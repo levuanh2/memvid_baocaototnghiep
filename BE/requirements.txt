@@ -1,0 +1,56 @@
+faiss-cpu
+flask
+flask-cors
+groq
+gunicorn
+# LangChain/LangGraph — pin chặt về stack 0.3.x/0.2.x.
+# KHÔNG nâng lên 1.x: langgraph 1.x kéo ormsgpack, mà binary ormsgpack bị
+# Windows Application Control chặn (xem .playbook/known-issues.md).
+langchain>=0.3.27,<0.4
+langchain-core>=0.3.66,<0.4
+langchain-community>=0.3.27,<0.4
+langchain-experimental>=0.3.4,<0.4
+langchain-google-genai>=2.0,<3
+langchain-groq>=0.2,<0.3
+langchain-huggingface>=0.1.2,<0.4
+langchain-ollama>=0.2.3,<0.4
+langchain-text-splitters>=0.3,<0.4
+langgraph>=0.2.57,<0.3
+langgraph-checkpoint==2.0.21      # msgpack thuần — bản cuối trước khi chuyển sang ormsgpack (2.0.22+); xem .playbook
+langgraph-checkpoint-sqlite==2.0.10
+# gRPC — giao tiếp giữa monolith và service (llm-gateway, mindmap-service)
+grpcio>=1.60
+grpcio-tools>=1.60
+langdetect
+numpy
+ollama
+rank-bm25>=0.2.2
+# Rerank cross-encoder dùng sentence-transformers (đã có ở dưới) — không cần dep mới.
+# cohere   # chỉ cài khi RERANK_BACKEND=cohere (phá tính offline)
+opencv-python-headless
+pandas
+pdfplumber
+Pillow
+psutil
+PyMuPDF
+pymupdf4llm
+pytesseract
+pytest>=8.0.0
+pydantic>=2.7.4,<2.11      # 2.11+ kéo typing_inspection → ForbiddenQualifier('not_required') khi StateGraph(QueryState) build từ TypedDict có NotRequired (langgraph 0.2.x). Xem .playbook
+python-docx
+python-dotenv
+redis>=5,<6   # cache semantic/retrieval (fail-open khi REDIS_URL rỗng) — pure-python, không chạm langgraph. Xem docs/SEMANTIC_CACHE_SPEC.md
+rq>=1.16,<2   # Phase 5: RQ worker cho heavy background jobs (ingest trước). Dùng redis ở trên. Chỉ chạy khi QUEUE_ENABLED=true.
+qrcode[pil]
+requests
+scikit-learn
+scipy
+sentence-transformers
+mammoth
+markdownify
+# Torch (CPU-only) để tránh kéo CUDA toolkit trong Docker
+--extra-index-url https://download.pytorch.org/whl/cpu
+torch==2.5.1+cpu
+tqdm
+transformers
+sentencepiece>=0.2.0   # tokenizer cho mDeBERTa NLI (DebertaV2) — leaf dep, không chạm langgraph; chỉ cần khi NLI_ENABLED=1

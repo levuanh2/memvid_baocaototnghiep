@@ -1,0 +1,9 @@
+schema_version: memvid-representation-config-v1
+representation_id: R0
+index_dir: reports/evaluation/indexes/R0_recursive
+corpus_version: REPLACE_BEFORE_BUILD
+chunking_mode: recursive
+chunk_size: 500
+overlap: 50
+embedding_model: BAAI/bge-m3
+late_chunking: false

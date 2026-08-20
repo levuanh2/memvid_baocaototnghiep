@@ -1,0 +1,43 @@
+**/node_modules
+**/__pycache__
+**/*.pyc
+**/*.pyo
+**/*.pyd
+**/.pytest_cache
+**/.mypy_cache
+**/.ruff_cache
+**/.DS_Store
+**/.vscode
+**/.idea
+
+# Frontend build output
+FE/dist
+
+# Avoid sending large generated artifacts to Docker build context
+__pycache__/
+*.pyc
+*.pyo
+*.pyd
+
+data/
+index/
+videos/
+*.mp4
+*.avi
+
+*.log
+
+.venv/
+node_modules/
+
+*.pt
+*.bin
+*.gguf
+
+# Legacy / existing generated locations in this repo
+BE/videos
+BE/input_docs
+BE/index
+BE/memory
+BE/data/backups
+

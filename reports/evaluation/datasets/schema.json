@@ -1,0 +1,23 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "memvid-research-dataset-v1",
+  "title": "MemVid research evaluation dataset records",
+  "description": "Canonical field contract. Files are JSONL collections of their named record type; annotations must be human-validated and must not be fabricated.",
+  "$defs": {
+    "annotation_status": {"enum": ["candidate", "human_validated", "adjudicated", "excluded"]},
+    "document": {"type": "object", "required": ["doc_id", "source", "format", "language", "length", "structure_quality", "scan_status", "domain", "duplicate_group", "eligible_for_study", "annotation_status"]},
+    "query": {"type": "object", "required": ["query_id", "query", "query_type", "language", "relevant_doc_ids", "gold_status", "gold_answer", "difficulty", "ambiguity", "requires_multi_chunk", "requires_hierarchical_context", "contradiction_case", "split", "annotation_status"]},
+    "canonical_evidence_span": {"type": "object", "required": ["span_id", "query_id", "doc_id", "locator", "evidence_text", "evidence_text_sha256", "annotation_status"]},
+    "representation_qrel": {"type": "object", "required": ["query_id", "span_id", "representation_id", "chunk_id", "mapping_rule_version", "annotation_status"]},
+    "citation": {"type": "object", "required": ["query_id", "answer_or_claim_id", "claim", "supporting_span_ids", "support_label", "annotation_status"]},
+    "contradiction": {"type": "object", "required": ["span_a_id", "span_b_id", "label", "notes", "human_rationale", "annotation_status"]},
+    "artifact": {"type": "object", "required": ["document_id", "evaluation_scope", "important_concepts", "important_sections", "expected_relations", "annotator", "annotation_status"]},
+    "source_unit": {"type": "object", "required": ["doc_id", "source", "locator", "locator_label", "text", "text_sha256"]},
+    "query_candidate": {
+      "type": "object",
+      "description": "Annotation aid only; prohibited from final evaluation until explicit human import.",
+      "required": ["query_id", "document_id", "query", "query_type", "language", "difficulty", "answerability", "candidate_answer", "candidate_evidence_spans", "candidate_rationale", "requires_multi_chunk", "citation_sensitive", "potential_contradiction", "annotation_status"],
+      "properties": {"annotation_status": {"const": "candidate"}}
+    }
+  }
+}

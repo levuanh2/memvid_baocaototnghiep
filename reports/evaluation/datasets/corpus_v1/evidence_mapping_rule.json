@@ -1,0 +1,12 @@
+{
+  "mapping_rule_version": "canonical-overlap-v1",
+  "status": "frozen_method_rule_before_test_evaluation",
+  "coordinate_system": "Unicode NFC, normalized newlines, collapsed inline whitespace over production-extracted source text",
+  "canonical_span_fields": ["doc_id", "page", "heading_path", "char_start", "char_end", "evidence_text", "evidence_text_sha256"],
+  "binary_relevance_rule": "A representation chunk is relevant when intersection length divided by canonical gold-span length is at least 0.50, or when it contains the complete normalized annotated fact.",
+  "overlap_threshold": 0.5,
+  "threshold_selection": "A priori; must not be tuned on held-out test results.",
+  "unresolved_alignment_policy": "Do not assign relevance. Send the source/chunk pair to human adjudication.",
+  "graded_relevance": "Disabled for corpus_v1 unless pilot agreement demonstrates consistent human application.",
+  "implementation": "BE/evaluation/evidence.py"
+}

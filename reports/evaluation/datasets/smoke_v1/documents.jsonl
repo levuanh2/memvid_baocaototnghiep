@@ -1,0 +1,2 @@
+{"doc_id":"smoke_doc_a","source":"synthetic://a","format":"txt","language":"vi","length":120,"structure_quality":"synthetic_heading","scan_status":"born_digital","domain":"software_validation","duplicate_group":"smoke_a","eligible_for_study":false,"annotation_status":"excluded"}
+{"doc_id":"smoke_doc_b","source":"synthetic://b","format":"txt","language":"en","length":100,"structure_quality":"synthetic_plain","scan_status":"born_digital","domain":"software_validation","duplicate_group":"smoke_b","eligible_for_study":false,"annotation_status":"excluded"}

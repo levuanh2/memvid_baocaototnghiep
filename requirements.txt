@@ -1,0 +1,28 @@
+faiss-cpu
+flask
+flask-cors
+gunicorn
+langchain
+langchain-experimental
+langchain-huggingface
+langdetect
+numpy
+ollama
+opencv-python-headless
+pandas
+pdfplumber
+Pillow
+psutil
+PyMuPDF
+pytesseract
+python-docx
+qrcode[pil]
+requests
+scikit-learn
+scipy
+sentence-transformers
+# Torch (CPU-only) để tránh kéo CUDA toolkit trong Docker
+--extra-index-url https://download.pytorch.org/whl/cpu
+torch==2.5.1+cpu
+tqdm
+transformers

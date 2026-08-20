@@ -1,0 +1,15 @@
+schema_version: memvid-evaluation-config-v1
+experiment_id: E2_hybrid
+split: test
+seed: 20260811
+index_dir: reports/evaluation/indexes/R2_late
+representation_id: R2
+retrieval: {mode: hybrid, candidate_k: 20, top_k: 6, bm25_weight: 0.4, faiss_weight: 0.6, rrf_k: 60}
+rerank: {enabled: false, top_n: 6}
+nli: {enabled: false, threshold: 0.6, max_pairs: 3}
+crag: {enabled: false, correct_threshold: 0.25, wrong_floor: 0.10, rewrite_max: 0}
+memory_tree: {enabled: false}
+cache: {semantic_answer: false, retrieval: false}
+hitl: {enabled: false}
+source_tags: true
+generator_model: qwen2.5:7b-instruct

@@ -1,0 +1,29 @@
+{
+  "schema_version": "corpus-approval-v1",
+  "reviewer_id": "R1",
+  "reviewed_at": "2026-08-13T05:01:06.077505+00:00",
+  "candidate_package_hash": "49a85796cfcf8878515274fa3cbd742e70c3a36271236bcdf36664cdc01e4561",
+  "documents": [
+    {
+      "document_id": "cv1_vector_feature_store",
+      "source_hash": "1720613abf72f4212ccef4df93faa94a47a04c758696569e2adfe925a0bd88fe",
+      "include_in_corpus": "yes",
+      "split": "test",
+      "reviewer_note": ""
+    },
+    {
+      "document_id": "cv1_ragas_guardrails",
+      "source_hash": "a1081a4f68b0794069d333e516dd193d6171c70c31aa1200e920253a2482cea6",
+      "include_in_corpus": "yes",
+      "split": "development",
+      "reviewer_note": ""
+    },
+    {
+      "document_id": "cv1_social_engineering",
+      "source_hash": "ec43f3a18b7c955936886b27ba72ee768676ead556fc525cb4206b71a68a0413",
+      "include_in_corpus": "yes",
+      "split": "test",
+      "reviewer_note": ""
+    }
+  ]
+}

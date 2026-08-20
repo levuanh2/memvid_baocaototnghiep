@@ -1,0 +1,60 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Corpus v1 — Human Review Desk</title>
+  <link rel="stylesheet" href="styles.css">
+</head>
+<body>
+  <div id="session-gate" class="session-gate" role="dialog" aria-modal="true" aria-labelledby="session-title">
+    <form id="session-form" class="session-card">
+      <p class="kicker">Phase 4B.2 · local review</p>
+      <h1 id="session-title">Sign the annotation ledger</h1>
+      <p>Use a pseudonym. The interface never reads your OS account and never approves a candidate for you.</p>
+      <label for="reviewer-id">Reviewer ID</label>
+      <input id="reviewer-id" name="reviewer_id" autocomplete="off" placeholder="R1" pattern="[A-Za-z0-9_-]{1,32}" required>
+      <button class="primary" type="submit">Start or resume review</button>
+      <p id="session-error" class="error" aria-live="polite"></p>
+    </form>
+  </div>
+
+  <header class="topbar">
+    <div>
+      <p class="kicker">Corpus v1 · annotation ledger</p>
+      <h1>Human Review Desk</h1>
+    </div>
+    <div class="candidate-stamp" aria-label="Candidate warning">CANDIDATE<br><span>NOT GROUND TRUTH</span></div>
+    <div class="reviewer-chip">Reviewer <strong id="reviewer-chip">—</strong></div>
+  </header>
+
+  <div class="shell">
+    <aside class="rail" aria-label="Review sections">
+      <nav id="section-nav">
+        <button data-kind="corpus" class="active"><span>Corpus approval</span><b id="nav-corpus">0/0</b></button>
+        <button data-kind="queries"><span>Queries</span><b id="nav-queries">0/0</b></button>
+        <button data-kind="citations"><span>Citations</span><b id="nav-citations">0/0</b></button>
+        <button data-kind="contradictions"><span>Contradictions</span><b id="nav-contradictions">0/0</b></button>
+        <button data-kind="artifacts"><span>Artifacts</span><b id="nav-artifacts">0/0</b></button>
+        <button data-kind="progress"><span>Progress & export</span><b id="nav-status">Blocked</b></button>
+      </nav>
+      <div class="rail-note">
+        <span class="lock-dot"></span>
+        <p>Dataset freeze and experiment execution are outside this interface.</p>
+      </div>
+    </aside>
+
+    <main>
+      <div id="item-toolbar" class="item-toolbar">
+        <button id="previous" class="quiet" type="button">← Previous</button>
+        <p id="item-progress" aria-live="polite">0 / 0</p>
+        <button id="next" class="quiet" type="button">Next →</button>
+      </div>
+      <section id="review-canvas" aria-live="polite"></section>
+    </main>
+  </div>
+
+  <div id="toast" class="toast" role="status" aria-live="polite"></div>
+  <script src="app.js"></script>
+</body>
+</html>

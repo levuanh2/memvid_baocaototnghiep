@@ -1,0 +1,97 @@
+{
+  "schema_version": "memvid-research-dataset-v1",
+  "dataset_id": "corpus_v1",
+  "dataset_version": "corpus_v1-candidate.2",
+  "corpus_version": "corpus_v1.0",
+  "created_at": "2026-08-11T21:48:21+07:00",
+  "status": "corpus_frozen_annotation_in_progress",
+  "document_count_inventory": 12,
+  "document_count_eligible": 3,
+  "query_count": 55,
+  "language_distribution_eligible": {
+    "vi_with_english_technical_terms": 3
+  },
+  "format_distribution_eligible": {
+    "pdf": 2,
+    "docx": 1
+  },
+  "query_type_distribution": {},
+  "annotation_status": "review_imported_qrel_mapping_pending",
+  "split_status": "document_split_frozen",
+  "proposed_split": {
+    "development": [
+      "cv1_ragas_guardrails"
+    ],
+    "test": [
+      "cv1_vector_feature_store",
+      "cv1_social_engineering"
+    ],
+    "ratio": "1/3 development; 2/3 test at document level",
+    "limitation": "Only three real documents exist; AI/RAG is represented in both splits, but cybersecurity occurs only in test."
+  },
+  "hash_status": "mutable_candidate_snapshot",
+  "candidate_corpus_hash": "ea394e312573ea4e37128d849e2577ec973dc87a07f12b7db2353bef45c0dc77",
+  "candidate_snapshot_hash": "7376390f614c6545a69c50f7d0cc6a12739b8acb12d44cc0b2db7480a7bf3051",
+  "proposed_split_hash": "bae840d3550a08464aa88f0cbd72c68c26e1b811c7f0ca98708c58ecd4304a7d",
+  "selected_source_hashes": {
+    "data/input_docs/1-Day 19 - Track 2 - Vector store and Feature store_v2.pdf": "1720613abf72f4212ccef4df93faa94a47a04c758696569e2adfe925a0bd88fe",
+    "data/input_docs/2-day24-ragas-guardrails.pdf": "a1081a4f68b0794069d333e516dd193d6171c70c31aa1200e920253a2482cea6",
+    "data/input_docs/TIỂU LUẬN AN TOÀN THÔNG TIN.docx": "ec43f3a18b7c955936886b27ba72ee768676ead556fc525cb4206b71a68a0413"
+  },
+  "candidate_file_hashes": {
+    "documents.jsonl": "95ac58d4b2d3e592954ab79322f7ad393b658a1c2aec3749a5c2ea38eb013ea6",
+    "queries.jsonl": "01ba4719c80b6fe911b091a7c05124b64eeece964e09c058ef8f9805daca546b",
+    "canonical_evidence_spans.jsonl": "01ba4719c80b6fe911b091a7c05124b64eeece964e09c058ef8f9805daca546b",
+    "representation_qrels.jsonl": "01ba4719c80b6fe911b091a7c05124b64eeece964e09c058ef8f9805daca546b",
+    "citation_annotations.jsonl": "01ba4719c80b6fe911b091a7c05124b64eeece964e09c058ef8f9805daca546b",
+    "contradictions.jsonl": "01ba4719c80b6fe911b091a7c05124b64eeece964e09c058ef8f9805daca546b",
+    "artifact_annotations.jsonl": "01ba4719c80b6fe911b091a7c05124b64eeece964e09c058ef8f9805daca546b"
+  },
+  "dataset_hash": null,
+  "split_hash": "5728e0e8e6f4c5911e89d8295f85af3aa372d9efe3e909e823e73a7f6f97050f",
+  "annotation_hash": null,
+  "freeze_blocked": true,
+  "freeze_blockers": [
+    "R0/R1/R2 indexes and representation qrels are required before final dataset freeze."
+  ],
+  "candidate_query_count": 60,
+  "candidate_query_type_distribution": {
+    "ambiguous": 4,
+    "citation-sensitive": 3,
+    "compare": 5,
+    "contradictory evidence": 2,
+    "cross-section": 4,
+    "exact-term factual": 13,
+    "how/why": 5,
+    "insufficient evidence": 3,
+    "main-points": 3,
+    "multi-chunk": 7,
+    "overview": 3,
+    "paraphrase factual": 8
+  },
+  "candidate_answerability_distribution": {
+    "ambiguous": 4,
+    "answerable": 53,
+    "insufficient_evidence": 3
+  },
+  "candidate_split_distribution": {
+    "development": 28,
+    "test": 32
+  },
+  "candidate_package_hash": "49a85796cfcf8878515274fa3cbd742e70c3a36271236bcdf36664cdc01e4561",
+  "candidate_package_file_hashes": {
+    "documents.jsonl": "a5f1b614d89e4b7122a831a0e3f8e3f60a346163138a03222199bee9a3e90e2b",
+    "query_candidates.jsonl": "114e9b79e99a067c25ce269432f1c1415d16128566fe05dea781fa77063fee50",
+    "candidate_canonical_evidence_spans.jsonl": "a7792311ec1920484a2c14a1b455033574dc4e60643ed69ed8935e5ac1511668",
+    "candidate_citation_annotations.jsonl": "f8723e8b49547bca749e8d579048faa3fa15902dea2b710317dbbef630546869",
+    "candidate_contradictions.jsonl": "206ff8a4c005cc60c9e8217b9a0aae8fa66ad246241c5604bb3f798bd9b64f2a",
+    "candidate_artifact_annotations.jsonl": "646a3a6dc3b29c690168505c1f56733da0d3d4a02dc7686732de71562d802b6e",
+    "source_units.jsonl": "7e9cd8177c7aa135c5b3e696acd84229266eb4fd038cfbb805d0cac06601f234",
+    "human_review_queries.csv": "18844c59200630acd897e62be8791832a1a8cd9cd30a357dee5b43b19512ca52",
+    "human_review_citations.csv": "2bde8559e4e14999458cf4719afb462537a084f345847a32f6060316252f64f8",
+    "human_review_contradictions.csv": "a0d84f3910657c9765b469d82526235b3115b41372fae700e0ff4d084ffdccce",
+    "human_review_artifacts.csv": "e9e391d15b380f6e0bc387520916b220bfe34375da354aa419cb095d50663454"
+  },
+  "corpus_frozen_at": "2026-08-14T11:24:06.723005+00:00",
+  "corpus_hash": "671cee787bca9e0c34f0d281227163112c17ebcdb002a010f27e820dacfd7b31"
+}

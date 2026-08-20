@@ -1,0 +1,41 @@
+{
+  "generated_at": "2026-08-11T15:45:36.605646+00:00",
+  "annotation_status": "candidate",
+  "warning": "LLM-assisted annotation aids only; none are ground truth until explicit human import.",
+  "candidate_query_count": 60,
+  "query_type_distribution": {
+    "ambiguous": 4,
+    "citation-sensitive": 3,
+    "compare": 5,
+    "contradictory evidence": 2,
+    "cross-section": 4,
+    "exact-term factual": 13,
+    "how/why": 5,
+    "insufficient evidence": 3,
+    "main-points": 3,
+    "multi-chunk": 7,
+    "overview": 3,
+    "paraphrase factual": 8
+  },
+  "document_distribution": {
+    "cv1_ragas_guardrails": 28,
+    "cv1_social_engineering": 14,
+    "cv1_vector_feature_store": 18
+  },
+  "split_distribution": {
+    "development": 28,
+    "test": 32
+  },
+  "answerability_distribution": {
+    "ambiguous": 4,
+    "answerable": 53,
+    "insufficient_evidence": 3
+  },
+  "candidate_span_count": 92,
+  "candidate_claim_count": 83,
+  "candidate_contradiction_pair_count": 3,
+  "candidate_artifact_document_count": 3,
+  "annotator_count": 0,
+  "inter_annotator_agreement": "not applicable / not measured",
+  "candidate_package_hash": "49a85796cfcf8878515274fa3cbd742e70c3a36271236bcdf36664cdc01e4561"
+}

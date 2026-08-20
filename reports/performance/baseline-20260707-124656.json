@@ -1,0 +1,28 @@
+{
+  "timestamp": "20260707-124656",
+  "base_url": "http://localhost:8080",
+  "scenarios": [],
+  "health": {
+    "backend_reachable": true,
+    "backend_health": {
+      "ingest_graph_ready": true,
+      "mode": "normal",
+      "query_graph_ready": true,
+      "status": "ok"
+    },
+    "backend_error": null,
+    "query_graph_ready": true,
+    "num_documents": 1,
+    "num_chunks": 6,
+    "ollama_reachable": true,
+    "ollama_models": [
+      "qwen3.5:9b",
+      "qwen2.5:14b",
+      "gemma2:2b",
+      "gemma4:e4b"
+    ],
+    "redis_reachable": true,
+    "logs_sqlite_readable": true,
+    "generate_answer_count_so_far": 3
+  }
+}

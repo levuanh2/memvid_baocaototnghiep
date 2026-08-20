@@ -1,0 +1,280 @@
+services:
+  backend:
+    build:
+      context: ./BE
+      dockerfile: Dockerfile
+    ports:
+      - "8080:8080"
+    volumes:
+      - ./data/videos:/app/videos
+      - ./data/index:/app/index
+      - ./data/memory:/app/memory
+      - ./data/input_docs:/app/input_docs
+      - hf_cache:/root/.cache/huggingface   # bge-m3 tải 1 lần, dùng lại qua restart
+    environment:
+      DATA_DIR: /app
+      PORT: "8080"
+      # HITL resume metadata is currently process-local; keep one HTTP worker so a
+      # pause and its resume request are handled by the same process.
+      WEB_CONCURRENCY: "1"
+      OLLAMA_HOST: "${OLLAMA_HOST:-http://host.docker.internal:11434}"
+      SLM_MODEL_CHAT: "${SLM_MODEL_CHAT:-qwen2.5:7b-instruct}"
+      SLM_MODEL: "${SLM_MODEL:-qwen2.5:7b-instruct}"
+      MINDMAP_MODEL: "${MINDMAP_MODEL:-qwen2.5:7b-instruct}"
+      OLLAMA_REASONING: "${OLLAMA_REASONING:-0}"
+      LLM_MAX_TOKENS: "${LLM_MAX_TOKENS:-8192}"
+      HYBRID_TOP_K: "${HYBRID_TOP_K:-6}"
+      SESSION_TTL_HOURS: "24"
+      SSE_TIMEOUT_SEC: "300"
+      ENABLE_QUERY_CITATION_PROMPT: "1"
+      USE_LC_VECTOR_STORE: "1"
+      USE_LC_QA_CHAIN: "1"
+      USE_LC_ENSEMBLE: "1"
+      USE_LC_INGEST: "1"
+      # Canonical full retrieval/QA pipeline. Every flag remains host-overridable
+      # for ablation runs while the normal Compose path enables the full method.
+      CRAG_ENABLED: "${CRAG_ENABLED:-1}"
+      CRAG_REWRITE_MAX: "${CRAG_REWRITE_MAX:-2}"
+      RERANK_ENABLED: "${RERANK_ENABLED:-1}"
+      RERANK_BACKEND: "${RERANK_BACKEND:-cross_encoder}"
+      RERANK_MODEL: "${RERANK_MODEL:-BAAI/bge-reranker-v2-m3}"
+      RERANK_CANDIDATE_K: "${RERANK_CANDIDATE_K:-20}"
+      RERANK_TOP_N: "${RERANK_TOP_N:-0}"
+      RERANK_BATCH: "${RERANK_BATCH:-16}"
+      RERANK_TIMEOUT_SEC: "${RERANK_TIMEOUT_SEC:-10}"
+      NLI_ENABLED: "${NLI_ENABLED:-1}"
+      NLI_MODEL: "${NLI_MODEL:-MoritzLaurer/mDeBERTa-v3-base-mnli-xnli}"
+      NLI_CONTRADICTION_THRESHOLD: "${NLI_CONTRADICTION_THRESHOLD:-0.6}"
+      NLI_TIMEOUT_SEC: "${NLI_TIMEOUT_SEC:-90}"
+      NLI_MAX_PAIRS: "${NLI_MAX_PAIRS:-3}"
+      HITL_ENABLED: "${HITL_ENABLED:-1}"
+      INCLUDE_CHUNK_SOURCE_TAGS: "${INCLUDE_CHUNK_SOURCE_TAGS:-1}"
+      # Late chunking (mặc định ON): bge-m3 long-context, mean-pool query+chunk cùng encoder.
+      EMBEDDING_MODEL_NAME: "${EMBEDDING_MODEL_NAME:-BAAI/bge-m3}"
+      LATE_CHUNKING: "${LATE_CHUNKING:-1}"
+      HF_HOME: /root/.cache/huggingface
+      LLM_GATEWAY_ADDR: llm-gateway:50051
+      MINDMAP_SERVICE_ADDR: mindmap-service:50052
+      MINDMAP_LLM_TIMEOUT_SEC: "${MINDMAP_LLM_TIMEOUT_SEC:-300}"   # mirror mindmap-service (dùng khi chạy Local pipeline)
+      SUMMARY_LLM_TIMEOUT_SEC: "${SUMMARY_LLM_TIMEOUT_SEC:-300}"   # summary v2 chạy trong backend (monolith) — cùng lý do CPU chậm
+      SUMMARY_PARALLEL: "${SUMMARY_PARALLEL:-2}"
+      SLM_MODEL_SUMMARY: "${SLM_MODEL_SUMMARY:-qwen2.5:7b-instruct}"
+      # Cache Redis (semantic + retrieval) — fail-open: redis chết thì backend vẫn chạy.
+      REDIS_URL: redis://redis:6379/0
+      CACHE_ENV: prod
+      # Phase 3 single-flight (DR-3 D3) — coalesce duplicate query storms. Host-overridable.
+      SINGLE_FLIGHT_ENABLED: "${SINGLE_FLIGHT_ENABLED:-true}"
+      SINGLE_FLIGHT_LOCK_TTL_SECONDS: "${SINGLE_FLIGHT_LOCK_TTL_SECONDS:-180}"
+      SINGLE_FLIGHT_WAIT_SECONDS: "${SINGLE_FLIGHT_WAIT_SECONDS:-120}"
+      SINGLE_FLIGHT_POLL_INTERVAL_SECONDS: "${SINGLE_FLIGHT_POLL_INTERVAL_SECONDS:-0.5}"
+      # Phase 4 ingress overload protection — rate limit OFF by default (opt-in for prod).
+      RATE_LIMIT_ENABLED: "${RATE_LIMIT_ENABLED:-false}"
+      RATE_LIMIT_RPS: "${RATE_LIMIT_RPS:-1}"
+      RATE_LIMIT_BURST: "${RATE_LIMIT_BURST:-5}"
+      RATE_LIMIT_WINDOW_SECONDS: "${RATE_LIMIT_WINDOW_SECONDS:-60}"
+      RATE_LIMIT_SCOPE: "${RATE_LIMIT_SCOPE:-ip}"
+      RATE_LIMIT_REQUIRE_REDIS: "${RATE_LIMIT_REQUIRE_REDIS:-false}"
+      ADMISSION_RETRY_AFTER_SECONDS: "${ADMISSION_RETRY_AFTER_SECONDS:-5}"
+      # Phase 5 RQ queue (default OFF; shared job DB on the memory volume so a worker can share it).
+      QUEUE_ENABLED: "${QUEUE_ENABLED:-false}"
+      QUEUE_DEPTH_MAX: "${QUEUE_DEPTH_MAX:-20}"
+      RQ_JOB_TIMEOUT_SEC: "${RQ_JOB_TIMEOUT_SEC:-1800}"
+      JOBS_DB_PATH: "${JOBS_DB_PATH:-/app/memory/jobs.sqlite}"
+      LOG_DB_PATH: "${LOG_DB_PATH:-/app/memory/logs.sqlite}"
+      # Conversation Context Layer (default OFF; conversation DB on the shared memory volume).
+      CONVERSATION_CONTEXT_ENABLED: "${CONVERSATION_CONTEXT_ENABLED:-false}"
+      CONVERSATIONS_DB_PATH: "${CONVERSATIONS_DB_PATH:-/app/memory/conversations.sqlite}"
+      # Auth (Bearer token). Do NOT hardcode a real secret — pass AUTH_SECRET from the
+      # host/deploy env. Empty in dev → ephemeral per-process secret. Restored here:
+      # this block was dropped during the landing/auth ↔ conversation merge.
+      AUTH_SECRET: "${AUTH_SECRET:-}"
+      AUTH_REQUIRE_SECRET: "${AUTH_REQUIRE_SECRET:-false}"
+      AUTH_TOKEN_TTL_SEC: "${AUTH_TOKEN_TTL_SEC:-604800}"
+      USERS_DB_PATH: "${USERS_DB_PATH:-/app/memory/users.sqlite}"
+      # Multi-user API protection (Auth Hardening). Default OFF = app APIs stay open.
+      AUTH_PROTECT_APP_APIS: "${AUTH_PROTECT_APP_APIS:-false}"
+    restart: always
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
+    depends_on:
+      - llm-gateway
+      - mindmap-service
+      - redis
+    healthcheck:
+      test: ["CMD-SHELL", "curl -fsS http://localhost:8080/health || exit 1"]
+      interval: 10s
+      timeout: 3s
+      retries: 10
+
+  llm-gateway:
+    build:
+      context: ./BE
+      dockerfile: Dockerfile
+    command: ["python", "-m", "services.llm_gateway.server"]
+    expose:
+      - "50051"
+    volumes:
+      - ./data/videos:/app/videos
+      - ./data/index:/app/index
+      - ./data/memory:/app/memory
+      - ./data/input_docs:/app/input_docs
+      - hf_cache:/root/.cache/huggingface
+    environment:
+      DATA_DIR: /app
+      OLLAMA_HOST: "${OLLAMA_HOST:-http://host.docker.internal:11434}"
+      SLM_MODEL_CHAT: "${SLM_MODEL_CHAT:-qwen2.5:7b-instruct}"
+      SLM_MODEL: "${SLM_MODEL:-qwen2.5:7b-instruct}"
+      OLLAMA_REASONING: "${OLLAMA_REASONING:-0}"
+      LLM_MAX_TOKENS: "${LLM_MAX_TOKENS:-8192}"
+      HYBRID_TOP_K: "${HYBRID_TOP_K:-6}"
+      SESSION_TTL_HOURS: "24"
+      SSE_TIMEOUT_SEC: "300"
+      ENABLE_QUERY_CITATION_PROMPT: "1"
+      USE_LC_VECTOR_STORE: "1"
+      USE_LC_QA_CHAIN: "1"
+      USE_LC_ENSEMBLE: "1"
+      USE_LC_INGEST: "1"
+      EMBEDDING_MODEL_NAME: "${EMBEDDING_MODEL_NAME:-BAAI/bge-m3}"
+      LATE_CHUNKING: "${LATE_CHUNKING:-1}"
+      HF_HOME: /root/.cache/huggingface
+      LLM_GATEWAY_PORT: "50051"
+      # Phase 2: global LLM concurrency cap (DR-3 D2). Host env overrides for tuning:
+      #   MAX_CONCURRENT_LLM_CALLS=1 docker compose up -d llm-gateway
+      MAX_CONCURRENT_LLM_CALLS: "${MAX_CONCURRENT_LLM_CALLS:-1}"
+      LLM_QUEUE_WAIT_TIMEOUT_SECONDS: "${LLM_QUEUE_WAIT_TIMEOUT_SECONDS:-180}"
+    restart: always
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
+    # TCP-connect check (python có sẵn trong image, không cần grpc_health_probe).
+    healthcheck:
+      test: ["CMD", "python", "-c", "import socket; socket.create_connection(('localhost', 50051), 2).close()"]
+      interval: 10s
+      timeout: 3s
+      retries: 10
+
+  mindmap-service:
+    build:
+      context: ./BE
+      dockerfile: Dockerfile
+    command: ["python", "-m", "services.mindmap.server"]
+    expose:
+      - "50052"
+    volumes:
+      - hf_cache:/root/.cache/huggingface
+    environment:
+      DATA_DIR: /app
+      OLLAMA_HOST: "${OLLAMA_HOST:-http://host.docker.internal:11434}"
+      SLM_MODEL_CHAT: "${SLM_MODEL_CHAT:-qwen2.5:7b-instruct}"
+      SLM_MODEL: "${SLM_MODEL:-qwen2.5:7b-instruct}"
+      MINDMAP_MODEL: "${MINDMAP_MODEL:-qwen2.5:7b-instruct}"
+      OLLAMA_REASONING: "${OLLAMA_REASONING:-0}"
+      LLM_MAX_TOKENS: "${LLM_MAX_TOKENS:-8192}"
+      HYBRID_TOP_K: "${HYBRID_TOP_K:-6}"
+      SESSION_TTL_HOURS: "24"
+      SSE_TIMEOUT_SEC: "300"
+      ENABLE_QUERY_CITATION_PROMPT: "1"
+      USE_LC_VECTOR_STORE: "1"
+      USE_LC_QA_CHAIN: "1"
+      USE_LC_ENSEMBLE: "1"
+      USE_LC_INGEST: "1"
+      EMBEDDING_MODEL_NAME: "${EMBEDDING_MODEL_NAME:-BAAI/bge-m3}"
+      LATE_CHUNKING: "${LATE_CHUNKING:-1}"
+      HF_HOME: /root/.cache/huggingface
+      MINDMAP_SERVICE_PORT: "50052"
+      # Đo thật 2026-07-05 (qwen3.5:9b, Ollama CPU host): enrich 1 nhánh với prompt
+      # nested-detail ~120-160s → default 120s làm 3/4 nhánh degraded. 240s có đệm.
+      MINDMAP_LLM_TIMEOUT_SEC: "${MINDMAP_LLM_TIMEOUT_SEC:-300}"
+      # mindmap-service cũng là client của llm-gateway (dùng chung 1 model embedding + policy provider)
+      LLM_GATEWAY_ADDR: llm-gateway:50051
+    restart: always
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
+    depends_on:
+      - llm-gateway
+    healthcheck:
+      test: ["CMD", "python", "-c", "import socket; socket.create_connection(('localhost', 50052), 2).close()"]
+      interval: 10s
+      timeout: 3s
+      retries: 10
+
+  # Phase 5 RQ worker for heavy background jobs (Step 1: ingest). OPTIONAL: gated behind
+  # the `worker` profile so a plain `docker compose up` does NOT start it and the backend
+  # never depends on it. Enable with:  QUEUE_ENABLED=true docker compose --profile worker up -d
+  rq-worker:
+    profiles: ["worker"]
+    build:
+      context: ./BE
+      dockerfile: Dockerfile
+    command: ["python", "-m", "app.jobs.worker"]
+    volumes:
+      - ./data/videos:/app/videos
+      - ./data/index:/app/index
+      - ./data/memory:/app/memory
+      - ./data/input_docs:/app/input_docs
+      - hf_cache:/root/.cache/huggingface
+    environment:
+      DATA_DIR: /app
+      OLLAMA_HOST: "${OLLAMA_HOST:-http://host.docker.internal:11434}"
+      SLM_MODEL_CHAT: "${SLM_MODEL_CHAT:-qwen2.5:7b-instruct}"
+      SLM_MODEL: "${SLM_MODEL:-qwen2.5:7b-instruct}"
+      OLLAMA_REASONING: "${OLLAMA_REASONING:-0}"
+      LLM_MAX_TOKENS: "${LLM_MAX_TOKENS:-8192}"
+      HYBRID_TOP_K: "${HYBRID_TOP_K:-6}"
+      SLM_MODEL_SUMMARY: "${SLM_MODEL_SUMMARY:-qwen2.5:7b-instruct}"
+      USE_LC_VECTOR_STORE: "1"
+      USE_LC_QA_CHAIN: "1"
+      USE_LC_ENSEMBLE: "1"
+      USE_LC_INGEST: "1"
+      EMBEDDING_MODEL_NAME: "${EMBEDDING_MODEL_NAME:-BAAI/bge-m3}"
+      LATE_CHUNKING: "${LATE_CHUNKING:-1}"
+      HF_HOME: /root/.cache/huggingface
+      LLM_GATEWAY_ADDR: llm-gateway:50051
+      MINDMAP_SERVICE_ADDR: mindmap-service:50052
+      REDIS_URL: redis://redis:6379/0
+      CACHE_ENV: prod
+      # MUST match the backend so both share ONE job/log DB on the memory volume.
+      QUEUE_ENABLED: "${QUEUE_ENABLED:-true}"
+      WORKER_CONCURRENCY: "${WORKER_CONCURRENCY:-1}"
+      RQ_JOB_TIMEOUT_SEC: "${RQ_JOB_TIMEOUT_SEC:-1800}"
+      JOBS_DB_PATH: "${JOBS_DB_PATH:-/app/memory/jobs.sqlite}"
+      LOG_DB_PATH: "${LOG_DB_PATH:-/app/memory/logs.sqlite}"
+      # Parity with backend (worker never serves /query, but shares the DB path).
+      CONVERSATION_CONTEXT_ENABLED: "${CONVERSATION_CONTEXT_ENABLED:-false}"
+      CONVERSATIONS_DB_PATH: "${CONVERSATIONS_DB_PATH:-/app/memory/conversations.sqlite}"
+    restart: always
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
+    depends_on:
+      - redis
+      - llm-gateway
+      - mindmap-service
+
+  redis:
+    image: redis:7-alpine
+    # Cache thuần (không persistence): maxmemory nhỏ + allkeys-lru, TTL tự dọn.
+    command: ["redis-server", "--maxmemory", "256mb", "--maxmemory-policy", "allkeys-lru", "--appendonly", "no", "--save", ""]
+    expose:
+      - "6379"
+    restart: always
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 10s
+      timeout: 3s
+      retries: 10
+
+  frontend:
+    build:
+      context: .
+      dockerfile: FE/Dockerfile
+      args:
+        VITE_API_BASE: http://backend:8080
+    ports:
+      - "3000:3000"
+    depends_on:
+      - backend
+    restart: always
+
+volumes:
+  # Cache HuggingFace dùng chung 3 service (bge-m3 ~2GB tải 1 lần). Muốn tái dùng cache
+  # sẵn trên máy thay vì tải lại: đổi thành bind mount host ~/.cache/huggingface.
+  hf_cache:

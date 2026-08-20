@@ -1,0 +1,515 @@
+{
+  "timestamp": "20260707-143610",
+  "base_url": "http://localhost:8080",
+  "scenarios": [
+    {
+      "scenario": "identical",
+      "mode": "identical",
+      "concurrency": 50,
+      "total_requests": 50,
+      "success_count": 50,
+      "empty_response_count": 0,
+      "fallback_answer_count": 0,
+      "error_count": 0,
+      "timeout_count": 0,
+      "rate_limited_count": 0,
+      "rate_limited_hits_total": 186,
+      "http_5xx_count": 0,
+      "outcomes": {
+        "success": 50
+      },
+      "p50_latency_ms": 2960.6,
+      "p95_latency_ms": 70173.1,
+      "p99_latency_ms": 70255.9,
+      "min_latency_ms": 99.7,
+      "max_latency_ms": 70257.6,
+      "wall_seconds": 70.3,
+      "throughput_rps": 0.712,
+      "cache_delta": {
+        "hits_exact": 0,
+        "hits_exact_nodia": 0,
+        "hits_semantic": 0,
+        "hits_semantic_judged": 0,
+        "misses": 0,
+        "saved_llm_calls": 0,
+        "hits_total": 0
+      },
+      "llm_generations": 1,
+      "records": [
+        {
+          "question": "noi dung la gi",
+          "latency_ms": 70191.5,
+          "submit_status": 202,
+          "job_status": "done",
+          "rate_limited_hits": 0,
+          "answer_len": 1998,
+          "outcome": "success"
+        },
+        {
+          "question": "noi dung la gi",
+          "latency_ms": 99.7,
+          "submit_status": 202,
+          "job_status": "done",
+          "rate_limited_hits": 0,
+          "answer_len": 1998,
+          "outcome": "success"
+        },
+        {
+          "question": "noi dung la gi",
+          "latency_ms": 70257.6,
+          "submit_status": 202,
+          "job_status": "done",
+          "rate_limited_hits": 0,
+          "answer_len": 1998,
+          "outcome": "success"
+        },
+        {
+          "question": "noi dung la gi",
+          "latency_ms": 140.4,
+          "submit_status": 202,
+          "job_status": "done",
+          "rate_limited_hits": 0,
+          "answer_len": 1998,
+          "outcome": "success"
+        },
+        {
+          "question": "noi dung la gi",
+          "latency_ms": 123.3,
+          "submit_status": 202,
+          "job_status": "done",
+          "rate_limited_hits": 0,
+          "answer_len": 1998,
+          "outcome": "success"
+        },
+        {
+          "question": "noi dung la gi",
+          "latency_ms": 70150.6,
+          "submit_status": 202,
+          "job_status": "done",
+          "rate_limited_hits": 0,
+          "answer_len": 1998,
+          "outcome": "success"
+        },
+        {
+          "question": "noi dung la gi",
+          "latency_ms": 124.7,
+          "submit_status": 202,
+          "job_status": "done",
+          "rate_limited_hits": 0,
+          "answer_len": 1998,
+          "outcome": "success"
+        },
+        {
+          "question": "noi dung la gi",
+          "latency_ms": 2101.3,
+          "submit_status": 202,
+          "job_status": "done",
+          "rate_limited_hits": 2,
+          "answer_len": 1998,
+          "outcome": "success"
+        },
+        {
+          "question": "noi dung la gi",
+          "latency_ms": 577.6,
+          "submit_status": 202,
+          "job_status": "done",
+          "rate_limited_hits": 1,
+          "answer_len": 1998,
+          "outcome": "success"
+        },
+        {
+          "question": "noi dung la gi",
+          "latency_ms": 1130.4,
+          "submit_status": 202,
+          "job_status": "done",
+          "rate_limited_hits": 2,
+          "answer_len": 1998,
+          "outcome": "success"
+        },
+        {
+          "question": "noi dung la gi",
+          "latency_ms": 1603.9,
+          "submit_status": 202,
+          "job_status": "done",
+          "rate_limited_hits": 1,
+          "answer_len": 1998,
+          "outcome": "success"
+        },
+        {
+          "question": "noi dung la gi",
+          "latency_ms": 1613.7,
+          "submit_status": 202,
+          "job_status": "done",
+          "rate_limited_hits": 1,
+          "answer_len": 1998,
+          "outcome": "success"
+        },
+        {
+          "question": "noi dung la gi",
+          "latency_ms": 2630.4,
+          "submit_status": 202,
+          "job_status": "done",
+          "rate_limited_hits": 3,
+          "answer_len": 1998,
+          "outcome": "success"
+        },
+        {
+          "question": "noi dung la gi",
+          "latency_ms": 3164.2,
+          "submit_status": 202,
+          "job_status": "done",
+          "rate_limited_hits": 4,
+          "answer_len": 1998,
+          "outcome": "success"
+        },
+        {
+          "question": "noi dung la gi",
+          "latency_ms": 4160.8,
+          "submit_status": 202,
+          "job_status": "done",
+          "rate_limited_hits": 6,
+          "answer_len": 1998,
+          "outcome": "success"
+        },
+        {
+          "question": "noi dung la gi",
+          "latency_ms": 4224.9,
+          "submit_status": 202,
+          "job_status": "done",
+          "rate_limited_hits": 6,
+          "answer_len": 1998,
+          "outcome": "success"
+        },
+        {
+          "question": "noi dung la gi",
+          "latency_ms": 3677.1,
+          "submit_status": 202,
+          "job_status": "done",
+          "rate_limited_hits": 5,
+          "answer_len": 1998,
+          "outcome": "success"
+        },
+        {
+          "question": "noi dung la gi",
+          "latency_ms": 70254.1,
+          "submit_status": 202,
+          "job_status": "done",
+          "rate_limited_hits": 0,
+          "answer_len": 1998,
+          "outcome": "success"
+        },
+        {
+          "question": "noi dung la gi",
+          "latency_ms": 155.2,
+          "submit_status": 202,
+          "job_status": "done",
+          "rate_limited_hits": 0,
+          "answer_len": 1998,
+          "outcome": "success"
+        },
+        {
+          "question": "noi dung la gi",
+          "latency_ms": 1634.3,
+          "submit_status": 202,
+          "job_status": "done",
+          "rate_limited_hits": 1,
+          "answer_len": 1998,
+          "outcome": "success"
+        },
+        {
+          "question": "noi dung la gi",
+          "latency_ms": 1138.9,
+          "submit_status": 202,
+          "job_status": "done",
+          "rate_limited_hits": 2,
+          "answer_len": 1998,
+          "outcome": "success"
+        },
+        {
+          "question": "noi dung la gi",
+          "latency_ms": 172.1,
+          "submit_status": 202,
+          "job_status": "done",
+          "rate_limited_hits": 0,
+          "answer_len": 1998,
+          "outcome": "success"
+        },
+        {
+          "question": "noi dung la gi",
+          "latency_ms": 3700.2,
+          "submit_status": 202,
+          "job_status": "done",
+          "rate_limited_hits": 5,
+          "answer_len": 1998,
+          "outcome": "success"
+        },
+        {
+          "question": "noi dung la gi",
+          "latency_ms": 6232.8,
+          "submit_status": 202,
+          "job_status": "done",
+          "rate_limited_hits": 10,
+          "answer_len": 1998,
+          "outcome": "success"
+        },
+        {
+          "question": "noi dung la gi",
+          "latency_ms": 2177.1,
+          "submit_status": 202,
+          "job_status": "done",
+          "rate_limited_hits": 2,
+          "answer_len": 1998,
+          "outcome": "success"
+        },
+        {
+          "question": "noi dung la gi",
+          "latency_ms": 2667.5,
+          "submit_status": 202,
+          "job_status": "done",
+          "rate_limited_hits": 3,
+          "answer_len": 1998,
+          "outcome": "success"
+        },
+        {
+          "question": "noi dung la gi",
+          "latency_ms": 4720.9,
+          "submit_status": 202,
+          "job_status": "done",
+          "rate_limited_hits": 7,
+          "answer_len": 1998,
+          "outcome": "success"
+        },
+        {
+          "question": "noi dung la gi",
+          "latency_ms": 1633.9,
+          "submit_status": 202,
+          "job_status": "done",
+          "rate_limited_hits": 1,
+          "answer_len": 1998,
+          "outcome": "success"
+        },
+        {
+          "question": "noi dung la gi",
+          "latency_ms": 6273.0,
+          "submit_status": 202,
+          "job_status": "done",
+          "rate_limited_hits": 10,
+          "answer_len": 1998,
+          "outcome": "success"
+        },
+        {
+          "question": "noi dung la gi",
+          "latency_ms": 174.0,
+          "submit_status": 202,
+          "job_status": "done",
+          "rate_limited_hits": 0,
+          "answer_len": 1998,
+          "outcome": "success"
+        },
+        {
+          "question": "noi dung la gi",
+          "latency_ms": 3726.3,
+          "submit_status": 202,
+          "job_status": "done",
+          "rate_limited_hits": 5,
+          "answer_len": 1998,
+          "outcome": "success"
+        },
+        {
+          "question": "noi dung la gi",
+          "latency_ms": 1687.4,
+          "submit_status": 202,
+          "job_status": "done",
+          "rate_limited_hits": 3,
+          "answer_len": 1998,
+          "outcome": "success"
+        },
+        {
+          "question": "noi dung la gi",
+          "latency_ms": 4741.1,
+          "submit_status": 202,
+          "job_status": "done",
+          "rate_limited_hits": 7,
+          "answer_len": 1998,
+          "outcome": "success"
+        },
+        {
+          "question": "noi dung la gi",
+          "latency_ms": 4284.2,
+          "submit_status": 202,
+          "job_status": "done",
+          "rate_limited_hits": 6,
+          "answer_len": 1998,
+          "outcome": "success"
+        },
+        {
+          "question": "noi dung la gi",
+          "latency_ms": 4296.9,
+          "submit_status": 202,
+          "job_status": "done",
+          "rate_limited_hits": 6,
+          "answer_len": 1998,
+          "outcome": "success"
+        },
+        {
+          "question": "noi dung la gi",
+          "latency_ms": 3240.7,
+          "submit_status": 202,
+          "job_status": "done",
+          "rate_limited_hits": 4,
+          "answer_len": 1998,
+          "outcome": "success"
+        },
+        {
+          "question": "noi dung la gi",
+          "latency_ms": 4769.6,
+          "submit_status": 202,
+          "job_status": "done",
+          "rate_limited_hits": 7,
+          "answer_len": 1998,
+          "outcome": "success"
+        },
+        {
+          "question": "noi dung la gi",
+          "latency_ms": 2174.2,
+          "submit_status": 202,
+          "job_status": "done",
+          "rate_limited_hits": 2,
+          "answer_len": 1998,
+          "outcome": "success"
+        },
+        {
+          "question": "noi dung la gi",
+          "latency_ms": 1698.3,
+          "submit_status": 202,
+          "job_status": "done",
+          "rate_limited_hits": 3,
+          "answer_len": 1998,
+          "outcome": "success"
+        },
+        {
+          "question": "noi dung la gi",
+          "latency_ms": 6842.1,
+          "submit_status": 202,
+          "job_status": "done",
+          "rate_limited_hits": 11,
+          "answer_len": 1998,
+          "outcome": "success"
+        },
+        {
+          "question": "noi dung la gi",
+          "latency_ms": 1667.4,
+          "submit_status": 202,
+          "job_status": "done",
+          "rate_limited_hits": 1,
+          "answer_len": 1998,
+          "outcome": "success"
+        },
+        {
+          "question": "noi dung la gi",
+          "latency_ms": 4819.0,
+          "submit_status": 202,
+          "job_status": "done",
+          "rate_limited_hits": 9,
+          "answer_len": 1998,
+          "outcome": "success"
+        },
+        {
+          "question": "noi dung la gi",
+          "latency_ms": 4831.6,
+          "submit_status": 202,
+          "job_status": "done",
+          "rate_limited_hits": 7,
+          "answer_len": 1998,
+          "outcome": "success"
+        },
+        {
+          "question": "noi dung la gi",
+          "latency_ms": 6351.4,
+          "submit_status": 202,
+          "job_status": "done",
+          "rate_limited_hits": 12,
+          "answer_len": 1998,
+          "outcome": "success"
+        },
+        {
+          "question": "noi dung la gi",
+          "latency_ms": 2756.9,
+          "submit_status": 202,
+          "job_status": "done",
+          "rate_limited_hits": 5,
+          "answer_len": 1998,
+          "outcome": "success"
+        },
+        {
+          "question": "noi dung la gi",
+          "latency_ms": 5309.4,
+          "submit_status": 202,
+          "job_status": "done",
+          "rate_limited_hits": 8,
+          "answer_len": 1998,
+          "outcome": "success"
+        },
+        {
+          "question": "noi dung la gi",
+          "latency_ms": 2708.7,
+          "submit_status": 202,
+          "job_status": "done",
+          "rate_limited_hits": 3,
+          "answer_len": 1998,
+          "outcome": "success"
+        },
+        {
+          "question": "noi dung la gi",
+          "latency_ms": 2175.3,
+          "submit_status": 202,
+          "job_status": "done",
+          "rate_limited_hits": 2,
+          "answer_len": 1998,
+          "outcome": "success"
+        },
+        {
+          "question": "noi dung la gi",
+          "latency_ms": 3263.9,
+          "submit_status": 202,
+          "job_status": "done",
+          "rate_limited_hits": 4,
+          "answer_len": 1998,
+          "outcome": "success"
+        },
+        {
+          "question": "noi dung la gi",
+          "latency_ms": 4831.6,
+          "submit_status": 202,
+          "job_status": "done",
+          "rate_limited_hits": 9,
+          "answer_len": 1998,
+          "outcome": "success"
+        }
+      ]
+    }
+  ],
+  "health": {
+    "backend_reachable": true,
+    "backend_health": {
+      "ingest_graph_ready": true,
+      "mode": "normal",
+      "query_graph_ready": true,
+      "status": "ok"
+    },
+    "backend_error": null,
+    "query_graph_ready": true,
+    "num_documents": 1,
+    "num_chunks": 6,
+    "ollama_reachable": true,
+    "ollama_models": [
+      "qwen3.5:9b",
+      "qwen2.5:14b",
+      "gemma2:2b",
+      "gemma4:e4b"
+    ],
+    "redis_reachable": true,
+    "logs_sqlite_readable": true,
+    "generate_answer_count_so_far": 1
+  }
+}

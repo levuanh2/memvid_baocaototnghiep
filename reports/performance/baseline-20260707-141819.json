@@ -1,0 +1,155 @@
+{
+  "timestamp": "20260707-141819",
+  "base_url": "http://localhost:8080",
+  "scenarios": [
+    {
+      "scenario": "identical",
+      "mode": "identical",
+      "concurrency": 10,
+      "total_requests": 10,
+      "success_count": 10,
+      "empty_response_count": 0,
+      "fallback_answer_count": 0,
+      "error_count": 0,
+      "timeout_count": 0,
+      "rate_limited_count": 0,
+      "rate_limited_hits_total": 322,
+      "http_5xx_count": 0,
+      "outcomes": {
+        "success": 10
+      },
+      "p50_latency_ms": 84412.7,
+      "p95_latency_ms": 85074.5,
+      "p99_latency_ms": 85429.8,
+      "min_latency_ms": 84367.1,
+      "max_latency_ms": 85518.6,
+      "wall_seconds": 85.5,
+      "throughput_rps": 0.117,
+      "cache_delta": {
+        "hits_exact": 0,
+        "hits_exact_nodia": 0,
+        "hits_semantic": 0,
+        "hits_semantic_judged": 0,
+        "misses": 0,
+        "saved_llm_calls": 0,
+        "hits_total": 0
+      },
+      "llm_generations": null,
+      "records": [
+        {
+          "question": "noi dung la gi",
+          "latency_ms": 84367.1,
+          "submit_status": 202,
+          "job_status": "done",
+          "rate_limited_hits": 0,
+          "answer_len": 1998,
+          "outcome": "success"
+        },
+        {
+          "question": "noi dung la gi",
+          "latency_ms": 84423.7,
+          "submit_status": 202,
+          "job_status": "done",
+          "rate_limited_hits": 0,
+          "answer_len": 1998,
+          "outcome": "success"
+        },
+        {
+          "question": "noi dung la gi",
+          "latency_ms": 84397.0,
+          "submit_status": 202,
+          "job_status": "done",
+          "rate_limited_hits": 0,
+          "answer_len": 1998,
+          "outcome": "success"
+        },
+        {
+          "question": "noi dung la gi",
+          "latency_ms": 84400.2,
+          "submit_status": 202,
+          "job_status": "done",
+          "rate_limited_hits": 0,
+          "answer_len": 1998,
+          "outcome": "success"
+        },
+        {
+          "question": "noi dung la gi",
+          "latency_ms": 84423.2,
+          "submit_status": 202,
+          "job_status": "done",
+          "rate_limited_hits": 0,
+          "answer_len": 1998,
+          "outcome": "success"
+        },
+        {
+          "question": "noi dung la gi",
+          "latency_ms": 84396.9,
+          "submit_status": 202,
+          "job_status": "done",
+          "rate_limited_hits": 0,
+          "answer_len": 1998,
+          "outcome": "success"
+        },
+        {
+          "question": "noi dung la gi",
+          "latency_ms": 84404.9,
+          "submit_status": 202,
+          "job_status": "done",
+          "rate_limited_hits": 0,
+          "answer_len": 1998,
+          "outcome": "success"
+        },
+        {
+          "question": "noi dung la gi",
+          "latency_ms": 84420.5,
+          "submit_status": 202,
+          "job_status": "done",
+          "rate_limited_hits": 0,
+          "answer_len": 1998,
+          "outcome": "success"
+        },
+        {
+          "question": "noi dung la gi",
+          "latency_ms": 85518.6,
+          "submit_status": 202,
+          "job_status": "done",
+          "rate_limited_hits": 161,
+          "answer_len": 1998,
+          "outcome": "success"
+        },
+        {
+          "question": "noi dung la gi",
+          "latency_ms": 84531.6,
+          "submit_status": 202,
+          "job_status": "done",
+          "rate_limited_hits": 161,
+          "answer_len": 1998,
+          "outcome": "success"
+        }
+      ]
+    }
+  ],
+  "health": {
+    "backend_reachable": true,
+    "backend_health": {
+      "ingest_graph_ready": true,
+      "mode": "normal",
+      "query_graph_ready": true,
+      "status": "ok"
+    },
+    "backend_error": null,
+    "query_graph_ready": true,
+    "num_documents": 1,
+    "num_chunks": 6,
+    "ollama_reachable": true,
+    "ollama_models": [
+      "qwen3.5:9b",
+      "qwen2.5:14b",
+      "gemma2:2b",
+      "gemma4:e4b"
+    ],
+    "redis_reachable": true,
+    "logs_sqlite_readable": false,
+    "generate_answer_count_so_far": null
+  }
+}

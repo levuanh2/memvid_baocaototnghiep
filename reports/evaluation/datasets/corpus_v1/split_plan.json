@@ -1,0 +1,18 @@
+{
+  "status": "proposed_not_frozen",
+  "strategy": "document_level",
+  "development": ["cv1_ragas_guardrails"],
+  "test": ["cv1_vector_feature_store", "cv1_social_engineering"],
+  "document_ratio": {"development": 0.3333, "test": 0.6667},
+  "candidate_query_counts": {"development": 28, "test": 32},
+  "rationale": "The AI/RAG domain appears in both splits, while test also covers cybersecurity. This is more coherent than placing cybersecurity alone in development and both AI slide decks in test.",
+  "duplicate_group_constraint": "All documents in one duplicate_group must remain in one split.",
+  "near_duplicate_constraint": "Human-confirmed near versions must remain in one split.",
+  "cross_document_query_constraint": "All relevant documents for a query must belong to the query split.",
+  "limitations": [
+    "Only three eligible real documents were available.",
+    "Cybersecurity is represented only in test.",
+    "The development document is much longer than either test document.",
+    "The split and every candidate query assignment still require human approval."
+  ]
+}

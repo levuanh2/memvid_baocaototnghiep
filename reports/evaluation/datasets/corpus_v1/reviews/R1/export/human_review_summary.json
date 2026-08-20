@@ -1,0 +1,39 @@
+{
+  "schema_version": "human-review-summary-v1",
+  "reviewer_id": "R1",
+  "exported_at": "2026-08-13T10:16:24.480948+00:00",
+  "candidate_package_hash": "49a85796cfcf8878515274fa3cbd742e70c3a36271236bcdf36664cdc01e4561",
+  "counts": {
+    "queries": {
+      "approved": 46,
+      "edited": 9,
+      "rejected": 5,
+      "pending": 0
+    },
+    "citations": {
+      "reviewed": 83,
+      "pending": 0,
+      "total": 83
+    },
+    "contradictions": {
+      "reviewed": 3,
+      "pending": 0,
+      "total": 3
+    },
+    "artifacts": {
+      "reviewed": 3,
+      "pending": 0,
+      "total": 3
+    },
+    "corpus": {
+      "reviewed": 3,
+      "pending": 0,
+      "total": 3,
+      "complete": true
+    },
+    "complete": true,
+    "dataset_blocked": false
+  },
+  "contains_research_performance_metrics": false,
+  "dataset_frozen": false
+}

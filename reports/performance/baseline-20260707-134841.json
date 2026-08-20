@@ -1,0 +1,156 @@
+{
+  "timestamp": "20260707-134841",
+  "base_url": "http://localhost:8080",
+  "scenarios": [
+    {
+      "scenario": "distinct",
+      "mode": "distinct",
+      "concurrency": 10,
+      "total_requests": 10,
+      "success_count": 9,
+      "empty_response_count": 0,
+      "fallback_answer_count": 0,
+      "error_count": 1,
+      "timeout_count": 0,
+      "rate_limited_count": 0,
+      "rate_limited_hits_total": 6,
+      "http_5xx_count": 0,
+      "outcomes": {
+        "success": 9,
+        "error": 1
+      },
+      "p50_latency_ms": 75676.9,
+      "p95_latency_ms": 215031.0,
+      "p99_latency_ms": 236374.7,
+      "min_latency_ms": 1160.6,
+      "max_latency_ms": 241710.6,
+      "wall_seconds": 241.7,
+      "throughput_rps": 0.041,
+      "cache_delta": {
+        "hits_exact": 0,
+        "hits_exact_nodia": 0,
+        "hits_semantic": 0,
+        "hits_semantic_judged": 0,
+        "misses": 0,
+        "saved_llm_calls": 0,
+        "hits_total": 0
+      },
+      "llm_generations": 6,
+      "records": [
+        {
+          "question": "nội dung chính của tài liệu là gì",
+          "latency_ms": 88273.4,
+          "submit_status": 202,
+          "job_status": "done",
+          "rate_limited_hits": 0,
+          "answer_len": 1389,
+          "outcome": "success"
+        },
+        {
+          "question": "tài liệu này nói về chủ đề gì",
+          "latency_ms": 6204.1,
+          "submit_status": 202,
+          "job_status": "done",
+          "rate_limited_hits": 0,
+          "answer_len": 1203,
+          "outcome": "success"
+        },
+        {
+          "question": "tóm tắt tài liệu giúp tôi",
+          "latency_ms": 241710.6,
+          "submit_status": 202,
+          "job_status": "done",
+          "rate_limited_hits": 0,
+          "answer_len": 0,
+          "outcome": "error"
+        },
+        {
+          "question": "các ý chính trong tài liệu là gì",
+          "latency_ms": 144287.4,
+          "submit_status": 202,
+          "job_status": "done",
+          "rate_limited_hits": 0,
+          "answer_len": 1769,
+          "outcome": "success"
+        },
+        {
+          "question": "tài liệu đề cập đến vấn đề gì",
+          "latency_ms": 1160.6,
+          "submit_status": 202,
+          "job_status": "done",
+          "rate_limited_hits": 0,
+          "answer_len": 1203,
+          "outcome": "success"
+        },
+        {
+          "question": "mục đích của tài liệu là gì",
+          "latency_ms": 63080.3,
+          "submit_status": 202,
+          "job_status": "done",
+          "rate_limited_hits": 0,
+          "answer_len": 1238,
+          "outcome": "success"
+        },
+        {
+          "question": "tài liệu này dành cho ai",
+          "latency_ms": 109759.8,
+          "submit_status": 202,
+          "job_status": "done",
+          "rate_limited_hits": 0,
+          "answer_len": 1165,
+          "outcome": "success"
+        },
+        {
+          "question": "có những phần nào trong tài liệu",
+          "latency_ms": 182422.6,
+          "submit_status": 202,
+          "job_status": "done",
+          "rate_limited_hits": 1,
+          "answer_len": 1972,
+          "outcome": "success"
+        },
+        {
+          "question": "kết luận của tài liệu là gì",
+          "latency_ms": 3195.4,
+          "submit_status": 202,
+          "job_status": "done",
+          "rate_limited_hits": 4,
+          "answer_len": 449,
+          "outcome": "success"
+        },
+        {
+          "question": "tài liệu trình bày những gì",
+          "latency_ms": 1702.7,
+          "submit_status": 202,
+          "job_status": "done",
+          "rate_limited_hits": 1,
+          "answer_len": 1883,
+          "outcome": "success"
+        }
+      ]
+    }
+  ],
+  "health": {
+    "backend_reachable": true,
+    "backend_health": {
+      "ingest_graph_ready": true,
+      "mode": "normal",
+      "query_graph_ready": true,
+      "status": "ok"
+    },
+    "backend_error": null,
+    "query_graph_ready": true,
+    "num_documents": 1,
+    "num_chunks": 6,
+    "ollama_reachable": true,
+    "ollama_models": [
+      "qwen3.5:9b",
+      "qwen2.5:14b",
+      "gemma2:2b",
+      "gemma4:e4b"
+    ],
+    "redis_reachable": true,
+    "logs_sqlite_readable": true,
+    "generate_answer_count_so_far": 23
+  }
+}

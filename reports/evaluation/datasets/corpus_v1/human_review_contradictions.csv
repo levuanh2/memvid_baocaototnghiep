@@ -1,0 +1,4 @@
+﻿pair_id,query_id,span_a_id,span_a_text,span_b_id,span_b_text,proposed_label,notes,reviewer_id,review_decision,corrected_label,human_rationale,reviewer_notes
+NC01,V16,V16_candidate_s01,Match metric với pretraining ● objective: sai metric degrade ● recall 10–20%,V16_candidate_s02,"unit-norm -> thứ tự xếp hạng (ranking) của cosine similarity, dot product và Euclidean distance là giống nhau",conditional difference,Metric mismatch warning versus equivalence under unit normalization.,,,,,
+NC02,R27,R27_candidate_s01,entailment_score < 0.5 →flag. < 0.3 →block.,R27_candidate_s02,entailment_score < 0.5 →block,direct contradiction,Different block thresholds appear in two NLI policy slides; scope may differ.,,,,,
+NC03,R14,R14_candidate_s01,Eval suite (RAGAS ≥0.75) + guardrail layer (overhead < 100ms P95) + blueprint document.,R14_candidate_s02,Pattern: mọi PR chạy eval trước khi merge.,scope difference,End-of-day deliverable threshold versus CI gate design.,,,,,

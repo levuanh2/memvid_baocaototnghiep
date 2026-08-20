@@ -1,0 +1,15 @@
+schema_version: memvid-evaluation-config-v1
+experiment_id: E7_full_hitl
+split: test
+seed: 20260811
+index_dir: reports/evaluation/indexes/R2_late
+representation_id: R2
+retrieval: {mode: hybrid, candidate_k: 20, top_k: 20, bm25_weight: 0.4, faiss_weight: 0.6, rrf_k: 60}
+rerank: {enabled: true, model: BAAI/bge-reranker-v2-m3, top_n: 6}
+nli: {enabled: true, model: MoritzLaurer/mDeBERTa-v3-base-mnli-xnli, threshold: 0.6, max_pairs: 3}
+crag: {enabled: true, correct_threshold: 0.25, wrong_floor: 0.10, rewrite_max: 2, threshold_source: original_heuristic}
+memory_tree: {enabled: true, routing: true}
+cache: {semantic_answer: false, retrieval: false}
+hitl: {enabled: true, protocol: reports/evaluation/annotations/HITL_PROTOCOL.md, fake_reviewer_forbidden: true}
+source_tags: true
+generator_model: qwen2.5:7b-instruct
