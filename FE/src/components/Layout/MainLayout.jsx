@@ -1,5 +1,5 @@
 import { useState, useCallback } from "react";
-import { useNavigate } from "react-router-dom";
+import { Link, useNavigate } from "react-router-dom";
 import SidebarLeft from "./SidebarLeft";
 import ChatArea from "./ChatArea";
 import SidebarRight from "./SidebarRight";
@@ -72,6 +72,16 @@ export default function MainLayout({ selectedSources, setSelectedSources }) {
 
         {/* Right actions */}
         <div className="flex items-center gap-2 flex-shrink-0">
+          {/* Sang gian StudyMap — cùng toà nhà, khác việc: đọc ở đây, kiểm tra ở kia. */}
+          <Link
+            to="/app/study"
+            className="pill-action"
+            title="Quiz chẩn đoán, ôn tập theo lỗ hổng"
+          >
+            <Icon name="ScrollText" size={14} />
+            <span className="hidden sm:inline">StudyMap</span>
+          </Link>
+
           {/* Mobile: open evidence margin */}
           <button onClick={() => setRightOpen(true)} className="md:hidden icon-btn w-9 h-9" aria-label="Mở lề bằng chứng">
             <Icon name="PanelRight" size={18} />

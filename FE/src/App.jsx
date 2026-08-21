@@ -5,6 +5,13 @@ import Landing from "./pages/Landing";
 import Login from "./pages/Login";
 import Register from "./pages/Register";
 import Workspace from "./pages/Workspace";
+import DocumentList from "./pages/study/DocumentList";
+import QuizSetup from "./pages/study/QuizSetup";
+import QuizTaking from "./pages/study/QuizTaking";
+import QuizResult from "./pages/study/QuizResult";
+import ReviewGuide from "./pages/study/ReviewGuide";
+import Practice from "./pages/study/Practice";
+
 
 export default function App() {
   // Apply the persisted light/dark preference app-wide (every route inherits it).
@@ -26,6 +33,13 @@ export default function App() {
         }
       />
       <Route path="/app/chat" element={<Navigate to="/app" replace />} />
+      {/* StudyMap — dữ liệu học tập là dữ liệu cá nhân, mọi trang đều sau ProtectedRoute. */}
+      <Route path="/app/study" element={<ProtectedRoute><DocumentList /></ProtectedRoute>} />
+      <Route path="/app/study/quiz/new" element={<ProtectedRoute><QuizSetup /></ProtectedRoute>} />
+      <Route path="/app/study/quiz/:quizId" element={<ProtectedRoute><QuizTaking /></ProtectedRoute>} />
+      <Route path="/app/study/result/:attemptId" element={<ProtectedRoute><QuizResult /></ProtectedRoute>} />
+      <Route path="/app/study/review/:attemptId" element={<ProtectedRoute><ReviewGuide /></ProtectedRoute>} />
+      <Route path="/app/study/practice/:quizId" element={<ProtectedRoute><Practice /></ProtectedRoute>} />
       <Route path="*" element={<Navigate to="/" replace />} />
     </Routes>
   );
