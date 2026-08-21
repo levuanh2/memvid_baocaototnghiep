@@ -425,3 +425,18 @@
 .answer-option--selected .answer-option__key,
 .answer-option--correct .answer-option__key,
 .answer-option--wrong .answer-option__key { color: currentColor; border-color: currentColor; }
+
+/* Trích đoạn nguồn trong bảng chi tiết sơ đồ — cùng ngôn ngữ "dẫn chứng" với
+   .cite-chip ở phần chat: lề trái là vạch mực, không phải khung viền. */
+.cite-block {
+  border-left: 2px solid var(--brand);
+  padding: 0.15rem 0 0.15rem 0.7rem;
+}
+
+/* Nhánh cây sơ đồ. `fill: none` là BẮT BUỘC: react-d3-tree tô đen đặc mọi
+   <path> mặc định, nhánh gấp khúc sẽ thành mảng đen che hết chữ. */
+.study-map__link {
+  fill: none;
+  stroke: var(--border-strong);
+  stroke-width: 1.2;
+}

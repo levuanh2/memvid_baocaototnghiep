@@ -144,6 +144,15 @@ export default function DocumentList() {
                   <StatusTag status={d.status} />
                   <button
                     type="button"
+                    className="btn-secondary text-[13px] shrink-0 disabled:opacity-50 inline-flex items-center gap-1.5"
+                    disabled={!ready}
+                    title={ready ? "" : "Tài liệu đang được xử lý"}
+                    onClick={() => navigate(`/app/study/map/${encodeURIComponent(d.document_id)}`)}
+                  >
+                    <Icon name="Network" size={14} /> Sơ đồ
+                  </button>
+                  <button
+                    type="button"
                     className="btn-secondary text-[13px] shrink-0 disabled:opacity-50"
                     disabled={!ready}
                     title={ready ? "" : "Tài liệu đang được xử lý"}

@@ -1,5 +1,6 @@
 import { describe, it, expect, beforeEach, afterEach, vi } from "vitest";
 import {
+  buildMapTree,
   fetchJobStatus,
   formatDuration,
   formatScore,
@@ -128,5 +129,53 @@ describe("studyApi formatting", () => {
     expect(formatDuration(125)).toBe("2 phút 5 giây");
     expect(formatDuration(-1)).toBe("—");
     expect(formatDuration(null)).toBe("—");
+  });
+});
+
+describe("buildMapTree", () => {
+  const N = (id, parent, extra = {}) => ({
+    node_id: id, parent_node_id: parent, title: id.toUpperCase(), node_type: "concept", ...extra,
+  });
+
+  it("dựng cây từ danh sách phẳng và giữ node gốc", () => {
+    const t = buildMapTree([N("a", null, { node_type: "root" }), N("b", "a"), N("c", "b")]);
+    expect(t.name).toBe("A");
+    expect(t.children).toHaveLength(1);
+    expect(t.children[0].children[0].name).toBe("C");
+  });
+
+  it("giữ nguyên node gốc trong attributes để bấm ra chunk nguồn", () => {
+    const t = buildMapTree([N("a", null, { chunk_ids: ["c1"] })]);
+    expect(t.attributes.chunk_ids).toEqual(["c1"]);
+    expect(t.attributes.node_id).toBe("a");
+  });
+
+  it("node mồ côi (cha không tồn tại) được treo lên gốc, KHÔNG bị mất", () => {
+    const t = buildMapTree([N("a", null), N("x", "khong-co-that")]);
+    // hai gốc -> bọc trong một gốc ảo, cả hai đều còn
+    const titles = t.children.map((c) => c.name).sort();
+    expect(titles).toEqual(["A", "X"]);
+  });
+
+  it("vòng lặp cha-con không làm mất node và không treo", () => {
+    const t = buildMapTree([N("a", null), N("b", "c"), N("c", "b")]);
+    const seen = [];
+    const walk = (n) => { seen.push(n.name); n.children.forEach(walk); };
+    walk(t);
+    expect(seen).toContain("B");
+    expect(seen).toContain("C");
+    // mỗi node đúng một lần — không nhân bản do vòng lặp
+    expect(new Set(seen).size).toBe(seen.length);
+  });
+
+  it("node tự làm cha chính nó không tạo self-loop", () => {
+    const t = buildMapTree([N("a", "a")]);
+    expect(t.name).toBe("A");
+    expect(t.children).toEqual([]);
+  });
+
+  it("danh sách rỗng trả null để trang hiện trạng thái trống, không phải cây rỗng", () => {
+    expect(buildMapTree([])).toBeNull();
+    expect(buildMapTree(undefined)).toBeNull();
   });
 });

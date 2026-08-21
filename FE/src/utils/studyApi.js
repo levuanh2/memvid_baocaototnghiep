@@ -38,6 +38,20 @@ export const uploadDocument = async (file) => {
   return apiFetch("/api/documents/upload", { method: "POST", body: form }).then(_json);
 };
 
+// ── Sơ đồ kiến thức (FR-04) ─────────────────────────────────────────────────
+export const generateStudyMap = (documentId, { force = false } = {}) =>
+  _send("/api/study-maps/generate", "POST", { document_id: documentId, force });
+
+export const getStudyMap = (mapId) => _get(`/api/study-maps/${encodeURIComponent(mapId)}`);
+
+export const listStudyMaps = (documentId) =>
+  _get(`/api/documents/${encodeURIComponent(documentId)}/study-maps`).then((b) => b.study_maps || []);
+
+// Đoạn văn nguồn để hiện khi bấm một node. Lấy MỘT lần rồi tra theo chunk_id —
+// node trỏ tới chunk bằng id, không kèm text.
+export const listChunks = (documentId, { limit = 500 } = {}) =>
+  _get(`/api/documents/${encodeURIComponent(documentId)}/chunks?limit=${limit}`).then((b) => b.chunks || []);
+
 // ── Quiz ────────────────────────────────────────────────────────────────────
 export const generateQuiz = (payload) => _send("/api/quizzes/generate", "POST", payload);
 
@@ -154,3 +168,69 @@ export const formatDuration = (seconds) => {
   const s = Math.round(n % 60);
   return m ? `${m} phút ${s} giây` : `${s} giây`;
 };
+
+// Nhãn hiển thị cho sơ đồ kiến thức.
+export const NODE_TYPE_LABEL = {
+  root: "Tài liệu",
+  section: "Chương mục",
+  concept: "Khái niệm",
+  example: "Ví dụ",
+};
+
+export const RELATION_LABEL = {
+  parent_child: "chứa",
+  prerequisite: "cần học trước",
+  supports: "củng cố",
+  contrasts: "đối lập",
+  related: "liên quan",
+};
+
+/**
+ * Danh sách node phẳng -> cây cho react-d3-tree.
+ *
+ * Backend đã sắp cha-trước-con, nhưng KHÔNG tin điều đó ở đây: một node mồ côi
+ * (cha bị lọc mất) hay một vòng lặp sẽ làm cây rỗng và người dùng thấy trang
+ * trắng không rõ vì sao. Node không gắn được vào đâu thì treo lên gốc.
+ */
+export function buildMapTree(nodes) {
+  const list = Array.isArray(nodes) ? nodes.filter((n) => n && n.node_id) : [];
+  if (!list.length) return null;
+
+  const byId = new Map(list.map((n) => [n.node_id, n]));
+  const childIds = new Map();
+  const rootIds = [];
+  for (const n of list) {
+    const parent = n.parent_node_id;
+    // Cha phải tồn tại và không phải chính nó, nếu không node thành gốc.
+    if (parent && parent !== n.node_id && byId.has(parent)) {
+      if (!childIds.has(parent)) childIds.set(parent, []);
+      childIds.get(parent).push(n.node_id);
+    } else {
+      rootIds.push(n.node_id);
+    }
+  }
+
+  // Gắn từ trên xuống, mỗi node gắn ĐÚNG MỘT LẦN. Kiểm `attached` ngay lúc gắn
+  // (không lọc trước rồi map) — nếu không, một node đã bị nhánh trước hút vào
+  // vẫn được gắn lại ở nhánh sau và cây thành vòng.
+  const attached = new Set();
+  const makeNode = (id) => {
+    attached.add(id);
+    const n = byId.get(id);
+    const children = [];
+    for (const childId of childIds.get(id) || []) {
+      if (!attached.has(childId)) children.push(makeNode(childId));
+    }
+    return { name: n.title || "(không tên)", attributes: n, children };
+  };
+
+  const roots = rootIds.map(makeNode);
+  // Còn sót = node nằm trong vòng lặp cha-con (không tới được từ gốc nào).
+  // Kéo lên gốc: cây phẳng hơn vẫn tốt hơn mất node hoặc treo trình duyệt.
+  for (const n of list) {
+    if (!attached.has(n.node_id)) roots.push(makeNode(n.node_id));
+  }
+
+  if (roots.length === 1) return roots[0];
+  return { name: "Sơ đồ", attributes: { node_type: "root" }, children: roots };
+}

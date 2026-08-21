@@ -6,6 +6,7 @@ import Login from "./pages/Login";
 import Register from "./pages/Register";
 import Workspace from "./pages/Workspace";
 import DocumentList from "./pages/study/DocumentList";
+import StudyMapView from "./pages/study/StudyMapView";
 import QuizSetup from "./pages/study/QuizSetup";
 import QuizTaking from "./pages/study/QuizTaking";
 import QuizResult from "./pages/study/QuizResult";
@@ -35,6 +36,7 @@ export default function App() {
       <Route path="/app/chat" element={<Navigate to="/app" replace />} />
       {/* StudyMap — dữ liệu học tập là dữ liệu cá nhân, mọi trang đều sau ProtectedRoute. */}
       <Route path="/app/study" element={<ProtectedRoute><DocumentList /></ProtectedRoute>} />
+      <Route path="/app/study/map/:documentId" element={<ProtectedRoute><StudyMapView /></ProtectedRoute>} />
       <Route path="/app/study/quiz/new" element={<ProtectedRoute><QuizSetup /></ProtectedRoute>} />
       <Route path="/app/study/quiz/:quizId" element={<ProtectedRoute><QuizTaking /></ProtectedRoute>} />
       <Route path="/app/study/result/:attemptId" element={<ProtectedRoute><QuizResult /></ProtectedRoute>} />
