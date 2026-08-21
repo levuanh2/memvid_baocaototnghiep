@@ -1,5 +1,54 @@
 # Known Issues
 
+## (ĐÃ SỬA 2026-08-21) `QUERY_GRAPH chưa khởi tạo` — site-packages global trôi khỏi MỌI pin
+
+- **Triệu chứng:** `/health` trả `query_graph_ready: false` +
+  `ModuleNotFoundError("No module named 'langchain_core.pydantic_v1')`. Ingest và toàn bộ
+  StudyMap chạy bình thường, riêng `/query` (chat) chết. FE hiện "QUERY_GRAPH chưa khởi tạo".
+- **Root cause:** Python global không còn khớp `requirements.txt` ở BẤT KỲ dòng nào —
+  langchain 0.2.17 (pin >=0.3.27), langchain-core 1.4.8 (pin <0.4), langchain-community
+  0.2.19, langchain-text-splitters 0.2.4, langgraph 1.0.1 (pin <0.3), pydantic 2.12.5
+  (pin <2.11). langchain 0.2.x gọi `langchain_core.pydantic_v1`, thứ langchain-core 1.x
+  đã bỏ. Đây chính là mục "Global python site-packages trôi khỏi requirements.txt pin"
+  bên dưới, lần này đủ nặng để làm chết một pipeline.
+- **Fix:** venv riêng `BE/.venv` + `pip install -r requirements.txt`. KHÔNG cài đè lên
+  Python global: hạ langgraph 1.x xuống 0.2.x ở phạm vi máy sẽ đụng mọi project khác, và
+  langgraph 1.x kéo ormsgpack vốn bị Windows Application Control chặn.
+  Chạy BE: `BE/.venv/Scripts/python.exe -m app.main`.
+- **Prevention:** `/health` đã phơi `query_graph_error` — nhưng không ai đọc /health trước
+  khi kết luận "chat hỏng". Kiểm tra /health TRƯỚC khi đọc log. Và đừng chạy BE bằng Python
+  global nữa; global sẽ trôi tiếp.
+
+## (KHÔNG PHẢI LỖI 2026-08-21) `/query-stream/<job_id>` trả 401 khi bật AUTH_PROTECT_APP_APIS
+
+`EventSource` của trình duyệt KHÔNG gửi được header `Authorization` — đây là giới hạn của
+Web API, không phải bug. Nên khi bật bảo vệ app API, SSE luôn 401.
+
+FE đã xử lý: `es.onerror` gắn cờ `sseConnectionLost`, `shouldPollFallback` cho qua, rồi
+`pollQueryStatus` gọi `/query-status` qua `apiFetch` (có Bearer). Có comment "Phase F.1"
+tại `ChatArea.jsx`. Thấy 401 này trong Network tab thì BỎ QUA — chữa nó (nhét token vào
+query string) là tự tạo lỗ hổng rò token qua log server.
+
+## (KHÔNG PHẢI LỖI 2026-08-21) Study map 44 node nhưng `knowledge_edges` chỉ có 2 hàng
+
+Đọc `edges: 2` rồi kết luận "bước Relations rớt cạnh" là SAI. Cây cha-con nằm ở cột
+`knowledge_nodes.parent_node_id`, KHÔNG nằm ở `knowledge_edges`. Đo thật trên map
+686f8481: 43/44 node có `parent_node_id` (chỉ root không có), phân tầng 1 root → 6 section
+→ 27 concept → 10 example. `knowledge_edges` chỉ giữ liên kết NGANG (ngoài cây) — 2 cạnh
+đó đều là quan hệ thật.
+
+Muốn biết graph có đầy đủ không thì đếm `parent_node_id`, đừng đếm `knowledge_edges`.
+
+## (2026-08-21) `PATCH /api/attempts/<id>/answers` nuốt im lặng khoá lạ
+
+Route nhận `answers` dạng list và đọc `a.get("user_answer")`. Gửi nhầm tên trường (ví dụ
+`answer_text`) thì mọi đáp án lưu thành `None`, route vẫn trả **200**, bài chấm ra 0 điểm
+và không có lỗi nào ở đâu cả. Mất hai vòng thử ~5 phút mới tìm ra khi viết script seed.
+
+CHƯA SỬA. Hướng sửa: dict item không có khoá `user_answer` thì trả 400 kèm tên khoá lạ,
+thay vì mặc định None.
+
+
 ## (ĐÃ SỬA 2026-08-21) Smoke end-to-end với LLM thật — 3 lỗi mà 696 unit test không bắt được
 
 Chạy đúng kịch bản demo PRD mục 19 (upload tài liệu Toán → quiz 10 câu → làm sai phần

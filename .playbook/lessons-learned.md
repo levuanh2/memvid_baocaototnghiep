@@ -1,5 +1,49 @@
 # Lessons Learned
 
+## 2026-08-21 - Trang sơ đồ kiến thức (/app/study/map) + chạy app thật lần đầu
+
+### Về việc dựng graph viewer
+
+- **Cây thì dùng thư viện vẽ cây.** 43/44 quan hệ là cha-con thật → `react-d3-tree`,
+  không phải `mind-elixir`. mind-elixir tự sở hữu canvas lẫn model node và không giữ
+  field lạ (bài học 2026-07-16), trong khi trang này cần `node_id` ổn định để tra ngược
+  chunk nguồn. Chọn thư viện theo HÌNH DẠNG dữ liệu, không theo "cái nào đã có sẵn".
+- **`react-d3-tree` tô đen đặc mọi `<path>` mặc định.** Không đặt `fill: none` cho link
+  thì nhánh gấp khúc thành mảng đen che hết chữ. Đây là mặc định của thư viện, không
+  phải lỗi CSS của mình.
+- **Nhãn đặt ngang tâm node sẽ bị chính đường nối gạch xuyên qua** khi
+  `pathFunc="step"` + `orientation="horizontal"`: link chạy ngang đúng tầm tâm node. Đặt
+  nhãn TRÊN node, cộng quầng `paintOrder: stroke` màu nền cho nhánh vẫn cắt qua.
+- **Mở sẵn một tầng thì cú bấm phải làm HAI việc.** `initialDepth={1}` mà node chỉ
+  `setSelected` là không nhánh nào bung ra được — phải gọi cả `toggleNode`. Đổi chế độ
+  hiển thị mặc định luôn kéo theo đổi hợp đồng tương tác.
+- **Lá và nhánh đã thu phải nhìn khác nhau**, nếu không người đọc tưởng cây chỉ có 7 node.
+
+### Về chống vòng lặp trong cấu trúc cây
+
+- **`seen` chặn lượt duyệt KHÔNG chặn dữ liệu.** Bản `buildMapTree` đầu dùng set `seen`
+  khi walk, nên hàm không treo — nhưng cấu trúc TRẢ VỀ vẫn có vòng (b.children=[c],
+  c.children=[b]) và react-d3-tree sẽ treo trình duyệt. Muốn cây không vòng thì phải gắn
+  mỗi node ĐÚNG MỘT LẦN lúc dựng, kiểm `attached` ngay tại thời điểm gắn — không lọc
+  trước rồi map (lọc chạy hết mảng trước khi nhánh đầu kịp hút node vào).
+- Test bắt được đúng lỗi này trước khi lên trang. Logic mồ côi/vòng lặp là chỗ RẤT đáng
+  viết test: hỏng thì ra trang trắng hoặc treo tab, không ra exception.
+
+### Về chạy app thật
+
+- **Chạy thật bắt được thứ test không bắt.** 696 test BE + 168 test FE đều xanh trong khi
+  `/query` chết hoàn toàn vì môi trường, và FR-04 không có đường nào vào từ UI. Không test
+  nào phát hiện được cả hai.
+- **Script kiểm thử sai còn tốn thời gian hơn không có.** Hai vòng seed ra 0/10 điểm đều
+  là lỗi script tao (đọc `correct_answer` từ API vốn cố tình không trả nó; gửi `answer_text`
+  trong khi route đọc `user_answer`), không phải lỗi app. Đọc hợp đồng route TRƯỚC khi
+  viết client, đừng suy tên trường.
+- **Đừng đọc số liệu từ ảnh thu nhỏ.** Đọc "38" trong ảnh downscale 0.53x, thật ra là
+  "80" — suýt báo một bug không tồn tại. Số liệu thì hỏi API, ảnh chỉ để xem bố cục.
+- **Job chưa xong không phải job hỏng.** Poll study map 300s rồi kết luận "treo"; nó xong
+  ở 335s. Chọn hạn chờ theo thời gian chạy thật đã đo, không theo cảm giác.
+
+
 ## 2026-08-21 - Phase 8 StudyMap: Frontend (6 trang /app/study)
 
 ### Bài học
