@@ -18,15 +18,7 @@ def test_ingest_enriched_metadata(tmp_path, monkeypatch):
 
     captured = {}
 
-    def fake_process(chunks, video_name, timestamp):
-        entries = [
-            {"text": c, "video": video_name, "timestamp": timestamp,
-             "parent_id": None, "sub_order": None, "total_parts": None, "is_subchunk": False}
-            for c in chunks
-        ]
-        return ("fake_video.mp4", entries)
-
-    def fake_append(chunks, video_name, custom_metadata=None, batch_size=32):
+    def fake_append(chunks, source_name, custom_metadata=None, batch_size=32, embeddings=None):
         captured["chunks"] = chunks
         captured["custom_metadata"] = custom_metadata
 
@@ -35,7 +27,6 @@ def test_ingest_enriched_metadata(tmp_path, monkeypatch):
         data_dir=tmp_path,
         extract_text=lambda p: Path(p).read_text(encoding="utf-8"),
         split_text=lambda t: [t],
-        process_and_store_chunks=fake_process,
         append_to_index=fake_append,
         build_memory_tree_for_sources=lambda srcs: None,
         jobs_update=None,

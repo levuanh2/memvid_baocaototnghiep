@@ -1,16 +1,43 @@
 """Phase 2 — backend auth MVP (Bearer token).
 
 Uses the shared session-scoped `client` fixture (Flask test_client). Unique emails
-per test avoid collisions on the shared users.sqlite. AUTH_SECRET is unset in tests
-→ ephemeral per-process secret (fine within a run).
+per test avoid collisions. AUTH_SECRET is unset in tests → ephemeral per-process
+secret (fine within a run).
+
+Từ Phase 1 store chạy trên PostgreSQL (Supabase) thay vì users.sqlite → cần
+DATABASE_URL. Không có thì skip cả module. Fixture `_cleanup_test_users` xoá các
+tài khoản @example.com sau khi chạy để DB không phình theo mỗi lần test.
 """
 
 from __future__ import annotations
 
+import os
 import time
 import uuid
 
 import pytest
+
+TEST_EMAIL_SUFFIX = "@example.com"
+
+
+@pytest.fixture(scope="module", autouse=True)
+def _cleanup_test_users():
+    # Nạp .env TRONG fixture, không ở module level: lúc pytest collect thì
+    # app.main chưa import nên DATABASE_URL chưa có trong os.environ.
+    from shared.env_loader import load_project_env
+    load_project_env()
+    if not (os.getenv("DATABASE_URL") or "").strip():
+        pytest.skip("cần DATABASE_URL (PostgreSQL) — xem BE/.env")
+
+    yield
+    from sqlalchemy import text
+
+    from app.db import get_engine
+    with get_engine().begin() as c:
+        c.execute(
+            text("DELETE FROM users WHERE email LIKE :pat"),
+            {"pat": "%" + TEST_EMAIL_SUFFIX},
+        )
 
 
 def _uniq():
@@ -143,3 +170,36 @@ def test_health_still_open(client):
 def test_logout_ok(client):
     r = client.post("/auth/logout")
     assert r.status_code == 200 and r.get_json()["ok"] is True
+
+
+# 13 — POST /auth/refresh (đặc tả 12.1)
+def test_refresh_returns_new_usable_token(client):
+    _, reg = _register(client)
+    old = reg.get_json()["token"]
+
+    r = client.post("/auth/refresh", headers={"Authorization": f"Bearer {old}"})
+    assert r.status_code == 200
+    new = r.get_json()["token"]
+    assert new
+    assert r.get_json()["user"]["role"] == "learner"
+
+    # token mới dùng được ngay
+    me = client.get("/auth/me", headers={"Authorization": f"Bearer {new}"})
+    assert me.status_code == 200
+
+
+def test_refresh_without_token_is_401(client):
+    assert client.post("/auth/refresh").status_code == 401
+
+
+def test_refresh_rejected_after_token_revoked(client):
+    """bump_token_version = logout-all → token cũ không refresh được."""
+    _, reg = _register(client)
+    token = reg.get_json()["token"]
+    uid = reg.get_json()["user"]["id"]
+
+    from app.domains.auth import users_store
+    users_store.bump_token_version(uid)
+
+    r = client.post("/auth/refresh", headers={"Authorization": f"Bearer {token}"})
+    assert r.status_code == 401

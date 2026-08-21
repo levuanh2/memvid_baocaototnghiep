@@ -147,7 +147,7 @@ def _load_meta() -> Dict[str, Dict]:
 
 
 def load_meta() -> Dict[str, Dict]:
-    """Đọc THUẦN index.json (chunk_id -> {text, video, embedding, ...}) cho các
+    """Đọc THUẦN index.json (chunk_id -> {text, source_stem, ...}) cho các
     consumer ngoài (memory_tree, retrieval) — seam VectorStore.load_meta().
 
     Khác _load_meta() nội bộ: KHÔNG tự thêm khoá __meta__ và KHÔNG ghi lại file
@@ -302,16 +302,16 @@ def load_vectorstore(use_cache: bool = False) -> Optional[FAISS]:
 
 def append_chunks_to_lc_index(
     chunks: List[str],
-    video_name: str = "",
+    source_name: str = "",
     custom_metadata: Optional[List[Dict[str, Any]]] = None,
     batch_size: int = 32,
     embeddings: Optional[Any] = None,
-) -> None:
+) -> List[int]:
     if embeddings is None and _skip_faiss_in_ci():
         print("[vector_store] Skipped append (CI mode)")
-        return
+        return []
     if not chunks:
-        return
+        return []
 
     meta = _load_meta()
     existing_ids: List[int] = []
@@ -325,7 +325,7 @@ def append_chunks_to_lc_index(
     docs: List[Document] = []
     for i, chunk in enumerate(chunks):
         cid = ids[i]
-        md: Dict[str, Any] = {"chunk_id": cid, "video": video_name}
+        md: Dict[str, Any] = {"chunk_id": cid, "source_stem": source_name}
         if custom_metadata and i < len(custom_metadata):
             for kk, vv in (custom_metadata[i] or {}).items():
                 md[kk] = vv
@@ -360,25 +360,21 @@ def append_chunks_to_lc_index(
     # PR#6: KHÔNG full-dir backup mỗi append — backup chưa từng có đường restore
     # tự động, chỉ là snapshot thủ công, mà copytree cả index dir mỗi lần append
     # là chi phí lớn nhất của ingest. Backup GIỮ ở thao tác phá huỷ
-    # (remove_chunks_*/rebuild_*); recovery còn rebuild_sqlite_from_videos.
+    # (remove_chunks_*/rebuild_*).
     vs.save_local(str(INDEX_DIR))
 
     text_items = []
     for i, chunk in enumerate(chunks):
         cid = ids[i]
         meta_entry: Dict[str, Any] = {
-            "video": video_name,
+            "source_stem": source_name,
             "timestamp": now,
         }
         if custom_metadata and i < len(custom_metadata):
             meta_entry.update(custom_metadata[i])
 
-        has_video = bool(meta_entry.get("video")) and meta_entry.get("frame_index") is not None
-        if has_video:
-            text_items.append((cid, chunk))
-        else:
-            meta_entry["text"] = chunk
-            text_items.append((cid, chunk))
+        meta_entry["text"] = chunk
+        text_items.append((cid, chunk))
 
         emb_vec = _optional_prefix_embedding_list(chunk)
         if emb_vec is not None:
@@ -413,7 +409,8 @@ def append_chunks_to_lc_index(
         "pooling": "mean_late" if embeddings is not None else "encode",
     }
     _save_meta(meta)
-    print(f"[vector_store] added {len(chunks)} chunks video={video_name!r} (total={num_chunks}, model={model_name})")
+    print(f"[vector_store] added {len(chunks)} chunks source={source_name!r} (total={num_chunks}, model={model_name})")
+    return ids
 
 
 def rebuild_lc_index_from_meta(meta: Dict[str, Any]) -> None:
@@ -453,7 +450,7 @@ def rebuild_lc_index_from_meta(meta: Dict[str, Any]) -> None:
                 page_content=t,
                 metadata={
                     "chunk_id": cid,
-                    "video": v.get("video") or "",
+                    "source_stem": v.get("source_stem") or "",
                 },
             )
         )
@@ -556,28 +553,29 @@ def _save_meta_with_updated_num_chunks(meta: Dict[str, Dict]) -> None:
 # ----- Public API (thay faiss_utils) -----
 def append_to_index(
     chunks: List[str],
-    video_name: str = "",
+    source_name: str = "",
     custom_metadata: List[Dict] = None,
     batch_size: int = 32,
     embeddings: Optional[Any] = None,
-):
-    """Thêm chunk vào index.
+) -> List[int]:
+    """Thêm chunk vào index. Trả về danh sách chunk_id trong FAISS theo THỨ TỰ
+    `chunks` — Postgres lưu id này ở `document_chunks.embedding_id` để nối khoá
+    nghiệp vụ (UUID) với chỉ mục tìm kiếm (int).
 
     `embeddings` (LATE CHUNKING): mảng (n_chunks, dim) ĐÃ mean-pool sẵn ở chunk_node.
     Khi có, BỎ QUA encode lại (vector late-chunk không tái tạo được từ text chunk).
     Vì không cần model, đường này vẫn chạy dưới SKIP_MODEL_LOAD.
     """
     if not chunks:
-        return
+        return []
 
     if embeddings is None and _skip_faiss_in_ci():
         print("[vector_store] Skipped append_to_index (CI mode)")
-        return
+        return []
 
     if _use_lc_vector_store():
         try:
-            append_chunks_to_lc_index(chunks, video_name, custom_metadata, batch_size, embeddings)
-            return
+            return append_chunks_to_lc_index(chunks, source_name, custom_metadata, batch_size, embeddings)
         except Exception as exc:
             print(f"[vector_store] LangChain vector store failed, fallback legacy FAISS: {exc}")
 
@@ -631,18 +629,14 @@ def append_to_index(
     for i, chunk in enumerate(chunks):
         cid = int(ids[i])
         meta_entry = {
-            "video": video_name,
+            "source_stem": source_name,
             "timestamp": now,
         }
         if custom_metadata and i < len(custom_metadata):
             meta_entry.update(custom_metadata[i])
 
-        has_video = bool(meta_entry.get("video")) and meta_entry.get("frame_index") is not None
-        if has_video:
-            text_items.append((cid, chunk))
-        else:
-            meta_entry["text"] = chunk
-            text_items.append((cid, chunk))
+        meta_entry["text"] = chunk
+        text_items.append((cid, chunk))
 
         emb_vec = _optional_prefix_embedding_list(chunk)
         if emb_vec is not None:
@@ -666,7 +660,8 @@ def append_to_index(
         "pooling": "mean_late" if embeddings is not None else "encode",
     }
     _save_meta(meta)
-    print(f"[INDEX] added {len(chunks)} chunks video={video_name!r} (total={num_chunks}, model={MODEL_NAME}, dim={dim})")
+    print(f"[INDEX] added {len(chunks)} chunks source={source_name!r} (total={num_chunks}, model={MODEL_NAME}, dim={dim})")
+    return [int(i) for i in ids]
 
 
 def search_index(query: str, k: int = 5) -> List[str]:
@@ -724,7 +719,7 @@ def search_index(query: str, k: int = 5) -> List[str]:
     return results
 
 
-def delete_source_from_index(video_name: str):
+def delete_source_from_index(source_name: str):
     meta = _load_meta()
     chunk_ids: List[int] = []
     keep_meta: Dict[str, Dict] = {}
@@ -733,7 +728,7 @@ def delete_source_from_index(video_name: str):
         if not isinstance(v, dict):
             keep_meta[k] = v
             continue
-        if isinstance(k, str) and k.isdigit() and v.get("video") == video_name:
+        if isinstance(k, str) and k.isdigit() and v.get("source_stem") == source_name:
             chunk_ids.append(int(k))
             continue
         keep_meta[k] = v
@@ -766,9 +761,9 @@ def delete_chunks_by_source(source_id: str) -> int:
         if not isinstance(v, dict):
             keep_meta[k] = v
             continue
-        video_raw = v.get("video", "")
-        vid_norm = _normalize_source_id(video_raw)
-        if isinstance(k, str) and k.isdigit() and vid_norm == target:
+        src_raw = v.get("source_id") or v.get("source_stem") or ""
+        src_norm = _normalize_source_id(src_raw)
+        if isinstance(k, str) and k.isdigit() and src_norm == target:
             deleted += 1
             chunk_ids.append(int(k))
             continue

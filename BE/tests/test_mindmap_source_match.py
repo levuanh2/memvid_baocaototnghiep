@@ -12,45 +12,45 @@ def _meta(entries):
     return m
 
 
-def test_space_filename_matches_sanitized_video():
-    meta = _meta([{"text": "a", "video": "videos/My_Report_pdf_20260628_120000.mp4"}])
+def test_space_filename_matches_canonical_stem():
+    meta = _meta([{"text": "a", "source_stem": "my_report_pdf"}])
     assert [c["key"] for c in collect_chunks_for_sources(meta, ["my report_pdf"])] == ["0"]
     assert [c["key"] for c in collect_chunks_for_sources(meta, ["My Report.pdf"])] == ["0"]
 
 
 def test_prefers_source_stem_field():
-    meta = _meta([{"text": "a", "video": "videos/unrelated_20260628_120000.mp4", "source_stem": "my_report_pdf"}])
+    meta = _meta([{"text": "a", "source_stem": "unrelated", "source_stem": "my_report_pdf"}])
     assert [c["key"] for c in collect_chunks_for_sources(meta, ["My Report.pdf"])] == ["0"]
 
 
 def test_vietnamese_diacritics():
-    meta = _meta([{"text": "a", "video": "videos/Báo_cáo_pdf_20260628_120000.mp4"}])
+    meta = _meta([{"text": "a", "source_stem": "báo_cáo_pdf"}])
     assert [c["key"] for c in collect_chunks_for_sources(meta, ["Báo cáo.pdf"])] == ["0"]
 
 
 def test_wrong_name_excluded():
-    meta = _meta([{"text": "a", "video": "videos/My_Report_pdf_20260628_120000.mp4"}])
+    meta = _meta([{"text": "a", "source_stem": "my_report_pdf"}])
     assert collect_chunks_for_sources(meta, ["khac.pdf"]) == []
 
 
 def test_empty_sources_returns_empty():
-    meta = _meta([{"text": "a", "video": "videos/My_Report_pdf_20260628_120000.mp4"}])
+    meta = _meta([{"text": "a", "source_stem": "my_report_pdf"}])
     assert collect_chunks_for_sources(meta, []) == []
 
 
 def test_multi_source_selects_correctly():
     meta = _meta([
-        {"text": "a", "video": "videos/A_pdf_20260628_120000.mp4"},
-        {"text": "b", "video": "videos/B_pdf_20260628_120000.mp4"},
+        {"text": "a", "source_stem": "a_pdf"},
+        {"text": "b", "source_stem": "b_pdf"},
     ])
     assert [c["key"] for c in collect_chunks_for_sources(meta, ["A.pdf"])] == ["0"]
     assert sorted(c["key"] for c in collect_chunks_for_sources(meta, ["A.pdf", "B.pdf"])) == ["0", "1"]
 
 
-def test_ignores_meta_entry_and_blank_video():
+def test_ignores_meta_entry_and_blank_source():
     meta = {
-        "0": {"text": "a", "video": "videos/A_pdf_20260628_120000.mp4"},
-        "1": {"text": "x", "video": ""},
+        "0": {"text": "a", "source_stem": "a_pdf"},
+        "1": {"text": "x", "source_stem": ""},
         "__meta__": {"version": "1.1", "num_chunks": 2},
     }
     assert [c["key"] for c in collect_chunks_for_sources(meta, ["A.pdf"])] == ["0"]

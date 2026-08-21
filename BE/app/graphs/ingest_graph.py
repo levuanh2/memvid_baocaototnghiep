@@ -1,7 +1,6 @@
 from __future__ import annotations
 
 import os
-from datetime import datetime
 from pathlib import Path
 from typing import Any, Callable
 
@@ -19,7 +18,6 @@ def build_ingest_graph(
     data_dir: Path,
     extract_text: Callable[[str], str],
     split_text: Callable[[str], list[str]],
-    process_and_store_chunks: Callable[..., Any],
     append_to_index: Callable[..., None],
     build_memory_tree_for_sources: Callable[[list[str]], None],
     jobs_update: Callable[..., None] | None = None,
@@ -198,31 +196,51 @@ def build_ingest_graph(
             log_node_event(state["job_id"], "Chunk", "error", t.ms(), {"error": str(e)})
             return {**state, "error": str(e), "current_node": "Chunk"}
 
-    def process_chunks_node(state: dict) -> dict:
-        t = _Timer()
+    def _persist_sections_and_chunks(state, chunks, headings, faiss_ids, t) -> None:
+        """Ghi sections + document_chunks vào Postgres (FR-03.4 → FR-03.9).
+
+        FAISS vẫn là chỉ mục tìm kiếm; Postgres giữ dữ liệu nghiệp vụ và là nơi
+        quiz/review truy ngược về nguồn. Lỗi ở đây KHÔNG chặn pipeline — index đã
+        ghi xong, chat vẫn chạy; chỉ log lại để biết mà chữa.
+        """
         try:
-            update_source_status(state["source_id"], "processing", progress=0.4)
-            _set_job(state["job_id"], progress=55, current_node="ProcessChunks")
-            video_name = f"{state['filename'].replace('.', '_')}"
-            timestamp = datetime.now().isoformat()
-            video_path, metadata_entries = process_and_store_chunks(
-                chunks=state["chunks"],
-                video_name=video_name,
-                timestamp=timestamp,
+            from app.domains.documents import repository as docs_repo
+            from app.domains.documents.sections import build_sections
+            from shared.config import get_settings
+
+            sections, chunk_keys = build_sections(
+                [(headings[i] if i < len(headings) else "") for i in range(len(chunks))]
             )
-            log_node_event(state["job_id"], "ProcessChunks", "ok", t.ms(), {"frames": len(metadata_entries)})
-            return {
-                **state,
-                "video_name": video_name,
-                "video_path": video_path,
-                "metadata_entries": metadata_entries,
-                "progress": 55,
-                "current_node": "ProcessChunks",
-                "error": None,
-            }
-        except Exception as e:
-            log_node_event(state["job_id"], "ProcessChunks", "error", t.ms(), {"error": str(e)})
-            return {**state, "error": str(e), "current_node": "ProcessChunks"}
+            key_to_id = docs_repo.replace_sections(state["source_id"], sections)
+
+            s_cfg = get_settings()
+            ids = list(faiss_ids or [])
+            rows = []
+            for i, text in enumerate(chunks):
+                key = chunk_keys[i] if i < len(chunk_keys) else None
+                rows.append({
+                    "chunk_index": i,
+                    "text": text,
+                    "heading": (headings[i] if i < len(headings) else "") or None,
+                    "token_count": len(text.split()),
+                    "section_id": key_to_id.get(key) if key else None,
+                    "embedding_id": ids[i] if i < len(ids) else None,
+                    "embedding_model": s_cfg.embedding_model_name,
+                    "embedding_dim": (len(state["late_embeddings"][0])
+                                      if state.get("late_embeddings") else None),
+                })
+            n = docs_repo.replace_chunks(state["source_id"], rows)
+            docs_repo.set_counts(
+                state["source_id"],
+                char_count=sum(len(c) for c in chunks),
+                chunk_count=n,
+            )
+            log_node_event(state["job_id"], "PersistDocument", "ok", t.ms(),
+                           {"sections": len(sections), "chunks": n})
+        except Exception as exc:
+            log_node_event(state["job_id"], "PersistDocument", "error", t.ms(),
+                           {"error": str(exc)})
+            print(f"⚠️ [ingest] Không ghi được sections/chunks vào DB: {exc}")
 
     def embed_index_node(state: dict) -> dict:
         t = _Timer()
@@ -230,80 +248,56 @@ def build_ingest_graph(
             update_source_status(state["source_id"], "processing", progress=0.5)
             _set_job(state["job_id"], progress=75, current_node="EmbedAndIndex")
 
-            entries = state["metadata_entries"]
-            all_chunks = [entry["text"] for entry in entries]
+            all_chunks = state["chunks"]
             doc_meta = state.get("doc_meta") or {}
             headings = state.get("chunk_headings") or []
-            # Map heading qua entry["chunk_index"] (index chunk CHA — chunk_processor gắn
-            # cho mọi entry kể cả sub-split, cùng cơ chế late_embeddings dùng). Cách cũ
-            # `len(headings)==len(entries)` vỡ khi QR sub-split → rớt TOÀN BỘ heading.
-            aligned = len(headings) == len(entries)  # fallback cho entry thiếu chunk_index
-
-            def _heading_for(i: int, entry: dict) -> str:
-                ci = entry.get("chunk_index")
-                if headings and ci is not None and 0 <= ci < len(headings):
-                    return headings[ci]
-                return headings[i] if aligned else ""
-            # Định danh canonical ghi thẳng vào metadata để retrieval khớp CHÍNH XÁC
-            # (không phải tái dựng từ video_path đã sanitize).
+            # Định danh canonical ghi thẳng vào metadata để retrieval khớp CHÍNH XÁC.
             src_stem = canonical_source_stem(state["filename"])
             all_metadata = []
-            for i, entry in enumerate(entries):
+            for i, _chunk in enumerate(all_chunks):
                 md = {
-                    "parent_id": entry.get("parent_id"),
-                    "sub_order": entry.get("sub_order"),
-                    "total_parts": entry.get("total_parts"),
-                    "is_subchunk": entry.get("is_subchunk", False),
                     "source_stem": src_stem,
                     "source_id": state.get("source_id"),
-                    "video": state.get("video_path") or "",
-                    "frame_index": entry.get("frame_index"),
+                    "chunk_index": i,
                 }
                 if doc_meta:
                     md.update(doc_meta)  # source/category/date/language (doc-level)
-                hp = _heading_for(i, entry)
-                if hp:
-                    md["heading_path"] = hp
+                if i < len(headings) and headings[i]:
+                    md["heading_path"] = headings[i]
                 all_metadata.append(md)
 
-            # LATE CHUNKING: lấy lại vector của CHUNK gốc cho mỗi entry (entry có thể bị
-            # sub-split bởi QR processor → dùng chung vector của chunk cha qua chunk_index).
+            # LATE CHUNKING: vector mean-pool theo span, 1 vector / 1 chunk (cùng thứ tự).
             late = state.get("late_embeddings")
             embeddings = None
             if late:
                 try:
                     import numpy as _np
-                    rows = []
-                    for entry in entries:
-                        ci = entry.get("chunk_index")
-                        if ci is None or not (0 <= ci < len(late)):
-                            rows = None
-                            break
-                        rows.append(late[ci])
-                    if rows is not None:
-                        embeddings = _np.asarray(rows, dtype="float32")
+                    if len(late) == len(all_chunks):
+                        embeddings = _np.asarray(late, dtype="float32")
                 except Exception as ee:
                     log_node_event(state["job_id"], "EmbedAndIndex", "late_map_skip", t.ms(), {"reason": str(ee)})
                     embeddings = None
 
             if embeddings is not None:
-                append_to_index(
+                faiss_ids = append_to_index(
                     chunks=all_chunks,
-                    video_name=state["video_path"],
+                    source_name=src_stem,
                     custom_metadata=all_metadata,
                     batch_size=32,
                     embeddings=embeddings,
                 )
             else:
-                # CI/không có late vector → đường cũ y hệt (fake/inject signature cũ vẫn chạy).
-                append_to_index(
+                # CI/không có late vector → tự encode trong append_to_index.
+                faiss_ids = append_to_index(
                     chunks=all_chunks,
-                    video_name=state["video_path"],
+                    source_name=src_stem,
                     custom_metadata=all_metadata,
                     batch_size=32,
                 )
 
-            source_stem = canonical_source_stem(state["filename"])
+            _persist_sections_and_chunks(state, all_chunks, headings, faiss_ids, t)
+
+            source_stem = src_stem
             update_source_status(
                 state["source_id"],
                 status="index_ready",
@@ -383,7 +377,6 @@ def build_ingest_graph(
     g.add_node("ExtractText", extract_text_node)
     g.add_node("Normalize", normalize_node)
     g.add_node("Chunk", chunk_node)
-    g.add_node("ProcessChunks", process_chunks_node)
     g.add_node("EmbedAndIndex", embed_index_node)
     g.add_node("BuildMemoryTree", memory_tree_node)
     g.add_node("Finalize", finalize_node)
@@ -393,8 +386,7 @@ def build_ingest_graph(
     for node_name, next_name in (
         ("ExtractText", "Normalize"),
         ("Normalize", "Chunk"),
-        ("Chunk", "ProcessChunks"),
-        ("ProcessChunks", "EmbedAndIndex"),
+        ("Chunk", "EmbedAndIndex"),
         ("EmbedAndIndex", "BuildMemoryTree"),
         ("BuildMemoryTree", "Finalize"),
     ):

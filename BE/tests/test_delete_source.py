@@ -57,9 +57,9 @@ class DeleteSourceTestCase(unittest.TestCase):
 
         # Tạo metadata index cho 2 source khác nhau
         meta = {
-            "0": {"text": "chunk A1", "video": "sourceA_20250101_120000.mp4"},
-            "1": {"text": "chunk A2", "video": "sourceA_20250101_120000.mp4"},
-            "2": {"text": "chunk B1", "video": "sourceB_20250101_120000.mp4"},
+            "0": {"text": "chunk A1", "source_stem": "sourcea"},
+            "1": {"text": "chunk A2", "source_stem": "sourcea"},
+            "2": {"text": "chunk B1", "source_stem": "sourceb"},
         }
         with open(vector_store.META_PATH, "w", encoding="utf-8") as f:
             json.dump(meta, f)
@@ -93,7 +93,7 @@ class DeleteSourceTestCase(unittest.TestCase):
         remaining_chunks = {k: v for k, v in remaining_meta.items() if isinstance(k, str) and k.isdigit()}
         self.assertEqual(len(remaining_chunks), 1)
         self.assertEqual(
-            vector_store._normalize_source_id(remaining_chunks["2"]["video"]),
+            vector_store._normalize_source_id(remaining_chunks["2"]["source_stem"]),
             vector_store._normalize_source_id("sourceB"),
         )
 
@@ -108,7 +108,7 @@ class DeleteSourceTestCase(unittest.TestCase):
 
         # Tạo metadata index với 1 source
         meta = {
-            "0": {"text": "chunk A1", "video": "sourceA_20250101_120000.mp4"},
+            "0": {"text": "chunk A1", "source_stem": "sourcea"},
         }
         with open(vector_store.META_PATH, "w", encoding="utf-8") as f:
             json.dump(meta, f)

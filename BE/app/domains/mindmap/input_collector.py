@@ -51,54 +51,29 @@ def collect_mindmap_input(index_meta_path: Path, source_names: list[str]) -> dic
             t = ""
         return t or (m.get("text") or "").strip()
 
-    parents: dict[str, dict] = {}
-    subs: dict[str, list[tuple[int, str, str]]] = {}
-    order: list[str] = []
+    chunks: list[dict] = []
     for key, m in (meta or {}).items():
         if not isinstance(m, dict):
             continue
-        stem = canonical_source_stem(m.get("source_stem") or m.get("video") or "")
+        stem = canonical_source_stem(m.get("source_stem") or "")
         if not stem or stem not in wanted:
             continue
-        if m.get("is_subchunk") and m.get("parent_id"):
-            pk = str(m["parent_id"]).strip()
-            subs.setdefault(pk, []).append((int(m.get("sub_order") or 0), str(key), _text(key, m)))
-        else:
-            c = {"key": str(key), "text": _text(key, m),
-                 "heading_path": (m.get("heading_path") or "").strip(),
-                 "chunk_keys": [str(key)]}
-            # Pointer metadata (Summary v3 Phase 2): ADDITIVE — chỉ gắn khi có, mindmap
-            # bỏ qua field lạ (skeleton chỉ đọc heading_path/chunk_keys/text). Không đổi
-            # key cũ, không bắt buộc page/source. `stem` đã canonical hoá ở trên.
-            if stem:
-                c["source_stem"] = stem
-            if m.get("source_id"):
-                c["source_id"] = str(m["source_id"])
-            if m.get("page") is not None:
-                c["page"] = m.get("page")
-            if m.get("chunk_index") is not None:
-                c["chunk_index"] = m.get("chunk_index")
-            parents[str(key)] = c
-            order.append(str(key))
-
-    chunks: list[dict] = []
-    for key in order:
-        c = parents[key]
-        for _so, sk, st in sorted(subs.get(key, [])):
-            if st:
-                c["text"] = (c["text"] + "\n\n" + st).strip()
-                c["chunk_keys"].append(sk)
-        if c["text"]:
-            chunks.append(c)
-    # sub-group mồ côi (parent không nằm trong selection) → chunk logic riêng
-    for pk, group in subs.items():
-        if pk in parents:
+        text = _text(key, m)
+        if not text:
             continue
-        group = sorted(group)
-        text = "\n\n".join(t for _o, _k, t in group if t).strip()
-        if text:
-            chunks.append({"key": pk, "text": text, "heading_path": "",
-                           "chunk_keys": [k for _o, k, t in group if t]})
+        c = {"key": str(key), "text": text,
+             "heading_path": (m.get("heading_path") or "").strip(),
+             "chunk_keys": [str(key)],
+             "source_stem": stem}
+        # Pointer metadata (Summary v3 Phase 2): ADDITIVE — chỉ gắn khi có, mindmap
+        # bỏ qua field lạ (skeleton chỉ đọc heading_path/chunk_keys/text).
+        if m.get("source_id"):
+            c["source_id"] = str(m["source_id"])
+        if m.get("page") is not None:
+            c["page"] = m.get("page")
+        if m.get("chunk_index") is not None:
+            c["chunk_index"] = m.get("chunk_index")
+        chunks.append(c)
 
     return {"title": _title_for(source_names), "sources": sorted(wanted),
             "chunks": chunks, "tree_sections": _load_tree_sections(wanted)}

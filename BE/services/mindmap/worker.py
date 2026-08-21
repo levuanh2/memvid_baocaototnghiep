@@ -20,7 +20,7 @@ def collect_chunks_for_sources(meta: dict, source_names: list) -> list:
     for key, entry in (meta or {}).items():
         if not isinstance(entry, dict):
             continue
-        stem = canonical_source_stem(entry.get("source_stem") or entry.get("video") or "")
+        stem = canonical_source_stem(entry.get("source_stem") or "")
         if not stem or stem not in wanted:
             continue
         from app.domains.vectorstore import chunk_text_store
@@ -29,10 +29,6 @@ def collect_chunks_for_sources(meta: dict, source_names: list) -> list:
         out.append(
             {
                 "text": text,
-                "parent_id": entry.get("parent_id"),
-                "sub_order": entry.get("sub_order"),
-                "total_parts": entry.get("total_parts"),
-                "is_subchunk": entry.get("is_subchunk", False),
                 "key": key,
                 "embedding": entry.get("embedding"),
             }

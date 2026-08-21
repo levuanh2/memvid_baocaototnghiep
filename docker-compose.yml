@@ -3,16 +3,22 @@ services:
     build:
       context: ./BE
       dockerfile: Dockerfile
+    image: ${BE_IMAGE:-levuanh/memvidbaocaototnghiep}:be-${IMAGE_TAG:-latest}
     ports:
       - "8080:8080"
     volumes:
-      - ./data/videos:/app/videos
       - ./data/index:/app/index
       - ./data/memory:/app/memory
       - ./data/input_docs:/app/input_docs
       - hf_cache:/root/.cache/huggingface   # bge-m3 tải 1 lần, dùng lại qua restart
     environment:
       DATA_DIR: /app
+      # PostgreSQL (Supabase) — nguồn lưu trữ nghiệp vụ StudyMap.
+      # Giá trị lấy từ .env ở repo root; KHÔNG hardcode secret vào file này.
+      DATABASE_URL: "${DATABASE_URL:?DATABASE_URL chua duoc dat trong .env}"
+      SUPABASE_URL: "${SUPABASE_URL:-}"
+      SUPABASE_SECRET_KEY: "${SUPABASE_SECRET_KEY:-}"
+      SUPABASE_STORAGE_BUCKET: "${SUPABASE_STORAGE_BUCKET:-documents}"
       PORT: "8080"
       # HITL resume metadata is currently process-local; keep one HTTP worker so a
       # pause and its resume request are handled by the same process.
@@ -107,14 +113,12 @@ services:
       retries: 10
 
   llm-gateway:
-    build:
-      context: ./BE
-      dockerfile: Dockerfile
+    # Dùng chung image với backend (chỉ khác `command`) — build một lần ở service backend.
+    image: ${BE_IMAGE:-levuanh/memvidbaocaototnghiep}:be-${IMAGE_TAG:-latest}
     command: ["python", "-m", "services.llm_gateway.server"]
     expose:
       - "50051"
     volumes:
-      - ./data/videos:/app/videos
       - ./data/index:/app/index
       - ./data/memory:/app/memory
       - ./data/input_docs:/app/input_docs
@@ -153,9 +157,8 @@ services:
       retries: 10
 
   mindmap-service:
-    build:
-      context: ./BE
-      dockerfile: Dockerfile
+    # Dùng chung image với backend (chỉ khác `command`) — build một lần ở service backend.
+    image: ${BE_IMAGE:-levuanh/memvidbaocaototnghiep}:be-${IMAGE_TAG:-latest}
     command: ["python", "-m", "services.mindmap.server"]
     expose:
       - "50052"
@@ -202,18 +205,22 @@ services:
   # never depends on it. Enable with:  QUEUE_ENABLED=true docker compose --profile worker up -d
   rq-worker:
     profiles: ["worker"]
-    build:
-      context: ./BE
-      dockerfile: Dockerfile
+    # Dùng chung image với backend (chỉ khác `command`).
+    image: ${BE_IMAGE:-levuanh/memvidbaocaototnghiep}:be-${IMAGE_TAG:-latest}
     command: ["python", "-m", "app.jobs.worker"]
     volumes:
-      - ./data/videos:/app/videos
       - ./data/index:/app/index
       - ./data/memory:/app/memory
       - ./data/input_docs:/app/input_docs
       - hf_cache:/root/.cache/huggingface
     environment:
       DATA_DIR: /app
+      # PostgreSQL (Supabase) — nguồn lưu trữ nghiệp vụ StudyMap.
+      # Giá trị lấy từ .env ở repo root; KHÔNG hardcode secret vào file này.
+      DATABASE_URL: "${DATABASE_URL:?DATABASE_URL chua duoc dat trong .env}"
+      SUPABASE_URL: "${SUPABASE_URL:-}"
+      SUPABASE_SECRET_KEY: "${SUPABASE_SECRET_KEY:-}"
+      SUPABASE_STORAGE_BUCKET: "${SUPABASE_STORAGE_BUCKET:-documents}"
       OLLAMA_HOST: "${OLLAMA_HOST:-http://host.docker.internal:11434}"
       SLM_MODEL_CHAT: "${SLM_MODEL_CHAT:-qwen2.5:7b-instruct}"
       SLM_MODEL: "${SLM_MODEL:-qwen2.5:7b-instruct}"
@@ -267,7 +274,8 @@ services:
       context: .
       dockerfile: FE/Dockerfile
       args:
-        VITE_API_BASE: http://backend:8080
+        VITE_API_BASE: ${VITE_API_BASE:-http://backend:8080}
+    image: ${FE_IMAGE:-levuanh/memvidbaocaototnghiep}:fe-${IMAGE_TAG:-latest}
     ports:
       - "3000:3000"
     depends_on:

@@ -76,7 +76,8 @@ def _rrf_merge(
     *,
     k: int = 60,
     top_k: int = 6,
-) -> list[int]:
+) -> list[tuple[int, float]]:
+    """Trả (chunk_id, điểm RRF) — điểm để API search xếp hạng, không phải similarity."""
     scores: dict[int, float] = {}
     for rank, cid in enumerate(a_ids, start=1):
         scores[cid] = scores.get(cid, 0.0) + 1.0 / (k + rank)
@@ -84,7 +85,7 @@ def _rrf_merge(
         scores[cid] = scores.get(cid, 0.0) + 1.0 / (k + rank)
 
     merged = sorted(scores.items(), key=lambda x: x[1], reverse=True)
-    return [cid for cid, _ in merged[:top_k]]
+    return merged[:top_k]
 
 
 class HybridRetriever:
@@ -148,9 +149,7 @@ class HybridRetriever:
             text = (texts.get(cid) or v.get("text") or "").strip()
             if not text:
                 continue
-            # Ưu tiên canonical source_stem ghi sẵn (chunk mới); fallback suy từ
-            # video_path (chunk cũ) — cả hai qua cùng canonicalizer nên khớp selected.
-            video_stem = _norm_stem(v.get("source_stem") or v.get("video") or "")
+            video_stem = _norm_stem(v.get("source_stem") or "")
             chunks.append(RetrievedChunk(
                 chunk_id=cid,
                 text=text,
@@ -187,6 +186,24 @@ class HybridRetriever:
         category: str | None = None,
         language: str | None = None,
     ) -> list[RetrievedChunk]:
+        return [
+            c for c, _ in self.retrieve_scored(
+                query, selected_sources=selected_sources, top_k=top_k,
+                category=category, language=language,
+            )
+        ]
+
+    def retrieve_scored(
+        self,
+        query: str,
+        *,
+        selected_sources: list[str] | None = None,
+        top_k: int = 6,
+        category: str | None = None,
+        language: str | None = None,
+    ) -> list[tuple[RetrievedChunk, float]]:
+        """Như `retrieve` nhưng giữ điểm RRF — API tìm kiếm ngữ nghĩa cần `score`
+        (FR-05), còn chat chỉ cần thứ tự nên dùng `retrieve`."""
         if os.getenv("SKIP_MODEL_LOAD") == "1":
             return []
 
@@ -245,11 +262,11 @@ class HybridRetriever:
                 except Exception as exc:
                     logger.warning("HybridRetriever.retrieve: legacy FAISS search failed: %s", exc)
 
-        merged_ids = _rrf_merge(faiss_ids, bm25_ids, top_k=top_k)
+        merged = _rrf_merge(faiss_ids, bm25_ids, top_k=top_k)
 
-        out = [self._by_id[cid] for cid in merged_ids if cid in self._by_id]
+        out = [(self._by_id[cid], score) for cid, score in merged if cid in self._by_id]
         if category or language:
-            out = [c for c in out if _meta_match(c, category, language)]
+            out = [(c, s) for c, s in out if _meta_match(c, category, language)]
         return out[:top_k]
 
     def retrieve_bm25_only(
@@ -306,7 +323,7 @@ class HybridRetriever:
                     by_id = self._by_id
                     out: list[RetrievedChunk] = []
                     for d, dist in pairs:
-                        stem = _norm_stem(d.metadata.get("source_stem") or d.metadata.get("video") or "")
+                        stem = _norm_stem(d.metadata.get("source_stem") or "")
                         if norms and not _chunk_visible_for_sources(stem, norms, bases):
                             continue
                         cid = d.metadata.get("chunk_id")

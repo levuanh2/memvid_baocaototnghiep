@@ -32,6 +32,7 @@ def public_user(user: dict) -> dict:
         "id": user.get("user_id"),
         "email": user.get("email"),
         "display_name": user.get("display_name"),
+        "role": user.get("role"),
     }
 
 

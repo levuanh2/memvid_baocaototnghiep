@@ -42,15 +42,11 @@ ENV PYTHONDONTWRITEBYTECODE=1 \
     PATH="/opt/venv/bin:$PATH" \
     DATA_DIR=/app
 
-# Runtime libs: tesseract (OCR), libgl/glib (opencv), ffmpeg (video), curl (healthcheck).
+# Runtime libs: tesseract (OCR ảnh tài liệu), curl (healthcheck).
+# libgl/glib/libsm/libxext + ffmpeg đã bỏ cùng lớp lưu trữ QR/video (Phase 0).
 RUN apt-get update && apt-get install -y --no-install-recommends \
     tesseract-ocr \
     tesseract-ocr-vie \
-    libgl1 \
-    libglib2.0-0 \
-    libsm6 \
-    libxext6 \
-    ffmpeg \
     curl \
     && rm -rf /var/lib/apt/lists/*
 
@@ -63,7 +59,7 @@ COPY . .
 
 # Sinh gRPC stub trong image (gen/ bị .dockerignore loại khỏi context) + tạo data dirs.
 RUN python scripts/build_proto.py \
-    && mkdir -p /app/videos /app/index /app/memory /app/input_docs
+    && mkdir -p /app/index /app/memory /app/input_docs
 
 EXPOSE 8080
 

@@ -6,8 +6,8 @@ from app.domains.retrieval.hybrid import HybridRetriever, _meta_match
 
 def _write_meta(tmp_path):
     meta = {
-        "0": {"text": "Nội dung y tế tiếng Việt.", "video": "doc1.mp4", "category": "yte", "language": "vi"},
-        "1": {"text": "English finance content.", "video": "doc2.mp4", "category": "finance", "language": "en"},
+        "0": {"text": "Nội dung y tế tiếng Việt.", "source_stem": "doc1_mp4", "category": "yte", "language": "vi"},
+        "1": {"text": "English finance content.", "source_stem": "doc2_mp4", "category": "finance", "language": "en"},
         "__meta__": {"version": "1.1", "num_chunks": 2},
     }
     p = tmp_path / "index.json"
@@ -54,11 +54,11 @@ def _retriever(tmp_path, entries):
     return r
 
 
-def test_filter_space_filename_matches_sanitized_video(tmp_path):
-    # BUG CHÍNH: chunk có video_path đã sanitize (space→'_'), người dùng chọn bằng
-    # stem giữ khoảng trắng (dạng /upload-file trả về cũ) → PHẢI khớp.
+def test_filter_space_filename_matches_canonical_stem(tmp_path):
+    # BUG CHÍNH: chunk lưu stem đã sanitize (space→'_'), người dùng chọn bằng
+    # stem giữ khoảng trắng (dạng /upload-file trả về) → PHẢI khớp.
     r = _retriever(tmp_path, [
-        {"text": "abc", "video": "videos/My_Report_pdf_20260628_120000.mp4"},
+        {"text": "abc", "source_stem": "my_report_pdf"},
     ])
     assert r._filter_by_sources(["my report_pdf"]) == [0]   # trước fix: []
     assert r._filter_by_sources(["My Report.pdf"]) == [0]
@@ -68,29 +68,29 @@ def test_filter_space_filename_matches_sanitized_video(tmp_path):
 def test_filter_prefers_canonical_source_stem_field(tmp_path):
     # Chunk mới ghi sẵn source_stem canonical → chọn bằng tên gốc vẫn khớp.
     r = _retriever(tmp_path, [
-        {"text": "abc", "video": "videos/x_20260628_120000.mp4", "source_stem": "my_report_pdf"},
+        {"text": "abc", "source_stem": "x", "source_stem": "my_report_pdf"},
     ])
     assert r._filter_by_sources(["My Report.pdf"]) == [0]
 
 
 def test_filter_vietnamese_diacritics(tmp_path):
     r = _retriever(tmp_path, [
-        {"text": "abc", "video": "videos/Báo_cáo_pdf_20260628_120000.mp4"},
+        {"text": "abc", "source_stem": "báo_cáo_pdf"},
     ])
     assert r._filter_by_sources(["Báo cáo.pdf"]) == [0]
 
 
 def test_filter_wrong_name_excludes(tmp_path):
     r = _retriever(tmp_path, [
-        {"text": "abc", "video": "videos/My_Report_pdf_20260628_120000.mp4"},
+        {"text": "abc", "source_stem": "my_report_pdf"},
     ])
     assert r._filter_by_sources(["khac.pdf"]) == []
 
 
 def test_filter_multi_source_selects_one(tmp_path):
     r = _retriever(tmp_path, [
-        {"text": "alpha noi dung", "video": "videos/My_Report_pdf_20260628_120000.mp4"},
-        {"text": "beta noi dung", "video": "videos/Other_Doc_pdf_20260628_120000.mp4"},
+        {"text": "alpha noi dung", "source_stem": "my_report_pdf"},
+        {"text": "beta noi dung", "source_stem": "other_doc_pdf"},
     ])
     assert r._filter_by_sources(["My Report.pdf"]) == [0]
     assert r._filter_by_sources(["Other Doc.pdf"]) == [1]

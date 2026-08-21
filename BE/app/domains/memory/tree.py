@@ -376,10 +376,10 @@ def build_memory_tree_for_sources(source_stems: List[str]) -> Dict[str, Any]:
     for key, m in meta.items():
         if not isinstance(key, str) or not key.isdigit():
             continue
-        video_raw = (m.get("video") or "").strip()
-        if not video_raw:
+        src_raw = (m.get("source_stem") or "").strip()
+        if not src_raw:
             continue
-        stem = _normalize_video_stem(video_raw)
+        stem = _normalize_video_stem(src_raw)
         if stem in norm_sources:
             # Gắn chunk_id từ key index.json
             m_with_id = dict(m)
@@ -413,7 +413,7 @@ def build_memory_tree_for_sources(source_stems: List[str]) -> Dict[str, Any]:
             continue
 
         # Document node
-        chunks_sorted = sorted(chunks, key=lambda c: (c.get("parent_id") or "", c.get("sub_order") or 0))
+        chunks_sorted = sorted(chunks, key=lambda c: int(c.get("chunk_id") or 0))
         doc_id = f"mem_doc_{stem}"
         doc_text = _join_chunk_text(chunks_sorted, max_chars=8000)
         doc_summary = _llm_summarize_for_memory(doc_text, level="document")

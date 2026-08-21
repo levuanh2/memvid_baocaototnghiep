@@ -8,7 +8,6 @@ langchain-huggingface
 langdetect
 numpy
 ollama
-opencv-python-headless
 pandas
 pdfplumber
 Pillow
@@ -16,7 +15,6 @@ psutil
 PyMuPDF
 pytesseract
 python-docx
-qrcode[pil]
 requests
 scikit-learn
 scipy
@@ -26,3 +24,8 @@ sentence-transformers
 torch==2.5.1+cpu
 tqdm
 transformers
+
+# PostgreSQL (Supabase) — lược đồ nghiệp vụ StudyMap, migration bằng Alembic
+SQLAlchemy>=2.0
+alembic
+psycopg[binary]

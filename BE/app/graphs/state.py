@@ -29,9 +29,6 @@ class IngestState(TypedDict):
     late_chunking_applied: NotRequired[bool]
     late_chunking_fallback_reason: NotRequired[Optional[str]]
     # Pipeline sau Chunk — PHẢI khai báo: LangGraph merge state chỉ giữ field có trong TypedDict.
-    video_name: NotRequired[str]
-    video_path: NotRequired[str]
-    metadata_entries: NotRequired[list[dict[str, Any]]]
     source_stem: NotRequired[str]
 
 

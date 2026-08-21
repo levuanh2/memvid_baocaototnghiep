@@ -141,13 +141,16 @@ def _model_map(feature: str) -> str:
         "chat": _chat,
         "summary": os.getenv("SLM_MODEL_SUMMARY", "qwen2.5:14b"),
         "mindmap": os.getenv("MINDMAP_MODEL", "qwen2.5:14b"),
+        # Ra đề bám ngữ liệu — cùng hạng model với summary/mindmap. Đổi model không
+        # phải sửa code (NFR-05.3), chỉ đặt QUIZ_MODEL.
+        "quiz": os.getenv("QUIZ_MODEL", os.getenv("SLM_MODEL_SUMMARY", "qwen2.5:14b")),
     }.get(feature, _chat)
 
 
 # Tác vụ factual/grounded → temperature thấp (tiến 0): bám sự thật, tái lập, giảm bịa.
 # 'answer' = sinh đáp án RAG (cùng model chat nhưng cần factual). Chat hội thoại giữ
 # LLM_TEMPERATURE để văn phong tự nhiên.
-_FACTUAL_FEATURES = frozenset({"answer", "summary", "mindmap", "grade", "classify", "extract"})
+_FACTUAL_FEATURES = frozenset({"answer", "summary", "mindmap", "quiz", "grade", "classify", "extract"})
 
 
 def _resolve_temperature(feature: str, options: dict | None = None) -> float:
@@ -554,6 +557,7 @@ def ask_ai(
         )
 
     last_error: Exception | None = None
+    errors: list[str] = []
 
     # Nếu không truyền model cụ thể, tự động chọn theo feature
     effective_model = model or _model_map(feature)
@@ -575,6 +579,14 @@ def ask_ai(
                     llm = _groq_chat_llm(feature, options)
                     return _invoke_chat(llm, prompt, system_prompt, timeout=timeout)
             except Exception as e:
+                # Chỉ giữ `last_error` là nuốt mất lỗi của provider ĐẦU. Khi Ollama
+                # timeout rồi rơi sang Gemini hết hạn key, thông báo cuối là "Gemini
+                # 401" — người đọc đi sửa nhầm chỗ hoàn toàn. Log từng provider và
+                # gộp hết vào lỗi cuối.
+                errors.append(f"{provider}: {type(e).__name__}: {str(e)[:200]}")
+                print(f"[llm] provider '{provider}' thất bại (feature={feature}, "
+                      f"model={effective_model}): {type(e).__name__}: {str(e)[:200]}",
+                      flush=True)
                 last_error = e
                 continue
 
@@ -583,7 +595,8 @@ def ask_ai(
             "No AI provider configured. Set OLLAMA_HOST for local Ollama, or set GEMINI_API_KEY/GROQ_API_KEY."
         )
 
-    raise RuntimeError(f"All AI providers failed (tried {PROVIDERS}): {last_error}")
+    raise RuntimeError(
+        "All AI providers failed — " + " | ".join(errors or [str(last_error)]))
 
 
 def summarize_results(query: str, chunks: list[str], model: str | None = None) -> str:

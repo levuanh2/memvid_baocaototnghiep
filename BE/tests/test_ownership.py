@@ -143,14 +143,14 @@ def test_current_user_id_none_without_token(be):
         assert be._current_user_id() is None
 
 
-def test_upload_stamps_owner_none_without_token(be, client, monkeypatch):
-    # The conftest client patches _trigger_background_ingest to a fast no-op ingest.
+def test_upload_stamps_owner_none_without_token(be, client):
+    """Không token → bản ghi documents có owner_user_id = None (chế độ mở)."""
     import io
-    captured = {}
-    orig_save = be._save_source_registry
-    monkeypatch.setattr(be, "_save_source_registry", lambda reg: captured.update(reg) or orig_save(reg))
-    r = client.post("/upload-file", data={"file": (io.BytesIO(b"# doc\nhi"), "own.md")},
+    r = client.post("/upload-file", data={"file": (io.BytesIO(b"# doc"), "own.md")},
                     content_type="multipart/form-data")
     assert r.status_code == 200
-    # a registry row was written with a user_id key present (None here, no token)
-    assert any("user_id" in row for row in captured.values() if isinstance(row, dict))
+    sid = r.get_json()["source_id"]
+
+    row = be._load_source_registry().get(sid)
+    assert row is not None, "upload phải tạo bản ghi documents"
+    assert "user_id" in row and row["user_id"] is None

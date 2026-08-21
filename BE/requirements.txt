@@ -27,7 +27,6 @@ ollama
 rank-bm25>=0.2.2
 # Rerank cross-encoder dùng sentence-transformers (đã có ở dưới) — không cần dep mới.
 # cohere   # chỉ cài khi RERANK_BACKEND=cohere (phá tính offline)
-opencv-python-headless
 pandas
 pdfplumber
 Pillow
@@ -41,7 +40,6 @@ python-docx
 python-dotenv
 redis>=5,<6   # cache semantic/retrieval (fail-open khi REDIS_URL rỗng) — pure-python, không chạm langgraph. Xem docs/SEMANTIC_CACHE_SPEC.md
 rq>=1.16,<2   # Phase 5: RQ worker cho heavy background jobs (ingest trước). Dùng redis ở trên. Chỉ chạy khi QUEUE_ENABLED=true.
-qrcode[pil]
 requests
 scikit-learn
 scipy
@@ -54,3 +52,8 @@ torch==2.5.1+cpu
 tqdm
 transformers
 sentencepiece>=0.2.0   # tokenizer cho mDeBERTa NLI (DebertaV2) — leaf dep, không chạm langgraph; chỉ cần khi NLI_ENABLED=1
+
+# PostgreSQL (Supabase) — lược đồ nghiệp vụ StudyMap, migration bằng Alembic
+SQLAlchemy>=2.0
+alembic
+psycopg[binary]

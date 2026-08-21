@@ -44,6 +44,30 @@ class _MockMindmapGraph:
         return {"result": record, "status_code": 200}
 
 
+def _purge_anonymous_documents() -> None:
+    """Xoá documents thuộc user ẩn danh.
+
+    Từ Phase 2, bảng `documents` thay `source_registry.json`. Registry cũ nằm
+    trong DATA_DIR tạm nên mỗi phiên test bắt đầu từ số 0; bảng Postgres thì DÙNG
+    CHUNG và tích luỹ — không dọn thì `_unique_display_filename` thấy tên trùng từ
+    lần chạy trước và đổi "a.md" thành "a (4).md", làm test stem sai.
+    """
+    try:
+        from sqlalchemy import delete as sa_delete
+        from sqlalchemy import select
+
+        from app.db import session_scope
+        from app.db.models import Document, User
+        from app.domains.documents.repository import ANONYMOUS_EMAIL, invalidate_cache
+        with session_scope() as s:
+            u = s.execute(select(User).where(User.email == ANONYMOUS_EMAIL)).scalar_one_or_none()
+            if u is not None:
+                s.execute(sa_delete(Document).where(Document.user_id == u.id))
+        invalidate_cache()
+    except Exception as exc:
+        print(f"[conftest] bỏ qua dọn documents: {exc}")
+
+
 @pytest.fixture(scope="session")
 def client(tmp_path_factory):
     """
@@ -85,17 +109,18 @@ def client(tmp_path_factory):
 
     # --- Patch các pipeline nặng ---
     def _fast_ingest(source_id: str, file_path: str, filename: str):
-        reg = be_main._load_source_registry()
-        if source_id in reg:
-            reg[source_id]["status"] = "index_ready"
-            reg[source_id]["progress"] = 1.0
-            reg[source_id]["capabilities"] = {"chunk_query": True}
-        be_main._save_source_registry(reg)
+        # Bỏ qua pipeline thật: đánh dấu tài liệu đã index xong (bảng documents).
+        be_main._update_source_status(
+            source_id, "index_ready", progress=1.0,
+            capabilities={"chunk_query": True},
+        )
 
     be_main._trigger_background_ingest = lambda sid, fp, fn: _fast_ingest(sid, fp, fn)
 
     # Đảm bảo thư mục input tồn tại trong DATA_DIR tmp
     Path(be_main.INPUT_DIR).mkdir(parents=True, exist_ok=True)
 
+    _purge_anonymous_documents()
     with be_main.app.test_client() as c:
         yield c
+    _purge_anonymous_documents()

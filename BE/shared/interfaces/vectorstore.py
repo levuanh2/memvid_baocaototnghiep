@@ -20,7 +20,7 @@ class VectorStore(Protocol):
     def append(
         self,
         chunks: List[str],
-        video_name: str = "",
+        source_name: str = "",
         custom_metadata: Optional[List[Dict]] = None,
         batch_size: int = 32,
     ) -> None:
@@ -36,7 +36,7 @@ class VectorStore(Protocol):
         ...
 
     def load_meta(self) -> Dict[str, Dict]:
-        """Đọc nội dung index.json (chunk_id -> {text, video, embedding, ...})."""
+        """Đọc nội dung index.json (chunk_id -> {text, source_stem, ...})."""
         ...
 
     def rebuild(self, existing_meta: Optional[Dict[str, Dict]] = None) -> None:

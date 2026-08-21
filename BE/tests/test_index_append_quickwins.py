@@ -33,11 +33,11 @@ def _backup_dirs(tmp_path):
             if p.is_dir() and p.name.startswith(f"{tmp_path.name}_backup_")]
 
 
-def _append(vs, n=3, dim=8, video="doc.mp4"):
+def _append(vs, n=3, dim=8, video="doc"):
     embs = np.random.RandomState(0).rand(n, dim).astype("float32")
     vs.append_to_index(
         chunks=[f"chunk {i}" for i in range(n)],
-        video_name=video,
+        source_name=video,
         embeddings=embs,
         custom_metadata=[{"source_stem": "doc"}] * n,
     )

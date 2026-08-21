@@ -1,4 +1,4 @@
-"""Auth Hardening Phase C — source route ownership (upload/list/status/delete/videos).
+"""Auth Hardening Phase C — source route ownership (upload/list/status/delete).
 
 Uses the shared `client` fixture; monkeypatches main._auth_protect_enabled /
 _current_user_id to simulate the flag and users. list-indexed data tests write a
@@ -77,37 +77,42 @@ def test_source_routes_401_without_token(be, client, monkeypatch):
     assert client.get("/sources/xyz/status").status_code == 401
     assert client.post("/delete-source", json={"video": "x"}).status_code == 401
     assert client.delete("/sources/xyz").status_code == 401
-    assert client.get("/videos/x.mp4").status_code == 401
 
 
 # ---- upload stamps owner ----------------------------------------------------
 
 def test_upload_stamps_current_user(be, client, monkeypatch):
-    _protect(be, monkeypatch, "userA", on=True)
-    r = client.post("/upload-file", data={"file": (io.BytesIO(b"# doc\nhi"), "own.md")},
+    # documents.user_id co FK -> phai la user THAT, khong phai id bia.
+    import uuid as _uuid
+
+    from app.domains.auth import users_store
+    user = users_store.create_user(f"owner_{_uuid.uuid4().hex[:8]}@example.com", "password123")
+    uid = user["user_id"]
+
+    _protect(be, monkeypatch, uid, on=True)
+    r = client.post("/upload-file", data={"file": (io.BytesIO(b"# doc"), "own.md")},
                     content_type="multipart/form-data")
     assert r.status_code == 200
     reg = be._load_source_registry()
-    assert any(row.get("user_id") == "userA" for row in reg.values())
+    assert any(row.get("user_id") == uid for row in reg.values())
 
 
 # ---- list-indexed owner filter ---------------------------------------------
 
-def _seed_index_and_registry(be, rows):
-    """rows: {source_id: {source_stem, user_id}}. Writes index.json chunks + registry."""
+def _seed_index_and_registry(be, monkeypatch, rows):
+    """rows: {source_id: {source_stem, user_id}}. Ghi chunk vào index.json và
+    giả lập bảng documents (từ Phase 2 registry JSON không còn)."""
     meta = {}
     for i, (sid, row) in enumerate(rows.items()):
-        meta[str(i)] = {"video": row["source_stem"], "source_stem": row["source_stem"], "text": "chunk"}
+        meta[str(i)] = {"source_stem": row["source_stem"], "text": "chunk"}
     be.INDEX_META_JSON_PATH.parent.mkdir(parents=True, exist_ok=True)
     be.INDEX_META_JSON_PATH.write_text(json.dumps(meta), encoding="utf-8")
-    be.SOURCE_REGISTRY_PATH.parent.mkdir(parents=True, exist_ok=True)
-    be.SOURCE_REGISTRY_PATH.write_text(json.dumps(
-        {sid: {"filename": row["source_stem"] + ".md", **row} for sid, row in rows.items()}
-    ), encoding="utf-8")
+    docs = {sid: {"filename": row["source_stem"] + ".md", **row} for sid, row in rows.items()}
+    monkeypatch.setattr(be, "_load_source_registry", lambda: docs)
 
 
 def test_list_indexed_owner_scoped(be, client, monkeypatch):
-    _seed_index_and_registry(be, {
+    _seed_index_and_registry(be, monkeypatch, {
         "idA": {"source_stem": "doc_a", "user_id": "userA"},
         "idB": {"source_stem": "doc_b", "user_id": "userB"},
         "idL": {"source_stem": "doc_l"},  # legacy
@@ -136,7 +141,6 @@ def test_foreign_source_status_delete_video_404(be, client, monkeypatch):
     _protect(be, monkeypatch, "userB", on=True)  # B is not the owner
     assert client.get("/sources/idA/status").status_code == 404
     assert client.post("/delete-source", json={"video": "doc_a"}).status_code == 404
-    assert client.get("/videos/doc_a.mp4").status_code == 404
     # owner A: status passes the owner check (may 404 later for missing files, but not the owner gate)
     _protect(be, monkeypatch, "userA", on=True)
     assert client.get("/sources/idA/status").status_code == 200

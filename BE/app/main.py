@@ -31,7 +31,6 @@ except ImportError:
     HAS_FCNTL = False
 
 from app.domains.ingest.ingest_utils import extract_text, split_text
-from app.domains.ingest.video_utils import  save_qr_frames_to_video
 from app.domains.vectorstore.store import (
     append_to_index,
     search_index,
@@ -49,7 +48,6 @@ from app.domains.mindmap.input_collector import collect_mindmap_input
 from services.mindmap.pipeline import schema as mindmap_schema
 from app.domains.summary import store as summary_store
 from services.summary.pipeline import schema as summary_schema
-from app.domains.ingest.chunk_processor import process_and_store_chunks
 from app.domains.memory.tree import (
     build_memory_tree_for_sources,
     query_with_memory_tree,
@@ -102,12 +100,10 @@ BASE_DIR = BE_ROOT
 
 DATA_DIR_DEFAULT = str(BASE_DIR)
 DATA_DIR = Path(os.environ.get("DATA_DIR", DATA_DIR_DEFAULT))
-VIDEO_DIR = Path(os.environ.get("VIDEO_DIR", str(DATA_DIR / "videos")))
 INPUT_DOCS_DIR = Path(os.environ.get("INPUT_DOCS_DIR", str(DATA_DIR / "input_docs")))
 INDEX_DIR = Path(os.environ.get("INDEX_DIR", str(DATA_DIR / "index")))
 MEMORY_DIR = Path(os.environ.get("MEMORY_DIR", str(DATA_DIR / "memory")))
 
-VIDEOS_DIR = str(VIDEO_DIR)
 INPUT_DIR = str(INPUT_DOCS_DIR)
 INDEX_META_JSON_PATH = INDEX_DIR / "index.json"
 INDEX_FAISS_PATH = INDEX_DIR / "index.faiss"
@@ -115,10 +111,8 @@ INDEX_FAISS_PATH = INDEX_DIR / "index.faiss"
 # Thư mục lưu các artefact trí nhớ tầng cao (mindmap, summary, memory tree, ...)
 MINDMAPS_PATH = MEMORY_DIR / 'mindmaps.json'
 SUMMARIES_PATH = MEMORY_DIR / 'summaries.json'
-SOURCE_REGISTRY_PATH = INDEX_DIR / "source_registry.json"
 
 os.makedirs(INPUT_DIR, exist_ok=True)
-os.makedirs(VIDEOS_DIR, exist_ok=True)
 os.makedirs(MEMORY_DIR, exist_ok=True)
 os.makedirs(INDEX_DIR, exist_ok=True)
 
@@ -206,7 +200,6 @@ _query_cache: "OrderedDict[str, dict]" = OrderedDict()
 _query_cache_lock = threading.Lock()
 
 # File lock để chặn rebuild đồng thời giữa nhiều gunicorn workers
-REBUILD_LOCK_PATH = INDEX_DIR / ".rebuild.lock"
 
 # In-memory async job manager (giữ offline, nhẹ)
 jobs: Dict[str, Dict[str, Any]] = {}
@@ -817,6 +810,22 @@ def auth_logout():
     return jsonify({"ok": True}), 200
 
 
+@app.post('/auth/refresh')
+def auth_refresh():
+    """Đổi token còn hạn lấy token mới (đặc tả 12.1 `POST /api/auth/refresh`).
+
+    Stateless: không có refresh-token riêng, chỉ cấp lại access token khi token
+    hiện tại còn hợp lệ VÀ token_version còn khớp. Token đã thu hồi (logout-all)
+    không refresh được.
+    """
+    from app.domains.auth import service as _auth
+    from app.domains.auth import tokens as _tokens
+    user = _auth.current_user_from_request()
+    if user is None:
+        return jsonify({"error": "unauthorized"}), 401
+    return jsonify({"token": _tokens.make_token(user), "user": _auth.public_user(user)}), 200
+
+
 @app.get('/auth/me')
 def auth_me():
     from app.domains.auth import service as _auth
@@ -852,24 +861,18 @@ def stats():
         if not isinstance(k, str) or not k.isdigit():
             continue
         num_chunks += 1
-        video_raw = (m.get("video") or "").strip() if isinstance(m, dict) else ""
-        if video_raw:
-            stem = _normalize_video_stem(video_raw)
+        src_raw = (m.get("source_stem") or "").strip() if isinstance(m, dict) else ""
+        if src_raw:
+            stem = _normalize_video_stem(src_raw)
             if stem:
                 video_stems.add(stem)
 
-    try:
-        num_videos = len(list(Path(VIDEOS_DIR).glob("*.mp4")))
-    except Exception:
-        num_videos = 0
-
-    # num_documents ~ số lượng video stems có trong index (tương ứng mỗi source)
+    # num_documents ~ số lượng source stem có trong index
     num_documents = len(video_stems)
 
     return jsonify({
         "num_documents": num_documents,
         "num_chunks": num_chunks,
-        "num_videos": num_videos,
         # Counter per-worker (gunicorn); aggregate thật xem redis-cli INFO stats.
         "cache": llm_cache.stats(),
         # Phase 3 single-flight counters (per-worker). duplicate_llm_calls_avoided ~= dup_avoided.
@@ -967,218 +970,24 @@ def job_timeline(job_id: str):
     }), 200
 
 
-@app.post('/rebuild-index')
-def rebuild_index_from_video():
-    """
-    Rebuild FAISS index ONLY from QR videos asynchronously (video-as-source-of-truth).
-    Returns immediately with a job_id for progress tracking.
-    """
-    # Phase D: rebuild is a GLOBAL/system-wide operation (no per-user index yet). No admin
-    # role exists, so the MVP rule is authenticated-only when protected; true admin-only
-    # rebuild is future work. The job is stamped with the caller (create_job user_id).
-    _uid, err = _require_app_user()
-    if err:
-        return err
-    _cleanup_old_jobs()
-
-    # Only one rebuild at a time across gunicorn workers (file lock)
-    try:
-        lock_fd = os.open(str(REBUILD_LOCK_PATH), os.O_CREAT | os.O_EXCL | os.O_WRONLY)
-        os.write(lock_fd, str(os.getpid()).encode("utf-8"))
-        os.close(lock_fd)
-    except FileExistsError:
-        return jsonify({"error": "Rebuild index is already running"}), 409
-    except Exception as exc:
-        return jsonify({"error": f"Cannot create rebuild lock: {str(exc)}"}), 500
-
-    job_id = str(uuid.uuid4())
-    with jobs_lock:
-        jobs[job_id] = {
-            "status": "pending",
-            "progress": 0,
-            "num_videos": 0,
-            "num_chunks": 0,
-            "error": None,
-            "created_at": time.time(),
-        }
-    # Phase 5 Step 4: also mirror status into the shared jobs.sqlite so an RQ worker in a
-    # separate process is visible to /rebuild-status (in-mem `jobs` dict is per-process).
-    if _jobs_create_job is not None:
-        try:
-            _jobs_create_job(job_id, job_type="rebuild", status="pending", progress=0, current_node="Queued", user_id=_current_user_id())
-        except Exception:
-            pass
-
-    from app.jobs.queue import enqueue_job
-    try:
-        res = enqueue_job(run_rebuild_index_job, args=(job_id,), queue="rebuild", job_id=job_id)
-    except Exception as exc:
-        # enqueue_job already falls back to a thread; a raise here is unexpected -> cleanup.
-        try:
-            if REBUILD_LOCK_PATH.exists():
-                REBUILD_LOCK_PATH.unlink()
-        except Exception:
-            pass
-        with jobs_lock:
-            jobs.pop(job_id, None)
-        return jsonify({"error": f"Failed to start rebuild job: {str(exc)}"}), 500
-    _event = {"rq": "rebuild_enqueue_rq", "thread": "rebuild_enqueue_thread",
-              "thread_fallback": "rebuild_queue_fallback_thread"}.get(res.get("mode"),
-                                                                      f"rebuild_enqueue_{res.get('mode')}")
-    print(f"{_event} job_id={job_id}", flush=True)
-    return jsonify({"status": "started", "job_id": job_id}), 202
-
-
-def run_rebuild_index_job(job_id: str) -> None:
-    """Rebuild FAISS index from QR videos. Runs in a daemon thread (QUEUE_ENABLED=false)
-    OR an RQ worker process (QUEUE_ENABLED=true) — identical behaviour, no Flask request
-    context. Enqueued by dotted path `app.main.run_rebuild_index_job`. Status is mirrored
-    into the shared jobs.sqlite (worker-visible) AND the in-mem `jobs` dict (legacy/same
-    process). Releases REBUILD_LOCK_PATH in finally (path on the shared index volume)."""
-    print(f"rebuild_job_running job_id={job_id}", flush=True)
-
-    def _set_store(**kw):
-        if _jobs_update_job is not None:
-            try:
-                _jobs_update_job(job_id, **kw)
-            except Exception:
-                pass
-
-    def _set_dict(**kw):
-        with jobs_lock:
-            if job_id in jobs:
-                jobs[job_id].update(kw)
-
-    try:
-        _set_dict(status="running", progress=0)
-        _set_store(status="running", progress=0, current_node="Rebuild")
-
-        _counts = {"num_videos": 0, "num_chunks": 0}
-
-        def progress_cb(progress: int, extra: Optional[Dict[str, Any]] = None) -> None:
-            upd: Dict[str, Any] = {"progress": progress}
-            if extra:
-                if extra.get("num_videos") is not None:
-                    _counts["num_videos"] = int(extra["num_videos"])
-                if extra.get("num_chunks") is not None:
-                    _counts["num_chunks"] = int(extra["num_chunks"])
-            _set_dict(**upd, **_counts)
-            _set_store(progress=progress, result=dict(_counts))
-
-        from app.scripts.rebuild_index_from_video import rebuild_faiss_index_from_videos
-        result = rebuild_faiss_index_from_videos(progress_cb=progress_cb)
-        num_chunks = int(result.get("num_chunks") or 0)
-        num_videos = int(result.get("num_videos") or _counts["num_videos"] or 0)
-        _set_dict(status="done", progress=100, num_chunks=num_chunks, num_videos=num_videos)
-        _set_store(status="done", progress=100,
-                   result={"num_chunks": num_chunks, "num_videos": num_videos})
-        print(f"rebuild_job_done job_id={job_id} num_videos={num_videos} num_chunks={num_chunks}", flush=True)
-    except Exception as exc:
-        _set_dict(status="error", error=str(exc))
-        _set_store(status="error", error_text=_job_error_text(exc))
-        print(f"rebuild_job_failed job_id={job_id} err={str(exc)[:80]}", flush=True)
-    finally:
-        try:
-            if REBUILD_LOCK_PATH.exists():
-                REBUILD_LOCK_PATH.unlink()
-        except Exception:
-            pass
-
-
-@app.get('/rebuild-status/<job_id>')
-def rebuild_status(job_id: str):
-    uid, err = _require_app_user()
-    if err:
-        return err
-    # Owner gate: a foreign/unknown rebuild job is 404 (no oracle). Under enforcement
-    # create_job always mirrors into jobs.sqlite with the owner, so the store is authoritative.
-    if _auth_protect_enabled() and _derived_job_owner_ok(job_id, uid, ("rebuild", None)) is not True:
-        return jsonify({"error": "Job not found"}), 404
-    _cleanup_old_jobs()
-    # Prefer the shared jobs.sqlite (worker-visible); fall back to the in-mem dict (legacy).
-    if _jobs_get_job is not None:
-        try:
-            j = _jobs_get_job(job_id)
-        except Exception:
-            j = None
-        if j is not None and j.get("job_type") in ("rebuild", None):
-            res = j.get("result") if isinstance(j.get("result"), dict) else {}
-            return jsonify({
-                "status": j.get("status"),
-                "progress": j.get("progress"),
-                # Default 0 before the first progress/result write (preserve legacy contract:
-                # the in-mem dict returned 0/0 on a freshly started job, not null).
-                "num_chunks": res.get("num_chunks") or 0,
-                "num_videos": res.get("num_videos") or 0,
-                "error": j.get("error"),
-            }), 200
-    with jobs_lock:
-        job = jobs.get(job_id)
-        if not job:
-            return jsonify({"error": "Job not found"}), 404
-        # Return only required fields (but include error when exists)
-        return jsonify({
-            "status": job.get("status"),
-            "progress": job.get("progress"),
-            "num_chunks": job.get("num_chunks"),
-            "num_videos": job.get("num_videos"),
-            "error": job.get("error"),
-        }), 200
-
-
 # -------------------------
 # 📋 Source Registry (tracking upload status)
 # -------------------------
 def _load_source_registry() -> Dict[str, Dict]:
-    """Load source registry với file locking để tránh race condition."""
-    if not SOURCE_REGISTRY_PATH.exists():
-        return {}
+    """Bảng `documents` (Postgres) — thay `index/source_registry.json` từ Phase 2.
+
+    Giữ nguyên tên + shape trả về để mọi call site cũ (owned_stems, ownership
+    check, /list-indexed, delete) không phải viết lại. Lỗi DB → {} (fail-open y
+    như bản JSON cũ khi file hỏng).
+    """
     try:
-        # Try file locking (works on Unix, fallback on Windows)
-        with open(SOURCE_REGISTRY_PATH, 'r', encoding='utf-8') as f:
-            if HAS_FCNTL:
-                try:
-                    fcntl.flock(f.fileno(), fcntl.LOCK_SH)  # Shared lock for read
-                    data = json.load(f)
-                    fcntl.flock(f.fileno(), fcntl.LOCK_UN)
-                except (AttributeError, OSError):
-                    # Fallback: just read
-                    data = json.load(f)
-            else:
-                # Windows: no locking, just read
-                data = json.load(f)
-        return data if isinstance(data, dict) else {}
+        from app.domains.documents import repository as _docs
+        return _docs.all_rows()
     except Exception as exc:
-        print(f"⚠️ Không thể đọc source_registry.json: {exc}")
+        print(f"⚠️ Không đọc được bảng documents: {exc}")
         return {}
 
 
-def _save_source_registry(registry: Dict[str, Dict]) -> None:
-    """Save source registry với file locking."""
-    try:
-        tmp_path = SOURCE_REGISTRY_PATH.with_suffix('.tmp')
-        with open(tmp_path, 'w', encoding='utf-8') as f:
-            if HAS_FCNTL:
-                try:
-                    fcntl.flock(f.fileno(), fcntl.LOCK_EX)  # Exclusive lock for write
-                    json.dump(registry, f, ensure_ascii=False, indent=2)
-                    fcntl.flock(f.fileno(), fcntl.LOCK_UN)
-                except (AttributeError, OSError):
-                    # Fallback: just write
-                    json.dump(registry, f, ensure_ascii=False, indent=2)
-            else:
-                # Windows: no locking, just write
-                json.dump(registry, f, ensure_ascii=False, indent=2)
-        tmp_path.replace(SOURCE_REGISTRY_PATH)
-    except Exception as exc:
-        print(f"⚠️ Không thể lưu source_registry.json: {exc}")
-
-
-# -------------------------
-# 🔐 Auth Hardening Phase A — ownership helpers (UNENFORCED this phase).
-# Flag default OFF; helpers are wired to storage (registry/jobs) but no route
-# changes its auth/scoping behavior yet. See the auth-hardening plan.
-# -------------------------
 def _auth_protect_enabled() -> bool:
     return (os.getenv("AUTH_PROTECT_APP_APIS", "false") or "").strip().lower() in ("1", "true", "yes", "on")
 
@@ -1316,7 +1125,7 @@ def _chunk_owner_stem(chunk_id) -> str:
     m = meta.get(str(chunk_id))
     if not isinstance(m, dict):
         return ""
-    return _normalize_video_stem(m.get("source_stem") or m.get("video") or "")
+    return _normalize_video_stem(m.get("source_stem") or "")
 
 
 def _derived_job_owner_ok(job_id: str, user_id: Optional[str], allowed_types) -> Optional[bool]:
@@ -1361,67 +1170,38 @@ def _update_source_status(
     substatus: Optional[str] = None,
     capabilities: Optional[Dict[str, bool]] = None
 ) -> None:
-    """
-    Update status của một source trong registry.
+    """Cập nhật trạng thái ingest của tài liệu.
+
     - status: "processing" | "index_ready" | "ready" | "error"
-    - substatus: "faiss_ready" | "building_memory_tree" | "memory_tree_ready" (optional)
-    - capabilities: {"chunk_query": bool, "memory_query": bool} (optional)
+    - substatus: "faiss_ready" | "building_memory_tree" | "memory_tree_ready"
+    - capabilities: {"chunk_query": bool, "memory_query": bool}
+
+    Trạng thái pipeline nằm ở `documents.metadata_json.ingest_status`; cột
+    `documents.status` giữ giá trị đã quy đổi theo đặc tả 3.2.4.
     """
-    registry = _load_source_registry()
-    if source_id not in registry:
-        # Nếu chưa có, tạo mới (shouldn't happen, but safe)
-        registry[source_id] = {
-            "filename": source_id,
-            "status": status,
-            "progress": progress if progress is not None else 0.0,
-            "created_at": datetime.now(timezone.utc).isoformat(),
-        }
-    else:
-        registry[source_id]["status"] = status
-        if progress is not None:
-            registry[source_id]["progress"] = progress
-        if error is not None:
-            registry[source_id]["error"] = error
-        elif "error" in registry[source_id] and status != "error":
-            # Clear error if status changed from error
-            del registry[source_id]["error"]
-        
-        # Update substatus (optional field)
-        if substatus is not None:
-            registry[source_id]["substatus"] = substatus
-        elif substatus is None and "substatus" in registry[source_id] and status == "error":
-            # Clear substatus on error
-            del registry[source_id]["substatus"]
-        
-        # Update capabilities (optional field)
-        if capabilities is not None:
-            registry[source_id]["capabilities"] = capabilities
-        elif capabilities is None and "capabilities" in registry[source_id] and status == "error":
-            # Clear capabilities on error
-            del registry[source_id]["capabilities"]
-    
-    _save_source_registry(registry)
+    try:
+        from app.domains.documents import repository as _docs
+        _docs.update_status(source_id, status, progress=progress, error=error,
+                            substatus=substatus, capabilities=capabilities)
+    except Exception as exc:
+        print(f"⚠️ Không cập nhật được trạng thái tài liệu {source_id}: {exc}")
 
 
 def _get_source_status(source_id: str) -> Optional[Dict]:
-    """Get status của một source."""
-    registry = _load_source_registry()
-    return registry.get(source_id)
+    try:
+        from app.domains.documents import repository as _docs
+        return _docs.get(source_id)
+    except Exception:
+        return None
 
 
 def _get_source_status_by_stem(source_stem: str) -> Optional[Dict]:
-    """
-    Get status của source dựa trên source_stem (normalized filename).
-    Tìm trong registry source nào có source_stem trùng.
-    """
-    registry = _load_source_registry()
-    # Canonical hoá CẢ HAI phía để khớp kể cả registry cũ (format pre-canonical).
-    target = _normalize_video_stem(source_stem)
-    for source_id, info in registry.items():
-        stored = info.get("source_stem") or info.get("filename", "")
-        if stored and _normalize_video_stem(stored) == target:
-            return info
-    return None
+    """Tìm tài liệu theo canonical stem (khớp cả tên hiển thị lẫn stem đã chuẩn hoá)."""
+    try:
+        from app.domains.documents import repository as _docs
+        return _docs.get_by_stem(source_stem)
+    except Exception:
+        return None
 
 
 def _check_sources_status(selected_sources: List[str]) -> Dict[str, str]:
@@ -1542,7 +1322,6 @@ _graphs = _build_graphs(
     update_source_status=lambda sid, status="processing", **kw: _update_source_status(sid, status, **kw),
     extract_text=extract_text,
     split_text=split_text,
-    process_and_store_chunks=process_and_store_chunks,
     append_to_index=append_to_index,
     build_memory_tree_for_sources=build_memory_tree_for_sources,
     jobs_update=_jobs_update_job,
@@ -1586,6 +1365,10 @@ def _langgraph_invoke(graph: Any, state: dict, *, thread_id: str, command: Any =
         if not str(e).strip():
             raise RuntimeError(_job_error_text(e)) from e
         raise
+
+
+class _JobCancelled(Exception):
+    """Người dùng bấm huỷ — không phải lỗi, không ghi error_text."""
 
 
 def _job_error_text(exc: BaseException) -> str:
@@ -1883,52 +1666,6 @@ def _trigger_background_ingest(source_id: str, file_path: str, filename: str):
 
 
 # -------------------------
-# 📤 Process raw text
-# -------------------------
-@app.post('/process-doc')
-def process_doc():
-    _uid, err = _require_app_user()
-    if err:
-        return err
-    text = request.json.get('text', '')
-    if not text:
-        return jsonify({'error': 'Missing text'}), 400
-
-    chunks = split_text(text)
-
-    # Thay toàn bộ logic cũ bằng hàm mới
-    video_name = "raw_text"  # hoặc tạo tên có nghĩa hơn
-    video_path, metadata_entries = process_and_store_chunks(
-        chunks=chunks,
-        video_name=video_name,
-        timestamp=datetime.now().isoformat()
-    )
-
-    # Append từng entry với custom metadata
-    for entry in metadata_entries:
-        append_to_index(
-            chunks=[entry["text"]],
-            video_name=video_path,
-            custom_metadata=[{
-                "parent_id": entry.get("parent_id"),
-                "sub_order": entry.get("sub_order"),
-                "total_parts": entry.get("total_parts"),
-                "is_subchunk": entry.get("is_subchunk", False)
-            }]
-        )
-
-    # Trigger background task để build Memory Tree (non-blocking)
-    source_stem = Path(video_name).stem.lower()
-    _trigger_memory_tree_build([source_stem])
-
-    return jsonify({
-        'video_path': video_path,
-        'status': 'uploaded',
-        'message': 'File processed and index built. Memory Tree is being built in background.'
-    })
-
-
-# -------------------------
 # 📤 Upload single file (ASYNC)
 # -------------------------
 # Ký tự cấm trên tên file Windows (+ control chars). NFKD ở canonicalizer lo phần
@@ -1977,17 +1714,33 @@ def _ingest_uploaded_file(file) -> dict:
     file.save(save_path)
 
     source_stem = _normalize_video_stem(filename)
-    registry[source_id] = {
-        "filename": filename,
-        "source_stem": source_stem,
-        "input_path": save_path,   # để xóa file gốc khi delete
-        "status": "processing",
-        "progress": 0.0,
-        "created_at": datetime.now(timezone.utc).isoformat(),
-        # Auth Hardening Phase A: owner stamp (None when no token). Unenforced this phase.
-        "user_id": _current_user_id(),
-    }
-    _save_source_registry(registry)
+    uid = _current_user_id()
+
+    # Bản gốc lên Supabase Storage (bucket private). File local vẫn giữ để pipeline
+    # ingest đọc trực tiếp — Storage là bản lưu bền, không phải đường đọc nóng.
+    # Chưa cấu hình Storage (test/CI) → file_path trỏ đường dẫn local, ingest chạy y hệt.
+    from app.domains.documents import repository as _docs
+    from app.domains.documents import storage as _storage
+    stored_path = save_path
+    if _storage.is_configured():
+        try:
+            _storage.ensure_bucket()
+            obj = _storage.object_path(uid or "anonymous", source_id, filename)
+            with open(save_path, "rb") as fh:
+                _storage.upload(obj, fh.read())
+            stored_path = obj
+        except Exception as exc:
+            print(f"⚠️ [Storage] Không đẩy được file lên bucket, dùng bản local: {exc}")
+
+    _docs.create(
+        document_id=source_id,
+        filename=filename,
+        file_type=os.path.splitext(filename)[1].lstrip(".").lower(),
+        file_path=stored_path,
+        user_id=uid,
+        input_path=save_path,   # để xóa file gốc khi delete
+        file_size=(os.path.getsize(save_path) if os.path.exists(save_path) else None),
+    )
     _trigger_background_ingest(source_id, save_path, filename)
     return {
         'source_id': source_id,
@@ -2093,6 +1846,1235 @@ def upload_multiple():
             results.append({'file': file.filename, 'error': f'Upload failed: {str(e)}'})
 
     return jsonify({'sources': sources, 'results': results})
+# -------------------------
+# 📚 API tài liệu StudyMap (đặc tả 12.2)
+# -------------------------
+def _doc_public(doc_id: str, row: dict) -> dict:
+    """Shape trả ra FE. KHÔNG lộ storage path thô (NFR-04.3) — muốn mở file gốc
+    thì gọi `GET /api/documents/<id>/file` để lấy signed URL có hạn."""
+    return {
+        "document_id": doc_id,
+        "title": row.get("filename"),
+        "source_stem": row.get("source_stem"),
+        # Đặc tả 3.2.4 / 8.3: uploaded | processing | completed | failed | deleted.
+        # Trạng thái pipeline (`ready`, `index_ready`) đi kèm riêng ở `ingest_status`
+        # để FE hiện chi tiết mà không phá hợp đồng của API.
+        "status": row.get("spec_status") or row.get("status"),
+        "ingest_status": row.get("status"),
+        "progress": row.get("progress", 0.0),
+        "substatus": row.get("substatus"),
+        "capabilities": row.get("capabilities"),
+        "page_count": row.get("page_count"),
+        "char_count": row.get("char_count"),
+        "chunk_count": row.get("chunk_count"),
+        "created_at": row.get("created_at"),
+        "error": row.get("error"),
+    }
+
+
+def _owned_document(document_id: str, uid):
+    """(row, error_response). Tài liệu của người khác = 404, không phải 403 —
+    không tạo oracle cho biết id đó có tồn tại hay không (FR-01.6)."""
+    from app.domains.documents import repository as _docs
+    row = _docs.get(document_id)
+    if not row:
+        return None, (jsonify({"error": "Document not found"}), 404)
+    if _auth_protect_enabled() and row.get("user_id") != uid:
+        return None, (jsonify({"error": "Document not found"}), 404)
+    return row, None
+
+
+@app.post('/api/documents/upload')
+def api_documents_upload():
+    """Upload tài liệu (FR-02.1). Cùng luồng async với /upload-file."""
+    uid, err = _require_app_user()
+    if err:
+        return err
+    file = request.files.get('file')
+    if not file or not (file.filename or "").strip():
+        return jsonify({'error': 'Missing file'}), 400
+    info = _ingest_uploaded_file(file)
+    from app.domains.documents import repository as _docs
+    row = _docs.get(info['source_id']) or {}
+    return jsonify(_doc_public(info['source_id'], row)), 201
+
+
+@app.get('/api/documents')
+def api_documents_list():
+    """Danh sách tài liệu của người dùng (FR-02.5, FR-02.6)."""
+    uid, err = _require_app_user()
+    if err:
+        return err
+    from app.domains.documents import repository as _docs
+    rows = _docs.all_rows()
+    out = [
+        _doc_public(did, row) for did, row in rows.items()
+        if not _auth_protect_enabled() or row.get("user_id") == uid
+    ]
+    out.sort(key=lambda d: d.get("created_at") or "", reverse=True)
+    return jsonify({"documents": out})
+
+
+@app.get('/api/documents/<document_id>')
+def api_documents_get(document_id: str):
+    uid, err = _require_app_user()
+    if err:
+        return err
+    row, err = _owned_document(document_id, uid)
+    if err:
+        return err
+    return jsonify(_doc_public(document_id, row))
+
+
+@app.delete('/api/documents/<document_id>')
+def api_documents_delete(document_id: str):
+    """Xoá mềm (đặc tả 8.10): ẩn khỏi truy vấn, giữ dữ liệu con."""
+    uid, err = _require_app_user()
+    if err:
+        return err
+    _row, err = _owned_document(document_id, uid)
+    if err:
+        return err
+    from app.domains.documents import repository as _docs
+    _docs.soft_delete(document_id)
+    return jsonify({"document_id": document_id, "status": "deleted"})
+
+
+@app.get('/api/documents/<document_id>/sections')
+def api_documents_sections(document_id: str):
+    uid, err = _require_app_user()
+    if err:
+        return err
+    _row, err = _owned_document(document_id, uid)
+    if err:
+        return err
+    from app.domains.documents import repository as _docs
+    return jsonify({"document_id": document_id, "sections": _docs.list_sections(document_id)})
+
+
+@app.get('/api/documents/<document_id>/chunks')
+def api_documents_chunks(document_id: str):
+    uid, err = _require_app_user()
+    if err:
+        return err
+    _row, err = _owned_document(document_id, uid)
+    if err:
+        return err
+    try:
+        limit = max(1, min(500, int(request.args.get("limit", 100))))
+        offset = max(0, int(request.args.get("offset", 0)))
+    except (TypeError, ValueError):
+        return jsonify({"error": "limit/offset phải là số nguyên"}), 400
+    from app.domains.documents import repository as _docs
+    return jsonify({
+        "document_id": document_id,
+        "total": _docs.count_chunks(document_id),
+        "limit": limit,
+        "offset": offset,
+        "chunks": _docs.list_chunks(document_id, limit=limit, offset=offset),
+    })
+
+
+@app.get('/api/documents/<document_id>/file')
+def api_documents_file(document_id: str):
+    """Signed URL có hạn để mở lại file gốc — không bao giờ trả storage path thô."""
+    uid, err = _require_app_user()
+    if err:
+        return err
+    row, err = _owned_document(document_id, uid)
+    if err:
+        return err
+    from app.domains.documents import storage as _storage
+    path = row.get("file_path")
+    if not path or not _storage.is_configured():
+        return jsonify({"error": "File gốc không có trên storage"}), 404
+    try:
+        ttl = max(60, min(3600, int(request.args.get("ttl", 600))))
+        return jsonify({"url": _storage.signed_url(path, ttl=ttl), "expires_in": ttl})
+    except Exception as exc:
+        print(f"⚠️ [Storage] ký URL thất bại: {exc}")
+        return jsonify({"error": "Không tạo được link tải"}), 502
+
+
+# -------------------------
+# 🔎 API tìm kiếm ngữ nghĩa (FR-05)
+# -------------------------
+def _search_payload():
+    """(query, top_k, error_response) — validate chung cho cả 2 route search."""
+    data = request.json or {}
+    query = (data.get("query") or "").strip()
+    if not query:
+        return None, None, (jsonify({"error": "Thiếu query"}), 400)
+    try:
+        top_k = max(1, min(50, int(data.get("top_k", 5))))
+    except (TypeError, ValueError):
+        return None, None, (jsonify({"error": "top_k phải là số nguyên"}), 400)
+    return query, top_k, None
+
+
+@app.post('/api/search')
+def api_search():
+    """Tìm trong TOÀN BỘ tài liệu của người dùng (FR-05.5)."""
+    uid, err = _require_app_user()
+    if err:
+        return err
+    query, top_k, err = _search_payload()
+    if err:
+        return err
+    from app.domains.retrieval import search as _search
+    # Chế độ mở: không lọc nguồn (danh sách stem đầy đủ chỉ làm chậm, kết quả y hệt).
+    stems = sorted(owned_stems(uid)) if _auth_protect_enabled() else []
+    if _auth_protect_enabled() and not stems:
+        return jsonify({"query": query, "results": []})
+    results = _search.semantic_search(
+        query, index_meta_path=INDEX_META_JSON_PATH, source_stems=stems,
+        top_k=top_k, user_id=uid if _auth_protect_enabled() else None,
+    )
+    return jsonify({"query": query, "results": results})
+
+
+@app.post('/api/documents/<document_id>/search')
+def api_document_search(document_id: str):
+    """Tìm trong MỘT tài liệu. Tài liệu người khác = 404 như mọi route documents."""
+    uid, err = _require_app_user()
+    if err:
+        return err
+    row, err = _owned_document(document_id, uid)
+    if err:
+        return err
+    query, top_k, err = _search_payload()
+    if err:
+        return err
+    from app.domains.retrieval import search as _search
+    stem = row.get("source_stem")
+    results = _search.semantic_search(
+        query, index_meta_path=INDEX_META_JSON_PATH,
+        source_stems=[stem] if stem else [], top_k=top_k,
+        user_id=uid if _auth_protect_enabled() else None,
+    )
+    results = [r for r in results if r["document_id"] == document_id]
+    return jsonify({"document_id": document_id, "query": query, "results": results})
+
+
+# -------------------------
+# 🗺️ API Study Map (FR-04, đặc tả 7.4)
+# -------------------------
+def run_study_map_job(job_id: str, document_id: str, user_id: Optional[str] = None) -> None:
+    """Sinh Study Map cho MỘT tài liệu (FR-04.2).
+
+    Gọi thẳng pipeline mindmap thay vì đi qua MINDMAP_GRAPH: graph tự ghi
+    `status=done` kèm result là artifact mindmap, mà job này phải trả `map_id` —
+    để graph đóng job trước rồi mới ghi map_id là dựng lại đúng race
+    done-trước-result đã có trong known-issues. Ở đây job chỉ done sau khi map
+    đã nằm trong DB.
+    """
+    from app.domains.documents import repository as _docs
+    from app.domains.jobs.jobs_store import is_cancel_requested, update_job
+    from app.domains.studymap import generator as _sm_gen
+    from app.domains.studymap import repository as _sm_repo
+
+    print(f"study_map_job_running job_id={job_id}", flush=True)
+    map_id = None
+    try:
+        row = _docs.get(document_id) or {}
+        stem = row.get("source_stem")
+        if not stem:
+            raise ValueError("Tài liệu chưa có dữ liệu đã index.")
+        map_id = _sm_repo.create_map(document_id=document_id, user_id=user_id,
+                                     title=row.get("filename") or "Study Map")
+        update_job(job_id, status="running", progress=5, current_node="CollectInput",
+                   result={"map_id": map_id, "status": "processing"})
+
+        mm = collect_mindmap_input(INDEX_META_JSON_PATH, [stem])
+        if not mm.get("chunks"):
+            raise ValueError("Tài liệu chưa có chunk nào đã index.")
+
+        def _cancelled() -> bool:
+            return bool(is_cancel_requested(job_id))
+
+        pipeline = _get_mindmap_pipeline()
+        update_job(job_id, progress=15, current_node="Skeleton")
+        skeleton, method = pipeline.skeleton(mm)
+        if _cancelled():
+            raise _JobCancelled()
+
+        update_job(job_id, progress=30, current_node="Enrich")
+        nodes, deg_enrich = pipeline.enrich(
+            mm, skeleton,
+            progress_cb=lambda p, msg: update_job(job_id, progress=p, current_node=msg),
+            cancel_cb=_cancelled,
+        )
+        if _cancelled():
+            raise _JobCancelled()
+
+        update_job(job_id, progress=75, current_node="Relations")
+        relations, deg_rel = pipeline.relations(nodes, cancel_cb=_cancelled)
+        if _cancelled():
+            raise _JobCancelled()
+
+        update_job(job_id, progress=85, current_node="Persist")
+        clean = mindmap_schema.sanitize_nodes(nodes)
+        rels = mindmap_schema.validate_relations(relations, clean)
+        node_rows, edge_rows = _sm_gen.build_graph(
+            clean, rels, _docs.chunks_by_embedding(document_id),
+        )
+        if not node_rows:
+            raise ValueError("Pipeline không dựng được node nào.")
+        counts = _sm_repo.save_graph(map_id, document_id, node_rows, edge_rows)
+        _sm_repo.finish(map_id, "completed", generator={
+            "pipeline": mindmap_schema.PIPELINE_VERSION,
+            "skeleton_method": method,
+            "degraded": bool(deg_enrich or deg_rel),
+            **counts,
+        })
+        update_job(job_id, status="done", progress=100, current_node="Persist",
+                   result={"map_id": map_id, "status": "completed", **counts})
+        print(f"study_map_job_done job_id={job_id} map_id={map_id}", flush=True)
+    except _JobCancelled:
+        if map_id:
+            _sm_repo.finish(map_id, "failed", generator={"cancelled": True})
+        update_job(job_id, status="cancelled", progress=0, current_node="Cancelled")
+        print(f"study_map_job_cancelled job_id={job_id}", flush=True)
+    except Exception as e:
+        if map_id:
+            _sm_repo.finish(map_id, "failed", generator={"error": str(e)[:500]})
+        update_job(job_id, status="error", error_text=_job_error_text(e))
+        print(f"study_map_job_failed job_id={job_id} err={str(e)[:80]}", flush=True)
+
+
+@app.post('/api/study-maps/generate')
+def api_study_maps_generate():
+    """Tạo Study Map từ một tài liệu (FR-04.1). Trả job_id để poll."""
+    uid, err = _require_app_user()
+    if err:
+        return err
+    data = request.json or {}
+    document_id = (data.get("document_id") or "").strip()
+    if not document_id:
+        return jsonify({"error": "Thiếu document_id"}), 400
+    row, err = _owned_document(document_id, uid)
+    if err:
+        return err
+    if not row.get("source_stem"):
+        return jsonify({"error": "Tài liệu chưa index xong"}), 409
+
+    from app.domains.studymap import repository as _sm_repo
+    if not data.get("force"):
+        existing = _sm_repo.latest_completed(document_id, uid)
+        if existing:
+            return jsonify({"map_id": existing, "status": "completed", "cached": True}), 200
+
+    job_id = str(uuid.uuid4())
+    from app.domains.jobs.jobs_store import create_job
+    create_job(job_id, job_type="study_map_generation", status="pending", progress=0,
+               current_node="Queued", user_id=uid)
+    from app.jobs.queue import enqueue_job
+    res = enqueue_job(run_study_map_job, args=(job_id, document_id, uid),
+                      queue="mindmap", job_id=job_id)
+    print(f"study_map_enqueue_{res.get('mode')} job_id={job_id}", flush=True)
+    return jsonify({"job_id": job_id, "status": "started"}), 202
+
+
+@app.get('/api/study-maps/jobs/<job_id>')
+def api_study_maps_job(job_id: str):
+    uid, err = _require_app_user()
+    if err:
+        return err
+    _run_jobs_maintenance()
+    from app.domains.jobs.jobs_store import get_job as _js_get
+    j = _js_get(job_id)
+    if not j or j.get("job_type") != "study_map_generation":
+        return jsonify({"error": "Job not found"}), 404
+    if _auth_protect_enabled() and j.get("user_id") != uid:
+        return jsonify({"error": "Job not found"}), 404  # foreign job → no oracle
+    return jsonify({
+        "job_id": job_id,
+        "status": j.get("status"),
+        "progress": j.get("progress", 0),
+        "current_step": j.get("current_node") or "",
+        "result": j.get("result"),
+        "error": j.get("error"),
+    })
+
+
+@app.post('/api/study-maps/jobs/<job_id>/cancel')
+def api_study_maps_job_cancel(job_id: str):
+    uid, err = _require_app_user()
+    if err:
+        return err
+    if _auth_protect_enabled() and _derived_job_owner_ok(job_id, uid, ("study_map_generation",)) is not True:
+        return jsonify({"error": "Job not found"}), 404
+    from app.domains.jobs.jobs_store import request_cancel
+    request_cancel(job_id)
+    return jsonify({"job_id": job_id, "cancel_requested": True})
+
+
+@app.get('/api/study-maps/<map_id>')
+def api_study_maps_get(map_id: str):
+    uid, err = _require_app_user()
+    if err:
+        return err
+    from app.domains.studymap import repository as _sm_repo
+    m = _sm_repo.get_map(map_id)
+    if not m or (_auth_protect_enabled() and m.get("user_id") != uid):
+        return jsonify({"error": "Study map not found"}), 404
+    m.pop("user_id", None)
+    return jsonify(m)
+
+
+@app.get('/api/documents/<document_id>/study-maps')
+def api_document_study_maps(document_id: str):
+    uid, err = _require_app_user()
+    if err:
+        return err
+    _row, err = _owned_document(document_id, uid)
+    if err:
+        return err
+    from app.domains.studymap import repository as _sm_repo
+    maps = _sm_repo.list_by_document(document_id, user_id=uid if _auth_protect_enabled() else None)
+    return jsonify({"document_id": document_id, "study_maps": maps})
+
+
+# -------------------------
+# 📝 API Quiz (FR-06, FR-13, đặc tả 7.5)
+# -------------------------
+QUIZ_MAX_QUESTIONS = int(os.getenv("QUIZ_MAX_QUESTIONS", "50"))
+QUIZ_MAX_CONTEXT_CHUNKS = int(os.getenv("QUIZ_MAX_CONTEXT_CHUNKS", "200"))
+
+
+def _quiz_config(data: dict):
+    """(config, error_response). Ép mọi giá trị về tập DB chấp nhận trước khi chạy job —
+    để CHECK của Postgres bắt thì job đã tốn một lượt gọi LLM rồi mới hỏng."""
+    from app.domains.ai_validation.rules import QUESTION_TYPES
+
+    try:
+        count = int(data.get("question_count", 10))
+    except (TypeError, ValueError):
+        return None, (jsonify({"error": "question_count phải là số nguyên"}), 400)
+    if not 1 <= count <= QUIZ_MAX_QUESTIONS:
+        return None, (jsonify({"error": f"question_count phải trong 1..{QUIZ_MAX_QUESTIONS}"}), 400)
+
+    difficulty = str(data.get("difficulty") or "mixed").strip().lower()
+    if difficulty not in ("easy", "medium", "hard", "mixed"):
+        return None, (jsonify({"error": "difficulty phải là easy|medium|hard|mixed"}), 400)
+
+    types = data.get("question_types") or list(QUESTION_TYPES)
+    if not isinstance(types, list):
+        return None, (jsonify({"error": "question_types phải là list"}), 400)
+    types = [str(t).strip().lower() for t in types if str(t or "").strip()]
+    bad = [t for t in types if t not in QUESTION_TYPES]
+    if bad or not types:
+        return None, (jsonify({"error": f"question_types không hợp lệ: {bad or 'rỗng'}"}), 400)
+
+    scope = data.get("scope") or {}
+    if not isinstance(scope, dict):
+        return None, (jsonify({"error": "scope phải là object"}), 400)
+    section_ids = [str(x) for x in (scope.get("section_ids") or []) if str(x or "").strip()]
+    scope_type = "sections" if section_ids else "full_document"
+
+    return {
+        "question_count": count,
+        "difficulty": difficulty,
+        "question_types": types,
+        "scope": {"type": scope_type, "section_ids": section_ids},
+    }, None
+
+
+def run_quiz_generation_job(job_id: str, document_id: str, config: dict,
+                            user_id: Optional[str] = None) -> None:
+    """Sinh quiz chẩn đoán (FR-06) + kiểm chất lượng (FR-13).
+
+    Không dùng LangGraph: luồng thẳng một mạch, và graph tự ghi `status=done` là dựng
+    lại race done-trước-result trong known-issues (xem `run_study_map_job`). Ở đây job
+    chỉ `done` sau khi câu hỏi đã nằm trong DB.
+    """
+    from app.domains.ai_validation import rules as _rules
+    from app.domains.ai_validation import store as _val_store
+    from app.domains.jobs import ledger as _ledger
+    from app.domains.jobs.jobs_store import is_cancel_requested, update_job
+    from app.domains.quiz import generator as _quiz_gen
+    from app.domains.quiz import repository as _quiz_repo
+
+    print(f"quiz_job_running job_id={job_id}", flush=True)
+    quiz_id = None
+    # Log validation có FK tới `jobs` (Postgres). Sổ cái mở được thì mới gắn job_id,
+    # không thì vẫn ghi log nhưng để trống — FR-13.10 không kèm điều kiện.
+    ledger_ok = _ledger.open_job(job_id, job_type="quiz_generation", user_id=user_id,
+                                 input_json={"document_id": document_id, **config})
+    log_job_id = job_id if ledger_ok else None
+
+    def _cancelled() -> bool:
+        return bool(is_cancel_requested(job_id))
+
+    try:
+        scope = config["scope"]
+        # Practice (FR-11.2) chỉ định thẳng chunk từ review item; quiz chẩn đoán lấy
+        # theo section. Dùng CHUNG job này để hai đường sinh quiz không lệch nhau.
+        if config.get("chunk_ids"):
+            chunks = _quiz_repo.chunks_by_ids(document_id, config["chunk_ids"],
+                                              limit=QUIZ_MAX_CONTEXT_CHUNKS)
+            if not chunks:
+                raise ValueError("Review item không còn chunk nguồn nào.")
+        else:
+            chunks = _quiz_repo.chunks_for_scope(document_id, scope.get("section_ids"),
+                                                 limit=QUIZ_MAX_CONTEXT_CHUNKS)
+            if not chunks:
+                raise ValueError("Phạm vi đã chọn không có chunk nào đã index.")
+
+        quiz_id = _quiz_repo.create_quiz(
+            user_id=user_id, document_id=document_id,
+            title=config.get("title") or _quiz_repo.document_title(document_id),
+            scope=scope, question_count=config["question_count"],
+            difficulty=config["difficulty"],
+            quiz_type=config.get("quiz_type") or "diagnostic",
+            source_review_item_id=config.get("source_review_item_id"),
+            source_attempt_id=config.get("source_attempt_id"),
+        )
+        update_job(job_id, status="running", progress=10, current_node="BuildContext",
+                   result={"quiz_id": quiz_id, "status": "processing"})
+
+        context, ref_map = _quiz_gen.build_context(chunks)
+        if _cancelled():
+            raise _JobCancelled()
+
+        update_job(job_id, progress=30, current_node="GenerateQuestions")
+        raw_questions, err, attempts = _quiz_gen.generate_questions(context, config)
+        if err:
+            _val_store.log_rejections([_rules.json_failure(err)], job_id=log_job_id)
+            raise ValueError(err)
+        if _cancelled():
+            raise _JobCancelled()
+
+        update_job(job_id, progress=70, current_node="Validate")
+        accepted, rejected = _rules.validate_questions(
+            raw_questions,
+            allowed_chunk_refs=ref_map.keys(),
+            allowed_section_ids=_quiz_repo.section_ids_of(document_id),
+            allowed_types=config["question_types"],
+        )
+        _val_store.log_rejections(rejected, job_id=log_job_id)
+
+        # Nhãn `c0` sang chunk_id thật + suy ra section từ chunk nguồn (FR-06.10):
+        # model không được cấp section_id nên tự nó không gắn được.
+        # Practice: ÉP tag chủ đề của review item vào mọi câu (FR-11.10).
+        # Tag do LLM tự đặt nên bài chẩn đoán ra "hàm hợp" còn bài luyện ra "quy tắc
+        # hàm hợp" — hai tên khác nhau thì so sánh trước/sau không bao giờ khớp và
+        # màn hình tiến bộ im lặng báo "chưa đo". Chủ đề đã biết chắc từ review item,
+        # không có lý do để model quyết định lại.
+        practice_topic = (config.get("practice_topic") or "").strip()
+        if practice_topic:
+            for q in accepted:
+                tags = [t for t in (q.get("concept_tags") or []) if t != practice_topic]
+                q["concept_tags"] = [practice_topic] + tags
+
+        section_by_chunk = {c["chunk_id"]: c.get("section_id") for c in chunks}
+        for q in accepted:
+            q["chunk_ids"] = _quiz_gen.resolve_chunk_refs(q["chunk_refs"], ref_map)
+            if not q.get("section_id"):
+                sections = [section_by_chunk.get(cid) for cid in q["chunk_ids"]]
+                sections = [x for x in sections if x]
+                q["section_id"] = max(set(sections), key=sections.count) if sections else None
+        accepted = [q for q in accepted if q["chunk_ids"]][: config["question_count"]]
+
+        if not accepted:
+            raise ValueError(
+                f"Không câu hỏi nào qua kiểm chất lượng ({len(rejected)} câu bị loại).")
+
+        update_job(job_id, progress=90, current_node="Persist")
+        _quiz_repo.save_questions(quiz_id, accepted)
+        _quiz_repo.finish(quiz_id, "ready", question_count=len(accepted))
+        result = {"quiz_id": quiz_id, "status": "ready", "question_count": len(accepted),
+                  "rejected_count": len(rejected), "llm_attempts": attempts}
+        update_job(job_id, status="done", progress=100, current_node="Persist", result=result)
+        _ledger.close_job(job_id, "done", result_type="quiz", result_id=quiz_id)
+        print(f"quiz_job_done job_id={job_id} quiz_id={quiz_id} "
+              f"kept={len(accepted)} rejected={len(rejected)}", flush=True)
+    except _JobCancelled:
+        if quiz_id:
+            _quiz_repo.finish(quiz_id, "failed")
+        update_job(job_id, status="cancelled", progress=0, current_node="Cancelled")
+        _ledger.close_job(job_id, "cancelled")
+        print(f"quiz_job_cancelled job_id={job_id}", flush=True)
+    except Exception as e:
+        if quiz_id:
+            _quiz_repo.finish(quiz_id, "failed")
+        update_job(job_id, status="error", error_text=_job_error_text(e))
+        _ledger.close_job(job_id, "error", error_message=str(e))
+        print(f"quiz_job_failed job_id={job_id} err={str(e)[:80]}", flush=True)
+
+
+@app.post('/api/quizzes/generate')
+def api_quizzes_generate():
+    """Tạo quiz chẩn đoán từ một tài liệu (FR-06.1). Trả job_id để poll."""
+    uid, err = _require_app_user()
+    if err:
+        return err
+    data = request.json or {}
+    document_id = (data.get("document_id") or "").strip()
+    if not document_id:
+        return jsonify({"error": "Thiếu document_id"}), 400
+    row, err = _owned_document(document_id, uid)
+    if err:
+        return err
+    if not row.get("source_stem"):
+        return jsonify({"error": "Tài liệu chưa index xong"}), 409
+    config, err = _quiz_config(data)
+    if err:
+        return err
+
+    # Section lạ / của tài liệu khác → 400 ngay, đừng để job chạy rồi mới ra quiz rỗng.
+    from app.domains.quiz import repository as _quiz_repo
+    wanted = config["scope"]["section_ids"]
+    if wanted:
+        known = set(_quiz_repo.section_ids_of(document_id))
+        unknown = [x for x in wanted if x not in known]
+        if unknown:
+            return jsonify({"error": f"section_ids không thuộc tài liệu: {unknown}"}), 400
+
+    job_id = str(uuid.uuid4())
+    from app.domains.jobs.jobs_store import create_job
+    create_job(job_id, job_type="quiz_generation", status="pending", progress=0,
+               current_node="Queued", user_id=uid)
+    from app.jobs.queue import enqueue_job
+    res = enqueue_job(run_quiz_generation_job, args=(job_id, document_id, config, uid),
+                      queue="mindmap", job_id=job_id)
+    print(f"quiz_enqueue_{res.get('mode')} job_id={job_id}", flush=True)
+    return jsonify({"job_id": job_id, "status": "started"}), 202
+
+
+@app.get('/api/quizzes/jobs/<job_id>')
+def api_quizzes_job(job_id: str):
+    uid, err = _require_app_user()
+    if err:
+        return err
+    _run_jobs_maintenance()
+    from app.domains.jobs.jobs_store import get_job as _js_get
+    j = _js_get(job_id)
+    if not j or j.get("job_type") != "quiz_generation":
+        return jsonify({"error": "Job not found"}), 404
+    if _auth_protect_enabled() and j.get("user_id") != uid:
+        return jsonify({"error": "Job not found"}), 404  # foreign job → no oracle
+    return jsonify({
+        "job_id": job_id,
+        "status": j.get("status"),
+        "progress": j.get("progress", 0),
+        "current_step": j.get("current_node") or "",
+        "result": j.get("result"),
+        "error": j.get("error"),
+    })
+
+
+@app.post('/api/quizzes/jobs/<job_id>/cancel')
+def api_quizzes_job_cancel(job_id: str):
+    uid, err = _require_app_user()
+    if err:
+        return err
+    if _auth_protect_enabled() and _derived_job_owner_ok(job_id, uid, ("quiz_generation",)) is not True:
+        return jsonify({"error": "Job not found"}), 404
+    from app.domains.jobs.jobs_store import request_cancel
+    request_cancel(job_id)
+    return jsonify({"job_id": job_id, "cancel_requested": True})
+
+
+@app.get('/api/quizzes/<quiz_id>')
+def api_quizzes_get(quiz_id: str):
+    """Đề bài. KHÔNG kèm correct_answer/explanation (FR-06.12) — đáp án chỉ lộ ở
+    `/api/quizzes/results/{attempt_id}` sau khi nộp (Phase 5)."""
+    uid, err = _require_app_user()
+    if err:
+        return err
+    from app.domains.quiz import repository as _quiz_repo
+    quiz = _quiz_repo.get_quiz(quiz_id, include_answers=False)
+    if not quiz or (_auth_protect_enabled() and quiz.get("user_id") != uid):
+        return jsonify({"error": "Quiz not found"}), 404
+    quiz.pop("user_id", None)
+    return jsonify(quiz)
+
+
+@app.get('/api/documents/<document_id>/quizzes')
+def api_document_quizzes(document_id: str):
+    uid, err = _require_app_user()
+    if err:
+        return err
+    _row, err = _owned_document(document_id, uid)
+    if err:
+        return err
+    from app.domains.quiz import repository as _quiz_repo
+    return jsonify({
+        "document_id": document_id,
+        "quizzes": _quiz_repo.list_by_document(
+            document_id, user_id=uid if _auth_protect_enabled() else None),
+    })
+
+
+@app.get('/api/quizzes/jobs/<job_id>/validation-logs')
+def api_quizzes_validation_logs(job_id: str):
+    """Câu bị AI Validation loại, kèm rule_code (FR-13.10, FR-13.11)."""
+    uid, err = _require_app_user()
+    if err:
+        return err
+    from app.domains.jobs.jobs_store import get_job as _js_get
+    j = _js_get(job_id)
+    if not j or j.get("job_type") != "quiz_generation":
+        return jsonify({"error": "Job not found"}), 404
+    if _auth_protect_enabled() and j.get("user_id") != uid:
+        return jsonify({"error": "Job not found"}), 404
+    from app.domains.ai_validation import store as _val_store
+    return jsonify({
+        "job_id": job_id,
+        "counts_by_rule": _val_store.count_by_rule(job_id),
+        "logs": _val_store.list_for_job(job_id),
+    })
+
+
+# -------------------------
+# 🎯 API làm bài + chấm điểm (FR-07, FR-08, đặc tả 7.6)
+# -------------------------
+def _owned_attempt(attempt_id: str, uid):
+    """(attempt, error_response). Bài của người khác = 404, không phải 403."""
+    from app.domains.attempts import repository as _attempts
+    attempt = _attempts.get_attempt(attempt_id)
+    if not attempt:
+        return None, (jsonify({"error": "Attempt not found"}), 404)
+    if _auth_protect_enabled() and attempt.get("user_id") != uid:
+        return None, (jsonify({"error": "Attempt not found"}), 404)
+    return attempt, None
+
+
+def _attempt_public(attempt: dict) -> dict:
+    out = dict(attempt)
+    out.pop("user_id", None)
+    out["unanswered_count"] = len(out.get("unanswered_question_ids") or [])
+    return out
+
+
+def run_short_answer_grading_job(job_id: str, attempt_id: str,
+                                 user_id: Optional[str] = None) -> None:
+    """Chấm bài có câu tự luận (FR-08.3). Chấm CẢ attempt rồi ghi một lần."""
+    from app.domains.attempts import service as _grading_service
+    from app.domains.jobs import ledger as _ledger
+    from app.domains.jobs.jobs_store import update_job
+
+    print(f"grading_job_running job_id={job_id}", flush=True)
+    _ledger.open_job(job_id, job_type="short_answer_grading", user_id=user_id,
+                     input_json={"attempt_id": attempt_id})
+    try:
+        update_job(job_id, status="running", progress=20, current_node="Grading")
+        result = _grading_service.grade_attempt(attempt_id)
+        if result is None:
+            raise ValueError("Attempt không tồn tại.")
+        update_job(job_id, status="done", progress=100, current_node="Grading",
+                   result={"attempt_id": attempt_id, **result})
+        _ledger.close_job(job_id, "done", result_type="quiz_attempt", result_id=attempt_id)
+        print(f"grading_job_done job_id={job_id} attempt_id={attempt_id} "
+              f"score={result['score']}/{result['max_score']}", flush=True)
+    except Exception as e:
+        update_job(job_id, status="error", error_text=_job_error_text(e))
+        _ledger.close_job(job_id, "error", error_message=str(e))
+        print(f"grading_job_failed job_id={job_id} err={str(e)[:80]}", flush=True)
+
+
+@app.post('/api/quizzes/<quiz_id>/attempts')
+def api_attempt_open(quiz_id: str):
+    """Mở quiz (FR-07.1) — tạo attempt `in_progress` ngay, không đợi nộp (FR-07.10)."""
+    uid, err = _require_app_user()
+    if err:
+        return err
+    from app.domains.quiz import repository as _quiz_repo
+    quiz = _quiz_repo.get_quiz(quiz_id, include_answers=False)
+    if not quiz or (_auth_protect_enabled() and quiz.get("user_id") != uid):
+        return jsonify({"error": "Quiz not found"}), 404
+    if quiz["status"] != "ready":
+        return jsonify({"error": "Quiz chưa sẵn sàng"}), 409
+
+    from app.domains.attempts import repository as _attempts
+    opened = _attempts.open_attempt(quiz_id, uid)
+    attempt = _attempts.get_attempt(opened["attempt_id"])
+    quiz.pop("user_id", None)
+    return jsonify({**_attempt_public(attempt), "quiz": quiz}), 201 if opened["created"] else 200
+
+
+@app.get('/api/attempts/<attempt_id>')
+def api_attempt_get(attempt_id: str):
+    uid, err = _require_app_user()
+    if err:
+        return err
+    attempt, err = _owned_attempt(attempt_id, uid)
+    if err:
+        return err
+    return jsonify(_attempt_public(attempt))
+
+
+@app.patch('/api/attempts/<attempt_id>/answers')
+def api_attempt_save_answers(attempt_id: str):
+    """Lưu nháp (FR-07.5, FR-07.11). Gọi lại cho cùng câu thì ghi đè."""
+    uid, err = _require_app_user()
+    if err:
+        return err
+    attempt, err = _owned_attempt(attempt_id, uid)
+    if err:
+        return err
+    if attempt["status"] != "in_progress":
+        # Đã nộp rồi mà còn sửa đáp án thì điểm không còn nghĩa gì.
+        return jsonify({"error": "Attempt đã nộp, không sửa được đáp án",
+                        "status": attempt["status"]}), 409
+
+    data = request.json or {}
+    raw = data.get("answers")
+    if isinstance(raw, list):
+        raw = {a.get("question_id"): a.get("user_answer")
+               for a in raw if isinstance(a, dict) and a.get("question_id")}
+    if not isinstance(raw, dict) or not raw:
+        return jsonify({"error": "Thiếu answers"}), 400
+
+    from app.domains.attempts import repository as _attempts
+    known = set(_attempts.question_ids_of_quiz(attempt["quiz_id"]))
+    unknown = [q for q in raw if str(q) not in known]
+    if unknown:
+        return jsonify({"error": f"question_id không thuộc quiz: {unknown}"}), 400
+
+    _attempts.save_draft_answers(attempt_id, {str(k): v for k, v in raw.items()})
+    return jsonify(_attempt_public(_attempts.get_attempt(attempt_id)))
+
+
+@app.post('/api/attempts/<attempt_id>/submit')
+def api_attempt_submit(attempt_id: str):
+    """Nộp bài (FR-07.7). Bài toàn trắc nghiệm chấm luôn; có tự luận thì chấm nền."""
+    uid, err = _require_app_user()
+    if err:
+        return err
+    attempt, err = _owned_attempt(attempt_id, uid)
+    if err:
+        return err
+
+    from app.domains.attempts import repository as _attempts
+    from app.domains.attempts import service as _grading_service
+    submitted = _attempts.submit(attempt_id)
+    if submitted is None:
+        return jsonify({"error": "Attempt không còn ở trạng thái in_progress",
+                        "status": attempt["status"]}), 409
+
+    if not _grading_service.has_short_answer(attempt["quiz_id"]):
+        result = _grading_service.grade_attempt(attempt_id)
+        return jsonify({**_attempt_public(_attempts.get_attempt(attempt_id)),
+                        "grading": "done", **(result or {})})
+
+    job_id = str(uuid.uuid4())
+    from app.domains.jobs.jobs_store import create_job
+    create_job(job_id, job_type="short_answer_grading", status="pending", progress=0,
+               current_node="Queued", user_id=uid)
+    from app.jobs.queue import enqueue_job
+    res = enqueue_job(run_short_answer_grading_job, args=(job_id, attempt_id, uid),
+                      queue="mindmap", job_id=job_id)
+    print(f"grading_enqueue_{res.get('mode')} job_id={job_id}", flush=True)
+    return jsonify({**_attempt_public(_attempts.get_attempt(attempt_id)),
+                    "grading": "pending", "job_id": job_id}), 202
+
+
+@app.get('/api/attempts/jobs/<job_id>')
+def api_attempt_grading_job(job_id: str):
+    uid, err = _require_app_user()
+    if err:
+        return err
+    _run_jobs_maintenance()
+    from app.domains.jobs.jobs_store import get_job as _js_get
+    j = _js_get(job_id)
+    if not j or j.get("job_type") != "short_answer_grading":
+        return jsonify({"error": "Job not found"}), 404
+    if _auth_protect_enabled() and j.get("user_id") != uid:
+        return jsonify({"error": "Job not found"}), 404
+    return jsonify({
+        "job_id": job_id,
+        "status": j.get("status"),
+        "progress": j.get("progress", 0),
+        "result": j.get("result"),
+        "error": j.get("error"),
+    })
+
+
+@app.get('/api/quizzes/results/<attempt_id>')
+def api_attempt_results(attempt_id: str):
+    """Kết quả sau khi nộp — CHỖ DUY NHẤT lộ đáp án đúng + giải thích (FR-08.8).
+
+    Chưa nộp thì 409: trả đáp án lúc bài còn `in_progress` là đưa bài giải cho người
+    đang làm.
+    """
+    uid, err = _require_app_user()
+    if err:
+        return err
+    attempt, err = _owned_attempt(attempt_id, uid)
+    if err:
+        return err
+    if attempt["status"] == "in_progress":
+        return jsonify({"error": "Attempt chưa nộp", "status": attempt["status"]}), 409
+
+    from app.domains.quiz import repository as _quiz_repo
+    quiz = _quiz_repo.get_quiz(attempt["quiz_id"], include_answers=True) or {}
+    by_question = {a["question_id"]: a for a in attempt["answers"]}
+    questions = []
+    for q in quiz.get("questions") or []:
+        answer = by_question.get(q["question_id"]) or {}
+        questions.append({
+            **q,
+            "user_answer": answer.get("user_answer"),
+            "verdict": answer.get("verdict"),
+            "is_correct": answer.get("is_correct"),
+            "score": answer.get("score"),
+            "feedback": answer.get("feedback"),
+        })
+    return jsonify({
+        **_attempt_public(attempt),
+        "quiz_id": attempt["quiz_id"],
+        "quiz_title": quiz.get("title"),
+        "questions": questions,
+    })
+
+
+@app.get('/api/quizzes/<quiz_id>/attempts')
+def api_quiz_attempts(quiz_id: str):
+    uid, err = _require_app_user()
+    if err:
+        return err
+    from app.domains.quiz import repository as _quiz_repo
+    owner = _quiz_repo.owner_of(quiz_id)
+    if owner is None or (_auth_protect_enabled() and owner != uid):
+        return jsonify({"error": "Quiz not found"}), 404
+    from app.domains.attempts import repository as _attempts
+    return jsonify({
+        "quiz_id": quiz_id,
+        "attempts": _attempts.list_by_quiz(
+            quiz_id, user_id=uid if _auth_protect_enabled() else None),
+    })
+
+
+# -------------------------
+# 🩺 API lỗ hổng kiến thức + gợi ý ôn tập (FR-09, FR-10, đặc tả 7.7)
+# -------------------------
+@app.get('/api/attempts/<attempt_id>/concept-masteries')
+def api_attempt_masteries(attempt_id: str):
+    """Mức nắm từng concept của bài làm; `?weak=1` chỉ lấy chủ đề yếu (FR-09.8)."""
+    uid, err = _require_app_user()
+    if err:
+        return err
+    attempt, err = _owned_attempt(attempt_id, uid)
+    if err:
+        return err
+    from app.domains.gap_analysis import service as _gap
+    weak_only = str(request.args.get("weak", "")).lower() in ("1", "true", "yes")
+    rows = _gap.list_for_attempt(attempt_id, weak_only=weak_only)
+    if not rows and attempt["status"] == "graded" and not weak_only:
+        # Bài đã chấm mà chưa có snapshot (hook lúc chấm hỏng) → tính bù, đừng trả rỗng.
+        _gap.analyze_attempt(attempt_id)
+        rows = _gap.list_for_attempt(attempt_id)
+    return jsonify({"attempt_id": attempt_id, "status": attempt["status"],
+                    "concept_masteries": rows})
+
+
+@app.post('/api/review-plans/generate')
+def api_review_plan_generate():
+    """Tạo review plan từ một attempt đã chấm (FR-10.1).
+
+    Chạy đồng bộ: đúng một lượt gọi LLM, và model hỏng vẫn ra plan rule-based nên
+    không cần job nền như tạo quiz.
+    """
+    uid, err = _require_app_user()
+    if err:
+        return err
+    data = request.json or {}
+    attempt_id = (data.get("attempt_id") or "").strip()
+    if not attempt_id:
+        return jsonify({"error": "Thiếu attempt_id"}), 400
+    attempt, err = _owned_attempt(attempt_id, uid)
+    if err:
+        return err
+    if attempt["status"] != "graded":
+        return jsonify({"error": "Attempt chưa được chấm", "status": attempt["status"]}), 409
+
+    from app.domains.review import service as _review
+    if not data.get("force"):
+        existing = _review.get_by_attempt(attempt_id)
+        if existing:
+            existing.pop("user_id", None)
+            return jsonify({**existing, "cached": True}), 200
+
+    plan = _review.generate(attempt_id)
+    if plan is None:
+        return jsonify({"error": "Không tạo được review plan"}), 500
+    plan.pop("user_id", None)
+    return jsonify(plan), 201
+
+
+@app.get('/api/review-plans/<attempt_id>')
+def api_review_plan_by_attempt(attempt_id: str):
+    """Đặc tả 7.7: tra theo `attempt_id`, không phải review_plan_id."""
+    uid, err = _require_app_user()
+    if err:
+        return err
+    _attempt, err = _owned_attempt(attempt_id, uid)
+    if err:
+        return err
+    from app.domains.review import service as _review
+    plan = _review.get_by_attempt(attempt_id)
+    if not plan:
+        return jsonify({"error": "Review plan not found"}), 404
+    plan.pop("user_id", None)
+    return jsonify(plan)
+
+
+@app.get('/api/review-plans/<review_plan_id>/items')
+def api_review_plan_items(review_plan_id: str):
+    uid, err = _require_app_user()
+    if err:
+        return err
+    from app.domains.review import service as _review
+    plan = _review.get_plan(review_plan_id)
+    if not plan or (_auth_protect_enabled() and plan.get("user_id") != uid):
+        return jsonify({"error": "Review plan not found"}), 404
+    return jsonify({"review_plan_id": plan["review_plan_id"],
+                    "attempt_id": plan["attempt_id"],
+                    "items": plan["items"]})
+
+
+# -------------------------
+# 🏋️ API luyện tập + tiến độ (FR-11, FR-12, đặc tả 7.8–7.10)
+# -------------------------
+def _owned_practice(quiz_id: str, uid):
+    """(meta, error). Quiz chẩn đoán vào route practice cũng là 404 — hai luồng khác nhau."""
+    from app.domains.quiz import repository as _quiz_repo
+    meta = _quiz_repo.get_meta(quiz_id)
+    if not meta or meta.get("quiz_type") != "practice":
+        return None, (jsonify({"error": "Practice quiz not found"}), 404)
+    if _auth_protect_enabled() and meta.get("user_id") != uid:
+        return None, (jsonify({"error": "Practice quiz not found"}), 404)
+    return meta, None
+
+
+@app.post('/api/practice/generate')
+def api_practice_generate():
+    """Tạo practice quiz từ một review item yếu (FR-11.1–FR-11.3).
+
+    Dùng CHUNG `run_quiz_generation_job` với quiz chẩn đoán, chỉ khác nguồn ngữ liệu:
+    chunk lấy thẳng từ review item thay vì theo section (FR-11.2, FR-11.4).
+    """
+    uid, err = _require_app_user()
+    if err:
+        return err
+    data = request.json or {}
+    review_item_id = (data.get("review_item_id") or "").strip()
+    if not review_item_id:
+        return jsonify({"error": "Thiếu review_item_id"}), 400
+
+    from app.domains.review import service as _review
+    item = _review.get_item(review_item_id)
+    if not item or (_auth_protect_enabled() and item.get("user_id") != uid):
+        return jsonify({"error": "Review item not found"}), 404
+    if not item.get("chunk_ids"):
+        return jsonify({"error": "Review item không có chunk nguồn để ra đề"}), 409
+
+    config, err = _quiz_config(data)
+    if err:
+        return err
+    config.update({
+        "quiz_type": "practice",
+        "chunk_ids": item["chunk_ids"],
+        # FR-11.8 / FR-11.9: mất hai khoá này là mất cả chuỗi yếu → ôn → luyện.
+        "source_review_item_id": review_item_id,
+        "source_attempt_id": item["attempt_id"],
+        "title": f"Luyện tập: {item['topic']}",
+        "practice_topic": item["topic"],
+    })
+
+    job_id = str(uuid.uuid4())
+    from app.domains.jobs.jobs_store import create_job
+    create_job(job_id, job_type="quiz_generation", status="pending", progress=0,
+               current_node="Queued", user_id=uid)
+    from app.jobs.queue import enqueue_job
+    res = enqueue_job(run_quiz_generation_job,
+                      args=(job_id, item["document_id"], config, uid),
+                      queue="mindmap", job_id=job_id)
+    print(f"practice_enqueue_{res.get('mode')} job_id={job_id}", flush=True)
+    return jsonify({"job_id": job_id, "status": "started"}), 202
+
+
+@app.get('/api/practice/<practice_quiz_id>')
+def api_practice_get(practice_quiz_id: str):
+    """Đề luyện tập. Vẫn KHÔNG kèm đáp án trước khi nộp (FR-06.12)."""
+    uid, err = _require_app_user()
+    if err:
+        return err
+    _meta, err = _owned_practice(practice_quiz_id, uid)
+    if err:
+        return err
+    from app.domains.quiz import repository as _quiz_repo
+    quiz = _quiz_repo.get_quiz(practice_quiz_id, include_answers=False)
+    quiz.pop("user_id", None)
+    meta = _quiz_repo.get_meta(practice_quiz_id) or {}
+    return jsonify({**quiz,
+                    "source_review_item_id": meta.get("source_review_item_id"),
+                    "source_attempt_id": meta.get("source_attempt_id")})
+
+
+@app.post('/api/practice/<practice_quiz_id>/submit')
+def api_practice_submit(practice_quiz_id: str):
+    """Nộp bài luyện tập trong MỘT lần gọi (FR-11.6, FR-11.7).
+
+    Luồng chẩn đoán tách mở/nháp/nộp vì người học làm dài và cần lưu nháp; bài luyện tập
+    ngắn nên gộp lại — vẫn đi qua đúng repository attempt để lịch sử thống nhất.
+    """
+    uid, err = _require_app_user()
+    if err:
+        return err
+    meta, err = _owned_practice(practice_quiz_id, uid)
+    if err:
+        return err
+    if meta.get("status") != "ready":
+        return jsonify({"error": "Practice quiz chưa sẵn sàng"}), 409
+
+    data = request.json or {}
+    raw = data.get("answers")
+    if isinstance(raw, list):
+        raw = {a.get("question_id"): a.get("user_answer")
+               for a in raw if isinstance(a, dict) and a.get("question_id")}
+    if not isinstance(raw, dict) or not raw:
+        return jsonify({"error": "Thiếu answers"}), 400
+
+    from app.domains.attempts import repository as _attempts
+    from app.domains.attempts import service as _grading_service
+    known = set(_attempts.question_ids_of_quiz(practice_quiz_id))
+    unknown = [q for q in raw if str(q) not in known]
+    if unknown:
+        return jsonify({"error": f"question_id không thuộc quiz: {unknown}"}), 400
+
+    attempt_id = _attempts.open_attempt(practice_quiz_id, uid)["attempt_id"]
+    _attempts.save_draft_answers(attempt_id, {str(k): v for k, v in raw.items()})
+    if _attempts.submit(attempt_id) is None:
+        return jsonify({"error": "Attempt không còn ở trạng thái in_progress"}), 409
+    result = _grading_service.grade_attempt(attempt_id)
+    return jsonify({**_attempt_public(_attempts.get_attempt(attempt_id)),
+                    "grading": "done", **(result or {})})
+
+
+@app.get('/api/practice/<practice_quiz_id>/comparison')
+def api_practice_comparison(practice_quiz_id: str):
+    """Mastery trước/sau luyện tập (FR-11.10, FR-12.7).
+
+    "Trước" là attempt chẩn đoán gốc (`source_attempt_id`), "sau" là lần làm practice
+    gần nhất đã chấm.
+    """
+    uid, err = _require_app_user()
+    if err:
+        return err
+    meta, err = _owned_practice(practice_quiz_id, uid)
+    if err:
+        return err
+
+    from app.domains.gap_analysis import service as _gap
+    from app.domains.progress import service as _progress
+    from app.domains.review import service as _review
+
+    after_attempt = _progress.latest_graded_attempt(practice_quiz_id, uid)
+    if not after_attempt:
+        return jsonify({"error": "Chưa có lần làm nào đã chấm cho practice quiz này"}), 409
+
+    source_attempt = meta.get("source_attempt_id")
+    item = _review.get_item(meta.get("source_review_item_id") or "")
+    topics = [item["topic"]] if item else None
+
+    body = _progress.compare_masteries(
+        _gap.list_for_attempt(source_attempt) if source_attempt else [],
+        _gap.list_for_attempt(after_attempt),
+        topics=topics,
+    )
+    return jsonify({
+        "practice_quiz_id": practice_quiz_id,
+        "topic": item["topic"] if item else None,
+        "source_attempt_id": source_attempt,
+        "practice_attempt_id": after_attempt,
+        **body,
+    })
+
+
+@app.get('/api/progress/overview')
+def api_progress_overview():
+    uid, err = _require_app_user()
+    if err:
+        return err
+    from app.domains.progress import service as _progress
+    return jsonify(_progress.overview(uid))
+
+
+@app.get('/api/progress/concepts')
+def api_progress_concepts():
+    """Mastery theo concept qua nhiều attempt (FR-12.3, FR-12.4). `?weak=1` lọc chủ đề yếu."""
+    uid, err = _require_app_user()
+    if err:
+        return err
+    from app.domains.progress import service as _progress
+    document_id = (request.args.get("document_id") or "").strip() or None
+    if document_id:
+        _row, err = _owned_document(document_id, uid)
+        if err:
+            return err
+    rows = _progress.concept_progress(uid, document_id=document_id)
+    if str(request.args.get("weak", "")).lower() in ("1", "true", "yes"):
+        rows = [r for r in rows if r["status"] != "mastered"]
+    return jsonify({"concepts": rows})
+
+
+@app.get('/api/progress/attempts')
+def api_progress_attempts():
+    uid, err = _require_app_user()
+    if err:
+        return err
+    try:
+        limit = max(1, min(200, int(request.args.get("limit", 50))))
+    except (TypeError, ValueError):
+        return jsonify({"error": "limit phải là số nguyên"}), 400
+    from app.domains.progress import service as _progress
+    return jsonify({"attempts": _progress.attempt_history(uid, limit=limit)})
+
+
+# -------------------------
+# ⚙️ API job dùng chung (đặc tả 7.10)
+# -------------------------
+@app.get('/api/jobs/<job_id>')
+def api_job_get(job_id: str):
+    """Tra job bất kể loại — FE chỉ cần một poller thay vì một cái cho mỗi tính năng."""
+    uid, err = _require_app_user()
+    if err:
+        return err
+    _run_jobs_maintenance()
+    from app.domains.jobs.jobs_store import get_job as _js_get
+    j = _js_get(job_id)
+    if not j:
+        return jsonify({"error": "Job not found"}), 404
+    if _auth_protect_enabled() and j.get("user_id") != uid:
+        return jsonify({"error": "Job not found"}), 404
+    return jsonify({
+        "job_id": job_id,
+        "job_type": j.get("job_type"),
+        "status": j.get("status"),
+        "progress": j.get("progress", 0),
+        "current_step": j.get("current_node") or "",
+        "result": j.get("result"),
+        "error": j.get("error"),
+    })
+
+
+@app.post('/api/jobs/<job_id>/cancel')
+def api_job_cancel(job_id: str):
+    uid, err = _require_app_user()
+    if err:
+        return err
+    from app.domains.jobs.jobs_store import get_job as _js_get
+    j = _js_get(job_id)
+    if not j or (_auth_protect_enabled() and j.get("user_id") != uid):
+        return jsonify({"error": "Job not found"}), 404
+    from app.domains.jobs.jobs_store import request_cancel
+    request_cancel(job_id)
+    return jsonify({"job_id": job_id, "cancel_requested": True})
+
+
 @app.get('/list-indexed')
 def list_indexed():
     """
@@ -2121,13 +3103,10 @@ def list_indexed():
         for key, item in meta.items():
             if not isinstance(key, str) or not key.isdigit():
                 continue
-            video = item.get('video', '').strip()
-            if not video or video.lower() == 'unknown':
-                continue
             # Canonical stem DÙNG CHUNG với retrieval/upload (bỏ path/ext/timestamp,
-            # sanitize space/đặc biệt). Gộp các chunk cùng nguồn dù video_path khác ts.
-            video_stem = _normalize_video_stem(item.get('source_stem') or video)
-            if not video_stem:
+            # sanitize space/đặc biệt).
+            video_stem = _normalize_video_stem(item.get('source_stem') or '')
+            if not video_stem or video_stem == 'unknown':
                 continue
             t = chunk_text_store.get_text(int(key)) or item.get('text') or ''
             video_map.setdefault(video_stem, []).append(t)
@@ -2154,24 +3133,6 @@ def list_indexed():
         import traceback
         traceback.print_exc()
         return jsonify({'error': str(e), 'sources': []})
-
-
-# -------------------------
-# 🎥 Serve video
-# -------------------------
-@app.get('/videos/<name>')
-def serve_video(name):
-    uid, err = _require_app_user()
-    if err:
-        return err
-    # Owner scope: derive the canonical stem from the (path-safe) basename and deny
-    # a foreign/missing video with 404 (no existence oracle, no path traversal —
-    # send_from_directory already confines to VIDEOS_DIR).
-    if _auth_protect_enabled():
-        stem = _normalize_video_stem(os.path.basename(name or ""))
-        if not _source_owner_ok(stem, uid):
-            return jsonify({'error': 'Not found'}), 404
-    return send_from_directory(VIDEOS_DIR, name)
 
 
 # -------------------------
@@ -2925,9 +3886,9 @@ def delete_source():
         for v in meta.values():
             if not isinstance(v, dict):
                 continue
-            stem = _normalize_video_stem(v.get('source_stem') or v.get('video') or '')
-            if stem and stem == target_stem:
-                stored_names.add(v.get('video', ''))
+            raw_stem = v.get('source_stem') or ''
+            if raw_stem and _normalize_video_stem(raw_stem) == target_stem:
+                stored_names.add(raw_stem)
                 removed_total += 1
 
         if not stored_names:
@@ -2946,34 +3907,28 @@ def delete_source():
         except Exception as e:
             print("cache invalidate failed:", e)
 
-        # Xóa file video vật lý CHÍNH XÁC theo path đã lưu (KHÔNG glob).
-        for stored in stored_names:
-            for cand in {stored, os.path.join(VIDEOS_DIR, os.path.basename(stored or ''))}:
-                try:
-                    pf = Path(cand)
-                    if cand and pf.is_file():
-                        pf.unlink()
-                except Exception as e:
-                    print("Could not delete video file:", cand, e)
-
-        # Dọn registry: bỏ entry cùng canonical stem (+ xóa file input gốc).
+        # Dọn bản ghi documents cùng canonical stem (+ file gốc local và trên Storage).
         try:
+            from app.domains.documents import repository as _docs
+            from app.domains.documents import storage as _storage
             reg = _load_source_registry()
             to_del = [sid for sid, info in reg.items()
                       if _normalize_video_stem(info.get('source_stem') or info.get('filename') or '') == target_stem]
             for sid in to_del:
-                ip = reg[sid].get('input_path')
+                info = reg[sid]
+                ip = info.get('input_path')
                 if ip:
                     try:
                         if Path(ip).is_file():
                             Path(ip).unlink()
                     except Exception:
                         pass
-                reg.pop(sid, None)
-            if to_del:
-                _save_source_registry(reg)
+                obj = info.get('file_path')
+                if obj and obj != ip and _storage.is_configured():
+                    _storage.delete(obj)
+                _docs.hard_delete(sid)
         except Exception as e:
-            print("registry cleanup failed:", e)
+            print("document cleanup failed:", e)
 
         try:
             mindmap_store.delete_by_source(target_stem)
@@ -3256,11 +4211,11 @@ def memory_tree_status():
         
         all_sources = set()
         for item in meta.values():
-            video = item.get("video", "").strip()
-            if video:
-                stem = _normalize_video_stem(video)
-                if stem:
-                    all_sources.add(stem)
+            if not isinstance(item, dict):
+                continue
+            stem = _normalize_video_stem(item.get("source_stem") or "")
+            if stem:
+                all_sources.add(stem)
 
         # Owner scope: only the caller's stems; legacy NULL-owner sources are hidden
         # (owned_stems excludes them under enforcement).
@@ -3330,39 +4285,6 @@ def _delete_input_file(source_id: str, source_info: Dict) -> bool:
     return ok
 
 
-def _delete_videos(source_id: str, source_stem: str) -> int:
-    """
-    Xóa tất cả video liên quan trong videos/.
-    Match theo source_stem hoặc source_id.
-    Returns số lượng video đã xóa.
-    """
-    videos_root = Path(VIDEOS_DIR)
-    if not videos_root.exists():
-        return 0
-    
-    deleted_count = 0
-
-    # Khớp CHÍNH XÁC theo canonical stem từng file (không glob '{stem}*' prefix —
-    # tránh xóa nhầm "report" ↔ "report2", và miễn nhiễm hoa/thường giữa các OS).
-    for video_file in videos_root.iterdir():
-        try:
-            if _normalize_video_stem(video_file.name) != source_stem:
-                continue
-            if video_file.is_file():
-                video_file.unlink()
-                deleted_count += 1
-                print(f"🗑️ [Delete] Đã xóa video: {video_file}")
-            elif video_file.is_dir():
-                import shutil
-                shutil.rmtree(video_file, ignore_errors=True)
-                deleted_count += 1
-                print(f"🗑️ [Delete] Đã xóa thư mục video: {video_file}")
-        except Exception as e:
-            print(f"⚠️ [Delete] Không thể xóa video {video_file}: {e}")
-
-    return deleted_count
-
-
 def _purge_chunk_index(source_stem: str) -> int:
     """
     Xóa tất cả chunks thuộc source từ index.
@@ -3397,20 +4319,14 @@ def _purge_memory_tree(source_stem: str) -> int:
 
 
 def _delete_registry_entry(source_id: str) -> bool:
-    """
-    Xóa entry khỏi source_registry.json.
-    Returns True nếu thành công.
-    """
+    """Xoá bản ghi `documents` (cascade sang sections/document_chunks theo cây 6.2)."""
     try:
-        registry = _load_source_registry()
-        if source_id in registry:
-            del registry[source_id]
-            _save_source_registry(registry)
-            print(f"🗑️ [Delete] Đã xóa registry entry cho source_id: {source_id}")
-            return True
-        return True  # Không có entry, coi như OK
+        from app.domains.documents import repository as _docs
+        _docs.hard_delete(source_id)
+        print(f"🗑️ [Delete] Đã xóa bản ghi documents: {source_id}")
+        return True
     except Exception as e:
-        print(f"⚠️ [Delete] Lỗi khi xóa registry entry: {e}")
+        print(f"⚠️ [Delete] Lỗi khi xóa bản ghi documents: {e}")
         raise
 
 
@@ -3433,8 +4349,9 @@ def _validate_source_exists(source_id: str, source_stem: str) -> Tuple[bool, Opt
             with open(index_path, encoding="utf-8") as f:
                 meta = json.load(f)
             for item in meta.values():
-                video = (item.get("video") or "").strip()
-                if _normalize_video_stem(video) == source_stem:
+                if not isinstance(item, dict):
+                    continue
+                if _normalize_video_stem(item.get("source_stem") or "") == source_stem:
                     return True, None  # Tồn tại nhưng không có trong registry
         except Exception:
             pass
@@ -3459,11 +4376,10 @@ def delete_source_v2(source_id: str):
     Xóa toàn bộ dữ liệu liên quan tới một source (clean delete).
     
     Xóa:
-    1. File gốc trong input_docs/
-    2. Video QR trong videos/
-    3. Chunk metadata và vectors trong index/
-    4. Memory nodes và vectors trong memory/
-    5. Registry entry trong data/source_registry.json
+    1. File gốc trong input_docs/ và object trên Supabase Storage
+    2. Chunk metadata và vectors trong index/ (FAISS)
+    3. Memory nodes và vectors trong memory/
+    4. Bản ghi `documents` (cascade sang sections/document_chunks)
     
     Đảm bảo atomicity và rebuild indexes sau khi xóa.
     """
@@ -3509,7 +4425,6 @@ def delete_source_v2(source_id: str):
             MEMORY_DIR / "memory_trees.json",
             MEMORY_DIR / "memory_index.faiss",
             MEMORY_DIR / "memory_index.json",
-            SOURCE_REGISTRY_PATH,
         ]
         
         import shutil
@@ -3525,7 +4440,6 @@ def delete_source_v2(source_id: str):
         
         # 2️⃣ DELETE FILE SYSTEM
         input_file_deleted = _delete_input_file(source_id, source_info or {})
-        videos_deleted = _delete_videos(source_id, source_stem)
         
         # 3️⃣ DELETE INDEX (CHUNK LEVEL)
         chunks_removed = _purge_chunk_index(source_stem)
@@ -3557,7 +4471,6 @@ def delete_source_v2(source_id: str):
             "source_id": source_id,
             "deleted_items": {
                 "input_file": input_file_deleted,
-                "videos": videos_deleted,
                 "chunks_removed": chunks_removed,
                 "memory_nodes_removed": memory_nodes_removed,
             }

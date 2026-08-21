@@ -1,155 +1,106 @@
-"""SQLite user store for the auth MVP.
+"""User store trên PostgreSQL (Supabase) — bảng `users` theo đặc tả mục 5.1.
 
-Mirrors the jobs_store template: WAL + synchronous=NORMAL + busy_timeout, lazy
-idempotent init_db(), USERS_DB_PATH env override → else DATA_DIR (shared
-`/app/memory/users.sqlite` in Docker). Passwords hashed with Werkzeug — no
-plaintext is ever stored. Store dicts carry password_hash + token_version for
-internal use; the API layer sanitises via auth.service.public_user().
+Trước Phase 1 store này chạy trên `users.sqlite`. Giờ dùng chung DB nghiệp vụ với
+19 bảng StudyMap; schema do Alembic quản lý (`BE/alembic`), store KHÔNG tự tạo bảng.
+
+Auth vẫn là JWT tự viết (không dùng Supabase Auth) nên `password_hash` nằm ngay
+trong bảng `users`, đúng đặc tả 8.2. Mật khẩu hash bằng Werkzeug — không bao giờ
+lưu plaintext. Dict trả về giữ nguyên các khoá cũ (`user_id`, `display_name`) để
+tầng route/token không phải đổi; `display_name` map vào cột `full_name`.
 """
 
 from __future__ import annotations
 
-import os
-import sqlite3
-import threading
-import time
-import uuid
-from pathlib import Path
 from typing import Optional
 
+from sqlalchemy import func, select
+from sqlalchemy.exc import IntegrityError
 from werkzeug.security import check_password_hash, generate_password_hash
 
-_lock = threading.Lock()
+from app.db import session_scope
+from app.db.models import User
+
+DEFAULT_ROLE = "learner"
 
 
 class EmailExistsError(Exception):
-    """Raised by create_user when the email is already registered."""
-
-
-def _data_dir() -> Path:
-    base = (os.environ.get("DATA_DIR") or "").strip()
-    if base:
-        return Path(base)
-    from shared.paths import BE_ROOT
-    return BE_ROOT
-
-
-def db_path() -> Path:
-    override = (os.environ.get("USERS_DB_PATH") or "").strip()
-    if override:
-        return Path(override)
-    return _data_dir() / "users.sqlite"
-
-
-def get_conn() -> sqlite3.Connection:
-    p = db_path()
-    p.parent.mkdir(parents=True, exist_ok=True)
-    conn = sqlite3.connect(str(p), check_same_thread=False, timeout=5.0)
-    conn.execute("PRAGMA journal_mode=WAL")
-    conn.execute("PRAGMA synchronous=NORMAL")
-    conn.execute("PRAGMA busy_timeout=5000")
-    return conn
+    """create_user gọi khi email đã được đăng ký."""
 
 
 def init_db() -> None:
-    with _lock:
-        conn = get_conn()
-        try:
-            conn.execute(
-                """
-                CREATE TABLE IF NOT EXISTS users (
-                    user_id        TEXT PRIMARY KEY,
-                    email          TEXT UNIQUE NOT NULL COLLATE NOCASE,
-                    password_hash  TEXT NOT NULL,
-                    display_name   TEXT,
-                    token_version  INTEGER NOT NULL DEFAULT 1,
-                    created_at     REAL NOT NULL
-                )
-                """
-            )
-            conn.commit()
-        finally:
-            conn.close()
+    """No-op: schema do Alembic tạo (`python -m alembic upgrade head`).
+
+    Giữ hàm để các caller cũ không phải đổi.
+    """
+    return None
 
 
 def _norm_email(email: str) -> str:
     return (email or "").strip().lower()
 
 
-def _row_to_user(row) -> Optional[dict]:
-    if not row:
+def _fallback_name(email: str) -> str:
+    """`users.full_name` NOT NULL — không nhập tên thì lấy phần trước '@'."""
+    return (email.split("@", 1)[0] or "user").strip() or "user"
+
+
+def _to_dict(u: Optional[User]) -> Optional[dict]:
+    if u is None:
         return None
     return {
-        "user_id": row[0],
-        "email": row[1],
-        "password_hash": row[2],
-        "display_name": row[3],
-        "token_version": row[4],
-        "created_at": row[5],
+        "user_id": u.id,
+        "email": u.email,
+        "password_hash": u.password_hash,
+        "display_name": u.full_name,
+        "full_name": u.full_name,
+        "role": u.role,
+        "token_version": int(u.token_version),
+        "created_at": u.created_at,
     }
 
 
-_COLS = "user_id, email, password_hash, display_name, token_version, created_at"
-
-
-def create_user(email: str, password: str, display_name: Optional[str] = None) -> dict:
-    """Create a user (password hashed). Raises EmailExistsError on duplicate."""
-    init_db()
+def create_user(email: str, password: str, display_name: Optional[str] = None,
+                role: str = DEFAULT_ROLE) -> dict:
+    """Tạo user (password đã hash). Ném EmailExistsError khi email trùng."""
     em = _norm_email(email)
-    user_id = uuid.uuid4().hex
-    pw_hash = generate_password_hash(password)
-    dn = (display_name or "").strip() or None
-    now = time.time()
-    with _lock:
-        conn = get_conn()
-        try:
-            conn.execute(
-                "INSERT INTO users(user_id, email, password_hash, display_name, token_version, created_at) "
-                "VALUES(?, ?, ?, ?, 1, ?)",
-                (user_id, em, pw_hash, dn, now),
-            )
-            conn.commit()
-        except sqlite3.IntegrityError as exc:
-            raise EmailExistsError(em) from exc
-        finally:
-            conn.close()
-    return {
-        "user_id": user_id, "email": em, "password_hash": pw_hash,
-        "display_name": dn, "token_version": 1, "created_at": now,
-    }
+    name = (display_name or "").strip() or _fallback_name(em)
+    user = User(
+        email=em,
+        full_name=name,
+        password_hash=generate_password_hash(password),
+        role=role,
+        token_version=1,
+    )
+    try:
+        with session_scope() as s:
+            s.add(user)
+            s.flush()
+            s.refresh(user)   # lấy created_at/updated_at do server_default sinh
+            return _to_dict(user)
+    except IntegrityError as exc:
+        raise EmailExistsError(em) from exc
 
 
 def get_by_email(email: str) -> Optional[dict]:
-    init_db()
     em = _norm_email(email)
-    with _lock:
-        conn = get_conn()
-        try:
-            row = conn.execute(
-                f"SELECT {_COLS} FROM users WHERE email = ? COLLATE NOCASE", (em,)
-            ).fetchone()
-        finally:
-            conn.close()
-    return _row_to_user(row)
+    if not em:
+        return None
+    with session_scope() as s:
+        # So khớp không phân biệt hoa/thường: email lưu đã lower, vẫn lower() cột
+        # để dữ liệu nhập tay từ SQL console cũng khớp.
+        u = s.execute(select(User).where(func.lower(User.email) == em)).scalar_one_or_none()
+        return _to_dict(u)
 
 
 def get_by_id(user_id: str) -> Optional[dict]:
     if not user_id:
         return None
-    init_db()
-    with _lock:
-        conn = get_conn()
-        try:
-            row = conn.execute(
-                f"SELECT {_COLS} FROM users WHERE user_id = ?", (user_id,)
-            ).fetchone()
-        finally:
-            conn.close()
-    return _row_to_user(row)
+    with session_scope() as s:
+        return _to_dict(s.get(User, str(user_id)))
 
 
 def verify_password(email: str, password: str) -> Optional[dict]:
-    """Return the user dict on a correct password, else None (no user enumeration)."""
+    """Trả user dict khi mật khẩu đúng, None khi sai (không lộ user tồn tại hay không)."""
     user = get_by_email(email)
     if not user:
         return None
@@ -159,17 +110,10 @@ def verify_password(email: str, password: str) -> Optional[dict]:
 
 
 def bump_token_version(user_id: str) -> None:
-    """Invalidate all existing tokens for a user (logout-all / password change)."""
+    """Vô hiệu mọi token đang phát cho user (logout-all / đổi mật khẩu)."""
     if not user_id:
         return
-    init_db()
-    with _lock:
-        conn = get_conn()
-        try:
-            conn.execute(
-                "UPDATE users SET token_version = token_version + 1 WHERE user_id = ?",
-                (user_id,),
-            )
-            conn.commit()
-        finally:
-            conn.close()
+    with session_scope() as s:
+        u = s.get(User, str(user_id))
+        if u is not None:
+            u.token_version = int(u.token_version) + 1
