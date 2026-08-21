@@ -1,5 +1,347 @@
 # Lessons Learned
 
+## 2026-08-21 - Phase 8 StudyMap: Frontend (6 trang /app/study)
+
+### Bài học
+
+- **Sản phẩm đã có bản sắc thị giác thì ĐỪNG dựng bản sắc thứ hai.** "Phòng đọc"
+  (giấy dó + mực + con dấu son, Spectral/Inter/IBM Plex Mono) đã hoàn chỉnh. StudyMap là
+  một GIAN khác của cùng toà nhà, không phải sản phẩm thứ hai - dùng nguyên token, chỉ
+  thêm 2 lớp component thật sự thiếu.
+- **Chữ ký mới phải mang thông tin, không phải trang trí.** `SealMeter`: mực đỏ dâng lên
+  đúng bằng mastery score - hình vẽ CHÍNH LÀ con số. Con dấu son vốn đã là ngôn ngữ
+  "provenance" của dự án, nên nó nối tiếp `cite-chip` chứ không cạnh tranh.
+- **Số thứ tự chỉ được đánh khi thứ tự có nghĩa.** Review item đánh "Ưu tiên 1/2/3" vì
+  đó là thứ tự ôn thật (mastery thấp trước); danh sách tài liệu thì không đánh số.
+- **Màu không bao giờ là kênh thông tin duy nhất.** Đúng/sai/partial luôn kèm CHỮ; ô đáp
+  án đổi cả viền lẫn nền; `StatusTag` là chữ có màu, không phải chấm màu.
+- **`Number(null)` là 0 - và test bắt được.** `formatDuration(null)` trả "0 giây", tức
+  bịa số liệu cho bài chưa nộp. Mọi hàm format nhận giá trị có thể null phải chặn null
+  TRƯỚC khi ép kiểu.
+- **Lưu nháp phải gộp lô, không bắn mỗi lần bấm.** Bấm nhanh 10 câu là 10 request chồng
+  nhau và request về trễ ghi đè lựa chọn mới hơn. Debounce 600ms + FLUSH nốt lô đang treo
+  ngay trước khi nộp, nếu không câu vừa chọn biến mất.
+- **Dùng lại `createJobPoller`, đừng viết poller thứ hai.** Nó đã xử lý `interrupted`,
+  404 job bị dọn, mất mạng kéo dài - ba thứ từng làm chip kẹt "đang tạo" vĩnh viễn
+  (known-issues 2026-07-17). API mới trả `current_step` còn poller đọc `current_node` →
+  ánh xạ MỘT dòng trong `studyApi` thay vì sửa poller hoặc chép bản mới.
+- **Trang kết quả phải tự chờ chấm nền.** Bài có câu tự luận dừng ở `submitted` một lúc;
+  không hỏi lại theo nhịp thì người học phải tự F5 mới thấy điểm.
+- **404 không phải lúc nào cũng là lỗi.** Chưa có review plan thì `GET` trả 404 - trang
+  hiển thị nút "Lập kế hoạch" chứ không phải thông báo lỗi đỏ.
+- **"Chưa đo" khác "0 điểm" - kể cả trên UI.** Ô so sánh thiếu số liệu ghi chữ "chưa đo",
+  không vẽ con dấu 0%. Vẽ 0% là nói người học đã làm và được 0.
+
+
+## 2026-08-21 - Phase 7 StudyMap: Practice + Progress
+
+Practice quiz sinh từ review item, so mastery trước/sau, ba endpoint tiến độ.
+
+### Bài học
+
+- **Thêm tham số vào job có sẵn, đừng chép job thứ hai.** Practice và quiz chẩn đoán khác
+  đúng MỘT thứ: nguồn ngữ liệu (chunk từ review item so với chunk theo section). Chép
+  `run_quiz_generation_job` ra bản thứ hai thì hai đường sinh quiz sẽ lệch nhau ngay lần
+  sửa prompt kế tiếp. Thêm `chunk_ids` / `quiz_type` / `source_*` vào config là đủ.
+- **"Chưa có số liệu" KHÁC "0 điểm".** Concept chỉ xuất hiện ở một phía của so sánh thì
+  `delta` phải là `None`, không phải 0 - và không được đếm vào improved/declined. Gộp hai
+  thứ đó lại là báo cáo sai tiến bộ, đúng thứ FR-12.7 dùng để đánh giá sản phẩm.
+- **So sánh phải hẹp về đúng chủ đề đã luyện.** Practice quiz chỉ luyện một topic; so cả
+  bài là so hai thứ khác nhau, và mọi concept không luyện sẽ hiện `delta=None` làm loãng
+  kết quả. `compare_masteries(topics=[...])`.
+- **Mastery tổng hợp lấy snapshot MỚI NHẤT, không cộng dồn.** `concept_masteries` là
+  snapshot theo attempt (đặc tả 8.15). Cộng dồn earned/total qua nhiều attempt thì một bài
+  tệ hồi đầu kéo điểm xuống mãi mãi dù người học đã nắm được - trái hẳn mục đích FR-12.4.
+  Giữ thêm `first_mastery_score` + `improvement` để thấy tiến bộ.
+- **Practice gộp mở-nháp-nộp làm một call, quiz chẩn đoán thì không.** Bài chẩn đoán dài,
+  người học cần lưu nháp và đổi đáp án; bài luyện ngắn nên `POST /submit` làm hết. Nhưng
+  vẫn đi qua đúng `attempts.repository` để lịch sử và thống kê thống nhất - khác API, không
+  khác dữ liệu.
+- **Quiz chẩn đoán vào route practice phải 404.** Hai luồng có ràng buộc khác nhau
+  (`source_review_item_id` bắt buộc cho practice); để lọt là mời gọi trạng thái lai.
+- **Một job route dùng chung tiết kiệm cả FE.** `/api/jobs/{id}` tra được mọi loại job nên
+  FE chỉ cần một poller thay vì một cái cho mỗi tính năng - và theo bài học known-issues
+  2026-07-17, càng ít poller thì càng ít chỗ quên cập nhật tập trạng thái terminal.
+- **Lọc lại `document_id` khi nhận id chunk từ tầng trên.** `chunks_by_ids` vẫn ràng buộc
+  theo tài liệu dù id đến từ review item của chính người dùng: một id lạc sang tài liệu
+  khác thì không thể lọt vào ngữ liệu ra đề.
+
+
+## 2026-08-20 - Phase 6 StudyMap: Gap Analysis + Review Plan
+
+Tính mastery theo concept sau khi chấm, sinh review plan rule-based với LLM chỉ viết lời.
+
+### Bài học
+
+- **Rule quyết định NGUỒN, LLM chỉ viết lời** (PRD 17.2). `section_id` và `chunk_ids` của
+  review item lấy từ chính câu người học làm sai; model chỉ viết `reason` +
+  `review_tasks`. Cho model chọn mục tài liệu là cách chắc chắn nhất để sinh ra "gợi ý ôn
+  phần không liên quan" — thứ FR-10 cấm.
+- **Section của câu SAI, không phải của cả concept.** Concept có thể trải nhiều mục;
+  người học chỉ cần đọc lại đúng chỗ mình hụt, không phải cả chương.
+- **Câu chưa chấm được phải bị LOẠI khỏi mastery, không tính 0.** LLM bó tay không phải
+  lỗi người học. Concept mà mọi câu đều chưa chấm thì không sinh bản ghi — `total_count > 0`
+  là CHECK ở DB, tính 0/0 sẽ nổ.
+- **`correct_count` và `earned_score` là hai thứ khác nhau.** `correct_count` đếm câu ĐÚNG
+  HOÀN TOÀN để báo cáo; `earned_score` (partial = 0.5) mới là cơ sở tính mastery. Gộp lại
+  thành một là mất thông tin, và sai công thức FR-09.9.
+- **Snapshot theo attempt thì chạy lại phải GHI ĐÈ.** `concept_masteries` có UNIQUE
+  `(attempt_id, concept_name)`; `analyze_attempt` xoá bản cũ của attempt rồi ghi lại. Chấm
+  lại mà cộng dồn thì snapshot không còn là snapshot.
+- **Phân tích chạy ngay sau khi chấm, và fail-open.** Bắt người dùng bấm thêm một nút để
+  hệ thống tự tính là vô nghĩa. Nhưng điểm đã ghi xong rồi, nên lỗi phân tích chỉ được log
+  chứ không được biến bài đã chấm thành hỏng. Route đọc mastery tính bù nếu thiếu.
+- **LLM hỏng vẫn phải ra review plan.** `fallback_text` sinh `reason` + `review_tasks` từ
+  số câu sai. Người học vừa làm bài xong mà nhận được trang trắng là hỏng sản phẩm, không
+  phải hỏng model.
+- **Patch chồng patch lại dính lần hai.** Test gọi `_fake_guide` hai lần trong một test:
+  lần thứ hai đọc `review_mod.generate` thì bắt phải chính bản đã patch lần đầu, nên
+  payload mới không bao giờ có tác dụng và test "force tạo lại" xanh giả. Giữ hàm gốc ở
+  cấp module. Cùng lớp lỗi với `grade_short_answer` ở Phase 5 - dấu hiệu là test dựng lại
+  cùng một helper nhiều lần trong một test.
+
+
+## 2026-08-20 - Phase 5 StudyMap: Quiz Taking + Grading
+
+Vòng đời attempt (mở → nháp → nộp → chấm), chấm khách quan đồng bộ, tự luận chấm nền.
+
+### Bài học
+
+- **Console Windows cp1252 giết tiến trình vì một dòng log tiếng Việt.** `print` có dấu
+  ném `UnicodeEncodeError` và làm chết luôn luồng đang chạy. Docker/pytest dùng UTF-8 nên
+  bẫy chỉ lộ khi chạy script trực tiếp - đúng lúc đang gỡ lỗi. Sửa MỘT chỗ:
+  `shared/__init__.py` reconfigure stdout/stderr sang UTF-8 với `errors="replace"`, vì mọi
+  module đều đi qua `shared.*`. Log xấu còn hơn tiến trình chết.
+- **Mở quiz lần hai phải trả lại attempt đang dở.** Tạo attempt mới mỗi lần mở (đúng chữ
+  FR-07.10) thì mỗi lần F5 đẻ một bài dở, và thống kê tiến bộ ở Phase 7 đếm toàn rác.
+  `open_attempt` tìm `in_progress` trước, có thì trả lại.
+- **Chấm hai đợt là mở lại race done-trước-result.** Bài có tự luận: cám dỗ là chấm trắc
+  nghiệm ngay lúc nộp rồi vá phần tự luận sau. Làm thế thì có cửa sổ FE đọc trúng bảng
+  điểm mới một nửa. Chấm CẢ attempt một lần, ghi một lần, trong một transaction.
+- **Model không chấm được thì để trống, đừng cho 0.** `grade_short_answer` trả `None` khi
+  JSON hỏng hoặc verdict lạ; câu đó giữ `verdict=NULL` và attempt vẫn `graded` để người
+  học xem phần còn lại. Cho 0 oan tệ hơn nhiều so với chờ chấm lại.
+- **`max_score` tính trên TỔNG số câu, không phải số câu đã chấm.** Bỏ trống 3 câu mà hiện
+  100% thì con số vô nghĩa. Câu chưa chấm được cũng vẫn nằm ở mẫu số.
+- **Chuẩn hoá đáp án phải dùng CHUNG với chỗ bắt câu trùng.** Người học bấm "Đúng" còn DB
+  lưu "true" thì vẫn phải tính đúng. Tách `shared/text_norm.py` để AI Validation (bắt
+  trùng) và Grading (so đáp án) dùng một hàm - hai bản riêng chắc chắn lệch nhau.
+- **Kết quả chỉ lộ đáp án SAU khi nộp.** `/api/quizzes/results/{id}` trả 409 khi attempt
+  còn `in_progress` - trả đáp án lúc đó là đưa bài giải cho người đang làm. Đây là chỗ
+  duy nhất `include_answers=True`.
+- **Sửa đáp án sau khi nộp phải 409, không phải 200 im lặng.** PATCH khi attempt không còn
+  `in_progress` bị từ chối; nộp lần hai cũng 409 để không ghi đè `submitted_at` (làm sai
+  `duration_seconds`).
+- **Monkeypatch hàm có tham số inject thì phải pop tham số đó.** Test thay
+  `grade_short_answer` bằng wrapper truyền `ask=...`, nhưng service đã truyền `ask=None`
+  → "got multiple values for keyword". `kw.pop("ask", None)` trước khi gọi hàm gốc.
+- **Kế hoạch bảo mở rộng `test_grading.py` - sai file.** File đó là CRAG retrieval
+  grading (chấm độ liên quan của chunk), không liên quan chấm quiz. Trùng tên khái niệm
+  không có nghĩa là trùng module; đọc file trước khi "mở rộng".
+
+
+## 2026-08-20 - Phase 4 StudyMap: Quiz Generation + AI Validation
+
+Sinh quiz chẩn đoán bằng LLM, 8 luật kiểm chất lượng FR-13, sổ cái job trong Postgres.
+
+### Bài học
+
+- **`đ` KHÔNG phân rã qua NFKD.** Chuẩn hoá tiếng Việt kiểu "NFKD rồi bỏ ký tự combining"
+  biến "đúng" thành "ung" (U+0111 là chữ cái riêng, không phải d + dấu), nên đáp án
+  true_false "Đúng" bị loại oan. Phải `replace("đ", "d")` TRƯỚC khi normalize. Bẫy này
+  áp cho mọi chỗ so trùng không dấu, không riêng quiz.
+- **Đừng loại câu hỏi vì trường trang trí.** Độ khó ghi "sieu kho", `section_id` lạ - đó
+  là lỗi hình thức, chuẩn hoá được. Loại cả câu thì người dùng mất câu hỏi vốn dùng được.
+  Chỉ loại khi câu **vô dụng cho người học** (thiếu đáp án/giải thích) hoặc **không kiểm
+  chứng được từ tài liệu** (không có chunk nguồn).
+- **Đưa nhãn ngắn cho model, đừng đưa UUID.** Chunk vào prompt là `c0`, `c1`; model trích
+  lại nhãn nên nhãn lạ = bịa nguồn, thấy ngay. UUID vừa tốn token vừa dễ bị model chép
+  sai một ký tự rồi trông y như thật.
+- **Mặc định của cờ phải là bản an toàn.** `get_quiz(include_answers=False)` mặc định ẩn
+  đáp án. Quên truyền cờ thì lộ đáp án (FR-06.12), nên cờ phải là thứ người gọi BẬT LÊN
+  chứ không phải thứ họ tắt đi.
+- **Validate config ở route, đừng để CHECK của DB bắt.** `difficulty`, `question_types`,
+  `section_ids` kiểm ngay khi nhận request. Để DB bắt thì job đã tốn một lượt gọi LLM
+  (hàng chục giây) rồi mới hỏng, mà lỗi trả ra là thông báo constraint không ai đọc được.
+- **Sổ cái Postgres KHÔNG thay `jobs_store` SQLite.** `ai_validation_logs.job_id` là FK
+  sang `jobs` nên phải có hàng thật trong Postgres. Nhưng `jobs_store` giữ progress từng %
+  và **token buffer của chat** (ghi mỗi token) - đẩy thứ đó sang pooler ap-northeast-2 là
+  tự sát về độ trễ. Giải: Postgres chỉ ghi 2 lần mỗi job (mở + đóng), `progress` để 0 và
+  ghi rõ nó không phải nguồn sự thật.
+- **Sổ kiểm toán hỏng không được làm hỏng job.** `ledger.open_job/close_job` nuốt lỗi và
+  trả cờ; mở thất bại thì log validation vẫn ghi với `job_id=None` - FR-13.10 đòi bản ghi
+  cho MỌI item bị loại, không kèm điều kiện.
+- **Monkeypatch một hàm rồi gọi lại nó qua module là đệ quy vô hạn.** Test thay
+  `gen.generate_questions` bằng lambda gọi `gen.generate_questions` - sau khi patch thì
+  tên đó trỏ chính lambda. Phải giữ tham chiếu hàm gốc TRƯỚC khi patch.
+- **Không dùng LangGraph cho luồng thẳng.** Kế hoạch ghi `quiz/graph.py` với LangGraph,
+  nhưng luồng LoadContext-Generate-Validate-Persist là một mạch thẳng; graph tự ghi
+  `status=done` lại dựng đúng race done-trước-result trong known-issues. Hàm thường,
+  ~90 dòng, tự quản status - giống `run_study_map_job`.
+
+
+## 2026-08-20 - Phase 3 StudyMap: Study Map + API tìm kiếm ngữ nghĩa
+
+Adapter mindmap sang `knowledge_maps/nodes/edges/node_chunks`, 6 endpoint Study Map,
+2 endpoint search dùng lại `HybridRetriever`.
+
+### Bài học
+
+- **Không chạy Study Map qua `MINDMAP_GRAPH` dù nó làm đúng các bước đó.** Graph tự ghi
+  `status=done` kèm result là artifact mindmap; job Study Map phải trả `map_id`, nên đi
+  qua graph là dựng lại đúng race "done trước result" trong known-issues 2026-07-06. Gọi
+  thẳng `pipeline.skeleton/enrich/relations` (~40 dòng) và tự quản lý status: job chỉ
+  `done` SAU khi map đã nằm trong DB.
+- **Validate ràng buộc CHECK ở tầng app, đừng để DB bắt.** `ck_knowledge_nodes_not_self_parent`
+  và `ck_knowledge_edges_no_self_loop` nếu để Postgres bắt thì cả transaction hỏng và
+  người dùng chỉ thấy 500. `generator.build_graph` lọc sẵn: node không title bị bỏ
+  (FR-04.6), node mồ côi / tự trỏ về root, edge self-loop và edge trỏ tới node lạ bị bỏ.
+- **Map enum khác tập thì PHẢI có giá trị mặc định.** mindmap có 6 `REL_TYPES`, đặc tả chỉ
+  cho 5 `relation_type`. Không map hết thì một `type` lạ làm vỡ CHECK giữa chừng. Bảng ánh
+  xạ + `DEFAULT_RELATION_TYPE = "related"`; tương tự `kind` sang `node_type` mặc định
+  `concept`.
+- **Score bị vứt ở `_rrf_merge` — FR-05 cần nó.** `retrieve()` trả `list[RetrievedChunk]`,
+  điểm RRF bị bỏ giữa chừng. Sửa bằng cách tách `retrieve_scored()` trả
+  `list[(chunk, score)]` và `retrieve()` thành wrapper một dòng: chỉ 1 call site
+  (`query_graph`) nên không phá gì, và không phải chép lại 60 dòng logic hybrid sang
+  module search.
+- **Score trả ra API phải gọi đúng tên nó là gì.** Điểm RRF (~0.03) không phải similarity
+  0..1 như ví dụ trong đặc tả. Không chuẩn hoá giả thành 0..1 cho đẹp — trả raw và ghi rõ
+  trong docstring là "chỉ so sánh được trong cùng một lần gọi".
+- **Chunk có trong FAISS mà không có trong Postgres thì BỎ, không bịa.** Index dựng từ
+  trước Phase 2 còn chunk chưa có hàng DB; trả `chunk_id` bịa còn tệ hơn trả thiếu.
+- **Lọc quyền sở hữu bằng SQL, không lọc sau ở Python.** `lookup_by_embedding_ids` join
+  `documents` và lọc `user_id` + `status != 'deleted'` ngay trong query (FR-05.5). Index
+  FAISS dùng chung giữa các user, nên đây là chỗ duy nhất chặn được.
+- **Xoá mềm là `status='deleted'`, KHÔNG có cột `deleted_at`.** Viết nhầm
+  `Document.deleted_at.is_(None)` theo quán tính; bảng `documents` không có cột đó. Đọc
+  lại model trước khi viết điều kiện lọc.
+- **Mỗi lần tạo là một map mới, không ghi đè.** `questions.knowledge_node_id` và
+  `review_plan_items.knowledge_node_id` trỏ vào node; ghi đè map cũ là mất dấu vết bài đã
+  làm. `force=true` tạo map mới, không `force` thì trả map `completed` gần nhất.
+- **Test viết theo trực giác về thứ tự thì sai.** Tôi kỳ vọng node ra theo `order` phẳng,
+  thực tế `build_graph` duyệt DFS (con đứng ngay sau cha) — và đó mới là thứ tự đúng để
+  insert FK. Tương tự, `validate_relations` bỏ cạnh chéo TRÙNG cạnh cây (cả chiều ngược),
+  nên pipeline giả trong test phải nối hai node ANH EM, không phải cha-con.
+
+
+## 2026-08-20 - Phase 2 StudyMap: documents/sections/chunks + Supabase Storage
+
+Bỏ hẳn `index/source_registry.json`, chuyển nguồn sự thật về bảng `documents`;
+ingest ghi `sections` + `document_chunks`; file gốc lên Supabase Storage; thêm 7
+endpoint `/api/documents/*`.
+
+### Bài học
+
+- **Đổi tầng lưu trữ thì GIỮ chữ ký hàm, đừng sửa 20 call site.** `_load_source_registry`,
+  `_update_source_status`, `_get_source_status*` được viết lại để đọc Postgres nhưng
+  giữ nguyên tên + shape dict trả về. Diff gọn, và mọi test đang `monkeypatch`
+  `_load_source_registry` vẫn chạy nguyên. Đổi tên hàm thì phải sửa cả chục file test.
+- **Test dùng chung DB từ xa thì mất tính cô lập của tmp dir.** Registry cũ nằm trong
+  `DATA_DIR` tạm nên mỗi phiên test bắt đầu sạch. Bảng `documents` dùng chung và tích
+  luỹ, nên `_unique_display_filename` thấy "own.md" đã tồn tại từ lần chạy trước rồi đổi
+  thành "own (4).md", làm test canonical stem sai. Fixture phải purge TRƯỚC và SAU phiên.
+- **FK làm lộ id giả trong test.** `documents.user_id` có FK tới `users`; test cũ
+  monkeypatch `_current_user_id` trả `"userA"` - id bịa - nên upload 500. Test phải tạo
+  user thật. Đây là FK làm đúng việc của nó, không phải phiền toái.
+- **Đừng để hai trường cùng mô tả một sự thật.** Bản đầu tôi lưu owner ở CẢ
+  `documents.user_id` (FK, NOT NULL) lẫn `metadata_json.owner_user_id` (cho phép None ẩn
+  danh) - hai nguồn sẽ drift. Sửa: một cột `user_id`, upload ẩn danh trỏ vào user hệ thống
+  `anonymous@studymap.local`, tầng đọc quy đổi ngược thành None.
+- **Supabase Storage từ chối key có khoảng trắng/ngoặc/dấu tiếng Việt** (`InvalidKey`).
+  "Báo cáo tài chính 2025 (2).pdf" phải fold về ASCII an toàn. Tên hiển thị giữ nguyên ở
+  `documents.title`; sanitize CHỈ áp cho khoá lưu trữ. Tiện thể chặn luôn path traversal.
+- **Khoá API mới của Supabase (`sb_secret_...`) không phải JWT** - Storage trả
+  `Invalid Compact JWS` nếu key sai. Bẫy thật lại là `BE/.env` vẫn giữ `CHANGE_ME_...`
+  trong khi `.env` root đã có key thật: `load_project_env` ưu tiên `BE/.env`. Lần thứ hai
+  trong một ngày dính cùng cái bẫy - mọi khoá Supabase giờ đồng bộ cả hai file.
+- **Hot path đọc DB xa cần cache rất ngắn.** `owned_stems()` chạy mỗi request, trước đây
+  đọc file local. Postgres ở ap-northeast-2 (~50-100ms) nên thêm cache 2s + xoá tường minh
+  ở MỌI đường ghi. Không cache thì mỗi query cõng thêm một round trip.
+- **Từ chối tái dùng `memory.tree._simple_section_group` cho bảng `sections`**: nó chia
+  theo KÍCH THƯỚC với tiêu đề vị trí ("Section 1"). Review guide phải nói được "ôn lại mục
+  2.3 Quy tắc hàm hợp" - tiêu đề vị trí làm gợi ý ôn tập vô nghĩa. Dùng heading thật; tài
+  liệu không có heading thì MỘT section mặc định (đặc tả 3.3.7) trung thực hơn sáu tên rỗng.
+- **Ghi DB trong ingest phải fail-open.** `_persist_sections_and_chunks` bọc try/except:
+  FAISS đã ghi xong, chat vẫn chạy được; lỗi DB không được biến tài liệu đã index thành
+  `failed`. Nhưng vẫn log `PersistDocument error` để không im lặng.
+
+
+## 2026-08-20 — Phase 1 StudyMap: nền PostgreSQL trên Supabase
+
+Dựng 19 bảng đặc tả bằng SQLAlchemy + Alembic, bật RLS deny-all, chuyển
+`users_store` từ `users.sqlite` sang Postgres, thêm `POST /auth/refresh`.
+
+### Bài học
+
+- **Percent-encode mật khẩu trong DATABASE_URL, và encode ĐÚNG MỘT LẦN.** Mật khẩu
+  có `#` để nguyên trong URL thì mọi thứ sau nó bị coi là fragment → URL cụt.
+  Nhưng chạy script encode hai lần thì `%23` thành `%2523`, decode ra `%23` — DB
+  báo `password authentication failed for user "postgres"` (Supabase pooler nuốt
+  luôn phần tenant sau dấu chấm trong thông báo lỗi, càng dễ chẩn đoán nhầm là sai
+  username). Script encode PHẢI idempotent: `unquote` tới khi ổn định rồi mới
+  `quote` một lần. Bẫy nhân đôi: `.env` và `BE/.env` có thể lệch nhau, mà
+  `load_project_env` ưu tiên `BE/.env` — sửa một file rồi test file kia là chẩn
+  đoán mù.
+- **`FORCE ROW LEVEL SECURITY` tự khoá chính mình.** BE kết nối bằng role `postgres`
+  (owner bảng). `ENABLE` RLS + không policy = deny-all cho anon/publishable key,
+  owner vẫn đọc được — đúng ý đồ. Thêm `FORCE` thì RLS áp cả owner → BE mất quyền
+  đọc mọi bảng. Chỉ `ENABLE`, không `FORCE`, khi FE không gọi thẳng DB.
+- **Vòng FK cần `use_alter=True`.** `quizzes → review_plan_items → review_plans →
+  quiz_attempts → quizzes` là chu trình; không đánh dấu thì DDL không có thứ tự tạo
+  bảng hợp lệ. Đặt `use_alter` trên hai FK của `quizzes` (`source_review_item_id`,
+  `source_attempt_id`) để constraint tạo sau bằng ALTER.
+- **Test schema phải chạy trên DB THẬT, không phải trên model.** CHECK khai trong
+  model mà migration quên sinh thì test model-only vẫn xanh. `test_db_schema.py`
+  insert dữ liệu sai và assert `IntegrityError` — bắt được cả trường hợp DB lệch model.
+- **`pytest.mark.skipif` ở module level đọc env QUÁ SỚM.** Lúc pytest collect thì
+  `app.main` chưa import nên `load_project_env()` chưa chạy → `DATABASE_URL` vắng →
+  skip toàn bộ dù .env có. Đưa việc nạp env + `pytest.skip` vào fixture autouse.
+- **Test ghi vào DB thật thì phải tự dọn.** Auth test tạo user mỗi lần chạy; không
+  có fixture xoá `%@example.com` thì DB phình dần và test sau nhiễu test trước.
+- `s.refresh()` sau `s.flush()` mới lấy được `created_at` do `server_default` sinh —
+  không refresh thì cột đó là None trong dict trả về.
+
+
+## 2026-08-20 — Phase 0 StudyMap: gỡ lớp lưu trữ QR/video
+
+Bối cảnh: chuyển sang StudyMap AI (xem `00_Active_Plans/StudyMap AI - Migration Plan.md`).
+Video QR không có trong đặc tả và đã là lưu trữ PHỤ từ trước (chunk_processor tự nuốt lỗi
+ghi video, text chunk nằm ở FAISS + chunks.sqlite). Gỡ sạch: `video_utils.py`,
+`chunk_processor.py`, 2 script rebuild-from-video, route `/videos/<name>`, `/rebuild-index`,
+`/rebuild-status`, `/process-doc`, dep `qrcode[pil]` + `opencv-python-headless`.
+
+### Bài học
+
+- **Gỡ một lớp lưu trữ thì gỡ luôn cái nó đẻ ra.** QR giới hạn 2953 byte/frame là lý do DUY
+  NHẤT của sub-chunk (`parent_id`/`sub_order`/`total_parts`/`is_subchunk`). Bỏ QR mà giữ
+  sub-chunk là giữ 4 field chết + logic merge ở `input_collector` + mapping `chunk_index`
+  vòng vèo ở `EmbedAndIndex`. Gỡ cả cụm thì node `ProcessChunks` không còn việc → xoá node,
+  entry == chunk, heading và late-vector map thẳng theo index. Diff to hơn nhưng hệ thống nhỏ đi.
+- **Định danh nghiệp vụ không được ký sinh vào tên file lưu trữ.** `meta["video"]` vừa là
+  đường dẫn mp4 vừa là khoá nhận diện source: `delete_source_from_index`, `hybrid._norm_stem`,
+  `memory/tree`, `input_collector`, `/list-indexed`, `/stats` đều fallback về nó. Đổi hết sang
+  `source_stem` (canonical, ingest ghi sẵn) là fix đúng chỗ — nếu chỉ xoá file mp4 mà giữ khoá
+  `video` thì mọi consumer vẫn phụ thuộc tên file của một lớp đã chết.
+- **Giữ contract API dù đổi tầng lưu trữ.** `/list-indexed` vẫn trả key `video` (FE đọc
+  `s.video_stem || s.video`) — chỉ đổi nguồn suy ra nó. Đổi tên field response chỉ vì tên
+  xấu là tự tạo việc ở FE mà không được gì.
+- **Bug ẩn lộ ra khi gỡ:** `chunk_index` được `chunk_processor` gắn vào entry nhưng
+  `EmbedAndIndex` KHÔNG copy vào metadata index.json → `summary/pointers.py` đọc `chunk_index`
+  luôn nhận None từ trước tới nay. Viết lại metadata thì thêm luôn `chunk_index: i`.
+- **Nhánh `has_video` bỏ inline text để tiết kiệm chỗ là bẫy dữ liệu.** Chunk chỉ có
+  `(video, frame_index)` mà không có `text` thì gỡ decode = mất text vĩnh viễn. Chốt xoá sạch
+  dữ liệu cũ nên không cần backfill; nếu phải giữ dữ liệu thì PHẢI backfill decode trước khi gỡ.
+- **Đo regression bằng baseline, không bằng cảm giác.** Suite này có 29 fail + 6 collection
+  error pre-existing (`langchain_core.pydantic_v1` thiếu ở env local; auth env leak giữa test).
+  Cách làm đúng: `git stash` → chạy suite → lưu danh sách fail → pop → chạy lại → `comm` hai
+  danh sách. Kết quả Phase 0: 0 fail mới, 588 passed. Không có bước này thì 60 dòng FAILED
+  trông như thảm hoạ do mình gây ra.
+- **Test isolation đánh lừa:** `test_queue.py::test_stats_has_queue_block` fail 401 khi chạy
+  RIÊNG file (env `AUTH_PROTECT_APP_APIS=true` từ `.env`), pass khi chạy cả suite. Xác nhận
+  pre-existing bằng cách stash rồi chạy đúng file đó — đừng kết luận từ một lần chạy.
+
+
 ## 2026-07-18 — Optimization wave PR#1–PR#8/#9 lessons
 
 Đợt tối ưu 8 PR (observability → SQLite reliability → FE delivery → LLM lanes →

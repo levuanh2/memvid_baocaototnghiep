@@ -1,0 +1,187 @@
+# ============================================================
+# StudyMap AI — Render Blueprint
+# ============================================================
+# Cách dùng: Render Dashboard > New > Blueprint > chọn repo này.
+# Render đọc file này, dựng 2 service, và tự deploy lại mỗi lần push lên `main`.
+#
+# Render sẽ HỎI 5 giá trị (đánh dấu `sync: false`). Lấy ở đâu:
+#   DATABASE_URL         Supabase > Settings > Database > Connection string
+#                        DÙNG session pooler port 5432 (transaction pooler 6543
+#                        KHÔNG chạy được DDL nhiều câu, alembic sẽ hỏng).
+#                        Mật khẩu PHẢI percent-encode: '#' -> '%23'.
+#   SUPABASE_URL         https://<project_ref>.supabase.co
+#   SUPABASE_SECRET_KEY  Supabase > Settings > API keys > secret key
+#   GEMINI_API_KEY       Google AI Studio. Render KHÔNG chạy được Ollama —
+#                        đây là provider LLM duy nhất trên deploy này.
+#   VITE_API_BASE        (ở service web) URL của studymap-api sau khi nó dựng
+#                        xong, ví dụ https://studymap-api.onrender.com
+#
+# KHÔNG bao giờ đặt secret thật vào file này — nó nằm trong git.
+# ============================================================
+
+services:
+  # ---------- Backend: Flask + FAISS + embedding ----------
+  - type: web
+    name: studymap-api
+    runtime: docker
+    # standard = 2GB RAM. Vừa đủ cho intfloat/multilingual-e5-small (~470MB).
+    # Muốn chạy ĐÚNG phương pháp luận văn (bge-m3 + late chunking) thì phải lên
+    # `pro` (4GB) — bge-m3 nạp fp32 tốn ~2.5GB, plan standard sẽ OOM.
+    plan: standard
+    # Supabase project ở ap-northeast-2 (Seoul) — singapore là region Render gần nhất.
+    region: singapore
+    branch: main
+    autoDeploy: true
+    dockerfilePath: ./BE/Dockerfile
+    dockerContext: ./BE
+    healthCheckPath: /health
+    # Migration chạy TRƯỚC khi instance mới nhận traffic. Hỏng migration =
+    # Render huỷ deploy, bản cũ vẫn phục vụ.
+    preDeployCommand: "alembic upgrade head"
+    # Dockerfile CMD không tạo thư mục trên disk mount (nó chỉ mkdir /app/*),
+    # nên override để tạo trước rồi mới chạy gunicorn.
+    dockerCommand: 'sh -c "mkdir -p $DATA_DIR/index $DATA_DIR/memory $DATA_DIR/input_docs $HF_HOME && exec gunicorn -w ${WEB_CONCURRENCY:-1} -b 0.0.0.0:${PORT:-8080} --timeout ${GUNICORN_TIMEOUT:-900} app.main:app"'
+    disk:
+      name: studymap-data
+      mountPath: /var/data
+      # FAISS index + sqlite + input_docs + cache HuggingFace (~500MB cho e5-small,
+      # ~2.5GB nếu đổi sang bge-m3). Disk giữ nguyên qua mỗi deploy nên model chỉ
+      # tải MỘT lần, không tải lại mỗi lần push.
+      sizeGB: 10
+    envVars:
+      # --- bí mật: Render hỏi lúc tạo blueprint ---
+      - key: DATABASE_URL
+        sync: false
+      - key: SUPABASE_URL
+        sync: false
+      - key: SUPABASE_SECRET_KEY
+        sync: false
+      - key: GEMINI_API_KEY
+        sync: false
+      # Khoá ký token: Render sinh 1 lần, không ai nhìn thấy, không nằm trong git.
+      - key: AUTH_SECRET
+        generateValue: true
+
+      # --- state trên disk ---
+      - key: DATA_DIR
+        value: /var/data
+      - key: HF_HOME
+        value: /var/data/hf
+      - key: JOBS_DB_PATH
+        value: /var/data/jobs.sqlite
+      - key: LOG_DB_PATH
+        value: /var/data/logs.sqlite
+      - key: USERS_DB_PATH
+        value: /var/data/users.sqlite
+      - key: CONVERSATIONS_DB_PATH
+        value: /var/data/conversations.sqlite
+
+      # --- LLM: Gemini, KHÔNG Ollama ---
+      # OLLAMA_HOST rỗng là BẮT BUỘC: llm_factory chỉ bỏ 'ollama' khỏi danh sách
+      # provider khi biến này rỗng. Để nguyên default thì mọi lời gọi LLM sẽ thử
+      # Ollama trước, timeout, rồi mới rơi sang Gemini.
+      - key: OLLAMA_HOST
+        value: ""
+      - key: OLLAMA_WARMUP
+        value: "0"
+      - key: GEMINI_CHAT_MODEL
+        value: gemini-2.5-flash
+      - key: LLM_MAX_TOKENS
+        value: "8192"
+      - key: AI_TIMEOUT_SEC
+        value: "300"
+      - key: SUMMARY_LLM_TIMEOUT_SEC
+        value: "300"
+      - key: MINDMAP_LLM_TIMEOUT_SEC
+        value: "300"
+      - key: QUIZ_LLM_TIMEOUT_SEC
+        value: "300"
+
+      # --- embedding / retrieval ---
+      # e5-small: 118M tham số, 384 chiều, đa ngữ (tiếng Việt ổn), ~470MB RAM.
+      # ĐỔI MODEL = PHẢI XOÁ INDEX CŨ (đổi số chiều FAISS). Deploy mới thì index
+      # rỗng sẵn nên không sao.
+      # Bản đầy đủ (cần plan `pro`):
+      #   EMBEDDING_MODEL_NAME=BAAI/bge-m3   +   LATE_CHUNKING=1
+      - key: EMBEDDING_MODEL_NAME
+        value: intfloat/multilingual-e5-small
+      # Late chunking cần encoder long-context. e5-small tối đa 512 token nên
+      # PHẢI tắt — bật với model ngắn sẽ cắt cụt tài liệu (xem known-issues).
+      - key: LATE_CHUNKING
+        value: "0"
+      - key: HYBRID_TOP_K
+        value: "6"
+      - key: USE_LC_VECTOR_STORE
+        value: "1"
+      - key: USE_LC_QA_CHAIN
+        value: "1"
+      - key: USE_LC_ENSEMBLE
+        value: "1"
+      - key: USE_LC_INGEST
+        value: "1"
+      - key: CRAG_ENABLED
+        value: "1"
+      - key: CRAG_REWRITE_MAX
+        value: "2"
+      # Rerank (bge-reranker-v2-m3 ~2.3GB) và NLI (mDeBERTa ~1.1GB) TẮT trên
+      # Render: hai model này cộng lại vượt RAM của mọi plan dưới `pro`, và
+      # chúng lazy-load ở query đầu nên sẽ OOM giữa request chứ không phải lúc boot.
+      - key: RERANK_ENABLED
+        value: "0"
+      - key: NLI_ENABLED
+        value: "0"
+      - key: EMBEDDING_WARMUP_ENABLED
+        value: "0"
+
+      # --- server ---
+      # 1 worker: HITL giữ metadata resume trong process, pause và resume phải
+      # rơi vào cùng một tiến trình.
+      - key: WEB_CONCURRENCY
+        value: "1"
+      - key: GUNICORN_TIMEOUT
+        value: "900"
+      # Bearer token nên cross-origin đọc được response cũng không lấy được token.
+      # Muốn siết thì đổi thành URL của studymap-web.
+      - key: CORS_ORIGINS
+        value: "*"
+
+      # --- auth: prod = fail-loud + khoá theo user ---
+      - key: AUTH_REQUIRE_SECRET
+        value: "true"
+      - key: AUTH_PROTECT_APP_APIS
+        value: "true"
+      - key: AUTH_TOKEN_TTL_SEC
+        value: "604800"
+
+      # --- không có Redis: cache và queue tự tắt (fail-open) ---
+      - key: REDIS_URL
+        value: ""
+      - key: QUEUE_ENABLED
+        value: "false"
+      - key: CONVERSATION_CONTEXT_ENABLED
+        value: "true"
+      - key: SUPABASE_STORAGE_BUCKET
+        value: documents
+
+  # ---------- Frontend: static site ----------
+  - type: web
+    name: studymap-web
+    runtime: static
+    branch: main
+    autoDeploy: true
+    rootDir: FE
+    buildCommand: npm ci && npm run build
+    staticPublishPath: ./dist
+    routes:
+      # SPA: mọi đường dẫn không phải file tĩnh đều trả index.html, nếu không
+      # F5 ở /app/study/quiz/<id> sẽ ra 404.
+      - type: rewrite
+        source: /*
+        destination: /index.html
+    envVars:
+      - key: NODE_VERSION
+        value: "22"
+      # URL của studymap-api, dán sau khi service đó dựng xong.
+      # Vite nhúng biến này lúc BUILD — đổi giá trị phải deploy lại FE.
+      - key: VITE_API_BASE
+        sync: false

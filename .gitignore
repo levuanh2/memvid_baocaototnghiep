@@ -73,3 +73,13 @@ TMP_TEST_DATA*/
 02_Session_Logs/
 05_Debug_Logs/
 06_Resume_States/
+
+# Rác sinh ra lúc chạy test (pytest tmpdir rơi ra thư mục gốc)
+pytest-cache-files-*/
+
+# Cấu hình MCP của Claude Code — công cụ cá nhân, không phải mã dự án.
+# Chứa project_ref Supabase; không phải secret nhưng không cần nằm trong git.
+.mcp.json
+
+# Output của bước làm sạch tài liệu (sinh lại được từ input_docs)
+BE/cleaned_md/

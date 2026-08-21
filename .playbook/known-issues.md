@@ -1,5 +1,72 @@
 # Known Issues
 
+## (ĐÃ SỬA 2026-08-21) Smoke end-to-end với LLM thật — 3 lỗi mà 696 unit test không bắt được
+
+Chạy đúng kịch bản demo PRD mục 19 (upload tài liệu Toán → quiz 10 câu → làm sai phần
+"quy tắc hàm hợp" → báo yếu → chỉ về mục 2.3 → luyện 5 câu) trên **Ollama thật + bge-m3
+thật + Postgres thật**. Toàn bộ unit test đều dùng LLM giả nên cả ba lỗi dưới đây lọt lưới.
+
+### 1. `/api/documents/*` trả status NGOÀI tập đặc tả
+
+- **Triệu chứng:** ingest xong hoàn toàn (4 chunk, progress 1.0) nhưng
+  `GET /api/documents/{id}` trả `status="ready"`. Client chờ `completed` theo đúng tài
+  liệu thì chờ vĩnh viễn — smoke treo 600s rồi bỏ cuộc.
+- **Root cause:** `repository._row()` trả trạng thái PIPELINE (`processing/index_ready/
+  ready/error`) ở khoá `status` để call site cũ (`/list-indexed`, `/sources/<id>/status`)
+  không phải sửa. API mới `/api/documents/*` dùng lại nguyên dict đó, nên nó phát ra
+  `ready` — giá trị không có trong `uploaded|processing|completed|failed|deleted` (đặc tả
+  3.2.4 / 8.3). Cột DB thì vẫn đúng.
+- **Fix:** `_row()` thêm khoá `spec_status` (cột `documents.status`); `_doc_public()` trả
+  `status = spec_status` và đưa trạng thái pipeline sang `ingest_status`. Route cũ không đổi.
+- **Prevention:** API mới KHÔNG được tái dùng nguyên dict của tầng cũ chỉ vì tiện — hai
+  API có hai hợp đồng khác nhau. Test `test_documents_api.py` giờ khẳng định `status` luôn
+  nằm trong tập đặc tả, không chỉ khẳng định nó "không rỗng".
+
+### 2. Lỗi provider LLM đầu tiên bị nuốt, báo nhầm hoàn toàn
+
+- **Triệu chứng:** tạo quiz hỏng với thông báo `All AI providers failed (tried ['ollama',
+  'gemini']): 401 ... ACCESS_TOKEN_TYPE_UNSUPPORTED`. Đọc xong đi kiểm tra key Gemini —
+  sai hướng. Nguyên nhân thật là **Ollama timeout** (model 14B sinh 10 câu vượt 180s mặc
+  định của `QUIZ_LLM_TIMEOUT_SEC`), rồi mới rơi sang Gemini vốn không có key hợp lệ.
+- **Root cause:** vòng fallback trong `ask_ai` chỉ giữ `last_error`, nên lỗi của provider
+  ĐẦU biến mất hoàn toàn khỏi thông báo lẫn log.
+- **Fix:** log từng provider ngay khi nó hỏng (kèm `feature` + `model`) và gộp TẤT CẢ lỗi
+  vào exception cuối.
+- **Prevention:** chuỗi fallback nào cũng phải báo cáo mọi mắt xích. "Thông báo lỗi cuối"
+  của một chuỗi fallback gần như luôn là mắt xích ÍT liên quan nhất tới nguyên nhân thật.
+
+### 3. So sánh trước/sau luyện tập im lặng không đo được (FR-11.10)
+
+- **Triệu chứng:** làm bài luyện đúng 100% mà màn hình tiến bộ hiện
+  `hàm hợp: 0.0 -> None (delta None)` — tức "chưa đo". Tiêu chí MVP #10 và #12 hỏng.
+- **Root cause:** `concept_tags` do LLM tự đặt. Bài chẩn đoán ra tag `"hàm hợp"`, bài
+  luyện sinh sau đó ra `"quy tắc hàm hợp"`. `compare_masteries` lọc theo topic của review
+  item nên hai bên không bao giờ khớp. Không có ngoại lệ nào được ném — chỉ là số liệu rỗng.
+- **Fix:** khi sinh practice quiz, **rule ép** tag chủ đề của review item vào mọi câu hỏi
+  (`config["practice_topic"]`). Chủ đề đã biết chắc từ review item, không có lý do để model
+  quyết định lại — cùng nguyên tắc "rule quyết định liên kết, LLM chỉ viết lời" ở Phase 6.
+- **Regression:** `test_practice_and_progress.py::test_practice_tags_are_forced_to_the_
+  review_topic` — LLM giả cố tình trả tag `"ten khac hoan toan"`, test khẳng định tag chủ
+  đề bị ép vào đầu VÀ comparison có số ở cả hai phía.
+- **Prevention:** hai phía của một phép so sánh không được lấy khoá từ hai nguồn tự do
+  khác nhau. Và **kiểm tra im lặng là kiểm tra vô dụng**: script smoke ban đầu vẫn in
+  "SMOKE PASS" trong khi cột "sau" toàn rỗng — giờ nó fail nếu mọi `delta` đều None.
+
+### Số liệu đo được (Ollama qwen2.5:7b-instruct, máy local)
+
+| Bước | Thời gian | Kết quả |
+| --- | --- | --- |
+| Ingest (chunk + bge-m3 + FAISS + memory tree) | ~70s | 4 chunk, 6 section đúng cây |
+| Tạo quiz 10 câu | ~55s | 10/10 giữ, 0 câu bị FR-13 loại, 1 lần gọi model |
+| Chấm 10 câu trắc nghiệm | <1s | đúng 8, sai 2 |
+| Review plan | ~11s | chỉ đúng "mục 2.3 Quy tắc hàm hợp" |
+| Tạo 5 câu luyện | ~42s | 5/5 giữ, 0 loại |
+
+Phát hiện chất lượng còn để mở: tài liệu 1300 ký tự chỉ chia được **4 chunk**, nên
+`/api/search` với truy vấn "quy tắc đạo hàm hàm hợp" trả top-1 là đoạn Chương 1 (không
+chứa "hàm hợp"). Chunk quá thô làm truy hồi kém — chưa sửa, cần đo thêm trên tài liệu dài.
+
+
 ## (ĐÃ SỬA 2026-07-17) Huỷ tóm tắt kẹt "Đang huỷ… (36%)" mãi — cancel job không còn executor + FE poller không biết "interrupted"
 
 - **Triệu chứng:** Đang tạo tóm tắt, bấm Huỷ → chip kẹt "Đang huỷ… (36%)" vĩnh viễn, %
