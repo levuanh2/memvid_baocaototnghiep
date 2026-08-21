@@ -16,8 +16,6 @@ if tesseract_path and os.path.exists(tesseract_path):
 else:
     print("[WARN] Tesseract not found - OCR will fail for images.")
     
-FRAME_DIR = "qr_frames"
-os.makedirs(FRAME_DIR, exist_ok=True)
 
 def extract_text(path: str) -> str:
     ext = path.lower()
