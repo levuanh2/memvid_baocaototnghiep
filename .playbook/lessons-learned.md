@@ -1176,3 +1176,35 @@ smoke-verified trên stack `memvid_auth_smoke` rebuild từ code mới.
   4. Định dạng cần nhị phân ngoài (`soffice` cho `.doc/.odt/.odp`, `tesseract` cho ảnh) chỉ chạy
      khi máy có nó. Máy dev hiện tại KHÔNG có cả hai — chấp nhận rơi về `extract_text` chứ đừng
      tưởng là đã chạy.
+
+## 2026-08-24 - Dán ảnh vào chat: để ảnh thành CHỮ trước cổng pipeline, đừng luồn ảnh qua graph
+
+- **Bối cảnh:** cho phép dán ảnh đề bài vào khung chat để hỏi. Ba kiến trúc khả dĩ:
+  (1) mô hình thị giác đọc ảnh ra chữ, chữ ghép vào câu hỏi, `/query` chạy y như cũ;
+  (2) mô hình thị giác trả lời trực tiếp với chunk đã truy hồi, ảnh đi cùng state;
+  (3) lai — đọc chữ để truy hồi, đưa ảnh lại ở node sinh câu trả lời.
+  Chọn (1).
+- **Vì sao (1) thắng:** ranh giới nằm TRƯỚC cổng QUERY_GRAPH. Retrieval, RRF, rerank, NLI,
+  HITL, trích dẫn, cache, streaming đều không cần biết ảnh tồn tại — không một node nào đổi
+  chữ ký. Cách (2) bắt `q` mang theo blob qua khoá cache, qua checkpoint của HITL, qua SSE:
+  mọi chỗ đó đều giả định state tuần tự hoá được và nhỏ. Nâng lên (3) sau vẫn dễ vì chỉ chạm
+  node cuối, còn đi (2) trước rồi lùi thì phải gỡ ngược khắp graph.
+- **Ba cái bẫy đo được ở tầng model:**
+  1. Model chỉ biết chữ KHÔNG luôn báo lỗi khi nhận `images`. `qwen2.5:7b-instruct` trả HTTP
+     400 (tốt), nhưng `gemma4:e4b` khai `capabilities: [..., "vision", ...]` mà vẫn đáp "hãy
+     gửi ảnh cho tôi" — nhận tham số, phớt lờ nội dung. Nghĩa là cờ capabilities chỉ đủ để ẨN
+     nút trên giao diện, không đủ để tin. Chỉ gọi thật mới biết.
+  2. Model có `thinking` mà không đặt `think: False` thì toàn bộ ngân sách token rơi vào
+     trường `thinking` và `content` về RỖNG. Lúc dò đầu tiên tao tưởng model mù, hoá ra chỉ là
+     đọc nhầm trường.
+  3. `/api/generate` với `images` cho kết quả rỗng ở model mới; `/api/chat` với
+     `messages[].images` thì chạy. Đường API cũng là một biến, không chỉ model.
+- **Prevention:**
+  1. Khả năng phụ thuộc mô hình phải có endpoint trạng thái riêng (`GET /api/vision/status`)
+     để FE ẩn lối vào, VÀ mã lỗi phân biệt được: 503 cho "máy chưa có mô hình" khác hẳn 500
+     cho "code hỏng". Trộn hai cái thì không ai biết nên pull model hay đọc traceback.
+  2. Chữ mô hình đọc từ ảnh phải HIỆN cho người dùng xem lại được (khối gập trong bong bóng
+     tin). Đọc sai là kiểu hỏng số một; giấu nó đi thì câu trả lời lệch trông như model dốt
+     chứ không phải như ảnh mờ.
+  3. Ảnh hỏi-một-lần và ảnh làm-tài-liệu là hai đường khác nhau. Đường chat KHÔNG tạo dòng
+     `documents`, không ingest — có test khoá đúng điều đó (`test_khong_tao_tai_lieu`).

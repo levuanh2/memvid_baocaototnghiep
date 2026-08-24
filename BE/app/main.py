@@ -63,6 +63,10 @@ app = Flask(__name__)
 MAX_UPLOAD_MB = max(1, int(os.getenv('MAX_UPLOAD_MB', '100')))
 app.config['MAX_CONTENT_LENGTH'] = MAX_UPLOAD_MB * 1024 * 1024
 
+# Ảnh dán vào khung chat đi đường riêng, mốc thấp hơn nhiều: nó phải nằm gọn
+# trong RAM để mã hoá base64 gửi sang Ollama, không phải file lưu trữ.
+VISION_MAX_IMAGE_MB = max(1, int(os.getenv('VISION_MAX_IMAGE_MB', '8')))
+
 
 @app.errorhandler(413)
 def _too_large(_err):
@@ -1889,6 +1893,65 @@ def upload_multiple():
             results.append({'file': file.filename, 'error': f'Upload failed: {str(e)}'})
 
     return jsonify({'sources': sources, 'results': results})
+# -------------------------
+# 🖼️ Đọc ảnh dán vào khung chat
+# -------------------------
+@app.get('/api/vision/status')
+def api_vision_status():
+    """FE hỏi trước khi hiện nút kèm ảnh — không có mô hình thì đừng mời người
+    dùng làm việc chắc chắn hỏng."""
+    from app.domains import vision as _vision
+
+    return jsonify({
+        'available': _vision.is_available(),
+        'model': _vision.vision_model(),
+        'max_image_mb': VISION_MAX_IMAGE_MB,
+    })
+
+
+@app.post('/api/vision/transcribe')
+def api_vision_transcribe():
+    """Ảnh → chữ. KHÔNG lưu ảnh: đọc xong là bỏ, chỉ phần chữ đi tiếp sang
+    /query như một câu hỏi thuần chữ.
+
+    Tách khỏi /upload-file có chủ đích — ảnh ở đây là câu hỏi dùng một lần, không
+    phải tài liệu, nên không tạo dòng documents và không đánh chỉ mục."""
+    _uid, err = _require_app_user()
+    if err:
+        return err
+
+    from app.domains.ingest import formats as _formats
+    from app.domains import vision as _vision
+
+    file = request.files.get('image') or request.files.get('file')
+    name = (file.filename or '').strip() if file else ''
+    if not file or not name:
+        return jsonify({'error': 'Missing image'}), 400
+
+    ext = os.path.splitext(name)[1].lower()
+    if ext not in _formats.IMAGE:
+        return jsonify({
+            'error': f'Chỉ đọc được ảnh, không đọc được {ext or name}',
+            'supported_extensions': sorted(_formats.IMAGE),
+        }), 415
+
+    # Đọc dư 1 byte để phân biệt 'vừa đủ mốc' với 'vượt mốc'.
+    cap = VISION_MAX_IMAGE_MB * 1024 * 1024
+    blob = file.read(cap + 1)
+    if len(blob) > cap:
+        return jsonify({
+            'error': f'Ảnh vượt giới hạn {VISION_MAX_IMAGE_MB}MB',
+            'max_image_mb': VISION_MAX_IMAGE_MB,
+        }), 413
+
+    try:
+        return jsonify(_vision.transcribe_image(blob))
+    except _vision.VisionUnavailable as exc:
+        # 503 chứ không 500: máy chưa có mô hình thị giác là tình trạng cấu hình,
+        # không phải lỗi lập trình. FE dựa vào đó để ẩn nút kèm ảnh.
+        return jsonify({'error': str(exc), 'model': _vision.vision_model()}), 503
+
+
 # -------------------------
 # 📚 API tài liệu StudyMap (đặc tả 12.2)
 # -------------------------

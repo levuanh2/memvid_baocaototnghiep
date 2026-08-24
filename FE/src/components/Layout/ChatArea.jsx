@@ -9,6 +9,7 @@ import { createPreviewThrottle } from "../../utils/streamPreview";
 import { shouldFocusComposer, shouldRefocusComposer, shouldFocusOnSlash } from "../../utils/chatFocus";
 import { Icon } from "../ui/Icon";
 import { nodeLabel, processCitations, parseCiteHref, normStem } from "../../utils/evidence";
+import { pickImageFromClipboard, downscaleImage, transcribeImage, getVisionStatus, buildQuestionWithImage, IMAGE_TYPES } from "../../utils/chatImage";
 
 // ── Error helpers (logic unchanged) ────────────────────
 const QUERY_SSE_ERR_FALLBACK = "Loi khi xu ly truy van. Vui long thu lai.";
@@ -122,6 +123,11 @@ export default function ChatArea({ selectedSources, sources = [], onEvidence, hi
   const [streamingPreview, setStreamingPreview] = useState("");
   const [pendingReview, setPendingReview] = useState(null);
   const [reviewSubmitting, setReviewSubmitting] = useState(false);
+  // Ảnh dán vào khung gõ. Sống đúng một lượt gửi: đọc xong chữ là bỏ, không lưu.
+  const [attachedImage, setAttachedImage] = useState(null);   // {file, previewUrl}
+  const [transcribing, setTranscribing] = useState(false);
+  const [visionReady, setVisionReady] = useState(false);
+  const imageInputRef = useRef(null);
   const messagesEndRef = useRef(null);
   const textareaRef = useRef(null);
   const abortControllerRef = useRef(null);
@@ -329,12 +335,82 @@ export default function ChatArea({ selectedSources, sources = [], onEvidence, hi
   };
 
   // ── Send (logic unchanged; + evidence capture) ──────
+  // ── Ảnh dán vào khung chat ───────────────────────────────────────────────
+  // Hỏi một lần lúc mount: không có mô hình thị giác thì đừng hiện nút kèm ảnh,
+  // mời người dùng làm việc chắc chắn hỏng còn tệ hơn là không mời.
+  useEffect(() => {
+    let alive = true;
+    getVisionStatus().then((st) => { if (alive) setVisionReady(Boolean(st?.available)); });
+    return () => { alive = false; };
+  }, []);
+
+  // Thu hồi object URL của ảnh trước, nếu không mỗi lần dán lại rò một blob.
+  const attachImage = useCallback((file) => {
+    if (!file) return;
+    setAttachedImage((prev) => {
+      if (prev?.previewUrl) URL.revokeObjectURL(prev.previewUrl);
+      return { file, previewUrl: URL.createObjectURL(file) };
+    });
+  }, []);
+
+  const clearImage = useCallback(() => {
+    setAttachedImage((prev) => {
+      if (prev?.previewUrl) URL.revokeObjectURL(prev.previewUrl);
+      return null;
+    });
+    if (imageInputRef.current) imageInputRef.current.value = "";
+  }, []);
+
+  useEffect(() => () => {
+    if (attachedImage?.previewUrl) URL.revokeObjectURL(attachedImage.previewUrl);
+  }, [attachedImage]);
+
+  const handlePaste = useCallback((e) => {
+    if (!visionReady || loading || pendingReview) return;
+    const file = pickImageFromClipboard(e.clipboardData);
+    if (!file) return;   // dán chữ thường thì để trình duyệt xử lý như cũ
+    e.preventDefault();
+    attachImage(file);
+  }, [visionReady, loading, pendingReview, attachImage]);
+
+  const handlePickImage = useCallback((e) => {
+    const file = e.target.files?.[0];
+    if (file) attachImage(file);
+  }, [attachImage]);
+
   const handleSend = async () => {
-    if (!input.trim() || loading || pendingReview) return;
+    // Có ảnh thì cho gửi dù chưa gõ chữ — ảnh đã là câu hỏi.
+    if ((!input.trim() && !attachedImage) || loading || pendingReview || transcribing) return;
     setContextCleared(false);          // a new question resumes using conversation context
-    const userMsg = { role: "user", content: input };
+
+    // Đọc ảnh TRƯỚC khi vào luồng hỏi: /query vẫn chỉ nhận chữ, đúng như cũ.
+    let imageText = "";
+    let imageName = "";
+    if (attachedImage) {
+      setTranscribing(true);
+      try {
+        const small = await downscaleImage(attachedImage.file);
+        const read = await transcribeImage(small);
+        imageText = String(read?.text || "").trim();
+        imageName = attachedImage.file?.name || "ảnh dán";
+      } catch (err) {
+        setTranscribing(false);
+        setMessages((prev) => [...prev, { role: "ai", content: getUserFriendlyApiError(err) }]);
+        return;   // giữ nguyên ảnh và câu đang gõ để người dùng thử lại
+      }
+      setTranscribing(false);
+    }
+
+    const question = buildQuestionWithImage(input, imageText);
+    const userMsg = {
+      role: "user",
+      content: input.trim() || "Giải thích nội dung trong ảnh này.",
+      imageText,
+      imageName,
+    };
     setMessages((prev) => [...prev, userMsg]);
     setInput("");
+    clearImage();
     setLoading(true); resetJobState(); setJobNode("Queued"); setSeenNodes(["Queued"]);
     onHighlight?.(null);
     cancelledRef.current = false;
@@ -347,7 +423,7 @@ export default function ChatArea({ selectedSources, sources = [], onEvidence, hi
       const res = await apiFetch(`/query`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ q: userMsg.content, sources: payloadSources?.length ? payloadSources : null, session_id: sessionId || undefined }),
+        body: JSON.stringify({ q: question, sources: payloadSources?.length ? payloadSources : null, session_id: sessionId || undefined }),
         signal: abortControllerRef.current.signal,
       });
       if (!res.ok) throw await _appError(res);  // carries .status for 401/403/404 UX
@@ -598,6 +674,18 @@ export default function ChatArea({ selectedSources, sources = [], onEvidence, hi
                 style={{ background: "var(--bg-elevated)", borderColor: "var(--border-color)", color: "var(--text-primary)" }}>
                 {msg.content}
               </div>
+              {msg.imageText ? (
+                /* Người học phải xem được máy đọc ra gì: đọc sai là kiểu hỏng số một,
+                   và không thấy phần này thì câu trả lời lệch trông như model dốt. */
+                <details className="mt-1.5 text-[12.5px] rounded-[8px] border px-3 py-2"
+                  style={{ borderColor: "var(--border-color)", background: "var(--bg-base)", color: "var(--text-secondary)" }}>
+                  <summary className="cursor-pointer select-none inline-flex items-center gap-1.5 text-text-muted">
+                    <Icon name="Image" size={12} />
+                    Đã đọc từ ảnh{msg.imageName ? ` · ${msg.imageName}` : ""}
+                  </summary>
+                  <div className="mt-1.5 whitespace-pre-wrap">{msg.imageText}</div>
+                </details>
+              ) : null}
             </div>
           ) : (
             <div key={idx} className="self-start w-full max-w-[760px] flex flex-col gap-2 animate-fadeUp">
@@ -684,16 +772,50 @@ export default function ChatArea({ selectedSources, sources = [], onEvidence, hi
           </div>
         )}
 
+        {attachedImage && (
+          <div className="px-4 sm:px-8 pt-3 -mb-1">
+            <div className="inline-flex items-center gap-2.5 rounded-[9px] border px-2 py-2"
+              style={{ borderColor: "var(--border-color)", background: "var(--bg-elevated)" }}>
+              <img src={attachedImage.previewUrl} alt="Ảnh sắp gửi kèm câu hỏi"
+                className="w-11 h-11 object-cover rounded-[6px] border"
+                style={{ borderColor: "var(--border-color)" }} />
+              <div className="text-[12.5px] leading-tight">
+                <div className="text-text-primary">
+                  {transcribing ? "Đang đọc ảnh…" : "Ảnh sẽ được đọc trước khi hỏi"}
+                </div>
+                <div className="text-text-muted">{Math.round((attachedImage.file?.size || 0) / 1024)} KB</div>
+              </div>
+              <button type="button" onClick={clearImage} disabled={transcribing}
+                className="icon-btn w-7 h-7 disabled:opacity-40" aria-label="Bỏ ảnh đính kèm">
+                <Icon name="X" size={14} />
+              </button>
+            </div>
+          </div>
+        )}
+
         <div className="px-4 sm:px-8 py-4 flex items-end gap-3">
+          {visionReady && (
+            <>
+              <input ref={imageInputRef} type="file" className="hidden"
+                accept={IMAGE_TYPES.join(",")} onChange={handlePickImage} />
+              <button type="button" onClick={() => imageInputRef.current?.click()}
+                disabled={loading || Boolean(pendingReview) || transcribing}
+                className="icon-btn w-11 h-11 flex-shrink-0 disabled:opacity-40"
+                aria-label="Đính kèm ảnh" title="Đính kèm ảnh, hoặc dán thẳng vào ô nhập">
+                <Icon name="ImagePlus" size={17} />
+              </button>
+            </>
+          )}
           <div className="flex-1 relative">
             <textarea
               ref={textareaRef}
               rows={1}
-              placeholder={pendingReview ? "Hãy hoàn tất bước duyệt câu trả lời…" : loading ? "Đang chờ phản hồi…" : "Đặt câu hỏi về tài liệu đã chọn…"}
+              placeholder={pendingReview ? "Hãy hoàn tất bước duyệt câu trả lời…" : transcribing ? "Đang đọc ảnh…" : loading ? "Đang chờ phản hồi…" : visionReady ? "Đặt câu hỏi, hoặc dán ảnh đề bài vào đây…" : "Đặt câu hỏi về tài liệu đã chọn…"}
               value={input}
               onChange={handleInput}
               onKeyDown={handleKeyDown}
-              disabled={loading || Boolean(pendingReview)}
+              onPaste={handlePaste}
+              disabled={loading || Boolean(pendingReview) || transcribing}
               className="w-full input-surface text-[14.5px] resize-none min-h-[46px] max-h-[140px] disabled:opacity-60"
               style={{ lineHeight: 1.55 }}
             />
@@ -710,7 +832,7 @@ export default function ChatArea({ selectedSources, sources = [], onEvidence, hi
           ) : (
             <button
               onClick={handleSend}
-              disabled={!input.trim() || Boolean(pendingReview)}
+              disabled={(!input.trim() && !attachedImage) || Boolean(pendingReview) || transcribing}
               className="btn-primary w-11 h-11 !p-0 rounded-[9px] inline-flex items-center justify-center flex-shrink-0"
               aria-label="Gửi câu hỏi"
             >
