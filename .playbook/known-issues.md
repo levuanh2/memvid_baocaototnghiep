@@ -718,3 +718,27 @@ chứa "hàm hợp"). Chunk quá thô làm truy hồi kém — chưa sửa, cầ
 - **Prevention:** khi đo hay so sánh chất lượng truy hồi, PHẢI ghi rõ đường nào — ba đường cho ba
   câu trả lời khác nhau với cùng một câu hỏi. Kịch bản benchmark quên `use_memory_tree: false` sẽ
   đo nhầm cây nhớ mà tưởng đang đo RAG.
+
+## (ĐÃ SỬA 2026-08-24) `DATA_DIR` trỏ sang DỰ ÁN KHÁC — toàn bộ trạng thái chạy nằm ngoài repo
+
+- **Triệu chứng:** đi tìm timeline node của một truy vấn vừa chạy, `BE/logs.sqlite` đứng im từ
+  2026-08-11. Tưởng instrumentation không tồn tại, suýt viết lại từ đầu.
+- **Nguyên nhân:** `BE/.env` đặt `DATA_DIR=e:/memvid_NCKH/MemVid_New/BE` — thư mục của một dự án
+  KHÁC. `logger.log_db_path()`, index FAISS, cây nhớ, `checkpoints.sqlite`, `conversations.sqlite`,
+  `jobs.sqlite`, `sessions.sqlite` đều neo theo `DATA_DIR`, nên mọi thứ sinh ra lúc chạy rơi vào
+  `MemVid_New/BE`. Kiểm chứng bằng dấu thời gian: các file bên đó mang giờ 17:21 hôm nay trong khi
+  bản trong repo dừng ở tháng 7.
+- **Vì sao ẩn được lâu:** trỏ sai KHÔNG gây lỗi nào. App chạy bình thường, upload được, hỏi được,
+  trả lời đúng — chỉ là đọc và ghi ở một cây thư mục khác. Không có exception, không có log đỏ.
+  Chỉ lộ ra khi đi tìm một file cụ thể và thấy nó cũ.
+- **Cách xử lý:** dừng BE, sao lưu bản trong repo sang `BE/_backup-<timestamp>/`, chép
+  `index/ memory/ input_docs/` và các `*.sqlite` (KÈM `-wal` và `-shm`, nếu không mất phần ghi chưa
+  checkpoint) từ thư mục cũ về, rồi đặt
+  `DATA_DIR=e:/memvid_NCKH/MemVid_BaoCaoTotNghiep/BE`.
+- **Phòng ngừa (đã thêm):** `main.py` in `DATA_DIR` mỗi lần khởi động và kêu to khi nó nằm ngoài
+  `BE_ROOT`. Một dòng in rẻ hơn nhiều so với vài tháng đo nhầm chỗ.
+- **Verify:** `BE/logs.sqlite` 185 bản ghi, mới nhất trùng giờ truy vấn vừa chạy; log bên
+  `MemVid_New` dừng hẳn ở thời điểm chuyển. Truy vấn RAG sau khi chuyển vẫn chạy trọn (index còn
+  nguyên, 19 sự kiện token).
+- **Còn lại:** `BE/_backup-<timestamp>/` chứa bản CŨ tháng 7 (đã bị thay). Thư mục
+  `e:/memvid_NCKH/MemVid_New/BE` vẫn nguyên vẹn làm bản gốc. Xoá được khi đã yên tâm.

@@ -1238,3 +1238,36 @@ smoke-verified trên stack `memvid_auth_smoke` rebuild từ code mới.
      duy nhất.
   4. Kéo phải gắn listener trên `window`, không phải trên tay cầm: con trỏ chạy nhanh hơn re-render
      nên nó rời khỏi tay cầm giữa chừng và thao tác "tuột".
+
+## 2026-08-24 - Cấu hình trỏ sai không bao giờ nổ: nó chỉ làm mọi phép đo sai thầm lặng
+
+- **Chuỗi sự việc:** đi tìm 198 giây "im lặng" trên đường RAG → mở `BE/logs.sqlite` → thấy bản ghi
+  mới nhất là 2026-08-11 → kết luận hụt rằng "không có instrumentation, phải tự thêm". Đọc kỹ
+  `logger.log_db_path()` mới thấy nó neo theo `DATA_DIR`, và `DATA_DIR` đang trỏ sang
+  `MemVid_New/BE` — thư mục của dự án khác. File log thật nằm ở đó, đầy đủ, và trả lời câu hỏi
+  trong một truy vấn SQL: `VerifyContext` chạy **197 691 ms**, chiếm 88% toàn bộ truy vấn.
+- **Root cause của việc suýt làm sai:** hai lần liên tiếp tao định KẾT LUẬN từ chỗ vắng dữ liệu.
+  Lần một: "log trống nghĩa là không có logging". Lần hai (trước đó): "job `interrupted` nghĩa là
+  pipeline chết". Cả hai đều sai, và cả hai đều là suy diễn từ sự vắng mặt thay vì truy tới nguồn.
+- **Prevention:**
+  1. Dữ liệu vắng mặt KHÔNG phải bằng chứng. Trước khi kết luận "tính năng này không tồn tại", truy
+     xem đường dẫn/khoá/cờ nào quyết định nơi nó xuất hiện. Ở đây chỉ cần đọc thêm 5 dòng
+     `log_db_path()` là ra.
+  2. Mọi biến cấu hình trỏ đường dẫn (`DATA_DIR`, `LOG_DB_PATH`, `MD_DIR`, `USERS_DB_PATH`) phải
+     được IN RA lúc khởi động. Trỏ sai không gây exception — app vẫn upload được, hỏi được, trả lời
+     đúng — nên không có tín hiệu nào khác ngoài việc tự in ra. Đã thêm cảnh báo khi `DATA_DIR` nằm
+     ngoài `BE_ROOT`.
+  3. Chép trạng thái SQLite phải kèm `-wal` và `-shm`. Chỉ chép `.sqlite` là mất phần ghi chưa
+     checkpoint, và mất im lặng.
+  4. Trước khi ghi đè thư mục dữ liệu: sao lưu bên đích, và KHÔNG xoá bên nguồn. Bên nguồn còn
+     nguyên là bản lui thật sự, thư mục `_backup-*` chỉ là lớp đệm.
+- **Số đo thu được nhờ tìm ra chỗ đúng (truy vấn RAG 225s):**
+  | Node | ms | % |
+  |---|---|---|
+  | VerifyContext (NLI mDeBERTa) | 197 691 | 88% |
+  | RerankDocuments (bge-reranker) | 18 327 | 8% |
+  | GenerateAnswer (LLM sinh chữ) | 7 427 | 3% |
+  | RetrieveFAISS | 727 | 0.3% |
+  | CheckSources + CacheLookup + GradeDocuments + ContextBuilder | < 30 | ~0% |
+  Khâu sinh câu trả lời chỉ chiếm 3%. `NLI_TIMEOUT_SEC=90` nhưng node chạy 197s — hạn đó rõ ràng
+  không phải hạn cho cả node. Đây là chỗ mổ tiếp.

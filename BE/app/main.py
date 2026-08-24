@@ -96,6 +96,22 @@ print("=== AI MODE ===")
 print("OLLAMA_HOST:", os.getenv("OLLAMA_HOST"))
 print("GEMINI_API_KEY:", "SET" if os.getenv("GEMINI_API_KEY") else "MISSING")
 
+# DATA_DIR quyết định index FAISS, cây nhớ, node log, checkpoint và hội thoại nằm
+# ở đâu. Trỏ sai thì KHÔNG có lỗi nào nổ: app chạy bình thường, chỉ là đọc/ghi vào
+# thư mục khác. Đã từng trỏ sang một dự án khác suốt nhiều tháng mà không ai biết,
+# và chỉ lộ ra khi đi tìm node log không thấy đâu. In ra mỗi lần khởi động, kêu to
+# khi nó nằm ngoài cây BE.
+try:
+    from shared.paths import BE_ROOT as _be_root
+
+    _data_dir = Path(os.getenv("DATA_DIR") or _be_root).resolve()
+    print("DATA_DIR:", _data_dir)
+    if _data_dir != Path(_be_root).resolve():
+        print(f"⚠️  [DATA_DIR] nằm NGOÀI {Path(_be_root).resolve()} — index, cây nhớ và "
+              f"node log sẽ đọc/ghi ở đó, không phải trong repo này.")
+except Exception as _exc:
+    print("DATA_DIR: không xác định được —", _exc)
+
 # CORS:
 # - Mặc định giữ hành vi hiện tại (cho phép tất cả origins) để không phá flow/FE.
 # - Khi deploy (Railway + Vercel) nên set CORS_ORIGINS để allowlist domain Vercel.
