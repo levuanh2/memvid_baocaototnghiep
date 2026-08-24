@@ -1112,3 +1112,35 @@ smoke-verified trên stack `memvid_auth_smoke` rebuild từ code mới.
   4. Test round-trip PURE (không import thư viện thật) phải cover: giữ nguyên note/chunk_refs/kind
      của node sống qua vòng record→adapter→record; node mới → default đúng; node xoá không rò lại;
      node mồ côi/root-thừa được rescue chứ không mất tích.
+
+## 2026-08-24 - Gỡ `reports/` khỏi git: tài sản của dự án khác đừng nằm trong repo mã nguồn
+
+- **Bối cảnh:** `reports/` (112 file tracked, 1.6MB) chứa báo cáo NCKH — 5 chương luận văn, khảo sát
+  paper, config thí nghiệm E0–E7/R0–R2, dataset `corpus_v1`, baseline benchmark. Đó là deliverable
+  của một dự án báo cáo riêng, không phải mã nguồn StudyMap. Gỡ bằng `git rm -r --cached` + thêm
+  `reports/` vào `.gitignore` (file giữ nguyên trên đĩa để bê sang repo báo cáo).
+- **Root cause của cái bẫy:** trước khi gỡ phải hỏi "code có đọc nó không". Lần đầu tao `grep -rn
+  "reports/"` chỉ trong `BE/app BE/scripts BE/tests scripts` — tự chọn tay danh sách thư mục vì
+  `grep -rn` từ gốc treo quá 120s (`node_modules` + `.venv`). Cách đó **sót `BE/evaluation/`**: 4 file
+  nữa (`aggregate.py`, `runner.py`, `review_app.py`, `candidate_package.py`) cũng nhắc `reports/`.
+  Chỉ khi lệnh grep toàn cây chạy nền xong mới lòi ra. Tổng thật là 10 chỗ, không phải 6:
+  2 script perf + 1 script playwright GHI ra `reports/` và đã tự `mkdir(parents=True, exist_ok=True)`;
+  3 test ĐỌC `reports/evaluation/datasets/corpus_v1`; 4 file `BE/evaluation/` chỉ dùng đường dẫn làm
+  **default của argparse / default parameter sau `if __name__ == "__main__"`** — không chạy lúc import,
+  đè được bằng cờ `--dataset` / `--reports-root`, nên không phải ràng buộc. Chỉ nhóm ĐỌC-lúc-chạy mới
+  là ràng buộc thật. May là lần sót này vô hại; lần sau có thể không.
+- **Điều bất ngờ:** 3 test đọc đó vốn đã fail sẵn 17 ca vì đường dẫn tương đối sai gốc CWD (chi tiết
+  ở `known-issues.md`). Nghĩa là ràng buộc tưởng chặn việc gỡ hoá ra là một lỗi có sẵn — gỡ file
+  không làm gãy gì mới, mà còn ép phải sửa cái lỗi đã ẩn từ lâu.
+- **Prevention:**
+  1. Trước khi gỡ/xoá thư mục dữ liệu, quét **CẢ CÂY** — đừng tự chọn tay danh sách thư mục, đó là
+     cách bỏ sót. Muốn nhanh thì loại thư mục rác chứ đừng thu hẹp phạm vi:
+     `grep -rn "reports/" . --exclude-dir=node_modules --exclude-dir=.venv --exclude-dir=.git`
+     (hoặc `git grep -n "reports/"` — chỉ quét file đã track, nhanh nhất và không cần cờ loại trừ).
+     Rồi tách kết quả làm ba: "ghi ra" (an toàn nếu có `mkdir(parents=True, exist_ok=True)`),
+     "default của CLI" (an toàn, đè được bằng cờ), và "đọc lúc chạy/lúc import" — chỉ nhóm cuối mới
+     chặn được việc gỡ.
+  2. `git rm --cached` (giữ file trên đĩa) là mặc định đúng khi gỡ tài sản còn dùng ở nơi khác. Chỉ
+     `git rm -r` khi chắc chắn không cần bản làm việc. Cả hai đều lấy lại được từ lịch sử git.
+  3. Dữ liệu bị gitignore mà test cần → guard `pytest.skip(..., allow_module_level=True)` ngay tại
+     module, không để `FileNotFoundError` giữa fixture.

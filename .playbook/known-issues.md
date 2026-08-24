@@ -583,3 +583,23 @@ chứa "hàm hợp"). Chunk quá thô làm truy hồi kém — chưa sửa, cầ
 - **Tham chiếu code:** `FE/src/components/mindmap/MindElixirView.jsx` (banner generating, dòng có
   comment "Honest mitigation"), `FE/src/components/Layout/SidebarRight.jsx::handleMindmapDone`.
 
+
+## (ĐÃ SỬA 2026-08-24) 17 test evaluation-review fail vì đường dẫn dataset tương đối sai gốc
+
+- **Triệu chứng:** `cd BE && pytest tests/test_evaluation_review.py tests/test_evaluation_review_app.py`
+  → 17 failed, đều chết ở `shutil.copytree(SOURCE_DATASET, root)` với `FileNotFoundError`. Nằm im
+  trong nhóm "29 test BE fail sẵn" nên không ai truy.
+- **Nguyên nhân:** hai file khai báo `Path("reports/evaluation/datasets/corpus_v1")` — đường dẫn
+  TƯƠNG ĐỐI theo CWD. Nhưng `evaluation.review_app` chỉ import được khi CWD = `BE/`, còn `reports/`
+  lại nằm ở gốc repo (`BE/../reports`). Hai ràng buộc mâu thuẫn: CWD nào cũng hỏng một nửa. Không có
+  CWD nào từng chạy được cả hai.
+- **Cách xử lý:** thêm guard module-level ngay sau chỗ khai báo hằng — `if not SOURCE.exists():
+  pytest.skip(..., allow_module_level=True)`. Cùng lúc `reports/` đã gỡ khỏi git (báo cáo NCKH là dự
+  án riêng, xem `.gitignore`), nên bản clone sạch cũng không có dataset và guard này là đường sống
+  duy nhất. 17 failed → 17 skipped.
+- **Prevention:** đường dẫn dữ liệu trong test KHÔNG dùng chuỗi tương đối trần. Neo theo file test:
+  `Path(__file__).resolve().parents[2] / "reports" / ...` — không phụ thuộc CWD. Nếu dữ liệu nằm
+  ngoài git (dataset nặng, tài sản dự án khác), test phải skip có thông báo chứ đừng fail: fail giả
+  làm loãng danh sách fail thật, đúng như trường hợp này (ẩn 4 tháng trong 29 fail).
+- **Verify:** `cd BE && .venv/Scripts/python.exe -m pytest tests/test_evaluation_review.py
+  tests/test_evaluation_review_app.py -q` → `2 skipped`.

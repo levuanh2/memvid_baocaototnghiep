@@ -21,6 +21,15 @@ from evaluation.review import (
 
 SOURCE_DATASET = Path("reports/evaluation/datasets/corpus_v1")
 
+# Bộ dữ liệu này sống ngoài git (reports/ nằm trong .gitignore — nó thuộc dự án
+# báo cáo NCKH riêng). Bản clone sạch không có nó, nên skip thay vì gãy.
+if not SOURCE_DATASET.exists():
+    pytest.skip(
+        "Thiếu reports/evaluation/datasets/corpus_v1 — bộ dữ liệu thực nghiệm không theo git",
+        allow_module_level=True,
+    )
+
+
 
 def _write_csv(path: Path, fields: list[str], rows: list[dict]) -> None:
     with path.open("w", encoding="utf-8-sig", newline="") as handle:

@@ -13,6 +13,15 @@ from evaluation.review import import_review
 
 SOURCE = Path("reports/evaluation/datasets/corpus_v1")
 
+# Bộ dữ liệu này sống ngoài git (reports/ nằm trong .gitignore — nó thuộc dự án
+# báo cáo NCKH riêng). Bản clone sạch không có nó, nên skip thay vì gãy.
+if not SOURCE.exists():
+    pytest.skip(
+        "Thiếu reports/evaluation/datasets/corpus_v1 — bộ dữ liệu thực nghiệm không theo git",
+        allow_module_level=True,
+    )
+
+
 
 def fixture(tmp_path: Path) -> Path:
     root = tmp_path / "corpus_v1"

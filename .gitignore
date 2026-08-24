@@ -83,3 +83,8 @@ pytest-cache-files-*/
 
 # Output của bước làm sạch tài liệu (sinh lại được từ input_docs)
 BE/cleaned_md/
+
+# Báo cáo NCKH + dữ liệu thực nghiệm đi kèm — thuộc dự án báo cáo riêng,
+# không phải mã nguồn StudyMap. File vẫn nằm trên đĩa, chỉ không theo git.
+# Test đọc reports/evaluation/datasets/corpus_v1 sẽ tự skip khi thiếu.
+reports/
