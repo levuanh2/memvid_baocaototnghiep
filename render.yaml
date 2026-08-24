@@ -130,6 +130,10 @@ services:
         value: "0"
       - key: NLI_ENABLED
         value: "0"
+      # Không dừng xin người duyệt: câu trả lời đi thẳng ra. Mặc định trong
+      # shared/config.py là 1, nên phải đặt tường minh ở đây.
+      - key: HITL_ENABLED
+        value: "0"
       - key: EMBEDDING_WARMUP_ENABLED
         value: "0"
 

@@ -661,3 +661,19 @@ chứa "hàm hợp"). Chunk quá thô làm truy hồi kém — chưa sửa, cầ
   phải thử với StrictMode bật — bug này vô hình nếu chỉ nhìn một lượt mount.
 - **Verify:** kịch bản playwright đặt sẵn trạng thái, vào `/app`, đếm `.panel-spine` = 2 và
   localStorage giữ nguyên; thêm vòng thu gọn → tải lại → vẫn 1 gáy sách.
+
+## (KHÔNG PHẢI LỖI) `status: interrupted` của /query-status là HITL đang chờ duyệt, không phải job chết
+
+- **Nhầm lẫn:** thấy `/query-status/<id>` trả `{"status": "interrupted"}` sau vài giây rồi kết luận
+  pipeline truy vấn hỏng. Sai.
+- **Sự thật:** `main.py:1421 _mark_query_interrupted()` — "HITL: đánh dấu job chờ người duyệt (SSE
+  coi 'interrupted' là terminal)". Với `HITL_ENABLED=1`, graph dừng ở cổng duyệt và job mang đúng
+  trạng thái đó, kèm `result.payload.review = {answer, job_id, type: "review"}`. Câu trả lời đã có
+  sẵn trong payload, chỉ chờ người bấm duyệt qua `/query-resume/<job_id>`.
+- **Cách phân biệt:** job chết thật thì `result` rỗng hoặc `error` khác None. Job chờ duyệt thì
+  `result.payload.review` tồn tại. Đừng coi `interrupted` là mã lỗi — nó nằm trong `TERMINAL_STATUSES`
+  của `jobs_store` nhưng CỐ Ý không bị xoá `token_buffer` vì còn resume được.
+- **Lưu ý khi viết script kiểm thử:** vòng lặp poll mà dừng ở `interrupted` rồi báo "thất bại" sẽ
+  báo động giả mỗi lần HITL bật. Phải đọc `result.payload.review` trước khi kết luận.
+- **Trạng thái hiện tại:** `HITL_ENABLED=0` trong `BE/.env` và trong `render.yaml` (mặc định của
+  `shared/config.py` là `1`, nên phải đặt tường minh). Query đi thẳng `running` → `done`.
