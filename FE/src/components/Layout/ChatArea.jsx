@@ -5,6 +5,8 @@ import remarkBreaks from "remark-breaks";
 import { apiFetch, apiUrl, clearConversationContext, deleteConversation, resumeQuery, _appError, isNotFoundOrForbiddenError, isUnauthorizedError, getUserFriendlyApiError } from "../../utils/api";
 import { newConversationId } from "../../utils/conversation";
 import { pollQueryStatus, shouldPollFallback } from "../../utils/queryPolling";
+import { streamSse } from "../../utils/sseStream";
+import { getToken } from "../../auth/tokenStore";
 import { createPreviewThrottle } from "../../utils/streamPreview";
 import { shouldFocusComposer, shouldRefocusComposer, shouldFocusOnSlash } from "../../utils/chatFocus";
 import { Icon } from "../ui/Icon";
@@ -169,7 +171,13 @@ export default function ChatArea({ selectedSources, sources = [], onEvidence, hi
       const throttle = createPreviewThrottle(() => setStreamingPreview(streamAccRef.current));
       previewThrottleRef.current = throttle;
       if (eventSourceRef.current) { try { eventSourceRef.current.close(); } catch {} }
-      const es = new EventSource(apiUrl(`/query-stream/${encodeURIComponent(jobId)}`));
+
+      // `fetch` + ReadableStream thay cho `EventSource`: EventSource không gửi được
+      // header nên không đính được Bearer, và /query-stream gọi _require_app_user()
+      // ngay dòng đầu — mọi kết nối đều 401 rồi tụt về polling, mất sạch token chảy
+      // dần. `abort()` đóng vai trò `es.close()` cũ, nên ref vẫn giữ hình dạng đó.
+      const ctrl = new AbortController();
+      const es = { close: () => ctrl.abort() };
       eventSourceRef.current = es;
 
       const tick = setInterval(() => {
@@ -180,9 +188,9 @@ export default function ChatArea({ selectedSources, sources = [], onEvidence, hi
         }
       }, 500);
 
-      es.onmessage = (e) => {
+      const onMessage = (raw) => {
         try {
-          const d = JSON.parse(e.data);
+          const d = JSON.parse(raw);
           if (d.type === "token" && d.content) { streamAccRef.current += d.content; throttle.schedule(); }
           const isStatus = d.type === "status" || d.type == null;
           if (isStatus) {
@@ -215,16 +223,35 @@ export default function ChatArea({ selectedSources, sources = [], onEvidence, hi
         } catch {}
       };
 
-      es.onerror = () => {
-        clearInterval(tick); try { es.close(); } catch {}
-        throttle.cancel();
-        streamAccRef.current = ""; setStreamingPreview("");
-        // EventSource gives no status here (opaque). Under protected mode this is the
-        // no-Authorization 401; mark it so handleSend can fall back to authed polling.
-        const e = new Error("Mất kết nối realtime (SSE). Vui lòng thử lại.");
-        e.sseConnectionLost = true;
-        reject(e);
-      };
+      const token = getToken();
+      streamSse(apiUrl(`/query-stream/${encodeURIComponent(jobId)}`), {
+        headers: token ? { Authorization: `Bearer ${token}` } : {},
+        signal: ctrl.signal,
+        onEvent: onMessage,
+      })
+        .then(() => {
+          // Luồng đóng mà chưa có khung status nào chốt job: coi như mất kết nối để
+          // handleSend còn dùng lại đường polling, đúng như hành vi onerror cũ.
+          clearInterval(tick);
+          throttle.cancel();
+          streamAccRef.current = ""; setStreamingPreview("");
+          const e = new Error("Luồng realtime kết thúc sớm. Vui lòng thử lại.");
+          e.sseConnectionLost = true;
+          reject(e);
+        })
+        .catch((err) => {
+          clearInterval(tick);
+          throttle.cancel();
+          streamAccRef.current = ""; setStreamingPreview("");
+          if (cancelledRef.current || err?.name === "AbortError") {
+            reject(new Error("CANCELLED"));
+            return;
+          }
+          const e = new Error("Mất kết nối realtime (SSE). Vui lòng thử lại.");
+          e.sseConnectionLost = true;
+          e.cause = err;
+          reject(e);
+        });
     });
 
   const stemBaseLoose = (s) => String(s || "").trim().toLowerCase().replace(/_\d{8}_\d{6}$/, "");

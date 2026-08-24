@@ -677,3 +677,44 @@ chứa "hàm hợp"). Chunk quá thô làm truy hồi kém — chưa sửa, cầ
   báo động giả mỗi lần HITL bật. Phải đọc `result.payload.review` trước khi kết luận.
 - **Trạng thái hiện tại:** `HITL_ENABLED=0` trong `BE/.env` và trong `render.yaml` (mặc định của
   `shared/config.py` là `1`, nên phải đặt tường minh). Query đi thẳng `running` → `done`.
+
+## (ĐÃ SỬA 2026-08-24) Không có chữ chảy dần trong chat — EventSource không gửi được Bearer
+
+- **Triệu chứng:** hỏi xong ngồi im vài phút rồi câu trả lời hiện MỘT CỤC. Console báo
+  `GET /query-stream/<job_id> 401 UNAUTHORIZED`.
+- **Nguyên nhân:** `ChatArea.jsx` dùng `new EventSource(...)`. Đặc tả EventSource KHÔNG cho đặt
+  header, nên không có cách nào đính `Authorization: Bearer`. Backend `/query-stream` gọi
+  `_require_app_user()` ngay dòng đầu → 401 → `onerror` → cờ `sseConnectionLost` → tụt về
+  `pollQueryStatus`. Polling chỉ lấy kết quả cuối nên mất sạch token chảy dần. Đường ống backend
+  luôn đúng: `query_graph.py:595` gọi `_append_token` từng mẩu, `/query-stream` đọc `token_buffer`
+  mỗi `SSE_POLL_INTERVAL_SEC=0.4` rồi đẩy `{"type":"token"}`.
+- **Cách xử lý:** `utils/sseStream.js` — `fetch()` + `ReadableStream`, tự tách khung SSE
+  (`parseSseChunk`, hàm thuần, 9 ca test). `fetch` gửi được header và huỷ được bằng
+  `AbortController`. Endpoint backend KHÔNG đổi một dòng. Đường polling giữ nguyên làm lưới an toàn.
+- **Hai cách đã cân nhắc và bỏ:** nhét token vào query string (`?token=`) làm rò bearer vào log máy
+  chủ và referrer; cấp vé dùng-một-lần thì đúng nhưng phải thêm route + bảng + hạn dùng.
+- **Cửa gác thứ hai cần biết:** `query_graph.py:89` ép `QUERY_STREAM_TOKENS = False` khi
+  `HITL_ENABLED` — "tắt stream token để không lộ bản nháp chưa duyệt". Bật HITL thì dù sửa vận
+  chuyển vẫn KHÔNG có token. Hai chỗ chặn độc lập nhau.
+- **Verify:** gọi thẳng SSE có Bearer → HTTP 200 `text/event-stream`, nhận 14 sự kiện token / 525
+  ký tự; không Bearer → 401. `npx vitest run` 27 file, 212 passed.
+
+## (KHÔNG PHẢI LỖI) Truy vấn mặc định KHÔNG đi đường RAG — `use_memory_tree` mặc định True
+
+- **Nhầm lẫn:** thấy chuỗi node `RetrieveMemory -> Finalize` (13–20s, không có `GenerateAnswer`,
+  `sources: 0`) rồi tưởng pipeline bị cắt hoặc streaming hỏng.
+- **Sự thật:** `main.py` route `/query` đọc `use_memory_tree = data.get('use_memory_tree', True)`.
+  Mặc định BẬT, nên câu hỏi đi đường cây-nhớ và trả lời từ tóm tắt cây, payload có
+  `query_type` + `memory_nodes`, KHÔNG có `sources`. Đường RAG đầy đủ
+  (`RerankDocuments -> VerifyContext -> GenerateAnswer -> Finalize`) chỉ chạy khi gửi
+  `use_memory_tree: false`. `_append_token` nằm trong `GenerateAnswer`, nên đường cây-nhớ
+  KHÔNG BAO GIỜ stream token — đúng thiết kế, không phải lỗi.
+- **Ba đường đo được cho cùng một câu hỏi:**
+  | Đường | Chuỗi node | Thời gian | Token |
+  |---|---|---|---|
+  | Cache trúng (Redis) | `CheckSources -> RetrieveMemory -> Finalize` | 40s | 0 |
+  | Cây nhớ (mặc định) | `RetrieveMemory -> Finalize` | 13–20s | 0 |
+  | RAG đầy đủ | `RerankDocuments -> VerifyContext -> GenerateAnswer -> Finalize` | 225s | 14 |
+- **Prevention:** khi đo hay so sánh chất lượng truy hồi, PHẢI ghi rõ đường nào — ba đường cho ba
+  câu trả lời khác nhau với cùng một câu hỏi. Kịch bản benchmark quên `use_memory_tree: false` sẽ
+  đo nhầm cây nhớ mà tưởng đang đo RAG.
