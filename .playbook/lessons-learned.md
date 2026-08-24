@@ -1208,3 +1208,33 @@ smoke-verified trên stack `memvid_auth_smoke` rebuild từ code mới.
      chứ không phải như ảnh mờ.
   3. Ảnh hỏi-một-lần và ảnh làm-tài-liệu là hai đường khác nhau. Đường chat KHÔNG tạo dòng
      `documents`, không ingest — có test khoá đúng điều đó (`test_khong_tao_tai_lieu`).
+
+## 2026-08-24 - Bố cục ba cột: gáy sách thay cho nút nổi, và chụp màn hình bắt được thứ đọc code không thấy
+
+- **Bối cảnh:** hai cột bên chỉ đóng mở được dưới breakpoint `md`. Từ 768px trở lên chúng đứng cứng
+  ở 252px và 326px — trên laptop 1366px khung đọc chỉ còn ~700px và không nới được. Thêm: thu gọn
+  trên màn rộng, kéo đổi bề rộng, và gập khối "Tạo từ tài liệu" trong cột phải.
+- **Quyết định hình thức:** cột thu gọn KHÔNG biến mất sau một nút nổi mà trở thành **gáy sách** —
+  dải dọc 34px mang tên panel đặt bằng `writing-mode: vertical-rl`. Lý do: đây là "phòng đọc", thứ
+  bị đẩy sang bên của một bàn đọc vẫn phải nhìn thấy và đọc được, không phải đoán bằng biểu tượng.
+  Tên đặt dọc nên dải hẹp mà vẫn mang chữ thật.
+- **Ba thứ chỉ CHỤP MÀN HÌNH mới thấy, đọc code không thấy:**
+  1. Thanh kéo tự vẽ vạch, cộng với `border-r` sẵn có của `<aside>` thành **đường đôi 2px**. Sửa:
+     ở chế độ màn rộng bỏ border của aside, thanh chia CHÍNH LÀ đường kẻ.
+  2. Chữ gợi ý trong ô nhập tao viết dài thêm ("…dán ảnh đề bài vào đây…") xuống dòng trong ô cao
+     46px rồi **bị xén mất nửa dòng dưới** ở 390px và 320px. CSS không đổi được nội dung
+     `placeholder`, nên phải nghe `matchMedia("(min-width: 640px)")` và đổi câu theo bề rộng.
+  3. Hai gáy sách đọc ngược chiều nhau vì tao xoay 180° cái bên phải cho "giống gáy sách thật".
+     Nhìn vào thì lệch chứ không tinh tế. Bỏ xoay.
+- **Prevention:**
+  1. Việc thiết kế phải NHÌN, không suy luận. Cài playwright rồi chụp ở 320/390/1024/1366/1920 tốn
+     vài phút, rẻ hơn nhiều so với đẩy một bố cục xén chữ. Chụp riêng vùng cần soi (`clip=`) thay
+     vì cả trang — ảnh nhỏ, nhìn rõ chi tiết hơn.
+  2. Tương tác phải kiểm bằng kịch bản, không bằng mắt: kéo, kéo quá tay để thử kẹp biên, mũi tên
+     bàn phím, Enter đặt lại, thu gọn, TẢI LẠI, bung ra. Chính bước "tải lại" mới lòi ra bug mất
+     trạng thái (xem `known-issues.md`) — nếu chỉ chụp ảnh tĩnh thì không bao giờ thấy.
+  3. Thanh chia kéo được phải là `role="separator"` + `aria-orientation="vertical"` +
+     `aria-valuenow/min/max`, và phải dùng được bằng bàn phím. Kéo chuột là lối tắt, không phải lối
+     duy nhất.
+  4. Kéo phải gắn listener trên `window`, không phải trên tay cầm: con trỏ chạy nhanh hơn re-render
+     nên nó rời khỏi tay cầm giữa chừng và thao tác "tuột".

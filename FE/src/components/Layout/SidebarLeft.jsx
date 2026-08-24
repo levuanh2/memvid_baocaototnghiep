@@ -35,7 +35,7 @@ const getStatusConfig = (status, substatus, canQuery) => {
 
 const formatFileName = (name = "") => name.replace(/\.(mp4|avi|mov|mkv|webm|mp3|wav|pdf|txt|docx)$/i, "");
 
-export default function SidebarLeft({ selectedSources, setSelectedSources, onSourcesChange, onClose }) {
+export default function SidebarLeft({ selectedSources, setSelectedSources, onSourcesChange, onClose, collapsible = false }) {
   const [sources, setSources] = useState([]);
   const [menuOpen, setMenuOpen] = useState(null);
   const [uploading, setUploading] = useState(false);
@@ -172,7 +172,11 @@ export default function SidebarLeft({ selectedSources, setSelectedSources, onSou
             {sources.length} tài liệu · <span className="text-brand">{selectedSources.length} đang chọn</span>
           </div>
         </div>
-        <button onClick={onClose} className="md:hidden icon-btn w-8 h-8" aria-label="Đóng">
+        {/* Khổ hẹp: đóng ngăn kéo. Khổ rộng: thu cột về gáy sách. */}
+        <button onClick={onClose}
+          className={`icon-btn w-8 h-8${collapsible ? "" : " md:hidden"}`}
+          aria-label={collapsible ? "Thu gọn cột" : "Đóng"}
+          title={collapsible ? "Thu gọn cột" : "Đóng"}>
           <Icon name="X" size={16} />
         </button>
       </div>

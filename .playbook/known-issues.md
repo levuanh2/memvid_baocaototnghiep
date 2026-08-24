@@ -639,3 +639,25 @@ chứa "hàm hợp"). Chunk quá thô làm truy hồi kém — chưa sửa, cầ
   (`_ingest_uploaded_file`) chứ không phải ở từng route — ba route cùng đi qua đó nên một guard
   che hết, thêm route thứ tư cũng tự có.
 - **Verify:** `test_upload_tu_choi_duoi_la_va_khong_ghi_dia` khẳng định 415 VÀ thư mục lưu vẫn rỗng.
+
+## (ĐÃ SỬA 2026-08-24) Trạng thái bố cục tự xoá chính nó — đọc localStorage trong useEffect + StrictMode
+
+- **Triệu chứng:** thu gọn cột bên, `localStorage` ghi đúng `{"collapsed":{"left":true}}`, tải lại
+  trang thì cột mở lại và giá trị đã lưu bị thay bằng mặc định. Đo bằng playwright: đặt sẵn
+  `{left:true,right:true}` rồi vào `/app` → `.panel-spine` đếm được **0**, và giá trị trong
+  localStorage đổi thành `{left:false,right:false}`.
+- **Nguyên nhân:** hook nạp trạng thái trong `useEffect` (đọc) và ghi trong một `useEffect` khác.
+  React chạy effect theo thứ tự khai báo trong CÙNG một commit: effect-đọc gọi `setState` (mới xếp
+  hàng, chưa có hiệu lực) rồi bật cờ `hydrated`, ngay sau đó effect-ghi thấy cờ đã bật nên ghi
+  **giá trị mặc định của lần render đầu** đè lên. Với `StrictMode` (dev gọi effect hai lượt), lượt
+  đọc thứ hai đọc đúng cái mặc định vừa bị ghi đè — dữ liệu mất hẳn, không phải chỉ nhấp nháy.
+- **Cách xử lý:** đọc `localStorage` NGAY trong initializer của `useState` (qua một `useRef` giữ
+  kết quả để không đọc lại mỗi lần render), bỏ hẳn effect-đọc, và bỏ qua lượt ghi đầu tiên bằng
+  `firstWrite` ref. Không còn lần render nào tồn tại trước khi trạng thái được nạp, nên không còn
+  gì để ghi đè.
+- **Prevention:** trong SPA thuần (không render phía máy chủ) thì đọc storage trong initializer của
+  `useState` là cách ĐÚNG, không phải cách tắt. Chỉ dùng effect khi thật sự có SSR và phải khớp
+  HTML lần đầu. Nếu buộc phải nạp bằng effect thì effect-ghi phải bỏ qua mọi lượt chạy lúc gắn, và
+  phải thử với StrictMode bật — bug này vô hình nếu chỉ nhìn một lượt mount.
+- **Verify:** kịch bản playwright đặt sẵn trạng thái, vào `/app`, đếm `.panel-spine` = 2 và
+  localStorage giữ nguyên; thêm vòng thu gọn → tải lại → vẫn 1 gáy sách.

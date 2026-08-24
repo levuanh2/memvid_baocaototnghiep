@@ -3,6 +3,10 @@ import { Link, useNavigate } from "react-router-dom";
 import SidebarLeft from "./SidebarLeft";
 import ChatArea from "./ChatArea";
 import SidebarRight from "./SidebarRight";
+import PanelSpine from "./PanelSpine";
+import PanelDivider from "./PanelDivider";
+import { usePanelLayout } from "../../hooks/usePanelLayout";
+import { PANELS } from "../../hooks/panelLayout";
 import { useTheme } from "../../hooks/useTheme";
 import { useAuth } from "../../auth/useAuth";
 import { Icon } from "../ui/Icon";
@@ -10,8 +14,10 @@ import Toaster from "../ui/Toaster";
 
 export default function MainLayout({ selectedSources, setSelectedSources }) {
   const [sources, setSources] = useState([]);
-  const [leftOpen, setLeftOpen] = useState(false);
+  const [leftOpen, setLeftOpen] = useState(false);   // chỉ dùng ở chế độ ngăn kéo (<768px)
   const [rightOpen, setRightOpen] = useState(false);
+  // Từ 768px trở lên hai cột nới được và thu về gáy sách được; trạng thái nhớ qua phiên.
+  const panel = usePanelLayout();
   const { isDark, setLight, setDark } = useTheme();
   const { user, logout } = useAuth();
   const navigate = useNavigate();
@@ -110,35 +116,67 @@ export default function MainLayout({ selectedSources, setSelectedSources }) {
         </div>
       </header>
 
-      {/* ── BODY (3 columns) ── */}
+      {/* ── BODY — kệ trái · trang giữa · lề phải ──
+          Dưới 768px: hai cột thành ngăn kéo phủ lên nội dung (như cũ).
+          Từ 768px: nới được bằng cách kéo, thu về gáy sách được, nhớ qua phiên. */}
       <div className="flex flex-1 min-h-0 overflow-hidden">
 
-        {/* Mobile overlay */}
-        {(leftOpen || rightOpen) && (
+        {/* Nền mờ của ngăn kéo — chỉ tồn tại ở khổ hẹp */}
+        {panel.drawer && (leftOpen || rightOpen) && (
           <div
-            className="fixed inset-0 bg-black/40 z-30 md:hidden backdrop-blur-sm"
+            className="fixed inset-0 bg-black/40 z-30 backdrop-blur-sm"
             onClick={() => { setLeftOpen(false); setRightOpen(false); }}
           />
         )}
 
-        {/* ── LEFT — Thư mục nguồn ── */}
-        <aside
-          className={`
-            fixed top-[58px] left-0 h-[calc(100vh-58px)] z-40 transition-transform duration-300 ease-in-out
-            md:static md:top-auto md:h-auto md:translate-x-0 md:z-auto
-            w-[252px] shrink-0 bg-surface-sidebar border-r border-border
-            ${leftOpen ? "translate-x-0" : "-translate-x-full"}
-          `}
-        >
-          <SidebarLeft
-            selectedSources={selectedSources}
-            setSelectedSources={setSelectedSources}
-            onSourcesChange={setSources}
-            onClose={() => setLeftOpen(false)}
+        {/* ── KỆ TRÁI — Thư mục nguồn ── */}
+        {!panel.drawer && panel.collapsed.left ? (
+          <PanelSpine
+            side="left"
+            label={PANELS.left.label}
+            count={sources.length}
+            onExpand={() => panel.setCollapsedFor("left", false)}
           />
-        </aside>
+        ) : (
+          <>
+            <aside
+              className={
+                panel.drawer
+                  ? `fixed top-[58px] left-0 h-[calc(100vh-58px)] z-40 w-[252px] shrink-0
+                     bg-surface-sidebar border-r border-border
+                     transition-transform duration-300 ease-in-out
+                     ${leftOpen ? "translate-x-0" : "-translate-x-full"}`
+                  // Không kẻ border ở đây: PanelDivider bên cạnh CHÍNH LÀ đường kẻ.
+                  // Giữ cả hai sẽ thành đường đôi 2px.
+                  : "shrink-0 bg-surface-sidebar overflow-hidden"
+              }
+              style={panel.drawer ? undefined : { width: panel.width.left }}
+            >
+              <SidebarLeft
+                selectedSources={selectedSources}
+                setSelectedSources={setSelectedSources}
+                onSourcesChange={setSources}
+                onClose={() => (panel.drawer ? setLeftOpen(false) : panel.setCollapsedFor("left", true))}
+                collapsible={!panel.drawer}
+              />
+            </aside>
+            {!panel.drawer && (
+              <PanelDivider
+                side="left"
+                label={PANELS.left.label}
+                width={panel.width.left}
+                min={PANELS.left.min}
+                max={PANELS.left.max}
+                active={panel.dragging === "left"}
+                onDrag={(e) => panel.startDrag("left", e)}
+                onNudge={(d) => panel.nudgeWidth("left", d)}
+                onReset={() => panel.resetWidth("left")}
+              />
+            )}
+          </>
+        )}
 
-        {/* ── CENTER — Phiên đọc ── */}
+        {/* ── TRANG GIỮA — Phiên đọc ── */}
         <main className="flex flex-1 flex-col min-w-0 min-h-0">
           <ChatArea
             selectedSources={selectedSources}
@@ -146,30 +184,58 @@ export default function MainLayout({ selectedSources, setSelectedSources }) {
             onEvidence={setEvidence}
             highlight={highlight}
             onHighlight={onHighlight}
-            onOpenLeft={() => setLeftOpen(true)}
-            onOpenRight={() => setRightOpen(true)}
+            onOpenLeft={() => (panel.drawer ? setLeftOpen(true) : panel.setCollapsedFor("left", false))}
+            onOpenRight={() => (panel.drawer ? setRightOpen(true) : panel.setCollapsedFor("right", false))}
             askAboutDraft={askAboutDraft}
           />
         </main>
 
-        {/* ── RIGHT — Lề bằng chứng ── */}
-        <aside
-          className={`
-            fixed top-[58px] right-0 h-[calc(100vh-58px)] z-40 transition-transform duration-300 ease-in-out
-            md:static md:top-auto md:h-auto md:translate-x-0 md:z-auto
-            w-[326px] shrink-0 bg-surface-sidebar border-l border-border
-            ${rightOpen ? "translate-x-0" : "translate-x-full"}
-          `}
-        >
-          <SidebarRight
-            selectedSources={selectedSources}
-            evidence={evidence}
-            highlight={highlight}
-            onHighlight={onHighlight}
-            onClose={() => setRightOpen(false)}
-            onAskAbout={onAskAbout}
+        {/* ── LỀ PHẢI — Bằng chứng và bản tạo ra ── */}
+        {!panel.drawer && panel.collapsed.right ? (
+          <PanelSpine
+            side="right"
+            label={PANELS.right.label}
+            count={evidence?.sources?.length || 0}
+            onExpand={() => panel.setCollapsedFor("right", false)}
           />
-        </aside>
+        ) : (
+          <>
+            {!panel.drawer && (
+              <PanelDivider
+                side="right"
+                label={PANELS.right.label}
+                width={panel.width.right}
+                min={PANELS.right.min}
+                max={PANELS.right.max}
+                active={panel.dragging === "right"}
+                onDrag={(e) => panel.startDrag("right", e)}
+                onNudge={(d) => panel.nudgeWidth("right", d)}
+                onReset={() => panel.resetWidth("right")}
+              />
+            )}
+            <aside
+              className={
+                panel.drawer
+                  ? `fixed top-[58px] right-0 h-[calc(100vh-58px)] z-40 w-[326px] shrink-0
+                     bg-surface-sidebar border-l border-border
+                     transition-transform duration-300 ease-in-out
+                     ${rightOpen ? "translate-x-0" : "translate-x-full"}`
+                  : "shrink-0 bg-surface-sidebar overflow-hidden"
+              }
+              style={panel.drawer ? undefined : { width: panel.width.right }}
+            >
+              <SidebarRight
+                selectedSources={selectedSources}
+                evidence={evidence}
+                highlight={highlight}
+                onHighlight={onHighlight}
+                onClose={() => (panel.drawer ? setRightOpen(false) : panel.setCollapsedFor("right", true))}
+                onAskAbout={onAskAbout}
+                collapsible={!panel.drawer}
+              />
+            </aside>
+          </>
+        )}
       </div>
 
       {/* ── TOAST STACK ── */}

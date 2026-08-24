@@ -18,6 +18,7 @@ import { saveActiveSummaryJob, loadActiveSummaryJob, clearActiveSummaryJob } fro
 import { confirmRegenerateIfDirty, stallBannerVisible, canRetry } from "../../utils/jobRecovery";
 import { toast } from "../ui/Toaster";
 import { Icon } from "../ui/Icon";
+import Disclosure from "../ui/Disclosure";
 import Spinner from "../ui/Spinner";
 import { normStem } from "../../utils/evidence";
 import MdSnippet from "../ui/Markdown";
@@ -69,7 +70,7 @@ const ARTIFACTS = [
 ];
 
 // ── Main component ────────────────────────────────────
-export default function SidebarRight({ selectedSources, evidence, highlight, onHighlight, onClose, onAskAbout }) {
+export default function SidebarRight({ selectedSources, evidence, highlight, onHighlight, onClose, onAskAbout, collapsible = false }) {
   const [artifactTab, setArtifactTab] = useState("mindmap");
   const [mindMaps, setMindMaps]           = useState([]);
   const [showModalMap, setShowModalMap]   = useState(null);
@@ -575,7 +576,11 @@ export default function SidebarRight({ selectedSources, evidence, highlight, onH
           <Icon name="Quote" size={15} className="text-brand flex-shrink-0" />
           <span className="text-[13px] font-semibold text-text-primary">Lề bằng chứng</span>
         </div>
-        <button onClick={onClose} className="md:hidden icon-btn w-8 h-8" aria-label="Đóng">
+        {/* Khổ hẹp: đóng ngăn kéo. Khổ rộng: thu cột về gáy sách. */}
+        <button onClick={onClose}
+          className={`icon-btn w-8 h-8${collapsible ? "" : " md:hidden"}`}
+          aria-label={collapsible ? "Thu gọn cột" : "Đóng"}
+          title={collapsible ? "Thu gọn cột" : "Đóng"}>
           <Icon name="X" size={16} />
         </button>
       </div>
@@ -643,10 +648,12 @@ export default function SidebarRight({ selectedSources, evidence, highlight, onH
         )}
       </div>
 
-      {/* ── ARTIFACTS — tạo từ tài liệu ── */}
-      <div className="flex-shrink-0 border-t border-border px-3 pt-3 pb-3">
+      {/* ── ARTIFACTS — tạo từ tài liệu ──
+          Gập được: khối này chiếm chỗ cố định ở đáy cột, gập lại thì danh sách
+          bằng chứng phía trên được nguyên chiều cao. */}
+      <div className="flex-shrink-0 border-t border-border">
+        <Disclosure title="Tạo từ tài liệu">
         <div className="flex items-center gap-2 mb-2.5">
-          <span className="text-[11px] font-mono uppercase tracking-[0.12em] text-text-muted">Tạo từ tài liệu</span>
           <div className="flex gap-1 ml-auto">
             {ARTIFACTS.map((a) => (
               <button
@@ -779,6 +786,7 @@ export default function SidebarRight({ selectedSources, evidence, highlight, onH
             )
           )}
         </div>
+        </Disclosure>
       </div>
 
       {/* ── MODALS (lazy chunks — Suspense chờ chunk tải xong mới render) ── */}

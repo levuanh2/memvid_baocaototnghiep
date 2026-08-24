@@ -127,6 +127,11 @@ export default function ChatArea({ selectedSources, sources = [], onEvidence, hi
   const [attachedImage, setAttachedImage] = useState(null);   // {file, previewUrl}
   const [transcribing, setTranscribing] = useState(false);
   const [visionReady, setVisionReady] = useState(false);
+  // Chữ gợi ý trong ô nhập không đổi được bằng CSS, mà câu dài thì xuống dòng
+  // rồi bị ô cao 46px xén mất. Nghe matchMedia thay vì đo lại mỗi lần cuộn.
+  const [roomy, setRoomy] = useState(
+    () => typeof window === "undefined" || window.matchMedia("(min-width: 640px)").matches
+  );
   const imageInputRef = useRef(null);
   const messagesEndRef = useRef(null);
   const textareaRef = useRef(null);
@@ -342,6 +347,14 @@ export default function ChatArea({ selectedSources, sources = [], onEvidence, hi
     let alive = true;
     getVisionStatus().then((st) => { if (alive) setVisionReady(Boolean(st?.available)); });
     return () => { alive = false; };
+  }, []);
+
+  useEffect(() => {
+    const mq = window.matchMedia("(min-width: 640px)");
+    const onChange = (e) => setRoomy(e.matches);
+    setRoomy(mq.matches);
+    mq.addEventListener("change", onChange);
+    return () => mq.removeEventListener("change", onChange);
   }, []);
 
   // Thu hồi object URL của ảnh trước, nếu không mỗi lần dán lại rò một blob.
@@ -793,7 +806,9 @@ export default function ChatArea({ selectedSources, sources = [], onEvidence, hi
           </div>
         )}
 
-        <div className="px-4 sm:px-8 py-4 flex items-end gap-3">
+        {/* Khổ hẹp: lề và khoảng cách thu lại, nếu không nút kèm ảnh + nút gửi ăn
+              hết chỗ và khung gõ bị bóp xuống dưới 46px. */}
+        <div className="px-3 sm:px-8 py-3 sm:py-4 flex items-end gap-2 sm:gap-3">
           {visionReady && (
             <>
               <input ref={imageInputRef} type="file" className="hidden"
@@ -810,7 +825,8 @@ export default function ChatArea({ selectedSources, sources = [], onEvidence, hi
             <textarea
               ref={textareaRef}
               rows={1}
-              placeholder={pendingReview ? "Hãy hoàn tất bước duyệt câu trả lời…" : transcribing ? "Đang đọc ảnh…" : loading ? "Đang chờ phản hồi…" : visionReady ? "Đặt câu hỏi, hoặc dán ảnh đề bài vào đây…" : "Đặt câu hỏi về tài liệu đã chọn…"}
+              placeholder={pendingReview ? "Hãy hoàn tất bước duyệt câu trả lời…" : transcribing ? "Đang đọc ảnh…" : loading ? "Đang chờ phản hồi…" : visionReady && roomy ? "Đặt câu hỏi, hoặc dán ảnh đề bài vào đây…"
+              : !roomy ? "Đặt câu hỏi…" : "Đặt câu hỏi về tài liệu đã chọn…"}
               value={input}
               onChange={handleInput}
               onKeyDown={handleKeyDown}
