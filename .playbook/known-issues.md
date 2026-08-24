@@ -603,3 +603,39 @@ chứa "hàm hợp"). Chunk quá thô làm truy hồi kém — chưa sửa, cầ
   làm loãng danh sách fail thật, đúng như trường hợp này (ẩn 4 tháng trong 29 fail).
 - **Verify:** `cd BE && .venv/Scripts/python.exe -m pytest tests/test_evaluation_review.py
   tests/test_evaluation_review_app.py -q` → `2 skipped`.
+
+## (ĐÃ SỬA 2026-08-24) Upload .html luôn hỏng — gọi thư viện không có trong requirements
+
+- **Triệu chứng:** tải file `.html` lên → tài liệu chuyển sang `failed`, log ingest ghi
+  `Cannot read file content`. Không có dòng lỗi nào nói vì sao.
+- **Nguyên nhân:** `document_loader.load_document` (bản cũ) gọi `UnstructuredHTMLLoader`, mà gói
+  `unstructured` **chưa bao giờ có trong `BE/requirements.txt`**. `ModuleNotFoundError` rơi vào
+  `except Exception: pass` ở cuối hàm, tụt xuống `ingest_utils.extract_text` — hàm này chỉ biết
+  pdf/docx/doc/txt/ảnh nên trả `''`. Rỗng → `extract_text_node` ném `ValueError`. Chua ở chỗ
+  `markdown_convert.py` đã dùng `markdownify` (đã cài) cho đúng việc đó, chỉ là hai file không dùng
+  chung đường.
+- **Cách xử lý:** `_load_html()` dùng `markdownify`, bỏ hẳn `UnstructuredHTMLLoader`.
+- **Prevention:** `except Exception: pass` bao quanh một chuỗi loader là chỗ trốn hoàn hảo cho lỗi
+  thiếu dependency. Mọi thư viện được gọi trong nhánh loader phải có test đọc file thật của định
+  dạng đó (`test_upload_formats.py`), nếu không "hỗ trợ định dạng X" chỉ là một dòng `if` chứ không
+  phải khả năng thật.
+- **Verify:** `cd BE && .venv/Scripts/python.exe -m pytest tests/test_upload_formats.py -q` → 11 passed.
+
+## (ĐÃ SỬA 2026-08-24) `/upload-file` nhận mọi loại file và không giới hạn dung lượng
+
+- **Triệu chứng:** tải `.exe`/`.zip`/`.mp4` lên vẫn được nhận. File được lưu đĩa, đẩy lên Supabase
+  Storage, tạo dòng trong `documents`, rồi vài phút sau ingest mới chết. Người dùng không thấy lỗi
+  lúc bấm — chỉ thấy một tài liệu hỏng trong danh sách. Ngoài ra không có `MAX_CONTENT_LENGTH` ở
+  bất kỳ đâu nên Flask nhận file lớn tuỳ ý.
+- **Nguyên nhân:** ba route upload (`/upload-file`, `/upload-multiple`, `/api/documents/upload`) chỉ
+  kiểm `file` có tồn tại và tên khác rỗng. Việc lọc định dạng bị phó mặc cho thuộc tính `accept` của
+  FE — thứ chỉ là gợi ý hộp thoại chọn file, gọi thẳng API là qua mặt được.
+- **Cách xử lý:** `app/domains/ingest/formats.py` giữ `SUPPORTED_EXTENSIONS` dùng chung.
+  `_ingest_uploaded_file` kiểm đuôi **trước khi ghi bất cứ thứ gì** và ném `UnsupportedFileType`;
+  ba route trả 415 kèm `supported_extensions`. Thêm `MAX_CONTENT_LENGTH` đọc từ `MAX_UPLOAD_MB`
+  (mặc định 100) và handler 413 trả JSON.
+- **Prevention:** thuộc tính `accept` của FE KHÔNG phải kiểm tra. Mọi ràng buộc đầu vào phải nằm ở
+  backend; FE chỉ là tiện ích chọn file. Đặt cổng chặn trong hàm dùng chung
+  (`_ingest_uploaded_file`) chứ không phải ở từng route — ba route cùng đi qua đó nên một guard
+  che hết, thêm route thứ tư cũng tự có.
+- **Verify:** `test_upload_tu_choi_duoi_la_va_khong_ghi_dia` khẳng định 415 VÀ thư mục lưu vẫn rỗng.

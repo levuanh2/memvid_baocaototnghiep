@@ -78,8 +78,10 @@ export default function DocumentList() {
       onRetry={load}
       actions={
         <>
+          {/* Danh sách này phải khớp formats.accept_attribute() của backend —
+              BE/tests/test_upload_formats.py khoá lại để hai bên không lệch. */}
           <input ref={fileRef} type="file" className="hidden" onChange={onPick}
-            accept=".pdf,.docx,.txt,.md" />
+            accept=".bmp,.csv,.doc,.docx,.epub,.fb2,.gif,.htm,.html,.jpeg,.jpg,.json,.md,.mobi,.odp,.odt,.pdf,.png,.pptx,.rtf,.txt,.xlsx,.xps" />
           <button type="button" className="btn-seal text-[13px] inline-flex items-center gap-2"
             disabled={uploading} onClick={() => fileRef.current?.click()}>
             {uploading ? <><Spinner size={13} /> Đang tải lên…</> : <><Icon name="Upload" size={14} /> Tải tài liệu</>}
@@ -117,7 +119,7 @@ export default function DocumentList() {
           <EmptyState
             icon="FileStack"
             title="Chưa có tài liệu nào"
-            hint="Tải lên một file PDF, DOCX, TXT hoặc Markdown để bắt đầu."
+            hint="Tải lên tài liệu PDF, Word, PowerPoint, Excel, Markdown, EPUB hoặc ảnh chụp trang sách để bắt đầu."
             action={
               <button type="button" className="btn-seal text-[13px] mt-1"
                 onClick={() => fileRef.current?.click()}>

@@ -58,6 +58,17 @@ def to_markdown(file_path: str) -> str:
         return path.read_text(encoding="utf-8", errors="ignore")
     if ext in {".png", ".jpg", ".jpeg"}:
         return extract_text(str(path))
+
+    # Định dạng còn lại (.pptx .xlsx .epub .rtf .odt .odp .csv .json ...) dùng lại
+    # chính loader của bước ExtractText: nó đã trả nội dung dạng Markdown (bảng
+    # xlsx, heading html) nên bước chunk theo heading dùng được ngay. Trước đây
+    # mọi đuôi lạ rơi thẳng vào extract_text — hàm chỉ biết pdf/docx/txt/ảnh nên
+    # trả rỗng, Normalize im lặng bỏ qua và chunk tụt về text thô.
+    from app.domains.ingest.document_loader import load_document
+
+    docs = load_document(str(path))
+    if docs:
+        return "\n\n".join(d.page_content for d in docs)
     return extract_text(str(path))
 
 

@@ -57,6 +57,21 @@ from app.domains.memory.tree import (
 )
 app = Flask(__name__)
 
+# Chặn upload quá khổ NGAY Ở TẦNG WSGI: không có mốc này Flask nhận không giới
+# hạn, file vài GB vẫn ghi hết vào đĩa rồi mới nghẹn ở bước sau. Werkzeug ném
+# RequestEntityTooLarge (413) trước khi thân request được đọc xong.
+MAX_UPLOAD_MB = max(1, int(os.getenv('MAX_UPLOAD_MB', '100')))
+app.config['MAX_CONTENT_LENGTH'] = MAX_UPLOAD_MB * 1024 * 1024
+
+
+@app.errorhandler(413)
+def _too_large(_err):
+    """Trả JSON thay vì trang HTML mặc định — FE chỉ đọc JSON."""
+    return jsonify({
+        'error': f'File vượt giới hạn {MAX_UPLOAD_MB}MB',
+        'max_upload_mb': MAX_UPLOAD_MB,
+    }), 413
+
 # Init SQLite job store (idempotent). Chưa thay logic endpoint ở bước này.
 try:
     from app.domains.jobs.jobs_store import init_db as _jobs_init_db, migrate_from_dict as _jobs_migrate_from_dict, mark_interrupted_jobs as _jobs_mark_interrupted
@@ -1701,9 +1716,22 @@ def _unique_display_filename(filename: str, registry: dict) -> str:
     return f"{base} ({n}){ext}"
 
 
+class UnsupportedFileType(ValueError):
+    """Đuôi file không có bộ đọc nào trong pipeline ingest."""
+
+
 def _ingest_uploaded_file(file) -> dict:
     """Đăng ký + lưu an toàn + trigger ingest cho 1 file. Dùng chung cho
     /upload-file và /upload-multiple (đồng nhất: source_id + registry + poll)."""
+    # Kiểm đuôi TRƯỚC khi ghi bất cứ thứ gì. Không có cổng này thì file lạ vẫn
+    # được lưu đĩa, đẩy lên Storage và tạo dòng documents, rồi vài phút sau ingest
+    # mới chết với "Cannot read file content" — người dùng không thấy lỗi lúc bấm.
+    from app.domains.ingest import formats as _formats
+
+    _name = (file.filename or "").strip()
+    if not _formats.is_supported(_name):
+        raise UnsupportedFileType(os.path.splitext(_name)[1].lower() or _name)
+
     source_id = str(uuid.uuid4())
     registry = _load_source_registry()
     # Tên hiển thị (chống trùng) — canonical stem suy từ tên này nên FE chọn theo
@@ -1752,6 +1780,16 @@ def _ingest_uploaded_file(file) -> dict:
     }
 
 
+def _unsupported_response(exc: "UnsupportedFileType"):
+    """415 kèm danh sách đuôi nhận được, để FE hiện thẳng cho người dùng."""
+    from app.domains.ingest import formats as _formats
+
+    return jsonify({
+        'error': f'Không đọc được định dạng {exc}',
+        'supported_extensions': sorted(_formats.SUPPORTED_EXTENSIONS),
+    }), 415
+
+
 @app.post('/upload-file')
 def upload_file():
     """Upload file và trả response ngay, xử lý ingest chạy background."""
@@ -1761,7 +1799,10 @@ def upload_file():
     file = request.files.get('file')
     if not file or not (file.filename or "").strip():
         return jsonify({'error': 'Missing file'}), 400
-    return jsonify(_ingest_uploaded_file(file))
+    try:
+        return jsonify(_ingest_uploaded_file(file))
+    except UnsupportedFileType as exc:
+        return _unsupported_response(exc)
 
 
 @app.post('/upload')
@@ -1841,6 +1882,8 @@ def upload_multiple():
             info = _ingest_uploaded_file(file)
             sources.append(info)
             results.append({'file': info['filename'], 'source_id': info['source_id'], 'status': 'processing'})
+        except UnsupportedFileType as exc:
+            results.append({'file': file.filename, 'error': f'Không đọc được định dạng {exc}'})
         except Exception as e:
             import traceback; traceback.print_exc()
             results.append({'file': file.filename, 'error': f'Upload failed: {str(e)}'})
@@ -1893,7 +1936,10 @@ def api_documents_upload():
     file = request.files.get('file')
     if not file or not (file.filename or "").strip():
         return jsonify({'error': 'Missing file'}), 400
-    info = _ingest_uploaded_file(file)
+    try:
+        info = _ingest_uploaded_file(file)
+    except UnsupportedFileType as exc:
+        return _unsupported_response(exc)
     from app.domains.documents import repository as _docs
     row = _docs.get(info['source_id']) or {}
     return jsonify(_doc_public(info['source_id'], row)), 201

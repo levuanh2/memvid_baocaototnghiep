@@ -46,6 +46,11 @@ scipy
 sentence-transformers
 mammoth
 markdownify
+# Bộ đọc tài liệu bổ sung (xem app/domains/ingest/formats.py)
+python-pptx      # .pptx — slide bài giảng, đọc cả bảng và ghi chú
+openpyxl         # .xlsx — mỗi sheet thành một bảng Markdown
+striprtf         # .rtf
+# .epub/.mobi/.fb2/.xps dùng PyMuPDF sẵn có; .odt/.odp qua LibreOffice (soffice)
 # Torch (CPU-only) để tránh kéo CUDA toolkit trong Docker
 --extra-index-url https://download.pytorch.org/whl/cpu
 torch==2.5.1+cpu

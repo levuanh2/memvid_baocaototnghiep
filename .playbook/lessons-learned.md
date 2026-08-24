@@ -1144,3 +1144,35 @@ smoke-verified trên stack `memvid_auth_smoke` rebuild từ code mới.
      `git rm -r` khi chắc chắn không cần bản làm việc. Cả hai đều lấy lại được từ lịch sử git.
   3. Dữ liệu bị gitignore mà test cần → guard `pytest.skip(..., allow_module_level=True)` ngay tại
      module, không để `FileNotFoundError` giữa fixture.
+
+## 2026-08-24 - Ba danh sách định dạng lệch nhau: "hỗ trợ" là khả năng đọc được, không phải một dòng `if`
+
+- **Bối cảnh:** thêm `.pptx .xlsx .rtf .odt .odp .epub .mobi .fb2 .xps` vào luồng upload, sửa `.html`,
+  và mở `.csv/.json` (vốn đã chạy được) ra cho người dùng.
+- **Root cause của mớ lộn xộn:** cùng một câu hỏi "đọc được đuôi nào" được trả lời ở BA nơi và không
+  nơi nào biết nơi kia: `FE/.../DocumentList.jsx` (`accept`, 4 đuôi), `document_loader.
+  SUPPORTED_LC_EXTENSIONS` (8 đuôi), `markdown_convert.to_markdown` (9 đuôi, tập khác). Hậu quả đo
+  được: `.csv`/`.json` đọc tốt nhưng người dùng không chọn được; `.html` có nhánh `if` đàng hoàng
+  nhưng gọi `unstructured` — gói chưa từng nằm trong `requirements.txt` — nên rỗng 100%. Một dòng
+  `if ext == ".html"` trông y hệt như hỗ trợ thật.
+- **Cách chữa:** `app/domains/ingest/formats.py` là nguồn sự thật duy nhất, chia nhóm theo BỘ ĐỌC
+  (`TEXT`, `PYMUPDF`, `WORD`, `PPTX`, `XLSX`, `OPENDOCUMENT`, `WEB`, `DATA`, `RICH_TEXT`, `IMAGE`)
+  chứ không phải một tập phẳng — thêm đuôi mới thì bỏ vào đúng nhóm, dispatch có sẵn. Module cố ý
+  không import gì nặng để `main.py` nạp được. Test khoá cả ba mặt: chuỗi `accept` của FE phải bằng
+  đúng `SUPPORTED_EXTENSIONS`, mỗi đuôi chỉ thuộc một nhóm, và mỗi bộ đọc phải đọc ra chữ từ file
+  sinh tại chỗ.
+- **Điều học được về việc mở rộng định dạng:** leo thang từ rẻ tới đắt trước khi thêm dependency.
+  PyMuPDF đã cài **mở native cả EPUB/MOBI/FB2/XPS** — bốn định dạng miễn phí, chung một vòng lặp
+  theo trang với PDF. `markdownify` đã cài, đủ cho HTML. Chỉ `.pptx/.xlsx/.rtf` mới đáng thêm gói
+  (`python-pptx`, `openpyxl`, `striprtf` — đều thuần Python, phụ thuộc lxml/Pillow đã có).
+  `.odt/.odp` nhờ `soffice` đổi sang OOXML rồi dùng lại loader có sẵn, 0 dep.
+- **Prevention:**
+  1. Một ràng buộc đầu vào chỉ được định nghĩa MỘT nơi. Nếu FE cần biết, hoặc gọi API lấy, hoặc
+     hardcode kèm **test khoá hai bên bằng nhau** — đừng để hai danh sách tự sống.
+  2. `accept` của `<input type="file">` không phải kiểm tra bảo mật. Cổng chặn thật đặt trong hàm
+     dùng chung ở backend, TRƯỚC khi ghi đĩa/Storage/DB.
+  3. Mỗi định dạng khai là "hỗ trợ" phải có test đọc file thật sinh tại chỗ. Không có test thì
+     `except Exception: pass` sẽ giấu một dependency thiếu suốt nhiều tháng.
+  4. Định dạng cần nhị phân ngoài (`soffice` cho `.doc/.odt/.odp`, `tesseract` cho ảnh) chỉ chạy
+     khi máy có nó. Máy dev hiện tại KHÔNG có cả hai — chấp nhận rơi về `extract_text` chứ đừng
+     tưởng là đã chạy.
