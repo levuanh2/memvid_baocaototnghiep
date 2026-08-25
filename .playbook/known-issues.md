@@ -891,4 +891,33 @@ chứa "hàm hợp"). Chunk quá thô làm truy hồi kém — chưa sửa, cầ
 - **Ba đường, cần người quyết:** (a) chạy lại coordinate bridge cho tài liệu đó theo
   `PHASE_4C_COMMANDS.md` mục 3 rồi phân xử thủ công các span lệch; (b) loại tài liệu đó khỏi corpus;
   (c) ghim đúng phiên bản PyMuPDF đã tạo bản gốc — nhưng không biết là bản nào.
-- **Chưa xác minh:** vì sao chỉ 3/12 tài liệu có canonical entry.
+- **ĐÃ XÁC MINH (2026-08-24), tác động NHỎ HƠN NHIỀU so với dự đoán ban đầu:**
+  - 3/12 tài liệu là ĐÚNG VÀ ĐỦ: 9 tài liệu còn lại `eligible_for_study=False` (smoke-test
+    payload, demo sản phẩm, tài liệu thiết kế nội bộ). Cả 3/3 tài liệu đủ điều kiện đều có
+    canonical. Coordinate bridge KHÔNG dở dang.
+  - Kiểm từng span bằng `locator.char_start/char_end` (hệ `canonical-document-v1`, 89/89 span
+    dùng chung hệ này) và so text đã gộp khoảng trắng:
+    | | bản CŨ (đóng băng) | bản MỚI |
+    |---|---|---|
+    | cv1_ragas_guardrails (canonical ĐỔI) | 44/44 | **43/44** |
+    | cv1_social_engineering | 28/28 | 28/28 |
+    | cv1_vector_feature_store | 17/17 | 17/17 |
+    | **tổng** | **89/89** | **88/89** |
+  - Dataset gốc NHẤT QUÁN HOÀN TOÀN (89/89). Toàn bộ thiệt hại là **ĐÚNG MỘT span**: `R17_s01`.
+  - Span đó: mong `'Eval ̸= optional. RAGAS 4 metrics + LLM-Judge là baseline.'`, lấy được
+    `'Eval̸ = optional. RAGAS 4 metrics + LLM-Judge là baseline.'` — chữ Y HỆT, dấu gạch chéo
+    tổ hợp dịch một vị trí. Cả hai đều hiển thị 'Eval ≠ optional'. Khác biệt RỖNG về ngữ nghĩa.
+  - Nên việc cần người làm thu về: phân xử ĐÚNG MỘT span, không phải gán nhãn lại.
+
+- **BỐN LẦN ĐO SAI LIÊN TIẾP trước khi ra được bảng trên — ghi lại để lần sau khỏi lặp:**
+  1. Kiểm chồng lấn bằng `char_start`/`char_end` ở cấp span → field đó KHÔNG tồn tại ở cấp đó,
+     `.get()` trả None nên mọi so sánh ra False. Kết luận '0 span bị chạm' hoàn toàn vô nghĩa.
+  2. Hash `canonical_text[start_offset:end_offset]` → `start_offset` là offset TRONG TRANG,
+     không phải trong tài liệu. Toạ độ tài liệu nằm ở `locator.char_start/char_end`.
+  3. Hash thô đoạn text → `evidence_text` lưu ở dạng ĐÃ GỘP khoảng trắng, còn canonical giữ
+     nguyên xuống dòng. Ra '6/17 khớp' và suýt báo dataset hỏng — thực ra 17/17.
+  4. Chỉ khi đọc TRỌN một bản ghi span (thay vì đoán tên field) mới thấy đủ `locator`,
+     `coordinate_system`, và quan hệ giữa `start_offset` với `locator.char_start`.
+  **Bài học:** với dữ liệu nghiên cứu có lược đồ lạ, ĐỌC TRỌN một bản ghi TRƯỚC khi viết phép
+  kiểm. Mỗi lần đoán tên field đều cho một con số trông hợp lý mà sai — và con số sai kiểu đó
+  nguy hiểm hơn lỗi ném ra, vì nó không kêu.
