@@ -1328,6 +1328,34 @@ def _warmup_ollama_background() -> list[str]:
             except Exception as e:
                 print(f"[warmup] embedding warmup failed: {e}")
 
+        # Rerank/NLI cũng nạp lười, và giá nạp rơi TRỌN vào câu hỏi đầu tiên của
+        # người dùng: đo được rerank 21.9s ở câu đầu so với 8.8s ở câu sau trong
+        # cùng tiến trình — 13 giây chỉ để nạp bge-reranker. Warm ở đây thì người
+        # dùng không phải trả.
+        #
+        # Opt-in như embedding warmup và cùng lý do: mỗi worker gunicorn giữ một
+        # bản model trong RAM (bge-reranker-v2-m3 ~2.2GB). Bật khi chấp nhận đổi
+        # RAM lấy câu-đầu-nhanh. Tôn trọng RERANK_ENABLED/NLI_ENABLED — tắt thành
+        # phần thì không nạp model của nó.
+        if (os.getenv("RETRIEVAL_WARMUP_ENABLED", "0") or "").strip().lower() in ("1", "true", "yes", "on"):
+            from shared.config import get_settings as _get_settings
+
+            _s = _get_settings()
+            if _s.rerank_enabled:
+                try:
+                    from app.domains.retrieval import rerank as _rr
+                    _rr.warmup()
+                    print("[warmup] rerank model ready")
+                except Exception as e:
+                    print(f"[warmup] rerank warmup failed: {e}")
+            if _s.nli_enabled:
+                try:
+                    from app.domains.retrieval import nli as _nli
+                    _nli.warmup()
+                    print("[warmup] NLI model ready")
+                except Exception as e:
+                    print(f"[warmup] NLI warmup failed: {e}")
+
     threading.Thread(target=_run, daemon=True).start()
     return models
 

@@ -430,9 +430,19 @@ def build_query_graph(
                         sources.append(s)
                 patch["retrieved_sources"] = sources
 
+            # `status` là thứ QUAN TRỌNG NHẤT ở đây mà log cũ bỏ sót: "fallback" nghĩa
+            # là rerank đã chạm hạn giờ và thứ hạng giữ nguyên như trước — tức node
+            # tốn trọn thời gian mà không đổi gì. Không ghi thì nhìn log không tài nào
+            # phân biệt được với một lượt rerank thành công.
             log_node_event(
                 state["job_id"], "RerankDocuments", "ok", t.ms(),
-                {"candidates": len(chunks), "kept": len(kept), "backend": _s.rerank_backend},
+                {
+                    "candidates": len(chunks),
+                    "kept": len(kept),
+                    "backend": _s.rerank_backend,
+                    "status": patch["rerank_status"],
+                    "timeout_sec": RERANK_TIMEOUT,
+                },
             )
             return {**state, **patch}
         except Exception as e:

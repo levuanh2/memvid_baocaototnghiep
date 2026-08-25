@@ -816,3 +816,41 @@ chứa "hàm hợp"). Chunk quá thô làm truy hồi kém — chưa sửa, cầ
 - **Verify:** `tests/test_evaluation_env_isolation.py` — khoá cả hành vi bẫy (`NLI_ENABLED=0` →
   `NullNli`, `RERANK_ENABLED=0` → `_IDENTITY`) lẫn việc runner đặt cờ TRƯỚC import production.
   6 passed; harness + timeout + crag-config: 23 passed.
+
+## (ĐÃ SỬA 2026-08-24) Câu hỏi ĐẦU TIÊN trả giá nạp model rerank — 13 giây không ai thấy
+
+- **Triệu chứng:** node `RerankDocuments` chiếm 50% thời gian truy vấn (18–22 giây), trông như
+  cross-encoder chậm.
+- **Sự thật:** phần lớn là NẠP MODEL, không phải suy luận. Đo trong cùng một tiến trình:
+  | | câu 1 (nguội) | câu 2 (ấm) |
+  |---|---|---|
+  | RerankDocuments | 21 958 ms | 8 844 ms |
+  | tổng truy vấn | 62.6s | 26.1s |
+  `rerank.warmup()` được gọi trong node và cố ý nằm NGOÀI vùng timeout (đúng — nếu không, lần
+  nạp đầu vượt hạn 10s làm rerank âm thầm fallback ở câu đầu). Nhưng thế nghĩa là người dùng đầu
+  tiên sau mỗi lần khởi động trả trọn giá nạp.
+- **Suy luận thì bình thường:** tuyến tính 0.65–0.69s mỗi ứng viên (5 ứng viên 3.39s · 10 ứng viên
+  6.85s · 20 ứng viên 12.95s). Khác hẳn NLI — bge-reranker chạy đúng như dự toán cho một model
+  568M tham số trên CPU. Và nó THẬT SỰ đổi thứ hạng: `[0,1,2,3,4,5]` thành `[17,16,13,19,14,7]`.
+- **Cách xử lý:** thêm `RETRIEVAL_WARMUP_ENABLED` (mặc định 0, opt-in như `EMBEDDING_WARMUP_ENABLED`
+  và cùng lý do RAM: mỗi worker gunicorn giữ một bản ~2.2GB). Bật thì luồng warm nền lúc khởi động
+  gọi `rerank.warmup()` và `nli.warmup()`, tôn trọng `RERANK_ENABLED`/`NLI_ENABLED`.
+- **Verify:** bật cờ, khởi động lại, câu ĐẦU TIÊN cho `RerankDocuments 9519 ms` (số ấm) thay vì
+  21 958 ms; tổng 40.7s thay vì 62.6s. Log có `[warmup] rerank model ready`.
+- **Bẫy khi kiểm:** dòng print của luồng warm nằm trong bộ đệm stdout nên `grep` ngay sau đó KHÔNG
+  thấy, dù nó đã chạy. Suýt kết luận nhầm là cờ không ăn. Bằng chứng đáng tin là SỐ ĐO của câu đầu,
+  không phải dòng log.
+- **Còn lại:** log node của `RerankDocuments` trước đây không ghi `rerank_status`, nên nhìn log
+  không phân biệt được một lượt rerank thành công với một lượt chạm hạn rồi giữ nguyên thứ tự. Đã
+  thêm `status` và `timeout_sec` vào metadata.
+
+## (CẦN ĐỂ Ý) Hạn rerank 10s sát mép — chunk dài hơn là chạm
+
+- Đo với chunk tổng hợp 979 ký tự: 20 ứng viên mất **12.95s**, vượt `RERANK_TIMEOUT_SEC=10` → rơi
+  về thứ tự gốc, tốn trọn 10 giây mà không đổi gì.
+- Chunk THẬT hiện tại ngắn hơn (~316 ký tự/đoạn, đo từ `ContextBuilder chars=1896` cho 6 đoạn) nên
+  còn lọt: log thật cho `status: "applied"`.
+- Nghĩa là biên an toàn mỏng. Tài liệu có đoạn dài hơn, hoặc `RERANK_CANDIDATE_K` tăng, là chạm hạn
+  ngay — và trước khi sửa lỗi `with ThreadPoolExecutor` thì hạn này còn không cắn nên chưa ai thấy.
+- Ba đường khi cần: giảm `RERANK_CANDIDATE_K` (20 xuống 10 = 6.85s), nâng `RERANK_TIMEOUT_SEC`, hoặc
+  cắt ngắn text đưa vào cross-encoder. Chưa quyết.
