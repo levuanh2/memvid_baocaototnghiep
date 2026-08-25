@@ -968,3 +968,46 @@ chứa "hàm hợp"). Chunk quá thô làm truy hồi kém — chưa sửa, cầ
   chiếu được, và hai hàm trả CÙNG bộ khoá (builder ghi chung một chỗ).
 - **Lưu ý:** R0 cũng có 4/171 chunk `unresolved` (chunk có khối code, ví dụ `RAGAS Code Setup — Quick
   Start\nfrom ragas import evaluate...`). Ít nhưng không phải không có.
+
+## (CHẶN — PHÁT HIỆN LỚN) Late chunking mean-pool trong khi bge-m3 dùng CLS — không gian vector sụp, E1–E7 vô hiệu
+
+- **Triệu chứng:** chạy ablation lần đầu ra kết quả khó tin — BM25 THUẦN thắng mọi thứ:
+  | thí nghiệm | recall@6 | MRR | nDCG@6 |
+  |---|---|---|---|
+  | E0_bm25 | **0.8371** | 0.7467 | 0.7331 |
+  | E1_faiss | 0.2286 | 0.1213 | 0.1460 |
+  | E2_hybrid | 0.4686 | 0.3313 | 0.3638 |
+  | E3_rerank | 0.6229 | 0.6080 | 0.5963 |
+  (25 truy vấn có chunk vàng, index R2_late)
+- **Nguyên nhân gốc — đo được, không suy đoán:**
+  1. Độ tương đồng cosine TRONG cùng một tài liệu, cùng bộ 142 chunk, chỉ khác cách nhúng:
+     | index | sim TB trong tài liệu | sim chéo tài liệu |
+     |---|---|---|
+     | R0_recursive (nhúng thường) | 0.53–0.68 | 0.447 |
+     | R1_structure (nhúng thường) | 0.53–0.64 | 0.470 |
+     | **R2_late (late chunking)** | **0.967–0.995** | **0.805** |
+     Hai chunk CẠNH NHAU trong R2 giống nhau tới **0.9999**. Không gian vector SỤP — FAISS không
+     phân biệt nổi chunk nào với chunk nào, kể cả giữa các tài liệu khác nhau.
+  2. `~/.cache/huggingface/.../bge-m3/1_Pooling/config.json` ghi rõ:
+     `"pooling_mode_cls_token": true`, `"pooling_mode_mean_tokens": false`.
+     bge-m3 sinh vector câu từ token **CLS**. Còn `late_chunk.embed_document` **mean-pool
+     `last_hidden_state`**. Đó là HAI KHÔNG GIAN KHÁC NHAU.
+  3. Hệ quả: vector TÀI LIỆU (mean-pool, dị hướng) và vector TRUY VẤN (CLS, chuẩn hoá qua
+     sentence-transformers) không so sánh được. Truy hồi dense đang đo nhiễu.
+- **KHÔNG phải do cắt cửa sổ:** có cảnh báo `14550 > 8192` lúc dựng, nhưng
+  `accumulate_token_embeddings` có cửa sổ trượt + overlap nên xử lý đúng. Và tài liệu NHỎ NHẤT
+  (4722 ký tự ≈ 1500 token, dưới xa 8192) vẫn sụp 0.995.
+- **Mức lan: TOÀN BỘ THANG.** Cả 8 config E0–E7 đều `index_dir: R2_late`. Nên E1–E7 đo trên một
+  nền hỏng. E0 không dính vì BM25 thuần từ vựng — và đó CHÍNH LÀ lý do nó "thắng".
+  **Kết luận "BM25 thắng dense retrieval" là SAI.** Sự thật là dense retrieval đang hỏng.
+- **Đã suýt mất 15 giờ:** thang đang chạy tiếp E4–E7 (NLI 298 giây/truy vấn) thì dừng lại kiểm.
+  Chạy hết sẽ cho một kết luận luận văn hoàn toàn sai.
+- **Ba đường, cần người quyết:**
+  - (a) Chạy thang E trên `R1_structure` (nhúng thường, cùng chunk với R2) — số hợp lệ ngay, và
+    trục R0/R1/R2 vốn là trục riêng.
+  - (b) Sửa late chunking cho khớp không gian: hoặc pool tài liệu bằng CLS theo từng span (khó —
+    CLS là một token cho cả chuỗi), hoặc nhúng TRUY VẤN cũng bằng mean-pool (nhất quán nội bộ
+    nhưng lệch đường production), hoặc đổi sang model có pooling mặc định là mean (họ e5).
+  - (c) Giữ nguyên và báo cáo "late chunking làm sụp không gian vector" như một kết quả âm — nó LÀ
+    một phát hiện thật, miễn là nói rõ nguyên nhân là lệch pooling chứ không phải late chunking
+    về nguyên lý.
