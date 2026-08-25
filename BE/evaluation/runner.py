@@ -42,6 +42,23 @@ def run(config_path: Path, dataset_dir: Path, reports_root: Path, *, run_id: str
     controls.apply_before_production_imports()
     os.environ["INDEX_DIR"] = str(Path(cfg["index_dir"]).resolve())
     os.environ["MEMORY_DIR"] = str((Path(cfg["index_dir"]) / "memory").resolve())
+
+    # Cờ thành phần phải theo YAML, KHÔNG theo .env của máy đang chạy.
+    #
+    # `adapters.py` đã gác đúng bằng `cfg["nli"]["enabled"]` / `cfg["rerank"]["enabled"]`,
+    # nhưng bên trong nó gọi `nli.get_nli()` và `rerank.get_reranker()` — hai hàm này
+    # đọc `NLI_ENABLED` / `RERANK_ENABLED` từ môi trường và trả về NullNli /
+    # IdentityReranker khi cờ tắt. Hậu quả: chạy E4_nli trên một máy có
+    # `NLI_ENABLED=0` thì cổng YAML vẫn mở, `nli_filter` vẫn được gọi, nhưng engine
+    # là NullNli nên KHÔNG BAO GIỜ có xung đột — E4 âm thầm ra kết quả trùng khít
+    # E3_rerank và hiệu số "đóng góp của NLI" bằng 0 vì lý do sai.
+    # Không có lỗi nào nổ ra. Đặt tường minh ở đây trước khi import production.
+    os.environ["NLI_ENABLED"] = "1" if cfg.get("nli", {}).get("enabled") else "0"
+    os.environ["RERANK_ENABLED"] = "1" if cfg.get("rerank", {}).get("enabled") else "0"
+    if cfg.get("nli", {}).get("model"):
+        os.environ["NLI_MODEL"] = str(cfg["nli"]["model"])
+    if cfg.get("rerank", {}).get("model"):
+        os.environ["RERANK_MODEL"] = str(cfg["rerank"]["model"])
     # Production imports deliberately occur only after controls are applied.
     from evaluation.adapters import EvaluationPipeline, ProductionEvaluationAdapter
     from evaluation.reproducibility import run_manifest

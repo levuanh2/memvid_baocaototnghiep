@@ -793,3 +793,26 @@ chứa "hàm hợp"). Chunk quá thô làm truy hồi kém — chưa sửa, cầ
 - **Lựa chọn, chưa quyết:** (a) `NLI_ENABLED=0` cho chạy thường, giữ cờ cho ablation E4_nli của
   luận văn; (b) đổi sang model NLI nhỏ hơn nhiều (họ MiniLM đa ngữ) rồi đo lại; (c) giữ nguyên và
   chấp nhận NLI luôn hết giờ.
+
+## (ĐÃ SỬA 2026-08-24) Ablation E0–E7 rò `.env` — E4_nli âm thầm biến thành E3_rerank
+
+- **Triệu chứng (chưa xảy ra, bắt được lúc rà):** chạy `E4_nli` trên máy có `NLI_ENABLED=0` trong
+  `BE/.env` sẽ ra kết quả TRÙNG KHÍT `E3_rerank`, và hiệu số "đóng góp của NLI" bằng 0 — vì lý do
+  sai. Không có lỗi nào nổ ra.
+- **Nguyên nhân:** `evaluation/adapters.py:178` gác đúng bằng `cfg["nli"]["enabled"]` từ YAML, cổng
+  mở nên `nli_filter` vẫn chạy. Nhưng bên trong nó gọi `nli.get_nli()`, và hàm đó (nli.py:120)
+  đọc `NLI_ENABLED` từ MÔI TRƯỜNG rồi trả `NullNli` khi cờ tắt. `NullNli` chấm mọi cặp là neutral
+  → không bao giờ có xung đột → không chunk nào bị loại. Cùng cái bẫy với `rerank.get_reranker()`
+  (rerank.py:193 → `_IDENTITY` khi `RERANK_ENABLED=0`).
+- **Vì sao nguy hiểm:** đây là số liệu đi thẳng vào chương 4 luận văn. Một biến môi trường trên máy
+  chạy thí nghiệm có thể vô hiệu hoá một thành phần mà bảng kết quả vẫn trông hoàn toàn hợp lệ.
+- **Cách xử lý:** `evaluation/runner.py` đặt `NLI_ENABLED` / `RERANK_ENABLED` (và `NLI_MODEL` /
+  `RERANK_MODEL` nếu cfg có) từ YAML, ngay cạnh `INDEX_DIR`/`MEMORY_DIR` và **trước** dòng import
+  production — đặt sau khi import thì vô tác dụng vì settings đã đọc env rồi.
+- **Prevention:** trong một bộ chạy ablation, YAML phải là nguồn quyết định DUY NHẤT cho mọi cờ
+  thành phần. Cổng ở tầng điều phối (`if cfg[...]["enabled"]`) là CHƯA ĐỦ khi hàm bên dưới còn tự
+  đọc env — phải ép env khớp cfg trước khi import. Quy tắc chung: mỗi cờ mà production đọc từ env
+  thì runner phải ghi đè tường minh, không dựa vào máy chạy sạch.
+- **Verify:** `tests/test_evaluation_env_isolation.py` — khoá cả hành vi bẫy (`NLI_ENABLED=0` →
+  `NullNli`, `RERANK_ENABLED=0` → `_IDENTITY`) lẫn việc runner đặt cờ TRƯỚC import production.
+  6 passed; harness + timeout + crag-config: 23 passed.
