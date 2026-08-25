@@ -1271,3 +1271,31 @@ smoke-verified trên stack `memvid_auth_smoke` rebuild từ code mới.
   | CheckSources + CacheLookup + GradeDocuments + ContextBuilder | < 30 | ~0% |
   Khâu sinh câu trả lời chỉ chiếm 3%. `NLI_TIMEOUT_SEC=90` nhưng node chạy 197s — hạn đó rõ ràng
   không phải hạn cho cả node. Đây là chỗ mổ tiếp.
+
+## 2026-08-25 - Chấp nhận trôi extraction: bốn tầng provenance đóng băng, mỗi tầng một hàng rào
+
+- **Việc:** PyMuPDF phiên bản hiện tại đặt dấu tổ hợp `U+0338` lệch một vị trí so với lúc đóng băng
+  dataset (`Eval ̸= optional` thành `Eval̸ = optional` — cùng hiển thị "Eval ≠ optional", khác biệt
+  rỗng về ngữ nghĩa). Người dùng quyết định CHẤP NHẬN và cập nhật dữ liệu cho khớp.
+- **Bốn hàng rào chặn lần lượt, mỗi cái ở một tầng khác nhau:**
+  1. `index_builder`: `canonical extraction changed after coordinate bridge`
+  2. `bridge_imported_spans`: `evidence source unit does not exist` — vì tao đưa span ở dạng ĐÃ
+     bridge; nó cần dạng TRƯỚC bridge (dựng lại từ các trường `source_*` mà span vẫn giữ).
+  3. `canonical/source-unit text mismatch` — `source_units.jsonl` cũng đóng băng text trang 71.
+  4. `reviewed evidence does not match source-unit boundary` — `source_evidence_text` của span là
+     text người duyệt đã đọc, cũng phải khớp.
+- **Cách làm tối thiểu (KHÔNG dựng lại cả candidate package — làm thế sẽ phá
+  `candidate_package_hash` mà `review.py` đang kiểm):**
+  - vá đúng MỘT ký tự trong `source_units.jsonl` (unit trang 71) + hash lại;
+  - vá `source_evidence_text` + hash của ĐÚNG span `R17_s01`;
+  - rồi để `bridge_imported_spans` của chính dự án sinh lại `canonical_documents.jsonl` và toàn bộ
+    89 span. Không tự tay sửa canonical hay `coordinate_bridge`.
+  - Kết quả: bridge OK 89 span / 3 record, `validate_canonical_span` 89/89 đạt.
+- **Prevention:**
+  1. Sửa dữ liệu nghiên cứu thì SAO LƯU TRƯỚC (`_backup-<timestamp>/` trong chính thư mục dataset)
+     và vá ở tầng NGUỒN nhất, rồi để công cụ của dự án sinh lại các tầng dẫn xuất. Tự tay sửa tầng
+     dẫn xuất sẽ để lại hash không nhất quán mà không hàng rào nào bắt được.
+  2. `coordinate_bridge.canonical_text_sha256` là hash CẤP TÀI LIỆU (chung cho mọi span của tài
+     liệu đó), không phải cấp đơn vị — kiểm trước khi đoán phạm vi ảnh hưởng.
+  3. Chuỗi hàng rào này là TÍNH NĂNG, không phải phiền hà. Nó ép mọi bản ghi text mà con người từng
+     đọc phải khớp với text máy đang dùng. Đừng lách bằng cách sửa `status` thành `frozen`.
