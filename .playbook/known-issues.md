@@ -1011,3 +1011,32 @@ chứa "hàm hợp"). Chunk quá thô làm truy hồi kém — chưa sửa, cầ
   - (c) Giữ nguyên và báo cáo "late chunking làm sụp không gian vector" như một kết quả âm — nó LÀ
     một phát hiện thật, miễn là nói rõ nguyên nhân là lệch pooling chứ không phải late chunking
     về nguyên lý.
+
+## (ĐÃ SỬA 2026-08-25) `aggregate` chết vì một run dở dang — bảng kết quả THIẾU SỐ mà không báo gì
+
+- **Triệu chứng:** bảng đối chiếu R1/R2 hiện `n=0` cho `E2_hybrid_R1` và `E3_rerank_R1`, dù cả hai
+  đã chạy xong và có đủ 30 dòng `per_query.jsonl`. `E1_faiss_R1` chỉ có 23/30 dòng.
+- **Nguyên nhân:** `aggregate()` duyệt `runs/*` và gọi thẳng `load_jsonl(run_dir / "retrieval.jsonl")`.
+  Một thí nghiệm bị DỪNG TAY (E4 lúc dừng thang) để lại thư mục có `manifest.json` nhưng chưa kịp
+  ghi `retrieval.jsonl`/`qa.jsonl`. Hàm ném `FileNotFoundError` và dừng hẳn — kéo theo MỌI run xếp
+  sau nó (theo `sorted()`) không được gộp.
+- **Vì sao đây là lỗi nguy hiểm nhất trong cả đợt:** nó không làm chương trình chết trước mắt người
+  đọc — nó làm **bảng kết quả thiếu số một cách im lặng**. Số cụt trông y hệt số thật. Tao đã đọc
+  bảng thiếu và báo cáo nó như bảng đầy đủ. Chỉ tình cờ thấy `n=0` mới lần ra.
+- **Cách xử lý:** kiểm `retrieval.jsonl`/`qa.jsonl` có tồn tại trước khi đọc; thiếu thì bỏ qua run
+  đó VÀ IN RA: `[aggregate] BỎ QUA 1 run dở dang: 75793f7f94d0 (thiếu retrieval.jsonl, qa.jsonl)`.
+- **Prevention:** công cụ gộp số liệu KHÔNG được dừng vì một mục hỏng — nhưng cũng không được bỏ
+  qua im lặng. Hai nửa đều bắt buộc: bỏ qua để phần còn lại dùng được, và kêu ra để người đọc biết
+  bảng không đầy đủ. Dừng-tay giữa chừng là chuyện bình thường khi chạy thí nghiệm dài.
+- **Verify:** `BE/tests/test_aggregate_partial_runs.py` 6 passed — gồm ca run dở dang nằm GIỮA (đúng
+  thứ tự `sorted()` gây lỗi thật), ca nằm đầu, ca thiếu một trong hai file, và ca khẳng định có in
+  cảnh báo.
+- **Số liệu ĐÚNG sau khi sửa (25 truy vấn có chunk vàng):**
+  | nấc | R2_late recall/MRR/nDCG | R1_structure recall/MRR/nDCG |
+  |---|---|---|
+  | E0 bm25 | 0.8371 / 0.7467 / 0.7331 | 0.8371 / 0.7467 / 0.7331 |
+  | E1 faiss | 0.2286 / 0.1213 / 0.1460 | 0.6971 / 0.6727 / 0.6379 |
+  | E2 hybrid | 0.4686 / 0.3313 / 0.3638 | 0.7829 / 0.8213 / 0.7654 |
+  | E3 rerank | 0.6229 / 0.6080 / 0.5963 | **0.9029 / 0.9200 / 0.8917** |
+  Trên nền nhúng ĐÚNG, thang tăng đơn điệu như thiết kế và rerank vượt BM25 thuần 6.6 điểm recall.
+  Trên nền hỏng, thang đi xuống rồi bò lên và BM25 "thắng" — kết luận ngược hoàn toàn.
