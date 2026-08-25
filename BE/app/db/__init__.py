@@ -44,13 +44,29 @@ def get_engine() -> Engine:
     global _engine, _SessionFactory
     with _lock:
         if _engine is None:
+            url = database_url()
+
+            # Pooler Supabase ở chế độ TRANSACTION (cổng 6543) tái dùng connection
+            # backend giữa các client, nên prepared statement phía server đụng tên
+            # nhau: `DuplicatePreparedStatement: prepared statement "_pg3_0" already
+            # exists`. psycopg3 tự dùng prepared statement sau vài lần lặp câu lệnh,
+            # nên lỗi chỉ nổ ra khi tải tăng — dễ qua mặt smoke test rồi chết ở thật.
+            #
+            # `prepare_threshold=None` tắt hẳn prepared statement phía server. Chỉ
+            # bật cho cổng 6543: session pooler (5432) và kết nối trực tiếp giữ một
+            # connection cho mỗi client nên không đụng, và giữ được prepared statement.
+            connect_args: dict = {}
+            if ":6543/" in url:
+                connect_args["prepare_threshold"] = None
+
             _engine = create_engine(
-                database_url(),
+                url,
                 pool_pre_ping=True,   # pooler Supabase có thể cắt connection nhàn rỗi
                 pool_size=5,
                 max_overflow=5,
                 pool_recycle=1800,
                 future=True,
+                connect_args=connect_args,
             )
             _SessionFactory = sessionmaker(bind=_engine, expire_on_commit=False, future=True)
         return _engine

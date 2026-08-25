@@ -12,6 +12,7 @@ cấu trúc thư mục, dễ rà soát bằng mắt trên dashboard.
 
 from __future__ import annotations
 
+import contextlib
 import mimetypes
 import os
 from pathlib import PurePosixPath
@@ -129,6 +130,35 @@ def download(path: str) -> bytes:
     if r.status_code != 200:
         _raise(r, "download")
     return r.content
+
+
+@contextlib.contextmanager
+def fetch_to_temp(path: str, *, suffix: str = ""):
+    """Kéo file từ bucket về một đường dẫn TẠM, dọn sạch khi ra khỏi khối `with`.
+
+    Đây là lưới an toàn cho việc bỏ lưu bản gốc dưới local: pipeline nào cần đọc
+    lại file (ingest lại, trích xuất lại bằng bộ đọc mới) thì lấy từ Storage thay
+    vì trông chờ `input_docs/`.
+
+        with storage.fetch_to_temp(row["file_path"], suffix=".pdf") as p:
+            docs = load_document(p)
+
+    Dọn trong `finally` nên hỏng giữa chừng cũng không để lại rác. Xoá được hay
+    không đều không ném — file tạm sót lại là phiền, không phải lỗi.
+    """
+    import tempfile
+
+    data = download(path)
+    fd, tmp = tempfile.mkstemp(suffix=suffix or os.path.splitext(path)[1])
+    try:
+        with os.fdopen(fd, "wb") as fh:
+            fh.write(data)
+        yield tmp
+    finally:
+        try:
+            os.unlink(tmp)
+        except OSError:
+            pass
 
 
 def signed_url(path: str, ttl: int = 3600) -> str:

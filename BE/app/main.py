@@ -1681,6 +1681,38 @@ def _trigger_memory_tree_build(source_stems: List[str]):
     print(f"{_event} sources={source_stems}", flush=True)
 
 
+def _don_file_tam(source_id: str, file_path: str) -> None:
+    """Xoá bản local sau khi ingest xong — CHỈ khi Storage đã giữ bản gốc.
+
+    Bản gốc sống trên Supabase Storage (bucket private); `input_docs/` chỉ là chỗ
+    đặt tạm để pipeline ingest có một đường dẫn để đọc. Giữ lại sau đó là nhân đôi
+    dung lượng mà không ai đọc tới: đo được 13MB cho 9 file, và không có luồng nào
+    đọc lại bản local sau ingest (`_trigger_background_ingest` gọi đúng một lần,
+    `rebuild_*` làm việc trên index, mở file gốc thì dùng signed URL).
+
+    Điều kiện bảo vệ: `documents.file_path` phải KHÁC `input_path`. Khi Storage
+    chưa cấu hình hoặc upload lỗi, code upload đặt `file_path = save_path` — lúc
+    đó bản local CHÍNH LÀ kho lưu, xoá là mất hẳn file.
+    """
+    try:
+        from app.domains.documents import repository as _docs
+
+        row = _docs.get(source_id) or {}
+        tren_storage = (row.get("file_path") or "").strip()
+        if not tren_storage or tren_storage == file_path:
+            return  # local đang là kho lưu duy nhất — không đụng
+        p = Path(file_path)
+        if p.is_file():
+            p.unlink()
+            # `input_path` trong DB thành đường dẫn chết — KHÔNG cần dọn:
+            # `_delete_input_file` đã kiểm `.exists()` trước khi xoá và coi
+            # file-không-còn là thành công. Giữ lại còn có ích khi truy vết.
+            print(f"🧹 [Ingest] Đã xoá bản tạm: {p.name} (bản gốc ở Storage)")
+    except Exception as exc:
+        # Không dọn được thì thôi — rác đĩa, không phải lỗi nghiệp vụ.
+        print(f"⚠️ [Ingest] Không xoá được bản tạm {file_path}: {exc}")
+
+
 def _run_ingest_job(source_id: str, file_path: str, filename: str) -> None:
     """Ingest execution body. Runs EITHER in a daemon thread (QUEUE_ENABLED=false)
     OR in an RQ worker process (QUEUE_ENABLED=true) — identical behaviour. Enqueued
@@ -1710,6 +1742,10 @@ def _run_ingest_job(source_id: str, file_path: str, filename: str) -> None:
             _update_source_status(source_id, "error", progress=0.0, error=_job_error_text(exc))
         except Exception:
             pass
+    finally:
+        # `finally`: ingest hỏng giữa chừng cũng không để lại bản tạm. Hàm tự kiểm
+        # điều kiện an toàn nên gọi vô điều kiện ở đây là đúng.
+        _don_file_tam(source_id, file_path)
 
 
 def _trigger_background_ingest(source_id: str, file_path: str, filename: str):
@@ -1801,9 +1837,11 @@ def _ingest_uploaded_file(file) -> dict:
     source_stem = _normalize_video_stem(filename)
     uid = _current_user_id()
 
-    # Bản gốc lên Supabase Storage (bucket private). File local vẫn giữ để pipeline
-    # ingest đọc trực tiếp — Storage là bản lưu bền, không phải đường đọc nóng.
-    # Chưa cấu hình Storage (test/CI) → file_path trỏ đường dẫn local, ingest chạy y hệt.
+    # Bản gốc lên Supabase Storage (bucket private) và đó là kho lưu DUY NHẤT.
+    # File local chỉ là chỗ đặt TẠM để pipeline ingest có đường dẫn mà đọc —
+    # `_don_file_tam` xoá nó trong `finally` của job ingest.
+    # Chưa cấu hình Storage (test/CI) → file_path trỏ đường dẫn local, và lúc đó
+    # bản local CHÍNH LÀ kho lưu nên không bị xoá. Xem `_don_file_tam`.
     from app.domains.documents import repository as _docs
     from app.domains.documents import storage as _storage
     stored_path = save_path

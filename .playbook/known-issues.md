@@ -1040,3 +1040,38 @@ chứa "hàm hợp"). Chunk quá thô làm truy hồi kém — chưa sửa, cầ
   | E3 rerank | 0.6229 / 0.6080 / 0.5963 | **0.9029 / 0.9200 / 0.8917** |
   Trên nền nhúng ĐÚNG, thang tăng đơn điệu như thiết kế và rerank vượt BM25 thuần 6.6 điểm recall.
   Trên nền hỏng, thang đi xuống rồi bò lên và BM25 "thắng" — kết luận ngược hoàn toàn.
+
+## (ĐÃ SỬA 2026-08-25) Pooler transaction 6543 + psycopg3 → `DuplicatePreparedStatement`
+
+- **Triệu chứng:** `sqlalchemy.exc.ProgrammingError: (psycopg.errors.DuplicatePreparedStatement)
+  prepared statement "_pg3_0" already exists`. Test đậu khi chạy RIÊNG, rớt khi chạy CHUNG với test
+  khác — dấu hiệu kinh điển của trạng thái phía server bị chia sẻ.
+- **Nguyên nhân:** Supavisor ở chế độ TRANSACTION (cổng 6543) tái dùng connection backend giữa các
+  client. psycopg3 tự chuyển sang prepared statement phía server sau vài lần lặp cùng một câu lệnh,
+  và tên `_pg3_N` đụng nhau giữa các client dùng chung backend.
+- **Vì sao nguy hiểm:** lỗi chỉ nổ khi CÙNG một câu lệnh chạy đủ nhiều lần, tức là khi tải tăng.
+  Smoke test một vài request sẽ qua sạch, rồi chết ở môi trường thật. Và `.env.example` của chính
+  dự án khuyến nghị 6543 cho runtime.
+- **Cách xử lý:** `app/db/__init__.py` truyền `connect_args={"prepare_threshold": None}` khi DSN có
+  `:6543/`. Chỉ cho cổng đó — session pooler (5432) và kết nối trực tiếp giữ một connection riêng
+  cho mỗi client nên không đụng, và giữ được lợi ích của prepared statement.
+- **Prevention:** dùng pooler transaction-mode với psycopg3 thì PHẢI tắt prepared statement. Đây là
+  ràng buộc của Supavisor/PgBouncer, không phải tuỳ chọn hiệu năng.
+- **Verify:** `pytest tests/test_ingest_temp_cleanup.py tests/test_documents_api.py` — trước khi sửa
+  2 failed, sau khi sửa 19 passed. Bộ rộng hơn (upload + documents + delete + schema): 42 passed.
+
+## (GHI NHỚ) Đường tới Supabase đổi hai lần trong một ngày — pooler rồi trực tiếp rồi lại pooler
+
+- **Sáng:** pooler `aws-0` trả `{:error, :nxdomain}` ở cả 5432 lẫn 6543 → tạm chuyển sang kết nối
+  trực tiếp `db.<ref>.supabase.co:5432`, chạy được.
+- **Chiều:** kết nối trực tiếp CHẾT — `ping -6` mất 100% gói. Đường trực tiếp của Supabase chỉ có
+  **IPv6**, và IPv6 trên máy này mất. Cùng lúc đó pooler đã sống lại.
+- **Đã chuyển về pooler** `aws-0-ap-northeast-2.pooler.supabase.com:6543`, kèm bản sửa
+  `prepare_threshold` ở trên.
+- **Hai điều cần nhớ khi dò lại:**
+  1. Pooler cần username dạng `postgres.<project_ref>`; kết nối trực tiếp dùng `postgres` trơn.
+     Đưa nhầm dạng nào cũng cho lỗi gây hiểu lầm: `ENOIDENTIFIER: no tenant identifier provided`
+     (đưa user trơn cho pooler) hoặc `ENOTFOUND: tenant/user not found` (đưa nhầm vùng).
+     Tao đã tưởng Supabase hỏng vì đúng lỗi này, thực ra là probe của mình sai.
+  2. Kết nối trực tiếp phụ thuộc IPv6 → **không dùng được trên Render** và không bền ở mạng gia
+     đình. Pooler có IPv4, bền hơn cho cả hai.
