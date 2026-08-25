@@ -275,6 +275,64 @@ def locate_chunks(canonical_text: str, chunk_texts: list[str]) -> list[dict]:
     return out
 
 
+def project_offsets(source: str, target: str) -> list[int]:
+    """Bảng quy đổi offset: `map[i]` là vị trí trong `target` ứng với offset `i` của `source`.
+
+    Dùng để chiếu toạ độ chunk từ hệ văn bản đã cắt sang hệ canonical. Vùng giống
+    nhau ánh xạ 1-1; vùng khác nhau nội suy tuyến tính giữa hai mốc, nên biên chunk
+    luôn rơi vào một vị trí hợp lệ và đơn điệu không giảm.
+
+    Dài `len(source) + 1` phần tử để `map[end]` của span cuối vẫn tra được.
+    """
+    import difflib
+
+    out = [0] * (len(source) + 1)
+    for tag, i1, i2, j1, j2 in difflib.SequenceMatcher(None, source, target, autojunk=False).get_opcodes():
+        rong_s, rong_t = i2 - i1, j2 - j1
+        if tag == "equal":
+            for k in range(rong_s):
+                out[i1 + k] = j1 + k
+        else:
+            for k in range(rong_s):
+                out[i1 + k] = j1 + (k * rong_t // rong_s if rong_s else 0)
+    out[len(source)] = len(target)
+    return out
+
+
+def locate_chunks_by_spans(canonical_text: str, doc_text: str, spans: list[tuple[int, int]]) -> list[dict]:
+    """Chiếu toạ độ chunk sang canonical bằng span mà bộ cắt ĐÃ trả về.
+
+    Vì sao cần, thay vì `locate_chunks` tìm chuỗi con: biểu diễn structure/late cắt
+    trên bản Markdown do `pymupdf4llm` sinh, mà bản đó VIẾT LẠI cấu trúc — thẻ HTML
+    `<mark>`, đánh số thành `**1.**`, heading `####`. Tìm chuỗi con chính xác trong
+    canonical (bản trích thô) không bao giờ khớp: đo được **1/142** chunk định vị
+    được, và bóc dấu nhấn mạnh chỉ nâng lên 6/142.
+
+    Bộ cắt vốn đã biết `doc_text[start:end] == text`, nên thông tin cần thiết luôn có
+    sẵn — chỉ cần căn `doc_text` với `canonical_text` MỘT LẦN cho mỗi tài liệu rồi quy
+    đổi, thay vì vứt đi rồi đi tìm lại bằng chuỗi.
+    """
+    if not canonical_text or not doc_text or not spans:
+        return [{"canonical_char_start": None, "canonical_char_end": None,
+                 "canonical_alignment": "unresolved"} for _ in spans]
+
+    bang = project_offsets(doc_text, canonical_text)
+    out: list[dict] = []
+    for a, b in spans:
+        if not (isinstance(a, int) and isinstance(b, int)) or a < 0 or b <= a or b > len(doc_text):
+            out.append({"canonical_char_start": None, "canonical_char_end": None,
+                        "canonical_alignment": "unresolved"})
+            continue
+        ca, cb = bang[a], bang[b]
+        if cb <= ca:
+            out.append({"canonical_char_start": None, "canonical_char_end": None,
+                        "canonical_alignment": "unresolved"})
+            continue
+        out.append({"canonical_char_start": ca, "canonical_char_end": cb,
+                    "canonical_alignment": "span_projection"})
+    return out
+
+
 def map_span_to_chunks(span: dict, chunks: list[dict], *, threshold: float = DEFAULT_OVERLAP_THRESHOLD) -> list[dict]:
     """Binary qrel mapping fixed before experiments: overlap/span_length >= 0.50.
 

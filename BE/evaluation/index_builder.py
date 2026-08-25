@@ -50,7 +50,7 @@ def build(config_path: Path, documents_dir: Path | None = None, *, dataset_dir: 
     from app.clients.llm_factory import get_embeddings
     from app.domains.ingest.document_loader import load_document, split_documents
     from app.domains.ingest.chunking import chunk_markdown_spans
-    from evaluation.evidence import canonical_document, locate_chunks
+    from evaluation.evidence import canonical_document, locate_chunks, locate_chunks_by_spans
 
     embeddings = get_embeddings()
     out.mkdir(parents=True, exist_ok=True)
@@ -116,7 +116,14 @@ def build(config_path: Path, documents_dir: Path | None = None, *, dataset_dir: 
         # retain their pooled late vectors in the same namespaced FAISS index.
         if cfg["late_chunking"] and vectors is None and chunks:
             vectors = embeddings.embed_documents(chunks)
-        alignments = locate_chunks(canonical_text, chunks)
+        # Biểu diễn structure/late: dùng span mà bộ cắt đã trả về rồi chiếu sang
+        # canonical. Tìm chuỗi con chỉ đúng cho chế độ đệ quy (chunk là chuỗi con
+        # thật của text thô); với bản Markdown do pymupdf4llm sinh thì đo được chỉ
+        # 1/142 chunk định vị được. Xem locate_chunks_by_spans.
+        if spans and len(spans) == len(chunks) and doc_text:
+            alignments = locate_chunks_by_spans(canonical_text, doc_text, spans)
+        else:
+            alignments = locate_chunks(canonical_text, chunks)
         for i, text in enumerate(chunks):
             md = {"chunk_id": cid, "source_stem": stable_doc_id, "doc_id": stable_doc_id, "source": path.name,
                   "video": path.name, "document_chunk_index": i,

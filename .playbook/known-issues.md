@@ -922,7 +922,7 @@ chứa "hàm hợp"). Chunk quá thô làm truy hồi kém — chưa sửa, cầ
   kiểm. Mỗi lần đoán tên field đều cho một con số trông hợp lý mà sai — và con số sai kiểu đó
   nguy hiểm hơn lỗi ném ra, vì nó không kêu.
 
-## (CHẶN — CẦN NGƯỜI QUYẾT) qrel của R1/R2 không sinh được: chunk Markdown không định vị được trong canonical
+## (ĐÃ SỬA 2026-08-25) qrel của R1/R2 không sinh được: chunk Markdown không định vị được trong canonical
 
 - **Trạng thái sau khi đã phá 4 hàng rào provenance:** 3 index dựng xong.
   | index | chunk | tb ký tự | trung vị | chunk có toạ độ canonical |
@@ -949,5 +949,22 @@ chứa "hàm hợp"). Chunk quá thô làm truy hồi kém — chưa sửa, cầ
     tìm chuỗi con từng chunk sau khi cắt, hãy căn Markdown↔canonical MỘT LẦN cho mỗi tài liệu rồi
     quy đổi offset. Đúng hơn nhiều nhưng là việc lớn và đổi `MAPPING_RULE_VERSION`.
   - (c) Phân xử tay 141 chunk — không khả thi.
+- **ĐÃ SỬA — chọn đường (b), sửa gốc:** `evaluation/evidence.py` thêm `project_offsets(source,
+  target)` (bảng quy đổi offset: vùng giống ánh xạ 1-1, vùng khác nội suy tuyến tính giữa hai
+  mốc, đơn điệu không giảm) và `locate_chunks_by_spans(canonical, doc_text, spans)`.
+  `index_builder` dùng đường mới khi có span hợp lệ, GIỮ `locate_chunks` cho chế độ đệ quy — ở
+  đó chunk LÀ chuỗi con thật của text thô nên tìm chuỗi vẫn đúng.
+- **Vì sao hướng này đúng:** `chunk_markdown_spans` đã bảo đảm `doc_text[start:end] == text`,
+  nên thông tin luôn có sẵn. Harness cũ vứt nó đi rồi đi tìm lại bằng chuỗi trong MỘT HỆ TOẠ ĐỘ
+  KHÁC. Giờ chỉ căn hai văn bản một lần mỗi tài liệu rồi quy đổi.
+- **Kết quả đo được:** R1_structure từ **1/142** lên **141/142** chunk có toạ độ canonical
+  (`span_projection` 141, `unresolved` 1). qrel R1 sinh ra **91**, bằng R0.
+- **Chi phí:** căn văn bản tốn 32.9s cho tài liệu lớn nhất (48k ký tự md ↔ 41.6k canonical,
+  5317 opcode, 81.4% giống), dưới 1s cho hai tài liệu còn lại. Một lần lúc dựng index.
+- **Đánh dấu provenance:** chunk chiếu bằng span mang `canonical_alignment: "span_projection"`,
+  phân biệt được với `exact_normalized` của đường tìm chuỗi. Không trộn hai cách trong dữ liệu.
+- **Verify:** `BE/tests/test_evidence_span_projection.py` 12 passed — gồm một ca dựng đúng tình
+  huống thật: cùng dữ liệu thì `locate_chunks` trả `unresolved` còn `locate_chunks_by_spans`
+  chiếu được, và hai hàm trả CÙNG bộ khoá (builder ghi chung một chỗ).
 - **Lưu ý:** R0 cũng có 4/171 chunk `unresolved` (chunk có khối code, ví dụ `RAGAS Code Setup — Quick
   Start\nfrom ragas import evaluate...`). Ít nhưng không phải không có.
