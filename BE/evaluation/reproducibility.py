@@ -17,12 +17,30 @@ def sha256_path(path: Path) -> str | None:
     return h.hexdigest()
 
 
+def _hash_tree(path: Path, h) -> None:
+    """Gộp một thư mục vào hash theo thứ tự ổn định (đệ quy, sắp theo đường dẫn tương đối).
+
+    Cần thiết vì `--build-memory-tree` tạo thư mục con `memory/` ngay trong thư mục
+    index. Bản cũ gọi thẳng `path.open("rb")` cho mọi mục của `glob("*")`, nên gặp
+    thư mục là ném `PermissionError` trên Windows (`IsADirectoryError` trên Linux) —
+    tức mọi thí nghiệm dùng index có cây nhớ đều chết trước khi chạy truy vấn nào.
+    """
+    for con in sorted(path.rglob("*"), key=lambda p: str(p.relative_to(path)).replace("\\", "/")):
+        if not con.is_file():
+            continue
+        h.update(str(con.relative_to(path)).replace("\\", "/").encode())
+        h.update((sha256_path(con) or "MISSING").encode())
+
+
 def content_hash(paths: list[Path]) -> str:
     h = hashlib.sha256()
     for path in sorted(paths, key=lambda p: str(p)):
         h.update(str(path.name).encode())
-        digest = sha256_path(path)
-        h.update((digest or "MISSING").encode())
+        if path.is_dir():
+            _hash_tree(path, h)
+        else:
+            digest = sha256_path(path)
+            h.update((digest or "MISSING").encode())
     return h.hexdigest()
 
 
