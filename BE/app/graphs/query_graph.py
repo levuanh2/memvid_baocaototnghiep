@@ -22,6 +22,30 @@ from app.domains.retrieval.hybrid import HybridRetriever
 from shared.config import get_settings
 _log = logging.getLogger(__name__)
 
+def run_with_timeout(fn: Callable[[], Any], timeout: float, *, propagate_ctx: bool = False) -> Any:
+    """Chạy `fn` và BỎ CHỜ sau `timeout` giây. Ném TimeoutError khi quá hạn.
+
+    Vì sao cần hàm này thay vì `with ThreadPoolExecutor(...) as ex:` như trước:
+    `__exit__` của executor gọi `shutdown(wait=True)`, nên nó CHẶN cho tới khi
+    worker chạy xong rồi TimeoutError mới tới được `except`. Kết quả là timeout
+    hoàn toàn vô hiệu — đo được: đặt timeout=2 cho một việc 8 giây thì khối
+    `with` vẫn thoát ở giây 8, không phải giây 2.
+
+    Điều đó làm mọi hạn giờ trong graph này thành trang trí, trong đó nặng nhất
+    là NLI: `NLI_TIMEOUT_SEC=90` mà node `VerifyContext` chạy 197 giây.
+
+    `shutdown(wait=False)` không giết được thread (Python không cho), nhưng nó
+    trả quyền điều khiển về ngay — đúng nghĩa của timeout: thôi chờ, đi tiếp
+    bằng đường dự phòng. Công việc bỏ lại tự kết thúc rồi thread tự thu.
+    """
+    ex = ThreadPoolExecutor(max_workers=1)
+    try:
+        fut = ctx_submit(ex, fn) if propagate_ctx else ex.submit(fn)
+        return fut.result(timeout=timeout)
+    finally:
+        ex.shutdown(wait=False)
+
+
 def build_query_graph(
     *,
     data_dir: Path,
@@ -196,9 +220,8 @@ def build_query_graph(
 
             mem_result = None
             try:
-                with ThreadPoolExecutor(max_workers=1) as ex:
-                    fut = ctx_submit(ex, _query_mem)  # Phase 0: propagate LLM counter
-                    mem_result = fut.result(timeout=MEMORY_TREE_TIMEOUT)
+                # ctx_submit: propagate LLM counter (Phase 0) vào thread của pool.
+                mem_result = run_with_timeout(_query_mem, MEMORY_TREE_TIMEOUT, propagate_ctx=True)
             except TimeoutError:
                 log_node_event(state["job_id"], "RetrieveMemory", "timeout", t.ms(), {"timeout_sec": MEMORY_TREE_TIMEOUT})
                 return {**state, "progress": 15, "current_node": "RetrieveMemory", "error": None}
@@ -270,6 +293,11 @@ def build_query_graph(
             sid = (state.get("session_id") or "").strip()
             if get_session_history and sid:
                 try:
+                    # ponytail: chỗ này vẫn dính lỗi `with` chặn lúc thoát như 4 chỗ đã
+                    # sửa bằng run_with_timeout — nhưng nó chạy HAI việc song song nên
+                    # hàm một-việc không vừa. Để lại vì thiệt hại nhỏ: truy hồi đo được
+                    # 727ms so với hạn 60s, và nhánh dự phòng chỉ chạy lại chính nó.
+                    # Nâng lên khi nào cần: đổi sang wait(fs, timeout=) + shutdown(wait=False).
                     with ThreadPoolExecutor(max_workers=2) as ex:
                         hf = ex.submit(get_session_history, sid, 8)
                         rf = ex.submit(_do_hybrid_retrieve)
@@ -367,8 +395,7 @@ def build_query_graph(
 
             scored_ok = True
             try:
-                with ThreadPoolExecutor(max_workers=1) as ex:
-                    ranked = ex.submit(_do_rerank).result(timeout=RERANK_TIMEOUT)
+                ranked = run_with_timeout(_do_rerank, RERANK_TIMEOUT)
             except TimeoutError:
                 # Quá hạn → giữ nguyên thứ tự, chỉ cắt top_n (không làm hỏng câu trả lời).
                 ranked = [(i, 0.0) for i in range(min(RERANK_TOP_N, len(chunks)))]
@@ -447,8 +474,7 @@ def build_query_graph(
                 )
 
             try:
-                with ThreadPoolExecutor(max_workers=1) as ex:
-                    conflicts = ex.submit(_do_detect).result(timeout=NLI_TIMEOUT)
+                conflicts = run_with_timeout(_do_detect, NLI_TIMEOUT)
             except TimeoutError:
                 conflicts = []
                 nli_timed_out = True
@@ -522,10 +548,8 @@ def build_query_graph(
             return {**state, "error": str(e), "current_node": "ContextBuilder"}
 
     def _call_llm_with_timeout(fn: Callable[[], str]) -> str:
-        with ThreadPoolExecutor(max_workers=1) as ex:
-            # Phase 0: propagate LLM counter contextvar vào pool thread.
-            fut = ctx_submit(ex, fn)
-            return fut.result(timeout=AI_TIMEOUT)
+        # Phase 0: propagate LLM counter contextvar vào pool thread.
+        return run_with_timeout(fn, AI_TIMEOUT, propagate_ctx=True)
 
     def generate_answer_node(state: dict) -> dict:
         t = _Timer()

@@ -742,3 +742,47 @@ chứa "hàm hợp"). Chunk quá thô làm truy hồi kém — chưa sửa, cầ
   nguyên, 19 sự kiện token).
 - **Còn lại:** `BE/_backup-<timestamp>/` chứa bản CŨ tháng 7 (đã bị thay). Thư mục
   `e:/memvid_NCKH/MemVid_New/BE` vẫn nguyên vẹn làm bản gốc. Xoá được khi đã yên tâm.
+
+## (ĐÃ SỬA 2026-08-24) MỌI timeout trong query_graph đều vô hiệu — `with ThreadPoolExecutor` chặn lúc thoát
+
+- **Triệu chứng:** `NLI_TIMEOUT_SEC=90` nhưng node `VerifyContext` chạy 197 giây. Kiểm log node
+  thấy đây là số thật, lặp lại: 5 lần chạy, trung vị 197 691 ms, max 226 979 ms.
+- **Nguyên nhân:** khuôn `with ThreadPoolExecutor(max_workers=1) as ex: ex.submit(fn).result(timeout=T)`.
+  `result()` ném `TimeoutError` đúng hạn, NHƯNG `__exit__` của executor gọi `shutdown(wait=True)`
+  nên nó chặn tới khi worker chạy xong, rồi ngoại lệ mới tới được `except`. Đo tách bạch: việc 8
+  giây với `timeout=2` thì khối `with` thoát ở giây **8.0**, không phải 2.0; bỏ `with` và
+  `shutdown(wait=False)` thì thoát đúng giây **2.0**.
+- **Phạm vi:** 5 chỗ trong `query_graph.py`, tức TOÀN BỘ hạn giờ của pipeline truy vấn —
+  `MEMORY_TREE_TIMEOUT`, `RERANK_TIMEOUT`, `NLI_TIMEOUT`, `AI_TIMEOUT` (hạn gọi LLM), và một chỗ
+  chạy hai việc song song.
+- **Cách xử lý:** thêm `run_with_timeout(fn, timeout, propagate_ctx=)` — tạo executor, submit,
+  `result(timeout=)`, rồi `shutdown(wait=False)` trong `finally`. Thay 4 chỗ một-việc. Chỗ thứ 5
+  (hai việc song song) để lại kèm comment `ponytail:` nêu rõ trần và đường nâng cấp — thiệt hại nhỏ
+  vì truy hồi đo được 727ms so với hạn 60s.
+- **Prevention:** `shutdown(wait=False)` KHÔNG giết được thread (Python không cho) — công việc bỏ
+  lại vẫn chạy tới hết rồi thread mới tự thu. Đó đúng là ý nghĩa của timeout ở đây: thôi chờ, đi
+  tiếp bằng đường dự phòng. Đừng bao giờ đặt `.result(timeout=)` bên trong `with ThreadPoolExecutor`
+  và mong hạn giờ có tác dụng.
+- **Verify:** `BE/tests/test_query_timeout.py` — ca `test_bo_cho_dung_han_chu_khong_doi_viec_xong`
+  khẳng định việc 6 giây với hạn 0.5s phải trả quyền dưới 3 giây (bản cũ trả ở ~6s). 5 passed;
+  `test_crag_graph` + `test_hitl_graph` + ca mới: 22 passed.
+
+## (CHƯA SỬA) NLI mDeBERTa chậm gấp ~250 lần dự toán FLOP và chưa từng bắt được mâu thuẫn nào
+
+- **Số đo (máy để yên, lặp 3 lần đều nhau):** một lượt forward `mDeBERTa-v3-base-mnli-xnli`,
+  batch 2 × 512 token → **94 giây**. Theo độ dài: 128 token 28.2s, 256 token 47.7s.
+  `detect_conflicts` với `max_pairs=1` (đúng 2 chiều) → **91.3s**. Nạp model một lần → 17.9s.
+- **Không phải do torch:** matmul thuần trên cùng máy đạt **400 GFLOPS**, MKL 2024.2 + oneDNN đủ,
+  8 luồng. Dự toán FLOP cho một forward là ~0.1s. Lệch ~250 lần. Nghi attention tách rời của
+  DeBERTa-v3 trong `transformers` (dựng tensor vị trí tương đối + `torch.gather`, nghẽn bộ nhớ
+  chứ không nghẽn tính toán) — CHƯA xác minh tới cùng.
+- **Hiệu quả thực tế:** `VerifyContext` chạy 5 lần trong các truy vấn thật, **0 lần** phát hiện mâu
+  thuẫn, tiêu tổng 1008 giây.
+- **Cảnh báo về dữ liệu lịch sử:** `logs.sqlite` có 46 bản ghi `VerifyContext` cũ với trung vị 1ms
+  và 16 lần "bắt được mâu thuẫn" — TOÀN BỘ có `job_id='j1'`, tức là của unit test với engine giả
+  (có cả ca `{"error": "nli down"}`). ĐỪNG dùng chúng làm số liệu vận hành.
+- **Hệ quả sau khi sửa timeout:** hạn 90s nay cắn thật, nên NLI sẽ hết giờ ở gần như mọi truy vấn
+  và trả `[]` — tức là vẫn mất 90 giây mà không đóng góp gì. Trạng thái đó tệ hơn tắt hẳn.
+- **Lựa chọn, chưa quyết:** (a) `NLI_ENABLED=0` cho chạy thường, giữ cờ cho ablation E4_nli của
+  luận văn; (b) đổi sang model NLI nhỏ hơn nhiều (họ MiniLM đa ngữ) rồi đo lại; (c) giữ nguyên và
+  chấp nhận NLI luôn hết giờ.
