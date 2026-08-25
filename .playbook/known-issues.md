@@ -921,3 +921,33 @@ chứa "hàm hợp"). Chunk quá thô làm truy hồi kém — chưa sửa, cầ
   **Bài học:** với dữ liệu nghiên cứu có lược đồ lạ, ĐỌC TRỌN một bản ghi TRƯỚC khi viết phép
   kiểm. Mỗi lần đoán tên field đều cho một con số trông hợp lý mà sai — và con số sai kiểu đó
   nguy hiểm hơn lỗi ném ra, vì nó không kêu.
+
+## (CHẶN — CẦN NGƯỜI QUYẾT) qrel của R1/R2 không sinh được: chunk Markdown không định vị được trong canonical
+
+- **Trạng thái sau khi đã phá 4 hàng rào provenance:** 3 index dựng xong.
+  | index | chunk | tb ký tự | trung vị | chunk có toạ độ canonical |
+  |---|---|---|---|---|
+  | R0_recursive | 171 | 300 | 310 | **167 / 171** |
+  | R1_structure | 142 | 388 | 450 | **1 / 142** |
+  | R2_late | 142 | 388 | 450 | **1 / 142** |
+  R0 sinh được **91 qrel**. R1 và R2 chết ở `span V01_s01 has unresolved chunk alignment`.
+- **Nguyên nhân THẬT (không phải span khó phân xử):** `map_span_to_chunks` trả `relevant: None`
+  khi CHUNK thiếu `canonical_char_start/end`, chứ không phải khi span không chồng lấn. Mà
+  `locate_chunks` dùng TÌM CHUỖI CON CHÍNH XÁC trong canonical text. R0 cắt trên text thô nên chunk
+  là chuỗi con thật → khớp. R1/R2 cắt trên bản Markdown do `pymupdf4llm` sinh, ví dụ:
+  `'#### <mark>Sau buổi học này, bạn sẽ:</mark>\n**1.** Hiểu vector embeddings...'`
+  Có thẻ HTML `<mark>`, đánh số thành `**1.**`, heading `####`. Đó là VIẾT LẠI CẤU TRÚC, không phải
+  thêm dấu.
+- **Đã thử và KHÔNG đủ:** `locate_chunks` vốn đã bóc dấu heading `^#{1,6}\s+`. Bóc thêm nhấn mạnh
+  (`**đậm**`, `_nghiêng_`, `*nghiêng*`) chỉ nâng từ **1/142 lên 6/142**. Bóc dấu không phải hướng đúng.
+- **Mức lan: TOÀN BỘ.** Cả 8 config E0–E7 đều `index_dir: reports/evaluation/indexes/R2_late`. Nên
+  cả thang ablation chặn ở đúng chỗ này.
+- **Ba đường, cần người quyết:**
+  - (a) Đổi 8 config E sang `R0_recursive` — chạy được NGAY (qrel đã có). Đổi lại: E0–E7 sẽ đo biểu
+    diễn cắt-đệ-quy chứ không phải late chunking. Trục so sánh R0/R1/R2 vốn là trục riêng.
+  - (b) Sửa đúng gốc: `chunk_markdown_spans` ĐÃ trả `start`/`end` trong hệ toạ độ Markdown. Thay vì
+    tìm chuỗi con từng chunk sau khi cắt, hãy căn Markdown↔canonical MỘT LẦN cho mỗi tài liệu rồi
+    quy đổi offset. Đúng hơn nhiều nhưng là việc lớn và đổi `MAPPING_RULE_VERSION`.
+  - (c) Phân xử tay 141 chunk — không khả thi.
+- **Lưu ý:** R0 cũng có 4/171 chunk `unresolved` (chunk có khối code, ví dụ `RAGAS Code Setup — Quick
+  Start\nfrom ragas import evaluate...`). Ít nhưng không phải không có.
