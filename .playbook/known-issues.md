@@ -854,3 +854,41 @@ chứa "hàm hợp"). Chunk quá thô làm truy hồi kém — chưa sửa, cầ
   ngay — và trước khi sửa lỗi `with ThreadPoolExecutor` thì hạn này còn không cắn nên chưa ai thấy.
 - Ba đường khi cần: giảm `RERANK_CANDIDATE_K` (20 xuống 10 = 6.85s), nâng `RERANK_TIMEOUT_SEC`, hoặc
   cắt ngắn text đưa vào cross-encoder. Chưa quyết.
+
+## (ĐÃ SỬA 2026-08-24) bge-m3 không nạp được qua sentence-transformers — torch.load bị chặn
+
+- **Triệu chứng:** `python -m evaluation.index_builder` chết ngay ở `get_embeddings()`:
+  `ValueError: Due to a serious vulnerability issue in torch.load ... require torch >= 2.6
+  (CVE-2025-32434). This version restriction does not apply when loading files with safetensors.`
+- **Nguyên nhân:** `transformers` bản mới từ chối `torch.load` mọi checkpoint `.bin` khi torch < 2.6
+  (ở đây torch 2.5.1+cpu). Kho bge-m3 có CẢ HAI định dạng nhưng sentence-transformers chọn `.bin`.
+- **Vì sao app vẫn chạy được mà chỉ bộ dựng index chết:** đường ingest của app dùng LATE_CHUNKING=1,
+  đi qua `late_chunk.py` với loader riêng. Chỉ nhánh nào gọi `get_embeddings()` với
+  `LATE_CHUNKING=0` mới dính — và đó đúng là cách config R0/R1 chạy. Một lỗi ẩn sau cờ.
+- **Cách xử lý:** `llm_factory.get_embeddings()` truyền
+  `model_kwargs={"device": "cpu", "model_kwargs": {"use_safetensors": True}}`. Kiểm riêng: nạp
+  được, dim 1024, 20.3s.
+- **Prevention:** đừng nâng torch để chữa (kéo theo cả stack langchain). Ép safetensors là đúng
+  hướng và rẻ. Khi thêm model mới, kiểm nó có `model.safetensors` trước khi ghim vào config.
+
+## (CHẶN — CẦN NGƯỜI QUYẾT) Ablation E0–E7 không chạy được: canonical extraction đã lệch
+
+- **Trạng thái:** `reports/evaluation/runs/` KHÔNG TỒN TẠI. Bộ ablation chưa chạy lần nào, nên chưa
+  có một con số recall/precision nào cho chương 4.
+- **Ba cửa đã qua:** (1) lỗi safetensors ở trên — đã sửa; (2) builder giải đường dẫn nguồn theo CWD
+  nên phải chạy TỪ GỐC REPO với `PYTHONPATH=BE`, không phải từ `BE/`; (3) `corpus_version:
+  REPLACE_BEFORE_BUILD` — thực ra builder tự lấy từ manifest khi dùng `--dataset`.
+- **Cửa còn lại:** `ValueError: canonical extraction changed after coordinate bridge:
+  cv1_ragas_guardrails`. Dataset ghi bản trích xuất chuẩn kèm hash, người gán nhãn đánh dấu span
+  bằng chứng TRÊN ĐÚNG bản đó. Trích lại bây giờ ra text khác nên toạ độ span không còn bảo đảm.
+- **Đo mức lệch:** độ dài Y HỆT (41619 = 41619), `SequenceMatcher.ratio()` = **1.0000**, khác biệt
+  duy nhất là VỊ TRÍ của dấu tổ hợp `U+0338`. Không bằng nhau kể cả sau NFC lẫn NFD
+  (`normalize_evidence_text` vốn đã áp NFC), nên đây là đổi thứ tự ký tự thật, không phải đổi dạng
+  chuẩn. Nghi PyMuPDF đổi cách phát dấu tổ hợp giữa các phiên bản. 1/3 tài liệu có canonical bị lệch.
+- **KHÔNG được phá hàng rào này.** Nó tồn tại đúng để chặn việc tính số liệu luận văn trên annotation
+  không còn khớp text. Độ dài giống hệt nên span "gần như chắc chắn" vẫn đúng — nhưng "gần như" không
+  phải tiêu chuẩn cho ground truth.
+- **Ba đường, cần người quyết:** (a) chạy lại coordinate bridge cho tài liệu đó theo
+  `PHASE_4C_COMMANDS.md` mục 3 rồi phân xử thủ công các span lệch; (b) loại tài liệu đó khỏi corpus;
+  (c) ghim đúng phiên bản PyMuPDF đã tạo bản gốc — nhưng không biết là bản nào.
+- **Chưa xác minh:** vì sao chỉ 3/12 tài liệu có canonical entry.
