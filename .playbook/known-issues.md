@@ -773,9 +773,16 @@ chứa "hàm hợp"). Chunk quá thô làm truy hồi kém — chưa sửa, cầ
   batch 2 × 512 token → **94 giây**. Theo độ dài: 128 token 28.2s, 256 token 47.7s.
   `detect_conflicts` với `max_pairs=1` (đúng 2 chiều) → **91.3s**. Nạp model một lần → 17.9s.
 - **Không phải do torch:** matmul thuần trên cùng máy đạt **400 GFLOPS**, MKL 2024.2 + oneDNN đủ,
-  8 luồng. Dự toán FLOP cho một forward là ~0.1s. Lệch ~250 lần. Nghi attention tách rời của
-  DeBERTa-v3 trong `transformers` (dựng tensor vị trí tương đối + `torch.gather`, nghẽn bộ nhớ
-  chứ không nghẽn tính toán) — CHƯA xác minh tới cùng.
+  8 luồng. Dự toán FLOP cho một forward là ~0.1s. Lệch ~250 lần.
+- **Nút thắt là công việc ĐƠN LUỒNG, không phải tính toán** — hai phép đo cùng chỉ một hướng:
+  1. Scale theo luồng gần như PHẲNG (512 token, batch 2): 1 luồng 96.5s · 4 luồng 94.8s ·
+     8 luồng 86.7s · 16 luồng 88.7s. Gấp 16 lần luồng chỉ nhanh hơn 10%. Việc nghẽn ở matmul
+     thì phải scale 6–8 lần (matmul thuần trên chính máy này scale đúng như vậy).
+  2. Thời gian TUYẾN TÍNH theo độ dài: 128 token 28.2s · 256 token 47.7s · 512 token 92.8s
+     (gấp đôi token = gấp 1.9 lần thời gian). Không phải bậc hai, nên KHÔNG phải ma trận
+     attention O(n²).
+  Kết luận: thời gian nằm ở các phép gather/index tuần tự của attention tách rời DeBERTa-v3
+  trong `transformers`. Hệ quả thực dụng: **thêm luồng hay gom lô đều không cứu được**.
 - **Hiệu quả thực tế:** `VerifyContext` chạy 5 lần trong các truy vấn thật, **0 lần** phát hiện mâu
   thuẫn, tiêu tổng 1008 giây.
 - **Cảnh báo về dữ liệu lịch sử:** `logs.sqlite` có 46 bản ghi `VerifyContext` cũ với trung vị 1ms
