@@ -1299,3 +1299,33 @@ smoke-verified trên stack `memvid_auth_smoke` rebuild từ code mới.
      liệu đó), không phải cấp đơn vị — kiểm trước khi đoán phạm vi ảnh hưởng.
   3. Chuỗi hàng rào này là TÍNH NĂNG, không phải phiền hà. Nó ép mọi bản ghi text mà con người từng
      đọc phải khớp với text máy đang dùng. Đừng lách bằng cách sửa `status` thành `frozen`.
+
+## 2026-08-25 - GPU nằm ngay đó mà torch không chạm được: hai lớp chặn, cả hai đều cố ý
+
+- **Phát hiện:** máy có **RTX 4050 Laptop 6GB**, nhưng `torch 2.5.1+cpu` — bản CPU-only, `CUDA build
+  None`. Toàn bộ ablation chạy CPU: NLI 298 giây/truy vấn, cả thang E4–E7 ước 12–15 giờ.
+- **Hai lớp chặn, cả hai đều là quyết định ĐÚNG cho môi trường của nó:**
+  1. `requirements.txt:54` ghim `torch==2.5.1+cpu` với comment "tránh kéo CUDA toolkit trong
+     Docker". Đúng cho ảnh Docker và máy chủ không GPU.
+  2. Thiết bị ghim cứng `"cpu"` ở `llm_factory.get_embeddings` và `late_chunk`; còn `nli.py` KHÔNG
+     đặt gì — mà `transformers` không tự chuyển model sang GPU, nên nó luôn ở CPU dù có card.
+- **Bài học chính:** một lựa chọn đúng cho triển khai có thể là cái giá đắt ở máy phát triển, và
+  vì nó KHÔNG gây lỗi nào nên không ai để ý. Giống hệt `DATA_DIR` trỏ sai và `content_hash` nghẹn
+  thư mục: hệ thống chạy đúng, chỉ là chậm gấp 30 lần hoặc đo nhầm chỗ.
+- **Cách làm đã chọn:** `shared/device.py::torch_device()` là nguồn sự thật duy nhất, mặc định
+  `cpu` (KHÔNG đổi hành vi ở đâu cả), đổi bằng `TORCH_DEVICE`. Bốn chỗ trước đây tự quyết nay đều
+  hỏi hàm đó. `requirements.txt` GIỮ NGUYÊN `+cpu` — torch CUDA cài riêng vào venv của máy dev.
+- **Prevention:**
+  1. Xin `cuda` mà torch không thấy CUDA thì **kêu MỘT lần rồi lùi về CPU**, không ném. Im lặng
+     lùi về CPU là cách nhanh nhất để một lần chạy chậm gấp 30 lần mà không ai biết vì sao — đúng
+     cái bẫy đã mất nhiều giờ ở `DATA_DIR`.
+  2. `transformers` KHÔNG tự `.to(device)`. Đặt biến môi trường mà quên dòng đó thì model vẫn nằm
+     CPU và tưởng là GPU không giúp gì. Tensor đầu vào cũng phải cùng thiết bị với model.
+  3. `sentence_transformers.CrossEncoder` thì NGƯỢC LẠI — nó TỰ dò CUDA. Không nói rõ `device=` thì
+     nó có thể lên GPU trong khi các model khác ở CPU: tốn VRAM ngoài dự tính và số đo không tái
+     lập được. Phải đặt tường minh cả khi muốn CPU.
+  4. In thiết bị lúc khởi động (`TORCH_DEVICE: cpu (torch 2.5.1+cpu, CUDA build cpu-only, ...)`).
+     Cùng lý do với `DATA_DIR`: cấu hình trỏ sai không bao giờ tự báo.
+- **Ràng buộc VRAM đã tính trước:** bge-m3 ~2.3GB + bge-reranker ~2.2GB + mDeBERTa ~1.1GB ≈ 5.6GB
+  trên card 6GB. Ollama (qwen 4.7GB) KHÔNG ở chung được — cách chia hợp lý là model HF lên GPU,
+  Ollama giữ CPU, vì sinh chữ chỉ chiếm 3% thời gian còn NLI+rerank chiếm 96%.

@@ -112,6 +112,15 @@ try:
 except Exception as _exc:
     print("DATA_DIR: không xác định được —", _exc)
 
+# Thiết bị chạy model PyTorch. In ra vì chênh lệch CPU/GPU ở đây là 30 lần
+# (NLI đo được 298 giây/truy vấn trên CPU), mà trỏ sai không gây lỗi nào.
+try:
+    from shared.device import mo_ta as _mo_ta_thiet_bi
+
+    print("TORCH_DEVICE:", _mo_ta_thiet_bi())
+except Exception as _exc:
+    print("TORCH_DEVICE: không xác định được —", _exc)
+
 # CORS:
 # - Mặc định giữ hành vi hiện tại (cho phép tất cả origins) để không phá flow/FE.
 # - Khi deploy (Railway + Vercel) nên set CORS_ORIGINS để allowlist domain Vercel.

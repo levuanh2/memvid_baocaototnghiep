@@ -53,6 +53,7 @@ class MDebertaNli:
 
     def __init__(self, model_name: str) -> None:
         self.model_name = model_name
+        self.device = "cpu"   # đặt lại theo shared.device lúc nạp model
         self._tok = None
         self._model = None
         self._id2label: Dict[int, str] = {}
@@ -65,8 +66,15 @@ class MDebertaNli:
                 if self._model is None:
                     from transformers import AutoModelForSequenceClassification, AutoTokenizer
 
+                    from shared.device import torch_device
+
                     tok = AutoTokenizer.from_pretrained(self.model_name)
                     model = AutoModelForSequenceClassification.from_pretrained(self.model_name)
+                    # `transformers` KHÔNG tự chuyển model sang GPU — không có dòng
+                    # `.to()` này thì đặt TORCH_DEVICE=cuda cũng vô nghĩa, model vẫn
+                    # nằm trên CPU và mỗi truy vấn vẫn mất 298 giây.
+                    self.device = torch_device()
+                    model.to(self.device)
                     model.eval()
                     raw = getattr(model.config, "id2label", None) or {}
                     # Chuẩn hoá: index -> nhãn lowercase ('ENTAILMENT' → 'entailment').
@@ -87,6 +95,9 @@ class MDebertaNli:
             premises, hypotheses,
             return_tensors="pt", truncation=True, padding=True, max_length=512,
         )
+        # Tensor đầu vào phải nằm CÙNG thiết bị với model, nếu không torch ném
+        # "Expected all tensors to be on the same device".
+        inputs = {k: v.to(self.device) for k, v in inputs.items()}
         with torch.no_grad():
             logits = model(**inputs).logits
         probs = torch.softmax(logits, dim=-1).tolist()

@@ -73,8 +73,13 @@ class CrossEncoderReranker:
                 if self._model is None:
                     from sentence_transformers import CrossEncoder
 
+                    from shared.device import torch_device
+
                     # max_length tránh OOM với chunk dài; bge-reranker-v2-m3 tới 8K.
-                    self._model = CrossEncoder(self.model_name, max_length=512)
+                    # Đặt device TƯỜNG MINH: CrossEncoder tự dò CUDA, nên nếu không
+                    # nói rõ thì nó có thể lên GPU trong khi các model khác ở CPU —
+                    # tốn VRAM ngoài dự tính và làm số đo không tái lập được.
+                    self._model = CrossEncoder(self.model_name, max_length=512, device=torch_device())
         return self._model
 
     def rerank(

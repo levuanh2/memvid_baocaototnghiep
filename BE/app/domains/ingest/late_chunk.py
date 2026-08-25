@@ -123,10 +123,16 @@ class LateChunkEncoder:
     def __init__(
         self,
         model_name: str = "BAAI/bge-m3",
-        device: str = "cpu",
+        device: str | None = None,
         max_length: int = 8192,
         window_overlap: int = 256,
     ) -> None:
+        # `None` = hỏi shared.device (mặc định "cpu", đổi bằng TORCH_DEVICE).
+        # Caller nào truyền tường minh thì vẫn được tôn trọng — test dùng đường đó.
+        if device is None:
+            from shared.device import torch_device
+
+            device = torch_device()
         self.model_name = model_name
         self.device = device
         self.max_length = int(max_length)

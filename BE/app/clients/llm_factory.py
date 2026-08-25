@@ -397,9 +397,11 @@ def get_embeddings() -> Any:
     # của app không lộ ra lỗi này vì late chunking dùng loader riêng — chỉ những
     # nhánh đi qua get_embeddings() với LATE_CHUNKING=0 mới dính, và đó đúng là
     # cách bộ dựng index ablation (R0/R1) chạy.
+    from shared.device import torch_device
+
     _emb_instance = HuggingFaceEmbeddings(
         model_name=model_name,
-        model_kwargs={"device": "cpu", "model_kwargs": {"use_safetensors": True}},
+        model_kwargs={"device": torch_device(), "model_kwargs": {"use_safetensors": True}},
         encode_kwargs={"normalize_embeddings": True, "batch_size": 32},
     )
     _emb_bound_name = model_name
