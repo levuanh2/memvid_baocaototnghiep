@@ -1333,9 +1333,10 @@ smoke-verified trên stack `memvid_auth_smoke` rebuild từ code mới.
 ## 2026-08-26 - Trung bình phải mang theo mẫu số: câu không có nhãn vàng KHÔNG phải câu trả lời sai
 
 Bộ truy vấn có 30 câu nhưng chỉ 25 câu gán được chunk vàng. Năm câu còn lại (V11–V15)
-có bằng chứng nằm trong hình/đồ hoạ — bộ trích xuất không lấy ra chữ, người duyệt không
-định vị được span, nên qrel bỏ trống. `retrieval_metrics` trả recall 0 cho chúng và tầng
-gộp cộng cả năm số 0 vào trung bình.
+là **bẫy cố ý**: `gold_status` của chúng là `insufficient_evidence` (4 câu) hoặc
+`ambiguous` (1 câu) — tài liệu KHÔNG chứa câu trả lời, và hành vi đúng của hệ thống là
+từ chối. Không có chunk vàng để gán, nên `retrieval_metrics` trả recall 0 và tầng gộp
+cộng cả năm số 0 vào trung bình.
 
 Kết quả: mọi chỉ số truy hồi trong `aggregate_metrics.json` thấp hơn sự thật ~14 điểm
 phần trăm (`E0_bm25_R1` 0.6976 thay vì 0.8371). Không có exception, không có cảnh báo.
@@ -1343,9 +1344,10 @@ phần trăm (`E0_bm25_R1` 0.6976 thay vì 0.8371). Không có exception, không
 
 Ba điều rút ra:
 
-1. **Không có nhãn ≠ trả lời sai.** Một câu chưa gán nhãn là lỗ hổng của BỘ DỮ LIỆU.
-   Tính nó thành 0 là chuyển lỗi của người gán nhãn sang cột điểm của hệ thống. Đúng
-   thì phải loại khỏi mẫu số, và nói rõ đã loại bao nhiêu câu.
+1. **Không có gì để truy hồi thì không thể trượt.** Câu không trả lời được phải đo
+   bằng thước khác — tỷ lệ TỪ CHỐI — chứ không phải recall. Nhét chúng vào mẫu số
+   recall là chấm hệ thống điểm liệt cho đúng cái việc mình muốn nó làm. Loại khỏi
+   mẫu số, và nói rõ đã loại câu nào.
 2. **`mean` trần trụi là số nửa vời.** Ghi kèm `n_queries` / `n_scored` / `n_no_gold` /
    `no_gold_query_ids` để việc loại trừ nhìn thấy được từ chính file kết quả, không phải
    một quy ước ngầm nằm trong đầu người chạy. Người đọc luận văn sáu tháng sau (kể cả

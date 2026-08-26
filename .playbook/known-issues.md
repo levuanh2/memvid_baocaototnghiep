@@ -1083,15 +1083,18 @@ chứa "hàm hợp"). Chunk quá thô làm truy hồi kém — chưa sửa, cầ
   lỗi, không có cảnh báo — chỉ là một con số nhỏ hơn sự thật.
 - **Root cause:** `retrieval_metrics(ranked, relevant_ids, k)` trả `recall = 0.0` khi
   `relevant_ids` rỗng, và `runner.py` gộp thẳng 30/30 hàng vào trung bình. Bộ dữ liệu
-  có 5 câu (**V11–V15**) chưa gán được chunk vàng nào — bằng chứng nằm trong hình/đồ
-  hoạ, người duyệt không định vị nổi. Năm số 0 đó là **lỗ hổng gán nhãn**, không phải
-  năm lần truy hồi trượt; cộng chúng vào là hệ thống tự nhận lỗi của bộ dữ liệu.
+  cố ý cài 5 câu (**V11–V15**) KHÔNG trả lời được: `gold_status` là
+  `insufficient_evidence` (V11, V12, V13, V15) hoặc `ambiguous` (V14). Tài liệu không
+  chứa đáp án, hành vi đúng là từ chối, nên không có chunk vàng để gán. Năm số 0 đó là
+  **đo sai thước** — chấm điểm truy hồi cho câu không có gì để truy hồi.
 - **Fix:** `retrieval_metrics` trả thêm `n_relevant`; `runner.py` chỉ trung bình trên
   hàng `n_relevant > 0` và ghi kèm `n_queries` / `n_scored` / `n_no_gold` /
   `no_gold_query_ids` để việc loại trừ **nhìn thấy được**, không phải quy ước ngầm.
   Run cũ không phải chạy lại: `BE/scripts/tinh_lai_aggregate.py` bù cột `n_relevant`
   vào `retrieval.jsonl` rồi tính lại file gộp (14 run, khớp từng chữ số với bảng trong
   `docs/KET_QUA_THUC_NGHIEM.md`).
+- **Còn thiếu:** 5 câu này cần thước riêng — **tỷ lệ từ chối** — chứ không phải bị bỏ
+  im lặng. Chưa đo (xem `docs/KET_QUA_THUC_NGHIEM.md`).
 - **Prevention:** chỉ số truy hồi phải đi kèm **mẫu số**. Một `mean` trần trụi không nói
   được nó trung bình trên bao nhiêu câu và bỏ câu nào — và cái bị bỏ thầm lặng luôn là
   cái làm sai kết luận. Đã có test: `tests/test_evaluation_harness.py` chốt

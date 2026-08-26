@@ -9,11 +9,15 @@ from typing import Callable, Iterable
 def retrieval_metrics(ranked_ids: list[int], relevant_ids: set[int], k: int) -> dict[str, float]:
     """Đo một truy vấn. `n_relevant` đi kèm để tầng gộp biết câu nào CÓ nhãn.
 
-    Truy vấn không có chunk vàng nào (người duyệt chưa định vị được bằng chứng —
-    ví dụ nội dung nằm trong hình) rơi vào nhánh `relevant_ids` rỗng và nhận
-    recall/MRR/nDCG = 0. Con số 0 đó KHÔNG phải "hệ thống truy hồi trượt", nó là
-    "chưa có đáp án để đối chiếu". Gộp chung vào trung bình là tự hạ điểm mình
-    bằng một lỗ hổng gán nhãn. Nên `n_relevant` phải theo hàng ra tới bảng gộp.
+    Bộ dữ liệu cố ý chứa truy vấn KHÔNG trả lời được (`gold_status` là
+    `insufficient_evidence` hoặc `ambiguous`): tài liệu không chứa câu trả lời, và
+    hành vi đúng của hệ thống là TỪ CHỐI chứ không phải trả lời. Những câu đó
+    không có chunk vàng nào, nên `relevant_ids` rỗng và recall/MRR/nDCG = 0.
+
+    Số 0 đó vô nghĩa — không có gì để truy hồi thì không thể trượt. Gộp nó vào
+    trung bình là chấm hệ thống điểm liệt cho việc làm đúng. Chúng phải được đo
+    bằng thước khác (tỷ lệ từ chối), nên `n_relevant` phải theo hàng ra tới bảng
+    gộp để tầng trên tách được hai nhóm.
     """
     ranked = ranked_ids[:k]
     hits = [1 if cid in relevant_ids else 0 for cid in ranked]

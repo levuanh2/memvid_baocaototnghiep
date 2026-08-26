@@ -110,11 +110,12 @@ def run(config_path: Path, dataset_dir: Path, reports_root: Path, *, run_id: str
         append_jsonl(run_dir / "timing.jsonl", {"query_id": q["query_id"], **trace.timing_ms})
         append_jsonl(run_dir / "qa.jsonl", {"query_id": q["query_id"], "answer": trace.system_answer,
                                              "human_labels": None, "judge_raw": None})
-    # Chỉ trung bình trên truy vấn CÓ nhãn vàng. Câu chưa gán nhãn được (bằng
-    # chứng nằm trong hình, người duyệt không định vị nổi) nhận recall = 0 ở tầng
-    # `retrieval_metrics`; gộp luôn số 0 đó là biến một lỗ hổng gán nhãn thành
-    # điểm trừ của hệ thống. Đo trên E0_bm25_R1: gộp cả 30 câu ra 0.6976, gộp
-    # đúng 25 câu có nhãn ra 0.8371 — lệch 14 điểm phần trăm, đủ để đảo kết luận.
+    # Chỉ trung bình trên truy vấn CÓ nhãn vàng. Bộ dữ liệu cố ý cài 5 câu không
+    # trả lời được (`gold_status` insufficient_evidence/ambiguous) — tài liệu
+    # không chứa đáp án, hành vi đúng là từ chối. Chúng không có chunk vàng nên
+    # nhận recall = 0, và gộp số 0 đó vào là chấm điểm liệt cho việc làm đúng.
+    # Đo trên E0_bm25_R1: gộp cả 30 câu ra 0.6976, gộp đúng 25 câu có nhãn ra
+    # 0.8371 — lệch 14 điểm phần trăm, đủ để đảo kết luận.
     cham_duoc = [r for r in rows if int(r.get("n_relevant") or 0) > 0]
     aggregate = {
         "n_queries": len(rows),
