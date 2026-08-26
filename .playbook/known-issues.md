@@ -1116,3 +1116,59 @@ Muốn chặt hơn thì `ollama stop <model>` trước khi chạy và đừng d�
 trong lúc chấm — vẫn không đảm bảo tuyệt đối.
 
 Không sửa được từ phía mình. Ghi lại để đừng mất thời gian đi tìm bug trong code chấm.
+
+## (ĐÃ SỬA 2026-08-26) Sơ đồ tư duy ra 4 node khung xương sau 9 phút — hai lỗi chồng nhau
+
+- **Triệu chứng:** Bấm tạo sơ đồ, đợi 9 phút, job báo **`done`** nhưng sơ đồ chỉ có
+  root + 3 section, không ý nào, không quan hệ nào. Không có lỗi đỏ ở đâu cả.
+
+- **Root cause 1 — model không vừa VRAM.** `BE/.env` đặt `MINDMAP_MODEL=qwen2.5:14b`
+  (9.95 GB) trong khi GPU chỉ 6 GiB: Ollama giữ được 4.07 GB, phần còn lại rơi xuống
+  CPU, tốc độ tụt còn **2.6 tok/s**. Mỗi nhánh enrich xin JSON ~5 ý × 3 chi tiết
+  (800–1500 token) nên cần 300–580 giây, chạm `MINDMAP_LLM_TIMEOUT_SEC=300` và rơi về
+  skeleton. Đáng chú ý: `.env` ở gốc repo vốn ghi `qwen2.5:7b-instruct` — `BE/.env`
+  trôi khỏi nó lúc nào không rõ, và `BE/.env` được nạp ĐÈ lên.
+
+- **Root cause 2 — hai cấu hình song song đá nhau.** `MINDMAP_ENRICH_PARALLEL` mặc
+  định **2**, còn cổng LLM in-process `MAX_CONCURRENT_LLM_CALLS` là **1**. Nhánh thứ
+  hai không chạy nhanh hơn, nó XẾP HÀNG; chờ quá `LLM_QUEUE_WAIT_TIMEOUT_SECONDS`
+  (180s) thì ném `LLM busy (in-process): all 1 slots in use, waited 180.0s`. Đo thật:
+  cả 3 nhánh **và** bước quan hệ đều chết đúng kiểu đó.
+
+  Lỗi này **lúc được lúc không**, nên rất khó bắt: chạy enrich riêng lẻ, nhánh 2 chờ
+  **179 giây** rồi lọt — sát mép 180 giây đúng 1 giây. Máy bận hơn một chút là hỏng.
+
+- **Vì sao job vẫn báo `done`:** enrich nuốt lỗi từng nhánh và chỉ bật cờ `degraded`;
+  graph vẫn ghi bản ghi và đóng job thành công. "Xong" ở đây nghĩa là "chạy hết
+  đường", không phải "ra được sơ đồ".
+
+- **Fix:**
+  1. `MINDMAP_MODEL=qwen2.5:7b-instruct` (4.68 GB, vừa VRAM, 27 tok/s) ở cả `.env`,
+     `BE/.env` và hai file `.env.example`.
+  2. `LocalMindmapPipeline._enrich_parallel()` **kẹp** số nhánh song song theo
+     `llm_factory.inproc_slots()`. Lấy trần từ chính cổng LLM thay vì bắt hai biến
+     env khớp tay — chỉnh một chỗ là đủ, không cấu hình nào tự mâu thuẫn được nữa.
+  3. Enrich báo progress NGAY khi nhánh đầu bắt đầu (trước đó im 166 giây, FE hiện
+     chip đứng yên và người dùng đọc là treo).
+
+- **Prevention:** cấu hình song song KHÔNG được đoán — phải hỏi tầng đang giới hạn.
+  Và khi một `.env` con đè `.env` cha, giá trị thật phải in ra lúc khởi động, nếu
+  không thì hai file lệch nhau âm thầm hàng tháng.
+
+## (ĐÃ SỬA 2026-08-26) 14 biến `MINDMAP_*` trong `.env` không có dòng code nào đọc
+
+`MINDMAP_TIMEOUT_SEC`, `MINDMAP_MODEL_FAST/BALANCED/QUALITY/FALLBACK`,
+`MINDMAP_SCHEMA_STRICT`, `MINDMAP_MAX_NODES`, `MINDMAP_JOB_TTL_MINUTES`,
+`MINDMAP_LLM_TIMEOUT_FAST/BALANCED/QUALITY`, `MINDMAP_JOB_TIMEOUT_FAST/BALANCED/QUALITY`
+— grep toàn bộ `app/`, `services/`, `shared/` ra **rỗng**.
+
+Chỉ 4 biến sống: `MINDMAP_MODEL` (`services/mindmap/pipeline/modelcfg.py`),
+`MINDMAP_LLM_TIMEOUT_SEC` và `MINDMAP_ENRICH_PARALLEL` (`app/clients/mindmap_factory.py`),
+`MINDMAP_SERVICE_ADDR` (`shared/config.py`).
+
+Nguy hiểm ở chỗ chúng trông rất hợp lý. Ai gặp sơ đồ chạy chậm sẽ mở `.env`, thấy
+`MINDMAP_TIMEOUT_SEC=240` và `MINDMAP_MODEL_QUALITY`, chỉnh hai cái đó, rồi kết luận
+"chỉnh rồi mà vẫn chậm" — trong khi chưa hề chạm vào biến thật.
+
+Đã gỡ hết khỏi `.env` và `.env.example`, thay bằng một khối chú thích liệt kê đúng
+4 biến sống kèm file đọc chúng.

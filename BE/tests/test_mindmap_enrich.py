@@ -100,3 +100,30 @@ def test_enrich_retries_once_on_malformed_json(monkeypatch):
     assert degraded is False
     assert any(n["title"] == "OK sau retry" for n in nodes)
     assert calls["n"] == 2
+
+
+def test_enrich_bao_progress_TRUOC_khi_nhanh_dau_chay_xong(monkeypatch):
+    """Dòng progress đầu tiên không được chờ một nhánh chạy xong.
+
+    Trên máy thật, nhánh đầu mất 166 giây. Nếu progress chỉ phát khi nhánh XONG thì
+    trong 166 giây đó FE hiện một chip đứng yên — người dùng đọc là treo và bấm huỷ
+    đúng lúc công việc vẫn đang chạy. Test chốt: có ít nhất một lần báo được phát ra
+    TRƯỚC khi lời gọi LLM đầu tiên trả về.
+    """
+    monkeypatch.delenv("SKIP_MODEL_LOAD", raising=False)
+    moc = []
+
+    def cham(*a, **kw):
+        # Ghi lại số lần báo đã phát tại thời điểm LLM bắt đầu trả lời.
+        moc.append(("llm", len(bao)))
+        return json.dumps({"title": "X", "note": "", "children": []})
+
+    bao = []
+    monkeypatch.setattr(en, "ask_ai", cham)
+    mm, skeleton = _input_and_skeleton()
+    en.enrich_branches(mm, skeleton, model="m", timeout_sec=5, max_workers=1,
+                       progress_cb=lambda p, msg: bao.append((p, msg)))
+
+    assert moc, "khong goi LLM lan nao"
+    assert moc[0][1] >= 1, "LLM dau tien chay ma chua bao progress lan nao"
+    assert bao[0][0] == 30 and "1/" in bao[0][1]

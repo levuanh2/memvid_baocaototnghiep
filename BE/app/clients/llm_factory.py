@@ -99,6 +99,16 @@ def configure_inproc_gate(max_calls: int | None = None, wait_timeout: float | No
         _inproc_semaphore, _INPROC_MAX, _INPROC_WAIT = _load_inproc_gate()
 
 
+def inproc_slots() -> int:
+    """Số lời gọi LLM chạy song song được. Cổng tắt → coi như không giới hạn.
+
+    Ai muốn chạy nhiều lời gọi song song (mindmap enrich chẳng hạn) phải hỏi con số
+    này thay vì đoán: đẩy nhiều hơn số slot không nhanh hơn, chỉ làm bên thua xếp
+    hàng rồi chết vì `LLM_QUEUE_WAIT_TIMEOUT_SECONDS`.
+    """
+    return 1024 if not _inproc_enabled() else _INPROC_MAX
+
+
 @contextmanager
 def _inproc_slot():
     """Một slot generation in-process (bounded wait). Tắt qua LLM_INPROCESS_CAP_ENABLED=0."""

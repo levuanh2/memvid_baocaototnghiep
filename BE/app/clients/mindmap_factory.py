@@ -25,11 +25,28 @@ class LocalMindmapPipeline:
                 return outlined, "llm_outline"
         return nodes, method
 
+    def _enrich_parallel(self) -> int:
+        """Số nhánh chạy song song — KHÔNG bao giờ vượt số slot của cổng LLM.
+
+        `MINDMAP_ENRICH_PARALLEL` mặc định 2, nhưng cổng in-process
+        (`MAX_CONCURRENT_LLM_CALLS`, mặc định 1 trên máy này) chỉ cho 1 lời gọi chạy
+        một lúc. Nhánh thứ hai không chạy nhanh hơn — nó ĐỢI, và khi chờ quá
+        `LLM_QUEUE_WAIT_TIMEOUT_SECONDS` (180s) thì ném "LLM busy (in-process)".
+        Đo thật: cả 3 nhánh + bước quan hệ đều chết kiểu này, sơ đồ ra đúng 4 node
+        khung xương sau 544 giây.
+
+        Lấy trần từ chính cổng LLM thay vì bắt hai biến env phải khớp tay: chỉnh một
+        chỗ là đủ, và không có cấu hình nào tự mâu thuẫn được nữa.
+        """
+        from app.clients.llm_factory import inproc_slots
+        muon = max(1, int(os.getenv("MINDMAP_ENRICH_PARALLEL", "2") or 2))
+        return max(1, min(muon, inproc_slots()))
+
     def enrich(self, mm_input, skeleton_nodes, progress_cb=None, cancel_cb=None):
         from services.mindmap.pipeline.enrich import enrich_branches
         return enrich_branches(mm_input, skeleton_nodes, model=self._model(),
                                timeout_sec=self._timeout(),
-                               max_workers=int(os.getenv("MINDMAP_ENRICH_PARALLEL", "2")),
+                               max_workers=self._enrich_parallel(),
                                progress_cb=progress_cb, cancel_cb=cancel_cb)
 
     def relations(self, nodes, cancel_cb=None):

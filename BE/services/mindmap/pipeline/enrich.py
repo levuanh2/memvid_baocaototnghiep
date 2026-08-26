@@ -129,6 +129,17 @@ def enrich_branches(mm_input: dict, skeleton_nodes: list[dict], *, model: str,
     if cancel_cb and cancel_cb():
         return nodes, degraded      # huỷ trước khi tốn bất kỳ LLM call nào
     done = 0
+    # Báo TRƯỚC khi submit. Nếu không, dòng progress đầu tiên chỉ đến khi một nhánh
+    # CHẠY XONG — đo được 166 giây im lặng trên máy này. Người dùng nhìn thấy một chip
+    # tiến trình đứng yên và kết luận là treo, rồi bấm huỷ đúng lúc công việc vẫn đang
+    # chạy bình thường.
+    #
+    # Phải TRƯỚC `ctx_submit`, không phải sau: submit là bắt đầu chạy ngay, nên đặt
+    # sau thì thread worker có thể gọi LLM trước khi dòng này kịp chạy — vẫn im lặng,
+    # chỉ là im lặng không tất định (bản đầu của bản vá này mắc đúng lỗi đó, và test
+    # chỉ đỏ tuỳ thứ tự chạy).
+    if progress_cb and branches:
+        progress_cb(30, f"Đang làm giàu nhánh 1/{len(branches)}...")
     ex = ThreadPoolExecutor(max_workers=max_workers)
     futs = {ctx_submit(ex, _run, b): b for b in branches}
     # ngân sách tổng: các đợt max_workers chạy tuần tự trong pool

@@ -1421,3 +1421,69 @@ Ba điều rút ra:
 
 Liên quan: [[trung-binh-phai-mang-theo-mau-so]] — cùng một dạng lỗi, dùng sai thước rồi
 đọc ra kết luận về hệ thống.
+
+## 2026-08-26 - Hai mức song song phải hỏi nhau, đừng để hai biến env "tự khớp"
+
+Mindmap enrich chạy 2 nhánh song song (`MINDMAP_ENRICH_PARALLEL=2`). Cổng LLM
+in-process cho 1 lời gọi một lúc (`MAX_CONCURRENT_LLM_CALLS=1`). Hai con số này nằm ở
+hai file khác nhau, do hai người khác nhau đặt, vì hai lý do khác nhau — và không ai
+sai riêng lẻ. Ghép lại thì nhánh thứ hai xếp hàng, chờ quá 180 giây rồi ném
+`LLM busy (in-process)`.
+
+Ba điều rút ra:
+
+1. **Song song nhiều hơn tầng dưới cho phép không nhanh hơn — nó HỎNG.** Không phải
+   chậm hơn, không phải xếp hàng êm: bên thua chờ đủ timeout rồi ném lỗi, và lỗi đó
+   bị nuốt thành cờ `degraded`. Kết quả là một sơ đồ rỗng kèm trạng thái `done`.
+2. **Cách sửa đúng là DẪN XUẤT, không phải đồng bộ.** Đặt `MINDMAP_ENRICH_PARALLEL=1`
+   cho khớp là sửa triệu chứng: ai đó chỉnh cổng LLM lên 4 tháng sau là lệch lại.
+   `llm_factory.inproc_slots()` phơi số slot ra, `_enrich_parallel()` kẹp theo nó.
+   Một nguồn sự thật, không cấu hình nào tự mâu thuẫn được nữa.
+3. **Lỗi sát mép là loại tệ nhất.** Chạy enrich riêng lẻ, nhánh 2 chờ **179 giây**
+   rồi lọt — thiếu đúng 1 giây là hỏng. Nên nó "lúc được lúc không" tuỳ máy bận, và
+   người dùng báo "khi thì ra khi thì không" thay vì một lỗi tái hiện được. Thấy một
+   con số đo được nằm trong vòng 5% của một ngưỡng timeout thì coi như đã hỏng, đừng
+   coi là đã qua.
+
+## 2026-08-26 - Config chết trông y hệt config sống
+
+`.env` có 14 biến `MINDMAP_*` mà không dòng code nào đọc: `MINDMAP_TIMEOUT_SEC`,
+`MINDMAP_MODEL_QUALITY`, `MINDMAP_MAX_NODES`, `MINDMAP_JOB_TIMEOUT_*`... Tên đúng
+quy ước, giá trị hợp lý, có chú thích tiếng Việt tử tế phía trên. Không cách nào
+phân biệt với 4 biến thật nếu không grep.
+
+Tác hại không phải là thừa vài dòng. Là **hướng người sửa lỗi đi sai đường**: gặp
+mindmap chậm, mở `.env`, thấy `MINDMAP_TIMEOUT_SEC=240`, chỉnh lên 600, chạy lại,
+vẫn chậm — và giờ tin rằng "đã thử tăng timeout rồi, không phải do timeout".
+
+Quy tắc từ nay: biến env chỉ được nằm trong `.env.example` khi có **một file mã
+nguồn đọc nó**. Khi gỡ, để lại một khối chú thích nói rõ biến nào sống và file nào
+đọc — người sau đọc `.env` sẽ tự định hướng được thay vì phải grep lại từ đầu.
+
+Liên quan: [[cau-hinh-tro-sai-khong-bao-gio-no]] — cùng họ, cấu hình sai không gây
+lỗi, chỉ làm mọi thứ lệch âm thầm.
+
+## 2026-08-26 - `submit()` là "chạy ngay": báo tiến trình phải đặt TRƯỚC nó
+
+Vá chỗ enrich im lặng 166 giây bằng một dòng `progress_cb(30, "nhánh 1/3...")`. Đặt
+nó ngay **sau** `futs = {ctx_submit(ex, _run, b): b for b in branches}` — nhìn thì
+hợp lý: "submit xong rồi báo là đang chạy".
+
+Sai. `submit()` không xếp hàng chờ ai gọi; worker thread bắt đầu chạy **ngay trong
+lúc** dict comprehension còn đang dựng. Với `max_workers=1` thì thread đó có thể vào
+tới lời gọi LLM trước khi luồng chính kịp chạy dòng `progress_cb`. Kết quả: vẫn im
+lặng, nhưng bây giờ im lặng **không tất định**.
+
+Test bắt được, và cách nó bắt mới là điều đáng nhớ: chạy riêng thì XANH, chạy chung
+với `llm_factory` thì ĐỎ, tỷ lệ 2/3. Phản xạ đầu tiên là đổ cho ô nhiễm giữa các test
+(và có ô nhiễm thật — fixture ghi thẳng `os.environ`, đã sửa riêng). Nhưng dọn ô
+nhiễm xong vẫn đỏ. Thứ `pytest-randomly` làm không phải là gây lỗi mà là **đổi thứ
+tự chạy đủ nhiều để một cuộc đua lộ ra**.
+
+Hai điều rút ra:
+
+1. **Mốc thời gian phải đặt trước hành động, không phải sau.** "Bắt đầu X" báo trước
+   khi khởi động X. Đặt sau là mở một cửa sổ đua đúng bằng thời gian giữa hai dòng.
+2. **Test nhấp nháy không phải phiền toái — nó là kết quả đo.** Ở đây nó chỉ thẳng
+   vào một lỗi thật trong chính bản vá vừa viết. Đánh dấu `flaky` rồi bỏ qua là vứt
+   đi phát hiện duy nhất mình có.
