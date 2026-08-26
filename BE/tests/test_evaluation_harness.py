@@ -114,7 +114,11 @@ def test_smoke_memory_tree_provenance_resolution(monkeypatch, tmp_path):
 
 
 def test_smoke_metrics_statistics_and_output_serialization(tmp_path):
-    assert retrieval_metrics([2, 1], {1}, 2) == {"recall@2": 1.0, "precision@2": 0.5, "mrr": 0.5, "ndcg@2": pytest.approx(1 / 1.584962500721156)}
+    assert retrieval_metrics([2, 1], {1}, 2) == {"recall@2": 1.0, "precision@2": 0.5, "mrr": 0.5,
+                                                 "ndcg@2": pytest.approx(1 / 1.584962500721156), "n_relevant": 1}
+    # Không có nhãn vàng: điểm 0 nhưng `n_relevant` = 0 để tầng gộp LOẠI câu này,
+    # thay vì tính nó là một lần truy hồi trượt (xem docstring retrieval_metrics).
+    assert retrieval_metrics([2, 1], set(), 2)["n_relevant"] == 0
     assert bootstrap_ci([1, 1, 1], samples=50) == (1.0, 1.0)
     assert paired_bootstrap([2, 3], [1, 2], samples=50)["mean_difference"] == 1.0
     path = tmp_path / "per_query.jsonl"

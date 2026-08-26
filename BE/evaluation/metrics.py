@@ -7,6 +7,14 @@ from typing import Callable, Iterable
 
 
 def retrieval_metrics(ranked_ids: list[int], relevant_ids: set[int], k: int) -> dict[str, float]:
+    """Đo một truy vấn. `n_relevant` đi kèm để tầng gộp biết câu nào CÓ nhãn.
+
+    Truy vấn không có chunk vàng nào (người duyệt chưa định vị được bằng chứng —
+    ví dụ nội dung nằm trong hình) rơi vào nhánh `relevant_ids` rỗng và nhận
+    recall/MRR/nDCG = 0. Con số 0 đó KHÔNG phải "hệ thống truy hồi trượt", nó là
+    "chưa có đáp án để đối chiếu". Gộp chung vào trung bình là tự hạ điểm mình
+    bằng một lỗ hổng gán nhãn. Nên `n_relevant` phải theo hàng ra tới bảng gộp.
+    """
     ranked = ranked_ids[:k]
     hits = [1 if cid in relevant_ids else 0 for cid in ranked]
     recall = sum(hits) / len(relevant_ids) if relevant_ids else 0.0
@@ -15,7 +23,8 @@ def retrieval_metrics(ranked_ids: list[int], relevant_ids: set[int], k: int) -> 
     dcg = sum(hit / math.log2(rank + 1) for rank, hit in enumerate(hits, 1))
     ideal_hits = min(len(relevant_ids), k)
     idcg = sum(1.0 / math.log2(rank + 1) for rank in range(1, ideal_hits + 1))
-    return {f"recall@{k}": recall, f"precision@{k}": precision, "mrr": rr, f"ndcg@{k}": dcg / idcg if idcg else 0.0}
+    return {f"recall@{k}": recall, f"precision@{k}": precision, "mrr": rr,
+            f"ndcg@{k}": dcg / idcg if idcg else 0.0, "n_relevant": len(relevant_ids)}
 
 
 def summarize(values: Iterable[float]) -> dict[str, float | int | None]:

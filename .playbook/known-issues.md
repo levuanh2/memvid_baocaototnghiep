@@ -1075,3 +1075,24 @@ chứa "hàm hợp"). Chunk quá thô làm truy hồi kém — chưa sửa, cầ
      Tao đã tưởng Supabase hỏng vì đúng lỗi này, thực ra là probe của mình sai.
   2. Kết nối trực tiếp phụ thuộc IPv6 → **không dùng được trên Render** và không bền ở mạng gia
      đình. Pooler có IPv4, bền hơn cho cả hai.
+
+## (ĐÃ SỬA 2026-08-26) Trung bình gộp cả truy vấn KHÔNG có nhãn vàng — mọi chỉ số truy hồi bị hạ ~14 điểm phần trăm
+
+- **Triệu chứng:** `aggregate_metrics.json` của mọi run báo recall thấp hơn con số tính
+  tay. Cụ thể `E0_bm25_R1`: file ghi **0.6976**, tính lại đúng ra **0.8371**. Không có
+  lỗi, không có cảnh báo — chỉ là một con số nhỏ hơn sự thật.
+- **Root cause:** `retrieval_metrics(ranked, relevant_ids, k)` trả `recall = 0.0` khi
+  `relevant_ids` rỗng, và `runner.py` gộp thẳng 30/30 hàng vào trung bình. Bộ dữ liệu
+  có 5 câu (**V11–V15**) chưa gán được chunk vàng nào — bằng chứng nằm trong hình/đồ
+  hoạ, người duyệt không định vị nổi. Năm số 0 đó là **lỗ hổng gán nhãn**, không phải
+  năm lần truy hồi trượt; cộng chúng vào là hệ thống tự nhận lỗi của bộ dữ liệu.
+- **Fix:** `retrieval_metrics` trả thêm `n_relevant`; `runner.py` chỉ trung bình trên
+  hàng `n_relevant > 0` và ghi kèm `n_queries` / `n_scored` / `n_no_gold` /
+  `no_gold_query_ids` để việc loại trừ **nhìn thấy được**, không phải quy ước ngầm.
+  Run cũ không phải chạy lại: `BE/scripts/tinh_lai_aggregate.py` bù cột `n_relevant`
+  vào `retrieval.jsonl` rồi tính lại file gộp (14 run, khớp từng chữ số với bảng trong
+  `docs/KET_QUA_THUC_NGHIEM.md`).
+- **Prevention:** chỉ số truy hồi phải đi kèm **mẫu số**. Một `mean` trần trụi không nói
+  được nó trung bình trên bao nhiêu câu và bỏ câu nào — và cái bị bỏ thầm lặng luôn là
+  cái làm sai kết luận. Đã có test: `tests/test_evaluation_harness.py` chốt
+  `n_relevant == 0` cho truy vấn không nhãn.

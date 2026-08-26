@@ -110,9 +110,20 @@ def run(config_path: Path, dataset_dir: Path, reports_root: Path, *, run_id: str
         append_jsonl(run_dir / "timing.jsonl", {"query_id": q["query_id"], **trace.timing_ms})
         append_jsonl(run_dir / "qa.jsonl", {"query_id": q["query_id"], "answer": trace.system_answer,
                                              "human_labels": None, "judge_raw": None})
-    aggregate = {}
-    for key in rows[0].keys() - {"query_id"} if rows else []:
-        vals = [r[key] for r in rows]
+    # Chỉ trung bình trên truy vấn CÓ nhãn vàng. Câu chưa gán nhãn được (bằng
+    # chứng nằm trong hình, người duyệt không định vị nổi) nhận recall = 0 ở tầng
+    # `retrieval_metrics`; gộp luôn số 0 đó là biến một lỗ hổng gán nhãn thành
+    # điểm trừ của hệ thống. Đo trên E0_bm25_R1: gộp cả 30 câu ra 0.6976, gộp
+    # đúng 25 câu có nhãn ra 0.8371 — lệch 14 điểm phần trăm, đủ để đảo kết luận.
+    cham_duoc = [r for r in rows if int(r.get("n_relevant") or 0) > 0]
+    aggregate = {
+        "n_queries": len(rows),
+        "n_scored": len(cham_duoc),
+        "n_no_gold": len(rows) - len(cham_duoc),
+        "no_gold_query_ids": [r["query_id"] for r in rows if int(r.get("n_relevant") or 0) == 0],
+    }
+    for key in (cham_duoc[0].keys() - {"query_id", "n_relevant"}) if cham_duoc else []:
+        vals = [r[key] for r in cham_duoc]
         aggregate[key] = {**summarize(vals), "ci95_bootstrap": bootstrap_ci(vals, seed=controls.seed)}
     (run_dir / "aggregate_metrics.json").write_text(json.dumps(aggregate, indent=2), encoding="utf-8")
     return run_dir

@@ -1329,3 +1329,61 @@ smoke-verified trên stack `memvid_auth_smoke` rebuild từ code mới.
 - **Ràng buộc VRAM đã tính trước:** bge-m3 ~2.3GB + bge-reranker ~2.2GB + mDeBERTa ~1.1GB ≈ 5.6GB
   trên card 6GB. Ollama (qwen 4.7GB) KHÔNG ở chung được — cách chia hợp lý là model HF lên GPU,
   Ollama giữ CPU, vì sinh chữ chỉ chiếm 3% thời gian còn NLI+rerank chiếm 96%.
+
+## 2026-08-26 - Trung bình phải mang theo mẫu số: câu không có nhãn vàng KHÔNG phải câu trả lời sai
+
+Bộ truy vấn có 30 câu nhưng chỉ 25 câu gán được chunk vàng. Năm câu còn lại (V11–V15)
+có bằng chứng nằm trong hình/đồ hoạ — bộ trích xuất không lấy ra chữ, người duyệt không
+định vị được span, nên qrel bỏ trống. `retrieval_metrics` trả recall 0 cho chúng và tầng
+gộp cộng cả năm số 0 vào trung bình.
+
+Kết quả: mọi chỉ số truy hồi trong `aggregate_metrics.json` thấp hơn sự thật ~14 điểm
+phần trăm (`E0_bm25_R1` 0.6976 thay vì 0.8371). Không có exception, không có cảnh báo.
+Đây là dạng sai nguy hiểm nhất trong đo đạc: **con số vẫn hợp lý**, chỉ là sai.
+
+Ba điều rút ra:
+
+1. **Không có nhãn ≠ trả lời sai.** Một câu chưa gán nhãn là lỗ hổng của BỘ DỮ LIỆU.
+   Tính nó thành 0 là chuyển lỗi của người gán nhãn sang cột điểm của hệ thống. Đúng
+   thì phải loại khỏi mẫu số, và nói rõ đã loại bao nhiêu câu.
+2. **`mean` trần trụi là số nửa vời.** Ghi kèm `n_queries` / `n_scored` / `n_no_gold` /
+   `no_gold_query_ids` để việc loại trừ nhìn thấy được từ chính file kết quả, không phải
+   một quy ước ngầm nằm trong đầu người chạy. Người đọc luận văn sáu tháng sau (kể cả
+   chính mình) không đọc được quy ước ngầm.
+3. **Đừng chạy lại nhiều giờ chỉ để đổi phép trung bình.** Dữ liệu từng truy vấn đã nằm
+   trong `retrieval.jsonl`; thứ sai là bước gộp. `BE/scripts/tinh_lai_aggregate.py` bù
+   cột `n_relevant` rồi tính lại — 14 run trong vài giây, khớp từng chữ số với bảng đã
+   công bố. Tách "đo" khỏi "gộp" để sửa được gộp mà không đụng đo.
+
+Liên quan: [[chay-thang-E-tren-GPU]] — bảng số E0–E3 trong `docs/KET_QUA_THUC_NGHIEM.md`
+vốn đã tính tay theo n=25, nên bảng KHÔNG đổi; thứ đổi là harness giờ tự làm đúng.
+
+## 2026-08-26 - GPU 6 GiB không đủ cho cả torch lẫn Ollama: chọn bên nào được lợi 600 lần
+
+RTX 4050 Laptop có 6.0 GiB. Ba model torch nạp cùng lúc đã ăn **5.21 GiB** đỉnh
+(bge-m3 2.3 + reranker 2.1 + mDeBERTa 0.55, fp32). qwen2.5:7b-instruct cần 4.68 GiB.
+Không thể cùng ở trên GPU — phải chọn.
+
+Đo trước khi chọn, cả hai chiều:
+
+| | CPU | GPU | lợi |
+|---|---|---|---|
+| NLI mDeBERTa | ~298 s/truy vấn | 0.50 s / 3 cặp | ~600× |
+| rerank 20 cặp | 9.52 s | 1.49 s | 6.4× |
+| sinh qwen2.5:7b | 9.1 tok/s | 27.3 tok/s | 3× |
+
+Đưa torch lên GPU và đẩy Ollama xuống CPU: mất ~22 s mỗi truy vấn ở khâu sinh, đổi lại
+bỏ được ~298 s mỗi truy vấn ở khâu NLI. Cho E4–E7 × 30 câu: **~10 giờ xuống ~1 giờ**.
+Chiều ngược lại (giữ Ollama trên GPU) tiết kiệm 45 phút và trả giá 10 giờ.
+
+Bài học không phải "GPU nhanh hơn" mà là: **tăng tốc thứ đang chiếm phần lớn thời gian,
+không phải thứ dễ thấy nhất.** Sinh câu trả lời là thứ người dùng nhìn thấy chạy chậm,
+nên bản năng là tăng tốc nó. NLI chạy im lặng trong nền và ăn 92% thời gian.
+
+Thứ tự nạp tự lo phần còn lại: pipeline chạm rerank/NLI TRƯỚC khi chạm bộ sinh, nên
+torch giành VRAM trước và bộ lập lịch của Ollama tự thấy hết chỗ rồi tự đẩy layer xuống
+CPU. Không cần ép `num_gpu: 0`. Chỉ cần `ollama stop <model>` trước khi chạy để nó
+không giữ chỗ sẵn từ phiên trước.
+
+Giữ fp32 dù fp16 tiết kiệm ~1.4 GiB: E0–E3 trên R1 đã chạy fp32 (trên CPU), đổi dtype
+giữa chừng là thêm một biến không kiểm soát vào đúng cái thang đang so sánh.
