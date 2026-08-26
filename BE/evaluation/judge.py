@@ -25,8 +25,10 @@ Giới hạn phải nói rõ khi trích vào luận văn:
   - Bộ chấm là một LLM khác bộ sinh (mặc định `qwen2.5:14b` chấm `qwen2.5:7b-instruct`)
     để tránh model tự chấm điểm cho chính mình, nhưng cùng họ model — vẫn còn thiên vị
     họ, chưa khử được.
-  - `temperature=0` + `seed` cố định nên chạy lại ra cùng kết quả, nhưng "tái lập
-    được" không có nghĩa là "đúng".
+  - `temperature=0` + `seed` cố định **gần** tất định, không tuyệt đối: chấm lại lần 2
+    và lần 3 ra giống hệt 50/50 điểm, nhưng giữa hai lần Ollama nạp model với phân bổ
+    layer GPU/CPU khác nhau thì đo được 1/50 điểm lệch. Và "tái lập được" dù sao cũng
+    không có nghĩa là "đúng".
 
     PYTHONPATH=BE BE/.venv/Scripts/python.exe -m evaluation.judge \
       --dataset reports/evaluation/datasets/corpus_v1 \
@@ -280,13 +282,19 @@ def main(argv=None) -> int:
     for name in args.runs:
         run_dir = args.reports_root / "runs" / name
         exp = json.loads((run_dir / "manifest.json").read_text(encoding="utf-8"))["config"]["experiment_id"]
-        ket_qua, hong = cham_mot_run(run_dir, queries, chunk_text, model=args.model, seed=args.seed)
-        (run_dir / "judge.jsonl").write_text(
+        if args.tu_choi:
+            ket_qua, hong = cham_tu_choi_mot_run(run_dir, queries, model=args.model, seed=args.seed)
+            dims, ten = ["abstained"], "judge_negatives.jsonl"
+        else:
+            ket_qua, hong = cham_mot_run(run_dir, queries, chunk_text, model=args.model, seed=args.seed)
+            dims, ten = DIMENSIONS, "judge.jsonl"
+        (run_dir / ten).write_text(
             "".join(json.dumps(r, ensure_ascii=False) + "\n" for r in ket_qua), encoding="utf-8")
-        _ghi_judge_raw(run_dir, {r["query_id"]: r for r in ket_qua})
+        if not args.tu_choi:
+            _ghi_judge_raw(run_dir, {r["query_id"]: r for r in ket_qua})
 
         phan = []
-        for dim in DIMENSIONS:
+        for dim in dims:
             vals = [float(r[dim]) for r in ket_qua]
             ci = bootstrap_ci(vals, seed=args.seed) if vals else None
             tb = statistics.fmean(vals) if vals else float("nan")

@@ -1389,3 +1389,35 @@ không giữ chỗ sẵn từ phiên trước.
 
 Giữ fp32 dù fp16 tiết kiệm ~1.4 GiB: E0–E3 trên R1 đã chạy fp32 (trên CPU), đổi dtype
 giữa chừng là thêm một biến không kiểm soát vào đúng cái thang đang so sánh.
+
+## 2026-08-26 - Đọc 170 ký tự đầu rồi gán nhãn: lời cải chính nằm ở câu CUỐI
+
+Chấm tay 40 câu trả lời cho 5 truy vấn bẫy (không trả lời được). In 170 ký tự đầu mỗi
+câu, đọc, gán nhãn "có từ chối / không từ chối". Kết luận rút ra: "V11, V12, V13 không
+nấc nào từ chối".
+
+Sai. Bộ chấm LLM đọc TOÀN VĂN cho ra số khác, và tao đã kết luận vội là **nó** hỏng —
+"đếm nhầm câu rào giữa bài là từ chối". Đọc lại nguyên văn thì hoá ra ngược lại: câu
+trả lời của E4/E5 dài 1000–1250 ký tự, trả lời đầy đủ, rồi **câu cuối cùng** mới viết
+"Tuy nhiên, trong tài liệu cung cấp, không có thông tin cụ thể về...". Lời cải chính
+nằm ngoài cửa sổ 170 ký tự. Bộ chấm đúng, tao sai — hai lần: sai nhãn, rồi sai cả khi
+đổ lỗi cho bộ chấm.
+
+Ba điều rút ra:
+
+1. **Cắt ngắn để đọc là một phép đo, và phép đo đó có sai số.** Cắt ở đầu bài giả định
+   thông tin quyết định nằm ở đầu bài. Với văn bản do LLM sinh, giả định đó SAI theo
+   một hướng có hệ thống: model được huấn luyện để trả lời trước, dè dặt sau. Muốn xem
+   nhanh thì in **cả đầu lẫn đuôi**, đừng chỉ đầu.
+2. **Khi cách đo tự động lệch với cách đo tay, đừng mặc định cách tay đúng.** Trước đó
+   trong cùng phiên, một regex đã chấm sai thật (bắt "không nhất quán" thành từ chối),
+   nên khi bộ chấm LLM lệch tiếp, phản xạ là quy cho nó. Cách duy nhất phân xử: mở
+   nguyên văn ra đọc. Mất 2 phút, đảo ngược một kết luận đã viết vào tài liệu.
+3. **Nhị phân là sai khung.** Không phải "từ chối / không từ chối" mà ba nhóm: từ chối
+   sạch · trả lời rồi rút lại · trả lời hẳn. Nhóm giữa mới là phát hiện đáng giá: các
+   tầng trên E3 không dạy hệ thống im lặng, chúng dạy nó **nói xong rồi cải chính** —
+   vô dụng với người đọc dừng ở đoạn đầu. Ép hai nhóm vào một nhãn là xoá mất kết quả.
+   Số của hai cách chấm khớp tuyệt đối khi hiểu đúng: `tự động = sạch + rút lại`.
+
+Liên quan: [[trung-binh-phai-mang-theo-mau-so]] — cùng một dạng lỗi, dùng sai thước rồi
+đọc ra kết luận về hệ thống.

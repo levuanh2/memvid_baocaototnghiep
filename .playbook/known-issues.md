@@ -1099,3 +1099,20 @@ chứa "hàm hợp"). Chunk quá thô làm truy hồi kém — chưa sửa, cầ
   được nó trung bình trên bao nhiêu câu và bỏ câu nào — và cái bị bỏ thầm lặng luôn là
   cái làm sai kết luận. Đã có test: `tests/test_evaluation_harness.py` chốt
   `n_relevant == 0` cho truy vấn không nhãn.
+
+## (GHI NHỚ 2026-08-26) `temperature=0` + `seed` KHÔNG đủ để Ollama tất định
+
+Bộ chấm `evaluation/judge.py` đặt `temperature: 0` và `seed` cố định. Chấm lại cùng một
+run hai lần liên tiếp ra **giống hệt 50/50 điểm**. Nhưng giữa hai lần chạy cách nhau
+(máy đã dùng GPU cho việc khác giữa chừng) thì **1/50 điểm đổi** — `faithfulness` trung
+bình 1.720 xuống 1.680.
+
+Nguyên nhân: Ollama quyết định số layer đẩy lên GPU **lúc nạp model**, theo VRAM còn
+trống tại thời điểm đó. Phân bổ layer khác nhau thì thứ tự cộng dồn dấu phẩy động trong
+llama.cpp khác nhau, và ở một câu sát ngưỡng quyết định thì logit lật.
+
+Hệ quả khi báo cáo số: nói "tái lập được" thì phải nói kèm **cùng một lần nạp model**.
+Muốn chặt hơn thì `ollama stop <model>` trước khi chạy và đừng dùng GPU cho việc khác
+trong lúc chấm — vẫn không đảm bảo tuyệt đối.
+
+Không sửa được từ phía mình. Ghi lại để đừng mất thời gian đi tìm bug trong code chấm.

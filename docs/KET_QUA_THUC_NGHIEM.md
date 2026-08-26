@@ -133,31 +133,114 @@ số truy hồi của nó bằng E6 theo thiết kế. Phần người duyệt c
 
 ## 3c. Khả năng từ chối trên 5 truy vấn không trả lời được
 
-Đây là thước đúng cho nhóm V11–V15 (mục 2). Chấm bằng tay, đọc nguyên văn 40 câu trả lời;
-tiêu chí: câu trả lời có **nói rõ tài liệu không chứa đáp án** hay không.
+Đây là thước đúng cho nhóm V11–V15 (mục 2). Chấm hai lần độc lập: đọc tay nguyên văn 40
+câu trả lời, và chấm tự động bằng `evaluation/judge.py --tu-choi`.
 
-| | V11 | V12 | V13 | V14 | V15 | từ chối đúng |
-|---|---|---|---|---|---|---|
-| E0 bm25 | ✗ | ✗ | ✗ | rào rồi vẫn chọn | ✓ | 1/5 |
-| E1 faiss | ✗ | ✗ | ✗ | ✓ | ✓ | 2/5 |
-| E2 hybrid | ✗ | ✗ | ✗ | ✓ | ✓ | 2/5 |
-| E3 rerank | ✗ | ✗ | ✗ | **✗ bịa** | ✓ | 1/5 |
-| E4–E7 | ✗ | ✗ | ✗ | ✓ | ✓ | 2/5 |
+Chấm nhị phân KHÔNG đủ. Có ba hành vi khác nhau, và nhóm giữa mới là nhóm đáng lo:
 
-Ba điều đọc được:
+- **từ chối sạch** — nói rõ tài liệu không chứa đáp án, không đưa ra kết luận thay thế;
+- **trả lời rồi rút lại** — viết 800–1300 ký tự trả lời đầy đủ, rồi câu CUỐI mới nói
+  "tuy nhiên, tài liệu không đề cập cụ thể...";
+- **trả lời hẳn** — viết ra một câu trả lời và chốt, không rào gì.
 
-1. **V11, V12, V13 không nấc nào từ chối.** Cả 8 cấu hình đều viết ra một câu trả lời trôi
-   chảy cho câu hỏi mà tài liệu không trả lời được. Đây là tỷ lệ ảo giác 3/5 trên nhóm bẫy,
-   và **rerank không cứu được** — nó chỉ làm bằng chứng sai được xếp cao hơn.
-2. **E3 là nấc DUY NHẤT bịa ở V14.** Hỏi "nên dùng store nào", E3 trả lời "nên dùng
-   **Arize Phoenix (TruLens)**" — một công cụ quan sát, không phải store, và không phải
-   nội dung được hỏi. E0/E1/E2 và E4–E7 đều không mắc.
-3. **NLI vá đúng chỗ đó.** E4 khác E3 duy nhất ở tầng NLI, và V14 là câu duy nhất đổi hành
-   vi. Đây là **bằng chứng đo được đầu tiên** cho thấy tầng NLI có tác dụng — nhưng n = 1,
-   nên là quan sát, chưa phải kết quả.
+| nấc | V11 | V12 | V13 | V14 | V15 | sạch | rút lại | trả lời hẳn |
+|---|---|---|---|---|---|---|---|---|
+| E0 bm25 | hẳn | hẳn | hẳn | hẳn | sạch | 1 | 0 | 4 |
+| E1 faiss | hẳn | rút lại | hẳn | sạch | sạch | 2 | 1 | 2 |
+| E2 hybrid | hẳn | rút lại | hẳn | sạch | sạch | 2 | 1 | 2 |
+| E3 rerank | hẳn | hẳn | hẳn | **hẳn — bịa** | sạch | 1 | 0 | 4 |
+| E4 nli | hẳn | rút lại | hẳn | sạch | sạch | 2 | 1 | 2 |
+| E5/E6/E7 | hẳn | rút lại | rút lại | sạch | sạch | 2 | 2 | 1 |
 
-> Chấm tay, một người chấm, không có người chấm chéo. Muốn đưa vào chương 4 thì cần
-> ít nhất một người thứ hai chấm độc lập, hoặc một bộ quy tắc chấm công bố kèm.
+Bốn điều đọc được:
+
+1. **Không nấc nào từ chối V11.** Hỏi "điểm chính cần ghi nhớ ở cuối bài", cả 8 cấu hình
+   đều viết ra một danh sách 460–870 ký tự, không cấu hình nào rào một chữ. Đây là ca
+   ảo giác sạch nhất trong bộ, và **không thành phần nào trong thang chặn được**.
+2. **Số câu "từ chối sạch" KHÔNG tăng theo thang** — đứng nguyên ở 2/5 từ E1 đến E7. Thứ
+   tăng là số câu **rút lại ở cuối**: 0 (E0, E3) → 1 (E1, E2, E4) → 2 (E5, E6, E7).
+   Nói cách khác, các tầng phía trên không dạy hệ thống im lặng; chúng dạy nó **nói xong
+   rồi mới cải chính**. Với người đọc dừng ở đoạn đầu thì tác dụng bằng không.
+3. **E3 là nấc DUY NHẤT bịa ở V14.** Hỏi "nên dùng store nào", E3 trả lời "nên dùng
+   **Arize Phoenix (TruLens)**" — một công cụ quan sát, không phải store. E0 cũng không
+   từ chối V14 nhưng chốt bằng Vector Store, thứ ít nhất còn đúng phạm trù. E4 khác E3
+   duy nhất ở tầng NLI và V14 là câu duy nhất đổi hành vi — **bằng chứng đo được đầu
+   tiên** rằng tầng NLI có tác dụng, nhưng n = 1 nên là quan sát, chưa phải kết quả.
+4. **Hai cách chấm khớp nhau.** Bộ chấm tự động (nhị phân) cho E0 1/5, E1 3/5, E2 3/5,
+   E3 1/5, E4 3/5, E5–E7 4/5 — bằng đúng `sạch + rút lại` của bảng trên, ở cả 8 cấu hình.
+   Nó gộp "rút lại" vào "có từ chối"; bảng ba nhóm tách ra.
+
+> Ghi nhận một lỗi trong quá trình chấm: bản chấm tay ĐẦU TIÊN đọc 170 ký tự đầu mỗi câu
+> trả lời và xếp toàn bộ nhóm "rút lại" vào "trả lời hẳn" — vì lời cải chính nằm ở CÂU
+> CUỐI của bài 1000+ ký tự. Bộ chấm tự động đọc hết bài và bắt được. Bảng trên là bản đã
+> sửa, chấm trên toàn văn.
+
+---
+
+## 3d. Chất lượng câu trả lời (n = 25, chấm tự động)
+
+Chỉ số truy hồi bão hoà ở E3, nên thước quyết định nằm ở đây. Chấm bằng
+`evaluation/judge.py`: `qwen2.5:14b` chấm câu trả lời của `qwen2.5:7b-instruct`, hai
+chiều độc lập, thang 0–1–2.
+
+- **đúng** (`answer_correctness`) — đối chiếu `gold_answer` của bộ dữ liệu.
+- **trung thành** (`faithfulness`) — đối chiếu NGỮ CẢNH mà chính hệ thống lấy về.
+
+Tách hai chiều để phân biệt hai kiểu hỏng khác nhau: lấy nhầm đoạn rồi trả lời trung
+thành với đoạn nhầm được `trung thành = 2, đúng = 0`.
+
+| nấc | đúng [CI95] | trung thành [CI95] | phân bố đúng 0/1/2 |
+|---|---|---|---|
+| E0 bm25 | **1.880** [1.72–2.00] | 1.720 [1.44–1.92] | 0/3/22 |
+| E1 faiss | 1.640 [1.32–1.88] | 1.680 [1.40–1.88] | 3/3/19 |
+| E2 hybrid | 1.640 [1.36–1.88] | 1.720 [1.56–1.88] | 2/5/18 |
+| E3 rerank | 1.800 [1.60–1.96] | **1.840** [1.68–1.96] | 1/3/21 |
+| E4 nli | 1.800 [1.60–1.96] | **1.840** [1.68–1.96] | 1/3/21 |
+| E5 crag | 1.760 [1.56–1.92] | 1.800 [1.64–1.96] | 1/4/20 |
+| E6 full | 1.720 [1.48–1.88] | 1.800 [1.64–1.96] | 1/5/19 |
+| E7 full+hitl | 1.760 [1.56–1.92] | 1.800 [1.64–1.96] | 1/4/20 |
+
+### So sánh ghép cặp — không cặp nào tách khỏi 0
+
+Khoảng tin cậy ở bảng trên chồng lên nhau hết, nhưng so hai khoảng là phép so YẾU khi
+hai cấu hình chạy trên **cùng một bộ truy vấn**. Bootstrap ghép cặp (`metrics.paired_bootstrap`,
+5000 lần lặp, `seed=20260811`) mạnh hơn nhiều:
+
+| so sánh | chênh lệch `đúng` [CI95] | chênh lệch `trung thành` [CI95] |
+|---|---|---|
+| E3 − E0 | −0.080 [−0.280, +0.080] | +0.120 [−0.160, +0.400] |
+| E3 − E2 | +0.160 [−0.040, +0.400] | +0.120 [−0.080, +0.320] |
+| E4 − E3 | +0.000 [−0.120, +0.120] | +0.000 [−0.160, +0.160] |
+| E5 − E4 | −0.040 [−0.120, +0.000] | −0.040 [−0.120, +0.000] |
+| E6 − E4 | −0.080 [−0.200, +0.000] | −0.040 [−0.120, +0.000] |
+| E0 − E1 | +0.240 [−0.040, +0.560] | +0.000 [−0.320, +0.320] |
+
+**Mọi khoảng đều chứa 0.** Ở n = 25, không cặp nào trong thang tách được khỏi nhiễu — kể
+cả cặp chênh nhiều nhất (E0 − E1, +0.240).
+
+### Đọc bảng
+
+- **Kết luận chính: chất lượng câu trả lời cũng không tách được các nấc trên E3.** Truy
+  hồi bão hoà ở E3 (mục 3), và câu trả lời cũng vậy. Bốn nấc trên cùng đổi hành vi ở
+  **đúng 4/25 câu**, và bốn câu đó bù trừ nhau: E3 hơn ở S10 và V10, E4+ hơn ở V16.
+- **E0 (BM25 thuần) có `đúng` cao nhất** (1.880) dù recall thấp hơn E3. Không mâu thuẫn:
+  bộ truy vấn nặng `exact-term factual`, khớp từ vựng lấy đúng đoạn cần, và **0 câu bị
+  chấm 0 điểm** — cấu hình duy nhất không có câu nào sai hẳn.
+- **Rerank mua `trung thành`, không mua `đúng`.** E3 hơn E2 +0.12 ở trung thành, và hơn
+  E0 +0.12. Nó làm câu trả lời bám ngữ cảnh hơn; nó không làm câu trả lời đúng hơn.
+- **Không nấc nào đạt 2.0.** Trần thực tế nằm ở 1.88.
+
+### Giới hạn phải nói kèm khi trích
+
+1. **Đây là chấm tự động, không phải nhãn người.** Cột `human_labels` trong `qa.jsonl` vẫn
+   trống. Đừng trộn hai cột.
+2. **Bộ chấm cùng họ với bộ sinh** (`qwen2.5:14b` chấm `qwen2.5:7b-instruct`). Khác model
+   nên không tự chấm cho chính mình, nhưng thiên vị họ model chưa khử được.
+3. **Tái lập được, có điều kiện.** Chấm lại lần 2 và lần 3 ra **giống hệt 50/50 điểm**.
+   Nhưng giữa hai lần Ollama nạp model theo cách khác nhau (phân bổ layer GPU/CPU đổi
+   theo VRAM còn trống lúc đó), đo được **1/50 điểm lệch** — `temperature=0` và `seed`
+   cố định KHÔNG đủ để tất định tuyệt đối.
+4. **n = 25.** Xem mục so sánh ghép cặp: ở cỡ mẫu này thang không tách được.
 
 ---
 
@@ -295,10 +378,13 @@ Sản phẩm: `reports/evaluation/results/{retrieval_results,qa_results,ablation
 - [x] ~~E4–E7 trên `R1_structure`~~ — xong 2026-08-26, 34 phút trên GPU
 - [x] ~~Chốt cách báo cáo nhóm 5 truy vấn không có chunk vàng~~ — loại khỏi mẫu số recall
       (harness tự làm từ commit `bcd3917`), đo riêng bằng tỷ lệ từ chối ở mục 3c
-- [ ] **Đo chất lượng câu trả lời.** Đây là việc lớn còn thiếu: `qa.jsonl` có
-      `human_labels: null` và `judge_raw: null` ở mọi run. Không có nó thì E4–E7 không có
-      gì để hơn E3, vì chỉ số truy hồi đã bão hoà. Bộ dữ liệu **có sẵn `gold_answer`** cho
-      cả 25 câu trả lời được — đủ nguyên liệu cho một bộ chấm
+- [x] ~~Đo chất lượng câu trả lời~~ — xong 2026-08-26, mục 3d. `judge_raw` đã điền cho
+      cả 8 run; `human_labels` vẫn trống theo thiết kế
+- [ ] **Nhãn người cho phần chất lượng câu trả lời.** Chấm tự động ở mục 3d không thay
+      được nhãn người, và ở n=25 nó không tách được cấu hình nào. Đây là việc lớn nhất
+      còn lại
+- [ ] **Mở rộng bộ truy vấn.** Mọi kết luận về THỨ TỰ các nấc trên E3 đều nằm trong nhiễu
+      ở n=25 (mục 3d). Không có thêm câu hỏi thì không có kết luận nào chắc hơn được
 - [ ] **Dựng cây nhớ cho corpus nghiên cứu** rồi chạy lại E6 (mục 3b) — hiện E6 = E5
 - [ ] Người duyệt thật cho E7 (`reports/evaluation/annotations/HITL_PROTOCOL.md`)
 - [ ] Chấm chéo phần từ chối ở mục 3c — hiện chỉ một người chấm
