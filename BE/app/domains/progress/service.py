@@ -13,6 +13,28 @@ from app.db import session_scope
 from app.db.models import ConceptMastery, Document, Quiz, QuizAttempt, ReviewPlan
 
 
+def _chu_so_huu(user_id: Optional[str]) -> str:
+    """uid None (chế độ mở, `AUTH_PROTECT_APP_APIS` tắt) → id user ẩn danh.
+
+    KHÔNG bỏ lọc chủ sở hữu như `list_by_document` làm. Quy ước đó đúng ở chỗ truy vấn
+    ĐÃ bị thu hẹp theo tài liệu; ở đây thì không — progress là thống kê theo TÀI KHOẢN.
+    Bỏ lọc là trả gộp số liệu của MỌI user trong DB cho một người gọi ẩn danh.
+
+    Dùng `ensure_anonymous_user` (tạo nếu chưa có) chứ không `anonymous_user_id` (có thể
+    trả None): chọn cái sau thì mỗi hàm phải tự dựng lại một "shape rỗng", và bốn bản
+    sao của cùng một shape sẽ trôi khỏi nhau. Hàng user ẩn danh là hàng giữ chỗ dùng
+    chung mà luồng upload ẩn danh vốn đã tạo; ở chế độ có auth thì nhánh này không bao
+    giờ chạy vì uid luôn có thật.
+
+    `str(None)` ra CHUỖI `"None"`, không phải NULL — Postgres từ chối với
+    `invalid input syntax for type uuid: "None"`, nên bỏ qua là 500 chứ không phải rỗng.
+    """
+    if user_id:
+        return str(user_id)
+    from app.domains.documents.repository import ensure_anonymous_user
+    return ensure_anonymous_user()
+
+
 def compare_masteries(before: Sequence[Dict[str, Any]], after: Sequence[Dict[str, Any]],
                       *, topics: Optional[Sequence[str]] = None) -> Dict[str, Any]:
     """So mastery của attempt gốc với attempt luyện tập.
@@ -65,32 +87,33 @@ def compare_masteries(before: Sequence[Dict[str, Any]], after: Sequence[Dict[str
     }
 
 
-def overview(user_id: str) -> Dict[str, Any]:
+def overview(user_id: Optional[str]) -> Dict[str, Any]:
     """Chỉ số tổng quan (FR-12)."""
+    uid = _chu_so_huu(user_id)
     with session_scope() as s:
         documents = int(s.execute(
             select(func.count()).select_from(Document)
-            .where(Document.user_id == str(user_id), Document.status != "deleted")
+            .where(Document.user_id == uid, Document.status != "deleted")
         ).scalar() or 0)
         quiz_rows = s.execute(
-            select(Quiz.quiz_type, func.count()).where(Quiz.user_id == str(user_id))
+            select(Quiz.quiz_type, func.count()).where(Quiz.user_id == uid)
             .group_by(Quiz.quiz_type)
         ).all()
         quizzes = {t: int(n) for t, n in quiz_rows}
         attempt_rows = s.execute(
             select(QuizAttempt.status, func.count())
-            .where(QuizAttempt.user_id == str(user_id))
+            .where(QuizAttempt.user_id == uid)
             .group_by(QuizAttempt.status)
         ).all()
         attempts = {t: int(n) for t, n in attempt_rows}
         avg_percentage = s.execute(
             select(func.avg(QuizAttempt.percentage))
-            .where(QuizAttempt.user_id == str(user_id),
+            .where(QuizAttempt.user_id == uid,
                    QuizAttempt.status == "graded")
         ).scalar()
         review_plans = int(s.execute(
             select(func.count()).select_from(ReviewPlan)
-            .where(ReviewPlan.user_id == str(user_id))
+            .where(ReviewPlan.user_id == uid)
         ).scalar() or 0)
 
     total_attempts = sum(attempts.values())
@@ -111,17 +134,18 @@ def overview(user_id: str) -> Dict[str, Any]:
     }
 
 
-def concept_progress(user_id: str, *, document_id: Optional[str] = None) -> List[Dict[str, Any]]:
+def concept_progress(user_id: Optional[str], *, document_id: Optional[str] = None) -> List[Dict[str, Any]]:
     """Mastery tổng hợp theo concept qua NHIỀU attempt (FR-12.4).
 
     Lấy **bản mới nhất** làm mức hiện tại chứ không cộng dồn: `concept_masteries` là
     snapshot theo attempt (đặc tả 8.15), cộng dồn thì một bài tệ hồi đầu kéo điểm xuống
     mãi mãi dù người học đã nắm được.
     """
+    uid = _chu_so_huu(user_id)
     with session_scope() as s:
         q = (select(ConceptMastery, QuizAttempt.started_at)
              .join(QuizAttempt, QuizAttempt.id == ConceptMastery.attempt_id)
-             .where(ConceptMastery.user_id == str(user_id))
+             .where(ConceptMastery.user_id == uid)
              .order_by(QuizAttempt.started_at))
         if document_id:
             q = q.where(ConceptMastery.document_id == str(document_id))
@@ -160,14 +184,15 @@ def concept_progress(user_id: str, *, document_id: Optional[str] = None) -> List
     return out
 
 
-def attempt_history(user_id: str, *, limit: int = 50) -> List[Dict[str, Any]]:
+def attempt_history(user_id: Optional[str], *, limit: int = 50) -> List[Dict[str, Any]]:
     """Lịch sử làm bài, mới nhất trước (FR-12.1, FR-12.2, FR-12.6)."""
+    uid = _chu_so_huu(user_id)
     with session_scope() as s:
         rows = s.execute(
             select(QuizAttempt, Quiz.title, Quiz.quiz_type, Quiz.document_id,
                    Quiz.source_review_item_id, Quiz.source_attempt_id)
             .join(Quiz, Quiz.id == QuizAttempt.quiz_id)
-            .where(QuizAttempt.user_id == str(user_id))
+            .where(QuizAttempt.user_id == uid)
             .order_by(QuizAttempt.started_at.desc()).limit(int(limit))
         ).all()
         return [{
@@ -190,12 +215,13 @@ def attempt_history(user_id: str, *, limit: int = 50) -> List[Dict[str, Any]]:
         } for a, title, quiz_type, document_id, review_item_id, source_attempt_id in rows]
 
 
-def latest_graded_attempt(quiz_id: str, user_id: str) -> Optional[str]:
+def latest_graded_attempt(quiz_id: str, user_id: Optional[str]) -> Optional[str]:
+    uid = _chu_so_huu(user_id)
     with session_scope() as s:
         return s.execute(
             select(QuizAttempt.id)
             .where(QuizAttempt.quiz_id == str(quiz_id),
-                   QuizAttempt.user_id == str(user_id),
+                   QuizAttempt.user_id == uid,
                    QuizAttempt.status == "graded")
             .order_by(QuizAttempt.started_at.desc()).limit(1)
         ).scalar()

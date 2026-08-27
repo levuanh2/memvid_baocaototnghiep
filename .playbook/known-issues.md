@@ -1,5 +1,97 @@
 # Known Issues
 
+## (ĐÃ SỬA 2026-08-28) Quiz / attempt / progress cũng vỡ ở chế độ mở — cùng bẫy `str(None)`
+
+Phần còn lại của mục Study Map ngay dưới. Quét cả `BE/app` tìm `str(user_id)` rồi GỌI THẬT
+từng hàm với `None` (không đọc mã suy đoán) — 6 chỗ vỡ, tất cả cùng một thông báo
+`invalid input syntax for type uuid: "None"`:
+
+| file:dòng | kiểu | hàm | hậu quả |
+|---|---|---|---|
+| `quiz/repository.py:25` | GHI | `create_quiz` | job tạo quiz chết |
+| `attempts/repository.py:45` | GHI | `open_attempt` | mở quiz để làm bài chết |
+| `attempts/repository.py:33` | LỌC | `open_attempt` | cùng hàm, vỡ trước dòng 45 |
+| `progress/service.py:73,76,82,88,93` | LỌC | `overview` | `/api/progress/overview` 500 |
+| `progress/service.py:124` | LỌC | `concept_progress` | `/api/progress/concepts` 500 |
+| `progress/service.py:170` | LỌC | `attempt_history` | `/api/progress/attempts` 500 |
+| `progress/service.py:198` | LỌC | `latest_graded_attempt` | so mastery trước/sau chết |
+
+**Không dính:** `review/service.py:223` và `gap_analysis/service.py:129` lấy user_id từ
+hàng DB đã có (`attempt.user_id`, `row.user_id`) nên không bao giờ None.
+`documents`, `quiz.list_by_document`, `attempts.list_by_quiz`, `studymap.list_by_document`
+đều đã có sẵn `if user_id is not None`.
+
+**Fix — ba loại, KHÔNG sửa đồng loạt.** Codebase có sẵn hai quy ước cho uid None, chọn sai
+là rò dữ liệu:
+
+- *Loại A — GHI vào cột NOT NULL uuid:* quy về user ẩn danh (`ensure_anonymous_user()`).
+  `quiz.create_quiz`, `attempts.open_attempt`. Riêng `open_attempt` giải MỘT lần rồi dùng
+  cho cả truy vấn tra attempt đang mở lẫn hàng ghi — hai chỗ hai giá trị thì mỗi lần F5
+  đẻ một attempt mới.
+- *Loại B — LỌC đã có phạm vi tài liệu:* bỏ lọc chủ sở hữu (quy ước `list_by_document`).
+  Đã dùng cho `studymap.latest_completed`.
+- *Loại C — LỌC theo TÀI KHOẢN, không phạm vi nào khác:* quy None về user ẩn danh rồi lọc
+  theo đó (`progress._chu_so_huu`). **Bê loại B sang đây là rò dữ liệu** —
+  `/api/progress/overview` sẽ trả gộp số liệu của cả 12 user trong DB cho một người gọi
+  ẩn danh. Đo trước khi sửa: 12 tài liệu trong DB; sau khi sửa đúng: `document_count: 0`.
+
+**Regression:** `test_practice_and_progress.py::test_che_do_mo_chay_het_chuoi_quiz_attempt_progress`
+(chạy nguyên chuỗi upload → quiz → attempt → review plan → 3 endpoint progress với uid None)
+và `::test_che_do_mo_khong_thay_du_lieu_cua_user_dang_nhap` (chốt đúng điểm loại C: dựng cả
+một bộ dữ liệu cho user CÓ đăng nhập rồi khẳng định overview ẩn danh KHÔNG đổi). 14 passed.
+
+Khẳng định trong hai test đó là **độ lệch so với mốc đo**, không phải số tuyệt đối: user ẩn
+danh dùng chung giữa các test và `pytest-randomly` đổi thứ tự chạy mỗi lần.
+
+## (ĐÃ SỬA 2026-08-27) Study Map vỡ HOÀN TOÀN ở chế độ mở — `str(None)` thành chuỗi `"None"`
+
+- **Triệu chứng:** `AUTH_PROTECT_APP_APIS` tắt (chế độ mở, `_require_app_user` trả
+  `(None, None)`) thì `/api/study-maps/generate` **500 ngay**, hoặc job chết với nguyên
+  văn lỗi psycopg lọt ra tận UI:
+  `(psycopg.errors.InvalidTextRepresentation) invalid input syntax for type uuid: "None"`
+- **Root cause:** `knowledge_maps.user_id` là `NOT NULL uuid` (`fk()` mặc định
+  `nullable=False`). Hai chỗ ép thẳng `str(user_id)`, mà `str(None)` ra CHUỖI `"None"` —
+  không phải NULL, nên Postgres không báo "thiếu giá trị" mà báo "uuid sai cú pháp":
+  1. `studymap/repository.latest_completed` — chạy TRONG route (`if not force:` tra cache),
+     nên đây là chỗ vỡ TRƯỚC, job còn chưa kịp tạo.
+  2. `studymap/repository.create_map` — chỗ vỡ thứ hai, job chết sau ~25s.
+  `documents/repository.create` đã quy `user_id=None` về user ẩn danh
+  (`ensure_anonymous_user()`) từ Phase 2; studymap không làm theo.
+- **Fix:** `create_map` quy None về user ẩn danh (cột NOT NULL nên phải có uuid thật);
+  `latest_completed` KHÔNG lọc theo chủ sở hữu khi `user_id is None` — đúng quy ước
+  `list_by_document` vốn đã có sẵn ngay trong cùng file đó.
+- **Vì sao 8 test cũ không bắt được:** cả 8 đều gọi `_protect(be, monkeypatch, owner)`,
+  tức chỉ chạy nhánh CÓ đăng nhập. Nhánh `_require_app_user` trả None chưa test bao giờ.
+- **Regression:** `test_studymap_generate.py::test_che_do_mo_van_tao_duoc_map` và
+  `::test_che_do_mo_van_dung_cache_va_force` (10 passed).
+- **Cùng lỗi, CHƯA sửa (ngoài phạm vi lần này, cùng chuỗi màn hình):**
+  `quiz/repository.py:25` (`create_quiz`) và `attempts/repository.py:33,45`
+  (`open_attempt`) cũng ép `str(user_id)` trên uid có thể None. Chế độ mở đi qua được
+  Study Map rồi vẫn chết ở màn tạo quiz. Cách sửa y hệt.
+- **Prevention:** cột `NOT NULL uuid` + `str()` là cái bẫy im lặng — `str(None)` KHÔNG
+  thành NULL. Chỗ nào nhận uid từ `_require_app_user()` thì phải xử lý None tường minh,
+  vì hàm đó trả None là hành vi ĐÚNG theo tài liệu, không phải lỗi.
+
+## (KHÔNG PHẢI LỖI 2026-08-27) Study Map chạy 487 giây — GPU đang bị game chiếm
+
+Đo trên `Day08- RAG Pipeline.docx` (18 chunk): job `done`, 19 node, 7 cạnh, 37 chunk link,
+**487,3 giây**. Cùng tài liệu đó chạy mindmap hôm 26 chỉ mất 833s cho 20 node, và tóm tắt
+mất 60,9s — nên 487s cho một job 3 nhánh là chậm bất thường.
+
+Nguyên nhân không nằm trong mã. `curl /api/ps` lúc đó:
+
+```
+qwen2.5:7b-instruct 5.12 GB, vram 0.19
+```
+
+Model 7b (vốn vừa VRAM) chỉ được cấp **0,19 GB VRAM** — phần còn lại chạy CPU.
+`nvidia-smi` cho thấy 5378/6141 MiB đã bị chiếm và tiến trình
+`TheIsleClient-Win64-Shipping.exe` (game trên Steam) đang giữ GPU ở 100%.
+
+Trước khi kết luận "pipeline chậm", kiểm tra `nvidia-smi --query-compute-apps` và
+`curl -s localhost:11434/api/ps`. `size_vram` thấp hơn `size` nhiều = model đang chạy CPU,
+và không có bản vá mã nguồn nào chữa được điều đó.
+
 ## (ĐÃ SỬA 2026-08-27) Tóm tắt chậm gấp 4 và im lặng 82 giây — cùng bộ lỗi đã sửa cho mindmap
 
 - **Triệu chứng:** tạo tóm tắt tài liệu 18 chunk mất **241,6 giây**; chip tiến trình đứng

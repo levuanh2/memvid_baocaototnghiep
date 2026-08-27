@@ -1,5 +1,67 @@
 # Lessons Learned
 
+## 2026-08-28 - Sửa lan cùng một bẫy: quét bằng cách GỌI, không bằng cách đọc
+
+- **Cùng một triệu chứng không có nghĩa là cùng một cách sửa.** Sáu chỗ vỡ đều ném
+  `invalid input syntax for type uuid: "None"`, nhưng sửa giống nhau cả sáu là sai. Chỗ
+  lọc ĐÃ có phạm vi tài liệu thì bỏ lọc chủ sở hữu là đúng; chỗ lọc theo TÀI KHOẢN mà bỏ
+  lọc là trả số liệu của mọi user cho người gọi ẩn danh. Phân loại theo NGỮ CẢNH TRUY VẤN
+  trước khi viết dòng sửa đầu tiên.
+
+- **Quét bằng cách gọi thật, đừng quét bằng mắt.** `grep str(user_id)` ra 21 chỗ; gọi từng
+  hàm với `None` cho biết đúng 6 chỗ vỡ và 15 chỗ đã có guard. Đọc mã 21 chỗ vừa lâu vừa
+  dễ bỏ sót một `if user_id is not None` nằm cách đó vài dòng.
+
+- **Thay chuỗi hàng loạt cắn cả vào chính hàm helper.** Sau khi thêm
+  `_chu_so_huu(user_id)`, lệnh `s.replace("str(user_id)", "uid")` biến luôn
+  `return str(user_id)` BÊN TRONG helper thành `return uid` — biến chưa tồn tại. Cú pháp
+  vẫn hợp lệ nên không có lỗi lúc import; chỉ `NameError` khi chạy. Thay hàng loạt xong
+  phải đọc lại đúng hàm vừa thêm.
+
+- **Khẳng định số tuyệt đối trên tài nguyên DÙNG CHUNG là test nhấp nháy.** User ẩn danh
+  dùng chung giữa mọi test chế độ mở, và `pytest-randomly` đổi thứ tự mỗi lần chạy. Mọi
+  khẳng định về số lượng phải là ĐỘ LỆCH so với mốc đo ngay trước đó.
+
+- **Test rò dữ liệu phải dựng dữ liệu của người khác thật.** Khẳng định "ẩn danh thấy 0
+  tài liệu" trên DB rỗng thì luôn xanh kể cả khi bỏ lọc. Test đúng là: đo mốc ở chế độ mở
+  → dựng nguyên một bộ tài liệu/quiz/attempt cho user CÓ đăng nhập → đo lại và bắt buộc
+  bằng mốc cũ.
+
+## 2026-08-27 - Audit Study Map: nhánh chưa test là nhánh vỡ
+
+- **`str(None)` không phải NULL — nó là chuỗi bốn ký tự `"None"`.** Với cột
+  `NOT NULL uuid`, Postgres không báo "thiếu giá trị" mà báo
+  `invalid input syntax for type uuid: "None"`, nên thông báo lỗi chỉ về phía "dữ liệu
+  hỏng" chứ không về phía "chưa xử lý người dùng ẩn danh". Chỗ nào nhận uid từ
+  `_require_app_user()` cũng phải xử lý None TƯỜNG MINH: trả None là hành vi đúng theo
+  tài liệu của hàm đó (chế độ mở), không phải trường hợp bất thường.
+
+- **Test hết 8 ca của MỘT nhánh không nói gì về nhánh kia.** Cả 8 test Study Map đều mở
+  đầu bằng `_protect(be, monkeypatch, owner)`. Coverage nhìn đẹp, mà toàn bộ chế độ mở
+  chưa từng chạy một lần — và nó vỡ 100%. Khi một hàm có nhánh theo cờ cấu hình, đếm test
+  theo NHÁNH CẤU HÌNH, đừng đếm theo số ca.
+
+- **Chỗ vỡ đầu tiên không phải chỗ dễ thấy nhất.** `create_map` là chỗ trực giác nghĩ tới,
+  nhưng `latest_completed` chạy TRƯỚC nó, ngay trong route khi tra cache — nên thực tế
+  route trả 500 trước khi job kịp sinh ra. Đi lần theo thứ tự THỰC THI, đừng dừng ở lỗi
+  đầu tiên tìm thấy trong mã.
+
+- **Đo trước khi tin rằng tính năng hỏng.** Giả thuyết vào việc là "Study Map không sinh
+  được". Chạy thật với uid hợp lệ thì nó XONG: 19 node, 7 cạnh, 37 chunk link. Bản vá
+  mindmap hôm 26 (`7b` vừa VRAM, kẹp song song theo cổng LLM, progress kêu ngay) đã theo
+  sang đây miễn phí vì `run_study_map_job` gọi chung `_get_mindmap_pipeline()`. Cái thật
+  sự hỏng là một nhánh cấu hình khác hẳn với cái mình đoán.
+
+- **Kiểm tra máy trước khi đổ cho mã.** 487 giây trông như hồi quy hiệu năng. Thật ra
+  `ollama /api/ps` báo model 7b chỉ được cấp 0,19 GB VRAM, và `nvidia-smi` cho thấy một
+  game Steam đang giữ 5,4/6,1 GiB ở 100%. Hai lệnh đó nên là bước ĐẦU của mọi lần điều
+  tra "sao dạo này chậm", không phải bước cuối.
+
+- **Sửa đúng phạm vi được hỏi, nhưng nói rõ chỗ còn lại.** `quiz/repository.py:25` và
+  `attempts/repository.py:33,45` mắc y hệt lỗi `str(user_id)`. Chúng nằm ngay sau Study
+  Map trong cùng luồng người dùng, nhưng là domain khác và người dùng không hỏi tới —
+  ghi lại kèm file:dòng và cách sửa, không tự lặng lẽ mở rộng phạm vi.
+
 ## 2026-08-27 - Audit chức năng tóm tắt: pipeline anh em clone luôn cả lỗi
 
 - **File nào ghi "clone shape của X" thì đi kiểm X trước.** `summarize.py` mở đầu bằng

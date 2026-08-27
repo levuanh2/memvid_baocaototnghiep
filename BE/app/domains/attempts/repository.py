@@ -20,17 +20,25 @@ def _f(value) -> Optional[float]:
     return None if value is None else float(value)
 
 
-def open_attempt(quiz_id: str, user_id: str) -> Dict[str, Any]:
+def open_attempt(quiz_id: str, user_id: Optional[str]) -> Dict[str, Any]:
     """Tạo attempt lúc MỞ quiz (FR-07.10), không đợi nộp.
 
     Đang có attempt `in_progress` thì trả lại chính nó: mỗi lần F5 mà đẻ một attempt mới
     thì thống kê tiến bộ (Phase 7) đếm toàn bài dở.
+
+    `user_id` None = chế độ mở → gắn vào user ẩn danh, GIẢI MỘT LẦN rồi dùng cho cả
+    truy vấn tra attempt đang mở lẫn hàng ghi mới. Hai chỗ dùng hai giá trị khác nhau
+    thì lần F5 nào cũng đẻ attempt mới. (`str(None)` ra chuỗi `"None"`, không phải NULL —
+    Postgres từ chối với `invalid input syntax for type uuid`.)
     """
+    from app.domains.documents.repository import ensure_anonymous_user
+
+    owner = str(user_id) if user_id else ensure_anonymous_user()
     with session_scope() as s:
         existing = s.execute(
             select(QuizAttempt).where(
                 QuizAttempt.quiz_id == str(quiz_id),
-                QuizAttempt.user_id == str(user_id),
+                QuizAttempt.user_id == owner,
                 QuizAttempt.status == "in_progress",
             ).order_by(QuizAttempt.started_at.desc()).limit(1)
         ).scalar_one_or_none()
@@ -42,7 +50,7 @@ def open_attempt(quiz_id: str, user_id: str) -> Dict[str, Any]:
         ).scalar() or 0)
         attempt_id = str(uuid.uuid4())
         s.add(QuizAttempt(
-            id=attempt_id, quiz_id=str(quiz_id), user_id=str(user_id),
+            id=attempt_id, quiz_id=str(quiz_id), user_id=owner,
             total_questions=total, max_score=float(total), status="in_progress",
         ))
         return {"attempt_id": attempt_id, "created": True}

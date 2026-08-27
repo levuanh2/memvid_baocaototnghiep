@@ -410,3 +410,81 @@ def test_practice_and_progress_of_other_user_are_isolated(be, client, monkeypatc
     assert client.get("/api/progress/overview").get_json()["attempt_count"] == 0
     assert client.get("/api/progress/concepts").get_json()["concepts"] == []
     assert client.get("/api/progress/attempts").get_json()["attempts"] == []
+
+
+# ── chế độ mở: AUTH_PROTECT_APP_APIS tắt → uid là None ──────────────────────
+#
+# Mọi test trên đều `_protect(...)`. Nhánh còn lại vỡ ở 6 chỗ, tất cả cùng một kiểu:
+# `str(None)` ra CHUỖI `"None"` chứ không phải NULL, nên Postgres từ chối với
+# `invalid input syntax for type uuid: "None"` — `quiz.create_quiz`,
+# `attempts.open_attempt` (cả truy vấn lẫn hàng ghi), và cả 4 hàm `progress`.
+#
+# Riêng progress KHÔNG được sửa bằng cách bỏ lọc chủ sở hữu (quy ước của
+# `list_by_document`): truy vấn ở đây không bị thu hẹp theo tài liệu, bỏ lọc là trả gộp
+# số liệu của MỌI user trong DB cho một người gọi ẩn danh. Test dưới chốt đúng điểm đó.
+
+def _open_mode(main, monkeypatch):
+    monkeypatch.setattr(main, "_auth_protect_enabled", lambda: False)
+    monkeypatch.setattr(main, "_current_user_id", lambda: None)
+
+
+@pytest.fixture()
+def don_tai_lieu_an_danh():
+    """Xoá tài liệu test tạo ra; quiz/attempt/review đi theo qua CASCADE.
+
+    Chế độ mở gắn mọi thứ vào user ẩn danh DÙNG CHUNG nên không được xoá user như
+    fixture `owner`. Và vì user đó dùng chung giữa các test, mọi khẳng định về số
+    lượng bên dưới đều phải là ĐỘ LỆCH so với mốc đo, không phải số tuyệt đối —
+    `pytest-randomly` đổi thứ tự chạy mỗi lần.
+    """
+    ids: list = []
+    yield ids
+    from app.db import session_scope
+    from app.db.models import Document
+    with session_scope() as s:
+        for doc_id in ids:
+            row = s.get(Document, doc_id)
+            if row is not None:
+                s.delete(row)
+    from app.domains.documents import repository as docs_repo
+    docs_repo.invalidate_cache()
+
+
+def test_che_do_mo_chay_het_chuoi_quiz_attempt_progress(
+        be, client, monkeypatch, owner, don_tai_lieu_an_danh):
+    _open_mode(be, monkeypatch)
+    _run_inline(monkeypatch)
+    moc = client.get("/api/progress/overview").get_json()
+    assert moc is not None, "overview phải chạy được khi chưa đăng nhập"
+
+    # user_id=None đi thẳng vào `create_quiz` và `open_attempt`
+    doc_id, attempt_id, item_id, _chunks = _seed_and_fail_a_quiz(client, None, monkeypatch)
+    don_tai_lieu_an_danh.append(doc_id)
+
+    over = client.get("/api/progress/overview").get_json()
+    assert over["document_count"] == moc["document_count"] + 1
+    assert over["attempt_count"] == moc["attempt_count"] + 1
+    assert over["review_plan_count"] == moc["review_plan_count"] + 1
+
+    assert client.get("/api/progress/concepts").status_code == 200
+    lich_su = client.get("/api/progress/attempts")
+    assert lich_su.status_code == 200
+    assert any(a["attempt_id"] == attempt_id for a in lich_su.get_json()["attempts"])
+    assert item_id
+
+
+def test_che_do_mo_khong_thay_du_lieu_cua_user_dang_nhap(
+        be, client, monkeypatch, owner, don_tai_lieu_an_danh):
+    """Bỏ lọc chủ sở hữu khi uid None là rò dữ liệu, không phải sửa lỗi."""
+    _run_inline(monkeypatch)
+    _open_mode(be, monkeypatch)
+    truoc = client.get("/api/progress/overview").get_json()
+
+    # cả một bộ tài liệu + quiz + attempt + review plan thuộc user CÓ đăng nhập
+    _protect(be, monkeypatch, owner)
+    _seed_and_fail_a_quiz(client, owner, monkeypatch)
+
+    _open_mode(be, monkeypatch)
+    sau = client.get("/api/progress/overview").get_json()
+    assert sau == truoc, "người gọi ẩn danh không được thấy số liệu của user khác"
+    assert all(a["attempt_id"] for a in client.get("/api/progress/attempts").get_json()["attempts"])

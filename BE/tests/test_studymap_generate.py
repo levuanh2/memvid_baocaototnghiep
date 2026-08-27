@@ -269,3 +269,70 @@ def test_failed_job_marks_map_failed_not_stuck_processing(be, client, monkeypatc
 
     maps = client.get(f"/api/documents/{doc_id}/study-maps").get_json()["study_maps"]
     assert [m["status"] for m in maps] == ["failed"]
+
+
+# ── chế độ mở: AUTH_PROTECT_APP_APIS tắt → uid là None ──────────────────────
+#
+# Mọi test trên đều gọi `_protect(...)`, tức chỉ chạy nhánh CÓ đăng nhập. Nhánh còn
+# lại (`_require_app_user` trả `(None, None)`) chưa test bao giờ, và nó vỡ hoàn toàn:
+# `str(None)` ra chuỗi `"None"`, Postgres từ chối với
+# `invalid input syntax for type uuid: "None"`. Hai chỗ vỡ, và chỗ vỡ TRƯỚC nằm ngay
+# trong route nên `/api/study-maps/generate` trả 500 trước khi job kịp chạy.
+
+def _open_mode(main, monkeypatch):
+    monkeypatch.setattr(main, "_auth_protect_enabled", lambda: False)
+    monkeypatch.setattr(main, "_current_user_id", lambda: None)
+
+
+@pytest.fixture()
+def don_map_theo_tai_lieu():
+    """Xoá tài liệu đã tạo khi xong — map/node/edge đi theo qua CASCADE.
+
+    Chế độ mở gắn mọi thứ vào user ẩn danh DÙNG CHUNG, nên không được xoá user như
+    fixture `owner`; phải xoá đúng tài liệu của test này.
+    """
+    ids: list = []
+    yield ids
+    from app.db import session_scope
+    from app.db.models import Document
+    with session_scope() as s:
+        for doc_id in ids:
+            row = s.get(Document, doc_id)
+            if row is not None:
+                s.delete(row)
+    from app.domains.documents import repository as docs_repo
+    docs_repo.invalidate_cache()
+
+
+def test_che_do_mo_van_tao_duoc_map(be, client, monkeypatch, don_map_theo_tai_lieu):
+    _open_mode(be, monkeypatch)
+    doc_id = _seed_document(client, be, monkeypatch)
+    don_map_theo_tai_lieu.append(doc_id)
+    _run_inline(monkeypatch)
+
+    r = client.post("/api/study-maps/generate", json={"document_id": doc_id})
+    assert r.status_code == 202, r.get_data(as_text=True)
+    job = client.get(f"/api/study-maps/jobs/{r.get_json()['job_id']}").get_json()
+    assert job["status"] == "done", job          # trước đây: error + lỗi psycopg thô
+    map_id = job["result"]["map_id"]
+
+    m = client.get(f"/api/study-maps/{map_id}").get_json()
+    assert m["status"] == "completed" and len(m["nodes"]) == 4
+
+
+def test_che_do_mo_van_dung_cache_va_force(be, client, monkeypatch, don_map_theo_tai_lieu):
+    """`latest_completed(doc, None)` là chỗ vỡ TRƯỚC — nó chạy trong route."""
+    _open_mode(be, monkeypatch)
+    doc_id = _seed_document(client, be, monkeypatch)
+    don_map_theo_tai_lieu.append(doc_id)
+    _run_inline(monkeypatch)
+
+    first = client.post("/api/study-maps/generate", json={"document_id": doc_id}).get_json()
+    map_id = client.get(f"/api/study-maps/jobs/{first['job_id']}").get_json()["result"]["map_id"]
+
+    again = client.post("/api/study-maps/generate", json={"document_id": doc_id})
+    assert again.status_code == 200
+    assert again.get_json() == {"map_id": map_id, "status": "completed", "cached": True}
+
+    forced = client.post("/api/study-maps/generate", json={"document_id": doc_id, "force": True})
+    assert forced.status_code == 202

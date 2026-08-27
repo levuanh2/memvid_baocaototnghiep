@@ -11,18 +11,26 @@ from app.db import session_scope
 from app.db.models import Document, Quiz, QuizQuestion, QuizQuestionChunk, Section
 
 
-def create_quiz(*, user_id: str, document_id: str, title: str, scope: Dict[str, Any],
+def create_quiz(*, user_id: Optional[str], document_id: str, title: str, scope: Dict[str, Any],
                 question_count: int, difficulty: str, quiz_type: str = "diagnostic",
                 map_id: Optional[str] = None,
                 source_review_item_id: Optional[str] = None,
                 source_attempt_id: Optional[str] = None) -> str:
     """`quiz_type='practice'` BẮT BUỘC có `source_review_item_id` (CHECK ở DB, đặc tả
     10.9) — practice quiz không truy được về review item nguồn là mất cả chuỗi
-    yếu → ôn → luyện (FR-11.8)."""
+    yếu → ôn → luyện (FR-11.8).
+
+    `user_id` None = chế độ mở (`AUTH_PROTECT_APP_APIS` tắt) → gắn vào user ẩn danh.
+    `quizzes.user_id` là NOT NULL uuid, mà `str(None)` ra CHUỖI `"None"` — Postgres
+    báo `invalid input syntax for type uuid: "None"` chứ không báo thiếu giá trị.
+    """
+    from app.domains.documents.repository import ensure_anonymous_user
+
     quiz_id = str(uuid.uuid4())
+    owner = str(user_id) if user_id else ensure_anonymous_user()
     with session_scope() as s:
         s.add(Quiz(
-            id=quiz_id, user_id=str(user_id), document_id=str(document_id), map_id=map_id,
+            id=quiz_id, user_id=owner, document_id=str(document_id), map_id=map_id,
             source_review_item_id=source_review_item_id,
             source_attempt_id=source_attempt_id,
             title=(title or "Quiz")[:500], quiz_type=quiz_type, scope_json=scope,

@@ -23,11 +23,21 @@ from app.db.models import (
 )
 
 
-def create_map(*, document_id: str, user_id: str, title: str) -> str:
+def create_map(*, document_id: str, user_id: Optional[str], title: str) -> str:
+    """`user_id` None = chế độ mở (`AUTH_PROTECT_APP_APIS` tắt) → gắn vào user ẩn danh.
+
+    `knowledge_maps.user_id` là NOT NULL uuid, mà `str(None)` ra chuỗi `"None"` —
+    Postgres từ chối với `invalid input syntax for type uuid: "None"` và người dùng
+    chỉ thấy job error kèm nguyên văn lỗi psycopg. `documents.repository.create` đã
+    quy None về user ẩn danh từ lâu; đây chỉ là làm cho khớp.
+    """
+    from app.domains.documents.repository import ensure_anonymous_user
+
     map_id = str(uuid.uuid4())
+    owner = str(user_id) if user_id else ensure_anonymous_user()
     with session_scope() as s:
         s.add(KnowledgeMap(
-            id=map_id, document_id=str(document_id), user_id=str(user_id),
+            id=map_id, document_id=str(document_id), user_id=owner,
             title=(title or "Study Map")[:500], status="processing",
         ))
     return map_id
@@ -155,16 +165,22 @@ def list_by_document(document_id: str, *, user_id: Optional[str] = None) -> List
         } for m in s.execute(q).scalars().all()]
 
 
-def latest_completed(document_id: str, user_id: str) -> Optional[str]:
-    """map_id hoàn tất gần nhất — dùng cho cache khi không `force`."""
+def latest_completed(document_id: str, user_id: Optional[str]) -> Optional[str]:
+    """map_id hoàn tất gần nhất — dùng cho cache khi không `force`.
+
+    `user_id` None = chế độ mở, KHÔNG lọc theo chủ sở hữu — y hệt quy ước
+    `list_by_document` ngay trên. Trước đây `str(None)` thành chuỗi `"None"` và
+    Postgres ném `invalid input syntax for type uuid`, nên route
+    `/api/study-maps/generate` trả 500 ngay trước khi job kịp chạy.
+    """
     with session_scope() as s:
-        return s.execute(
-            select(KnowledgeMap.id)
-            .where(KnowledgeMap.document_id == str(document_id),
-                   KnowledgeMap.user_id == str(user_id),
-                   KnowledgeMap.status == "completed")
-            .order_by(KnowledgeMap.created_at.desc()).limit(1)
-        ).scalar()
+        q = (select(KnowledgeMap.id)
+             .where(KnowledgeMap.document_id == str(document_id),
+                    KnowledgeMap.status == "completed")
+             .order_by(KnowledgeMap.created_at.desc()).limit(1))
+        if user_id is not None:
+            q = q.where(KnowledgeMap.user_id == str(user_id))
+        return s.execute(q).scalar()
 
 
 def document_title(document_id: str) -> str:
