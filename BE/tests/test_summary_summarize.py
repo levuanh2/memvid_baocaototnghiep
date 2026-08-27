@@ -190,3 +190,33 @@ def test_facts_prompt_contains_seven_keys_and_length_rule(monkeypatch):
     for key in sz._FACTS_KEYS:
         assert key in seen["system"]
     assert "2-3 câu" in seen["system"]
+
+
+# --- Tiến trình phải kêu TRƯỚC khi mục đầu chạy xong ---
+#
+# Đo thật trên máy 6 GiB (qwen2.5:14b, tài liệu 18 chunk, 3 mục): dòng progress đầu
+# tiên đến ở giây **82.5** — trước đó chip FE đứng im ở 30%. Người dùng đọc đó là
+# treo và bấm Huỷ đúng lúc job đang chạy bình thường. Tài liệu to hơn thì im lâu hơn.
+#
+# Test đếm số lần progress ĐÃ kêu tại thời điểm lời gọi LLM đầu tiên bắt đầu — chứ
+# không đếm tổng lúc xong, vì tổng vẫn đúng ngay cả khi mọi thứ dồn về cuối.
+def test_bao_progress_TRUOC_khi_muc_dau_chay_xong(monkeypatch):
+    da_bao: list[int] = []
+    luc_goi_llm: list[int] = []
+
+    def cham(*a, **k):
+        luc_goi_llm.append(len(da_bao))
+        return _ok_payload(["0"])
+
+    monkeypatch.setattr(sz, "ask_ai", cham)
+    sz.summarize_sections(_MM, _SECTIONS, timeout_sec=5, max_workers=1,
+                          progress_cb=lambda p, m: da_bao.append(p))
+    assert luc_goi_llm[0] >= 1, "im lang cho den khi muc dau xong — dung loi da do o mindmap"
+
+
+def test_khong_co_muc_nao_thi_khong_bao_progress_ao(monkeypatch):
+    da_bao: list[int] = []
+    monkeypatch.setattr(sz, "ask_ai", lambda *a, **k: _ok_payload([]))
+    sz.summarize_sections(_MM, [], timeout_sec=5, max_workers=1,
+                          progress_cb=lambda p, m: da_bao.append(p))
+    assert da_bao == []

@@ -218,3 +218,24 @@ def test_build_record_includes_coverage_when_provided():
                           sections=[], entities=[], content_hash_value="h",
                           model="m", elapsed_sec=0, degraded_missing=[], coverage=diag)
     assert rec["coverage"] == diag
+
+
+# --- Cờ SUMMARY_FACTS cũng phải nằm trong khoá cache ---
+#
+# Cờ này đổi CẢ prompt (facts-first) LẪN output (`sections[].facts`, study block suy từ
+# facts). Phase 1 chỉ bump PIPELINE_VERSION lúc thêm tính năng, KHÔNG đưa cờ vào hash —
+# nên bật cờ lên là bản ĐÃ cache lúc cờ tắt vẫn khớp hash và được trả về: mode=study âm
+# thầm rơi về fallback key_points, không ai biết cờ đã bật. Cùng lỗi Phase 5 đã chặn cho
+# `coverage`, chỉ là chưa ai làm cho `facts`.
+def test_content_hash_includes_facts_flag():
+    base = sm.content_hash(["a"], ["t"], ["h"], "medium", "standard", False)  # facts default False
+    assert sm.content_hash(["a"], ["t"], ["h"], "medium", "standard", False, False) == base
+    assert sm.content_hash(["a"], ["t"], ["h"], "medium", "standard", False, True) != base
+
+
+def test_content_hash_facts_va_coverage_doc_lap():
+    """Hai cờ phải tách bạch — bật cái này không được ra cùng hash với bật cái kia."""
+    chi_coverage = sm.content_hash(["a"], ["t"], ["h"], "medium", "standard", True, False)
+    chi_facts = sm.content_hash(["a"], ["t"], ["h"], "medium", "standard", False, True)
+    ca_hai = sm.content_hash(["a"], ["t"], ["h"], "medium", "standard", True, True)
+    assert len({chi_coverage, chi_facts, ca_hai}) == 3

@@ -76,7 +76,8 @@ def sanitize_facts(raw: object) -> dict:
 
 def content_hash(source_stems: list[str], chunk_texts: list[str],
                  chunk_headings: list[str] | None, length_mode: str,
-                 mode: str = "standard", coverage: bool = False) -> str:
+                 mode: str = "standard", coverage: bool = False,
+                 facts: bool = False) -> str:
     """Cache key: hash MỌI input ảnh hưởng output (bài học mindmap content_hash).
 
     length_mode + mode nằm trong hash — đổi độ dài HAY đổi mục đích (standard/study)
@@ -86,12 +87,20 @@ def content_hash(source_stems: list[str], chunk_texts: list[str],
     coverage (Phase 5): bật SUMMARY_COVERAGE thêm field `coverage` vào output → phải là
     hash khác, nếu không bản ĐÃ cache lúc coverage OFF sẽ bị trả về khi bật coverage
     (stale no-coverage output). coverage=False giữ hash tương thích caller cũ.
+
+    facts: y hệt lý do trên, cho `SUMMARY_FACTS`. Cờ này đổi CẢ prompt (facts-first)
+    LẪN output (`sections[].facts`, và study block suy từ facts) — nhưng Phase 1 chỉ
+    bump PIPELINE_VERSION lúc thêm tính năng, KHÔNG đưa cờ vào hash. Hậu quả: bật cờ
+    lên thì bản ĐÃ cache lúc cờ tắt vẫn khớp hash và được trả về, mode=study âm thầm
+    rơi về fallback key_points và không ai biết cờ đã bật. facts=False giữ hash tương
+    thích caller cũ.
     """
     h = hashlib.sha256()
     h.update(PIPELINE_VERSION.encode("utf-8"))
     h.update(b"\x03" + (length_mode or "medium").encode("utf-8"))
     h.update(b"\x04" + (mode or "standard").encode("utf-8"))
     h.update(b"\x05" + (b"1" if coverage else b"0"))
+    h.update(b"\x06" + (b"1" if facts else b"0"))
     for s in sorted(source_stems or []):
         h.update(b"\x00" + s.encode("utf-8"))
     for t in chunk_texts or []:

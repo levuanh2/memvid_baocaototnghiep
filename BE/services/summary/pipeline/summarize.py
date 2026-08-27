@@ -132,6 +132,15 @@ def summarize_sections(mm_input: dict, sections: list[dict], *, model: str | Non
         return out, missing      # huỷ trước khi tốn LLM call nào
     by_id = {s["id"]: s for s in out}
     done = 0
+    # Báo TRƯỚC khi submit. Nếu không, dòng progress đầu tiên chỉ đến khi một mục
+    # CHẠY XONG — với model chậm là vài phút chip đứng im ở 30%, người dùng đọc là
+    # treo rồi bấm huỷ đúng lúc job vẫn chạy bình thường (đúng lỗi đã đo ở mindmap).
+    #
+    # Phải TRƯỚC `ctx_submit`, không phải sau: submit là bắt đầu chạy ngay, nên đặt
+    # sau thì thread worker có thể gọi LLM trước khi dòng này kịp chạy — vẫn im lặng,
+    # chỉ là im lặng không tất định.
+    if progress_cb and sections:
+        progress_cb(30, f"Đang tóm tắt mục 1/{len(sections)}...")
     ex = ThreadPoolExecutor(max_workers=max_workers)
     futs = {ctx_submit(ex, _summarize_one, mm_input, s, model, timeout_sec, length_mode, with_facts): s
             for s in sections}

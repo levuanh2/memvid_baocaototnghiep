@@ -1,5 +1,49 @@
 # Lessons Learned
 
+## 2026-08-27 - Audit chức năng tóm tắt: pipeline anh em clone luôn cả lỗi
+
+- **File nào ghi "clone shape của X" thì đi kiểm X trước.** `summarize.py` mở đầu bằng
+  "Clone shape services/mindmap/pipeline/enrich.py — cùng các bài học". Nó clone thật:
+  cùng cách kẹp `max_workers` từ env không qua cổng LLM, cùng chỗ đặt `progress_cb` sau
+  submit, cùng model 14b lệch trong `BE/.env`. Sửa xong mindmap hôm 26 mà không grep sang
+  summary là để nguyên ba lỗi y hệt sống thêm một ngày. Lần sau: vừa sửa một pipeline thì
+  `grep -rn` ngay cái tên hàm/biến vừa sửa ra toàn repo, trước khi commit.
+
+- **Đừng bắt hai biến env phải khớp tay nhau.** `SUMMARY_PARALLEL=2` và
+  `MAX_CONCURRENT_LLM_CALLS=1` là một cấu hình TỰ MÂU THUẪN mà không chỗ nào phát hiện —
+  hệ quả là mục thứ hai xếp hàng rồi chết vì timeout hàng đợi. Cách chặn không phải là
+  viết tài liệu bảo người ta chỉnh cả hai, mà là **lấy trần từ chính cái cổng**:
+  `min(muốn, inproc_slots())`. Một chỗ chỉnh, không cấu hình nào tự mâu thuẫn được nữa.
+
+- **Song song danh nghĩa còn nói dối cả ngân sách timeout.**
+  `budget = timeout_sec * ceil(n/max_workers)` tính theo số worker KHAI BÁO. Khi cổng ép
+  chạy tuần tự, ngân sách nhỏ hơn thời gian thật cần → mục cuối bị đánh degraded dù chưa
+  hề vượt timeout riêng của nó. Sửa đúng chỗ (`max_workers` phản ánh thực tế) thì ngân
+  sách tự đúng theo. Nếu chỉ vá triệu chứng bằng cách nới `budget` thì lỗi gốc vẫn còn.
+
+- **Test xanh hết mà tính năng vẫn hỏng — vì test giả LLM.** 132 test summary pass cả
+  trước lẫn sau khi phát hiện lỗi. Cả ba lỗi đều nằm ở cấu hình runtime và ở tương tác với
+  cổng LLM thật, thứ mà `monkeypatch ask_ai` không chạm tới. Bộ test đơn vị KHÔNG phải
+  bằng chứng tính năng chạy được; phải có một lần chạy thật, có bấm giờ.
+
+- **Đo trước khi kết luận "tính năng này hỏng".** Giả thuyết ban đầu của tao là
+  `SUMMARY_PARALLEL=2` đang làm chết mục thứ hai như bên mindmap. Chạy thật thì nó KHÔNG
+  chết: mục đầu chỉ mất 82s, dưới ngưỡng 180s. Lỗi có thật nhưng là bom hẹn giờ theo kích
+  thước tài liệu, không phải lỗi đang nổ. Báo cáo phải nói đúng như vậy — nói nó "đang làm
+  hỏng tóm tắt" là bịa cho khớp giả thuyết.
+
+- **Bật một cờ tính năng lên phải ĐO, không suy luận.** `SUMMARY_FACTS` để tắt trông như
+  di sản của một đợt rollout theo phase đã đi hết tới Phase 5, và study mode thiếu 4/7 mục
+  vì nó. Suy luận hợp lý là "bật lên thì đầy đủ". Đo thật thì ngược: qwen2.5:7b chỉ trả
+  được facts cho 1/3 mục, study block ra NGHÈO HƠN đường fallback, mà chậm hơn 45%. Sửa
+  cái làm cho việc bật/tắt AN TOÀN (đưa cờ vào khoá cache), rồi để cờ nguyên trạng.
+
+- **Model mặc định hard-code trong code là mìn.** `qwen2.5:14b` xuất hiện làm giá trị mặc
+  định ở `llm_factory._model_map` (2 chỗ) và `summary_graph.assemble_node`. Hôm nay chúng
+  không nổ vì cả 4 file env đều đặt biến. Nhưng một lần clone repo thiếu env là chạy thẳng
+  vào model 9,95 GB trên card 6 GiB — đúng cái đã tốn của dự án này hai buổi. CHƯA sửa
+  (đổi mặc định đụng cả chat/quiz), chỉ ghi lại ở đây.
+
 ## 2026-08-21 - Trang sơ đồ kiến thức (/app/study/map) + chạy app thật lần đầu
 
 ### Về việc dựng graph viewer

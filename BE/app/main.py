@@ -3793,11 +3793,12 @@ def _summary_input_and_hash(source_names: list[str], length_mode: str,
     # Phase 5: coverage flag goes into the cache key so a no-coverage record cached earlier is
     # not served once SUMMARY_COVERAGE=1 (and vice-versa). collect_node mirrors this.
     from shared.config import get_settings as _get_settings
-    cov_on = _get_settings().summary_coverage
+    _s = _get_settings()
+    cov_on, facts_on = _s.summary_coverage, _s.summary_facts
     h = summary_schema.content_hash(mm.get("sources") or [],
                                     [c["text"] for c in mm.get("chunks") or []],
                                     [c.get("heading_path", "") for c in mm.get("chunks") or []],
-                                    length_mode, mode, cov_on)
+                                    length_mode, mode, cov_on, facts_on)
     return mm, h
 
 

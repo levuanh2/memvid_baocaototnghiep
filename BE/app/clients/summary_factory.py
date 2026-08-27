@@ -18,6 +18,22 @@ class LocalSummaryPipeline:
 
         return build_sections(mm_input, outline_fn=_outline)
 
+    def _parallel(self) -> int:
+        """Số mục chạy song song — KHÔNG bao giờ vượt số slot của cổng LLM.
+
+        `SUMMARY_PARALLEL` mặc định 2, nhưng cổng in-process
+        (`MAX_CONCURRENT_LLM_CALLS`, mặc định 1 trên máy này) chỉ cho 1 lời gọi chạy
+        một lúc. Mục thứ hai không chạy nhanh hơn — nó ĐỢI, và khi chờ quá
+        `LLM_QUEUE_WAIT_TIMEOUT_SECONDS` (180s) thì ném "LLM busy (in-process)",
+        mục đó rơi vào `missing` và bản tóm tắt ra degraded.
+
+        Lấy trần từ chính cổng LLM thay vì bắt hai biến env phải khớp tay — y hệt
+        `mindmap_factory._enrich_parallel`, cùng một lỗi, cùng một cách chặn.
+        """
+        from app.clients.llm_factory import inproc_slots
+        muon = max(1, int(os.getenv("SUMMARY_PARALLEL", "2") or 2))
+        return max(1, min(muon, inproc_slots()))
+
     def summarize(self, mm_input, sections, *, length_mode="medium",
                   progress_cb=None, cancel_cb=None):
         from shared.config import get_settings
@@ -25,7 +41,7 @@ class LocalSummaryPipeline:
         return summarize_sections(
             mm_input, sections, model=None, length_mode=length_mode,
             timeout_sec=self._timeout(),
-            max_workers=int(os.getenv("SUMMARY_PARALLEL", "2")),
+            max_workers=self._parallel(),
             with_facts=get_settings().summary_facts,
             progress_cb=progress_cb, cancel_cb=cancel_cb)
 

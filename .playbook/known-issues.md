@@ -1,5 +1,83 @@
 # Known Issues
 
+## (ĐÃ SỬA 2026-08-27) Tóm tắt chậm gấp 4 và im lặng 82 giây — cùng bộ lỗi đã sửa cho mindmap
+
+- **Triệu chứng:** tạo tóm tắt tài liệu 18 chunk mất **241,6 giây**; chip tiến trình đứng
+  im ở 30% suốt **82,5 giây đầu** rồi mới nhích. Không có lỗi nào, `missing=[]`, bản tóm
+  tắt vẫn đúng — nên không ai gọi đây là bug, chỉ thấy "nó chậm".
+- **Root cause (3 cái, độc lập):**
+  1. `BE/.env` để `SLM_MODEL_SUMMARY=qwen2.5:14b`. Model nặng 9,95 GB, card 6 GiB → Ollama
+     chỉ nhét 4,07 GB vào VRAM, phần còn lại chạy CPU, tụt còn ~2,6 tok/s. Root `.env` đã
+     là `qwen2.5:7b-instruct`, nhưng `shared/env_loader.load_project_env` nạp `BE/.env`
+     TRƯỚC với `override=False` nên BE/.env thắng. **Đúng y hệt lỗi mindmap ngày 2026-08-26.**
+  2. `summarize_sections` chỉ gọi `progress_cb` BÊN TRONG vòng `as_completed` — dòng
+     progress đầu tiên chỉ đến khi một mục CHẠY XONG.
+  3. `summary_factory.summarize` truyền `max_workers=int(os.getenv("SUMMARY_PARALLEL","2"))`
+     mà không kẹp theo cổng LLM in-process (`MAX_CONCURRENT_LLM_CALLS=1`). Mục thứ hai
+     không chạy song song mà xếp hàng; chờ quá `LLM_QUEUE_WAIT_TIMEOUT_SECONDS` (180s) thì
+     ném "LLM busy (in-process)". **Trên tài liệu 18 chunk lỗi này KHÔNG nổ** (mục đầu chỉ
+     mất 82s < 180s) — nó là bom hẹn giờ theo kích thước tài liệu.
+     Tái hiện được cơ chế mà không cần tài liệu to: hạ `LLM_QUEUE_WAIT_TIMEOUT_SECONDS`
+     xuống 5s rồi chạy cùng 3 mục đó —
+     `max_workers=2` → 2/3 mục chết (`LLM busy (in-process): all 1 slots in use, waited
+     5.0s`), job "xong" sau **14,7s** với bản tóm tắt thiếu 2 mục;
+     `max_workers=1` (đã kẹp) → 35,5s, `missing=[]`. Job nhanh hơn ở đây là job HỎNG.
+     Hệ quả phụ cùng gốc: `budget = timeout_sec * ceil(n/max_workers) + 15` tính theo số
+     worker DANH NGHĨA. Với 3 mục, `max_workers=2` cho budget 615s trong khi thực tế chạy
+     tuần tự cần tới 3×300 = 900s → mục cuối có thể degraded dù chưa hề vượt timeout riêng.
+- **Fix:** (1) `SLM_MODEL_SUMMARY=qwen2.5:7b-instruct` trong `BE/.env` + `BE/.env.example`,
+  kèm comment nói rõ vì sao không phải 14b. (2) `progress_cb` gọi TRƯỚC `ctx_submit`.
+  (3) `LocalSummaryPipeline._parallel()` lấy trần từ `llm_factory.inproc_slots()` — cùng
+  cách đã dùng cho `mindmap_factory._enrich_parallel`.
+- **Đo lại (cùng tài liệu `day08-_rag_pipeline_docx`, 18 chunk, 3 mục):**
+
+  |                   | trước  | sau   |
+  |-------------------|--------|-------|
+  | tổng              | 241,6s | 60,9s |
+  | riêng summarize   | 211,1s | 51,8s |
+  | riêng synthesize  | 30,5s  | 9,1s  |
+  | progress đầu tiên | 82,5s  | 0,03s |
+  | mục degraded      | 0      | 0     |
+  | overview          | 335 ký tự | 581 ký tự |
+
+  7b không hề tóm tắt tệ hơn 14b ở đây — chunk_refs mục 3 tăng 7→13, entities 8→10.
+- **Regression:** `tests/test_summary_factory.py` (3 test kẹp song song),
+  `tests/test_summary_summarize.py::test_bao_progress_TRUOC_khi_muc_dau_chay_xong` (đếm số
+  lần progress ĐÃ kêu tại thời điểm lời gọi LLM đầu tiên, không đếm tổng lúc xong).
+- **Prevention:** đừng để hai biến env phải khớp tay nhau — lấy trần từ chính cái cổng.
+  Và khi sửa một pipeline, grep pipeline anh em ngay: `summarize.py` vốn ghi rõ trong
+  docstring là "clone shape enrich.py", nên nó clone luôn cả ba lỗi.
+
+## (2026-08-27) Bật `SUMMARY_FACTS` làm study mode TỆ HƠN trên qwen2.5:7b — đừng bật
+
+Có hai vấn đề tách bạch ở đây.
+
+**(a) Đã sửa — cờ không nằm trong khoá cache.** `content_hash` gồm `PIPELINE_VERSION`,
+`length_mode`, `mode`, cờ `coverage`, nhưng KHÔNG gồm cờ `facts`. Phase 5 đã chặn đúng lỗi
+này cho `coverage` mà không ai làm cho `facts`. Hậu quả: bật `SUMMARY_FACTS=1` lên thì bản
+đã cache lúc cờ tắt vẫn khớp hash và được trả về — `mode=study` âm thầm rơi về fallback
+key_points, không có dấu hiệu gì. Đã thêm tham số `facts` vào `content_hash`; cả
+`main._summary_input_and_hash` LẪN `summary_graph.collect_node` đều mirror (bài học Phase 5:
+thiếu một trong hai là cache lệch).
+
+**(b) CHƯA sửa và không định sửa — cờ vẫn nên để TẮT.** Đo thật trên
+`day08-_rag_pipeline_docx` với `qwen2.5:7b-instruct`:
+
+|                        | FACTS=0 | FACTS=1 |
+|------------------------|---------|---------|
+| thời gian summarize    | 40,7s   | 59,0s   |
+| mục trả được facts     | 0/3     | **1/3** |
+| study.key_concepts     | 13      | 7       |
+| study.self_check       | 10      | 7       |
+| definitions/formulas/examples/common_mistakes | 0 | 0 |
+
+7b không kham nổi JSON 7 khoá facts — 2/3 mục trả về không có facts, và study block dựng từ
+đó NGHÈO HƠN đường fallback key_points. Chậm hơn 45% để nhận kết quả tệ hơn.
+
+Ghi chú cho người đọc sau: 4 mục `definitions/formulas/examples/common_mistakes` trong
+modal tóm tắt hiện đang LUÔN rỗng ở chế độ study. Đó là hệ quả của cờ tắt, không phải lỗi
+render. Muốn lấp thì cần model mạnh hơn cho riêng bước này, không phải bật cờ lên.
+
 ## (ĐÃ SỬA 2026-08-21) `QUERY_GRAPH chưa khởi tạo` — site-packages global trôi khỏi MỌI pin
 
 - **Triệu chứng:** `/health` trả `query_graph_ready: false` +

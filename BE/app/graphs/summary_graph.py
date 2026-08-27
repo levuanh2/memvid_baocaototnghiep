@@ -56,10 +56,12 @@ def build_summary_graph(*, data_dir: Path, index_meta_path: Path,
         lmode = state.get("length_mode") or "medium"
         smode = state.get("mode") or "standard"
         from shared.config import get_settings
-        cov_on = get_settings().summary_coverage
+        _s = get_settings()
+        cov_on, facts_on = _s.summary_coverage, _s.summary_facts
         ch = state.get("content_hash") or sm_schema.content_hash(
             mm.get("sources") or [], [c["text"] for c in mm.get("chunks") or []],
-            [c.get("heading_path", "") for c in mm.get("chunks") or []], lmode, smode, cov_on)
+            [c.get("heading_path", "") for c in mm.get("chunks") or []], lmode, smode,
+            cov_on, facts_on)
         if not mm.get("chunks"):
             raise ValueError("Không có chunk nào cho các nguồn đã chọn.")
         return {**state, "mm_input": mm, "content_hash": ch, "length_mode": lmode,
