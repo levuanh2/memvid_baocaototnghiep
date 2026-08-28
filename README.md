@@ -1,4 +1,4 @@
-# MemVidX - Hệ thống Trí nhớ Thị giác & RAG
+# StudyMap AI — Hệ thống RAG hỗ trợ học từ tài liệu
 
 ## Mục lục
 
@@ -17,14 +17,19 @@
 
 ## Tổng quan
 
-**MemVidX** là một hệ thống RAG (Retrieval-Augmented Generation) tích hợp trí nhớ thị giác, cho phép người dùng:
+**StudyMap AI** là hệ thống RAG (Retrieval-Augmented Generation) cho người học: nạp tài
+liệu vào, rồi hỏi đáp, tóm tắt, dựng sơ đồ và tự kiểm tra trên chính tài liệu đó.
 
-- **Upload tài liệu** (PDF, DOCX, TXT, hình ảnh) và mã hoá thành video QR
-- **Tạo index vector** với FAISS để tìm kiếm ngữ nghĩa
-- **Xây dựng Memory Tree** - cấu trúc phân cấp trí nhớ theo document/section/topic
-- **Sinh Mind Map** tự động từ nội dung tài liệu
-- **Tóm tắt thông minh** theo nhiều phương pháp nâng cao
-- **Hỏi đáp thông minh** với ngữ cảnh từ tài liệu đã ingest
+- **Nạp tài liệu** (PDF, DOCX, PPTX, XLSX, EPUB, HTML, MD, TXT, ảnh) rồi chunk + index
+- **Tìm kiếm lai** BM25 + FAISS, hợp nhất bằng RRF, rerank bằng cross-encoder
+- **Memory Tree** — cấu trúc phân cấp document/section/topic cho câu hỏi tổng hợp
+- **Sơ đồ tư duy** và **tóm tắt** sinh tự động, chạy dạng job nền có tiến trình + huỷ
+- **Study Map** — đồ thị khái niệm kèm liên kết ngược về chunk nguồn
+- **Quiz, chấm bài, phân tích lỗ hổng, kế hoạch ôn tập, theo dõi tiến độ**
+
+> **Ghi chú lịch sử.** Dự án khởi đầu tên **MemVid**, mã hoá bộ nhớ thành video QR. Hướng
+> đó đã bỏ: không còn `videos/`, `core_modules/`, `chunk_processor.py`, `video_utils.py`.
+> Tài liệu này từng mô tả kiến trúc cũ đó tới **75%** đường dẫn sai — viết lại 2026-08-28.
 
 ---
 
@@ -92,102 +97,53 @@
 
 ## Cấu trúc dự án
 
+> Cây dưới đây **sinh từ `git ls-files`**, dừng ở 2 tầng. Bản cũ liệt kê tới từng file ở
+> 4 tầng và gõ tay — kết quả là 54/72 mục trỏ vào chỗ không tồn tại. Muốn dựng lại:
+>
+> ```bash
+> git ls-files | awk -F/ 'NF>2{print $1"/"$2"/"} NF==2{print $1"/"$2} NF==1{print $1}' | sort -u
+> ```
+
 ```
-MemVid_New/
-├── BE/                          # Backend (Python/Flask)
-│   ├── main.py                  # Flask app, all API endpoints
-│   ├── requirements.txt          # Python dependencies
-│   │
-│   ├── graphs/                  # LangGraph pipelines
-│   │   ├── ingest_graph.py     # Document ingestion pipeline
-│   │   ├── query_graph.py       # Query & retrieval pipeline
-│   │   ├── mindmap_graph.py     # Mind map generation pipeline
-│   │   ├── state.py            # Shared state definitions
-│   │   ├── sqlite_checkpointer.py
-│   │   └── logger.py
-│   │
-│   ├── retrieval/                # Advanced retrieval
-│   │   ├── hybrid.py           # Hybrid search (vector + keyword)
-│   │   └── ensemble_retriever.py
-│   │
-│   ├── memory/                 # Memory layer
-│   │   ├── lc_memory_tree.py   # LangChain memory adapter
-│   │   └── __init__.py
-│   │
-│   ├── core_modules/           # Core business logic
-│   │   ├── vector_store.py     # FAISS indexing & search
-│   │   ├── memory_tree.py      # Memory tree structure
-│   │   ├── mindmap_utils.py    # Mind map generation (CMGN)
-│   │   ├── summarize_advanced.py # Advanced summarization
-│   │   ├── chunk_processor.py  # QR code generation
-│   │   ├── video_utils.py      # Video encoding/decoding
-│   │   ├── ingest_utils.py     # Document text extraction
-│   │   └── qa_chain.py        # Q&A chain
-│   │
-│   ├── services/               # LLM & external services
-│   │   ├── llm_factory.py      # Multi-provider LLM factory
-│   │   ├── ai_provider.py      # AI provider abstraction
-│   │   └── ollama_utils.py     # Ollama-specific utils
-│   │
-│   ├── storage/               # Data persistence
-│   │   ├── jobs_store.py       # Job tracking (SQLite)
-│   │   └── sessions_store.py    # Session history
-│   │
-│   ├── index/                # Vector index storage
-│   │   ├── index.faiss         # FAISS vector index
-│   │   ├── index.json          # Chunk metadata
-│   │   └── source_registry.json # Source tracking
-│   │
-│   ├── memory/                # Memory storage
-│   │   ├── memory_index.faiss  # Memory vectors
-│   │   ├── memory_index.json
-│   │   ├── memory_trees.json    # Memory tree nodes
-│   │   ├── mindmaps.json       # Generated mind maps
-│   │   └── summaries.json       # Saved summaries
-│   │
-│   ├── videos/               # QR-encoded videos
-│   │   └── *.mp4
-│   │
-│   ├── input_docs/           # Uploaded documents
-│   │   └── *.pdf, *.docx, *.txt
-│   │
-│   ├── Dockerfile            # Backend container
-│   ├── env_loader.py        # Environment config loader
-│   └── rebuild_index_from_video.py
+MemVid_BaoCaoTotNghiep/
+├── BE/                     # Backend: Flask + LangGraph
+│   ├── app/
+│   │   ├── main.py         # Flask app — 80 endpoint (bảng bên dưới)
+│   │   ├── domains/        # 20 domain: documents, retrieval, quiz, studymap,
+│   │   │                   #   progress, review, memory, mindmap, summary, auth…
+│   │   ├── graphs/         # Pipeline LangGraph: ingest / query / mindmap / summary
+│   │   ├── clients/        # llm_factory, mindmap_factory, summary_factory
+│   │   ├── db/             # SQLAlchemy models + session
+│   │   ├── jobs/           # Hàng đợi job nền (RQ, bật bằng QUEUE_ENABLED)
+│   │   └── wiring.py       # Ghép graph với dependency
+│   ├── services/           # Microservice tách được: mindmap (gRPC), summary, llm_gateway
+│   ├── shared/             # config.py, env_loader.py, paths.py, source_id.py
+│   ├── evaluation/         # Bộ chấm chất lượng cho luận văn
+│   ├── alembic/            # Migration Postgres
+│   ├── scripts/            # Tiện ích chạy tay (build_proto, perf…)
+│   ├── tests/              # pytest — 894 passed / 4 skipped
+│   ├── .env.example        # 128 biến, có comment lý do cho từng khoá
+│   └── ENV_SETUP.md        # Hướng dẫn thao tác env / rebuild index
 │
-├── FE/                         # Frontend (React + Tailwind)
-│   ├── src/
-│   │   ├── App.jsx            # Main app component
-│   │   ├── App.css
-│   │   ├── main.jsx
-│   │   ├── index.css
-│   │   │
-│   │   ├── components/Layout/
-│   │   │   ├── MainLayout.jsx  # 3-column layout
-│   │   │   ├── ChatArea.jsx    # Main chat interface
-│   │   │   ├── SidebarLeft.jsx # Document management
-│   │   │   ├── SidebarRight.jsx # Tools (MindMap/Summary)
-│   │   │   ├── MindMapModal.jsx
-│   │   │   └── SummaryModal.jsx
-│   │   │
-│   │   ├── hooks/
-│   │   │   └── useTheme.js     # Dark/Light theme
-│   │   │
-│   │   └── utils/
-│   │       └── api.js          # API client
-│   │
-│   ├── Dockerfile
-│   ├── tailwind.config.js
-│   ├── package.json
-│   └── vite.config.js
+├── FE/                     # Frontend: React + Vite + Tailwind
+│   └── src/
+│       ├── pages/          # Landing, Login, Register, Workspace, study/
+│       ├── components/     # Layout/, mindmap/, study/, ui/
+│       ├── auth/           # AuthContext, tokenStore, ProtectedRoute
+│       ├── hooks/          # useStudyJob, panelLayout…
+│       └── utils/          # api client, job poller, SSE stream (test đặt cạnh mã)
 │
-├── docker-compose.yml          # Multi-container orchestration
-├── .env                        # Environment variables
-├── requirements.txt            # Python dependencies (root)
-└── memvid_architecture_flow.svg # Architecture diagram
+├── docs/                   # ARCHITECTURE, SPEC, playbooks/, decisions/, skills/,
+│                           #   superpowers/plans/, tailieu/ (tài liệu luận văn)
+├── .playbook/              # known-issues.md + lessons-learned.md — BỘ NHỚ của dự án,
+│                           #   đọc TRƯỚC khi sửa mã (xem .claude/rules/AGENTS.md)
+├── docker-compose.yml      # backend, llm-gateway, mindmap-service, rq-worker, redis, frontend
+├── .env.example            # Hồ sơ DOCKER/PROD (BE/.env.example là hồ sơ DEV và THẮNG)
+└── requirements.txt        # Con trỏ tới BE/requirements.txt (nơi pin thật)
 ```
 
----
+**Thư mục runtime không nằm trong git** (`.gitignore` che): `BE/index/`, `BE/memory/`,
+`BE/data/`, `BE/input_docs/`, `BE/cleaned_md/`, `BE/reports/`, `BE/_backup-*/`.
 
 ## Hướng dẫn cài đặt
 
@@ -289,69 +245,151 @@ docker-compose up --build
 
 ## API Endpoints
 
-### Health & Stats
+> Bảng **sinh từ `BE/app/main.py`**, không chép tay. Bản cũ liệt kê 27 endpoint, trong đó
+> 5 cái không tồn tại và thiếu 56 route có thật. Dựng lại bằng:
+>
+> ```bash
+> grep -oE "@app\.(route|get|post|put|delete)\(\s*['\"][^'\"]+" BE/app/main.py
+> ```
 
-| Method | Endpoint | Description |
-|--------|----------|-------------|
-| GET | `/` | Health check |
-| GET | `/health` | Detailed health status |
-| GET | `/stats` | Index statistics (documents, chunks, videos) |
+### Sức khoẻ hệ thống
 
-### Document Management
+| Method | Endpoint |
+|---|---|
+| GET | `/` |
+| GET | `/health` |
+| GET | `/ready` |
+| GET | `/stats` |
 
-| Method | Endpoint | Description |
-|--------|----------|-------------|
-| POST | `/upload` | Upload single file |
-| POST | `/upload-file` | Upload file (alias) |
-| POST | `/upload-multiple` | Upload multiple files |
-| POST | `/process-doc` | Process raw text |
-| POST | `/delete-source` | Delete source (legacy) |
-| DELETE | `/sources/<id>` | Delete source (v2, clean delete) |
-| GET | `/list-indexed` | List all indexed sources |
-| GET | `/sources/<id>/status` | Get source processing status |
+### Job nền
 
-### Query & Chat
+| Method | Endpoint |
+|---|---|
+| GET | `/api/jobs/<job_id>` |
+| POST | `/api/jobs/<job_id>/cancel` |
+| GET | `/jobs/<job_id>/timeline` |
 
-| Method | Endpoint | Description |
-|--------|----------|-------------|
-| POST | `/query` | Submit query (async, returns job_id) |
-| GET | `/query-status/<job_id>` | Poll query job status |
-| GET | `/query-stream/<job_id>` | SSE stream for query progress |
+### Đọc ảnh
 
-### Mind Map
+| Method | Endpoint |
+|---|---|
+| GET | `/api/vision/status` |
+| POST | `/api/vision/transcribe` |
 
-| Method | Endpoint | Description |
-|--------|----------|-------------|
-| POST | `/generate-mindmap` | Generate mind map async |
-| GET | `/mindmap-status/<job_id>` | Poll mind map generation status |
-| GET | `/mindmaps` | List saved mind maps |
-| DELETE | `/mindmaps/<id>` | Delete mind map |
+### Xác thực
 
-### Summary
+| Method | Endpoint |
+|---|---|
+| POST | `/auth/login` |
+| POST | `/auth/logout` |
+| GET | `/auth/me` |
+| POST | `/auth/refresh` |
+| POST | `/auth/register` |
 
-| Method | Endpoint | Description |
-|--------|----------|-------------|
-| POST | `/summarize-file` | Summarize uploaded file |
-| POST | `/summarize-documents` | Advanced summarize (multi-method) |
-| GET | `/summaries` | List saved summaries |
-| POST | `/summaries` | Save summary |
-| DELETE | `/summaries/<id>` | Delete summary |
+### Tài liệu & ingest
 
-### Memory Tree
+| Method | Endpoint |
+|---|---|
+| GET | `/api/documents` |
+| DELETE | `/api/documents/<document_id>` |
+| GET | `/api/documents/<document_id>` |
+| GET | `/api/documents/<document_id>/chunks` |
+| GET | `/api/documents/<document_id>/file` |
+| GET | `/api/documents/<document_id>/quizzes` |
+| POST | `/api/documents/<document_id>/search` |
+| GET | `/api/documents/<document_id>/sections` |
+| GET | `/api/documents/<document_id>/study-maps` |
+| POST | `/api/documents/upload` |
+| GET | `/chunk-text/<int:chunk_id>` |
+| POST | `/delete-source` |
+| GET | `/list-indexed` |
+| GET | `/memory-tree-status` |
+| GET | `/memory-tree/<source_stem>` |
+| DELETE | `/sources/<source_id>` |
+| GET | `/sources/<source_id>/status` |
+| POST | `/upload` |
+| POST | `/upload-file` |
+| POST | `/upload-multiple` |
 
-| Method | Endpoint | Description |
-|--------|----------|-------------|
-| GET | `/memory-tree-status` | Get all memory tree status |
-| GET | `/memory-tree/<stem>` | Get memory tree for specific source |
+### Hỏi đáp
 
-### Index Management
+| Method | Endpoint |
+|---|---|
+| POST | `/api/search` |
+| DELETE | `/conversations/<conversation_id>` |
+| POST | `/conversations/<conversation_id>/clear-context` |
+| GET | `/conversations/<conversation_id>/messages` |
+| POST | `/query` |
+| POST | `/query-resume/<job_id>` |
+| GET | `/query-status/<job_id>` |
+| GET | `/query-stream/<job_id>` |
 
-| Method | Endpoint | Description |
-|--------|----------|-------------|
-| POST | `/rebuild-index` | Rebuild FAISS index from videos |
-| GET | `/rebuild-status/<job_id>` | Poll rebuild job status |
+### Sơ đồ tư duy
 
----
+| Method | Endpoint |
+|---|---|
+| POST | `/generate-mindmap` |
+| POST | `/mindmap-cancel/<job_id>` |
+| GET | `/mindmap-status/<job_id>` |
+| GET | `/mindmaps` |
+| PUT | `/mindmaps/<mindmap_id>` |
+| DELETE | `/mindmaps/<string:mindmap_id>` |
+
+### Tóm tắt
+
+| Method | Endpoint |
+|---|---|
+| POST | `/generate-summary` |
+| GET | `/summaries` |
+| DELETE | `/summaries/<string:summary_id>` |
+| POST | `/summary-cancel/<job_id>` |
+| GET | `/summary-status/<job_id>` |
+
+### Study Map
+
+| Method | Endpoint |
+|---|---|
+| GET | `/api/study-maps/<map_id>` |
+| POST | `/api/study-maps/generate` |
+| GET | `/api/study-maps/jobs/<job_id>` |
+| POST | `/api/study-maps/jobs/<job_id>/cancel` |
+
+### Quiz & bài làm
+
+| Method | Endpoint |
+|---|---|
+| GET | `/api/attempts/<attempt_id>` |
+| PATCH | `/api/attempts/<attempt_id>/answers` |
+| GET | `/api/attempts/<attempt_id>/concept-masteries` |
+| POST | `/api/attempts/<attempt_id>/submit` |
+| GET | `/api/attempts/jobs/<job_id>` |
+| GET | `/api/practice/<practice_quiz_id>` |
+| GET | `/api/practice/<practice_quiz_id>/comparison` |
+| POST | `/api/practice/<practice_quiz_id>/submit` |
+| POST | `/api/practice/generate` |
+| GET | `/api/quizzes/<quiz_id>` |
+| GET | `/api/quizzes/<quiz_id>/attempts` |
+| POST | `/api/quizzes/<quiz_id>/attempts` |
+| POST | `/api/quizzes/generate` |
+| GET | `/api/quizzes/jobs/<job_id>` |
+| POST | `/api/quizzes/jobs/<job_id>/cancel` |
+| GET | `/api/quizzes/jobs/<job_id>/validation-logs` |
+| GET | `/api/quizzes/results/<attempt_id>` |
+
+### Tiến độ & ôn tập
+
+| Method | Endpoint |
+|---|---|
+| GET | `/api/progress/attempts` |
+| GET | `/api/progress/concepts` |
+| GET | `/api/progress/overview` |
+| GET | `/api/review-plans/<attempt_id>` |
+| GET | `/api/review-plans/<review_plan_id>/items` |
+| POST | `/api/review-plans/generate` |
+
+**Huỷ job:** `/api/jobs/<job_id>/cancel` chỉ nhận `mindmap`, `summary`, `quiz_generation`,
+`study_map_generation` — những loại mà executor thật sự đọc cờ huỷ. Loại khác trả **409**
+thay vì hứa suông (xem `.playbook/known-issues.md`).
 
 ## Các tính năng chính
 

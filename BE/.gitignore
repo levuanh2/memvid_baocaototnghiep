@@ -3,6 +3,10 @@ __pycache__/
 *.pyc
 *.sqlite*
 index_backup_*/
+# Ảnh chụp runtime state (sqlite + index + memory) lúc chuyển dữ liệu về repo.
+# `index_backup_*/` ở trên KHÔNG khớp tiền tố `_backup-`, nên thư mục 1.3M
+# `_backup-20260824-173248/` từng nằm trần trong cây mã — chỉ thoát commit vì may.
+_backup-*/
 .pytest_cache/
 videos/
 input_docs/

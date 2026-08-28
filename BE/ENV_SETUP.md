@@ -1,5 +1,9 @@
 # Backend Environment Setup
 
+Đây là tài liệu **thao tác** (đổi embedding model, rebuild index, troubleshooting). Danh
+sách đầy đủ 128 biến nằm ở **`BE/.env.example`** — file đó có comment cho từng khoá kèm lý
+do. Đừng chép khoá sang đây: hai bản danh sách thì một bản sẽ lệch.
+
 ## Quick Start
 
 ```bash
@@ -44,43 +48,53 @@ Model cũ (dimension 384, chỉ tiếng Anh tốt):
 
 Khi đổi `EMBEDDING_MODEL_NAME`, dimension vector thay đổi -> FAISS index cũ **KHÔNG tương thích**.
 
-### PowerShell Commands để xóa artifacts cũ
+> **Sửa 2026-08-28 — khối lệnh cũ ở đây XOÁ NHẦM DỰ ÁN.** Nó hard-code
+> `$base = "e:/memvid_NCKH/MemVid_New/BE"`. `MemVid_New` là **dự án KHÁC và có thật trên
+> máy này**, nên chạy nguyên văn là xoá `index/` cùng toàn bộ memory artifact của nó.
+> Cùng cái bẫy `DATA_DIR` từng trỏ nhầm sang `MemVid_New/BE` suốt nhiều tháng (xem comment
+> trong `BE/.env`). Tên artifact cũng đã đổi: `mindmaps.json` -> `mindmaps.sqlite`,
+> `summaries.json` -> `summaries.sqlite`, `mindmap_content_cache.json` không còn.
+>
+> Khối dưới đây chạy **tương đối theo thư mục `BE/`** — không có đường dẫn tuyệt đối nào
+> để gõ nhầm.
+
+### PowerShell
 
 ```powershell
-$base = "e:/memvid_NCKH/MemVid_New/BE"
+# Đứng ở thư mục BE/ rồi chạy. KHÔNG dùng đường dẫn tuyệt đối.
+Remove-Item -Recurse -Force "./index" -ErrorAction SilentlyContinue
+Remove-Item -Force "./memory/memory_index.faiss" -ErrorAction SilentlyContinue
+Remove-Item -Force "./memory/memory_index.json" -ErrorAction SilentlyContinue
+Remove-Item -Force "./memory/memory_trees.json" -ErrorAction SilentlyContinue
+Remove-Item -Force "./memory/mindmaps.sqlite" -ErrorAction SilentlyContinue
 
-# Xóa index FAISS chunk (bắt buộc khi đổi embedding model)
-Remove-Item -Recurse -Force "$base/index" -ErrorAction SilentlyContinue
-
-# Xóa memory artifacts (bắt buộc vì chứa embeddings)
-Remove-Item -Force "$base/memory/memory_index.faiss" -ErrorAction SilentlyContinue
-Remove-Item -Force "$base/memory/memory_index.json" -ErrorAction SilentlyContinue
-Remove-Item -Force "$base/memory/memory_trees.json" -ErrorAction SilentlyContinue
-Remove-Item -Force "$base/memory/mindmaps.json" -ErrorAction SilentlyContinue
-Remove-Item -Force "$base/memory/mindmap_content_cache.json" -ErrorAction SilentlyContinue
-
-Write-Host "Đã xóa toàn bộ embedding artifacts. Restart backend và upload lại document."
+Write-Host "Đã xoá embedding artifacts. Restart backend và upload lại document."
 ```
 
-### Bash Commands (Linux/Mac/WSL)
+### Bash (Linux/Mac/WSL)
 
 ```bash
 cd BE
 rm -rf index/
-rm -rf memory/memory_index.faiss memory/memory_index.json
-rm -rf memory/memory_trees.json
-rm -rf memory/mindmaps.json memory/mindmap_content_cache.json
+rm -f memory/memory_index.faiss memory/memory_index.json memory/memory_trees.json
+rm -f memory/mindmaps.sqlite
 ```
+
+### Quên rebuild thì sao?
+
+Từ 2026-08-28 không còn im lặng: `hybrid._load_faiss_index()` so số chiều của vector truy
+vấn với `index.d` và ném câu báo nêu CẢ HAI số chiều + tên model + cách dựng lại. Trước đó
+faiss ném `AssertionError` **rỗng**, log ra một dòng cụt, và truy hồi âm thầm tụt về
+BM25-only. Xem `.playbook/known-issues.md`.
 
 ### File KHÔNG cần xóa (an toàn)
 
 - `BE/.env` - cấu hình (chỉ đổi EMBEDDING_MODEL_NAME)
 - `input_docs/` - tài liệu gốc
-- `videos/` - video QR codes
 - `jobs.sqlite` - job status
 - `sessions.sqlite` - lịch sử chat
 - `logs.sqlite` - logs
-- `summaries.json` - không chứa embeddings
+- `summaries.sqlite` - không chứa embeddings
 
 ### File CÓ THỂ giữ (không bắt buộc xóa)
 
@@ -99,8 +113,8 @@ os.environ        (Docker/K8s environment variables - ghi đè tất cả khi ov
 | Biến | Mô tả | Mặc định |
 |---|---|---|
 | `OLLAMA_HOST` | Ollama server | `http://localhost:11434` |
-| `SLM_MODEL_CHAT` | Model chat | `qwen3.5:9b` |
-| `SLM_MODEL_SUMMARY` | Model summarize | `qwen2.5:14b` |
+| `SLM_MODEL_CHAT` | Model chat + memory tree | `shared.config.DEFAULT_LOCAL_MODEL` |
+| `SLM_MODEL_SUMMARY` | Model summarize | `shared.config.DEFAULT_LOCAL_MODEL` |
 | `EMBEDDING_MODEL_NAME` | Model embedding | `BAAI/bge-m3` |
 | `SKIP_MODEL_LOAD` | CI/testing mode | `0` |
 | `DATA_DIR` | Thư mục data | `BE/` |
@@ -112,8 +126,10 @@ os.environ        (Docker/K8s environment variables - ghi đè tất cả khi ov
 # Kiểm tra Ollama đang chạy
 ollama list
 
-# Pull model nếu chưa có
-ollama pull qwen3.5:9b
+# Pull model nếu chưa có. Mặc định của mã là qwen2.5:7b-instruct
+# (shared/config.py::DEFAULT_LOCAL_MODEL) — 4.68 GB, vừa card 6 GiB.
+# qwen3.5:9b nặng 6.59 GB, KHÔNG vừa; chỉ pull khi máy có VRAM lớn hơn.
+ollama pull qwen2.5:7b-instruct
 ```
 
 **Embedding model lỗi:**
