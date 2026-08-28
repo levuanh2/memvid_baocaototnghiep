@@ -1,5 +1,101 @@
 # Lessons Learned
 
+## 2026-08-29 - Audit vòng 5: phép quét phủ định phải có ca kiểm chứng, và test xanh phải chứng minh nó đo được gì
+
+- **LẦN THỨ TƯ đo sai câu hỏi trong bốn vòng.** Vòng 1 kết luận "9 cờ chưa test nhánh
+  không mặc định". Quét lại thì **4 trong 9 đã có test** — regex cũ chỉ khớp
+  `monkeypatch.setenv("K", "v")` và mù hoàn toàn với `base_env(monkeypatch, HITL_ENABLED="0")`,
+  đúng dạng bộ test dùng nhiều nhất. Chuỗi bốn lần:
+  1. `BASE_URL` khớp bên trong `DATABASE_URL` (thiếu ranh giới từ).
+  2. `cmp` báo 7 file y hệt là "khác toàn bộ" (line-ending).
+  3. Đếm 9/128 khoá rồi gọi `ENV_SETUP.md` là bản sao rỗng (nó là tài liệu thao tác).
+  4. Regex một dạng gán, bỏ sót dạng kwarg.
+
+  **Luật từ đây:** trước khi tin một phép quét PHỦ ĐỊNH ("không có X", "0 người dùng",
+  "chưa test"), tự tìm một **ví dụ dương tính đã biết** rồi kiểm phép quét có bắt được nó
+  không. Không có ca kiểm chứng thì con số 0 là vô nghĩa. Phép quét dương tính (grep ra
+  một danh sách) tự kiểm được bằng mắt; phép quét phủ định thì không.
+
+- **Test xanh chưa chắc đo được gì.** Test `ENRICH_METADATA` của chính đợt này XANH ngay
+  lần đầu, nhưng nó đọc `out["chunk_metadatas"]` — khoá KHÔNG tồn tại (khoá thật là
+  `doc_meta`). Cả hai phía ra `{}`, và vế `or not m_bat` trong khẳng định nuốt trọn.
+  Hai mùi cần nhớ:
+  - `assert A != B or not A` — vế `or` biến test thành hằng đúng khi cả hai phía rỗng.
+  - Khoá state đoán theo tên. Đối chiếu với mã (`grep` khoá đó trong graph) trước khi tin.
+
+  Cách kiểm rẻ: làm test ĐỎ một lần có chủ ý (đổi giá trị mong đợi) xem nó có đỏ thật không.
+
+- **`assert f(x) == f(x)` là hằng đúng, không phải test.** Bản đầu của
+  `test_lc_flag_mot_nguon.py` có đúng dòng đó. Nếu không dựng được điều kiện thật thì viết
+  **khẳng định CẤU TRÚC** trên mã nguồn (`inspect.getsource`) và nói rõ trong docstring vì
+  sao chọn cấu trúc thay vì hành vi — thà thế còn hơn một dòng trông như test.
+
+- **"Không có dòng import" KHÔNG kết luận được gói thừa.** `gunicorn`, `grpcio-tools`,
+  `psycopg`, `psutil` đều sống mà không có import nào. `pip show` -> `Required-by` trả lời
+  dứt điểm trong một lệnh, và nó cũng bác bỏ luôn kế hoạch "gỡ thử rồi chạy suite" mà
+  chính tao viết ở vòng 3 — chọn phép đo nặng khi có phép đo nhẹ và chính xác hơn.
+
+- **Trừu tượng dựng rồi bị bỏ qua: lần thứ BA.** `shared/config` có 4 trường `use_lc_*`
+  với 0 người đọc, trong khi mã thật `os.getenv()` rải rác — đúng thứ docstring của file
+  đó tuyên bố đã dẹp, và ví dụ trong docstring còn dùng chính trường không ai đọc. Trước
+  đó: `paths.default_data_dir()` (0 caller) và `__meta__["embedding_dim"]` (ghi 6, đọc 0).
+  **Luật:** thêm trường vào `config` thì CÙNG COMMIT phải có ít nhất một chỗ đọc nó.
+
+- **Sửa cái lệch trên giấy, đừng tạo cái lệch thật.** `store._use_lc_vector_store()` default
+  `"0"` khác `config` default `True` — cám dỗ là đổi `"0"` thành `"1"` cho "nhất quán".
+  Nhưng `"0"` chính là đường LEGACY mà toàn bộ test retrieval đang chạy và là nơi guard dim
+  của vòng 3 nằm. Cách đúng: **xoá bên không ai đọc**, giữ nguyên bên đang chạy.
+
+- **Điều kiện tiên quyết của phép đo phải được KIỂM, không phải giả định.** Plan vòng 5 ghi
+  "máy phải rảnh" mới đo được cổng LLM. Kiểm lúc chạy: `nvidia-smi` báo 5331/6141 MiB đã
+  dùng còn `/api/ps` báo Ollama giữ **0** — tức tiến trình khác chiếm. Gần y hệt lần Study
+  Map 487 giây (5378/6141 MiB). Không đo, không đoán, ghi lại điều kiện để đo sau. Một phép
+  đo chạy sai điều kiện tệ hơn không đo: nó tạo ra một con số mà lần sau có người tin.
+
+## 2026-08-28 - Audit vòng 4: tài liệu cũng là bề mặt tấn công, và "đo sai câu hỏi" là họ lỗi của tao
+
+- **Tài liệu hướng dẫn thao tác phá huỷ phải bị soát như mã.** `BE/ENV_SETUP.md` chứa
+  `Remove-Item -Recurse -Force` với `$base` hard-code trỏ sang **dự án KHÁC có thật trên
+  máy**. Không test nào bắt được, không lint nào bắt được, và làm theo là mất dữ liệu ở
+  chỗ khác. Luật: **không đường dẫn tuyệt đối trong tài liệu**, đặc biệt quanh `rm -rf` /
+  `Remove-Item`; neo vào thư mục hiện tại.
+
+- **Cùng một đường dẫn nhầm xuất hiện ở hai file khác nhau.** `MemVid_New/BE` vừa là
+  `$base` trong ENV_SETUP vừa là `DATA_DIR` cũ trong `.env` (đã sửa 2026-08-24). Sửa một
+  chỗ không diệt được nó. Khi tìm thấy một đường dẫn sai, grep TOÀN KHO đúng chuỗi đó.
+
+- **"Đo sai câu hỏi" — lần thứ BA trong ba vòng, cùng một họ.**
+  1. Vòng 1: `BASE_URL` khớp bên trong `DATABASE_URL` (thiếu ranh giới từ).
+  2. Vòng 3: `cmp` báo 7 file y hệt là "khác toàn bộ" (line-ending, không phải nội dung).
+  3. Vòng 4: đếm 9/128 khoá env rồi kết luận `ENV_SETUP.md` là bản sao rỗng — nhưng nó
+     không định làm danh sách khoá, nó là tài liệu THAO TÁC.
+
+  Cả ba lần công cụ đều trả lời đúng câu tao hỏi. Sai ở chỗ câu hỏi không đo thứ cần đo.
+  **Trước khi đo, hỏi: thứ này định làm gì?** Rồi mới chọn phép đo.
+
+- **May mà chưa rút gọn.** Nếu làm theo plan (rút `ENV_SETUP.md` thành một con trỏ) thì
+  cái lệnh xoá nhầm dự án bị xoá đi cùng — không ai biết nó từng tồn tại, và bản sao của
+  nó trong đầu người dùng vẫn còn. Đọc kỹ trước khi rút gọn: file "thừa" có thể đang giấu
+  thứ duy nhất đáng tìm.
+
+- **Tài liệu lệch thì SINH lại, đừng vá.** README có 54/72 đường dẫn sai và thiếu 56 route.
+  Vá từng dòng tốn hơn viết lại, và bản vá tay sẽ lệch tiếp. Cây thư mục dừng ở **2 tầng**
+  sinh từ `git ls-files`, bảng API sinh từ `grep @app.route` — và dán luôn lệnh sinh vào
+  README để lần sau dựng lại trong một dòng. Cây 4 tầng gõ tay chính là thứ vừa lệch.
+
+- **Tự kiểm bằng ĐÚNG phép đếm đã phát hiện lỗi.** Viết xong chạy lại script đếm:
+  `cây 29 mục | sai 0`, `api: 80 endpoint | ma 0 | thiếu 0`. Không có con số này thì
+  "đã cập nhật README" chỉ là lời hứa.
+
+- **Luật `.gitignore` phải khớp tên THẬT trên đĩa.** `index_backup_*/` nhìn rất hợp lý và
+  không khớp `_backup-20260824-173248/`. Viết luật xong thì `git check-ignore -v <đường dẫn
+  thật>` để xác nhận.
+
+- **Cấu trúc thư mục hoá ra không sai.** Câu hỏi ban đầu là "dọn cấu trúc thư mục chưa".
+  Quét xong: `app/domains/` 20 package là kiến trúc thật, test đặt cạnh mã ở FE là quy ước
+  hợp lệ. Sai là **rác lẫn trong đó** và **tài liệu mô tả nó**. Đừng tái cấu trúc thứ chỉ
+  cần dọn.
+
 ## 2026-08-28 - Audit vòng 3: chọn MỘT chỗ để sửa, và tin công cụ đúng mức
 
 - **"Không có guard" thường là "guard chỉ có ở một nửa".** Tao viết vào plan là index tài

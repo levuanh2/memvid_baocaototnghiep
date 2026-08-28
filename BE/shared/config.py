@@ -8,7 +8,7 @@ Các tham số chỉ dùng cục bộ trong 1 node vẫn để inline.
 Dùng:
     from shared.config import get_settings
     s = get_settings()
-    if s.use_lc_vector_store: ...
+    if s.crag_enabled: ...
 
 get_settings() trả singleton (đọc env lần đầu, cache lại). Gọi reload() trong test
 sau khi đổi env (tương tự cách conftest reload llm_factory).
@@ -94,11 +94,17 @@ class Settings:
     llm_ctx_size: int = 4096
     ai_timeout_sec: int = 180
 
-    # --- Toggles LangChain ---
-    use_lc_vector_store: bool = True
-    use_lc_ensemble: bool = True
-    use_lc_qa_chain: bool = True
-    use_lc_ingest: bool = True
+    # --- Toggles LangChain: KHÔNG có ở đây, CỐ Ý (gỡ 2026-08-29) ---
+    # `use_lc_vector_store/ensemble/qa_chain/ingest` từng là 4 trường ở đây với default
+    # True, và KHÔNG AI ĐỌC chúng — mã thật đọc thẳng env, mỗi chỗ một default:
+    #     vectorstore/store.py:64   os.getenv("USE_LC_VECTOR_STORE", "0")   <- NGƯỢC
+    #     graphs/query_graph.py     os.getenv("USE_LC_ENSEMBLE"/"USE_LC_QA_CHAIN", "1")
+    #     graphs/ingest_graph.py    os.getenv("USE_LC_INGEST", "1")
+    # `conftest.py` đặt MEMVID_DISABLE_LC_DEFAULTS=1 nên tầng setdefault của env_loader im,
+    # và khi đó config nói BẬT còn store nói TẮT cho cùng một câu hỏi. Giữ 4 trường chết ở
+    # đây nguy hiểm hơn bỏ: người đọc file này tin nó là nguồn sự thật.
+    # Nguồn sự thật thật sự = biến env; điểm đọc duy nhất cho vector store là
+    # `store._use_lc_vector_store()`.
 
     # --- Retrieval (RRF + hybrid weights) ---
     hybrid_top_k: int = 4
@@ -182,10 +188,6 @@ class Settings:
             llm_temperature_factual=_float("LLM_TEMPERATURE_FACTUAL", 0.0),
             llm_ctx_size=_int("LLM_CTX_SIZE", 4096),
             ai_timeout_sec=_int("AI_TIMEOUT_SEC", 180),
-            use_lc_vector_store=_flag("USE_LC_VECTOR_STORE", "1"),
-            use_lc_ensemble=_flag("USE_LC_ENSEMBLE", "1"),
-            use_lc_qa_chain=_flag("USE_LC_QA_CHAIN", "1"),
-            use_lc_ingest=_flag("USE_LC_INGEST", "1"),
             hybrid_top_k=_int("HYBRID_TOP_K", 4),
             rrf_k=_int("RRF_K", 60),
             hybrid_bm25_weight=_float("HYBRID_BM25_WEIGHT", 0.4),

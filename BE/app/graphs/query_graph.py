@@ -77,8 +77,13 @@ def build_query_graph(
     EVAL_ENABLED = (os.getenv("EVAL_ENABLED", "false") or "").strip().lower() == "true"
     EVAL_THRESHOLD = float(os.getenv("EVAL_THRESHOLD", "0.6"))
     HYBRID_TOP_K = int(os.getenv("HYBRID_TOP_K", "4"))
-    USE_LC_ENSEMBLE = (os.getenv("USE_LC_ENSEMBLE", "1") or "").strip().lower() not in ("0", "false", "no", "off")
-    USE_LC_QA_CHAIN = (os.getenv("USE_LC_QA_CHAIN", "1") or "").strip().lower() in ("1", "true", "yes", "on")
+    # Hai cờ anh em, TRƯỚC ĐÂY hai ngữ nghĩa ngược nhau: ENSEMBLE dùng `not in (falsy)`
+    # nên giá trị lạ ("maybe") ra True, QA_CHAIN dùng `in (truthy)` nên ra False. Cùng một
+    # giá trị env, hai câu trả lời. Thống nhất về danh sách truthy (2026-08-29) — "1"/"0"
+    # cho kết quả y hệt trước, chỉ giá trị rác mới đổi, và đổi theo hướng an toàn hơn.
+    _truthy = lambda v: (v or "").strip().lower() in ("1", "true", "yes", "on")
+    USE_LC_ENSEMBLE = _truthy(os.getenv("USE_LC_ENSEMBLE", "1"))
+    USE_LC_QA_CHAIN = _truthy(os.getenv("USE_LC_QA_CHAIN", "1"))
     QUERY_STREAM_TOKENS = (os.getenv("QUERY_STREAM_TOKENS", "1") or "").strip().lower() in ("1", "true", "yes", "on")
     INCLUDE_CHUNK_SOURCE_TAGS = (os.getenv("INCLUDE_CHUNK_SOURCE_TAGS", "0") or "").strip().lower() in (
         "1", "true", "yes", "on"

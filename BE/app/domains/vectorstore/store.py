@@ -62,6 +62,17 @@ MODEL_NAME = os.environ.get("EMBEDDING_MODEL_NAME", DEFAULT_EMBEDDING_MODEL_NAME
 
 
 def _use_lc_vector_store() -> bool:
+    """ĐIỂM ĐỌC DUY NHẤT của `USE_LC_VECTOR_STORE`. Mọi nhánh LC-vs-legacy đi qua đây.
+
+    Default "0" là CỐ Ý và khác với `env_loader` (setdefault "1"): env_loader chạy cho
+    tiến trình app thật, còn khi nó bị tắt bằng `MEMVID_DISABLE_LC_DEFAULTS=1` (chính
+    `tests/conftest.py` đặt) thì đường LEGACY mới là đường mặc định — đó là đường mà bộ
+    test cố ý chạy, và cũng là đường có guard dim của `hybrid._load_faiss_index`.
+
+    `shared/config.py` từng có `use_lc_vector_store: bool = True` song song với dòng này —
+    hai tầng trả lời ngược nhau cho cùng một câu hỏi. Trường đó đã bị gỡ 2026-08-29 vì
+    0 người đọc. Đổi default ở đây thì đổi luôn đường mà toàn bộ test retrieval đang chạy.
+    """
     return (os.getenv("USE_LC_VECTOR_STORE", "0") or "").strip().lower() in ("1", "true", "yes", "on")
 
 

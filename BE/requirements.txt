@@ -27,9 +27,11 @@ ollama
 rank-bm25>=0.2.2
 # Rerank cross-encoder dùng sentence-transformers (đã có ở dưới) — không cần dep mới.
 # cohere   # chỉ cài khi RERANK_BACKEND=cohere (phá tính offline)
-pandas
-pdfplumber
+# pandas, pdfplumber gỡ 2026-08-29: 0 dòng import trên toàn app/services/shared/
+# evaluation/scripts/tests, và `pip show` cho biết KHÔNG gói nào cần chúng bắc cầu
+# (Required-by rỗng). PDF của dự án đọc bằng PyMuPDF (`fitz`) + pymupdf4llm.
 Pillow
+# psutil giữ dù không có dòng import nào: pymupdf4llm cần nó (pip show Required-by).
 psutil
 PyMuPDF
 pymupdf4llm

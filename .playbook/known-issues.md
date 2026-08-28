@@ -1,5 +1,256 @@
 # Known Issues
 
+## (ĐÃ SỬA 2026-08-29) `USE_LC_VECTOR_STORE`: ba tầng, ba default, một tầng nói ngược
+
+Tìm ra khi soạn plan vòng 5, không phải do ai báo lỗi. Cùng một cờ, ba nơi định nghĩa
+mặc định:
+
+```
+shared/config.py:98        use_lc_vector_store: bool = True
+shared/env_loader.py:45    os.environ.setdefault("USE_LC_VECTOR_STORE", "1")
+vectorstore/store.py:65    os.getenv("USE_LC_VECTOR_STORE", "0")      <-- NGƯỢC
+```
+
+`tests/conftest.py` đặt `MEMVID_DISABLE_LC_DEFAULTS=1` nên tầng giữa im lặng. Khi đó
+`config` trả **True** còn `store` trả **False** cho cùng một câu hỏi.
+
+Ai thắng: `store`, vì `hybrid.py:252,338` và 5 chỗ trong `store.py` gọi
+`_use_lc_vector_store()`. Còn trường trong config:
+
+```
+settings.use_lc_vector_store -> 0 người đọc
+settings.use_lc_ensemble     -> 0 người đọc
+settings.use_lc_qa_chain     -> 0 người đọc
+settings.use_lc_ingest       -> 0 người đọc
+```
+
+**Cả bốn trường `use_lc_*` không ai đọc.** Mã thật vẫn `os.getenv()` rải rác — đúng thứ mà
+docstring của chính `shared/config.py` tuyên bố đã dẹp: *"Settings tập trung — nạp env MỘT
+lần thay vì os.getenv() rải rác lúc import."* Ví dụ minh hoạ trong docstring đó còn dùng
+`s.use_lc_vector_store` — dạy người đọc dùng đúng trường không ai đọc.
+
+- **Root cause:** trường được thêm vào config như một "sẽ chuyển sang dùng sau", nhưng bước
+  chuyển không bao giờ xảy ra. Không ai xoá, nên nó thành nguồn sự thật giả.
+- **Fix:** gỡ 4 trường + 4 kwarg khỏi `Settings`, đổi ví dụ docstring sang `s.crag_enabled`
+  (trường có người đọc thật), và dán khối giải thích tại `store._use_lc_vector_store()` nêu
+  rõ nó là ĐIỂM ĐỌC DUY NHẤT + vì sao default "0" là cố ý.
+- **KHÔNG đổi default "0" thành "1".** Đó là đường LEGACY mà toàn bộ test retrieval đang
+  chạy, và cũng là đường có guard dim của `hybrid._load_faiss_index` (vòng 3). Đổi default
+  là đổi đường mà cả bộ test đi qua — sửa một cái lệch trên giấy, tạo một cái lệch thật.
+- **Kèm:** hai cờ anh em ở `query_graph.py` đọc theo hai ngữ nghĩa ngược nhau —
+  `USE_LC_ENSEMBLE` dùng `not in (falsy)` nên `"maybe"` ra **True**, `USE_LC_QA_CHAIN` dùng
+  `in (truthy)` nên `"maybe"` ra **False**. Thống nhất về một hàm `_truthy` dùng chung;
+  `"1"/"0"` không đổi kết quả, chỉ giá trị rác đổi và đổi theo hướng an toàn (TẮT).
+- **Regression:** `tests/test_lc_flag_mot_nguon.py` (13 test): config không còn trường
+  `use_lc_*`, bảng truthy đầy đủ 10 ca, default không-env về legacy, và khẳng định cấu trúc
+  rằng hai cờ anh em cùng đi qua `_truthy`.
+- **Prevention:** đây là **lần thứ ba** gặp "trừu tượng dựng xong rồi bị bỏ qua", sau
+  `shared/paths.default_data_dir()` (0 caller, 3 module tự viết lại) và
+  `__meta__["embedding_dim"]` (ghi 6 lần, đọc 0 lần). Luật: thêm một trường vào `config`
+  thì **cùng commit đó** phải có ít nhất một chỗ đọc nó; nếu không thì đừng thêm.
+
+---
+
+## (ĐÃ SỬA 2026-08-29) Hai nhánh cấu hình của ingest chưa từng chạy
+
+`USE_LC_INGEST` và `ENRICH_METADATA` đều mặc định BẬT và **không test nào từng đặt về
+tắt**. Đúng lớp lỗi đã làm Study Map vỡ 100% ở chế độ mở.
+
+- **Fix:** `tests/test_ingest_flag_branches.py` (5 test) chạy `build_ingest_graph` thật với
+  cả hai giá trị của cả hai cờ. Mọi dependency nặng đã là seam inject sẵn
+  (`extract_text`, `split_text`, `append_to_index`, `build_memory_tree_for_sources`) nên
+  không đụng model, FAISS hay Postgres.
+- **Kết quả:** cả bốn nhánh đều chạy được, không nhánh nào hỏng. Khác Study Map — lần đó
+  nhánh chưa chạy vỡ 100%.
+- **Bẫy khi viết:** graph có checkpointer sqlite nên `invoke()` bắt buộc
+  `config={"configurable": {"thread_id": ...}}`, thiếu là
+  `ValueError: Checkpointer requires one or more of the following 'configurable' keys`.
+
+**Một test của chính đợt này từng XANH mà không đo gì.** Bản đầu khẳng định
+`assert m_bat != m_tat or not m_bat` trên `out["chunk_metadatas"]` — **khoá không tồn tại**
+(khoá thật là `doc_meta`, `ingest_graph.py:186`). Cả hai phía ra `{}`, vế `or not m_bat`
+nuốt trọn, test xanh. Đã đọc đúng khoá và **bỏ vế thoát**: giờ khẳng định `doc_meta` có nội
+dung khi bật và rỗng khi tắt.
+
+**Prevention:** khẳng định dạng `assert A != B or not A` là mùi — vế `or` biến test thành
+hằng đúng khi cả hai phía rỗng. Và khoá state phải đối chiếu với mã, đừng đoán theo tên.
+
+---
+
+## (2026-08-29) Dep BE: `pip show Required-by` trả lời, không cần thí nghiệm
+
+Plan vòng 3 (R4.3) đề xuất "gỡ trong venv rồi chạy suite, đỏ thì trả lại" cho 5 gói nghi
+thừa. Thừa công — một lệnh là xong:
+
+```
+pandas       Required-by: (rỗng)                                  -> GỠ
+pdfplumber   Required-by: (rỗng)                                  -> GỠ
+scipy        Required-by: scikit-learn, sentence-transformers     -> GIỮ
+psutil       Required-by: pymupdf4llm                             -> GIỮ
+tqdm         Required-by: huggingface_hub, sentence-transformers  -> GIỮ
+```
+
+`pdfplumber` không phải bộ đọc PDF của dự án — `fitz` (PyMuPDF) và `pymupdf4llm` mới là
+(`ingest_utils.py:2`, `markdown_convert.py:9`).
+
+- **Fix:** gỡ 2 dòng khỏi `BE/requirements.txt`, kèm comment nêu lý do giữ `psutil` (không
+  có dòng import nào nhưng `pymupdf4llm` cần).
+- **Prevention:** "không có dòng `import`" KHÔNG đủ để kết luận thừa — `gunicorn`,
+  `grpcio-tools`, `psycopg`, `psutil` đều sống mà không có import. Hỏi `pip show`, đừng
+  hỏi `grep`.
+
+---
+
+## (2026-08-29) CHƯA ĐO ĐƯỢC: cổng LLM 1 -> 2, vì GPU đang bị chiếm
+
+Plan vòng 5 (E4) đặt điều kiện tiên quyết "máy phải RẢNH". Kiểm lúc chạy:
+
+```
+nvidia-smi   5331 MiB / 6141 MiB đã dùng, GPU 40%
+/api/ps      {"models":[]}          <- Ollama KHÔNG giữ gì
+```
+
+Tức 5.3 GB đang bị tiến trình khác giữ (explorer.exe, msedgewebview2.exe, các
+SystemApps), còn trống ~810 MiB — không đủ nạp model 4.68 GB. Đo lúc này chỉ đo tốc độ
+CPU offload, không đo được điều cần biết.
+
+**Gần y hệt lần trước:** sự cố Study Map 487 giây truy ra là do GPU bị chiếm
+5378/6141 MiB. Cùng ngưỡng, cùng kiểu.
+
+**Chưa đổi gì.** `MAX_CONCURRENT_LLM_CALLS` giữ `1`. Đo lại khi `nvidia-smi` báo dưới
+~1 GB đang dùng, theo giao thức trong plan vòng 5.
+
+**Ghi thêm — example lệch thực tế:** `BE/.env.example:295` ghi
+`MAX_CONCURRENT_LLM_CALLS=2` trong khi giá trị đang chạy là `1` (từ `.env:40`, vì `BE/.env`
+không khai báo khoá này nên rơi xuống root). Cùng họ với `SLM_MODEL` ở vòng 2: file mẫu
+mô tả một cấu hình không ai chạy.
+
+## (ĐÃ SỬA 2026-08-28) `BE/ENV_SETUP.md` chứa lệnh xoá NHẦM DỰ ÁN KHÁC
+
+Nặng nhất vòng 4, và không phải lỗi mã — lỗi **tài liệu hướng dẫn thao tác phá huỷ**.
+
+Mục "Rebuild FAISS Index khi đổi Embedding Model" có khối PowerShell mở đầu bằng:
+
+```powershell
+$base = "e:/memvid_NCKH/MemVid_New/BE"
+Remove-Item -Recurse -Force "$base/index"
+Remove-Item -Force "$base/memory/memory_index.faiss"
+...
+```
+
+`MemVid_New` là **dự án KHÁC và CÓ THẬT trên máy này** (`ls -d /e/memvid_NCKH/MemVid_New`
+trả về đường dẫn). Ai làm theo tài liệu là xoá `index/` cùng toàn bộ memory artifact của
+dự án đó, còn dự án đang làm thì không đụng tới — vừa mất dữ liệu chỗ khác, vừa tưởng đã
+rebuild xong.
+
+Đây đúng là cái bẫy đã cắn một lần rồi: `BE/.env` có comment ghi `DATA_DIR` từng trỏ sang
+`MemVid_New/BE` suốt nhiều tháng, toàn bộ trạng thái chạy rơi ra ngoài repo. Cùng một
+đường dẫn tuyệt đối, cùng một dự án nhầm, ở hai file khác nhau.
+
+Tên artifact trong khối lệnh cũng đã lỗi thời: `mindmaps.json` -> `mindmaps.sqlite`,
+`summaries.json` -> `summaries.sqlite`, `mindmap_content_cache.json` không còn. Nên kể cả
+sửa đúng `$base` thì lệnh vẫn không xoá được thứ cần xoá.
+
+- **Fix:** khối lệnh chạy **tương đối theo `BE/`**, không còn đường dẫn tuyệt đối nào để gõ
+  nhầm; tên artifact cập nhật theo thực tế; thêm mục "Quên rebuild thì sao?" trỏ tới guard
+  dim mới (vòng 3) — giờ có câu báo rõ thay vì `AssertionError` rỗng.
+- **Prevention:** **KHÔNG đường dẫn tuyệt đối trong tài liệu**, nhất là tài liệu có
+  `Remove-Item -Recurse -Force` / `rm -rf`. Lệnh phá huỷ phải neo vào thư mục hiện tại.
+- Sửa kèm: bảng "Biến quan trọng nhất" ghi `SLM_MODEL_CHAT` mặc định `qwen3.5:9b` và
+  `SLM_MODEL_SUMMARY` mặc định `qwen2.5:14b` — cả hai đã gom về `DEFAULT_LOCAL_MODEL` ở
+  vòng 2; `ollama pull qwen3.5:9b` ở mục troubleshooting đổi thành `qwen2.5:7b-instruct`
+  (6.59 GB không vừa card 6.14 GiB); `videos/` bỏ khỏi danh sách "file an toàn".
+
+**Đính chính phương pháp — lần thứ BA cùng một họ sai.** Plan vòng 4 kết luận
+`ENV_SETUP.md` là "nguồn sự thật thứ hai, rỗng 93%" vì nó chỉ nhắc 9/128 khoá env, và đề
+xuất rút nó thành một con trỏ. SAI. Nó không hề định làm danh sách khoá — nó là tài liệu
+**thao tác** (rebuild index, thứ tự nạp env, troubleshooting), và phần nội dung đó không
+có ở `.env.example`. Rút thành con trỏ là xoá mất thứ duy nhất có giá trị, và sẽ bỏ luôn
+cái lệnh xoá nhầm dự án mà không ai phát hiện.
+
+Đếm khoá là **phép đo sai câu hỏi** — cùng họ với `cmp` báo khác vì line-ending, và với
+`BASE_URL` khớp trong `DATABASE_URL`. Trước khi đo, hỏi: file này định làm gì? Đo đúng thứ
+nó định làm.
+
+---
+
+## (ĐÃ SỬA 2026-08-28) `README.md` mô tả một dự án khác — 75% đường dẫn sai
+
+Đếm máy, không đếm mắt.
+
+**Mục "Cấu trúc dự án":**
+
+```
+72 mục liệt kê | 54 SAI  (41 đã DI CHUYỂN, 13 KHÔNG CÒN)
+```
+
+13 mục không còn đều thuộc thời MemVid mã hoá bộ nhớ vào video QR: `core_modules/`,
+`video_utils.py`, `chunk_processor.py`, `rebuild_index_from_video.py`, `videos/`,
+`mindmap_utils.py`, `vector_store.py`, `memory_tree.py`, `summarize_advanced.py`,
+`ai_provider.py`, `ollama_utils.py`, `storage/`, `lc_memory_tree.py`.
+
+41 mục đã di chuyển: `main.py` -> `app/main.py`, `graphs/` -> `app/graphs/`, `retrieval/`
+-> `app/domains/retrieval/`, `env_loader.py` -> `shared/env_loader.py`. Cây trong README là
+ảnh chụp TRƯỚC đợt tái cấu trúc sang `app/domains/`.
+
+**Mục "API Endpoints":**
+
+```
+README 27 endpoint | main.py 78 route
+  5 endpoint README nói mà KHÔNG tồn tại
+ 56 route có thật mà README KHÔNG nhắc
+```
+
+5 endpoint ma: `/process-doc`, `/summarize-file`, `/summarize-documents`, `/rebuild-index`,
+`/rebuild-status/<job_id>`. 56 route thiếu là toàn bộ bề mặt Phase 6–7 (study map, quiz,
+attempt, progress, review, gap analysis, auth).
+
+Thêm: tiêu đề vẫn là "MemVidX - Hệ thống Trí nhớ Thị giác"; cây bắt đầu bằng `MemVid_New/`
+— **tên dự án khác**, đúng thư mục mà `.env` từng trỏ nhầm; 18 dòng nói về "video".
+
+- **Fix:** viết lại ĐÚNG HAI MỤC, giữ nguyên phần còn lại (Cài đặt / Tính năng / Kiến trúc
+  phần lớn còn đúng — đụng vào là tự tạo việc). Đổi tiêu đề + Tổng quan sang StudyMap AI,
+  kèm một ghi chú lịch sử nói rõ hướng video QR đã bỏ.
+- **Cách chống lệch lại: SINH, không gõ tay.** Cây dừng ở **2 tầng** sinh từ `git ls-files`;
+  bảng API sinh từ `grep @app.route BE/app/main.py`. Cây 4 tầng liệt kê từng file gõ tay
+  chính là thứ vừa lệch 54 chỗ. Cả hai lệnh sinh được dán ngay trong README.
+- **Tự kiểm sau khi viết** (chạy lại đúng phép đếm đã phát hiện lỗi):
+  `cây 29 mục | sai 0` · `api: README 80 | ma 0 | thiếu 0`.
+
+---
+
+## (ĐÃ SỬA 2026-08-28) Rác được git theo dõi + `.gitignore` hụt tiền tố backup
+
+| file | bằng chứng | xử |
+|---|---|---|
+| `BE/scratch_cut.txt` | **0 dòng**, nội dung `1395 1594` | xoá |
+| `BE/package-lock.json` | lockfile npm **rỗng** (`"packages": {}`), KHÔNG có `package.json` cạnh nó, nằm trong backend Python | xoá |
+| `FE/db.json` | mock json-server, 3 hội thoại rỗng | xoá |
+| `FE/src/db.json` | mock json-server KHÁC (khác md5), hội thoại giả `"Chat với GPT"` | xoá |
+
+Xác minh trước khi xoá: `grep -rn "db.json" FE/src FE/vite.config.js FE/package.json` rỗng;
+không có `json-server` trong `package.json`; `grep -rn "scratch_cut"` chỉ trúng plan vòng 4 và một ghi chú cá
+nhân KHÔNG được git theo dõi (`06_Resume_States/`) — không mã, build hay tài liệu nào dùng.
+
+**`.gitignore` hụt:** `BE/.gitignore:5` có `index_backup_*/` nhưng thư mục thật tên
+`_backup-20260824-173248/` (1.3M sqlite runtime thật). Tiền tố không khớp, nên nó nằm trần
+trong cây mã — thoát commit chỉ vì may, trong khi phiên này đã chạy `git add -A` ba lần.
+Thêm `_backup-*/`. KHÔNG xoá thư mục: nó chứa sqlite thật, không sinh lại được.
+
+**Prevention:** luật ignore phải khớp tên THẬT đang có trên đĩa. Viết luật xong thì
+`git check-ignore -v <đường dẫn thật>` để xác nhận, đừng tin mẫu nhìn có vẻ đúng.
+
+---
+
+## (ĐÃ SỬA 2026-08-28) `docs/` — file kế hoạch nằm ngoài `plans/`
+
+`docs/mindmap_generation_optimization_plan.md` là kế hoạch, trong khi mọi kế hoạch khác ở
+`docs/superpowers/plans/`. `git mv` vào đó.
+
+**CỐ Ý không làm:** 8 file spec còn lại để phẳng trong `docs/`. Dựng thêm `docs/specs/` chỉ
+để cho gọn là việc tự tạo ra. `docs/memvid_speed_fix.docx` (nhị phân, tên thời MemVid) để
+nguyên — xoá tài liệu không đọc được nội dung là quyết định của người dùng.
+
 ## (ĐÃ SỬA 2026-08-28) Index FAISS lệch dim: `AssertionError` RỖNG, truy hồi âm thầm tụt về BM25
 
 **Chính xác hoá phạm vi.** Plan vòng 3 viết "index tài liệu không kiểm dim". Không đủ
