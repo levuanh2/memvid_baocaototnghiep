@@ -1,5 +1,46 @@
 # Lessons Learned
 
+## 2026-08-28 - Audit vòng 3: chọn MỘT chỗ để sửa, và tin công cụ đúng mức
+
+- **"Không có guard" thường là "guard chỉ có ở một nửa".** Tao viết vào plan là index tài
+  liệu không kiểm dim. Thực tế đường GHI có kiểm (`store._load_index` xoá index khi lệch);
+  chỉ đường ĐỌC là hở. Phạm vi sai làm bản vá sai chỗ. Trước khi kết luận "thiếu X", hỏi
+  riêng từng chiều: ghi có không, đọc có không.
+
+- **Lỗi im lặng tệ nhất là lỗi có `except` bắt được nhưng message rỗng.** faiss ném
+  `AssertionError` KHÔNG có nội dung khi dim lệch. Hai chỗ trong `hybrid.py` bắt rồi log
+  `"legacy FAISS search failed: %s"` — ra một dòng cụt, rồi truy hồi âm thầm tụt về
+  BM25-only. Có try/except + có log mà vẫn vô hình. Kiểm tra `str(exc)` có nội dung không,
+  đừng cho rằng cứ bắt được là quan sát được.
+
+- **Metadata ghi mà không ai đọc là mã chết trá hình.** `__meta__["embedding_dim"]` được
+  ghi 6 chỗ trong `store.py`, đọc 0 chỗ. Nhìn vào thì tưởng hệ thống đang theo dõi dim.
+  Grep CẢ HAI chiều (ghi và đọc) trước khi tin một khoá metadata đang làm việc gì đó.
+
+- **Guard phải đặt ở chỗ có sẵn cache, không phải chỗ gần lỗi nhất.** Đặt trong
+  `_load_faiss_index()` thì cả hai đường search dùng chung, và vì hàm đó cache theo
+  `(mtime_ns, size)` nên guard chạy một lần mỗi khi index đổi. Đặt ở caller thì hai bản
+  sao và chạy mỗi query — biến bản vá đúng thành hồi quy hot path. Đã viết hẳn một test
+  đếm số lần `read_index` để khoá điều đó lại.
+
+- **Bốn chỗ cùng một triệu chứng thì sửa một, không sửa bốn.** Thanh tiến trình đứng im ở
+  4 job. Chọn `short_answer_grading` vì người học đang NGỒI CHỜ (khác `ingest` chạy nền) và
+  vòng lặp đã có sẵn. `study_map` Relations là MỘT lời gọi LLM đơn — chỉ đổi được nhãn.
+  Chia nhỏ một lời gọi LLM để thanh chạy mượt là làm đẹp bằng cách làm chậm.
+
+- **Mẫu số của thanh tiến trình phải là thứ TỐN THỜI GIAN.** Đếm cả câu trắc nghiệm (chấm
+  bằng so chuỗi, xong tức thì) vào mẫu số thì thanh nhảy vọt rồi đứng im — vẫn nói dối, chỉ
+  là nói dối kiểu khác.
+
+- **Tên hàm test giữ ASCII.** Dấu tiếng Việt trong tên test làm `tmp_path` của pytest chứa
+  ký tự non-ASCII và `faiss.write_index` không mở được file:
+  `could not open ... for writing: No such file or directory`. Docstring thì thoải mái.
+
+- **Sửa nguồn gây hiểu sai, không chỉ sửa hiểu sai.** Kết luận sai về 7 file `.mdc` đến từ
+  việc kho trộn CRLF/LF. Đính chính tài liệu là chưa đủ — thêm `.gitattributes` để lần sau
+  công cụ không nói dối nữa. Nhưng KHÔNG renormalize toàn kho cùng lúc: diff ~470 file che
+  mất mọi thay đổi mã khác.
+
 ## 2026-08-28 - Audit vòng 2: dọn mã. Bài học nằm ở chỗ "trùng nhau" chứ không ở chỗ "thừa"
 
 - **Hai file trùng tên khác giá trị KHÔNG mặc nhiên là lỗi.** Tao đếm 12 khoá lệch giữa

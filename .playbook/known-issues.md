@@ -1,5 +1,100 @@
 # Known Issues
 
+## (ĐÃ SỬA 2026-08-28) Index FAISS lệch dim: `AssertionError` RỖNG, truy hồi âm thầm tụt về BM25
+
+**Chính xác hoá phạm vi.** Plan vòng 3 viết "index tài liệu không kiểm dim". Không đủ
+chính xác — đường **GHI** có guard: `store._load_index(dim)` so `idx.d` với dim model, lệch
+thì xoá index và build lại. Đường **ĐỌC** mới là chỗ hở: `hybrid._load_faiss_index()` đọc
+file rồi `idx.search(qv, k)` thẳng.
+
+Cửa sổ hở: đổi `EMBEDDING_MODEL_NAME` rồi **truy vấn TRƯỚC khi ingest lại lần nào**. Ingest
+lại là index tự rebuild và cửa sổ đóng.
+
+**Tái hiện (chạy được, không cần model thật):**
+
+```python
+idx = faiss.IndexFlatIP(384); idx.add(np.random.rand(5, 384).astype('float32'))
+faiss.read_index(path).search(np.random.rand(1, 1024).astype('float32'), 3)
+# AssertionError :          <- message RỖNG
+```
+
+**Vì sao nặng hơn vẻ ngoài:** cả hai chỗ search trong `hybrid.py` đều bắt rồi log
+`logger.warning("... legacy FAISS search failed: %s", exc)`. `exc` không có message, nên
+dòng log ra cụt ngủn — và chỗ thứ nhất tiếp tục chạy với `faiss_ids` rỗng (truy hồi tụt về
+**BM25-only**), chỗ thứ hai `return []`. Người dùng vẫn nhận được câu trả lời, dựng từ nửa
+số nguồn, không có dấu hiệu gì. Đúng lớp "hỏng mà không kêu".
+
+- **Bất đối xứng giữa hai anh em** — hình dạng lỗi lặp lại của dự án này. `memory/tree.py`
+  làm ĐÚNG: `_tree_matches_current_embedding()` so cả `embedding_model_name` lẫn
+  `embedding_dim`, in `Drop legacy tree for <stem>: model=… dim=… != current …`, và
+  `_rebuild_memory_index` đếm `skipped_mismatched`. Module anh em không có gì.
+- **`__meta__["embedding_dim"]` ghi 6 lần, đọc 0 lần** (`store.py` 410/481/663/882).
+  Metadata có sẵn từ lâu, chưa ai dùng.
+- **Fix:** guard trong `hybrid._load_faiss_index(expected_dim=...)`, ném `ValueError` nêu
+  CẢ HAI số chiều + tên model + cách dựng lại. Đặt ở đó vì cả hai đường search đi qua nó,
+  và nó có cache theo `(mtime_ns, size)` nên guard chạy một lần mỗi khi index đổi, KHÔNG
+  phải mỗi query. `expected_dim` lấy từ `qv.shape[1]` — không phụ thuộc metadata có đúng
+  hay không.
+- **Tham số tuỳ chọn, không bắt buộc:** caller cũ không truyền gì thì hành vi y hệt.
+- **Regression:** `tests/test_retrieval_dim_guard.py` (5 test). Trong đó có một test khoá
+  lại chính LÝ DO guard tồn tại — `AssertionError` của faiss phải rỗng; faiss đổi hành vi
+  thì test đỏ và bắt đọc lại lời giải thích.
+- **Prevention:** metadata ghi ra mà không ai đọc là mã chết trá hình. `grep` chiều ghi
+  và chiều đọc của mọi khoá `__meta__` trước khi thêm khoá mới.
+
+**Bẫy Windows gặp lúc viết test:** đặt tên test có dấu tiếng Việt (`test_lech_dim_thi_ném…`)
+làm `tmp_path` của pytest chứa ký tự non-ASCII, và `faiss.write_index` không mở được file
+đó: `could not open ... for writing: No such file or directory`. Tên hàm test giữ ASCII;
+docstring thì thoải mái.
+
+---
+
+## (ĐÃ SỬA 2026-08-28) Job chấm tự luận đứng im 20% tới khi xong
+
+Vòng 2 đo và kết luận: tiêu chí "khoảng im ĐẦU TIÊN > 5 giây" không job nào vi phạm — mọi
+job báo mốc đầu ngay lúc bắt đầu. Còn lại là biến thể nhẹ hơn: **thanh đứng yên giữa
+chừng**. Bốn chỗ:
+
+| job | cửa sổ đứng im | trong đó chạy gì | tổng thật |
+|---|---|---|---|
+| `short_answer_grading` | 20% → 100% | 1 LLM mỗi câu tự luận | — |
+| `quiz_generation` | 30% → 70% | `generate_questions` + retry | 43–70s |
+| `study_map_generation` | 75% → 85% | `pipeline.relations()` | 106s / job 487–633s |
+| `ingest` | trong `BuildMemoryTree` | 1 LLM mỗi section | job tới 410s |
+
+**Chỉ sửa MỘT.** `short_answer_grading` được chọn vì người học đang NGỒI CHỜ màn hình điểm
+(khác `ingest` chạy nền), và vòng lặp theo câu hỏi đã có sẵn nên diff nhỏ nhất.
+
+- **Fix:** `grade_attempt(..., progress_cb=...)` kêu **TRƯỚC** mỗi lời gọi LLM. Đặt sau thì
+  dòng đầu chỉ xuất hiện khi câu đầu đã chấm xong — đúng lỗi đã mắc ở summary 2026-08-27.
+- **Mẫu số chỉ đếm câu TỰ LUẬN.** Trắc nghiệm chấm bằng so chuỗi, xong tức thì; đưa vào
+  mẫu số thì thanh nhảy vọt rồi đứng im — mô tả sai chỗ thời gian thật sự trôi.
+- **`study_map` Relations chỉ đổi NHÃN**, không chia nhỏ: `pipeline.relations()` là MỘT lời
+  gọi LLM đơn. Nhãn giờ là `Đang tìm quan hệ giữa {n} khái niệm...`. Chia nhỏ một lời gọi
+  LLM để thanh chạy mượt là làm đẹp bằng cách làm chậm.
+- **KHÔNG làm `ingest`:** chạy nền, không ai ngồi nhìn.
+- **Regression:** `tests/test_grading_progress.py` (5 test). Test chính đo **số mốc progress
+  đã kêu TẠI THỜI ĐIỂM lời gọi LLM đầu tiên bắt đầu**, không đếm tổng lúc xong — tổng vẫn
+  đúng ngay cả khi dồn hết về cuối.
+
+---
+
+## (ĐÃ SỬA 2026-08-28) `.gitattributes`: line-ending trộn đã đẻ ra một kết luận sai
+
+Kho không có `.gitattributes`, `core.autocrlf=true`, nên git tự đoán file nào là text.
+Kết quả: `.claude/rules/*.mdc` là CRLF còn `.cursor/rules/*.mdc` là LF **dù nội dung y hệt**.
+
+Hậu quả thật, không phải giả định: `cmp` báo cả 7 cặp "khác nội dung", tao viết kết luận đó
+vào plan vòng 2 và vào `README.md`. Phải đính chính cả hai. `diff --strip-trailing-cr` ra
+0 dòng khác.
+
+- **Fix:** `.gitattributes` với `* text=auto`, đánh dấu `binary` cho docx/faiss/pkl/ảnh, và
+  `-diff` cho `FE/package-lock.json`.
+- **CỐ Ý không chạy `git add --renormalize .`:** nó đụng ~470 file và tạo một diff che mất
+  mọi thay đổi mã khác. Từng file tự chuẩn hoá khi có người sửa nó.
+- **Prevention:** khi hai file "giống hệt mà công cụ báo khác", nghi line-ending TRƯỚC khi
+  nghi nội dung. `diff --strip-trailing-cr` là câu hỏi đúng.
+
 ## (ĐÃ SỬA 2026-08-28) Audit vòng 2 — file cấu hình trùng tên nhưng nói khác nhau
 
 Ba cặp file "trùng" mà mỗi cặp có một bản THẮNG và một bản NÓI DỐI. Không phải rác — là

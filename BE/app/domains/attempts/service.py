@@ -21,12 +21,21 @@ def has_short_answer(quiz_id: str) -> bool:
 
 
 def grade_attempt(attempt_id: str, *, ask: Optional[Callable[..., str]] = None,
+                  progress_cb: Optional[Callable[[int, str], None]] = None,
                   ) -> Optional[Dict[str, Any]]:
     """Chấm toàn bộ attempt rồi ghi một lần. None khi attempt không tồn tại.
 
     Trả `{**totals, ungraded_count}`. `ungraded_count > 0` nghĩa là LLM không chấm được
     vài câu tự luận — attempt vẫn `graded` để người học xem được phần còn lại, những câu
     đó để `verdict=None` chứ không bị cho 0 oan.
+
+    `progress_cb(phan_tram, thong_diep)` kêu TRƯỚC mỗi lời gọi LLM, không phải sau. Job
+    chấm trước đây nhảy 20% rồi đứng im tới 100% suốt cả lượt chấm — mà người học đang
+    NGỒI CHỜ màn hình điểm, khác ingest chạy nền. Đặt sau lời gọi thì dòng đầu tiên chỉ
+    xuất hiện khi câu đầu đã chấm xong (bài học summary 2026-08-27).
+
+    Chỉ đếm câu TỰ LUẬN: câu trắc nghiệm chấm bằng so chuỗi, xong tức thì, đưa vào mẫu số
+    thì thanh nhảy vọt rồi đứng im — mô tả sai chỗ thời gian thật sự trôi.
     """
     attempt = repository.get_attempt(attempt_id)
     if attempt is None:
@@ -36,7 +45,12 @@ def grade_attempt(attempt_id: str, *, ask: Optional[Callable[..., str]] = None,
     graded: List[Dict[str, Any]] = []
     ungraded = 0
 
-    for q in repository.questions_for_grading(attempt["quiz_id"]):
+    cau_hoi = repository.questions_for_grading(attempt["quiz_id"])
+    tong_tu_luan = sum(1 for q in cau_hoi
+                       if q["question_type"] not in grading.OBJECTIVE_TYPES)
+    da_cham_tu_luan = 0
+
+    for q in cau_hoi:
         answer = given.get(q["question_id"])
         if q["question_type"] in grading.OBJECTIVE_TYPES:
             verdict, score = grading.grade_objective(
@@ -49,6 +63,12 @@ def grade_attempt(attempt_id: str, *, ask: Optional[Callable[..., str]] = None,
             })
             continue
 
+        if progress_cb:
+            da_cham_tu_luan += 1
+            progress_cb(
+                int(20 + 75 * (da_cham_tu_luan - 1) / max(1, tong_tu_luan)),
+                f"Đang chấm câu tự luận {da_cham_tu_luan}/{tong_tu_luan}...",
+            )
         result = grading.grade_short_answer(
             question=q["question_text"], correct_answer=q["correct_answer"],
             user_answer=answer, source_context=q["source_context"], ask=ask)

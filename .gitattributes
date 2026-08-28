@@ -1,0 +1,26 @@
+# Chuẩn hoá line-ending. Không có file này thì git tự đoán file nào là text, và cách
+# đoán đó đã tạo ra một kho trộn CRLF/LF: `.claude/rules/*.mdc` là CRLF còn
+# `.cursor/rules/*.mdc` là LF, dù nội dung y hệt nhau. Hậu quả thật (2026-08-28):
+# `cmp` báo 7 cặp file giống hệt là "khác toàn bộ", và tao viết kết luận sai đó vào
+# kế hoạch audit. Xem .playbook/known-issues.md.
+#
+# `text=auto` = git lưu LF trong repo, checkout theo core.autocrlf của từng máy.
+# CỐ Ý không chạy `git add --renormalize .` cùng lúc: nó đụng vào ~470 file và tạo
+# một diff che mất mọi thay đổi mã khác. Từng file sẽ tự chuẩn hoá khi có người sửa nó.
+* text=auto
+
+# Nhị phân — không được đụng vào byte nào.
+*.docx  binary
+*.faiss binary
+*.pkl   binary
+*.png   binary
+*.jpg   binary
+*.jpeg  binary
+*.gif   binary
+*.ico   binary
+*.pdf   binary
+
+# Sinh tự động: không cần review diff, và diff của nó làm loãng mọi PR.
+# (Stub gRPC `*_pb2*.py` KHÔNG được commit — scripts/build_proto.py sinh lúc build —
+#  nên không cần dòng nào cho chúng.)
+FE/package-lock.json linguist-generated=true -diff

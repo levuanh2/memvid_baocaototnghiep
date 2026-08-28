@@ -41,6 +41,12 @@ done   # rỗng -> giống hệt nhau
 
 ## R1 — Index tài liệu không kiểm dim, trong khi memory tree thì có
 
+> **Chính xác hoá sau khi thi hành:** tiêu đề trên nói quá. Đường **GHI** CÓ guard —
+> `store._load_index(dim)` so `idx.d` với dim model, lệch thì xoá index và build lại.
+> Chỉ đường **ĐỌC** hở. Cửa sổ: đổi `EMBEDDING_MODEL_NAME` rồi truy vấn TRƯỚC khi ingest
+> lại lần nào. **ĐÃ SỬA** — guard trong `hybrid._load_faiss_index(expected_dim=...)`,
+> 5 test ở `tests/test_retrieval_dim_guard.py`.
+
 **Bất đối xứng giữa hai anh em — đúng hình dạng lỗi lặp lại của dự án này.**
 
 `memory/tree.py` có guard đầy đủ:
@@ -85,6 +91,11 @@ query. Cache đã có sẵn ở cả hai ứng viên — bám vào đó.
 
 ## R2 — Thanh tiến trình đứng yên giữa chừng
 
+> **ĐÃ SỬA** — `short_answer_grading` có `progress_cb` kêu trước mỗi lời gọi LLM;
+> `study_map` Relations đổi nhãn thành `Đang tìm quan hệ giữa {n} khái niệm...`.
+> 5 test ở `tests/test_grading_progress.py`. `quiz_generation` và `ingest` giữ nguyên
+> theo đúng nguyên tắc "chọn một".
+
 Vòng 2 đã kiểm và kết luận: tiêu chí cũ ("khoảng im ĐẦU TIÊN > 5 giây") **không chỗ nào
 vi phạm** — mọi job báo mốc đầu ngay lúc bắt đầu. Cái còn lại nhẹ hơn nhưng có thật:
 
@@ -116,6 +127,9 @@ làm chậm.
 ---
 
 ## R3 — `.gitattributes` cho line-ending
+
+> **ĐÃ SỬA** — `.gitattributes` ở gốc, `* text=auto` + binary + `-diff` cho
+> `package-lock.json`. KHÔNG renormalize toàn kho.
 
 R0.2 cho thấy repo đang trộn CRLF và LF trong cùng loại file. Triệu chứng đã gặp:
 

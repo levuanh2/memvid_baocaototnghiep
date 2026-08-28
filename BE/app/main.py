@@ -2283,7 +2283,12 @@ def run_study_map_job(job_id: str, document_id: str, user_id: Optional[str] = No
         if _cancelled():
             raise _JobCancelled()
 
-        update_job(job_id, progress=75, current_node="Relations")
+        # Nhãn nêu SỐ khái niệm chứ không chỉ tên bước: `relations()` là MỘT lời gọi
+        # LLM, không chia nhỏ được, và nó chiếm 106 giây đo được trong job 487s. Chia
+        # nhỏ một lời gọi LLM chỉ để thanh chạy mượt là làm đẹp bằng cách làm chậm —
+        # nói thật cho người dùng biết đang chờ gì thì rẻ hơn và đúng hơn.
+        update_job(job_id, progress=75,
+                   current_node=f"Đang tìm quan hệ giữa {len(nodes)} khái niệm...")
         relations, deg_rel = pipeline.relations(nodes, cancel_cb=_cancelled)
         if _cancelled():
             raise _JobCancelled()
@@ -2736,7 +2741,12 @@ def run_short_answer_grading_job(job_id: str, attempt_id: str,
                      input_json={"attempt_id": attempt_id})
     try:
         update_job(job_id, status="running", progress=20, current_node="Grading")
-        result = _grading_service.grade_attempt(attempt_id)
+        result = _grading_service.grade_attempt(
+            attempt_id,
+            # Người học đang ngồi chờ màn hình điểm. Không có dòng này thì job đứng ở
+            # 20% suốt cả lượt chấm (1 lời gọi LLM mỗi câu tự luận) rồi nhảy thẳng 100%.
+            progress_cb=lambda p, msg: update_job(job_id, progress=p, current_node=msg),
+        )
         if result is None:
             raise ValueError("Attempt không tồn tại.")
         update_job(job_id, status="done", progress=100, current_node="Grading",

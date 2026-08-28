@@ -110,16 +110,39 @@ class HybridRetriever:
         self._faiss_idx = None
         self._faiss_key: tuple | None = None
 
-    def _load_faiss_index(self):
+    def _load_faiss_index(self, expected_dim: int | None = None):
         """Đọc index.faiss có cache theo (mtime_ns, size). File đổi → reload;
-        đọc lỗi → raise như cũ (caller đã bọc try/except + log)."""
+        đọc lỗi → raise như cũ (caller đã bọc try/except + log).
+
+        `expected_dim` = số chiều của vector truy vấn. Lệch với `index.d` thì ném NGAY
+        kèm câu giải thích, thay vì để faiss ném `AssertionError` RỖNG (đo thật: search
+        vector 1024 chiều vào index 384 chiều ra `AssertionError` không có message).
+        Cả hai caller đều log `"legacy FAISS search failed: %s"`, nên message rỗng biến
+        thành một dòng log cụt và truy hồi âm thầm tụt về BM25-only — hỏng mà không kêu.
+
+        Kiểm ở ĐÂY chứ không ở caller: cả hai đường search đi qua hàm này, và kết quả có
+        cache theo (mtime, size) nên guard chạy một lần mỗi khi index đổi, không phải
+        mỗi query.
+
+        Đường GHI đã có guard riêng (`store._load_index` xoá index khi lệch dim). Cửa sổ
+        hở là: đổi EMBEDDING_MODEL_NAME rồi truy vấn TRƯỚC khi ingest lại lần nào.
+        """
         st = self.index_path.stat()
         key = (st.st_mtime_ns, st.st_size)
         if self._faiss_idx is not None and self._faiss_key == key:
-            return self._faiss_idx
-        idx = faiss.read_index(str(self.index_path))
-        self._faiss_idx = idx
-        self._faiss_key = key
+            idx = self._faiss_idx
+        else:
+            idx = faiss.read_index(str(self.index_path))
+            self._faiss_idx = idx
+            self._faiss_key = key
+        if expected_dim is not None and idx.d != expected_dim:
+            from app.domains.vectorstore.store import MODEL_NAME
+            raise ValueError(
+                f"FAISS index {self.index_path.name} có {idx.d} chiều nhưng model hiện tại "
+                f"({MODEL_NAME}) sinh vector {expected_dim} chiều. Index được build bằng "
+                f"model khác — chạy lại ingest, hoặc "
+                f"app.domains.vectorstore.store.rebuild_chunk_index()."
+            )
         return idx
 
     def _ensure_loaded(self) -> None:
@@ -244,7 +267,7 @@ class HybridRetriever:
                     qv = model.encode([query], convert_to_numpy=True).astype("float32")
             if qv is not None:
                 try:
-                    idx = self._load_faiss_index()
+                    idx = self._load_faiss_index(expected_dim=int(qv.shape[1]))
                     _, I = idx.search(qv, 10)
                     # PR#7: aliases tính MỘT lần ngoài vòng hit; lookup qua _by_id
                     # thay next()-scan O(n) mỗi hit. Kết quả y hệt.
@@ -372,7 +395,7 @@ class HybridRetriever:
             qv = model.encode([query], convert_to_numpy=True).astype("float32")
 
         try:
-            idx = self._load_faiss_index()
+            idx = self._load_faiss_index(expected_dim=int(qv.shape[1]))
             D, I = idx.search(qv, max(10, top_k * 2))
         except Exception as exc:
             logger.warning("HybridRetriever.retrieve_faiss_only: legacy FAISS read/search failed: %s", exc)
