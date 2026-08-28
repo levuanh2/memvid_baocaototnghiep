@@ -8,7 +8,6 @@ try:
 except Exception:
     pass
 
-import unicodedata
 import json
 import re
 import uuid
@@ -19,16 +18,9 @@ import signal
 import sys
 from collections import OrderedDict
 from datetime import datetime, timezone
-from typing import List, Dict, Optional, Tuple, Any, Callable
-from flask import Flask, request, jsonify, send_from_directory, Response, stream_with_context
+from typing import List, Dict, Optional, Tuple, Any
+from flask import Flask, request, jsonify, Response, stream_with_context
 from flask_cors import CORS
-
-# File locking (Unix only, fallback on Windows)
-try:
-    import fcntl
-    HAS_FCNTL = True
-except ImportError:
-    HAS_FCNTL = False
 
 from app.domains.ingest.ingest_utils import extract_text, split_text
 from app.domains.vectorstore.store import (
@@ -39,10 +31,11 @@ from app.domains.vectorstore.store import (
     rebuild_chunk_index,
     MODEL_NAME,
 )
-from app.clients.llm_factory import ask_ai, summarize_results
+from app.clients.llm_factory import summarize_results
 from app.domains.cache import llm_cache
+from shared.config import DEFAULT_LOCAL_MODEL
 # Chỉ dùng cho local Ollama (Gemini sẽ bỏ qua model).
-SLM_MODEL = os.environ.get("SLM_MODEL_CHAT", os.environ.get("SLM_MODEL", "qwen3.6:35b-a3b"))
+SLM_MODEL = os.environ.get("SLM_MODEL_CHAT", os.environ.get("SLM_MODEL", DEFAULT_LOCAL_MODEL))
 from app.domains.mindmap import store as mindmap_store
 from app.domains.mindmap.input_collector import collect_mindmap_input
 from services.mindmap.pipeline import schema as mindmap_schema
@@ -256,16 +249,6 @@ try:
         _jobs_migrate_from_dict(jobs, job_type="rebuild")
 except Exception:
     pass
-
-def _cleanup_old_jobs() -> None:
-    # Lazily cleanup on request (per-process, per gunicorn worker)
-    if JOB_TTL_MINUTES <= 0:
-        return
-    cutoff = time.time() - (JOB_TTL_MINUTES * 60)
-    with jobs_lock:
-        expired = [jid for jid, j in jobs.items() if isinstance(j.get("created_at"), (int, float)) and j["created_at"] < cutoff]
-        for jid in expired:
-            jobs.pop(jid, None)
 
 # Query async job store (separate from rebuild jobs)
 query_jobs: Dict[str, Dict[str, Any]] = {}
@@ -1090,13 +1073,6 @@ def owned_stems(user_id: Optional[str]) -> set:
     return out
 
 
-def user_data_root(user_id: Optional[str]) -> "Path":
-    """Physical-ready seam. Returns the CURRENT global data root today; a future
-    physical-partition phase swaps this to DATA_DIR/users/<user_id>/ without
-    touching call sites."""
-    return Path(DATA_DIR_DEFAULT)
-
-
 # Phase C — source/query ownership.
 # Sentinel stem that matches NO chunk: used when an enforced query resolves to zero
 # owned sources, so retrieval returns [] instead of falling back to the global corpus.
@@ -1277,8 +1253,8 @@ def _get_session_history_safe(session_id: str, limit: int) -> list:
 
 def _warmup_model_names() -> list[str]:
     """Model Ollama cần warm = ĐÚNG model runtime sẽ resolve theo feature
-    (một nguồn sự thật `_model_map` — hết stale default kiểu qwen3.5:9b hardcode
-    riêng ở warmup trong khi compose chạy model khác). Dedupe giữ thứ tự,
+    (một nguồn sự thật `_model_map` — hết chuyện warmup ôm một default cứng riêng
+    trong khi compose chạy model khác). Dedupe giữ thứ tự,
     chat/query warm trước (interactive nhạy cold-start nhất)."""
     from app.clients.llm_factory import _model_map
     out: list[str] = []
@@ -3261,6 +3237,11 @@ def api_job_get(job_id: str):
     })
 
 
+# Job_type mà executor THẬT SỰ gọi is_cancel_requested giữa các bước.
+# Kiểm bằng: grep -rn "is_cancel_requested" BE/app BE/services --include=*.py
+_CANCELLABLE_JOB_TYPES = {"mindmap", "summary", "quiz_generation", "study_map_generation"}
+
+
 @app.post('/api/jobs/<job_id>/cancel')
 def api_job_cancel(job_id: str):
     uid, err = _require_app_user()
@@ -3270,6 +3251,17 @@ def api_job_cancel(job_id: str):
     j = _js_get(job_id)
     if not j or (_auth_protect_enabled() and j.get("user_id") != uid):
         return jsonify({"error": "Job not found"}), 404
+    # Chỉ những job_type có điểm kiểm huỷ trong executor mới huỷ được. Các loại còn
+    # lại (ingest, query, short_answer_grading) KHÔNG đọc cờ ở bất kỳ đâu — trước đây
+    # route này vẫn trả cancel_requested=True cho chúng, nên FE hiện "Đang huỷ…" rồi
+    # treo tới hết TTL (đúng lớp lỗi known-issues 2026-07-17). Thà từ chối thẳng.
+    # Thêm job_type vào đây CHỈ SAU KHI executor của nó thật sự gọi is_cancel_requested.
+    if (j.get("job_type") or "") not in _CANCELLABLE_JOB_TYPES:
+        return jsonify({
+            "error": f"Loại job '{j.get('job_type')}' không hỗ trợ huỷ giữa chừng.",
+            "job_id": job_id,
+            "cancel_requested": False,
+        }), 409
     from app.domains.jobs.jobs_store import request_cancel
     request_cancel(job_id)
     return jsonify({"job_id": job_id, "cancel_requested": True})

@@ -62,6 +62,3 @@ def canonical_source_stem(name: str) -> str:
     return s.strip("_").lower()
 
 
-def display_filename(filename: str) -> str:
-    """Tên hiển thị cho UI (NFC, bỏ no-break space). KHÔNG dùng để so khớp."""
-    return unicodedata.normalize("NFC", (filename or "").strip()).replace(" ", " ")

@@ -1,5 +1,71 @@
 # Lessons Learned
 
+## 2026-08-28 - Audit vòng 2: dọn mã. Bài học nằm ở chỗ "trùng nhau" chứ không ở chỗ "thừa"
+
+- **Hai file trùng tên khác giá trị KHÔNG mặc nhiên là lỗi.** Tao đếm 12 khoá lệch giữa
+  `.env.example` gốc và `BE/.env.example` rồi viết vào plan là "12 chỗ nói dối". Sai:
+  11/12 là hai HỒ SƠ khác nhau (docker/prod vs dev), lệch là đúng. Chỉ 1 khoá là lỗi thật.
+  Phân loại theo HỒ SƠ trước khi gọi cái gì là drift — nếu không thì bản vá "cho hai file
+  giống nhau" sẽ phá cấu hình docker.
+
+- **Lỗi thật thường nhỏ hơn và nằm sâu hơn con số thống kê.** Cái duy nhất sai
+  (`SLM_MODEL`) truy ra được nguyên nhân gốc: `BE/.env.example` **lặp key hai lần**, dòng
+  thứ hai chú thích "alias" nhưng gõ lại đúng tên cũ thay vì `SLM_MODEL_CHAT`. Vì vậy
+  `SLM_MODEL_CHAT` chưa bao giờ tồn tại ở file THẮNG. Đây là toàn bộ cơ chế của triệu
+  chứng "giá trị an toàn nằm ở file thua" mà vòng 1 chỉ mô tả được chứ chưa giải thích.
+
+- **Comment không chặn được tái phát, test thì có.** `main.py:1255` đã có sẵn comment "một
+  nguồn sự thật `_model_map` — hết stale default kiểu qwen3.5:9b hardcode". Comment đó viết
+  xong, default vẫn quay lại, và lần quét này đếm được **12 chỗ** viết cứng. Muốn một luật
+  sống thì phải có test quét mã, không phải một dòng chú thích.
+
+- **Xoá mã chết làm lộ ra lời nói dối trong tài liệu.** `accept_attribute()` có docstring
+  khẳng định một test đang khoá nó — test đó tồn tại và vẫn xanh, nhưng nó so trực tiếp
+  `DocumentList.jsx` với `SUPPORTED_EXTENSIONS`, không gọi hàm đó lần nào. Đọc docstring mà
+  không kiểm là cách hiểu sai ai đang bảo vệ cái gì.
+
+- **Trừu tượng dựng rồi bỏ còn tệ hơn không dựng.** `shared/paths.default_data_dir()` sinh
+  ra để gom đường dẫn về một chỗ; 0 caller, trong khi ba module tự viết lại đúng biểu thức
+  đó tại chỗ. Người sau đọc `paths.py` sẽ tưởng đường dẫn đã được gom.
+
+- **Sửa chỗ NÓI DỐI rẻ hơn dựng chức năng còn thiếu.** `ingest`/`query`/`grading` không ack
+  cờ huỷ. Lựa chọn A: thêm điểm kiểm huỷ vào ingest graph (thêm node, đổi hình graph, rủi
+  ro đụng test ingest) cho một nút bấm FE **chưa nối**. Lựa chọn B: route trả 409 và không
+  bật cờ. B đúng vì lỗi thật là "API hứa thứ nó không làm được", không phải "thiếu tính
+  năng huỷ". Dựng A là làm việc suy đoán rồi vẫn phải sửa B.
+
+- **Đừng sửa gộp một lớp lỗi chỉ vì đếm được nhiều.** 81 chỗ `except Exception: pass`, sửa
+  hết là hấp dẫn. Phân loại theo nội dung khối `try` cho thấy 24 chỗ là import dự phòng,
+  5 chỗ là log/cache, và chỉ **3 chỗ** thật sự giấu mất dữ liệu. Cùng bài học loại C ở
+  `progress` hôm nay: một triệu chứng, nhiều cách sửa khác nhau.
+
+- **`git mv` là công cụ dọn thư mục, không phải viết lại.** 11 file `.md` ở
+  `01_/03_/04_` chuyển vào `docs/` giữ nguyên nội dung; kiểm trước bằng grep toàn kho thấy
+  0 chỗ viện dẫn đường dẫn cũ nên di chuyển an toàn.
+
+## 2026-08-28 - Audit toàn dự án: quét theo LỚP LỖI, và đừng tin chính cái grep của mình
+
+- **Quét theo lớp lỗi bắt được bản sao thứ ba; quét theo thư mục thì không.** Ba đợt sửa
+  (mindmap 26/8, summary 27/8, studymap+quiz+progress 28/8) đều là CÙNG một khiếm khuyết
+  nhân bản sang module anh em. Lấy đúng lớp lỗi đó đi quét cả repo thì tìm ra ngay bản sao
+  thứ ba ở `memory/tree.py` — chỗ chưa ai báo lỗi vì nó chỉ nổ khi tài liệu đủ nhiều mục.
+
+- **Test xanh không thấy lớp lỗi này.** Cả ba lần đều xanh 100% suốt thời gian lỗi tồn tại:
+  test giả LLM (nên cổng LLM không bao giờ nghẽn) và chỉ chạy MỘT nhánh cấu hình. Coverage
+  đếm theo SỐ CA, không theo NHÁNH CẤU HÌNH.
+
+- **Regex `os.getenv("X")` bỏ sót biến đọc gián tiếp.** Quét biến chết bằng mẫu literal báo
+  nhầm `AUTH_REQUIRE_SECRET` là chết — nó sống, đọc qua `_truthy(name)` ở
+  `auth/tokens.py:33` và ném `RuntimeError` khi thiếu `AUTH_SECRET`. Suýt gỡ một control
+  bảo mật đang chạy. Trước khi kết luận "biến chết", grep TÊN TRẦN chứ không grep lời gọi.
+
+- **Khớp chuỗi con tạo báo động giả.** `BASE_URL` khớp bên trong `DATABASE_URL`. Dùng ranh
+  giới từ (`\bX\b`) cho mọi so khớp tên biến.
+
+- **Đừng in giá trị env ra terminal khi so sánh drift.** Một lệnh chẩn đoán đã echo cả
+  `DATABASE_URL` kèm mật khẩu DB. So sánh bằng hash/`diff <(cut -d= -f1)` là đủ để biết
+  khoá nào trôi — không cần thấy giá trị.
+
 ## 2026-08-28 - Sửa lan cùng một bẫy: quét bằng cách GỌI, không bằng cách đọc
 
 - **Cùng một triệu chứng không có nghĩa là cùng một cách sửa.** Sáu chỗ vỡ đều ném

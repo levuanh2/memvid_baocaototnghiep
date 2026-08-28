@@ -1,15 +1,12 @@
-"""Minimal helpers kept after the skeleton-first mindmap pipeline migration."""
+"""Helper còn lại sau khi mindmap chuyển sang pipeline skeleton-first.
+
+Chỉ còn MỘT hàm. `attach_mindmap_job_context` / `_notify_progress` và contextvar job đi
+kèm đã bị xoá 2026-08-28: 0 caller. Đường progress thật của mindmap là `progress_cb` mà
+`server.py` và `mindmap_factory` truyền xuống `pipeline/enrich.py`, không phải contextvar.
+"""
 from __future__ import annotations
 
-import contextvars
-from typing import Callable, Optional
-
-from services.mindmap.jsonrepair import repair_json_text as _repair_json_text
 from shared.source_id import canonical_source_stem
-
-_mindmap_job_id_ctx: contextvars.ContextVar[Optional[str]] = contextvars.ContextVar(
-    "mindmap_job_id", default=None
-)
 
 
 def collect_chunks_for_sources(meta: dict, source_names: list) -> list:
@@ -34,24 +31,3 @@ def collect_chunks_for_sources(meta: dict, source_names: list) -> list:
             }
         )
     return out
-
-
-def attach_mindmap_job_context(job_id: Optional[str]) -> None:
-    _mindmap_job_id_ctx.set(job_id)
-
-
-def _notify_progress(
-    progress_cb: Optional[Callable[[int], None]],
-    p: int,
-    msg_vi: str,
-) -> None:
-    if progress_cb is not None:
-        progress_cb(int(p))
-    jid = _mindmap_job_id_ctx.get(None)
-    if jid:
-        try:
-            from app.domains.jobs.jobs_store import update_job
-
-            update_job(jid, progress=int(p), current_node=msg_vi)
-        except Exception:
-            pass

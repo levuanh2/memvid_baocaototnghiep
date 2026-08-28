@@ -1,31 +1,8 @@
-faiss-cpu
-flask
-flask-cors
-gunicorn
-langchain
-langchain-experimental
-langchain-huggingface
-langdetect
-numpy
-ollama
-pandas
-pdfplumber
-Pillow
-psutil
-PyMuPDF
-pytesseract
-python-docx
-requests
-scikit-learn
-scipy
-sentence-transformers
-# Torch (CPU-only) để tránh kéo CUDA toolkit trong Docker
---extra-index-url https://download.pytorch.org/whl/cpu
-torch==2.5.1+cpu
-tqdm
-transformers
+# StudyMap AI — KHÔNG khai báo dependency ở đây.
+#
+# Bản chuẩn DUY NHẤT là BE/requirements.txt: nó pin chặt langchain 0.3.x / langgraph 0.2.x.
+# File này từng là bản sao KHÔNG pin, nên `pip install -r requirements.txt` ở thư mục gốc
+# kéo langgraph 1.x -> ormsgpack -> bị Windows Application Control chặn
+# (xem .playbook/known-issues.md). Giữ lại làm con trỏ để lệnh cũ vẫn chạy đúng.
 
-# PostgreSQL (Supabase) — lược đồ nghiệp vụ StudyMap, migration bằng Alembic
-SQLAlchemy>=2.0
-alembic
-psycopg[binary]
+-r BE/requirements.txt

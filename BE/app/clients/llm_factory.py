@@ -15,6 +15,8 @@ from contextlib import contextmanager
 from typing import Any, Iterator, Optional
 
 import numpy as np
+
+from shared.config import DEFAULT_LOCAL_MODEL
 from langchain_core.embeddings import Embeddings as _LCEmbeddings
 
 try:
@@ -145,15 +147,15 @@ def _grpc_embedding_provider(addr: str, name: str):
 
 
 def _model_map(feature: str) -> str:
-    # Mặc định qwen3.5:9b (Ollama). Không dùng qwen3:9b — tag không tồn tại.
-    _chat = os.getenv("SLM_MODEL_CHAT", os.getenv("SLM_MODEL", "qwen3.5:9b"))
+    # Default lấy từ shared.config.DEFAULT_LOCAL_MODEL — MỘT chỗ, xem giải thích ở đó.
+    _chat = os.getenv("SLM_MODEL_CHAT", os.getenv("SLM_MODEL", DEFAULT_LOCAL_MODEL))
     return {
         "chat": _chat,
-        "summary": os.getenv("SLM_MODEL_SUMMARY", "qwen2.5:14b"),
-        "mindmap": os.getenv("MINDMAP_MODEL", "qwen2.5:14b"),
+        "summary": os.getenv("SLM_MODEL_SUMMARY", DEFAULT_LOCAL_MODEL),
+        "mindmap": os.getenv("MINDMAP_MODEL", DEFAULT_LOCAL_MODEL),
         # Ra đề bám ngữ liệu — cùng hạng model với summary/mindmap. Đổi model không
         # phải sửa code (NFR-05.3), chỉ đặt QUIZ_MODEL.
-        "quiz": os.getenv("QUIZ_MODEL", os.getenv("SLM_MODEL_SUMMARY", "qwen2.5:14b")),
+        "quiz": os.getenv("QUIZ_MODEL", os.getenv("SLM_MODEL_SUMMARY", DEFAULT_LOCAL_MODEL)),
     }.get(feature, _chat)
 
 
@@ -332,7 +334,7 @@ def stream_chat_tokens(llm: Any, messages: list) -> Iterator[str]:
 def get_llm(feature: str = "chat") -> Any:
     """
     LLM chính cho chain (LangChain) — luôn dùng Ollama local.
-    feature: 'chat' -> SLM_MODEL_CHAT (mặc định qwen3.5:9b)
+    feature: 'chat' -> SLM_MODEL_CHAT (mặc định DEFAULT_LOCAL_MODEL)
     """
     return _ollama_chat_llm(None, feature, None)
 
@@ -533,13 +535,6 @@ def get_embedding_model(model_name: Optional[str] = None) -> Optional[LangChainE
     return _emb_adapter_cache
 
 
-def get_sentence_transformer(model_name: Optional[str] = None) -> LangChainEmbeddingAdapter:
-    m = get_embedding_model(model_name)
-    if m is None:
-        raise RuntimeError("Embedding model not available (CI mode)")
-    return m
-
-
 def ask_ai(
     prompt: str,
     system_prompt: str | None = None,
@@ -549,9 +544,9 @@ def ask_ai(
     timeout: float | None = None,
 ) -> str:
     """Gọi AI qua Ollama. `feature` xác định model mặc định khi `model` không truyền.
-    feature='chat'    -> SLM_MODEL_CHAT (mặc định qwen3.5:9b)
-    feature='summary' -> qwen2.5:14b  (dùng cho summarize_advanced, memory_tree)
-    feature='mindmap' -> qwen2.5:14b
+    feature='chat'    -> SLM_MODEL_CHAT (mặc định DEFAULT_LOCAL_MODEL)
+    feature='summary' -> SLM_MODEL_SUMMARY (dùng cho summarize_advanced, memory_tree)
+    feature='mindmap' -> MINDMAP_MODEL
     timeout: số giây tối đa cho LLM call (None = không giới hạn)
     """
     # Phase 0 observability: đếm MỘT lần cho mỗi invocation (cả nhánh gateway lẫn

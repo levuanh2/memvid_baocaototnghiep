@@ -23,8 +23,14 @@ def build_mindmap_graph(*, data_dir: Path, index_meta_path: Path,
             return
         try:
             jobs_update(job_id, **kw)
-        except Exception:
-            pass
+        except Exception as e:
+            # Fail-open là ĐÚNG cho mốc tiến trình giữa chừng, nhưng KHÔNG được im.
+            # Mọi trạng thái của graph này đi qua đây, kể cả `status="done"` kèm
+            # result. Nuốt im lặng = job không bao giờ tới done, FE poll tới hết TTL
+            # mà không ai biết vì sao (known-issues 2026-07-06).
+            # ponytail: chỉ in ra, không ném — ném ở đây làm hỏng cả pipeline vì một
+            # lần ghi SQLite bị khoá. Đổi sang ném khi có bằng chứng ghi hỏng thật.
+            print(f"set_job_failed job_id={job_id} keys={sorted(kw)} err={e}", flush=True)
 
     def _cancelled(job_id: str) -> bool:
         try:

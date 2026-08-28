@@ -20,6 +20,13 @@ import os
 from dataclasses import dataclass, field
 from typing import List, Optional
 
+# Model local mặc định khi KHÔNG có env nào đặt. Phải VỪA VRAM của máy yếu nhất mà
+# dự án nhắm tới (ở đây 6 GiB): qwen2.5:14b nặng 9.95 GB, qwen3.5:9b nặng 6.59 GB,
+# qwen3.6:35b-a3b thì chưa từng được pull về. Cả ba từng là default rải rác trong mã,
+# và cả ba đều là lý do hai buổi debug "sinh mãi không xong" (.playbook 2026-08-26/27).
+# Đổi ở ĐÂY, không đổi rải rác — 12 chỗ hardcode là cách nó quay lại lần trước.
+DEFAULT_LOCAL_MODEL = "qwen2.5:7b-instruct"
+
 DEFAULT_EMBEDDING_MODEL_NAME = "sentence-transformers/all-MiniLM-L6-v2"
 
 
@@ -66,9 +73,9 @@ class Settings:
     groq_chat_model: str = "llama-3.3-70b-versatile"
 
     # --- Models theo feature ---
-    model_chat: str = "qwen3.5:9b"
-    model_summary: str = "qwen2.5:14b"
-    model_mindmap: str = "qwen2.5:14b"
+    model_chat: str = DEFAULT_LOCAL_MODEL
+    model_summary: str = DEFAULT_LOCAL_MODEL
+    model_mindmap: str = DEFAULT_LOCAL_MODEL
 
     # --- Embedding ---
     embedding_model_name: str = DEFAULT_EMBEDDING_MODEL_NAME
@@ -163,9 +170,9 @@ class Settings:
             ollama_host=(os.getenv("OLLAMA_HOST") or "").strip(),
             gemini_chat_model=os.getenv("GEMINI_CHAT_MODEL", "gemini-2.5-flash"),
             groq_chat_model=os.getenv("GROQ_CHAT_MODEL", "llama-3.3-70b-versatile"),
-            model_chat=os.getenv("SLM_MODEL_CHAT", os.getenv("SLM_MODEL", "qwen3.5:9b")),
-            model_summary=os.getenv("SLM_MODEL_SUMMARY", "qwen2.5:14b"),
-            model_mindmap=os.getenv("MINDMAP_MODEL", "qwen2.5:14b"),
+            model_chat=os.getenv("SLM_MODEL_CHAT", os.getenv("SLM_MODEL", DEFAULT_LOCAL_MODEL)),
+            model_summary=os.getenv("SLM_MODEL_SUMMARY", DEFAULT_LOCAL_MODEL),
+            model_mindmap=os.getenv("MINDMAP_MODEL", DEFAULT_LOCAL_MODEL),
             embedding_model_name=os.getenv("EMBEDDING_MODEL_NAME", DEFAULT_EMBEDDING_MODEL_NAME),
             query_embed_cache_max=_int("QUERY_EMBED_CACHE_MAX", 512),
             skip_model_load=_flag("SKIP_MODEL_LOAD"),

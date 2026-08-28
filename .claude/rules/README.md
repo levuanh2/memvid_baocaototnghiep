@@ -1,19 +1,33 @@
 # Shared Agent Rules
 
-This folder stores shared rules and skills used by different AI coding tools.
+Nơi để rule/skill dùng chung cho các công cụ AI coding của dự án.
 
-Current skill location:
+## Bố cục thật (đã đối chiếu 2026-08-28)
 
-- .agents/rules/skills/frontend-design/SKILL.md
+```
+.claude/rules/
+  AGENTS.md                              luật bắt buộc: đọc .playbook trước khi sửa mã
+  skills/frontend-design/SKILL.md         skill dùng chung — MỘT bản duy nhất
+  *.mdc                                   rule cho Claude-style agent
+.cursor/rules/*.mdc                       rule cho Cursor (7 file TRÙNG TÊN với trên
+                                          nhưng NỘI DUNG KHÁC — chưa hợp nhất)
+```
 
-Bridge files:
+Thêm skill mới thì đặt ở `.claude/rules/skills/<ten-skill>/SKILL.md`.
 
-- AGENTS.md: used by Codex-style agents.
-- CLAUDE.md: used by Claude-style agents.
-- .cursor/rules/project-rules.mdc: used by Cursor.
+## Ba chỗ tài liệu này từng nói sai (sửa 2026-08-28)
 
-When adding a new shared skill, place it under:
+- Ghi vị trí skill là `.agents/rules/skills/frontend-design/SKILL.md`. Thư mục `.agents/`
+  **rỗng**, đường dẫn đó chưa bao giờ tồn tại.
+- Ghi có bridge file `CLAUDE.md`. Không có file nào tên vậy trong kho.
+- Ghi có `.cursor/rules/project-rules.mdc`. File đó nằm ở `.claude/rules/`, không phải
+  `.cursor/rules/`.
 
-.agents/rules/skills/<skill-name>/SKILL.md
+`SKILL.md` cũng từng có **hai bản y hệt** (`rules/frontend-design/` và
+`rules/skills/frontend-design/`, cùng md5). Cả hai đều được nạp vào context mỗi phiên nên
+tốn gấp đôi cho cùng một nội dung. Đã giữ lại bản trong `skills/`.
 
-Then reference it from the bridge files above.
+## Chưa làm
+
+7 file `.mdc` trùng tên giữa `.claude/rules/` và `.cursor/rules/` đều khác nội dung. Chưa
+biết bản nào mới hơn nên chưa hợp nhất — đối chiếu từng cặp trước khi gộp, đừng xoá bừa.

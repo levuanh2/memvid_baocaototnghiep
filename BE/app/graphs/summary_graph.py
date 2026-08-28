@@ -11,6 +11,7 @@ from app.graphs.logger import _Timer, log_node_event
 from app.graphs.sqlite_checkpointer import sqlite_saver_from_path
 from app.graphs.state import SummaryState
 from services.summary.pipeline import schema as sm_schema
+from shared.config import DEFAULT_LOCAL_MODEL
 
 
 def build_summary_graph(*, data_dir: Path, index_meta_path: Path,
@@ -23,8 +24,14 @@ def build_summary_graph(*, data_dir: Path, index_meta_path: Path,
             return
         try:
             jobs_update(job_id, **kw)
-        except Exception:
-            pass
+        except Exception as e:
+            # Fail-open là ĐÚNG cho mốc tiến trình giữa chừng, nhưng KHÔNG được im.
+            # Mọi trạng thái của graph này đi qua đây, kể cả `status="done"` kèm
+            # result. Nuốt im lặng = job không bao giờ tới done, FE poll tới hết TTL
+            # mà không ai biết vì sao (known-issues 2026-07-06).
+            # ponytail: chỉ in ra, không ném — ném ở đây làm hỏng cả pipeline vì một
+            # lần ghi SQLite bị khoá. Đổi sang ném khi có bằng chứng ghi hỏng thật.
+            print(f"set_job_failed job_id={job_id} keys={sorted(kw)} err={e}", flush=True)
 
     def _cancelled(job_id: str) -> bool:
         try:
@@ -133,7 +140,7 @@ def build_summary_graph(*, data_dir: Path, index_meta_path: Path,
             sections=sections,
             entities=meta.get("entities") or [],
             content_hash_value=state["content_hash"],
-            model=os.getenv("SLM_MODEL_SUMMARY", "qwen2.5:14b"),
+            model=os.getenv("SLM_MODEL_SUMMARY", DEFAULT_LOCAL_MODEL),
             elapsed_sec=elapsed,
             degraded_missing=state.get("degraded_missing") or [],
             skeleton_method=state.get("skeleton_method") or "",

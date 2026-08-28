@@ -141,6 +141,9 @@ def _load_meta() -> Dict[str, Dict]:
                 try:
                     _save_meta(meta)
                 except Exception:
+                    # ponytail: fail-open cố ý. Đây là ghi MIGRATION (thêm __meta__ cho
+                    # index cũ); dict trong bộ nhớ đã có __meta__ nên lần load sau thử
+                    # lại. Không mất dữ liệu, không cần kêu.
                     pass
             return meta
     return {}
@@ -466,8 +469,10 @@ def rebuild_lc_index_from_meta(meta: Dict[str, Any]) -> None:
     try:
         dummy = emb.embed_query("dim_check")
         emb_dim = len(dummy)
-    except Exception:
-        pass
+    except Exception as e:
+        # emb_dim giữ 0 và được ghi thẳng vào __meta__. Đọc lại thấy dim=0 thì không
+        # phân biệt được "chưa đo" với "model 0 chiều" — nên phải kêu, không nuốt im.
+        print(f"embedding_dim_probe_failed err={e}", flush=True)
     meta["__meta__"] = {
         "version": "1.1",
         "created_at": meta.get("__meta__", {}).get("created_at") or datetime.now().isoformat(),

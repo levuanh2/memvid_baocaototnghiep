@@ -1,5 +1,207 @@
 # Known Issues
 
+## (ĐÃ SỬA 2026-08-28) Audit vòng 2 — file cấu hình trùng tên nhưng nói khác nhau
+
+Ba cặp file "trùng" mà mỗi cặp có một bản THẮNG và một bản NÓI DỐI. Không phải rác — là
+bẫy, vì người đọc bản thua tin rằng mình đang chỉnh thứ có hiệu lực.
+
+### 1. `requirements.txt` ở gốc vs `BE/requirements.txt`
+
+Gốc 64 dòng KHÔNG pin gì (`langchain`, `langgraph`); BE pin `langchain>=0.3.27,<0.4`,
+`langgraph>=0.2.57,<0.3` kèm lý do: langgraph 1.x kéo `ormsgpack`, binary đó bị Windows
+Application Control chặn.
+
+- **Hậu quả:** `pip install -r requirements.txt` ở thư mục gốc cài đúng bản đang cấm.
+  CI chưa dính vì `.github/workflows/ci.yml:32` ưu tiên `BE/requirements.txt`; người mới
+  clone thì dính.
+- **Fix:** file gốc còn ĐÚNG MỘT dòng `-r BE/requirements.txt` + comment nêu lý do.
+
+### 2. `.env.example` gốc vs `BE/.env.example`
+
+**Chỉnh lại phán đoán ban đầu:** lúc quét tao đếm "12 khoá khác giá trị" rồi kết luận cả
+12 đều là lỗi. Đọc kỹ thì 11/12 là CỐ Ý — hai file là hai HỒ SƠ khác nhau, không phải hai
+bản sao: gốc = docker/prod (docker-compose thay thế 102 chỗ `${VAR}` từ đó, nên
+`OLLAMA_HOST=host.docker.internal`, `REDIS_URL=redis://redis:6379/0`, `QUEUE_ENABLED=true`
+đều đúng), BE = dev trên máy.
+
+Chỉ MỘT khoá là lỗi thật, và nó đúng là khoá đã hành dự án hai lần:
+
+```
+SLM_MODEL   gốc: qwen2.5:7b-instruct   BE: qwen3.5:9b   <- BE THẮNG, 6.59 GB / card 6.14 GiB
+```
+
+Nguyên nhân gốc tìm ra ở đây: `BE/.env.example` **lặp key `SLM_MODEL` hai lần**, dòng thứ
+hai chú thích "Alias backward-compatible" — người viết định đặt `SLM_MODEL_CHAT` nhưng gõ
+lại `SLM_MODEL`. Vì vậy `SLM_MODEL_CHAT` KHÔNG BAO GIỜ có trong `BE/.env.example`, kéo
+theo không có trong `BE/.env`, nên giá trị an toàn chỉ tồn tại ở `.env` gốc — file ưu tiên
+THẤP hơn. Đây là toàn bộ cơ chế của "biến an toàn nằm ở file thua" mà vòng 1 phát hiện.
+
+- **Fix:** `BE/.env` và `BE/.env.example` đặt `SLM_MODEL_CHAT=qwen2.5:7b-instruct` và
+  `SLM_MODEL=qwen2.5:7b-instruct` (hết lặp key). Cả hai file example thêm khối đầu nói rõ
+  **hai hồ sơ, và BE/.env thắng khi trùng khoá**.
+- **Prevention:** khác giá trị giữa hai file KHÔNG mặc nhiên là lỗi. Phân loại theo HỒ SƠ
+  trước; chỉ khoá nào cùng hồ sơ mà lệch mới là lỗi.
+
+### 3. `frontend-design/SKILL.md` có hai bản y hệt (cùng md5)
+
+`.claude/rules/frontend-design/` và `.claude/rules/skills/frontend-design/`. Cả hai được
+nạp vào context mỗi phiên nên trả gấp đôi token cho cùng một nội dung. `README.md` lại ghi
+vị trí chuẩn là `.agents/rules/skills/...` mà thư mục `.agents/` **rỗng**; README cũng
+viện dẫn `CLAUDE.md` (không tồn tại) và `.cursor/rules/project-rules.mdc` (file đó nằm ở
+`.claude/rules/`). Ba nguồn sự thật, không cái nào đúng.
+
+- **Fix:** giữ bản trong `skills/`, xoá bản kia, viết lại README theo bố cục thật.
+
+---
+
+## (ĐÃ SỬA 2026-08-28) Mã chết: 1460 dòng, 0 người gọi
+
+Quét bằng một lượt đọc `git ls-files '*.py'` rồi tìm tên module/hàm không xuất hiện ở file
+nào khác (bỏ `scripts/` và `alembic/versions/` — dương tính giả: entry point và revision id).
+
+| xoá | dòng | ghi chú |
+|---|---|---|
+| `services/mindmap/utils.py` | 1414 | pipeline iterative-prompting CŨ, 40 `def`, 0 importer |
+| `app/clients/provider_factory.py` | 19 | factory 2 hàm, 0 caller |
+| `app/domains/memory/lc_memory_tree.py` | 9 | re-export "cho thống nhất roadmap" |
+| `FE/src/components/ui/Button.jsx` | 18 | 0 import |
+| 9 hàm chết trong file còn sống | ~70 | xem danh sách trong plan vòng 2 |
+| 5 import chết ở `main.py` | 5 | `Callable`, `ask_ai`, `fcntl`, `send_from_directory`, `unicodedata` — đã chết TRƯỚC đợt này |
+| 4 dep FE | — | `@heroicons/react`, `axios`, `react-icons`, `uuid` — 0 hit toàn `src/` |
+
+Hai thứ đáng chú ý hơn phần còn lại:
+
+- `accept_attribute()` có docstring nói "test `test_upload_formats.py` khoá chuỗi này khớp
+  với FE". Test đó CÓ THẬT và vẫn chạy — nhưng nó đọc thẳng `DocumentList.jsx` rồi so với
+  `SUPPORTED_EXTENSIONS`, không hề gọi hàm này. Docstring nói sai về chính người dùng nó.
+- `shared/paths.py` sinh ra để gom đường dẫn về một chỗ, nhưng helper `default_data_dir()`
+  0 caller: ba module (`cache/llm_cache.py:180`, `conversation/store.py:31`,
+  `jobs/jobs_store.py:21`) tự viết lại `Path(os.environ.get("DATA_DIR", str(BE_ROOT)))`
+  tại chỗ. Trừu tượng dựng xong rồi không ai dùng.
+
+**Còn hở, CHƯA sửa:** `validate_vector_index_compatibility()` bị xoá vì 0 caller. Nghĩa là
+**không có chỗ nào kiểm dim của FAISS index lúc load**, dù `.env` cảnh báo "đổi
+EMBEDDING_MODEL_NAME thì PHẢI rebuild index". Đổi model xong query sẽ ném AssertionError
+khó hiểu từ faiss thay vì một câu báo rõ ràng. Có 5+ chỗ `faiss.read_index`, nối guard vào
+chỗ nào là một quyết định riêng, không phải việc của đợt dọn.
+
+---
+
+## (ĐÃ SỬA 2026-08-28) Default model viết cứng 12 chỗ — gom về một hằng
+
+Vòng 1 đếm 7 chỗ. Quét lại kỹ ra **12**: `qwen2.5:14b` x8, `qwen3.5:9b` x3,
+`qwen3.6:35b-a3b` x2 (`memory/tree.py:23` và `main.py:37` — cùng một dòng copy sang nhau,
+và tag 35B **chưa bao giờ được pull về máy** nên gọi vào là 404, không phải chậm).
+
+- **Fix:** `shared/config.DEFAULT_LOCAL_MODEL = "qwen2.5:7b-instruct"`, mọi chỗ tham chiếu
+  hằng đó. Xác minh: bỏ hết env thì `chat/summary/mindmap/quiz` và memory tree đều ra
+  `qwen2.5:7b-instruct`.
+- **Regression:** `tests/test_default_model_khong_hardcode.py` — quét mã (bỏ dòng comment)
+  tìm ba tên model nặng; `test_mindmap_modelcfg.py` đổi từ so chuỗi cứng sang so hằng.
+- **Vì sao cần test chứ không phải comment:** `main.py:1255` ĐÃ có comment "một nguồn sự
+  thật `_model_map` — hết stale default kiểu qwen3.5:9b hardcode". Comment không chặn được
+  lần tái phát nào.
+- **Miễn trừ có chủ ý:** `vision/transcribe.py:27` giữ `DEFAULT_MODEL="qwen3.5:9b"` — tác vụ
+  đọc ảnh cần model VL riêng. **Nhưng máy này chưa pull model VL nào** (`ollama /api/tags`:
+  chỉ qwen2.5:7b-instruct, qwen3.5:9b, qwen2.5:14b, gemma2:2b, gemma4:e4b) và qwen3.5 không
+  phải model thị giác — chức năng ảnh gần như chắc chắn đang hỏng. Chưa sửa vì không biết
+  model VL nào là ý định.
+
+---
+
+## (ĐÃ SỬA 2026-08-28) `/api/jobs/<id>/cancel` hứa suông với 3 loại job
+
+Route nhận MỌI `job_id` và luôn trả `cancel_requested: true`. Nhưng
+`grep -rn is_cancel_requested BE/app BE/services` chỉ trúng mindmap, summary, quiz,
+study map. `ingest`, `query`, `short_answer_grading` không đọc cờ ở đâu cả.
+
+Đo thật (tạo job running rồi `request_cancel`):
+
+```
+ingest                 status=running    cancel_requested=True
+short_answer_grading   status=running    cancel_requested=True
+query                  status=running    cancel_requested=True
+summary                status=running    cancel_requested=True   <- chỉ cái này có ai ack
+```
+
+`sweep_stuck_jobs` không cứu được: nó chỉ đụng job ngừng heartbeat quá
+`JOB_STUCK_AFTER_SECONDS`, mà job đang chạy vẫn `update_job` đều.
+
+- **Chưa nổ vì:** FE chỉ gọi `cancelJob` từ hook `useStudyJob`, và hook đó chỉ dùng ở
+  QuizSetup / ReviewGuide / StudyMapView — cả ba đều là loại CÓ ack. `QuizTaking` nộp bài
+  xong không theo dõi job chấm. Nối nút huỷ cho ingest là kẹt "Đang huỷ…" ngay.
+- **Fix:** KHÔNG dựng đường huỷ mới cho ingest (chưa ai gọi = việc suy đoán). Sửa chỗ nói
+  dối: route trả **409** cho `job_type` không nằm trong `_CANCELLABLE_JOB_TYPES`, và
+  **không bật cờ**. Bật cờ rồi bỏ đó chính là cách sinh ra "Đang huỷ…" kẹt.
+- **Regression:** `tests/test_job_cancel_contract.py` (8 test, parametrize cả hai phía).
+- **Prevention:** thêm `job_type` vào `_CANCELLABLE_JOB_TYPES` CHỈ SAU KHI executor của nó
+  thật sự gọi `is_cancel_requested`.
+
+---
+
+## (ĐÃ SỬA 2026-08-28) Nuốt lỗi im lặng: 81 chỗ, chỉ 3 chỗ đáng sửa
+
+`grep -rn -A1 "except Exception" | grep -c "pass$"` ra 81 (40 trong `main.py`). Phân loại
+theo NỘI DUNG khối `try` thay vì sửa đồng loạt:
+
+| nhóm | số chỗ | xử lý |
+|---|---|---|
+| import động (đường dự phòng thật) | 24 | giữ nguyên |
+| log / telemetry / cache | 5 | giữ nguyên |
+| có ghi DB/file trong khối | 12 | soi từng chỗ |
+| còn lại | 36 | giữ nguyên |
+
+Trong 12 chỗ "có ghi", chỉ 3 chỗ là vấn đề:
+
+1. **`mindmap_graph._set_job` và `summary_graph._set_job`** — MỌI trạng thái của hai graph
+   đi qua đây, kể cả `status="done"` kèm `result`. Ghi hỏng thì job không bao giờ tới done,
+   FE poll tới hết TTL, không log nào giải thích. Đúng lớp lỗi known-issues 2026-07-06.
+   **Fix:** in ra `set_job_failed job_id=... keys=... err=...`, KHÔNG ném (ném ở đây làm
+   hỏng cả pipeline vì một lần ghi SQLite bị khoá).
+2. **`store.py:469`** — `emb_dim` giữ 0 rồi ghi thẳng vào `__meta__`. Đọc lại không phân
+   biệt được "chưa đo" với "model 0 chiều". **Fix:** in cảnh báo.
+
+Chỗ thứ ba (`store.py:143`, `_save_meta` lúc migrate `__meta__`) fail-open là **đúng** —
+dict trong bộ nhớ đã có `__meta__`, lần load sau thử lại, không mất dữ liệu. Đã thêm
+comment `ponytail:` nói rõ để lần sau không ai "sửa" nó.
+
+**Prevention:** đừng sửa gộp cả 81 chỗ. Fail-open quanh log/cache/import là thiết kế đúng;
+sửa mù là cách nhanh nhất tạo sự cố tiếp theo.
+
+## (ĐÃ SỬA 2026-08-28) Memory tree — bản sao THỨ BA của lỗi song song không kẹp theo cổng LLM
+
+Tìm ra khi soạn kế hoạch audit toàn dự án, quét theo LỚP LỖI chứ không theo thư mục.
+Sau `mindmap_factory._enrich_parallel` (2026-08-26) và `summary_factory._parallel`
+(2026-08-27), chỗ thứ ba là `BE/app/domains/memory/tree.py:481`:
+
+```python
+max_workers = min(4, int(os.environ.get("MAX_SUMMARIZE_WORKERS", "3")))
+with concurrent.futures.ThreadPoolExecutor(max_workers=max_workers) as executor:
+    for result in executor.map(_summarize_section, section_raw_data):
+```
+
+`_summarize_section` gọi `_llm_summarize_for_memory`, tức 3 lời gọi LLM song song đâm vào
+`MAX_CONCURRENT_LLM_CALLS=1`. Hai luồng sau xếp hàng, chờ quá
+`LLM_QUEUE_WAIT_TIMEOUT_SECONDS=180` thì ném `LLM busy (in-process): all 1 slots in use`.
+
+- **Root cause:** giống hệt hai lần trước — số worker đoán từ một biến env riêng thay vì
+  hỏi tầng đang giới hạn thật sự (cổng LLM in-process).
+- **Vì sao NẶNG hơn hai lần trước:** `executor.map` ném lại lỗi lúc duyệt kết quả, không
+  bắt riêng từng worker. `ingest_graph.BuildMemoryTree` bắt exception rồi đánh dấu CẢ tài
+  liệu `memory_tree_failed` + `memory_query: False`, và để lại cây dở dang
+  `status="building"` trong `memory_trees.json`. Summary chỉ mất một mục; đây mất cả cây.
+- **Tái hiện rẻ:** hạ `LLM_QUEUE_WAIT_TIMEOUT_SECONDS` xuống 5 — 2/3 worker chết trong 40
+  giây thay vì phải chờ 180s. Cùng mẹo đã dùng cho summary.
+- **Fix:** hàm public `so_worker_tom_tat()` kẹp `min(4, MAX_SUMMARIZE_WORKERS, inproc_slots())`,
+  sàn 1. Public để test gọi thẳng, không phải dựng cả pipeline ingest.
+- **Hệ quả chấp nhận:** cổng đang là 1 slot nên cây ký ức giờ dựng TUẦN TỰ — chậm hơn,
+  nhưng trước đó không phải nhanh hơn mà là hỏng.
+- **Regression:** `BE/tests/test_memory_tree_parallel.py` (4 test: kẹp theo cổng, tôn trọng
+  cổng rộng, giữ trần cứng 4, sàn 1).
+- **Prevention:** mọi `max_workers=` mới trong `BE/app`, `BE/services`, `BE/shared` mà hàm
+  worker có gọi `ask_ai` PHẢI lấy trần từ `llm_factory.inproc_slots()`. Quét bằng
+  `grep -rn "max_workers=" BE/app BE/services BE/shared --include=*.py | grep -v test`.
+
 ## (ĐÃ SỬA 2026-08-28) Quiz / attempt / progress cũng vỡ ở chế độ mở — cùng bẫy `str(None)`
 
 Phần còn lại của mục Study Map ngay dưới. Quét cả `BE/app` tìm `str(user_id)` rồi GỌI THẬT

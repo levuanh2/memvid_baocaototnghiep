@@ -12,6 +12,7 @@ import numpy as np
 from app.clients.llm_factory import ask_ai, get_embedding_model
 from app.domains.vectorstore.store import MODEL_NAME
 from app.domains.vectorstore.embedding_utils import normalize_embeddings_array, safe_stack_vectors
+from shared.config import DEFAULT_LOCAL_MODEL
 from shared.source_id import canonical_source_stem
 try:
     from shared.env_loader import load_project_env
@@ -20,7 +21,7 @@ except Exception:
     pass
 
 # Chỉ dùng cho local Ollama (Gemini sẽ bỏ qua model).
-SLM_MODEL = os.environ.get("SLM_MODEL_CHAT", os.environ.get("SLM_MODEL", "qwen3.6:35b-a3b"))
+SLM_MODEL = os.environ.get("SLM_MODEL_CHAT", os.environ.get("SLM_MODEL", DEFAULT_LOCAL_MODEL))
 SLM_MODEL_INTENT = os.environ.get("SLM_MODEL_INTENT", "gemma2:2b")
 
 
@@ -146,6 +147,28 @@ def _classify_intent_type(text: str, title: str = "") -> str:
     except Exception as exc:
         print(f"⚠️ Lỗi classify intent_type: {exc}")
         return "argument"  # fallback
+
+
+def so_worker_tom_tat() -> int:
+    """Số section tóm tắt song song — KHÔNG bao giờ vượt số slot của cổng LLM.
+
+    `MAX_SUMMARIZE_WORKERS` mặc định 3, nhưng `_llm_summarize_for_memory` gọi `ask_ai`,
+    mà `ask_ai` giành slot ở cổng in-process `MAX_CONCURRENT_LLM_CALLS` (mặc định 1 trên
+    máy này). Worker thứ hai trở đi không chạy nhanh hơn — nó ĐỢI, và chờ quá
+    `LLM_QUEUE_WAIT_TIMEOUT_SECONDS` (180s) thì ném "LLM busy (in-process)".
+    Đo thật với hạn chờ hạ xuống 5s: 2/3 worker chết.
+
+    Hậu quả ở đây NẶNG hơn summary. `executor.map` ném lại lỗi lúc duyệt kết quả, không
+    bắt riêng từng worker; `ingest_graph.BuildMemoryTree` bắt exception rồi đánh dấu CẢ
+    tài liệu `memory_tree_failed` kèm `memory_query: False`, và để lại một cây dở dang
+    `status="building"` trong `memory_trees.json`. Summary chỉ mất một mục, đây mất cả cây.
+
+    Lấy trần từ chính cổng thay vì bắt hai biến env khớp tay — y hệt
+    `mindmap_factory._enrich_parallel` và `summary_factory._parallel`.
+    """
+    from app.clients.llm_factory import inproc_slots
+    muon = min(4, int(os.environ.get("MAX_SUMMARIZE_WORKERS", "3") or 3))
+    return max(1, min(muon, inproc_slots()))
 
 
 def _llm_summarize_for_memory(text: str, level: str) -> str:
@@ -477,8 +500,7 @@ def build_memory_tree_for_sources(source_stems: List[str]) -> Dict[str, Any]:
             sec_summary = _llm_summarize_for_memory(sec_text, level="section")
             return (idx, spec, sec_chunks, sec_summary, sec_title)
 
-        # Số lượng worker vừa phải để tránh quá tải Ollama local hoặc chạm limit API
-        max_workers = min(4, int(os.environ.get("MAX_SUMMARIZE_WORKERS", "3")))
+        max_workers = so_worker_tom_tat()
         with concurrent.futures.ThreadPoolExecutor(max_workers=max_workers) as executor:
             for result in executor.map(_summarize_section, section_raw_data):
                 section_data.append(result)

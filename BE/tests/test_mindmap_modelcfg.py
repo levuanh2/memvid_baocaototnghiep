@@ -1,4 +1,5 @@
 from services.mindmap.pipeline.modelcfg import resolve_mindmap_model
+from shared.config import DEFAULT_LOCAL_MODEL
 
 
 def test_mindmap_model_env_wins(monkeypatch):
@@ -16,7 +17,9 @@ def test_mindmap_model_falls_back_to_slm_model(monkeypatch):
 def test_mindmap_model_falls_back_to_default(monkeypatch):
     monkeypatch.delenv("MINDMAP_MODEL", raising=False)
     monkeypatch.delenv("SLM_MODEL", raising=False)
-    assert resolve_mindmap_model() == "qwen2.5:14b"
+    # So với HẰNG, không với chuỗi cứng: default từng bị viết cứng ở 12 chỗ và
+    # quay lại 2 lần. Test khoá chuỗi cứng là test giúp nó quay lại lần thứ ba.
+    assert resolve_mindmap_model() == DEFAULT_LOCAL_MODEL
 
 
 # --- Trần song song của enrich phải bám cổng LLM, không bám ước đoán ---

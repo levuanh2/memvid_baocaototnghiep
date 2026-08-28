@@ -1,14 +1,12 @@
 """
 Embedding utilities - shared helpers cho embedding/vector operations.
-Dung chung cho vector_store.py, memory_tree.py, mindmap_generation_worker.py, retrieval/*.py
+Dung chung cho vectorstore/store.py, memory/tree.py, retrieval/*.py.
+Tung co validate_vector_index_compatibility() o day, xoa 2026-08-28: 0 caller.
 """
 from __future__ import annotations
 
 import logging
-from pathlib import Path
-from typing import Any, List, Optional
 
-import faiss
 import numpy as np
 
 logger = logging.getLogger(__name__)
@@ -126,25 +124,3 @@ def get_embedding_dim_safe(
         return default_dim
 
 
-def validate_vector_index_compatibility(index_path, expected_dim):
-    """
-    Kiểm tra FAISS index có tương thích với expected_dim không.
-    - Nếu index không tồn tại: trả về True (không cần rebuild)
-    - Nếu index.d == expected_dim: trả về True
-    - Nếu index.d != expected_dim: trả về False
-    """
-    path = Path(index_path)
-    if not path.exists():
-        return True
-
-    try:
-        idx = faiss.read_index(str(path))
-        dim_match = idx.d == expected_dim
-        logger.info(
-            "[embedding_utils] index %s: index.d=%d expected=%d match=%s",
-            path.name, idx.d, expected_dim, dim_match
-        )
-        return dim_match
-    except Exception as e:
-        logger.warning("[embedding_utils] Failed to read index %s: %s", path, e)
-        return False

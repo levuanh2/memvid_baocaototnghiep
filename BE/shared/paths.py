@@ -1,23 +1,20 @@
-"""
-Phân giải đường dẫn gốc một cách ỔN ĐỊNH theo vị trí file.
+"""Neo BE_ROOT theo vị trí file, không theo thư mục làm việc.
 
-Vấn đề: nhiều module tính DATA_DIR mặc định bằng Path(__file__).parent. Khi tái cấu
-trúc thư mục (file chui sâu vào app/domains/...), __file__.parent đổi -> data path
-mặc định lệch. paths.py neo mọi thứ vào BE_ROOT (thư mục chứa shared/, app/, services/)
-nên mặc định không đổi dù file nằm ở đâu.
+Vấn đề gốc: nhiều module tính đường dẫn mặc định bằng `Path(__file__).parent`. File chui
+sâu vào `app/domains/...` là mặc định lệch. `BE_ROOT` luôn đúng vì file này luôn nằm ở
+`BE/shared/paths.py`.
 
-BE_ROOT = thư mục BE (vì file này luôn ở BE/shared/paths.py).
+Từng có `default_data_dir()` ở đây, xoá 2026-08-28: 0 caller. Ba module tự viết lại
+`Path(os.environ.get("DATA_DIR", str(BE_ROOT)))` tại chỗ (`cache/llm_cache.py:180`,
+`conversation/store.py:31`, `jobs/jobs_store.py:21`) thay vì gọi helper. Muốn gom về một
+chỗ thì phải sửa cả ba, không phải để lại một hàm không ai gọi.
 """
 
 from __future__ import annotations
 
-import os
 from pathlib import Path
 
 # shared/paths.py -> parent = BE/shared, parent.parent = BE
 BE_ROOT = Path(__file__).resolve().parent.parent
 
 
-def default_data_dir() -> Path:
-    """DATA_DIR: lấy từ env nếu có, mặc định = BE_ROOT (giữ nguyên hành vi cũ)."""
-    return Path(os.environ.get("DATA_DIR", str(BE_ROOT)))

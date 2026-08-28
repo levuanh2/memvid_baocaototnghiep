@@ -51,10 +51,3 @@ def is_supported(filename: str) -> bool:
     return os.path.splitext(filename or "")[1].lower() in SUPPORTED_EXTENSIONS
 
 
-def accept_attribute() -> str:
-    """Chuỗi cho `<input type="file" accept=...>` của FE, sắp xếp ổn định.
-
-    Test `BE/tests/test_upload_formats.py` khoá chuỗi này khớp với FE để ba
-    danh sách không lệch nhau lần nữa.
-    """
-    return ",".join(sorted(SUPPORTED_EXTENSIONS))
