@@ -52,6 +52,18 @@ viện dẫn `CLAUDE.md` (không tồn tại) và `.cursor/rules/project-rules.m
 
 - **Fix:** giữ bản trong `skills/`, xoá bản kia, viết lại README theo bố cục thật.
 
+**Đính chính 2026-08-28 (kèm):** README cũ ghi 7 file `.mdc` trùng tên giữa `.claude/rules/`
+và `.cursor/rules/` là "cả 7 đều khác nội dung". SAI — `cmp` báo khác vì **line-ending**:
+`.claude/rules/*.mdc` là CRLF, `.cursor/rules/*.mdc` là LF. So bằng
+`diff --strip-trailing-cr` thì cả 7 cặp ra **0 dòng khác**.
+
+Chúng là bản sao y hệt. Bài học giống hệt lần `BASE_URL` khớp trong `DATABASE_URL`: công cụ
+trả lời đúng câu hỏi mình HỎI, không phải câu hỏi mình NGHĨ. `cmp` so byte, mà byte khác
+không có nghĩa nội dung khác. Chuẩn hoá trước khi so.
+
+Chưa gộp vì mỗi công cụ đọc thư mục riêng của nó — trùng lặp ở đây là do tooling ép, không
+phải do ai đó quên. Cần `.gitattributes` để hai bên hết lệch CRLF/LF.
+
 ---
 
 ## (ĐÃ SỬA 2026-08-28) Mã chết: 1460 dòng, 0 người gọi
@@ -102,10 +114,26 @@ và tag 35B **chưa bao giờ được pull về máy** nên gọi vào là 404,
   thật `_model_map` — hết stale default kiểu qwen3.5:9b hardcode". Comment không chặn được
   lần tái phát nào.
 - **Miễn trừ có chủ ý:** `vision/transcribe.py:27` giữ `DEFAULT_MODEL="qwen3.5:9b"` — tác vụ
-  đọc ảnh cần model VL riêng. **Nhưng máy này chưa pull model VL nào** (`ollama /api/tags`:
-  chỉ qwen2.5:7b-instruct, qwen3.5:9b, qwen2.5:14b, gemma2:2b, gemma4:e4b) và qwen3.5 không
-  phải model thị giác — chức năng ảnh gần như chắc chắn đang hỏng. Chưa sửa vì không biết
-  model VL nào là ý định.
+  đọc ảnh cần model có khả năng thị giác, không dùng chung `DEFAULT_LOCAL_MODEL` (7b-instruct
+  KHÔNG có vision).
+
+  **Đính chính 2026-08-28:** lúc đầu tao kết luận "chức năng ảnh gần như chắc chắn đang
+  hỏng vì máy chưa pull model VL nào". SAI. Hỏi `/api/show` cho biết:
+
+  ```
+  qwen3.5:9b          ['completion', 'vision', 'tools', 'thinking']
+  gemma4:e4b          ['completion', 'vision', 'audio', 'tools', 'thinking']
+  qwen2.5:7b-instruct ['completion', 'tools']          <- không có vision
+  ```
+
+  Default đang dùng ĐÚNG là model có vision, và `is_available()` còn probe `capabilities`
+  rồi fail-closed nên FE ẩn nút ảnh khi không dùng được. Không có lỗi ở đây.
+
+  Bài học: suy ra "không có model VL" từ việc nhìn TÊN model trong `/api/tags` là đoán.
+  `/api/show` trả thẳng `capabilities` — hỏi cái đó, đừng đoán theo tên.
+
+  Còn lại đúng một điều: 6.59 GB trên card 6.14 GiB nên lượt đọc ảnh tràn xuống CPU và
+  chậm. Chậm, không phải hỏng.
 
 ---
 

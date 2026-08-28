@@ -27,7 +27,20 @@ Thêm skill mới thì đặt ở `.claude/rules/skills/<ten-skill>/SKILL.md`.
 `rules/skills/frontend-design/`, cùng md5). Cả hai đều được nạp vào context mỗi phiên nên
 tốn gấp đôi cho cùng một nội dung. Đã giữ lại bản trong `skills/`.
 
-## Chưa làm
+## Về 7 file `.mdc` trùng tên
 
-7 file `.mdc` trùng tên giữa `.claude/rules/` và `.cursor/rules/` đều khác nội dung. Chưa
-biết bản nào mới hơn nên chưa hợp nhất — đối chiếu từng cặp trước khi gộp, đừng xoá bừa.
+`.claude/rules/*.mdc` và `.cursor/rules/*.mdc` là **bản sao y hệt** — chỉ khác line-ending
+(CRLF vs LF), nên `cmp` báo "khác" ở mọi dòng. So sau khi chuẩn hoá thì 0 dòng khác thật:
+
+```bash
+for f in .claude/rules/*.mdc; do
+  b=".cursor/rules/$(basename "$f")"
+  [ -f "$b" ] && diff --strip-trailing-cr "$f" "$b"
+done   # rỗng -> giống hệt nhau
+```
+
+Trùng lặp ở đây do tooling ép: Cursor chỉ đọc `.cursor/rules/`. Chưa gộp. Cần
+`.gitattributes` để hết lệch line-ending.
+
+Không đối xứng: `project-rules.mdc` chỉ có ở `.claude/`, `karpathy-guidelines.mdc` chỉ có
+ở `.cursor/`.
