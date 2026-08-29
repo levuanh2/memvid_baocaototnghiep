@@ -70,6 +70,136 @@ thiếu phần nào"; ingest không có gì tương đương.
 
 ---
 
+## (ĐÃ SỬA 2026-08-30) Bấm "Tạo quiz" 5 lần = 5 job, 3 job chết vì tranh 1 slot LLM
+
+Audit vòng 7 — trace một HÀNH ĐỘNG (bấm một nút) thay vì một FILE. Người dùng báo:
+
+```
+Tạo quiz thất bại
+Gọi model thất bại: LLM busy (in-process): all 1 slots in use, waited 180.0s
+```
+
+Log server nói rõ hơn — **5 POST trong 2 giây**:
+
+```
+00:24:40 POST /api/quizzes/generate 202  x3
+00:24:41 POST /api/quizzes/generate 202  x2
+quiz_job_done   f97dc5d6 kept=3 rejected=2
+quiz_job_failed 43e873d3 / 8ebf370b / 488b300d  err=... LLM busy: all 1 slots in use
+```
+
+**Một quiz ĐÃ RA XONG** (f97dc5d6) nhưng giao diện bám vào một job khác nên báo thất bại.
+
+- **Q1 — FE không chặn bấm lặp.** `QuizSetup.onSubmit` không có cờ đang-gửi, nút submit
+  không bao giờ `disabled`. Giữa lúc bấm và lúc 202 về, form **không đổi gì** — bấm thêm
+  là phản xạ đúng. `job.jobId` (thứ thay form bằng `JobProgress`) chỉ được đặt SAU `await`.
+  **Fix:** cờ `submitting` đặt TRƯỚC `await`, nút `disabled` + đổi nhãn "Đang gửi yêu cầu…".
+  Mượn đúng khuôn `submitting` đã có sẵn ở `QuizTaking.jsx`.
+- **Q2 — BE nhận job trùng vô điều kiện.** Cờ ở FE **không đủ**: F5, hai tab, app khác đều
+  đi vòng qua nó. **Fix:** `_quiz_job_giu_cho()` — dedupe theo `(user_id, document_id,
+  config)`; job cũ còn sống (`pending|running|processing`, cùng từ vựng với
+  `list_active_jobs`) thì trả lại đúng `job_id` đó + `deduped: true`, không tạo job mới.
+  **Kiểm-rồi-giữ nằm TRONG một lần khoá** — tách hai bước thì hai request cùng lúc đều
+  thấy trống, đúng lỗi cần chặn. Test dùng `threading.Barrier(2)` khoá luật này.
+  Giữ chỗ TRƯỚC khi enqueue (enqueue hỏng thì `sweep_stuck_jobs` dọn); giữ chỗ SAU thì
+  cửa sổ đua quay lại.
+  **Trần đã biết:** dict trong tiến trình, đúng cho `WEB_CONCURRENCY=1` mà compose đang ép.
+- **Q4 — xin 5 câu, nhận 3, không ai nói gì.** `result` của job **có** `rejected_count`
+  (`main.py:2590`) nhưng FE chưa bao giờ đọc khoá đó. Cùng họ với P2 vòng 6: chạy một
+  phần thì phải nói ra là phần nào. **Fix:** `QuizSetup` gửi `{asked, kept, rejected}` qua
+  router state, `QuizTaking` hiện một dòng khi `rejected > 0`.
+- **Regression:** `tests/test_quiz_job_dedupe.py` — 6 test, gồm ca đua hai luồng và ca
+  `get_job` trả `None` (job bị dọn) không được biến thành cửa khoá vĩnh viễn.
+
+**Không đụng `MAX_CONCURRENT_LLM_CALLS=1`.** Một slot là ĐÚNG cho CPU không GPU: hai lời
+gọi song song trên cùng CPU không nhanh hơn, chỉ chia đôi tốc độ và gấp đôi bộ nhớ.
+
+- **Q3 — ba con số của cửa sổ ngữ cảnh không khớp nhau.** `QUIZ_CONTEXT_CHARS=18000`
+  (~6500 token tiếng Việt) nhồi vào `num_ctx=4096`, trong khi `num_predict=8192` **lớn hơn
+  cả cửa sổ**. Ollama không báo lỗi — nó **cắt bớt prompt trong im lặng**, nên quiz lâu nay
+  ra đề từ một phần ngữ liệu mà không ai biết. `build_context` cắt theo KÝ TỰ, không biết
+  gì về cửa sổ token của model đang chạy.
+  **Fix:** cho ba số khớp nhau — `QUIZ_CONTEXT_CHARS=12000` (~4400 token) +
+  chỉ dẫn (~300) + `QUIZ_LLM_MAX_OUT=3000` = ~7700 < `QUIZ_LLM_CTX=8192` (trần của
+  gemma2:2b; qwen2.5 chịu 32k). Truyền `num_ctx`/`num_predict` xuống ĐÚNG lời gọi quiz —
+  đặt hằng mà quên truyền thì Ollama vẫn dùng `LLM_CTX_SIZE=4096` toàn cục.
+  `build_context` in `quiz_context_cat_bot giu=N bo=M` khi bỏ đoạn.
+  **Test khoá BẤT ĐẲNG THỨC giữa ba số, không khoá từng số** — đổi một cái mà quên hai cái
+  kia thì đỏ, còn chỉnh cả ba cho khớp thì vẫn xanh.
+- **Q5 — hàng đợi bận và model không kịp nói cùng một câu.** Cả hai tới người dùng dưới
+  dạng `Gọi model thất bại: ...`, trong khi chúng đòi hai hành động ngược nhau: "chờ rồi
+  thử lại" và "máy không kham nổi, giảm tải hoặc đổi model".
+  **Fix:** bảng `_LOI_AI_DE_HIEU` trong `_job_error_text` — bộ định dạng lỗi **dùng chung**
+  của mọi job, nên sửa một chỗ thì mindmap/summary/study-map được luôn. Nguyên văn kỹ thuật
+  giữ trong ngoặc `(chi tiết: ...)`, không mất gì cho người sửa lỗi.
+- **Regression (Q3+Q5):** `tests/test_quiz_ngan_sach_va_loi.py` — 9 test.
+
+---
+
+## (ĐÃ SỬA 2026-08-29) Tạo quiz chết: CPU 3.66 tok/s không lọt 180s, gemini 401 vì token lạ
+
+Hai nguyên nhân ĐỘC LẬP, không cái nào là lỗi logic:
+
+```
+[llm] provider 'ollama' thất bại (feature=quiz): TimeoutError: LLM call timed out after 180s
+[llm] provider 'gemini' thất bại (feature=quiz): Unauthenticated: 401 ... ACCESS_TOKEN_TYPE_UNSUPPORTED
+```
+
+**1. Ollama trên CPU không thể xong trong 180s.** Đo thật (`/api/generate`, qwen2.5:7b-instruct Q4):
+
+```
+eval_count 260  eval_duration 71.1s  load_duration 11.1s   ->  3.66 token/giây
+```
+
+Quiz mặc định `question_count=10`; JSON tiếng Việt kèm 4 lựa chọn + giải thích ≈ 1500–2500
+token đầu ra ≈ **7–11 phút**. `QUIZ_LLM_TIMEOUT_SEC` mặc định 180s, hụt ~4 lần.
+`MAX_ATTEMPTS=2` nên hỏng hai lần rồi mới báo. Máy không GPU (`TORCH_DEVICE: cpu`), model
+còn bị ollama unload khi rảnh (`/api/ps` rỗng) nên cộng thêm 11s nạp lại mỗi lần.
+**Fix (đã chọn):** `QUIZ_MODEL=gemma2:2b` — đo được **30.28 token/giây**, nhanh hơn 8.3
+lần, 10 câu còn ~1 phút. Knob `QUIZ_MODEL` đã có sẵn (`llm_factory._model_map:158`), không
+phải viết thêm gì. Kèm `QUIZ_LLM_TIMEOUT_SEC=900` làm đệm. Không đổi mặc định trong mã —
+180s và 7b đều đúng cho máy có GPU. Đánh đổi: chất lượng ra đề tiếng Việt của 2b kém hơn.
+
+**Còn treo, CHƯA sửa — `num_ctx` nhỏ hơn ngữ liệu quiz gửi vào:**
+
+| | giá trị | ở đâu |
+|---|---|---|
+| cửa sổ ngữ cảnh | `num_ctx=4096` | `LLM_CTX_SIZE`, `llm_factory.py:223` |
+| số token sinh tối đa | `num_predict=8192` | `LLM_MAX_TOKENS`, `llm_factory.py:46` |
+| ngữ liệu quiz nhồi vào | 18000 **ký tự** ≈ 5000–7000 token | `QUIZ_CONTEXT_CHARS`, `generator.py:19` |
+
+`num_predict` **lớn gấp đôi** `num_ctx` là vô nghĩa với Ollama — cửa sổ chứa cả prompt lẫn
+phần sinh ra. Và ngữ liệu một mình đã vượt cửa sổ, nên Ollama **cắt bớt prompt trong im
+lặng**: quiz lâu nay ra đề từ một phần ngữ liệu chứ không phải toàn bộ, không có cảnh báo
+nào. `build_context` có cắt theo `max_chars` nhưng cắt theo KÝ TỰ, không biết gì về cửa sổ
+token của model đang dùng. Chưa sửa vì phải chọn: nâng `LLM_CTX_SIZE` (chậm hơn, và
+gemma2:2b trần 8192) hay hạ `QUIZ_CONTEXT_CHARS` (ít ngữ liệu hơn, nhưng thật thà).
+
+**2. Gemini 401 vì một biến môi trường KHÔNG PHẢI của dự án.** `BE/.env:10` là
+`GEMINI_API_KEY=` **rỗng**, nhưng Windows User environment có
+`GEMINI_API_KEY=AQ.Ab8RN...` (53 ký tự). `AQ.` + 53 ký tự là **access token OAuth** của
+Google (Gemini CLI / Antigravity đặt lúc đăng nhập), không phải API key AI Studio
+(`AIza...`, 39 ký tự) — đúng thứ `ACCESS_TOKEN_TYPE_UNSUPPORTED` đang nói. Token loại đó
+sống ~1 giờ.
+
+`load_project_env(override=False)` -> **os.environ thắng `.env`**, nên đặt gì trong
+`BE/.env` cũng vô ích. Provider gemini vào `PROVIDERS`, và mỗi lần fallback langchain
+retry 401 năm lần (2+4+8+16+32 = **62 giây**) cho một lỗi không bao giờ retry được.
+**Fix:** gỡ biến ở tầng User Windows, hoặc chạy BE với biến đó bỏ trống. Không sửa mã.
+
+**3. Nhặt được trên đường: `AI_TIMEOUT_SEC` khai HAI lần** trong `BE/.env.example` (dòng
+83 = 600, dòng 349 = 180) và trong `.env` copy từ nó. dotenv lấy dòng SAU -> 600 chưa bao
+giờ có hiệu lực. Ai sửa dòng 600 sẽ thấy "sửa xong không có gì đổi".
+**Regression:** `tests/test_env_example_khong_trung_khoa.py` — quét trùng khoá cả hai file
+mẫu. `.env` thật bị gitignore nên không test được; chặn ở file mẫu là chặn tại nguồn sao chép.
+
+**4. Docstring `load_project_env` ghi NGƯỢC thứ tự ưu tiên**: "BE/.env > ../.env >
+os.environ" trong khi `override=False` nghĩa là os.environ thắng. Chính câu đó làm mất
+20 phút đi tìm "vì sao `.env` rỗng mà vẫn có key". Sửa docstring, **không** sửa hành vi:
+docker-compose truyền cấu hình bằng biến môi trường thật và phải thắng `.env` trong image.
+
+---
+
 ## (ĐÃ SỬA 2026-08-29) `_safe_save_path` chỉ KIỂM tên, không giành tên
 
 Audit vòng 6 — P4. Vòng trước ghi "chưa tái hiện được ca đua, chưa vá". Tái hiện được, và

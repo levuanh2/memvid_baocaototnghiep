@@ -16,7 +16,19 @@ from typing import Any, Callable, Dict, List, Optional, Sequence, Tuple
 
 from services.mindmap.jsonrepair import repair_json_text
 
-MAX_CONTEXT_CHARS = int(os.getenv("QUIZ_CONTEXT_CHARS", "18000"))
+# Ba con số này phải khớp nhau, và trước audit vòng 7 thì không: ngữ liệu 18000 ký tự
+# (~6000-7000 token tiếng Việt) nhồi vào cửa sổ `num_ctx=4096`, còn `num_predict` mặc định
+# là 8192 — LỚN HƠN cả cửa sổ. Ollama không báo lỗi, nó CẮT BỚT PROMPT trong im lặng, nên
+# quiz lâu nay ra đề từ một phần ngữ liệu mà không ai biết.
+#
+# Ngân sách hiện tại (tiếng Việt ~2.7 ký tự/token với tokenizer của qwen/gemma):
+#   12000 ký tự ngữ liệu  ~4400 token
+#   + chỉ dẫn hệ thống     ~300 token
+#   + phần sinh ra        3000 token
+#   = ~7700  <  8192 (num_ctx)      gemma2:2b trần đúng 8192; qwen2.5 chịu được 32k
+MAX_CONTEXT_CHARS = int(os.getenv("QUIZ_CONTEXT_CHARS", "12000"))
+QUIZ_NUM_CTX = int(os.getenv("QUIZ_LLM_CTX", "8192"))
+QUIZ_NUM_PREDICT = int(os.getenv("QUIZ_LLM_MAX_OUT", "3000"))
 MAX_ATTEMPTS = 2
 
 _SYSTEM = """Bạn là trợ lý ra đề kiểm tra chẩn đoán bằng TIẾNG VIỆT.
@@ -62,6 +74,10 @@ def build_context(chunks: Sequence[Dict[str, Any]], *,
         heading = (c.get("heading") or "").strip()
         block = f"[{label}]" + (f" ({heading})" if heading else "") + f"\n{text}"
         if used + len(block) > max_chars and lines:
+            # Bỏ bớt đoạn là đúng, nhưng bỏ trong IM LẶNG thì không: đề ra từ 3/20 đoạn
+            # trông y hệt đề ra từ cả tài liệu. In ra để còn biết mà chỉnh ngân sách.
+            print(f"quiz_context_cat_bot giu={len(lines)} bo={len(chunks) - i} "
+                  f"max_chars={max_chars}", flush=True)
             break
         lines.append(block)
         ref_map[label] = c["chunk_id"]
@@ -105,7 +121,9 @@ def generate_questions(
         system = _SYSTEM if attempt == 1 else _SYSTEM + _RETRY_HINT
         try:
             raw = ask(prompt, system_prompt=system, feature="quiz",
-                      options={"temperature": 0.2}, timeout=timeout_sec)
+                      options={"temperature": 0.2, "num_ctx": QUIZ_NUM_CTX,
+                               "num_predict": QUIZ_NUM_PREDICT},
+                      timeout=timeout_sec)
         except Exception as exc:
             return [], f"Gọi model thất bại: {exc}", attempt
         last_raw = str(raw or "")

@@ -1,5 +1,78 @@
 # Lessons Learned
 
+## 2026-08-30 - Audit vòng 7: trace một HÀNH ĐỘNG, và đọc số lần lặp trong log
+
+- **Cùng một thông báo lỗi, ba lần là ba nguyên nhân khác nhau.** "Tạo quiz thất bại" lần
+  một là timeout CPU, lần hai là gemini 401, lần ba là tranh slot vì 5 job trùng. Nếu vòng
+  ba mà vẫn sửa theo phản xạ của vòng một (nâng timeout) thì hỏng thêm một vòng nữa.
+  **Đọc lại log từ đầu mỗi lần**, đừng tin rằng triệu chứng giống nghĩa là nguyên nhân giống.
+
+- **Đếm số dòng lặp trong log trước khi phân tích nội dung dòng.** Năm `POST` trong hai
+  giây nói toàn bộ câu chuyện, và nó nằm ở CHỖ KHÁC với dòng lỗi. Dòng lỗi nói "hết slot";
+  chỉ có số lần lặp mới nói "vì có năm job cho một lần muốn".
+
+- **Một job XONG mà giao diện vẫn báo thất bại là lỗi nặng hơn cả job hỏng.** `quiz_job_done
+  kept=3` nằm ngay giữa ba dòng `quiz_job_failed`. Người dùng mất niềm tin vào thứ thực ra
+  đã chạy đúng. Khi một hành động sinh nhiều job, phải hỏi: **giao diện bám vào job nào?**
+
+- **Cờ chặn ở client không bao giờ đủ.** F5, hai tab, app khác, người dùng dùng curl — tất
+  cả đi vòng qua nó. Cờ FE sửa TRẢI NGHIỆM (nút hết bấm được), dedupe BE sửa LỖI (không
+  còn job trùng). Làm cả hai, và đừng nhầm cái nào là bản vá thật.
+
+- **"Kiểm rồi làm" là cùng một bẫy với `_safe_save_path` của vòng 6, ở một tầng khác.** Ở
+  đó là `os.path.exists()` rồi `save()`; ở đây là "tra dict" rồi "ghi dict". Cả hai đều
+  phải nằm trong MỘT thao tác nguyên tử. Cùng một test dựng bằng `threading.Barrier(2)`
+  bắt được cả hai. **Thấy hai bước kiểm-rồi-làm trên tài nguyên dùng chung: dừng lại.**
+
+- **Khi ba tham số phải khớp nhau, hãy test QUAN HỆ giữa chúng, đừng test từng cái.**
+  `QUIZ_CONTEXT_CHARS`, `num_ctx`, `num_predict`: không con số nào tự nó sai, cái sai là
+  chúng rời nhau. Test khoá bất đẳng thức `ngữ_liệu + chỉ_dẫn + sinh_ra < cửa_sổ` cho phép
+  chỉnh cả ba mà vẫn xanh, và đỏ đúng lúc ai đó chỉ chỉnh một. Khoá từng số thì test cản
+  người sửa đúng và vẫn để lọt người sửa sai.
+
+- **Đặt hằng ở module KHÔNG có nghĩa là nó tới được nơi cần.** `QUIZ_NUM_CTX` nằm trong
+  `generator.py` là vô nghĩa nếu không truyền vào `options` của lời gọi — Ollama vẫn dùng
+  `LLM_CTX_SIZE=4096` toàn cục. Cùng họ với cờ `structured_query` bị LangGraph loại giữa
+  hai node ở vòng 6: **đi theo giá trị tới tận nơi tiêu thụ, đừng dừng ở chỗ khai báo.**
+
+- **Sửa ở bộ định dạng DÙNG CHUNG rẻ hơn sửa ở từng feature.** Phân loại lỗi AI đặt trong
+  `_job_error_text` (mọi job đi qua) nên mindmap/summary/study-map được luôn, diff nhỏ hơn
+  hẳn so với vá ở mỗi chỗ bắt lỗi. Đúng phản xạ "một guard ở hàm chung, không phải một
+  guard ở mỗi caller".
+
+- **`get_job` trả `None` phải mở khoá, không được khoá.** Job bị dọn khỏi store mà dedupe
+  vẫn coi là "đang chạy" thì người dùng không bao giờ tạo được quiz nữa cho tới khi restart.
+  Cùng họ với `None` vs `0`: **thiếu dữ liệu không được mặc định thành "cấm".**
+
+## 2026-08-29 - Quiz chết vì hai lý do rời nhau, và cả hai đều ở NGOÀI mã
+
+- **Đo tốc độ trước khi bàn về timeout.** "180s không đủ" là phỏng đoán cho tới khi có
+  `eval_count 260 / eval_duration 71.1s` = 3.66 token/giây. Có con số đó thì mọi thứ khác
+  suy ra được: 10 câu ≈ 2000 token ≈ 9 phút, hụt 4 lần, và 900s là con số có lý do chứ
+  không phải "cho to lên cho chắc". Một lời gọi `/api/generate` mất 80 giây trả lời được
+  câu hỏi mà đọc mã cả buổi không trả lời được.
+
+- **Biến môi trường của MÁY có thể phá cấu hình của DỰ ÁN, và `.env` không cứu được.**
+  `GEMINI_API_KEY` rỗng trong `BE/.env` nhưng Windows User environment có một OAuth token
+  do tool khác đặt. `override=False` nghĩa là os.environ thắng. Khi cấu hình "rõ ràng là
+  đúng" mà hành vi vẫn sai, **in giá trị thật ra khỏi tiến trình** (`os.getenv`, độ dài,
+  vài ký tự đầu) trước khi nghi mã — chỗ này `len=53` và tiền tố `AQ.` nói ngay nó không
+  phải API key (`AIza`, 39 ký tự).
+
+- **Docstring sai còn tốn thời gian hơn không có docstring.** `load_project_env` ghi
+  "BE/.env > ../.env > os.environ" trong khi `override=False` cho kết quả ngược hẳn. Câu
+  đó khiến giả thuyết đúng bị loại sớm. Cùng họ với "route v2 hứa xoá Storage" của vòng 6.
+  **Docstring nói về THỨ TỰ ƯU TIÊN phải đối chiếu với tham số quyết định thứ tự đó.**
+
+- **Retry cho lỗi 401 là 62 giây ném đi.** langchain_google_genai retry 5 lần
+  (2+4+8+16+32) trên `Unauthenticated`. Xác thực sai không bao giờ tự đúng lại. Ghi lại để
+  lần sau chạm tới tầng provider thì phân loại lỗi retry được / không retry được.
+
+- **Khoá trùng trong file `.env` là lỗi im lặng nhất trong họ "file cấu hình nói dối".**
+  `AI_TIMEOUT_SEC` hai dòng, dòng sau thắng, dòng trước không báo gì. Test không quét được
+  `.env` thật (gitignore) nhưng quét được `.env.example` — chặn tại **nguồn sao chép**,
+  vì mọi `.env` trên máy dev đều copy từ đó.
+
 ## 2026-08-29 - Audit vòng 6 (phần sau): "chưa tái hiện được" thường là chưa dựng đúng chỗ
 
 - **"Cửa sổ đua rất hẹp" là một giả định, không phải một phép đo.** Vòng trước hoãn P4 vì

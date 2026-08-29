@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
-import { useNavigate, useParams } from "react-router-dom";
+import { useLocation, useNavigate, useParams } from "react-router-dom";
 import StudyShell from "../../components/study/StudyShell";
 import { Icon } from "../../components/ui/Icon";
 import Spinner from "../../components/ui/Spinner";
@@ -16,6 +16,9 @@ const KEYS = ["A", "B", "C", "D", "E", "F"];
 export default function QuizTaking() {
   const { quizId } = useParams();
   const navigate = useNavigate();
+  // Trang tạo quiz gửi kèm số câu đã xin / giữ / bị loại. Chỉ có ở lần điều hướng ngay
+  // sau khi ra đề; mở lại quiz từ chỗ khác thì không có và cũng không cần.
+  const raDe = useLocation().state;
 
   const [quiz, setQuiz] = useState(null);
   const [attemptId, setAttemptId] = useState(null);
@@ -123,6 +126,16 @@ export default function QuizTaking() {
         </span>
       }
     >
+      {raDe?.rejected > 0 && (
+        <div className="surface-card !py-3 !px-4 mb-4 flex items-start gap-2.5 text-[13px] text-text-secondary">
+          <Icon name="AlertCircle" size={15} className="text-text-muted mt-0.5 shrink-0" />
+          <span>
+            Ra được <strong className="text-text-primary">{raDe.kept}</strong> câu trên{" "}
+            {raDe.asked} câu đã chọn. {raDe.rejected} câu bị loại vì không đạt kiểm chất
+            lượng — thường là do đoạn tài liệu tương ứng quá ngắn để ra đề.
+          </span>
+        </div>
+      )}
       {!current ? null : (
         <>
           <ProgressStrip

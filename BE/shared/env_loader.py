@@ -9,8 +9,21 @@ def load_project_env(*, override: bool = False) -> None:
     Load environment variables from BE/.env (same dir as this file) first,
     then fall back to project root ../.env.
 
-    Priority: BE/.env > ../.env > os.environ (when override=False).
-    This makes BE self-contained while preserving root .env for docker-compose.
+    Priority with override=False (the default): os.environ > BE/.env > ../.env.
+    A variable already in the process environment WINS; dotenv only fills in what is
+    missing. The two .env files are ranked between themselves (BE/.env loads first, so
+    it beats root .env), but neither can override a variable the OS already set.
+
+    That ordering is deliberate — docker-compose passes config as real environment
+    variables and must win over any .env baked into the image — but it also means a
+    stray user-level variable silently beats this project's own config. Seen for real:
+    a `GEMINI_API_KEY` holding a Google OAuth access token (`AQ....`, set by another
+    tool) beat the empty value in BE/.env, so the Gemini provider registered and every
+    call died with 401 ACCESS_TOKEN_TYPE_UNSUPPORTED. Unset the OS variable; setting it
+    in BE/.env is not enough.
+
+    This makes BE self-contained where the OS is silent, while preserving root .env for
+    docker-compose.
     """
     if (os.getenv("SKIP_DOTENV") or "").strip() in {"1", "true", "True", "yes", "on"}:
         return

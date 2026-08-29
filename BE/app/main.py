@@ -1428,10 +1428,29 @@ class _JobCancelled(Exception):
     """Người dùng bấm huỷ — không phải lỗi, không ghi error_text."""
 
 
+# Audit vòng 7 Q5 — hai lỗi AI hay gặp nhất từng tới người dùng dưới CÙNG một câu
+# "Gọi model thất bại: ...", trong khi chúng đòi hai hành động ngược nhau: một cái bảo
+# "chờ rồi thử lại", cái kia bảo "máy này không kham nổi, giảm tải hoặc đổi model".
+# Giữ nguyên văn kỹ thuật ở cuối để log và người sửa lỗi không mất gì.
+_LOI_AI_DE_HIEU = (
+    ("LLM busy (in-process)",
+     "Hệ thống đang bận: máy này chỉ chạy được một yêu cầu AI mỗi lúc và hàng đợi "
+     "chờ quá lâu. Thử lại sau ít phút."),
+    ("LLM gateway busy",
+     "Hệ thống đang bận: hàng đợi AI đã đầy. Thử lại sau ít phút."),
+    ("timed out",
+     "Máy không sinh xong trong thời gian cho phép. Thử giảm số câu, thu hẹp phạm vi "
+     "tài liệu, hoặc dùng model nhẹ hơn."),
+)
+
+
 def _job_error_text(exc: BaseException) -> str:
     """Nhiều built-in (TimeoutError, RuntimeError…) có str(exc)==''; không bao giờ trả chuỗi rỗng."""
     msg = str(exc).strip()
     if msg:
+        for dau_hieu, cau in _LOI_AI_DE_HIEU:
+            if dau_hieu in msg:
+                return f"{cau} (chi tiết: {msg})"
         return msg
     name = getattr(type(exc), "__name__", None) or type(exc).__qualname__ or "Exception"
     return f"{name}: không có nội dung chi tiết (xem traceback trong log server)."
@@ -2606,6 +2625,46 @@ def run_quiz_generation_job(job_id: str, document_id: str, config: dict,
         print(f"quiz_job_failed job_id={job_id} err={str(e)[:80]}", flush=True)
 
 
+# Audit vòng 7 Q2 — chống job quiz trùng.
+# Bấm "Tạo quiz" năm lần trong hai giây từng tạo NĂM job y hệt nhau (log 2026-08-30
+# 00:24:40). Máy chỉ có 1 slot LLM (`MAX_CONCURRENT_LLM_CALLS`), nên job trùng không chỉ
+# vô ích: chúng xếp hàng, chờ quá `LLM_QUEUE_WAIT_TIMEOUT_SECONDS` rồi chết với
+# "LLM busy (in-process): all 1 slots in use" — người dùng thấy "Tạo quiz thất bại" dù
+# một quiz đã ra xong. Cờ chặn ở FE không đủ: F5, hai tab, app khác đều đi vòng qua nó.
+_QUIZ_JOB_SONG = ("pending", "running", "processing")   # cùng từ vựng với list_active_jobs
+_QUIZ_INFLIGHT: "OrderedDict[str, str]" = OrderedDict()
+_QUIZ_INFLIGHT_LOCK = threading.Lock()
+_QUIZ_INFLIGHT_MAX = 256
+
+
+def _quiz_job_key(uid: Optional[str], document_id: str, config: dict) -> str:
+    """Hai yêu cầu chỉ là 'trùng' khi CÙNG người, CÙNG tài liệu, CÙNG cấu hình. Đổi số câu
+    hay đổi phạm vi là một yêu cầu khác và phải được chạy."""
+    return json.dumps([uid, document_id, config], sort_keys=True, ensure_ascii=False)
+
+
+def _quiz_job_giu_cho(key: str, job_id_moi: str) -> Optional[str]:
+    """Trả `job_id` CŨ nếu có job y hệt đang sống; None nếu đã giữ chỗ cho job mới.
+
+    Kiểm tra và giữ chỗ nằm TRONG cùng một lần khoá — tách hai bước thì hai request tới
+    cùng lúc đều thấy trống và cả hai cùng tạo job, đúng thứ hàm này sinh ra để chặn.
+    `get_job` là một lần đọc sqlite local (vài ms) nên chấp nhận nằm trong lock.
+    """
+    from app.domains.jobs.jobs_store import get_job
+    with _QUIZ_INFLIGHT_LOCK:
+        cu = _QUIZ_INFLIGHT.get(key)
+        if cu:
+            job = get_job(cu)
+            if job and job.get("status") in _QUIZ_JOB_SONG:
+                return cu
+        # Giữ chỗ TRƯỚC khi enqueue: enqueue hỏng thì job nằm 'pending' và `sweep_stuck_jobs`
+        # dọn, chấp nhận được. Giữ chỗ SAU khi enqueue thì cửa sổ đua quay lại.
+        _QUIZ_INFLIGHT[key] = job_id_moi
+        while len(_QUIZ_INFLIGHT) > _QUIZ_INFLIGHT_MAX:
+            _QUIZ_INFLIGHT.popitem(last=False)
+    return None
+
+
 @app.post('/api/quizzes/generate')
 def api_quizzes_generate():
     """Tạo quiz chẩn đoán từ một tài liệu (FR-06.1). Trả job_id để poll."""
@@ -2635,6 +2694,13 @@ def api_quizzes_generate():
             return jsonify({"error": f"section_ids không thuộc tài liệu: {unknown}"}), 400
 
     job_id = str(uuid.uuid4())
+    dang_chay = _quiz_job_giu_cho(_quiz_job_key(uid, document_id, config), job_id)
+    if dang_chay:
+        # Không phải lỗi: người dùng bấm lại đúng cái họ đã xin. Trả về job ĐANG chạy để
+        # giao diện bám tiếp vào nó thay vì mở thêm một job nữa tranh slot LLM.
+        print(f"quiz_enqueue_deduped job_id={dang_chay}", flush=True)
+        return jsonify({"job_id": dang_chay, "status": "started", "deduped": True}), 202
+
     from app.domains.jobs.jobs_store import create_job
     create_job(job_id, job_type="quiz_generation", status="pending", progress=0,
                current_node="Queued", user_id=uid)

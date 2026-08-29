@@ -37,10 +37,22 @@ export default function QuizSetup() {
   const [types, setTypes] = useState(["multiple_choice", "true_false"]);
   const [sectionIds, setSectionIds] = useState([]);
   const [submitError, setSubmitError] = useState(null);
+  const [submitting, setSubmitting] = useState(false);
 
   const job = useStudyJob({
     onDone: (result) => {
-      if (result?.quiz_id) navigate(`/app/study/quiz/${result.quiz_id}`, { replace: true });
+      if (!result?.quiz_id) return;
+      // Kiểm chất lượng loại bớt câu là chuyện thường, nhưng "xin 5 nhận 3" mà không nói
+      // gì thì người dùng tưởng hệ thống hỏng. BE đã trả `rejected_count`; mang nó sang
+      // trang làm bài để nói ra đúng một lần.
+      navigate(`/app/study/quiz/${result.quiz_id}`, {
+        replace: true,
+        state: {
+          asked: count,
+          kept: result.question_count,
+          rejected: result.rejected_count ?? 0,
+        },
+      });
     },
   });
 
@@ -79,6 +91,11 @@ export default function QuizSetup() {
     e.preventDefault();
     setSubmitError(null);
     if (!types.length) return setSubmitError("Chọn ít nhất một dạng câu hỏi.");
+    // Giữa lúc bấm và lúc 202 về, form không đổi gì — nên bấm thêm là phản xạ đúng của
+    // người dùng, và mỗi lần bấm là một job LLM nữa. Máy chỉ có 1 slot: job thừa xếp
+    // hàng rồi chết với "LLM busy", kể cả khi quiz thật đã ra xong. Cờ đặt TRƯỚC await.
+    if (submitting) return;
+    setSubmitting(true);
     try {
       const body = await generateQuiz({
         document_id: documentId,
@@ -90,6 +107,8 @@ export default function QuizSetup() {
       if (body?.job_id) job.start(body.job_id);
     } catch (err) {
       setSubmitError(err?.message || "Không tạo được quiz.");
+    } finally {
+      setSubmitting(false);
     }
   };
 
@@ -187,8 +206,10 @@ export default function QuizSetup() {
             </div>
           )}
 
-          <button type="submit" className="btn-seal inline-flex items-center justify-center gap-2 self-start">
-            <Icon name="Zap" size={15} /> Tạo quiz
+          <button type="submit" disabled={submitting}
+            className="btn-seal inline-flex items-center justify-center gap-2 self-start disabled:opacity-60 disabled:cursor-not-allowed">
+            {submitting ? <Spinner size={15} /> : <Icon name="Zap" size={15} />}
+            {submitting ? "Đang gửi yêu cầu…" : "Tạo quiz"}
           </button>
         </form>
       )}
