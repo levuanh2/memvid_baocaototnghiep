@@ -56,6 +56,8 @@ Ghi lại để vòng sau khỏi "sửa" nhầm:
 
 ## P1 — Đường xoá CHÍNH của FE không xoá file trên Storage (nặng nhất)
 
+> **ĐÃ SỬA** — helper `_delete_storage_object` dùng chung, gọi ở bước 2 của route v2, guard `obj != input_path` giống `_don_file_tam`, xoá hỏng thì log chứ không nuốt. Response thêm `deleted_items.storage_object`. 5 test.
+
 Có **hai** route xoá, và chúng làm khác nhau:
 
 ```
@@ -89,6 +91,8 @@ với tài liệu học tập cá nhân thì "đã xoá" mà còn lưu là một
 
 ## P2 — Ghi chunk vào Postgres hỏng thì im lặng, tài liệu vẫn báo "xong"
 
+> **ĐÃ SỬA** — `_persist_sections_and_chunks` trả bool vào `capabilities.structured_query`; `chunk_count=0` thay vì `None`. Fail-open GIỮ NGUYÊN. Hai bẫy dính khi sửa: `update_status` THAY chứ không gộp capabilities, và field mới phải khai trong `IngestState` nếu không LangGraph loại giữa hai node. 3 test.
+
 `ingest_graph._persist_sections_and_chunks` bọc toàn bộ trong `try/except` với comment:
 
 > "Lỗi ở đây KHÔNG chặn pipeline — index đã ghi xong, chat vẫn chạy; chỉ log lại để biết mà chữa."
@@ -120,6 +124,8 @@ nào". Ingest không có gì tương đương.
 
 ## P3 — Chế độ mở: kho chung vẫn còn chunk của tài liệu đã xoá mềm
 
+> **ĐÃ SỬA** — chế độ mở + `sources` rỗng giờ trả `sorted(owned_stems(uid))` thay vì `[]`; `all_rows()` đã lọc `deleted` nên không thêm tầng lọc nào mới. Registry rỗng vẫn trả `[]` (= toàn kho) để không gãy cài mới. Test cũ ở `test_source_ownership.py` khẳng định hành vi cũ nên phải sửa theo.
+
 `soft_delete` chỉ đổi `documents.status`; FAISS và `index.json` giữ nguyên chunk (đúng đặc
 tả 8.10 "giữ dữ liệu con").
 
@@ -138,6 +144,8 @@ chấp nhận được là **không ai biết nó thế nào**.
 ---
 
 ## P4 — Hai upload trùng tên cùng lúc có thể ghi đè nhau (cần xác minh)
+
+> **ĐÃ SỬA** — tái hiện được ngay bằng `threading.Barrier(2)`, không cần sleep giả: `_safe_save_path` không tạo file nào nên hai luồng LUÔN nhận cùng đường dẫn. Vá bằng `os.open(O_CREAT|O_EXCL)` chứ **không** phải `mkstemp` (mkstemp phá hình dạng tên file mà FE đang dựa vào).
 
 `_safe_save_path` là vòng `while os.path.exists(path)` rồi mới `file.save(path)`. Giữa lúc
 kiểm và lúc ghi có khe: hai request trùng tên cùng lúc chọn **cùng** một đường dẫn, bản sau
@@ -170,6 +178,8 @@ chứ không phải lỗ bảo mật.
 ---
 
 ## P6 — Ingest hỏng thì file trên Storage và dòng DB nằm lại mãi
+
+> **ĐÃ ĐO, chưa cần cơ chế dọn** — `BE/scripts/dem_tai_lieu_loi.py`, chỉ đọc. Chạy thật: 1 tài liệu, 8.7 MB, lý do `disk I/O error`. Quy mô đó chưa đáng xây cron/chính sách giữ. **Chú ý:** cột DB là `status='failed'`, không phải `'error'` (`_STATUS_TO_DB`) — viết đúng chữ trong plan này thì query trả 0 hàng.
 
 Ingest lỗi → `error_handler_node` đặt source `status="error"`. Object trên Storage và dòng
 `documents` vẫn còn.

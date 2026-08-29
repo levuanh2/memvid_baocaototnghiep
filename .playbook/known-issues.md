@@ -1,5 +1,190 @@
 # Known Issues
 
+## (ĐÃ SỬA 2026-08-29) Xoá tài liệu xong, bản gốc vẫn nằm trong bucket private
+
+Audit vòng 6 — trace đường đi của một file từ lúc nhận tới lúc nằm yên.
+
+Có **hai** route xoá, làm khác nhau:
+
+```
+POST   /delete-source     main.py:4064  -> CÓ gọi _storage.delete(obj)
+DELETE /sources/<id>      main.py:4576  -> 6 bước dọn, KHÔNG bước nào chạm Storage
+```
+
+6 bước của route v2: backup -> xoá `input_docs` -> xoá chunk index -> xoá memory tree ->
+xoá registry row -> xoá mindmap. Bản gốc trong bucket **không có trong danh sách**.
+
+Tệ hơn: docstring của chính route đó ghi *"Xóa: 1. File gốc trong input_docs/ **và object
+trên Supabase Storage**"*. Tài liệu hứa, mã không làm.
+
+FE dùng route nào? `SidebarLeft.jsx:126` gọi `DELETE /sources/<id>` **trước**, chỉ rơi về
+`POST /delete-source` khi cái kia hỏng. **Đường mặc định là đường không dọn.**
+
+- **Hậu quả:** người dùng bấm xoá, giao diện sạch, file gốc nằm lại **vĩnh viễn** trong
+  bucket private. Không đường nào dọn về sau. Với tài liệu học tập cá nhân thì "đã xoá"
+  mà còn lưu là một lời hứa bị phá, không chỉ là tốn dung lượng.
+- **Fix:** helper `_delete_storage_object(source_info)` dùng chung, gọi ở bước 2 của route
+  v2. Guard `obj != input_path` **giống hệt `_don_file_tam`**: khi Storage chưa cấu hình
+  hoặc upload lỗi thì `documents.file_path` chính là đường local, và bước xoá file local đã
+  lo — gọi `storage.delete` với một đường dẫn đĩa là vô nghĩa.
+- **Không nuốt im:** xoá hỏng thì in cảnh báo (bài học C5 vòng 2 — rác tồn kho có tính tiền).
+  Response thêm `deleted_items.storage_object`: `None` = không có gì để xoá, `True/False` =
+  đã thử và kết quả.
+- **KHÔNG đụng route cũ.** `POST /delete-source` đang làm ĐÚNG HƠN route mới; việc cần làm
+  là kéo route mới lên bằng nó.
+- **Regression:** `tests/test_upload_pipeline_holes.py` — 5 test cho P1, gồm một khẳng định
+  cấu trúc rằng route v2 có gọi bước này.
+
+---
+
+## (ĐÃ SỬA 2026-08-29) Ghi chunk vào Postgres hỏng thì im, tài liệu vẫn báo "xong"
+
+`ingest_graph._persist_sections_and_chunks` bọc toàn bộ trong `try/except` với lý do đúng:
+
+> "Lỗi ở đây KHÔNG chặn pipeline — index đã ghi xong, chat vẫn chạy."
+
+Fail-open đó **đúng cho chat**. Nhưng trạng thái tài liệu không phản ánh gì:
+
+- FAISS đã có chunk -> hỏi đáp chạy ngon.
+- `document_chunks` **rỗng** -> quiz (`chunks_for_scope`), study map, review, gap analysis
+  đều mất nguồn. Chúng đọc Postgres, không đọc FAISS.
+- `set_counts(chunk_count=n)` nằm TRONG `try` -> hỏng thì `chunk_count` giữ `None`.
+- Tài liệu vẫn đi tiếp tới `Finalize` -> `status = ready`.
+
+Người dùng thấy "xử lý xong", chat chạy tốt, rồi tạo quiz thì gặp lỗi vô nghĩa. Chỉ có một
+dòng `print` ở server. So sánh: mindmap/summary có `degraded_missing` để nói "xong nhưng
+thiếu phần nào"; ingest không có gì tương đương.
+
+- **Fix:** `_persist_sections_and_chunks` trả `bool`; kết quả đi vào
+  `capabilities.structured_query`. Fail-open **giữ nguyên** — chỉ sửa phần BÁO CÁO.
+- `chunk_count = 0` khi hỏng, thay vì để `None`: `None` là "chưa đo", `0` là "đã đo, rỗng".
+- **Bẫy đã dính khi sửa:** `update_status` ghi `meta["capabilities"] = capabilities` —
+  **THAY, không gộp**. Node `BuildMemoryTree` ghi capabilities sau nên xoá mất cờ. Không
+  gộp ở tầng repository (gộp thì không caller nào tắt được một capability nữa) mà truyền cờ
+  qua state.
+- **Bẫy thứ hai:** `state.py` có sẵn comment *"LangGraph merge state chỉ giữ field có trong
+  TypedDict"*. Thiếu dòng khai `structured_query: NotRequired[bool]` là cờ bị loại giữa hai
+  node. Comment đó cứu đúng một lần.
+- **Regression:** 3 test — hỏng thì `structured_query=False` + `chunk_count=0`, chạy tốt thì
+  `True`, và một test khoá rằng field có trong `IngestState`.
+
+---
+
+## (ĐÃ SỬA 2026-08-29) `_safe_save_path` chỉ KIỂM tên, không giành tên
+
+Audit vòng 6 — P4. Vòng trước ghi "chưa tái hiện được ca đua, chưa vá". Tái hiện được, và
+khe không hẹp như tưởng:
+
+```python
+while os.path.exists(path):      # chỉ kiểm
+    path = f"{root}_{n}{ext}"
+return path                      # KHÔNG tạo gì -> file mãi tới file.save() mới ra đời
+```
+
+Hai luồng gọi cùng lúc **luôn** nhận cùng một đường dẫn — không phải "cửa sổ rất hẹp", mà
+là toàn bộ khoảng từ lúc trả chuỗi tới lúc `file.save()`. Test dùng `threading.Barrier(2)`,
+không cần sleep giả, hỏng ngay lần đầu:
+
+```
+AssertionError: hai luồng chọn cùng một đường dẫn: ['...ao_cao.pdf', '...ao_cao.pdf']
+```
+
+- **Hậu quả:** hai upload trùng tên cùng lúc, bản lưu sau đè bản trước. Người thứ nhất
+  thấy tài liệu "xong" nhưng nội dung là file của người thứ hai. Gunicorn nhiều worker
+  dùng chung `input_docs/` nên là nhiều **tiến trình**, khoá trong tiến trình vô dụng.
+- **Fix:** `os.open(path, O_CREAT|O_EXCL|O_WRONLY)` trong vòng lặp — giành tên atomic ở
+  tầng hệ điều hành, đúng ranh giới nhiều tiến trình. `FileExistsError` -> thử `_2`, `_3`.
+- **KHÔNG dùng `tempfile.mkstemp`** như plan gốc đề xuất: nó phá hình dạng tên
+  (`bao_cao_2.pdf` -> `tmp8f2x.pdf`), mà tên đọc được là thứ `_unique_display_filename` và
+  cả FE đang dựa vào. `O_EXCL` giữ nguyên tên, cùng stdlib, ít dòng hơn.
+- **Kéo theo:** `os.makedirs(INPUT_DIR)` phải chuyển VÀO trong hàm — hàm giờ ghi đĩa thật,
+  gọi nó trước khi thư mục tồn tại sẽ chết.
+- **Đánh đổi đã cân:** `save` ném thì còn file 0 byte. Giống hệt hành vi cũ (file ghi dở),
+  `_don_file_tam` trong `finally` của job ingest dọn.
+- **Regression:** `tests/test_upload_pipeline_holes.py::test_hai_upload_trung_ten_cung_luc_*`
+
+---
+
+## (ĐÃ SỬA 2026-08-29) Chế độ mở: `sources` rỗng = quét toàn kho, gồm cả tài liệu đã xoá
+
+Audit vòng 6 — P3. `soft_delete` chỉ đổi `documents.status`, chunk trong FAISS nằm nguyên
+(đúng đặc tả 8.10 "giữ dữ liệu con"). `_resolve_owned_query_sources` với
+`AUTH_PROTECT_APP_APIS=false` trả thẳng `[]`, và `[]` xuống tầng truy hồi nghĩa là **tìm
+toàn bộ kho** — không tầng nào lọc `deleted`.
+
+Cùng lớp lỗi "nhánh chế độ mở" của vòng 1 (Study Map vỡ 100% ở đúng nhánh này).
+
+- **Fix một dòng:** rỗng -> `sorted(owned_stems(user_id))`. Chế độ mở `owned_stems` bỏ qua
+  chủ sở hữu nhưng vẫn lấy từ `all_rows()`, mà `all_rows()` **đã** lọc `status != deleted`.
+  Không thêm tầng lọc mới, chỉ dùng cái đã có.
+- **Registry rỗng vẫn trả `[]`** (= toàn kho) như cũ: cài mới hoặc kho chưa đăng ký không
+  được biến thành "không tìm gì cả".
+- **Mặt trái đã cân:** stem có trong index mà KHÔNG có trong registry (index nhập từ
+  ngoài, registry mất) sẽ không được tìm ở chế độ mở nữa. Đo được từ mã thì không, nhưng
+  cấu hình thật đang bật auth nên bán kính nổ nhỏ.
+- **Test cũ phải sửa theo:** `test_source_ownership.py` khẳng định `flag off + [] -> []`.
+  Đó chính là hành vi vừa đổi; sửa khẳng định, không phải sửa mã.
+- **Regression:** `test_upload_pipeline_holes.py::test_che_do_mo_*` (3 test: liệt kê,
+  registry rỗng, có chọn nguồn).
+
+---
+
+## (2026-08-29) ĐÃ ĐO: tài liệu ingest hỏng tồn đọng — 1 dòng, 8.7 MB
+
+Audit vòng 6 — P6. Ingest lỗi thì object trên Storage và dòng `documents` giữ nguyên. Giữ
+là **đúng** (ingest lại thì phải còn file), nhưng không có gì đo được đống đó lớn cỡ nào.
+
+`BE/scripts/dem_tai_lieu_loi.py` — chỉ đọc, không xoá. Chạy thật trên DB:
+
+```
+1 tài liệu hỏng cũ hơn 0 ngày (8.7 MB, cũ nhất 2026-08-25).
+lý do hỏng thường gặp:  1  disk I/O error
+```
+
+**Quy mô nhỏ -> chưa cần cơ chế dọn.** Đo trước, quyết sau; đó là toàn bộ mục đích.
+
+**Bẫy chữ `status`, suýt trả lời sai:** `ck_documents_status` chỉ nhận
+`uploaded|processing|completed|failed|deleted`. Pipeline gọi trạng thái này là `error`, cột
+DB lưu `failed` (`repository._STATUS_TO_DB`). Truy vấn `status = 'error'` trả **0 hàng** và
+kết luận "không có gì tồn đọng" — sai theo cách im lặng nhất. Plan vòng 6 viết `status=error`
+đúng theo từ vựng pipeline; script phải dịch sang từ vựng DB.
+
+---
+
+## (2026-08-29) Pipeline upload — những chỗ ĐÃ ĐÚNG, đừng "sửa"
+
+Trace đầy đủ rồi mới kết luận. Ghi lại để vòng sau khỏi đụng nhầm:
+
+| | bằng chứng |
+|---|---|
+| Chặn đuôi file TRƯỚC khi ghi bất cứ gì | `_ingest_uploaded_file` gọi `is_supported()` dòng đầu -> 415 kèm danh sách đuôi hợp lệ |
+| Giới hạn dung lượng | `main.py:56` `MAX_UPLOAD_MB=100` -> `MAX_CONTENT_LENGTH`, có handler 413 riêng |
+| Chống path traversal | **hai lớp**: `_safe_save_path` (`os.path.basename` + fold `[<>:"/\|?*\x00-\x1f]`) và `storage.object_path` (`PurePosixPath(...).name`) |
+| Khoá Storage hợp lệ | `_safe_key_part` NFKD -> ASCII -> fold (Supabase từ chối khoảng trắng/dấu tiếng Việt) |
+| KHÔNG lộ storage path | `_doc_public` không có `file_path`; mở file phải qua `/api/documents/<id>/file` -> signed URL, ttl kẹp 60–3600s (NFR-04.3) |
+| Xoá bản tạm an toàn | `_don_file_tam` so `file_path` với đường local, **bằng nhau thì không xoá** |
+| Gắn chủ sở hữu | `uid = _current_user_id()` lúc `create`; `_owned_document` trả **404** chứ không 403 (không tạo oracle đoán id) |
+| Tài liệu xoá mềm | `all_rows()` lọc `status != "deleted"` + `invalidate_cache()` trong `soft_delete` |
+
+**Một nghi ngờ đã RÚT LẠI:** `_load_source_registry()` nghe như đọc file JSON và tao đã
+định ghi nó là "nguồn sự thật thứ hai cho quyền sở hữu". Đọc kỹ thì nó là
+`_docs.all_rows()` (Postgres); tên cũ giữ cho back-compat. **Không có hai nguồn sự thật.**
+
+**Bảy nơi dữ liệu nằm lại, phân vai đúng:** Storage = bản gốc, Postgres = dữ liệu nghiệp
+vụ, FAISS + `chunks.sqlite` = chỉ mục, `memory/` = cây nhớ, `input_docs/` = tạm.
+
+---
+
+## (2026-08-29) CHƯA SỬA, đã xét: 1 điểm còn lại của pipeline upload
+
+(Hai điểm kia — chế độ mở thấy tài liệu đã xoá, và khe TOCTOU của `_safe_save_path` — đã
+sửa cùng ngày, xem hai mục ĐÃ SỬA ở trên.)
+
+- **Chỉ kiểm ĐUÔI file, không kiểm nội dung.** Đổi tên `a.exe` -> `a.pdf` là qua cổng.
+  Mức độ **thấp**: bucket private, file không bao giờ phục vụ trực tiếp (chỉ signed URL),
+  không đường nào thực thi nội dung. Hậu quả thật là thông báo lỗi tệ, không phải lỗ bảo
+  mật. Không thêm dep sniff MIME.
+
 ## (ĐÃ SỬA 2026-08-29) `USE_LC_VECTOR_STORE`: ba tầng, ba default, một tầng nói ngược
 
 Tìm ra khi soạn plan vòng 5, không phải do ai báo lỗi. Cùng một cờ, ba nơi định nghĩa

@@ -196,12 +196,19 @@ def build_ingest_graph(
             log_node_event(state["job_id"], "Chunk", "error", t.ms(), {"error": str(e)})
             return {**state, "error": str(e), "current_node": "Chunk"}
 
-    def _persist_sections_and_chunks(state, chunks, headings, faiss_ids, t) -> None:
+    def _persist_sections_and_chunks(state, chunks, headings, faiss_ids, t) -> bool:
         """Ghi sections + document_chunks vào Postgres (FR-03.4 → FR-03.9).
 
         FAISS vẫn là chỉ mục tìm kiếm; Postgres giữ dữ liệu nghiệp vụ và là nơi
         quiz/review truy ngược về nguồn. Lỗi ở đây KHÔNG chặn pipeline — index đã
         ghi xong, chat vẫn chạy; chỉ log lại để biết mà chữa.
+
+        TRẢ VỀ ĐƯỢC/KHÔNG (2026-08-29). Fail-open vẫn giữ, nhưng trước đây hỏng ở
+        đây là hoàn toàn im: FAISS có chunk nên chat chạy ngon, `document_chunks`
+        rỗng nên quiz/study-map/review/gap-analysis mất nguồn, mà tài liệu vẫn đi
+        tới `Finalize` và báo `ready`. Người dùng thấy "xử lý xong", tạo quiz mới
+        gặp lỗi vô nghĩa. Kết quả giờ đi vào `capabilities.structured_query` để
+        trạng thái nói đúng thứ nó làm được.
         """
         try:
             from app.domains.documents import repository as docs_repo
@@ -237,10 +244,17 @@ def build_ingest_graph(
             )
             log_node_event(state["job_id"], "PersistDocument", "ok", t.ms(),
                            {"sections": len(sections), "chunks": n})
+            return True
         except Exception as exc:
             log_node_event(state["job_id"], "PersistDocument", "error", t.ms(),
                            {"error": str(exc)})
             print(f"⚠️ [ingest] Không ghi được sections/chunks vào DB: {exc}")
+            # chunk_count = 0 chứ không để None: None là "chưa đo", 0 là "đã đo, rỗng".
+            try:
+                docs_repo.set_counts(state["source_id"], chunk_count=0)
+            except Exception:
+                pass
+            return False
 
     def embed_index_node(state: dict) -> dict:
         t = _Timer()
@@ -295,7 +309,7 @@ def build_ingest_graph(
                     batch_size=32,
                 )
 
-            _persist_sections_and_chunks(state, all_chunks, headings, faiss_ids, t)
+            co_chunk_db = _persist_sections_and_chunks(state, all_chunks, headings, faiss_ids, t)
 
             source_stem = src_stem
             update_source_status(
@@ -303,11 +317,19 @@ def build_ingest_graph(
                 status="index_ready",
                 progress=0.7,
                 substatus="faiss_ready",
-                capabilities={"chunk_query": True, "memory_query": False},
+                # `structured_query` = có dòng trong Postgres `document_chunks` không.
+                # Quiz / study map / review / gap analysis đọc từ ĐÓ, không đọc FAISS.
+                capabilities={"chunk_query": True, "memory_query": False,
+                              "structured_query": co_chunk_db},
             )
 
             log_node_event(state["job_id"], "EmbedAndIndex", "ok", t.ms(), {"chunks": len(all_chunks)})
-            return {**state, "source_stem": source_stem, "progress": 75, "current_node": "EmbedAndIndex", "error": None}
+            # Mang cờ qua state: `update_status` THAY capabilities chứ không gộp, nên
+            # nhánh BuildMemoryTree ghi sau sẽ xoá mất `structured_query` nếu không
+            # truyền tiếp. (Gộp ở tầng repository thì không caller nào tắt được một
+            # capability nữa — chọn truyền tiếp cho rõ ràng.)
+            return {**state, "source_stem": source_stem, "structured_query": co_chunk_db,
+                    "progress": 75, "current_node": "EmbedAndIndex", "error": None}
         except Exception as e:
             log_node_event(state["job_id"], "EmbedAndIndex", "error", t.ms(), {"error": str(e)})
             return {**state, "error": str(e), "current_node": "EmbedAndIndex"}
@@ -332,7 +354,8 @@ def build_ingest_graph(
                 status="ready",
                 progress=1.0,
                 substatus="memory_tree_ready",
-                capabilities={"chunk_query": True, "memory_query": True},
+                capabilities={"chunk_query": True, "memory_query": True,
+                              "structured_query": bool(state.get("structured_query", True))},
             )
 
             log_node_event(state["job_id"], "BuildMemoryTree", "ok", t.ms())
@@ -346,7 +369,8 @@ def build_ingest_graph(
                     status="index_ready",
                     progress=0.8,
                     substatus="memory_tree_failed",
-                    capabilities={"chunk_query": True, "memory_query": False},
+                    capabilities={"chunk_query": True, "memory_query": False,
+                                  "structured_query": bool(state.get("structured_query", True))},
                     error=str(e),
                 )
             except Exception:

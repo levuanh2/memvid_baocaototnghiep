@@ -61,8 +61,17 @@ def test_resolve_owned_query_sources(be, monkeypatch):
         resolved, err = be._resolve_owned_query_sources([], "C")
         assert err is None and resolved == be._NO_OWNED_SOURCES
 
-        # flag off → passthrough (today's behavior)
+        # flag off → passthrough for an explicit list, and the full registry (already
+        # deleted-filtered by all_rows()) for an empty one. Audit vòng 6 P3: [] used to
+        # mean "search the whole corpus", which still reached soft-deleted chunks.
         monkeypatch.setattr(be, "_auth_protect_enabled", lambda: False)
+        resolved, err = be._resolve_owned_query_sources([], "A")
+        assert err is None and resolved == ["doc_a", "doc_a2", "doc_b"]
+        resolved, err = be._resolve_owned_query_sources(["doc_b"], "A")
+        assert err is None and resolved == ["doc_b"]
+        # empty registry → [] (global), exactly as before: a fresh install or an index
+        # with no registry rows must not resolve to "search nothing".
+        monkeypatch.setattr(be, "_load_source_registry", lambda: {})
         resolved, err = be._resolve_owned_query_sources([], "A")
         assert err is None and resolved == []
 

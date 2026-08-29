@@ -1,5 +1,82 @@
 # Lessons Learned
 
+## 2026-08-29 - Audit vòng 6 (phần sau): "chưa tái hiện được" thường là chưa dựng đúng chỗ
+
+- **"Cửa sổ đua rất hẹp" là một giả định, không phải một phép đo.** Vòng trước hoãn P4 vì
+  không dựng nổi ca đua. Đọc lại thì `_safe_save_path` **không tạo file nào** — chỉ trả
+  chuỗi. Nên khe không phải vài micro giây giữa `exists()` và `save()`, mà là TOÀN BỘ
+  quãng giữa hai lời gọi đó. `threading.Barrier(2)` hỏng ngay lần chạy đầu, không cần
+  sleep giả. Trước khi ghi "chưa tái hiện được", hỏi **cái gì tạo ra tài nguyên tranh
+  chấp** — nếu câu trả lời là "không có gì", đua chắc chắn xảy ra chứ không phải hiếm.
+
+- **Hoãn vá vì chưa chứng minh được là ĐÚNG; nhưng phải quay lại chứng minh.** Vòng 6 hoãn
+  P4 là quyết định đúng theo thông tin lúc đó. Cái sai duy nhất là để nguyên chữ "chưa tái
+  hiện" mà không ai thử lại. Ghi "chưa tái hiện" kèm **cách tái hiện định thử**, để lần sau
+  chạy được ngay.
+
+- **Bản vá plan đề xuất không nhất thiết là bản vá đúng.** Plan ghi `tempfile.mkstemp`.
+  Nó atomic thật, nhưng phá hình dạng tên file (`bao_cao_2.pdf` -> `tmp8f2x.pdf`) mà
+  `_unique_display_filename` và FE đang dựa vào. `os.open(..., O_CREAT|O_EXCL)` cũng
+  atomic, cùng stdlib, giữ nguyên tên, ít dòng hơn. **Đọc plan như đề xuất, không như lệnh.**
+
+- **Sửa hành vi thì test cũ PHẢI đỏ — đó là bằng chứng, không phải phiền toái.**
+  `test_source_ownership.py` khẳng định `flag off + [] -> []`. Bản vá P3 làm nó đỏ, đúng
+  chỗ nó phải đỏ. Test cũ xanh sau khi đổi hành vi mới là điều đáng lo: nghĩa là nó không
+  đo cái nó tưởng đang đo.
+
+- **Từ vựng pipeline và từ vựng DB lệch nhau, và chỗ lệch nằm ngay trong plan.** Plan viết
+  "đếm tài liệu `status=error`". Cột `documents.status` không nhận giá trị đó —
+  `ck_documents_status` chỉ cho `uploaded|processing|completed|failed|deleted`, và
+  `_STATUS_TO_DB` dịch `error -> failed`. Viết đúng chữ trong plan thì query trả 0 hàng và
+  kết luận "sạch". **Cùng họ lỗi với `None` vs `0`: một câu trả lời rỗng trông giống hệt
+  một câu trả lời tốt.** Đọc ràng buộc CHECK trước khi viết bất cứ `WHERE status = ...` nào.
+
+- **Đo trước, cơ chế sau.** P6 chỉ cần một script đọc để biết quy mô: 1 dòng, 8.7 MB. Với
+  con số đó thì mọi bàn luận về cron dọn dẹp, chính sách giữ N ngày, thông báo cho người
+  dùng đều là xây cho một vấn đề chưa tồn tại. Script đọc rẻ hơn nhiều so với cái quyết
+  định mà nó chặn lại.
+
+## 2026-08-29 - Audit vòng 6: trace một đường đi đầy đủ tìm ra thứ mà quét theo lớp lỗi bỏ sót
+
+- **Hai đường làm cùng một việc thì đường MỚI hay thiếu bước, không phải đường cũ.**
+  `POST /delete-source` (legacy) xoá object trên Storage; `DELETE /sources/<id>` (v2, FE
+  dùng mặc định) thì không, dù docstring của nó hứa có. Phản xạ "cái cũ chắc tệ hơn" sai ở
+  đây. Khi có hai đường, **so danh sách việc chúng làm**, đừng giả định cái mới đầy đủ hơn.
+
+- **Docstring hứa mà mã không làm là lỗi, không phải tài liệu lỗi thời.** Route v2 ghi
+  "Xóa: 1. File gốc trong input_docs/ VÀ object trên Supabase Storage" — câu đó là ý định
+  ban đầu, bước thứ hai không bao giờ được viết. Đọc docstring rồi ĐỐI CHIẾU từng gạch đầu
+  dòng với thân hàm; ở đây nó chỉ ra ngay chỗ thiếu.
+
+- **Fail-open đúng vẫn có thể sai ở phần BÁO CÁO.** Ghi `document_chunks` hỏng mà không
+  chặn pipeline là quyết định đúng (chat vẫn chạy). Cái sai là trạng thái vẫn nói `ready`
+  và `capabilities` vẫn báo đủ. Khi chấp nhận chạy-một-phần, phải có chỗ nói ra là phần
+  nào — mindmap/summary có `degraded_missing`, ingest thì không có gì. **Sửa phần báo cáo,
+  đừng bỏ phần chịu lỗi.**
+
+- **`None` và `0` không được lẫn.** `chunk_count` để `None` khi ghi hỏng nghĩa là "chưa
+  đo"; đặt `0` mới là "đã đo, rỗng". Cùng bài học với `emb_dim` giữ 0 lúc probe hỏng
+  (vòng 2) và `delta=None` vs `0` ở `compare_masteries`.
+
+- **Hàm cập nhật THAY hay GỘP là chi tiết quyết định bản vá.** `update_status` ghi
+  `meta["capabilities"] = capabilities` — thay. Node sau ghi capabilities là xoá mất cờ vừa
+  đặt. Không sửa thành gộp (gộp thì không caller nào tắt được một capability nữa) mà truyền
+  cờ qua state. Đọc hàm ghi trước khi tin rằng đặt một khoá là xong.
+
+- **Comment cứu được một lần.** `state.py` có sẵn dòng *"LangGraph merge state chỉ giữ field
+  có trong TypedDict"*. Thêm field vào state mà không khai báo thì nó bị loại giữa hai node,
+  im lặng. Đây là loại comment đáng viết: nó nói một luật KHÔNG suy ra được từ mã xung quanh.
+
+- **Bẫy khi viết test cho graph có seam inject.** `update_source_status` được gọi với
+  `status` ở **vị trí** (`update_source_status(sid, "processing", progress=...)`) chứ không
+  phải kwarg. Lambda giả `lambda sid, **kw` chết ngay node đầu, và triệu chứng hiện ra là
+  "không có lần ghi capabilities nào" — trông như bản vá không chạy, thật ra là fixture
+  sai. Khi test graph báo "không thấy gì xảy ra", **in `out["error"]` trước khi nghi mã**.
+
+- **Trace một đường đi đầy đủ bắt được thứ mà quét theo lớp lỗi bỏ sót.** Năm vòng trước
+  quét theo lớp (song song LLM, `str(None)`, file trùng, mã chết, cờ cấu hình) và không
+  vòng nào chạm tới "xoá xong file vẫn còn". Hai cách quét bổ sung nhau, không thay nhau.
+
 ## 2026-08-29 - Audit vòng 5: phép quét phủ định phải có ca kiểm chứng, và test xanh phải chứng minh nó đo được gì
 
 - **LẦN THỨ TƯ đo sai câu hỏi trong bốn vòng.** Vòng 1 kết luận "9 cờ chưa test nhánh

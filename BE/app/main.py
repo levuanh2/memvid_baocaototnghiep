@@ -1100,13 +1100,22 @@ def _source_owner_ok(stem_or_id: str, user_id: Optional[str]) -> bool:
 def _resolve_owned_query_sources(raw_sources, user_id: Optional[str]):
     """Return (resolved_sources, error_response|None).
 
-    Flag OFF → (raw, None): today's behavior (empty means global).
+    Flag OFF → raw passthrough; raw empty → every stem in the registry, which
+      `all_rows()` already filters to non-deleted. Empty registry keeps returning []
+      (= global corpus), so a fresh install or an index with no registry rows behaves
+      exactly as before. Audit vòng 6 P3: `soft_delete` only flips `documents.status`
+      and leaves the FAISS chunks in place, so an empty list here used to search the
+      whole corpus — including documents the user had deleted. The trade-off: a stem
+      present in the index but absent from the registry is no longer searched in open
+      mode.
     Flag ON  → owner-scoped:
       * raw empty   → all owned stems (or the NO-OWNED sentinel → retrieval returns [])
       * raw present → every requested stem must be owned, else 403; returns the
         canonicalized owned subset. Never falls back to the global corpus."""
     if not _auth_protect_enabled():
-        return (list(raw_sources) if raw_sources else []), None
+        if raw_sources:
+            return list(raw_sources), None
+        return sorted(owned_stems(user_id)), None
     owned = owned_stems(user_id)  # set of canonical stems
     raw = [s for s in (raw_sources or []) if s]
     if not raw:
@@ -1759,16 +1768,29 @@ _ILLEGAL_FS_CHARS = re.compile(r'[<>:"/\\|?*\x00-\x1f]')
 
 def _safe_save_path(filename: str) -> str:
     """Đường lưu vật lý AN TOÀN trong INPUT_DIR: bỏ thành phần thư mục (chống
-    traversal), thay ký tự cấm → '_', và đảm bảo không trùng file sẵn có."""
+    traversal), thay ký tự cấm → '_', và GIÀNH tên bằng một lần tạo file atomic.
+
+    `O_CREAT|O_EXCL` chứ không phải `os.path.exists()`: bản cũ chỉ KIỂM rồi trả chuỗi,
+    file mãi tới `file.save(path)` mới ra đời — hai upload trùng tên cùng lúc nhận CÙNG
+    một đường dẫn và bản sau đè bản trước. Gunicorn chạy nhiều worker dùng chung
+    `input_docs/` nên đây là nhiều TIẾN TRÌNH; khoá trong tiến trình không cứu được.
+    Ném lỗi khác `FileExistsError` thì để nó nổi lên: hết đĩa/không có quyền phải thấy
+    ngay ở đây, không phải vài dòng sau khi `save` chết vì lý do khó hiểu hơn."""
+    os.makedirs(INPUT_DIR, exist_ok=True)
     base = os.path.basename((filename or "").strip()) or "file"
     safe = _ILLEGAL_FS_CHARS.sub("_", base).strip().strip(".") or "file"
     path = os.path.join(INPUT_DIR, safe)
     root, ext = os.path.splitext(path)
     n = 2
-    while os.path.exists(path):
-        path = f"{root}_{n}{ext}"
-        n += 1
-    return path
+    while True:
+        try:
+            # File 0 byte nằm lại nếu `save` ném — giống hệt hành vi cũ (file dở dang),
+            # và `_don_file_tam` trong `finally` của job ingest dọn nó.
+            os.close(os.open(path, os.O_CREAT | os.O_EXCL | os.O_WRONLY))
+            return path
+        except FileExistsError:
+            path = f"{root}_{n}{ext}"
+            n += 1
 
 
 def _unique_display_filename(filename: str, registry: dict) -> str:
@@ -1806,8 +1828,8 @@ def _ingest_uploaded_file(file) -> dict:
     # Tên hiển thị (chống trùng) — canonical stem suy từ tên này nên FE chọn theo
     # tên hiển thị sẽ khớp chunk; lưu vật lý theo path an toàn riêng.
     filename = _unique_display_filename(file.filename or "file", registry)
+    # `_safe_save_path` tạo thư mục và giành tên (atomic) — `save` chỉ ghi đè nội dung.
     save_path = _safe_save_path(filename)
-    os.makedirs(INPUT_DIR, exist_ok=True)
     file.save(save_path)
 
     source_stem = _normalize_video_stem(filename)
@@ -4459,6 +4481,35 @@ def memory_tree_status():
 # 🗑️ Delete Source Helper Functions
 # -------------------------
 
+def _delete_storage_object(source_info: Dict) -> Optional[bool]:
+    """Xoá bản gốc trên Supabase Storage. None = không có gì để xoá.
+
+    `DELETE /sources/<id>` (đường FE dùng mặc định — SidebarLeft.jsx:126) trước
+    2026-08-29 làm 6 bước dọn mà KHÔNG có bước này, dù docstring của chính route đó
+    hứa "File gốc trong input_docs/ VÀ object trên Supabase Storage". Người dùng bấm
+    xoá, giao diện sạch, file gốc nằm lại vĩnh viễn trong bucket private — không
+    đường nào dọn. Route cũ `POST /delete-source` thì có (main.py cũ dòng 4131).
+
+    Guard `obj != input_path` giống hệt `_don_file_tam`: khi Storage chưa cấu hình
+    hoặc upload lỗi, `documents.file_path` chính là đường local, và lúc đó bước xoá
+    file local đã lo rồi — gọi `storage.delete` với một đường dẫn đĩa là vô nghĩa.
+    """
+    obj = (source_info or {}).get("file_path")
+    ip = (source_info or {}).get("input_path")
+    if not obj or obj == ip:
+        return None
+    from app.domains.documents import storage as _storage
+    if not _storage.is_configured():
+        return None
+    ok = _storage.delete(obj)          # best-effort, không ném
+    if not ok:
+        # KHÔNG nuốt im: đây là rác tồn kho có tính tiền (bài học C5 vòng 2).
+        print(f"⚠️ [Delete] Không xoá được object trên Storage: {obj}")
+    else:
+        print(f"🗑️ [Delete] Đã xoá bản gốc trên Storage: {obj}")
+    return ok
+
+
 def _delete_input_file(source_id: str, source_info: Dict) -> bool:
     """
     Xóa file gốc trong input_docs/.
@@ -4641,8 +4692,9 @@ def delete_source_v2(source_id: str):
                 backups.append((file_path, backup_path))
                 print(f"💾 [Delete] Đã backup: {file_path.name}")
         
-        # 2️⃣ DELETE FILE SYSTEM
+        # 2️⃣ DELETE FILE SYSTEM (local tạm + bản gốc trên Storage)
         input_file_deleted = _delete_input_file(source_id, source_info or {})
+        storage_object_deleted = _delete_storage_object(source_info or {})
         
         # 3️⃣ DELETE INDEX (CHUNK LEVEL)
         chunks_removed = _purge_chunk_index(source_stem)
@@ -4674,6 +4726,9 @@ def delete_source_v2(source_id: str):
             "source_id": source_id,
             "deleted_items": {
                 "input_file": input_file_deleted,
+                # None = không có object nào để xoá (Storage chưa cấu hình, hoặc
+                # bản gốc chính là file local). True/False = đã thử và kết quả.
+                "storage_object": storage_object_deleted,
                 "chunks_removed": chunks_removed,
                 "memory_nodes_removed": memory_nodes_removed,
             }

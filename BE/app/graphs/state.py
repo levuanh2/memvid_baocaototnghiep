@@ -30,6 +30,10 @@ class IngestState(TypedDict):
     late_chunking_fallback_reason: NotRequired[Optional[str]]
     # Pipeline sau Chunk — PHẢI khai báo: LangGraph merge state chỉ giữ field có trong TypedDict.
     source_stem: NotRequired[str]
+    # Ghi được `document_chunks` vào Postgres hay không. EmbedAndIndex đặt,
+    # BuildMemoryTree đọc lại để không xoá mất cờ khi nó ghi capabilities (update_status
+    # THAY chứ không gộp). Thiếu dòng khai báo này thì LangGraph loại field giữa hai node.
+    structured_query: NotRequired[bool]
 
 
 class QueryState(TypedDict):
