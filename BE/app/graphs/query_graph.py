@@ -62,7 +62,6 @@ def build_query_graph(
     search_index: Callable[[str], list[str]],
     summarize_results: Callable[..., str],
     query_with_memory_tree: Callable[..., Any],
-    get_session_history: Callable[[str, int], List[dict]] | None = None,
     retriever: Any | None = None,
 ) -> Any:
     """
@@ -293,35 +292,21 @@ def build_query_graph(
                 )
                 return out
 
-            hist_patch: dict = {}
-            retrieved = None
-            sid = (state.get("session_id") or "").strip()
-            if get_session_history and sid:
-                try:
-                    # ponytail: chỗ này vẫn dính lỗi `with` chặn lúc thoát như 4 chỗ đã
-                    # sửa bằng run_with_timeout — nhưng nó chạy HAI việc song song nên
-                    # hàm một-việc không vừa. Để lại vì thiệt hại nhỏ: truy hồi đo được
-                    # 727ms so với hạn 60s, và nhánh dự phòng chỉ chạy lại chính nó.
-                    # Nâng lên khi nào cần: đổi sang wait(fs, timeout=) + shutdown(wait=False).
-                    with ThreadPoolExecutor(max_workers=2) as ex:
-                        hf = ex.submit(get_session_history, sid, 8)
-                        rf = ex.submit(_do_hybrid_retrieve)
-                        try:
-                            fresh = hf.result(timeout=5)
-                            if isinstance(fresh, list):
-                                hist_patch["conversation_history"] = fresh
-                        except Exception:
-                            pass
-                        retrieved = rf.result(timeout=60)
-                except Exception:
-                    retrieved = _do_hybrid_retrieve()
-            else:
-                retrieved = _do_hybrid_retrieve()
+            # Audit vòng 8 V8-5: node này TỪNG đọc lại `sessions_store.get_history(sid)`
+            # rồi ghi đè `conversation_history` trong state. `sessions_store` khoá theo
+            # `session_id` và không biết chủ sở hữu, còn state ở đây KHÔNG mang `user_id`
+            # nên node không có cách nào tự giới hạn phạm vi. Nó ghi đè đúng thứ tầng
+            # route vừa quyết định có phạm vi (`main.py`, `history = []` khi lệch chủ) —
+            # gửi `session_id` của người khác là lịch sử chat của họ cắm thẳng vào prompt.
+            #
+            # Lần đọc lại đó chỉ mua thêm những lượt vừa ghi trong vài giây trước, còn
+            # tầng dưới thì mất trắng phạm vi. Bỏ hẳn: tin tầng đang giữ phạm vi.
+            retrieved = _do_hybrid_retrieve()
 
             if not retrieved:
                 payload = {"answer": "Không tìm thấy dữ liệu phù hợp trong file đã chọn."}
                 log_node_event(state["job_id"], "RetrieveFAISS", "ok", t.ms(), {"chunks": 0})
-                return {**state, **hist_patch, "payload": payload, "status_code": 200, "done": True, "progress": 20, "current_node": "RetrieveFAISS"}
+                return {**state, "payload": payload, "status_code": 200, "done": True, "progress": 20, "current_node": "RetrieveFAISS"}
 
             chunks_with_citation: list[str] = []
             chunk_ids: list[int] = []
@@ -342,7 +327,6 @@ def build_query_graph(
             log_node_event(state["job_id"], "RetrieveFAISS", "ok", t.ms(), {"chunks": len(chunks_with_citation)})
             return {
                 **state,
-                **hist_patch,
                 "retrieved_chunks": chunks_with_citation,
                 "retrieved_chunk_ids": chunk_ids,
                 "retrieved_stems": chunk_stems,

@@ -104,7 +104,7 @@ def test_single_flight_bypasses_followup_with_history(monkeypatch):
     import app.main as main
 
     monkeypatch.setenv("SINGLE_FLIGHT_ENABLED", "true")
-    monkeypatch.setattr(main, "_get_session_history_safe", lambda sid, n: [
+    monkeypatch.setattr(main, "_get_session_history_safe", lambda sid, n, user_id=None: [
         {"role": "user", "content": "Nội dung là gì?"},
         {"role": "assistant", "content": "Phase 5."},
     ])

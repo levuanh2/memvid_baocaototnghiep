@@ -86,7 +86,7 @@ def sf_env(monkeypatch):
     monkeypatch.setenv("SINGLE_FLIGHT_WAIT_SECONDS", "1.0")
     monkeypatch.setenv("SINGLE_FLIGHT_POLL_INTERVAL_SECONDS", "0.05")
     monkeypatch.setenv("SINGLE_FLIGHT_LOCK_TTL_SECONDS", "180")
-    monkeypatch.setattr(main, "_get_session_history_safe", lambda sid, n: [])
+    monkeypatch.setattr(main, "_get_session_history_safe", lambda sid, n, user_id=None: [])
     served = []
     monkeypatch.setattr(main, "_finalize_from_cache",
                         lambda jid, sid, q, cached, **kw: served.append((jid, cached)))
@@ -155,7 +155,7 @@ def test_follower_fail_open_when_leader_vanishes(sf_env):
 
 def test_redis_down_bypass(monkeypatch):
     monkeypatch.setenv("SINGLE_FLIGHT_ENABLED", "true")
-    monkeypatch.setattr(main, "_get_session_history_safe", lambda sid, n: [])
+    monkeypatch.setattr(main, "_get_session_history_safe", lambda sid, n, user_id=None: [])
     redis_client.reset_for_tests(None)  # no client -> get_redis() returns None
     try:
         r = main._single_flight_try("j6", "nội dung là gì", [], True, None, None, "s1")

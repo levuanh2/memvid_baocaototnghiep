@@ -1,5 +1,48 @@
 # Lessons Learned
 
+## 2026-09-01 - Chốt bảo mật nằm sau một cờ tính năng thì không phải chốt
+
+- **Cờ tắt là đường mặc định, và đường mặc định phải là đường an toàn.** Kiểm chủ sở hữu
+  phiên chat có thật trong `main.py`, viết đúng, nhưng nằm trong khối
+  `if _conversation_enabled()`. Cờ đó mặc định `False` và `BE/.env` không khai — tức
+  **cấu hình đang chạy là cấu hình rò**. Một chốt chỉ hoạt động khi bật cờ không phải
+  chốt, nó là hiệu ứng phụ của một tính năng khác.
+
+- **Bật cờ lên cũng không phải là an toàn, nếu cái chặn không phải luật quyền sở hữu.**
+  Bật `CONVERSATION_CONTEXT_ENABLED` thì rò bị chặn — nhưng bởi chốt chống
+  cache-poisoning (`if hist and cache_key`), hoàn toàn tình cờ. Rò mở lại mỗi khi
+  `cache_key` rơi về `None` (nguồn còn `processing`, hoặc Redis chết). Khi truy nguyên vì
+  sao một lỗ "không tái hiện được", phải hỏi *cái gì đang chặn nó* — nếu câu trả lời
+  không phải luật đang nói về quyền, thì lỗ vẫn còn, chỉ là chưa gặp điều kiện.
+
+- **Tầng dưới không được ghi đè quyết định của tầng đang giữ phạm vi.**
+  `RetrieveFAISS` đọc lại store rồi ghi đè `conversation_history`, kể cả khi route vừa
+  quyết định để rỗng. State của graph không mang `user_id` nên node đó **không thể** tự
+  giới hạn phạm vi — nó không có dữ liệu để quyết. Mang không đủ ngữ cảnh để tự quyết thì
+  đừng ghi đè quyết định của người có đủ.
+
+- **Một guard trong hàm dùng chung nhỏ hơn năm guard ở năm caller.** `sessions_store` có
+  đúng hai hàm và năm điểm gọi. Thêm cột `user_id` + kiểm ở hai hàm đó phủ cả chiều đọc
+  lẫn chiều ghi, gồm cả những đường chưa ai nghĩ tới. Vá ở từng route thì diff to hơn mà
+  vẫn sót.
+
+- **`CREATE TABLE IF NOT EXISTS` bỏ qua cả cột mới.** Thêm cột vào câu CREATE trông như đã
+  xong, nhưng với mọi máy đã có DB thì nó là no-op. Phải `PRAGMA table_info` rồi `ALTER
+  TABLE` kèm theo — và test phải dựng sẵn một DB kiểu cũ để chứng minh đường migration
+  chạy, chứ không chỉ test trên thư mục rỗng.
+
+- **Hàng cũ không có chủ: đừng coi là "của mọi người".** Cột `user_id` thêm sau thì hàng
+  cũ là `NULL`. Cho `NULL` khớp mọi người dùng nghe có vẻ tương thích ngược, nhưng nó giữ
+  nguyên lỗ với đúng những hàng đang tồn tại — tức đúng những hàng có dữ liệu thật.
+  `NULL` chỉ khớp lời gọi cũng không có chủ (chế độ mở). TTL 24h dọn nốt phần còn lại.
+
+- **`inspect.getsource` đọc đĩa, `inspect.signature` đọc RAM.** Test khẳng định-cấu-trúc
+  bằng `getsource` đỏ giả khi file bị sửa giữa lúc suite chạy: `co_firstlineno` lấy từ
+  module đã nạp, còn nội dung lấy từ `linecache` đọc dòng hiện tại. Suite 22 phút thì cửa
+  sổ đó rất rộng. Khoá "thiếu tham số chủ sở hữu" bằng `signature` vừa đúng ý hơn vừa
+  không dính bẫy.
+
+
 ## 2026-09-01 - Audit vòng 8: prompt và luật kiểm phải sinh từ cùng một danh sách
 
 - **Hằng số prompt tả nhiều hơn cấu hình cho phép thì tầng luật phía sau chỉ còn việc đếm

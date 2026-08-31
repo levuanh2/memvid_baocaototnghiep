@@ -42,7 +42,6 @@ def build_graphs(
     search_index: Callable[..., Any],
     summarize_results: Callable[..., Any],
     query_with_memory_tree: Callable[..., Any],
-    get_session_history: Callable[..., Any] | None,
     # mindmap deps
     collect_mindmap_input: Callable[..., dict],
     mindmap_pipeline: Any,
@@ -83,7 +82,6 @@ def build_graphs(
             search_index=search_index,
             summarize_results=summarize_results,
             query_with_memory_tree=query_with_memory_tree,
-            get_session_history=get_session_history,
             retriever=retriever,
         )
     except Exception as exc:

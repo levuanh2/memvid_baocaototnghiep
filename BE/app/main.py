@@ -415,7 +415,7 @@ def _finalize_from_cache(jid: str, session_id: str, question: str, cached: dict,
             _ss_append(session_id, [
                 {"role": "user", "content": question},
                 {"role": "assistant", "content": str(payload.get("answer"))},
-            ])
+            ], user_id=user_id)
     except Exception:
         pass
 
@@ -462,7 +462,7 @@ def _single_flight_try(jid: str, question: str, sources: list, use_mem: bool,
 
     # Follow-up (context-specific) → don't coalesce (mirror cache_lookup behaviour).
     try:
-        history = _get_session_history_safe(session_id, 8)
+        history = _get_session_history_safe(session_id, 8, user_id=user_id)
     except Exception:
         history = []
     if history and not llm_cache.is_standalone_question(question):
@@ -1252,10 +1252,11 @@ def _check_sources_status(selected_sources: List[str]) -> Dict[str, str]:
 # LangGraph pipelines được dựng tập trung ở app/wiring.py — gọi ở CUỐI khối init
 # (sau khi mọi callback/helper cần thiết đã sẵn sàng).
 
-def _get_session_history_safe(session_id: str, limit: int) -> list:
+def _get_session_history_safe(session_id: str, limit: int,
+                              user_id: Optional[str] = None) -> list:
     try:
         from app.domains.jobs.sessions_store import get_history as _gh
-        return _gh(session_id, limit_messages=limit)
+        return _gh(session_id, limit_messages=limit, user_id=user_id)
     except Exception:
         return []
 
@@ -1390,7 +1391,6 @@ _graphs = _build_graphs(
     search_index=search_index,
     summarize_results=summarize_results,
     query_with_memory_tree=query_with_memory_tree,
-    get_session_history=_get_session_history_safe,
     collect_mindmap_input=collect_mindmap_input,
     mindmap_pipeline=_get_mindmap_pipeline(),
     persist_mindmap=mindmap_store.save_record,
@@ -1621,7 +1621,7 @@ def _finalize_query_job(jid: str, session_id: str, question: str, out: dict,
     try:
         if isinstance(payload, dict) and payload.get("answer"):
             from app.domains.jobs.sessions_store import append_messages as _ss_append
-            _ss_append(session_id, [{"role": "user", "content": question}, {"role": "assistant", "content": str(payload.get("answer"))}])
+            _ss_append(session_id, [{"role": "user", "content": question}, {"role": "assistant", "content": str(payload.get("answer"))}], user_id=user_id)
     except Exception:
         pass
 
@@ -3625,7 +3625,7 @@ def query():
 
             try:
                 from app.domains.jobs.sessions_store import get_history as _ss_get
-                history = _ss_get(session_id, limit_messages=8)
+                history = _ss_get(session_id, limit_messages=8, user_id=req_user_id)
             except Exception:
                 history = []
 

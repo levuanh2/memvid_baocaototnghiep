@@ -66,7 +66,6 @@ def build(*, retriever_chunks=None, summarize=None, **overrides):
         search_index=lambda q: [],
         summarize_results=summarize or (lambda *a, **k: "generated answer"),
         query_with_memory_tree=lambda *a, **k: None,
-        get_session_history=None,
         retriever=StubRetriever(chunks),
     )
     kwargs.update(overrides)

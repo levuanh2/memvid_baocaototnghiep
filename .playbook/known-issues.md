@@ -1,5 +1,116 @@
 # Known Issues
 
+## (ĐÃ SỬA 2026-09-01) Biết `session_id` của người khác là đọc được lịch sử chat của họ
+
+Audit vòng 8, phần backend. Bảng `sessions` (`BE/sessions.sqlite`) chỉ có ba cột:
+
+```sql
+CREATE TABLE sessions (session_id TEXT PRIMARY KEY, updated_at REAL, history_json TEXT)
+```
+
+Không có `user_id`. Chữ ký hàm cũng không có chỗ để truyền:
+
+```
+get_history(session_id: str, *, limit_messages: int = 8) -> list[dict[str, str]]
+append_messages(session_id: str, messages: list[dict[str, str]]) -> None
+```
+
+**Rào cản duy nhất:** `session_id` là `uuid4()` server sinh — không dò được. Nhưng nó
+không phải bí mật: đi qua body request, localStorage, log proxy, link chia sẻ. Qua rào
+đó thì không còn lớp nào chặn.
+
+### Vì sao chốt kiểm chủ đã có không cứu được
+
+`main.py` **có** kiểm chủ, nhưng nó nằm trong khối `if _conversation_enabled()`:
+
+```python
+history = _ss_get(session_id, limit_messages=8)      # đọc KHÔNG phạm vi
+if _conversation_enabled() and ...:
+    ...
+    history = []      # chốt kiểm chủ — CHỈ chạy khi cờ bật
+```
+
+`CONVERSATION_CONTEXT_ENABLED` mặc định `False` (`shared/config.py:124`) và `BE/.env`
+không khai khoá này → **đang chạy tắt** → chốt không bao giờ chạy. Cấu hình mặc định là
+cấu hình rò.
+
+Bật cờ thì rò bị chặn phần lớn, nhưng **do ngẫu nhiên**: `cache_key` được đặt nên chốt
+chống cache-poisoning ở `query_graph.py:581` ném lịch sử đi. Không có logic quyền sở hữu
+nào tham gia. Rò mở lại mỗi khi `cache_key` rơi về `None` — nguồn của chính người hỏi còn
+`status=processing` (`query_graph.py:167`), hoặc Redis chết (`:207`).
+
+### Và một tầng nữa ghi đè lên quyết định đã có phạm vi
+
+`RetrieveFAISS` (`query_graph.py:312`) đọc lại `sessions_store` rồi **ghi đè**
+`conversation_history` trong state — kể cả khi tầng route vừa quyết định để rỗng.
+
+State của graph **không mang `user_id`** (kiểm: `grep user_id app/graphs/query_graph.py`
+ra rỗng), nên node đó không có cách nào tự giới hạn phạm vi, kể cả nếu muốn. Lần đọc lại
+ấy chỉ mua thêm những lượt vừa ghi vài giây trước.
+
+### Chiều GHI cũng hổng
+
+`main.py` (đường leader) và đường single-flight follower đều gọi `_ss_append(session_id,
+...)` không kèm chủ. B hỏi trên phiên của A thì câu của B nằm luôn trong lịch sử của A —
+lượt sau của A mang theo ngữ cảnh của người lạ.
+
+### Fix
+
+- `sessions_store`: thêm cột `user_id` + `ALTER TABLE` idempotent trong `init_db()` cho DB
+  đã tồn tại (`CREATE TABLE IF NOT EXISTS` bỏ qua cả cột mới — dễ tưởng là đã xong).
+  `get_history`/`append_messages` nhận `user_id` và kiểm chủ ở **cả hai chiều**.
+- Hàng cũ chủ `NULL` chỉ khớp lời gọi cũng không có chủ, tức chế độ mở. Coi `NULL` là "của
+  mọi người" thì rò vẫn nguyên với đúng những hàng đang tồn tại. `SESSION_TTL_HOURS=24`
+  dọn hết trong một ngày.
+- 5 call site trong `main.py` truyền chủ xuống. `get_session_history` gỡ hẳn khỏi
+  `build_query_graph`, `wiring.py` và điểm nối ở `main.py`; `hist_patch` chết theo.
+
+**Một guard trong hai hàm của store phủ cả 5 call site.** Vá ở từng route thì diff to hơn
+mà vẫn sót đường nào chưa ai nghĩ tới.
+
+### Regression
+
+`BE/tests/test_sessions_store_chu_so_huu.py` — 9 test: chữ ký có chỗ truyền chủ, người
+khác không đọc được, chính chủ đọc được, người khác không ghi đè được (chiều ghi), chế độ
+mở không tự dựng rào, hàng cũ `NULL` không mở cho người đã đăng nhập, DB cũ chưa có cột
+vẫn mở được và không mất dữ liệu, `session_id` rỗng không nổ, và `build_query_graph` không
+còn nhận hàm đọc lịch sử.
+
+**Không dùng `inspect.getsource`** trong nhóm test này — xem mục dưới về bẫy dịch dòng.
+
+### Phòng ngừa
+
+Kiểm quyền sở hữu **không được nằm sau một cờ tính năng**. Cờ tắt là đường mặc định, và
+đường mặc định phải là đường an toàn. Nếu một chốt bảo mật chỉ chạy khi bật cờ, nó không
+phải chốt — nó là hiệu ứng phụ.
+
+Và: tầng dưới không được ghi đè quyết định của tầng đang giữ phạm vi. Muốn ghi đè thì phải
+mang theo đủ ngữ cảnh để tự quyết — không mang được thì đừng ghi đè.
+
+## (GHI NHỚ 2026-09-01) Test dùng `inspect.getsource` không chạy được song song với việc sửa chính file đó
+
+Hai ca đỏ giả trong một lần chạy suite:
+
+```
+FAILED tests/test_upload_pipeline_holes.py::test_route_v2_co_goi_buoc_xoa_storage
+FAILED tests/test_quiz_attempt.py::test_short_answer_quiz_is_graded_in_background
+```
+
+Chạy lại riêng: `2 passed`. Mã không sai. `inspect.getsource` lấy `co_firstlineno` từ
+module đã nạp trong RAM rồi đọc **dòng hiện tại trên đĩa** qua `linecache`. Sửa
+`app/main.py` (+50 dòng) giữa lúc suite chạy → nó trả về thân của hàm khác.
+
+Suite BE mất ~22 phút. Cửa sổ đó đủ rộng để dính thường xuyên.
+
+Hai luật rút ra:
+- Đừng chạy suite đầy đủ trong lúc còn đang sửa mã. Số ra không dùng được.
+- Đừng chạy **hai** lần pytest chồng nhau: chúng dùng chung Postgres/sqlite, và ca
+  `test_progress_concepts_uses_latest_snapshot_not_a_running_sum` đỏ đúng vì lý do đó
+  (chạy riêng thì xanh).
+- Test khẳng định-cấu-trúc thì ưu tiên `inspect.signature` thay vì `getsource`: nó đọc từ
+  object trong RAM, không đụng `linecache`, nên không dính bẫy này.
+
+
 ## (ĐÃ SỬA 2026-09-01) Quiz: đáp án trùng nhau, xin 10 nhận 5, lỗi mạng nói tiếng Anh
 
 Audit vòng 8 — người dùng báo ba thứ trong một lần dùng: *"tạo ra đáp án có trùng A B C D

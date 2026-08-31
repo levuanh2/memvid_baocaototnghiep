@@ -152,7 +152,10 @@ def test_questions_without_real_source_are_dropped_and_logged(be, client, monkey
         _question("Nguon bia?", ref="c999"),
     ]})
 
-    job_id = _generate(client, doc_id).get_json()["job_id"]
+    # question_count=1: xin đúng số câu tốt mà LLM giả cung cấp, nên vòng bù (audit
+    # vòng 8) không kích. Test này đo việc GHI LOG, không đo việc bù — pin số câu để
+    # lượt bù không cộng thêm bản ghi vào phép đếm.
+    job_id = _generate(client, doc_id, question_count=1).get_json()["job_id"]
     job = client.get(f"/api/quizzes/jobs/{job_id}").get_json()
     assert job["status"] == "done"
     assert job["result"]["question_count"] == 1 and job["result"]["rejected_count"] == 2
@@ -256,7 +259,8 @@ def test_job_is_recorded_in_postgres_ledger(be, client, monkeypatch, owner):
     _run_inline(monkeypatch)
     _fake_llm(monkeypatch, {"questions": [_question("Cau tot?"), _question("Nguon bia?", ref="c9")]})
 
-    job_id = _generate(client, doc_id).get_json()["job_id"]
+    # question_count=1 để vòng bù không kích — test này đo FK sổ cái, không đo bù.
+    job_id = _generate(client, doc_id, question_count=1).get_json()["job_id"]
     result = client.get(f"/api/quizzes/jobs/{job_id}").get_json()["result"]
 
     with session_scope() as s:
@@ -268,3 +272,76 @@ def test_job_is_recorded_in_postgres_ledger(be, client, monkeypatch, owner):
 
     logs = client.get(f"/api/quizzes/jobs/{job_id}/validation-logs").get_json()["logs"]
     assert len(logs) == 1, "log gắn được vào job qua FK"
+
+
+def test_thieu_cau_thi_bu_mot_luot_va_noi_ra_so_da_xin(be, client, monkeypatch, owner):
+    """Audit vòng 8 V8-3 — xin 3 nhận 1 rồi im lặng là hỏng.
+
+    Lượt đầu chỉ ra 1 câu dùng được (log thật 2026-08-30: model bỏ `explanation` nên
+    5/10 câu bị loại). Phải hỏi lại ĐÚNG phần thiếu, kèm danh sách câu đã có để model
+    khỏi ra lại y hệt — và chỉ MỘT lượt: máy có 1 slot LLM.
+    """
+    import json as _json
+
+    from app.domains.quiz import generator as gen
+
+    _protect(be, monkeypatch, owner)
+    doc_id, _ = _seed_document(client)
+    _run_inline(monkeypatch)
+
+    luot = []
+    original = gen.generate_questions
+
+    def _ask_theo_luot(prompt, **kw):
+        luot.append(prompt)
+        if len(luot) == 1:
+            return _json.dumps({"questions": [_question("Cau dau?")]}, ensure_ascii=False)
+        return _json.dumps({"questions": [_question("Cau bu 1?"), _question("Cau bu 2?")]},
+                           ensure_ascii=False)
+
+    monkeypatch.setattr(gen, "generate_questions",
+                        lambda ctx, cfg, **kw: original(ctx, cfg, ask=_ask_theo_luot,
+                                                        da_co=kw.get("da_co")))
+
+    job_id = _generate(client, doc_id, question_count=3).get_json()["job_id"]
+    result = client.get(f"/api/quizzes/jobs/{job_id}").get_json()["result"]
+
+    assert len(luot) == 2, "đúng một lượt bù, không hơn"
+    assert "Cau dau?" in luot[1], "lượt bù phải liệt kê câu đã có để model khỏi lặp"
+    assert "Số câu: 2" in luot[1], "lượt bù chỉ xin phần còn thiếu"
+
+    assert result["question_count"] == 3
+    assert result["asked_count"] == 3, "result phải nói ra số đã xin"
+    quiz = client.get(f"/api/quizzes/{result['quiz_id']}").get_json()
+    assert [q["question_text"] for q in quiz["questions"]] == [
+        "Cau dau?", "Cau bu 1?", "Cau bu 2?"]
+
+
+def test_bu_hong_thi_van_giu_cau_da_qua_kiem_chat_luong(be, client, monkeypatch, owner):
+    """Lượt bù chết không được kéo theo cả job — 1 câu vẫn hơn không câu nào."""
+    import json as _json
+
+    from app.domains.quiz import generator as gen
+
+    _protect(be, monkeypatch, owner)
+    doc_id, _ = _seed_document(client)
+    _run_inline(monkeypatch)
+
+    luot = []
+    original = gen.generate_questions
+
+    def _ask_luot_hai_chet(prompt, **kw):
+        luot.append(prompt)
+        if len(luot) == 1:
+            return _json.dumps({"questions": [_question("Cau dau?")]}, ensure_ascii=False)
+        raise RuntimeError("het token")
+
+    monkeypatch.setattr(gen, "generate_questions",
+                        lambda ctx, cfg, **kw: original(ctx, cfg, ask=_ask_luot_hai_chet,
+                                                        da_co=kw.get("da_co")))
+
+    job_id = _generate(client, doc_id, question_count=3).get_json()["job_id"]
+    job = client.get(f"/api/quizzes/jobs/{job_id}").get_json()
+    assert job["status"] == "done", "bù hỏng không được làm hỏng cả job"
+    assert job["result"]["question_count"] == 1
+    assert job["result"]["asked_count"] == 3

@@ -31,10 +31,16 @@ def init_db() -> None:
                 CREATE TABLE IF NOT EXISTS sessions (
                     session_id TEXT PRIMARY KEY,
                     updated_at REAL NOT NULL,
-                    history_json TEXT NOT NULL
+                    history_json TEXT NOT NULL,
+                    user_id TEXT
                 )
                 """
             )
+            # DB đã có từ trước thì CREATE TABLE IF NOT EXISTS bỏ qua cả cột mới —
+            # phải thêm tay. Idempotent: chỉ ALTER khi cột chưa có.
+            cols = {r[1] for r in con.execute("PRAGMA table_info(sessions)")}
+            if "user_id" not in cols:
+                con.execute("ALTER TABLE sessions ADD COLUMN user_id TEXT")
             con.commit()
         finally:
             con.close()
@@ -48,7 +54,23 @@ def _cleanup_expired(con: sqlite3.Connection) -> None:
     con.execute("DELETE FROM sessions WHERE updated_at < ?", (cutoff,))
 
 
-def get_history(session_id: str, *, limit_messages: int = 8) -> list[dict[str, str]]:
+def _dung_chu(row_owner: Optional[str], user_id: Optional[str]) -> bool:
+    """Hàng này có thuộc về người đang hỏi không.
+
+    `session_id` là `uuid4()` server sinh nên không dò được, nhưng nó KHÔNG phải thứ
+    bí mật: nó đi qua body request, localStorage, log proxy. Biết id của người khác
+    là đọc/ghi được phiên của họ, vì bảng này chưa từng biết ai là chủ.
+
+    Hàng cũ (chủ NULL, ghi trước khi có cột) chỉ khớp với lời gọi cũng không có chủ —
+    tức chế độ mở, khi không có người dùng nào để tách. Coi NULL là "của mọi người"
+    thì rò vẫn nguyên với đúng những hàng đang tồn tại. TTL 24h
+    (`SESSION_TTL_HOURS`) dọn hết chúng trong một ngày.
+    """
+    return (row_owner or None) == (user_id or None)
+
+
+def get_history(session_id: str, *, limit_messages: int = 8,
+                user_id: Optional[str] = None) -> list[dict[str, str]]:
     if not session_id:
         return []
     init_db()
@@ -58,10 +80,10 @@ def get_history(session_id: str, *, limit_messages: int = 8) -> list[dict[str, s
         try:
             _cleanup_expired(con)
             row = con.execute(
-                "SELECT history_json FROM sessions WHERE session_id = ?",
+                "SELECT history_json, user_id FROM sessions WHERE session_id = ?",
                 (session_id,),
             ).fetchone()
-            if not row:
+            if not row or not _dung_chu(row[1], user_id):
                 return []
             raw = row[0] or "[]"
             try:
@@ -85,7 +107,8 @@ def get_history(session_id: str, *, limit_messages: int = 8) -> list[dict[str, s
             con.close()
 
 
-def append_messages(session_id: str, messages: list[dict[str, str]]) -> None:
+def append_messages(session_id: str, messages: list[dict[str, str]],
+                    *, user_id: Optional[str] = None) -> None:
     if not session_id:
         return
     if not messages:
@@ -99,10 +122,15 @@ def append_messages(session_id: str, messages: list[dict[str, str]]) -> None:
         try:
             _cleanup_expired(con)
             row = con.execute(
-                "SELECT history_json FROM sessions WHERE session_id = ?",
+                "SELECT history_json, user_id FROM sessions WHERE session_id = ?",
                 (session_id,),
             ).fetchone()
             if row:
+                # Chiều GHI cũng phải kiểm chủ: hỏi trên phiên của người khác thì câu
+                # của mình không được nằm trong lịch sử của họ, nếu không lượt sau của
+                # họ mang theo ngữ cảnh của người lạ.
+                if not _dung_chu(row[1], user_id):
+                    return
                 try:
                     hist = json.loads(row[0] or "[]")
                 except Exception:
@@ -128,13 +156,13 @@ def append_messages(session_id: str, messages: list[dict[str, str]]) -> None:
 
             con.execute(
                 """
-                INSERT INTO sessions(session_id, updated_at, history_json)
-                VALUES(?, ?, ?)
+                INSERT INTO sessions(session_id, updated_at, history_json, user_id)
+                VALUES(?, ?, ?, ?)
                 ON CONFLICT(session_id) DO UPDATE SET
                     updated_at=excluded.updated_at,
                     history_json=excluded.history_json
                 """,
-                (session_id, now, json.dumps(hist, ensure_ascii=False)),
+                (session_id, now, json.dumps(hist, ensure_ascii=False), user_id or None),
             )
             con.commit()
         finally:
