@@ -11,6 +11,7 @@ except Exception:
 import json
 import re
 import uuid
+import contextlib
 import threading
 import time
 import logging
@@ -2560,12 +2561,17 @@ def run_quiz_generation_job(job_id: str, document_id: str, config: dict,
             raise _JobCancelled()
 
         update_job(job_id, progress=30, current_node="GenerateQuestions")
-        raw_questions, err, attempts = _quiz_gen.generate_questions(context, config)
+        with _nhip_tim_job(job_id):
+            raw_questions, err, attempts = _quiz_gen.generate_questions(
+                context, config, da_huy=_cancelled)
+        # Huỷ phải được đọc TRƯỚC `err`: `generate_questions` trả lỗi "Đã huỷ..." khi
+        # thấy cờ, và nó là huỷ chứ không phải hỏng — vào nhánh `err` thì job hiện
+        # "Tạo quiz thất bại" cho một việc chính người dùng bấm dừng.
+        if _cancelled():
+            raise _JobCancelled()
         if err:
             _val_store.log_rejections([_rules.json_failure(err)], job_id=log_job_id)
             raise ValueError(err)
-        if _cancelled():
-            raise _JobCancelled()
 
         update_job(job_id, progress=70, current_node="Validate")
         accepted, rejected = _rules.validate_questions(
@@ -2610,9 +2616,11 @@ def run_quiz_generation_job(job_id: str, document_id: str, config: dict,
             update_job(job_id, progress=80, current_node="BuSoCauThieu")
             print(f"quiz_bu_cau job_id={job_id} co={len(accepted)} thieu={thieu}",
                   flush=True)
-            them_raw, them_err, _ = _quiz_gen.generate_questions(
-                context, {**config, "question_count": thieu},
-                da_co=[q["question_text"] for q in accepted])
+            with _nhip_tim_job(job_id):
+                them_raw, them_err, _ = _quiz_gen.generate_questions(
+                    context, {**config, "question_count": thieu},
+                    da_co=[q["question_text"] for q in accepted],
+                    da_huy=_cancelled)
             if them_err:
                 # Bù hỏng KHÔNG làm hỏng cả job: quiz với 5 câu vẫn dùng được, còn hơn
                 # ném đi cả 5 câu đã qua kiểm chất lượng.
@@ -2686,6 +2694,12 @@ _QUIZ_INFLIGHT: "OrderedDict[str, str]" = OrderedDict()
 _QUIZ_INFLIGHT_LOCK = threading.Lock()
 _QUIZ_INFLIGHT_MAX = 256
 
+# Job `pending` quá ngưỡng này = xếp hàng xong mà không worker nào nhận. Rộng rãi so với
+# thời gian một job thật cần để chuyển sang `running` (đo được: dưới một giây ở chế độ
+# thread, vài giây khi qua RQ), nhưng vẫn đủ ngắn để người dùng bấm lại được trong cùng
+# một phiên làm việc thay vì phải chờ tới lần khởi động sau.
+_QUIZ_PENDING_TOI_DA_GIAY = float(os.getenv("QUIZ_PENDING_TOI_DA_GIAY", "120"))
+
 
 def _quiz_job_key(uid: Optional[str], document_id: str, config: dict) -> str:
     """Hai yêu cầu chỉ là 'trùng' khi CÙNG người, CÙNG tài liệu, CÙNG cấu hình. Đổi số câu
@@ -2705,14 +2719,79 @@ def _quiz_job_giu_cho(key: str, job_id_moi: str) -> Optional[str]:
         cu = _QUIZ_INFLIGHT.get(key)
         if cu:
             job = get_job(cu)
-            if job and job.get("status") in _QUIZ_JOB_SONG:
+            if job and job.get("status") in _QUIZ_JOB_SONG and not _job_pending_da_chet(job):
                 return cu
-        # Giữ chỗ TRƯỚC khi enqueue: enqueue hỏng thì job nằm 'pending' và `sweep_stuck_jobs`
-        # dọn, chấp nhận được. Giữ chỗ SAU khi enqueue thì cửa sổ đua quay lại.
+        # Giữ chỗ TRƯỚC khi enqueue — giữ chỗ SAU thì cửa sổ đua quay lại. Route phải
+        # gọi `_quiz_job_nha_cho` nếu không xếp hàng được (xem ở đó).
         _QUIZ_INFLIGHT[key] = job_id_moi
         while len(_QUIZ_INFLIGHT) > _QUIZ_INFLIGHT_MAX:
             _QUIZ_INFLIGHT.popitem(last=False)
     return None
+
+
+def _job_pending_da_chet(job: dict) -> bool:
+    """Job `pending` quá lâu = xếp hàng xong mà không worker nào nhận.
+
+    `sweep_stuck_jobs` CỐ Ý không đụng `pending` (hàng đợi chờ lâu là hợp lệ, và
+    `tests/test_jobs_retention.py` khoá đúng hành vi đó), nên không ai dọn nó cho tới
+    lần khởi động sau. Comment cũ ở đây ghi ngược lại — nó hứa một cơ chế không tồn tại.
+
+    Hậu quả nếu tin comment cũ: dedupe thấy job chết vẫn "còn sống" và trả lại đúng nó
+    cho MỌI lần bấm sau — người dùng vĩnh viễn không tạo lại được quiz cùng cấu hình,
+    còn giao diện thì poll một job không bao giờ nhúc nhích.
+    """
+    if job.get("status") != "pending":
+        return False   # `running` cũ là việc của sweep_stuck_jobs, không phải của đây
+    moc = job.get("updated_at") or job.get("created_at")
+    if not moc:
+        return False
+    try:
+        from datetime import datetime, timezone
+        tuoi = (datetime.now(timezone.utc) - datetime.fromisoformat(str(moc))).total_seconds()
+    except Exception:
+        return False   # không đọc được mốc thì đừng đoán, cứ coi là còn sống
+    return tuoi > _QUIZ_PENDING_TOI_DA_GIAY
+
+
+def _quiz_job_nha_cho(key: str, job_id_cua_minh: str) -> None:
+    """Trả lại chỗ đã giữ khi không xếp hàng được.
+
+    Chỉ xoá nếu chỗ VẪN đang là của mình — request khác có thể đã chiếm sau đó, xoá
+    nhầm thì mở lại đúng cửa sổ đua mà dedupe sinh ra để đóng.
+    """
+    with _QUIZ_INFLIGHT_LOCK:
+        if _QUIZ_INFLIGHT.get(key) == job_id_cua_minh:
+            _QUIZ_INFLIGHT.pop(key, None)
+
+
+@contextlib.contextmanager
+def _nhip_tim_job(job_id: str, moi_giay: float = 120.0):
+    """Báo "còn sống" đều đặn trong lúc một bước dài không có tiến trình để báo.
+
+    `sweep_stuck_jobs` quét job `running` không chạm `updated_at` quá
+    `JOB_STUCK_AFTER_SECONDS` (mặc định 900) thành `interrupted`. Bước gọi model của
+    quiz nằm trọn giữa `progress=30` và `progress=70`: `QUIZ_LLM_TIMEOUT_SEC=900` nhân
+    `MAX_ATTEMPTS=2` là tối đa 1800s im lặng. Job đang chạy tử tế bị quét, người dùng
+    bấm lại, và job thứ hai tranh 1 slot LLM — đúng lỗi vòng 7 quay lại bằng cửa khác.
+
+    Việc phụ: hỏng thì im, không được ném vào luồng job.
+    """
+    dung = threading.Event()
+
+    def _chay() -> None:
+        from app.domains.jobs import jobs_store as _js
+        while not dung.wait(moi_giay):
+            try:
+                _js.touch_job(job_id)
+            except Exception:
+                pass
+
+    t = threading.Thread(target=_chay, daemon=True)
+    t.start()
+    try:
+        yield
+    finally:
+        dung.set()
 
 
 @app.post('/api/quizzes/generate')
@@ -2744,7 +2823,8 @@ def api_quizzes_generate():
             return jsonify({"error": f"section_ids không thuộc tài liệu: {unknown}"}), 400
 
     job_id = str(uuid.uuid4())
-    dang_chay = _quiz_job_giu_cho(_quiz_job_key(uid, document_id, config), job_id)
+    khoa = _quiz_job_key(uid, document_id, config)
+    dang_chay = _quiz_job_giu_cho(khoa, job_id)
     if dang_chay:
         # Không phải lỗi: người dùng bấm lại đúng cái họ đã xin. Trả về job ĐANG chạy để
         # giao diện bám tiếp vào nó thay vì mở thêm một job nữa tranh slot LLM.
@@ -2752,11 +2832,17 @@ def api_quizzes_generate():
         return jsonify({"job_id": dang_chay, "status": "started", "deduped": True}), 202
 
     from app.domains.jobs.jobs_store import create_job
-    create_job(job_id, job_type="quiz_generation", status="pending", progress=0,
-               current_node="Queued", user_id=uid)
     from app.jobs.queue import enqueue_job
-    res = enqueue_job(run_quiz_generation_job, args=(job_id, document_id, config, uid),
-                      queue="mindmap", job_id=job_id)
+    try:
+        create_job(job_id, job_type="quiz_generation", status="pending", progress=0,
+                   current_node="Queued", user_id=uid)
+        res = enqueue_job(run_quiz_generation_job, args=(job_id, document_id, config, uid),
+                          queue="mindmap", job_id=job_id)
+    except Exception:
+        # Chỗ đã giữ mà job không bao giờ chạy = cửa khoá vĩnh viễn: mọi lần bấm sau đều
+        # bị dedupe trả về đúng job chết này. Trả chỗ lại rồi mới báo lỗi.
+        _quiz_job_nha_cho(khoa, job_id)
+        raise
     print(f"quiz_enqueue_{res.get('mode')} job_id={job_id}", flush=True)
     return jsonify({"job_id": job_id, "status": "started"}), 202
 

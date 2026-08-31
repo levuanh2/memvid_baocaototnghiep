@@ -371,6 +371,23 @@ def cleanup_terminal_jobs(retention_days: Optional[int] = None) -> int:
         return 0
 
 
+def touch_job(job_id: str) -> None:
+    """Chạm `updated_at` mà KHÔNG đổi gì khác — nhịp tim cho bước dài không có tiến
+    trình để báo (`sweep_stuck_jobs` đo đúng cột này).
+
+    Không dùng `update_job(job_id, progress=...)` thay: báo một con số tiến trình không
+    có thật để giữ job sống là nói dối đúng chỗ người dùng đang nhìn.
+    """
+    init_db()
+    with _lock:
+        conn = get_conn()
+        try:
+            conn.execute("UPDATE jobs SET updated_at=? WHERE job_id=?", (_now(), job_id))
+            conn.commit()
+        finally:
+            conn.close()
+
+
 def sweep_stuck_jobs(stuck_after_seconds: Optional[int] = None) -> int:
     """Job running/processing không heartbeat (updated_at — mọi update_job/append_token
     đều chạm) quá ngưỡng (default env JOB_STUCK_AFTER_SECONDS=900) → 'interrupted'.

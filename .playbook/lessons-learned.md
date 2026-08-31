@@ -1,5 +1,43 @@
 # Lessons Learned
 
+## 2026-09-01 - Comment hứa một cơ chế thì phải grep xem cơ chế đó có thật không
+
+- **Ba nguồn trong cùng một kho, hai nói thật, một nói dối — và nguồn nói dối là nguồn
+  người sửa sau đọc.** Comment vòng 7 ghi *"enqueue hỏng thì job nằm 'pending' và
+  `sweep_stuck_jobs` dọn"*. Docstring của chính `sweep_stuck_jobs` ghi *"Pending KHÔNG bị
+  đụng"*, và `test_fresh_running_and_old_pending_untouched` khoá đúng hành vi ngược đó.
+  Comment ấy không mô tả mã, nó mô tả **mong muốn** của người viết. Khi một comment hứa
+  "chỗ khác lo rồi", grep chỗ khác trước khi tin.
+
+- **Bước dài không có tiến trình để báo vẫn phải báo là mình còn sống.** Phép đếm rất
+  ngắn: thời lượng tối đa của bước × số lần thử, so với `JOB_STUCK_AFTER_SECONDS`. Quiz
+  ra 900×2 = 1800 so với 900 — job đang chạy tử tế tự bị quét thành `interrupted`, và
+  chính cú poll của người dùng là thứ quét nó (`_run_jobs_maintenance` nằm trong route
+  poll). Study map có `progress_cb` từng item nên thoát; quiz là ngoại lệ duy nhất, và
+  ngoại lệ duy nhất là chỗ đáng soi nhất.
+
+- **Nhịp tim đừng giả làm tiến trình.** Cách dễ nhất để giữ job sống là
+  `update_job(job_id, progress=...)`, và nó sai: báo một con số không có thật đúng chỗ
+  người dùng đang nhìn. `touch_job()` chỉ chạm `updated_at` — làm đúng một việc, không
+  nói thêm gì.
+
+- **Huỷ chỉ tới được nơi có người đọc nó.** `quiz_generation` nằm trong
+  `_CANCELLABLE_JOB_TYPES`, executor có gọi `is_cancel_requested` — nhưng chỉ ở hai điểm
+  kẹp NGOÀI lời gọi model. Đăng ký "huỷ được" không làm cho nó huỷ được. Và trần thật thì
+  phải nói ra: một request HTTP đang chạy tới Ollama thì Python không cắt ngang được, nên
+  worst case đi từ hai lượt xuống một, không xuống không.
+
+- **"Đã huỷ" mà đi vào nhánh lỗi thì thành "Thất bại".** `generate_questions` báo huỷ qua
+  kênh `err`, còn job đọc `err` trước khi đọc cờ huỷ — kết quả là màn hình đổ lỗi cho hệ
+  thống về hành động chính người dùng vừa bấm. Khi một hàm dùng chung một kênh trả về cho
+  hai ý nghĩa khác nhau, thứ tự đọc ở caller trở thành một phần của hợp đồng; hoặc đọc
+  đúng thứ tự, hoặc tách kênh.
+
+- **Nhả tài nguyên đã giữ phải kiểm còn là của mình không.** `_quiz_job_nha_cho` xoá chỗ
+  chỉ khi chỗ vẫn mang job_id của mình. Xoá vô điều kiện thì mở lại đúng cửa sổ đua mà
+  dedupe sinh ra để đóng — sửa một lỗi kẹt bằng cách trả lại một lỗi trùng lặp.
+
+
 ## 2026-09-01 - Chốt bảo mật nằm sau một cờ tính năng thì không phải chốt
 
 - **Cờ tắt là đường mặc định, và đường mặc định phải là đường an toàn.** Kiểm chủ sở hữu

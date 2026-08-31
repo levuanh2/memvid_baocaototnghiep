@@ -345,3 +345,33 @@ def test_bu_hong_thi_van_giu_cau_da_qua_kiem_chat_luong(be, client, monkeypatch,
     assert job["status"] == "done", "bù hỏng không được làm hỏng cả job"
     assert job["result"]["question_count"] == 1
     assert job["result"]["asked_count"] == 3
+
+
+def test_huy_giua_luc_goi_model_ra_cancelled_chu_khong_phai_that_bai(
+        be, client, monkeypatch, owner):
+    """Audit vòng 8 BE#9 — huỷ tới được giữa hai lượt gọi model.
+
+    `generate_questions` trả lỗi "Đã huỷ..." khi thấy cờ. Nếu job đọc `err` trước khi
+    đọc cờ huỷ thì màn hình hiện "Tạo quiz thất bại" cho một việc chính người dùng bấm
+    dừng — đổ lỗi cho hệ thống về hành động của người dùng.
+    """
+    import app.domains.jobs.jobs_store as js
+
+    _protect(be, monkeypatch, owner)
+    doc_id, _ = _seed_document(client)
+    _run_inline(monkeypatch)
+    _fake_llm(monkeypatch, {"questions": [_question("Khong bao gio dung toi?")]})
+
+    lan = {"n": 0}
+    that = js.is_cancel_requested
+
+    def _huy_tu_lan_thu_hai(job_id):
+        lan["n"] += 1
+        return lan["n"] >= 2 or that(job_id)
+
+    monkeypatch.setattr(js, "is_cancel_requested", _huy_tu_lan_thu_hai)
+
+    job_id = _generate(client, doc_id).get_json()["job_id"]
+    job = client.get(f"/api/quizzes/jobs/{job_id}").get_json()
+    assert job["status"] == "cancelled", "huỷ không được hiện thành thất bại"
+    assert not job.get("error")

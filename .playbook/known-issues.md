@@ -1,5 +1,102 @@
 # Known Issues
 
+## (ĐÃ SỬA 2026-09-01) Ba cách job quiz kẹt: khoá vĩnh viễn, tự bị quét, huỷ không ăn
+
+Audit vòng 8, phần vòng đời job. Ba lỗi khác nhau, cùng một hậu quả với người dùng: bấm
+"Tạo quiz" rồi ngồi nhìn một thứ không bao giờ xong.
+
+### BE#2 — giữ chỗ dedupe biến thành cửa khoá vĩnh viễn
+
+Dedupe vòng 7 giữ chỗ TRƯỚC khi xếp hàng, kèm comment tự trấn an:
+
+```python
+# Giữ chỗ TRƯỚC khi enqueue: enqueue hỏng thì job nằm 'pending' và `sweep_stuck_jobs`
+# dọn, chấp nhận được.
+```
+
+Comment nói dối. `sweep_stuck_jobs` docstring ghi rõ *"Pending KHÔNG bị đụng (job queue
+có thể chờ lâu hợp lệ)"*, và `tests/test_jobs_retention.py::test_fresh_running_and_old_
+pending_untouched` **khoá đúng hành vi ngược đó**. Pending mồ côi chỉ được dọn bởi
+`reconcile_interrupted` lúc khởi động.
+
+Nên: job xếp hàng xong mà không worker nào nhận (RQ bật nhưng không có worker, hoặc
+`Thread.start()` ném) sẽ nằm `pending` mãi. Dedupe thấy `pending` ∈ `_QUIZ_JOB_SONG` nên
+trả lại **đúng job chết đó** cho mọi lần bấm sau. Người dùng vĩnh viễn không tạo lại được
+quiz cùng cấu hình; giao diện poll một job không bao giờ nhúc nhích.
+
+**Fix hai lớp:**
+- `_job_pending_da_chet()` — `pending` quá `QUIZ_PENDING_TOI_DA_GIAY` (mặc định 120s) thì
+  dedupe không coi là đang sống nữa. Chỉ `pending`: `running` cũ là việc của
+  `sweep_stuck_jobs`, đừng giẫm chân.
+- `_quiz_job_nha_cho()` — route trả chỗ lại nếu `create_job`/`enqueue_job` ném. Chỉ xoá
+  khi chỗ VẪN là của mình; request khác có thể đã chiếm, xoá nhầm thì mở lại đúng cửa sổ
+  đua mà dedupe sinh ra để đóng.
+
+Comment nói dối đã thay bằng comment nói đúng thứ đang xảy ra.
+
+### BE#3 — job đang chạy tử tế tự bị quét thành `interrupted`
+
+Giữa `progress=30` và `progress=70` là trọn lời gọi model. Không nhịp tim nào.
+
+```
+QUIZ_LLM_TIMEOUT_SEC=900  ×  MAX_ATTEMPTS=2   = tối đa 1800s im lặng
+JOB_STUCK_AFTER_SECONDS=900                     ngưỡng quét
+```
+
+`_run_jobs_maintenance()` nằm ngay trong route poll của chính giao diện, nên chính cú
+poll của người dùng quét job của họ. Sau khi bị quét, `interrupted` ∉ `_QUIZ_JOB_SONG`
+nên dedupe mở cửa cho job mới — người dùng bấm lại và job thứ hai tranh 1 slot LLM. Đúng
+lỗi vòng 7 quay lại bằng cửa khác.
+
+Study map có `progress_cb` từng item; quiz là ngoại lệ duy nhất.
+
+**Fix:** `_nhip_tim_job(job_id, moi_giay=120)` — context manager, thread daemon chạm
+`updated_at` đều đặn, `finally` tắt. Bọc cả lượt chính lẫn lượt bù.
+
+Thêm `jobs_store.touch_job()` thay vì `update_job(job_id, progress=...)`: báo một con số
+tiến trình không có thật để giữ job sống là nói dối đúng chỗ người dùng đang nhìn.
+(`update_job` không kwargs thì return sớm, nên không dùng thẳng được.)
+
+Nhịp tim là việc phụ — hỏng thì im, không ném vào luồng job. Có test cho đúng ca đó.
+
+### BE#9 — bấm Huỷ, "Đang huỷ…" đứng 15-30 phút
+
+`quiz_generation` có trong `_CANCELLABLE_JOB_TYPES` và executor **có** gọi
+`is_cancel_requested` — nhưng chỉ ở hai điểm kẹp NGOÀI `generate_questions`. Cùng họ với
+known-issues 2026-07-17 ("Đang huỷ… 36% mãi"), đã sửa cho summary, chưa sửa cho quiz.
+
+**Fix:** `generate_questions(..., da_huy=...)` kiểm cờ trước MỖI lượt.
+
+**Trần còn lại, nói thẳng:** huỷ vẫn không cắt được một lời gọi đang chạy — đó là request
+HTTP tới Ollama, Python không cắt ngang được. Worst case đi từ **hai** lượt xuống **một**
+(`QUIZ_LLM_TIMEOUT_SEC`). Muốn xuống nữa thì phải huỷ ở tầng HTTP client, không phải ở đây.
+
+**Và một lỗi kèm theo, phát hiện lúc nối dây:** job đọc `err` TRƯỚC khi đọc cờ huỷ.
+`generate_questions` trả `err="Đã huỷ trước khi gọi model."`, rơi vào nhánh `err` →
+`raise ValueError` → job `error` → màn hình hiện **"Tạo quiz thất bại"** cho một việc
+chính người dùng bấm dừng. Đã đảo thứ tự: đọc cờ huỷ trước.
+
+### Regression
+
+- `BE/tests/test_quiz_job_ket.py` — 10 test: pending còn mới vẫn dedupe (không phá vòng
+  7), pending quá cũ nhường chỗ, running cũ KHÔNG bị đụng, nhả chỗ đúng và không giẫm
+  vào chỗ người khác đã chiếm, nhịp tim chạm `updated_at`, dừng hẳn khi ra khỏi khối,
+  không làm hỏng job khi `touch_job` ném, và huỷ chặn được lượt gọi model tiếp theo.
+- `test_quiz_generation.py::test_huy_giua_luc_goi_model_ra_cancelled_chu_khong_phai_that_bai`
+  — khoá thứ tự đọc cờ huỷ trước `err`.
+
+### Phòng ngừa
+
+**Comment hứa một cơ chế thì phải grep xem cơ chế đó có thật không.** Comment vòng 7 hứa
+`sweep_stuck_jobs` dọn pending; docstring của chính hàm đó nói ngược, và có hẳn một test
+khoá hành vi ngược. Ba nguồn trong cùng một kho, hai nguồn nói thật, một nguồn nói dối —
+và nguồn nói dối là nguồn người sửa sau đọc.
+
+**Bước dài không có tiến trình để báo vẫn phải báo là mình còn sống.** Bất cứ chỗ nào có
+thể chạy lâu hơn `JOB_STUCK_AFTER_SECONDS` mà không gọi `update_job` đều là ứng viên bị
+quét. Đếm: thời lượng tối đa của bước × số lần thử.
+
+
 ## (ĐÃ SỬA 2026-09-01) Biết `session_id` của người khác là đọc được lịch sử chat của họ
 
 Audit vòng 8, phần backend. Bảng `sessions` (`BE/sessions.sqlite`) chỉ có ba cột:

@@ -136,6 +136,7 @@ def generate_questions(
     ask: Optional[Callable[..., str]] = None,
     timeout_sec: Optional[float] = None,
     da_co: Optional[Sequence[str]] = None,
+    da_huy: Optional[Callable[[], bool]] = None,
 ) -> Tuple[List[Any], Optional[str], int]:
     """(danh sách câu thô, lỗi, số lần gọi model).
 
@@ -151,6 +152,11 @@ def generate_questions(
     base_system = build_system(config.get("question_types") or [])
     last_raw = ""
     for attempt in range(1, MAX_ATTEMPTS + 1):
+        # Huỷ chỉ tới được ở ĐÂY, không tới được giữa lời gọi model đang chạy: lời gọi
+        # là một request HTTP tới Ollama, Python không cắt ngang được. Trần còn lại vì
+        # thế là MỘT lượt (`QUIZ_LLM_TIMEOUT_SEC`), thay cho hai như trước.
+        if da_huy is not None and da_huy():
+            return [], "Đã huỷ trước khi gọi model.", attempt - 1
         system = base_system if attempt == 1 else base_system + _RETRY_HINT
         try:
             raw = ask(prompt, system_prompt=system, feature="quiz",
