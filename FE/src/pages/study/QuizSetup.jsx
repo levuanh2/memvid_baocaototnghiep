@@ -10,6 +10,7 @@ import {
   getDocument,
   listDocuments,
   listSections,
+  moTaLoi,
 } from "../../utils/studyApi";
 
 const COUNTS = [5, 10, 15, 20];
@@ -68,7 +69,7 @@ export default function QuizSetup() {
         setSections(s);
       }
     } catch (e) {
-      setError(e?.message || "Không tải được tài liệu.");
+      setError(moTaLoi(e, "Không tải được tài liệu."));
     } finally {
       setLoading(false);
     }
@@ -106,7 +107,7 @@ export default function QuizSetup() {
       });
       if (body?.job_id) job.start(body.job_id);
     } catch (err) {
-      setSubmitError(err?.message || "Không tạo được quiz.");
+      setSubmitError(moTaLoi(err, "Không tạo được quiz."));
     } finally {
       setSubmitting(false);
     }

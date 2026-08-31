@@ -98,9 +98,18 @@ def validate_questions(
             continue
 
         if qtype == "multiple_choice":
+            # Gộp lựa chọn trùng TRƯỚC khi đếm: model yếu hay trả "C" hai lần, và hai
+            # lựa chọn giống hệt nhau thì câu hỏi không chấm công bằng được. Gộp chứ
+            # không loại cả câu — ba lựa chọn phân biệt vẫn là câu dùng được.
+            deduped: List[str] = []
+            for o in options:
+                if not any(_norm(o) == _norm(k) for k in deduped):
+                    deduped.append(o)
+            options = deduped
             if len(options) < 2:
                 rejected.append(_reject(
-                    RULE_JSON, "multiple_choice cần ít nhất 2 lựa chọn.", raw, index))
+                    RULE_JSON, "multiple_choice cần ít nhất 2 lựa chọn phân biệt.",
+                    raw, index))
                 continue
             # Đáp án phải NẰM TRONG lựa chọn, nếu không câu hỏi không chấm được.
             match = next((o for o in options if _norm(o) == _norm(answer)), None)

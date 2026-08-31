@@ -12,6 +12,7 @@ import {
   getProgressOverview,
   listDocuments,
   uploadDocument,
+  moTaLoi,
 } from "../../utils/studyApi";
 
 const READY = new Set(["completed", "ready", "index_ready"]);
@@ -42,7 +43,7 @@ export default function DocumentList() {
       setWeak(concepts.slice(0, 4));
       setAttempts(history);
     } catch (e) {
-      setError(e?.message || "Không tải được danh sách tài liệu.");
+      setError(moTaLoi(e, "Không tải được danh sách tài liệu."));
     } finally {
       setLoading(false);
     }
@@ -60,7 +61,7 @@ export default function DocumentList() {
       await uploadDocument(file);
       await load();
     } catch (err) {
-      setError(err?.message || "Tải tài liệu lên thất bại.");
+      setError(moTaLoi(err, "Tải tài liệu lên thất bại."));
     } finally {
       setUploading(false);
     }

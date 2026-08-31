@@ -9,6 +9,7 @@ import {
   optionLabel,
   saveAnswers,
   submitAttempt,
+  moTaLoi,
 } from "../../utils/studyApi";
 
 const KEYS = ["A", "B", "C", "D", "E", "F"];
@@ -50,7 +51,7 @@ export default function QuizTaking() {
         navigate(`/app/study/result/${body.attempt_id}`, { replace: true });
       }
     } catch (e) {
-      setError(e?.message || "Không mở được quiz.");
+      setError(moTaLoi(e, "Không mở được quiz."));
     } finally {
       setLoading(false);
     }
@@ -79,7 +80,7 @@ export default function QuizTaking() {
       try {
         await saveAnswers(attemptId, batch);
       } catch (e) {
-        setError(e?.message || "Không lưu được câu trả lời.");
+        setError(moTaLoi(e, "Không lưu được câu trả lời."));
       } finally {
         setSaving(false);
       }
@@ -105,7 +106,7 @@ export default function QuizTaking() {
       await submitAttempt(attemptId);
       navigate(`/app/study/result/${attemptId}`, { replace: true });
     } catch (e) {
-      setError(e?.message || "Nộp bài thất bại.");
+      setError(moTaLoi(e, "Nộp bài thất bại."));
       setSubmitting(false);
       setConfirming(false);
     }

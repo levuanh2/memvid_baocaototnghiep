@@ -2598,6 +2598,55 @@ def run_quiz_generation_job(job_id: str, document_id: str, config: dict,
                 q["section_id"] = max(set(sections), key=sections.count) if sections else None
         accepted = [q for q in accepted if q["chunk_ids"]][: config["question_count"]]
 
+        # MỘT lượt bù, không hơn. Xin 10 nhận 5 (log 2026-08-30 job 7ae6eb87: 5/10 câu
+        # bị loại vì model bỏ `explanation`) — không ép được model viết đủ, nhưng hỏi
+        # lại đúng phần thiếu thì được. Máy chỉ có 1 slot LLM nên mỗi lượt là ~1 phút
+        # người dùng ngồi chờ: bù xong vẫn thiếu thì trả đúng số có được, `asked_count`
+        # trong result nói ra phần chênh.
+        thieu = config["question_count"] - len(accepted)
+        if thieu > 0 and not _cancelled():
+            from shared.text_norm import norm_text as _norm_text
+
+            update_job(job_id, progress=80, current_node="BuSoCauThieu")
+            print(f"quiz_bu_cau job_id={job_id} co={len(accepted)} thieu={thieu}",
+                  flush=True)
+            them_raw, them_err, _ = _quiz_gen.generate_questions(
+                context, {**config, "question_count": thieu},
+                da_co=[q["question_text"] for q in accepted])
+            if them_err:
+                # Bù hỏng KHÔNG làm hỏng cả job: quiz với 5 câu vẫn dùng được, còn hơn
+                # ném đi cả 5 câu đã qua kiểm chất lượng.
+                print(f"quiz_bu_cau_that_bai job_id={job_id} err={them_err[:80]}",
+                      flush=True)
+            else:
+                them_ok, them_bad = _rules.validate_questions(
+                    them_raw,
+                    allowed_chunk_refs=ref_map.keys(),
+                    allowed_section_ids=_quiz_repo.section_ids_of(document_id),
+                    allowed_types=config["question_types"],
+                )
+                _val_store.log_rejections(them_bad, job_id=log_job_id)
+                rejected = rejected + them_bad
+                da_co_norm = {_norm_text(q["question_text"]) for q in accepted}
+                for q in them_ok:
+                    if _norm_text(q["question_text"]) in da_co_norm:
+                        continue
+                    q["chunk_ids"] = _quiz_gen.resolve_chunk_refs(q["chunk_refs"], ref_map)
+                    if not q["chunk_ids"]:
+                        continue
+                    if practice_topic:
+                        tags = [t for t in (q.get("concept_tags") or []) if t != practice_topic]
+                        q["concept_tags"] = [practice_topic] + tags
+                    if not q.get("section_id"):
+                        secs = [section_by_chunk.get(c) for c in q["chunk_ids"]]
+                        secs = [x for x in secs if x]
+                        q["section_id"] = max(set(secs), key=secs.count) if secs else None
+                    accepted.append(q)
+                    da_co_norm.add(_norm_text(q["question_text"]))
+                    if len(accepted) >= config["question_count"]:
+                        break
+                print(f"quiz_bu_cau_xong job_id={job_id} tong={len(accepted)}", flush=True)
+
         if not accepted:
             raise ValueError(
                 f"Không câu hỏi nào qua kiểm chất lượng ({len(rejected)} câu bị loại).")
@@ -2606,6 +2655,7 @@ def run_quiz_generation_job(job_id: str, document_id: str, config: dict,
         _quiz_repo.save_questions(quiz_id, accepted)
         _quiz_repo.finish(quiz_id, "ready", question_count=len(accepted))
         result = {"quiz_id": quiz_id, "status": "ready", "question_count": len(accepted),
+                  "asked_count": config["question_count"],
                   "rejected_count": len(rejected), "llm_attempts": attempts}
         update_job(job_id, status="done", progress=100, current_node="Persist", result=result)
         _ledger.close_job(job_id, "done", result_type="quiz", result_id=quiz_id)

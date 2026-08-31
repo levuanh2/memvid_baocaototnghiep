@@ -9,6 +9,26 @@ async function _json(res) {
   return res.json();
 }
 
+// Lỗi cho người đọc, không phải cho console.
+//
+// Mất mạng thì `fetch` ném TypeError("Failed to fetch") — chuỗi tiếng Anh do trình
+// duyệt sinh, người học không hiểu và cũng không biết phải làm gì; 14 chỗ trong
+// pages/study từng hiện thẳng nó ra. Nhưng KHÔNG nuốt tất: BE trả nhiều thông báo
+// tiếng Việt viết sẵn cho người dùng ("Phạm vi đã chọn không có chunk nào đã index")
+// — mất chúng thì người dùng hết đường tự sửa. Vì vậy chỉ thay ba nhóm: lỗi mạng,
+// lỗi quyền, và chuỗi "HTTP nnn" trần.
+export function moTaLoi(e, duPhong = "Đã có lỗi xảy ra. Vui lòng thử lại.") {
+  if (!e) return duPhong;
+  if (e.name === "TypeError" || e.status === 0 || !e.status) {
+    return "Không kết nối được máy chủ. Kiểm tra mạng rồi thử lại.";
+  }
+  if (e.status === 401) return "Phiên đăng nhập đã hết hạn. Vui lòng đăng nhập lại.";
+  if (e.status === 403) return "Bạn không có quyền truy cập tài liệu này.";
+  if (e.status === 404) return "Tài nguyên không tồn tại hoặc bạn không có quyền truy cập.";
+  const msg = String(e.message || "").trim();
+  return msg && !/^HTTP \d+$/.test(msg) ? msg : duPhong;
+}
+
 const _get = (path) => apiFetch(path).then(_json);
 
 const _send = (path, method, body) =>

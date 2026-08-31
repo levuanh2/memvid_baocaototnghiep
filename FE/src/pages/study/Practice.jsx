@@ -12,6 +12,7 @@ import {
   getPracticeComparison,
   optionLabel,
   submitPractice,
+  moTaLoi,
 } from "../../utils/studyApi";
 
 const KEYS = ["A", "B", "C", "D", "E", "F"];
@@ -39,7 +40,7 @@ export default function Practice() {
         if (e?.status !== 409) throw e;
       }
     } catch (e) {
-      setError(e?.message || "Không tải được bài luyện tập.");
+      setError(moTaLoi(e, "Không tải được bài luyện tập."));
     } finally {
       setLoading(false);
     }
@@ -63,7 +64,7 @@ export default function Practice() {
       setGraded(result);
       setComparison(await getPracticeComparison(quizId));
     } catch (e) {
-      setError(e?.message || "Nộp bài luyện tập thất bại.");
+      setError(moTaLoi(e, "Nộp bài luyện tập thất bại."));
     } finally {
       setSubmitting(false);
     }

@@ -1,5 +1,48 @@
 # Lessons Learned
 
+## 2026-09-01 - Audit vòng 8: prompt và luật kiểm phải sinh từ cùng một danh sách
+
+- **Hằng số prompt tả nhiều hơn cấu hình cho phép thì tầng luật phía sau chỉ còn việc đếm
+  xác.** `_SYSTEM` là hằng số, luôn dạy đủ ba dạng câu hỏi kèm định dạng riêng cho
+  `short_answer`; cấu hình thật của người dùng chỉ nằm một dòng trong prompt người dùng.
+  Model 2B nghe system prompt: 7/10 câu trả về là dạng đã bị tắt, `validate_questions` loại
+  đúng cả 7, người dùng xin 10 nhận 2. Tầng luật **không sai một chỗ nào** — nó chỉ đang
+  dọn hậu quả của một chỉ dẫn tự mâu thuẫn. Sau này: bất cứ giá trị nào người dùng chọn
+  được thì prompt và luật phải **cùng đọc từ nó**, đừng để một bên là hằng số.
+
+- **Tầng luật sinh ra để đỡ cho model yếu, nên chỗ nó không soi mới là chỗ hổng.**
+  `validate_questions` kiểm rất kỹ `correct_answer`, `chunk_refs`, `explanation`,
+  `concept_tags` — và **không có một dòng nào** về việc các lựa chọn trắc nghiệm có khác
+  nhau không. `['A','B','C','C']` đi thẳng vào DB. Đọc một tầng kiểm tra thì đừng chỉ đọc
+  những luật nó *có*; liệt kê những trường nó *chạm* rồi hỏi trường nào bị bỏ qua hoàn
+  toàn.
+
+- **Cắt xuống không phải là tôn trọng con số người dùng chọn.** `accepted[:count]` trông
+  như đang giữ đúng cấu hình, thật ra nó chỉ chặn trên. Xin 10 nhận 5 vẫn qua được dòng
+  đó mà không kêu một tiếng. Con số người dùng chọn là **mục tiêu**, không phải trần: đạt
+  thì thôi, không đạt thì bù một lượt, bù vẫn không đạt thì **nói ra phần chênh**
+  (`asked_count` trong result), đừng để họ tự đếm.
+
+- **Hàm tử tế viết xong mà không ai gọi thì bằng không.** `getUserFriendlyApiError` nằm
+  trong `utils/api.js` từ lâu, xử lý đúng ca `TypeError` của `fetch`, có cả câu tiếng Việt
+  sẵn. Grep ra 0 caller trong `pages/study/`, còn 14 chỗ vẫn hiện thẳng `e?.message` —
+  người học đọc được nguyên văn `Failed to fetch`. Lần thứ n của họ "trừu tượng dựng xong
+  rồi bị bỏ qua" (xem cả `require_auth` 0 caller, `_numeric_score` 0 caller). Viết helper
+  xong thì việc chưa xong: phải grep lại xem còn chỗ nào đang làm bằng tay.
+
+- **Và đừng dùng thẳng helper cũ chỉ vì nó tồn tại.** `getUserFriendlyApiError` đổi **mọi**
+  lỗi lạ thành "Đã có lỗi xảy ra" — nối nó vào sẽ nuốt luôn những câu tiếng Việt BE đã viết
+  sẵn cho người dùng ("Phạm vi đã chọn không có chunk nào đã index"), tức là sửa một lỗi
+  hiển thị bằng cách tạo ra một lỗi hiển thị nặng hơn. Bản mới chỉ thay ba nhóm nói bằng
+  ngôn ngữ máy: lỗi mạng, lỗi quyền, và `HTTP nnn` trần.
+
+- **Bằng chứng nằm trong bảng log, không nằm trong phỏng đoán.** Ba giả thuyết ban đầu cho
+  "xin 10 nhận 5" (model sinh ít, JSON bị cắt vì `num_predict`, luật loại) đều hợp lý.
+  `ai_validation_logs` trả lời trong một truy vấn: `count_by_rule` cho từng job nói rõ
+  7 câu chết vì FR-13.1 và 5 câu chết vì FR-13.3. FR-13.11 (log giữ **nguyên văn item bị
+  loại**) là thứ biến một buổi đoán thành một buổi đọc.
+
+
 ## 2026-08-30 - Audit vòng 7: trace một HÀNH ĐỘNG, và đọc số lần lặp trong log
 
 - **Cùng một thông báo lỗi, ba lần là ba nguyên nhân khác nhau.** "Tạo quiz thất bại" lần

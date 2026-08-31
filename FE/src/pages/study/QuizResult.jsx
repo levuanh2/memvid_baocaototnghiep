@@ -12,6 +12,7 @@ import {
   getConceptMasteries,
   getResult,
   optionLabel,
+  moTaLoi,
 } from "../../utils/studyApi";
 
 const KEYS = ["A", "B", "C", "D", "E", "F"];
@@ -35,7 +36,7 @@ export default function QuizResult() {
       }
       return body.status;
     } catch (e) {
-      setError(e?.message || "Không tải được kết quả.");
+      setError(moTaLoi(e, "Không tải được kết quả."));
       return null;
     } finally {
       if (!quiet) setLoading(false);

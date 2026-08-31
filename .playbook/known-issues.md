@@ -1,5 +1,114 @@
 # Known Issues
 
+## (ĐÃ SỬA 2026-09-01) Quiz: đáp án trùng nhau, xin 10 nhận 5, lỗi mạng nói tiếng Anh
+
+Audit vòng 8 — người dùng báo ba thứ trong một lần dùng: *"tạo ra đáp án có trùng A B C D
+thì có thêm C hoặc D"*, *"tạo 10 câu như chỉ tạo ra 5 câu"*, *"fetch to failed"*.
+
+Ba triệu chứng, **ba nguyên nhân gốc khác nhau**. Bằng chứng lấy từ log server và bảng
+`ai_validation_logs` chứ không đoán:
+
+```
+quiz_job_done job_id=7ae6eb87 kept=5 rejected=5   -> 5x FR-13.3 "Thiếu explanation"
+quiz_job_done job_id=a16c1454 kept=2 rejected=8   -> 7x FR-13.1 "question_type
+                                                    'short_answer' không nằm trong
+                                                    dạng đã yêu cầu" + 1x FR-13.2
+quiz_job_done job_id=f97dc5d6 kept=3 rejected=2   -> 2x FR-13.1 (short_answer)
+```
+
+### V8-1 — tầng luật không soi mảng `options` một dòng nào
+
+`validate_questions` kiểm `correct_answer` có nằm trong `options` không, nhưng **không hề
+kiểm các lựa chọn có khác nhau không**. Chứng minh trực tiếp:
+
+```python
+q = {..., "options": ["A", "B", "C", "C"], "correct_answer": "C"}
+validate_questions([q], allowed_chunk_refs=["c0"])
+# -> accepted: 1, options giữ nguyên ['A','B','C','C']
+```
+
+Người học thấy C và D y hệt nhau. Nếu đáp án đúng là C thì câu đó không chấm công bằng
+được — chọn "D" cũng là chọn đúng nội dung.
+
+Một dòng thật từ `ai_validation_logs` cho thấy hình dạng output của model lỏng đến mức
+nào: `type: true_false` mà `opts: ['Không có hạn chế', 'Hạn chế về độ chính xác',
+'Hạn chế về hiệu suất']`.
+
+**Fix:** gộp lựa chọn trùng theo `norm_text` (bỏ dấu, bỏ hoa/thường) **trước** khi đếm và
+trước khi so đáp án; gộp xong còn dưới 2 lựa chọn phân biệt thì mới loại cả câu. Gộp chứ
+không loại — câu 3 lựa chọn phân biệt vẫn dùng được, loại đi là người dùng mất câu hỏi
+vốn dùng được (đúng nguyên tắc đã ghi ở đầu `rules.py`).
+
+**Đừng đổ cho model.** gemma2:2b yếu là điều kiện vận hành đã chọn ở vòng 7 để đổi lấy
+tốc độ (30 tok/s thay vì 3.66). Tầng luật sinh ra chính là để đỡ cho nó.
+
+### V8-2 — system prompt dạy cả ba dạng, kể cả dạng người dùng đã tắt
+
+`_SYSTEM` là **hằng số**, luôn mô tả đủ ba dạng kèm định dạng riêng cho `short_answer`.
+Cấu hình thật (`question_types`) chỉ xuất hiện **một dòng** trong prompt người dùng:
+`- Dạng câu hỏi được phép: multiple_choice, true_false`.
+
+Model 2B nghe system prompt. Job a16c1454: người dùng tắt short_answer, model trả 7/10 câu
+short_answer, tầng luật loại sạch 7 câu. **Xin 10 nhận 2.**
+
+Tầng luật làm đúng việc của nó. Vấn đề là nó chỉ còn việc đếm xác.
+
+**Fix:** `build_system(allowed_types)` — dạng nào không được phép thì **không xuất hiện**
+trong chỉ dẫn, kể cả trong khối JSON mẫu (`"question_type": "{{TYPES}}"`). Prompt và luật
+giờ sinh từ cùng một danh sách `question_types`. Nhân tiện siết hai chỗ model hay bỏ:
+`explanation` ghi rõ BẮT BUỘC + hậu quả, `multiple_choice` ghi rõ 4 lựa chọn KHÁC HẲN NHAU.
+
+### V8-3 — thiếu câu thì không có gì bù lại
+
+`accepted[:question_count]` chỉ **cắt xuống**, không bao giờ bù lên. Job 7ae6eb87 mất 5/10
+câu vì model bỏ `explanation` — V8-2 không chữa ca này, model 2B bỏ trường bắt buộc là
+chuyện thường.
+
+**Fix:** **MỘT** lượt bù, không hơn. Sau khi lọc, còn thiếu thì gọi lại đúng phần thiếu,
+kèm danh sách câu đã có (`da_co`) để model không ra lại y hệt rồi bị loại vì trùng
+(FR-13.7). Câu bù đi qua đúng tầng luật đó, đúng bộ `allowed_types` đó.
+
+**Vì sao chỉ một lượt:** máy có 1 slot LLM (`MAX_CONCURRENT_LLM_CALLS=1`), mỗi lượt là ~1
+phút người dùng ngồi chờ. Bù xong vẫn thiếu thì trả đúng số có được — `result` thêm khoá
+`asked_count` để chênh lệch nói ra được, không im lặng.
+
+Bù hỏng **không** làm hỏng cả job: quiz 5 câu vẫn dùng được, còn hơn ném đi 5 câu đã qua
+kiểm chất lượng. `update_job(progress=80, current_node="BuSoCauThieu")` giữa hai lượt vừa
+là báo tiến trình vừa là nhịp tim — không có nó, lượt bù kéo dài tổng thời gian im lặng
+vượt `JOB_STUCK_AFTER_SECONDS=900` và job bị quét thành `interrupted`.
+
+### V8-4 — `Failed to fetch` hiện nguyên văn cho người học
+
+Chuỗi đó do **trình duyệt** sinh khi `fetch` không tới được máy chủ (`TypeError`). Tiếng
+Anh, và không nói được phải làm gì.
+
+`getUserFriendlyApiError` trong `FE/src/utils/api.js` xử lý đúng ca `TypeError` **từ lâu**.
+Grep ra: **0 trang StudyMap nào gọi nó**. 14 chỗ trong `pages/study/*` hiện thẳng
+`e?.message`. Không phải thiếu code — code có sẵn không ai nối vào.
+
+**Fix:** `moTaLoi(e, duPhong)` trong `studyApi.js`, thay vào cả 14 chỗ. Không dùng thẳng
+`getUserFriendlyApiError`: hàm đó đổi **mọi** lỗi lạ thành "Đã có lỗi xảy ra", nuốt luôn
+thông báo tiếng Việt BE đã viết sẵn cho người dùng ("Phạm vi đã chọn không có chunk nào đã
+index") — mất chúng thì người dùng hết đường tự sửa. `moTaLoi` chỉ thay ba nhóm: lỗi mạng,
+lỗi quyền (401/403/404), và chuỗi `HTTP nnn` trần.
+
+### Regression
+
+- `BE/tests/test_quiz_lua_chon_trung.py` — 5 test: gộp trùng, trùng chỉ khác dấu/hoa
+  thường, gộp xong còn 1 lựa chọn thì loại, đáp án đúng phải sống sót sau khi gộp, và
+  lựa chọn khác nhau thì giữ nguyên thứ tự.
+- `BE/tests/test_quiz_prompt_va_bu_cau.py` — 8 test: system prompt không được chứa dạng đã
+  tắt (kể cả ở **lượt retry**), danh sách lạ/rỗng thì quay về đủ ba dạng, prompt bù nói
+  đúng số còn thiếu và liệt kê câu đã có.
+- `FE/src/utils/studyApiLoi.test.js` — 6 test, gồm ca khoá thẳng: chuỗi trả về **không**
+  được khớp `/failed to fetch/i`.
+
+### Phòng ngừa
+
+Prompt và luật kiểm phải sinh từ **cùng một danh sách**. Hằng số prompt tả nhiều hơn cấu
+hình cho phép thì tầng luật phía sau chỉ còn việc đếm xác — và người dùng chịu phần chênh.
+
+
 ## (ĐÃ SỬA 2026-08-29) Xoá tài liệu xong, bản gốc vẫn nằm trong bucket private
 
 Audit vòng 6 — trace đường đi của một file từ lúc nhận tới lúc nằm yên.

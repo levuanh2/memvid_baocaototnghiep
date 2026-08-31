@@ -5,7 +5,7 @@ import SealMeter from "../../components/study/SealMeter";
 import { Icon } from "../../components/ui/Icon";
 import Spinner from "../../components/ui/Spinner";
 import { useStudyJob } from "../../hooks/useStudyJob";
-import { MASTERY_LABEL, generatePractice, generateReviewPlan, getReviewPlan } from "../../utils/studyApi";
+import { MASTERY_LABEL, moTaLoi, generatePractice, generateReviewPlan, getReviewPlan } from "../../utils/studyApi";
 
 export default function ReviewGuide() {
   const { attemptId } = useParams();
@@ -30,7 +30,7 @@ export default function ReviewGuide() {
     } catch (e) {
       // Chưa có plan (404) không phải lỗi — chỉ là chưa tạo. Trang tự tạo giúp.
       if (e?.status === 404) setPlan(null);
-      else setError(e?.message || "Không tải được kế hoạch ôn tập.");
+      else setError(moTaLoi(e, "Không tải được kế hoạch ôn tập."));
     } finally {
       setLoading(false);
     }
@@ -44,7 +44,7 @@ export default function ReviewGuide() {
     try {
       setPlan(await generateReviewPlan(attemptId, { force }));
     } catch (e) {
-      setError(e?.message || "Không tạo được kế hoạch ôn tập.");
+      setError(moTaLoi(e, "Không tạo được kế hoạch ôn tập."));
     } finally {
       setBusy(false);
     }
@@ -61,7 +61,7 @@ export default function ReviewGuide() {
       });
       if (body?.job_id) job.start(body.job_id);
     } catch (e) {
-      setError(e?.message || "Không tạo được câu luyện tập.");
+      setError(moTaLoi(e, "Không tạo được câu luyện tập."));
       setPracticeFor(null);
     }
   };

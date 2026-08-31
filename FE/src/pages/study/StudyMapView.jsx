@@ -14,6 +14,7 @@ import {
   getStudyMap,
   listChunks,
   listStudyMaps,
+  moTaLoi,
 } from "../../utils/studyApi";
 
 // Bốn loại node là phân tầng THẬT của tài liệu (tài liệu > chương mục > khái
@@ -67,7 +68,7 @@ export default function StudyMapView() {
       if (newest) await openMap(newest.map_id, documentId);
       else setMap(null);
     } catch (e) {
-      setError(e?.message || "Không tải được sơ đồ kiến thức.");
+      setError(moTaLoi(e, "Không tải được sơ đồ kiến thức."));
     } finally {
       setLoading(false);
     }
@@ -107,7 +108,7 @@ export default function StudyMapView() {
       if (body?.job_id) job.start(body.job_id);
       else if (body?.map_id) await openMap(body.map_id, documentId);
     } catch (e) {
-      setError(e?.message || "Không tạo được sơ đồ kiến thức.");
+      setError(moTaLoi(e, "Không tạo được sơ đồ kiến thức."));
     } finally {
       setStarting(false);
     }
