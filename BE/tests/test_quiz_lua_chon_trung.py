@@ -75,3 +75,51 @@ def test_ly_do_loai_ma_la_van_noi_duoc_gi_do():
     dem, cau = rules.ly_do_loai([{"rule_code": "FR-99.9"}])
     assert dem == {"FR-99.9": 1}
     assert cau, "mã lạ vẫn phải có câu mô tả, đừng trả rỗng"
+
+
+# ── Lựa chọn gần-trùng: đo trên dữ liệu THẬT, ngưỡng nằm trong khoảng trống ──
+def test_loai_cau_co_lua_chon_chi_la_cach_dien_dat_khac(_=None):
+    """Dữ liệu thật, attempt 01597551, câu "RAG là gì?" (max jaccard 0.905).
+
+    Ba "đáp án nhiễu" chỉ khác nhau ở mấy từ cuối và ĐỀU là mô tả đúng về RAG. Người
+    học chọn một câu đúng nhưng không phải chuỗi model chỉ định → chấm sai, và điểm số
+    thu được không nói lên điều gì.
+    """
+    q = {**BASE, "options": [
+        "Retrieval-Augmented Generation là một kỹ thuật kết hợp truy xuất thông tin từ kho dữ liệu",
+        "RAG là một kỹ thuật sử dụng LLM để trả lời câu hỏi dựa trên dữ liệu nội bộ.",
+        "RAG là một kỹ thuật sử dụng LLM để trả lời câu hỏi dựa trên dữ liệu từ internet.",
+        "RAG là một kỹ thuật sử dụng LLM để trả lời câu hỏi dựa trên dữ liệu từ kho dữ liệu.",
+    ], "correct_answer":
+        "Retrieval-Augmented Generation là một kỹ thuật kết hợp truy xuất thông tin từ kho dữ liệu"}
+    ok, bad = rules.validate_questions([q], allowed_chunk_refs=["c0"])
+    assert not ok and bad[0]["rule_code"] == rules.RULE_JSON
+    assert "gần như trùng" in bad[0]["message"].lower()
+
+
+def test_giu_cau_co_khuc_dau_giong_nhung_duoi_khac_han():
+    """Dữ liệu thật, cùng bài (max jaccard 0.722) — câu này DÙNG ĐƯỢC.
+
+    Khúc đầu dài giống nhau, nhưng phần phân biệt ở đuôi khác hẳn về nghĩa. Ngưỡng phải
+    tha câu này; loại nó là loại nhầm đề tốt.
+    """
+    q = {**BASE, "options": [
+        "RAG có thể giúp giải quyết những vấn đề liên quan đến kiến thức chung, không cần citation.",
+        "RAG có thể giúp giải quyết những vấn đề liên quan đến dữ liệu nội bộ, có tính chất thay đổi.",
+        "RAG có thể giúp giải quyết những vấn đề liên quan đến các task creative writing, brainstorm.",
+        "RAG có thể giúp giải quyết những vấn đề liên quan đến các task có yêu cầu citation.",
+    ], "correct_answer":
+        "RAG có thể giúp giải quyết những vấn đề liên quan đến dữ liệu nội bộ, có tính chất thay đổi."}
+    ok, bad = rules.validate_questions([q], allowed_chunk_refs=["c0"])
+    assert ok and not bad, "đề tốt bị loại nhầm"
+
+
+def test_nguong_nam_trong_khoang_trong_do_duoc_tren_du_lieu_that():
+    """Khoá ngưỡng vào SỐ ĐO, không phải một con số đẹp.
+
+    Đo 8 câu multiple_choice trong DB (2026-09-02), max jaccard giữa các cặp lựa chọn:
+        dùng được : 0.467 · 0.700 · 0.722
+        hỏng      : 0.864 · 0.900 · 0.905 · 1.000 · 1.000
+    Khoảng trống nằm giữa 0.722 và 0.864.
+    """
+    assert 0.722 < rules.NGUONG_LUA_CHON_GIONG < 0.864

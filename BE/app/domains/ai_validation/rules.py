@@ -27,6 +27,22 @@ RULE_NO_SOURCE = "FR-13.6"       # chunk_refs không trỏ vào chunk nào của
 RULE_DUPLICATE = "FR-13.7"       # trùng câu đã có
 RULE_REVIEW_SCOPE = "FR-13.9"    # review item gợi ý ngoài phạm vi câu sai (Phase 6)
 
+# Hai lựa chọn giống nhau tới mức này thì câu hỏi không còn phân biệt được bằng HIỂU.
+#
+# Đo 2026-09-02 trên 8 câu multiple_choice thật trong DB — max Jaccard (tập token, đã
+# `norm_text`) giữa các cặp lựa chọn:
+#     dùng được : 0.467 · 0.700 · 0.722
+#     hỏng      : 0.864 · 0.900 · 0.905 · 1.000 · 1.000
+# Khoảng trống thật nằm giữa 0.722 và 0.864, nên ngưỡng đặt 0.80. KHÔNG phải con số đẹp
+# chọn bừa: 0.72 (dự đoán ban đầu) sẽ loại nhầm câu "…dữ liệu nội bộ / creative writing /
+# citation" vốn phân biệt được rõ ở phần đuôi.
+#
+# TRẦN ĐÃ BIẾT — đây là phép đo CHỮ, không phải nghĩa. Ca hỏng thật ở attempt 01597551 là
+# ba "đáp án nhiễu" ĐỀU MÔ TẢ ĐÚNG về RAG; chúng bị bắt vì tình cờ cũng giống nhau về chữ.
+# Một bộ nhiễu diễn đạt khác hẳn nhưng cùng đúng thì luật này KHÔNG bắt được. Muốn bắt
+# phải kiểm bằng nghĩa (NLI/embedding), đắt hơn nhiều — chưa làm.
+NGUONG_LUA_CHON_GIONG = 0.80
+
 QUESTION_TYPES = ("multiple_choice", "true_false", "short_answer")
 DIFFICULTIES = ("easy", "medium", "hard")
 DEFAULT_DIFFICULTY = "medium"
@@ -44,6 +60,14 @@ def _reject(rule_code: str, message: str, item: Any, index: int) -> Dict[str, An
         "target_ref": str(index),
         "payload": {"index": index, "item": item},
     }
+
+
+def _giong_nhau(a: str, b: str) -> float:
+    """Jaccard trên tập token đã chuẩn hoá. 1.0 = cùng bộ từ, 0.0 = không chung từ nào."""
+    ta, tb = set(_norm(a).split()), set(_norm(b).split())
+    if not ta or not tb:
+        return 0.0
+    return len(ta & tb) / len(ta | tb)
 
 
 def _as_list(value: Any) -> List[str]:
@@ -110,6 +134,19 @@ def validate_questions(
                 rejected.append(_reject(
                     RULE_JSON, "multiple_choice cần ít nhất 2 lựa chọn phân biệt.",
                     raw, index))
+                continue
+            # Trùng KHÍT đã gộp ở trên; còn lại là cặp GẦN trùng. Người học không phân
+            # biệt được bằng hiểu thì điểm số thu về không nói lên điều gì — thà loại câu.
+            gan_trung = [
+                (options[i], options[j])
+                for i in range(len(options)) for j in range(i + 1, len(options))
+                if _giong_nhau(options[i], options[j]) >= NGUONG_LUA_CHON_GIONG
+            ]
+            if gan_trung:
+                rejected.append(_reject(
+                    RULE_JSON,
+                    f"Các lựa chọn gần như trùng nhau ({len(gan_trung)} cặp) — câu hỏi "
+                    "không phân biệt được bằng hiểu.", raw, index))
                 continue
             # Đáp án phải NẰM TRONG lựa chọn, nếu không câu hỏi không chấm được.
             match = next((o for o in options if _norm(o) == _norm(answer)), None)
@@ -230,6 +267,27 @@ def demo() -> None:
         assert not ok and len(bad) == 1 and bad[0]["rule_code"] == code, (code, bad)
         assert bad[0]["payload"]["item"] == item, "FR-13.11: log phải giữ nguyên item"
 
+    # lựa chọn GẦN trùng: đo trên dữ liệu thật (attempt 01597551) — ba nhiễu đều là
+    # cách diễn đạt khác của đáp án đúng
+    ok, bad = validate_questions([{**base, "options": [
+        "Retrieval-Augmented Generation la ky thuat ket hop truy xuat thong tin",
+        "RAG la mot ky thuat su dung LLM de tra loi cau hoi dua tren du lieu noi bo",
+        "RAG la mot ky thuat su dung LLM de tra loi cau hoi dua tren du lieu internet",
+        "RAG la mot ky thuat su dung LLM de tra loi cau hoi dua tren du lieu kho",
+    ], "correct_answer": "Retrieval-Augmented Generation la ky thuat ket hop truy xuat thong tin"}],
+        allowed_chunk_refs=["c1"])
+    assert not ok and "gan nhu trung" in _norm(bad[0]["message"]), bad[0]["message"]
+
+    # khuc dau giong nhung duoi khac han thi GIU (khong loai nham de tot)
+    ok, bad = validate_questions([{**base, "options": [
+        "RAG giup giai quyet van de lien quan den kien thuc chung khong can citation",
+        "RAG giup giai quyet van de lien quan den du lieu noi bo co tinh thay doi",
+        "RAG giup giai quyet van de lien quan den task creative writing brainstorm",
+        "RAG giup giai quyet van de lien quan den task co yeu cau citation",
+    ], "correct_answer": "RAG giup giai quyet van de lien quan den du lieu noi bo co tinh thay doi"}],
+        allowed_chunk_refs=["c1"])
+    assert ok and not bad, "de tot bi loai nham"
+
     # trùng câu: chỉ khác dấu/hoa thường vẫn là trùng
     ok, bad = validate_questions(
         [base, {**base, "question_text": "DAO HAM CUA X^2 LA GI?"}],
@@ -318,7 +376,7 @@ def validate_review_items(
 # bị loại vì FR-13.5 (model không trích nhãn nguồn), 2 vì trùng, 1 vì lựa chọn không
 # phân biệt. Không câu nào vì đoạn ngắn.
 _CAU_THEO_RULE = {
-    RULE_JSON: "model trả về câu hỏi sai định dạng (sai dạng đã chọn, hoặc thiếu lựa chọn phân biệt)",
+    RULE_JSON: "model trả về câu hỏi không dùng được (sai dạng đã chọn, hoặc các lựa chọn gần như trùng nhau)",
     RULE_CORRECT_ANSWER: "đáp án đúng không khớp lựa chọn nào",
     RULE_EXPLANATION: "model bỏ phần giải thích đáp án",
     RULE_CONCEPT_TAGS: "model không gắn khái niệm cho câu hỏi",

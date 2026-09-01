@@ -1,5 +1,77 @@
 # Known Issues
 
+## (ĐÃ SỬA 2026-09-02) "Kết quả bài thi sai" — hoá ra một câu hỏng, một câu trả lời sai thật
+
+Người dùng gửi link trang kết quả và nói kết quả sai. Tra thẳng DB attempt
+`01597551-7868-481a-8eff-1c1dd01b1689`: `graded · 0.0/2.0 = 0% · đúng 0 / sai 2`.
+
+**Trước khi kết luận, tôi đã đoán sai HAI lần. Ghi lại cả hai vì cách sai giống nhau:
+kết luận từ một phép đo tóm tắt thay vì nhìn dữ liệu thật.**
+
+1. *"Cả bốn lựa chọn gần như y hệt nhau, câu hỏi không trả lời được"* — dựa trên 34 ký
+   tự đầu bị cắt khi in ra. In đủ thì thấy phần phân biệt nằm ở ĐUÔI và khác nhau thật.
+2. *"Giao diện cắt mất phần đuôi nên không đọc được"* — grep `truncate`/`line-clamp`
+   trong `QuizTaking.jsx` và `.answer-option`: **không có**. Chữ xuống dòng đầy đủ.
+
+### Sự thật sau khi in đủ hai câu
+
+**Câu 2 KHÔNG hỏng.** Bốn lựa chọn khác nhau rõ (kiến thức chung / dữ liệu nội bộ /
+creative writing / citation). Người dùng chọn *"kiến thức chung, không cần citation"* —
+sai thật với RAG. Chấm đúng.
+
+**Câu 1 hỏng, nhưng không phải vì "nhìn giống nhau":**
+
+```
+[ĐÚNG] Retrieval-Augmented Generation là kỹ thuật kết hợp truy xuất thông tin từ kho dữ liệu…
+[    ] RAG là kỹ thuật dùng LLM trả lời câu hỏi dựa trên dữ liệu nội bộ.
+[    ] RAG là kỹ thuật dùng LLM trả lời câu hỏi dựa trên dữ liệu từ internet.
+[    ] RAG là kỹ thuật dùng LLM trả lời câu hỏi dựa trên dữ liệu từ kho dữ liệu.  ← người dùng chọn
+```
+
+Ba "đáp án nhiễu" **đều là mô tả đúng về RAG**. Người học chọn một câu đúng nhưng không
+phải chuỗi model chỉ định → bị chấm sai. Điểm 0% ở đây là **nửa do đề hỏng, nửa do trả
+lời sai** — không phải "kết quả sai".
+
+### Ngưỡng: đo, thấy không có khoảng trống, đo tiếp, rồi mới chọn
+
+Lần đo đầu (max Jaccard giữa các cặp lựa chọn, 8 câu MC trong DB) cho một dải **liên
+tục** 0.467 → 1.000, không có chỗ cắt. Đo thêm "tỉ lệ từ đầu giống nhau" cũng không tách
+được (câu lành nhất lại có tiền tố chung 0.667).
+
+Chỉ khi **đọc tận mắt** các ca ở ranh giới mới thấy đường phân chia thật:
+
+```
+dùng được : 0.467 · 0.700 · 0.722
+hỏng      : 0.864 · 0.900 · 0.905 · 1.000 · 1.000
+```
+
+Khoảng trống nằm giữa **0.722 và 0.864** → `NGUONG_LUA_CHON_GIONG = 0.80`.
+
+Con số 0.72 trong plan ban đầu **sẽ loại nhầm** câu 2 — câu hoàn toàn dùng được.
+
+### Trần đã biết, viết thẳng vào mã
+
+Đây là phép đo **CHỮ**, không phải nghĩa. Ca hỏng thật bị bắt vì ba nhiễu **tình cờ**
+cũng giống nhau về chữ. Một bộ nhiễu diễn đạt khác hẳn nhưng cùng đúng về nghĩa thì luật
+này **không bắt được** — muốn bắt phải kiểm bằng nghĩa (NLI/embedding), đắt hơn nhiều,
+chưa làm.
+
+### Regression
+
+`test_quiz_lua_chon_trung.py` +3: ca hỏng thật (0.905) phải bị loại, ca dùng được (0.722)
+phải được giữ, và một ca khoá **ngưỡng nằm trong khoảng trống đo được** —
+`0.722 < NGUONG < 0.864`. Đổi ngưỡng ra ngoài khoảng đó là đỏ. `demo()` của
+`rules.py` có cả hai ca biên.
+
+### Phòng ngừa
+
+**In đủ trước khi kết luận.** Hai lần đoán sai đều đến từ việc đọc bản in bị cắt 34 ký
+tự. Khi so sánh chuỗi, in đủ chuỗi — hoặc in phần KHÁC NHAU, đừng in phần đầu.
+
+**Không có khoảng trống trong dữ liệu = chưa được phép chọn ngưỡng.** Dải liên tục nghĩa
+là chỉ số đang dùng chưa tách được hai nhóm. Hoặc tìm chỉ số khác, hoặc đọc tận mắt vài
+ca ranh giới để biết nhóm thật nằm đâu — đừng cắt giữa cho có.
+
 ## (ĐÃ SỬA 2026-09-02) Quiz ra 2/10: ba nguyên nhân, và giả thuyết ban đầu của tôi sai
 
 Người dùng báo *"Ra được 2 câu trên 10 câu đã chọn"*. Job `e31ace34`:
