@@ -123,7 +123,7 @@ services:
         value: "1"
       - key: CRAG_REWRITE_MAX
         value: "2"
-      # Rerank (bge-reranker-v2-m3 ~2.3GB) và NLI (mDeBERTa ~1.1GB) TẮT trên
+      # Rerank (bge-reranker-v2-m3 ~2.3GB) và NLI (MiniLMv2-L6 ~0.4GB) TẮT trên
       # Render: hai model này cộng lại vượt RAM của mọi plan dưới `pro`, và
       # chúng lazy-load ở query đầu nên sẽ OOM giữa request chứ không phải lúc boot.
       - key: RERANK_ENABLED

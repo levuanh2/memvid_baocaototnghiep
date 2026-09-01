@@ -1,5 +1,70 @@
 # Known Issues
 
+## (ĐÃ ĐO + SỬA 2026-09-01) NLI nhanh hơn 764 lần sau khi đổi model — và phép đo đầu của chính tôi đã sai
+
+Đóng mục "(CHƯA SỬA) NLI mDeBERTa chậm gấp ~250 lần dự toán FLOP".
+
+**Đính chính trước:** mục cũ ghi "(CHƯA SỬA)" nhưng `BE/.env` **đã có** `NLI_ENABLED=0`
+kèm đủ chú thích từ trước — đường (a) đã làm rồi. Phần thật sự còn treo là đường (b):
+đổi sang model nhẹ hơn để **bật lại được**, vì ablation E4_nli của luận văn cần NLI bật.
+
+### Số đo (`scripts/do_model_nli.py`, CPU, batch 2)
+
+```
+mDeBERTa-v3-base (279M, 12 lớp) : 128t  39.61s · 256t  69.39s · 512t 137.51s
+MiniLMv2-L6      (107M,  6 lớp) : 128t   0.05s · 256t   0.09s · 512t   0.18s
+```
+
+**Nhanh hơn 764 lần trong khi chỉ ít hơn 2.6 lần tham số.** Đây là bằng chứng thẳng cho
+chẩn đoán cũ: nút thắt không phải khối lượng tính toán mà là các phép gather/index tuần
+tự của attention tách rời trong DeBERTa-v3. Kiến trúc attention thường không dính.
+
+Một truy vấn (`NLI_MAX_PAIRS=3` × 512 token): **412.5s → 0.5s**.
+
+(mDeBERTa đo được 137.5s ở đây so với 94s trong mục cũ — máy đang chạy BE và các việc
+khác. Không đổi kết luận.)
+
+### Chất lượng — và một phép đo sai của chính tôi
+
+Lần thử đầu dùng tiếng Việt **KHÔNG DẤU**, ra kết quả đáng lo: mâu thuẫn chỉ đạt
+0.489/0.529 (dưới ngưỡng 0.6, tức là sẽ không bao giờ kích), còn một cặp hoàn toàn không
+liên quan lại được 0.387 và bị gán nhãn `entailment`. Suýt kết luận "model nhẹ hiệu chỉnh
+kém, phải hạ ngưỡng".
+
+Chạy lại với tiếng Việt **CÓ DẤU** — 6/6 đúng, tách bạch rất rộng:
+
+```
+mâu thuẫn : 0.997  0.992  0.997
+kéo theo  : 0.002
+trung lập : 0.019  0.178
+```
+
+`NLI_CONTRADICTION_THRESHOLD=0.6` nằm gọn trong khoảng trống giữa 0.178 và 0.992 —
+**không cần chỉnh**. Lỗi nằm ở phép đo, không ở model: bỏ dấu là bỏ mất phần lớn tín hiệu
+cho một model đa ngữ, và nó đẩy mọi phân phối về giữa.
+
+### Đã đổi
+
+- `NLI_MODEL` → `MoritzLaurer/multilingual-MiniLMv2-L6-mnli-xnli` ở `shared/config.py`
+  (cả hằng số lẫn `os.getenv` mặc định), `BE/.env`, hai `.env.example`,
+  `docker-compose.yml`. `render.yaml` sửa chú thích cỡ model (~1.1GB → ~0.4GB).
+- `NLI_TIMEOUT_SEC` 90 → 15. Hạn 90s là hạn cho model 137s/lượt; giờ 3 cặp mất ~0.5s nên
+  90s không còn là hàng rào mà là một con số bỏ quên.
+- `NLI_ENABLED` **giữ 0**. Bật hay không là quyết định về hành vi sản phẩm (NLI lọc chunk
+  mâu thuẫn — dương tính giả sẽ cắt mất ngữ liệu đúng), và 6 mẫu chưa đủ để tôi tự quyết
+  thay. Nhưng lý do cũ để tắt (quá chậm) đã hết.
+
+### Phòng ngừa
+
+**Phép đo sai trông y hệt phát hiện thật.** "Model nhẹ hiệu chỉnh kém, cần hạ ngưỡng" là
+một kết luận hoàn toàn hợp lý, có số kèm theo, và sai — chỉ vì dữ liệu thử bị bỏ dấu.
+Trước khi kết luận về một model đa ngữ, kiểm dữ liệu thử có đúng ngôn ngữ đích không, kể
+cả dấu.
+
+**Một hạn giờ phải theo model, không theo lịch sử.** `NLI_TIMEOUT_SEC=90` từng đúng và
+thành vô nghĩa ngay khi model đổi. Mọi hằng số thời gian nên ghi kèm con số nó được suy
+ra từ đâu, để lần sau biết nó còn hiệu lực hay không.
+
 ## (ĐÃ ĐO + SỬA 2026-09-01) Hạn rerank: nâng 10s lên 15s, và index production KHÔNG sụp như R2_late
 
 Hai mục treo được đóng bằng hai phép đo. Script đo giữ lại trong `BE/scripts/`, chạy lại
@@ -2692,7 +2757,7 @@ chứa "hàm hợp"). Chunk quá thô làm truy hồi kém — chưa sửa, cầ
   khẳng định việc 6 giây với hạn 0.5s phải trả quyền dưới 3 giây (bản cũ trả ở ~6s). 5 passed;
   `test_crag_graph` + `test_hitl_graph` + ca mới: 22 passed.
 
-## (CHƯA SỬA) NLI mDeBERTa chậm gấp ~250 lần dự toán FLOP và chưa từng bắt được mâu thuẫn nào
+## (ĐÃ ĐÓNG 2026-09-01 — xem mục đầu file, đã đổi sang MiniLMv2-L6) NLI mDeBERTa chậm gấp ~250 lần dự toán FLOP và chưa từng bắt được mâu thuẫn nào
 
 - **Số đo (máy để yên, lặp 3 lần đều nhau):** một lượt forward `mDeBERTa-v3-base-mnli-xnli`,
   batch 2 × 512 token → **94 giây**. Theo độ dài: 128 token 28.2s, 256 token 47.7s.

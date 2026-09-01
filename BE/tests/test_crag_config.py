@@ -53,7 +53,7 @@ def test_nli_defaults(monkeypatch):
     settings = cfg.get_settings()
 
     assert settings.nli_enabled is True
-    assert settings.nli_model == "MoritzLaurer/mDeBERTa-v3-base-mnli-xnli"
+    assert settings.nli_model == "MoritzLaurer/multilingual-MiniLMv2-L6-mnli-xnli"
     assert settings.nli_contradiction_threshold == 0.6
     assert settings.nli_timeout_sec == 90
     assert settings.nli_max_pairs == 3

@@ -136,9 +136,13 @@ class Settings:
 
     # --- NLI / contradiction-check (khử trùng context TRƯỚC khi sinh đáp án) ---
     # Mặc định ON; có thể tắt cho ablation. Quét các cặp chunk top-K
-    # bằng mDeBERTa, hạ/loại chunk mâu thuẫn (phủ định/thời gian/con số) hạng thấp.
+    # bằng NLI đa ngữ, hạ/loại chunk mâu thuẫn (phủ định/thời gian/con số) hạng thấp.
+    # Model mặc định đổi 2026-09-01: mDeBERTa-v3-base mất 137s cho MỘT lượt forward
+    # (batch 2 x 512 token) trên CPU máy này — nút thắt là gather/index tuần tự của
+    # attention tách rời DeBERTa-v3, không phải FLOP. MiniLMv2-L6 cùng việc: 0.18s,
+    # nhanh hơn 764 lần, và phân loại đúng 6/6 trên bộ thử tiếng Việt có dấu.
     nli_enabled: bool = True
-    nli_model: str = "MoritzLaurer/mDeBERTa-v3-base-mnli-xnli"
+    nli_model: str = "MoritzLaurer/multilingual-MiniLMv2-L6-mnli-xnli"
     nli_contradiction_threshold: float = 0.6  # prob 'contradiction' tối thiểu để tính là xung đột
     # Đo thực trên CPU máy dev: 3 cặp chunk dài (6 forward) ≈ 66s → để 90s có đệm.
     # Có GPU/model nhanh hơn thì hạ timeout xuống. (xem .playbook/known-issues)
@@ -207,7 +211,7 @@ class Settings:
             rerank_batch=_int("RERANK_BATCH", 16),
             rerank_timeout_sec=_int("RERANK_TIMEOUT_SEC", 10),
             nli_enabled=_flag("NLI_ENABLED", "1"),
-            nli_model=os.getenv("NLI_MODEL", "MoritzLaurer/mDeBERTa-v3-base-mnli-xnli"),
+            nli_model=os.getenv("NLI_MODEL", "MoritzLaurer/multilingual-MiniLMv2-L6-mnli-xnli"),
             nli_contradiction_threshold=_float("NLI_CONTRADICTION_THRESHOLD", 0.6),
             nli_timeout_sec=_int("NLI_TIMEOUT_SEC", 90),
             nli_max_pairs=_int("NLI_MAX_PAIRS", 3),
