@@ -1,5 +1,74 @@
 # Known Issues
 
+## (ĐÃ SỬA 2026-09-01) CORS thiếu PATCH/PUT — mọi lần chọn đáp án đều hỏng, và log BE trông vẫn bình thường
+
+Người dùng báo: chọn đáp án trong quiz thì hiện "Không kết nối được máy chủ. Kiểm tra
+mạng rồi thử lại." Máy chủ vẫn chạy, `/health` 200.
+
+**Bằng chứng quyết định — đếm trong log BE:**
+
+```
+OPTIONS /api/attempts/<id>/answers  200   x4
+PATCH   /api/attempts/<id>/answers        x0
+```
+
+Bốn lần preflight, **không lần nào** request thật tới nơi.
+
+```python
+# main.py:130 — trước khi sửa
+CORS(app, resources={...}, methods=["GET", "POST", "DELETE", "OPTIONS"], ...)
+```
+
+Thiếu `PATCH` và `PUT`. Trình duyệt đọc `Access-Control-Allow-Methods`, không thấy method
+mình cần, và **chặn request thật trước khi gửi**. `fetch` ném `TypeError`; `moTaLoi` dịch
+đúng theo thứ nó thấy thành "Không kết nối được máy chủ".
+
+**Vì sao khó thấy:** preflight trả **200**. Nhìn log BE chỉ thấy `OPTIONS ... 200` nối
+nhau, trông như mọi thứ bình thường. Không có dòng lỗi nào, không có 4xx/5xx. Thứ duy
+nhất tố cáo là **cái không có mặt**: không có dòng `PATCH` nào.
+
+**Hai tính năng chết hoàn toàn qua trình duyệt:**
+
+| route | tính năng |
+|---|---|
+| `PATCH /api/attempts/<id>/answers` | lưu nháp đáp án — mọi lần chọn đáp án |
+| `PUT /mindmaps/<id>` | lưu mindmap đã sửa |
+
+**Đáng ghi:** cùng ngày, khi rà plan `mindmap-ux-v3`, Task 8 ("Edit → nút Lưu → PUT") được
+đánh dấu ĐÃ LÀM vì route tồn tại ở `main.py:4616` và `updateMindmap` tồn tại ở
+`utils/api.js`. Cả hai đều có thật — và trình duyệt **chưa bao giờ gọi được**. Kiểm sự
+tồn tại của file/route không phải là kiểm hành vi.
+
+### Regression
+
+`BE/tests/test_cors_methods.py` — 4 test. Ca chính khoá hợp đồng bằng **hành vi**, không
+bằng đọc mã nguồn: duyệt `app.url_map` (nguồn sự thật lúc chạy) lấy mọi method đang dùng,
+rồi tự hỏi preflight và so. Thêm route `PATCH`/`PUT` mới mà quên CORS sẽ đỏ ngay. Kèm một
+ca chặn hướng ngược lại: không được nới `Allow-Methods` thành `*`.
+
+### Bẫy gặp lúc xác minh — ghi lại vì suýt kết luận sai
+
+Sửa xong, test xanh, nhưng `curl` vào server thật **vẫn không có** header
+`Access-Control-Allow-Methods`. Suýt kết luận "flask_cors không hoạt động như test".
+
+Sự thật: tiến trình BE cũ **chưa bị dừng**, nó vẫn giữ cổng 8080, còn tiến trình mới in
+"Running on http://127.0.0.1:8080" rồi ngồi im (Werkzeug không báo lỗi bind rõ ràng ở
+đây). Đo được: test client trên app import trực tiếp trả đủ header, còn cổng 8080 thì
+không — hai kết quả khác nhau cho cùng một mã là dấu hiệu **hai tiến trình khác nhau**.
+
+Sau khi dừng tiến trình cũ, server thật trả:
+`Access-Control-Allow-Methods: DELETE, GET, OPTIONS, PATCH, POST, PUT`.
+
+### Phòng ngừa
+
+**Preflight 200 không có nghĩa là request qua được.** Khi FE báo lỗi mạng mà BE vẫn sống,
+hãy đếm **cặp** OPTIONS/method-thật trong log. Thiếu vế thứ hai là CORS chặn, không phải
+mạng.
+
+**Khởi động lại server thì phải DỪNG cái cũ trước.** Hai tiến trình cùng cổng cho ra một
+hệ thống mà bản vá "không có tác dụng" một cách bí ẩn — và cách phân biệt rẻ nhất là so
+kết quả qua cổng với kết quả qua test client trên cùng mã.
+
 ## (ĐÃ SỬA 2026-09-01) Giao diện tự bịa nguyên nhân câu hỏi bị loại — và chính tôi viết câu đó
 
 Người dùng chạy thật, giao diện hiện:

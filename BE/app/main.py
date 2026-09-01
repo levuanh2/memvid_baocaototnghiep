@@ -127,7 +127,15 @@ else:
 CORS(
     app,
     resources={r"/*": {"origins": _cors_origins}},
-    methods=["GET", "POST", "DELETE", "OPTIONS"],
+    # PATCH và PUT THIẾU ở đây cho tới 2026-09-01, và cách nó hỏng rất khó thấy:
+    # preflight vẫn trả 200 nên log BE ghi "OPTIONS ... 200" trông như bình thường,
+    # nhưng trình duyệt đọc `Access-Control-Allow-Methods`, không thấy method mình cần,
+    # rồi CHẶN request thật trước khi gửi. `fetch` ném TypeError và giao diện báo
+    # "Không kết nối được máy chủ" trong khi máy chủ vẫn sống nguyên.
+    # Đo được trong log thật: 4 lần OPTIONS /api/attempts/<id>/answers, 0 lần PATCH.
+    # Hai tính năng chết hoàn toàn qua trình duyệt: lưu nháp đáp án (PATCH) và lưu
+    # mindmap đã sửa (PUT /mindmaps/<id>).
+    methods=["GET", "POST", "PUT", "PATCH", "DELETE", "OPTIONS"],
     # "Authorization" for Bearer-token auth (no cookie credentials in this phase).
     allow_headers=["Content-Type", "Authorization"],
 )
