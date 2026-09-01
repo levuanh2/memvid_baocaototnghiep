@@ -40,6 +40,8 @@ export default function SidebarLeft({ selectedSources, setSelectedSources, onSou
   const [menuOpen, setMenuOpen] = useState(null);
   const [uploading, setUploading] = useState(false);
   const [deletingFile, setDeletingFile] = useState(null);
+  const [loiTai, setLoiTai] = useState(null);
+  const [loiUpload, setLoiUpload] = useState(null);
   const [query, setQuery] = useState("");
   const fileInputRef = useRef(null);
   const pollingIntervalsRef = useRef({});
@@ -69,7 +71,14 @@ export default function SidebarLeft({ selectedSources, setSelectedSources, onSou
 
   const fetchSourcesFromBackend = () => {
     apiFetch(`/list-indexed`)
-      .then((res) => res.json())
+      .then(async (res) => {
+        // `.json()` trên một 500/401 vẫn "thành công" (body lỗi cũng là JSON), rồi
+        // `data.sources || []` biến nó thành danh sách rỗng: màn hình báo "Chưa có tài
+        // liệu nào" cho một người có đủ tài liệu, và dòng lọc bên dưới XOÁ LUÔN lựa
+        // chọn nguồn của họ. Mất mạng không phải là "chưa có gì".
+        if (!res.ok) throw await _appError(res);
+        return res.json();
+      })
       .then((data) => {
         const backendSources = data.sources || [];
         const keyOf = (s) => s.video_stem || s.video;
@@ -81,11 +90,23 @@ export default function SidebarLeft({ selectedSources, setSelectedSources, onSou
           return combined;
         });
         setSelectedSources((prev) => prev.filter((p) => backendSources.some((s) => keyOf(s) === p)));
+        setLoiTai(null);
       })
-      .catch((err) => console.error("Error fetching sources:", err));
+      .catch((err) => {
+        console.error("Error fetching sources:", err);
+        setLoiTai(getUserFriendlyApiError(err));
+      });
   };
 
   useEffect(() => { fetchSourcesFromBackend(); }, []);
+
+  // Thu cột trái lại là component này unmount thật (MainLayout thay nó bằng PanelSpine),
+  // nhưng mọi interval 1.5s vẫn chạy tiếp — mãi mãi, cho mỗi tài liệu từng ở trạng thái
+  // đang xử lý. Dọn hết khi rời đi.
+  useEffect(() => () => {
+    Object.values(pollingIntervalsRef.current).forEach(clearInterval);
+    pollingIntervalsRef.current = {};
+  }, []);
   useEffect(() => { if (onSourcesChange) onSourcesChange(sources); }, [sources, onSourcesChange]);
 
   // ── Upload logic (unchanged) ───────────────────────
@@ -93,6 +114,7 @@ export default function SidebarLeft({ selectedSources, setSelectedSources, onSou
     const files = Array.from(e.target.files || []);
     if (!files.length) return;
     setUploading(true);
+    setLoiUpload(null);
     try {
       for (const file of files) {
         const fd = new FormData();
@@ -101,6 +123,10 @@ export default function SidebarLeft({ selectedSources, setSelectedSources, onSou
         if (!res.ok) {
           const err = await _appError(res);
           console.error("Upload failed:", err.code);
+          // Trước đây chỉ 401/403/404 mới báo; 413 (file quá lớn), 415 (định dạng
+          // không đọc được) và 500 thì `continue` trong im lặng — nút hết quay, danh
+          // sách không thêm gì, không một chữ nào. Người dùng đọc là "bấm không ăn".
+          setLoiUpload(`${file.name}: ${getUserFriendlyApiError(err)}`);
           if (isUnauthorizedError(err) || isNotFoundOrForbiddenError(err)) alert(getUserFriendlyApiError(err));
           continue;
         }
@@ -216,7 +242,22 @@ export default function SidebarLeft({ selectedSources, setSelectedSources, onSou
 
       {/* Sources list */}
       <div className="flex-1 overflow-y-auto px-3 pb-3 flex flex-col gap-1.5">
-        {sources.length === 0 && (
+        {loiUpload && (
+          <div className="text-[12px] flex items-start gap-1.5 px-1 py-2" style={{ color: "var(--err)" }}>
+            <Icon name="AlertCircle" size={13} className="mt-0.5 shrink-0" />
+            <span className="flex-1">{loiUpload}</span>
+          </div>
+        )}
+        {loiTai ? (
+          <div className="text-center py-12 px-4">
+            <Icon name="AlertCircle" size={30} className="mx-auto mb-3" style={{ color: "var(--err)" }} />
+            <p className="text-[13px] font-semibold text-text-secondary">{loiTai}</p>
+            <button type="button" className="text-[12px] underline text-text-muted mt-2"
+              onClick={fetchSourcesFromBackend}>
+              Thử lại
+            </button>
+          </div>
+        ) : sources.length === 0 && (
           <div className="text-center py-12 px-4">
             <Icon name="FolderOpen" size={30} className="mx-auto mb-3 text-text-muted opacity-60" />
             <p className="text-[13px] font-semibold text-text-secondary">Chưa có tài liệu nào.</p>

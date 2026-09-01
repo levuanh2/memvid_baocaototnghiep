@@ -1,5 +1,45 @@
 # Lessons Learned
 
+## 2026-09-01 - Nuốt lỗi không phải là fail-open, đó là nói dối có chủ đích
+
+- **Fail-open là chạy tiếp; nuốt lỗi là chạy tiếp RỒI khẳng định mọi thứ ổn.** Bảy lỗi
+  frontend vòng 8 đều nằm ở khoảng cách đó: `catch` xong vẫn hiện "N/M đã trả lời", vẫn
+  điều hướng sang trang kết quả, vẫn báo "Chưa có tài liệu nào". Doctrine `.playbook`
+  cho phép fail-open, nhưng phần "báo cáo phải nói thật" là phần hay bị bỏ.
+
+- **Ba câu hỏi trước khi viết một `catch`:** (1) người dùng có mất dữ liệu gì không — nếu
+  có thì phải trả lại chứ không được nuốt; (2) màn hình sau `catch` có đang khẳng định
+  điều gì không còn đúng không; (3) vòng lặp hay timer nào vừa chết theo, và ai bật lại.
+
+- **`res.json()` sau `fetch` không đảm bảo request thành công.** `fetch` chỉ ném khi mạng
+  hỏng; 4xx/5xx là "thành công" với body lỗi, và body lỗi cũng là JSON hợp lệ. Thiếu
+  `res.ok` là cách phổ biến nhất để một lỗi máy chủ hoá trang thành "không có dữ liệu" —
+  đúng họ với `None` khác `0` ở backend.
+
+- **Dọn buffer trước `await` là mất dữ liệu, không phải "tránh gửi trùng".** Mẫu
+  `const b = ref.current; ref.current = {}; await gui(b)` đọc rất gọn và ăn trắng lô dữ
+  liệu mỗi lần request hỏng. Cần cả hai chiều: lấy ra để gửi, và **trả lại** khi hỏng —
+  trả lại mà không đè lên thứ người dùng vừa đổi trong lúc request còn bay.
+
+- **Một thao tác ghi hỏng thì đừng cho thao tác kế tiếp đi tiếp.** Lưu nháp hỏng rồi vẫn
+  cho nộp bài là biến một lỗi mạng thành một điểm số sai — thứ ở lại trong DB và chảy vào
+  mọi thống kê tiến bộ về sau.
+
+- **Effect poll phụ thuộc vào dữ liệu thì lần hỏi hỏng sẽ giết luôn vòng hỏi.** Lỗi không
+  đổi `result`, `result` không đổi thì effect không chạy lại, và trang đứng im mãi. Vòng
+  lặp cần một nhịp riêng để tự lên lịch, cộng một trần số lần trượt để không nện mãi.
+
+- **Cờ khoá nút phải là cờ đặt TRƯỚC `await`, không phải cờ suy ra từ kết quả `await`.**
+  `disabled={job.running}` trông đúng nhưng `job.jobId` chỉ có sau khi 202 về — cửa sổ ở
+  giữa là chỗ người dùng bấm thêm ba lần. Đây là lần thứ hai cùng một lỗi ở hai trang
+  khác nhau (Q1 vòng 7 ở `QuizSetup`, FE#4 ở `ReviewGuide`): vá một chỗ thì grep các chỗ
+  còn lại ngay, đừng đợi vòng audit sau.
+
+- **Khoá thì phải có đường mở.** `practiceFor` khoá nút, `onDone` điều hướng đi nên không
+  ai nghĩ tới việc mở lại — job hỏng thì `onDone` không chạy, trang khoá vĩnh viễn tới
+  khi F5. Mỗi cờ khoá cần một câu trả lời cho "ai gỡ nó khi đường thành công không xảy
+  ra".
+
 ## 2026-09-01 - Comment hứa một cơ chế thì phải grep xem cơ chế đó có thật không
 
 - **Ba nguồn trong cùng một kho, hai nói thật, một nói dối — và nguồn nói dối là nguồn

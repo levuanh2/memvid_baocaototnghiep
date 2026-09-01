@@ -38,6 +38,10 @@ export default function ReviewGuide() {
 
   useEffect(() => { load(); }, [load]);
 
+  // Job luyện tập hỏng thì onDone không chạy, không có điều hướng nào — phải tự mở khoá
+  // nút, nếu không trang này khoá vĩnh viễn cho tới khi F5.
+  useEffect(() => { if (job.error) setPracticeFor(null); }, [job.error]);
+
   const build = async ({ force = false } = {}) => {
     setBusy(true);
     setError(null);
@@ -51,6 +55,10 @@ export default function ReviewGuide() {
   };
 
   const practise = async (item) => {
+    // Cờ đặt TRƯỚC await và nút đọc chính cờ này, không đọc `job.running`: `job.jobId`
+    // chỉ có SAU khi 202 về, nên giữa lúc bấm và lúc đó nút vẫn bấm được và mỗi lần bấm
+    // là một job luyện tập nữa tranh 1 slot LLM. Đúng lỗi Q1 vòng 7, chưa vá ở đây.
+    if (practiceFor) return;
     setPracticeFor(item.review_item_id);
     setError(null);
     try {
@@ -131,8 +139,8 @@ export default function ReviewGuide() {
                 <ReviewItem
                   key={item.review_item_id}
                   item={item}
-                  busy={practiceFor === item.review_item_id && job.running}
-                  disabled={job.running}
+                  busy={practiceFor === item.review_item_id}
+                  disabled={Boolean(practiceFor) || job.running}
                   onPractise={() => practise(item)}
                 />
               ))}

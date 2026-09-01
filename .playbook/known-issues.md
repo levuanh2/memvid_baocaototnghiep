@@ -1,5 +1,106 @@
 # Known Issues
 
+## (ĐÃ SỬA 2026-09-01) Bảy chỗ giao diện nói sai về việc vừa xảy ra
+
+Audit vòng 8, phần frontend. Bảy lỗi, một họ: **giao diện báo cáo một thứ khác với thứ
+thật sự xảy ra.** Nặng nhất là hai cái ăn mất câu trả lời của người học.
+
+### FE#5 + FE#6 — lưu nháp hỏng thì mất lô đáp án, rồi nộp bài thiếu mà vẫn báo xong
+
+`QuizTaking` dọn sổ nháp NGAY TRƯỚC `await`:
+
+```js
+const batch = pendingRef.current;
+pendingRef.current = {};          // <- mất trắng nếu request hỏng
+await saveAnswers(attemptId, batch);
+```
+
+Gửi hỏng thì lô ấy biến mất, nhưng ô vẫn tô mực và bộ đếm vẫn ghi "N/M đã trả lời" —
+giao diện nói đã lưu, server không có.
+
+Và lỗi thứ hai chồng lên: sau một lần lưu hỏng, bấm "Nộp bài" thì `pendingRef` đã rỗng
+nên submit đi **không kèm mấy câu đó**. `submitAttempt` trả 200, điều hướng sang trang
+kết quả như một lần nộp bình thường. Câu bị chấm như chưa trả lời, không ai nói gì.
+
+**Fix:** `FE/src/utils/soNhap.js` — sổ nháp có `traLai(lo)`. Gửi hỏng thì lô quay lại sổ;
+lần gửi sau, hoặc lúc nộp, mang nó đi lại. `traLai` KHÔNG đè giá trị người dùng vừa đổi
+trong lúc request còn bay (`{...lo, ...cho}`) — trả một đáp án cũ đè lên đáp án mới hơn
+cũng là mất dữ liệu, chỉ khó thấy hơn.
+
+Lúc nộp, `saveAnswers` hỏng thì **ném tiếp**, không nộp: nộp khi chưa chắc server có đủ
+đáp án là biến một lỗi mạng thành một điểm số sai.
+
+Bộ đếm hết nói dối: có câu chưa lên được server thì nó ghi "N câu chưa lưu được" thay vì
+"N/M đã trả lời".
+
+### FE#7 — một cú poll trượt mạng xoá sạch trang kết quả đã chấm
+
+`error={error}` không kẹp `!result` (khác `QuizTaking` và `StudyMapView` ngay cạnh), nên
+lần hỏi NỀN hỏng là cả trang thành thẻ đỏ "Không tải được kết quả" — kể cả khi kết quả đã
+chấm xong và đang hiển thị.
+
+Tệ hơn: effect poll phụ thuộc `[result, load]`. Lần hỏi nền hỏng thì `result` **không
+đổi**, effect không chạy lại, vòng hỏi chết lặng — trang đứng mãi ở "đang chấm".
+
+**Fix:** lỗi nền tách khỏi lỗi tải đầu (`loiNen`, hiện thành một dòng kèm nút "Thử lại",
+không thay cả trang); `error && !result` cho khung; thêm `nhip` vào dependency để vòng
+hỏi tự lên lịch lại; và trần `MAX_CONSECUTIVE_FETCH_FAILURES` mượn từ `jobPoller` để năm
+lần trượt liên tiếp thì thôi, đừng nện mãi.
+
+### FE#4 — "Luyện thêm 5 câu" bấm ba lần ra ba job
+
+Đúng lỗi Q1 vòng 7, chưa vá ở trang này: `disabled={job.running}` mà `job.jobId` chỉ có
+SAU khi 202 về. Giữa lúc bấm và lúc đó nút vẫn bấm được, và không có spinner (`busy`
+cũng phụ thuộc `job.running`). Mỗi lần bấm là một job tranh 1 slot LLM.
+
+**Fix:** nút đọc chính cờ `practiceFor` — đặt TRƯỚC `await` — chứ không đọc `job.running`.
+Kèm `useEffect` mở khoá khi `job.error`: job hỏng thì `onDone` không chạy, không có điều
+hướng nào, và trang sẽ khoá vĩnh viễn cho tới khi F5.
+
+### FE#1 — thu cột trái lại thì vẫn nã server mỗi 1.5 giây, mãi mãi
+
+`SidebarLeft` unmount thật khi thu cột (MainLayout thay nó bằng `PanelSpine`), nhưng
+`pollingIntervalsRef` **không có `useEffect` cleanup nào**. Mỗi tài liệu từng ở trạng
+thái đang xử lý để lại một interval sống sót.
+
+**Fix:** effect cleanup dọn hết interval khi unmount.
+
+### FE#2 — `/list-indexed` hỏng thì báo "Chưa có tài liệu nào" và XOÁ LUÔN lựa chọn
+
+`.then((res) => res.json())` không kiểm `res.ok`. Body của 500/401 cũng là JSON hợp lệ,
+nên `data.sources || []` biến lỗi thành danh sách rỗng: người có đủ tài liệu đọc được
+"Chưa có tài liệu nào. Nhấn Thêm tài liệu để bắt đầu", và dòng
+`setSelectedSources(prev => prev.filter(...))` ngay dưới xoá sạch lựa chọn nguồn của họ.
+
+**Mất mạng không phải là "chưa có gì".** Cùng họ với `None` khác `0` ở backend.
+
+**Fix:** `if (!res.ok) throw await _appError(res)`; trạng thái lỗi riêng kèm nút "Thử
+lại"; không đụng vào `selectedSources` khi chưa biết server nói gì.
+
+### FE#3 — upload hỏng vì 413/415/500 thì không có gì hiện ra
+
+`alert` chỉ chạy cho 401/403/404; còn lại `continue` trong im lặng. Nút hết quay, danh
+sách không thêm gì, không một chữ nào. Người dùng đọc là "bấm không ăn".
+
+**Fix:** mọi mã lỗi đều để lại một dòng `<tên file>: <lời giải thích>` trong cột.
+
+### Regression
+
+`FE/src/utils/soNhap.test.js` — 6 test cho sổ nháp, gồm ca `traLai` không đè giá trị mới
+hơn và ca `traLai(undefined)`. Sáu lỗi còn lại là nối dây trong component; kho chưa có
+testing-library và **không thêm phụ thuộc chỉ để test chúng** — phần logic có thể tách
+thì đã tách ra thành hàm thuần và test rồi.
+
+### Phòng ngừa
+
+Khi bắt lỗi, hỏi ba câu trước khi viết `catch`: (1) người dùng có mất dữ liệu gì không —
+nếu có thì phải trả lại, không được nuốt; (2) màn hình sau `catch` có đang khẳng định
+điều gì không còn đúng không; (3) vòng lặp hay timer nào vừa chết theo và ai bật lại.
+
+Và: `res.json()` sau `fetch` **không** đảm bảo request thành công. `fetch` chỉ ném khi
+mạng hỏng; 4xx/5xx là "thành công" với body lỗi. Thiếu `res.ok` là cách phổ biến nhất để
+một lỗi máy chủ hoá trang thành "không có dữ liệu".
+
 ## (ĐÃ SỬA 2026-09-01) Ba cách job quiz kẹt: khoá vĩnh viễn, tự bị quét, huỷ không ăn
 
 Audit vòng 8, phần vòng đời job. Ba lỗi khác nhau, cùng một hậu quả với người dùng: bấm

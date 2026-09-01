@@ -14,6 +14,7 @@ import {
   optionLabel,
   moTaLoi,
 } from "../../utils/studyApi";
+import { MAX_CONSECUTIVE_FETCH_FAILURES } from "../../utils/jobPoller";
 
 const KEYS = ["A", "B", "C", "D", "E", "F"];
 const REGRADE_POLL_MS = 3000;
@@ -24,6 +25,11 @@ export default function QuizResult() {
   const [masteries, setMasteries] = useState([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
+  // Lỗi của lần hỏi NỀN (đang chờ chấm tự luận) tách khỏi lỗi của lần tải đầu: một cú
+  // poll trượt mạng không được biến cả trang kết quả đã chấm thành thẻ đỏ.
+  const [loiNen, setLoiNen] = useState(null);
+  const [nhip, setNhip] = useState(0);
+  const truotRef = useRef(0);
   const timerRef = useRef(null);
 
   const load = useCallback(async ({ quiet = false } = {}) => {
@@ -34,9 +40,13 @@ export default function QuizResult() {
       if (body.status === "graded") {
         setMasteries(await getConceptMasteries(attemptId));
       }
+      truotRef.current = 0;
+      setLoiNen(null);
       return body.status;
     } catch (e) {
-      setError(moTaLoi(e, "Không tải được kết quả."));
+      truotRef.current += 1;
+      if (quiet) setLoiNen(moTaLoi(e, "Chưa hỏi lại được trạng thái chấm bài."));
+      else setError(moTaLoi(e, "Không tải được kết quả."));
       return null;
     } finally {
       if (!quiet) setLoading(false);
@@ -48,11 +58,18 @@ export default function QuizResult() {
   // Bài có câu tự luận được chấm bằng job nền: attempt dừng ở `submitted` một
   // lúc rồi mới sang `graded`. Hỏi lại theo nhịp cho tới khi chấm xong thay vì
   // bắt người học tự F5.
+  //
+  // `nhip` phải nằm trong dependency: lần hỏi nền hỏng thì `result` KHÔNG đổi, effect
+  // không chạy lại, và vòng hỏi chết lặng — trang đứng mãi ở "đang chấm".
   useEffect(() => {
     if (result?.status !== "submitted") return undefined;
-    timerRef.current = setTimeout(() => { load({ quiet: true }); }, REGRADE_POLL_MS);
+    if (truotRef.current >= MAX_CONSECUTIVE_FETCH_FAILURES) return undefined;
+    timerRef.current = setTimeout(async () => {
+      await load({ quiet: true });
+      setNhip((n) => n + 1);
+    }, REGRADE_POLL_MS);
     return () => clearTimeout(timerRef.current);
-  }, [result, load]);
+  }, [result, nhip, load]);
 
   const grading = result?.status === "submitted";
 
@@ -62,7 +79,7 @@ export default function QuizResult() {
       title={result?.quiz_title || "Kết quả bài làm"}
       backTo="/app/study"
       loading={loading}
-      error={error}
+      error={error && !result ? error : null}
       onRetry={load}
       width="max-w-[860px]"
       actions={
@@ -75,6 +92,15 @@ export default function QuizResult() {
     >
       {!result ? null : (
         <>
+          {loiNen && (
+            <div className="text-[13px] flex items-center gap-1.5 mb-3" style={{ color: "var(--err)" }}>
+              <Icon name="AlertCircle" size={14} />
+              {loiNen}
+              <button type="button" className="underline" onClick={() => { truotRef.current = 0; setNhip((n) => n + 1); }}>
+                Thử lại
+              </button>
+            </div>
+          )}
           <ScoreBoard result={result} grading={grading} />
 
           {grading && (

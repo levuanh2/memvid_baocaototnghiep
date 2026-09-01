@@ -11,6 +11,7 @@ import {
   submitAttempt,
   moTaLoi,
 } from "../../utils/studyApi";
+import { taoSoNhap } from "../../utils/soNhap";
 
 const KEYS = ["A", "B", "C", "D", "E", "F"];
 
@@ -30,8 +31,13 @@ export default function QuizTaking() {
   const [saving, setSaving] = useState(false);
   const [submitting, setSubmitting] = useState(false);
   const [confirming, setConfirming] = useState(false);
-  const pendingRef = useRef({});
+  const soNhapRef = useRef(null);
+  if (soNhapRef.current === null) soNhapRef.current = taoSoNhap();
   const flushRef = useRef(null);
+  // Số câu đã chọn nhưng CHƯA lên được server. Bộ đếm "N/M đã trả lời" đọc state
+  // trong máy, nên nếu không nói riêng ra thì nó báo đã lưu cho cả những câu server
+  // chưa hề nhận.
+  const [choLuu, setChoLuu] = useState(0);
 
   const load = useCallback(async () => {
     setLoading(true);
@@ -70,16 +76,22 @@ export default function QuizTaking() {
   // Lưu nháp gộp lô: mỗi lần bấm đáp án mà gọi API ngay thì bấm nhanh 10 câu là
   // 10 request chồng nhau, và request về trễ có thể ghi đè lựa chọn mới hơn.
   const queueSave = useCallback((questionId, value) => {
-    pendingRef.current[questionId] = value;
+    const so = soNhapRef.current;
+    so.dat(questionId, value);
+    setChoLuu(so.demCho());
     if (flushRef.current) clearTimeout(flushRef.current);
     flushRef.current = setTimeout(async () => {
-      const batch = pendingRef.current;
-      pendingRef.current = {};
-      if (!attemptId || !Object.keys(batch).length) return;
+      if (!attemptId || !so.coGi()) return;
+      const batch = so.layDeGui();
       setSaving(true);
       try {
         await saveAnswers(attemptId, batch);
+        setChoLuu(so.demCho());
       } catch (e) {
+        // Gửi hỏng thì trả lô về sổ: mất nó là mất câu trả lời của người học trong
+        // khi ô vẫn tô mực. Lần gửi sau, hoặc lúc bấm Nộp bài, sẽ mang nó đi lại.
+        so.traLai(batch);
+        setChoLuu(so.demCho());
         setError(moTaLoi(e, "Không lưu được câu trả lời."));
       } finally {
         setSaving(false);
@@ -98,11 +110,22 @@ export default function QuizTaking() {
     setSubmitting(true);
     setError(null);
     try {
-      // Gửi nốt nháp còn treo trước khi nộp — nếu không, câu vừa chọn sẽ mất.
+      // Gửi nốt nháp còn treo trước khi nộp — nếu không, câu vừa chọn sẽ mất. Gồm cả
+      // lô của một lần lưu đã hỏng trước đó: nộp mà thiếu nó thì mấy câu ấy bị chấm
+      // như chưa trả lời, và trang kết quả hiện ra y như một lần nộp bình thường.
       if (flushRef.current) clearTimeout(flushRef.current);
-      const batch = pendingRef.current;
-      pendingRef.current = {};
-      if (Object.keys(batch).length) await saveAnswers(attemptId, batch);
+      const so = soNhapRef.current;
+      const batch = so.layDeGui();
+      if (Object.keys(batch).length) {
+        try {
+          await saveAnswers(attemptId, batch);
+          setChoLuu(0);
+        } catch (e) {
+          so.traLai(batch);
+          setChoLuu(so.demCho());
+          throw e;   // KHÔNG nộp khi chưa chắc server đã có đủ đáp án
+        }
+      }
       await submitAttempt(attemptId);
       navigate(`/app/study/result/${attemptId}`, { replace: true });
     } catch (e) {
@@ -123,7 +146,11 @@ export default function QuizTaking() {
       width="max-w-[820px]"
       actions={
         <span className="font-mono text-[11.5px] text-text-muted">
-          {saving ? "đang lưu…" : `${questions.length - unanswered.length}/${questions.length} đã trả lời`}
+          {saving
+            ? "đang lưu…"
+            : choLuu > 0
+              ? `${choLuu} câu chưa lưu được`
+              : `${questions.length - unanswered.length}/${questions.length} đã trả lời`}
         </span>
       }
     >
