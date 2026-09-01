@@ -53,6 +53,17 @@ cho một model đa ngữ, và nó đẩy mọi phân phối về giữa.
 - `NLI_ENABLED` **giữ 0**. Bật hay không là quyết định về hành vi sản phẩm (NLI lọc chunk
   mâu thuẫn — dương tính giả sẽ cắt mất ngữ liệu đúng), và 6 mẫu chưa đủ để tôi tự quyết
   thay. Nhưng lý do cũ để tắt (quá chậm) đã hết.
+- **`reports/evaluation/configs/*.yaml` — SÁU file, không chỉ E4.** `runner.py:59` đặt
+  `os.environ["NLI_MODEL"]` từ YAML nên **YAML thắng `.env`** (đúng luật đã ghi ở mục
+  "Ablation E0–E7 rò `.env`"): đổi model trong `.env` KHÔNG tới được thang đo. Đã đổi
+  trong `E4_nli`, `E5_crag`, `E6_full_automatic`, `E7_full_hitl`, `source_tags_off`,
+  `source_tags_on` — tất cả đều `nli: {enabled: true, ...}`. Thư mục `reports/` không nằm
+  trong git (gỡ 2026-08-24) nên thay đổi này KHÔNG có trong commit; ghi ở đây là dấu vết
+  duy nhất.
+
+  Đây chính là mặt trái của luật "YAML là nguồn quyết định duy nhất": nó chặn được rò
+  `.env` vào số liệu, và cũng chặn luôn mọi cải thiện đi qua `.env`. Sửa cấu hình
+  production thì phải hỏi ngay: thang đo có bản sao riêng không?
 
 ### Phòng ngừa
 
