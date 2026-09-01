@@ -21,6 +21,7 @@ export default function StudyShell({
   onRetry = null,
   children,
   width = "max-w-[980px]",
+  skeleton = null,
 }) {
   return (
     <div className="min-h-screen overflow-y-auto" style={{ background: "var(--bg-base)" }}>
@@ -53,9 +54,14 @@ export default function StudyShell({
         {subtitle && <p className="text-[13.5px] text-text-secondary mb-6">{subtitle}</p>}
 
         {loading ? (
-          <div className="flex items-center gap-2.5 text-[13.5px] text-text-secondary py-10">
-            <Spinner size={15} /> Đang tải…
-          </div>
+          // Có khung xương thì dùng khung xương: nó giữ NGUYÊN chỗ mà nội dung sắp
+          // chiếm, nên lúc dữ liệu về không có cú nhảy. Dòng "Đang tải…" một hàng thì
+          // ngược lại — trang cao 1 dòng rồi bung ra cả màn hình.
+          skeleton || (
+            <div className="flex items-center gap-2.5 text-[13.5px] text-text-secondary py-10">
+              <Spinner size={15} /> Đang tải…
+            </div>
+          )
         ) : error ? (
           <div className="surface-card flex flex-col items-start gap-3">
             <div className="flex items-center gap-2 text-[13.5px]" style={{ color: "var(--err)" }}>

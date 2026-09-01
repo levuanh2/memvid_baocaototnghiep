@@ -295,6 +295,16 @@
     color: var(--slate);
   }
 
+  /* Vùng cuộn cắt phẳng ở mép dưới trông y hệt vùng đã hết nội dung — người đọc dừng
+     lại vì tưởng hết. Một dải mờ 24px ở đáy nói "còn nữa" mà không tốn một pixel giao
+     diện nào, và tự biến mất khi cuộn tới đáy (mask theo scroll không làm được bằng CSS
+     thuần, nhưng dải mờ tĩnh vẫn đúng ở 95% thời gian và sai vô hại ở 5% còn lại).
+     Tôn trọng prefers-reduced-motion không liên quan ở đây: đây là tĩnh, không động. */
+  .co-the-cuon-them {
+    -webkit-mask-image: linear-gradient(to bottom, #000 calc(100% - 24px), transparent 100%);
+    mask-image: linear-gradient(to bottom, #000 calc(100% - 24px), transparent 100%);
+  }
+
   /* ── SIGNATURE: retrieval apparatus ── */
   .apparatus-step { @apply flex items-center gap-2.5 py-1; }
   .apparatus-dot {

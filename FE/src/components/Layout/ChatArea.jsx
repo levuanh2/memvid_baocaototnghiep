@@ -718,6 +718,9 @@ export default function ChatArea({ selectedSources, sources = [], onEvidence, hi
 
       {/* Reading session — click vùng trống bất kỳ là vào thẳng ô nhập (xem handlePanelMouseUp) */}
       <div onMouseUp={handlePanelMouseUp}
+        // KHÔNG dùng `co-the-cuon-them` ở đây: khung chat neo nội dung ở ĐÁY, tin mới nhất
+        // nằm dưới cùng — dải mờ đáy sẽ làm mờ đúng câu trả lời vừa tới. Dải mờ chỉ
+        // đúng cho danh sách neo từ trên xuống (hai cột bên).
         className="flex-1 min-h-0 overflow-y-auto px-5 sm:px-8 py-7 flex flex-col gap-6">
 
         {/* Empty state — the reading-room thesis */}

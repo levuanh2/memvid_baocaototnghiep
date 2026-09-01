@@ -218,7 +218,11 @@ export default function QuizTaking() {
             </div>
           )}
 
-          <div className="flex items-center gap-2">
+          {/* Dính đáy: câu hỏi dài (nhất là trả lời ngắn) đẩy cụm nút xuống dưới màn hình,
+              nên người làm bài phải cuộn mới bấm được "Câu sau" — mỗi câu một lần cuộn
+              thừa. Nền đặc + đường kẻ trên để chữ phía sau không lộ qua khi cuộn. */}
+          <div className="sticky bottom-0 z-10 -mx-5 px-5 py-3 border-t flex items-center gap-2"
+            style={{ background: "var(--bg-base)", borderColor: "var(--border-color)" }}>
             <button type="button" className="btn-secondary text-[13px] inline-flex items-center gap-1.5"
               disabled={index === 0} onClick={() => setIndex((i) => Math.max(0, i - 1))}>
               <Icon name="ArrowLeft" size={14} /> Câu trước

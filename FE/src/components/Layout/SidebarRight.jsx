@@ -603,7 +603,7 @@ export default function SidebarRight({ selectedSources, evidence, highlight, onH
       </div>
 
       {/* ── EVIDENCE MARGIN ── */}
-      <div className="flex-1 min-h-0 overflow-y-auto px-3 py-3">
+      <div className="flex-1 min-h-0 overflow-y-auto co-the-cuon-them px-3 py-3">
         {chunks.length > 0 ? (
           <>
             <div className="text-[11px] font-mono uppercase tracking-[0.12em] text-text-muted mb-2 px-1">
@@ -773,8 +773,11 @@ export default function SidebarRight({ selectedSources, evidence, highlight, onH
           </div>
         )}
 
-        {/* Saved list */}
-        <div className="mt-3 max-h-[34vh] overflow-y-auto">
+        {/* Saved list — KHÔNG tự giới hạn chiều cao + cuộn riêng nữa. Cột này đã có
+            đúng một vùng cuộn ở trên (`flex-1 min-h-0 overflow-y-auto`); lồng thêm một
+            vùng nữa làm người dùng không biết mình đang cuộn cái nào, và con lăn dừng
+            đột ngột khi trỏ đi qua ranh giới. Một cột, một vùng cuộn. */}
+        <div className="mt-3">
           {artifactTab === "mindmap" ? (
             initialLoading ? (
               <div className="flex items-center justify-center py-6 text-text-muted text-[12px] gap-2"><Spinner size={14} /> Đang tải…</div>

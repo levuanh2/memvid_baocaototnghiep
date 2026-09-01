@@ -277,7 +277,11 @@ export default function SidebarLeft({ selectedSources, setSelectedSources, onSou
       </div>
 
       {/* Sources list */}
-      <div className="flex-1 overflow-y-auto px-3 pb-3 flex flex-col gap-1.5">
+      {/* `min-h-0` BẮT BUỘC: trong flex column, con mặc định không co xuống dưới chiều
+          cao nội dung, nên `overflow-y-auto` không bao giờ kích và phần dư bị cha
+          (`overflow-hidden` ở MainLayout) cắt im lặng. SidebarRight đã có, đây thì
+          chưa — đúng loại bất đối xứng chỉ lộ ra khi danh sách đủ dài. */}
+      <div className="flex-1 min-h-0 overflow-y-auto co-the-cuon-them px-3 pb-3 flex flex-col gap-1.5">
         {loiUpload && (
           <div className="text-[12px] flex items-start gap-1.5 px-1 py-2" style={{ color: "var(--err)" }}>
             <Icon name="AlertCircle" size={13} className="mt-0.5 shrink-0" />

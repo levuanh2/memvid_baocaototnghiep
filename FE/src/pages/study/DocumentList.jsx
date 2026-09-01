@@ -17,6 +17,25 @@ import {
 
 const READY = new Set(["completed", "ready", "index_ready"]);
 
+/** Khung xương đúng hình dạng thẻ tài liệu thật — cùng bo góc, cùng chiều cao. */
+function DocumentSkeleton() {
+  return (
+    <div className="flex flex-col gap-2.5" aria-hidden="true">
+      {[0, 1, 2].map((i) => (
+        <div key={i} className="surface-card !py-4 flex items-center gap-3">
+          <div className="w-[17px] h-[17px] rounded-[4px] bg-surface-elevated animate-pulse" />
+          <div className="flex-1 min-w-0 flex flex-col gap-2">
+            <div className="h-[13px] rounded bg-surface-elevated animate-pulse"
+              style={{ width: `${58 + i * 12}%` }} />
+            <div className="h-[10px] w-[38%] rounded bg-surface-elevated animate-pulse" />
+          </div>
+        </div>
+      ))}
+    </div>
+  );
+}
+
+
 export default function DocumentList() {
   const navigate = useNavigate();
   const fileRef = useRef(null);
@@ -90,6 +109,7 @@ export default function DocumentList() {
       loading={loading}
       error={error}
       onRetry={load}
+      skeleton={<DocumentSkeleton />}
       actions={
         <>
           {/* Danh sách này phải khớp formats.accept_attribute() của backend —
