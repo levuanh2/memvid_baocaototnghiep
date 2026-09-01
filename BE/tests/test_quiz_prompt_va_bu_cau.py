@@ -78,3 +78,37 @@ def test_generate_questions_chuyen_da_co_xuong_prompt():
     gen.generate_questions("ngữ liệu", {"question_count": 2}, ask=_ask,
                            da_co=["Câu đã có?"])
     assert "Câu đã có?" in thay["prompt"]
+
+
+# ── Lượt bù phải biết TẤT CẢ câu model đã viết, không chỉ câu được nhận ─────
+def test_da_co_gom_ca_cau_bi_loai_khong_chi_cau_duoc_nhan():
+    """Job e31ace34 (01/09): 2 câu được nhận, 12 câu bị loại vì TRÙNG.
+
+    12 câu đó model đã viết ra ở lượt đầu rồi bị tầng luật loại — nhưng chúng không nằm
+    trong `da_co`, nên lượt bù không biết mình vừa viết chúng và viết lại y hệt. Bảo
+    model "đừng lặp" trong khi giấu 12/14 thứ nó vừa viết là thông tin thiếu.
+    """
+    from app.domains.quiz.generator import gom_da_co
+
+    accepted = [{"question_text": "Câu tốt?"}]
+    tho = [{"question_text": "Câu tốt?"}, {"question_text": "Câu bị loại?"},
+           {"question_text": "Câu bị loại?"}]        # model tự lặp ngay trong lượt đầu
+    ds = gom_da_co(accepted, tho)
+    assert "Câu tốt?" in ds and "Câu bị loại?" in ds
+    assert len(ds) == 2, "trùng nhau thì gộp, đừng nhồi cùng một câu hai lần vào prompt"
+
+
+def test_gom_da_co_chiu_duoc_du_lieu_rac():
+    from app.domains.quiz.generator import gom_da_co
+
+    assert gom_da_co([], []) == []
+    assert gom_da_co(None, None) == []
+    assert gom_da_co([{"question_text": ""}], ["khong phai dict", None, 5]) == []
+
+
+def test_gom_da_co_giu_thu_tu_cau_duoc_nhan_truoc():
+    """Câu được nhận là ví dụ TỐT cho model; đặt trước để nó đọc thấy trước."""
+    from app.domains.quiz.generator import gom_da_co
+
+    ds = gom_da_co([{"question_text": "Đã nhận?"}], [{"question_text": "Bị loại?"}])
+    assert ds[0] == "Đã nhận?"

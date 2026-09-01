@@ -235,3 +235,33 @@ def demo() -> None:
 
 if __name__ == "__main__":
     demo()
+
+
+def gom_da_co(accepted: Optional[Sequence[Dict[str, Any]]],
+              tho: Optional[Sequence[Any]]) -> List[str]:
+    """Mọi câu model ĐÃ VIẾT ở lượt trước — cả câu được nhận lẫn câu bị loại.
+
+    Vì sao phải gồm câu bị loại: log job e31ace34 (2026-09-01) cho thấy 2 câu được nhận
+    và 12 câu bị loại vì TRÙNG. Mười hai câu đó model đã viết ra rồi bị tầng luật loại,
+    nhưng chúng không nằm trong `da_co` nên lượt bù không biết mình vừa viết chúng — và
+    viết lại y hệt. Bảo model "đừng lặp" trong khi giấu 12/14 thứ nó vừa viết là thông
+    tin thiếu, không phải model bướng.
+
+    Câu được nhận đứng TRƯỚC: chúng vừa là thứ cần tránh lặp, vừa là ví dụ tốt về hình
+    dạng câu hỏi đạt yêu cầu.
+    """
+    ra: List[str] = []
+    da_thay: set = set()
+    for nguon in (accepted or [], tho or []):
+        for q in nguon:
+            if not isinstance(q, dict):
+                continue
+            t = str(q.get("question_text") or "").strip()
+            if not t:
+                continue
+            khoa = " ".join(t.lower().split())
+            if khoa in da_thay:
+                continue
+            da_thay.add(khoa)
+            ra.append(t)
+    return ra

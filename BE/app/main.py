@@ -2672,7 +2672,10 @@ def run_quiz_generation_job(job_id: str, document_id: str, config: dict,
             with _nhip_tim_job(job_id):
                 them_raw, them_err, _ = _quiz_gen.generate_questions(
                     context, {**config, "question_count": thieu},
-                    da_co=[q["question_text"] for q in accepted],
+                    # GỒM CẢ câu bị loại: chúng là thứ model vừa viết và sẽ viết lại
+                    # nếu không được nhắc. Chỉ liệt kê câu được nhận là giấu đi phần
+                    # lớn thông tin cần cho việc "đừng lặp".
+                    da_co=_quiz_gen.gom_da_co(accepted, raw_questions),
                     da_huy=_cancelled)
             if them_err:
                 # Bù hỏng KHÔNG làm hỏng cả job: quiz với 5 câu vẫn dùng được, còn hơn
