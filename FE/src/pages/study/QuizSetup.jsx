@@ -52,6 +52,9 @@ export default function QuizSetup() {
           asked: count,
           kept: result.question_count,
           rejected: result.rejected_count ?? 0,
+          // Nguyên nhân do BE ĐẾM từ log kiểm chất lượng, không phải câu đoán viết sẵn
+          // ở giao diện.
+          reason: result.rejected_reason || "",
         },
       });
     },

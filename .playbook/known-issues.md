@@ -1,5 +1,66 @@
 # Known Issues
 
+## (ĐÃ SỬA 2026-09-01) Giao diện tự bịa nguyên nhân câu hỏi bị loại — và chính tôi viết câu đó
+
+Người dùng chạy thật, giao diện hiện:
+
+> Ra được 7 câu trên 10 câu đã chọn. 12 câu bị loại vì không đạt kiểm chất lượng —
+> **thường là do đoạn tài liệu tương ứng quá ngắn để ra đề.**
+
+Vế sau là một **phỏng đoán trình bày như sự thật**, do tôi viết ở vòng 7 khi thêm dòng
+thông báo này. Không có gì đo nó cả.
+
+Lý do THẬT, tra từ `ai_validation_logs` của đúng job đó (e4bfd2dd):
+
+```
+FR-13.5  Thiếu chunk_refs                            9 câu  (75%)
+FR-13.7  Trùng câu hỏi đã nhận                       2 câu
+FR-13.1  multiple_choice cần ≥2 lựa chọn phân biệt   1 câu
+```
+
+**Không câu nào vì đoạn tài liệu ngắn.** Ba phần tư mất vì model không trích nhãn nguồn.
+
+Nghịch lý đáng ghi: dữ liệu để nói đúng đã nằm sẵn trong DB từ FR-13.11 (log giữ nguyên
+văn item bị loại + `rule_code`), và `count_by_rule` cũng có sẵn. Giao diện đoán trong khi
+câu trả lời thật cách đó một truy vấn.
+
+### Đã sửa
+
+- `rules.ly_do_loai(rejections)` — đếm theo `rule_code`, trả câu mô tả nguyên nhân
+  **chiếm đa số**. Mã lạ (luật mới thêm mà quên cập nhật bảng) vẫn trả một câu có nghĩa
+  kèm mã, không im lặng — im lặng ở đây là quay lại đúng chỗ vừa sửa.
+- `result` của job thêm `rejected_reason` + `rejected_by_rule`; `QuizSetup` chuyển sang
+  router state; `QuizTaking` hiện "phần lớn do <nguyên nhân>" và **bỏ hẳn** câu đoán.
+  Không có nguyên nhân thì kết thúc câu bằng dấu chấm, không bịa thêm.
+
+### Và một số liệu nữa từ cùng lần chạy
+
+```
+quiz_bu_cau job_id=e4bfd2dd co=0 thieu=10
+quiz_bu_cau_xong tong=7
+quiz_job_done kept=7 rejected=12
+```
+
+**Lượt đầu ra 0 câu dùng được.** Cả 7 câu đều đến từ vòng bù (V8-3). Không có vòng bù thì
+job này đã chết với "Không câu hỏi nào qua kiểm chất lượng" — người dùng thấy thất bại
+hoàn toàn thay vì 7 câu.
+
+Cũng trong lần này, luật gộp lựa chọn trùng (V8-1) bắt được **1 ca thật** ngoài đời, đúng
+thứ người dùng báo lúc đầu.
+
+Vì FR-13.5 chiếm 75%, đã siết prompt: `chunk_refs` giờ ghi **BẮT BUỘC ở MỌI câu** kèm hậu
+quả và một dòng nói thẳng "đây là lỗi bị loại NHIỀU NHẤT" — cùng khuôn đã dùng cho
+`explanation` ở V8-2.
+
+### Phòng ngừa
+
+**Đừng viết nguyên nhân vào giao diện nếu không đo nó.** Một câu "thường là do X" nghe
+rất tự nhiên và không ai chất vấn — nhưng nó dạy người dùng một mô hình sai về hệ thống,
+và khi họ làm theo (rút ngắn/kéo dài tài liệu) thì không có gì khá hơn.
+
+**Có log rồi thì đọc log.** FR-13.11 sinh ra đúng để trả lời câu này. Khoảng cách giữa
+"dữ liệu có sẵn" và "giao diện dùng nó" là chỗ phỏng đoán chui vào.
+
 ## (ĐÃ SỬA 2026-09-01) Nút "Huỷ" trong chat giờ huỷ thật — và nhả được slot LLM
 
 Đóng phần trần còn lại của FE#12. Bản vòng 8 mới chỉ sửa LỜI (không hứa việc không làm);

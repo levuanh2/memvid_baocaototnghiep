@@ -308,3 +308,41 @@ def validate_review_items(
             "review_tasks": tasks[:5],
         })
     return accepted, rejected
+
+
+# Mã quy tắc -> câu nói được cho người học. Dùng khi báo "N câu bị loại": nói nguyên
+# nhân ĐO ĐƯỢC thay vì đoán.
+#
+# Giao diện từng ghi "thường là do đoạn tài liệu tương ứng quá ngắn để ra đề" — một
+# phỏng đoán không dựa trên gì. Log thật của job e4bfd2dd (2026-09-01) cho thấy 9/12 câu
+# bị loại vì FR-13.5 (model không trích nhãn nguồn), 2 vì trùng, 1 vì lựa chọn không
+# phân biệt. Không câu nào vì đoạn ngắn.
+_CAU_THEO_RULE = {
+    RULE_JSON: "model trả về câu hỏi sai định dạng (sai dạng đã chọn, hoặc thiếu lựa chọn phân biệt)",
+    RULE_CORRECT_ANSWER: "đáp án đúng không khớp lựa chọn nào",
+    RULE_EXPLANATION: "model bỏ phần giải thích đáp án",
+    RULE_CONCEPT_TAGS: "model không gắn khái niệm cho câu hỏi",
+    RULE_CHUNK_REFS: "model không trích được đoạn nguồn cho câu hỏi",
+    RULE_NO_SOURCE: "model trích một đoạn nguồn không có trong tài liệu",
+    RULE_DUPLICATE: "câu hỏi trùng với câu đã nhận",
+}
+
+
+def ly_do_loai(rejections: Sequence[Any]) -> Tuple[Dict[str, int], str]:
+    """(đếm theo rule_code, câu mô tả nguyên nhân CHIẾM ĐA SỐ).
+
+    Trả `("")` khi không có gì bị loại — không có gì để nói thì đừng nói.
+    """
+    dem: Dict[str, int] = {}
+    for r in rejections or []:
+        ma = str((r or {}).get("rule_code") or "").strip() or "?"
+        dem[ma] = dem.get(ma, 0) + 1
+    if not dem:
+        return {}, ""
+    ma_nhieu_nhat = max(dem, key=lambda k: dem[k])
+    cau = _CAU_THEO_RULE.get(ma_nhieu_nhat)
+    if not cau:
+        # Mã lạ (luật mới thêm mà quên cập nhật bảng) vẫn phải nói được gì đó, và nói
+        # rõ là chưa dịch được — im lặng ở đây là quay lại đúng chỗ vừa sửa.
+        cau = f"không đạt kiểm chất lượng (mã {ma_nhieu_nhat})"
+    return dem, cau

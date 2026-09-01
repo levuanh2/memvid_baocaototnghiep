@@ -160,7 +160,7 @@ export default function QuizTaking() {
           <span>
             Ra được <strong className="text-text-primary">{raDe.kept}</strong> câu trên{" "}
             {raDe.asked} câu đã chọn. {raDe.rejected} câu bị loại vì không đạt kiểm chất
-            lượng — thường là do đoạn tài liệu tương ứng quá ngắn để ra đề.
+            lượng{raDe.reason ? <> — phần lớn do {raDe.reason}.</> : "."}
           </span>
         </div>
       )}

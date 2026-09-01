@@ -42,7 +42,9 @@ Trả về DUY NHẤT JSON dạng:
 
 Quy tắc:
 - Câu hỏi phải trả lời được CHỈ bằng ngữ liệu đã cấp; không dùng kiến thức ngoài.
-- `chunk_refs` phải là nhãn chunk có thật trong ngữ liệu (vd "c0", "c3"), tối đa 3 nhãn.
+- `chunk_refs` BẮT BUỘC có ở MỌI câu: nhãn chunk có thật trong ngữ liệu (vd "c0", "c3"),
+  tối đa 3 nhãn. Câu nào thiếu `chunk_refs` sẽ bị loại bỏ — đây là lỗi bị loại NHIỀU
+  NHẤT, hãy kiểm lại từng câu trước khi trả về.
 - CHỈ được dùng những dạng câu hỏi liệt kê dưới đây, không dùng dạng nào khác.
 """
 

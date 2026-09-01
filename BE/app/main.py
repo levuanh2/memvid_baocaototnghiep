@@ -2707,9 +2707,14 @@ def run_quiz_generation_job(job_id: str, document_id: str, config: dict,
         update_job(job_id, progress=90, current_node="Persist")
         _quiz_repo.save_questions(quiz_id, accepted)
         _quiz_repo.finish(quiz_id, "ready", question_count=len(accepted))
+        dem_loai, ly_do = _rules.ly_do_loai(rejected)
         result = {"quiz_id": quiz_id, "status": "ready", "question_count": len(accepted),
                   "asked_count": config["question_count"],
-                  "rejected_count": len(rejected), "llm_attempts": attempts}
+                  "rejected_count": len(rejected), "llm_attempts": attempts,
+                  # Nguyên nhân ĐO ĐƯỢC, không đoán. Giao diện từng tự bịa "đoạn tài
+                  # liệu quá ngắn" trong khi log cho thấy 9/12 câu mất vì model không
+                  # trích nhãn nguồn.
+                  "rejected_reason": ly_do, "rejected_by_rule": dem_loai}
         update_job(job_id, status="done", progress=100, current_node="Persist", result=result)
         _ledger.close_job(job_id, "done", result_type="quiz", result_id=quiz_id)
         print(f"quiz_job_done job_id={job_id} quiz_id={quiz_id} "

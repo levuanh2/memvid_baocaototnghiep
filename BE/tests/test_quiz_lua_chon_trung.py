@@ -46,3 +46,32 @@ def test_dap_an_dung_song_sot_sau_khi_go_trung():
 def test_lua_chon_khac_nhau_thi_giu_nguyen_thu_tu():
     ok, bad = rules.validate_questions([BASE], allowed_chunk_refs=["c0"])
     assert not bad and ok[0]["options"] == ["2x", "x", "x^2", "1"]
+
+
+# ── Lý do loại phải ĐO được, không đoán ─────────────────────────────────────
+def test_ly_do_loai_noi_dung_nguyen_nhan_nhieu_nhat():
+    """Giao diện từng ghi "thường là do đoạn tài liệu quá ngắn" — một phỏng đoán.
+
+    Log thật của job e4bfd2dd (2026-09-01): 9/12 câu bị loại vì FR-13.5 (thiếu
+    chunk_refs), 2 vì trùng, 1 vì lựa chọn không phân biệt. KHÔNG câu nào vì đoạn ngắn.
+    """
+    bi_loai = (
+        [{"rule_code": rules.RULE_CHUNK_REFS}] * 9
+        + [{"rule_code": rules.RULE_DUPLICATE}] * 2
+        + [{"rule_code": rules.RULE_JSON}]
+    )
+    dem, cau = rules.ly_do_loai(bi_loai)
+    assert dem[rules.RULE_CHUNK_REFS] == 9
+    assert "nguồn" in cau.lower(), cau
+    assert "ngắn" not in cau.lower(), "đừng đoán nguyên nhân không đo được"
+
+
+def test_ly_do_loai_rong_thi_khong_bia_cau_nao():
+    dem, cau = rules.ly_do_loai([])
+    assert dem == {} and cau == ""
+
+
+def test_ly_do_loai_ma_la_van_noi_duoc_gi_do():
+    dem, cau = rules.ly_do_loai([{"rule_code": "FR-99.9"}])
+    assert dem == {"FR-99.9": 1}
+    assert cau, "mã lạ vẫn phải có câu mô tả, đừng trả rỗng"
