@@ -1,5 +1,83 @@
 # Known Issues
 
+## (ĐÃ ĐO + SỬA 2026-09-01) Hạn rerank: nâng 10s lên 15s, và index production KHÔNG sụp như R2_late
+
+Hai mục treo được đóng bằng hai phép đo. Script đo giữ lại trong `BE/scripts/`, chạy lại
+được bất cứ lúc nào.
+
+### Hạn rerank 10s — đo trên chunk THẬT, không phải văn bản tổng hợp
+
+Mục cũ "(CẦN ĐỂ Ý) Hạn rerank 10s sát mép" đo bằng chunk tổng hợp 979 ký tự và kết luận
+"chưa quyết". Đo lại bằng chunk thật lấy từ `index/chunks.sqlite`
+(`scripts/do_han_rerank.py`) — 40 đoạn, TB **314 ký tự**, p95 496, max 498:
+
+```
+   k   p50 (s)   ket luan
+   5      1.70   OK
+  10      3.58   OK
+  15      5.71   OK
+  20      7.56   SAT MEP   (76% cua han 10s)
+  30     11.51   VUOT HAN
+```
+
+Tuyến tính **~0.38s mỗi ứng viên**. Với độ dài này, hạn 10s bị chạm ở **~26 ứng viên**.
+Đối chiếu đo cũ (979 ký tự, k=20 = 12.95s): chunk dài gấp ~3 thì chậm gấp ~1.7.
+
+**Quyết: nâng `RERANK_TIMEOUT_SEC` 10 → 15, GIỮ `RERANK_CANDIDATE_K=20`.**
+
+Vì sao nâng hạn chứ không giảm pool:
+- Timeout ở đây là thời gian **vứt đi hoàn toàn** — hết giờ thì rơi về thứ tự gốc, đã
+  tốn trọn 10 giây mà không đổi gì. Hạn đặt quá sát biến một tính năng thành một khoản
+  phạt thời gian.
+- Giảm `RERANK_CANDIDATE_K` là làm yếu đúng thứ đang muốn giữ: lessons-learned đã có mục
+  "Rerank (Two-Stage Retrieval) cần candidate pool RỘNG ở Stage 1 mới có tác dụng".
+- 15s cho k=20 ở độ dài hiện tại = 7.56s, còn **50% biên** — đủ cho tài liệu có đoạn dài
+  gấp đôi.
+
+Con số để lần sau chỉnh bằng số học chứ không đoán: `thời gian ≈ 0.38s × k` ở ~314 ký
+tự/đoạn; nhân ~1.7 khi độ dài đoạn gấp 3.
+
+### Index production KHÔNG dính lỗi sụp không gian của R2_late
+
+Mục "(CHẶN) Late chunking mean-pool trong khi bge-m3 dùng CLS" để mở một câu hỏi: đó là
+lỗi của riêng bộ đánh giá, hay index đang chạy cũng vậy? Đo
+(`scripts/do_do_sup_khong_gian_vector.py`, chỉ đọc, không gọi model):
+
+```
+index production : 188 vector, dim 1024
+cosine TB        : 0.6622   p50 0.6650   p95 0.8681
+chunk canh nhau  : TB 0.7820
+
+doi chieu: nhung thuong (R0/R1) 0.53-0.68 | late chunking (R2) 0.967-0.995, canh nhau 0.9999
+```
+
+**Không gian còn phân biệt được** — nằm đúng vùng của nhúng thường, không phải vùng sụp.
+
+Thêm một nửa nữa của câu trả lời, đọc từ mã: `LateChunkEncoder.embed_query` cũng
+mean-pool (`late_chunk.py`, `_mean_pool_texts`), nên trong production **truy vấn và tài
+liệu cùng một không gian**. Lỗi "hai không gian" (tài liệu mean-pool vs truy vấn CLS qua
+sentence-transformers) là chuyện của đường đánh giá, không phải của app.
+
+**Nên phạm vi thiệt hại thu hẹp lại rõ ràng:** app truy hồi bình thường; thứ hỏng là
+index `R2_late` mà thang E0–E7 dùng, và hậu quả không phải "chạy đánh giá bị lỗi" mà là
+**kết luận rút ra từ nó sai** — bảng cũ (BM25 0.8371 vs FAISS 0.2286) dễ viết thành "BM25
+thắng dense retrieval", trong khi sự thật là dense đang đo nhiễu trên một index sụp.
+
+Ghi chú nhỏ: `cosine max = 1.0000` nghĩa là có vector trùng khít — nhiều khả năng một tài
+liệu upload hai lần hoặc đoạn lặp. Không hại truy hồi, nhưng đáng để ý nếu số chunk phình.
+
+### Phòng ngừa
+
+**"Sát mép" không phải một kết luận, nó là một lời hẹn đo lại.** Mục cũ dừng ở "chưa
+quyết" suốt một tuần vì thiếu đúng một bảng số. Khi ghi một mục CẦN ĐỂ Ý, ghi luôn phép
+đo cần chạy để đóng nó.
+
+**Đo trên dữ liệu thật, không trên văn bản tổng hợp.** Số cũ (979 ký tự) mô tả một kho
+không tồn tại và làm vấn đề trông nặng gấp đôi thực tế.
+
+**Một hạn giờ bọc công việc "được thì tốt" phải rộng hơn trường hợp bình thường khá
+nhiều** — vì khi nó cắn, ta trả trọn thời gian chờ và không nhận lại gì.
+
 ## (ĐÃ SỬA 2026-09-01) Mười ba chỗ giao diện còn lại: hứa việc không làm, và coi hỏng là rỗng
 
 Audit vòng 8, FE#8–#20 — nốt bảng frontend. Hai họ lỗi, và họ thứ nhất nặng hơn nhiều.
@@ -2691,7 +2769,7 @@ chứa "hàm hợp"). Chunk quá thô làm truy hồi kém — chưa sửa, cầ
   không phân biệt được một lượt rerank thành công với một lượt chạm hạn rồi giữ nguyên thứ tự. Đã
   thêm `status` và `timeout_sec` vào metadata.
 
-## (CẦN ĐỂ Ý) Hạn rerank 10s sát mép — chunk dài hơn là chạm
+## (ĐÃ ĐÓNG 2026-09-01 — xem mục đầu file, đã nâng hạn lên 15s) Hạn rerank 10s sát mép — chunk dài hơn là chạm
 
 - Đo với chunk tổng hợp 979 ký tự: 20 ứng viên mất **12.95s**, vượt `RERANK_TIMEOUT_SEC=10` → rơi
   về thứ tự gốc, tốn trọn 10 giây mà không đổi gì.
