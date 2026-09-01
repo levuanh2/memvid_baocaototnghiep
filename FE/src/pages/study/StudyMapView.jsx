@@ -5,6 +5,7 @@ import StudyShell, { EmptyState } from "../../components/study/StudyShell";
 import { Icon } from "../../components/ui/Icon";
 import Spinner from "../../components/ui/Spinner";
 import { useStudyJob } from "../../hooks/useStudyJob";
+import { nenChanLan } from "../../utils/wheelGate";
 import {
   NODE_TYPE_LABEL,
   RELATION_LABEL,
@@ -88,6 +89,18 @@ export default function StudyMapView() {
     if (!el || !map) return;
     const { width, height } = el.getBoundingClientRect();
     setTranslate({ x: Math.min(160, width * 0.18), y: height / 2 });
+  }, [map]);
+
+  // Trả con lăn về cho TRANG. d3-zoom (do react-d3-tree gắn lên <svg> con) nghe `wheel`
+  // rồi preventDefault, mà canvas cao 70vh nên con trỏ gần như luôn nằm trên nó — kết
+  // quả là trang sơ đồ không bao giờ cuộn được. Nghe ở pha CAPTURE để chạy TRƯỚC d3, và
+  // chỉ stopPropagation; KHÔNG preventDefault, vì đó chính là thứ trình duyệt cần để cuộn.
+  useEffect(() => {
+    const el = canvasRef.current;
+    if (!el) return undefined;
+    const chan = (e) => { if (nenChanLan(e)) e.stopPropagation(); };
+    el.addEventListener("wheel", chan, { capture: true });
+    return () => el.removeEventListener("wheel", chan, { capture: true });
   }, [map]);
 
   const tree = useMemo(() => buildMapTree(map?.nodes), [map]);
@@ -278,6 +291,10 @@ export default function StudyMapView() {
             {map.edges?.length > 0 && <span>· {map.edges.length} liên kết ngang</span>}
           </div>
 
+          <div className="hidden lg:block coord text-text-muted mb-2">
+            Ctrl + lăn để phóng sơ đồ · lăn thường để cuộn trang · kéo để di chuyển
+          </div>
+
           <div className="flex gap-4 items-start flex-col lg:flex-row">
             <div
               ref={canvasRef}
@@ -303,6 +320,8 @@ export default function StudyMapView() {
                   pathClassFunc={() => "study-map__link"}
                 />
               )}
+              {/* Luật mới phải nói ra: không ai đoán được "Ctrl + lăn". Chỉ hiện ở khổ
+                  rộng — máy cảm ứng không có con lăn nên câu này vô nghĩa ở đó. */}
             </div>
 
             <aside className="surface-card w-full lg:w-[340px] shrink-0">

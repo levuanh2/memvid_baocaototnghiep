@@ -2262,3 +2262,37 @@ Hai điều rút ra:
 2. **Test nhấp nháy không phải phiền toái — nó là kết quả đo.** Ở đây nó chỉ thẳng
    vào một lỗi thật trong chính bản vá vừa viết. Đánh dấu `flaky` rồi bỏ qua là vứt
    đi phát hiện duy nhất mình có.
+## 2026-09-02 - Bản đồ nhúng nuốt con lăn: trang cuộn được mà người dùng không chạm tới được
+
+- **Triệu chứng người dùng mô tả là "trang chết cứng", nhưng trang KHÔNG hỏng.**
+  `StudyShell` có `overflow-y-auto`, DOM cuộn được bình thường. Thứ hỏng là **đường đi
+  của sự kiện**: `react-d3-tree` gắn d3-zoom lên `<svg>`, d3-zoom nghe `wheel` rồi
+  `preventDefault`, và canvas cao `min(70vh, 640px)` nên con trỏ gần như luôn nằm trên
+  nó. Mọi cú lăn bị lấy mất để phóng cây.
+
+- **Đừng tìm lỗi cuộn ở thuộc tính CSS trước.** Phản xạ đầu tiên là grep
+  `overflow-hidden` / `h-screen` — và ở đây phản xạ đó dẫn sai đường: `MainLayout` có
+  `h-screen overflow-hidden` trông rất đáng ngờ, nhưng trang StudyMap **không nằm trong**
+  MainLayout (route độc lập trong `App.jsx`). Kiểm cây route trước khi kết tội bố cục.
+
+- **Ba tầng phải phân biệt khi gỡ lỗi cuộn:** (1) DOM có vùng cuộn không; (2) vùng cuộn
+  có cao hơn cha không; (3) **có ai nuốt sự kiện không**. Tầng ba là tầng hay bị bỏ qua
+  nhất, và là tầng duy nhất mà DevTools "Elements" không cho thấy.
+
+- **Cuộn thuộc về TRANG; phóng bản đồ phải là chủ ý.** Luật này có ở mọi bản đồ nhúng
+  (Google Maps, Figma) vì nó giải đúng xung đột: một vùng tương tác lớn nằm giữa một
+  trang dài. Cách chặn: nghe `wheel` ở **pha capture** của thẻ bọc — capture chạy TRƯỚC
+  listener trên phần tử con, nên `stopPropagation()` là đủ. **Không** gọi
+  `preventDefault`: đó chính là thứ phải trả lại cho trình duyệt.
+
+- **Đổi luật tương tác thì phải nói ra.** "Ctrl + lăn để phóng" không ai đoán được. Một
+  dòng nhãn cạnh bản đồ là phần bắt buộc của bản sửa, không phải phần thêm cho đẹp. Và
+  chỉ hiện ở khổ rộng — máy cảm ứng không có con lăn, câu đó vô nghĩa ở đó. (Lần đầu tôi
+  viết nhầm thành `lg:hidden`, tức ẩn đúng chỗ cần hiện.)
+
+- **Kho đã có bản sắc thì việc của mình là nắn, không phải thay.** `--brand-rgb: 178 58 46`
+  là màu con dấu son, chữ đọc là `Spectral`, và comment trong mã gọi các vùng là "phòng
+  đọc" / "kệ trái" / "gáy sách". Khi được yêu cầu "học theo app khác cho đẹp", lấy
+  **pattern tương tác** (bản đồ nhúng, thanh hành động dính đáy, dấu hiệu còn nội dung)
+  chứ đừng lấy **phong cách** — thay palette/font bằng thứ vay mượn là cách nhanh nhất
+  biến một sản phẩm có giọng riêng thành một sản phẩm giống mọi sản phẩm khác.
