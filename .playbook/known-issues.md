@@ -1,5 +1,104 @@
 # Known Issues
 
+## (ĐÃ SỬA 2026-09-01) Mười ba chỗ giao diện còn lại: hứa việc không làm, và coi hỏng là rỗng
+
+Audit vòng 8, FE#8–#20 — nốt bảng frontend. Hai họ lỗi, và họ thứ nhất nặng hơn nhiều.
+
+### Họ 1 — nói đã làm một việc chưa hề xảy ra
+
+**FE#12 — nút "Huỷ" trong chat không gọi route nào.** BE **không có** `/query-cancel`:
+`_CANCELLABLE_JOB_TYPES = {"mindmap", "summary", "quiz_generation", "study_map_generation"}`,
+không có `"query"`, và `query_graph` không gọi `is_cancel_requested` ở bất kỳ đâu. Bấm
+Huỷ chỉ `abort()` request phía trình duyệt — job vẫn chạy tới xong và vẫn **giữ slot LLM
+duy nhất**. UI thì ghi "Đã huỷ truy vấn.", nên người dùng hỏi câu mới và không hiểu vì
+sao phải chờ lâu.
+
+Kèm theo: `setMessages(prev => [...prev.slice(0, -1), …])` xoá luôn **câu hỏi của người
+dùng**. Lúc gửi chỉ tin nhắn `role: "user"` được đẩy vào (không có bong bóng AI giữ chỗ),
+nên phần tử cuối chính là câu vừa gõ.
+
+**Fix:** bỏ `slice(0, -1)`; đổi lời thành "Đã ngừng chờ câu trả lời. Máy chủ vẫn chạy nốt
+truy vấn này, nên câu hỏi tiếp theo có thể phải đợi thêm một lúc."
+
+**Trần còn lại, nói thẳng:** đây là huỷ phía máy người dùng. Huỷ thật cần
+`query_graph` gọi `is_cancel_requested` giữa các node rồi mới thêm `"query"` vào
+`_CANCELLABLE_JOB_TYPES` — comment ở `main.py:3509` đã ghi đúng thứ tự đó và cố ý chưa
+làm.
+
+**FE#13 — "Đã xóa" cho việc BE trả 500.** `try { await clearConversationContext(...) }
+catch {}` rồi vẫn `showNotice("Đã xóa ngữ cảnh...")`; `handleDeleteHistory` còn tệ hơn —
+`catch {}` rồi vẫn `setMessages([])`, nên người dùng tin đã xoá trong khi máy chủ giữ
+nguyên lịch sử và vẫn đưa nó vào ngữ cảnh lượt sau. **Fix:** hỏng thì nói hỏng, và
+**không** dọn khung chat.
+
+**FE#9 — nộp bài luyện THÀNH CÔNG mà hiện dòng đỏ "Nộp bài luyện tập thất bại".** Một
+`catch` bọc cả `submitPractice` lẫn `getPracticeComparison`; cái thứ hai chỉ là phần so
+sánh trước/sau. **Fix:** bọc riêng, hỏng thì `setComparison(null)`.
+
+**FE#10 — upload xong, `load()` hỏng → "Tải tài liệu lên thất bại" và mất cả danh sách**,
+trong khi file ĐÃ lên. **Fix:** tách hai `try`; lỗi tải lại có lời riêng ("Đã tải lên
+xong, nhưng chưa làm mới được danh sách").
+
+### Họ 2 — coi "hỏng" là "rỗng"
+
+**FE#11** — `Promise.all` bốn endpoint: một cú 500 của `/api/progress/overview` xoá sạch
+danh sách tài liệu. **Fix:** `Promise.allSettled`, chỉ lỗi ở `listDocuments()` mới là lỗi
+thật; ba khối tiến độ hỏng thì để trống chúng.
+
+**FE#14** — `/mindmaps` hoặc `/summaries` hỏng → `setMindMaps([])` → "Chưa có sơ đồ nào
+được lưu" cho người có đủ sơ đồ, và họ dựng lại từ đầu. Tab Tóm tắt còn không có cờ tải
+nào nên hiện "Chưa có tóm tắt nào" **trong lúc đang tải lần đầu**. **Fix:** giữ nguyên
+danh sách đang có, hiện lỗi kèm "Thử lại"; thêm `dangTaiSummary`.
+
+**FE#15** — `StudyMapView` chỉ nhận map `status === "completed"`. Có job đang dựng ở tab
+khác (hoặc vừa F5) thì trang hiện "Chưa dựng sơ đồ cho tài liệu này" **kèm nút mời dựng**
+— bấm là job thứ hai tranh slot LLM với job thứ nhất. **Fix:** thấy map `processing`/
+`pending` thì hiện trạng thái "Sơ đồ đang được dựng" + nút "Kiểm tra lại".
+
+**FE#16** — poll `/sources/<id>/status` gặp lỗi mạng hoặc `!res.ok` là `stopPolling` im
+lặng: thẻ đứng mãi ở "Đang phân tích tài liệu…" với thanh tiến trình đóng băng, không
+lỗi, không bao giờ hết. **Fix:** cờ `matDauVet` — nói ra là đã hết theo dõi, kèm nút
+"Theo dõi lại".
+
+**FE#17** — tài liệu đang xử lý **biến mất** sau khi thu/mở lại cột trái hoặc F5:
+`SidebarLeft` unmount thật, và `/list-indexed` chỉ trả về tài liệu đã index XONG. Người
+dùng đọc là upload hỏng. **Fix:** `utils/nguonDangXuLy.js` — nhớ `source_id` + tên file
+vào localStorage ngay khi nhận được id, dựng lại thẻ và theo dõi tiếp khi mount, quên khi
+`ready`/`error`, tự hết hạn sau 6 giờ. Cùng bài học với `makeActiveJobStore`.
+
+**FE#8** — job chấm tự luận chết ở BE thì attempt kẹt `submitted` **vĩnh viễn**: poll
+thành công mọi lần, chỉ là trạng thái không bao giờ đổi, nên trần đếm-lỗi thêm ở commit
+trước không cứu được. **Fix:** trần thời gian 5 phút (khớp `STALL_MS` của `jobPoller`),
+hết thì nói thật là có thể việc chấm đã dừng, kèm nút "Chờ thêm".
+
+### Nhóm nhẹ
+
+**FE#18** — `if (body?.job_id) job.start(...)` không có nhánh `else` ở `QuizSetup` và
+`ReviewGuide`: response thiếu `job_id` thì nút hết quay và tuyệt đối không có gì xảy ra —
+người dùng bấm lại, lần này ra job thật, thành hai job cho một ý định.
+**FE#19** — "Không xóa được tài liệu, kiểm tra console!" đổi thành lời cho người học.
+**FE#20** — nút "Tải tài liệu" trong `EmptyState` thiếu `disabled={uploading}` (nút ở
+thanh công cụ thì có), nên chọn file lần hai lúc đang tải tạo upload chồng.
+
+### Regression
+
+`FE/src/utils/nguonDangXuLy.test.js` — 6 test: nhớ được nguồn, quên khi xong, không tạo
+bản trùng, quá hạn thì bỏ, localStorage rác trả rỗng không ném, thiếu `sourceId` thì bỏ
+qua. Kho không có testing-library nên phần nối dây component dựa vào build + đọc lại
+diff; phần logic tách được thì đã tách và test.
+
+FE 230 passed (mốc 224), build OK, lint 70 (mốc 72 — giảm 2, không thêm).
+
+### Phòng ngừa
+
+**`Promise.all` biến mọi endpoint phụ thành endpoint bắt buộc.** Trang có một thứ chính
+và vài thứ phụ thì dùng `allSettled` và chỉ ném khi thứ CHÍNH hỏng — nếu không, một cú
+500 ở khối thống kê xoá sạch nội dung người dùng đến để xem.
+
+**Một `catch` bọc hai lời gọi là một `catch` nói dối về một trong hai.** Lời báo lỗi mang
+tên hành động đầu tiên, còn thứ hỏng là hành động thứ hai — và hành động đầu tiên thì đã
+thành công.
+
 ## (ĐÃ SỬA 2026-09-01) Một khẩu súng đã lên đạn, một tài liệu nói ngược, một cờ xoá không ai đọc
 
 Audit vòng 8, BE#10 và #11. Không cái nào đang hại ai **hôm nay** — đó chính là lý do

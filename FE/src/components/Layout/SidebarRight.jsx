@@ -85,6 +85,9 @@ export default function SidebarRight({ selectedSources, evidence, highlight, onH
   const [summaryMode, setSummaryMode] = useState("standard");  // Phase 3: standard | study
   const [summaryCancelNotice, setSummaryCancelNotice] = useState(false);
   const [initialLoading, setInitialLoading] = useState(true);
+  const [dangTaiSummary, setDangTaiSummary] = useState(true);
+  const [loiTaiMindmap, setLoiTaiMindmap] = useState(null);
+  const [loiTaiSummary, setLoiTaiSummary] = useState(null);
   const [summaries, setSummaries]         = useState([]);
   // `mindmapGenerating` now only drives the viewer's in-overlay "generating"
   // banner during a "Tạo lại" (regenerate) run — plain "Tạo sơ đồ" no longer
@@ -128,13 +131,20 @@ export default function SidebarRight({ selectedSources, evidence, highlight, onH
   }, []);
 
   // ── Fetchers (logic unchanged) ────────────────────
+  // Hỏng KHÁC rỗng: `setMindMaps([])` trong `catch` làm màn hình ghi "Chưa có sơ đồ
+  // nào được lưu" cho một người có đủ sơ đồ, và họ sẽ dựng lại từ đầu. Giữ nguyên danh
+  // sách đang có, nói ra là chưa tải được.
   const fetchMindMaps = useCallback(async () => {
     try {
       const res = await apiFetch(`/mindmaps`);
       if (!res.ok) throw new Error(`HTTP ${res.status}`);
       const data = await res.json();
       setMindMaps(Array.isArray(data?.mindmaps) ? data.mindmaps : []);
-    } catch (err) { console.error("Mind map fetch error:", err); setMindMaps([]); }
+      setLoiTaiMindmap(null);
+    } catch (err) {
+      console.error("Mind map fetch error:", err);
+      setLoiTaiMindmap("Chưa tải được danh sách sơ đồ.");
+    }
     finally { setInitialLoading(false); }
   }, []);
 
@@ -144,7 +154,14 @@ export default function SidebarRight({ selectedSources, evidence, highlight, onH
       if (!res.ok) throw new Error(`HTTP ${res.status}`);
       const data = await res.json();
       setSummaries(Array.isArray(data?.summaries) ? data.summaries : []);
-    } catch (err) { console.error("Summary fetch error:", err); setSummaries([]); }
+      setLoiTaiSummary(null);
+    } catch (err) {
+      console.error("Summary fetch error:", err);
+      setLoiTaiSummary("Chưa tải được danh sách tóm tắt.");
+    }
+    // Tab Tóm tắt trước đây KHÔNG có cờ tải nào, nên nó hiện "Chưa có tóm tắt nào"
+    // ngay trong lúc đang tải lần đầu.
+    finally { setDangTaiSummary(false); }
   }, []);
 
   useEffect(() => { fetchMindMaps(); fetchSummaries(); }, [fetchMindMaps, fetchSummaries]);
@@ -761,6 +778,11 @@ export default function SidebarRight({ selectedSources, evidence, highlight, onH
           {artifactTab === "mindmap" ? (
             initialLoading ? (
               <div className="flex items-center justify-center py-6 text-text-muted text-[12px] gap-2"><Spinner size={14} /> Đang tải…</div>
+            ) : loiTaiMindmap && mindMaps.length === 0 ? (
+              <p className="text-[12px] text-center py-4" style={{ color: "var(--err)" }}>
+                {loiTaiMindmap}{" "}
+                <button type="button" className="underline" onClick={fetchMindMaps}>Thử lại</button>
+              </p>
             ) : mindMaps.length === 0 ? (
               <p className="text-[12px] text-text-muted text-center py-4">Chưa có sơ đồ nào được lưu.</p>
             ) : (
@@ -773,7 +795,14 @@ export default function SidebarRight({ selectedSources, evidence, highlight, onH
               </div>
             )
           ) : (
-            summaries.length === 0 ? (
+            dangTaiSummary ? (
+              <div className="flex items-center justify-center py-6 text-text-muted text-[12px] gap-2"><Spinner size={14} /> Đang tải…</div>
+            ) : loiTaiSummary && summaries.length === 0 ? (
+              <p className="text-[12px] text-center py-4" style={{ color: "var(--err)" }}>
+                {loiTaiSummary}{" "}
+                <button type="button" className="underline" onClick={fetchSummaries}>Thử lại</button>
+              </p>
+            ) : summaries.length === 0 ? (
               <p className="text-[12px] text-text-muted text-center py-4">Chưa có tóm tắt nào được lưu.</p>
             ) : (
               <div className="flex flex-col gap-1.5">

@@ -106,6 +106,9 @@ export default function QuizSetup() {
         scope: { section_ids: sectionIds },
       });
       if (body?.job_id) job.start(body.job_id);
+      // Không có nhánh này thì nút hết quay và TUYỆT ĐỐI không có gì xảy ra: người dùng
+      // bấm lại, và lần này có thể ra job thật — thành hai job cho một ý định.
+      else setSubmitError("Máy chủ không trả về mã tiến trình nào. Thử lại.");
     } catch (err) {
       setSubmitError(moTaLoi(err, "Không tạo được quiz."));
     } finally {

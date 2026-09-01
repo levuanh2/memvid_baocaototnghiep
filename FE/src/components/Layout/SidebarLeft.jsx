@@ -3,6 +3,7 @@ import { apiFetch, _appError, isUnauthorizedError, isNotFoundOrForbiddenError, g
 import { Icon } from "../ui/Icon";
 import Badge from "../ui/Badge";
 import Spinner from "../ui/Spinner";
+import { nguonConDangXuLy, nhoNguon, quenNguon } from "../../utils/nguonDangXuLy";
 
 /** Phase sau FAISS: memory tree. memory_tree_ready = đã xong — không hiện « đang tối ưu ». */
 const SUBSTATUS_OPTIMIZING = new Set(["faiss_ready", "building_memory_tree"]);
@@ -52,17 +53,33 @@ export default function SidebarLeft({ selectedSources, setSelectedSources, onSou
     const poll = async () => {
       try {
         const res = await apiFetch(`/sources/${sourceId}/status`);
-        if (!res.ok) { stopPolling(sourceId); return; }
+        if (!res.ok) { stopPolling(sourceId); danhDauMatDau(sourceId); return; }
         const data = await res.json();
         setSources((prev) => prev.map((s) => s.source_id === sourceId ? { ...s, status: data.status, progress: data.progress ?? s.progress, substatus: data.substatus, capabilities: data.capabilities, can_query: data.can_query === true, video_stem: data.video_stem ?? s.video_stem, error: data.error } : s));
         if (data.status === "ready" || data.status === "error") {
           stopPolling(sourceId);
+          quenNguon(sourceId);
           if (data.status === "ready") setTimeout(() => fetchSourcesFromBackend(), 500);
         }
-      } catch (err) { console.error(`Error polling status for ${sourceId}:`, err); stopPolling(sourceId); }
+      } catch (err) {
+        // Dừng poll là đúng, dừng TRONG IM LẶNG thì không: thẻ đứng mãi ở "Đang phân
+        // tích tài liệu…" với thanh tiến trình đóng băng, không lỗi, không bao giờ hết.
+        console.error(`Error polling status for ${sourceId}:`, err);
+        stopPolling(sourceId);
+        danhDauMatDau(sourceId);
+      }
     };
     poll();
     pollingIntervalsRef.current[sourceId] = setInterval(poll, 1500);
+  };
+
+  // Mất liên lạc khi đang theo dõi một tài liệu: đổi thẻ sang trạng thái nói được
+  // rằng đã hết theo dõi, kèm đường bấm lại.
+  const danhDauMatDau = (sourceId) => {
+    setSources((prev) => prev.map((s) =>
+      s.source_id === sourceId && s.status !== "ready" && s.status !== "error"
+        ? { ...s, matDauVet: true }
+        : s));
   };
 
   const stopPolling = (sourceId) => {
@@ -100,6 +117,19 @@ export default function SidebarLeft({ selectedSources, setSelectedSources, onSou
 
   useEffect(() => { fetchSourcesFromBackend(); }, []);
 
+  // Dựng lại thẻ cho những tài liệu còn đang xử lý và theo dõi tiếp. `/list-indexed`
+  // không biết chúng tồn tại; danh sách này là thứ duy nhất còn lại sau F5.
+  useEffect(() => {
+    for (const n of nguonConDangXuLy()) {
+      setSources((prev) => prev.some((s) => s.source_id === n.sourceId) ? prev : [{
+        source_id: n.sourceId, filename: n.filename || "Tài liệu đang xử lý",
+        video_stem: null, status: "processing", progress: 0, can_query: false,
+      }, ...prev]);
+      pollSourceStatus(n.sourceId);
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
   // Thu cột trái lại là component này unmount thật (MainLayout thay nó bằng PanelSpine),
   // nhưng mọi interval 1.5s vẫn chạy tiếp — mãi mãi, cho mỗi tài liệu từng ở trạng thái
   // đang xử lý. Dọn hết khi rời đi.
@@ -133,7 +163,13 @@ export default function SidebarLeft({ selectedSources, setSelectedSources, onSou
         const data = await res.json();
         const newSource = { source_id: data.source_id, filename: formatFileName(file.name), video_stem: data.video_stem, status: data.status || "processing", progress: 0, can_query: false };
         setSources((prev) => [newSource, ...prev]);
-        if (data.source_id) pollSourceStatus(data.source_id);
+        if (data.source_id) {
+          // Nhớ ngay khi nhận được id: thu cột trái là component này unmount thật, và
+          // `/list-indexed` chỉ trả về tài liệu đã xong — không nhớ thì thẻ biến mất và
+          // người dùng đọc là upload hỏng.
+          nhoNguon({ sourceId: data.source_id, filename: formatFileName(file.name) });
+          pollSourceStatus(data.source_id);
+        }
       }
     } finally {
       setUploading(false);
@@ -160,7 +196,7 @@ export default function SidebarLeft({ selectedSources, setSelectedSources, onSou
       console.error("Delete source error:", err);
       alert((isUnauthorizedError(err) || isNotFoundOrForbiddenError(err))
         ? getUserFriendlyApiError(err)
-        : "Không xóa được tài liệu, kiểm tra console!");
+        : "Không xóa được tài liệu. Thử lại sau ít phút.");
     }
     finally { setDeletingFile(null); }
   };
@@ -313,9 +349,19 @@ export default function SidebarLeft({ selectedSources, setSelectedSources, onSou
 
                   {statusConfig.subText && <div className="text-[11px] text-text-muted mt-1">{statusConfig.subText}</div>}
 
-                  {statusConfig.showProgress && (
+                  {statusConfig.showProgress && !src.matDauVet && (
                     <div className="mt-1.5">
                       <div className="progress-track"><div className="progress-fill" style={{ width: `${(src.progress || 0) * 100}%` }} /></div>
+                    </div>
+                  )}
+
+                  {src.matDauVet && (
+                    <div className="text-[11px] mt-1.5" style={{ color: "var(--err)" }}>
+                      Mất liên lạc khi đang theo dõi. Tài liệu có thể vẫn đang được xử lý.{" "}
+                      <button type="button" className="underline"
+                        onClick={() => { setSources((prev) => prev.map((s) => s.source_id === src.source_id ? { ...s, matDauVet: false } : s)); pollSourceStatus(src.source_id); }}>
+                        Theo dõi lại
+                      </button>
                     </div>
                   )}
 

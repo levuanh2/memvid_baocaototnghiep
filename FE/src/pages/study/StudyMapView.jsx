@@ -37,6 +37,7 @@ export default function StudyMapView() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
   const [starting, setStarting] = useState(false);
+  const [dangDung, setDangDung] = useState(false);
   const canvasRef = useRef(null);
   const [translate, setTranslate] = useState({ x: 120, y: 300 });
 
@@ -67,6 +68,10 @@ export default function StudyMapView() {
       const newest = maps.find((m) => m.status === "completed") || null;
       if (newest) await openMap(newest.map_id, documentId);
       else setMap(null);
+      // Có job đang dựng (tab khác, hoặc vừa F5) mà trang hiện "Chưa dựng sơ đồ cho
+      // tài liệu này" kèm nút mời dựng thì người dùng bấm, và job thứ hai tranh slot
+      // LLM với job thứ nhất.
+      setDangDung(Boolean(maps.find((m) => m.status === "processing" || m.status === "pending")));
     } catch (e) {
       setError(moTaLoi(e, "Không tải được sơ đồ kiến thức."));
     } finally {
@@ -107,6 +112,9 @@ export default function StudyMapView() {
       const body = await generateStudyMap(documentId, { force });
       if (body?.job_id) job.start(body.job_id);
       else if (body?.map_id) await openMap(body.map_id, documentId);
+      // FE#18: không có nhánh này thì response thiếu cả hai khoá = nút hết quay và
+      // TUYỆT ĐỐI không có gì xảy ra, không một chữ nào.
+      else setError("Máy chủ không trả về sơ đồ hay mã tiến trình nào. Thử lại.");
     } catch (e) {
       setError(moTaLoi(e, "Không tạo được sơ đồ kiến thức."));
     } finally {
@@ -222,7 +230,18 @@ export default function StudyMapView() {
         </div>
       )}
 
-      {!map && !job.running ? (
+      {!map && !job.running && dangDung ? (
+        <EmptyState
+          icon="Clock"
+          title="Sơ đồ đang được dựng"
+          hint="Một tiến trình dựng sơ đồ cho tài liệu này đang chạy (có thể từ tab khác). Bấm dựng thêm sẽ tạo job thứ hai tranh cùng một chỗ xử lý."
+          action={
+            <button type="button" className="btn-secondary text-[13px] mt-1" onClick={load}>
+              Kiểm tra lại
+            </button>
+          }
+        />
+      ) : !map && !job.running ? (
         <EmptyState
           icon="Network"
           title="Chưa dựng sơ đồ cho tài liệu này"

@@ -68,6 +68,10 @@ export default function ReviewGuide() {
         difficulty: "easy",
       });
       if (body?.job_id) job.start(body.job_id);
+      else {
+        setError("Máy chủ không trả về mã tiến trình nào. Thử lại.");
+        setPracticeFor(null);
+      }
     } catch (e) {
       setError(moTaLoi(e, "Không tạo được câu luyện tập."));
       setPracticeFor(null);

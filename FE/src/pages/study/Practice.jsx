@@ -62,7 +62,13 @@ export default function Practice() {
       // Bài luyện ngắn: nộp trong MỘT lần gọi, không cần lưu nháp từng câu.
       const result = await submitPractice(quizId, answers);
       setGraded(result);
-      setComparison(await getPracticeComparison(quizId));
+      // Nộp XONG rồi. So sánh trước/sau chỉ là phần trang trí thêm — hỏng nó mà báo
+      // "Nộp bài luyện tập thất bại" thì dòng đỏ đó nằm ngay trên điểm số vừa hiện.
+      try {
+        setComparison(await getPracticeComparison(quizId));
+      } catch {
+        setComparison(null);
+      }
     } catch (e) {
       setError(moTaLoi(e, "Nộp bài luyện tập thất bại."));
     } finally {

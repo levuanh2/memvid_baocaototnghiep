@@ -267,16 +267,24 @@ export default function ChatArea({ selectedSources, sources = [], onEvidence, hi
 
   const resetJobState = () => { setJobProgress(0); setJobNode(""); setSeenNodes([]); previewThrottleRef.current?.cancel(); setStreamingPreview(""); streamAccRef.current = ""; };
 
+  // Huỷ ở đây là huỷ PHÍA MÁY BẠN, không phải phía máy chủ: BE chưa có route huỷ cho
+  // job `query` (`_CANCELLABLE_JOB_TYPES` không có "query", và query_graph không gọi
+  // `is_cancel_requested` ở đâu cả). Job vẫn chạy tới xong và vẫn giữ slot LLM duy
+  // nhất. Nói "Đã huỷ truy vấn" là hứa một việc không xảy ra — người dùng bấm Huỷ rồi
+  // hỏi câu mới và không hiểu vì sao phải chờ lâu.
+  //
+  // `prev.slice(0, -1)` cũng phải đi: lúc gửi chỉ tin nhắn NGƯỜI DÙNG được đẩy vào
+  // (không có bong bóng AI giữ chỗ), nên nó xoá đúng câu hỏi vừa gõ.
   const handleCancel = () => {
     if (pendingReview) return;
     cancelledRef.current = true;
     abortControllerRef.current?.abort();
     try { eventSourceRef.current?.close(); } catch {}
     resetJobState(); setLoading(false);
-    setMessages((prev) => {
-      const withoutLast = prev.slice(0, -1);
-      return [...withoutLast, { role: "cancelled", content: "Đã huỷ truy vấn." }];
-    });
+    setMessages((prev) => [...prev, {
+      role: "cancelled",
+      content: "Đã ngừng chờ câu trả lời. Máy chủ vẫn chạy nốt truy vấn này, nên câu hỏi tiếp theo có thể phải đợi thêm một lúc.",
+    }]);
   };
 
   // ── Conversation controls ───────────────────────────
@@ -307,15 +315,29 @@ export default function ChatArea({ selectedSources, sources = [], onEvidence, hi
     setMenuOpen(false);
     setContextCleared(true);            // messages stay visible; AI stops using old turns
     refocusComposer();                  // trước await: nút vừa bấm đã biến mất cùng menu
-    try { await clearConversationContext(sessionId); } catch {}
-    showNotice("Đã xóa ngữ cảnh. Câu hỏi tiếp theo sẽ được xử lý như chủ đề mới.");
+    try {
+      await clearConversationContext(sessionId);
+      showNotice("Đã xóa ngữ cảnh. Câu hỏi tiếp theo sẽ được xử lý như chủ đề mới.");
+    } catch {
+      // `catch {}` rồi vẫn báo "Đã xóa" là báo cáo một việc chưa làm: cờ phía máy này
+      // tắt ngữ cảnh, nhưng máy chủ vẫn giữ mốc cũ và lượt sau vẫn có thể dùng lại nó.
+      setContextCleared(false);
+      showNotice("Không xóa được ngữ cảnh trên máy chủ. Thử lại, hoặc mở cuộc trò chuyện mới.");
+    }
   };
 
   const handleDeleteHistory = async () => {
     if (loading || pendingReview) return;
     setMenuOpen(false);
     if (!window.confirm("Xóa toàn bộ lịch sử chat của cuộc trò chuyện này? Hành động này không thể hoàn tác.")) return;
-    try { await deleteConversation(sessionId); } catch {}
+    try {
+      await deleteConversation(sessionId);
+    } catch {
+      // Xoá hỏng mà vẫn dọn sạch khung chat là tệ nhất: người dùng tin đã xoá, còn máy
+      // chủ vẫn giữ nguyên lịch sử và vẫn đưa nó vào ngữ cảnh lượt sau.
+      showNotice("Không xóa được lịch sử chat trên máy chủ. Lịch sử vẫn còn, hãy thử lại.");
+      return;
+    }
     setMessages([]);
     setContextCleared(false);
     onEvidence?.(null); onHighlight?.(null);

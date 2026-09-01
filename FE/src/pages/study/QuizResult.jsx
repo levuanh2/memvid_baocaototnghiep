@@ -18,6 +18,10 @@ import { MAX_CONSECUTIVE_FETCH_FAILURES } from "../../utils/jobPoller";
 
 const KEYS = ["A", "B", "C", "D", "E", "F"];
 const REGRADE_POLL_MS = 3000;
+// Job chấm tự luận chết ở BE thì attempt kẹt `submitted` VĨNH VIỄN — poll thành công
+// mọi lần, chỉ là trạng thái không bao giờ đổi, nên trần đếm-lỗi không cứu được.
+// 5 phút khớp STALL_MS của jobPoller: quá đó thì nói thật là đang kẹt.
+const REGRADE_STALL_MS = 5 * 60 * 1000;
 
 export default function QuizResult() {
   const { attemptId } = useParams();
@@ -29,7 +33,9 @@ export default function QuizResult() {
   // poll trượt mạng không được biến cả trang kết quả đã chấm thành thẻ đỏ.
   const [loiNen, setLoiNen] = useState(null);
   const [nhip, setNhip] = useState(0);
+  const [ketChamBai, setKetChamBai] = useState(false);
   const truotRef = useRef(0);
+  const batDauChoRef = useRef(null);
   const timerRef = useRef(null);
 
   const load = useCallback(async ({ quiet = false } = {}) => {
@@ -62,8 +68,13 @@ export default function QuizResult() {
   // `nhip` phải nằm trong dependency: lần hỏi nền hỏng thì `result` KHÔNG đổi, effect
   // không chạy lại, và vòng hỏi chết lặng — trang đứng mãi ở "đang chấm".
   useEffect(() => {
-    if (result?.status !== "submitted") return undefined;
+    if (result?.status !== "submitted") { batDauChoRef.current = null; return undefined; }
     if (truotRef.current >= MAX_CONSECUTIVE_FETCH_FAILURES) return undefined;
+    if (batDauChoRef.current === null) batDauChoRef.current = Date.now();
+    if (Date.now() - batDauChoRef.current > REGRADE_STALL_MS) {
+      setKetChamBai(true);
+      return undefined;
+    }
     timerRef.current = setTimeout(async () => {
       await load({ quiet: true });
       setNhip((n) => n + 1);
@@ -92,6 +103,16 @@ export default function QuizResult() {
     >
       {!result ? null : (
         <>
+          {ketChamBai && (
+            <div className="text-[13px] flex items-center gap-1.5 mb-3" style={{ color: "var(--err)" }}>
+              <Icon name="AlertCircle" size={14} />
+              Bài chưa được chấm xong sau 5 phút — có thể việc chấm đã dừng giữa chừng.
+              <button type="button" className="underline"
+                onClick={() => { batDauChoRef.current = Date.now(); setKetChamBai(false); setNhip((n) => n + 1); }}>
+                Chờ thêm
+              </button>
+            </div>
+          )}
           {loiNen && (
             <div className="text-[13px] flex items-center gap-1.5 mb-3" style={{ color: "var(--err)" }}>
               <Icon name="AlertCircle" size={14} />

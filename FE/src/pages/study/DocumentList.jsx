@@ -32,16 +32,20 @@ export default function DocumentList() {
     setLoading(true);
     setError(null);
     try {
-      const [docs, ov, concepts, history] = await Promise.all([
+      // Danh sách tài liệu là thứ trang này TỒN TẠI để hiện; ba khối tiến độ bên dưới
+      // là phần thêm. `Promise.all` cho một cú 500 của /api/progress/overview quyền xoá
+      // sạch cả trang — dùng allSettled và chỉ coi lỗi ở tài liệu là lỗi thật.
+      const [docs, ov, concepts, history] = await Promise.allSettled([
         listDocuments(),
         getProgressOverview(),
         getProgressConcepts({ weakOnly: true }),
         getProgressAttempts({ limit: 5 }),
       ]);
-      setDocuments(docs);
-      setOverview(ov);
-      setWeak(concepts.slice(0, 4));
-      setAttempts(history);
+      if (docs.status === "rejected") throw docs.reason;
+      setDocuments(docs.value);
+      setOverview(ov.status === "fulfilled" ? ov.value : null);
+      setWeak(concepts.status === "fulfilled" ? concepts.value.slice(0, 4) : []);
+      setAttempts(history.status === "fulfilled" ? history.value : []);
     } catch (e) {
       setError(moTaLoi(e, "Không tải được danh sách tài liệu."));
     } finally {
@@ -59,9 +63,18 @@ export default function DocumentList() {
     setError(null);
     try {
       await uploadDocument(file);
-      await load();
     } catch (err) {
       setError(moTaLoi(err, "Tải tài liệu lên thất bại."));
+      setUploading(false);
+      return;
+    }
+    // Lên xong rồi. `load()` hỏng sau đó là lỗi TẢI LẠI, không phải lỗi tải lên — gộp
+    // hai cái vào một `catch` thì file đã lên mà màn hình ghi "Tải tài liệu lên thất
+    // bại" và cả danh sách biến mất.
+    try {
+      await load();
+    } catch (err) {
+      setError(moTaLoi(err, "Đã tải lên xong, nhưng chưa làm mới được danh sách."));
     } finally {
       setUploading(false);
     }
@@ -122,9 +135,9 @@ export default function DocumentList() {
             title="Chưa có tài liệu nào"
             hint="Tải lên tài liệu PDF, Word, PowerPoint, Excel, Markdown, EPUB hoặc ảnh chụp trang sách để bắt đầu."
             action={
-              <button type="button" className="btn-seal text-[13px] mt-1"
-                onClick={() => fileRef.current?.click()}>
-                Tải tài liệu
+              <button type="button" className="btn-seal text-[13px] mt-1 disabled:opacity-60 disabled:cursor-not-allowed"
+                disabled={uploading} onClick={() => fileRef.current?.click()}>
+                {uploading ? "Đang tải lên…" : "Tải tài liệu"}
               </button>
             }
           />

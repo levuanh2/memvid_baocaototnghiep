@@ -1,5 +1,45 @@
 # Lessons Learned
 
+## 2026-09-01 - Nút bấm không gọi gì cả vẫn có thể trông như đang hoạt động
+
+- **Nút "Huỷ" của chat chưa bao giờ huỷ gì trên máy chủ.** Nó `abort()` request phía
+  trình duyệt rồi ghi "Đã huỷ truy vấn." — trong khi BE không có route huỷ cho job
+  `query` và `query_graph` không đọc cờ huỷ ở đâu cả. Job chạy tới xong, giữ nguyên slot
+  LLM duy nhất, và người dùng hỏi câu tiếp theo rồi không hiểu vì sao chờ lâu. Khi review
+  một nút "Huỷ/Dừng/Xoá", câu hỏi đầu tiên là **nó gọi đường nào ở máy chủ**; không gọi
+  gì thì lời thông báo phải nói đúng phạm vi của nó.
+
+- **`catch {}` rồi vẫn báo thành công là hình thức nói dối rẻ nhất và hay gặp nhất.** Ba
+  chỗ trong một file: xoá ngữ cảnh, xoá lịch sử, và xoá lịch sử còn dọn sạch khung chat
+  trước khi biết máy chủ có làm được không. Người dùng tin đã xoá; lượt sau model vẫn
+  nhớ.
+
+- **`Promise.all` biến mọi endpoint phụ thành endpoint bắt buộc.** Trang danh sách tài
+  liệu gọi 4 endpoint và mất sạch nội dung khi `/api/progress/overview` trả 500 — thứ
+  người dùng đến để xem bị xoá bởi một khối thống kê trang trí. Có một thứ chính và vài
+  thứ phụ thì `allSettled`, và chỉ ném khi thứ chính hỏng.
+
+- **Một `catch` bọc hai lời gọi sẽ nói dối về một trong hai.** "Nộp bài luyện tập thất
+  bại" hiện ngay trên điểm số vừa chấm xong, vì `getPracticeComparison` mới là cái hỏng.
+  Cùng khuôn: upload thành công rồi `load()` hỏng thì thông báo mang tên "Tải tài liệu
+  lên thất bại". Bọc riêng từng hành động có tên riêng.
+
+- **"Hỏng" và "rỗng" phải là hai màn hình khác nhau.** `setMindMaps([])` trong `catch`
+  làm người có đủ sơ đồ đọc "Chưa có sơ đồ nào được lưu" rồi dựng lại từ đầu. Và trạng
+  thái rỗng không có cờ tải sẽ nói dối ngay trong lúc đang tải lần đầu. Ba trạng thái
+  tối thiểu cho mọi danh sách: đang tải, hỏng (kèm Thử lại), rỗng thật.
+
+- **Trần đếm-lỗi không cứu được vòng lặp mà mọi lần gọi đều thành công.** Job chấm chết ở
+  BE thì attempt kẹt `submitted` vĩnh viễn: poll trả 200 mãi mãi, `failStreak` luôn bằng
+  0. Vòng chờ một trạng thái thay đổi cần thêm **trần thời gian**, không chỉ trần số lần
+  hỏng.
+
+- **Trạng thái sống chỉ nằm trong bộ nhớ của một component là trạng thái sẽ mất.**
+  `SidebarLeft` unmount thật khi thu cột trái, và `/list-indexed` chỉ biết những tài liệu
+  đã xong — nên thẻ "đang xử lý" bốc hơi và trông như upload hỏng. Cùng bài học với job
+  mindmap: lưu id ngay khi nhận được, khôi phục lúc mount, xoá khi tới trạng thái cuối,
+  kèm hạn để máy tắt giữa chừng không để lại thẻ ma.
+
 ## 2026-09-01 - Cột chỉ có đường ghi mà không có đường đọc thì tính năng đó chưa tồn tại
 
 - **`deleted_at` là ca mẫu.** Ghi ở đúng một chỗ, đọc ở không chỗ nào. Cột có, migration
