@@ -3,13 +3,21 @@ from __future__ import annotations
 from numbers import Real
 from typing import Any
 
+from app.domains.retrieval.citation import bo_nhan_nguon
 from app.domains.retrieval.hybrid import _tokenize
 
 
 def _chunk_text(chunk: Any) -> str:
+    """Nội dung để CHẤM ĐIỂM — đã gỡ nhãn nguồn do chính hệ thống dán vào.
+
+    RetrieveFAISS dán `[Nguồn: <stem>, đoạn <id>]` lên đầu mỗi chunk cho prompt, và
+    chuỗi đó đi thẳng vào đây. Tokenize cả nhãn thì thước đo tự cộng điểm cho chính
+    nó: "nguồn"/"đoạn" khớp với câu hỏi tiếng Việt bất kỳ. Xem `citation.py` để biết
+    con số đo được.
+    """
     if isinstance(chunk, str):
-        return chunk
-    return str(getattr(chunk, "text", "") or "")
+        return bo_nhan_nguon(chunk)
+    return bo_nhan_nguon(str(getattr(chunk, "text", "") or ""))
 
 
 def _numeric_score(chunk: Any, name: str) -> float | None:

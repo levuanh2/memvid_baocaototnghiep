@@ -16,7 +16,7 @@ from app.graphs.logger import _Timer, ctx_submit, log_node_event
 from app.graphs.sqlite_checkpointer import sqlite_saver_from_path
 from app.graphs.state import QueryState
 from app.domains.cache import llm_cache
-from app.domains.retrieval import grading, nli, query_rewrite, rerank
+from app.domains.retrieval import citation, grading, nli, query_rewrite, rerank
 from app.domains.retrieval.ensemble_retriever import hybrid_retrieve_with_ensemble
 from app.domains.retrieval.hybrid import HybridRetriever
 from shared.config import get_settings
@@ -315,7 +315,9 @@ def build_query_graph(
             for item in retrieved:
                 txt = item.text or ""
                 if INCLUDE_CHUNK_SOURCE_TAGS:
-                    chunks_with_citation.append(f"[Nguồn: {item.video_stem}, đoạn {item.chunk_id}]\n{txt}")
+                    # Dán và gỡ phải cùng một hình dạng — xem `retrieval/citation.py`.
+                    chunks_with_citation.append(
+                        f"{citation.nhan_nguon(item.video_stem, item.chunk_id)}\n{txt}")
                 else:
                     chunks_with_citation.append(txt)
                 stem = (item.video_stem or "").strip()

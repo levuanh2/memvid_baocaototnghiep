@@ -1,5 +1,70 @@
 # Known Issues
 
+## (ĐÃ SỬA 2026-09-01) CRAG không bao giờ kích nhánh sửa sai — thước đo tự cộng điểm cho chính nó
+
+Audit vòng 8, BE#4. `INCLUDE_CHUNK_SOURCE_TAGS=1` (`.env:183`, đang bật) khiến
+`RetrieveFAISS` dán nhãn lên đầu mọi chunk:
+
+```python
+chunks_with_citation.append(f"[Nguồn: {item.video_stem}, đoạn {item.chunk_id}]\n{txt}")
+```
+
+`state["retrieved_chunks"]` sau đó đi thẳng vào `grade_documents`, và `_relevance`
+tokenize **cả cái nhãn**. "nguồn" và "đoạn" là hai từ cực phổ biến trong câu hỏi tiếng
+Việt, nên chunk lạc đề ăn điểm chỉ nhờ thứ **chính hệ thống vừa dán vào nó**.
+
+Đo lại trên máy (`CRAG_RELEVANCE_THRESHOLD=0.25`):
+
+```
+câu hỏi : "đoạn nào trong nguồn nói về tích phân"
+chunk   : "Công ty ABC thành lập năm 1998 tại Hải Phòng, chuyên vận tải biển."
+
+trước sửa   không nhãn -> 0.0   wrong        có nhãn -> 0.25  correct   (vừa đúng ngưỡng)
+sau sửa     không nhãn -> 0.0   wrong        có nhãn -> 0.0   wrong
+```
+
+Grade luôn ra `correct` thì `RewriteQuery` và `CRAGFallback` **không bao giờ chạy**. Cả
+tầng CRAG thành trang trí, và câu hỏi lạc đề vẫn được trả lời từ ngữ liệu không liên quan
+— đúng thứ CRAG sinh ra để chặn.
+
+### Vì sao lỗi này sống lâu
+
+Mọi test trong `tests/test_grading.py` đều truyền **chuỗi trần**. Không test nào đưa vào
+một chuỗi có tiền tố `[Nguồn: ...]`, tức là không test nào chạy đúng hình dạng dữ liệu mà
+production luôn tạo ra. Lưới có, nhưng giăng ở chỗ không ai đi qua.
+
+### Fix
+
+`app/domains/retrieval/citation.py` — **hai chiều nằm cùng một chỗ**: `nhan_nguon()` dựng
+nhãn (query_graph gọi), `bo_nhan_nguon()` gỡ nhãn ở ĐẦU chuỗi (grading gọi trong
+`_chunk_text`). Trước đây chiều dán nằm trong `query_graph` còn chiều gỡ **không tồn
+tại**; giờ đổi hình dạng nhãn là đổi một chỗ.
+
+Chỉ gỡ nhãn ở **đầu** chunk: nhãn nằm giữa thân bài là nội dung của tài liệu, không phải
+thứ ta dán vào.
+
+Không đụng `rerank_scores` — đó là tín hiệu độc lập từ cross-encoder, và nó vẫn phải
+thắng được lexical như thiết kế.
+
+**KHÔNG tắt `INCLUDE_CHUNK_SOURCE_TAGS`.** Nhãn có ích thật ở prompt: nó là thứ cho model
+trích nguồn. Vấn đề chưa bao giờ là cái nhãn, mà là chấm điểm trên chuỗi đã bị mình thêm
+chữ vào.
+
+### Regression
+
+`BE/tests/test_grading_nhan_nguon.py` — 6 test: round-trip dán/gỡ, không có nhãn thì giữ
+nguyên, chỉ gỡ ở đầu, **chunk lạc đề có nhãn phải ra `wrong`** (ca chính), chunk thật sự
+liên quan vẫn `correct`, và gỡ nhãn không làm mất điểm rerank.
+
+### Phòng ngừa
+
+**Đừng chấm điểm trên chuỗi mình vừa thêm chữ vào.** Bất cứ khi nào một tầng làm đẹp dữ
+liệu cho tầng sau (nhãn trích dẫn, tiền tố vai trò, header markdown), hỏi ngay: còn ai
+khác đọc chuỗi này để **đo** cái gì không? Nếu có, tầng đo phải nhận bản gốc.
+
+**Và test phải mang đúng hình dạng dữ liệu của production.** Chuỗi trần trong test còn
+production luôn có tiền tố thì bộ test đang đo một hệ thống khác.
+
 ## (ĐÃ SỬA 2026-09-01) Bảy chỗ giao diện nói sai về việc vừa xảy ra
 
 Audit vòng 8, phần frontend. Bảy lỗi, một họ: **giao diện báo cáo một thứ khác với thứ

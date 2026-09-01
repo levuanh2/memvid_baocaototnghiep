@@ -1,5 +1,32 @@
 # Lessons Learned
 
+## 2026-09-01 - Đừng chấm điểm trên chuỗi mình vừa thêm chữ vào
+
+- **Thước đo tự cộng điểm cho chính nó.** `RetrieveFAISS` dán `[Nguồn: …, đoạn …]` lên
+  đầu mỗi chunk cho prompt; `grade_documents` nhận đúng chuỗi đó và tokenize cả nhãn.
+  Chunk lạc đề đạt 0.25 — vừa đúng `CRAG_RELEVANCE_THRESHOLD` — chỉ nhờ hai từ "nguồn"
+  và "đoạn" mà chính hệ thống vừa thêm vào. Cả tầng CRAG thành trang trí trong im lặng:
+  không lỗi, không log, chỉ là nhánh sửa sai không bao giờ chạy.
+
+- **Câu hỏi phải hỏi mỗi khi một tầng làm đẹp dữ liệu cho tầng sau:** còn ai khác đọc
+  chuỗi này để ĐO cái gì không? Nhãn trích dẫn, tiền tố vai trò, header markdown, dấu
+  phân đoạn — tất cả đều vô hại cho tầng đọc, và đều là nhiễu cho tầng đo. Tầng đo phải
+  nhận bản gốc.
+
+- **Dán và gỡ phải nằm cùng một chỗ.** Trước khi sửa, chiều dán ở `query_graph` còn chiều
+  gỡ **không tồn tại** — nên không ai nhìn thấy sự bất đối xứng. Đặt cả hai vào một module
+  (`retrieval/citation.py`) làm cho việc thiếu một chiều trở nên hiển nhiên, và đổi hình
+  dạng nhãn chỉ còn một chỗ để đổi.
+
+- **Test dùng chuỗi trần trong khi production luôn có tiền tố = bộ test đang đo một hệ
+  thống khác.** `tests/test_grading.py` phủ khá kỹ ngưỡng, sàn, rerank — và mọi ca đều
+  truyền chuỗi sạch. Lưới giăng ở chỗ không ai đi qua. Khi viết test cho một hàm chấm
+  điểm, lấy đúng thứ mà caller thật sự truyền vào, đừng lấy thứ dễ gõ.
+
+- **Sửa cái đo, đừng tắt cái bị đo.** Phản xạ nhanh là tắt `INCLUDE_CHUNK_SOURCE_TAGS`.
+  Nhưng nhãn có ích thật: nó là thứ cho model trích nguồn. Vấn đề chưa bao giờ là cái
+  nhãn.
+
 ## 2026-09-01 - Nuốt lỗi không phải là fail-open, đó là nói dối có chủ đích
 
 - **Fail-open là chạy tiếp; nuốt lỗi là chạy tiếp RỒI khẳng định mọi thứ ổn.** Bảy lỗi
