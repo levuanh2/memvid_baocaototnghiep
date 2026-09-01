@@ -1811,21 +1811,35 @@ smoke-verified trên stack `memvid_auth_smoke` rebuild từ code mới.
   4. Verify: `python -m pytest BE/tests/test_query.py` (global python) — payload có `sources`/`chunks`
      khi có answer, vắng khi lỗi.
 
-## QR Canonical Text Store: video=canonical, index slim, sqlite derived
+## Chunk Text Store: `chunks.sqlite` là nguồn văn bản DUY NHẤT
 
-- **Bối cảnh / root cause:** Sau khi thêm late chunking, `index.json` lưu cả `text` lẫn vector/metadata cho mỗi chunk (~13MB cho 245 chunk) trong khi QR video (`videos/*.mp4`) cũng chứa chính text đó dạng QR — trùng lặp dữ liệu và video đóng vai trò "write-only". Đồng thời, BM25 nạp corpus hàng loạt từ `index.json` khi khởi động/thay đổi, các site khác cũng đọc text rất nhiều lần, nên không thể giải mã video on-demand hàng loạt được vì quá chậm.
-- **Thiết kế (đã làm):** 
-  1. Tách biệt 3 store: `videos/*.mp4` làm canonical archive + recovery, `index/index.json` gọn nhẹ chỉ chứa pointer `(video, frame_index)` + metadata, và `index/chunks.sqlite` lưu trữ text runtime (dẫn xuất, tái dựng được từ video).
-  2. Module truy cập duy nhất `chunk_text_store.py` (Sqlite + fallback inline index.json + decode-on-demand từng frame với LRU cache).
-  3. Quá trình ingest: lưu video QR ở `save_qr_frames_to_video`, luôn lưu text vào SQLite qua `chunk_text_store.put_many`, và loại bỏ field `text` trong `index.json` nếu có video QR hợp lệ (giữ lại inline `text` làm fallback an toàn khi ghi video lỗi).
-  4. Chuyển đổi toàn bộ các nơi đọc text (BM25, memory tree, mindmap worker, main app endpoints) sang `chunk_text_store`.
-- **Prevention / lessons:**
-  - Thứ tự frame giải mã trong video QR cực kỳ quan trọng; đổi `decode_video_qr` sang trả về list tuple `(frame_index, chunk_text)` theo đúng thứ tự frame thay vì dùng set mất thứ tự.
-  - Gán `frame_index` ở `chunk_processor` phải thực hiện SAU khi đã lọc các frame hỏng để khớp chính xác 1-1 với video ghi ra.
-  - Video chỉ ghi `.mp4` để đồng bộ với cơ chế recovery quét file `.mp4`.
-- **Regression / testing:**
-  - Unit test `test_chunk_text_store.py` (kiểm thử 3 tầng fallback, reset cache, iter_all, put_many).
-  - Integration test `test_store_precomputed.py` và `test_late_chunk_ingest.py` (verify index.json không còn text khi có video, sqlite có text, query/BM25 hoạt động tốt).
+> **Sửa 2026-09-01.** Mục này trước đây mô tả một kiến trúc ba tầng
+> "video QR = canonical, index.json slim, sqlite dẫn xuất". Lớp lưu trữ QR/video thuộc
+> một dự án khác và **đã được gỡ khỏi kho này** — không còn `video_utils.py`,
+> `chunk_processor.py`, hay bất kỳ tham chiếu `decode_video_qr`/`qrcode` nào. Giữ nguyên
+> mô tả cũ là để lại một bản đồ dẫn tới nơi không tồn tại, và tệ hơn: nó hứa một đường
+> recovery không có thật.
+
+- **Vì sao tách text ra khỏi `index.json`:** sau khi thêm late chunking, `index.json` lưu
+  cả `text` lẫn vector/metadata cho mỗi chunk (~13MB cho 245 chunk). BM25 nạp corpus hàng
+  loạt lúc khởi động và nhiều nơi khác đọc text rất nhiều lần, nên text phải nằm ở một
+  store đọc nhanh và tách khỏi metadata.
+- **Hiện trạng (đã kiểm 2026-09-01):**
+  1. `index/chunks.sqlite` giữ text thô — **nguồn duy nhất**.
+  2. `chunk_text_store.py` là module truy cập duy nhất. `get_text` có **đúng hai** tầng:
+     sqlite, rồi inline `text` trong `index.json` (chỉ index cũ mới còn).
+  3. Ingest ghi text qua `chunk_text_store.put_many`.
+  4. Mọi nơi đọc text (BM25, memory tree, mindmap input collector, endpoint trong
+     `main.py`) đều đi qua module này — 23 điểm gọi trong `app/`.
+- **Hệ quả phải nhớ:** **không có đường recovery nào sau `chunks.sqlite`.** Mất nó, và
+  `index.json` không còn inline text, thì cách duy nhất là ingest lại tài liệu gốc. Xem
+  known-issues "chunks.sqlite bị mất hoặc hỏng dữ liệu".
+- **Regression:** `test_chunk_text_store.py`, `test_store_precomputed.py`,
+  `test_late_chunk_ingest.py`.
+- **Bài học chung:** khi gỡ một lớp lưu trữ, grep cả **tài liệu** chứ không chỉ mã. Mã đã
+  sạch từ lâu (các comment còn lại đều ghi "QR đã gỡ"), nhưng `ARCHITECTURE.md`,
+  `FLOW_UPLOAD.md`, `QUY_TRINH_TAO_SO_DO_TU_DUY.md`, `README.md` và RQ Worker Playbook vẫn
+  vẽ nó như đang chạy — trong đó có một câu khẳng định sai về khả năng khôi phục dữ liệu.
 
 ## Job chạy nền dài (mindmap): KHÔNG đặt hard-timeout FE dựa trên thời lượng trung bình
 

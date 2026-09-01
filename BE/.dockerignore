@@ -25,10 +25,8 @@ env/
 index/
 index_backup_*/
 memory/
-videos/
 input_docs/
 data/
-qr_frames/
 models/
 *.sqlite
 *.sqlite-*

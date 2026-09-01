@@ -70,8 +70,8 @@ liệu vào, rồi hỏi đáp, tóm tắt, dựng sơ đồ và tự kiểm tra
 │  │  └──────────────┘  └──────────────┘  └────────────────────────┘   │  │
 │  │  ┌──────────────┐  ┌──────────────┐  ┌────────────────────────┐   │  │
 │  │  │ llm_factory  │  │ chunk_proc   │  │  summarize_advanced    │   │  │
-│  │  │ - Ollama     │  │ - QR Gen     │  │  - DANCER             │   │  │
-│  │  │ - Gemini     │  │ - Video      │  │  - Chain of Density   │   │  │
+│  │  │ - Ollama     │  │ - Semantic   │  │  - DANCER             │   │  │
+│  │  │ - Gemini     │  │ - Text store │  │  - Chain of Density   │   │  │
 │  │  │ - Groq       │  │ - Metadata   │  │  - Entity Chain       │   │  │
 │  │  └──────────────┘  └──────────────┘  └────────────────────────┘   │  │
 │  └─────────────────────────────────────────────────────────────────────┘  │
@@ -81,8 +81,8 @@ liệu vào, rồi hỏi đáp, tóm tắt, dựng sơ đồ và tự kiểm tra
 ┌─────────────────────────────────────────────────────────────────────────────┐
 │                           DATA STORAGE                                       │
 │  ┌─────────────────┐  ┌─────────────────┐  ┌─────────────────────────────┐   │
-│  │   BE/index/     │  │   BE/memory/    │  │   BE/videos/              │   │
-│  │  - index.faiss  │  │  - memory_index │  │  - *.mp4 (QR videos)      │   │
+│  │   BE/index/     │  │   BE/memory/    │  │   BE/index/               │   │
+│  │  - index.faiss  │  │  - memory_index │  │  - chunks.sqlite          │   │
 │  │  - index.json   │  │  - memory_trees │  │                           │   │
 │  │  - source_reg   │  │  - summaries    │  │                           │   │
 │  └─────────────────┘  └─────────────────┘  └─────────────────────────────┘   │

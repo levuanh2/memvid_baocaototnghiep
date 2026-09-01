@@ -23,18 +23,17 @@ Phần này mô tả mô hình lưu trữ/truy xuất chunk text hiện hành:
 flowchart LR
     A[Semantic chunks] --> B[chunks.sqlite<br/>raw text]
     A --> C[index.json<br/>pointer + metadata]
-    A --> D[video QR frames]
     B --> E[chunk_text_store.get_text]
     C --> E
-    D --> E
     E --> F[Memory Tree / Mind Map]
 ```
 
 Thứ tự fallback:
 
 1. `chunks.sqlite`
-2. inline `text` trong `index.json`
-3. decode on-demand từ video QR frames
+2. inline `text` trong `index.json` (chỉ index cũ mới còn)
+
+Chỉ hai tầng. Lớp QR/video là của dự án khác, đã gỡ khỏi kho này.
 
 ---
 
@@ -60,7 +59,9 @@ Khi người dùng tải lên một tài liệu, hệ thống trích xuất văn
 
 - Raw chunk text được ghi vào `chunks.sqlite`
 - Metadata của chunk được ghi vào `index.json`
-- Video QR frames là nguồn recovery cuối cùng
+- KHÔNG có nguồn recovery nào sau `chunks.sqlite`: mất nó thì phải ingest lại tài liệu
+  gốc. (Tài liệu này từng ghi "video QR frames là nguồn recovery cuối cùng" — sai, lớp
+  đó thuộc dự án khác và đã được gỡ.)
 
 ### BƯỚC 3: TẠO MEMORY TREE
 

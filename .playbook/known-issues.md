@@ -2503,6 +2503,7 @@ chứa "hàm hợp"). Chunk quá thô làm truy hồi kém — chưa sửa, cầ
 - **Prevention:** Docker vẫn nên set `EMBEDDING_MODEL_NAME=BAAI/bge-m3` (đã thêm vào compose)
   cho rõ ràng. Đổi model → rebuild index. (Phát hiện qua **codex audit** + Docker log thật.)
 
+## (KHÔNG CÒN ÁP DỤNG 2026-09-01 — lớp QR/video là của dự án khác, đã gỡ khỏi kho)
 ## Video QR ghi 0 frame trong container headless (opencv-python-headless)
 
 - **Triệu chứng:** `Completed: 0/N frames written successfully` / `Failed to write frame`;
@@ -2656,12 +2657,21 @@ chứa "hàm hợp"). Chunk quá thô làm truy hồi kém — chưa sửa, cầ
 ## chunks.sqlite bị mất hoặc hỏng dữ liệu
 
 - **Triệu chứng:** Không thể thực hiện tìm kiếm lexical (BM25 trả kết quả kém) hoặc tìm kiếm/tóm tắt thất bại khi đọc text của chunk, mặc dù các vector search qua FAISS vẫn trả về các ID tương ứng.
-- **Nguyên nhân:** File cơ sở dữ liệu runtime `chunks.sqlite` (lưu trữ text của các chunk) bị xóa nhầm, lỗi quyền ghi, hoặc bị hỏng. `index.json` nay chỉ chứa pointer `(video, frame_index)` và metadata, không còn lưu trữ text inline mặc định nữa.
-- **Cách xử lý:** Chạy công cụ dòng lệnh khôi phục để tự động quét `index.json`, giải mã lại các frame video QR tương ứng để tái cấu trúc lại database SQLite:
-  ```bash
-  cd BE
-  python -m app.scripts.rebuild_sqlite_from_videos
-  ```
+- **Nguyên nhân:** File cơ sở dữ liệu runtime `chunks.sqlite` (lưu text của các chunk) bị
+  xoá nhầm, lỗi quyền ghi, hoặc hỏng. `index.json` chỉ còn pointer + metadata, không lưu
+  text inline mặc định nữa.
+- **Cách xử lý: INGEST LẠI TÀI LIỆU GỐC. Không có công cụ khôi phục nào.**
+
+  > **Sửa 2026-09-01.** Mục này trước đây chỉ dẫn chạy
+  > `python -m app.scripts.rebuild_sqlite_from_videos` để "giải mã lại các frame video QR".
+  > **Lệnh đó không tồn tại** (`app/scripts/rebuild_sqlite_from_videos.py` chưa bao giờ
+  > được viết), và lớp lưu trữ QR/video mà nó dựa vào là của một dự án khác, đã gỡ khỏi
+  > kho này. Ai gặp sự cố mất dữ liệu rồi làm theo hướng dẫn cũ sẽ mất thêm thời gian đi
+  > tìm một công cụ không có, trong lúc dữ liệu vẫn đang mất.
+
+- **Phòng ngừa:** `chunks.sqlite` là nguồn văn bản DUY NHẤT (`chunk_text_store.get_text`
+  chỉ có hai tầng: sqlite → inline `index.json` của index cũ). Nó phải nằm trong phạm vi
+  sao lưu, ngang hàng với `index.faiss`.
 
 ## (ĐÃ SỬA 2026-07-04) Xoá nguồn khi index lớn → re-embed toàn bộ bằng bge-m3, block toàn bộ API vài phút
 

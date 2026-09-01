@@ -14,10 +14,13 @@ Hệ thống xử lý upload file theo mô hình 2 pha:
 - Ở bước ingest, raw chunk text được ghi vào `index/chunks.sqlite`
 - `index/index.json` được giữ slim, chỉ còn pointer và metadata chính như `video`, `frame_index`, `source_stem`, `parent_id`, `sub_order`, timestamp và embedding prefix
 - Memory Tree và Mind Map downstream lấy text thô thông qua `chunk_text_store.get_text()`
-- `chunk_text_store.get_text()` ưu tiên:
+- `chunk_text_store.get_text()` ưu tiên (đúng hai tầng, xem `chunk_text_store.py:83`):
   1. `chunks.sqlite`
-  2. inline `text` trong `index.json`
-  3. decode QR frame on-demand
+  2. inline `text` trong `index.json` (chỉ index cũ mới còn)
+
+  **KHÔNG có tầng thứ ba.** Lớp lưu trữ QR/video là của một dự án khác và đã được gỡ
+  khỏi kho này — mất `chunks.sqlite` mà `index.json` không còn inline text thì phải
+  ingest lại tài liệu gốc.
 
 ```mermaid
 flowchart TD
@@ -25,7 +28,6 @@ flowchart TD
     A --> C[index.json<br/>slim metadata + pointer]
     B --> D[chunk_text_store.get_text]
     C --> D
-    E[video QR frames] --> D
     D --> F[Memory Tree]
     D --> G[Mind Map]
 ```
@@ -52,11 +54,7 @@ flowchart TD
 
 - Chia văn bản thành semantic chunks
 
-#### Step 3: Create QR video frames
-
-- Tạo QR frames/video nếu pipeline này được bật
-
-#### Step 4: Embedding + Vector Store + Chunk Text Store
+#### Step 3: Embedding + Vector Store + Chunk Text Store
 
 Trong `BE/app/domains/vectorstore/store.py`:
 

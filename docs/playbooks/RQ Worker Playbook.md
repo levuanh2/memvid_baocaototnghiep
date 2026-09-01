@@ -112,7 +112,9 @@ listens on all 5 queues; rebuild + memory execute in the worker; /query in-proce
 reconcile preserves live jobs. Only remaining Phase 5 action = commit + merge Step 4.
 
 ### Diagnosing rebuild-index failures
-`[REBUILD] reconstructed chunks=0 decoded=N used=0` → QR video frames decode but no chunk text
-reconstructed. In headless containers this is the known opencv QR-decode limitation (see
-known-issues "Video QR ghi 0 frame"), NOT a queue bug — the job correctly surfaces status=error via
-`/rebuild-status`. Real rebuild needs decodable QR videos on the shared `videos/` volume.
+Chunk text now comes from `chunks.sqlite` only (`chunk_text_store.get_text` → sqlite, then
+inline `index.json` for legacy indexes). The QR/video storage layer belonged to a different
+project and has been removed from this repo, so the old
+`[REBUILD] reconstructed chunks=0 decoded=N used=0` opencv-QR troubleshooting no longer
+applies. A rebuild that finds no text means `chunks.sqlite` is missing or empty — the fix is
+to re-ingest the source documents, not to repair any video.

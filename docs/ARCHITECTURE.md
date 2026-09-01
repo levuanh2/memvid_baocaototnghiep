@@ -16,8 +16,7 @@
 ## Tổng quan
 
 MemVidX là hệ thống RAG (Retrieval-Augmented Generation) kết hợp:
-- Xử lý tài liệu đa định dạng (PDF, DOCX, TXT, Video)
-- Mã hóa video thành QR code
+- Xử lý tài liệu đa định dạng (PDF, DOCX, PPTX, XLSX, Markdown, EPUB, ảnh)
 - Xây dựng cây phân cấp kiến thức (Memory Tree)
 - Tạo mindmap tự động
 - Hỏi đáp thông minh với streaming SSE
@@ -148,8 +147,8 @@ Quy trình nạp tài liệu vào hệ thống.
     │         │
     ▼         ▼
 ┌─────────────────┐    ┌─────────────────┐
-│ chunk_processor │───▶│  vector_store   │
-│ (QR/MP4/metadata│    │  FAISS Index    │
+│  semantic chunk │───▶│  vector_store   │
+│   + metadata    │    │  FAISS Index    │
 └────────┬────────┘    └────────┬────────┘
          │                       │
          │                       ▼
@@ -160,10 +159,10 @@ Quy trình nạp tài liệu vào hệ thống.
          │                       │
          ▼                       ▼
 ┌─────────────────┐     ┌─────────────────┐
-│   Videos / QR   │     │   FAISS index   │
-│   videos/       │     │   index.faiss    │
-└─────────────────┘     │   + index.json   │
-                       └─────────────────┘
+│  chunks.sqlite  │     │   FAISS index   │
+│  (text thô —    │     │   index.faiss    │
+│   nguồn DUY NHẤT)│     │   + index.json   │
+└─────────────────┘     └─────────────────┘
 ```
 
 ### Chi tiết các bước
