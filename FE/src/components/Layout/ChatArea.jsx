@@ -4,6 +4,7 @@ import remarkGfm from "remark-gfm";
 import remarkBreaks from "remark-breaks";
 import { apiFetch, apiUrl, clearConversationContext, deleteConversation, resumeQuery, _appError, isNotFoundOrForbiddenError, isUnauthorizedError, getUserFriendlyApiError } from "../../utils/api";
 import { newConversationId } from "../../utils/conversation";
+import { cancelJob } from "../../utils/studyApi";
 import { pollQueryStatus, shouldPollFallback } from "../../utils/queryPolling";
 import { streamSse } from "../../utils/sseStream";
 import { getToken } from "../../auth/tokenStore";
@@ -265,6 +266,8 @@ export default function ChatArea({ selectedSources, sources = [], onEvidence, hi
       return !sources.some((o) => o.status === "ready" && (stemBaseLoose(o.video_stem || o.video) === b || (o.video_stem || o.video) === key));
     });
 
+  const jobIdRef = useRef(null);
+
   const resetJobState = () => { setJobProgress(0); setJobNode(""); setSeenNodes([]); previewThrottleRef.current?.cancel(); setStreamingPreview(""); streamAccRef.current = ""; };
 
   // Huỷ ở đây là huỷ PHÍA MÁY BẠN, không phải phía máy chủ: BE chưa có route huỷ cho
@@ -275,16 +278,32 @@ export default function ChatArea({ selectedSources, sources = [], onEvidence, hi
   //
   // `prev.slice(0, -1)` cũng phải đi: lúc gửi chỉ tin nhắn NGƯỜI DÙNG được đẩy vào
   // (không có bong bóng AI giữ chỗ), nên nó xoá đúng câu hỏi vừa gõ.
-  const handleCancel = () => {
+  const handleCancel = async () => {
     if (pendingReview) return;
     cancelledRef.current = true;
     abortControllerRef.current?.abort();
     try { eventSourceRef.current?.close(); } catch {}
     resetJobState(); setLoading(false);
-    setMessages((prev) => [...prev, {
-      role: "cancelled",
-      content: "Đã ngừng chờ câu trả lời. Máy chủ vẫn chạy nốt truy vấn này, nên câu hỏi tiếp theo có thể phải đợi thêm một lúc.",
-    }]);
+    setMessages((prev) => [...prev, { role: "cancelled", content: "Đang dừng truy vấn…" }]);
+
+    const jid = jobIdRef.current;
+    // `slice(0, -1)` ở đây AN TOÀN: nó xoá đúng dòng "Đang dừng truy vấn…" mà chính hàm
+    // này vừa thêm. Bản trước vòng 8 slice khi chưa thêm gì nên xoá mất câu hỏi của
+    // người dùng.
+    const thay = (noiDung) =>
+      setMessages((prev) => [...prev.slice(0, -1), { role: "cancelled", content: noiDung }]);
+    if (!jid) {
+      thay("Đã ngừng chờ câu trả lời.");
+      return;
+    }
+    try {
+      await cancelJob(jid);
+      // Huỷ tới được ở ranh giới node, không cắt được node đang chạy (một request HTTP
+      // tới Ollama). Nói đúng phạm vi thay vì hứa dừng tức thì.
+      thay("Đã yêu cầu dừng truy vấn. Bước đang chạy sẽ kết thúc rồi job dừng hẳn.");
+    } catch {
+      thay("Đã ngừng chờ câu trả lời. Máy chủ vẫn chạy nốt truy vấn này, nên câu hỏi tiếp theo có thể phải đợi thêm một lúc.");
+    }
   };
 
   // ── Conversation controls ───────────────────────────
@@ -492,6 +511,7 @@ export default function ChatArea({ selectedSources, sources = [], onEvidence, hi
       const startData = await res.json();
       if (!startData.job_id) throw new Error("Không nhận được job_id từ server.");
       const jobId = startData.job_id;
+      jobIdRef.current = jobId;   // để nút Huỷ gọi được route huỷ thật
       let jobOutcome;
       try {
         jobOutcome = await streamQueryJob(jobId);

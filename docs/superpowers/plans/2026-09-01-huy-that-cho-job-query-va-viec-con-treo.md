@@ -2,6 +2,8 @@
 
 > **Cho người thực thi:** dùng `superpowers:executing-plans`. Mỗi bước có checkbox.
 
+**Trạng thái:** Task 1-4 ĐÃ LÀM XONG 2026-09-01. Ba mục "ngoài phạm vi" ở cuối cũng đã đóng (rerank đo + nâng hạn, NLI đổi model, ablation dùng số R1 sẵn có + thêm hàng rào sức khoẻ index).
+
 **Mục tiêu:** bấm "Huỷ" trong chat thì job dừng thật và nhả slot LLM, thay vì chỉ ngừng
 hiển thị phía trình duyệt.
 
@@ -44,7 +46,7 @@ comment `main.py:3509` đã ghi. FE gọi route huỷ thật thay cho lời hứ
   "payload": {"answer": None, "cancelled": True}}` — cùng hình dạng nhánh dừng sớm mà
   `retrieve_faiss_node` đã dùng khi không có chunk nào.
 
-- [ ] **Bước 1: viết test đỏ**
+- [x] **Bước 1: viết test đỏ**
 
 ```python
 """Huỷ phải tới được graph, không chỉ tới trình duyệt."""
@@ -76,12 +78,12 @@ def test_khong_truyen_da_huy_thi_hanh_vi_y_nhu_cu():
     assert not out.get("cancelled")
 ```
 
-- [ ] **Bước 2: chạy, phải đỏ**
+- [x] **Bước 2: chạy, phải đỏ**
 
 `./.venv/Scripts/python.exe -m pytest tests/test_query_cancel.py -q`
 Kỳ vọng: FAIL — `build_test_graph()` chưa nhận `da_huy`.
 
-- [ ] **Bước 3: thêm bọc huỷ trong `build_query_graph`**
+- [x] **Bước 3: thêm bọc huỷ trong `build_query_graph`**
 
 ```python
 def _boc_huy(ten: str, fn):
@@ -102,7 +104,7 @@ def _boc_huy(ten: str, fn):
 
 Rồi đổi mọi `g.add_node("X", x_node)` thành `g.add_node("X", _boc_huy("X", x_node))`.
 
-- [ ] **Bước 4: nối dây qua `wiring.py` và `main.py`**
+- [x] **Bước 4: nối dây qua `wiring.py` và `main.py`**
 
 `main.py`, cạnh chỗ dựng graph:
 
@@ -117,9 +119,9 @@ def _query_da_huy(job_id: str) -> bool:
 
 Truyền `da_huy=_query_da_huy` xuống `build_query_graph` qua `wiring.py`.
 
-- [ ] **Bước 5: chạy test, phải xanh; chạy cả `tests/test_query.py tests/test_crag_graph.py tests/test_hitl_graph.py`**
+- [x] **Bước 5: chạy test, phải xanh; chạy cả `tests/test_query.py tests/test_crag_graph.py tests/test_hitl_graph.py`**
 
-- [ ] **Bước 6: commit**
+- [x] **Bước 6: commit**
 
 ---
 
@@ -132,7 +134,7 @@ hiện thành "Thất bại".
 - Modify: `BE/app/main.py` (`process_query_job`, phần finalize)
 - Test: `BE/tests/test_query_cancel.py` (thêm ca)
 
-- [ ] **Bước 1: viết test đỏ**
+- [x] **Bước 1: viết test đỏ**
 
 ```python
 def test_job_bi_huy_ghi_status_cancelled_khong_phai_error(be, client, monkeypatch, owner):
@@ -144,9 +146,9 @@ def test_job_bi_huy_ghi_status_cancelled_khong_phai_error(be, client, monkeypatc
     assert not job.get("error")
 ```
 
-- [ ] **Bước 2: chạy, phải đỏ**
+- [x] **Bước 2: chạy, phải đỏ**
 
-- [ ] **Bước 3: sửa `process_query_job`** — sau khi graph trả về, đọc `out.get("cancelled")`
+- [x] **Bước 3: sửa `process_query_job`** — sau khi graph trả về, đọc `out.get("cancelled")`
       **TRƯỚC** mọi nhánh lỗi:
 
 ```python
@@ -155,9 +157,9 @@ def test_job_bi_huy_ghi_status_cancelled_khong_phai_error(be, client, monkeypatc
             return
 ```
 
-- [ ] **Bước 4: chạy test + `tests/test_query.py`, phải xanh**
+- [x] **Bước 4: chạy test + `tests/test_query.py`, phải xanh**
 
-- [ ] **Bước 5: commit**
+- [x] **Bước 5: commit**
 
 ---
 
@@ -171,7 +173,7 @@ sớm.
 - Modify: `FE/src/components/Layout/ChatArea.jsx` (`handleCancel`)
 - Test: `BE/tests/test_query_cancel.py`, `FE` — không có test component, dựa vào build
 
-- [ ] **Bước 1: viết test đỏ**
+- [x] **Bước 1: viết test đỏ**
 
 ```python
 def test_route_huy_chap_nhan_job_query(be, client, monkeypatch, owner):
@@ -179,11 +181,11 @@ def test_route_huy_chap_nhan_job_query(be, client, monkeypatch, owner):
     assert r.status_code == 200 and r.get_json()["cancel_requested"] is True
 ```
 
-- [ ] **Bước 2: chạy, phải đỏ** (409 "không hỗ trợ huỷ giữa chừng")
+- [x] **Bước 2: chạy, phải đỏ** (409 "không hỗ trợ huỷ giữa chừng")
 
-- [ ] **Bước 3: thêm `"query"` vào `_CANCELLABLE_JOB_TYPES`, sửa comment cho khớp**
+- [x] **Bước 3: thêm `"query"` vào `_CANCELLABLE_JOB_TYPES`, sửa comment cho khớp**
 
-- [ ] **Bước 4: FE gọi route thật**
+- [x] **Bước 4: FE gọi route thật**
 
 ```jsx
   const handleCancel = async () => {
@@ -208,21 +210,21 @@ def test_route_huy_chap_nhan_job_query(be, client, monkeypatch, owner):
 `slice(0, -1)` ở đây là **an toàn** vì nó xoá đúng dòng "Đang dừng truy vấn…" mà chính
 hàm này vừa thêm — khác hẳn bản cũ (xoá câu hỏi của người dùng).
 
-- [ ] **Bước 5: `npm run build` + `npx vitest run` + `npx eslint src`; so mốc 230/70**
+- [x] **Bước 5: `npm run build` + `npx vitest run` + `npx eslint src`; so mốc 230/70**
 
-- [ ] **Bước 6: chạy toàn bộ BE suite, so mốc 1000 passed / 4 skipped**
+- [x] **Bước 6: chạy toàn bộ BE suite, so mốc 1000 passed / 4 skipped**
 
-- [ ] **Bước 7: commit**
+- [x] **Bước 7: commit**
 
 ---
 
 ### Task 4: Ghi lại vào .playbook
 
-- [ ] `known-issues.md`: chuyển FE#12 từ "trần còn lại" sang đã sửa, ghi rõ trần MỚI
+- [x] `known-issues.md`: chuyển FE#12 từ "trần còn lại" sang đã sửa, ghi rõ trần MỚI
       (huỷ tới được ở ranh giới node, không cắt được node đang chạy).
-- [ ] `lessons-learned.md`: một bài học — "đăng ký huỷ được và thật sự huỷ được là hai
+- [x] `lessons-learned.md`: một bài học — "đăng ký huỷ được và thật sự huỷ được là hai
       việc; thứ tự đúng là executor đọc cờ trước, mở cổng sau".
-- [ ] Commit.
+- [x] Commit.
 
 ---
 

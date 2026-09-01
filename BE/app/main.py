@@ -1262,6 +1262,19 @@ def _check_sources_status(selected_sources: List[str]) -> Dict[str, str]:
 # LangGraph pipelines được dựng tập trung ở app/wiring.py — gọi ở CUỐI khối init
 # (sau khi mọi callback/helper cần thiết đã sẵn sàng).
 
+def _query_da_huy(job_id: str) -> bool:
+    """Người dùng đã bấm Huỷ cho job truy vấn này chưa.
+
+    Graph gọi hàm này ở MỌI ranh giới node. Đọc cờ hỏng (sqlite khoá, file mất) thì trả
+    False: một job đang chạy tốt không được chết vì tra cờ thất bại.
+    """
+    try:
+        from app.domains.jobs.jobs_store import is_cancel_requested
+        return bool(is_cancel_requested(job_id))
+    except Exception:
+        return False
+
+
 def _get_session_history_safe(session_id: str, limit: int,
                               user_id: Optional[str] = None) -> list:
     try:
@@ -1398,6 +1411,7 @@ _graphs = _build_graphs(
     set_cached=_set_cached_query,
     check_sources_status=_check_sources_status,
     get_source_status_by_stem=_get_source_status_by_stem,
+    query_da_huy=_query_da_huy,
     search_index=search_index,
     summarize_results=summarize_results,
     query_with_memory_tree=query_with_memory_tree,
@@ -1599,6 +1613,28 @@ def _finalize_query_job(jid: str, session_id: str, question: str, out: dict,
     Dùng chung cho /query và /query-resume. user_id/enforce_owner scope the
     conversation-turn persistence to the caller (Phase B).
     """
+    # Huỷ phải đọc TRƯỚC mọi nhánh lỗi. Lượt bị huỷ không có `answer` và cũng không có
+    # `error`, nên nếu rơi xuống dưới thì khối "not has_ans and not has_err" gán
+    # `error = "Unknown error"` và màn hình đổ lỗi cho hệ thống về một việc chính người
+    # dùng vừa bấm dừng — đúng bẫy đã gặp ở quiz vòng 8.
+    if out.get("cancelled"):
+        ket_qua = {"payload": {"answer": None, "cancelled": True},
+                   "status": int(out.get("status_code") or 499)}
+        with query_jobs_lock:
+            if jid in query_jobs:
+                query_jobs[jid]["status"] = "cancelled"
+                query_jobs[jid]["result"] = ket_qua
+        if _jobs_update_job:
+            try:
+                _jobs_update_job(jid, status="cancelled", progress=0,
+                                 current_node="Cancelled", result=ket_qua)
+            except Exception:
+                pass
+        # KHÔNG ghi lịch sử hội thoại: lượt này không có câu trả lời, ghi vào là bịa ra
+        # một lượt chưa từng hoàn thành rồi mang nó sang ngữ cảnh lượt sau.
+        print(f"query_job_cancelled job_id={jid}", flush=True)
+        return
+
     raw_pl = out.get("payload")
     payload = dict(raw_pl) if isinstance(raw_pl, dict) else {}
     ans_state = (out.get("answer") or "").strip()
@@ -3490,7 +3526,8 @@ def api_job_get(job_id: str):
 
 # Job_type mà executor THẬT SỰ gọi is_cancel_requested giữa các bước.
 # Kiểm bằng: grep -rn "is_cancel_requested" BE/app BE/services --include=*.py
-_CANCELLABLE_JOB_TYPES = {"mindmap", "summary", "quiz_generation", "study_map_generation"}
+_CANCELLABLE_JOB_TYPES = {"mindmap", "summary", "quiz_generation",
+                          "study_map_generation", "query"}
 
 
 @app.post('/api/jobs/<job_id>/cancel')
@@ -3503,10 +3540,13 @@ def api_job_cancel(job_id: str):
     if not j or (_auth_protect_enabled() and j.get("user_id") != uid):
         return jsonify({"error": "Job not found"}), 404
     # Chỉ những job_type có điểm kiểm huỷ trong executor mới huỷ được. Các loại còn
-    # lại (ingest, query, short_answer_grading) KHÔNG đọc cờ ở bất kỳ đâu — trước đây
+    # lại (ingest, short_answer_grading) KHÔNG đọc cờ ở bất kỳ đâu — trước đây
     # route này vẫn trả cancel_requested=True cho chúng, nên FE hiện "Đang huỷ…" rồi
     # treo tới hết TTL (đúng lớp lỗi known-issues 2026-07-17). Thà từ chối thẳng.
     # Thêm job_type vào đây CHỈ SAU KHI executor của nó thật sự gọi is_cancel_requested.
+    # "query" thêm 2026-09-01: `build_query_graph(da_huy=...)` bọc MỌI node và đọc cờ ở
+    # từng ranh giới. Trần: không cắt được node đang chạy (một request HTTP tới Ollama),
+    # nên worst case là thời lượng node đó, không phải tức thì.
     if (j.get("job_type") or "") not in _CANCELLABLE_JOB_TYPES:
         return jsonify({
             "error": f"Loại job '{j.get('job_type')}' không hỗ trợ huỷ giữa chừng.",

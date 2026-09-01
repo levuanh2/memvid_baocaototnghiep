@@ -1,5 +1,74 @@
 # Known Issues
 
+## (ĐÃ SỬA 2026-09-01) Nút "Huỷ" trong chat giờ huỷ thật — và nhả được slot LLM
+
+Đóng phần trần còn lại của FE#12. Bản vòng 8 mới chỉ sửa LỜI (không hứa việc không làm);
+lần này sửa VIỆC.
+
+### Trước
+
+Bấm Huỷ chỉ `abort()` request phía trình duyệt. BE không có đường huỷ cho job `query`:
+`_CANCELLABLE_JOB_TYPES` không có `"query"`, và `query_graph` không gọi
+`is_cancel_requested` ở bất kỳ đâu. Job chạy tới xong và **vẫn giữ slot LLM duy nhất** —
+câu hỏi tiếp theo phải xếp hàng sau một truy vấn người dùng đã bỏ.
+
+### Thứ tự bắt buộc, và vì sao
+
+`main.py` có một comment cấm rất rõ: *"Thêm job_type vào đây CHỈ SAU KHI executor của nó
+thật sự gọi `is_cancel_requested`"* — vì route trả `cancel_requested=True` cho một loại
+job không ai đọc cờ sẽ làm FE hiện "Đang huỷ…" rồi treo tới hết TTL (known-issues
+2026-07-17). Nên làm theo đúng thứ tự: graph đọc cờ **trước**, mở cổng **sau**, nối FE
+**sau cùng**.
+
+### Đã làm
+
+1. `build_query_graph(da_huy=...)` — `_boc_huy(ten, fn)` bọc **cả 18 node**, đọc cờ TRƯỚC
+   khi chạy node. State trả về trùng hình dạng nhánh dừng sớm sẵn có ở
+   `retrieve_faiss_node` (`done=True` + `payload` + `status_code`), nhờ vậy mọi cạnh điều
+   kiện xử lý nó y như một kết thúc bình thường — không phải sửa routing.
+2. `QueryState.cancelled: NotRequired[bool]`. **Không có dòng này thì cờ rơi ngay ở cạnh
+   kế tiếp** — LangGraph chỉ giữ field có trong schema. Bẫy đã ghi cho `IngestState`,
+   lặp lại nguyên vẹn: `payload` sống sót vì có khai, `cancelled` biến mất vì không.
+   Test đầu tiên đỏ đúng vì lý do này chứ không phải vì logic sai.
+3. `_finalize_query_job` đọc `cancelled` **TRƯỚC** mọi nhánh lỗi. Lượt bị huỷ không có
+   `answer` và cũng không có `error`, nên rơi xuống dưới là khối
+   `not has_ans and not has_err` gán `"Unknown error"` → màn hình đổ lỗi cho hệ thống về
+   việc người dùng vừa bấm dừng. Đúng bẫy đã gặp ở quiz vòng 8, ở một file khác.
+   Và **không ghi lịch sử hội thoại** cho lượt bị huỷ: nó không có câu trả lời, ghi vào
+   là bịa ra một lượt chưa từng hoàn thành rồi mang sang ngữ cảnh lượt sau.
+4. `"query"` vào `_CANCELLABLE_JOB_TYPES`; `_query_da_huy` nối qua `wiring.py` vào graph
+   production. **Mở cổng mà không nối dây thì đúng là thứ comment kia cấm** — cổng mở,
+   route trả 200, và không có gì dừng cả.
+5. FE `handleCancel` gọi `cancelJob(jobIdRef.current)`, lời báo theo đúng kết quả thật.
+
+### Trần còn lại — nói ra, đừng giấu
+
+Huỷ tới được ở **ranh giới node**, không cắt được node đang chạy: node là một request
+HTTP tới Ollama, Python không cắt ngang được. Worst case = thời lượng node đó
+(`AI_TIMEOUT_SEC=180` với `GenerateAnswer`). Muốn xuống nữa thì phải huỷ ở tầng HTTP
+client, không phải ở đây. Lời trong giao diện viết đúng phạm vi này: *"Đã yêu cầu dừng
+truy vấn. Bước đang chạy sẽ kết thúc rồi job dừng hẳn."*
+
+### Regression
+
+`BE/tests/test_query_cancel.py` — 11 test: dừng ngay khi cờ bật từ đầu; dừng ở ranh giới
+node kế tiếp khi huỷ giữa chừng; không huỷ thì chạy bình thường; không truyền `da_huy`
+thì hành vi y như cũ; **`da_huy` ném lỗi KHÔNG được biến thành huỷ** (sqlite khoá không
+được giết job đang chạy tốt); không có `job_id` thì không tra cờ; finalize ghi
+`cancelled` chứ không `error`; lượt bình thường vẫn `done`; không lưu lịch sử cho lượt bị
+huỷ; `"query"` có trong danh sách huỷ được; và `ingest`/`short_answer_grading` **vẫn bị
+từ chối** — đừng mở cổng cho loại job không ai đọc cờ.
+
+### Phòng ngừa
+
+**Đăng ký "huỷ được" và thật sự huỷ được là hai việc khác nhau.** Thứ tự đúng: executor
+đọc cờ → mở cổng → nối FE. Làm ngược lại cho ra một nút bấm trả 200 và không dừng gì,
+tệ hơn không có nút.
+
+**Field không khai trong TypedDict của LangGraph thì biến mất giữa hai node.** Lần thứ
+hai trong cùng kho (lần đầu: `IngestState`). Khi thêm một khoá state mới, khai schema là
+bước một, không phải bước dọn dẹp sau.
+
 ## (ĐÃ ĐÓNG 2026-09-01) Ablation E0–E7: số hợp lệ ĐÃ CÓ SẴN trên R1, và "BM25 thắng dense" là kết luận sai
 
 Đóng hai mục CHẶN. Hoá ra phần lớn công việc đã làm xong từ trước và không ai đọc lại.

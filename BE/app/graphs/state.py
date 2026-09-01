@@ -74,6 +74,10 @@ class QueryState(TypedDict):
     payload: NotRequired[Optional[dict]]
     status_code: NotRequired[int]
     done: NotRequired[bool]
+    # Người dùng bấm Huỷ giữa chừng. Phải khai ở đây: LangGraph CHỈ giữ field có trong
+    # schema, nên thiếu dòng này thì node huỷ đặt cờ xong là nó rơi ngay ở cạnh kế tiếp
+    # (payload sống sót vì payload có khai, cờ thì không — đúng bẫy đã ghi cho IngestState).
+    cancelled: NotRequired[bool]
     cache_key: NotRequired[Optional[str]]
     eval_score: NotRequired[float]
     processing_message: NotRequired[Optional[str]]

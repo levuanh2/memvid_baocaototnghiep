@@ -42,6 +42,7 @@ def build_graphs(
     search_index: Callable[..., Any],
     summarize_results: Callable[..., Any],
     query_with_memory_tree: Callable[..., Any],
+    query_da_huy: Callable[[str], bool] | None = None,
     # mindmap deps
     collect_mindmap_input: Callable[..., dict],
     mindmap_pipeline: Any,
@@ -83,6 +84,7 @@ def build_graphs(
             summarize_results=summarize_results,
             query_with_memory_tree=query_with_memory_tree,
             retriever=retriever,
+            da_huy=query_da_huy,
         )
     except Exception as exc:
         g.query_build_error = repr(exc)

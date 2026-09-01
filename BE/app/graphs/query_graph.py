@@ -63,6 +63,7 @@ def build_query_graph(
     summarize_results: Callable[..., str],
     query_with_memory_tree: Callable[..., Any],
     retriever: Any | None = None,
+    da_huy: Callable[[str], bool] | None = None,
 ) -> Any:
     """
     LangGraph Query pipeline:
@@ -958,22 +959,49 @@ def build_query_graph(
     finalize_target = "ReviewGate" if hitl_on else "Finalize"
 
     g = StateGraph(QueryState)
-    g.add_node("CheckSources", check_sources_node)
-    g.add_node("CacheLookup", cache_lookup_node)
-    g.add_node("RetrieveMemory", retrieve_memory_node)
-    g.add_node("RetrieveFAISS", retrieve_faiss_node)
-    g.add_node("ContextBuilder", context_builder_node)
-    g.add_node("GenerateAnswer", generate_answer_node)
-    g.add_node("Evaluate", evaluate_node)
-    g.add_node("FeedbackLoop", feedback_loop_node)
-    g.add_node("Finalize", finalize_node)
-    g.add_node("ErrorHandler", error_handler_node)
+    def _boc_huy(ten: str, fn):
+        """Đọc cờ huỷ TRƯỚC khi chạy node.
+
+        Huỷ chỉ tới được ở RANH GIỚI node: node đang chạy là một request HTTP tới
+        Ollama, Python không cắt ngang được. Worst case = thời lượng node đó
+        (`AI_TIMEOUT_SEC` với GenerateAnswer). Nói ra trần này, đừng hứa nhiều hơn.
+
+        Hình dạng state trả về trùng với nhánh dừng sớm sẵn có ở `retrieve_faiss_node`
+        (khi không có chunk nào): `done=True` + `payload` + `status_code`. Nhờ vậy mọi
+        cạnh điều kiện của graph xử lý nó y như một kết thúc bình thường.
+        """
+        def _chay(state: dict) -> dict:
+            job_id = state.get("job_id")
+            if da_huy is not None and job_id:
+                try:
+                    huy = bool(da_huy(job_id))
+                except Exception:
+                    huy = False   # đọc cờ hỏng KHÔNG được giết một job đang chạy tốt
+                if huy:
+                    log_node_event(job_id, ten, "cancelled", 0.0, {})
+                    return {**state, "cancelled": True, "done": True,
+                            "status_code": 499,
+                            "payload": {"answer": None, "cancelled": True},
+                            "current_node": ten}
+            return fn(state)
+        return _chay
+
+    g.add_node("CheckSources", _boc_huy("CheckSources", check_sources_node))
+    g.add_node("CacheLookup", _boc_huy("CacheLookup", cache_lookup_node))
+    g.add_node("RetrieveMemory", _boc_huy("RetrieveMemory", retrieve_memory_node))
+    g.add_node("RetrieveFAISS", _boc_huy("RetrieveFAISS", retrieve_faiss_node))
+    g.add_node("ContextBuilder", _boc_huy("ContextBuilder", context_builder_node))
+    g.add_node("GenerateAnswer", _boc_huy("GenerateAnswer", generate_answer_node))
+    g.add_node("Evaluate", _boc_huy("Evaluate", evaluate_node))
+    g.add_node("FeedbackLoop", _boc_huy("FeedbackLoop", feedback_loop_node))
+    g.add_node("Finalize", _boc_huy("Finalize", finalize_node))
+    g.add_node("ErrorHandler", _boc_huy("ErrorHandler", error_handler_node))
     if hitl_on:
-        g.add_node("ReviewGate", review_gate_node)
+        g.add_node("ReviewGate", _boc_huy("ReviewGate", review_gate_node))
 
     # Supervisor: entry point khi bật, fall-through về CheckSources.
     if SUPERVISOR_ENABLED:
-        g.add_node("Supervisor", supervisor_node)
+        g.add_node("Supervisor", _boc_huy("Supervisor", supervisor_node))
         g.set_entry_point("Supervisor")
         g.add_edge("Supervisor", "CheckSources")
     else:
@@ -1006,7 +1034,7 @@ def build_query_graph(
         )
 
     if RERANK_ENABLED:
-        g.add_node("RerankDocuments", rerank_documents_node)
+        g.add_node("RerankDocuments", _boc_huy("RerankDocuments", rerank_documents_node))
         nxt = post_retrieve_chain[post_retrieve_chain.index("RerankDocuments") + 1]
         g.add_conditional_edges(
             "RerankDocuments",
@@ -1014,7 +1042,7 @@ def build_query_graph(
             {"ErrorHandler": "ErrorHandler", "Continue": nxt},
         )
     if NLI_ENABLED:
-        g.add_node("VerifyContext", verify_context_node)
+        g.add_node("VerifyContext", _boc_huy("VerifyContext", verify_context_node))
         nxt = post_retrieve_chain[post_retrieve_chain.index("VerifyContext") + 1]
         g.add_conditional_edges(
             "VerifyContext",
@@ -1030,9 +1058,9 @@ def build_query_graph(
         {"ErrorHandler": "ErrorHandler", "Continue": "GenerateAnswer"},
     )
     if CRAG_ENABLED:
-        g.add_node("GradeDocuments", grade_documents_node)
-        g.add_node("RewriteQuery", rewrite_query_node)
-        g.add_node("CRAGFallback", crag_fallback_node)
+        g.add_node("GradeDocuments", _boc_huy("GradeDocuments", grade_documents_node))
+        g.add_node("RewriteQuery", _boc_huy("RewriteQuery", rewrite_query_node))
+        g.add_node("CRAGFallback", _boc_huy("CRAGFallback", crag_fallback_node))
         g.add_conditional_edges(
             "GradeDocuments",
             _route_after_grade,
