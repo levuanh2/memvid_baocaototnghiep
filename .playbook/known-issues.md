@@ -1,5 +1,106 @@
 # Known Issues
 
+## (ĐÃ ĐÓNG 2026-09-01) Ablation E0–E7: số hợp lệ ĐÃ CÓ SẴN trên R1, và "BM25 thắng dense" là kết luận sai
+
+Đóng hai mục CHẶN. Hoá ra phần lớn công việc đã làm xong từ trước và không ai đọc lại.
+
+### Đính chính hai chỗ playbook nói sai
+
+1. Mục "(CHẶN — CẦN NGƯỜI QUYẾT) Ablation E0–E7 không chạy được" ghi *"`reports/
+   evaluation/runs/` KHÔNG TỒN TẠI. Bộ ablation chưa chạy lần nào."* — **sai**. Thư mục
+   có **20 run**, trong đó **thang E0–E7 đầy đủ trên `R1_structure`, mỗi thí nghiệm đủ
+   30/30 truy vấn**.
+2. Hàng rào `canonical extraction changed` nằm ở `index_builder.py:71` — nó chặn **dựng
+   index**, không chặn **chạy thang**. Index `R1_structure` đã dựng sẵn nên nó không
+   chặn gì cả. Mục cũ mô tả nó như cửa cuối cùng chặn mọi thứ.
+
+### Số hợp lệ (25 truy vấn CÓ nhãn vàng — câu không nhãn không vào mẫu số)
+
+| thí nghiệm | recall@6 | MRR | nDCG@6 |
+|---|---|---|---|
+| E0_bm25 · R2 | 0.8371 | 0.7467 | 0.7331 |
+| **E0_bm25 · R1** | **0.8371** | 0.7467 | 0.7331 |
+| E1_faiss · R2 | 0.2286 | 0.1213 | 0.1460 |
+| **E1_faiss · R1** | **0.6971** | 0.6727 | 0.6379 |
+| E2_hybrid · R2 | 0.4686 | 0.3313 | 0.3638 |
+| **E2_hybrid · R1** | **0.7829** | 0.8213 | 0.7654 |
+| E3_rerank · R2 | 0.6229 | 0.6080 | 0.5963 |
+| **E3_rerank · R1** | **0.9029** | 0.9200 | 0.8917 |
+| E4_nli · R1 | 0.9029 | 0.9200 | 0.8930 |
+| E5_crag · R1 | 0.9029 | 0.9200 | 0.8930 |
+| E6_full · R2 | 0.1114 | 0.0533 | 0.0657 |
+| **E6_full · R1** | **0.9029** | 0.9200 | 0.8930 |
+| E7_full_hitl · R1 | 0.9029 | 0.9200 | 0.8930 |
+
+**Ba phép tự kiểm cho thấy bảng R1 đáng tin:**
+- `E0_bm25` **giống hệt nhau ở cả hai index** (0.8371). Đúng như phải thế — BM25 thuần từ
+  vựng, không đụng vector. Đây là biến chứng nội tại.
+- `E1 < E2 < E3` đơn điệu tăng trên R1: hybrid hơn từng thành phần, rerank hơn hybrid.
+  Đó là hình dạng của một hệ thống chạy đúng.
+- Trên R2, `E6_full` = 0.1114, **tệ hơn cả E1**. Thang mà càng thêm thành phần càng tệ là
+  dấu hiệu nền hỏng, không phải dấu hiệu thành phần vô dụng.
+
+**Kết luận "BM25 thắng dense retrieval" là SAI.** Trên nền lành: dense 0.6971, hybrid
+0.7829, rerank 0.9029. BM25 (0.8371) chỉ thắng dense đơn lẻ và thua hẳn khi có rerank.
+
+E4/E5/E6/E7 trùng khít E3 ở chỉ số **truy hồi** là đúng: NLI/CRAG/HITL tác động ở tầng
+sinh câu trả lời, không đổi thứ hạng truy hồi trong các cấu hình này. Đừng đọc đó là
+"không đóng góp gì" — phải nhìn chỉ số QA.
+
+**Cảnh báo khi viết báo cáo:** `n=50` ở E0–E3_R1 là **25 truy vấn × 2 lần chạy trùng**,
+không phải 50 truy vấn. Trung bình không đổi (hai lần ra số y hệt) nhưng đừng viết 50.
+
+### Sụp không gian: đo lại đủ bốn index, và phát biểu cũ chưa chính xác
+
+```
+index           n     cosine TB   canh nhau
+production     188      0.6622      0.7820
+R0_recursive   171      0.5091      0.5970
+R1_structure   142      0.5117      0.6246
+R2_late        142      0.9262      0.9950   <- sup
+```
+
+Production **cũng dùng late chunking** (`ingest_graph.py:165` gọi `embed_document`, y hệt
+`index_builder.py:108`) mà **không sụp** — nhưng cạnh-nhau 0.7820 cao hơn R0/R1 (~0.60)
+rõ rệt, tức một phiên bản NHẸ của cùng hiện tượng.
+
+Nên phát biểu đúng không phải *"late chunking làm sụp không gian vector"* mà: **late
+chunking làm span cạnh nhau giống nhau, mức độ tăng theo độ dài tài liệu, tới ngưỡng nào
+đó thì sụp hẳn.** Corpus nghiên cứu có tài liệu 14550 token (vượt cửa sổ 8192); tài liệu
+production ngắn hơn nhiều.
+
+Phần "mean-pool vs CLS" trong mục cũ vẫn đúng cho **đường đánh giá** (truy vấn nhúng qua
+sentence-transformers = CLS, tài liệu mean-pool), nhưng nó KHÔNG giải thích được vế
+doc-side: production cùng mean-pool cả hai đầu mà vẫn có hiện tượng nhẹ.
+
+### Hàng rào đã thêm
+
+`BE/evaluation/suc_khoe_index.py` + gọi từ `evaluation/runner.py` trước `validate_dataset`.
+Đo cosine trung bình và cosine chunk-cạnh-nhau của index sắp dùng; vượt 0.90 thì in cảnh
+báo nêu rõ mọi số liệu rút ra sẽ vô nghĩa. Ngưỡng 0.90 nằm giữa khoảng trống đo được
+(production 0.7820 ↔ R2 0.9950) nên không cần tinh chỉnh.
+
+Đây **không phải** bản sửa late chunking. Nó không làm index hết sụp; nó làm việc sụp
+**kêu lên** trước khi ai đó tiêu 15 giờ máy vào nó. Fail-open: hàng rào hỏng không được
+chặn thang đo.
+
+Regression: `BE/tests/test_suc_khoe_index.py` — 5 test, dựng IndexFlatL2 thật chứ không
+mock faiss, gồm ca "không đo được KHÔNG phải là sụp" và ca khoá ngưỡng nằm giữa hai số
+thật đã đo.
+
+### Phòng ngừa
+
+**Trước khi lên kế hoạch chạy lại, kiểm xem đã chạy chưa.** Hai mục CHẶN đứng một tuần
+trong khi kết quả hợp lệ nằm sẵn trên đĩa. `ls reports/evaluation/runs/` là một lệnh.
+
+**Một chỉ số hỏng thì im, một THANG hỏng thì lộ.** Bảng R2 tự tố cáo ở chỗ E6_full tệ hơn
+E1 — thêm thành phần mà tệ đi là điều không hệ thống đúng nào làm được. Khi đọc kết quả
+ablation, kiểm tính đơn điệu trước khi kiểm từng con số.
+
+**Chỉ số không đổi giữa hai cấu hình không có nghĩa là thành phần vô dụng** — có thể nó
+tác động ở tầng khác. E4/E5/E6/E7 trùng E3 ở truy hồi vì NLI/CRAG/HITL làm việc ở tầng
+sinh câu trả lời.
+
 ## (ĐÃ ĐO + SỬA 2026-09-01) NLI nhanh hơn 764 lần sau khi đổi model — và phép đo đầu của chính tôi đã sai
 
 Đóng mục "(CHƯA SỬA) NLI mDeBERTa chậm gấp ~250 lần dự toán FLOP".
@@ -2872,7 +2973,7 @@ chứa "hàm hợp"). Chunk quá thô làm truy hồi kém — chưa sửa, cầ
 - **Prevention:** đừng nâng torch để chữa (kéo theo cả stack langchain). Ép safetensors là đúng
   hướng và rẻ. Khi thêm model mới, kiểm nó có `model.safetensors` trước khi ghim vào config.
 
-## (CHẶN — CẦN NGƯỜI QUYẾT) Ablation E0–E7 không chạy được: canonical extraction đã lệch
+## (ĐÃ ĐÓNG 2026-09-01 — xem mục đầu file; thang ĐÃ chạy xong trên R1) Ablation E0–E7 không chạy được: canonical extraction đã lệch
 
 - **Trạng thái:** `reports/evaluation/runs/` KHÔNG TỒN TẠI. Bộ ablation chưa chạy lần nào, nên chưa
   có một con số recall/precision nào cho chương 4.
@@ -2970,7 +3071,7 @@ chứa "hàm hợp"). Chunk quá thô làm truy hồi kém — chưa sửa, cầ
 - **Lưu ý:** R0 cũng có 4/171 chunk `unresolved` (chunk có khối code, ví dụ `RAGAS Code Setup — Quick
   Start\nfrom ragas import evaluate...`). Ít nhưng không phải không có.
 
-## (CHẶN — PHÁT HIỆN LỚN) Late chunking mean-pool trong khi bge-m3 dùng CLS — không gian vector sụp, E1–E7 vô hiệu
+## (ĐÃ ĐÓNG 2026-09-01 — xem mục đầu file; đã đo lại đủ 4 index + thêm hàng rào) Late chunking mean-pool trong khi bge-m3 dùng CLS — không gian vector sụp, E1–E7 vô hiệu
 
 - **Triệu chứng:** chạy ablation lần đầu ra kết quả khó tin — BM25 THUẦN thắng mọi thứ:
   | thí nghiệm | recall@6 | MRR | nDCG@6 |

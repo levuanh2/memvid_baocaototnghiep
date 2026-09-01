@@ -32,6 +32,15 @@ def run(config_path: Path, dataset_dir: Path, reports_root: Path, *, run_id: str
         cfg["experiment_id"] = experiment_id_override
     if representation_id_override:
         cfg["representation_id"] = representation_id_override
+    # Hàng rào không gian vector: thang E0–E7 đã từng chạy TRỌN trên `R2_late`, một
+    # index mà mọi chunk gần như trùng nhau — không có gì kêu, bảng kết quả vẫn trông
+    # hợp lệ, và suýt thành kết luận "BM25 thắng dense retrieval" trong luận văn.
+    # Đo trước khi chạy thì rẻ; phát hiện sau 15 giờ máy thì không.
+    try:
+        from evaluation.suc_khoe_index import canh_bao
+        canh_bao(Path(cfg["index_dir"]))
+    except Exception:
+        pass   # hàng rào hỏng không được chặn thang đo
     validate_dataset(dataset_dir)
     dataset_manifest = json.loads((Path(dataset_dir) / "dataset_manifest.json").read_text(encoding="utf-8"))
     software_fixture = dataset_manifest.get("purpose", "").startswith("SOFTWARE VALIDATION ONLY")
