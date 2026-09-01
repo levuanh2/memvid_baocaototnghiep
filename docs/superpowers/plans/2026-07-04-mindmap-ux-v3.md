@@ -2,6 +2,20 @@
 
 > **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development (recommended) or superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox (`- [ ]`) syntax for tracking.
 
+**Trạng thái (rà lại 2026-09-01):** ĐÃ LÀM XONG. Xác minh bằng hiện vật:
+
+- Task 1-5, 7-8: `FE/src/utils/mindmapJob.js`, `activeMindmapJob.js`,
+  `components/ui/Toaster.jsx`, `utils/mindElixirAdapter.js`,
+  `components/mindmap/MindElixirView.jsx` + `mindmap.css` — đều tồn tại;
+  `mind-elixir@^5.13.0` trong `package.json`.
+- Task 6: `app/domains/mindmap/store.py::get_record` (dòng 180) và
+  `@app.route("/mindmaps/<mindmap_id>", methods=["PUT"])` (`main.py:4611`).
+- Task 9: `@zumer/snapdom@^2.15.0` CÓ; `reactflow`, `elkjs`, `html-to-image` đã **gỡ khỏi
+  package.json** — đúng yêu cầu "GỠ NẾU grep không còn nơi nào dùng".
+- Task 10: `.playbook/lessons-learned.md` có cả hai mục đã hẹn — "Job chạy nền dài
+  (mindmap): KHÔNG đặt hard-timeout FE" và "mind-elixir (và mọi editor bên thứ ba khác):
+  đừng tin nó bảo toàn field lạ".
+
 **Goal:** Sinh mindmap chạy nền (chip tiến độ, không hard-timeout, tự mở khi xong, sống sót reload) + thay viewer ReactFlow/ELK bằng mind-elixir (theme Phòng đọc, arrows quan hệ, evidence drawer, chỉnh sửa tay + nút Lưu qua `PUT /mindmaps/<id>`).
 
 **Architecture:** FE tách poller thuần (`mindmapJob.js`) + adapter 2 chiều record-v2 ↔ mind-elixir (`mindElixirAdapter.js`, sidecar map giữ note/chunk_refs/kind) — cả hai pure, vitest được. `MindElixirView.jsx` thay `MindmapView.jsx`. BE chỉ thêm `store.get_record` + `PUT /mindmaps/<id>` (validate bằng schema pipeline sẵn có). Pipeline sinh KHÔNG đụng.
@@ -72,7 +86,7 @@ XOÁ (Task 9): MindmapView.jsx, MindmapNodeCard.jsx, RelationEdge.jsx, useElkLay
     - fetch lỗi mạng → KHÔNG dừng, thử lại tick sau (log console)
     - `stop()` idempotent, huỷ timer đang chờ
 
-- [ ] **Step 1: Viết test fail**
+- [x] **Step 1: Viết test fail**
 
 ```js
 // FE/src/utils/mindmapJob.test.js
@@ -159,9 +173,9 @@ describe("createMindmapPoller", () => {
 });
 ```
 
-- [ ] **Step 2: Chạy fail** — `cd FE && npx vitest run src/utils/mindmapJob.test.js` → FAIL (module chưa có).
+- [x] **Step 2: Chạy fail** — `cd FE && npx vitest run src/utils/mindmapJob.test.js` → FAIL (module chưa có).
 
-- [ ] **Step 3: Implement `mindmapJob.js`**
+- [x] **Step 3: Implement `mindmapJob.js`**
 
 ```js
 // Poller mindmap thuần — KHÔNG hard-timeout (bài học: job thật chạy vài phút,
@@ -238,8 +252,8 @@ export function createMindmapPoller({
 }
 ```
 
-- [ ] **Step 4: Chạy pass** — `npx vitest run src/utils/mindmapJob.test.js` → PASS.
-- [ ] **Step 5: Commit** — `git add FE/src/utils/mindmapJob.js FE/src/utils/mindmapJob.test.js && git commit -m "feat(fe): mindmap poller — no hard timeout, adaptive interval, stall guard"`
+- [x] **Step 4: Chạy pass** — `npx vitest run src/utils/mindmapJob.test.js` → PASS.
+- [x] **Step 5: Commit** — `git add FE/src/utils/mindmapJob.js FE/src/utils/mindmapJob.test.js && git commit -m "feat(fe): mindmap poller — no hard timeout, adaptive interval, stall guard"`
 
 ### Task 2 [CODEX]: localStorage active-job helpers
 
@@ -255,7 +269,7 @@ export function createMindmapPoller({
   - `clearActiveMindmapJob() -> void`
   - Mọi hàm bọc try/catch (localStorage có thể bị chặn) — lỗi → no-op/null.
 
-- [ ] **Step 1: Viết test fail**
+- [x] **Step 1: Viết test fail**
 
 ```js
 // FE/src/utils/activeMindmapJob.test.js
@@ -292,9 +306,9 @@ describe("activeMindmapJob", () => {
 
 Lưu ý vitest environment: file test này cần `// @vitest-environment jsdom` ở dòng đầu NẾU config mặc định là node (kiểm `FE/vite.config.js`/`vitest.config`; các test hiện có `mindmapNormalize.test.js` chạy môi trường gì thì theo đó — nếu node, thêm devDep `jsdom` đã có sẵn qua vitest? KHÔNG cài thêm gì nếu test hiện tại đã chạy jsdom).
 
-- [ ] **Step 2: Chạy fail** — `cd FE && npx vitest run src/utils/activeMindmapJob.test.js` → FAIL.
+- [x] **Step 2: Chạy fail** — `cd FE && npx vitest run src/utils/activeMindmapJob.test.js` → FAIL.
 
-- [ ] **Step 3: Implement**
+- [x] **Step 3: Implement**
 
 ```js
 // Ghi nhớ job mindmap đang chạy để F5/đóng-mở tab poll tiếp được.
@@ -331,8 +345,8 @@ export const clearActiveMindmapJob = () => {
 };
 ```
 
-- [ ] **Step 4: Chạy pass** — `npx vitest run src/utils/activeMindmapJob.test.js` → PASS.
-- [ ] **Step 5: Commit** — `git add FE/src/utils/activeMindmapJob.js FE/src/utils/activeMindmapJob.test.js && git commit -m "feat(fe): persist active mindmap job to localStorage for resume-after-reload"`
+- [x] **Step 4: Chạy pass** — `npx vitest run src/utils/activeMindmapJob.test.js` → PASS.
+- [x] **Step 5: Commit** — `git add FE/src/utils/activeMindmapJob.js FE/src/utils/activeMindmapJob.test.js && git commit -m "feat(fe): persist active mindmap job to localStorage for resume-after-reload"`
 
 ### Task 3: Toast nhẹ
 
@@ -344,7 +358,7 @@ export const clearActiveMindmapJob = () => {
 **Interfaces:**
 - Produces: `toast(message, { type = "info", duration = 5000 })` — type ∈ `info|success|error`; export thêm `subscribeToasts(cb)`/`dismissToast(id)` cho component + test. Toast stack góc dưới-phải, style token Phòng đọc (`--bg-card`, `--border-strong`, accent son cho error, `--ok` cho success), tự biến mất sau `duration`, click để đóng, `role="status"` (info/success) — error dùng `role="alert"`.
 
-- [ ] **Step 1: Viết test fail** (logic store tách khỏi React — test không cần render)
+- [x] **Step 1: Viết test fail** (logic store tách khỏi React — test không cần render)
 
 ```js
 // FE/src/components/ui/toastStore.test.js
@@ -374,9 +388,9 @@ describe("toast store", () => {
 });
 ```
 
-- [ ] **Step 2: Chạy fail** → FAIL.
+- [x] **Step 2: Chạy fail** → FAIL.
 
-- [ ] **Step 3: Implement `Toaster.jsx`** — store module-level + component:
+- [x] **Step 3: Implement `Toaster.jsx`** — store module-level + component:
 
 ```jsx
 // Toast nhẹ cho đường mindmap (KHÔNG thay alert() toàn app).
@@ -439,8 +453,8 @@ export default function Toaster() {
 
 Mount trong `MainLayout.jsx`: import default `Toaster` và render `<Toaster />` một lần cuối JSX gốc (cạnh các modal/overlay hiện có).
 
-- [ ] **Step 4: Chạy pass** — `npx vitest run src/components/ui/toastStore.test.js` → PASS; `npm run build` xanh.
-- [ ] **Step 5: Commit** — `git add FE/src/components/ui/Toaster.jsx FE/src/components/ui/toastStore.test.js FE/src/components/Layout/MainLayout.jsx && git commit -m "feat(fe): lightweight toast stack (mindmap flow)"`
+- [x] **Step 4: Chạy pass** — `npx vitest run src/components/ui/toastStore.test.js` → PASS; `npm run build` xanh.
+- [x] **Step 5: Commit** — `git add FE/src/components/ui/Toaster.jsx FE/src/components/ui/toastStore.test.js FE/src/components/Layout/MainLayout.jsx && git commit -m "feat(fe): lightweight toast stack (mindmap flow)"`
 
 ### Task 4: SidebarRight — sinh nền + chip + resume + auto-open
 
@@ -478,11 +492,11 @@ Mount trong `MainLayout.jsx`: import default `Toaster` và render `<Toaster />` 
 
 (`animate-spin` tôn trọng reduced-motion nếu app đã cấu hình; nếu chưa, thêm vào `mindmap.css` Task 7: `@media (prefers-reduced-motion: reduce) { .animate-spin { animation: none } }`.)
 
-- [ ] **Step 1:** Rewire theo 1-8. `handleCancelMindMap` đổi sang `poller.stop()` + `cancelMindmap(jobId)` + clear key + chip tắt (logic notice giữ).
-- [ ] **Step 2:** `npm run build` xanh; `npx vitest run` toàn FE xanh.
-- [ ] **Step 3: Manual smoke A** — BE chạy, tạo sơ đồ doc nhỏ: chip hiện label stage, KHÔNG overlay lúc sinh, xong → toast + overlay tự mở + list có record (KHÔNG F5).
-- [ ] **Step 4: Manual smoke B** — tạo sơ đồ, F5 giữa chừng → chip tự hiện lại (resume), xong → toast, KHÔNG tự mở.
-- [ ] **Step 5: Commit** — `git add FE/src/components/Layout/SidebarRight.jsx && git commit -m "feat(fe): background mindmap generation — progress chip, no FE timeout, auto-open, resume after reload"`
+- [x] **Step 1:** Rewire theo 1-8. `handleCancelMindMap` đổi sang `poller.stop()` + `cancelMindmap(jobId)` + clear key + chip tắt (logic notice giữ).
+- [x] **Step 2:** `npm run build` xanh; `npx vitest run` toàn FE xanh.
+- [x] **Step 3: Manual smoke A** — BE chạy, tạo sơ đồ doc nhỏ: chip hiện label stage, KHÔNG overlay lúc sinh, xong → toast + overlay tự mở + list có record (KHÔNG F5).
+- [x] **Step 4: Manual smoke B** — tạo sơ đồ, F5 giữa chừng → chip tự hiện lại (resume), xong → toast, KHÔNG tự mở.
+- [x] **Step 5: Commit** — `git add FE/src/components/Layout/SidebarRight.jsx && git commit -m "feat(fe): background mindmap generation — progress chip, no FE timeout, auto-open, resume after reload"`
 
 ---
 
@@ -504,9 +518,9 @@ Mount trong `MainLayout.jsx`: import default `Toaster` và render `<Toaster />` 
     - `REL_LABELS = { relates_to: "liên quan", leads_to: "dẫn tới", causes: "gây ra", supports: "bổ trợ", contrasts: "đối lập", contains: "bao hàm" }`.
   - `mindElixirToRecord(mindData, sidecar, baseRecord) -> record v2` — walk `nodeData` DFS: node `{id, parent, kind, title: topic, note, chunk_refs, order}`; `kind` = sidecar trước, node mới → depth 0 `root` / depth 1 `section` / sâu hơn `idea`; `note`/`chunk_refs` từ sidecar, node mới → `""`/`[]`. Arrows → relations: arrow trùng `from→to` với relation gốc trong `baseRecord` → giữ `type` gốc; arrow mới → `type: "relates_to"`; `label` lấy từ arrow. Trả `{...baseRecord, title: rootTopic, nodes, relations}` (KHÔNG đổi id/hash/created_at — server tự bảo vệ thêm).
 
-- [ ] **Step 1:** `cd FE && npm i mind-elixir` (v5.x). `npm run build` vẫn xanh (chưa import đâu cả).
+- [x] **Step 1:** `cd FE && npm i mind-elixir` (v5.x). `npm run build` vẫn xanh (chưa import đâu cả).
 
-- [ ] **Step 2: Viết test fail**
+- [x] **Step 2: Viết test fail**
 
 ```js
 // FE/src/utils/mindElixirAdapter.test.js
@@ -586,7 +600,7 @@ describe("mindElixirToRecord", () => {
 });
 ```
 
-- [ ] **Step 3: Chạy fail** → FAIL. Implement:
+- [x] **Step 3: Chạy fail** → FAIL. Implement:
 
 ```js
 // Adapter record v2 ↔ mind-elixir. Pure — không import mind-elixir (chỉ shape data).
@@ -659,8 +673,8 @@ export function mindElixirToRecord(mindData, sidecar, baseRecord) {
 }
 ```
 
-- [ ] **Step 4: Chạy pass** — `npx vitest run src/utils/mindElixirAdapter.test.js` → PASS. LƯU Ý: nếu `normalizeMindmapRecord` với record v2 KHÔNG trả field `order` (kiểm code thật) → sort fallback giữ nguyên thứ tự mảng là đúng (v2 nodes đã theo thứ tự tài liệu).
-- [ ] **Step 5: Commit** — `git add FE/package.json FE/package-lock.json FE/src/utils/mindElixirAdapter.js FE/src/utils/mindElixirAdapter.test.js && git commit -m "feat(fe): mind-elixir adapter — record v2 <-> nodeData/arrows with provenance sidecar"`
+- [x] **Step 4: Chạy pass** — `npx vitest run src/utils/mindElixirAdapter.test.js` → PASS. LƯU Ý: nếu `normalizeMindmapRecord` với record v2 KHÔNG trả field `order` (kiểm code thật) → sort fallback giữ nguyên thứ tự mảng là đúng (v2 nodes đã theo thứ tự tài liệu).
+- [x] **Step 5: Commit** — `git add FE/package.json FE/package-lock.json FE/src/utils/mindElixirAdapter.js FE/src/utils/mindElixirAdapter.test.js && git commit -m "feat(fe): mind-elixir adapter — record v2 <-> nodeData/arrows with provenance sidecar"`
 
 ### Task 6 [CODEX]: BE `store.get_record` + `PUT /mindmaps/<id>`
 
@@ -675,7 +689,7 @@ export function mindElixirToRecord(mindData, sidecar, baseRecord) {
   - `PUT /mindmaps/<id>`: body JSON `{title?, nodes, relations?}` (record v2 shape). 404 id lạ; 400 nếu `sanitize_nodes(body["nodes"])` trả rỗng. Server: bảo vệ `id/content_hash/created_at/sources` từ record gốc (body KHÔNG đè được); `relations` qua `validate_relations` (id lạ/self-loop/trùng cạnh cây bị lọc — node đã xoá kéo relation chết theo tại đây); set `updated_at` ISO Z + `generator.edited = True`; ghi `store.save_record` (INSERT OR REPLACE sẵn có); trả record đã lưu.
 - Consumes: `services.mindmap.pipeline.schema.sanitize_nodes/validate_relations` (đã tồn tại).
 
-- [ ] **Step 1: Viết test fail** (mirror fixture pattern `tests/test_mindmap_routes.py` — client Flask + `MINDMAPS_DB_PATH` env như `tests/test_mindmap_store.py`):
+- [x] **Step 1: Viết test fail** (mirror fixture pattern `tests/test_mindmap_routes.py` — client Flask + `MINDMAPS_DB_PATH` env như `tests/test_mindmap_store.py`):
 
 ```python
 # BE/tests/test_mindmap_update.py
@@ -742,9 +756,9 @@ def test_put_400_empty_nodes(tmp_path, monkeypatch):
     assert r.status_code == 400
 ```
 
-- [ ] **Step 2: Chạy fail** — `cd BE && python -m pytest tests/test_mindmap_update.py -v` → FAIL.
+- [x] **Step 2: Chạy fail** — `cd BE && python -m pytest tests/test_mindmap_update.py -v` → FAIL.
 
-- [ ] **Step 3: Implement.** `store.py`:
+- [x] **Step 3: Implement.** `store.py`:
 
 ```python
 def get_record(mindmap_id: str) -> Optional[dict]:
@@ -791,8 +805,8 @@ def update_mindmap(mindmap_id: str):
     return jsonify(record)
 ```
 
-- [ ] **Step 4: Chạy pass** — `python -m pytest tests/test_mindmap_update.py tests/test_mindmap_store.py tests/test_mindmap_routes.py -v` → PASS; `python -c "import app.main"` OK.
-- [ ] **Step 5: Commit** — `git add BE/app/domains/mindmap/store.py BE/app/main.py BE/tests/test_mindmap_update.py && git commit -m "feat(be): PUT /mindmaps/<id> — save manual edits, validated via pipeline schema"`
+- [x] **Step 4: Chạy pass** — `python -m pytest tests/test_mindmap_update.py tests/test_mindmap_store.py tests/test_mindmap_routes.py -v` → PASS; `python -c "import app.main"` OK.
+- [x] **Step 5: Commit** — `git add BE/app/domains/mindmap/store.py BE/app/main.py BE/tests/test_mindmap_update.py && git commit -m "feat(be): PUT /mindmaps/<id> — save manual edits, validated via pipeline schema"`
 
 ### Task 7: `MindElixirView.jsx` — viewer mới + theme + drawer
 
@@ -807,7 +821,7 @@ def update_mindmap(mindmap_id: str):
 - Produces: `MindElixirView({ data, onClose, onRegenerate, regenerating })` — `data` = record (+ field bơm từ SidebarRight: `onAskAbout`, `generating`, `onCancel`). Expose nội bộ cho Task 8: giữ `mindRef` (instance), `sidecarRef`, state `dirty`.
 - Props shell giữ nguyên → SidebarRight KHÔNG đổi ở task này.
 
-- [ ] **Step 1: Implement `MindElixirView.jsx`**
+- [x] **Step 1: Implement `MindElixirView.jsx`**
 
 ```jsx
 // Viewer mind-elixir — thay ReactFlow/ELK. Overlay fullscreen giữ từ v2.
@@ -923,7 +937,7 @@ export default function MindElixirView({ data, onClose, onRegenerate, regenerati
 }
 ```
 
-- [ ] **Step 2: `mindmap.css`** — toggle arrows + quality floor:
+- [x] **Step 2: `mindmap.css`** — toggle arrows + quality floor:
 
 ```css
 /* Ẩn layer arrows khi tắt toggle "Quan hệ".
@@ -941,10 +955,10 @@ export default function MindElixirView({ data, onClose, onRegenerate, regenerati
 }
 ```
 
-- [ ] **Step 3: Shell swap** — `MindMapModal.jsx`: bỏ import `reactflow`/`ReactFlowProvider`/`MindmapView`/`LAYOUT_OPTIONS`; render `<MindElixirView data={data} onClose={onClose} onRegenerate={onRegenerate} regenerating={regenerating} />` trong `createPortal`. Empty-state giữ nguyên. Grep `LAYOUT_OPTIONS` call-site (`SidebarRight` import?) — nếu còn ai import từ modal thì giữ re-export từ `../mindmap/constants`.
-- [ ] **Step 4:** `npm run build` xanh + `npx vitest run` xanh.
-- [ ] **Step 5: Manual smoke** — BE chạy: mở map v2 có relations → nhánh cong màu archival, arrows nét đứt son + label; toggle Quan hệ ẩn/hiện (VERIFY selector `g[id^="a-"]`); click node → drawer trích đoạn thật; node tự thêm (contextMenu) → drawer "Chưa có bằng chứng"; map v1 legacy mở không vỡ; Esc đóng; dark mode nhìn được.
-- [ ] **Step 6: Commit** — `git add FE/src/components/mindmap/MindElixirView.jsx FE/src/components/mindmap/mindmap.css FE/src/components/Layout/MindMapModal.jsx && git commit -m "feat(fe): mind-elixir viewer — Phong Doc theme, relation arrows, evidence drawer rewire"`
+- [x] **Step 3: Shell swap** — `MindMapModal.jsx`: bỏ import `reactflow`/`ReactFlowProvider`/`MindmapView`/`LAYOUT_OPTIONS`; render `<MindElixirView data={data} onClose={onClose} onRegenerate={onRegenerate} regenerating={regenerating} />` trong `createPortal`. Empty-state giữ nguyên. Grep `LAYOUT_OPTIONS` call-site (`SidebarRight` import?) — nếu còn ai import từ modal thì giữ re-export từ `../mindmap/constants`.
+- [x] **Step 4:** `npm run build` xanh + `npx vitest run` xanh.
+- [x] **Step 5: Manual smoke** — BE chạy: mở map v2 có relations → nhánh cong màu archival, arrows nét đứt son + label; toggle Quan hệ ẩn/hiện (VERIFY selector `g[id^="a-"]`); click node → drawer trích đoạn thật; node tự thêm (contextMenu) → drawer "Chưa có bằng chứng"; map v1 legacy mở không vỡ; Esc đóng; dark mode nhìn được.
+- [x] **Step 6: Commit** — `git add FE/src/components/mindmap/MindElixirView.jsx FE/src/components/mindmap/mindmap.css FE/src/components/Layout/MindMapModal.jsx && git commit -m "feat(fe): mind-elixir viewer — Phong Doc theme, relation arrows, evidence drawer rewire"`
 
 ### Task 8: Edit → nút Lưu → PUT
 
@@ -1000,11 +1014,11 @@ const handleSave = async () => {
 
 - `SidebarRight`: trong `modalMapData` bơm thêm `onSaved: (saved) => { setMindMaps(prev => prev.map(m => m.id === saved.id ? saved : m)); setShowModalMap(prev => prev ? { ...prev, ...saved } : prev); }`. LƯU Ý: map `id === "preview"` / đang generating → nút Lưu ẩn (record chưa có trong sqlite, PUT sẽ 404): render nút chỉ khi `data.id && data.id !== "preview" && !data.generating`.
 
-- [ ] **Step 1:** Implement 3 file trên.
-- [ ] **Step 2:** `npm run build` + `npx vitest run` xanh.
-- [ ] **Step 3: Manual smoke** — mở map, đổi tên node (double-click), thêm node con, kéo node, vẽ arrow (context menu) → chấm "chưa lưu" hiện; Lưu → toast "Đã lưu sơ đồ"; F5 → mở lại từ list: mọi thay đổi còn nguyên (kể cả arrow mới thành relation `relates_to`); node đã xoá kéo relation chết biến mất; đóng khi dirty → confirm.
-- [ ] **Step 4:** Kiểm cache-hit trả bản edit: bấm "Tạo sơ đồ" lại cùng nguồn (không force) → nhận bản ĐÃ SỬA (content_hash giữ — chủ ý spec §5).
-- [ ] **Step 5: Commit** — `git add FE/src/utils/api.js FE/src/components/mindmap/MindElixirView.jsx FE/src/components/Layout/SidebarRight.jsx && git commit -m "feat(fe): manual mindmap editing with explicit save via PUT /mindmaps/<id>"`
+- [x] **Step 1:** Implement 3 file trên.
+- [x] **Step 2:** `npm run build` + `npx vitest run` xanh.
+- [x] **Step 3: Manual smoke** — mở map, đổi tên node (double-click), thêm node con, kéo node, vẽ arrow (context menu) → chấm "chưa lưu" hiện; Lưu → toast "Đã lưu sơ đồ"; F5 → mở lại từ list: mọi thay đổi còn nguyên (kể cả arrow mới thành relation `relates_to`); node đã xoá kéo relation chết biến mất; đóng khi dirty → confirm.
+- [x] **Step 4:** Kiểm cache-hit trả bản edit: bấm "Tạo sơ đồ" lại cùng nguồn (không force) → nhận bản ĐÃ SỬA (content_hash giữ — chủ ý spec §5).
+- [x] **Step 5: Commit** — `git add FE/src/utils/api.js FE/src/components/mindmap/MindElixirView.jsx FE/src/components/Layout/SidebarRight.jsx && git commit -m "feat(fe): manual mindmap editing with explicit save via PUT /mindmaps/<id>"`
 
 ### Task 9 [CODEX]: Export PNG (snapdom) + dọn ReactFlow
 
@@ -1038,20 +1052,20 @@ const handleExportPng = async () => {
 
 Nút trong toolbar cạnh Lưu: `<button onClick={handleExportPng} className="text-[12px] underline text-text-secondary">Xuất PNG</button>`. VERIFY `snapdom(...)` option key (`backgroundColor` vs `background`) theo README @zumer/snapdom lúc implement; nền PHẢI đặc (không transparent).
 
-- [ ] **Step 1:** `cd FE && npm i @zumer/snapdom`; implement nút export.
-- [ ] **Step 2:** Grep `reactflow|elkjs|html-to-image|MindmapView|RelationEdge|MindmapNodeCard|useElkLayout|exportPng` toàn `FE/src` — xoá file chết + import chết; chỉ `npm uninstall` dep khi 0 call-site còn lại.
-- [ ] **Step 3:** `npm run build` xanh; `npx vitest run` xanh.
-- [ ] **Step 4: Manual** — Xuất PNG → file mở được, nền đặc, đủ node.
-- [ ] **Step 5: Commit** — `git add -A FE && git commit -m "feat(fe): png export via snapdom; remove dead ReactFlow mindmap code"`
+- [x] **Step 1:** `cd FE && npm i @zumer/snapdom`; implement nút export.
+- [x] **Step 2:** Grep `reactflow|elkjs|html-to-image|MindmapView|RelationEdge|MindmapNodeCard|useElkLayout|exportPng` toàn `FE/src` — xoá file chết + import chết; chỉ `npm uninstall` dep khi 0 call-site còn lại.
+- [x] **Step 3:** `npm run build` xanh; `npx vitest run` xanh.
+- [x] **Step 4: Manual** — Xuất PNG → file mở được, nền đặc, đủ node.
+- [x] **Step 5: Commit** — `git add -A FE && git commit -m "feat(fe): png export via snapdom; remove dead ReactFlow mindmap code"`
 
 ### Task 10: Docs + playbook (đóng dự án)
 
 **Files:**
 - Modify: `docs/MINDMAP_WORKFLOW.md` (phần FE viewer + luồng generate: nền, chip, resume, edit/save), `.playbook/lessons-learned.md` (mục mới: "FE hard-timeout poll giết UX job dài" — root cause, fix poll-until-terminal + stall guard; "mind-elixir sidecar" — vì sao không tin field lạ), `.playbook/known-issues.md` (annotate mục cache-hit/job_id nếu hành vi đổi).
 
-- [ ] **Step 1:** Viết docs + playbook.
-- [ ] **Step 2:** Full suite: `cd BE && python -m pytest tests/ --ignore=tests/test_crag_graph.py --ignore=tests/test_hitl_graph.py --ignore=tests/test_nli_graph.py --ignore=tests/test_rerank_graph.py --ignore=tests/test_supervisor_graph.py` xanh (5 file ignore theo known-issue env trôi); `cd FE && npx vitest run && npm run build` xanh.
-- [ ] **Step 3: Commit** — `git add docs .playbook && git commit -m "docs(mindmap): ux v3 — background generation + mind-elixir viewer + edit"`
+- [x] **Step 1:** Viết docs + playbook.
+- [x] **Step 2:** Full suite: `cd BE && python -m pytest tests/ --ignore=tests/test_crag_graph.py --ignore=tests/test_hitl_graph.py --ignore=tests/test_nli_graph.py --ignore=tests/test_rerank_graph.py --ignore=tests/test_supervisor_graph.py` xanh (5 file ignore theo known-issue env trôi); `cd FE && npx vitest run && npm run build` xanh.
+- [x] **Step 3: Commit** — `git add docs .playbook && git commit -m "docs(mindmap): ux v3 — background generation + mind-elixir viewer + edit"`
 
 ---
 

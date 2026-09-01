@@ -1,6 +1,12 @@
 # Delete Source Without Re-embed — Implementation Plan
 
-> **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development (recommended) or superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox (`- [ ]`) syntax for tracking.
+> **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development (recommended) or superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox (`- [x]`) syntax for tracking.
+
+**Trạng thái (rà lại 2026-09-01):** Task 1, 2, 4 ĐÃ LÀM — xác minh bằng mã và test
+đang chạy. Task 3 **KHÔNG làm và sẽ không làm**: đề xuất `WEB_CONCURRENCY=2` đã bị
+phủ định bởi hai ràng buộc xuất hiện sau — HITL resume metadata và dict dedupe quiz
+đều giữ trạng thái trong tiến trình, nên compose ép `1`. Xem chú thích trong
+`docker-compose.yml` và `docs/ARCHITECTURE.md`.
 
 **Goal:** Khi xoá source/chunk khỏi vector index, loại đúng các vector hiện có theo id và KHÔNG re-embed toàn bộ corpus trong nhánh thành công; giữ fallback rebuild cũ để không bao giờ làm hỏng index.
 
@@ -35,7 +41,7 @@
   - Legacy raw-FAISS: `IndexIDMap.remove_ids(np.array(ids, dtype="int64"))`.
   - Nếu delete-by-id fail: raise để caller fallback rebuild.
 
-- [ ] **Step 1: Viết test fail cho LC mapping**
+- [x] **Step 1: Viết test fail cho LC mapping**
 
 ```python
 # BE/tests/test_vectorstore_delete_by_id.py
@@ -69,14 +75,14 @@ def test_remove_chunks_from_lc_index_maps_chunk_id_to_docstore_id(monkeypatch):
     assert deleted_ids == ["uuid-a", "uuid-c"]
 ```
 
-- [ ] **Step 2: Chạy fail**
+- [x] **Step 2: Chạy fail**
 
 ```bash
 cd BE
 ../.venv/Scripts/python.exe -m pytest tests/test_vectorstore_delete_by_id.py::test_remove_chunks_from_lc_index_maps_chunk_id_to_docstore_id -v
 ```
 
-- [ ] **Step 3: Implement trong `store.py`**
+- [x] **Step 3: Implement trong `store.py`**
 
 ```python
 def remove_chunks_from_lc_index(chunk_ids: list[int]) -> int:
@@ -132,7 +138,7 @@ Lưu ý:
 - LC path dùng docstore id kiểu uuid, KHÔNG phải `chunk_id`.
 - Giữ `rebuild_lc_index_from_meta(...)` và `rebuild_chunk_index(...)` nguyên vẹn làm đường fallback an toàn.
 
-- [ ] **Step 4: Chạy pass + thêm case raw-FAISS**
+- [x] **Step 4: Chạy pass + thêm case raw-FAISS**
 
 ```bash
 cd BE
@@ -158,7 +164,7 @@ set SKIP_MODEL_LOAD=1
   3. Chỉ khi remove API ném lỗi mới `_save_meta(keep_meta)` + `rebuild_chunk_index(keep_meta)`.
   4. Nhánh thành công: cập nhật meta + `__meta__["num_chunks"]`, lưu bằng `_save_meta(...)`, không in log rebuild.
 
-- [ ] **Step 1: Viết test e2e nhỏ cho delete-by-source không rebuild**
+- [x] **Step 1: Viết test e2e nhỏ cho delete-by-source không rebuild**
 
 ```python
 def test_delete_chunks_by_source_lc_keeps_remaining_vectors_and_no_rebuild_log(monkeypatch, capsys, tmp_path):
@@ -205,14 +211,14 @@ def test_delete_chunks_by_source_lc_keeps_remaining_vectors_and_no_rebuild_log(m
     assert any("gamma s2" in h for h in hits)
 ```
 
-- [ ] **Step 2: Chạy fail**
+- [x] **Step 2: Chạy fail**
 
 ```bash
 cd BE
 ../.venv/Scripts/python.exe -m pytest tests/test_vectorstore_delete_source.py::test_delete_chunks_by_source_lc_keeps_remaining_vectors_and_no_rebuild_log -v
 ```
 
-- [ ] **Step 3: Implement**
+- [x] **Step 3: Implement**
 
 ```python
 def delete_source_from_index(video_name: str):
@@ -241,7 +247,7 @@ Chi tiết cần giữ khớp code thật:
 - Preserve `__meta__` bookkeeping sau khi xoá thành công.
 - Fallback except phải dùng đúng đường cũ `rebuild_chunk_index(keep_meta)`.
 
-- [ ] **Step 4: Chạy pass**
+- [x] **Step 4: Chạy pass**
 
 ```bash
 cd BE
@@ -262,7 +268,7 @@ set SKIP_MODEL_LOAD=1
 - `docker-compose.yml` backend `environment` thêm `WEB_CONCURRENCY: "2"`.
 - `docs/ARCHITECTURE.md` phần `Environment Configuration` thêm 1 dòng: `WEB_CONCURRENCY=2` để backend còn trả `/health` khi 1 worker đang xử lý request nặng.
 
-- [ ] **Step 1: Sửa cấu hình**
+- [ ] ~~**Step 1: Sửa cấu hình**~~ — KHÔNG làm, xem Trạng thái ở đầu file
 
 ```yaml
 backend:
@@ -276,7 +282,7 @@ backend:
 WEB_CONCURRENCY=2              # gunicorn workers cho backend; giữ /health sống khi 1 worker bận
 ```
 
-- [ ] **Step 2: Smoke thủ công trong Docker**
+- [ ] ~~**Step 2: Smoke thủ công trong Docker**~~ — không áp dụng
 
 ```bash
 docker compose up -d --build backend
@@ -301,14 +307,14 @@ Expected:
 - `known-issues`: annotate mục `Xoá nguồn khi index lớn...` là đã fix, nêu ngày fix và fallback behavior.
 - `lessons-learned`: thêm regression note ngắn về bẫy LC docstore id khác `chunk_id`, và vì sao phải giữ rebuild fallback.
 
-- [ ] **Step 1: Update docs**
+- [x] **Step 1: Update docs**
 
 Nội dung tối thiểu cần chốt:
 - LC `FAISS.delete(ids=...)` nhận docstore ids, không nhận `chunk_id`.
 - Legacy raw-FAISS giữ id = `chunk_id`, nên delete path hai backend khác nhau.
 - Mọi lỗi delete-by-id phải rebuild để ưu tiên tính toàn vẹn index hơn hiệu năng.
 
-- [ ] **Step 2: Verify cuối**
+- [x] **Step 2: Verify cuối**
 
 ```bash
 cd BE

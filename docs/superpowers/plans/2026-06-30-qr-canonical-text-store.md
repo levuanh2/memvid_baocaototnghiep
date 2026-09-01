@@ -2,6 +2,25 @@
 
 > **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development (recommended) or superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox (`- [ ]`) syntax for tracking.
 
+**Trạng thái (rà lại 2026-09-01):** làm MỘT NỬA, và nửa còn lại không còn áp dụng.
+
+- **Task 3, 4, 6, 7 — ĐÃ LÀM.** `chunk_text_store.py` tồn tại, `store.py` ghi qua
+  `put_many`, `hybrid.py` đọc qua `iter_all`, và 23 điểm đọc trong `app/` đã đi qua nó
+  (`memory/tree.py`, `mindmap/input_collector.py`, `retrieval/hybrid.py`,
+  `vectorstore/store.py`, `main.py`). Test `test_chunk_text_store.py`,
+  `test_hybrid_textstore.py`, `test_store_precomputed.py`, `test_late_chunk_ingest.py`
+  đều có.
+- **Task 1, 2, 5, 8 — KHÔNG CÒN ÁP DỤNG.** Toàn bộ tầng QR/video **đã bị gỡ khỏi dự án**:
+  `grep -rl "decode_video_qr\|save_qr_frames_to_video\|qrcode" BE/app BE/services` ra
+  rỗng, và không còn file `video_utils.py` / `chunk_processor.py` nào. Bốn task đó nhắm
+  vào mã không còn tồn tại, nên chúng không phải "chưa làm" mà là "không còn chỗ để làm".
+
+**Hệ quả cần biết:** sqlite `chunks.sqlite` giờ là nguồn văn bản DUY NHẤT, không còn là
+bản dẫn xuất từ video như tiêu đề plan mô tả. `app/scripts/rebuild_sqlite_from_videos.py`
+(Task 8) không tồn tại và cũng không dựng lại được từ đâu — mất `chunks.sqlite` là mất
+text, chỉ còn khôi phục bằng cách ingest lại tài liệu gốc. Điều này đã được ghi trong
+known-issues "chunks.sqlite bị mất hoặc hỏng dữ liệu".
+
 **Goal:** Make the QR video the canonical/portable text archive, slim `index.json` to pointers `(video, frame_index)` + metadata, and serve runtime text from a derived `chunks.sqlite` rebuildable from video.
 
 **Architecture:** Three stores with clear roles — `videos/*.mp4` (canonical archive + recovery), `index/index.json` (pointers + metadata, no text), `index/chunks.sqlite` (runtime text, derived). A single access layer `chunk_text_store` is the only place that reads chunk text; consumers (BM25, memory, mindmap, endpoints) go through it. Text is written to sqlite at ingest time (no video decode in normal operation); video decode is recovery-only.
@@ -29,7 +48,7 @@
 **Interfaces:**
 - Produces: `decode_video_qr(path) -> list[tuple[int, str]]` (frame_index, chunk_text) THEO THỨ TỰ frame; `decode_frame(path, frame_index) -> str | None`.
 
-- [ ] **Step 1: Write failing test** (append to `tests/test_video_codec.py`)
+- [ ] ~~KHÔNG CÒN ÁP DỤNG~~ **Step 1: Write failing test** (append to `tests/test_video_codec.py`)
 
 ```python
 def test_decode_video_qr_preserves_order(monkeypatch):
@@ -58,12 +77,12 @@ def test_decode_video_qr_preserves_order(monkeypatch):
     assert [t for _, t in out] == ["alpha", "beta"]
 ```
 
-- [ ] **Step 2: Run test, verify FAIL**
+- [ ] ~~KHÔNG CÒN ÁP DỤNG~~ **Step 2: Run test, verify FAIL**
 
 Run: `cd BE && SKIP_MODEL_LOAD=1 python -m pytest tests/test_video_codec.py::test_decode_video_qr_preserves_order -v`
 Expected: FAIL (current returns `list(set)` of full strings, không phải tuple có thứ tự).
 
-- [ ] **Step 3: Rewrite `decode_video_qr`** (replace body, bỏ checksum-skip làm mất thứ tự — vẫn verify nhưng giữ frame index)
+- [ ] ~~KHÔNG CÒN ÁP DỤNG~~ **Step 3: Rewrite `decode_video_qr`** (replace body, bỏ checksum-skip làm mất thứ tự — vẫn verify nhưng giữ frame index)
 
 ```python
 def decode_video_qr(path: str) -> List[tuple[int, str]]:
@@ -125,18 +144,18 @@ def decode_frame(path: str, frame_index: int) -> Optional[str]:
 
 Add `from typing import Optional` if missing.
 
-- [ ] **Step 4: Restrict save to .mp4** — in `save_qr_frames_to_video`, change `candidates` to mp4 only:
+- [ ] ~~KHÔNG CÒN ÁP DỤNG~~ **Step 4: Restrict save to .mp4** — in `save_qr_frames_to_video`, change `candidates` to mp4 only:
 
 ```python
     candidates = [('mp4v', '.mp4'), ('avc1', '.mp4')]
 ```
 
-- [ ] **Step 5: Run tests, verify PASS**
+- [ ] ~~KHÔNG CÒN ÁP DỤNG~~ **Step 5: Run tests, verify PASS**
 
 Run: `cd BE && SKIP_MODEL_LOAD=1 python -m pytest tests/test_video_codec.py -v`
 Expected: PASS (all). The fallthrough test now only has .mp4 candidates → update its `_video_is_valid` monkeypatch to `lambda p: p.endswith(".mp4")`.
 
-- [ ] **Step 6: Commit**
+- [ ] ~~KHÔNG CÒN ÁP DỤNG~~ **Step 6: Commit**
 
 ```bash
 git add BE/app/domains/ingest/video_utils.py BE/tests/test_video_codec.py
@@ -154,7 +173,7 @@ git commit -m "fix(video): ordered QR decode + single-frame decode + mp4-only"
 **Interfaces:**
 - Produces: mỗi entry có `entry["frame_index"]` = vị trí 0-based trong list cuối cùng (khớp thứ tự ghi video).
 
-- [ ] **Step 1: Write failing test**
+- [ ] ~~KHÔNG CÒN ÁP DỤNG~~ **Step 1: Write failing test**
 
 ```python
 def test_entries_get_frame_index_after_filter(monkeypatch, tmp_path):
@@ -165,9 +184,9 @@ def test_entries_get_frame_index_after_filter(monkeypatch, tmp_path):
     assert [e["frame_index"] for e in entries] == list(range(len(entries)))
 ```
 
-- [ ] **Step 2: Run, verify FAIL** — `cd BE && SKIP_MODEL_LOAD=1 python -m pytest tests/test_chunk_processor_index.py::test_entries_get_frame_index_after_filter -v` → FAIL (KeyError frame_index).
+- [ ] ~~KHÔNG CÒN ÁP DỤNG~~ **Step 2: Run, verify FAIL** — `cd BE && SKIP_MODEL_LOAD=1 python -m pytest tests/test_chunk_processor_index.py::test_entries_get_frame_index_after_filter -v` → FAIL (KeyError frame_index).
 
-- [ ] **Step 3: Implement** — after the filter line, before saving video:
+- [ ] ~~KHÔNG CÒN ÁP DỤNG~~ **Step 3: Implement** — after the filter line, before saving video:
 
 ```python
     qr_frames = [f for f in qr_frames if f is not None]
@@ -176,9 +195,9 @@ def test_entries_get_frame_index_after_filter(monkeypatch, tmp_path):
         e["frame_index"] = i   # khớp thứ tự ghi video (frame i ↔ entry i)
 ```
 
-- [ ] **Step 4: Run, verify PASS** — same command → PASS. Also run full file.
+- [ ] ~~KHÔNG CÒN ÁP DỤNG~~ **Step 4: Run, verify PASS** — same command → PASS. Also run full file.
 
-- [ ] **Step 5: Commit**
+- [ ] ~~KHÔNG CÒN ÁP DỤNG~~ **Step 5: Commit**
 
 ```bash
 git add BE/app/domains/ingest/chunk_processor.py BE/tests/test_chunk_processor_index.py
@@ -197,7 +216,7 @@ git commit -m "feat(ingest): persist frame_index per chunk entry (post-filter)"
 - Consumes: `store.INDEX_DIR` (path), `store.load_meta()` (read index.json), `video_utils.decode_frame`.
 - Produces: `put_many(items: list[tuple[int,str]])`; `get_text(chunk_id:int)->str|None`; `get_texts(ids)->dict[int,str]`; `iter_all()->Iterable[tuple[int,str]]`; `mtime()->float`; `rebuild_from_videos()->int`; `reset_cache()`; `init()`.
 
-- [ ] **Step 1: Write failing tests**
+- [x] **Step 1: Write failing tests**
 
 ```python
 import importlib
@@ -244,9 +263,9 @@ def test_iter_all_uses_inline_when_sqlite_empty(tmp_path, monkeypatch):
     assert sorted(cts.iter_all()) == [(0, "x"), (1, "y")]
 ```
 
-- [ ] **Step 2: Run, verify FAIL** — `cd BE && SKIP_MODEL_LOAD=1 python -m pytest tests/test_chunk_text_store.py -v` → FAIL (module missing).
+- [x] **Step 2: Run, verify FAIL** — `cd BE && SKIP_MODEL_LOAD=1 python -m pytest tests/test_chunk_text_store.py -v` → FAIL (module missing).
 
-- [ ] **Step 3: Implement module**
+- [x] **Step 3: Implement module**
 
 ```python
 """Tầng truy cập text DUY NHẤT cho chunk.
@@ -418,9 +437,9 @@ def rebuild_from_videos() -> int:
     return len(items)
 ```
 
-- [ ] **Step 4: Run, verify PASS** — `cd BE && SKIP_MODEL_LOAD=1 python -m pytest tests/test_chunk_text_store.py -v` → PASS.
+- [x] **Step 4: Run, verify PASS** — `cd BE && SKIP_MODEL_LOAD=1 python -m pytest tests/test_chunk_text_store.py -v` → PASS.
 
-- [ ] **Step 5: Commit**
+- [x] **Step 5: Commit**
 
 ```bash
 git add BE/app/domains/vectorstore/chunk_text_store.py BE/tests/test_chunk_text_store.py
@@ -439,7 +458,7 @@ git commit -m "feat(vectorstore): chunk_text_store (sqlite + inline + video-deco
 - Consumes: `chunk_text_store.put_many`. `custom_metadata[i]` có thể chứa `video`, `frame_index`.
 - Produces: `index.json` entry KHÔNG có `text` khi có video; CÓ `text` inline khi `video` rỗng/thiếu. sqlite luôn có text.
 
-- [ ] **Step 1: Write failing test** (raw path)
+- [x] **Step 1: Write failing test** (raw path)
 
 ```python
 def test_append_writes_sqlite_and_slims_index(tmp_path, monkeypatch):
@@ -473,9 +492,9 @@ def test_append_keeps_inline_text_when_no_video(tmp_path, monkeypatch):
     assert meta["0"].get("text") == "x", "video lỗi → giữ inline text (an toàn)"
 ```
 
-- [ ] **Step 2: Run, verify FAIL** — `cd BE && python -m pytest tests/test_store_precomputed.py::test_append_writes_sqlite_and_slims_index -v` → FAIL (text vẫn còn).
+- [x] **Step 2: Run, verify FAIL** — `cd BE && python -m pytest tests/test_store_precomputed.py::test_append_writes_sqlite_and_slims_index -v` → FAIL (text vẫn còn).
 
-- [ ] **Step 3: Implement** — in `append_to_index` meta loop, replace the per-entry build:
+- [x] **Step 3: Implement** — in `append_to_index` meta loop, replace the per-entry build:
 
 ```python
     from app.domains.vectorstore import chunk_text_store
@@ -501,9 +520,9 @@ def test_append_keeps_inline_text_when_no_video(tmp_path, monkeypatch):
 
 Apply the **same pattern** to `append_chunks_to_lc_index`'s meta loop (lines ~333-345): same `has_video` check, `text_items`, `chunk_text_store.put_many`, drop `"text"` when `has_video`.
 
-- [ ] **Step 4: Run, verify PASS** — both new tests + existing `test_store_precomputed.py` PASS. (Existing tests pass `custom_metadata` without video → keep inline text → still fine.)
+- [x] **Step 4: Run, verify PASS** — both new tests + existing `test_store_precomputed.py` PASS. (Existing tests pass `custom_metadata` without video → keep inline text → still fine.)
 
-- [ ] **Step 5: Commit**
+- [x] **Step 5: Commit**
 
 ```bash
 git add BE/app/domains/vectorstore/store.py BE/tests/test_store_precomputed.py
@@ -522,7 +541,7 @@ git commit -m "feat(vectorstore): write chunk text to sqlite, slim index.json to
 - Consumes: `entry.get("frame_index")` (Task 2), `state["video_path"]`.
 - Produces: `custom_metadata[i]` có `video` (= video_path) và `frame_index`.
 
-- [ ] **Step 1: Write failing test** — extend `test_late_chunk_ingest.py` fake_append to capture `custom_metadata`, assert each has `frame_index` and `video`:
+- [ ] ~~KHÔNG CÒN ÁP DỤNG~~ **Step 1: Write failing test** — extend `test_late_chunk_ingest.py` fake_append to capture `custom_metadata`, assert each has `frame_index` and `video`:
 
 ```python
     def fake_append(chunks, video_name, custom_metadata=None, batch_size=32, embeddings=None):
@@ -535,9 +554,9 @@ git commit -m "feat(vectorstore): write chunk text to sqlite, slim index.json to
 
 (fake_process must set `frame_index` per entry — update it to include `"frame_index": len(entries)` per appended entry.)
 
-- [ ] **Step 2: Run, verify FAIL** — `cd BE && python -m pytest tests/test_late_chunk_ingest.py -v` → FAIL (no frame_index/video in md).
+- [ ] ~~KHÔNG CÒN ÁP DỤNG~~ **Step 2: Run, verify FAIL** — `cd BE && python -m pytest tests/test_late_chunk_ingest.py -v` → FAIL (no frame_index/video in md).
 
-- [ ] **Step 3: Implement** — in `embed_index_node`, where `md` dict is built per entry, add:
+- [ ] ~~KHÔNG CÒN ÁP DỤNG~~ **Step 3: Implement** — in `embed_index_node`, where `md` dict is built per entry, add:
 
 ```python
                 md = {
@@ -552,9 +571,9 @@ git commit -m "feat(vectorstore): write chunk text to sqlite, slim index.json to
                 }
 ```
 
-- [ ] **Step 4: Run, verify PASS** — same command → PASS.
+- [ ] ~~KHÔNG CÒN ÁP DỤNG~~ **Step 4: Run, verify PASS** — same command → PASS.
 
-- [ ] **Step 5: Commit**
+- [ ] ~~KHÔNG CÒN ÁP DỤNG~~ **Step 5: Commit**
 
 ```bash
 git add BE/app/graphs/ingest_graph.py BE/tests/test_late_chunk_ingest.py
@@ -573,7 +592,7 @@ git commit -m "feat(ingest): carry video+frame_index pointer into chunk metadata
 - Consumes: `chunk_text_store.iter_all()`, `chunk_text_store.mtime()`.
 - Produces: BM25 corpus + `self._chunks[].text` lấy từ chunk_text_store (không từ `meta["text"]`).
 
-- [ ] **Step 1: Write failing test** (`tests/test_hybrid_textstore.py`)
+- [x] **Step 1: Write failing test** (`tests/test_hybrid_textstore.py`)
 
 ```python
 import json
@@ -602,9 +621,9 @@ def test_bm25_corpus_from_sqlite_not_index_text(tmp_path, monkeypatch):
 
 (Confirm `HybridRetriever.__init__` accepts `meta_path`; if it derives meta_path internally, set it via the constructor arg it already uses — check `hybrid.py` ctor.)
 
-- [ ] **Step 2: Run, verify FAIL** — `cd BE && SKIP_MODEL_LOAD=1 python -m pytest tests/test_hybrid_textstore.py -v` → FAIL (current reads `v.get("text")` → empty → no chunks).
+- [x] **Step 2: Run, verify FAIL** — `cd BE && SKIP_MODEL_LOAD=1 python -m pytest tests/test_hybrid_textstore.py -v` → FAIL (current reads `v.get("text")` → empty → no chunks).
 
-- [ ] **Step 3: Implement** — replace `_ensure_loaded` body to source text from chunk_text_store:
+- [x] **Step 3: Implement** — replace `_ensure_loaded` body to source text from chunk_text_store:
 
 ```python
     def _ensure_loaded(self) -> None:
@@ -637,9 +656,9 @@ def test_bm25_corpus_from_sqlite_not_index_text(tmp_path, monkeypatch):
         self._meta_mtime = mtime
 ```
 
-- [ ] **Step 4: Run, verify PASS** — new test + `tests/test_retrieval_filter.py` + `tests/test_query*.py` PASS.
+- [x] **Step 4: Run, verify PASS** — new test + `tests/test_retrieval_filter.py` + `tests/test_query*.py` PASS.
 
-- [ ] **Step 5: Commit**
+- [x] **Step 5: Commit**
 
 ```bash
 git add BE/app/domains/retrieval/hybrid.py BE/tests/test_hybrid_textstore.py
@@ -661,7 +680,7 @@ git commit -m "feat(retrieval): BM25 corpus + result text via chunk_text_store"
 - Consumes: `chunk_text_store.get_text(chunk_id)` / `get_texts(ids)`.
 - Pattern: chỗ nào có `chunk_id`/key + đọc `text`, đổi sang `get_text(cid)`; chỗ duyệt nhiều chunk theo source → gom ids rồi `get_texts`.
 
-- [ ] **Step 1: Write failing test** — `search_index` trả text từ sqlite:
+- [x] **Step 1: Write failing test** — `search_index` trả text từ sqlite:
 
 ```python
 def test_search_index_text_from_sqlite(tmp_path, monkeypatch):
@@ -679,9 +698,9 @@ def test_search_index_text_from_sqlite(tmp_path, monkeypatch):
 
 (For `search_index` itself: it returns `[]` under SKIP_MODEL_LOAD; the real change is replacing `meta[key]["text"]` with `chunk_text_store.get_text(int(key))`. Verify via reading the line is changed + the query e2e tests.)
 
-- [ ] **Step 2: Run baseline** — `cd BE && python -m pytest tests/test_query.py tests/test_mindmap_source_match.py tests/test_delete_source.py -v` (note current pass set).
+- [x] **Step 2: Run baseline** — `cd BE && python -m pytest tests/test_query.py tests/test_mindmap_source_match.py tests/test_delete_source.py -v` (note current pass set).
 
-- [ ] **Step 3: Implement swaps.** For EACH site, replace direct text read with `chunk_text_store`:
+- [x] **Step 3: Implement swaps.** For EACH site, replace direct text read with `chunk_text_store`:
 
 `store.search_index` (~594):
 ```python
@@ -701,9 +720,9 @@ def test_search_index_text_from_sqlite(tmp_path, monkeypatch):
 
 `main.py` `/sources` (1184) and summary (1551-1566): where iterating meta items with key `cid`, use `chunk_text_store.get_text(int(cid))` instead of `item.get('text','')` / `m.get("text","")`.
 
-- [ ] **Step 4: Run, verify PASS** — `cd BE && python -m pytest tests/test_query.py tests/test_mindmap_source_match.py tests/test_delete_source.py tests/test_store_precomputed.py -v` → PASS (same or better than baseline).
+- [x] **Step 4: Run, verify PASS** — `cd BE && python -m pytest tests/test_query.py tests/test_mindmap_source_match.py tests/test_delete_source.py tests/test_store_precomputed.py -v` → PASS (same or better than baseline).
 
-- [ ] **Step 5: Commit**
+- [x] **Step 5: Commit**
 
 ```bash
 git add BE/app/domains/vectorstore/store.py BE/app/domains/memory/tree.py BE/services/mindmap/worker.py BE/app/main.py BE/tests/
@@ -722,14 +741,14 @@ git commit -m "refactor(text): route all chunk-text reads through chunk_text_sto
 **Interfaces:**
 - Consumes: `chunk_text_store.rebuild_from_videos()`.
 
-- [ ] **Step 1: Write failing integ assertion** — in `test_late_chunk_ingest.py`, after invoke, assert:
+- [ ] ~~KHÔNG CÒN ÁP DỤNG~~ **Step 1: Write failing integ assertion** — in `test_late_chunk_ingest.py`, after invoke, assert:
 
 ```python
     meta = json.load(open(store.META_PATH, encoding="utf-8"))  # need real append, not fake
 ```
 (For this, run a variant using REAL `store.append_to_index` with patched paths + `SKIP_MODEL_LOAD` off + fake encoder; assert `"text" not in meta["0"]` and `chunk_text_store.get_text(0)` non-empty. If too heavy, keep the unit coverage from Tasks 3-4 and make this a smoke script instead.)
 
-- [ ] **Step 2: Implement recovery CLI**
+- [ ] ~~KHÔNG CÒN ÁP DỤNG~~ **Step 2: Implement recovery CLI**
 
 ```python
 """Dựng lại chunks.sqlite từ index.json pointer + decode video (recovery)."""
@@ -742,16 +761,16 @@ if __name__ == "__main__":
     print(f"[rebuild_sqlite] dựng lại {n} chunk text từ video/inline")
 ```
 
-- [ ] **Step 3: Run full suite + import check**
+- [ ] ~~KHÔNG CÒN ÁP DỤNG~~ **Step 3: Run full suite + import check**
 
 Run: `cd BE && python -c "import app.graphs.ingest_graph; import app.graphs.query_graph" && python -m pytest -q`
 Expected: imports OK; all PASS.
 
-- [ ] **Step 4: Real smoke (manual, cần bge-m3)** — script: ingest 1 .md qua graph thật → assert index.json không có text, `chunks.sqlite` có; query trả đúng; xoá sqlite → `rebuild_sqlite_from_videos` → query vẫn đúng. Lưu ở scratchpad.
+- [ ] ~~KHÔNG CÒN ÁP DỤNG~~ **Step 4: Real smoke (manual, cần bge-m3)** — script: ingest 1 .md qua graph thật → assert index.json không có text, `chunks.sqlite` có; query trả đúng; xoá sqlite → `rebuild_sqlite_from_videos` → query vẫn đúng. Lưu ở scratchpad.
 
-- [ ] **Step 5: Update playbook** — thêm note: video=canonical, index slim, sqlite derived; root cause (trùng text + video write-only); prevention (mọi read qua chunk_text_store; frame_index gán sau lọc; .mp4-only); regression (các test ở trên).
+- [ ] ~~KHÔNG CÒN ÁP DỤNG~~ **Step 5: Update playbook** — thêm note: video=canonical, index slim, sqlite derived; root cause (trùng text + video write-only); prevention (mọi read qua chunk_text_store; frame_index gán sau lọc; .mp4-only); regression (các test ở trên).
 
-- [ ] **Step 6: Commit**
+- [ ] ~~KHÔNG CÒN ÁP DỤNG~~ **Step 6: Commit**
 
 ```bash
 git add BE/app/scripts/rebuild_sqlite_from_videos.py .playbook/ BE/tests/

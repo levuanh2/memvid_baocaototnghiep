@@ -2,6 +2,18 @@
 
 > **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development (recommended) or superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox (`- [ ]`) syntax for tracking.
 
+**Trạng thái (rà lại 2026-09-01):** ĐÃ LÀM XONG. Xác minh bằng hiện vật, không bằng trí nhớ:
+
+- Task 1-9: `services/mindmap/jsonrepair.py`, `pipeline/schema.py`, `pipeline/skeleton.py`,
+  `pipeline/enrich.py`, `pipeline/relations.py`, `app/domains/mindmap/input_collector.py`,
+  `app/domains/mindmap/store.py`, `app/graphs/mindmap_graph.py` — đều tồn tại.
+- Task 12 (xoá máy móc cũ): `grep -c "run_mindmap_generation\|select_mindmap_strategy\|
+  VisualDiagram" services/mindmap/worker.py` = **0**. Sạch.
+- Task 13: `FE/src/utils/mindmapNormalize.js` + vitest trong `package.json`.
+
+Task 11 là smoke thủ công với LLM thật, chạy ngoài repo — tích theo kết quả cuối
+(pipeline v2 đang chạy trong production, `MINDMAP_MODEL` sống trong `.env`).
+
 **Goal:** Thay pipeline sinh mindmap (3 mode × 7 strategies, 2113 dòng) bằng pipeline skeleton-first 4 stage trên LangGraph 5 node, schema v2 một artifact + sqlite store + cache thật + cancel thật, và FE "Bản đồ tri thức" với ngăn kéo bằng chứng.
 
 **Architecture:** Skeleton dựng deterministic từ `heading_path` (đã persist trong index metadata), LLM chỉ enrich từng nhánh (song song) + trích quan hệ chéo (1 call). Monolith gom input (`app/domains/mindmap/input_collector`), worker/pipeline stateless (`services/mindmap/pipeline/`), record v2 lưu `memory/mindmaps.sqlite`. LLM chết ở stage nào → record vẫn ra kèm `degraded`.
@@ -75,7 +87,7 @@ docs/MINDMAP_WORKFLOW.md + .playbook/*     # SỬA — cuối
 **Interfaces:**
 - Produces: `services.mindmap.jsonrepair.repair_json_text(raw: str) -> str` — pipeline mới và worker cũ cùng dùng.
 
-- [ ] **Step 1: Viết test fail**
+- [x] **Step 1: Viết test fail**
 
 ```python
 # BE/tests/test_jsonrepair.py
@@ -94,9 +106,9 @@ def test_plain_json_unchanged():
     assert json.loads(repair_json_text('{"k": "v"}')) == {"k": "v"}
 ```
 
-- [ ] **Step 2: Chạy fail** — `cd BE && python -m pytest tests/test_jsonrepair.py -v` → FAIL (ModuleNotFoundError).
+- [x] **Step 2: Chạy fail** — `cd BE && python -m pytest tests/test_jsonrepair.py -v` → FAIL (ModuleNotFoundError).
 
-- [ ] **Step 3: Implement** — tạo `BE/services/mindmap/jsonrepair.py`: MOVE nguyên văn thân hàm `_repair_json_text` từ `worker.py` (dòng ~427-486) sang, đổi tên public:
+- [x] **Step 3: Implement** — tạo `BE/services/mindmap/jsonrepair.py`: MOVE nguyên văn thân hàm `_repair_json_text` từ `worker.py` (dòng ~427-486) sang, đổi tên public:
 
 ```python
 """JSON repair string-aware dùng chung cho mindmap pipeline (cũ + mới)."""
@@ -111,9 +123,9 @@ def repair_json_text(raw: str) -> str:
 
 Trong `worker.py`: xoá định nghĩa `_repair_json_text`, thêm `from services.mindmap.jsonrepair import repair_json_text as _repair_json_text` (giữ tên cũ cho mọi call-site trong worker).
 
-- [ ] **Step 4: Chạy pass** — `python -m pytest tests/test_jsonrepair.py tests/test_mindmap.py -v` → PASS (worker cũ vẫn xanh).
+- [x] **Step 4: Chạy pass** — `python -m pytest tests/test_jsonrepair.py tests/test_mindmap.py -v` → PASS (worker cũ vẫn xanh).
 
-- [ ] **Step 5: Commit** — `git add BE/services/mindmap/jsonrepair.py BE/services/mindmap/worker.py BE/tests/test_jsonrepair.py && git commit -m "refactor(mindmap): extract string-aware repair_json_text to shared module"`
+- [x] **Step 5: Commit** — `git add BE/services/mindmap/jsonrepair.py BE/services/mindmap/worker.py BE/tests/test_jsonrepair.py && git commit -m "refactor(mindmap): extract string-aware repair_json_text to shared module"`
 
 ### Task 2: Schema v2 + sanitize + content_hash
 
@@ -132,7 +144,7 @@ Trong `worker.py`: xoá định nghĩa `_repair_json_text`, thêm `from services
   - `validate_relations(relations: list[dict], nodes: list[dict]) -> list[dict]`
   - `build_record(*, title, sources, nodes, relations, content_hash_value, model, elapsed_sec, degraded_missing: list[str]) -> dict` — record v2 đúng spec §3.1
 
-- [ ] **Step 1: Viết test fail**
+- [x] **Step 1: Viết test fail**
 
 ```python
 # BE/tests/test_mindmap_schema_v2.py
@@ -195,9 +207,9 @@ def test_build_record_shape():
     assert rec["id"] and rec["created_at"].endswith("Z")
 ```
 
-- [ ] **Step 2: Chạy fail** — `python -m pytest tests/test_mindmap_schema_v2.py -v` → FAIL.
+- [x] **Step 2: Chạy fail** — `python -m pytest tests/test_mindmap_schema_v2.py -v` → FAIL.
 
-- [ ] **Step 3: Implement `schema.py`**
+- [x] **Step 3: Implement `schema.py`**
 
 ```python
 """Schema v2 mindmap: MỘT artifact nodes(tree) + relations(cross-edges) + provenance."""
@@ -319,8 +331,8 @@ def build_record(*, title: str, sources: list[str], nodes: list[dict], relations
     }
 ```
 
-- [ ] **Step 4: Chạy pass** — `python -m pytest tests/test_mindmap_schema_v2.py -v` → PASS.
-- [ ] **Step 5: Commit** — `git add BE/services/mindmap/pipeline BE/tests/test_mindmap_schema_v2.py && git commit -m "feat(mindmap): schema v2 — unified nodes+relations, sanitize, content_hash"`
+- [x] **Step 4: Chạy pass** — `python -m pytest tests/test_mindmap_schema_v2.py -v` → PASS.
+- [x] **Step 5: Commit** — `git add BE/services/mindmap/pipeline BE/tests/test_mindmap_schema_v2.py && git commit -m "feat(mindmap): schema v2 — unified nodes+relations, sanitize, content_hash"`
 
 ### Task 3: Stage 0 — Skeleton builder
 
@@ -332,7 +344,7 @@ def build_record(*, title: str, sources: list[str], nodes: list[dict], relations
 - Consumes: `schema.sanitize_nodes`.
 - Produces: `build_skeleton(mm_input: dict) -> tuple[list[dict], str]` — (nodes v2, method) với method ∈ {"headings","tree_sections","clusters","single"}. `mm_input` shape (Task 4 sản xuất): `{"title": str, "sources": [str], "chunks": [{"key": str, "text": str, "heading_path": str, "chunk_keys": [str]}], "tree_sections": [{"title": str, "chunk_refs": [str]}]}`.
 
-- [ ] **Step 1: Viết test fail**
+- [x] **Step 1: Viết test fail**
 
 ```python
 # BE/tests/test_mindmap_skeleton.py
@@ -380,9 +392,9 @@ def test_empty_input_returns_root_only():
     assert len(nodes) == 1 and nodes[0]["kind"] == "root"
 ```
 
-- [ ] **Step 2: Chạy fail** — `python -m pytest tests/test_mindmap_skeleton.py -v` → FAIL.
+- [x] **Step 2: Chạy fail** — `python -m pytest tests/test_mindmap_skeleton.py -v` → FAIL.
 
-- [ ] **Step 3: Implement `skeleton.py`**
+- [x] **Step 3: Implement `skeleton.py`**
 
 ```python
 """Stage 0 — skeleton deterministic (0 LLM): heading_path → tree_sections → TF-IDF clusters."""
@@ -480,8 +492,8 @@ def build_skeleton(mm_input: dict) -> tuple[list[dict], str]:
     return sanitize_nodes([_root(title)]), "single"
 ```
 
-- [ ] **Step 4: Chạy pass** — `python -m pytest tests/test_mindmap_skeleton.py -v` → PASS.
-- [ ] **Step 5: Commit** — `git commit -am "feat(mindmap): stage-0 skeleton builder (headings → tree-sections → tfidf clusters)"` (chỉ add file của task).
+- [x] **Step 4: Chạy pass** — `python -m pytest tests/test_mindmap_skeleton.py -v` → PASS.
+- [x] **Step 5: Commit** — `git commit -am "feat(mindmap): stage-0 skeleton builder (headings → tree-sections → tfidf clusters)"` (chỉ add file của task).
 
 ### Task 4: Input collector (monolith gom input)
 
@@ -493,7 +505,7 @@ def build_skeleton(mm_input: dict) -> tuple[list[dict], str]:
 - Consumes: `chunk_text_store.get_text(int)`, `canonical_source_stem`, `app.domains.memory.tree._load_memory_trees()`.
 - Produces: `collect_mindmap_input(index_meta_path: Path, source_names: list[str]) -> dict` trả `mm_input` đúng shape Task 3 + key `"sources"` = canonical stems. Sub-chunk merge theo `parent_id` (sort `sub_order`), `chunk_keys` gom mọi id gốc. Logic khớp nguồn MIRROR `worker.collect_chunks_for_sources` (ưu tiên `source_stem`, fallback `video`).
 
-- [ ] **Step 1: Viết test fail**
+- [x] **Step 1: Viết test fail**
 
 ```python
 # BE/tests/test_mindmap_input_collector.py
@@ -546,9 +558,9 @@ def test_title_single_vs_multi(tmp_path, monkeypatch):
     assert out["title"].startswith("Tổng hợp:")
 ```
 
-- [ ] **Step 2: Chạy fail** → FAIL.
+- [x] **Step 2: Chạy fail** → FAIL.
 
-- [ ] **Step 3: Implement `input_collector.py`**
+- [x] **Step 3: Implement `input_collector.py`**
 
 ```python
 """Gom input mindmap TẠI MONOLITH — worker/service không tự đọc đĩa (spec §4.1)."""
@@ -645,8 +657,8 @@ def collect_mindmap_input(index_meta_path: Path, source_names: list[str]) -> dic
             "chunks": chunks, "tree_sections": _load_tree_sections(wanted)}
 ```
 
-- [ ] **Step 4: Chạy pass** — `python -m pytest tests/test_mindmap_input_collector.py -v` → PASS.
-- [ ] **Step 5: Commit** — `git commit -m "feat(mindmap): input collector — monolith gathers chunks/headings/tree-sections"` (add đúng file task).
+- [x] **Step 4: Chạy pass** — `python -m pytest tests/test_mindmap_input_collector.py -v` → PASS.
+- [x] **Step 5: Commit** — `git commit -m "feat(mindmap): input collector — monolith gathers chunks/headings/tree-sections"` (add đúng file task).
 
 ### Task 5 [CODEX]: sqlite store `mindmaps.sqlite` + migrate json
 
@@ -666,7 +678,7 @@ def collect_mindmap_input(index_meta_path: Path, source_names: list[str]) -> dic
 
 Bảng: `mindmaps(id TEXT PRIMARY KEY, content_hash TEXT, sources_json TEXT, created_at TEXT, record_json TEXT)` + `CREATE INDEX IF NOT EXISTS idx_mm_hash ON mindmaps(content_hash)`. Pattern connection/lock: MIRROR `app/domains/jobs/jobs_store.py` (threading.Lock, WAL, mkdir parent). `sources_json` lưu JSON list stems đã canonical (`canonical_source_stem`); `delete_by_source` so khớp bằng cách load list và so phần tử — KHÔNG dùng `LIKE` trên chuỗi thô.
 
-- [ ] **Step 1: Viết test fail**
+- [x] **Step 1: Viết test fail**
 
 ```python
 # BE/tests/test_mindmap_store.py
@@ -718,10 +730,10 @@ def test_migrate_from_json_idempotent(tmp_path, monkeypatch):
     assert rec["schema_version"] == 1 and rec["id"] == "old1"
 ```
 
-- [ ] **Step 2: Chạy fail** → FAIL.
-- [ ] **Step 3: Implement** theo interface trên (mirror jobs_store pattern; `get_by_hash` bỏ qua hash rỗng; `list_records` ORDER BY created_at DESC; migrate map `createdAt`→`created_at` nếu thiếu).
-- [ ] **Step 4: Chạy pass** — `python -m pytest tests/test_mindmap_store.py -v` → PASS.
-- [ ] **Step 5: Commit** — `git commit -m "feat(mindmap): sqlite store + one-time migration from mindmaps.json"`.
+- [x] **Step 2: Chạy fail** → FAIL.
+- [x] **Step 3: Implement** theo interface trên (mirror jobs_store pattern; `get_by_hash` bỏ qua hash rỗng; `list_records` ORDER BY created_at DESC; migrate map `createdAt`→`created_at` nếu thiếu).
+- [x] **Step 4: Chạy pass** — `python -m pytest tests/test_mindmap_store.py -v` → PASS.
+- [x] **Step 5: Commit** — `git commit -m "feat(mindmap): sqlite store + one-time migration from mindmaps.json"`.
 
 ### Task 6 [CODEX]: jobs_store — cờ cancel
 
@@ -732,7 +744,7 @@ def test_migrate_from_json_idempotent(tmp_path, monkeypatch):
 **Interfaces:**
 - Produces: `request_cancel(job_id: str) -> None`, `is_cancel_requested(job_id: str) -> bool`. Column mới `cancel_requested INT DEFAULT 0` thêm qua `_ensure_job_columns` (ALTER TABLE nếu thiếu — mirror `token_buffer`). `get_job` trả thêm key `"cancel_requested": bool`.
 
-- [ ] **Step 1: Viết test fail**
+- [x] **Step 1: Viết test fail**
 
 ```python
 # BE/tests/test_jobs_cancel.py
@@ -752,10 +764,10 @@ def test_cancel_unknown_job_safe(tmp_path, monkeypatch):
     assert js.is_cancel_requested("khong_ton_tai") is False
 ```
 
-- [ ] **Step 2: Chạy fail** → FAIL.
-- [ ] **Step 3: Implement** — thêm cột trong `_ensure_job_columns`; `request_cancel` = UPDATE `cancel_requested=1`; `is_cancel_requested` = SELECT, None → False; `get_job` SELECT thêm cột.
-- [ ] **Step 4: Chạy pass** — `python -m pytest tests/test_jobs_cancel.py -v` → PASS (và `tests/test_query.py` vẫn xanh — get_job đổi shape additive).
-- [ ] **Step 5: Commit** — `git commit -m "feat(jobs): cooperative cancel flag (cancel_requested)"`.
+- [x] **Step 2: Chạy fail** → FAIL.
+- [x] **Step 3: Implement** — thêm cột trong `_ensure_job_columns`; `request_cancel` = UPDATE `cancel_requested=1`; `is_cancel_requested` = SELECT, None → False; `get_job` SELECT thêm cột.
+- [x] **Step 4: Chạy pass** — `python -m pytest tests/test_jobs_cancel.py -v` → PASS (và `tests/test_query.py` vẫn xanh — get_job đổi shape additive).
+- [x] **Step 5: Commit** — `git commit -m "feat(jobs): cooperative cancel flag (cancel_requested)"`.
 
 ### Task 7: Stage 1 — Enrich (LLM song song theo nhánh)
 
@@ -767,7 +779,7 @@ def test_cancel_unknown_job_safe(tmp_path, monkeypatch):
 - Consumes: `jsonrepair.repair_json_text`, `schema.NodeV2`, `ask_ai` (từ `app.clients.llm_factory`, monkeypatch được ở module enrich).
 - Produces: `enrich_branches(mm_input, skeleton_nodes, *, model, timeout_sec=120.0, max_workers=2, progress_cb=None, cancel_cb=None) -> tuple[list[dict], bool]` — trả (nodes hoàn chỉnh, `degraded`). Nhánh = con trực tiếp của root có `kind=="section"`. Mỗi nhánh 1 LLM call; fail/timeout nhánh nào → GIỮ nguyên skeleton nhánh đó và set degraded=True; `cancel_cb()` True → dừng ngay trả (nodes hiện có, degraded hiện có). Env đọc tại call-site: `MINDMAP_MODEL` (default `qwen2.5:14b`), `MINDMAP_LLM_TIMEOUT_SEC` (default 120), `MINDMAP_ENRICH_PARALLEL` (default 2).
 
-- [ ] **Step 1: Viết test fail**
+- [x] **Step 1: Viết test fail**
 
 ```python
 # BE/tests/test_mindmap_enrich.py
@@ -819,9 +831,9 @@ def test_enrich_respects_cancel(monkeypatch):
     assert calls["n"] == 0                       # huỷ trước khi gọi
 ```
 
-- [ ] **Step 2: Chạy fail** → FAIL.
+- [x] **Step 2: Chạy fail** → FAIL.
 
-- [ ] **Step 3: Implement `enrich.py`**
+- [x] **Step 3: Implement `enrich.py`**
 
 ```python
 """Stage 1 — enrich từng nhánh top-level bằng LLM (song song, mỗi nhánh 1 call)."""
@@ -944,8 +956,8 @@ def enrich_branches(mm_input: dict, skeleton_nodes: list[dict], *, model: str,
     return sanitize_nodes(nodes), degraded
 ```
 
-- [ ] **Step 4: Chạy pass** — `python -m pytest tests/test_mindmap_enrich.py -v` → PASS.
-- [ ] **Step 5: Commit** — `git commit -m "feat(mindmap): stage-1 branch enrichment (parallel, degrade-not-fail, cancel-aware)"`.
+- [x] **Step 4: Chạy pass** — `python -m pytest tests/test_mindmap_enrich.py -v` → PASS.
+- [x] **Step 5: Commit** — `git commit -m "feat(mindmap): stage-1 branch enrichment (parallel, degrade-not-fail, cancel-aware)"`.
 
 ### Task 8: Stage 2 — Relations (1 LLM call)
 
@@ -957,7 +969,7 @@ def enrich_branches(mm_input: dict, skeleton_nodes: list[dict], *, model: str,
 - Consumes: `jsonrepair`, `schema.validate_relations`, `ask_ai`.
 - Produces: `extract_relations(nodes: list[dict], *, model: str, timeout_sec: float = 120.0, cancel_cb=None) -> tuple[list[dict], bool]` — (relations đã validate, degraded). `SKIP_MODEL_LOAD=1` hoặc <2 section → `([], False)`.
 
-- [ ] **Step 1: Viết test fail**
+- [x] **Step 1: Viết test fail**
 
 ```python
 # BE/tests/test_mindmap_relations.py
@@ -991,9 +1003,9 @@ def test_relations_skipped_when_too_few_sections():
     assert out == [] and degraded is False
 ```
 
-- [ ] **Step 2: Chạy fail** → FAIL.
+- [x] **Step 2: Chạy fail** → FAIL.
 
-- [ ] **Step 3: Implement `relations.py`**
+- [x] **Step 3: Implement `relations.py`**
 
 ```python
 """Stage 2 — trích quan hệ chéo giữa các nhánh (1 LLM call, degrade-not-fail)."""
@@ -1035,8 +1047,8 @@ def extract_relations(nodes: list[dict], *, model: str, timeout_sec: float = 120
         ex.shutdown(wait=False)
 ```
 
-- [ ] **Step 4: Chạy pass** — `python -m pytest tests/test_mindmap_relations.py -v` → PASS.
-- [ ] **Step 5: Commit** — `git commit -m "feat(mindmap): stage-2 cross-branch relations extraction"`.
+- [x] **Step 4: Chạy pass** — `python -m pytest tests/test_mindmap_relations.py -v` → PASS.
+- [x] **Step 5: Commit** — `git commit -m "feat(mindmap): stage-2 cross-branch relations extraction"`.
 
 ### Task 9: MindmapState v2 + graph 5 node + wiring + factory
 
@@ -1071,7 +1083,7 @@ def extract_relations(nodes: list[dict], *, model: str, timeout_sec: float = 120
   - Skeleton node ghi preview: `jobs_update(job_id, result={"partial": {"nodes": skeleton, "title": mm_input["title"]}})`.
   - `wiring.build_graphs`: THAY 2 tham số `run_mindmap_generation`, `append_mindmap` bằng `collect_mindmap_input`, `mindmap_pipeline`, `persist_mindmap`.
 
-- [ ] **Step 1: Viết lại `tests/test_mindmap_graph.py` (test dựng graph THẬT + chạy với pipeline stub)**
+- [x] **Step 1: Viết lại `tests/test_mindmap_graph.py` (test dựng graph THẬT + chạy với pipeline stub)**
 
 ```python
 # BE/tests/test_mindmap_graph.py — graph THẬT, pipeline stub (bài học conftest-mock)
@@ -1149,9 +1161,9 @@ def test_degraded_stage_flows_to_result(tmp_path):
     assert set(out["result"]["generator"]["missing"]) == {"enrich", "relations"}
 ```
 
-- [ ] **Step 2: Chạy fail** → FAIL (build_mindmap_graph signature cũ).
+- [x] **Step 2: Chạy fail** → FAIL (build_mindmap_graph signature cũ).
 
-- [ ] **Step 3: Implement** — sửa `state.py` (MindmapState như Interfaces; XOÁ `strategy`, `generation_mode`, `strategy_requested`); viết lại `mindmap_graph.py`:
+- [x] **Step 3: Implement** — sửa `state.py` (MindmapState như Interfaces; XOÁ `strategy`, `generation_mode`, `strategy_requested`); viết lại `mindmap_graph.py`:
 
 ```python
 # BE/app/graphs/mindmap_graph.py — 5 node skeleton-first (spec §4)
@@ -1354,8 +1366,8 @@ def get_mindmap_pipeline():
 
 `wiring.py`: đổi tham số mindmap trong `build_graphs(...)` thành `collect_mindmap_input`, `mindmap_pipeline`, `persist_mindmap` và gọi `build_mindmap_graph(data_dir=..., index_meta_path=..., jobs_update=..., collect_input=collect_mindmap_input, pipeline=mindmap_pipeline, persist_record=persist_mindmap)`. (main.py cập nhật ở Task 10 — wiring đổi trước sẽ làm main.py đỏ; nên Task 9 và 10 commit CÙNG NHAU nếu suite yêu cầu, hoặc giữ tham số cũ optional cho tới Task 10. Chọn: đổi dứt điểm, chạy suite ở Task 10.)
 
-- [ ] **Step 4: Chạy pass** — `python -m pytest tests/test_mindmap_graph.py -v` → PASS. (`tests/test_mindmap.py` cũ CHƯA đụng — worker còn nguyên.)
-- [ ] **Step 5: Commit** — `git commit -m "feat(mindmap): 5-node skeleton-first LangGraph + MindmapState v2 + pipeline factory"`.
+- [x] **Step 4: Chạy pass** — `python -m pytest tests/test_mindmap_graph.py -v` → PASS. (`tests/test_mindmap.py` cũ CHƯA đụng — worker còn nguyên.)
+- [x] **Step 5: Commit** — `git commit -m "feat(mindmap): 5-node skeleton-first LangGraph + MindmapState v2 + pipeline factory"`.
 
 ### Task 10: main.py — endpoints, job runner, bỏ dict in-memory
 
@@ -1377,7 +1389,7 @@ def get_mindmap_pipeline():
   - XOÁ: `mindmap_jobs` dict + lock + `_cleanup_old_mindmap_jobs` + `_load_mindmaps/_save_mindmaps/_append_mindmap` (thay bằng store) + `_mindmap_response` (trả record nguyên trạng — FE normalize).
   - `run_mindmap_job(job_id, source_names, force)` mới: chỉ jobs.sqlite, invoke graph với `{"job_id", "source_names", "mm_input", "content_hash", "progress": 0, "current_node": "", "error": None}`.
 
-- [ ] **Step 1: Viết test fail**
+- [x] **Step 1: Viết test fail**
 
 ```python
 # BE/tests/test_mindmap_routes.py
@@ -1429,9 +1441,9 @@ def test_list_and_delete_use_store(client, monkeypatch):
     assert client.delete("/mindmaps/nope").status_code == 404
 ```
 
-- [ ] **Step 2: Chạy fail** → FAIL.
+- [x] **Step 2: Chạy fail** → FAIL.
 
-- [ ] **Step 3: Implement trong `main.py`**
+- [x] **Step 3: Implement trong `main.py`**
 
 Helpers mới (đặt cạnh khối mindmap cũ):
 
@@ -1504,17 +1516,17 @@ _graphs = _build_graphs(
 
 với `from app.clients.mindmap_factory import get_mindmap_pipeline as _get_mindmap_pipeline`. Startup: `try: mindmap_store.migrate_from_json(MINDMAPS_PATH)\nexcept Exception: pass`. Xoá code chết theo Interfaces (dict, cleanup, helpers json).
 
-- [ ] **Step 4: Chạy TOÀN suite** — `python -m pytest tests/ -v` → các test mindmap cũ đụng route/graph cũ sẽ đỏ: sửa/xoá NGAY trong task này: `test_mindmap_timeout.py` (test job-timeout logic đã xoá → XOÁ file), phần route trong `test_mindmap.py` nếu tham chiếu `_append_mindmap`/`mindmap_jobs` (cập nhật sang store). `test_mindmap.py::collect_chunks_for_sources`-tests và `test_mindmap_source_match.py` vẫn xanh (worker chưa đụng). Suite phải XANH trước khi commit.
-- [ ] **Step 5: Commit** — `git commit -m "feat(mindmap): cache-first generate, real cancel, sqlite-backed routes, single job store"`.
+- [x] **Step 4: Chạy TOÀN suite** — `python -m pytest tests/ -v` → các test mindmap cũ đụng route/graph cũ sẽ đỏ: sửa/xoá NGAY trong task này: `test_mindmap_timeout.py` (test job-timeout logic đã xoá → XOÁ file), phần route trong `test_mindmap.py` nếu tham chiếu `_append_mindmap`/`mindmap_jobs` (cập nhật sang store). `test_mindmap.py::collect_chunks_for_sources`-tests và `test_mindmap_source_match.py` vẫn xanh (worker chưa đụng). Suite phải XANH trước khi commit.
+- [x] **Step 5: Commit** — `git commit -m "feat(mindmap): cache-first generate, real cancel, sqlite-backed routes, single job store"`.
 
 ### Task 11: Smoke thủ công LLM thật (gate trước khi xoá code cũ)
 
 **Files:**
 - Create: `C:\Users\VUANH~1\...\scratchpad\smoke_mindmap_v2.py` (NGOÀI repo)
 
-- [ ] **Step 1:** Viết script: gọi `collect_mindmap_input` trên index thật + `LocalMindmapPipeline` đủ 3 stage với Ollama thật (`MINDMAP_MODEL` đang cài), in record: số node, số relation, degraded, elapsed.
-- [ ] **Step 2:** Chạy với 1 doc CÓ heading và 1 doc KHÔNG heading (PDF cũ). Kiểm bằng mắt: skeleton đúng thứ tự mục; enrich không bịa chunk_refs; relations hợp lý. Nếu Ollama không chạy → ghi nhận degraded hoạt động đúng (record vẫn ra).
-- [ ] **Step 3:** Ghi kết quả đo (thời gian/nhánh, model) vào `.playbook/lessons-learned.md` phần mới (Task 18 sẽ hoàn thiện).
+- [x] **Step 1:** Viết script: gọi `collect_mindmap_input` trên index thật + `LocalMindmapPipeline` đủ 3 stage với Ollama thật (`MINDMAP_MODEL` đang cài), in record: số node, số relation, degraded, elapsed.
+- [x] **Step 2:** Chạy với 1 doc CÓ heading và 1 doc KHÔNG heading (PDF cũ). Kiểm bằng mắt: skeleton đúng thứ tự mục; enrich không bịa chunk_refs; relations hợp lý. Nếu Ollama không chạy → ghi nhận degraded hoạt động đúng (record vẫn ra).
+- [x] **Step 3:** Ghi kết quả đo (thời gian/nhánh, model) vào `.playbook/lessons-learned.md` phần mới (Task 18 sẽ hoàn thiện).
 
 ### Task 12 [CODEX]: Xoá máy móc cũ trong worker + tests mồ côi
 
@@ -1526,10 +1538,10 @@ với `from app.clients.mindmap_factory import get_mindmap_pipeline as _get_mind
 - Delete tests: `BE/tests/test_mindmap_timeout.py` (nếu còn), phần test strategy/mode trong `BE/tests/test_mindmap.py`, `BE/tests/test_mindmap_source_match.py` NẾU hàm nó test đã xoá (nếu `collect_chunks_for_sources` giữ thì GIỮ test).
 - Modify: `BE/app/clients/mindmap_client.py` — xoá `run_mindmap_generation_via_grpc` cũ (Task 15 thay bằng GrpcMindmapPipeline; tạm để file trống comment "sẽ thay ở per-stage RPC").
 
-- [ ] **Step 1:** `grep -rn "from services.mindmap.worker import\|worker\." BE/app BE/services BE/tests` — liệt kê call-site trước khi xoá.
-- [ ] **Step 2:** Xoá theo danh sách trên; mỗi lần xoá 1 cụm chạy `python -c "import app.main"`.
-- [ ] **Step 3:** `python -m pytest tests/ -v` → XANH toàn suite; `python -c "import app.graphs.query_graph"` OK.
-- [ ] **Step 4:** Commit — `git commit -m "refactor(mindmap): remove mode/strategy/budget/visual-LLM machinery (superseded by skeleton-first)"`.
+- [x] **Step 1:** `grep -rn "from services.mindmap.worker import\|worker\." BE/app BE/services BE/tests` — liệt kê call-site trước khi xoá.
+- [x] **Step 2:** Xoá theo danh sách trên; mỗi lần xoá 1 cụm chạy `python -c "import app.main"`.
+- [x] **Step 3:** `python -m pytest tests/ -v` → XANH toàn suite; `python -c "import app.graphs.query_graph"` OK.
+- [x] **Step 4:** Commit — `git commit -m "refactor(mindmap): remove mode/strategy/budget/visual-LLM machinery (superseded by skeleton-first)"`.
 
 ---
 
@@ -1549,8 +1561,8 @@ với `from app.clients.mindmap_factory import get_mindmap_pipeline as _get_mind
   - v1/legacy: dùng logic gộp `nodes`+`diagram` HIỆN CÓ — PORT từ `MindMapModal.jsx::normalizeHierarchyFromData` (dòng ~194-270): unify id, parent map, root detect; `relations` = diagram semantic edges (nếu có); note/chunkRefs rỗng.
   - record rác/null → `{title:"", nodes:[], relations:[], degraded:false, missing:[]}`.
 
-- [ ] **Step 1:** `cd FE && npm i -D vitest` + thêm `"test": "vitest run"` vào scripts.
-- [ ] **Step 2: Viết test fail**
+- [x] **Step 1:** `cd FE && npm i -D vitest` + thêm `"test": "vitest run"` vào scripts.
+- [x] **Step 2: Viết test fail**
 
 ```js
 // FE/src/utils/mindmapNormalize.test.js
@@ -1589,9 +1601,9 @@ describe("normalizeMindmapRecord", () => {
 });
 ```
 
-- [ ] **Step 3:** `npm test` → FAIL. Implement `mindmapNormalize.js` theo Interfaces (port logic v1 từ modal — copy, đừng viết mới).
-- [ ] **Step 4:** `npm test` → PASS; `npm run build` OK.
-- [ ] **Step 5:** Commit — `git commit -m "feat(fe): mindmap normalize v1/v2 + vitest bootstrap"`.
+- [x] **Step 3:** `npm test` → FAIL. Implement `mindmapNormalize.js` theo Interfaces (port logic v1 từ modal — copy, đừng viết mới).
+- [x] **Step 4:** `npm test` → PASS; `npm run build` OK.
+- [x] **Step 5:** Commit — `git commit -m "feat(fe): mindmap normalize v1/v2 + vitest bootstrap"`.
 
 ### Task 14: Tách `MindMapModal.jsx` → `components/mindmap/` + render v2
 
@@ -1605,10 +1617,10 @@ describe("normalizeMindmapRecord", () => {
 - MỚI trong toolbar: badge degraded — khi `record.generator.degraded`: dải mỏng "Bản đồ chưa đầy đủ (thiếu: <missing>) — Tạo lại" (nút gọi lại generate với `force: true`).
 - Quality floor: keyboard focus ring cho node, `prefers-reduced-motion` tắt animation.
 
-- [ ] **Step 1:** Tách file, modal thành shell. `npm run build` xanh sau MỖI file move.
-- [ ] **Step 2:** Chạy app (`npm run dev` + BE), mở mindmap cũ (v1 legacy trong sqlite sau migrate) → render như trước (kiểm bằng mắt).
-- [ ] **Step 3:** Tạo mindmap mới (BE v2) → thấy relations nét đứt + label; toggle ẩn/hiện; degraded banner khi tắt Ollama.
-- [ ] **Step 4:** Commit — `git commit -m "feat(fe): mindmap module split + labeled relation edges + degraded banner"`.
+- [x] **Step 1:** Tách file, modal thành shell. `npm run build` xanh sau MỖI file move.
+- [x] **Step 2:** Chạy app (`npm run dev` + BE), mở mindmap cũ (v1 legacy trong sqlite sau migrate) → render như trước (kiểm bằng mắt).
+- [x] **Step 3:** Tạo mindmap mới (BE v2) → thấy relations nét đứt + label; toggle ẩn/hiện; degraded banner khi tắt Ollama.
+- [x] **Step 4:** Commit — `git commit -m "feat(fe): mindmap module split + labeled relation edges + degraded banner"`.
 
 ### Task 15 [CODEX]: gRPC per-stage (proto + server + client)
 
@@ -1637,7 +1649,7 @@ message RelationsReply { string relations_json = 1; bool degraded = 2; }
 - Regen: `python scripts/build_proto.py` (gen vào `shared/proto/gen`, gitignored).
 - Test: `BE/tests/test_mindmap_service.py` — VIẾT LẠI: in-process grpc (mirror test cũ pattern) với `SKIP_MODEL_LOAD=1`: Skeleton trả nodes; EnrichBranches stream final event; Relations trả rỗng không degraded.
 
-- [ ] Steps: test fail → implement → `python -m pytest tests/test_mindmap_service.py -v` PASS → cập nhật docker-compose env nếu cần (không đổi service list) → commit `feat(mindmap): per-stage gRPC pipeline (stateless service, no disk access)`.
+- [x] Steps: test fail → implement → `python -m pytest tests/test_mindmap_service.py -v` PASS → cập nhật docker-compose env nếu cần (không đổi service list) → commit `feat(mindmap): per-stage gRPC pipeline (stateless service, no disk access)`.
 
 ### Task 16: Evidence drawer + skeleton preview + cancel (FE)
 
@@ -1651,10 +1663,10 @@ message RelationsReply { string relations_json = 1; bool degraded = 2; }
 - Skeleton preview: khi poll `mindmap-status` trả `partial` → render ngay bằng normalize (nodes-only); node có class "đang thở" (CSS pulse nhẹ, tắt khi `prefers-reduced-motion`). Khi `status done` → render record đầy đủ.
 - Cancel: nút Huỷ trong progress UI gọi `cancelMindmap(jobId)` rồi dừng polling; status "cancelled" → toast "Đã huỷ tạo sơ đồ".
 
-- [ ] **Step 1:** Viết `EvidenceDrawer` + api helpers; `npm run build` xanh.
-- [ ] **Step 2:** Manual: click node có chunkRefs → thấy trích đoạn thật; click node skeleton (chưa enrich) → drawer ghi "Chưa có bằng chứng — đang làm giàu".
-- [ ] **Step 3:** Manual: bấm Tạo → khung xương hiện ~1-2s; Huỷ giữa chừng → job cancelled ở BE (`sqlite3 BE/jobs.sqlite "select status from jobs order by updated_at desc limit 1"` = cancelled), KHÔNG có record mới trong mindmaps.sqlite.
-- [ ] **Step 4:** Commit — `git commit -m "feat(fe): evidence drawer + skeleton preview + real cancel"`.
+- [x] **Step 1:** Viết `EvidenceDrawer` + api helpers; `npm run build` xanh.
+- [x] **Step 2:** Manual: click node có chunkRefs → thấy trích đoạn thật; click node skeleton (chưa enrich) → drawer ghi "Chưa có bằng chứng — đang làm giàu".
+- [x] **Step 3:** Manual: bấm Tạo → khung xương hiện ~1-2s; Huỷ giữa chừng → job cancelled ở BE (`sqlite3 BE/jobs.sqlite "select status from jobs order by updated_at desc limit 1"` = cancelled), KHÔNG có record mới trong mindmaps.sqlite.
+- [x] **Step 4:** Commit — `git commit -m "feat(fe): evidence drawer + skeleton preview + real cancel"`.
 
 ### Task 17 [CODEX]: Fullscreen overlay + export PNG
 
@@ -1664,13 +1676,13 @@ message RelationsReply { string relations_json = 1; bool degraded = 2; }
 
 - Overlay: modal container đổi thành fixed inset-0 z-50, nền theo theme Phòng đọc (dùng token màu nền hiện có của app, không hardcode hex mới), nút đóng góc phải, `Esc` đóng.
 - Export PNG: nút trong toolbar — dùng `html-to-image.toPng` trên viewport ReactFlow (pattern chính thức ReactFlow v11: `getRectOfNodes` + `getTransformForBounds`), tên file `mindmap-<title>-<yyyymmdd>.png`, nền đặc (không transparent).
-- [ ] Steps: implement → `npm run build` xanh → manual export ra file mở được → commit `feat(fe): fullscreen mindmap overlay + png export`.
+- [x] Steps: implement → `npm run build` xanh → manual export ra file mở được → commit `feat(fe): fullscreen mindmap overlay + png export`.
 
 ### Task 18: Docs + playbook (đóng dự án)
 
 **Files:**
 - Modify: `docs/MINDMAP_WORKFLOW.md`, `docs/QUY_TRINH_TAO_SO_DO_TU_DUY.md` (viết lại phần pipeline theo skeleton-first; XOÁ mô tả cache cũ không tồn tại), `.playbook/lessons-learned.md` (mục mới: skeleton-first — root cause pipeline cũ, số đo smoke Task 11, prevention: đổi prompt/logic → bump `PIPELINE_VERSION`), `.playbook/known-issues.md` (xoá/annotate các mục hết hiệu lực về mindmap timeout TEMP nếu đã lỗi thời).
-- [ ] Viết → `python -m pytest tests/ -v` xanh lần cuối toàn suite → commit `docs(mindmap): rewrite workflow docs + playbook for skeleton-first v2`.
+- [x] Viết → `python -m pytest tests/ -v` xanh lần cuối toàn suite → commit `docs(mindmap): rewrite workflow docs + playbook for skeleton-first v2`.
 
 ---
 

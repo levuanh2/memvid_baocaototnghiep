@@ -414,7 +414,14 @@ eventSource.onmessage = (event) => {
 ```bash
 # Vector Store
 USE_LC_VECTOR_STORE=true        # Dùng LangChain VectorStore
-WEB_CONCURRENCY=2              # gunicorn workers cho backend; giữ /health sống khi 1 worker bận
+WEB_CONCURRENCY=1              # PHẢI là 1. Hai thứ giữ trạng thái TRONG TIẾN TRÌNH:
+                               #   - HITL resume metadata (pause và resume phải cùng process)
+                               #   - dict dedupe job quiz (_QUIZ_INFLIGHT trong main.py)
+                               # Đặt 2+ thì resume tìm không thấy pause, và bấm "Tạo quiz"
+                               # nhiều lần lại ra nhiều job tranh 1 slot LLM.
+                               # (Kế hoạch 2026-07-04 từng đề xuất =2 để giữ /health sống khi
+                               #  rebuild index; nay rebuild chỉ còn là fallback nên lý do đó
+                               #  đã hết, còn hai ràng buộc trên thì chưa.)
 
 # Retrieval
 USE_LC_ENSEMBLE=true           # Dùng LangChain Ensemble Retriever
