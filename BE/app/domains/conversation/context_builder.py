@@ -80,7 +80,7 @@ def build_recent_conversation_context(
         # Owner-enforced: a non-owner sees no context (get_messages returns []),
         # so this never reads another user's turns.
         conv = _conv.get_conversation(conversation_id)
-        reset_at = conv.get("context_reset_at") if conv else None
+        reset_at = moc_chan(conv)
         # Only turns created after the last Clear-context.
         msgs = _conv.get_messages(
             conversation_id, after_ts=reset_at, user_id=user_id, enforce_owner=enforce_owner
@@ -147,3 +147,24 @@ def build_recent_conversation_context(
         context_signature=context_signature,
         is_empty=False,
     )
+
+
+def moc_chan(conv: Optional[dict]) -> Optional[float]:
+    """Mốc thời gian mà ngữ cảnh chỉ được lấy các lượt SAU nó.
+
+    Hai thứ đều dựng mốc, và trước audit vòng 8 chỉ một thứ được đọc:
+
+    - `context_reset_at` — người dùng bấm "Xóa ngữ cảnh".
+    - `deleted_at`       — người dùng bấm "Xóa lịch sử chat". Ghi ở đúng một chỗ
+      (`store.soft_delete`) và **đọc ở không chỗ nào**, nên hội thoại đã xoá vẫn nhận
+      tin nhắn mới và lượt cũ vẫn chảy vào prompt.
+
+    Lấy cái muộn hơn. `ensure_conversation` cũng đẩy `context_reset_at` lên khi hàng
+    sống lại, nhưng đường đọc không được phụ thuộc vào việc đó đã chạy hay chưa —
+    hàng bị xoá rồi để yên vẫn phải sạch.
+    """
+    if not conv:
+        return None
+    moc = [t for t in (conv.get("context_reset_at"), conv.get("deleted_at"))
+           if isinstance(t, (int, float))]
+    return max(moc) if moc else None

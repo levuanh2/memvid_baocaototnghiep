@@ -1,6 +1,5 @@
 from __future__ import annotations
 
-from numbers import Real
 from typing import Any
 
 from app.domains.retrieval.citation import bo_nhan_nguon
@@ -20,26 +19,19 @@ def _chunk_text(chunk: Any) -> str:
     return bo_nhan_nguon(str(getattr(chunk, "text", "") or ""))
 
 
-def _numeric_score(chunk: Any, name: str) -> float | None:
-    value = getattr(chunk, name, None)
-    if isinstance(value, Real):
-        score = float(value)
-        return min(1.0, max(0.0, score))
-    return None
-
-
 def _relevance(query: str, chunk: Any) -> float:
     query_tokens = set(_tokenize(query))
     if not query_tokens:
         return 0.0
 
     chunk_tokens = set(_tokenize(_chunk_text(chunk)))
-    lexical = len(query_tokens & chunk_tokens) / len(query_tokens)
-
-    vector_score = _numeric_score(chunk, "vector_score")
-    bm25_score = _numeric_score(chunk, "bm25_score")
-    extras = [score for score in (vector_score, bm25_score) if score is not None]
-    return max([lexical, *extras], default=lexical)
+    # Chỉ lexical. Audit vòng 8 đã gỡ nhánh gộp `vector_score`/`bm25_score`: nhánh đó
+    # có 0 caller production (query_graph luôn truyền list[str]) và là một cái bẫy —
+    # `hybrid` gán `vector_score=dist` từ `IndexFlatL2`, tức KHOẢNG CÁCH (nhỏ = tốt),
+    # trong khi chỗ này gộp bằng `max(...)` (lớn = tốt). Nối lại là mọi chunk thành
+    # "correct", vì `min(1.0, ...)` kẹp mọi khoảng cách > 1 thành liên quan tuyệt đối.
+    # Muốn dùng điểm vector thật thì phải đổi dấu và chuẩn hoá trước, không phải kẹp.
+    return len(query_tokens & chunk_tokens) / len(query_tokens)
 
 
 def grade_documents(
@@ -54,8 +46,10 @@ def grade_documents(
         return "wrong"
 
     rels = [_relevance(query, chunk) for chunk in chunks]
-    # Sau Rerank, chunk là str (mất vector/bm25 score) → grade rớt về lexical thuần.
-    # Cross-encoder là tín hiệu liên quan tốt hơn lexical: fold vào nếu khớp độ dài.
+    # `query_graph` truyền list[str] ở MỌI đường (trước và sau rerank), nên grade luôn
+    # là lexical thuần. Cross-encoder là tín hiệu liên quan tốt hơn: fold vào nếu khớp
+    # độ dài. Đây là tín hiệu số DUY NHẤT được tin ở đây — nó vốn đã là điểm liên quan
+    # 0-1, không phải khoảng cách.
     if rerank_scores and len(rerank_scores) == len(rels):
         rels = [
             max(r, min(1.0, max(0.0, float(s))))

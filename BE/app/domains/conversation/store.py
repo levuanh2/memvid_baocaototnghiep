@@ -169,7 +169,14 @@ def ensure_conversation(conversation_id: str, *, active_source_scope: Any = None
                 ON CONFLICT(conversation_id) DO UPDATE SET
                     updated_at=excluded.updated_at,
                     active_source_scope=COALESCE(excluded.active_source_scope, conversations.active_source_scope),
-                    user_id=COALESCE(conversations.user_id, excluded.user_id)
+                    user_id=COALESCE(conversations.user_id, excluded.user_id),
+                    -- Hội thoại đã xoá mà lại có tin nhắn mới: người dùng đang gõ tiếp
+                    -- trong cùng phiên. Cho hàng SỐNG LẠI (bỏ cờ xoá) nhưng đẩy mốc
+                    -- chặn ngữ cảnh tới thời điểm xoá — nếu không, "xoá lịch sử chat"
+                    -- chỉ là một cái nhãn còn lượt cũ vẫn quay lại prompt.
+                    context_reset_at=NULLIF(MAX(COALESCE(conversations.context_reset_at, 0),
+                                                COALESCE(conversations.deleted_at, 0)), 0),
+                    deleted_at=NULL
                 """,
                 (conversation_id, now, now, scope, user_id),
             )

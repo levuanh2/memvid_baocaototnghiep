@@ -1,5 +1,40 @@
 # Lessons Learned
 
+## 2026-09-01 - Cột chỉ có đường ghi mà không có đường đọc thì tính năng đó chưa tồn tại
+
+- **`deleted_at` là ca mẫu.** Ghi ở đúng một chỗ, đọc ở không chỗ nào. Cột có, migration
+  có, hàm `soft_delete` có, nút trên giao diện có — và bấm nút xong thì model vẫn nhớ
+  nguyên những gì vừa được yêu cầu xoá. Với mọi cột trạng thái (`deleted_at`,
+  `archived_at`, `disabled_at`, `revoked_at`), grep **cả hai chiều**: một chiều thiếu
+  nghĩa là nút bấm đang nói dối.
+
+- **Sửa ở đường ĐỌC trước, đường ghi sau.** Cám dỗ là chữa `ensure_conversation` cho hàng
+  sống lại rồi coi như xong. Nhưng hàng bị xoá mà không ai đụng tới nữa thì vẫn phải
+  sạch — đường đọc không được phụ thuộc vào việc một đường ghi khác đã chạy hay chưa.
+  Làm cả hai, và đường đọc là đường bắt buộc.
+
+- **Mã chết trộn hai thang đo là bẫy, không phải rác.** `vector_score` là khoảng cách L2
+  (nhỏ = tốt) chảy vào một hàm gộp bằng `max` (lớn = tốt), kèm `min(1.0, …)` biến mọi
+  khoảng cách > 1 thành "liên quan tuyệt đối". Hôm nay 0 caller nên vô hại; ngày ai đó
+  nối lại thì mọi chunk đều `correct` và không có gì kêu. "Không ai gọi" chỉ đúng tới lần
+  refactor sau — gỡ hẳn, hoặc sửa cho đúng, đừng để lại.
+
+- **Giữ mã 0 caller thì phải viết ra LÝ DO, không viết ra thì nó thành nợ.**
+  `require_auth` được giữ vì `_require_app_user` trả `(uid, error_response)` nên route
+  chọn được 404 thay vì 403 ở chỗ không được lộ sự tồn tại của tài nguyên — decorator
+  không làm được. Đó là lý do kỹ thuật. Không ghi lại thì lần audit sau nó lại xuất hiện
+  trong danh sách "trừu tượng dựng xong rồi bỏ".
+
+- **Docstring đầu file là thứ người sửa đọc đầu tiên, nên nó sai là sai đắt nhất.**
+  "the app APIs stay open" đúng ở giai đoạn viết ra và sai từ lâu. Khi đổi mô hình gác
+  quyền, sửa câu mô tả cùng lúc với sửa route — nếu không, người sau đọc nó rồi kết luận
+  sai về toàn bộ mô hình bảo mật.
+
+- **Test khẳng định-cấu-trúc: bắt tham số, đừng đọc mã nguồn.** Ca "đường đọc phải chặn
+  từ mốc xoá" viết bằng `inspect.getsource` là đỏ giả mỗi khi file dịch dòng. Monkeypatch
+  hàm bị gọi rồi bắt `after_ts` vừa đúng ý hơn (đo hành vi, không đo cách viết) vừa không
+  dính bẫy `linecache`.
+
 ## 2026-09-01 - Biến dựng ra rồi không ai đọc là một lỗi, không phải rác vô hại
 
 - **`filtered_indices` là ca mẫu.** Nó được tính đúng — kể cả nhánh nới lỏng khi không có

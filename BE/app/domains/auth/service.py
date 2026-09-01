@@ -1,7 +1,12 @@
 """Auth glue: request → user resolution, sanitised user shape, validators.
 
-The @require_auth decorator is provided for FUTURE protected endpoints; it is NOT
-applied to any existing app route in this phase (the app APIs stay open).
+Route gác quyền bằng `main._require_app_user()`, KHÔNG phải bằng `@require_auth`:
+`_require_app_user` trả `(uid, error_response)` nên route quyết định được mã lỗi
+(404 thay vì 403 ở những chỗ không được lộ sự tồn tại), còn decorator thì không.
+
+`require_auth` dưới đây có **0 caller** và giữ lại làm sẵn cho endpoint tương lai
+muốn kiểu gác đơn giản. Docstring cũ khẳng định các app API vẫn còn mở — đúng ở
+giai đoạn viết ra, sai từ khi route bắt đầu gọi `_require_app_user`.
 """
 
 from __future__ import annotations

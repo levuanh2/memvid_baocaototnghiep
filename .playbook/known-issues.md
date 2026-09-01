@@ -1,5 +1,94 @@
 # Known Issues
 
+## (ĐÃ SỬA 2026-09-01) Một khẩu súng đã lên đạn, một tài liệu nói ngược, một cờ xoá không ai đọc
+
+Audit vòng 8, BE#10 và #11. Không cái nào đang hại ai **hôm nay** — đó chính là lý do
+chúng sống lâu.
+
+### BE#10 — nhánh điểm số chết trong `grading.py`, và nó đảo ngược
+
+`_numeric_score` + hai field `vector_score` / `bm25_score`: **0 caller production**
+(`query_graph` truyền `list[str]` ở mọi đường), **0 test nào đặt hai field đó**.
+
+Nhưng nếu ai nối lại:
+
+```python
+# hybrid.py:428 — dist từ faiss.IndexFlatL2  => KHOẢNG CÁCH, nhỏ = tốt
+RetrievedChunk(..., vector_score=dist)
+
+# grading.py — gộp bằng max(), lớn = tốt, và kẹp trần 1.0
+return max([lexical, *extras], default=lexical)
+```
+
+Hai quy ước ngược nhau gặp nhau: `min(1.0, max(0.0, score))` biến **mọi** khoảng cách
+lớn hơn 1 thành `1.0` — "liên quan tuyệt đối". Chunk càng XA càng được chấm cao, và mọi
+chunk đều ra `correct`.
+
+Comment cũ còn ghi *"Sau Rerank, chunk là str"* — sai: nó là `str` từ **trước** rerank,
+`RetrieveFAISS` đã đổi rồi. Và `tests/test_grading.py` truyền `RetrievedChunk` — một hình
+dạng runtime không bao giờ sinh ra.
+
+**Fix:** gỡ hẳn `_numeric_score` và nhánh gộp. `_relevance` giờ thuần lexical, đúng như
+production vẫn chạy. `rerank_scores` giữ nguyên — nó là tín hiệu số DUY NHẤT được tin ở
+đây, và nó vốn đã là điểm liên quan 0-1 chứ không phải khoảng cách. Comment ghi rõ: muốn
+dùng điểm vector thật thì phải **đổi dấu và chuẩn hoá**, không phải kẹp trần.
+
+### BE#11a — docstring `auth/service.py` nói ngược với mã
+
+*"The @require_auth decorator is provided for FUTURE protected endpoints; it is NOT
+applied to any existing app route in this phase (the app APIs stay open)."*
+
+Route giờ gác bằng `_require_app_user()`. Câu đó đúng ở giai đoạn viết ra, sai từ khi
+route bắt đầu gọi hàm kia — và nó nằm ngay đầu file mà người sửa auth đọc đầu tiên.
+
+`require_auth` vẫn 0 caller. **Giữ lại nhưng nói thật vì sao:** `_require_app_user` trả
+`(uid, error_response)` nên route quyết định được mã lỗi (404 thay vì 403 ở những chỗ
+không được lộ sự tồn tại của tài nguyên) — decorator không làm được điều đó. Đây là lý do
+kỹ thuật, không phải bỏ quên.
+
+### BE#11b — "Xóa lịch sử chat" chỉ là một cái nhãn
+
+`conversations.deleted_at`: ghi ở **đúng một chỗ** (`store.soft_delete`), đọc ở **không
+chỗ nào**.
+
+- `get_conversation` trả nó ra nhưng không route nào lọc.
+- `ensure_conversation` upsert không xoá nó → hội thoại "đã xoá" vẫn nhận tin nhắn mới.
+- `context_builder` chỉ đọc `context_reset_at` → lượt trước khi xoá **vẫn chảy vào
+  prompt**.
+
+Nên bấm "Xóa lịch sử chat" xong, gõ tiếp trong cùng phiên, và model vẫn nhớ những gì vừa
+được yêu cầu xoá.
+
+**Fix hai đầu:**
+
+1. `context_builder.moc_chan(conv)` — lấy mốc **muộn hơn** giữa `context_reset_at` và
+   `deleted_at`. Đường đọc không được phụ thuộc vào việc hàng đã được "sống lại" hay
+   chưa: hàng bị xoá rồi để yên vẫn phải sạch.
+2. `ensure_conversation` — hàng đã xoá mà có tin nhắn mới nghĩa là người dùng đang gõ
+   tiếp: cho hàng sống lại (`deleted_at=NULL`) nhưng **đẩy `context_reset_at` tới thời
+   điểm xoá**. Không làm bước này thì hàng mang cờ xoá vĩnh viễn trong khi vẫn tích tin
+   nhắn — và bất kỳ đường đọc nào sau này bắt đầu tôn trọng `deleted_at` sẽ âm thầm giấu
+   mất dữ liệu đang sống.
+
+### Regression
+
+`BE/tests/test_audit_vong8_hai_muc_cuoi.py` — 7 test: `_numeric_score` phải biến mất,
+chunk lạc đề mang `vector_score=42.0` không được thành `correct`, chunk liên quan vẫn
+`correct`, docstring auth hết khẳng định app API đang mở, hội thoại xoá rồi nhận tin mới
+phải sống lại kèm mốc chặn, `moc_chan` lấy đúng cái muộn hơn, và đường đọc chặn đúng từ
+mốc xoá — bắt tham số `after_ts` chứ **không** đọc mã nguồn bằng `inspect.getsource`.
+
+### Phòng ngừa
+
+**Mã chết mang hai quy ước ngược nhau là bẫy, không phải rác.** "Không ai gọi" chỉ đúng
+tới lần refactor sau. Khi thấy một nhánh 0 caller mà nó trộn hai thang đo (khoảng cách vs
+tương đồng, giây vs mili-giây, 0-1 vs 0-100), gỡ hẳn — hoặc sửa cho đúng — chứ đừng để
+lại cho người sau tin rằng nó đã được kiểm.
+
+**Một cột chỉ có đường ghi mà không có đường đọc thì tính năng đó chưa tồn tại.** Grep cả
+hai chiều cho mọi cột trạng thái: `deleted_at`, `archived_at`, `disabled_at`. Ghi được mà
+không ai đọc nghĩa là nút bấm trên giao diện đang nói dối.
+
 ## (ĐÃ SỬA 2026-09-01) Bốn chỗ hệ thống mất dấu: memory tree, sổ cái job, quiz đã xoá, câu chưa chấm
 
 Audit vòng 8, BE#5–#8.
