@@ -13,6 +13,16 @@ known-issues 2026-07-17.
     short_answer_grading   status=running    cancel_requested=True
     query                  status=running    cancel_requested=True
     summary                status=running    cancel_requested=True   <- chỉ cái này có ai ack
+
+**Cập nhật 2026-09-01 — `query` đã chuyển sang nhóm ACK.** `build_query_graph` nhận
+`da_huy` và `_boc_huy` bọc CẢ 18 node, đọc cờ trước mỗi node; `_query_da_huy` nối qua
+`wiring.py` vào graph production; `_finalize_query_job` ghi `status="cancelled"` chứ
+không rơi vào nhánh lỗi. Xem `tests/test_query_cancel.py` (11 test).
+
+Trần đã biết và KHÔNG được hứa quá: huỷ chỉ tới được ở RANH GIỚI node. Node đang chạy là
+một request HTTP tới Ollama, Python không cắt ngang được — worst case là thời lượng node
+đó (`AI_TIMEOUT_SEC=180` với GenerateAnswer). Nhưng đó vẫn là ack thật: job dừng và nhả
+slot LLM, khác hẳn `ingest`/`short_answer_grading` vốn không đọc cờ ở đâu cả.
 """
 
 import uuid
@@ -45,7 +55,7 @@ def job_factory(client):
 
 
 @pytest.mark.parametrize("job_type", ["mindmap", "summary", "quiz_generation",
-                                      "study_map_generation"])
+                                      "study_map_generation", "query"])
 def test_loai_co_ack_thi_huy_duoc(client, job_factory, job_type):
     jid = job_factory(job_type)
     r = client.post(f"/api/jobs/{jid}/cancel")
@@ -54,7 +64,7 @@ def test_loai_co_ack_thi_huy_duoc(client, job_factory, job_type):
     assert jobs_store.is_cancel_requested(jid) is True
 
 
-@pytest.mark.parametrize("job_type", ["ingest", "query", "short_answer_grading"])
+@pytest.mark.parametrize("job_type", ["ingest", "short_answer_grading"])
 def test_loai_khong_ack_thi_tu_choi_thay_vi_hua_suong(client, job_factory, job_type):
     """409 + cờ KHÔNG bật. Bật cờ mà không ai đọc là cách tạo ra 'Đang huỷ…' kẹt."""
     jid = job_factory(job_type)
