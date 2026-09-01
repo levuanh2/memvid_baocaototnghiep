@@ -1,5 +1,86 @@
 # Known Issues
 
+## (ĐÃ SỬA 2026-09-02) Quiz ra 2/10: ba nguyên nhân, và giả thuyết ban đầu của tôi sai
+
+Người dùng báo *"Ra được 2 câu trên 10 câu đã chọn"*. Job `e31ace34`:
+
+```
+quiz_bu_cau job_id=e31ace34 co=2 thieu=8
+quiz_bu_cau_xong tong=2                  <- vòng bù thêm được 0 câu
+FR-13.7  Trùng câu hỏi đã nhận   12 câu
+FR-13.2  Đáp án không khớp        2 câu
+```
+
+### Nguyên nhân 1 — lượt bù bị giấu mất 12/14 thứ model vừa viết
+
+Prompt lượt bù chỉ liệt kê câu **được nhận**:
+
+```
+Đã có sẵn 2 câu dưới đây. Ra thêm 8 câu KHÁC HẲN, không lặp ý:
+- Cau A?
+- Cau B?
+```
+
+12 câu bị loại không có trong danh sách, nên model không biết mình vừa viết chúng và
+viết lại y hệt → lại bị loại vì trùng. Bảo model "đừng lặp" trong khi giấu phần lớn thứ
+nó vừa viết là **thông tin thiếu**, không phải model bướng.
+
+**Fix:** `gom_da_co(accepted, tho)` — gộp câu được nhận + câu thô lượt trước, khử trùng,
+câu được nhận đứng trước (vừa là thứ cần tránh, vừa là ví dụ tốt về hình dạng đạt yêu cầu).
+
+### Nguyên nhân 2 — JSON hỏng thì VỨT CẢ LƯỢT
+
+Đây là cái đắt nhất, và **phép đo đã bác bỏ giả thuyết đầu tiên của tôi**.
+
+Tôi nghi "output vượt trần `num_predict=3000`". Đo thật trên gemma2:2b, cùng ngữ liệu
+3801 ký tự:
+
+```
+ xin  ký tự ra   ~token  câu JSON  kết quả
+   3      2019      747         3  OK
+   5      2485      920         0  HỎNG      <- ca hỏng là ca NGẮN NHẤT
+   8      5029     1862         7  OK
+```
+
+Một câu tốn ~230 token → 10 câu ≈ 2300–2500, **nằm trong** trần 3000. Hỏng **không theo
+độ dài**. Nếu tin giả thuyết mà nâng `num_predict` hoặc cắt ngữ liệu thì đã đánh đổi ngân
+sách để chữa một thứ không hỏng.
+
+Sự thật: model nhỏ thỉnh thoảng trả JSON không hợp lệ, ngẫu nhiên. Và hậu quả mới là chỗ
+đắt — `repair_json_text` đòi một khối `{...}` **cân bằng cho cả tài liệu**, nên 2485 ký tự
+output bị ném đi **toàn bộ** dù bên trong có những object câu hỏi đã viết xong đàng hoàng.
+Người dùng nhận 0 câu sau một phút CPU.
+
+**Fix:** `vot_cau_hoan_chinh(raw)` — quét có nhận biết chuỗi, dùng **NGĂN XẾP** chứ không
+phải bộ đếm mức ngoài cùng. Khi output bị cắt thì object ngoài cùng (`{"questions": […`)
+không bao giờ đóng, nên gom ở mức 0 sẽ ra rỗng — đúng thứ cần cứu nằm **lồng bên trong**.
+Parse riêng từng object cân bằng, chỉ giữ object có `question_text` (object `meta` lồng
+bên trong cũng parse được nhưng không phải câu hỏi). Gọi TRƯỚC khi báo lỗi.
+
+### Nguyên nhân 3 — `chunk_refs` bị bỏ (75% ở lần chạy trước đó)
+
+Job `e4bfd2dd`: 9/12 câu mất vì FR-13.5. Đã siết prompt: `chunk_refs` ghi **BẮT BUỘC ở
+MỌI câu** kèm hậu quả và một dòng nói thẳng "đây là lỗi bị loại NHIỀU NHẤT" — cùng khuôn
+đã dùng cho `explanation`.
+
+### Hai chỗ tự làm hỏng rồi tự sửa, ghi lại vì dễ lặp
+
+1. **`cat >>` đẩy hàm mới xuống DƯỚI `if __name__ == "__main__": demo()`.** Test xanh
+   (test import module, không chạy `__main__`) còn `python -m app.domains.quiz.generator`
+   thì `NameError`. **Test xanh không chứng minh module chạy được.** Kho này có lệ
+   `demo()` self-check đúng để bắt loại lỗi đó — phải chạy nó, không chỉ chạy pytest.
+2. Lỡ commit `BE/_do_ngan_sach_tam.py` (script đo tạm) ở `e6b591a`; gỡ ở `e2fca45`.
+
+### Phòng ngừa
+
+**Đo trước khi sửa — kể cả khi giả thuyết nghe rất hợp lý.** "Output vượt num_predict"
+giải thích được mọi triệu chứng, có con số ngân sách sẵn trong comment để hậu thuẫn, và
+sai. Ba dòng đo (3/5/8 câu) tốn ba phút và đổi hướng toàn bộ bản sửa.
+
+**Khi tầng phân tích cú pháp thất bại, hỏi "còn cứu được gì không" trước khi vứt.** Một
+lượt gọi LLM là một phút CPU và một lần chờ của người dùng. `json.loads` hỏng không có
+nghĩa là *mọi thứ* trong chuỗi đó đều hỏng.
+
 ## (ĐÃ SỬA 2026-09-01) CORS thiếu PATCH/PUT — mọi lần chọn đáp án đều hỏng, và log BE trông vẫn bình thường
 
 Người dùng báo: chọn đáp án trong quiz thì hiện "Không kết nối được máy chủ. Kiểm tra

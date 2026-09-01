@@ -2296,3 +2296,36 @@ Hai điều rút ra:
   **pattern tương tác** (bản đồ nhúng, thanh hành động dính đáy, dấu hiệu còn nội dung)
   chứ đừng lấy **phong cách** — thay palette/font bằng thứ vay mượn là cách nhanh nhất
   biến một sản phẩm có giọng riêng thành một sản phẩm giống mọi sản phẩm khác.
+
+## 2026-09-02 - Giả thuyết hợp lý + có số hậu thuẫn vẫn có thể sai; ba dòng đo đổi cả hướng sửa
+
+- **Ca mẫu:** quiz ra 2/10, JSON của model bị cắt. Giả thuyết "output vượt trần
+  `num_predict=3000`" giải thích được MỌI triệu chứng, và còn có sẵn một khối comment
+  ngân sách token trong `generator.py` để hậu thuẫn. Đo ba mức (3/5/8 câu) mất ba phút:
+  một câu tốn ~230 token nên 10 câu ≈ 2400 — **trong** trần; và ca hỏng lại là ca **ngắn
+  nhất** (920 token). Giả thuyết sai. Nếu tin nó, tôi đã nâng `num_predict` hoặc cắt ngữ
+  liệu — đánh đổi ngân sách để chữa một thứ không hỏng, rồi vẫn ra 2/10.
+
+- **Dấu hiệu nhận ra giả thuyết sai loại này:** nó dự đoán quan hệ ĐƠN ĐIỆU (càng dài
+  càng dễ hỏng) mà dữ liệu lại không đơn điệu (3 OK, 5 hỏng, 8 OK). Khi ba điểm đo không
+  xếp thành một đường, nguyên nhân không phải cái thang mình đang đo.
+
+- **Tầng parse thất bại: hỏi "còn cứu được gì không" trước khi vứt.** `repair_json_text`
+  đòi một khối `{...}` cân bằng cho CẢ tài liệu, nên 2485 ký tự output — trong đó có
+  những câu hỏi đã viết xong đàng hoàng — bị ném đi sạch. Một lượt gọi LLM là một phút
+  CPU và một lần chờ của người dùng; `json.loads` hỏng không có nghĩa là mọi thứ trong
+  chuỗi đó đều hỏng.
+
+- **Quét cấu trúc lồng nhau thì dùng NGĂN XẾP, đừng dùng bộ đếm mức ngoài cùng.** Bản
+  đầu của tôi chỉ gom object ở mức 0 — và khi output bị cắt thì object ngoài cùng KHÔNG
+  BAO GIỜ đóng, nên kết quả luôn rỗng. Đúng thứ cần cứu nằm lồng bên trong cái không đóng
+  được đó.
+
+- **Test xanh không chứng minh module chạy được.** `cat >>` đẩy hai hàm mới xuống dưới
+  khối `if __name__ == "__main__": demo()`; pytest xanh (nó import module) còn
+  `python -m ...` thì `NameError`. Kho này có lệ `demo()` self-check đúng để bắt lớp lỗi
+  đó — phải chạy nó, không chỉ chạy pytest.
+
+- **Bảo model "đừng lặp" thì phải cho nó thấy TẤT CẢ những gì nó đã viết.** Lượt bù chỉ
+  liệt kê câu được nhận (2), giấu 12 câu vừa bị loại — rồi ngạc nhiên vì model viết lại
+  đúng 12 câu đó. Đây là thông tin thiếu ở phía mình, không phải model bướng.
