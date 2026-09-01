@@ -112,3 +112,47 @@ def test_gom_da_co_giu_thu_tu_cau_duoc_nhan_truoc():
 
     ds = gom_da_co([{"question_text": "Đã nhận?"}], [{"question_text": "Bị loại?"}])
     assert ds[0] == "Đã nhận?"
+
+
+# ── Cứu câu hoàn chỉnh trong một mảng JSON hỏng ─────────────────────────────
+def test_vot_cau_hoan_chinh_tu_json_bi_cat():
+    """Đo 01/09: xin 5 câu -> model trả 2485 ký tự -> `json.loads` hỏng -> nhận 0 câu.
+
+    Toàn bộ output bị ném đi vì `repair_json_text` đòi một khối {...} CÂN BẰNG. Nhưng
+    trong đống đó có những object câu hỏi hoàn chỉnh, đóng ngoặc đàng hoàng — vứt chúng
+    là vứt công sức một phút CPU và bắt người dùng nhận 0 câu.
+    """
+    hong = ('```json\n{"questions": [\n'
+            '{"question_text": "Câu một?", "question_type": "true_false", '
+            '"correct_answer": "true", "explanation": "vì vậy", '
+            '"concept_tags": ["a"], "chunk_refs": ["c0"]},\n'
+            '{"question_text": "Câu hai?", "question_type": "true_false", '
+            '"correct_answer": "false", "explanation": "vì kia", '
+            '"concept_tags": ["b"], "chunk_refs": ["c1"]},\n'
+            '{"question_text": "Câu ba bị cắt giữa chừ')      # cụt ở đây
+    ds = gen.vot_cau_hoan_chinh(hong)
+    assert [q["question_text"] for q in ds] == ["Câu một?", "Câu hai?"]
+
+
+def test_vot_khong_bia_them_gi_khi_khong_co_cau_nao_tron_ven():
+    assert gen.vot_cau_hoan_chinh('{"questions": [{"question_text": "cut ngay') == []
+    assert gen.vot_cau_hoan_chinh("") == []
+    assert gen.vot_cau_hoan_chinh(None) == []
+
+
+def test_vot_bo_qua_object_khong_phai_cau_hoi():
+    """Chỉ nhặt object CÓ `question_text` — đừng nhặt nhầm object lồng bên trong."""
+    raw = ('{"meta": {"model": "x"}, "questions": ['
+           '{"question_text": "Thật?", "concept_tags": ["a"]}, {"khong": "phai cau"}]')
+    ds = gen.vot_cau_hoan_chinh(raw)
+    assert [q["question_text"] for q in ds] == ["Thật?"]
+
+
+def test_generate_questions_dung_duong_vot_khi_json_hong_ca_hai_luot():
+    """Hỏng cả hai lượt mà vẫn vớt được câu thì trả câu, đừng trả lỗi."""
+    hong = ('{"questions": [{"question_text": "Con lai duoc?", '
+            '"question_type": "true_false", "correct_answer": "true", '
+            '"explanation": "e", "concept_tags": ["t"], "chunk_refs": ["c0"]}, {"cut')
+    qs, err, _ = gen.generate_questions("ngữ liệu", {}, ask=lambda *a, **k: hong)
+    assert err is None, err
+    assert [q["question_text"] for q in qs] == ["Con lai duoc?"]

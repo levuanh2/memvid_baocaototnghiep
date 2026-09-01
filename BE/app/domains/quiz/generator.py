@@ -178,6 +178,13 @@ def generate_questions(
         # Parse được nhưng sai hình dạng — thử lại cũng không khá hơn.
         return [], "Output JSON không có mảng `questions`.", attempt
 
+    # Trước khi báo hỏng: vớt những câu TRỌN VẸN còn nằm trong đống output. Model nhỏ
+    # trả JSON hỏng khá thường xuyên (đo: 3 câu OK, 5 câu hỏng, 8 câu OK — không theo độ
+    # dài), và ném cả lượt đi nghĩa là người dùng nhận 0 câu sau một phút CPU.
+    vot = vot_cau_hoan_chinh(last_raw)
+    if vot:
+        print(f"quiz_vot_cau_tu_json_hong so_cau={len(vot)}", flush=True)
+        return vot, None, MAX_ATTEMPTS
     return [], f"Output không phải JSON hợp lệ sau {MAX_ATTEMPTS} lần: {last_raw[:300]}", MAX_ATTEMPTS
 
 
@@ -189,6 +196,90 @@ def resolve_chunk_refs(refs: Sequence[str], ref_map: Dict[str, str]) -> List[str
         if chunk_id and chunk_id not in out:
             out.append(chunk_id)
     return out
+
+
+
+def gom_da_co(accepted: Optional[Sequence[Dict[str, Any]]],
+              tho: Optional[Sequence[Any]]) -> List[str]:
+    """Mọi câu model ĐÃ VIẾT ở lượt trước — cả câu được nhận lẫn câu bị loại.
+
+    Vì sao phải gồm câu bị loại: log job e31ace34 (2026-09-01) cho thấy 2 câu được nhận
+    và 12 câu bị loại vì TRÙNG. Mười hai câu đó model đã viết ra rồi bị tầng luật loại,
+    nhưng chúng không nằm trong `da_co` nên lượt bù không biết mình vừa viết chúng — và
+    viết lại y hệt. Bảo model "đừng lặp" trong khi giấu 12/14 thứ nó vừa viết là thông
+    tin thiếu, không phải model bướng.
+
+    Câu được nhận đứng TRƯỚC: chúng vừa là thứ cần tránh lặp, vừa là ví dụ tốt về hình
+    dạng câu hỏi đạt yêu cầu.
+    """
+    ra: List[str] = []
+    da_thay: set = set()
+    for nguon in (accepted or [], tho or []):
+        for q in nguon:
+            if not isinstance(q, dict):
+                continue
+            t = str(q.get("question_text") or "").strip()
+            if not t:
+                continue
+            khoa = " ".join(t.lower().split())
+            if khoa in da_thay:
+                continue
+            da_thay.add(khoa)
+            ra.append(t)
+    return ra
+
+
+def vot_cau_hoan_chinh(raw: Optional[str]) -> List[Dict[str, Any]]:
+    """Nhặt những object câu hỏi TRỌN VẸN ra khỏi một chuỗi JSON hỏng.
+
+    Vì sao cần: đo 2026-09-01 trên gemma2:2b — xin 3 câu OK, xin 5 câu HỎNG (0 câu), xin
+    8 câu OK (7 câu). Hỏng không theo độ dài (ca hỏng chỉ ~920 token, xa trần
+    `num_predict=3000`); model đơn giản là thỉnh thoảng trả JSON không hợp lệ.
+
+    Khi đó `repair_json_text` bó tay vì nó đòi một khối `{...}` CÂN BẰNG cho cả tài liệu,
+    và toàn bộ output bị ném đi — kể cả những câu hỏi đã viết xong đàng hoàng bên trong.
+    Người dùng nhận 0 câu sau một phút CPU.
+
+    Hàm này quét thủ công, có nhận biết chuỗi (dấu ngoặc trong `"..."` không tính), gom
+    từng object cân bằng ở mức lồng 1 rồi thử `json.loads` riêng từng cái. Chỉ giữ object
+    CÓ `question_text` — object `meta`/`config` lồng trong đó không phải câu hỏi.
+
+    Không sửa, không đoán, không bịa: câu nào chưa đóng ngoặc thì bỏ.
+    """
+    s = str(raw or "")
+    if not s:
+        return []
+    ra: List[Dict[str, Any]] = []
+    # Ngăn xếp, KHÔNG phải bộ đếm mức ngoài cùng: khi output bị cắt thì object ngoài
+    # cùng (`{"questions": [...]`) không bao giờ đóng, nên chỉ gom ở mức 0 sẽ ra rỗng —
+    # đúng thứ cần cứu lại nằm LỒNG BÊN TRONG nó.
+    ngan_xep: List[int] = []
+    trong_chuoi = False
+    thoat = False
+    for i, c in enumerate(s):
+        if trong_chuoi:
+            if thoat:
+                thoat = False
+            elif c == "\\":
+                thoat = True
+            elif c == '"':
+                trong_chuoi = False
+            continue
+        if c == '"':
+            trong_chuoi = True
+        elif c == "{":
+            ngan_xep.append(i)
+        elif c == "}" and ngan_xep:
+            dau = ngan_xep.pop()
+            try:
+                o = json.loads(s[dau:i + 1])
+            except Exception:
+                continue
+            # Chỉ nhặt object CÓ `question_text`: object `meta`/`config` lồng bên trong
+            # cũng cân bằng và cũng parse được, nhưng nó không phải câu hỏi.
+            if isinstance(o, dict) and str(o.get("question_text") or "").strip():
+                ra.append(o)
+    return ra
 
 
 def demo() -> None:
@@ -230,38 +321,18 @@ def demo() -> None:
 
     qs, err, _ = generate_questions(ctx, {}, ask=lambda *a, **k: (_ for _ in ()).throw(RuntimeError("hết token")))
     assert not qs and "Gọi model thất bại" in err
-    print("quiz generator demo OK")
+    # gom_da_co: lượt bù phải biết cả câu bị loại, không chỉ câu được nhận
+    assert gom_da_co([{"question_text": "A?"}],
+                     [{"question_text": "A?"}, {"question_text": "B?"}]) == ["A?", "B?"]
+    assert gom_da_co(None, ["rac", None, 7]) == []
 
+    # vot_cau_hoan_chinh: cứu câu trọn vẹn trong mảng bị cắt
+    cut = ('{"questions": [{"question_text": "Tron ven?", "chunk_refs": ["c0"]},'
+           ' {"question_text": "Bi cat giua ch')
+    assert [q["question_text"] for q in vot_cau_hoan_chinh(cut)] == ["Tron ven?"]
+    assert vot_cau_hoan_chinh("") == [] and vot_cau_hoan_chinh(None) == []
+
+    print("quiz generator demo OK")
 
 if __name__ == "__main__":
     demo()
-
-
-def gom_da_co(accepted: Optional[Sequence[Dict[str, Any]]],
-              tho: Optional[Sequence[Any]]) -> List[str]:
-    """Mọi câu model ĐÃ VIẾT ở lượt trước — cả câu được nhận lẫn câu bị loại.
-
-    Vì sao phải gồm câu bị loại: log job e31ace34 (2026-09-01) cho thấy 2 câu được nhận
-    và 12 câu bị loại vì TRÙNG. Mười hai câu đó model đã viết ra rồi bị tầng luật loại,
-    nhưng chúng không nằm trong `da_co` nên lượt bù không biết mình vừa viết chúng — và
-    viết lại y hệt. Bảo model "đừng lặp" trong khi giấu 12/14 thứ nó vừa viết là thông
-    tin thiếu, không phải model bướng.
-
-    Câu được nhận đứng TRƯỚC: chúng vừa là thứ cần tránh lặp, vừa là ví dụ tốt về hình
-    dạng câu hỏi đạt yêu cầu.
-    """
-    ra: List[str] = []
-    da_thay: set = set()
-    for nguon in (accepted or [], tho or []):
-        for q in nguon:
-            if not isinstance(q, dict):
-                continue
-            t = str(q.get("question_text") or "").strip()
-            if not t:
-                continue
-            khoa = " ".join(t.lower().split())
-            if khoa in da_thay:
-                continue
-            da_thay.add(khoa)
-            ra.append(t)
-    return ra
