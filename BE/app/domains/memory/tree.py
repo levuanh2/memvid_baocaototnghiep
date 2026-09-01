@@ -1028,8 +1028,15 @@ def query_with_memory_tree(query: str, selected_sources: Optional[List[str]] = N
     # Embed query
     qv = _require_mem_model().encode([q], convert_to_numpy=True).astype("float32")
 
-    # Search với top_k lớn hơn để có nhiều candidate
-    search_k = min(strategy_top_k * 3, len(nodes_meta))
+    # Bề rộng phải tính theo TỈ LỆ node được phép, không phải một hằng số.
+    # Trước audit vòng 8: `search_k = strategy_top_k * 3` cố định, lọc chủ sở hữu chạy
+    # SAU search. Ai sở hữu 2/200 node thì 15 node gần nhất hầu như đều của người khác,
+    # `scored` rỗng, hàm `return None`, và chat im lặng tụt về chunk search — không log,
+    # không lỗi, chỉ là câu trả lời tệ hơn. `filtered_indices` ở trên vốn đã tính đúng
+    # phần được phép rồi mà không ai đọc.
+    search_k = _be_rong_tim(strategy_top_k, len(nodes_meta), len(filtered_indices))
+    if search_k <= 0:
+        return None
     D, I = idx.search(qv, search_k)
 
     scored: List[Tuple[float, Dict[str, Any]]] = []
@@ -1049,6 +1056,10 @@ def query_with_memory_tree(query: str, selected_sources: Optional[List[str]] = N
         scored.append((float(score), row))
 
     if not scored:
+        # Im lặng tụt về chunk search là cách lỗi này sống sót lâu. In ra để lần sau
+        # còn đọc được từ log thay vì phải suy từ chất lượng câu trả lời.
+        print(f"memory_tree_khong_co_node_phu_hop duoc_phep={len(filtered_indices)} "
+              f"tong={len(nodes_meta)} quet={search_k}", flush=True)
         return None
 
     # Lấy top_k theo strategy
@@ -1171,3 +1182,20 @@ def build_human_context(top_nodes: List[Dict[str, Any]], evidence_chunks: List[D
         parts.append("Trích đoạn liên quan:\n- " + "\n- ".join(snippets[:5]))
 
     return "\n\n".join(parts)
+
+
+def _be_rong_tim(strategy_top_k: int, tong_node: int, so_node_duoc_phep: int) -> int:
+    """Số node cần quét để phần ĐƯỢC PHÉP vẫn có đủ ứng viên.
+
+    FAISS xếp hạng trên toàn index, còn quyền sở hữu được lọc sau. Nếu người dùng chỉ
+    sở hữu `p/n` số node thì để lấy được `k` node của họ, trung bình phải quét
+    `k * n / p`. Giữ nguyên `k*3` như cũ làm sàn, và không bao giờ vượt `n`.
+
+    Quét rộng ở đây rẻ: index memory-tree là node tóm tắt, không phải chunk.
+    """
+    can = max(1, strategy_top_k) * 3
+    if tong_node <= 0 or so_node_duoc_phep <= 0:
+        return 0
+    if so_node_duoc_phep < tong_node:
+        can = max(can, -(-can * tong_node // so_node_duoc_phep))   # ceil
+    return min(can, tong_node)

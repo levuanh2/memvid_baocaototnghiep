@@ -86,7 +86,7 @@ def grade_attempt(attempt_id: str, *, ask: Optional[Callable[..., str]] = None,
         })
 
     totals = grading.totals(graded, attempt["total_questions"])
-    repository.save_grades(attempt_id, graded, totals)
+    repository.save_grades(attempt_id, graded, totals, ungraded_count=ungraded)
 
     # Chấm xong thì phân tích lỗ hổng luôn (FR-09.7) — review plan cần nó, và bắt
     # người dùng bấm thêm một nút để hệ thống tự tính là vô nghĩa. Fail-open: điểm đã

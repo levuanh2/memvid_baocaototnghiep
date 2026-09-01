@@ -211,6 +211,15 @@ def _run_jobs_maintenance(force: bool = False) -> None:
     try:
         from app.domains.jobs.jobs_store import sweep_stuck_jobs, cleanup_terminal_jobs
         swept = sweep_stuck_jobs()
+        # Sổ cái Postgres phải theo được cả bốn đường kết thúc KHÔNG đi qua `close_job`
+        # (sweep / mark_interrupted / reconcile / request_cancel) — nếu không nó tồn
+        # đọng hàng `running` vĩnh viễn. Chạy TRƯỚC prune: prune xoá hàng SQLite là mất
+        # luôn thứ để đối chiếu.
+        try:
+            from app.domains.jobs import ledger as _ledger_sync
+            _ledger_sync.dong_theo_jobs_store()
+        except Exception:
+            pass
         pruned = cleanup_terminal_jobs()
         from app.graphs.logger import cleanup_old_node_logs
         logs = cleanup_old_node_logs()
@@ -2950,6 +2959,14 @@ def _attempt_public(attempt: dict) -> dict:
     out = dict(attempt)
     out.pop("user_id", None)
     out["unanswered_count"] = len(out.get("unanswered_question_ids") or [])
+    # Số câu LLM chấm hỏng: đọc từ chính attempt, không từ `result` của job (job bị
+    # prune sau 7 ngày, còn điểm thì ở lại vĩnh viễn). Không có metadata = 0 câu, không
+    # phải "không biết" — trước khi có trường này thì mọi bài đều chấm đủ hoặc mất dấu.
+    meta = out.get("metadata") or {}
+    try:
+        out["ungraded_count"] = int(meta.get("ungraded_count") or 0)
+    except (TypeError, ValueError):
+        out["ungraded_count"] = 0
     return out
 
 

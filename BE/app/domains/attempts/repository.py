@@ -155,7 +155,7 @@ def submit(attempt_id: str) -> Optional[Dict[str, Any]]:
 
 
 def save_grades(attempt_id: str, graded: List[Dict[str, Any]], totals: Dict[str, Any],
-                *, status: str = "graded") -> bool:
+                *, status: str = "graded", ungraded_count: int = 0) -> bool:
     """Ghi điểm từng câu + tổng kết attempt trong MỘT transaction.
 
     Bài học known-issues (cache hit trả rỗng): trạng thái terminal phải ghi cùng lúc với
@@ -189,6 +189,16 @@ def save_grades(attempt_id: str, graded: List[Dict[str, Any]], totals: Dict[str,
         a.correct_count = totals["correct_count"]
         a.incorrect_count = totals["incorrect_count"]
         a.status = status
+        # Số câu LLM chấm hỏng phải sống LÂU BẰNG attempt. Trước đây nó chỉ nằm trong
+        # `result` của job, mà job bị prune sau `JOB_RETENTION_DAYS=7` — còn
+        # `percentage` thì ở lại DB vĩnh viễn và chảy vào `progress.overview`. Người
+        # học thấy 66.7% và không còn cách nào biết một câu chưa được chấm.
+        #
+        # Phần TOÁN là cố ý và không đổi: câu chưa chấm vẫn nằm ở mẫu số
+        # (`test_quiz_attempt.py:311` khoá điều đó). Chỗ hỏng là BÁO CÁO.
+        meta = dict(a.metadata_json or {})
+        meta["ungraded_count"] = int(ungraded_count)
+        a.metadata_json = meta
         if status == "graded":
             a.graded_at = now
     return True

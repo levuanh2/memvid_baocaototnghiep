@@ -1,5 +1,120 @@
 # Known Issues
 
+## (ĐÃ SỬA 2026-09-01) Bốn chỗ hệ thống mất dấu: memory tree, sổ cái job, quiz đã xoá, câu chưa chấm
+
+Audit vòng 8, BE#5–#8.
+
+### BE#5 — memory tree im lặng tụt về chunk search khi kho lớn
+
+`query_with_memory_tree` dựng `filtered_indices` (hai lần, có cả nhánh nới lỏng
+`preferred_node_type`) rồi **không ai đọc nó**. Khối comment ghi "Build mask" nhưng không
+có mask nào được dùng:
+
+```python
+search_k = min(strategy_top_k * 3, len(nodes_meta))   # hằng số, không liên quan tới mask
+D, I = idx.search(qv, search_k)                        # quét TOÀN BỘ index
+... lọc chủ sở hữu SAU khi search ...
+if not scored:
+    return None                                        # im lặng
+```
+
+FAISS xếp hạng trên toàn index. Ai sở hữu 2 trong 200 node thì 15 node gần nhất hầu như
+đều của người khác, `scored` rỗng, hàm trả `None`, và chat tụt về chunk search — **không
+log, không lỗi**, chỉ là câu trả lời tệ hơn. Overview / "nội dung chính" mất đường đi mà
+không ai biết.
+
+**Fix:** `_be_rong_tim(strategy_top_k, tong_node, so_node_duoc_phep)` — bề rộng tính
+theo tỉ lệ: cần `k` node của một người sở hữu `p/n` thì trung bình phải quét `k*n/p`.
+Giữ `k*3` làm sàn, chặn trên bằng `n`. Quét rộng ở đây rẻ: index memory-tree là node tóm
+tắt, không phải chunk.
+
+Và `return None` giờ in ra `memory_tree_khong_co_node_phu_hop duoc_phep=… tong=… quet=…`
+— im lặng chính là thứ giúp lỗi này sống lâu.
+
+### BE#6 — sổ cái `jobs` (Postgres) tồn đọng hàng `running` vĩnh viễn
+
+`close_job` chỉ được gọi từ đường job chạy xong bình thường. **Bốn** đường kết thúc còn
+lại — `sweep_stuck_jobs`, `mark_interrupted_jobs`, `reconcile_interrupted`,
+`request_cancel` — chỉ ghi SQLite. Hàng Postgres tương ứng nằm `running` mãi.
+
+Đó là sổ **kiểm toán**, và `ai_validation_logs.job_id` là FK trỏ vào nó: sổ nói job vẫn
+đang chạy trong khi nó chết từ tuần trước.
+
+Thêm: `close_job` map `"interrupted"` không có trong `STATUS_MAP` nên rơi về default
+`"failed"` — kết quả đúng, nhưng không ai phân biệt được cố ý với bỏ sót.
+
+**Fix:** `ledger.dong_theo_jobs_store()` gọi từ `_run_jobs_maintenance`, **trước**
+`cleanup_terminal_jobs` (prune xoá hàng SQLite là mất thứ để đối chiếu). Hai luật, cả hai
+nói được thành lời:
+
+1. SQLite còn hàng và đã ở trạng thái cuối → đóng theo đúng trạng thái đó, mang theo
+   `error_text`.
+2. SQLite không còn hàng (đã prune) và hàng sổ cái cũ hơn 24h → đóng `failed`, kèm lý do
+   ghi rõ **là suy ra chứ không quan sát được**.
+
+Hàng `running` mới mà SQLite chưa có thì để yên: job vừa mở, chưa kịp ghi.
+
+`STATUS_MAP["interrupted"] = "failed"` giờ tường minh (CHECK của Postgres không có
+`interrupted`, không thêm status mới).
+
+### BE#7 — xem lại kế hoạch ôn của một bài làm cũ → 500 traceback trống
+
+`review/service._persist`:
+
+```python
+attempt = s.get(QuizAttempt, str(attempt_id))
+if attempt is None:
+    return None                                    # CÓ guard
+document_id = s.get(Quiz, str(quiz_id)).document_id   # KHÔNG có guard
+```
+
+Quiz bị xoá (hoặc tài liệu gỡ) → `AttributeError` → 500. Hai dòng cạnh nhau, một dòng
+cẩn thận một dòng không.
+
+**Fix:** guard `None` → `return None`, đúng như dòng trên nó.
+
+### BE#8 — 66.7% mà không biết vì sao, và sau 7 ngày thì không còn cách nào biết
+
+`ungraded_count` (số câu tự luận LLM chấm hỏng) **chỉ nằm trong `result` của job**. Job
+bị prune sau `JOB_RETENTION_DAYS=7`. Còn `QuizAttempt.percentage` thì ở lại DB vĩnh viễn
+và chảy vào `progress.overview.avg_percentage`.
+
+`/api/quizzes/results/<id>` không trả khoá này, nên mở lại trang kết quả là mất dấu ngay
+cả trong 7 ngày đó.
+
+**Phần TOÁN là cố ý, không đổi:** câu chưa chấm vẫn nằm ở mẫu số —
+`tests/test_quiz_attempt.py:311` khoá `max_score == 3.0` với chú thích "câu chưa chấm
+vẫn tính vào mẫu số". Docstring `grade_attempt` ghi "không bị cho 0 oan": verdict đúng là
+`None`, nhưng **phần trăm thì y hệt như cho 0**. Chỗ hỏng là BÁO CÁO, không phải công
+thức.
+
+**Fix:** `save_grades(..., ungraded_count=)` ghi vào `QuizAttempt.metadata_json` — sống
+lâu bằng attempt; `_attempt_public` lộ `ungraded_count` ra mọi endpoint đọc attempt.
+Không có metadata = 0, không phải "không biết": trước khi có trường này thì mọi bài hoặc
+chấm đủ hoặc đã mất dấu.
+
+### Regression
+
+`BE/tests/test_audit_vong8_bon_muc.py` — 10 test: bốn ca cho `_be_rong_tim` (nở ra khi sở
+hữu ít, giữ nguyên khi sở hữu hết, không chia cho 0, không vượt kích thước index),
+`STATUS_MAP` biết `interrupted`, `dong_theo_jobs_store` tồn tại, `_persist` không lấy
+thuộc tính thẳng trên `s.get(Quiz, ...)`, `save_grades` nhận `ungraded_count`, và
+`_attempt_public` lộ đúng số — kể cả ca không có metadata thì trả 0 chứ không bịa.
+
+### Phòng ngừa
+
+**Biến dựng ra rồi không ai đọc là một lỗi, không phải rác vô hại.** `filtered_indices`
+tính đúng phần được phép — đúng thứ cần để chặn lỗi — rồi bị bỏ. Comment "Build mask"
+làm người đọc sau tin rằng mask đã được dùng.
+
+**Hai nơi giữ trạng thái thì phải có một đường đồng bộ, không chỉ một đường ghi.**
+`jobs_store` và `jobs` cố ý tách nhau (đã ghi trong docstring của `ledger`), nhưng chỉ có
+đường ghi lúc mở và lúc đóng-đẹp. Mọi đường kết thúc khác đều bỏ quên nơi thứ hai.
+
+**Số đo ở lại vĩnh viễn thì lý do của nó cũng phải ở lại vĩnh viễn.** `percentage` sống
+mãi trong DB còn `ungraded_count` chết sau 7 ngày — hai thứ giải thích cho nhau mà tuổi
+thọ khác nhau thì phần giải thích luôn là phần mất trước.
+
 ## (ĐÃ SỬA 2026-09-01) CRAG không bao giờ kích nhánh sửa sai — thước đo tự cộng điểm cho chính nó
 
 Audit vòng 8, BE#4. `INCLUDE_CHUNK_SOURCE_TAGS=1` (`.env:183`, đang bật) khiến

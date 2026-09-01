@@ -1,5 +1,41 @@
 # Lessons Learned
 
+## 2026-09-01 - Biến dựng ra rồi không ai đọc là một lỗi, không phải rác vô hại
+
+- **`filtered_indices` là ca mẫu.** Nó được tính đúng — kể cả nhánh nới lỏng khi không có
+  node đúng type — rồi bị bỏ, và `idx.search` vẫn quét toàn index với một hằng số
+  `top_k*3`. Thứ cần để chặn lỗi đã nằm sẵn trong hàm. Comment "Build mask" còn làm người
+  đọc sau tin rằng mask đã được dùng. Khi review, grep biến vừa dựng: không có chỗ đọc
+  thì hoặc là mã chết, hoặc là một bước bị quên — và bước bị quên thường im lặng.
+
+- **Lọc sau khi xếp hạng thì bề rộng phải tính theo tỉ lệ, không phải hằng số.** FAISS xếp
+  trên toàn index, quyền sở hữu lọc sau: cần `k` node của người sở hữu `p/n` thì trung
+  bình phải quét `k*n/p`. Giữ hằng số cũ làm sàn, chặn trên bằng `n`. Nguyên tắc chung:
+  mọi chỗ "lấy top-N rồi lọc" đều hỏng dần khi tỉ lệ được-phép giảm, và hỏng theo kiểu
+  trả về rỗng chứ không theo kiểu báo lỗi.
+
+- **`return None` im lặng là cách một lỗi sống qua nhiều vòng audit.** Tụt về đường dự
+  phòng là fail-open hợp lệ; không để lại một dòng log nào thì không ai truy được. Mỗi
+  nhánh "không tìm thấy gì nên đi đường khác" cần in ra đủ số để đọc ngược: bao nhiêu ứng
+  viên được phép, tổng bao nhiêu, đã quét bao nhiêu.
+
+- **Hai nơi giữ trạng thái thì cần một đường ĐỒNG BỘ, không chỉ đường ghi.** `jobs_store`
+  (SQLite, runtime) và `jobs` (Postgres, kiểm toán) tách nhau có lý do và có ghi trong
+  docstring. Nhưng chỉ đường "chạy xong bình thường" nhớ ghi cả hai; bốn đường kết thúc
+  khác (sweep, mark_interrupted, reconcile, cancel) chỉ ghi một nơi. Đếm số đường KẾT
+  THÚC, đừng đếm số chỗ gọi hàm đóng.
+
+- **Số đo ở lại vĩnh viễn thì lý do của nó cũng phải ở lại vĩnh viễn.**
+  `QuizAttempt.percentage` sống mãi và chảy vào thống kê tiến bộ; `ungraded_count` giải
+  thích cho nó thì chết sau 7 ngày cùng job. Hai thứ giải thích cho nhau mà tuổi thọ khác
+  nhau thì phần giải thích luôn là phần mất trước — và cái còn lại thành một con số không
+  ai cãi được.
+
+- **Hai dòng cạnh nhau, một dòng cẩn thận một dòng không.** `s.get(QuizAttempt, ...)` có
+  guard `None`, `s.get(Quiz, ...)` ngay dưới thì lấy thuộc tính thẳng. Khi đã viết một
+  guard cho một lần `get`, quét nốt các lần `get` còn lại trong cùng hàm — chúng có cùng
+  lý do để trả `None`.
+
 ## 2026-09-01 - Đừng chấm điểm trên chuỗi mình vừa thêm chữ vào
 
 - **Thước đo tự cộng điểm cho chính nó.** `RetrieveFAISS` dán `[Nguồn: …, đoạn …]` lên

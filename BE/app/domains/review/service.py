@@ -208,7 +208,13 @@ def _persist(attempt_id: str, quiz_id: str, weak: List[Dict[str, Any]],
         attempt = s.get(QuizAttempt, str(attempt_id))
         if attempt is None:
             return None
-        document_id = s.get(Quiz, str(quiz_id)).document_id
+        # `s.get(QuizAttempt, ...)` ngay trên CÓ guard None, chỗ này thì không: quiz bị
+        # xoá (hoặc tài liệu gỡ) là AttributeError → 500 traceback trống ở trang "Xem
+        # phần cần ôn" của một bài làm cũ.
+        quiz = s.get(Quiz, str(quiz_id))
+        if quiz is None:
+            return None
+        document_id = quiz.document_id
 
         old = s.execute(
             select(ReviewPlan).where(ReviewPlan.attempt_id == str(attempt_id))
