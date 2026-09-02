@@ -1,0 +1,574 @@
+[
+  {
+    "endpoint": "home",
+    "methods": [
+      "GET"
+    ],
+    "rule": "/"
+  },
+  {
+    "endpoint": "api_attempt_get",
+    "methods": [
+      "GET"
+    ],
+    "rule": "/api/attempts/<attempt_id>"
+  },
+  {
+    "endpoint": "api_attempt_save_answers",
+    "methods": [
+      "PATCH"
+    ],
+    "rule": "/api/attempts/<attempt_id>/answers"
+  },
+  {
+    "endpoint": "api_attempt_masteries",
+    "methods": [
+      "GET"
+    ],
+    "rule": "/api/attempts/<attempt_id>/concept-masteries"
+  },
+  {
+    "endpoint": "api_attempt_submit",
+    "methods": [
+      "POST"
+    ],
+    "rule": "/api/attempts/<attempt_id>/submit"
+  },
+  {
+    "endpoint": "api_attempt_grading_job",
+    "methods": [
+      "GET"
+    ],
+    "rule": "/api/attempts/jobs/<job_id>"
+  },
+  {
+    "endpoint": "api_documents_list",
+    "methods": [
+      "GET"
+    ],
+    "rule": "/api/documents"
+  },
+  {
+    "endpoint": "api_documents_delete",
+    "methods": [
+      "DELETE"
+    ],
+    "rule": "/api/documents/<document_id>"
+  },
+  {
+    "endpoint": "api_documents_get",
+    "methods": [
+      "GET"
+    ],
+    "rule": "/api/documents/<document_id>"
+  },
+  {
+    "endpoint": "api_documents_chunks",
+    "methods": [
+      "GET"
+    ],
+    "rule": "/api/documents/<document_id>/chunks"
+  },
+  {
+    "endpoint": "api_documents_file",
+    "methods": [
+      "GET"
+    ],
+    "rule": "/api/documents/<document_id>/file"
+  },
+  {
+    "endpoint": "api_document_quizzes",
+    "methods": [
+      "GET"
+    ],
+    "rule": "/api/documents/<document_id>/quizzes"
+  },
+  {
+    "endpoint": "api_document_search",
+    "methods": [
+      "POST"
+    ],
+    "rule": "/api/documents/<document_id>/search"
+  },
+  {
+    "endpoint": "api_documents_sections",
+    "methods": [
+      "GET"
+    ],
+    "rule": "/api/documents/<document_id>/sections"
+  },
+  {
+    "endpoint": "api_document_study_maps",
+    "methods": [
+      "GET"
+    ],
+    "rule": "/api/documents/<document_id>/study-maps"
+  },
+  {
+    "endpoint": "api_documents_upload",
+    "methods": [
+      "POST"
+    ],
+    "rule": "/api/documents/upload"
+  },
+  {
+    "endpoint": "api_job_get",
+    "methods": [
+      "GET"
+    ],
+    "rule": "/api/jobs/<job_id>"
+  },
+  {
+    "endpoint": "api_job_cancel",
+    "methods": [
+      "POST"
+    ],
+    "rule": "/api/jobs/<job_id>/cancel"
+  },
+  {
+    "endpoint": "api_practice_get",
+    "methods": [
+      "GET"
+    ],
+    "rule": "/api/practice/<practice_quiz_id>"
+  },
+  {
+    "endpoint": "api_practice_comparison",
+    "methods": [
+      "GET"
+    ],
+    "rule": "/api/practice/<practice_quiz_id>/comparison"
+  },
+  {
+    "endpoint": "api_practice_submit",
+    "methods": [
+      "POST"
+    ],
+    "rule": "/api/practice/<practice_quiz_id>/submit"
+  },
+  {
+    "endpoint": "api_practice_generate",
+    "methods": [
+      "POST"
+    ],
+    "rule": "/api/practice/generate"
+  },
+  {
+    "endpoint": "api_progress_attempts",
+    "methods": [
+      "GET"
+    ],
+    "rule": "/api/progress/attempts"
+  },
+  {
+    "endpoint": "api_progress_concepts",
+    "methods": [
+      "GET"
+    ],
+    "rule": "/api/progress/concepts"
+  },
+  {
+    "endpoint": "api_progress_overview",
+    "methods": [
+      "GET"
+    ],
+    "rule": "/api/progress/overview"
+  },
+  {
+    "endpoint": "api_quizzes_get",
+    "methods": [
+      "GET"
+    ],
+    "rule": "/api/quizzes/<quiz_id>"
+  },
+  {
+    "endpoint": "api_attempt_open",
+    "methods": [
+      "POST"
+    ],
+    "rule": "/api/quizzes/<quiz_id>/attempts"
+  },
+  {
+    "endpoint": "api_quiz_attempts",
+    "methods": [
+      "GET"
+    ],
+    "rule": "/api/quizzes/<quiz_id>/attempts"
+  },
+  {
+    "endpoint": "api_quizzes_generate",
+    "methods": [
+      "POST"
+    ],
+    "rule": "/api/quizzes/generate"
+  },
+  {
+    "endpoint": "api_quizzes_job",
+    "methods": [
+      "GET"
+    ],
+    "rule": "/api/quizzes/jobs/<job_id>"
+  },
+  {
+    "endpoint": "api_quizzes_job_cancel",
+    "methods": [
+      "POST"
+    ],
+    "rule": "/api/quizzes/jobs/<job_id>/cancel"
+  },
+  {
+    "endpoint": "api_quizzes_validation_logs",
+    "methods": [
+      "GET"
+    ],
+    "rule": "/api/quizzes/jobs/<job_id>/validation-logs"
+  },
+  {
+    "endpoint": "api_attempt_results",
+    "methods": [
+      "GET"
+    ],
+    "rule": "/api/quizzes/results/<attempt_id>"
+  },
+  {
+    "endpoint": "api_review_plan_by_attempt",
+    "methods": [
+      "GET"
+    ],
+    "rule": "/api/review-plans/<attempt_id>"
+  },
+  {
+    "endpoint": "api_review_plan_items",
+    "methods": [
+      "GET"
+    ],
+    "rule": "/api/review-plans/<review_plan_id>/items"
+  },
+  {
+    "endpoint": "api_review_plan_generate",
+    "methods": [
+      "POST"
+    ],
+    "rule": "/api/review-plans/generate"
+  },
+  {
+    "endpoint": "api_search",
+    "methods": [
+      "POST"
+    ],
+    "rule": "/api/search"
+  },
+  {
+    "endpoint": "api_study_maps_get",
+    "methods": [
+      "GET"
+    ],
+    "rule": "/api/study-maps/<map_id>"
+  },
+  {
+    "endpoint": "api_study_maps_generate",
+    "methods": [
+      "POST"
+    ],
+    "rule": "/api/study-maps/generate"
+  },
+  {
+    "endpoint": "api_study_maps_job",
+    "methods": [
+      "GET"
+    ],
+    "rule": "/api/study-maps/jobs/<job_id>"
+  },
+  {
+    "endpoint": "api_study_maps_job_cancel",
+    "methods": [
+      "POST"
+    ],
+    "rule": "/api/study-maps/jobs/<job_id>/cancel"
+  },
+  {
+    "endpoint": "api_vision_status",
+    "methods": [
+      "GET"
+    ],
+    "rule": "/api/vision/status"
+  },
+  {
+    "endpoint": "api_vision_transcribe",
+    "methods": [
+      "POST"
+    ],
+    "rule": "/api/vision/transcribe"
+  },
+  {
+    "endpoint": "auth_login",
+    "methods": [
+      "POST"
+    ],
+    "rule": "/auth/login"
+  },
+  {
+    "endpoint": "auth_logout",
+    "methods": [
+      "POST"
+    ],
+    "rule": "/auth/logout"
+  },
+  {
+    "endpoint": "auth_me",
+    "methods": [
+      "GET"
+    ],
+    "rule": "/auth/me"
+  },
+  {
+    "endpoint": "auth_refresh",
+    "methods": [
+      "POST"
+    ],
+    "rule": "/auth/refresh"
+  },
+  {
+    "endpoint": "auth_register",
+    "methods": [
+      "POST"
+    ],
+    "rule": "/auth/register"
+  },
+  {
+    "endpoint": "get_chunk_text",
+    "methods": [
+      "GET"
+    ],
+    "rule": "/chunk-text/<int:chunk_id>"
+  },
+  {
+    "endpoint": "delete_conversation",
+    "methods": [
+      "DELETE"
+    ],
+    "rule": "/conversations/<conversation_id>"
+  },
+  {
+    "endpoint": "clear_conversation_context",
+    "methods": [
+      "POST"
+    ],
+    "rule": "/conversations/<conversation_id>/clear-context"
+  },
+  {
+    "endpoint": "get_conversation_messages",
+    "methods": [
+      "GET"
+    ],
+    "rule": "/conversations/<conversation_id>/messages"
+  },
+  {
+    "endpoint": "delete_source",
+    "methods": [
+      "POST"
+    ],
+    "rule": "/delete-source"
+  },
+  {
+    "endpoint": "generate_mindmap",
+    "methods": [
+      "POST"
+    ],
+    "rule": "/generate-mindmap"
+  },
+  {
+    "endpoint": "generate_summary",
+    "methods": [
+      "POST"
+    ],
+    "rule": "/generate-summary"
+  },
+  {
+    "endpoint": "health",
+    "methods": [
+      "GET"
+    ],
+    "rule": "/health"
+  },
+  {
+    "endpoint": "job_timeline",
+    "methods": [
+      "GET"
+    ],
+    "rule": "/jobs/<job_id>/timeline"
+  },
+  {
+    "endpoint": "list_indexed",
+    "methods": [
+      "GET"
+    ],
+    "rule": "/list-indexed"
+  },
+  {
+    "endpoint": "memory_tree_status",
+    "methods": [
+      "GET"
+    ],
+    "rule": "/memory-tree-status"
+  },
+  {
+    "endpoint": "get_memory_tree",
+    "methods": [
+      "GET"
+    ],
+    "rule": "/memory-tree/<source_stem>"
+  },
+  {
+    "endpoint": "mindmap_cancel",
+    "methods": [
+      "POST"
+    ],
+    "rule": "/mindmap-cancel/<job_id>"
+  },
+  {
+    "endpoint": "mindmap_status",
+    "methods": [
+      "GET"
+    ],
+    "rule": "/mindmap-status/<job_id>"
+  },
+  {
+    "endpoint": "list_mindmaps",
+    "methods": [
+      "GET"
+    ],
+    "rule": "/mindmaps"
+  },
+  {
+    "endpoint": "update_mindmap",
+    "methods": [
+      "PUT"
+    ],
+    "rule": "/mindmaps/<mindmap_id>"
+  },
+  {
+    "endpoint": "delete_mindmap",
+    "methods": [
+      "DELETE"
+    ],
+    "rule": "/mindmaps/<string:mindmap_id>"
+  },
+  {
+    "endpoint": "query",
+    "methods": [
+      "POST"
+    ],
+    "rule": "/query"
+  },
+  {
+    "endpoint": "query_resume",
+    "methods": [
+      "POST"
+    ],
+    "rule": "/query-resume/<job_id>"
+  },
+  {
+    "endpoint": "query_status",
+    "methods": [
+      "GET"
+    ],
+    "rule": "/query-status/<job_id>"
+  },
+  {
+    "endpoint": "query_stream",
+    "methods": [
+      "GET"
+    ],
+    "rule": "/query-stream/<job_id>"
+  },
+  {
+    "endpoint": "ready",
+    "methods": [
+      "GET"
+    ],
+    "rule": "/ready"
+  },
+  {
+    "endpoint": "delete_source_v2",
+    "methods": [
+      "DELETE"
+    ],
+    "rule": "/sources/<source_id>"
+  },
+  {
+    "endpoint": "get_source_status",
+    "methods": [
+      "GET"
+    ],
+    "rule": "/sources/<source_id>/status"
+  },
+  {
+    "endpoint": "static",
+    "methods": [
+      "GET"
+    ],
+    "rule": "/static/<path:filename>"
+  },
+  {
+    "endpoint": "stats",
+    "methods": [
+      "GET"
+    ],
+    "rule": "/stats"
+  },
+  {
+    "endpoint": "list_summaries",
+    "methods": [
+      "GET"
+    ],
+    "rule": "/summaries"
+  },
+  {
+    "endpoint": "summaries_options",
+    "methods": [],
+    "rule": "/summaries"
+  },
+  {
+    "endpoint": "delete_summary",
+    "methods": [
+      "DELETE"
+    ],
+    "rule": "/summaries/<string:summary_id>"
+  },
+  {
+    "endpoint": "summary_cancel",
+    "methods": [
+      "POST"
+    ],
+    "rule": "/summary-cancel/<job_id>"
+  },
+  {
+    "endpoint": "summary_status",
+    "methods": [
+      "GET"
+    ],
+    "rule": "/summary-status/<job_id>"
+  },
+  {
+    "endpoint": "upload",
+    "methods": [
+      "POST"
+    ],
+    "rule": "/upload"
+  },
+  {
+    "endpoint": "upload_file",
+    "methods": [
+      "POST"
+    ],
+    "rule": "/upload-file"
+  },
+  {
+    "endpoint": "upload_multiple",
+    "methods": [
+      "POST"
+    ],
+    "rule": "/upload-multiple"
+  }
+]
