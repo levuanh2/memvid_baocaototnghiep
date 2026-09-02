@@ -2691,30 +2691,51 @@ def api_quizzes_validation_logs(job_id: str):
 # -------------------------
 # 🎯 API làm bài + chấm điểm (FR-07, FR-08, đặc tả 7.6)
 # -------------------------
+# Thân 8 route attempt đã sang `app/application/attempts.py` (Phase 2B). Tầng ấy
+# không biết HTTP: nó ném lỗi mang NGỮ NGHĨA, còn bảng dưới chọn con số.
+from app.application import attempts as attempts_uc  # noqa: E402
+
+_ATTEMPT_ERR_HTTP = {
+    attempts_uc.AttemptKhongTonTai: 404,
+    attempts_uc.QuizKhongTonTai: 404,
+    attempts_uc.JobChamKhongTonTai: 404,
+    attempts_uc.QuizChuaSanSang: 409,
+    attempts_uc.AttemptDaNop: 409,
+    attempts_uc.AttemptKhongConDangLam: 409,
+    attempts_uc.AttemptChuaNop: 409,
+    attempts_uc.ThieuDapAn: 400,
+    attempts_uc.CauHoiLac: 400,
+}
+
+
+def _attempt_err(exc: "attempts_uc.AttemptError"):
+    """Lỗi ngữ nghĩa -> (body, status). `exc.kem` mang các trường phải giữ nguyên
+    trong response, ví dụ `status` của attempt lúc bị từ chối."""
+    return jsonify({"error": exc.loi, **exc.kem}), _ATTEMPT_ERR_HTTP[type(exc)]
+
+
+def _dispatch_grading(job_id: str, attempt_id: str, uid):
+    """RQ serialize hàm theo `module.qualname`. Truyền WRAPPER ở module này để job
+    vẫn mang đường dẫn `app.main.run_short_answer_grading_job` như trước."""
+    from app.jobs.queue import enqueue_job
+    res = enqueue_job(run_short_answer_grading_job, args=(job_id, attempt_id, uid),
+                      queue="mindmap", job_id=job_id)
+    print(f"grading_enqueue_{res.get('mode')} job_id={job_id}", flush=True)
+
+
 def _owned_attempt(attempt_id: str, uid):
-    """(attempt, error_response). Bài của người khác = 404, không phải 403."""
-    from app.domains.attempts import repository as _attempts
-    attempt = _attempts.get_attempt(attempt_id)
-    if not attempt:
-        return None, (jsonify({"error": "Attempt not found"}), 404)
-    if _auth_protect_enabled() and attempt.get("user_id") != uid:
-        return None, (jsonify({"error": "Attempt not found"}), 404)
-    return attempt, None
+    """(attempt, error_response). Bài của người khác = 404, không phải 403.
+
+    Giữ lại vì còn route ngoài nhóm attempt dùng (review-plan, practice)."""
+    try:
+        return attempts_uc.load_owned_attempt(
+            attempt_id, uid, bat_buoc_chu_so_huu=_auth_protect_enabled()), None
+    except attempts_uc.AttemptError as exc:
+        return None, _attempt_err(exc)
 
 
 def _attempt_public(attempt: dict) -> dict:
-    out = dict(attempt)
-    out.pop("user_id", None)
-    out["unanswered_count"] = len(out.get("unanswered_question_ids") or [])
-    # Số câu LLM chấm hỏng: đọc từ chính attempt, không từ `result` của job (job bị
-    # prune sau 7 ngày, còn điểm thì ở lại vĩnh viễn). Không có metadata = 0 câu, không
-    # phải "không biết" — trước khi có trường này thì mọi bài đều chấm đủ hoặc mất dấu.
-    meta = out.get("metadata") or {}
-    try:
-        out["ungraded_count"] = int(meta.get("ungraded_count") or 0)
-    except (TypeError, ValueError):
-        out["ungraded_count"] = 0
-    return out
+    return attempts_uc.attempt_public(attempt)
 
 
 # ── Wrapper tương thích (Phase 1) ──────────────────────────────────────────
@@ -2733,18 +2754,12 @@ def api_attempt_open(quiz_id: str):
     uid, err = _require_app_user()
     if err:
         return err
-    from app.domains.quiz import repository as _quiz_repo
-    quiz = _quiz_repo.get_quiz(quiz_id, include_answers=False)
-    if not quiz or (_auth_protect_enabled() and quiz.get("user_id") != uid):
-        return jsonify({"error": "Quiz not found"}), 404
-    if quiz["status"] != "ready":
-        return jsonify({"error": "Quiz chưa sẵn sàng"}), 409
-
-    from app.domains.attempts import repository as _attempts
-    opened = _attempts.open_attempt(quiz_id, uid)
-    attempt = _attempts.get_attempt(opened["attempt_id"])
-    quiz.pop("user_id", None)
-    return jsonify({**_attempt_public(attempt), "quiz": quiz}), 201 if opened["created"] else 200
+    try:
+        data, moi = attempts_uc.open_attempt(
+            quiz_id, uid, bat_buoc_chu_so_huu=_auth_protect_enabled())
+    except attempts_uc.AttemptError as exc:
+        return _attempt_err(exc)
+    return jsonify(data), 201 if moi else 200
 
 
 @app.get('/api/attempts/<attempt_id>')
@@ -2752,10 +2767,11 @@ def api_attempt_get(attempt_id: str):
     uid, err = _require_app_user()
     if err:
         return err
-    attempt, err = _owned_attempt(attempt_id, uid)
-    if err:
-        return err
-    return jsonify(_attempt_public(attempt))
+    try:
+        return jsonify(attempts_uc.get_attempt(
+            attempt_id, uid, bat_buoc_chu_so_huu=_auth_protect_enabled()))
+    except attempts_uc.AttemptError as exc:
+        return _attempt_err(exc)
 
 
 @app.patch('/api/attempts/<attempt_id>/answers')
@@ -2764,30 +2780,12 @@ def api_attempt_save_answers(attempt_id: str):
     uid, err = _require_app_user()
     if err:
         return err
-    attempt, err = _owned_attempt(attempt_id, uid)
-    if err:
-        return err
-    if attempt["status"] != "in_progress":
-        # Đã nộp rồi mà còn sửa đáp án thì điểm không còn nghĩa gì.
-        return jsonify({"error": "Attempt đã nộp, không sửa được đáp án",
-                        "status": attempt["status"]}), 409
-
-    data = request.json or {}
-    raw = data.get("answers")
-    if isinstance(raw, list):
-        raw = {a.get("question_id"): a.get("user_answer")
-               for a in raw if isinstance(a, dict) and a.get("question_id")}
-    if not isinstance(raw, dict) or not raw:
-        return jsonify({"error": "Thiếu answers"}), 400
-
-    from app.domains.attempts import repository as _attempts
-    known = set(_attempts.question_ids_of_quiz(attempt["quiz_id"]))
-    unknown = [q for q in raw if str(q) not in known]
-    if unknown:
-        return jsonify({"error": f"question_id không thuộc quiz: {unknown}"}), 400
-
-    _attempts.save_draft_answers(attempt_id, {str(k): v for k, v in raw.items()})
-    return jsonify(_attempt_public(_attempts.get_attempt(attempt_id)))
+    try:
+        return jsonify(attempts_uc.save_answers(
+            attempt_id, uid, (request.json or {}).get("answers"),
+            bat_buoc_chu_so_huu=_auth_protect_enabled()))
+    except attempts_uc.AttemptError as exc:
+        return _attempt_err(exc)
 
 
 @app.post('/api/attempts/<attempt_id>/submit')
@@ -2796,32 +2794,13 @@ def api_attempt_submit(attempt_id: str):
     uid, err = _require_app_user()
     if err:
         return err
-    attempt, err = _owned_attempt(attempt_id, uid)
-    if err:
-        return err
-
-    from app.domains.attempts import repository as _attempts
-    from app.domains.attempts import service as _grading_service
-    submitted = _attempts.submit(attempt_id)
-    if submitted is None:
-        return jsonify({"error": "Attempt không còn ở trạng thái in_progress",
-                        "status": attempt["status"]}), 409
-
-    if not _grading_service.has_short_answer(attempt["quiz_id"]):
-        result = _grading_service.grade_attempt(attempt_id)
-        return jsonify({**_attempt_public(_attempts.get_attempt(attempt_id)),
-                        "grading": "done", **(result or {})})
-
-    job_id = str(uuid.uuid4())
-    from app.domains.jobs.jobs_store import create_job
-    create_job(job_id, job_type="short_answer_grading", status="pending", progress=0,
-               current_node="Queued", user_id=uid)
-    from app.jobs.queue import enqueue_job
-    res = enqueue_job(run_short_answer_grading_job, args=(job_id, attempt_id, uid),
-                      queue="mindmap", job_id=job_id)
-    print(f"grading_enqueue_{res.get('mode')} job_id={job_id}", flush=True)
-    return jsonify({**_attempt_public(_attempts.get_attempt(attempt_id)),
-                    "grading": "pending", "job_id": job_id}), 202
+    try:
+        data, cham_nen = attempts_uc.submit_attempt(
+            attempt_id, uid, bat_buoc_chu_so_huu=_auth_protect_enabled(),
+            dispatch_grading=_dispatch_grading)
+    except attempts_uc.AttemptError as exc:
+        return _attempt_err(exc)
+    return (jsonify(data), 202) if cham_nen else jsonify(data)
 
 
 @app.get('/api/attempts/jobs/<job_id>')
@@ -2830,19 +2809,11 @@ def api_attempt_grading_job(job_id: str):
     if err:
         return err
     _run_jobs_maintenance()
-    from app.domains.jobs.jobs_store import get_job as _js_get
-    j = _js_get(job_id)
-    if not j or j.get("job_type") != "short_answer_grading":
-        return jsonify({"error": "Job not found"}), 404
-    if _auth_protect_enabled() and j.get("user_id") != uid:
-        return jsonify({"error": "Job not found"}), 404
-    return jsonify({
-        "job_id": job_id,
-        "status": j.get("status"),
-        "progress": j.get("progress", 0),
-        "result": j.get("result"),
-        "error": j.get("error"),
-    })
+    try:
+        return jsonify(attempts_uc.grading_job(
+            job_id, uid, bat_buoc_chu_so_huu=_auth_protect_enabled()))
+    except attempts_uc.AttemptError as exc:
+        return _attempt_err(exc)
 
 
 @app.get('/api/quizzes/results/<attempt_id>')
@@ -2855,32 +2826,11 @@ def api_attempt_results(attempt_id: str):
     uid, err = _require_app_user()
     if err:
         return err
-    attempt, err = _owned_attempt(attempt_id, uid)
-    if err:
-        return err
-    if attempt["status"] == "in_progress":
-        return jsonify({"error": "Attempt chưa nộp", "status": attempt["status"]}), 409
-
-    from app.domains.quiz import repository as _quiz_repo
-    quiz = _quiz_repo.get_quiz(attempt["quiz_id"], include_answers=True) or {}
-    by_question = {a["question_id"]: a for a in attempt["answers"]}
-    questions = []
-    for q in quiz.get("questions") or []:
-        answer = by_question.get(q["question_id"]) or {}
-        questions.append({
-            **q,
-            "user_answer": answer.get("user_answer"),
-            "verdict": answer.get("verdict"),
-            "is_correct": answer.get("is_correct"),
-            "score": answer.get("score"),
-            "feedback": answer.get("feedback"),
-        })
-    return jsonify({
-        **_attempt_public(attempt),
-        "quiz_id": attempt["quiz_id"],
-        "quiz_title": quiz.get("title"),
-        "questions": questions,
-    })
+    try:
+        return jsonify(attempts_uc.results(
+            attempt_id, uid, bat_buoc_chu_so_huu=_auth_protect_enabled()))
+    except attempts_uc.AttemptError as exc:
+        return _attempt_err(exc)
 
 
 @app.get('/api/quizzes/<quiz_id>/attempts')
@@ -2888,16 +2838,11 @@ def api_quiz_attempts(quiz_id: str):
     uid, err = _require_app_user()
     if err:
         return err
-    from app.domains.quiz import repository as _quiz_repo
-    owner = _quiz_repo.owner_of(quiz_id)
-    if owner is None or (_auth_protect_enabled() and owner != uid):
-        return jsonify({"error": "Quiz not found"}), 404
-    from app.domains.attempts import repository as _attempts
-    return jsonify({
-        "quiz_id": quiz_id,
-        "attempts": _attempts.list_by_quiz(
-            quiz_id, user_id=uid if _auth_protect_enabled() else None),
-    })
+    try:
+        return jsonify(attempts_uc.list_attempts(
+            quiz_id, uid, bat_buoc_chu_so_huu=_auth_protect_enabled()))
+    except attempts_uc.AttemptError as exc:
+        return _attempt_err(exc)
 
 
 # -------------------------
@@ -2909,18 +2854,13 @@ def api_attempt_masteries(attempt_id: str):
     uid, err = _require_app_user()
     if err:
         return err
-    attempt, err = _owned_attempt(attempt_id, uid)
-    if err:
-        return err
-    from app.domains.gap_analysis import service as _gap
     weak_only = str(request.args.get("weak", "")).lower() in ("1", "true", "yes")
-    rows = _gap.list_for_attempt(attempt_id, weak_only=weak_only)
-    if not rows and attempt["status"] == "graded" and not weak_only:
-        # Bài đã chấm mà chưa có snapshot (hook lúc chấm hỏng) → tính bù, đừng trả rỗng.
-        _gap.analyze_attempt(attempt_id)
-        rows = _gap.list_for_attempt(attempt_id)
-    return jsonify({"attempt_id": attempt_id, "status": attempt["status"],
-                    "concept_masteries": rows})
+    try:
+        return jsonify(attempts_uc.concept_masteries(
+            attempt_id, uid, weak_only=weak_only,
+            bat_buoc_chu_so_huu=_auth_protect_enabled()))
+    except attempts_uc.AttemptError as exc:
+        return _attempt_err(exc)
 
 
 @app.post('/api/review-plans/generate')
