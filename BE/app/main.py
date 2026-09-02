@@ -1405,6 +1405,14 @@ try:
 except Exception:
     pass
 
+# Composition root: đây là nơi DUY NHẤT biết retriever cụ thể là HybridRetriever.
+# `query_graph` trước đây tự dựng nó khi không được truyền — nghĩa là tầng graph phải
+# import lớp cụ thể và tự biết cách ghép đường dẫn index. Dựng ở đây rẻ như cũ: hàm
+# khởi tạo chỉ giữ hai Path, index nạp lười ở lần truy hồi đầu.
+from app.domains.retrieval.hybrid import HybridRetriever as _HybridRetriever
+
+RETRIEVER = _HybridRetriever(index_path=INDEX_FAISS_PATH, meta_path=INDEX_META_JSON_PATH)
+
 _graphs = _build_graphs(
     data_dir=DATA_DIR,
     index_meta_path=INDEX_META_JSON_PATH,
@@ -1423,6 +1431,7 @@ _graphs = _build_graphs(
     search_index=search_index,
     summarize_results=summarize_results,
     query_with_memory_tree=query_with_memory_tree,
+    retriever=RETRIEVER,
     collect_mindmap_input=collect_mindmap_input,
     mindmap_pipeline=_get_mindmap_pipeline(),
     persist_mindmap=mindmap_store.save_record,

@@ -1,5 +1,55 @@
 # Known Issues
 
+## (CHƯA SỬA — ghi nhận 2026-09-02) Ba món nợ lộ ra khi wire retriever (Phase 2A)
+
+Phase 2A gỡ đoạn `query_graph` tự dựng `HybridRetriever` và bắt buộc tiêm từ
+`main.py`. Trong lúc làm, ba thứ lộ ra. Cả ba **cố ý chưa sửa**, vì sửa là ra
+ngoài phạm vi "wire cái đã có".
+
+### 1. `Retriever` Protocol hẹp hơn hợp đồng thật
+
+`shared/interfaces/retriever.py` khai đúng một phương thức:
+
+```python
+def retrieve(self, query, *, selected_sources=None, top_k=6) -> List[RetrievedChunk]
+```
+
+Nhưng khi `USE_LC_ENSEMBLE=1`, node truy hồi đi qua
+`ensemble_retriever.hybrid_retrieve_with_ensemble`, và hàm đó gọi tiếp
+`retrieve_bm25_only` / `retrieve_faiss_only` — hai phương thức **không có trong
+Protocol**. Nghĩa là một object khớp `Retriever` vẫn chết ở nhánh ensemble.
+
+Nợ này **có từ trước** Phase 2A: injection đã được hỗ trợ từ lâu, chỉ chưa ai
+dùng nên chưa ai va phải. Test hiện tại không bắt được vì `_qg_build.base_env`
+đặt `USE_LC_ENSEMBLE=0`.
+
+Sửa đúng cách là mở rộng Protocol cho đủ ba phương thức, hoặc để ensemble nhận
+một Protocol riêng. Cả hai đều đụng `shared/interfaces` — việc của phase sau.
+
+### 2. `search_index` đi qua bốn file để không làm gì
+
+```text
+main.py:29 (import) -> main.py:1423 -> wiring.py:42,83 -> query_graph.py:62
+```
+
+Trong thân `query_graph.py`, `search_index` xuất hiện **đúng một lần**: chính
+dòng khai báo tham số. `grep -c search_index app/graphs/query_graph.py` = 1.
+
+Chưa xoá: dọn tham số chết là task riêng, và trộn nó vào một commit refactor
+kiến trúc làm diff khó đọc.
+
+### 3. `index_meta_path` vừa trở thành tham số chết thứ hai — do chính Phase 2A
+
+Trong `build_query_graph`, `index_meta_path` **chỉ** được dùng để dựng
+`HybridRetriever`. Gỡ đoạn dựng đó đi thì nó còn đúng một lần xuất hiện: dòng khai
+báo tham số. Đây là nợ MỚI, không phải nợ có sẵn — ghi rõ để lần sau không ai
+tưởng nó vốn thế.
+
+Chưa xoá vì cùng lý do với `search_index`, và vì xoá là đổi chữ ký, kéo theo
+`wiring.py` + `tests/_qg_build.py`. Ba tham số chết (`search_index`,
+`index_meta_path`, và bất kỳ cái nào lộ ra sau đó) nên dọn CÙNG một commit riêng.
+
+
 ## (CHƯA SỬA — ghi nhận 2026-09-02) `test_queue.py` có test phụ thuộc THỨ TỰ chạy
 
 Trong lúc rút 6 job runner khỏi `main.py` (Phase 1), sau khi sửa 5 test stale thì chạy

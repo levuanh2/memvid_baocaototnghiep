@@ -50,7 +50,7 @@ def build_graphs(
     # summary deps (reuse collect_mindmap_input làm collect_input)
     summary_pipeline: Any | None = None,
     persist_summary: Callable[[dict], None] | None = None,
-    retriever: Any | None = None,
+    retriever: Any,
 ) -> Graphs:
     """Dựng 3 graph; lỗi từng graph được nuốt (trả None) để app vẫn chạy phần còn lại."""
     g = Graphs()

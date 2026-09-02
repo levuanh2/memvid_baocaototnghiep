@@ -18,7 +18,7 @@ from app.graphs.state import QueryState
 from app.domains.cache import llm_cache
 from app.domains.retrieval import citation, grading, nli, query_rewrite, rerank
 from app.domains.retrieval.ensemble_retriever import hybrid_retrieve_with_ensemble
-from app.domains.retrieval.hybrid import HybridRetriever
+from shared.interfaces.retriever import Retriever
 from shared.config import get_settings
 _log = logging.getLogger(__name__)
 
@@ -62,7 +62,10 @@ def build_query_graph(
     search_index: Callable[[str], list[str]],
     summarize_results: Callable[..., str],
     query_with_memory_tree: Callable[..., Any],
-    retriever: Any | None = None,
+    # Bắt buộc: composition root (`main.py`) là nơi duy nhất biết implementation cụ thể.
+    # Chú ý — hợp đồng THẬT rộng hơn `Retriever` khi bật USE_LC_ENSEMBLE: nhánh ensemble
+    # còn gọi `retrieve_bm25_only`/`retrieve_faiss_only`. Nợ có sẵn, ghi ở .playbook.
+    retriever: Retriever,
     da_huy: Callable[[str], bool] | None = None,
 ) -> Any:
     """
@@ -116,14 +119,6 @@ def build_query_graph(
     # HITL hi\u1ec3n th\u1ecb c\u00e2u tr\u1ea3 l\u1eddi sau khi duy\u1ec7t \u2192 t\u1eaft stream token \u0111\u1ec3 kh\u00f4ng l\u1ed9 b\u1ea3n nh\u00e1p ch\u01b0a duy\u1ec7t.
     if HITL_ENABLED:
         QUERY_STREAM_TOKENS = False
-
-    # Retriever được INJECT (seam shared.interfaces.Retriever). Mặc định dựng
-    # HybridRetriever như cũ -> main.py không phải đổi (back-compat Phase 1).
-    if retriever is None:
-        retriever = HybridRetriever(
-            index_path=Path(index_meta_path).with_name("index.faiss"),
-            meta_path=Path(index_meta_path),
-        )
 
     def _set_job(job_id: str, **kw: Any) -> None:
         if jobs_update is None:
