@@ -2694,7 +2694,13 @@ def api_quizzes_validation_logs(job_id: str):
 # Thân 8 route attempt đã sang `app/application/attempts.py` (Phase 2B). Tầng ấy
 # không biết HTTP: nó ném lỗi mang NGỮ NGHĨA, còn bảng dưới chọn con số.
 from app.application import attempts as attempts_uc  # noqa: E402
+from app.application import practice as practice_uc  # noqa: E402
+from app.application import progress as progress_uc  # noqa: E402
+from app.application import review_plans as review_uc  # noqa: E402
 
+# Một bảng cho cả ba nhóm: lỗi của review-plan và practice đều kế thừa
+# `attempts_uc.AttemptError`, nên route chỉ cần MỘT chỗ bắt. Thiếu một lớp ở đây là
+# `KeyError` trong route, tức 500 thay cho 404/409 — có test quét đủ các lớp con.
 _ATTEMPT_ERR_HTTP = {
     attempts_uc.AttemptKhongTonTai: 404,
     attempts_uc.QuizKhongTonTai: 404,
@@ -2705,6 +2711,16 @@ _ATTEMPT_ERR_HTTP = {
     attempts_uc.AttemptChuaNop: 409,
     attempts_uc.ThieuDapAn: 400,
     attempts_uc.CauHoiLac: 400,
+    # Phase 2C
+    review_uc.ThieuAttemptId: 400,
+    review_uc.AttemptChuaCham: 409,
+    review_uc.ReviewPlanKhongTonTai: 404,
+    # 500 là hành vi ĐANG CÓ khi `review.generate` trả None. Lạ nhưng giữ nguyên:
+    # đổi nó ở đây là đổi API trong một commit refactor.
+    review_uc.KhongTaoDuocPlan: 500,
+    practice_uc.PracticeKhongTonTai: 404,
+    practice_uc.PracticeChuaSanSang: 409,
+    practice_uc.ChuaCoLanChamNao: 409,
 }
 
 
@@ -2865,36 +2881,19 @@ def api_attempt_masteries(attempt_id: str):
 
 @app.post('/api/review-plans/generate')
 def api_review_plan_generate():
-    """Tạo review plan từ một attempt đã chấm (FR-10.1).
-
-    Chạy đồng bộ: đúng một lượt gọi LLM, và model hỏng vẫn ra plan rule-based nên
-    không cần job nền như tạo quiz.
-    """
+    """Tạo review plan từ một attempt đã chấm (FR-10.1). 201 khi vừa sinh, 200 khi
+    trả bản đã có — xem `review_plans.generate`."""
     uid, err = _require_app_user()
     if err:
         return err
     data = request.json or {}
-    attempt_id = (data.get("attempt_id") or "").strip()
-    if not attempt_id:
-        return jsonify({"error": "Thiếu attempt_id"}), 400
-    attempt, err = _owned_attempt(attempt_id, uid)
-    if err:
-        return err
-    if attempt["status"] != "graded":
-        return jsonify({"error": "Attempt chưa được chấm", "status": attempt["status"]}), 409
-
-    from app.domains.review import service as _review
-    if not data.get("force"):
-        existing = _review.get_by_attempt(attempt_id)
-        if existing:
-            existing.pop("user_id", None)
-            return jsonify({**existing, "cached": True}), 200
-
-    plan = _review.generate(attempt_id)
-    if plan is None:
-        return jsonify({"error": "Không tạo được review plan"}), 500
-    plan.pop("user_id", None)
-    return jsonify(plan), 201
+    try:
+        plan, tao_moi = review_uc.generate(
+            data.get("attempt_id"), uid, force=bool(data.get("force")),
+            bat_buoc_chu_so_huu=_auth_protect_enabled())
+    except attempts_uc.AttemptError as exc:
+        return _attempt_err(exc)
+    return jsonify(plan), 201 if tao_moi else 200
 
 
 @app.get('/api/review-plans/<attempt_id>')
@@ -2903,15 +2902,11 @@ def api_review_plan_by_attempt(attempt_id: str):
     uid, err = _require_app_user()
     if err:
         return err
-    _attempt, err = _owned_attempt(attempt_id, uid)
-    if err:
-        return err
-    from app.domains.review import service as _review
-    plan = _review.get_by_attempt(attempt_id)
-    if not plan:
-        return jsonify({"error": "Review plan not found"}), 404
-    plan.pop("user_id", None)
-    return jsonify(plan)
+    try:
+        return jsonify(review_uc.by_attempt(
+            attempt_id, uid, bat_buoc_chu_so_huu=_auth_protect_enabled()))
+    except attempts_uc.AttemptError as exc:
+        return _attempt_err(exc)
 
 
 @app.get('/api/review-plans/<review_plan_id>/items')
@@ -2919,29 +2914,16 @@ def api_review_plan_items(review_plan_id: str):
     uid, err = _require_app_user()
     if err:
         return err
-    from app.domains.review import service as _review
-    plan = _review.get_plan(review_plan_id)
-    if not plan or (_auth_protect_enabled() and plan.get("user_id") != uid):
-        return jsonify({"error": "Review plan not found"}), 404
-    return jsonify({"review_plan_id": plan["review_plan_id"],
-                    "attempt_id": plan["attempt_id"],
-                    "items": plan["items"]})
+    try:
+        return jsonify(review_uc.items(
+            review_plan_id, uid, bat_buoc_chu_so_huu=_auth_protect_enabled()))
+    except attempts_uc.AttemptError as exc:
+        return _attempt_err(exc)
 
 
 # -------------------------
 # 🏋️ API luyện tập + tiến độ (FR-11, FR-12, đặc tả 7.8–7.10)
 # -------------------------
-def _owned_practice(quiz_id: str, uid):
-    """(meta, error). Quiz chẩn đoán vào route practice cũng là 404 — hai luồng khác nhau."""
-    from app.domains.quiz import repository as _quiz_repo
-    meta = _quiz_repo.get_meta(quiz_id)
-    if not meta or meta.get("quiz_type") != "practice":
-        return None, (jsonify({"error": "Practice quiz not found"}), 404)
-    if _auth_protect_enabled() and meta.get("user_id") != uid:
-        return None, (jsonify({"error": "Practice quiz not found"}), 404)
-    return meta, None
-
-
 @app.post('/api/practice/generate')
 def api_practice_generate():
     """Tạo practice quiz từ một review item yếu (FR-11.1–FR-11.3).
@@ -2995,16 +2977,11 @@ def api_practice_get(practice_quiz_id: str):
     uid, err = _require_app_user()
     if err:
         return err
-    _meta, err = _owned_practice(practice_quiz_id, uid)
-    if err:
-        return err
-    from app.domains.quiz import repository as _quiz_repo
-    quiz = _quiz_repo.get_quiz(practice_quiz_id, include_answers=False)
-    quiz.pop("user_id", None)
-    meta = _quiz_repo.get_meta(practice_quiz_id) or {}
-    return jsonify({**quiz,
-                    "source_review_item_id": meta.get("source_review_item_id"),
-                    "source_attempt_id": meta.get("source_attempt_id")})
+    try:
+        return jsonify(practice_uc.get(
+            practice_quiz_id, uid, bat_buoc_chu_so_huu=_auth_protect_enabled()))
+    except attempts_uc.AttemptError as exc:
+        return _attempt_err(exc)
 
 
 @app.post('/api/practice/<practice_quiz_id>/submit')
@@ -3017,34 +2994,12 @@ def api_practice_submit(practice_quiz_id: str):
     uid, err = _require_app_user()
     if err:
         return err
-    meta, err = _owned_practice(practice_quiz_id, uid)
-    if err:
-        return err
-    if meta.get("status") != "ready":
-        return jsonify({"error": "Practice quiz chưa sẵn sàng"}), 409
-
-    data = request.json or {}
-    raw = data.get("answers")
-    if isinstance(raw, list):
-        raw = {a.get("question_id"): a.get("user_answer")
-               for a in raw if isinstance(a, dict) and a.get("question_id")}
-    if not isinstance(raw, dict) or not raw:
-        return jsonify({"error": "Thiếu answers"}), 400
-
-    from app.domains.attempts import repository as _attempts
-    from app.domains.attempts import service as _grading_service
-    known = set(_attempts.question_ids_of_quiz(practice_quiz_id))
-    unknown = [q for q in raw if str(q) not in known]
-    if unknown:
-        return jsonify({"error": f"question_id không thuộc quiz: {unknown}"}), 400
-
-    attempt_id = _attempts.open_attempt(practice_quiz_id, uid)["attempt_id"]
-    _attempts.save_draft_answers(attempt_id, {str(k): v for k, v in raw.items()})
-    if _attempts.submit(attempt_id) is None:
-        return jsonify({"error": "Attempt không còn ở trạng thái in_progress"}), 409
-    result = _grading_service.grade_attempt(attempt_id)
-    return jsonify({**_attempt_public(_attempts.get_attempt(attempt_id)),
-                    "grading": "done", **(result or {})})
+    try:
+        return jsonify(practice_uc.submit(
+            practice_quiz_id, uid, (request.json or {}).get("answers"),
+            bat_buoc_chu_so_huu=_auth_protect_enabled()))
+    except attempts_uc.AttemptError as exc:
+        return _attempt_err(exc)
 
 
 @app.get('/api/practice/<practice_quiz_id>/comparison')
@@ -3057,34 +3012,11 @@ def api_practice_comparison(practice_quiz_id: str):
     uid, err = _require_app_user()
     if err:
         return err
-    meta, err = _owned_practice(practice_quiz_id, uid)
-    if err:
-        return err
-
-    from app.domains.gap_analysis import service as _gap
-    from app.domains.progress import service as _progress
-    from app.domains.review import service as _review
-
-    after_attempt = _progress.latest_graded_attempt(practice_quiz_id, uid)
-    if not after_attempt:
-        return jsonify({"error": "Chưa có lần làm nào đã chấm cho practice quiz này"}), 409
-
-    source_attempt = meta.get("source_attempt_id")
-    item = _review.get_item(meta.get("source_review_item_id") or "")
-    topics = [item["topic"]] if item else None
-
-    body = _progress.compare_masteries(
-        _gap.list_for_attempt(source_attempt) if source_attempt else [],
-        _gap.list_for_attempt(after_attempt),
-        topics=topics,
-    )
-    return jsonify({
-        "practice_quiz_id": practice_quiz_id,
-        "topic": item["topic"] if item else None,
-        "source_attempt_id": source_attempt,
-        "practice_attempt_id": after_attempt,
-        **body,
-    })
+    try:
+        return jsonify(practice_uc.comparison(
+            practice_quiz_id, uid, bat_buoc_chu_so_huu=_auth_protect_enabled()))
+    except attempts_uc.AttemptError as exc:
+        return _attempt_err(exc)
 
 
 @app.get('/api/progress/overview')
@@ -3092,8 +3024,7 @@ def api_progress_overview():
     uid, err = _require_app_user()
     if err:
         return err
-    from app.domains.progress import service as _progress
-    return jsonify(_progress.overview(uid))
+    return jsonify(progress_uc.overview(uid))
 
 
 @app.get('/api/progress/concepts')
@@ -3102,16 +3033,14 @@ def api_progress_concepts():
     uid, err = _require_app_user()
     if err:
         return err
-    from app.domains.progress import service as _progress
     document_id = (request.args.get("document_id") or "").strip() or None
     if document_id:
+        # `_owned_document` có 12 caller ngoài nhóm này — cổng ở lại đây, không chuyển.
         _row, err = _owned_document(document_id, uid)
         if err:
             return err
-    rows = _progress.concept_progress(uid, document_id=document_id)
-    if str(request.args.get("weak", "")).lower() in ("1", "true", "yes"):
-        rows = [r for r in rows if r["status"] != "mastered"]
-    return jsonify({"concepts": rows})
+    weak_only = str(request.args.get("weak", "")).lower() in ("1", "true", "yes")
+    return jsonify(progress_uc.concepts(uid, document_id=document_id, weak_only=weak_only))
 
 
 @app.get('/api/progress/attempts')
@@ -3123,8 +3052,7 @@ def api_progress_attempts():
         limit = max(1, min(200, int(request.args.get("limit", 50))))
     except (TypeError, ValueError):
         return jsonify({"error": "limit phải là số nguyên"}), 400
-    from app.domains.progress import service as _progress
-    return jsonify({"attempts": _progress.attempt_history(uid, limit=limit)})
+    return jsonify(progress_uc.attempt_history(uid, limit=limit))
 
 
 # -------------------------
