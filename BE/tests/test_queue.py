@@ -284,7 +284,13 @@ def test_memory_tree_thread_path_when_disabled(monkeypatch):
         seen["stems"] = stems
         ev.set()
 
-    monkeypatch.setattr(main, "build_memory_tree_for_sources", fake_build)
+    # Phase 1: thân `run_memory_tree_job` đã sang `app/application/memory_tree.py`, và
+    # nó tra `build_memory_tree_for_sources` trong globals của MODULE ĐÓ. Patch phải đặt
+    # ở nơi mã tra tên, không phải nơi hàm được định nghĩa gốc (`domains.memory.tree`)
+    # cũng không phải nơi nó từng được nhập (`app.main`).
+    import app.application.memory_tree as memory_tree_uc
+
+    monkeypatch.setattr(memory_tree_uc, "build_memory_tree_for_sources", fake_build)
     main._trigger_memory_tree_build(["srcA"])
     assert ev.wait(2.0) and seen["stems"] == ["srcA"]   # ran in-thread, not queued
 

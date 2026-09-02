@@ -1,5 +1,33 @@
 # Known Issues
 
+## (CHƯA SỬA — ghi nhận 2026-09-02) `test_queue.py` có test phụ thuộc THỨ TỰ chạy
+
+Trong lúc rút 6 job runner khỏi `main.py` (Phase 1), sau khi sửa 5 test stale thì chạy
+riêng `pytest tests/test_queue.py` vẫn thấy 2 test đỏ:
+
+- `test_stats_has_queue_block` — nhận 401 trong khi chờ 200
+- `test_query_path_still_returns_job_id_not_queued`
+
+Chạy cả bộ (`pytest -q`) thì cả hai xanh. Đây **không phải hồi quy của Phase 1**. Kiểm
+chứng bằng cách lấy đúng file ở commit trước rồi chạy cô lập:
+
+```bash
+git show HEAD:BE/tests/test_queue.py > /tmp/test_queue_HEAD.py
+# chạy riêng file này -> 3 test đỏ, gồm cả 2 test trên
+```
+
+Nguyên nhân: hai test đó dựa vào trạng thái mà test khác trong bộ dựng sẵn (phiên đăng
+nhập / cờ hàng đợi), không tự dựng lấy. Chạy một mình thì trạng thái đó chưa có.
+
+**Quy tắc cho các phase sau:** thấy test đỏ lúc chạy cô lập thì **đối chiếu với `HEAD`
+trước khi đổ cho refactor** — `git show HEAD:<file>` rồi chạy đúng file đó. Đỏ ở cả hai
+nghĩa là nợ có sẵn, không phải do thay đổi vừa làm.
+
+Cố ý **chưa sửa** trong Phase 1: sửa fixture của 2 test này là đụng vào phần ngoài phạm
+vi "chỉ di chuyển mã", và sẽ trộn lẫn thay đổi hành vi test vào một commit refactor
+thuần. Để lại cho một commit riêng.
+
+
 ## (ĐÃ SỬA 2026-09-02) "Kết quả bài thi sai" — hoá ra một câu hỏng, một câu trả lời sai thật
 
 Người dùng gửi link trang kết quả và nói kết quả sai. Tra thẳng DB attempt

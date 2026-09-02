@@ -153,11 +153,18 @@ def _seed_document(client, be, monkeypatch, name="giao trinh.md"):
     ])
 
     # Pipeline giả không đọc mm_input, chỉ cần route đi qua được.
-    monkeypatch.setattr(be, "collect_mindmap_input",
+    #
+    # Phase 1: thân `run_study_map_job` đã sang `app/application/study_map_generation.py`.
+    # Nó `from ... import collect_mindmap_input` nên tên đó nằm trong globals của module
+    # ĐÓ — patch `app.main` không còn tới được, và hàm thật sẽ chạy rồi đọc index.json
+    # thật (FileNotFoundError). Patch tại nơi mã tra tên.
+    import app.application.study_map_generation as study_map_uc
+
+    monkeypatch.setattr(study_map_uc, "collect_mindmap_input",
                         lambda meta, stems: {"title": name, "sources": stems,
                                              "chunks": [{"key": "100", "text": "noi dung"}],
                                              "tree_sections": []})
-    monkeypatch.setattr(be, "_get_mindmap_pipeline", lambda: _FakePipeline())
+    monkeypatch.setattr(study_map_uc, "_get_mindmap_pipeline", lambda: _FakePipeline())
     return doc_id
 
 
@@ -262,7 +269,9 @@ def test_failed_job_marks_map_failed_not_stuck_processing(be, client, monkeypatc
         def enrich(self, *a, **kw):
             raise RuntimeError("LLM chet")
 
-    monkeypatch.setattr(be, "_get_mindmap_pipeline", lambda: _Boom())
+    import app.application.study_map_generation as study_map_uc
+
+    monkeypatch.setattr(study_map_uc, "_get_mindmap_pipeline", lambda: _Boom())
     job = client.post("/api/study-maps/generate", json={"document_id": doc_id}).get_json()
     status = client.get(f"/api/study-maps/jobs/{job['job_id']}").get_json()
     assert status["status"] == "error" and status["error"]

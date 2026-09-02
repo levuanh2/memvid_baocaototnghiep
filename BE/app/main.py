@@ -1441,51 +1441,29 @@ _reconcile_jobs_safe()
 _run_jobs_maintenance(force=True)
 
 
-def _langgraph_invoke(graph: Any, state: dict, *, thread_id: str, command: Any = None) -> dict:
-    """Graph compile với SqliteSaver yêu cầu configurable.thread_id.
-
-    command != None → resume một interrupt (HITL): truyền Command(resume=...) thay cho state.
-    """
-    tid = (thread_id or "").strip() or str(uuid.uuid4())
-    try:
-        return graph.invoke(command if command is not None else state, config={"configurable": {"thread_id": tid}})
-    except Exception as e:
-        # LangGraph / thư viện đôi khi ném exception str() rỗng — bọc để job/SSE có nội dung.
-        if not str(e).strip():
-            raise RuntimeError(_job_error_text(e)) from e
-        raise
+# Bốn helper vòng đời job nền đã chuyển sang tầng Application (Phase 1). Import lại
+# dưới TÊN CŨ: mọi chỗ gọi trong file này và các test đang tham chiếu
+# `app.main._job_error_text` / `_nhip_tim_job` vẫn chạy nguyên trạng.
+from app.application.shared import (  # noqa: E402
+    _job_error_text,
+    _JobCancelled,
+    _langgraph_invoke,
+    _LOI_AI_DE_HIEU,
+    _nhip_tim_job,
+)
 
 
-class _JobCancelled(Exception):
-    """Người dùng bấm huỷ — không phải lỗi, không ghi error_text."""
+
 
 
 # Audit vòng 7 Q5 — hai lỗi AI hay gặp nhất từng tới người dùng dưới CÙNG một câu
 # "Gọi model thất bại: ...", trong khi chúng đòi hai hành động ngược nhau: một cái bảo
 # "chờ rồi thử lại", cái kia bảo "máy này không kham nổi, giảm tải hoặc đổi model".
 # Giữ nguyên văn kỹ thuật ở cuối để log và người sửa lỗi không mất gì.
-_LOI_AI_DE_HIEU = (
-    ("LLM busy (in-process)",
-     "Hệ thống đang bận: máy này chỉ chạy được một yêu cầu AI mỗi lúc và hàng đợi "
-     "chờ quá lâu. Thử lại sau ít phút."),
-    ("LLM gateway busy",
-     "Hệ thống đang bận: hàng đợi AI đã đầy. Thử lại sau ít phút."),
-    ("timed out",
-     "Máy không sinh xong trong thời gian cho phép. Thử giảm số câu, thu hẹp phạm vi "
-     "tài liệu, hoặc dùng model nhẹ hơn."),
-)
 
 
-def _job_error_text(exc: BaseException) -> str:
-    """Nhiều built-in (TimeoutError, RuntimeError…) có str(exc)==''; không bao giờ trả chuỗi rỗng."""
-    msg = str(exc).strip()
-    if msg:
-        for dau_hieu, cau in _LOI_AI_DE_HIEU:
-            if dau_hieu in msg:
-                return f"{cau} (chi tiết: {msg})"
-        return msg
-    name = getattr(type(exc), "__name__", None) or type(exc).__qualname__ or "Exception"
-    return f"{name}: không có nội dung chi tiết (xem traceback trong log server)."
+
+
 
 
 def _detect_query_interrupt(graph: Any, thread_id: str) -> Optional[dict]:
@@ -1705,21 +1683,13 @@ def _finalize_query_job(jid: str, session_id: str, question: str, out: dict,
 # -------------------------
 # 🔄 Background tasks (non-blocking)
 # -------------------------
+# ── Wrapper tương thích (Phase 1) ──────────────────────────────────────────
+# Thân hàm đã chuyển sang `app/application/`. Giữ tên ở ĐÚNG chỗ này vì RQ
+# serialize hàm theo `module.qualname` (`app.main.<ten>`) — job đã nằm trong
+# hàng đợi trước lúc deploy vẫn phải resolve được. Chữ ký giữ NGUYÊN.
 def run_memory_tree_job(source_stems: List[str]):
-    """Build Memory Tree for the given sources. Runs in a daemon thread
-    (QUEUE_ENABLED=false) OR an RQ worker process (QUEUE_ENABLED=true) — identical
-    behaviour, no Flask request context. Enqueued by dotted path
-    `app.main.run_memory_tree_job`. Fire-and-forget: there is no per-job status store
-    today (results land in memory_trees.json, surfaced by /memory-tree-status); errors are
-    logged, not persisted, matching the existing contract."""
-    print(f"memory_tree_job_running sources={source_stems}", flush=True)
-    try:
-        build_memory_tree_for_sources(source_stems)
-        print(f"memory_tree_job_done sources={source_stems}", flush=True)
-    except Exception as exc:
-        import traceback
-        traceback.print_exc()
-        print(f"memory_tree_job_failed sources={source_stems} err={str(exc)[:80]}", flush=True)
+    from app.application.memory_tree import run_memory_tree_job as _impl
+    return _impl(source_stems)
 
 
 # Backward-compatible alias (older callers / tests may reference this name).
@@ -2330,92 +2300,13 @@ def api_document_search(document_id: str):
 # -------------------------
 # 🗺️ API Study Map (FR-04, đặc tả 7.4)
 # -------------------------
+# ── Wrapper tương thích (Phase 1) ──────────────────────────────────────────
+# Thân hàm đã chuyển sang `app/application/`. Giữ tên ở ĐÚNG chỗ này vì RQ
+# serialize hàm theo `module.qualname` (`app.main.<ten>`) — job đã nằm trong
+# hàng đợi trước lúc deploy vẫn phải resolve được. Chữ ký giữ NGUYÊN.
 def run_study_map_job(job_id: str, document_id: str, user_id: Optional[str] = None) -> None:
-    """Sinh Study Map cho MỘT tài liệu (FR-04.2).
-
-    Gọi thẳng pipeline mindmap thay vì đi qua MINDMAP_GRAPH: graph tự ghi
-    `status=done` kèm result là artifact mindmap, mà job này phải trả `map_id` —
-    để graph đóng job trước rồi mới ghi map_id là dựng lại đúng race
-    done-trước-result đã có trong known-issues. Ở đây job chỉ done sau khi map
-    đã nằm trong DB.
-    """
-    from app.domains.documents import repository as _docs
-    from app.domains.jobs.jobs_store import is_cancel_requested, update_job
-    from app.domains.studymap import generator as _sm_gen
-    from app.domains.studymap import repository as _sm_repo
-
-    print(f"study_map_job_running job_id={job_id}", flush=True)
-    map_id = None
-    try:
-        row = _docs.get(document_id) or {}
-        stem = row.get("source_stem")
-        if not stem:
-            raise ValueError("Tài liệu chưa có dữ liệu đã index.")
-        map_id = _sm_repo.create_map(document_id=document_id, user_id=user_id,
-                                     title=row.get("filename") or "Study Map")
-        update_job(job_id, status="running", progress=5, current_node="CollectInput",
-                   result={"map_id": map_id, "status": "processing"})
-
-        mm = collect_mindmap_input(INDEX_META_JSON_PATH, [stem])
-        if not mm.get("chunks"):
-            raise ValueError("Tài liệu chưa có chunk nào đã index.")
-
-        def _cancelled() -> bool:
-            return bool(is_cancel_requested(job_id))
-
-        pipeline = _get_mindmap_pipeline()
-        update_job(job_id, progress=15, current_node="Skeleton")
-        skeleton, method = pipeline.skeleton(mm)
-        if _cancelled():
-            raise _JobCancelled()
-
-        update_job(job_id, progress=30, current_node="Enrich")
-        nodes, deg_enrich = pipeline.enrich(
-            mm, skeleton,
-            progress_cb=lambda p, msg: update_job(job_id, progress=p, current_node=msg),
-            cancel_cb=_cancelled,
-        )
-        if _cancelled():
-            raise _JobCancelled()
-
-        # Nhãn nêu SỐ khái niệm chứ không chỉ tên bước: `relations()` là MỘT lời gọi
-        # LLM, không chia nhỏ được, và nó chiếm 106 giây đo được trong job 487s. Chia
-        # nhỏ một lời gọi LLM chỉ để thanh chạy mượt là làm đẹp bằng cách làm chậm —
-        # nói thật cho người dùng biết đang chờ gì thì rẻ hơn và đúng hơn.
-        update_job(job_id, progress=75,
-                   current_node=f"Đang tìm quan hệ giữa {len(nodes)} khái niệm...")
-        relations, deg_rel = pipeline.relations(nodes, cancel_cb=_cancelled)
-        if _cancelled():
-            raise _JobCancelled()
-
-        update_job(job_id, progress=85, current_node="Persist")
-        clean = mindmap_schema.sanitize_nodes(nodes)
-        rels = mindmap_schema.validate_relations(relations, clean)
-        node_rows, edge_rows = _sm_gen.build_graph(
-            clean, rels, _docs.chunks_by_embedding(document_id),
-        )
-        if not node_rows:
-            raise ValueError("Pipeline không dựng được node nào.")
-        counts = _sm_repo.save_graph(map_id, document_id, node_rows, edge_rows)
-        _sm_repo.finish(map_id, "completed", generator={
-            "pipeline": mindmap_schema.PIPELINE_VERSION,
-            "skeleton_method": method,
-            "degraded": bool(deg_enrich or deg_rel),
-            **counts,
-        })
-        update_job(job_id, status="done", progress=100, current_node="Persist",
-                   result={"map_id": map_id, "status": "completed", **counts})
-        print(f"study_map_job_done job_id={job_id} map_id={map_id}", flush=True)
-    except _JobCancelled:
-        if map_id:
-            _sm_repo.finish(map_id, "failed", generator={"cancelled": True})
-        update_job(job_id, status="cancelled", progress=0, current_node="Cancelled")
-        print(f"study_map_job_cancelled job_id={job_id}", flush=True)
-    except Exception as e:
-        if map_id:
-            _sm_repo.finish(map_id, "failed", generator={"error": str(e)[:500]})
-        update_job(job_id, status="error", error_text=_job_error_text(e))
-        print(f"study_map_job_failed job_id={job_id} err={str(e)[:80]}", flush=True)
+    from app.application.study_map_generation import run_study_map_job as _impl
+    return _impl(job_id, document_id, user_id)
 
 
 @app.post('/api/study-maps/generate')
@@ -2556,192 +2447,14 @@ def _quiz_config(data: dict):
     }, None
 
 
+# ── Wrapper tương thích (Phase 1) ──────────────────────────────────────────
+# Thân hàm đã chuyển sang `app/application/`. Giữ tên ở ĐÚNG chỗ này vì RQ
+# serialize hàm theo `module.qualname` (`app.main.<ten>`) — job đã nằm trong
+# hàng đợi trước lúc deploy vẫn phải resolve được. Chữ ký giữ NGUYÊN.
 def run_quiz_generation_job(job_id: str, document_id: str, config: dict,
                             user_id: Optional[str] = None) -> None:
-    """Sinh quiz chẩn đoán (FR-06) + kiểm chất lượng (FR-13).
-
-    Không dùng LangGraph: luồng thẳng một mạch, và graph tự ghi `status=done` là dựng
-    lại race done-trước-result trong known-issues (xem `run_study_map_job`). Ở đây job
-    chỉ `done` sau khi câu hỏi đã nằm trong DB.
-    """
-    from app.domains.ai_validation import rules as _rules
-    from app.domains.ai_validation import store as _val_store
-    from app.domains.jobs import ledger as _ledger
-    from app.domains.jobs.jobs_store import is_cancel_requested, update_job
-    from app.domains.quiz import generator as _quiz_gen
-    from app.domains.quiz import repository as _quiz_repo
-
-    print(f"quiz_job_running job_id={job_id}", flush=True)
-    quiz_id = None
-    # Log validation có FK tới `jobs` (Postgres). Sổ cái mở được thì mới gắn job_id,
-    # không thì vẫn ghi log nhưng để trống — FR-13.10 không kèm điều kiện.
-    ledger_ok = _ledger.open_job(job_id, job_type="quiz_generation", user_id=user_id,
-                                 input_json={"document_id": document_id, **config})
-    log_job_id = job_id if ledger_ok else None
-
-    def _cancelled() -> bool:
-        return bool(is_cancel_requested(job_id))
-
-    try:
-        scope = config["scope"]
-        # Practice (FR-11.2) chỉ định thẳng chunk từ review item; quiz chẩn đoán lấy
-        # theo section. Dùng CHUNG job này để hai đường sinh quiz không lệch nhau.
-        if config.get("chunk_ids"):
-            chunks = _quiz_repo.chunks_by_ids(document_id, config["chunk_ids"],
-                                              limit=QUIZ_MAX_CONTEXT_CHUNKS)
-            if not chunks:
-                raise ValueError("Review item không còn chunk nguồn nào.")
-        else:
-            chunks = _quiz_repo.chunks_for_scope(document_id, scope.get("section_ids"),
-                                                 limit=QUIZ_MAX_CONTEXT_CHUNKS)
-            if not chunks:
-                raise ValueError("Phạm vi đã chọn không có chunk nào đã index.")
-
-        quiz_id = _quiz_repo.create_quiz(
-            user_id=user_id, document_id=document_id,
-            title=config.get("title") or _quiz_repo.document_title(document_id),
-            scope=scope, question_count=config["question_count"],
-            difficulty=config["difficulty"],
-            quiz_type=config.get("quiz_type") or "diagnostic",
-            source_review_item_id=config.get("source_review_item_id"),
-            source_attempt_id=config.get("source_attempt_id"),
-        )
-        update_job(job_id, status="running", progress=10, current_node="BuildContext",
-                   result={"quiz_id": quiz_id, "status": "processing"})
-
-        context, ref_map = _quiz_gen.build_context(chunks)
-        if _cancelled():
-            raise _JobCancelled()
-
-        update_job(job_id, progress=30, current_node="GenerateQuestions")
-        with _nhip_tim_job(job_id):
-            raw_questions, err, attempts = _quiz_gen.generate_questions(
-                context, config, da_huy=_cancelled)
-        # Huỷ phải được đọc TRƯỚC `err`: `generate_questions` trả lỗi "Đã huỷ..." khi
-        # thấy cờ, và nó là huỷ chứ không phải hỏng — vào nhánh `err` thì job hiện
-        # "Tạo quiz thất bại" cho một việc chính người dùng bấm dừng.
-        if _cancelled():
-            raise _JobCancelled()
-        if err:
-            _val_store.log_rejections([_rules.json_failure(err)], job_id=log_job_id)
-            raise ValueError(err)
-
-        update_job(job_id, progress=70, current_node="Validate")
-        accepted, rejected = _rules.validate_questions(
-            raw_questions,
-            allowed_chunk_refs=ref_map.keys(),
-            allowed_section_ids=_quiz_repo.section_ids_of(document_id),
-            allowed_types=config["question_types"],
-        )
-        _val_store.log_rejections(rejected, job_id=log_job_id)
-
-        # Nhãn `c0` sang chunk_id thật + suy ra section từ chunk nguồn (FR-06.10):
-        # model không được cấp section_id nên tự nó không gắn được.
-        # Practice: ÉP tag chủ đề của review item vào mọi câu (FR-11.10).
-        # Tag do LLM tự đặt nên bài chẩn đoán ra "hàm hợp" còn bài luyện ra "quy tắc
-        # hàm hợp" — hai tên khác nhau thì so sánh trước/sau không bao giờ khớp và
-        # màn hình tiến bộ im lặng báo "chưa đo". Chủ đề đã biết chắc từ review item,
-        # không có lý do để model quyết định lại.
-        practice_topic = (config.get("practice_topic") or "").strip()
-        if practice_topic:
-            for q in accepted:
-                tags = [t for t in (q.get("concept_tags") or []) if t != practice_topic]
-                q["concept_tags"] = [practice_topic] + tags
-
-        section_by_chunk = {c["chunk_id"]: c.get("section_id") for c in chunks}
-        for q in accepted:
-            q["chunk_ids"] = _quiz_gen.resolve_chunk_refs(q["chunk_refs"], ref_map)
-            if not q.get("section_id"):
-                sections = [section_by_chunk.get(cid) for cid in q["chunk_ids"]]
-                sections = [x for x in sections if x]
-                q["section_id"] = max(set(sections), key=sections.count) if sections else None
-        accepted = [q for q in accepted if q["chunk_ids"]][: config["question_count"]]
-
-        # MỘT lượt bù, không hơn. Xin 10 nhận 5 (log 2026-08-30 job 7ae6eb87: 5/10 câu
-        # bị loại vì model bỏ `explanation`) — không ép được model viết đủ, nhưng hỏi
-        # lại đúng phần thiếu thì được. Máy chỉ có 1 slot LLM nên mỗi lượt là ~1 phút
-        # người dùng ngồi chờ: bù xong vẫn thiếu thì trả đúng số có được, `asked_count`
-        # trong result nói ra phần chênh.
-        thieu = config["question_count"] - len(accepted)
-        if thieu > 0 and not _cancelled():
-            from shared.text_norm import norm_text as _norm_text
-
-            update_job(job_id, progress=80, current_node="BuSoCauThieu")
-            print(f"quiz_bu_cau job_id={job_id} co={len(accepted)} thieu={thieu}",
-                  flush=True)
-            with _nhip_tim_job(job_id):
-                them_raw, them_err, _ = _quiz_gen.generate_questions(
-                    context, {**config, "question_count": thieu},
-                    # GỒM CẢ câu bị loại: chúng là thứ model vừa viết và sẽ viết lại
-                    # nếu không được nhắc. Chỉ liệt kê câu được nhận là giấu đi phần
-                    # lớn thông tin cần cho việc "đừng lặp".
-                    da_co=_quiz_gen.gom_da_co(accepted, raw_questions),
-                    da_huy=_cancelled)
-            if them_err:
-                # Bù hỏng KHÔNG làm hỏng cả job: quiz với 5 câu vẫn dùng được, còn hơn
-                # ném đi cả 5 câu đã qua kiểm chất lượng.
-                print(f"quiz_bu_cau_that_bai job_id={job_id} err={them_err[:80]}",
-                      flush=True)
-            else:
-                them_ok, them_bad = _rules.validate_questions(
-                    them_raw,
-                    allowed_chunk_refs=ref_map.keys(),
-                    allowed_section_ids=_quiz_repo.section_ids_of(document_id),
-                    allowed_types=config["question_types"],
-                )
-                _val_store.log_rejections(them_bad, job_id=log_job_id)
-                rejected = rejected + them_bad
-                da_co_norm = {_norm_text(q["question_text"]) for q in accepted}
-                for q in them_ok:
-                    if _norm_text(q["question_text"]) in da_co_norm:
-                        continue
-                    q["chunk_ids"] = _quiz_gen.resolve_chunk_refs(q["chunk_refs"], ref_map)
-                    if not q["chunk_ids"]:
-                        continue
-                    if practice_topic:
-                        tags = [t for t in (q.get("concept_tags") or []) if t != practice_topic]
-                        q["concept_tags"] = [practice_topic] + tags
-                    if not q.get("section_id"):
-                        secs = [section_by_chunk.get(c) for c in q["chunk_ids"]]
-                        secs = [x for x in secs if x]
-                        q["section_id"] = max(set(secs), key=secs.count) if secs else None
-                    accepted.append(q)
-                    da_co_norm.add(_norm_text(q["question_text"]))
-                    if len(accepted) >= config["question_count"]:
-                        break
-                print(f"quiz_bu_cau_xong job_id={job_id} tong={len(accepted)}", flush=True)
-
-        if not accepted:
-            raise ValueError(
-                f"Không câu hỏi nào qua kiểm chất lượng ({len(rejected)} câu bị loại).")
-
-        update_job(job_id, progress=90, current_node="Persist")
-        _quiz_repo.save_questions(quiz_id, accepted)
-        _quiz_repo.finish(quiz_id, "ready", question_count=len(accepted))
-        dem_loai, ly_do = _rules.ly_do_loai(rejected)
-        result = {"quiz_id": quiz_id, "status": "ready", "question_count": len(accepted),
-                  "asked_count": config["question_count"],
-                  "rejected_count": len(rejected), "llm_attempts": attempts,
-                  # Nguyên nhân ĐO ĐƯỢC, không đoán. Giao diện từng tự bịa "đoạn tài
-                  # liệu quá ngắn" trong khi log cho thấy 9/12 câu mất vì model không
-                  # trích nhãn nguồn.
-                  "rejected_reason": ly_do, "rejected_by_rule": dem_loai}
-        update_job(job_id, status="done", progress=100, current_node="Persist", result=result)
-        _ledger.close_job(job_id, "done", result_type="quiz", result_id=quiz_id)
-        print(f"quiz_job_done job_id={job_id} quiz_id={quiz_id} "
-              f"kept={len(accepted)} rejected={len(rejected)}", flush=True)
-    except _JobCancelled:
-        if quiz_id:
-            _quiz_repo.finish(quiz_id, "failed")
-        update_job(job_id, status="cancelled", progress=0, current_node="Cancelled")
-        _ledger.close_job(job_id, "cancelled")
-        print(f"quiz_job_cancelled job_id={job_id}", flush=True)
-    except Exception as e:
-        if quiz_id:
-            _quiz_repo.finish(quiz_id, "failed")
-        update_job(job_id, status="error", error_text=_job_error_text(e))
-        _ledger.close_job(job_id, "error", error_message=str(e))
-        print(f"quiz_job_failed job_id={job_id} err={str(e)[:80]}", flush=True)
+    from app.application.quiz_generation import run_quiz_generation_job as _impl
+    return _impl(job_id, document_id, config, user_id)
 
 
 # Audit vòng 7 Q2 — chống job quiz trùng.
@@ -2825,34 +2538,7 @@ def _quiz_job_nha_cho(key: str, job_id_cua_minh: str) -> None:
             _QUIZ_INFLIGHT.pop(key, None)
 
 
-@contextlib.contextmanager
-def _nhip_tim_job(job_id: str, moi_giay: float = 120.0):
-    """Báo "còn sống" đều đặn trong lúc một bước dài không có tiến trình để báo.
 
-    `sweep_stuck_jobs` quét job `running` không chạm `updated_at` quá
-    `JOB_STUCK_AFTER_SECONDS` (mặc định 900) thành `interrupted`. Bước gọi model của
-    quiz nằm trọn giữa `progress=30` và `progress=70`: `QUIZ_LLM_TIMEOUT_SEC=900` nhân
-    `MAX_ATTEMPTS=2` là tối đa 1800s im lặng. Job đang chạy tử tế bị quét, người dùng
-    bấm lại, và job thứ hai tranh 1 slot LLM — đúng lỗi vòng 7 quay lại bằng cửa khác.
-
-    Việc phụ: hỏng thì im, không được ném vào luồng job.
-    """
-    dung = threading.Event()
-
-    def _chay() -> None:
-        from app.domains.jobs import jobs_store as _js
-        while not dung.wait(moi_giay):
-            try:
-                _js.touch_job(job_id)
-            except Exception:
-                pass
-
-    t = threading.Thread(target=_chay, daemon=True)
-    t.start()
-    try:
-        yield
-    finally:
-        dung.set()
 
 
 @app.post('/api/quizzes/generate')
@@ -3022,35 +2708,14 @@ def _attempt_public(attempt: dict) -> dict:
     return out
 
 
+# ── Wrapper tương thích (Phase 1) ──────────────────────────────────────────
+# Thân hàm đã chuyển sang `app/application/`. Giữ tên ở ĐÚNG chỗ này vì RQ
+# serialize hàm theo `module.qualname` (`app.main.<ten>`) — job đã nằm trong
+# hàng đợi trước lúc deploy vẫn phải resolve được. Chữ ký giữ NGUYÊN.
 def run_short_answer_grading_job(job_id: str, attempt_id: str,
                                  user_id: Optional[str] = None) -> None:
-    """Chấm bài có câu tự luận (FR-08.3). Chấm CẢ attempt rồi ghi một lần."""
-    from app.domains.attempts import service as _grading_service
-    from app.domains.jobs import ledger as _ledger
-    from app.domains.jobs.jobs_store import update_job
-
-    print(f"grading_job_running job_id={job_id}", flush=True)
-    _ledger.open_job(job_id, job_type="short_answer_grading", user_id=user_id,
-                     input_json={"attempt_id": attempt_id})
-    try:
-        update_job(job_id, status="running", progress=20, current_node="Grading")
-        result = _grading_service.grade_attempt(
-            attempt_id,
-            # Người học đang ngồi chờ màn hình điểm. Không có dòng này thì job đứng ở
-            # 20% suốt cả lượt chấm (1 lời gọi LLM mỗi câu tự luận) rồi nhảy thẳng 100%.
-            progress_cb=lambda p, msg: update_job(job_id, progress=p, current_node=msg),
-        )
-        if result is None:
-            raise ValueError("Attempt không tồn tại.")
-        update_job(job_id, status="done", progress=100, current_node="Grading",
-                   result={"attempt_id": attempt_id, **result})
-        _ledger.close_job(job_id, "done", result_type="quiz_attempt", result_id=attempt_id)
-        print(f"grading_job_done job_id={job_id} attempt_id={attempt_id} "
-              f"score={result['score']}/{result['max_score']}", flush=True)
-    except Exception as e:
-        update_job(job_id, status="error", error_text=_job_error_text(e))
-        _ledger.close_job(job_id, "error", error_message=str(e))
-        print(f"grading_job_failed job_id={job_id} err={str(e)[:80]}", flush=True)
+    from app.application.short_answer_grading import run_short_answer_grading_job as _impl
+    return _impl(job_id, attempt_id, user_id)
 
 
 @app.post('/api/quizzes/<quiz_id>/attempts')
@@ -4121,40 +3786,18 @@ def _start_summary_job(source_names: list[str], mm_input: dict, content_hash: st
     return job_id
 
 
+# ── Wrapper tương thích (Phase 1) ──────────────────────────────────────────
+# Thân hàm đã chuyển sang `app/application/`. Giữ tên ở ĐÚNG chỗ này vì RQ
+# serialize hàm theo `module.qualname` (`app.main.<ten>`) — job đã nằm trong
+# hàng đợi trước lúc deploy vẫn phải resolve được. Chữ ký giữ NGUYÊN.
 def run_summary_job(job_id: str, source_names: list[str], mm_input: dict,
                     content_hash: str, length_mode: str, user_id: Optional[str] = None,
                     mode: str = "standard") -> None:
-    """Summary v2 execution body. Runs in a daemon thread (QUEUE_ENABLED=false) OR an RQ
-    worker process (QUEUE_ENABLED=true) — identical behaviour, no Flask request context
-    needed. Enqueued by dotted path `app.main.run_summary_job`. The graph owns the
-    done/result write (atomic); this wraps errors -> job error. Cancellation uses the
-    existing cooperative flag (summary graph `_guard` checks jobs_store cancel_requested)."""
-    print(f"summary_job_running job_id={job_id}", flush=True)
-    # Phase 0 observability: counter LLM call per-job (pipeline pool propagate
-    # qua ctx_submit); flush thành node event "LLMCalls" kể cả khi job lỗi.
-    from app.graphs.logger import begin_llm_count, flush_llm_count
-    _llm_counter = begin_llm_count()
-    try:
-        from app.domains.jobs.jobs_store import update_job as _uj
-        try:
-            _uj(job_id, status="running", current_node="Summary")
-        except Exception:
-            pass
-        if SUMMARY_GRAPH is None:
-            raise RuntimeError("SUMMARY_GRAPH chưa khởi tạo — kiểm tra logs khởi động.")
-        _langgraph_invoke(SUMMARY_GRAPH, {
-            "job_id": job_id, "source_names": source_names, "mm_input": mm_input,
-            "content_hash": content_hash, "length_mode": length_mode, "mode": mode,
-            "user_id": user_id,  # Phase D: persisted onto the summary record (owner)
-            "progress": 0, "current_node": "", "error": None,
-        }, thread_id=job_id)
-        print(f"summary_job_done job_id={job_id}", flush=True)
-    except Exception as e:
-        from app.domains.jobs.jobs_store import update_job
-        update_job(job_id, status="error", error_text=_job_error_text(e))
-        print(f"summary_job_failed job_id={job_id} err={str(e)[:80]}", flush=True)
-    finally:
-        flush_llm_count(job_id, _llm_counter)
+    # Graph là biến module của file này (dựng lúc khởi động) — TIÊM vào use case
+    # thay vì để tầng application import ngược lên tầng API.
+    from app.application.summary_generation import run_summary_job as _impl
+    return _impl(job_id, source_names, mm_input, content_hash, length_mode, user_id,
+                 mode, graph=SUMMARY_GRAPH)
 
 
 # -------------------------
@@ -4474,35 +4117,14 @@ def _start_mindmap_job(source_names: list[str], mm_input: dict, content_hash: st
     return job_id
 
 
+# ── Wrapper tương thích (Phase 1) ──────────────────────────────────────────
+# Thân hàm đã chuyển sang `app/application/`. Giữ tên ở ĐÚNG chỗ này vì RQ
+# serialize hàm theo `module.qualname` (`app.main.<ten>`) — job đã nằm trong
+# hàng đợi trước lúc deploy vẫn phải resolve được. Chữ ký giữ NGUYÊN.
 def run_mindmap_job(job_id: str, source_names: list[str], mm_input: dict, content_hash: str, user_id: Optional[str] = None) -> None:
-    """Mindmap v3 execution body. Runs in a daemon thread (QUEUE_ENABLED=false) OR an RQ
-    worker process (QUEUE_ENABLED=true) — identical behaviour, no Flask request context
-    needed. Enqueued by dotted path `app.main.run_mindmap_job`. The graph owns the
-    done/result write (atomic); this wraps errors -> job error. Cancellation uses the
-    existing cooperative flag (mindmap graph `_guard` checks jobs_store cancel_requested)."""
-    print(f"mindmap_job_running job_id={job_id}", flush=True)
-    from app.graphs.logger import begin_llm_count, flush_llm_count
-    _llm_counter = begin_llm_count()
-    try:
-        from app.domains.jobs.jobs_store import update_job as _uj
-        try:
-            _uj(job_id, status="running", current_node="Mindmap")
-        except Exception:
-            pass
-        if MINDMAP_GRAPH is None:
-            raise RuntimeError("MINDMAP_GRAPH chưa khởi tạo — kiểm tra logs khởi động.")
-        _langgraph_invoke(MINDMAP_GRAPH, {
-            "job_id": job_id, "source_names": source_names, "mm_input": mm_input,
-            "content_hash": content_hash, "user_id": user_id,  # Phase D: record owner
-            "progress": 0, "current_node": "", "error": None,
-        }, thread_id=job_id)
-        print(f"mindmap_job_done job_id={job_id}", flush=True)
-    except Exception as e:
-        from app.domains.jobs.jobs_store import update_job
-        update_job(job_id, status="error", error_text=_job_error_text(e))
-        print(f"mindmap_job_failed job_id={job_id} err={str(e)[:80]}", flush=True)
-    finally:
-        flush_llm_count(job_id, _llm_counter)
+    from app.application.mindmap_generation import run_mindmap_job as _impl
+    return _impl(job_id, source_names, mm_input, content_hash, user_id,
+                 graph=MINDMAP_GRAPH)
 
 
 # -------------------------
