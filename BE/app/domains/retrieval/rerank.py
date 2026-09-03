@@ -12,6 +12,9 @@ Thiết kế (mirror app.clients.llm_factory.get_embedding_model):
 
 Backend cắm-rút qua RERANK_BACKEND:
   - cross_encoder (mặc định): sentence_transformers.CrossEncoder — đã có sẵn dep.
+  - fpt: FPT AI Marketplace `/rerank`, model `bge-reranker-v2-m3` — CÙNG model với
+    default cross_encoder, chỉ khác chỗ chạy. Không nạp weight nên hợp với môi
+    trường 512 MB không nạp nổi 568M tham số.
   - cohere: gọi Cohere Rerank API (lazy-import 'cohere', cần API key + internet).
   - llm: tái dùng get_llm() làm LLM-as-reranker.
   - none/identity: passthrough.
@@ -98,6 +101,81 @@ class CrossEncoderReranker:
         return ranked[: _clip_top_n(len(ranked), top_n)]
 
 
+# Backend gọi API từ xa: KHÔNG nạp weight nào vào tiến trình này. Phân biệt quan
+# trọng vì `SKIP_MODEL_LOAD=1` tồn tại để chặn nạp weight (RAM), không phải để tắt
+# rerank — production chạy cờ đó và vẫn cần rerank.
+_REMOTE_BACKENDS = frozenset({"fpt", "cohere"})
+
+FPT_DEFAULT_RERANK_MODEL = "bge-reranker-v2-m3"
+
+
+class FptReranker:
+    """FPT AI Marketplace `/rerank`.
+
+    Hợp đồng đã đo thật 2026-09-04 (không lấy từ tài liệu):
+        POST {base}/rerank {"model", "query", "documents", "top_n"}
+        200 -> {"results": [{"index", "relevance_score", "document"}], "object": "rerank"}
+    `results` trả về ĐÃ SẮP giảm dần theo `relevance_score` — đúng thứ tự
+    `Reranker.rerank` cam kết, nên không sắp lại; nhưng cũng không phụ thuộc vào đó:
+    `rerank_texts` chỉ đọc cặp (index, score).
+
+    `document` mặc định là null (chỉ có khi gửi `return_documents`), nên KHÔNG đọc
+    trường ấy — index mới là thứ ánh xạ ngược về `texts`.
+
+    Mọi lỗi thành RuntimeError để `rerank_texts` bắt và giữ nguyên thứ tự: rerank
+    hỏng phải làm truy hồi kém đi, không được làm nó vỡ.
+    """
+
+    def __init__(self, model_name: str) -> None:
+        self.model_name = (model_name or "").strip() or FPT_DEFAULT_RERANK_MODEL
+
+    def rerank(
+        self, query: str, texts: List[str], *, top_n: Optional[int] = None
+    ) -> List[Tuple[int, float]]:
+        if not texts:
+            return []
+        import requests
+
+        from app.clients.llm_factory import fpt_api_key, fpt_base_url, fpt_headers
+
+        if not fpt_api_key():
+            raise RuntimeError("FPT_AI_API_KEY rỗng")
+        n = _clip_top_n(len(texts), top_n)
+        payload = {"model": self.model_name, "query": query,
+                   "documents": [str(t) for t in texts], "top_n": n}
+        try:
+            r = requests.post(fpt_base_url() + "/rerank", headers=fpt_headers(),
+                              json=payload, timeout=get_settings().rerank_timeout_sec)
+        except Exception as exc:
+            raise RuntimeError(f"FPT rerank request lỗi: {type(exc).__name__}") from None
+        if r.status_code >= 400:
+            raise RuntimeError(f"FPT rerank HTTP {r.status_code}: {r.text[:200]}")
+        try:
+            body = r.json()
+        except ValueError:
+            raise RuntimeError(f"FPT rerank thân không phải JSON: {r.text[:200]}") from None
+
+        # Cùng phòng thủ như client chat: chấp nhận cả bản bọc `data` lẫn bản phẳng,
+        # vì marketplace không đồng nhất giữa các model.
+        goi = body.get("data")
+        loi = goi if isinstance(goi, dict) else body
+        results = loi.get("results")
+        if not isinstance(results, list):
+            raise RuntimeError(f"FPT rerank thiếu `results`: {str(body)[:200]}")
+
+        ra: List[Tuple[int, float]] = []
+        for it in results:
+            if not isinstance(it, dict) or "index" not in it:
+                raise RuntimeError(f"FPT rerank phần tử thiếu `index`: {str(it)[:120]}")
+            idx = int(it["index"])
+            if not 0 <= idx < len(texts):
+                # Index ngoài khoảng = ánh xạ ngược sai chunk. Thà giữ nguyên thứ tự
+                # còn hơn đưa nhầm đoạn văn vào ngữ cảnh của LLM.
+                raise RuntimeError(f"FPT rerank trả index ngoài khoảng: {idx}")
+            ra.append((idx, float(it.get("relevance_score") or 0.0)))
+        return ra[:n]
+
+
 class CohereReranker:
     """Cohere Rerank API (lazy-import; cần COHERE_API_KEY)."""
 
@@ -179,6 +257,11 @@ def _build_reranker(backend: str, model_name: str, batch_size: int) -> Reranker:
         return _IDENTITY
     if backend == "cross_encoder":
         return CrossEncoderReranker(model_name, batch_size=batch_size)
+    if backend == "fpt":
+        # Model rerank có biến RIÊNG: `RERANK_MODEL` mang tên HuggingFace
+        # ("BAAI/bge-reranker-v2-m3") còn marketplace dùng tên trần
+        # ("bge-reranker-v2-m3"). Cùng model, khác cách gọi tên.
+        return FptReranker(os.getenv("FPT_AI_RERANK_MODEL") or FPT_DEFAULT_RERANK_MODEL)
     if backend == "cohere":
         return CohereReranker(model_name)
     if backend == "llm":
@@ -191,11 +274,14 @@ def get_reranker() -> Reranker:
     """Singleton. SKIP_MODEL_LOAD=1 hoặc lỗi build → IdentityReranker."""
     global _reranker_cache, _reranker_key
 
-    if os.getenv("SKIP_MODEL_LOAD") == "1":
-        return _IDENTITY
-
     s = get_settings()
     if not s.rerank_enabled:
+        return _IDENTITY
+
+    # `SKIP_MODEL_LOAD=1` nghĩa là "đừng nạp weight vào tiến trình này", không phải
+    # "đừng rerank". Backend từ xa không nạp gì nên cờ đó không áp cho nó — nếu áp,
+    # production (đang chạy cờ này) sẽ im lặng mất hẳn tầng rerank.
+    if os.getenv("SKIP_MODEL_LOAD") == "1" and (s.rerank_backend or "").strip().lower()             not in _REMOTE_BACKENDS:
         return _IDENTITY
 
     key = f"{s.rerank_backend}|{s.rerank_model}|{s.rerank_batch}"

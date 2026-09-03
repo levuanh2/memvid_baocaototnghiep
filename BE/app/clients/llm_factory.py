@@ -29,6 +29,8 @@ PROVIDERS: list[str] = []
 
 has_gemini = bool((os.getenv("GEMINI_API_KEY") or "").strip())
 has_groq = bool((os.getenv("GROQ_API_KEY") or "").strip())
+# Đọc thẳng env, KHÔNG gọi `fpt_api_key()`: khối này chạy lúc import, còn helper
+# nằm dưới nên gọi lên là NameError.
 has_fpt = bool((os.getenv("FPT_AI_API_KEY") or "").strip())
 has_any_remote = has_gemini or has_groq or has_fpt
 
@@ -251,6 +253,24 @@ FPT_DEFAULT_BASE_URL = "https://mkp-api.fptcloud.com/v1"
 FPT_DEFAULT_CHAT_MODEL = "gpt-oss-120b"
 
 
+def fpt_api_key() -> str:
+    """Khoá FPT, rỗng nghĩa là chưa cấu hình. Điểm đọc DUY NHẤT cho cả chat, rerank,
+    vision và embedding — bốn năng lực dùng chung một tài khoản, nên cũng dùng chung
+    một biến. Không log, không đưa vào thông báo lỗi."""
+    return (os.getenv("FPT_AI_API_KEY") or "").strip()
+
+
+def fpt_base_url() -> str:
+    """Gốc URL FPT, đã bỏ dấu `/` cuối để nối path an toàn."""
+    return (os.getenv("FPT_AI_BASE_URL") or FPT_DEFAULT_BASE_URL).strip().rstrip("/")
+
+
+def fpt_headers() -> dict:
+    """Header cho mọi lời gọi FPT. Đây là chỗ DUY NHẤT khoá được ghép vào request."""
+    return {"Content-Type": "application/json",
+            "Authorization": f"Bearer {fpt_api_key()}"}
+
+
 class _FptChatResponse:
     """Chỉ mang `.content` — đủ cho `lc_ai_message_text` đọc."""
 
@@ -356,10 +376,10 @@ class _FptChatLLM:
 
 def _fpt_chat_llm(feature: str = "chat", options: dict | None = None,
                   timeout: float | None = None) -> Any:
-    api_key = (os.getenv("FPT_AI_API_KEY") or "").strip()
+    api_key = fpt_api_key()
     if not api_key:
         raise RuntimeError("Missing FPT_AI_API_KEY for FPT provider.")
-    base_url = (os.getenv("FPT_AI_BASE_URL") or FPT_DEFAULT_BASE_URL).strip()
+    base_url = fpt_base_url()
     model = (os.getenv("FPT_AI_CHAT_MODEL") or FPT_DEFAULT_CHAT_MODEL).strip()
 
     max_tokens = _DEFAULT_LLM_OUT
