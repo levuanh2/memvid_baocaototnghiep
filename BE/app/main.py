@@ -2360,46 +2360,19 @@ def api_document_study_maps(document_id: str):
 # -------------------------
 # 📝 API Quiz (FR-06, FR-13, đặc tả 7.5)
 # -------------------------
-QUIZ_MAX_QUESTIONS = int(os.getenv("QUIZ_MAX_QUESTIONS", "50"))
+# Điều phối sinh quiz (chẩn đoán + luyện tập) đã sang `app/application/quiz_dispatch.py`
+# ở Phase 2G.2. Tầng ấy không biết HTTP: nó ném lỗi mang ngữ nghĩa, `_ATTEMPT_ERR_HTTP`
+# chọn con số. `QUIZ_MAX_QUESTIONS` nằm dưới khối import vì nó alias
+# `quiz_uc.SO_CAU_TOI_DA` nên phải đứng SAU import.
 QUIZ_MAX_CONTEXT_CHUNKS = int(os.getenv("QUIZ_MAX_CONTEXT_CHUNKS", "200"))
 
 
-def _quiz_config(data: dict):
-    """(config, error_response). Ép mọi giá trị về tập DB chấp nhận trước khi chạy job —
-    để CHECK của Postgres bắt thì job đã tốn một lượt gọi LLM rồi mới hỏng."""
-    from app.domains.ai_validation.rules import QUESTION_TYPES
-
-    try:
-        count = int(data.get("question_count", 10))
-    except (TypeError, ValueError):
-        return None, (jsonify({"error": "question_count phải là số nguyên"}), 400)
-    if not 1 <= count <= QUIZ_MAX_QUESTIONS:
-        return None, (jsonify({"error": f"question_count phải trong 1..{QUIZ_MAX_QUESTIONS}"}), 400)
-
-    difficulty = str(data.get("difficulty") or "mixed").strip().lower()
-    if difficulty not in ("easy", "medium", "hard", "mixed"):
-        return None, (jsonify({"error": "difficulty phải là easy|medium|hard|mixed"}), 400)
-
-    types = data.get("question_types") or list(QUESTION_TYPES)
-    if not isinstance(types, list):
-        return None, (jsonify({"error": "question_types phải là list"}), 400)
-    types = [str(t).strip().lower() for t in types if str(t or "").strip()]
-    bad = [t for t in types if t not in QUESTION_TYPES]
-    if bad or not types:
-        return None, (jsonify({"error": f"question_types không hợp lệ: {bad or 'rỗng'}"}), 400)
-
-    scope = data.get("scope") or {}
-    if not isinstance(scope, dict):
-        return None, (jsonify({"error": "scope phải là object"}), 400)
-    section_ids = [str(x) for x in (scope.get("section_ids") or []) if str(x or "").strip()]
-    scope_type = "sections" if section_ids else "full_document"
-
-    return {
-        "question_count": count,
-        "difficulty": difficulty,
-        "question_types": types,
-        "scope": {"type": scope_type, "section_ids": section_ids},
-    }, None
+def _day_quiz_job(job_id: str, document_id: str, config: dict, uid):
+    """RQ serialize hàm theo `module.qualname`. Truyền WRAPPER ở module này để job vẫn
+    mang đường dẫn `app.main.run_quiz_generation_job` — cả quiz chẩn đoán lẫn luyện tập."""
+    from app.jobs.queue import enqueue_job
+    return enqueue_job(run_quiz_generation_job, args=(job_id, document_id, config, uid),
+                       queue="mindmap", job_id=job_id)
 
 
 # ── Wrapper tương thích (Phase 1) ──────────────────────────────────────────
@@ -2431,9 +2404,9 @@ _QUIZ_PENDING_TOI_DA_GIAY = float(os.getenv("QUIZ_PENDING_TOI_DA_GIAY", "120"))
 
 
 def _quiz_job_key(uid: Optional[str], document_id: str, config: dict) -> str:
-    """Hai yêu cầu chỉ là 'trùng' khi CÙNG người, CÙNG tài liệu, CÙNG cấu hình. Đổi số câu
-    hay đổi phạm vi là một yêu cầu khác và phải được chạy."""
-    return json.dumps([uid, document_id, config], sort_keys=True, ensure_ascii=False)
+    """Luật trùng giờ ở `quiz_dispatch.khoa_trung`. Giữ TÊN ở đây vì
+    `test_quiz_job_dedupe` gọi thẳng `app.main._quiz_job_key`."""
+    return quiz_uc.khoa_trung(uid, document_id, config)
 
 
 def _quiz_job_giu_cho(key: str, job_id_moi: str) -> Optional[str]:
@@ -2509,44 +2482,13 @@ def api_quizzes_generate():
     row, err = _owned_document(document_id, uid)
     if err:
         return err
-    if not row.get("source_stem"):
-        return jsonify({"error": "Tài liệu chưa index xong"}), 409
-    config, err = _quiz_config(data)
-    if err:
-        return err
-
-    # Section lạ / của tài liệu khác → 400 ngay, đừng để job chạy rồi mới ra quiz rỗng.
-    from app.domains.quiz import repository as _quiz_repo
-    wanted = config["scope"]["section_ids"]
-    if wanted:
-        known = set(_quiz_repo.section_ids_of(document_id))
-        unknown = [x for x in wanted if x not in known]
-        if unknown:
-            return jsonify({"error": f"section_ids không thuộc tài liệu: {unknown}"}), 400
-
-    job_id = str(uuid.uuid4())
-    khoa = _quiz_job_key(uid, document_id, config)
-    dang_chay = _quiz_job_giu_cho(khoa, job_id)
-    if dang_chay:
-        # Không phải lỗi: người dùng bấm lại đúng cái họ đã xin. Trả về job ĐANG chạy để
-        # giao diện bám tiếp vào nó thay vì mở thêm một job nữa tranh slot LLM.
-        print(f"quiz_enqueue_deduped job_id={dang_chay}", flush=True)
-        return jsonify({"job_id": dang_chay, "status": "started", "deduped": True}), 202
-
-    from app.domains.jobs.jobs_store import create_job
-    from app.jobs.queue import enqueue_job
     try:
-        create_job(job_id, job_type="quiz_generation", status="pending", progress=0,
-                   current_node="Queued", user_id=uid)
-        res = enqueue_job(run_quiz_generation_job, args=(job_id, document_id, config, uid),
-                          queue="mindmap", job_id=job_id)
-    except Exception:
-        # Chỗ đã giữ mà job không bao giờ chạy = cửa khoá vĩnh viễn: mọi lần bấm sau đều
-        # bị dedupe trả về đúng job chết này. Trả chỗ lại rồi mới báo lỗi.
-        _quiz_job_nha_cho(khoa, job_id)
-        raise
-    print(f"quiz_enqueue_{res.get('mode')} job_id={job_id}", flush=True)
-    return jsonify({"job_id": job_id, "status": "started"}), 202
+        payload, _ = quiz_uc.sinh_quiz(
+            document_id, data, uid, source_stem=row.get("source_stem"),
+            giu_cho=_quiz_job_giu_cho, nha_cho=_quiz_job_nha_cho, day_job=_day_quiz_job)
+    except attempts_uc.AttemptError as exc:
+        return _attempt_err(exc)
+    return jsonify(payload), 202
 
 
 @app.get('/api/quizzes/jobs/<job_id>')
@@ -2636,7 +2578,12 @@ from app.application import attempts as attempts_uc  # noqa: E402
 from app.application import jobs as jobs_uc  # noqa: E402
 from app.application import practice as practice_uc  # noqa: E402
 from app.application import progress as progress_uc  # noqa: E402
+from app.application import quiz_dispatch as quiz_uc  # noqa: E402
 from app.application import review_plans as review_uc  # noqa: E402
+
+# Nguồn sự thật của trần số câu giờ ở tầng use case. Giữ TÊN ở đây vì
+# `test_generate_characterization` đọc `app.main.QUIZ_MAX_QUESTIONS`.
+QUIZ_MAX_QUESTIONS = quiz_uc.SO_CAU_TOI_DA
 
 # Một bảng cho cả ba nhóm: lỗi của review-plan và practice đều kế thừa
 # `attempts_uc.AttemptError`, nên route chỉ cần MỘT chỗ bắt. Thiếu một lớp ở đây là
@@ -2664,6 +2611,17 @@ _ATTEMPT_ERR_HTTP = {
     # Phase 2D
     jobs_uc.JobKhongTonTai: 404,
     jobs_uc.JobKhongHoTroHuy: 409,
+    # Phase 2G.2 — sáu thân lỗi của `cau_hinh_quiz` giữ nguyên từng cái, không gộp.
+    quiz_uc.SoCauKhongPhaiSo: 400,
+    quiz_uc.SoCauNgoaiKhoang: 400,
+    quiz_uc.DoKhoSai: 400,
+    quiz_uc.LoaiCauKhongPhaiList: 400,
+    quiz_uc.LoaiCauKhongHopLe: 400,
+    quiz_uc.ScopeKhongPhaiObject: 400,
+    quiz_uc.SectionLac: 400,
+    quiz_uc.TaiLieuChuaIndex: 409,
+    quiz_uc.ReviewItemKhongTonTai: 404,
+    quiz_uc.ReviewItemKhongCoChunk: 409,
 }
 
 
@@ -2882,36 +2840,13 @@ def api_practice_generate():
     if not review_item_id:
         return jsonify({"error": "Thiếu review_item_id"}), 400
 
-    from app.domains.review import service as _review
-    item = _review.get_item(review_item_id)
-    if not item or (_auth_protect_enabled() and item.get("user_id") != uid):
-        return jsonify({"error": "Review item not found"}), 404
-    if not item.get("chunk_ids"):
-        return jsonify({"error": "Review item không có chunk nguồn để ra đề"}), 409
-
-    config, err = _quiz_config(data)
-    if err:
-        return err
-    config.update({
-        "quiz_type": "practice",
-        "chunk_ids": item["chunk_ids"],
-        # FR-11.8 / FR-11.9: mất hai khoá này là mất cả chuỗi yếu → ôn → luyện.
-        "source_review_item_id": review_item_id,
-        "source_attempt_id": item["attempt_id"],
-        "title": f"Luyện tập: {item['topic']}",
-        "practice_topic": item["topic"],
-    })
-
-    job_id = str(uuid.uuid4())
-    from app.domains.jobs.jobs_store import create_job
-    create_job(job_id, job_type="quiz_generation", status="pending", progress=0,
-               current_node="Queued", user_id=uid)
-    from app.jobs.queue import enqueue_job
-    res = enqueue_job(run_quiz_generation_job,
-                      args=(job_id, item["document_id"], config, uid),
-                      queue="mindmap", job_id=job_id)
-    print(f"practice_enqueue_{res.get('mode')} job_id={job_id}", flush=True)
-    return jsonify({"job_id": job_id, "status": "started"}), 202
+    try:
+        payload = quiz_uc.sinh_practice(
+            review_item_id, data, uid,
+            bat_buoc_chu_so_huu=_auth_protect_enabled(), day_job=_day_quiz_job)
+    except attempts_uc.AttemptError as exc:
+        return _attempt_err(exc)
+    return jsonify(payload), 202
 
 
 @app.get('/api/practice/<practice_quiz_id>')
