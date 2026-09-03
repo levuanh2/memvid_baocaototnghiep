@@ -678,12 +678,63 @@ class FptEmbeddings(_LCEmbeddings):
         self._timeout = timeout or float(os.getenv("FPT_AI_EMBED_TIMEOUT_SEC", "60"))
         self._batch = max(1, int(os.getenv("EMBED_BATCH_SIZE", str(batch_size))))
 
-    def _goi(self, texts: list[str]) -> list[list[float]]:
+    @staticmethod
+    def _cho_bao_lau(resp: Any, lan: int, tran: float) -> float:
+        """Giây cần chờ trước lần thử lại. Ưu tiên `Retry-After` của server."""
+        thu = ""
+        try:
+            thu = (resp.headers or {}).get("Retry-After", "") if resp is not None else ""
+        except Exception:
+            thu = ""
+        try:
+            if str(thu).strip():
+                return min(float(str(thu).strip()), tran)
+        except ValueError:
+            pass
+        return min(2.0 ** lan, tran)          # 1, 2, 4, 8… giây
+
+    def _goi_mot_lan(self, texts: list[str]) -> Any:
         import requests
 
-        r = requests.post(fpt_base_url() + "/embeddings", headers=fpt_headers(),
-                          json={"model": self.model_name, "input": texts},
-                          timeout=self._timeout)
+        return requests.post(fpt_base_url() + "/embeddings", headers=fpt_headers(),
+                             json={"model": self.model_name, "input": texts},
+                             timeout=self._timeout)
+
+    def _goi(self, texts: list[str]) -> list[list[float]]:
+        """Gọi `/embeddings`, thử lại khi bị giới hạn tần suất hoặc server lỗi tạm.
+
+        Vì sao cần retry ở ĐÂY chứ không để caller lo: dựng lại index là vài nghìn
+        chunk chia thành hàng trăm lô. Một lượt 429 giữa chừng làm hỏng cả lượt dựng,
+        và mỗi lần chạy lại là trả tiền lại từ đầu cho những lô đã xong.
+
+        CHỈ thử lại 429 và 5xx — hai loại nói "thử lại đi". 4xx khác (400 sai payload,
+        401 sai khoá, 404 sai tên model) thử lại bao nhiêu lần cũng thế, chỉ tốn thêm
+        thời gian trước khi báo đúng lỗi đó.
+
+        Tôn trọng `Retry-After` khi server có gửi; không thì lùi theo luỹ thừa 2, chặn
+        trên bằng `FPT_AI_EMBED_RETRY_MAX_WAIT` để không treo vô hạn.
+        """
+        import time
+
+        so_lan = max(0, int(os.getenv("FPT_AI_EMBED_RETRIES", "3")))
+        tran_cho = float(os.getenv("FPT_AI_EMBED_RETRY_MAX_WAIT", "30"))
+        r = None
+        for lan in range(so_lan + 1):
+            try:
+                r = self._goi_mot_lan(texts)
+            except Exception as exc:
+                if lan >= so_lan:
+                    raise RuntimeError(
+                        f"FPT embeddings request lỗi: {type(exc).__name__}") from None
+                time.sleep(self._cho_bao_lau(None, lan, tran_cho))
+                continue
+            if r.status_code == 429 or r.status_code >= 500:
+                if lan >= so_lan:
+                    break
+                time.sleep(self._cho_bao_lau(r, lan, tran_cho))
+                continue
+            break
+
         if r.status_code >= 400:
             raise RuntimeError(f"FPT embeddings HTTP {r.status_code}: {r.text[:200]}")
         try:

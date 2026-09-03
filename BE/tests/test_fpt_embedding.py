@@ -34,15 +34,19 @@ KHOA_GIA = "sk-khoa-gia-chi-dung-trong-test"
 def _sach(monkeypatch):
     monkeypatch.delenv("FPT_AI_EMBEDDING_MODEL", raising=False)
     monkeypatch.setenv("FPT_AI_API_KEY", "")
+    # Retry ngủ thật thì mỗi ca lỗi 5xx tốn 1+2+4 giây thật. Test đo LUẬT lùi, không
+    # đo đồng hồ — ca nào cần biết ngủ bao lâu thì `_bat_day` ghi lại con số.
+    monkeypatch.setattr("time.sleep", lambda _s: None)
     lf.clear_embeddings_cache()
     yield
     lf.clear_embeddings_cache()
 
 
 class _Resp:
-    def __init__(self, status=200, body=None, text=None):
+    def __init__(self, status=200, body=None, text=None, headers=None):
         self.status_code = status
         self._body = body
+        self.headers = headers or {}
         self.text = text if text is not None else json.dumps(body, ensure_ascii=False)
 
     def json(self):
@@ -179,6 +183,107 @@ def test_khoa_KHONG_lot_vao_thong_bao_loi(monkeypatch, resp):
         e.embed_query("a")
     assert KHOA_GIA not in str(ex.value)
     assert "Bearer" not in str(ex.value)
+
+
+# ── Thử lại khi bị giới hạn tần suất / server lỗi tạm ──────────────────────
+def _bat_day(monkeypatch, resps):
+    """Trả lần lượt từng response trong `resps`; ghi lại số lần gọi và số giây ngủ."""
+    ghi = {"goi": 0, "ngu": []}
+    it = iter(resps)
+
+    def _post(url, headers=None, json=None, timeout=None):
+        ghi["goi"] += 1
+        r = next(it)
+        if isinstance(r, Exception):
+            raise r
+        return r
+
+    import requests
+    monkeypatch.setattr(requests, "post", _post)
+    monkeypatch.setattr("time.sleep", lambda s: ghi["ngu"].append(s))
+    return ghi
+
+
+@pytest.mark.parametrize("ma", [429, 500, 502, 503])
+def test_thu_lai_khi_429_va_5xx(monkeypatch, ma):
+    """Dựng lại index là hàng trăm lô. Một lượt 429 giữa chừng mà bỏ cuộc thì lần
+    chạy lại phải trả tiền lại từ đầu cho những lô đã xong."""
+    e = _emb(monkeypatch)
+    ghi = _bat_day(monkeypatch, [_Resp(status=ma, text="ban"), _Resp(body=_than(1))])
+    assert e.embed_query("a") == [0.0, 0.0, 0.0, 0.0]
+    assert ghi["goi"] == 2
+
+
+@pytest.mark.parametrize("ma", [400, 401, 403, 404, 422])
+def test_KHONG_thu_lai_loi_cua_phia_minh(monkeypatch, ma):
+    """400 sai payload, 401 sai khoá, 404 sai tên model — thử lại bao nhiêu lần cũng
+    thế, chỉ tốn thời gian trước khi báo đúng lỗi đó."""
+    e = _emb(monkeypatch)
+    ghi = _bat_day(monkeypatch, [_Resp(status=ma, text="hong")])
+    with pytest.raises(RuntimeError, match=f"HTTP {ma}"):
+        e.embed_query("a")
+    assert ghi["goi"] == 1
+
+
+def test_ton_trong_Retry_After_cua_server(monkeypatch):
+    e = _emb(monkeypatch)
+    ghi = _bat_day(monkeypatch, [_Resp(status=429, text="ban", headers={"Retry-After": "7"}),
+                                 _Resp(body=_than(1))])
+    e.embed_query("a")
+    assert ghi["ngu"] == [7.0]
+
+
+def test_Retry_After_bi_chan_tran(monkeypatch):
+    """Server bảo chờ một giờ thì cũng không được treo một giờ."""
+    monkeypatch.setenv("FPT_AI_EMBED_RETRY_MAX_WAIT", "5")
+    e = _emb(monkeypatch)
+    ghi = _bat_day(monkeypatch, [_Resp(status=429, headers={"Retry-After": "3600"}, text="x"),
+                                 _Resp(body=_than(1))])
+    e.embed_query("a")
+    assert ghi["ngu"] == [5.0]
+
+
+def test_khong_co_Retry_After_thi_lui_theo_luy_thua(monkeypatch):
+    monkeypatch.setenv("FPT_AI_EMBED_RETRIES", "3")
+    e = _emb(monkeypatch)
+    ghi = _bat_day(monkeypatch, [_Resp(status=503, text="x")] * 3 + [_Resp(body=_than(1))])
+    e.embed_query("a")
+    assert ghi["ngu"] == [1.0, 2.0, 4.0]
+
+
+def test_het_luot_thi_bao_dung_ma_loi_cuoi(monkeypatch):
+    monkeypatch.setenv("FPT_AI_EMBED_RETRIES", "2")
+    e = _emb(monkeypatch)
+    ghi = _bat_day(monkeypatch, [_Resp(status=429, text="ban")] * 3)
+    with pytest.raises(RuntimeError, match="HTTP 429"):
+        e.embed_query("a")
+    assert ghi["goi"] == 3, "1 lần đầu + 2 lần thử lại"
+
+
+def test_loi_mang_cung_duoc_thu_lai(monkeypatch):
+    e = _emb(monkeypatch)
+    ghi = _bat_day(monkeypatch, [TimeoutError("het gio"), _Resp(body=_than(1))])
+    e.embed_query("a")
+    assert ghi["goi"] == 2
+
+
+def test_loi_mang_het_luot_thanh_RuntimeError_khong_lo_khoa(monkeypatch):
+    monkeypatch.setenv("FPT_AI_EMBED_RETRIES", "1")
+    e = _emb(monkeypatch)
+    _bat_day(monkeypatch, [TimeoutError("het gio")] * 2)
+    with pytest.raises(RuntimeError) as ex:
+        e.embed_query("a")
+    assert "TimeoutError" in str(ex.value)
+    assert KHOA_GIA not in str(ex.value)
+
+
+def test_tat_retry_duoc(monkeypatch):
+    monkeypatch.setenv("FPT_AI_EMBED_RETRIES", "0")
+    e = _emb(monkeypatch)
+    ghi = _bat_day(monkeypatch, [_Resp(status=429, text="ban")])
+    with pytest.raises(RuntimeError, match="HTTP 429"):
+        e.embed_query("a")
+    assert ghi["goi"] == 1 and ghi["ngu"] == []
 
 
 # ── Danh tính không gian vector ────────────────────────────────────────────
