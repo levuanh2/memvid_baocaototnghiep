@@ -3722,3 +3722,21 @@ Nguy hiểm ở chỗ chúng trông rất hợp lý. Ai gặp sơ đồ chạy c
 
 Đã gỡ hết khỏi `.env` và `.env.example`, thay bằng một khối chú thích liệt kê đúng
 4 biến sống kèm file đọc chúng.
+
+## Render free: `SKIP_MODEL_LOAD=1` chặn mọi đường truy vấn có retrieval (2026-09-03)
+
+`SKIP_MODEL_LOAD=1` bật CI mode: ingest ghi log `[vector_store] Skipped append_to_index
+(CI mode)` và **không ghi** `/tmp/studymap/index/index.json`. Hệ quả trên production:
+
+- `POST /query` luôn trả `"Không tìm thấy dữ liệu phù hợp trong file đã chọn."` —
+  guard chặn TRƯỚC khi gọi LLM, nên đường này không dùng để smoke test provider được.
+- `POST /generate-summary` trả 500 `"Không đọc được dữ liệu nguồn: [Errno 2] No such
+  file or directory: '/tmp/studymap/index/index.json'"`.
+- `POST /api/quizzes/generate` **vẫn chạy**: chunk nằm trong Postgres, không qua FAISS.
+  Đây là đường duy nhất chứng minh được LLM production hoạt động khi CI mode đang bật.
+
+Ngoài ra `sources` trong `POST /query` là **stem** (`quang_hop_txt`), không phải
+`source_id` UUID — truyền UUID nhận 403 `forbidden_source`, dễ nhầm là lỗi phân quyền.
+
+Instance free 512MB thỉnh thoảng restart giữa chừng khi ingest: request đang bay nhận
+502. Script smoke test cần thử lại khi gặp 502, đừng coi là hỏng thật.

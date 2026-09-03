@@ -2329,3 +2329,27 @@ Hai điều rút ra:
 - **Bảo model "đừng lặp" thì phải cho nó thấy TẤT CẢ những gì nó đã viết.** Lượt bù chỉ
   liệt kê câu được nhận (2), giấu 12 câu vừa bị loại — rồi ngạc nhiên vì model viết lại
   đúng 12 câu đó. Đây là thông tin thiếu ở phía mình, không phải model bướng.
+
+## Tài liệu của nhà cung cấp không phải là hợp đồng — đo cái endpoint thật (2026-09-03)
+
+**Ca mẫu:** thêm provider FPT AI. Spec tôi nhận ghi rõ, kèm nhãn "ĐÃ XÁC MINH", rằng
+FPT bọc kết quả trong `data`: `body["data"]["choices"][0]["message"]["content"]`. Viết
+parser đúng theo đó. Lần gọi thật đầu tiên `gpt-oss-120b` trả **hình dạng OpenAI phẳng**,
+không có `data`.
+
+**Root cause của lỗi khó thấy:** parser ném `RuntimeError`, vòng fallback bắt được rồi
+chuyển sang Ollama. Tôi nhận một câu trả lời dài 389 ký tự và suýt ghi "FPT PASS" —
+câu đó là của Ollama. Vòng fallback biến một lỗi tích hợp thành **thành công giả**:
+người dùng vẫn thấy câu trả lời, log vẫn sạch, không ai biết FPT chưa từng chạy.
+
+**Cách bắt:** ép danh sách provider xuống đúng một phần tử trước khi tin kết quả smoke
+test — `OLLAMA_HOST=''` + `GEMINI_API_KEY=''` cho `PROVIDERS == ['fpt']`. Không còn
+đường lui thì kết quả nói thật.
+
+**Phòng ngừa:**
+- Mọi smoke test một provider MỚI phải chạy với fallback bị cắt. Xanh khi còn fallback
+  không chứng minh gì.
+- Parser đọc CẢ HAI hình dạng (`data.choices` lẫn `choices`), có test cho từng cái —
+  vì bên cung cấp có thể đổi lại bất cứ lúc nào và không ai báo.
+- Thông báo lỗi ghi rõ đã thử những đường nào (`"đã thử cả data.choices lẫn choices"`),
+  để lần sau đọc log là biết ngay chứ không phải đọc mã.
