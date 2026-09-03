@@ -336,6 +336,43 @@ def replace_chunks(document_id: str, chunks: List[Dict[str, Any]]) -> int:
     return n
 
 
+def set_chunk_embedding_id(chunk_id: str, embedding_id: str) -> bool:
+    """Gán id FAISS cho MỘT chunk. Trả True nếu có dòng được cập nhật.
+
+    `embedding_id` là cầu nối giữa id FAISS (int) và khoá nghiệp vụ (UUID);
+    `lookup_by_embedding_ids` tra ngược qua nó. Chunk chưa từng được index có giá
+    trị NULL — đúng tình trạng khi `SKIP_MODEL_LOAD=1` bỏ qua đường ghi index.
+    Nên dựng lại index từ Postgres bắt buộc kèm một lượt ghi cột này, nếu không
+    thì index có vector mà không ai tra ngược được về chunk.
+
+    Cập nhật MỘT cột, không xoá gì, chạy lại được.
+    """
+    with session_scope() as s:
+        row = s.get(DocumentChunk, str(chunk_id))
+        if row is None:
+            return False
+        row.embedding_id = str(embedding_id)
+        return True
+
+
+def clear_chunk_embedding_ids(document_id: str) -> int:
+    """Xoá liên kết FAISS của một tài liệu (đặt về NULL). Trả số dòng đổi.
+
+    Dùng khi index bị vứt đi: để `embedding_id` trỏ vào một index không còn tồn
+    tại thì `lookup_by_embedding_ids` trả về chunk cho những hit không có thật.
+    KHÔNG xoá chunk — chỉ bỏ liên kết.
+    """
+    with session_scope() as s:
+        rows = s.execute(
+            select(DocumentChunk).where(
+                DocumentChunk.document_id == str(document_id),
+                DocumentChunk.embedding_id.isnot(None))
+        ).scalars().all()
+        for r in rows:
+            r.embedding_id = None
+        return len(rows)
+
+
 def list_sections(document_id: str) -> List[Dict[str, Any]]:
     with session_scope() as s:
         rows = s.execute(
