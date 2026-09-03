@@ -49,7 +49,6 @@ def run_with_timeout(fn: Callable[[], Any], timeout: float, *, propagate_ctx: bo
 def build_query_graph(
     *,
     data_dir: Path,
-    index_meta_path: Path,
     jobs_update: Callable[..., None] | None,
     # cache helpers
     make_cache_key: Callable[..., str],
@@ -59,7 +58,6 @@ def build_query_graph(
     check_sources_status: Callable[[list], dict],
     get_source_status_by_stem: Callable[[str], Optional[dict]],
     # retrieval + generation
-    search_index: Callable[[str], list[str]],
     summarize_results: Callable[..., str],
     query_with_memory_tree: Callable[..., Any],
     # Bắt buộc: composition root (`main.py`) là nơi duy nhất biết implementation cụ thể.

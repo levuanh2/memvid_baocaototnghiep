@@ -56,14 +56,12 @@ def build(*, retriever_chunks=None, summarize=None, **overrides):
     chunks = retriever_chunks if retriever_chunks is not None else [StubChunk("python testing fixtures relevant")]
     kwargs = dict(
         data_dir=d,
-        index_meta_path=d / "index.json",
         jobs_update=None,
         make_cache_key=lambda q, s, m, f=None, cs="public": f"ck::{cs}::{q}",
         get_cached=lambda k: cache.get(k),
         set_cached=lambda k, v: cache.__setitem__(k, v),
         check_sources_status=lambda s: {},
         get_source_status_by_stem=lambda s: None,
-        search_index=lambda q: [],
         summarize_results=summarize or (lambda *a, **k: "generated answer"),
         query_with_memory_tree=lambda *a, **k: None,
         retriever=StubRetriever(chunks),

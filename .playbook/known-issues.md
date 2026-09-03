@@ -1,6 +1,14 @@
 # Known Issues
 
-## (CHƯA SỬA — ghi nhận 2026-09-02) Ba món nợ lộ ra khi wire retriever (Phase 2A)
+## (MỘT PHẦN ĐÃ SỬA 2026-09-03) Ba món nợ lộ ra khi wire retriever (Phase 2A)
+
+**Mục 2 và 3 đã dọn** trong commit cleanup 2026-09-03: bỏ hẳn hai tham số chết khỏi
+`build_query_graph` và chuỗi truyền `main.py -> wiring.py`. Lưu ý phân biệt: hàm
+`store.search_index` VẪN SỐNG (có `test_store_precomputed` gọi thẳng) — thứ đã chết
+chỉ là đường truyền tham số. `wiring.build_graphs` cũng VẪN giữ `index_meta_path`
+vì mindmap/summary graph thật sự đọc nó.
+
+**Mục 1 vẫn chưa sửa.**
 
 Phase 2A gỡ đoạn `query_graph` tự dựng `HybridRetriever` và bắt buộc tiêm từ
 `main.py`. Trong lúc làm, ba thứ lộ ra. Cả ba **cố ý chưa sửa**, vì sửa là ra

@@ -39,7 +39,6 @@ def build_graphs(
     set_cached: Callable[..., Any],
     check_sources_status: Callable[..., Any],
     get_source_status_by_stem: Callable[..., Any],
-    search_index: Callable[..., Any],
     summarize_results: Callable[..., Any],
     query_with_memory_tree: Callable[..., Any],
     query_da_huy: Callable[[str], bool] | None = None,
@@ -73,14 +72,12 @@ def build_graphs(
         from app.graphs.query_graph import build_query_graph
         g.query = build_query_graph(
             data_dir=data_dir,
-            index_meta_path=index_meta_path,
             jobs_update=jobs_update,
             make_cache_key=make_cache_key,
             get_cached=get_cached,
             set_cached=set_cached,
             check_sources_status=check_sources_status,
             get_source_status_by_stem=get_source_status_by_stem,
-            search_index=search_index,
             summarize_results=summarize_results,
             query_with_memory_tree=query_with_memory_tree,
             retriever=retriever,

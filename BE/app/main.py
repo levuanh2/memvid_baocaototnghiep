@@ -26,7 +26,6 @@ from flask_cors import CORS
 from app.domains.ingest.ingest_utils import extract_text, split_text
 from app.domains.vectorstore.store import (
     append_to_index,
-    search_index,
     delete_source_from_index,
     delete_chunks_by_source,
     rebuild_chunk_index,
@@ -960,11 +959,6 @@ def _metric_totals_safe():
         return None
 
 
-# Thân 7 route job đã sang `app/application/jobs.py` (Phase 2D). Tầng ấy không biết
-# HTTP: nó ném lỗi mang ngữ nghĩa, còn `_ATTEMPT_ERR_HTTP` bên dưới chọn con số.
-from app.application import jobs as jobs_uc  # noqa: E402
-
-
 @app.get('/jobs/<job_id>/timeline')
 def job_timeline(job_id: str):
     """Phase 0 observability — timeline read-only cho MỘT job từ logs.sqlite
@@ -1388,7 +1382,6 @@ _graphs = _build_graphs(
     check_sources_status=_check_sources_status,
     get_source_status_by_stem=_get_source_status_by_stem,
     query_da_huy=_query_da_huy,
-    search_index=search_index,
     summarize_results=summarize_results,
     query_with_memory_tree=query_with_memory_tree,
     retriever=RETRIEVER,
@@ -2637,9 +2630,10 @@ def api_quizzes_validation_logs(job_id: str):
 # -------------------------
 # 🎯 API làm bài + chấm điểm (FR-07, FR-08, đặc tả 7.6)
 # -------------------------
-# Thân 8 route attempt đã sang `app/application/attempts.py` (Phase 2B). Tầng ấy
-# không biết HTTP: nó ném lỗi mang NGỮ NGHĨA, còn bảng dưới chọn con số.
+# Các tầng use case request-scoped (Phase 2B/2C/2D). Chúng không biết HTTP: mỗi tầng
+# ném lỗi mang NGỮ NGHĨA, còn bảng `_ATTEMPT_ERR_HTTP` bên dưới chọn con số.
 from app.application import attempts as attempts_uc  # noqa: E402
+from app.application import jobs as jobs_uc  # noqa: E402
 from app.application import practice as practice_uc  # noqa: E402
 from app.application import progress as progress_uc  # noqa: E402
 from app.application import review_plans as review_uc  # noqa: E402
@@ -3032,9 +3026,10 @@ def api_job_cancel(job_id: str):
     uid, err = _require_app_user()
     if err:
         return err
-    # "query" thêm 2026-09-01: `build_query_graph(da_huy=...)` bọc MỌI node và đọc cờ ở
-    # từng ranh giới. Trần: không cắt được node đang chạy (một request HTTP tới Ollama),
-    # nên worst case là thời lượng node đó, không phải tức thì.
+    # Cổng "loại nào huỷ được" đã sang `jobs_uc.LOAI_HUY_DUOC`. Giữ lại ở đây một
+    # giới hạn mà tập hằng không nói được: với `query`, cờ huỷ được đọc ở ranh giới
+    # giữa các node, nên trần là thời lượng node đang chạy (một request HTTP tới
+    # Ollama) — huỷ không tức thì.
     try:
         return jsonify(jobs_uc.huy_chung(
             job_id, uid, bat_buoc_chu_so_huu=_auth_protect_enabled()))
