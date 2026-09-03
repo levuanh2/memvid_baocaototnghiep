@@ -244,6 +244,40 @@ def test_loi_fpt_khong_lam_vo_truy_hoi(monkeypatch):
     assert rk.rerank_texts("q", ["a", "b", "c"], top_n=2) == [(0, 0.0), (1, 0.0)]
 
 
+def test_KHONG_nap_CrossEncoder_khi_backend_la_fpt(monkeypatch):
+    """Lý do đổi sang FPT là để KHỎI nạp 568M tham số vào một tiến trình 512MB. Nếu
+    đường fpt vẫn chạm `sentence_transformers.CrossEncoder` thì việc migrate không
+    những vô ích mà còn tệ hơn: trả tiền API xong vẫn OOM.
+
+    Bắt ở chỗ nhập khẩu, không ở chỗ gọi — `CrossEncoder` nạp weight ngay trong hàm
+    dựng, nên chạm tới nó là đã trả giá rồi."""
+    import sentence_transformers
+
+    def _no(*a, **k):
+        raise AssertionError("backend fpt không được nạp CrossEncoder cục bộ")
+
+    monkeypatch.setattr(sentence_transformers, "CrossEncoder", _no)
+    _nap_lai(monkeypatch, RERANK_ENABLED="1", RERANK_BACKEND="fpt", SKIP_MODEL_LOAD="1")
+    monkeypatch.setenv("FPT_AI_API_KEY", KHOA_GIA)
+
+    r = rk.get_reranker()
+    assert isinstance(r, rk.FptReranker)
+    rk.warmup()
+    _bat_post(monkeypatch, _Resp(body={"results": [{"index": 0, "relevance_score": 1.0}]}))
+    assert r.rerank("q", ["a"]) == [(0, 1.0)]
+
+
+def test_cau_hinh_production_dung_nhu_da_dat_tren_render(monkeypatch):
+    """Khoá đúng cặp env đang đặt ở production. Đổi tên biến ở một phía mà quên phía
+    kia thì rerank âm thầm về Identity — hỏng đúng kiểu không ai thấy."""
+    _nap_lai(monkeypatch, RERANK_ENABLED="1", RERANK_BACKEND="fpt", SKIP_MODEL_LOAD="1",
+             FPT_AI_RERANK_MODEL="bge-reranker-v2-m3")
+    monkeypatch.setenv("FPT_AI_API_KEY", KHOA_GIA)
+    r = rk.get_reranker()
+    assert isinstance(r, rk.FptReranker)
+    assert r.model_name == "bge-reranker-v2-m3"
+
+
 def test_warmup_khong_lam_gi_voi_backend_tu_xa(monkeypatch):
     """Không có weight để nạp; warmup phải là no-op chứ không được ném."""
     _nap_lai(monkeypatch, RERANK_ENABLED="1", RERANK_BACKEND="fpt", SKIP_MODEL_LOAD="0")

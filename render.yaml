@@ -128,14 +128,25 @@ services:
       - key: QUIZ_LLM_TIMEOUT_SEC
         value: "110"
 
-      # --- retrieval: every local-model feature off ------------------------
-      # Reranker (bge-reranker-v2-m3, ~2.3 GB) and NLI (~0.4 GB) lazy-load on
-      # first query, so leaving them on would OOM mid-request rather than at
-      # boot — the worst place to find out.
-      - key: RERANK_ENABLED
-        value: "0"
+      # --- retrieval: every LOCAL-model feature off -------------------------
+      # The rule here is "no model weights in this process", not "no reranking".
+      # NLI (~0.4 GB) still lazy-loads on first query, so leaving it on would OOM
+      # mid-request rather than at boot — the worst place to find out. FPT has no
+      # NLI/zero-shot model, so it stays off.
       - key: NLI_ENABLED
         value: "0"
+      # Reranking is back ON because it no longer loads anything. The local
+      # cross-encoder (bge-reranker-v2-m3, ~2.3 GB) was the reason this was "0";
+      # the FPT backend calls the SAME model over HTTP and allocates nothing here.
+      - key: RERANK_ENABLED
+        value: "1"
+      - key: RERANK_BACKEND
+        value: fpt
+      # Marketplace uses the bare model name; RERANK_MODEL carries the HuggingFace
+      # name ("BAAI/bge-reranker-v2-m3"). Same model, two naming conventions —
+      # passing the wrong one gets a 404 from FPT.
+      - key: FPT_AI_RERANK_MODEL
+        value: bge-reranker-v2-m3
       # Late chunking needs a long-context encoder; nothing is loaded here.
       - key: LATE_CHUNKING
         value: "0"
