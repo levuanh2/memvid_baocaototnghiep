@@ -7,11 +7,52 @@ on:
     branches: ["main"]
 
 jobs:
-  backend-test:
-    name: Backend Test (Python 3.11)
+  # ---------------------------------------------------------------
+  # Backend test suite (the real one — pytest, not just an import).
+  #
+  # Postgres runs as a service container: `tests/conftest.py` talks to
+  # the `documents` / `users` tables through SQLAlchemy, and without a
+  # live DB ~96 tests fail with `assert 500 == 201` or blow up inside
+  # psycopg. A throwaway container is free on GitHub-hosted runners and
+  # keeps the suite off anybody's Supabase project.
+  #
+  # SKIP_MODEL_LOAD=1 is what the suite already uses (see conftest):
+  # embeddings become FakeEmbeddings, so CI never downloads torch
+  # weights, never needs a GPU, and never starts Ollama.
+  # ---------------------------------------------------------------
+  backend-tests:
+    name: Backend Tests (Python 3.11)
     runs-on: ubuntu-latest
+
+    services:
+      postgres:
+        image: postgres:16-alpine
+        env:
+          POSTGRES_USER: postgres
+          POSTGRES_PASSWORD: postgres
+          POSTGRES_DB: studymap_test
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd pg_isready
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
+
     env:
       SKIP_MODEL_LOAD: "1"
+      # Plain `postgresql://` is fine — app/db/__init__.py rewrites it to
+      # `postgresql+psycopg://` because psycopg2 is not installed.
+      DATABASE_URL: postgresql://postgres:postgres@localhost:5432/studymap_test
+      # Stops shared/env_loader from setdefault-ing the USE_LC_* flags, so the
+      # suite reads the same flag values it does locally. conftest sets this for
+      # itself too; declaring it here also covers tests that never build the
+      # `client` fixture.
+      #
+      # No API keys are set anywhere in this workflow, and none are needed:
+      # with no GEMINI_API_KEY / GROQ_API_KEY, llm_factory falls back to the
+      # ollama provider, and every heavy call is mocked by conftest.
+      MEMVID_DISABLE_LC_DEFAULTS: "1"
 
     steps:
       - name: Checkout
@@ -22,51 +63,93 @@ jobs:
         with:
           python-version: "3.11"
           cache: pip
-          cache-dependency-path: |
-            requirements.txt
-            BE/requirements.txt
+          cache-dependency-path: BE/requirements.txt
 
       - name: Install dependencies
+        working-directory: BE
         run: |
           python -m pip install --upgrade pip
-          if [ -f "BE/requirements.txt" ]; then
-            pip install -r BE/requirements.txt
-          else
-            pip install -r requirements.txt
-          fi
+          pip install -r requirements.txt
 
-      - name: Import app
+      # gen/ is gitignored, so a fresh clone has no gRPC stubs. Nothing on the
+      # boot path imports them (the gateway clients are lazy, behind
+      # LLM_GATEWAY_ADDR), but generating them keeps parity with BE/Dockerfile.
+      - name: Generate gRPC stubs
         working-directory: BE
-        run: python -c "from app.main import app; print('OK')"
+        run: python scripts/build_proto.py
 
-      # OCR-related code paths may expect tesseract on the runner
-      - name: Install tesseract (smoke deps)
-        run: |
-          sudo apt-get update
-          sudo apt-get install -y --no-install-recommends tesseract-ocr
-
-      - name: Smoke run + healthcheck
+      - name: Run migrations
         working-directory: BE
+        run: alembic upgrade head
+
+      - name: Run backend test suite
+        working-directory: BE
+        run: python -m pytest -q
+
+      # Boots the app the way Render does (gunicorn -> app.main:app) and hits
+      # the health path named in render.yaml. Catches "imports fine, dies on
+      # boot" and "healthCheckPath points at nothing" before a deploy does.
+      - name: Smoke boot under gunicorn + health check
+        working-directory: BE
+        env:
+          # Same shape as the Render Free service: no Ollama, no local weights.
+          OLLAMA_HOST: ""
+          SKIP_MODEL_LOAD: "1"
         run: |
-          DEBUG=0 FLASK_DEBUG=0 python -m app.main &
+          gunicorn -w 1 -b 127.0.0.1:8080 --timeout 120 app.main:app &
           pid=$!
-
-          echo "Waiting for backend to be ready..."
-
-          for i in {1..30}; do
-            if curl -fsS http://localhost:8080/health > /dev/null; then
-              echo "Backend is up!"
+          for i in $(seq 1 30); do
+            if curl -fsS http://127.0.0.1:8080/health > /dev/null; then
+              echo "up after ${i} tries"
               break
             fi
-            echo "Retry $i..."
             sleep 2
           done
+          curl -fsS http://127.0.0.1:8080/health
+          echo
+          kill "$pid" || true
 
-          echo "Final health check..."
-          curl -fsS http://localhost:8080/health
+  # ---------------------------------------------------------------
+  # Frontend: tests + production build.
+  # ---------------------------------------------------------------
+  frontend:
+    name: Frontend Tests & Build (Node 22)
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: FE
 
-          kill $pid || true
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
 
+      - name: Setup Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+          cache: npm
+          cache-dependency-path: FE/package-lock.json
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Run frontend tests
+        run: npm test
+
+      - name: Build frontend
+        run: npm run build
+
+      # Reported, never blocking. The repo carries a known, pre-existing
+      # eslint backlog; fixing it is deliberately out of scope for the
+      # deployment work, and failing CI on it would only hide new problems
+      # behind old ones. Read the annotation, don't ignore the step.
+      - name: Lint (report only — known pre-existing debt)
+        run: npm run lint
+        continue-on-error: true
+
+  # ---------------------------------------------------------------
+  # Pre-existing jobs, kept as they were.
+  # ---------------------------------------------------------------
   docker-build-test:
     name: Docker Build Test
     runs-on: ubuntu-latest

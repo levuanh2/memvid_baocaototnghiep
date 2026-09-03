@@ -1,55 +1,66 @@
 # ============================================================
-# StudyMap AI — Render Blueprint
+# StudyMap AI — Render Blueprint (FREE tier)
 # ============================================================
-# Cách dùng: Render Dashboard > New > Blueprint > chọn repo này.
-# Render đọc file này, dựng 2 service, và tự deploy lại mỗi lần push lên `main`.
+# Render Dashboard > New > Blueprint > pick this repo. Render reads this
+# file, creates the services, and redeploys on every push to `main`.
 #
-# Render sẽ HỎI 5 giá trị (đánh dấu `sync: false`). Lấy ở đâu:
-#   DATABASE_URL         Supabase > Settings > Database > Connection string
-#                        DÙNG session pooler port 5432 (transaction pooler 6543
-#                        KHÔNG chạy được DDL nhiều câu, alembic sẽ hỏng).
-#                        Mật khẩu PHẢI percent-encode: '#' -> '%23'.
+# Target: Render Free Web Service (~0.5 CPU / 512 MB RAM, ephemeral disk,
+# spins down after ~15 min idle). Everything below is shaped by those three
+# limits. The paid configuration this file used to hold is written down in
+# docs/deployment/render-free.md ("Upgrading to paid") — nothing was lost,
+# it moved.
+#
+# Render prompts for every `sync: false` value when you create the blueprint:
+#   DATABASE_URL         Supabase > Settings > Database > Connection string.
+#                        Use the SESSION pooler (port 5432). The transaction
+#                        pooler (6543) cannot run alembic's multi-statement DDL.
+#                        Percent-encode the password: '#' -> '%23'.
 #   SUPABASE_URL         https://<project_ref>.supabase.co
 #   SUPABASE_SECRET_KEY  Supabase > Settings > API keys > secret key
-#   GEMINI_API_KEY       Google AI Studio. Render KHÔNG chạy được Ollama —
-#                        đây là provider LLM duy nhất trên deploy này.
-#   VITE_API_BASE        (ở service web) URL của studymap-api sau khi nó dựng
-#                        xong, ví dụ https://studymap-api.onrender.com
+#   GEMINI_API_KEY       Google AI Studio. Render cannot run Ollama, so this
+#                        is the only LLM provider on this deployment.
+#   VITE_API_BASE        (on studymap-web) the studymap-api URL once it exists,
+#                        e.g. https://studymap-api.onrender.com
 #
-# KHÔNG bao giờ đặt secret thật vào file này — nó nằm trong git.
+# NEVER put a real secret in this file — it is committed to git.
 # ============================================================
 
 services:
-  # ---------- Backend: Flask + FAISS + embedding ----------
+  # ---------- Backend: Flask + Gunicorn ----------
   - type: web
     name: studymap-api
-    runtime: docker
-    # standard = 2GB RAM. Vừa đủ cho intfloat/multilingual-e5-small (~470MB).
-    # Muốn chạy ĐÚNG phương pháp luận văn (bge-m3 + late chunking) thì phải lên
-    # `pro` (4GB) — bge-m3 nạp fp32 tốn ~2.5GB, plan standard sẽ OOM.
-    plan: standard
-    # Supabase project ở ap-northeast-2 (Seoul) — singapore là region Render gần nhất.
+    runtime: python
+    plan: free
+    # Supabase project sits in ap-northeast-2 (Seoul); singapore is the nearest
+    # Render region, which keeps DB round-trips off the critical path.
     region: singapore
     branch: main
     autoDeploy: true
-    dockerfilePath: ./BE/Dockerfile
-    dockerContext: ./BE
+    rootDir: BE
     healthCheckPath: /health
-    # Migration chạy TRƯỚC khi instance mới nhận traffic. Hỏng migration =
-    # Render huỷ deploy, bản cũ vẫn phục vụ.
-    preDeployCommand: "alembic upgrade head"
-    # Dockerfile CMD không tạo thư mục trên disk mount (nó chỉ mkdir /app/*),
-    # nên override để tạo trước rồi mới chạy gunicorn.
-    dockerCommand: 'sh -c "mkdir -p $DATA_DIR/index $DATA_DIR/memory $DATA_DIR/input_docs $HF_HOME && exec gunicorn -w ${WEB_CONCURRENCY:-1} -b 0.0.0.0:${PORT:-8080} --timeout ${GUNICORN_TIMEOUT:-900} app.main:app"'
-    disk:
-      name: studymap-data
-      mountPath: /var/data
-      # FAISS index + sqlite + input_docs + cache HuggingFace (~500MB cho e5-small,
-      # ~2.5GB nếu đổi sang bge-m3). Disk giữ nguyên qua mỗi deploy nên model chỉ
-      # tải MỘT lần, không tải lại mỗi lần push.
-      sizeGB: 10
+
+    # `preDeployCommand` is a paid-plan feature, so migrations run here instead.
+    # Build-time is the right place on free: a failed migration fails the build
+    # and Render keeps the previous deploy serving. Putting it in startCommand
+    # would re-run it on every cold start and take the service down on failure.
+    buildCommand: >-
+      pip install --upgrade pip &&
+      pip install -r requirements.txt &&
+      python scripts/build_proto.py &&
+      alembic upgrade head
+
+    # Production WSGI server, never `flask run`. One worker: HITL keeps resume
+    # metadata in-process, so pause and resume must land in the same process —
+    # and 512 MB does not fit a second worker anyway.
+    startCommand: >-
+      gunicorn -w ${WEB_CONCURRENCY:-1} -b 0.0.0.0:${PORT:-8080}
+      --timeout ${GUNICORN_TIMEOUT:-120} app.main:app
+
     envVars:
-      # --- bí mật: Render hỏi lúc tạo blueprint ---
+      - key: PYTHON_VERSION
+        value: "3.11"
+
+      # --- secrets: Render asks for these at blueprint creation ---
       - key: DATABASE_URL
         sync: false
       - key: SUPABASE_URL
@@ -58,28 +69,45 @@ services:
         sync: false
       - key: GEMINI_API_KEY
         sync: false
-      # Khoá ký token: Render sinh 1 lần, không ai nhìn thấy, không nằm trong git.
+      # Token signing key: generated once by Render, never shown, never in git.
       - key: AUTH_SECRET
         generateValue: true
 
-      # --- state trên disk ---
-      - key: DATA_DIR
-        value: /var/data
-      - key: HF_HOME
-        value: /var/data/hf
-      - key: JOBS_DB_PATH
-        value: /var/data/jobs.sqlite
-      - key: LOG_DB_PATH
-        value: /var/data/logs.sqlite
-      - key: USERS_DB_PATH
-        value: /var/data/users.sqlite
-      - key: CONVERSATIONS_DB_PATH
-        value: /var/data/conversations.sqlite
+      # --- THE free-tier switch -------------------------------------------
+      # No local model weights, ever. get_embeddings() returns FakeEmbeddings
+      # instead of pulling a sentence-transformers checkpoint, so boot needs no
+      # download and no ~470 MB+ of resident model on a 512 MB box.
+      #
+      # The cost is real and is NOT hidden: embedding-backed retrieval (RAG chat
+      # citations, semantic search, ingest indexing) does not produce meaningful
+      # results on this deployment. Gemini-backed generation does work. See the
+      # "What does not work on Free" section of docs/deployment/render-free.md.
+      - key: SKIP_MODEL_LOAD
+        value: "1"
 
-      # --- LLM: Gemini, KHÔNG Ollama ---
-      # OLLAMA_HOST rỗng là BẮT BUỘC: llm_factory chỉ bỏ 'ollama' khỏi danh sách
-      # provider khi biến này rỗng. Để nguyên default thì mọi lời gọi LLM sẽ thử
-      # Ollama trước, timeout, rồi mới rơi sang Gemini.
+      # --- state: ephemeral on free, so keep it off the local disk ----------
+      # No Persistent Disk exists on free. DATA_DIR points at the container's
+      # own filesystem and is wiped on every deploy, restart and spin-down.
+      # Business data lives in Postgres (Supabase); uploads live in Supabase
+      # Storage. FAISS index files and the sqlite job/log ledgers do not survive.
+      # HF_HOME and USERS_DB_PATH are deliberately absent: no code reads
+      # USERS_DB_PATH (accounts live in Postgres), and SKIP_MODEL_LOAD=1 means
+      # nothing ever populates a HuggingFace cache. Setting either would be
+      # config that looks load-bearing and is not.
+      - key: DATA_DIR
+        value: /tmp/studymap
+      - key: JOBS_DB_PATH
+        value: /tmp/studymap/jobs.sqlite
+      - key: LOG_DB_PATH
+        value: /tmp/studymap/logs.sqlite
+      - key: CONVERSATIONS_DB_PATH
+        value: /tmp/studymap/conversations.sqlite
+
+      # --- LLM: Gemini only, no Ollama -------------------------------------
+      # An EMPTY OLLAMA_HOST is required, not cosmetic: llm_factory only drops
+      # "ollama" from PROVIDERS when this is blank. Leave it at its default and
+      # every LLM call tries Ollama first, waits for the timeout, then falls
+      # through to Gemini.
       - key: OLLAMA_HOST
         value: ""
       - key: OLLAMA_WARMUP
@@ -88,68 +116,51 @@ services:
         value: gemini-2.5-flash
       - key: LLM_MAX_TOKENS
         value: "8192"
+      # Free spins down and has one slow CPU; generous per-call ceilings, but
+      # below the gunicorn worker timeout so a hung call dies as a request error
+      # rather than as a killed worker.
       - key: AI_TIMEOUT_SEC
-        value: "300"
+        value: "110"
       - key: SUMMARY_LLM_TIMEOUT_SEC
-        value: "300"
+        value: "110"
       - key: MINDMAP_LLM_TIMEOUT_SEC
-        value: "300"
+        value: "110"
       - key: QUIZ_LLM_TIMEOUT_SEC
-        value: "300"
+        value: "110"
 
-      # --- embedding / retrieval ---
-      # e5-small: 118M tham số, 384 chiều, đa ngữ (tiếng Việt ổn), ~470MB RAM.
-      # ĐỔI MODEL = PHẢI XOÁ INDEX CŨ (đổi số chiều FAISS). Deploy mới thì index
-      # rỗng sẵn nên không sao.
-      # Bản đầy đủ (cần plan `pro`):
-      #   EMBEDDING_MODEL_NAME=BAAI/bge-m3   +   LATE_CHUNKING=1
-      - key: EMBEDDING_MODEL_NAME
-        value: intfloat/multilingual-e5-small
-      # Late chunking cần encoder long-context. e5-small tối đa 512 token nên
-      # PHẢI tắt — bật với model ngắn sẽ cắt cụt tài liệu (xem known-issues).
-      - key: LATE_CHUNKING
-        value: "0"
-      - key: HYBRID_TOP_K
-        value: "6"
-      - key: USE_LC_VECTOR_STORE
-        value: "1"
-      - key: USE_LC_QA_CHAIN
-        value: "1"
-      - key: USE_LC_ENSEMBLE
-        value: "1"
-      - key: USE_LC_INGEST
-        value: "1"
-      - key: CRAG_ENABLED
-        value: "1"
-      - key: CRAG_REWRITE_MAX
-        value: "2"
-      # Rerank (bge-reranker-v2-m3 ~2.3GB) và NLI (MiniLMv2-L6 ~0.4GB) TẮT trên
-      # Render: hai model này cộng lại vượt RAM của mọi plan dưới `pro`, và
-      # chúng lazy-load ở query đầu nên sẽ OOM giữa request chứ không phải lúc boot.
+      # --- retrieval: every local-model feature off ------------------------
+      # Reranker (bge-reranker-v2-m3, ~2.3 GB) and NLI (~0.4 GB) lazy-load on
+      # first query, so leaving them on would OOM mid-request rather than at
+      # boot — the worst place to find out.
       - key: RERANK_ENABLED
         value: "0"
       - key: NLI_ENABLED
         value: "0"
-      # Không dừng xin người duyệt: câu trả lời đi thẳng ra. Mặc định trong
-      # shared/config.py là 1, nên phải đặt tường minh ở đây.
-      - key: HITL_ENABLED
+      # Late chunking needs a long-context encoder; nothing is loaded here.
+      - key: LATE_CHUNKING
         value: "0"
       - key: EMBEDDING_WARMUP_ENABLED
         value: "0"
+      - key: HYBRID_TOP_K
+        value: "6"
+      - key: CRAG_ENABLED
+        value: "0"
+      # Answers go straight out; no human-approval pause.
+      - key: HITL_ENABLED
+        value: "0"
 
-      # --- server ---
-      # 1 worker: HITL giữ metadata resume trong process, pause và resume phải
-      # rơi vào cùng một tiến trình.
+      # --- server ----------------------------------------------------------
       - key: WEB_CONCURRENCY
         value: "1"
+      # Must stay under Render's own request ceiling and above the LLM timeouts.
       - key: GUNICORN_TIMEOUT
-        value: "900"
-      # Bearer token nên cross-origin đọc được response cũng không lấy được token.
-      # Muốn siết thì đổi thành URL của studymap-web.
+        value: "120"
+      # Auth is Bearer-token, so a cross-origin reader still cannot obtain a
+      # token. Tighten to the studymap-web URL once it is known.
       - key: CORS_ORIGINS
         value: "*"
 
-      # --- auth: prod = fail-loud + khoá theo user ---
+      # --- auth: production posture ---------------------------------------
       - key: AUTH_REQUIRE_SECRET
         value: "true"
       - key: AUTH_PROTECT_APP_APIS
@@ -157,7 +168,10 @@ services:
       - key: AUTH_TOKEN_TTL_SEC
         value: "604800"
 
-      # --- không có Redis: cache và queue tự tắt (fail-open) ---
+      # --- no Redis on free: queue and cache fail open ---------------------
+      # QUEUE_ENABLED=false runs jobs in in-process daemon threads instead of
+      # RQ workers. Same code path, same dotted callables — but a job dies with
+      # the instance when free spins down. No Redis service is created here.
       - key: REDIS_URL
         value: ""
       - key: QUEUE_ENABLED
@@ -167,7 +181,7 @@ services:
       - key: SUPABASE_STORAGE_BUCKET
         value: documents
 
-  # ---------- Frontend: static site ----------
+  # ---------- Frontend: static site (free, no instance hours) ----------
   - type: web
     name: studymap-web
     runtime: static
@@ -177,15 +191,14 @@ services:
     buildCommand: npm ci && npm run build
     staticPublishPath: ./dist
     routes:
-      # SPA: mọi đường dẫn không phải file tĩnh đều trả index.html, nếu không
-      # F5 ở /app/study/quiz/<id> sẽ ra 404.
+      # SPA fallback: without this, refreshing /app/study/quiz/<id> returns 404.
       - type: rewrite
         source: /*
         destination: /index.html
     envVars:
       - key: NODE_VERSION
         value: "22"
-      # URL của studymap-api, dán sau khi service đó dựng xong.
-      # Vite nhúng biến này lúc BUILD — đổi giá trị phải deploy lại FE.
+      # Vite inlines this at BUILD time — changing it requires a new FE deploy,
+      # not just a restart.
       - key: VITE_API_BASE
         sync: false
