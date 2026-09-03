@@ -960,6 +960,11 @@ def _metric_totals_safe():
         return None
 
 
+# Thân 7 route job đã sang `app/application/jobs.py` (Phase 2D). Tầng ấy không biết
+# HTTP: nó ném lỗi mang ngữ nghĩa, còn `_ATTEMPT_ERR_HTTP` bên dưới chọn con số.
+from app.application import jobs as jobs_uc  # noqa: E402
+
+
 @app.get('/jobs/<job_id>/timeline')
 def job_timeline(job_id: str):
     """Phase 0 observability — timeline read-only cho MỘT job từ logs.sqlite
@@ -968,51 +973,11 @@ def job_timeline(job_id: str):
     uid, err = _require_app_user()
     if err:
         return err
-    from app.domains.jobs.jobs_store import get_job as _js_get
-    j = _js_get(job_id)
-    if not j:
-        return jsonify({"error": "Job not found"}), 404
-    if _auth_protect_enabled() and j.get("user_id") != uid:
-        return jsonify({"error": "Job not found"}), 404  # foreign job → no oracle
-    from app.graphs.logger import read_job_events
-    events = read_job_events(job_id)
-    total_ms = 0.0
-    llm_calls = None
-    for e in events:
-        try:
-            total_ms += float(e.get("duration_ms") or 0.0)
-        except Exception:
-            pass
-        md = e.get("metadata") or {}
-        if "llm_calls" in md:
-            try:
-                llm_calls = int(md["llm_calls"])
-            except Exception:
-                pass
-    # queue_wait_ms best-effort: created_at (isoformat UTC) → ts event đầu tiên
-    # (sqlite datetime('now'), UTC). Parse lỗi → None, không bao giờ 500.
-    queue_wait_ms = None
     try:
-        if events and j.get("created_at"):
-            from datetime import datetime, timezone
-            t0 = datetime.fromisoformat(str(j["created_at"]))
-            if t0.tzinfo is None:
-                t0 = t0.replace(tzinfo=timezone.utc)
-            t1 = datetime.strptime(str(events[0]["ts"]), "%Y-%m-%d %H:%M:%S").replace(tzinfo=timezone.utc)
-            qw = (t1 - t0).total_seconds() * 1000.0
-            if qw >= 0:
-                queue_wait_ms = round(qw, 1)
-    except Exception:
-        pass
-    return jsonify({
-        "job_id": job_id,
-        "job_type": j.get("job_type"),
-        "status": j.get("status"),
-        "progress": j.get("progress", 0),
-        "events": events,
-        "totals": {"total_ms": total_ms, "llm_calls": llm_calls,
-                   "queue_wait_ms": queue_wait_ms},
-    }), 200
+        return jsonify(jobs_uc.dong_thoi_gian(
+            job_id, uid, bat_buoc_chu_so_huu=_auth_protect_enabled())), 200
+    except attempts_uc.AttemptError as exc:
+        return _attempt_err(exc)
 
 
 # -------------------------
@@ -1176,17 +1141,12 @@ def _chunk_owner_stem(chunk_id) -> str:
 
 
 def _derived_job_owner_ok(job_id: str, user_id: Optional[str], allowed_types) -> Optional[bool]:
-    """Owner check for derived-artifact jobs (summary/mindmap/rebuild) that live in
-    jobs_store. None if the job is unknown or of a foreign type; True if owned; False
-    if owned by someone else. Both None and False map to 404 (no existence oracle)."""
-    try:
-        from app.domains.jobs.jobs_store import get_job as _js_get
-        row = _js_get(job_id)
-    except Exception:
-        row = None
-    if row is None or row.get("job_type") not in allowed_types:
-        return None
-    return row.get("user_id") == user_id
+    """Owner check for derived-artifact jobs (summary/mindmap) that live in jobs_store.
+
+    Giữ lại ở đây vì `summary-cancel` và `mindmap-cancel` — hai route NẰM NGOÀI batch
+    Phase 2D — vẫn gọi. Chữ ký và ngữ nghĩa tri-state (None/True/False) giữ nguyên.
+    """
+    return jobs_uc.chu_so_huu_hop_le(job_id, user_id, allowed_types)
 
 
 def _query_job_owner_ok(job_id: str, user_id: Optional[str]) -> Optional[bool]:
@@ -2357,20 +2317,12 @@ def api_study_maps_job(job_id: str):
     if err:
         return err
     _run_jobs_maintenance()
-    from app.domains.jobs.jobs_store import get_job as _js_get
-    j = _js_get(job_id)
-    if not j or j.get("job_type") != "study_map_generation":
-        return jsonify({"error": "Job not found"}), 404
-    if _auth_protect_enabled() and j.get("user_id") != uid:
-        return jsonify({"error": "Job not found"}), 404  # foreign job → no oracle
-    return jsonify({
-        "job_id": job_id,
-        "status": j.get("status"),
-        "progress": j.get("progress", 0),
-        "current_step": j.get("current_node") or "",
-        "result": j.get("result"),
-        "error": j.get("error"),
-    })
+    try:
+        return jsonify(jobs_uc.xem(
+            job_id, uid, loai_cho_phep=("study_map_generation",), kem_job_type=False,
+            bat_buoc_chu_so_huu=_auth_protect_enabled()))
+    except attempts_uc.AttemptError as exc:
+        return _attempt_err(exc)
 
 
 @app.post('/api/study-maps/jobs/<job_id>/cancel')
@@ -2378,11 +2330,12 @@ def api_study_maps_job_cancel(job_id: str):
     uid, err = _require_app_user()
     if err:
         return err
-    if _auth_protect_enabled() and _derived_job_owner_ok(job_id, uid, ("study_map_generation",)) is not True:
-        return jsonify({"error": "Job not found"}), 404
-    from app.domains.jobs.jobs_store import request_cancel
-    request_cancel(job_id)
-    return jsonify({"job_id": job_id, "cancel_requested": True})
+    try:
+        return jsonify(jobs_uc.huy_theo_loai(
+            job_id, uid, loai_cho_phep=("study_map_generation",),
+            bat_buoc_chu_so_huu=_auth_protect_enabled()))
+    except attempts_uc.AttemptError as exc:
+        return _attempt_err(exc)
 
 
 @app.get('/api/study-maps/<map_id>')
@@ -2609,20 +2562,12 @@ def api_quizzes_job(job_id: str):
     if err:
         return err
     _run_jobs_maintenance()
-    from app.domains.jobs.jobs_store import get_job as _js_get
-    j = _js_get(job_id)
-    if not j or j.get("job_type") != "quiz_generation":
-        return jsonify({"error": "Job not found"}), 404
-    if _auth_protect_enabled() and j.get("user_id") != uid:
-        return jsonify({"error": "Job not found"}), 404  # foreign job → no oracle
-    return jsonify({
-        "job_id": job_id,
-        "status": j.get("status"),
-        "progress": j.get("progress", 0),
-        "current_step": j.get("current_node") or "",
-        "result": j.get("result"),
-        "error": j.get("error"),
-    })
+    try:
+        return jsonify(jobs_uc.xem(
+            job_id, uid, loai_cho_phep=("quiz_generation",), kem_job_type=False,
+            bat_buoc_chu_so_huu=_auth_protect_enabled()))
+    except attempts_uc.AttemptError as exc:
+        return _attempt_err(exc)
 
 
 @app.post('/api/quizzes/jobs/<job_id>/cancel')
@@ -2630,11 +2575,12 @@ def api_quizzes_job_cancel(job_id: str):
     uid, err = _require_app_user()
     if err:
         return err
-    if _auth_protect_enabled() and _derived_job_owner_ok(job_id, uid, ("quiz_generation",)) is not True:
-        return jsonify({"error": "Job not found"}), 404
-    from app.domains.jobs.jobs_store import request_cancel
-    request_cancel(job_id)
-    return jsonify({"job_id": job_id, "cancel_requested": True})
+    try:
+        return jsonify(jobs_uc.huy_theo_loai(
+            job_id, uid, loai_cho_phep=("quiz_generation",),
+            bat_buoc_chu_so_huu=_auth_protect_enabled()))
+    except attempts_uc.AttemptError as exc:
+        return _attempt_err(exc)
 
 
 @app.get('/api/quizzes/<quiz_id>')
@@ -2721,6 +2667,9 @@ _ATTEMPT_ERR_HTTP = {
     practice_uc.PracticeKhongTonTai: 404,
     practice_uc.PracticeChuaSanSang: 409,
     practice_uc.ChuaCoLanChamNao: 409,
+    # Phase 2D
+    jobs_uc.JobKhongTonTai: 404,
+    jobs_uc.JobKhongHoTroHuy: 409,
 }
 
 
@@ -3065,27 +3014,17 @@ def api_job_get(job_id: str):
     if err:
         return err
     _run_jobs_maintenance()
-    from app.domains.jobs.jobs_store import get_job as _js_get
-    j = _js_get(job_id)
-    if not j:
-        return jsonify({"error": "Job not found"}), 404
-    if _auth_protect_enabled() and j.get("user_id") != uid:
-        return jsonify({"error": "Job not found"}), 404
-    return jsonify({
-        "job_id": job_id,
-        "job_type": j.get("job_type"),
-        "status": j.get("status"),
-        "progress": j.get("progress", 0),
-        "current_step": j.get("current_node") or "",
-        "result": j.get("result"),
-        "error": j.get("error"),
-    })
+    try:
+        return jsonify(jobs_uc.xem(
+            job_id, uid, bat_buoc_chu_so_huu=_auth_protect_enabled()))
+    except attempts_uc.AttemptError as exc:
+        return _attempt_err(exc)
 
 
-# Job_type mà executor THẬT SỰ gọi is_cancel_requested giữa các bước.
-# Kiểm bằng: grep -rn "is_cancel_requested" BE/app BE/services --include=*.py
-_CANCELLABLE_JOB_TYPES = {"mindmap", "summary", "quiz_generation",
-                          "study_map_generation", "query"}
+# Nguồn sự thật giờ ở `application/jobs.py`. Giữ TÊN Ở ĐÂY vì `test_query_cancel.py`
+# đọc `app.main._CANCELLABLE_JOB_TYPES` để khẳng định "query" có trong tập còn
+# "ingest"/"short_answer_grading" thì không.
+_CANCELLABLE_JOB_TYPES = jobs_uc.LOAI_HUY_DUOC
 
 
 @app.post('/api/jobs/<job_id>/cancel')
@@ -3093,27 +3032,14 @@ def api_job_cancel(job_id: str):
     uid, err = _require_app_user()
     if err:
         return err
-    from app.domains.jobs.jobs_store import get_job as _js_get
-    j = _js_get(job_id)
-    if not j or (_auth_protect_enabled() and j.get("user_id") != uid):
-        return jsonify({"error": "Job not found"}), 404
-    # Chỉ những job_type có điểm kiểm huỷ trong executor mới huỷ được. Các loại còn
-    # lại (ingest, short_answer_grading) KHÔNG đọc cờ ở bất kỳ đâu — trước đây
-    # route này vẫn trả cancel_requested=True cho chúng, nên FE hiện "Đang huỷ…" rồi
-    # treo tới hết TTL (đúng lớp lỗi known-issues 2026-07-17). Thà từ chối thẳng.
-    # Thêm job_type vào đây CHỈ SAU KHI executor của nó thật sự gọi is_cancel_requested.
     # "query" thêm 2026-09-01: `build_query_graph(da_huy=...)` bọc MỌI node và đọc cờ ở
     # từng ranh giới. Trần: không cắt được node đang chạy (một request HTTP tới Ollama),
     # nên worst case là thời lượng node đó, không phải tức thì.
-    if (j.get("job_type") or "") not in _CANCELLABLE_JOB_TYPES:
-        return jsonify({
-            "error": f"Loại job '{j.get('job_type')}' không hỗ trợ huỷ giữa chừng.",
-            "job_id": job_id,
-            "cancel_requested": False,
-        }), 409
-    from app.domains.jobs.jobs_store import request_cancel
-    request_cancel(job_id)
-    return jsonify({"job_id": job_id, "cancel_requested": True})
+    try:
+        return jsonify(jobs_uc.huy_chung(
+            job_id, uid, bat_buoc_chu_so_huu=_auth_protect_enabled()))
+    except attempts_uc.AttemptError as exc:
+        return _attempt_err(exc)
 
 
 @app.get('/list-indexed')
