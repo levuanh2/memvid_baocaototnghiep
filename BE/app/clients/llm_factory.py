@@ -252,6 +252,11 @@ def _ollama_chat_llm(model: str | None, feature: str, options: dict | None, time
 FPT_DEFAULT_BASE_URL = "https://mkp-api.fptcloud.com/v1"
 FPT_DEFAULT_CHAT_MODEL = "gpt-oss-120b"
 
+# Embedding qua FPT là OPT-IN: phải đặt TÊN MODEL tường minh, có mỗi khoá thì
+# chưa đủ. Lý do: đổi model embedding làm index FAISS đang có trở nên vô nghĩa,
+# nên nó không được xảy ra như một tác dụng phụ của việc bật chat.
+FPT_DEFAULT_EMBEDDING_MODEL = ""
+
 
 def fpt_api_key() -> str:
     """Khoá FPT, rỗng nghĩa là chưa cấu hình. Điểm đọc DUY NHẤT cho cả chat, rerank,
@@ -642,6 +647,78 @@ class LateChunkEmbeddings(_LCEmbeddings):
         return [row.tolist() for row in arr]
 
 
+def fpt_embedding_model() -> str:
+    """Tên model embedding FPT, rỗng = không bật."""
+    return (os.getenv("FPT_AI_EMBEDDING_MODEL") or FPT_DEFAULT_EMBEDDING_MODEL).strip()
+
+
+def fpt_embedding_enabled() -> bool:
+    """Cần CẢ khoá lẫn tên model. Xem chú thích ở `FPT_DEFAULT_EMBEDDING_MODEL`."""
+    return bool(fpt_api_key()) and bool(fpt_embedding_model())
+
+
+class FptEmbeddings(_LCEmbeddings):
+    """Embedding qua `/embeddings` của FPT AI Marketplace (hình dạng OpenAI).
+
+    Đo thật 2026-09-04: `Vietnamese_Embedding` (fine-tune từ BGE-M3, ctx 8000) và
+    `multilingual-e5-large` đều trả 1024 chiều, thân
+    `{"data": [{"embedding": [...], "index": n}]}`.
+
+    KHÔNG làm được late chunking. Late chunking cần hidden state ở MỨC TOKEN để
+    mean-pool theo span; API chỉ trả vector đã pool sẵn. Nên chiến lược của
+    provider này là `api_pooled`, khác hẳn `mean_late` của encoder cục bộ — và
+    đó là lý do danh tính index phải ghi cả chiến lược, không chỉ số chiều.
+
+    PHẢI subclass Embeddings: LC FAISS isinstance-check.
+    """
+
+    def __init__(self, model: str, *, timeout: float | None = None,
+                 batch_size: int = 32) -> None:
+        self.model_name = model
+        self._timeout = timeout or float(os.getenv("FPT_AI_EMBED_TIMEOUT_SEC", "60"))
+        self._batch = max(1, int(os.getenv("EMBED_BATCH_SIZE", str(batch_size))))
+
+    def _goi(self, texts: list[str]) -> list[list[float]]:
+        import requests
+
+        r = requests.post(fpt_base_url() + "/embeddings", headers=fpt_headers(),
+                          json={"model": self.model_name, "input": texts},
+                          timeout=self._timeout)
+        if r.status_code >= 400:
+            raise RuntimeError(f"FPT embeddings HTTP {r.status_code}: {r.text[:200]}")
+        try:
+            body = r.json()
+        except ValueError:
+            raise RuntimeError(
+                f"FPT embeddings thân không phải JSON: {r.text[:200]}") from None
+        muc = body.get("data")
+        if not isinstance(muc, list) or len(muc) != len(texts):
+            raise RuntimeError(
+                f"FPT embeddings trả {len(muc) if isinstance(muc, list) else '?'} vector "
+                f"cho {len(texts)} đầu vào: {str(body)[:200]}")
+        # `index` cho biết vector nào ứng với đầu vào nào. Giả định thứ tự giữ
+        # nguyên là cách lặng lẽ gán nhầm vector cho chunk.
+        theo_idx: dict[int, list[float]] = {}
+        for it in muc:
+            if not isinstance(it, dict) or not isinstance(it.get("embedding"), list):
+                raise RuntimeError(
+                    f"FPT embeddings phần tử thiếu `embedding`: {str(it)[:120]}")
+            theo_idx[int(it.get("index", len(theo_idx)))] = [float(x) for x in it["embedding"]]
+        if sorted(theo_idx) != list(range(len(texts))):
+            raise RuntimeError(
+                f"FPT embeddings thiếu/lệch `index`: {sorted(theo_idx)[:10]}")
+        return [theo_idx[i] for i in range(len(texts))]
+
+    def embed_documents(self, texts: list[str]) -> list[list[float]]:
+        ra: list[list[float]] = []
+        for i in range(0, len(texts), self._batch):
+            ra.extend(self._goi(list(texts[i:i + self._batch])))
+        return ra
+
+    def embed_query(self, text: str) -> list[float]:
+        return self._goi([text])[0]
+
+
 def get_embeddings() -> Any:
     """
     Lazy singleton embeddings.
@@ -652,6 +729,17 @@ def get_embeddings() -> Any:
     global _emb_instance, _emb_bound_name
 
     from langchain_core.embeddings import Embeddings
+
+    # Trước cả `SKIP_MODEL_LOAD`: cờ đó nghĩa là 'đừng nạp weight vào tiến trình
+    # này', mà provider từ xa không nạp gì. Production chạy cờ đó, nên nếu để nó
+    # chặn thì FPT embedding không bao giờ có tác dụng ở đúng nơi cần.
+    if fpt_embedding_enabled():
+        bound = f"fpt:{fpt_embedding_model()}"
+        if _emb_instance is not None and _emb_bound_name == bound:
+            return _emb_instance
+        _emb_instance = FptEmbeddings(fpt_embedding_model())
+        _emb_bound_name = bound
+        return _emb_instance
 
     if os.getenv("SKIP_MODEL_LOAD") == "1":
         from langchain_core.embeddings.fake import FakeEmbeddings
@@ -698,6 +786,39 @@ def get_embeddings() -> Any:
     return _emb_instance
 
 
+def embedding_identity() -> dict:
+    """Danh tính của KHÔNG GIAN VECTOR đang dùng — thứ mà index phải khớp.
+
+    Số chiều KHÔNG đủ để nhận diện. `BAAI/bge-m3` và `Vietnamese_Embedding` (bản
+    fine-tune từ chính nó) đều 1024 chiều, nên hàng rào chỉ so chiều sẽ cho nạp
+    một index dựng bằng model này rồi truy vấn bằng model kia: không lỗi nào nổ
+    ra, chỉ là kết quả truy hồi thành rác.
+
+    `strategy` cũng phải nằm trong danh tính: cùng một model bge-m3 nhưng pool
+    theo `mean_late` và pool theo `encode` cho hai không gian khác nhau — đã có
+    một buổi debug về đúng chuyện đó (.playbook 2026-09-01).
+    """
+    if fpt_embedding_enabled():
+        return {"embedding_provider": "fpt",
+                "embedding_model_name": fpt_embedding_model(),
+                "embedding_strategy": "api_pooled"}
+    if os.getenv("SKIP_MODEL_LOAD") == "1":
+        return {"embedding_provider": "fake",
+                "embedding_model_name": "FakeEmbeddings",
+                "embedding_strategy": "fake"}
+    if _late_chunking_enabled():
+        from app.domains.ingest.late_chunk import get_late_chunk_encoder
+
+        ten = get_late_chunk_encoder(os.getenv("EMBEDDING_MODEL_NAME") or None).model_name
+        return {"embedding_provider": "local",
+                "embedding_model_name": ten,
+                "embedding_strategy": "mean_late"}
+    return {"embedding_provider": "local",
+            "embedding_model_name": os.getenv("EMBEDDING_MODEL_NAME",
+                                              DEFAULT_EMBEDDING_MODEL_NAME),
+            "embedding_strategy": "encode"}
+
+
 _EMB_QUERY_VEC_CACHE: OrderedDict[str, np.ndarray] = OrderedDict()
 QUERY_EMBED_CACHE_MAX = int(os.getenv("QUERY_EMBED_CACHE_MAX", "512"))
 
@@ -716,7 +837,7 @@ def encode_query_cached(query: str, model_name: Optional[str] = None) -> Optiona
     """
     global _EMB_QUERY_VEC_CACHE
 
-    if os.getenv("SKIP_MODEL_LOAD") == "1":
+    if os.getenv("SKIP_MODEL_LOAD") == "1" and not fpt_embedding_enabled():
         return None
     q = (query or "").strip()
     if not q:
@@ -773,6 +894,15 @@ _emb_adapter_name: Optional[str] = None
 def get_embedding_model(model_name: Optional[str] = None) -> Optional[LangChainEmbeddingAdapter]:
     """SKIP_MODEL_LOAD=1 → None. Đổi model_name → cập nhật env + clear cache embeddings."""
     global _emb_adapter_cache, _emb_adapter_name
+
+    # FPT đứng trước cả `SKIP_MODEL_LOAD` lẫn late chunking: nó KHÔNG nạp weight,
+    # và late chunking không chạy được qua HTTP (cần hidden state mức token).
+    if fpt_embedding_enabled():
+        bound = f"fpt:{fpt_embedding_model()}"
+        if _emb_adapter_cache is None or _emb_adapter_name != bound:
+            _emb_adapter_cache = LangChainEmbeddingAdapter()
+            _emb_adapter_name = bound
+        return _emb_adapter_cache
 
     if os.getenv("SKIP_MODEL_LOAD") == "1":
         return None

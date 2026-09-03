@@ -20,6 +20,8 @@ from langchain_core.documents import Document
 
 from app.clients.llm_factory import (
     DEFAULT_EMBEDDING_MODEL_NAME,
+    embedding_identity,
+    fpt_embedding_enabled,
     get_embedding_model,
     get_embeddings,
 )
@@ -128,7 +130,10 @@ def save_index_with_backup(index: Any, index_dir: Path, keep: int = 3) -> None:
 
 
 def _skip_faiss_in_ci() -> bool:
-    return os.getenv("SKIP_MODEL_LOAD") == "1"
+    """`SKIP_MODEL_LOAD=1` nghĩa là 'đừng nạp weight vào tiến trình này'. Embedding
+    qua HTTP không nạp gì, nên cờ đó không áp — nếu áp thì bật FPT embedding xong
+    index vẫn không bao giờ được ghi ở đúng nơi cần nó nhất."""
+    return os.getenv("SKIP_MODEL_LOAD") == "1" and not fpt_embedding_enabled()
 
 
 def _require_embedding_model():
@@ -210,6 +215,61 @@ def _get_current_embedding_dim() -> int:
     return int(dummy.shape[1])
 
 
+INDEX_IDENTITY_KEYS = ("embedding_provider", "embedding_model_name", "embedding_strategy")
+
+
+class IndexIdentityMismatch(RuntimeError):
+    """Index được dựng bằng một không gian vector khác với cái đang cấu hình."""
+
+
+def index_identity(meta: Optional[Dict[str, Any]] = None) -> Dict[str, Any]:
+    """Danh tính đã GHI trong `__meta__`. Thiếu khoá nào thì để None."""
+    if meta is None:
+        meta = load_meta()
+    m = meta.get("__meta__") if isinstance(meta, dict) else None
+    if not isinstance(m, dict):
+        return {k: None for k in INDEX_IDENTITY_KEYS}
+    return {k: m.get(k) for k in INDEX_IDENTITY_KEYS}
+
+
+def check_index_identity(meta: Optional[Dict[str, Any]] = None) -> Optional[str]:
+    """Trả về mô tả chỗ lệch, hoặc None nếu dùng được.
+
+    Vì sao không so số chiều là đủ: `BAAI/bge-m3` và `Vietnamese_Embedding` — bản
+    fine-tune từ chính nó trên marketplace — ĐỀU 1024 chiều. Hàng rào cũ
+    (`_load_index`) chỉ so `idx.d`, nên đổi sang model kia thì index cũ nạp trót
+    lọt, truy vấn chạy bình thường, và kết quả là rác. Không một dòng log nào.
+
+    Chiến lược pool cũng đổi không gian vector dù cùng model: `mean_late` và
+    `encode` trên cùng bge-m3 cho hai không gian khác nhau (.playbook 2026-09-01).
+
+    Index CŨ (`version` 1.0/1.1) không ghi provider/strategy. Không suy đoán hộ:
+    thiếu thông tin thì cho qua, chỉ so những khoá thực sự có. Khoá duy nhất mà
+    index 1.1 luôn có là `embedding_model_name`, và riêng nó đã bắt được ca
+    bge-m3 -> Vietnamese_Embedding.
+    """
+    hien_tai = embedding_identity()
+    da_ghi = index_identity(meta)
+    if not any(da_ghi.values()):
+        # Index 1.0 không ghi gì để so. Với provider CỤC BỘ thì cho qua: không có
+        # thông tin, mà chặn hết thì mọi cài đặt cũ chết oan.
+        #
+        # Với `fpt` thì KHÔNG cho qua, và đây không phải phỏng đoán: provider ấy chưa
+        # tồn tại trong mã cho tới hôm nay, nên một index không mang danh tính chắc
+        # chắn KHÔNG được dựng bằng nó. Đây là ca "thiếu metadata" mà vẫn kết luận
+        # được, thay vì mặc định coi là tương thích.
+        if hien_tai.get("embedding_provider") == "fpt":
+            return ("index không ghi danh tính (version cũ) nên không thể do provider "
+                    "'fpt' dựng — provider này mới có")
+        return None
+    lech = [f"{k}: index={da_ghi[k]!r} != cấu hình={hien_tai.get(k)!r}"
+            for k in INDEX_IDENTITY_KEYS
+            if da_ghi.get(k) is not None and da_ghi[k] != hien_tai.get(k)]
+    if not lech:
+        return None
+    return "; ".join(lech)
+
+
 def _load_index(dim: int):
     """
     Load hoặc tạo FAISS index với dimension validation.
@@ -287,9 +347,13 @@ def _vs_cache_key() -> Optional[tuple]:
     try:
         f = (INDEX_DIR / "index.faiss").stat()
         p = (INDEX_DIR / "index.pkl").stat()
-        return (f.st_mtime_ns, f.st_size, p.st_mtime_ns, p.st_size)
     except OSError:
         return None
+    # Danh tính embedding nằm TRONG khoá cache. Nếu không, đổi cấu hình embedding
+    # giữa chừng sẽ trả về đúng cái vectorstore đã cache trước đó — hàng rào bên
+    # dưới không bao giờ chạy vì cache đã trả lời trước. Đọc env, không chạm đĩa.
+    return (f.st_mtime_ns, f.st_size, p.st_mtime_ns, p.st_size,
+            tuple(sorted(embedding_identity().items())))
 
 
 def load_vectorstore(use_cache: bool = False) -> Optional[FAISS]:
@@ -304,6 +368,13 @@ def load_vectorstore(use_cache: bool = False) -> Optional[FAISS]:
     key = _vs_cache_key() if use_cache else None
     if use_cache and key is not None and _VS_CACHE["key"] == key and _VS_CACHE["vs"] is not None:
         return _VS_CACHE["vs"]
+    lech = check_index_identity()
+    if lech:
+        # KHÔNG xoá, KHÔNG dựng lại: index là dữ liệu, và việc dựng lại là quyết
+        # định của người vận hành. Chỉ từ chối dùng nó và nói rõ vì sao — truy hồi
+        # rỗng là kết quả trung thực, truy hồi bằng vector của model khác thì không.
+        print(f"[INDEX] Từ chối nạp: không gian vector lệch ({lech}). Dựng lại index bằng cấu hình hiện tại rồi thử lại.", flush=True)
+        return None
     try:
         vs = FAISS.load_local(str(INDEX_DIR), get_embeddings(), allow_dangerous_deserialization=True)
     except Exception:
@@ -414,13 +485,13 @@ def append_chunks_to_lc_index(
         except Exception:
             emb_dim = 0
     meta["__meta__"] = {
-        "version": "1.1",
+        "version": "1.2",
         "created_at": meta.get("__meta__", {}).get("created_at") or now,
         "num_chunks": num_chunks,
-        "embedding_model_name": model_name,
         "embedding_dim": emb_dim,
         "vector_backend": "langchain_faiss",
         "pooling": "mean_late" if embeddings is not None else "encode",
+        **embedding_identity(),
     }
     _save_meta(meta)
     print(f"[vector_store] added {len(chunks)} chunks source={source_name!r} (total={num_chunks}, model={model_name})")
@@ -485,12 +556,13 @@ def rebuild_lc_index_from_meta(meta: Dict[str, Any]) -> None:
         # phân biệt được "chưa đo" với "model 0 chiều" — nên phải kêu, không nuốt im.
         print(f"embedding_dim_probe_failed err={e}", flush=True)
     meta["__meta__"] = {
-        "version": "1.1",
+        "version": "1.2",
         "created_at": meta.get("__meta__", {}).get("created_at") or datetime.now().isoformat(),
         "num_chunks": num_chunks,
         "embedding_model_name": MODEL_NAME,
         "embedding_dim": emb_dim,
         "vector_backend": "langchain_faiss",
+        **embedding_identity(),
     }
     _save_meta(meta)
     print(f"[vector_store] rebuilt LC FAISS vectors={num_chunks} (model={MODEL_NAME})")
@@ -635,6 +707,14 @@ def append_to_index(
     next_id = max(existing_ids) + 1 if existing_ids else 0
     ids = np.arange(next_id, next_id + len(chunks), dtype="int64")
 
+    lech = check_index_identity(meta)
+    if lech:
+        # Ghi thêm vector của model MỚI vào index của model CŨ là cách trộn hai
+        # không gian vào một file, và không có đường lùi nào sau đó.
+        raise IndexIdentityMismatch(
+            f"Index hiện có được dựng bằng không gian vector khác ({lech}). Dựng lại index trước khi ghi thêm."
+        )
+
     idx = _load_index(dim)
     idx.add_with_ids(embeds, ids)
     # PR#6: append ghi thẳng, không full-dir backup (xem append_chunks_to_lc_index).
@@ -667,13 +747,14 @@ def append_to_index(
 
     num_chunks = sum(1 for k in meta.keys() if isinstance(k, str) and k.isdigit())
     meta["__meta__"] = {
-        "version": "1.1",
+        "version": "1.2",
         "created_at": meta.get("__meta__", {}).get("created_at") or now,
         "num_chunks": num_chunks,
         "embedding_model_name": MODEL_NAME,
         "embedding_dim": dim,
         # mean_late: vector late-chunk (mean-pool theo span); encode: tự encode 1 vector/chunk.
         "pooling": "mean_late" if embeddings is not None else "encode",
+        **embedding_identity(),
     }
     _save_meta(meta)
     print(f"[INDEX] added {len(chunks)} chunks source={source_name!r} (total={num_chunks}, model={MODEL_NAME}, dim={dim})")
@@ -886,11 +967,12 @@ def rebuild_chunk_index(existing_meta: Dict[str, Dict] | None = None) -> None:
 
     num_chunks = len(ids)
     meta["__meta__"] = {
-        "version": "1.1",
+        "version": "1.2",
         "created_at": meta.get("__meta__", {}).get("created_at") or datetime.now().isoformat(),
         "num_chunks": num_chunks,
         "embedding_model_name": MODEL_NAME,
         "embedding_dim": dim,
+        **embedding_identity(),
     }
     _save_meta(meta)
     print(f"[INDEX] rebuilt FAISS vectors={num_chunks} (model={MODEL_NAME}, dim={dim})")
