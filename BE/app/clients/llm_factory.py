@@ -305,22 +305,39 @@ class _FptChatLLM:
         self.max_tokens = max_tokens
         self.timeout = timeout
 
+    def _headers(self) -> dict:
+        """Chỗ DUY NHẤT khoá được ghép vào request của client này."""
+        return {"Content-Type": "application/json",
+                "Authorization": f"Bearer {self._api_key}"}
+
     @staticmethod
     def _vai(message: Any) -> str:
         """LangChain đặt tên loại là system/human/ai; FPT dùng từ vựng OpenAI."""
         loai = getattr(message, "type", "") or ""
         return {"system": "system", "human": "user", "ai": "assistant"}.get(loai, "user")
 
+    def _dung_messages(self, messages: Any) -> list:
+        """Chấp nhận cả danh sách message LangChain lẫn MỘT chuỗi trần.
+
+        `llm_cache._judge_same_intent` gọi `get_llm('chat').invoke(prompt_str)` —
+        LangChain nhận chuỗi, còn vòng lặp `for m in messages` thì duyệt TỪNG KÝ TỰ
+        và dựng một request vài nghìn message rỗng. Không lỗi nào nổ ra, chỉ là câu
+        trả lời vô nghĩa."""
+        if isinstance(messages, str):
+            return [{"role": "user", "content": messages}]
+        return [{"role": self._vai(m),
+                 "content": lc_message_content_text(getattr(m, "content", m))}
+                for m in messages]
+
     def invoke(self, messages: Any, stream: bool = False) -> _FptChatResponse:
-        """`stream` nhận vào cho khớp chữ ký của `_invoke_chat` nhưng bị bỏ qua: phase
-        này chỉ cần completion đồng bộ, và request luôn gửi `stream: false`."""
+        """`stream` nhận vào cho khớp chữ ký của `_invoke_chat` nhưng bị bỏ qua ở đây:
+        lời gọi này luôn là completion đồng bộ. Muốn stream thì dùng `.stream()`,
+        đúng như LangChain phân đôi hai đường."""
         import requests
 
         payload = {
             "model": self.model,
-            "messages": [{"role": self._vai(m),
-                          "content": lc_message_content_text(getattr(m, "content", ""))}
-                         for m in messages],
+            "messages": self._dung_messages(messages),
             "temperature": self.temperature,
             "max_tokens": self.max_tokens,
             "stream": False,
@@ -328,8 +345,7 @@ class _FptChatLLM:
         try:
             r = requests.post(
                 self._url,
-                headers={"Content-Type": "application/json",
-                         "Authorization": f"Bearer {self._api_key}"},
+                headers=self._headers(),
                 json=payload,
                 timeout=self.timeout,
             )
@@ -372,6 +388,67 @@ class _FptChatLLM:
                 f"FPT thiếu `choices[0].message.content`: {str(body)[:200]}")
 
         return _FptChatResponse(lc_message_content_text(message.get("content")))
+
+
+    def stream(self, messages: Any, **_kw: Any) -> Any:
+        """SSE theo lối OpenAI: mỗi dòng `data: {...}` mang một `choices[0].delta`,
+        kết thúc bằng `data: [DONE]`.
+
+        CHỈ lấy `delta.content`. `gpt-oss-120b` còn phát `delta.reasoning_content` —
+        đo thật 2026-09-04: với `max_tokens` nhỏ thì TOÀN BỘ ngân sách rơi vào
+        reasoning và `content` không bao giờ xuất hiện. Trộn hai trường lại thì phần
+        suy luận tiếng Anh chảy thẳng vào câu trả lời người dùng đọc.
+
+        Không đặt `reasoning_content` vào `additional_kwargs`: `lc_ai_chunk_text` sẽ
+        lấy nó khi `content` rỗng — đúng hành vi cần cho Ollama think, nhưng ở đây là
+        đường rò."""
+        import json as _json
+
+        import requests
+
+        payload = {
+            "model": self.model,
+            "messages": self._dung_messages(messages),
+            "temperature": self.temperature,
+            "max_tokens": self.max_tokens,
+            "stream": True,
+        }
+        try:
+            r = requests.post(self._url, headers=self._headers(), json=payload,
+                              timeout=self.timeout, stream=True)
+        except Exception as exc:
+            raise RuntimeError(
+                f"FPT stream request failed: {type(exc).__name__}") from None
+        if r.status_code >= 400:
+            raise RuntimeError(f"FPT stream HTTP {r.status_code}: {r.text[:200]}")
+
+        # BẮT BUỘC. FPT trả `content-type: text/event-stream` KHÔNG kèm charset, nên
+        # requests áp mặc định ISO-8859-1 của HTTP và `decode_unicode=True` sẽ giải mã
+        # byte UTF-8 bằng latin-1: "Quang hợp" thành "Quang há»£p". Đường non-stream
+        # không dính vì `r.json()` tự giải mã UTF-8 — nên lỗi này chỉ hiện ở stream, và
+        # hiện dưới dạng chữ vẫn chạy nhưng mất sạch dấu.
+        r.encoding = "utf-8"
+
+        for line in r.iter_lines(decode_unicode=True):
+            if not line:
+                continue
+            if not line.startswith("data:"):
+                continue
+            data = line[len("data:"):].strip()
+            if data == "[DONE]":
+                return
+            try:
+                goi = _json.loads(data)
+            except ValueError:
+                # Một dòng hỏng không đáng huỷ cả câu trả lời đang chảy dở.
+                continue
+            choices = goi.get("choices") or []
+            if not choices:
+                continue
+            delta = choices[0].get("delta") or {}
+            phan = lc_message_content_text(delta.get("content"))
+            if phan:
+                yield _FptChatResponse(phan)
 
 
 def _fpt_chat_llm(feature: str = "chat", options: dict | None = None,
@@ -499,11 +576,44 @@ def stream_chat_tokens(llm: Any, messages: list) -> Iterator[str]:
 
 
 def get_llm(feature: str = "chat") -> Any:
+    """Chat model cho các chain gọi `.invoke()`/`.stream()` trực tiếp.
+
+    Trước đây hàm này hardcode Ollama. Trên production `OLLAMA_HOST` rỗng, nên NĂM
+    đường đi qua đây đều trỏ vào hư không: bộ sinh câu trả lời RAG
+    (`summary.qa_chain`, cả bản đồng bộ lẫn bản stream), viết lại truy vấn
+    (`retrieval.query_rewrite`), phân giải câu hỏi nối tiếp (`conversation.rewrite`),
+    judge của cache ngữ nghĩa, và `RERANK_BACKEND=llm`. Quiz vẫn chạy vì nó dùng
+    `ask_ai`, còn `/query` thì không — cùng một ứng dụng, hai kết cục.
+
+    Giờ đi theo ĐÚNG thứ tự `PROVIDERS` mà `ask_ai` dùng, nên chỉ có MỘT nơi trả lời
+    câu hỏi 'provider nào'. Không có khoá từ xa nào thì `PROVIDERS` vẫn là
+    `['ollama']` và hàm này trả về đúng thứ nó vẫn trả về.
+
+    Chỉ bỏ qua provider nào DỰNG hỏng (thường là thiếu khoá) — lỗi lúc gọi vẫn ném
+    lên như trước, không thêm tầng fallback lúc invoke. `ask_ai` đã giữ vai trò đó
+    cho mọi tác vụ sinh nội dung nặng; dựng thêm một vòng fallback thứ hai ở đây là
+    hai luật cùng nói về một chuyện.
     """
-    LLM chính cho chain (LangChain) — luôn dùng Ollama local.
-    feature: 'chat' -> SLM_MODEL_CHAT (mặc định DEFAULT_LOCAL_MODEL)
-    """
-    return _ollama_chat_llm(None, feature, None)
+    loi: Exception | None = None
+    for provider in PROVIDERS:
+        try:
+            if provider == "fpt":
+                return _fpt_chat_llm(feature, None)
+            if provider == "gemini":
+                return _gemini_chat_llm(feature, None)
+            if provider == "groq":
+                return _groq_chat_llm(feature, None)
+            if provider == "ollama":
+                return _ollama_chat_llm(None, feature, None)
+        except Exception as exc:  # noqa: BLE001 — thiếu khoá thì thử provider kế
+            loi = exc
+            continue
+    raise RuntimeError(
+        f"Khong dung duoc chat model tu PROVIDERS={PROVIDERS}: {loi}"
+        if PROVIDERS else
+        "No AI provider configured. Set OLLAMA_HOST for local Ollama, or set "
+        "FPT_AI_API_KEY/GEMINI_API_KEY/GROQ_API_KEY."
+    )
 
 
 _emb_instance: Any = None
