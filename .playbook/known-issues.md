@@ -3740,3 +3740,48 @@ Ngoài ra `sources` trong `POST /query` là **stem** (`quang_hop_txt`), không p
 
 Instance free 512MB thỉnh thoảng restart giữa chừng khi ingest: request đang bay nhận
 502. Script smoke test cần thử lại khi gặp 502, đừng coi là hỏng thật.
+
+## Rerank/embedding trên Render: `SKIP_MODEL_LOAD` chặn nhầm cả provider từ xa (2026-09-04)
+
+`SKIP_MODEL_LOAD=1` có nghĩa "đừng nạp weight vào tiến trình này" — nó tồn tại vì
+Render free chỉ có 512MB. Nhưng `rerank.get_reranker()` và `llm_factory.get_embeddings()`
+dùng nó như công tắc TẮT HẲN năng lực, nên backend gọi API từ xa (không nạp gì) cũng
+bị chặn theo. Kết quả: bật FPT rerank/embedding ở production xong vẫn không có tác dụng.
+
+Đã sửa: cờ chỉ áp cho backend nạp weight cục bộ. `cross_encoder` giữ nguyên hành vi cũ,
+có test khoá cả hai chiều.
+
+Còn một cổng NỮA cho rerank: `RERANK_ENABLED`. Production đặt `0` (vì cross-encoder
+~2.3GB sẽ OOM giữa request). Backend FPT không nạp gì nên cờ đó đã bật lại thành `1`
+kèm giải thích trong `render.yaml`. `NLI_ENABLED` vẫn `0` — NLI vẫn nạp weight thật và
+marketplace không có model NLI/zero-shot nào để thay.
+
+## `ask_ai(model=...)` chỉ có tác dụng với Ollama (2026-09-04)
+
+`effective_model = model or _model_map(feature)` chỉ được truyền vào nhánh `ollama`.
+Ba provider từ xa (fpt/gemini/groq) dùng biến env model riêng của chúng. Dưới FPT:
+
+    SLM_MODEL_CHAT, SLM_MODEL_SUMMARY, SLM_MODEL_INTENT, MINDMAP_MODEL, QUIZ_MODEL
+    -> KHÔNG còn tác dụng, mọi feature dùng chung FPT_AI_CHAT_MODEL
+
+Không phải lỗi, nhưng ai đọc `.env` sẽ tưởng năm biến kia đang điều khiển cái gì đó.
+Muốn chọn model theo từng tác vụ trên FPT thì phải thêm `FPT_AI_QUIZ_MODEL`… — chưa làm.
+
+## Index truy hồi trên Render free: ephemeral, và chunk chưa có `embedding_id` (2026-09-04)
+
+Hai chuyện tách biệt, cùng chặn việc bật embedding ở production:
+
+1. `INDEX_DIR` nằm trên đĩa PHÙ DU. Dựng lại index xong thì nó mất sau lần khởi động
+   kế tiếp. Đã thấy instance restart nhiều lần trong một phiên làm việc.
+2. Mọi chunk ở production có `document_chunks.embedding_id = NULL`, vì `SKIP_MODEL_LOAD=1`
+   bỏ qua đường ghi index nên chưa có id FAISS nào được gán. `semantic_search` tra
+   ngược kết quả FAISS về chunk QUA cột này. Nên dựng lại index bắt buộc kèm một lượt
+   ghi cột đó — nếu không thì index có vector mà không ai tra ngược được.
+
+`app/domains/vectorstore/rebuild.py` xử lý cả hai (ghi `embedding_id` SAU khi thăng cấp
+thành công), nhưng KHÔNG có gì tự gọi nó. Chạy tay:
+`python -m scripts.dung_lai_index_tu_postgres --dry-run`.
+
+Persistence: `app/domains/documents/storage.py` (Supabase Storage) là cơ chế lưu bền
+DUY NHẤT có sẵn trong kho — nhưng production thiếu `SUPABASE_URL`/`SUPABASE_SECRET_KEY`
+nên nó chưa dùng được, và nó cũng chưa được nối vào vòng đời index.

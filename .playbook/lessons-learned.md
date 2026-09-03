@@ -2353,3 +2353,72 @@ test — `OLLAMA_HOST=''` + `GEMINI_API_KEY=''` cho `PROVIDERS == ['fpt']`. Khô
   vì bên cung cấp có thể đổi lại bất cứ lúc nào và không ai báo.
 - Thông báo lỗi ghi rõ đã thử những đường nào (`"đã thử cả data.choices lẫn choices"`),
   để lần sau đọc log là biết ngay chứ không phải đọc mã.
+
+## Một cổng không đủ: `RERANK_BACKEND=fpt` mà `RERANK_ENABLED=0` thì vẫn là Identity (2026-09-04)
+
+Đặt xong `RERANK_BACKEND=fpt` + `FPT_AI_RERANK_MODEL` trên production, kiểm lại bằng
+cách chạy `get_reranker()` với "đúng env production" trên máy — ra `FptReranker`, xanh.
+Nhưng bản sao env đó **thiếu một biến**: production có `RERANK_ENABLED=0`, còn mặc
+định trên máy là `1`. `get_reranker()` kiểm `rerank_enabled` TRƯỚC khi nhìn tới
+backend, nên production vẫn là `IdentityReranker`.
+
+- **Bài học:** "sao y env production" phải lấy TỪ production, không phải liệt kê những
+  biến mình nhớ là có liên quan. Biến làm hỏng là biến không nghĩ tới.
+- **Cách bắt rẻ nhất:** đọc cả bảng env của service rồi so, thay vì set từng biến theo
+  trí nhớ. Một lệnh gọi API thay cho một giả định.
+- **Đo hai chiều mới là đo:** `RERANK_ENABLED=0 -> IdentityReranker`,
+  `RERANK_ENABLED=1 -> FptReranker`. Chỉ chạy chiều mong đợi thì không phân biệt được
+  "cấu hình đúng" với "may mà mặc định đúng".
+
+## Số chiều không phải danh tính của một không gian vector (2026-09-04)
+
+`BAAI/bge-m3` và `Vietnamese_Embedding` (bản fine-tune từ chính nó trên FPT
+Marketplace) **đều 1024 chiều**. Hàng rào duy nhất trong `store._load_index` là
+`idx.d != dim`. Nghĩa là đổi sang model kia thì index cũ nạp trót lọt, truy vấn chạy
+bình thường, và kết quả là rác — không một dòng log nào.
+
+Cùng lý do, chiến lược pool cũng nằm trong danh tính: cùng bge-m3 nhưng `mean_late` và
+`encode` cho hai không gian khác nhau (đã có một buổi debug về đúng chuyện đó,
+2026-09-01).
+
+- **Hàng rào phải so BỘ BA** provider + model + strategy, ghi vào `__meta__` v1.2.
+- **Thiếu metadata KHÔNG được mặc nhiên là tương thích.** Index 1.0 không ghi gì để
+  so, nhưng vẫn kết luận được: provider `fpt` chưa tồn tại trong mã cho tới hôm nay,
+  nên index ấy không thể do nó dựng. Đây là suy luận, không phải phỏng đoán — khác hẳn
+  với "không biết thì cho qua".
+- **Khoá cache phải mang danh tính.** `_vs_cache_key()` chỉ gồm mtime/size của file
+  nên một vectorstore đã cache sống sót qua việc đổi cấu hình embedding: cache trả lời
+  trước, hàng rào không bao giờ chạy. Hàng rào đặt sau cache là hàng rào không tồn tại.
+- **Lệch thì TỪ CHỐI, không xoá.** Truy hồi rỗng là kết quả trung thực; truy hồi bằng
+  vector của model khác thì không. Index là dữ liệu, dựng lại là quyết định của người
+  vận hành.
+
+## `text/event-stream` không khai charset → requests giải mã UTF-8 bằng latin-1 (2026-09-04)
+
+Stream của FPT trả `content-type: text/event-stream` KHÔNG kèm charset. Theo mặc định
+của HTTP, `requests` đặt `r.encoding = "ISO-8859-1"`, và `iter_lines(decode_unicode=True)`
+dùng đúng giá trị đó: "Quang hợp" thành "Quang há»£p".
+
+- **Chỉ đường stream dính.** Đường non-stream dùng `r.json()`, tự lo UTF-8 — nên test
+  và smoke test của bản đồng bộ đều xanh trong khi bản stream hỏng.
+- **Hỏng theo kiểu tệ nhất:** chữ vẫn ra, độ dài vẫn đúng, chỉ mất sạch dấu. Trên một
+  ứng dụng tiếng Việt. Không exception nào để bắt.
+- **Sửa:** ép `r.encoding = "utf-8"` trước khi `iter_lines`. Test regression phải mô
+  phỏng CẢ luật giải mã của `requests` (đối tượng giả khởi tạo `encoding` là
+  ISO-8859-1 rồi tự decode), nếu không nó xanh cả khi chưa sửa — đã kiểm bằng cách gỡ
+  dòng sửa và thấy test đỏ.
+
+## Hai đường gọi LLM song song thì sửa một đường không sửa được đường kia (2026-09-04)
+
+Thêm provider FPT vào `ask_ai` xong, tưởng đã xong. `get_llm()` là một hàm KHÁC, và nó
+hardcode `_ollama_chat_llm` với docstring ghi thẳng "luôn dùng Ollama local". Năm đường
+production đi qua nó — trong đó có bộ sinh câu trả lời RAG của `/query`.
+
+Hậu quả nhìn từ ngoài: quiz chạy được ở production, `/query` thì không. Cùng một ứng
+dụng, hai kết cục, và không có gì ở tầng cấu hình để nhìn ra vì `Active providers:
+['fpt']` vẫn in ra đúng.
+
+- **Đếm số nơi trả lời cùng một câu hỏi.** Ở đây là ba: `llm_factory.PROVIDERS`,
+  `shared.config._compute_providers`, `local_providers.ProviderPool`. Chỉ cái đầu được
+  cập nhật; hai cái sau là mã chết nên không hỏng — hôm nay.
+- **Test ràng chúng với nhau** rẻ hơn nhiều so với việc phát hiện lệch qua triệu chứng.
