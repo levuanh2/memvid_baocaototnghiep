@@ -24,7 +24,6 @@ Ví dụ (đều ra "my_report_pdf"):
 
 from __future__ import annotations
 
-import os
 import re
 import unicodedata
 
@@ -45,9 +44,12 @@ def canonical_source_stem(name: str) -> str:
     s = (name or "").strip()
     if not s:
         return ""
-    # 1) basename
+    # 1) basename — tách thủ công, KHÔNG dùng `os.path.basename`: trên Linux nó không
+    #    coi '\' là dấu phân cách, nên một đường dẫn Windows đi nguyên vào bước
+    #    sanitize và ra stem khác hẳn (`c___users__a__my_report_pdf`). Điều kiện ngay
+    #    trên đã nói rõ ý định là xử lý CẢ HAI dấu phân cách, bất kể hệ điều hành.
     if "/" in s or "\\" in s:
-        s = os.path.basename(s)
+        s = re.split(r"[\\/]", s)[-1]
     # 2) NFC (ổn định, giữ dấu)
     s = unicodedata.normalize("NFC", s)
     # 3) chỉ bỏ '.mp4' khi là container ta tạo (có timestamp) — giữ '.mp4' của
