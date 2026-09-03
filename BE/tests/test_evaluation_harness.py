@@ -37,6 +37,13 @@ def _trace(name="smoke"):
 
 def test_smoke_dataset_qrels_load_and_split_guard():
     root = Path(__file__).parents[2] / "reports" / "evaluation" / "datasets" / "smoke_v1"
+    # `reports/` nằm trong .gitignore — bộ dữ liệu thực nghiệm thuộc dự án báo cáo
+    # riêng, không theo git. Bản clone sạch (CI) không có nó — skip thay vì gãy, giống
+    # `test_evaluation_review.py`. Guard ở MỨC TEST vì 6 test còn lại trong file
+    # không đọc dataset.
+    if not root.exists():
+        pytest.skip("Thiếu reports/evaluation/datasets/smoke_v1 — dữ liệu thực nghiệm "
+                    "không theo git")
     out = validate_dataset(root)
     assert out["counts"]["queries.jsonl"] == 2
     assert out["splits"] == ["development", "test"]

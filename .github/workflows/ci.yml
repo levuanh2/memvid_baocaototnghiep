@@ -154,6 +154,13 @@ jobs:
     name: Docker Build Test
     runs-on: ubuntu-latest
 
+    # Compose nội suy TOÀN BỘ file trước mọi lệnh, kể cả `build`, nên
+    # `${DATABASE_URL:?}` ở docker-compose.yml làm `docker compose build` dừng trước khi
+    # build. Build KHÔNG kết nối DB — giá trị giả dưới đây chỉ để thoả mãn nội suy.
+    # KHÔNG phải secret, không trỏ tới hệ thống nào có thật.
+    env:
+      DATABASE_URL: postgresql://ci:ci@localhost:5432/ci_build_only
+
     steps:
       - uses: actions/checkout@v4
 
@@ -170,6 +177,10 @@ jobs:
     name: Docker Compose Run Test
     runs-on: ubuntu-latest
     needs: docker-build-test
+
+    # Cùng lý do với job trên: `docker compose up` cũng nội suy cả file trước khi chạy.
+    env:
+      DATABASE_URL: postgresql://ci:ci@localhost:5432/ci_build_only
 
     steps:
       - uses: actions/checkout@v4
