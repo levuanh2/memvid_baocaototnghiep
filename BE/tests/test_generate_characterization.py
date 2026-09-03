@@ -335,3 +335,117 @@ def test_practice_generate_item_khong_co_chunk_409(be, client, monkeypatch, bat)
     assert r.status_code == 409
     assert r.get_json() == {"error": "Review item không có chunk nguồn để ra đề"}
     assert bat["enqueue"] == []
+
+
+# ══════════════════════════════════════════════════════════════════════════
+# DEDUPE — bất đối xứng giữa hai route, và khoá dedupe được tính từ ĐÂU
+#
+# `test_quiz_job_dedupe.py` đã khoá `_quiz_job_key` / `_quiz_job_giu_cho` ở MỨC HÀM
+# (khác người / khác tài liệu / khác cấu hình / thứ tự khoá). Phần chưa ai khoá là
+# đoạn nối từ ROUTE xuống hàm đó: route tính khoá từ `_quiz_config(data)` — tức
+# cấu hình ĐÃ CHUẨN HOÁ — chứ không từ payload thô, và `uid` lấy từ
+# `_require_app_user()`.
+# ══════════════════════════════════════════════════════════════════════════
+def test_practice_generate_KHONG_di_qua_dedupe(be, client, monkeypatch, bat):
+    """Hai route dùng chung pipeline nhưng CHỈ quiz có dedupe. Practice thì không.
+
+    Ghi nhận hiện trạng, không phải đề xuất. Đây là chỗ dễ bị "thống nhất" nhất khi
+    gộp hai route vào một use case chung: thêm dedupe cho practice, hoặc bỏ dedupe của
+    quiz, đều là đổi hành vi mà không ai thấy.
+    """
+    import app.domains.jobs.jobs_store as js
+
+    _item_hop_le(monkeypatch)
+    monkeypatch.setattr(js, "get_job", lambda jid: {"job_id": jid, "status": "running"})
+
+    a = client.post("/api/practice/generate", json={"review_item_id": "ri1"}).get_json()
+    b = client.post("/api/practice/generate", json={"review_item_id": "ri1"}).get_json()
+
+    assert "deduped" not in a and "deduped" not in b, "practice chưa bao giờ trả cờ deduped"
+    assert a["job_id"] != b["job_id"], "practice tạo job MỚI mỗi lần bấm"
+    assert len(bat["enqueue"]) == 2, "cả hai lần đều được xếp hàng"
+    assert be._QUIZ_INFLIGHT == {}, "practice không giữ chỗ nào trong sổ dedupe"
+
+
+def test_quiz_dedupe_tinh_tren_cau_hinh_da_chuan_hoa(be, client, monkeypatch, bat):
+    """Hai payload KHÁC NHAU nhưng chuẩn hoá về cùng một config vẫn là một yêu cầu.
+
+    Route gọi `_quiz_job_key(uid, document_id, config)` với `config` là đầu ra của
+    `_quiz_config`, nên `difficulty` gửi đúng bằng mặc định không tạo yêu cầu mới.
+    """
+    import app.domains.jobs.jobs_store as js
+
+    _tai_lieu_cua_toi(be, monkeypatch)
+    monkeypatch.setattr(js, "get_job", lambda jid: {"job_id": jid, "status": "running"})
+
+    a = client.post("/api/quizzes/generate", json={"document_id": "d1"}).get_json()
+    b = client.post("/api/quizzes/generate",
+                    json={"document_id": "d1", "difficulty": "mixed"}).get_json()
+
+    assert b.get("deduped") is True, "gửi đúng giá trị mặc định không phải yêu cầu mới"
+    assert b["job_id"] == a["job_id"]
+    assert len(bat["enqueue"]) == 1
+
+
+def test_quiz_doi_cau_hinh_thi_KHONG_dedupe(be, client, monkeypatch, bat):
+    """Đổi số câu là một yêu cầu khác và phải được chạy — mặt còn lại của luật trên."""
+    import app.domains.jobs.jobs_store as js
+
+    _tai_lieu_cua_toi(be, monkeypatch)
+    monkeypatch.setattr(js, "get_job", lambda jid: {"job_id": jid, "status": "running"})
+
+    a = client.post("/api/quizzes/generate",
+                    json={"document_id": "d1", "question_count": 5}).get_json()
+    b = client.post("/api/quizzes/generate",
+                    json={"document_id": "d1", "question_count": 7}).get_json()
+
+    assert "deduped" not in b
+    assert a["job_id"] != b["job_id"]
+    assert len(bat["enqueue"]) == 2
+
+
+def test_quiz_dedupe_tach_theo_nguoi_dung_khi_bat_cuong_che(be, client, monkeypatch, bat):
+    """Bật cưỡng chế sở hữu: cùng tài liệu + cùng cấu hình nhưng KHÁC người là hai
+    yêu cầu. Người B không được nhận job của người A."""
+    import app.domains.jobs.jobs_store as js
+
+    _tai_lieu_cua_toi(be, monkeypatch)
+    monkeypatch.setattr(js, "get_job", lambda jid: {"job_id": jid, "status": "running"})
+    monkeypatch.setattr(be, "_auth_protect_enabled", lambda: True)
+
+    ai = {"v": "userA"}
+    monkeypatch.setattr(be, "_current_user_id", lambda: ai["v"])
+
+    a = client.post("/api/quizzes/generate", json={"document_id": "d1"}).get_json()
+    ai["v"] = "userB"
+    b = client.post("/api/quizzes/generate", json={"document_id": "d1"}).get_json()
+
+    assert "deduped" not in b, "job của người khác không được nuốt yêu cầu của mình"
+    assert a["job_id"] != b["job_id"]
+    assert len(bat["enqueue"]) == 2
+    assert bat["enqueue"][0]["args"][3] == "userA"
+    assert bat["enqueue"][1]["args"][3] == "userB"
+
+
+def test_che_do_mo_moi_nguoi_dung_CHUNG_mot_khoa_dedupe(be, client, monkeypatch, bat):
+    """Hệ quả của chế độ mở, ghi nhận nguyên trạng.
+
+    Cờ sở hữu TẮT thì `_require_app_user()` trả `(None, None)` cho MỌI người gọi, nên
+    `uid` trong khoá dedupe luôn là None. Hai người khác nhau xin cùng một tài liệu sẽ
+    dùng chung một job. Chấp nhận được ở chế độ mở (không có khái niệm người dùng),
+    nhưng là thứ phải biết trước khi ai đó bật/tắt cờ.
+    """
+    import app.domains.jobs.jobs_store as js
+
+    _tai_lieu_cua_toi(be, monkeypatch)
+    monkeypatch.setattr(js, "get_job", lambda jid: {"job_id": jid, "status": "running"})
+    # `_sach` đã đặt _auth_protect_enabled -> False; đổi _current_user_id không có tác
+    # dụng vì `_require_app_user` không gọi tới nó khi cờ tắt.
+    monkeypatch.setattr(be, "_current_user_id", lambda: "userA")
+    a = client.post("/api/quizzes/generate", json={"document_id": "d1"}).get_json()
+    monkeypatch.setattr(be, "_current_user_id", lambda: "userB")
+    b = client.post("/api/quizzes/generate", json={"document_id": "d1"}).get_json()
+
+    assert b.get("deduped") is True
+    assert b["job_id"] == a["job_id"]
+    assert bat["enqueue"][0]["args"][3] is None, "chế độ mở: job không mang chủ sở hữu"
