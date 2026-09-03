@@ -54,7 +54,13 @@ def _compute_providers() -> List[str]:
     providers: List[str] = []
     has_gemini = bool((os.getenv("GEMINI_API_KEY") or "").strip())
     has_groq = bool((os.getenv("GROQ_API_KEY") or "").strip())
-    has_any_remote = has_gemini or has_groq
+    has_fpt = bool((os.getenv("FPT_AI_API_KEY") or "").strip())
+    has_any_remote = has_gemini or has_groq or has_fpt
+    # Phải khớp `llm_factory.PROVIDERS` từng chữ. Hai danh sách provider lệch
+    # nhau chính là kiểu sai đã tạo ra bug `get_llm` hardcode Ollama: nơi này
+    # nói một đằng, nơi thật sự gọi model nói một nẻo, và không có gì kêu.
+    if has_fpt:
+        providers.append("fpt")
     if (os.getenv("OLLAMA_HOST") or "").strip() or (not has_any_remote):
         providers.append("ollama")
     if has_gemini:

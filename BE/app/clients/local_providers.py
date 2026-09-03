@@ -88,7 +88,9 @@ class ProviderPool:
         self._last_provider_used = None
         for provider in self._providers:
             try:
-                if provider == "ollama":
+                if provider == "fpt":
+                    llm = _lf._fpt_chat_llm(feature, options, timeout=timeout)
+                elif provider == "ollama":
                     llm = _lf._ollama_chat_llm(effective_model, feature, options)
                 elif provider == "gemini":
                     llm = _lf._gemini_chat_llm(feature, options)
@@ -104,7 +106,8 @@ class ProviderPool:
                 continue
         if not self._providers:
             raise RuntimeError(
-                "No AI provider configured. Set OLLAMA_HOST, GEMINI_API_KEY hoặc GROQ_API_KEY."
+                "No AI provider configured. Set OLLAMA_HOST, FPT_AI_API_KEY, "
+                "GEMINI_API_KEY hoặc GROQ_API_KEY."
             )
         raise RuntimeError(f"All AI providers failed (tried {self._providers}): {last_error}")
 
