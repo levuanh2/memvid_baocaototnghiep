@@ -29,7 +29,14 @@ PROVIDERS: list[str] = []
 
 has_gemini = bool((os.getenv("GEMINI_API_KEY") or "").strip())
 has_groq = bool((os.getenv("GROQ_API_KEY") or "").strip())
-has_any_remote = has_gemini or has_groq
+has_fpt = bool((os.getenv("FPT_AI_API_KEY") or "").strip())
+has_any_remote = has_gemini or has_groq or has_fpt
+
+# FPT đứng TRƯỚC ollama: khi có key, đây là provider từ xa dùng cho production, còn
+# ollama chỉ là fallback cục bộ. Không có key thì danh sách giữ nguyên như trước —
+# thứ tự cũ (ollama, gemini, groq) không đổi một chữ.
+if has_fpt:
+    PROVIDERS.append("fpt")
 
 if (os.getenv("OLLAMA_HOST") or "").strip() or (not has_any_remote):
     PROVIDERS.append("ollama")
@@ -237,6 +244,146 @@ def _ollama_chat_llm(model: str | None, feature: str, options: dict | None, time
         kw["timeout"] = timeout
     
     return ChatOllama(**kw)
+
+
+# ── FPT AI Marketplace ─────────────────────────────────────────────────────
+FPT_DEFAULT_BASE_URL = "https://mkp-api.fptcloud.com/v1"
+FPT_DEFAULT_CHAT_MODEL = "gpt-oss-120b"
+
+
+class _FptChatResponse:
+    """Chỉ mang `.content` — đủ cho `lc_ai_message_text` đọc."""
+
+    __slots__ = ("content",)
+
+    def __init__(self, content: str) -> None:
+        self.content = content
+
+
+class _FptChatLLM:
+    """Client tối thiểu cho FPT AI Marketplace, mang hình dạng của một chat model
+    LangChain (`.invoke(messages, stream=False)`) để dùng LẠI `_invoke_chat` — không
+    dựng thêm một đường gọi LLM thứ hai song song với ba provider hiện có.
+
+    Dùng `requests` (đã có trong requirements), KHÔNG thêm dependency mới.
+
+    Hình dạng response KHÔNG cố định. Tài liệu marketplace mô tả bản bọc trong `data`
+    (`body["data"]["choices"][0]["message"]["content"]`), nhưng đo thật 2026-09-03 với
+    `gpt-oss-120b` thì endpoint trả thẳng hình dạng OpenAI phẳng (`body["choices"]`),
+    không có `data`. Cược vào một bản là hỏng nửa số model, nên đọc cả hai.
+
+    Không đưa API key vào bất kỳ thông báo lỗi nào — chỉ status và một đoạn thân
+    response đã cắt ngắn.
+    """
+
+    def __init__(self, *, api_key: str, base_url: str, model: str,
+                 temperature: float, max_tokens: int, timeout: float) -> None:
+        self._api_key = api_key
+        self._url = base_url.rstrip("/") + "/chat/completions"
+        self.model = model
+        self.temperature = temperature
+        self.max_tokens = max_tokens
+        self.timeout = timeout
+
+    @staticmethod
+    def _vai(message: Any) -> str:
+        """LangChain đặt tên loại là system/human/ai; FPT dùng từ vựng OpenAI."""
+        loai = getattr(message, "type", "") or ""
+        return {"system": "system", "human": "user", "ai": "assistant"}.get(loai, "user")
+
+    def invoke(self, messages: Any, stream: bool = False) -> _FptChatResponse:
+        """`stream` nhận vào cho khớp chữ ký của `_invoke_chat` nhưng bị bỏ qua: phase
+        này chỉ cần completion đồng bộ, và request luôn gửi `stream: false`."""
+        import requests
+
+        payload = {
+            "model": self.model,
+            "messages": [{"role": self._vai(m),
+                          "content": lc_message_content_text(getattr(m, "content", ""))}
+                         for m in messages],
+            "temperature": self.temperature,
+            "max_tokens": self.max_tokens,
+            "stream": False,
+        }
+        try:
+            r = requests.post(
+                self._url,
+                headers={"Content-Type": "application/json",
+                         "Authorization": f"Bearer {self._api_key}"},
+                json=payload,
+                timeout=self.timeout,
+            )
+        except Exception as exc:
+            # `exc` của requests không chứa header, nhưng vẫn chỉ lấy tên lớp + URL
+            # để chắc chắn không có gì từ Authorization lọt ra log.
+            raise RuntimeError(
+                f"FPT request failed: {type(exc).__name__} khi gọi {self._url}") from None
+
+        if r.status_code >= 400:
+            raise RuntimeError(
+                f"FPT HTTP {r.status_code}: {r.text[:200]}")
+
+        try:
+            body = r.json()
+        except ValueError:
+            raise RuntimeError(
+                f"FPT trả về thân không phải JSON: {r.text[:200]}") from None
+
+        # FPT gói mã lỗi nghiệp vụ TRONG thân, kèm HTTP 200. Không kiểm thì một
+        # {"code": 500, "data": null} sẽ đi tiếp và vỡ ở bước bóc `data`.
+        ma = body.get("code")
+        if ma is not None and int(ma) >= 400:
+            raise RuntimeError(
+                f"FPT API error code={ma}: {str(body.get('message'))[:200]}")
+
+        # FPT trả HAI hình dạng tuỳ endpoint/model. Tài liệu marketplace mô tả bản có
+        # wrapper `data`, nhưng `gpt-oss-120b` (đo thật 2026-09-03) trả thẳng hình dạng
+        # OpenAI phẳng, không có `data`. Nhận cả hai thay vì cược vào một bản.
+        goi = body.get("data")
+        loi = goi if isinstance(goi, dict) else body
+        choices = loi.get("choices")
+        if not isinstance(choices, list) or not choices:
+            raise RuntimeError(
+                f"FPT thiếu `choices` (đã thử cả `data.choices` lẫn `choices`): "
+                f"{str(body)[:200]}")
+        message = choices[0].get("message") if isinstance(choices[0], dict) else None
+        if not isinstance(message, dict) or "content" not in message:
+            raise RuntimeError(
+                f"FPT thiếu `choices[0].message.content`: {str(body)[:200]}")
+
+        return _FptChatResponse(lc_message_content_text(message.get("content")))
+
+
+def _fpt_chat_llm(feature: str = "chat", options: dict | None = None,
+                  timeout: float | None = None) -> Any:
+    api_key = (os.getenv("FPT_AI_API_KEY") or "").strip()
+    if not api_key:
+        raise RuntimeError("Missing FPT_AI_API_KEY for FPT provider.")
+    base_url = (os.getenv("FPT_AI_BASE_URL") or FPT_DEFAULT_BASE_URL).strip()
+    model = (os.getenv("FPT_AI_CHAT_MODEL") or FPT_DEFAULT_CHAT_MODEL).strip()
+
+    max_tokens = _DEFAULT_LLM_OUT
+    if options:
+        # `num_predict` là từ vựng của Ollama; caller (mindmap) đã dùng nó để hạ trần
+        # output, nên tôn trọng cả hai tên thay vì bắt caller biết provider nào đang chạy.
+        for khoa in ("max_tokens", "num_predict"):
+            if khoa in options:
+                max_tokens = int(options[khoa])
+                break
+
+    # Không dựng hệ timeout mới: lấy timeout của lời gọi, thiếu thì dùng đúng
+    # `AI_TIMEOUT_SEC` mà phần còn lại của ứng dụng đã dùng.
+    giay = timeout if (timeout is not None and timeout > 0) else float(
+        os.getenv("AI_TIMEOUT_SEC", "180"))
+
+    return _FptChatLLM(
+        api_key=api_key,
+        base_url=base_url,
+        model=model,
+        temperature=_resolve_temperature(feature, options),
+        max_tokens=max_tokens,
+        timeout=giay,
+    )
 
 
 def _gemini_chat_llm(feature: str = "chat", options: dict | None = None) -> Any:
@@ -586,6 +733,10 @@ def ask_ai(
                     llm = _ollama_chat_llm(effective_model, feature, options)
                     return _invoke_chat(llm, prompt, system_prompt, timeout=timeout)
 
+                if provider == "fpt":
+                    llm = _fpt_chat_llm(feature, options, timeout=timeout)
+                    return _invoke_chat(llm, prompt, system_prompt, timeout=timeout)
+
                 if provider == "gemini":
                     llm = _gemini_chat_llm(feature, options)
                     return _invoke_chat(llm, prompt, system_prompt, timeout=timeout)
@@ -607,7 +758,8 @@ def ask_ai(
 
     if not PROVIDERS:
         raise RuntimeError(
-            "No AI provider configured. Set OLLAMA_HOST for local Ollama, or set GEMINI_API_KEY/GROQ_API_KEY."
+            "No AI provider configured. Set OLLAMA_HOST for local Ollama, or set "
+            "FPT_AI_API_KEY/GEMINI_API_KEY/GROQ_API_KEY."
         )
 
     raise RuntimeError(
