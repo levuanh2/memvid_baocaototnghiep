@@ -58,6 +58,9 @@ checkpoints.sqlite*
 
 # FAISS index (rebuildable)
 BE/index/
+# Index dựng lại và các bản lưu của nó: artifact nhị phân, sinh lại được từ
+# Postgres + allowlist, và bản chuẩn đã nằm trên Supabase Storage.
+BE/index_*/
 BE/memory/
 BE/videos/
 BE/input_docs/

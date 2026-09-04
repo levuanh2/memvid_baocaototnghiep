@@ -159,6 +159,18 @@ services:
       - key: LATE_CHUNKING
         value: "0"
 
+      # --- retrieval index: restore from Supabase at boot --------------------
+      # Free tier wipes /tmp on every restart, so an index built here dies with the
+      # instance. With this on, boot pulls the published index for the CURRENT
+      # embedding identity from Supabase Storage (index/<provider>__<model>__
+      # <strategy>/current.json -> manifest -> artifacts, sha256-checked).
+      #
+      # This restores; it never rebuilds. Rebuilding stays a manual script
+      # (scripts/dung_lai_index_tu_postgres.py) so no boot can silently spend money
+      # on embedding, and so an index only ever contains allowlisted documents.
+      - key: INDEX_PERSISTENCE_ENABLED
+        value: "1"
+
       # --- provenance: which process ingested a document ---------------------
       # Written by the server into documents.metadata_json at row creation, never
       # taken from a request. It is the third condition for index eligibility, next

@@ -4396,3 +4396,58 @@ Dry-run rebuild in đúng `1 tài liệu / 3 chunk SẼ được embed`, chặn 
 `FPT_AI_API_KEY` chưa có ở máy dev (`.env`, `BE/.env`, shell: absent) nên không dựng
 được index FPT cục bộ. Production thì có khoá và đã embed 3 chunk này lúc ingest, nhưng
 index đó nằm trên `/tmp` phù du và không có đường nào lấy ra.
+
+---
+
+## Index FPT production ĐẦU TIÊN — dựng, thẩm định, lưu bền, khôi phục (2026-09-04)
+
+Chuỗi chạy thật, từ ngữ liệu `f01ac8c1-…` (3 chunk, danh tính đúng ngay từ ingest):
+
+```
+Kết quả rebuild: promoted True · chunks 3 · dim 1024 · embedding_id_da_ghi 3
+                 danh_tinh {fpt, Vietnamese_Embedding, api_pooled}
+                 allowlist chặn 192/195 chunk
+index.json v1.2  num_chunks 3 · embedding_dim 1024 · vectors_normalized true
+FAISS            ntotal 3 · d 1024 · load_local OK · chuẩn L2 = 1.0 · không NaN/Inf
+không lẫn        bge-m3 / mean_late / MiniLM / FakeEmbeddings — cả 4 đều vắng
+Supabase         index/fpt__Vietnamese_Embedding__api_pooled/
+                   current.json  -> version 20260904_215256_8db1b12f8508
+                   <version>/{index.faiss,index.pkl,index.json,manifest.json}
+                 sha256 remote khớp bytes 3/3 · không credential trong metadata
+restore          vào thư mục tạm cô lập: 3 file, identity khớp, ntotal 3, dim 1024
+index cũ         BE/index sha256 4/4 KHỚP — không đụng, không append
+```
+
+Index mới dựng ở thư mục RIÊNG (`BE/index_production_fpt`), không thăng cấp đè lên
+`BE/index` cũ. Đó là cách duy nhất chắc chắn không append vector FPT vào index bge-m3.
+
+### `embedding_id` VA CHẠM khi hai index cùng tồn tại — CHƯA SỬA
+
+`embedding_id` là vị trí hàng FAISS, chỉ duy nhất TRONG MỘT index. Nhưng nó nằm ở một
+cột toàn cục và `lookup_by_embedding_ids` tra toàn cục. Sau khi dựng index FPT:
+
+```
+emb='0' -> 3 hàng: 2-day24-ragas-guardrails.pdf | prod-fpt-…txt | production-…txt
+emb='1' -> 3 hàng   (như trên)
+emb='2' -> 3 hàng
+tổng embedding_id bị trùng: 3 / 195 hàng có embedding_id
+```
+
+`lookup_by_embedding_ids` trả `dict` khoá theo `embedding_id`, nên mỗi khoá chỉ MỘT hàng
+sống sót — và truy vấn không có `ORDER BY`, tức hàng nào thắng là **không xác định**.
+Văn bản hiển thị lấy từ FAISS (đúng), còn `document_id`/`title`/`chunk_id` lấy từ đây
+(có thể sai) → trích dẫn trỏ nhầm tài liệu.
+
+Đo thật hôm nay: cả 3 khoá ra ĐÚNG tài liệu mới. Đó là may, không phải đảm bảo.
+
+Ở production `AUTH_PROTECT_APP_APIS=true` nên `user_id` lọc bớt (ba tài liệu khác chủ),
+nhưng chế độ mở truyền `user_id=None` thì không còn gì đỡ.
+
+Kho mã đã biết vấn đề này: `repository.clear_chunk_embedding_ids` có docstring "dùng khi
+index bị vứt đi — để `embedding_id` trỏ vào một index không còn tồn tại thì
+`lookup_by_embedding_ids` trả về chunk cho những hit không có thật". Nhưng rebuild hiện
+chỉ GHI id cho chunk được index, không XOÁ id của chunk bị loại.
+
+KHÔNG sửa ở phase này: xoá `embedding_id` của 192 chunk cũ là ghi vào dữ liệu cũ, mà
+phase này cấm. Cần một phase riêng, và lựa chọn đúng có lẽ là dọn trong chính vòng đời
+rebuild (thăng cấp xong thì mọi chunk ngoài index mới phải mất `embedding_id`).
