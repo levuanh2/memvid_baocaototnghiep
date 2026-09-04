@@ -415,6 +415,38 @@ def restore_luc_khoi_dong() -> Dict[str, Any]:
     return ra
 
 
+class PublishFailed(RuntimeError):
+    """Index trong bộ nhớ đã đổi nhưng bản bền trên kho thì chưa."""
+
+
+def cong_bo_sau_ingest(thu_muc: Optional[Path] = None) -> Dict[str, Any]:
+    """Xuất bản index NGAY SAU một lượt ingest. NÉM khi hỏng — khác `publish_sau_rebuild`.
+
+    Hai đường gọi, hai ngữ nghĩa, và khác nhau vì lý do thật:
+
+    - Sau `rebuild`: index cục bộ vừa dựng xong vẫn dùng được, nên một lần đứt mạng
+      không được biến thành lượt rebuild thất bại. Nuốt lỗi là ĐÚNG ở đó.
+    - Sau `ingest`: `append_to_index` vừa gán `embedding_id` cho chunk và ghi xuống
+      Postgres. Nếu bản bền không có vector ấy thì lần khởi động sau, `restore` mang
+      về bản cũ và những `embedding_id` kia trỏ vào ô không tồn tại. Nuốt lỗi ở đây
+      là tạo ra một tài liệu "xong" mà sẽ hỏng lặng lẽ ở lần restart kế tiếp.
+
+    Chưa bật persistence → no-op, KHÔNG ném: máy dev và CI không có kho object, và
+    ở đó index cục bộ chính là bản duy nhất.
+
+    Bật rồi mà chưa cấu hình kho → NÉM. Đó là cấu hình sai, không phải chế độ chạy.
+    """
+    if not enabled():
+        return {"published": False, "ly_do": "INDEX_PERSISTENCE_ENABLED chưa bật",
+                "bat_buoc": False}
+    try:
+        ra = publish(thu_muc)
+    except Exception as exc:
+        raise PublishFailed(
+            f"{type(exc).__name__}: {str(exc)[:200]}") from exc
+    return {"published": True, "bat_buoc": True, **ra}
+
+
 def publish_sau_rebuild(thu_muc: Optional[Path] = None) -> Dict[str, Any]:
     """Bước cuối TUỲ CHỌN của rebuild. Tắt hoặc chưa cấu hình thì no-op, không ném.
 

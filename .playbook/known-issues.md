@@ -4717,3 +4717,68 @@ Phase này là VERIFY. Cách sửa đúng cần quyết định thiết kế, í
 
 Lựa chọn 3 gần với thiết kế hiện tại nhất, nhưng nó mâu thuẫn với việc `append_to_index`
 đang gán `embedding_id` — gán một con trỏ vào index sẽ biến mất.
+
+---
+
+## (ĐÃ SỬA 2026-09-05) Ingest append vào FAISS nhưng không xuất bản — index bền tụt lại phía sau
+
+Đo trên production: `append_to_index` đưa index runtime từ 3 lên 4 vector và gán
+`embedding_id='3'` cho chunk mới, nhưng Supabase vẫn giữ version 3 vector. Tài liệu được
+báo `completed`. Container bị thay là vector mới mất, còn `document_chunks` vẫn trỏ vào
+ô số 3 không tồn tại.
+
+Nguyên nhân: chỉ `scripts/dung_lai_index_tu_postgres.py` gọi `publish_sau_rebuild()`.
+Đường ingest gọi `append_to_index` rồi dừng.
+
+### Sửa
+
+`EmbedAndIndex` nay làm BA việc trong MỘT khoá:
+
+```
+with _KHOA_INDEX:
+    faiss_ids = append_to_index(...)          # gán vị trí trong FAISS
+    _persist_sections_and_chunks(...)         # ghi vị trí ấy xuống Postgres
+    _ps.cong_bo_sau_ingest()                  # đẩy chính index ấy lên kho bền
+```
+
+Tách ba việc này ra là mở cửa cho trạng thái mà chunk trỏ vào một vector không tồn tại
+ở đâu cả — đúng bug vừa đo.
+
+### Hai hàm xuất bản, hai ngữ nghĩa, và vì sao KHÔNG gộp
+
+| | `publish_sau_rebuild` | `cong_bo_sau_ingest` (mới) |
+|---|---|---|
+| gọi từ | script rebuild | node ingest |
+| hỏng thì | nuốt, trả `published: False` | **NÉM** `PublishFailed` |
+
+Khác nhau vì hậu quả khác nhau. Sau rebuild, index cục bộ vừa dựng vẫn dùng được nên một
+lần đứt mạng không được biến thành lượt rebuild thất bại. Sau ingest thì `embedding_id`
+ĐÃ ghi xuống Postgres — nuốt lỗi ở đó là tạo một tài liệu "xong" sẽ hỏng lặng lẽ ở lần
+khởi động sau.
+
+Chưa bật persistence → no-op, không ném (máy dev, CI). Bật rồi mà thiếu credential →
+NÉM: đó là cấu hình sai, không phải chế độ chạy — im lặng ở đây tạo ra đúng tình trạng
+production hôm 2026-09-04.
+
+### Khi xuất bản hỏng thì tài liệu KHÔNG thành `completed`
+
+Node trả `error` → `_route_err_or_continue` → `ErrorHandler` → `status=error` → DB
+`failed`, kèm nguyên văn "index đã cập nhật trong tiến trình nhưng CHƯA xuất bản được
+lên kho bền: …".
+
+**KHÔNG xoá chunk để "rollback".** Kiến trúc hiện tại không có giao dịch chung giữa FAISS
+và Postgres, và xoá dữ liệu thật để che một lỗi mạng thì tệ hơn cái nó che. Chunk ở lại,
+trạng thái nói thật.
+
+### Đồng thời
+
+Ingest chạy trong daemon thread (`QUEUE_ENABLED=false`), nên hai lượt upload cùng lúc có
+thể cùng đọc index, cùng append, rồi cùng xuất bản — lượt sau đè lượt trước.
+`_KHOA_INDEX` (`threading.Lock`) bao trọn đoạn trên.
+
+Phạm vi CỐ Ý là trong-tiến-trình: Render chạy `WEB_CONCURRENCY=1` và index nằm trên đĩa
+cục bộ của chính tiến trình đó. Nhiều tiến trình cùng ghi một index là bài toán khác
+(khoá phân tán / một worker chuyên trách) và chưa có yêu cầu.
+
+Regression: `tests/test_ingest_publishes_index.py` (8 test). Kiểm ngược: 7/8 đỏ trên mã
+cũ. Khẳng định "xuất bản nằm cùng khoá với append" đọc bằng AST, không phải grep chuỗi.

@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import os
+import threading
 from pathlib import Path
 from typing import Any, Callable
 
@@ -9,8 +10,20 @@ from langgraph.graph import END, StateGraph
 
 from app.graphs.logger import _Timer, log_node_event
 from app.graphs.sqlite_checkpointer import sqlite_saver_from_path
+from app.domains.vectorstore.persistence import PublishFailed as _PublishFailed
 from app.graphs.state import IngestState
 from shared.source_id import canonical_source_stem
+
+# Ingest chạy trong daemon thread (`QUEUE_ENABLED=false`), nên hai lượt upload cùng lúc
+# có thể cùng đọc index, cùng append, rồi cùng xuất bản — lượt sau đè lượt trước và một
+# tài liệu mất vector mà không ai báo. Khoá này bao TRỌN "append -> ghi DB -> xuất bản"
+# thành một đoạn không chia cắt được.
+#
+# Phạm vi CỐ Ý là trong-tiến-trình: Render chạy `WEB_CONCURRENCY=1`, và index nằm trên
+# đĩa cục bộ của chính tiến trình đó. Nhiều tiến trình cùng ghi một index là một bài
+# toán khác (khoá phân tán / một worker chuyên trách) và chưa có yêu cầu đó.
+_KHOA_INDEX = threading.Lock()
+
 
 def build_ingest_graph(
     *,
@@ -305,24 +318,41 @@ def build_ingest_graph(
                     log_node_event(state["job_id"], "EmbedAndIndex", "late_map_skip", t.ms(), {"reason": str(ee)})
                     embeddings = None
 
-            if embeddings is not None:
-                faiss_ids = append_to_index(
-                    chunks=all_chunks,
-                    source_name=src_stem,
-                    custom_metadata=all_metadata,
-                    batch_size=32,
-                    embeddings=embeddings,
-                )
-            else:
-                # CI/không có late vector → tự encode trong append_to_index.
-                faiss_ids = append_to_index(
-                    chunks=all_chunks,
-                    source_name=src_stem,
-                    custom_metadata=all_metadata,
-                    batch_size=32,
-                )
+            # Ba việc dưới đây là MỘT: gán vị trí trong FAISS, ghi vị trí ấy xuống
+            # Postgres, rồi đẩy chính index ấy lên kho bền. Tách ra là mở cửa cho
+            # trạng thái mà chunk trỏ vào một vector không tồn tại ở đâu cả.
+            with _KHOA_INDEX:
+                if embeddings is not None:
+                    faiss_ids = append_to_index(
+                        chunks=all_chunks,
+                        source_name=src_stem,
+                        custom_metadata=all_metadata,
+                        batch_size=32,
+                        embeddings=embeddings,
+                    )
+                else:
+                    # CI/không có late vector → tự encode trong append_to_index.
+                    faiss_ids = append_to_index(
+                        chunks=all_chunks,
+                        source_name=src_stem,
+                        custom_metadata=all_metadata,
+                        batch_size=32,
+                    )
 
-            co_chunk_db = _persist_sections_and_chunks(state, all_chunks, headings, faiss_ids, t)
+                co_chunk_db = _persist_sections_and_chunks(
+                    state, all_chunks, headings, faiss_ids, t)
+
+                # Xuất bản NGAY, trong cùng khoá. `cong_bo_sau_ingest` ném khi
+                # persistence đang bật mà đẩy hỏng — cố ý khác `publish_sau_rebuild`
+                # (xem docstring ở đó). Chưa bật thì no-op, nên máy dev và CI không
+                # đổi hành vi.
+                from app.domains.vectorstore import persistence as _ps
+
+                ket_qua_cong_bo = _ps.cong_bo_sau_ingest()
+            if ket_qua_cong_bo.get("published"):
+                log_node_event(state["job_id"], "EmbedAndIndex", "published", t.ms(),
+                               {"version": ket_qua_cong_bo.get("version"),
+                                "files": ket_qua_cong_bo.get("files")})
 
             source_stem = src_stem
             update_source_status(
@@ -343,6 +373,18 @@ def build_ingest_graph(
             # capability nữa — chọn truyền tiếp cho rõ ràng.)
             return {**state, "source_stem": source_stem, "structured_query": co_chunk_db,
                     "progress": 75, "current_node": "EmbedAndIndex", "error": None}
+        except _PublishFailed as e:
+            # Index trong bộ nhớ ĐÃ đổi và chunk ĐÃ có `embedding_id`. Không xoá gì
+            # để "rollback": kiến trúc hiện tại không có giao dịch chung giữa FAISS
+            # và Postgres, và xoá chunk là làm mất dữ liệu thật để che một lỗi mạng.
+            # Thay vào đó nói thẳng ra, và KHÔNG cho tài liệu đi tiếp tới `ready`
+            # (tức `completed`) — một tài liệu "xong" mà bản bền thiếu vector của nó
+            # sẽ hỏng lặng lẽ ở lần khởi động sau.
+            loi = (f"index đã cập nhật trong tiến trình nhưng CHƯA xuất bản được lên "
+                   f"kho bền: {e}")
+            log_node_event(state["job_id"], "EmbedAndIndex", "publish_failed", t.ms(),
+                           {"error": str(e)})
+            return {**state, "error": loi, "current_node": "EmbedAndIndex"}
         except Exception as e:
             log_node_event(state["job_id"], "EmbedAndIndex", "error", t.ms(), {"error": str(e)})
             return {**state, "error": str(e), "current_node": "EmbedAndIndex"}
