@@ -164,6 +164,24 @@ also why a green `/health` is *not* evidence that retrieval works.
 and curls the same path, so a broken start command fails a pull request instead
 of a deploy.
 
+### Reading the live configuration
+
+`render.yaml` marks every sensitive value `sync: false`, so the repository never records
+what production is actually running, and no Render read API returns environment variable
+values. Ask the service itself:
+
+```bash
+curl -s https://<api-host>/api/config/status | jq
+```
+
+It reports names and flags only — `ingest_origin`, the active LLM provider list, the
+embedding identity (provider / model / strategy) and whether it is enabled, the rerank
+backend, the vision model, `index_persistence_enabled`, `skip_model_load`, and whether an
+FPT key is **present**. It never returns a secret value.
+
+Use this before drawing any conclusion about production behaviour. Two audits in this
+repository reached opposite conclusions by inferring configuration instead of reading it.
+
 ## 6. Expected commands
 
 ```

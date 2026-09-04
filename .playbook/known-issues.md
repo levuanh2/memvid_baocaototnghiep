@@ -4197,3 +4197,30 @@ vào nhầm index.
 **11 tài liệu hiện có đều không mang nhãn** (tạo trước khi có trường này) nên vẫn bị chặn.
 KHÔNG được UPDATE chúng để gắn nhãn — đó là ngụy tạo bằng chứng, không phải sửa dữ liệu.
 Regression: `test_11_tai_lieu_hien_tai_van_KHONG_the_vao_index`.
+
+## `/api/config/status`: production tự khai cấu hình đang chạy (2026-09-04)
+
+Suốt hai phase kiểm toán, câu hỏi "production ĐANG chạy cấu hình gì" chỉ trả lời được
+bằng suy đoán: `render.yaml` khai `sync: false` cho mọi biến nhạy cảm, và không API đọc
+nào của Render trả về giá trị biến môi trường. Một lần suy đoán sai đã dẫn tới kết luận
+ngược hẳn về việc production dùng database nào (xem mục "SỬA LẠI KẾT LUẬN").
+
+Rẻ hơn nhiều là để chính tiến trình đó tự khai. `GET /api/config/status`, không xác thực,
+trả TÊN và CỜ:
+
+```
+ingest_origin · llm_providers · embedding{enabled,provider,model,strategy}
+rerank{enabled,backend} · vision{available,model} · index_persistence_enabled
+skip_model_load · fpt_api_key_present
+```
+
+**Không bao giờ giá trị bí mật.** Khoá API chỉ báo có/không — cùng quy ước với
+`fpt_api_key()`. Regression `test_config_status_KHONG_lo_gia_tri_khoa` đặt một khoá giả
+vào env rồi khẳng định nó không xuất hiện ở bất kỳ đâu trong body.
+
+Không xác thực có chủ đích: nếu phải có token thì phải tạo user để dùng, mà tạo user là
+ghi vào production — đúng thứ mà endpoint này sinh ra để khỏi phải làm. Bề mặt lộ ra
+tương đương `/api/vision/status` vốn đã không xác thực.
+
+`tests/snapshots/url_map.json` +1 rule (83). Đó là điểm chính của ảnh chụp đó: một route
+mới phải hiện ra trong code review.

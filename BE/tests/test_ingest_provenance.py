@@ -14,6 +14,7 @@ from __future__ import annotations
 
 import contextlib
 import inspect
+import json
 
 import pytest
 
@@ -223,3 +224,46 @@ def test_rebuild_mang_nguon_tu_hang_tai_lieu_xuong_chunk():
             [{"chunk_id": f"{did}-c", "text": "noi dung"}] if offset == 0 else []))
     assert {b["document_id"]: b["ingest_origin"] for b in ra} == {
         "d1": "production", "d2": "local", "d3": None}
+
+
+# ── Endpoint khai báo cấu hình ─────────────────────────────────────────────
+def _config_status(monkeypatch, **env):
+    import app.main as be
+
+    for k, v in env.items():
+        if v is None:
+            monkeypatch.delenv(k, raising=False)
+        else:
+            monkeypatch.setenv(k, v)
+    r = be.app.test_client().get("/api/config/status")
+    assert r.status_code == 200
+    return r.get_json()
+
+
+def test_config_status_khai_dung_nhan_nguon(monkeypatch):
+    """Endpoint này tồn tại để trả lời "production ĐANG chạy cấu hình gì" bằng đo,
+    không bằng đoán. Dưới pytest nó phải khai `test` — cùng một hàm, cùng một luật."""
+    assert _config_status(monkeypatch, INGEST_ORIGIN="production")["ingest_origin"] == "test"
+
+
+def test_config_status_phan_anh_embedding_bat_tat(monkeypatch):
+    tat = _config_status(monkeypatch, FPT_AI_EMBEDDING_MODEL=None)
+    assert tat["embedding"]["enabled"] is False
+
+    bat = _config_status(monkeypatch, FPT_AI_EMBEDDING_MODEL="Vietnamese_Embedding",
+                         FPT_AI_API_KEY="khoa-gia-cho-test")
+    assert bat["embedding"]["enabled"] is True
+    assert bat["embedding"]["embedding_provider"] == "fpt"
+    assert bat["embedding"]["embedding_model_name"] == "Vietnamese_Embedding"
+    assert bat["embedding"]["embedding_strategy"] == "api_pooled"
+
+
+def test_config_status_KHONG_lo_gia_tri_khoa(monkeypatch):
+    """Chỉ CÓ hay KHÔNG. Một endpoint không xác thực mà in khoá ra là cách nhanh nhất
+    biến tiện ích vận hành thành lỗ bảo mật."""
+    khoa = "fpt-khoa-that-khong-duoc-lo-9a8b7c6d"
+    body = _config_status(monkeypatch, FPT_AI_API_KEY=khoa)
+    assert body["fpt_api_key_present"] is True
+    assert khoa not in json.dumps(body)
+    for v in json.dumps(body).split('"'):
+        assert khoa[:12] not in v

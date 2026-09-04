@@ -2016,6 +2016,45 @@ def api_vision_status():
     })
 
 
+@app.get('/api/config/status')
+def api_config_status():
+    """Production đang chạy với cấu hình nào. KHÔNG xác thực, KHÔNG bí mật.
+
+    Vì sao endpoint này tồn tại: `render.yaml` khai `sync: false` cho mọi biến nhạy
+    cảm, và không API đọc nào của Render trả về giá trị biến môi trường. Suốt hai
+    phase kiểm toán, câu hỏi "production ĐANG chạy cấu hình gì" chỉ trả lời được bằng
+    suy đoán — và một lần suy đoán sai đã dẫn tới kết luận ngược hẳn về việc production
+    dùng database nào. Rẻ hơn nhiều là để chính tiến trình đó tự khai.
+
+    Chỉ khai TÊN và CỜ. Khoá API chỉ báo có/không, không bao giờ báo giá trị — cùng
+    quy ước với `fpt_api_key()`, nơi khoá được đọc và không được log.
+    """
+    from app.clients import llm_factory as _lf
+    from app.domains import vision as _vision
+    from app.domains.documents import provenance as _prov
+    from app.domains.vectorstore import persistence as _persist
+
+    return jsonify({
+        # Nhãn mà mọi tài liệu nạp từ tiến trình này sẽ mang.
+        'ingest_origin': _prov.nguon_ingest(),
+        'llm_providers': list(_lf.PROVIDERS),
+        'embedding': {
+            'enabled': _lf.fpt_embedding_enabled(),
+            **_lf.embedding_identity(),
+        },
+        'rerank': {
+            'enabled': (os.getenv('RERANK_ENABLED', '1') or '').strip().lower()
+                       not in ('0', 'false', 'no', 'off'),
+            'backend': (os.getenv('RERANK_BACKEND') or 'local').strip(),
+        },
+        'vision': {'available': _vision.is_available(), 'model': _vision.vision_model()},
+        'index_persistence_enabled': _persist.enabled(),
+        'skip_model_load': os.environ.get('SKIP_MODEL_LOAD') == '1',
+        # CÓ hay KHÔNG, không bao giờ là giá trị.
+        'fpt_api_key_present': bool(_lf.fpt_api_key()),
+    })
+
+
 @app.post('/api/vision/transcribe')
 def api_vision_transcribe():
     """Ảnh → chữ. KHÔNG lưu ảnh: đọc xong là bỏ, chỉ phần chữ đi tiếp sang

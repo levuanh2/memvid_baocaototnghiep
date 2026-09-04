@@ -82,8 +82,11 @@ def test_method_cua_tung_route_khong_doi(client, cu):
 
 
 def test_tong_so_route_khop(client, cu):
-    """82 = 81 route ứng dụng + 1 `/static/<path:filename>` built-in của Flask."""
-    assert len(_hien_tai()) == len(cu) == 82
+    """83 = 82 route ứng dụng + 1 `/static/<path:filename>` built-in của Flask.
+
+    +1 ngày 2026-09-04: `GET /api/config/status`. Con số ở đây CỐ Ý viết cứng — sửa nó
+    là một dòng diff mà người review phải nhìn thấy, đúng mục đích của cả file này."""
+    assert len(_hien_tai()) == len(cu) == 83
 
 
 def test_khong_co_cap_duong_dan_method_trung(client):

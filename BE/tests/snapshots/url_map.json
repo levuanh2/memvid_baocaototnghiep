@@ -42,6 +42,13 @@
     "rule": "/api/attempts/jobs/<job_id>"
   },
   {
+    "endpoint": "api_config_status",
+    "methods": [
+      "GET"
+    ],
+    "rule": "/api/config/status"
+  },
+  {
     "endpoint": "api_documents_list",
     "methods": [
       "GET"
