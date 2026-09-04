@@ -4619,3 +4619,40 @@ Với lỗi 401, payload trả về người dùng là:
 lặn, trong khi việc cần làm là đổi một biến môi trường. Trường `error` bên ngoài có chứa
 nguyên văn 401, nhưng payload thì không. Cần tách "index không tương thích" khỏi "provider
 từ chối xác thực" — hai thứ này sửa bằng hai hành động khác hẳn nhau. Phase riêng.
+
+## CHUỖI ĐÃ ĐÓNG: upload production → Storage bền → restart → restore → truy hồi (2026-09-04)
+
+Sau khi khoá FPT trên Render được thay bằng khoá dùng được, cả sáu mắt xích đều đo được:
+
+| | mắt xích | bằng chứng |
+|---|---|---|
+| A | bản gốc → Supabase Storage | object tồn tại, 2.809 byte, sha256 khớp bản gốc từng byte, signed_url cấp được |
+| B | sống qua restart | vẫn tải về được sau ≥2 lượt deploy kể từ lúc upload |
+| C | khôi phục index lúc boot | `restore completed slug=fpt__Vietnamese_Embedding__api_pooled files=3 elapsed=3.37s` |
+| D | embedding câu hỏi | FPT trả vector, không còn 401 |
+| E | ánh xạ truy hồi | 3/3 chunk trả về đều thuộc `prod-fpt-embedding-smoke-2026-09-04_txt`, KHÔNG lẫn 189 chunk cũ |
+| F | sinh câu trả lời | trả lời đúng nội dung tài liệu (điện trở suất nicrom, công thức P=I²R) |
+
+Dấu hiệu rẻ nhất để biết khoá FPT có thông không: `/api/config/status` →
+`vision.available`. Nó gọi `GET /v1/models` bằng CHÍNH khoá đó, nên `false` nghĩa là khoá
+bị từ chối — không cần thử embedding. Đã dùng đúng dấu hiệu này để phân biệt "khoá hỏng"
+với "endpoint embedding hỏng" trong lượt chẩn đoán.
+
+### Hai chi tiết ghi lại, chưa sửa
+
+**1. `chunk_id` rỗng trong payload `/query`.** Không phải lỗi ánh xạ `embedding_id`.
+`main.py:1505` lấy `chunk_id` từ TIỀN TỐ TRÍCH DẪN nhúng trong văn bản chunk
+(`_CITE_PREFIX_RE`), mà chunk dựng lại từ Postgres không mang tiền tố đó. `stem` vẫn đúng
+nên câu trả lời vẫn quy được về tài liệu; chỉ là không deep-link tới từng chunk được.
+Ảnh hưởng: trích dẫn ở FE kém chi tiết với mọi index dựng lại.
+
+**2. Tài liệu `873ea272-…` có 0 chunk.** Nó được upload đúng lúc khoá FPT đang hỏng, nên
+ingest chết ở bước embedding. Bản gốc của nó ĐÃ bền trên Storage (đó là thứ phase này cần
+chứng minh); chỉ thiếu chunk. Kho mã KHÔNG có endpoint ingest lại — muốn có chunk thì phải
+upload lại thành một tài liệu mới. Để nguyên, `status=failed`, allowlist chặn.
+
+### Một quan sát về dữ liệu cũ
+
+11 tài liệu cũ đều CÓ khoá object trên Storage — vì máy trạm dev có sẵn credential
+Supabase. Chỉ 3 tài liệu nạp qua production là rơi về `/tmp`, vì Render thiếu credential.
+Nghĩa là lỗ hổng này chỉ tồn tại đúng ở môi trường mà nó nguy hiểm nhất.
