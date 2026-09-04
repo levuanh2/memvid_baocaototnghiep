@@ -138,6 +138,37 @@ def test_ngoai_pytest_van_dung_DATABASE_URL(monkeypatch):
     assert "supabase.com" in appdb.database_url()
 
 
+def test_ngoai_pytest_BO_QUA_TEST_DATABASE_URL(monkeypatch):
+    """Chiều ngược lại của hàng rào, và nó quan trọng ngang chiều xuôi: production
+    không được vớt `TEST_DATABASE_URL` khi biến đó tình cờ có mặt (một file `.env`
+    bê nhầm, một biến còn sót trong shell). Gunicorn trên Render đọc `DATABASE_URL`,
+    chấm hết."""
+    monkeypatch.setattr(appdb, "dang_chay_pytest", lambda: False)
+    monkeypatch.setenv("DATABASE_URL", PROD)
+    monkeypatch.setenv("TEST_DATABASE_URL", TEST_RIENG)
+    ra = appdb.database_url()
+    assert "supabase.com" in ra
+    assert "studymap_test" not in ra
+
+
+def test_hai_du_an_supabase_khac_nhau_bi_coi_la_MOT_dich():
+    """GIỚI HẠN ĐÃ BIẾT, và nó fail-closed nên giữ nguyên.
+
+    Pooler của Supabase dùng CHUNG một hostname cho mọi dự án trong cùng vùng, và
+    tên database luôn là `postgres`. Thứ phân biệt dự án nằm trong USERNAME
+    (`postgres.<project_ref>`) — mà `_danh_tinh_dich` cố ý bỏ username đi.
+
+    Hệ quả: hai dự án Supabase HOÀN TOÀN KHÁC NHAU bị coi là cùng một đích, nên
+    dùng một dự án Supabase riêng làm TEST_DATABASE_URL sẽ bị chặn. Đó là phía
+    an toàn của sai số: chặn nhầm thì mất công, cho qua nhầm thì mất dữ liệu.
+    KHÔNG được "sửa" bằng cách đưa username vào danh tính — làm thế là mở lại đúng
+    cái lỗ hai tài khoản cùng trỏ một database. Cách đúng là dùng Postgres cục bộ
+    hoặc container CI cho test (xem `scripts/setup_test_db.py`)."""
+    du_an_a = PROD
+    du_an_b = PROD.replace("postgres.abcdefgh", "postgres.zyxwvuts")
+    assert appdb._danh_tinh_dich(du_an_a) == appdb._danh_tinh_dich(du_an_b)
+
+
 def test_ngoai_pytest_thieu_DATABASE_URL_van_nem_nhu_cu(monkeypatch):
     monkeypatch.setattr(appdb, "dang_chay_pytest", lambda: False)
     monkeypatch.delenv("DATABASE_URL", raising=False)

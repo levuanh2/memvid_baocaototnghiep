@@ -2507,3 +2507,23 @@ truy nguồn gốc được.
 Bài học phụ, đắt hơn: kết quả là **không hàng nào do production nạp**. Suốt mấy phase tôi
 gọi nó là "DB production" và đi tìm xem tài liệu nào trong đó là thật. Câu hỏi đúng lẽ ra
 phải hỏi từ đầu là "database này đã bao giờ nhận một lượt upload từ production chưa".
+
+## "Database production" là một cái tên, không phải một phép đo (2026-09-04)
+
+Suốt sáu phase tôi gọi một database là production vì `BE/.env` gọi nó thế. Hai phép đo
+lật ngược cả hai nửa của cái tên đó:
+
+- `metadata_json.input_path` cho thấy **không tài liệu nào** trong đó do service
+  production nạp — nó là kho dev.
+- Log đăng ký của Render cho thấy production **không còn ghi vào nó** từ 2026-09-03
+  17:17 UTC — nên nó cũng không còn là database của production.
+
+Cái tên sai theo cả hai chiều cùng lúc, và không phép suy luận nào từ trong kho mã phát
+hiện được: cả hai câu trả lời đều nằm ở dấu vết vận hành (một cột do server ghi, một dòng
+log HTTP), không nằm trong mã.
+
+Bài học thao tác: khi một môi trường được xác định bằng một biến bí mật mà công cụ không
+đọc được, đừng suy luận nó — hãy tìm một **sự kiện có mặt ở cả hai bên** rồi khớp dấu thời
+gian. Hai lượt `register` khớp đến 0,27 giây chứng minh được nhiều hơn mọi lập luận về tên
+host. Và khi cùng phương pháp ấy cho kết quả ngược ở một mốc thời gian khác, câu trả lời
+đúng là "đã đổi", không phải chọn nửa nào mình thích.

@@ -4046,3 +4046,55 @@ Cùng commit `56a276f` còn ghi `don_input_docs.py` "Đã chạy: **9/9 file** �
 commit `7683e3b` gọi tên nó với đúng 18 chunk, và `knowledge_maps` có hàng probe
 `7bf18385-…` mà plan vòng 3 tự nhận "do tao sinh ra lúc dò lỗi" — nhưng tất cả đều diễn ra
 **sau** lượt upload, nên chỉ chứng minh nó ĐƯỢC DÙNG để đo, không chứng minh lượt upload.
+
+---
+
+## CHƯA XÁC ĐỊNH: Render production đang trỏ vào database nào (2026-09-04)
+
+`DATABASE_URL` khai `sync: false` trong `render.yaml`, tức chỉ tồn tại trong dashboard
+Render. Không API đọc nào của Render trả về giá trị biến môi trường, nên **không đọc
+được từ đây**. Đo gián tiếp cho hai kết quả NGƯỢC NHAU, và cả hai đều chắc:
+
+**Từng là database dev — ít nhất tới 2026-09-03 ~13:33 UTC.** Hai lượt đăng ký khớp
+đến từng giây, từ hai thiết bị khác nhau:
+
+| log production | `users.created_at` trong DB dev |
+|---|---|
+| `09:20:14.546Z POST /auth/register 201` (Chrome/Windows) | `levuanhhihihi@gmail.com` `09:20:14.266Z` |
+| `13:33:01.968Z POST /auth/register 201` (Android/Zalo) | `sunny@gmail.com` `13:33:01.696Z` |
+
+Hàng nằm trước dòng log ~0,27 s — đúng thứ tự insert rồi mới trả lời.
+
+**Không còn là database đó từ 2026-09-03 ~17:17 UTC.** Sáu lượt `POST /auth/register`
+trả `201` trong khoảng 17:17–17:23 (`fpt-smoke-<hex>@example.com`,
+`verify-<hex>@example.com`, do script smoke của chính tôi gọi). `users_store.create_user`
+KHÔNG có store dự phòng — `201` nghĩa là một hàng Postgres đã commit. Trong DB dev:
+`SELECT count(*) FROM users WHERE email LIKE 'verify-%'` = **0**, và không mã nào trong
+kho hay trong script smoke xoá user. Giữa hai mốc có một deploy `trigger: api` lúc
+`2026-09-03T17:06:52`.
+
+Alembic CHƯA BAO GIỜ in dòng `Running upgrade` trên bất kỳ build Render nào, kể cả build
+đầu tiên — nên database mà production nói chuyện đã ở head trước khi Render kết nối lần
+đầu. Điều đó loại giả thuyết "trỏ sang một Supabase project trống mới tạo".
+
+**Không đoán tiếp.** Bước tiếp theo phải do người làm: mở dashboard Render, đọc host và
+tên database của `DATABASE_URL`, ghi vào `docs/deployment/database-boundary.md`. Cách duy
+nhất để máy tự trả lời là gọi `/auth/register` với một email đã có — trả 409 nếu chung DB,
+nhưng trả 201 và TẠO một hàng nếu khác DB. Đó là ghi vào production, nên không làm.
+
+## Hostname pooler của Supabase KHÔNG phân biệt được project (2026-09-04)
+
+Mọi project Supabase cùng vùng dùng chung một hostname pooler
+(`aws-0-<region>.pooler.supabase.com`) và cùng tên database `postgres`. Thứ chọn project
+nằm trong USERNAME: `postgres.<project_ref>`.
+
+`app/db._danh_tinh_dich()` cố ý bỏ username, nên nó coi **hai project Supabase khác nhau
+là cùng một đích**. Hệ quả: dùng một project Supabase riêng làm `TEST_DATABASE_URL` sẽ bị
+chặn. Đó là phía an toàn của sai số — chặn nhầm thì mất công, cho qua nhầm thì mất dữ liệu.
+
+**Không được "sửa" bằng cách đưa username vào danh tính.** Làm thế là mở lại đúng cái lỗ
+hai tài khoản cùng trỏ một database bị coi là hai đích — chính là lỗ đã để pytest xoá cứng
+dữ liệu suốt nhiều tuần. Muốn DB test riêng thì dùng Postgres cục bộ hoặc container CI
+(`scripts/setup_test_db.py`).
+
+Regression: `test_db_isolation.py::test_hai_du_an_supabase_khac_nhau_bi_coi_la_MOT_dich`.

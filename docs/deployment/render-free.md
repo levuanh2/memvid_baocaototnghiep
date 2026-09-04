@@ -74,7 +74,7 @@ Never commit them: not to `render.yaml`, not to workflow YAML, not to `.env`.
 
 | Key | Where to get it |
 |---|---|
-| `DATABASE_URL` | Supabase → Settings → Database → connection string. Use the **session pooler (port 5432)**; the transaction pooler (6543) cannot run alembic's multi-statement DDL. Percent-encode the password (`#` → `%23`). |
+| `DATABASE_URL` | Supabase → Settings → Database → connection string. **Which database this points at is not recorded anywhere in this repository and is currently unconfirmed — see [database-boundary.md](database-boundary.md) before any corpus or index work.** Use the **session pooler (port 5432)**; the transaction pooler (6543) cannot run alembic's multi-statement DDL. Percent-encode the password (`#` → `%23`). |
 | `SUPABASE_URL` | `https://<project_ref>.supabase.co` |
 | `SUPABASE_SECRET_KEY` | Supabase → Settings → API keys → secret key |
 | `GEMINI_API_KEY` | Google AI Studio. Must be an **AI Studio API key** (`AIza…`, 39 chars), not an OAuth access token (`AQ.…`) — the latter fails with `ACCESS_TOKEN_TYPE_UNSUPPORTED`. |
