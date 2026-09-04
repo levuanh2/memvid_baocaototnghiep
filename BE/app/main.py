@@ -1829,6 +1829,17 @@ class UnsupportedFileType(ValueError):
     """Đuôi file không có bộ đọc nào trong pipeline ingest."""
 
 
+class DurableStorageRequired(RuntimeError):
+    """Ingest production nhưng kho object không dùng được.
+
+    Chỉ ném ở tiến trình mang nhãn `ingest_origin=production`. Trên Render free,
+    `/tmp` bị xoá sạch mỗi lần khởi động lại, nên một tài liệu "completed" mà bản
+    gốc chỉ nằm ở `/tmp` là tài liệu SẼ MẤT — chỉ chưa ai biết. Đo 2026-09-04: cả
+    hai tài liệu production đều có `file_path == input_path`, tức đã rơi vào nhánh
+    dự phòng từ lượt upload đầu tiên mà không dòng log nào ở tầng cấu hình nói ra.
+    """
+
+
 def _ingest_uploaded_file(file) -> dict:
     """Đăng ký + lưu an toàn + trigger ingest cho 1 file. Dùng chung cho
     /upload-file và /upload-multiple (đồng nhất: source_id + registry + poll)."""
@@ -1860,6 +1871,11 @@ def _ingest_uploaded_file(file) -> dict:
     # bản local CHÍNH LÀ kho lưu nên không bị xoá. Xem `_don_file_tam`.
     from app.domains.documents import repository as _docs
     from app.domains.documents import storage as _storage
+    from app.domains.documents import provenance as _prov
+
+    # Production thì kho bền là BẮT BUỘC; dev/test thì bản local chính là kho lưu.
+    # Cùng một hàm quyết định nhãn nguồn gốc, nên không có cờ thứ hai để lệch nhau.
+    bat_buoc_ben = _prov.la_production(_prov.nguon_ingest())
     stored_path = save_path
     if _storage.is_configured():
         try:
@@ -1869,7 +1885,17 @@ def _ingest_uploaded_file(file) -> dict:
                 _storage.upload(obj, fh.read())
             stored_path = obj
         except Exception as exc:
+            if bat_buoc_ben:
+                _go_file_tam(save_path)
+                raise DurableStorageRequired(
+                    f"đẩy bản gốc lên kho object thất bại: {type(exc).__name__}") from exc
             print(f"⚠️ [Storage] Không đẩy được file lên bucket, dùng bản local: {exc}")
+    elif bat_buoc_ben:
+        # Ném TRƯỚC `_docs.create` nên không để lại hàng documents ma. Bản cũ đi
+        # thẳng qua đây không một lời cảnh báo — đó là cách sự cố này im lặng suốt.
+        _go_file_tam(save_path)
+        raise DurableStorageRequired(
+            "kho object chưa cấu hình (thiếu SUPABASE_URL / SUPABASE_SECRET_KEY)")
 
     _docs.create(
         document_id=source_id,
@@ -1889,6 +1915,25 @@ def _ingest_uploaded_file(file) -> dict:
         'progress': 0.0,
         'can_query': False,
     }
+
+
+def _go_file_tam(duong_dan: str) -> None:
+    """Xoá bản tạm khi upload bị từ chối. Không để lại rác cho một lượt đã hỏng."""
+    try:
+        if duong_dan and os.path.exists(duong_dan):
+            os.remove(duong_dan)
+    except OSError:
+        pass
+
+
+def _storage_required_response(exc: "DurableStorageRequired"):
+    """503, không phải 500: đây là hạ tầng chưa sẵn sàng, không phải request sai.
+    Nói thẳng nguyên nhân để người vận hành sửa được, và KHÔNG kèm bí mật nào."""
+    return jsonify({
+        'error': 'Kho lưu trữ bền chưa sẵn sàng nên chưa nhận tài liệu.',
+        'detail': str(exc),
+        'hint': 'Kiểm tra SUPABASE_URL / SUPABASE_SECRET_KEY, xem GET /api/config/status.',
+    }), 503
 
 
 def _unsupported_response(exc: "UnsupportedFileType"):
@@ -1914,6 +1959,8 @@ def upload_file():
         return jsonify(_ingest_uploaded_file(file))
     except UnsupportedFileType as exc:
         return _unsupported_response(exc)
+    except DurableStorageRequired as exc:
+        return _storage_required_response(exc)
 
 
 @app.post('/upload')
@@ -1995,6 +2042,8 @@ def upload_multiple():
             results.append({'file': info['filename'], 'source_id': info['source_id'], 'status': 'processing'})
         except UnsupportedFileType as exc:
             results.append({'file': file.filename, 'error': f'Không đọc được định dạng {exc}'})
+        except DurableStorageRequired as exc:
+            results.append({'file': file.filename, 'error': f'Kho lưu trữ bền chưa sẵn sàng: {exc}'})
         except Exception as e:
             import traceback; traceback.print_exc()
             results.append({'file': file.filename, 'error': f'Upload failed: {str(e)}'})
@@ -2155,6 +2204,8 @@ def api_documents_upload():
         info = _ingest_uploaded_file(file)
     except UnsupportedFileType as exc:
         return _unsupported_response(exc)
+    except DurableStorageRequired as exc:
+        return _storage_required_response(exc)
     from app.domains.documents import repository as _docs
     row = _docs.get(info['source_id']) or {}
     return jsonify(_doc_public(info['source_id'], row)), 201

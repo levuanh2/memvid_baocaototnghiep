@@ -4490,3 +4490,66 @@ dùng), nhưng nó chỉ `print` một dòng cảnh báo rồi đi tiếp. Khôn
 nhìn ra được. Nay `/api/config/status` khai thẳng `supabase_storage_configured`.
 
 **Sửa: điền hai biến đó trong dashboard Render.** Không phải việc của mã.
+
+---
+
+## Ingest production nay TỪ CHỐI khi kho object chưa sẵn sàng (2026-09-04)
+
+Trước đây `_ingest_uploaded_file` có hai đường im lặng đưa tài liệu production về `/tmp`:
+
+```python
+stored_path = save_path
+if _storage.is_configured():        # False -> đi thẳng qua, KHÔNG một dòng cảnh báo
+    try:
+        ...
+    except Exception as exc:        # hỏng -> chỉ print, vẫn trả 200
+        print("⚠️ [Storage] ... dùng bản local")
+```
+
+Nhánh `False` là nhánh đã chạy ở production suốt: cả hai tài liệu đều có
+`file_path == input_path == /tmp/studymap/input_docs/...`. Render free xoá sạch `/tmp`
+mỗi lần khởi động lại, nên tài liệu `completed` mà bản gốc chỉ nằm đó là tài liệu **sẽ
+mất** — chỉ chưa ai biết. Hàng `documents` còn, file thì không, và
+`GET /api/documents/<id>/file` trỏ vào đường dẫn chết.
+
+Nay tiến trình mang nhãn `ingest_origin=production` ném `DurableStorageRequired` → HTTP
+**503** (hạ tầng chưa sẵn sàng, không phải request sai), kèm gợi ý kiểm
+`SUPABASE_URL`/`SUPABASE_SECRET_KEY` và trỏ tới `GET /api/config/status`. Ném TRƯỚC
+`_docs.create` nên không để lại hàng `documents` ma, và dọn luôn file tạm.
+
+Dev/test **giữ nguyên** fallback: ở đó bản local chính là kho lưu. Siết cả hai môi
+trường là phá mọi lượt chạy không có Supabase. Cùng một hàm `provenance.nguon_ingest()`
+quyết định, nên không có cờ thứ hai để lệch nhau.
+
+Regression: `tests/test_storage_durability.py` (14 test). Kiểm ngược: 3/14 đỏ trên mã cũ
+— đúng ba ca fail-closed.
+
+### Khoá lưu trữ đã đúng sẵn, không cần đổi
+
+`storage.object_path` lấy `PurePosixPath(name).name` sau khi đổi `\` thành `/`, rồi fold
+mọi ký tự ngoài `[A-Za-z0-9._-]`. Nên khoá luôn có dạng `<user>/<doc>/<file>`, không mang
+đường tuyệt đối, không mang ổ đĩa Windows, không traversal được. Không đổi schema, không
+đổi format khoá.
+
+`file_path` = khoá object (bền); `input_path` = đường tạm để `_don_file_tam` dọn. Hai vai
+trò khác nhau, giữ nguyên cả hai.
+
+## CHƯA SỬA — `embedding_id` va chạm (ghi cho phase sau, 2026-09-04)
+
+Đã đo, KHÔNG đụng trong phase này:
+
+```
+emb='0' -> 3 hàng ở 3 tài liệu khác nhau
+emb='1' -> 3 hàng
+emb='2' -> 3 hàng
+```
+
+`embedding_id` là vị trí hàng FAISS — chỉ duy nhất TRONG MỘT index. Nhưng nó nằm ở cột
+toàn cục và `lookup_by_embedding_ids` tra toàn cục, trả `dict` khoá theo `embedding_id`,
+nên mỗi khoá chỉ MỘT hàng sống sót. Truy vấn không có `ORDER BY` → hàng nào thắng là
+**không xác định**. Hôm nay ra đúng cả ba; đó là may, không phải đảm bảo.
+
+Kho mã đã biết: `repository.clear_chunk_embedding_ids` có docstring đúng cho việc này,
+nhưng rebuild chỉ GHI id cho chunk được index, không XOÁ id của chunk bị loại.
+
+Không xoá, không viết lại hàng cũ, không migration, không đổi format trong phase này.
