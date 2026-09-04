@@ -211,16 +211,22 @@ def build_ingest_graph(
         trạng thái nói đúng thứ nó làm được.
         """
         try:
+            from app.clients.llm_factory import embedding_identity
             from app.domains.documents import repository as docs_repo
             from app.domains.documents.sections import build_sections
-            from shared.config import get_settings
 
             sections, chunk_keys = build_sections(
                 [(headings[i] if i < len(headings) else "") for i in range(len(chunks))]
             )
             key_to_id = docs_repo.replace_sections(state["source_id"], sections)
 
-            s_cfg = get_settings()
+            # Danh tính hỏi ĐỐI TƯỢNG embedding đang dùng, không hỏi cấu hình.
+            # `EMBEDDING_MODEL_NAME` là thứ người ta ĐẶT; `embedding_identity()` là thứ
+            # `get_embeddings()` THẬT SỰ trả về. Hai cái lệch nhau là chuyện đã xảy ra:
+            # 2026-09-04 production embed bằng FPT `Vietnamese_Embedding` trong khi cột
+            # này ghi `sentence-transformers/all-MiniLM-L6-v2` — nhãn mặc định của một
+            # biến chưa ai đặt. Không hard-code provider nào ở đây: hàm kia tự khai.
+            danh_tinh = embedding_identity()
             ids = list(faiss_ids or [])
             rows = []
             for i, text in enumerate(chunks):
@@ -232,9 +238,16 @@ def build_ingest_graph(
                     "token_count": len(text.split()),
                     "section_id": key_to_id.get(key) if key else None,
                     "embedding_id": ids[i] if i < len(ids) else None,
-                    "embedding_model": s_cfg.embedding_model_name,
+                    "embedding_model": danh_tinh.get("embedding_model_name"),
+                    # Số chiều đo từ vector THẬT nếu có sẵn. Không gọi thêm một lượt
+                    # embedding chỉ để điền nhãn — với provider từ xa đó là tiền thật.
+                    # Và số chiều KHÔNG BAO GIỜ đủ để nhận diện không gian vector:
+                    # bge-m3 và Vietnamese_Embedding đều 1024 (xem check_index_identity).
                     "embedding_dim": (len(state["late_embeddings"][0])
                                       if state.get("late_embeddings") else None),
+                    # Danh tính canonical, cùng ba khoá với `index.json`
+                    # (`store.INDEX_IDENTITY_KEYS`) để chunk và index so được với nhau.
+                    "metadata_json": {"embedding_identity": danh_tinh},
                 })
             n = docs_repo.replace_chunks(state["source_id"], rows)
             docs_repo.set_counts(

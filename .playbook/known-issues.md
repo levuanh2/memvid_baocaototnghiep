@@ -4293,3 +4293,55 @@ Thêm nữa `/query` lọc theo quyền sở hữu, nên một tài khoản khá
 
 Muốn kiểm retrieval trên production thì phải có `INDEX_PERSISTENCE_ENABLED` + khôi phục
 lúc khởi động. Chưa bật, và bật nó là quyết định riêng.
+
+---
+
+## Danh tính embedding của chunk lấy từ CẤU HÌNH, không phải provider thật (2026-09-04)
+
+Tài liệu production đầu tiên embed bằng FPT `Vietnamese_Embedding`, còn
+`document_chunks.embedding_model` ghi `sentence-transformers/all-MiniLM-L6-v2`.
+
+Không ai nói dối. `ingest_graph._persist_sections_and_chunks` lấy nhãn từ
+`shared.config.embedding_model_name` — tức biến `EMBEDDING_MODEL_NAME`, thứ NGƯỜI TA
+ĐẶT — thay vì hỏi đối tượng mà `get_embeddings()` thật sự trả về. Biến đó chưa ai đặt
+nên rơi về mặc định, và mặc định là một model không hề tham gia.
+
+Một cột nói sai model còn tệ hơn cột trống: cột trống thì người đọc đi tìm, cột sai thì
+người đọc tin.
+
+**Sửa:** node hỏi `llm_factory.embedding_identity()` — cùng hàm mà `index.json` dùng.
+Ghi `embedding_model` từ đó, và ghi cả bộ ba vào `document_chunks.metadata_json`:
+
+```
+metadata_json.embedding_identity = {embedding_provider, embedding_model_name,
+                                    embedding_strategy}
+```
+
+Ba khoá này ĐÚNG BẰNG `store.INDEX_IDENTITY_KEYS`, để chunk và index so được với nhau.
+Không migration: cột `metadata_json` đã có sẵn. Không hard-code provider nào trong
+`ingest_graph` — hàm kia tự khai. Không thêm lượt gọi embedding nào chỉ để điền nhãn:
+với provider từ xa đó là tiền thật.
+
+`embedding_dim` giữ nguyên cách cũ (chỉ có khi late chunking đã sinh vector). Số chiều
+KHÔNG BAO GIỜ đủ để nhận diện không gian vector — bge-m3 và Vietnamese_Embedding đều
+1024, đó là cả lý do `check_index_identity` tồn tại.
+
+### KHÔNG đụng `embedding_id` — và vì sao
+
+Kế hoạch ban đầu của phase nói `ingest_graph` lấy `EMBEDDING_MODEL_NAME` để ghi
+`embedding_id`. Không phải. `embedding_id` là **id hàng FAISS** dạng chuỗi số:
+
+| | |
+|---|---|
+| ghi | `ingest_graph` (`faiss_ids` từ lượt append) và `repository.set_chunk_embedding_id` (sau khi rebuild thăng cấp) |
+| đọc | `repository.lookup_by_embedding_ids` → `retrieval/search.py:65` |
+| vai trò | khoá tra ngược FAISS hit → chunk, có index Postgres `ix_document_chunks_embedding_id` |
+
+Nhồi provider/model/strategy vào đó sẽ phá truy hồi ở mọi lượt hit và làm mồ côi 192
+hàng đang có. Danh tính đi vào `metadata_json`; `embedding_id` giữ nguyên vai trò con trỏ.
+
+Không backfill 189 chunk cũ, không sửa 3 chunk production. Nhãn cũ sai vẫn nằm đó — sửa
+nó là ngụy tạo dữ liệu; chỗ đúng để sửa là lần ingest sau.
+
+Regression: `tests/test_chunk_embedding_identity.py` (8 test). Đã kiểm ngược: 5/8 đỏ
+trên mã cũ.

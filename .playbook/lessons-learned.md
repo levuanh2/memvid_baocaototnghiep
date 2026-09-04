@@ -2588,3 +2588,31 @@ kê từng bí mật mà bước ấy cần và hỏi "bí mật này có ở n�
 Không có khoá thì lựa chọn đúng là DỪNG, không phải dựng một index `bge-m3` rồi gọi nó là
 index production. Hàng rào đã nói thẳng ("index sẽ mang danh tính model cục bộ") — và cả
 chuỗi phase vừa rồi tồn tại chính là để câu cảnh báo đó không bị bỏ qua.
+
+## Nhãn phải hỏi vật, đừng hỏi cấu hình (2026-09-04)
+
+`document_chunks.embedding_model` ghi tên model lấy từ `EMBEDDING_MODEL_NAME`. Hợp lý
+khi viết: biến đó "là" model đang dùng. Nhưng nó chỉ là ý định, còn `get_embeddings()`
+mới là thực tế — và khi FPT được bật, thực tế rẽ sang một nhánh không đọc biến đó.
+
+Cùng một lớp lỗi với `ingest_origin`: thứ quyết định phải sinh ra ở nơi nó được tin.
+Khác một chỗ: `ingest_origin` sai thì hàng rào chặn nhầm và ai đó sẽ kêu; nhãn model sai
+thì không có ai kêu cả — nó chỉ nằm đó cho tới ngày có người dựa vào nó để quyết định
+một index có tương thích hay không.
+
+Cách nhận ra sớm: với mỗi cột "mô tả cách dữ liệu được tạo ra", hỏi "ai trả lời câu hỏi
+này — hằng số cấu hình hay đối tượng đã làm việc đó". Chỉ nhóm sau mới đúng khi có nhiều
+nhánh provider.
+
+## Đọc kỹ tên trường trước khi sửa nó (2026-09-04)
+
+Kế hoạch phase nói sửa `embedding_id`. Tra ra thì `embedding_id` là id hàng FAISS, khoá
+tra ngược của cả đường truy hồi, có index Postgres riêng. Nhồi danh tính vào đó là phá
+truy hồi và mồ côi 192 hàng.
+
+Thứ hỏng là `embedding_model` — cột bên cạnh, tên gần giống, vai trò khác hẳn. Nếu tôi
+làm theo đúng câu chữ thay vì tra `grep embedding_id` trước, thiệt hại sẽ lớn hơn nhiều
+lần cái lỗi đang đi sửa.
+
+Quy tắc rẻ: trước khi đổi format một trường bền vững, liệt kê ĐỦ nơi ghi và nơi ĐỌC nó.
+Nếu có người đọc dùng nó làm khoá join, format đó không còn là chuyện nội bộ nữa.
