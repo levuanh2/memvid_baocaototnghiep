@@ -43,7 +43,15 @@ jobs:
       SKIP_MODEL_LOAD: "1"
       # Plain `postgresql://` is fine — app/db/__init__.py rewrites it to
       # `postgresql+psycopg://` because psycopg2 is not installed.
-      DATABASE_URL: postgresql://postgres:postgres@localhost:5432/studymap_test
+      #
+      # Only TEST_DATABASE_URL lives at job scope. DATABASE_URL is set per-step,
+      # on the two steps that are not pytest (migrations, gunicorn smoke boot),
+      # so that during `pytest` there is no production-shaped URL in the
+      # environment at all. `app/db.database_url()` refuses to fall back to
+      # DATABASE_URL under pytest — that fallback is exactly how the local suite
+      # wrote to, and hard-deleted from, the production database for weeks:
+      # BE/.env supplies DATABASE_URL and conftest never overrode it.
+      TEST_DATABASE_URL: postgresql://postgres:postgres@localhost:5432/studymap_test
       # Stops shared/env_loader from setdefault-ing the USE_LC_* flags, so the
       # suite reads the same flag values it does locally. conftest sets this for
       # itself too; declaring it here also covers tests that never build the
@@ -80,6 +88,8 @@ jobs:
 
       - name: Run migrations
         working-directory: BE
+        env:
+          DATABASE_URL: postgresql://postgres:postgres@localhost:5432/studymap_test
         run: alembic upgrade head
 
       - name: Run backend test suite
@@ -95,6 +105,7 @@ jobs:
           # Same shape as the Render Free service: no Ollama, no local weights.
           OLLAMA_HOST: ""
           SKIP_MODEL_LOAD: "1"
+          DATABASE_URL: postgresql://postgres:postgres@localhost:5432/studymap_test
         run: |
           gunicorn -w 1 -b 127.0.0.1:8080 --timeout 120 app.main:app &
           pid=$!

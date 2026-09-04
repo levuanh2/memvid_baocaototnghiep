@@ -143,7 +143,7 @@ def test_current_user_id_none_without_token(be):
         assert be._current_user_id() is None
 
 
-def test_upload_stamps_owner_none_without_token(be, client):
+def test_upload_stamps_owner_none_without_token(can_db_test, be, client):
     """Không token → bản ghi documents có owner_user_id = None (chế độ mở)."""
     import io
     r = client.post("/upload-file", data={"file": (io.BytesIO(b"# doc"), "own.md")},

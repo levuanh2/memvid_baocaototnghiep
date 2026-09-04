@@ -68,6 +68,19 @@ def _purge_anonymous_documents() -> None:
         print(f"[conftest] bỏ qua dọn documents: {exc}")
 
 
+@pytest.fixture()
+def can_db_test():
+    """Test nào GHI vào Postgres thì xin fixture này.
+
+    Trước 2026-09-04 những test ấy chạy thẳng vào database PRODUCTION: conftest
+    không ghi đè `DATABASE_URL`, `BE/.env` thì có URL production, và bước dọn dẹp
+    ở đây xoá CỨNG. `app/db.database_url()` giờ đòi `TEST_DATABASE_URL` và không
+    rơi về `DATABASE_URL` — không có database test thì skip, không phải nổ.
+    """
+    if not (os.getenv("TEST_DATABASE_URL") or "").strip():
+        pytest.skip("cần TEST_DATABASE_URL — xem `python -m scripts.setup_test_db --help`")
+
+
 @pytest.fixture(scope="session")
 def client(tmp_path_factory):
     """

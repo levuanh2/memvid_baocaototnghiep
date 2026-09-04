@@ -3923,3 +3923,45 @@ KHÔNG ảnh hưởng `/query`: đường sinh đáp án RAG đi qua `summary/qa
 Chưa lộ ra ở production vì summary/mindmap còn tắc ở chỗ thiếu index. Sửa xong index
 thì chúng vẫn degraded — cần một phase riêng với bộ test riêng, vì đổi hành vi của
 chúng là đổi ngữ nghĩa tính năng khác.
+
+## (ĐÃ SỬA 2026-09-04) Bộ test chạy thẳng vào database PRODUCTION
+
+Suốt nhiều tuần, mọi lượt `pytest` **cục bộ** đọc `DATABASE_URL` từ `BE/.env` và nối
+vào database Supabase production. Fixture tạo user/tài liệu thật ở đó, và bước dọn dẹp
+của conftest chạy `sa_delete(Document)` — **xoá cứng**.
+
+**Vì sao không ai thấy:** `BE/.env` dùng cổng **6543**, production dùng **5432**. Hai
+URL trông khác nhau. Chúng là **cùng một database** — Supabase mở nó ở cả hai cổng
+(session pooler / transaction pooler). So chuỗi URL thì thấy khác; so host + tên
+database thì giống hệt.
+
+**Bằng chứng:** 8 user mới nhất trong database production đều là fixture pytest
+(`search_o_*`, `owner_*`, `quiz_o_*`, `att_o_*`, `prac_o_*`, `gap_o_*`, `smap_o_*`),
+tạo lúc 03:18–03:38 UTC ngày 2026-09-04 — đúng khoảng một lượt chạy suite đầy đủ. Hai
+trong 11 tài liệu production (`cua nguoi khac.md`, `own (2).md`) là fixture của chính
+lượt chạy ấy.
+
+CI thì **không** dính: nó vốn đã dùng Postgres service container riêng.
+
+**Cách sửa:** `app/db.database_url()` — điểm DUY NHẤT resolve URL, alembic cũng đi qua
+đây — giờ đòi `TEST_DATABASE_URL` khi đang chạy dưới pytest và **KHÔNG rơi về**
+`DATABASE_URL`. Thiếu nó thì ném `DatabaseNotConfigured` chứ không nối bừa.
+
+Ba chi tiết đáng giữ:
+
+1. **Nhận diện pytest qua `sys.modules`, không qua một cờ do conftest đặt.** Conftest
+   chạy sau khi pytest đã import vài thứ, nên một cờ để lại cửa sổ mà một import sớm
+   mở kết nối trước khi cờ kịp có.
+2. **Danh tính đích chỉ gồm host + tên database.** Bỏ cổng (đó là cái đã che mắt) và
+   bỏ cả user/mật khẩu — chúng nói AI kết nối, không nói kết nối tới ĐÂU. Bản đầu tôi
+   đưa user vào và test bắt được ngay: hai tài khoản khác nhau trỏ cùng một database
+   sẽ bị coi là hai đích, và hàng rào im lặng không nổ.
+3. **CI không đặt `DATABASE_URL` ở mức job nữa** — chỉ đặt cho bước migration và bước
+   smoke boot. Trong bước `pytest` không có gì để rơi về thì không có đường nào rơi.
+
+Guard `pytest.skip` của 11 module test đổi sang đọc `TEST_DATABASE_URL`: không có
+database test thì các test cần DB **skip**, không phải chạy vào production.
+
+Dựng database test: `python -m scripts.setup_test_db` (script chỉ đọc
+`TEST_DATABASE_URL`, không bao giờ lấy đích từ `DATABASE_URL`, và từ chối chạy nếu hai
+biến trỏ cùng một database).

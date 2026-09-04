@@ -90,7 +90,7 @@ def test_source_routes_401_without_token(be, client, monkeypatch):
 
 # ---- upload stamps owner ----------------------------------------------------
 
-def test_upload_stamps_current_user(be, client, monkeypatch):
+def test_upload_stamps_current_user(can_db_test, be, client, monkeypatch):
     # documents.user_id co FK -> phai la user THAT, khong phai id bia.
     import uuid as _uuid
 

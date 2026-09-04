@@ -14,8 +14,8 @@ import pytest
 def _need_db():
     from shared.env_loader import load_project_env
     load_project_env()
-    if not (os.getenv("DATABASE_URL") or "").strip():
-        pytest.skip("cần DATABASE_URL (PostgreSQL) — xem BE/.env")
+    if not (os.getenv("TEST_DATABASE_URL") or "").strip():
+        pytest.skip("cần TEST_DATABASE_URL — xem `python -m scripts.setup_test_db --help`")
 
 
 @pytest.fixture()

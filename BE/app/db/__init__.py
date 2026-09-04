@@ -10,6 +10,7 @@ không có DB vẫn import được. Đổi env trong test thì gọi reset_engi
 from __future__ import annotations
 
 import os
+import sys
 import threading
 from contextlib import contextmanager
 from typing import Iterator, Optional
@@ -27,13 +28,62 @@ class DatabaseNotConfigured(RuntimeError):
     """DATABASE_URL chưa được cấu hình."""
 
 
+def dang_chay_pytest() -> bool:
+    """Tiến trình này có phải một lượt pytest không.
+
+    `sys.modules` chứ không phải một biến env do conftest đặt: conftest chạy SAU khi
+    pytest đã import vài thứ, nên có cửa sổ mà một import sớm mở kết nối trước khi cờ
+    kịp được đặt. Không module nào trong `app/`, `shared/`, `services/`, `scripts/`
+    import pytest (đã kiểm), nên dấu hiệu này không dương tính giả ở production.
+    """
+    return "pytest" in sys.modules or bool(os.getenv("PYTEST_CURRENT_TEST"))
+
+
+def _danh_tinh_dich(url: str) -> tuple:
+    """Nhận diện MỘT database: chỉ host + tên database.
+
+    CỐ Ý bỏ cổng: Supabase mở cùng một database ở 5432 (session pooler) và 6543
+    (transaction pooler). Đúng chỗ này đã che mắt một lần rồi — `BE/.env` và
+    production trông "khác nhau" vì lệch cổng, trong khi chúng là cùng một database,
+    và bộ test đã ghi/xoá dữ liệu production suốt nhiều tuần.
+
+    CỐ Ý bỏ user và mật khẩu: chúng nói AI kết nối, không nói kết nối tới ĐÂU. Đưa
+    user vào thì hai tài khoản khác nhau trỏ vào cùng một database sẽ bị coi là hai
+    đích khác nhau, và hàng rào im lặng không nổ — đúng thứ nó sinh ra để chặn.
+    """
+    from urllib.parse import urlsplit
+
+    p = urlsplit(url)
+    return ((p.hostname or "").lower(), (p.path or "").rstrip("/").lower())
+
+
 def database_url() -> str:
-    url = (os.getenv("DATABASE_URL") or "").strip()
-    if not url:
-        raise DatabaseNotConfigured(
-            "DATABASE_URL chưa được đặt. Lấy connection string ở Supabase > Settings > "
-            "Database và percent-encode mật khẩu (ví dụ '#' → '%23')."
-        )
+    if dang_chay_pytest():
+        url = (os.getenv("TEST_DATABASE_URL") or "").strip()
+        if not url:
+            # KHÔNG rơi về `DATABASE_URL`. Rơi về chính là cách bộ test đã chạy vào
+            # database production: `BE/.env` có `DATABASE_URL`, conftest không ghi đè,
+            # và fixture tạo/xoá dòng thật. Thà hỏng ồn còn hơn sửa dữ liệu người dùng.
+            raise DatabaseNotConfigured(
+                "TEST_DATABASE_URL chưa được đặt. Test KHÔNG được dùng DATABASE_URL — "
+                "đó là database production. Dựng một database test riêng rồi đặt biến "
+                "này: xem `python -m scripts.setup_test_db --help`."
+            )
+        prod = (os.getenv("DATABASE_URL") or "").strip()
+        if prod and _danh_tinh_dich(url) == _danh_tinh_dich(prod):
+            raise DatabaseNotConfigured(
+                "TEST_DATABASE_URL trỏ vào CÙNG database với DATABASE_URL "
+                f"(host={_danh_tinh_dich(url)[0]}, db={_danh_tinh_dich(url)[1]}). "
+                "Khác cổng KHÔNG phải khác database — Supabase mở cùng một database "
+                "ở cả 5432 lẫn 6543. Dùng một database riêng cho test."
+            )
+    else:
+        url = (os.getenv("DATABASE_URL") or "").strip()
+        if not url:
+            raise DatabaseNotConfigured(
+                "DATABASE_URL chưa được đặt. Lấy connection string ở Supabase > Settings > "
+                "Database và percent-encode mật khẩu (ví dụ '#' → '%23')."
+            )
     # SQLAlchemy cần driver tường minh; 'postgresql://' mặc định là psycopg2 (chưa cài).
     if url.startswith("postgresql://"):
         url = "postgresql+psycopg://" + url[len("postgresql://"):]

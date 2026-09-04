@@ -1,6 +1,18 @@
 import io
 import time
 
+import os
+
+import pytest
+
+
+@pytest.fixture(scope="module", autouse=True)
+def _need_db():
+    """Mọi test trong file này upload tài liệu, tức GHI vào Postgres. Không có
+    database test riêng thì skip — xem .playbook/known-issues.md."""
+    if not (os.getenv("TEST_DATABASE_URL") or "").strip():
+        pytest.skip("cần TEST_DATABASE_URL — xem `python -m scripts.setup_test_db --help`")
+
 
 def test_upload_and_poll_status(client):
     data = {"file": (io.BytesIO(b"hello world"), "hello.txt")}

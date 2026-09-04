@@ -2461,3 +2461,31 @@ nào, không log nào. Chất lượng kết quả tụt mà không có triệu 
 - **Cách tìm hết:** `grep SKIP_MODEL_LOAD` rồi hỏi từng chỗ "cái này chặn việc nạp,
   hay chặn việc dùng?". Hai lần đầu tôi sửa từng chỗ khi gặp; lần thứ ba mới nhận ra
   phải quét cả kho.
+
+## Hai URL khác nhau không có nghĩa là hai database khác nhau (2026-09-04)
+
+`BE/.env` có `DATABASE_URL` cổng 6543; production có cổng 5432. Nhìn qua là hai thứ
+khác nhau, nên suốt nhiều tuần không ai hỏi lại. Supabase mở **cùng một database** ở
+cả hai cổng — 6543 là transaction pooler, 5432 là session pooler. Bộ test đã tạo và
+**xoá cứng** dữ liệu production suốt thời gian đó.
+
+- **So sánh phải chuẩn hoá về thứ định danh, không phải chuỗi.** Đích của một kết nối
+  DB là (host, tên database). Cổng là cách vào; user/mật khẩu là ai vào. Hai cái sau
+  không được nằm trong danh tính — bản đầu của tôi đưa user vào và test bắt ngay: hai
+  tài khoản khác nhau trỏ cùng một database sẽ lọt qua hàng rào.
+- **Dấu hiệu để nghi ngờ:** một cấu hình "test" và một cấu hình "production" khác nhau
+  ở đúng MỘT trường. Trùng hợp thì hiếm; hai bản sao của cùng một thứ thì thường.
+- **Chỗ đáng tìm:** conftest KHÔNG ghi đè biến kết nối. Nếu bộ test không tự nói nó
+  nối vào đâu, nó đang nối vào bất cứ đâu môi trường bảo.
+
+## Sửa một hàng rào thì phải hỏi nó chặn được đường vòng nào (2026-09-04)
+
+Thêm hàng rào "TEST_DATABASE_URL không được trùng DATABASE_URL" xong, tôi đặt CI cấp
+cả hai biến trỏ vào cùng container ephemeral — và hàng rào sẽ chặn chính CI.
+
+Cách sửa đúng không phải nới hàng rào, mà là **bỏ hẳn thứ để rơi về**: CI không đặt
+`DATABASE_URL` ở mức job nữa, chỉ đặt cho hai bước không phải pytest. Không có gì để
+rơi về thì không cần hàng rào nào bắt được đường rơi.
+
+Nới hàng rào bằng một cờ "cho phép trùng" cũng chạy, nhưng nó tạo ra đúng cái công tắc
+mà một ngày nào đó ai đó bật ở máy mình cho tiện.
