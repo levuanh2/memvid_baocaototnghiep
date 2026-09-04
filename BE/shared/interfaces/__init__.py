@@ -8,12 +8,14 @@ khớp interface mà KHÔNG cần kế thừa — đổi tối thiểu, không p
 """
 
 from .llm import EmbeddingProvider, LLMProvider
+from .object_storage import ObjectStorage
 from .retriever import RetrievedChunk, Retriever
 from .vectorstore import VectorStore
 
 __all__ = [
     "LLMProvider",
     "EmbeddingProvider",
+    "ObjectStorage",
     "VectorStore",
     "Retriever",
     "RetrievedChunk",

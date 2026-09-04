@@ -125,7 +125,38 @@ Production từng có `RERANK_ENABLED=0` (vì cross-encoder ~2.3 GB sẽ OOM), n
 Dòng cuối là **đúng như thiết kế**, không phải lỗi: chưa có index nên guard trả lời
 trước khi gọi LLM. Đó cũng là lý do reranker chưa chạy được end-to-end ở production.
 
-## 8. Chưa đo
+## 8. Vòng đời index — sáu giai đoạn, hai giai đoạn cuối chưa bật
+
+```
+PostgreSQL document_chunks
+        │
+   A. SINH        embed theo lô, kiểm số chiều          rebuild.py
+        │
+   B. GHI TẠM     index_staging, không chạm active      rebuild.py
+        │
+   C. THẨM ĐỊNH   đọc LẠI từ đĩa, so danh tính          rebuild.py
+        │
+   D. THĂNG CẤP   đổi tên, giữ bản cũ làm backup        rebuild.py
+        │
+   E. LƯU BỀN     đẩy lên kho object (TUỲ CHỌN)         persistence.py   ← TẮT
+        │
+   F. KHÔI PHỤC   lúc khởi động nếu đĩa trống           persistence.py   ← TẮT
+```
+
+E và F cần **ba** biến, production chưa có biến nào: `INDEX_PERSISTENCE_ENABLED=1`,
+`SUPABASE_URL`, `SUPABASE_SECRET_KEY`. Thiếu bất kỳ cái nào là no-op im lặng — app
+vẫn boot, chỉ in `[index_persistence] restore skipped: ...`.
+
+Layout từ xa (kho object không có commit nguyên tử nhiều file, nên thứ tự là tất cả):
+
+```
+index/<provider>__<model>__<strategy>/<version>/index.faiss
+index/<provider>__<model>__<strategy>/<version>/index.json
+index/<provider>__<model>__<strategy>/<version>/manifest.json   ghi SAU artifact
+index/<provider>__<model>__<strategy>/current.json              ghi SAU CÙNG
+```
+
+## 9. Chưa đo
 
 - Độ trễ và hạn mức của FPT dưới tải thật (mới chỉ gọi lẻ và lô 20 chunk).
 - Hành vi thật khi FPT trả 429 (client có retry + tôn trọng `Retry-After`, nhưng chưa

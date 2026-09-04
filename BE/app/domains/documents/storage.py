@@ -132,6 +132,30 @@ def download(path: str) -> bytes:
     return r.content
 
 
+def exists(path: str) -> bool:
+    """Có object ở `path` không. Thiếu là CÂU TRẢ LỜI, không phải lỗi — nên hàm này
+    không ném với 404.
+
+    Dùng `HEAD` chứ không `GET`: người gọi duy nhất hiện nay là bước kiểm sau khi đẩy
+    artifact index lên, và kéo cả file vài chục MB về chỉ để biết nó có tồn tại thì
+    quá đắt cho một câu hỏi có/không.
+
+    Lỗi mạng thì ném — im lặng trả False sẽ biến "không với tới kho" thành "artifact
+    chưa đẩy lên", hai chuyện khác hẳn nhau.
+    """
+    r = requests.head(
+        f"{_base_url()}/object/{bucket()}/{path}",
+        headers=_headers(),
+        timeout=DEFAULT_TIMEOUT,
+    )
+    if r.status_code in (200, 206):
+        return True
+    if r.status_code in (400, 404):
+        return False
+    _raise(r, "kiểm tồn tại")
+    return False          # không tới được, `_raise` luôn ném
+
+
 @contextlib.contextmanager
 def fetch_to_temp(path: str, *, suffix: str = ""):
     """Kéo file từ bucket về một đường dẫn TẠM, dọn sạch khi ra khỏi khối `with`.

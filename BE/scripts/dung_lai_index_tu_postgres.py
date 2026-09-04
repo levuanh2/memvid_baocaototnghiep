@@ -30,6 +30,10 @@ def main() -> int:
                                 formatter_class=argparse.RawDescriptionHelpFormatter)
     p.add_argument("--thuc-hien", action="store_true",
                    help="chạy thật; thiếu cờ này thì chỉ xem trước")
+    p.add_argument("--persist", action="store_true",
+                   help="đẩy artifact lên kho object SAU khi thăng cấp cục bộ thành "
+                        "công. Phải nêu TƯỜNG MINH — dựng lại index là việc cục bộ, "
+                        "xuất bản nó cho mọi instance khác dùng là việc khác.")
     p.add_argument("--batch-size", type=int, default=64)
     p.add_argument("--keep-backup", type=int, default=3)
     args = p.parse_args()
@@ -70,7 +74,19 @@ def main() -> int:
     ra = rb.rebuild_index_tu_postgres(ban_ghi=ban_ghi, batch_size=args.batch_size,
                                       tien_do=_tien_do, keep_backup=args.keep_backup)
     print(f"\nKết quả: {ra}")
-    return 0 if ra.get("promoted") else 1
+    if not ra.get("promoted"):
+        return 1
+
+    if args.persist:
+        from app.domains.vectorstore import persistence as ps
+
+        if not ps.enabled():
+            print("\n--persist được nêu nhưng INDEX_PERSISTENCE_ENABLED chưa bật — "
+                  "bỏ qua. Không bật ngầm hộ: đẩy index lên kho là thay đổi thứ mọi "
+                  "instance khác sẽ tải về.", file=sys.stderr)
+        else:
+            print(f"\nĐẩy lên kho: {ps.publish_sau_rebuild()}")
+    return 0
 
 
 if __name__ == "__main__":

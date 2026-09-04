@@ -3785,3 +3785,38 @@ thành công), nhưng KHÔNG có gì tự gọi nó. Chạy tay:
 Persistence: `app/domains/documents/storage.py` (Supabase Storage) là cơ chế lưu bền
 DUY NHẤT có sẵn trong kho — nhưng production thiếu `SUPABASE_URL`/`SUPABASE_SECRET_KEY`
 nên nó chưa dùng được, và nó cũng chưa được nối vào vòng đời index.
+
+## Lưu bền index: có mã, chưa bật, và còn thiếu đúng hai biến (2026-09-04)
+
+`app/domains/vectorstore/persistence.py` dựng xong hai giai đoạn còn thiếu của vòng
+đời index — lưu bền sau khi thăng cấp, và khôi phục lúc khởi động. Nhưng nó TẮT ở
+production, và bật được cần ba thứ, thiếu bất kỳ cái nào là no-op:
+
+    INDEX_PERSISTENCE_ENABLED=1     (chưa đặt)
+    SUPABASE_URL                    (chưa đặt)
+    SUPABASE_SECRET_KEY             (chưa đặt)
+
+`SUPABASE_STORAGE_BUCKET=documents` đã có sẵn.
+
+**Kho object KHÔNG có thao tác nguyên tử nhiều object.** Supabase Storage không có
+commit nhiều file, cũng không có rename nguyên tử. Nên tính nguyên tử phải dựng bằng
+tay và THỨ TỰ là toàn bộ tài sản an toàn:
+
+    file artifact  ->  manifest.json  ->  đọc lại kiểm  ->  current.json
+
+`manifest.json` tồn tại là bằng chứng version ấy đủ file; `current.json` chỉ đổi sau
+khi manifest đã đọc lại được. Upload đứt giữa chừng để lại một version MỒ CÔI (vô hại,
+không ai trỏ tới) chứ không bao giờ để lại một con trỏ trỏ vào artifact thiếu file.
+
+**Một bẫy đã mắc khi thiết kế:** bản đầu đưa số chiều vào slug từ xa
+(`..._d1024__v1.2`). Lúc khôi phục thì chưa biết số chiều — phải tải index về mới biết
+— nên hai bên tính ra hai tiền tố khác nhau và không bao giờ gặp nhau. Slug giờ chỉ
+gồm provider + model + strategy; số chiều là HỆ QUẢ của bộ ba đó, và vẫn được kiểm
+lúc thẩm định (đối chiếu cả metadata lẫn manifest).
+
+**Đường LC cần `index.pkl`.** `env_loader` setdefault `USE_LC_VECTOR_STORE=1` nên app
+thật đi đường LangChain, và `FAISS.load_local` đòi `index.faiss` + `index.pkl`.
+`rebuild.py` chỉ sinh `index.faiss` + `index.json` (định dạng legacy), nên index dựng
+lại được đọc qua nhánh fallback legacy của `HybridRetriever`, không qua nhánh LC. Bộ
+artifact lưu bền vì thế nhận `index.pkl`/`chunks.sqlite` là TUỲ CHỌN: đẩy lên nếu có,
+khôi phục nếu manifest ghi.

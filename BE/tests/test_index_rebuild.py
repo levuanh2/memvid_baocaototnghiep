@@ -353,8 +353,15 @@ def test_ghi_db_tat_duoc(tmp_path):
 
 
 def test_KHONG_tu_chay_o_dau_ca():
-    """Module này là thư viện. Route hay tiến trình khởi động gọi nó = dựng lại tự
-    động, đúng thứ bị cấm."""
+    """Không route nào, không tiến trình khởi động nào GỌI bộ điều phối dựng lại.
+
+    Kiểm đúng lời gọi `rebuild_index_tu_postgres(...)`, không kiểm chuỗi
+    `"vectorstore.rebuild"`: bản đầu của test này quét chuỗi, nên `persistence.py`
+    import `thang_cap` (một helper thăng cấp thư mục) cũng bị coi là "tự chạy rebuild".
+    Nhập một hàm phụ trợ khác hẳn với việc kích hoạt cả lượt dựng vài nghìn chunk —
+    test phải nói đúng điều nó muốn cấm.
+    """
+    import ast
     import pathlib
 
     goc = pathlib.Path(__file__).resolve().parents[1]
@@ -362,6 +369,15 @@ def test_KHONG_tu_chay_o_dau_ca():
     for f in list((goc / "app").rglob("*.py")) + list((goc / "services").rglob("*.py")):
         if f.name == "rebuild.py" or "__pycache__" in str(f):
             continue
-        if "vectorstore.rebuild" in f.read_text(encoding="utf-8", errors="ignore"):
-            xau.append(str(f.relative_to(goc)))
+        try:
+            cay = ast.parse(f.read_text(encoding="utf-8", errors="ignore"))
+        except SyntaxError:
+            continue
+        for n in ast.walk(cay):
+            if not isinstance(n, ast.Call):
+                continue
+            ten = (n.func.attr if isinstance(n.func, ast.Attribute)
+                   else n.func.id if isinstance(n.func, ast.Name) else "")
+            if ten == "rebuild_index_tu_postgres":
+                xau.append(f"{f.relative_to(goc).as_posix()}:{n.lineno}")
     assert not xau, f"có nơi gọi rebuild tự động: {xau}"

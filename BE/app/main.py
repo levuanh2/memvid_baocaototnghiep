@@ -1343,6 +1343,19 @@ def _warmup_ollama_background() -> list[str]:
 _warmup_ollama_background()
 
 
+# Khôi phục index từ kho object nếu đĩa trống. Mặc định TẮT
+# (`INDEX_PERSISTENCE_ENABLED`), và thiếu cấu hình Supabase thì bỏ qua im lặng — đĩa
+# của Render free là phù du, nhưng biến Supabase KHÔNG được là điều kiện để app boot.
+# Hàm này không bao giờ ném; đặt TRƯỚC khi dựng RETRIEVER để lần truy hồi đầu tiên
+# thấy index đã ở đúng chỗ.
+try:
+    from app.domains.vectorstore import persistence as _index_persistence
+
+    _index_persistence.restore_luc_khoi_dong()
+except Exception as _exc:  # pragma: no cover - phòng thủ cho đường import
+    print(f"[index_persistence] restore skipped: {type(_exc).__name__}", flush=True)
+
+
 # === Dựng toàn bộ LangGraph pipeline qua wiring tập trung (T4) ===
 from app.wiring import build_graphs as _build_graphs
 from app.clients.mindmap_factory import get_mindmap_pipeline as _get_mindmap_pipeline
