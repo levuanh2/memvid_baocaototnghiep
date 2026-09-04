@@ -271,3 +271,15 @@ def test_config_status_KHONG_lo_gia_tri_khoa(monkeypatch):
     assert khoa not in json.dumps(body)
     for v in json.dumps(body).split('"'):
         assert khoa[:12] not in v
+
+
+def test_config_status_khai_kho_object_da_cau_hinh_chua(monkeypatch):
+    """Bật persistence mà thiếu credential Supabase thì khôi phục lúc khởi động im lặng
+    bỏ qua, và bản gốc người dùng tải lên cũng nằm lại trên đĩa phù du. Từ ngoài không
+    nhìn ra được — đo 2026-09-04 mới lộ. Endpoint phải khai thẳng."""
+    thieu = _config_status(monkeypatch, SUPABASE_URL=None, SUPABASE_SECRET_KEY=None)
+    assert thieu["supabase_storage_configured"] is False
+
+    du = _config_status(monkeypatch, SUPABASE_URL="https://vi-du.supabase.co",
+                        SUPABASE_SECRET_KEY="khoa-gia-cho-test")
+    assert du["supabase_storage_configured"] is True

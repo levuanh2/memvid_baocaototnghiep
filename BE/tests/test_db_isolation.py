@@ -19,6 +19,7 @@ hàm nhận diện đích ở đây CỐ Ý bỏ qua cổng.
 
 from __future__ import annotations
 
+import os
 import sys
 
 import pytest
@@ -225,3 +226,16 @@ def test_ci_cap_TEST_DATABASE_URL_va_khong_de_DATABASE_URL_o_muc_job():
     assert "TEST_DATABASE_URL:" in khoi_job, "CI phải cấp TEST_DATABASE_URL ở mức job"
     assert "\n      DATABASE_URL:" not in khoi_job, (
         "DATABASE_URL không được ở mức job — chỉ đặt cho bước migration và smoke boot")
+
+
+# ── Cấu hình provider của máy dev cũng không được rò vào test ──────────────
+def test_conftest_don_sach_cau_hinh_FPT():
+    """Cùng lý lẽ với cách ly database, một tầng khác: `BE/.env` của một người không
+    được quyết định kết quả test của mọi người.
+
+    2026-09-04: thêm khoá FPT vào `.env` để dựng index production làm 17 test đỏ ngay —
+    `get_embeddings()` đổi nhánh sang `FptEmbeddings`, mọi test khẳng định hành vi
+    embedding cục bộ đều vỡ. CI xanh vì CI không có khoá. Test này khoá lại việc dọn."""
+    for ten in ("FPT_AI_API_KEY", "FPT_AI_EMBEDDING_MODEL"):
+        assert not os.getenv(ten), (
+            f"{ten} còn trong môi trường test — conftest phải dọn nó ở mức session")

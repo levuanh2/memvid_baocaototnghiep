@@ -6,6 +6,25 @@ from pathlib import Path
 import pytest
 
 
+# ── Cấu hình provider của MÁY DEV không được rò vào bộ test ────────────────
+# Cùng lớp lỗi với `DATABASE_URL` (xem test_db_isolation.py): thứ nằm trong `BE/.env`
+# của một người không được quyết định kết quả test của mọi người. Ngày 2026-09-04, thêm
+# `FPT_AI_API_KEY` + `FPT_AI_EMBEDDING_MODEL` vào `.env` để dựng index production làm 17
+# test đỏ ngay — `get_embeddings()` trả `FptEmbeddings` thay vì `LateChunkEmbeddings`,
+# và mọi test khẳng định hành vi embedding cục bộ đều vỡ. CI xanh (không có khoá), máy
+# dev đỏ: đúng kiểu hỏng khó lần nhất.
+#
+# Xoá ở mức SESSION, trước khi bất cứ module nào đọc env. Test nào CẦN FPT thì tự đặt
+# bằng monkeypatch với khoá giả (test_fpt_*.py, test_chunk_embedding_identity.py) —
+# và như thế ý định nằm ngay trong test, không nằm trong máy ai.
+# Đặt RỖNG chứ không `pop`: `load_dotenv` chạy sau, và nó chỉ bỏ qua biến đã CÓ trong
+# môi trường. Pop xong thì dotenv lại nạp giá trị thật từ `BE/.env` — đã thử, vẫn đỏ.
+# Chuỗi rỗng thì mọi `(os.getenv(...) or "").strip()` trong llm_factory đều thành tắt.
+_ENV_PROVIDER_PHAI_SACH = ("FPT_AI_API_KEY", "FPT_AI_EMBEDDING_MODEL")
+for _ten in _ENV_PROVIDER_PHAI_SACH:
+    os.environ[_ten] = ""
+
+
 class _MockQueryGraph:
     def invoke(self, state, config=None, **_kwargs):
         return {"payload": {"answer": "mock answer"}, "status_code": 200}

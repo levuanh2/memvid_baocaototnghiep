@@ -4451,3 +4451,42 @@ chỉ GHI id cho chunk được index, không XOÁ id của chunk bị loại.
 KHÔNG sửa ở phase này: xoá `embedding_id` của 192 chunk cũ là ghi vào dữ liệu cũ, mà
 phase này cấm. Cần một phase riêng, và lựa chọn đúng có lẽ là dọn trong chính vòng đời
 rebuild (thăng cấp xong thì mọi chunk ngoài index mới phải mất `embedding_id`).
+
+## Supabase Storage CHƯA cấu hình ở production — bản gốc người dùng nằm trên đĩa phù du (2026-09-04)
+
+Bật `INDEX_PERSISTENCE_ENABLED=1` xong, log khởi động Render nói:
+
+```
+[index_persistence] restore skipped: not configured
+                    (Kho object chưa cấu hình (thiếu SUPABASE_URL / SUPABASE_SECRET_KEY).)
+```
+
+Đo tiếp trong DB thì lộ ra hậu quả lớn hơn nhiều so với chuyện index:
+
+```
+production-embedding-smoke-2026-09-04.txt
+  file_path  = /tmp/studymap/input_docs/...
+  input_path = /tmp/studymap/input_docs/...      -> BẰNG NHAU
+prod-fpt-embedding-smoke-2026-09-04.txt          -> BẰNG NHAU
+```
+
+`_ingest_uploaded_file` đẩy bản gốc lên bucket rồi mới ghi `file_path`; đẩy hỏng thì nó
+`except` và giữ đường local (`⚠️ [Storage] Không đẩy được file lên bucket, dùng bản local`).
+Hai giá trị bằng nhau nghĩa là **mọi lượt upload production đều rơi vào nhánh dự phòng**.
+
+Hệ quả:
+
+1. **Bản gốc người dùng tải lên biến mất sau mỗi lần khởi động lại** — `/tmp` của Render
+   free bị xoá sạch. Hàng `documents` còn, file thì không. `/api/documents/<id>/file` sẽ
+   trỏ vào đường dẫn chết.
+2. Index không khôi phục được lúc boot, nên `/query` trả "Không tìm thấy dữ liệu phù hợp"
+   dù index đã nằm sẵn trên Supabase.
+
+`render.yaml` khai `SUPABASE_URL` và `SUPABASE_SECRET_KEY` là `sync: false` — Render hỏi
+lúc tạo blueprint. Rõ ràng chúng chưa từng được điền, hoặc đã bị xoá.
+
+Vì sao im lặng lâu thế: fail-open ở nhánh upload là CỐ Ý (mất bucket thì đừng chặn người
+dùng), nhưng nó chỉ `print` một dòng cảnh báo rồi đi tiếp. Không có gì ở tầng cấu hình
+nhìn ra được. Nay `/api/config/status` khai thẳng `supabase_storage_configured`.
+
+**Sửa: điền hai biến đó trong dashboard Render.** Không phải việc của mã.

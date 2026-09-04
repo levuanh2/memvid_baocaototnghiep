@@ -2032,6 +2032,7 @@ def api_config_status():
     from app.clients import llm_factory as _lf
     from app.domains import vision as _vision
     from app.domains.documents import provenance as _prov
+    from app.domains.documents import storage as _doc_storage
     from app.domains.vectorstore import persistence as _persist
 
     return jsonify({
@@ -2049,6 +2050,11 @@ def api_config_status():
         },
         'vision': {'available': _vision.is_available(), 'model': _vision.vision_model()},
         'index_persistence_enabled': _persist.enabled(),
+        # Bật persistence mà kho object chưa cấu hình thì khôi phục lúc khởi động im
+        # lặng bỏ qua, VÀ bản gốc người dùng tải lên cũng nằm lại trên đĩa phù du —
+        # hai hỏng hóc lớn mà từ ngoài không nhìn ra. Đo được 2026-09-04: production
+        # bật persistence nhưng thiếu SUPABASE_URL/SUPABASE_SECRET_KEY.
+        'supabase_storage_configured': _doc_storage.is_configured(),
         'skip_model_load': os.environ.get('SKIP_MODEL_LOAD') == '1',
         # CÓ hay KHÔNG, không bao giờ là giá trị.
         'fpt_api_key_present': bool(_lf.fpt_api_key()),

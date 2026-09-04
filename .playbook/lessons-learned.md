@@ -2616,3 +2616,23 @@ lần cái lỗi đang đi sửa.
 
 Quy tắc rẻ: trước khi đổi format một trường bền vững, liệt kê ĐỦ nơi ghi và nơi ĐỌC nó.
 Nếu có người đọc dùng nó làm khoá join, format đó không còn là chuyện nội bộ nữa.
+
+## Khoá thật trong `.env` của một người làm đỏ 17 test của mọi người (2026-09-04)
+
+Thêm `FPT_AI_API_KEY` + `FPT_AI_EMBEDDING_MODEL` vào `BE/.env` để dựng index production.
+Index dựng xong; 17 test đỏ ngay lập tức. Không test nào liên quan tới index — chúng
+khẳng định `get_embeddings()` trả `LateChunkEmbeddings`, mà giờ nó trả `FptEmbeddings`.
+
+CI vẫn xanh, vì CI không có khoá. Đó là kiểu hỏng khó lần nhất: đỏ ở máy người này, xanh
+ở máy người kia, xanh trên CI, và nguyên nhân không nằm trong diff nào cả.
+
+Cùng lớp với lỗi `DATABASE_URL` hồi 3058272: **cấu hình trong `.env` của một người không
+được quyết định kết quả test của mọi người.** Lần đó là database, lần này là provider.
+
+Một chi tiết đắt hơn dự tính: `os.environ.pop(...)` trong conftest KHÔNG đủ. `load_dotenv`
+chạy sau và nó chỉ bỏ qua biến đã CÓ trong môi trường — pop xong thì nó nạp lại giá trị
+thật từ file. Phải đặt chuỗi RỖNG. Mọi chỗ đọc đều là `(os.getenv(x) or "").strip()` nên
+rỗng đúng bằng tắt.
+
+Quy tắc: khi dọn env cho test, hỏi "sau mình còn ai ghi vào env nữa không". Nếu có
+dotenv, xoá không phải là dọn — ghi đè mới là.
