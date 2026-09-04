@@ -15,7 +15,15 @@
     "",
     "PHÂN LOẠI và ĐƯỢC INDEX là hai chuyện khác nhau. Một tài liệu có thể là",
     "CONFIRMED_PRODUCTION mà vẫn eligible_for_index = false. 'Không phải test'",
-    "KHÔNG có nghĩa là 'an toàn để index'."
+    "KHÔNG có nghĩa là 'an toàn để index'.",
+    "",
+    "KẾT QUẢ ĐIỀU TRA NGUỒN GỐC 2026-09-04: KHÔNG hàng nào trong 11 hàng này do service",
+    "production nạp. Trường `ingested_from` lấy từ documents.metadata_json->>'input_path',",
+    "do SERVER ghi chứ không phải client gửi (main.py:1880). 9 hàng trỏ ổ E: của máy trạm",
+    "Windows, 2 hàng trỏ thư mục tmp_path của pytest. Render chạy Linux, không có ổ E:.",
+    "Nghĩa là CONFIRMED_PRODUCTION đã bị LOẠI cho cả 11 — không phải vì thiếu bằng chứng,",
+    "mà vì có bằng chứng ngược. Bốn hàng vẫn AMBIGUOUS: loại được 'dữ liệu người dùng thật'",
+    "không đồng nghĩa chứng minh được 'do test/smoke sinh ra'."
   ],
   "classifications": {
     "CONFIRMED_TEST": "Có bằng chứng TRỰC TIẾP là dữ liệu do test/smoke sinh ra.",
@@ -30,9 +38,10 @@
       "chunk_count": 132,
       "classification": "AMBIGUOUS",
       "eligible_for_index": false,
-      "evidence": "Không khớp fixture nào trong kho (đã grep 'ragas-guardrails': không có). Email 'demo@local.test' gợi ý tài khoản thử nhưng email KHÔNG phải bằng chứng. 132 chunk, sửa 4 phút sau khi tạo — không phân biệt được thao tác thật với một lượt thử tay.",
+      "evidence": "BẰNG CHỨNG MÁY GHI: documents.metadata_json->>'input_path' = 'e:\\memvid_NCKH\\...\\BE\\input_docs\\<tên file>' — đường dẫn ổ E: trên Windows. Production chạy Render Linux, không có ổ E:, và trường này do SERVER ghi (main.py:1880 `input_path=save_path`, save_path = _safe_save_path() = os.path.join(INPUT_DIR, basename đã fold ':' và '\\')), nên client KHÔNG chèn được. Suy ra: hàng này do máy trạm dev nạp, KHÔNG do service production nạp. CONFIRMED_PRODUCTION bị LOẠI. Không tìm được lệnh/test nào gây ra lượt upload này. Ngược lại, corpus_inventory.md của bộ dữ liệu NCKH (reports/evaluation/datasets/corpus_v1, gỡ khỏi git ở f3d34fe, lập 2026-08-11 — 10 ngày TRƯỚC lượt upload) liệt kê đúng file này là 1 trong 3 'genuine user-provided research/learning document', kèm source hash, và tách riêng khỏi nhóm 'explicit software/auth test fixtures'. Tức nội dung là tài liệu học thật của chính người dùng, nhưng hàng DB là lượt dev tự upload. Hai hướng ngược nhau, không đủ kết luận: GIỮ AMBIGUOUS.",
       "decided_at": "2026-09-04",
-      "decided_by": "audit-2026-09-04"
+      "decided_by": "provenance-2026-09-04",
+      "ingested_from": "may-tram-dev (Windows, e:\\memvid_NCKH\\...\\BE\\input_docs)"
     },
     "7d5a3721-37c4-4984-87f6-a413733b92c2": {
       "filename": "Bai giang dao ham.pptx",
@@ -40,19 +49,21 @@
       "chunk_count": 2,
       "classification": "AMBIGUOUS",
       "eligible_for_index": false,
-      "evidence": "Không khớp fixture nào. Tạo lẻ 3 ngày sau khi user được tạo. Cụm 'dao ham' có xuất hiện trong nhiều test nhưng là dữ liệu inline, không phải upload file cùng tên.",
+      "evidence": "BẰNG CHỨNG MÁY GHI: documents.metadata_json->>'input_path' = 'e:\\memvid_NCKH\\...\\BE\\input_docs\\<tên file>' — đường dẫn ổ E: trên Windows. Production chạy Render Linux, không có ổ E:, và trường này do SERVER ghi (main.py:1880 `input_path=save_path`, save_path = _safe_save_path() = os.path.join(INPUT_DIR, basename đã fold ':' và '\\')), nên client KHÔNG chèn được. Suy ra: hàng này do máy trạm dev nạp, KHÔNG do service production nạp. CONFIRMED_PRODUCTION bị LOẠI. Không tìm được lệnh/test nào gây ra lượt upload. Tạo 2026-08-24 15:06 +07, 5 phút sau commit 3c0f5bb (FE cột bên) — GẦN VỀ THỜI GIAN THÔI, không phải chuỗi nhân quả. GIỮ AMBIGUOUS.",
       "decided_at": "2026-09-04",
-      "decided_by": "audit-2026-09-04"
+      "decided_by": "provenance-2026-09-04",
+      "ingested_from": "may-tram-dev (Windows, e:\\memvid_NCKH\\...\\BE\\input_docs)"
     },
     "a7fa7ace-8656-4bca-b276-7db0875ccce1": {
       "filename": "thu-don-tam-f3633a.html",
       "owner_email": "demo@local.test",
       "chunk_count": 1,
-      "classification": "AMBIGUOUS",
+      "classification": "CONFIRMED_TEST",
       "eligible_for_index": false,
-      "evidence": "Không khớp fixture nào (đã grep 'thu-don-tam'). Hậu tố hex 6 ký tự trong tên gợi ý sinh tự động, nhưng không có mã nào trong kho sinh ra dạng tên này — nên đó là phỏng đoán, không phải bằng chứng.",
+      "evidence": "BẰNG CHỨNG MÁY GHI: documents.metadata_json->>'input_path' = 'e:\\memvid_NCKH\\...\\BE\\input_docs\\<tên file>' — đường dẫn ổ E: trên Windows. Production chạy Render Linux, không có ổ E:, và trường này do SERVER ghi (main.py:1880 `input_path=save_path`, save_path = _safe_save_path() = os.path.join(INPUT_DIR, basename đã fold ':' và '\\')), nên client KHÔNG chèn được. Suy ra: hàng này do máy trạm dev nạp, KHÔNG do service production nạp. CONFIRMED_PRODUCTION bị LOẠI. CHUỖI NHÂN QUẢ ĐẦY ĐỦ: commit 56a276f (2026-08-25 18:39 +07, 'bỏ lưu bản gốc dưới local — Storage là kho lưu duy nhất') ghi nguyên văn bước kiểm thủ công của nó: 'Smoke thật: upload .html mới -> input_docs có 1 file -> ingest completed -> input_docs còn 0 file'. Hàng này là tài liệu DUY NHẤT tạo trong ngày hôm đó sau trưa, lúc 18:37:44 +07 — 2 phút TRƯỚC commit; tên 'thu-don-tam' đúng là chủ đề của commit (thu dọn file tạm); 86 byte / 1 chunk / status completed khớp 'ingest completed'. Cùng commit còn ghi don_input_docs.py 'Đã chạy: 9/9 file đối chiếu được' — đúng bằng 9 tài liệu có mặt trong DB lúc đó, tức input_docs của máy dev khớp 1:1 với kho. Lệnh -> upload -> tên file -> hàng production: đủ.",
       "decided_at": "2026-09-04",
-      "decided_by": "audit-2026-09-04"
+      "decided_by": "provenance-2026-09-04",
+      "ingested_from": "may-tram-dev (Windows, e:\\memvid_NCKH\\...\\BE\\input_docs)"
     },
     "77ba91f4-153f-4da6-bf29-b0afc0e8a9de": {
       "filename": "Day08- RAG Pipeline.docx",
@@ -60,9 +71,10 @@
       "chunk_count": 18,
       "classification": "AMBIGUOUS",
       "eligible_for_index": false,
-      "evidence": "Không khớp fixture nào. Email chứa chữ 'test' nhưng email KHÔNG phải bằng chứng. Nội dung trông như tài liệu khoá học thật — cũng KHÔNG phải bằng chứng.",
+      "evidence": "BẰNG CHỨNG MÁY GHI: documents.metadata_json->>'input_path' = 'e:\\memvid_NCKH\\...\\BE\\input_docs\\<tên file>' — đường dẫn ổ E: trên Windows. Production chạy Render Linux, không có ổ E:, và trường này do SERVER ghi (main.py:1880 `input_path=save_path`, save_path = _safe_save_path() = os.path.join(INPUT_DIR, basename đã fold ':' và '\\')), nên client KHÔNG chèn được. Suy ra: hàng này do máy trạm dev nạp, KHÔNG do service production nạp. CONFIRMED_PRODUCTION bị LOẠI. Được dùng làm tài liệu ĐO CHUẨN của dự án: commit 7683e3b ghi 'Day08- RAG Pipeline.docx 18 chunk -> 19 node, 7 cạnh, 37 chunk link, 487s' (DB đúng 18 chunk); knowledge_maps có hàng 7bf18385-7ba1-47f2-b6d0-3fec2bafe47c trỏ vào tài liệu này, 2026-08-27, mà docs/superpowers/plans/2026-08-28-audit-vong-3-con-lai.md gọi thẳng là 'dữ liệu probe ... do tao sinh ra lúc dò lỗi'; playbook còn đo lại nó ngày 26/28/29 và có 4 quiz ngày 31/08-01/09. NHƯNG tất cả đều SAU lượt upload 2026-08-25 11:49 và chỉ chứng minh tài liệu ĐƯỢC DÙNG để đo, không chứng minh lượt upload do một lệnh/test gây ra. Thiếu đúng mắt xích đó: GIỮ AMBIGUOUS.",
       "decided_at": "2026-09-04",
-      "decided_by": "audit-2026-09-04"
+      "decided_by": "provenance-2026-09-04",
+      "ingested_from": "may-tram-dev (Windows, e:\\memvid_NCKH\\...\\BE\\input_docs)"
     },
     "065c3cb0-a069-4e00-b0d4-b9412cee4895": {
       "filename": "[VinUn_20k] Đào tạo hội nhập.pptx",
@@ -70,9 +82,10 @@
       "chunk_count": 31,
       "classification": "AMBIGUOUS",
       "eligible_for_index": false,
-      "evidence": "Không khớp fixture nào (đã grep 'VinUn'). status='failed' nhưng vẫn có 31 chunk. Không xác định được nguồn gốc.",
+      "evidence": "BẰNG CHỨNG MÁY GHI: documents.metadata_json->>'input_path' = 'e:\\memvid_NCKH\\...\\BE\\input_docs\\<tên file>' — đường dẫn ổ E: trên Windows. Production chạy Render Linux, không có ổ E:, và trường này do SERVER ghi (main.py:1880 `input_path=save_path`, save_path = _safe_save_path() = os.path.join(INPUT_DIR, basename đã fold ':' và '\\')), nên client KHÔNG chèn được. Suy ra: hàng này do máy trạm dev nạp, KHÔNG do service production nạp. CONFIRMED_PRODUCTION bị LOẠI. Upload 47 giây sau Day08- RAG Pipeline.docx, cùng chủ sở hữu, cùng máy. error_message='disk I/O error' — khớp mục playbook 2026-08-29 ('1 tài liệu hỏng 8.7 MB, cũ nhất 2026-08-25', file_size 8.675.308 B), nên hàng này chính là hàng đó, nhưng đó là bằng chứng về CÁCH HỎNG, không phải về nguồn gốc. Không lệnh/test nào gây ra lượt upload. GIỮ AMBIGUOUS.",
       "decided_at": "2026-09-04",
-      "decided_by": "audit-2026-09-04"
+      "decided_by": "provenance-2026-09-04",
+      "ingested_from": "may-tram-dev (Windows, e:\\memvid_NCKH\\...\\BE\\input_docs)"
     },
     "f7ff7171-5aec-4b28-a2f4-224eb78e0a6d": {
       "filename": "cua nguoi khac.md",
@@ -82,7 +95,8 @@
       "eligible_for_index": false,
       "evidence": "BẰNG CHỨNG TRỰC TIẾP TRONG MÃ: tests/test_search_api.py:122 sinh email theo đúng khuôn f\"search_o_{uuid4().hex[:8]}@example.com\" — khớp 'search_o_92cd43f9'. User tạo 2026-09-04 03:37:11, tài liệu tạo 03:37:14, nằm trong lượt chạy suite đầy đủ 03:18-03:38 UTC.",
       "decided_at": "2026-09-04",
-      "decided_by": "audit-2026-09-04"
+      "decided_by": "audit-2026-09-04",
+      "ingested_from": "pytest tmp_path (C:\\Users\\...\\Temp\\pytest-of-...\\data_dir0\\input_docs)"
     },
     "a02e1f75-f912-456f-ab8d-6a64c757abb1": {
       "filename": "own (2).md",
@@ -92,7 +106,8 @@
       "eligible_for_index": false,
       "evidence": "BẰNG CHỨNG TRỰC TIẾP TRONG MÃ: tests/test_source_ownership.py:98 sinh email theo đúng khuôn f\"owner_{uuid4().hex[:8]}@example.com\" — khớp 'owner_ac21137b'. User tạo 03:37:46, tài liệu 03:37:48. Hậu tố ' (2)' do _unique_display_filename thêm khi trùng tên — dấu vết chạy lặp nhiều lượt.",
       "decided_at": "2026-09-04",
-      "decided_by": "audit-2026-09-04"
+      "decided_by": "audit-2026-09-04",
+      "ingested_from": "pytest tmp_path (C:\\Users\\...\\Temp\\pytest-of-...\\data_dir0\\input_docs)"
     },
     "66dbbef3-14eb-479c-83c7-5cea07003e49": {
       "filename": "slide-giai-tich.pptx",
@@ -100,9 +115,10 @@
       "chunk_count": 1,
       "classification": "CONFIRMED_TEST",
       "eligible_for_index": false,
-      "evidence": "Bằng chứng HÀNH VI, không phải fixture trong kho (đã grep 'smoke+': không có trong repo). Bốn tài liệu cùng chủ sở hữu, bốn ĐỊNH DẠNG khác nhau (pptx/xlsx/html/epub), tạo trong 38 giây, mỗi cái đúng 1 chunk — đó là hình dạng của một lượt thử độ phủ định dạng, không phải người dùng thật. Ghi rõ để người đọc tự đánh giá: bằng chứng này yếu hơn hai ca fixture ở trên.",
+      "evidence": "Bằng chứng HÀNH VI, không phải fixture trong kho (đã grep 'smoke+': không có trong repo). Bốn tài liệu cùng chủ sở hữu, bốn ĐỊNH DẠNG khác nhau (pptx/xlsx/html/epub), tạo trong 38 giây, mỗi cái đúng 1 chunk — đó là hình dạng của một lượt thử độ phủ định dạng, không phải người dùng thật. Ghi rõ để người đọc tự đánh giá: bằng chứng này yếu hơn hai ca fixture ở trên. BỔ SUNG 2026-09-04 (nâng từ 'bằng chứng hành vi' lên chuỗi nhân quả): bốn định dạng .pptx/.xlsx/.html/.epub là bốn trong chín định dạng commit d3d5eb8 ('9 định dạng tài liệu mới', 2026-08-24 11:49 +07) vừa thêm; bốn lượt upload diễn ra 12:22 +07 cùng ngày, 33 phút sau commit đó. Và input_path chứng minh chúng do máy trạm dev nạp, không phải service production.",
       "decided_at": "2026-09-04",
-      "decided_by": "audit-2026-09-04"
+      "decided_by": "provenance-2026-09-04",
+      "ingested_from": "may-tram-dev (Windows, e:\\memvid_NCKH\\...\\BE\\input_docs)"
     },
     "18e71324-a8d4-4999-a388-4ed9a6d54965": {
       "filename": "diem-lop.xlsx",
@@ -110,9 +126,10 @@
       "chunk_count": 1,
       "classification": "CONFIRMED_TEST",
       "eligible_for_index": false,
-      "evidence": "Cùng lượt với slide-giai-tich.pptx — xem bằng chứng ở tài liệu đó.",
+      "evidence": "Cùng lượt với slide-giai-tich.pptx — xem bằng chứng ở tài liệu đó. BỔ SUNG 2026-09-04 (nâng từ 'bằng chứng hành vi' lên chuỗi nhân quả): bốn định dạng .pptx/.xlsx/.html/.epub là bốn trong chín định dạng commit d3d5eb8 ('9 định dạng tài liệu mới', 2026-08-24 11:49 +07) vừa thêm; bốn lượt upload diễn ra 12:22 +07 cùng ngày, 33 phút sau commit đó. Và input_path chứng minh chúng do máy trạm dev nạp, không phải service production.",
       "decided_at": "2026-09-04",
-      "decided_by": "audit-2026-09-04"
+      "decided_by": "provenance-2026-09-04",
+      "ingested_from": "may-tram-dev (Windows, e:\\memvid_NCKH\\...\\BE\\input_docs)"
     },
     "4fd0300a-0aea-4ebd-bd62-e91706cd3398": {
       "filename": "tich-phan.html",
@@ -120,9 +137,10 @@
       "chunk_count": 1,
       "classification": "CONFIRMED_TEST",
       "eligible_for_index": false,
-      "evidence": "Cùng lượt với slide-giai-tich.pptx — xem bằng chứng ở tài liệu đó.",
+      "evidence": "Cùng lượt với slide-giai-tich.pptx — xem bằng chứng ở tài liệu đó. BỔ SUNG 2026-09-04 (nâng từ 'bằng chứng hành vi' lên chuỗi nhân quả): bốn định dạng .pptx/.xlsx/.html/.epub là bốn trong chín định dạng commit d3d5eb8 ('9 định dạng tài liệu mới', 2026-08-24 11:49 +07) vừa thêm; bốn lượt upload diễn ra 12:22 +07 cùng ngày, 33 phút sau commit đó. Và input_path chứng minh chúng do máy trạm dev nạp, không phải service production.",
       "decided_at": "2026-09-04",
-      "decided_by": "audit-2026-09-04"
+      "decided_by": "provenance-2026-09-04",
+      "ingested_from": "may-tram-dev (Windows, e:\\memvid_NCKH\\...\\BE\\input_docs)"
     },
     "e6585669-e6bb-4207-b506-7696ba168a7d": {
       "filename": "giao-trinh.epub",
@@ -130,9 +148,10 @@
       "chunk_count": 1,
       "classification": "CONFIRMED_TEST",
       "eligible_for_index": false,
-      "evidence": "Cùng lượt với slide-giai-tich.pptx. Tên 'giao-trinh.epub' có xuất hiện ở tests/test_upload_formats.py:46 nhưng CHỈ trong một assert is_supported() thuần chuỗi — test ấy upload 'sach.epub', không phải file này. Nên đó KHÔNG phải bằng chứng fixture.",
+      "evidence": "Cùng lượt với slide-giai-tich.pptx. Tên 'giao-trinh.epub' có xuất hiện ở tests/test_upload_formats.py:46 nhưng CHỈ trong một assert is_supported() thuần chuỗi — test ấy upload 'sach.epub', không phải file này. Nên đó KHÔNG phải bằng chứng fixture. BỔ SUNG 2026-09-04 (nâng từ 'bằng chứng hành vi' lên chuỗi nhân quả): bốn định dạng .pptx/.xlsx/.html/.epub là bốn trong chín định dạng commit d3d5eb8 ('9 định dạng tài liệu mới', 2026-08-24 11:49 +07) vừa thêm; bốn lượt upload diễn ra 12:22 +07 cùng ngày, 33 phút sau commit đó. Và input_path chứng minh chúng do máy trạm dev nạp, không phải service production.",
       "decided_at": "2026-09-04",
-      "decided_by": "audit-2026-09-04"
+      "decided_by": "provenance-2026-09-04",
+      "ingested_from": "may-tram-dev (Windows, e:\\memvid_NCKH\\...\\BE\\input_docs)"
     }
   }
 }

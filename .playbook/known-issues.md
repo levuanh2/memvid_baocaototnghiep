@@ -4009,3 +4009,40 @@ Chỉ hai tài liệu có bằng chứng TRỰC TIẾP TRONG MÃ:
 
 Email chứa chữ "test"/"demo", tên file trông chính đáng, hay nội dung trông như tài
 liệu thật đều **không** phải bằng chứng, và không được dùng để phân loại.
+
+---
+
+## Không hàng nào trong "DB production" do production nạp (2026-09-04)
+
+Điều tra nguồn gốc 5 tài liệu AMBIGUOUS, chỉ đọc, không sửa dữ liệu. Trường quyết định
+không nằm ở email, tên file hay nội dung mà ở `documents.metadata_json->>'input_path'`:
+
+```
+9/11 hàng:  e:\memvid_NCKH\...\BE\input_docs\<tên file>
+2/11 hàng:  C:\Users\...\Temp\pytest-of-...\data_dir0\input_docs\<tên file>
+```
+
+Ổ `E:` là máy trạm Windows. Render chạy Linux, không có ổ `E:`. Nên **cả 11 hàng đều do
+máy dev nạp, không hàng nào do service production nạp** — `CONFIRMED_PRODUCTION` bị loại
+bằng bằng chứng ngược, chứ không phải vì thiếu bằng chứng.
+
+Trường này tin được vì **server ghi, không phải client gửi**: `main.py:1880` truyền
+`input_path=save_path`, mà `save_path = _safe_save_path(filename)` chạy `os.path.basename`
+rồi fold `[<>:"/\|?*]` trước khi `os.path.join(INPUT_DIR, ...)`. Client không có cách nào
+chèn `e:\...\` vào đó.
+
+Hai chuỗi nhân quả đầy đủ tìm được:
+
+| tài liệu | lệnh gây ra nó |
+|---|---|
+| `thu-don-tam-f3633a.html` | commit `56a276f` ghi nguyên văn "Smoke thật: upload .html mới -> input_docs có 1 file -> ingest completed"; hàng này là .html duy nhất tạo 18:37:44 +07, **2 phút trước** commit; tên = chủ đề commit |
+| 4 tài liệu `smoke+11ffbb29` | commit `d3d5eb8` "9 định dạng tài liệu mới" (11:49 +07); 4 upload .pptx/.xlsx/.html/.epub lúc 12:22 +07 cùng ngày |
+
+Cùng commit `56a276f` còn ghi `don_input_docs.py` "Đã chạy: **9/9 file** đối chiếu được" —
+đúng bằng 9 tài liệu có trong DB lúc đó, tức `input_docs/` của máy dev khớp 1:1 với kho.
+
+**4 hàng vẫn AMBIGUOUS.** Loại được "dữ liệu người dùng thật" KHÔNG đồng nghĩa chứng minh
+được "do test/smoke sinh ra". `Day08- RAG Pipeline.docx` là ca sát nhất mà vẫn không đủ:
+commit `7683e3b` gọi tên nó với đúng 18 chunk, và `knowledge_maps` có hàng probe
+`7bf18385-…` mà plan vòng 3 tự nhận "do tao sinh ra lúc dò lỗi" — nhưng tất cả đều diễn ra
+**sau** lượt upload, nên chỉ chứng minh nó ĐƯỢC DÙNG để đo, không chứng minh lượt upload.

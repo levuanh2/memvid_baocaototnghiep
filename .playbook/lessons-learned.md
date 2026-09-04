@@ -2489,3 +2489,21 @@ rơi về thì không cần hàng rào nào bắt được đường rơi.
 
 Nới hàng rào bằng một cờ "cho phép trùng" cũng chạy, nhưng nó tạo ra đúng cái công tắc
 mà một ngày nào đó ai đó bật ở máy mình cho tiện.
+
+## Nguồn gốc dữ liệu nằm ở trường server tự ghi, không ở trường người dùng đặt (2026-09-04)
+
+Ba vòng trước tôi phân loại 11 tài liệu production bằng email chủ sở hữu, tên file và hình
+dạng hành vi — rồi tự ghi vào bằng chứng rằng những thứ đó "không phải bằng chứng". Đúng,
+và vì thế 5/11 kẹt ở AMBIGUOUS.
+
+Thứ gỡ được nút không phải suy luận kỹ hơn mà là tìm ra một trường **client không chạm
+được**: `metadata_json->>'input_path'` do handler upload ghi từ filesystem của chính tiến
+trình đang chạy. Một dòng SQL trả lời xong câu hỏi mà ba vòng suy luận không trả lời nổi.
+
+Cách nhận ra trường như vậy: hỏi "ai ghi giá trị này". Email, tên file, nội dung — người
+dùng ghi. `input_path`, `created_at`, `file_size` — server ghi. Chỉ nhóm sau mới dùng để
+truy nguồn gốc được.
+
+Bài học phụ, đắt hơn: kết quả là **không hàng nào do production nạp**. Suốt mấy phase tôi
+gọi nó là "DB production" và đi tìm xem tài liệu nào trong đó là thật. Câu hỏi đúng lẽ ra
+phải hỏi từ đầu là "database này đã bao giờ nhận một lượt upload từ production chưa".
