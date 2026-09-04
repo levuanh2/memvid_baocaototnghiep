@@ -19,7 +19,7 @@ safe and correct: by **where they are actually reached**, never by account name.
 | CI (`.github/workflows/ci.yml`) | `TEST_DATABASE_URL` at job scope | `localhost` (Postgres 16 service container) | `studymap_test` | 5432 | test |
 | CI migration + smoke-boot steps | `DATABASE_URL`, set per step only | `localhost` | `studymap_test` | 5432 | test |
 | CI docker-build job | `DATABASE_URL` placeholder | `localhost` | `ci_build_only` | 5432 | build-only, never connected |
-| Render production | `DATABASE_URL`, `sync: false` in `render.yaml` | **not determinable from this repository** | — | — | production |
+| Render production | `DATABASE_URL`, `sync: false` in `render.yaml`; value read from the Render dashboard on 2026-09-04 | `aws-0-ap-northeast-2.pooler.supabase.com` | `postgres` | 5432 | production — **the same database as local dev** |
 | alembic | `app.db.database_url()` (same resolution point as the app) | follows whichever environment it runs in | | | |
 
 The dev database, measured read-only:
@@ -47,9 +47,9 @@ same database name `postgres`. The project is selected by the **username**
 
 ---
 
-## What the dev database actually contains
+## What the production database actually contains
 
-Not a production corpus. Every one of its 11 documents carries a
+Not a production corpus — even though it is the production database. Every one of its 11 documents carries a
 `metadata_json.input_path` written by the server at upload time:
 
 - 9 rows: `e:\memvid_NCKH\…\BE\input_docs\…` — a Windows workstation
@@ -67,40 +67,43 @@ default.
 
 ---
 
-## Unresolved: which database does Render use today?
+## Which database does Render use? — answered 2026-09-04
 
-`DATABASE_URL` is `sync: false` in `render.yaml` — it lives only in the Render
-dashboard, and no read-only API exposes its value. What measurement does say:
+`DATABASE_URL` is `sync: false`, so no API exposes it. A human read it from the Render
+dashboard (`studymap-api` → Environment). Its host, port, database name, and Supabase
+project reference are **identical to the local development `DATABASE_URL`**.
 
-**It was this dev database, at least until 2026-09-03 ~13:33 UTC.** Two user
-registrations match to the second across two independent devices:
+```
+host      aws-0-ap-northeast-2.pooler.supabase.com
+port      5432                       (BE/.env uses 6543 — the other pooler on the same DB)
+database  postgres
+project   same Supabase project reference as local dev (verified by comparison, not printed)
+```
 
-| production request log | `users.created_at` in the dev DB |
-|---|---|
-| `2026-09-03T09:20:14.546Z POST /auth/register 201` (Chrome/Windows) | `levuanhhihihi@gmail.com` `09:20:14.266Z` |
-| `2026-09-03T13:33:01.968Z POST /auth/register 201` (Android/Zalo) | `sunny@gmail.com` `13:33:01.696Z` |
+**There is one database.** Render production, the local application, and — until commit
+`3058272` — the pytest suite all write to it. The audit numbers below are therefore the
+production numbers.
 
-Both rows land ~0.27 s before the response is logged, which is the right order
-for insert-then-respond.
+### Correction: an earlier inference here was wrong
 
-**It was not this database from 2026-09-03 ~17:17 UTC onward.** Six
-`POST /auth/register` calls returned `201` from production between 17:17 and
-17:23 (`fpt-smoke-<hex>@example.com`, `verify-<hex>@example.com`). `create_user`
-has no fallback store — a `201` means a committed Postgres row. No such row
-exists in the dev database (`SELECT count(*) … LIKE 'verify-%'` → 0), and nothing
-in the codebase or the smoke scripts deletes users.
+An earlier revision of this document argued that production had stopped writing to this
+database, because six `POST /auth/register` calls returned `201` on 2026-09-03 between
+17:17 and 17:23 UTC and no matching `users` row exists.
 
-A deploy triggered through the Render API sits between the two observations
-(`2026-09-03T17:06:52`).
+That reasoning was unsound, and the flaw is worth keeping: **absence proves nothing in
+this database, because rows are routinely hard-deleted from it.** Measured read-only:
 
-Alembic has never logged a `Running upgrade` line on any Render build, including
-the first one — so whichever database production talks to was already at head
-before Render ever connected to it.
+```
+distinct document_id values ever referenced by jobs   1401
+jobs still pointing at a surviving document              4
+documents currently in the table                        11
+orphaned document_chunks                                 0
+```
 
-**Do not guess past this point.** Determining the live value requires reading the
-environment variable in the Render dashboard, which is a human step.
-
----
+Roughly 1 397 documents have been created and hard-deleted here over its lifetime — the
+pytest suite ran against this database for weeks. A missing row is the normal state, not
+a signal. The two second-exact registration matches (2026-09-03 09:20:14 and 13:33:01)
+remain valid positive evidence; only the negative inference was wrong.
 
 ## Intended flow for real production data
 
@@ -129,11 +132,42 @@ Two rules this diagram encodes:
 2. Absence from the allowlist is never permission. `AMBIGUOUS`, `CONFIRMED_TEST`,
    `UNKNOWN`, and `CONFIRMED_PRODUCTION` with the flag off are all "not eligible".
 
+## Production corpus inventory (read-only, 2026-09-04)
+
+```
+users            24
+documents        11        completed 8 | processing 2 | failed 1
+document_chunks 189        1 document has zero chunks
+```
+
+| # | filename | owner | status | chunks | created (UTC) | ingested from |
+|---|---|---|---|---|---|---|
+| 1 | `2-day24-ragas-guardrails.pdf` | demo@local.test | completed | 132 | 2026-08-21 04:35 | workstation |
+| 2 | `slide-giai-tich.pptx` | smoke+11ffbb29@local.test | completed | 1 | 2026-08-24 05:22 | workstation |
+| 3 | `diem-lop.xlsx` | smoke+11ffbb29@local.test | completed | 1 | 2026-08-24 05:22 | workstation |
+| 4 | `tich-phan.html` | smoke+11ffbb29@local.test | completed | 1 | 2026-08-24 05:22 | workstation |
+| 5 | `giao-trinh.epub` | smoke+11ffbb29@local.test | completed | 1 | 2026-08-24 05:22 | workstation |
+| 6 | `Bai giang dao ham.pptx` | demo@local.test | completed | 2 | 2026-08-24 08:06 | workstation |
+| 7 | `Day08- RAG Pipeline.docx` | test2@local.com | completed | 18 | 2026-08-25 04:49 | workstation |
+| 8 | `[VinUn_20k] Đào tạo hội nhập.pptx` | test2@local.com | **failed** | 31 | 2026-08-25 04:49 | workstation |
+| 9 | `thu-don-tam-f3633a.html` | demo@local.test | completed | 1 | 2026-08-25 11:37 | workstation |
+| 10 | `cua nguoi khac.md` | search_o_92cd43f9@example.com | processing | 1 | 2026-09-04 03:37 | pytest tmp_path |
+| 11 | `own (2).md` | owner_ac21137b@example.com | processing | **0** | 2026-09-04 03:37 | pytest tmp_path |
+
+Two rows never finished: #8 failed with `disk I/O error`; #10 and #11 are still
+`processing` because the pytest run that created them ended mid-pipeline.
+
+All eleven remain `eligible_for_index = false`. Their classifications
+(7 `CONFIRMED_TEST`, 4 `AMBIGUOUS`) were established from direct evidence in
+`BE/config/production_index_allowlist.json` and are **not** downgraded to
+`UNREVIEWED` — that would discard evidence, not add caution.
+
 ## Before any production corpus work
 
-1. Read `DATABASE_URL` from the Render dashboard and record its host, database
-   name, and port here (never the credentials).
-2. Inspect that database read-only. Record users / documents / chunks. Do not
-   assume it is empty.
-3. Inventory any documents it holds as `UNREVIEWED`, `eligible_for_index = false`.
+1. `DATABASE_URL` identity: recorded above. Re-check it after any Render env change.
+2. Inspect read-only. Record users / documents / chunks. Do not assume it is empty.
+3. Inventory new documents as `UNREVIEWED`, `eligible_for_index = false`.
    Classify only on direct evidence, one document at a time.
+4. Nothing here is eligible today, so there is nothing to embed or index yet. A real
+   production corpus starts with the first upload that arrives through
+   `studymap-api` — its `input_path` will be a Linux path, not an `E:` drive.

@@ -2527,3 +2527,21 @@ Bài học thao tác: khi một môi trường được xác định bằng mộ
 gian. Hai lượt `register` khớp đến 0,27 giây chứng minh được nhiều hơn mọi lập luận về tên
 host. Và khi cùng phương pháp ấy cho kết quả ngược ở một mốc thời gian khác, câu trả lời
 đúng là "đã đổi", không phải chọn nửa nào mình thích.
+
+## Vắng mặt chỉ là bằng chứng khi kho dữ liệu không xoá (2026-09-04)
+
+Tôi kết luận "production đã đổi database" vì sáu lượt `register` trả 201 mà không thấy
+hàng `users` nào. Kết luận đó sai, và cái sai không nằm ở phép đo — phép đo đúng: không
+có hàng nào thật.
+
+Nó nằm ở giả định ngầm rằng thứ gì được tạo thì còn đó. Database này đã xoá cứng khoảng
+1.397 tài liệu trong vòng đời của nó, vì bộ pytest chạy thẳng vào đó nhiều tuần. Trong một
+kho như thế, "không tìm thấy" là trạng thái mặc định của mọi hàng tạm.
+
+Cách kiểm giả định đó rẻ hơn cả suy luận ban đầu: đếm số `document_id` từng xuất hiện
+trong `jobs` (1401) so với số tài liệu còn sống (11). Một truy vấn, và nó lật ngược kết
+luận.
+
+Đối xứng đáng nhớ: cùng một phiên, bằng chứng KHẲNG ĐỊNH của tôi (hai lượt đăng ký khớp
+đến 0,27 giây) đúng, còn bằng chứng PHỦ ĐỊNH sai. Trong hệ thống có xoá, hai loại bằng
+chứng đó không cùng độ tin cậy.

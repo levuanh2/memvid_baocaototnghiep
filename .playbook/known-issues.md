@@ -4098,3 +4098,53 @@ dữ liệu suốt nhiều tuần. Muốn DB test riêng thì dùng Postgres c�
 (`scripts/setup_test_db.py`).
 
 Regression: `test_db_isolation.py::test_hai_du_an_supabase_khac_nhau_bi_coi_la_MOT_dich`.
+
+---
+
+## (SỬA LẠI KẾT LUẬN 2026-09-04) Render production DÙNG CHUNG database với máy dev
+
+Mục "CHƯA XÁC ĐỊNH: Render production đang trỏ vào database nào" ở trên kết luận sai ở
+nửa sau. Người dùng đã mở dashboard Render đọc `DATABASE_URL`: host, cổng, tên database và
+project ref của Supabase **trùng khớp hoàn toàn** với `DATABASE_URL` của máy dev.
+
+```
+host      aws-0-ap-northeast-2.pooler.supabase.com
+port      5432          (BE/.env dùng 6543 — pooler còn lại của CÙNG database)
+database  postgres
+project   cùng project ref với dev (đối chiếu bằng so sánh, không in ra)
+```
+
+**Chỉ có một database.** Render production, app cục bộ, và — cho tới `3058272` — cả bộ
+pytest đều ghi vào đó.
+
+### Lập luận sai ở chỗ nào
+
+Tôi suy ra "production không còn ghi vào DB này" từ chỗ sáu lượt `POST /auth/register`
+trả `201` lúc 17:17–17:23 UTC ngày 2026-09-03 mà không có hàng `users` nào khớp.
+
+Sai vì **vắng mặt không chứng minh được gì trong database này — hàng ở đây bị xoá cứng
+thường xuyên.** Đo lại, chỉ đọc:
+
+```
+document_id riêng biệt từng xuất hiện trong jobs   1401
+jobs còn trỏ tới một tài liệu còn tồn tại             4
+documents hiện có                                    11
+document_chunks mồ côi                                0
+```
+
+Khoảng 1.397 tài liệu đã được tạo rồi xoá cứng trong vòng đời DB này — bộ pytest chạy
+thẳng vào đó suốt nhiều tuần. Một hàng biến mất là trạng thái BÌNH THƯỜNG ở đây, không
+phải tín hiệu.
+
+Hai lượt đăng ký khớp đến từng giây (09:20:14 và 13:33:01) vẫn đứng vững — chúng là bằng
+chứng KHẲNG ĐỊNH. Chỉ suy luận PHỦ ĐỊNH là sai.
+
+**Quy tắc rút ra:** trong một kho dữ liệu có xoá cứng, chỉ suy luận từ cái CÓ MẶT. Muốn
+dùng cái vắng mặt làm bằng chứng thì phải chứng minh trước rằng kho đó không xoá.
+
+### Ngữ liệu production, kiểm kê 2026-09-04
+
+`users 24 · documents 11 · document_chunks 189` (completed 8, processing 2, failed 1;
+1 tài liệu 0 chunk). Cả 11 vẫn `eligible_for_index=false`. Không tài liệu nào do service
+production nạp — xem mục "Không hàng nào trong 'DB production' do production nạp".
+Chi tiết bảng ở `docs/deployment/database-boundary.md`.
