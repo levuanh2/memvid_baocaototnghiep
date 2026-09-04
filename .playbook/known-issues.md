@@ -3902,3 +3902,24 @@ summary/mindmap còn tắc ở chỗ thiếu index; sửa xong index thì chúng
 
 KHÔNG sửa trong phase định dạng index: đổi hành vi summary/mindmap là thay đổi ngữ
 nghĩa của tính năng khác, cần phase riêng và bộ test riêng.
+
+### Bảng chi tiết 6 chỗ còn lại (audit 2026-09-04, KHÔNG sửa)
+
+| File:dòng | Hàm | Hành vi khi `SKIP_MODEL_LOAD=1` | Vì sao cờ chặn sai | Ảnh hưởng |
+|---|---|---|---|---|
+| `services/summary/pipeline/summarize.py:125` | `summarize_sections` | trả section rỗng + `missing["section:<title>"]` | gọi `ask_ai` (chat), không nạp weight nào | tóm tắt |
+| `services/summary/pipeline/synthesize.py:27` | `synthesize` | trả `fallback, True` (degraded) | như trên | tóm tắt |
+| `services/mindmap/pipeline/outline.py:32` | `build_outline` | trả `None`, skeleton giữ nguyên "single" | như trên | mindmap, study map |
+| `services/mindmap/pipeline/relations.py:28` | `extract_relations` | trả `[], True` — không có quan hệ giữa nhánh | như trên | mindmap, study map |
+| `services/mindmap/pipeline/enrich.py:111` | `enrich_branches` | trả skeleton chưa làm giàu | như trên | mindmap, study map |
+| `app/domains/cache/llm_cache.py:354` | `judge_reuse` | trả `False` (không tái dùng cache biên) | **ĐÚNG** — judge cần embedding để so ngữ nghĩa | /query (chỉ giảm tỉ lệ trúng cache) |
+
+Năm hàng đầu đều gọi `ask_ai`, tức CHAT — không nạp weight nào, và chat FPT đang chạy
+tốt ở production. Chúng bị chặn bởi một cờ nói về RAM.
+
+KHÔNG ảnh hưởng `/query`: đường sinh đáp án RAG đi qua `summary/qa_chain`, không qua
+`services/summary/pipeline`.
+
+Chưa lộ ra ở production vì summary/mindmap còn tắc ở chỗ thiếu index. Sửa xong index
+thì chúng vẫn degraded — cần một phase riêng với bộ test riêng, vì đổi hành vi của
+chúng là đổi ngữ nghĩa tính năng khác.
