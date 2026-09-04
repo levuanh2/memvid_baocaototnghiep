@@ -31,6 +31,16 @@ def main() -> int:
                    help="thoát khác 0 khi chưa cấu hình hoặc kiểm tra hỏng")
     args = p.parse_args()
 
+    # `documents/storage.py` đọc thẳng `os.getenv` và KHÔNG tự nạp `.env` — nó vốn
+    # chỉ chạy trong tiến trình app, nơi `llm_factory` đã nạp hộ. Chạy script này
+    # trần thì không có ai nạp, và lệnh sẽ báo "chưa cấu hình" dù `.env` có đủ biến.
+    try:
+        from shared.env_loader import load_project_env
+
+        load_project_env(override=False)
+    except Exception:
+        pass
+
     from app.domains.documents import storage_probe
 
     ra = storage_probe.kiem_tra_kho(ensure_bucket=args.ensure_bucket)
