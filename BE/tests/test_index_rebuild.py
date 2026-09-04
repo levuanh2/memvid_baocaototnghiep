@@ -45,9 +45,12 @@ def _cho_phep(*docs: str):
             for d in (docs or ("d1",))}
 
 
-def _ban_ghi(n: int, doc: str = "d1"):
+def _ban_ghi(n: int, doc: str = "d1", nguon: str = "production"):
+    """Nhãn `production` mặc định: file này đo VÒNG ĐỜI dựng index, và điều kiện nguồn
+    gốc phải đã thoả để nó không chặn mất thứ đang đo. Hàng rào nguồn gốc có file
+    riêng (`test_ingest_provenance.py`)."""
     return [{"chunk_id": f"c{i}", "document_id": doc, "source_stem": f"{doc}_txt",
-             "text": f"doan van thu {i}"} for i in range(n)]
+             "text": f"doan van thu {i}", "ingest_origin": nguon} for i in range(n)]
 
 
 # ── A. Đọc ngữ liệu từ DB ──────────────────────────────────────────────────

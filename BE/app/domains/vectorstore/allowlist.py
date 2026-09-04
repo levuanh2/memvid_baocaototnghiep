@@ -27,6 +27,8 @@ import os
 from pathlib import Path
 from typing import Any, Dict, Iterable, List, Optional
 
+from app.domains.documents import provenance as _prov
+
 CONFIRMED_TEST = "CONFIRMED_TEST"
 CONFIRMED_PRODUCTION = "CONFIRMED_PRODUCTION"
 AMBIGUOUS = "AMBIGUOUS"
@@ -81,11 +83,25 @@ def tai(duong_dan: Optional[Path] = None) -> Dict[str, Dict[str, Any]]:
     return ra
 
 
-def duoc_index(document_id: str, allowlist: Optional[Dict[str, Dict[str, Any]]] = None) -> bool:
+def duoc_index(document_id: str,
+               allowlist: Optional[Dict[str, Dict[str, Any]]] = None,
+               *, ingest_origin: Any = None) -> bool:
     """Tài liệu này có được vào index production không.
 
-    Đúng MỘT tổ hợp trả về True. Mọi thứ khác — không có bản ghi, AMBIGUOUS, UNKNOWN,
-    CONFIRMED_TEST, hay CONFIRMED_PRODUCTION mà cờ tắt — đều là False.
+    BA điều kiện, phải đủ cả ba:
+
+      1. có bản ghi allowlist với `classification = CONFIRMED_PRODUCTION`
+      2. `eligible_for_index = true`
+      3. `ingest_origin = "production"` — tức tài liệu do CHÍNH service production nạp
+
+    Điều kiện 3 thêm vào 2026-09-04 và nó không thừa. Hai điều kiện đầu là quyết định
+    của con người ghi trong một file; điều kiện thứ ba là sự thật do máy ghi lúc tạo
+    hàng. Người viết sai file thì hàng rào vẫn đứng; máy ghi nhãn `local` thì không
+    quyết định nào của con người cứu được.
+
+    `ingest_origin` là THAM SỐ chứ không phải hàm này tự đọc DB: module này phải
+    thuần và test được không cần Postgres, và người gọi vốn đã cầm sẵn hàng tài liệu.
+    Không truyền → `None` → False. Mặc định đóng.
     """
     if allowlist is None:
         allowlist = tai()
@@ -93,16 +109,23 @@ def duoc_index(document_id: str, allowlist: Optional[Dict[str, Dict[str, Any]]] 
     if not isinstance(ban, dict):
         return False
     return (ban.get("classification") == CONFIRMED_PRODUCTION
-            and ban.get("eligible_for_index") is True)
+            and ban.get("eligible_for_index") is True
+            and _prov.la_production(ingest_origin))
 
 
 def loc_ban_ghi(ban_ghi: Iterable[Dict[str, Any]],
                 allowlist: Optional[Dict[str, Dict[str, Any]]] = None,
                 ) -> List[Dict[str, Any]]:
-    """Giữ lại chỉ những chunk thuộc tài liệu được phép index."""
+    """Giữ lại chỉ những chunk thuộc tài liệu được phép index.
+
+    Nguồn gốc đọc từ chính bản ghi chunk (`doc_chunks_tu_db` mang nó xuống từ hàng
+    tài liệu). Bản ghi không có khoá đó → `None` → bị chặn.
+    """
     if allowlist is None:
         allowlist = tai()
-    return [b for b in ban_ghi if duoc_index(b.get("document_id", ""), allowlist)]
+    return [b for b in ban_ghi
+            if duoc_index(b.get("document_id", ""), allowlist,
+                          ingest_origin=b.get("ingest_origin"))]
 
 
 def tom_tat(ban_ghi: Iterable[Dict[str, Any]],
@@ -111,22 +134,29 @@ def tom_tat(ban_ghi: Iterable[Dict[str, Any]],
     if allowlist is None:
         allowlist = tai()
     tai_lieu: Dict[str, int] = {}
+    nguon: Dict[str, Any] = {}
     for b in ban_ghi:
         did = str(b.get("document_id", ""))
         tai_lieu[did] = tai_lieu.get(did, 0) + 1
+        nguon.setdefault(did, b.get("ingest_origin"))
 
     ra = {"eligible_documents": 0, "eligible_chunks": 0,
           "blocked_documents": 0, "blocked_chunks": 0,
           "ambiguous_documents": 0, "ambiguous_chunks": 0,
           "unknown_documents": 0, "unknown_chunks": 0,
-          "khong_co_ban_ghi_documents": 0, "khong_co_ban_ghi_chunks": 0}
+          "khong_co_ban_ghi_documents": 0, "khong_co_ban_ghi_chunks": 0,
+          "nguon_production_documents": 0, "nguon_khong_production_documents": 0}
     for did, n in tai_lieu.items():
+        if _prov.la_production(nguon.get(did)):
+            ra["nguon_production_documents"] += 1
+        else:
+            ra["nguon_khong_production_documents"] += 1
         ban = allowlist.get(did)
         if ban is None:
             ra["khong_co_ban_ghi_documents"] += 1
             ra["khong_co_ban_ghi_chunks"] += n
         pl = (ban or {}).get("classification")
-        if duoc_index(did, allowlist):
+        if duoc_index(did, allowlist, ingest_origin=nguon.get(did)):
             ra["eligible_documents"] += 1
             ra["eligible_chunks"] += n
         else:

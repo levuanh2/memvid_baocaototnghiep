@@ -51,7 +51,7 @@ def doc_chunks_tu_db(
     liet_ke_chunk: Optional[Callable[..., List[Dict[str, Any]]]] = None,
     trang: int = 500,
 ) -> List[Dict[str, Any]]:
-    """Trả về [{chunk_id, document_id, source_stem, text}] theo thứ tự tất định.
+    """Trả về [{chunk_id, document_id, source_stem, text, ingest_origin}] theo thứ tự tất định.
 
     Thứ tự phải tất định vì id FAISS được gán theo vị trí trong danh sách này: dựng
     lại hai lần trên cùng dữ liệu phải cho cùng ánh xạ, nếu không thì `embedding_id`
@@ -73,6 +73,10 @@ def doc_chunks_tu_db(
         if str(row.get("status") or "").lower() == "deleted":
             continue
         stem = row.get("source_stem") or ""
+        # Nguồn gốc đi CÙNG chunk xuống tận hàng rào allowlist. Để nó ở đây, cạnh
+        # `source_stem`, chứ không tra lại DB ở tầng lọc: tra hai lần là hai lần có
+        # thể lệch nhau, và lệch về phía nào cũng là một tài liệu vào nhầm index.
+        nguon = row.get("ingest_origin")
         offset = 0
         while True:
             lo = liet_ke_chunk(did, limit=trang, offset=offset) or []
@@ -85,7 +89,8 @@ def doc_chunks_tu_db(
                     raise RebuildError(
                         f"chunk {c.get('chunk_id')} của tài liệu {did} có text rỗng")
                 ra.append({"chunk_id": str(c.get("chunk_id")), "document_id": str(did),
-                           "source_stem": str(stem), "text": text})
+                           "source_stem": str(stem), "text": text,
+                           "ingest_origin": nguon})
             if len(lo) < trang:
                 break
             offset += trang

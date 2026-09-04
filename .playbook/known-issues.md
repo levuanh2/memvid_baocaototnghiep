@@ -4148,3 +4148,52 @@ dùng cái vắng mặt làm bằng chứng thì phải chứng minh trước r�
 1 tài liệu 0 chunk). Cả 11 vẫn `eligible_for_index=false`. Không tài liệu nào do service
 production nạp — xem mục "Không hàng nào trong 'DB production' do production nạp".
 Chi tiết bảng ở `docs/deployment/database-boundary.md`.
+
+---
+
+## `ingest_origin`: điều kiện thứ ba để một tài liệu vào index (2026-09-04)
+
+Bốn manh mối từng dùng để đoán nguồn gốc tài liệu đều hỏng theo một kiểu khác nhau:
+
+| manh mối | hỏng ở đâu |
+|---|---|
+| tên file, email chủ sở hữu | người dùng đặt — `demo@local.test` có thể là người thật |
+| `metadata_json.input_path` | server ghi nên tin được, nhưng trả lời "chạy trên MÁY nào", không phải "với VAI TRÒ gì". Container Linux của CI và của production cho đường dẫn giống hệt |
+| dấu thời gian | nói "gần nhau", không nói "vì nhau" |
+| hàng còn hay mất | vô nghĩa ở kho này — ~1.397 tài liệu đã bị xoá cứng |
+
+Nên thêm `metadata_json.ingest_origin`, ghi MỘT lần lúc tạo hàng, bởi chính tiến trình
+đang chạy: `production` | `test` | `local`.
+
+**Client không chạm được.** `repository.create()` KHÔNG có tham số nhận nguồn — nó tự gọi
+`provenance.nguon_ingest()`. Không có tham số thì không route nào chuyền được giá trị từ
+request vào. Regression: `test_route_upload_KHONG_chuyen_gi_ve_nguon_xuong_repository`
+bắn một request mang nhãn giả ở form field, JSON, header và query string cùng lúc rồi
+bắt lấy kwargs thật mà route truyền xuống.
+
+**pytest thắng cấu hình.** Thứ tự kiểm trong `nguon_ingest()` không đổi được: cờ pytest
+trước, `INGEST_ORIGIN` sau. Một biến còn sót trong shell hay một `.env` bê nhầm từ
+production về sẽ khiến mọi tài liệu do bộ test sinh ra mang nhãn production — mà nhãn đó
+là thứ duy nhất cho phép một tài liệu vào index.
+
+**Mặc định đóng.** Thiếu biến, biến rỗng, sai chính tả (`prod`, `producton`) → `local`.
+Không đoán hộ lỗi gõ: đoán hộ là cách một tài liệu thử nghiệm lọt vào index production.
+
+`allowlist.duoc_index()` giờ đòi BA điều kiện, là VÀ:
+
+```
+classification == CONFIRMED_PRODUCTION   (con người quyết, ghi trong file)
+eligible_for_index is True               (con người quyết, ghi trong file)
+ingest_origin == "production"            (MÁY ghi lúc tạo hàng)
+```
+
+Hai điều kiện đầu nằm trong một file người ta sửa được; điều kiện thứ ba thì không. Người
+viết sai file thì hàng rào vẫn đứng.
+
+Nguồn gốc đi cùng chunk từ `doc_chunks_tu_db` xuống tận `loc_ban_ghi`, KHÔNG tra DB lại ở
+tầng lọc: tra hai lần là hai lần có thể lệch, mà lệch về phía nào cũng là một tài liệu
+vào nhầm index.
+
+**11 tài liệu hiện có đều không mang nhãn** (tạo trước khi có trường này) nên vẫn bị chặn.
+KHÔNG được UPDATE chúng để gắn nhãn — đó là ngụy tạo bằng chứng, không phải sửa dữ liệu.
+Regression: `test_11_tai_lieu_hien_tai_van_KHONG_the_vao_index`.

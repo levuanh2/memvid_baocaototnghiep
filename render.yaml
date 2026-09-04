@@ -147,9 +147,26 @@ services:
       # passing the wrong one gets a 404 from FPT.
       - key: FPT_AI_RERANK_MODEL
         value: bge-reranker-v2-m3
+      # Embedding runs on FPT over HTTP, so it allocates nothing in this process and
+      # `get_embeddings()` checks it BEFORE SKIP_MODEL_LOAD. Setting this turns real
+      # embedding on for documents ingested from here on — it does NOT touch anything
+      # already in the database, and it does NOT rebuild an index. The existing 189
+      # chunks stay unembedded because nothing walks them: rebuild is a manual script,
+      # and every document currently in the corpus is blocked by the allowlist.
+      - key: FPT_AI_EMBEDDING_MODEL
+        value: Vietnamese_Embedding
       # Late chunking needs a long-context encoder; nothing is loaded here.
       - key: LATE_CHUNKING
         value: "0"
+
+      # --- provenance: which process ingested a document ---------------------
+      # Written by the server into documents.metadata_json at row creation, never
+      # taken from a request. It is the third condition for index eligibility, next
+      # to the two human decisions in production_index_allowlist.json — see
+      # app/domains/documents/provenance.py. Absent or misspelled means "not
+      # production", and pytest overrides it regardless of what is set here.
+      - key: INGEST_ORIGIN
+        value: production
       - key: EMBEDDING_WARMUP_ENABLED
         value: "0"
       - key: HYBRID_TOP_K

@@ -27,6 +27,7 @@ from sqlalchemy import select
 
 from app.db import session_scope
 from app.db.models import Document, DocumentChunk, Section, User
+from app.domains.documents import provenance as _provenance
 from shared.source_id import canonical_source_stem
 
 # pipeline status → documents.status (đặc tả 3.2.4)
@@ -123,6 +124,9 @@ def _row(d: Document) -> Dict[str, Any]:
         "page_count": d.page_count,
         "char_count": d.char_count,
         "chunk_count": d.chunk_count,
+        # Tiến trình nào đã nạp tài liệu này. `None` với mọi hàng tạo trước
+        # 2026-09-04 — và `None` KHÔNG BAO GIỜ đủ để vào index (allowlist.duoc_index).
+        "ingest_origin": meta.get("ingest_origin"),
     }
     if d.error_message:
         out["error"] = d.error_message
@@ -148,6 +152,10 @@ def create(*, document_id: str, filename: str, file_type: str, file_path: str,
         "input_path": input_path,
         "progress": 0.0,
         "ingest_status": "processing",
+        # CỐ Ý không phải tham số của hàm này. Nếu nó là tham số thì một route nào đó
+        # sẽ chuyền giá trị lấy từ request vào, và cái nhãn quyết định quyền vào index
+        # trở thành thứ client đặt được. Hàm tự hỏi tiến trình của chính nó.
+        "ingest_origin": _provenance.nguon_ingest(),
     }
     with session_scope() as s:
         doc = Document(

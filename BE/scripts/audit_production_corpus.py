@@ -15,6 +15,8 @@ from __future__ import annotations
 
 import argparse
 
+UNREVIEWED = "UNREVIEWED"   # chưa có bản ghi allowlist nào cho tài liệu này
+
 
 def _lay_du_lieu():
     from sqlalchemy import func, select
@@ -26,11 +28,13 @@ def _lay_du_lieu():
         rows = s.execute(
             select(Document.id, Document.title, Document.status, Document.user_id,
                    Document.created_at, Document.updated_at, User.email,
-                   func.count(DocumentChunk.id))
+                   func.count(DocumentChunk.id),
+                   Document.metadata_json["ingest_origin"].astext)
             .join(User, User.id == Document.user_id, isouter=True)
             .join(DocumentChunk, DocumentChunk.document_id == Document.id, isouter=True)
             .group_by(Document.id, Document.title, Document.status, Document.user_id,
-                      Document.created_at, Document.updated_at, User.email)
+                      Document.created_at, Document.updated_at, User.email,
+                      Document.metadata_json["ingest_origin"].astext)
             .order_by(Document.created_at)
         ).all()
         tong_user = s.execute(select(func.count(User.id))).scalar() or 0
@@ -42,11 +46,11 @@ def _in_kiem_ke(rows, tong_user, tong_chunk) -> None:
     print(f"{'document_id':38} {'filename':34} {'status':11} {'chunks':>6}  owner_email")
     print("-" * 118)
     theo_status: dict[str, int] = {}
-    for did, ti, st, uid, dc, du, em, n in rows:
+    for did, ti, st, uid, dc, du, em, n, ng in rows:
         theo_status[str(st)] = theo_status.get(str(st), 0) + 1
         print(f"{str(did):38} {str(ti)[:34]:34} {str(st):11} {n:>6}  {em}")
     print()
-    for did, ti, st, uid, dc, du, em, n in rows:
+    for did, ti, st, uid, dc, du, em, n, ng in rows:
         print(f"{str(did)[:8]}…  owner_id={uid}  tạo={str(dc)[:19]}  sửa={str(du)[:19]}")
     print()
     print(f"TỔNG   tài liệu: {len(rows)}   chunk: {tong_chunk}   user: {tong_user}")
@@ -63,18 +67,22 @@ def _in_eligibility(rows) -> int:
         print(f"DỪNG: {exc}")
         return 2
 
-    print(f"{'document_id':38} {'filename':30} {'classification':22} {'chunks':>6}  eligible")
-    print("-" * 118)
+    print(f"{'filename':30} {'classification':22} {'ingest_origin':14} {'chunks':>6}  eligible")
+    print("-" * 90)
     ban_ghi_gia = []
-    for did, ti, st, uid, dc, du, em, n in rows:
+    for did, ti, st, uid, dc, du, em, n, ng in rows:
         ban = danh_sach.get(str(did))
-        pl = (ban or {}).get("classification", "(KHÔNG CÓ BẢN GHI)")
-        ok = al.duoc_index(str(did), danh_sach)
-        print(f"{str(did):38} {str(ti)[:30]:30} {pl:22} {n:>6}  {'CÓ' if ok else 'không'}")
-        ban_ghi_gia.extend([{"document_id": str(did)}] * n)
+        # Không có bản ghi allowlist = CHƯA AI DUYỆT. Đó là một trạng thái riêng, khác
+        # với UNKNOWN (có bản ghi, ghi rõ là chưa có bằng chứng). Cả hai đều không
+        # được index; phân biệt để người đọc biết cần thêm bản ghi hay thêm bằng chứng.
+        pl = (ban or {}).get("classification", UNREVIEWED)
+        ok = al.duoc_index(str(did), danh_sach, ingest_origin=ng)
+        print(f"{str(ti)[:30]:30} {pl:22} {str(ng or '(trống)'):14} {n:>6}  "
+              f"{'CÓ' if ok else 'không'}")
+        ban_ghi_gia.extend([{"document_id": str(did), "ingest_origin": ng}] * n)
 
     print()
-    for did, ti, st, uid, dc, du, em, n in rows:
+    for did, ti, st, uid, dc, du, em, n, ng in rows:
         ban = danh_sach.get(str(did))
         if ban and ban.get("evidence"):
             print(f"{str(ti)[:34]:34} → {ban['evidence']}")
@@ -88,6 +96,9 @@ def _in_eligibility(rows) -> int:
     print(f"AMBIGUOUS_DOCUMENTS : {tt['ambiguous_documents']}")
     print(f"AMBIGUOUS_CHUNKS    : {tt['ambiguous_chunks']}")
     print(f"UNKNOWN_DOCUMENTS   : {tt['unknown_documents']}")
+    print(f"NGUỒN production    : {tt['nguon_production_documents']} tài liệu")
+    print(f"NGUỒN khác          : {tt['nguon_khong_production_documents']} tài liệu "
+          f"(dev/test/chưa có nhãn — KHÔNG được index)")
     print(f"KHÔNG CÓ BẢN GHI    : {tt['khong_co_ban_ghi_documents']} tài liệu / "
           f"{tt['khong_co_ban_ghi_chunks']} chunk (mặc định KHÔNG được index)")
     return 0

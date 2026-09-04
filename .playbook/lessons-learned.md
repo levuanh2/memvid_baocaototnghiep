@@ -2545,3 +2545,21 @@ luận.
 Đối xứng đáng nhớ: cùng một phiên, bằng chứng KHẲNG ĐỊNH của tôi (hai lượt đăng ký khớp
 đến 0,27 giây) đúng, còn bằng chứng PHỦ ĐỊNH sai. Trong hệ thống có xoá, hai loại bằng
 chứng đó không cùng độ tin cậy.
+
+## Cái quyết định quyền thì đừng để nó là tham số của hàm (2026-09-04)
+
+`ingest_origin` là nhãn quyết định một tài liệu có được vào index production hay không.
+Cách viết hiển nhiên là cho `repository.create(..., ingest_origin=...)` rồi để route
+truyền vào. Nó chạy, nó test được, và nó sai.
+
+Sai vì tham số là một cái ống: hôm nay route tự tính giá trị, ngày mai ai đó thêm
+`request.form.get("ingest_origin")` cho tiện, và nhãn quyết định quyền trở thành thứ
+client đặt được. Không cần ai cố tình — chỉ cần một người thấy cái tham số ở đó và nghĩ
+nó để dùng.
+
+Cách viết đúng: hàm tự hỏi tiến trình của chính nó, và KHÔNG có tham số nào cho việc đó.
+Test khoá lại bằng `inspect.signature` — không phải grep chuỗi, mà là khẳng định cấu trúc:
+không tham số nào tên chứa "origin".
+
+Quy tắc rút ra: giá trị nào quyết định quyền thì phải sinh ra ở nơi nó được tin, và đường
+từ request tới nơi đó phải KHÔNG TỒN TẠI — chứ không phải tồn tại mà hiện chưa ai đi.

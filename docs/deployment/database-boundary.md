@@ -110,27 +110,39 @@ remain valid positive evidence; only the negative inference was wrong.
 ```
 real production user
       ↓
-Render production API  (studymap-api)
+Render production API  (studymap-api, INGEST_ORIGIN=production)
       ↓
-production PostgreSQL          <- identity must be confirmed first
+repository.create()  writes metadata_json.ingest_origin = "production"
+      ↓                        (server-side, never from the request)
+production PostgreSQL
       ↓
 documents / document_chunks
       ↓
-explicit allowlist             BE/config/production_index_allowlist.json
-      ↓  (CONFIRMED_PRODUCTION + eligible_for_index = true, human decision, via PR)
-embedding
+allowlist  BE/config/production_index_allowlist.json
+      ↓    CONFIRMED_PRODUCTION  +  eligible_for_index = true  +  ingest_origin = production
+embedding  (FPT Vietnamese_Embedding, 1024-dim, api_pooled)
       ↓
 FAISS index
       ↓
-Supabase Storage persistence
+Supabase Storage persistence   (INDEX_PERSISTENCE_ENABLED — still off)
 ```
 
-Two rules this diagram encodes:
+Three rules this diagram encodes:
 
-1. A rebuild runs against the **real** production database, only when invoked
-   explicitly. The dev/test database is never a corpus source.
+1. A rebuild runs against the production database only when invoked explicitly.
+   Nothing rebuilds on boot or on upload.
 2. Absence from the allowlist is never permission. `AMBIGUOUS`, `CONFIRMED_TEST`,
    `UNKNOWN`, and `CONFIRMED_PRODUCTION` with the flag off are all "not eligible".
+3. Eligibility needs a machine-written fact on top of the two human decisions.
+   `ingest_origin` is written once at row creation by the process doing the ingest
+   (`app/domains/documents/provenance.py`). It is not a parameter of `create()`, so
+   no route can thread a client-supplied value into it, and pytest always overrides
+   it to `test` regardless of configuration. Missing or misspelled means "not
+   production".
+
+All eleven documents currently in the database predate this field, so their
+`ingest_origin` is absent and they are blocked by rule 3 as well as rule 2.
+**Backfilling that field onto them would be fabricating evidence, not fixing data.**
 
 ## Production corpus inventory (read-only, 2026-09-04)
 

@@ -26,8 +26,13 @@ def _ban(pl: str, ok: bool) -> dict:
 
 
 # ── Chỉ một tổ hợp cho phép ────────────────────────────────────────────────
-def test_CONFIRMED_PRODUCTION_va_eligible_true_moi_duoc_index():
-    assert al.duoc_index(DID, {DID: _ban(al.CONFIRMED_PRODUCTION, True)}) is True
+def test_CONFIRMED_PRODUCTION_va_eligible_true_va_nguon_production_moi_duoc_index():
+    """Từ 2026-09-04 có ĐIỀU KIỆN THỨ BA: nhãn `ingest_origin` do server ghi lúc tạo
+    hàng. Hai điều kiện dưới đây là quyết định của con người trong một file; điều kiện
+    thứ ba là sự thật do máy ghi. Xem `test_ingest_provenance.py`."""
+    assert al.duoc_index(DID, {DID: _ban(al.CONFIRMED_PRODUCTION, True)},
+                         ingest_origin="production") is True
+    assert al.duoc_index(DID, {DID: _ban(al.CONFIRMED_PRODUCTION, True)}) is False
 
 
 @pytest.mark.parametrize("pl,ok", [
@@ -40,7 +45,9 @@ def test_CONFIRMED_PRODUCTION_va_eligible_true_moi_duoc_index():
     (al.CONFIRMED_PRODUCTION, False),  # là thật nhưng CHƯA cho phép index
 ])
 def test_moi_to_hop_khac_deu_KHONG_duoc_index(pl, ok):
-    assert al.duoc_index(DID, {DID: _ban(pl, ok)}) is False
+    # Nguồn `production` để test này đo đúng chiều PHÂN LOẠI, không đỏ nhờ ăn may ở
+    # điều kiện nguồn gốc.
+    assert al.duoc_index(DID, {DID: _ban(pl, ok)}, ingest_origin="production") is False
 
 
 def test_khong_co_ban_ghi_thi_KHONG_duoc_index():
@@ -80,9 +87,12 @@ def test_KHONG_suy_dien_eligibility_tu_thuoc_tinh_khac(ban_ghi):
 
 
 # ── Lọc bản ghi ────────────────────────────────────────────────────────────
-def _chunks(doc: str, n: int):
+def _chunks(doc: str, n: int, nguon: str = "production"):
+    """Mặc định mang nhãn `production`: các test dưới đây kiểm hàng rào ALLOWLIST, nên
+    điều kiện nguồn gốc phải đã thoả để nó không che mất thứ đang được đo. Hàng rào
+    nguồn gốc có file test riêng (`test_ingest_provenance.py`)."""
     return [{"chunk_id": f"{doc}-{i}", "document_id": doc, "source_stem": doc,
-             "text": f"doan {i}"} for i in range(n)]
+             "text": f"doan {i}", "ingest_origin": nguon} for i in range(n)]
 
 
 def test_loc_giu_dung_tai_lieu_duoc_phep():
