@@ -3965,3 +3965,47 @@ database test thì các test cần DB **skip**, không phải chạy vào produc
 Dựng database test: `python -m scripts.setup_test_db` (script chỉ đọc
 `TEST_DATABASE_URL`, không bao giờ lấy đích từ `DATABASE_URL`, và từ chối chạy nếu hai
 biến trỏ cùng một database).
+
+## Allowlist tường minh cho ngữ liệu vào index production (2026-09-04)
+
+Luật DUY NHẤT: **không tài liệu nào vào index production trừ khi có bản ghi tường minh
+với `classification = CONFIRMED_PRODUCTION` VÀ `eligible_for_index = true`.** Vắng mặt
+không bao giờ là cho phép.
+
+Vì sao allowlist chứ không phải blocklist: trong 11 tài liệu production, **5 tài liệu
+(184/189 chunk — 97%) không phân loại được** bằng bằng chứng trực tiếp. Với tỉ lệ ấy,
+danh sách chặn để lọt mọi thứ chưa nghĩ ra; danh sách cho phép chặn mọi thứ chưa nghĩ
+ra. Đó là khác biệt giữa an toàn và may.
+
+Nguồn: `BE/config/production_index_allowlist.json` — file trong kho mã, KHÔNG phải
+bảng DB. Quyết định "tài liệu này được index" là quyết định của con người, cần review
+như mã (pull request, git blame), và không cần migration chạm schema production.
+
+**Phân loại ≠ được index.** `CONFIRMED_PRODUCTION` + `eligible_for_index=false` là
+trạng thái hợp lệ. Mã không được coi "không phải test" là "an toàn để index".
+
+**Chỗ đặt hàng rào:** trong `rebuild_index_tu_postgres`, lọc `ban_ghi` KỂ CẢ khi người
+gọi truyền sẵn. Nếu lọc chỉ nằm ở `doc_chunks_tu_db` thì ai truyền danh sách của mình
+sẽ lách được — mà lách được nghĩa là hàng rào không tồn tại. Không có sentinel "bỏ qua
+kiểm tra": test phải khai allowlist tường minh, y như production.
+
+**Trạng thái hôm nay:** 0 tài liệu eligible, 189 chunk bị chặn, 184 chunk mơ hồ.
+`test_allowlist_that_KHONG_cho_phep_tai_lieu_nao` sẽ ĐỎ khi ai đó thêm mục eligible
+đầu tiên — cố ý, để việc ấy được nhìn thấy chứ không lặng lẽ.
+
+### Đường ingest KHÔNG đi qua allowlist — cố ý, đã cân nhắc
+
+`store.append_to_index()` (upload → FAISS) vẫn index mọi tài liệu người dùng tải lên.
+Đưa nó qua allowlist sẽ làm hỏng sản phẩm: người dùng upload xong không tìm được tài
+liệu của chính mình. Allowlist chỉ quản đường **dựng lại hàng loạt từ Postgres** —
+nơi một lần chạy quét toàn bộ kho và biến mọi thứ có sẵn thành vector.
+
+### Bằng chứng phân loại (mẫu để lần sau làm theo)
+
+Chỉ hai tài liệu có bằng chứng TRỰC TIẾP TRONG MÃ:
+`tests/test_search_api.py:122` sinh `search_o_{uuid4().hex[:8]}@example.com`, và
+`tests/test_source_ownership.py:98` sinh `owner_{uuid4().hex[:8]}@example.com` — khớp
+đúng hai chủ sở hữu, với dấu thời gian nằm trong lượt chạy suite 03:18–03:38 UTC.
+
+Email chứa chữ "test"/"demo", tên file trông chính đáng, hay nội dung trông như tài
+liệu thật đều **không** phải bằng chứng, và không được dùng để phân loại.

@@ -35,6 +35,16 @@ def _embed_gia(dim: int = 4):
     return _e
 
 
+def _cho_phep(*docs: str):
+    """Allowlist tường minh cho tài liệu trong fixture.
+
+    KHÔNG có sentinel "bỏ qua kiểm tra": test phải khai đúng thứ production phải
+    khai. Nếu test được phép lách hàng rào thì hàng rào chỉ tồn tại trong test.
+    """
+    return {d: {"classification": "CONFIRMED_PRODUCTION", "eligible_for_index": True}
+            for d in (docs or ("d1",))}
+
+
 def _ban_ghi(n: int, doc: str = "d1"):
     return [{"chunk_id": f"c{i}", "document_id": doc, "source_stem": f"{doc}_txt",
              "text": f"doan van thu {i}"} for i in range(n)]
@@ -47,7 +57,7 @@ def test_db_rong_thi_KHONG_dung_index_rong_de_len(tmp_path):
     active.mkdir()
     (active / "index.faiss").write_bytes(b"index-cu-con-nguyen")
 
-    ra = rb.rebuild_index_tu_postgres(active_dir=active, ban_ghi=[],
+    ra = rb.rebuild_index_tu_postgres(allowlist=_cho_phep(), active_dir=active, ban_ghi=[],
                                       embed=_embed_gia(), danh_tinh=DT, ghi_db=False)
     assert ra["promoted"] is False and ra["chunks"] == 0
     assert (active / "index.faiss").read_bytes() == b"index-cu-con-nguyen"
@@ -292,7 +302,7 @@ def test_dung_lai_day_du(tmp_path):
     active = tmp_path / "index"
     bg = _ban_ghi(5)
     da_ghi = {}
-    ra = rb.rebuild_index_tu_postgres(
+    ra = rb.rebuild_index_tu_postgres(allowlist=_cho_phep(),
         active_dir=active, ban_ghi=bg, embed=_embed_gia(4), danh_tinh=DT,
         batch_size=2, cap_nhat_embedding_id=lambda cid, eid: da_ghi.__setitem__(cid, eid))
     assert ra["promoted"] is True and ra["chunks"] == 5 and ra["dim"] == 4
@@ -310,7 +320,7 @@ def test_loi_embedding_KHONG_dung_toi_index_dang_phuc_vu(tmp_path):
         raise RuntimeError("FPT embeddings HTTP 500")
 
     with pytest.raises(RuntimeError, match="500"):
-        rb.rebuild_index_tu_postgres(active_dir=active, ban_ghi=_ban_ghi(3),
+        rb.rebuild_index_tu_postgres(allowlist=_cho_phep(), active_dir=active, ban_ghi=_ban_ghi(3),
                                      embed=_e, danh_tinh=DT, ghi_db=False)
     assert (active / "index.faiss").read_bytes() == b"index-cu"
     assert not (tmp_path / "index_staging").exists() or True
@@ -326,7 +336,7 @@ def test_tham_dinh_truot_thi_DON_staging_va_giu_active(tmp_path, monkeypatch):
                         lambda *a, **k: (_ for _ in ()).throw(
                             rb.RebuildValidationError("co tinh lam truot")))
     with pytest.raises(rb.RebuildValidationError):
-        rb.rebuild_index_tu_postgres(active_dir=active, ban_ghi=_ban_ghi(3),
+        rb.rebuild_index_tu_postgres(allowlist=_cho_phep(), active_dir=active, ban_ghi=_ban_ghi(3),
                                      embed=_embed_gia(4), danh_tinh=DT, ghi_db=False)
     assert (active / "index.faiss").read_bytes() == b"index-cu"
     assert not (tmp_path / "index_staging").exists(), "staging hỏng phải được dọn"
@@ -340,14 +350,14 @@ def test_ghi_embedding_id_chay_SAU_khi_thang_cap(tmp_path):
     def _cap_nhat(cid, eid):
         thu_tu.append(("db", (active / "index.faiss").exists()))
 
-    rb.rebuild_index_tu_postgres(active_dir=active, ban_ghi=_ban_ghi(2),
+    rb.rebuild_index_tu_postgres(allowlist=_cho_phep(), active_dir=active, ban_ghi=_ban_ghi(2),
                                  embed=_embed_gia(4), danh_tinh=DT,
                                  cap_nhat_embedding_id=_cap_nhat)
     assert thu_tu and all(co for _, co in thu_tu), "index phải đã active khi ghi DB"
 
 
 def test_ghi_db_tat_duoc(tmp_path):
-    ra = rb.rebuild_index_tu_postgres(active_dir=tmp_path / "index", ban_ghi=_ban_ghi(2),
+    ra = rb.rebuild_index_tu_postgres(allowlist=_cho_phep(), active_dir=tmp_path / "index", ban_ghi=_ban_ghi(2),
                                       embed=_embed_gia(4), danh_tinh=DT, ghi_db=False)
     assert ra["embedding_id_da_ghi"] == 0
 

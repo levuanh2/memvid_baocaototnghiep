@@ -330,13 +330,23 @@ def rebuild_index_tu_postgres(
     ghi_db: bool = True,
     tien_do: Optional[Callable[[int, int], None]] = None,
     keep_backup: int = 3,
+    allowlist: Optional[Dict[str, Dict[str, Any]]] = None,
 ) -> Dict[str, Any]:
     """A → B → C → D. Ném thì index đang phục vụ vẫn nguyên vẹn.
 
     KHÔNG tự chạy ở bất kỳ đâu. Không có ngữ liệu thì KHÔNG đụng vào index hiện có —
     dựng lại thành index rỗng là cách xoá dữ liệu mà trông như thành công.
+
+    MỌI chunk đi qua ALLOWLIST trước khi được embed — kể cả `ban_ghi` truyền sẵn.
+    `doc_chunks_tu_db()` đọc TẤT CẢ tài liệu chưa xoá; nếu lọc chỉ nằm ở đó thì người
+    gọi nào truyền `ban_ghi` của riêng mình sẽ lách được, và lách được nghĩa là hàng
+    rào không tồn tại. Lọc ở ĐÂY vì đây là chỗ duy nhất mọi đường dựng lại đi qua.
+
+    `allowlist=None` nghĩa là ĐỌC FILE THẬT và áp nó. Không có sentinel "bỏ qua kiểm
+    tra": test phải khai tường minh tài liệu nào được phép, y như production.
     """
     from app.clients.llm_factory import embedding_identity
+    from app.domains.vectorstore import allowlist as _al
     from app.domains.vectorstore import store as _store
 
     active = Path(active_dir) if active_dir is not None else Path(_store.INDEX_DIR)
@@ -345,9 +355,17 @@ def rebuild_index_tu_postgres(
 
     if ban_ghi is None:
         ban_ghi = doc_chunks_tu_db()
+    tho = len(ban_ghi)
+    ban_ghi = _al.loc_ban_ghi(ban_ghi, allowlist)
+    if tho != len(ban_ghi):
+        print(f"[allowlist] {tho} chunk đọc được, {len(ban_ghi)} chunk được phép index "
+              f"({tho - len(ban_ghi)} bị chặn vì tài liệu chưa được allowlist)", flush=True)
     if not ban_ghi:
         return {"promoted": False, "chunks": 0, "dim": 0, "backup": None,
-                "ly_do": "không có chunk nào trong Postgres — giữ nguyên index hiện có"}
+                "chunks_doc_duoc": tho,
+                "ly_do": ("không có chunk nào ĐƯỢC PHÉP index — giữ nguyên index hiện có"
+                          if tho else
+                          "không có chunk nào trong Postgres — giữ nguyên index hiện có")}
 
     vecs = sinh_vector([b["text"] for b in ban_ghi], embed=embed,
                        batch_size=batch_size, tien_do=tien_do)
@@ -367,5 +385,9 @@ def rebuild_index_tu_postgres(
         so_db = ghi_embedding_id(ban_ghi, cap_nhat=cap_nhat_embedding_id)
 
     return {"promoted": True, "chunks": len(ban_ghi), "dim": dim,
+            # Số chunk ĐỌC ĐƯỢC luôn được báo cùng số chunk ĐÃ INDEX. Chỉ báo số sau
+            # thì một allowlist đặt sai khiến 3/189 chunk vào index vẫn trông như
+            # thành công — hai con số cạnh nhau thì chênh lệch tự lộ ra.
+            "chunks_doc_duoc": tho,
             "backup": str(backup) if backup else None,
             "embedding_id_da_ghi": so_db, "danh_tinh": dt}

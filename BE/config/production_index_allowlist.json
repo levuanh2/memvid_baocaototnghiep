@@ -1,0 +1,138 @@
+{
+  "version": "1",
+  "note": [
+    "Danh sách CHO PHÉP đưa tài liệu vào index truy hồi của production.",
+    "",
+    "Luật duy nhất: KHÔNG tài liệu nào vào index trừ khi có bản ghi ở đây với",
+    "classification = CONFIRMED_PRODUCTION VÀ eligible_for_index = true.",
+    "Không có bản ghi = KHÔNG được index. Vắng mặt không bao giờ là cho phép.",
+    "",
+    "Vì sao là file trong kho mã chứ không phải bảng DB: quyết định 'tài liệu này",
+    "được vào index' là quyết định của con người, cần được review như mã. Ở đây nó",
+    "đi qua pull request, có git blame, và không cần một migration nào chạm vào",
+    "schema production. Bảng DB thì phải sửa schema production mới dùng được, mà",
+    "phase này cấm sửa production.",
+    "",
+    "PHÂN LOẠI và ĐƯỢC INDEX là hai chuyện khác nhau. Một tài liệu có thể là",
+    "CONFIRMED_PRODUCTION mà vẫn eligible_for_index = false. 'Không phải test'",
+    "KHÔNG có nghĩa là 'an toàn để index'."
+  ],
+  "classifications": {
+    "CONFIRMED_TEST": "Có bằng chứng TRỰC TIẾP là dữ liệu do test/smoke sinh ra.",
+    "CONFIRMED_PRODUCTION": "Có bằng chứng TRỰC TIẾP là dữ liệu thật của người dùng. Nội dung 'trông thật' KHÔNG phải bằng chứng.",
+    "AMBIGUOUS": "Bằng chứng chỉ về nhiều hướng, hoặc không đủ để kết luận.",
+    "UNKNOWN": "Chưa có bằng chứng nào."
+  },
+  "documents": {
+    "960c1b5b-bbee-4593-86b3-3f4fc9fb3b17": {
+      "filename": "2-day24-ragas-guardrails.pdf",
+      "owner_email": "demo@local.test",
+      "chunk_count": 132,
+      "classification": "AMBIGUOUS",
+      "eligible_for_index": false,
+      "evidence": "Không khớp fixture nào trong kho (đã grep 'ragas-guardrails': không có). Email 'demo@local.test' gợi ý tài khoản thử nhưng email KHÔNG phải bằng chứng. 132 chunk, sửa 4 phút sau khi tạo — không phân biệt được thao tác thật với một lượt thử tay.",
+      "decided_at": "2026-09-04",
+      "decided_by": "audit-2026-09-04"
+    },
+    "7d5a3721-37c4-4984-87f6-a413733b92c2": {
+      "filename": "Bai giang dao ham.pptx",
+      "owner_email": "demo@local.test",
+      "chunk_count": 2,
+      "classification": "AMBIGUOUS",
+      "eligible_for_index": false,
+      "evidence": "Không khớp fixture nào. Tạo lẻ 3 ngày sau khi user được tạo. Cụm 'dao ham' có xuất hiện trong nhiều test nhưng là dữ liệu inline, không phải upload file cùng tên.",
+      "decided_at": "2026-09-04",
+      "decided_by": "audit-2026-09-04"
+    },
+    "a7fa7ace-8656-4bca-b276-7db0875ccce1": {
+      "filename": "thu-don-tam-f3633a.html",
+      "owner_email": "demo@local.test",
+      "chunk_count": 1,
+      "classification": "AMBIGUOUS",
+      "eligible_for_index": false,
+      "evidence": "Không khớp fixture nào (đã grep 'thu-don-tam'). Hậu tố hex 6 ký tự trong tên gợi ý sinh tự động, nhưng không có mã nào trong kho sinh ra dạng tên này — nên đó là phỏng đoán, không phải bằng chứng.",
+      "decided_at": "2026-09-04",
+      "decided_by": "audit-2026-09-04"
+    },
+    "77ba91f4-153f-4da6-bf29-b0afc0e8a9de": {
+      "filename": "Day08- RAG Pipeline.docx",
+      "owner_email": "test2@local.com",
+      "chunk_count": 18,
+      "classification": "AMBIGUOUS",
+      "eligible_for_index": false,
+      "evidence": "Không khớp fixture nào. Email chứa chữ 'test' nhưng email KHÔNG phải bằng chứng. Nội dung trông như tài liệu khoá học thật — cũng KHÔNG phải bằng chứng.",
+      "decided_at": "2026-09-04",
+      "decided_by": "audit-2026-09-04"
+    },
+    "065c3cb0-a069-4e00-b0d4-b9412cee4895": {
+      "filename": "[VinUn_20k] Đào tạo hội nhập.pptx",
+      "owner_email": "test2@local.com",
+      "chunk_count": 31,
+      "classification": "AMBIGUOUS",
+      "eligible_for_index": false,
+      "evidence": "Không khớp fixture nào (đã grep 'VinUn'). status='failed' nhưng vẫn có 31 chunk. Không xác định được nguồn gốc.",
+      "decided_at": "2026-09-04",
+      "decided_by": "audit-2026-09-04"
+    },
+    "f7ff7171-5aec-4b28-a2f4-224eb78e0a6d": {
+      "filename": "cua nguoi khac.md",
+      "owner_email": "search_o_92cd43f9@example.com",
+      "chunk_count": 1,
+      "classification": "CONFIRMED_TEST",
+      "eligible_for_index": false,
+      "evidence": "BẰNG CHỨNG TRỰC TIẾP TRONG MÃ: tests/test_search_api.py:122 sinh email theo đúng khuôn f\"search_o_{uuid4().hex[:8]}@example.com\" — khớp 'search_o_92cd43f9'. User tạo 2026-09-04 03:37:11, tài liệu tạo 03:37:14, nằm trong lượt chạy suite đầy đủ 03:18-03:38 UTC.",
+      "decided_at": "2026-09-04",
+      "decided_by": "audit-2026-09-04"
+    },
+    "a02e1f75-f912-456f-ab8d-6a64c757abb1": {
+      "filename": "own (2).md",
+      "owner_email": "owner_ac21137b@example.com",
+      "chunk_count": 0,
+      "classification": "CONFIRMED_TEST",
+      "eligible_for_index": false,
+      "evidence": "BẰNG CHỨNG TRỰC TIẾP TRONG MÃ: tests/test_source_ownership.py:98 sinh email theo đúng khuôn f\"owner_{uuid4().hex[:8]}@example.com\" — khớp 'owner_ac21137b'. User tạo 03:37:46, tài liệu 03:37:48. Hậu tố ' (2)' do _unique_display_filename thêm khi trùng tên — dấu vết chạy lặp nhiều lượt.",
+      "decided_at": "2026-09-04",
+      "decided_by": "audit-2026-09-04"
+    },
+    "66dbbef3-14eb-479c-83c7-5cea07003e49": {
+      "filename": "slide-giai-tich.pptx",
+      "owner_email": "smoke+11ffbb29@local.test",
+      "chunk_count": 1,
+      "classification": "CONFIRMED_TEST",
+      "eligible_for_index": false,
+      "evidence": "Bằng chứng HÀNH VI, không phải fixture trong kho (đã grep 'smoke+': không có trong repo). Bốn tài liệu cùng chủ sở hữu, bốn ĐỊNH DẠNG khác nhau (pptx/xlsx/html/epub), tạo trong 38 giây, mỗi cái đúng 1 chunk — đó là hình dạng của một lượt thử độ phủ định dạng, không phải người dùng thật. Ghi rõ để người đọc tự đánh giá: bằng chứng này yếu hơn hai ca fixture ở trên.",
+      "decided_at": "2026-09-04",
+      "decided_by": "audit-2026-09-04"
+    },
+    "18e71324-a8d4-4999-a388-4ed9a6d54965": {
+      "filename": "diem-lop.xlsx",
+      "owner_email": "smoke+11ffbb29@local.test",
+      "chunk_count": 1,
+      "classification": "CONFIRMED_TEST",
+      "eligible_for_index": false,
+      "evidence": "Cùng lượt với slide-giai-tich.pptx — xem bằng chứng ở tài liệu đó.",
+      "decided_at": "2026-09-04",
+      "decided_by": "audit-2026-09-04"
+    },
+    "4fd0300a-0aea-4ebd-bd62-e91706cd3398": {
+      "filename": "tich-phan.html",
+      "owner_email": "smoke+11ffbb29@local.test",
+      "chunk_count": 1,
+      "classification": "CONFIRMED_TEST",
+      "eligible_for_index": false,
+      "evidence": "Cùng lượt với slide-giai-tich.pptx — xem bằng chứng ở tài liệu đó.",
+      "decided_at": "2026-09-04",
+      "decided_by": "audit-2026-09-04"
+    },
+    "e6585669-e6bb-4207-b506-7696ba168a7d": {
+      "filename": "giao-trinh.epub",
+      "owner_email": "smoke+11ffbb29@local.test",
+      "chunk_count": 1,
+      "classification": "CONFIRMED_TEST",
+      "eligible_for_index": false,
+      "evidence": "Cùng lượt với slide-giai-tich.pptx. Tên 'giao-trinh.epub' có xuất hiện ở tests/test_upload_formats.py:46 nhưng CHỈ trong một assert is_supported() thuần chuỗi — test ấy upload 'sach.epub', không phải file này. Nên đó KHÔNG phải bằng chứng fixture.",
+      "decided_at": "2026-09-04",
+      "decided_by": "audit-2026-09-04"
+    }
+  }
+}
