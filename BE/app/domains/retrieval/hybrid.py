@@ -11,7 +11,12 @@ from typing import Iterable
 import faiss
 from rank_bm25 import BM25Okapi
 
-from app.clients.llm_factory import DEFAULT_MODEL_NAME, encode_query_cached, get_embedding_model
+from app.clients.llm_factory import (
+    DEFAULT_MODEL_NAME,
+    encode_query_cached,
+    fpt_embedding_enabled,
+    get_embedding_model,
+)
 from app.domains.vectorstore.store import _use_lc_vector_store
 from shared.source_id import canonical_source_stem
 logger = logging.getLogger(__name__)
@@ -227,7 +232,10 @@ class HybridRetriever:
     ) -> list[tuple[RetrievedChunk, float]]:
         """Như `retrieve` nhưng giữ điểm RRF — API tìm kiếm ngữ nghĩa cần `score`
         (FR-05), còn chat chỉ cần thứ tự nên dùng `retrieve`."""
-        if os.getenv("SKIP_MODEL_LOAD") == "1":
+        # Cùng luật với `retrieve_faiss_only`: cờ nói về RAM, không nói về tính năng.
+        # Đây là đường `semantic_search` (API tìm kiếm) đi qua — để nó chặn thì bật
+        # embedding từ xa xong API vẫn trả rỗng.
+        if os.getenv("SKIP_MODEL_LOAD") == "1" and not fpt_embedding_enabled():
             return []
 
         self._ensure_loaded()
@@ -296,7 +304,10 @@ class HybridRetriever:
         self, query: str, *, selected_sources: list[str] | None = None, top_k: int = 6
     ) -> list[RetrievedChunk]:
         """Chỉ xếp hạng BM25 (để ghép EnsembleRetriever)."""
-        if os.getenv("SKIP_MODEL_LOAD") == "1":
+        # BM25 là xếp hạng thuần văn bản, KHÔNG nạp model nào. Cổng này thừa hưởng từ
+        # thời cả module bị tắt chung dưới `SKIP_MODEL_LOAD`. Nới đúng bằng điều kiện
+        # của hai hàm kia để nhất quán; gỡ hẳn là thay đổi rộng hơn phạm vi phase này.
+        if os.getenv("SKIP_MODEL_LOAD") == "1" and not fpt_embedding_enabled():
             return []
 
         self._ensure_loaded()
@@ -328,7 +339,12 @@ class HybridRetriever:
         self, query: str, *, selected_sources: list[str] | None = None, top_k: int = 6
     ) -> list[RetrievedChunk]:
         """Chỉ xếp hạng vector FAISS (để ghép EnsembleRetriever)."""
-        if os.getenv("SKIP_MODEL_LOAD") == "1":
+        # `SKIP_MODEL_LOAD=1` nghĩa là "đừng nạp weight vào tiến trình này", không
+        # phải "đừng truy hồi bằng vector". Provider embedding từ xa không nạp gì, và
+        # production chạy đúng cờ này — để nó chặn ở đây thì nửa FAISS của truy hồi
+        # lai biến mất im lặng, chỉ còn BM25, không một lỗi nào. Cùng luật đã áp cho
+        # rerank (`get_reranker`) và embedding (`get_embeddings`).
+        if os.getenv("SKIP_MODEL_LOAD") == "1" and not fpt_embedding_enabled():
             return []
 
         self._ensure_loaded()

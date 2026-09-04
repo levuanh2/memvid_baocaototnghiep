@@ -44,12 +44,16 @@ from typing import Any, Dict, List, Optional
 
 from app.domains.vectorstore.rebuild import RebuildValidationError, thang_cap
 
-# `index.faiss` + `index.json` là tối thiểu để đường LEGACY đọc được index.
-# `index.pkl` là docstore của LangChain, cần cho đường LC (`FAISS.load_local`);
-# `chunks.sqlite` giữ text chunk (index.json có bản inline nên đây là tuỳ chọn).
-# Thiếu file BẮT BUỘC thì artifact vô nghĩa; thiếu file tuỳ chọn thì vẫn dùng được.
-FILE_BAT_BUOC = ("index.faiss", "index.json")
-FILE_TUY_CHON = ("index.pkl", "chunks.sqlite")
+# Bộ artifact CANONICAL — đúng thứ `FAISS.load_local` cần, cộng `index.json` là meta
+# riêng của ứng dụng (BM25, ánh xạ chunk_id, danh tính không gian vector).
+#
+# `index.pkl` là BẮT BUỘC, không phải tuỳ chọn: thiếu nó thì `load_vectorstore()` trả
+# None, truy hồi tụt xuống nhánh legacy, và lần ingest kế tiếp sẽ ĐÈ MẤT index. Một
+# artifact thiếu `index.pkl` không phải "index kém đầy đủ", nó là một quả mìn.
+#
+# `chunks.sqlite` tuỳ chọn thật: `index.json` đã mang bản text inline.
+FILE_BAT_BUOC = ("index.faiss", "index.pkl", "index.json")
+FILE_TUY_CHON = ("chunks.sqlite",)
 
 TEN_MANIFEST = "manifest.json"
 TEN_CON_TRO = "current.json"
@@ -295,6 +299,37 @@ def _tham_dinh_tai_ve(thu_muc: Path, manifest: Dict[str, Any]) -> None:
     lech = _store.check_index_identity(meta)
     if lech:
         raise RebuildValidationError(f"danh tính lệch cấu hình hiện tại ({lech})")
+
+    _thu_nap_canonical(thu_muc, so_vector=idx.ntotal)
+
+
+def _thu_nap_canonical(thu_muc: Path, *, so_vector: int) -> None:
+    """NẠP THỬ bằng đúng loader production dùng, trước khi thăng cấp.
+
+    `faiss.read_index` mở được `index.faiss` KHÔNG chứng minh artifact dùng được:
+    `index.pkl` (docstore của LangChain) là một file riêng, và pickle hỏng chỉ lộ ra
+    lúc `FAISS.load_local` giải mã nó. Bản đầu của hàm thẩm định dừng ở `read_index`,
+    nên một `index.pkl` hỏng đi lọt qua, được thăng cấp, và chỉ hỏng về sau —
+    `load_vectorstore()` trả None, truy hồi tụt xuống nhánh dự phòng, rồi lần ingest
+    kế tiếp ĐÈ MẤT index. Test bắt được đúng ca này.
+
+    Nạp thử ở thư mục STAGING, chưa thăng cấp — hỏng thì index đang phục vụ chưa bị
+    đụng tới.
+    """
+    from langchain_community.vectorstores import FAISS
+
+    from app.clients.llm_factory import get_embeddings
+
+    try:
+        vs = FAISS.load_local(str(thu_muc), get_embeddings(),
+                              allow_dangerous_deserialization=True)
+    except Exception as exc:
+        raise RebuildValidationError(
+            f"loader canonical không nạp được artifact: {type(exc).__name__}: "
+            f"{str(exc)[:160]}") from None
+    if vs.index.ntotal != so_vector:
+        raise RebuildValidationError(
+            f"loader canonical thấy {vs.index.ntotal} vector, index.faiss có {so_vector}")
 
 
 def restore(*, thu_muc: Optional[Path] = None, storage: Any = None,

@@ -419,6 +419,23 @@ def append_chunks_to_lc_index(
     emb = get_embeddings()
     os.makedirs(str(INDEX_DIR), exist_ok=True)
 
+    # `load_vectorstore()` trả None cho BA lý do khác hẳn nhau: chưa có index (bình
+    # thường), thiếu `index.pkl`, và lệch danh tính không gian vector. Hai lý do sau
+    # mà vẫn đi tiếp thì `FAISS.from_*` dựng một vectorstore MỚI chỉ từ chunk đang
+    # thêm, rồi `save_local` ĐÈ LÊN `index.faiss` đang có — mọi vector cũ biến mất
+    # trong khi `index.json` vẫn liệt kê chúng. Mất dữ liệu, không một lỗi nào.
+    #
+    # Nên: có file index trên đĩa mà không nạp được thì DỪNG. Đường ingest cũng phải
+    # đi qua hàng rào danh tính, y như đường legacy — trước đây nó lách được vì
+    # `append_to_index` rẽ sang đây TRƯỚC khi tới chỗ kiểm.
+    if (INDEX_DIR / "index.faiss").exists() and load_vectorstore() is None:
+        lech = check_index_identity()
+        raise IndexIdentityMismatch(
+            f"Có index trên đĩa nhưng không nạp được"
+            f"{f' ({lech})' if lech else ' (thiếu index.pkl hoặc file hỏng)'}. "
+            f"Ghi thêm vào lúc này sẽ ĐÈ MẤT index hiện có — dựng lại index trước."
+        )
+
     if embeddings is not None:
         # LATE CHUNKING: dùng vector precomputed; `emb` chỉ để embed query lúc truy vấn.
         vecs = np.asarray(embeddings, dtype="float32")
@@ -664,6 +681,12 @@ def append_to_index(
     if _use_lc_vector_store():
         try:
             return append_chunks_to_lc_index(chunks, source_name, custom_metadata, batch_size, embeddings)
+        except IndexIdentityMismatch:
+            # KHÔNG rơi xuống legacy. Đường LC vừa từ chối ghi vì có index trên đĩa
+            # mà không nạp được; nhánh legacy sẽ đọc CÙNG file ấy, thấy nó không phải
+            # `IndexIDMap`, rồi dựng một IndexIDMap rỗng đè lên — đúng cái mất dữ
+            # liệu mà lời từ chối kia vừa ngăn, chỉ theo một đường khác.
+            raise
         except Exception as exc:
             print(f"[vector_store] LangChain vector store failed, fallback legacy FAISS: {exc}")
 

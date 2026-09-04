@@ -143,6 +143,11 @@ PostgreSQL document_chunks
    F. KHÔI PHỤC   lúc khởi động nếu đĩa trống           persistence.py   ← TẮT
 ```
 
+Định dạng CANONICAL (chốt 2026-09-04): **LangChain FAISS**, bộ ba bắt buộc
+`index.faiss` + `index.pkl` + `index.json`; `chunks.sqlite` tuỳ chọn. Cả đường ingest
+lẫn đường rebuild giờ sinh CÙNG một bộ — trước đó chúng ghi hai định dạng khác nhau
+vào cùng tên file. Xem `.playbook/known-issues.md`.
+
 E và F cần **ba** biến, production chưa có biến nào: `INDEX_PERSISTENCE_ENABLED=1`,
 `SUPABASE_URL`, `SUPABASE_SECRET_KEY`. Thiếu bất kỳ cái nào là no-op im lặng — app
 vẫn boot, chỉ in `[index_persistence] restore skipped: ...`.

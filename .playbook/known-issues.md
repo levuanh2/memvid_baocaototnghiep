@@ -3814,9 +3814,91 @@ không ai trỏ tới) chứ không bao giờ để lại một con trỏ trỏ 
 gồm provider + model + strategy; số chiều là HỆ QUẢ của bộ ba đó, và vẫn được kiểm
 lúc thẩm định (đối chiếu cả metadata lẫn manifest).
 
-**Đường LC cần `index.pkl`.** `env_loader` setdefault `USE_LC_VECTOR_STORE=1` nên app
-thật đi đường LangChain, và `FAISS.load_local` đòi `index.faiss` + `index.pkl`.
-`rebuild.py` chỉ sinh `index.faiss` + `index.json` (định dạng legacy), nên index dựng
-lại được đọc qua nhánh fallback legacy của `HybridRetriever`, không qua nhánh LC. Bộ
-artifact lưu bền vì thế nhận `index.pkl`/`chunks.sqlite` là TUỲ CHỌN: đẩy lên nếu có,
-khôi phục nếu manifest ghi.
+**Đường LC cần `index.pkl`.** ĐÃ GIẢI QUYẾT 2026-09-04 — xem mục "Định dạng index
+canonical" bên dưới. Ghi lại nguyên trạng vấn đề để hiểu vì sao có mục ấy: `env_loader`
+setdefault `USE_LC_VECTOR_STORE=1` nên app thật đi đường LangChain và `FAISS.load_local`
+đòi `index.faiss` + `index.pkl`, trong khi `rebuild.py` chỉ sinh `index.faiss` +
+`index.json`. Index dựng lại vì thế đọc qua nhánh fallback legacy — chạy được, nên
+trông như ổn.
+
+
+## Định dạng index CANONICAL: LangChain FAISS, ba file (2026-09-04)
+
+Kho từng có HAI định dạng index ghi vào CÙNG tên file `index.faiss`:
+
+| Đường ghi | Sinh ra | Số trong `index.faiss` nghĩa là gì |
+|---|---|---|
+| `append_chunks_to_lc_index` (ingest thật) | `index.faiss` + `index.pkl` | vị trí trong `IndexFlatL2` |
+| `rebuild._ghi_staging` (bản cũ) | `index.faiss` | `chunk_id`, vì là `IndexIDMap` |
+
+Hai nghĩa khác nhau, một tên file, và không chỗ nào đối chiếu. Chúng trùng khớp được
+chỉ vì rebuild đánh id 0..N-1 đúng theo thứ tự khoá trong `index.json`.
+
+**Chốt: canonical = LangChain FAISS**, bộ ba `index.faiss` + `index.pkl` +
+`index.json`. Lý do chọn nó chứ không chọn legacy: đó đã là thứ đường ingest của ứng
+dụng sinh ra, là thứ `USE_LC_VECTOR_STORE=1` (mặc định của `env_loader`) đọc, và
+LangChain vốn đã là dependency. Chọn legacy thì phải sửa loader ở nhiều nơi và bỏ
+`similarity_search_with_score`.
+
+`rebuild.py` giờ ghi đúng bộ canonical. `chunks.sqlite` là file tuỳ chọn thật
+(`index.json` đã có text inline). `index.pkl` KHÔNG tuỳ chọn.
+
+### Ba lỗ mất dữ liệu bịt được cùng lúc
+
+1. **Ingest đè mất index.** `append_chunks_to_lc_index` gọi `load_vectorstore()`,
+   nhận `None`, rồi dựng vectorstore MỚI chỉ từ chunk đang thêm và `save_local` đè lên
+   `index.faiss`. `load_vectorstore()` trả `None` cho BA lý do khác hẳn nhau: chưa có
+   index (bình thường), thiếu `index.pkl`, và lệch danh tính. Hai lý do sau mà đi tiếp
+   là mất sạch vector cũ trong khi `index.json` vẫn liệt kê chúng. Giờ: có file index
+   trên đĩa mà không nạp được thì ném `IndexIdentityMismatch`.
+2. **Hàng rào danh tính bị đường LC lách.** `append_to_index` rẽ sang
+   `append_chunks_to_lc_index` TRƯỚC khi tới chỗ kiểm danh tính, nên hàng rào thêm ở
+   33d9059 chỉ bảo vệ nhánh legacy. Giờ nhánh LC kiểm trước khi ghi, và
+   `IndexIdentityMismatch` KHÔNG bị `except Exception` nuốt để rơi xuống legacy —
+   rơi xuống đó thì `_load_index` thấy file không phải `IndexIDMap` và dựng một cái
+   rỗng đè lên, đúng cái vừa ngăn theo đường khác.
+3. **Thẩm định không chạm pickle.** `faiss.read_index` mở được `index.faiss` KHÔNG
+   chứng minh artifact dùng được: pickle hỏng chỉ lộ ra lúc `FAISS.load_local` giải
+   mã. Bản đầu dừng ở `read_index` nên một `index.pkl` hỏng đi lọt, được thăng cấp,
+   rồi hỏng về sau. Giờ thẩm định NẠP THỬ bằng đúng loader production dùng, ở thư mục
+   staging, trước khi thăng cấp.
+
+### `SKIP_MODEL_LOAD` chặn nhầm — lần thứ BA
+
+`hybrid.retrieve_faiss_only` mở đầu bằng `if os.getenv("SKIP_MODEL_LOAD") == "1":
+return []`. Production chạy đúng cờ đó, nên kể cả khi bật FPT embedding và có index
+hợp lệ, nửa FAISS của truy hồi lai vẫn biến mất — chỉ còn BM25, không một lỗi nào.
+Đây là chỗ thứ ba mắc cùng lỗi (trước đó: `get_reranker`, `get_embeddings`). Luật:
+cờ ấy nghĩa là "đừng nạp weight vào tiến trình này", KHÔNG phải "đừng dùng năng lực
+này"; provider từ xa không nạp gì nên không bị nó áp.
+
+### Tương thích ngược
+
+Index legacy (thiếu `index.pkl`) KHÔNG bị xoá, KHÔNG bị tự chuyển đổi. Nó chỉ bị từ
+chối ở hai chỗ cần canonical: `doc_artifact` không cho đẩy lên kho (đẩy một artifact
+thiếu `index.pkl` là gài mìn cho mọi instance khôi phục nó), và ingest không cho ghi
+đè lên nó. Muốn dùng tiếp thì dựng lại:
+`python -m scripts.dung_lai_index_tu_postgres --dry-run`.
+
+## Còn 6 chỗ `SKIP_MODEL_LOAD` chặn nhầm — CHƯA sửa, ngoài phạm vi (2026-09-04)
+
+Quét cả kho sau khi mắc lỗi này lần thứ ba. Đường truy hồi đã sửa xong (`retrieve`,
+`retrieve_scored`, `retrieve_faiss_only`, `retrieve_bm25_only`, `get_reranker`,
+`get_embeddings`, `_skip_faiss_in_ci`). Sáu chỗ dưới đây **vẫn chặn theo cờ**, và mỗi
+chỗ là một tính năng lặng lẽ suy giảm ở production dù chat FPT chạy tốt:
+
+| Chỗ | Hậu quả khi `SKIP_MODEL_LOAD=1` |
+|---|---|
+| `services/summary/pipeline/summarize.py:125` | trả section rỗng + `missing`, tóm tắt luôn degraded |
+| `services/summary/pipeline/synthesize.py:27` | không tổng hợp |
+| `services/mindmap/pipeline/outline.py:32` | không dựng mục lục bằng LLM |
+| `services/mindmap/pipeline/relations.py:28` | không sinh quan hệ giữa nhánh |
+| `services/mindmap/pipeline/enrich.py:111` | không làm giàu nút |
+| `domains/cache/llm_cache.py:354` | cache ngữ nghĩa tắt (chỗ này ĐÚNG — nó cần embedding) |
+
+Năm chỗ đầu gọi `ask_ai`, tức chat — **không nạp weight nào**. Cờ ở đó nói về RAM
+nhưng đang được đọc như "không có model nào để dùng". Production hiện chưa lộ ra vì
+summary/mindmap còn tắc ở chỗ thiếu index; sửa xong index thì chúng vẫn degraded.
+
+KHÔNG sửa trong phase định dạng index: đổi hành vi summary/mindmap là thay đổi ngữ
+nghĩa của tính năng khác, cần phase riêng và bộ test riêng.

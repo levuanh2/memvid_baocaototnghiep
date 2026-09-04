@@ -2422,3 +2422,42 @@ dụng, hai kết cục, và không có gì ở tầng cấu hình để nhìn r
   `shared.config._compute_providers`, `local_providers.ProviderPool`. Chỉ cái đầu được
   cập nhật; hai cái sau là mã chết nên không hỏng — hôm nay.
 - **Test ràng chúng với nhau** rẻ hơn nhiều so với việc phát hiện lệch qua triệu chứng.
+
+## Thẩm định phải chạy ĐÚNG loader của production, không phải một loader gần giống (2026-09-04)
+
+Hàm thẩm định artifact index bản đầu mở `index.faiss` bằng `faiss.read_index`, so số
+chiều, so số vector, so danh tính — nghe đủ. Nó bỏ sót `index.pkl` hoàn toàn, vì
+`read_index` không cần file ấy.
+
+Nhưng production nạp index bằng `FAISS.load_local`, và pickle hỏng chỉ lộ ra lúc hàm
+đó giải mã. Nên một `index.pkl` hỏng đi lọt qua thẩm định, được **thăng cấp**, đè lên
+index đang phục vụ, rồi mới hỏng: `load_vectorstore()` trả None, truy hồi tụt xuống
+nhánh dự phòng, và lần ingest kế tiếp đè mất luôn index.
+
+- **Bài học:** "đã kiểm" chỉ có nghĩa nếu kiểm bằng chính đường mà production đi. Một
+  kiểm tra gần giống cho cảm giác an toàn ở đúng chỗ nguy hiểm nhất — ngay trước bước
+  không lùi được.
+- **Cách bắt:** test phải phá đúng file mà kiểm tra kia không đọc, rồi khẳng định vẫn
+  bị từ chối. Test "artifact hợp lệ thì nạp được" xanh trong cả hai bản.
+- **Nạp thử ở STAGING**, trước khi thăng cấp — hỏng thì index đang phục vụ chưa bị
+  đụng tới.
+
+## Cùng một cờ, ba lần chặn nhầm (2026-09-04)
+
+`SKIP_MODEL_LOAD=1` nghĩa là "đừng nạp weight vào tiến trình này" — nó tồn tại vì
+Render free có 512MB. Ba chỗ đã dùng nó như công tắc TẮT HẲN năng lực:
+
+    rerank.get_reranker          -> Identity, kể cả khi backend là API từ xa
+    llm_factory.get_embeddings   -> FakeEmbeddings, kể cả khi provider là FPT
+    hybrid.retrieve_faiss_only   -> trả [] ngay dòng đầu
+
+Cái thứ ba tệ nhất vì nó nằm thẳng trong đường truy hồi: bật FPT embedding, có index
+hợp lệ, mà nửa FAISS của truy hồi lai vẫn im lặng biến mất — chỉ còn BM25, không lỗi
+nào, không log nào. Chất lượng kết quả tụt mà không có triệu chứng nào để lần ra.
+
+- **Dấu hiệu chung:** một cờ nói về TÀI NGUYÊN (RAM, đĩa, thời gian nạp) bị đọc như
+  một cờ nói về TÍNH NĂNG. Mỗi lần thêm một provider từ xa, mọi chỗ đọc cờ ấy lại sai
+  thêm một lần.
+- **Cách tìm hết:** `grep SKIP_MODEL_LOAD` rồi hỏi từng chỗ "cái này chặn việc nạp,
+  hay chặn việc dùng?". Hai lần đầu tôi sửa từng chỗ khi gặp; lần thứ ba mới nhận ra
+  phải quét cả kho.

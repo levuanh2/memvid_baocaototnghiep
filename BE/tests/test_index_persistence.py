@@ -60,9 +60,10 @@ class KhoGia:
         return path in self.data
 
 
-def _dung_index(thu_muc: Path, *, n=3, dim=4, danh_tinh=None, them_pkl=False,
+def _dung_index(thu_muc: Path, *, n=3, dim=4, danh_tinh=None, them_sqlite=False,
                 meta_version="1.2"):
-    """Dựng một bộ artifact thật (faiss + json) bằng chính đường của rebuild."""
+    """Dựng bộ artifact CANONICAL thật (faiss + pkl + json) bằng chính đường của
+    rebuild — không dựng file giả, vì test phải chạy trên đúng thứ production sinh ra."""
     bg = [{"chunk_id": f"c{i}", "document_id": "d1", "source_stem": "d1_txt",
            "text": f"doan {i}"} for i in range(n)]
     vecs = [[1.0] + [0.0] * (dim - 1) for _ in range(n)]
@@ -72,8 +73,8 @@ def _dung_index(thu_muc: Path, *, n=3, dim=4, danh_tinh=None, them_pkl=False,
         m["__meta__"]["version"] = meta_version
         (thu_muc / "index.json").write_text(json.dumps(m, ensure_ascii=False),
                                             encoding="utf-8")
-    if them_pkl:
-        (thu_muc / "index.pkl").write_bytes(b"docstore-gia")
+    if them_sqlite:
+        (thu_muc / "chunks.sqlite").write_bytes(b"sqlite-gia")
     return thu_muc
 
 
@@ -181,8 +182,18 @@ def test_thieu_index_faiss_thi_KHONG_day_len(tmp_path):
 
 
 def test_file_tuy_chon_duoc_day_khi_co(tmp_path):
-    d = _dung_index(tmp_path / "index", them_pkl=True)
-    assert set(ps.doc_artifact(d)) == {"index.faiss", "index.json", "index.pkl"}
+    d = _dung_index(tmp_path / "index", them_sqlite=True)
+    assert set(ps.doc_artifact(d)) == {"index.faiss", "index.pkl", "index.json",
+                                       "chunks.sqlite"}
+
+
+def test_thieu_index_pkl_thi_KHONG_day_len(tmp_path):
+    """`index.pkl` là BẮT BUỘC, không phải tuỳ chọn: thiếu nó thì
+    `load_vectorstore()` trả None và lần ingest kế tiếp ĐÈ MẤT index."""
+    d = _dung_index(tmp_path / "index")
+    (d / "index.pkl").unlink()
+    with pytest.raises(ps.PersistenceError, match="index.pkl"):
+        ps.doc_artifact(d)
 
 
 # ── Upload: thứ tự và tính nguyên tử ───────────────────────────────────────
@@ -194,7 +205,7 @@ def test_thu_tu_upload_con_tro_SAU_CUNG(tmp_path, cau_hinh):
     upload = [p for k, p in kho.log if k == "upload"]
     assert upload[-1].endswith("current.json"), "con trỏ phải là thứ ghi sau cùng"
     assert upload[-2].endswith("manifest.json"), "manifest ghi sau artifact"
-    assert ra["files"] == 2 and ra["version"]
+    assert ra["files"] == 3 and ra["version"]
 
 
 def test_upload_dut_giua_chung_KHONG_de_lai_con_tro(tmp_path, cau_hinh):
@@ -239,7 +250,7 @@ def test_manifest_ghi_du_bam_va_kich_thuoc(tmp_path, cau_hinh):
     d = _dung_index(tmp_path / "index")
     ra = ps.publish(d, storage=kho)
     mf = json.loads(kho.data[ps.khoa_version(ra["slug"], ra["version"], "manifest.json")])
-    assert {f["name"] for f in mf["files"]} == {"index.faiss", "index.json"}
+    assert {f["name"] for f in mf["files"]} == {"index.faiss", "index.pkl", "index.json"}
     assert all(f["sha256"] and f["size"] > 0 for f in mf["files"])
     assert mf["identity"] == DT
     assert mf["embedding_dim"] == 4
@@ -256,13 +267,13 @@ def test_day_lai_cung_noi_dung_ra_cung_van_tay(tmp_path, cau_hinh):
 # ── Khôi phục: đường thành công ────────────────────────────────────────────
 def test_vong_doi_day_du_upload_roi_restore(tmp_path, cau_hinh):
     kho = KhoGia()
-    goc = _dung_index(tmp_path / "goc", them_pkl=True)
+    goc = _dung_index(tmp_path / "goc", them_sqlite=True)
     ps.publish(goc, storage=kho)
 
     dich = tmp_path / "index"
     ra = ps.restore(thu_muc=dich, storage=kho)
-    assert ra["restored"] is True and ra["files"] == 3
-    for ten in ("index.faiss", "index.json", "index.pkl"):
+    assert ra["restored"] is True and ra["files"] == 4
+    for ten in ("index.faiss", "index.pkl", "index.json", "chunks.sqlite"):
         assert (dich / ten).read_bytes() == (goc / ten).read_bytes(), (
             f"{ten}: byte tải về phải trùng khít byte đã đẩy")
     m = json.loads((dich / "index.json").read_text(encoding="utf-8"))["__meta__"]

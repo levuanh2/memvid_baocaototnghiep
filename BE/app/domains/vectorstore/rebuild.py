@@ -159,21 +159,55 @@ def kiem_vector(vecs: Sequence[Sequence[float]]) -> int:
 
 
 # ── B. Ghi staging ─────────────────────────────────────────────────────────
+# Bộ artifact CANONICAL. Đây là thứ `append_chunks_to_lc_index` (đường ingest thật
+# của ứng dụng) vẫn sinh ra, và là thứ `FAISS.load_local` đọc được.
+FILE_CANONICAL = ("index.faiss", "index.pkl", "index.json")
+
+
 def _ghi_staging(thu_muc: Path, ban_ghi: List[Dict[str, Any]],
                  vecs: Sequence[Sequence[float]], dim: int,
-                 danh_tinh: Dict[str, Any]) -> None:
-    import faiss
-    import numpy as np
+                 danh_tinh: Dict[str, Any], *, emb_obj: Any = None) -> None:
+    """Ghi index ở ĐÚNG định dạng mà ứng dụng đọc — LangChain FAISS.
+
+    Bản đầu của hàm này ghi `faiss.IndexIDMap` trần: đúng cho đường legacy, nhưng
+    ứng dụng chạy `USE_LC_VECTOR_STORE=1` nên `load_vectorstore()` gọi
+    `FAISS.load_local`, cần thêm `index.pkl`. Thiếu file ấy thì `load_vectorstore()`
+    trả None và truy hồi rơi xuống nhánh legacy — chạy được, nên trông như ổn.
+
+    Nó KHÔNG ổn, vì hai lý do:
+
+    1. `FAISS.load_local` ghi `IndexFlatL2`, và `idx.search` trả về VỊ TRÍ trong
+       index, không phải `chunk_id`. Nhánh legacy lại dùng số trả về ấy làm
+       `chunk_id` để tra `_by_id`. Hai định dạng dùng CHUNG một tên file
+       `index.faiss` mà nghĩa của số bên trong thì khác nhau — trùng khớp được chỉ
+       vì rebuild đánh id 0..N-1 đúng theo thứ tự khoá trong `index.json`.
+    2. Nguy hiểm hơn: lần ingest KẾ TIẾP gọi `append_chunks_to_lc_index`, hàm này
+       gọi `load_vectorstore()`, nhận None (vì thiếu `index.pkl`), rồi dựng một
+       vectorstore MỚI chỉ từ các chunk mới và `save_local` đè lên `index.faiss`.
+       Toàn bộ vector vừa dựng lại biến mất, còn `index.json` vẫn liệt kê chúng.
+
+    Nên rebuild sinh ĐÚNG định dạng canonical, không dựa vào nhánh dự phòng.
+    `metadata` mang `chunk_id` = vị trí, khớp khoá `index.json` và khớp
+    `document_chunks.embedding_id` sẽ ghi xuống Postgres.
+    """
+    from langchain_community.vectorstores import FAISS
 
     if thu_muc.exists():
         shutil.rmtree(thu_muc)
     thu_muc.mkdir(parents=True, exist_ok=True)
 
-    arr = np.asarray(vecs, dtype="float32")
-    ids = np.arange(len(ban_ghi), dtype="int64")
-    idx = faiss.IndexIDMap(faiss.IndexFlatL2(dim))
-    idx.add_with_ids(arr, ids)
-    faiss.write_index(idx, str(thu_muc / "index.faiss"))
+    if emb_obj is None:
+        from app.clients.llm_factory import get_embeddings
+
+        # Chỉ dùng để embed CÂU TRUY VẤN lúc đọc lại; `save_local` không ghi nó vào
+        # pickle, nên đối tượng nào cũng được miễn khớp không gian vector khi truy vấn.
+        emb_obj = get_embeddings()
+
+    cap = [(b["text"], [float(x) for x in v]) for b, v in zip(ban_ghi, vecs)]
+    metadatas = [{"chunk_id": i, "source_stem": b["source_stem"]}
+                 for i, b in enumerate(ban_ghi)]
+    vs = FAISS.from_embeddings(cap, emb_obj, metadatas=metadatas)
+    vs.save_local(str(thu_muc))
 
     meta: Dict[str, Any] = {}
     for i, b in enumerate(ban_ghi):
@@ -184,7 +218,7 @@ def _ghi_staging(thu_muc: Path, ban_ghi: List[Dict[str, Any]],
         "created_at": datetime.now().isoformat(),
         "num_chunks": len(ban_ghi),
         "embedding_dim": dim,
-        "vector_backend": "faiss_idmap",
+        "vector_backend": "langchain_faiss",
         "rebuilt_from": "postgres.document_chunks",
         "vectors_normalized": da_chuan_hoa(vecs),
         **danh_tinh,
@@ -200,10 +234,11 @@ def tham_dinh_staging(thu_muc: Path, *, so_chunk: int, dim: int,
     lần ghi hỏng nửa chừng."""
     import faiss
 
+    thieu = [t for t in FILE_CANONICAL if not (thu_muc / t).exists()]
+    if thieu:
+        raise RebuildValidationError(f"staging thiếu file: {thieu} trong {thu_muc}")
     f = thu_muc / "index.faiss"
     m = thu_muc / "index.json"
-    if not f.exists() or not m.exists():
-        raise RebuildValidationError(f"staging thiếu file: {thu_muc}")
 
     idx = faiss.read_index(str(f))
     if idx.d != dim:
