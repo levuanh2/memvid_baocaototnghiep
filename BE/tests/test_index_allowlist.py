@@ -163,10 +163,13 @@ def test_thieu_co_eligible_thi_nem(tmp_path):
 # ── File allowlist THẬT của kho ────────────────────────────────────────────
 def test_allowlist_that_doc_duoc_va_hop_le():
     ds = al.tai()
-    assert len(ds) == 12, f"kho có 12 tài liệu, allowlist khai {len(ds)}"
+    assert len(ds) == 13, f"kho có 13 tài liệu, allowlist khai {len(ds)}"
 
 
-TAI_LIEU_PRODUCTION_DAU_TIEN = "7a70a7d0-a678-4fcb-b983-9df66b49cbba"
+# Tài liệu production SẠCH đầu tiên: tạo sau 373f388 nên chunk mang đúng danh
+# tính fpt/Vietnamese_Embedding/api_pooled. Bản trước (7a70a7d0-…) đã bị THU HỒI
+# quyền index vì 3 chunk của nó ingest trước fix, danh tính NULL.
+TAI_LIEU_PRODUCTION_DAU_TIEN = "f01ac8c1-830e-45e1-a802-7713c20982c3"
 
 
 def test_dung_MOT_tai_lieu_duoc_duyet_va_dung_no(capsys):
@@ -219,8 +222,14 @@ def test_khong_hang_nao_do_production_nap():
         if ban["classification"] == al.CONFIRMED_PRODUCTION:
             # Chỉ tài liệu nạp QUA RENDER mới được mang phân loại này. `input_path`
             # của nó là đường POSIX của container, không phải ổ E: của máy trạm.
+            #
+            # Có thể có NHIỀU bản ghi CONFIRMED_PRODUCTION: nguồn gốc là sự thật lịch
+            # sử, không thu hồi được. Cái thu hồi được là quyền index — 7a70a7d0-… vẫn
+            # là production thật nhưng `eligible_for_index=false` vì chunk của nó
+            # ingest trước 373f388 nên không rõ danh tính không gian vector.
             assert "render" in ban["ingested_from"].lower(), did
-            assert did == TAI_LIEU_PRODUCTION_DAU_TIEN, did
+            if ban["eligible_for_index"]:
+                assert did == TAI_LIEU_PRODUCTION_DAU_TIEN, did
 
 
 def test_moi_ban_ghi_that_deu_co_bang_chung():

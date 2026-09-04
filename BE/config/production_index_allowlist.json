@@ -158,11 +158,22 @@
       "owner_email": "corpus-c2353f9e@studymap.local",
       "chunk_count": 3,
       "classification": "CONFIRMED_PRODUCTION",
+      "eligible_for_index": false,
+      "ingested_from": "render production (studymap-api-keq6.onrender.com)",
+      "evidence": "TÀI LIỆU PRODUCTION ĐẦU TIÊN. Nạp qua đường thật: POST /auth/register rồi POST /upload-file tới https://studymap-api-keq6.onrender.com — không qua pytest, không qua script ghi thẳng DB, không seed, không fixture. BẰNG CHỨNG MÁY GHI: documents.metadata_json->>'ingest_origin' = 'production', do `repository.create()` tự gọi `provenance.nguon_ingest()` lúc tạo hàng — không phải tham số nên client không đặt được (xem test_ingest_provenance.py). input_path = '/tmp/studymap/input_docs/production-embedding-smoke-2026-09-04.txt' — đường dẫn POSIX của container Render, không phải ổ E: của máy trạm. document_id 7a70a7d0-a678-4fcb-b983-9df66b49cbba, tạo 2026-09-04T12:29:02Z, xong 12:29:39Z, status completed, 3 chunk (chunk_index 0..2, không chunk mồ côi), 2.806 byte / 2.220 ký tự, nội dung sinh học phổ thông tiếng Việt, không chứa bí mật. Đây là tài liệu DUY NHẤT được duyệt; 11 tài liệu còn lại giữ nguyên eligible=false. THU HỒI QUYỀN INDEX 2026-09-04 (phân loại GIỮ NGUYÊN là CONFIRMED_PRODUCTION — nguồn gốc của nó vẫn thật): 3 chunk này được ingest TRƯỚC commit 373f388, nên `metadata_json.embedding_identity` là NULL và `embedding_model` ghi nhãn sai 'sentence-transformers/all-MiniLM-L6-v2'. Đưa chunk không rõ danh tính không gian vector vào một index FPT là đúng thứ `check_index_identity` sinh ra để chặn. Không được backfill nhãn (ngụy tạo dữ liệu) nên danh tính ấy KHÔNG BAO GIỜ xác lập lại được cho 3 hàng này; muốn đưa nội dung này vào index thì phải upload lại qua production. Thay thế: tài liệu f01ac8c1-830e-45e1-a802-7713c20982c3.",
+      "decided_at": "2026-09-04",
+      "decided_by": "corpus-production-2026-09-04-v2"
+    },
+    "f01ac8c1-830e-45e1-a802-7713c20982c3": {
+      "filename": "prod-fpt-embedding-smoke-2026-09-04.txt",
+      "owner_email": "corpus2-31543a0d@studymap.local",
+      "chunk_count": 3,
+      "classification": "CONFIRMED_PRODUCTION",
       "eligible_for_index": true,
       "ingested_from": "render production (studymap-api-keq6.onrender.com)",
-      "evidence": "TÀI LIỆU PRODUCTION ĐẦU TIÊN. Nạp qua đường thật: POST /auth/register rồi POST /upload-file tới https://studymap-api-keq6.onrender.com — không qua pytest, không qua script ghi thẳng DB, không seed, không fixture. BẰNG CHỨNG MÁY GHI: documents.metadata_json->>'ingest_origin' = 'production', do `repository.create()` tự gọi `provenance.nguon_ingest()` lúc tạo hàng — không phải tham số nên client không đặt được (xem test_ingest_provenance.py). input_path = '/tmp/studymap/input_docs/production-embedding-smoke-2026-09-04.txt' — đường dẫn POSIX của container Render, không phải ổ E: của máy trạm. document_id 7a70a7d0-a678-4fcb-b983-9df66b49cbba, tạo 2026-09-04T12:29:02Z, xong 12:29:39Z, status completed, 3 chunk (chunk_index 0..2, không chunk mồ côi), 2.806 byte / 2.220 ký tự, nội dung sinh học phổ thông tiếng Việt, không chứa bí mật. Đây là tài liệu DUY NHẤT được duyệt; 11 tài liệu còn lại giữ nguyên eligible=false.",
+      "evidence": "NGỮ LIỆU PRODUCTION SẠCH ĐẦU TIÊN — tạo SAU commit 373f388 nên là tài liệu đầu tiên mang danh tính embedding đúng. Nạp qua đường thật: POST /auth/register rồi POST /upload-file tới https://studymap-api-keq6.onrender.com; không pytest, không script ghi thẳng DB, không seed, không fixture, không local API. BẰNG CHỨNG MÁY GHI (server ghi, client không đặt được): ingest_origin='production'; input_path='/tmp/studymap/input_docs/prod-fpt-embedding-smoke-2026-09-04.txt' — đường POSIX của container Render, không phải ổ E: của máy trạm; và cả 3 chunk mang metadata_json.embedding_identity={'embedding_provider':'fpt','embedding_model_name':'Vietnamese_Embedding','embedding_strategy':'api_pooled'} do `_persist_sections_and_chunks` hỏi `embedding_identity()` chứ không đọc cấu hình. document_id f01ac8c1-830e-45e1-a802-7713c20982c3, tạo 2026-09-04T13:46:16Z, xong 13:46:43Z, status completed, 3 chunk (chunk_index 0..2, embedding_id '0'..'2' giữ đúng vai trò con trỏ FAISS), 2.251 ký tự, nội dung vật lý phổ thông tiếng Việt (định luật Ohm), không chứa bí mật. Audit chỉ-đọc lúc 2026-09-04T13:47Z. Đây là tài liệu DUY NHẤT được duyệt.",
       "decided_at": "2026-09-04",
-      "decided_by": "corpus-production-2026-09-04"
+      "decided_by": "corpus-production-2026-09-04-v2"
     }
   }
 }

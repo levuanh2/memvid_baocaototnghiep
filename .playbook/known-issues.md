@@ -4345,3 +4345,54 @@ nó là ngụy tạo dữ liệu; chỗ đúng để sửa là lần ingest sau.
 
 Regression: `tests/test_chunk_embedding_identity.py` (8 test). Đã kiểm ngược: 5/8 đỏ
 trên mã cũ.
+
+---
+
+## Ngữ liệu production SẠCH đầu tiên — và vì sao tài liệu production cũ bị thu hồi quyền index (2026-09-04)
+
+`f01ac8c1-830e-45e1-a802-7713c20982c3` · `prod-fpt-embedding-smoke-2026-09-04.txt` ·
+3 chunk · nạp qua `POST /upload-file` tới studymap-api-keq6.onrender.com, SAU commit
+`373f388`.
+
+Đây là bằng chứng chạy thật của fix danh tính chunk. Cả 3 chunk mang:
+
+```
+metadata_json.embedding_identity = {embedding_provider: fpt,
+                                    embedding_model_name: Vietnamese_Embedding,
+                                    embedding_strategy: api_pooled}
+embedding_model = Vietnamese_Embedding      (trước fix: all-MiniLM-L6-v2)
+embedding_id    = '0','1','2'               (vẫn là con trỏ hàng FAISS, không đổi vai trò)
+ingest_origin   = production
+input_path      = /tmp/studymap/input_docs/...   POSIX của Render
+```
+
+### Tài liệu production ĐẦU TIÊN (`7a70a7d0-…`) bị THU HỒI quyền index
+
+`eligible_for_index` true → **false**. Phân loại GIỮ NGUYÊN `CONFIRMED_PRODUCTION` —
+nguồn gốc là sự thật lịch sử, không thu hồi được; thứ thu hồi được là quyền vào index.
+
+Lý do là kỹ thuật, không phải hành chính: 3 chunk của nó ingest TRƯỚC `373f388` nên
+`embedding_identity` NULL và `embedding_model` ghi nhãn sai. Đưa chunk không rõ danh
+tính không gian vector vào một index FPT là đúng thứ `check_index_identity` sinh ra để
+chặn. Và vì cấm backfill (ngụy tạo dữ liệu), danh tính ấy **không bao giờ xác lập lại
+được** cho ba hàng đó — muốn nội dung ấy vào index thì phải upload lại qua production.
+
+Bài học vận hành: một hàng dữ liệu tạo ra trước khi hàng rào tồn tại thì vĩnh viễn
+không qua được hàng rào ấy, trừ khi tạo lại. Đó là cái giá của việc không backfill, và
+nó rẻ hơn cái giá của việc tin một nhãn do người sau điền hộ.
+
+### Trạng thái allowlist
+
+```
+ELIGIBLE_DOCUMENTS 1   ELIGIBLE_CHUNKS 3     (chỉ f01ac8c1-…)
+BLOCKED_DOCUMENTS 11   BLOCKED_CHUNKS 192
+KHÔNG CÓ BẢN GHI   0
+```
+
+Dry-run rebuild in đúng `1 tài liệu / 3 chunk SẼ được embed`, chặn 11 tài liệu / 192 chunk.
+
+### Vẫn DỪNG ở embedding
+
+`FPT_AI_API_KEY` chưa có ở máy dev (`.env`, `BE/.env`, shell: absent) nên không dựng
+được index FPT cục bộ. Production thì có khoá và đã embed 3 chunk này lúc ingest, nhưng
+index đó nằm trên `/tmp` phù du và không có đường nào lấy ra.

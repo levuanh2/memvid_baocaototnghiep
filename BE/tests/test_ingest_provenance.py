@@ -199,7 +199,7 @@ def test_11_tai_lieu_hien_tai_van_KHONG_the_vao_index():
     Test này đỏ nếu có người vừa gắn nhãn production cho tài liệu cũ vừa duyệt nó —
     hai việc mà phase này CẤM làm."""
     ds = al.tai()
-    MOI = "7a70a7d0-a678-4fcb-b983-9df66b49cbba"
+    MOI = "f01ac8c1-830e-45e1-a802-7713c20982c3"
     ban_ghi = [{"document_id": did, "text": "x"} for did in ds if did != MOI]
     assert al.loc_ban_ghi(ban_ghi, ds) == []
     assert al.tom_tat(ban_ghi, ds)["eligible_chunks"] == 0
@@ -209,9 +209,9 @@ def test_allowlist_that_chi_duyet_tai_lieu_production():
     """Từ 2026-09-04 có đúng MỘT mục được duyệt — tài liệu production đầu tiên. Mọi
     tài liệu khác vẫn bị chặn kể cả khi giả định nhãn nguồn là production."""
     ds = al.tai()
-    assert len(ds) == 12
+    assert len(ds) == 13
     duyet = [d for d in ds if al.duoc_index(d, ds, ingest_origin="production")]
-    assert duyet == ["7a70a7d0-a678-4fcb-b983-9df66b49cbba"], duyet
+    assert duyet == ["f01ac8c1-830e-45e1-a802-7713c20982c3"], duyet
 
 
 def test_rebuild_mang_nguon_tu_hang_tai_lieu_xuong_chunk():

@@ -176,7 +176,7 @@ def test_allowlist_van_dung_mot_tai_lieu_ba_chunk():
     """Phase này KHÔNG được đụng allowlist. 189 chunk cũ vẫn bị chặn, tài liệu
     production vẫn là mục duy nhất được duyệt."""
     ds = al.tai()
-    assert len(ds) == 12
+    assert len(ds) == 13
     duyet = [d for d in ds if al.duoc_index(d, ds, ingest_origin="production")]
-    assert duyet == ["7a70a7d0-a678-4fcb-b983-9df66b49cbba"]
+    assert duyet == ["f01ac8c1-830e-45e1-a802-7713c20982c3"]
     assert ds[duyet[0]]["chunk_count"] == 3
