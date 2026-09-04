@@ -3,7 +3,8 @@
     python -m scripts.dung_lai_index_tu_postgres --dry-run
     python -m scripts.dung_lai_index_tu_postgres --thuc-hien
 
-`--dry-run` (mặc định) đọc chunk, đếm, in danh tính embedding đang cấu hình rồi DỪNG.
+`--dry-run` (mặc định) đọc chunk, ÁP ALLOWLIST, đếm, in danh tính embedding đang
+cấu hình rồi DỪNG. Con số in ra là con số SẼ được embed, không phải con số đọc từ DB.
 Không gọi embedding, không ghi file, không chạm DB — dùng để xem trước quy mô và giá
 trước khi tiêu tiền gọi API.
 
@@ -64,9 +65,34 @@ def main() -> int:
         theo_doc[b["document_id"]] = theo_doc.get(b["document_id"], 0) + 1
     print(f"Tài liệu: {len(theo_doc)}")
 
+    # Xem trước PHẢI nói con số sẽ thực sự được embed, không phải con số đọc được.
+    # Bản cũ in tổng số chunk trong DB, mà hàng rào allowlist nằm bên trong
+    # `rebuild_index_tu_postgres` — nên xem trước báo 192 trong khi việc thật chỉ embed
+    # 3. Sai theo hướng nguy hiểm nhất: người đọc tưởng sắp trả tiền cho 192 lượt gọi,
+    # hoặc tệ hơn, tưởng 189 chunk cũ sắp vào index.
+    from app.domains.vectorstore import allowlist as _al
+
+    try:
+        danh_sach = _al.tai()
+    except _al.AllowlistError as exc:
+        print(f"DỪNG: allowlist hỏng — {exc}", file=sys.stderr)
+        return 2
+    duoc_phep = _al.loc_ban_ghi(ban_ghi, danh_sach)
+    doc_duoc_phep = sorted({b["document_id"] for b in duoc_phep})
+    print(f"Qua allowlist : {len(doc_duoc_phep)} tài liệu / {len(duoc_phep)} chunk SẼ được embed")
+    print(f"Bị chặn       : {len(theo_doc) - len(doc_duoc_phep)} tài liệu / "
+          f"{len(ban_ghi) - len(duoc_phep)} chunk")
+    for did in doc_duoc_phep:
+        print(f"  + {did}  {sum(1 for b in duoc_phep if b['document_id'] == did)} chunk")
+
     if not args.thuc_hien:
         print("\n(xem trước) Thêm --thuc-hien để dựng thật.")
         return 0
+
+    if not duoc_phep:
+        print("Không tài liệu nào được allowlist cho phép — không gọi embedding, "
+              "không đụng vào index hiện có.", file=sys.stderr)
+        return 1
 
     def _tien_do(xong: int, tong: int) -> None:
         print(f"  embed {xong}/{tong}", flush=True)

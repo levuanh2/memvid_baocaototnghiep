@@ -4224,3 +4224,72 @@ tương đương `/api/vision/status` vốn đã không xác thực.
 
 `tests/snapshots/url_map.json` +1 rule (83). Đó là điểm chính của ảnh chụp đó: một route
 mới phải hiện ra trong code review.
+
+---
+
+## Tài liệu production ĐẦU TIÊN — và ba thứ chặn ở mắt xích embedding (2026-09-04)
+
+Nạp qua đường thật: `POST /auth/register` → `POST /upload-file` tới
+`studymap-api-keq6.onrender.com`. Không pytest, không script ghi thẳng DB, không seed.
+
+```
+document_id   7a70a7d0-a678-4fcb-b983-9df66b49cbba
+filename      production-embedding-smoke-2026-09-04.txt
+ingest_origin production          <- server ghi, client không đặt được
+input_path    /tmp/studymap/input_docs/...   <- POSIX của Render, không phải ổ E:
+status        completed · 3 chunk (index 0..2) · 2.806 B / 2.220 ký tự
+```
+
+Allowlist: `CONFIRMED_PRODUCTION` + `eligible_for_index=true`. Kiểm kê ra đúng
+**1 tài liệu / 3 chunk eligible**, 10 tài liệu / 189 chunk vẫn blocked.
+
+### 1. Xem trước của rebuild nói SAI quy mô — đã sửa
+
+`--dry-run` in tổng số chunk đọc từ DB (192) trong khi hàng rào allowlist nằm bên trong
+`rebuild_index_tu_postgres`, tức việc thật chỉ embed 3. Sai theo hướng nguy hiểm nhất:
+người đọc tưởng sắp trả tiền cho 192 lượt gọi, hoặc tệ hơn, tưởng 189 chunk cũ sắp vào
+index. Nay dry-run áp allowlist trước khi in:
+
+```
+Qua allowlist : 1 tài liệu / 3 chunk SẼ được embed
+Bị chặn       : 10 tài liệu / 189 chunk
+  + 7a70a7d0-…  3 chunk
+```
+
+Và `--thuc-hien` với danh sách rỗng thì dừng hẳn thay vì đi tiếp vào `rebuild`.
+
+### 2. `document_chunks.embedding_model` ghi NHÃN CẤU HÌNH, không phải model đã dùng
+
+Chunk mới ghi `sentence-transformers/all-MiniLM-L6-v2` trong khi production embed bằng
+FPT `Vietnamese_Embedding`. Nguồn: `ingest_graph.py:235` lấy `s_cfg.embedding_model_name`
+— tức `EMBEDDING_MODEL_NAME` env hoặc hằng mặc định, **không hỏi** đối tượng embeddings
+thật đang dùng. `embedding_dim` để trống.
+
+Không sửa ở phase này (đổi hành vi ingest cần bộ test riêng), nhưng phải biết: cột đó
+KHÔNG dùng để nhận diện không gian vector được. Danh tính thật nằm ở `index.json`, do
+`embedding_identity()` ghi.
+
+### 3. DỪNG ở mắt xích embedding: máy dev không có khoá FPT
+
+`FPT_AI_API_KEY` chỉ tồn tại trên Render (đặt làm secret env var, cố ý không nằm trong
+kho mã và không có trong `.env` nào cục bộ). Nên **không dựng được index FPT từ máy này**:
+
+```
+Danh tính embedding: {'embedding_provider': 'local', 'embedding_model_name': 'BAAI/bge-m3',
+                      'embedding_strategy': 'mean_late'}
+Lưu ý: FPT embedding CHƯA bật — index sẽ mang danh tính model cục bộ.
+```
+
+Hàng rào hoạt động đúng: thiếu khoá thì `fpt_embedding_enabled()` False và script nói
+thẳng rằng index sẽ mang danh tính sai. Dựng tiếp lúc này là tạo một index `bge-m3` rồi
+gọi nó là index production — đúng loại nhầm mà cả chuỗi phase này sinh ra để chặn.
+
+### 4. Retrieval production không kiểm được vì đĩa phù du + phạm vi quyền
+
+Ingest production có dựng FAISS trong `/tmp` (chunk được gán `embedding_id` 0..2,
+`can_query=true`). Nhưng instance restart lúc 12:4x (502 rồi lên lại) là `/tmp` sạch.
+Thêm nữa `/query` lọc theo quyền sở hữu, nên một tài khoản khác hỏi tài liệu này nhận
+`403 forbidden_source` — đúng thiết kế.
+
+Muốn kiểm retrieval trên production thì phải có `INDEX_PERSISTENCE_ENABLED` + khôi phục
+lúc khởi động. Chưa bật, và bật nó là quyết định riêng.

@@ -2563,3 +2563,28 @@ không tham số nào tên chứa "origin".
 
 Quy tắc rút ra: giá trị nào quyết định quyền thì phải sinh ra ở nơi nó được tin, và đường
 từ request tới nơi đó phải KHÔNG TỒN TẠI — chứ không phải tồn tại mà hiện chưa ai đi.
+
+## Xem trước phải xem trước cái SẼ xảy ra, không phải cái vừa đọc được (2026-09-04)
+
+`--dry-run` của rebuild in "Chunk đọc từ Postgres: 192". Con số đúng, câu hỏi sai. Thứ
+người ta chạy dry-run để biết là "tôi sắp embed bao nhiêu, tốn bao nhiêu" — mà hàng rào
+allowlist nằm sau đó, bên trong hàm rebuild, nên đáp án thật là 3.
+
+Một xem trước lệch 64 lần theo hướng phóng đại thì vô hại về tiền nhưng độc về niềm tin:
+lần sau người đọc thấy 192 rồi thấy hoá đơn 3, họ sẽ ngừng tin cả hai con số.
+
+Quy tắc: nếu một bước lọc nằm giữa "đọc" và "làm", thì bản xem trước phải chạy qua đúng
+bước lọc đó. Xem trước dùng chung đường với việc thật, hoặc nó không phải xem trước.
+
+## Khoá chỉ có ở production nghĩa là mắt xích đó chỉ chứng minh được ở production (2026-09-04)
+
+Kế hoạch của tôi là dựng index FPT từ máy dev, đọc ngữ liệu qua DB dùng chung. Đọc DB thì
+được — khoá thì không: `FPT_AI_API_KEY` cố ý chỉ nằm trong Render.
+
+Đáng lẽ phải phát hiện điều này ở bước lập kế hoạch chứ không phải sau khi đã upload xong
+tài liệu production. Cách kiểm rẻ: trước khi dựng kế hoạch có bước gọi API trả tiền, liệt
+kê từng bí mật mà bước ấy cần và hỏi "bí mật này có ở nơi tôi định chạy không".
+
+Không có khoá thì lựa chọn đúng là DỪNG, không phải dựng một index `bge-m3` rồi gọi nó là
+index production. Hàng rào đã nói thẳng ("index sẽ mang danh tính model cục bộ") — và cả
+chuỗi phase vừa rồi tồn tại chính là để câu cảnh báo đó không bị bỏ qua.

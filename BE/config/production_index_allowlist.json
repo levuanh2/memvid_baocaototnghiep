@@ -152,6 +152,17 @@
       "decided_at": "2026-09-04",
       "decided_by": "provenance-2026-09-04",
       "ingested_from": "may-tram-dev (Windows, e:\\memvid_NCKH\\...\\BE\\input_docs)"
+    },
+    "7a70a7d0-a678-4fcb-b983-9df66b49cbba": {
+      "filename": "production-embedding-smoke-2026-09-04.txt",
+      "owner_email": "corpus-c2353f9e@studymap.local",
+      "chunk_count": 3,
+      "classification": "CONFIRMED_PRODUCTION",
+      "eligible_for_index": true,
+      "ingested_from": "render production (studymap-api-keq6.onrender.com)",
+      "evidence": "TÀI LIỆU PRODUCTION ĐẦU TIÊN. Nạp qua đường thật: POST /auth/register rồi POST /upload-file tới https://studymap-api-keq6.onrender.com — không qua pytest, không qua script ghi thẳng DB, không seed, không fixture. BẰNG CHỨNG MÁY GHI: documents.metadata_json->>'ingest_origin' = 'production', do `repository.create()` tự gọi `provenance.nguon_ingest()` lúc tạo hàng — không phải tham số nên client không đặt được (xem test_ingest_provenance.py). input_path = '/tmp/studymap/input_docs/production-embedding-smoke-2026-09-04.txt' — đường dẫn POSIX của container Render, không phải ổ E: của máy trạm. document_id 7a70a7d0-a678-4fcb-b983-9df66b49cbba, tạo 2026-09-04T12:29:02Z, xong 12:29:39Z, status completed, 3 chunk (chunk_index 0..2, không chunk mồ côi), 2.806 byte / 2.220 ký tự, nội dung sinh học phổ thông tiếng Việt, không chứa bí mật. Đây là tài liệu DUY NHẤT được duyệt; 11 tài liệu còn lại giữ nguyên eligible=false.",
+      "decided_at": "2026-09-04",
+      "decided_by": "corpus-production-2026-09-04"
     }
   }
 }

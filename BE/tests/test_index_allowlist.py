@@ -163,16 +163,26 @@ def test_thieu_co_eligible_thi_nem(tmp_path):
 # ── File allowlist THẬT của kho ────────────────────────────────────────────
 def test_allowlist_that_doc_duoc_va_hop_le():
     ds = al.tai()
-    assert len(ds) == 11, f"kho có 11 tài liệu production, allowlist khai {len(ds)}"
+    assert len(ds) == 12, f"kho có 12 tài liệu, allowlist khai {len(ds)}"
 
 
-def test_allowlist_that_KHONG_cho_phep_tai_lieu_nao(capsys):
-    """Trạng thái đúng của hôm nay: chưa tài liệu nào được chứng minh là dữ liệu thật
-    VÀ được duyệt cho index. Test này sẽ đỏ khi có người thêm mục đầu tiên — đó là
-    chủ đích: việc ấy phải được nhìn thấy, không được lặng lẽ."""
+TAI_LIEU_PRODUCTION_DAU_TIEN = "7a70a7d0-a678-4fcb-b983-9df66b49cbba"
+
+
+def test_dung_MOT_tai_lieu_duoc_duyet_va_dung_no(capsys):
+    """Bản trước khẳng định danh sách duyệt RỖNG, và ghi rõ nó sẽ đỏ khi có mục đầu
+    tiên. Ngày 2026-09-04 mục đó xuất hiện: tài liệu production đầu tiên, nạp qua
+    studymap-api-keq6.onrender.com. Test đổi sang khoá đúng MỘT id — thêm mục thứ hai
+    vẫn phải đỏ, vì việc ấy phải được nhìn thấy chứ không được lặng lẽ."""
     ds = al.tai()
-    cho_phep = [d for d in ds if al.duoc_index(d, ds)]
-    assert cho_phep == [], f"có tài liệu được cho phép index: {cho_phep}"
+    cho_phep = [d for d in ds if al.duoc_index(d, ds, ingest_origin="production")]
+    assert cho_phep == [TAI_LIEU_PRODUCTION_DAU_TIEN], cho_phep
+
+
+def test_khong_co_nhan_nguon_thi_KHONG_ai_duoc_duyet():
+    """Kể cả tài liệu đã duyệt: bỏ nhãn nguồn đi thì nó cũng không vào được index."""
+    ds = al.tai()
+    assert [d for d in ds if al.duoc_index(d, ds)] == []
 
 
 BON_TAI_LIEU_MO_HO = {
@@ -206,7 +216,11 @@ def test_khong_hang_nao_do_production_nap():
     khi có người khai một hàng là dữ liệu production mà không sửa `ingested_from`."""
     for did, ban in al.tai().items():
         assert ban.get("ingested_from"), f"{did} thiếu ingested_from"
-        assert ban["classification"] != al.CONFIRMED_PRODUCTION, did
+        if ban["classification"] == al.CONFIRMED_PRODUCTION:
+            # Chỉ tài liệu nạp QUA RENDER mới được mang phân loại này. `input_path`
+            # của nó là đường POSIX của container, không phải ổ E: của máy trạm.
+            assert "render" in ban["ingested_from"].lower(), did
+            assert did == TAI_LIEU_PRODUCTION_DAU_TIEN, did
 
 
 def test_moi_ban_ghi_that_deu_co_bang_chung():

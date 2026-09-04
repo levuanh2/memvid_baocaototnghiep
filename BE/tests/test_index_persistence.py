@@ -551,14 +551,39 @@ def test_CLI_khong_tu_day_len_khi_thieu_co_persist():
 
 
 def test_dry_run_KHONG_goi_embedding():
-    """`--dry-run` (mặc định) chỉ đếm — không được tiêu một đồng API nào."""
+    """`--dry-run` (mặc định) chỉ đếm — không được tiêu một đồng API nào.
+
+    Đọc bằng AST chứ không phải `str.find`. Bản cũ so vị trí chuỗi
+    `"rebuild_index_tu_postgres"` với chuỗi `"(xem trước)"`, nên một dòng CHÚ THÍCH
+    nhắc tên hàm đó cũng đủ làm test đỏ — đã xảy ra thật ngày 2026-09-04. Cùng lớp
+    lỗi với `test_KHONG_tu_chay_o_dau_ca` đã chuyển sang AST trước đó: thứ cần
+    khẳng định là LỜI GỌI, không phải sự xuất hiện của một cái tên.
+    """
+    import ast
     import pathlib
 
     src = (pathlib.Path(__file__).resolve().parents[1] / "scripts"
            / "dung_lai_index_tu_postgres.py").read_text(encoding="utf-8")
-    i_thoat = src.find("(xem trước)")
-    i_dung = src.find("rebuild_index_tu_postgres")
-    assert 0 < i_thoat < i_dung, "nhánh xem trước phải return TRƯỚC khi dựng lại"
+    cay = ast.parse(src)
+    ham = next(n for n in ast.walk(cay)
+               if isinstance(n, ast.FunctionDef) and n.name == "main")
+
+    def _ten(node):
+        f = node.func
+        return f.attr if isinstance(f, ast.Attribute) else getattr(f, "id", "")
+
+    dong_goi = [n.lineno for n in ast.walk(ham)
+                if isinstance(n, ast.Call) and _ten(n) == "rebuild_index_tu_postgres"]
+    assert dong_goi, "main() phải gọi rebuild_index_tu_postgres ở nhánh --thuc-hien"
+
+    # Nhánh xem trước: `if not args.thuc_hien:` ... `return`
+    dong_thoat = [n.lineno
+                  for nhanh in ast.walk(ham) if isinstance(nhanh, ast.If)
+                  for n in ast.walk(nhanh) if isinstance(n, ast.Return)
+                  and "thuc_hien" in ast.dump(nhanh.test)]
+    assert dong_thoat, "không tìm thấy nhánh thoát của --dry-run"
+    assert min(dong_thoat) < min(dong_goi), (
+        "nhánh xem trước phải return TRƯỚC lời gọi dựng lại")
 
 
 # ── Không rò bí mật ────────────────────────────────────────────────────────
