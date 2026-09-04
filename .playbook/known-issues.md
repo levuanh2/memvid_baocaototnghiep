@@ -4656,3 +4656,64 @@ upload lại thành một tài liệu mới. Để nguyên, `status=failed`, all
 11 tài liệu cũ đều CÓ khoá object trên Storage — vì máy trạm dev có sẵn credential
 Supabase. Chỉ 3 tài liệu nạp qua production là rơi về `/tmp`, vì Render thiếu credential.
 Nghĩa là lỗ hổng này chỉ tồn tại đúng ở môi trường mà nó nguy hiểm nhất.
+
+---
+
+## Upload production đi hết chuỗi — trừ một mắt xích: index KHÔNG được publish sau ingest (2026-09-05)
+
+Kiểm sau khi khoá FPT trên Render đã dùng được. Tài liệu
+`fa460d39-aa1f-46b1-9bc7-55ddcb495040` (`production-ingest-smoke-2026-09-05.txt`, 245 B):
+
+```
+upload            HTTP 200 · ingest_origin=production · status completed
+bản gốc bền       file_path = bb9b3690-…/fa460d39-…/production-ingest-smoke-2026-09-05.txt
+                  object tồn tại · 245 B · sha256 khớp bản gốc từng byte · signed_url cấp được
+                  input_path chỉ là /tmp (bản tạm), KHÔNG phải kho lưu
+chunk             1 chunk · embedding_id='3' · model=Vietnamese_Embedding
+                  metadata_json.embedding_identity = {fpt, Vietnamese_Embedding, api_pooled}
+                  không dấu vết MiniLM / bge-m3 / mean_late / FakeEmbeddings
+truy hồi          trả đúng 1 chunk của tài liệu này, KHÔNG lẫn 189 chunk cũ,
+                  câu trả lời đúng nội dung (điện trở suất lớn, P = I²R)
+```
+
+### Mắt xích thiếu: không ai publish index sau khi ingest append
+
+Chỉ `scripts/dung_lai_index_tu_postgres.py` gọi `ps.publish_sau_rebuild()`. Đường
+upload/ingest gọi `append_to_index` — ghi vào FAISS cục bộ rồi thôi. Đo được:
+
+```
+chunk mới           embedding_id = '3'      (index cục bộ có 4 vector)
+Supabase current    version 20260904_215256_8db1b12f8508
+manifest num_chunks 3                        (tạo 21:52 hôm trước, chưa có tài liệu này)
+```
+
+Nghĩa là vector của tài liệu mới **chỉ tồn tại trên `/tmp` của Render**. Container bị thay
+(deploy, spin-down) là mất, còn hàng `document_chunks` vẫn giữ `embedding_id='3'` trỏ vào
+một ô không còn.
+
+### Vì sao truy hồi vẫn chạy sau lần khởi động lại vừa rồi
+
+Log ba mốc, đọc theo thứ tự:
+
+```
+18:30:30  restore completed  version=20260904_215256  files=3     <- boot, kéo 3 vector về
+(sau đó)  upload tài liệu mới -> append -> 4 vector trong /tmp
+18:34:33  restore skipped: đã có index cục bộ hợp lệ              <- boot lại, KHÔNG đè
+```
+
+`restore()` cố ý không đè một index cục bộ còn hợp lệ — đúng, vì đè là xoá mất phần mới
+hơn. Lần khởi động lại đó chỉ thay tiến trình, `/tmp` còn nguyên nên vector mới sống sót.
+**Đó là may mắn của một lần restart nhẹ, không phải cơ chế bền.** Deploy thật sẽ thay
+container.
+
+### Không sửa trong phase này
+
+Phase này là VERIFY. Cách sửa đúng cần quyết định thiết kế, ít nhất ba lựa chọn:
+
+1. publish sau mỗi lượt ingest — đơn giản nhưng mỗi upload là một lượt tải lên kho
+2. publish theo lô / có debounce
+3. giữ nguyên và coi index production là thứ dựng lại được từ Postgres + allowlist
+   (lúc đó phải chấp nhận: tài liệu mới không tìm được cho tới lần rebuild kế tiếp)
+
+Lựa chọn 3 gần với thiết kế hiện tại nhất, nhưng nó mâu thuẫn với việc `append_to_index`
+đang gán `embedding_id` — gán một con trỏ vào index sẽ biến mất.
