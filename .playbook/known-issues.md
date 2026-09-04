@@ -4553,3 +4553,69 @@ Kho mã đã biết: `repository.clear_chunk_embedding_ids` có docstring đúng
 nhưng rebuild chỉ GHI id cho chunk được index, không XOÁ id của chunk bị loại.
 
 Không xoá, không viết lại hàng cũ, không migration, không đổi format trong phase này.
+
+---
+
+## Bản gốc production đã BỀN — và mắt xích tiếp theo đứt ở khoá FPT (2026-09-04)
+
+Sau khi điền `SUPABASE_URL` + `SUPABASE_SECRET_KEY` trên Render:
+
+```
+/api/config/status  supabase_storage_configured true · index_persistence_enabled true
+```
+
+**Bản gốc bền — ĐẠT.** Tài liệu production mới `873ea272-7c91-4d25-81b2-c8df95e7362d`:
+
+```
+file_path   bb9b3690-…/873ea272-…/prod-storage-durable-2026-09-04.txt   ← khoá object
+input_path  /tmp/studymap/input_docs/…                                  ← chỉ là bản tạm
+object trong bucket `documents`: tồn tại · 2.809 byte · sha256 khớp bản gốc từng byte
+signed_url cấp được
+```
+
+Lần đầu một tài liệu production có định danh lưu trữ bền. Trước đó `file_path` luôn bằng
+`input_path`, tức bản gốc chết theo `/tmp` ở lần khởi động kế tiếp.
+
+**Khôi phục index lúc khởi động — ĐẠT.** Log Render:
+
+```
+[index_persistence] restore started   slug=fpt__Vietnamese_Embedding__api_pooled
+[index_persistence] restore completed slug=… version=20260904_215256_8db1b12f8508
+                    files=3 elapsed=3.49s
+```
+
+Không còn `restore skipped: not configured`. Đáng chú ý: khôi phục KHÔNG cần khoá FPT hợp
+lệ — nó chỉ cần tên danh tính để dựng slug, còn artifact thì tải thẳng về.
+
+### Đứt ở mắt xích D: khoá FPT trên Render không hợp lệ
+
+```
+ingest tài liệu mới -> status=failed
+  FPT embeddings HTTP 401: {"code":401,"description":"Invalid API Key"}
+/query trên tài liệu đã có trong index -> cùng lỗi 401
+```
+
+Phân lập theo đúng sáu mắt xích:
+
+| | mắt xích | kết quả |
+|---|---|---|
+| A | bản gốc lên kho object | **ĐẠT** — object tồn tại, sha256 khớp |
+| B | khôi phục index | **ĐẠT** — restore completed, 3 file |
+| C | phân quyền | **ĐẠT** — login 200, không `403 forbidden_source`, `/query` nhận 202 |
+| D | embedding câu hỏi | **HỎNG** — FPT 401 Invalid API Key |
+| E | ánh xạ truy hồi | chưa tới |
+| F | sinh câu trả lời | chưa tới |
+
+Một nguyên nhân gốc duy nhất, ở tầng cấu hình, không phải mã.
+
+### Thông báo lỗi cho người dùng CHẨN ĐOÁN SAI — chưa sửa
+
+Với lỗi 401, payload trả về người dùng là:
+
+> "Chỉ mục tài liệu đang không tương thích với embedding model hiện tại.
+> Vui lòng rebuild index hoặc upload lại tài liệu."
+
+Đó là chẩn đoán sai và tốn kém: nó đẩy người đọc đi dựng lại một index hoàn toàn lành
+lặn, trong khi việc cần làm là đổi một biến môi trường. Trường `error` bên ngoài có chứa
+nguyên văn 401, nhưng payload thì không. Cần tách "index không tương thích" khỏi "provider
+từ chối xác thực" — hai thứ này sửa bằng hai hành động khác hẳn nhau. Phase riêng.
