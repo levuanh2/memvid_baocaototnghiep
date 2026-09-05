@@ -2687,3 +2687,67 @@ phản hồi cũ đè thành `processing`.
 Tự hẹn `setTimeout` SAU khi lượt trước kết thúc thì bất biến "chỉ một request đang bay"
 đúng theo cấu trúc, không cần cờ nào canh. Đổi lại phải guard `start()` gọi hai lần —
 chỉ giữ được một handle, dựng vòng thứ hai là mất cách dừng vòng thứ nhất.
+
+## Cache khoá theo đĩa cục bộ trở thành cache VĨNH VIỄN khi người ghi ở tiến trình khác (2026-09-05)
+
+`_VS_CACHE` khoá theo `mtime+size` của `index.faiss`. Đó là một khoá tốt — miễn là người
+GHI và người ĐỌC dùng chung cái đĩa ấy. Tách ingest sang worker riêng làm giả định đó sai
+mà không có dòng mã nào thay đổi: đĩa của web không ai chạm nữa, nên khoá không bao giờ
+đổi, nên cache không bao giờ hết hạn.
+
+Điều làm nó nguy hiểm là **im lặng**: không lỗi, không log, truy hồi vẫn trả kết quả —
+chỉ là thiếu tài liệu vừa ingest. Một cache hết hạn sai thì ai cũng thấy; một cache không
+bao giờ hết hạn thì phải đi tìm mới thấy.
+
+Quy tắc: mỗi cache có một khoá, và mỗi khoá có một giả định về việc "ai làm thay đổi thứ
+này". Viết giả định đó ra cạnh khoá. Khi thay đổi kiến trúc tiến trình, đọc lại đúng những
+dòng ấy — chúng là danh sách những thứ vừa âm thầm sai.
+
+## Đường ĐỌC và đường GHI chịu lỗi khác nhau, và phải viết thành hai hàm (2026-09-05)
+
+Cùng một việc "kéo bản index mới nhất về", nhưng:
+
+- đường đọc hỏng → phục vụ bản cũ. Mất tính mới. Chấp nhận được, và tốt hơn nhiều so với
+  làm chết `/query` vì Supabase chập chờn.
+- đường ghi hỏng mà vẫn đi tiếp → append lên bản cũ rồi publish đè → **xoá vector của
+  lượt ingest khác**. Mất dữ liệu.
+
+Một hàm với cờ `nghiem_ngat=True` cũng chạy đúng, nhưng hai tên hàm thì người đọc chỗ gọi
+biết ngay mình đang ở phía nào của sự đánh đổi. `dong_bo` cho người đọc, `dong_bo_truoc_khi_ghi`
+cho người ghi — và cái thứ hai NÉM.
+
+Kèm một chi tiết đắt: "kho chưa có bản nào" phải khác "không hỏi được kho". Cái đầu là cài
+mới và phải cho ingest chạy; cái sau phải chặn. Phân biệt bằng `exists()` chứ đừng đoán mã
+lỗi của `download()` — 404 và timeout đi chung một `except` là cách biến một lần đứt mạng
+thành một lần ghi đè.
+
+## Khoá phải bao đúng thứ tạo ra xung đột, không phải thứ trông nguy hiểm nhất (2026-09-05)
+
+Phản xạ là khoá quanh `append_to_index` — chỗ "ghi". Nhưng kịch bản mất dữ liệu là:
+
+```
+A: đọc V1 → append → publish V2
+B: đọc V1 → append → publish V3      ← V3 không có A
+```
+
+Không lần append nào chạy cùng lúc với lần kia. Xung đột nằm ở khoảng ĐỌC→PUBLISH, nên
+đoạn tới hạn phải bắt đầu từ lúc lấy bản mới nhất và kết thúc sau khi xuất bản xong. Khoá
+hẹp hơn chạy nhanh hơn và bảo vệ đúng con số không.
+
+Cách kiểm rẻ: viết ra dãy thao tác của hai bên xen kẽ nhau và tìm cặp cho ra kết quả sai.
+Đoạn tới hạn là đoạn ngắn nhất bao trọn cặp đó — không phải đoạn quanh lời gọi trông đáng
+sợ nhất.
+
+## Khoá phân tán mà không có hạn là đổi một lỗi lấy một lỗi tệ hơn (2026-09-05)
+
+Worker giữ khoá rồi bị OOM giết — đúng thứ vừa xảy ra trên production. Khoá không có hạn
+thì mọi lượt ingest sau đó đứng vĩnh viễn, và triệu chứng ("upload không bao giờ xong")
+giống hệt cái bug vừa đi dọn.
+
+`timeout` là bắt buộc, không phải tuỳ chọn. Và `blocking_timeout` cũng vậy: chờ vô hạn để
+lấy khoá thì một worker kẹt kéo theo cả hàng đợi.
+
+Chi tiết cài đặt dễ trượt: redis-py chỉ mở kết nối ở lệnh ĐẦU TIÊN thật sự nói chuyện với
+server. `from_url()` và `.lock()` không chạm mạng; `.acquire()` mới chạm. Bọc `try` quanh
+hai cái đầu mà để `acquire` ra ngoài thì lỗi mạng thoát ra dạng thô và mất hết ngữ nghĩa
+"thử lại được" mà mình vừa dựng.

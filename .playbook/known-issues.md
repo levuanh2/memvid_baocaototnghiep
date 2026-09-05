@@ -4896,3 +4896,117 @@ request nhân đôi và chỉ giữ được MỘT `hen` nên không cách nào 
 
 Regression: `src/utils/theoDoiNguon.test.js` (19 test). Đường production không đổi: đây là
 thay đổi thuần phía trình bày, `/sources/{id}/status` giữ nguyên hợp đồng.
+
+## (ĐÃ SỬA 2026-09-05) Hai lỗ hổng của index khi ingest chạy ở tiến trình khác
+
+Phase trước tách ingest sang worker RQ để bộ nhớ ingest không giết tiến trình web. Việc
+tách ấy để lại hai lỗ hổng **chỉ tồn tại khi có từ hai tiến trình** — và cả hai đều hỏng
+IM LẶNG, không sinh lỗi nào.
+
+### 1. Index của web ôi đi mà không ai biết
+
+```
+worker:  ingest tài liệu A  →  publish V2 lên Supabase
+web:     vẫn V1 trên đĩa của nó  →  A không tìm thấy  →  tới khi web restart
+```
+
+Cơ chế: `store._VS_CACHE` khoá theo `mtime+size` của `index.faiss` trên đĩa **cục bộ**
+(`store.py:365`). Worker ở container khác không chạm đĩa ấy, nên khoá cache không bao giờ
+đổi. `persistence.restore_luc_khoi_dong()` chỉ chạy lúc khởi động, không có đường nạp lại.
+
+**Cách phát hiện version mới.** Nguồn sự thật KHÔNG đổi: `index/<slug>/current.json` trên
+kho object. Thêm `vectorstore/dong_bo.py`:
+
+- `phien_ban_tu_xa()` tải đúng `current.json` — vài trăm byte, không phải cả index.
+- `phien_ban_cuc_bo()` đọc mốc `.phien_ban` nằm TRONG thư mục index. Nằm trong là có lý
+  do: `thang_cap` đổi tên cả thư mục, nên thay index là thay luôn mốc — không có cửa sổ
+  nào mốc nói một đằng còn file nằm một nẻo. Mốc là **bản ghi nhớ cục bộ**, không phải
+  nguồn sự thật thứ hai.
+- `dong_bo()` gọi ở đường ĐỌC (`load_vectorstore(use_cache=True)`, tức retrieval), có TTL
+  `INDEX_SYNC_TTL_SEC` mặc định 60 giây. Version khác thì mới `restore(ghi_de=True)` rồi
+  `xoa_cache()`. Không tải index mỗi query — chỉ hỏi con trỏ, tối đa mỗi phút một lần.
+- Đường GHI dùng `dong_bo_truoc_khi_ghi()`: bỏ qua TTL, và **ném khi không xác nhận
+  được**. Khác biệt này là bản chất chứ không phải phòng xa: đọc hỏng thì phục vụ bản cũ
+  (mất tính mới); ghi hỏng mà đi tiếp thì append lên bản cũ rồi publish đè — **xoá vector
+  của lượt ingest khác**.
+
+**Hỏng thì giữ nguyên bản đang chạy.** Kho không hỏi được, tải hỏng, hoặc artifact từ xa
+lệch danh tính → log rồi trả về, index cục bộ không bị đụng. `restore` vốn thẩm định
+trong thư mục staging rồi mới thăng cấp, nên một bản từ xa hỏng không bao giờ chạm tới
+bản đang phục vụ. Supabase chập chờn không được phép làm chết `/query`.
+
+Kho chưa có con trỏ = chưa ai publish (cài mới) → **không chặn** lượt ingest đầu tiên.
+Phân biệt bằng `exists()` chứ không đoán mã lỗi của `download()`: 404 và timeout không
+được lẫn vào nhau ở chỗ này.
+
+### 2. Hai worker ghi đè nhau
+
+```
+worker A: đọc V1 → append A → publish V2
+worker B: đọc V1 → append B → publish V3     ← V3 không có A
+```
+
+`_KHOA_INDEX` là `threading.Lock` — chỉ có nghĩa trong MỘT tiến trình. Nay `EmbedAndIndex`
+giữ HAI khoá, hai phạm vi:
+
+```python
+with _KHOA_INDEX, _db_index.khoa_ghi_index():   # thread trong 1 tiến trình + giữa các tiến trình
+    _db_index.dong_bo_truoc_khi_ghi()           # PHẢI cầm bản mới nhất TRƯỚC khi append
+    append_to_index(...)
+    _persist_sections_and_chunks(...)
+    cong_bo_sau_ingest()
+```
+
+Đoạn tới hạn bao **cả bốn việc**. Khoá riêng `append` hoặc riêng `publish` đều vô dụng:
+đúng cái kịch bản mất vector ở trên xảy ra giữa hai lời gọi ấy. Và `dong_bo_truoc_khi_ghi`
+phải nằm trong khoá, trước `append` — đồng bộ sau khi append là đã append lên bản cũ mất rồi.
+
+Khoá là `redis.lock.Lock` (redis-py 5 có sẵn, RQ vốn đã cần Redis), tên
+`studymap:index:ghi:<slug>` nên hai không gian vector khác nhau không chặn nhau. Có HẠN
+(`INDEX_LOCK_TIMEOUT_SEC`, mặc định 900s): worker bị OOM giết giữa lúc giữ khoá mà khoá
+không tự hết hạn thì mọi lượt ingest sau đứng vĩnh viễn — đúng kiểu hỏng đang đi dọn, chỉ
+đổi chỗ.
+
+### Lấy khoá không được thì sao
+
+Ném `KhongLayDuocKhoa` **trước khi** chạm vào index. Node trả `error` → ErrorHandler →
+tài liệu `failed`, thông điệp "Chưa ghi được vào chỉ mục lúc này, hãy thử lại". Không ghi
+đè, không giả vờ thành công, không tụt về thread trong web.
+
+Redis chết ở chế độ nhiều tiến trình cũng ném — vì lúc đó **không còn gì bảo vệ index**,
+và chạy tiếp là cược vào việc worker kia đang rảnh. Lưu ý cài đặt: `acquire()` phải nằm
+trong cùng `try` với `from_url` — redis-py chỉ mở kết nối ở lệnh đầu tiên, nên lỗi mạng
+rơi vào `acquire`.
+
+### Nhiều worker RQ giờ đã an toàn chưa
+
+**Rồi, với điều kiện có Redis.** Có test chạy thật hai luồng qua đúng context manager: một
+bên vào được, bên kia ném `KhongLayDuocKhoa`, không bên nào lọt vào đoạn tới hạn cùng lúc.
+Cộng với `dong_bo_truoc_khi_ghi` trong khoá, lượt sau luôn append lên đúng cái mà lượt
+trước vừa xuất bản. 1 worker hay 2 worker đều đúng.
+
+Không có `REDIS_URL`, hoặc `QUEUE_ENABLED=false` → khoá phân tán là **no-op có chủ đích**:
+lúc ấy chỉ một tiến trình ingest, `threading.Lock` là bảo vệ đủ và đúng. Dựng một hàng rào
+giả chỉ để "trông an toàn" thì tệ hơn không có.
+
+### Còn lại gì trước khi bật `QUEUE_ENABLED=true`
+
+Không còn blocker về tính đúng đắn của index. Còn lại là **bộ nhớ**: worker phải nạp đúng
+bộ import đã chiếm 332 MB ở web, cộng phần ingest đã đo tới >425 MB. Gói Render free
+512 MiB cho worker gần như chắc chắn vẫn OOM — chỉ khác là OOM ở nơi không kéo `/health`
+và `/sources/<id>/status` chết theo. **Tách tiến trình chữa được sự lan của lỗi, không
+chữa được bản thân lỗi thiếu bộ nhớ.**
+
+### Lần thứ BA: `.env` của máy dev quyết định kết quả test
+
+`BE/.env` ở máy này có `QUEUE_ENABLED=true` và `REDIS_URL` trỏ localhost. Từ khi ingest có
+khoá phân tán, cờ ấy quyết định ingest có đòi Redis hay không — và không có Redis chạy thì
+**10 test ingest đỏ** với `Error 10061 connecting to localhost:6379`, trong khi CI xanh.
+
+Cùng lớp với `DATABASE_URL` (3058272) và `FPT_AI_API_KEY` (2026-09-04). `conftest.py` nay
+trung hoà `QUEUE_ENABLED` ở mức session; test hàng đợi tự bật cờ bằng monkeypatch.
+
+Và một lỗi thiết kế của chính bản sửa, đã sửa lại: điều kiện bật khoá phân tán ban đầu chỉ
+là `REDIS_URL`. Sai — `REDIS_URL` có mặt vì cache ngữ nghĩa, không phải vì có worker. Điều
+kiện đúng là `QUEUE_ENABLED` **và** `REDIS_URL`: rủi ro hai tiến trình cùng ghi chỉ tồn
+tại khi thật sự có worker RQ.

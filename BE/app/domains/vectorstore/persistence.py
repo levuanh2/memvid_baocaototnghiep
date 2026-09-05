@@ -224,6 +224,12 @@ def publish(thu_muc: Optional[Path] = None, *, storage: Any = None,
                    json.dumps(con_tro, ensure_ascii=False, indent=2).encode("utf-8"),
                    content_type="application/json")
 
+    # Đĩa của tiến trình này giờ ĐANG cầm đúng version vừa đẩy. Không ghi mốc thì lượt
+    # đồng bộ kế tiếp thấy "cục bộ: không biết" và tải về đúng cái nó vừa gửi đi.
+    from app.domains.vectorstore import dong_bo as _dong_bo
+
+    _dong_bo.ghi_phien_ban_cuc_bo(version, thu_muc)
+
     giay = time.perf_counter() - t0
     print(f"[index_persistence] upload completed slug={slug} version={version} "
           f"bytes={tong} elapsed={giay:.2f}s", flush=True)
@@ -381,6 +387,12 @@ def restore(*, thu_muc: Optional[Path] = None, storage: Any = None,
         raise
 
     backup = thang_cap(staging, active, keep=3)
+    # Ghi mốc SAU thăng cấp: `thang_cap` đổi tên cả thư mục, mốc ghi trước sẽ đi theo
+    # thư mục cũ vào backup.
+    from app.domains.vectorstore import dong_bo as _dong_bo
+
+    _dong_bo.ghi_phien_ban_cuc_bo(version, active)
+
     giay = time.perf_counter() - t0
     print(f"[index_persistence] restore completed slug={slug} version={version} "
           f"files={len(manifest['files'])} elapsed={giay:.2f}s", flush=True)

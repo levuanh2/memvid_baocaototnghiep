@@ -378,6 +378,23 @@ def _vs_cache_key() -> Optional[tuple]:
 def load_vectorstore(use_cache: bool = False) -> Optional[FAISS]:
     if _skip_faiss_in_ci():
         return None
+    if use_cache:
+        # Đường ĐỌC (retrieval). Ở chế độ nhiều tiến trình, index được ghi bởi worker ở
+        # container khác: đĩa cục bộ của web không bao giờ đổi, nên cache mtime+size bên
+        # dưới sẽ không bao giờ tự hết hạn và web phục vụ bản cũ mãi. Hỏi con trỏ trên
+        # kho — có TTL, vài trăm byte — và chỉ tải khi version thật sự khác.
+        #
+        # Chỉ ở nhánh `use_cache`: người GHI (append/remove) phải nạp bản tươi bằng
+        # `use_cache=False`, và họ tự đồng bộ trong khoá ghi của mình.
+        #
+        # Chưa bật persistence → `dong_bo` trả về ngay, không chạm mạng. Hỏng → giữ
+        # nguyên bản cục bộ. Không đường nào ở đây được phép làm chết truy hồi.
+        try:
+            from app.domains.vectorstore import dong_bo as _dong_bo
+
+            _dong_bo.dong_bo()
+        except Exception:
+            pass
     faiss_file = INDEX_DIR / "index.faiss"
     if not faiss_file.exists():
         return None

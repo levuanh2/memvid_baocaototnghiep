@@ -20,7 +20,13 @@ import pytest
 # Đặt RỖNG chứ không `pop`: `load_dotenv` chạy sau, và nó chỉ bỏ qua biến đã CÓ trong
 # môi trường. Pop xong thì dotenv lại nạp giá trị thật từ `BE/.env` — đã thử, vẫn đỏ.
 # Chuỗi rỗng thì mọi `(os.getenv(...) or "").strip()` trong llm_factory đều thành tắt.
-_ENV_PROVIDER_PHAI_SACH = ("FPT_AI_API_KEY", "FPT_AI_EMBEDDING_MODEL")
+#
+# 2026-09-05, lần thứ ba của đúng lớp lỗi này: `QUEUE_ENABLED=true` trong `BE/.env`.
+# Từ khi index có khoá ghi phân tán (`vectorstore/dong_bo.py`), cờ ấy quyết định ingest
+# có đòi Redis hay không. Máy nào có `QUEUE_ENABLED=true` mà không có Redis chạy thì 10
+# test ingest đỏ với "Error 10061 connecting to localhost:6379" — trong khi CI xanh.
+# `test_queue.py` và các test hàng đợi tự bật cờ bằng monkeypatch khi cần.
+_ENV_PROVIDER_PHAI_SACH = ("FPT_AI_API_KEY", "FPT_AI_EMBEDDING_MODEL", "QUEUE_ENABLED")
 for _ten in _ENV_PROVIDER_PHAI_SACH:
     os.environ[_ten] = ""
 

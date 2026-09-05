@@ -10,6 +10,7 @@ from langgraph.graph import END, StateGraph
 
 from app.graphs.logger import _Timer, log_node_event
 from app.graphs.sqlite_checkpointer import sqlite_saver_from_path
+from app.domains.vectorstore import dong_bo as _db_index
 from app.domains.vectorstore.persistence import PublishFailed as _PublishFailed
 from app.graphs.state import IngestState
 from shared.source_id import canonical_source_stem
@@ -19,9 +20,10 @@ from shared.source_id import canonical_source_stem
 # tài liệu mất vector mà không ai báo. Khoá này bao TRỌN "append -> ghi DB -> xuất bản"
 # thành một đoạn không chia cắt được.
 #
-# Phạm vi CỐ Ý là trong-tiến-trình: Render chạy `WEB_CONCURRENCY=1`, và index nằm trên
-# đĩa cục bộ của chính tiến trình đó. Nhiều tiến trình cùng ghi một index là một bài
-# toán khác (khoá phân tán / một worker chuyên trách) và chưa có yêu cầu đó.
+# Phạm vi của khoá NÀY là trong-tiến-trình, và đó là giới hạn thật của `threading.Lock`
+# chứ không phải một lựa chọn. Nhiều TIẾN TRÌNH cùng ghi (worker RQ) được chặn bởi
+# `dong_bo.khoa_ghi_index()` — khoá Redis, đặt lồng ngay bên trong khoá này ở
+# `embed_index_node`. Hai khoá, hai phạm vi, cùng bảo vệ một đoạn.
 _KHOA_INDEX = threading.Lock()
 
 
@@ -318,10 +320,24 @@ def build_ingest_graph(
                     log_node_event(state["job_id"], "EmbedAndIndex", "late_map_skip", t.ms(), {"reason": str(ee)})
                     embeddings = None
 
-            # Ba việc dưới đây là MỘT: gán vị trí trong FAISS, ghi vị trí ấy xuống
-            # Postgres, rồi đẩy chính index ấy lên kho bền. Tách ra là mở cửa cho
-            # trạng thái mà chunk trỏ vào một vector không tồn tại ở đâu cả.
-            with _KHOA_INDEX:
+            # BỐN việc dưới đây là MỘT: kéo bản index mới nhất về, gán vị trí trong
+            # FAISS, ghi vị trí ấy xuống Postgres, rồi đẩy chính index ấy lên kho bền.
+            # Tách ra là mở cửa cho trạng thái mà chunk trỏ vào một vector không tồn
+            # tại ở đâu cả.
+            #
+            # Hai khoá, hai phạm vi, cả hai đều cần:
+            #   `_KHOA_INDEX`      threading.Lock — hai thread trong CÙNG tiến trình
+            #   `khoa_ghi_index()` Redis          — hai TIẾN TRÌNH worker
+            # Cái thứ hai là no-op khi không có REDIS_URL, tức `QUEUE_ENABLED=false`
+            # giữ nguyên hành vi cũ từng chữ.
+            #
+            # `dong_bo(bat_buoc=True)` nằm TRONG khoá và phải chạy TRƯỚC append: đọc
+            # bản cũ rồi append rồi publish là cách hai worker xoá vector của nhau.
+            # Kéo bản mới nhất về ở đây, dưới khoá, thì lượt sau luôn append lên đúng
+            # cái mà lượt trước vừa xuất bản.
+            with _KHOA_INDEX, _db_index.khoa_ghi_index():
+                _db_index.dong_bo_truoc_khi_ghi()
+
                 if embeddings is not None:
                     faiss_ids = append_to_index(
                         chunks=all_chunks,
@@ -383,6 +399,15 @@ def build_ingest_graph(
             loi = (f"index đã cập nhật trong tiến trình nhưng CHƯA xuất bản được lên "
                    f"kho bền: {e}")
             log_node_event(state["job_id"], "EmbedAndIndex", "publish_failed", t.ms(),
+                           {"error": str(e)})
+            return {**state, "error": loi, "current_node": "EmbedAndIndex"}
+        except (_db_index.KhongLayDuocKhoa, _db_index.KhongDongBoDuoc) as e:
+            # Chưa đụng vào index: cả hai ngoại lệ này đều ném TRƯỚC `append_to_index`.
+            # Tài liệu thành `failed` với lời nhắn thử lại được — đúng ngữ nghĩa, vì
+            # nguyên nhân là một tiến trình khác đang ghi hoặc kho tạm thời không hỏi
+            # được, không phải dữ liệu hỏng.
+            loi = f"Chưa ghi được vào chỉ mục lúc này, hãy thử lại: {e}"
+            log_node_event(state["job_id"], "EmbedAndIndex", "index_busy", t.ms(),
                            {"error": str(e)})
             return {**state, "error": loi, "current_node": "EmbedAndIndex"}
         except Exception as e:
