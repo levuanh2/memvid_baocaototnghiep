@@ -2688,6 +2688,73 @@ Tự hẹn `setTimeout` SAU khi lượt trước kết thúc thì bất biến "
 đúng theo cấu trúc, không cần cờ nào canh. Đổi lại phải guard `start()` gọi hai lần —
 chỉ giữ được một handle, dựng vòng thứ hai là mất cách dừng vòng thứ nhất.
 
+## 502 không có log request là câu trả lời, không phải chỗ thiếu dữ liệu (2026-09-05)
+
+Trình duyệt thấy 502 hàng loạt. Phản xạ đầu là đi tìm nhánh nào trong Flask trả 502.
+Không có nhánh nào — và đó chính là dữ kiện.
+
+Cách đọc rẻ nhất, dùng được cho mọi sự cố sau này:
+
+| trình duyệt | log gunicorn | kết luận |
+|---|---|---|
+| 502 | **không có dòng nào** | proxy/hạ tầng — request chưa từng tới ứng dụng |
+| 502 | có, ghi 502 | đường ứng dụng |
+| 502 | có, ghi 200 | proxy/upstream/thời gian phản hồi |
+
+Ở đây log im 61 giây, kể cả `/health` — thứ Render tự gọi mỗi 5 giây. Một endpoint mà
+CHÍNH hạ tầng gọi cũng im nghĩa là không còn tiến trình nào sống. Chọn một đường mà bạn
+biết chắc phải có nhịp đều (health check) làm mốc đối chiếu: chỗ nó biến mất là chỗ chết.
+
+Và chết KHÔNG có traceback, không `SIGTERM`, không dòng shutdown nào là chữ ký riêng của
+`SIGKILL` từ ngoài. Ứng dụng tự chết thì để lại vết; bị giết thì không kịp.
+
+## Việc nặng chạy chung tiến trình với HTTP thì hạn mức bộ nhớ là hạn mức CHUNG (2026-09-05)
+
+`threading.Thread(daemon=True)` trông như "chạy nền", nhưng nền ở đây vẫn là cùng một
+tiến trình, cùng một cgroup, cùng một trần 512 MiB. Ingest phình lên không làm chậm web —
+nó **giết** web. Hai thứ chẳng liên quan gì nhau về nghiệp vụ lại chết cùng nhau.
+
+Cách nhận ra sớm mà không cần sự cố: lấy bộ nhớ NHÀN RỖI chia cho trần. Ở đây là
+332/512 = 65% trước khi làm bất cứ việc gì. Còn 35% cho mọi việc nặng nhất — con số đó tự
+nó đã là câu trả lời, không cần chờ OOM mới biết.
+
+Bài học phụ về ưu tiên: khi đã biết trần bị chạm, đừng đi tối ưu bản sao trong pipeline
+trước. Đo xem cái gì chiếm phần lớn. Ở đây phần lớn là import (torch/faiss/transformers)
+chứ không phải dữ liệu tài liệu — tối ưu chỗ sau cho ra vài MB trên một vấn đề cỡ trăm MB.
+
+## Fail-open đúng chỗ này là fail-open sai chỗ kia (2026-09-05)
+
+`enqueue_job` có một fallback: đẩy vào hàng đợi hỏng thì chạy tại chỗ bằng thread. Viết
+ra là hợp lý — "Redis chết thì upload vẫn phải chạy được".
+
+Nhưng cùng một dòng mã ấy mang hai hậu quả khác hẳn nhau tuỳ việc nó chạy:
+
+- summary/mindmap hỏng → mất một tính năng phụ, người dùng bấm lại
+- ingest chạy tại chỗ → **tiến trình web bị OOM giết**, cả dịch vụ ngừng 61 giây
+
+Nên cái sửa không phải bỏ fallback, mà là để NƠI GỌI nói ra nó chịu được gì:
+`fail_closed=True` ở đường ingest, mặc định giữ nguyên cho phần còn lại. Chính sách thuộc
+về chỗ biết hậu quả, không thuộc về hàm tiện ích ở giữa.
+
+## Tách tiến trình không miễn phí: thứ gì đang ngầm dùng chung đĩa? (2026-09-05)
+
+Đưa ingest sang worker riêng là sửa đúng gốc. Nhưng trước khi bật, phải hỏi: hai tiến
+trình ấy đang ngầm dựa vào cái gì chung?
+
+Ở đây là FAISS. `_VS_CACHE` khoá theo `mtime+size` của `index.faiss` trên đĩa **cục bộ**,
+và `restore` chỉ chạy lúc khởi động. Worker ghi trên đĩa của nó, đĩa của web không đổi,
+nên web sẽ phục vụ index cũ mà không có một lỗi nào — tài liệu vừa ingest xong đơn giản
+là không tìm thấy.
+
+Và `threading.Lock` bảo vệ index chỉ có nghĩa trong một tiến trình. Hai worker là hai
+tiến trình: khoá còn đó, tác dụng thì không. Hiện tại an toàn vì cấu hình chỉ có một
+worker — an toàn *do cấu hình*, không phải *do thiết kế*. Ghi rõ sự khác biệt đó ra, vì
+người nâng lên 2 worker sẽ không đọc lại đoạn mã có khoá.
+
+Quy tắc: trước khi tách tiến trình, liệt kê mọi trạng thái đang nằm trên đĩa cục bộ hoặc
+trong bộ nhớ tiến trình. Cái nào có người ĐỌC ở tiến trình khác thì tách là phá, trừ khi
+có đường đồng bộ.
+
 ## Cache khoá theo đĩa cục bộ trở thành cache VĨNH VIỄN khi người ghi ở tiến trình khác (2026-09-05)
 
 `_VS_CACHE` khoá theo `mtime+size` của `index.faiss`. Đó là một khoá tốt — miễn là người

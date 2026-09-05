@@ -20,7 +20,7 @@ import os
 import threading
 import time
 from datetime import datetime, timezone
-from typing import Any, Dict, List, Optional
+from typing import Any, Dict, Iterable, List, Optional
 
 from sqlalchemy import delete as sa_delete
 from sqlalchemy import select
@@ -238,6 +238,49 @@ def update_status(document_id: str, status: str, progress: Optional[float] = Non
         elif status != "error":
             d.error_message = None
     invalidate_cache()
+
+
+LY_DO_GIAN_DOAN = (
+    "Tiến trình xử lý dừng giữa chừng trước khi ingest xong (container khởi động lại). "
+    "Tài liệu chưa được lập chỉ mục — hãy tải lên lại."
+)
+
+
+def reconcile_interrupted_documents(bo_qua: Optional[Iterable[str]] = None) -> List[str]:
+    """Hạ tài liệu kẹt `processing` xuống `error` sau khi tiến trình chết.
+
+    Vì sao cần: ingest chạy trong thread của chính tiến trình web. Tiến trình bị giết
+    (OOM trên Render free, đo 2026-09-05) là thread bay theo mà không ai ghi trạng
+    thái. `reconcile_interrupted` cũ chỉ chạm `jobs.sqlite`, còn hàng `documents` nằm
+    lại ở `processing` VĨNH VIỄN — FE poll nó không bao giờ dừng. Hai tài liệu
+    production đang ở đúng tình trạng đó (b68beaf3 từ 03:10, d3d4c0c5 từ hôm trước).
+
+    Hai hàng rào để KHÔNG hạ nhầm việc đang chạy hoặc việc đã xong:
+
+    1. Chỉ `ingest_status == "processing"`. `index_ready` KHÔNG bị đụng — FAISS đã
+       xong, tài liệu truy vấn được, chỉ còn cây nhớ dang dở; hạ nó xuống lỗi là vứt
+       một tài liệu dùng được. `ready` thì cột `status` đã là `completed`, không lọt
+       vào truy vấn này.
+    2. `bo_qua`: id đang sống theo registry RQ. Ở queue mode, web khởi động lại KHÔNG
+       được hạ tài liệu mà worker đang xử lý dở.
+
+    Trả về danh sách id đã hạ. Đi qua `update_status` chứ không tự ghi cột — quy đổi
+    `error -> failed` và việc xoá `substatus`/`capabilities` chỉ nên có MỘT chỗ định nghĩa.
+    """
+    bo = {str(x) for x in (bo_qua or ())}
+    can_ha: List[str] = []
+    with session_scope() as s:
+        rows = s.execute(select(Document).where(Document.status == "processing")).scalars().all()
+        for d in rows:
+            meta = d.metadata_json or {}
+            if meta.get("ingest_status") != "processing":
+                continue
+            if str(d.id) in bo:
+                continue
+            can_ha.append(str(d.id))
+    for doc_id in can_ha:
+        update_status(doc_id, "error", progress=0.0, error=LY_DO_GIAN_DOAN)
+    return can_ha
 
 
 def set_counts(document_id: str, *, page_count: Optional[int] = None,

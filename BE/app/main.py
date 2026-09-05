@@ -1770,9 +1770,37 @@ def _trigger_background_ingest(source_id: str, file_path: str, filename: str):
     except Exception:
         pass
 
-    from app.jobs.queue import enqueue_job
-    res = enqueue_job(_run_ingest_job, args=(source_id, file_path, filename),
-                      queue="ingest", job_id=job_id)
+    from app.jobs.queue import EnqueueFailed, enqueue_job
+    try:
+        res = enqueue_job(_run_ingest_job, args=(source_id, file_path, filename),
+                          queue="ingest", job_id=job_id, fail_closed=True)
+    except EnqueueFailed as exc:
+        # Bật queue mà Redis/RQ không đẩy được: KHÔNG chạy ingest trong tiến trình web.
+        # Đó chính là đường đã giết tiến trình ngày 2026-09-05. Hàng `documents` đã tạo
+        # trước lời gọi này nên phải tự hạ xuống lỗi — bỏ nguyên nó là để lại đúng cái
+        # tài liệu kẹt `processing` vĩnh viễn mà phase này đang đi dọn.
+        try:
+            _update_source_status(source_id, "error", progress=0.0,
+                                  error=f"Hàng đợi xử lý chưa sẵn sàng: {exc}")
+        except Exception:
+            pass
+        # Sổ job phải nói CÙNG một chuyện với hàng `documents`. Job được tạo
+        # `pending` ở ngay trên; bỏ nguyên nó thì `/api/jobs` báo một lượt ingest
+        # đang chờ chạy mà sẽ không bao giờ chạy, và `sweep_stuck_jobs` cố ý không
+        # quét `pending` — nên nó chỉ được dọn ở lần khởi động sau. Đúng lớp "hai
+        # nguồn sự thật lệch nhau" mà phase này sinh ra để dẹp.
+        # Thông điệp CỐ Ý là hằng số: `exc` đã sạch, nhưng sổ job bị nhiều nơi đọc
+        # và hiển thị, nên ở đây không lấy gì từ ngoại lệ cả.
+        try:
+            if _jobs_update_job:
+                _jobs_update_job(job_id, status="error",
+                                 error_text="hàng đợi chưa sẵn sàng")
+        except Exception:
+            # Ghi sổ hỏng KHÔNG được che mất việc chính: người dùng vẫn phải nhận
+            # 503, và tài liệu vẫn đã được hạ xuống lỗi ở trên.
+            pass
+        _don_file_tam(source_id, file_path)
+        raise IngestQueueRequired(str(exc)) from None
     print(f"🚀 [Background] ingest source={source_id} mode={res.get('mode')}")
 
 
@@ -1838,6 +1866,26 @@ class DurableStorageRequired(RuntimeError):
     hai tài liệu production đều có `file_path == input_path`, tức đã rơi vào nhánh
     dự phòng từ lượt upload đầu tiên mà không dòng log nào ở tầng cấu hình nói ra.
     """
+
+
+class IngestQueueRequired(RuntimeError):
+    """Bật `QUEUE_ENABLED` nhưng không đẩy được việc ingest ra worker.
+
+    Song song với `DurableStorageRequired`: cả hai đều là "hạ tầng chưa sẵn sàng", và
+    cả hai đều CHỌN từ chối thay vì đi đường vòng im lặng. Đường vòng ở đây là chạy
+    ingest trong tiến trình web — đúng thứ đã bị OOM killer giết trên Render free
+    ngày 2026-09-05, kéo sập cả `/health` lẫn `/sources/<id>/status` trong 61 giây.
+    """
+
+
+def _queue_required_response(exc: "IngestQueueRequired"):
+    """503 — hạ tầng chưa sẵn sàng, không phải request sai. Cùng khuôn với
+    `_storage_required_response`, và cũng không kèm bí mật nào."""
+    return jsonify({
+        'error': 'Hàng đợi xử lý chưa sẵn sàng nên chưa nhận tài liệu.',
+        'detail': str(exc),
+        'hint': 'Kiểm tra REDIS_URL và worker hàng đợi, xem GET /stats.',
+    }), 503
 
 
 def _ingest_uploaded_file(file) -> dict:
@@ -1961,6 +2009,8 @@ def upload_file():
         return _unsupported_response(exc)
     except DurableStorageRequired as exc:
         return _storage_required_response(exc)
+    except IngestQueueRequired as exc:
+        return _queue_required_response(exc)
 
 
 @app.post('/upload')
@@ -2044,6 +2094,8 @@ def upload_multiple():
             results.append({'file': file.filename, 'error': f'Không đọc được định dạng {exc}'})
         except DurableStorageRequired as exc:
             results.append({'file': file.filename, 'error': f'Kho lưu trữ bền chưa sẵn sàng: {exc}'})
+        except IngestQueueRequired as exc:
+            results.append({'file': file.filename, 'error': f'Hàng đợi xử lý chưa sẵn sàng: {exc}'})
         except Exception as e:
             import traceback; traceback.print_exc()
             results.append({'file': file.filename, 'error': f'Upload failed: {str(e)}'})
@@ -2206,6 +2258,8 @@ def api_documents_upload():
         return _unsupported_response(exc)
     except DurableStorageRequired as exc:
         return _storage_required_response(exc)
+    except IngestQueueRequired as exc:
+        return _queue_required_response(exc)
     from app.domains.documents import repository as _docs
     row = _docs.get(info['source_id']) or {}
     return jsonify(_doc_public(info['source_id'], row)), 201

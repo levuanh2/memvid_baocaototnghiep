@@ -47,12 +47,32 @@ def _job_timeout() -> int:
         return 1800
 
 
-def enqueue_job(func, args=(), queue: str = "ingest", job_id: str | None = None) -> dict:
+class EnqueueFailed(RuntimeError):
+    """Bật queue mà không đẩy được việc ra ngoài, và người gọi CẤM chạy tại chỗ.
+
+    Chỉ ném khi `fail_closed=True`. Xem `enqueue_job` để biết vì sao đường ingest
+    dùng cờ đó còn các đường khác thì không.
+    """
+
+
+def enqueue_job(func, args=(), queue: str = "ingest", job_id: str | None = None,
+                *, fail_closed: bool = False) -> dict:
     """Single switch point for heavy background work.
 
     QUEUE_ENABLED=false -> run in a daemon thread (today's behaviour).
     QUEUE_ENABLED=true  -> enqueue on RQ; on ANY enqueue failure fall back to a
                            thread (fail-safe, so uploads keep working if Redis/RQ is down).
+
+    `fail_closed=True` tắt CHỈ cái fallback ở nhánh cuối: bật queue mà đẩy hỏng thì
+    NÉM `EnqueueFailed` thay vì chạy tại chỗ. Vì sao cần một cờ chứ không đổi hành vi
+    chung: fallback ấy đúng cho summary/mindmap (nhẹ, hỏng thì mất một tính năng), và
+    sai cho ingest — đo trên production 2026-09-05, ingest một PDF 190 KB đẩy tiến
+    trình web từ 332 MB lên >425 MB rồi bị OOM killer giết, kéo theo cả `/health` và
+    `/sources/<id>/status` cùng chết 61 giây. "Chạy tạm trong web" ở đây không phải
+    dự phòng, nó là chính cái đã làm sập dịch vụ.
+
+    Cờ này KHÔNG đụng nhánh `QUEUE_ENABLED=false`: ở đó thread là chế độ chạy được
+    chọn có chủ đích (máy dev, demo), không phải một lượt dự phòng sau khi hỏng.
     """
     args = tuple(args)
     if not queue_enabled():
@@ -66,6 +86,10 @@ def enqueue_job(func, args=(), queue: str = "ingest", job_id: str | None = None)
         _qlog("enqueue_rq", queue=queue, job_id=job_id)
         return {"mode": "rq"}
     except Exception as exc:  # noqa: BLE001 — never let a broken queue block work
+        if fail_closed:
+            _qlog("enqueue_failed_fail_closed", queue=queue, job_id=job_id, err=str(exc)[:80])
+            raise EnqueueFailed(f"không đẩy được việc vào hàng đợi {queue}: "
+                                f"{type(exc).__name__}") from None
         _qlog("enqueue_failed_fallback_thread", queue=queue, job_id=job_id, err=str(exc)[:80])
         threading.Thread(target=func, args=args, daemon=True).start()
         return {"mode": "thread_fallback", "error": str(exc)[:120]}
@@ -147,8 +171,9 @@ def reconcile_interrupted() -> dict:
     from app.domains.jobs import jobs_store
     if not queue_enabled():
         jobs_store.mark_interrupted_jobs()
-        _qlog("reconcile_mark_all", mode="disabled")
-        return {"mode": "mark_all"}
+        tai_lieu = _don_tai_lieu_ket()
+        _qlog("reconcile_mark_all", mode="disabled", tai_lieu=len(tai_lieu))
+        return {"mode": "mark_all", "documents": tai_lieu}
     live = _live_job_ids()
     if live is None:
         return {"mode": "skipped"}  # RQ down -> don't corrupt live state
@@ -159,5 +184,21 @@ def reconcile_interrupted() -> dict:
             jobs_store.update_job(jid, status="interrupted", current_node="Reconciled")
         except Exception:
             pass
-    _qlog("reconcile_registry_aware", live=len(live), active=len(active), interrupted=len(stale))
-    return {"mode": "registry", "interrupted": stale, "live_count": len(live)}
+    # `job_id == source_id` cho ingest, nên tập job còn sống dùng thẳng được làm tập
+    # tài liệu KHÔNG được đụng tới: một worker đang chạy dở không bị web hạ xuống lỗi.
+    tai_lieu = _don_tai_lieu_ket(bo_qua=live)
+    _qlog("reconcile_registry_aware", live=len(live), active=len(active),
+          interrupted=len(stale), tai_lieu=len(tai_lieu))
+    return {"mode": "registry", "interrupted": stale, "live_count": len(live),
+            "documents": tai_lieu}
+
+
+def _don_tai_lieu_ket(bo_qua: "set[str] | None" = None) -> list:
+    """Hạ những tài liệu kẹt `processing` xuống lỗi. Hỏng thì nuốt — đây là dọn dẹp
+    lúc khởi động, không được phép ngăn ứng dụng lên."""
+    try:
+        from app.domains.documents import repository as _docs
+        return _docs.reconcile_interrupted_documents(bo_qua=bo_qua)
+    except Exception as exc:  # noqa: BLE001
+        _qlog("reconcile_documents_failed", err=str(exc)[:80])
+        return []

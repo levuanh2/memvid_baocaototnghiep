@@ -4897,6 +4897,143 @@ request nhân đôi và chỉ giữ được MỘT `hen` nên không cách nào 
 Regression: `src/utils/theoDoiNguon.test.js` (19 test). Đường production không đổi: đây là
 thay đổi thuần phía trình bày, `/sources/{id}/status` giữ nguyên hợp đồng.
 
+## (ĐÃ SỬA MỘT PHẦN 2026-09-05) Ingest chạy trong tiến trình web làm OOM giết cả dịch vụ — 502 không phải lỗi Flask
+
+Triệu chứng người dùng thấy: `GET /sources/<id>/status` trả **502 Bad Gateway**, lặp lại,
+`Server: cloudflare`, `X-Render-Origin-Server: Render`.
+
+### Đo được gì
+
+Render free, 1 instance, trần **536.870.900 byte** (512 MiB), `-w 1`, worker `sync`,
+không `--threads`. Ngày 2026-09-05, instance `m7kfd`:
+
+```
+03:09:06  ==> Running 'gunicorn ...'          cold start #1 (sau spin-down)
+03:10:03  Listening at 0.0.0.0:10000          -> 57 giây
+03:10:34  POST /upload 200 ; ingest source=b68beaf3 mode=thread
+03:10:35-54  GET /sources/b68beaf3/status 200  x12
+03:10:55-03:11:03   ← tiến trình CHẾT, không một dòng log
+03:11:04  ==> Running 'gunicorn ...'
+03:11:55  Booting worker with pid: 50          -> 51 giây
+```
+
+Bộ nhớ cùng lúc: `135 MB → 287 → 333 → **425 MB** → 137 MB`. Các instance trước còn sát
+hơn: `9bwvg` chạm 534.839.300 B, `crlht` chạm 533.520.400 B — 99,6% trần.
+
+**Nền nhàn rỗi đã là 332 MB** dù `skip_model_load: true`. Chỉ còn ~180 MB cho toàn bộ
+việc ingest.
+
+Cùng một file (`phase2-day01-...-fuller.pdf`, 190.136 byte) giết tiến trình **hai lần**,
+hai ngày khác nhau (19:18 và 19:23 ngày 04/09; 03:11 ngày 05/09).
+
+### 502 đến từ đâu
+
+**Không phải từ Flask.** Toàn bộ `app/` có đúng một chỗ trả 502 (`main.py:2308`, link tải).
+Endpoint status chỉ có 401/404/200; `_get_source_status` còn bọc `except Exception:
+return None`, nên DB chết cũng ra 404.
+
+**Không phải từ gunicorn.** Trong 61 giây đó không có MỘT dòng log request nào — kể cả
+`/health`. Không `WORKER TIMEOUT`, không `SIGTERM`, không traceback. Chết đột ngột =
+`SIGKILL` từ OOM killer.
+
+502 là do **proxy Render trả khi không có tiến trình nào lắng nghe**. Cây quyết định:
+502 ở trình duyệt + KHÔNG có log gunicorn tương ứng ⇒ hạ tầng, không phải mã ứng dụng.
+
+### Vì sao FE polling KHÔNG phải nguyên nhân gốc
+
+Phase trước (`1ed4c0c`) làm FE chịu được 502 lẻ. Đó là đúng việc, nhưng nó chữa CÁCH
+TRÌNH BÀY, không chữa cái chết. Hai con số phải đặt cạnh nhau:
+
+```
+ngân sách thử lại của poller mới   1,5 + 3 + 6 + 10 + 10  ≈ 29 giây
+thời gian ngừng thật đo được                              ≈ 61 giây
+```
+
+Nới thêm số lần thử chỉ kéo dài thời gian nói dối. Nguyên nhân nằm ở chỗ khác.
+
+### Vì sao ingest bằng daemon thread là sai cho production
+
+```
+gunicorn worker (sync, -w 1)
+  └── threading.Thread(daemon=True)
+       └── ingest: đọc PDF → chunk → FPT embedding → FAISS → publish
+```
+
+Bộ nhớ của ingest tính vào ĐÚNG tiến trình đang phục vụ HTTP. Ingest phình lên là cả
+`/health` lẫn `/sources/<id>/status` chết theo. Và tiến trình chết là thread bay theo,
+không ai ghi lại trạng thái.
+
+### Đã sửa gì trong phase này
+
+**1. Bật queue thì việc nặng KHÔNG được chạy trong web.** `enqueue_job` có thêm
+`fail_closed`; đường ingest truyền `True`. Bật `QUEUE_ENABLED` mà đẩy hỏng thì ném
+`EnqueueFailed` → upload trả **503** kèm lý do, thay vì âm thầm chạy ingest trong
+gunicorn. Các đường khác (summary/mindmap) GIỮ NGUYÊN fallback — ở đó hỏng chỉ mất một
+tính năng, còn ingest hỏng thì sập dịch vụ. `QUEUE_ENABLED=false` không đổi một chút
+nào: thread ở đó là chế độ chạy được chọn (máy dev, demo), không phải lượt dự phòng.
+
+**2. Tài liệu gián đoạn không còn kẹt vĩnh viễn.** `reconcile_interrupted` trước đây chỉ
+chạm `jobs.sqlite`; hàng `documents` nằm lại `processing` mãi mãi và FE poll không bao
+giờ dừng. Nay gọi thêm `repository.reconcile_interrupted_documents()`, hạ
+`processing → error` (DB `failed`) với lý do nói rõ tiến trình dừng giữa chừng.
+
+Hai hàng rào để không hạ nhầm:
+- chỉ `ingest_status == "processing"`. **`index_ready` KHÔNG bị đụng** — FAISS đã xong,
+  tài liệu truy vấn được, chỉ còn cây nhớ dang dở.
+- ở queue mode, bỏ qua id có trong registry RQ (`job_id == source_id` cho ingest), nên
+  web khởi động lại không hạ tài liệu mà worker đang làm. RQ không đọc được → không đụng gì.
+
+Không thêm trạng thái mới: dùng đúng từ vựng sẵn có (`error` → `_STATUS_TO_DB` → `failed`).
+
+### Hai điều đã cân nhắc và CỐ Ý không làm trong phase này
+
+**Bản gốc ở lại kho object khi enqueue fail-closed.** `DurableStorageRequired` ném
+TRƯỚC `_docs.create` nên không để lại gì; `IngestQueueRequired` thì không thể — job phải
+được đẩy sau khi có hàng `documents`, nếu không worker có thể chạy trước khi hàng ấy tồn
+tại. Nên một lượt upload bị từ chối vì hàng đợi vẫn để lại object trong bucket.
+
+KHÔNG coi đây là rò rỉ: hàng `documents` vẫn còn và vẫn trỏ vào object ấy (`file_path`),
+nên đường xoá tài liệu bình thường dọn được nó. Cái sẽ thành rò rỉ là xoá hàng documents
+mà giữ object — chính vì thế ở đây chọn hạ trạng thái xuống `failed` chứ không xoá hàng.
+Không đổi gì ở `DurableStorageRequired` trong phase này.
+
+**`_don_tai_lieu_ket` ghi N+1 session và không có trần (C2, CHƯA SỬA).** Nó chạy lúc
+import `app.main` và trong `_handle_sigterm`: một `SELECT` mọi document `processing`, rồi
+`update_status` một session mỗi tài liệu qua pooler Supabase (~50–100 ms/lượt). Hôm nay
+2–3 hàng nên không đáng kể. Không có `LIMIT`, không gộp, nên nhiều hàng kẹt sẽ kéo dài
+thời gian khởi động — và trong signal handler thì nó tiêu vào quỹ ân hạn trước `SIGKILL`
+của Render. Sửa là gộp thành một session hoặc đặt trần cho lượt dọn lúc khởi động. Để
+phase riêng: đo được là nhỏ, và trộn nó vào đây làm diff khó đọc.
+
+### CHƯA sửa — vì sao production vẫn để `QUEUE_ENABLED=false`
+
+Bật queue với một Render service worker riêng sẽ tách được bộ nhớ, nhưng **chưa dùng
+được**, vì hai lý do đo được chứ không phải phỏng đoán:
+
+1. **Index của web sẽ ôi.** `store._VS_CACHE` khoá theo `mtime+size` của `index.faiss`
+   trên đĩa CỤC BỘ. Worker ở service khác ghi index trên đĩa của nó và publish lên
+   Supabase; đĩa của web không đổi ⇒ khoá cache không đổi ⇒ **web tiếp tục phục vụ index
+   cũ**. `persistence.restore_luc_khoi_dong()` chỉ chạy lúc khởi động, không có đường nạp
+   lại. Tài liệu mới ingest xong sẽ không truy vấn được cho tới lần restart kế.
+2. **Không có gì đảm bảo chỉ một worker ghi index.** `_KHOA_INDEX` là `threading.Lock` —
+   chỉ hiệu lực trong MỘT tiến trình. Một worker RQ xử lý job tuần tự nên hiện tại là an
+   toàn *do cấu hình*, không phải *do thiết kế*: nâng lên 2 worker là hai tiến trình cùng
+   append rồi cùng publish, lượt sau đè lượt trước. Không thêm khoá phân tán trong phase
+   này.
+
+Cả hai là phase riêng. Đến lúc đó mới bật `QUEUE_ENABLED` ở production.
+
+### Bộ nhớ — quan sát, KHÔNG sửa trong phase này
+
+- Đòn bẩy lớn nhất **không** nằm ở pipeline mà ở **nền 332 MB lúc nhàn rỗi**: import
+  torch/faiss/transformers vào chính tiến trình web, dù `SKIP_MODEL_LOAD=1`.
+- `ingest_graph` compile **có checkpointer SQLite** (`ingest_graph.py:480`). LangGraph
+  ghi toàn bộ state ở mỗi ranh giới node, mà `state["text"]` (toàn văn tài liệu) không
+  bao giờ được bỏ ra sau khi chunk xong (`ingest_graph.py:148`). Bỏ `text` khỏi state sau
+  `ChunkText` là thay đổi nhỏ, rủi ro thấp. Nhưng phải nói thật quy mô: với PDF 190 KB
+  thì đây là cỡ MB, không phải cỡ trăm MB — nó KHÔNG phải nguyên nhân OOM.
+- Các node trả `{**state, ...}` (12 chỗ) là copy NÔNG, không nhân đôi dữ liệu lớn.
+
 ## (ĐÃ SỬA 2026-09-05) Hai lỗ hổng của index khi ingest chạy ở tiến trình khác
 
 Phase trước tách ingest sang worker RQ để bộ nhớ ingest không giết tiến trình web. Việc
