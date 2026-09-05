@@ -4,6 +4,7 @@ import { Icon } from "../ui/Icon";
 import Badge from "../ui/Badge";
 import Spinner from "../ui/Spinner";
 import { nguonConDangXuLy, nhoNguon, quenNguon } from "../../utils/nguonDangXuLy";
+import { taoBoTheoDoiNguon } from "../../utils/theoDoiNguon";
 
 /** Phase sau FAISS: memory tree. memory_tree_ready = đã xong — không hiện « đang tối ưu ». */
 const SUBSTATUS_OPTIMIZING = new Set(["faiss_ready", "building_memory_tree"]);
@@ -45,45 +46,56 @@ export default function SidebarLeft({ selectedSources, setSelectedSources, onSou
   const [loiUpload, setLoiUpload] = useState(null);
   const [query, setQuery] = useState("");
   const fileInputRef = useRef(null);
-  const pollingIntervalsRef = useRef({});
+  const pollersRef = useRef({});
 
-  // ── Polling logic (unchanged) ──────────────────────
-  const pollSourceStatus = (sourceId) => {
-    if (pollingIntervalsRef.current[sourceId]) return;
-    const poll = async () => {
-      try {
-        const res = await apiFetch(`/sources/${sourceId}/status`);
-        if (!res.ok) { stopPolling(sourceId); danhDauMatDau(sourceId); return; }
-        const data = await res.json();
-        setSources((prev) => prev.map((s) => s.source_id === sourceId ? { ...s, status: data.status, progress: data.progress ?? s.progress, substatus: data.substatus, capabilities: data.capabilities, can_query: data.can_query === true, video_stem: data.video_stem ?? s.video_stem, error: data.error } : s));
-        if (data.status === "ready" || data.status === "error") {
-          stopPolling(sourceId);
-          quenNguon(sourceId);
-          if (data.status === "ready") setTimeout(() => fetchSourcesFromBackend(), 500);
-        }
-      } catch (err) {
-        // Dừng poll là đúng, dừng TRONG IM LẶNG thì không: thẻ đứng mãi ở "Đang phân
-        // tích tài liệu…" với thanh tiến trình đóng băng, không lỗi, không bao giờ hết.
-        console.error(`Error polling status for ${sourceId}:`, err);
-        stopPolling(sourceId);
-        danhDauMatDau(sourceId);
-      }
-    };
-    poll();
-    pollingIntervalsRef.current[sourceId] = setInterval(poll, 1500);
+  // ── Polling ────────────────────────────────────────
+  // Một cú 502 của gateway KHÔNG phải là ingest hỏng: logic chịu-lỗi nằm trong
+  // `taoBoTheoDoiNguon` (thuần, test ở env node), ở đây chỉ nối callback vào state.
+  const layTrangThai = async (sourceId) => {
+    const res = await apiFetch(`/sources/${sourceId}/status`);
+    if (!res.ok) throw await _appError(res);   // `.status` → poller phân loại tạm thời/không
+    return res.json();
   };
 
-  // Mất liên lạc khi đang theo dõi một tài liệu: đổi thẻ sang trạng thái nói được
-  // rằng đã hết theo dõi, kèm đường bấm lại.
+  const pollSourceStatus = (sourceId) => {
+    if (pollersRef.current[sourceId]) return;   // đang theo dõi rồi, đừng dựng bộ thứ hai
+    const bo = taoBoTheoDoiNguon({
+      layTrangThai,
+      onTrangThai: (data) => {
+        setSources((prev) => prev.map((s) => s.source_id === sourceId ? { ...s, status: data.status, progress: data.progress ?? s.progress, substatus: data.substatus, capabilities: data.capabilities, can_query: data.can_query === true, video_stem: data.video_stem ?? s.video_stem, error: data.error, trucTracTamThoi: false, matDauVet: false } : s));
+      },
+      onKetThuc: (data) => {
+        stopPolling(sourceId);
+        quenNguon(sourceId);
+        if (data.status === "ready") setTimeout(() => fetchSourcesFromBackend(), 500);
+      },
+      // Vẫn đang thử lại — thẻ giữ nguyên trạng thái xử lý, chỉ thêm một dòng nhỏ.
+      onTrucTrac: () => {
+        setSources((prev) => prev.map((s) =>
+          s.source_id === sourceId ? { ...s, trucTracTamThoi: true } : s));
+      },
+      onMatKetNoi: (soLanHong, err) => {
+        console.error(`Mất liên lạc khi theo dõi ${sourceId} (hỏng ${soLanHong} lần):`, err);
+        stopPolling(sourceId);
+        danhDauMatDau(sourceId);
+      },
+    });
+    pollersRef.current[sourceId] = bo;
+    bo.start(sourceId);
+  };
+
+  // Hết ngân sách thử lại: thẻ nói rõ là ĐÃ NGỪNG THEO DÕI, không phải tài liệu hỏng —
+  // ingest vẫn có thể đang chạy ở server. Kèm đường bấm lại.
   const danhDauMatDau = (sourceId) => {
     setSources((prev) => prev.map((s) =>
       s.source_id === sourceId && s.status !== "ready" && s.status !== "error"
-        ? { ...s, matDauVet: true }
+        ? { ...s, matDauVet: true, trucTracTamThoi: false }
         : s));
   };
 
   const stopPolling = (sourceId) => {
-    if (pollingIntervalsRef.current[sourceId]) { clearInterval(pollingIntervalsRef.current[sourceId]); delete pollingIntervalsRef.current[sourceId]; }
+    const bo = pollersRef.current[sourceId];
+    if (bo) { bo.stop(); delete pollersRef.current[sourceId]; }
   };
 
   const fetchSourcesFromBackend = () => {
@@ -134,8 +146,8 @@ export default function SidebarLeft({ selectedSources, setSelectedSources, onSou
   // nhưng mọi interval 1.5s vẫn chạy tiếp — mãi mãi, cho mỗi tài liệu từng ở trạng thái
   // đang xử lý. Dọn hết khi rời đi.
   useEffect(() => () => {
-    Object.values(pollingIntervalsRef.current).forEach(clearInterval);
-    pollingIntervalsRef.current = {};
+    Object.values(pollersRef.current).forEach((bo) => bo.stop());
+    pollersRef.current = {};
   }, []);
   useEffect(() => { if (onSourcesChange) onSourcesChange(sources); }, [sources, onSourcesChange]);
 
@@ -359,12 +371,20 @@ export default function SidebarLeft({ selectedSources, setSelectedSources, onSou
                     </div>
                   )}
 
+                  {/* Trục trặc đường truyền, VẪN đang thử lại. Màu cảnh báo chứ không phải
+                      màu lỗi: tài liệu không hỏng, chỉ là tạm thời không hỏi được. */}
+                  {src.trucTracTamThoi && !src.matDauVet && (
+                    <div className="text-[11px] mt-1.5" style={{ color: "var(--warn)" }}>
+                      Không thể kết nối tạm thời. Đang thử theo dõi lại...
+                    </div>
+                  )}
+
                   {src.matDauVet && (
                     <div className="text-[11px] mt-1.5" style={{ color: "var(--err)" }}>
-                      Mất liên lạc khi đang theo dõi. Tài liệu có thể vẫn đang được xử lý.{" "}
+                      Không thể kết nối tới máy chủ để theo dõi tiến trình. Tài liệu có thể vẫn đang được xử lý.{" "}
                       <button type="button" className="underline"
-                        onClick={() => { setSources((prev) => prev.map((s) => s.source_id === src.source_id ? { ...s, matDauVet: false } : s)); pollSourceStatus(src.source_id); }}>
-                        Theo dõi lại
+                        onClick={() => { setSources((prev) => prev.map((s) => s.source_id === src.source_id ? { ...s, matDauVet: false, trucTracTamThoi: false } : s)); pollSourceStatus(src.source_id); }}>
+                        Thử lại
                       </button>
                     </div>
                   )}
