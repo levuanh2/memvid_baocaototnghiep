@@ -4782,3 +4782,117 @@ cục bộ của chính tiến trình đó. Nhiều tiến trình cùng ghi mộ
 
 Regression: `tests/test_ingest_publishes_index.py` (8 test). Kiểm ngược: 7/8 đỏ trên mã
 cũ. Khẳng định "xuất bản nằm cùng khoá với append" đọc bằng AST, không phải grep chuỗi.
+
+## (ĐÃ SỬA 2026-09-05) Lỗi 401 của nhà cung cấp embedding bị báo thành "chỉ mục không tương thích"
+
+`query_graph` phân loại lỗi bằng cách dò chuỗi trong thông báo:
+
+```python
+if any(kw in err_lower for kw in ["dim mismatch", "shape", "embedding", "dimension"]):
+    user_msg = "Chỉ mục tài liệu đang không tương thích... Vui lòng rebuild index"
+```
+
+`RuntimeError("FPT embeddings HTTP 401: Invalid API Key")` có chữ "embedding", nên nó
+rơi đúng vào nhánh đó. Mọi hỏng hóc của tầng embedding — khoá sai, hết hạn, 429, 502,
+đứt mạng — đều mang chữ ấy trong thông báo, nên **không có lỗi provider nào thoát được**.
+
+Hậu quả không dừng ở chữ nghĩa. Thông điệp bảo người đọc đi dựng lại một index hoàn toàn
+lành lặn: vài nghìn lượt gọi embedding trả tiền, trong khi việc cần làm là sửa một biến
+môi trường. Và sau khi dựng lại xong, lỗi vẫn y nguyên.
+
+### Sửa: phân loại bằng KIỂU, không bằng chuỗi
+
+`shared/interfaces/errors.py` (mới) giữ hợp đồng lỗi ở tầng port. Mỗi ngoại lệ tự khai mã
+ở `MA_LOI`; hàm phân loại chỉ đọc thuộc tính ấy, không so kiểu — nhờ vậy lớp lỗi phía chỉ
+mục nằm lại ở `app/domains/vectorstore` mà `shared` không phải import ngược lên `app`.
+
+| Tình huống | Mã | Chữa bằng |
+|---|---|---|
+| 401/403 từ nhà cung cấp | `EMBEDDING_PROVIDER_AUTH_FAILED` | sửa khoá/quyền — thử lại vô ích |
+| 429, 5xx còn sót sau khi đã thử lại, hết giờ chờ, đứt kết nối/DNS | `EMBEDDING_PROVIDER_UNAVAILABLE` | chờ rồi thử lại |
+| 4xx còn lại, thân không phải JSON, số vector trả về không khớp số đầu vào | `EMBEDDING_REQUEST_FAILED` | sửa payload/tên model |
+| Danh tính index không khớp cấu hình (`IndexIdentityMismatch`) | `INDEX_INCOMPATIBLE` | **dựng lại index** |
+| Không có index để dùng (`IndexMissing`) | `INDEX_MISSING` | dựng hoặc khôi phục |
+
+`INDEX_INCOMPATIBLE` là lớp DUY NHẤT mà thông điệp được phép khuyên rebuild — đúng lớp
+duy nhất mà rebuild thật sự chữa được.
+
+### Còn đúng một chỗ đọc chuỗi, và nó hẹp có chủ đích
+
+`_phan_loai_loi` xét `MA_LOI` trước. Chỉ khi không ai khai mới xét tới hình dạng chuỗi,
+và CHỈ cho `ValueError` về số chiều/hình dạng do numpy/FAISS ném (`dim mismatch`,
+`dimension`, `shape`, `not aligned`) — lỗi chỉ mục thật, không có lớp riêng để bắt. Vì
+bước một đã bắt hết lỗi provider trước, bước hai không còn cách nào chạm tới chúng nữa.
+
+### `IndexMissing` hiện CHƯA có nơi nào ném
+
+Lớp và mã đã có, thông điệp đã có, `ma_loi()` nhận ra. Nhưng `grep IndexMissing app/` chỉ
+ra đúng dòng khai báo — chưa đường nào ném nó. Ghi rõ để lần sau không ai tưởng thiếu
+index đang được phân loại: hiện nó vẫn rơi vào nhánh "không mã" và hiện nguyên văn lỗi
+kỹ thuật. Nối dây là việc của phase sau.
+
+### Tương thích ngược
+
+`payload["error"]` giữ nguyên vai trò cũ (thông điệp cho người dùng). `payload["code"]`
+là khoá THÊM, và chỉ xuất hiện khi phân loại được — client đang đọc `error` chạy y nguyên.
+Không mã thì hiện nguyên văn lỗi kỹ thuật, KHÔNG đoán bừa sang một lớp cụ thể.
+
+Lỗi auth cố ý không kèm `r.text`: thân phản hồi của tầng xác thực là chỗ dễ lọt thông tin
+nhạy cảm nhất trong cả nhóm. Mã trạng thái đã đủ để chẩn đoán. Hành vi retry của
+`FptEmbeddings` giữ nguyên — chỉ đổi lớp ngoại lệ ném ra ở cuối.
+
+Regression: `tests/test_error_classification.py` (30 test). Khẳng định "không còn dò chuỗi
+để phân loại" đọc bằng AST, không phải grep — chính docstring của test có chữ "embedding".
+
+### Không đụng gì tới đường production đang chạy
+
+Chuỗi upload → Storage bền → ingest → publish → truy hồi (đóng ngày 2026-09-04/09-05)
+không đổi một bước nào. Đây thuần là đổi cách TRÌNH BÀY lỗi khi có lỗi.
+
+## (ĐÃ SỬA 2026-09-05) Một cú 502 lẻ của gateway làm thẻ tài liệu thành "Mất liên lạc"
+
+`SidebarLeft` poll `/sources/{id}/status` mỗi 1.5s. Lần hỏng ĐẦU TIÊN — bất kể vì sao —
+là dừng poll và đổi thẻ sang "Mất liên lạc khi đang theo dõi".
+
+Render/proxy trả 502/503/504 lẻ tẻ trong khi Gunicorn vẫn ghi `200` cho đúng request đó.
+Nghĩa là một cú nhiễu đường truyền được trình bày cho người dùng thành tài liệu chết,
+trong khi backend đang ingest bình thường và sẽ xong sau vài giây.
+
+Lỗi VẬN CHUYỂN và lỗi XỬ LÝ là hai chuyện khác nhau và phải hiện ra khác nhau.
+
+### Sửa
+
+Logic chịu lỗi tách ra `utils/theoDoiNguon.js` (thuần, test ở env node); component chỉ nối
+callback vào state.
+
+| Nhóm | Mã | Xử lý |
+|---|---|---|
+| tạm thời | 408, 429, 502, 503, 504, và fetch ném (mất mạng/DNS/CORS đứt) | thử lại, backoff có trần 3s → 6s → 10s → 10s |
+| không tạm thời | 401, 403, 404, **500** | dừng ngay |
+
+**500 CỐ Ý không nằm nhóm thử lại.** Đó là ứng dụng tự ném lỗi; thử lại 5 lần cũng ra đúng
+lỗi ấy, và giấu nó sau banner "đang thử lại" là nói dối. Lỗi xử lý thật của backend vẫn là
+ingest hỏng thật, hiện đúng như trước.
+
+Ba mức hiển thị, thay cho hai:
+
+- hỏng 1–2 lần: **không hiện gì**. Cả mục đích đợt sửa là một cú 502 lẻ phải vô hình.
+- hỏng ≥ 3 lần liên tiếp (`NGUONG_CANH_BAO`): một dòng màu `--warn` — "Không thể kết nối
+  tạm thời. Đang thử theo dõi lại…". Trạng thái ingest và thanh tiến trình GIỮ NGUYÊN.
+- vượt `MAX_CONSECUTIVE_FETCH_FAILURES` (= 5, lấy lại từ `jobPoller` để cả ứng dụng chỉ có
+  MỘT con số): dừng theo dõi, màu `--err`, kèm nút "Thử lại". Câu chữ nói rõ là đã ngừng
+  THEO DÕI chứ không phải tài liệu hỏng — ingest vẫn có thể đang chạy ở server.
+
+Hỏi được một lượt là xoá sạch bộ đếm, banner tạm thời biến mất.
+
+### `setInterval` → tự hẹn `setTimeout`
+
+Thân poll là async. Với `setInterval(poll, 1500)`, một lượt chậm hơn 1.5s thì lượt sau vẫn
+bắn: hai request cùng bay, phản hồi về trễ ghi đè phản hồi mới hơn. Tự hẹn giờ SAU khi lượt
+trước kết thúc thì không bao giờ có hai lượt cùng lúc — cùng khuôn với `createJobPoller`.
+
+`start()` gọi hai lần được guard: không guard là dựng hai vòng lặp trên cùng một bộ, số
+request nhân đôi và chỉ giữ được MỘT `hen` nên không cách nào dừng cái thứ nhất.
+
+Regression: `src/utils/theoDoiNguon.test.js` (19 test). Đường production không đổi: đây là
+thay đổi thuần phía trình bày, `/sources/{id}/status` giữ nguyên hợp đồng.

@@ -2636,3 +2636,54 @@ rỗng đúng bằng tắt.
 
 Quy tắc: khi dọn env cho test, hỏi "sau mình còn ai ghi vào env nữa không". Nếu có
 dotenv, xoá không phải là dọn — ghi đè mới là.
+
+## Dò chuỗi để phân loại lỗi là bịa ra nguyên nhân (2026-09-05)
+
+`if "embedding" in err_str.lower()` đọc rất hợp lý lúc viết: lỗi về embedding thì báo là
+lỗi index không tương thích. Nhưng chuỗi lỗi không phải hợp đồng. `"FPT embeddings HTTP
+401"` cũng có chữ đó, và mọi lỗi của tầng embedding cũng vậy — nên nhánh ấy nuốt trọn
+một lớp lỗi mà nó không hề định nói tới.
+
+Thứ làm nó đắt là **thông điệp có kèm chỉ dẫn hành động**: "hãy rebuild index". Phân loại
+sai + chỉ dẫn cụ thể = đẩy người đọc đi làm một việc tốn tiền, mất thời gian, và không
+chữa gì cả. Một thông điệp mơ hồ ("lỗi khi truy hồi") mà đúng còn rẻ hơn nhiều.
+
+Quy tắc: lỗi tự khai mã của nó (`MA_LOI` trên chính lớp ngoại lệ), người phân loại chỉ
+đọc thuộc tính. Còn phải đọc chuỗi thì thu hẹp tới mức không thể trùm lên lớp khác được
+nữa — ở đây là `ValueError` về số chiều, và chỉ sau khi mọi lỗi tự khai đã bị bắt trước.
+
+Kèm theo: đọc thuộc tính thay vì so kiểu giữ được hướng import. `shared/interfaces` là
+tầng port, không được import lên `app/`; nhờ đọc `MA_LOI` mà lớp lỗi phía chỉ mục vẫn nằm
+ở nơi sở hữu khái niệm index, port vẫn nhận ra nó.
+
+## Một lần hỏng chưa phải là hỏng (2026-09-05)
+
+Poll trạng thái ingest dừng ngay ở lần fetch hỏng đầu tiên và báo "Mất liên lạc". Trên
+Render, 502/503/504 lẻ tẻ là chuyện thường — cùng lúc đó log Gunicorn ghi `200` cho đúng
+request ấy. Người dùng đọc thấy tài liệu chết, còn backend đang chạy bình thường.
+
+Hai câu hỏi tách bạch cho mọi vòng poll:
+
+1. **Lỗi này tự khỏi không?** 408/429/502/503/504 và fetch ném thì có; 401/403/404/500 thì
+   không. Riêng 500 đáng nhắc: nó trông như "lỗi server, chắc thử lại được", nhưng đó là
+   ứng dụng tự ném — thử lại chỉ tốn request cho một câu trả lời không đổi.
+2. **Bao nhiêu lần thì mới NÓI RA?** Không phải một. Ngưỡng nói ra và ngưỡng bỏ cuộc là
+   hai con số khác nhau: hỏng 1–2 lần thì im, ≥3 thì báo "đang thử lại" nhưng giữ nguyên
+   trạng thái xử lý, vượt ngân sách chung mới nói là đã ngừng theo dõi.
+
+Và câu chữ phải phân biệt "tôi không theo dõi được nữa" với "việc của bạn hỏng rồi" —
+ingest vẫn có thể đang chạy ở server sau khi trình duyệt bỏ cuộc.
+
+Ngưỡng bỏ cuộc lấy lại `MAX_CONSECUTIVE_FETCH_FAILURES` của `jobPoller` thay vì đặt số
+mới: hai con số cùng nghĩa nằm hai chỗ thì sớm muộn cũng trôi khỏi nhau.
+
+## `setInterval` với thân async là hai request cùng bay (2026-09-05)
+
+`setInterval(poll, 1500)` với `poll` là async không phải "hỏi mỗi 1.5s" — nó là "bắn mỗi
+1.5s bất kể lượt trước xong chưa". Một lượt chậm là hai request chồng nhau, và phản hồi
+về trễ ghi đè phản hồi mới hơn: thanh tiến trình nhảy lùi, hoặc trạng thái `ready` bị một
+phản hồi cũ đè thành `processing`.
+
+Tự hẹn `setTimeout` SAU khi lượt trước kết thúc thì bất biến "chỉ một request đang bay"
+đúng theo cấu trúc, không cần cờ nào canh. Đổi lại phải guard `start()` gọi hai lần —
+chỉ giữ được một handle, dựng vòng thứ hai là mất cách dừng vòng thứ nhất.
