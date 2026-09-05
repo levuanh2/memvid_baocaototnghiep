@@ -215,11 +215,30 @@ def _get_current_embedding_dim() -> int:
     return int(dummy.shape[1])
 
 
+from shared.interfaces import errors as _loi
+
 INDEX_IDENTITY_KEYS = ("embedding_provider", "embedding_model_name", "embedding_strategy")
 
 
 class IndexIdentityMismatch(RuntimeError):
-    """Index được dựng bằng một không gian vector khác với cái đang cấu hình."""
+    """Index được dựng bằng một không gian vector khác với cái đang cấu hình.
+
+    `MA_LOI` để `shared.interfaces.errors.ma_loi()` nhận ra mà KHÔNG phải import ngược
+    từ `shared` lên `app` — port đọc thuộc tính, không so kiểu. Đây là lớp lỗi DUY NHẤT
+    mà lời khuyên "dựng lại index" thật sự chữa được.
+    """
+
+    MA_LOI = _loi.INDEX_INCOMPATIBLE
+
+
+class IndexMissing(RuntimeError):
+    """Không có index để dùng: chưa dựng bao giờ, hoặc khôi phục không ra.
+
+    Khác `IndexIdentityMismatch` ở chỗ chữa bằng việc khác: ở đây là dựng/khôi phục,
+    ở kia là dựng LẠI cho khớp danh tính. Và khác hẳn lỗi nhà cung cấp.
+    """
+
+    MA_LOI = _loi.INDEX_MISSING
 
 
 def index_identity(meta: Optional[Dict[str, Any]] = None) -> Dict[str, Any]:

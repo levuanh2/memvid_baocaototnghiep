@@ -16,10 +16,36 @@ from app.graphs.logger import _Timer, ctx_submit, log_node_event
 from app.graphs.sqlite_checkpointer import sqlite_saver_from_path
 from app.graphs.state import QueryState
 from app.domains.cache import llm_cache
+from shared.interfaces import errors as _loi
 from app.domains.retrieval import citation, grading, nli, query_rewrite, rerank
 from app.domains.retrieval.ensemble_retriever import hybrid_retrieve_with_ensemble
 from shared.interfaces.retriever import Retriever
 from shared.config import get_settings
+def _phan_loai_loi(exc: BaseException) -> Optional[str]:
+    """Mã lỗi cho một ngoại lệ bắt được ở đường truy hồi.
+
+    Thứ tự có chủ đích:
+
+    1. Ngoại lệ TỰ KHAI mã (`MA_LOI`) — mọi lỗi của tầng embedding và của chỉ mục đều
+       thuộc nhóm này. Đây là đường chính, và nó không đoán gì cả.
+    2. Chỉ khi nào không ai khai, mới xét tới hình dạng chuỗi — và CHỈ cho đúng một
+       thứ: `ValueError` về số chiều/hình dạng do numpy/FAISS ném khi vector truy vấn
+       không khớp index. Đó là lỗi chỉ mục THẬT.
+
+    Vì sao bước 2 hẹp đến thế: bản cũ dò chữ "embedding" trong thông báo, mà mọi lỗi
+    của nhà cung cấp embedding đều có chữ đó. Ở đây bước 1 đã bắt hết chúng trước, nên
+    bước 2 không còn cách nào chạm tới lỗi provider nữa.
+    """
+    ma = _loi.ma_loi(exc)
+    if ma:
+        return ma
+    if isinstance(exc, ValueError):
+        van = str(exc).lower()
+        if any(k in van for k in ("dim mismatch", "dimension", "shape", "not aligned")):
+            return _loi.INDEX_INCOMPATIBLE
+    return None
+
+
 _log = logging.getLogger(__name__)
 
 def run_with_timeout(fn: Callable[[], Any], timeout: float, *, propagate_ctx: bool = False) -> Any:
@@ -331,28 +357,14 @@ def build_query_graph(
                 "current_node": "RetrieveFAISS",
                 "error": None,
             }
-        except ValueError as ve:
-            err_str = str(ve)
-            _log.error("[RetrieveFAISS] ValueError: %s", err_str)
-            log_node_event(state["job_id"], "RetrieveFAISS", "error", t.ms(), {"error": err_str})
-            if "dim mismatch" in err_str.lower() or "embedding" in err_str.lower():
-                return {
-                    **state,
-                    "error": "Chỉ mục tài liệu đang không tương thích với embedding model hiện tại. Vui lòng rebuild index hoặc upload lại tài liệu.",
-                    "current_node": "RetrieveFAISS",
-                }
-            return {**state, "error": err_str, "current_node": "RetrieveFAISS"}
         except Exception as e:
             err_str = str(e)
-            _log.error("[RetrieveFAISS] Exception: %s", err_str)
-            log_node_event(state["job_id"], "RetrieveFAISS", "error", t.ms(), {"error": err_str})
-            if "shape" in err_str.lower() or "dimension" in err_str.lower():
-                return {
-                    **state,
-                    "error": "Chỉ mục tài liệu đang không tương thích với embedding model hiện tại. Vui lòng rebuild index hoặc upload lại tài liệu.",
-                    "current_node": "RetrieveFAISS",
-                }
-            return {**state, "error": err_str, "current_node": "RetrieveFAISS"}
+            _log.error("[RetrieveFAISS] %s: %s", type(e).__name__, err_str)
+            ma = _phan_loai_loi(e)
+            log_node_event(state["job_id"], "RetrieveFAISS", "error", t.ms(),
+                           {"error": err_str, "error_code": ma})
+            return {**state, "error": err_str, "error_code": ma,
+                    "current_node": "RetrieveFAISS"}
 
     def rerank_documents_node(state: dict) -> dict:
         """Two-Stage Retrieval — Stage 2: cross-encoder lọc candidate pool xuống top_n."""
@@ -731,20 +743,28 @@ def build_query_graph(
         return {**state, "progress": 100, "current_node": "Finalize"}
 
     def error_handler_node(state: dict) -> dict:
+        """Dịch lỗi kỹ thuật sang thông điệp cho người dùng, THEO MÃ chứ không theo chuỗi.
+
+        Bản cũ dò `["dim mismatch", "shape", "embedding", "dimension"]` trong thông báo
+        lỗi. `"FPT embeddings HTTP 401"` chứa chữ "embedding", nên một lỗi xác thực bị
+        báo thành "chỉ mục không tương thích, hãy rebuild index" — đẩy người đọc đi dựng
+        lại vài nghìn vector để chữa một biến môi trường sai (.playbook 2026-09-05).
+        """
         raw = state.get("error")
         err = (str(raw).strip() if raw is not None else "") or "unknown error"
-        
-        # Check for dimension/embedding mismatch errors
-        err_lower = err.lower()
-        if any(kw in err_lower for kw in ["dim mismatch", "shape", "embedding", "dimension"]):
-            user_msg = "Chỉ mục tài liệu đang không tương thích với embedding model hiện tại. Vui lòng rebuild index hoặc upload lại tài liệu."
-            _set_job(state["job_id"], status="error", progress=0, current_node="ErrorHandler", error_text=err)
-            log_node_event(state["job_id"], "ErrorHandler", "error", 0.0, {"error": err, "user_message": user_msg})
-            return {**state, "current_node": "ErrorHandler", "payload": {"error": user_msg}, "status_code": 500}
-        
-        _set_job(state["job_id"], status="error", progress=0, current_node="ErrorHandler", error_text=err)
-        log_node_event(state["job_id"], "ErrorHandler", "error", 0.0, {"error": err})
-        return {**state, "current_node": "ErrorHandler", "payload": {"error": err}, "status_code": 500}
+        ma = state.get("error_code")
+        user_msg = _loi.thong_diep(ma) or err
+
+        _set_job(state["job_id"], status="error", progress=0,
+                 current_node="ErrorHandler", error_text=err)
+        log_node_event(state["job_id"], "ErrorHandler", "error", 0.0,
+                       {"error": err, "error_code": ma, "user_message": user_msg})
+        payload = {"error": user_msg}
+        if ma:
+            # Thêm khoá, không đổi khoá cũ: client đang đọc `error` vẫn chạy y nguyên.
+            payload["code"] = ma
+        return {**state, "current_node": "ErrorHandler", "error_code": ma,
+                "payload": payload, "status_code": 500}
 
     # ---- CRAG nodes (chỉ wire khi CRAG_ENABLED) ----
     def grade_documents_node(state: dict) -> dict:

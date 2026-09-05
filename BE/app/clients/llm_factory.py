@@ -249,6 +249,8 @@ def _ollama_chat_llm(model: str | None, feature: str, options: dict | None, time
 
 
 # ── FPT AI Marketplace ─────────────────────────────────────────────────────
+from shared.interfaces import errors as _loi
+
 FPT_DEFAULT_BASE_URL = "https://mkp-api.fptcloud.com/v1"
 FPT_DEFAULT_CHAT_MODEL = "gpt-oss-120b"
 
@@ -724,8 +726,10 @@ class FptEmbeddings(_LCEmbeddings):
                 r = self._goi_mot_lan(texts)
             except Exception as exc:
                 if lan >= so_lan:
-                    raise RuntimeError(
-                        f"FPT embeddings request lỗi: {type(exc).__name__}") from None
+                    # Không gọi tới nơi: hết thời gian chờ, đứt kết nối, DNS hỏng.
+                    # KHÔNG kèm chuỗi lỗi gốc — nó có thể mang URL kèm tham số.
+                    raise _loi.EmbeddingProviderUnavailable(
+                        f"không gọi được dịch vụ embedding: {type(exc).__name__}") from None
                 time.sleep(self._cho_bao_lau(None, lan, tran_cho))
                 continue
             if r.status_code == 429 or r.status_code >= 500:
@@ -735,16 +739,30 @@ class FptEmbeddings(_LCEmbeddings):
                 continue
             break
 
+        # Dịch mã HTTP sang lỗi NGỮ NGHĨA. Trước đây chỗ này ném `RuntimeError` với
+        # thông điệp chứa chữ "embeddings", và `query_graph` dò chuỗi đó rồi kết luận
+        # "chỉ mục không tương thích" — một lỗi 401 bị báo thành lỗi index, đẩy người
+        # đọc đi dựng lại một index lành lặn (.playbook 2026-09-05).
+        if r.status_code in (401, 403):
+            # CỐ Ý không kèm `r.text`: thân phản hồi của tầng xác thực là chỗ dễ lọt
+            # thông tin nhạy cảm nhất. Mã trạng thái đã đủ để chẩn đoán.
+            raise _loi.EmbeddingProviderAuthFailed(
+                f"dịch vụ embedding từ chối xác thực (HTTP {r.status_code})")
+        if r.status_code == 429 or r.status_code >= 500:
+            # Còn tới đây nghĩa là đã thử lại hết lượt ở vòng trên mà vẫn vậy.
+            raise _loi.EmbeddingProviderUnavailable(
+                f"dịch vụ embedding chưa sẵn sàng (HTTP {r.status_code})")
         if r.status_code >= 400:
-            raise RuntimeError(f"FPT embeddings HTTP {r.status_code}: {r.text[:200]}")
+            raise _loi.EmbeddingRequestFailed(
+                f"FPT embeddings HTTP {r.status_code}: {r.text[:200]}")
         try:
             body = r.json()
         except ValueError:
-            raise RuntimeError(
+            raise _loi.EmbeddingRequestFailed(
                 f"FPT embeddings thân không phải JSON: {r.text[:200]}") from None
         muc = body.get("data")
         if not isinstance(muc, list) or len(muc) != len(texts):
-            raise RuntimeError(
+            raise _loi.EmbeddingRequestFailed(
                 f"FPT embeddings trả {len(muc) if isinstance(muc, list) else '?'} vector "
                 f"cho {len(texts)} đầu vào: {str(body)[:200]}")
         # `index` cho biết vector nào ứng với đầu vào nào. Giả định thứ tự giữ
@@ -752,11 +770,11 @@ class FptEmbeddings(_LCEmbeddings):
         theo_idx: dict[int, list[float]] = {}
         for it in muc:
             if not isinstance(it, dict) or not isinstance(it.get("embedding"), list):
-                raise RuntimeError(
+                raise _loi.EmbeddingRequestFailed(
                     f"FPT embeddings phần tử thiếu `embedding`: {str(it)[:120]}")
             theo_idx[int(it.get("index", len(theo_idx)))] = [float(x) for x in it["embedding"]]
         if sorted(theo_idx) != list(range(len(texts))):
-            raise RuntimeError(
+            raise _loi.EmbeddingRequestFailed(
                 f"FPT embeddings thiếu/lệch `index`: {sorted(theo_idx)[:10]}")
         return [theo_idx[i] for i in range(len(texts))]
 

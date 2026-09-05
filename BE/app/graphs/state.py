@@ -70,6 +70,10 @@ class QueryState(TypedDict):
     progress: int
     current_node: str
     error: Optional[str]
+    # Mã lỗi ổn định (shared.interfaces.errors). PHẢI khai ở đây: LangGraph chỉ giữ
+    # field có trong schema, thiếu dòng này thì mã lỗi rơi mất ở cạnh kế tiếp và
+    # ErrorHandler lại phải đoán từ chuỗi — đúng cái vừa bỏ đi.
+    error_code: NotRequired[Optional[str]]
     # LangGraph chỉ giữ các field có trong schema — thiếu payload/done → API mất answer.
     payload: NotRequired[Optional[dict]]
     status_code: NotRequired[int]
