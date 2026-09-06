@@ -50,10 +50,19 @@ export function AuthProvider({ children }) {
   // `provider` là tham số THỨ BA, tuỳ chọn: `login(email, password)` giữ nguyên chữ
   // ký cũ nên trang Login hiện tại không phải sửa. Chọn provider là việc của giao
   // diện sau này; ở đây chỉ mở đường cho nó.
-  const login = useCallback(async (email, password, provider) => {
+  // Tham số đầu là ĐỊNH DANH, không nhất thiết là email: local dùng email, NKS dùng
+  // username. `login(email, password)` giữ nguyên chữ ký cũ nên mọi caller cũ không
+  // phải sửa. Phiên sau khi đăng nhập giống hệt nhau bất kể provider nào — chỉ có
+  // token StudyMap được lưu, không bao giờ có gì của provider ngoài.
+  const login = useCallback(async (dinhDanh, password, provider) => {
     setError("");
     try {
-      const { token, user: u } = await loginUser({ email, password, provider });
+      const laProviderNgoai = Boolean(provider) && provider !== "local";
+      const { token, user: u } = await loginUser(
+        laProviderNgoai
+          ? { username: dinhDanh, password, provider }
+          : { email: dinhDanh, password },
+      );
       setToken(token);
       setUser(u);
       return u;

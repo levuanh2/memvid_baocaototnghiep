@@ -2,7 +2,7 @@ import { useState } from "react";
 import { Link, Navigate, useNavigate, useSearchParams } from "react-router-dom";
 import { Icon } from "../components/ui/Icon";
 import Spinner from "../components/ui/Spinner";
-import { isValidEmail, isValidPassword } from "../auth/validate";
+import { kiemTra, PROVIDER_MAC_DINH } from "../auth/loginForm";
 import { safeNext } from "../auth/authRedirect";
 import { useAuth } from "../auth/useAuth";
 
@@ -11,20 +11,31 @@ export default function Login() {
   const [params] = useSearchParams();
   const next = safeNext(params.get("next"));
   const { user, loading, login, error, setError } = useAuth();
+  const [provider, setProvider] = useState(PROVIDER_MAC_DINH);
   const [email, setEmail] = useState("");
+  const [username, setUsername] = useState("");
   const [password, setPassword] = useState("");
   const [submitting, setSubmitting] = useState(false);
+  const laNks = provider === "nks";
 
   // Already signed in → skip the form.
   if (!loading && user) return <Navigate to={next} replace />;
 
+  const doiProvider = (p) => {
+    if (p === provider) return;
+    setProvider(p);
+    // Xoá lỗi của provider trước, nhưng GIỮ giá trị đã gõ ở mỗi ô: đổi qua đổi lại
+    // mà mất chữ vừa nhập là cách nhanh nhất làm người ta gõ lại sai.
+    setError("");
+  };
+
   const onSubmit = async (e) => {
     e.preventDefault();
-    if (!isValidEmail(email)) return setError("Email chưa hợp lệ.");
-    if (!isValidPassword(password)) return setError("Mật khẩu cần ít nhất 8 ký tự.");
+    const loi = kiemTra(provider, { dinhDanh: laNks ? username : email, password });
+    if (loi) return setError(loi);
     setSubmitting(true);
     try {
-      await login(email, password);
+      await login(laNks ? username.trim() : email, password, laNks ? "nks" : undefined);
       navigate(next, { replace: true });
     } catch {
       // error is surfaced via context.error
@@ -48,12 +59,33 @@ export default function Login() {
           </div>
 
           <form onSubmit={onSubmit} className="flex flex-col gap-3.5">
-            <label className="flex flex-col gap-1.5">
-              <span className="text-[12.5px] font-medium text-text-secondary">Email</span>
-              <input type="email" autoComplete="email" value={email}
-                onChange={(e) => setEmail(e.target.value)}
-                placeholder="ban@vidu.com" className="input-surface text-[14px]" />
-            </label>
+            {/* Chọn nguồn tài khoản. Mặc định là tài khoản StudyMap — người dùng cũ
+                mở trang này thấy đúng thứ họ vẫn thấy. */}
+            <div className="flex gap-1.5" role="radiogroup" aria-label="Nguồn tài khoản">
+              {[["local", "Tài khoản StudyMap"], ["nks", "Tài khoản NKS"]].map(([gt, nhan]) => (
+                <button key={gt} type="button" role="radio" aria-checked={provider === gt}
+                  onClick={() => doiProvider(gt)}
+                  className={`pill-tab flex-1 justify-center !py-1.5 ${provider === gt ? "pill-tab-active" : ""}`}>
+                  {nhan}
+                </button>
+              ))}
+            </div>
+
+            {laNks ? (
+              <label className="flex flex-col gap-1.5">
+                <span className="text-[12.5px] font-medium text-text-secondary">Tên đăng nhập NKS</span>
+                <input type="text" autoComplete="username" value={username}
+                  onChange={(e) => setUsername(e.target.value)}
+                  placeholder="tên đăng nhập" className="input-surface text-[14px]" />
+              </label>
+            ) : (
+              <label className="flex flex-col gap-1.5">
+                <span className="text-[12.5px] font-medium text-text-secondary">Email</span>
+                <input type="email" autoComplete="email" value={email}
+                  onChange={(e) => setEmail(e.target.value)}
+                  placeholder="ban@vidu.com" className="input-surface text-[14px]" />
+              </label>
+            )}
             <label className="flex flex-col gap-1.5">
               <span className="text-[12.5px] font-medium text-text-secondary">Mật khẩu</span>
               <input type="password" autoComplete="current-password" value={password}

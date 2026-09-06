@@ -120,9 +120,15 @@ export const registerUser = async ({ email, password, display_name }) => {
 //
 // Không có logic xác thực nào ở đây: FE chỉ chuyển tiếp lựa chọn, backend vẫn là
 // nơi duy nhất quyết định provider nào hợp lệ và bật hay tắt.
-export const loginUser = async ({ email, password, provider } = {}) => {
-  const body = { email, password };
-  if (provider) body.provider = provider;
+export const loginUser = async ({ email, username, password, provider } = {}) => {
+  // Local gửi `email`, provider ngoài gửi `username` — NKS định danh người dùng bằng
+  // username, không phải email. Backend chấp nhận cả hai khoá, nhưng gửi đúng tên
+  // trường của từng provider thì thân yêu cầu tự nói nó là loại đăng nhập nào.
+  const dinhDanh = username ?? email;
+  const laProviderNgoai = Boolean(provider) && provider !== "local";
+  const body = laProviderNgoai
+    ? { provider, username: dinhDanh, password }
+    : { email: dinhDanh, password };
   const res = await apiFetch(`/auth/login`, {
     method: "POST",
     headers: { "Content-Type": "application/json" },
