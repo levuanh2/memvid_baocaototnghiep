@@ -87,6 +87,33 @@ class User(Base):
     )
 
 
+class Identity(Base):
+    """Danh tính ở provider ngoài (NKS…) trỏ về một `users` row.
+
+    Bảng này là thứ CHẶN chiếm tài khoản qua email: nhận ra người quay lại bằng
+    `UNIQUE(provider, provider_user_id)` — một phép tra khoá — thay vì bằng cách so
+    email, vốn cho phép bất kỳ ai đăng ký được email đó ở provider ngoài nuốt tài
+    khoản StudyMap sẵn có.
+
+    `provider` để dạng chuỗi tự do có chủ đích: lõi không được có danh sách cứng tên
+    provider, nếu không gỡ một provider lại thành sửa lược đồ.
+    """
+
+    __tablename__ = "identities"
+
+    id = pk()
+    provider = Column(String(50), nullable=False)
+    provider_user_id = Column(String(255), nullable=False)
+    user_id = fk("users.id")
+    created_at = created_at()
+    last_login_at = Column(DateTime(timezone=True), nullable=True)
+
+    __table_args__ = (
+        UniqueConstraint("provider", "provider_user_id", name="uq_identities_provider_user"),
+        Index("ix_identities_user_id", "user_id"),
+    )
+
+
 # ───────────────────────────────────────────────────────────── 2. Tài liệu ────
 
 class Document(Base):

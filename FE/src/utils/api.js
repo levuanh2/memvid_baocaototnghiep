@@ -113,11 +113,20 @@ export const registerUser = async ({ email, password, display_name }) => {
   return _authJson(res); // { token, user }
 };
 
-export const loginUser = async ({ email, password }) => {
+// `provider` TUỲ CHỌN. Không truyền = backend hiểu là "local" = đúng hành vi cũ,
+// nên mọi lời gọi hiện có không phải sửa. Khoá `provider` chỉ được thêm vào thân
+// yêu cầu khi thật sự có giá trị — gửi `provider: undefined` thì JSON.stringify bỏ
+// đi, nhưng gửi `provider: ""` thì backend đọc ra chuỗi rỗng và phải đoán.
+//
+// Không có logic xác thực nào ở đây: FE chỉ chuyển tiếp lựa chọn, backend vẫn là
+// nơi duy nhất quyết định provider nào hợp lệ và bật hay tắt.
+export const loginUser = async ({ email, password, provider } = {}) => {
+  const body = { email, password };
+  if (provider) body.provider = provider;
   const res = await apiFetch(`/auth/login`, {
     method: "POST",
     headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({ email, password }),
+    body: JSON.stringify(body),
   });
   return _authJson(res); // { token, user }
 };

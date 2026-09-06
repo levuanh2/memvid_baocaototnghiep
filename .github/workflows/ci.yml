@@ -86,10 +86,13 @@ jobs:
         working-directory: BE
         run: python scripts/build_proto.py
 
+      # No DATABASE_URL here on purpose. alembic/env.py now picks its own target via
+      # shared.migration_guard.chon_dich(), which reads TEST_DATABASE_URL and refuses
+      # to fall back to DATABASE_URL. Setting DATABASE_URL to the same value would
+      # actually FAIL the guard: "target identity == DATABASE_URL identity" is how it
+      # detects a test URL that is really the production database.
       - name: Run migrations
         working-directory: BE
-        env:
-          DATABASE_URL: postgresql://postgres:postgres@localhost:5432/studymap_test
         run: alembic upgrade head
 
       - name: Run backend test suite

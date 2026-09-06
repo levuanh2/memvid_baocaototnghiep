@@ -53,7 +53,8 @@ def test_all_19_tables_exist_with_rls(engine):
     assert set(ALL_TABLES) == set(present), (
         f"thiếu: {set(ALL_TABLES) - set(present)} | thừa: {set(present) - set(ALL_TABLES)}"
     )
-    assert len(ALL_TABLES) == 19
+    # 19 bảng đặc tả Phase 1 + `identities` (2026-09-05, liên kết provider ngoài).
+    assert len(ALL_TABLES) == 20
     # RLS bật + không policy nào = deny-all cho publishable key (đặc tả Phase 1).
     assert [t for t, rls in present.items() if not rls] == []
 

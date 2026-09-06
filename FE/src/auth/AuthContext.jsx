@@ -47,10 +47,13 @@ export function AuthProvider({ children }) {
   // ProtectedRoute redirects to /login?next=<current>.
   useEffect(() => installUnauthorizedHandler(() => setUser(null)), []);
 
-  const login = useCallback(async (email, password) => {
+  // `provider` là tham số THỨ BA, tuỳ chọn: `login(email, password)` giữ nguyên chữ
+  // ký cũ nên trang Login hiện tại không phải sửa. Chọn provider là việc của giao
+  // diện sau này; ở đây chỉ mở đường cho nó.
+  const login = useCallback(async (email, password, provider) => {
     setError("");
     try {
-      const { token, user: u } = await loginUser({ email, password });
+      const { token, user: u } = await loginUser({ email, password, provider });
       setToken(token);
       setUser(u);
       return u;

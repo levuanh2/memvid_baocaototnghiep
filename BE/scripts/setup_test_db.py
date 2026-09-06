@@ -44,6 +44,13 @@ def _mo_ta(url: str) -> str:
 def kiem_hang_rao() -> tuple[bool, str]:
     from app.db import _danh_tinh_dich
 
+    # Nạp .env TRƯỚC khi so sánh. Không nạp thì `DATABASE_URL` rỗng, phép so bên dưới
+    # bị bỏ qua trong im lặng, và một URL production đặt vào TEST_DATABASE_URL sẽ đi
+    # lọt — đã đo 2026-09-05: `--kiem-tra` in ra "Đích test: <host production>".
+    # Hàng rào so với một giá trị chưa nạp là hàng rào không tồn tại.
+    from shared.env_loader import load_project_env
+    load_project_env()
+
     test_url = (os.getenv("TEST_DATABASE_URL") or "").strip()
     if not test_url:
         return False, ("TEST_DATABASE_URL chưa được đặt. Đây là biến DUY NHẤT script "
@@ -53,6 +60,19 @@ def kiem_hang_rao() -> tuple[bool, str]:
         return False, ("TEST_DATABASE_URL trỏ vào CÙNG database với DATABASE_URL. "
                        "Khác cổng KHÔNG phải khác database — Supabase mở cùng một "
                        "database ở cả 5432 lẫn 6543.")
+
+    # Cùng một chốt mà `alembic/env.py` dùng, áp ngay ở đây để `--kiem-tra` trả lời
+    # đúng câu hỏi "đích này có hợp lệ không" thay vì chỉ in nó ra.
+    from shared.migration_guard import (
+        CHE_DO_TEST,
+        MigrationTargetRejected,
+        kiem_tra_dich,
+    )
+    try:
+        kiem_tra_dich(test_url, CHE_DO_TEST)
+    except MigrationTargetRejected as exc:
+        return False, str(exc)
+
     return True, _mo_ta(test_url)
 
 
@@ -61,6 +81,11 @@ def main() -> int:
                                 formatter_class=argparse.RawDescriptionHelpFormatter)
     p.add_argument("--kiem-tra", action="store_true",
                    help="chỉ kiểm hàng rào và in đích đến, không chạy migration")
+    # Downgrade cũng phải đi qua ĐÚNG hàng rào này. Không có cờ ở đây thì người ta sẽ
+    # quay lại gõ `python -c "from alembic import command..."` — chính là lệnh đã trỏ
+    # nhầm vào production ngày 2026-09-05.
+    p.add_argument("--go-lui", metavar="REVISION", default=None,
+                   help="hạ về REVISION (ví dụ ea56c24b17bb) trên DB test, qua cùng hàng rào")
     args = p.parse_args()
 
     ok, thong_diep = kiem_hang_rao()
@@ -72,10 +97,13 @@ def main() -> int:
         print("(chỉ kiểm tra — không chạy migration)")
         return 0
 
-    # Alembic đi qua `app.db.database_url()`, và hàm ấy trả về TEST_DATABASE_URL khi
-    # đang chạy dưới pytest. Script này KHÔNG chạy dưới pytest, nên phải ép tường minh.
-    os.environ["DATABASE_URL"] = os.environ["TEST_DATABASE_URL"]
-
+    # KHÔNG còn ghi đè `DATABASE_URL` bằng `TEST_DATABASE_URL` nữa.
+    #
+    # Dòng đó từng cần vì `alembic/env.py` gọi `app.db.database_url()`, vốn ngoài
+    # pytest chỉ đọc `DATABASE_URL`. Từ 2026-09-05 env.py tự chọn đích qua
+    # `shared.migration_guard.chon_dich()`, nên việc ghi đè vừa thừa vừa NGUY HIỂM:
+    # nó xoá mất chính giá trị mà chốt dùng để trả lời câu hỏi "đích test này có
+    # trùng production không", khiến hàng rào mạnh nhất tự vô hiệu hoá.
     from alembic import command
     from alembic.config import Config
 
@@ -83,6 +111,10 @@ def main() -> int:
 
     cfg = Config(str(BE_ROOT / "alembic.ini"))
     cfg.set_main_option("script_location", str(BE_ROOT / "alembic"))
+    if args.go_lui:
+        command.downgrade(cfg, args.go_lui)
+        print(f"alembic downgrade {args.go_lui}: xong")
+        return 0
     command.upgrade(cfg, "head")
     print("alembic upgrade head: xong")
     return 0

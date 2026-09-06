@@ -43,11 +43,25 @@ services:
     # Build-time is the right place on free: a failed migration fails the build
     # and Render keeps the previous deploy serving. Putting it in startCommand
     # would re-run it on every cold start and take the service down on failure.
+    # `alembic upgrade head` trần KHÔNG còn chạy được, và đó là chủ ý: từ 2026-09-05
+    # `alembic/env.py` mặc định TỪ CHỐI mọi đích không phải database test. Chạm
+    # production phải là một hành động được KHAI BÁO, không phải mặc định.
+    #
+    # `run_migrations` khai lớp môi trường (`--moi-truong production`), rồi chốt đối
+    # chiếu đích thật với ALEMBIC_PRODUCTION_HOST/DB bên dưới VÀ với
+    # `SELECT current_database()` trên kết nối sống. Sai một trong ba thì build dừng,
+    # bản deploy cũ vẫn phục vụ.
+    #
+    # Không có credential ở đây: chỉ TÊN host và TÊN database. Mật khẩu đi riêng
+    # trong `DATABASE_URL` do Render tiêm vào (`sync: false`).
     buildCommand: >-
       pip install --upgrade pip &&
       pip install -r requirements.txt &&
       python scripts/build_proto.py &&
-      alembic upgrade head
+      ALEMBIC_ALLOW_PRODUCTION=1
+      ALEMBIC_PRODUCTION_HOST=$ALEMBIC_PRODUCTION_HOST
+      ALEMBIC_PRODUCTION_DB=$ALEMBIC_PRODUCTION_DB
+      python -m scripts.run_migrations --moi-truong production
 
     # Production WSGI server, never `flask run`. One worker: HITL keeps resume
     # metadata in-process, so pause and resume must land in the same process —
@@ -69,6 +83,16 @@ services:
         sync: false
       - key: GEMINI_API_KEY
         sync: false
+      # --- đích migration được KHAI BÁO tường minh ---
+      # KHÔNG phải bí mật (chỉ là tên host + tên database), nhưng vẫn `sync: false`:
+      # giá trị của hàng rào này nằm ở chỗ một CON NGƯỜI phải gõ ra đích production
+      # là gì. Chép sẵn vào git thì nó thành mặc định, và mặc định thì không ai đọc.
+      # Bỏ trống ⇒ build DỪNG (fail closed), không phải chạy nhầm.
+      - key: ALEMBIC_PRODUCTION_HOST
+        sync: false
+      - key: ALEMBIC_PRODUCTION_DB
+        sync: false
+
       # Token signing key: generated once by Render, never shown, never in git.
       - key: AUTH_SECRET
         generateValue: true

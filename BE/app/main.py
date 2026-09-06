@@ -828,22 +828,44 @@ def auth_register():
     return jsonify({"token": token, "user": _auth.public_user(user)}), 201
 
 
+#: Lỗi đăng nhập → (mã HTTP, mã lỗi máy đọc được). `invalid_credentials`/401 giữ
+#: NGUYÊN như trước khi có provider: frontend đang map đúng chuỗi đó sang câu tiếng
+#: Việt, đổi là vỡ màn hình đăng nhập.
+_LOI_DANG_NHAP = {
+    "InvalidCredentials": (401, "invalid_credentials"),
+    "InvalidProvider": (400, "invalid_provider"),
+    "ProviderNotEnabled": (400, "provider_not_enabled"),
+    "ProviderUnavailable": (503, "provider_unavailable"),
+    "ProviderProtocolError": (502, "provider_protocol_error"),
+    "IdentityNotLinked": (409, "identity_not_linked"),
+}
+
+
 @app.post('/auth/login')
 def auth_login():
+    from app.application import auth as _app_auth
     from app.domains.auth import service as _auth
     from app.domains.auth import tokens as _tokens
-    from app.domains.auth import users_store as _users
     data = request.json or {}
-    email = data.get("email") or ""
+    # Định danh: `email` là trường cũ và vẫn là trường CHÍNH. `username` chấp nhận
+    # thêm vì NKS định danh người dùng bằng username, không phải email — nhưng nó chỉ
+    # là đường dự phòng, KHÔNG bắt buộc cho local (yêu cầu: local không cần trường
+    # riêng của provider nào).
+    email = data.get("email") or data.get("username") or ""
     password = data.get("password") or ""
+    # `provider` là TUỲ CHỌN. Vắng mặt = "local" = đúng hành vi cũ, nên frontend
+    # hiện tại (chỉ gửi {email, password}) không phải sửa gì.
+    provider = (data.get("provider") or _app_auth.LOCAL)
     # Reuse the Phase-4 token-bucket limiter (off by default; fail-open).
     allowed, retry_after = _rate_limit_check(f"login:{_client_ip()}")
     if not allowed:
         return _rate_limited_response(retry_after)
-    user = _users.verify_password(email, password)
-    if user is None:
-        # Generic error — no user enumeration.
-        return jsonify({"error": "invalid_credentials"}), 401
+    try:
+        user = _app_auth.dang_nhap(email, password, provider)
+    except _app_auth.AuthError as exc:
+        # Generic error for bad credentials — no user enumeration.
+        ma_http, ma_loi = _LOI_DANG_NHAP.get(type(exc).__name__, (401, "invalid_credentials"))
+        return jsonify({"error": ma_loi}), ma_http
     token = _tokens.make_token(user)
     return jsonify({"token": token, "user": _auth.public_user(user)}), 200
 
