@@ -2818,3 +2818,73 @@ Chi tiết cài đặt dễ trượt: redis-py chỉ mở kết nối ở lệnh
 server. `from_url()` và `.lock()` không chạm mạng; `.acquire()` mới chạm. Bọc `try` quanh
 hai cái đầu mà để `acquire` ra ngoài thì lỗi mạng thoát ra dạng thô và mất hết ngữ nghĩa
 "thử lại được" mà mình vừa dựng.
+
+## Bảng "Output" trong tài liệu NKS sai ở CẢ BA endpoint ghi (2026-09-07)
+
+`docs/NKS API.md` ghi Output của `updateInfo` / `updateAvatar` / `updateCccd` đều là
+"User Info". Ảnh chụp Postman trong CHÍNH tài liệu đó cho thấy thứ khác:
+
+```json
+{"success": true, "option": null, "data": true, "message": "User retrieved successfully."}
+```
+
+`data` là một boolean trần. Ai viết client theo bảng Output sẽ đọc `data.avatar` sau khi
+đổi ảnh và nhận `undefined` — mỗi lần ghi phải gọi lại `/nks/user` mới thấy kết quả.
+
+Lặp lại đúng bài học "Tài liệu của nhà cung cấp không phải là hợp đồng" (2026-09-03), với
+một biến thể: **phần đáng tin nhất của tài liệu là ảnh chụp phản hồi thật, không phải bảng
+mô tả bên cạnh nó.** Bảng do người viết gõ tay, ảnh do máy chủ trả. Khi hai thứ lệch nhau
+thì tin ảnh.
+
+Cùng tài liệu, hai thứ nữa cần nhớ:
+
+- Endpoint đăng nhập ghi là `https://account.nks.vn/api/user/login`, nhưng đường sống là
+  `/api/nks/user/login` — đã đo được từ trước, tài liệu vẫn chưa sửa.
+- Token là **JWT** (`eyJ0eXA…`), và danh sách endpoint của tài liệu là ĐẦY ĐỦ: không có
+  refresh, không có client-credentials, không có tài khoản máy. Nghĩa là mọi lần đọc hồ sơ
+  đều cần token của chính người dùng, lấy từ một lần đăng nhập bằng mật khẩu. "Không lưu
+  token" + "không sao chép dữ liệu" + "vẫn thấy hồ sơ sau khi tải lại trang" là ba điều
+  KHÔNG cùng đúng được — phải bỏ một.
+
+Còn một cạm bẫy về bí mật: tài liệu này chứa mật khẩu của 8 tài khoản NKS thật và một
+bearer token của API `sdata.io.vn`. Nó đang nằm trong repo. Trước khi commit phải quyết
+định: xoá phần credential, hay để tài liệu ngoài git.
+
+## Lọc kiểu ngay tại chỗ gọi biến "đọc sai trường" thành "im lặng về quyền thấp nhất" (2026-09-07)
+
+`mapper.to_identity` đọc nhóm NKS bằng `_lay(d, UNG_VIEN_NHOM)` rồi truyền đi qua:
+
+```python
+role=map_role(nhom if isinstance(nhom, (str, int)) else None),
+```
+
+`/nks/user` trả `role` là OBJECT `{"id": 11, "name": "Manager"}`. `_lay` lấy đúng
+khoá và trả về dict; `isinstance` loại dict; `map_role(None)` trả `learner`. **Mọi
+người dùng NKS trên production đều là `learner`, kể cả Manager** — và đã như thế từ
+ngày tính năng lên.
+
+Ba điều đáng nhớ:
+
+- **Fail-closed che mất lỗi lâu hơn fail-open.** Rơi về quyền THẤP NHẤT là đúng
+  hướng nên không có gì kêu: không exception, không log, không người dùng phàn nàn
+  (bị thiếu quyền thì người ta tưởng mình vốn không có quyền). Một mặc định an toàn
+  vẫn phải kèm cách biết là nó vừa được dùng. `metadata["nks_group"]` lẽ ra làm được
+  việc đó, nhưng nó ghi `str(dict)` nên nhìn vào không ai thấy bất thường.
+- **Lọc kiểu đặt ở chỗ GỌI thì nó không phải phép kiểm, nó là chỗ nuốt lỗi.**
+  `x if isinstance(x, T) else None` ngay trên dòng gọi biến "giá trị sai hình dạng"
+  thành "không có giá trị" mà không ai đọc lại. Việc rút một trường ra khỏi phản hồi
+  ngoài phải là một HÀM CÓ TÊN, để chỗ đó có tài liệu, có test, và hình dạng lạ thì
+  hiện ra chứ không biến mất.
+- **Bảng ánh xạ khoá theo NHÃN TRONG TÀI LIỆU, không theo giá trị API.** Tài liệu ghi
+  "Faculty"/"Student"/"Driver"; API trả `"teacher"`/`"user"`/`"user"`. Ngoài
+  `"manager"` thì không khoá nào từng khớp. Nghĩa là kể cả khi sửa xong đường đọc,
+  bảng cũ vẫn sai — hai lỗi độc lập chồng lên nhau, cùng cho ra một triệu chứng.
+
+Phòng lần sau: với mọi trường lấy từ hệ thống ngoài mà QUYẾT ĐỊNH QUYỀN, viết một
+test dùng đúng thân phản hồi thật đã đo, khẳng định giá trị cao nhất (`admin`) tới
+được đích. Test "unknown → learner" luôn xanh kể cả khi đường đọc gãy hoàn toàn, nên
+một mình nó không chứng minh được gì.
+
+Hồi quy: `test_regression_manager_khong_con_thanh_learner` trong
+`BE/tests/test_auth_nks.py` — thân `/nks/user` thật, tài khoản Manager, khẳng định
+`admin`. Trước bản sửa: `learner`.

@@ -5,7 +5,9 @@ BẮT BUỘC phải có tầng này, không phải cho đẹp: `users.role` có 
 hay "Student" vào cột đó là INSERT chết ngay ở tầng DB.
 
 Bảng để trong adapter: lõi domain không được biết NKS có những nhóm gì. Sửa được
-bằng env `NKS_ROLE_MAP="Manager:admin,Faculty:teacher"` để đổi ánh xạ không cần deploy.
+bằng env `NKS_ROLE_MAP="Manager:admin,teacher:teacher"` để đổi ánh xạ không cần deploy.
+
+Khoá là `role.name` của NKS, KHÔNG phải `role_id` — xem `mapper._ten_nhom`.
 """
 
 from __future__ import annotations
@@ -15,17 +17,25 @@ import os
 VAI_TRO_HOP_LE = ("learner", "teacher", "admin")
 MAC_DINH = "learner"
 
-# Bảy nhóm nêu trong tài liệu NKS. CHƯA XÁC MINH bằng phản hồi thật — tên trường
-# chứa nhóm vẫn là UNKNOWN (xem mapper.py), nên bảng này là điểm khởi đầu hợp lý
-# chứ không phải sự thật đã đo.
+# ĐO ĐƯỢC 2026-09-07 trên sáu tài khoản test in trong `docs/NKS API.md`, đọc
+# `data.role` của `/nks/user`:
+#
+#   nhãn tài liệu │ role_id │ role.name  │ StudyMap
+#   ──────────────┼─────────┼────────────┼──────────
+#   Manager       │   11    │ "Manager"  │ admin
+#   Faculty       │    8    │ "teacher"  │ teacher
+#   Driver        │    2    │ "user"     │ learner
+#   Student       │    2    │ "user"     │ learner
+#   Member        │  null   │  (vắng)    │ learner
+#
+# Bảng cũ khoá theo NHÃN TRONG TÀI LIỆU ("faculty", "student", "driver", "member",
+# "citizen", "customer"). Không nhãn nào trong số đó là giá trị API trả về — API
+# nói "teacher" và "user" — nên ngoài "manager" thì không khoá nào từng khớp.
+# Chỉ ba giá trị dưới đây là thứ đã QUAN SÁT ĐƯỢC; giá trị lạ vẫn về `learner`.
 MAC_DINH_MAP = {
     "manager": "admin",
-    "faculty": "teacher",
-    "student": "learner",
-    "member": "learner",
-    "citizen": "learner",
-    "customer": "learner",
-    "driver": "learner",
+    "teacher": "teacher",
+    "user": "learner",
 }
 
 

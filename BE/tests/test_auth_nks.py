@@ -134,17 +134,43 @@ def test_thieu_mat_khau_bi_chan_truoc_khi_goi_mang():
 
 
 # ── 3. Ánh xạ ────────────────────────────────────────────────────────────────
+#
+# Bảng dưới đây ĐO ĐƯỢC ngày 2026-09-07 bằng sáu tài khoản test in trong
+# `docs/NKS API.md`, đọc `data.role` của `/nks/user`:
+#
+#   nhãn trong tài liệu │ role_id │ role.name   │ vai trò StudyMap
+#   ────────────────────┼─────────┼─────────────┼──────────────────
+#   Manager             │   11    │ "Manager"   │ admin
+#   Faculty             │    8    │ "teacher"   │ teacher
+#   Driver              │    2    │ "user"      │ learner
+#   Student             │    2    │ "user"      │ learner
+#   Member              │  null   │  (vắng)     │ learner
+#
+# Nhãn trong tài liệu KHÔNG phải giá trị API trả về: "Faculty" thật ra là
+# "teacher", còn "Student" và "Driver" chung một giá trị "user".
 @pytest.mark.parametrize("nhom,mong_doi", [
     ("Manager", "admin"),
-    ("Faculty", "teacher"),
-    ("Student", "learner"),
-    ("Member", "learner"),
-    ("Citizen", "learner"),
-    ("Customer", "learner"),
-    ("Driver", "learner"),
+    ("teacher", "teacher"),
+    ("user", "learner"),
 ])
-def test_map_role_bay_nhom_tai_lieu(nhom, mong_doi):
+def test_map_role_ba_gia_tri_do_duoc_that(nhom, mong_doi):
     assert map_role(nhom) == mong_doi
+
+
+@pytest.mark.parametrize("nhan", ["Faculty", "Student", "Driver", "Member", "Citizen", "Customer"])
+def test_nhan_trong_tai_lieu_khong_phai_gia_tri_api(nhan):
+    """Sáu nhãn này KHÔNG bao giờ là `role.name` thật, nên phải rơi về quyền thấp nhất.
+
+    Bảng cũ khoá theo chúng — đó là lý do không nhãn nào khớp ngoài "Manager".
+    """
+    assert map_role(nhan) == "learner"
+
+
+@pytest.mark.parametrize("nhom", ["MANAGER", "manager", " Manager ", "TEACHER", "User"])
+def test_map_role_chuan_hoa_hoa_thuong_va_khoang_trang(nhom):
+    """NKS trả "Manager" hoa nhưng "teacher"/"user" thường — không được phụ thuộc kiểu chữ."""
+    assert map_role(nhom) in ("admin", "teacher", "learner")
+    assert map_role(nhom) == map_role(str(nhom).strip().lower())
 
 
 def test_nhom_la_va_thieu_nhom_deu_ve_quyen_thap_nhat():
@@ -158,6 +184,75 @@ def test_map_role_khong_bao_gio_tra_gia_tri_ngoai_rang_buoc_db():
     """`ck_users_role` chỉ nhận learner/teacher/admin — trả khác là INSERT chết."""
     for nhom in ["Manager", "Faculty", "Student", "la", None, "", "ADMIN", "root"]:
         assert map_role(nhom) in ("learner", "teacher", "admin")
+
+
+# ── 3b. `role` là OBJECT, không phải chuỗi ───────────────────────────────────
+#
+# Đây là chỗ lỗi thật sự nằm. `/nks/user` trả:
+#
+#     "role": {"id": 8, "name": "teacher"},
+#     "role_id": 8,
+#
+# `_lay` lấy đúng khoá `role` nhưng nhận về một dict; bản cũ lọc
+# `isinstance(nhom, (str, int))` nên dict rơi thành `None` ⇒ `map_role(None)` ⇒
+# `learner`. Mọi người NKS, kể cả Manager, đều thành learner. Bảng ánh xạ có sửa
+# đúng tới đâu cũng vô nghĩa nếu giá trị không bao giờ tới được nó.
+
+def _than_user(role=..., **them):
+    """Thân `/nks/user` rút gọn theo phản hồi thật (đo 2026-09-07)."""
+    d = {"id": 128, "email": "nks.teacher01@example.com", "name": "Teacher1",
+         "firstname": "Nguyễn Hữu", "lastname": "Lực"}
+    if role is not ...:
+        d["role"] = role
+    d.update(them)
+    return {"success": True, "data": d}
+
+
+@pytest.mark.parametrize("role,mong_doi", [
+    ({"id": 11, "name": "Manager"}, "admin"),
+    ({"id": 8, "name": "teacher"}, "teacher"),
+    ({"id": 2, "name": "user"}, "learner"),
+])
+def test_to_identity_doc_role_name_tu_object(role, mong_doi):
+    assert to_identity(_than_user(role=role)).role == mong_doi
+
+
+def test_regression_manager_khong_con_thanh_learner():
+    """Ca hồi quy của chính lỗi này — tài khoản Manager thật, hình dạng thật.
+
+    Trước bản sửa: "learner". Nếu test này đỏ trở lại thì đường đọc `role` đã hỏng
+    lần nữa, bất kể bảng ánh xạ trông ra sao.
+    """
+    ident = to_identity(_than_user(role={"id": 11, "name": "Manager"}, name="Manager 1"))
+    assert ident.role == "admin"
+    assert ident.role != "learner"
+
+
+@pytest.mark.parametrize("role", [None, ..., {}, {"id": 5}, {"name": None}, {"name": ""}])
+def test_role_vang_hoac_rong_ve_learner(role):
+    """Tài khoản Member thật trả `role: null`. Thiếu tên nhóm ⇒ quyền THẤP NHẤT."""
+    assert to_identity(_than_user(role=role)).role == "learner"
+
+
+def test_role_id_mot_minh_khong_cap_quyen():
+    """`role_id` là số nội bộ của NKS.
+
+    Đổi một hàng trong bảng roles bên họ là StudyMap cấp nhầm quyền mà không ai
+    biết. Chỉ `role.name` mới được quyết định vai trò.
+    """
+    assert to_identity(_than_user(role=..., role_id=11)).role == "learner"
+    assert to_identity(_than_user(role={"id": 11, "name": "user"}, role_id=11)).role == "learner"
+
+
+def test_metadata_mang_ten_nhom_chu_khong_phai_dict_stringify():
+    """`metadata` đi vào log chẩn đoán — "Manager" đọc được, "{'id': 11, ...}" thì không."""
+    ident = to_identity(_than_user(role={"id": 11, "name": "Manager"}))
+    assert ident.metadata.get("nks_group") == "Manager"
+
+
+def test_role_dang_chuoi_van_chay():
+    """Provider ngoài đổi sang trả chuỗi trần thì không được gãy."""
+    assert to_identity(_than_user(role="Manager")).role == "admin"
 
 
 def test_mapper_doc_duoc_ca_dang_phang_va_dang_boc():
