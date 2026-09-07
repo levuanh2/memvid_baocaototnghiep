@@ -214,6 +214,78 @@ def _gan_danh_tinh_ngoai(identity: InternalIdentity, *, deps: Optional[Mapping[s
         raise IdentityNotLinked(str(exc)) from None
 
 
+class GrantKhongKhopDanhTinh(AuthError):
+    """Credential đúng, nhưng thuộc một tài khoản NKS KHÁC.
+
+    Không có bước kiểm này thì bất kỳ ai cũng nộp được credential NKS của người khác
+    và nhận về một chứng từ gắn với user StudyMap của CHÍNH MÌNH — rồi ghi lên hồ sơ
+    NKS của nạn nhân. Route trả về đúng mã lỗi như sai mật khẩu.
+    """
+
+
+def mo_grant_ghi(
+    user_id: str,
+    identifier: str,
+    password: str,
+    provider: str = NKS,
+    *,
+    ttl_sec: Optional[int] = None,
+    deps: Optional[Mapping[str, Any]] = None,
+) -> tuple[str, float]:
+    """Đổi mật khẩu provider ngoài lấy một chứng từ ghi ngắn hạn. Trả `(grant_id, hết_hạn)`.
+
+    Ba hàng rào, theo thứ tự:
+
+    1. Provider phải là provider NGOÀI. `local` không có gì để cấp chứng từ ghi cả.
+    2. Credential phải đúng ở provider.
+    3. Danh tính provider trả về phải TRỎ ĐÚNG người dùng StudyMap đang gọi. Tra bằng
+       `(provider, provider_user_id)` như mọi chỗ khác — không bao giờ bằng email.
+
+    Token của provider chỉ đi từ adapter vào `grants` (RAM). Không log, không DB,
+    không lọt vào giá trị trả về.
+    """
+    ten = (provider or "").strip().lower()
+    if ten not in KNOWN_PROVIDERS:
+        raise InvalidProvider(ten)
+    if ten == LOCAL:
+        raise InvalidProvider(LOCAL)
+    if not user_id:
+        raise InvalidCredentials("thiếu người dùng StudyMap")
+
+    prov = _nks_provider(deps)
+    if prov is None:
+        raise ProviderNotEnabled(ten)
+
+    try:
+        identity, bi_mat = prov.mo_phien_ghi(
+            {"identifier": identifier, "password": password, "nks_extra": None})
+    except AuthError:
+        raise
+    except Exception as exc:  # noqa: BLE001 — dịch sang từ vựng lõi, không rò chi tiết
+        raise _dich_loi_nks(exc) from None
+
+    store = (deps or {}).get("identities_store")
+    if store is None:
+        from app.domains.auth import identities_store as store  # type: ignore[no-redef]
+
+    lien_ket = store.find(identity.provider, identity.provider_user_id)
+    if lien_ket is None or str(lien_ket["user_id"]) != str(user_id):
+        # Xoá tham chiếu tới token trước khi ném: không có lý do gì để nó còn sống
+        # thêm một khung stack nào nữa.
+        del bi_mat
+        raise GrantKhongKhopDanhTinh(ten)
+
+    grants = (deps or {}).get("grants")
+    if grants is None:
+        from app.domains.auth import grants  # type: ignore[no-redef]
+
+    try:
+        return grants.tao(str(user_id), ten, bi_mat,
+                          **({"ttl_sec": ttl_sec} if ttl_sec is not None else {}))
+    finally:
+        del bi_mat
+
+
 def dang_nhap(
     identifier: str,
     password: str,

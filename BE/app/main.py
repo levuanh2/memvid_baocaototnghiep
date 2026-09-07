@@ -873,6 +873,96 @@ def auth_login():
 @app.post('/auth/logout')
 def auth_logout():
     # Stateless: the client drops the token. (No token_version bump = not logout-all.)
+    # Nhưng chứng từ ghi NKS thì có trạng thái ở máy chủ, nên nó phải chết ở đây —
+    # nếu không, một token NKS còn sống thêm tối đa 10 phút sau khi người dùng đã
+    # chủ động đăng xuất. Token StudyMap hỏng/hết hạn ⇒ không biết là ai ⇒ không dọn
+    # được gì, và hạn tuyệt đối của chứng từ vẫn là hàng rào cuối.
+    from app.domains.auth import grants as _grants
+    from app.domains.auth import service as _auth
+    user = _auth.current_user_from_request()
+    if user is not None:
+        _grants.xoa_cua_user(str(user["user_id"]))
+    return jsonify({"ok": True}), 200
+
+
+#: Lỗi khi cấp chứng từ ghi → (mã HTTP, mã lỗi). `GrantKhongKhopDanhTinh` cố ý dùng
+#: CHUNG mã với sai mật khẩu: phân biệt hai ca đó là nói cho người gọi biết một tài
+#: khoản NKS nào đó có tồn tại và đã liên kết với ai.
+_LOI_GRANT = {
+    "InvalidCredentials": (401, "invalid_credentials"),
+    "GrantKhongKhopDanhTinh": (401, "invalid_credentials"),
+    "InvalidProvider": (400, "invalid_provider"),
+    "ProviderNotEnabled": (400, "provider_not_enabled"),
+    "ProviderUnavailable": (503, "provider_unavailable"),
+    "ProviderProtocolError": (502, "provider_protocol_error"),
+}
+
+
+@app.post('/auth/nks/grant')
+def auth_nks_grant_tao():
+    """Đổi mật khẩu provider ngoài lấy chứng từ ghi ngắn hạn (10 phút, chỉ trong RAM).
+
+    KHÔNG bao giờ trả chứng chỉ của provider ra ngoài. Thứ đi ra là một `grant_id`
+    ngẫu nhiên 256 bit, vô nghĩa nếu không kèm token StudyMap của đúng chủ nhân.
+    """
+    from app.application import auth as _app_auth
+    from app.domains.auth import gioi_han as _gh
+    from app.domains.auth import service as _auth
+
+    # Không dùng `_require_app_user`: nó trả (None, None) khi AUTH_PROTECT_APP_APIS
+    # tắt. Đường này cầm mật khẩu của một hệ thống khác — không có chế độ mở.
+    user = _auth.current_user_from_request()
+    if user is None:
+        return jsonify({"error": "unauthorized"}), 401
+    uid = str(user["user_id"])
+
+    data = request.json or {}
+    identifier = data.get("identifier") or data.get("username") or ""
+    password = data.get("password") or ""
+
+    # Trần theo NGƯỜI DÙNG và theo IP: người dùng chặn dò mật khẩu của một tài khoản,
+    # IP chặn quét nhiều tài khoản từ một chỗ.
+    khoa_user, khoa_ip = f"grant:u:{uid}", f"grant:ip:{_client_ip()}"
+    for k in (khoa_user, khoa_ip):
+        duoc, cho = _gh.cho_phep(k)
+        if not duoc:
+            return _rate_limited_response(cho)
+
+    try:
+        grant_id, het_han = _app_auth.mo_grant_ghi(uid, identifier, password)
+    except _app_auth.AuthError as exc:
+        ma_http, ma_loi = _LOI_GRANT.get(type(exc).__name__, (401, "invalid_credentials"))
+        if ma_http == 401:
+            # Chỉ đếm lỗi CREDENTIAL. NKS sập không phải lỗi của người đang gõ, và
+            # tính vào trần sẽ khoá luôn người dùng thật vì sự cố phía provider.
+            _gh.ghi_that_bai(khoa_user)
+            _gh.ghi_that_bai(khoa_ip)
+        return jsonify({"error": ma_loi}), ma_http
+
+    _gh.xoa(khoa_user)
+    _gh.xoa(khoa_ip)
+    return jsonify({"grant_id": grant_id, "expires_at": int(het_han)}), 201
+
+
+@app.delete('/auth/nks/grant')
+def auth_nks_grant_xoa():
+    """Chủ nhân tự thu hồi chứng từ. Idempotent, và không đụng được của người khác."""
+    from app.domains.auth import grants as _grants
+    from app.domains.auth import service as _auth
+
+    user = _auth.current_user_from_request()
+    if user is None:
+        return jsonify({"error": "unauthorized"}), 401
+
+    data = request.json if request.is_json else None
+    grant_id = (data or {}).get("grant_id") or ""
+    uid = str(user["user_id"])
+    # Không có `grant_id` ⇒ thu hồi tất cả của chính mình. Không bao giờ nói cho
+    # người gọi biết có thật sự tồn tại chứng từ nào hay không.
+    if grant_id:
+        _grants.xoa(str(grant_id), uid)
+    else:
+        _grants.xoa_cua_user(uid)
     return jsonify({"ok": True}), 200
 
 

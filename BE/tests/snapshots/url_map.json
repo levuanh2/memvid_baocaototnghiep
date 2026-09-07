@@ -329,6 +329,20 @@
     "rule": "/auth/me"
   },
   {
+    "endpoint": "auth_nks_grant_tao",
+    "methods": [
+      "POST"
+    ],
+    "rule": "/auth/nks/grant"
+  },
+  {
+    "endpoint": "auth_nks_grant_xoa",
+    "methods": [
+      "DELETE"
+    ],
+    "rule": "/auth/nks/grant"
+  },
+  {
     "endpoint": "auth_refresh",
     "methods": [
       "POST"
