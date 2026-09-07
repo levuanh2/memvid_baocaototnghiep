@@ -91,3 +91,14 @@ BE/cleaned_md/
 # không phải mã nguồn StudyMap. File vẫn nằm trên đĩa, chỉ không theo git.
 # Test đọc reports/evaluation/datasets/corpus_v1 sẽ tự skip khi thiếu.
 reports/
+
+# Tài liệu gốc của NKS — CHỨA CREDENTIAL THẬT, không bao giờ được vào kho.
+# File Word xuất ra kèm bảng tài khoản test (mật khẩu plaintext) và ảnh chụp Postman
+# có access_token nhìn thấy được. Bản đã làm sạch nằm ở docs/nks-api.md và ĐÓ mới là
+# bản để đọc; file dưới đây chỉ giữ trên máy cá nhân để đối chiếu.
+#
+# Đường dẫn khai TƯỜNG MINH, không dùng glob rộng: git trên Windows so khoá
+# KHÔNG phân biệt hoa thường (`core.ignorecase`), nên `docs/NKS*API*.md` nuốt luôn
+# `docs/nks-api.md` — tức là chặn mất chính bản đã làm sạch cần được commit.
+docs/NKS API.md
+docs/NKS API.docx
