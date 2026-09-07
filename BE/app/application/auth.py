@@ -155,6 +155,29 @@ def giai_quyet_user(identity: InternalIdentity, *, deps: Optional[Mapping[str, A
     return _gan_danh_tinh_ngoai(identity, deps=deps)
 
 
+def _lam_moi_vai_tro(user: dict, identity: InternalIdentity, users_store) -> None:
+    """Đồng bộ `users.role` theo provider ngoài ở MỖI lần đăng nhập. Sửa `user` tại chỗ.
+
+    Provider ngoài là nguồn sự thật của vai trò, nhưng `users.role` trước đây chỉ có
+    đường GHI lúc INSERT: người quay lại giữ mãi vai trò của lần đầu. Một người được
+    thăng chức ở NKS không bao giờ nhận được nó, và — nguy hơn — một người bị hạ chức
+    vẫn giữ đặc quyền cũ.
+
+    Hai hàng rào:
+
+    * Chỉ ghi khi KHÁC. Đăng nhập thường ngày không sinh lệnh ghi nào.
+    * Chỉ ghi khi giá trị NẰM TRONG tập hợp hợp lệ. Vai trò rỗng/lạ nghĩa là mapper
+      hỏng, và ghi đè lúc đó biến một lỗi đọc thành một lần đổi quyền âm thầm — đúng
+      cái mà `map_role` đã cẩn thận tránh bằng cách mặc định về quyền thấp nhất.
+
+    KHÔNG bump `token_version`: xem `users_store.set_role`.
+    """
+    moi = identity.role
+    if moi in users_store.VAI_TRO_HOP_LE and moi != user.get("role"):
+        users_store.set_role(user["user_id"], moi)
+        user["role"] = moi
+
+
 def _gan_danh_tinh_ngoai(identity: InternalIdentity, *, deps: Optional[Mapping[str, Any]] = None) -> dict:
     """Tra-hoặc-tạo liên kết cho danh tính ngoài.
 
@@ -175,6 +198,7 @@ def _gan_danh_tinh_ngoai(identity: InternalIdentity, *, deps: Optional[Mapping[s
             # Liên kết trỏ vào user đã bị xoá. FK ON DELETE CASCADE lẽ ra đã dọn;
             # tới đây nghĩa là dữ liệu lệch — từ chối, đừng tạo user mới đè lên.
             raise IdentityNotLinked(identity.provider)
+        _lam_moi_vai_tro(user, identity, users_store)
         store.touch_last_login(lien_ket["identity_id"])
         return user
 

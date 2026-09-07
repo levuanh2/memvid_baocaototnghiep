@@ -55,7 +55,9 @@ class NksGia:
             raise self.user_exc
         d = {"id": self.pid, "email": self.email, "full_name": self.ten}
         if self.nhom:
-            d["group"] = self.nhom
+            # Hình dạng THẬT (đo 2026-09-07): `role` là object `{id, name}`, không
+            # phải chuỗi trần. Giữ đúng hình dạng này để đường đọc nhóm được test.
+            d["role"] = {"id": 0, "name": self.nhom}
         return {"success": True, "data": d}
 
 
@@ -253,11 +255,68 @@ def test_email_trung_tai_khoan_local_thi_tu_choi_chu_khong_chiem(client, monkeyp
 
 
 # ── Ánh xạ vai trò đi hết đường xuống DB ─────────────────────────────────────
-@pytest.mark.parametrize("nhom,mong", [("Manager", "admin"), ("Faculty", "teacher"),
-                                       ("Student", "learner"), ("NhomLa", "learner")])
+# Giá trị `role.name` THẬT, đo 2026-09-07 (xem `roles.py`): "Manager" / "teacher" /
+# "user". Nhãn trong tài liệu ("Faculty", "Student"…) KHÔNG phải giá trị API trả về.
+@pytest.mark.parametrize("nhom,mong", [("Manager", "admin"), ("teacher", "teacher"),
+                                       ("user", "learner"), ("NhomLa", "learner")])
 def test_role_nks_map_dung_khi_luu(client, monkeypatch, nhom, mong):
     pid, em = f"nks-{uuid.uuid4().hex[:8]}", _email()
     _cai_nks(monkeypatch, NksGia(pid, em, nhom=nhom))
     r = client.post("/auth/login", json={"provider": "nks", "username": "u", "password": "mk"})
     assert r.status_code == 200
     assert r.get_json()["user"]["role"] == mong
+
+
+def _role_trong_db(email):
+    from sqlalchemy import text
+
+    from app.db import get_engine
+    with get_engine().begin() as c:
+        return c.execute(text("SELECT role FROM users WHERE email=:e"), {"e": email}).scalar_one()
+
+
+@pytest.mark.parametrize("dau,sau,mong_dau,mong_sau", [
+    ("user", "Manager", "learner", "admin"),      # thăng quyền
+    ("Manager", "user", "admin", "learner"),      # hạ quyền — không được giữ lại admin
+])
+def test_nguoi_quay_lai_duoc_tinh_lai_vai_tro_theo_nks(client, monkeypatch, dau, sau,
+                                                       mong_dau, mong_sau):
+    """Vai trò đổi ở NKS phải theo người dùng về, ngay lần đăng nhập kế tiếp.
+
+    Trước bản sửa, nhánh "đã có liên kết" trả nguyên hàng `users` cũ, nên hàng đầu
+    tiên ghi vào lúc nào thì vai trò đóng băng từ lúc đó.
+    """
+    pid, em = f"nks-{uuid.uuid4().hex[:8]}", _email()
+    gia = NksGia(pid, em, nhom=dau)
+    _cai_nks(monkeypatch, gia)
+
+    r1 = client.post("/auth/login", json={"provider": "nks", "username": "u", "password": "mk"})
+    assert r1.status_code == 200
+    assert r1.get_json()["user"]["role"] == mong_dau
+    assert _role_trong_db(em) == mong_dau
+
+    gia.nhom = sau                       # NKS đổi vai trò giữa hai lần đăng nhập
+    r2 = client.post("/auth/login", json={"provider": "nks", "username": "u", "password": "mk"})
+    assert r2.status_code == 200
+    assert r2.get_json()["user"]["role"] == mong_sau
+    assert _role_trong_db(em) == mong_sau
+    assert _dem_identity(pid) == 1       # vẫn đúng một liên kết, không tạo thêm
+
+
+def test_auth_me_thay_vai_tro_moi_bang_TOKEN_CU(client, monkeypatch):
+    """Token cũ vẫn dùng được và đã thấy vai trò mới — không đổi định dạng token,
+    không bump `token_version`, không bắt đăng nhập lại."""
+    pid, em = f"nks-{uuid.uuid4().hex[:8]}", _email()
+    gia = NksGia(pid, em, nhom="user")
+    _cai_nks(monkeypatch, gia)
+
+    r1 = client.post("/auth/login", json={"provider": "nks", "username": "u", "password": "mk"})
+    token_cu = r1.get_json()["token"]
+    assert r1.get_json()["user"]["role"] == "learner"
+
+    gia.nhom = "Manager"
+    client.post("/auth/login", json={"provider": "nks", "username": "u", "password": "mk"})
+
+    me = client.get("/auth/me", headers={"Authorization": f"Bearer {token_cu}"})
+    assert me.status_code == 200                       # token CŨ vẫn sống
+    assert me.get_json()["user"]["role"] == "admin"    # và đã thấy vai trò mới

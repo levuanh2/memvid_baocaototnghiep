@@ -21,6 +21,9 @@ from app.db import session_scope
 from app.db.models import User
 
 DEFAULT_ROLE = "learner"
+#: Phải khớp `ck_users_role` trong `db/models.py`. Để ở đây vì đây là tầng CHẠM cột
+#: `users.role`; adapter provider ngoài có bảng riêng của nó và không được nhập vào lõi.
+VAI_TRO_HOP_LE = ("learner", "teacher", "admin")
 
 
 class EmailExistsError(Exception):
@@ -107,6 +110,29 @@ def verify_password(email: str, password: str) -> Optional[dict]:
     if not check_password_hash(user["password_hash"], password or ""):
         return None
     return user
+
+
+def set_role(user_id: str, role: str) -> None:
+    """Đặt lại `users.role`.
+
+    Ném `ValueError` với giá trị ngoài `VAI_TRO_HOP_LE` — kể cả `"ADMIN"` hay
+    `"admin "`. Không chuẩn hoá giúp: một giá trị sai chính tả tới được đây nghĩa là
+    tầng trên đọc sai, và "hiểu ý" sẽ giấu mất lỗi đó. Chặn ở Python để hỏng ngay tại
+    chỗ gọi thay vì thành `IntegrityError` của `ck_users_role` giữa một transaction.
+
+    KHÔNG đụng `token_version`: token chỉ mang `{uid, tv}` và
+    `service.current_user_from_request` đọc lại hàng users ở MỖI request, nên vai trò
+    mới có hiệu lực ngay ở request kế tiếp. Bump ở đây chỉ đá người dùng ra ngoài mà
+    không thêm được gì về an toàn.
+    """
+    if not user_id:
+        return
+    if role not in VAI_TRO_HOP_LE:
+        raise ValueError(f"vai trò không hợp lệ: {role!r}")
+    with session_scope() as s:
+        u = s.get(User, str(user_id))
+        if u is not None:
+            u.role = role
 
 
 def bump_token_version(user_id: str) -> None:

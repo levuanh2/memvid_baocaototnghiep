@@ -2888,3 +2888,45 @@ một mình nó không chứng minh được gì.
 Hồi quy: `test_regression_manager_khong_con_thanh_learner` trong
 `BE/tests/test_auth_nks.py` — thân `/nks/user` thật, tài khoản Manager, khẳng định
 `admin`. Trước bản sửa: `learner`.
+
+## Cột chỉ được ghi lúc INSERT là cột đóng băng ở lần đầu (2026-09-07)
+
+`77ba7fa` sửa xong chỗ TÍNH vai trò NKS, nhưng người dùng quay lại vẫn giữ vai trò cũ.
+`_gan_danh_tinh_ngoai` chỉ đọc `identity.role` ở nhánh TẠO MỚI:
+
+```python
+lien_ket = store.find(...)
+if lien_ket is not None:
+    user = users_store.get_by_id(lien_ket["user_id"])
+    store.touch_last_login(...)
+    return user            # identity.role bị bỏ đi ở đây
+...
+return store.link_new_user(..., role=identity.role or "learner")   # chỗ DUY NHẤT dùng
+```
+
+`grep` cả `BE/app` cho phép gán `role`: đúng ba chỗ, **cả ba đều là INSERT**, không có
+một UPDATE nào. `users_store` không hề có `set_role`.
+
+- **"Nguồn sự thật ở hệ thống ngoài" chỉ đúng nếu có đường ĐỌC LẠI.** Chép một lần lúc
+  tạo tài khoản rồi thôi thì hệ thống ngoài là nguồn sự thật của đúng một khoảnh khắc
+  trong quá khứ. Cùng họ với bài học `deleted_at`: một chiều thì tính năng đó chưa tồn
+  tại.
+- **Sửa chỗ TÍNH không tự động sửa chỗ DÙNG.** Bản sửa trước xanh hết test, đúng hoàn
+  toàn, và không thay đổi gì cho người đã có tài khoản. Sau khi sửa một phép biến đổi,
+  phải hỏi tiếp: giá trị mới này đi tới đâu, và có ai đang giữ một bản cũ không?
+- **Hạ quyền mới là hướng nguy hiểm.** "Manager kẹt ở learner" chỉ phiền; "người bị hạ
+  chức vẫn còn admin" mới là lỗ hổng. Một hàng rào chỉ đồng bộ theo chiều tăng sẽ trông
+  như đang hoạt động rất lâu trước khi ai đó phát hiện.
+
+Hai hàng rào của bản sửa: chỉ UPDATE khi KHÁC (đăng nhập thường ngày không sinh lệnh
+ghi), và chỉ UPDATE khi giá trị NẰM TRONG `VAI_TRO_HOP_LE` — vai trò rỗng/lạ nghĩa là
+mapper hỏng, ghi đè lúc đó biến một lỗi đọc thành một lần đổi quyền âm thầm.
+
+Không bump `token_version`: token chỉ mang `{uid, tv}` và `current_user_from_request`
+đọc lại hàng `users` ở MỖI request, nên vai trò mới có hiệu lực ngay ở request kế tiếp.
+
+Còn một bẫy riêng đáng nhớ: `test_role_nks_map_dung_khi_luu` khẳng định
+`("Faculty", "teacher")` — sai từ lúc `77ba7fa` đổi bảng ánh xạ, nhưng **xanh ở máy dev
+vì thiếu `TEST_DATABASE_URL` nên nó SKIP**, trong khi CI có Postgres và sẽ chạy nó thật.
+Test bị skip không phải test đang xanh. Sửa một bảng ánh xạ thì phải grep xem test nào
+khoá theo giá trị cũ, đừng chỉ nhìn kết quả chạy ở máy mình.
