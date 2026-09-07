@@ -427,6 +427,20 @@
     "rule": "/list-indexed"
   },
   {
+    "endpoint": "me_nks_profile_doc",
+    "methods": [
+      "GET"
+    ],
+    "rule": "/me/nks/profile"
+  },
+  {
+    "endpoint": "me_nks_profile_ghi",
+    "methods": [
+      "PATCH"
+    ],
+    "rule": "/me/nks/profile"
+  },
+  {
     "endpoint": "memory_tree_status",
     "methods": [
       "GET"

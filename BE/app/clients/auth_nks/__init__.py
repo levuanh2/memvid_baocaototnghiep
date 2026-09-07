@@ -9,6 +9,7 @@ from __future__ import annotations
 from typing import Any, Mapping, Optional
 
 from shared.interfaces.auth import InternalIdentity
+from shared.interfaces.profile import ExternalProfile
 
 from . import client as _client
 from . import config
@@ -20,6 +21,7 @@ from .errors import (
     NksUnavailable,
 )
 from .mapper import PROVIDER, doc_access_token, to_identity
+from .profile_mapper import da_ghi_xong, to_profile, to_update_fields
 
 NAME = PROVIDER
 
@@ -94,3 +96,29 @@ class NKSAuthProvider:
         extra: Optional[dict] = credentials.get("nks_extra") or None
         access_token = doc_access_token(self._client.login(identifier, password, extra=extra))
         return to_identity(self._client.get_user(access_token)), access_token
+
+    # ── Hồ sơ ────────────────────────────────────────────────────────────────
+    #
+    # Hai hàm dưới nhận `bi_mat` — chính là access_token do `grants` giữ trong RAM.
+    # Chúng KHÔNG tự đăng nhập: chứng từ đã được cấp ở một request trước đó.
+
+    def doc_ho_so(self, bi_mat: str) -> ExternalProfile:
+        """Hồ sơ hiện tại ở provider. Nguồn sự thật, không có bản sao nào ở StudyMap."""
+        if not self._enabled():
+            raise NksNotEnabled("NKS chưa được bật")
+        return to_profile(self._client.get_user(bi_mat))
+
+    def ghi_ho_so(self, bi_mat: str, thay_doi: Mapping[str, Any]) -> ExternalProfile:
+        """Ghi hồ sơ rồi ĐỌC LẠI, trả về bản mới.
+
+        Đọc lại là bắt buộc chứ không phải cẩn thận thừa: `updateInfo` trả
+        `{"success": true, "data": true}` — một boolean, không phải hồ sơ. Tin vào
+        thứ vừa gửi đi mà vẽ lên màn hình là hiển thị một trạng thái chưa ai xác nhận;
+        provider có thể chuẩn hoá, cắt bớt, hoặc bỏ qua một trường.
+        """
+        if not self._enabled():
+            raise NksNotEnabled("NKS chưa được bật")
+        truong = to_update_fields(thay_doi)
+        if not da_ghi_xong(self._client.update_info(bi_mat, truong)):
+            raise NksProtocolError("NKS không xác nhận đã ghi hồ sơ")
+        return to_profile(self._client.get_user(bi_mat))

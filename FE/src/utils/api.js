@@ -245,3 +245,54 @@ export const fetchChunkText = async (chunkId) => {
   const data = await res.json();
   return typeof data?.text === "string" ? data.text : null;
 };
+
+// ── Hồ sơ NKS: chứng từ ghi ngắn hạn + đọc/ghi ─────────────────────────────
+//
+// Access token của NKS KHÔNG bao giờ đi qua đây — nó nằm trong RAM của máy chủ, tối
+// đa 10 phút. Thứ trình duyệt cầm là `grant_id`: chuỗi ngẫu nhiên không mang thông
+// tin, vô dụng nếu không kèm token StudyMap của đúng chủ nhân.
+//
+// Chứng từ đi ở HEADER `X-Grant-Id`, không phải query string: query nằm trong log
+// truy cập của proxy, header thì không.
+
+const _GRANT_HEADER = "X-Grant-Id";
+
+/** Đổi mật khẩu NKS lấy chứng từ. Trả `{ grant_id, expires_at }`. */
+export const taoGrantNks = async ({ identifier, password }) => {
+  const res = await apiFetch(`/auth/nks/grant`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ identifier, password }),
+  });
+  return _authJson(res);
+};
+
+/** Thu hồi chứng từ. Best-effort: hạn tuyệt đối phía máy chủ vẫn là hàng rào cuối. */
+export const xoaGrantNks = async (grantId) => {
+  try {
+    await apiFetch(`/auth/nks/grant`, {
+      method: "DELETE",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(grantId ? { grant_id: grantId } : {}),
+    });
+  } catch {
+    /* không sao — chứng từ tự chết theo hạn */
+  }
+};
+
+export const layHoSoNks = async (grantId) => {
+  const res = await apiFetch(`/me/nks/profile`, { headers: { [_GRANT_HEADER]: grantId || "" } });
+  const body = await _authJson(res);
+  return body.profile;
+};
+
+/** Ghi các ô đã đổi. Máy chủ tự đọc lại NKS, nên thứ trả về là hồ sơ MỚI THẬT. */
+export const capNhatHoSoNks = async (grantId, thayDoi) => {
+  const res = await apiFetch(`/me/nks/profile`, {
+    method: "PATCH",
+    headers: { "Content-Type": "application/json", [_GRANT_HEADER]: grantId || "" },
+    body: JSON.stringify(thayDoi || {}),
+  });
+  const body = await _authJson(res);
+  return body.profile;
+};

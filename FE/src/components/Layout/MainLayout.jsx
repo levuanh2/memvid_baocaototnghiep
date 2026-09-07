@@ -11,6 +11,7 @@ import { useTheme } from "../../hooks/useTheme";
 import { useAuth } from "../../auth/useAuth";
 import { Icon } from "../ui/Icon";
 import Toaster from "../ui/Toaster";
+import AccountMenu from "./AccountMenu";
 
 export default function MainLayout({ selectedSources, setSelectedSources }) {
   const [sources, setSources] = useState([]);
@@ -102,17 +103,8 @@ export default function MainLayout({ selectedSources, setSelectedSources }) {
             </button>
           </div>
 
-          {/* Account: user identity + logout */}
-          {user && (
-            <div className="flex items-center gap-1.5">
-              <span className="hidden md:inline text-[12.5px] text-text-secondary max-w-[160px] truncate" title={user.email}>
-                {user.display_name || user.email}
-              </span>
-              <button onClick={handleLogout} className="icon-btn w-9 h-9" aria-label="Đăng xuất" title="Đăng xuất">
-                <Icon name="LogOut" size={16} />
-              </button>
-            </div>
-          )}
+          {/* Account: ảnh + tên + menu (hồ sơ · đổi mật khẩu · đăng xuất) */}
+          {user && <AccountMenu user={user} onLogout={handleLogout} />}
         </div>
       </header>
 

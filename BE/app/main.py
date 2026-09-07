@@ -991,6 +991,72 @@ def auth_me():
     return jsonify({"user": _auth.public_user(user)}), 200
 
 
+#: Lỗi hồ sơ → (mã HTTP, mã lỗi). `grant_required` là mã FE dựa vào để bật lại hộp
+#: thoại xác minh — và để GIỮ NGUYÊN những gì người dùng đang gõ dở.
+_LOI_HO_SO = {
+    "GrantKhongHopLe": (409, "grant_required"),
+    "TruongKhongSuaDuoc": (400, "invalid_field"),
+    "InvalidProvider": (400, "invalid_provider"),
+    "ProviderNotEnabled": (400, "provider_not_enabled"),
+    "ProviderUnavailable": (503, "provider_unavailable"),
+    "ProviderProtocolError": (502, "provider_protocol_error"),
+}
+
+
+def _grant_id_tu_request() -> str:
+    """Chứng từ đi ở HEADER, không phải trong URL: query string nằm trong log truy cập
+    của proxy, còn header thì không."""
+    return (request.headers.get("X-Grant-Id") or "").strip()
+
+
+def _ho_so_response(fn):
+    from app.application import profile as _profile
+
+    user = _auth_service().current_user_from_request()
+    if user is None:
+        return jsonify({"error": "unauthorized"}), 401
+    grant_id = _grant_id_tu_request()
+    if not grant_id:
+        return jsonify({"error": "grant_required"}), 409
+    try:
+        ho_so = fn(str(user["user_id"]), grant_id)
+    except _profile.AuthError as exc:
+        ma_http, ma_loi = _LOI_HO_SO.get(type(exc).__name__, (502, "provider_protocol_error"))
+        return jsonify({"error": ma_loi}), ma_http
+    # `to_dict` là danh sách trắng: phản hồi thật của provider có 56 trường, trong đó
+    # có token kích hoạt và ảnh giấy tờ tuỳ thân. Không bao giờ chuyển tiếp cả object.
+    return jsonify({"profile": ho_so.to_dict()}), 200
+
+
+def _auth_service():
+    from app.domains.auth import service as _auth
+
+    return _auth
+
+
+@app.get('/me/nks/profile')
+def me_nks_profile_doc():
+    """Hồ sơ hiện tại ở provider ngoài. Cần chứng từ ghi còn hạn."""
+    from app.application import profile as _profile
+
+    return _ho_so_response(lambda uid, gid: _profile.doc_ho_so(uid, gid))
+
+
+@app.patch('/me/nks/profile')
+def me_nks_profile_ghi():
+    """Ghi các trường được phép, rồi trả về hồ sơ ĐỌC LẠI từ provider.
+
+    Provider chỉ trả một boolean khi ghi, nên bản hồ sơ đi ra đây luôn là bản vừa đọc
+    lại — không phải thứ vừa gửi lên.
+    """
+    from app.application import profile as _profile
+
+    thay_doi = request.json if request.is_json else None
+    if not isinstance(thay_doi, dict):
+        return jsonify({"error": "invalid_field"}), 400
+    return _ho_so_response(lambda uid, gid: _profile.cap_nhat_ho_so(uid, gid, thay_doi))
+
+
 @app.get('/stats')
 def stats():
     # Phase D: /stats exposes GLOBAL, cross-user metrics (index size, cache/queue/

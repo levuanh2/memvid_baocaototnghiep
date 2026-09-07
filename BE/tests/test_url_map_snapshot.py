@@ -82,13 +82,14 @@ def test_method_cua_tung_route_khong_doi(client, cu):
 
 
 def test_tong_so_route_khop(client, cu):
-    """85 = 84 route ứng dụng + 1 `/static/<path:filename>` built-in của Flask.
+    """87 = 86 route ứng dụng + 1 `/static/<path:filename>` built-in của Flask.
 
     +1 ngày 2026-09-04: `GET /api/config/status`.
     +2 ngày 2026-09-07: `POST` và `DELETE /auth/nks/grant` — chứng từ ghi ngắn hạn.
+    +2 ngày 2026-09-07: `GET` và `PATCH /me/nks/profile` — đọc/ghi hồ sơ NKS.
     Con số ở đây CỐ Ý viết cứng — sửa nó là một dòng diff mà người review phải nhìn
     thấy, đúng mục đích của cả file này."""
-    assert len(_hien_tai()) == len(cu) == 85
+    assert len(_hien_tai()) == len(cu) == 87
 
 
 def test_khong_co_cap_duong_dan_method_trung(client):

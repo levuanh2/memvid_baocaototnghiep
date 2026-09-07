@@ -20,6 +20,7 @@ import os
 DEFAULT_BASE_URL = "https://account.nks.vn/api"
 DEFAULT_LOGIN_PATH = "/nks/user/login"
 DEFAULT_USER_PATH = "/nks/user"
+DEFAULT_UPDATE_INFO_PATH = "/nks/user/updateInfo"
 
 
 def _s(name: str, default: str = "") -> str:
@@ -41,6 +42,10 @@ def login_url() -> str:
 
 def user_url() -> str:
     return base_url() + _s("NKS_USER_PATH", DEFAULT_USER_PATH)
+
+
+def update_info_url() -> str:
+    return base_url() + _s("NKS_UPDATE_INFO_PATH", DEFAULT_UPDATE_INFO_PATH)
 
 
 def system() -> str:

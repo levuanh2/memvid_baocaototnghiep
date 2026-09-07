@@ -80,3 +80,20 @@ def get_user(access_token: str) -> dict:
     if not access_token:
         raise NksProtocolError("thiếu access_token")
     return _post(config.user_url(), {"access_token": access_token})
+
+
+def update_info(access_token: str, fields: dict) -> dict:
+    """Ghi hồ sơ → envelope thô.
+
+    Phản hồi đo thật (2026-09-07) là `{"success": true, "data": true, ...}` — một
+    boolean trần, KHÔNG phải User Info như bảng Output trong tài liệu ghi. Nên người
+    gọi bắt buộc phải hỏi lại `/nks/user` mới biết hồ sơ giờ ra sao.
+
+    `fields` đã được lọc trắng ở `mapper.py`; ở đây chỉ ghép thêm credential. Không
+    log `fields`: nó chứa số điện thoại, ngày sinh, nơi sinh của người dùng.
+    """
+    if not access_token:
+        raise NksProtocolError("thiếu access_token")
+    payload: dict[str, Any] = dict(fields or {})
+    payload["access_token"] = access_token
+    return _post(config.update_info_url(), payload)
