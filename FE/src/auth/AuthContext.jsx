@@ -1,7 +1,8 @@
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import { registerUser, loginUser, logoutUser, getCurrentUser } from "../utils/api";
 import { getToken, setToken, clearToken } from "./tokenStore";
 import { installUnauthorizedHandler } from "./authEvents";
+import { caiDatKiemTraKhoiPhuc } from "./khoiPhucBfcache";
 import { xoaDuLieuPhienNguoiDung } from "./phienNguoiDung";
 import { AuthContext } from "./context";
 
@@ -21,6 +22,11 @@ export function AuthProvider({ children }) {
   const [user, setUser] = useState(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
+  // Listener `pageshow` đăng ký MỘT lần nhưng phải đọc được người dùng ở thời điểm
+  // sự kiện xảy ra. Đọc qua ref, không đóng gói giá trị lúc đăng ký — nếu không nó
+  // mãi mãi so với `null` của lần render đầu.
+  const userRef = useRef(null);
+  userRef.current = user;
 
   // Restore session on mount: if a token exists, validate it via /auth/me.
   useEffect(() => {
@@ -62,6 +68,25 @@ export function AuthProvider({ children }) {
   useEffect(() => installUnauthorizedHandler(() => {
     xoaDuLieuPhienNguoiDung();
     setUser(null);
+  }), []);
+
+  // Trang được khôi phục từ bfcache: React không mount lại nên KHÔNG hàng rào nào
+  // ở trên chạy, và giao diện cũ của người dùng trước vẫn nằm nguyên trên màn hình.
+  // Hỏi lại server một lần, và chỉ giữ màn hình đó nếu vẫn đúng người.
+  //
+  // Khác người ⇒ huỷ HẲN phiên (token + state + user) rồi để `ProtectedRoute` đá về
+  // `/login`. Chỉ `setUser(người mới)` là KHÔNG đủ: `Workspace` vẫn đang mount với
+  // dữ liệu của người cũ trong `useState`, đổi context không dọn được chỗ đó. Cái
+  // giá là người mới phải đăng nhập lại trong tab đó — đắt hơn một chút so với việc
+  // để lộ tài liệu của người khác.
+  useEffect(() => caiDatKiemTraKhoiPhuc({
+    layIdDangHienThi: () => userRef.current?.id,
+    layUser: getCurrentUser,
+    onHuy: () => {
+      clearToken();
+      xoaDuLieuPhienNguoiDung();
+      setUser(null);
+    },
   }), []);
 
   // `provider` là tham số THỨ BA, tuỳ chọn: `login(email, password)` giữ nguyên chữ
