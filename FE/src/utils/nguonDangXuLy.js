@@ -40,6 +40,18 @@ export function quenNguon(sourceId) {
   ghi(doc().filter((x) => x.sourceId !== sourceId));
 }
 
+/** Xoá SẠCH danh sách — dùng khi đổi người dùng (đăng xuất / hết phiên).
+ *
+ * Danh sách này chứa `filename` của tài liệu, và `SidebarLeft` vẽ thẳng tên đó ra
+ * thẻ NGAY LÚC MOUNT, không hỏi backend câu nào. Khoá localStorage lại không gắn
+ * với người dùng nào. Không xoá lúc đăng xuất thì người tiếp theo đăng nhập trên
+ * cùng trình duyệt sẽ thấy tên tài liệu của người trước — rò dữ liệu thuần client,
+ * mọi kiểm tra quyền ở backend đều không chạm tới được.
+ */
+export function quenHetNguon() {
+  ghi([]);
+}
+
 /** Danh sách còn hạn, và dọn luôn những mục đã quá hạn. */
 export function nguonConDangXuLy(now = Date.now()) {
   const ds = doc().filter(

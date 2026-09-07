@@ -2,6 +2,7 @@ import { useCallback, useEffect, useState } from "react";
 import { registerUser, loginUser, logoutUser, getCurrentUser } from "../utils/api";
 import { getToken, setToken, clearToken } from "./tokenStore";
 import { installUnauthorizedHandler } from "./authEvents";
+import { xoaDuLieuPhienNguoiDung } from "./phienNguoiDung";
 import { AuthContext } from "./context";
 
 // Map backend error codes → friendly Vietnamese messages for the forms.
@@ -26,14 +27,24 @@ export function AuthProvider({ children }) {
     let alive = true;
     (async () => {
       if (!getToken()) {
+        // Không có phiên ⇒ không được còn state của phiên nào. Ca thật: token của A
+        // hết hạn và bị `getCurrentUser` xoá ở một lần tải trước, nhưng tên tài liệu
+        // của A vẫn nằm trong localStorage; B đăng nhập sau đó là thấy chúng.
+        xoaDuLieuPhienNguoiDung();
         if (alive) setLoading(false);
         return;
       }
       try {
         const u = await getCurrentUser(); // null on 401 (clears token)
+        // `/auth/me` khớp `AUTH_PATH_RE` nên 401 ở ĐÂY **không** phát
+        // `auth:unauthorized` — cố ý, vì lượt thăm dò phiên không được kéo theo một
+        // vòng đăng xuất toàn cục. Hệ quả là nhánh dọn kia không bao giờ chạy cho
+        // token hết hạn, nên phải dọn tại chỗ.
+        if (!u) xoaDuLieuPhienNguoiDung();
         if (alive) setUser(u || null);
       } catch {
         clearToken();
+        xoaDuLieuPhienNguoiDung();
         if (alive) setUser(null);
       } finally {
         if (alive) setLoading(false);
@@ -45,7 +56,13 @@ export function AuthProvider({ children }) {
   // Global sign-out signal: apiFetch fires `auth:unauthorized` when a protected app
   // API returns 401 (expired/invalid token) → clear the token and drop the user so
   // ProtectedRoute redirects to /login?next=<current>.
-  useEffect(() => installUnauthorizedHandler(() => setUser(null)), []);
+  // Hết phiên vì token hỏng/hết hạn cũng là ĐỔI NGƯỜI DÙNG dưới góc nhìn của trình
+  // duyệt này — dọn y như đăng xuất chủ động, nếu không thì đường "token hết hạn"
+  // vẫn để lại đúng những gì đường đăng xuất vừa được sửa để xoá.
+  useEffect(() => installUnauthorizedHandler(() => {
+    xoaDuLieuPhienNguoiDung();
+    setUser(null);
+  }), []);
 
   // `provider` là tham số THỨ BA, tuỳ chọn: `login(email, password)` giữ nguyên chữ
   // ký cũ nên trang Login hiện tại không phải sửa. Chọn provider là việc của giao
@@ -88,6 +105,11 @@ export function AuthProvider({ children }) {
   const logout = useCallback(async () => {
     await logoutUser();       // best-effort server call
     clearToken();
+    // State trong React mất theo component lúc `Workspace` unmount, nhưng
+    // localStorage thì không: tên tài liệu và job đang chạy của người vừa đăng xuất
+    // sẽ được người kế tiếp đọc lại trên cùng trình duyệt. Xoá TRƯỚC khi
+    // `setUser(null)` đẩy đi redirect, để không có cửa sổ nào mount lại và đọc trúng.
+    xoaDuLieuPhienNguoiDung();
     setUser(null);
     setError("");
   }, []);
