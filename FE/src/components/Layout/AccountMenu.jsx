@@ -2,6 +2,7 @@ import { useEffect, useRef, useState } from "react";
 import { Icon } from "../ui/Icon";
 import Avatar from "../ui/Avatar";
 import ProfileDrawer from "./ProfileDrawer";
+import ChangePasswordDialog from "./ChangePasswordDialog";
 import { dungHoSo } from "../../auth/hoSoNguoiDung";
 
 /**
@@ -13,6 +14,7 @@ import { dungHoSo } from "../../auth/hoSoNguoiDung";
  * "Chỉnh sửa" bên trong ngăn đó.
  */
 export default function AccountMenu({ user, onLogout }) {
+  const [moDoiMatKhau, setMoDoiMatKhau] = useState(false);
   const [moMenu, setMoMenu] = useState(false);
   const [moHoSo, setMoHoSo] = useState(false);
   const [hoSoMoi, setHoSoMoi] = useState(null);
@@ -83,12 +85,18 @@ export default function AccountMenu({ user, onLogout }) {
             <Icon name="UserRound" size={15} /> Hồ sơ tài khoản
           </button>
 
-          {/* Chưa có đường ghi nào ở máy chủ cho việc đổi mật khẩu NKS — nên nút này
-              KHÔNG bấm được, thay vì bấm được rồi không làm gì. */}
-          <button role="menuitem" disabled aria-disabled="true" title="Sắp có" className={`${muc} text-text-muted opacity-55 cursor-not-allowed`}>
-            <Icon name="KeyRound" size={15} /> Đổi mật khẩu
-            <span className="ml-auto font-mono text-[9.5px] tracking-[0.12em] uppercase">Sắp có</span>
-          </button>
+          {/* Chỉ tài khoản NKS mới có mật khẩu NKS để đổi. Người dùng local KHÔNG
+              được đưa tới endpoint NKS — với họ mục này không tồn tại, chứ không
+              phải hiện ra rồi báo lỗi. */}
+          {hoSo.nhaCungCap === "NKS" && (
+            <button
+              role="menuitem"
+              className={`${muc} text-text-secondary hover:text-brand`}
+              onClick={() => { setMoMenu(false); setMoDoiMatKhau(true); }}
+            >
+              <Icon name="KeyRound" size={15} /> Đổi mật khẩu
+            </button>
+          )}
 
           <div className="my-1 border-t" style={{ borderColor: "var(--border-color)" }} />
 
@@ -103,6 +111,19 @@ export default function AccountMenu({ user, onLogout }) {
         hoSo={hoSo}
         onClose={() => setMoHoSo(false)}
         onHoSoMoi={setHoSoMoi}
+      />
+
+      <ChangePasswordDialog
+        open={moDoiMatKhau}
+        email={hoSo.email}
+        onClose={() => setMoDoiMatKhau(false)}
+        onDoiXong={() => {
+          setMoDoiMatKhau(false);
+          // Máy chủ đã vô hiệu mọi token StudyMap của người này, nên ở lại là ở lại
+          // với một phiên đã chết. Dùng chính đường đăng xuất sẵn có: nó dọn token,
+          // dọn state theo người dùng, rồi chuyển về trang đăng nhập.
+          onLogout?.({ lyDo: "doi-mat-khau" });
+        }}
       />
     </div>
   );

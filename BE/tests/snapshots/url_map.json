@@ -434,6 +434,13 @@
     "rule": "/me/nks/avatar"
   },
   {
+    "endpoint": "me_nks_password_doi",
+    "methods": [
+      "POST"
+    ],
+    "rule": "/me/nks/password"
+  },
+  {
     "endpoint": "me_nks_profile_doc",
     "methods": [
       "GET"

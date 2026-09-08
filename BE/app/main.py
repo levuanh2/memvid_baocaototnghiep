@@ -1102,6 +1102,74 @@ def me_nks_avatar_ghi():
     return jsonify({"profile": ho_so.to_dict()}), 200
 
 
+#: Lỗi đổi mật khẩu → (mã HTTP, mã lỗi). `InvalidCredentials` và
+#: `KhongPhaiNguoiDungProvider` cố ý DÙNG CHUNG mã: phân biệt chúng là nói cho người
+#: gọi biết một tài khoản NKS nào đó có tồn tại và đã liên kết với ai.
+_LOI_MAT_KHAU = {
+    "MatKhauKhongHopLe": (400, "invalid_password"),
+    "InvalidCredentials": (401, "invalid_credentials"),
+    "KhongPhaiNguoiDungProvider": (401, "invalid_credentials"),
+    "InvalidProvider": (400, "invalid_provider"),
+    "ProviderNotEnabled": (400, "provider_not_enabled"),
+    "ProviderUnavailable": (503, "provider_unavailable"),
+    "ProviderProtocolError": (502, "provider_protocol_error"),
+}
+
+
+@app.post('/me/nks/password')
+def me_nks_password_doi():
+    """Đổi mật khẩu NKS. KHÔNG dùng chứng từ ghi — tự đăng nhập bằng mật khẩu cũ.
+
+    Thành công ⇒ mọi token StudyMap của người này bị vô hiệu (`token_version` tăng),
+    nên FE phải dọn phiên và đưa về màn hình đăng nhập.
+    """
+    from app.application import mat_khau as _mk
+    from app.domains.auth import gioi_han as _gh
+
+    user = _auth_service().current_user_from_request()
+    if user is None:
+        return jsonify({"error": "unauthorized"}), 401
+    uid = str(user["user_id"])
+
+    data = request.json if request.is_json else None
+    if not isinstance(data, dict):
+        return jsonify({"error": "invalid_password"}), 400
+
+    # Cùng bộ đếm Redis-free với đường cấp chứng từ, khoá riêng: đây là một endpoint
+    # nhận mật khẩu của HỆ THỐNG KHÁC, không có trần thì nó là máy dò mật khẩu.
+    khoa_user, khoa_ip = f"pass:u:{uid}", f"pass:ip:{_client_ip()}"
+    for k in (khoa_user, khoa_ip):
+        duoc, cho = _gh.cho_phep(k)
+        if not duoc:
+            return _rate_limited_response(cho)
+
+    try:
+        _mk.doi_mat_khau(
+            uid,
+            data.get("identifier") or "",
+            data.get("old_password") or "",
+            data.get("password") or "",
+            data.get("password_confirmation") or "",
+        )
+    except _mk.MatKhauKhongHopLe as exc:
+        # Thông điệp này CHỈ nói về hình dạng dữ liệu ("xác nhận không khớp"), không
+        # tiết lộ gì về tài khoản — nên trả ra được, và trả ra thì hữu ích hơn nhiều.
+        return jsonify({"error": "invalid_password", "message": str(exc)}), 400
+    except _mk.AuthError as exc:
+        ma_http, ma_loi = _LOI_MAT_KHAU.get(type(exc).__name__, (502, "provider_protocol_error"))
+        if ma_http == 401:
+            # CHỈ đếm lỗi credential. NKS sập không phải lỗi của người đang gõ, và
+            # tính vào trần sẽ khoá người dùng thật vì sự cố phía provider.
+            _gh.ghi_that_bai(khoa_user)
+            _gh.ghi_that_bai(khoa_ip)
+        return jsonify({"error": ma_loi}), ma_http
+
+    _gh.xoa(khoa_user)
+    _gh.xoa(khoa_ip)
+    # `reauth_required` là hợp đồng với FE: dọn token + state rồi về trang đăng nhập.
+    return jsonify({"ok": True, "reauth_required": True}), 200
+
+
 @app.get('/stats')
 def stats():
     # Phase D: /stats exposes GLOBAL, cross-user metrics (index size, cache/queue/

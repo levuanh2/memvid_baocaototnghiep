@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import Modal from "../ui/Modal";
 import { Icon } from "../ui/Icon";
 
@@ -9,12 +9,22 @@ import { Icon } from "../ui/Icon";
  * khoản máy và token của họ sống 365 ngày, nên StudyMap cố ý KHÔNG giữ nó. Cái giá
  * là một lần gõ mật khẩu cho mỗi lượt sửa; đổi lại, không có gì để rò.
  *
- * Mật khẩu chỉ tồn tại trong `useState` của component này và biến mất khi đóng. Không
- * localStorage, không context, không log.
+ * Mật khẩu chỉ tồn tại trong `useState` của component này — không localStorage, không
+ * context, không log — và bị XOÁ khi hộp thoại đóng.
+ *
+ * Phải xoá TAY: `ProfileDrawer` dựng hộp thoại này vô điều kiện và nó tự `return null`
+ * khi `open` sai, nên đóng lại KHÔNG unmount. Không xoá thì mật khẩu đã gõ còn nằm
+ * trong ô ở lần mở sau.
  */
 export default function NksVerifyDialog({ open, email, onXacNhan, onClose, dangGui, loi }) {
   const [dinhDanh, setDinhDanh] = useState(email || "");
   const [matKhau, setMatKhau] = useState("");
+
+  useEffect(() => {
+    if (open) return;
+    setDinhDanh(email || "");
+    setMatKhau("");
+  }, [open, email]);
 
   if (!open) return null;
 

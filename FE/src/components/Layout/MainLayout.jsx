@@ -22,7 +22,16 @@ export default function MainLayout({ selectedSources, setSelectedSources }) {
   const { isDark, setLight, setDark } = useTheme();
   const { user, logout } = useAuth();
   const navigate = useNavigate();
-  const handleLogout = async () => { await logout(); navigate("/"); };
+  // Đăng xuất thường giữ NGUYÊN hành vi cũ: về trang chủ, không thông báo gì.
+  // Chỉ ca đăng xuất-vì-vừa-đổi-mật-khẩu mới đi tới `/login` kèm một MÃ thông báo —
+  // người dùng cần thấy xác nhận rằng mật khẩu đã đổi, và cần đăng nhập lại ngay ở
+  // đúng chỗ để làm việc đó.
+  const handleLogout = async (tuyChon) => {
+    await logout();
+    const ma = tuyChon?.lyDo;
+    if (ma) navigate(`/login?tb=${encodeURIComponent(ma)}`, { replace: true });
+    else navigate("/");
+  };
 
   // ── Signature state: evidence margin ⇄ citation chips ──
   // `evidence` = provenance of the latest answer ({ sources, chunks }).

@@ -22,6 +22,7 @@ DEFAULT_LOGIN_PATH = "/nks/user/login"
 DEFAULT_USER_PATH = "/nks/user"
 DEFAULT_UPDATE_INFO_PATH = "/nks/user/updateInfo"
 DEFAULT_UPDATE_AVATAR_PATH = "/nks/user/updateAvatar"
+DEFAULT_UPDATE_PASS_PATH = "/nks/user/updatePass"
 
 
 def _s(name: str, default: str = "") -> str:
@@ -51,6 +52,10 @@ def update_info_url() -> str:
 
 def update_avatar_url() -> str:
     return base_url() + _s("NKS_UPDATE_AVATAR_PATH", DEFAULT_UPDATE_AVATAR_PATH)
+
+
+def update_pass_url() -> str:
+    return base_url() + _s("NKS_UPDATE_PASS_PATH", DEFAULT_UPDATE_PASS_PATH)
 
 
 def system() -> str:

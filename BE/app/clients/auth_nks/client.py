@@ -82,6 +82,27 @@ def get_user(access_token: str) -> dict:
     return _post(config.user_url(), {"access_token": access_token})
 
 
+def update_pass(access_token: str, old_password: str, password: str) -> dict:
+    """Đổi mật khẩu NKS → envelope thô.
+
+    KHÔNG log gì ở đây — `_post` vốn không log thân yêu cầu, và thân này chứa CẢ HAI
+    mật khẩu. Đây là lời gọi nhạy cảm nhất trong toàn bộ adapter.
+
+    Ít bằng chứng nhất trong cả hợp đồng NKS: chỉ có bảng tài liệu, không ảnh chụp,
+    chưa đo thật (xem `docs/nks-api.md`). Nên chỗ này chỉ tin đúng một thứ —
+    `success` — và không suy diễn gì thêm về hình dạng phản hồi.
+    """
+    if not access_token:
+        raise NksProtocolError("thiếu access_token")
+    if not old_password or not password:
+        raise NksProtocolError("thiếu mật khẩu")
+    return _post(config.update_pass_url(), {
+        "old_password": old_password,
+        "password": password,
+        "access_token": access_token,
+    })
+
+
 def update_avatar(access_token: str, data_uri: str) -> dict:
     """Ghi ảnh đại diện → envelope thô.
 

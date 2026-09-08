@@ -315,3 +315,24 @@ export const doiAnhDaiDienNks = async (grantId, blob) => {
   const body = await _authJson(res);
   return body.profile;
 };
+
+/**
+ * Đổi mật khẩu NKS. KHÔNG dùng chứng từ ghi — máy chủ tự đăng nhập bằng mật khẩu cũ.
+ *
+ * Thành công ⇒ `{ok: true, reauth_required: true}`: mọi token StudyMap của người này
+ * đã bị vô hiệu ở máy chủ, nên caller PHẢI dọn phiên và đưa về màn hình đăng nhập.
+ * Mật khẩu chỉ tồn tại trong tham số của lời gọi này rồi biến mất cùng nó.
+ */
+export const doiMatKhauNks = async ({ identifier, oldPassword, password, passwordConfirmation }) => {
+  const res = await apiFetch(`/me/nks/password`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({
+      identifier,
+      old_password: oldPassword,
+      password,
+      password_confirmation: passwordConfirmation,
+    }),
+  });
+  return _authJson(res);
+};

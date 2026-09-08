@@ -4,7 +4,7 @@
 // registry liệt kê đủ. Thêm icon mới → thêm import + 1 dòng vào ICONS
 // (tên lạ → warn DEV + render null, y hệt hành vi cũ với typo).
 import {
-  AlertCircle, ArrowLeft, ArrowRight, Ban, BookOpen, ChevronDown, Clock, Download, Eraser,
+  AlertCircle, ArrowLeft, ArrowRight, BadgeCheck, Ban, BookOpen, ChevronDown, Clock, Download, Eraser,
   FileStack, FileText, FolderOpen, Image, ImagePlus, Info, KeyRound, Library, LogOut, Maximize, Menu,
   MessageCircleQuestion, MessageSquare, MessageSquareText, MessagesSquare, Moon,
   MoreVertical, Network, PanelRight, Pencil, Plus, Quote, RotateCcw, Scan, ScrollText,
@@ -13,7 +13,7 @@ import {
 } from "lucide-react";
 
 const ICONS = {
-  AlertCircle, ArrowLeft, ArrowRight, Ban, BookOpen, ChevronDown, Clock, Download, Eraser,
+  AlertCircle, ArrowLeft, ArrowRight, BadgeCheck, Ban, BookOpen, ChevronDown, Clock, Download, Eraser,
   FileStack, FileText, FolderOpen, Image, ImagePlus, Info, KeyRound, Library, LogOut, Maximize, Menu,
   MessageCircleQuestion, MessageSquare, MessageSquareText, MessagesSquare, Moon,
   MoreVertical, Network, PanelRight, Pencil, Plus, Quote, RotateCcw, Scan, ScrollText,

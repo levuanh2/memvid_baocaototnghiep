@@ -61,6 +61,31 @@ def find(provider: str, provider_user_id: str) -> Optional[dict]:
                 "provider": row.provider, "provider_user_id": row.provider_user_id}
 
 
+def find_by_user(provider: str, user_id: str) -> Optional[dict]:
+    """Người dùng StudyMap này có liên kết với `provider` không?
+
+    Chiều tra NGƯỢC với `find`: ở đây đã biết user StudyMap, cần biết họ có phải người
+    của provider ngoài hay không. Dùng để TỪ CHỐI SỚM — trước khi bất kỳ mật khẩu nào
+    được chuyển tiếp sang hệ thống của người khác. Một tài khoản local không có hàng
+    nào ở đây, nên đường ghi của provider đóng lại với họ ngay từ hàng rào đầu tiên.
+
+    Vẫn KHÔNG bao giờ tra bằng email — xem docstring `Identity` trong models.py.
+    """
+    if not provider or not user_id:
+        return None
+    with session_scope() as s:
+        row = s.execute(
+            select(Identity).where(
+                Identity.provider == provider,
+                Identity.user_id == str(user_id),
+            )
+        ).scalar_one_or_none()
+        if row is None:
+            return None
+        return {"identity_id": row.id, "user_id": row.user_id,
+                "provider": row.provider, "provider_user_id": row.provider_user_id}
+
+
 def touch_last_login(identity_id: str) -> None:
     if not identity_id:
         return

@@ -123,6 +123,32 @@ class NKSAuthProvider:
             raise NksProtocolError("NKS không xác nhận đã ghi hồ sơ")
         return to_profile(self._client.get_user(bi_mat))
 
+    def doi_mat_khau(self, identifier: str, mat_khau_cu: str, mat_khau_moi: str) -> None:
+        """Đăng nhập bằng mật khẩu CŨ rồi đổi ngay. Token chết trong đúng hàm này.
+
+        CỐ Ý KHÔNG dùng chứng từ ghi 10 phút: đổi mật khẩu là thao tác nhạy cảm nhất
+        ở đây, và `updatePass` vốn đã đòi `old_password` — nghĩa là người dùng phải gõ
+        mật khẩu hiện tại dù thế nào. Vậy nên không có gì để tiết kiệm khi tái sử dụng
+        một chứng từ, mà lại mở rộng thứ một chứng từ bị đánh cắp có thể làm được:
+        từ "sửa hồ sơ" thành "khoá chủ tài khoản ra ngoài".
+
+        Token sinh ra ở đây sống một năm và KHÔNG thu hồi được (xem `docs/nks-api.md`),
+        nên `finally: del` không phải nghi thức — nó là cách duy nhất bảo đảm token
+        không sống lâu hơn một lời gọi hàm.
+        """
+        if not self._enabled():
+            raise NksNotEnabled("NKS chưa được bật")
+        if not identifier or not mat_khau_cu or not mat_khau_moi:
+            raise NksInvalidCredentials("thiếu thông tin đổi mật khẩu")
+
+        access_token = doc_access_token(self._client.login(identifier, mat_khau_cu))
+        try:
+            body = self._client.update_pass(access_token, mat_khau_cu, mat_khau_moi)
+            if not da_ghi_xong(body):
+                raise NksProtocolError("NKS không xác nhận đã đổi mật khẩu")
+        finally:
+            del access_token
+
     def ghi_anh_dai_dien(self, bi_mat: str, data_uri: str) -> ExternalProfile:
         """Ghi ảnh đại diện rồi ĐỌC LẠI, trả về hồ sơ mới.
 

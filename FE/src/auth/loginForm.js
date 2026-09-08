@@ -34,3 +34,23 @@ export function kiemTra(provider, { dinhDanh = "", password = "" } = {}) {
   if (!isValidPassword(password)) return "Mật khẩu cần ít nhất 8 ký tự.";
   return null;
 }
+
+/**
+ * Thông báo hiện ở màn hình đăng nhập sau khi bị đăng xuất có chủ đích.
+ *
+ * Truyền bằng MÃ trong query (`/login?tb=doi-mat-khau`), không truyền câu chữ: nếu
+ * truyền chữ thì bất kỳ ai gửi một đường link cũng dựng được thông báo tuỳ ý trên
+ * trang đăng nhập của người khác. Mã lạ ⇒ chuỗi rỗng ⇒ không hiện gì.
+ *
+ * Không mã nào ở đây được mang bí mật — chúng chỉ nói việc gì vừa xảy ra.
+ */
+export const MA_THONG_BAO = { DOI_MAT_KHAU: "doi-mat-khau" };
+
+const _THONG_BAO = {
+  [MA_THONG_BAO.DOI_MAT_KHAU]:
+    "Đã đổi mật khẩu NKS. Vui lòng đăng nhập lại bằng mật khẩu mới.",
+};
+
+export function thongBaoSauDangXuat(ma) {
+  return _THONG_BAO[String(ma || "")] || "";
+}

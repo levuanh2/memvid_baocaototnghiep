@@ -2,7 +2,7 @@ import { useState } from "react";
 import { Link, Navigate, useNavigate, useSearchParams } from "react-router-dom";
 import { Icon } from "../components/ui/Icon";
 import Spinner from "../components/ui/Spinner";
-import { kiemTra, PROVIDER_MAC_DINH } from "../auth/loginForm";
+import { kiemTra, PROVIDER_MAC_DINH, thongBaoSauDangXuat } from "../auth/loginForm";
 import { safeNext } from "../auth/authRedirect";
 import { useAuth } from "../auth/useAuth";
 
@@ -10,6 +10,8 @@ export default function Login() {
   const navigate = useNavigate();
   const [params] = useSearchParams();
   const next = safeNext(params.get("next"));
+  // Thông báo tra từ BẢNG TRẮNG theo mã — không lấy câu chữ từ URL.
+  const thongBao = thongBaoSauDangXuat(params.get("tb"));
   const { user, loading, login, error, setError } = useAuth();
   const [provider, setProvider] = useState(PROVIDER_MAC_DINH);
   const [email, setEmail] = useState("");
@@ -93,6 +95,12 @@ export default function Login() {
                 placeholder="••••••••" className="input-surface text-[14px]" />
             </label>
 
+            {thongBao && !error && (
+              <p role="status" className="flex items-center gap-1.5 text-[12.5px] mb-3"
+                style={{ color: "var(--ok)" }}>
+                <Icon name="BadgeCheck" size={13} /> {thongBao}
+              </p>
+            )}
             {error && (
               <div className="text-[12.5px] flex items-center gap-1.5" style={{ color: "var(--err)" }}>
                 <Icon name="AlertCircle" size={13} /> {error}
