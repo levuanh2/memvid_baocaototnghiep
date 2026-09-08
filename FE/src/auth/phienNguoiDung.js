@@ -16,6 +16,7 @@
 import { clearActiveMindmapJob } from "../utils/activeMindmapJob";
 import { clearActiveSummaryJob } from "../utils/activeSummaryJob";
 import { quenHetNguon } from "../utils/nguonDangXuLy";
+import { quenGrant } from "./grantNks";
 
 /**
  * Xoá mọi thứ thuộc về phiên của MỘT người dùng.
@@ -27,9 +28,20 @@ import { quenHetNguon } from "../utils/nguonDangXuLy";
  * chúng không hề mang dữ liệu của ai.
  *
  * Token do `tokenStore.clearToken()` lo, tách riêng để tầng gọi quyết định thứ tự.
+ *
+ * `quenGrant()` nằm ở ĐÂY chứ không rải ra từng nơi gọi, vì đây là chỗ DUY NHẤT mà
+ * cả ba đường kết thúc phiên đều đi qua: đăng xuất chủ động, `auth:unauthorized`, và
+ * lượt khôi phục bfcache phát hiện người khác. Rải ra thì đường thứ tư thêm sau này
+ * sẽ quên — đúng cách ba khoá localStorage ở trên từng bị bỏ sót.
+ *
+ * `grant_id` không phải bí mật đầy đủ (máy chủ còn kiểm chủ sở hữu), nhưng để nó
+ * sống qua một lần đổi người dùng là đúng lớp trạng thái cũ mà file này tồn tại để
+ * dọn: người kế tiếp trên cùng trình duyệt sẽ gửi kèm chứng từ của người trước và
+ * nhận một lỗi khó hiểu, thay vì được hỏi mật khẩu như bình thường.
  */
 export function xoaDuLieuPhienNguoiDung() {
   quenHetNguon();
   clearActiveMindmapJob();
   clearActiveSummaryJob();
+  quenGrant();
 }

@@ -4,6 +4,7 @@ import { getToken, setToken, clearToken } from "./tokenStore";
 import { installUnauthorizedHandler } from "./authEvents";
 import { caiDatKiemTraKhoiPhuc } from "./khoiPhucBfcache";
 import { xoaDuLieuPhienNguoiDung } from "./phienNguoiDung";
+import { quenGrant } from "./grantNks";
 import { AuthContext } from "./context";
 
 // Map backend error codes → friendly Vietnamese messages for the forms.
@@ -105,6 +106,10 @@ export function AuthProvider({ children }) {
           ? { username: dinhDanh, password, provider }
           : { email: dinhDanh, password },
       );
+      // Đăng nhập là ĐỔI NGƯỜI DÙNG. Chứng từ ghi của người trước — nếu tab này chưa
+      // tải lại — thuộc về một user_id khác và máy chủ sẽ từ chối nó; quên ngay ở đây
+      // để người mới được hỏi mật khẩu như bình thường, thay vì gặp một lỗi lạ.
+      quenGrant();
       setToken(token);
       setUser(u);
       return u;
