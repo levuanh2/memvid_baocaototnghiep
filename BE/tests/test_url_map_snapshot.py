@@ -82,7 +82,7 @@ def test_method_cua_tung_route_khong_doi(client, cu):
 
 
 def test_tong_so_route_khop(client, cu):
-    """90 = 89 route ứng dụng + 1 `/static/<path:filename>` built-in của Flask.
+    """93 = 92 route ứng dụng + 1 `/static/<path:filename>` built-in của Flask.
 
     +1 ngày 2026-09-04: `GET /api/config/status`.
     +2 ngày 2026-09-07: `POST` và `DELETE /auth/nks/grant` — chứng từ ghi ngắn hạn.
@@ -90,9 +90,13 @@ def test_tong_so_route_khop(client, cu):
     +1 ngày 2026-09-08: `PUT /me/nks/avatar` — đổi ảnh đại diện.
     +1 ngày 2026-09-08: `POST /me/nks/password` — đổi mật khẩu NKS.
     +1 ngày 2026-09-08: `POST /auth/logout-all` — thu hồi mọi phiên StudyMap.
+    +3 ngày 2026-09-09 (Thư viện học tập, Phase 1A): `GET /api/library` (payload gộp,
+      thay hàng chục lượt hỏi trạng thái), `PATCH /api/documents/<id>` (siêu dữ liệu
+      thư viện), `POST /api/documents/<id>/opened` (mốc MỞ — route riêng để GET không
+      có tác dụng phụ và để client không vá được timestamp).
     Con số ở đây CỐ Ý viết cứng — sửa nó là một dòng diff mà người review phải nhìn
     thấy, đúng mục đích của cả file này."""
-    assert len(_hien_tai()) == len(cu) == 90
+    assert len(_hien_tai()) == len(cu) == 93
 
 
 def test_khong_co_cap_duong_dan_method_trung(client):

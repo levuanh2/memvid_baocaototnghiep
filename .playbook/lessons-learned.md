@@ -1,5 +1,58 @@
 # Lessons Learned
 
+## 2026-09-09 - Trạng thái AI phải phân biệt kho BỀN VỮNG với kho PHÙ DU
+
+- **Đọc chỗ trống thành "đang tạo" là một lời nói dối có lịch chạy.** Thư viện học tập
+  cần trạng thái tóm tắt / sơ đồ tư duy, nhưng hai kho ấy là SQLite dưới `DATA_DIR`, và
+  trên Render Free `DATA_DIR` bị xoá mỗi lần deploy lẫn mỗi lần dịch vụ ngủ (~15 phút).
+  Thiết kế đầu tiên định hiện "Đang tạo tóm tắt…" khi không tìm thấy bản ghi — nghĩa là
+  màn hình sẽ nói dối PHẦN LỚN thời gian, và người dùng ngồi chờ một việc chưa từng bắt
+  đầu. Quy tắc rút ra: `GENERATING` chỉ được sinh từ **bằng chứng dương** (một job đang
+  chạy có thật), không bao giờ từ sự vắng mặt.
+
+- **Bằng chứng dương đó thường đã nằm sẵn ở đâu đó — tìm trước khi thêm cột.** Bảng
+  `jobs` không lưu nguồn của job nên máy chủ không gắn được job tóm tắt với tài liệu.
+  Nhưng `utils/activeJob.js` đã lưu `{jobId, sources, startedAt}` từ lâu, và `sources`
+  chính là stem. Trạng thái "đang tạo" giải được HOÀN TOÀN ở client, không thêm cột, không
+  sửa dispatch của summary/mindmap. Chi phí duy nhất là nó theo từng máy — và như thế thì
+  sai lệch luôn nghiêng về phía an toàn (hiện "chưa có" thay vì "đang tạo" giả).
+
+## 2026-09-09 - Trước khi thêm cột, hỏi dữ liệu đã có suy ra được không
+
+- **Sáu cột bị loại vì suy ra được.** `reading_time` ← `char_count`; `language` ← metadata
+  chunk (ingest đã chạy langdetect từ trước); `ai_overview` ← `sections[].key_points` của
+  bản ghi tóm tắt; `summary_preview` ← `overview`; `mindmap_layout` ← `knowledge_nodes`
+  (`parent_node_id`, `level`, `order_index`) + `knowledge_edges.relation_type` đã đủ cho
+  9/10 layout; `last_workspace_ref` ← quiz/attempt mới nhất tra được bằng `array_agg(...
+  ORDER BY ...)[1]` trong chính truy vấn đếm. Một giá trị vừa lưu vừa suy ra được là hai
+  nguồn sự thật, và bản lưu sẽ lệch ngay lần tạo lại đầu tiên.
+
+- **Ngược lại, `last_opened_at` KHÔNG suy ra được, và lý do đáng ghi.** Mọi mốc thời gian
+  đang có (`quiz_attempts.started_at`, `review_plans.created_at`,
+  `knowledge_maps.created_at`, `created_at` của bản ghi tóm tắt) ghi lúc TẠO artifact,
+  không ghi lúc người dùng MỞ nó. Mở một bản tóm tắt ba lần không sinh dòng nào ở đâu cả.
+  Đó là bài kiểm tra thật: "có bảng nào ghi lại đúng sự kiện này chưa?", không phải "có
+  bảng nào chứa thông tin gần giống không?".
+
+## 2026-09-09 - Cột trạng thái mới không được mượn cột `status` đang có
+
+- **`archived_at` là cột riêng, không phải một giá trị của `documents.status`.** Nhét
+  "đã lưu trữ" vào `status` thì `all_rows()` (lọc `status != 'deleted'`) và `owned_stems()`
+  loại nó ra, và tài liệu đã lưu trữ âm thầm biến mất khỏi RAG — người dùng chỉ muốn dọn
+  giao diện, không muốn tài liệu ngừng trả lời câu hỏi. Ba khẳng định khoá điều này nằm ở
+  `test_study_library_api.py::test_db_luu_tru_khong_lam_tai_lieu_bien_mat_khoi_rag`: sau
+  khi lưu trữ, tài liệu vẫn `completed`, vẫn trong `all_rows()`, vẫn trong `owned_stems()`.
+
+## 2026-09-09 - Ký tự tổ hợp Unicode viết trần trong mã nguồn là bom hẹn giờ
+
+- Regex bỏ dấu tiếng Việt viết là `/[<dấu tổ hợp trần>]/g` thì bản thân dấu dính vào ký tự
+  liền trước khi hiển thị, và một lần đổi encoding là nó im lặng biến mất — lúc đó bỏ dấu
+  hết chạy mà không test nào lộ ra ngay. Viết `/[̀-ͯ]/g`.
+
+- **`đ` KHÔNG phải `d` + dấu.** NFD tách được `ế` nhưng không tách `đ` — nó là một chữ cái
+  riêng trong Unicode. Thiếu bước `.replace(/đ/g, "d")` thì gõ "dinh thoi" không bao giờ
+  ra "định thời", đúng cái người dùng gõ nhiều nhất.
+
 ## 2026-09-01 - Nút bấm không gọi gì cả vẫn có thể trông như đang hoạt động
 
 - **Nút "Huỷ" của chat chưa bao giờ huỷ gì trên máy chủ.** Nó `abort()` request phía

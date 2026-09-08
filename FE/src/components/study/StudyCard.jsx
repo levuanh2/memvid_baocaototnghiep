@@ -1,0 +1,264 @@
+import { useEffect, useRef, useState } from "react";
+import { Icon } from "../ui/Icon";
+import { chipHienThi, READY, GENERATING } from "../../utils/trangThaiAi";
+import { tenHienThi, thoiGianDoc, nhanThoiGianDoc } from "../../utils/thuVienTaiLieu";
+import { tiepTucHoc } from "../../utils/tiepTucHoc";
+import { kiemTraTen } from "../../utils/doiTen";
+
+/**
+ * Thẻ tài liệu của Thư viện học tập.
+ *
+ * Thứ bậc thị giác CỐ Ý: tên hiển thị → tên tệp (mờ, nhỏ) → **AI Overview là khối
+ * chữ lớn nhất** → tóm tắt xem trước → chip trạng thái → siêu dữ liệu → hành động.
+ * Thứ AI đã chuẩn bị đứng trên thứ người dùng đã tải lên; tên tệp không bao giờ
+ * lấn át nội dung được sinh ra.
+ *
+ * Không có: ảnh thu nhỏ sơ đồ, dòng hoạt động gần đây của từng thẻ, giao diện
+ * Collections, và không có hành động "Mở tệp".
+ */
+
+const MAU_CHIP = {
+  [READY]: { bg: "var(--ok-bg, rgba(34,150,94,0.12))", fg: "var(--ok, #22965e)" },
+  [GENERATING]: { bg: "rgba(120,120,120,0.14)", fg: "var(--text-secondary)" },
+};
+
+function ChipAi({ chip }) {
+  const dangChay = chip.trangThai === GENERATING;
+  const sanSang = chip.trangThai === READY;
+  const mau = MAU_CHIP[chip.trangThai];
+  return (
+    <span
+      className="inline-flex items-center gap-1 rounded-full px-2 py-[3px] text-[11px] font-medium"
+      style={mau
+        ? { background: mau.bg, color: mau.fg }
+        : { background: "transparent", color: "var(--text-muted)",
+            border: "1px solid var(--border)" }}
+    >
+      {sanSang && <Icon name="Check" size={11} strokeWidth={2.5} />}
+      {dangChay && <Icon name="Clock" size={11} />}
+      {chip.nhan}{chip.soLuong ? ` (${chip.soLuong})` : ""}
+    </span>
+  );
+}
+
+/** Đổi tên tại chỗ: Enter lưu, Esc huỷ, bấm ra ngoài huỷ. */
+function DoiTenTaiCho({ giaTriDau, dangLuu, onLuu, onHuy }) {
+  const [nhap, setNhap] = useState(giaTriDau ?? "");
+  const [loi, setLoi] = useState(null);
+  const oRef = useRef(null);
+  const boxRef = useRef(null);
+
+  useEffect(() => {
+    oRef.current?.focus();
+    oRef.current?.select();
+  }, []);
+
+  // Bấm ra ngoài = HUỶ, không phải lưu. Lưu ngầm một giá trị người dùng chưa xác
+  // nhận là đổi dữ liệu sau lưng họ.
+  useEffect(() => {
+    const ngoai = (e) => {
+      if (boxRef.current && !boxRef.current.contains(e.target)) onHuy();
+    };
+    document.addEventListener("mousedown", ngoai);
+    return () => document.removeEventListener("mousedown", ngoai);
+  }, [onHuy]);
+
+  const guiDi = () => {
+    const kq = kiemTraTen(nhap, giaTriDau);
+    if (kq.khongDoi) return onHuy();
+    if (!kq.hopLe) return setLoi(kq.loi);
+    onLuu(kq.giaTri);
+  };
+
+  return (
+    <div ref={boxRef} className="min-w-0 flex-1">
+      <input
+        ref={oRef}
+        value={nhap}
+        disabled={dangLuu}
+        onChange={(e) => { setNhap(e.target.value); setLoi(null); }}
+        onKeyDown={(e) => {
+          if (e.key === "Enter") { e.preventDefault(); guiDi(); }
+          if (e.key === "Escape") { e.preventDefault(); onHuy(); }
+        }}
+        aria-label="Tên hiển thị của tài liệu"
+        className="w-full rounded-[6px] px-2 py-1 text-[15px] font-semibold outline-none"
+        style={{ background: "var(--bg-card)", color: "var(--text-primary)",
+                 border: "1px solid var(--accent)" }}
+      />
+      <p className="mt-1 text-[11px] text-text-muted">
+        {loi
+          ? <span style={{ color: "var(--err)" }} role="alert">{loi}</span>
+          : "Enter để lưu · Esc để huỷ · để trống để dùng lại tên tệp"}
+      </p>
+    </div>
+  );
+}
+
+export default function StudyCard({
+  doc, jobs, dangDoiTen, dangLuu, onDoiTen, onLuuTen, onHuyDoiTen,
+  onBatTat, onMo,
+}) {
+  const [menuMo, setMenuMo] = useState(false);
+  const ten = tenHienThi(doc);
+  const chips = chipHienThi(doc, jobs);
+  const ai = doc.ai || {};
+  const yChinh = Array.isArray(ai.summary?.ai_overview) ? ai.summary.ai_overview : [];
+  const phut = thoiGianDoc(doc);
+  const tiepTuc = tiepTucHoc(doc);
+  const daIndex = ai.index === "ready";
+
+  const sieuDuLieu = [
+    nhanThoiGianDoc(phut),
+    doc.page_count ? `${doc.page_count} trang` : null,
+    doc.chunk_count ? `${doc.chunk_count} đoạn` : null,
+    doc.language || null,
+    tiepTuc?.nhanThoiGian ? `mở ${tiepTuc.nhanThoiGian}` : null,
+  ].filter(Boolean);
+
+  const hanhDong = [
+    { khoa: "summary", nhan: "Tóm tắt", icon: "ScrollText" },
+    { khoa: "studymap", nhan: "Sơ đồ", icon: "Network" },
+    { khoa: "quiz", nhan: "Quiz", icon: "BadgeCheck" },
+    { khoa: "review", nhan: "Ôn tập", icon: "BookOpen" },
+    { khoa: "chat", nhan: "Hỏi AI", icon: "MessageSquare" },
+  ];
+
+  return (
+    <div className="surface-card !p-4 flex flex-col gap-3"
+         style={doc.archived_at ? { opacity: 0.62 } : undefined}>
+
+      {/* Tên + cờ + menu */}
+      <div className="flex items-start gap-3">
+        <Icon name="FileText" size={18} className="text-text-muted shrink-0 mt-[3px]" />
+
+        {dangDoiTen ? (
+          <DoiTenTaiCho giaTriDau={doc.display_name || doc.title}
+                        dangLuu={dangLuu} onLuu={onLuuTen} onHuy={onHuyDoiTen} />
+        ) : (
+          <div className="min-w-0 flex-1">
+            <div className="flex items-center gap-1.5 min-w-0">
+              <span className="font-display text-[15.5px] font-semibold text-text-primary truncate">
+                {ten}
+              </span>
+              {doc.pinned && <Icon name="Pin" size={13} className="shrink-0 text-brand" />}
+              {doc.favorite && <Icon name="Star" size={13} className="shrink-0 text-brand" />}
+              {doc.archived_at && (
+                <span className="shrink-0 text-[10.5px] text-text-muted">· đã lưu trữ</span>
+              )}
+            </div>
+            {/* Tên tệp gốc: giữ lại vì người dùng nhận ra nó, nhưng mờ và nhỏ —
+                nó không phải thứ quan trọng nhất trên thẻ này. */}
+            {doc.display_name && (
+              <div className="font-mono text-[11px] text-text-muted truncate mt-0.5">
+                {doc.title}
+              </div>
+            )}
+          </div>
+        )}
+
+        <div className="relative shrink-0">
+          <button type="button" className="icon-btn w-7 h-7"
+                  aria-label="Tuỳ chọn tài liệu"
+                  onClick={() => setMenuMo((v) => !v)}>
+            <Icon name="MoreVertical" size={15} />
+          </button>
+          {menuMo && (
+            <>
+              <div className="fixed inset-0 z-10" onClick={() => setMenuMo(false)} />
+              <div className="absolute right-0 top-8 z-20 min-w-[170px] rounded-[8px] py-1 shadow-lg"
+                   style={{ background: "var(--bg-card)", border: "1px solid var(--border)" }}>
+                {[
+                  ["Đổi tên", "Pencil", () => onDoiTen(doc.document_id)],
+                  [doc.favorite ? "Bỏ yêu thích" : "Yêu thích", "Star",
+                    () => onBatTat(doc, { favorite: !doc.favorite })],
+                  [doc.pinned ? "Bỏ ghim" : "Ghim", "Pin",
+                    () => onBatTat(doc, { pinned: !doc.pinned })],
+                  [doc.archived_at ? "Bỏ lưu trữ" : "Lưu trữ",
+                    doc.archived_at ? "ArchiveRestore" : "Archive",
+                    () => onBatTat(doc, { archived: !doc.archived_at })],
+                ].map(([nhan, icon, ham]) => (
+                  <button key={nhan} type="button"
+                          onClick={() => { setMenuMo(false); ham(); }}
+                          className="w-full px-3 py-1.5 text-left text-[13px] text-text-primary
+                                     hover:bg-surface-elevated inline-flex items-center gap-2">
+                    <Icon name={icon} size={13} /> {nhan}
+                  </button>
+                ))}
+              </div>
+            </>
+          )}
+        </div>
+      </div>
+
+      {/* AI Overview — khối chữ LỚN NHẤT trên thẻ. Chỉ hiện khi có tóm tắt thật. */}
+      {yChinh.length > 0 && (
+        <ul className="flex flex-col gap-1 pl-0.5">
+          {yChinh.map((y, i) => (
+            <li key={i} className="flex gap-2 text-[13.5px] leading-[1.5] text-text-primary">
+              <Icon name="Sparkles" size={12} className="mt-[4px] shrink-0 text-brand" />
+              <span>{y}</span>
+            </li>
+          ))}
+        </ul>
+      )}
+
+      {/* Tóm tắt xem trước — kẹp 2 dòng */}
+      {ai.summary?.preview && (
+        <p className="text-[12.5px] leading-[1.55] text-text-secondary"
+           style={{ display: "-webkit-box", WebkitLineClamp: 2, WebkitBoxOrient: "vertical",
+                    overflow: "hidden" }}>
+          {ai.summary.preview}
+        </p>
+      )}
+
+      {/* Chưa có tóm tắt: nói đúng là chưa có, kèm một hành động THẬT. Không bao giờ
+          hiện "đang tạo…" khi không có job nào đang chạy. */}
+      {ai.summary?.state === "not_generated" && daIndex && yChinh.length === 0 && (
+        <p className="text-[12.5px] text-text-muted">
+          Chưa có tóm tắt cho tài liệu này.
+        </p>
+      )}
+
+      <div className="flex flex-wrap gap-1.5">
+        {chips.map((c) => <ChipAi key={c.khoa} chip={c} />)}
+      </div>
+
+      {sieuDuLieu.length > 0 && (
+        <div className="font-mono text-[11px] text-text-muted">{sieuDuLieu.join(" · ")}</div>
+      )}
+
+      {Array.isArray(doc.tags) && doc.tags.length > 0 && (
+        <div className="flex flex-wrap gap-1.5">
+          {doc.tags.map((t) => (
+            <span key={t}
+                  className="inline-flex items-center gap-1 rounded-full px-2 py-[2px] text-[11px]"
+                  style={{ background: "var(--bg-sidebar)", color: "var(--text-secondary)",
+                           border: "1px solid var(--border)" }}>
+              <Icon name="Tag" size={10} /> {t}
+            </span>
+          ))}
+        </div>
+      )}
+
+      <div className="flex flex-wrap items-center gap-1.5 pt-0.5">
+        {/* Nút Tiếp tục chỉ xuất hiện khi thật sự có chỗ để tiếp tục. */}
+        {tiepTuc && (
+          <button type="button" className="btn-seal !py-1.5 !text-[12.5px] inline-flex items-center gap-1.5"
+                  onClick={() => onMo(doc, tiepTuc.beMat || "studymap")}>
+            <Icon name="ArrowRight" size={13} /> Tiếp tục · {tiepTuc.nhanBeMat}
+          </button>
+        )}
+        {hanhDong.map(({ khoa, nhan, icon }) => (
+          <button key={khoa} type="button"
+                  className="pill-action disabled:opacity-45 disabled:cursor-not-allowed"
+                  disabled={!daIndex}
+                  title={daIndex ? undefined : "Tài liệu chưa được lập chỉ mục"}
+                  onClick={() => onMo(doc, khoa)}>
+            <Icon name={icon} size={13} /> {nhan}
+          </button>
+        ))}
+      </div>
+    </div>
+  );
+}

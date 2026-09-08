@@ -42,6 +42,26 @@ const _send = (path, method, body) =>
 export const listDocuments = () =>
   _get("/api/documents").then((b) => b.documents || []);
 
+// ── Thư viện học tập (Phase 1A) ─────
+// MỘT lượt gọi cho cả trang: tài liệu + trạng thái AI + đếm quiz/ôn tập + ngôn ngữ.
+// Mọi mục, bộ lọc và chế độ sắp trên trang đều là phép chiếu của payload này —
+// không có endpoint `/sections`, không có tìm kiếm phía máy chủ.
+export const getLibrary = () =>
+  _get("/api/library").then((b) => b.documents || []);
+
+// Vá một phần: chỉ gửi trường thật sự đổi. `display_name: null` xoá tên đã đặt.
+export const patchDocument = (documentId, thayDoi) =>
+  _send(`/api/documents/${encodeURIComponent(documentId)}`, "PATCH", thayDoi);
+
+// Ghi mốc MỞ. Route riêng để GET không có tác dụng phụ và để client không đặt được
+// timestamp. Gọi kiểu bắn-và-quên: hỏng thì KHÔNG được chặn điều hướng.
+export const markOpened = (documentId, workspace) =>
+  _send(`/api/documents/${encodeURIComponent(documentId)}/opened`, "POST",
+        workspace ? { workspace } : {});
+
+export const deleteDocument = (documentId) =>
+  _send(`/api/documents/${encodeURIComponent(documentId)}`, "DELETE");
+
 export const getDocument = (documentId) =>
   _get(`/api/documents/${encodeURIComponent(documentId)}`);
 

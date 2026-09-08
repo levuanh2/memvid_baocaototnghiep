@@ -127,6 +127,17 @@ def _row(d: Document) -> Dict[str, Any]:
         # Tiến trình nào đã nạp tài liệu này. `None` với mọi hàng tạo trước
         # 2026-09-04 — và `None` KHÔNG BAO GIỜ đủ để vào index (allowlist.duoc_index).
         "ingest_origin": meta.get("ingest_origin"),
+        # ── Thư viện học tập (Phase 1A) ──────────────────────────────────────
+        # Đường ĐỌC của bảy cột mới. Viết trước đọc là tạo tính năng ma: cột có,
+        # nút có, và không chỗ nào hiện ra giá trị (bài học `deleted_at`).
+        "file_type": d.file_type,
+        "display_name": d.display_name,
+        "favorite": bool(d.favorite),
+        "pinned": bool(d.pinned),
+        "archived_at": d.archived_at.isoformat() if d.archived_at else None,
+        "tags": list(d.tags) if isinstance(d.tags, list) else [],
+        "last_opened_at": d.last_opened_at.isoformat() if d.last_opened_at else None,
+        "last_workspace": d.last_workspace,
     }
     if d.error_message:
         out["error"] = d.error_message
@@ -310,6 +321,163 @@ def soft_delete(document_id: str) -> bool:
         d.metadata_json = meta
     invalidate_cache()
     return True
+
+
+# ───────────────────────────────── thư viện học tập (Phase 1A) ────
+
+# Sentinel cho "không gửi trường này" — `None` là một GIÁ TRỊ hợp lệ với
+# `display_name` (xoá tên đã đặt) nên nó không thể đồng thời mang nghĩa "bỏ qua".
+KHONG_DOI = object()
+
+
+def set_library_fields(document_id: str, *, display_name: Any = KHONG_DOI,
+                       favorite: Any = KHONG_DOI, pinned: Any = KHONG_DOI,
+                       archived: Any = KHONG_DOI, tags: Any = KHONG_DOI) -> bool:
+    """Cập nhật một phần các cột thư viện. Chỉ ghi trường được gửi.
+
+    Hoàn toàn tách khỏi `update_status`: hàm kia chỉ đụng `metadata_json` và
+    `status`, hàm này chỉ đụng cột người dùng. Hai đường ghi không giao nhau, nên
+    ingest chạy giữa chừng không thể xoá mất tên người dùng vừa đặt.
+
+    `archived` là bool ở API nhưng là mốc thời gian dưới database — người gọi
+    không bao giờ gửi timestamp, nếu không thứ tự "mới lưu trữ" là thứ client đặt.
+    """
+    with session_scope() as s:
+        d = s.get(Document, str(document_id))
+        if d is None:
+            return False
+        if display_name is not KHONG_DOI:
+            d.display_name = display_name
+        if favorite is not KHONG_DOI:
+            d.favorite = bool(favorite)
+        if pinned is not KHONG_DOI:
+            d.pinned = bool(pinned)
+        if archived is not KHONG_DOI:
+            d.archived_at = datetime.now(timezone.utc) if archived else None
+        if tags is not KHONG_DOI:
+            d.tags = list(tags) if tags else None
+    invalidate_cache()
+    return True
+
+
+def touch_opened(document_id: str, workspace: Optional[str] = None) -> bool:
+    """Ghi mốc MỞ. Mốc do máy chủ đặt, không nhận từ client.
+
+    Tách khỏi `set_library_fields` vì đây là đường ghi duy nhất chạm mốc thời gian,
+    và nó phải nằm sau một route riêng: client vá được timestamp là client giả mạo
+    được thứ tự "mở gần đây".
+    """
+    with session_scope() as s:
+        d = s.get(Document, str(document_id))
+        if d is None:
+            return False
+        d.last_opened_at = datetime.now(timezone.utc)
+        if workspace:
+            d.last_workspace = str(workspace)[:20]
+    invalidate_cache()
+    return True
+
+
+def languages_for(document_ids: Iterable[str]) -> Dict[str, str]:
+    """{document_id: ngôn ngữ} — MỘT truy vấn cho cả thư viện, không phải mỗi tài
+    liệu một lượt.
+
+    Ngôn ngữ đã được ingest phát hiện sẵn (`domains/ingest/enrich.py`, langdetect)
+    và nằm trong metadata của từng chunk. Đọc lại từ đó rẻ hơn nhiều so với thêm
+    một cột — và thêm cột nghĩa là sửa ingest, thứ phase này không được đụng.
+
+    Lấy chunk có `chunk_index` nhỏ nhất của mỗi tài liệu: chunk đầu là đoạn văn
+    xuôi thật, còn chunk cuối hay là bảng biểu/phụ lục và đoán sai ngôn ngữ.
+    """
+    ids = [str(i) for i in document_ids if i]
+    if not ids:
+        return {}
+    out: Dict[str, str] = {}
+    with session_scope() as s:
+        rows = s.execute(
+            select(DocumentChunk.document_id, DocumentChunk.metadata_json)
+            .where(DocumentChunk.document_id.in_(ids))
+            .order_by(DocumentChunk.document_id, DocumentChunk.chunk_index)
+            .distinct(DocumentChunk.document_id)
+        ).all()
+        for doc_id, meta in rows:
+            lang = (meta or {}).get("language") if isinstance(meta, dict) else None
+            if isinstance(lang, str) and lang.strip():
+                out[str(doc_id)] = lang.strip().lower()
+    return out
+
+
+def ai_counts(user_id: Optional[str]) -> Dict[str, Dict[str, Any]]:
+    """Đếm artifact AI BỀN VỮNG cho toàn bộ thư viện — ba truy vấn gộp, không có
+    truy vấn nào chạy theo từng tài liệu.
+
+    Quiz và số lần làm đã chấm đi CHUNG một truy vấn: cả hai đều treo dưới
+    `quizzes.document_id`, và section "Cần hướng dẫn ôn tập" chỉ có nghĩa khi đã
+    có bài chấm — tách ra là thêm một truy vấn thứ sáu mà không thêm thông tin gì.
+
+    `review_plans` có `document_id` trực tiếp nên không cần đi vòng qua attempt.
+    """
+    from sqlalchemy import distinct, func
+    from sqlalchemy.dialects.postgresql import aggregate_order_by
+
+    from app.db.models import KnowledgeMap, Quiz, QuizAttempt, ReviewPlan
+
+    quizzes: Dict[str, Dict[str, Any]] = {}
+    reviews: Dict[str, Dict[str, Any]] = {}
+    studymaps: Dict[str, str] = {}
+
+    def _moi_nhat(cot, theo):
+        """argmax — Postgres không có sẵn, `array_agg(... ORDER BY ...)[1]` là cách
+        rẻ nhất lấy hàng MỚI NHẤT mà vẫn ở trong CÙNG một truy vấn gộp. Tách ra
+        thành truy vấn riêng là phá ngân sách 5 truy vấn của `/api/library`."""
+        return func.array_agg(aggregate_order_by(cot, theo.desc()))[1]
+
+    with session_scope() as s:
+        # Quiz: số quiz + số lượt ĐÃ CHẤM + id quiz mới nhất, một truy vấn. Số lượt
+        # đã chấm là điều kiện của mục "Cần hướng dẫn ôn tập" (không có bài chấm thì
+        # không dựng được hướng dẫn), nên tách nó ra là thêm truy vấn mà không thêm
+        # thông tin.
+        q = (select(Quiz.document_id,
+                    func.count(distinct(Quiz.id)),
+                    func.count(distinct(QuizAttempt.id)),
+                    _moi_nhat(Quiz.id, Quiz.created_at))
+             .select_from(Quiz)
+             .outerjoin(QuizAttempt,
+                        (QuizAttempt.quiz_id == Quiz.id) & (QuizAttempt.status == "graded"))
+             .group_by(Quiz.document_id))
+        if user_id is not None:
+            q = q.where(Quiz.user_id == user_id)
+        for doc_id, so_quiz, so_cham, quiz_moi in s.execute(q).all():
+            quizzes[str(doc_id)] = {"quizzes": int(so_quiz or 0),
+                                    "graded_attempts": int(so_cham or 0),
+                                    "latest_quiz_id": str(quiz_moi) if quiz_moi else None}
+
+        # Ôn tập: `review_plans.document_id` là FK trực tiếp nên KHÔNG phải đi vòng
+        # qua attempt. `attempt_id` mới nhất là đích resume thật (`/app/study/review/
+        # <attemptId>`) — không có nó thì nút "Tiếp tục" chỉ về được tới tài liệu.
+        r = (select(ReviewPlan.document_id, func.count(ReviewPlan.id),
+                    _moi_nhat(ReviewPlan.attempt_id, ReviewPlan.created_at))
+             .group_by(ReviewPlan.document_id))
+        if user_id is not None:
+            r = r.where(ReviewPlan.user_id == user_id)
+        for doc_id, so, attempt_moi in s.execute(r).all():
+            reviews[str(doc_id)] = {"count": int(so or 0),
+                                    "latest_attempt_id": str(attempt_moi) if attempt_moi else None}
+
+        # `completed` thắng `processing`: một tài liệu có bản đồ xong VÀ một bản
+        # đang dựng lại thì nó đã sẵn sàng — hiện "đang tạo" là giấu mất thứ đang
+        # mở được. `created_at` tăng dần nên bản mới nhất ghi đè sau cùng.
+        m = (select(KnowledgeMap.document_id, KnowledgeMap.status)
+             .order_by(KnowledgeMap.created_at))
+        if user_id is not None:
+            m = m.where(KnowledgeMap.user_id == user_id)
+        for doc_id, status in s.execute(m).all():
+            key = str(doc_id)
+            if studymaps.get(key) == "completed":
+                continue
+            studymaps[key] = str(status or "")
+
+    return {"quizzes": quizzes, "reviews": reviews, "studymaps": studymaps}
 
 
 def hard_delete(document_id: str) -> bool:

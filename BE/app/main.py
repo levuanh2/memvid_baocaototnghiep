@@ -33,6 +33,9 @@ from app.domains.vectorstore.store import (
 )
 from app.clients.llm_factory import summarize_results
 from app.domains.cache import llm_cache
+# Phép chiếu thư viện — thuần, không DB/HTTP. Import ở đầu file (không lười) vì
+# `_doc_public` gọi nó ở mọi phản hồi tài liệu.
+from app.domains.documents import thu_vien as _thu_vien
 from shared.config import DEFAULT_LOCAL_MODEL
 # Chỉ dùng cho local Ollama (Gemini sẽ bỏ qua model).
 SLM_MODEL = os.environ.get("SLM_MODEL_CHAT", os.environ.get("SLM_MODEL", DEFAULT_LOCAL_MODEL))
@@ -2641,6 +2644,11 @@ def _doc_public(doc_id: str, row: dict) -> dict:
         "chunk_count": row.get("chunk_count"),
         "created_at": row.get("created_at"),
         "error": row.get("error"),
+        # Bảy trường thư viện (Phase 1A) — THÊM khoá, không đổi khoá nào đang có.
+        # Có mặt ở đây để `/api/documents`, `/api/documents/<id>` và phản hồi upload
+        # nói cùng một thứ với `/api/library`; khối `ai` thì KHÔNG, nó cần hai lượt
+        # đọc kho và chỉ `/api/library` mới đáng trả giá đó.
+        **_thu_vien.library_fields(row),
     }
 
 
@@ -2717,6 +2725,183 @@ def api_documents_delete(document_id: str):
     from app.domains.documents import repository as _docs
     _docs.soft_delete(document_id)
     return jsonify({"document_id": document_id, "status": "deleted"})
+
+
+# -------------------------
+# 📖 Thư viện học tập (Phase 1A)
+# -------------------------
+_TAGS_TOI_DA = 20
+_TAG_DAI_TOI_DA = 30
+_TEN_DAI_TOI_DA = 200
+
+
+def _doc_tags(gia_tri):
+    """(tags, lỗi). Cắt trắng, bỏ rỗng, khử trùng KHÔNG phân biệt hoa thường và
+    giữ cách viết ĐẦU TIÊN — người dùng gõ "AI" rồi "ai" thì thấy lại "AI"."""
+    if not isinstance(gia_tri, list):
+        return None, "tags phải là danh sách chuỗi"
+    out, seen = [], set()
+    for item in gia_tri:
+        if not isinstance(item, str):
+            return None, "tags phải là danh sách chuỗi"
+        t = item.strip()
+        if not t:
+            continue
+        if len(t) > _TAG_DAI_TOI_DA:
+            return None, f"mỗi thẻ tối đa {_TAG_DAI_TOI_DA} ký tự"
+        khoa = t.lower()
+        if khoa in seen:
+            continue
+        seen.add(khoa)
+        out.append(t)
+    if len(out) > _TAGS_TOI_DA:
+        return None, f"tối đa {_TAGS_TOI_DA} thẻ"
+    return out, None
+
+
+@app.get('/api/library')
+def api_library():
+    """Thư viện học tập — MỘT lần gọi thay cho hàng chục lượt hỏi trạng thái.
+
+    Ngân sách: 5 truy vấn gộp (tài liệu, quiz+lượt chấm, kế hoạch ôn tập,
+    StudyMap, ngôn ngữ) + 2 lượt đọc kho phù du (tóm tắt, sơ đồ tư duy). Không có
+    truy vấn nào chạy theo từng tài liệu — đó là ràng buộc chính của endpoint này.
+
+    Kho phù du hỏng hoặc trống KHÔNG được làm hỏng cả thư viện: hỏng thì phần AI
+    của nó về `not_generated` và danh sách vẫn hiện. Danh sách tài liệu là thứ
+    trang này tồn tại để hiện; tóm tắt là phần thêm.
+    """
+    uid, err = _require_app_user()
+    if err:
+        return err
+    from app.domains.documents import repository as _docs
+
+    rows = {
+        did: row for did, row in _docs.all_rows().items()
+        if not _auth_protect_enabled() or row.get("user_id") == uid
+    }
+    scope_uid = uid if _auth_protect_enabled() else None
+
+    def _thu(ham, du_phong):
+        """Nguồn phụ hỏng thì mất đúng nguồn ấy, không mất cả trang."""
+        try:
+            return ham()
+        except Exception as exc:  # noqa: BLE001 — nguồn phụ, không được lan ra
+            print(f"⚠️ /api/library: nguồn phụ lỗi ({exc})", flush=True)
+            return du_phong
+
+    summaries = _thu(
+        lambda: (summary_store.list_records(user_id=uid, enforce_owner=True)
+                 if _auth_protect_enabled() else summary_store.list_records()), [])
+    mindmaps = _thu(
+        lambda: (mindmap_store.list_records(user_id=uid, enforce_owner=True)
+                 if _auth_protect_enabled() else mindmap_store.list_records()), [])
+    counts = _thu(lambda: _docs.ai_counts(scope_uid),
+                  {"quizzes": {}, "reviews": {}, "studymaps": {}})
+    languages = _thu(lambda: _docs.languages_for(rows.keys()), {})
+
+    return jsonify({"documents": _thu_vien.chieu_thu_vien(
+        rows,
+        summaries=summaries,
+        mindmaps=mindmaps,
+        studymap_status=counts.get("studymaps") or {},
+        quiz_counts=counts.get("quizzes") or {},
+        review_counts=counts.get("reviews") or {},
+        languages=languages,
+    )})
+
+
+@app.patch('/api/documents/<document_id>')
+def api_documents_patch(document_id: str):
+    """Sửa một phần siêu dữ liệu thư viện. Chỉ ghi trường ĐƯỢC GỬI.
+
+    CỐ Ý không nhận mốc thời gian: `archived` là bool, máy chủ tự đặt
+    `archived_at`. Và `archived` KHÔNG đụng tới `status` — tài liệu đã lưu trữ
+    vẫn `completed`, vẫn nằm trong `all_rows()`, vẫn trong `owned_stems()`, nên
+    vẫn tra cứu được bằng AI. Lưu trữ chỉ ẩn khỏi giao diện.
+    """
+    uid, err = _require_app_user()
+    if err:
+        return err
+    _row, err = _owned_document(document_id, uid)
+    if err:
+        return err
+
+    body = request.get_json(silent=True)
+    if not isinstance(body, dict):
+        return jsonify({"error": "Body phải là JSON object"}), 400
+
+    kw = {}
+    if "display_name" in body:
+        gt = body["display_name"]
+        if gt is None:
+            kw["display_name"] = None          # xoá tên đã đặt → quay về `title`
+        elif isinstance(gt, str):
+            ten = gt.strip()
+            if not ten:
+                return jsonify({"error": "Tên hiển thị không được để trống"}), 400
+            if len(ten) > _TEN_DAI_TOI_DA:
+                return jsonify({"error": f"Tên hiển thị tối đa {_TEN_DAI_TOI_DA} ký tự"}), 400
+            kw["display_name"] = ten
+        else:
+            return jsonify({"error": "display_name phải là chuỗi hoặc null"}), 400
+
+    for ten_truong in ("favorite", "pinned", "archived"):
+        if ten_truong in body:
+            # `bool` nghiêm ngặt: ép truthy ở đây thì `"false"` bật cờ lên.
+            if not isinstance(body[ten_truong], bool):
+                return jsonify({"error": f"{ten_truong} phải là true hoặc false"}), 400
+            kw[ten_truong] = body[ten_truong]
+
+    if "tags" in body:
+        tags, loi = _doc_tags(body["tags"])
+        if loi:
+            return jsonify({"error": loi}), 400
+        kw["tags"] = tags
+
+    if not kw:
+        return jsonify({"error": "Không có trường nào để cập nhật"}), 400
+
+    from app.domains.documents import repository as _docs
+    if not _docs.set_library_fields(document_id, **kw):
+        return jsonify({"error": "Document not found"}), 404
+    row = _docs.get(document_id) or {}
+    return jsonify(_doc_public(document_id, row))
+
+
+@app.post('/api/documents/<document_id>/opened')
+def api_documents_opened(document_id: str):
+    """Ghi nhận người dùng vừa MỞ tài liệu ở một bề mặt học tập.
+
+    Route riêng chứ không gộp vào PATCH: client vá được timestamp là client giả
+    mạo được thứ tự "mở gần đây". Và không gộp vào GET: đọc phải không có tác dụng
+    phụ, nếu không thì mỗi lần tải danh sách là một lần "vừa mở" mọi tài liệu.
+    """
+    uid, err = _require_app_user()
+    if err:
+        return err
+    _row, err = _owned_document(document_id, uid)
+    if err:
+        return err
+
+    body = request.get_json(silent=True) or {}
+    workspace = body.get("workspace")
+    if workspace is not None:
+        if not isinstance(workspace, str) or workspace.strip().lower() not in _thu_vien.WORKSPACES:
+            return jsonify({
+                "error": f"workspace không hợp lệ (chọn: {', '.join(_thu_vien.WORKSPACES)})"
+            }), 400
+        workspace = workspace.strip().lower()
+
+    from app.domains.documents import repository as _docs
+    if not _docs.touch_opened(document_id, workspace):
+        return jsonify({"error": "Document not found"}), 404
+    row = _docs.get(document_id) or {}
+    return jsonify({
+        "document_id": document_id,
+        "last_opened_at": row.get("last_opened_at"),
+        "last_workspace": row.get("last_workspace"),
+    })
 
 
 @app.get('/api/documents/<document_id>/sections')

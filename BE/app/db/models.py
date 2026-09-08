@@ -30,6 +30,7 @@ from sqlalchemy import (
     Text,
     UniqueConstraint,
     func,
+    text,
 )
 from sqlalchemy.dialects.postgresql import JSONB, UUID
 from sqlalchemy.orm import DeclarativeBase
@@ -142,6 +143,19 @@ class Document(Base):
     # documents thiếu là lỗ hổng — không có chỗ này thì phải giữ song song
     # source_registry.json (hai nguồn sự thật).
     metadata_json = Column(JSONB)
+    # Thư viện học tập (Phase 1A) — thứ NGƯỜI DÙNG tự đặt, không suy ra được từ đâu.
+    # `archived_at` CỐ Ý không dùng `status`: đưa "đã lưu trữ" vào `status` sẽ đẩy tài
+    # liệu ra khỏi `all_rows()` và khỏi `owned_stems()`, tức là ẩn nó khỏi cả RAG —
+    # lưu trữ chỉ được ẩn khỏi giao diện, không được đụng tới truy hồi.
+    display_name = Column(String(200))
+    favorite = Column(Boolean, nullable=False, server_default=text("false"))
+    pinned = Column(Boolean, nullable=False, server_default=text("false"))
+    archived_at = Column(DateTime(timezone=True))
+    tags = Column(JSONB)
+    # Mốc MỞ, không phải mốc TẠO. Không bảng nào đang ghi lại việc người dùng mở một
+    # artifact (mở tóm tắt ba lần không sinh dòng nào), nên hai cột này không suy ra được.
+    last_opened_at = Column(DateTime(timezone=True))
+    last_workspace = Column(String(20))
     created_at = created_at()
     updated_at = updated_at()
 

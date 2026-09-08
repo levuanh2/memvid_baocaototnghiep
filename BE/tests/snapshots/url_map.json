@@ -70,6 +70,13 @@
     "rule": "/api/documents/<document_id>"
   },
   {
+    "endpoint": "api_documents_patch",
+    "methods": [
+      "PATCH"
+    ],
+    "rule": "/api/documents/<document_id>"
+  },
+  {
     "endpoint": "api_documents_chunks",
     "methods": [
       "GET"
@@ -82,6 +89,13 @@
       "GET"
     ],
     "rule": "/api/documents/<document_id>/file"
+  },
+  {
+    "endpoint": "api_documents_opened",
+    "methods": [
+      "POST"
+    ],
+    "rule": "/api/documents/<document_id>/opened"
   },
   {
     "endpoint": "api_document_quizzes",
@@ -131,6 +145,13 @@
       "POST"
     ],
     "rule": "/api/jobs/<job_id>/cancel"
+  },
+  {
+    "endpoint": "api_library",
+    "methods": [
+      "GET"
+    ],
+    "rule": "/api/library"
   },
   {
     "endpoint": "api_practice_get",

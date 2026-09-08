@@ -1,12 +1,22 @@
 import { useState } from "react";
+import { useSearchParams } from "react-router-dom";
 import MainLayout from "../components/Layout/MainLayout";
 
 // Workspace — the authenticated app screen (mounted at /app).
 // Holds `selectedSources` (lifted out of the old App.jsx) so the chosen files
 // persist across the workspace session. Everything below MainLayout — chat,
 // upload, summary, mindmap, conversation context, RQ — is unchanged.
+//
+// `?source=<stem>` chọn sẵn một nguồn khi vào (Thư viện học tập dùng nó cho nút
+// "Hỏi AI" và cho Tiếp tục học). CHỈ là giá trị KHỞI TẠO: sau đó cột trái làm chủ
+// lựa chọn y như cũ, nên không có đường nào URL ghi đè thao tác của người dùng.
+// Không có tham số → [] , đúng hành vi cũ.
 export default function Workspace() {
-  const [selectedSources, setSelectedSources] = useState([]);
+  const [searchParams] = useSearchParams();
+  const [selectedSources, setSelectedSources] = useState(() => {
+    const stem = (searchParams.get("source") || "").trim();
+    return stem ? [stem] : [];
+  });
   return (
     <MainLayout
       selectedSources={selectedSources}
