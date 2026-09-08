@@ -839,7 +839,9 @@ def auth_register():
         return jsonify({"error": "email_exists"}), 409
     _gh.xoa(khoa_ip)
     token = _tokens.make_token(user)
-    return jsonify({"token": token, "user": _auth.public_user(user)}), 201
+    ho_so = _auth.public_user(user)
+    ho_so["provider"] = "local"          # đăng ký luôn tạo tài khoản local
+    return jsonify({"token": token, "user": ho_so}), 201
 
 
 def _khoa_dinh_danh(tien_to: str, dinh_danh: str) -> str:
@@ -851,6 +853,10 @@ def _khoa_dinh_danh(tien_to: str, dinh_danh: str) -> str:
     lách được trần.
     """
     return f"{tien_to}:{(dinh_danh or '').strip().lower()[:120]}"
+
+
+#: Tên provider ngoài, lấy từ lõi thay vì gõ lại chuỗi ở tầng route.
+from app.application.auth import NKS as _app_auth_NKS
 
 
 #: Lỗi đăng nhập → (mã HTTP, mã lỗi máy đọc được). `invalid_credentials`/401 giữ
@@ -918,7 +924,12 @@ def auth_login():
     _gh.xoa(khoa_ip)
     _gh.xoa(khoa_dinh_danh)
     token = _tokens.make_token(user)
-    return jsonify({"token": token, "user": _auth.public_user(user)}), 200
+    # `provider` đi kèm ngay từ phản hồi đăng nhập, không đợi `/auth/me`: nếu thiếu,
+    # giao diện sẽ ẩn hết phần dành cho NKS cho tới lần tải trang kế tiếp. Giá trị lấy
+    # từ đường xác thực VỪA chạy, không phải từ thứ client khai.
+    ho_so = _auth.public_user(user)
+    ho_so["provider"] = (provider or _app_auth.LOCAL).strip().lower()
+    return jsonify({"token": token, "user": ho_so}), 200
 
 
 @app.post('/auth/logout')
@@ -1068,16 +1079,38 @@ def auth_refresh():
     user = _auth.current_user_from_request()
     if user is None:
         return jsonify({"error": "unauthorized"}), 401
-    return jsonify({"token": _tokens.make_token(user), "user": _auth.public_user(user)}), 200
+    from app.domains.auth import identities_store as _idents
+    ho_so = _auth.public_user(user)
+    lien_ket = _idents.find_by_user(_app_auth_NKS, str(user["user_id"]))
+    ho_so["provider"] = lien_ket["provider"] if lien_ket else "local"
+    return jsonify({"token": _tokens.make_token(user), "user": ho_so}), 200
 
 
 @app.get('/auth/me')
 def auth_me():
+    """Người dùng của phiên hiện tại, KÈM provider ngoài đã liên kết (nếu có).
+
+    `provider` phải đi cùng ở đây vì giao diện dùng nó để quyết định hiển thị: chỉ
+    người dùng NKS mới có mật khẩu NKS để đổi và hồ sơ NKS để sửa. Không có trường
+    này thì `dungHoSo()` luôn thấy `undefined`, và mọi phần dành cho NKS — nút "Chỉnh
+    sửa", mục "Đổi mật khẩu" — bị ẩn với TẤT CẢ mọi người, kể cả người dùng NKS.
+
+    Suy ra từ bảng `identities`, KHÔNG lấy từ thứ client tự khai: đây là dữ liệu chỉ
+    máy chủ mới biết chắc, và nó quyết định người dùng thấy được đường ghi nào.
+
+    Một truy vấn thêm cho mỗi lần gọi, đi qua `ix_identities_user_id`. Không có thì
+    không có cách nào để trang biết được điều này sau khi tải lại.
+    """
+    from app.domains.auth import identities_store as _idents
     from app.domains.auth import service as _auth
     user = _auth.current_user_from_request()
     if user is None:
         return jsonify({"error": "unauthorized"}), 401
-    return jsonify({"user": _auth.public_user(user)}), 200
+
+    ho_so = _auth.public_user(user)
+    lien_ket = _idents.find_by_user(_app_auth_NKS, str(user["user_id"]))
+    ho_so["provider"] = lien_ket["provider"] if lien_ket else "local"
+    return jsonify({"user": ho_so}), 200
 
 
 #: Lỗi hồ sơ → (mã HTTP, mã lỗi). `grant_required` là mã FE dựa vào để bật lại hộp
