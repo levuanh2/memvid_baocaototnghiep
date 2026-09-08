@@ -809,9 +809,19 @@ def health():
 # -------------------------
 @app.post('/auth/register')
 def auth_register():
+    from app.domains.auth import gioi_han as _gh
     from app.domains.auth import service as _auth
     from app.domains.auth import tokens as _tokens
     from app.domains.auth import users_store as _users
+
+    # Trần theo IP, không theo email: email ở đây là thứ người gọi tự chọn, nên khoá
+    # theo nó là để họ tự đặt khoá mới mỗi lần thử. IP là thứ duy nhất họ không đổi
+    # được miễn phí.
+    khoa_ip = f"register:ip:{_client_ip()}"
+    duoc, cho = _gh.cho_phep(khoa_ip)
+    if not duoc:
+        return _rate_limited_response(cho)
+
     data = request.json or {}
     email = data.get("email") or ""
     password = data.get("password") or ""
@@ -823,9 +833,24 @@ def auth_register():
     try:
         user = _users.create_user(email, password, display_name)
     except _users.EmailExistsError:
+        # Email đã tồn tại LÀ một lần thất bại đáng đếm: lặp lại nó chính là phép dò
+        # xem địa chỉ nào đã đăng ký.
+        _gh.ghi_that_bai(khoa_ip)
         return jsonify({"error": "email_exists"}), 409
+    _gh.xoa(khoa_ip)
     token = _tokens.make_token(user)
     return jsonify({"token": token, "user": _auth.public_user(user)}), 201
+
+
+def _khoa_dinh_danh(tien_to: str, dinh_danh: str) -> str:
+    """Khoá bộ đếm theo định danh người dùng gõ.
+
+    CẮT NGẮN và hạ chữ thường vì `gioi_han` chặn SỐ LƯỢNG khoá chứ không chặn ĐỘ DÀI
+    khoá: một định danh 10 KB gửi lặp lại sẽ nở bộ nhớ dù số khoá vẫn dưới trần.
+    Hạ chữ thường để "A@b.c" và "a@b.c" đếm chung — nếu không thì đổi kiểu chữ là
+    lách được trần.
+    """
+    return f"{tien_to}:{(dinh_danh or '').strip().lower()[:120]}"
 
 
 #: Lỗi đăng nhập → (mã HTTP, mã lỗi máy đọc được). `invalid_credentials`/401 giữ
@@ -860,12 +885,38 @@ def auth_login():
     allowed, retry_after = _rate_limit_check(f"login:{_client_ip()}")
     if not allowed:
         return _rate_limited_response(retry_after)
+
+    # Trần Redis-free, LUÔN bật. Cái ở trên chạy trên Redis, mà production đặt
+    # `REDIS_URL=""` và không bật `RATE_LIMIT_ENABLED`, nên nó fail-open — nghĩa là
+    # trước bản này `/auth/login` KHÔNG có trần nào. Với `provider=nks` đó là một máy
+    # dò mật khẩu không cần đăng nhập, nhắm vào hệ thống của người khác.
+    #
+    # Hai khoá: IP chặn một nguồn quét nhiều tài khoản; định danh chặn nhiều nguồn
+    # cùng dò MỘT tài khoản. Thiếu khoá định danh thì một botnet chia đều theo IP sẽ
+    # đi qua trần mà không chạm vào nó.
+    from app.domains.auth import gioi_han as _gh
+    khoa_ip = f"login:ip:{_client_ip()}"
+    khoa_dinh_danh = _khoa_dinh_danh("login:identifier", email)
+    for k in (khoa_ip, khoa_dinh_danh):
+        duoc, cho = _gh.cho_phep(k)
+        if not duoc:
+            return _rate_limited_response(cho)
+
     try:
         user = _app_auth.dang_nhap(email, password, provider)
     except _app_auth.AuthError as exc:
         # Generic error for bad credentials — no user enumeration.
         ma_http, ma_loi = _LOI_DANG_NHAP.get(type(exc).__name__, (401, "invalid_credentials"))
+        if ma_http == 401:
+            # CHỈ đếm lỗi credential. Provider sập (503) hay cấu hình sai (400) không
+            # phải lỗi của người đang gõ; tính vào trần sẽ khoá người dùng thật vì một
+            # sự cố họ không gây ra.
+            _gh.ghi_that_bai(khoa_ip)
+            _gh.ghi_that_bai(khoa_dinh_danh)
         return jsonify({"error": ma_loi}), ma_http
+
+    _gh.xoa(khoa_ip)
+    _gh.xoa(khoa_dinh_danh)
     token = _tokens.make_token(user)
     return jsonify({"token": token, "user": _auth.public_user(user)}), 200
 
@@ -964,6 +1015,44 @@ def auth_nks_grant_xoa():
     else:
         _grants.xoa_cua_user(uid)
     return jsonify({"ok": True}), 200
+
+
+@app.post('/auth/logout-all')
+def auth_logout_all():
+    """Đăng xuất khỏi MỌI thiết bị: tăng `token_version` ⇒ mọi token đang phát chết.
+
+    Vì sao cần một endpoint riêng thay vì sửa `/auth/logout`: `/auth/logout` là đường
+    đi hàng ngày và phải giữ nguyên nghĩa "rời khỏi trình duyệt NÀY" — đá luôn điện
+    thoại của người dùng mỗi lần họ đóng tab trên máy tính là một hành vi không ai xin.
+
+    Vì sao cần TỒN TẠI: trước endpoint này, `bump_token_version` chỉ có ĐÚNG MỘT nơi
+    gọi — luồng đổi mật khẩu NKS. Nghĩa là người dùng local bị lộ token không có cách
+    nào thu hồi nó: đăng xuất không đụng tới `token_version`, `/auth/refresh` cấp lại
+    token mới vô hạn từ một token còn hạn, và không có luồng đổi mật khẩu local nào.
+    Token rò rỉ là token vĩnh viễn, trừ khi sửa tay trong database.
+
+    `/auth/refresh` KHÔNG phải sửa gì: nó đã đối chiếu `tv` với hàng users ở mỗi lần
+    gọi, nên sau khi tăng thì mọi token cũ — kể cả token vừa dùng để gọi chính endpoint
+    này — không refresh được nữa. Đó là ý đồ.
+
+    Idempotent theo nghĩa dùng được: gọi lại chỉ tăng tiếp và vẫn trả 200. Không có
+    trạng thái nào để hỏng, và người dùng bấm hai lần không gặp lỗi.
+    """
+    from app.domains.auth import grants as _grants
+    from app.domains.auth import service as _auth
+    from app.domains.auth import users_store as _users
+
+    user = _auth.current_user_from_request()
+    if user is None:
+        return jsonify({"error": "unauthorized"}), 401
+    uid = str(user["user_id"])
+
+    # Chứng từ ghi chết TRƯỚC: nó giữ một access token của provider ngoài, và một lần
+    # "đăng xuất mọi nơi" mà để lại credential đó thì chưa thu hồi được gì cả. Dùng
+    # đúng hàm mà `/auth/logout` vẫn dùng — không có ngữ nghĩa chứng từ nào bị đổi.
+    _grants.xoa_cua_user(uid)
+    _users.bump_token_version(uid)
+    return jsonify({"ok": True, "revoked_all": True}), 200
 
 
 @app.post('/auth/refresh')

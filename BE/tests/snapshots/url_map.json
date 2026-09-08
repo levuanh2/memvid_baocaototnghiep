@@ -322,6 +322,13 @@
     "rule": "/auth/logout"
   },
   {
+    "endpoint": "auth_logout_all",
+    "methods": [
+      "POST"
+    ],
+    "rule": "/auth/logout-all"
+  },
+  {
     "endpoint": "auth_me",
     "methods": [
       "GET"
