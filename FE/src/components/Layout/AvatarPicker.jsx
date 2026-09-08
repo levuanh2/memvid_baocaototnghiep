@@ -8,15 +8,49 @@ import { LOAI_CHO_PHEP } from "../../auth/anhDaiDienFile";
  *
  * `xemTruoc` là một object URL sống trong bộ nhớ của trình duyệt: ảnh chưa lưu KHÔNG
  * rời khỏi máy người dùng cho tới khi họ bấm "Lưu ảnh". Huỷ ⇒ ảnh cũ hiện lại nguyên vẹn.
+ *
+ * Chính tấm ảnh là nút bấm — đó là chỗ người ta thử bấm đầu tiên. Nút "Đổi ảnh" bên
+ * cạnh vẫn giữ nguyên: một vùng bấm hình tròn không có nhãn thì trình đọc màn hình
+ * lẫn người mới dùng đều không đoán ra, nên nhãn chữ là đường đi được bảo đảm còn
+ * ảnh là đường đi nhanh.
+ *
+ * Dùng `<button>` thật chứ không phải `<div onClick>`: Enter và Space, thứ tự tab,
+ * vòng focus và `disabled` đều có sẵn từ trình duyệt. Tự dựng lại bằng `onKeyDown`
+ * là viết lại thứ nền tảng đã làm đúng, và thường quên mất một nửa.
  */
 export default function AvatarPicker({
   avatar, chuCai, xemTruoc, dangLuu, loi, onChon, onLuu, onHuy,
 }) {
   const oFile = useRef(null);
 
+  const moChonAnh = () => oFile.current?.click();
+
   return (
     <div className="flex items-center gap-4">
-      <Avatar src={xemTruoc || avatar} chuCai={chuCai} size={72} />
+      <button
+        type="button"
+        onClick={moChonAnh}
+        disabled={dangLuu}
+        aria-label={xemTruoc ? "Chọn ảnh đại diện khác" : "Đổi ảnh đại diện"}
+        title="Đổi ảnh đại diện"
+        className="group relative rounded-full flex-shrink-0 transition-theme
+                   focus:outline-none focus-visible:ring-2 focus-visible:ring-offset-2
+                   disabled:cursor-not-allowed enabled:cursor-pointer"
+        style={{ "--tw-ring-color": "var(--accent)", "--tw-ring-offset-color": "var(--bg-card)" }}
+      >
+        <Avatar src={xemTruoc || avatar} chuCai={chuCai} size={72} />
+        {/* Lớp phủ chỉ là gợi ý: hiện khi rê chuột hoặc khi focus bằng bàn phím, để
+            người đi bằng Tab cũng thấy đúng thứ người đi bằng chuột thấy. */}
+        <span
+          aria-hidden
+          className="pointer-events-none absolute inset-0 rounded-full flex items-center
+                     justify-center opacity-0 transition-opacity duration-150
+                     group-hover:opacity-100 group-focus-visible:opacity-100"
+          style={{ background: "rgba(0,0,0,0.45)", color: "#fff" }}
+        >
+          <Icon name="ImagePlus" size={20} />
+        </span>
+      </button>
 
       <div className="min-w-0 flex-1">
         <input
@@ -37,7 +71,7 @@ export default function AvatarPicker({
           {!xemTruoc ? (
             <button
               type="button"
-              onClick={() => oFile.current?.click()}
+              onClick={moChonAnh}
               disabled={dangLuu}
               className="pill-action"
             >
