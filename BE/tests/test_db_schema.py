@@ -79,6 +79,37 @@ def test_users_role_check_rejects_unknown_role(engine):
             )
 
 
+def test_users_avatar_url_ton_tai_va_nullable(engine):
+    """`users.avatar_url` — bộ nhớ đệm HIỂN THỊ, migration c7f3a92b5e41.
+
+    NULLABLE là một phần của hợp đồng, không phải chi tiết bỏ qua được: hàng cũ để
+    NULL và tự điền ở lần đăng nhập NKS kế tiếp, nên không cần backfill.
+    """
+    from sqlalchemy import text
+    with engine.connect() as c:
+        hang = c.execute(text(
+            "SELECT data_type, is_nullable, character_maximum_length "
+            "FROM information_schema.columns "
+            "WHERE table_schema='public' AND table_name='users' AND column_name='avatar_url'"
+        )).first()
+    assert hang is not None, "thiếu cột users.avatar_url — migration chưa chạy?"
+    kieu, nullable, do_dai = hang
+    assert kieu == "character varying"
+    assert nullable == "YES"
+    # 500 đủ rộng cho URL thật (~61 ký tự) và đủ hẹp để một chuỗi base64 lọt vào đây
+    # do lỗi lập trình sẽ hỏng ngay thay vì âm thầm phình cột.
+    assert do_dai == 500
+
+
+def test_users_avatar_url_mac_dinh_NULL(engine, user_id):
+    """Hàng tạo không nêu avatar_url phải là NULL, không phải chuỗi rỗng."""
+    from sqlalchemy import text
+    with engine.connect() as c:
+        v = c.execute(text("SELECT avatar_url FROM users WHERE id = :id"),
+                      {"id": user_id}).scalar()
+    assert v is None
+
+
 def test_users_email_is_unique(engine, user_id):
     from sqlalchemy import text
     from sqlalchemy.exc import IntegrityError

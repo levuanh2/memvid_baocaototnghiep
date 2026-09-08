@@ -78,6 +78,11 @@ class User(Base):
     role = Column(String(50), nullable=False, server_default="learner")
     # Ngoài đặc tả: tăng lên để vô hiệu mọi token đã phát (logout-all).
     token_version = Column(Integer, nullable=False, server_default="1")
+    # Bộ nhớ đệm HIỂN THỊ, không phải hồ sơ: URL công khai của ảnh đại diện ở provider
+    # ngoài. KHÔNG lưu byte ảnh. Có mặt vì sau khi tải lại trang, máy chủ không còn
+    # token nào để hỏi lại provider. Chỉ nhận https tuyệt đối (xem migration
+    # c7f3a92b5e41). NULL = không biết, và sẽ tự điền ở lần đăng nhập kế tiếp.
+    avatar_url = Column(String(500), nullable=True)
     created_at = created_at()
     updated_at = updated_at()
 
