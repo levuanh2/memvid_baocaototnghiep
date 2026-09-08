@@ -38,6 +38,9 @@ def public_user(user: dict) -> dict:
         "email": user.get("email"),
         "display_name": user.get("display_name"),
         "role": user.get("role"),
+        # Bộ nhớ đệm hiển thị: nhờ nó ảnh đại diện còn sống sau khi tải lại trang,
+        # vì lúc đó máy chủ không còn token nào để hỏi lại provider.
+        "avatar": user.get("avatar_url"),
     }
 
 

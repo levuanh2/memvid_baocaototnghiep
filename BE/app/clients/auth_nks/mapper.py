@@ -108,6 +108,9 @@ def to_identity(body: Mapping[str, Any]) -> InternalIdentity:
         provider_user_id=str(raw_id),
         email=str(email).strip().lower() if email else None,
         display_name=str(ten).strip() if ten else None,
+        # URL ảnh đại diện đi kèm danh tính để đường đăng nhập ghi được vào
+        # `users.avatar_url` mà không phải gọi thêm một lượt nào.
+        avatar=(str(d.get("avatar")).strip() or None) if d.get("avatar") else None,
         role=map_role(nhom),
         # Chỉ nhóm thô để chẩn đoán ánh xạ. KHÔNG có token, KHÔNG có mật khẩu.
         metadata={"nks_group": str(nhom)} if nhom else {},

@@ -995,6 +995,8 @@ def auth_me():
 #: thoại xác minh — và để GIỮ NGUYÊN những gì người dùng đang gõ dở.
 _LOI_HO_SO = {
     "GrantKhongHopLe": (409, "grant_required"),
+    "AnhQuaLon": (413, "image_too_large"),
+    "AnhKhongHopLe": (400, "invalid_image"),
     "TruongKhongSuaDuoc": (400, "invalid_field"),
     "InvalidProvider": (400, "invalid_provider"),
     "ProviderNotEnabled": (400, "provider_not_enabled"),
@@ -1055,6 +1057,49 @@ def me_nks_profile_ghi():
     if not isinstance(thay_doi, dict):
         return jsonify({"error": "invalid_field"}), 400
     return _ho_so_response(lambda uid, gid: _profile.cap_nhat_ho_so(uid, gid, thay_doi))
+
+
+@app.put('/me/nks/avatar')
+def me_nks_avatar_ghi():
+    """Đổi ảnh đại diện: chuẩn hoá ảnh → ghi sang provider → đọc lại → trả hồ sơ mới.
+
+    Nhận multipart. Trần byte của ẢNH được chặn ở ĐÂY, không phải ở
+    `MAX_CONTENT_LENGTH`: mốc đó là 100 MB dùng chung cho upload tài liệu, rộng gấp
+    ~50 lần trần ảnh nên nó chỉ chặn được ca cực đoan. Hàng rào thật là `read(trần+1)`
+    ngay dưới — đo dữ liệu THẬT, không tin `Content-Length` client khai — rồi
+    `chuan_hoa` chặn lần nữa trên chính byte đó.
+    """
+    from app.application import profile as _profile
+    from app.domains.media import anh_dai_dien as _anh
+
+    user = _auth_service().current_user_from_request()
+    if user is None:
+        return jsonify({"error": "unauthorized"}), 401
+    grant_id = _grant_id_tu_request()
+    if not grant_id:
+        return jsonify({"error": "grant_required"}), 409
+
+    tep = request.files.get("avatar")
+    if tep is None:
+        return jsonify({"error": "invalid_image"}), 400
+
+    # Đọc TỐI ĐA trần + 1 byte. Đọc thêm đúng một byte là đủ để biết "còn nữa" mà
+    # không kéo cả file khổng lồ vào RAM chỉ để rồi từ chối nó.
+    raw = tep.read(_anh.GIOI_HAN_BYTE + 1)
+    if len(raw) > _anh.GIOI_HAN_BYTE:
+        return jsonify({"error": "image_too_large"}), 413
+
+    try:
+        ho_so = _profile.cap_nhat_anh_dai_dien(str(user["user_id"]), grant_id, raw)
+    except (_anh.AnhQuaLon, _anh.AnhKhongHopLe) as exc:
+        # Thông điệp của các lớp này chỉ mang con số/tên định dạng, không mang nội
+        # dung ảnh — nhưng vẫn KHÔNG trả `str(exc)` ra ngoài, chỉ trả mã.
+        ma_http, ma_loi = _LOI_HO_SO.get(type(exc).__name__, (400, "invalid_image"))
+        return jsonify({"error": ma_loi}), ma_http
+    except _profile.AuthError as exc:
+        ma_http, ma_loi = _LOI_HO_SO.get(type(exc).__name__, (502, "provider_protocol_error"))
+        return jsonify({"error": ma_loi}), ma_http
+    return jsonify({"profile": ho_so.to_dict()}), 200
 
 
 @app.get('/stats')

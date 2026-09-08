@@ -82,6 +82,25 @@ def get_user(access_token: str) -> dict:
     return _post(config.user_url(), {"access_token": access_token})
 
 
+def update_avatar(access_token: str, data_uri: str) -> dict:
+    """Ghi ảnh đại diện → envelope thô.
+
+    `data_uri` là data-URI ĐẦY ĐỦ (`data:image/jpeg;base64,...`), không phải base64
+    trần: bảng tài liệu chỉ ghi "Base64" nhưng ảnh chụp Postman cho thấy giá trị thật
+    có tiền tố đầy đủ. Xem `docs/nks-api.md`.
+
+    Phản hồi cũng là `{"success": true, "data": true}` — người gọi PHẢI hỏi lại
+    `/nks/user` mới biết URL ảnh mới.
+
+    KHÔNG log `data_uri`: nó là toàn bộ ảnh của người dùng dưới dạng chuỗi.
+    """
+    if not access_token:
+        raise NksProtocolError("thiếu access_token")
+    if not data_uri:
+        raise NksProtocolError("thiếu dữ liệu ảnh")
+    return _post(config.update_avatar_url(), {"avatar": data_uri, "access_token": access_token})
+
+
 def update_info(access_token: str, fields: dict) -> dict:
     """Ghi hồ sơ → envelope thô.
 

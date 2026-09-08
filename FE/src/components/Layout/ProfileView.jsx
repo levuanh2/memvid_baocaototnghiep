@@ -14,7 +14,7 @@ import { Icon } from "../ui/Icon";
  * với firstname/lastname và endpoint ghi không có tham số nào đặt nó.
  */
 export default function ProfileView({
-  hoSo, onClose, laNks, dangSua, dangTai, onSua, rongHon, children,
+  hoSo, onClose, laNks, dangSua, dangTai, onSua, rongHon, khoiAnh, children,
 }) {
   if (!hoSo) return null;
 
@@ -22,9 +22,12 @@ export default function ProfileView({
     <Modal open title="Hồ sơ tài khoản" onClose={onClose} maxWidth={rongHon ? 620 : 460}>
       <div className="px-5 py-6">
 
-        {/* Danh tính: ảnh lớn, tên, nơi đăng nhập */}
-        <div className="flex items-center gap-4">
-          <Avatar src={hoSo.avatar} chuCai={hoSo.chuCai} size={72} />
+        {/* Danh tính: ảnh lớn, tên, nơi đăng nhập.
+            `khoiAnh` thay chỗ tấm ảnh khi tài khoản đổi được ảnh — nó tự mang ảnh,
+            nút bấm và trạng thái xem trước của riêng nó. */}
+        {khoiAnh}
+        <div className={`flex items-center gap-4${khoiAnh ? " mt-4" : ""}`}>
+          {!khoiAnh && <Avatar src={hoSo.avatar} chuCai={hoSo.chuCai} size={72} />}
           <div className="min-w-0 flex-1">
             <div className="font-display text-[19px] font-semibold text-text-primary truncate" title={hoSo.ten}>
               {hoSo.ten}

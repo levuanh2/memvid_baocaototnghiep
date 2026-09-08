@@ -14,8 +14,36 @@ không thể bị gửi đi.
 
 from __future__ import annotations
 
+import re
 from dataclasses import dataclass, replace
 from typing import Any, Mapping, Optional
+
+#: URL ảnh đại diện chấp nhận được: **https tuyệt đối**, không khoảng trắng, không
+#: ký tự bọc thẻ. Đây là giá trị từ hệ thống ngoài sẽ trở thành `src` của một thẻ
+#: trên trang VÀ được ghi vào `users.avatar_url`, nên nó phải qua đúng một cửa.
+#:
+#: Chặn: `http:` (nội dung lẫn lộn, trình duyệt chặn), `data:` (ảnh nhúng — chiều ĐỌC
+#: của provider không bao giờ trả về dạng này, và nhét base64 vào một cột 500 ký tự là
+#: một lỗi lập trình đang cố xảy ra), `javascript:`, và đường dẫn tương đối.
+_AVATAR_HTTPS = re.compile(r"^https://[^\s\"'<>]+$", re.IGNORECASE)
+
+#: Trần độ dài, khớp `users.avatar_url VARCHAR(500)`. Dài hơn ⇒ từ chối ở Python thay
+#: vì để `DataError` nổ giữa một transaction.
+AVATAR_URL_MAX = 500
+
+
+def avatar_hop_le(url: Any) -> Optional[str]:
+    """URL ảnh đại diện đã được duyệt, hoặc `None`.
+
+    `None` cho MỌI lý do — vắng, sai giao thức, quá dài. Người gọi không cần phân biệt:
+    phản ứng luôn giống nhau, hiện chữ cái thay ảnh.
+    """
+    if not isinstance(url, str):
+        return None
+    s = url.strip()
+    if not s or len(s) > AVATAR_URL_MAX:
+        return None
+    return s if _AVATAR_HTTPS.match(s) else None
 
 #: Trường người dùng sửa được. Thứ tự = thứ tự hiển thị mặc định.
 #:

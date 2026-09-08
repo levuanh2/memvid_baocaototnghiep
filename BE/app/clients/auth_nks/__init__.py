@@ -122,3 +122,17 @@ class NKSAuthProvider:
         if not da_ghi_xong(self._client.update_info(bi_mat, truong)):
             raise NksProtocolError("NKS không xác nhận đã ghi hồ sơ")
         return to_profile(self._client.get_user(bi_mat))
+
+    def ghi_anh_dai_dien(self, bi_mat: str, data_uri: str) -> ExternalProfile:
+        """Ghi ảnh đại diện rồi ĐỌC LẠI, trả về hồ sơ mới.
+
+        Cùng khuôn với `ghi_ho_so` và vì cùng một lý do: `updateAvatar` trả
+        `{"success": true, "data": true}`, không trả URL ảnh mới. URL duy nhất đáng
+        tin là cái đọc được ở `/nks/user` SAU khi ghi — NKS tự đặt tên file và tự
+        quyết đường dẫn.
+        """
+        if not self._enabled():
+            raise NksNotEnabled("NKS chưa được bật")
+        if not da_ghi_xong(self._client.update_avatar(bi_mat, data_uri)):
+            raise NksProtocolError("NKS không xác nhận đã ghi ảnh đại diện")
+        return to_profile(self._client.get_user(bi_mat))

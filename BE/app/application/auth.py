@@ -178,6 +178,28 @@ def _lam_moi_vai_tro(user: dict, identity: InternalIdentity, users_store) -> Non
         user["role"] = moi
 
 
+def _lam_moi_avatar(user: dict, identity: InternalIdentity, users_store) -> None:
+    """Đồng bộ `users.avatar_url` theo provider ở mỗi lần đăng nhập. Sửa `user` tại chỗ.
+
+    Cùng lý do với `_lam_moi_vai_tro`: cột chỉ được ghi lúc INSERT là cột đóng băng ở
+    lần đầu. Nhưng ở đây còn một lý do riêng — đây là ĐƯỜNG DUY NHẤT để URL ảnh vào
+    được database. Sau khi tải lại trang, máy chủ không còn token nào để hỏi lại
+    provider, nên nếu lần đăng nhập không ghi thì ảnh không bao giờ hiện lại.
+
+    Provider không có ảnh ⇒ ghi `None`, tức là XOÁ URL cũ: người dùng gỡ ảnh ở
+    provider thì StudyMap phải thôi hiển thị nó, chứ không giữ một tấm ảnh đã bị gỡ.
+
+    Giá trị không phải https tuyệt đối bị `set_avatar_url` biến thành `None` — kiểm ở
+    một chỗ duy nhất, không rải điều kiện ra từng nơi gọi.
+    """
+    from shared.interfaces.profile import avatar_hop_le
+
+    moi = avatar_hop_le(identity.avatar)
+    if moi != user.get("avatar_url"):
+        users_store.set_avatar_url(user["user_id"], moi)
+        user["avatar_url"] = moi
+
+
 def _gan_danh_tinh_ngoai(identity: InternalIdentity, *, deps: Optional[Mapping[str, Any]] = None) -> dict:
     """Tra-hoặc-tạo liên kết cho danh tính ngoài.
 
@@ -199,11 +221,12 @@ def _gan_danh_tinh_ngoai(identity: InternalIdentity, *, deps: Optional[Mapping[s
             # tới đây nghĩa là dữ liệu lệch — từ chối, đừng tạo user mới đè lên.
             raise IdentityNotLinked(identity.provider)
         _lam_moi_vai_tro(user, identity, users_store)
+        _lam_moi_avatar(user, identity, users_store)
         store.touch_last_login(lien_ket["identity_id"])
         return user
 
     try:
-        return store.link_new_user(
+        user = store.link_new_user(
             provider=identity.provider,
             provider_user_id=identity.provider_user_id,
             email=identity.email,
@@ -212,6 +235,10 @@ def _gan_danh_tinh_ngoai(identity: InternalIdentity, *, deps: Optional[Mapping[s
         )
     except (store.EmailRequiredForProvisioning, store.EmailBelongsToAnotherAccount) as exc:
         raise IdentityNotLinked(str(exc)) from None
+    # Ghi ảnh SAU khi hàng users đã tồn tại: `link_new_user` cố ý không nhận thêm
+    # tham số nào, để lược đồ của nó khỏi phình theo từng trường hiển thị mới.
+    _lam_moi_avatar(user, identity, users_store)
+    return user
 
 
 class GrantKhongKhopDanhTinh(AuthError):

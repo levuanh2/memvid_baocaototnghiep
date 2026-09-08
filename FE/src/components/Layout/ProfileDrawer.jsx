@@ -3,9 +3,11 @@ import { toast } from "../ui/Toaster";
 import ProfileView from "./ProfileView";
 import NksVerifyDialog from "./NksVerifyDialog";
 import ProfileEditForm from "./ProfileEditForm";
+import AvatarPicker from "./AvatarPicker";
 import { coThayDoi, kiemTra, loiDeDoc, tuHoSo, veThayDoi } from "../../auth/hoSoForm";
+import { kiemTraFile, thuNhoAnh, AnhKhongHopLe } from "../../auth/anhDaiDienFile";
 import { layGrant, luuGrant, quenGrant } from "../../auth/grantNks";
-import { capNhatHoSoNks, layHoSoNks, taoGrantNks } from "../../utils/api";
+import { capNhatHoSoNks, doiAnhDaiDienNks, layHoSoNks, taoGrantNks } from "../../utils/api";
 
 /**
  * Ngăn hồ sơ — đọc, và (với tài khoản NKS) sửa.
@@ -33,16 +35,50 @@ export default function ProfileDrawer({ open, hoSo, onClose, onHoSoMoi }) {
   const [hoiMatKhau, setHoiMatKhau] = useState(false);
   const [dangXacMinh, setDangXacMinh] = useState(false);
   const [loiXacMinh, setLoiXacMinh] = useState("");
-  //: Việc phải làm NGAY SAU khi có chứng từ: "mo" (mở form) hoặc "luu" (lưu tiếp).
+  //: Việc phải làm NGAY SAU khi có chứng từ: "mo" (mở form), "luu" (lưu hồ sơ),
+  //: hoặc "anh" (tải ảnh đang chờ). Nhờ nó, chứng từ hết hạn giữa chừng KHÔNG làm
+  //: mất phần người dùng đang dở — kể cả tấm ảnh họ vừa chọn.
   const [viecCho, setViecCho] = useState(null);
 
+  // Ảnh đang chờ lưu. `blob` là ảnh đã thu nhỏ; `url` là object URL để xem trước.
+  // Cả hai chỉ sống trong bộ nhớ trang — ảnh chưa lưu không rời khỏi máy người dùng.
+  const [anhCho, setAnhCho] = useState(null);
+  const [dangTaiAnh, setDangTaiAnh] = useState(false);
+  const [loiAnh, setLoiAnh] = useState("");
+
   const laNks = hoSo?.nhaCungCap === "NKS";
+
+  /** Trả object URL về hệ thống — không làm thì mỗi lần chọn ảnh rò một khối bộ nhớ. */
+  const boAnhCho = useCallback(() => {
+    setAnhCho((cu) => {
+      if (cu?.url) URL.revokeObjectURL(cu.url);
+      return null;
+    });
+    setLoiAnh("");
+  }, []);
 
   const dongHet = useCallback(() => {
     setDangSua(false); setForm(null); setGoc(null); setLoi({});
     setHoiMatKhau(false); setLoiXacMinh(""); setViecCho(null);
+    boAnhCho();
     onClose?.();
-  }, [onClose]);
+  }, [onClose, boAnhCho]);
+
+  /** Chọn ảnh: kiểm, thu nhỏ, xem trước. CHƯA gửi đi đâu cả. */
+  const chonAnh = useCallback(async (file) => {
+    const loiFile = kiemTraFile(file);
+    if (loiFile) { setLoiAnh(loiFile); return; }
+    setLoiAnh("");
+    try {
+      const blob = await thuNhoAnh(file);
+      setAnhCho((cu) => {
+        if (cu?.url) URL.revokeObjectURL(cu.url);
+        return { blob, url: URL.createObjectURL(blob) };
+      });
+    } catch (err) {
+      setLoiAnh(err instanceof AnhKhongHopLe ? err.message : "Không xử lý được ảnh.");
+    }
+  }, []);
 
   /** Tải giá trị hiện tại rồi mở form. Bản gốc để so là bản VỪA ĐỌC, không phải bản cũ. */
   const moForm = useCallback(async (grantId) => {
@@ -99,6 +135,36 @@ export default function ProfileDrawer({ open, hoSo, onClose, onHoSoMoi }) {
     }
   }, [form, goc, onHoSoMoi]);
 
+  const luuAnh = useCallback(async (grantId) => {
+    if (!anhCho || dangTaiAnh) return false;      // chặn gửi trùng
+    setDangTaiAnh(true); setLoiAnh("");
+    try {
+      const moi = await doiAnhDaiDienNks(grantId, anhCho.blob);
+      // URL đi ra từ máy chủ là URL ĐỌC LẠI từ provider — provider tự đặt tên file.
+      onHoSoMoi?.(moi);
+      boAnhCho();
+      toast("Đã đổi ảnh đại diện.", { type: "success" });
+      return true;
+    } catch (err) {
+      if (err?.code === "grant_required") {
+        // GIỮ NGUYÊN `anhCho` — người dùng không phải chọn lại ảnh.
+        quenGrant(); setViecCho("anh"); setLoiXacMinh(""); setHoiMatKhau(true);
+        return false;
+      }
+      // Thất bại ⇒ ảnh cũ vẫn hiện, vì `hoSo.avatar` chưa hề bị đụng tới.
+      setLoiAnh(loiDeDoc(err?.code, err?.status));
+      return false;
+    } finally {
+      setDangTaiAnh(false);
+    }
+  }, [anhCho, dangTaiAnh, onHoSoMoi, boAnhCho]);
+
+  const batDauLuuAnh = useCallback(async () => {
+    const g = layGrant();
+    if (g) { await luuAnh(g); return; }
+    setViecCho("anh"); setLoiXacMinh(""); setHoiMatKhau(true);
+  }, [luuAnh]);
+
   const xacMinh = useCallback(async ({ identifier, password }) => {
     if (dangXacMinh) return;                      // chặn gửi trùng
     setDangXacMinh(true); setLoiXacMinh("");
@@ -106,7 +172,8 @@ export default function ProfileDrawer({ open, hoSo, onClose, onHoSoMoi }) {
       const { grant_id, expires_at } = await taoGrantNks({ identifier, password });
       luuGrant(grant_id, expires_at);
       setHoiMatKhau(false);
-      if (viecCho === "luu") await luu(grant_id);
+      if (viecCho === "anh") await luuAnh(grant_id);
+      else if (viecCho === "luu") await luu(grant_id);
       else await moForm(grant_id);
       setViecCho(null);
     } catch (err) {
@@ -114,7 +181,7 @@ export default function ProfileDrawer({ open, hoSo, onClose, onHoSoMoi }) {
     } finally {
       setDangXacMinh(false);
     }
-  }, [dangXacMinh, viecCho, luu, moForm]);
+  }, [dangXacMinh, viecCho, luu, moForm, luuAnh]);
 
   if (!open || !hoSo) return null;
 
@@ -130,6 +197,18 @@ export default function ProfileDrawer({ open, hoSo, onClose, onHoSoMoi }) {
         dangTai={dangTai}
         onSua={batDauSua}
         rongHon={dangSua}
+        khoiAnh={laNks ? (
+          <AvatarPicker
+            avatar={hoSo.avatar}
+            chuCai={hoSo.chuCai}
+            xemTruoc={anhCho?.url}
+            dangLuu={dangTaiAnh}
+            loi={loiAnh}
+            onChon={chonAnh}
+            onLuu={batDauLuuAnh}
+            onHuy={boAnhCho}
+          />
+        ) : null}
       >
         {dangSua && form && (
           <ProfileEditForm

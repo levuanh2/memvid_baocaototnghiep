@@ -57,6 +57,7 @@ def _to_dict(u: Optional[User]) -> Optional[dict]:
         "display_name": u.full_name,
         "full_name": u.full_name,
         "role": u.role,
+        "avatar_url": u.avatar_url,
         "token_version": int(u.token_version),
         "created_at": u.created_at,
     }
@@ -133,6 +134,26 @@ def set_role(user_id: str, role: str) -> None:
         u = s.get(User, str(user_id))
         if u is not None:
             u.role = role
+
+
+def set_avatar_url(user_id: str, avatar_url: Optional[str]) -> None:
+    """Đặt `users.avatar_url` — bộ nhớ đệm HIỂN THỊ, không phải hồ sơ.
+
+    Chỉ nhận URL https tuyệt đối (`shared.interfaces.profile.avatar_hop_le`) hoặc
+    `None`. Giá trị không qua cửa đó bị coi như `None`: thà không có ảnh còn hơn ghi
+    một `src` mà mình không kiểm soát vào trang của mọi người dùng.
+
+    KHÔNG lưu byte ảnh, KHÔNG lưu base64. Ảnh nằm ở provider.
+    """
+    if not user_id:
+        return
+    from shared.interfaces.profile import avatar_hop_le
+
+    sach = avatar_hop_le(avatar_url)
+    with session_scope() as s:
+        u = s.get(User, str(user_id))
+        if u is not None:
+            u.avatar_url = sach
 
 
 def bump_token_version(user_id: str) -> None:

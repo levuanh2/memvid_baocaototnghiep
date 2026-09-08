@@ -29,6 +29,10 @@ class InternalIdentity:
     provider_user_id: str
     email: str | None = None
     display_name: str | None = None
+    #: URL ảnh đại diện công khai ở provider, hoặc None. KHÔNG phải bí mật — nó vốn
+    #: đã truy cập được không cần xác thực. Lõi chỉ chuyển tiếp; việc duyệt giao thức
+    #: nằm ở `shared.interfaces.profile.avatar_hop_le`.
+    avatar: str | None = None
     role: str = "learner"
     metadata: Mapping[str, str] = field(default_factory=dict)
 

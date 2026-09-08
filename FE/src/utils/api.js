@@ -296,3 +296,22 @@ export const capNhatHoSoNks = async (grantId, thayDoi) => {
   const body = await _authJson(res);
   return body.profile;
 };
+
+/**
+ * Đổi ảnh đại diện. `blob` là ảnh ĐÃ thu nhỏ ở trình duyệt.
+ *
+ * Gửi multipart — không gửi base64: base64 phình 33% và bắt cả hai đầu giữ nguyên
+ * chuỗi khổng lồ trong RAM. Việc dựng data-URI cho provider là của MÁY CHỦ, sau khi
+ * nó đã tự giải mã và mã hoá lại ảnh.
+ */
+export const doiAnhDaiDienNks = async (grantId, blob) => {
+  const form = new FormData();
+  form.append("avatar", blob, "avatar.jpg");
+  const res = await apiFetch(`/me/nks/avatar`, {
+    method: "PUT",
+    headers: { [_GRANT_HEADER]: grantId || "" },   // KHÔNG đặt Content-Type: boundary do trình duyệt sinh
+    body: form,
+  });
+  const body = await _authJson(res);
+  return body.profile;
+};

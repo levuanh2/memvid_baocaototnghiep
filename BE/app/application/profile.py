@@ -93,6 +93,43 @@ def doc_ho_so(user_id: str, grant_id: str, *, deps=None) -> ExternalProfile:
     return _goi(lambda: prov.doc_ho_so(bi_mat), user_id=user_id, grant_id=grant_id, deps=deps)
 
 
+def cap_nhat_anh_dai_dien(user_id: str, grant_id: str, raw: bytes, *, deps=None) -> ExternalProfile:
+    """Chuẩn hoá ảnh → ghi sang provider → ĐỌC LẠI → lưu URL mới. Trả hồ sơ mới.
+
+    Thứ tự có chủ đích:
+
+    1. **Chuẩn hoá TRƯỚC khi chạm chứng từ.** Ảnh hỏng/quá lớn là lỗi của người dùng,
+       không phải của chứng từ; kiểm trước thì một file rác không tiêu tốn một lượt
+       gọi ra provider, và cũng không có cơ hội làm chết chứng từ đang tốt.
+    2. Ghi, rồi đọc lại — `updateAvatar` chỉ trả một boolean.
+    3. `users.avatar_url` chỉ được ghi khi provider đã xác nhận VÀ URL trả về là https
+       tuyệt đối. Provider trả rác ⇒ giữ nguyên URL cũ, không xoá: mất ảnh đang hiển
+       thị vì một phản hồi lạ là tệ hơn nhiều so với việc hiển thị ảnh cũ thêm một lúc.
+
+    Byte ảnh KHÔNG được lưu ở đâu cả — không đĩa, không DB, không Storage. Chúng sống
+    trong một biến của hàm này rồi biến mất.
+    """
+    from app.domains.media.anh_dai_dien import chuan_hoa
+
+    # Ném `AnhKhongHopLe`/`AnhQuaLon` — route dịch sang 400/413, không đụng chứng từ.
+    anh = chuan_hoa(raw)
+
+    bi_mat = _lay_bi_mat(user_id, grant_id, deps)
+    prov = _provider(deps)
+    ho_so = _goi(lambda: prov.ghi_anh_dai_dien(bi_mat, anh.data_uri),
+                 user_id=user_id, grant_id=grant_id, deps=deps)
+
+    from shared.interfaces.profile import avatar_hop_le
+
+    url_moi = avatar_hop_le(ho_so.avatar)
+    if url_moi:
+        users_store = (deps or {}).get("users_store")
+        if users_store is None:
+            from app.domains.auth import users_store  # type: ignore[no-redef]
+        users_store.set_avatar_url(str(user_id), url_moi)
+    return ho_so
+
+
 def cap_nhat_ho_so(user_id: str, grant_id: str, thay_doi: Mapping[str, Any],
                    *, deps=None) -> ExternalProfile:
     """Ghi các trường được phép rồi trả về hồ sơ MỚI đọc lại từ provider.

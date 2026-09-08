@@ -427,6 +427,13 @@
     "rule": "/list-indexed"
   },
   {
+    "endpoint": "me_nks_avatar_ghi",
+    "methods": [
+      "PUT"
+    ],
+    "rule": "/me/nks/avatar"
+  },
+  {
     "endpoint": "me_nks_profile_doc",
     "methods": [
       "GET"
