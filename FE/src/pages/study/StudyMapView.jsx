@@ -10,6 +10,10 @@ import { LAYOUT_IDS, nhanLayout, thongSoReactD3Tree } from "../../utils/studyMap
 import { docPrefs, writeDocPref } from "../../utils/studyMapPreference";
 import { lienQuanCuaNode } from "../../utils/studyMapGraph";
 import { diChuyenKetQua, phimTimKiemStudyMap, timStudyMap } from "../../utils/studyMapSearch";
+import { exportImage } from "../../utils/studyMapExport";
+// Toán zoom + phím tắt THUẦN, không riêng cho mind-elixir (mindmapViewport.js không
+// import thư viện nào) — dùng lại nguyên, không viết lại phép kẹp/scale lần hai.
+import { formatZoom, nextScale, viewportKeyAction, ZOOM_STEP } from "../../utils/mindmapViewport";
 import {
   NODE_TYPE_LABEL,
   RELATION_LABEL,
@@ -21,6 +25,12 @@ import {
   listStudyMaps,
   moTaLoi,
 } from "../../utils/studyApi";
+
+// Khớp NGUYÊN VĂN giá trị cứng trước Phase 2 (`zoom={0.8}` / `scaleExtent={{min:0.25,
+// max:2}}`) — bật zoom bàn phím không được đổi điểm bắt đầu hay biên kẹp đã có.
+const ZOOM_MAC_DINH = 0.8;
+const SCALE_MIN = 0.25;
+const SCALE_MAX = 2;
 
 // Bốn loại node là phân tầng THẬT của tài liệu (tài liệu > chương mục > khái
 // niệm > ví dụ), nên nét vẽ mã hoá đúng tầng đó chứ không tô cho đẹp: càng gần
@@ -117,6 +127,60 @@ export default function StudyMapView() {
       if (n) { setSelected(n); setFocusedId(n.node_id); }
     }
   }, [nodeIdChon, map, ketQuaTho, doiTruyVan]);
+
+  // Zoom bàn phím (Phase 2 #12) — trước Phase 2, phóng to/nhỏ CHỈ qua Ctrl+lăn (chuột).
+  // `zoom` của react-d3-tree LÀ điều khiển được sau khi mount: `componentDidUpdate` so
+  // `props.zoom` với giá trị cũ và tự re-bind d3-zoom nếu khác (verified
+  // node_modules/react-d3-tree/lib/esm/Tree/index.js) — không phải chỉ đọc lúc mount
+  // như JSDoc gợi ý. `onUpdate` đọc NGƯỢC lại scale thật (kể cả khi người dùng tự lăn
+  // chuột) để bước bấm phím tiếp theo tính từ đúng vị trí hiện tại, không phải giá trị
+  // state đã cũ.
+  const [zoom, setZoom] = useState(ZOOM_MAC_DINH);
+  const onTreeUpdate = useCallback(({ zoom: z }) => {
+    if (Number.isFinite(z)) setZoom((prev) => (Math.abs(prev - z) > 0.001 ? z : prev));
+  }, []);
+  const zoomBy = useCallback((delta) => {
+    setZoom((z) => nextScale(z, delta, { min: SCALE_MIN, max: SCALE_MAX }));
+  }, []);
+  const zoomReset = useCallback(() => setZoom(ZOOM_MAC_DINH), []);
+
+  useEffect(() => {
+    const onKey = (e) => {
+      const ae = document.activeElement;
+      const isEditing = Boolean(ae && /^(INPUT|TEXTAREA|SELECT)$/.test(ae.tagName));
+      const action = viewportKeyAction(e, { isEditing });
+      if (!action || action === "fit") return;   // "fit" (F) không có tương đương react-d3-tree
+      e.preventDefault();
+      if (action === "in") zoomBy(ZOOM_STEP);
+      else if (action === "out") zoomBy(-ZOOM_STEP);
+      else if (action === "reset") zoomReset();
+    };
+    window.addEventListener("keydown", onKey);
+    return () => window.removeEventListener("keydown", onKey);
+  }, [zoomBy, zoomReset]);
+
+  // Xuất ảnh (Phase 2 #10) — bọc trong `studyMapExport.js`, trang này không biết
+  // "snapdom" tồn tại. `element` là `.map-canvas`-tương-đương ở đây: chính `canvasRef`,
+  // vì react-d3-tree vẽ trọn SVG trong container đó, không có lớp con cần nhắm riêng
+  // như `mind.map` của mind-elixir.
+  const [dangXuat, setDangXuat] = useState(false);
+  const [loiXuat, setLoiXuat] = useState(null);
+  const xuatAnh = useCallback(async (format, { transparent = false } = {}) => {
+    if (!canvasRef.current || dangXuat) return;
+    setDangXuat(true);
+    setLoiXuat(null);
+    try {
+      const nen = getComputedStyle(document.documentElement).getPropertyValue("--bg-base").trim()
+        || "#ECE7DB";
+      await exportImage(canvasRef.current, {
+        title: doc?.title || doc?.filename, format, transparent, nenMacDinh: nen, scale: 2,
+      });
+    } catch (err) {
+      setLoiXuat(moTaLoi(err, "Không xuất được ảnh."));
+    } finally {
+      setDangXuat(false);
+    }
+  }, [doc, dangXuat]);
 
   const openMap = useCallback(async (mapId, documentIdForChunks) => {
     const body = await getStudyMap(mapId);
@@ -367,6 +431,14 @@ export default function StudyMapView() {
         </div>
       )}
 
+      {loiXuat && (
+        <div role="alert" className="surface-card !p-3.5 mb-5 flex items-center gap-2.5">
+          <Icon name="AlertCircle" size={15} style={{ color: "var(--err)" }} />
+          <span className="text-[13.5px] flex-1" style={{ color: "var(--err)" }}>{loiXuat}</span>
+          <button type="button" className="btn-secondary text-[12.5px]" onClick={() => setLoiXuat(null)}>Đóng</button>
+        </div>
+      )}
+
       {!map && !job.running && dangDung ? (
         <EmptyState
           icon="Clock"
@@ -427,6 +499,23 @@ export default function StudyMapView() {
                 Ctrl + lăn để phóng sơ đồ · lăn thường để cuộn trang · kéo để di chuyển
               </div>
               <div className="ml-auto flex flex-wrap items-center gap-2">
+                <div className="flex items-center gap-0.5">
+                  <button type="button" onClick={() => zoomBy(-ZOOM_STEP)}
+                          aria-label="Thu nhỏ" title="Thu nhỏ (−)"
+                          className="p-1.5 rounded hover:bg-[var(--bg-hover)] text-text-secondary">
+                    <Icon name="ZoomOut" size={14} />
+                  </button>
+                  <button type="button" onClick={zoomReset}
+                          aria-label="Đặt lại thu phóng" title="Đặt lại thu phóng (0)"
+                          className="px-1 py-1 rounded hover:bg-[var(--bg-hover)] font-mono text-[11px] tabular-nums text-text-secondary min-w-[38px]">
+                    {formatZoom(zoom)}
+                  </button>
+                  <button type="button" onClick={() => zoomBy(ZOOM_STEP)}
+                          aria-label="Phóng to" title="Phóng to (+)"
+                          className="p-1.5 rounded hover:bg-[var(--bg-hover)] text-text-secondary">
+                    <Icon name="ZoomIn" size={14} />
+                  </button>
+                </div>
                 {focusedId && (
                   <button type="button" onClick={boFocus}
                           className="pill-action !py-1 !text-[11.5px] inline-flex items-center gap-1">
@@ -468,6 +557,24 @@ export default function StudyMapView() {
                     ))}
                   </select>
                 </label>
+                <button type="button" onClick={() => xuatAnh("png")}
+                        disabled={dangXuat}
+                        title="Xuất PNG (nền theo giao diện hiện tại, x2 độ phân giải)"
+                        className="pill-action !py-1 !text-[11.5px] inline-flex items-center gap-1 disabled:opacity-50">
+                  {dangXuat ? <Spinner size={11} /> : <Icon name="Download" size={12} />} PNG
+                </button>
+                <button type="button" onClick={() => xuatAnh("png", { transparent: true })}
+                        disabled={dangXuat}
+                        title="Xuất PNG nền trong suốt"
+                        className="pill-action !py-1 !text-[11.5px] disabled:opacity-50">
+                  PNG trong suốt
+                </button>
+                <button type="button" onClick={() => xuatAnh("svg")}
+                        disabled={dangXuat}
+                        title="Xuất SVG"
+                        className="pill-action !py-1 !text-[11.5px] disabled:opacity-50">
+                  SVG
+                </button>
                 <button type="button" onClick={() => doiTrinhChieu(true)}
                         title="Chế độ trình chiếu (Esc để thoát)"
                         className="pill-action !py-1 !text-[11.5px] inline-flex items-center gap-1">
@@ -491,8 +598,9 @@ export default function StudyMapView() {
                   translate={translate}
                   nodeSize={{ x: 300, y: 42 }}
                   separation={{ siblings: 1, nonSiblings: 1.25 }}
-                  zoom={0.8}
-                  scaleExtent={{ min: 0.25, max: 2 }}
+                  zoom={zoom}
+                  scaleExtent={{ min: SCALE_MIN, max: SCALE_MAX }}
+                  onUpdate={onTreeUpdate}
                   collapsible
                   // 44 node không vừa một khung 640px. Mở sẵn tới tầng chương
                   // mục thôi, người đọc bấm để bung nhánh mình quan tâm — hơn
