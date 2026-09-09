@@ -162,8 +162,8 @@ export default function DocumentList() {
   };
 
   // ── Mở một bề mặt ─────────────────────────────────────────────────────────
-  const moBeMat = useCallback((doc, beMat) => {
-    const dich = duongDi(doc, beMat);
+  const moBeMat = useCallback((doc, beMat, context) => {
+    const dich = duongDi(doc, beMat, context);
     if (!dich) return;
     // Bắn-và-quên: ghi mốc mở KHÔNG được chặn điều hướng. Người dùng bấm để đi,
     // không phải để chờ một lượt ghi siêu dữ liệu.

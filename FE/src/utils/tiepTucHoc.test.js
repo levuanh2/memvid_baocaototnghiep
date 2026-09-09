@@ -25,6 +25,24 @@ describe("duongDi — mọi bề mặt được hỗ trợ", () => {
     expect(duongDi(doc({ source_stem: "  " }), "chat")).toBe("/app");
   });
 
+  it("context.prompt (Phase 4A.3) nối thêm vào Workspace bằng &, mã hoá đúng", () => {
+    expect(duongDi(doc(), "chat", { prompt: "Giải thích CPU" }))
+      .toBe("/app?source=bai_giang_pdf&prompt=Gi%E1%BA%A3i%20th%C3%ADch%20CPU");
+    // Không stem → base là "/app" (không có "?"), phải nối bằng "?" chứ không "&".
+    expect(duongDi(doc({ source_stem: null }), "chat", { prompt: "Hỏi gì đó" }))
+      .toBe("/app?prompt=H%E1%BB%8Fi%20g%C3%AC%20%C4%91%C3%B3");
+  });
+
+  it("prompt rỗng/thiếu/toàn khoảng trắng thì KHÔNG thêm tham số — chữ ký cũ không đổi", () => {
+    expect(duongDi(doc(), "chat")).toBe("/app?source=bai_giang_pdf");
+    expect(duongDi(doc(), "chat", {})).toBe("/app?source=bai_giang_pdf");
+    expect(duongDi(doc(), "chat", { prompt: "   " })).toBe("/app?source=bai_giang_pdf");
+  });
+
+  it("prompt chỉ áp dụng cho bề mặt về Workspace — studymap/quiz/review bỏ qua nó", () => {
+    expect(duongDi(doc(), "studymap", { prompt: "x" })).toBe("/app/study/map/doc-1");
+  });
+
   it("bản đồ học tập có route riêng theo document_id", () => {
     expect(duongDi(doc(), "studymap")).toBe("/app/study/map/doc-1");
   });

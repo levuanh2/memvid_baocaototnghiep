@@ -13,7 +13,7 @@ import { Icon } from "../ui/Icon";
 import Toaster from "../ui/Toaster";
 import AccountMenu from "./AccountMenu";
 
-export default function MainLayout({ selectedSources, setSelectedSources }) {
+export default function MainLayout({ selectedSources, setSelectedSources, initialAskAbout = null }) {
   const [sources, setSources] = useState([]);
   const [leftOpen, setLeftOpen] = useState(false);   // chỉ dùng ở chế độ ngăn kéo (<768px)
   const [rightOpen, setRightOpen] = useState(false);
@@ -45,7 +45,13 @@ export default function MainLayout({ selectedSources, setSelectedSources }) {
   // prefills + focuses the chat composer with the evidence snippet. `nonce`
   // forces ChatArea's effect to re-fire even if the same snippet is asked
   // about twice in a row (object identity, not just text, changes).
-  const [askAboutDraft, setAskAboutDraft] = useState(null); // { text, nonce } | null
+  //
+  // Phase 4A.3: một Câu hỏi gợi ý bấm từ Thư viện học tập tới thẳng đây qua
+  // `initialAskAbout` (Workspace.jsx đọc `?prompt=`) — dùng NGUYÊN VĂN câu hỏi đã
+  // sinh sẵn từ Question Engine, KHÔNG bọc qua mẫu "Về đoạn này..." của
+  // `onAskAbout` bên dưới (mẫu đó chỉ đúng cho một ĐOẠN trích dẫn, không đúng cho
+  // một câu hỏi đã hoàn chỉnh).
+  const [askAboutDraft, setAskAboutDraft] = useState(initialAskAbout); // { text, nonce } | null
   const onAskAbout = useCallback((snippet) => {
     const text = String(snippet || "").trim();
     if (!text) return;

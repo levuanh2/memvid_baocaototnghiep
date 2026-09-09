@@ -17,10 +17,18 @@ export default function Workspace() {
     const stem = (searchParams.get("source") || "").trim();
     return stem ? [stem] : [];
   });
+  // `?prompt=` (Phase 4A.3) — một Câu hỏi gợi ý (KnowledgePanel/cauHoiGoiY.js) bấm
+  // vào đã đi qua `duongDi(doc, "chat", {prompt})` tới đây. CHỈ đọc lúc khởi tạo
+  // (như `source` ở trên) — sau đó ô chat làm chủ nội dung của nó y như cũ.
+  const [initialAskAbout] = useState(() => {
+    const text = (searchParams.get("prompt") || "").trim();
+    return text ? { text, nonce: Date.now() } : null;
+  });
   return (
     <MainLayout
       selectedSources={selectedSources}
       setSelectedSources={setSelectedSources}
+      initialAskAbout={initialAskAbout}
     />
   );
 }

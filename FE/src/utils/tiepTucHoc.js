@@ -30,17 +30,27 @@ const q = (v) => encodeURIComponent(String(v ?? ""));
  * Bề mặt lạ hoặc thiếu dữ liệu → về chính tài liệu ấy, KHÔNG BAO GIỜ trả một route
  * hỏng: một nút "Tiếp tục" dẫn tới trang trắng còn tệ hơn không có nút.
  */
-export function duongDi(doc, beMat) {
+/**
+ * `context.prompt` (Phase 4A.3) — câu hỏi gợi ý bấm vào mang theo văn bản để điền
+ * sẵn ô chat. Chỉ áp dụng cho ba bề mặt đổ về Workspace (`summary`/`mindmap`/
+ * `chat`): đó là nơi DUY NHẤT có ô chat. Route khác (`studymap`/`quiz`/`review`)
+ * bỏ qua tham số này — giữ chữ ký cũ tương thích cho MỌI lời gọi không truyền nó.
+ */
+export function duongDi(doc, beMat, context) {
   if (!doc?.document_id) return null;
   const id = q(doc.document_id);
   const stem = String(doc.source_stem || "").trim();
   const toiWorkspace = stem ? `/app?source=${q(stem)}` : "/app";
+  const prompt = String(context?.prompt || "").trim();
+  const toiWorkspaceKemPrompt = prompt
+    ? `${toiWorkspace}${toiWorkspace.includes("?") ? "&" : "?"}prompt=${q(prompt)}`
+    : toiWorkspace;
 
   switch (beMat) {
     case "summary":
     case "mindmap":
     case "chat":
-      return toiWorkspace;
+      return toiWorkspaceKemPrompt;
     case "studymap":
       return `/app/study/map/${id}`;
     case "quiz": {
