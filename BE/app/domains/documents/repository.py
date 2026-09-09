@@ -494,6 +494,120 @@ def languages_for(document_ids: Iterable[str]) -> Dict[str, str]:
     return out
 
 
+def tri_thuc_tho(user_id: Optional[str]) -> Dict[str, Dict[str, Any]]:
+    """Nguyen lieu THO cho tang tri thuc — bon nguon chu de + moc thoi gian, gom
+    trong MOT vong truy van cho ca thu vien.
+
+    Khong tinh toan gi o day: gom du lieu la viec cua repository, con dien giai la
+    viec cua `tri_thuc.py` (thuan, test duoc khong can database). Tron hai thu vao
+    nhau la ly do phep chieu cua Phase 1A phai test bang Postgres that.
+
+    Chu de KHONG can pipeline moi va KHONG can LLM: bon pipeline dang chay da ghi
+    san chung o bon bang khac nhau.
+
+        concept_masteries.concept_name   chu de + muc thanh thao THAT cua nguoi hoc
+        quiz_questions.concept_tags_json chu de pipeline quiz da rut
+        review_plan_items.topic          chu de can on tap
+        knowledge_nodes.title            chu de trong ban do hoc tap
+
+    Tra {document_id: {masteries, quiz_tags, review_topics, studymap_titles, moc}}.
+    """
+    from sqlalchemy import func
+
+    from app.db.models import (ConceptMastery, KnowledgeMap, KnowledgeNode, Quiz,
+                               QuizAttempt, QuizQuestion, ReviewPlan, ReviewPlanItem)
+
+    out: Dict[str, Dict[str, Any]] = {}
+
+    def _o(doc_id: str) -> Dict[str, Any]:
+        key = str(doc_id)
+        if key not in out:
+            out[key] = {"masteries": [], "quiz_tags": [], "review_topics": [],
+                        "studymap_titles": [], "moc": {}}
+        return out[key]
+
+    def _som_nhat(doc_id, ten, gia_tri):
+        """Moc dau tien cho mot su kien. Lan tao DAU TIEN moi la cot moc — lan thu
+        muoi khong noi len dieu gi ve lich su tai lieu."""
+        if gia_tri is None:
+            return
+        m = _o(doc_id)["moc"]
+        iso = gia_tri.isoformat()
+        if ten not in m or iso < m[ten]:
+            m[ten] = iso
+
+    def _muon_nhat(doc_id, ten, gia_tri):
+        """Moc gan nhat — dung cho "vua lam", "vua mo"."""
+        if gia_tri is None:
+            return
+        m = _o(doc_id)["moc"]
+        iso = gia_tri.isoformat()
+        if ten not in m or iso > m[ten]:
+            m[ten] = iso
+
+    with session_scope() as s:
+        # 1) Chu de + thanh thao. Gom theo (tai lieu, ten chu de) va lay diem TRUNG
+        #    BINH: mot chu de duoc kiem tra nhieu lan qua nhieu bai, lay lan cuoi la
+        #    vut bo phan con lai cua lich su hoc.
+        q = (select(ConceptMastery.document_id, ConceptMastery.concept_name,
+                    func.avg(ConceptMastery.mastery_score),
+                    func.max(ConceptMastery.status))
+             .group_by(ConceptMastery.document_id, ConceptMastery.concept_name))
+        if user_id is not None:
+            q = q.where(ConceptMastery.user_id == user_id)
+        for doc_id, ten, diem, trang_thai in s.execute(q).all():
+            _o(doc_id)["masteries"].append(
+                {"name": ten, "mastery_score": float(diem or 0.0), "status": trang_thai})
+
+        # 2) Chu de tu pipeline quiz + moc tao quiz.
+        q = select(Quiz.document_id, QuizQuestion.concept_tags_json, Quiz.created_at)             .select_from(Quiz).join(QuizQuestion, QuizQuestion.quiz_id == Quiz.id)
+        if user_id is not None:
+            q = q.where(Quiz.user_id == user_id)
+        for doc_id, tags, tao_luc in s.execute(q).all():
+            if isinstance(tags, list):
+                _o(doc_id)["quiz_tags"].extend(t for t in tags if isinstance(t, str))
+            _som_nhat(doc_id, "quiz_created", tao_luc)
+
+        # 3) Chu de can on tap + moc tao ke hoach.
+        q = (select(ReviewPlan.document_id, ReviewPlanItem.topic, ReviewPlan.created_at)
+             .select_from(ReviewPlan)
+             .join(ReviewPlanItem, ReviewPlanItem.review_plan_id == ReviewPlan.id))
+        if user_id is not None:
+            q = q.where(ReviewPlan.user_id == user_id)
+        for doc_id, topic, tao_luc in s.execute(q).all():
+            if isinstance(topic, str) and topic.strip():
+                _o(doc_id)["review_topics"].append(topic)
+            _som_nhat(doc_id, "review_created", tao_luc)
+
+        # 4) Chu de tu ban do hoc tap + moc dung ban do. Chi lay node cap cao: cap
+        #    la la chi tiet, khong phai chu de cua tai lieu.
+        q = select(KnowledgeNode.document_id, KnowledgeNode.title)             .where(KnowledgeNode.level <= 1)
+        if user_id is not None:
+            q = q.where(KnowledgeNode.document_id.in_(
+                select(KnowledgeMap.document_id).where(KnowledgeMap.user_id == user_id)))
+        for doc_id, title in s.execute(q).all():
+            if isinstance(title, str) and title.strip():
+                _o(doc_id)["studymap_titles"].append(title)
+
+        q = select(KnowledgeMap.document_id, KnowledgeMap.created_at)             .where(KnowledgeMap.status == "completed")
+        if user_id is not None:
+            q = q.where(KnowledgeMap.user_id == user_id)
+        for doc_id, tao_luc in s.execute(q).all():
+            _som_nhat(doc_id, "studymap", tao_luc)
+
+        # 5) Moc lam bai. `started_at` dau tien = lan dau dung toi, `graded_at` cuoi
+        #    cung = lan cham gan nhat.
+        q = (select(Quiz.document_id, QuizAttempt.started_at, QuizAttempt.graded_at)
+             .select_from(QuizAttempt).join(Quiz, Quiz.id == QuizAttempt.quiz_id))
+        if user_id is not None:
+            q = q.where(QuizAttempt.user_id == user_id)
+        for doc_id, bat_dau, cham_luc in s.execute(q).all():
+            _som_nhat(doc_id, "quiz_attempted", bat_dau)
+            _muon_nhat(doc_id, "quiz_graded", cham_luc)
+
+    return out
+
+
 def ai_counts(user_id: Optional[str]) -> Dict[str, Dict[str, Any]]:
     """Đếm artifact AI BỀN VỮNG cho toàn bộ thư viện — ba truy vấn gộp, không có
     truy vấn nào chạy theo từng tài liệu.

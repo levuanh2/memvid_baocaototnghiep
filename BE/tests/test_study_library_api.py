@@ -36,6 +36,7 @@ class DocsGia:
         self.dem_all_rows = 0
         self.dem_languages = 0
         self.dem_ai_counts = 0
+        self.dem_tri_thuc = 0
 
     @staticmethod
     def hang(**kw):
@@ -95,6 +96,18 @@ class DocsGia:
                 "reviews": {"d1": {"count": 1, "latest_attempt_id": "a-1"}},
                 "studymaps": {"d1": "completed"}}
 
+    def tri_thuc_tho(self, user_id):
+        self.dem_tri_thuc += 1
+        return {"d1": {
+            "masteries": [{"name": "Định thời", "mastery_score": 0.4, "status": "weak"}],
+            "quiz_tags": ["dinh thoi", "Hàng đợi"],
+            "review_topics": ["ĐỊNH THỜI"],
+            "studymap_titles": ["Dinh Thoi"],
+            "moc": {"quiz_created": "2026-09-03T00:00:00Z",
+                    "quiz_graded": "2026-09-04T00:00:00Z",
+                    "studymap": "2026-09-02T00:00:00Z"},
+        }}
+
 
 class KhoGia:
     def __init__(self, records=None, no=False):
@@ -123,7 +136,7 @@ def moi_truong(be, monkeypatch):
     def cai_dat(rows=None, summaries=None, mindmaps=None, kho_summary_no=False):
         docs = DocsGia(rows)
         for ten in ("all_rows", "get", "set_library_fields", "touch_opened",
-                    "languages_for", "ai_counts"):
+                    "languages_for", "ai_counts", "tri_thuc_tho"):
             monkeypatch.setattr(docs_repo, ten, getattr(docs, ten))
         sm = KhoGia(summaries, no=kho_summary_no)
         mm = KhoGia(mindmaps)
@@ -596,3 +609,93 @@ def test_db_ingest_uploaded_file_van_duoc_goi_dung_mot_lan(be, client, monkeypat
     monkeypatch.setattr(be, "_ingest_uploaded_file", dem)
     assert _upload(client).status_code == 201
     assert len(lan_goi) == 1
+
+
+# ── Tầng tri thức (Phase 1C.1) ──────────────────────────────────────────────
+
+def test_library_kem_khoi_knowledge(client, moi_truong):
+    moi_truong(summaries=[_summary(["bai_giang_pdf"])],
+               mindmaps=[{"id": "m-1", "sources": ["bai_giang_pdf"],
+                          "created_at": "2026-09-02T12:00:00Z"}])
+    d = client.get("/api/library").get_json()["documents"][0]
+    k = d["knowledge"]
+
+    assert set(k) == {"takeaways", "topics", "entities", "keywords",
+                      "suggested_questions", "related", "readiness",
+                      "learning_status", "timeline", "recent_ai"}
+
+
+def test_chu_de_gop_bon_nguon_va_khu_dau_tieng_viet(client, moi_truong):
+    """Chủ đề KHÔNG cần pipeline mới: bốn pipeline đang chạy đã ghi sẵn chúng ở bốn
+    bảng khác nhau. `Định thời` / `dinh thoi` / `ĐỊNH THỜI` / `Dinh Thoi` là MỘT."""
+    moi_truong()
+    k = client.get("/api/library").get_json()["documents"][0]["knowledge"]
+    dinh_thoi = [t for t in k["topics"] if t["weight"] == 4]
+
+    assert len(dinh_thoi) == 1, f"khử trùng dấu hỏng: {[t['name'] for t in k['topics']]}"
+    assert set(dinh_thoi[0]["sources"]) == {"mastery", "quiz", "review", "studymap"}
+    assert dinh_thoi[0]["mastery"] == 0.4
+    assert dinh_thoi[0]["status"] == "weak"
+
+
+def test_lazy_van_None_o_payload_thu_vien(client, moi_truong):
+    """Câu hỏi gợi ý và tài liệu liên quan là LƯỜI — chúng thuộc 1C.2 và tốn một
+    truy vấn FAISS. `None` nghĩa là chưa tính; `[]` sẽ nói dối rằng đã tính và rỗng."""
+    moi_truong()
+    k = client.get("/api/library").get_json()["documents"][0]["knowledge"]
+    assert k["suggested_questions"] is None
+    assert k["related"] is None
+
+
+def test_dong_thoi_gian_khong_co_moc_indexed(client, moi_truong):
+    """Chưa có cột `indexed_at`. Suy từ `updated_at` là đặt một mốc BỊA lên dòng
+    thời gian của người dùng — thà thiếu một sự kiện còn hơn bịa thời điểm."""
+    moi_truong()
+    k = client.get("/api/library").get_json()["documents"][0]["knowledge"]
+    ten_su_kien = [e["event"] for e in k["timeline"]]
+
+    assert "indexed" not in ten_su_kien
+    assert "uploaded" in ten_su_kien
+    # đã sắp cũ → mới
+    assert [e["at"] for e in k["timeline"]] == sorted(e["at"] for e in k["timeline"])
+
+
+def test_readiness_noi_ro_khi_chua_danh_gia(client, moi_truong):
+    """`mastery = 0` khi chưa ai làm quiz. Không có cờ `mastery_available` thì con
+    số 0 đó đọc như "học sinh này điểm 0", chứ không phải "chưa kiểm tra"."""
+    moi_truong()
+    k = client.get("/api/library").get_json()["documents"][0]["knowledge"]
+    assert k["readiness"]["mastery_available"] is True     # stub CÓ mastery
+
+    # Tài liệu khác, không có hàng nào trong dữ liệu thô -> chưa từng được đánh giá.
+    moi_truong(rows={"d2": DocsGia.hang()})
+    k2 = client.get("/api/library").get_json()["documents"][0]["knowledge"]
+    assert k2["readiness"]["mastery_available"] is False
+    assert k2["readiness"]["mastery"] == 0
+
+
+def test_tri_thuc_khong_them_truy_van_theo_tung_tai_lieu(client, moi_truong):
+    """Ràng buộc ngân sách: 40 tài liệu vẫn là MỘT lượt gom chủ đề."""
+    rows = {f"d{i}": DocsGia.hang(filename=f"f{i}.pdf", source_stem=f"f{i}_pdf")
+            for i in range(40)}
+    docs, _, _ = moi_truong(rows=rows)
+    assert len(client.get("/api/library").get_json()["documents"]) == 40
+    assert docs.dem_tri_thuc == 1
+
+
+def test_nguon_tri_thuc_hong_van_tra_ve_thu_vien(client, moi_truong, monkeypatch):
+    """Gom chủ đề hỏng thì mất ĐÚNG phần chủ đề — danh sách tài liệu vẫn hiện."""
+    moi_truong()
+    from app.domains.documents import repository as docs_repo
+
+    def no(uid):
+        raise RuntimeError("db down")
+    # Vá Ở MODULE: gán lại thuộc tính trên stub sau khi `monkeypatch` đã bind method
+    # cũ vào module thì không có tác dụng gì — bài học từ chính lần chạy đầu của test này.
+    monkeypatch.setattr(docs_repo, "tri_thuc_tho", no)
+
+    r = client.get("/api/library")
+    assert r.status_code == 200
+    k = r.get_json()["documents"][0]["knowledge"]
+    assert k["topics"] == []
+    assert k["readiness"]["pipeline"] > 0       # tín hiệu bền vững vẫn nguyên

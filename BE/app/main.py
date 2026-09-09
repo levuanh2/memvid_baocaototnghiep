@@ -37,6 +37,10 @@ from app.domains.cache import llm_cache
 # `_doc_public` gọi nó ở mọi phản hồi tài liệu.
 from app.domains.documents import bo_suu_tap as _bo_suu_tap
 from app.domains.documents import thu_vien as _thu_vien
+# Tang tri thuc NAM TREN thu_vien va import nguoc xuong no, nen `thu_vien`
+# tuyet doi khong duoc import lai `tri_thuc` — vong import. Viec lap rap vi
+# vay xay ra o day, dung huong phu thuoc.
+from app.domains.documents import tri_thuc as _tri_thuc
 from shared.config import DEFAULT_LOCAL_MODEL
 # Chỉ dùng cho local Ollama (Gemini sẽ bỏ qua model).
 SLM_MODEL = os.environ.get("SLM_MODEL_CHAT", os.environ.get("SLM_MODEL", DEFAULT_LOCAL_MODEL))
@@ -2800,6 +2804,9 @@ def api_library():
     counts = _thu(lambda: _docs.ai_counts(scope_uid),
                   {"quizzes": {}, "reviews": {}, "studymaps": {}})
     languages = _thu(lambda: _docs.languages_for(rows.keys()), {})
+    # Chu de + moc thoi gian: MOT vong truy van gom cho ca thu vien, khong
+    # phai moi tai lieu mot lan. Hong thi mat dung khoi tri thuc.
+    tri_thuc_tho = _thu(lambda: _docs.tri_thuc_tho(scope_uid), {})
 
     # Bộ sưu tập đi CÙNG payload: thanh bên và huy hiệu trên thẻ đều cần nó, và một
     # lượt gọi thứ hai chỉ để lấy danh sách này là đúng thứ endpoint gộp sinh ra để
@@ -2819,6 +2826,46 @@ def api_library():
         review_counts=counts.get("reviews") or {},
         languages=languages,
     )
+
+    # ── Tang tri thuc (Phase 1C.1) ──────────────────────────────────────────
+    # THUAN: chi tinh tren du lieu da lay o tren, khong them mot truy van nao.
+    # Dung lai `index_by_stem` cua thu_vien thay vi khop stem lan hai.
+    sum_theo_stem = _thu_vien.index_by_stem(summaries)
+    map_theo_stem = _thu_vien.index_by_stem(mindmaps)
+    for d in documents:
+        did = d["document_id"]
+        tho = tri_thuc_tho.get(did) or {}
+        stem = d.get("source_stem") or ""
+        ban_tt = sum_theo_stem.get(stem)
+        ban_sd = map_theo_stem.get(stem)
+
+        # Moc thoi gian: gop moc cua chinh tai lieu voi moc tu cac bang artifact.
+        # `indexed` CO Y vang mat — chua co cot `indexed_at`, va suy tu `updated_at`
+        # la dat mot moc BIA len dong thoi gian cua nguoi dung (Phase 1C.2 them cot).
+        moc = dict(tho.get("moc") or {})
+        moc["uploaded"] = d.get("created_at")
+        moc["last_opened"] = d.get("last_opened_at")
+        if isinstance(ban_tt, dict):
+            moc["summary"] = ban_tt.get("created_at")
+        if isinstance(ban_sd, dict):
+            moc["mindmap"] = ban_sd.get("created_at")
+
+        d["knowledge"] = _tri_thuc.chieu_tri_thuc(
+            ai_block=d.get("ai") or {},
+            summary_record=ban_tt,
+            entity_list=((d.get("ai") or {}).get("summary") or {}).get("entities") or [],
+            tag_list=d.get("tags") or [],
+            masteries=tho.get("masteries") or [],
+            quiz_concept_tags=tho.get("quiz_tags") or [],
+            review_topics=tho.get("review_topics") or [],
+            studymap_node_titles=tho.get("studymap_titles") or [],
+            moc=moc,
+            open_count=d.get("open_count") or 0,
+            recency_score=d.get("recency_score") or 0.0,
+            last_opened_at=d.get("last_opened_at"),
+            graded_attempts=((counts.get("quizzes") or {}).get(did) or {})
+                .get("graded_attempts") or 0,
+        )
 
     return jsonify({"documents": documents, "collections": collections})
 
