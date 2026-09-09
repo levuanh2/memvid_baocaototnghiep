@@ -1,12 +1,13 @@
 // SummaryModal v2 — record section-first (overview + sections + citation chips
 // mở EvidenceDrawer) + fallback legacy (summary_md từ summaries.json migrate).
 // Record được BE tự persist khi job xong — không còn nút Lưu.
-import { useCallback, useState } from "react";
+import { useCallback, useEffect, useState } from "react";
 import Modal from "../ui/Modal";
 import { MdProse } from "../ui/Markdown";
 import EvidenceDrawer from "../mindmap/EvidenceDrawer";
 import { Icon } from "../ui/Icon";
 import { normalizeSummaryRecord } from "../../utils/summaryJob";
+import { useStudyContext } from "../../study/useStudyContext";
 
 const CHIP_CAP = 6;
 
@@ -28,8 +29,18 @@ function StudyList({ title, items }) {
 export default function SummaryModal({ data, onClose }) {
   const [drawerNode, setDrawerNode] = useState(null);
   const closeDrawer = useCallback(() => setDrawerNode(null), []);
+  // Study Context (Phase 4A.2) — cùng khoá STEM mà StudyMapView dùng (xem comment ở
+  // đó). `rec.sources` là mảng vì API hỗ trợ tóm tắt nhiều nguồn, nhưng luồng dùng
+  // thật của app luôn đúng một tài liệu mỗi lượt mở modal — lấy phần tử đầu là đủ,
+  // không cần giải quyết trường hợp nhiều tài liệu ở đây.
+  const { selectDocument, selectSummary, selectedSummary } = useStudyContext();
 
   const rec = normalizeSummaryRecord(data);
+
+  useEffect(() => {
+    selectDocument(rec?.sources?.[0] || null);
+  }, [rec?.sources, selectDocument]);
+
   if (!rec) return null;
 
   const degraded = Boolean(rec.generator?.degraded);
@@ -80,9 +91,21 @@ export default function SummaryModal({ data, onClose }) {
               <div className="flex flex-col gap-3">
                 {rec.sections.map((s) => {
                   const refs = Array.isArray(s.chunk_refs) ? s.chunk_refs : [];
+                  const daChon = selectedSummary === s.id;
                   return (
-                    <section key={s.id} className="surface-card font-reading">
-                      <h3 className="font-display text-[15.5px] font-semibold text-text-primary mb-2">{s.title}</h3>
+                    <section key={s.id} className="surface-card font-reading"
+                             style={daChon ? { borderColor: "var(--accent)" } : undefined}>
+                      <h3 className="mb-2">
+                        {/* Bấm tiêu đề mục = phát selectedSummary lên Study Context (Phase
+                            4A.2) — KHÔNG điều hướng đi đâu, chỉ để module khác (khi cùng mở)
+                            biết mục nào đang được xem. Vẫn là <h3> thật, nút nằm BÊN TRONG —
+                            thứ tự heading cho screen reader không đổi. */}
+                        <button type="button" onClick={() => selectSummary(s.id)}
+                                className="font-display text-[15.5px] font-semibold text-left"
+                                style={{ color: daChon ? "var(--accent)" : "var(--text-primary)" }}>
+                          {s.title}
+                        </button>
+                      </h3>
                       {s.summary
                         ? <MdProse text={s.summary} />
                         : <p className="text-[13px] italic text-text-muted">Mục này chưa tóm tắt được.</p>}

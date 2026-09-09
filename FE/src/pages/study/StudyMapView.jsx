@@ -14,6 +14,7 @@ import { exportImage } from "../../utils/studyMapExport";
 // Toán zoom + phím tắt THUẦN, không riêng cho mind-elixir (mindmapViewport.js không
 // import thư viện nào) — dùng lại nguyên, không viết lại phép kẹp/scale lần hai.
 import { formatZoom, nextScale, viewportKeyAction, ZOOM_STEP } from "../../utils/mindmapViewport";
+import { useStudyContext } from "../../study/useStudyContext";
 import {
   NODE_TYPE_LABEL,
   RELATION_LABEL,
@@ -45,6 +46,12 @@ const markOf = (t) => MARK[t] || MARK.concept;
 
 export default function StudyMapView() {
   const { documentId } = useParams();
+  // Study Context (Phase 4A.2) — PHÁT lựa chọn, không thay `selected`/`focusedId`
+  // cục bộ ở dưới. `selectedDocument` lưu STEM (không phải document_id UUID): đó là
+  // khoá DUY NHẤT mà cả hai thế giới cùng có — Summary (SidebarRight/SummaryModal)
+  // chỉ biết stem (`rec.sources`), StudyMap chỉ biết document_id qua route; `doc`
+  // (đã fetch qua `getDocument`) mang cả hai, `source_stem` là cầu nối chung.
+  const { selectDocument, selectNode } = useStudyContext();
   const [doc, setDoc] = useState(null);
   const [map, setMap] = useState(null);
   const [chunks, setChunks] = useState(new Map());
@@ -206,6 +213,7 @@ export default function StudyMapView() {
     try {
       const [d, maps] = await Promise.all([getDocument(documentId), listStudyMaps(documentId)]);
       setDoc(d);
+      selectDocument(d?.source_stem || null);
       const newest = maps.find((m) => m.status === "completed") || null;
       if (newest) await openMap(newest.map_id, documentId);
       else setMap(null);
@@ -218,7 +226,7 @@ export default function StudyMapView() {
     } finally {
       setLoading(false);
     }
-  }, [documentId, openMap]);
+  }, [documentId, openMap, selectDocument]);
 
   useEffect(() => { load(); }, [load]);
 
@@ -324,10 +332,11 @@ export default function StudyMapView() {
       const daMo = !focusInfo || focusInfo.all.has(attrs.node_id);
       // Cây mở sẵn ở tầng 1, nên MỘT cú bấm phải làm cả hai việc: chọn node để
       // đọc chi tiết, và bung/thu nhánh — VÀ (Phase 2 #4) focus nó, làm nổi bật
-      // đường tổ tiên/hậu duệ. Ba việc, một cử chỉ, không cử chỉ nào tranh nhau.
+      // đường tổ tiên/hậu duệ — VÀ (Phase 4A.2) phát lên Study Context, để module
+      // khác (khi cùng mở) biết node nào đang được xem. Bốn việc, một cử chỉ.
       const hasBranch = Boolean(nodeDatum.children?.length || nodeDatum._children?.length);
       const onPick = () => {
-        if (attrs.node_id) { setSelected(attrs); setFocusedId(attrs.node_id); }
+        if (attrs.node_id) { setSelected(attrs); setFocusedId(attrs.node_id); selectNode(attrs.node_id); }
         if (hasBranch) toggleNode();
       };
       return (
@@ -371,7 +380,7 @@ export default function StudyMapView() {
         </g>
       );
     },
-    [selected, focusInfo, tapKhopTim, nodeIdChon],
+    [selected, focusInfo, tapKhopTim, nodeIdChon, selectNode],
   );
 
   const counts = useMemo(() => {
