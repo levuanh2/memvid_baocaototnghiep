@@ -494,6 +494,33 @@ def languages_for(document_ids: Iterable[str]) -> Dict[str, str]:
     return out
 
 
+def quan_he_studymap(document_id: str) -> set:
+    """Tap `relation_type` co that trong ban do hoc tap cua MOT tai lieu.
+
+    Dung cho hai loai cau hoi goi y:
+      Architecture  can bat ky quan he nao (co lien ket thi moi hoi duoc "lien he
+                    voi phan con lai the nao")
+      ProsCons      can dung `contrasts`
+
+    Tra ve tap RONG khi tai lieu chua co ban do — va lop tren se khong sinh hai
+    loai cau hoi do. Do la chu y: khong co du lieu thi khong co cau hoi, khong bao
+    gio co cau hoi giu cho.
+    """
+    if not document_id:
+        return set()
+    from app.db.models import KnowledgeEdge, KnowledgeMap
+
+    with session_scope() as s:
+        rows = s.execute(
+            select(KnowledgeEdge.relation_type)
+            .join(KnowledgeMap, KnowledgeMap.id == KnowledgeEdge.map_id)
+            .where(KnowledgeMap.document_id == str(document_id),
+                   KnowledgeMap.status == "completed")
+            .distinct()
+        ).scalars().all()
+    return {r for r in rows if r}
+
+
 def tri_thuc_tho(user_id: Optional[str]) -> Dict[str, Dict[str, Any]]:
     """Nguyen lieu THO cho tang tri thuc — bon nguon chu de + moc thoi gian, gom
     trong MOT vong truy van cho ca thu vien.

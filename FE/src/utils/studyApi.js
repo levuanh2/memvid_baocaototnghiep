@@ -79,6 +79,13 @@ export const markOpened = (documentId, workspace) =>
   _send(`/api/documents/${encodeURIComponent(documentId)}/opened`, "POST",
         workspace ? { workspace } : {});
 
+// Câu hỏi gợi ý — LƯỜI. Chỉ gọi khi người dùng MỞ panel, không bao giờ ở danh sách:
+// payload thư viện đi kèm mọi tài liệu, tính câu hỏi cho hàng trăm cái để hiện một
+// cái là đúng thứ endpoint riêng sinh ra để tránh.
+export const getQuestions = (documentId) =>
+  _get(`/api/documents/${encodeURIComponent(documentId)}/questions`)
+    .then((b) => b.questions || []);
+
 export const deleteDocument = (documentId) =>
   _send(`/api/documents/${encodeURIComponent(documentId)}`, "DELETE");
 

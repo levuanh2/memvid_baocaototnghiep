@@ -40,6 +40,7 @@ from app.domains.documents import thu_vien as _thu_vien
 # Tang tri thuc NAM TREN thu_vien va import nguoc xuong no, nen `thu_vien`
 # tuyet doi khong duoc import lai `tri_thuc` — vong import. Viec lap rap vi
 # vay xay ra o day, dung huong phu thuoc.
+from app.domains.documents import cau_hoi_goi_y as _cau_hoi
 from app.domains.documents import tri_thuc as _tri_thuc
 from shared.config import DEFAULT_LOCAL_MODEL
 # Chỉ dùng cho local Ollama (Gemini sẽ bỏ qua model).
@@ -3179,6 +3180,60 @@ def api_documents_bulk():
 
     return jsonify({"updated": _docs.bulk_library_fields(ids, user_id=scope, **kw),
                     "action": hanh_dong})
+
+
+@app.get('/api/documents/<document_id>/questions')
+def api_document_questions(document_id: str):
+    """Cau hoi goi y — LUOI, suy ra, khong sinh gi.
+
+    Vi sao khong nam trong `/api/library`: payload thu vien di kem MOI tai lieu, con
+    cau hoi chi co nghia khi nguoi dung mo mot tai lieu ra. Tra chung o danh sach la
+    tinh cho hang tram tai lieu de hien thi cho mot.
+
+    Endpoint nay KHONG goi tom tat, KHONG goi embedding, KHONG sinh quiz. No doc du
+    lieu bon pipeline da ghi san roi ghep chuoi. Khong co LLM o day.
+    """
+    uid, err = _require_app_user()
+    if err:
+        return err
+    row, err = _owned_document(document_id, uid)
+    if err:
+        return err
+
+    from app.domains.documents import repository as _docs
+
+    def _thu(ham, du_phong):
+        """Nguon phu hong thi mat dung loai cau hoi do, khong mat ca endpoint."""
+        try:
+            return ham()
+        except Exception as exc:  # noqa: BLE001
+            print(f"warn /questions: nguon phu loi ({exc})", flush=True)
+            return du_phong
+
+    stem = row.get("source_stem") or ""
+    ban_tt = _thu_vien.index_by_stem(
+        _thu(lambda: (summary_store.list_records(user_id=uid, enforce_owner=True)
+                      if _auth_protect_enabled() else summary_store.list_records()),
+             [])).get(stem)
+
+    scope_uid = uid if _auth_protect_enabled() else None
+    tho = (_thu(lambda: _docs.tri_thuc_tho(scope_uid), {}) or {}).get(document_id) or {}
+
+    chu_de = _tri_thuc.topics(
+        masteries=tho.get("masteries") or [],
+        quiz_concept_tags=tho.get("quiz_tags") or [],
+        review_topics=tho.get("review_topics") or [],
+        studymap_node_titles=tho.get("studymap_titles") or [],
+    )
+
+    cau_hoi = _cau_hoi.sinh_cau_hoi(
+        topic_list=chu_de,
+        entity_list=_thu_vien.entities(ban_tt),
+        section_list=_thu(lambda: _docs.list_sections(document_id), []),
+        relation_types=_thu(lambda: _docs.quan_he_studymap(document_id), set()),
+        recent_ai=_tri_thuc.hoat_dong_gan_day(moc=tho.get("moc") or {}),
+    )
+    return jsonify({"document_id": document_id, "questions": cau_hoi})
 
 
 @app.get('/api/documents/<document_id>/sections')

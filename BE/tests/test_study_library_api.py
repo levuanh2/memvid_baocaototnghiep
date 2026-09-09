@@ -37,6 +37,8 @@ class DocsGia:
         self.dem_languages = 0
         self.dem_ai_counts = 0
         self.dem_tri_thuc = 0
+        self.dem_sections = 0
+        self.dem_quan_he = 0
 
     @staticmethod
     def hang(**kw):
@@ -96,6 +98,17 @@ class DocsGia:
                 "reviews": {"d1": {"count": 1, "latest_attempt_id": "a-1"}},
                 "studymaps": {"d1": "completed"}}
 
+    def list_sections(self, document_id):
+        self.dem_sections += 1
+        return [{"section_id": "s1", "title": "Chương 1: Mở đầu", "level": 1,
+                 "order_index": 0, "summary": "x"},
+                {"section_id": "s2", "title": "Các bước định thời", "level": 1,
+                 "order_index": 1, "summary": None}]
+
+    def quan_he_studymap(self, document_id):
+        self.dem_quan_he += 1
+        return {"parent_child", "contrasts"}
+
     def tri_thuc_tho(self, user_id):
         self.dem_tri_thuc += 1
         return {"d1": {
@@ -136,7 +149,8 @@ def moi_truong(be, monkeypatch):
     def cai_dat(rows=None, summaries=None, mindmaps=None, kho_summary_no=False):
         docs = DocsGia(rows)
         for ten in ("all_rows", "get", "set_library_fields", "touch_opened",
-                    "languages_for", "ai_counts", "tri_thuc_tho"):
+                    "languages_for", "ai_counts", "tri_thuc_tho",
+                    "list_sections", "quan_he_studymap"):
             monkeypatch.setattr(docs_repo, ten, getattr(docs, ten))
         sm = KhoGia(summaries, no=kho_summary_no)
         mm = KhoGia(mindmaps)
@@ -699,3 +713,114 @@ def test_nguon_tri_thuc_hong_van_tra_ve_thu_vien(client, moi_truong, monkeypatch
     k = r.get_json()["documents"][0]["knowledge"]
     assert k["topics"] == []
     assert k["readiness"]["pipeline"] > 0       # tín hiệu bền vững vẫn nguyên
+
+
+# ── Câu hỏi gợi ý (Phase 1C.2a) ─────────────────────────────────────────────
+
+def test_questions_tra_ve_cau_hoi_that(client, moi_truong):
+    moi_truong(summaries=[_summary(["bai_giang_pdf"])])
+    r = client.get("/api/documents/d1/questions")
+    assert r.status_code == 200
+
+    b = r.get_json()
+    assert b["document_id"] == "d1"
+    ds = b["questions"]
+    assert 0 < len(ds) <= 6
+
+    for c in ds:
+        assert set(c) == {"id", "category", "text", "target", "reason", "confidence"}
+        # `reason` PHẢI là dict nói rõ NGUỒN và GIÁ TRỊ, không phải chuỗi "topic".
+        # Không có `value` thì giao diện không giải thích được vì sao hỏi câu này.
+        assert set(c["reason"]) == {"source", "value"}
+        assert c["reason"]["value"], "reason.value rỗng = mất căn cứ"
+        assert 0.0 <= c["confidence"] <= 1.0
+        assert c["target"] in ("chat", "quiz", "studymap")
+        assert c["text"].strip()
+
+
+def test_questions_tat_dinh(client, moi_truong):
+    """Cùng tài liệu ⇒ cùng câu hỏi. Câu hỏi nhảy múa mỗi lần mở panel làm người
+    dùng tưởng hệ thống đang nghĩ ra thứ mới — trong khi nó chỉ ghép chuỗi."""
+    moi_truong(summaries=[_summary(["bai_giang_pdf"])])
+    a = client.get("/api/documents/d1/questions").get_json()["questions"]
+    b = client.get("/api/documents/d1/questions").get_json()["questions"]
+    assert a == b
+
+
+def test_questions_khong_bao_gio_o_payload_thu_vien(client, moi_truong):
+    """LƯỜI: payload thư viện đi kèm MỌI tài liệu. Tính câu hỏi cho hàng trăm tài
+    liệu để hiện cho một là đúng thứ endpoint riêng sinh ra để tránh."""
+    moi_truong(summaries=[_summary(["bai_giang_pdf"])])
+    d = client.get("/api/library").get_json()["documents"][0]
+    assert d["knowledge"]["suggested_questions"] is None
+
+
+def test_questions_khong_lay_sections_khi_chi_tai_thu_vien(client, moi_truong):
+    """`/api/library` KHÔNG được chạm nguồn của câu hỏi."""
+    docs, _, _ = moi_truong()
+    client.get("/api/library")
+    assert docs.dem_sections == 0
+    assert docs.dem_quan_he == 0
+
+
+def test_questions_khong_du_lieu_thi_khong_co_cau_hoi_giu_cho(client, moi_truong,
+                                                              monkeypatch):
+    """Không có chủ đề/thực thể/section ⇒ danh sách RỖNG. Một câu hỏi giữ chỗ tệ
+    hơn không có câu hỏi nào: người dùng bấm vào rồi nhận về hư không."""
+    moi_truong()
+    from app.domains.documents import repository as docs_repo
+
+    # Phải qua `monkeypatch`: gán thẳng lên module thì trạng thái rò sang test sau,
+    # và thứ tự chạy quyết định kết quả — đúng lớp lỗi đã mắc một lần ở 1C.1.
+    monkeypatch.setattr(docs_repo, "list_sections", lambda d: [])
+    monkeypatch.setattr(docs_repo, "quan_he_studymap", lambda d: set())
+    monkeypatch.setattr(docs_repo, "tri_thuc_tho", lambda uid: {})
+
+    r = client.get("/api/documents/d1/questions")
+    assert r.status_code == 200
+    assert r.get_json()["questions"] == []
+
+
+def test_questions_tai_lieu_cua_nguoi_khac_la_404(client, be, moi_truong, monkeypatch):
+    moi_truong(rows={"khac": DocsGia.hang(user_id="user-B")})
+    monkeypatch.setattr(be, "_auth_protect_enabled", lambda: True)
+    monkeypatch.setattr(be, "_current_user_id", lambda: UID)
+    assert client.get("/api/documents/khac/questions").status_code == 404
+
+
+def test_questions_401_khi_khong_co_token(client, be, monkeypatch):
+    monkeypatch.setattr(be, "_auth_protect_enabled", lambda: True)
+    monkeypatch.setattr(be, "_current_user_id", lambda: None)
+    assert client.get("/api/documents/d1/questions").status_code == 401
+
+
+def test_questions_nguon_phu_hong_van_tra_200(client, moi_truong, monkeypatch):
+    """Hỏng một nguồn thì mất ĐÚNG loại câu hỏi của nguồn đó, không sập endpoint."""
+    moi_truong()
+    from app.domains.documents import repository as docs_repo
+
+    def no(*a, **k):
+        raise RuntimeError("db down")
+    monkeypatch.setattr(docs_repo, "list_sections", no)
+
+    r = client.get("/api/documents/d1/questions")
+    assert r.status_code == 200
+    assert not any(c["category"] in ("Summarize", "Timeline")
+                   for c in r.get_json()["questions"])
+
+
+def test_questions_khong_goi_tom_tat_hay_embedding(client, moi_truong, monkeypatch):
+    """Ràng buộc trung tâm của slice: endpoint này chỉ ĐỌC. Nó không được sinh tóm
+    tắt, không được gọi embedding, không được chạm retriever."""
+    import app.main as main
+    moi_truong(summaries=[_summary(["bai_giang_pdf"])])
+
+    goi = []
+    if hasattr(main, "RETRIEVER"):
+        monkeypatch.setattr(main.RETRIEVER, "retrieve",
+                            lambda *a, **k: goi.append("retrieve") or [])
+    monkeypatch.setattr(main, "_start_summary_job",
+                        lambda *a, **k: goi.append("summary"))
+
+    assert client.get("/api/documents/d1/questions").status_code == 200
+    assert goi == [], f"endpoint đã gọi thứ bị cấm: {goi}"

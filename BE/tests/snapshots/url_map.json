@@ -126,6 +126,13 @@
     "rule": "/api/documents/<document_id>/opened"
   },
   {
+    "endpoint": "api_document_questions",
+    "methods": [
+      "GET"
+    ],
+    "rule": "/api/documents/<document_id>/questions"
+  },
+  {
     "endpoint": "api_document_quizzes",
     "methods": [
       "GET"

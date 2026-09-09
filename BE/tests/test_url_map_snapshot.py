@@ -82,7 +82,7 @@ def test_method_cua_tung_route_khong_doi(client, cu):
 
 
 def test_tong_so_route_khop(client, cu):
-    """98 = 97 route ứng dụng + 1 `/static/<path:filename>` built-in của Flask.
+    """99 = 98 route ứng dụng + 1 `/static/<path:filename>` built-in của Flask.
 
     +1 ngày 2026-09-04: `GET /api/config/status`.
     +2 ngày 2026-09-07: `POST` và `DELETE /auth/nks/grant` — chứng từ ghi ngắn hạn.
@@ -97,9 +97,11 @@ def test_tong_so_route_khop(client, cu):
     +5 ngày 2026-09-09 (Bộ sưu tập, Phase 1B): `GET` + `POST /api/collections`,
       `PATCH` + `DELETE /api/collections/<id>`, `POST /api/documents/bulk`. Đếm theo
       RULE của Flask nên `GET` và `POST` cùng một đường dẫn là hai dòng.
+    +1 ngày 2026-09-09 (Phase 1C.2a): `GET /api/documents/<id>/questions` — câu hỏi
+      gợi ý, LƯỜI và suy ra. Không sinh tóm tắt, không gọi embedding, không có LLM.
     Con số ở đây CỐ Ý viết cứng — sửa nó là một dòng diff mà người review phải nhìn
     thấy, đúng mục đích của cả file này."""
-    assert len(_hien_tai()) == len(cu) == 98
+    assert len(_hien_tai()) == len(cu) == 99
 
 
 def test_khong_co_cap_duong_dan_method_trung(client):
