@@ -6,6 +6,8 @@ import { Icon } from "../../components/ui/Icon";
 import Spinner from "../../components/ui/Spinner";
 import { useStudyJob } from "../../hooks/useStudyJob";
 import { nenChanLan } from "../../utils/wheelGate";
+import { LAYOUT_IDS, nhanLayout, thongSoReactD3Tree } from "../../utils/studyMapLayout";
+import { docPrefs, writeDocPref } from "../../utils/studyMapPreference";
 import {
   NODE_TYPE_LABEL,
   RELATION_LABEL,
@@ -41,6 +43,20 @@ export default function StudyMapView() {
   const [dangDung, setDangDung] = useState(false);
   const canvasRef = useRef(null);
   const [translate, setTranslate] = useState({ x: 120, y: 300 });
+
+  // Layout (Phase 2 #1) — id RENDERER-ĐỘC-LẬP, đọc tuỳ chọn đã lưu của CHÍNH tài liệu
+  // này. Lazy init đọc ngay lần render đầu (không nhấp nháy về mặc định rồi mới nhảy
+  // sang layout đã chọn); effect bên dưới đọc LẠI khi `documentId` đổi mà component
+  // không remount — `load()` ở trên đã đổi khoá theo đúng cách này rồi.
+  const [layoutId, setLayoutId] = useState(
+    () => docPrefs(window.localStorage, documentId).layout);
+  useEffect(() => {
+    setLayoutId(docPrefs(window.localStorage, documentId).layout);
+  }, [documentId]);
+  const doiLayout = useCallback((id) => {
+    setLayoutId(id);
+    writeDocPref(window.localStorage, documentId, { layout: id });
+  }, [documentId]);
 
   const openMap = useCallback(async (mapId, documentIdForChunks) => {
     const body = await getStudyMap(mapId);
@@ -82,14 +98,22 @@ export default function StudyMapView() {
 
   useEffect(() => { load(); }, [load]);
 
-  // Cây phải neo vào mép trái, giữa chiều cao — mặc định react-d3-tree đặt gốc
-  // ở (0,0) nên nửa cây nằm ngoài khung.
+  // Điểm neo phụ thuộc HƯỚNG: cây ngang neo mép trái - giữa chiều cao (gốc mọc sang
+  // phải); cây dọc neo giữa chiều rộng - gần đỉnh (gốc mọc xuống dưới). Dùng công
+  // thức của cây ngang cho cây dọc thì gốc kẹt ở giữa-trái, quá nửa khung trống phía
+  // trên — đúng loại lỗi "layout đổi nhưng khung nhìn thì không" nếu bỏ qua bước này.
+  const rd3tProps = useMemo(
+    () => thongSoReactD3Tree(layoutId, map?.nodes), [layoutId, map]);
+  // Chỉ neo lại khi HƯỚNG đổi thật — đổi step→diagonal (cùng hướng) giữ nguyên
+  // khung nhìn người dùng đang xem, không kéo họ về giữa lần nữa.
   useEffect(() => {
     const el = canvasRef.current;
     if (!el || !map) return;
     const { width, height } = el.getBoundingClientRect();
-    setTranslate({ x: Math.min(160, width * 0.18), y: height / 2 });
-  }, [map]);
+    setTranslate(rd3tProps.orientation === "vertical"
+      ? { x: width / 2, y: Math.min(80, height * 0.12) }
+      : { x: Math.min(160, width * 0.18), y: height / 2 });
+  }, [map, rd3tProps.orientation]);
 
   // Trả con lăn về cho TRANG. d3-zoom (do react-d3-tree gắn lên <svg> con) nghe `wheel`
   // rồi preventDefault, mà canvas cao 70vh nên con trỏ gần như luôn nằm trên nó — kết
@@ -291,8 +315,24 @@ export default function StudyMapView() {
             {map.edges?.length > 0 && <span>· {map.edges.length} liên kết ngang</span>}
           </div>
 
-          <div className="hidden lg:block coord text-text-muted mb-2">
-            Ctrl + lăn để phóng sơ đồ · lăn thường để cuộn trang · kéo để di chuyển
+          <div className="flex flex-wrap items-center justify-between gap-2 mb-2">
+            <div className="hidden lg:block coord text-text-muted">
+              Ctrl + lăn để phóng sơ đồ · lăn thường để cuộn trang · kéo để di chuyển
+            </div>
+            <label className="ml-auto flex items-center gap-1.5 text-[12px] text-text-secondary">
+              Bố cục
+              <select
+                value={layoutId}
+                onChange={(e) => doiLayout(e.target.value)}
+                aria-label="Bố cục sơ đồ"
+                className="rounded-[6px] border px-2 py-1 text-[12px] bg-transparent"
+                style={{ borderColor: "var(--border-color)" }}
+              >
+                {LAYOUT_IDS.map((id) => (
+                  <option key={id} value={id}>{nhanLayout(id)}</option>
+                ))}
+              </select>
+            </label>
           </div>
 
           <div className="flex gap-4 items-start flex-col lg:flex-row">
@@ -304,7 +344,7 @@ export default function StudyMapView() {
               {tree && (
                 <Tree
                   data={tree}
-                  orientation="horizontal"
+                  orientation={rd3tProps.orientation}
                   translate={translate}
                   nodeSize={{ x: 300, y: 42 }}
                   separation={{ siblings: 1, nonSiblings: 1.25 }}
@@ -315,7 +355,7 @@ export default function StudyMapView() {
                   // mục thôi, người đọc bấm để bung nhánh mình quan tâm — hơn
                   // là đổ hết ra rồi bắt cuộn tìm.
                   initialDepth={1}
-                  pathFunc="step"
+                  pathFunc={rd3tProps.pathFunc}
                   renderCustomNodeElement={renderNode}
                   pathClassFunc={() => "study-map__link"}
                 />
