@@ -1,6 +1,5 @@
 // Tuỳ chọn StudyMap của người dùng TRÊN THIẾT BỊ NÀY, theo TỪNG TÀI LIỆU — layout đã
-// chọn (Phase 2 #1), và về sau là chế độ trình chiếu (Phase 2 #3 sẽ ghi thêm trường
-// `presentation` vào ĐÚNG object này, không đổi khoá lưu trữ).
+// chọn (Phase 2 #1) và chế độ trình chiếu (Phase 2 #9), CÙNG một object mỗi tài liệu.
 //
 // Cùng khuôn với `hooks/panelLayout.js`: nhận `storage` qua tham số để test được mà
 // không cần localStorage thật; đọc hỏng/thiếu đều rơi về mặc định, không bao giờ ném.
@@ -24,11 +23,12 @@ function tatCa(storage) {
   }
 }
 
-/** Tuỳ chọn đã lưu của MỘT tài liệu. Luôn trả `layout` hợp lệ, kể cả khi chưa lưu gì. */
+/** Tuỳ chọn đã lưu của MỘT tài liệu. Luôn trả đủ trường hợp lệ, kể cả khi chưa lưu gì. */
 export function docPrefs(storage, documentId) {
   const raw = documentId ? tatCa(storage)[documentId] : null;
   const layout = raw && LAYOUT_IDS.includes(raw.layout) ? raw.layout : LAYOUT_MAC_DINH;
-  return { layout };
+  const presentation = Boolean(raw?.presentation);
+  return { layout, presentation };
 }
 
 /** Ghi ĐÈ một phần tuỳ chọn của một tài liệu — các trường khác (và tài liệu khác) giữ nguyên. */

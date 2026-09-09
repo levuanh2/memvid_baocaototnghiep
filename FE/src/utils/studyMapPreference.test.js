@@ -13,14 +13,28 @@ function fakeStorage({ throws = false } = {}) {
 }
 
 describe("studyMapPreference", () => {
-  it("chưa lưu gì thì trả layout mặc định", () => {
-    expect(docPrefs(fakeStorage(), "d1")).toEqual({ layout: "tree-horizontal" });
+  it("chưa lưu gì thì trả mặc định: layout ngang, KHÔNG trình chiếu", () => {
+    expect(docPrefs(fakeStorage(), "d1")).toEqual({ layout: "tree-horizontal", presentation: false });
   });
 
-  it("ghi rồi đọc lại đúng layout đã chọn", () => {
+  it("ghi rồi đọc lại đúng layout đã chọn, presentation giữ mặc định false", () => {
     const s = fakeStorage();
     writeDocPref(s, "d1", { layout: "tree-vertical" });
-    expect(docPrefs(s, "d1")).toEqual({ layout: "tree-vertical" });
+    expect(docPrefs(s, "d1")).toEqual({ layout: "tree-vertical", presentation: false });
+  });
+
+  it("ghi rồi đọc lại đúng trạng thái trình chiếu, layout giữ mặc định", () => {
+    const s = fakeStorage();
+    writeDocPref(s, "d1", { presentation: true });
+    expect(docPrefs(s, "d1")).toEqual({ layout: "tree-horizontal", presentation: true });
+  });
+
+  it("giá trị presentation không phải boolean thì ép kiểu, không ném", () => {
+    const s = fakeStorage();
+    s._map.set("memvidx.study_map.v1", JSON.stringify({ d1: { presentation: "co" } }));
+    expect(docPrefs(s, "d1").presentation).toBe(true);
+    s._map.set("memvidx.study_map.v1", JSON.stringify({ d1: { presentation: 0 } }));
+    expect(docPrefs(s, "d1").presentation).toBe(false);
   });
 
   it("mỗi tài liệu có tuỳ chọn riêng, không lẫn nhau", () => {
@@ -48,13 +62,13 @@ describe("studyMapPreference", () => {
   it("JSON hỏng trong storage rơi về mặc định, không ném", () => {
     const s = fakeStorage();
     s._map.set("memvidx.study_map.v1", "{ khong phai json");
-    expect(docPrefs(s, "d1")).toEqual({ layout: "tree-horizontal" });
+    expect(docPrefs(s, "d1")).toEqual({ layout: "tree-horizontal", presentation: false });
   });
 
   it("storage ném lỗi (cửa sổ riêng tư) không làm vỡ đọc hay ghi", () => {
     const s = fakeStorage({ throws: true });
     expect(() => writeDocPref(s, "d1", { layout: "tree-vertical" })).not.toThrow();
-    expect(docPrefs(s, "d1")).toEqual({ layout: "tree-horizontal" });
+    expect(docPrefs(s, "d1")).toEqual({ layout: "tree-horizontal", presentation: false });
   });
 
   it("thiếu documentId thì không ghi gì, không ném", () => {

@@ -60,6 +60,18 @@ export default function StudyMapView() {
     writeDocPref(window.localStorage, documentId, { layout: id });
   }, [documentId]);
 
+  // Trình chiếu (Phase 2 #9) — cùng khoá lưu trữ và cùng nhịp đọc-lại-khi-đổi-tài-liệu
+  // với layout ở trên, không phải một cơ chế riêng.
+  const [trinhChieu, setTrinhChieu] = useState(
+    () => docPrefs(window.localStorage, documentId).presentation);
+  useEffect(() => {
+    setTrinhChieu(docPrefs(window.localStorage, documentId).presentation);
+  }, [documentId]);
+  const doiTrinhChieu = useCallback((v) => {
+    setTrinhChieu(v);
+    writeDocPref(window.localStorage, documentId, { presentation: v });
+  }, [documentId]);
+
   // Focus mode (Phase 2 #4) — click một node vừa CHỌN (bảng chi tiết, hành vi cũ)
   // vừa FOCUS (làm mờ nhánh không liên quan). Cùng một cú bấm, hai việc bổ sung
   // nhau, không phải hai cử chỉ tranh nhau.
@@ -152,8 +164,10 @@ export default function StudyMapView() {
   // trên — đúng loại lỗi "layout đổi nhưng khung nhìn thì không" nếu bỏ qua bước này.
   const rd3tProps = useMemo(
     () => thongSoReactD3Tree(layoutId, map?.nodes), [layoutId, map]);
-  // Chỉ neo lại khi HƯỚNG đổi thật — đổi step→diagonal (cùng hướng) giữ nguyên
-  // khung nhìn người dùng đang xem, không kéo họ về giữa lần nữa.
+  // Chỉ neo lại khi HƯỚNG đổi thật (đổi step→diagonal giữ nguyên khung nhìn) — trừ
+  // `trinhChieu`: bật/tắt trình chiếu đổi HẲN kích thước khung (`calc(100vh-120px)`
+  // so với `min(70vh,640px)`), không neo lại thì góc neo cũ trỏ vào toạ độ đã hết
+  // đúng trên khung mới.
   useEffect(() => {
     const el = canvasRef.current;
     if (!el || !map) return;
@@ -161,7 +175,7 @@ export default function StudyMapView() {
     setTranslate(rd3tProps.orientation === "vertical"
       ? { x: width / 2, y: Math.min(80, height * 0.12) }
       : { x: Math.min(160, width * 0.18), y: height / 2 });
-  }, [map, rd3tProps.orientation]);
+  }, [map, rd3tProps.orientation, trinhChieu]);
 
   // Trả con lăn về cho TRANG. d3-zoom (do react-d3-tree gắn lên <svg> con) nghe `wheel`
   // rồi preventDefault, mà canvas cao 70vh nên con trỏ gần như luôn nằm trên nó — kết
@@ -175,21 +189,22 @@ export default function StudyMapView() {
     return () => el.removeEventListener("wheel", chan, { capture: true });
   }, [map]);
 
-  // Esc xoá focus khi bàn phím KHÔNG ở ô tìm kiếm (ô đó tự xử lý Esc riêng, cùng lúc
-  // với việc điều hướng kết quả) — bấm một node để focus rồi Esc phải thoát được mà
-  // không cần bấm nút "Bỏ focus". Trang này trước Phase 2 không có phím tắt nào, nên
-  // đây không đụng vào hành vi Esc nào đã có.
+  // Esc — khi bàn phím KHÔNG ở ô tìm kiếm (ô đó tự xử lý Esc riêng, cùng lúc với việc
+  // điều hướng kết quả): thoát trình chiếu TRƯỚC (trạng thái "to" nhất, giống đóng một
+  // lớp phủ), rồi mới tới xoá focus. Trang này trước Phase 2 không có phím tắt nào,
+  // nên đây không đụng vào hành vi Esc nào đã có.
   useEffect(() => {
-    if (!focusedId) return undefined;
+    if (!trinhChieu && !focusedId) return undefined;
     const onKey = (e) => {
       if (e.key !== "Escape") return;
       const ae = document.activeElement;
       if (ae && /^(INPUT|TEXTAREA|SELECT)$/.test(ae.tagName)) return;
-      setFocusedId(null);
+      if (trinhChieu) doiTrinhChieu(false);
+      else setFocusedId(null);
     };
     window.addEventListener("keydown", onKey);
     return () => window.removeEventListener("keydown", onKey);
-  }, [focusedId]);
+  }, [focusedId, trinhChieu, doiTrinhChieu]);
 
   // Bản đồ MỚI (tải lần đầu hoặc "Dựng lại") có tập node_id khác — focus/tìm kiếm cũ
   // trỏ vào id không còn tồn tại thì focus sẽ làm mờ HẾT (không node nào khớp `all`),
@@ -381,79 +396,93 @@ export default function StudyMapView() {
         />
       ) : map ? (
         <>
-          <div className="flex flex-wrap items-center gap-x-5 gap-y-1.5 mb-4 font-mono text-[11.5px] text-text-muted">
-            {["root", "section", "concept", "example"].map((t) =>
-              counts[t] ? (
-                <span key={t} className="inline-flex items-center gap-1.5">
-                  <span
-                    className="inline-block rounded-full"
-                    style={{
-                      width: markOf(t).r * 1.6, height: markOf(t).r * 1.6,
-                      background: markOf(t).fill,
-                      boxShadow: `inset 0 0 0 1.5px ${markOf(t).stroke}`,
-                    }}
-                  />
-                  {counts[t]} {NODE_TYPE_LABEL[t]?.toLowerCase()}
-                </span>
-              ) : null,
-            )}
-            {map.edges?.length > 0 && <span>· {map.edges.length} liên kết ngang</span>}
-          </div>
-
-          <div className="flex flex-wrap items-center justify-between gap-2 mb-2">
-            <div className="hidden lg:block coord text-text-muted">
-              Ctrl + lăn để phóng sơ đồ · lăn thường để cuộn trang · kéo để di chuyển
-            </div>
-            <div className="ml-auto flex flex-wrap items-center gap-2">
-              {focusedId && (
-                <button type="button" onClick={boFocus}
-                        className="pill-action !py-1 !text-[11.5px] inline-flex items-center gap-1">
-                  <Icon name="X" size={12} /> Bỏ focus
-                </button>
+          {/* Trình chiếu (Phase 2 #9): ẩn số liệu/thanh công cụ/bảng chi tiết, CHỈ còn
+              sơ đồ. Không đụng tới chrome của StudyShell (tiêu đề/back/"Dựng lại") —
+              đó là khung điều hướng dùng chung cho mọi trang study, không phải thứ
+              trang này sở hữu để tắt riêng. */}
+          {!trinhChieu && (
+            <div className="flex flex-wrap items-center gap-x-5 gap-y-1.5 mb-4 font-mono text-[11.5px] text-text-muted">
+              {["root", "section", "concept", "example"].map((t) =>
+                counts[t] ? (
+                  <span key={t} className="inline-flex items-center gap-1.5">
+                    <span
+                      className="inline-block rounded-full"
+                      style={{
+                        width: markOf(t).r * 1.6, height: markOf(t).r * 1.6,
+                        background: markOf(t).fill,
+                        boxShadow: `inset 0 0 0 1.5px ${markOf(t).stroke}`,
+                      }}
+                    />
+                    {counts[t]} {NODE_TYPE_LABEL[t]?.toLowerCase()}
+                  </span>
+                ) : null,
               )}
-              <div className="relative">
-                <Icon name="Search" size={13}
-                      className="absolute left-2 top-1/2 -translate-y-1/2 text-text-muted" />
-                <input
-                  type="text"
-                  value={truyVan}
-                  onChange={(e) => doiTruyVan(e.target.value)}
-                  onKeyDown={xuLyPhimTim}
-                  placeholder="Tìm theo tên khái niệm…"
-                  aria-label="Tìm trong sơ đồ kiến thức"
-                  className="rounded-[6px] border pl-7 pr-2 py-1 text-[12px] bg-transparent w-[190px]"
-                  style={{ borderColor: "var(--border-color)" }}
-                />
+              {map.edges?.length > 0 && <span>· {map.edges.length} liên kết ngang</span>}
+            </div>
+          )}
+
+          {!trinhChieu && (
+            <div className="flex flex-wrap items-center justify-between gap-2 mb-2">
+              <div className="hidden lg:block coord text-text-muted">
+                Ctrl + lăn để phóng sơ đồ · lăn thường để cuộn trang · kéo để di chuyển
               </div>
-              {truyVan && (
-                <span className="text-[11px] text-text-muted tabular-nums" aria-live="polite">
-                  {ketQuaTim.total
-                    ? `${ketQuaTim.activeIndex + 1}/${ketQuaTim.total}`
-                    : "Không có kết quả"}
-                </span>
-              )}
-              <label className="flex items-center gap-1.5 text-[12px] text-text-secondary">
-                Bố cục
-                <select
-                  value={layoutId}
-                  onChange={(e) => doiLayout(e.target.value)}
-                  aria-label="Bố cục sơ đồ"
-                  className="rounded-[6px] border px-2 py-1 text-[12px] bg-transparent"
-                  style={{ borderColor: "var(--border-color)" }}
-                >
-                  {LAYOUT_IDS.map((id) => (
-                    <option key={id} value={id}>{nhanLayout(id)}</option>
-                  ))}
-                </select>
-              </label>
+              <div className="ml-auto flex flex-wrap items-center gap-2">
+                {focusedId && (
+                  <button type="button" onClick={boFocus}
+                          className="pill-action !py-1 !text-[11.5px] inline-flex items-center gap-1">
+                    <Icon name="X" size={12} /> Bỏ focus
+                  </button>
+                )}
+                <div className="relative">
+                  <Icon name="Search" size={13}
+                        className="absolute left-2 top-1/2 -translate-y-1/2 text-text-muted" />
+                  <input
+                    type="text"
+                    value={truyVan}
+                    onChange={(e) => doiTruyVan(e.target.value)}
+                    onKeyDown={xuLyPhimTim}
+                    placeholder="Tìm theo tên khái niệm…"
+                    aria-label="Tìm trong sơ đồ kiến thức"
+                    className="rounded-[6px] border pl-7 pr-2 py-1 text-[12px] bg-transparent w-[190px]"
+                    style={{ borderColor: "var(--border-color)" }}
+                  />
+                </div>
+                {truyVan && (
+                  <span className="text-[11px] text-text-muted tabular-nums" aria-live="polite">
+                    {ketQuaTim.total
+                      ? `${ketQuaTim.activeIndex + 1}/${ketQuaTim.total}`
+                      : "Không có kết quả"}
+                  </span>
+                )}
+                <label className="flex items-center gap-1.5 text-[12px] text-text-secondary">
+                  Bố cục
+                  <select
+                    value={layoutId}
+                    onChange={(e) => doiLayout(e.target.value)}
+                    aria-label="Bố cục sơ đồ"
+                    className="rounded-[6px] border px-2 py-1 text-[12px] bg-transparent"
+                    style={{ borderColor: "var(--border-color)" }}
+                  >
+                    {LAYOUT_IDS.map((id) => (
+                      <option key={id} value={id}>{nhanLayout(id)}</option>
+                    ))}
+                  </select>
+                </label>
+                <button type="button" onClick={() => doiTrinhChieu(true)}
+                        title="Chế độ trình chiếu (Esc để thoát)"
+                        className="pill-action !py-1 !text-[11.5px] inline-flex items-center gap-1">
+                  <Icon name="Maximize" size={12} /> Trình chiếu
+                </button>
+              </div>
             </div>
-          </div>
+          )}
 
-          <div className="flex gap-4 items-start flex-col lg:flex-row">
+          <div className={`flex gap-4 items-start ${trinhChieu ? "" : "flex-col lg:flex-row"}`}>
             <div
               ref={canvasRef}
-              className="surface-card !p-0 overflow-hidden w-full lg:flex-1"
-              style={{ height: "min(70vh, 640px)" }}
+              className="surface-card !p-0 overflow-hidden w-full relative"
+              style={{ height: trinhChieu ? "calc(100vh - 120px)" : "min(70vh, 640px)",
+                       flex: trinhChieu ? "1 1 auto" : undefined }}
             >
               {tree && (
                 <Tree
@@ -476,26 +505,37 @@ export default function StudyMapView() {
               )}
               {/* Luật mới phải nói ra: không ai đoán được "Ctrl + lăn". Chỉ hiện ở khổ
                   rộng — máy cảm ứng không có con lăn nên câu này vô nghĩa ở đó. */}
+              {trinhChieu && (
+                <button type="button" onClick={() => doiTrinhChieu(false)}
+                        title="Thoát trình chiếu (Esc)"
+                        aria-label="Thoát trình chiếu"
+                        className="icon-btn absolute top-3 right-3 z-10"
+                        style={{ background: "var(--bg-card)", border: "1px solid var(--border-color)" }}>
+                  <Icon name="X" size={16} />
+                </button>
+              )}
             </div>
 
-            <aside className="surface-card w-full lg:w-[340px] shrink-0">
-              {selected ? (
-                <NodeDetail
-                  node={selected}
-                  chunks={chunks}
-                  edges={edgesOf(selected.node_id)}
-                  nodeById={nodeById}
-                />
-              ) : (
-                <div className="text-center py-8">
-                  <Icon name="Spline" size={20} className="text-text-muted mx-auto mb-2.5" />
-                  <p className="text-[13.5px] text-text-secondary leading-[1.65]">
-                    Bấm một khái niệm trên sơ đồ để đọc tóm tắt và đoạn tài liệu sinh ra nó.
-                    Bấm vào node có nhánh con để bung, kéo nền để di chuyển.
-                  </p>
-                </div>
-              )}
-            </aside>
+            {!trinhChieu && (
+              <aside className="surface-card w-full lg:w-[340px] shrink-0">
+                {selected ? (
+                  <NodeDetail
+                    node={selected}
+                    chunks={chunks}
+                    edges={edgesOf(selected.node_id)}
+                    nodeById={nodeById}
+                  />
+                ) : (
+                  <div className="text-center py-8">
+                    <Icon name="Spline" size={20} className="text-text-muted mx-auto mb-2.5" />
+                    <p className="text-[13.5px] text-text-secondary leading-[1.65]">
+                      Bấm một khái niệm trên sơ đồ để đọc tóm tắt và đoạn tài liệu sinh ra nó.
+                      Bấm vào node có nhánh con để bung, kéo nền để di chuyển.
+                    </p>
+                  </div>
+                )}
+              </aside>
+            )}
           </div>
         </>
       ) : null}
