@@ -122,6 +122,38 @@ class Identity(Base):
 
 # ───────────────────────────────────────────────────────────── 2. Tài liệu ────
 
+class Collection(Base):
+    """Bộ sưu tập — ĐỐI TƯỢNG hạng nhất, không phải một cái thẻ.
+
+    Khác thẻ ở bốn điểm và cả bốn đều cần danh tính riêng: đổi tên mà không đụng
+    tài liệu nào, có màu, có biểu tượng, có thứ tự người dùng tự sắp, và tồn tại
+    được cả khi rỗng. `documents.tags` (JSONB, Phase 1A) không làm được thứ nào
+    trong số đó — nên hai khái niệm này KHÔNG hợp nhất.
+
+    Phẳng, cố ý: không cha-con, không bộ sưu tập thông minh. Cây thư mục là thứ
+    Phase 1A đã bỏ công tránh, thêm lại ở đây thì mất cả mục đích.
+    """
+
+    __tablename__ = "collections"
+
+    id = pk()
+    user_id = fk("users.id")
+    name = Column(String(100), nullable=False)
+    color = Column(String(20))
+    icon = Column(String(40))
+    sort_order = Column(Integer, nullable=False, server_default=text("0"))
+    # `archived_at` chứ không phải bool — đối xứng với `documents.archived_at`, và
+    # trả lời thêm "lưu trữ từ bao giờ".
+    archived_at = Column(DateTime(timezone=True))
+    created_at = created_at()
+    updated_at = updated_at()
+
+    __table_args__ = (
+        CheckConstraint("length(trim(name)) > 0", name="ck_collections_name_nonempty"),
+        Index("ix_collections_user_id", "user_id"),
+    )
+
+
 class Document(Base):
     __tablename__ = "documents"
 
@@ -156,6 +188,13 @@ class Document(Base):
     # artifact (mở tóm tắt ba lần không sinh dòng nào), nên hai cột này không suy ra được.
     last_opened_at = Column(DateTime(timezone=True))
     last_workspace = Column(String(20))
+    # Phase 1B. `collection_id` 0..1 — một tài liệu thuộc nhiều nhất một bộ sưu tập,
+    # nên khoá ngoại đủ diễn tả, bảng nối chỉ thêm một lượt JOIN vô ích.
+    # `open_count` là TẦN SUẤT: `last_opened_at` nói "lần cuối khi nào", không nói
+    # "mở bao nhiêu lần" — xếp hạng Học gần đây cần cả hai.
+    collection_id = Column(UUID(as_uuid=False),
+                           ForeignKey("collections.id", ondelete="SET NULL"))
+    open_count = Column(Integer, nullable=False, server_default=text("0"))
     created_at = created_at()
     updated_at = updated_at()
 
@@ -167,6 +206,9 @@ class Document(Base):
         CheckConstraint("file_size IS NULL OR file_size > 0", name="ck_documents_file_size"),
         Index("ix_documents_user_id", "user_id"),
         Index("ix_documents_status", "status"),
+        # BẮT BUỘC: Postgres không tự đánh chỉ mục khoá ngoại, nên xoá một bộ sưu tập
+        # (ON DELETE SET NULL) sẽ quét toàn bảng `documents` nếu thiếu chỉ mục này.
+        Index("ix_documents_collection_id", "collection_id"),
     )
 
 

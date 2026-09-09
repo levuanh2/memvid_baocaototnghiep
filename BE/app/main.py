@@ -35,6 +35,7 @@ from app.clients.llm_factory import summarize_results
 from app.domains.cache import llm_cache
 # Phép chiếu thư viện — thuần, không DB/HTTP. Import ở đầu file (không lười) vì
 # `_doc_public` gọi nó ở mọi phản hồi tài liệu.
+from app.domains.documents import bo_suu_tap as _bo_suu_tap
 from app.domains.documents import thu_vien as _thu_vien
 from shared.config import DEFAULT_LOCAL_MODEL
 # Chỉ dùng cho local Ollama (Gemini sẽ bỏ qua model).
@@ -2800,7 +2801,16 @@ def api_library():
                   {"quizzes": {}, "reviews": {}, "studymaps": {}})
     languages = _thu(lambda: _docs.languages_for(rows.keys()), {})
 
-    return jsonify({"documents": _thu_vien.chieu_thu_vien(
+    # Bộ sưu tập đi CÙNG payload: thanh bên và huy hiệu trên thẻ đều cần nó, và một
+    # lượt gọi thứ hai chỉ để lấy danh sách này là đúng thứ endpoint gộp sinh ra để
+    # tránh. Tên bộ sưu tập nằm ở ĐÂY, không nhúng vào từng tài liệu — tài liệu chỉ
+    # mang `collection_id`, nên đổi tên một bộ sưu tập không phải sửa N chỗ.
+    #
+    # Danh sách THẺ thì KHÔNG trả riêng: mọi tài liệu trong payload đã mang `tags`,
+    # nên thanh bên gộp lại ở client. Trả thêm một mảng thẻ là nhân bản dữ liệu đã có.
+    collections = _thu(lambda: _bo_suu_tap.liet_ke(scope_uid), [])
+
+    documents = _thu_vien.chieu_thu_vien(
         rows,
         summaries=summaries,
         mindmaps=mindmaps,
@@ -2808,7 +2818,9 @@ def api_library():
         quiz_counts=counts.get("quizzes") or {},
         review_counts=counts.get("reviews") or {},
         languages=languages,
-    )})
+    )
+
+    return jsonify({"documents": documents, "collections": collections})
 
 
 @app.patch('/api/documents/<document_id>')
@@ -2859,6 +2871,19 @@ def api_documents_patch(document_id: str):
             return jsonify({"error": loi}), 400
         kw["tags"] = tags
 
+    if "collection_id" in body:
+        cid = body["collection_id"]
+        if cid is None or cid == "":
+            kw["collection_id"] = None       # bỏ khỏi bộ sưu tập
+        elif isinstance(cid, str):
+            # Bộ sưu tập của người khác đọc ra None → 400 "không tồn tại", KHÔNG phải
+            # 403: xác nhận id đó có thật là dựng một oracle để dò id.
+            if not _bo_suu_tap.lay(cid, user_id=uid if _auth_protect_enabled() else None):
+                return jsonify({"error": "Bộ sưu tập không tồn tại"}), 400
+            kw["collection_id"] = cid
+        else:
+            return jsonify({"error": "collection_id phải là chuỗi hoặc null"}), 400
+
     if not kw:
         return jsonify({"error": "Không có trường nào để cập nhật"}), 400
 
@@ -2902,6 +2927,211 @@ def api_documents_opened(document_id: str):
         "last_opened_at": row.get("last_opened_at"),
         "last_workspace": row.get("last_workspace"),
     })
+
+
+# -------------------------
+# 🗂️ Bộ sưu tập + thao tác hàng loạt (Phase 1B)
+# -------------------------
+_TEN_BST_TOI_DA = 100
+_MAU_TOI_DA = 20
+_ICON_TOI_DA = 40
+_BULK_TOI_DA = 200
+
+_BULK_HANH_DONG = ("pin", "unpin", "favorite", "unfavorite", "archive", "unarchive",
+                   "move_collection", "add_tags", "remove_tags", "delete")
+
+
+def _chuoi_tuy_chon(body, khoa, dai_toi_da):
+    """(giá_trị, lỗi). Không gửi → KHONG_DOI. `null`/rỗng → None (xoá giá trị)."""
+    from app.domains.documents.bo_suu_tap import KHONG_DOI
+    if khoa not in body:
+        return KHONG_DOI, None
+    v = body[khoa]
+    if v is None:
+        return None, None
+    if not isinstance(v, str):
+        return None, f"{khoa} phải là chuỗi hoặc null"
+    v = v.strip()
+    if not v:
+        return None, None
+    if len(v) > dai_toi_da:
+        return None, f"{khoa} tối đa {dai_toi_da} ký tự"
+    return v, None
+
+
+@app.get('/api/collections')
+def api_collections_list():
+    """Danh sách bộ sưu tập kèm số tài liệu — một truy vấn gộp.
+
+    Có route riêng NGOÀI `/api/library` vì thanh bên cần làm mới sau khi tạo/sửa/xoá
+    một bộ sưu tập mà không phải tải lại toàn bộ thư viện.
+    """
+    uid, err = _require_app_user()
+    if err:
+        return err
+    scope = uid if _auth_protect_enabled() else None
+    return jsonify({"collections": _bo_suu_tap.liet_ke(scope)})
+
+
+@app.post('/api/collections')
+def api_collections_create():
+    uid, err = _require_app_user()
+    if err:
+        return err
+    body = request.get_json(silent=True)
+    if not isinstance(body, dict):
+        return jsonify({"error": "Body phải là JSON object"}), 400
+
+    ten = body.get("name")
+    if not isinstance(ten, str) or not ten.strip():
+        return jsonify({"error": "Tên bộ sưu tập không được để trống"}), 400
+    ten = ten.strip()
+    if len(ten) > _TEN_BST_TOI_DA:
+        return jsonify({"error": f"Tên tối đa {_TEN_BST_TOI_DA} ký tự"}), 400
+
+    from app.domains.documents.bo_suu_tap import KHONG_DOI
+    mau, loi = _chuoi_tuy_chon(body, "color", _MAU_TOI_DA)
+    if loi:
+        return jsonify({"error": loi}), 400
+    icon, loi = _chuoi_tuy_chon(body, "icon", _ICON_TOI_DA)
+    if loi:
+        return jsonify({"error": loi}), 400
+
+    return jsonify(_bo_suu_tap.tao(
+        user_id=uid if _auth_protect_enabled() else None,
+        name=ten,
+        color=None if mau is KHONG_DOI else mau,
+        icon=None if icon is KHONG_DOI else icon,
+    )), 201
+
+
+@app.patch('/api/collections/<collection_id>')
+def api_collections_patch(collection_id: str):
+    """Vá một phần. Tên đổi ở ĐÂY và chỉ ở đây — tài liệu chỉ giữ `collection_id`,
+    nên không có bản sao tên nào phải cập nhật theo."""
+    uid, err = _require_app_user()
+    if err:
+        return err
+    scope = uid if _auth_protect_enabled() else None
+    if not _bo_suu_tap.lay(collection_id, user_id=scope):
+        return jsonify({"error": "Collection not found"}), 404
+
+    body = request.get_json(silent=True)
+    if not isinstance(body, dict):
+        return jsonify({"error": "Body phải là JSON object"}), 400
+
+    from app.domains.documents.bo_suu_tap import KHONG_DOI
+    kw = {}
+    if "name" in body:
+        ten = body["name"]
+        if not isinstance(ten, str) or not ten.strip():
+            return jsonify({"error": "Tên bộ sưu tập không được để trống"}), 400
+        if len(ten.strip()) > _TEN_BST_TOI_DA:
+            return jsonify({"error": f"Tên tối đa {_TEN_BST_TOI_DA} ký tự"}), 400
+        kw["name"] = ten.strip()
+
+    for khoa, dai in (("color", _MAU_TOI_DA), ("icon", _ICON_TOI_DA)):
+        gt, loi = _chuoi_tuy_chon(body, khoa, dai)
+        if loi:
+            return jsonify({"error": loi}), 400
+        if gt is not KHONG_DOI:
+            kw[khoa] = gt
+
+    if "sort_order" in body:
+        if not isinstance(body["sort_order"], int) or isinstance(body["sort_order"], bool):
+            return jsonify({"error": "sort_order phải là số nguyên"}), 400
+        kw["sort_order"] = body["sort_order"]
+
+    if "archived" in body:
+        if not isinstance(body["archived"], bool):
+            return jsonify({"error": "archived phải là true hoặc false"}), 400
+        kw["archived"] = body["archived"]
+
+    if not kw:
+        return jsonify({"error": "Không có trường nào để cập nhật"}), 400
+    if not _bo_suu_tap.cap_nhat(collection_id, **kw):
+        return jsonify({"error": "Collection not found"}), 404
+    return jsonify(_bo_suu_tap.lay(collection_id, user_id=scope))
+
+
+@app.delete('/api/collections/<collection_id>')
+def api_collections_delete(collection_id: str):
+    """Xoá bộ sưu tập. Tài liệu bên trong KHÔNG bị xoá — khoá ngoại `SET NULL` đưa
+    chúng về "chưa phân loại". Dọn dẹp không được biến thành mất dữ liệu."""
+    uid, err = _require_app_user()
+    if err:
+        return err
+    scope = uid if _auth_protect_enabled() else None
+    if not _bo_suu_tap.lay(collection_id, user_id=scope):
+        return jsonify({"error": "Collection not found"}), 404
+    _bo_suu_tap.xoa(collection_id)
+    return jsonify({"collection_id": collection_id, "deleted": True})
+
+
+@app.post('/api/documents/bulk')
+def api_documents_bulk():
+    """Một hành động, nhiều tài liệu, MỘT phiên database.
+
+    Vì sao không để client lặp `PATCH`: 200 tài liệu × một vòng tới Supabase
+    (~50-100ms) là 20 giây, và một nửa số lượt hỏng giữa chừng để lại trạng thái
+    dở dang mà không ai dọn.
+
+    Id không thuộc về người gọi bị BỎ QUA lặng lẽ, không báo lỗi — báo lỗi là xác
+    nhận id đó có thật. Phản hồi trả số hàng thực sự đổi, nên client vẫn biết được
+    có gì đó không áp dụng được.
+    """
+    uid, err = _require_app_user()
+    if err:
+        return err
+    body = request.get_json(silent=True)
+    if not isinstance(body, dict):
+        return jsonify({"error": "Body phải là JSON object"}), 400
+
+    ids = body.get("document_ids")
+    if not isinstance(ids, list) or not ids or not all(isinstance(i, str) and i for i in ids):
+        return jsonify({"error": "document_ids phải là danh sách id không rỗng"}), 400
+    if len(ids) > _BULK_TOI_DA:
+        return jsonify({"error": f"Tối đa {_BULK_TOI_DA} tài liệu mỗi lần"}), 400
+
+    hanh_dong = body.get("action")
+    if hanh_dong not in _BULK_HANH_DONG:
+        return jsonify({
+            "error": f"action không hợp lệ (chọn: {', '.join(_BULK_HANH_DONG)})"}), 400
+
+    from app.domains.documents import repository as _docs
+    scope = uid if _auth_protect_enabled() else None
+
+    if hanh_dong == "delete":
+        return jsonify({"updated": _docs.bulk_soft_delete(ids, user_id=scope),
+                        "action": hanh_dong})
+
+    kw = {}
+    if hanh_dong in ("pin", "unpin"):
+        kw["pinned"] = hanh_dong == "pin"
+    elif hanh_dong in ("favorite", "unfavorite"):
+        kw["favorite"] = hanh_dong == "favorite"
+    elif hanh_dong in ("archive", "unarchive"):
+        kw["archived"] = hanh_dong == "archive"
+    elif hanh_dong == "move_collection":
+        cid = body.get("collection_id")
+        if cid in (None, ""):
+            kw["collection_id"] = None
+        elif isinstance(cid, str):
+            if not _bo_suu_tap.lay(cid, user_id=scope):
+                return jsonify({"error": "Bộ sưu tập không tồn tại"}), 400
+            kw["collection_id"] = cid
+        else:
+            return jsonify({"error": "collection_id phải là chuỗi hoặc null"}), 400
+    else:   # add_tags / remove_tags
+        tags, loi = _doc_tags(body.get("tags"))
+        if loi:
+            return jsonify({"error": loi}), 400
+        if not tags:
+            return jsonify({"error": "tags không được để trống"}), 400
+        kw["them_tags" if hanh_dong == "add_tags" else "bo_tags"] = tags
+
+    return jsonify({"updated": _docs.bulk_library_fields(ids, user_id=scope, **kw),
+                    "action": hanh_dong})
 
 
 @app.get('/api/documents/<document_id>/sections')

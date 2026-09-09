@@ -263,7 +263,64 @@ def library_fields(row: Mapping[str, Any]) -> Dict[str, Any]:
         "tags": [t for t in tags if isinstance(t, str)] if isinstance(tags, list) else [],
         "last_opened_at": row.get("last_opened_at"),
         "last_workspace": row.get("last_workspace"),
+        # Phase 1B. `collection_id` là KHOÁ, không phải tên — tên nằm ở danh sách
+        # `collections` của payload, một chỗ duy nhất. Nhúng tên vào từng tài liệu
+        # là nhân bản dữ liệu, và bản nhúng sẽ lệch ngay lần đổi tên đầu tiên.
+        "collection_id": row.get("collection_id"),
+        "open_count": int(row.get("open_count") or 0),
     }
+
+
+# ── Xếp hạng "Học gần đây" ──────────────────────────────────────────────────
+
+# Nửa đời của điểm mới-cũ: sau 7 ngày, phần "vừa mở" của điểm giảm còn một nửa.
+NUA_DOI_NGAY = 7.0
+# Trần đóng góp của tần suất. Không có trần thì một tài liệu mở 300 lần sẽ đứng đầu
+# mãi mãi kể cả khi người dùng đã bỏ nó vài tháng — thứ hạng đóng băng.
+TRAN_TAN_SUAT = 5.0
+
+
+def diem_gan_day(row: Mapping[str, Any], *, now_ts: Optional[float] = None,
+                 co_ai_moi: bool = False) -> float:
+    """Điểm "học gần đây" — CÀNG CAO CÀNG TRƯỚC. Thuần, không I/O.
+
+    Ba thành phần, đúng ba thứ đề bài yêu cầu:
+
+      mới-cũ    exp(-tuổi / 7 ngày)      trong (0, 1]
+      tần suất  log2(1 + open_count)     chặn ở 5 → thang (0, 1]
+      AI mới    +0.15 nếu vừa có artifact
+
+    Vì sao phân rã mũ chứ không phải sắp theo `last_opened_at`: sắp theo mốc thời
+    gian đơn thuần thì một tài liệu mở đúng một lần hôm qua luôn đứng trên một tài
+    liệu học 20 lần tuần trước — trong khi cái thứ hai mới là thứ người dùng đang
+    thật sự học. Phân rã mũ để tần suất cạnh tranh được với độ mới, nhưng độ mới
+    vẫn luôn thắng khi khoảng cách thời gian đủ lớn.
+
+    Chưa mở bao giờ → 0.0, và mục "Học gần đây" lọc chúng ra từ trước.
+    """
+    mo = row.get("last_opened_at")
+    if not mo:
+        return 0.0
+    try:
+        from datetime import datetime, timezone as _tz
+        t = datetime.fromisoformat(str(mo).replace("Z", "+00:00"))
+        if t.tzinfo is None:
+            t = t.replace(tzinfo=_tz.utc)
+        tuoi_ngay = max(0.0, ((now_ts if now_ts is not None
+                               else datetime.now(_tz.utc).timestamp()) - t.timestamp())
+                        / 86400.0)
+    except (ValueError, TypeError, OverflowError):
+        return 0.0
+
+    import math
+    moi = math.exp(-tuoi_ngay / NUA_DOI_NGAY)
+    try:
+        lan = max(0, int(row.get("open_count") or 0))
+    except (TypeError, ValueError):
+        lan = 0
+    tan_suat = min(math.log2(1 + lan), TRAN_TAN_SUAT) / TRAN_TAN_SUAT
+
+    return round(0.6 * moi + 0.4 * tan_suat + (0.15 if co_ai_moi else 0.0), 6)
 
 
 # ── Phép chiếu ──────────────────────────────────────────────────────────────
@@ -306,6 +363,11 @@ def chieu_tai_lieu(
         "error": row.get("error"),
     }
     doc.update(library_fields(row))
+    # Điểm xếp hạng tính ở MÁY CHỦ vì nó cần `open_count` — client chỉ sắp theo nó,
+    # không tự tính lại. Một công thức, một chỗ.
+    doc["recency_score"] = diem_gan_day(
+        row, co_ai_moi=bool(summary_record or mindmap_record
+                            or _chuoi(studymap_status).lower() == "completed"))
 
     doc["ai"] = {
         "extraction": ingest["extraction"],

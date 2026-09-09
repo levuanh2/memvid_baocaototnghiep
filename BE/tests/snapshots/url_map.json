@@ -42,6 +42,34 @@
     "rule": "/api/attempts/jobs/<job_id>"
   },
   {
+    "endpoint": "api_collections_create",
+    "methods": [
+      "POST"
+    ],
+    "rule": "/api/collections"
+  },
+  {
+    "endpoint": "api_collections_list",
+    "methods": [
+      "GET"
+    ],
+    "rule": "/api/collections"
+  },
+  {
+    "endpoint": "api_collections_delete",
+    "methods": [
+      "DELETE"
+    ],
+    "rule": "/api/collections/<collection_id>"
+  },
+  {
+    "endpoint": "api_collections_patch",
+    "methods": [
+      "PATCH"
+    ],
+    "rule": "/api/collections/<collection_id>"
+  },
+  {
     "endpoint": "api_config_status",
     "methods": [
       "GET"
@@ -124,6 +152,13 @@
       "GET"
     ],
     "rule": "/api/documents/<document_id>/study-maps"
+  },
+  {
+    "endpoint": "api_documents_bulk",
+    "methods": [
+      "POST"
+    ],
+    "rule": "/api/documents/bulk"
   },
   {
     "endpoint": "api_documents_upload",

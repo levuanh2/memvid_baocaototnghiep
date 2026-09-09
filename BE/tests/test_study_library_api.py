@@ -47,6 +47,7 @@ class DocsGia:
             "created_at": "2026-09-01T00:00:00Z", "user_id": UID,
             "display_name": None, "favorite": False, "pinned": False,
             "archived_at": None, "tags": [], "last_opened_at": None, "last_workspace": None,
+            "collection_id": None, "open_count": 0,
         }
         base.update(kw)
         return base
@@ -436,9 +437,13 @@ def test_doc_public_giu_nguyen_moi_khoa_cu_va_them_bay_khoa_thu_vien(client, moi
           "created_at", "error"}
     moi = {"display_name", "favorite", "pinned", "archived_at", "tags",
            "last_opened_at", "last_workspace"}
+    # Phase 1B thêm đúng hai khoá. Test này CỐ Ý đỏ khi bề mặt đổi — nó vừa bắt
+    # được lần thêm này, và phải bắt được lần sau.
+    moi_1b = {"collection_id", "open_count"}
     assert cu <= set(d), f"mất khoá cũ: {cu - set(d)}"
     assert moi <= set(d), f"thiếu khoá thư viện: {moi - set(d)}"
-    assert set(d) == cu | moi, f"khoá lạ: {set(d) - cu - moi}"
+    assert moi_1b <= set(d), f"thiếu khoá Phase 1B: {moi_1b - set(d)}"
+    assert set(d) == cu | moi | moi_1b, f"khoá lạ: {set(d) - cu - moi - moi_1b}"
 
 
 def test_api_documents_khong_kem_khoi_ai(client, moi_truong):

@@ -46,8 +46,28 @@ export const listDocuments = () =>
 // MỘT lượt gọi cho cả trang: tài liệu + trạng thái AI + đếm quiz/ôn tập + ngôn ngữ.
 // Mọi mục, bộ lọc và chế độ sắp trên trang đều là phép chiếu của payload này —
 // không có endpoint `/sections`, không có tìm kiếm phía máy chủ.
-export const getLibrary = () =>
-  _get("/api/library").then((b) => b.documents || []);
+export const getLibrary = ({ kemBoSuuTap = false } = {}) =>
+  _get("/api/library").then((b) => (kemBoSuuTap
+    ? { documents: b.documents || [], collections: b.collections || [] }
+    : b.documents || []));
+
+// ── Bộ sưu tập (Phase 1B) ───────────────────────────────────────────────────
+// Route riêng ngoài `/api/library` để thanh bên làm mới sau khi tạo/sửa/xoá mà
+// không phải tải lại cả thư viện.
+export const listCollections = () =>
+  _get("/api/collections").then((b) => b.collections || []);
+
+export const createCollection = (payload) => _send("/api/collections", "POST", payload);
+
+export const patchCollection = (collectionId, payload) =>
+  _send(`/api/collections/${encodeURIComponent(collectionId)}`, "PATCH", payload);
+
+export const deleteCollection = (collectionId) =>
+  _send(`/api/collections/${encodeURIComponent(collectionId)}`, "DELETE");
+
+// Một hành động, nhiều tài liệu, MỘT lượt gọi. Lặp PATCH ở client cho 200 tài liệu
+// là 200 vòng mạng, và một nửa hỏng giữa chừng để lại trạng thái dở dang.
+export const bulkDocuments = (payload) => _send("/api/documents/bulk", "POST", payload);
 
 // Vá một phần: chỉ gửi trường thật sự đổi. `display_name: null` xoá tên đã đặt.
 export const patchDocument = (documentId, thayDoi) =>

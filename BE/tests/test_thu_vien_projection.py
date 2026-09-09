@@ -41,6 +41,7 @@ def _row(**kw):
         "created_at": "2026-09-01T10:00:00Z",
         "display_name": None, "favorite": False, "pinned": False,
         "archived_at": None, "tags": [], "last_opened_at": None, "last_workspace": None,
+        "collection_id": None, "open_count": 0,
     }
     base.update(kw)
     return base
@@ -428,3 +429,115 @@ def test_nguon_phu_vang_mat_khong_lam_hong_phep_chieu():
     assert len(out) == 1
     assert out[0]["ai"]["summary"]["state"] == NOT_GEN
     assert out[0]["ai"]["index"] == READY      # tín hiệu bền vững vẫn nguyên
+
+
+# ── Phase 1B: bộ sưu tập + xếp hạng "Học gần đây" ───────────────────────────
+
+def test_collection_id_di_qua_phep_chieu():
+    doc = tv.chieu_tai_lieu("d1", _row(collection_id="c1"))
+    assert doc["collection_id"] == "c1"
+
+
+def test_phep_chieu_khong_nhung_ten_bo_suu_tap():
+    """Tài liệu mang KHOÁ, không mang tên. Nhúng tên vào từng tài liệu là nhân bản
+    dữ liệu, và bản nhúng lệch ngay lần đổi tên bộ sưu tập đầu tiên."""
+    doc = tv.chieu_tai_lieu("d1", _row(collection_id="c1"))
+    assert "collection_name" not in doc
+    assert "collection" not in {k for k in doc if k != "collection_id"}
+
+
+def test_open_count_di_qua_phep_chieu_va_ep_kieu():
+    assert tv.chieu_tai_lieu("d1", _row(open_count=7))["open_count"] == 7
+    assert tv.chieu_tai_lieu("d1", _row(open_count=None))["open_count"] == 0
+    assert tv.chieu_tai_lieu("d1", _row())["open_count"] == 0
+
+
+def _ts(iso):
+    from datetime import datetime, timezone
+    return datetime.fromisoformat(iso.replace("Z", "+00:00")).replace(
+        tzinfo=timezone.utc).timestamp()
+
+
+BAY_GIO = _ts("2026-09-09T12:00:00Z")
+
+
+def test_diem_chua_mo_bao_gio_la_0():
+    assert tv.diem_gan_day({"last_opened_at": None}, now_ts=BAY_GIO) == 0.0
+    assert tv.diem_gan_day({}, now_ts=BAY_GIO) == 0.0
+
+
+def test_diem_giam_dan_theo_thoi_gian():
+    moi = tv.diem_gan_day({"last_opened_at": "2026-09-09T11:00:00Z", "open_count": 1},
+                          now_ts=BAY_GIO)
+    cu = tv.diem_gan_day({"last_opened_at": "2026-08-09T11:00:00Z", "open_count": 1},
+                         now_ts=BAY_GIO)
+    assert moi > cu
+
+
+def test_tan_suat_thang_do_moi_khi_khoang_cach_du_lon():
+    """Đây là LÝ DO công thức tồn tại: sắp theo mốc mở đơn thuần thì tài liệu mở đúng
+    một lần hôm qua luôn đứng trên tài liệu học 20 lần tuần trước — trong khi cái
+    thứ hai mới là thứ người dùng đang thật sự học."""
+    hay_hoc = tv.diem_gan_day(
+        {"last_opened_at": "2026-09-06T12:00:00Z", "open_count": 20}, now_ts=BAY_GIO)
+    mo_mot_lan = tv.diem_gan_day(
+        {"last_opened_at": "2026-09-08T12:00:00Z", "open_count": 1}, now_ts=BAY_GIO)
+    assert hay_hoc > mo_mot_lan
+
+
+def test_do_moi_van_thang_khi_khoang_cach_qua_lon():
+    """Tần suất không được đóng băng thứ hạng: một tài liệu mở 300 lần từ năm ngoái
+    KHÔNG được đứng trên tài liệu vừa mở sáng nay."""
+    cu_nhung_nhieu = tv.diem_gan_day(
+        {"last_opened_at": "2025-09-09T12:00:00Z", "open_count": 300}, now_ts=BAY_GIO)
+    vua_mo = tv.diem_gan_day(
+        {"last_opened_at": "2026-09-09T09:00:00Z", "open_count": 1}, now_ts=BAY_GIO)
+    assert vua_mo > cu_nhung_nhieu
+
+
+def test_tan_suat_bi_chan_tran():
+    """Trên trần thì thêm lượt mở không đổi điểm — nếu không, thứ hạng đóng băng
+    quanh vài tài liệu được mở rất nhiều."""
+    a = tv.diem_gan_day({"last_opened_at": "2026-09-09T11:00:00Z", "open_count": 40},
+                        now_ts=BAY_GIO)
+    b = tv.diem_gan_day({"last_opened_at": "2026-09-09T11:00:00Z", "open_count": 4000},
+                        now_ts=BAY_GIO)
+    assert a == b
+
+
+def test_ai_moi_cong_diem_nhung_khong_lat_nguoc_do_moi():
+    khong_ai = tv.diem_gan_day({"last_opened_at": "2026-09-09T11:00:00Z", "open_count": 1},
+                               now_ts=BAY_GIO)
+    co_ai = tv.diem_gan_day({"last_opened_at": "2026-09-09T11:00:00Z", "open_count": 1},
+                            now_ts=BAY_GIO, co_ai_moi=True)
+    assert co_ai > khong_ai
+    cu_co_ai = tv.diem_gan_day({"last_opened_at": "2025-01-01T00:00:00Z", "open_count": 1},
+                               now_ts=BAY_GIO, co_ai_moi=True)
+    assert khong_ai > cu_co_ai
+
+
+@pytest.mark.parametrize("moc", ["khong-phai-ngay", "", 12345, None])
+def test_diem_moc_thoi_gian_hong_tra_0_khong_nem(moc):
+    assert tv.diem_gan_day({"last_opened_at": moc, "open_count": 5}, now_ts=BAY_GIO) == 0.0
+
+
+def test_diem_open_count_hong_kieu_khong_nem():
+    for xau in ("nhieu", None, [], {}):
+        d = tv.diem_gan_day({"last_opened_at": "2026-09-09T11:00:00Z", "open_count": xau},
+                            now_ts=BAY_GIO)
+        assert 0.0 <= d <= 1.2
+
+
+def test_recency_score_co_mat_trong_payload():
+    doc = tv.chieu_tai_lieu("d1", _row(last_opened_at="2026-09-09T11:00:00Z",
+                                       open_count=3))
+    assert isinstance(doc["recency_score"], float)
+    assert doc["recency_score"] > 0
+    assert tv.chieu_tai_lieu("d1", _row())["recency_score"] == 0.0
+
+
+def test_co_artifact_ai_lam_diem_cao_hon():
+    hang = _row(last_opened_at="2026-09-09T11:00:00Z", open_count=1)
+    khong = tv.chieu_tai_lieu("d1", hang)["recency_score"]
+    co = tv.chieu_tai_lieu("d1", hang, summary_record=_summary(["a"]))["recency_score"]
+    assert co > khong

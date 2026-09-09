@@ -138,6 +138,9 @@ def _row(d: Document) -> Dict[str, Any]:
         "tags": list(d.tags) if isinstance(d.tags, list) else [],
         "last_opened_at": d.last_opened_at.isoformat() if d.last_opened_at else None,
         "last_workspace": d.last_workspace,
+        # Phase 1B — đường ĐỌC của hai cột mới, viết trước đọc là tính năng ma.
+        "collection_id": d.collection_id,
+        "open_count": int(d.open_count or 0),
     }
     if d.error_message:
         out["error"] = d.error_message
@@ -332,7 +335,8 @@ KHONG_DOI = object()
 
 def set_library_fields(document_id: str, *, display_name: Any = KHONG_DOI,
                        favorite: Any = KHONG_DOI, pinned: Any = KHONG_DOI,
-                       archived: Any = KHONG_DOI, tags: Any = KHONG_DOI) -> bool:
+                       archived: Any = KHONG_DOI, tags: Any = KHONG_DOI,
+                       collection_id: Any = KHONG_DOI) -> bool:
     """Cập nhật một phần các cột thư viện. Chỉ ghi trường được gửi.
 
     Hoàn toàn tách khỏi `update_status`: hàm kia chỉ đụng `metadata_json` và
@@ -356,6 +360,9 @@ def set_library_fields(document_id: str, *, display_name: Any = KHONG_DOI,
             d.archived_at = datetime.now(timezone.utc) if archived else None
         if tags is not KHONG_DOI:
             d.tags = list(tags) if tags else None
+        if collection_id is not KHONG_DOI:
+            # `None` = bỏ khỏi bộ sưu tập (về "chưa phân loại"), một thao tác hợp lệ.
+            d.collection_id = collection_id or None
     invalidate_cache()
     return True
 
@@ -372,10 +379,90 @@ def touch_opened(document_id: str, workspace: Optional[str] = None) -> bool:
         if d is None:
             return False
         d.last_opened_at = datetime.now(timezone.utc)
+        # Tần suất: cộng ở ĐÚNG đường ghi đã có, không thêm bảng sự kiện. Một bảng
+        # sự kiện sẽ ghi mỗi lần mở một dòng — chi phí thật cho một con số mà xếp
+        # hạng chỉ cần biết độ lớn.
+        d.open_count = int(d.open_count or 0) + 1
         if workspace:
             d.last_workspace = str(workspace)[:20]
     invalidate_cache()
     return True
+
+
+def bulk_library_fields(document_ids: Iterable[str], *, user_id: Optional[str] = None,
+                        favorite: Any = KHONG_DOI, pinned: Any = KHONG_DOI,
+                        archived: Any = KHONG_DOI, collection_id: Any = KHONG_DOI,
+                        them_tags: Optional[Iterable[str]] = None,
+                        bo_tags: Optional[Iterable[str]] = None) -> int:
+    """Áp một thay đổi cho NHIỀU tài liệu trong MỘT phiên. Trả số hàng đã đổi.
+
+    Một phiên, không phải N lần gọi `set_library_fields`: 200 tài liệu × một vòng
+    kết nối tới Supabase (~50-100ms) là 20 giây người dùng ngồi nhìn.
+
+    Quyền sở hữu lọc NGAY TRONG truy vấn, không phải sau khi lấy về: id của người
+    khác lẫn trong danh sách thì bị bỏ QUA lặng lẽ, không báo lỗi — báo lỗi là xác
+    nhận id đó có thật.
+
+    Thẻ hợp nhất theo tập, không ghi đè: `them_tags` cộng vào thẻ sẵn có (giữ cách
+    viết đầu tiên), `bo_tags` trừ đi. Ghi đè hàng loạt sẽ xoá mất thẻ riêng của
+    từng tài liệu — thứ người dùng không hề yêu cầu.
+    """
+    ids = [str(i) for i in document_ids if i]
+    if not ids:
+        return 0
+    them = [t.strip() for t in (them_tags or []) if isinstance(t, str) and t.strip()]
+    bo = {t.strip().lower() for t in (bo_tags or []) if isinstance(t, str) and t.strip()}
+
+    now = datetime.now(timezone.utc)
+    so = 0
+    with session_scope() as s:
+        q = select(Document).where(Document.id.in_(ids), Document.status != "deleted")
+        if user_id is not None:
+            q = q.where(Document.user_id == user_id)
+        for d in s.execute(q).scalars().all():
+            if favorite is not KHONG_DOI:
+                d.favorite = bool(favorite)
+            if pinned is not KHONG_DOI:
+                d.pinned = bool(pinned)
+            if archived is not KHONG_DOI:
+                d.archived_at = now if archived else None
+            if collection_id is not KHONG_DOI:
+                d.collection_id = collection_id or None
+            if them or bo:
+                hien = [t for t in (d.tags or []) if isinstance(t, str)]
+                khoa = {t.lower() for t in hien}
+                for t in them:
+                    if t.lower() not in khoa:
+                        hien.append(t)
+                        khoa.add(t.lower())
+                hien = [t for t in hien if t.lower() not in bo]
+                d.tags = hien or None
+            so += 1
+    invalidate_cache()
+    return so
+
+
+def bulk_soft_delete(document_ids: Iterable[str], *,
+                     user_id: Optional[str] = None) -> int:
+    """Xoá mềm nhiều tài liệu — CÙNG ngữ nghĩa với `soft_delete` một tài liệu
+    (`status='deleted'` + `metadata_json.ingest_status`), chỉ khác là một phiên.
+    Hai đường xoá lệch ngữ nghĩa nhau là cách chắc chắn nhất để một trong hai sai."""
+    ids = [str(i) for i in document_ids if i]
+    if not ids:
+        return 0
+    so = 0
+    with session_scope() as s:
+        q = select(Document).where(Document.id.in_(ids), Document.status != "deleted")
+        if user_id is not None:
+            q = q.where(Document.user_id == user_id)
+        for d in s.execute(q).scalars().all():
+            d.status = "deleted"
+            meta = dict(d.metadata_json or {})
+            meta["ingest_status"] = "deleted"
+            d.metadata_json = meta
+            so += 1
+    invalidate_cache()
+    return so
 
 
 def languages_for(document_ids: Iterable[str]) -> Dict[str, str]:

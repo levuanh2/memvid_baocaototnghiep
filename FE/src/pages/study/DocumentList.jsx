@@ -3,18 +3,28 @@ import { Link, useNavigate } from "react-router-dom";
 import StudyShell, { EmptyState } from "../../components/study/StudyShell";
 import StudyCard from "../../components/study/StudyCard";
 import AiInsightCard from "../../components/study/AiInsightCard";
+import CollectionSidebar from "../../components/study/CollectionSidebar";
+import BulkBar from "../../components/study/BulkBar";
 import SealMeter from "../../components/study/SealMeter";
 import { Icon } from "../../components/ui/Icon";
 import Spinner from "../../components/ui/Spinner";
 import {
-  MASTERY_LABEL, formatScore, getLibrary, getProgressAttempts, getProgressConcepts,
-  getProgressOverview, markOpened, patchDocument, uploadDocument, moTaLoi,
+  MASTERY_LABEL, bulkDocuments, createCollection, deleteCollection, formatScore,
+  getLibrary, getProgressAttempts, getProgressConcepts, getProgressOverview,
+  markOpened, patchCollection, patchDocument, uploadDocument, moTaLoi,
 } from "../../utils/studyApi";
 import { tim, loc, sapXep, chiaMuc } from "../../utils/thuVienTaiLieu";
 import { docJobDangChay } from "../../utils/trangThaiAi";
 import { duongDi } from "../../utils/tiepTucHoc";
 import { apDungLacQuan } from "../../utils/doiTen";
 import { daDong, dongInsight } from "../../utils/aiInsight";
+import { chiMucBoSuuTap, boSuuTapCua, boSuuTapChoThanhBen, theChoThanhBen }
+  from "../../utils/boSuuTap";
+import {
+  batTat as batTatChon, chonTatCa, daChonHet, locTheoHienThi, phimDanhSach,
+  thanRequest, thayDoiLacQuan, xoaChon,
+} from "../../utils/chonNhieu";
+import { trangThaiRong, nguCanhTuBoLoc } from "../../utils/trangThaiRong";
 
 // Thư viện học tập — mọi mục, bộ lọc và chế độ sắp đều là PHÉP CHIẾU của một
 // payload `/api/library` duy nhất. Không có endpoint `/sections`, không có tìm
@@ -86,6 +96,15 @@ export default function DocumentList() {
   // Job đang chạy ở MÁY NÀY — đọc một lần cho cả danh sách, không đọc theo từng thẻ.
   const [jobs, setJobs] = useState(() => docJobDangChay());
 
+  // Phase 1B. `collections` là nguồn DUY NHẤT của tên/màu bộ sưu tập — tài liệu chỉ
+  // mang `collection_id`, nên không có bản sao nào để lệch.
+  const [collections, setCollections] = useState([]);
+  const [chonBoSuuTap, setChonBoSuuTap] = useState(null);
+  const [chonThe, setChonThe] = useState([]);
+  const [daChon, setDaChon] = useState(() => new Set());
+  const [dangChayBulk, setDangChayBulk] = useState(false);
+  const [chiSoFocus, setChiSoFocus] = useState(-1);
+
   const load = useCallback(async () => {
     setLoading(true);
     setError(null);
@@ -93,13 +112,14 @@ export default function DocumentList() {
       // Thư viện là thứ trang này TỒN TẠI để hiện; ba khối tiến độ là phần thêm.
       // `allSettled` để một cú 500 của /api/progress/* không xoá sạch trang.
       const [thuVien, ov, concepts, history] = await Promise.allSettled([
-        getLibrary(),
+        getLibrary({ kemBoSuuTap: true }),
         getProgressOverview(),
         getProgressConcepts({ weakOnly: true }),
         getProgressAttempts({ limit: 5 }),
       ]);
       if (thuVien.status === "rejected") throw thuVien.reason;
-      setDocuments(thuVien.value);
+      setDocuments(thuVien.value.documents);
+      setCollections(thuVien.value.collections);
       setOverview(ov.status === "fulfilled" ? ov.value : null);
       setWeak(concepts.status === "fulfilled" ? concepts.value.slice(0, 4) : []);
       setAttempts(history.status === "fulfilled" ? history.value : []);
@@ -184,6 +204,76 @@ export default function DocumentList() {
     return vaTaiLieu(doc, thayDoi, hienThi);
   }, [vaTaiLieu]);
 
+  // ── Bộ sưu tập ────────────────────────────────────────────────────────────
+  const taiLaiBoSuuTap = useCallback(async (ham, thongBaoLoi) => {
+    setLoiThaoTac(null);
+    try {
+      return await ham();
+    } catch (err) {
+      setLoiThaoTac(moTaLoi(err, thongBaoLoi));
+      return null;
+    }
+  }, []);
+
+  const taoBoSuuTap = useCallback(async (v) => {
+    const moi = await taiLaiBoSuuTap(() => createCollection(v),
+                                     "Không tạo được bộ sưu tập.");
+    if (moi) setCollections((prev) => [...prev, { ...moi, hien_thi_count: 0 }]);
+  }, [taiLaiBoSuuTap]);
+
+  const suaBoSuuTap = useCallback(async (c, v) => {
+    const moi = await taiLaiBoSuuTap(() => patchCollection(c.collection_id, v),
+                                     "Không lưu được bộ sưu tập.");
+    if (moi) {
+      setCollections((prev) => prev.map((x) =>
+        x.collection_id === c.collection_id ? { ...x, ...moi } : x));
+    }
+  }, [taiLaiBoSuuTap]);
+
+  const xoaBoSuuTap = useCallback(async (c) => {
+    if (!window.confirm(
+      `Xoá bộ sưu tập "${c.name}"? Tài liệu bên trong KHÔNG bị xoá, chúng trở về "chưa phân loại".`)) {
+      return;
+    }
+    const ok = await taiLaiBoSuuTap(() => deleteCollection(c.collection_id),
+                                    "Không xoá được bộ sưu tập.");
+    if (!ok) return;
+    setCollections((prev) => prev.filter((x) => x.collection_id !== c.collection_id));
+    // Tài liệu rơi về "chưa phân loại" — phản chiếu ngay `ON DELETE SET NULL` của
+    // máy chủ để màn hình không hiện một bộ sưu tập vừa biến mất.
+    setDocuments((prev) => prev.map((d) =>
+      d.collection_id === c.collection_id ? { ...d, collection_id: null } : d));
+    if (chonBoSuuTap === c.collection_id) setChonBoSuuTap(null);
+  }, [taiLaiBoSuuTap, chonBoSuuTap]);
+
+  // ── Hàng loạt ─────────────────────────────────────────────────────────────
+  const chayBulk = useCallback(async (hanhDong, kem) => {
+    const than = thanRequest(hanhDong, [...daChon], kem);
+    if (!than) return;
+    setDangChayBulk(true);
+    setLoiThaoTac(null);
+    const lac = thayDoiLacQuan(hanhDong, kem);
+    try {
+      await bulkDocuments(than);
+      if (lac) {
+        // Áp được ngay thì áp — đỡ một vòng tải lại cho thao tác thường dùng nhất.
+        const ids = new Set(than.document_ids);
+        setDocuments((prev) => prev.map((d) =>
+          ids.has(d.document_id) ? { ...d, ...lac } : d));
+      } else {
+        // Thẻ hợp nhất theo TẬP ở máy chủ và xoá đổi cả danh sách — đoán ở client là
+        // đoán sai, nên tải lại thay vì hiện một trạng thái bịa.
+        await load();
+      }
+      setDaChon(xoaChon());
+    } catch (err) {
+      setLoiThaoTac(moTaLoi(err, "Không áp dụng được thao tác."));
+      await load().catch(() => {});
+    } finally {
+      setDangChayBulk(false);
+    }
+  }, [daChon, load]);
+
   const luuTen = useCallback(async (doc, ten) => {
     setDangLuu(true);
     await vaTaiLieu(doc, { display_name: ten }, { display_name: ten });
@@ -192,21 +282,49 @@ export default function DocumentList() {
   }, [vaTaiLieu]);
 
   // ── Phép chiếu ────────────────────────────────────────────────────────────
+  const chiMucBst = useMemo(() => chiMucBoSuuTap(collections), [collections]);
+
   const mucHienThi = useMemo(() => {
-    const daLoc = loc(tim(documents, truyVan), boLoc, { hienLuuTru });
+    const daLoc = loc(tim(documents, truyVan, chiMucBst), boLoc,
+                      { hienLuuTru, collectionId: chonBoSuuTap, tags: chonThe });
     return chiaMuc(sapXep(daLoc, cheDoSap), { hienLuuTru });
-  }, [documents, truyVan, boLoc, hienLuuTru, cheDoSap]);
+  }, [documents, truyVan, chiMucBst, boLoc, hienLuuTru, chonBoSuuTap, chonThe, cheDoSap]);
+
+  const thanhBen = useMemo(
+    () => boSuuTapChoThanhBen(collections, documents, { hienLuuTru }),
+    [collections, documents, hienLuuTru]);
+  const theThanhBen = useMemo(
+    () => theChoThanhBen(documents, { hienLuuTru }), [documents, hienLuuTru]);
+
+  // Lựa chọn phải theo kịp bộ lọc: một tài liệu đã lọc đi mà còn trong lựa chọn thì
+  // "Xoá 3 tài liệu" xoá một thứ người dùng không nhìn thấy.
+  useEffect(() => {
+    setDaChon((prev) => (prev.size ? locTheoHienThi(prev, mucHienThi.tatCa) : prev));
+  }, [mucHienThi.tatCa]);
 
   const docVuaTai = idVuaTai
     ? documents.find((d) => d.document_id === idVuaTai) || null
     : null;
   const hienInsight = (uploading || (docVuaTai && !daDong(idVuaTai)));
 
-  const veThe = (doc) => (
+  // Roving tabindex: đúng MỘT thẻ nhận Tab, mũi tên đi giữa các thẻ. Cho mọi thẻ
+  // `tabIndex=0` thì người dùng bàn phím phải Tab 300 lần để đi qua thư viện.
+  const xuLyPhim = (e, doc, chiSo) => {
+    const kq = phimDanhSach(e, { chiSo, tong: mucHienThi.tatCa.length });
+    if (!kq) return;
+    e.preventDefault();
+    if (kq.loai === "focus") setChiSoFocus(kq.chiSo);
+    else if (kq.loai === "chon") setDaChon((prev) => batTatChon(prev, doc.document_id));
+    else if (kq.loai === "mo") moBeMat(doc, doc.last_workspace || "studymap");
+    else if (kq.loai === "xoa_chon") setDaChon(xoaChon());
+  };
+
+  const veThe = (doc, chiSo = null) => (
     <StudyCard
       key={doc.document_id}
       doc={doc}
       jobs={jobs}
+      boSuuTap={boSuuTapCua(doc, chiMucBst)}
       dangDoiTen={dangDoiTen === doc.document_id}
       dangLuu={dangLuu}
       onDoiTen={setDangDoiTen}
@@ -214,6 +332,10 @@ export default function DocumentList() {
       onHuyDoiTen={() => setDangDoiTen(null)}
       onBatTat={batTat}
       onMo={moBeMat}
+      daChon={daChon.has(doc.document_id)}
+      onChon={(id) => setDaChon((prev) => batTatChon(prev, id))}
+      tabIndex={chiSo == null ? undefined : (chiSo === Math.max(0, chiSoFocus) ? 0 : -1)}
+      onKeyDown={chiSo == null ? undefined : (e) => xuLyPhim(e, doc, chiSo)}
     />
   );
 
@@ -221,6 +343,9 @@ export default function DocumentList() {
   const muc = [
     ["Đã ghim", mucHienThi.daGhim],
     ["Yêu thích", mucHienThi.yeuThich],
+    ["Hôm nay", mucHienThi.homNay],
+    ["Hôm qua", mucHienThi.homQua],
+    ["Tuần này", mucHienThi.tuanNay],
     ["Học gần đây", mucHienThi.hocGanDay],
     ["Tải lên gần đây", mucHienThi.taiLenGanDay],
     ["Chưa mở bao giờ", mucHienThi.chuaMoBaoGio],
@@ -254,6 +379,25 @@ export default function DocumentList() {
         </>
       }
     >
+      <div className="flex gap-6 items-start">
+      <CollectionSidebar
+        boSuuTap={thanhBen.boSuuTap}
+        chuaPhanLoai={thanhBen.chuaPhanLoai}
+        the={theThanhBen}
+        chon={{ collectionId: chonBoSuuTap, tags: chonThe, khoa: boLoc }}
+        onChon={(v) => {
+          setChonBoSuuTap(v.collectionId ?? null);
+          setChonThe(v.tags || []);
+          if (v.khoa) setBoLoc((prev) => (prev.join() === v.khoa.join() ? [] : v.khoa));
+        }}
+        onTao={taoBoSuuTap}
+        onSua={suaBoSuuTap}
+        onXoa={xoaBoSuuTap}
+        hienLuuTru={hienLuuTru}
+        onHienLuuTru={setHienLuuTru}
+      />
+
+      <div className="min-w-0 flex-1">
       {hienInsight && (
         <AiInsightCard
           doc={docVuaTai}
@@ -274,6 +418,14 @@ export default function DocumentList() {
       )}
 
       {overview && <Overview overview={overview} />}
+
+      <BulkBar
+        so={daChon.size}
+        boSuuTap={thanhBen.boSuuTap}
+        dangChay={dangChayBulk}
+        onHanhDong={chayBulk}
+        onXoaChon={() => setDaChon(xoaChon())}
+      />
 
       {/* Thanh công cụ */}
       <div className="mb-6 flex flex-wrap items-center gap-2">
@@ -343,6 +495,23 @@ export default function DocumentList() {
                  className="w-3.5 h-3.5 accent-brand rounded" />
           <span className="text-[12.5px] text-text-secondary">Hiện đã lưu trữ</span>
         </label>
+
+        {mucHienThi.tatCa.length > 0 && (
+          <label className="flex items-center gap-2 cursor-pointer px-1">
+            <input
+              type="checkbox"
+              checked={daChonHet(daChon, mucHienThi.tatCa)}
+              onChange={(e) => setDaChon(e.target.checked
+                ? chonTatCa(mucHienThi.tatCa) : xoaChon())}
+              className="w-3.5 h-3.5 accent-brand rounded"
+            />
+            {/* Nói rõ phạm vi: "tất cả" ở đây là những gì ĐANG hiện, không phải cả
+                thư viện — chọn 300 tài liệu đang ẩn rồi xoá là mất dữ liệu. */}
+            <span className="text-[12.5px] text-text-secondary">
+              Chọn {mucHienThi.tatCa.length} đang hiện
+            </span>
+          </label>
+        )}
       </div>
 
       {/* Tiếp tục học */}
@@ -385,35 +554,47 @@ export default function DocumentList() {
       <section className="mb-7">
         <SectionTitle dem={mucHienThi.tatCa.length}>Tất cả tài liệu</SectionTitle>
         {mucHienThi.tatCa.length === 0 ? (
-          documents.length === 0 ? (
-            <EmptyState
-              icon="FileStack"
-              title="Chưa có tài liệu nào"
-              hint="Tải lên PDF, Word, PowerPoint, Excel, Markdown, EPUB hoặc ảnh chụp trang sách để bắt đầu."
-              action={
-                <button type="button" className="btn-seal text-[13px] mt-1 disabled:opacity-60"
-                        disabled={uploading} onClick={() => fileRef.current?.click()}>
-                  {uploading ? "Đang tải lên…" : "Tải tài liệu"}
-                </button>
-              }
-            />
-          ) : (
-            // "Không khớp bộ lọc" và "chưa có gì" là hai màn hình khác nhau — gộp
-            // chúng làm người có đủ tài liệu đọc thành "thư viện trống".
-            <EmptyState
-              icon="Search"
-              title="Không có tài liệu nào khớp"
-              hint="Thử bớt từ khoá hoặc bỏ bớt bộ lọc."
-              action={
-                <button type="button" className="pill-action mt-1"
-                        onClick={() => { setTruyVan(""); setBoLoc([]); }}>
-                  Xoá tìm kiếm và bộ lọc
-                </button>
-              }
-            />
-          )
+          // "Chưa có gì", "không khớp bộ lọc" và "mục này trống" là BA màn hình khác
+          // nhau. Gộp chúng làm người có đủ tài liệu đọc thành "thư viện trống" rồi
+          // đi tải lên lại từ đầu.
+          (() => {
+            const rong = trangThaiRong(
+              documents.length === 0
+                ? "thu_vien"
+                : nguCanhTuBoLoc({ collectionId: chonBoSuuTap, tags: chonThe,
+                                   khoa: boLoc, truyVan }),
+              { coTaiLieu: documents.length > 0 });
+            return (
+              <EmptyState
+                icon={rong.icon}
+                title={rong.tieuDe}
+                hint={rong.goiY}
+                action={rong.hanhDong ? (
+                  <button
+                    type="button"
+                    className={rong.khoaHanhDong === "tai_len"
+                      ? "btn-seal text-[13px] mt-1 disabled:opacity-60" : "pill-action mt-1"}
+                    disabled={rong.khoaHanhDong === "tai_len" && uploading}
+                    onClick={() => {
+                      if (rong.khoaHanhDong === "tai_len") return fileRef.current?.click();
+                      setTruyVan("");
+                      setBoLoc([]);
+                      setChonBoSuuTap(null);
+                      setChonThe([]);
+                    }}
+                  >
+                    {rong.khoaHanhDong === "tai_len" && uploading
+                      ? "Đang tải lên…" : rong.hanhDong}
+                  </button>
+                ) : null}
+              />
+            );
+          })()
         ) : (
-          <div className="flex flex-col gap-2.5">{mucHienThi.tatCa.map(veThe)}</div>
+          <div className="flex flex-col gap-2.5" role="listbox"
+               aria-label="Danh sách tài liệu" aria-multiselectable="true">
+            {mucHienThi.tatCa.map((d, i) => veThe(d, i))}
+          </div>
         )}
       </section>
 
@@ -451,6 +632,8 @@ export default function DocumentList() {
           </div>
         </section>
       )}
+      </div>
+      </div>
     </StudyShell>
   );
 }

@@ -4,6 +4,8 @@ import { chipHienThi, READY, GENERATING } from "../../utils/trangThaiAi";
 import { tenHienThi, thoiGianDoc, nhanThoiGianDoc } from "../../utils/thuVienTaiLieu";
 import { tiepTucHoc } from "../../utils/tiepTucHoc";
 import { kiemTraTen } from "../../utils/doiTen";
+import { hexMau } from "../../utils/boSuuTap";
+import { nhanOChon } from "../../utils/chonNhieu";
 
 /**
  * Thẻ tài liệu của Thư viện học tập.
@@ -13,8 +15,11 @@ import { kiemTraTen } from "../../utils/doiTen";
  * Thứ AI đã chuẩn bị đứng trên thứ người dùng đã tải lên; tên tệp không bao giờ
  * lấn át nội dung được sinh ra.
  *
- * Không có: ảnh thu nhỏ sơ đồ, dòng hoạt động gần đây của từng thẻ, giao diện
- * Collections, và không có hành động "Mở tệp".
+ * Không có: ảnh thu nhỏ sơ đồ, và không có hành động "Mở tệp".
+ *
+ * Phase 1B thêm: huy hiệu bộ sưu tập, ô chọn để thao tác hàng loạt, và một dòng
+ * hoạt động gần đây GỘP vào hàng siêu dữ liệu — không phải một khối riêng. Thẻ đã
+ * mang bảy thông tin; thêm một khối nữa là biến nó thành bảng biểu.
  */
 
 const MAU_CHIP = {
@@ -96,8 +101,8 @@ function DoiTenTaiCho({ giaTriDau, dangLuu, onLuu, onHuy }) {
 }
 
 export default function StudyCard({
-  doc, jobs, dangDoiTen, dangLuu, onDoiTen, onLuuTen, onHuyDoiTen,
-  onBatTat, onMo,
+  doc, jobs, boSuuTap, dangDoiTen, dangLuu, onDoiTen, onLuuTen, onHuyDoiTen,
+  onBatTat, onMo, daChon, onChon, tabIndex, onKeyDown, refThe,
 }) {
   const [menuMo, setMenuMo] = useState(false);
   const ten = tenHienThi(doc);
@@ -108,12 +113,19 @@ export default function StudyCard({
   const tiepTuc = tiepTucHoc(doc);
   const daIndex = ai.index === "ready";
 
+  // Hoạt động gần đây nằm CHUNG hàng siêu dữ liệu, không phải một khối riêng —
+  // "mở 2 giờ trước · Sơ đồ tư duy" nói đủ chuyện mà không tốn thêm một dòng.
+  const hoatDong = tiepTuc
+    ? `mở ${tiepTuc.nhanThoiGian}${tiepTuc.beMat ? ` · ${tiepTuc.nhanBeMat}` : ""}`
+    : null;
+
   const sieuDuLieu = [
     nhanThoiGianDoc(phut),
     doc.page_count ? `${doc.page_count} trang` : null,
     doc.chunk_count ? `${doc.chunk_count} đoạn` : null,
     doc.language || null,
-    tiepTuc?.nhanThoiGian ? `mở ${tiepTuc.nhanThoiGian}` : null,
+    hoatDong,
+    doc.open_count > 1 ? `${doc.open_count} lần mở` : null,
   ].filter(Boolean);
 
   const hanhDong = [
@@ -125,12 +137,36 @@ export default function StudyCard({
   ];
 
   return (
-    <div className="surface-card !p-4 flex flex-col gap-3"
-         style={doc.archived_at ? { opacity: 0.62 } : undefined}>
+    <div
+      ref={refThe}
+      // `tabIndex` do danh sách cấp phát (roving tabindex): đúng MỘT thẻ nhận Tab,
+      // mũi tên đi giữa các thẻ. Cho mọi thẻ `tabIndex=0` thì người dùng bàn phím
+      // phải Tab qua 300 lần để tới thanh dưới.
+      tabIndex={tabIndex}
+      onKeyDown={onKeyDown}
+      aria-selected={onChon ? Boolean(daChon) : undefined}
+      className="surface-card !p-4 flex flex-col gap-3 outline-none
+                 focus-visible:ring-2 focus-visible:ring-offset-2"
+      style={{
+        ...(doc.archived_at ? { opacity: 0.62 } : null),
+        ...(daChon ? { borderColor: "var(--accent)" } : null),
+        "--tw-ring-color": "var(--accent)", "--tw-ring-offset-color": "var(--bg-card)",
+      }}
+    >
 
       {/* Tên + cờ + menu */}
       <div className="flex items-start gap-3">
-        <Icon name="FileText" size={18} className="text-text-muted shrink-0 mt-[3px]" />
+        {onChon ? (
+          <input
+            type="checkbox"
+            checked={Boolean(daChon)}
+            onChange={() => onChon(doc.document_id)}
+            aria-label={nhanOChon(ten, Boolean(daChon))}
+            className="w-[15px] h-[15px] mt-[4px] accent-brand rounded cursor-pointer shrink-0"
+          />
+        ) : (
+          <Icon name="FileText" size={18} className="text-text-muted shrink-0 mt-[3px]" />
+        )}
 
         {dangDoiTen ? (
           <DoiTenTaiCho giaTriDau={doc.display_name || doc.title}
@@ -147,6 +183,18 @@ export default function StudyCard({
                 <span className="shrink-0 text-[10.5px] text-text-muted">· đã lưu trữ</span>
               )}
             </div>
+            {/* Huy hiệu bộ sưu tập: TÊN lấy từ danh sách chung, không từ tài liệu —
+                tài liệu chỉ mang `collection_id`, nên đổi tên là một lượt ghi. */}
+            {boSuuTap && (
+              <span className="mt-1 inline-flex items-center gap-1.5 rounded-full px-2 py-[2px]
+                               text-[11px] max-w-full"
+                    style={{ background: "var(--bg-sidebar)", color: "var(--text-secondary)",
+                             border: "1px solid var(--border)" }}>
+                <span aria-hidden className="w-2 h-2 rounded-full shrink-0"
+                      style={{ background: hexMau(boSuuTap.color) }} />
+                <span className="truncate">{boSuuTap.name}</span>
+              </span>
+            )}
             {/* Tên tệp gốc: giữ lại vì người dùng nhận ra nó, nhưng mờ và nhỏ —
                 nó không phải thứ quan trọng nhất trên thẻ này. */}
             {doc.display_name && (

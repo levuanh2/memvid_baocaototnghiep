@@ -1,7 +1,8 @@
 import { describe, it, expect } from "vitest";
 import {
   boDau, tim, chuoiTim, sapXep, loc, chiaMuc, thoiGianDoc, nhanThoiGianDoc,
-  tenHienThi, CHE_DO_SAP, BO_LOC,
+  tenHienThi, CHE_DO_SAP, BO_LOC, nhomThoiGian, dauNgay, KHONG_PHAN_LOAI,
+  locTheoBoSuuTap, locTheoThe,
 } from "./thuVienTaiLieu";
 
 const doc = (over = {}) => ({
@@ -11,6 +12,7 @@ const doc = (over = {}) => ({
   char_count: 4000, page_count: 4, chunk_count: 12,
   created_at: "2026-09-01T00:00:00Z", last_opened_at: null, last_workspace: null,
   favorite: false, pinned: false, archived_at: null,
+  collection_id: null, open_count: 0, recency_score: 0,
   ai: {
     index: "ready", extraction: "ready", embedding: "ready", chat_ready: "ready",
     summary: { state: "not_generated", preview: null, ai_overview: null, entities: [] },
@@ -373,5 +375,177 @@ describe("chiaMuc", () => {
     ];
     expect(chiaMuc(ds).tatCa[0].document_id).toBe("thuong");   // tatCa giữ thứ tự đầu vào
     expect(sapXep(chiaMuc(ds).tatCa, "newest")[0].document_id).toBe("ghim");
+  });
+});
+
+
+// ── Phase 1B ────────────────────────────────────────────────────────────────
+
+describe("nhomThoiGian — theo lịch địa phương, không phải 24 giờ", () => {
+  const now = new Date("2026-09-09T12:00:00").getTime();
+  const dau = dauNgay(now);
+
+  it("hôm nay", () => {
+    expect(nhomThoiGian(new Date(dau + 3600000).toISOString(), now)).toBe("today");
+  });
+
+  it("23:00 hôm qua là 'hôm qua', dù mới cách 13 tiếng", () => {
+    // Trừ 24 giờ sẽ gọi nó là "hôm nay" — sai với cách người dùng nghĩ về ngày.
+    expect(nhomThoiGian(new Date(dau - 3600000).toISOString(), now)).toBe("yesterday");
+  });
+
+  it("trong tuần", () => {
+    expect(nhomThoiGian(new Date(dau - 3 * 86400000).toISOString(), now)).toBe("this_week");
+  });
+
+  it("cũ hơn", () => {
+    expect(nhomThoiGian(new Date(dau - 30 * 86400000).toISOString(), now)).toBe("older");
+  });
+
+  it("mốc hỏng hoặc thiếu trả null", () => {
+    expect(nhomThoiGian(null, now)).toBeNull();
+    expect(nhomThoiGian("rác", now)).toBeNull();
+    expect(nhomThoiGian(undefined, now)).toBeNull();
+  });
+});
+
+describe("lọc theo bộ sưu tập và thẻ", () => {
+  const ds = [
+    doc({ document_id: "a", collection_id: "c1", tags: ["AI", "Exam"] }),
+    doc({ document_id: "b", collection_id: "c2", tags: ["AI"] }),
+    doc({ document_id: "c", collection_id: null, tags: [] }),
+  ];
+
+  it("lọc theo một bộ sưu tập", () => {
+    expect(loc(ds, [], { collectionId: "c1" }).map((d) => d.document_id)).toEqual(["a"]);
+  });
+
+  it("KHONG_PHAN_LOAI chọn đúng tài liệu chưa có bộ sưu tập", () => {
+    expect(loc(ds, [], { collectionId: KHONG_PHAN_LOAI }).map((d) => d.document_id))
+      .toEqual(["c"]);
+  });
+
+  it("nhiều thẻ là AND, không phải OR", () => {
+    // OR thì chọn càng nhiều thẻ càng ra nhiều kết quả — đúng ngược ý người lọc.
+    expect(loc(ds, [], { tags: ["AI"] }).map((d) => d.document_id)).toEqual(["a", "b"]);
+    expect(loc(ds, [], { tags: ["AI", "Exam"] }).map((d) => d.document_id)).toEqual(["a"]);
+  });
+
+  it("thẻ không phân biệt hoa thường", () => {
+    expect(loc(ds, [], { tags: ["ai"] })).toHaveLength(2);
+  });
+
+  it("bộ sưu tập kết hợp với thẻ và với BO_LOC", () => {
+    expect(loc(ds, ["pdf"], { collectionId: "c1", tags: ["AI"] })
+      .map((d) => d.document_id)).toEqual(["a"]);
+  });
+
+  it("bộ lọc uncategorized", () => {
+    expect(loc(ds, ["uncategorized"]).map((d) => d.document_id)).toEqual(["c"]);
+  });
+
+  it("helper locTheoBoSuuTap / locTheoThe dùng độc lập được", () => {
+    expect(ds.filter(locTheoBoSuuTap("c2")).map((d) => d.document_id)).toEqual(["b"]);
+    expect(ds.filter(locTheoThe("exam")).map((d) => d.document_id)).toEqual(["a"]);
+  });
+});
+
+describe("bộ lọc recent", () => {
+  it("chỉ nhận tài liệu mở trong 7 ngày", () => {
+    const moi = doc({ document_id: "moi", last_opened_at: new Date().toISOString() });
+    const cu = doc({ document_id: "cu",
+      last_opened_at: new Date(Date.now() - 30 * 86400000).toISOString() });
+    const chua = doc({ document_id: "chua" });
+    expect(loc([moi, cu, chua], ["recent"]).map((d) => d.document_id)).toEqual(["moi"]);
+  });
+});
+
+describe("tìm theo tên bộ sưu tập", () => {
+  const idx = new Map([["c1", { collection_id: "c1", name: "Hệ điều hành" }]]);
+  const ds = [
+    doc({ document_id: "a", title: "chuong4.pdf", collection_id: "c1" }),
+    doc({ document_id: "b", title: "khac.pdf" }),
+  ];
+
+  it("gõ tên bộ sưu tập tìm ra tài liệu bên trong", () => {
+    expect(tim(ds, "he dieu hanh", idx).map((d) => d.document_id)).toEqual(["a"]);
+  });
+
+  it("không dấu vẫn khớp", () => {
+    expect(tim(ds, "HỆ ĐIỀU", idx)).toHaveLength(1);
+  });
+
+  it("không truyền chỉ mục thì chỉ mất khả năng tìm theo bộ sưu tập, không nổ", () => {
+    expect(tim(ds, "he dieu hanh")).toHaveLength(0);
+    expect(() => tim(ds, "x")).not.toThrow();
+  });
+
+  it("chuoiTim nhận tên bộ sưu tập truyền vào, không lấy từ tài liệu", () => {
+    // Tài liệu chỉ mang `collection_id`; không có bản sao tên nào để lệch.
+    expect(chuoiTim(ds[0], "Hệ điều hành")).toContain("he dieu hanh");
+    expect(chuoiTim(ds[0])).not.toContain("he dieu hanh");
+  });
+});
+
+describe("sắp theo recently_studied", () => {
+  it("dùng recency_score của máy chủ", () => {
+    const cao = doc({ document_id: "cao", recency_score: 0.9,
+      last_opened_at: "2026-09-01T00:00:00Z" });
+    const thap = doc({ document_id: "thap", recency_score: 0.2,
+      last_opened_at: "2026-09-08T00:00:00Z" });
+    expect(sapXep([thap, cao], "recently_studied").map((d) => d.document_id))
+      .toEqual(["cao", "thap"]);
+  });
+
+  it("thiếu điểm thì lùi về mốc mở cuối", () => {
+    const a = doc({ document_id: "a", last_opened_at: "2026-09-08T00:00:00Z",
+      recency_score: undefined });
+    const b = doc({ document_id: "b", last_opened_at: "2026-09-01T00:00:00Z",
+      recency_score: undefined });
+    expect(sapXep([b, a], "recently_studied").map((d) => d.document_id)).toEqual(["a", "b"]);
+  });
+
+  it("vẫn tuân Ghim → Yêu thích", () => {
+    const ghim = doc({ document_id: "ghim", pinned: true, recency_score: 0 });
+    const diem = doc({ document_id: "diem", recency_score: 0.99 });
+    expect(sapXep([diem, ghim], "recently_studied").map((d) => d.document_id))
+      .toEqual(["ghim", "diem"]);
+  });
+
+  it("có mặt trong CHE_DO_SAP", () => {
+    expect(CHE_DO_SAP).toContain("recently_studied");
+  });
+});
+
+describe("mục theo lịch trong chiaMuc", () => {
+  const now = new Date("2026-09-09T12:00:00").getTime();
+  const dau = dauNgay(now);
+  const ds = [
+    doc({ document_id: "homnay", last_opened_at: new Date(dau + 3600000).toISOString() }),
+    doc({ document_id: "homqua", last_opened_at: new Date(dau - 3600000).toISOString() }),
+    doc({ document_id: "tuannay",
+      last_opened_at: new Date(dau - 3 * 86400000).toISOString() }),
+    doc({ document_id: "cu", last_opened_at: new Date(dau - 60 * 86400000).toISOString() }),
+  ];
+
+  it("chia đúng ba nhóm và không nhóm nào nuốt tài liệu cũ", () => {
+    const m = chiaMuc(ds, { now });
+    expect(m.homNay.map((d) => d.document_id)).toEqual(["homnay"]);
+    expect(m.homQua.map((d) => d.document_id)).toEqual(["homqua"]);
+    expect(m.tuanNay.map((d) => d.document_id)).toEqual(["tuannay"]);
+    expect(m.homNay.concat(m.homQua, m.tuanNay).map((d) => d.document_id))
+      .not.toContain("cu");
+  });
+
+  it("chưa mở bao giờ không vào mục lịch nào", () => {
+    const m = chiaMuc([doc({ document_id: "chua" })], { now });
+    expect(m.homNay.concat(m.homQua, m.tuanNay)).toEqual([]);
+  });
+
+  it("mục lịch rỗng là mảng rỗng, không phải undefined", () => {
+    const m = chiaMuc([], { now });
+    expect(m.homNay).toEqual([]);
+    expect(m.homQua).toEqual([]);
+    expect(m.tuanNay).toEqual([]);
   });
 });
