@@ -8,6 +8,8 @@ import { useStudyJob } from "../../hooks/useStudyJob";
 import { nenChanLan } from "../../utils/wheelGate";
 import { LAYOUT_IDS, nhanLayout, thongSoReactD3Tree } from "../../utils/studyMapLayout";
 import { docPrefs, writeDocPref } from "../../utils/studyMapPreference";
+import { lienQuanCuaNode } from "../../utils/studyMapGraph";
+import { diChuyenKetQua, phimTimKiemStudyMap, timStudyMap } from "../../utils/studyMapSearch";
 import {
   NODE_TYPE_LABEL,
   RELATION_LABEL,
@@ -57,6 +59,52 @@ export default function StudyMapView() {
     setLayoutId(id);
     writeDocPref(window.localStorage, documentId, { layout: id });
   }, [documentId]);
+
+  // Focus mode (Phase 2 #4) — click một node vừa CHỌN (bảng chi tiết, hành vi cũ)
+  // vừa FOCUS (làm mờ nhánh không liên quan). Cùng một cú bấm, hai việc bổ sung
+  // nhau, không phải hai cử chỉ tranh nhau.
+  const [focusedId, setFocusedId] = useState(null);
+  const focusInfo = useMemo(
+    () => (focusedId ? lienQuanCuaNode(focusedId, map?.nodes) : null), [focusedId, map]);
+  const boFocus = useCallback(() => setFocusedId(null), []);
+
+  // Tìm kiếm (Phase 2 #6). `ketQuaTho` tính lại mỗi lần gõ (44 node hiện tại rẻ tới
+  // mức không cần debounce; sơ đồ lớn hơn nhiều thì thêm debounce ở ĐÂY mà không đổi
+  // hình dạng state phía dưới). `chiSoTim` là state RIÊNG cho mũi tên di chuyển được
+  // mà không phải tính lại danh sách khớp — gộp lại thành `ketQuaTim` để nơi dùng chỉ
+  // thấy đúng MỘT mô hình {matches, activeIndex, total}.
+  const [truyVan, setTruyVan] = useState("");
+  const [chiSoTim, setChiSoTim] = useState(0);
+  const ketQuaTho = useMemo(() => timStudyMap(map?.nodes, truyVan), [map, truyVan]);
+  // Không có khớp nào thì `ketQuaTho.activeIndex` đã đúng là -1 — không đụng vào.
+  // Có khớp thì kẹp `chiSoTim` (có thể lệch khỏi phạm vi mới sau khi truy vấn đổi
+  // số lượng khớp) về đúng vòng bằng chính công thức `diChuyenKetQua` dùng cho
+  // mũi tên, không viết lại phép chia dư ở đây lần nữa.
+  const ketQuaTim = useMemo(() => (ketQuaTho.total
+    ? diChuyenKetQua({ ...ketQuaTho, activeIndex: chiSoTim }, 0)
+    : ketQuaTho), [ketQuaTho, chiSoTim]);
+  const nodeIdChon = ketQuaTim.activeIndex >= 0 ? ketQuaTim.matches[ketQuaTim.activeIndex] : null;
+  const tapKhopTim = useMemo(() => new Set(ketQuaTim.matches), [ketQuaTim]);
+
+  const doiTruyVan = useCallback((q) => { setTruyVan(q); setChiSoTim(0); }, []);
+
+  const xuLyPhimTim = useCallback((e) => {
+    const kq = phimTimKiemStudyMap(e);
+    if (!kq) return;
+    e.preventDefault();
+    if (kq.loai === "tiep") setChiSoTim((i) => diChuyenKetQua({ ...ketQuaTho, activeIndex: i }, 1).activeIndex);
+    else if (kq.loai === "truoc") setChiSoTim((i) => diChuyenKetQua({ ...ketQuaTho, activeIndex: i }, -1).activeIndex);
+    else if (kq.loai === "xoa") doiTruyVan("");
+    else if (kq.loai === "nhay" && nodeIdChon) {
+      // "Nhảy" KHÔNG cuộn/căn giữa camera tới node — react-d3-tree v3.6.6 không có
+      // API pan-tới-node công khai, và giả lập bằng cách sửa `__rd3t` nội bộ là đúng
+      // thứ approval của phase này cấm ("không vá bằng cách sửa nội bộ thư viện").
+      // Thay vào đó: chọn node để mở bảng chi tiết (đọc được nội dung ngay cả khi
+      // node đang nằm trong nhánh còn gập) VÀ focus nó (làm nổi bật đường tổ tiên).
+      const n = (map?.nodes || []).find((x) => x.node_id === nodeIdChon);
+      if (n) { setSelected(n); setFocusedId(n.node_id); }
+    }
+  }, [nodeIdChon, map, ketQuaTho, doiTruyVan]);
 
   const openMap = useCallback(async (mapId, documentIdForChunks) => {
     const body = await getStudyMap(mapId);
@@ -127,6 +175,32 @@ export default function StudyMapView() {
     return () => el.removeEventListener("wheel", chan, { capture: true });
   }, [map]);
 
+  // Esc xoá focus khi bàn phím KHÔNG ở ô tìm kiếm (ô đó tự xử lý Esc riêng, cùng lúc
+  // với việc điều hướng kết quả) — bấm một node để focus rồi Esc phải thoát được mà
+  // không cần bấm nút "Bỏ focus". Trang này trước Phase 2 không có phím tắt nào, nên
+  // đây không đụng vào hành vi Esc nào đã có.
+  useEffect(() => {
+    if (!focusedId) return undefined;
+    const onKey = (e) => {
+      if (e.key !== "Escape") return;
+      const ae = document.activeElement;
+      if (ae && /^(INPUT|TEXTAREA|SELECT)$/.test(ae.tagName)) return;
+      setFocusedId(null);
+    };
+    window.addEventListener("keydown", onKey);
+    return () => window.removeEventListener("keydown", onKey);
+  }, [focusedId]);
+
+  // Bản đồ MỚI (tải lần đầu hoặc "Dựng lại") có tập node_id khác — focus/tìm kiếm cũ
+  // trỏ vào id không còn tồn tại thì focus sẽ làm mờ HẾT (không node nào khớp `all`),
+  // trông như sơ đồ vỡ. Dọn theo đúng mốc `map` đổi, không đợi người dùng tự bấm "Bỏ
+  // focus" sau một lần dựng lại.
+  useEffect(() => {
+    setFocusedId(null);
+    setTruyVan("");
+    setChiSoTim(0);
+  }, [map]);
+
   const tree = useMemo(() => buildMapTree(map?.nodes), [map]);
   const nodeById = useMemo(
     () => new Map((map?.nodes || []).map((n) => [n.node_id, n])),
@@ -164,22 +238,33 @@ export default function StudyMapView() {
       const attrs = nodeDatum.attributes || {};
       const m = markOf(attrs.node_type);
       const isSel = selected && attrs.node_id === selected.node_id;
+      const isMatch = attrs.node_id && tapKhopTim.has(attrs.node_id);
+      const isActiveMatch = attrs.node_id && attrs.node_id === nodeIdChon;
+      // Focus: không có focus nào ⇒ mọi node sáng bình thường (không phải mờ-hết-rồi-
+      // không-ai-sáng). Có focus ⇒ chỉ tổ tiên/chính node/hậu duệ giữ độ sáng đầy đủ.
+      const daMo = !focusInfo || focusInfo.all.has(attrs.node_id);
       // Cây mở sẵn ở tầng 1, nên MỘT cú bấm phải làm cả hai việc: chọn node để
-      // đọc chi tiết, và bung/thu nhánh. Chỉ setSelected thì nhánh sâu không có
-      // cách nào mở ra.
+      // đọc chi tiết, và bung/thu nhánh — VÀ (Phase 2 #4) focus nó, làm nổi bật
+      // đường tổ tiên/hậu duệ. Ba việc, một cử chỉ, không cử chỉ nào tranh nhau.
       const hasBranch = Boolean(nodeDatum.children?.length || nodeDatum._children?.length);
       const onPick = () => {
-        if (attrs.node_id) setSelected(attrs);
+        if (attrs.node_id) { setSelected(attrs); setFocusedId(attrs.node_id); }
         if (hasBranch) toggleNode();
       };
       return (
-        <g onClick={onPick} style={{ cursor: "pointer" }}>
+        <g onClick={onPick} style={{ cursor: "pointer", opacity: daMo ? 1 : 0.22 }}>
           <circle
             r={m.r}
             fill={isSel ? "var(--brand)" : m.fill}
-            stroke={isSel ? "var(--brand)" : m.stroke}
-            strokeWidth={isSel ? 3 : 1.6}
+            stroke={isActiveMatch ? "var(--accent)" : isSel ? "var(--brand)" : m.stroke}
+            strokeWidth={isActiveMatch ? 3.5 : isSel ? 3 : 1.6}
           />
+          {/* Khớp tìm kiếm (không phải kết quả đang chọn): vòng ngoài mảnh, để phân
+              biệt "có khớp" khỏi "đang xem" (viền accent đậm ở trên). */}
+          {isMatch && !isActiveMatch && (
+            <circle r={m.r + 3} fill="none" stroke="var(--accent)" strokeWidth={1.2}
+                    strokeDasharray="2 2" />
+          )}
           {/* Nhánh đang thu: chấm đặc bên trong = "còn nội dung bên dưới".
               Không có dấu này thì lá và nhánh đã thu trông y hệt nhau. */}
           {nodeDatum.__rd3t?.collapsed && (
@@ -207,7 +292,7 @@ export default function StudyMapView() {
         </g>
       );
     },
-    [selected],
+    [selected, focusInfo, tapKhopTim, nodeIdChon],
   );
 
   const counts = useMemo(() => {
@@ -319,20 +404,49 @@ export default function StudyMapView() {
             <div className="hidden lg:block coord text-text-muted">
               Ctrl + lăn để phóng sơ đồ · lăn thường để cuộn trang · kéo để di chuyển
             </div>
-            <label className="ml-auto flex items-center gap-1.5 text-[12px] text-text-secondary">
-              Bố cục
-              <select
-                value={layoutId}
-                onChange={(e) => doiLayout(e.target.value)}
-                aria-label="Bố cục sơ đồ"
-                className="rounded-[6px] border px-2 py-1 text-[12px] bg-transparent"
-                style={{ borderColor: "var(--border-color)" }}
-              >
-                {LAYOUT_IDS.map((id) => (
-                  <option key={id} value={id}>{nhanLayout(id)}</option>
-                ))}
-              </select>
-            </label>
+            <div className="ml-auto flex flex-wrap items-center gap-2">
+              {focusedId && (
+                <button type="button" onClick={boFocus}
+                        className="pill-action !py-1 !text-[11.5px] inline-flex items-center gap-1">
+                  <Icon name="X" size={12} /> Bỏ focus
+                </button>
+              )}
+              <div className="relative">
+                <Icon name="Search" size={13}
+                      className="absolute left-2 top-1/2 -translate-y-1/2 text-text-muted" />
+                <input
+                  type="text"
+                  value={truyVan}
+                  onChange={(e) => doiTruyVan(e.target.value)}
+                  onKeyDown={xuLyPhimTim}
+                  placeholder="Tìm theo tên khái niệm…"
+                  aria-label="Tìm trong sơ đồ kiến thức"
+                  className="rounded-[6px] border pl-7 pr-2 py-1 text-[12px] bg-transparent w-[190px]"
+                  style={{ borderColor: "var(--border-color)" }}
+                />
+              </div>
+              {truyVan && (
+                <span className="text-[11px] text-text-muted tabular-nums" aria-live="polite">
+                  {ketQuaTim.total
+                    ? `${ketQuaTim.activeIndex + 1}/${ketQuaTim.total}`
+                    : "Không có kết quả"}
+                </span>
+              )}
+              <label className="flex items-center gap-1.5 text-[12px] text-text-secondary">
+                Bố cục
+                <select
+                  value={layoutId}
+                  onChange={(e) => doiLayout(e.target.value)}
+                  aria-label="Bố cục sơ đồ"
+                  className="rounded-[6px] border px-2 py-1 text-[12px] bg-transparent"
+                  style={{ borderColor: "var(--border-color)" }}
+                >
+                  {LAYOUT_IDS.map((id) => (
+                    <option key={id} value={id}>{nhanLayout(id)}</option>
+                  ))}
+                </select>
+              </label>
+            </div>
           </div>
 
           <div className="flex gap-4 items-start flex-col lg:flex-row">
