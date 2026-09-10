@@ -1,555 +1,259 @@
-# MemVidX - Architecture & Workflow Documentation
+# Architecture
+
+> Rewritten for v1.0 release. The previous version of this document
+> described an abandoned "QR-code video encoding" concept (`videos/`,
+> `chunk_processor.py`, FastAPI/`uvicorn`) that does not exist in this
+> codebase — confirmed absent from both git and disk before writing this.
+> Every fact below was read from the actual source or generated with a
+> reproducible command; none of it is carried over from the old version
+> unchecked.
 
 ## Mục lục
-1. [Tổng quan](#tổng-quan)
-2. [Cấu trúc dự án](#cấu-trúc-dự-án)
-3. [Luồng dữ liệu End-to-End](#luồng-dữ-liệu-end-to-end)
-4. [Ingest Workflow](#ingest-workflow)
-5. [Query Workflow](#query-workflow)
-6. [Mindmap & Summarize](#mindmap--summarize)
-7. [Storage Layer](#storage-layer)
-8. [API Endpoints](#api-endpoints)
-9. [Environment Configuration](#environment-configuration)
+
+1. [System Context](#system-context)
+2. [Frontend Architecture](#frontend-architecture)
+3. [Backend Architecture](#backend-architecture)
+4. [AI Pipeline](#ai-pipeline)
+5. [Study Pipeline](#study-pipeline)
+6. [Authentication](#authentication)
+7. [Data Flow](#data-flow)
+8. [Deployment](#deployment)
+9. [Folder Organization](#folder-organization)
+10. [Major Design Decisions](#major-design-decisions)
+11. [Trade-offs](#trade-offs)
+12. [Future Improvements](#future-improvements)
 
 ---
 
-## Tổng quan
-
-MemVidX là hệ thống RAG (Retrieval-Augmented Generation) kết hợp:
-- Xử lý tài liệu đa định dạng (PDF, DOCX, PPTX, XLSX, Markdown, EPUB, ảnh)
-- Xây dựng cây phân cấp kiến thức (Memory Tree)
-- Tạo mindmap tự động
-- Hỏi đáp thông minh với streaming SSE
-
-### Công nghệ chính
-
-| Phần | Công nghệ |
-|------|-----------|
-| **Backend** | FastAPI/Flask, LangGraph, LangChain, FAISS, ChromaDB |
-| **LLM** | Ollama, OpenAI-compatible API, Gemini, Groq |
-| **Document Processing** | PyMuPDF, python-docx, Whisper |
-| **Frontend** | React, Vite, Tailwind CSS |
-| **Storage** | FAISS, SQLite, JSON files |
-
----
-
-## Cấu trúc dự án
+## System Context
 
 ```
-MemVid_New/
-├── BE/                          # Backend (Python)
-│   ├── main.py                  # FastAPI/Flask entry point
-│   ├── graphs/                  # LangGraph workflows
-│   │   ├── ingest_graph.py      # Document ingestion workflow
-│   │   ├── query_graph.py       # Query/answer workflow
-│   │   ├── mindmap_graph.py     # Mindmap generation
-│   │   ├── state.py             # Shared state definitions
-│   │   └── logger.py            # Logging utilities
-│   ├── retrieval/               # Retrieval logic
-│   │   ├── ensemble_retriever.py
-│   │   └── hybrid.py            # BM25 + FAISS + RRF
-│   ├── memory/                  # Memory system
-│   │   ├── memory_trees.json    # Hierarchical memory trees
-│   │   ├── summaries.json       # Document summaries
-│   │   ├── mindmaps.json        # Generated mindmaps
-│   │   └── memory_index.faiss   # Memory vector index
-│   ├── index/                   # Document vector store
-│   │   ├── index.faiss          # FAISS index
-│   │   └── index.json           # Metadata
-│   ├── tests/                   # Pytest test suite
-│   ├── document_loader.py       # Multi-format document loading
-│   ├── chunk_processor.py       # Text chunking
-│   ├── summarize_advanced.py    # LLM summarization
-│   ├── memory_tree.py           # Memory tree management
-│   ├── qa_chain.py              # QA chain
-│   ├── jobs_store.py            # Job management
-│   ├── sessions_store.py        # Session management
-│   ├── llm_factory.py           # LLM provider factory
-│   ├── Dockerfile
-│   └── requirements.txt
-│
-├── FE/                          # Frontend (React)
-│   ├── src/
-│   │   ├── components/
-│   │   │   └── Layout/
-│   │   │       ├── ChatArea.jsx     # Main chat interface
-│   │   │       ├── MindMapModal.jsx  # Mindmap visualization
-│   │   │       ├── SummaryModal.jsx  # Document summary view
-│   │   │       ├── SidebarLeft.jsx   # Session/source list
-│   │   │       └── SidebarRight.jsx  # Context/documents
-│   │   ├── hooks/
-│   │   │   └── useTheme.js          # Theme management
-│   │   └── utils/
-│   │       └── api.js               # Backend API client
-│   ├── tailwind.config.js
-│   └── package.json
-│
-├── docker-compose.yml           # Container orchestration
-├── .env                         # Environment configuration
-└── README.md
+┌──────────┐      HTTPS (SPA)      ┌────────────┐      REST /api/*      ┌──────────────┐
+│  Browser │◄─────────────────────►│   nginx    │◄─────────────────────►│  Flask app   │
+└──────────┘                       │ (FE image) │                       │ (BE main.py) │
+                                    └────────────┘                       └──────┬───────┘
+                                                                                  │
+                    ┌──────────────────────────┬───────────────────────────────┼───────────────────┐
+                    ▼                          ▼                                ▼                   ▼
+             ┌─────────────┐           ┌───────────────┐                ┌─────────────┐    ┌────────────────┐
+             │  Postgres   │           │ SQLite chunk  │                │ llm-gateway │    │ mindmap-service │
+             │ (Supabase)  │           │ store (legacy)│                │   (gRPC)    │    │     (gRPC)      │
+             └─────────────┘           └───────────────┘                └──────┬──────┘    └────────┬────────┘
+                                                                                  ▼                    ▼
+                                                                        Ollama / Gemini / Groq / FPT AI
 ```
 
----
+Redis is an optional cache-only dependency (`redis:7-alpine`, 256mb
+allkeys-lru) — every subsystem that touches it (semantic cache,
+single-flight, general rate limiting) fails open when it's absent.
+`rq-worker` is a Docker Compose profile, off by default; the app runs as
+a single Flask process when `QUEUE_ENABLED` is unset.
 
-## Luồng dữ liệu End-to-End
+## Frontend Architecture
 
-```
-┌─────────────────────────────────────────────────────────────────────────────┐
-│                              CLIENT LAYER                                   │
-│                    React + Vite + Tailwind CSS                             │
-│              ChatArea · EventSource SSE · apiFetch                         │
-└─────────────────────────────────────────────────────────────────────────────┘
-                                    │
-                                    ▼
-┌─────────────────────────────────────────────────────────────────────────────┐
-│                              API LAYER                                      │
-│                         Flask/FastAPI - main.py                            │
-│                   /upload · /query · /query-stream                         │
-│                   /generate-mindmap · /health                              │
-│                                    │                                        │
-│           ┌────────────────────────┼────────────────────────┐              │
-│           │                        │                        │              │
-│           ▼                        ▼                        ▼              │
-│   ┌──────────────┐        ┌──────────────┐        ┌──────────────┐       │
-│   │ jobs_store   │        │ sessions_    │        │   Env flags  │       │
-│   │   .sqlite    │        │   store      │        │              │       │
-│   └──────────────┘        └──────────────┘        └──────────────┘       │
-└─────────────────────────────────────────────────────────────────────────────┘
-                                    │
-                    ┌───────────────┴───────────────┐
-                    ▼                               ▼
-┌─────────────────────────────────┐   ┌─────────────────────────────────────┐
-│      INGEST GRAPH               │   │         QUERY GRAPH                 │
-│      (LangGraph)                │   │         (LangGraph)                 │
-└─────────────────────────────────┘   └─────────────────────────────────────┘
-```
+React 19 + Vite, plain JavaScript (no TypeScript). Routes are code-split
+with `React.lazy()` at the router level (`FE/src/App.jsx`) — every page
+except `Landing` loads on demand.
 
----
+No global state library. A single React Context, **Study Context**
+(`FE/src/study/`), broadcasts the current cross-surface selection
+(document / topic / entity / summary / node / question / learning mode)
+as plain IDs to every study surface that wants to react to it. It is
+explicitly a broadcast layer, not a second data store — each component
+still owns its own detailed local state. Selection transitions are pure,
+tested functions (`studySelection.js`), not inline `setState` calls.
 
-## Ingest Workflow
+Key surfaces, all wired through Study Context:
 
-Quy trình nạp tài liệu vào hệ thống.
+- **Workspace** (`/app`) — the chat reading room (`ChatArea.jsx`), with
+  a left sidebar (source library) and a right column that toggles
+  between "Bằng chứng" (citation margin) and "Gia sư AI" (the AI Tutor
+  panel: live context card, quick actions, session-only Tutor Memory).
+- **Study Library** (`/app/study`) — document collections, the Knowledge
+  Panel per document, a Learning Dashboard (progress/coverage/weak
+  topics/review queue, all derived client-side from already-fetched
+  data), and Demo Mode (opens the best already-processed real document —
+  never fabricated content).
+- **StudyMap** (`/app/study/map/:documentId`) — a react-d3-tree knowledge
+  graph with pluggable layouts, search, focus mode, presentation mode,
+  and image export.
+- Quiz/Practice/Review pages, each its own lazy-loaded route.
 
-### Sơ đồ luồng
+A single shared `ui/Modal.jsx` (focus-trap, auto-focus, focus-restore)
+backs every dialog in the app rather than each surface implementing its
+own.
 
-```
-┌─────────────────┐
-│  File Upload    │  (PDF, DOCX, MP4, TXT, Video)
-└────────┬────────┘
-         │
-         ▼
-┌─────────────────┐
-│  ingest_utils   │  extract_text() + split_text()
-│  (extract/split)│  Trích xuất & chia nhỏ text
-└────────┬────────┘
-         │
-    ┌────┴────┐
-    │         │
-    ▼         ▼
-┌─────────────────┐    ┌─────────────────┐
-│  semantic chunk │───▶│  vector_store   │
-│   + metadata    │    │  FAISS Index    │
-└────────┬────────┘    └────────┬────────┘
-         │                       │
-         │                       ▼
-         │              ┌─────────────────┐
-         │              │   memory_tree    │
-         │              │   build_tree()   │
-         │              └────────┬─────────┘
-         │                       │
-         ▼                       ▼
-┌─────────────────┐     ┌─────────────────┐
-│  chunks.sqlite  │     │   FAISS index   │
-│  (text thô —    │     │   index.faiss    │
-│   nguồn DUY NHẤT)│     │   + index.json   │
-└─────────────────┘     └─────────────────┘
-```
+## Backend Architecture
 
-### Chi tiết các bước
+Flask app (`BE/app/main.py`, ~98 route handlers), domain-organized under
+`BE/app/domains/` (auth, documents, retrieval, ...). AI work is expressed
+as LangGraph state machines under `BE/app/graphs/` (ingest, query,
+mindmap, and related generation graphs), invoked from route handlers via
+`BE/app/wiring.py`. Two microservices exist as separate Docker Compose
+services sharing the backend's image but running a different entrypoint:
+`llm-gateway` (gRPC, centralizes LLM calls behind a global concurrency
+cap — `MAX_CONCURRENT_LLM_CALLS`) and `mindmap-service` (gRPC).
 
-| Bước | Module | Chức năng |
-|------|--------|-----------|
-| 1 | **Upload** | Nhận file từ client |
-| 2 | **ingest_utils** | Extract text từ file, split thành chunks |
-| 3 | **chunk_processor** | Xử lý metadata, tạo QR cho video |
-| 4 | **vector_store** | Tạo embeddings và lưu vào FAISS |
-| 5 | **memory_tree** | Xây dựng cây phân cấp kiến thức |
+Served over `gunicorn`, `WEB_CONCURRENCY` pinned to 1 by requirement (not
+a tuning choice): HITL resume metadata and an in-process quiz-job dedupe
+dict both live in single-process memory — a second worker would silently
+break resume and let one "Tạo quiz" click spawn duplicate jobs.
 
-### Các file quan trọng
+## AI Pipeline
 
-- `BE/ingest_utils.py` - Trích xuất text và chia chunks
-- `BE/chunk_processor.py` - Xử lý chunks, metadata, video
-- `BE/vector_store.py` - Lưu trữ vector với FAISS
-- `BE/memory_tree.py` - Xây dựng memory tree
-
----
-
-## Query Workflow
-
-Quy trình xử lý câu hỏi và trả lời.
-
-### Sơ đồ luồng
+LangGraph query pipeline, in order:
 
 ```
-┌──────────────────────────────────────────────────────────────────────────────┐
-│                         QueryGraph (LangGraph)                              │
-│                                                                              │
-│  ┌──────────────┐    ┌──────────────┐    ┌──────────────┐                 │
-│  │ Cache lookup │───▶│ Memory tree  │───▶│ Hybrid       │                 │
-│  │ hit / miss   │    │ (conditional)│    │ retrieval    │                 │
-│  └──────────────┘    └──────────────┘    └──────┬───────┘                 │
-│                                                  │                          │
-│                                                  ▼                          │
-│  ┌──────────────┐    ┌──────────────┐    ┌──────────────┐                 │
-│  │ Conv.history │───▶│   Generate   │◀───│  Context     │                 │
-│  │sessions_store│    │   answer     │    │  builder     │                 │
-│  └──────────────┘    └──────┬───────┘    │  (citation)  │                 │
-│                             │            └──────────────┘                 │
-│                             ▼                                               │
-│                    ┌──────────────┐                                         │
-│                    │  Finalize    │───▶ SSE Streaming / jobs_store         │
-│                    └──────────────┘                                         │
-└──────────────────────────────────────────────────────────────────────────────┘
+Cache lookup ─▶ Memory tree (conditional) ─▶ Hybrid retrieval (BM25 + FAISS, RRF fusion)
+   ─▶ [Rerank: cross-encoder, RERANK_ENABLED] ─▶ [VerifyContext: NLI contradiction check, NLI_ENABLED]
+   ─▶ Context builder (citations) ─▶ Generate answer ─▶ Finalize (SSE stream)
 ```
 
-### Chi tiết các node
+- **Hybrid retrieval**: BM25 (keyword) + FAISS (vector) fused by
+  Reciprocal Rank Fusion (`RRF_score = Σ 1/(k + rank_i) / n`, k=60).
+- **Rerank** (optional, off by default): cross-encoder
+  (`BAAI/bge-reranker-v2-m3` by default) re-scores the Stage-1 candidate
+  set; on any failure or timeout it degrades to Identity (original order)
+  rather than breaking the pipeline. Code: `BE/app/domains/retrieval/rerank.py`.
+- **NLI contradiction check** (optional, off by default): catches pairs
+  of retrieved chunks that are semantically opposed despite both scoring
+  high on cosine similarity (negation, changed numbers/dates) using
+  `MoritzLaurer/multilingual-MiniLMv2-L6-mnli-xnli`; same fail-safe
+  degrade-to-passthrough behavior. Code: `BE/app/domains/retrieval/nli.py`.
 
-| Node | Mô tả | Chi tiết |
-|------|-------|----------|
-| **Cache lookup** | Kiểm tra cache | Nếu hit → trả ngay, miss → tiếp tục |
-| **Memory tree** | Truy xuất context | Conditional - chỉ chạy khi cần |
-| **Hybrid retrieval** | Tìm docs liên quan (Stage 1 / Recall) | BM25 + FAISS + RRF; khi rerank bật → lấy `RERANK_CANDIDATE_K` ứng viên |
-| **Rerank** | Lọc tinh (Stage 2 / Precision) | Cross-encoder chấm cặp (query, passage), lọc xuống `RERANK_TOP_N`; conditional - chỉ khi `RERANK_ENABLED=1` |
-| **VerifyContext (NLI)** | Khử trùng context | mDeBERTa NLI: loại chunk MÂU THUẪN (phủ định/thời gian/con số); conditional - chỉ khi `NLI_ENABLED=1`. Chạy sau Rerank nếu cả hai bật |
-| **Context builder** | Tạo context | Thêm citation, truncate nếu quá dài |
-| **Generate answer** | Sinh câu trả | Gọi qa_chain với context + history |
-| **Finalize** | Hoàn thiện | Format output, gửi SSE |
+**Model configuration** (`BE/.env.example` defaults): chat/summary/mindmap
+LLM = `qwen2.5:7b-instruct`, intent classifier = `gemma2:2b`, embeddings =
+`BAAI/bge-m3`. **Provider chain**: Ollama (local), Google Gemini, Groq,
+and **FPT AI** — a fourth provider (`BE/app/clients/llm_factory.py`)
+providing chat, embeddings, reranking, and vision (image transcription),
+not commonly documented elsewhere in this repo before this rewrite.
+Providers are selected via a fallback chain, not hardcoded to one vendor.
 
-### Retrieval Chi tiết (Hybrid)
+## Study Pipeline
 
-```
-Query ─┬─▶ BM25 (keyword search)
-       ├─▶ FAISS (vector similarity)
-       └─▶ RRF (Reciprocal Rank Fusion)
-            │
-            ▼
-       Combined Results
-```
+Separate from the RAG query pipeline: server-computed "knowledge
+projection" per document (`BE/app/domains/documents/tri_thuc.py`) —
+topics with weight/mastery/status, a readiness score (pipeline coverage +
+engagement + mastery, weighted), and a timeline of real events (upload,
+summary/mindmap created, quiz created/graded, review plan created). This
+projection is computed once per document as part of the bulk `/api/library`
+response and consumed directly by the frontend's Learning Dashboard,
+Learning Journey stepper, and Demo Mode candidate-picker — none of those
+features perform their own calculation of "how far along is this
+document," they all read this one server-computed value.
 
-**RRF Formula:**
-```
-RRF_score = Σ (1 / (k + rank_i)) / n
-```
+## Authentication
 
-### Rerank — Two-Stage Retrieval (Stage 2 / Precision)
+Stateless Bearer token, `itsdangerous`-signed (`BE/app/domains/auth/tokens.py`),
+not a session cookie and not a standard-library JWT. Payload is
+`{uid, token_version}`; `token_version` on the user row allows
+server-side revocation (password change, logout-everywhere) without a
+session table. Default 7-day TTL, configurable
+(`AUTH_TOKEN_TTL_SEC`). Also supports an NKS SSO identity provider path
+(`BE/app/domains/auth/`) alongside local email/password registration.
 
-```
-Stage 1 (Recall)            Stage 2 (Precision)
-Hybrid ─▶ RERANK_CANDIDATE_K ─▶ Cross-encoder (query, passage) ─▶ top RERANK_TOP_N ─▶ LLM
-  ~20 ứng viên                    chấm điểm đồng thời                ~4 tốt nhất
-```
+## Data Flow
 
-- Bật bằng `RERANK_ENABLED=1` (mặc định tắt → graph chạy y như cũ).
-- Backend cắm-rút (`RERANK_BACKEND`): `cross_encoder` (self-host, offline — mặc định `BAAI/bge-reranker-v2-m3`), `cohere`, `llm`, `none`.
-- An toàn: lỗi load/predict hoặc quá `RERANK_TIMEOUT_SEC` → giữ nguyên thứ tự (Identity), không làm vỡ pipeline.
-- Lưu ý: rerank chỉ sắp xếp lại tài liệu Stage 1 đưa cho — KHÔNG tìm tài liệu mới (Recall thấp thì rerank vô dụng).
-- Code: `BE/app/domains/retrieval/rerank.py`, node `RerankDocuments` trong `query_graph.py`.
+Two identity systems, bridged deliberately, not accidentally:
 
-### NLI / Contradiction-check (khử trùng context)
+- **`document_id`** (Postgres) — the newer StudyMap domain: documents,
+  collections, quizzes, attempts, concept mastery, review plans.
+- **`source_stem`** (SQLite chunk store) — the older chat/summary/mindmap
+  generation pipeline, which predates the Postgres schema.
 
-```
-RetrieveFAISS ─▶ [RerankDocuments] ─▶ [VerifyContext] ─▶ ContextBuilder
-                                         mDeBERTa NLI
-```
+A document object carries both fields; frontend code that needs to route
+between "the chat/summary/mindmap world" and "the StudyMap world" reads
+`doc.source_stem` to bridge them. See `docs/deployment/database-boundary.md`
+for the full reasoning.
 
-- Bật bằng `NLI_ENABLED=1` (mặc định tắt → graph chạy y như cũ). Chạy SAU Rerank nếu cả hai bật.
-- Vì sao: embedding (bi-encoder) có điểm mù — cosine cao nhưng nghĩa ngược (phủ định "được nghỉ" vs "không được nghỉ", đổi thực thể, thời gian/con số cũ-mới "12 ngày" vs "20 ngày"). NLI bắt được hai chunk *mâu thuẫn nhau* cùng lọt vào context.
-- Cách làm: quét cặp chunk top-K (trần `NLI_MAX_PAIRS`), chấm mDeBERTa cả 2 chiều lấy prob `contradiction` lớn nhất; ≥ `NLI_CONTRADICTION_THRESHOLD` → loại chunk hạng thấp, giữ chunk hạng cao; ghi `context_conflicts` vào state.
-- An toàn: `SKIP_MODEL_LOAD=1`, lỗi load/predict, hoặc quá `NLI_TIMEOUT_SEC` → passthrough (giữ nguyên context), không làm vỡ pipeline.
-- Cross-encoder của Rerank cũng được tái dùng làm tín hiệu cho CRAG grade (`grade_documents(rerank_scores=...)`) vì sau rerank chunk là `str` nên mất vector/bm25 score.
-- Code: `BE/app/domains/retrieval/nli.py`, node `VerifyContext` trong `query_graph.py`. Dep mới: `sentencepiece` (tokenizer DebertaV2).
-- `k` = 60 (constant)
-- `rank_i` = thứ hạng trong retrieval method i
-- `n` = số retrieval methods
+## Deployment
 
-### Các file quan trọng
+`BE/Dockerfile` (`python:3.11-slim`, both stages), `FE/Dockerfile`
+(`node:18-slim` build → `nginx:alpine` runtime — the official nginx image
+already drops worker processes to a non-root user). `docker-compose.yml`
+defines 6 services: `backend`, `llm-gateway`, `mindmap-service`,
+`rq-worker` (profile-gated, off by default), `redis:7-alpine`, `frontend`.
+Postgres is external (Supabase — `SUPABASE_URL`/`DATABASE_URL`). Health
+check at `GET /health`. `render.yaml` targets Render's free tier with a
+documented set of production-posture env vars (`AUTH_REQUIRE_SECRET=true`,
+Render-generated `AUTH_SECRET`, `CORS_ORIGINS="*"` — deliberate, see
+`docs/SECURITY_SUMMARY.md`).
 
-- `BE/graphs/query_graph.py` - Query workflow
-- `BE/retrieval/hybrid.py` - Hybrid retrieval
-- `BE/retrieval/ensemble_retriever.py` - Ensemble retriever
-- `BE/qa_chain.py` - QA chain
-- `BE/sessions_store.py` - Conversation history
-
----
-
-## Mindmap & Summarize
-
-### MindmapGraph
+## Folder Organization
 
 ```
-┌─────────────────────────────────────────────────┐
-│                 MindmapGraph                     │
-│  mindmap_utils · JSON schema · LLM             │
-└─────────────────────┬───────────────────────────┘
-                      │
-                      ▼
-              ┌───────────────┐
-              │  llm_factory  │ Ollama · Gemini · Groq
-              └───────────────┘
+BE/
+├── app/
+│   ├── main.py           # Flask app, ~98 routes
+│   ├── domains/          # auth, documents, retrieval, ...
+│   ├── graphs/           # LangGraph pipelines (ingest/query/mindmap/...)
+│   ├── clients/          # llm_factory and other provider clients
+│   ├── db/                # SQLAlchemy models + session
+│   └── wiring.py         # Wires graphs to their dependencies
+├── services/              # llm-gateway, mindmap-service (gRPC, separate entrypoints)
+├── alembic/                # Postgres migrations
+├── evaluation/             # Retrieval/answer-quality evaluation harness (E0-E7)
+├── scripts/                # perf/, build_proto.py, and other one-off tools
+├── tests/                  # pytest — 198 files, ~2009 test functions
+└── .env.example             # 476 lines, every variable commented with why
+
+FE/
+└── src/
+    ├── pages/              # Landing, Login, Register, Workspace, study/
+    ├── components/         # Layout/, mindmap/, study/, ui/
+    ├── study/               # Study Context, pure selection/aggregation logic + tests
+    ├── auth/                # AuthContext, tokenStore, ProtectedRoute
+    ├── hooks/                # usePanelLayout, useTheme, ...
+    └── utils/                # api client, job pollers, SSE stream (tests sit beside source)
+
+docs/                        # This file, deployment/, decisions/, playbooks/, SECURITY.md, ...
+.playbook/                   # known-issues.md + lessons-learned.md — read before changing code
 ```
 
-### Summarize
+## Major Design Decisions
 
-```
-┌─────────────────────────────────────────────────┐
-│                  Summarize                       │
-│            summarize_advanced.py                 │
-└─────────────────────┬───────────────────────────┘
-                      │
-                      ▼
-              ┌───────────────┐
-              │  llm_factory  │
-              └───────────────┘
-```
+- **Study Context is a broadcast layer, not a store.** Every component
+  keeps its own detailed state; the context only carries IDs. Prevents
+  the class of bug where two copies of "what's selected" drift apart.
+- **Dual data store, bridged explicitly.** Rather than a big-bang
+  migration off the SQLite chunk store, the Postgres StudyMap domain was
+  built alongside it, with `source_stem` as the documented bridge field.
+- **Everything derived, not duplicated.** The Learning Dashboard, review
+  queue, and Demo Mode all read the same server-computed knowledge
+  projection rather than each implementing their own progress/mastery
+  calculation.
+- **Fail-open caching/rate-limiting.** Every Redis-dependent subsystem
+  degrades to "no cache" / "no limit" rather than blocking requests when
+  Redis is absent — a deliberate choice for the free-tier deployment
+  target, with a known trade-off (see below).
+- **Provider-chain AI, not vendor lock-in.** Ollama/Gemini/Groq/FPT AI
+  are all wired through the same `llm_factory` interface.
 
-### Các file quan trọng
+## Trade-offs
 
-- `BE/graphs/mindmap_graph.py` - Mindmap workflow
-- `BE/mindmap_utils.py` - Mindmap utilities
-- `BE/summarize_advanced.py` - Advanced summarization
+- Fail-open rate limiting means general API rate limiting is currently
+  ineffective on the free-tier deployment (Redis absent). Password routes
+  have an independent in-process guard specifically because of this.
+- `CORS_ORIGINS="*"` in production is a conscious trade — Bearer-token
+  auth reduces the classic CSRF blast radius, but it's not zero risk, and
+  the team's own config comment states the plan to tighten it later.
+- The legacy SQLite chunk store adds a second identity system to reason
+  about (`source_stem` vs `document_id`) instead of a single migration —
+  cheaper to build against, more to hold in your head.
+- `BE/app/main.py` at 5525 lines is a maintainability cost accepted in
+  exchange for not risking a structural split during active feature work.
 
----
+## Future Improvements
 
-## Storage Layer
-
-### Sơ đồ Storage
-
-```
-┌─────────────────┐
-│   FAISS index   │  index.faiss · index.json
-│  Document Store │  Vector embeddings
-└────────┬────────┘
-         │
-         ▼
-┌─────────────────┐
-│  Memory store   │  memory/ folder
-│                 │  memory_trees.json
-│                 │  summaries.json
-│                 │  mindmaps.json
-└────────┬────────┘
-         │
-         ▼
-┌─────────────────┐
-│   Videos / QR    │  videos/ folder
-│                 │  Video files & QR codes
-└─────────────────┘
-         │
-         ▼
-┌─────────────────┐
-│     SQLite       │  jobs.sqlite
-│                 │  logs.sqlite
-│                 │  checkpoints.sqlite
-└─────────────────┘
-```
-
-### Chi tiết Storage
-
-| Storage | Đường dẫn | Mô tả |
-|---------|-----------|-------|
-| **FAISS Index** | `BE/index/` | Vector embeddings của documents |
-| **Memory Store** | `BE/memory/` | Memory trees, summaries, mindmaps |
-| **Videos** | `BE/videos/` | Video files và QR codes |
-| **SQLite** | `BE/*.sqlite` | Jobs, logs, checkpoints |
-
----
-
-## API Endpoints
-
-### Endpoints chính
-
-| Method | Endpoint | Mô tả |
-|--------|----------|-------|
-| `POST` | `/upload` | Upload tài liệu/video |
-| `POST` | `/query` | Query thường (sync) |
-| `POST` | `/query-stream` | Query với SSE streaming |
-| `POST` | `/generate-mindmap` | Tạo mindmap |
-| `GET` | `/health` | Health check |
-| `GET` | `/sessions` | Lấy danh sách sessions |
-| `DELETE` | `/sources/{id}` | Xóa source |
-
-### Response Format
-
-```json
-{
-  "answer": "Câu trả lời...",
-  "sources": [
-    {
-      "id": "source_1",
-      "content": "Nội dung trích dẫn...",
-      "score": 0.95
-    }
-  ],
-  "session_id": "session_xxx"
-}
-```
-
-### SSE Streaming
-
-```javascript
-// Frontend
-const eventSource = new EventSource(`/query-stream?query=${query}`);
-eventSource.onmessage = (event) => {
-  const data = JSON.parse(event.data);
-  // Handle streaming chunks
-};
-```
-
----
-
-## Environment Configuration
-
-### Các biến môi trường
-
-```bash
-# Vector Store
-USE_LC_VECTOR_STORE=true        # Dùng LangChain VectorStore
-WEB_CONCURRENCY=1              # PHẢI là 1. Hai thứ giữ trạng thái TRONG TIẾN TRÌNH:
-                               #   - HITL resume metadata (pause và resume phải cùng process)
-                               #   - dict dedupe job quiz (_QUIZ_INFLIGHT trong main.py)
-                               # Đặt 2+ thì resume tìm không thấy pause, và bấm "Tạo quiz"
-                               # nhiều lần lại ra nhiều job tranh 1 slot LLM.
-                               # (Kế hoạch 2026-07-04 từng đề xuất =2 để giữ /health sống khi
-                               #  rebuild index; nay rebuild chỉ còn là fallback nên lý do đó
-                               #  đã hết, còn hai ràng buộc trên thì chưa.)
-
-# Retrieval
-USE_LC_ENSEMBLE=true           # Dùng LangChain Ensemble Retriever
-
-# QA Chain
-USE_LC_QA_CHAIN=true          # Dùng LangChain QA Chain
-
-# Evaluation
-EVAL_ENABLED=false             # Bật evaluation mode
-
-# Models
-MINDMAP_MODEL=gpt-4            # Model cho mindmap generation
-OLLAMA_MODEL=llama3            # Model cho Ollama
-
-# LLM Providers
-OLLAMA_BASE_URL=http://localhost:11434
-OPENAI_API_KEY=sk-xxx
-GEMINI_API_KEY=xxx
-GROQ_API_KEY=xxx
-
-# Storage
-FAISS_INDEX_PATH=./index
-MEMORY_PATH=./memory
-VIDEOS_PATH=./videos
-```
-
-### Database Connection
-
-```bash
-# Jobs Store
-JOBS_DB_PATH=./jobs.sqlite
-
-# Sessions Store
-SESSIONS_DB_PATH=./sessions.sqlite
-
-# Logs
-LOGS_DB_PATH=./logs.sqlite
-```
-
----
-
-## Cài đặt & Chạy
-
-### Development
-
-```bash
-# Clone repo
-git clone https://github.com/your-repo/MemVid_New.git
-cd MemVid_New
-
-# Backend
-cd BE
-pip install -r requirements.txt
-uvicorn main:app --reload --port 8000
-
-# Frontend
-cd FE
-npm install
-npm run dev
-```
-
-### Docker
-
-```bash
-docker-compose up --build
-```
-
-### Testing
-
-```bash
-cd BE
-pytest tests/ -v
-```
-
----
-
-## Architecture Diagram
-
-```
-┌─────────────────────────────────────────────────────────────────────────────┐
-│                              MEMVIDX ARCHITECTURE                           │
-├─────────────────────────────────────────────────────────────────────────────┤
-│                                                                             │
-│  ┌─────────────────────────────────────────────────────────────────────┐   │
-│  │ CLIENT LAYER                                                        │   │
-│  │  React + Vite + Tailwind CSS                                        │   │
-│  │  ChatArea · EventSource SSE · apiFetch                             │   │
-│  └─────────────────────────────────────────────────────────────────────┘   │
-│                                    │                                        │
-│                                    ▼                                        │
-│  ┌─────────────────────────────────────────────────────────────────────┐   │
-│  │ API LAYER                                                           │   │
-│  │  Flask/FastAPI - main.py                                            │   │
-│  │  /upload · /query · /query-stream · /generate-mindmap · /health    │   │
-│  │  jobs_store · sessions_store                                        │   │
-│  └─────────────────────────────────────────────────────────────────────┘   │
-│                    │                               │                        │
-│                    ▼                               ▼                        │
-│  ┌───────────────────────────┐     ┌───────────────────────────────────┐   │
-│  │ INGEST GRAPH (LangGraph)  │     │ QUERY GRAPH (LangGraph)          │   │
-│  │                           │     │                                   │   │
-│  │ ingest_utils              │     │ Cache lookup ──┐                  │   │
-│  │   extract · split_text    │     │ Memory tree   │── Hybrid ──┐    │   │
-│  │ chunk_processor           │     │                │  retrieval │    │   │
-│  │   QR · MP4 · metadata     │     │                └─────┬──────┘    │   │
-│  │ vector_store              │     │              Context builder     │   │
-│  │   FAISS · LC FAISS        │     │                Generate answer  │   │
-│  │ memory_tree               │     │ Conv.history ── Finalize ── SSE │   │
-│  │   build · query_with_     │     │                                   │   │
-│  │       memory              │     └───────────────────────────────────┘   │
-│  └───────────────────────────┘                       │                     │
-│                    │                                 │                     │
-│                    ▼                                 ▼                     │
-│  ┌─────────────────────────────────────────────────────────────────────┐   │
-│  │ LLM FACTORY                                                          │   │
-│  │  Ollama · Gemini · Groq · OpenAI                                    │   │
-│  └─────────────────────────────────────────────────────────────────────┘   │
-│                                    │                                        │
-│                                    ▼                                        │
-│  ┌─────────────────────────────────────────────────────────────────────┐   │
-│  │ STORAGE LAYER                                                        │   │
-│  │  FAISS index · Memory store · Videos/QR · SQLite                   │   │
-│  └─────────────────────────────────────────────────────────────────────┘   │
-│                                                                             │
-└─────────────────────────────────────────────────────────────────────────────┘
-```
-
----
-
-## License
-
-MIT License
+- Split `main.py` by concern (routing / caching / rate-limiting / auth
+  handlers) — deferred everywhere in this project's recent history as
+  too risky to do without dedicated regression coverage; not attempted
+  in this release.
+- Add nginx security headers (X-Frame-Options, CSP) and a non-root user
+  in `BE/Dockerfile`.
+- Enable Redis-backed general rate limiting once a Redis instance is
+  available in the target deployment tier.
+- Full page-by-page accessibility sweep (this release fixed the shared
+  Modal component only).
+- AI-pipeline latency benchmarking (summary/mindmap/query turnaround) —
+  not measured in this release; see `docs/BENCHMARK.md`.

@@ -1,725 +1,306 @@
-# StudyMap AI — Hệ thống RAG hỗ trợ học từ tài liệu
+# MemVidX
 
-## Mục lục
+**Upload a document, then chat, summarize, mind-map, and quiz yourself on
+it — every answer cited back to the source, every study surface reading
+from one shared context.**
 
-1. [Tổng quan](#tổng-quan)
-2. [Kiến trúc hệ thống](#kiến-trúc-hệ-thống)
-3. [Cấu trúc dự án](#cấu-trúc-dự-án)
-4. [Hướng dẫn cài đặt](#hướng-dẫn-cài-đặt)
-5. [API Endpoints](#api-endpoints)
-6. [Các tính năng chính](#các-tính-năng-chính)
-7. [Mô hình AI/ML](#mô-hình-aiml)
-8. [Lưu trữ dữ liệu](#lưu-trữ-dữ-liệu)
-9. [Docker Deployment](#docker-deployment)
-10. [Development](#development)
+![MemVidX hero screenshot placeholder](docs/assets/hero-placeholder.png)
+<!-- Placeholder — replace with a real screenshot of the Workspace before
+     publishing. See "Screenshots" below for the full shot list needed. -->
 
 ---
 
-## Tổng quan
+## Table of Contents
 
-**StudyMap AI** là hệ thống RAG (Retrieval-Augmented Generation) cho người học: nạp tài
-liệu vào, rồi hỏi đáp, tóm tắt, dựng sơ đồ và tự kiểm tra trên chính tài liệu đó.
-
-- **Nạp tài liệu** (PDF, DOCX, PPTX, XLSX, EPUB, HTML, MD, TXT, ảnh) rồi chunk + index
-- **Tìm kiếm lai** BM25 + FAISS, hợp nhất bằng RRF, rerank bằng cross-encoder
-- **Memory Tree** — cấu trúc phân cấp document/section/topic cho câu hỏi tổng hợp
-- **Sơ đồ tư duy** và **tóm tắt** sinh tự động, chạy dạng job nền có tiến trình + huỷ
-- **Study Map** — đồ thị khái niệm kèm liên kết ngược về chunk nguồn
-- **Quiz, chấm bài, phân tích lỗ hổng, kế hoạch ôn tập, theo dõi tiến độ**
-
-> **Ghi chú lịch sử.** Dự án khởi đầu tên **MemVid**, mã hoá bộ nhớ thành video QR. Hướng
-> đó đã bỏ: không còn `videos/`, `core_modules/`, `chunk_processor.py`, `video_utils.py`.
-> Tài liệu này từng mô tả kiến trúc cũ đó tới **75%** đường dẫn sai — viết lại 2026-08-28.
-
----
-
-## Kiến trúc hệ thống
-
-```
-┌─────────────────────────────────────────────────────────────────────────────┐
-│                              CLIENT (FE)                                    │
-│  ┌──────────────┐  ┌──────────────────┐  ┌──────────────────────────────┐  │
-│  │  SidebarLeft │  │    ChatArea      │  │       SidebarRight          │  │
-│  │  - Upload    │  │  - Hỏi đáp      │  │  - Mind Map Viewer          │  │
-│  │  - File List│  │  - Streaming     │  │  - Summary Viewer           │  │
-│  │  - Selection │  │  - Progress      │  │  - History                 │  │
-│  └──────────────┘  └──────────────────┘  └──────────────────────────────┘  │
-└─────────────────────────────────────────────────────────────────────────────┘
-                                      │
-                                      │ HTTP/REST API
-                                      ▼
-┌─────────────────────────────────────────────────────────────────────────────┐
-│                           BACKEND (BE) - Flask                               │
-│                                                                             │
-│  ┌─────────────────────────────────────────────────────────────────────┐  │
-│  │                        LangGraph Pipelines                            │  │
-│  │  ┌─────────────┐  ┌─────────────┐  ┌──────────────────────────┐   │  │
-│  │  │ IngestGraph │  │ QueryGraph   │  │    MindmapGraph          │   │  │
-│  │  │ - Extract   │  │ - Retrieve   │  │    - Generate MindMap    │   │  │
-│  │  │ - Chunk     │  │ - Memory     │  │    - CMGN Strategy       │   │  │
-│  │  │ - Embed     │  │ - Generate   │  │    - Iterative Expand   │   │  │
-│  │  └─────────────┘  └─────────────┘  └──────────────────────────┘   │  │
-│  └─────────────────────────────────────────────────────────────────────┘  │
-│                                                                             │
-│  ┌─────────────────────────────────────────────────────────────────────┐  │
-│  │                      Core Services                                    │  │
-│  │  ┌──────────────┐  ┌──────────────┐  ┌────────────────────────┐   │  │
-│  │  │ vector_store │  │ memory_tree   │  │  mindmap_utils        │   │  │
-│  │  │ - FAISS      │  │ - Nodes      │  │  - CMGN Algorithm     │   │  │
-│  │  │ - Embeddings │  │ - Intent     │  │  - Critics (3-phase)   │   │  │
-│  │  └──────────────┘  └──────────────┘  └────────────────────────┘   │  │
-│  │  ┌──────────────┐  ┌──────────────┐  ┌────────────────────────┐   │  │
-│  │  │ llm_factory  │  │ chunk_proc   │  │  summarize_advanced    │   │  │
-│  │  │ - Ollama     │  │ - Semantic   │  │  - DANCER             │   │  │
-│  │  │ - Gemini     │  │ - Text store │  │  - Chain of Density   │   │  │
-│  │  │ - Groq       │  │ - Metadata   │  │  - Entity Chain       │   │  │
-│  │  └──────────────┘  └──────────────┘  └────────────────────────┘   │  │
-│  └─────────────────────────────────────────────────────────────────────┘  │
-└─────────────────────────────────────────────────────────────────────────────┘
-                                      │
-                                      ▼
-┌─────────────────────────────────────────────────────────────────────────────┐
-│                           DATA STORAGE                                       │
-│  ┌─────────────────┐  ┌─────────────────┐  ┌─────────────────────────────┐   │
-│  │   BE/index/     │  │   BE/memory/    │  │   BE/index/               │   │
-│  │  - index.faiss  │  │  - memory_index │  │  - chunks.sqlite          │   │
-│  │  - index.json   │  │  - memory_trees │  │                           │   │
-│  │  - source_reg   │  │  - summaries    │  │                           │   │
-│  └─────────────────┘  └─────────────────┘  └─────────────────────────────┘   │
-│  ┌─────────────────┐  ┌─────────────────┐  ┌─────────────────────────────┐   │
-│  │   BE/input_docs│  │   BE/jobs.sqlite │  │   BE/sessions.sqlite       │   │
-│  │  - *.pdf/docx  │  │  - Job tracking  │  │  - Chat history           │   │
-│  └─────────────────┘  └─────────────────┘  └─────────────────────────────┘   │
-└─────────────────────────────────────────────────────────────────────────────┘
-```
+1. [Feature Overview](#feature-overview)
+2. [AI Capabilities](#ai-capabilities)
+3. [Screenshots](#screenshots)
+4. [Architecture Overview](#architecture-overview)
+5. [AI Pipeline](#ai-pipeline)
+6. [Technology Stack](#technology-stack)
+7. [Folder Structure](#folder-structure)
+8. [Installation](#installation)
+9. [Environment Variables](#environment-variables)
+10. [Running Locally](#running-locally)
+11. [Running with Docker](#running-with-docker)
+12. [Deployment](#deployment)
+13. [Testing](#testing)
+14. [Benchmark](#benchmark)
+15. [Known Limitations](#known-limitations)
+16. [Roadmap](#roadmap)
+17. [License](#license)
+18. [Acknowledgements](#acknowledgements)
 
 ---
 
-## Cấu trúc dự án
+## Feature Overview
 
-> Cây dưới đây **sinh từ `git ls-files`**, dừng ở 2 tầng. Bản cũ liệt kê tới từng file ở
-> 4 tầng và gõ tay — kết quả là 54/72 mục trỏ vào chỗ không tồn tại. Muốn dựng lại:
->
-> ```bash
-> git ls-files | awk -F/ 'NF>2{print $1"/"$2"/"} NF==2{print $1"/"$2} NF==1{print $1}' | sort -u
-> ```
+- **Document chat with citations** — ask questions, get answers grounded
+  in the documents you selected, each claim linked back to its source
+  chunk.
+- **Summary v2** — structure-aware summaries, generated as a background
+  job with progress and cancel.
+- **Mindmap v3** — auto-generated, multi-level mind maps, exportable as
+  an image.
+- **StudyMap** — a knowledge graph per document (react-d3-tree) with
+  layout switching, search, focus mode, and presentation mode.
+- **Study Library** — collections, per-document Knowledge Panel (topics,
+  entities, related documents, suggested questions), and a Learning
+  Dashboard (progress, weak-topic detection, review queue) — all derived
+  from already-loaded data, no extra network calls.
+- **AI Tutor panel** — a live context card, quick actions (Explain /
+  Summarize / Quiz-in-chat), and session-only memory of what you've
+  recently looked at, wired into the same chat composer as everything
+  else.
+- **Quiz, grading, and review plans** — generate a quiz, take it, get
+  graded, get a review plan for what you missed.
+- **Demo Mode** — one click opens the best already-processed real
+  document in your library. Never fabricated content; if nothing is
+  ready yet, the button simply doesn't appear.
+
+## AI Capabilities
+
+- Hybrid retrieval: BM25 + FAISS vector search, fused by Reciprocal Rank
+  Fusion.
+- Optional two-stage precision: cross-encoder reranking
+  (`BAAI/bge-reranker-v2-m3` by default) and an NLI-based contradiction
+  filter that catches retrieved chunks that are semantically opposed
+  despite scoring similarly (negation, changed numbers/dates) — both off
+  by default, both degrade safely to a no-op on any failure or timeout.
+- Multi-provider LLM chain: **Ollama** (local), **Google Gemini**,
+  **Groq**, and **FPT AI** (chat, embeddings, reranking, and vision/image
+  transcription) — selected via a fallback chain, not locked to one
+  vendor.
+- LangGraph-orchestrated pipelines for ingest, query, mindmap generation,
+  and quiz generation.
+- Deterministic (non-LLM) Suggested Question engine — derives questions
+  from already-computed topic/entity/mastery data instead of generating
+  new ones per view.
+
+## Screenshots
+
+*(Placeholders — capture these before publishing. None are included in
+this repository; no image has been fabricated.)*
+
+| Screen | File |
+|---|---|
+| Workspace — chat + citations | `docs/assets/screenshot-workspace.png` |
+| AI Tutor panel | `docs/assets/screenshot-tutor.png` |
+| Summary view | `docs/assets/screenshot-summary.png` |
+| Mindmap | `docs/assets/screenshot-mindmap.png` |
+| StudyMap knowledge graph | `docs/assets/screenshot-studymap.png` |
+| Study Library + Learning Dashboard | `docs/assets/screenshot-library.png` |
+| Quiz taking | `docs/assets/screenshot-quiz.png` |
+
+## Architecture Overview
+
+Two services: a React/Vite frontend behind nginx, and a Flask backend
+(~98 routes, domain-organized) running LangGraph pipelines. Two data
+stores by design — Postgres for the newer StudyMap domain
+(documents/collections/quizzes/progress), a legacy SQLite chunk store
+still serving chat/summary/mindmap generation. Optional gRPC
+microservices (`llm-gateway`, `mindmap-service`) and an optional Redis
+cache, both fail-open when unavailable.
+
+Full detail, diagrams, and every major design decision/trade-off:
+**[`docs/ARCHITECTURE.md`](docs/ARCHITECTURE.md)**.
+
+## AI Pipeline
 
 ```
-MemVid_BaoCaoTotNghiep/
-├── BE/                     # Backend: Flask + LangGraph
-│   ├── app/
-│   │   ├── main.py         # Flask app — 80 endpoint (bảng bên dưới)
-│   │   ├── domains/        # 20 domain: documents, retrieval, quiz, studymap,
-│   │   │                   #   progress, review, memory, mindmap, summary, auth…
-│   │   ├── graphs/         # Pipeline LangGraph: ingest / query / mindmap / summary
-│   │   ├── clients/        # llm_factory, mindmap_factory, summary_factory
-│   │   ├── db/             # SQLAlchemy models + session
-│   │   ├── jobs/           # Hàng đợi job nền (RQ, bật bằng QUEUE_ENABLED)
-│   │   └── wiring.py       # Ghép graph với dependency
-│   ├── services/           # Microservice tách được: mindmap (gRPC), summary, llm_gateway
-│   ├── shared/             # config.py, env_loader.py, paths.py, source_id.py
-│   ├── evaluation/         # Bộ chấm chất lượng cho luận văn
-│   ├── alembic/            # Migration Postgres
-│   ├── scripts/            # Tiện ích chạy tay (build_proto, perf…)
-│   ├── tests/              # pytest — 894 passed / 4 skipped
-│   ├── .env.example        # 128 biến, có comment lý do cho từng khoá
-│   └── ENV_SETUP.md        # Hướng dẫn thao tác env / rebuild index
-│
-├── FE/                     # Frontend: React + Vite + Tailwind
-│   └── src/
-│       ├── pages/          # Landing, Login, Register, Workspace, study/
-│       ├── components/     # Layout/, mindmap/, study/, ui/
-│       ├── auth/           # AuthContext, tokenStore, ProtectedRoute
-│       ├── hooks/          # useStudyJob, panelLayout…
-│       └── utils/          # api client, job poller, SSE stream (test đặt cạnh mã)
-│
-├── docs/                   # ARCHITECTURE, SPEC, playbooks/, decisions/, skills/,
-│                           #   superpowers/plans/, tailieu/ (tài liệu luận văn)
-├── .playbook/              # known-issues.md + lessons-learned.md — BỘ NHỚ của dự án,
-│                           #   đọc TRƯỚC khi sửa mã (xem .claude/rules/AGENTS.md)
-├── docker-compose.yml      # backend, llm-gateway, mindmap-service, rq-worker, redis, frontend
-├── .env.example            # Hồ sơ DOCKER/PROD (BE/.env.example là hồ sơ DEV và THẮNG)
-└── requirements.txt        # Con trỏ tới BE/requirements.txt (nơi pin thật)
+Cache lookup ─▶ Memory tree (conditional) ─▶ Hybrid retrieval (BM25 + FAISS, RRF)
+   ─▶ [Rerank, optional] ─▶ [NLI contradiction check, optional]
+   ─▶ Context builder (citations) ─▶ Generate answer ─▶ SSE stream
 ```
 
-**Thư mục runtime không nằm trong git** (`.gitignore` che): `BE/index/`, `BE/memory/`,
-`BE/data/`, `BE/input_docs/`, `BE/cleaned_md/`, `BE/reports/`, `BE/_backup-*/`.
+Ingest, mindmap generation, and quiz generation are separate LangGraph
+pipelines. Full node-by-node detail: `docs/ARCHITECTURE.md#ai-pipeline`.
 
-## Hướng dẫn cài đặt
+## Technology Stack
 
-### Yêu cầu hệ thống
+| Layer | Technology |
+|---|---|
+| Frontend | React 19, React Router 7, Vite, Tailwind CSS, react-markdown, mind-elixir, react-d3-tree |
+| Backend | Flask, gunicorn, LangChain/LangGraph (pinned `<0.4` — see `requirements.txt` for why), FAISS, sentence-transformers |
+| Databases | PostgreSQL (via SQLAlchemy + Alembic, Supabase-hosted), SQLite (legacy chunk store) |
+| AI providers | Ollama, Google Gemini, Groq, FPT AI |
+| Document parsing | PyMuPDF/pymupdf4llm, python-docx, python-pptx, openpyxl, striprtf |
+| Infra | Docker, docker-compose, nginx, Redis (optional), gRPC (optional microservices) |
+| Testing | Vitest (frontend, 831 tests), pytest (backend, ~2009 tests across 198 files) |
 
-- **Python 3.10+**
-- **Node.js 18+** (cho Frontend)
-- **Ollama** (chạy local) hoặc **API Key** (Gemini/Groq)
-- **Docker & Docker Compose** (optional)
+No TypeScript — the frontend is plain JavaScript by project convention.
 
-### 1. Cài đặt Backend
+## Folder Structure
+
+```
+BE/
+├── app/
+│   ├── main.py        # Flask app, ~98 routes
+│   ├── domains/        # auth, documents, retrieval, ...
+│   ├── graphs/          # LangGraph pipelines
+│   └── clients/          # llm_factory and other provider clients
+├── services/              # llm-gateway, mindmap-service (gRPC)
+├── alembic/                 # Postgres migrations
+├── evaluation/               # Retrieval/answer-quality evaluation harness
+├── tests/                      # pytest
+└── .env.example                 # every variable commented with why
+
+FE/
+└── src/
+    ├── pages/          # Landing, Login, Register, Workspace, study/
+    ├── components/      # Layout/, mindmap/, study/, ui/
+    ├── study/             # Study Context + pure aggregation logic, tested
+    ├── auth/               # AuthContext, tokenStore, ProtectedRoute
+    └── utils/               # API client, job pollers, SSE stream
+
+docs/                   # Architecture, security, deployment, product docs
+```
+
+Full 2-level tree and legacy-artifact confirmation (what was checked and
+found NOT to exist): `docs/ARCHITECTURE.md#folder-organization`.
+
+## Installation
+
+**Requirements**: Python 3.11, Node.js 18+, and either a running Ollama
+instance or an API key for Gemini/Groq/FPT AI. Docker + Docker Compose
+optional but recommended.
 
 ```bash
-# Di chuyển vào thư mục Backend
+git clone <this-repository-url>
+cd MemVid_BaoCaoTotNghiep
+
+# Backend
 cd BE
-
-# Tạo virtual environment
-python -m venv venv
-source venv/bin/activate  # Linux/Mac
-# Hoặc: venv\Scripts\activate  # Windows
-
-# Cài đặt dependencies
+python -m venv .venv
+source .venv/bin/activate   # Windows: .venv\Scripts\activate
 pip install -r requirements.txt
+cp .env.example .env        # then edit — see Environment Variables below
 
-# Cài đặt Ollama models (cần thiết nếu dùng local)
-ollama pull qwen3.5:9b
-ollama pull qwen2.5:14b
-ollama pull gemma2:2b
-```
-
-### 2. Cài đặt Frontend
-
-```bash
-# Di chuyển vào thư mục Frontend
-cd FE
-
-# Cài đặt dependencies
+# Frontend
+cd ../FE
 npm install
-
-# Copy environment file
-cp .env.example .env  # Chỉnh sửa VITE_API_URL nếu cần
+# No .env.example ships for the frontend — in dev it falls back to
+# http://localhost:8080 automatically (FE/src/utils/api.js). Only create
+# a .env if you need to point at a different backend URL:
+#   echo "VITE_API_URL=http://localhost:8080" > .env
 ```
 
-### 3. Cấu hình Environment
+## Environment Variables
 
-Tạo file `.env` trong thư mục `BE/`:
+`BE/.env.example` is the authoritative reference — 476 lines, every
+variable commented with *why*, not just what. Root `.env.example` (219
+lines) is the Docker/production profile. Highlights:
 
-```env
-# AI Provider Configuration
-OLLAMA_HOST=http://localhost:11434
+| Variable | Default | Purpose |
+|---|---|---|
+| `OLLAMA_HOST` | `http://localhost:11434` | Local LLM provider |
+| `SLM_MODEL_CHAT` / `SLM_MODEL_SUMMARY` / `MINDMAP_MODEL` | `qwen2.5:7b-instruct` | LLM used per task |
+| `EMBEDDING_MODEL_NAME` | `BAAI/bge-m3` | Embedding model |
+| `RERANK_ENABLED` | off | Enable cross-encoder reranking |
+| `NLI_ENABLED` | off | Enable contradiction-check filtering |
+| `AUTH_SECRET` | *(required in prod)* | Token signing key — must be set, or the app falls back to a per-process dev-only secret |
+| `AUTH_REQUIRE_SECRET` | `false` | Set `true` in production to fail loudly instead of falling back |
+| `CORS_ORIGINS` | `*` | Allowed frontend origins |
+| `DATABASE_URL` / `SUPABASE_URL` | — | Postgres connection |
+| `REDIS_URL` | — | Optional; every dependent feature fails open without it |
+| `WEB_CONCURRENCY` | `1` | Must stay `1` — see `docs/ARCHITECTURE.md#backend-architecture` for why |
 
-# LLM Models
-SLM_MODEL_CHAT=qwen3.5:9b
-SLM_MODEL_SUMMARY=qwen2.5:14b
-MINDMAP_MODEL=qwen2.5:14b
-SLM_MODEL_INTENT=gemma2:2b
-
-# Alternative: Gemini
-# GEMINI_API_KEY=your_gemini_api_key
-
-# Alternative: Groq
-# GROQ_API_KEY=your_groq_api_key
-
-# Storage Paths
-DATA_DIR=./BE
-VIDEO_DIR=./BE/videos
-INPUT_DOCS_DIR=./BE/input_docs
-INDEX_DIR=./BE/index
-MEMORY_DIR=./BE/memory
-
-# Embedding Model
-EMBEDDING_MODEL_NAME=sentence-transformers/all-MiniLM-L6-v2
-
-# Optional: Skip model loading for CI testing
-# SKIP_MODEL_LOAD=1
-```
-
-### 4. Chạy Ứng dụng
-
-**Development Mode:**
+## Running Locally
 
 ```bash
-# Terminal 1: Backend
+# Terminal 1 — backend
 cd BE
-python main.py
+python -m app.main   # or: gunicorn -w 1 -b 0.0.0.0:8080 app.main:app
 
-# Terminal 2: Frontend
+# Terminal 2 — frontend
 cd FE
 npm run dev
 ```
 
-**Docker Mode:**
+## Running with Docker
 
 ```bash
 docker-compose up --build
 ```
 
----
-
-## API Endpoints
-
-> Bảng **sinh từ `BE/app/main.py`**, không chép tay. Bản cũ liệt kê 27 endpoint, trong đó
-> 5 cái không tồn tại và thiếu 56 route có thật. Dựng lại bằng:
->
-> ```bash
-> grep -oE "@app\.(route|get|post|put|delete)\(\s*['\"][^'\"]+" BE/app/main.py
-> ```
-
-### Sức khoẻ hệ thống
-
-| Method | Endpoint |
-|---|---|
-| GET | `/` |
-| GET | `/health` |
-| GET | `/ready` |
-| GET | `/stats` |
-
-### Job nền
-
-| Method | Endpoint |
-|---|---|
-| GET | `/api/jobs/<job_id>` |
-| POST | `/api/jobs/<job_id>/cancel` |
-| GET | `/jobs/<job_id>/timeline` |
-
-### Đọc ảnh
-
-| Method | Endpoint |
-|---|---|
-| GET | `/api/vision/status` |
-| POST | `/api/vision/transcribe` |
-
-### Xác thực
-
-| Method | Endpoint |
-|---|---|
-| POST | `/auth/login` |
-| POST | `/auth/logout` |
-| GET | `/auth/me` |
-| POST | `/auth/refresh` |
-| POST | `/auth/register` |
-
-### Tài liệu & ingest
-
-| Method | Endpoint |
-|---|---|
-| GET | `/api/documents` |
-| DELETE | `/api/documents/<document_id>` |
-| GET | `/api/documents/<document_id>` |
-| GET | `/api/documents/<document_id>/chunks` |
-| GET | `/api/documents/<document_id>/file` |
-| GET | `/api/documents/<document_id>/quizzes` |
-| POST | `/api/documents/<document_id>/search` |
-| GET | `/api/documents/<document_id>/sections` |
-| GET | `/api/documents/<document_id>/study-maps` |
-| POST | `/api/documents/upload` |
-| GET | `/chunk-text/<int:chunk_id>` |
-| POST | `/delete-source` |
-| GET | `/list-indexed` |
-| GET | `/memory-tree-status` |
-| GET | `/memory-tree/<source_stem>` |
-| DELETE | `/sources/<source_id>` |
-| GET | `/sources/<source_id>/status` |
-| POST | `/upload` |
-| POST | `/upload-file` |
-| POST | `/upload-multiple` |
-
-### Hỏi đáp
-
-| Method | Endpoint |
-|---|---|
-| POST | `/api/search` |
-| DELETE | `/conversations/<conversation_id>` |
-| POST | `/conversations/<conversation_id>/clear-context` |
-| GET | `/conversations/<conversation_id>/messages` |
-| POST | `/query` |
-| POST | `/query-resume/<job_id>` |
-| GET | `/query-status/<job_id>` |
-| GET | `/query-stream/<job_id>` |
-
-### Sơ đồ tư duy
-
-| Method | Endpoint |
-|---|---|
-| POST | `/generate-mindmap` |
-| POST | `/mindmap-cancel/<job_id>` |
-| GET | `/mindmap-status/<job_id>` |
-| GET | `/mindmaps` |
-| PUT | `/mindmaps/<mindmap_id>` |
-| DELETE | `/mindmaps/<string:mindmap_id>` |
-
-### Tóm tắt
-
-| Method | Endpoint |
-|---|---|
-| POST | `/generate-summary` |
-| GET | `/summaries` |
-| DELETE | `/summaries/<string:summary_id>` |
-| POST | `/summary-cancel/<job_id>` |
-| GET | `/summary-status/<job_id>` |
-
-### Study Map
-
-| Method | Endpoint |
-|---|---|
-| GET | `/api/study-maps/<map_id>` |
-| POST | `/api/study-maps/generate` |
-| GET | `/api/study-maps/jobs/<job_id>` |
-| POST | `/api/study-maps/jobs/<job_id>/cancel` |
-
-### Quiz & bài làm
-
-| Method | Endpoint |
-|---|---|
-| GET | `/api/attempts/<attempt_id>` |
-| PATCH | `/api/attempts/<attempt_id>/answers` |
-| GET | `/api/attempts/<attempt_id>/concept-masteries` |
-| POST | `/api/attempts/<attempt_id>/submit` |
-| GET | `/api/attempts/jobs/<job_id>` |
-| GET | `/api/practice/<practice_quiz_id>` |
-| GET | `/api/practice/<practice_quiz_id>/comparison` |
-| POST | `/api/practice/<practice_quiz_id>/submit` |
-| POST | `/api/practice/generate` |
-| GET | `/api/quizzes/<quiz_id>` |
-| GET | `/api/quizzes/<quiz_id>/attempts` |
-| POST | `/api/quizzes/<quiz_id>/attempts` |
-| POST | `/api/quizzes/generate` |
-| GET | `/api/quizzes/jobs/<job_id>` |
-| POST | `/api/quizzes/jobs/<job_id>/cancel` |
-| GET | `/api/quizzes/jobs/<job_id>/validation-logs` |
-| GET | `/api/quizzes/results/<attempt_id>` |
-
-### Tiến độ & ôn tập
-
-| Method | Endpoint |
-|---|---|
-| GET | `/api/progress/attempts` |
-| GET | `/api/progress/concepts` |
-| GET | `/api/progress/overview` |
-| GET | `/api/review-plans/<attempt_id>` |
-| GET | `/api/review-plans/<review_plan_id>/items` |
-| POST | `/api/review-plans/generate` |
-
-**Huỷ job:** `/api/jobs/<job_id>/cancel` chỉ nhận `mindmap`, `summary`, `quiz_generation`,
-`study_map_generation` — những loại mà executor thật sự đọc cờ huỷ. Loại khác trả **409**
-thay vì hứa suông (xem `.playbook/known-issues.md`).
-
-## Các tính năng chính
-
-### 1. Document Ingestion Pipeline
-
-```
-Document Upload → Text Extraction → Semantic Chunking → Embedding → FAISS Index
-                                        ↓
-                               QR Code Generation → Video Encoding
-                                        ↓
-                               Memory Tree Construction
-```
-
-**Chi tiết:**
-- **Text Extraction**: Hỗ trợ PDF (PyMuPDF), DOCX (python-docx), TXT, Images (OCR via Tesseract)
-- **Semantic Chunking**: Sử dụng `SemanticChunker` từ LangChain với embedding model
-- **QR Encoding**: Mỗi chunk được mã hoá thành QR code frame, ghép thành video MP4
-- **Metadata**: Parent-child relationships, order, checksum cho data integrity
-
-### 2. Memory Tree Architecture
-
-```
-MemoryTree
-├── Document Node (root)
-│   ├── Summary (LLM-generated)
-│   ├── Intent Type (definition/procedure/argument/comparison/reference)
-│   └── Embedding (384-dim vector)
-│
-└── Section Nodes (children)
-    ├── Title
-    ├── Summary
-    ├── Chunk References
-    ├── Intent Type
-    └── Embedding
-```
-
-**Query Routing:**
-- **Overview**: Ưu tiên document-level nodes
-- **Main Points**: Lấy cả document + section summaries
-- **Detail/How**: Ưu tiên section nodes, nhiều chunks
-- **Compare**: Nhiều section nodes để so sánh
-- **Locate**: Fallback sang chunk-level search
-
-### 3. Mind Map Generation (CMGN Algorithm)
-
-**Coreference-Guided Mind-Map Network** sử dụng 3-phase pipeline:
-
-```
-1. Sentence Extraction
-   └── Parse document → list of sentences with IDs
-
-2. Coreference Graph Building
-   ├── Identify entities
-   ├── Cluster co-referential mentions
-   └── Build semantic edges
-
-3. Mind Map Generation
-   └── Tree structure with:
-       - Root (topic)
-       - Branch 1 (coreference cluster)
-       ├── Sub-branch 1.1
-       └── Sub-branch 1.2
-       - Branch 2
-       └── ...
-```
-
-**Critics (3-phase refinement):**
-1. **Factuality Critic**: Kiểm tra độ chính xác vs source
-2. **Local Structure Critic**: Đảm bảo specificity của nodes
-3. **Global Structure Critic**: Cân bằng bố cục toàn cục
-
-### 4. Advanced Summarization
-
-Hệ thống tóm tắt đa phương pháp:
-
-| Method | Description |
-|--------|-------------|
-| **DANCER** | Divide-and-Conquer: Chia tài liệu → tóm tắt từng phần → tổng hợp |
-| **Entity Chain** | Trích xuất entities → tạo summary dựa trên chain |
-| **Chain of Density** | Iterative enrichment với increasing entity density |
-| **Structured Extraction** | Chuyển đổi sang JSON có cấu trúc |
-| **FactCC** | Kiểm chứng tính nhất quán vs source |
-
-### 5. Hybrid Retrieval
-
-```python
-# Retrieval strategy
-Final_Results = α × Semantic_Scores + β × BM25_Scores + γ × MemoryTree_Scores
-```
-
-- **Semantic Search**: FAISS vector similarity
-- **Keyword Search**: BM25 sparse retrieval
-- **Memory Tree**: Summary-level retrieval với query routing
-
----
-
-## Mô hình AI/ML
-
-### Embedding Models
-
-| Model | Dimension | Use Case |
-|-------|-----------|----------|
-| `sentence-transformers/all-MiniLM-L6-v2` | 384 | Default, fast |
-| `sentence-transformers/all-mpnet-base-v2` | 768 | High quality |
-
-### LLM Models
-
-| Model | Provider | Use Case |
-|-------|----------|----------|
-| `qwen3.5:9b` | Ollama | Chat & general Q&A |
-| `qwen2.5:14b` | Ollama | Summary & Mind Map |
-| `gemma2:2b` | Ollama | Intent classification |
-| `gemini-2.5-flash` | Google | Cloud alternative |
-| `llama-3.3-70b-versatile` | Groq | Cloud alternative |
-
-### Query Routing (No-LLM Heuristics)
-
-```python
-def classify_query_type(query: str) -> str:
-    # Fast keyword-based classification (~1ms)
-    if "tóm tắt" in query: return "overview"
-    if "ý chính" in query: return "main_points"
-    if "chi tiết" in query: return "detail"
-    if "so sánh" in query: return "compare"
-    # ... more patterns
-```
-
----
-
-## Lưu trữ dữ liệu
-
-### Directory Structure
-
-```
-BE/
-├── index/                      # Vector index
-│   ├── index.faiss             # FAISS index file
-│   ├── index.json              # Metadata (chunk_id → text, video, etc.)
-│   └── source_registry.json    # Upload status tracking
-│
-├── memory/                     # High-level memory artifacts
-│   ├── memory_index.faiss      # Memory vectors
-│   ├── memory_index.json       # Memory metadata
-│   ├── memory_trees.json       # Tree nodes (document + sections)
-│   ├── mindmaps.json           # Generated mind maps
-│   └── summaries.json          # Saved summaries
-│
-├── videos/                     # QR-encoded videos
-│   └── *.mp4                   # One video per upload
-│
-└── input_docs/                # Original uploads
-    └── *.pdf, *.docx, *.txt
-```
-
-### SQLite Databases
-
-| Database | Tables | Purpose |
-|----------|--------|---------|
-| `jobs.sqlite` | jobs | Job tracking (ingest, query, mindmap) |
-| `sessions.sqlite` | sessions, messages | Chat history |
-| `checkpoints.sqlite` | checkpoints | LangGraph state persistence |
-
-### Index JSON Schema
-
-```json
-{
-  "123": {
-    "text": "Chunk content...",
-    "video": "source_filename_timestamp.mp4",
-    "timestamp": "2025-05-23T12:00:00",
-    "parent_id": null,
-    "sub_order": 1,
-    "total_parts": 1,
-    "is_subchunk": false,
-    "embedding": [0.123, ...]
-  },
-  "__meta__": {
-    "version": "1.0",
-    "created_at": "2025-05-23T12:00:00",
-    "num_chunks": 150,
-    "vector_backend": "langchain_faiss"
-  }
-}
-```
-
-### Memory Tree Node Schema
-
-```json
-{
-  "tree_id": "memtree_source1",
-  "source_stem": "report_20250523",
-  "built_at": "2025-05-23T12:00:00Z",
-  "version": "1.0",
-  "status": "completed",
-  "nodes": [
-    {
-      "memory_id": "mem_doc_source1",
-      "type": "document",
-      "title": "Tài liệu: report_20250523",
-      "summary": "Generated document summary...",
-      "embedding": [0.456, ...],
-      "chunk_refs": ["0", "1", "2"],
-      "children": ["mem_sec_source1_0", "mem_sec_source1_1"],
-      "metadata": {"source_stem": "report_20250523", "num_chunks": 45},
-      "intent_type": "argument"
-    }
-  ]
-}
-```
-
----
-
-## Docker Deployment
-
-### docker-compose.yml
-
-```yaml
-services:
-  backend:
-    build: ./BE
-    ports:
-      - "8080:8080"
-    volumes:
-      - ./data/videos:/app/videos
-      - ./data/index:/app/index
-      - ./data/memory:/app/memory
-      - ./data/input_docs:/app/input_docs
-    environment:
-      DATA_DIR: /app
-      PORT: "8080"
-      OLLAMA_HOST: http://host.docker.internal:11434
-      SLM_MODEL_CHAT: qwen3.5:9b
-      USE_LC_VECTOR_STORE: "1"
-      USE_LC_QA_CHAIN: "1"
-    extra_hosts:
-      - "host.docker.internal:host-gateway"
-
-  frontend:
-    build: .
-    ports:
-      - "3000:3000"
-    depends_on:
-      - backend
-```
-
-### Docker Commands
+Starts `backend`, `frontend`, `llm-gateway`, `mindmap-service`, and
+`redis`. `rq-worker` is a Compose profile, off by default
+(`docker-compose --profile worker up` to include it). A Windows-specific
+compose override exists at `docker-compose.windows.yml`.
+
+## Deployment
+
+`render.yaml` targets Render's free tier with a documented
+production-posture configuration (auto-generated `AUTH_SECRET`,
+`AUTH_REQUIRE_SECRET=true`, health check on `/health`). Full deployment
+detail: [`docs/deployment/render-free.md`](docs/deployment/render-free.md),
+[`docs/deployment/database-boundary.md`](docs/deployment/database-boundary.md).
+
+## Testing
 
 ```bash
-# Build and start
-docker-compose up --build
-
-# Start in background
-docker-compose up -d
-
-# View logs
-docker-compose logs -f
-
-# Stop
-docker-compose down
-
-# Rebuild after code changes
-docker-compose up --build --force-recreate
-```
-
-### Production Considerations
-
-1. **Volume Mounts**: Data persists in `./data/` on host
-2. **OLLAMA_HOST**: Use `host.docker.internal` on Windows/Mac
-3. **CORS**: Set `CORS_ORIGINS` for production domains
-4. **Health Check**: Backend health endpoint at `/health`
-
----
-
-## Development
-
-### Project Structure Guidelines
-
-```
-BE/
-├── core_modules/     # Pure business logic, no Flask imports
-├── services/         # External integrations (LLM, embedding)
-├── storage/          # Data persistence
-├── graphs/          # LangGraph pipelines
-└── main.py          # Flask app + routes only
-```
-
-### Adding New Features
-
-1. **New API Endpoint**: Add to `main.py`
-2. **New Service**: Add to appropriate directory under `BE/`
-3. **New Frontend Component**: Add to `FE/src/components/Layout/`
-
-### Testing
-
-```bash
-# Run all tests
+# Backend
 cd BE
-pytest tests/
+pytest
 
-# Run specific test
-pytest tests/test_query.py -v
-
-# With coverage
-pytest tests/ --cov=. --cov-report=html
+# Frontend
+cd FE
+npm run test    # vitest
+npm run lint     # eslint
+npm run build     # production build
 ```
 
-### Environment Variables Reference
+Frontend: **831 tests passing, 65 files** (measured this release — see
+`docs/BENCHMARK.md`). Backend: 198 test files, ~2009 test functions;
+CI (`.github/workflows/ci.yml`) runs the full suite against a real
+Postgres service container on every push.
 
-| Variable | Default | Description |
-|----------|---------|-------------|
-| `DATA_DIR` | `./BE` | Root data directory |
-| `VIDEO_DIR` | `$DATA_DIR/videos` | QR video storage |
-| `INDEX_DIR` | `$DATA_DIR/index` | Vector index |
-| `MEMORY_DIR` | `$DATA_DIR/memory` | Memory artifacts |
-| `OLLAMA_HOST` | `http://localhost:11434` | Ollama server |
-| `SLM_MODEL_CHAT` | `qwen3.5:9b` | Chat model |
-| `SLM_MODEL_SUMMARY` | `qwen2.5:14b` | Summary model |
-| `EMBEDDING_MODEL_NAME` | `all-MiniLM-L6-v2` | Embedding model |
-| `QUERY_CACHE_TTL_SEC` | `1800` | Query cache TTL |
-| `USE_LC_VECTOR_STORE` | `0` | Use LangChain FAISS |
+## Benchmark
 
----
+Only measured numbers — nothing estimated. Full detail:
+[`docs/BENCHMARK.md`](docs/BENCHMARK.md).
 
-## License & Credits
+- Frontend main bundle: **565.93kB → 223.34kB** (-60.7%) after
+  route-level code splitting.
+- Frontend test suite: 831/831 passing.
+- AI-pipeline latency, cold/warm start, memory usage: **not measured** in
+  this release — stated plainly rather than estimated.
 
-Dự án được phát triển cho mục đích nghiên cứu khoa học.
+## Known Limitations
 
-**Authors**: Lê Vũ Anh
+- General API rate limiting is not effective on the current free-tier
+  deployment (fails open without Redis); password-accepting routes have
+  an independent guard.
+- `CORS_ORIGINS` defaults to `*` in production — a documented, deliberate
+  trade-off (Bearer-token auth, not cookies), not an oversight.
+- No security headers (CSP, X-Frame-Options) at the nginx layer yet.
+- Backend Docker image runs as root.
+- No LICENSE file currently exists in this repository (see below).
+- Full detail: [`docs/SECURITY_SUMMARY.md`](docs/SECURITY_SUMMARY.md),
+  [`docs/RELEASE_CHECKLIST.md`](docs/RELEASE_CHECKLIST.md).
 
-**Tech Stack**:
-- Backend: Python, Flask, LangChain, LangGraph, FAISS
-- Frontend: React, TailwindCSS, Vite
-- AI: Ollama, Gemini, Groq, HuggingFace
+## Roadmap
+
+- Split `BE/app/main.py` (currently ~5,500 lines) into focused modules.
+- Nginx security headers + non-root backend container.
+- Enable Redis-backed general rate limiting once available in the target
+  deployment tier.
+- Full page-by-page accessibility audit (this release fixed the shared
+  dialog component only).
+- Measure AI-pipeline latency and publish real numbers.
+
+## License
+
+**No LICENSE file currently exists in this repository.** Add one before
+publishing publicly — until then, all rights are reserved by default
+under copyright law regardless of the repository being visible on
+GitHub.
+
+## Acknowledgements
+
+Built on Ollama, LangChain/LangGraph, FAISS, sentence-transformers, and
+React. This project's original working name was **MemVid**, exploring an
+encode-memory-as-QR-video approach; that direction was abandoned early
+and no longer exists in this codebase — mentioned here only so the
+repository name doesn't cause confusion for anyone reading the git
+history.
