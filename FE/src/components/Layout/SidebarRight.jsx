@@ -22,6 +22,7 @@ import Disclosure from "../ui/Disclosure";
 import Spinner from "../ui/Spinner";
 import { normStem } from "../../utils/evidence";
 import MdSnippet from "../ui/Markdown";
+import TutorPanel from "../study/TutorPanel";
 
 const IDLE_JOB_UI = { running: false, label: "", progress: null, stalled: false };
 
@@ -70,8 +71,25 @@ const ARTIFACTS = [
 ];
 
 // ── Main component ────────────────────────────────────
-export default function SidebarRight({ selectedSources, evidence, highlight, onHighlight, onClose, onAskAbout, collapsible = false }) {
+export default function SidebarRight({
+  selectedSources, evidence, highlight, onHighlight, onClose, onAskAbout, collapsible = false,
+  // Phase 4C — Gia sư AI sống trong CÙNG cột này, không phải một cột thứ ba
+  // (xem hard constraint "no new sidebar"). `rightView` là CONTROLLED từ
+  // MainLayout (Ctrl+/ và trạng thái ngăn kéo/bottom-sheet trên mobile cần
+  // biết tab nào đang mở); `artifactRequest` là lệnh một-lần (nonce) để "Xem
+  // sơ đồ"/"Xem tóm tắt" ở Tutor chuyển đúng tab Artifacts bên dưới.
+  rightView = "evidence", onRightViewChange, artifactRequest, askDirect, openArtifact, tutorMemory,
+}) {
   const [artifactTab, setArtifactTab] = useState("mindmap");
+  // "Ghim"/"Tách nổi" CHỈ đổi kiểu hiển thị của tab Gia sư AI TRONG cột này —
+  // không tách sang cây DOM khác, không đụng bề rộng cột (đó là việc của
+  // `usePanelLayout`, không phải của component này) — cục bộ, không cần state
+  // ở MainLayout.
+  const [tutorFloating, setTutorFloating] = useState(false);
+
+  useEffect(() => {
+    if (artifactRequest?.tab) setArtifactTab(artifactRequest.tab);
+  }, [artifactRequest]);
   const [mindMaps, setMindMaps]           = useState([]);
   const [showModalMap, setShowModalMap]   = useState(null);
   const [showSummaryModal, setShowSummaryModal] = useState(null);
@@ -587,21 +605,48 @@ export default function SidebarRight({ selectedSources, evidence, highlight, onH
   return (
     <div className="flex flex-col h-full overflow-hidden transition-theme" style={{ background: "var(--bg-sidebar)" }}>
 
-      {/* Header */}
-      <div className="px-4 pt-4 pb-3 border-b border-border flex items-center justify-between flex-shrink-0">
-        <div className="flex items-center gap-2 min-w-0">
-          <Icon name="Quote" size={15} className="text-brand flex-shrink-0" />
-          <span className="text-[13px] font-semibold text-text-primary">Lề bằng chứng</span>
+      {/* Header — hai tab của MỘT cột: Bằng chứng (cũ) / Gia sư AI (Phase 4C) */}
+      <div className="px-4 pt-4 pb-3 border-b border-border flex items-center justify-between flex-shrink-0 gap-2">
+        <div className="flex gap-1 min-w-0">
+          <button type="button" onClick={() => onRightViewChange?.("evidence")}
+                  className={`pill-tab !px-2.5 !py-1 ${rightView === "evidence" ? "pill-tab-active" : ""}`}
+                  aria-pressed={rightView === "evidence"}>
+            <Icon name="Quote" size={13} /> Bằng chứng
+          </button>
+          <button type="button" onClick={() => onRightViewChange?.("tutor")}
+                  className={`pill-tab !px-2.5 !py-1 ${rightView === "tutor" ? "pill-tab-active" : ""}`}
+                  aria-pressed={rightView === "tutor"}>
+            <Icon name="Sparkles" size={13} /> Gia sư AI
+          </button>
         </div>
-        {/* Khổ hẹp: đóng ngăn kéo. Khổ rộng: thu cột về gáy sách. */}
-        <button onClick={onClose}
-          className={`icon-btn w-8 h-8${collapsible ? "" : " md:hidden"}`}
-          aria-label={collapsible ? "Thu gọn cột" : "Đóng"}
-          title={collapsible ? "Thu gọn cột" : "Đóng"}>
-          <Icon name="X" size={16} />
-        </button>
+        <div className="flex items-center gap-1 flex-shrink-0">
+          {/* Ghim/Tách nổi — chỉ có ý nghĩa trên màn rộng, nơi cột này có chỗ
+              để "nổi" lên trên nội dung thay vì nằm phẳng trong hàng cột. */}
+          {rightView === "tutor" && (
+            <button type="button" onClick={() => setTutorFloating((v) => !v)}
+                    className={`icon-btn w-8 h-8 hidden md:inline-flex ${tutorFloating ? "text-brand" : ""}`}
+                    aria-pressed={tutorFloating}
+                    title={tutorFloating ? "Ghim vào cột" : "Tách nổi"}
+                    aria-label={tutorFloating ? "Ghim Gia sư AI vào cột" : "Tách Gia sư AI nổi lên"}>
+              <Icon name="Pin" size={15} />
+            </button>
+          )}
+          {/* Khổ hẹp: đóng ngăn kéo. Khổ rộng: thu cột về gáy sách. */}
+          <button onClick={onClose}
+            className={`icon-btn w-8 h-8${collapsible ? "" : " md:hidden"}`}
+            aria-label={collapsible ? "Thu gọn cột" : "Đóng"}
+            title={collapsible ? "Thu gọn cột" : "Đóng"}>
+            <Icon name="X" size={16} />
+          </button>
+        </div>
       </div>
 
+      {rightView === "tutor" ? (
+        <div className={`flex-1 min-h-0 overflow-y-auto co-the-cuon-them ${tutorFloating ? "md:m-2.5 md:rounded-[12px] md:shadow-lg md:border md:border-border" : ""}`}>
+          <TutorPanel askDirect={askDirect} openArtifact={openArtifact} memory={tutorMemory} />
+        </div>
+      ) : (
+      <>
       {/* ── EVIDENCE MARGIN ── */}
       <div className="flex-1 min-h-0 overflow-y-auto co-the-cuon-them px-3 py-3">
         {chunks.length > 0 ? (
@@ -820,8 +865,12 @@ export default function SidebarRight({ selectedSources, evidence, highlight, onH
         </div>
         </Disclosure>
       </div>
+      </>
+      )}
 
-      {/* ── MODALS (lazy chunks — Suspense chờ chunk tải xong mới render) ── */}
+      {/* ── MODALS (lazy chunks — Suspense chờ chunk tải xong mới render) ──
+          Ở NGOÀI nhánh rightView có chủ đích: đổi tab không được đóng một
+          modal sơ đồ/tóm tắt đang mở phía trên nó. */}
       {showModalMap && (
         <Suspense fallback={null}>
           <MindMapModal
