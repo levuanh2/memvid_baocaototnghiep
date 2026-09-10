@@ -390,22 +390,48 @@ _SF_METRICS: Dict[str, int] = _MirroredCounter("sf", {
 })
 
 
-def _sf_enabled() -> bool:
-    return (os.getenv("SINGLE_FLIGHT_ENABLED", "true") or "").strip().lower() not in (
-        "0", "false", "no", "off",
-    )
-
-
-def _sf_num(name: str, default: float) -> float:
+def _num_env(name: str, default: float) -> float:
+    """Đọc một biến môi trường số, lùi về `default` nếu thiếu/hỏng. Dùng chung
+    cho single-flight và overload — hai hệ thống trước đây định nghĩa RIÊNG
+    hai bản y hệt nhau (`_sf_num`/`_ovl_num`); gộp một chỗ, giữ nguyên cả hai
+    tên gọi cũ làm hàm bọc mỏng để không phải sửa các nơi đang gọi chúng."""
     try:
         return float((os.getenv(name) or "").strip() or default)
     except ValueError:
         return default
 
 
-def _sf_log(event: str, **kv: object) -> None:
+def _bool_env(name: str, default: bool) -> bool:
+    """Đọc một biến môi trường boolean — cùng lý do gộp như `_num_env`. Hành vi
+    đã CHẠY THẬT để đối chiếu với công thức cũ của `_sf_enabled`/`_ovl_bool`
+    ở mọi trường hợp (thiếu biến, biến rỗng, giá trị lạ, giá trị false-like)
+    — cùng kết quả ở tất cả. `pytest` đầy đủ không chạy được cục bộ trong
+    phiên này (venv lệch phiên bản langchain so với requirements.txt, không
+    liên quan tới thay đổi này), nhưng import trực tiếp `app.main` + gọi hàm
+    vẫn chạy được (QUERY_GRAPH tự bắt lỗi import của nó, không chặn phần còn
+    lại của module) — dùng đường đó để xác minh, không phải suy luận suông."""
+    v = (os.getenv(name) or "").strip().lower()
+    if not v:
+        return default
+    return v not in ("0", "false", "no", "off")
+
+
+def _log_event(prefix: str, event: str, **kv: object) -> None:
+    """In một dòng log `<prefix> <event> k=v ...` — cùng lý do gộp như trên."""
     parts = " ".join(f"{k}={v}" for k, v in kv.items())
-    print(f"singleflight {event} {parts}".rstrip(), flush=True)
+    print(f"{prefix} {event} {parts}".rstrip(), flush=True)
+
+
+def _sf_enabled() -> bool:
+    return _bool_env("SINGLE_FLIGHT_ENABLED", True)
+
+
+def _sf_num(name: str, default: float) -> float:
+    return _num_env(name, default)
+
+
+def _sf_log(event: str, **kv: object) -> None:
+    _log_event("singleflight", event, **kv)
 
 
 def _sf_nonempty(cached: Optional[dict]) -> bool:
@@ -625,22 +651,15 @@ _OVERLOAD_METRICS: Dict[str, int] = _MirroredCounter("overload", {
 
 
 def _ovl_log(event: str, **kv: object) -> None:
-    parts = " ".join(f"{k}={v}" for k, v in kv.items())
-    print(f"overload {event} {parts}".rstrip(), flush=True)
+    _log_event("overload", event, **kv)
 
 
 def _ovl_bool(name: str, default: bool) -> bool:
-    v = (os.getenv(name) or "").strip().lower()
-    if not v:
-        return default
-    return v not in ("0", "false", "no", "off")
+    return _bool_env(name, default)
 
 
 def _ovl_num(name: str, default: float) -> float:
-    try:
-        return float((os.getenv(name) or "").strip() or default)
-    except ValueError:
-        return default
+    return _num_env(name, default)
 
 
 def _client_ip() -> str:
