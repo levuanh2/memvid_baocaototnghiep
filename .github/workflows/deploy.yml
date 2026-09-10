@@ -1,0 +1,76 @@
+# Production auto-deploy — backend only, EC2.
+#
+# Triggered by the completion of the "CI" workflow (.github/workflows/ci.yml),
+# not by `push` directly — this is how deploy stays wired to "all CI jobs
+# passed" without duplicating or modifying ci.yml's job list. `workflow_run`
+# fires for every CI run regardless of branch (main pushes AND PR branches),
+# so the branch/event filter below is what actually enforces "main only,
+# never feature branches" — ci.yml itself needs no changes.
+#
+# SSH host key is pinned via ssh-keyscan into a job-local known_hosts file
+# (never disables StrictHostKeyChecking) — see docs/AWS_DEPLOYMENT.md for the
+# one-time setup this depends on (EC2_HOST/EC2_USER/EC2_SSH_KEY secrets).
+
+name: Deploy
+
+on:
+  workflow_run:
+    workflows: ["CI"]
+    types: [completed]
+
+jobs:
+  deploy:
+    name: Deploy backend to EC2
+    runs-on: ubuntu-latest
+    # Both conditions matter: `head_branch == 'main'` scopes to main (a PR's
+    # CI run has head_branch == the PR's source branch, never "main", unless
+    # the PR itself is main -> main which GitHub doesn't allow); `event ==
+    # 'push'` additionally excludes any pull_request-triggered CI run even
+    # in an edge case where head_branch alone wouldn't. conclusion ==
+    # 'success' is the actual "all CI jobs passed" gate — workflow_run's
+    # conclusion is only 'success' when every job in that run succeeded.
+    if: >
+      github.event.workflow_run.conclusion == 'success' &&
+      github.event.workflow_run.head_branch == 'main' &&
+      github.event.workflow_run.event == 'push'
+    steps:
+      - name: Pin EC2 host key (ssh-keyscan into known_hosts)
+        run: |
+          set -euo pipefail
+          mkdir -p ~/.ssh
+          chmod 700 ~/.ssh
+          ssh-keyscan -H "${{ secrets.EC2_HOST }}" >> ~/.ssh/known_hosts
+          chmod 644 ~/.ssh/known_hosts
+
+      - name: Install deploy SSH key
+        run: |
+          set -euo pipefail
+          install -m 600 -D /dev/null ~/.ssh/deploy_key
+          printf '%s\n' "${{ secrets.EC2_SSH_KEY }}" > ~/.ssh/deploy_key
+          chmod 600 ~/.ssh/deploy_key
+
+      - name: Deploy over SSH
+        run: |
+          set -euo pipefail
+          ssh -i ~/.ssh/deploy_key \
+              -o StrictHostKeyChecking=yes \
+              -o BatchMode=yes \
+              -o ConnectTimeout=15 \
+              "${{ secrets.EC2_USER }}@${{ secrets.EC2_HOST }}" '
+            set -euo pipefail
+            cd /opt/memvid/app
+            git fetch origin
+            git checkout main
+            git pull --ff-only origin main
+            chmod +x scripts/*.sh
+            ./scripts/deploy.sh
+          '
+
+      - name: Report deployment result
+        if: always()
+        run: |
+          if [ "${{ job.status }}" = "success" ]; then
+            echo "Deployment to EC2 (${{ secrets.EC2_HOST }}) succeeded."
+          else
+            echo "Deployment to EC2 (${{ secrets.EC2_HOST }}) FAILED — see the 'Deploy over SSH' step above for the exact error." >&2
+          fi
