@@ -3,6 +3,7 @@ import { Link, useNavigate } from "react-router-dom";
 import StudyShell, { EmptyState } from "../../components/study/StudyShell";
 import StudyCard from "../../components/study/StudyCard";
 import AiInsightCard from "../../components/study/AiInsightCard";
+import LearningDashboard from "../../components/study/LearningDashboard";
 import CollectionSidebar from "../../components/study/CollectionSidebar";
 import BulkBar from "../../components/study/BulkBar";
 import SealMeter from "../../components/study/SealMeter";
@@ -515,6 +516,17 @@ export default function DocumentList() {
           </label>
         )}
       </div>
+
+      {documents.length > 0 && (
+        <LearningDashboard
+          documents={documents}
+          overview={overview}
+          weak={weak}
+          attempts={attempts}
+          mucHienThi={mucHienThi}
+          onMo={moBeMat}
+        />
+      )}
 
       {/* Tiếp tục học */}
       {mucHienThi.tiepTucHoc && (
