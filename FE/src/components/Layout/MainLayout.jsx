@@ -1,4 +1,4 @@
-import { useState, useCallback } from "react";
+import { useState, useCallback, useEffect } from "react";
 import { Link, useNavigate } from "react-router-dom";
 import SidebarLeft from "./SidebarLeft";
 import ChatArea from "./ChatArea";
@@ -14,6 +14,7 @@ import Toaster from "../ui/Toaster";
 import AccountMenu from "./AccountMenu";
 import StudyBreadcrumb from "../study/StudyBreadcrumb";
 import { useStudyContext } from "../../study/useStudyContext";
+import { useTutorMemory } from "../../study/useTutorMemory";
 
 export default function MainLayout({ selectedSources, setSelectedSources, initialAskAbout = null }) {
   const [sources, setSources] = useState([]);
@@ -24,6 +25,7 @@ export default function MainLayout({ selectedSources, setSelectedSources, initia
   const { isDark, setLight, setDark } = useTheme();
   const { user, logout } = useAuth();
   const { selectedDocument } = useStudyContext();
+  const tutorMemory = useTutorMemory();
   const navigate = useNavigate();
   // Đăng xuất thường giữ NGUYÊN hành vi cũ: về trang chủ, không thông báo gì.
   // Chỉ ca đăng xuất-vì-vừa-đổi-mật-khẩu mới đi tới `/login` kèm một MÃ thông báo —
@@ -60,6 +62,56 @@ export default function MainLayout({ selectedSources, setSelectedSources, initia
     if (!text) return;
     setAskAboutDraft({ text: `Về đoạn này: "${text}" — hãy giải thích thêm.`, nonce: Date.now() });
   }, []);
+
+  // Phase 4C, Step 6 — "một bộ phát duy nhất": Gia sư AI gửi câu hỏi thẳng vào
+  // chat qua CHÍNH `setAskAboutDraft` ở trên, không bọc mẫu "Về đoạn này...",
+  // giống hệt cách `initialAskAbout` (Câu hỏi gợi ý, Phase 4A.3) đã seed state
+  // này. Không tạo state chat thứ hai.
+  const askDirect = useCallback((text) => {
+    const t = String(text || "").trim();
+    if (!t) return;
+    setAskAboutDraft({ text: t, nonce: Date.now() });
+  }, []);
+
+  // Gia sư AI + Lề bằng chứng dùng chung MỘT cột (hard constraint: không thêm
+  // cột thứ ba) — `rightView` chọn tab nào đang hiện trong nó.
+  const [rightView, setRightView] = useState("evidence");   // "evidence" | "tutor"
+  // Lệnh một-lần (nonce) để "Xem sơ đồ"/"Xem tóm tắt" ở Tutor chuyển đúng tab
+  // Artifacts trong SidebarRight — KHÔNG điều hướng, KHÔNG route mới (tutorActions.js
+  // giải thích lý do: Workspace không có `document_id` để gọi `duongDi`).
+  const [artifactRequest, setArtifactRequest] = useState(null);
+  const openTutor = useCallback(() => {
+    setRightView("tutor");
+    if (panel.drawer) setRightOpen(true); else panel.setCollapsedFor("right", false);
+  }, [panel]);
+  const openArtifact = useCallback((tab) => {
+    setRightView("evidence");
+    setArtifactRequest({ tab, nonce: Date.now() });
+    if (panel.drawer) setRightOpen(true); else panel.setCollapsedFor("right", false);
+  }, [panel]);
+
+  // Step 10 — Ctrl+/ (hoặc Cmd+/) mở Gia sư AI từ bất cứ đâu trong Workspace.
+  useEffect(() => {
+    const onKey = (e) => {
+      if ((e.ctrlKey || e.metaKey) && e.key === "/") { e.preventDefault(); openTutor(); }
+    };
+    window.addEventListener("keydown", onKey);
+    return () => window.removeEventListener("keydown", onKey);
+  }, [openTutor]);
+
+  // Step 10 — Escape đóng ngăn kéo lề phải (khổ hẹp). Bỏ qua khi một overlay
+  // khác đang mở (modal tóm tắt/sơ đồ — `[aria-modal]`/`.me-container`) để
+  // không tranh phím Escape với overlay đó, giống guard đã có ở
+  // `chatFocus.js::shouldFocusOnSlash`.
+  useEffect(() => {
+    const onKey = (e) => {
+      if (e.key !== "Escape" || !panel.drawer || !rightOpen) return;
+      if (document.querySelector('[aria-modal="true"], .me-container')) return;
+      setRightOpen(false);
+    };
+    window.addEventListener("keydown", onKey);
+    return () => window.removeEventListener("keydown", onKey);
+  }, [panel.drawer, rightOpen]);
 
   return (
     <div className="flex flex-col h-screen overflow-hidden font-body transition-theme" style={{ background: "var(--bg-base)", color: "var(--text-primary)" }}>
@@ -114,9 +166,15 @@ export default function MainLayout({ selectedSources, setSelectedSources, initia
             <span className="hidden sm:inline">StudyMap</span>
           </Link>
 
-          {/* Mobile: open evidence margin */}
-          <button onClick={() => setRightOpen(true)} className="md:hidden icon-btn w-9 h-9" aria-label="Mở lề bằng chứng">
-            <Icon name="PanelRight" size={18} />
+          {/* Mobile: open right column (whichever tab — Bằng chứng/Gia sư AI — was last open) */}
+          <button onClick={() => setRightOpen(true)} className="md:hidden icon-btn w-9 h-9"
+                  aria-label={rightView === "tutor" ? "Mở Gia sư AI" : "Mở lề bằng chứng"}>
+            <Icon name={rightView === "tutor" ? "Sparkles" : "PanelRight"} size={18} />
+          </button>
+          {/* Gia sư AI — luôn có mặt (ẩn trên mobile để tránh chật hàng nút; Ctrl+/ vẫn mở được). */}
+          <button onClick={openTutor} className="hidden md:inline-flex pill-action !text-[12.5px]"
+                  title="Gia sư AI (Ctrl+/)">
+            <Icon name="Sparkles" size={14} /> Gia sư AI
           </button>
           {/* Theme toggle */}
           <div className="hidden sm:flex theme-toggle" role="group" aria-label="Chế độ sáng/tối">
@@ -233,10 +291,18 @@ export default function MainLayout({ selectedSources, setSelectedSources, initia
             <aside
               className={
                 panel.drawer
-                  ? `fixed top-[58px] right-0 h-[calc(100vh-58px)] z-40 w-[326px] shrink-0
-                     bg-surface-sidebar border-l border-border
-                     transition-transform duration-300 ease-in-out
-                     ${rightOpen ? "translate-x-0" : "translate-x-full"}`
+                  // Gia sư AI trên mobile là bottom sheet (đúng yêu cầu Step 1),
+                  // Bằng chứng vẫn là ngăn kéo trượt từ cạnh phải như cũ — cùng
+                  // `rightOpen`/nền mờ, chỉ đổi hướng trượt theo `rightView`.
+                  ? rightView === "tutor"
+                    ? `fixed inset-x-0 bottom-0 max-h-[80vh] z-40 shrink-0
+                       bg-surface-sidebar border-t border-border rounded-t-[14px]
+                       transition-transform duration-300 ease-in-out
+                       ${rightOpen ? "translate-y-0" : "translate-y-full"}`
+                    : `fixed top-[58px] right-0 h-[calc(100vh-58px)] z-40 w-[326px] shrink-0
+                       bg-surface-sidebar border-l border-border
+                       transition-transform duration-300 ease-in-out
+                       ${rightOpen ? "translate-x-0" : "translate-x-full"}`
                   : "shrink-0 bg-surface-sidebar overflow-hidden"
               }
               style={panel.drawer ? undefined : { width: panel.width.right }}
@@ -249,6 +315,12 @@ export default function MainLayout({ selectedSources, setSelectedSources, initia
                 onClose={() => (panel.drawer ? setRightOpen(false) : panel.setCollapsedFor("right", true))}
                 onAskAbout={onAskAbout}
                 collapsible={!panel.drawer}
+                rightView={rightView}
+                onRightViewChange={setRightView}
+                artifactRequest={artifactRequest}
+                askDirect={askDirect}
+                openArtifact={openArtifact}
+                tutorMemory={tutorMemory}
               />
             </aside>
           </>
