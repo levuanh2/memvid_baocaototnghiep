@@ -12,6 +12,8 @@ import { useAuth } from "../../auth/useAuth";
 import { Icon } from "../ui/Icon";
 import Toaster from "../ui/Toaster";
 import AccountMenu from "./AccountMenu";
+import StudyBreadcrumb from "../study/StudyBreadcrumb";
+import { useStudyContext } from "../../study/useStudyContext";
 
 export default function MainLayout({ selectedSources, setSelectedSources, initialAskAbout = null }) {
   const [sources, setSources] = useState([]);
@@ -21,6 +23,7 @@ export default function MainLayout({ selectedSources, setSelectedSources, initia
   const panel = usePanelLayout();
   const { isDark, setLight, setDark } = useTheme();
   const { user, logout } = useAuth();
+  const { selectedDocument } = useStudyContext();
   const navigate = useNavigate();
   // Đăng xuất thường giữ NGUYÊN hành vi cũ: về trang chủ, không thông báo gì.
   // Chỉ ca đăng xuất-vì-vừa-đổi-mật-khẩu mới đi tới `/login` kèm một MÃ thông báo —
@@ -85,11 +88,18 @@ export default function MainLayout({ selectedSources, setSelectedSources, initia
           </span>
         </div>
 
-        {/* Center eyebrow — the thesis, not a dead search box */}
+        {/* Center eyebrow — the thesis, not a dead search box. Phase 4B #8: khi
+            Study Context có tài liệu đang chọn (tới đây qua moBeMat), thay eyebrow
+            tĩnh bằng chặng đường thật Document > Bề mặt > Chủ đề > Câu hỏi > Chat —
+            KHÔNG suy từ URL, chỉ đọc context. Chưa có lựa chọn thì giữ eyebrow cũ. */}
         <div className="flex-1 flex justify-center px-2 min-w-0">
-          <span className="hidden md:block text-[12px] tracking-[0.14em] uppercase text-text-muted font-mono truncate">
-            Đọc · Truy hồi · Dẫn chứng
-          </span>
+          {selectedDocument ? (
+            <StudyBreadcrumb showChat className="hidden md:flex" />
+          ) : (
+            <span className="hidden md:block text-[12px] tracking-[0.14em] uppercase text-text-muted font-mono truncate">
+              Đọc · Truy hồi · Dẫn chứng
+            </span>
+          )}
         </div>
 
         {/* Right actions */}

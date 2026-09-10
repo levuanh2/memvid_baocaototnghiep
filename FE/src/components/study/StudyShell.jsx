@@ -1,6 +1,7 @@
 import { Link } from "react-router-dom";
 import { Icon } from "../ui/Icon";
 import Spinner from "../ui/Spinner";
+import StudyBreadcrumb from "./StudyBreadcrumb";
 
 /**
  * Khung chung cho các trang StudyMap.
@@ -48,6 +49,9 @@ export default function StudyShell({
           </div>
           <div className="flex items-center gap-2 shrink-0">{actions}</div>
         </div>
+        {/* Phase 4B #8: chỉ hiện khi Study Context thật sự có lựa chọn — trang
+            KHÔNG liên quan (chưa từng qua moBeMat) không tự vẽ ra một chặng giả. */}
+        <StudyBreadcrumb className={`${width} mx-auto px-5 pb-2.5`} />
       </header>
 
       <main className={`${width} mx-auto px-5 py-7`}>
