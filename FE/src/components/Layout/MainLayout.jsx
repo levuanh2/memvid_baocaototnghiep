@@ -260,7 +260,6 @@ export default function MainLayout({ selectedSources, setSelectedSources, initia
             highlight={highlight}
             onHighlight={onHighlight}
             onOpenLeft={() => (panel.drawer ? setLeftOpen(true) : panel.setCollapsedFor("left", false))}
-            onOpenRight={() => (panel.drawer ? setRightOpen(true) : panel.setCollapsedFor("right", false))}
             askAboutDraft={askAboutDraft}
           />
         </main>

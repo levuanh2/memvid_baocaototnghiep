@@ -13,35 +13,7 @@ import { shouldFocusComposer, shouldRefocusComposer, shouldFocusOnSlash } from "
 import { Icon } from "../ui/Icon";
 import { nodeLabel, processCitations, parseCiteHref, normStem } from "../../utils/evidence";
 import { pickImageFromClipboard, downscaleImage, transcribeImage, getVisionStatus, buildQuestionWithImage, IMAGE_TYPES } from "../../utils/chatImage";
-
-// ── Error helpers (logic unchanged) ────────────────────
-const QUERY_SSE_ERR_FALLBACK = "Loi khi xu ly truy van. Vui long thu lai.";
-const INVISIBLE_RE = new RegExp("[" + [0x200B, 0x200C, 0x200D, 0xFEFF, 0x2060, 0x180E].map((c) => String.fromCharCode(c)).join("") + "]", "g");
-function stripInvisible(s) { return String(s ?? "").replace(INVISIBLE_RE, ""); }
-function ensureErrMsg(msg, fb = QUERY_SSE_ERR_FALLBACK) {
-  const base = fb != null && String(fb).trim() !== "" ? String(fb).trim() : QUERY_SSE_ERR_FALLBACK;
-  const t = stripInvisible(msg).trim();
-  return t.length > 0 ? t : base;
-}
-function pickQueryDisplayText(jobResult, streamedText) {
-  const st = streamedText != null ? String(streamedText).trim() : "";
-  if (st) return st;
-  const p = jobResult && typeof jobResult === "object" ? jobResult.payload : null;
-  if (p && typeof p === "object") {
-    if (p.answer != null && String(p.answer).trim()) return String(p.answer).trim();
-    if (p.error != null && String(p.error).trim()) return String(p.error).trim();
-  }
-  if (jobResult && typeof jobResult === "object" && jobResult.answer != null && String(jobResult.answer).trim()) return String(jobResult.answer).trim();
-  return "";
-}
-function sseErrorToMessage(raw, fallback = QUERY_SSE_ERR_FALLBACK) {
-  const fb = ensureErrMsg(fallback, QUERY_SSE_ERR_FALLBACK);
-  if (raw == null) return fb;
-  if (typeof raw === "string") { const t = stripInvisible(raw).trim(); return t.length > 0 ? t : fb; }
-  if (typeof raw === "number" && Number.isFinite(raw)) return String(raw);
-  if (typeof raw === "boolean") return String(raw);
-  return fb;
-}
+import { QUERY_SSE_ERR_FALLBACK, ensureErrMsg, pickQueryDisplayText, sseErrorToMessage } from "../../utils/queryText";
 
 // ── Quick question chips (fill the composer; functional, not decorative) ──
 const SUGGESTIONS = [
@@ -110,7 +82,7 @@ function AnswerProse({ content, mdComponents }) {
   );
 }
 
-export default function ChatArea({ selectedSources, sources = [], onEvidence, highlight, onHighlight, onOpenLeft, onOpenRight, askAboutDraft }) {
+export default function ChatArea({ selectedSources, sources = [], onEvidence, highlight, onHighlight, onOpenLeft, askAboutDraft }) {
   const [messages, setMessages] = useState([]);
   const [input, setInput] = useState("");
   const [loading, setLoading] = useState(false);
@@ -121,7 +93,6 @@ export default function ChatArea({ selectedSources, sources = [], onEvidence, hi
   const [notice, setNotice] = useState("");
   const [contextCleared, setContextCleared] = useState(false);
   const [jobProgress, setJobProgress] = useState(0);
-  const [jobNode, setJobNode] = useState("");
   const [seenNodes, setSeenNodes] = useState([]);
   const [streamingPreview, setStreamingPreview] = useState("");
   const [pendingReview, setPendingReview] = useState(null);
@@ -198,7 +169,6 @@ export default function ChatArea({ selectedSources, sources = [], onEvidence, hi
             if (typeof d.progress === "number") setJobProgress(Math.max(0, Math.min(100, d.progress)));
             if (d.current_node) {
               const k = String(d.current_node);
-              setJobNode(k);
               setSeenNodes((prev) => (prev[prev.length - 1] === k || prev.includes(k) ? prev : [...prev, k]));
             }
             if (d.status === "done") {
@@ -268,7 +238,7 @@ export default function ChatArea({ selectedSources, sources = [], onEvidence, hi
 
   const jobIdRef = useRef(null);
 
-  const resetJobState = () => { setJobProgress(0); setJobNode(""); setSeenNodes([]); previewThrottleRef.current?.cancel(); setStreamingPreview(""); streamAccRef.current = ""; };
+  const resetJobState = () => { setJobProgress(0); setSeenNodes([]); previewThrottleRef.current?.cancel(); setStreamingPreview(""); streamAccRef.current = ""; };
 
   // Huỷ ở đây là huỷ PHÍA MÁY BẠN, không phải phía máy chủ: BE chưa có route huỷ cho
   // job `query` (`_CANCELLABLE_JOB_TYPES` không có "query", và query_graph không gọi
@@ -383,7 +353,6 @@ export default function ChatArea({ selectedSources, sources = [], onEvidence, hi
     if (action === "edit" && !String(pendingReview.answer || "").trim()) return;
     setReviewSubmitting(true);
     setLoading(true);
-    setJobNode("ReviewGate");
     try {
       await resumeQuery(pendingReview.jobId, { action, answer: pendingReview.answer });
       const result = await pollQueryStatus(pendingReview.jobId, {
@@ -391,7 +360,6 @@ export default function ChatArea({ selectedSources, sources = [], onEvidence, hi
         isCancelled: () => false,
         onStatus: (d) => {
           if (typeof d?.progress === "number") setJobProgress(Math.max(0, Math.min(100, d.progress)));
-          if (d?.current_node) setJobNode(String(d.current_node));
         },
       });
       applyFinalQueryResult(result);
@@ -492,7 +460,7 @@ export default function ChatArea({ selectedSources, sources = [], onEvidence, hi
     setMessages((prev) => [...prev, userMsg]);
     setInput("");
     clearImage();
-    setLoading(true); resetJobState(); setJobNode("Queued"); setSeenNodes(["Queued"]);
+    setLoading(true); resetJobState(); setSeenNodes(["Queued"]);
     onHighlight?.(null);
     cancelledRef.current = false;
     abortControllerRef.current = new AbortController();
@@ -528,7 +496,6 @@ export default function ChatArea({ selectedSources, sources = [], onEvidence, hi
             if (typeof d?.progress === "number") setJobProgress(Math.max(0, Math.min(100, d.progress)));
             if (d?.current_node) {
               const k = String(d.current_node);
-              setJobNode(k);
               setSeenNodes((prev) => (prev.includes(k) ? prev : [...prev, k]));
             }
           },
@@ -541,7 +508,6 @@ export default function ChatArea({ selectedSources, sources = [], onEvidence, hi
       const review = jobResult?.payload?.review;
       if (review?.type === "review") {
         setPendingReview({ jobId, answer: String(review.answer || "") });
-        setJobNode("ReviewGate");
         setJobProgress((p) => Math.max(p, 90));
         return;
       }
@@ -572,7 +538,7 @@ export default function ChatArea({ selectedSources, sources = [], onEvidence, hi
     ta.style.height = "44px";
     ta.style.height = Math.min(ta.scrollHeight, 140) + "px";
   };
-  const useSuggestion = (q) => { setInput(q); textareaRef.current?.focus(); };
+  const fillSuggestion = (q) => { setInput(q); textareaRef.current?.focus(); };
 
   // ── Focus UX ────────────────────────────────────────
   // Đọc sự thật DOM ở đây, quyết định để utils/chatFocus.js (thuần, test được).
@@ -736,7 +702,7 @@ export default function ChatArea({ selectedSources, sources = [], onEvidence, hi
             {selectedSources?.length > 0 ? (
               <div className="flex flex-wrap gap-2 justify-center">
                 {SUGGESTIONS.map((q) => (
-                  <button key={q} onClick={() => useSuggestion(q)} className="pill-action">{q}</button>
+                  <button key={q} onClick={() => fillSuggestion(q)} className="pill-action">{q}</button>
                 ))}
               </div>
             ) : (
@@ -852,7 +818,7 @@ export default function ChatArea({ selectedSources, sources = [], onEvidence, hi
         {messages.length > 0 && !loading && !pendingReview && (
           <div className="px-4 sm:px-8 pt-3 pb-1 flex gap-2 overflow-x-auto scrollbar-none">
             {SUGGESTIONS.map((q) => (
-              <button key={q} onClick={() => useSuggestion(q)} className="pill-action flex-shrink-0">{q}</button>
+              <button key={q} onClick={() => fillSuggestion(q)} className="pill-action flex-shrink-0">{q}</button>
             ))}
           </div>
         )}
