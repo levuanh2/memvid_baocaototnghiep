@@ -22,12 +22,21 @@ import {
 export function StudyContextProvider({ children }) {
   const [state, setState] = useState(TRANG_THAI_RONG);
 
-  const selectDocument = useCallback((documentId) => setState((s) => chonDoc(s, documentId)), []);
-  const selectTopic = useCallback((topic) => setState((s) => chonTopic(s, topic)), []);
-  const selectEntity = useCallback((entity) => setState((s) => chonEntity(s, entity)), []);
-  const selectSummary = useCallback((summaryId) => setState((s) => chonSummary(s, summaryId)), []);
-  const selectNode = useCallback((nodeId) => setState((s) => chonNode(s, nodeId)), []);
-  const selectQuestion = useCallback((questionId) => setState((s) => chonQuestion(s, questionId)), []);
+  // `opts` (Phase 4B): `{ source }` — bề mặt gọi lựa chọn này (một trong
+  // SELECTION_SOURCES). Tuỳ chọn, không phá lời gọi cũ chưa truyền nó — thiếu thì
+  // `selectionSource` đơn giản là `null`.
+  const selectDocument = useCallback(
+    (documentId, opts) => setState((s) => chonDoc(s, documentId, opts)), []);
+  const selectTopic = useCallback(
+    (topic, opts) => setState((s) => chonTopic(s, topic, opts)), []);
+  const selectEntity = useCallback(
+    (entity, opts) => setState((s) => chonEntity(s, entity, opts)), []);
+  const selectSummary = useCallback(
+    (summaryId, opts) => setState((s) => chonSummary(s, summaryId, opts)), []);
+  const selectNode = useCallback(
+    (nodeId, opts) => setState((s) => chonNode(s, nodeId, opts)), []);
+  const selectQuestion = useCallback(
+    (questionId, opts) => setState((s) => chonQuestion(s, questionId, opts)), []);
   const setLearningMode = useCallback((mode) => setState((s) => datLearningMode(s, mode)), []);
   const clearSelection = useCallback((key) => setState((s) => xoaLuaChon(s, key)), []);
 
