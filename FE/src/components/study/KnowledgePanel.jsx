@@ -1,4 +1,4 @@
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { Icon } from "../ui/Icon";
 import { tenHienThi, thoiGianDoc, nhanThoiGianDoc } from "../../utils/thuVienTaiLieu";
 import { tiepTucHoc } from "../../utils/tiepTucHoc";
@@ -51,9 +51,20 @@ function KhungXuong({ soDong = 3 }) {
 export default function KnowledgePanel({
   doc, documents, chiMucBst, chips, cauHoi, dangTaiCauHoi, loiCauHoi, onThuLai, onMo,
 }) {
-  const { selectQuestion, selectTopic, selectEntity, selectedTopic, selectedEntity } = useStudyContext();
+  const {
+    selectDocument, selectQuestion, selectTopic, selectEntity, selectedTopic, selectedEntity,
+    selectedQuestion, selectedDocument,
+  } = useStudyContext();
   const tri = doc?.knowledge || {};
   const entities = Array.isArray(tri.entities) ? tri.entities : [];
+
+  // Panel MỞ = đang xem tài liệu này — cùng quy ước StudyMapView/SummaryModal đã
+  // dùng (đều tự phát `selectedDocument` bằng STEM khi mount). Panel này chỉ mount
+  // sau lần bung đầu tiên (StudyCard's `daTungMo`), nên effect này CHÍNH LÀ mốc
+  // "người dùng đang xem tài liệu X qua Knowledge Panel".
+  useEffect(() => {
+    if (doc?.source_stem) selectDocument(doc.source_stem);
+  }, [doc?.source_stem, selectDocument]);
 
   // Sắp xếp yếu-trước / trọng-số cao-trước là quyết định ĐÃ CÓ (và đã test) ở
   // `triThuc.js` — không viết lại ở đây. `gioiHan` không giới hạn để "Xem thêm"
@@ -73,6 +84,15 @@ export default function KnowledgePanel({
   // Tiếp tục học: tài liệu hiện tại luôn có sẵn qua `doc`, không cần thêm một prop
   // suy ra được từ đúng thứ panel đã nhận.
   const tiepTuc = useMemo(() => tiepTucHoc(doc), [doc]);
+  // Phase 4A.5: nhận biết Study Context — vừa chọn một Câu hỏi gợi ý (cùng phiên,
+  // có thể đã rời trang) thì "Tiếp tục" đưa ĐÚNG câu hỏi đó, dùng lại `cauHoi` đã
+  // tải sẵn (không tải lại danh sách câu hỏi). Chỉ tin khi `selectedDocument` khớp
+  // ĐÚNG tài liệu của panel này — id câu hỏi (`_slug(category, subject)`, BE) không
+  // đảm bảo duy nhất TOÀN app, hai tài liệu khác nhau có thể trùng id nếu trùng chủ
+  // đề/thực thể; không khớp tài liệu (hoặc chưa tải câu hỏi) thì rơi về hành vi cũ.
+  const cauHoiDangChon = selectedQuestion && doc?.source_stem && doc.source_stem === selectedDocument
+    ? (cauHoi || []).find((q) => q.id === selectedQuestion) || null
+    : null;
 
   const nhomCauHoi = useMemo(() => nhomTheoDanhMuc(cauHoi), [cauHoi]);
   const trangThaiCauHoi = trangThaiRongCauHoi(cauHoi, { dangTai: dangTaiCauHoi });
@@ -285,12 +305,16 @@ export default function KnowledgePanel({
           <h4 className={TIEU_DE}>Tiếp tục học</h4>
           <div className="flex items-center justify-between gap-2 rounded-[7px] px-2.5 py-2"
                style={{ background: "var(--bg-card)", border: "1px solid var(--border)" }}>
-            <span className="text-[12px] text-text-secondary">
-              {tiepTuc.nhanBeMat} · mở {tiepTuc.nhanThoiGian}
+            <span className="text-[12px] text-text-secondary truncate">
+              {cauHoiDangChon ? `Câu hỏi: ${cauHoiDangChon.text}` : (
+                <>{tiepTuc.nhanBeMat} · mở {tiepTuc.nhanThoiGian}</>
+              )}
             </span>
             <button type="button"
                     className="btn-seal !py-1 !text-[12px] inline-flex items-center gap-1.5 shrink-0"
-                    onClick={() => onMo(doc, tiepTuc.beMat || "studymap")}>
+                    onClick={() => (cauHoiDangChon
+                      ? onMo(doc, cauHoiDangChon.target, { prompt: cauHoiDangChon.text })
+                      : onMo(doc, tiepTuc.beMat || "studymap"))}>
               <Icon name="ArrowRight" size={12} /> Tiếp tục
             </button>
           </div>
