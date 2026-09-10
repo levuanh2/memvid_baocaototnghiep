@@ -331,6 +331,73 @@ def test_thang_cap_khong_bao_gio_rename_active_mount_point(tmp_path, monkeypatch
     assert not st.exists()
 
 
+def test_thang_cap_sao_luu_hong_giua_chung_khong_rut_ruot_active(tmp_path, monkeypatch):
+    """Gap A: giai đoạn sao lưu (active -> backup) hỏng ở file thứ hai trong ba. active
+    không được rút ruột một phần — cả ba file cũ phải còn NGUYÊN VẸN sau rollback."""
+    active = tmp_path / "index"
+    active.mkdir()
+    (active / "a_index.faiss").write_bytes(b"1")
+    (active / "b_index.json").write_bytes(b"2")
+    (active / "c_metadata.json").write_bytes(b"3")
+    st = tmp_path / "index_staging"
+    st.mkdir()
+    (st / "a_index.faiss").write_bytes(b"moi")
+
+    goc = shutil.move
+
+    def _move(src, dst):
+        if Path(src).parent == active and Path(src).name == "b_index.json":
+            raise OSError("dia day luc sao luu")
+        return goc(src, dst)
+
+    monkeypatch.setattr(shutil, "move", _move)
+    with pytest.raises(OSError, match="dia day luc sao luu"):
+        rb.thang_cap(st, active, keep=3)
+
+    assert (active / "a_index.faiss").read_bytes() == b"1"
+    assert (active / "b_index.json").read_bytes() == b"2"
+    assert (active / "c_metadata.json").read_bytes() == b"3"
+
+
+def test_thang_cap_rollback_hong_khong_che_loi_goc(tmp_path, monkeypatch):
+    """Gap B: rollback (backup -> active) hỏng một file — lỗi GỐC (từ thăng cấp) vẫn
+    phải là lỗi người gọi thấy, không bị thay bằng lỗi rollback. Best effort: file nào
+    rollback được vẫn phải về đúng chỗ; file rollback hỏng thì không mất — vẫn nằm
+    trong thư mục backup, chỉ là chưa về lại active."""
+    active = tmp_path / "index"
+    active.mkdir()
+    (active / "a.faiss").write_bytes(b"cu-a")
+    (active / "b.json").write_bytes(b"cu-b")
+    st = tmp_path / "index_staging"
+    st.mkdir()
+    (st / "a.faiss").write_bytes(b"moi-a")
+    (st / "b.json").write_bytes(b"moi-b")
+
+    goc = shutil.move
+
+    def _move(src, dst):
+        p = Path(src)
+        # Lỗi GỐC: thăng cấp b.json (staging -> active) hỏng.
+        if p.parent == st and p.name == "b.json":
+            raise OSError("loi goc: thang cap b.json hong")
+        # Lỗi PHỤ: rollback đúng a.faiss (backup -> active) hỏng.
+        if p.parent.name.startswith(f"{active.name}_backup_") and p.name == "a.faiss":
+            raise OSError("loi phu: rollback a.faiss hong")
+        return goc(src, dst)
+
+    monkeypatch.setattr(shutil, "move", _move)
+    with pytest.raises(OSError, match="loi goc"):
+        rb.thang_cap(st, active, keep=3)
+
+    # File rollback được: về đúng active, đúng nội dung cũ.
+    assert (active / "b.json").read_bytes() == b"cu-b"
+    # File rollback hỏng: không có trong active (không đưa lại được)...
+    assert not (active / "a.faiss").exists()
+    # ...nhưng KHÔNG MẤT — vẫn còn trong thư mục backup, khôi phục tay được.
+    backups = list(tmp_path.glob(f"{active.name}_backup_*"))
+    assert backups and (backups[0] / "a.faiss").read_bytes() == b"cu-a"
+
+
 def test_khong_co_staging_thi_keu(tmp_path):
     with pytest.raises(rb.RebuildError, match="không có staging"):
         rb.thang_cap(tmp_path / "khong-ton-tai", tmp_path / "index")

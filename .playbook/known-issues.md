@@ -4843,6 +4843,46 @@ TRÊN CHÍNH `active`; đỏ ngay trên mã cũ, xanh trên mã mới vì `thang
 `.rename()` trên `active` ở đâu cả. `test_thang_cap_hong_thi_TRA_LAI_ban_cu` cập nhật
 để vá `shutil.move` (cơ chế mới) thay vì `Path.rename` (cơ chế cũ đã bỏ).
 
+### Cập nhật 2026-09-11 — hai lỗ rollback bị bỏ sót trong bản vá đầu
+
+Audit sau khi vá phát hiện `thang_cap()` bản đầu (thay directory-rename bằng per-file
+move) còn HAI khoảng hở rollback, cả hai đều là "khoảng hở KHÔNG có try/except", không
+phải lỗi logic:
+
+- **Giai đoạn sao lưu** (`active` → `backup`, chuyển file cũ ra) không có try/except
+  nào. Hỏng giữa chừng (ví dụ file thứ hai trong ba) thì `active` bị RÚT RUỘT một
+  phần — vài file cũ đã sang `backup`, số còn lại vẫn ở `active` — và không ai đưa
+  lại. Đo trực tiếp trên mã trước khi vá: `a_index.faiss` biến mất khỏi `active`
+  sau lượt gọi hỏng, không phục hồi.
+- **Rollback của thăng cấp** (`backup` → `active`, khi bước staging→active hỏng)
+  cũng không có try/except theo từng file. Hỏng thêm MỘT file trong lúc rollback thì
+  exception PHỤ đó thay thế luôn exception GỐC đã kích hoạt rollback — người gọi
+  thấy nhầm lỗi. Đo trực tiếp: lỗi `"loi phu: rollback a.faiss hong"` che mất lỗi
+  gốc `"loi goc: thang cap b.json hong"`.
+
+**Sửa:** cả hai giai đoạn giờ bọc try/except riêng.
+- Giai đoạn sao lưu: hỏng giữa chừng thì đưa lại NHỮNG GÌ đã kịp chuyển sang
+  `backup`, rồi mới ném lại lỗi gốc.
+- Rollback của thăng cấp: mỗi lượt chuyển `backup` → `active` bọc riêng, hỏng một
+  file chỉ LOG (`print("[thang_cap] rollback ... không đưa lại được ...")`), không
+  ném — cố gắng hết sức đưa lại từng file còn lại, rồi mới `raise` (bare) để lỗi GỐC
+  luôn là lỗi người gọi thấy. File nào rollback không đưa lại được thì KHÔNG MẤT —
+  vẫn nằm nguyên trong thư mục `backup`, khôi phục tay được.
+
+**Prevention:** một khối "hỏng thì rollback" mà chính lượt CHUYỂN dữ liệu ra chỗ
+tạm (backup) không có try/except thì rollback không bảo vệ được đúng bước đó — kiểm
+TỪNG bước ghi/chuyển trong một chuỗi rollback, không chỉ bước cuối cùng hay dễ thấy
+nhất. Và rollback CHÍNH NÓ có thể hỏng: bọc riêng từng đơn vị phục hồi, log lỗi phụ,
+đừng để nó thay thế lỗi gốc — nếu không, log sản xuất sẽ chỉ ra nguyên nhân sai.
+
+Regression: `test_thang_cap_sao_luu_hong_giua_chung_khong_rut_ruot_active` (giai đoạn
+sao lưu hỏng ở file thứ hai — `active` phải còn đủ cả ba file cũ) và
+`test_thang_cap_rollback_hong_khong_che_loi_goc` (rollback hỏng một file — lỗi GỐC
+vẫn phải là lỗi propagate ra, file rollback hỏng vẫn còn trong `backup`, không mất).
+Cả hai đo trực tiếp trên mã TRƯỚC bản vá này (chạy cô lập ngoài pytest, không sửa
+working tree): cả hai đỏ đúng như dự đoán, xanh trên mã sau vá. Suite đầy đủ: 2191
+passed, 234 skipped, 0 failed.
+
 ## (ĐÃ SỬA 2026-09-05) Lỗi 401 của nhà cung cấp embedding bị báo thành "chỉ mục không tương thích"
 
 `query_graph` phân loại lỗi bằng cách dò chuỗi trong thông báo:

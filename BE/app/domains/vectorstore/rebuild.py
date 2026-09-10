@@ -282,7 +282,11 @@ def thang_cap(staging: Path, active: Path, *, keep: int = 3) -> Optional[Path]:
 
     Đổi lại mất tính nguyên-tử-một-lệnh của rename thư mục cũ (giờ là nhiều lượt
     chuyển file). Đây là cách DUY NHẤT chạy được trên một thư mục bị mount; bù bằng
-    rollback tường minh nếu thăng cấp giữa chừng hỏng — xem nhánh `except` bên dưới.
+    rollback tường minh ở CẢ HAI giai đoạn nếu hỏng giữa chừng — xem hai nhánh
+    `except` bên dưới. Rollback của rollback (đưa file trong `backup` về lại `active`
+    khi bước thăng cấp hỏng) CỐ GẮNG HẾT SỨC theo từng file: một file không đưa lại
+    được chỉ bị LOG, không bao giờ thay thế exception GỐC đang được xử lý — người gọi
+    luôn thấy đúng lỗi đã kích hoạt rollback, không phải lỗi phụ xảy ra trong lúc dọn.
     """
     active = Path(active)
     staging = Path(staging)
@@ -299,8 +303,23 @@ def thang_cap(staging: Path, active: Path, *, keep: int = 3) -> Optional[Path]:
         ts = datetime.now().strftime("%Y%m%d_%H%M%S")
         backup = active.parent / f"{active.name}_backup_{ts}"
         backup.mkdir(parents=True, exist_ok=True)
-        for p in old_entries:
-            shutil.move(str(p), str(backup / p.name))
+        backed_up: List[Path] = []
+        try:
+            for p in old_entries:
+                dich = backup / p.name
+                shutil.move(str(p), str(dich))
+                backed_up.append(dich)
+        except Exception:
+            # Giai đoạn sao lưu hỏng giữa chừng: active có thể đã bị rút ruột một
+            # phần (vài file cũ đã sang backup, số còn lại vẫn ở active). Đưa lại
+            # NHỮNG GÌ đã kịp chuyển — không mất file nào, rồi ném lại lỗi gốc.
+            for p in backed_up:
+                try:
+                    shutil.move(str(p), str(active / p.name))
+                except Exception as exc:
+                    print(f"[thang_cap] rollback (giai đoạn sao lưu) không đưa lại "
+                          f"được {p}: {type(exc).__name__}: {exc}", flush=True)
+            raise
 
     moved: List[Path] = []
     try:
@@ -320,8 +339,16 @@ def thang_cap(staging: Path, active: Path, *, keep: int = 3) -> Optional[Path]:
             except Exception:
                 pass
         if backup is not None:
+            # CỐ GẮNG HẾT SỨC, từng file riêng: một file không đưa lại được chỉ LOG,
+            # không được ném — ném ở đây sẽ thay thế exception GỐC đang xử lý (biến
+            # `except Exception:` ngoài cùng ném nhầm lỗi rollback thay vì lỗi thật
+            # đã kích hoạt toàn bộ khối này).
             for p in sorted(backup.iterdir()):
-                shutil.move(str(p), str(active / p.name))
+                try:
+                    shutil.move(str(p), str(active / p.name))
+                except Exception as exc:
+                    print(f"[thang_cap] rollback (giai đoạn thăng cấp) không đưa lại "
+                          f"được {p}: {type(exc).__name__}: {exc}", flush=True)
         raise
 
     shutil.rmtree(staging, ignore_errors=True)
