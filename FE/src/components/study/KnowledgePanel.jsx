@@ -51,7 +51,7 @@ function KhungXuong({ soDong = 3 }) {
 export default function KnowledgePanel({
   doc, documents, chiMucBst, chips, cauHoi, dangTaiCauHoi, loiCauHoi, onThuLai, onMo,
 }) {
-  const { selectQuestion } = useStudyContext();
+  const { selectQuestion, selectTopic, selectEntity, selectedTopic, selectedEntity } = useStudyContext();
   const tri = doc?.knowledge || {};
   const entities = Array.isArray(tri.entities) ? tri.entities : [];
 
@@ -100,19 +100,25 @@ export default function KnowledgePanel({
             <div className="flex flex-wrap items-center gap-1.5">
               {chuDeHien.map((t) => {
                 const mau = t.status ? MAU_MASTERY[t.status] : null;
+                const daChon = selectedTopic === t.name;
                 return (
-                  <span
-                    key={t.name}
+                  // Phase 4A.4: bấm chủ đề PHÁT lên Study Context — "reuse existing
+                  // helper" nghĩa là KHÔNG tính lại gì ở đây, chỉ phát cái tên chủ đề
+                  // `chuDeNoiBat` đã suy sẵn. Vẫn là <button>, không đổi vai trò hiển
+                  // thị của pill thành liên kết điều hướng — không rời trang.
+                  <button
+                    type="button" key={t.name} onClick={() => selectTopic(t.name)}
                     title={t.status ? MASTERY_LABEL[t.status] || undefined : undefined}
                     className="inline-flex items-center gap-1 rounded-full px-2 py-[3px] text-[11px]"
-                    style={mau
-                      ? { background: mau.bg, color: mau.fg }
-                      : { background: "var(--bg-card)", color: "var(--text-secondary)",
-                          border: "1px solid var(--border)" }}
+                    style={{
+                      background: mau ? mau.bg : "var(--bg-card)",
+                      color: mau ? mau.fg : "var(--text-secondary)",
+                      border: daChon ? "1.5px solid var(--accent)" : "1px solid var(--border)",
+                    }}
                   >
                     {t.name}
                     {t.mastery != null && <span className="opacity-80">· {masteryPercent(t.mastery)}%</span>}
-                  </span>
+                  </button>
                 );
               })}
               {chuDeAn > 0 && (
@@ -135,12 +141,14 @@ export default function KnowledgePanel({
           {entities.length > 0 && (
             <div className="flex flex-wrap gap-1.5">
               {entities.slice(0, 10).map((e) => (
-                <span key={e}
-                      className="inline-flex items-center gap-1 rounded-full px-2 py-[2px] text-[11px]"
-                      style={{ background: "var(--bg-card)", color: "var(--text-muted)",
-                               border: "1px solid var(--border)" }}>
+                <button type="button" key={e} onClick={() => selectEntity(e)}
+                        className="inline-flex items-center gap-1 rounded-full px-2 py-[2px] text-[11px]"
+                        style={{ background: "var(--bg-card)",
+                                 color: selectedEntity === e ? "var(--accent)" : "var(--text-muted)",
+                                 border: selectedEntity === e
+                                   ? "1.5px solid var(--accent)" : "1px solid var(--border)" }}>
                   <Icon name="Tag" size={10} /> {e}
-                </span>
+                </button>
               ))}
             </div>
           )}
