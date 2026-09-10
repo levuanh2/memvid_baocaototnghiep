@@ -137,12 +137,43 @@ scripts/deploy.sh
    has real uncommitted changes; `MEMVID_FORCE_RESET=1 scripts/deploy.sh`
    overrides that.
 4. **Build** the backend image.
-5. **Migrate** — `alembic upgrade head` runs as part of every deploy, not as
-   a separate manual step. Safe to re-run: it no-ops when the schema is
-   already current.
+5. **Migrate** — `python -m scripts.run_migrations --moi-truong production`
+   runs as part of every deploy, not as a separate manual step. This is the
+   repo's only sanctioned production migration entry point (see Migrations,
+   below) — **never** call bare `alembic upgrade head` against production,
+   it bypasses the safety checks below and fails closed on
+   `TEST_DATABASE_URL chưa đặt` instead. Safe to re-run: it no-ops when the
+   schema is already current.
 6. **Start** the backend (`compose up -d`).
 7. **Health check** — `scripts/health.sh`; the deploy fails (non-zero exit)
    if the backend is unhealthy.
+
+## Migrations
+
+`BE/scripts/run_migrations.py` is the repo's only sanctioned way to run
+Alembic against a real database — `deploy.sh` calls it, nothing here calls
+bare `alembic` directly. It exists because of a real incident
+(`BE/shared/migration_guard.py`'s docstring: 2026-09-05, a bare Alembic
+invocation outside pytest silently targeted production and wiped a column's
+contents on 22 rows). The guard is fail-closed by design:
+
+- Default target is **test**, and it requires `TEST_DATABASE_URL` — there is
+  no fallback to `DATABASE_URL`. Production is reached only by explicitly
+  passing `--moi-truong production` **and** having `ALEMBIC_ALLOW_PRODUCTION=1`
+  set for that one invocation.
+- Even then, `ALEMBIC_PRODUCTION_HOST`/`ALEMBIC_PRODUCTION_DB` (from
+  `.env`) must name the real target exactly, and the check runs a second
+  time against the *live* connection's `current_database()` — a connection
+  string can lie (pooler routing, `PGDATABASE` overrides); the server it
+  actually reaches cannot.
+- `BE/alembic/env.py` enforces the same check independently, so it holds
+  even if something ever calls Alembic a different way.
+
+`deploy.sh` passes `ALEMBIC_ALLOW_PRODUCTION=1` only to that one
+`compose run` (via `-e`), never as a line in `.env` — the same shape
+`render.yaml`'s `buildCommand` uses. A standing `ALEMBIC_ALLOW_PRODUCTION=1`
+in the env file would make the "does the caller actually mean production"
+check permanently true, which defeats the point of it.
 
 ## Rollback
 

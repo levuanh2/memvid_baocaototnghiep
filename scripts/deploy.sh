@@ -2,7 +2,9 @@
 # Deploy or update the production stack (backend only — frontend stays on
 # Render), in order:
 #   validate env -> ensure data layout -> sync code to origin/main -> build
-#   -> migrate (safe to re-run) -> start -> health check -> success.
+#   -> migrate (via scripts.run_migrations --moi-truong production, the
+#   repo's sanctioned production entry point; safe to re-run) -> start ->
+#   health check -> success.
 #
 # Fails fast at the first broken step. Fails the whole deploy (non-zero
 # exit) if the backend is unhealthy after start — never reports success on
@@ -51,8 +53,16 @@ fi
 log "step 4/7: building backend image"
 compose build
 
-log "step 5/7: running database migration (alembic upgrade head — no-ops if already current)"
-compose run --rm backend alembic upgrade head
+log "step 5/7: running database migration (scripts.run_migrations — the repo's only sanctioned production entry point, no-ops if already current)"
+# Bare `alembic upgrade head` bypasses shared/migration_guard.py's declared-intent
+# check and defaults to CHE_DO_TEST (requires TEST_DATABASE_URL, which production
+# never sets) — that is exactly the bug this replaced. ALEMBIC_ALLOW_PRODUCTION=1
+# is passed ONLY to this one `run`, never written to .env, matching render.yaml's
+# own invocation — a standing env var would make the "did I mean production"
+# check permanently true, which is the opposite of what it's for.
+# ALEMBIC_PRODUCTION_HOST/ALEMBIC_PRODUCTION_DB already come from env_file (they're
+# in REQUIRED_ENV_VARS, checked by validate_env in step 1).
+compose run --rm -e ALEMBIC_ALLOW_PRODUCTION=1 backend python -m scripts.run_migrations --moi-truong production
 
 log "step 6/7: starting backend"
 compose up -d
