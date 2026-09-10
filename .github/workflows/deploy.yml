@@ -7,9 +7,11 @@
 # so the branch/event filter below is what actually enforces "main only,
 # never feature branches" — ci.yml itself needs no changes.
 #
-# SSH host key is pinned via ssh-keyscan into a job-local known_hosts file
-# (never disables StrictHostKeyChecking) — see docs/AWS_DEPLOYMENT.md for the
-# one-time setup this depends on (EC2_HOST/EC2_USER/EC2_SSH_KEY secrets).
+# SSH host key is PINNED, not fetched at runtime: EC2_KNOWN_HOSTS holds the
+# exact output of a one-time `ssh-keyscan -H <host>` run by a human, written
+# straight to known_hosts (StrictHostKeyChecking stays "yes"). The workflow
+# never queries the server for its key — see docs/AWS_DEPLOYMENT.md for how
+# to generate that secret once (EC2_HOST/EC2_USER/EC2_SSH_KEY/EC2_KNOWN_HOSTS).
 
 name: Deploy
 
@@ -34,12 +36,12 @@ jobs:
       github.event.workflow_run.head_branch == 'main' &&
       github.event.workflow_run.event == 'push'
     steps:
-      - name: Pin EC2 host key (ssh-keyscan into known_hosts)
+      - name: Write pinned EC2 host key to known_hosts
         run: |
           set -euo pipefail
           mkdir -p ~/.ssh
           chmod 700 ~/.ssh
-          ssh-keyscan -H "${{ secrets.EC2_HOST }}" >> ~/.ssh/known_hosts
+          printf '%s\n' "${{ secrets.EC2_KNOWN_HOSTS }}" > ~/.ssh/known_hosts
           chmod 644 ~/.ssh/known_hosts
 
       - name: Install deploy SSH key

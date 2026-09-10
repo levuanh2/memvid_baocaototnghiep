@@ -148,6 +148,44 @@ scripts/deploy.sh
 7. **Health check** — `scripts/health.sh`; the deploy fails (non-zero exit)
    if the backend is unhealthy.
 
+## GitHub Actions auto-deploy
+
+`.github/workflows/deploy.yml` runs the manual flow above automatically:
+triggered by the completion of the `CI` workflow, gated to only fire when
+that CI run passed, was for a push (not a PR), and was on `main`. On a
+green run it SSHes into the EC2 box and runs the exact sequence documented
+under Deployment (fetch, checkout `main`, `git pull --ff-only`, `chmod +x
+scripts/*.sh`, `./scripts/deploy.sh`).
+
+**Required GitHub Secrets** (Settings → Secrets and variables → Actions):
+
+| Secret | Value |
+|---|---|
+| `EC2_HOST` | the server's IP or hostname |
+| `EC2_USER` | `ubuntu` |
+| `EC2_SSH_KEY` | the private key matching a public key already in that user's `~/.ssh/authorized_keys` on the server |
+| `EC2_KNOWN_HOSTS` | the server's SSH host key, pinned — see below |
+
+**`EC2_KNOWN_HOSTS` — generate ONCE, by hand, not by the workflow.** The
+workflow deliberately never queries the server for its own host key at
+runtime (that would mean trusting whatever key is presented at deploy
+time, which is exactly what host-key pinning exists to avoid). Run this
+yourself, from a machine you trust, before the first deploy:
+
+```bash
+ssh-keyscan -H <EC2_HOST> > known_hosts_ec2.txt
+cat known_hosts_ec2.txt
+```
+
+Paste the full contents of `known_hosts_ec2.txt` (usually 1–3 lines, one
+per host key algorithm) as the value of the `EC2_KNOWN_HOSTS` secret,
+verbatim — the workflow writes it to `~/.ssh/known_hosts` as-is and connects
+with `StrictHostKeyChecking=yes`, so a mismatch (server key rotated,
+instance rebuilt) fails the deploy loudly rather than silently trusting a
+new key. If the server's host key ever changes on purpose, re-run
+`ssh-keyscan` and update the secret — that's the only time this needs
+touching again.
+
 ## Migrations
 
 `BE/scripts/run_migrations.py` is the repo's only sanctioned way to run
