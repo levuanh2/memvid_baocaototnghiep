@@ -3,8 +3,8 @@ import { readFileSync } from "node:fs";
 import { describe, expect, it } from "vitest";
 
 import {
-  bieuTuongDanhMuc, DANH_MUC, duongDiCauHoi, nhanDanhMuc, nhomTheoDanhMuc,
-  trangThaiRongCauHoi,
+  bieuTuongDanhMuc, DANH_MUC, duongDiCauHoi, nhanDanhMuc, nhanLyDoCauHoi,
+  nhomTheoDanhMuc, trangThaiRongCauHoi,
 } from "./cauHoiGoiY";
 
 const NHAN = [
@@ -74,5 +74,21 @@ describe("câu hỏi gợi ý", () => {
     const groups = nhomTheoDanhMuc(QUESTIONS);
     groups[0].cauHoi[0].reason.value = "changed";
     expect(JSON.stringify(QUESTIONS)).toBe(before);
+  });
+
+  it("labels every reason source known to the Tier-0 backend and keeps the raw value", () => {
+    expect(nhanLyDoCauHoi({ source: "topic", value: "Định thời" })).toBe("Chủ đề: Định thời");
+    expect(nhanLyDoCauHoi({ source: "weak_mastery", value: "Định thời" })).toBe("Cần ôn: Định thời");
+    expect(nhanLyDoCauHoi({ source: "relation", value: "contrasts" })).toBe("Liên hệ: contrasts");
+    expect(nhanLyDoCauHoi({ source: "entity", value: "CPU" })).toBe("Thực thể: CPU");
+    expect(nhanLyDoCauHoi({ source: "section", value: "Chương 1" })).toBe("Phần: Chương 1");
+  });
+
+  it("falls back to the raw value for an unknown source and tolerates malformed input", () => {
+    expect(nhanLyDoCauHoi({ source: "other", value: "x" })).toBe("x");
+    expect(nhanLyDoCauHoi(null)).toBeNull();
+    expect(nhanLyDoCauHoi({})).toBeNull();
+    expect(nhanLyDoCauHoi({ source: "topic", value: "  " })).toBeNull();
+    expect(nhanLyDoCauHoi({ source: "topic", value: 5 })).toBeNull();
   });
 });

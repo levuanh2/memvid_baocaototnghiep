@@ -323,6 +323,8 @@ export default function DocumentList() {
     <StudyCard
       key={doc.document_id}
       doc={doc}
+      documents={documents}
+      chiMucBst={chiMucBst}
       jobs={jobs}
       boSuuTap={boSuuTapCua(doc, chiMucBst)}
       dangDoiTen={dangDoiTen === doc.document_id}

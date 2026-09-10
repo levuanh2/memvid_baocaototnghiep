@@ -39,6 +39,25 @@ export function nhanDanhMuc(category) {
   return NHAN[category] || (category == null ? "" : String(category));
 }
 
+// `reason.source` — nguồn Tier-0 gán ở `cau_hoi_goi_y.py::_candidate`. Nhãn ở đây
+// dịch NGUỒN ra chữ; `reason.value` (chủ đề/thực thể/phần…) giữ nguyên, không dịch.
+const NHAN_LY_DO = {
+  topic: "Chủ đề",
+  weak_mastery: "Cần ôn",
+  relation: "Liên hệ",
+  entity: "Thực thể",
+  section: "Phần",
+};
+
+/** "Chủ đề: Định thời" — chip lý do cho MỘT câu hỏi gợi ý. `null` khi thiếu dữ liệu. */
+export function nhanLyDoCauHoi(reason) {
+  if (!reason || typeof reason !== "object") return null;
+  const value = typeof reason.value === "string" ? reason.value.trim() : "";
+  if (!value) return null;
+  const nhan = NHAN_LY_DO[reason.source];
+  return nhan ? `${nhan}: ${value}` : value;
+}
+
 export function bieuTuongDanhMuc(category) {
   return BIEU_TUONG[category] || "MessageSquare";
 }

@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import { Icon } from "../ui/Icon";
 import { chipHienThi, READY, GENERATING } from "../../utils/trangThaiAi";
 import { tenHienThi, thoiGianDoc, nhanThoiGianDoc } from "../../utils/thuVienTaiLieu";
@@ -6,6 +6,8 @@ import { tiepTucHoc } from "../../utils/tiepTucHoc";
 import { kiemTraTen } from "../../utils/doiTen";
 import { hexMau } from "../../utils/boSuuTap";
 import { nhanOChon } from "../../utils/chonNhieu";
+import { getQuestions, moTaLoi } from "../../utils/studyApi";
+import KnowledgePanel from "./KnowledgePanel";
 
 /**
  * Thẻ tài liệu của Thư viện học tập.
@@ -101,8 +103,8 @@ function DoiTenTaiCho({ giaTriDau, dangLuu, onLuu, onHuy }) {
 }
 
 export default function StudyCard({
-  doc, jobs, boSuuTap, dangDoiTen, dangLuu, onDoiTen, onLuuTen, onHuyDoiTen,
-  onBatTat, onMo, daChon, onChon, tabIndex, onKeyDown, refThe,
+  doc, documents, chiMucBst, jobs, boSuuTap, dangDoiTen, dangLuu, onDoiTen, onLuuTen,
+  onHuyDoiTen, onBatTat, onMo, daChon, onChon, tabIndex, onKeyDown, refThe,
 }) {
   const [menuMo, setMenuMo] = useState(false);
   const ten = tenHienThi(doc);
@@ -112,6 +114,41 @@ export default function StudyCard({
   const phut = thoiGianDoc(doc);
   const tiepTuc = tiepTucHoc(doc);
   const daIndex = ai.index === "ready";
+
+  // Bảng tri thức (Phase 1C.2b). Cache và trạng thái tải sống Ở ĐÂY, không trong
+  // KnowledgePanel — panel chỉ trình bày. `null` = chưa từng tải; `[]` = đã tải,
+  // rỗng thật. Gập lại rồi mở ra dùng lại đúng cache này, không gọi lại mạng.
+  const [moTriThuc, setMoTriThuc] = useState(false);
+  const [daTungMo, setDaTungMo] = useState(false);
+  const [cauHoi, setCauHoi] = useState(null);
+  const [dangTaiCauHoi, setDangTaiCauHoi] = useState(false);
+  const [loiCauHoi, setLoiCauHoi] = useState(null);
+
+  // MỘT đường tải duy nhất — lần mở đầu tiên và nút "Thử lại" đều gọi đúng hàm này.
+  const taiCauHoi = useCallback(() => {
+    if (dangTaiCauHoi || cauHoi != null) return;
+    setDangTaiCauHoi(true);
+    setLoiCauHoi(null);
+    getQuestions(doc.document_id)
+      .then((ds) => setCauHoi(ds))
+      .catch((err) => setLoiCauHoi(moTaLoi(err, "Không tải được câu hỏi gợi ý.")))
+      .finally(() => setDangTaiCauHoi(false));
+  }, [doc.document_id, dangTaiCauHoi, cauHoi]);
+
+  // Đọc `moTriThuc` trực tiếp từ closure của lần render này, KHÔNG qua hàm cập
+  // nhật của setState: đây là handler bấm nút (một sự kiện rời rạc, không phải
+  // effect), nên closure luôn đúng. Gọi `taiCauHoi()` — một tác dụng phụ mạng —
+  // bên trong hàm cập nhật của setState là sai: StrictMode gọi hàm đó hai lần ở
+  // môi trường dev, và lần gọi thứ hai chạy TRƯỚC KHI state của lần đầu commit,
+  // nên guard `cauHoi != null` chưa kịp chặn — bắn hai request GET trùng nhau.
+  const batTatTriThuc = () => {
+    const moi = !moTriThuc;
+    setMoTriThuc(moi);
+    if (moi) {
+      setDaTungMo(true);
+      taiCauHoi();
+    }
+  };
 
   // Hoạt động gần đây nằm CHUNG hàng siêu dữ liệu, không phải một khối riêng —
   // "mở 2 giờ trước · Sơ đồ tư duy" nói đủ chuyện mà không tốn thêm một dòng.
@@ -306,7 +343,41 @@ export default function StudyCard({
             <Icon name={icon} size={13} /> {nhan}
           </button>
         ))}
+        <button type="button" className="pill-action ml-auto"
+                aria-expanded={moTriThuc}
+                aria-controls={`tri-thuc-${doc.document_id}`}
+                onClick={batTatTriThuc}>
+          <Icon name="ChevronDown" size={13}
+                style={{ transform: moTriThuc ? "rotate(180deg)" : undefined,
+                         transition: "transform 180ms ease" }} />
+          Chi tiết
+        </button>
       </div>
+
+      {daTungMo && (
+        <div id={`tri-thuc-${doc.document_id}`}
+             className={`knowledge-panel${moTriThuc ? " knowledge-panel--open" : ""}`}
+             aria-hidden={!moTriThuc} inert={!moTriThuc ? "" : undefined}
+             // Chặn nảy bọt: bàn phím ở đây là của các nút BÊN TRONG panel (mở câu
+             // hỏi, mở tài liệu liên quan…), không phải của lưới thẻ. Không chặn thì
+             // Enter/Space bấm trên MỘT nút trong panel sẽ nảy lên `onKeyDown` của
+             // thẻ ngoài và bị `xuLyPhim` diễn dịch lại thành "mở thẻ"/"chọn thẻ" —
+             // đúng cơ chế roving-tabindex vẫn dùng cho 5 nút hành động sẵn có, nhưng
+             // panel này có QUÁ NHIỀU nút lồng nhau để chịu chung giới hạn đó.
+             onKeyDown={(e) => e.stopPropagation()}>
+          <KnowledgePanel
+            doc={doc}
+            documents={documents}
+            chiMucBst={chiMucBst}
+            chips={chips}
+            cauHoi={cauHoi}
+            dangTaiCauHoi={dangTaiCauHoi}
+            loiCauHoi={loiCauHoi}
+            onThuLai={taiCauHoi}
+            onMo={onMo}
+          />
+        </div>
+      )}
     </div>
   );
 }

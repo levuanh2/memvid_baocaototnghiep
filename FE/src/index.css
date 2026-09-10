@@ -578,3 +578,18 @@
   .disclosure__toggle,
   .disclosure__caret { transition: none; }
 }
+
+/* ── Study Knowledge Panel (Phase 1C.2b) ──────────────────────────────────── */
+/* max-height, không phải height:auto — auto không animate được bằng CSS transition;
+   1200px là trần rộng rãi cho nội dung thật, không phải chiều cao đo được. */
+.knowledge-panel {
+  overflow: hidden;
+  max-height: 0;
+  opacity: 0;
+  transition: max-height 220ms ease-out, opacity 180ms ease-out;
+}
+.knowledge-panel--open { max-height: 1200px; opacity: 1; }
+
+@media (prefers-reduced-motion: reduce) {
+  .knowledge-panel { transition: none; }
+}
