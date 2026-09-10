@@ -11,8 +11,18 @@
 //     (chạy kèm tóm tắt/sơ đồ), nên đánh dấu đạt được ngay khi có topic đầu
 //     tiên, không đợi một event tên "knowledge".
 //   - "Questions" (bấm một câu hỏi gợi ý) không được BE ghi lại thành sự kiện
-//     riêng — nó luôn đổ vào "Chat" (`last_chat`) ngay sau đó, nên hai chặng
-//     gộp làm một, đúng luồng thật (Question Engine → Study Context → Chat).
+//     riêng — luồng thật (Question Engine → Study Context → Chat, Phase 4C)
+//     đổ thẳng vào ô chat, nên gộp chung với "Chat" thay vì tách chặng riêng.
+//   - "Chat" (`last_chat`) — SỰ THẬT CẦN GHI RÕ: `last_chat` có tên trong
+//     `tri_thuc.py::EVENTS` nhưng KHÔNG CÓ nơi nào trong BE thật sự gán nó
+//     (đã grep toàn bộ `repository.py`/`main.py` — không một dòng nào viết
+//     `moc["last_chat"]`, khác hẳn `quiz_created`/`quiz_graded`/`review_created`,
+//     đều có nơi gán rõ trong `repository.py::tri_thuc_tho`). Chặng này vì vậy
+//     LUÔN hiện chưa đạt (`dat: false`) — không sai (đúng là chưa có bằng
+//     chứng), nhưng đừng đọc nhầm là "đã kiểm tra, người dùng chưa chat":
+//     hệ thống hiện không đo được việc này. Ghi BE mốc đó là việc NGOÀI phạm
+//     vi (cấm sửa backend ở Phase này) — giữ chặng lại vì cấu trúc CHANG đúng,
+//     chỉ khoanh vùng giới hạn ở đây để không ai tưởng nó đã hoạt động.
 //   - "Finished" không có cờ nào — coi là đạt khi đã có kế hoạch ôn tập
 //     (`review_created`), chặng cuối cùng của mọi bề mặt học hiện có.
 const CHANG = [
