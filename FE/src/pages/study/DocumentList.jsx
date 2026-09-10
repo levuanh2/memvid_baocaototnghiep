@@ -17,6 +17,7 @@ import {
 import { tim, loc, sapXep, chiaMuc } from "../../utils/thuVienTaiLieu";
 import { docJobDangChay } from "../../utils/trangThaiAi";
 import { duongDi } from "../../utils/tiepTucHoc";
+import { chonTaiLieuDemo, beMatDemoDauTien } from "../../utils/demoMode";
 import { apDungLacQuan } from "../../utils/doiTen";
 import { daDong, dongInsight } from "../../utils/aiInsight";
 import { chiMucBoSuuTap, boSuuTapCua, boSuuTapChoThanhBen, theChoThanhBen }
@@ -291,6 +292,11 @@ export default function DocumentList() {
     return chiaMuc(sapXep(daLoc, cheDoSap), { hienLuuTru });
   }, [documents, truyVan, chiMucBst, boLoc, hienLuuTru, chonBoSuuTap, chonThe, cheDoSap]);
 
+  // Demo Mode (Phase 6, Step 4) — tài liệu THẬT tốt nhất để xem thử ngay, từ
+  // TOÀN BỘ thư viện (không qua bộ lọc/tìm kiếm đang bật — "Xem thử" phải luôn
+  // hoạt động bất kể người dùng đang lọc gì). `null` → ẩn nút, không demo rỗng.
+  const taiLieuDemo = useMemo(() => chonTaiLieuDemo(documents), [documents]);
+
   const thanhBen = useMemo(
     () => boSuuTapChoThanhBen(collections, documents, { hienLuuTru }),
     [collections, documents, hienLuuTru]);
@@ -379,6 +385,15 @@ export default function DocumentList() {
             disabled={uploading} onClick={() => fileRef.current?.click()}>
             {uploading ? <><Spinner size={13} /> Đang tải lên…</> : <><Icon name="Upload" size={14} /> Tải tài liệu</>}
           </button>
+          {/* Demo Mode — chỉ hiện khi có tài liệu THẬT đủ sẵn sàng; không có thì
+              không vẽ nút, không hứa một bản xem thử không tồn tại. */}
+          {taiLieuDemo && (
+            <button type="button" className="pill-action text-[13px] inline-flex items-center gap-1.5"
+              title="Mở ngay một tài liệu đã sẵn sàng để xem thử Tóm tắt/Sơ đồ/Gia sư AI"
+              onClick={() => moBeMat(taiLieuDemo, beMatDemoDauTien(taiLieuDemo))}>
+              <Icon name="Sparkles" size={13} /> Xem thử
+            </button>
+          )}
         </>
       }
     >
