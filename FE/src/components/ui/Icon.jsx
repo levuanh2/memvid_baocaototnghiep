@@ -5,21 +5,21 @@
 // (tên lạ → warn DEV + render null, y hệt hành vi cũ với typo).
 import {
   AlertCircle, Archive, ArchiveRestore, ArrowLeft, ArrowRight, BadgeCheck, Ban, BookOpen,
-  Check, ChevronDown, Clock, Download, Eraser, Filter,
-  FileStack, FileText, FolderOpen, Image, ImagePlus, Info, KeyRound, Library, LogOut, Maximize, Menu,
+  Check, ChevronDown, CircleDashed, Clock, Download, Eraser, EyeOff, Filter,
+  FileStack, FileText, FolderOpen, HelpCircle, Image, ImagePlus, Info, KeyRound, Library, LogOut, Maximize, Menu,
   MessageCircleQuestion, MessageSquare, MessageSquareText, MessagesSquare, Moon,
   MoreVertical, Network, PanelRight, Pencil, Plus, Quote, RotateCcw, Scan, ScrollText,
-  Search, Send, Spline, Square, Sun, Trash2, TriangleAlert, Unlink, Upload, UserRound, X,
+  Search, Send, Spline, Square, Sun, Trash2, TrendingDown, TriangleAlert, Unlink, Upload, UserRound, X,
   Sparkles, Star, Tag, Pin, Zap, ZoomIn, ZoomOut,
 } from "lucide-react";
 
 const ICONS = {
   AlertCircle, Archive, ArchiveRestore, ArrowLeft, ArrowRight, BadgeCheck, Ban, BookOpen,
-  Check, ChevronDown, Clock, Download, Eraser, Filter,
-  FileStack, FileText, FolderOpen, Image, ImagePlus, Info, KeyRound, Library, LogOut, Maximize, Menu,
+  Check, ChevronDown, CircleDashed, Clock, Download, Eraser, EyeOff, Filter,
+  FileStack, FileText, FolderOpen, HelpCircle, Image, ImagePlus, Info, KeyRound, Library, LogOut, Maximize, Menu,
   MessageCircleQuestion, MessageSquare, MessageSquareText, MessagesSquare, Moon,
   MoreVertical, Network, PanelRight, Pencil, Plus, Quote, RotateCcw, Scan, ScrollText,
-  Search, Send, Spline, Square, Sun, Trash2, TriangleAlert, Unlink, Upload, UserRound, X,
+  Search, Send, Spline, Square, Sun, Trash2, TrendingDown, TriangleAlert, Unlink, Upload, UserRound, X,
   Sparkles, Star, Tag, Pin, Zap, ZoomIn, ZoomOut,
 };
 
