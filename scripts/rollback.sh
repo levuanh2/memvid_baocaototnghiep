@@ -18,10 +18,16 @@ require_env_file
 git -C "$REPO_ROOT" rev-parse --verify "$REF" >/dev/null 2>&1 \
   || die "unknown git ref: $REF"
 
+if [ -n "$(git -C "$REPO_ROOT" status --porcelain)" ]; then
+  git -C "$REPO_ROOT" status --short >&2
+  die "uncommitted changes in $REPO_ROOT — commit/stash them before rolling back"
+fi
+
 CURRENT="$(git -C "$REPO_ROOT" rev-parse --short HEAD)"
 log "rolling back from $CURRENT to $REF"
 
 git -C "$REPO_ROOT" checkout "$REF"
+log "repo is now on a detached HEAD at $REF — intentional, this is how the rollback runs the old code. The next scripts/deploy.sh run always resets the repo back to origin/main automatically, so this never lingers into the next deploy by accident."
 
 log "rebuilding images at $REF"
 compose build
