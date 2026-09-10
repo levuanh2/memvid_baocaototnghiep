@@ -33,12 +33,12 @@ export default function SummaryModal({ data, onClose }) {
   // đó). `rec.sources` là mảng vì API hỗ trợ tóm tắt nhiều nguồn, nhưng luồng dùng
   // thật của app luôn đúng một tài liệu mỗi lượt mở modal — lấy phần tử đầu là đủ,
   // không cần giải quyết trường hợp nhiều tài liệu ở đây.
-  const { selectDocument, selectSummary, selectedSummary } = useStudyContext();
+  const { selectDocument, selectSummary, selectEntity, selectedSummary } = useStudyContext();
 
   const rec = normalizeSummaryRecord(data);
 
   useEffect(() => {
-    selectDocument(rec?.sources?.[0] || null);
+    selectDocument(rec?.sources?.[0] || null, { source: "summary" });
   }, [rec?.sources, selectDocument]);
 
   if (!rec) return null;
@@ -100,7 +100,7 @@ export default function SummaryModal({ data, onClose }) {
                             4A.2) — KHÔNG điều hướng đi đâu, chỉ để module khác (khi cùng mở)
                             biết mục nào đang được xem. Vẫn là <h3> thật, nút nằm BÊN TRONG —
                             thứ tự heading cho screen reader không đổi. */}
-                        <button type="button" onClick={() => selectSummary(s.id)}
+                        <button type="button" onClick={() => selectSummary(s.id, { source: "summary" })}
                                 className="font-display text-[15.5px] font-semibold text-left"
                                 style={{ color: daChon ? "var(--accent)" : "var(--text-primary)" }}>
                           {s.title}
@@ -143,7 +143,8 @@ export default function SummaryModal({ data, onClose }) {
                   <div className="font-mono text-[11px] uppercase tracking-[0.12em] text-text-muted mb-2">Khái niệm then chốt</div>
                   <div className="flex flex-wrap gap-1.5">
                     {rec.entities.map((e, i) => (
-                      <span key={i} className="pill-tab !px-2.5 !py-1 !cursor-default">{e}</span>
+                      <button key={i} type="button" onClick={() => selectEntity(e, { source: "summary" })}
+                              className="pill-tab !px-2.5 !py-1">{e}</button>
                     ))}
                   </div>
                 </div>

@@ -63,7 +63,7 @@ export default function KnowledgePanel({
   // sau lần bung đầu tiên (StudyCard's `daTungMo`), nên effect này CHÍNH LÀ mốc
   // "người dùng đang xem tài liệu X qua Knowledge Panel".
   useEffect(() => {
-    if (doc?.source_stem) selectDocument(doc.source_stem);
+    if (doc?.source_stem) selectDocument(doc.source_stem, { source: "knowledge" });
   }, [doc?.source_stem, selectDocument]);
 
   // Sắp xếp yếu-trước / trọng-số cao-trước là quyết định ĐÃ CÓ (và đã test) ở
@@ -127,7 +127,7 @@ export default function KnowledgePanel({
                   // `chuDeNoiBat` đã suy sẵn. Vẫn là <button>, không đổi vai trò hiển
                   // thị của pill thành liên kết điều hướng — không rời trang.
                   <button
-                    type="button" key={t.name} onClick={() => selectTopic(t.name)}
+                    type="button" key={t.name} onClick={() => selectTopic(t.name, { source: "knowledge" })}
                     title={t.status ? MASTERY_LABEL[t.status] || undefined : undefined}
                     className="inline-flex items-center gap-1 rounded-full px-2 py-[3px] text-[11px]"
                     style={{
@@ -161,7 +161,7 @@ export default function KnowledgePanel({
           {entities.length > 0 && (
             <div className="flex flex-wrap gap-1.5">
               {entities.slice(0, 10).map((e) => (
-                <button type="button" key={e} onClick={() => selectEntity(e)}
+                <button type="button" key={e} onClick={() => selectEntity(e, { source: "knowledge" })}
                         className="inline-flex items-center gap-1 rounded-full px-2 py-[2px] text-[11px]"
                         style={{ background: "var(--bg-card)",
                                  color: selectedEntity === e ? "var(--accent)" : "var(--text-muted)",
@@ -240,7 +240,7 @@ export default function KnowledgePanel({
                         onClick={() => {
                           // Phase 4A.3: "nhớ" câu hỏi vừa bấm lên Study Context TRƯỚC khi
                           // điều hướng — id sống qua cả lượt đổi route sang Workspace.
-                          selectQuestion(q.id);
+                          selectQuestion(q.id, { source: "question" });
                           onMo(doc, q.target, { prompt: q.text });
                         }}
                       >
@@ -299,7 +299,12 @@ export default function KnowledgePanel({
         </div>
       </section>
 
-      {/* Tiếp tục học — điểm quay lại, hoạt động gần nhất, lần mở cuối */}
+      {/* Tiếp tục học — điểm quay lại, hoạt động gần nhất, lần mở cuối.
+          Phase 4B: nút này KHÔNG tự phát "continue_learning" lên Study Context —
+          nó chỉ điều hướng (`onMo`) tới lựa chọn ĐÃ được phát từ trước (câu hỏi
+          gắn "question" ở thẻ câu hỏi phía trên, tài liệu gắn "knowledge" ở effect
+          mount). Không có sự kiện chọn MỚI nào xảy ra ở đây để gắn nguồn thật —
+          gắn "continue_learning" vào một dispatch không tồn tại là bịa, không làm. */}
       {tiepTuc && (
         <section className="flex flex-col gap-2">
           <h4 className={TIEU_DE}>Tiếp tục học</h4>

@@ -213,7 +213,7 @@ export default function StudyMapView() {
     try {
       const [d, maps] = await Promise.all([getDocument(documentId), listStudyMaps(documentId)]);
       setDoc(d);
-      selectDocument(d?.source_stem || null);
+      selectDocument(d?.source_stem || null, { source: "mindmap" });
       const newest = maps.find((m) => m.status === "completed") || null;
       if (newest) await openMap(newest.map_id, documentId);
       else setMap(null);
@@ -334,9 +334,22 @@ export default function StudyMapView() {
       // đọc chi tiết, và bung/thu nhánh — VÀ (Phase 2 #4) focus nó, làm nổi bật
       // đường tổ tiên/hậu duệ — VÀ (Phase 4A.2) phát lên Study Context, để module
       // khác (khi cùng mở) biết node nào đang được xem. Bốn việc, một cử chỉ.
+      //
+      // Phase 4B #3, CỐ Ý KHÔNG làm: đóng thêm `selectTopic`/`selectEntity` khi bấm
+      // node. `doc` ở trang này tới từ `getDocument()` → `/api/documents/<id>` →
+      // `_doc_public()`, và `_doc_public()` KHÔNG có khối `knowledge` (đọc thẳng
+      // main.py: khối đó "cần hai lượt đọc kho, chỉ /api/library mới đáng trả giá
+      // đó") — nghĩa là trang này không có `doc.knowledge.topics` để đối chiếu tên
+      // node với tên chủ đề. Suy chủ đề từ node ở ĐÂY cần một lượt gọi MỚI (cấm) hoặc
+      // một trường BE mới (cấm). Không có ánh xạ thật thì không bịa — đúng yêu cầu
+      // "if mappings do not exist, say so. Do NOT invent mappings."
       const hasBranch = Boolean(nodeDatum.children?.length || nodeDatum._children?.length);
       const onPick = () => {
-        if (attrs.node_id) { setSelected(attrs); setFocusedId(attrs.node_id); selectNode(attrs.node_id); }
+        if (attrs.node_id) {
+          setSelected(attrs);
+          setFocusedId(attrs.node_id);
+          selectNode(attrs.node_id, { source: "mindmap" });
+        }
         if (hasBranch) toggleNode();
       };
       return (
