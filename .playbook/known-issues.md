@@ -4783,6 +4783,66 @@ cục bộ của chính tiến trình đó. Nhiều tiến trình cùng ghi mộ
 Regression: `tests/test_ingest_publishes_index.py` (8 test). Kiểm ngược: 7/8 đỏ trên mã
 cũ. Khẳng định "xuất bản nằm cùng khoá với append" đọc bằng AST, không phải grep chuỗi.
 
+## (ĐÃ SỬA 2026-09-11) `thang_cap()` đổi tên chính `active` — vỡ trên Docker bind mount (EBUSY)
+
+**Triệu chứng production (EC2, `docker-compose.prod.yml`):** `/opt/memvid/data/index`
+bind-mount vào `/app/index`. Khôi phục index lúc khởi động (`INDEX_PERSISTENCE_ENABLED=1`)
+chết với:
+
+```
+OSError: [Errno 16] Device or resource busy: rename('/app/index', '/app/index_backup_xxx')
+```
+
+Lỗi không được bọc ở đúng chỗ nó ném (xem dưới), nên tiến trình chạy tiếp với
+`/app/index` RỖNG. Request kế tiếp chạm `FileNotFoundError: /app/index/index.json`.
+Giao diện báo "indexing failure" dù upload tài liệu (ghi Postgres + Supabase Storage)
+đã xong — hai bước khác nhau, lỗi nằm ở bước sau.
+
+**Nguyên nhân:** `app/domains/vectorstore/rebuild.py::thang_cap()` (bước D — thăng cấp
+staging thành active) dùng:
+
+```python
+active.rename(backup)     # đổi tên CHÍNH active
+staging.rename(active)    # rồi đổi tên staging thành active
+```
+
+`active` là `/app/index` — MỘT MOUNT POINT trên production. Linux từ chối
+`rename()`/`unlink()` trên mount point dù nó rỗng — không phải lỗi tạm thời, không retry
+được, luôn xảy ra trên đúng bố cục bind-mount mà `docker-compose.prod.yml` dùng. Đây là
+điểm gọi DUY NHẤT trong toàn bộ backend đổi tên nguyên thư mục index —
+`store.py::save_index_with_backup` (đường ghi index khi ingest bình thường) đã dùng
+`shutil.copytree` từ trước, không đụng lỗi này.
+
+**Cách xử lý:** `thang_cap()` không còn đổi tên `active` nữa — nó LUÔN tồn tại nguyên
+vẹn, chỉ NỘI DUNG bên trong đổi:
+
+1. Nếu `active` có nội dung cũ: tạo thư mục backup SIBLING (`active_backup_<ts>`,
+   không phải chính `active`), chuyển từng file cũ vào đó bằng `shutil.move`.
+2. Chuyển từng file trong `staging` vào `active` (cũng bằng `shutil.move`).
+3. Hỏng giữa chừng bước 2: gỡ những file vừa chuyển, đưa backup về lại — index cũ
+   không mất.
+
+Dùng `shutil.move` thay vì `Path.rename`/`os.rename` cho MỌI lượt chuyển: `active` và
+`staging`/backup thường khác filesystem (bind-mount host khác layer overlay của
+container), rename trực tiếp giữa hai thiết bị ném `OSError EXDEV`; `shutil.move` tự
+copy-rồi-xoá khi không rename được.
+
+Đổi lại: mất tính nguyên-tử-MỘT-LỆNH của rename thư mục (giờ là nhiều lượt chuyển
+file). Đây là cách DUY NHẤT chạy được trên một thư mục bị mount — không có lựa chọn
+nào khác giữ được atomicity đó mà vẫn tôn trọng ràng buộc của kernel.
+
+**Prevention:** bất cứ hàm nào thao tác một thư mục có thể là bind-mount điểm gắn
+(`INDEX_DIR`, `DATA_DIR`, hay bất kỳ path nào `docker-compose*.yml` liệt trong
+`volumes:`) — không được `rename()`/`unlink()` chính thư mục đó. Chỉ được tạo/đọc/xoá
+NỘI DUNG bên trong. Grep `\.rename\(` / `shutil.move\(` mỗi khi thêm một thư mục mới
+vào danh sách bind-mount.
+
+Regression: `tests/test_index_rebuild.py::test_thang_cap_khong_bao_gio_rename_active_mount_point`
+— vá `Path.rename` ném `OSError(16, "Device or resource busy")` bất cứ khi nào gọi
+TRÊN CHÍNH `active`; đỏ ngay trên mã cũ, xanh trên mã mới vì `thang_cap` không còn gọi
+`.rename()` trên `active` ở đâu cả. `test_thang_cap_hong_thi_TRA_LAI_ban_cu` cập nhật
+để vá `shutil.move` (cơ chế mới) thay vì `Path.rename` (cơ chế cũ đã bỏ).
+
 ## (ĐÃ SỬA 2026-09-05) Lỗi 401 của nhà cung cấp embedding bị báo thành "chỉ mục không tương thích"
 
 `query_graph` phân loại lỗi bằng cách dò chuỗi trong thông báo:

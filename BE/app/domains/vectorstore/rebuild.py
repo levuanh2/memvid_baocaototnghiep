@@ -264,29 +264,67 @@ def tham_dinh_staging(thu_muc: Path, *, so_chunk: int, dim: int,
 
 # ── D. Thăng cấp ───────────────────────────────────────────────────────────
 def thang_cap(staging: Path, active: Path, *, keep: int = 3) -> Optional[Path]:
-    """Đưa staging thành active. Trả về đường dẫn backup của bản cũ (None nếu chưa có).
+    """Đưa NỘI DUNG staging vào active. Trả về đường dẫn backup của bản cũ (None nếu chưa có).
 
-    Bản cũ được ĐỔI TÊN, không xoá — nếu bước cuối hỏng thì còn đường lùi bằng tay.
-    Đổi tên trong cùng một hệ thống file là thao tác nguyên tử ở mức thư mục: không có
-    khoảnh khắc nào index vừa cũ vừa mới.
+    KHÔNG BAO GIỜ đổi tên hay xoá `active` — trên Docker, `/app/index` (hay bất kỳ
+    thư mục nào bị bind-mount) là một MOUNT POINT, và Linux từ chối rename/unlink một
+    mount point (`OSError errno 16, Device or resource busy`), kể cả khi nó rỗng. Bản
+    cũ dùng `active.rename(backup)` rồi crash đúng chỗ này trên production
+    (`/opt/memvid/data/index` bind-mount vào `/app/index`), và vì đó không phải lỗi
+    được bọc, index cục bộ đứng lại nửa chừng — rỗng, không `index.json` — nên request
+    kế tiếp chết với `FileNotFoundError`. `active` giờ được giữ NGUYÊN VẸN; chỉ nội
+    dung bên trong nó đổi.
+
+    `active` cũng thường khác filesystem với `staging`/backup (bind-mount host khác
+    hẳn layer của container) — `shutil.move()` tự copy-rồi-xoá khi không rename được
+    giữa hai thiết bị; `Path.rename`/`os.rename` thì ném `OSError` (`EXDEV`) thẳng.
+    Nên MỌI lượt chuyển file ở đây dùng `shutil.move`, không dùng rename trực tiếp.
+
+    Đổi lại mất tính nguyên-tử-một-lệnh của rename thư mục cũ (giờ là nhiều lượt
+    chuyển file). Đây là cách DUY NHẤT chạy được trên một thư mục bị mount; bù bằng
+    rollback tường minh nếu thăng cấp giữa chừng hỏng — xem nhánh `except` bên dưới.
     """
     active = Path(active)
     staging = Path(staging)
     if not staging.exists():
         raise RebuildError(f"không có staging để thăng cấp: {staging}")
 
+    # Mount point phải LUÔN tồn tại — không tạo mới bằng cách đổi tên, chỉ mkdir nếu
+    # thiếu (trường hợp chưa từng có index nào, không phải trường hợp bind-mount).
+    active.mkdir(parents=True, exist_ok=True)
+
     backup: Optional[Path] = None
-    if active.exists():
+    old_entries = sorted(active.iterdir())
+    if old_entries:
         ts = datetime.now().strftime("%Y%m%d_%H%M%S")
         backup = active.parent / f"{active.name}_backup_{ts}"
-        active.rename(backup)
+        backup.mkdir(parents=True, exist_ok=True)
+        for p in old_entries:
+            shutil.move(str(p), str(backup / p.name))
+
+    moved: List[Path] = []
     try:
-        staging.rename(active)
+        for p in sorted(staging.iterdir()):
+            dich = active / p.name
+            shutil.move(str(p), str(dich))
+            moved.append(dich)
     except Exception:
-        # Trả lại nguyên trạng: thà không có index mới còn hơn mất index cũ.
-        if backup is not None and not active.exists():
-            backup.rename(active)
+        # Trả lại nguyên trạng: gỡ những gì vừa chuyển sang active, đưa backup về lại.
+        # Thà không có index mới còn hơn để active ở trạng thái trộn lẫn hoặc mất index cũ.
+        for p in moved:
+            try:
+                if p.is_dir():
+                    shutil.rmtree(p, ignore_errors=True)
+                else:
+                    p.unlink(missing_ok=True)
+            except Exception:
+                pass
+        if backup is not None:
+            for p in sorted(backup.iterdir()):
+                shutil.move(str(p), str(active / p.name))
         raise
+
+    shutil.rmtree(staging, ignore_errors=True)
 
     if backup is not None and keep >= 0:
         try:

@@ -18,6 +18,7 @@ Bốn giai đoạn phải tách bạch, và test đi theo đúng ranh giới đ�
 from __future__ import annotations
 
 import json
+import shutil
 from pathlib import Path
 
 import pytest
@@ -281,18 +282,53 @@ def test_thang_cap_hong_thi_TRA_LAI_ban_cu(tmp_path, monkeypatch):
     (active / "index.faiss").write_bytes(b"cu")
     st = tmp_path / "index_staging"
     st.mkdir()
+    (st / "index.faiss").write_bytes(b"moi")
 
-    that = Path.rename
+    goc = shutil.move
 
-    def _rename(self, target):
-        if Path(self) == st:
+    def _move(src, dst):
+        # Hỏng đúng lượt chuyển file TỪ staging — sau khi backup bản cũ đã xong.
+        if Path(src).parent == st:
             raise OSError("dia day")
-        return that(self, target)
+        return goc(src, dst)
 
-    monkeypatch.setattr(Path, "rename", _rename)
+    monkeypatch.setattr(shutil, "move", _move)
     with pytest.raises(OSError):
         rb.thang_cap(st, active, keep=3)
     assert (active / "index.faiss").read_bytes() == b"cu", "index cũ phải còn nguyên"
+
+
+def test_thang_cap_khong_bao_gio_rename_active_mount_point(tmp_path, monkeypatch):
+    """Mô phỏng `/app/index` là Docker bind mount: Linux từ chối `rename()`/`unlink()`
+    trên một mount point (`OSError errno 16, Device or resource busy`), kể cả khi
+    rỗng. Regression cho sự cố production: `thang_cap` cũ gọi `active.rename(backup)`
+    và crash đúng ở đây; index cục bộ đứng lại rỗng, request kế tiếp chết với
+    `FileNotFoundError: index.json`.
+
+    Vá lại `Path.rename` để ném EBUSY bất cứ khi nào gọi TRÊN CHÍNH `active` — nếu
+    `thang_cap` còn gọi `.rename()` trên `active` ở đâu đó, test này đỏ.
+    """
+    active = tmp_path / "index"
+    active.mkdir()
+    (active / "index.faiss").write_bytes(b"cu")
+    st = tmp_path / "index_staging"
+    st.mkdir()
+    (st / "index.faiss").write_bytes(b"moi")
+
+    goc = Path.rename
+
+    def _rename(self, target):
+        if Path(self) == active:
+            raise OSError(16, "Device or resource busy")
+        return goc(self, target)
+
+    monkeypatch.setattr(Path, "rename", _rename)
+
+    backup = rb.thang_cap(st, active, keep=3)
+
+    assert (active / "index.faiss").read_bytes() == b"moi"
+    assert backup is not None and (Path(backup) / "index.faiss").read_bytes() == b"cu"
+    assert not st.exists()
 
 
 def test_khong_co_staging_thi_keu(tmp_path):
