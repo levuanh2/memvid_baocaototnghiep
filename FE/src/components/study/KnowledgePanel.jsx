@@ -6,6 +6,7 @@ import { taiLieuLienQuan } from "../../utils/taiLieuLienQuan";
 import { chuDeNoiBat, nhanSanSang } from "../../utils/triThuc";
 import { nhanLyDoCauHoi, nhomTheoDanhMuc, trangThaiRongCauHoi } from "../../utils/cauHoiGoiY";
 import { masteryPercent, MASTERY_LABEL } from "../../utils/studyApi";
+import { useStudyContext } from "../../study/useStudyContext";
 
 /**
  * Bảng tri thức trong thẻ (Phase 1C.2b) — HOÀN TOÀN trình bày.
@@ -50,6 +51,7 @@ function KhungXuong({ soDong = 3 }) {
 export default function KnowledgePanel({
   doc, documents, chiMucBst, chips, cauHoi, dangTaiCauHoi, loiCauHoi, onThuLai, onMo,
 }) {
+  const { selectQuestion } = useStudyContext();
   const tri = doc?.knowledge || {};
   const entities = Array.isArray(tri.entities) ? tri.entities : [];
 
@@ -207,7 +209,12 @@ export default function KnowledgePanel({
                         key={q.id} type="button"
                         className="flex items-start gap-2 rounded-[7px] px-2.5 py-1.5 text-left"
                         style={{ background: "var(--bg-card)", border: "1px solid var(--border)" }}
-                        onClick={() => onMo(doc, q.target, { prompt: q.text })}
+                        onClick={() => {
+                          // Phase 4A.3: "nhớ" câu hỏi vừa bấm lên Study Context TRƯỚC khi
+                          // điều hướng — id sống qua cả lượt đổi route sang Workspace.
+                          selectQuestion(q.id);
+                          onMo(doc, q.target, { prompt: q.text });
+                        }}
                       >
                         <Icon name={nhom.icon} size={13} className="shrink-0 mt-[2px] text-brand" />
                         <span className="min-w-0 flex-1">
