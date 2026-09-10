@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useLocation, useNavigate, useParams } from "react-router-dom";
 import StudyShell from "../../components/study/StudyShell";
+import Modal from "../../components/ui/Modal";
 import { Icon } from "../../components/ui/Icon";
 import Spinner from "../../components/ui/Spinner";
 import {
@@ -145,7 +146,10 @@ export default function QuizTaking() {
       onRetry={load}
       width="max-w-[820px]"
       actions={
-        <span className="font-mono text-[11.5px] text-text-muted">
+        // Phase 6, Step 2: đếm câu đã trả lời/đang lưu đổi liên tục trong lúc
+        // làm bài — không có aria-live thì chỉ ai NHÌN thấy mới biết trạng thái
+        // lưu vừa đổi; người dùng đọc màn hình sẽ không hay autosave vừa hỏng.
+        <span className="font-mono text-[11.5px] text-text-muted" aria-live="polite">
           {saving
             ? "đang lưu…"
             : choLuu > 0
@@ -200,6 +204,7 @@ export default function QuizTaking() {
                     <button
                       key={opt}
                       type="button"
+                      aria-pressed={selected}
                       className={`answer-option ${selected ? "answer-option--selected" : ""}`}
                       onClick={() => choose(current.question_id, opt)}
                     >
@@ -213,7 +218,7 @@ export default function QuizTaking() {
           </article>
 
           {error && (
-            <div className="text-[13px] flex items-center gap-1.5 mb-4" style={{ color: "var(--err)" }}>
+            <div className="text-[13px] flex items-center gap-1.5 mb-4" style={{ color: "var(--err)" }} role="alert">
               <Icon name="AlertCircle" size={14} /> {error}
             </div>
           )}
@@ -284,18 +289,15 @@ function ProgressStrip({ questions, answers, index, onJump }) {
   );
 }
 
+// Phase 6, Step 2/11: từng dựng tay một lớp <div role="dialog" aria-modal>
+// riêng — trùng đúng việc `ui/Modal.jsx` đã làm, mà lại THIẾU bẫy Tab/auto-
+// focus/trả focus mà Modal.jsx vừa được bổ sung. Dùng lại Modal.jsx: hết
+// trùng lặp, và hộp thoại này tự động có luôn ba thứ đó, không cần chép lại.
 function ConfirmSubmit({ unanswered, total, onCancel, onConfirm, submitting }) {
   return (
-    <div className="fixed inset-0 z-40 flex items-center justify-center px-5"
-      style={{ background: "rgba(15,23,42,0.45)" }} role="dialog" aria-modal="true">
-      <div className="surface-card w-full max-w-[420px]">
-        <h3 className="font-display text-[17px] font-semibold text-text-primary">Nộp bài?</h3>
-        <p className="text-[13.5px] text-text-secondary mt-2">
-          {unanswered > 0
-            ? `Còn ${unanswered}/${total} câu chưa trả lời. Câu bỏ trống được tính là sai.`
-            : `Đã trả lời đủ ${total} câu. Sau khi nộp không sửa được đáp án nữa.`}
-        </p>
-        <div className="flex gap-2 mt-5">
+    <Modal open title="Nộp bài?" onClose={onCancel} maxWidth={420}
+      footer={
+        <div className="flex gap-2">
           <button type="button" className="btn-secondary text-[13px] flex-1" onClick={onCancel}>
             Quay lại làm tiếp
           </button>
@@ -304,7 +306,12 @@ function ConfirmSubmit({ unanswered, total, onCancel, onConfirm, submitting }) {
             {submitting ? <><Spinner size={13} /> Đang nộp…</> : "Nộp bài"}
           </button>
         </div>
-      </div>
-    </div>
+      }>
+      <p className="text-[13.5px] text-text-secondary p-5">
+        {unanswered > 0
+          ? `Còn ${unanswered}/${total} câu chưa trả lời. Câu bỏ trống được tính là sai.`
+          : `Đã trả lời đủ ${total} câu. Sau khi nộp không sửa được đáp án nữa.`}
+      </p>
+    </Modal>
   );
 }
