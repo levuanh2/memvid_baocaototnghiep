@@ -1,5 +1,6 @@
 #!/usr/bin/env bash
-# Check health of every production service. Exits non-zero if any check fails.
+# Check backend health. Frontend lives on Render (out of scope — check it
+# via Render's own dashboard/health, not from here). Exits non-zero on failure.
 #
 # Usage: scripts/health.sh
 set -euo pipefail
@@ -23,14 +24,12 @@ check() {
 }
 
 check "backend (/health)"  compose exec -T backend curl -fsS http://localhost:8080/health
-check "frontend (:3000)"   compose exec -T frontend wget -q --spider http://localhost:3000/
-check "nginx (/healthz)"   compose exec -T nginx wget -q --spider http://localhost/healthz
 
 log "container status:"
 compose ps
 
 if [ "$FAILED" -ne 0 ]; then
-  die "one or more health checks failed"
+  die "backend health check failed"
 fi
 
-log "all services healthy"
+log "backend healthy"

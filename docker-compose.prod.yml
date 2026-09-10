@@ -1,77 +1,31 @@
-# StudyMap AI — AWS EC2 production stack.
+# StudyMap AI — AWS EC2 production stack, backend-only.
 #
-# Three services only: nginx (public entrypoint + TLS termination), frontend
-# (static SPA, unchanged from docker-compose.yml's frontend), backend (Flask/
-# Gunicorn monolith, unchanged app code). No redis, no worker, no llm-gateway,
-# no mindmap-service, no Ollama, no local embedding/reranker — this mirrors
-# render.yaml's production posture (remote AI only: FPT AI + Gemini), not
-# docker-compose.yml's local-model dev defaults. See AWS_DEPLOYMENT_PLAN.md
-# and docs/AWS_DEPLOYMENT.md for the reasoning.
+# Frontend stays permanently on Render Static Site (unchanged, out of scope
+# here). Only the backend (Flask/Gunicorn monolith, unchanged app code) runs
+# on EC2. No nginx, no frontend container, no Certbot — those all existed to
+# serve the frontend and terminate TLS for it; neither is this compose
+# file's job anymore. If TLS termination in front of the backend is needed,
+# it belongs in front of this compose stack (e.g. an ALB with an ACM
+# certificate) rather than inside it — deliberately out of scope, see
+# docs/AWS_DEPLOYMENT.md.
+#
+# Mirrors render.yaml's production posture (remote AI only: FPT AI +
+# Gemini), not docker-compose.yml's local-model dev defaults. See
+# AWS_DEPLOYMENT_PLAN.md for the reasoning.
 #
 # Run from the repo root with an explicit env file:
 #   docker compose -f docker-compose.prod.yml --env-file /opt/memvid/env/.env up -d
-# (the deploy scripts under scripts/ already do this).
+# (scripts/deploy.sh already does this).
 
 services:
-  nginx:
-    image: nginx:1.27-alpine
-    container_name: memvid_nginx
-    restart: unless-stopped
-    ports:
-      - "80:80"
-      - "443:443"
-    volumes:
-      - ./docker/nginx.conf:/etc/nginx/conf.d/default.conf:ro
-      - /opt/memvid/data/certbot/conf:/etc/letsencrypt:ro
-      - /opt/memvid/data/certbot/www:/var/www/certbot:ro
-      - /opt/memvid/logs/nginx:/var/log/nginx
-    depends_on:
-      backend:
-        condition: service_healthy
-      frontend:
-        condition: service_healthy
-    healthcheck:
-      test: ["CMD", "wget", "-q", "--spider", "http://localhost/healthz"]
-      interval: 30s
-      timeout: 5s
-      retries: 3
-      start_period: 5s
-    logging:
-      driver: json-file
-      options:
-        max-size: "10m"
-        max-file: "3"
-
-  frontend:
-    build:
-      context: .
-      dockerfile: FE/Dockerfile
-      args:
-        VITE_API_BASE: ${VITE_API_BASE}
-    container_name: memvid_frontend
-    restart: unless-stopped
-    expose:
-      - "3000"
-    healthcheck:
-      test: ["CMD", "wget", "-q", "--spider", "http://localhost:3000/"]
-      interval: 30s
-      timeout: 5s
-      retries: 3
-      start_period: 10s
-    logging:
-      driver: json-file
-      options:
-        max-size: "10m"
-        max-file: "3"
-
   backend:
     build:
       context: ./BE
       dockerfile: Dockerfile
     container_name: memvid_backend
     restart: unless-stopped
-    expose:
-      - "8080"
+    ports:
+      - "8080:8080"
     env_file:
       - /opt/memvid/env/.env
     environment:
@@ -90,8 +44,9 @@ services:
       - /opt/memvid/data/input_docs:/app/input_docs
       # LangGraph HITL checkpointer (query/ingest/summary/mindmap graphs) writes
       # DATA_DIR/checkpoints.sqlite directly — not under /app/memory. Bind-mount
-      # the file itself so it isn't silently ephemeral. The host file must exist
-      # BEFORE first `up` (empty file) — see docs/AWS_DEPLOYMENT.md.
+      # the file itself so it isn't silently ephemeral. scripts/deploy.sh
+      # creates the host file automatically before first `up` — see
+      # docs/AWS_DEPLOYMENT.md.
       - /opt/memvid/data/memory/checkpoints.sqlite:/app/checkpoints.sqlite
     healthcheck:
       test: ["CMD-SHELL", "curl -fsS http://localhost:8080/health || exit 1"]

@@ -1,12 +1,12 @@
 #!/usr/bin/env bash
-# Deploy or update the production stack, in order:
+# Deploy or update the production stack (backend only — frontend stays on
+# Render), in order:
 #   validate env -> ensure data layout -> sync code to origin/main -> build
-#   -> migrate (safe to re-run) -> TLS bootstrap (idempotent) -> start
-#   -> health checks (backend, frontend, nginx — independently) -> success.
+#   -> migrate (safe to re-run) -> start -> health check -> success.
 #
 # Fails fast at the first broken step. Fails the whole deploy (non-zero
-# exit) if any service is unhealthy after start — never reports success on
-# a partially-broken stack.
+# exit) if the backend is unhealthy after start — never reports success on
+# a broken stack.
 #
 # Usage: scripts/deploy.sh
 # Env:   MEMVID_FORCE_RESET=1  discard uncommitted local changes in the repo
@@ -22,14 +22,14 @@ source "$SCRIPT_DIR/_lib.sh"
 require_compose_file
 require_env_file
 
-log "step 1/8: validating environment"
+log "step 1/7: validating environment"
 validate_env
 
-log "step 2/8: ensuring data directory layout"
+log "step 2/7: ensuring data directory layout"
 ensure_data_layout
 
 if [ -d "$REPO_ROOT/.git" ]; then
-  log "step 3/8: syncing code to origin/main"
+  log "step 3/7: syncing code to origin/main"
   CURRENT_REF="$(git -C "$REPO_ROOT" rev-parse --short HEAD 2>/dev/null || echo unknown)"
   if [ -n "$(git -C "$REPO_ROOT" status --porcelain)" ] && [ "${MEMVID_FORCE_RESET:-}" != "1" ]; then
     git -C "$REPO_ROOT" status --short >&2
@@ -45,24 +45,21 @@ if [ -d "$REPO_ROOT/.git" ]; then
   git -C "$REPO_ROOT" reset --hard origin/main
   log "now at $(git -C "$REPO_ROOT" rev-parse --short HEAD) (was $CURRENT_REF)"
 else
-  log "step 3/8: no .git directory at $REPO_ROOT — skipping code sync"
+  log "step 3/7: no .git directory at $REPO_ROOT — skipping code sync"
 fi
 
-log "step 4/8: building images"
+log "step 4/7: building backend image"
 compose build
 
-log "step 5/8: running database migration (alembic upgrade head — no-ops if already current)"
+log "step 5/7: running database migration (alembic upgrade head — no-ops if already current)"
 compose run --rm backend alembic upgrade head
 
-log "step 6/8: TLS bootstrap (idempotent — skips if a certificate already exists)"
-"$SCRIPT_DIR/bootstrap-tls.sh"
-
-log "step 7/8: starting services"
+log "step 6/7: starting backend"
 compose up -d
 
-log "step 8/8: health checks (backend, frontend, nginx — independently)"
+log "step 7/7: health check"
 if ! "$SCRIPT_DIR/health.sh"; then
-  die "one or more services failed health checks — deploy did NOT complete successfully"
+  die "backend failed its health check — deploy did NOT complete successfully"
 fi
 
 log "deploy complete"

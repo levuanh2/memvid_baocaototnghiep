@@ -1,13 +1,19 @@
 # AWS EC2 Production Deployment
 
-Runbook for the `docker-compose.prod.yml` stack: nginx (public entrypoint +
-TLS) → frontend (static SPA) / backend (Flask/Gunicorn), Supabase Postgres +
-Storage kept external, FPT AI + Gemini kept external. No Ollama, no local
-embedding/reranker, no Redis, no worker — mirrors `render.yaml`'s production
-behavior, not `docker-compose.yml`'s local-model dev defaults.
+Runbook for the `docker-compose.prod.yml` stack: **backend only**
+(Flask/Gunicorn monolith, unchanged app code). Supabase Postgres + Storage
+kept external, FPT AI + Gemini kept external. No Ollama, no local
+embedding/reranker, no Redis, no worker.
 
-Background/reasoning lives in `AWS_DEPLOYMENT_PLAN.md` at the repo root — this
-document is the operational how-to.
+**Frontend stays permanently on Render Static Site**, deployed and
+configured there — out of scope for this document and this compose file.
+The only thing that ties the two together is CORS on the backend side and
+`VITE_API_BASE`/`VITE_API_URL` on the Render side (see CORS, below).
+
+Background/reasoning lives in `AWS_DEPLOYMENT_PLAN.md` at the repo root —
+written for the earlier backend+frontend-on-EC2 design and not fully
+updated for this backend-only split; treat it as historical context, this
+document is the current operational how-to.
 
 ## Directory structure
 
@@ -15,7 +21,6 @@ document is the operational how-to.
 /opt/memvid/
 ├── app/                                 # git clone of this repo
 │   ├── docker-compose.prod.yml
-│   ├── docker/nginx.conf
 │   └── scripts/*.sh
 ├── env/
 │   └── .env                             # copied from .env.example.aws, filled
@@ -31,14 +36,8 @@ document is the operational how-to.
 │   │                                    # self-heals if Docker previously
 │   │                                    # auto-created it as an empty
 │   │                                    # directory — no manual step needed
-│   ├── input_docs/                      # staged uploads (durable copy is in
-│   │                                    # Supabase Storage; this is scratch)
-│   └── certbot/
-│       ├── conf/                        # Let's Encrypt certs + account state
-│       │                                # (see TLS bootstrap, below)
-│       └── www/                         # HTTP-01 challenge webroot (renewal only)
-├── logs/
-│   └── nginx/                           # nginx access/error logs
+│   └── input_docs/                      # staged uploads (durable copy is in
+│                                         # Supabase Storage; this is scratch)
 └── backups/                             # created by scripts/backup.sh
 ```
 
@@ -46,20 +45,41 @@ Not bind-mounted, and deliberately so: `/tmp` inside the backend container.
 Werkzeug's transient upload spooling is correctly ephemeral there — it never
 needs to survive a restart.
 
+## Network
+
+The backend container publishes `8080` directly to the host — there is no
+nginx or reverse proxy in front of it in this compose file anymore. The
+Render frontend (and any browser) talks to it cross-origin, directly on
+that port.
+
+This changes what the EC2 security group needs, compared to any earlier
+plan that assumed nginx/Certbot on this box: **open the backend's port
+(8080, or whatever it's fronted by) to the internet; 80/443 aren't used by
+this compose file at all.**
+
+**TLS is out of scope for this compose file.** Backend-on-Render-frontend
+means the browser calls the EC2 backend directly and cross-origin — if that
+call is `https://`, plain `http://backend-ip:8080` will fail with a
+mixed-content error from the Render page. If HTTPS is needed in front of
+the backend, it has to be added outside this compose file — an AWS ALB with
+an ACM certificate is the standard fit for "one EC2 instance, no ECS/K8s."
+That's a separate, deliberate infrastructure decision, not something this
+runbook implements.
+
 ## Environment variables
 
 Template: `.env.example.aws` at the repo root. Copy it to `/opt/memvid/env/.env`,
-fill in real values, `chmod 600`. Full classification (required / optional /
-Render-only / legacy / unused) is in `AWS_DEPLOYMENT_PLAN.md` §6 — the template
-itself only includes what this deployment actually needs: Supabase, FPT AI,
-Gemini, auth, gunicorn, CORS. Render-only and dev/test-only variables are
-intentionally omitted.
+fill in real values, `chmod 600`. The template only includes what this
+backend-only deployment actually needs: Supabase, FPT AI, Gemini, auth,
+gunicorn, CORS. Render-only, dev/test-only, and (now) frontend-build-only
+variables are intentionally omitted — `VITE_API_BASE` in particular is
+Render's concern now, not this file's.
 
 `scripts/deploy.sh` validates every variable in `_lib.sh`'s `REQUIRED_ENV_VARS`
 list is present and non-empty **before** it builds anything — a missing
 secret fails the deploy immediately instead of failing partway through a
-build or, worse, after containers are already up. Run the same check on its
-own with `scripts/validate-env.sh`.
+build or, worse, after the container is already up. Run the same check on
+its own with `scripts/validate-env.sh`.
 
 Two things worth double-checking before first boot:
 
@@ -68,9 +88,23 @@ Two things worth double-checking before first boot:
 - `ALEMBIC_PRODUCTION_HOST` / `ALEMBIC_PRODUCTION_DB` must name the real
   Supabase host/db exactly — the migration guard refuses to run against
   production otherwise (fails closed, by design).
-- `CERTBOT_DOMAIN` must match whatever `VITE_API_BASE` points at, and
-  `CERTBOT_EMAIL` must be a real, reachable address — Let's Encrypt sends
-  expiry warnings there if renewal ever starts failing.
+
+## CORS (the piece that actually connects Render to EC2)
+
+Since frontend and backend are on different origins now, `CORS_ORIGINS`
+matters more than it used to — this is a real cross-origin browser call,
+not same-origin-behind-nginx. Set it to the exact Render frontend URL once
+known (e.g. `https://studymap-web.onrender.com`); `*` is the current
+default but is the weaker posture of the two.
+
+On the Render side (not this repo's concern to deploy, but relevant to get
+right): `VITE_API_BASE` (or `VITE_API_URL` — `FE/src/utils/api.js` accepts
+either) must be set to this backend's public origin, with **no** `/api`
+suffix — `apiUrl()` builds requests as `base + path` against the Flask
+app's bare routes (e.g. `/health`, `/query`) directly, it does not expect
+or use an `/api/` prefix. Nothing about this changed with the frontend move
+— there was never an nginx path-rewrite the frontend code actually depended
+on.
 
 ## Deployment
 
@@ -81,7 +115,7 @@ from here (it creates every data directory and file itself):
 sudo mkdir -p /opt/memvid/env
 sudo chown "$USER":"$USER" /opt/memvid
 cp /opt/memvid/app/.env.example.aws /opt/memvid/env/.env
-# edit /opt/memvid/env/.env with real values, including CERTBOT_DOMAIN/CERTBOT_EMAIL
+# edit /opt/memvid/env/.env with real values
 chmod 600 /opt/memvid/env/.env
 ```
 
@@ -102,50 +136,13 @@ scripts/deploy.sh
    is what makes rollback safe — see Rollback below). Aborts if the clone
    has real uncommitted changes; `MEMVID_FORCE_RESET=1 scripts/deploy.sh`
    overrides that.
-4. **Build** the three images.
+4. **Build** the backend image.
 5. **Migrate** — `alembic upgrade head` runs as part of every deploy, not as
    a separate manual step. Safe to re-run: it no-ops when the schema is
    already current.
-6. **TLS bootstrap** — `scripts/bootstrap-tls.sh` runs automatically,
-   idempotent (does nothing once a certificate exists). See TLS bootstrap
-   below for what it actually does on a brand new server.
-7. **Start** the stack (`compose up -d`).
-8. **Health checks** — backend, frontend, and nginx checked independently
-   (`scripts/health.sh`); the deploy fails (non-zero exit) if any one of
-   them is unhealthy, even if the other two are fine.
-
-## TLS bootstrap
-
-`docker/nginx.conf` requires a certificate to already exist on disk before
-nginx will even start — a missing `ssl_certificate` file is a fatal
-config-load error for the whole process, not just the HTTPS server block.
-That's a problem on a brand new server: the normal way to get a certificate
-(ACME HTTP-01 challenge over webroot) needs nginx already running on `:80`
-to serve it.
-
-`scripts/bootstrap-tls.sh` breaks that deadlock: on a server with no
-certificate yet, it runs `certbot certonly --standalone` — certbot's own
-temporary listener on `:80`, entirely separate from the compose stack — so
-nginx is never asked to start without a certificate already in place.
-`--cert-name memvid` pins the on-disk path to exactly what `docker/nginx.conf`
-expects (`/etc/letsencrypt/live/memvid/...`), regardless of which domain
-`CERTBOT_DOMAIN` names — so a future domain change never requires editing
-`docker/nginx.conf`.
-
-This runs automatically as step 6 of `scripts/deploy.sh` and is a no-op once
-a certificate exists — safe on every subsequent deploy.
-
-**Renewal** is a different script, `scripts/renew-tls.sh`, because it needs
-a different method: by the time renewal matters, nginx already owns `:80`
-permanently, so standalone mode would conflict with it. Renewal uses webroot
-mode instead (nginx already serves `/.well-known/acme-challenge/` from
-`data/certbot/www`, unchanged from the original nginx.conf), then reloads
-nginx to pick up the refreshed files. Not run automatically — schedule it,
-e.g. via crontab:
-
-```
-0 3 * * 1 cd /opt/memvid/app && scripts/renew-tls.sh >> /opt/memvid/logs/renew-tls.log 2>&1
-```
+6. **Start** the backend (`compose up -d`).
+7. **Health check** — `scripts/health.sh`; the deploy fails (non-zero exit)
+   if the backend is unhealthy.
 
 ## Rollback
 
@@ -166,9 +163,10 @@ sync-code step unconditionally resets the local clone to `origin/main`
 before building, regardless of what ref it finds checked out. Running
 `deploy.sh` after a rollback is the normal way back to the latest code.
 
-Rollback only reverts code/images. A migration that ran forward before the
-rollback is not automatically reversed — check `alembic history` if the
-rollback target predates a schema change.
+Rollback only reverts backend code/images. A migration that ran forward
+before the rollback is not automatically reversed — check `alembic history`
+if the rollback target predates a schema change. It also has nothing to do
+with the frontend — that's a separate rollback on Render if ever needed.
 
 ## Backup
 
@@ -196,9 +194,9 @@ Prompts for confirmation unless run with a trailing `--yes`.
 
 ## Updating
 
-Same as Deployment — `scripts/deploy.sh` is the update path (git pull, build,
-up, health-wait). No separate "update" script; a fresh deploy of the same
-running version is a no-op beyond the git pull finding nothing new.
+Same as Deployment — `scripts/deploy.sh` is the update path (sync, build,
+migrate, up, health-check). No separate "update" script; a fresh deploy of
+the same running version is a no-op beyond the git sync finding nothing new.
 
 ## Health check
 
@@ -206,26 +204,27 @@ running version is a no-op beyond the git pull finding nothing new.
 scripts/health.sh
 ```
 
-Checks all three services independently (backend `/health` inside the
-container, frontend `:3000/`, nginx `/healthz`) and exits non-zero if any
-fail. `compose ps` output is printed either way.
+Checks the backend's `/health` (from inside the container) and exits
+non-zero on failure. `compose ps` output is printed either way.
 
-External uptime monitoring should hit `https://yourdomain.com/healthz`
-(served directly by the nginx container, no backend round-trip) or
-`https://yourdomain.com/api/health` (proxied through to the backend — use
-this one if you want the check to prove the whole chain, not just nginx).
+External uptime monitoring should hit the backend's public URL directly
+(`http://<host>:8080/health`, or through whatever fronts it if you've added
+an ALB). Frontend uptime is Render's own concern now, not this instance's.
 
 ## Troubleshooting
 
-- **A service won't start:** `scripts/logs.sh <service>` — `nginx`,
-  `frontend`, or `backend`.
+- **Backend won't start:** `scripts/logs.sh backend`.
 - **Backend healthy per Docker but app is broken:** `/health` only reports
   `query_graph_ready`/`ingest_graph_ready`, not whether AI providers are
   reachable — check `scripts/logs.sh backend` for FPT AI/Gemini call errors.
-- **502/504 from nginx:** usually the backend container is still starting
-  (`start_period: 15s` in the healthcheck) or a `GUNICORN_TIMEOUT` mismatch —
-  confirm `.env` actually sets `GUNICORN_TIMEOUT=120` and that nginx's own
-  `/api/` proxy timeouts (300s) are longer than gunicorn's.
+- **Browser blocks the API call from the Render page (mixed content /
+  CORS):** two separate things to check — (1) if the Render page is
+  `https://` and the backend URL is plain `http://`, the browser blocks it
+  before CORS is even evaluated; the backend needs to be behind something
+  that terminates TLS (see Network, above). (2) If it's a CORS error
+  specifically (not mixed content), confirm `CORS_ORIGINS` in
+  `/opt/memvid/env/.env` actually names the Render frontend's exact origin
+  (or is still `*` during initial testing).
 - **HITL pause/resume not surviving a restart:** `deploy.sh` creates
   `/opt/memvid/data/memory/checkpoints.sqlite` automatically, but if it was
   ever created by hand or by an older deploy, confirm it's actually a file,
@@ -234,21 +233,6 @@ this one if you want the check to prove the whole chain, not just nginx).
   it automatically on the next run, but only if the directory is empty —
   a non-empty one makes the script stop and ask a human to look, rather
   than guess.
-- **Nginx won't start on a brand new server:** almost certainly the TLS
-  bootstrap didn't run or failed — check `scripts/logs.sh nginx` for a
-  `cannot load certificate` error, then run `scripts/bootstrap-tls.sh`
-  directly to see the certbot output (it's swallowed inside `deploy.sh`'s
-  step 6 otherwise). Common causes: `CERTBOT_DOMAIN` doesn't actually point
-  at this server's IP yet (DNS not propagated), or port 80 wasn't reachable
-  from the internet when certbot's standalone listener tried to bind it
-  (check the security group).
-- **Certbot renewal fails:** confirm `/opt/memvid/data/certbot/www` is
-  writable by whatever process runs `scripts/renew-tls.sh` and matches the
-  webroot nginx serves at `/.well-known/acme-challenge/` on port 80 — cert
-  issuance and the app's own nginx container must agree on this path. Renewal
-  uses webroot mode, not standalone (see TLS bootstrap) — if it's failing
-  with a port-80-in-use error, something is trying to use standalone mode
-  again, which conflicts with nginx already running.
 - **Uploads failing / index not restoring after a redeploy:** check
   `SUPABASE_URL`/`SUPABASE_SECRET_KEY` are actually set — a known-issues
   entry in this repo flagged these as possibly unset on Render at one point;

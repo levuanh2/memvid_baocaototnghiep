@@ -8,15 +8,10 @@ COMPOSE_FILE="$REPO_ROOT/docker-compose.prod.yml"
 ENV_FILE="${MEMVID_ENV_FILE:-/opt/memvid/env/.env}"
 DATA_DIR="${MEMVID_DATA_DIR:-/opt/memvid/data}"
 BACKUP_DIR="${MEMVID_BACKUP_DIR:-/opt/memvid/backups}"
-LOGS_DIR="${MEMVID_LOGS_DIR:-/opt/memvid/logs}"
-CERTBOT_CONF_DIR="$DATA_DIR/certbot/conf"
-CERTBOT_WWW_DIR="$DATA_DIR/certbot/www"
-# Fixed cert-name certbot issues under — must match docker/nginx.conf's
-# ssl_certificate path (.../live/memvid/...) so the domain can change without
-# ever having to hand-edit nginx.conf.
-CERT_NAME="memvid"
 
 # Every variable the app cannot run correctly without, checked before build.
+# VITE_API_BASE is deliberately absent: the frontend build (and its own
+# CORS-facing origin) lives entirely on Render now, not in this compose file.
 REQUIRED_ENV_VARS=(
   DATABASE_URL
   SUPABASE_URL
@@ -25,11 +20,8 @@ REQUIRED_ENV_VARS=(
   AUTH_SECRET
   GEMINI_API_KEY
   FPT_AI_API_KEY
-  VITE_API_BASE
   ALEMBIC_PRODUCTION_HOST
   ALEMBIC_PRODUCTION_DB
-  CERTBOT_DOMAIN
-  CERTBOT_EMAIL
 )
 
 # Every directory the compose stack bind-mounts.
@@ -37,9 +29,6 @@ REQUIRED_DATA_DIRS=(
   "$DATA_DIR/index"
   "$DATA_DIR/memory"
   "$DATA_DIR/input_docs"
-  "$CERTBOT_CONF_DIR"
-  "$CERTBOT_WWW_DIR"
-  "$LOGS_DIR/nginx"
   "$BACKUP_DIR"
 )
 
