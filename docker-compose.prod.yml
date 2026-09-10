@@ -1,0 +1,106 @@
+# StudyMap AI — AWS EC2 production stack.
+#
+# Three services only: nginx (public entrypoint + TLS termination), frontend
+# (static SPA, unchanged from docker-compose.yml's frontend), backend (Flask/
+# Gunicorn monolith, unchanged app code). No redis, no worker, no llm-gateway,
+# no mindmap-service, no Ollama, no local embedding/reranker — this mirrors
+# render.yaml's production posture (remote AI only: FPT AI + Gemini), not
+# docker-compose.yml's local-model dev defaults. See AWS_DEPLOYMENT_PLAN.md
+# and docs/AWS_DEPLOYMENT.md for the reasoning.
+#
+# Run from the repo root with an explicit env file:
+#   docker compose -f docker-compose.prod.yml --env-file /opt/memvid/env/.env up -d
+# (the deploy scripts under scripts/ already do this).
+
+services:
+  nginx:
+    image: nginx:1.27-alpine
+    container_name: memvid_nginx
+    restart: unless-stopped
+    ports:
+      - "80:80"
+      - "443:443"
+    volumes:
+      - ./docker/nginx.conf:/etc/nginx/conf.d/default.conf:ro
+      - /opt/memvid/data/certbot/conf:/etc/letsencrypt:ro
+      - /opt/memvid/data/certbot/www:/var/www/certbot:ro
+      - /opt/memvid/logs/nginx:/var/log/nginx
+    depends_on:
+      backend:
+        condition: service_healthy
+      frontend:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD", "wget", "-q", "--spider", "http://localhost/healthz"]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+      start_period: 5s
+    logging:
+      driver: json-file
+      options:
+        max-size: "10m"
+        max-file: "3"
+
+  frontend:
+    build:
+      context: .
+      dockerfile: FE/Dockerfile
+      args:
+        VITE_API_BASE: ${VITE_API_BASE}
+    container_name: memvid_frontend
+    restart: unless-stopped
+    expose:
+      - "3000"
+    healthcheck:
+      test: ["CMD", "wget", "-q", "--spider", "http://localhost:3000/"]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+      start_period: 10s
+    logging:
+      driver: json-file
+      options:
+        max-size: "10m"
+        max-file: "3"
+
+  backend:
+    build:
+      context: ./BE
+      dockerfile: Dockerfile
+    container_name: memvid_backend
+    restart: unless-stopped
+    expose:
+      - "8080"
+    env_file:
+      - /opt/memvid/env/.env
+    environment:
+      # Fixed production defaults — not left to whatever .env may or may not set.
+      DATA_DIR: /app
+      PORT: "8080"
+      WEB_CONCURRENCY: "1"
+      GUNICORN_TIMEOUT: "120"
+      JOBS_DB_PATH: /app/memory/jobs.sqlite
+      LOG_DB_PATH: /app/memory/logs.sqlite
+      CONVERSATIONS_DB_PATH: /app/memory/conversations.sqlite
+      USERS_DB_PATH: /app/memory/users.sqlite
+    volumes:
+      - /opt/memvid/data/index:/app/index
+      - /opt/memvid/data/memory:/app/memory
+      - /opt/memvid/data/input_docs:/app/input_docs
+      # LangGraph HITL checkpointer (query/ingest/summary/mindmap graphs) writes
+      # DATA_DIR/checkpoints.sqlite directly — not under /app/memory. Bind-mount
+      # the file itself so it isn't silently ephemeral. The host file must exist
+      # BEFORE first `up` (empty file) — see docs/AWS_DEPLOYMENT.md.
+      - /opt/memvid/data/memory/checkpoints.sqlite:/app/checkpoints.sqlite
+    healthcheck:
+      test: ["CMD-SHELL", "curl -fsS http://localhost:8080/health || exit 1"]
+      interval: 10s
+      timeout: 3s
+      retries: 10
+      start_period: 15s
+    logging:
+      driver: json-file
+      options:
+        max-size: "10m"
+        max-file: "3"
