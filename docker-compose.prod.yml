@@ -53,7 +53,11 @@ services:
       interval: 10s
       timeout: 3s
       retries: 10
-      start_period: 15s
+      # AI-heavy imports (embeddings, LangChain, etc.) push real startup to
+      # 70-90s; 15s made Docker start counting failures toward "unhealthy"
+      # while the backend was still loading. scripts/health.sh polls Docker's
+      # own status too, so this just keeps `docker inspect` honest with reality.
+      start_period: 90s
     logging:
       driver: json-file
       options:
