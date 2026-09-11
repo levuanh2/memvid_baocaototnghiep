@@ -148,9 +148,17 @@ def test_storage_khong_dua_khoa_vao_thong_bao_loi(monkeypatch):
 
 
 # ── 7. Không phá persistence sẵn có ───────────────────────────────────────
-def test_persistence_van_dung_chung_mot_client_storage():
+def test_persistence_van_dung_chung_mot_client_storage(monkeypatch):
     """`persistence.get_storage()` KHÔNG được dựng client Supabase thứ hai — hai
-    client là hai chỗ đọc credential, và chúng sẽ lệch nhau đúng vào ngày xấu nhất."""
+    client là hai chỗ đọc credential, và chúng sẽ lệch nhau đúng vào ngày xấu nhất.
+
+    Cái đang kiểm là DANH TÍNH (`is` — cùng một object), không phải "Supabase có
+    kết nối được". `get_storage()` tự ném `PersistenceNotConfigured` khi thiếu
+    `SUPABASE_URL`/`SUPABASE_SECRET_KEY` — đúng ở CI/máy dev, nơi không có và
+    không nên có cặp đó. Giả `is_configured()` = True (cùng cách `_upload()` ở
+    trên đã làm cho các test khác trong file này) để đi qua đúng nhánh cần đo mà
+    không cần thật, không đụng biến môi trường thật nào."""
     from app.domains.vectorstore import persistence as ps
 
+    monkeypatch.setattr(st, "is_configured", lambda: True)
     assert ps.get_storage() is st

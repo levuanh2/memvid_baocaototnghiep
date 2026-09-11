@@ -89,7 +89,7 @@ def test_A_local_login_giu_nguyen(client):
     assert r.status_code == 200
     b = r.get_json()
     assert b["token"]
-    assert set(b["user"]) == {"id", "email", "display_name", "role"}
+    assert set(b["user"]) == {"id", "email", "display_name", "role", "avatar", "provider"}
 
 
 # ── CASE B — NKS thành công (mock) ───────────────────────────────────────────
@@ -103,7 +103,7 @@ def test_B_nks_login_tao_user_va_identity(client, monkeypatch):
     b = r.get_json()
     assert b["token"]
     assert b["user"]["email"] == em
-    assert set(b["user"]) == {"id", "email", "display_name", "role"}
+    assert set(b["user"]) == {"id", "email", "display_name", "role", "avatar", "provider"}
     assert _dem_identity(pid) == 1
 
     # Token StudyMap dùng được ở endpoint bảo vệ (CASE L của đề bài).

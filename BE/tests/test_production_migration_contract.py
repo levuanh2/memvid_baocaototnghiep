@@ -20,17 +20,40 @@ import os
 import subprocess
 import sys
 from pathlib import Path
+from urllib.parse import urlsplit
 
 import pytest
 
 BE = Path(__file__).resolve().parents[1]
 
+
+def _test_db_port() -> int:
+    """Cổng Postgres test THẬT — suy từ `TEST_DATABASE_URL`, không đoán/hardcode.
+
+    CI (`ci.yml`) chạy Postgres làm service container ánh xạ cổng CHUẨN 5432 và
+    đặt `TEST_DATABASE_URL` trỏ đúng vào đó. `scripts/setup_test_db.py` (dev cục
+    bộ) CỐ Ý dùng 55432 để không đụng một Postgres khác đã chạy sẵn trên máy. Hai
+    quy ước khác nhau, cùng đúng ở đúng môi trường của nó — file test này từng
+    hardcode 55432, nên nó pass ở máy dev (đã chạy setup_test_db.py) nhưng ở CI
+    lại đi dò đúng cổng không ai lắng nghe (5432 mới là cổng CI thật có), một kết
+    nối bị từ chối/treo cho tới khi hết `timeout`. Đọc thẳng cổng từ biến môi
+    trường mà `_co_db_test()` NGAY BÊN DƯỚI cũng đang dùng để quyết định có chạy
+    hay skip — hai chỗ đó phải đồng bộ, không phải hai nguồn sự thật khác nhau.
+    """
+    raw = (os.getenv("TEST_DATABASE_URL") or "").strip()
+    if not raw:
+        return 55432   # không chạy tới đây thật: _co_db_test() đã skip cả module
+    return urlsplit(raw).port or 55432
+
+
+_TEST_PORT = _test_db_port()
+
 FAKE_PROD_HOST = "fake-production-host.example"
 FAKE_PROD_DB = "postgres"
 #: Khai báo là production, đường đi thật là container test.
-FAKE_PROD_URL = (f"postgresql://postgres:postgres@{FAKE_PROD_HOST}:55432/"
+FAKE_PROD_URL = (f"postgresql://postgres:postgres@{FAKE_PROD_HOST}:{_TEST_PORT}/"
                  f"{FAKE_PROD_DB}?hostaddr=127.0.0.1")
-TEST_URL = "postgresql://postgres:postgres@localhost:55432/studymap_test"
+TEST_URL = f"postgresql://postgres:postgres@localhost:{_TEST_PORT}/studymap_test"
 
 
 def _co_db_test() -> bool:
@@ -157,7 +180,7 @@ def test_6_current_database_song_lech_thi_tu_choi():
     Chuỗi khai báo qua được vòng kiểm tĩnh; chỉ `SELECT current_database()` trên kết
     nối SỐNG mới lộ ra. Đây là ca chứng minh vòng kiểm thứ hai có giá trị thật.
     """
-    lech = (f"postgresql://postgres:postgres@{FAKE_PROD_HOST}:55432/"
+    lech = (f"postgresql://postgres:postgres@{FAKE_PROD_HOST}:{_TEST_PORT}/"
             f"postgres?hostaddr=127.0.0.1&dbname=studymap_test")
     r = chay({
         "ALEMBIC_ALLOW_PRODUCTION": "1",

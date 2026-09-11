@@ -1,4 +1,6 @@
-"""Phase 1 — lược đồ 19 bảng StudyMap trên PostgreSQL phải khớp đặc tả.
+"""Lược đồ StudyMap trên PostgreSQL phải khớp `app.db.models` — đối chiếu TẬP
+bảng, không một tổng số cứng (một tổng số cứng ở đây từng lệch âm thầm khi
+Phase 1B thêm bảng `collections` mà không ai quay lại sửa nó — 84895d7).
 
 Kiểm cả hai chiều: bảng/RLS có mặt, VÀ ràng buộc thật sự chặn dữ liệu sai (CHECK
 chỉ nằm trong model mà DB không có thì test model-only sẽ không bắt được).
@@ -40,7 +42,7 @@ def user_id(engine):
         c.execute(text("DELETE FROM users WHERE id = :id"), {"id": uid})
 
 
-def test_all_19_tables_exist_with_rls(engine):
+def test_all_tables_exist_with_rls(engine):
     from sqlalchemy import text
 
     from app.db.models import ALL_TABLES
@@ -53,8 +55,13 @@ def test_all_19_tables_exist_with_rls(engine):
     assert set(ALL_TABLES) == set(present), (
         f"thiếu: {set(ALL_TABLES) - set(present)} | thừa: {set(present) - set(ALL_TABLES)}"
     )
-    # 19 bảng đặc tả Phase 1 + `identities` (2026-09-05, liên kết provider ngoài).
-    assert len(ALL_TABLES) == 20
+    # KHÔNG khoá một con số tổng ở đây nữa (từng là 20, rồi lệch ngay khi
+    # `collections` — bảng thứ 21, Phase 1B, 84895d7 — ra đời mà không ai quay
+    # lại sửa số này). Đối chiếu TẬP đã đủ mạnh: nó tự bắt MỌI lần lệch, thêm
+    # hay bớt bảng nào cũng vậy, không cần một tổng cứng đi kèm và tự cũ đi.
+    # Bảng nào phải có mặt thì khai TÊN, không khai SỐ LƯỢNG:
+    assert "identities" in ALL_TABLES, "liên kết provider ngoài (2026-09-05)"
+    assert "collections" in ALL_TABLES, "bộ sưu tập tài liệu (Phase 1B, 84895d7)"
     # RLS bật + không policy nào = deny-all cho publishable key (đặc tả Phase 1).
     assert [t for t, rls in present.items() if not rls] == []
 

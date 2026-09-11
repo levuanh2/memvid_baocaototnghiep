@@ -45,7 +45,10 @@ def test_khong_co_provider_van_dang_nhap_nhu_cu(client):
     assert r.status_code == 200
     body = r.get_json()
     assert body["token"]
-    assert set(body["user"].keys()) == {"id", "email", "display_name", "role"}
+    # `avatar`/`provider` gia nhập hợp đồng công khai ở f2dd4c2 (public_user() +
+    # định tuyến provider) — test_auth_me_provider.py:109 đã khoá đúng bộ khoá
+    # mới; hai chỗ dưới NGAY BÊN NÀY từng bị bỏ sót khi cập nhật.
+    assert set(body["user"].keys()) == {"id", "email", "display_name", "role", "avatar", "provider"}
     assert body["user"]["email"] == email
 
 
