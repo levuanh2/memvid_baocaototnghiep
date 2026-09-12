@@ -89,7 +89,18 @@ module.exports = {
           "0%": { opacity: "0" },
           "100%": { opacity: "1" },
         },
-        pulse: {
+        // Wave 8 cleanup: was named `pulse`, silently overriding Tailwind's
+        // OWN built-in `pulse` keyframe (used by the plain `animate-pulse`
+        // utility — real, active consumers: ChatArea's typing cursor,
+        // DocumentList/KnowledgePanel's skeleton loaders). `extend.keyframes`
+        // merges by key name, so every one of those was actually animating
+        // with this 0.4-opacity custom curve instead of Tailwind's intended
+        // default (0.5) the whole time — a real, if subtle, side effect
+        // nobody asked for. Renamed to its own name; `animate-pulse` now
+        // gets Tailwind's real default back, `animate-pulseSoft` keeps
+        // behaving exactly as before (same curve, just no longer sharing a
+        // name with something else).
+        pulseSoft: {
           "0%,100%": { opacity: "1" },
           "50%": { opacity: "0.4" },
         },
@@ -97,7 +108,7 @@ module.exports = {
       animation: {
         fadeUp: "fadeUp 450ms ease-out both",
         fadeIn: "fadeIn 180ms ease-out both",
-        pulseSoft: "pulse 1.3s ease-in-out infinite",
+        pulseSoft: "pulseSoft 1.3s ease-in-out infinite",
       },
       boxShadow: {
         // Wave 3: `glow` (a hardcoded, non-dark-aware seal-red ring) removed —

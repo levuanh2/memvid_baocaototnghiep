@@ -141,7 +141,9 @@
      collapsed to one role per the Signature Contract; every call site now
      uses `font-display` directly. */
   /* No more gradient brand — degrade any leftover usage to seal ink */
-  .text-gradient { color: var(--accent); -webkit-text-fill-color: currentColor; }
+  /* Wave 8 cleanup: `.text-gradient` removed — grep-confirmed zero JSX
+     consumers (its own comment said it was a leftover compatibility shim
+     for a gradient-brand treatment already removed elsewhere). */
   /* Wave 2: the manual `.animate-fadeUp { animation: fadeUp 450ms... }` rule
      that used to live here was a byte-for-byte duplicate of the utility
      Tailwind already generates from tailwind.config.js's own `animation.
@@ -260,7 +262,9 @@
     color: var(--text-secondary);
   }
   .pill-action:hover { border-color: color-mix(in srgb, var(--accent) 35%, transparent); color: var(--accent); }
-  .pill-action-active { background: color-mix(in srgb, var(--accent) 10%, transparent); border-color: color-mix(in srgb, var(--accent) 40%, transparent); color: var(--accent); font-weight: 600; }
+  /* Wave 8 cleanup: `.pill-action-active` removed — grep-confirmed zero
+     JSX consumers (`.pill-action` itself is used everywhere; its `-active`
+     state variant was never actually wired to any active condition). */
 
   /* Icon button */
   .icon-btn {
@@ -272,14 +276,8 @@
   .icon-btn:hover { border-color: color-mix(in srgb, var(--accent) 30%, transparent); color: var(--accent); }
   .icon-btn:active { transform: scale(0.97); }
 
-  /* Sidebar tab */
-  .sidebar-tab {
-    @apply flex-1 py-2 text-[13px] font-semibold transition-all duration-150 relative;
-    color: var(--text-secondary);
-    border-bottom: 2px solid transparent;
-  }
-  .sidebar-tab:hover { color: var(--text-primary); }
-  .sidebar-tab-active { color: var(--accent); border-bottom-color: var(--accent); }
+  /* Wave 8 cleanup: `.sidebar-tab`/`.sidebar-tab-active` removed — grep-
+     confirmed zero JSX consumers (superseded by WorkspaceTabs.jsx). */
 
   /* Header search */
   .header-search {
@@ -360,7 +358,10 @@
     border: 1.5px solid var(--accent);
     animation: scanPulse 1.4s ease-out infinite;
   }
-  .apparatus-rail { width: 1.5px; background: var(--border-color); }
+  /* Wave 8 cleanup: `.apparatus-rail` removed — grep-confirmed zero JSX
+     consumers (`.apparatus-step`/`.apparatus-dot*` ARE used, in ChatArea's
+     retrieval-steps indicator; the connecting rail between dots was styled
+     but never actually rendered anywhere). */
 
   /* Theme toggle */
   .theme-toggle {
@@ -385,11 +386,19 @@
    grep-confirmed zero remaining references anywhere in FE/src. */
 
 /* ─── Keyframes ─────────────────────────────── */
-/* `fadeUp` lives only in tailwind.config.js now (was duplicated here too —
-   see the Wave 2 note in @layer utilities above). `fadeIn` (Modal's new,
-   shorter open animation) is defined there as well, not here. */
-@keyframes spin { to { transform: rotate(360deg); } }
-@keyframes pulse { 0%, 100% { opacity: 1; } 50% { opacity: 0.4; } }
+/* `fadeUp`/`fadeIn`/`pulseSoft` live only in tailwind.config.js now. Wave 8
+   cleanup: this file used to ALSO manually redefine `@keyframes spin` and
+   `@keyframes pulse` — both dead (grep-confirmed: nothing in this file or
+   any component references `animation: spin`/`animation: pulse` directly;
+   every real consumer uses Tailwind's `animate-spin`/`animate-pulse`
+   utilities, which draw from Tailwind's own built-in keyframes of those
+   names, never these). Worse than merely dead: the old `pulse` name here
+   shadowed nothing on its own, but tailwind.config.js's OWN custom
+   `keyframes.pulse` (now renamed `pulseSoft`, see that file) WAS silently
+   overriding Tailwind's built-in `pulse` for every real `animate-pulse`
+   consumer (ChatArea's typing cursor, DocumentList/KnowledgePanel's
+   skeleton loaders) — fixed there, not here; removing this file's unrelated
+   dead copy is just the second half of the same cleanup. */
 @keyframes scanPulse {
   0%   { transform: scale(0.7); opacity: 0.8; }
   100% { transform: scale(1.5); opacity: 0; }
