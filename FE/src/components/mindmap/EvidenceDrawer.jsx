@@ -107,7 +107,7 @@ export default function EvidenceDrawer({ node, onClose, generating, onAskAbout, 
         <div className="flex-1 min-h-0 overflow-y-auto px-4 py-3.5">
           {node.note && (
             <MdSnippet text={node.note}
-              className="font-reading text-[13.5px] leading-[1.6] text-text-secondary mb-4 pb-4 border-b border-border" />
+              className="font-display text-[13.5px] leading-[1.6] text-text-secondary mb-4 pb-4 border-b border-border" />
           )}
 
           {nothingAtAll ? (

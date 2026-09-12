@@ -36,6 +36,11 @@
     --ink-rgb:       27 42 65;
     --slate:         #5C6B7A;
 
+    /* Wave 1 (additive) — forest/bronze from the Signature Contract. Not the
+       default `--accent` yet; wired in per-component across Waves 2-7. */
+    --forest-rgb: 31 64 51;     /* #1F4033 */
+    --bronze-rgb: 160 106 59;   /* #A06A3B */
+
     /* Semantic status */
     --ok:    #3E6B57;   /* indexed */
     --ok-bg: rgba(62,107,87,0.12);   /* Wave 0: was an undeclared var(--ok-bg) everywhere, silently
@@ -79,6 +84,9 @@
     --ink-rgb:       236 231 219;
     --slate:         #8FA0B3;
 
+    --forest-rgb: 111 169 138;   /* #6FA98A — brightened, not an inversion */
+    --bronze-rgb: 201 154 108;   /* #C99A6C */
+
     --ok:    #5BA888;
     --ok-bg: rgba(91,168,136,0.14);
     --warn: #D6A547;
@@ -115,8 +123,10 @@
 
 /* ─── Utilities ─────────────────────────────── */
 @layer utilities {
-  /* The "scholarship" voice — serif reading prose */
-  .font-reading { font-family: 'Spectral', Georgia, 'Times New Roman', serif; }
+  /* Wave 1: `.font-reading` was a duplicate alias of `.font-display` (same
+     Spectral/Georgia/serif voice, slightly different fallback chain) —
+     collapsed to one role per the Signature Contract; every call site now
+     uses `font-display` directly. */
   /* No more gradient brand — degrade any leftover usage to seal ink */
   .text-gradient { color: var(--accent); -webkit-text-fill-color: currentColor; }
   .animate-fadeUp { animation: fadeUp 450ms ease-out both; }

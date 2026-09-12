@@ -76,7 +76,7 @@ function makeMdComponents({ highlight, onHighlight }) {
 function AnswerProse({ content, mdComponents }) {
   const { md } = useMemo(() => processCitations(content), [content]);
   return (
-    <div className="font-reading">
+    <div className="font-display">
       <ReactMarkdown remarkPlugins={[remarkGfm, remarkBreaks]} components={mdComponents}>{md}</ReactMarkdown>
     </div>
   );
@@ -696,7 +696,7 @@ export default function ChatArea({ selectedSources, sources = [], onEvidence, hi
             <h1 className="font-display text-[26px] sm:text-[30px] leading-[1.2] font-semibold text-text-primary mb-3">
               Hỏi tài liệu của bạn — <span className="text-brand">kèm dẫn chứng</span>.
             </h1>
-            <p className="font-reading text-[15px] leading-[1.7] text-text-secondary mb-6">
+            <p className="font-display text-[15px] leading-[1.7] text-text-secondary mb-6">
               Mỗi câu trả lời được truy hồi từ tài liệu đã chọn và gắn nguồn ở lề phải. Chọn tài liệu bên trái, rồi đặt câu hỏi.
             </p>
             {selectedSources?.length > 0 ? (
@@ -799,7 +799,7 @@ export default function ChatArea({ selectedSources, sources = [], onEvidence, hi
                 })}
               </div>
               {streamingPreview && (
-                <div className="mt-3 pt-3 border-t border-border font-reading text-[14.5px] text-text-primary leading-[1.7] max-h-[42vh] overflow-y-auto">
+                <div className="mt-3 pt-3 border-t border-border font-display text-[14.5px] text-text-primary leading-[1.7] max-h-[42vh] overflow-y-auto">
                   <ReactMarkdown remarkPlugins={[remarkGfm, remarkBreaks]}>{streamingPreview}</ReactMarkdown>
                   <span className="inline-block w-0.5 h-4 bg-brand animate-pulse ml-0.5 align-middle rounded-sm" aria-hidden />
                 </div>

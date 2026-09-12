@@ -80,7 +80,7 @@ function ChatBubble({ role, children }) {
     );
   }
   return (
-    <div className="self-start max-w-[86%] font-reading text-[14px] leading-[1.7] text-text-primary">{children}</div>
+    <div className="self-start max-w-[86%] font-display text-[14px] leading-[1.7] text-text-primary">{children}</div>
   );
 }
 
@@ -131,7 +131,7 @@ export default function Landing() {
           <h1 className="font-display text-[34px] sm:text-[44px] leading-[1.12] font-semibold text-text-primary">
             Hỏi tài liệu của bạn — <span className="text-brand">kèm dẫn chứng</span>.
           </h1>
-          <p className="font-reading text-[16px] leading-[1.7] text-text-secondary mt-5 max-w-[520px]">
+          <p className="font-display text-[16px] leading-[1.7] text-text-secondary mt-5 max-w-[520px]">
             Upload tài liệu, hỏi đáp bám nguồn, tóm tắt, tạo mindmap và tiếp tục hỏi bằng ngữ cảnh hội thoại.
           </p>
           <div className="flex flex-wrap gap-3 mt-7">

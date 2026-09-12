@@ -178,7 +178,7 @@ export const EnrichmentCard = memo(function EnrichmentCard({ entry }) {
       </div>
       {body && (
         <Clamp lines={5}>
-          <MdSnippet text={body} className="font-reading text-[13px] leading-[1.55] text-text-secondary" />
+          <MdSnippet text={body} className="font-display text-[13px] leading-[1.55] text-text-secondary" />
         </Clamp>
       )}
       {entry.important_facts?.length > 0 && (
@@ -264,7 +264,7 @@ export const EvidenceCard = memo(function EvidenceCard({ entry, index, onAskAbou
       ) : (
         <>
           <Clamp lines={7}>
-            <MdSnippet text={entry.text} className="font-reading text-[13px] leading-[1.55] text-text-secondary" />
+            <MdSnippet text={entry.text} className="font-display text-[13px] leading-[1.55] text-text-secondary" />
           </Clamp>
           {typeof onAskAbout === "function" && (
             <button

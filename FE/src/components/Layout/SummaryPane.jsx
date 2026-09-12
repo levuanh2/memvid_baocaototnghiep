@@ -92,7 +92,7 @@ export default function SummaryPane({ data }) {
             {rec.overview && (
               <>
                 <div className="font-mono text-[11px] uppercase tracking-[0.12em] text-text-muted mb-2">Tổng quan</div>
-                <div className="surface-card font-reading mb-4">
+                <div className="surface-card font-display mb-4">
                   <MdProse text={rec.overview} />
                 </div>
               </>
@@ -104,7 +104,7 @@ export default function SummaryPane({ data }) {
                 const refs = Array.isArray(s.chunk_refs) ? s.chunk_refs : [];
                 const daChon = selectedSummary === s.id;
                 return (
-                  <section key={s.id} className="surface-card font-reading"
+                  <section key={s.id} className="surface-card font-display"
                            style={daChon ? { borderColor: "var(--accent)" } : undefined}>
                     <h3 className="mb-2">
                       <button type="button" onClick={() => selectSummary(s.id, { source: "summary" })}
@@ -200,7 +200,7 @@ export default function SummaryPane({ data }) {
         ) : (
           <>
             <div className="font-mono text-[11px] uppercase tracking-[0.12em] text-text-muted mb-2">Bản tóm tắt</div>
-            <div className="surface-card font-reading">
+            <div className="surface-card font-display">
               <MdProse text={rec.legacyMd || "Không có tóm tắt."} />
             </div>
           </>

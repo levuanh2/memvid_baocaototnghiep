@@ -96,7 +96,7 @@ function CitationCard({ chunkId, text, loading, error, index, sourceLabel, headi
         <p className="text-[12.5px] text-text-muted italic">Không tải được trích đoạn này.</p>
       ) : (
         <Clamp lines={7}>
-          <MdSnippet text={text} className="font-reading text-[13px] leading-[1.55] text-text-secondary" />
+          <MdSnippet text={text} className="font-display text-[13px] leading-[1.55] text-text-secondary" />
         </Clamp>
       )}
     </div>
@@ -238,7 +238,7 @@ export default function KnowledgeInspector({
     <div className="px-4 pb-3.5">
       {node.note && (
         <div className="pt-3">
-          <MdSnippet text={node.note} className="font-reading text-[13.5px] leading-[1.6] text-text-secondary" />
+          <MdSnippet text={node.note} className="font-display text-[13.5px] leading-[1.6] text-text-secondary" />
         </div>
       )}
 

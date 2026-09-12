@@ -708,7 +708,7 @@ export default function SidebarRight({
                     </div>
                     {c.snippet && (
                       <MdSnippet text={c.snippet}
-                        className="font-reading text-[13px] leading-[1.55] text-text-secondary line-clamp-4" />
+                        className="font-display text-[13px] leading-[1.55] text-text-secondary line-clamp-4" />
                     )}
                   </div>
                 );
