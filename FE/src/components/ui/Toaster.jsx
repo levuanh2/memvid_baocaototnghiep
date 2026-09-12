@@ -41,7 +41,7 @@ export default function Toaster() {
       {items.map((t) => (
         <div key={t.id} role={t.type === "error" ? "alert" : "status"}
           onClick={() => dismissToast(t.id)}
-          className="cursor-pointer rounded-[8px] border px-3 py-2 text-[13px]"
+          className="cursor-pointer rounded-control border px-3 py-2 text-[13px]"
           style={{
             background: "var(--bg-card)", borderColor: "var(--border-strong)",
             boxShadow: "var(--shadow-card-hover)", color: "var(--text-primary)",

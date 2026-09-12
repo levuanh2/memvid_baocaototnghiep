@@ -251,7 +251,7 @@ export default function StudyCard({
           {menuMo && (
             <>
               <div className="fixed inset-0 z-10" onClick={() => setMenuMo(false)} />
-              <div className="absolute right-0 top-8 z-20 min-w-[170px] rounded-[8px] py-1 shadow-lg"
+              <div className="absolute right-0 top-8 z-20 min-w-[170px] rounded-[8px] py-1 shadow-card-hover"
                    style={{ background: "var(--bg-card)", border: "1px solid var(--border-color)" }}>
                 {[
                   ["Đổi tên", "Pencil", () => onDoiTen(doc.document_id)],

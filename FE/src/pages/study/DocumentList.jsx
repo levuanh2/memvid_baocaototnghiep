@@ -478,7 +478,7 @@ export default function DocumentList() {
           {moBangLoc && (
             <>
               <div className="fixed inset-0 z-10" onClick={() => setMoBangLoc(false)} />
-              <div className="absolute right-0 top-10 z-20 w-[230px] rounded-[8px] p-3 shadow-lg"
+              <div className="absolute right-0 top-10 z-20 w-[230px] rounded-[8px] p-3 shadow-card-hover"
                    style={{ background: "var(--bg-card)", border: "1px solid var(--border-color)" }}>
                 {NHOM_LOC.map(([nhom, mucLoc]) => (
                   <div key={nhom} className="mb-2.5 last:mb-0">

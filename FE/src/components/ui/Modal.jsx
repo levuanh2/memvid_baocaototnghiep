@@ -71,8 +71,8 @@ export default function Modal({
         ref={dialogRef}
         tabIndex={-1}
         onKeyDown={bayTab}
-        className="relative flex flex-col w-full max-h-[90vh] rounded-[10px] border overflow-hidden animate-fadeUp"
-        style={{ maxWidth, background: "var(--bg-card)", borderColor: "var(--border-strong)", boxShadow: "var(--shadow-card-hover)", outline: "none" }}
+        className="relative flex flex-col w-full max-h-[90vh] rounded-control border overflow-hidden animate-fadeIn"
+        style={{ maxWidth, background: "var(--bg-card)", borderColor: "var(--border-strong)", outline: "none" }}
       >
         {(title || onClose) && (
           <div className="flex items-center gap-3 px-5 py-3.5 border-b flex-shrink-0" style={{ borderColor: "var(--border-color)" }}>

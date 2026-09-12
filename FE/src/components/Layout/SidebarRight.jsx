@@ -671,7 +671,7 @@ export default function SidebarRight({
       </div>
 
       {rightView === "tutor" ? (
-        <div className={`flex-1 min-h-0 overflow-y-auto co-the-cuon-them ${tutorFloating ? "md:m-2.5 md:rounded-[12px] md:shadow-lg md:border md:border-border" : ""}`}>
+        <div className={`flex-1 min-h-0 overflow-y-auto co-the-cuon-them ${tutorFloating ? "md:m-2.5 md:rounded-[12px] md:shadow-card-hover md:border md:border-border" : ""}`}>
           <TutorPanel askDirect={askDirect} openArtifact={openArtifact} memory={tutorMemory} />
         </div>
       ) : (

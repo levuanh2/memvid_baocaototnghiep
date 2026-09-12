@@ -67,7 +67,7 @@ export default function BulkBar({ so, boSuuTap, onHanhDong, onXoaChon, dangChay 
             <>
               <div className="fixed inset-0 z-10" onClick={() => setMoChuyen(false)} />
               <div className="absolute left-0 top-9 z-20 min-w-[180px] max-h-[240px] overflow-y-auto
-                              rounded-[8px] py-1 shadow-lg"
+                              rounded-[8px] py-1 shadow-card-hover"
                    style={{ background: "var(--bg-card)", border: "1px solid var(--border-color)" }}>
                 <button type="button"
                         onClick={() => chay("move_collection", { collectionId: null })}
@@ -102,7 +102,7 @@ export default function BulkBar({ so, boSuuTap, onHanhDong, onXoaChon, dangChay 
           {moThe && (
             <>
               <div className="fixed inset-0 z-10" onClick={() => setMoThe(null)} />
-              <div className="absolute left-0 top-9 z-20 w-[240px] rounded-[8px] p-2.5 shadow-lg"
+              <div className="absolute left-0 top-9 z-20 w-[240px] rounded-[8px] p-2.5 shadow-card-hover"
                    style={{ background: "var(--bg-card)", border: "1px solid var(--border-color)" }}>
                 <div className="flex gap-1 mb-2">
                   {[["add_tags", "Gắn"], ["remove_tags", "Bỏ"]].map(([k, n]) => (

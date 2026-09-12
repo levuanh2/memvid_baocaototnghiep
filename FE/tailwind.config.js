@@ -83,6 +83,12 @@ module.exports = {
           "0%": { opacity: "0", transform: "translateY(12px)" },
           "100%": { opacity: "1", transform: "translateY(0)" },
         },
+        // Wave 2: Modal's open animation — opacity only, no translate, inside
+        // the redesign's ~180ms motion ceiling (was fadeUp's 450ms/12px).
+        fadeIn: {
+          "0%": { opacity: "0" },
+          "100%": { opacity: "1" },
+        },
         pulse: {
           "0%,100%": { opacity: "1" },
           "50%": { opacity: "0.4" },
@@ -90,6 +96,7 @@ module.exports = {
       },
       animation: {
         fadeUp: "fadeUp 450ms ease-out both",
+        fadeIn: "fadeIn 180ms ease-out both",
         pulseSoft: "pulse 1.3s ease-in-out infinite",
       },
       boxShadow: {

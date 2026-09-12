@@ -650,7 +650,7 @@ export default function ChatArea({ selectedSources, sources = [], onEvidence, hi
           {menuOpen && (
             <>
               <div className="fixed inset-0 z-10" onClick={() => setMenuOpen(false)} aria-hidden />
-              <div className="absolute right-0 top-9 z-20 min-w-[190px] rounded-[8px] border py-1 shadow-lg"
+              <div className="absolute right-0 top-9 z-20 min-w-[190px] rounded-[8px] border py-1 shadow-card-hover"
                 style={{ borderColor: "var(--border-color)", background: "var(--bg-elevated)" }}>
                 <button onClick={handleClearContext} className="menu-item">
                   <Icon name="Eraser" size={14} /> Xóa ngữ cảnh
