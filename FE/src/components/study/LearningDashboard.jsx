@@ -174,7 +174,7 @@ function TieuDeNho({ children }) {
  * bằng độ dài thanh (màu/độ dài không bao giờ là kênh thông tin duy nhất). */
 function ThanhTienDo({ nhan, phanTram, phu }) {
   return (
-    <div className="rounded-[7px] p-2.5" style={{ background: "var(--bg-card)", border: "1px solid var(--border)" }}>
+    <div className="rounded-[7px] p-2.5" style={{ background: "var(--bg-card)", border: "1px solid var(--border-color)" }}>
       <div className="flex items-baseline justify-between mb-1.5">
         <span className="text-[11px] text-text-muted">{nhan}</span>
         <span className="font-display text-[15px] font-semibold text-text-primary">{phanTram}%</span>
@@ -192,7 +192,7 @@ function ThanhTienDo({ nhan, phanTram, phu }) {
 
 function MiniDanhSach({ icon, tieuDe, children }) {
   return (
-    <div className="rounded-[7px] p-2.5" style={{ background: "var(--bg-card)", border: "1px solid var(--border)" }}>
+    <div className="rounded-[7px] p-2.5" style={{ background: "var(--bg-card)", border: "1px solid var(--border-color)" }}>
       <div className="flex items-center gap-1.5 text-[11px] text-text-muted mb-1.5">
         <Icon name={icon} size={12} /> {tieuDe}
       </div>
@@ -203,7 +203,7 @@ function MiniDanhSach({ icon, tieuDe, children }) {
 
 function CotOnTap({ nhan, docs, onMo, nhan_mau }) {
   return (
-    <div className="rounded-[7px] p-2.5" style={{ background: "var(--bg-card)", border: "1px solid var(--border)" }}>
+    <div className="rounded-[7px] p-2.5" style={{ background: "var(--bg-card)", border: "1px solid var(--border-color)" }}>
       <div className="text-[11px] font-medium mb-1.5" style={{ color: nhan_mau }}>{nhan} ({docs.length})</div>
       {docs.length === 0 ? (
         <span className="text-[12px] text-text-muted">—</span>
@@ -233,7 +233,7 @@ function HanhTrinh({ doc }) {
             className="inline-flex items-center gap-1 rounded-full px-2 py-[3px] text-[11px]"
             style={c.dat
               ? { background: "color-mix(in srgb, var(--accent) 14%, transparent)", color: "var(--accent)" }
-              : { color: "var(--text-muted)", border: "1px solid var(--border)" }}
+              : { color: "var(--text-muted)", border: "1px solid var(--border-color)" }}
           >
             {c.dat && <Icon name="Check" size={10} strokeWidth={2.5} />}
             {c.nhan}

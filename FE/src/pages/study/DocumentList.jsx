@@ -465,7 +465,7 @@ export default function DocumentList() {
         <select id="che-do-sap" value={cheDoSap} onChange={(e) => setCheDoSap(e.target.value)}
                 className="rounded-[7px] px-2.5 py-2 text-[13px] outline-none"
                 style={{ background: "var(--bg-card)", color: "var(--text-primary)",
-                         border: "1px solid var(--border)" }}>
+                         border: "1px solid var(--border-color)" }}>
           {CHE_DO_SAP.map(([v, n]) => <option key={v} value={v}>{n}</option>)}
         </select>
 
@@ -479,7 +479,7 @@ export default function DocumentList() {
             <>
               <div className="fixed inset-0 z-10" onClick={() => setMoBangLoc(false)} />
               <div className="absolute right-0 top-10 z-20 w-[230px] rounded-[8px] p-3 shadow-lg"
-                   style={{ background: "var(--bg-card)", border: "1px solid var(--border)" }}>
+                   style={{ background: "var(--bg-card)", border: "1px solid var(--border-color)" }}>
                 {NHOM_LOC.map(([nhom, mucLoc]) => (
                   <div key={nhom} className="mb-2.5 last:mb-0">
                     <div className="font-mono text-[10px] uppercase tracking-[0.14em] text-text-muted mb-1">

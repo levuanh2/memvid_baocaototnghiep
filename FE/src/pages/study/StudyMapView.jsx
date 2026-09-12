@@ -37,8 +37,8 @@ const SCALE_MAX = 2;
 // niệm > ví dụ), nên nét vẽ mã hoá đúng tầng đó chứ không tô cho đẹp: càng gần
 // gốc càng đậm và càng to.
 const MARK = {
-  root:    { r: 9, fill: "var(--brand)",       stroke: "var(--brand)",        text: 15.5, weight: 600 },
-  section: { r: 7, fill: "var(--bg-card)",     stroke: "var(--brand)",        text: 14,   weight: 600 },
+  root:    { r: 9, fill: "var(--accent)",       stroke: "var(--accent)",        text: 15.5, weight: 600 },
+  section: { r: 7, fill: "var(--bg-card)",     stroke: "var(--accent)",        text: 14,   weight: 600 },
   concept: { r: 5, fill: "var(--bg-card)",     stroke: "var(--text-muted)",   text: 13,   weight: 500 },
   example: { r: 3, fill: "var(--bg-base)",     stroke: "var(--border-color)", text: 12,   weight: 400 },
 };
@@ -356,8 +356,8 @@ export default function StudyMapView() {
         <g onClick={onPick} style={{ cursor: "pointer", opacity: daMo ? 1 : 0.22 }}>
           <circle
             r={m.r}
-            fill={isSel ? "var(--brand)" : m.fill}
-            stroke={isActiveMatch ? "var(--accent)" : isSel ? "var(--brand)" : m.stroke}
+            fill={isSel ? "var(--accent)" : m.fill}
+            stroke={isActiveMatch ? "var(--accent)" : isSel ? "var(--accent)" : m.stroke}
             strokeWidth={isActiveMatch ? 3.5 : isSel ? 3 : 1.6}
           />
           {/* Khớp tìm kiếm (không phải kết quả đang chọn): vòng ngoài mảnh, để phân
@@ -380,7 +380,7 @@ export default function StudyMapView() {
               fontSize: m.text,
               fontWeight: m.weight,
               fill: "var(--text-primary)",
-              fontFamily: "var(--font-display, Spectral), serif",
+              fontFamily: "Spectral, Georgia, serif", // matches tailwind.config.js's font-display stack directly — `--font-display` was never a declared CSS var
               // Viền cùng màu nền vẽ TRƯỚC chữ = quầng che nét link cắt ngang.
               paintOrder: "stroke",
               stroke: "var(--bg-card)",

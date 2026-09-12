@@ -25,7 +25,7 @@ function MucLoc({ nhan, so, dangChon, mau, icon, onClick, onSua }) {
         aria-pressed={dangChon}
         className="flex-1 min-w-0 flex items-center gap-2 rounded-[6px] px-2 py-1.5 text-left
                    transition-theme hover:bg-surface-elevated"
-        style={dangChon ? { background: "var(--surface-elevated)" } : undefined}
+        style={dangChon ? { background: "var(--bg-elevated)" } : undefined}
       >
         {mau
           ? <span aria-hidden className="w-2.5 h-2.5 rounded-full shrink-0"
@@ -77,7 +77,7 @@ function FormBoSuuTap({ ban_dau, onLuu, onHuy, onXoa }) {
 
   return (
     <div className="px-2 py-2 rounded-[7px] mb-2"
-         style={{ background: "var(--bg-card)", border: "1px solid var(--border)" }}>
+         style={{ background: "var(--bg-card)", border: "1px solid var(--border-color)" }}>
       <input
         autoFocus value={ten}
         onChange={(e) => { setTen(e.target.value); setLoi(null); }}

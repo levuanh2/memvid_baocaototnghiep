@@ -23,7 +23,7 @@ import { useStudyContext } from "../../study/useStudyContext";
  */
 
 const MAU_MASTERY = {
-  mastered: { bg: "var(--ok-bg, rgba(34,150,94,0.12))", fg: "var(--ok, #22965e)" },
+  mastered: { bg: "var(--ok-bg)", fg: "var(--ok)" },
   critical_gap: { bg: "rgba(220,38,38,0.10)", fg: "var(--err, #dc2626)" },
 };
 
@@ -111,7 +111,7 @@ export default function KnowledgePanel({
           {sanSang.phanTram > 0 && (
             <span className="self-start inline-flex items-center gap-1.5 rounded-full px-2 py-[3px] text-[11px]"
                   style={{ background: "var(--bg-card)", color: "var(--text-secondary)",
-                           border: "1px solid var(--border)" }}>
+                           border: "1px solid var(--border-color)" }}>
               {sanSang.nhan} · {sanSang.phanTram}%
             </span>
           )}
@@ -133,7 +133,7 @@ export default function KnowledgePanel({
                     style={{
                       background: mau ? mau.bg : "var(--bg-card)",
                       color: mau ? mau.fg : "var(--text-secondary)",
-                      border: daChon ? "1.5px solid var(--accent)" : "1px solid var(--border)",
+                      border: daChon ? "1.5px solid var(--accent)" : "1px solid var(--border-color)",
                     }}
                   >
                     {t.name}
@@ -166,7 +166,7 @@ export default function KnowledgePanel({
                         style={{ background: "var(--bg-card)",
                                  color: selectedEntity === e ? "var(--accent)" : "var(--text-muted)",
                                  border: selectedEntity === e
-                                   ? "1.5px solid var(--accent)" : "1px solid var(--border)" }}>
+                                   ? "1.5px solid var(--accent)" : "1px solid var(--border-color)" }}>
                   <Icon name="Tag" size={10} /> {e}
                 </button>
               ))}
@@ -183,7 +183,7 @@ export default function KnowledgePanel({
             {lienQuan.map(({ doc: d, reason }) => (
               <li key={d.document_id}
                   className="flex items-center justify-between gap-2 rounded-[7px] px-2.5 py-1.5"
-                  style={{ background: "var(--bg-card)", border: "1px solid var(--border)" }}>
+                  style={{ background: "var(--bg-card)", border: "1px solid var(--border-color)" }}>
                 <div className="min-w-0">
                   <div className="truncate text-[12.5px] text-text-primary">{tenHienThi(d)}</div>
                   <div className="truncate text-[10.5px] text-text-muted">
@@ -236,7 +236,7 @@ export default function KnowledgePanel({
                       <button
                         key={q.id} type="button"
                         className="flex items-start gap-2 rounded-[7px] px-2.5 py-1.5 text-left"
-                        style={{ background: "var(--bg-card)", border: "1px solid var(--border)" }}
+                        style={{ background: "var(--bg-card)", border: "1px solid var(--border-color)" }}
                         onClick={() => {
                           // Phase 4A.3: "nhớ" câu hỏi vừa bấm lên Study Context TRƯỚC khi
                           // điều hướng — id sống qua cả lượt đổi route sang Workspace.
@@ -271,7 +271,7 @@ export default function KnowledgePanel({
       <section className="flex flex-col gap-2">
         <h4 className={TIEU_DE}>Tóm tắt AI</h4>
         <div className="rounded-[7px] px-2.5 py-2 flex flex-col gap-1.5"
-             style={{ background: "var(--bg-card)", border: "1px solid var(--border)" }}>
+             style={{ background: "var(--bg-card)", border: "1px solid var(--border-color)" }}>
           {doc?.ai?.summary?.preview ? (
             <>
               <p className="text-[12.5px] leading-[1.5] text-text-secondary line-clamp-3">
@@ -309,7 +309,7 @@ export default function KnowledgePanel({
         <section className="flex flex-col gap-2">
           <h4 className={TIEU_DE}>Tiếp tục học</h4>
           <div className="flex items-center justify-between gap-2 rounded-[7px] px-2.5 py-2"
-               style={{ background: "var(--bg-card)", border: "1px solid var(--border)" }}>
+               style={{ background: "var(--bg-card)", border: "1px solid var(--border-color)" }}>
             <span className="text-[12px] text-text-secondary truncate">
               {cauHoiDangChon ? `Câu hỏi: ${cauHoiDangChon.text}` : (
                 <>{tiepTuc.nhanBeMat} · mở {tiepTuc.nhanThoiGian}</>

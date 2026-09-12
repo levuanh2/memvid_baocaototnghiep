@@ -68,7 +68,7 @@ export default function BulkBar({ so, boSuuTap, onHanhDong, onXoaChon, dangChay 
               <div className="fixed inset-0 z-10" onClick={() => setMoChuyen(false)} />
               <div className="absolute left-0 top-9 z-20 min-w-[180px] max-h-[240px] overflow-y-auto
                               rounded-[8px] py-1 shadow-lg"
-                   style={{ background: "var(--bg-card)", border: "1px solid var(--border)" }}>
+                   style={{ background: "var(--bg-card)", border: "1px solid var(--border-color)" }}>
                 <button type="button"
                         onClick={() => chay("move_collection", { collectionId: null })}
                         className="w-full px-3 py-1.5 text-left text-[12.5px] text-text-secondary
@@ -103,7 +103,7 @@ export default function BulkBar({ so, boSuuTap, onHanhDong, onXoaChon, dangChay 
             <>
               <div className="fixed inset-0 z-10" onClick={() => setMoThe(null)} />
               <div className="absolute left-0 top-9 z-20 w-[240px] rounded-[8px] p-2.5 shadow-lg"
-                   style={{ background: "var(--bg-card)", border: "1px solid var(--border)" }}>
+                   style={{ background: "var(--bg-card)", border: "1px solid var(--border-color)" }}>
                 <div className="flex gap-1 mb-2">
                   {[["add_tags", "Gắn"], ["remove_tags", "Bỏ"]].map(([k, n]) => (
                     <button key={k} type="button" onClick={() => setMoThe(k)}
@@ -125,7 +125,7 @@ export default function BulkBar({ so, boSuuTap, onHanhDong, onXoaChon, dangChay 
                   aria-label="Thẻ, cách nhau bằng dấu phẩy"
                   className="w-full rounded-[6px] px-2 py-1 text-[12.5px] outline-none"
                   style={{ background: "var(--bg-sidebar)", color: "var(--text-primary)",
-                           border: "1px solid var(--border)" }}
+                           border: "1px solid var(--border-color)" }}
                 />
                 <p className="mt-1 text-[11px] text-text-muted">
                   Cách nhau bằng dấu phẩy. Enter để áp dụng.

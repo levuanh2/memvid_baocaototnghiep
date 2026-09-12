@@ -37,7 +37,11 @@
     --slate:         #5C6B7A;
 
     /* Semantic status */
-    --ok:   #3E6B57;   /* indexed */
+    --ok:    #3E6B57;   /* indexed */
+    --ok-bg: rgba(62,107,87,0.12);   /* Wave 0: was an undeclared var(--ok-bg) everywhere, silently
+                                        falling back to rgba(34,150,94,0.12) — a DIFFERENT, brighter
+                                        green than --ok itself. Declared for real, derived from --ok's
+                                        own rgb so the badge background actually matches the badge text. */
     --warn: #B5821F;   /* processing */
     --err:  #B23A2E;   /* error (also the seal) */
 
@@ -75,7 +79,8 @@
     --ink-rgb:       236 231 219;
     --slate:         #8FA0B3;
 
-    --ok:   #5BA888;
+    --ok:    #5BA888;
+    --ok-bg: rgba(91,168,136,0.14);
     --warn: #D6A547;
     --err:  #D86A53;
 
@@ -439,7 +444,7 @@
 /* Trích đoạn nguồn trong bảng chi tiết sơ đồ — cùng ngôn ngữ "dẫn chứng" với
    .cite-chip ở phần chat: lề trái là vạch mực, không phải khung viền. */
 .cite-block {
-  border-left: 2px solid var(--brand);
+  border-left: 2px solid var(--accent);
   padding: 0.15rem 0 0.15rem 0.7rem;
 }
 

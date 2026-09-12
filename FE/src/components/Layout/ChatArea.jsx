@@ -667,7 +667,7 @@ export default function ChatArea({ selectedSources, sources = [], onEvidence, hi
       {/* Transient feedback (New chat / Clear context / Delete history) */}
       {notice && (
         <div className="px-5 sm:px-8 py-1.5 text-[12px] flex items-center gap-2 border-b flex-shrink-0"
-          style={{ borderColor: "var(--border-color)", background: "color-mix(in srgb, var(--brand) 8%, transparent)", color: "var(--text-secondary)" }}>
+          style={{ borderColor: "var(--border-color)", background: "color-mix(in srgb, var(--accent) 8%, transparent)", color: "var(--text-secondary)" }}>
           <Icon name="Info" size={13} className="text-brand" />
           <span>{notice}</span>
         </div>
@@ -902,7 +902,7 @@ export default function ChatArea({ selectedSources, sources = [], onEvidence, hi
         @media (min-width: 768px) { .md\\:hidden { display: none !important; } }
         .menu-item { display: flex; align-items: center; gap: 8px; width: 100%; padding: 7px 12px;
           font-size: 13px; color: var(--text-primary); background: transparent; text-align: left; }
-        .menu-item:hover { background: color-mix(in srgb, var(--brand) 10%, transparent); }
+        .menu-item:hover { background: color-mix(in srgb, var(--accent) 10%, transparent); }
         .menu-item--danger { color: var(--err); }
         .menu-item--danger:hover { background: color-mix(in srgb, var(--err) 12%, transparent); }
       `}</style>

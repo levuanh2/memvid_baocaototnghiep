@@ -25,7 +25,7 @@ import KnowledgePanel from "./KnowledgePanel";
  */
 
 const MAU_CHIP = {
-  [READY]: { bg: "var(--ok-bg, rgba(34,150,94,0.12))", fg: "var(--ok, #22965e)" },
+  [READY]: { bg: "var(--ok-bg)", fg: "var(--ok)" },
   [GENERATING]: { bg: "rgba(120,120,120,0.14)", fg: "var(--text-secondary)" },
 };
 
@@ -39,7 +39,7 @@ function ChipAi({ chip }) {
       style={mau
         ? { background: mau.bg, color: mau.fg }
         : { background: "transparent", color: "var(--text-muted)",
-            border: "1px solid var(--border)" }}
+            border: "1px solid var(--border-color)" }}
     >
       {sanSang && <Icon name="Check" size={11} strokeWidth={2.5} />}
       {dangChay && <Icon name="Clock" size={11} />}
@@ -226,7 +226,7 @@ export default function StudyCard({
               <span className="mt-1 inline-flex items-center gap-1.5 rounded-full px-2 py-[2px]
                                text-[11px] max-w-full"
                     style={{ background: "var(--bg-sidebar)", color: "var(--text-secondary)",
-                             border: "1px solid var(--border)" }}>
+                             border: "1px solid var(--border-color)" }}>
                 <span aria-hidden className="w-2 h-2 rounded-full shrink-0"
                       style={{ background: hexMau(boSuuTap.color) }} />
                 <span className="truncate">{boSuuTap.name}</span>
@@ -252,7 +252,7 @@ export default function StudyCard({
             <>
               <div className="fixed inset-0 z-10" onClick={() => setMenuMo(false)} />
               <div className="absolute right-0 top-8 z-20 min-w-[170px] rounded-[8px] py-1 shadow-lg"
-                   style={{ background: "var(--bg-card)", border: "1px solid var(--border)" }}>
+                   style={{ background: "var(--bg-card)", border: "1px solid var(--border-color)" }}>
                 {[
                   ["Đổi tên", "Pencil", () => onDoiTen(doc.document_id)],
                   [doc.favorite ? "Bỏ yêu thích" : "Yêu thích", "Star",
@@ -319,7 +319,7 @@ export default function StudyCard({
             <span key={t}
                   className="inline-flex items-center gap-1 rounded-full px-2 py-[2px] text-[11px]"
                   style={{ background: "var(--bg-sidebar)", color: "var(--text-secondary)",
-                           border: "1px solid var(--border)" }}>
+                           border: "1px solid var(--border-color)" }}>
               <Icon name="Tag" size={10} /> {t}
             </span>
           ))}
