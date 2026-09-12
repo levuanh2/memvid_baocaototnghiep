@@ -1,4 +1,12 @@
-// Viewer mind-elixir — thay ReactFlow/ELK. Overlay fullscreen giữ từ v2.
+// Viewer mind-elixir — thay ReactFlow/ELK.
+//
+// Workspace architecture (approved audit) — this component is now Toolbar +
+// Canvas ONLY. It no longer owns a fullscreen overlay, the Knowledge Inspector,
+// or any node-selection state: WorkspaceContainer mounts this as the "MindMap"
+// tab's content, calls `useMindMapController()` ONCE, and hands this component
+// only the pieces it still legitimately owns (the mind-elixir instance
+// lifecycle) via the `controller` prop. Inspector reads the SAME controller
+// from a sibling slot — one controller, one Inspector, never duplicated.
 import { useEffect, useRef, useState, useCallback } from "react";
 import MindElixir from "mind-elixir";
 // BẮT BUỘC: toàn bộ layout của mind-elixir (me-nodes flex, me-tpc block, gaps)
@@ -9,7 +17,6 @@ import { recordToMindElixir, mindElixirToRecord } from "../../utils/mindElixirAd
 import { nextScale, formatZoom, viewportKeyAction, ZOOM_STEP } from "../../utils/mindmapViewport";
 import { updateMindmap } from "../../utils/api";
 import { toast } from "../ui/Toaster";
-import EvidenceDrawer from "./EvidenceDrawer";
 import { Icon } from "../ui/Icon";
 import Spinner from "../ui/Spinner";
 import "./mindmap.css";
@@ -56,11 +63,14 @@ export const THEME = {
   },
 };
 
-export default function MindElixirView({ data, onClose, onRegenerate, regenerating }) {
+// `data`: the mindmap record + generation-status fields SidebarRight already
+// computes (generating/progress/onCancel/onSaved/onDirtyChange) — UNCHANGED
+// shape from before this refactor, just no longer wrapped in a portal.
+// `controller`: the ONE `useMindMapController()` instance, owned by whoever
+// renders both this component and KnowledgeInspector (WorkspaceContainer).
+export default function MindElixirView({ data, onRegenerate, regenerating, controller }) {
   const containerRef = useRef(null);
   const mindRef = useRef(null);
-  const sidecarRef = useRef(new Map());
-  const [selected, setSelected] = useState(null);   // node cho EvidenceDrawer
   const [showRelations, setShowRelations] = useState(true);
   const [dirty, setDirty] = useState(false);
   const [saving, setSaving] = useState(false);
@@ -73,22 +83,21 @@ export default function MindElixirView({ data, onClose, onRegenerate, regenerati
   const degraded = Boolean(data?.generator?.degraded);
   const missing = data?.generator?.missing || [];
   // "Tạo lại" đang chạy nền (SidebarRight bơm generating/progress/onCancel vào
-  // data). Overlay này che luôn progress chip của sidebar → phải có banner +
-  // nút Huỷ NGAY TRONG viewer, giữ parity với MindmapView cũ.
+  // data) — banner + nút Huỷ ngay trong toolbar.
   const generating = Boolean(data?.generating);
 
-  // (re)init khi đổi record
+  // (re)init khi đổi record — KHÔNG còn phụ thuộc mount/unmount của một modal:
+  // mode switch (Chat ⇄ MindMap) không unmount component này nữa (WorkspaceContainer
+  // giữ cả ba mode luôn mounted), nên đây là NƠI DUY NHẤT mind-elixir tái tạo,
+  // và chỉ khi `data?.id` thật sự đổi (tài liệu/mindmap khác) — không phải khi
+  // chuyển tab.
   useEffect(() => {
     if (!containerRef.current || !data) return;
-    // Record mới (vd tạo lại xong) → xoá sạch state phiên cũ, nếu không badge
-    // "chưa lưu" và EvidenceDrawer trỏ node cũ sống sót qua re-init (codex #8).
     setDirty(false);
     setSaving(false);
-    setSelected(null);
     setZoom(1);
-    setErrorMsg(null);   // record mới → lỗi của phiên cũ không được sống sót qua re-init
+    setErrorMsg(null);
     const { mindData, sidecar } = recordToMindElixir(data);
-    sidecarRef.current = sidecar;
     const mind = new MindElixir({
       el: containerRef.current,
       direction: MindElixir.SIDE,
@@ -104,6 +113,7 @@ export default function MindElixirView({ data, onClose, onRegenerate, regenerati
     });
     mind.init(mindData);
     mindRef.current = mind;
+    controller.registerMindInstance(mind, sidecar);
     setZoom(mind.scaleVal || 1);
 
     // Readout thu phóng. Thư viện fire "scale" (number) ở MỌI đường đổi scale —
@@ -112,28 +122,20 @@ export default function MindElixirView({ data, onClose, onRegenerate, regenerati
     // KHÔNG kẹp giá trị ở đây: scaleFit() không đọc scaleMin nên map rất lớn có thể
     // xuống dưới 0.2; kẹp readout sẽ hiện số SAI so với map đang vẽ.
     mind.bus.addListener("scale", (v) => setZoom(v));
-    mind.bus.addListener("selectNodes", (nodes) => {
-      const n = nodes?.[0];
-      if (!n) return;
-      const side = sidecarRef.current.get(n.id);
-      setSelected({ id: n.id, title: n.topic, note: side?.note || "", chunkRefs: side?.chunkRefs || [] });
-    });
+    mind.bus.addListener("selectNodes", (nodes) => controller.onNodeSelected(nodes));
     mind.bus.addListener("operation", () => setDirty(true));
-
-    // PR#8: record mới swap vào (data.id đổi) = phiên chỉnh sửa cũ kết thúc —
-    // reset dirty để trạng thái không rò sang map mới.
-    setDirty(false);
 
     return () => {
       // mind-elixir's own destroy() unregisters the bus listeners above AND the
       // container keydown handler it wires internally (init() -> On()); without
-      // it, re-init on a data.id change (e.g. regenerate while the modal stays
-      // open) would leave the old instance's listeners attached to the same
-      // container DOM node, stacking duplicate handlers on every re-init.
+      // it, re-init on a data.id change (e.g. regenerate) would leave the old
+      // instance's listeners attached to the same container DOM node, stacking
+      // duplicate handlers on every re-init.
       mindRef.current?.destroy?.();
       mindRef.current = null;
       containerRef.current && (containerRef.current.innerHTML = "");
     };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [data?.id]);
 
   // PR#8: thread dirty lên SidebarRight (data.onDirtyChange) — parent cần biết
@@ -155,7 +157,7 @@ export default function MindElixirView({ data, onClose, onRegenerate, regenerati
     setSaving(true);
     setErrorMsg(null);   // thử lại → bỏ lỗi lần trước, đừng để banner cũ gây hiểu nhầm
     try {
-      const record = mindElixirToRecord(mind.getData(), sidecarRef.current, data);
+      const record = mindElixirToRecord(mind.getData(), controller.sidecarRef.current, data);
       const saved = await updateMindmap(data.id, record);
       setDirty(false);
       toast("Đã lưu sơ đồ", { type: "success" });
@@ -221,17 +223,15 @@ export default function MindElixirView({ data, onClose, onRegenerate, regenerati
     }
   };
 
-  // Esc đóng (confirm khi dirty — Task 8 nối)
-  const requestClose = useCallback(() => {
-    if (dirty && !window.confirm("Có thay đổi chưa lưu. Đóng và bỏ thay đổi?")) return;
-    onClose?.();
-  }, [dirty, onClose]);
+  // Workspace architecture — there's no more "close" (a workspace tab has
+  // nothing to dismiss to); only zoom/view shortcuts remain here. Regenerate's
+  // own dirty-confirm (SidebarRight's `confirmRegenerateIfDirty`) still guards
+  // the one real data-loss risk, unchanged.
   useEffect(() => {
     const onKey = (e) => {
-      if (e.key === "Escape") { requestClose(); return; }
       // Đang gõ tên node thì editor của mind-elixir đã stopPropagation() mọi keydown
       // (verified dist) nên listener window này vốn không nhận được — guard vẫn giữ để
-      // chặn các ô nhập khác (drawer/form) và không phụ thuộc chi tiết nội bộ thư viện.
+      // chặn các ô nhập khác và không phụ thuộc chi tiết nội bộ thư viện.
       const ae = document.activeElement;
       const isEditing = Boolean(
         ae && (ae.isContentEditable || ae.closest?.("me-tpc") || /^(INPUT|TEXTAREA|SELECT)$/.test(ae.tagName))
@@ -246,10 +246,10 @@ export default function MindElixirView({ data, onClose, onRegenerate, regenerati
     };
     window.addEventListener("keydown", onKey);
     return () => window.removeEventListener("keydown", onKey);
-  }, [requestClose, zoomBy, resetView, fitView]);
+  }, [zoomBy, resetView, fitView]);
 
   return (
-    <div className="fixed inset-0 z-[1000] flex flex-col" style={{ background: "var(--bg-base)" }}>
+    <div className="h-full w-full flex flex-col overflow-hidden" style={{ background: "var(--bg-base)" }}>
       {/* Toolbar — chrome Phòng đọc: kicker mono + tiêu đề Spectral, control là icon-btn */}
       <div className="flex flex-wrap items-center gap-2 px-3 py-2 border-b flex-shrink-0"
         style={{ borderColor: "var(--border-color)", background: "var(--bg-sidebar)" }}>
@@ -307,9 +307,6 @@ export default function MindElixirView({ data, onClose, onRegenerate, regenerati
             {saving ? "Đang lưu…" : "Lưu"}
           </button>
         )}
-        <button onClick={requestClose} aria-label="Đóng" className="p-1.5 rounded hover:bg-[var(--bg-hover)]">
-          <Icon name="X" size={16} />
-        </button>
       </div>
       {/* Error banner — Lưu/Xuất PNG hỏng. role="alert" để screen reader đọc ngay, không
           phải chờ user mò tới. Đứng trên banner generating/degraded vì đây là thứ user
@@ -325,7 +322,7 @@ export default function MindElixirView({ data, onClose, onRegenerate, regenerati
           </button>
         </div>
       )}
-      {/* Generating banner — overlay che chip tiến độ ở sidebar nên Huỷ phải ở đây */}
+      {/* Generating banner — nút Huỷ ngay trong toolbar */}
       {generating && (
         <div className="px-3 py-1.5 text-[12px] flex items-center gap-2 border-b"
           style={{ color: "var(--text-secondary)", borderColor: "var(--border-color)", background: "var(--bg-elevated)" }}>
@@ -357,7 +354,7 @@ export default function MindElixirView({ data, onClose, onRegenerate, regenerati
           )}
         </div>
       )}
-      {/* Map + legend (legend là sibling — cleanup xoá innerHTML của container
+      {/* Canvas + legend — legend là sibling (cleanup xoá innerHTML của container
           nên không được đặt con React bên trong div ref) */}
       <div className="relative flex-1 min-h-0 overflow-hidden">
         {/* Ref target owns h/w-full (normal flow) — mind-elixir sets el.style.position
@@ -373,11 +370,6 @@ export default function MindElixirView({ data, onClose, onRegenerate, regenerati
           <span className="mm-legend-hint">kéo node → chuyển nhánh · kéo nền → di chuyển</span>
         </div>
       </div>
-      {/* Evidence drawer giữ nguyên component */}
-      {selected && (
-        <EvidenceDrawer node={selected} onClose={() => setSelected(null)}
-          generating={generating} onAskAbout={data?.onAskAbout} />
-      )}
     </div>
   );
 }

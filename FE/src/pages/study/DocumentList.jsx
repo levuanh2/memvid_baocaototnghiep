@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
-import { Link, useNavigate } from "react-router-dom";
+import { Link } from "react-router-dom";
 import StudyShell, { EmptyState } from "../../components/study/StudyShell";
 import StudyCard from "../../components/study/StudyCard";
 import AiInsightCard from "../../components/study/AiInsightCard";
@@ -12,12 +12,12 @@ import Spinner from "../../components/ui/Spinner";
 import {
   MASTERY_LABEL, bulkDocuments, createCollection, deleteCollection, formatScore,
   getLibrary, getProgressAttempts, getProgressConcepts, getProgressOverview,
-  markOpened, patchCollection, patchDocument, uploadDocument, moTaLoi,
+  patchCollection, patchDocument, uploadDocument, moTaLoi,
 } from "../../utils/studyApi";
 import { tim, loc, sapXep, chiaMuc } from "../../utils/thuVienTaiLieu";
 import { docJobDangChay } from "../../utils/trangThaiAi";
-import { duongDi } from "../../utils/tiepTucHoc";
 import { chonTaiLieuDemo, beMatDemoDauTien } from "../../utils/demoMode";
+import { useOpenSurface } from "../../study/useOpenSurface";
 import { apDungLacQuan } from "../../utils/doiTen";
 import { daDong, dongInsight } from "../../utils/aiInsight";
 import { chiMucBoSuuTap, boSuuTapCua, boSuuTapChoThanhBen, theChoThanhBen }
@@ -73,7 +73,7 @@ function SectionTitle({ children, dem }) {
 }
 
 export default function DocumentList() {
-  const navigate = useNavigate();
+  const moTheoDoi = useOpenSurface();
   const fileRef = useRef(null);
 
   const [documents, setDocuments] = useState([]);
@@ -164,17 +164,15 @@ export default function DocumentList() {
   };
 
   // ── Mở một bề mặt ─────────────────────────────────────────────────────────
+  // Định tuyến + ghi mốc mở sống trong `useOpenSurface()` (Phase 7 — Command
+  // Palette dùng CHUNG hook này, đúng một chỗ định nghĩa "mở nghĩa là gì"). Còn
+  // lại ở đây CHỈ là cập nhật lạc quan cho danh sách trang này đang hiển thị.
   const moBeMat = useCallback((doc, beMat, context) => {
-    const dich = duongDi(doc, beMat, context);
-    if (!dich) return;
-    // Bắn-và-quên: ghi mốc mở KHÔNG được chặn điều hướng. Người dùng bấm để đi,
-    // không phải để chờ một lượt ghi siêu dữ liệu.
-    markOpened(doc.document_id, beMat).catch(() => {});
+    if (!moTheoDoi(doc, beMat, context)) return;
     setDocuments((prev) => prev.map((d) => d.document_id === doc.document_id
       ? { ...d, last_opened_at: new Date().toISOString(), last_workspace: beMat }
       : d));
-    navigate(dich);
-  }, [navigate]);
+  }, [moTheoDoi]);
 
   // ── Sửa siêu dữ liệu (lạc quan, có đường lùi) ─────────────────────────────
   const vaTaiLieu = useCallback(async (doc, thayDoi, hienThi) => {

@@ -1,8 +1,10 @@
-import { useState, useCallback, useEffect } from "react";
+import { useState, useCallback, useEffect, useRef, useMemo } from "react";
 import { Link, useNavigate } from "react-router-dom";
 import SidebarLeft from "./SidebarLeft";
-import ChatArea from "./ChatArea";
 import SidebarRight from "./SidebarRight";
+import WorkspaceContainer from "./WorkspaceContainer";
+import KnowledgeInspector from "../mindmap/KnowledgeInspector";
+import { useMindMapController } from "../../hooks/useMindMapController";
 import PanelSpine from "./PanelSpine";
 import PanelDivider from "./PanelDivider";
 import { usePanelLayout } from "../../hooks/usePanelLayout";
@@ -14,6 +16,7 @@ import Toaster from "../ui/Toaster";
 import AccountMenu from "./AccountMenu";
 import StudyBreadcrumb from "../study/StudyBreadcrumb";
 import { useStudyContext } from "../../study/useStudyContext";
+import { openCommandPalette } from "../../utils/commandPaletteBus";
 import { useTutorMemory } from "../../study/useTutorMemory";
 
 export default function MainLayout({ selectedSources, setSelectedSources, initialAskAbout = null }) {
@@ -24,9 +27,58 @@ export default function MainLayout({ selectedSources, setSelectedSources, initia
   const panel = usePanelLayout();
   const { isDark, setLight, setDark } = useTheme();
   const { user, logout } = useAuth();
-  const { selectedDocument } = useStudyContext();
+  const { selectedDocument, selectDocument } = useStudyContext();
   const tutorMemory = useTutorMemory();
   const navigate = useNavigate();
+
+  // ── Workspace architecture (approved audit) ──────────────────────────────
+  // Chat/MindMap/Summary now share this ONE central region — `workspaceMode`
+  // is pure client state, no navigation. SidebarRight keeps 100% of its own
+  // generation/polling logic (untouched) and just FORWARDS its computed data
+  // here via `onMindmapDataChange`/`onSummaryDataChange` instead of portaling
+  // a modal — see SidebarRight.jsx's two small forwarding effects.
+  const [workspaceMode, setWorkspaceMode] = useState("chat");
+  const [mindmapData, setMindmapData] = useState(null);   // { data, onRegenerate, regenerating } | null
+  const [summaryData, setSummaryData] = useState(null);   // summary record | null
+  // Auto-switch to a newly-populated tab ONCE (null → non-null), not on every
+  // later update (Save/regenerate) — those must not yank the user off Chat.
+  const hadMindmapRef = useRef(false);
+  const hadSummaryRef = useRef(false);
+  useEffect(() => {
+    if (mindmapData && !hadMindmapRef.current) setWorkspaceMode("mindmap");
+    hadMindmapRef.current = Boolean(mindmapData);
+  }, [mindmapData]);
+  useEffect(() => {
+    if (summaryData && !hadSummaryRef.current) setWorkspaceMode("summary");
+    hadSummaryRef.current = Boolean(summaryData);
+  }, [summaryData]);
+  const onSwitchToChat = useCallback(() => setWorkspaceMode("chat"), []);
+
+  // ONE controller, ONE Inspector, shared by MindElixirView (via WorkspaceContainer)
+  // and the KnowledgeInspector rendered directly below — selection state
+  // survives switching modes because it lives HERE, not inside MindElixirView.
+  const mindMapController = useMindMapController(mindmapData?.data);
+
+  // Task 3 "Open source" (Knowledge Inspector) — reuses the EXISTING Study
+  // Context selector, same call SummaryPane already makes; "closing" now
+  // means switching the Workspace back to Chat, not dismissing a modal.
+  const onInspectorOpenSource = useCallback((stem) => {
+    if (!stem) return;
+    selectDocument(stem, { source: "mindmap" });
+    setWorkspaceMode("chat");
+  }, [selectDocument]);
+  const onInspectorAskAI = useCallback((text) => {
+    mindmapData?.data?.onAskDirect?.(text);
+  }, [mindmapData]);
+
+  const inspectorProps = useMemo(() => ({
+    node: mindMapController.selected, relations: mindMapController.relations, breadcrumb: mindMapController.breadcrumb,
+    generating: Boolean(mindmapData?.data?.generating),
+    documentTitle: mindmapData?.data?.title || "",
+    sources: Array.isArray(mindmapData?.data?.sources) ? mindmapData.data.sources : [],
+    onNavigate: mindMapController.jumpTo, onAskAI: onInspectorAskAI, onOpenSource: onInspectorOpenSource,
+    nav: mindMapController.nav,
+  }), [mindMapController, mindmapData, onInspectorAskAI, onInspectorOpenSource]);
   // Đăng xuất thường giữ NGUYÊN hành vi cũ: về trang chủ, không thông báo gì.
   // Chỉ ca đăng xuất-vì-vừa-đổi-mật-khẩu mới đi tới `/login` kèm một MÃ thông báo —
   // người dùng cần thấy xác nhận rằng mật khẩu đã đổi, và cần đăng nhập lại ngay ở
@@ -166,10 +218,22 @@ export default function MainLayout({ selectedSources, setSelectedSources, initia
             <span className="hidden sm:inline">StudyMap</span>
           </Link>
 
+          {/* Mobile: search has no keyboard shortcut to fall back on — needs its own icon button. */}
+          <button onClick={openCommandPalette} className="md:hidden icon-btn w-9 h-9" aria-label="Tìm kiếm">
+            <Icon name="Search" size={18} />
+          </button>
           {/* Mobile: open right column (whichever tab — Bằng chứng/Gia sư AI — was last open) */}
           <button onClick={() => setRightOpen(true)} className="md:hidden icon-btn w-9 h-9"
                   aria-label={rightView === "tutor" ? "Mở Gia sư AI" : "Mở lề bằng chứng"}>
             <Icon name={rightView === "tutor" ? "Sparkles" : "PanelRight"} size={18} />
+          </button>
+          {/* UI/UX Polish Issue 2 — search's discoverable HOME is the Study
+              Workspace now, not buried in Library. Same global CommandPalette
+              as Ctrl+K (Issue 2 doesn't ask for a second search engine, just
+              a visible entry point reachable from here). */}
+          <button onClick={openCommandPalette} className="hidden md:inline-flex pill-action !text-[12.5px]"
+                  title="Tìm kiếm (Ctrl+K)">
+            <Icon name="Search" size={14} /> Tìm kiếm
           </button>
           {/* Gia sư AI — luôn có mặt (ẩn trên mobile để tránh chật hàng nút; Ctrl+/ vẫn mở được). */}
           <button onClick={openTutor} className="hidden md:inline-flex pill-action !text-[12.5px]"
@@ -251,16 +315,19 @@ export default function MainLayout({ selectedSources, setSelectedSources, initia
           </>
         )}
 
-        {/* ── TRANG GIỮA — Phiên đọc ── */}
+        {/* ── TRANG GIỮA — Workspace: Chat ⇄ MindMap ⇄ Summary ── */}
         <main className="flex flex-1 flex-col min-w-0 min-h-0">
-          <ChatArea
-            selectedSources={selectedSources}
-            sources={sources}
-            onEvidence={setEvidence}
-            highlight={highlight}
-            onHighlight={onHighlight}
-            onOpenLeft={() => (panel.drawer ? setLeftOpen(true) : panel.setCollapsedFor("left", false))}
-            askAboutDraft={askAboutDraft}
+          <WorkspaceContainer
+            mode={workspaceMode}
+            onModeChange={setWorkspaceMode}
+            chatProps={{
+              selectedSources, sources, onEvidence: setEvidence, highlight, onHighlight,
+              onOpenLeft: () => (panel.drawer ? setLeftOpen(true) : panel.setCollapsedFor("left", false)),
+              askAboutDraft,
+            }}
+            mindmapData={mindmapData}
+            summaryData={summaryData}
+            controller={mindMapController}
           />
         </main>
 
@@ -306,21 +373,34 @@ export default function MainLayout({ selectedSources, setSelectedSources, initia
               }
               style={panel.drawer ? undefined : { width: panel.width.right }}
             >
-              <SidebarRight
-                selectedSources={selectedSources}
-                evidence={evidence}
-                highlight={highlight}
-                onHighlight={onHighlight}
-                onClose={() => (panel.drawer ? setRightOpen(false) : panel.setCollapsedFor("right", true))}
-                onAskAbout={onAskAbout}
-                collapsible={!panel.drawer}
-                rightView={rightView}
-                onRightViewChange={setRightView}
-                artifactRequest={artifactRequest}
-                askDirect={askDirect}
-                openArtifact={openArtifact}
-                tutorMemory={tutorMemory}
-              />
+              {/* Workspace architecture — exactly ONE Inspector, ONE SidebarRight,
+                  both ALWAYS mounted (CSS `hidden`, never conditional JSX) so
+                  neither remounts when `workspaceMode` changes. MindMap mode shows
+                  the Inspector; Chat/Summary keep SidebarRight's evidence/tutor
+                  tabs (unrelated to node selection, unaffected by this refactor). */}
+              <div className={workspaceMode === "mindmap" ? "h-full" : "hidden h-full"}>
+                <KnowledgeInspector {...inspectorProps} />
+              </div>
+              <div className={workspaceMode === "mindmap" ? "hidden h-full" : "h-full"}>
+                <SidebarRight
+                  selectedSources={selectedSources}
+                  evidence={evidence}
+                  highlight={highlight}
+                  onHighlight={onHighlight}
+                  onClose={() => (panel.drawer ? setRightOpen(false) : panel.setCollapsedFor("right", true))}
+                  onAskAbout={onAskAbout}
+                  collapsible={!panel.drawer}
+                  rightView={rightView}
+                  onRightViewChange={setRightView}
+                  artifactRequest={artifactRequest}
+                  askDirect={askDirect}
+                  openArtifact={openArtifact}
+                  tutorMemory={tutorMemory}
+                  onMindmapDataChange={setMindmapData}
+                  onSummaryDataChange={setSummaryData}
+                  onSwitchToChat={onSwitchToChat}
+                />
+              </div>
             </aside>
           </>
         )}

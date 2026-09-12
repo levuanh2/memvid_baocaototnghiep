@@ -2,6 +2,21 @@
 // Sidecar: mind-elixir KHÔNG cam kết bảo toàn field lạ qua operations → note/chunk_refs/kind
 // sống ở Map riêng, merge lại lúc save.
 import { normalizeMindmapRecord } from "./mindmapNormalize";
+import { stripMarkdown } from "./stripMarkdown";
+
+// Phase 4, Task 3 — hierarchy phải "đọc được độ sâu mà không cần đọc số".
+// mind-elixir tự phân biệt root(0)/main(1) qua THEME's --root-*/--main-*
+// cssVar; khoảng trống thật là idea(2)/detail(3+) — trước đây DÙNG CHUNG
+// đúng một cặp --color/--bgcolor, không phân biệt được. `style` là field
+// THẬT của node-elixir (verified node_modules/mind-elixir/dist/types —
+// NodeObj.style: {fontSize, fontWeight, color, ...}, áp trực tiếp lên
+// phần tử topic) — không phải hack nội bộ thư viện.
+function levelStyle(level) {
+  if (level >= 4) return { fontSize: "12px", fontWeight: "400" };
+  if (level === 3) return { fontSize: "12.5px", fontWeight: "400" };
+  if (level === 2) return { fontSize: "13.5px", fontWeight: "500" };
+  return undefined; // root/section: THEME cssVar đã đủ, không ghi đè
+}
 
 export const REL_LABELS = {
   relates_to: "liên quan", leads_to: "dẫn tới", causes: "gây ra",
@@ -29,7 +44,13 @@ export function recordToMindElixir(record) {
   let root = null;
   const orphans = []; // extra parentless nodes + dangling parent refs — rescued under root
   for (const n of norm.nodes) {
-    sidecar.set(n.id, { note: n.note || "", chunkRefs: n.chunkRefs || [], kind: n.kind });
+    sidecar.set(n.id, {
+      note: n.note || "", chunkRefs: n.chunkRefs || [], kind: n.kind,
+      // Renderer V2 (Task 2/6) — EvidenceDrawer reads these via MindElixirView's
+      // `selectNodes` listener; additive, never written back on save (mirrors
+      // note/chunkRefs' own existing sidecar-only lifecycle).
+      number: n.number || "", level: n.level || 0, enrichment: n.enrichment || [],
+    });
     if (!root && (n.kind === "root" || n.parent == null)) { root = n; continue; }
     if (n.parent == null || !ids.has(n.parent)) { orphans.push(n); continue; }
     if (!byParent.has(n.parent)) byParent.set(n.parent, []);
@@ -43,14 +64,27 @@ export function recordToMindElixir(record) {
     let next = kids.reduce((m, c) => Math.max(m, c.order ?? 0), -1) + 1;
     for (const n of orphans) kids.push({ ...n, order: next++ });
   }
-  const toTree = (n) => ({
-    id: n.id, topic: n.title,
-    // Tag ※N = node có N trích đoạn nguồn — hiện provenance ngay trên canvas.
-    // mindElixirToRecord bỏ qua tags nên round-trip an toàn.
-    ...(n.chunkRefs?.length ? { tags: [`※ ${n.chunkRefs.length}`] } : {}),
-    children: (byParent.get(n.id) || [])
-      .slice().sort((a, b) => (a.order ?? 0) - (b.order ?? 0)).map(toTree),
-  });
+  const toTree = (n) => {
+    // Task 4 — number and citation-count are SEPARATE tags (own className,
+    // own color) from the title text, not appended into one string; title
+    // itself keeps its full original text (numbering included, per Phase 1's
+    // contract) — only markdown SYNTAX is stripped, never structural content
+    // (Task 1: mind-elixir sets `textContent`, not a markdown renderer — see
+    // stripMarkdown.js's own docstring for why stripping, not rendering, is
+    // the correct fix here, and why it's safe to persist back on save: it
+    // only ever removes formatting noise, never a numbering/semantic field).
+    const tags = [];
+    if (n.number) tags.push({ text: n.number, className: "mm-tag-number" });
+    if (n.chunkRefs?.length) tags.push({ text: `※ ${n.chunkRefs.length}`, className: "mm-tag-citations" });
+    const style = levelStyle(n.level);
+    return {
+      id: n.id, topic: stripMarkdown(n.title),
+      ...(tags.length ? { tags } : {}),
+      ...(style ? { style } : {}),
+      children: (byParent.get(n.id) || [])
+        .slice().sort((a, b) => (a.order ?? 0) - (b.order ?? 0)).map(toTree),
+    };
+  };
   const nodeData = root
     ? toTree(root)
     : { id: "n0", topic: norm.title || "Sơ đồ tư duy", children: [] };

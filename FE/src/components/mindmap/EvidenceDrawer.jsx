@@ -1,29 +1,15 @@
-// Evidence drawer — right-side sliding panel inside the mindmap overlay.
-// Task 16: click a node, see the note + the actual chunk text(s) it was built
-// from ("lề bằng chứng" pattern, mirrored from SidebarRight's citation margin).
-//
-// Fetched chunk text is cached in a COMPONENT-scoped ref (`cacheRef`, Fix Round 1)
-// so re-clicking a node — or opening a different node that shares a chunk ref —
-// never re-fetches within the drawer's lifetime, while still bounding staleness:
-// the cache is dropped whenever the drawer instance itself is torn down (e.g. the
-// mindmap overlay closes/reopens), which matters once chunk ids get reused across
-// a re-ingest.
-import { useEffect, useMemo, useRef, useState } from "react";
+// Evidence drawer — right-side sliding panel. Still used standalone by
+// SummaryModal (citation margin for tóm tắt). The mindmap's own node-click
+// experience moved to the permanent KnowledgeInspector in Phase 5 — this
+// file stays as the drawer-shaped variant, sharing every card/clamp/fetch
+// piece with it via `knowledgeParts.jsx` (Phase 5 Task 12: reuse, don't
+// duplicate).
+import { useEffect, useRef, useMemo } from "react";
 import { Icon } from "../ui/Icon";
-import Spinner from "../ui/Spinner";
 import MdSnippet from "../ui/Markdown";
-import { fetchChunkText } from "../../utils/api";
+import { Clamp, MetaChip, EnrichmentCard, EvidenceCard, useChunkEvidence } from "./knowledgeParts";
 
-const SNIPPET_MAX = 600;
-
-const cutSnippet = (text) => {
-  const s = String(text || "");
-  if (s.length <= SNIPPET_MAX) return { snippet: s, truncated: false };
-  return { snippet: s.slice(0, SNIPPET_MAX), truncated: true };
-};
-
-export default function EvidenceDrawer({ node, onClose, generating, onAskAbout }) {
-  const [entries, setEntries] = useState([]); // [{ chunkId, snippet, truncated, loading, error }]
+export default function EvidenceDrawer({ node, onClose, generating, onAskAbout, sources }) {
   const panelRef = useRef(null);
   const closeBtnRef = useRef(null);
   const cacheRef = useRef(new Map());
@@ -32,70 +18,23 @@ export default function EvidenceDrawer({ node, onClose, generating, onAskAbout }
   const nodeRef = useRef(node);
   nodeRef.current = node;
 
-  // Stable primitive key for the fetch effect below — `node` itself is a NEW
-  // object identity on every poll tick while a mindmap is generating (see
-  // MindmapView's `selectedDrawerNode`), even when the node's actual chunk refs
-  // haven't changed. Joining into a string gives the effect something that only
-  // changes value when the refs actually do (Fix Round 1, Fix 2).
-  const chunkKey = useMemo(
-    () => (Array.isArray(node?.chunkRefs) ? node.chunkRefs.filter((c) => c != null && c !== "").join(",") : ""),
-    [node]
-  );
-
-  // Fetch each chunk ref once per node, reusing the drawer-lifetime cache.
-  // Deps are [node?.id, chunkKey] — both primitives — so a poll tick that hands
-  // us a new `node` object with the SAME id + same chunk refs does not re-run
-  // this effect or rebuild `entries`.
-  useEffect(() => {
-    if (node?.id == null) { setEntries([]); return; }
-    const refs = chunkKey ? chunkKey.split(",") : [];
-    let cancelled = false;
-
-    if (refs.length === 0) { setEntries([]); return; }
-
-    setEntries(refs.map((chunkId) => {
-      const cached = cacheRef.current.get(chunkId);
-      return cached !== undefined
-        ? { chunkId, ...cutSnippet(cached), loading: false, error: cached == null }
-        : { chunkId, snippet: "", truncated: false, loading: true, error: false };
-    }));
-
-    refs.forEach(async (chunkId) => {
-      if (cacheRef.current.has(chunkId)) return; // already resolved (hit or miss)
-      try {
-        const text = await fetchChunkText(chunkId);
-        cacheRef.current.set(chunkId, text); // cache misses too — chunk id won't gain text mid-session
-        if (cancelled) return;
-        setEntries((prev) => prev.map((e) => (
-          e.chunkId === chunkId ? { ...e, ...cutSnippet(text), loading: false, error: text == null } : e
-        )));
-      } catch {
-        if (cancelled) return;
-        setEntries((prev) => prev.map((e) => (
-          e.chunkId === chunkId ? { ...e, loading: false, error: true } : e
-        )));
-      }
-    });
-
-    return () => { cancelled = true; };
-  }, [node?.id, chunkKey]);
+  const entries = useChunkEvidence(node?.chunkRefs, cacheRef);
 
   // Focus the close button ONLY when the drawer newly opens or the selected
   // node actually changes (deps [node?.id]) — not on every re-render a poll
-  // tick causes (Fix Round 1, Fix 1). Previously this ran on every `node`
-  // identity change (every tick), yanking keyboard focus to the close button
-  // even while the user was hovering/interacting elsewhere on the canvas.
+  // tick causes. Previously this ran on every `node` identity change (every
+  // tick), yanking keyboard focus to the close button even while the user
+  // was hovering/interacting elsewhere on the canvas.
   useEffect(() => {
     if (node?.id == null) return;
     closeBtnRef.current?.focus();
   }, [node?.id]);
 
   // Esc-to-close: a SEPARATE effect from the focus one above, deps [onClose]
-  // alone. `onClose` is now a stable useCallback identity from MindmapView, so
-  // this listener is attached exactly once and never torn down/rebuilt purely
-  // because a poll tick re-rendered the parent. Whether the drawer is actually
-  // open is checked at KEYDOWN time via `nodeRef` (always the latest `node`),
-  // not baked into the effect's dependencies or setup/teardown timing.
+  // alone. `onClose` is expected to be a stable identity, so this listener is
+  // attached once and never torn down/rebuilt purely because a poll tick
+  // re-rendered the parent. Whether the drawer is actually open is checked at
+  // KEYDOWN time via `nodeRef` (always the latest `node`).
   useEffect(() => {
     const onKey = (e) => {
       if (e.key === "Escape" && nodeRef.current) { e.stopPropagation(); onClose?.(); }
@@ -104,11 +43,25 @@ export default function EvidenceDrawer({ node, onClose, generating, onAskAbout }
     return () => window.removeEventListener("keydown", onKey, true);
   }, [onClose]);
 
+  const enrichment = Array.isArray(node?.enrichment) ? node.enrichment : [];
+  const sourceLabel = useMemo(() => {
+    const list = Array.isArray(sources) ? sources : [];
+    if (list.length === 1) return list[0];
+    if (list.length > 1) return `${list.length} tài liệu`;
+    return null;
+  }, [sources]);
+  const avgConfidencePct = useMemo(() => {
+    const vals = enrichment.map((e) => e.confidence).filter((c) => Number.isFinite(c));
+    if (!vals.length) return null;
+    return Math.round((vals.reduce((a, b) => a + b, 0) / vals.length) * 100);
+  }, [enrichment]);
+
   if (!node) return null;
 
   const emptyMessage = generating
     ? "Chưa có bằng chứng — đang làm giàu"
     : "Nhánh này chưa gắn trích đoạn";
+  const nothingAtAll = entries.length === 0 && enrichment.length === 0;
 
   return (
     <div
@@ -130,6 +83,15 @@ export default function EvidenceDrawer({ node, onClose, generating, onAskAbout }
             <h3 className="font-display font-semibold text-text-primary text-[14px] truncate" title={node.title}>
               {node.title || "Nhánh"}
             </h3>
+            {(node.number || sourceLabel || avgConfidencePct != null) && (
+              <div className="flex items-center gap-1.5 mt-1.5 flex-wrap">
+                {node.number && <MetaChip>{node.number}</MetaChip>}
+                {sourceLabel && <MetaChip icon="FileStack" title="Nguồn tài liệu">{sourceLabel}</MetaChip>}
+                {avgConfidencePct != null && (
+                  <MetaChip icon="BadgeCheck" title="Độ tin cậy trung bình của phần làm giàu">{avgConfidencePct}%</MetaChip>
+                )}
+              </div>
+            )}
           </div>
           <button
             ref={closeBtnRef}
@@ -148,45 +110,27 @@ export default function EvidenceDrawer({ node, onClose, generating, onAskAbout }
               className="font-reading text-[13.5px] leading-[1.6] text-text-secondary mb-4 pb-4 border-b border-border" />
           )}
 
-          {entries.length === 0 ? (
+          {nothingAtAll ? (
             <div className="text-center px-2 pt-8 text-text-muted">
               <Icon name="Quote" size={22} className="mx-auto mb-2.5 opacity-60" />
               <p className="text-[12.5px] leading-[1.6] text-text-secondary">{emptyMessage}</p>
             </div>
           ) : (
             <div className="flex flex-col gap-2">
-              {entries.map((entry, i) => (
-                <div key={`${entry.chunkId}-${i}`} className="evidence-frame p-3">
-                  <div className="flex items-center gap-2 mb-1.5">
-                    <span
-                      className="w-5 h-5 rounded-[4px] inline-flex items-center justify-center text-[11px] font-mono font-semibold flex-shrink-0"
-                      style={{ color: "var(--accent)", border: "1px solid color-mix(in srgb, var(--accent) 35%, transparent)" }}
-                    >
-                      {i + 1}
-                    </span>
-                    <span className="coord truncate flex-1">đoạn {entry.chunkId}</span>
-                  </div>
-
-                  {entry.loading ? (
-                    <div className="flex items-center gap-2 text-[12px] text-text-muted py-1"><Spinner size={12} /> Đang tải…</div>
-                  ) : entry.error ? (
-                    <p className="text-[12.5px] text-text-muted italic">Không tải được trích đoạn này.</p>
-                  ) : (
-                    <>
-                      <MdSnippet text={`${entry.snippet}${entry.truncated ? "…" : ""}`}
-                        className="font-reading text-[13px] leading-[1.55] text-text-secondary" />
-                      {typeof onAskAbout === "function" && (
-                        <button
-                          onClick={() => onAskAbout(entry.snippet)}
-                          className="mt-2 inline-flex items-center gap-1.5 text-[11.5px] font-medium text-brand hover:underline"
-                        >
-                          <Icon name="MessageCircleQuestion" size={12} /> Hỏi về đoạn này
-                        </button>
-                      )}
-                    </>
-                  )}
+              {enrichment.length > 0 && (
+                <div className="flex flex-col gap-2 mb-1" role="group" aria-label="Nội dung được làm giàu">
+                  {enrichment.map((entry) => (
+                    <EnrichmentCard key={entry.semantic_node_id} entry={entry} />
+                  ))}
                 </div>
-              ))}
+              )}
+              {entries.length > 0 && (
+                <div className="flex flex-col gap-2" role="group" aria-label="Trích đoạn nguồn">
+                  {entries.map((entry, i) => (
+                    <EvidenceCard key={`${entry.chunkId}-${i}`} entry={entry} index={i} onAskAbout={onAskAbout} />
+                  ))}
+                </div>
+              )}
             </div>
           )}
         </div>

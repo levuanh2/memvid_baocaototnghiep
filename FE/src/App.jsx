@@ -1,6 +1,7 @@
 import { lazy, Suspense } from "react";
 import { Routes, Route, Navigate } from "react-router-dom";
 import { useTheme } from "./hooks/useTheme";
+import { useAuth } from "./auth/useAuth";
 import ProtectedRoute from "./auth/ProtectedRoute";
 import Spinner from "./components/ui/Spinner";
 // Landing tải NGAY: nó là trang KHÔNG cần đăng nhập gặp nhiều nhất (mọi khách
@@ -10,6 +11,13 @@ import Spinner from "./components/ui/Spinner";
 // bundle chính là phần lớn 565KB của `index-*.js` (Phase 6, Step 1 — xem báo
 // cáo cuối phase để có số đo trước/sau thật).
 import Landing from "./pages/Landing";
+// Command Palette (Phase 7) — Ctrl+K từ bất kỳ trang nào trong /app/*. Mount
+// MỘT lần, cạnh <Routes> chứ không bên trong: đổi route không được unmount
+// (mất trạng thái mở giữa chừng) nó. Lazy: nó trả null cho khách CHƯA đăng
+// nhập, nên Landing/Login/Register không có lý do gì phải trả phí bundle cho
+// một tính năng họ không dùng được — +29kB đo được ở bundle chính khi từng
+// import thẳng, đúng loại chi phí Phase 6's route-splitting đã tồn tại để tránh.
+const CommandPalette = lazy(() => import("./components/palette/CommandPalette"));
 const Login = lazy(() => import("./pages/Login"));
 const Register = lazy(() => import("./pages/Register"));
 const Workspace = lazy(() => import("./pages/Workspace"));
@@ -37,8 +45,15 @@ export default function App() {
   // MainLayout and Landing also call useTheme() for their own toggles; the shared
   // truth is the `.dark` class on <html>, so the instances stay in sync.
   useTheme();
+  const { user } = useAuth();
 
   return (
+    <>
+    {/* Chỉ mount (và vì vậy chỉ TẢI chunk của) khi đã đăng nhập — khách ở
+        Landing/Login/Register không trả phí mạng cho một tính năng họ không
+        dùng được. `fallback=null`: palette không có gì để hiện trong lúc tải
+        chunk, và nó không phải nội dung trang. */}
+    {user && <Suspense fallback={null}><CommandPalette /></Suspense>}
     <Suspense fallback={<DangTaiTrang />}>
       <Routes>
         <Route path="/" element={<Landing />} />
@@ -64,5 +79,6 @@ export default function App() {
         <Route path="*" element={<Navigate to="/" replace />} />
       </Routes>
     </Suspense>
+    </>
   );
 }

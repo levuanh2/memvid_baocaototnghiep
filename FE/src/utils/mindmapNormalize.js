@@ -34,6 +34,13 @@ const normalizeV2 = (record) => {
         kind: n.kind || (parent == null ? KIND_ROOT : KIND_DEFAULT),
         chunkRefs: Array.isArray(n.chunk_refs) ? n.chunk_refs : [],
         order: Number.isFinite(Number(n.order)) ? Number(n.order) : 0,
+        // Renderer V2 (Task 3/4) — additive passthrough of fields the BE
+        // already sends (Phase 1: number/level; Phase 2B: enrichment) but
+        // this normalizer previously dropped. v1/legacy records never have
+        // these — safe defaults below, never undefined.
+        number: n.number || "",
+        level: Number.isFinite(Number(n.level)) ? Number(n.level) : 0,
+        enrichment: Array.isArray(n.enrichment) ? n.enrichment : [],
       };
     });
 
@@ -84,6 +91,7 @@ const normalizeV1 = (record) => {
           kind,
           chunkRefs: [],
           order: Number.isFinite(Number(extra.order)) ? Number(extra.order) : index,
+          number: "", level: 0, enrichment: [],
         };
       });
   } else if (diagramNodes.length > 0) {
@@ -102,6 +110,7 @@ const normalizeV1 = (record) => {
           kind,
           chunkRefs: [],
           order: Number.isFinite(Number(n.order)) ? Number(n.order) : index,
+          number: "", level: 0, enrichment: [],
         };
       });
   } else {

@@ -1,8 +1,4 @@
-import { useState, useEffect, useCallback, useRef, useMemo, lazy, Suspense } from "react";
-// Lazy: hai modal này kéo mind-elixir + snapdom (~nửa bundle) — chỉ tải khi user
-// thật sự mở. fallback=null: modal vốn xuất hiện sau click, không có layout shift.
-const MindMapModal = lazy(() => import("./MindMapModal"));
-const SummaryModal = lazy(() => import("./SummaryModal"));
+import { useState, useEffect, useCallback, useRef, useMemo } from "react";
 import { apiFetch, generateMindmap, cancelMindmap, generateSummary, cancelSummary, isUnauthorizedError, isNotFoundOrForbiddenError, getUserFriendlyApiError } from "../../utils/api";
 
 // Permission-safe toast text: 401/403/404 → friendly line (no raw error/id); else
@@ -79,6 +75,11 @@ export default function SidebarRight({
   // biết tab nào đang mở); `artifactRequest` là lệnh một-lần (nonce) để "Xem
   // sơ đồ"/"Xem tóm tắt" ở Tutor chuyển đúng tab Artifacts bên dưới.
   rightView = "evidence", onRightViewChange, artifactRequest, askDirect, openArtifact, tutorMemory,
+  // Workspace architecture (approved audit) — MindMap/Summary no longer render
+  // as modals FROM HERE; this component keeps 100% of its generation/polling
+  // logic and just forwards the computed data upward so MainLayout/
+  // WorkspaceContainer can dock it into the central region instead.
+  onMindmapDataChange, onSummaryDataChange, onSwitchToChat,
 }) {
   const [artifactTab, setArtifactTab] = useState("mindmap");
   // "Ghim"/"Tách nổi" CHỈ đổi kiểu hiển thị của tab Gia sư AI TRONG cột này —
@@ -395,13 +396,24 @@ export default function SidebarRight({
     cancelMindmap(jobId).catch((err) => console.error("[MindMap] cancel request failed:", err));
   };
 
-  // "Hỏi về đoạn này" (EvidenceDrawer) → close the mindmap overlay so the chat
-  // underneath is visible again, then hand the snippet up to MainLayout to
-  // prefill + focus the composer.
+  // "Hỏi về đoạn này" (EvidenceDrawer) → switch the Workspace back to the Chat
+  // tab (mindmap stays generated, NOT cleared — Workspace architecture: a tab
+  // switch must never lose the generated map), then hand the snippet up to
+  // MainLayout to prefill + focus the composer.
   const handleAskAbout = useCallback((snippet) => {
-    setShowModalMap(null);
+    onSwitchToChat?.();
     onAskAbout?.(snippet);
-  }, [onAskAbout]);
+  }, [onAskAbout, onSwitchToChat]);
+
+  // Phase 5 (Knowledge Inspector) Task 5 — Learning Actions (Explain simpler/
+  // deeper, flashcard, quiz, examples, ask) send a fully-formed prompt, unlike
+  // `handleAskAbout`'s raw quoted snippet, so they reuse `askDirect` (already
+  // threaded into this component for TutorPanel) instead of wrapping it in
+  // `onAskAbout`'s "Về đoạn này..." template. Same switch-then-forward shape.
+  const handleAskDirect = useCallback((text) => {
+    onSwitchToChat?.();
+    askDirect?.(text);
+  }, [askDirect, onSwitchToChat]);
 
   // Task 8: after MindElixirView's explicit Save (PUT /mindmaps/<id>) succeeds,
   // sync both the saved-list card and the still-open modal with the returned
@@ -595,11 +607,28 @@ export default function SidebarRight({
     progress: mindmapJobUi.progress,
     onCancel: handleCancelMindMap,
     onAskAbout: handleAskAbout,
+    onAskDirect: handleAskDirect,
     onSaved: handleMindmapSaved,
     // PR#8: viewer báo dirty lên đây — handleRegenerateMindMap đọc ref này để
     // confirm trước khi "Tạo lại" thay thế bản đang sửa.
     onDirtyChange: (d) => { mindmapDirtyRef.current = Boolean(d); },
-  } : null), [showModalMap, mindmapGenerating, mindmapJobUi.progress, handleCancelMindMap, handleAskAbout, handleMindmapSaved]);
+  } : null), [showModalMap, mindmapGenerating, mindmapJobUi.progress, handleCancelMindMap, handleAskAbout, handleAskDirect, handleMindmapSaved]);
+
+  // Workspace architecture — forward the SAME `modalMapData` a portal used to
+  // consume, plus the two extra props MindElixirView takes directly
+  // (onRegenerate/regenerating, previously passed to MindMapModal alongside
+  // `data`). `showModalMap.initialLayoutType` was dead (MindMapModal accepted
+  // it but never forwarded it to MindElixirView) — not carried forward.
+  useEffect(() => {
+    onMindmapDataChange?.(modalMapData ? {
+      data: modalMapData, onRegenerate: handleRegenerateMindMap, regenerating: mindmapGenerating,
+    } : null);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [modalMapData, mindmapGenerating, onMindmapDataChange]);
+
+  useEffect(() => {
+    onSummaryDataChange?.(showSummaryModal || null);
+  }, [showSummaryModal, onSummaryDataChange]);
 
   // ── Render ────────────────────────────────────────
   return (
@@ -866,26 +895,6 @@ export default function SidebarRight({
         </Disclosure>
       </div>
       </>
-      )}
-
-      {/* ── MODALS (lazy chunks — Suspense chờ chunk tải xong mới render) ──
-          Ở NGOÀI nhánh rightView có chủ đích: đổi tab không được đóng một
-          modal sơ đồ/tóm tắt đang mở phía trên nó. */}
-      {showModalMap && (
-        <Suspense fallback={null}>
-          <MindMapModal
-            data={modalMapData}
-            initialLayoutType={showModalMap.initialLayoutType || "napkin"}
-            onClose={() => setShowModalMap(null)}
-            onRegenerate={handleRegenerateMindMap}
-            regenerating={mindmapGenerating}
-          />
-        </Suspense>
-      )}
-      {showSummaryModal && (
-        <Suspense fallback={null}>
-          <SummaryModal data={showSummaryModal} onClose={() => setShowSummaryModal(null)} />
-        </Suspense>
       )}
 
       <style>{`@media (min-width: 768px) { .md\\:hidden { display: none !important; } }`}</style>

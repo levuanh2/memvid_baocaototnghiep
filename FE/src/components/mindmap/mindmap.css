@@ -60,6 +60,32 @@ html.dark .me-container { --mm-relation: #7e90c4; }
   border-radius: 4px;
   padding: 0 4px;
 }
+/* Renderer V2 Task 4 — number tag (vị trí trong tài liệu) và citation-count tag
+   (bằng chứng) trước đây tô ĐỎ NHƯ NHAU, không phân biệt được cái nào là gì.
+   mind-elixir gán thẳng `span.className` (KHÔNG cộng dồn với "tags" — xem
+   dist/MindElixir.js dòng ~344), nên chọn theo class riêng thắng rule chung ở trên. */
+.me-container me-tpc .tags span.mm-tag-number {
+  color: var(--text-muted, var(--text-secondary));
+  border-color: color-mix(in srgb, var(--text-muted, var(--text-secondary)) 40%, transparent);
+  font-weight: 600;
+}
+.me-container me-tpc .tags span.mm-tag-citations {
+  color: var(--accent);
+  border-color: color-mix(in srgb, var(--accent) 35%, transparent);
+}
+
+/* Sprint A, item 1 — Knowledge Inspector as CSS Grid: exactly 5 fixed rows
+   (nav bar / recent-pinned / node header / scrollable content / AI Actions
+   footer), each a real DOM child (see KnowledgeInspector.jsx) so implicit
+   grid auto-placement can't reassign rows when a conditional row renders
+   empty. Only the 4th row (`1fr`) scrolls — the header/footer rows are
+   "sticky" by construction, not by `position: sticky` (which needs the right
+   scroll-container ancestor to work at all and is easy to get wrong). */
+.knowledge-inspector {
+  display: grid;
+  grid-template-rows: auto auto auto 1fr auto;
+  height: 100%;
+}
 
 /* Legend nổi góc dưới trái canvas */
 .mm-legend {
@@ -109,4 +135,26 @@ html.dark .me-container { --mm-relation: #7e90c4; }
 @media (prefers-reduced-motion: reduce) {
   .me-container * { transition: none !important; animation: none !important; }
   .animate-spin { animation: none !important; }
+}
+
+/* Sprint A, item 5 — skeleton placeholder for evidence text while it loads.
+   `background-size`/`position` animate the highlight sweeping across a fixed
+   base color, so there's one rule to disable under reduced-motion instead of
+   juggling a separate "static" variant. */
+.skel {
+  background: linear-gradient(
+    90deg,
+    color-mix(in srgb, var(--text-muted, var(--text-secondary)) 12%, transparent) 25%,
+    color-mix(in srgb, var(--text-muted, var(--text-secondary)) 22%, transparent) 37%,
+    color-mix(in srgb, var(--text-muted, var(--text-secondary)) 12%, transparent) 63%
+  );
+  background-size: 200% 100%;
+  animation: skel-sweep 1.4s ease-in-out infinite;
+}
+@keyframes skel-sweep {
+  0% { background-position: 100% 0; }
+  100% { background-position: -100% 0; }
+}
+@media (prefers-reduced-motion: reduce) {
+  .skel { animation: none; background-position: 0 0; }
 }

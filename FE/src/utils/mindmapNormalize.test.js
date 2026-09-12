@@ -52,4 +52,41 @@ describe("normalizeMindmapRecord", () => {
     expect(out.nodes[0].kind).toBe("root");
     expect(out.nodes[1].kind).not.toBe("root");
   });
+
+  // Renderer V2 (Phase 4, Task 3/4) — number/level/enrichment passthrough.
+  it("v2: passes through number/level/enrichment additively", () => {
+    const rec = {
+      schema_version: 2, title: "T",
+      nodes: [
+        { id: "n0", parent: null, kind: "root", title: "T" },
+        {
+          id: "n1", parent: "n0", kind: "section", title: "1.2 Phương pháp",
+          number: "1.2", level: 1,
+          enrichment: [{ semantic_node_id: "p1", semantic_type: "definition", confidence: 1.0 }],
+        },
+      ],
+      relations: [], generator: {},
+    };
+    const out = normalizeMindmapRecord(rec);
+    const n1 = out.nodes.find((n) => n.id === "n1");
+    expect(n1.number).toBe("1.2");
+    expect(n1.level).toBe(1);
+    expect(n1.enrichment).toEqual([{ semantic_node_id: "p1", semantic_type: "definition", confidence: 1.0 }]);
+  });
+
+  it("v2: defaults number/level/enrichment when absent, never undefined", () => {
+    const rec = { schema_version: 2, nodes: [{ id: "n0", parent: null, title: "T" }] };
+    const out = normalizeMindmapRecord(rec);
+    expect(out.nodes[0].number).toBe("");
+    expect(out.nodes[0].level).toBe(0);
+    expect(out.nodes[0].enrichment).toEqual([]);
+  });
+
+  it("v1: number/level/enrichment default safely (legacy records never had them)", () => {
+    const rec = { title: "L", nodes: [{ id: "root", parent: null, title: "L" }] };
+    const out = normalizeMindmapRecord(rec);
+    expect(out.nodes[0].number).toBe("");
+    expect(out.nodes[0].level).toBe(0);
+    expect(out.nodes[0].enrichment).toEqual([]);
+  });
 });

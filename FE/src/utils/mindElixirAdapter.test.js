@@ -22,7 +22,10 @@ describe("recordToMindElixir", () => {
     expect(mindData.nodeData.topic).toBe("Tài liệu X");
     expect(mindData.nodeData.children.map((c) => c.topic)).toEqual(["1. Mở đầu", "2. Phương pháp"]);
     expect(mindData.nodeData.children[0].children[0].id).toBe("n3");
-    expect(sidecar.get("n1")).toEqual({ note: "tóm ý", chunkRefs: ["3"], kind: "section" });
+    expect(sidecar.get("n1")).toEqual({
+      note: "tóm ý", chunkRefs: ["3"], kind: "section",
+      number: "", level: 0, enrichment: [], // Renderer V2 additive fields
+    });
   });
 
   it("relations → arrows nét đứt màu son có label", () => {
@@ -109,7 +112,7 @@ describe("redesign Phòng đọc (tags + relation color + type từ label)", () 
   it("node có chunkRefs được gắn tag ※N; node không có thì không", () => {
     const { mindData } = recordToMindElixir(REC);
     const sec1 = mindData.nodeData.children[0];
-    expect(sec1.tags).toEqual(["※ 1"]);
+    expect(sec1.tags).toEqual([{ text: "※ 1", className: "mm-tag-citations" }]);
     expect(mindData.nodeData.tags).toBeUndefined(); // root không có refs
   });
 
