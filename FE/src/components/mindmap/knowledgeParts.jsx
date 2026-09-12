@@ -248,9 +248,10 @@ export const EvidenceCard = memo(function EvidenceCard({ entry, index, onAskAbou
   return (
     <div className="evidence-frame p-3">
       <div className="flex items-center gap-2 mb-1.5">
+        {/* Citation index badge — provenance, stays --seal (Signature Contract §1). */}
         <span
           className="w-5 h-5 rounded-[4px] inline-flex items-center justify-center text-[11px] font-mono font-semibold flex-shrink-0"
-          style={{ color: "var(--accent)", border: "1px solid color-mix(in srgb, var(--accent) 35%, transparent)" }}
+          style={{ color: "var(--seal)", border: "1px solid color-mix(in srgb, var(--seal) 35%, transparent)" }}
         >
           {index + 1}
         </span>

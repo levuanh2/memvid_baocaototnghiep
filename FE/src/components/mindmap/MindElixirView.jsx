@@ -23,7 +23,18 @@ import "./mindmap.css";
 
 // Palette nhánh: archival ink hexes (Phòng đọc theme) — trước đây sống ở
 // constants.js::BRANCH_COLORS (file đã xoá cùng ReactFlow view ở Task 9).
-const PALETTE = ["#5C6B7A", "#3E6B57", "#B5821F", "#B23A2E", "#4A5A8A", "#8A7A66"];
+// Wave 5: this feeds mind-elixir's OWN per-branch line/border coloring
+// directly (`theme.palette`, cycled by branch index — see mind-elixir's
+// `MindElixir.js` generateMainBranch/`In` function; NOT unstyled-library-
+// default gray, contrary to an earlier draft audit — verified by reading
+// the actual bundled source, not assumed). The one real fix: the old array
+// included `#B23A2E` — the EXACT seal-red value now reserved for
+// provenance only (Signature Contract §1) — meaning a mindmap branch could
+// already render identically to a citation/provenance signal by pure
+// coincidence. Replaced with a muted seal-adjacent tone that reads as the
+// same archival-ink family without the collision; forest/bronze slots now
+// use the Signature Contract's own exact values for direct consistency.
+const PALETTE = ["#5C6B7A", "#1F4033", "#B5821F", "#8A4A3E", "#4A5A8A", "#A06A3B"];
 
 // MindElixir.css tiêu thụ đủ bộ var dưới đây KHÔNG có fallback — thiếu var nào
 // là declaration đó invalid và spacing/màu sụp đổ. Phải set đủ (guard bằng test

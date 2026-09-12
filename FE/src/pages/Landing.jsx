@@ -99,8 +99,9 @@ export default function Landing() {
         style={{ background: "color-mix(in srgb, var(--bg-sidebar) 92%, transparent)", backdropFilter: "blur(8px)" }}>
         <nav className="max-w-[1080px] mx-auto px-5 sm:px-8 h-[60px] flex items-center gap-4">
           <div className="flex items-center gap-2.5 select-none">
+            {/* Same wordmark seal as MainLayout.jsx — stays --seal (Signature Contract §7). */}
             <span className="w-[30px] h-[30px] rounded-[6px] inline-flex items-center justify-center font-display text-[16px] font-semibold"
-              style={{ color: "var(--accent)", border: "1.5px solid var(--accent)", transform: "rotate(-4deg)" }} aria-hidden>M</span>
+              style={{ color: "var(--seal)", border: "1.5px solid var(--seal)", transform: "rotate(-4deg)" }} aria-hidden>M</span>
             <span className="font-display font-semibold text-[17px] tracking-tight text-text-primary">MemVid<span className="text-brand">X</span></span>
           </div>
           <div className="flex-1" />

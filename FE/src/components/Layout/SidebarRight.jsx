@@ -40,7 +40,7 @@ const ListCard = ({ title, meta, icon, onOpen, onDelete, deleteLabel = "Xóa" })
     className="flex items-center gap-3 px-3 py-2.5 rounded-[7px] border border-border hover:border-brand/30 cursor-pointer transition-all group transition-theme"
     style={{ background: "var(--bg-card)" }}
   >
-    <div className="w-8 h-8 rounded-[6px] flex items-center justify-center flex-shrink-0 text-brand" style={{ background: "color-mix(in srgb, var(--accent) 10%, transparent)" }}>
+    <div className="w-8 h-8 rounded-[6px] flex items-center justify-center flex-shrink-0 text-brand" style={{ background: "color-mix(in srgb, var(--seal) 10%, transparent)" }}>
       <Icon name={icon} size={15} />
     </div>
     <div className="flex-1 min-w-0">
@@ -699,7 +699,7 @@ export default function SidebarRight({
                   >
                     <div className="flex items-center gap-2 mb-1.5">
                       <span className="w-5 h-5 rounded-[4px] inline-flex items-center justify-center text-[11px] font-mono font-semibold flex-shrink-0"
-                        style={{ color: "var(--accent)", border: "1px solid color-mix(in srgb, var(--accent) 35%, transparent)" }}>
+                        style={{ color: "var(--seal)", border: "1px solid color-mix(in srgb, var(--seal) 35%, transparent)" }}>
                         {i + 1}
                       </span>
                       <span className="coord truncate flex-1" title={stem}>

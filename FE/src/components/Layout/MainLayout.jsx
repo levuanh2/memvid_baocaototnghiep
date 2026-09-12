@@ -178,11 +178,14 @@ export default function MainLayout({ selectedSources, setSelectedSources, initia
           <Icon name="Menu" size={18} />
         </button>
 
-        {/* Wordmark — a stamped seal + serif name */}
+        {/* Wordmark — a stamped seal + serif name. This IS the seal-stamp
+            signature itself (Signature Contract §7) — stays --seal even
+            after --accent flips to forest; every other component only
+            REFERENCES this motif, never duplicates its exact treatment. */}
         <div className="flex items-center gap-2.5 flex-shrink-0 select-none">
           <span
             className="w-[30px] h-[30px] rounded-[6px] inline-flex items-center justify-center font-display text-[16px] font-semibold flex-shrink-0"
-            style={{ color: "var(--accent)", border: "1.5px solid var(--accent)", transform: "rotate(-4deg)" }}
+            style={{ color: "var(--seal)", border: "1.5px solid var(--seal)", transform: "rotate(-4deg)" }}
             aria-hidden
           >
             M

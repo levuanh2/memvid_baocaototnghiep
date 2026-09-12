@@ -66,11 +66,13 @@ function CitationCard({ chunkId, text, loading, error, index, sourceLabel, headi
     toast(ok ? "Đã sao chép trích dẫn" : "Không sao chép được", { type: ok ? "success" : "error" });
   };
   return (
-    <div className={`evidence-frame p-3 ${highlighted ? "ring-1 ring-[var(--accent)]" : ""}`}>
+    <div className={`evidence-frame p-3 ${highlighted ? "ring-1 ring-[var(--seal)]" : ""}`}>
       <div className="flex items-center gap-1.5 mb-1.5">
+        {/* Citation index badge — provenance, stays --seal (Signature Contract §1),
+            same reasoning as .cite-chip/.evidence-frame--active in index.css. */}
         <span
           className="w-5 h-5 rounded-[4px] inline-flex items-center justify-center text-[11px] font-mono font-semibold flex-shrink-0"
-          style={{ color: "var(--accent)", border: "1px solid color-mix(in srgb, var(--accent) 35%, transparent)" }}
+          style={{ color: "var(--seal)", border: "1px solid color-mix(in srgb, var(--seal) 35%, transparent)" }}
         >
           {index + 1}
         </span>
