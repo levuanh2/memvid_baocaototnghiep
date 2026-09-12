@@ -34,25 +34,34 @@ export function MdSnippet({ text, className = "" }) {
 
 // Prose cỡ đọc (SummaryModal) — chuyển từ mdComponents inline của SummaryModal
 // vào đây để mọi text dài render qua MỘT đường (bài học "một đường render").
+// Wave 4: sizes now come from the named scale (docs/DESIGN_TOKEN_AUDIT.md §1)
+// instead of three arbitrary pixel values with no relationship to each other
+// or to the rest of the app. h1/h2 share `text-h3` (both are "a sub-head
+// inside a block of prose", the SAME semantic role, previously differentiated
+// by 2px for no reason); h3 collapses into `text-body` since 15px was already
+// body-adjacent, and it's still visually distinct via weight + secondary color.
 const PROSE = {
-  p: ({ node, ...p }) => <p className="mb-2.5 last:mb-0 text-[15px] leading-[1.72] text-text-primary" {...p} />,
-  ul: ({ node, ...p }) => <ul className="pl-5 my-2.5 list-disc marker:text-slate text-[15px] text-text-primary" {...p} />,
-  ol: ({ node, ...p }) => <ol className="pl-5 my-2.5 list-decimal marker:text-slate text-[15px] text-text-primary" {...p} />,
+  p: ({ node, ...p }) => <p className="mb-2.5 last:mb-0 text-body leading-[1.72] text-text-primary" {...p} />,
+  ul: ({ node, ...p }) => <ul className="pl-5 my-2.5 list-disc marker:text-slate text-body text-text-primary" {...p} />,
+  ol: ({ node, ...p }) => <ol className="pl-5 my-2.5 list-decimal marker:text-slate text-body text-text-primary" {...p} />,
   li: ({ node, ...p }) => <li className="mb-1.5 leading-[1.7]" {...p} />,
   strong: ({ node, ...p }) => <strong className="text-text-primary font-semibold" {...p} />,
   em: ({ node, ...p }) => <em className="italic" {...p} />,
-  h1: ({ node, ...p }) => <h1 className="font-display text-[19px] font-semibold my-3 text-text-primary" {...p} />,
-  h2: ({ node, ...p }) => <h2 className="font-display text-[17px] font-semibold my-2.5 text-text-primary" {...p} />,
-  h3: ({ node, ...p }) => <h3 className="font-display text-[15px] font-semibold my-2 text-text-secondary" {...p} />,
+  h1: ({ node, ...p }) => <h1 className="font-display text-h3 font-semibold my-3 text-text-primary" {...p} />,
+  h2: ({ node, ...p }) => <h2 className="font-display text-h3 font-semibold my-2.5 text-text-primary" {...p} />,
+  h3: ({ node, ...p }) => <h3 className="font-display text-body font-semibold my-2 text-text-secondary" {...p} />,
   code: ({ node, inline, children, ...props }) => inline
     ? <code className="bg-surface-elevated border border-border px-1.5 py-0.5 rounded text-[12.5px] font-mono text-text-secondary" {...props}>{children}</code>
     : <pre className="bg-surface-elevated border border-border rounded-[7px] p-3 overflow-x-auto my-2.5"><code className="text-[12.5px] font-mono text-text-secondary" {...props}>{children}</code></pre>,
   blockquote: ({ node, ...p }) => <blockquote className="border-l-2 border-brand/50 pl-3.5 my-2.5 text-text-secondary italic" {...p} />,
 };
 
-export function MdProse({ text, className = "" }) {
+/** `dropCap` — the opening-paragraph editorial flourish from the redesign
+ * spec (§07): use on ONE reading surface's first block, never repeated per
+ * section (see index.css's `.prose-drop-cap` for exactly what it draws). */
+export function MdProse({ text, className = "", dropCap = false }) {
   return (
-    <div className={className}>
+    <div className={dropCap ? `prose-drop-cap ${className}` : className}>
       <ReactMarkdown remarkPlugins={[remarkGfm, remarkBreaks]} components={PROSE}>
         {unescapeMd(text)}
       </ReactMarkdown>

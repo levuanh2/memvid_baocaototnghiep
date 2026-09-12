@@ -629,6 +629,18 @@
 }
 .knowledge-panel--open { max-height: 1200px; opacity: 1; }
 
+/* Wave 4 — the opening-paragraph editorial flourish (redesign spec §07).
+   Marks "a reading surface begins here" once; never repeated per section. */
+.prose-drop-cap > p:first-of-type::first-letter {
+  font-family: 'Spectral', Georgia, serif;
+  font-size: 2.5em;
+  float: left;
+  line-height: 0.82;
+  padding-right: 0.1em;
+  padding-top: 0.06em;
+  color: var(--accent);
+}
+
 @media (prefers-reduced-motion: reduce) {
   .knowledge-panel { transition: none; }
 }

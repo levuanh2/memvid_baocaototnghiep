@@ -93,7 +93,7 @@ export default function SummaryPane({ data }) {
               <>
                 <div className="font-mono text-[11px] uppercase tracking-[0.12em] text-text-muted mb-2">Tổng quan</div>
                 <div className="surface-card font-display mb-4">
-                  <MdProse text={rec.overview} />
+                  <MdProse text={rec.overview} dropCap />
                 </div>
               </>
             )}
