@@ -23,7 +23,7 @@ function MucLoc({ nhan, so, dangChon, mau, icon, onClick, onSua }) {
         type="button"
         onClick={onClick}
         aria-pressed={dangChon}
-        className="flex-1 min-w-0 flex items-center gap-2 rounded-[6px] px-2 py-1.5 text-left
+        className="flex-1 min-w-0 flex items-center gap-2 rounded-control px-2 py-1.5 text-left
                    transition-theme hover:bg-surface-elevated"
         style={dangChon ? { background: "var(--bg-elevated)" } : undefined}
       >

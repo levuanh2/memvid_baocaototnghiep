@@ -89,7 +89,7 @@ function DoiTenTaiCho({ giaTriDau, dangLuu, onLuu, onHuy }) {
           if (e.key === "Escape") { e.preventDefault(); onHuy(); }
         }}
         aria-label="Tên hiển thị của tài liệu"
-        className="w-full rounded-[6px] px-2 py-1 text-[15px] font-semibold outline-none"
+        className="w-full rounded-control px-2 py-1 text-[15px] font-semibold outline-none"
         style={{ background: "var(--bg-card)", color: "var(--text-primary)",
                  border: "1px solid var(--accent)" }}
       />

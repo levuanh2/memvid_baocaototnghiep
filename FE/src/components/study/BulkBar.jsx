@@ -123,7 +123,7 @@ export default function BulkBar({ so, boSuuTap, onHanhDong, onXoaChon, dangChay 
                   }}
                   placeholder="AI, Exam"
                   aria-label="Thẻ, cách nhau bằng dấu phẩy"
-                  className="w-full rounded-[6px] px-2 py-1 text-[12.5px] outline-none"
+                  className="w-full rounded-control px-2 py-1 text-[12.5px] outline-none"
                   style={{ background: "var(--bg-sidebar)", color: "var(--text-primary)",
                            border: "1px solid var(--border-color)" }}
                 />
