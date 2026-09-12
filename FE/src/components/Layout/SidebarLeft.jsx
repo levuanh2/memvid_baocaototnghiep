@@ -264,7 +264,7 @@ export default function SidebarLeft({ selectedSources, setSelectedSources, onSou
         </label>
 
         {/* Search — functional filter */}
-        <div className="header-search !rounded-[7px] !min-w-0 !px-3 !py-2">
+        <div className="header-search !rounded-control !min-w-0 !px-3 !py-2">
           <Icon name="Search" size={14} className="text-text-muted flex-shrink-0" />
           <input
             type="text"
@@ -333,12 +333,20 @@ export default function SidebarLeft({ selectedSources, setSelectedSources, onSou
               key={src.source_id || src.video_stem || idx}
               onClick={() => checkboxEnabled && toggleSelect(src)}
               className={[
-                "rounded-[8px] border px-3 py-2.5 transition-all duration-150 transition-theme",
+                // Wave 3: was a 4-side bordered box + shadow-glow + bg tint (3
+                // signals for one state) on every card, always — replaced with
+                // a flat list row (bottom hairline only, like .disclosure) and
+                // a single selection signal: a left accent bar + bg tint,
+                // matching the app's OWN existing left-rule convention
+                // (Toaster, .cite-block) instead of inventing a new one.
+                "px-3 py-2.5 border-b border-border transition-all duration-150 transition-theme",
                 checkboxEnabled ? "cursor-pointer" : "cursor-default",
-                isSelected ? "border-brand/45 shadow-glow" : "border-border bg-surface-card hover:border-border-strong",
+                !isSelected && "hover:bg-surface-hover",
                 isDeleting ? "opacity-50" : "",
               ].join(" ")}
-              style={isSelected ? { background: "color-mix(in srgb, var(--accent) 6%, var(--bg-card))" } : undefined}
+              style={isSelected
+                ? { background: "color-mix(in srgb, var(--accent) 6%, var(--bg-card))", borderLeft: "3px solid var(--accent)", marginLeft: "-3px" }
+                : { borderLeft: "3px solid transparent" }}
             >
               <div className="flex items-start gap-2.5">
                 <input
@@ -402,7 +410,7 @@ export default function SidebarLeft({ selectedSources, setSelectedSources, onSou
                     <Spinner size={16} className="text-text-muted" />
                   ) : (
                     <>
-                      <button onClick={() => setMenuOpen(menuOpen === idx ? null : idx)} className="w-7 h-7 rounded-[6px] inline-flex items-center justify-center text-text-muted hover:text-text-primary hover:bg-surface-elevated transition-colors" aria-label="Tuỳ chọn">
+                      <button onClick={() => setMenuOpen(menuOpen === idx ? null : idx)} className="w-7 h-7 rounded-control inline-flex items-center justify-center text-text-muted hover:text-text-primary hover:bg-surface-elevated transition-colors" aria-label="Tuỳ chọn">
                         <Icon name="MoreVertical" size={14} />
                       </button>
                       {menuOpen === idx && (

@@ -100,7 +100,9 @@ module.exports = {
         pulseSoft: "pulse 1.3s ease-in-out infinite",
       },
       boxShadow: {
-        glow:         "0 0 0 2px rgba(178,58,46,0.18)",
+        // Wave 3: `glow` (a hardcoded, non-dark-aware seal-red ring) removed —
+        // its only consumer (SidebarLeft's source-card selection state) now
+        // uses a single left accent bar + bg tint instead (see that file).
         card:         "var(--shadow-card)",
         "card-hover": "var(--shadow-card-hover)",
         header:       "0 1px 0 var(--border-color)",

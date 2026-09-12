@@ -445,7 +445,7 @@ export default function DocumentList() {
 
       {/* Thanh công cụ */}
       <div className="mb-6 flex flex-wrap items-center gap-2">
-        <div className="header-search !rounded-[7px] !min-w-0 !px-3 !py-2 flex-1 min-w-[200px]">
+        <div className="header-search !rounded-control !min-w-0 !px-3 !py-2 flex-1 min-w-[200px]">
           <Icon name="Search" size={14} className="text-text-muted flex-shrink-0" />
           <input
             type="text" value={truyVan} onChange={(e) => setTruyVan(e.target.value)}
@@ -463,7 +463,7 @@ export default function DocumentList() {
 
         <label className="sr-only" htmlFor="che-do-sap">Sắp xếp</label>
         <select id="che-do-sap" value={cheDoSap} onChange={(e) => setCheDoSap(e.target.value)}
-                className="rounded-[7px] px-2.5 py-2 text-[13px] outline-none"
+                className="rounded-control px-2.5 py-2 text-[13px] outline-none"
                 style={{ background: "var(--bg-card)", color: "var(--text-primary)",
                          border: "1px solid var(--border-color)" }}>
           {CHE_DO_SAP.map(([v, n]) => <option key={v} value={v}>{n}</option>)}
