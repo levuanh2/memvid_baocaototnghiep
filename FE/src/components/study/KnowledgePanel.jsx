@@ -23,8 +23,15 @@ import { useStudyContext } from "../../study/useStudyContext";
  */
 
 const MAU_MASTERY = {
-  mastered: { bg: "var(--ok-bg)", fg: "var(--ok)" },
-  critical_gap: { bg: "rgba(220,38,38,0.10)", fg: "var(--err, #dc2626)" },
+  // Wave 7: `critical_gap`'s background was a hardcoded literal red, never
+  // dark-mode aware (same class of bug as the rgba(178,58,46,...) sites
+  // fixed in Wave 2) — now derives from --err like every other error state.
+  // `icon` — the mastery pill was color-only (a `title` tooltip is not a
+  // substitute for a visible signal); a small icon gives every viewer,
+  // keyboard/touch/screen-reader included, the same status StatusTag's own
+  // word+color convention already guarantees elsewhere in the app.
+  mastered: { bg: "var(--ok-bg)", fg: "var(--ok)", icon: "Check" },
+  critical_gap: { bg: "color-mix(in srgb, var(--err) 10%, transparent)", fg: "var(--err)", icon: "AlertCircle" },
 };
 
 const TIEU_DE = "font-mono text-[10.5px] tracking-[0.16em] uppercase text-text-muted";
@@ -136,6 +143,7 @@ export default function KnowledgePanel({
                       border: daChon ? "1.5px solid var(--accent)" : "1px solid var(--border-color)",
                     }}
                   >
+                    {mau?.icon && <Icon name={mau.icon} size={10} aria-hidden />}
                     {t.name}
                     {t.mastery != null && <span className="opacity-80">· {masteryPercent(t.mastery)}%</span>}
                   </button>
