@@ -167,10 +167,30 @@ export default function MindElixirView({ data, onRegenerate, regenerating, contr
   // `<html>`'s class (self-contained here, no app-wide state/context change)
   // re-invokes the library's own public `changeTheme()` so it re-resolves
   // against the CURRENT `html.dark` state.
+  //
+  // Final QA fix: `changeTheme()` ALONE only updates node fill/text colors —
+  // it does not recompute connector paths. On a real multi-branch document
+  // (verified live on a real generated graph, not just the small harness
+  // dataset earlier passes were checked against), the subLines connectors
+  // went stale/NaN after a theme toggle — visible as missing or malformed
+  // curves, console errors ("<path> attribute d: Expected number, "M NaN
+  // 0..."). mind-elixir's own `refresh()` calls `changeTheme()` THEN
+  // `layout()` THEN `linkDiv()` in sequence (dist/MindElixir.js, the
+  // function assigned to `refresh`) — that's the real contract; a bare
+  // `changeTheme()` call was always incomplete. Not calling `refresh()`
+  // itself: it also reassigns `this.nodeData` from its argument and calls
+  // `toCenter()`, which would wipe the current tree unless passed a fully
+  // reconstructed data object and would recenter the view out from under
+  // the user's current pan/zoom — `layout()` + `linkDiv()` alone give the
+  // same connector-geometry fix without either side effect.
   useEffect(() => {
     const html = document.documentElement;
     const observer = new MutationObserver(() => {
-      mindRef.current?.changeTheme?.(THEME);
+      const mind = mindRef.current;
+      if (!mind) return;
+      mind.changeTheme?.(THEME);
+      mind.layout?.();
+      mind.linkDiv?.();
     });
     observer.observe(html, { attributes: true, attributeFilter: ["class"] });
     return () => observer.disconnect();
