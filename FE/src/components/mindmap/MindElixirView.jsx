@@ -196,6 +196,37 @@ export default function MindElixirView({ data, onRegenerate, regenerating, contr
     return () => observer.disconnect();
   }, []);
 
+  // Final QA fix (2nd bug, same family): WorkspaceContainer mounts every
+  // pane's content as soon as it HAS data, toggling only CSS `hidden`
+  // (display:none) to switch tabs — mind-elixir's own effect above doesn't
+  // know about that: if the mindmap arrives while the user is still on the
+  // Chat tab, `mind.init()` (and its internal first layout()/linkDiv()) runs
+  // against a 0x0 container (display:none collapses every descendant's
+  // offsetWidth/offsetHeight to 0), producing the exact same NaN subLines
+  // paths as the dark-mode bug above — reproduced live: connectors stay
+  // broken indefinitely after switching into the MindMap tab, with nothing
+  // to self-correct them (mind-elixir never reruns layout just because a
+  // hidden ancestor became visible). A ResizeObserver on the container
+  // catches that hidden -> visible transition (display:none -> real size
+  // fires a resize entry) and reruns layout()+linkDiv() once genuine
+  // geometry exists; the width/height>0 guard skips the initial 0x0 report
+  // while still hidden.
+  useEffect(() => {
+    const el = containerRef.current;
+    if (!el) return;
+    const ro = new ResizeObserver((entries) => {
+      const mind = mindRef.current;
+      if (!mind) return;
+      const { width, height } = entries[0].contentRect;
+      if (width > 0 && height > 0) {
+        mind.layout?.();
+        mind.linkDiv?.();
+      }
+    });
+    ro.observe(el);
+    return () => ro.disconnect();
+  }, []);
+
   // PR#8: thread dirty lên SidebarRight (data.onDirtyChange) — parent cần biết
   // để confirm TRƯỚC khi "Tạo lại" thay thế bản đang sửa (fix thật của known-issue
   // "Tạo lại xong ghi đè chỉnh sửa chưa lưu"). Unmount → báo false (hết phiên sửa).
