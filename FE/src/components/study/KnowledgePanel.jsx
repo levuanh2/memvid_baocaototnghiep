@@ -151,7 +151,7 @@ export default function KnowledgePanel({
               })}
               {chuDeAn > 0 && (
                 <button type="button"
-                        className="text-caption text-brand hover:underline"
+                        className="text-caption text-forest hover:underline"
                         onClick={() => setHienHetChuDe(true)}>
                   +{chuDeAn} chủ đề khác
                 </button>
@@ -252,7 +252,7 @@ export default function KnowledgePanel({
                           onMo(doc, q.target, { prompt: q.text });
                         }}
                       >
-                        <Icon name={nhom.icon} size={13} className="shrink-0 mt-[2px] text-brand" />
+                        <Icon name={nhom.icon} size={13} className="shrink-0 mt-[2px] text-forest" />
                         <span className="min-w-0 flex-1">
                           <span className="block text-small text-text-primary">{q.text}</span>
                           {lyDo && <span className="block text-caption text-text-muted mt-0.5">{lyDo}</span>}

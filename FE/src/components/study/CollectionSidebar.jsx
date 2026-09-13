@@ -207,7 +207,7 @@ export default function CollectionSidebar({
           <label className="flex items-center gap-2 px-2 py-1.5 cursor-pointer">
             <input type="checkbox" checked={hienLuuTru}
                    onChange={(e) => onHienLuuTru(e.target.checked)}
-                   className="w-3.5 h-3.5 accent-brand rounded" />
+                   className="w-3.5 h-3.5 accent-forest rounded" />
             <span className="text-small text-text-primary">Hiện đã lưu trữ</span>
           </label>
         </Nhom>

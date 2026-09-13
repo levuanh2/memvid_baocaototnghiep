@@ -51,8 +51,12 @@ export default function ProfileView({
           )}
         </div>
 
-        {/* Trường chỉ đọc — trường vắng thì KHÔNG có dòng, không hiện ô trống có nhãn */}
-        <dl className="mt-6 grid grid-cols-1 sm:grid-cols-2 gap-x-5 gap-y-4">
+        {/* Trường chỉ đọc — trường vắng thì KHÔNG có dòng, không hiện ô trống có nhãn.
+            Sprint J: 2 cột ở ngưỡng sm bổ đôi hộp thoại hẹp (460px) thành ~200px/cột —
+            một email dài (vd "sprinti-qa-1789286238622@example.com") vỡ ba dòng dù đã
+            `break-words`. Một cột duy nhất tránh vỡ dòng cho MỌI độ dài giá trị, không
+            cần biết trước trường nào sẽ dài. */}
+        <dl className="mt-6 grid grid-cols-1 gap-x-5 gap-y-4">
           {hoSo.dong.map((d) => (
             <div key={d.khoa} className="min-w-0">
               <dt className="font-mono text-metadata uppercase text-text-muted">{d.nhan}</dt>

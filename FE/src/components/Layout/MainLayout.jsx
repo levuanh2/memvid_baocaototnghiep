@@ -191,7 +191,7 @@ export default function MainLayout({ selectedSources, setSelectedSources, initia
             M
           </span>
           <span className="font-display font-semibold text-title tracking-tight text-text-primary hidden sm:block">
-            MemVid<span className="text-brand">X</span>
+            MemVid<span className="text-seal">X</span>
           </span>
         </div>
 

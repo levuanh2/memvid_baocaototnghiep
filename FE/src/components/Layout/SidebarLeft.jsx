@@ -257,10 +257,10 @@ export default function SidebarLeft({ selectedSources, setSelectedSources, onSou
       <div className="px-4 pt-4 pb-3 border-b border-border flex items-center justify-between flex-shrink-0">
         <div className="min-w-0">
           <div className="text-small font-semibold text-text-primary flex items-center gap-1.5">
-            <Icon name="Library" size={14} className="text-brand" /> Thư mục nguồn
+            <Icon name="Library" size={14} className="text-forest" /> Thư mục nguồn
           </div>
           <div className="text-caption text-text-muted mt-1 font-mono">
-            {sources.length} tài liệu · <span className="text-brand">{selectedSources.length} đang chọn</span>
+            {sources.length} tài liệu · <span className="text-forest">{selectedSources.length} đang chọn</span>
           </div>
         </div>
         {/* Khổ hẹp: đóng ngăn kéo. Khổ rộng: thu cột về gáy sách. */}
@@ -274,8 +274,14 @@ export default function SidebarLeft({ selectedSources, setSelectedSources, onSou
 
       {/* Controls */}
       <div className="px-3 pt-3 pb-2 flex-shrink-0 flex flex-col gap-2">
-        {/* Upload */}
-        <label className={["select-none w-full inline-flex items-center justify-center gap-2", uploading ? "btn-secondary cursor-not-allowed opacity-70" : "btn-primary cursor-pointer"].join(" ")}>
+        {/* Upload — Sprint K: the heavy ink-fill `.btn-primary` treatment
+            earns its weight when the shelf is empty (it's the one thing to
+            do); once there are sources, "add another" is a routine action
+            that doesn't need to out-shout the shelf itself every visit. */}
+        <label className={["select-none w-full inline-flex items-center justify-center gap-2",
+          uploading ? "btn-secondary cursor-not-allowed opacity-70"
+            : sources.length > 0 ? "btn-secondary cursor-pointer"
+            : "btn-primary cursor-pointer"].join(" ")}>
           {uploading ? (<><Spinner size={15} /> Đang tải lên…</>) : (<><Icon name="Plus" size={16} strokeWidth={2} /> Thêm tài liệu</>)}
           <input ref={fileInputRef} type="file" multiple className="hidden" onChange={handleAddFiles} disabled={uploading} />
         </label>
@@ -298,11 +304,20 @@ export default function SidebarLeft({ selectedSources, setSelectedSources, onSou
           )}
         </div>
 
-        {/* Select all */}
-        <label className="flex items-center gap-2 cursor-pointer px-1 py-0.5">
-          <input type="checkbox" checked={allSelected} onChange={(e) => handleSelectAll(e.target.checked)} className="w-3.5 h-3.5 accent-brand cursor-pointer rounded" />
-          <span className="text-small text-text-secondary font-medium">Chọn tất cả tài liệu sẵn sàng</span>
-        </label>
+        {/* Select all — Sprint Omega: was always rendered, even with zero or
+            one ready source, where "bulk"-select has nothing to act on. Gate
+            reuses the SAME `readySources` (can_query===true) the checkbox
+            logic already computes above — not a new eligibility rule, the
+            existing one, just also used to decide whether this row earns
+            its place. Real conditional render (unmounts, not just hidden),
+            so it's correctly out of both the Tab order and the a11y tree
+            when absent — no orphaned focus target. */}
+        {readySources.length > 1 && (
+          <label className="flex items-center gap-2 cursor-pointer px-1 py-0.5">
+            <input type="checkbox" checked={allSelected} onChange={(e) => handleSelectAll(e.target.checked)} className="w-3.5 h-3.5 accent-forest cursor-pointer rounded" />
+            <span className="text-small text-text-secondary font-medium">Chọn tất cả tài liệu sẵn sàng</span>
+          </label>
+        )}
       </div>
 
       {/* Sources list */}
@@ -371,9 +386,9 @@ export default function SidebarLeft({ selectedSources, setSelectedSources, onSou
                   checked={isSelected}
                   onChange={(e) => { e.stopPropagation(); toggleSelect(src); }}
                   disabled={!checkboxEnabled}
-                  className="mt-0.5 w-3.5 h-3.5 accent-brand flex-shrink-0 cursor-pointer"
+                  className="mt-0.5 w-3.5 h-3.5 accent-forest flex-shrink-0 cursor-pointer"
                 />
-                <Icon name="FileText" size={14} className={`flex-shrink-0 mt-0.5 ${isSelected ? "text-brand" : "text-text-muted"}`} />
+                <Icon name="FileText" size={14} className={`flex-shrink-0 mt-0.5 ${isSelected ? "text-forest" : "text-text-muted"}`} />
 
                 <div className="flex-1 min-w-0">
                   <div className="flex items-center gap-1.5">

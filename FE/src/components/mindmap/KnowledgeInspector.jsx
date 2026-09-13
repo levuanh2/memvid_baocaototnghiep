@@ -277,7 +277,7 @@ export default function KnowledgeInspector({
               <MetaChip icon="BookOpen" title="Mục">{node.title}</MetaChip>
               {sources?.length === 1 && (
                 <button type="button" onClick={() => onOpenSource(sources[0])}
-                  className="inline-flex items-center gap-1 text-caption font-mono text-brand hover:underline">
+                  className="inline-flex items-center gap-1 text-caption font-mono text-forest hover:underline">
                   <Icon name="FolderOpen" size={10} /> Mở nguồn
                 </button>
               )}

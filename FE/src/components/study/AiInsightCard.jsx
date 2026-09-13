@@ -40,7 +40,7 @@ export default function AiInsightCard({ doc, dangTai, tenTep, onMo, onTaiLai, on
         {n.dangChay
           ? <Spinner size={15} />
           : <Icon name={hong ? "AlertCircle" : "Sparkles"} size={16}
-                  className={hong ? "" : "text-brand"}
+                  className={hong ? "" : "text-forest"}
                   style={hong ? { color: "var(--err)" } : undefined} />}
       </span>
 
@@ -56,7 +56,7 @@ export default function AiInsightCard({ doc, dangTai, tenTep, onMo, onTaiLai, on
           <ul className="mt-2 flex flex-col gap-1">
             {n.yChinh.map((y, i) => (
               <li key={i} className="flex gap-2 text-small text-text-primary">
-                <span aria-hidden className="text-brand">•</span>
+                <span aria-hidden className="text-forest">•</span>
                 <span>{y}</span>
               </li>
             ))}

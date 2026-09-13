@@ -252,6 +252,15 @@ export default function StudyMapView() {
     setTranslate(rd3tProps.orientation === "vertical"
       ? { x: width / 2, y: Math.min(80, height * 0.12) }
       : { x: Math.min(160, width * 0.18), y: height / 2 });
+    // Sprint I fix (P1-4): `nodeSize={{x:300,...}}` below costs `300 * zoom`
+    // screen-px per tree depth regardless of viewport width — at the fixed
+    // default zoom (0.8) that's 240px/level, leaving a ~390px mobile canvas
+    // room for barely one level before branch labels run off-screen. Narrow
+    // the zoom proportionally on small containers only; desktop/tablet
+    // (>=500px) keep the exact existing default, untouched.
+    if (width < 500) {
+      setZoom(Math.max(SCALE_MIN, (width / 500) * ZOOM_MAC_DINH));
+    }
   }, [map, rd3tProps.orientation, trinhChieu]);
 
   // Trả con lăn về cho TRANG. d3-zoom (do react-d3-tree gắn lên <svg> con) nghe `wheel`

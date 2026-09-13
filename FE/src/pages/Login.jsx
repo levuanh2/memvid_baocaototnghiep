@@ -49,7 +49,7 @@ export default function Login() {
   return (
     <div className="h-screen overflow-y-auto flex items-center justify-center px-5 py-10" style={{ background: "var(--bg-base)" }}>
       <div className="w-full max-w-[400px]">
-        <Link to="/" className="inline-flex items-center gap-1.5 text-small text-text-muted hover:text-brand mb-6 transition-theme">
+        <Link to="/" className="inline-flex items-center gap-1.5 text-small text-text-muted hover:text-forest mb-6 transition-theme">
           <Icon name="ArrowLeft" size={14} /> Về trang chủ
         </Link>
 
@@ -116,7 +116,7 @@ export default function Login() {
           <p className="text-small text-text-secondary text-center mt-5">
             Chưa có tài khoản?{" "}
             <Link to={`/register${params.get("next") ? `?next=${encodeURIComponent(params.get("next"))}` : ""}`}
-              className="text-brand font-medium hover:underline">Tạo tài khoản</Link>
+              className="text-forest font-medium hover:underline">Tạo tài khoản</Link>
           </p>
         </div>
       </div>

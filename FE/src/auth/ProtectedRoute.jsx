@@ -12,7 +12,7 @@ export default function ProtectedRoute({ children }) {
 
   if (state.action === "loading") {
     return (
-      <div className="h-screen flex items-center justify-center text-brand" style={{ background: "var(--bg-base)" }}>
+      <div className="h-screen flex items-center justify-center text-forest" style={{ background: "var(--bg-base)" }}>
         <Spinner size={22} />
       </div>
     );

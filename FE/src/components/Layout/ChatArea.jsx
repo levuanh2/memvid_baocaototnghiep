@@ -67,7 +67,7 @@ function makeMdComponents({ highlight, onHighlight }) {
           </sup>
         );
       }
-      return <a href={href} target="_blank" rel="noreferrer" className="text-brand underline underline-offset-2" {...props}>{children}</a>;
+      return <a href={href} target="_blank" rel="noreferrer" className="text-forest underline underline-offset-2" {...props}>{children}</a>;
     },
   };
 }
@@ -629,7 +629,7 @@ export default function ChatArea({ selectedSources, sources = [], onEvidence, hi
         style={{ borderColor: "var(--border-color)", background: "var(--bg-sidebar)" }}>
         {usingContext && (
           <span className="inline-flex items-center gap-1.5 text-caption font-mono text-text-muted">
-            <Icon name="MessageSquare" size={12} className="text-brand" />
+            <Icon name="MessageSquare" size={12} className="text-forest" />
             Đang dùng ngữ cảnh cuộc trò chuyện
           </span>
         )}
@@ -668,7 +668,7 @@ export default function ChatArea({ selectedSources, sources = [], onEvidence, hi
       {notice && (
         <div className="px-5 sm:px-8 py-1.5 text-small flex items-center gap-2 border-b flex-shrink-0"
           style={{ borderColor: "var(--border-color)", background: "color-mix(in srgb, var(--accent) 8%, transparent)", color: "var(--text-secondary)" }}>
-          <Icon name="Info" size={13} className="text-brand" />
+          <Icon name="Info" size={13} className="text-forest" />
           <span>{notice}</span>
         </div>
       )}
@@ -694,7 +694,7 @@ export default function ChatArea({ selectedSources, sources = [], onEvidence, hi
           <div className="flex flex-col items-center justify-center h-full text-center pb-16 animate-fadeUp max-w-[440px] mx-auto">
             <div className="font-mono text-metadata uppercase text-text-muted mb-4">Phòng đọc</div>
             <h1 className="font-display text-[26px] sm:text-[30px] leading-[1.2] font-semibold text-text-primary mb-3">
-              Hỏi tài liệu của bạn — <span className="text-brand">kèm dẫn chứng</span>.
+              Hỏi tài liệu của bạn — <span className="text-seal">kèm dẫn chứng</span>.
             </h1>
             <p className="font-display text-body-lg text-text-secondary mb-6">
               Mỗi câu trả lời được truy hồi từ tài liệu đã chọn và gắn nguồn ở lề phải. Chọn tài liệu bên trái, rồi đặt câu hỏi.
@@ -741,7 +741,7 @@ export default function ChatArea({ selectedSources, sources = [], onEvidence, hi
           ) : (
             <div key={idx} className="self-start w-full max-w-[760px] flex flex-col gap-2 animate-fadeUp">
               <div className="flex items-center gap-2 text-metadata font-mono uppercase text-text-muted">
-                <Icon name="BookOpen" size={13} className="text-brand" /> Trả lời
+                <Icon name="BookOpen" size={13} className="text-forest" /> Trả lời
                 {msg.evidence?.sources?.length ? (
                   <span className="text-text-muted">· {msg.evidence.sources.length} nguồn</span>
                 ) : null}
@@ -755,8 +755,13 @@ export default function ChatArea({ selectedSources, sources = [], onEvidence, hi
 
         {pendingReview && (
           <div className="self-start w-full max-w-[760px] animate-fadeUp">
-            <div className="surface-card !p-4 border border-brand/30">
-              <div className="text-metadata font-mono uppercase text-brand mb-2">
+            {/* Final sprint: "waiting for review" is an attention/warning
+                state (HITL pause), not a brand/selection/provenance signal —
+                was on `border-brand`/`text-brand` by default, migrated to
+                `--warn` (inline style; no Tailwind `warn` utility exists yet,
+                same as every other --warn consumer in this codebase). */}
+            <div className="surface-card !p-4" style={{ borderColor: "color-mix(in srgb, var(--warn) 30%, transparent)" }}>
+              <div className="text-metadata font-mono uppercase mb-2" style={{ color: "var(--warn)" }}>
                 Chờ người dùng duyệt câu trả lời
               </div>
               <p className="text-small text-text-secondary mb-3">
@@ -801,7 +806,7 @@ export default function ChatArea({ selectedSources, sources = [], onEvidence, hi
               {streamingPreview && (
                 <div className="mt-3 pt-3 border-t border-border font-display text-body text-text-primary max-h-[42vh] overflow-y-auto">
                   <ReactMarkdown remarkPlugins={[remarkGfm, remarkBreaks]}>{streamingPreview}</ReactMarkdown>
-                  <span className="inline-block w-0.5 h-4 bg-brand animate-pulse ml-0.5 align-middle rounded-sm" aria-hidden />
+                  <span className="inline-block w-0.5 h-4 bg-forest animate-pulse ml-0.5 align-middle rounded-sm" aria-hidden />
                 </div>
               )}
             </div>

@@ -8,6 +8,21 @@
     <meta name="description" content="Hệ thống RAG học thuật: hỏi đáp tài liệu kèm dẫn chứng và truy hồi minh bạch." />
   </head>
   <body>
+    <!-- Sprint L (signature moment): static SVG filter defs, zero React/state/
+         event logic — referenced by `filter: url(#mm-sketch)` in
+         src/components/mindmap/mindmap.css. Gives MindMap's root-level
+         connectors a faint hand-sketched wobble (the "organic branch rhythm"
+         identity direction) instead of perfectly ruled computer lines.
+         Kept in the static HTML shell, not a component, specifically so this
+         never touches MindMap's render/event code. -->
+    <svg width="0" height="0" style="position:absolute" aria-hidden="true">
+      <defs>
+        <filter id="mm-sketch" x="-8%" y="-8%" width="116%" height="116%">
+          <feTurbulence type="fractalNoise" baseFrequency="0.018" numOctaves="1" seed="7" result="mm-noise" />
+          <feDisplacementMap in="SourceGraphic" in2="mm-noise" scale="2" xChannelSelector="R" yChannelSelector="G" />
+        </filter>
+      </defs>
+    </svg>
     <div id="root"></div>
     <script type="module" src="/src/main.jsx"></script>
   </body>

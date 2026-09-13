@@ -66,7 +66,11 @@ export default function Modal({
 
   return createPortal(
     <div className="fixed inset-0 z-50 flex items-center justify-center p-4 sm:p-6" role="dialog" aria-modal="true" aria-label={title || "Hộp thoại"}>
-      <div className="absolute inset-0 bg-black/45 backdrop-blur-sm" onClick={onClose} />
+      {/* Sprint K: dropped `backdrop-blur-sm` — a blurred camera-lens scrim
+          reads as "UI dialog"; a paper sheet laid on the desk just dims the
+          desk. Opacity nudged 45→50% since blur was doing some of that
+          obscuring work on its own. */}
+      <div className="absolute inset-0 bg-black/50" onClick={onClose} />
       <div
         ref={dialogRef}
         tabIndex={-1}

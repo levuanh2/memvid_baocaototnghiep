@@ -62,8 +62,8 @@ function Muc({ chinh, phu, icon, lyDo, coGhim, coYeuThich, hoatDong, onClick, on
       <div className="min-w-0 flex-1">
         <div className="flex items-center gap-1.5 min-w-0">
           <span className="text-body text-text-primary truncate">{chinh}</span>
-          {coGhim && <Icon name="Pin" size={11} className="shrink-0 text-brand" />}
-          {coYeuThich && <Icon name="Star" size={11} className="shrink-0 text-brand" />}
+          {coGhim && <Icon name="Pin" size={11} className="shrink-0 text-forest" />}
+          {coYeuThich && <Icon name="Star" size={11} className="shrink-0 text-forest" />}
         </div>
         {phu && <div className="text-caption text-text-muted truncate">{phu}</div>}
       </div>

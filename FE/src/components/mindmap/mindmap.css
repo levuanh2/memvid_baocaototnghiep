@@ -36,11 +36,33 @@ html.dark .me-container { --mm-relation: #7e90c4; }
 /* Typography theo kind — mind-elixir style theo ĐỘ SÂU, map 1:1 với kind:
    root (me-root) / section (me-main cấp 1) / idea+detail (sâu hơn).
    Selectors verified against mind-elixir 5.13 dist — kiểm lại khi nâng version. */
+/* Final sprint: root was a solid `--text-primary`-filled block (white-on-ink
+   box, THEME.cssVar's `--root-bgcolor`) — the exact "giant colored block"
+   the original audit named as needing a typographic root instead. Overriding
+   here (not by changing `--root-bgcolor` in THEME.cssVar, which mind-elixir
+   also reads for the `.mind-elixir-ghost` drag-preview swatch and the
+   `.selected` outline's own painting order) keeps the fix scoped to root's
+   own rendered box only. `border` overrides the library's own
+   `.map-container me-root me-tpc{border:var(--root-border-color) 2px
+   solid}` (equal-specificity, this file loads after `mind-elixir/style` so
+   it already wins) with a single bronze rule beneath the title — the same
+   "weight + rule, never a box, never italic" idiom already established for
+   WorkspaceTabs' active-tab underline. Presentation only: node data,
+   layout, geometry, expand/collapse, drag, and keyboard are untouched —
+   `.selected`'s own 2px outline (mind-elixir's own class, THEME.cssVar's
+   `--selected`) draws independently of this box's fill/border and is
+   unaffected either way. */
 .me-container me-root me-tpc {
   font-family: "Spectral", Georgia, serif;
   font-weight: 600;
-  font-size: 16px;
+  font-size: 24px;
   letter-spacing: 0.01em;
+  background: transparent !important;
+  color: var(--text-primary) !important;
+  border: none !important;
+  border-bottom: 2px solid var(--bronze) !important;
+  border-radius: 0 !important;
+  padding: 4px 2px 8px !important;
 }
 .me-container me-main > me-wrapper > me-parent > me-tpc {
   font-family: "Spectral", Georgia, serif;
@@ -90,6 +112,18 @@ html.dark .me-container { --mm-relation: #7e90c4; }
    depending on library internals that could change under a version bump. */
 .me-container .lines path { opacity: 1; }
 .me-container .subLines path { opacity: 0.6; }
+
+/* Sprint L (signature moment — "organic branch rhythm"): a faint hand-
+   sketched wobble on the root-level connectors only. Scoped to `.lines`
+   (root→branch, always a small, fixed count) and deliberately NOT
+   `.subLines` (one SVG per branch flattening its whole subtree — could be
+   dozens of paths in a dense graph, where a per-path SVG filter risks real
+   repaint cost). The filter itself lives in index.html's static markup
+   (zero React/state), referenced here by id only. Respects
+   prefers-reduced-motion by simply not animating — this is a static
+   distortion, not motion, so it stays on even under reduced-motion (nothing
+   here moves). */
+.me-container .lines path { filter: url(#mm-sketch); }
 
 /* Sprint F — clean hover: a border-color shift only, no glow/scale/shadow.
    Sprint H: was scoped to `me-main > me-wrapper > me-parent > me-tpc` — only
@@ -266,6 +300,71 @@ html.dark .me-container { --mm-relation: #7e90c4; }
 @media (prefers-reduced-motion: reduce) {
   .me-container * { transition: none !important; animation: none !important; }
   .animate-spin { animation: none !important; }
+}
+
+/* Sprint Omega — floating canvas controls (Phase 9: "floating controls,
+   context always obvious"). Opposite corner from `.mm-legend` (bottom-right
+   vs. bottom-left) so the two overlays can never collide. `pointer-events`
+   is scoped to this box only — everything outside its own small footprint
+   (the vast majority of the canvas) still receives pan/drag/click exactly
+   as before, since the box sits inside the already-`relative` canvas
+   wrapper, not as a full-viewport layer. No motion/transition on the
+   container itself, so `prefers-reduced-motion` has nothing to change here
+   — only its geometry needs to stay stable, which this doesn't touch. */
+.mm-floating-toolbar {
+  position: absolute;
+  right: 12px;
+  bottom: 12px;
+  z-index: 6;
+  display: flex;
+  align-items: center;
+  gap: 2px;
+  padding: 4px;
+  border-radius: 10px;
+  background: color-mix(in srgb, var(--bg-card) 92%, transparent);
+  border: 1px solid var(--border-color);
+  box-shadow: var(--shadow-card);
+  pointer-events: auto;
+  max-width: calc(100% - 24px);
+  flex-wrap: wrap;
+}
+.mm-floating-toolbar__sep {
+  width: 1px;
+  align-self: stretch;
+  margin: 4px 2px;
+  background: var(--border-color);
+  flex-shrink: 0;
+}
+/* Narrow canvases (mobile MindMap tab, panel resized small): let the
+   cluster wrap to two rows rather than overflow off-screen or shrink
+   buttons below a usable tap size. */
+@media (max-width: 480px) {
+  .mm-floating-toolbar { right: 8px; bottom: 8px; padding: 3px; gap: 1px; }
+}
+
+/* Sprint Omega — edge vignette (Phase 9: "atlas feeling, museum feeling").
+   The reason this exists at all: an atlas or a museum case-map has a real
+   edge — your eye knows where the map stops and the room begins. A flat
+   canvas that just crops has no edge, it just... ends. This is a fade
+   toward the page's own paper tone at the four corners only — not a
+   decorative color wash (no hue, no purple/blue "aurora" glow banned
+   elsewhere in this project's own audits), 6% of the surface's own
+   background color at its darkest point, fully transparent by the time it
+   reaches a quarter of the way in. `pointer-events: none` — it can never
+   intercept a click, drag, or hover meant for a node or the canvas
+   underneath. Static (no animation), so reduced-motion changes nothing
+   about it — geometry and readability are identical either way. */
+.mm-canvas-wrap::after {
+  content: "";
+  position: absolute;
+  inset: 0;
+  z-index: 4;
+  pointer-events: none;
+  background: radial-gradient(
+    ellipse at center,
+    transparent 60%,
+    color-mix(in srgb, var(--bg-base) 55%, transparent) 100%
+  );
 }
 
 /* Sprint A, item 5 — skeleton placeholder for evidence text while it loads.

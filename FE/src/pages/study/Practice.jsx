@@ -91,7 +91,7 @@ export default function Practice() {
       actions={
         quiz?.source_attempt_id && (
           <Link to={`/app/study/review/${quiz.source_attempt_id}`}
-            className="text-small text-text-muted hover:text-brand inline-flex items-center gap-1.5">
+            className="text-small text-text-muted hover:text-forest inline-flex items-center gap-1.5">
             <Icon name="BookOpen" size={14} /> Kế hoạch ôn
           </Link>
         )

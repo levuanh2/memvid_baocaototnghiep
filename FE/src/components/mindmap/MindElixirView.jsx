@@ -52,7 +52,12 @@ export const THEME = {
     "--root-radius": "8px",
     "--main-radius": "6px",
     "--topic-padding": "4px",
-    // root = khối mực (ink), chữ màu giấy
+    // Final sprint: root is now typographic (Spectral + bronze rule, see
+    // mindmap.css's `!important` override on `.me-container me-root me-tpc`)
+    // — these three stay set only because mind-elixir's own stylesheet has
+    // no fallback for an undefined var (an invalid declaration would break
+    // the rule entirely); their VALUES no longer paint anything, the
+    // override always wins.
     "--root-color": "var(--bg-base)",
     "--root-bgcolor": "var(--text-primary)",
     "--root-border-color": "transparent",
@@ -151,6 +156,25 @@ export default function MindElixirView({ data, onRegenerate, regenerating, contr
     };
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [data?.id]);
+
+  // Sprint I fix (P0-1): mind-elixir merges `THEME.cssVar` with its OWN
+  // internal light/dark default palette at `changeTheme()` time based on
+  // `this.theme.type` (dist/MindElixir.js ~line 2041) — a ONE-TIME merge done
+  // at `mind.init()`, not a live CSS cascade. useTheme.js just toggles
+  // `html.dark` with no context/event other components can subscribe to, so
+  // toggling dark mode after mount never re-ran that merge — node fills froze
+  // at whichever theme was active on first render. A MutationObserver on
+  // `<html>`'s class (self-contained here, no app-wide state/context change)
+  // re-invokes the library's own public `changeTheme()` so it re-resolves
+  // against the CURRENT `html.dark` state.
+  useEffect(() => {
+    const html = document.documentElement;
+    const observer = new MutationObserver(() => {
+      mindRef.current?.changeTheme?.(THEME);
+    });
+    observer.observe(html, { attributes: true, attributeFilter: ["class"] });
+    return () => observer.disconnect();
+  }, []);
 
   // PR#8: thread dirty lên SidebarRight (data.onDirtyChange) — parent cần biết
   // để confirm TRƯỚC khi "Tạo lại" thay thế bản đang sửa (fix thật của known-issue
@@ -264,7 +288,13 @@ export default function MindElixirView({ data, onRegenerate, regenerating, contr
 
   return (
     <div className="h-full w-full flex flex-col overflow-hidden" style={{ background: "var(--bg-base)" }}>
-      {/* Toolbar — chrome Phòng đọc: kicker mono + tiêu đề Spectral, control là icon-btn */}
+      {/* Toolbar — Sprint Omega: was a bordered row holding both page-identity
+          (title) AND every canvas control (zoom/fit/reset/center/relations/
+          export) in one flat line — the single busiest chrome strip in the
+          map. Canvas controls moved to a floating cluster anchored inside
+          the canvas itself (below); this row now holds only what's genuinely
+          page-identity: kicker, title, dirty flag, Lưu. Quieter by
+          subtraction, not by re-styling what stays. */}
       <div className="flex flex-wrap items-center gap-2 px-3 py-2 border-b flex-shrink-0"
         style={{ borderColor: "var(--border-color)", background: "var(--bg-sidebar)" }}>
         <div className="min-w-0">
@@ -277,42 +307,6 @@ export default function MindElixirView({ data, onRegenerate, regenerating, contr
         </div>
         {dirty && <span className="text-caption px-1.5 rounded" style={{ color: "var(--warn)" }}>● chưa lưu</span>}
         <div className="flex-1" />
-        <button onClick={() => zoomBy(-ZOOM_STEP)} aria-label="Thu nhỏ" title="Thu nhỏ (−)"
-          className="p-1.5 rounded hover:bg-[var(--bg-hover)] text-text-secondary">
-          <Icon name="ZoomOut" size={16} />
-        </button>
-        {/* Readout — vừa là mức thu phóng hiện tại, vừa là affordance dạy user rằng
-            canvas là một khung nhìn di chuyển được (không phải ảnh tĩnh). */}
-        <button onClick={resetZoom} aria-label="Đặt lại thu phóng" title="Đặt lại thu phóng (100%)"
-          className="px-1.5 py-1 rounded hover:bg-[var(--bg-hover)] font-mono text-caption tabular-nums text-text-secondary min-w-[46px]">
-          {formatZoom(zoom)}
-        </button>
-        <button onClick={() => zoomBy(+ZOOM_STEP)} aria-label="Phóng to" title="Phóng to (+)"
-          className="p-1.5 rounded hover:bg-[var(--bg-hover)] text-text-secondary">
-          <Icon name="ZoomIn" size={16} />
-        </button>
-        <button onClick={fitView} aria-label="Vừa khung" title="Vừa khung (F)"
-          className="flex items-center gap-1 px-2 py-1.5 rounded hover:bg-[var(--bg-hover)] text-small text-text-secondary">
-          <Icon name="Scan" size={14} /> Vừa khung
-        </button>
-        <button onClick={resetView} aria-label="Đặt lại khung nhìn" title="Đặt lại khung nhìn (0)"
-          className="flex items-center gap-1 px-2 py-1.5 rounded hover:bg-[var(--bg-hover)] text-small text-text-secondary">
-          <Icon name="RotateCcw" size={14} /> Đặt lại
-        </button>
-        <button onClick={() => mindRef.current?.toCenter()} aria-label="Căn giữa" title="Căn giữa"
-          className="p-1.5 rounded hover:bg-[var(--bg-hover)] text-text-secondary">
-          <Icon name="Maximize" size={16} />
-        </button>
-        <button onClick={() => setShowRelations((v) => !v)} aria-pressed={showRelations}
-          aria-label="Bật/tắt quan hệ" title="Quan hệ"
-          className="p-1.5 rounded hover:bg-[var(--bg-hover)]"
-          style={{ color: showRelations ? "var(--text-primary)" : "var(--text-secondary)", opacity: showRelations ? 1 : 0.5 }}>
-          <Icon name="Spline" size={16} />
-        </button>
-        <button onClick={handleExportPng} aria-label="Xuất PNG" title="Xuất PNG"
-          className="flex items-center gap-1 px-2 py-1.5 rounded hover:bg-[var(--bg-hover)] text-small text-text-secondary">
-          <Icon name="Download" size={14} /> Xuất PNG
-        </button>
         {/* Nút Lưu — chỉ hiện khi record đã có id thật trong sqlite (không phải
             "preview" transient) và không đang generating, tránh PUT 404. */}
         {data?.id && data.id !== "preview" && !data.generating && (
@@ -370,7 +364,7 @@ export default function MindElixirView({ data, onRegenerate, regenerating, contr
       )}
       {/* Canvas + legend — legend là sibling (cleanup xoá innerHTML của container
           nên không được đặt con React bên trong div ref) */}
-      <div className="relative flex-1 min-h-0 overflow-hidden">
+      <div className="relative flex-1 min-h-0 overflow-hidden mm-canvas-wrap">
         {/* Ref target owns h/w-full (normal flow) — mind-elixir sets el.style.position
             = "relative" inline (verified dist), which defeats `absolute inset-0` (inline
             beats class) and collapses the container to content height, breaking scaleFit
@@ -382,6 +376,51 @@ export default function MindElixirView({ data, onRegenerate, regenerating, contr
           <span><span className="font-mono" style={{ color: "var(--accent)" }}>※</span> có trích đoạn</span>
           <span><span className="dash" />quan hệ</span>
           <span className="mm-legend-hint">kéo node → chuyển nhánh · kéo nền → di chuyển</span>
+        </div>
+        {/* Sprint Omega — floating canvas controls, opposite corner from the
+            legend (bottom-right vs. bottom-left) so neither ever overlaps the
+            other. Same buttons, same handlers, same aria-labels, same window
+            keydown shortcuts (unchanged above) as when this lived in the top
+            toolbar row — only the position and container chrome changed.
+            `mm-floating-toolbar` sets its own `pointer-events: auto` so its
+            buttons stay clickable while the transparent canvas area under and
+            around it keeps receiving pan/drag/click exactly as before; the
+            cluster's own small footprint (bottom-right corner only) means it
+            can never sit over a node near the map's center or along its main
+            branches. Keyboard users are unaffected — Tab order and
+            `:focus-visible` are unchanged, only DOM position moved. */}
+        <div className="mm-floating-toolbar" role="toolbar" aria-label="Điều khiển sơ đồ">
+          <button onClick={() => zoomBy(-ZOOM_STEP)} aria-label="Thu nhỏ" title="Thu nhỏ (−)"
+            className="icon-btn w-8 h-8">
+            <Icon name="ZoomOut" size={15} />
+          </button>
+          <button onClick={resetZoom} aria-label="Đặt lại thu phóng" title="Đặt lại thu phóng (100%)"
+            className="icon-btn h-8 px-2 font-mono text-caption tabular-nums min-w-[42px]">
+            {formatZoom(zoom)}
+          </button>
+          <button onClick={() => zoomBy(+ZOOM_STEP)} aria-label="Phóng to" title="Phóng to (+)"
+            className="icon-btn w-8 h-8">
+            <Icon name="ZoomIn" size={15} />
+          </button>
+          <div className="mm-floating-toolbar__sep" aria-hidden="true" />
+          <button onClick={fitView} aria-label="Vừa khung" title="Vừa khung (F)" className="icon-btn w-8 h-8">
+            <Icon name="Scan" size={14} />
+          </button>
+          <button onClick={resetView} aria-label="Đặt lại khung nhìn" title="Đặt lại khung nhìn (0)" className="icon-btn w-8 h-8">
+            <Icon name="RotateCcw" size={14} />
+          </button>
+          <button onClick={() => mindRef.current?.toCenter()} aria-label="Căn giữa" title="Căn giữa" className="icon-btn w-8 h-8">
+            <Icon name="Maximize" size={15} />
+          </button>
+          <div className="mm-floating-toolbar__sep" aria-hidden="true" />
+          <button onClick={() => setShowRelations((v) => !v)} aria-pressed={showRelations}
+            aria-label="Bật/tắt quan hệ" title="Quan hệ" className="icon-btn w-8 h-8"
+            style={{ color: showRelations ? "var(--text-primary)" : "var(--text-secondary)", opacity: showRelations ? 1 : 0.55 }}>
+            <Icon name="Spline" size={15} />
+          </button>
+          <button onClick={handleExportPng} aria-label="Xuất PNG" title="Xuất PNG" className="icon-btn w-8 h-8">
+            <Icon name="Download" size={14} />
+          </button>
         </div>
       </div>
     </div>

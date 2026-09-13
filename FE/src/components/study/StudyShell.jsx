@@ -34,7 +34,7 @@ export default function StudyShell({
           {backTo && (
             <Link
               to={backTo}
-              className="inline-flex items-center gap-1.5 text-small text-text-muted hover:text-brand transition-theme shrink-0"
+              className="inline-flex items-center gap-1.5 text-small text-text-muted hover:text-forest transition-theme shrink-0"
             >
               <Icon name="ArrowLeft" size={14} /> {backLabel}
             </Link>

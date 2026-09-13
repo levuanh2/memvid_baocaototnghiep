@@ -191,7 +191,7 @@ export default function QuizSetup() {
                   <button key={s.section_id} type="button"
                     className={`text-left rounded-[6px] px-3 py-2 text-body transition-all border ${
                       sectionIds.includes(s.section_id)
-                        ? "border-brand text-brand"
+                        ? "border-forest text-forest"
                         : "border-transparent text-text-secondary hover:text-text-primary"
                     }`}
                     style={{ paddingLeft: `${12 + (s.level - 1) * 14}px` }}
@@ -201,7 +201,7 @@ export default function QuizSetup() {
                 ))}
               </div>
               {sectionIds.length > 0 && (
-                <button type="button" className="text-small text-text-muted hover:text-brand mt-1"
+                <button type="button" className="text-small text-text-muted hover:text-forest mt-1"
                   onClick={() => setSectionIds([])}>Bỏ chọn, ra đề toàn tài liệu</button>
               )}
             </Field>

@@ -102,12 +102,12 @@ export default function Landing() {
             {/* Same wordmark seal as MainLayout.jsx — stays --seal (Signature Contract §7). */}
             <span className="w-[30px] h-[30px] rounded-[6px] inline-flex items-center justify-center font-display text-body-lg font-semibold"
               style={{ color: "var(--seal)", border: "1.5px solid var(--seal)", transform: "rotate(-4deg)" }} aria-hidden>M</span>
-            <span className="font-display font-semibold text-title tracking-tight text-text-primary">MemVid<span className="text-brand">X</span></span>
+            <span className="font-display font-semibold text-title tracking-tight text-text-primary">MemVid<span className="text-seal">X</span></span>
           </div>
           <div className="flex-1" />
-          <button onClick={() => scrollTo("tinhnang")} className="hidden md:inline text-body text-text-secondary hover:text-brand transition-theme">Tính năng</button>
-          <button onClick={() => scrollTo("quytrinh")} className="hidden md:inline text-body text-text-secondary hover:text-brand transition-theme">Quy trình</button>
-          <button onClick={() => scrollTo("demo")} className="hidden md:inline text-body text-text-secondary hover:text-brand transition-theme">Demo</button>
+          <button onClick={() => scrollTo("tinhnang")} className="hidden md:inline text-body text-text-secondary hover:text-forest transition-theme">Tính năng</button>
+          <button onClick={() => scrollTo("quytrinh")} className="hidden md:inline text-body text-text-secondary hover:text-forest transition-theme">Quy trình</button>
+          <button onClick={() => scrollTo("demo")} className="hidden md:inline text-body text-text-secondary hover:text-forest transition-theme">Demo</button>
           <button onClick={toggleTheme} className="icon-btn w-8 h-8" aria-label="Đổi giao diện sáng/tối" title="Sáng/tối">
             <Icon name={isDark ? "Sun" : "Moon"} size={15} />
           </button>
@@ -130,7 +130,7 @@ export default function Landing() {
         <div className="animate-fadeUp">
           <div className="font-mono text-metadata uppercase text-text-muted mb-4">Phòng đọc · RAG bám nguồn</div>
           <h1 className="font-display text-display font-semibold text-text-primary" style={{ textWrap: "balance" }}>
-            Hỏi tài liệu của bạn — <span className="text-brand">kèm dẫn chứng</span>.
+            Hỏi tài liệu của bạn — <span className="text-seal">kèm dẫn chứng</span>.
           </h1>
           <p className="font-body text-body text-text-secondary mt-6 max-w-[520px]">
             Upload tài liệu, hỏi đáp bám nguồn, tóm tắt, tạo mindmap và tiếp tục hỏi bằng ngữ cảnh hội thoại.
@@ -148,19 +148,23 @@ export default function Landing() {
       </section>
 
       {/* ── PROBLEM ── */}
+      {/* Sprint J (Hallmark C2/L1): was a 4-col icon-tile grid — the same
+          shape as the SOLUTION grid right below it, so the page opened with
+          two back-to-back identical-looking sections. Dropped the icons and
+          the grid; reads as a short list of friction points, not a second
+          feature-tile row, and its tighter rhythm (py-12, gap-y-3) varies
+          against its neighbors instead of matching their py-14 uniformly. */}
       <section className="border-t border-border" style={{ background: "var(--bg-sidebar)" }}>
-        <div className="max-w-[1080px] mx-auto px-5 sm:px-8 py-14">
+        <div className="max-w-[1080px] mx-auto px-5 sm:px-8 py-12">
           <h2 className="font-display text-h1 font-semibold text-text-primary mb-2">Đọc tài liệu dài không nên khó đến vậy</h2>
-          <p className="text-body text-text-secondary mb-8 max-w-[560px]">Những trở ngại quen thuộc khi làm việc với tài liệu học tập và nghiên cứu.</p>
-          <div className="grid sm:grid-cols-2 lg:grid-cols-4 gap-x-8 gap-y-10">
+          <p className="text-body text-text-secondary mb-6 max-w-[560px]">Những trở ngại quen thuộc khi làm việc với tài liệu học tập và nghiên cứu.</p>
+          <ul className="grid sm:grid-cols-2 gap-x-10 gap-y-3 max-w-[760px]">
             {PROBLEMS.map((p) => (
-              <div key={p.title} className="p-1">
-                <Icon name={p.icon} size={20} className="text-brand mb-3" />
-                <div className="font-display font-semibold text-title text-text-primary mb-1">{p.title}</div>
-                <div className="text-small text-text-secondary leading-relaxed">{p.desc}</div>
-              </div>
+              <li key={p.title} className="text-body text-text-secondary">
+                <span className="font-display font-semibold text-text-primary">{p.title}.</span>{" "}{p.desc}
+              </li>
             ))}
-          </div>
+          </ul>
         </div>
       </section>
 
@@ -171,7 +175,7 @@ export default function Landing() {
         <div className="grid sm:grid-cols-2 lg:grid-cols-5 gap-x-6 gap-y-10">
           {SOLUTIONS.map((s) => (
             <div key={s.title} className="p-1">
-              <Icon name={s.icon} size={20} className="text-brand mb-3" />
+              <Icon name={s.icon} size={20} className="text-forest mb-3" />
               <div className="font-display font-semibold text-body-lg text-text-primary mb-1">{s.title}</div>
               <div className="text-small text-text-secondary leading-relaxed">{s.desc}</div>
             </div>
@@ -186,7 +190,7 @@ export default function Landing() {
           <div className="grid sm:grid-cols-2 lg:grid-cols-4 gap-5">
             {WORKFLOW.map((w) => (
               <div key={w.n} className="relative">
-                <div className="font-mono text-h3 text-brand mb-2 tabular-nums">{w.n}</div>
+                <div className="font-mono text-h3 text-bronze mb-2 tabular-nums">{w.n}</div>
                 <div className="font-display text-title text-text-primary mb-1.5">{w.title}</div>
                 <div className="text-small text-text-secondary leading-relaxed">{w.desc}</div>
               </div>
@@ -195,18 +199,24 @@ export default function Landing() {
         </div>
       </section>
 
-      {/* ── FEATURE CARDS ── */}
+      {/* ── FEATURE LIST ── Sprint J (Hallmark C2): was a 3-col grid of
+          colored-icon-square cards — Hallmark's own named "3-column feature
+          grid" / "icon-tile feature card" tells, verbatim. Dropped the
+          colored icon box and the per-item card border; icon sits inline
+          beside the heading, rows separated by a hairline (not four sides),
+          2 columns instead of 3 so it doesn't repeat the SOLUTION grid's
+          shape a second time on the same page. */}
       <section id="tinhnang" className="max-w-[1080px] mx-auto px-5 sm:px-8 py-14">
         <h2 className="font-display text-h1 font-semibold text-text-primary mb-8">Tính năng chính</h2>
-        <div className="grid sm:grid-cols-2 lg:grid-cols-3 gap-x-8 gap-y-10">
-          {FEATURES.map((f) => (
-            <div key={f.title} className="p-1">
-              <div className="w-9 h-9 rounded-[7px] inline-flex items-center justify-center mb-3"
-                style={{ background: "color-mix(in srgb, var(--accent) 10%, transparent)", border: "1px solid rgba(178,58,46,0.25)" }}>
-                <Icon name={f.icon} size={17} className="text-brand" />
+        <div className="grid sm:grid-cols-2 gap-x-10">
+          {FEATURES.map((f, i) => (
+            <div key={f.title}
+              className={`flex items-start gap-3 py-4 ${i < FEATURES.length - 2 ? "border-b border-border" : ""}`}>
+              <Icon name={f.icon} size={18} className="text-forest mt-0.5 flex-shrink-0" />
+              <div>
+                <div className="font-display font-semibold text-body-lg text-text-primary mb-1">{f.title}</div>
+                <div className="text-small text-text-secondary leading-relaxed">{f.desc}</div>
               </div>
-              <div className="font-display font-semibold text-body-lg text-text-primary mb-1">{f.title}</div>
-              <div className="text-small text-text-secondary leading-relaxed">{f.desc}</div>
             </div>
           ))}
         </div>
@@ -227,7 +237,7 @@ export default function Landing() {
               Bình lọc Hải Đăng 3000 giải quyết nước <strong>nhiễm phèn và nhiễm mặn</strong> ở đồng bằng sông Cửu Long.<span className="cite-chip">2</span>
             </ChatBubble>
             <div className="pt-2 mt-1 border-t border-border flex items-center gap-2 text-small text-text-muted">
-              <Icon name="MessagesSquare" size={13} className="text-brand" />
+              <Icon name="MessagesSquare" size={13} className="text-forest" />
               Hiểu “nó” nhờ ngữ cảnh hội thoại — không cần nhắc lại tên tài liệu.
             </div>
           </div>
@@ -276,7 +286,7 @@ export default function Landing() {
       {/* ── FOOTER ── */}
       <footer className="border-t border-border" style={{ background: "var(--bg-sidebar)" }}>
         <div className="max-w-[1080px] mx-auto px-5 sm:px-8 py-8 flex flex-col sm:flex-row items-center justify-between gap-3">
-          <div className="font-display font-semibold text-body-lg text-text-primary">MemVid<span className="text-brand">X</span></div>
+          <div className="font-display font-semibold text-body-lg text-text-primary">MemVid<span className="text-seal">X</span></div>
           <div className="text-small text-text-muted font-mono">Đọc · Truy hồi · Dẫn chứng</div>
         </div>
       </footer>

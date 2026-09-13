@@ -487,7 +487,7 @@ export default function DocumentList() {
                     </div>
                     {mucLoc.map(([khoa, nhan]) => (
                       <label key={khoa} className="flex items-center gap-2 py-[3px] cursor-pointer">
-                        <input type="checkbox" className="w-3.5 h-3.5 accent-brand rounded"
+                        <input type="checkbox" className="w-3.5 h-3.5 accent-forest rounded"
                                checked={boLoc.includes(khoa)}
                                onChange={(e) => setBoLoc((prev) => e.target.checked
                                  ? [...prev, khoa] : prev.filter((k) => k !== khoa))} />
@@ -498,7 +498,7 @@ export default function DocumentList() {
                 ))}
                 {boLoc.length > 0 && (
                   <button type="button" onClick={() => setBoLoc([])}
-                          className="mt-1 text-small text-brand">Xoá bộ lọc</button>
+                          className="mt-1 text-small text-forest">Xoá bộ lọc</button>
                 )}
               </div>
             </>
@@ -508,7 +508,7 @@ export default function DocumentList() {
         <label className="flex items-center gap-2 cursor-pointer px-1">
           <input type="checkbox" checked={hienLuuTru}
                  onChange={(e) => setHienLuuTru(e.target.checked)}
-                 className="w-3.5 h-3.5 accent-brand rounded" />
+                 className="w-3.5 h-3.5 accent-forest rounded" />
           <span className="text-small text-text-secondary">Hiện đã lưu trữ</span>
         </label>
 
@@ -519,7 +519,7 @@ export default function DocumentList() {
               checked={daChonHet(daChon, mucHienThi.tatCa)}
               onChange={(e) => setDaChon(e.target.checked
                 ? chonTatCa(mucHienThi.tatCa) : xoaChon())}
-              className="w-3.5 h-3.5 accent-brand rounded"
+              className="w-3.5 h-3.5 accent-forest rounded"
             />
             {/* Nói rõ phạm vi: "tất cả" ở đây là những gì ĐANG hiện, không phải cả
                 thư viện — chọn 300 tài liệu đang ẩn rồi xoá là mất dữ liệu. */}
@@ -665,24 +665,33 @@ export default function DocumentList() {
   );
 }
 
+/* Sprint J (Hallmark critical finding C1): four equal `.surface-card` tiles,
+   each a mono-uppercase label over a big number, is the single most
+   recognizable "admin dashboard stat row" shape — independent of any
+   color/font choice layered on top. Replaced with a status line: document
+   count gets real visual priority (it's the number that orients the page),
+   the other three read as a natural inline sentence, not a second row of
+   boxes. Numbers stay mono/tabular per the Signature Contract's "numbers
+   are the one cross-screen constant" rule — bronze, not the accent color,
+   since these are data, not an action. */
 function Overview({ overview }) {
   const items = [
-    ["Tài liệu", overview.document_count],
-    ["Quiz đã tạo", overview.quiz_count],
-    ["Bài đã làm", overview.attempt_count],
+    ["Quiz đã tạo", overview.quiz_count ?? 0],
+    ["Bài đã làm", overview.attempt_count ?? 0],
     ["Điểm trung bình", overview.average_percentage == null ? "—" : `${overview.average_percentage}%`],
   ];
   return (
-    <section className="grid grid-cols-2 sm:grid-cols-4 gap-2.5 mb-7">
-      {items.map(([label, value]) => (
-        <div key={label} className="surface-card !p-3.5">
-          <div className="font-mono text-metadata uppercase text-text-muted">
-            {label}
-          </div>
-          <div className="font-display text-h2 font-semibold text-text-primary mt-1">
-            {value ?? 0}
-          </div>
-        </div>
+    <section className="mb-7 pb-5 border-b border-border flex flex-wrap items-baseline gap-x-2.5 gap-y-1.5">
+      <span className="font-mono text-h1 font-semibold tabular-nums" style={{ color: "var(--bronze)" }}>
+        {overview.document_count ?? 0}
+      </span>
+      <span className="text-body-lg text-text-secondary mr-2">tài liệu</span>
+      {items.map(([label, value], i) => (
+        <span key={label} className="text-small text-text-muted">
+          {i > 0 && <span className="mx-2.5" aria-hidden="true">·</span>}
+          {label}{" "}
+          <span className="font-mono tabular-nums" style={{ color: "var(--bronze)" }}>{value}</span>
+        </span>
       ))}
     </section>
   );
