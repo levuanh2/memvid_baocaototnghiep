@@ -40,6 +40,23 @@ const formatFileName = (name = "") => name.replace(/\.(mp4|avi|mov|mkv|webm|mp3|
 export default function SidebarLeft({ selectedSources, setSelectedSources, onSourcesChange, onClose, collapsible = false }) {
   const [sources, setSources] = useState([]);
   const [menuOpen, setMenuOpen] = useState(null);
+  // Sprint H: "..." menu had no dismiss path except its own Xóa button or
+  // re-clicking the toggle — click elsewhere / Escape left it floating open
+  // indefinitely. Same outside-click shape as `DoiTenTaiCho` below.
+  useEffect(() => {
+    if (menuOpen === null) return;
+    // Bấm bên TRONG khối menu (kể cả nút "...") không tính là "ngoài" — chỉ
+    // check containment mới tránh được vòng lặp đóng-rồi-mở lại ngay do
+    // mousedown chạy trước click và React re-render xen giữa hai sự kiện đó.
+    const ngoai = (e) => { if (!e.target.closest(".sidebar-source-menu")) setMenuOpen(null); };
+    const phimEsc = (e) => { if (e.key === "Escape") setMenuOpen(null); };
+    document.addEventListener("mousedown", ngoai);
+    document.addEventListener("keydown", phimEsc);
+    return () => {
+      document.removeEventListener("mousedown", ngoai);
+      document.removeEventListener("keydown", phimEsc);
+    };
+  }, [menuOpen]);
   const [uploading, setUploading] = useState(false);
   const [deletingFile, setDeletingFile] = useState(null);
   const [loiTai, setLoiTai] = useState(null);
@@ -239,10 +256,10 @@ export default function SidebarLeft({ selectedSources, setSelectedSources, onSou
       {/* Header */}
       <div className="px-4 pt-4 pb-3 border-b border-border flex items-center justify-between flex-shrink-0">
         <div className="min-w-0">
-          <div className="text-[13px] font-semibold text-text-primary flex items-center gap-1.5">
+          <div className="text-small font-semibold text-text-primary flex items-center gap-1.5">
             <Icon name="Library" size={14} className="text-brand" /> Thư mục nguồn
           </div>
-          <div className="text-[11px] text-text-muted mt-1 font-mono">
+          <div className="text-caption text-text-muted mt-1 font-mono">
             {sources.length} tài liệu · <span className="text-brand">{selectedSources.length} đang chọn</span>
           </div>
         </div>
@@ -272,7 +289,7 @@ export default function SidebarLeft({ selectedSources, setSelectedSources, onSou
             onChange={(e) => setQuery(e.target.value)}
             placeholder="Lọc theo tên tài liệu…"
             aria-label="Lọc tài liệu"
-            className="bg-transparent outline-none text-[13px] text-text-primary placeholder:text-text-muted w-full"
+            className="bg-transparent outline-none text-small text-text-primary placeholder:text-text-muted w-full"
           />
           {query && (
             <button onClick={() => setQuery("")} className="text-text-muted hover:text-text-primary" aria-label="Xoá bộ lọc">
@@ -284,7 +301,7 @@ export default function SidebarLeft({ selectedSources, setSelectedSources, onSou
         {/* Select all */}
         <label className="flex items-center gap-2 cursor-pointer px-1 py-0.5">
           <input type="checkbox" checked={allSelected} onChange={(e) => handleSelectAll(e.target.checked)} className="w-3.5 h-3.5 accent-brand cursor-pointer rounded" />
-          <span className="text-[12px] text-text-secondary font-medium">Chọn tất cả tài liệu sẵn sàng</span>
+          <span className="text-small text-text-secondary font-medium">Chọn tất cả tài liệu sẵn sàng</span>
         </label>
       </div>
 
@@ -295,7 +312,7 @@ export default function SidebarLeft({ selectedSources, setSelectedSources, onSou
           chưa — đúng loại bất đối xứng chỉ lộ ra khi danh sách đủ dài. */}
       <div className="flex-1 min-h-0 overflow-y-auto co-the-cuon-them px-3 pb-3 flex flex-col gap-1.5">
         {loiUpload && (
-          <div className="text-[12px] flex items-start gap-1.5 px-1 py-2" style={{ color: "var(--err)" }}>
+          <div className="text-small flex items-start gap-1.5 px-1 py-2" style={{ color: "var(--err)" }}>
             <Icon name="AlertCircle" size={13} className="mt-0.5 shrink-0" />
             <span className="flex-1">{loiUpload}</span>
           </div>
@@ -303,8 +320,8 @@ export default function SidebarLeft({ selectedSources, setSelectedSources, onSou
         {loiTai ? (
           <div className="text-center py-12 px-4">
             <Icon name="AlertCircle" size={30} className="mx-auto mb-3" style={{ color: "var(--err)" }} />
-            <p className="text-[13px] font-semibold text-text-secondary">{loiTai}</p>
-            <button type="button" className="text-[12px] underline text-text-muted mt-2"
+            <p className="text-small font-semibold text-text-secondary">{loiTai}</p>
+            <button type="button" className="text-small underline text-text-muted mt-2"
               onClick={fetchSourcesFromBackend}>
               Thử lại
             </button>
@@ -312,12 +329,12 @@ export default function SidebarLeft({ selectedSources, setSelectedSources, onSou
         ) : sources.length === 0 && (
           <div className="text-center py-12 px-4">
             <Icon name="FolderOpen" size={30} className="mx-auto mb-3 text-text-muted opacity-60" />
-            <p className="text-[13px] font-semibold text-text-secondary">Chưa có tài liệu nào.</p>
-            <p className="text-[12px] text-text-muted mt-1">Nhấn “Thêm tài liệu” để bắt đầu.</p>
+            <p className="text-small font-semibold text-text-secondary">Chưa có tài liệu nào.</p>
+            <p className="text-small text-text-muted mt-1">Nhấn “Thêm tài liệu” để bắt đầu.</p>
           </div>
         )}
         {sources.length > 0 && visibleSources.length === 0 && (
-          <div className="text-center py-10 px-4 text-[12px] text-text-muted">Không có tài liệu khớp “{query}”.</div>
+          <div className="text-center py-10 px-4 text-small text-text-muted">Không có tài liệu khớp “{query}”.</div>
         )}
 
         {visibleSources.map((src, idx) => {
@@ -360,18 +377,18 @@ export default function SidebarLeft({ selectedSources, setSelectedSources, onSou
 
                 <div className="flex-1 min-w-0">
                   <div className="flex items-center gap-1.5">
-                    <span className="text-[13px] font-semibold text-text-primary truncate flex-1" title={displayName}>{displayName}</span>
+                    <span className="text-small font-semibold text-text-primary truncate flex-1" title={displayName}>{displayName}</span>
                     {statusConfig.showErrorIcon && <Icon name="AlertCircle" size={13} className="flex-shrink-0 text-[var(--err)]" />}
                   </div>
 
                   <div className="flex items-center gap-2 mt-1.5">
                     {isSelectable && src.num_chunks ? (
-                      <span className="text-[11px] text-text-muted font-mono">{src.num_chunks} đoạn</span>
+                      <span className="text-caption text-text-muted font-mono">{src.num_chunks} đoạn</span>
                     ) : null}
                     {statusConfig.badgeText && <Badge tone={statusConfig.tone}>{statusConfig.badgeText}</Badge>}
                   </div>
 
-                  {statusConfig.subText && <div className="text-[11px] text-text-muted mt-1">{statusConfig.subText}</div>}
+                  {statusConfig.subText && <div className="text-caption text-text-muted mt-1">{statusConfig.subText}</div>}
 
                   {statusConfig.showProgress && !src.matDauVet && (
                     <div className="mt-1.5">
@@ -382,13 +399,13 @@ export default function SidebarLeft({ selectedSources, setSelectedSources, onSou
                   {/* Trục trặc đường truyền, VẪN đang thử lại. Màu cảnh báo chứ không phải
                       màu lỗi: tài liệu không hỏng, chỉ là tạm thời không hỏi được. */}
                   {src.trucTracTamThoi && !src.matDauVet && (
-                    <div className="text-[11px] mt-1.5" style={{ color: "var(--warn)" }}>
+                    <div className="text-caption mt-1.5" style={{ color: "var(--warn)" }}>
                       Không thể kết nối tạm thời. Đang thử theo dõi lại...
                     </div>
                   )}
 
                   {src.matDauVet && (
-                    <div className="text-[11px] mt-1.5" style={{ color: "var(--err)" }}>
+                    <div className="text-caption mt-1.5" style={{ color: "var(--err)" }}>
                       Không thể kết nối tới máy chủ để theo dõi tiến trình. Tài liệu có thể vẫn đang được xử lý.{" "}
                       <button type="button" className="underline"
                         onClick={() => { setSources((prev) => prev.map((s) => s.source_id === src.source_id ? { ...s, matDauVet: false, trucTracTamThoi: false } : s)); pollSourceStatus(src.source_id); }}>
@@ -398,24 +415,24 @@ export default function SidebarLeft({ selectedSources, setSelectedSources, onSou
                   )}
 
                   {src.status === "error" && (
-                    <div className="text-[11px] mt-1.5 rounded-[6px] px-2 py-1 whitespace-pre-wrap break-words"
+                    <div className="text-caption mt-1.5 rounded-[6px] px-2 py-1 whitespace-pre-wrap break-words"
                       style={{ color: "var(--err)", background: "color-mix(in srgb, var(--err) 10%, transparent)", border: "1px solid color-mix(in srgb, var(--err) 25%, transparent)" }}>
                       {String(src.error ?? "").trim() || "Không có chi tiết lỗi — xem log backend."}
                     </div>
                   )}
                 </div>
 
-                <div className="relative flex-shrink-0" onClick={(e) => e.stopPropagation()}>
+                <div className="relative flex-shrink-0 sidebar-source-menu" onClick={(e) => e.stopPropagation()}>
                   {isDeleting ? (
                     <Spinner size={16} className="text-text-muted" />
                   ) : (
                     <>
-                      <button onClick={() => setMenuOpen(menuOpen === idx ? null : idx)} className="w-7 h-7 rounded-control inline-flex items-center justify-center text-text-muted hover:text-text-primary hover:bg-surface-elevated transition-colors" aria-label="Tuỳ chọn">
+                      <button onClick={() => setMenuOpen(menuOpen === idx ? null : idx)} className="w-7 h-7 rounded-control inline-flex items-center justify-center text-text-muted hover:text-text-primary hover:bg-surface-elevated transition-colors" aria-label="Tuỳ chọn" aria-haspopup="true" aria-expanded={menuOpen === idx}>
                         <Icon name="MoreVertical" size={14} />
                       </button>
                       {menuOpen === idx && (
-                        <div className="absolute right-0 top-8 z-20 min-w-[120px] border border-border rounded-[8px] overflow-hidden" style={{ background: "var(--bg-card)", boxShadow: "var(--shadow-card-hover)" }}>
-                          <button onClick={() => handleDeleteSource(src)} className="w-full text-left px-3 py-2 text-[13px] font-semibold inline-flex items-center gap-2 hover:bg-surface-elevated transition-colors" style={{ color: "var(--err)" }}>
+                        <div role="menu" className="absolute right-0 top-8 z-20 min-w-[120px] border border-border rounded-[8px] overflow-hidden animate-fadeIn" style={{ background: "var(--bg-card)", boxShadow: "var(--shadow-card-hover)" }}>
+                          <button role="menuitem" onClick={() => handleDeleteSource(src)} className="w-full text-left px-3 py-2 text-small font-semibold inline-flex items-center gap-2 hover:bg-surface-elevated transition-colors" style={{ color: "var(--err)" }}>
                             <Icon name="Trash2" size={13} /> Xóa
                           </button>
                         </div>

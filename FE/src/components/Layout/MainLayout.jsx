@@ -184,13 +184,13 @@ export default function MainLayout({ selectedSources, setSelectedSources, initia
             REFERENCES this motif, never duplicates its exact treatment. */}
         <div className="flex items-center gap-2.5 flex-shrink-0 select-none">
           <span
-            className="w-[30px] h-[30px] rounded-[6px] inline-flex items-center justify-center font-display text-[16px] font-semibold flex-shrink-0"
+            className="w-[30px] h-[30px] rounded-[6px] inline-flex items-center justify-center font-display text-body-lg font-semibold flex-shrink-0"
             style={{ color: "var(--seal)", border: "1.5px solid var(--seal)", transform: "rotate(-4deg)" }}
             aria-hidden
           >
             M
           </span>
-          <span className="font-display font-semibold text-[17px] tracking-tight text-text-primary hidden sm:block">
+          <span className="font-display font-semibold text-title tracking-tight text-text-primary hidden sm:block">
             MemVid<span className="text-brand">X</span>
           </span>
         </div>
@@ -203,7 +203,7 @@ export default function MainLayout({ selectedSources, setSelectedSources, initia
           {selectedDocument ? (
             <StudyBreadcrumb showChat className="hidden md:flex" />
           ) : (
-            <span className="hidden md:block text-[12px] tracking-[0.14em] uppercase text-text-muted font-mono truncate">
+            <span className="hidden md:block text-metadata uppercase text-text-muted font-mono truncate">
               Đọc · Truy hồi · Dẫn chứng
             </span>
           )}
@@ -234,12 +234,12 @@ export default function MainLayout({ selectedSources, setSelectedSources, initia
               Workspace now, not buried in Library. Same global CommandPalette
               as Ctrl+K (Issue 2 doesn't ask for a second search engine, just
               a visible entry point reachable from here). */}
-          <button onClick={openCommandPalette} className="hidden md:inline-flex pill-action !text-[12.5px]"
+          <button onClick={openCommandPalette} className="hidden md:inline-flex pill-action !text-small"
                   title="Tìm kiếm (Ctrl+K)">
             <Icon name="Search" size={14} /> Tìm kiếm
           </button>
           {/* Gia sư AI — luôn có mặt (ẩn trên mobile để tránh chật hàng nút; Ctrl+/ vẫn mở được). */}
-          <button onClick={openTutor} className="hidden md:inline-flex pill-action !text-[12.5px]"
+          <button onClick={openTutor} className="hidden md:inline-flex pill-action !text-small"
                   title="Gia sư AI (Ctrl+/)">
             <Icon name="Sparkles" size={14} /> Gia sư AI
           </button>
@@ -286,7 +286,7 @@ export default function MainLayout({ selectedSources, setSelectedSources, initia
                 panel.drawer
                   ? `fixed top-[58px] left-0 h-[calc(100vh-58px)] z-40 w-[252px] shrink-0
                      bg-surface-sidebar border-r border-border
-                     transition-transform duration-300 ease-in-out
+                     transition-transform duration-200 ease-in-out
                      ${leftOpen ? "translate-x-0" : "-translate-x-full"}`
                   // Không kẻ border ở đây: PanelDivider bên cạnh CHÍNH LÀ đường kẻ.
                   // Giữ cả hai sẽ thành đường đôi 2px.
@@ -366,11 +366,11 @@ export default function MainLayout({ selectedSources, setSelectedSources, initia
                   ? rightView === "tutor"
                     ? `fixed inset-x-0 bottom-0 max-h-[80vh] z-40 shrink-0
                        bg-surface-sidebar border-t border-border rounded-t-[14px]
-                       transition-transform duration-300 ease-in-out
+                       transition-transform duration-200 ease-in-out
                        ${rightOpen ? "translate-y-0" : "translate-y-full"}`
                     : `fixed top-[58px] right-0 h-[calc(100vh-58px)] z-40 w-[326px] shrink-0
                        bg-surface-sidebar border-l border-border
-                       transition-transform duration-300 ease-in-out
+                       transition-transform duration-200 ease-in-out
                        ${rightOpen ? "translate-x-0" : "translate-x-full"}`
                   : "shrink-0 bg-surface-sidebar overflow-hidden"
               }

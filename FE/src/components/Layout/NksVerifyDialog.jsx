@@ -38,13 +38,13 @@ export default function NksVerifyDialog({ open, email, onXacNhan, onClose, dangG
   return (
     <Modal open title="Xác minh tài khoản NKS" onClose={dangGui ? undefined : onClose} maxWidth={420}>
       <form onSubmit={gui} className="px-5 py-5">
-        <p className="text-[13px] leading-[1.6] text-text-secondary">
+        <p className="text-small text-text-secondary">
           Hồ sơ do NKS quản lý. Nhập mật khẩu NKS để mở khoá chỉnh sửa trong 10 phút.
           StudyMap không lưu mật khẩu này.
         </p>
 
         <label className="block mt-4">
-          <span className="font-mono text-[10.5px] tracking-[0.14em] uppercase text-text-muted">
+          <span className="font-mono text-metadata uppercase text-text-muted">
             Tài khoản NKS
           </span>
           <input
@@ -52,13 +52,13 @@ export default function NksVerifyDialog({ open, email, onXacNhan, onClose, dangG
             value={dinhDanh}
             onChange={(e) => setDinhDanh(e.target.value)}
             autoComplete="username"
-            className="input-surface text-[14px] mt-1.5"
+            className="input-surface text-body mt-1.5"
             disabled={dangGui}
           />
         </label>
 
         <label className="block mt-3">
-          <span className="font-mono text-[10.5px] tracking-[0.14em] uppercase text-text-muted">
+          <span className="font-mono text-metadata uppercase text-text-muted">
             Mật khẩu NKS
           </span>
           <input
@@ -66,23 +66,23 @@ export default function NksVerifyDialog({ open, email, onXacNhan, onClose, dangG
             value={matKhau}
             onChange={(e) => setMatKhau(e.target.value)}
             autoComplete="current-password"
-            className="input-surface text-[14px] mt-1.5"
+            className="input-surface text-body mt-1.5"
             disabled={dangGui}
             autoFocus
           />
         </label>
 
         {loi && (
-          <p role="alert" className="mt-3 text-[12.5px]" style={{ color: "var(--err)" }}>
+          <p role="alert" className="mt-3 text-small" style={{ color: "var(--err)" }}>
             {loi}
           </p>
         )}
 
         <div className="flex gap-2 justify-end mt-5">
-          <button type="button" onClick={onClose} disabled={dangGui} className="btn-secondary !py-1.5 !text-[13px]">
+          <button type="button" onClick={onClose} disabled={dangGui} className="btn-secondary !py-1.5 !text-small">
             Huỷ
           </button>
-          <button type="submit" disabled={!guiDuoc} className="btn-seal !py-1.5 !text-[13px] inline-flex items-center gap-1.5">
+          <button type="submit" disabled={!guiDuoc} className="btn-seal !py-1.5 !text-small inline-flex items-center gap-1.5">
             {dangGui && <Icon name="Clock" size={14} />}
             {dangGui ? "Đang xác minh…" : "Xác minh"}
           </button>

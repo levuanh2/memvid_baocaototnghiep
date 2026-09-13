@@ -34,7 +34,7 @@ const MAU_MASTERY = {
   critical_gap: { bg: "color-mix(in srgb, var(--err) 10%, transparent)", fg: "var(--err)", icon: "AlertCircle" },
 };
 
-const TIEU_DE = "font-mono text-[10.5px] tracking-[0.16em] uppercase text-text-muted";
+const TIEU_DE = "font-mono text-metadata uppercase text-text-muted";
 const GIOI_HAN_CHU_DE = 8;
 
 function nhanLyDoLienQuan({ source, value }) {
@@ -116,7 +116,7 @@ export default function KnowledgePanel({
           <h4 className={TIEU_DE}>Tri thức</h4>
 
           {sanSang.phanTram > 0 && (
-            <span className="self-start inline-flex items-center gap-1.5 rounded-full px-2 py-[3px] text-[11px]"
+            <span className="self-start inline-flex items-center gap-1.5 rounded-full px-2 py-[3px] text-caption"
                   style={{ background: "var(--bg-card)", color: "var(--text-secondary)",
                            border: "1px solid var(--border-color)" }}>
               {sanSang.nhan} · {sanSang.phanTram}%
@@ -136,7 +136,7 @@ export default function KnowledgePanel({
                   <button
                     type="button" key={t.name} onClick={() => selectTopic(t.name, { source: "knowledge" })}
                     title={t.status ? MASTERY_LABEL[t.status] || undefined : undefined}
-                    className="inline-flex items-center gap-1 rounded-full px-2 py-[3px] text-[11px]"
+                    className="inline-flex items-center gap-1 rounded-full px-2 py-[3px] text-caption"
                     style={{
                       background: mau ? mau.bg : "var(--bg-card)",
                       color: mau ? mau.fg : "var(--text-secondary)",
@@ -151,14 +151,14 @@ export default function KnowledgePanel({
               })}
               {chuDeAn > 0 && (
                 <button type="button"
-                        className="text-[11px] text-brand hover:underline"
+                        className="text-caption text-brand hover:underline"
                         onClick={() => setHienHetChuDe(true)}>
                   +{chuDeAn} chủ đề khác
                 </button>
               )}
               {hienHetChuDe && chuDeDayDu.length > GIOI_HAN_CHU_DE && (
                 <button type="button"
-                        className="text-[11px] text-text-muted hover:underline"
+                        className="text-caption text-text-muted hover:underline"
                         onClick={() => setHienHetChuDe(false)}>
                   Thu gọn
                 </button>
@@ -170,7 +170,7 @@ export default function KnowledgePanel({
             <div className="flex flex-wrap gap-1.5">
               {entities.slice(0, 10).map((e) => (
                 <button type="button" key={e} onClick={() => selectEntity(e, { source: "knowledge" })}
-                        className="inline-flex items-center gap-1 rounded-full px-2 py-[2px] text-[11px]"
+                        className="inline-flex items-center gap-1 rounded-full px-2 py-[2px] text-caption"
                         style={{ background: "var(--bg-card)",
                                  color: selectedEntity === e ? "var(--accent)" : "var(--text-muted)",
                                  border: selectedEntity === e
@@ -193,12 +193,12 @@ export default function KnowledgePanel({
                   className="flex items-center justify-between gap-2 rounded-[7px] px-2.5 py-1.5"
                   style={{ background: "var(--bg-card)", border: "1px solid var(--border-color)" }}>
                 <div className="min-w-0">
-                  <div className="truncate text-[12.5px] text-text-primary">{tenHienThi(d)}</div>
-                  <div className="truncate text-[10.5px] text-text-muted">
+                  <div className="truncate text-small text-text-primary">{tenHienThi(d)}</div>
+                  <div className="truncate text-caption text-text-muted">
                     {reason.map(nhanLyDoLienQuan).join(" · ")}
                   </div>
                 </div>
-                <button type="button" className="pill-action !py-1 !text-[11.5px] shrink-0"
+                <button type="button" className="pill-action !py-1 !text-caption shrink-0"
                         onClick={() => onMo(d, d.last_workspace || "studymap")}>
                   Mở
                 </button>
@@ -215,11 +215,11 @@ export default function KnowledgePanel({
         {dangTaiCauHoi && <KhungXuong soDong={3} />}
 
         {!dangTaiCauHoi && loiCauHoi && (
-          <div className="flex flex-wrap items-center gap-2 text-[12px]" role="alert"
+          <div className="flex flex-wrap items-center gap-2 text-small" role="alert"
                style={{ color: "var(--err)" }}>
             <Icon name="AlertCircle" size={13} />
             <span>{loiCauHoi}</span>
-            <button type="button" className="pill-action !py-0.5 !text-[11px] inline-flex items-center gap-1"
+            <button type="button" className="pill-action !py-0.5 !text-caption inline-flex items-center gap-1"
                     onClick={onThuLai}>
               <Icon name="RotateCcw" size={11} /> Thử lại
             </button>
@@ -227,14 +227,14 @@ export default function KnowledgePanel({
         )}
 
         {!dangTaiCauHoi && !loiCauHoi && trangThaiCauHoi.loai === "rong" && (
-          <p className="text-[12px] text-text-muted">{trangThaiCauHoi.goiY}</p>
+          <p className="text-small text-text-muted">{trangThaiCauHoi.goiY}</p>
         )}
 
         {!dangTaiCauHoi && !loiCauHoi && nhomCauHoi.length > 0 && (
           <div className="flex flex-col gap-3">
             {nhomCauHoi.map((nhom) => (
               <div key={nhom.category} className="flex flex-col gap-1.5">
-                <div className="flex items-center gap-1.5 text-[11px] text-text-muted">
+                <div className="flex items-center gap-1.5 text-caption text-text-muted">
                   <Icon name={nhom.icon} size={12} /> {nhom.nhan}
                 </div>
                 <div className="flex flex-col gap-1.5">
@@ -254,11 +254,11 @@ export default function KnowledgePanel({
                       >
                         <Icon name={nhom.icon} size={13} className="shrink-0 mt-[2px] text-brand" />
                         <span className="min-w-0 flex-1">
-                          <span className="block text-[12.5px] text-text-primary">{q.text}</span>
-                          {lyDo && <span className="block text-[10.5px] text-text-muted mt-0.5">{lyDo}</span>}
+                          <span className="block text-small text-text-primary">{q.text}</span>
+                          {lyDo && <span className="block text-caption text-text-muted mt-0.5">{lyDo}</span>}
                         </span>
                         {Number.isFinite(Number(q.confidence)) && (
-                          <span className="shrink-0 text-[10.5px] text-text-muted"
+                          <span className="shrink-0 text-caption text-text-muted"
                                 title="Độ tin cậy của câu hỏi này">
                             {masteryPercent(q.confidence)}%
                           </span>
@@ -282,23 +282,23 @@ export default function KnowledgePanel({
              style={{ background: "var(--bg-card)", border: "1px solid var(--border-color)" }}>
           {doc?.ai?.summary?.preview ? (
             <>
-              <p className="text-[12.5px] leading-[1.5] text-text-secondary line-clamp-3">
+              <p className="text-small text-text-secondary line-clamp-3">
                 {doc.ai.summary.preview}
               </p>
               <div className="flex items-center justify-between gap-2">
-                <span className="text-[11px] text-text-muted">{nhanThoiGianDoc(phut)}</span>
-                <button type="button" className="pill-action !py-1 !text-[11.5px] shrink-0"
+                <span className="text-caption text-text-muted">{nhanThoiGianDoc(phut)}</span>
+                <button type="button" className="pill-action !py-1 !text-caption shrink-0"
                         onClick={() => onMo(doc, "summary")}>
                   Mở tóm tắt
                 </button>
               </div>
             </>
           ) : trangThaiTomTat === "generating" ? (
-            <span className="text-[12px] text-text-muted">Đang tóm tắt…</span>
+            <span className="text-small text-text-muted">Đang tóm tắt…</span>
           ) : (
             <div className="flex items-center justify-between gap-2">
-              <span className="text-[12px] text-text-muted">Chưa có tóm tắt cho tài liệu này.</span>
-              <button type="button" className="pill-action !py-1 !text-[11.5px] shrink-0"
+              <span className="text-small text-text-muted">Chưa có tóm tắt cho tài liệu này.</span>
+              <button type="button" className="pill-action !py-1 !text-caption shrink-0"
                       onClick={() => onMo(doc, "summary")}>
                 Tạo tóm tắt
               </button>
@@ -318,13 +318,13 @@ export default function KnowledgePanel({
           <h4 className={TIEU_DE}>Tiếp tục học</h4>
           <div className="flex items-center justify-between gap-2 rounded-[7px] px-2.5 py-2"
                style={{ background: "var(--bg-card)", border: "1px solid var(--border-color)" }}>
-            <span className="text-[12px] text-text-secondary truncate">
+            <span className="text-small text-text-secondary truncate">
               {cauHoiDangChon ? `Câu hỏi: ${cauHoiDangChon.text}` : (
                 <>{tiepTuc.nhanBeMat} · mở {tiepTuc.nhanThoiGian}</>
               )}
             </span>
             <button type="button"
-                    className="btn-seal !py-1 !text-[12px] inline-flex items-center gap-1.5 shrink-0"
+                    className="btn-seal !py-1 !text-small inline-flex items-center gap-1.5 shrink-0"
                     onClick={() => (cauHoiDangChon
                       ? onMo(doc, cauHoiDangChon.target, { prompt: cauHoiDangChon.text })
                       : onMo(doc, tiepTuc.beMat || "studymap"))}>

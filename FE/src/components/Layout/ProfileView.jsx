@@ -29,11 +29,11 @@ export default function ProfileView({
         <div className={`flex items-center gap-4${khoiAnh ? " mt-4" : ""}`}>
           {!khoiAnh && <Avatar src={hoSo.avatar} chuCai={hoSo.chuCai} size={72} />}
           <div className="min-w-0 flex-1">
-            <div className="font-display text-[19px] font-semibold text-text-primary truncate" title={hoSo.ten}>
+            <div className="font-display text-h3 font-semibold text-text-primary truncate" title={hoSo.ten}>
               {hoSo.ten}
             </div>
             {hoSo.nhaCungCap && (
-              <div className="mt-1 font-mono text-[11px] tracking-[0.14em] uppercase text-text-muted">
+              <div className="mt-1 font-mono text-metadata uppercase text-text-muted">
                 {hoSo.nhaCungCap}
               </div>
             )}
@@ -55,8 +55,8 @@ export default function ProfileView({
         <dl className="mt-6 grid grid-cols-1 sm:grid-cols-2 gap-x-5 gap-y-4">
           {hoSo.dong.map((d) => (
             <div key={d.khoa} className="min-w-0">
-              <dt className="font-mono text-[10.5px] tracking-[0.14em] uppercase text-text-muted">{d.nhan}</dt>
-              <dd className="mt-1 text-[14px] text-text-primary break-words">{d.giaTri}</dd>
+              <dt className="font-mono text-metadata uppercase text-text-muted">{d.nhan}</dt>
+              <dd className="mt-1 text-body text-text-primary break-words">{d.giaTri}</dd>
             </div>
           ))}
         </dl>
@@ -64,7 +64,7 @@ export default function ProfileView({
         {children}
 
         {hoSo.nhaCungCap === "NKS" && !dangSua && (
-          <p className="mt-6 pt-4 border-t text-[12.5px] leading-[1.6] text-text-muted"
+          <p className="mt-6 pt-4 border-t text-small text-text-muted"
             style={{ borderColor: "var(--border-color)" }}>
             Hồ sơ này do NKS quản lý. Thay đổi ở đây được ghi thẳng sang NKS; tên hiển thị
             và ảnh đại diện phải sửa tại tài khoản NKS.

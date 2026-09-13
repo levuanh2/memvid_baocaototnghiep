@@ -46,7 +46,7 @@ export default function LearningDashboard({ documents, overview, weak, attempts,
                            phu={`${coverage.quiz.co}/${coverage.quiz.tong}`} />
             </div>
             {overview?.average_percentage != null && (
-              <p className="text-[12px] text-text-muted mt-2">
+              <p className="text-small text-text-muted mt-2">
                 Điểm quiz trung bình: <span className="text-text-secondary font-medium">{overview.average_percentage}%</span>
                 {" · "}Thời lượng đọc ước tính đã mở: <span className="text-text-secondary font-medium">{phutDoc} phút</span>
               </p>
@@ -112,7 +112,7 @@ export default function LearningDashboard({ documents, overview, weak, attempts,
           {/* ── Insight thư viện (Step 6) ── */}
           <div>
             <TieuDeNho>Insight</TieuDeNho>
-            <ul className="grid gap-1.5 sm:grid-cols-2 text-[12.5px] text-text-secondary">
+            <ul className="grid gap-1.5 sm:grid-cols-2 text-small text-text-secondary">
               {insight.chuDeHocNhieuNhat && <li>Chủ đề học nhiều nhất: <b className="text-text-primary">{insight.chuDeHocNhieuNhat}</b></li>}
               {insight.chuDeItHocNhat && insight.chuDeItHocNhat !== insight.chuDeHocNhieuNhat && (
                 <li>Chủ đề ít khám phá nhất: <b className="text-text-primary">{insight.chuDeItHocNhat}</b></li>
@@ -164,7 +164,7 @@ export default function LearningDashboard({ documents, overview, weak, attempts,
 
 function TieuDeNho({ children }) {
   return (
-    <h3 className="font-mono text-[10.5px] tracking-[0.16em] uppercase text-text-muted mb-2">
+    <h3 className="font-mono text-metadata uppercase text-text-muted mb-2">
       {children}
     </h3>
   );
@@ -176,8 +176,8 @@ function ThanhTienDo({ nhan, phanTram, phu }) {
   return (
     <div className="rounded-[7px] p-2.5" style={{ background: "var(--bg-card)", border: "1px solid var(--border-color)" }}>
       <div className="flex items-baseline justify-between mb-1.5">
-        <span className="text-[11px] text-text-muted">{nhan}</span>
-        <span className="font-display text-[15px] font-semibold text-text-primary">{phanTram}%</span>
+        <span className="text-caption text-text-muted">{nhan}</span>
+        <span className="font-display text-body-lg font-semibold text-text-primary">{phanTram}%</span>
       </div>
       <div
         role="progressbar" aria-label={nhan} aria-valuenow={phanTram} aria-valuemin={0} aria-valuemax={100}
@@ -185,7 +185,7 @@ function ThanhTienDo({ nhan, phanTram, phu }) {
       >
         <div className="h-full rounded-full" style={{ width: `${phanTram}%`, background: "var(--accent)" }} />
       </div>
-      {phu && <div className="text-[10.5px] text-text-muted mt-1">{phu}</div>}
+      {phu && <div className="text-caption text-text-muted mt-1">{phu}</div>}
     </div>
   );
 }
@@ -193,7 +193,7 @@ function ThanhTienDo({ nhan, phanTram, phu }) {
 function MiniDanhSach({ icon, tieuDe, children }) {
   return (
     <div className="rounded-[7px] p-2.5" style={{ background: "var(--bg-card)", border: "1px solid var(--border-color)" }}>
-      <div className="flex items-center gap-1.5 text-[11px] text-text-muted mb-1.5">
+      <div className="flex items-center gap-1.5 text-caption text-text-muted mb-1.5">
         <Icon name={icon} size={12} /> {tieuDe}
       </div>
       <div className="flex flex-col">{children}</div>
@@ -204,9 +204,9 @@ function MiniDanhSach({ icon, tieuDe, children }) {
 function CotOnTap({ nhan, docs, onMo, nhan_mau }) {
   return (
     <div className="rounded-[7px] p-2.5" style={{ background: "var(--bg-card)", border: "1px solid var(--border-color)" }}>
-      <div className="text-[11px] font-medium mb-1.5" style={{ color: nhan_mau }}>{nhan} ({docs.length})</div>
+      <div className="text-caption font-medium mb-1.5" style={{ color: nhan_mau }}>{nhan} ({docs.length})</div>
       {docs.length === 0 ? (
-        <span className="text-[12px] text-text-muted">—</span>
+        <span className="text-small text-text-muted">—</span>
       ) : (
         <div className="flex flex-col gap-1.5">
           {docs.slice(0, 4).map((d) => (
@@ -230,7 +230,7 @@ function HanhTrinh({ doc }) {
       {chang.map((c, i) => (
         <li key={c.key} className="flex items-center gap-1">
           <span
-            className="inline-flex items-center gap-1 rounded-full px-2 py-[3px] text-[11px]"
+            className="inline-flex items-center gap-1 rounded-full px-2 py-[3px] text-caption"
             style={c.dat
               ? { background: "color-mix(in srgb, var(--accent) 14%, transparent)", color: "var(--accent)" }
               : { color: "var(--text-muted)", border: "1px solid var(--border-color)" }}

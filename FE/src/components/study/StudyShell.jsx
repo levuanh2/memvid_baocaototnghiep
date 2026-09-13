@@ -34,16 +34,16 @@ export default function StudyShell({
           {backTo && (
             <Link
               to={backTo}
-              className="inline-flex items-center gap-1.5 text-[13px] text-text-muted hover:text-brand transition-theme shrink-0"
+              className="inline-flex items-center gap-1.5 text-small text-text-muted hover:text-brand transition-theme shrink-0"
             >
               <Icon name="ArrowLeft" size={14} /> {backLabel}
             </Link>
           )}
           <div className="flex-1 min-w-0">
-            <div className="font-mono text-[10.5px] tracking-[0.2em] uppercase text-text-muted">
+            <div className="font-mono text-metadata uppercase text-text-muted">
               {eyebrow}
             </div>
-            <h1 className="font-display text-[19px] font-semibold text-text-primary truncate">
+            <h1 className="font-display text-h3 font-semibold text-text-primary truncate">
               {title}
             </h1>
           </div>
@@ -55,24 +55,24 @@ export default function StudyShell({
       </header>
 
       <main className={`${width} mx-auto px-5 py-7`}>
-        {subtitle && <p className="text-[13.5px] text-text-secondary mb-6">{subtitle}</p>}
+        {subtitle && <p className="text-body text-text-secondary mb-6">{subtitle}</p>}
 
         {loading ? (
           // Có khung xương thì dùng khung xương: nó giữ NGUYÊN chỗ mà nội dung sắp
           // chiếm, nên lúc dữ liệu về không có cú nhảy. Dòng "Đang tải…" một hàng thì
           // ngược lại — trang cao 1 dòng rồi bung ra cả màn hình.
           skeleton || (
-            <div className="flex items-center gap-2.5 text-[13.5px] text-text-secondary py-10">
+            <div className="flex items-center gap-2.5 text-body text-text-secondary py-10">
               <Spinner size={15} /> Đang tải…
             </div>
           )
         ) : error ? (
           <div className="surface-card flex flex-col items-start gap-3">
-            <div className="flex items-center gap-2 text-[13.5px]" style={{ color: "var(--err)" }}>
+            <div className="flex items-center gap-2 text-body" style={{ color: "var(--err)" }}>
               <Icon name="AlertCircle" size={15} /> {error}
             </div>
             {onRetry && (
-              <button type="button" className="btn-secondary text-[13px]" onClick={onRetry}>
+              <button type="button" className="btn-secondary text-small" onClick={onRetry}>
                 Thử lại
               </button>
             )}
@@ -90,8 +90,8 @@ export function EmptyState({ icon = "FileText", title, hint, action }) {
   return (
     <div className="surface-card flex flex-col items-center text-center py-12 gap-3">
       <Icon name={icon} size={26} className="text-text-muted" />
-      <div className="font-display text-[16px] font-semibold text-text-primary">{title}</div>
-      {hint && <p className="text-[13px] text-text-secondary max-w-[380px]">{hint}</p>}
+      <div className="font-display text-body-lg font-semibold text-text-primary">{title}</div>
+      {hint && <p className="text-small text-text-secondary max-w-[380px]">{hint}</p>}
       {action}
     </div>
   );

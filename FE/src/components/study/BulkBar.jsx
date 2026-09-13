@@ -51,7 +51,7 @@ export default function BulkBar({ so, boSuuTap, onHanhDong, onXoaChon, dangChay 
   return (
     <div className="sticky top-2 z-30 mb-4 surface-card !p-3 flex flex-wrap items-center gap-2"
          style={{ borderColor: "var(--accent)" }}>
-      <span aria-live="polite" className="text-[13px] font-semibold text-text-primary">
+      <span aria-live="polite" className="text-small font-semibold text-text-primary">
         {thongBaoDaChon(so)}
       </span>
 
@@ -71,20 +71,20 @@ export default function BulkBar({ so, boSuuTap, onHanhDong, onXoaChon, dangChay 
                    style={{ background: "var(--bg-card)", border: "1px solid var(--border-color)" }}>
                 <button type="button"
                         onClick={() => chay("move_collection", { collectionId: null })}
-                        className="w-full px-3 py-1.5 text-left text-[12.5px] text-text-secondary
+                        className="w-full px-3 py-1.5 text-left text-small text-text-secondary
                                    hover:bg-surface-elevated">
                   Bỏ khỏi bộ sưu tập
                 </button>
                 {boSuuTap.map((c) => (
                   <button key={c.collection_id} type="button"
                           onClick={() => chay("move_collection", { collectionId: c.collection_id })}
-                          className="w-full px-3 py-1.5 text-left text-[12.5px] text-text-primary
+                          className="w-full px-3 py-1.5 text-left text-small text-text-primary
                                      hover:bg-surface-elevated truncate">
                     {c.name}
                   </button>
                 ))}
                 {boSuuTap.length === 0 && (
-                  <p className="px-3 py-1.5 text-[12px] text-text-muted">
+                  <p className="px-3 py-1.5 text-small text-text-muted">
                     Chưa có bộ sưu tập nào.
                   </p>
                 )}
@@ -108,8 +108,8 @@ export default function BulkBar({ so, boSuuTap, onHanhDong, onXoaChon, dangChay 
                   {[["add_tags", "Gắn"], ["remove_tags", "Bỏ"]].map(([k, n]) => (
                     <button key={k} type="button" onClick={() => setMoThe(k)}
                             aria-pressed={moThe === k}
-                            className={moThe === k ? "btn-seal !py-1 !text-[12px]"
-                              : "btn-secondary !py-1 !text-[12px]"}>
+                            className={moThe === k ? "btn-seal !py-1 !text-small"
+                              : "btn-secondary !py-1 !text-small"}>
                       {n}
                     </button>
                   ))}
@@ -123,11 +123,11 @@ export default function BulkBar({ so, boSuuTap, onHanhDong, onXoaChon, dangChay 
                   }}
                   placeholder="AI, Exam"
                   aria-label="Thẻ, cách nhau bằng dấu phẩy"
-                  className="w-full rounded-control px-2 py-1 text-[12.5px] outline-none"
+                  className="w-full rounded-control px-2 py-1 text-small outline-none"
                   style={{ background: "var(--bg-sidebar)", color: "var(--text-primary)",
                            border: "1px solid var(--border-color)" }}
                 />
-                <p className="mt-1 text-[11px] text-text-muted">
+                <p className="mt-1 text-caption text-text-muted">
                   Cách nhau bằng dấu phẩy. Enter để áp dụng.
                 </p>
               </div>
@@ -138,7 +138,7 @@ export default function BulkBar({ so, boSuuTap, onHanhDong, onXoaChon, dangChay 
         {nut("delete")}
       </div>
 
-      <button type="button" onClick={onXoaChon} className="btn-secondary !py-1.5 !text-[12.5px]">
+      <button type="button" onClick={onXoaChon} className="btn-secondary !py-1.5 !text-small">
         Bỏ chọn
       </button>
     </div>

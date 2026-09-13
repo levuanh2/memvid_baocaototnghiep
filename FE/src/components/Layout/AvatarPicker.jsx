@@ -83,7 +83,7 @@ export default function AvatarPicker({
                 type="button"
                 onClick={onLuu}
                 disabled={dangLuu}
-                className="btn-seal !py-1.5 !text-[13px] inline-flex items-center gap-1.5"
+                className="btn-seal !py-1.5 !text-small inline-flex items-center gap-1.5"
               >
                 {dangLuu && <Icon name="Clock" size={14} />}
                 {dangLuu ? "Đang tải lên…" : "Lưu ảnh"}
@@ -92,7 +92,7 @@ export default function AvatarPicker({
                 type="button"
                 onClick={onHuy}
                 disabled={dangLuu}
-                className="btn-secondary !py-1.5 !text-[13px]"
+                className="btn-secondary !py-1.5 !text-small"
               >
                 Huỷ
               </button>
@@ -100,12 +100,12 @@ export default function AvatarPicker({
           )}
         </div>
 
-        <p className="mt-1.5 text-[11.5px] text-text-muted">
+        <p className="mt-1.5 text-caption text-text-muted">
           {xemTruoc ? "Ảnh chưa được lưu." : "JPG, PNG hoặc WEBP. Ảnh sẽ được thu nhỏ về 512px."}
         </p>
 
         {loi && (
-          <p role="alert" className="mt-1 text-[11.5px]" style={{ color: "var(--err)" }}>
+          <p role="alert" className="mt-1 text-caption" style={{ color: "var(--err)" }}>
             {loi}
           </p>
         )}

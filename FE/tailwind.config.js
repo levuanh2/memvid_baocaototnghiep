@@ -53,16 +53,43 @@ module.exports = {
       },
       fontSize: {
         // Wave 1: named scale (docs/DESIGN_TOKEN_AUDIT.md §1) — additive only.
-        // Existing `text-[Npx]` arbitrary values are migrated per-component,
-        // by semantic role, across Waves 2-7 (not a single blind codemod —
-        // see UI_IMPLEMENTATION_PLAN.md Task 20's revision note).
+        // Sprint G: extended into the FULL semantic scale (docs/SPRINT_F_
+        // REPORT.md §9's "~495 arbitrary text-[Npx] instances" debt item) —
+        // every role below exists ONCE; components consume it instead of a
+        // new arbitrary pixel value. Sizes are the REAL values sampled from
+        // the app's own existing usage (grep census, not invented), grouped
+        // by the semantic role each cluster of nearby values actually plays.
         display: ["clamp(2.6rem, 5vw, 4.4rem)", { lineHeight: "1.05" }],
         h1: ["2.25rem", { lineHeight: "1.15" }],
         h2: ["1.5rem", { lineHeight: "1.25" }],
         h3: ["1.2rem", { lineHeight: "1.3" }],
-        body: ["1rem", { lineHeight: "1.7" }],
+        // Component/card/node title (e.g. a StudyCard's document name, a
+        // KnowledgeInspector node header) — smaller than an H3 in-content
+        // sub-head, bigger than body.
+        title: ["1.0625rem", { lineHeight: "1.35", fontWeight: "600" }],
+        // Secondary line directly under a title (dialog subtitle, breadcrumb
+        // under a node title).
+        subtitle: ["0.9375rem", { lineHeight: "1.45" }],
+        // Comfortable long-form reading prose (Summary/Inspector notes).
+        // This is what `body` meant before Sprint G — Markdown.jsx's MdProse
+        // is repointed from `text-body` to `text-body-lg` in this same
+        // sprint so its actual rendered size does not change; `body` itself
+        // is freed up below to mean the smaller, much-more-common dense-UI
+        // text size instead (14px was the single highest-count "normal
+        // text" size in the app-wide grep census, not 16px).
+        "body-lg": ["1rem", { lineHeight: "1.7" }],
+        body: ["0.875rem", { lineHeight: "1.55" }],
+        small: ["0.8125rem", { lineHeight: "1.5" }],
         label: ["0.8rem", { lineHeight: "1.4", letterSpacing: "0.06em" }],
-        caption: ["0.72rem", { lineHeight: "1.4", letterSpacing: "0.06em" }],
+        caption: ["0.71875rem", { lineHeight: "1.45" }],
+        // Mono uppercase tracked micro-label (section eyebrows, "BẰNG CHỨNG",
+        // node numbers) — was 3 different arbitrary sizes (10/10.5/11px) and
+        // ~15 different tracking-[Nem] values across 40+ files, all playing
+        // this exact one role. One token, one tracking value.
+        metadata: ["0.65625rem", { lineHeight: "1.4", letterSpacing: "0.12em" }],
+        // Inline mono figures at body-adjacent size (counts, IDs, timestamps
+        // outside a metadata-label context) — tabular so digits line up.
+        mono: ["0.8125rem", { lineHeight: "1.4" }],
       },
       spacing: {
         // Wave 1: named steps on top of Tailwind's default scale (which stays

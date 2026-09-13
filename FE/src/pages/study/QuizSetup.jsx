@@ -130,7 +130,7 @@ export default function QuizSetup() {
               className="surface-card !p-4 text-left flex items-center gap-3"
               onClick={() => navigate(`/app/study/quiz/new?document=${encodeURIComponent(d.document_id)}`)}>
               <Icon name="FileText" size={17} className="text-text-muted" />
-              <span className="font-display text-[15px] font-semibold text-text-primary flex-1 truncate">
+              <span className="font-display text-body-lg font-semibold text-text-primary flex-1 truncate">
                 {d.title}
               </span>
               <Icon name="ArrowRight" size={15} className="text-text-muted" />
@@ -189,7 +189,7 @@ export default function QuizSetup() {
               <div className="flex flex-col gap-1 max-h-[240px] overflow-y-auto pr-1">
                 {sections.map((s) => (
                   <button key={s.section_id} type="button"
-                    className={`text-left rounded-[6px] px-3 py-2 text-[13.5px] transition-all border ${
+                    className={`text-left rounded-[6px] px-3 py-2 text-body transition-all border ${
                       sectionIds.includes(s.section_id)
                         ? "border-brand text-brand"
                         : "border-transparent text-text-secondary hover:text-text-primary"
@@ -201,14 +201,14 @@ export default function QuizSetup() {
                 ))}
               </div>
               {sectionIds.length > 0 && (
-                <button type="button" className="text-[12.5px] text-text-muted hover:text-brand mt-1"
+                <button type="button" className="text-small text-text-muted hover:text-brand mt-1"
                   onClick={() => setSectionIds([])}>Bỏ chọn, ra đề toàn tài liệu</button>
               )}
             </Field>
           )}
 
           {submitError && (
-            <div className="text-[13px] flex items-center gap-1.5" style={{ color: "var(--err)" }}>
+            <div className="text-small flex items-center gap-1.5" style={{ color: "var(--err)" }}>
               <Icon name="AlertCircle" size={14} /> {submitError}
             </div>
           )}
@@ -227,11 +227,11 @@ export default function QuizSetup() {
 function Field({ label, hint, children }) {
   return (
     <label className="flex flex-col gap-2">
-      <span className="font-mono text-[11px] tracking-[0.16em] uppercase text-text-muted">
+      <span className="font-mono text-metadata uppercase text-text-muted">
         {label}
       </span>
       {children}
-      {hint && <span className="text-[12.5px] text-text-muted">{hint}</span>}
+      {hint && <span className="text-small text-text-muted">{hint}</span>}
     </label>
   );
 }
@@ -247,14 +247,14 @@ function JobProgress({ job }) {
           <Spinner size={15} />
         )}
         <div className="flex-1">
-          <div className="text-[14px] font-semibold text-text-primary">
+          <div className="text-body font-semibold text-text-primary">
             {job.error ? "Tạo quiz thất bại" : "Đang ra đề từ tài liệu"}
           </div>
-          <div className="font-mono text-[11.5px] text-text-muted mt-0.5">
+          <div className="font-mono text-caption text-text-muted mt-0.5">
             {job.error || job.status?.current_node || "Đang chuẩn bị"}
           </div>
         </div>
-        <span className="font-mono text-[13px] text-text-secondary">{progress}%</span>
+        <span className="font-mono text-small text-text-secondary">{progress}%</span>
       </div>
 
       <div className="progress-track">
@@ -263,11 +263,11 @@ function JobProgress({ job }) {
 
       <div className="flex gap-2">
         {job.error ? (
-          <button type="button" className="btn-secondary text-[13px]" onClick={job.reset}>
+          <button type="button" className="btn-secondary text-small" onClick={job.reset}>
             Sửa cấu hình và thử lại
           </button>
         ) : (
-          <button type="button" className="btn-secondary text-[13px]" onClick={job.cancel}>
+          <button type="button" className="btn-secondary text-small" onClick={job.cancel}>
             Huỷ
           </button>
         )}

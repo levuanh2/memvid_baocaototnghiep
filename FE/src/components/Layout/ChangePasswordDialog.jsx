@@ -74,14 +74,14 @@ export default function ChangePasswordDialog({ open, email, onClose, onDoiXong }
   return (
     <Modal open title="Đổi mật khẩu NKS" onClose={dangGui ? undefined : onClose} maxWidth={440}>
       <form onSubmit={gui} className="px-5 py-5">
-        <p className="text-[13px] leading-[1.6] text-text-secondary">
+        <p className="text-small text-text-secondary">
           Mật khẩu này thuộc tài khoản NKS. Sau khi đổi, bạn sẽ được đăng xuất khỏi
           StudyMap trên mọi thiết bị và cần đăng nhập lại.
         </p>
 
         {O.map((o) => (
           <label key={o.khoa} className="block mt-3.5">
-            <span className="font-mono text-[10.5px] tracking-[0.14em] uppercase text-text-muted">
+            <span className="font-mono text-metadata uppercase text-text-muted">
               {o.nhan}
             </span>
             <input
@@ -92,10 +92,10 @@ export default function ChangePasswordDialog({ open, email, onClose, onDoiXong }
               disabled={dangGui}
               aria-invalid={loi[o.khoa] ? true : undefined}
               aria-describedby={loi[o.khoa] ? `loi-${o.khoa}` : undefined}
-              className="input-surface text-[14px] mt-1.5"
+              className="input-surface text-body mt-1.5"
             />
             {loi[o.khoa] && (
-              <p id={`loi-${o.khoa}`} role="alert" className="mt-1 text-[11.5px]"
+              <p id={`loi-${o.khoa}`} role="alert" className="mt-1 text-caption"
                 style={{ color: "var(--err)" }}>
                 {loi[o.khoa]}
               </p>
@@ -103,25 +103,25 @@ export default function ChangePasswordDialog({ open, email, onClose, onDoiXong }
           </label>
         ))}
 
-        <label className="flex items-center gap-2 mt-3 text-[12.5px] text-text-secondary select-none">
+        <label className="flex items-center gap-2 mt-3 text-small text-text-secondary select-none">
           <input type="checkbox" checked={hien} disabled={dangGui}
             onChange={(e) => setHien(e.target.checked)} />
           Hiện mật khẩu
         </label>
 
         {loiChung && (
-          <p role="alert" className="mt-3 text-[12.5px]" style={{ color: "var(--err)" }}>
+          <p role="alert" className="mt-3 text-small" style={{ color: "var(--err)" }}>
             {loiChung}
           </p>
         )}
 
         <div className="flex gap-2 justify-end mt-5">
           <button type="button" onClick={onClose} disabled={dangGui}
-            className="btn-secondary !py-1.5 !text-[13px]">
+            className="btn-secondary !py-1.5 !text-small">
             Huỷ
           </button>
           <button type="submit" disabled={dangGui}
-            className="btn-seal !py-1.5 !text-[13px] inline-flex items-center gap-1.5">
+            className="btn-seal !py-1.5 !text-small inline-flex items-center gap-1.5">
             {dangGui && <Icon name="Clock" size={14} />}
             {dangGui ? "Đang đổi…" : "Đổi mật khẩu"}
           </button>

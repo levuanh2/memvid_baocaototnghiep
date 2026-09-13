@@ -45,17 +45,17 @@ export default function AiInsightCard({ doc, dangTai, tenTep, onMo, onTaiLai, on
       </span>
 
       <div className="min-w-0 flex-1">
-        <div className="text-[13.5px] font-semibold text-text-primary">{n.tieuDe}</div>
-        <div className="font-mono text-[11px] text-text-muted truncate mt-0.5">{n.ten}</div>
+        <div className="text-body font-semibold text-text-primary">{n.tieuDe}</div>
+        <div className="font-mono text-caption text-text-muted truncate mt-0.5">{n.ten}</div>
 
         {n.moTa && (
-          <p className="mt-1.5 text-[12.5px] leading-[1.55] text-text-secondary">{n.moTa}</p>
+          <p className="mt-1.5 text-small text-text-secondary">{n.moTa}</p>
         )}
 
         {n.yChinh.length > 0 && (
           <ul className="mt-2 flex flex-col gap-1">
             {n.yChinh.map((y, i) => (
-              <li key={i} className="flex gap-2 text-[13px] leading-[1.5] text-text-primary">
+              <li key={i} className="flex gap-2 text-small text-text-primary">
                 <span aria-hidden className="text-brand">•</span>
                 <span>{y}</span>
               </li>

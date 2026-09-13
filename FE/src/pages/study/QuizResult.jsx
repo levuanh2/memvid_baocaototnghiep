@@ -95,7 +95,7 @@ export default function QuizResult() {
       width="max-w-[860px]"
       actions={
         result?.status === "graded" && (
-          <Link to={`/app/study/review/${attemptId}`} className="btn-seal text-[13px] inline-flex items-center gap-2">
+          <Link to={`/app/study/review/${attemptId}`} className="btn-seal text-small inline-flex items-center gap-2">
             <Icon name="BookOpen" size={14} /> Xem phần cần ôn
           </Link>
         )
@@ -104,7 +104,7 @@ export default function QuizResult() {
       {!result ? null : (
         <>
           {ketChamBai && (
-            <div className="text-[13px] flex items-center gap-1.5 mb-3" style={{ color: "var(--err)" }}>
+            <div className="text-small flex items-center gap-1.5 mb-3" style={{ color: "var(--err)" }}>
               <Icon name="AlertCircle" size={14} />
               Bài chưa được chấm xong sau 5 phút — có thể việc chấm đã dừng giữa chừng.
               <button type="button" className="underline"
@@ -114,7 +114,7 @@ export default function QuizResult() {
             </div>
           )}
           {loiNen && (
-            <div className="text-[13px] flex items-center gap-1.5 mb-3" style={{ color: "var(--err)" }}>
+            <div className="text-small flex items-center gap-1.5 mb-3" style={{ color: "var(--err)" }}>
               <Icon name="AlertCircle" size={14} />
               {loiNen}
               <button type="button" className="underline" onClick={() => { truotRef.current = 0; setNhip((n) => n + 1); }}>
@@ -127,7 +127,7 @@ export default function QuizResult() {
           {grading && (
             <div className="surface-card !p-3.5 flex items-center gap-2.5 mb-6">
               <Spinner size={14} />
-              <span className="text-[13.5px] text-text-secondary">
+              <span className="text-body text-text-secondary">
                 Đang chấm các câu trả lời ngắn. Điểm trắc nghiệm sẽ hiện ngay khi chấm xong.
               </span>
             </div>
@@ -141,10 +141,10 @@ export default function QuizResult() {
                   <div key={m.concept_mastery_id} className="surface-card !p-3.5 flex items-center gap-3">
                     <SealMeter score={m.mastery_score} status={m.status} size={40} />
                     <div className="min-w-0">
-                      <div className="font-display text-[14.5px] font-semibold text-text-primary truncate">
+                      <div className="font-display text-body font-semibold text-text-primary truncate">
                         {m.concept_name}
                       </div>
-                      <div className="text-[12px] text-text-secondary">
+                      <div className="text-small text-text-secondary">
                         {MASTERY_LABEL[m.status] || m.status} · đúng {m.correct_count}/{m.total_count}
                       </div>
                     </div>
@@ -170,7 +170,7 @@ export default function QuizResult() {
 
 function SectionTitle({ children }) {
   return (
-    <h2 className="font-mono text-[11px] tracking-[0.18em] uppercase text-text-muted mb-3">
+    <h2 className="font-mono text-metadata uppercase text-text-muted mb-3">
       {children}
     </h2>
   );
@@ -188,16 +188,16 @@ function ScoreBoard({ result, grading }) {
           label={percent == null ? "Chưa có điểm" : `Đạt ${percent} phần trăm`}
         />
         <div>
-          <div className="font-display text-[26px] font-semibold text-text-primary leading-none">
+          <div className="font-display text-h2 font-semibold text-text-primary leading-none">
             {formatScore(result.score, result.max_score)}
           </div>
-          <div className="font-mono text-[11.5px] text-text-muted mt-1.5">
+          <div className="font-mono text-caption text-text-muted mt-1.5">
             {grading ? "đang chấm" : percent == null ? "chưa chấm" : `${percent}% · điểm thô`}
           </div>
         </div>
       </div>
 
-      <div className="flex flex-wrap gap-x-7 gap-y-2 text-[13px]">
+      <div className="flex flex-wrap gap-x-7 gap-y-2 text-small">
         <Stat label="Đúng" value={result.correct_count ?? "—"} />
         <Stat label="Sai" value={result.incorrect_count ?? "—"} />
         <Stat label="Số câu" value={result.total_questions} />
@@ -210,8 +210,8 @@ function ScoreBoard({ result, grading }) {
 function Stat({ label, value }) {
   return (
     <div>
-      <div className="font-mono text-[10.5px] tracking-[0.16em] uppercase text-text-muted">{label}</div>
-      <div className="text-[15px] font-semibold text-text-primary mt-0.5">{value}</div>
+      <div className="font-mono text-metadata uppercase text-text-muted">{label}</div>
+      <div className="text-body-lg font-semibold text-text-primary mt-0.5">{value}</div>
     </div>
   );
 }
@@ -223,11 +223,11 @@ function ReviewedQuestion({ question, order }) {
   return (
     <article className="surface-card">
       <div className="flex items-start gap-3 mb-3">
-        <span className="font-mono text-[12px] text-text-muted mt-1">{String(order).padStart(2, "0")}</span>
-        <h3 className="font-display text-[16px] leading-[1.5] text-text-primary flex-1">
+        <span className="font-mono text-small text-text-muted mt-1">{String(order).padStart(2, "0")}</span>
+        <h3 className="font-display text-body-lg text-text-primary flex-1">
           {question.question_text}
         </h3>
-        <span className="rounded-[4px] text-[10.5px] px-2 py-[2px] font-semibold uppercase font-mono shrink-0"
+        <span className="rounded-[4px] text-metadata px-2 py-[2px] font-semibold uppercase font-mono shrink-0"
           style={{ color: tone, border: `1px solid ${tone}`, background: `color-mix(in srgb, ${tone} 12%, transparent)` }}>
           {VERDICT_LABEL[verdict] || "Chưa chấm"}
         </span>
@@ -249,12 +249,12 @@ function ReviewedQuestion({ question, order }) {
             return (
               <div key={opt} className={`answer-option ${cls}`}>
                 <span className="answer-option__key">{KEYS[i] || i + 1}</span>
-                <span className="text-[14px] leading-[1.5] flex-1">{optionLabel(opt)}</span>
+                <span className="text-body flex-1">{optionLabel(opt)}</span>
                 {isPicked && (
-                  <span className="font-mono text-[10.5px] uppercase shrink-0">bạn chọn</span>
+                  <span className="font-mono text-metadata uppercase shrink-0">bạn chọn</span>
                 )}
                 {isCorrect && !isPicked && (
-                  <span className="font-mono text-[10.5px] uppercase shrink-0">đáp án</span>
+                  <span className="font-mono text-metadata uppercase shrink-0">đáp án</span>
                 )}
               </div>
             );
@@ -263,7 +263,7 @@ function ReviewedQuestion({ question, order }) {
       )}
 
       {(question.feedback || question.explanation) && (
-        <p className="text-[13.5px] leading-[1.65] text-text-secondary border-l-2 pl-3"
+        <p className="text-body text-text-secondary border-l-2 pl-3"
           style={{ borderColor: "color-mix(in srgb, var(--accent) 40%, transparent)" }}>
           {question.feedback || question.explanation}
         </p>
@@ -272,7 +272,7 @@ function ReviewedQuestion({ question, order }) {
       {question.chunk_ids?.length > 0 && (
         <div className="flex items-center gap-1.5 mt-3">
           <Icon name="Quote" size={12} className="text-text-muted" />
-          <span className="font-mono text-[11px] text-text-muted">
+          <span className="font-mono text-caption text-text-muted">
             Nguồn: {question.chunk_ids.length} đoạn trong tài liệu
           </span>
         </div>
@@ -284,10 +284,10 @@ function ReviewedQuestion({ question, order }) {
 function Labeled({ label, children }) {
   return (
     <div>
-      <div className="font-mono text-[10.5px] tracking-[0.16em] uppercase text-text-muted mb-1">
+      <div className="font-mono text-metadata uppercase text-text-muted mb-1">
         {label}
       </div>
-      <div className="text-[14px] leading-[1.6] text-text-primary">{children}</div>
+      <div className="text-body text-text-primary">{children}</div>
     </div>
   );
 }

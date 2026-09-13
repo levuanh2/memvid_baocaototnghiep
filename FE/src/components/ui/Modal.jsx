@@ -77,8 +77,8 @@ export default function Modal({
         {(title || onClose) && (
           <div className="flex items-center gap-3 px-5 py-3.5 border-b flex-shrink-0" style={{ borderColor: "var(--border-color)" }}>
             <div className="flex-1 min-w-0">
-              {title && <h2 className="font-display text-[16px] font-semibold text-text-primary truncate">{title}</h2>}
-              {subtitle && <p className="text-[12px] text-text-muted truncate mt-0.5">{subtitle}</p>}
+              {title && <h2 className="font-display text-body-lg font-semibold text-text-primary truncate">{title}</h2>}
+              {subtitle && <p className="text-small text-text-muted truncate mt-0.5">{subtitle}</p>}
             </div>
             {onClose && (
               <button onClick={onClose} className="icon-btn w-8 h-8 flex-shrink-0" aria-label="Đóng hộp thoại">

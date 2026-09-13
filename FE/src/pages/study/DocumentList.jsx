@@ -66,7 +66,7 @@ function DocumentSkeleton() {
 
 function SectionTitle({ children, dem }) {
   return (
-    <h2 className="font-mono text-[11px] tracking-[0.18em] uppercase text-text-muted mb-3">
+    <h2 className="font-mono text-metadata uppercase text-text-muted mb-3">
       {children}{dem != null ? ` (${dem})` : ""}
     </h2>
   );
@@ -379,14 +379,14 @@ export default function DocumentList() {
               BE/tests/test_upload_formats.py khoá lại để hai bên không lệch. */}
           <input ref={fileRef} type="file" className="hidden" onChange={onPick}
             accept=".bmp,.csv,.doc,.docx,.epub,.fb2,.gif,.htm,.html,.jpeg,.jpg,.json,.md,.mobi,.odp,.odt,.pdf,.png,.pptx,.rtf,.txt,.xlsx,.xps" />
-          <button type="button" className="btn-seal text-[13px] inline-flex items-center gap-2"
+          <button type="button" className="btn-seal text-small inline-flex items-center gap-2"
             disabled={uploading} onClick={() => fileRef.current?.click()}>
             {uploading ? <><Spinner size={13} /> Đang tải lên…</> : <><Icon name="Upload" size={14} /> Tải tài liệu</>}
           </button>
           {/* Demo Mode — chỉ hiện khi có tài liệu THẬT đủ sẵn sàng; không có thì
               không vẽ nút, không hứa một bản xem thử không tồn tại. */}
           {taiLieuDemo && (
-            <button type="button" className="pill-action text-[13px] inline-flex items-center gap-1.5"
+            <button type="button" className="pill-action text-small inline-flex items-center gap-1.5"
               title="Mở ngay một tài liệu đã sẵn sàng để xem thử Tóm tắt/Sơ đồ/Gia sư AI"
               onClick={() => moBeMat(taiLieuDemo, beMatDemoDauTien(taiLieuDemo))}>
               <Icon name="Sparkles" size={13} /> Xem thử
@@ -426,7 +426,7 @@ export default function DocumentList() {
       )}
 
       {loiThaoTac && (
-        <div role="alert" className="mb-4 text-[12.5px] flex items-start gap-1.5"
+        <div role="alert" className="mb-4 text-small flex items-start gap-1.5"
              style={{ color: "var(--err)" }}>
           <Icon name="AlertCircle" size={13} className="mt-0.5 shrink-0" />
           <span>{loiThaoTac}</span>
@@ -451,7 +451,7 @@ export default function DocumentList() {
             type="text" value={truyVan} onChange={(e) => setTruyVan(e.target.value)}
             placeholder="Tìm theo tên, thẻ, ý chính, thực thể…"
             aria-label="Tìm trong thư viện"
-            className="bg-transparent outline-none text-[13px] text-text-primary placeholder:text-text-muted w-full"
+            className="bg-transparent outline-none text-small text-text-primary placeholder:text-text-muted w-full"
           />
           {truyVan && (
             <button onClick={() => setTruyVan("")} className="text-text-muted hover:text-text-primary"
@@ -463,7 +463,7 @@ export default function DocumentList() {
 
         <label className="sr-only" htmlFor="che-do-sap">Sắp xếp</label>
         <select id="che-do-sap" value={cheDoSap} onChange={(e) => setCheDoSap(e.target.value)}
-                className="rounded-control px-2.5 py-2 text-[13px] outline-none"
+                className="rounded-control px-2.5 py-2 text-small outline-none"
                 style={{ background: "var(--bg-card)", color: "var(--text-primary)",
                          border: "1px solid var(--border-color)" }}>
           {CHE_DO_SAP.map(([v, n]) => <option key={v} value={v}>{n}</option>)}
@@ -482,7 +482,7 @@ export default function DocumentList() {
                    style={{ background: "var(--bg-card)", border: "1px solid var(--border-color)" }}>
                 {NHOM_LOC.map(([nhom, mucLoc]) => (
                   <div key={nhom} className="mb-2.5 last:mb-0">
-                    <div className="font-mono text-[10px] uppercase tracking-[0.14em] text-text-muted mb-1">
+                    <div className="font-mono text-metadata uppercase text-text-muted mb-1">
                       {nhom}
                     </div>
                     {mucLoc.map(([khoa, nhan]) => (
@@ -491,14 +491,14 @@ export default function DocumentList() {
                                checked={boLoc.includes(khoa)}
                                onChange={(e) => setBoLoc((prev) => e.target.checked
                                  ? [...prev, khoa] : prev.filter((k) => k !== khoa))} />
-                        <span className="text-[12.5px] text-text-secondary">{nhan}</span>
+                        <span className="text-small text-text-secondary">{nhan}</span>
                       </label>
                     ))}
                   </div>
                 ))}
                 {boLoc.length > 0 && (
                   <button type="button" onClick={() => setBoLoc([])}
-                          className="mt-1 text-[12px] text-brand">Xoá bộ lọc</button>
+                          className="mt-1 text-small text-brand">Xoá bộ lọc</button>
                 )}
               </div>
             </>
@@ -509,7 +509,7 @@ export default function DocumentList() {
           <input type="checkbox" checked={hienLuuTru}
                  onChange={(e) => setHienLuuTru(e.target.checked)}
                  className="w-3.5 h-3.5 accent-brand rounded" />
-          <span className="text-[12.5px] text-text-secondary">Hiện đã lưu trữ</span>
+          <span className="text-small text-text-secondary">Hiện đã lưu trữ</span>
         </label>
 
         {mucHienThi.tatCa.length > 0 && (
@@ -523,7 +523,7 @@ export default function DocumentList() {
             />
             {/* Nói rõ phạm vi: "tất cả" ở đây là những gì ĐANG hiện, không phải cả
                 thư viện — chọn 300 tài liệu đang ẩn rồi xoá là mất dữ liệu. */}
-            <span className="text-[12.5px] text-text-secondary">
+            <span className="text-small text-text-secondary">
               Chọn {mucHienThi.tatCa.length} đang hiện
             </span>
           </label>
@@ -557,10 +557,10 @@ export default function DocumentList() {
               <div key={c.concept_name} className="surface-card !p-3.5 flex items-center gap-3">
                 <SealMeter score={c.mastery_score} status={c.status} size={40} />
                 <div className="min-w-0">
-                  <div className="font-display text-[14.5px] font-semibold text-text-primary truncate">
+                  <div className="font-display text-body font-semibold text-text-primary truncate">
                     {c.concept_name}
                   </div>
-                  <div className="text-[12px] text-text-secondary">
+                  <div className="text-small text-text-secondary">
                     {MASTERY_LABEL[c.status] || c.status}
                     {c.attempt_count > 1 && ` · ${c.attempt_count} lần làm`}
                   </div>
@@ -600,7 +600,7 @@ export default function DocumentList() {
                   <button
                     type="button"
                     className={rong.khoaHanhDong === "tai_len"
-                      ? "btn-seal text-[13px] mt-1 disabled:opacity-60" : "pill-action mt-1"}
+                      ? "btn-seal text-small mt-1 disabled:opacity-60" : "pill-action mt-1"}
                     disabled={rong.khoaHanhDong === "tai_len" && uploading}
                     onClick={() => {
                       if (rong.khoaHanhDong === "tai_len") return fileRef.current?.click();
@@ -643,15 +643,15 @@ export default function DocumentList() {
                 className="surface-card !p-3.5 flex items-center gap-3 hover:no-underline"
               >
                 <div className="min-w-0 flex-1">
-                  <div className="text-[14px] font-semibold text-text-primary truncate">
+                  <div className="text-body font-semibold text-text-primary truncate">
                     {a.quiz_title}
                   </div>
-                  <div className="font-mono text-[11px] text-text-muted mt-0.5">
+                  <div className="font-mono text-caption text-text-muted mt-0.5">
                     {a.quiz_type === "practice" ? "luyện tập" : "chẩn đoán"}
                     {a.submitted_at ? ` · ${new Date(a.submitted_at).toLocaleDateString("vi-VN")}` : ""}
                   </div>
                 </div>
-                <span className="font-mono text-[13px] text-text-secondary shrink-0">
+                <span className="font-mono text-small text-text-secondary shrink-0">
                   {formatScore(a.score, a.max_score)}
                 </span>
               </Link>
@@ -676,10 +676,10 @@ function Overview({ overview }) {
     <section className="grid grid-cols-2 sm:grid-cols-4 gap-2.5 mb-7">
       {items.map(([label, value]) => (
         <div key={label} className="surface-card !p-3.5">
-          <div className="font-mono text-[10.5px] tracking-[0.16em] uppercase text-text-muted">
+          <div className="font-mono text-metadata uppercase text-text-muted">
             {label}
           </div>
-          <div className="font-display text-[22px] font-semibold text-text-primary mt-1">
+          <div className="font-display text-h2 font-semibold text-text-primary mt-1">
             {value ?? 0}
           </div>
         </div>

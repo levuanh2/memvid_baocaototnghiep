@@ -73,8 +73,8 @@ export function CollapsibleSection({ id, title, icon, count, defaultOpen = true,
         className="w-full flex items-center gap-1.5 mb-2 text-left"
       >
         {icon && <Icon name={icon} size={12} className="text-text-muted flex-shrink-0" />}
-        <span className="text-[10.5px] font-mono uppercase tracking-[0.1em] text-text-muted flex-1">{title}</span>
-        {count != null && <span className="text-[10.5px] font-mono text-text-muted">{count}</span>}
+        <span className="text-metadata font-mono uppercase text-text-muted flex-1">{title}</span>
+        {count != null && <span className="text-caption font-mono text-text-muted">{count}</span>}
         <Icon name="ChevronDown" size={12} className={`text-text-muted flex-shrink-0 transition-transform ${open ? "" : "-rotate-90"}`} />
       </button>
       {open && <div id={`insp-section-${id}`}>{children}</div>}
@@ -114,7 +114,7 @@ export function EvidenceSkeleton() {
 export const MetaChip = ({ icon, children, title }) => (
   <span
     title={title}
-    className="inline-flex items-center gap-1 text-[10.5px] font-mono text-text-muted px-1.5 py-0.5 rounded-[4px] border border-border"
+    className="inline-flex items-center gap-1 text-caption font-mono text-text-muted px-1.5 py-0.5 rounded-[4px] border border-border"
   >
     {icon && <Icon name={icon} size={10} />} {children}
   </span>
@@ -150,7 +150,7 @@ export function Clamp({ children, lines = 6 }) {
           type="button"
           onClick={() => setOpen((v) => !v)}
           aria-expanded={open}
-          className="mt-1 text-[11.5px] font-medium text-brand hover:underline"
+          className="mt-1 text-caption font-medium text-brand hover:underline"
         >
           {open ? "Thu gọn" : "Xem thêm"}
         </button>
@@ -171,23 +171,23 @@ export const EnrichmentCard = memo(function EnrichmentCard({ entry }) {
   return (
     <div className="evidence-frame p-3">
       <div className="flex items-center gap-1.5 mb-1.5">
-        <span className="inline-flex items-center gap-1 text-[11px] font-medium text-text-secondary px-1.5 py-0.5 rounded-[4px] border border-border">
+        <span className="inline-flex items-center gap-1 text-caption font-medium text-text-secondary px-1.5 py-0.5 rounded-[4px] border border-border">
           <Icon name={meta.icon} size={11} /> {meta.label}
         </span>
         {pct != null && <MetaChip title="Độ tin cậy của phần làm giàu này">{pct}%</MetaChip>}
       </div>
       {body && (
         <Clamp lines={5}>
-          <MdSnippet text={body} className="font-display text-[13px] leading-[1.55] text-text-secondary" />
+          <MdSnippet text={body} className="font-display text-small text-text-secondary" />
         </Clamp>
       )}
       {entry.important_facts?.length > 0 && (
-        <ul className="mt-1.5 pl-4 list-disc text-[12.5px] text-text-secondary space-y-0.5">
+        <ul className="mt-1.5 pl-4 list-disc text-small text-text-secondary space-y-0.5">
           {entry.important_facts.map((f, i) => <li key={i}>{f}</li>)}
         </ul>
       )}
       {entry.memory_hint && (
-        <p className="mt-1.5 text-[11.5px] italic text-text-muted">
+        <p className="mt-1.5 text-caption italic text-text-muted">
           <Icon name="Zap" size={11} className="inline -mt-0.5 mr-1" /> {entry.memory_hint}
         </p>
       )}
@@ -250,7 +250,7 @@ export const EvidenceCard = memo(function EvidenceCard({ entry, index, onAskAbou
       <div className="flex items-center gap-2 mb-1.5">
         {/* Citation index badge — provenance, stays --seal (Signature Contract §1). */}
         <span
-          className="w-5 h-5 rounded-[4px] inline-flex items-center justify-center text-[11px] font-mono font-semibold flex-shrink-0"
+          className="w-5 h-5 rounded-[4px] inline-flex items-center justify-center text-caption font-mono font-semibold flex-shrink-0"
           style={{ color: "var(--seal)", border: "1px solid color-mix(in srgb, var(--seal) 35%, transparent)" }}
         >
           {index + 1}
@@ -259,18 +259,18 @@ export const EvidenceCard = memo(function EvidenceCard({ entry, index, onAskAbou
       </div>
 
       {entry.loading ? (
-        <div className="flex items-center gap-2 text-[12px] text-text-muted py-1"><Spinner size={12} /> Đang tải…</div>
+        <div className="flex items-center gap-2 text-small text-text-muted py-1"><Spinner size={12} /> Đang tải…</div>
       ) : entry.error ? (
-        <p className="text-[12.5px] text-text-muted italic">Không tải được trích đoạn này.</p>
+        <p className="text-small text-text-muted italic">Không tải được trích đoạn này.</p>
       ) : (
         <>
           <Clamp lines={7}>
-            <MdSnippet text={entry.text} className="font-display text-[13px] leading-[1.55] text-text-secondary" />
+            <MdSnippet text={entry.text} className="font-display text-small text-text-secondary" />
           </Clamp>
           {typeof onAskAbout === "function" && (
             <button
               onClick={() => onAskAbout(entry.text)}
-              className="mt-2 inline-flex items-center gap-1.5 text-[11.5px] font-medium text-brand hover:underline"
+              className="mt-2 inline-flex items-center gap-1.5 text-caption font-medium text-brand hover:underline"
             >
               <Icon name="MessageCircleQuestion" size={12} /> Hỏi về đoạn này
             </button>

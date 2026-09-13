@@ -35,7 +35,7 @@ function ChipAi({ chip }) {
   const mau = MAU_CHIP[chip.trangThai];
   return (
     <span
-      className="inline-flex items-center gap-1 rounded-full px-2 py-[3px] text-[11px] font-medium"
+      className="inline-flex items-center gap-1 rounded-full px-2 py-[3px] text-caption font-medium"
       style={mau
         ? { background: mau.bg, color: mau.fg }
         : { background: "transparent", color: "var(--text-muted)",
@@ -89,11 +89,11 @@ function DoiTenTaiCho({ giaTriDau, dangLuu, onLuu, onHuy }) {
           if (e.key === "Escape") { e.preventDefault(); onHuy(); }
         }}
         aria-label="Tên hiển thị của tài liệu"
-        className="w-full rounded-control px-2 py-1 text-[15px] font-semibold outline-none"
+        className="w-full rounded-control px-2 py-1 text-body-lg font-semibold outline-none"
         style={{ background: "var(--bg-card)", color: "var(--text-primary)",
                  border: "1px solid var(--accent)" }}
       />
-      <p className="mt-1 text-[11px] text-text-muted">
+      <p className="mt-1 text-caption text-text-muted">
         {loi
           ? <span style={{ color: "var(--err)" }} role="alert">{loi}</span>
           : "Enter để lưu · Esc để huỷ · để trống để dùng lại tên tệp"}
@@ -211,20 +211,20 @@ export default function StudyCard({
         ) : (
           <div className="min-w-0 flex-1">
             <div className="flex items-center gap-1.5 min-w-0">
-              <span className="font-display text-[15.5px] font-semibold text-text-primary truncate">
+              <span className="font-display text-title font-semibold text-text-primary truncate">
                 {ten}
               </span>
               {doc.pinned && <Icon name="Pin" size={13} className="shrink-0 text-brand" />}
               {doc.favorite && <Icon name="Star" size={13} className="shrink-0 text-brand" />}
               {doc.archived_at && (
-                <span className="shrink-0 text-[10.5px] text-text-muted">· đã lưu trữ</span>
+                <span className="shrink-0 text-caption text-text-muted">· đã lưu trữ</span>
               )}
             </div>
             {/* Huy hiệu bộ sưu tập: TÊN lấy từ danh sách chung, không từ tài liệu —
                 tài liệu chỉ mang `collection_id`, nên đổi tên là một lượt ghi. */}
             {boSuuTap && (
               <span className="mt-1 inline-flex items-center gap-1.5 rounded-full px-2 py-[2px]
-                               text-[11px] max-w-full"
+                               text-caption max-w-full"
                     style={{ background: "var(--bg-sidebar)", color: "var(--text-secondary)",
                              border: "1px solid var(--border-color)" }}>
                 <span aria-hidden className="w-2 h-2 rounded-full shrink-0"
@@ -235,7 +235,7 @@ export default function StudyCard({
             {/* Tên tệp gốc: giữ lại vì người dùng nhận ra nó, nhưng mờ và nhỏ —
                 nó không phải thứ quan trọng nhất trên thẻ này. */}
             {doc.display_name && (
-              <div className="font-mono text-[11px] text-text-muted truncate mt-0.5">
+              <div className="font-mono text-caption text-text-muted truncate mt-0.5">
                 {doc.title}
               </div>
             )}
@@ -265,7 +265,7 @@ export default function StudyCard({
                 ].map(([nhan, icon, ham]) => (
                   <button key={nhan} type="button"
                           onClick={() => { setMenuMo(false); ham(); }}
-                          className="w-full px-3 py-1.5 text-left text-[13px] text-text-primary
+                          className="w-full px-3 py-1.5 text-left text-small text-text-primary
                                      hover:bg-surface-elevated inline-flex items-center gap-2">
                     <Icon name={icon} size={13} /> {nhan}
                   </button>
@@ -280,7 +280,7 @@ export default function StudyCard({
       {yChinh.length > 0 && (
         <ul className="flex flex-col gap-1 pl-0.5">
           {yChinh.map((y, i) => (
-            <li key={i} className="flex gap-2 text-[13.5px] leading-[1.5] text-text-primary">
+            <li key={i} className="flex gap-2 text-body text-text-primary">
               <Icon name="Sparkles" size={12} className="mt-[4px] shrink-0 text-brand" />
               <span>{y}</span>
             </li>
@@ -290,7 +290,7 @@ export default function StudyCard({
 
       {/* Tóm tắt xem trước — kẹp 2 dòng */}
       {ai.summary?.preview && (
-        <p className="text-[12.5px] leading-[1.55] text-text-secondary"
+        <p className="text-small text-text-secondary"
            style={{ display: "-webkit-box", WebkitLineClamp: 2, WebkitBoxOrient: "vertical",
                     overflow: "hidden" }}>
           {ai.summary.preview}
@@ -300,7 +300,7 @@ export default function StudyCard({
       {/* Chưa có tóm tắt: nói đúng là chưa có, kèm một hành động THẬT. Không bao giờ
           hiện "đang tạo…" khi không có job nào đang chạy. */}
       {ai.summary?.state === "not_generated" && daIndex && yChinh.length === 0 && (
-        <p className="text-[12.5px] text-text-muted">
+        <p className="text-small text-text-muted">
           Chưa có tóm tắt cho tài liệu này.
         </p>
       )}
@@ -310,14 +310,14 @@ export default function StudyCard({
       </div>
 
       {sieuDuLieu.length > 0 && (
-        <div className="font-mono text-[11px] text-text-muted">{sieuDuLieu.join(" · ")}</div>
+        <div className="font-mono text-caption text-text-muted">{sieuDuLieu.join(" · ")}</div>
       )}
 
       {Array.isArray(doc.tags) && doc.tags.length > 0 && (
         <div className="flex flex-wrap gap-1.5">
           {doc.tags.map((t) => (
             <span key={t}
-                  className="inline-flex items-center gap-1 rounded-full px-2 py-[2px] text-[11px]"
+                  className="inline-flex items-center gap-1 rounded-full px-2 py-[2px] text-caption"
                   style={{ background: "var(--bg-sidebar)", color: "var(--text-secondary)",
                            border: "1px solid var(--border-color)" }}>
               <Icon name="Tag" size={10} /> {t}
@@ -329,7 +329,7 @@ export default function StudyCard({
       <div className="flex flex-wrap items-center gap-1.5 pt-0.5">
         {/* Nút Tiếp tục chỉ xuất hiện khi thật sự có chỗ để tiếp tục. */}
         {tiepTuc && (
-          <button type="button" className="btn-seal !py-1.5 !text-[12.5px] inline-flex items-center gap-1.5"
+          <button type="button" className="btn-seal !py-1.5 !text-small inline-flex items-center gap-1.5"
                   onClick={() => onMo(doc, tiepTuc.beMat || "studymap")}>
             <Icon name="ArrowRight" size={13} /> Tiếp tục · {tiepTuc.nhanBeMat}
           </button>

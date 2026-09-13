@@ -149,7 +149,7 @@ export default function QuizTaking() {
         // Phase 6, Step 2: đếm câu đã trả lời/đang lưu đổi liên tục trong lúc
         // làm bài — không có aria-live thì chỉ ai NHÌN thấy mới biết trạng thái
         // lưu vừa đổi; người dùng đọc màn hình sẽ không hay autosave vừa hỏng.
-        <span className="font-mono text-[11.5px] text-text-muted" aria-live="polite">
+        <span className="font-mono text-caption text-text-muted" aria-live="polite">
           {saving
             ? "đang lưu…"
             : choLuu > 0
@@ -159,7 +159,7 @@ export default function QuizTaking() {
       }
     >
       {raDe?.rejected > 0 && (
-        <div className="surface-card !py-3 !px-4 mb-4 flex items-start gap-2.5 text-[13px] text-text-secondary">
+        <div className="surface-card !py-3 !px-4 mb-4 flex items-start gap-2.5 text-small text-text-secondary">
           <Icon name="AlertCircle" size={15} className="text-text-muted mt-0.5 shrink-0" />
           <span>
             Ra được <strong className="text-text-primary">{raDe.kept}</strong> câu trên{" "}
@@ -181,17 +181,17 @@ export default function QuizTaking() {
             <div className="flex items-center gap-2 mb-3">
               <span className="badge-processing">{QUESTION_TYPE_LABEL[current.question_type]}</span>
               {current.concept_tags?.slice(0, 2).map((t) => (
-                <span key={t} className="font-mono text-[11px] text-text-muted">#{t}</span>
+                <span key={t} className="font-mono text-caption text-text-muted">#{t}</span>
               ))}
             </div>
 
-            <h2 className="font-display text-[19px] leading-[1.5] text-text-primary mb-5">
+            <h2 className="font-display text-h3 text-text-primary mb-5">
               {current.question_text}
             </h2>
 
             {current.question_type === "short_answer" ? (
               <textarea
-                className="input-surface w-full text-[14.5px] min-h-[120px] resize-y"
+                className="input-surface w-full text-body min-h-[120px] resize-y"
                 placeholder="Viết câu trả lời ngắn của bạn…"
                 value={answers[current.question_id] ?? ""}
                 onChange={(e) => choose(current.question_id, e.target.value)}
@@ -209,7 +209,7 @@ export default function QuizTaking() {
                       onClick={() => choose(current.question_id, opt)}
                     >
                       <span className="answer-option__key">{KEYS[i] || i + 1}</span>
-                      <span className="text-[14.5px] leading-[1.5]">{optionLabel(opt)}</span>
+                      <span className="text-body">{optionLabel(opt)}</span>
                     </button>
                   );
                 })}
@@ -218,7 +218,7 @@ export default function QuizTaking() {
           </article>
 
           {error && (
-            <div className="text-[13px] flex items-center gap-1.5 mb-4" style={{ color: "var(--err)" }} role="alert">
+            <div className="text-small flex items-center gap-1.5 mb-4" style={{ color: "var(--err)" }} role="alert">
               <Icon name="AlertCircle" size={14} /> {error}
             </div>
           )}
@@ -228,17 +228,17 @@ export default function QuizTaking() {
               thừa. Nền đặc + đường kẻ trên để chữ phía sau không lộ qua khi cuộn. */}
           <div className="sticky bottom-0 z-10 -mx-5 px-5 py-3 border-t flex items-center gap-2"
             style={{ background: "var(--bg-base)", borderColor: "var(--border-color)" }}>
-            <button type="button" className="btn-secondary text-[13px] inline-flex items-center gap-1.5"
+            <button type="button" className="btn-secondary text-small inline-flex items-center gap-1.5"
               disabled={index === 0} onClick={() => setIndex((i) => Math.max(0, i - 1))}>
               <Icon name="ArrowLeft" size={14} /> Câu trước
             </button>
-            <button type="button" className="btn-secondary text-[13px] inline-flex items-center gap-1.5"
+            <button type="button" className="btn-secondary text-small inline-flex items-center gap-1.5"
               disabled={index >= questions.length - 1}
               onClick={() => setIndex((i) => Math.min(questions.length - 1, i + 1))}>
               Câu sau <Icon name="ArrowRight" size={14} />
             </button>
             <div className="flex-1" />
-            <button type="button" className="btn-seal text-[13px] inline-flex items-center gap-2"
+            <button type="button" className="btn-seal text-small inline-flex items-center gap-2"
               disabled={submitting} onClick={() => setConfirming(true)}>
               {submitting ? <><Spinner size={13} /> Đang nộp…</> : "Nộp bài"}
             </button>
@@ -273,7 +273,7 @@ function ProgressStrip({ questions, answers, index, onJump }) {
             onClick={() => onJump(i)}
             aria-label={`Câu ${i + 1}${done ? " đã trả lời" : " chưa trả lời"}`}
             aria-current={active ? "true" : undefined}
-            className="w-8 h-8 rounded-[5px] font-mono text-[11.5px] font-semibold transition-all"
+            className="w-8 h-8 rounded-[5px] font-mono text-caption font-semibold transition-all"
             style={{
               background: done ? "color-mix(in srgb, var(--accent) 16%, transparent)" : "var(--bg-elevated)",
               border: `1px solid ${active ? "var(--accent)" : done ? "color-mix(in srgb, var(--accent) 35%, transparent)" : "var(--border-color)"}`,
@@ -298,16 +298,16 @@ function ConfirmSubmit({ unanswered, total, onCancel, onConfirm, submitting }) {
     <Modal open title="Nộp bài?" onClose={onCancel} maxWidth={420}
       footer={
         <div className="flex gap-2">
-          <button type="button" className="btn-secondary text-[13px] flex-1" onClick={onCancel}>
+          <button type="button" className="btn-secondary text-small flex-1" onClick={onCancel}>
             Quay lại làm tiếp
           </button>
-          <button type="button" className="btn-seal text-[13px] flex-1 inline-flex items-center justify-center gap-2"
+          <button type="button" className="btn-seal text-small flex-1 inline-flex items-center justify-center gap-2"
             disabled={submitting} onClick={onConfirm}>
             {submitting ? <><Spinner size={13} /> Đang nộp…</> : "Nộp bài"}
           </button>
         </div>
       }>
-      <p className="text-[13.5px] text-text-secondary p-5">
+      <p className="text-body text-text-secondary p-5">
         {unanswered > 0
           ? `Còn ${unanswered}/${total} câu chưa trả lời. Câu bỏ trống được tính là sai.`
           : `Đã trả lời đủ ${total} câu. Sau khi nộp không sửa được đáp án nữa.`}

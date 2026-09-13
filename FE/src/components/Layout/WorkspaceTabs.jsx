@@ -27,7 +27,7 @@ export default function WorkspaceTabs({ mode, onChange, hasMindmap, hasSummary }
             disabled={disabled}
             onClick={() => !disabled && onChange(t.key)}
             title={disabled ? `${t.label} — chưa có nội dung` : t.label}
-            className="flex items-center gap-1.5 px-3 py-2 text-[12.5px] border-b-2 -mb-px transition-colors disabled:opacity-35 disabled:cursor-not-allowed"
+            className="flex items-center gap-1.5 px-3 py-2 text-small border-b-2 -mb-px transition-colors disabled:opacity-35 disabled:cursor-not-allowed"
             style={{
               borderColor: active ? "var(--accent)" : "transparent",
               color: active ? "var(--text-primary)" : "var(--text-secondary)",

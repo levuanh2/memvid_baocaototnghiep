@@ -10,7 +10,7 @@ const NHAN_MODE = { focus: "Tập trung", reader: "Đọc", tutor: "Gia sư" };
 function DongNguCanh({ icon, nhan, giaTri }) {
   if (!giaTri) return null;
   return (
-    <div className="flex items-start gap-2 text-[12.5px]">
+    <div className="flex items-start gap-2 text-small">
       <Icon name={icon} size={13} className="text-text-muted mt-[2px] flex-shrink-0" />
       <div className="min-w-0">
         <span className="text-text-muted">{nhan}: </span>
@@ -41,11 +41,11 @@ export default function TutorPanel({ askDirect, openArtifact, memory }) {
     return (
       <div className="flex flex-col items-center text-center px-5 py-10 gap-3">
         <Icon name="Sparkles" size={24} className="text-text-muted opacity-70" />
-        <p className="text-[13px] text-text-secondary leading-[1.6] max-w-[260px]">
+        <p className="text-small text-text-secondary max-w-[260px]">
           Gia sư AI cần một tài liệu đang xem. Mở một tài liệu ở Thư viện học tập,
           hoặc chọn nguồn ở cột trái rồi đặt câu hỏi trong khung chat.
         </p>
-        <Link to="/app/study" className="pill-action !text-[12.5px]">
+        <Link to="/app/study" className="pill-action !text-small">
           <Icon name="Library" size={13} /> Thư viện học tập
         </Link>
       </div>
@@ -60,7 +60,7 @@ export default function TutorPanel({ askDirect, openArtifact, memory }) {
     <div className="flex flex-col gap-4 px-3 py-3">
       {/* ── Thẻ ngữ cảnh (Step 2) ── */}
       <section className="surface-card !p-3 flex flex-col gap-1.5" aria-label="Đang xem">
-        <div className="text-[11px] font-mono uppercase tracking-[0.12em] text-text-muted mb-0.5">
+        <div className="text-metadata font-mono uppercase text-text-muted mb-0.5">
           Đang xem
         </div>
         <DongNguCanh icon="FileText" nhan="Tài liệu" giaTri={selectedDocument} />
@@ -76,7 +76,7 @@ export default function TutorPanel({ askDirect, openArtifact, memory }) {
 
       {/* ── Hành động nhanh (Step 3) ── */}
       <section aria-label="Hành động nhanh">
-        <div className="text-[11px] font-mono uppercase tracking-[0.12em] text-text-muted mb-2">
+        <div className="text-metadata font-mono uppercase text-text-muted mb-2">
           Hành động nhanh
         </div>
         <div className="flex flex-wrap gap-1.5">
@@ -86,13 +86,13 @@ export default function TutorPanel({ askDirect, openArtifact, memory }) {
               type="button"
               disabled={!a.enabled}
               onClick={() => (a.artifact ? openArtifact(a.artifact) : askDirect(a.prompt))}
-              className="pill-action !text-[12px] disabled:opacity-40"
+              className="pill-action !text-small disabled:opacity-40"
             >
               <Icon name={a.icon} size={13} /> {a.label}
             </button>
           ))}
           {recap && (
-            <button type="button" onClick={() => askDirect(recap)} className="pill-action !text-[12px]">
+            <button type="button" onClick={() => askDirect(recap)} className="pill-action !text-small">
               <Icon name="RotateCcw" size={13} /> Ôn lại phiên này
             </button>
           )}
@@ -104,14 +104,14 @@ export default function TutorPanel({ askDirect, openArtifact, memory }) {
           Engine (xem tutorActions.js) — đây là câu ĐÃ chọn qua nơi khác trong
           phiên này, không phải một bộ Top-3 sinh mới. */}
       <section aria-label="Câu hỏi gợi ý">
-        <div className="text-[11px] font-mono uppercase tracking-[0.12em] text-text-muted mb-2">
+        <div className="text-metadata font-mono uppercase text-text-muted mb-2">
           Câu hỏi trong phiên này
         </div>
         {selectedQuestion || goiY.length > 0 ? (
           <div className="flex flex-col gap-1.5">
             {selectedQuestion && (
               <button type="button" onClick={() => askDirect(selectedQuestion)}
-                      className="pill-tab pill-tab-active !justify-start !text-left !text-[12.5px] !py-1.5">
+                      className="pill-tab pill-tab-active !justify-start !text-left !text-small !py-1.5">
                 {selectedQuestion}
               </button>
             )}
@@ -120,7 +120,7 @@ export default function TutorPanel({ askDirect, openArtifact, memory }) {
                 <div className="flex flex-col gap-1.5">
                   {goiY.map((q) => (
                     <button key={q.id} type="button" onClick={() => askDirect(q.text)}
-                            className="pill-tab !justify-start !text-left !text-[12.5px] !py-1.5">
+                            className="pill-tab !justify-start !text-left !text-small !py-1.5">
                       {q.text}
                     </button>
                   ))}
@@ -129,7 +129,7 @@ export default function TutorPanel({ askDirect, openArtifact, memory }) {
             )}
           </div>
         ) : (
-          <p className="text-[12.5px] text-text-muted leading-[1.6]">
+          <p className="text-small text-text-muted">
             Chưa có câu hỏi nào được chọn trong phiên này. Mở tài liệu này ở{" "}
             <Link to="/app/study" className="underline hover:text-accent">Thư viện học tập</Link>{" "}
             để xem câu hỏi gợi ý từ Question Engine.

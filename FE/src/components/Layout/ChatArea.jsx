@@ -27,25 +27,25 @@ const SUGGESTIONS = [
 // styled for serif reading.
 function makeMdComponents({ highlight, onHighlight }) {
   return {
-    p: ({ node, ...p }) => <p className="mb-2.5 last:mb-0 leading-[1.72] text-[15px] text-text-primary" {...p} />,
+    p: ({ node, ...p }) => <p className="mb-2.5 last:mb-0 text-body-lg text-text-primary" {...p} />,
     code: ({ node, inline, children, ...props }) =>
       inline ? (
-        <code className="bg-surface-elevated border border-border px-1.5 py-0.5 rounded text-[12.5px] font-mono text-text-secondary" {...props}>{children}</code>
+        <code className="bg-surface-elevated border border-border px-1.5 py-0.5 rounded text-small font-mono text-text-secondary" {...props}>{children}</code>
       ) : (
         <pre className="bg-surface-elevated border border-border rounded-[7px] p-3 overflow-x-auto my-2.5">
-          <code className="text-[12.5px] font-mono text-text-secondary" {...props}>{children}</code>
+          <code className="text-small font-mono text-text-secondary" {...props}>{children}</code>
         </pre>
       ),
-    ul: ({ node, ...p }) => <ul className="pl-5 my-2.5 list-disc marker:text-slate text-[15px] text-text-primary" {...p} />,
-    ol: ({ node, ...p }) => <ol className="pl-5 my-2.5 list-decimal marker:text-slate text-[15px] text-text-primary" {...p} />,
-    li: ({ node, ...p }) => <li className="mb-1.5 leading-[1.7]" {...p} />,
+    ul: ({ node, ...p }) => <ul className="pl-5 my-2.5 list-disc marker:text-slate text-body-lg text-text-primary" {...p} />,
+    ol: ({ node, ...p }) => <ol className="pl-5 my-2.5 list-decimal marker:text-slate text-body-lg text-text-primary" {...p} />,
+    li: ({ node, ...p }) => <li className="mb-1.5" {...p} />,
     strong: ({ node, ...p }) => <strong className="text-text-primary font-semibold" {...p} />,
     em: ({ node, ...p }) => <em className="italic" {...p} />,
-    h1: ({ node, ...p }) => <h1 className="font-display text-[19px] font-semibold my-3 text-text-primary" {...p} />,
-    h2: ({ node, ...p }) => <h2 className="font-display text-[17px] font-semibold my-2.5 text-text-primary" {...p} />,
-    h3: ({ node, ...p }) => <h3 className="font-display text-[15px] font-semibold my-2 text-text-secondary" {...p} />,
+    h1: ({ node, ...p }) => <h1 className="font-display text-h3 font-semibold my-3 text-text-primary" {...p} />,
+    h2: ({ node, ...p }) => <h2 className="font-display text-title font-semibold my-2.5 text-text-primary" {...p} />,
+    h3: ({ node, ...p }) => <h3 className="font-display text-body-lg font-semibold my-2 text-text-secondary" {...p} />,
     blockquote: ({ node, ...p }) => <blockquote className="border-l-2 border-brand/50 pl-3.5 my-2.5 text-text-secondary italic" {...p} />,
-    table: ({ node, ...p }) => <div className="overflow-x-auto my-2.5"><table className="w-full text-[13px] border-collapse font-body" {...p} /></div>,
+    table: ({ node, ...p }) => <div className="overflow-x-auto my-2.5"><table className="w-full text-small border-collapse font-body" {...p} /></div>,
     th: ({ node, ...p }) => <th className="bg-surface-elevated px-2.5 py-1.5 text-left text-text-primary border border-border font-semibold" {...p} />,
     td: ({ node, ...p }) => <td className="px-2.5 py-1.5 text-text-secondary border border-border" {...p} />,
     a: ({ node, href, children, ...props }) => {
@@ -628,7 +628,7 @@ export default function ChatArea({ selectedSources, sources = [], onEvidence, hi
       <div className="flex items-center gap-2 px-5 sm:px-8 h-9 border-b flex-shrink-0"
         style={{ borderColor: "var(--border-color)", background: "var(--bg-sidebar)" }}>
         {usingContext && (
-          <span className="inline-flex items-center gap-1.5 text-[11px] font-mono text-text-muted">
+          <span className="inline-flex items-center gap-1.5 text-caption font-mono text-text-muted">
             <Icon name="MessageSquare" size={12} className="text-brand" />
             Đang dùng ngữ cảnh cuộc trò chuyện
           </span>
@@ -636,7 +636,7 @@ export default function ChatArea({ selectedSources, sources = [], onEvidence, hi
         <div className="flex-1" />
         <button
           onClick={handleNewChat} disabled={loading || Boolean(pendingReview)}
-          className="pill-action !py-1 !text-[12px] disabled:opacity-40"
+          className="pill-action !py-1 !text-small disabled:opacity-40"
           title="Bắt đầu cuộc trò chuyện mới">
           <Icon name="Plus" size={13} /> Chat mới
         </button>
@@ -666,7 +666,7 @@ export default function ChatArea({ selectedSources, sources = [], onEvidence, hi
 
       {/* Transient feedback (New chat / Clear context / Delete history) */}
       {notice && (
-        <div className="px-5 sm:px-8 py-1.5 text-[12px] flex items-center gap-2 border-b flex-shrink-0"
+        <div className="px-5 sm:px-8 py-1.5 text-small flex items-center gap-2 border-b flex-shrink-0"
           style={{ borderColor: "var(--border-color)", background: "color-mix(in srgb, var(--accent) 8%, transparent)", color: "var(--text-secondary)" }}>
           <Icon name="Info" size={13} className="text-brand" />
           <span>{notice}</span>
@@ -675,7 +675,7 @@ export default function ChatArea({ selectedSources, sources = [], onEvidence, hi
 
       {/* Notice: sources still indexing */}
       {hasIndexReadySources && (
-        <div className="px-5 py-2 text-[12px] flex items-center gap-2 border-b flex-shrink-0"
+        <div className="px-5 py-2 text-small flex items-center gap-2 border-b flex-shrink-0"
           style={{ borderColor: "var(--border-color)", background: "color-mix(in srgb, var(--warn) 10%, transparent)", color: "var(--warn)" }}>
           <Icon name="Info" size={14} />
           <span>Một số tài liệu vẫn đang lập chỉ mục — câu trả lời có thể chưa đầy đủ.</span>
@@ -692,11 +692,11 @@ export default function ChatArea({ selectedSources, sources = [], onEvidence, hi
         {/* Empty state — the reading-room thesis */}
         {messages.length === 0 && !loading && (
           <div className="flex flex-col items-center justify-center h-full text-center pb-16 animate-fadeUp max-w-[440px] mx-auto">
-            <div className="font-mono text-[11px] tracking-[0.2em] uppercase text-text-muted mb-4">Phòng đọc</div>
+            <div className="font-mono text-metadata uppercase text-text-muted mb-4">Phòng đọc</div>
             <h1 className="font-display text-[26px] sm:text-[30px] leading-[1.2] font-semibold text-text-primary mb-3">
               Hỏi tài liệu của bạn — <span className="text-brand">kèm dẫn chứng</span>.
             </h1>
-            <p className="font-display text-[15px] leading-[1.7] text-text-secondary mb-6">
+            <p className="font-display text-body-lg text-text-secondary mb-6">
               Mỗi câu trả lời được truy hồi từ tài liệu đã chọn và gắn nguồn ở lề phải. Chọn tài liệu bên trái, rồi đặt câu hỏi.
             </p>
             {selectedSources?.length > 0 ? (
@@ -716,19 +716,19 @@ export default function ChatArea({ selectedSources, sources = [], onEvidence, hi
         {/* Messages */}
         {messages.map((msg, idx) =>
           msg.role === "cancelled" ? (
-            <div key={idx} className="self-center text-[12px] font-mono text-text-muted flex items-center gap-2 py-1">
+            <div key={idx} className="self-center text-small font-mono text-text-muted flex items-center gap-2 py-1">
               <Icon name="Ban" size={13} /> {msg.content}
             </div>
           ) : msg.role === "user" ? (
             <div key={idx} className="self-end max-w-[78%]">
-              <div className="px-4 py-2.5 text-[14.5px] leading-relaxed rounded-[10px] rounded-br-[3px] border transition-theme"
+              <div className="px-4 py-2.5 text-body leading-relaxed rounded-[10px] rounded-br-[3px] border transition-theme"
                 style={{ background: "var(--bg-elevated)", borderColor: "var(--border-color)", color: "var(--text-primary)" }}>
                 {msg.content}
               </div>
               {msg.imageText ? (
                 /* Người học phải xem được máy đọc ra gì: đọc sai là kiểu hỏng số một,
                    và không thấy phần này thì câu trả lời lệch trông như model dốt. */
-                <details className="mt-1.5 text-[12.5px] rounded-[8px] border px-3 py-2"
+                <details className="mt-1.5 text-small rounded-[8px] border px-3 py-2"
                   style={{ borderColor: "var(--border-color)", background: "var(--bg-base)", color: "var(--text-secondary)" }}>
                   <summary className="cursor-pointer select-none inline-flex items-center gap-1.5 text-text-muted">
                     <Icon name="Image" size={12} />
@@ -740,7 +740,7 @@ export default function ChatArea({ selectedSources, sources = [], onEvidence, hi
             </div>
           ) : (
             <div key={idx} className="self-start w-full max-w-[760px] flex flex-col gap-2 animate-fadeUp">
-              <div className="flex items-center gap-2 text-[11px] font-mono uppercase tracking-[0.14em] text-text-muted">
+              <div className="flex items-center gap-2 text-metadata font-mono uppercase text-text-muted">
                 <Icon name="BookOpen" size={13} className="text-brand" /> Trả lời
                 {msg.evidence?.sources?.length ? (
                   <span className="text-text-muted">· {msg.evidence.sources.length} nguồn</span>
@@ -756,10 +756,10 @@ export default function ChatArea({ selectedSources, sources = [], onEvidence, hi
         {pendingReview && (
           <div className="self-start w-full max-w-[760px] animate-fadeUp">
             <div className="surface-card !p-4 border border-brand/30">
-              <div className="text-[11px] font-mono uppercase tracking-[0.14em] text-brand mb-2">
+              <div className="text-metadata font-mono uppercase text-brand mb-2">
                 Chờ người dùng duyệt câu trả lời
               </div>
-              <p className="text-[13px] text-text-secondary mb-3">
+              <p className="text-small text-text-secondary mb-3">
                 Kiểm tra bản nháp dưới đây. Có thể phê duyệt, chỉnh sửa rồi gửi lại, hoặc từ chối.
               </p>
               <textarea
@@ -767,7 +767,7 @@ export default function ChatArea({ selectedSources, sources = [], onEvidence, hi
                 onChange={(e) => setPendingReview((prev) => ({ ...prev, answer: e.target.value }))}
                 disabled={reviewSubmitting}
                 rows={7}
-                className="w-full input-surface text-[14px] resize-y min-h-[150px] mb-3 disabled:opacity-60"
+                className="w-full input-surface text-body resize-y min-h-[150px] mb-3 disabled:opacity-60"
                 aria-label="Bản nháp câu trả lời cần duyệt"
               />
               <div className="flex flex-wrap gap-2">
@@ -783,7 +783,7 @@ export default function ChatArea({ selectedSources, sources = [], onEvidence, hi
         {loading && !pendingReview && (
           <div className="self-start w-full max-w-[760px] animate-fadeUp">
             <div className="surface-card !p-4">
-              <div className="flex items-center justify-between text-[11px] font-mono uppercase tracking-[0.14em] text-text-muted mb-3">
+              <div className="flex items-center justify-between text-metadata font-mono uppercase text-text-muted mb-3">
                 <span>Bộ máy truy hồi</span>
                 <span className="tabular-nums text-text-secondary">{Math.round(jobProgress)}%</span>
               </div>
@@ -793,13 +793,13 @@ export default function ChatArea({ selectedSources, sources = [], onEvidence, hi
                   return (
                     <div key={`${key}-${i}`} className="apparatus-step">
                       <span className={`apparatus-dot ${isActive ? "apparatus-dot--active" : "apparatus-dot--done"}`} />
-                      <span className={`text-[12.5px] ${isActive ? "text-text-primary font-medium" : "text-text-secondary"}`}>{nodeLabel(key)}</span>
+                      <span className={`text-small ${isActive ? "text-text-primary font-medium" : "text-text-secondary"}`}>{nodeLabel(key)}</span>
                     </div>
                   );
                 })}
               </div>
               {streamingPreview && (
-                <div className="mt-3 pt-3 border-t border-border font-display text-[14.5px] text-text-primary leading-[1.7] max-h-[42vh] overflow-y-auto">
+                <div className="mt-3 pt-3 border-t border-border font-display text-body text-text-primary max-h-[42vh] overflow-y-auto">
                   <ReactMarkdown remarkPlugins={[remarkGfm, remarkBreaks]}>{streamingPreview}</ReactMarkdown>
                   <span className="inline-block w-0.5 h-4 bg-brand animate-pulse ml-0.5 align-middle rounded-sm" aria-hidden />
                 </div>
@@ -830,7 +830,7 @@ export default function ChatArea({ selectedSources, sources = [], onEvidence, hi
               <img src={attachedImage.previewUrl} alt="Ảnh sắp gửi kèm câu hỏi"
                 className="w-11 h-11 object-cover rounded-[6px] border"
                 style={{ borderColor: "var(--border-color)" }} />
-              <div className="text-[12.5px] leading-tight">
+              <div className="text-small leading-tight">
                 <div className="text-text-primary">
                   {transcribing ? "Đang đọc ảnh…" : "Ảnh sẽ được đọc trước khi hỏi"}
                 </div>
@@ -870,7 +870,7 @@ export default function ChatArea({ selectedSources, sources = [], onEvidence, hi
               onKeyDown={handleKeyDown}
               onPaste={handlePaste}
               disabled={loading || Boolean(pendingReview) || transcribing}
-              className="w-full input-surface text-[14.5px] resize-none min-h-[46px] max-h-[140px] disabled:opacity-60"
+              className="w-full input-surface text-body resize-none min-h-[46px] max-h-[140px] disabled:opacity-60"
               style={{ lineHeight: 1.55 }}
             />
           </div>

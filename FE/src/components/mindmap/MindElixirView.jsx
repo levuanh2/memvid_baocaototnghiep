@@ -64,9 +64,12 @@ export const THEME = {
     // idea/detail = chữ trần trên nền
     "--color": "var(--text-secondary)",
     "--bgcolor": "transparent",
-    // selection/active — seal đỏ hợp lệ (active state, không decorative)
-    "--selected": "var(--accent)",
-    "--accent-color": "var(--accent)",
+    // Sprint F: selection is an action/state signal, not provenance — forest
+    // ring (Paper & Graphite Signature Contract §1), not seal red. Citation
+    // tags (mindmap.css's `.tags span`) stay on `--seal` deliberately; this
+    // is the one place in the map that should NOT read as "a citation."
+    "--selected": "var(--forest)",
+    "--accent-color": "var(--forest)",
     // context-menu panel
     "--panel-color": "var(--text-primary)",
     "--panel-bgcolor": "var(--bg-card)",
@@ -265,14 +268,14 @@ export default function MindElixirView({ data, onRegenerate, regenerating, contr
       <div className="flex flex-wrap items-center gap-2 px-3 py-2 border-b flex-shrink-0"
         style={{ borderColor: "var(--border-color)", background: "var(--bg-sidebar)" }}>
         <div className="min-w-0">
-          <div className="font-mono text-[10px] tracking-[0.14em] uppercase" style={{ color: "var(--text-secondary)" }}>
+          <div className="font-mono text-metadata uppercase" style={{ color: "var(--text-secondary)" }}>
             Sơ đồ tư duy
           </div>
-          <div className="font-display text-[14px] font-semibold truncate text-text-primary">
+          <div className="font-display text-body font-semibold truncate text-text-primary">
             {data?.title || "Sơ đồ tư duy"}
           </div>
         </div>
-        {dirty && <span className="text-[11px] px-1.5 rounded" style={{ color: "var(--warn)" }}>● chưa lưu</span>}
+        {dirty && <span className="text-caption px-1.5 rounded" style={{ color: "var(--warn)" }}>● chưa lưu</span>}
         <div className="flex-1" />
         <button onClick={() => zoomBy(-ZOOM_STEP)} aria-label="Thu nhỏ" title="Thu nhỏ (−)"
           className="p-1.5 rounded hover:bg-[var(--bg-hover)] text-text-secondary">
@@ -281,7 +284,7 @@ export default function MindElixirView({ data, onRegenerate, regenerating, contr
         {/* Readout — vừa là mức thu phóng hiện tại, vừa là affordance dạy user rằng
             canvas là một khung nhìn di chuyển được (không phải ảnh tĩnh). */}
         <button onClick={resetZoom} aria-label="Đặt lại thu phóng" title="Đặt lại thu phóng (100%)"
-          className="px-1.5 py-1 rounded hover:bg-[var(--bg-hover)] font-mono text-[11px] tabular-nums text-text-secondary min-w-[46px]">
+          className="px-1.5 py-1 rounded hover:bg-[var(--bg-hover)] font-mono text-caption tabular-nums text-text-secondary min-w-[46px]">
           {formatZoom(zoom)}
         </button>
         <button onClick={() => zoomBy(+ZOOM_STEP)} aria-label="Phóng to" title="Phóng to (+)"
@@ -289,11 +292,11 @@ export default function MindElixirView({ data, onRegenerate, regenerating, contr
           <Icon name="ZoomIn" size={16} />
         </button>
         <button onClick={fitView} aria-label="Vừa khung" title="Vừa khung (F)"
-          className="flex items-center gap-1 px-2 py-1.5 rounded hover:bg-[var(--bg-hover)] text-[12px] text-text-secondary">
+          className="flex items-center gap-1 px-2 py-1.5 rounded hover:bg-[var(--bg-hover)] text-small text-text-secondary">
           <Icon name="Scan" size={14} /> Vừa khung
         </button>
         <button onClick={resetView} aria-label="Đặt lại khung nhìn" title="Đặt lại khung nhìn (0)"
-          className="flex items-center gap-1 px-2 py-1.5 rounded hover:bg-[var(--bg-hover)] text-[12px] text-text-secondary">
+          className="flex items-center gap-1 px-2 py-1.5 rounded hover:bg-[var(--bg-hover)] text-small text-text-secondary">
           <Icon name="RotateCcw" size={14} /> Đặt lại
         </button>
         <button onClick={() => mindRef.current?.toCenter()} aria-label="Căn giữa" title="Căn giữa"
@@ -307,14 +310,14 @@ export default function MindElixirView({ data, onRegenerate, regenerating, contr
           <Icon name="Spline" size={16} />
         </button>
         <button onClick={handleExportPng} aria-label="Xuất PNG" title="Xuất PNG"
-          className="flex items-center gap-1 px-2 py-1.5 rounded hover:bg-[var(--bg-hover)] text-[12px] text-text-secondary">
+          className="flex items-center gap-1 px-2 py-1.5 rounded hover:bg-[var(--bg-hover)] text-small text-text-secondary">
           <Icon name="Download" size={14} /> Xuất PNG
         </button>
         {/* Nút Lưu — chỉ hiện khi record đã có id thật trong sqlite (không phải
             "preview" transient) và không đang generating, tránh PUT 404. */}
         {data?.id && data.id !== "preview" && !data.generating && (
           <button onClick={handleSave} disabled={!dirty || saving} aria-label="Lưu sơ đồ"
-            className="btn-primary text-[12px] disabled:opacity-40">
+            className="btn-primary text-small disabled:opacity-40">
             {saving ? "Đang lưu…" : "Lưu"}
           </button>
         )}
@@ -323,7 +326,7 @@ export default function MindElixirView({ data, onRegenerate, regenerating, contr
           phải chờ user mò tới. Đứng trên banner generating/degraded vì đây là thứ user
           vừa bấm và đang chờ kết quả. */}
       {errorMsg && (
-        <div role="alert" className="px-3 py-1.5 text-[12px] flex items-center gap-2 border-b flex-shrink-0"
+        <div role="alert" className="px-3 py-1.5 text-small flex items-center gap-2 border-b flex-shrink-0"
           style={{ color: "var(--err)", borderColor: "var(--border-color)", background: "var(--bg-elevated)" }}>
           <Icon name="TriangleAlert" size={14} />
           <span className="min-w-0 flex-1">{errorMsg}</span>
@@ -335,7 +338,7 @@ export default function MindElixirView({ data, onRegenerate, regenerating, contr
       )}
       {/* Generating banner — nút Huỷ ngay trong toolbar */}
       {generating && (
-        <div className="px-3 py-1.5 text-[12px] flex items-center gap-2 border-b"
+        <div className="px-3 py-1.5 text-small flex items-center gap-2 border-b"
           style={{ color: "var(--text-secondary)", borderColor: "var(--border-color)", background: "var(--bg-elevated)" }}>
           <Spinner size={12} />
           <span>
@@ -355,7 +358,7 @@ export default function MindElixirView({ data, onRegenerate, regenerating, contr
       )}
       {/* Degraded banner giữ từ v2 — ẩn nút Tạo lại khi đang generate (tránh double-trigger) */}
       {degraded && (
-        <div className="px-3 py-1.5 text-[12px] flex items-center gap-2 border-b"
+        <div className="px-3 py-1.5 text-small flex items-center gap-2 border-b"
           style={{ color: "var(--warn)", borderColor: "var(--border-color)", background: "var(--bg-elevated)" }}>
           <span>Bản đồ chưa đầy đủ{missing.length ? ` (thiếu: ${missing.join(", ")})` : ""}.</span>
           {!generating && (

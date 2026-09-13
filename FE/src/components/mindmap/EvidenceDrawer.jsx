@@ -74,13 +74,13 @@ export default function EvidenceDrawer({ node, onClose, generating, onAskAbout, 
         aria-modal="false"
         aria-label={`Bằng chứng cho ${node.title || "nhánh"}`}
         className="evidence-drawer h-full w-full max-w-[380px] flex flex-col border-l border-border shadow-card-hover animate-drawerIn"
-        style={{ background: "var(--bg-sidebar)" }}
+        style={{ background: "var(--surface-contrast)" }}
         onMouseDown={(e) => e.stopPropagation()}
       >
         <div className="flex items-start gap-2 px-4 py-3.5 border-b border-border flex-shrink-0">
           <div className="min-w-0 flex-1">
-            <div className="text-[10px] font-mono uppercase tracking-[0.12em] text-text-muted mb-1">Bằng chứng</div>
-            <h3 className="font-display font-semibold text-text-primary text-[14px] truncate" title={node.title}>
+            <div className="text-metadata font-mono uppercase text-text-muted mb-1">Bằng chứng</div>
+            <h3 className="font-display font-semibold text-text-primary text-body truncate" title={node.title}>
               {node.title || "Nhánh"}
             </h3>
             {(node.number || sourceLabel || avgConfidencePct != null) && (
@@ -107,13 +107,13 @@ export default function EvidenceDrawer({ node, onClose, generating, onAskAbout, 
         <div className="flex-1 min-h-0 overflow-y-auto px-4 py-3.5">
           {node.note && (
             <MdSnippet text={node.note}
-              className="font-display text-[13.5px] leading-[1.6] text-text-secondary mb-4 pb-4 border-b border-border" />
+              className="font-display text-body text-text-secondary mb-4 pb-4 border-b border-border" />
           )}
 
           {nothingAtAll ? (
             <div className="text-center px-2 pt-8 text-text-muted">
               <Icon name="Quote" size={22} className="mx-auto mb-2.5 opacity-60" />
-              <p className="text-[12.5px] leading-[1.6] text-text-secondary">{emptyMessage}</p>
+              <p className="text-small text-text-secondary">{emptyMessage}</p>
             </div>
           ) : (
             <div className="flex flex-col gap-2">

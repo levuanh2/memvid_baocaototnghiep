@@ -50,13 +50,17 @@ html.dark .me-container { --mm-relation: #7e90c4; }
 .me-container me-tpc { font-size: 13px; }
 
 /* Tag ※N (số trích đoạn nguồn trên node) — mono + seal outline: đây là provenance,
-   dùng seal đỏ là ĐÚNG vai (đồng bộ chip trích đoạn trong EvidenceDrawer). */
+   dùng seal đỏ là ĐÚNG vai (đồng bộ chip trích đoạn trong EvidenceDrawer).
+   Sprint F: was `var(--accent)` — --accent's role is now action/selection
+   (see THEME.cssVar's `--selected` in MindElixirView.jsx), so this migrates
+   to `--seal` directly, same reasoning as the other citation badges fixed
+   elsewhere in the app. */
 .me-container me-tpc .tags span {
   font-family: "IBM Plex Mono", ui-monospace, monospace;
   font-size: 10px;
-  color: var(--accent);
+  color: var(--seal);
   background: transparent;
-  border: 1px solid color-mix(in srgb, var(--accent) 35%, transparent);
+  border: 1px solid color-mix(in srgb, var(--seal) 35%, transparent);
   border-radius: 4px;
   padding: 0 4px;
 }
@@ -70,8 +74,42 @@ html.dark .me-container { --mm-relation: #7e90c4; }
   font-weight: 600;
 }
 .me-container me-tpc .tags span.mm-tag-citations {
-  color: var(--accent);
-  border-color: color-mix(in srgb, var(--accent) 35%, transparent);
+  color: var(--seal);
+  border-color: color-mix(in srgb, var(--seal) 35%, transparent);
+}
+
+/* Sprint F — depth-signaled connectors. mind-elixir draws root->main-branch
+   edges into one `.lines` SVG and every deeper edge (branch->child and
+   below) into a per-branch `.subLines` SVG that flattens its WHOLE subtree
+   into one container (verified against the rendered DOM — mind-elixir does
+   not tag individual paths with their true nesting depth, so a real
+   per-level fade isn't available without patching the library's internals).
+   This is the honest two-tier approximation that IS achievable: the
+   root's own connectors stay strongest, everything nested reads lighter —
+   matching "root strongest, branches second, leaves light" without
+   depending on library internals that could change under a version bump. */
+.me-container .lines path { opacity: 1; }
+.me-container .subLines path { opacity: 0.6; }
+
+/* Sprint F — clean hover: a border-color shift only, no glow/scale/shadow.
+   Sprint H: was scoped to `me-main > me-wrapper > me-parent > me-tpc` — only
+   the first branch level. Everything nested deeper (concept/example depth,
+   where most nodes in a dense graph actually live) had zero hover feedback.
+   Widened to a plain descendant selector so every non-root depth gets it. */
+.me-container me-main me-tpc:hover {
+  border-color: color-mix(in srgb, var(--forest) 45%, transparent) !important;
+}
+@media (prefers-reduced-motion: no-preference) {
+  .me-container me-main me-tpc {
+    transition: border-color 120ms ease-out;
+  }
+  /* mind-elixir's own `.selected{outline:2px solid var(--selected)}` (see
+     MindElixir.css) has no transition of its own — the ring used to snap
+     in instantly. This is an override on the library's class, not a new
+     visual language: same ring, same color, just eased in. */
+  .me-container .selected {
+    transition: outline-color 150ms ease-out;
+  }
 }
 
 /* Sprint A, item 1 — Knowledge Inspector as CSS Grid: exactly 5 fixed rows
@@ -85,6 +123,99 @@ html.dark .me-container { --mm-relation: #7e90c4; }
   display: grid;
   grid-template-rows: auto auto auto 1fr auto;
   height: 100%;
+}
+
+/* ═══════════════════════════════════════════════════
+   Sprint F — the graphite register. Knowledge Inspector,
+   Evidence Drawer, and the right sidebar are permanently
+   dark (see index.css's --surface-contrast/--on-contrast:
+   declared once, no html.dark override — the reader
+   focuses on paper, the tools stay on graphite, regardless
+   of which reading theme is active).
+
+   Mechanism: override the TAILWIND UTILITY CLASSES these
+   components already use (`.text-text-primary`, `.border-
+   border`, etc. — real class names Tailwind generates from
+   `colors.text.primary`/`colors.border`), scoped under each
+   graphite container by selector specificity. This reaches
+   every consumer of those classes without editing any JSX,
+   and — critically — lets one exception rule below "give
+   back" the paper look to evidence/citation CARDS, which
+   are deliberately NOT part of this register (Sprint F §7:
+   "Evidence should resemble research notes... paper card"
+   — a paper note pinned to a graphite desk, not graphite
+   itself). `--accent` is also redirected locally to bronze
+   (`--contrast-focus`) for hover states — action/interaction
+   inside these panels, not provenance, so it does not use
+   `--seal` (citation badges already reference `--seal`
+   directly and are unaffected either way).
+═══════════════════════════════════════════════════ */
+.knowledge-inspector,
+.evidence-drawer,
+.sidebar-right {
+  --accent: var(--contrast-focus);
+}
+.knowledge-inspector .text-text-primary,
+.evidence-drawer .text-text-primary,
+.sidebar-right .text-text-primary { color: var(--on-contrast); }
+.knowledge-inspector .text-text-secondary,
+.evidence-drawer .text-text-secondary,
+.sidebar-right .text-text-secondary,
+.knowledge-inspector .text-text-muted,
+.evidence-drawer .text-text-muted,
+.sidebar-right .text-text-muted { color: var(--on-contrast-muted); }
+.knowledge-inspector .border-border,
+.evidence-drawer .border-border,
+.sidebar-right .border-border { border-color: var(--contrast-border); }
+.knowledge-inspector .icon-btn,
+.evidence-drawer .icon-btn,
+.sidebar-right .icon-btn {
+  background: transparent;
+  border-color: var(--contrast-border);
+  color: var(--on-contrast-muted);
+}
+.knowledge-inspector .icon-btn:hover,
+.evidence-drawer .icon-btn:hover,
+.sidebar-right .icon-btn:hover {
+  border-color: var(--contrast-focus);
+  color: var(--on-contrast);
+}
+.knowledge-inspector .icon-btn:disabled,
+.evidence-drawer .icon-btn:disabled,
+.sidebar-right .icon-btn:disabled { color: var(--on-contrast-muted); }
+
+/* Evidence/citation cards stay paper — revert the overrides above for
+   anything inside `.evidence-frame` (one selector-specificity level deeper
+   always beats the panel-wide rules, regardless of source order). */
+.knowledge-inspector .evidence-frame,
+.evidence-drawer .evidence-frame,
+.sidebar-right .evidence-frame {
+  --accent: var(--seal);
+}
+.knowledge-inspector .evidence-frame .text-text-primary,
+.evidence-drawer .evidence-frame .text-text-primary,
+.sidebar-right .evidence-frame .text-text-primary { color: var(--text-primary); }
+.knowledge-inspector .evidence-frame .text-text-secondary,
+.evidence-drawer .evidence-frame .text-text-secondary,
+.sidebar-right .evidence-frame .text-text-secondary,
+.knowledge-inspector .evidence-frame .text-text-muted,
+.evidence-drawer .evidence-frame .text-text-muted,
+.sidebar-right .evidence-frame .text-text-muted { color: var(--text-muted); }
+.knowledge-inspector .evidence-frame .border-border,
+.evidence-drawer .evidence-frame .border-border,
+.sidebar-right .evidence-frame .border-border { border-color: var(--border-color); }
+.knowledge-inspector .evidence-frame .icon-btn,
+.evidence-drawer .evidence-frame .icon-btn,
+.sidebar-right .evidence-frame .icon-btn {
+  background: var(--bg-card);
+  border-color: var(--border-color);
+  color: var(--text-secondary);
+}
+.knowledge-inspector .evidence-frame .icon-btn:hover,
+.evidence-drawer .evidence-frame .icon-btn:hover,
+.sidebar-right .evidence-frame .icon-btn:hover {
+  border-color: var(--accent);
+  color: var(--accent);
 }
 
 /* Legend nổi góc dưới trái canvas */

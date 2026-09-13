@@ -49,15 +49,15 @@ export default function Login() {
   return (
     <div className="h-screen overflow-y-auto flex items-center justify-center px-5 py-10" style={{ background: "var(--bg-base)" }}>
       <div className="w-full max-w-[400px]">
-        <Link to="/" className="inline-flex items-center gap-1.5 text-[13px] text-text-muted hover:text-brand mb-6 transition-theme">
+        <Link to="/" className="inline-flex items-center gap-1.5 text-small text-text-muted hover:text-brand mb-6 transition-theme">
           <Icon name="ArrowLeft" size={14} /> Về trang chủ
         </Link>
 
         <div className="surface-card !p-7">
           <div className="mb-6">
-            <div className="font-mono text-[11px] tracking-[0.2em] uppercase text-text-muted mb-2">Phòng đọc</div>
-            <h1 className="font-display text-[24px] font-semibold text-text-primary">Đăng nhập</h1>
-            <p className="text-[13.5px] text-text-secondary mt-1">Tiếp tục làm việc với tài liệu của bạn.</p>
+            <div className="font-mono text-metadata uppercase text-text-muted mb-2">Phòng đọc</div>
+            <h1 className="font-display text-h2 font-semibold text-text-primary">Đăng nhập</h1>
+            <p className="text-body text-text-secondary mt-1">Tiếp tục làm việc với tài liệu của bạn.</p>
           </div>
 
           <form onSubmit={onSubmit} className="flex flex-col gap-3.5">
@@ -75,34 +75,34 @@ export default function Login() {
 
             {laNks ? (
               <label className="flex flex-col gap-1.5">
-                <span className="text-[12.5px] font-medium text-text-secondary">Tên đăng nhập NKS</span>
+                <span className="text-small font-medium text-text-secondary">Tên đăng nhập NKS</span>
                 <input type="text" autoComplete="username" value={username}
                   onChange={(e) => setUsername(e.target.value)}
-                  placeholder="tên đăng nhập" className="input-surface text-[14px]" />
+                  placeholder="tên đăng nhập" className="input-surface text-body" />
               </label>
             ) : (
               <label className="flex flex-col gap-1.5">
-                <span className="text-[12.5px] font-medium text-text-secondary">Email</span>
+                <span className="text-small font-medium text-text-secondary">Email</span>
                 <input type="email" autoComplete="email" value={email}
                   onChange={(e) => setEmail(e.target.value)}
-                  placeholder="ban@vidu.com" className="input-surface text-[14px]" />
+                  placeholder="ban@vidu.com" className="input-surface text-body" />
               </label>
             )}
             <label className="flex flex-col gap-1.5">
-              <span className="text-[12.5px] font-medium text-text-secondary">Mật khẩu</span>
+              <span className="text-small font-medium text-text-secondary">Mật khẩu</span>
               <input type="password" autoComplete="current-password" value={password}
                 onChange={(e) => setPassword(e.target.value)}
-                placeholder="••••••••" className="input-surface text-[14px]" />
+                placeholder="••••••••" className="input-surface text-body" />
             </label>
 
             {thongBao && !error && (
-              <p role="status" className="flex items-center gap-1.5 text-[12.5px] mb-3"
+              <p role="status" className="flex items-center gap-1.5 text-small mb-3"
                 style={{ color: "var(--ok)" }}>
                 <Icon name="BadgeCheck" size={13} /> {thongBao}
               </p>
             )}
             {error && (
-              <div className="text-[12.5px] flex items-center gap-1.5" style={{ color: "var(--err)" }}>
+              <div className="text-small flex items-center gap-1.5" style={{ color: "var(--err)" }}>
                 <Icon name="AlertCircle" size={13} /> {error}
               </div>
             )}
@@ -113,7 +113,7 @@ export default function Login() {
             </button>
           </form>
 
-          <p className="text-[13px] text-text-secondary text-center mt-5">
+          <p className="text-small text-text-secondary text-center mt-5">
             Chưa có tài khoản?{" "}
             <Link to={`/register${params.get("next") ? `?next=${encodeURIComponent(params.get("next"))}` : ""}`}
               className="text-brand font-medium hover:underline">Tạo tài khoản</Link>

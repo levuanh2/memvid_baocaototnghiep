@@ -44,8 +44,8 @@ const ListCard = ({ title, meta, icon, onOpen, onDelete, deleteLabel = "Xóa" })
       <Icon name={icon} size={15} />
     </div>
     <div className="flex-1 min-w-0">
-      <div className="text-[13px] font-semibold text-text-primary truncate">{title}</div>
-      <div className="text-[11px] text-text-muted flex items-center gap-1 mt-0.5 font-mono">
+      <div className="text-small font-semibold text-text-primary truncate">{title}</div>
+      <div className="text-caption text-text-muted flex items-center gap-1 mt-0.5 font-mono">
         <Icon name="Clock" size={10} />{meta}
       </div>
     </div>
@@ -632,7 +632,7 @@ export default function SidebarRight({
 
   // ── Render ────────────────────────────────────────
   return (
-    <div className="flex flex-col h-full overflow-hidden transition-theme" style={{ background: "var(--bg-sidebar)" }}>
+    <div className="sidebar-right flex flex-col h-full overflow-hidden transition-theme" style={{ background: "var(--surface-contrast)" }}>
 
       {/* Header — hai tab của MỘT cột: Bằng chứng (cũ) / Gia sư AI (Phase 4C) */}
       <div className="px-4 pt-4 pb-3 border-b border-border flex items-center justify-between flex-shrink-0 gap-2">
@@ -680,7 +680,7 @@ export default function SidebarRight({
       <div className="flex-1 min-h-0 overflow-y-auto co-the-cuon-them px-3 py-3">
         {chunks.length > 0 ? (
           <>
-            <div className="text-[11px] font-mono uppercase tracking-[0.12em] text-text-muted mb-2 px-1">
+            <div className="text-metadata font-mono uppercase text-text-muted mb-2 px-1">
               Nguồn của câu trả lời ({chunks.length})
             </div>
             <div className="flex flex-col gap-2">
@@ -698,7 +698,7 @@ export default function SidebarRight({
                     onMouseLeave={() => onHighlight?.(null)}
                   >
                     <div className="flex items-center gap-2 mb-1.5">
-                      <span className="w-5 h-5 rounded-[4px] inline-flex items-center justify-center text-[11px] font-mono font-semibold flex-shrink-0"
+                      <span className="w-5 h-5 rounded-[4px] inline-flex items-center justify-center text-caption font-mono font-semibold flex-shrink-0"
                         style={{ color: "var(--seal)", border: "1px solid color-mix(in srgb, var(--seal) 35%, transparent)" }}>
                         {i + 1}
                       </span>
@@ -708,7 +708,7 @@ export default function SidebarRight({
                     </div>
                     {c.snippet && (
                       <MdSnippet text={c.snippet}
-                        className="font-display text-[13px] leading-[1.55] text-text-secondary line-clamp-4" />
+                        className="font-display text-small text-text-secondary line-clamp-4" />
                     )}
                   </div>
                 );
@@ -717,7 +717,7 @@ export default function SidebarRight({
           </>
         ) : sourceStems.length > 0 ? (
           <>
-            <div className="text-[11px] font-mono uppercase tracking-[0.12em] text-text-muted mb-2 px-1">
+            <div className="text-metadata font-mono uppercase text-text-muted mb-2 px-1">
               Tài liệu đã dùng ({sourceStems.length})
             </div>
             <div className="flex flex-col gap-1.5">
@@ -732,7 +732,7 @@ export default function SidebarRight({
         ) : (
           <div className="text-center px-5 pt-12 text-text-muted">
             <Icon name="Quote" size={26} className="mx-auto mb-3 text-text-muted opacity-60" />
-            <p className="text-[13px] leading-[1.6] text-text-secondary">
+            <p className="text-small text-text-secondary">
               Đặt một câu hỏi — nguồn dẫn chứng của câu trả lời sẽ hiện ở đây, khớp với các chú thích<sup className="cite-chip mx-0.5">n</sup>trong câu trả lời.
             </p>
           </div>
@@ -811,7 +811,7 @@ export default function SidebarRight({
         {/* Background-generation progress chip — dùng chung cho cả hai tab
             (jobUi/onCancelJob đã switch theo artifactTab ở phần Derived). */}
         {jobUi.running && (
-          <div className="mx-3 mb-2 flex items-center gap-2 rounded-[8px] border px-2.5 py-2 text-[12px]"
+          <div className="mx-3 mb-2 flex items-center gap-2 rounded-[8px] border px-2.5 py-2 text-small"
             style={{ borderColor: stallShown ? "var(--warn)" : "var(--border-strong)", background: "var(--bg-elevated)" }}>
             <span className="animate-spin inline-block w-3.5 h-3.5 rounded-full border-2 border-t-transparent"
               style={{ borderColor: "var(--accent)", borderTopColor: "transparent" }} aria-hidden />
@@ -822,26 +822,26 @@ export default function SidebarRight({
             {/* PR#8: stall → chọn Chờ tiếp (snooze cảnh báo, vẫn poll) hoặc Huỷ.
                 KHÔNG auto-cancel, KHÔNG hard-timeout — job nền dài là bình thường. */}
             {stallShown && (
-              <button onClick={dismissStall} className="text-[12px] underline text-text-muted hover:text-accent">Chờ tiếp</button>
+              <button onClick={dismissStall} className="text-small underline text-text-muted hover:text-accent">Chờ tiếp</button>
             )}
-            <button onClick={onCancelJob} className="text-[12px] underline text-text-muted hover:text-accent">Huỷ</button>
+            <button onClick={onCancelJob} className="text-small underline text-text-muted hover:text-accent">Huỷ</button>
           </div>
         )}
         {!jobUi.running && cancelNotice && (
-          <div className="mt-2 flex items-center gap-1.5 text-[12px] text-text-muted">
+          <div className="mt-2 flex items-center gap-1.5 text-small text-text-muted">
             <Icon name="Ban" size={12} /> {cancelNoticeText}
           </div>
         )}
         {/* PR#8: job hỏng → đường phục hồi một-bấm với đúng params lần chạy trước.
             Không có context (chưa chạy lần nào trong phiên) → nút Tạo thường ở trên. */}
         {showRetry && (
-          <div className="mx-3 mb-2 flex items-center gap-2 rounded-[8px] border px-2.5 py-2 text-[12px]"
+          <div className="mx-3 mb-2 flex items-center gap-2 rounded-[8px] border px-2.5 py-2 text-small"
             style={{ borderColor: "var(--warn)", background: "var(--bg-elevated)" }}>
             <Icon name="TriangleAlert" size={13} className="text-text-muted" aria-hidden />
             <span className="flex-1 truncate text-text-secondary">
               {artifactTab === "mindmap" ? "Tạo sơ đồ không thành công." : "Tạo tóm tắt không thành công."}
             </span>
-            <button onClick={handleRetry} className="text-[12px] underline text-text-muted hover:text-accent inline-flex items-center gap-1">
+            <button onClick={handleRetry} className="text-small underline text-text-muted hover:text-accent inline-flex items-center gap-1">
               <Icon name="RotateCcw" size={12} aria-hidden /> Thử lại
             </button>
           </div>
@@ -854,14 +854,14 @@ export default function SidebarRight({
         <div className="mt-3">
           {artifactTab === "mindmap" ? (
             initialLoading ? (
-              <div className="flex items-center justify-center py-6 text-text-muted text-[12px] gap-2"><Spinner size={14} /> Đang tải…</div>
+              <div className="flex items-center justify-center py-6 text-text-muted text-small gap-2"><Spinner size={14} /> Đang tải…</div>
             ) : loiTaiMindmap && mindMaps.length === 0 ? (
-              <p className="text-[12px] text-center py-4" style={{ color: "var(--err)" }}>
+              <p className="text-small text-center py-4" style={{ color: "var(--err)" }}>
                 {loiTaiMindmap}{" "}
                 <button type="button" className="underline" onClick={fetchMindMaps}>Thử lại</button>
               </p>
             ) : mindMaps.length === 0 ? (
-              <p className="text-[12px] text-text-muted text-center py-4">Chưa có sơ đồ nào được lưu.</p>
+              <p className="text-small text-text-muted text-center py-4">Chưa có sơ đồ nào được lưu.</p>
             ) : (
               <div className="flex flex-col gap-1.5">
                 {mindMaps.map((map) => (
@@ -873,14 +873,14 @@ export default function SidebarRight({
             )
           ) : (
             dangTaiSummary ? (
-              <div className="flex items-center justify-center py-6 text-text-muted text-[12px] gap-2"><Spinner size={14} /> Đang tải…</div>
+              <div className="flex items-center justify-center py-6 text-text-muted text-small gap-2"><Spinner size={14} /> Đang tải…</div>
             ) : loiTaiSummary && summaries.length === 0 ? (
-              <p className="text-[12px] text-center py-4" style={{ color: "var(--err)" }}>
+              <p className="text-small text-center py-4" style={{ color: "var(--err)" }}>
                 {loiTaiSummary}{" "}
                 <button type="button" className="underline" onClick={fetchSummaries}>Thử lại</button>
               </p>
             ) : summaries.length === 0 ? (
-              <p className="text-[12px] text-text-muted text-center py-4">Chưa có tóm tắt nào được lưu.</p>
+              <p className="text-small text-text-muted text-center py-4">Chưa có tóm tắt nào được lưu.</p>
             ) : (
               <div className="flex flex-col gap-1.5">
                 {summaries.map((item) => (

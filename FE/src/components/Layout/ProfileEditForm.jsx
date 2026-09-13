@@ -21,7 +21,7 @@ export default function ProfileEditForm({ form, loi, dangLuu, onDoi, onLuu, onHu
       onChange: (e) => onDoi(t.khoa, e.target.value),
       "aria-invalid": loi[t.khoa] ? true : undefined,
       "aria-describedby": loi[t.khoa] ? idLoi : undefined,
-      className: "input-surface text-[14px] mt-1.5",
+      className: "input-surface text-body mt-1.5",
     };
     if (t.loai === "gender") {
       return (
@@ -49,12 +49,12 @@ export default function ProfileEditForm({ form, loi, dangLuu, onDoi, onLuu, onHu
         {TRUONG.map((t) => (
           <div key={t.khoa} className={t.loai === "textarea" ? "sm:col-span-2" : ""}>
             <label htmlFor={`hs-${t.khoa}`}
-              className="font-mono text-[10.5px] tracking-[0.14em] uppercase text-text-muted">
+              className="font-mono text-metadata uppercase text-text-muted">
               {t.nhan}
             </label>
             {o(t)}
             {loi[t.khoa] && (
-              <p id={`loi-${t.khoa}`} role="alert" className="mt-1 text-[11.5px]"
+              <p id={`loi-${t.khoa}`} role="alert" className="mt-1 text-caption"
                 style={{ color: "var(--err)" }}>
                 {loi[t.khoa]}
               </p>
@@ -65,11 +65,11 @@ export default function ProfileEditForm({ form, loi, dangLuu, onDoi, onLuu, onHu
 
       <div className="flex flex-wrap gap-2 justify-end mt-5">
         <button type="button" onClick={onHuy} disabled={dangLuu}
-          className="btn-secondary !py-1.5 !text-[13px]">
+          className="btn-secondary !py-1.5 !text-small">
           Huỷ
         </button>
         <button type="submit" disabled={dangLuu || !coThayDoi}
-          className="btn-seal !py-1.5 !text-[13px] inline-flex items-center gap-1.5">
+          className="btn-seal !py-1.5 !text-small inline-flex items-center gap-1.5">
           {dangLuu && <Icon name="Clock" size={14} />}
           {dangLuu ? "Đang lưu…" : "Lưu thay đổi"}
         </button>

@@ -37,10 +37,10 @@ export default class ErrorBoundary extends Component {
         style={{ background: "var(--bg-base)" }}>
         <div className="surface-card max-w-[420px] text-center">
           <Icon name="AlertCircle" size={28} className="mx-auto mb-3" style={{ color: "var(--err)" }} />
-          <h1 className="font-display text-[18px] font-semibold text-text-primary mb-2">
+          <h1 className="font-display text-h2 font-semibold text-text-primary mb-2">
             Có lỗi xảy ra
           </h1>
-          <p className="text-[13.5px] text-text-secondary leading-[1.6] mb-5">
+          <p className="text-body text-text-secondary mb-5">
             Trang gặp một lỗi không mong muốn. Dữ liệu đã lưu không bị mất —
             tải lại trang để tiếp tục.
           </p>

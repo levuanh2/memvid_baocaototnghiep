@@ -31,7 +31,7 @@ export default function StudyBreadcrumb({ showChat = false, className = "" }) {
   return (
     <nav
       aria-label="Đường dẫn học tập"
-      className={`flex items-center gap-1.5 min-w-0 text-[11.5px] font-mono text-text-muted ${className}`}
+      className={`flex items-center gap-1.5 min-w-0 text-caption font-mono text-text-muted ${className}`}
     >
       {segments.map((nhan, i) => (
         <span key={i} className="flex items-center gap-1.5 min-w-0">

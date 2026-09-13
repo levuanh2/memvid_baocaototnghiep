@@ -36,11 +36,16 @@ const SCALE_MAX = 2;
 // Bốn loại node là phân tầng THẬT của tài liệu (tài liệu > chương mục > khái
 // niệm > ví dụ), nên nét vẽ mã hoá đúng tầng đó chứ không tô cho đẹp: càng gần
 // gốc càng đậm và càng to.
+//
+// SVG `fontSize` cần số thô, không đọc được CSS custom property — nên bốn giá
+// trị dưới đây gõ tay, nhưng KHÔNG còn là số tuỳ ý: chúng là px thật của
+// title/body/small/caption trong tailwind.config.js (Sprint G), để cây SVG này
+// dùng đúng thang chữ với phần còn lại của app, không phải thang riêng của nó.
 const MARK = {
-  root:    { r: 9, fill: "var(--accent)",       stroke: "var(--accent)",        text: 15.5, weight: 600 },
-  section: { r: 7, fill: "var(--bg-card)",     stroke: "var(--accent)",        text: 14,   weight: 600 },
-  concept: { r: 5, fill: "var(--bg-card)",     stroke: "var(--text-muted)",   text: 13,   weight: 500 },
-  example: { r: 3, fill: "var(--bg-base)",     stroke: "var(--border-color)", text: 12,   weight: 400 },
+  root:    { r: 9, fill: "var(--accent)",       stroke: "var(--accent)",        text: 17,   weight: 600 }, // = text-title
+  section: { r: 7, fill: "var(--bg-card)",     stroke: "var(--accent)",        text: 14,   weight: 600 }, // = text-body
+  concept: { r: 5, fill: "var(--bg-card)",     stroke: "var(--text-muted)",   text: 13,   weight: 500 }, // = text-small
+  example: { r: 3, fill: "var(--bg-base)",     stroke: "var(--border-color)", text: 11.5, weight: 400 }, // = text-caption
 };
 const markOf = (t) => MARK[t] || MARK.concept;
 
@@ -416,7 +421,7 @@ export default function StudyMapView() {
         map && (
           <button
             type="button"
-            className="btn-secondary text-[13px] inline-flex items-center gap-1.5"
+            className="btn-secondary text-small inline-flex items-center gap-1.5"
             disabled={starting || job.running}
             onClick={() => build({ force: true })}
           >
@@ -429,17 +434,17 @@ export default function StudyMapView() {
         <section className="surface-card mb-5">
           <div className="flex items-center gap-2.5 mb-2.5">
             <Spinner size={14} />
-            <span className="text-[13.5px] text-text-secondary flex-1">
+            <span className="text-body text-text-secondary flex-1">
               {job.status?.current_node || "Đang dựng sơ đồ"} · {job.status?.progress ?? 0}%
             </span>
-            <button type="button" className="btn-secondary text-[12.5px]" onClick={job.cancel}>
+            <button type="button" className="btn-secondary text-small" onClick={job.cancel}>
               Huỷ
             </button>
           </div>
           <div className="progress-track">
             <div className="progress-fill" style={{ width: `${job.status?.progress ?? 0}%` }} />
           </div>
-          <p className="text-[12.5px] text-text-muted mt-2.5">
+          <p className="text-small text-text-muted mt-2.5">
             Tài liệu dài mất vài phút. Bạn có thể rời trang, sơ đồ vẫn được dựng tiếp.
           </p>
         </section>
@@ -448,16 +453,16 @@ export default function StudyMapView() {
       {job.error && (
         <div className="surface-card !p-3.5 mb-5 flex items-center gap-2.5">
           <Icon name="AlertCircle" size={15} style={{ color: "var(--err)" }} />
-          <span className="text-[13.5px] flex-1" style={{ color: "var(--err)" }}>{job.error}</span>
-          <button type="button" className="btn-secondary text-[12.5px]" onClick={job.reset}>Đóng</button>
+          <span className="text-body flex-1" style={{ color: "var(--err)" }}>{job.error}</span>
+          <button type="button" className="btn-secondary text-small" onClick={job.reset}>Đóng</button>
         </div>
       )}
 
       {loiXuat && (
         <div role="alert" className="surface-card !p-3.5 mb-5 flex items-center gap-2.5">
           <Icon name="AlertCircle" size={15} style={{ color: "var(--err)" }} />
-          <span className="text-[13.5px] flex-1" style={{ color: "var(--err)" }}>{loiXuat}</span>
-          <button type="button" className="btn-secondary text-[12.5px]" onClick={() => setLoiXuat(null)}>Đóng</button>
+          <span className="text-body flex-1" style={{ color: "var(--err)" }}>{loiXuat}</span>
+          <button type="button" className="btn-secondary text-small" onClick={() => setLoiXuat(null)}>Đóng</button>
         </div>
       )}
 
@@ -467,7 +472,7 @@ export default function StudyMapView() {
           title="Sơ đồ đang được dựng"
           hint="Một tiến trình dựng sơ đồ cho tài liệu này đang chạy (có thể từ tab khác). Bấm dựng thêm sẽ tạo job thứ hai tranh cùng một chỗ xử lý."
           action={
-            <button type="button" className="btn-secondary text-[13px] mt-1" onClick={load}>
+            <button type="button" className="btn-secondary text-small mt-1" onClick={load}>
               Kiểm tra lại
             </button>
           }
@@ -480,7 +485,7 @@ export default function StudyMapView() {
           action={
             <button
               type="button"
-              className="btn-seal text-[13px] mt-1 inline-flex items-center gap-2"
+              className="btn-seal text-small mt-1 inline-flex items-center gap-2"
               disabled={starting}
               onClick={() => build()}
             >
@@ -495,7 +500,7 @@ export default function StudyMapView() {
               đó là khung điều hướng dùng chung cho mọi trang study, không phải thứ
               trang này sở hữu để tắt riêng. */}
           {!trinhChieu && (
-            <div className="flex flex-wrap items-center gap-x-5 gap-y-1.5 mb-4 font-mono text-[11.5px] text-text-muted">
+            <div className="flex flex-wrap items-center gap-x-5 gap-y-1.5 mb-4 font-mono text-caption text-text-muted">
               {["root", "section", "concept", "example"].map((t) =>
                 counts[t] ? (
                   <span key={t} className="inline-flex items-center gap-1.5">
@@ -529,7 +534,7 @@ export default function StudyMapView() {
                   </button>
                   <button type="button" onClick={zoomReset}
                           aria-label="Đặt lại thu phóng" title="Đặt lại thu phóng (0)"
-                          className="px-1 py-1 rounded hover:bg-[var(--bg-hover)] font-mono text-[11px] tabular-nums text-text-secondary min-w-[38px]">
+                          className="px-1 py-1 rounded hover:bg-[var(--bg-hover)] font-mono text-caption tabular-nums text-text-secondary min-w-[38px]">
                     {formatZoom(zoom)}
                   </button>
                   <button type="button" onClick={() => zoomBy(ZOOM_STEP)}
@@ -540,7 +545,7 @@ export default function StudyMapView() {
                 </div>
                 {focusedId && (
                   <button type="button" onClick={boFocus}
-                          className="pill-action !py-1 !text-[11.5px] inline-flex items-center gap-1">
+                          className="pill-action !py-1 !text-caption inline-flex items-center gap-1">
                     <Icon name="X" size={12} /> Bỏ focus
                   </button>
                 )}
@@ -554,24 +559,24 @@ export default function StudyMapView() {
                     onKeyDown={xuLyPhimTim}
                     placeholder="Tìm theo tên khái niệm…"
                     aria-label="Tìm trong sơ đồ kiến thức"
-                    className="rounded-[6px] border pl-7 pr-2 py-1 text-[12px] bg-transparent w-[190px]"
+                    className="rounded-[6px] border pl-7 pr-2 py-1 text-small bg-transparent w-[190px]"
                     style={{ borderColor: "var(--border-color)" }}
                   />
                 </div>
                 {truyVan && (
-                  <span className="text-[11px] text-text-muted tabular-nums" aria-live="polite">
+                  <span className="text-caption text-text-muted tabular-nums" aria-live="polite">
                     {ketQuaTim.total
                       ? `${ketQuaTim.activeIndex + 1}/${ketQuaTim.total}`
                       : "Không có kết quả"}
                   </span>
                 )}
-                <label className="flex items-center gap-1.5 text-[12px] text-text-secondary">
+                <label className="flex items-center gap-1.5 text-small text-text-secondary">
                   Bố cục
                   <select
                     value={layoutId}
                     onChange={(e) => doiLayout(e.target.value)}
                     aria-label="Bố cục sơ đồ"
-                    className="rounded-[6px] border px-2 py-1 text-[12px] bg-transparent"
+                    className="rounded-[6px] border px-2 py-1 text-small bg-transparent"
                     style={{ borderColor: "var(--border-color)" }}
                   >
                     {LAYOUT_IDS.map((id) => (
@@ -582,24 +587,24 @@ export default function StudyMapView() {
                 <button type="button" onClick={() => xuatAnh("png")}
                         disabled={dangXuat}
                         title="Xuất PNG (nền theo giao diện hiện tại, x2 độ phân giải)"
-                        className="pill-action !py-1 !text-[11.5px] inline-flex items-center gap-1 disabled:opacity-50">
+                        className="pill-action !py-1 !text-caption inline-flex items-center gap-1 disabled:opacity-50">
                   {dangXuat ? <Spinner size={11} /> : <Icon name="Download" size={12} />} PNG
                 </button>
                 <button type="button" onClick={() => xuatAnh("png", { transparent: true })}
                         disabled={dangXuat}
                         title="Xuất PNG nền trong suốt"
-                        className="pill-action !py-1 !text-[11.5px] disabled:opacity-50">
+                        className="pill-action !py-1 !text-caption disabled:opacity-50">
                   PNG trong suốt
                 </button>
                 <button type="button" onClick={() => xuatAnh("svg")}
                         disabled={dangXuat}
                         title="Xuất SVG"
-                        className="pill-action !py-1 !text-[11.5px] disabled:opacity-50">
+                        className="pill-action !py-1 !text-caption disabled:opacity-50">
                   SVG
                 </button>
                 <button type="button" onClick={() => doiTrinhChieu(true)}
                         title="Chế độ trình chiếu (Esc để thoát)"
-                        className="pill-action !py-1 !text-[11.5px] inline-flex items-center gap-1">
+                        className="pill-action !py-1 !text-caption inline-flex items-center gap-1">
                   <Icon name="Maximize" size={12} /> Trình chiếu
                 </button>
               </div>
@@ -658,7 +663,7 @@ export default function StudyMapView() {
                 ) : (
                   <div className="text-center py-8">
                     <Icon name="Spline" size={20} className="text-text-muted mx-auto mb-2.5" />
-                    <p className="text-[13.5px] text-text-secondary leading-[1.65]">
+                    <p className="text-body text-text-secondary">
                       Bấm một khái niệm trên sơ đồ để đọc tóm tắt và đoạn tài liệu sinh ra nó.
                       Bấm vào node có nhánh con để bung, kéo nền để di chuyển.
                     </p>
@@ -677,19 +682,19 @@ function NodeDetail({ node, chunks, edges, nodeById }) {
   const sources = (node.chunk_ids || []).map((id) => chunks.get(id)).filter(Boolean);
   return (
     <div>
-      <div className="font-mono text-[10.5px] tracking-[0.16em] uppercase text-text-muted mb-1.5">
+      <div className="font-mono text-metadata uppercase text-text-muted mb-1.5">
         {NODE_TYPE_LABEL[node.node_type] || node.node_type} · tầng {node.level}
       </div>
-      <h2 className="font-display text-[18px] font-semibold text-text-primary leading-[1.35]">
+      <h2 className="font-display text-h2 font-semibold text-text-primary">
         {node.title}
       </h2>
       {node.summary && (
-        <p className="text-[13.5px] leading-[1.65] text-text-secondary mt-2.5">{node.summary}</p>
+        <p className="text-body text-text-secondary mt-2.5">{node.summary}</p>
       )}
 
       {edges.length > 0 && (
         <div className="mt-5">
-          <div className="font-mono text-[10.5px] tracking-[0.16em] uppercase text-text-muted mb-2">
+          <div className="font-mono text-metadata uppercase text-text-muted mb-2">
             Liên kết ngang
           </div>
           <ul className="flex flex-col gap-1.5">
@@ -697,8 +702,8 @@ function NodeDetail({ node, chunks, edges, nodeById }) {
               const outgoing = e.source_node_id === node.node_id;
               const other = nodeById.get(outgoing ? e.target_node_id : e.source_node_id);
               return (
-                <li key={e.edge_id} className="text-[13px] leading-[1.55] text-text-primary">
-                  <span className="font-mono text-[11px]" style={{ color: "var(--accent)" }}>
+                <li key={e.edge_id} className="text-small text-text-primary">
+                  <span className="font-mono text-caption" style={{ color: "var(--accent)" }}>
                     {outgoing ? "→" : "←"} {RELATION_LABEL[e.relation_type] || e.relation_type}
                   </span>{" "}
                   {other?.title || "(node đã bị xoá)"}
@@ -710,13 +715,13 @@ function NodeDetail({ node, chunks, edges, nodeById }) {
       )}
 
       <div className="mt-5">
-        <div className="font-mono text-[10.5px] tracking-[0.16em] uppercase text-text-muted mb-2">
+        <div className="font-mono text-metadata uppercase text-text-muted mb-2">
           Đoạn tài liệu nguồn
         </div>
         {sources.length === 0 ? (
           // Khái niệm không neo được về đoạn nào thì nói thẳng — im lặng để trống
           // khiến người đọc tưởng trang lỗi.
-          <p className="text-[13px] text-text-muted">
+          <p className="text-small text-text-muted">
             {node.chunk_ids?.length
               ? "Không tải được nội dung đoạn nguồn."
               : "Khái niệm này không neo về đoạn văn cụ thể nào."}
@@ -726,11 +731,11 @@ function NodeDetail({ node, chunks, edges, nodeById }) {
             {sources.map((c) => (
               <li key={c.chunk_id} className="cite-block">
                 {c.heading && (
-                  <div className="font-mono text-[10.5px] text-text-muted mb-1">
+                  <div className="font-mono text-caption text-text-muted mb-1">
                     {c.heading}{c.page_number ? ` · trang ${c.page_number}` : ""}
                   </div>
                 )}
-                <p className="text-[12.5px] leading-[1.6] text-text-secondary">
+                <p className="text-small text-text-secondary">
                   {String(c.text || "").slice(0, 320)}
                   {String(c.text || "").length > 320 ? "…" : ""}
                 </p>

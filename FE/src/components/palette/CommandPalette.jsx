@@ -61,17 +61,17 @@ function Muc({ chinh, phu, icon, lyDo, coGhim, coYeuThich, hoatDong, onClick, on
       <Icon name={icon} size={16} className="shrink-0 text-text-muted" />
       <div className="min-w-0 flex-1">
         <div className="flex items-center gap-1.5 min-w-0">
-          <span className="text-[13.5px] text-text-primary truncate">{chinh}</span>
+          <span className="text-body text-text-primary truncate">{chinh}</span>
           {coGhim && <Icon name="Pin" size={11} className="shrink-0 text-brand" />}
           {coYeuThich && <Icon name="Star" size={11} className="shrink-0 text-brand" />}
         </div>
-        {phu && <div className="text-[11.5px] text-text-muted truncate">{phu}</div>}
+        {phu && <div className="text-caption text-text-muted truncate">{phu}</div>}
       </div>
       {/* Lý do khớp — Step 7: PHẢI hiện thật, không suy diễn/giả vờ một điểm số
           tương đồng nào. `lyDo` luôn là nhãn từ `universalSearch.js::lyDoKhop`
           hoặc chuỗi phụ ("Lọc theo bộ sưu tập này"…), không phải trang trí. */}
       {lyDo && (
-        <span className="shrink-0 font-mono text-[10px] uppercase tracking-wide text-text-muted">{lyDo}</span>
+        <span className="shrink-0 font-mono text-metadata uppercase tracking-wide text-text-muted">{lyDo}</span>
       )}
     </button>
   );
@@ -79,7 +79,7 @@ function Muc({ chinh, phu, icon, lyDo, coGhim, coYeuThich, hoatDong, onClick, on
 
 function TieuDeNhom({ children }) {
   return (
-    <div className="px-4 pt-3 pb-1 font-mono text-[10.5px] uppercase tracking-[0.12em] text-text-muted">
+    <div className="px-4 pt-3 pb-1 font-mono text-metadata uppercase text-text-muted">
       {children}
     </div>
   );
@@ -317,9 +317,9 @@ export default function CommandPalette() {
             onKeyDown={onKeyDown}
             placeholder='Tìm tài liệu, chủ đề, lệnh… (thử topic:"CPU" AND has:quiz)'
             aria-label="Tìm kiếm toàn cục"
-            className="flex-1 bg-transparent outline-none text-[14.5px] text-text-primary placeholder:text-text-muted"
+            className="flex-1 bg-transparent outline-none text-body text-text-primary placeholder:text-text-muted"
           />
-          <kbd className="font-mono text-[10.5px] text-text-muted border border-border rounded px-1.5 py-0.5">Esc</kbd>
+          <kbd className="font-mono text-caption text-text-muted border border-border rounded px-1.5 py-0.5">Esc</kbd>
         </div>
 
         <AdvancedSearchPanel
@@ -334,17 +334,17 @@ export default function CommandPalette() {
         <div id="command-palette-ket-qua" role="listbox" aria-label="Kết quả tìm kiếm"
              className="flex-1 min-h-0 overflow-y-auto py-1.5">
           {dangTai && (
-            <div className="px-4 py-8 text-center text-[12.5px] text-text-muted">Đang tải thư viện…</div>
+            <div className="px-4 py-8 text-center text-small text-text-muted">Đang tải thư viện…</div>
           )}
 
           {!dangTai && dangRong && dsPhang.length === 0 && (
-            <div className="px-4 py-8 text-center text-[12.5px] text-text-muted">
+            <div className="px-4 py-8 text-center text-small text-text-muted">
               Gõ để tìm tài liệu, chủ đề, thực thể, bộ sưu tập hoặc một lệnh.
             </div>
           )}
 
           {!dangTai && !dangRong && dsPhang.length === 0 && (
-            <div className="px-4 py-8 text-center text-[12.5px] text-text-muted">
+            <div className="px-4 py-8 text-center text-small text-text-muted">
               Không có kết quả nào khớp “{query}”.
             </div>
           )}
@@ -378,7 +378,7 @@ export default function CommandPalette() {
                     {hoatDong && (
                       <div className="flex flex-wrap gap-1 px-4 pb-2 pl-11">
                         {BE_MAT_NHANH.map((b) => (
-                          <button key={b.khoa} type="button" className="pill-action !text-[11px] !py-0.5"
+                          <button key={b.khoa} type="button" className="pill-action !text-caption !py-0.5"
                                   onClick={(e) => { e.stopPropagation(); moTaiLieu(r.doc, b.khoa); }}>
                             <Icon name={b.icon} size={11} /> {b.nhan}
                           </button>
@@ -450,7 +450,7 @@ export default function CommandPalette() {
         </div>
 
         {/* Gợi ý bàn phím — cố định đáy */}
-        <div className="flex items-center gap-3 px-4 py-2 border-t border-border flex-shrink-0 font-mono text-[10.5px] text-text-muted">
+        <div className="flex items-center gap-3 px-4 py-2 border-t border-border flex-shrink-0 font-mono text-caption text-text-muted">
           <span>↑↓ chọn</span>
           <span>↵ mở</span>
           <span>Esc đóng</span>

@@ -90,7 +90,7 @@ export default function ReviewGuide() {
       width="max-w-[820px]"
       actions={
         plan && (
-          <button type="button" className="btn-secondary text-[13px] inline-flex items-center gap-1.5"
+          <button type="button" className="btn-secondary text-small inline-flex items-center gap-1.5"
             disabled={busy} onClick={() => build({ force: true })}>
             {busy ? <Spinner size={13} /> : <Icon name="RotateCcw" size={14} />} Viết lại
           </button>
@@ -103,7 +103,7 @@ export default function ReviewGuide() {
           title="Chưa có kế hoạch ôn tập"
           hint="Hệ thống sẽ lấy các chủ đề bạn làm chưa tốt và chỉ đúng đoạn tài liệu cần đọc lại."
           action={
-            <button type="button" className="btn-seal text-[13px] mt-1 inline-flex items-center gap-2"
+            <button type="button" className="btn-seal text-small mt-1 inline-flex items-center gap-2"
               disabled={busy} onClick={() => build()}>
               {busy ? <><Spinner size={13} /> Đang lập kế hoạch…</> : "Lập kế hoạch ôn tập"}
             </button>
@@ -111,7 +111,7 @@ export default function ReviewGuide() {
         />
       ) : (
         <>
-          <p className="font-display text-[17px] leading-[1.6] text-text-primary mb-6">
+          <p className="font-display text-title text-text-primary mb-6">
             {plan.summary}
           </p>
 
@@ -120,11 +120,11 @@ export default function ReviewGuide() {
               {job.error
                 ? <Icon name="AlertCircle" size={15} style={{ color: "var(--err)" }} />
                 : <Spinner size={14} />}
-              <span className="text-[13.5px] text-text-secondary flex-1">
+              <span className="text-body text-text-secondary flex-1">
                 {job.error || `Đang soạn câu luyện tập… ${job.status?.progress ?? 0}%`}
               </span>
               {job.error && (
-                <button type="button" className="btn-secondary text-[12.5px]"
+                <button type="button" className="btn-secondary text-small"
                   onClick={() => { job.reset(); setPracticeFor(null); }}>Đóng</button>
               )}
             </div>
@@ -135,7 +135,7 @@ export default function ReviewGuide() {
               icon="BookOpen"
               title="Không còn chủ đề nào cần ôn"
               hint="Bài làm này không để lại lỗ hổng nào. Thử một quiz khó hơn hoặc tài liệu khác."
-              action={<Link to="/app/study" className="btn-secondary text-[13px] mt-1">Về danh sách tài liệu</Link>}
+              action={<Link to="/app/study" className="btn-secondary text-small mt-1">Về danh sách tài liệu</Link>}
             />
           ) : (
             <ol className="flex flex-col gap-3">
@@ -165,24 +165,24 @@ function ReviewItem({ item, busy, disabled, onPractise }) {
         <div className="flex-1 min-w-0">
           <div className="flex items-center gap-2 mb-1">
             {/* Số thứ tự là ƯU TIÊN thật (mastery thấp trước), không phải đánh số cho đẹp. */}
-            <span className="font-mono text-[11px] text-text-muted">Ưu tiên {item.priority}</span>
-            <span className="font-mono text-[11px] text-text-muted">·</span>
-            <span className="font-mono text-[11px]" style={{ color: "var(--accent)" }}>
+            <span className="font-mono text-caption text-text-muted">Ưu tiên {item.priority}</span>
+            <span className="font-mono text-caption text-text-muted">·</span>
+            <span className="font-mono text-caption" style={{ color: "var(--accent)" }}>
               {MASTERY_LABEL[item.status] || item.status}
             </span>
           </div>
 
-          <h3 className="font-display text-[17px] font-semibold text-text-primary">
+          <h3 className="font-display text-title font-semibold text-text-primary">
             {item.topic}
           </h3>
-          <p className="text-[13.5px] leading-[1.65] text-text-secondary mt-1.5">{item.reason}</p>
+          <p className="text-body text-text-secondary mt-1.5">{item.reason}</p>
 
           {item.review_tasks?.length > 0 && (
             <ul className="mt-3 flex flex-col gap-1.5">
               {item.review_tasks.map((task, i) => (
-                <li key={i} className="flex items-start gap-2 text-[13.5px] text-text-primary">
+                <li key={i} className="flex items-start gap-2 text-body text-text-primary">
                   <Icon name="ArrowRight" size={13} className="mt-1 shrink-0 text-text-muted" />
-                  <span className="leading-[1.6]">{task}</span>
+                  <span>{task}</span>
                 </li>
               ))}
             </ul>
@@ -190,12 +190,12 @@ function ReviewItem({ item, busy, disabled, onPractise }) {
 
           <div className="flex flex-wrap items-center gap-3 mt-4">
             {item.chunk_ids?.length > 0 && (
-              <span className="inline-flex items-center gap-1.5 font-mono text-[11px] text-text-muted">
+              <span className="inline-flex items-center gap-1.5 font-mono text-caption text-text-muted">
                 <Icon name="Quote" size={12} />
                 {item.chunk_ids.length} đoạn cần đọc lại
               </span>
             )}
-            <button type="button" className="btn-seal text-[12.5px] inline-flex items-center gap-1.5"
+            <button type="button" className="btn-seal text-small inline-flex items-center gap-1.5"
               disabled={disabled} onClick={onPractise}>
               {busy ? <><Spinner size={12} /> Đang soạn…</> : <><Icon name="Zap" size={13} /> Luyện thêm 5 câu</>}
             </button>

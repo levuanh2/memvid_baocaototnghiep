@@ -44,10 +44,10 @@ const RelatedPill = ({ item, onNavigate, icon }) => !item ? null : (
   <button
     type="button"
     onClick={() => onNavigate(item.id)}
-    className="inline-flex items-center gap-1 text-[11.5px] px-2 py-1 rounded-[6px] border border-border text-text-secondary hover:border-[var(--accent)] hover:text-text-primary transition-colors max-w-full"
+    className="inline-flex items-center gap-1 text-caption px-2 py-1 rounded-[6px] border border-border text-text-secondary hover:border-[var(--accent)] hover:text-text-primary transition-colors max-w-full"
   >
     {icon && <Icon name={icon} size={11} className="flex-shrink-0" />}
-    {item.number && <span className="font-mono text-[10px] text-text-muted flex-shrink-0">{item.number}</span>}
+    {item.number && <span className="font-mono text-caption text-text-muted flex-shrink-0">{item.number}</span>}
     <span className="truncate">{item.title || "(không tên)"}</span>
   </button>
 );
@@ -71,7 +71,7 @@ function CitationCard({ chunkId, text, loading, error, index, sourceLabel, headi
         {/* Citation index badge — provenance, stays --seal (Signature Contract §1),
             same reasoning as .cite-chip/.evidence-frame--active in index.css. */}
         <span
-          className="w-5 h-5 rounded-[4px] inline-flex items-center justify-center text-[11px] font-mono font-semibold flex-shrink-0"
+          className="w-5 h-5 rounded-[4px] inline-flex items-center justify-center text-caption font-mono font-semibold flex-shrink-0"
           style={{ color: "var(--seal)", border: "1px solid color-mix(in srgb, var(--seal) 35%, transparent)" }}
         >
           {index + 1}
@@ -95,10 +95,10 @@ function CitationCard({ chunkId, text, loading, error, index, sourceLabel, headi
       {loading ? (
         <EvidenceSkeleton />
       ) : error ? (
-        <p className="text-[12.5px] text-text-muted italic">Không tải được trích đoạn này.</p>
+        <p className="text-small text-text-muted italic">Không tải được trích đoạn này.</p>
       ) : (
         <Clamp lines={7}>
-          <MdSnippet text={text} className="font-display text-[13px] leading-[1.55] text-text-secondary" />
+          <MdSnippet text={text} className="font-display text-small text-text-secondary" />
         </Clamp>
       )}
     </div>
@@ -170,7 +170,7 @@ export default function KnowledgeInspector({
         className="icon-btn w-7 h-7 disabled:opacity-30 disabled:pointer-events-none">
         <Icon name="ArrowRight" size={14} />
       </button>
-      <span className="text-[10px] font-mono uppercase tracking-[0.12em] text-text-muted ml-1 truncate">
+      <span className="text-metadata font-mono uppercase text-text-muted ml-1 truncate">
         Trình khám phá tri thức
       </span>
       <div className="flex-1" />
@@ -207,11 +207,11 @@ export default function KnowledgeInspector({
   // chips, never one text blob.
   const nodeHeader = node ? (
     <div className="px-4 py-3 border-b border-border">
-      <h3 className="font-display font-semibold text-text-primary text-[15px] leading-snug mb-1.5">
+      <h3 className="font-display font-semibold text-text-primary text-body-lg leading-snug mb-1.5">
         {node.title || "Nhánh"}
       </h3>
       {breadcrumb?.length > 0 && (
-        <div className="text-[11px] text-text-muted mb-1.5 truncate">
+        <div className="text-caption text-text-muted mb-1.5 truncate">
           {documentTitle ? `${documentTitle} › ` : ""}
           {breadcrumb.map((b) => b.title).join(" › ")}
         </div>
@@ -233,14 +233,14 @@ export default function KnowledgeInspector({
     <div className="h-full flex items-center justify-center text-center px-6">
       <div>
         <Icon name="Network" size={26} className="mx-auto mb-2.5 opacity-50 text-text-muted" />
-        <p className="text-[12.5px] text-text-secondary">Chọn một nhánh trên sơ đồ để xem chi tiết.</p>
+        <p className="text-small text-text-secondary">Chọn một nhánh trên sơ đồ để xem chi tiết.</p>
       </div>
     </div>
   ) : (
     <div className="px-4 pb-3.5">
       {node.note && (
         <div className="pt-3">
-          <MdSnippet text={node.note} className="font-display text-[13.5px] leading-[1.6] text-text-secondary" />
+          <MdSnippet text={node.note} className="font-display text-body text-text-secondary" />
         </div>
       )}
 
@@ -251,7 +251,7 @@ export default function KnowledgeInspector({
         return (
           <CollapsibleSection key={key} id={key} title={meta.title} icon={meta.icon} count={items.length}>
             {key === "keyIdeas" ? (
-              <ul className="pl-4 list-disc text-[13px] text-text-secondary space-y-1">
+              <ul className="pl-4 list-disc text-small text-text-secondary space-y-1">
                 {items.map((k, i) => <li key={i}>{k}</li>)}
               </ul>
             ) : (
@@ -267,7 +267,7 @@ export default function KnowledgeInspector({
           here, not per card (that was the duplicated-metadata clutter). */}
       <CollapsibleSection id="evidence" title="Bằng chứng" icon="Quote" count={evidence.length || null}>
         {evidence.length === 0 ? (
-          <p className="text-[12px] text-text-muted italic">
+          <p className="text-small text-text-muted italic">
             {generating ? "Chưa có bằng chứng — đang làm giàu" : "Nhánh này chưa gắn trích đoạn"}
           </p>
         ) : (
@@ -277,12 +277,12 @@ export default function KnowledgeInspector({
               <MetaChip icon="BookOpen" title="Mục">{node.title}</MetaChip>
               {sources?.length === 1 && (
                 <button type="button" onClick={() => onOpenSource(sources[0])}
-                  className="inline-flex items-center gap-1 text-[10.5px] font-mono text-brand hover:underline">
+                  className="inline-flex items-center gap-1 text-caption font-mono text-brand hover:underline">
                   <Icon name="FolderOpen" size={10} /> Mở nguồn
                 </button>
               )}
             </div>
-            <p className="text-[10.5px] text-text-muted mb-2 leading-[1.5]">
+            <p className="text-caption text-text-muted mb-2">
               Vị trí trang/đoạn chính xác chưa khả dụng — độ tin cậy hiển thị là mức
               trung bình của cả nhánh, chưa tách theo từng trích đoạn.
             </p>
@@ -304,18 +304,18 @@ export default function KnowledgeInspector({
       {/* Related concepts (Task 4) — pure graph traversal, no LLM. */}
       <CollapsibleSection id="related" title="Liên hệ" icon="Network">
         {!hasRelations ? (
-          <p className="text-[12px] text-text-muted italic">Nhánh này không có liên hệ nào khác.</p>
+          <p className="text-small text-text-muted italic">Nhánh này không có liên hệ nào khác.</p>
         ) : (
           <div className="flex flex-col gap-2.5">
             {relations.parent && (
               <div>
-                <div className="text-[10.5px] text-text-muted mb-1">Nhánh cha</div>
+                <div className="text-caption text-text-muted mb-1">Nhánh cha</div>
                 <RelatedPill item={relations.parent} onNavigate={onNavigate} icon="ArrowLeft" />
               </div>
             )}
             {relations.children.length > 0 && (
               <div>
-                <div className="text-[10.5px] text-text-muted mb-1">Nhánh con ({relations.children.length})</div>
+                <div className="text-caption text-text-muted mb-1">Nhánh con ({relations.children.length})</div>
                 <div className="flex flex-wrap gap-1.5">
                   {relations.children.map((c) => <RelatedPill key={c.id} item={c} onNavigate={onNavigate} />)}
                 </div>
@@ -323,7 +323,7 @@ export default function KnowledgeInspector({
             )}
             {(relations.prev || relations.next) && (
               <div>
-                <div className="text-[10.5px] text-text-muted mb-1">Liền kề</div>
+                <div className="text-caption text-text-muted mb-1">Liền kề</div>
                 <div className="flex flex-wrap gap-1.5">
                   <RelatedPill item={relations.prev} onNavigate={onNavigate} icon="ArrowLeft" />
                   <RelatedPill item={relations.next} onNavigate={onNavigate} icon="ArrowRight" />
@@ -332,7 +332,7 @@ export default function KnowledgeInspector({
             )}
             {relations.siblings.length > 0 && (
               <div>
-                <div className="text-[10.5px] text-text-muted mb-1">Cùng cấp ({relations.siblings.length})</div>
+                <div className="text-caption text-text-muted mb-1">Cùng cấp ({relations.siblings.length})</div>
                 <div className="flex flex-wrap gap-1.5">
                   {relations.siblings.map((s) => <RelatedPill key={s.id} item={s} onNavigate={onNavigate} />)}
                 </div>
@@ -348,15 +348,15 @@ export default function KnowledgeInspector({
   // it's chrome the whole panel is oriented around, same reasoning as the
   // nav bar; hidden entirely (not just empty) when there's no node to act on.
   const footer = node ? (
-    <div className="px-4 py-3 border-t border-border" style={{ background: "var(--bg-sidebar)" }}>
-      <div className="text-[10.5px] font-mono uppercase tracking-[0.1em] text-text-muted mb-2">Hành động học tập</div>
+    <div className="px-4 py-3 border-t border-border" style={{ background: "var(--surface-contrast)" }}>
+      <div className="text-metadata font-mono uppercase text-text-muted mb-2">Hành động học tập</div>
       <div className="grid grid-cols-2 gap-1.5">
         {ACTIONS.map((a) => (
           <button
             key={a.key}
             type="button"
             onClick={() => onAskAI(a.build(node.title || "nhánh này"))}
-            className="flex items-center gap-1.5 px-2.5 py-2 rounded-[7px] border border-border text-[12px] text-text-secondary hover:border-[var(--accent)] hover:text-text-primary transition-colors text-left"
+            className="flex items-center gap-1.5 px-2.5 py-2 rounded-[7px] border border-border text-small text-text-secondary hover:border-[var(--accent)] hover:text-text-primary transition-colors text-left"
           >
             <Icon name={a.icon} size={13} className="flex-shrink-0" />
             <span className="truncate">{a.label}</span>
@@ -367,7 +367,7 @@ export default function KnowledgeInspector({
   ) : null;
 
   return (
-    <aside role="complementary" aria-label="Trình khám phá tri thức" className="knowledge-inspector border-l border-border flex-shrink-0" style={{ background: "var(--bg-sidebar)" }}>
+    <aside role="complementary" aria-label="Trình khám phá tri thức" className="knowledge-inspector border-l border-border flex-shrink-0" style={{ background: "var(--surface-contrast)" }}>
       {navBar}
       {recentPinnedRow}
       {nodeHeader}

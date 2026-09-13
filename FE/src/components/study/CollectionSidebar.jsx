@@ -31,9 +31,9 @@ function MucLoc({ nhan, so, dangChon, mau, icon, onClick, onSua }) {
           ? <span aria-hidden className="w-2.5 h-2.5 rounded-full shrink-0"
                   style={{ background: mau }} />
           : <Icon name={icon || "Tag"} size={13} className="text-text-muted shrink-0" />}
-        <span className="flex-1 min-w-0 truncate text-[12.5px] text-text-primary">{nhan}</span>
+        <span className="flex-1 min-w-0 truncate text-small text-text-primary">{nhan}</span>
         {so != null && (
-          <span className="font-mono text-[10.5px] text-text-muted shrink-0">{so}</span>
+          <span className="font-mono text-caption text-text-muted shrink-0">{so}</span>
         )}
       </button>
       {onSua && (
@@ -52,7 +52,7 @@ function Nhom({ tieuDe, children, hanhDong }) {
   return (
     <div className="mb-4">
       <div className="flex items-center justify-between px-2 mb-1">
-        <span className="font-mono text-[10px] uppercase tracking-[0.16em] text-text-muted">
+        <span className="font-mono text-metadata uppercase text-text-muted">
           {tieuDe}
         </span>
         {hanhDong}
@@ -87,7 +87,7 @@ function FormBoSuuTap({ ban_dau, onLuu, onHuy, onXoa }) {
         }}
         placeholder="Tên bộ sưu tập"
         aria-label="Tên bộ sưu tập"
-        className="w-full bg-transparent outline-none text-[13px] text-text-primary
+        className="w-full bg-transparent outline-none text-small text-text-primary
                    placeholder:text-text-muted"
       />
       <div className="flex flex-wrap gap-1 mt-2">
@@ -100,13 +100,13 @@ function FormBoSuuTap({ ban_dau, onLuu, onHuy, onXoa }) {
                            outlineOffset: "1px" }} />
         ))}
       </div>
-      {loi && <p role="alert" className="mt-1 text-[11px]" style={{ color: "var(--err)" }}>{loi}</p>}
+      {loi && <p role="alert" className="mt-1 text-caption" style={{ color: "var(--err)" }}>{loi}</p>}
       <div className="flex items-center gap-1.5 mt-2">
-        <button type="button" onClick={gui} className="btn-seal !py-1 !text-[12px]">Lưu</button>
-        <button type="button" onClick={onHuy} className="btn-secondary !py-1 !text-[12px]">Huỷ</button>
+        <button type="button" onClick={gui} className="btn-seal !py-1 !text-small">Lưu</button>
+        <button type="button" onClick={onHuy} className="btn-secondary !py-1 !text-small">Huỷ</button>
         {onXoa && (
           <button type="button" onClick={onXoa}
-                  className="ml-auto text-[11.5px]" style={{ color: "var(--err)" }}>
+                  className="ml-auto text-caption" style={{ color: "var(--err)" }}>
             Xoá
           </button>
         )}
@@ -179,7 +179,7 @@ export default function CollectionSidebar({
             />
           )}
           {boSuuTap.length === 0 && !dangTao && (
-            <p className="px-2 text-[11.5px] text-text-muted leading-[1.5]">
+            <p className="px-2 text-caption text-text-muted">
               Chưa có bộ sưu tập. Nhóm các tài liệu cùng một môn để tìm lại nhanh hơn.
             </p>
           )}
@@ -208,7 +208,7 @@ export default function CollectionSidebar({
             <input type="checkbox" checked={hienLuuTru}
                    onChange={(e) => onHienLuuTru(e.target.checked)}
                    className="w-3.5 h-3.5 accent-brand rounded" />
-            <span className="text-[12.5px] text-text-primary">Hiện đã lưu trữ</span>
+            <span className="text-small text-text-primary">Hiện đã lưu trữ</span>
           </label>
         </Nhom>
       </div>

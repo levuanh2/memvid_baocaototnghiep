@@ -49,7 +49,7 @@ export default function AccountMenu({ user, onLogout }) {
   const hoSo = dungHoSo(dayDu);
   if (!hoSo) return null;
 
-  const muc = "w-full flex items-center gap-2.5 px-3 py-2 text-[13px] text-left transition-theme";
+  const muc = "w-full flex items-center gap-2.5 px-3 py-2 text-small text-left transition-theme";
 
   return (
     <div className="relative" ref={boc}>
@@ -62,7 +62,7 @@ export default function AccountMenu({ user, onLogout }) {
         style={{ borderColor: "var(--border-color)" }}
       >
         <Avatar src={hoSo.avatar} chuCai={hoSo.chuCai} size={28} />
-        <span className="hidden md:inline text-[12.5px] text-text-secondary max-w-[140px] truncate">{hoSo.ten}</span>
+        <span className="hidden md:inline text-small text-text-secondary max-w-[140px] truncate">{hoSo.ten}</span>
         <Icon name="ChevronDown" size={14} className={moMenu ? "rotate-180 transition-transform" : "transition-transform"} />
       </button>
 
@@ -73,8 +73,8 @@ export default function AccountMenu({ user, onLogout }) {
           style={{ background: "var(--bg-card)", borderColor: "var(--border-strong)", boxShadow: "var(--shadow-card-hover)" }}
         >
           <div className="px-3 pt-2 pb-2.5 border-b" style={{ borderColor: "var(--border-color)" }}>
-            <div className="text-[13px] font-medium text-text-primary truncate">{hoSo.ten}</div>
-            <div className="text-[11.5px] text-text-muted truncate">{hoSo.email}</div>
+            <div className="text-small font-medium text-text-primary truncate">{hoSo.ten}</div>
+            <div className="text-caption text-text-muted truncate">{hoSo.email}</div>
           </div>
 
           <button

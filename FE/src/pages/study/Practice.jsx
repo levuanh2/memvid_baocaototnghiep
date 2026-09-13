@@ -91,7 +91,7 @@ export default function Practice() {
       actions={
         quiz?.source_attempt_id && (
           <Link to={`/app/study/review/${quiz.source_attempt_id}`}
-            className="text-[13px] text-text-muted hover:text-brand inline-flex items-center gap-1.5">
+            className="text-small text-text-muted hover:text-brand inline-flex items-center gap-1.5">
             <Icon name="BookOpen" size={14} /> Kế hoạch ôn
           </Link>
         )
@@ -108,10 +108,10 @@ export default function Practice() {
                   size={58}
                 />
                 <div>
-                  <div className="font-display text-[24px] font-semibold text-text-primary leading-none">
+                  <div className="font-display text-h2 font-semibold text-text-primary leading-none">
                     {formatScore(graded.score, graded.max_score)}
                   </div>
-                  <div className="font-mono text-[11.5px] text-text-muted mt-1.5">
+                  <div className="font-mono text-caption text-text-muted mt-1.5">
                     đúng {graded.correct_count}/{graded.total_questions}
                   </div>
                 </div>
@@ -125,19 +125,19 @@ export default function Practice() {
             {questions.map((q, i) => (
               <article key={q.question_id} className="surface-card">
                 <div className="flex items-center gap-2 mb-3">
-                  <span className="font-mono text-[12px] text-text-muted">
+                  <span className="font-mono text-small text-text-muted">
                     {String(i + 1).padStart(2, "0")}
                   </span>
                   <span className="badge-processing">{QUESTION_TYPE_LABEL[q.question_type]}</span>
                 </div>
 
-                <h3 className="font-display text-[16.5px] leading-[1.5] text-text-primary mb-4">
+                <h3 className="font-display text-body-lg text-text-primary mb-4">
                   {q.question_text}
                 </h3>
 
                 {q.question_type === "short_answer" ? (
                   <textarea
-                    className="input-surface w-full text-[14px] min-h-[96px] resize-y disabled:opacity-70"
+                    className="input-surface w-full text-body min-h-[96px] resize-y disabled:opacity-70"
                     placeholder="Viết câu trả lời ngắn…"
                     disabled={done}
                     value={answers[q.question_id] ?? ""}
@@ -152,7 +152,7 @@ export default function Practice() {
                           className={`answer-option ${selected ? "answer-option--selected" : ""}`}
                           onClick={() => setAnswers((p) => ({ ...p, [q.question_id]: opt }))}>
                           <span className="answer-option__key">{KEYS[oi] || oi + 1}</span>
-                          <span className="text-[14px] leading-[1.5]">{optionLabel(opt)}</span>
+                          <span className="text-body">{optionLabel(opt)}</span>
                         </button>
                       );
                     })}
@@ -163,7 +163,7 @@ export default function Practice() {
           </section>
 
           {error && (
-            <div className="text-[13px] flex items-center gap-1.5 mt-4" style={{ color: "var(--err)" }}>
+            <div className="text-small flex items-center gap-1.5 mt-4" style={{ color: "var(--err)" }}>
               <Icon name="AlertCircle" size={14} /> {error}
             </div>
           )}
@@ -175,7 +175,7 @@ export default function Practice() {
                 {submitting ? <><Spinner size={14} /> Đang chấm…</> : "Nộp bài luyện tập"}
               </button>
               {unanswered > 0 && (
-                <span className="text-[12.5px] text-text-muted">
+                <span className="text-small text-text-muted">
                   còn {unanswered} câu chưa trả lời
                 </span>
               )}
@@ -193,17 +193,17 @@ function Comparison({ comparison }) {
   if (!rows.length) return null;
   return (
     <section className="surface-card mb-6">
-      <h2 className="font-mono text-[11px] tracking-[0.18em] uppercase text-text-muted mb-4">
+      <h2 className="font-mono text-metadata uppercase text-text-muted mb-4">
         Trước và sau khi luyện
       </h2>
       <div className="flex flex-col gap-4">
         {rows.map((c) => (
           <div key={c.concept_name} className="flex items-center gap-4 flex-wrap">
             <div className="flex-1 min-w-[150px]">
-              <div className="font-display text-[15px] font-semibold text-text-primary">
+              <div className="font-display text-body-lg font-semibold text-text-primary">
                 {c.concept_name}
               </div>
-              <div className="text-[12.5px] text-text-secondary mt-0.5">
+              <div className="text-small text-text-secondary mt-0.5">
                 {c.delta == null
                   ? "Chưa đủ số liệu để so sánh"
                   : c.became_mastered
@@ -231,15 +231,15 @@ function Comparison({ comparison }) {
 function Slot({ label, value }) {
   return (
     <div className="flex flex-col items-center gap-1">
-      <span className="font-mono text-[10px] uppercase tracking-[0.14em] text-text-muted">{label}</span>
+      <span className="font-mono text-metadata uppercase text-text-muted">{label}</span>
       {value ? (
         <>
           <SealMeter score={value.mastery_score} status={value.status} size={40} />
-          <span className="text-[11px] text-text-muted">{MASTERY_LABEL[value.status] || ""}</span>
+          <span className="text-caption text-text-muted">{MASTERY_LABEL[value.status] || ""}</span>
         </>
       ) : (
         // Không có số liệu thì nói thế, đừng vẽ con dấu 0% — 0 điểm khác chưa đo.
-        <span className="text-[12px] text-text-muted h-[40px] flex items-center">chưa đo</span>
+        <span className="text-small text-text-muted h-[40px] flex items-center">chưa đo</span>
       )}
     </div>
   );
