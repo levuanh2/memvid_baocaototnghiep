@@ -201,9 +201,13 @@ export default function MainLayout({ selectedSources, setSelectedSources, initia
             KHÔNG suy từ URL, chỉ đọc context. Chưa có lựa chọn thì giữ eyebrow cũ. */}
         <div className="flex-1 flex justify-center px-2 min-w-0">
           {selectedDocument ? (
-            <StudyBreadcrumb showChat className="hidden md:flex" />
+            // Final QA: was `md:flex` (768px) — at that width this row also has
+            // the StudyMap/search/tutor buttons appearing (all `hidden md:*`
+            // too), so the breadcrumb gets squeezed into near-zero space and
+            // truncates to one letter. `lg` (1024px) gives it room.
+            <StudyBreadcrumb showChat className="hidden lg:flex" />
           ) : (
-            <span className="hidden md:block text-metadata uppercase text-text-muted font-mono truncate">
+            <span className="hidden lg:block text-metadata uppercase text-text-muted font-mono truncate">
               Đọc · Truy hồi · Dẫn chứng
             </span>
           )}
