@@ -186,6 +186,28 @@
   @media (prefers-reduced-motion: reduce) {
     .animate-fadeUp, .animate-fadeIn, .apparatus-dot--active::after { animation: none !important; }
   }
+
+  /* Frontend V3 — every other animation in this file is covered by its own
+     per-class reduced-motion rule (this one included); grepping the app found
+     two real exceptions with ZERO coverage: `animate-pulse` (Tailwind's own
+     default, 9 consumers incl. skeleton loaders) and `animate-spin`
+     (Spinner.jsx, 4 consumers). Rather than add two more one-off rules that
+     the next new animation can just as easily miss, this is the standard
+     Bootstrap/web.dev global safety net — collapses every remaining
+     animation/transition duration to near-zero under reduced-motion, so a
+     future animation is covered automatically instead of by omission. Sits
+     alongside (not instead of) the per-class rules above; both are harmless
+     together. Status/loading indicators (pulse, spin) still render, just
+     without the motion — the accompanying text label is what actually
+     communicates "in progress," same as it does today. */
+  @media (prefers-reduced-motion: reduce) {
+    *, *::before, *::after {
+      animation-duration: 0.01ms !important;
+      animation-iteration-count: 1 !important;
+      transition-duration: 0.01ms !important;
+      scroll-behavior: auto !important;
+    }
+  }
 }
 
 /* ─── Components ────────────────────────────── */
