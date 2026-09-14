@@ -681,10 +681,16 @@ export default function DocumentList() {
                 title={rong.tieuDe}
                 hint={rong.goiY}
                 action={rong.hanhDong ? (
+                  // Frontend V3 (Workspace hierarchy, §2) — this used to also
+                  // render as `btn-seal` when the action is "upload," which put
+                  // two seal-red primary buttons on screen at once (this one +
+                  // StudyShell's own "Tải tài liệu" in the header actions slot,
+                  // always rendered, doing the exact same thing). One primary
+                  // per screen: the header owns it, this stays a secondary
+                  // shortcut into the same file picker.
                   <button
                     type="button"
-                    className={rong.khoaHanhDong === "tai_len"
-                      ? "btn-seal text-small mt-1 disabled:opacity-60" : "pill-action mt-1"}
+                    className="pill-action mt-1 disabled:opacity-60"
                     disabled={rong.khoaHanhDong === "tai_len" && uploading}
                     onClick={() => {
                       if (rong.khoaHanhDong === "tai_len") return fileRef.current?.click();
