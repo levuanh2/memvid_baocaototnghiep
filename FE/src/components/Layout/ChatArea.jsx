@@ -11,6 +11,7 @@ import { getToken } from "../../auth/tokenStore";
 import { createPreviewThrottle } from "../../utils/streamPreview";
 import { shouldFocusComposer, shouldRefocusComposer, shouldFocusOnSlash } from "../../utils/chatFocus";
 import { Icon } from "../ui/Icon";
+import { PROSE } from "../ui/Markdown";
 import { nodeLabel, processCitations, parseCiteHref, normStem } from "../../utils/evidence";
 import { pickImageFromClipboard, downscaleImage, transcribeImage, getVisionStatus, buildQuestionWithImage, IMAGE_TYPES } from "../../utils/chatImage";
 import { QUERY_SSE_ERR_FALLBACK, ensureErrMsg, pickQueryDisplayText, sseErrorToMessage } from "../../utils/queryText";
@@ -43,31 +44,18 @@ function buildSuggestions(selectedSources, sources) {
 }
 
 // ── Markdown components for the answer prose ──────────
-// `a` handles citation chips ([n](#cite:stem:chunkId)); everything else is
-// styled for serif reading.
+// Frontend V3 (Reading Experience, §1) — built on the shared PROSE base
+// (ui/Markdown.jsx) instead of a near-duplicate set of p/ul/ol/blockquote/
+// table renderers. This is a real, cited fix, not a style refresh: PROSE's
+// own comments document that ChatArea's old blockquote carried a decorative
+// `italic` on the whole block — exactly the "generic AI redesign" tell
+// Sprint G already found and removed from every OTHER prose surface
+// (SummaryPane). Only `a` genuinely needs to differ here (citation chips,
+// [n](#cite:stem:chunkId)); everything else now renders through the same
+// path the rest of the app already uses ("một đường render").
 function makeMdComponents({ highlight, onHighlight }) {
   return {
-    p: ({ node, ...p }) => <p className="mb-2.5 last:mb-0 text-body-lg text-text-primary" {...p} />,
-    code: ({ node, inline, children, ...props }) =>
-      inline ? (
-        <code className="bg-surface-elevated border border-border px-1.5 py-0.5 rounded text-small font-mono text-text-secondary" {...props}>{children}</code>
-      ) : (
-        <pre className="bg-surface-elevated border border-border rounded-[7px] p-3 overflow-x-auto my-2.5">
-          <code className="text-small font-mono text-text-secondary" {...props}>{children}</code>
-        </pre>
-      ),
-    ul: ({ node, ...p }) => <ul className="pl-5 my-2.5 list-disc marker:text-slate text-body-lg text-text-primary" {...p} />,
-    ol: ({ node, ...p }) => <ol className="pl-5 my-2.5 list-decimal marker:text-slate text-body-lg text-text-primary" {...p} />,
-    li: ({ node, ...p }) => <li className="mb-1.5" {...p} />,
-    strong: ({ node, ...p }) => <strong className="text-text-primary font-semibold" {...p} />,
-    em: ({ node, ...p }) => <em className="italic" {...p} />,
-    h1: ({ node, ...p }) => <h1 className="font-display text-h3 font-semibold my-3 text-text-primary" {...p} />,
-    h2: ({ node, ...p }) => <h2 className="font-display text-title font-semibold my-2.5 text-text-primary" {...p} />,
-    h3: ({ node, ...p }) => <h3 className="font-display text-body-lg font-semibold my-2 text-text-secondary" {...p} />,
-    blockquote: ({ node, ...p }) => <blockquote className="border-l-2 border-brand/50 pl-3.5 my-2.5 text-text-secondary italic" {...p} />,
-    table: ({ node, ...p }) => <div className="overflow-x-auto my-2.5"><table className="w-full text-small border-collapse font-body" {...p} /></div>,
-    th: ({ node, ...p }) => <th className="bg-surface-elevated px-2.5 py-1.5 text-left text-text-primary border border-border font-semibold" {...p} />,
-    td: ({ node, ...p }) => <td className="px-2.5 py-1.5 text-text-secondary border border-border" {...p} />,
+    ...PROSE,
     a: ({ node, href, children, ...props }) => {
       const cite = parseCiteHref(href);
       if (cite) {
@@ -93,10 +81,15 @@ function makeMdComponents({ highlight, onHighlight }) {
 }
 
 // ── Answer block (memo-light): runs citation pass once per content ──
-function AnswerProse({ content, mdComponents }) {
+// `dropCap` — the editorial opening-paragraph flourish (MdProse's own rule,
+// reused via the same `.prose-drop-cap` class it defines in index.css).
+// Applied to the FIRST answer of a session only, per that rule's own
+// constraint ("use on ONE reading surface's first block, never repeated") —
+// wired at the call site below, not decided in here.
+function AnswerProse({ content, mdComponents, dropCap = false }) {
   const { md } = useMemo(() => processCitations(content), [content]);
   return (
-    <div className="font-display">
+    <div className={dropCap ? "font-display prose-drop-cap" : "font-display"}>
       <ReactMarkdown remarkPlugins={[remarkGfm, remarkBreaks]} components={mdComponents}>{md}</ReactMarkdown>
     </div>
   );
@@ -139,6 +132,9 @@ export default function ChatArea({ selectedSources, sources = [], onEvidence, hi
 
   const mdComponents = useMemo(() => makeMdComponents({ highlight, onHighlight }), [highlight, onHighlight]);
   const suggestions = useMemo(() => buildSuggestions(selectedSources, sources), [selectedSources, sources]);
+  // First assistant answer only — the drop-cap is an "a reading surface begins
+  // here" signal (MdProse's own rule), not a per-turn decoration.
+  const firstAssistantIdx = useMemo(() => messages.findIndex((m) => m.role === "ai"), [messages]);
 
   // Stop any in-flight SSE stream / status-polling loop when the component unmounts
   // (cancelledRef is what pollQueryStatus checks each iteration).
@@ -768,7 +764,7 @@ export default function ChatArea({ selectedSources, sources = [], onEvidence, hi
                 ) : null}
               </div>
               <div className="text-text-primary">
-                <AnswerProse content={msg.content} mdComponents={mdComponents} />
+                <AnswerProse content={msg.content} mdComponents={mdComponents} dropCap={idx === firstAssistantIdx} />
               </div>
               {/* Product Experience Redesign, Question→Evidence handoff — Peak-End Rule:
                   the resting point of a reading turn (not mid-stream, not every turn)

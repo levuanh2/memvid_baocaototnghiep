@@ -65,7 +65,24 @@ const PROSE = {
   thead: ({ node, ...p }) => <thead className="border-b border-border-strong" {...p} />,
   th: ({ node, ...p }) => <th className="text-left font-semibold text-text-primary py-1.5 pr-4" {...p} />,
   td: ({ node, ...p }) => <td className="py-1.5 pr-4 border-b border-border align-top" {...p} />,
+  // Frontend V3 (Reading Experience, §1) — genuinely missing before: an
+  // unhandled `img` falls back to the browser default (no max-width), so a
+  // source document's embedded image could overflow the reading column
+  // entirely. Constrained to the column, given a hairline frame consistent
+  // with this app's other content frames (`.evidence-frame`, code blocks).
+  img: ({ node, alt, ...p }) => (
+    <img alt={alt} className="max-w-full h-auto rounded-[7px] border border-border my-3.5" {...p} />
+  ),
 };
+
+/** Frontend V3 (Reading Experience, §1) — exported so any other long-form
+ * reading surface can build on the SAME editorial base (spread `PROSE`,
+ * override only what that surface genuinely needs different, e.g. citation
+ * links) instead of re-deriving its own p/ul/ol/blockquote/table treatment.
+ * This is the "một đường render" (one render path) rule this file's own
+ * SummaryPane consumer already follows — ChatArea's answer prose did not,
+ * and carried its own near-duplicate of everything below except `a`. */
+export { PROSE };
 
 /** `dropCap` — the opening-paragraph editorial flourish from the redesign
  * spec (§07): use on ONE reading surface's first block, never repeated per
