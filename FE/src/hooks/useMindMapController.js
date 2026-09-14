@@ -6,8 +6,19 @@
 // so both consume the SAME state instead of two copies of it.
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { buildGraphIndex, relationsFor, headingPath } from "../utils/mindmapGraph";
+import { useStudyContext } from "../study/useStudyContext";
 
 export function useMindMapController(data) {
+  // Frontend V4 (Research Session / Context Preservation) — this controller
+  // already has its OWN selection+history+breadcrumb (below), but it never
+  // told the APP-WIDE Study Context about a canvas click. StudyMapView's own
+  // node click already does (`selectNode(id, {source:"mindmap"})`) — two
+  // structurally parallel interactions (click a node in MindMap vs StudyMap)
+  // had different context-integration behavior: browsing StudyMap updated
+  // the global breadcrumb/session, browsing MindMap didn't. One line closes
+  // it, using the existing Phase-4 Study Context wholesale — no new state,
+  // no new component.
+  const { selectNode: selectNodeInContext } = useStudyContext();
   // The mind-elixir INSTANCE and its sidecar are DOM-bound and created by
   // MindElixirView's own init effect; the controller only needs a place to
   // read them from when `jumpTo`/`goBack`/`goForward` fire. `registerMindInstance`
@@ -61,7 +72,8 @@ export function useMindMapController(data) {
       number: side?.number || "", level: side?.level || 0, enrichment: side?.enrichment || [],
     });
     pushHistory(n.id);
-  }, [pushHistory]);
+    selectNodeInContext(n.id, { source: "mindmap" });
+  }, [pushHistory, selectNodeInContext]);
 
   const jumpTo = useCallback((id) => {
     const mind = mindRef.current;
