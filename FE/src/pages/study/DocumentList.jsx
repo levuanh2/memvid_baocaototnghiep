@@ -480,7 +480,17 @@ export default function DocumentList() {
 
       {/* Thanh công cụ */}
       <div className="mb-6 flex flex-wrap items-center gap-2">
-        <div className="header-search !rounded-control !min-w-0 !px-3 !py-2 flex-1 min-w-[200px]">
+        {/* Frontend V3 (Responsive, §7) — `!min-w-0` and `min-w-[200px]` were
+            both on this element, fighting over the same property: Tailwind's
+            `!` compiles to `!important`, so `!min-w-0` always won regardless
+            of source order, making `min-w-[200px]` dead code. Effective floor
+            was 0, not 200px — confirmed live at 390px width (the input
+            rendered ~2 characters of its own placeholder). One value now:
+            enough to stay usable on a phone without starving `Mới nhất`/
+            `Lọc`/`Đủ` next to it, wider on anything roomier. Nothing inside
+            this div depends on `min-width:0` for truncation (the input is
+            `w-full`, no `overflow-hidden`/`truncate` descendant). */}
+        <div className="header-search !rounded-control !px-3 !py-2 flex-1 min-w-[140px] sm:min-w-[220px]">
           <Icon name="Search" size={14} className="text-text-muted flex-shrink-0" />
           <input
             type="text" value={truyVan} onChange={(e) => setTruyVan(e.target.value)}
