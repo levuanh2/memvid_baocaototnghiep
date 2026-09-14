@@ -105,7 +105,12 @@ function DoiTenTaiCho({ giaTriDau, dangLuu, onLuu, onHuy }) {
 export default function StudyCard({
   doc, documents, chiMucBst, jobs, boSuuTap, dangDoiTen, dangLuu, onDoiTen, onLuuTen,
   onHuyDoiTen, onBatTat, onMo, daChon, onChon, tabIndex, onKeyDown, refThe,
+  matDo = "comfortable",
 }) {
+  // Frontend V2, Library wave — density is a display variant only: same doc,
+  // same props, same actions, just fewer of them rendered/visible at once.
+  // Không đổi thứ bậc thị giác đã có (tên → AI Overview → …), chỉ rút gọn nó.
+  const gon = matDo === "compact";
   const [menuMo, setMenuMo] = useState(false);
   const ten = tenHienThi(doc);
   const chips = chipHienThi(doc, jobs);
@@ -182,8 +187,9 @@ export default function StudyCard({
       tabIndex={tabIndex}
       onKeyDown={onKeyDown}
       aria-selected={onChon ? Boolean(daChon) : undefined}
-      className="surface-card !p-4 flex flex-col gap-3 outline-none
-                 focus-visible:ring-2 focus-visible:ring-offset-2"
+      className={`surface-card flex flex-col outline-none
+                 focus-visible:ring-2 focus-visible:ring-offset-2
+                 ${gon ? "!p-2.5 gap-1.5" : "!p-4 gap-3"}`}
       style={{
         ...(doc.archived_at ? { opacity: 0.62 } : null),
         ...(daChon ? { borderColor: "var(--accent)" } : null),
@@ -276,10 +282,12 @@ export default function StudyCard({
         </div>
       </div>
 
-      {/* AI Overview — khối chữ LỚN NHẤT trên thẻ. Chỉ hiện khi có tóm tắt thật. */}
+      {/* AI Overview — khối chữ LỚN NHẤT trên thẻ. Chỉ hiện khi có tóm tắt thật.
+          Gọn: chỉ dòng đầu — vẫn là điều AI chuẩn bị, chỉ ít dòng hơn, không đổi
+          nội dung. */}
       {yChinh.length > 0 && (
         <ul className="flex flex-col gap-1 pl-0.5">
-          {yChinh.map((y, i) => (
+          {(gon ? yChinh.slice(0, 1) : yChinh).map((y, i) => (
             <li key={i} className="flex gap-2 text-body text-text-primary">
               <Icon name="Sparkles" size={12} className="mt-[4px] shrink-0 text-forest" />
               <span>{y}</span>
@@ -288,8 +296,9 @@ export default function StudyCard({
         </ul>
       )}
 
-      {/* Tóm tắt xem trước — kẹp 2 dòng */}
-      {ai.summary?.preview && (
+      {/* Tóm tắt xem trước — kẹp 2 dòng. Ẩn ở chế độ gọn: AI Overview một dòng
+          đã đủ định vị thẻ, xem trước đầy đủ có ở "Chi tiết". */}
+      {!gon && ai.summary?.preview && (
         <p className="text-small text-text-secondary"
            style={{ display: "-webkit-box", WebkitLineClamp: 2, WebkitBoxOrient: "vertical",
                     overflow: "hidden" }}>
@@ -309,11 +318,11 @@ export default function StudyCard({
         {chips.map((c) => <ChipAi key={c.khoa} chip={c} />)}
       </div>
 
-      {sieuDuLieu.length > 0 && (
+      {!gon && sieuDuLieu.length > 0 && (
         <div className="font-mono text-caption text-text-muted">{sieuDuLieu.join(" · ")}</div>
       )}
 
-      {Array.isArray(doc.tags) && doc.tags.length > 0 && (
+      {!gon && Array.isArray(doc.tags) && doc.tags.length > 0 && (
         <div className="flex flex-wrap gap-1.5">
           {doc.tags.map((t) => (
             <span key={t}

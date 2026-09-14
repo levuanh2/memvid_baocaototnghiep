@@ -1,5 +1,4 @@
 import { Icon } from "../ui/Icon";
-import Disclosure from "../ui/Disclosure";
 import SealMeter from "./SealMeter";
 import { MASTERY_LABEL } from "../../utils/studyApi";
 import { tenHienThi } from "../../utils/thuVienTaiLieu";
@@ -28,9 +27,12 @@ export default function LearningDashboard({ documents, overview, weak, attempts,
   const hangDoi = hangDoiOnTap(mucHienThi.canOnTap, taiLieuDaOnXong(documents));
   const changGanNhatDoc = mucHienThi.tiepTucHoc || mucHienThi.hocGanDay[0] || null;
 
+  // Product Experience / Signature System pass — the outer surface-card + Disclosure
+  // now live in DocumentList.jsx (the caller decides default-open/collapsed tiering;
+  // this component only renders its own metrics, unchanged). Prop/wrapper change
+  // only — no metric, data, or render-semantics change below this line.
   return (
-    <section className="surface-card !p-0 mb-7">
-      <Disclosure title="Tổng quan học tập" dense>
+    <>
         <div className="p-4 flex flex-col gap-5">
 
           {/* ── Tiến độ ── */}
@@ -150,7 +152,6 @@ export default function LearningDashboard({ documents, overview, weak, attempts,
             </div>
           )}
         </div>
-      </Disclosure>
 
       <style>{`
         .mini-item { display: block; width: 100%; text-align: left; padding: 3px 0;
@@ -158,7 +159,7 @@ export default function LearningDashboard({ documents, overview, weak, attempts,
         button.mini-item:hover { color: var(--accent); text-decoration: underline; cursor: pointer; }
         .mini-item--static { color: var(--text-muted); }
       `}</style>
-    </section>
+    </>
   );
 }
 
