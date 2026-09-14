@@ -750,7 +750,7 @@ export default function SidebarRight({
               <button
                 key={a.key}
                 onClick={() => setArtifactTab(a.key)}
-                className={`pill-tab !px-2.5 !py-1 ${artifactTab === a.key ? "pill-tab-active" : ""}`}
+                className={`pill-tab--sub ${artifactTab === a.key ? "pill-tab-active" : ""}`}
                 aria-pressed={artifactTab === a.key}
               >
                 <Icon name={a.icon} size={13} /> {a.label}
