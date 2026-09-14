@@ -93,11 +93,31 @@ def build_summary_graph(*, data_dir: Path, index_meta_path: Path,
         _set_job(state["job_id"], progress=30, current_node="SummarizeSections")
         def _prog(p: int, msg: str) -> None:
             _set_job(state["job_id"], progress=p, current_node=msg)
+        # P0.5 Blocker #1 (instrumentation only): a plain list `pipeline.summarize`
+        # appends per-section diagnostics into, additive to its existing return
+        # shape — see `summarize_sections`'s own docstring for the guarantee that
+        # omitting this parameter (nothing else in this codebase does) is
+        # byte-identical to before this change. Not every `pipeline` object
+        # implementing this duck-typed interface supports the new kwarg yet
+        # (test doubles in particular) — checked via signature introspection,
+        # not a try/except around the actual call, so a real bug inside
+        # `summarize()` still surfaces as a real error instead of being
+        # silently retried away.
+        import inspect
+        diag_sink: list[dict] = []
+        summarize_kwargs = {"length_mode": state.get("length_mode") or "medium",
+                            "progress_cb": _prog, "cancel_cb": lambda: _cancelled(state["job_id"])}
+        try:
+            params = inspect.signature(pipeline.summarize).parameters
+            if "diagnostics_sink" in params or any(p.kind == p.VAR_KEYWORD for p in params.values()):
+                summarize_kwargs["diagnostics_sink"] = diag_sink
+        except (TypeError, ValueError):
+            pass
         summaries, missing_sections = pipeline.summarize(
-            state["mm_input"], state["sections"], length_mode=state.get("length_mode") or "medium",
-            progress_cb=_prog, cancel_cb=lambda: _cancelled(state["job_id"]))
+            state["mm_input"], state["sections"], **summarize_kwargs)
         missing = list(state.get("degraded_missing") or []) + list(missing_sections or [])
         return {**state, "section_summaries": summaries, "degraded_missing": missing,
+                "section_diagnostics": diag_sink,
                 "progress": 70, "current_node": "SummarizeSections"}
 
     @_guard("Synthesize")
@@ -174,6 +194,16 @@ def build_summary_graph(*, data_dir: Path, index_meta_path: Path,
         # done PHẢI đi cùng result trong MỘT update (bài học race 2026-07-06)
         _set_job(state["job_id"], status="done", progress=100,
                  current_node="AssemblePersist", result=record)
+        # P0.5 Blocker #1: diagnostics ONLY — logged/persisted separately, never
+        # merged into `record`/`generator` (same non-exposure rule MindMap's own
+        # quality_report follows). Own try/except so a diagnostics-write failure
+        # can never touch the record already persisted above.
+        try:
+            from services.summary.pipeline.diagnostics_store import append_summary_diagnostics
+            append_summary_diagnostics(state["content_hash"], mm.get("sources") or [],
+                                       state.get("section_diagnostics") or [], data_dir)
+        except Exception as e:
+            print(f"[summary] diagnostics append failed (non-fatal): {e}")
         return {**state, "result": record, "progress": 100, "current_node": "AssemblePersist"}
 
     def cancelled_node(state: dict) -> dict:
