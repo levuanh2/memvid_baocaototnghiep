@@ -111,6 +111,7 @@ class SummaryState(TypedDict):
     section_summaries: NotRequired[list]
     overview_meta: NotRequired[dict]  # {title, overview, entities} từ Synthesize
     degraded_missing: NotRequired[list]
+    section_diagnostics: NotRequired[list]  # P0.5 Blocker #1: per-section instrumentation
     result: NotRequired[dict]
     cancelled: NotRequired[bool]
     progress: int

@@ -35,7 +35,7 @@ class LocalSummaryPipeline:
         return max(1, min(muon, inproc_slots()))
 
     def summarize(self, mm_input, sections, *, length_mode="medium",
-                  progress_cb=None, cancel_cb=None):
+                  progress_cb=None, cancel_cb=None, diagnostics_sink=None):
         from shared.config import get_settings
         from services.summary.pipeline.summarize import summarize_sections
         return summarize_sections(
@@ -43,7 +43,8 @@ class LocalSummaryPipeline:
             timeout_sec=self._timeout(),
             max_workers=self._parallel(),
             with_facts=get_settings().summary_facts,
-            progress_cb=progress_cb, cancel_cb=cancel_cb)
+            progress_cb=progress_cb, cancel_cb=cancel_cb,
+            diagnostics_sink=diagnostics_sink)
 
     def synthesize(self, sections, *, doc_title, length_mode="medium"):
         from services.summary.pipeline.synthesize import synthesize

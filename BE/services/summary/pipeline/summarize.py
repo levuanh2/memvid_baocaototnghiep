@@ -7,6 +7,7 @@ from __future__ import annotations
 
 import json
 import os
+import time
 from concurrent.futures import ThreadPoolExecutor, as_completed
 from concurrent.futures import TimeoutError as FuturesTimeoutError
 from typing import Callable, Optional
@@ -64,10 +65,30 @@ def _section_context(mm_input: dict, refs: list[str]) -> str:
     return "\n\n".join(parts)
 
 
-def _ask_json(user: str, system: str, model: str | None, timeout_sec: float) -> dict:
-    """1 call + parse; retry đúng 1 lần khi JSON hỏng (bài học enrich: ~1/4 call qwen)."""
+def _provider_name() -> str:
+    """Best-effort — mirrors enrich.py's own helper of the same name and the
+    same limitation: `ask_ai` doesn't surface which provider actually served
+    a call (it tries `shared.config`'s provider order internally and only
+    returns text). Recording the configured primary is honest and cheap
+    without touching `llm_factory.py`'s shared, multi-feature signature."""
+    try:
+        from shared.config import get_settings
+        providers = get_settings().providers
+        return providers[0] if providers else "unknown"
+    except Exception:
+        return "unknown"
+
+
+def _ask_json(user: str, system: str, model: str | None, timeout_sec: float,
+              diag: dict | None = None) -> dict:
+    """1 call + parse; retry đúng 1 lần khi JSON hỏng (bài học enrich: ~1/4 call qwen).
+
+    P0.5 Blocker #1 (instrumentation only): `diag`, when given a dict, gets
+    `retry_count` recorded in place. Omitting it (every call site before this
+    change did, and still can) leaves behavior byte-identical — this is a
+    pure additive side-channel, never read by the function's own control flow."""
     last_err: Exception | None = None
-    for _attempt in range(2):
+    for attempt in range(2):
         ex = ThreadPoolExecutor(max_workers=1)
         try:
             fut = ctx_submit(ex, ask_ai, user, system_prompt=system, model=model,
@@ -76,15 +97,21 @@ def _ask_json(user: str, system: str, model: str | None, timeout_sec: float) -> 
         finally:
             ex.shutdown(wait=False)      # timeout phải TRẢ NGAY (bài học warmup)
         try:
-            return json.loads(repair_json_text(str(raw)))
+            result = json.loads(repair_json_text(str(raw)))
+            if diag is not None:
+                diag["retry_count"] = attempt
+            return result
         except ValueError as e:
             last_err = e
+    if diag is not None:
+        diag["retry_count"] = 1
     raise last_err
 
 
 def _summarize_one(mm_input: dict, section: dict, model: str | None,
                    timeout_sec: float, length_mode: str,
-                   with_facts: bool = False, two_pass: bool = False) -> dict:
+                   with_facts: bool = False, two_pass: bool = False,
+                   diag: dict | None = None) -> dict:
     # two_pass = seam cho chế độ chất lượng cao (extract → summarize tách 2 call) —
     # CHƯA cài (Phase 1). Gọi với True là lỗi lập trình, không phải fallback im lặng.
     if two_pass:
@@ -95,7 +122,11 @@ def _summarize_one(mm_input: dict, section: dict, model: str | None,
     system = tmpl.format(length_rule=_LENGTH_RULES.get(length_mode, _LENGTH_RULES["medium"]))
     user = (f"Mục: {section['title']}\nDanh sách id hợp lệ: {', '.join(sorted(set(allowed)))}\n\n"
             f"<<<TÀI LIỆU>>>\n{ctx}\n<<<HẾT>>>")
-    data = _ask_json(user, system, model, timeout_sec)
+    t0 = time.time()
+    data = _ask_json(user, system, model, timeout_sec, diag=diag)
+    if diag is not None:
+        diag["elapsed_ms"] = int((time.time() - t0) * 1000)
+        diag["provider"] = _provider_name()
     allowed_set = set(allowed)
     result = {
         "summary": (data.get("summary") or "").strip(),
@@ -107,7 +138,18 @@ def _summarize_one(mm_input: dict, section: dict, model: str | None,
         # facts = free-text (định nghĩa/công thức...), KHÔNG lọc theo allowed_set như id;
         # chỉ coerce str + bỏ rỗng + cap (schema.sanitize_facts, dùng chung với persist).
         result["facts"] = _coerce_facts(data.get("facts"))
+    if diag is not None:
+        diag["status"] = "ok"
+        diag["empty_output"] = not bool(result["summary"])
     return result
+
+
+def _blank_diag(s: dict, **overrides) -> dict:
+    d = {"section_id": s["id"], "section_title": s["title"], "status": "pending",
+         "provider": None, "elapsed_ms": None, "retry_count": 0, "token_usage": None,
+         "fallback_used": False, "failure_reason": None, "empty_output": None}
+    d.update(overrides)
+    return d
 
 
 def summarize_sections(mm_input: dict, sections: list[dict], *, model: str | None = None,
@@ -115,22 +157,50 @@ def summarize_sections(mm_input: dict, sections: list[dict], *, model: str | Non
                        max_workers: int = 2,
                        with_facts: bool | None = None,
                        progress_cb: Optional[Callable[[int, str], None]] = None,
-                       cancel_cb: Optional[Callable[[], bool]] = None) -> tuple[list[dict], list[str]]:
+                       cancel_cb: Optional[Callable[[], bool]] = None,
+                       diagnostics_sink: Optional[list[dict]] = None) -> tuple[list[dict], list[str]]:
     """Trả (sections đã có summary, missing). Section lỗi → giữ skeleton (summary rỗng)
     + missing "section:<title>" — degraded trung thực, không bịa.
 
     with_facts=None → resolve từ get_settings().summary_facts (cờ SUMMARY_FACTS, mặc
-    định OFF). OFF → shape y hệt v2 (không key "facts"). ON → mỗi section thêm "facts"."""
+    định OFF). OFF → shape y hệt v2 (không key "facts"). ON → mỗi section thêm "facts".
+
+    P0.5 Blocker #1 (instrumentation only, additive): `diagnostics_sink`, when
+    given a list, gets exactly one dict per section appended to it —
+    section_id/section_title/status/provider/elapsed_ms/retry_count/
+    token_usage/fallback_used/failure_reason/empty_output. `token_usage` is
+    always `None` (safe default): `ask_ai` doesn't expose it today, and
+    that's a `llm_factory.py`-level limitation out of this fix's scope, not
+    guessed at here. `provider` is the configured primary (same honest
+    best-effort `_provider_name()` limitation as `enrich.py`'s own helper —
+    `ask_ai` doesn't surface which provider actually served a call).
+    Omitting `diagnostics_sink` (every call site before this change did, and
+    still can) leaves every other return value and code path byte-identical
+    to before this change — this parameter is read nowhere except to decide
+    whether to populate it."""
     out = [dict(s, summary="", key_points=[]) for s in sections]
     if os.getenv("SKIP_MODEL_LOAD") == "1":
+        if diagnostics_sink is not None:
+            diagnostics_sink.extend(_blank_diag(s, status="skipped_model_load",
+                                                fallback_used=True, empty_output=True,
+                                                failure_reason="SKIP_MODEL_LOAD=1")
+                                    for s in sections)
         return out, [f"section:{s['title']}" for s in sections]
     if with_facts is None:
         from shared.config import get_settings
         with_facts = get_settings().summary_facts
     missing: list[str] = []
     if cancel_cb and cancel_cb():
+        if diagnostics_sink is not None:
+            diagnostics_sink.extend(_blank_diag(s, status="cancelled", fallback_used=True,
+                                                empty_output=True,
+                                                failure_reason="cancelled_before_start")
+                                    for s in sections)
         return out, missing      # huỷ trước khi tốn LLM call nào
     by_id = {s["id"]: s for s in out}
+    diag_by_id: dict[str, dict] = (
+        {s["id"]: _blank_diag(s) for s in sections} if diagnostics_sink is not None else {}
+    )
     done = 0
     # Báo TRƯỚC khi submit. Nếu không, dòng progress đầu tiên chỉ đến khi một mục
     # CHẠY XONG — với model chậm là vài phút chip đứng im ở 30%, người dùng đọc là
@@ -142,8 +212,11 @@ def summarize_sections(mm_input: dict, sections: list[dict], *, model: str | Non
     if progress_cb and sections:
         progress_cb(30, f"Đang tóm tắt mục 1/{len(sections)}...")
     ex = ThreadPoolExecutor(max_workers=max_workers)
-    futs = {ctx_submit(ex, _summarize_one, mm_input, s, model, timeout_sec, length_mode, with_facts): s
-            for s in sections}
+    futs = {
+        ctx_submit(ex, _summarize_one, mm_input, s, model, timeout_sec, length_mode, with_facts,
+                  diag=diag_by_id.get(s["id"])): s
+        for s in sections
+    }
     budget = timeout_sec * ((len(sections) + max_workers - 1) // max_workers) + 15 if sections else 1
     finished: set[str] = set()
     try:
@@ -151,6 +224,12 @@ def summarize_sections(mm_input: dict, sections: list[dict], *, model: str | Non
             if cancel_cb and cancel_cb():
                 for f in futs:
                     f.cancel()
+                if diagnostics_sink is not None:
+                    for d in diag_by_id.values():
+                        if d["status"] == "pending":
+                            d.update(status="cancelled", fallback_used=True, empty_output=True,
+                                     failure_reason="cancelled_mid_batch")
+                    diagnostics_sink.extend(diag_by_id.values())
                 return out, missing
             s = futs[fut]
             try:
@@ -162,11 +241,20 @@ def summarize_sections(mm_input: dict, sections: list[dict], *, model: str | Non
                 if r.get("facts"):
                     by_id[s["id"]]["facts"] = r["facts"]   # chỉ khi with_facts + có facts
                 finished.add(s["id"])
+                if diagnostics_sink is not None:
+                    d = diag_by_id[s["id"]]
+                    # "fallback_used": the pipeline's own real fallback behavior is
+                    # keeping an empty summary when nothing usable came back —
+                    # a successful-but-empty call is exactly that case.
+                    d["fallback_used"] = bool(d.get("empty_output"))
             except Exception as e:
                 msg = str(e).strip() or type(e).__name__
                 print(f"[summary] section '{s.get('title', '')[:40]}' failed: {msg}")
                 missing.append(f"section:{s['title']}")
                 finished.add(s["id"])
+                if diagnostics_sink is not None:
+                    diag_by_id[s["id"]].update(status="failed", failure_reason=msg,
+                                               fallback_used=True, empty_output=True)
             done += 1
             if progress_cb:
                 progress_cb(int(30 + 40 * done / max(1, len(sections))),
@@ -174,6 +262,13 @@ def summarize_sections(mm_input: dict, sections: list[dict], *, model: str | Non
     except FuturesTimeoutError:
         # section chưa xong trong ngân sách → degraded phần đó
         missing.extend(f"section:{s['title']}" for s in sections if s["id"] not in finished)
+        if diagnostics_sink is not None:
+            for d in diag_by_id.values():
+                if d["status"] == "pending":
+                    d.update(status="timeout", fallback_used=True, empty_output=True,
+                             failure_reason="budget_timeout")
     finally:
         ex.shutdown(wait=False)
+    if diagnostics_sink is not None:
+        diagnostics_sink.extend(diag_by_id.values())
     return out, missing
