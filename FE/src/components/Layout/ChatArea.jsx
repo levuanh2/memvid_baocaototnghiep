@@ -16,11 +16,31 @@ import { pickImageFromClipboard, downscaleImage, transcribeImage, getVisionStatu
 import { QUERY_SSE_ERR_FALLBACK, ensureErrMsg, pickQueryDisplayText, sseErrorToMessage } from "../../utils/queryText";
 
 // ── Quick question chips (fill the composer; functional, not decorative) ──
-const SUGGESTIONS = [
+// Generic fallback — used only when no source is selected yet (nothing to name).
+const SUGGESTIONS_GENERIC = [
   "Các ý chính của tài liệu là gì?",
   "Tóm tắt nội dung chính.",
   "Giải thích khái niệm quan trọng nhất.",
 ];
+
+// Product Experience Redesign, Question stage — JTBD + Priming (Growth.Design):
+// a chip that already names the real selected document primes "ask about THIS"
+// instead of a generic prompt the user has to mentally re-target. Real filenames
+// only — never fabricated titles, honest per Hallmark's no-invented-content rule.
+function buildSuggestions(selectedSources, sources) {
+  const stems = Array.isArray(selectedSources) ? selectedSources : [];
+  if (!stems.length) return SUGGESTIONS_GENERIC;
+  const names = stems
+    .map((stem) => sources.find((s) => (s.video_stem || s.video) === stem)?.filename)
+    .filter(Boolean);
+  if (!names.length) return SUGGESTIONS_GENERIC;
+  const label = names.length > 1 ? `${names.length} tài liệu đã chọn` : names[0];
+  return [
+    `Tóm tắt ${label}.`,
+    `Ý chính của ${label} là gì?`,
+    `Khái niệm nào trong ${label} khó hiểu nhất?`,
+  ];
+}
 
 // ── Markdown components for the answer prose ──────────
 // `a` handles citation chips ([n](#cite:stem:chunkId)); everything else is
@@ -118,6 +138,7 @@ export default function ChatArea({ selectedSources, sources = [], onEvidence, hi
   const previewThrottleRef = useRef(null);
 
   const mdComponents = useMemo(() => makeMdComponents({ highlight, onHighlight }), [highlight, onHighlight]);
+  const suggestions = useMemo(() => buildSuggestions(selectedSources, sources), [selectedSources, sources]);
 
   // Stop any in-flight SSE stream / status-polling loop when the component unmounts
   // (cancelledRef is what pollQueryStatus checks each iteration).
@@ -701,7 +722,7 @@ export default function ChatArea({ selectedSources, sources = [], onEvidence, hi
             </p>
             {selectedSources?.length > 0 ? (
               <div className="flex flex-wrap gap-2 justify-center">
-                {SUGGESTIONS.map((q) => (
+                {suggestions.map((q) => (
                   <button key={q} onClick={() => fillSuggestion(q)} className="pill-action">{q}</button>
                 ))}
               </div>
@@ -749,6 +770,16 @@ export default function ChatArea({ selectedSources, sources = [], onEvidence, hi
               <div className="text-text-primary">
                 <AnswerProse content={msg.content} mdComponents={mdComponents} />
               </div>
+              {/* Product Experience Redesign, Question→Evidence handoff — Peak-End Rule:
+                  the resting point of a reading turn (not mid-stream, not every turn)
+                  gets a distinct settled marker instead of fading identically into the
+                  next question. Real citation count only — no count means no claim. */}
+              {idx === messages.length - 1 && !loading && msg.evidence?.sources?.length > 0 && (
+                <div className="flex items-center gap-1.5 text-caption font-mono text-text-muted pt-0.5">
+                  <Icon name="BadgeCheck" size={12} className="text-forest" />
+                  Đã trả lời với {msg.evidence.sources.length} nguồn — xem chi tiết ở lề phải
+                </div>
+              )}
             </div>
           )
         )}
@@ -822,7 +853,7 @@ export default function ChatArea({ selectedSources, sources = [], onEvidence, hi
         {/* Follow-up suggestions */}
         {messages.length > 0 && !loading && !pendingReview && (
           <div className="px-4 sm:px-8 pt-3 pb-1 flex gap-2 overflow-x-auto scrollbar-none">
-            {SUGGESTIONS.map((q) => (
+            {suggestions.map((q) => (
               <button key={q} onClick={() => fillSuggestion(q)} className="pill-action flex-shrink-0">{q}</button>
             ))}
           </div>
