@@ -15,6 +15,7 @@ import { phimBang } from "../../utils/paletteKeyboard";
 import { docLichSu, ghiLichSu, themTimKiem, themLenh } from "../../utils/commandHistory";
 import { boDau } from "../../utils/thuVienTaiLieu";
 import { openShortcutsOverlay } from "../../utils/shortcutsBus";
+import { KIND_META as TIMELINE_KIND_META } from "../../utils/knowledgeEvolution";
 
 /**
  * Command Palette toàn cục (Phase 7). Ctrl+K/⌘K mở từ BẤT KỲ trang nào trong
@@ -40,20 +41,6 @@ const DANH_SACH_LENH = [
   // trạng thái mở/đóng thứ hai (xem utils/shortcutsBus.js).
   { id: "phim-tat", nhan: "Phím tắt", icon: "Keyboard", moTa: "Xem toàn bộ phím tắt (hoặc bấm ?)" },
 ];
-
-// Feature Pack C — nhãn/icon cho một mục Dòng thời gian trong kết quả tìm kiếm.
-// Cùng nội dung với KIND_META trong ResearchTimeline.jsx (không import chéo:
-// đây là một bảng tra CHỮ hiển thị, không phải state — trùng nhãn hiển thị ở
-// hai nơi đọc CÙNG MỘT trường `history[].kind` không phải "kho dữ liệu thứ hai"
-// theo đúng kỷ luật studySelection.js đã đặt ra cho chính `history`).
-const TIMELINE_KIND_META = {
-  topic: { icon: "Tag", label: "Chủ đề" },
-  entity: { icon: "BookOpen", label: "Thực thể" },
-  summary: { icon: "ScrollText", label: "Tóm tắt" },
-  node: { icon: "Network", label: "Sơ đồ" },
-  question: { icon: "MessageCircleQuestion", label: "Câu hỏi" },
-  evidence: { icon: "Quote", label: "Bằng chứng" },
-};
 
 // Bề mặt mở nhanh trên MỘT kết quả tài liệu — đúng bốn khoá `duongDi()` thật đã
 // hỗ trợ (BE_MAT trong tiepTucHoc.js), KHÔNG thêm khoá nào mới.

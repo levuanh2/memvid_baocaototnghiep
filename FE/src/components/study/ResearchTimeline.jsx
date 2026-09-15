@@ -8,45 +8,8 @@ import { useMemo, useState } from "react";
 import { Icon } from "../ui/Icon";
 import { useStudyContext } from "../../study/useStudyContext";
 import { boDau } from "../../utils/thuVienTaiLieu";
-
-const KIND_META = {
-  topic:    { icon: "Tag",                   label: "Chủ đề" },
-  entity:   { icon: "BookOpen",              label: "Thực thể" },
-  summary:  { icon: "ScrollText",            label: "Tóm tắt" },
-  node:     { icon: "Network",               label: "Sơ đồ" },
-  question: { icon: "MessageCircleQuestion", label: "Câu hỏi" },
-  evidence: { icon: "Quote",                 label: "Bằng chứng" },
-};
-
-/** Mốc thời gian tương đối, tiếng Việt, không phụ thuộc thư viện ngoài —
- * đủ cho một phiên (session), không định hướng tới ngày/tháng. */
-function nhanThoiGian(at, now) {
-  const s = Math.max(0, Math.round((now - at) / 1000));
-  if (s < 10) return "vừa xong";
-  if (s < 60) return `${s} giây trước`;
-  const m = Math.round(s / 60);
-  if (m < 60) return `${m} phút trước`;
-  const h = Math.round(m / 60);
-  return `${h} giờ trước`;
-}
-
-/**
- * Khả năng "Jump" thật của một mục, theo ĐÚNG loại — không giả lập. Trả về
- * `{ kha_thi, ly_do }`; `ly_do` luôn có chữ khi `kha_thi` false, để nút tắt
- * vẫn giải thích được vì sao, không chỉ mờ đi im lặng.
- */
-function xetKhaNangJump(entry, { canJumpNode }) {
-  if (entry.kind === "question") return { kha_thi: true };
-  if (entry.kind === "evidence") return { kha_thi: true };
-  if (entry.kind === "node") {
-    return canJumpNode(entry.id)
-      ? { kha_thi: true }
-      : { kha_thi: false, ly_do: "Không còn trong sơ đồ đang mở (đã đổi tài liệu, sơ đồ đã dựng lại, hoặc mục này đến từ StudyMap — StudyMap không có trong khung Trò chuyện)" };
-  }
-  // topic/entity/summary: chưa có điểm nhảy thật nào trong giao diện hiện tại —
-  // nói rõ thay vì giả một hành động không làm gì.
-  return { kha_thi: false, ly_do: "Chưa có điểm để nhảy tới cho loại mục này" };
-}
+import { formatRelativeTime } from "../../utils/relativeTime";
+import { KIND_META, canJumpEntry } from "../../utils/knowledgeEvolution";
 
 function MucDongThoiGian({ entry, now, kha_thi_jump, onJump }) {
   const meta = KIND_META[entry.kind] || { icon: "Tag", label: entry.kind };
@@ -57,7 +20,7 @@ function MucDongThoiGian({ entry, now, kha_thi_jump, onJump }) {
         <div className="flex items-center gap-1.5 text-caption text-text-muted">
           <span className="font-mono uppercase">{meta.label}</span>
           <span aria-hidden="true">·</span>
-          <span>{nhanThoiGian(entry.at, now)}</span>
+          <span>{formatRelativeTime(entry.at, now)}</span>
         </div>
         <p className="text-small text-text-primary truncate" title={entry.label}>{entry.label}</p>
       </div>
@@ -151,7 +114,7 @@ export default function ResearchTimeline({ mindMapController, onJumpQuestion, on
           </div>
           <MucDongThoiGian
             entry={ganNhat} now={now}
-            kha_thi_jump={xetKhaNangJump(ganNhat, { canJumpNode })}
+            kha_thi_jump={canJumpEntry(ganNhat, { canJumpNode })}
             onJump={nhay}
           />
         </div>
@@ -193,7 +156,7 @@ export default function ResearchTimeline({ mindMapController, onJumpQuestion, on
                   <MucDongThoiGian
                     key={`${entry.kind}-${entry.id}-${entry.at}-${i}`}
                     entry={entry} now={now}
-                    kha_thi_jump={xetKhaNangJump(entry, { canJumpNode })}
+                    kha_thi_jump={canJumpEntry(entry, { canJumpNode })}
                     onJump={nhay}
                   />
                 ))}
