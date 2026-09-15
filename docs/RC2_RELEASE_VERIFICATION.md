@@ -2,6 +2,11 @@
 
 Feature development is stopped for this epic. This document answers one question: can the current tree become a release candidate — with evidence, not assumptions, and no BLOCKED result converted into a PASS.
 
+**Pre-deploy decisions required — read this before the verdict at the bottom.** Two findings in this report (P7) are release-owner decisions, not implementation gaps this pass could resolve on its own, and neither should be read as "safe by default" just because the verdict below is READY:
+
+1. **`CORS_ORIGINS` is wildcard (`*`) in production `render.yaml`.** Mitigated by bearer-token auth today, but a real, self-acknowledged (in the code's own comment) gap. **This needs an explicit go/no-go decision before an actual production deploy** — either accept the wildcard consciously for this launch, or tighten it to the real `studymap-web` origin first. It is not fixed in this pass (a shared deploy-config value change needs separate sign-off, not a unilateral edit here), and it should not be read as an accepted risk just because it's filed as a "known limitation" below.
+2. **Production's retrieval index currently allows exactly one real document** (`BE/config/production_index_allowlist.json`). Before anyone treats this deployment as feature-complete at scale (RAG chat citations, semantic search), **the release owner should explicitly confirm this is expected** for the current launch stage, not discover it after the fact.
+
 ---
 
 ## Phase 0 — Release baseline
@@ -248,8 +253,8 @@ No blindly-deleted TODOs — this audit only classified, per the epic's explicit
 - **5 BE test failures in `tests/test_index_khoa_that.py`** — fakeredis lock-acquire/release test-isolation artifact, reproduces only when that file runs alone, unrelated to any epic's feature work. Real, disclosed, not fixed this pass (root-causing a `fakeredis` test-isolation quirk is outside RC2's "no feature dev" mandate and outside the specific P0 dependency-fix scope).
 - **Live E2E verification of flows 1, 2, 7, 11, 13, 14, 15** (upload, processing, MindMap/Summary/StudyMap generation, quiz, weak-topic review) — not performed this pass. The single largest gap in this report.
 - **BE-side performance measurement (P6)** — not performed this pass.
-- **Production retrieval index is nearly empty** (1 real document, P7) — not a defect, but material to any expectation of production RAG quality today.
-- **CORS wildcard in production** (P7/P8) — self-acknowledged in code, not tightened this pass (a deploy-config value, not something to change unilaterally in a shared `render.yaml` without separate sign-off).
+- **Production retrieval index is nearly empty** (1 real document, P7) — see "Pre-deploy decisions required" at the top of this document. Requires explicit owner confirmation this is expected before the deployment is treated as feature-complete at scale, not just filed here as background context.
+- **CORS wildcard in production** (P7/P8) — see "Pre-deploy decisions required" at the top of this document. Elevated to a required go/no-go decision before an actual production deploy, per Codex's review of this report — not a "known limitation" to be read as an accepted default.
 
 ---
 
