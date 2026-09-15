@@ -4,6 +4,7 @@ import SidebarLeft from "./SidebarLeft";
 import SidebarRight from "./SidebarRight";
 import WorkspaceContainer from "./WorkspaceContainer";
 import KnowledgeInspector from "../mindmap/KnowledgeInspector";
+import ResearchTimeline from "../study/ResearchTimeline";
 import { useMindMapController } from "../../hooks/useMindMapController";
 import PanelSpine from "./PanelSpine";
 import PanelDivider from "./PanelDivider";
@@ -19,7 +20,17 @@ import { useStudyContext } from "../../study/useStudyContext";
 import { openCommandPalette } from "../../utils/commandPaletteBus";
 import { useTutorMemory } from "../../study/useTutorMemory";
 
-export default function MainLayout({ selectedSources, setSelectedSources, initialAskAbout = null }) {
+export default function MainLayout({
+  selectedSources, setSelectedSources, initialAskAbout = null,
+  // Feature Pack B (Cross Navigation) — read once as the INITIAL value only,
+  // same contract as `initialAskAbout` above (Workspace.jsx already documents
+  // why: "sau đó [state] làm chủ y như cũ", so a later click is never
+  // fought by a stale URL). A page that lands with `tab=mindmap` but no
+  // mindmap data loaded yet shows the same brief blank pane a fresh page
+  // load already can (WorkspaceContainer only mounts the MindMap pane once
+  // `hasMindmap` is true) — a pre-existing rough edge, not a new one.
+  initialWorkspaceMode = "chat", initialRightView = "evidence",
+}) {
   const [sources, setSources] = useState([]);
   const [leftOpen, setLeftOpen] = useState(false);   // chỉ dùng ở chế độ ngăn kéo (<768px)
   const [rightOpen, setRightOpen] = useState(false);
@@ -37,7 +48,7 @@ export default function MainLayout({ selectedSources, setSelectedSources, initia
   // generation/polling logic (untouched) and just FORWARDS its computed data
   // here via `onMindmapDataChange`/`onSummaryDataChange` instead of portaling
   // a modal — see SidebarRight.jsx's two small forwarding effects.
-  const [workspaceMode, setWorkspaceMode] = useState("chat");
+  const [workspaceMode, setWorkspaceMode] = useState(initialWorkspaceMode);
   const [mindmapData, setMindmapData] = useState(null);   // { data, onRegenerate, regenerating } | null
   const [summaryData, setSummaryData] = useState(null);   // summary record | null
   // Auto-switch to a newly-populated tab ONCE (null → non-null), not on every
@@ -53,6 +64,9 @@ export default function MainLayout({ selectedSources, setSelectedSources, initia
     hadSummaryRef.current = Boolean(summaryData);
   }, [summaryData]);
   const onSwitchToChat = useCallback(() => setWorkspaceMode("chat"), []);
+  // Feature Pack B — the other direction of the same switch, for Chat's own
+  // "Xem tóm tắt" button.
+  const onSwitchToSummary = useCallback(() => setWorkspaceMode("summary"), []);
 
   // ONE controller, ONE Inspector, shared by MindElixirView (via WorkspaceContainer)
   // and the KnowledgeInspector rendered directly below — selection state
@@ -138,7 +152,7 @@ export default function MainLayout({ selectedSources, setSelectedSources, initia
 
   // Gia sư AI + Lề bằng chứng dùng chung MỘT cột (hard constraint: không thêm
   // cột thứ ba) — `rightView` chọn tab nào đang hiện trong nó.
-  const [rightView, setRightView] = useState("evidence");   // "evidence" | "tutor"
+  const [rightView, setRightView] = useState(initialRightView);   // "evidence" | "tutor" | "timeline"
   // Lệnh một-lần (nonce) để "Xem sơ đồ"/"Xem tóm tắt" ở Tutor chuyển đúng tab
   // Artifacts trong SidebarRight — KHÔNG điều hướng, KHÔNG route mới (tutorActions.js
   // giải thích lý do: Workspace không có `document_id` để gọi `duongDi`).
@@ -152,6 +166,44 @@ export default function MainLayout({ selectedSources, setSelectedSources, initia
     setArtifactRequest({ tab, nonce: Date.now() });
     if (panel.drawer) setRightOpen(true); else panel.setCollapsedFor("right", false);
   }, [panel]);
+
+  // Feature Pack B (Cross Navigation) — real dead end found: while on the
+  // MindMap tab, the right column shows ONLY KnowledgeInspector (see the
+  // `workspaceMode === "mindmap"` swap below); SidebarRight, and with it the
+  // Research Timeline tab, is entirely unreachable. Everywhere else `rightView
+  // = "timeline"` already works (SidebarRight is what's showing). This is the
+  // ONE case that needs an actual overlay — a floating panel ON TOP of the
+  // Inspector, not a replacement for it (Inspector must stay mounted/visible
+  // underneath, not lose its own state).
+  const [timelineOverlayOpen, setTimelineOverlayOpen] = useState(false);
+  const openTimeline = useCallback(() => {
+    if (workspaceMode === "mindmap") { setTimelineOverlayOpen(true); return; }
+    setRightView("timeline");
+    if (panel.drawer) setRightOpen(true); else panel.setCollapsedFor("right", false);
+  }, [workspaceMode, panel]);
+  useEffect(() => {
+    if (!timelineOverlayOpen) return;
+    const onKey = (e) => { if (e.key === "Escape") setTimelineOverlayOpen(false); };
+    window.addEventListener("keydown", onKey);
+    return () => window.removeEventListener("keydown", onKey);
+  }, [timelineOverlayOpen]);
+  // Jumping to a question/evidence entry from the MindMap-mode overlay must
+  // switch workspaceMode itself, or the jump has no visible effect (the
+  // panel it lands in — Chat's composer, the Evidence tab — isn't the one on
+  // screen). Closes the overlay too: once you've jumped away from MindMap,
+  // there's nothing left for it to float over.
+  const onOverlayJumpQuestion = useCallback((text) => {
+    setWorkspaceMode("chat");
+    askDirect(text);
+    setTimelineOverlayOpen(false);
+  }, [askDirect]);
+  const onOverlayJumpEvidence = useCallback(({ stem, chunkId }) => {
+    setWorkspaceMode("chat");
+    setRightView("evidence");
+    if (panel.drawer) setRightOpen(true); else panel.setCollapsedFor("right", false);
+    onHighlight?.({ stem, chunkId });
+    setTimelineOverlayOpen(false);
+  }, [onHighlight, panel]);
 
   // Step 10 — Ctrl+/ (hoặc Cmd+/) mở Gia sư AI từ bất cứ đâu trong Workspace.
   useEffect(() => {
@@ -258,6 +310,12 @@ export default function MainLayout({ selectedSources, setSelectedSources, initia
                   title="Gia sư AI (Ctrl+/)">
             <Icon name="Sparkles" size={14} /> Gia sư AI
           </button>
+          {/* Feature Pack B — luôn có mặt, kể cả khi đang ở sơ đồ tư duy (nơi
+              cột phải bị Trình khám phá tri thức chiếm, xem openTimeline). */}
+          <button onClick={openTimeline} className="hidden md:inline-flex pill-action !text-small"
+                  title="Dòng thời gian nghiên cứu">
+            <Icon name="Clock" size={14} /> Dòng thời gian
+          </button>
           {/* Theme toggle */}
           <div className="hidden sm:flex theme-toggle" role="group" aria-label="Chế độ sáng/tối">
             <button onClick={setLight} title="Nền sáng" aria-pressed={!isDark} className={`theme-toggle-btn ${!isDark ? "theme-toggle-btn-active" : ""}`} aria-label="Nền sáng">
@@ -342,6 +400,7 @@ export default function MainLayout({ selectedSources, setSelectedSources, initia
               selectedSources, sources, onEvidence: setEvidence, highlight, onHighlight,
               onOpenLeft: () => (panel.drawer ? setLeftOpen(true) : panel.setCollapsedFor("left", false)),
               askAboutDraft,
+              hasSummary: Boolean(summaryData), onOpenSummary: onSwitchToSummary,
             }}
             mindmapData={mindmapData}
             summaryData={summaryData}
@@ -398,6 +457,48 @@ export default function MainLayout({ selectedSources, setSelectedSources, initia
                   tabs (unrelated to node selection, unaffected by this refactor). */}
               <div className={workspaceMode === "mindmap" ? "h-full" : "hidden h-full"}>
                 <KnowledgeInspector {...inspectorProps} />
+                {/* Feature Pack B — floating OVER the Inspector, not replacing
+                    it (Inspector stays mounted/visible underneath, keeps its
+                    own scroll/selection). Fixed-position slide-in, same shape
+                    as the mobile right-drawer elsewhere in this file, just
+                    available regardless of viewport width because this is
+                    the one case with no other way to reach the Timeline. */}
+                {timelineOverlayOpen && (
+                  <>
+                    <div
+                      className="fixed inset-0 z-40 bg-black/20"
+                      onClick={() => setTimelineOverlayOpen(false)}
+                      aria-hidden="true"
+                    />
+                    <div
+                      role="dialog"
+                      aria-modal="true"
+                      aria-label="Dòng thời gian nghiên cứu"
+                      className="fixed top-[58px] right-0 h-[calc(100vh-58px)] z-50 w-[326px] max-w-[90vw]
+                                 bg-surface-sidebar border-l border-border shadow-card-hover
+                                 flex flex-col"
+                    >
+                      <div className="flex items-center justify-between px-3 py-2 border-b border-border flex-shrink-0">
+                        <span className="text-caption text-text-muted">
+                          Nổi trên Trình khám phá tri thức
+                        </span>
+                        <button type="button" onClick={() => setTimelineOverlayOpen(false)}
+                                className="icon-btn w-7 h-7" autoFocus
+                                aria-label="Đóng dòng thời gian" title="Đóng (Esc)">
+                          <Icon name="X" size={14} />
+                        </button>
+                      </div>
+                      <div className="flex-1 min-h-0">
+                        <ResearchTimeline
+                          mindMapController={mindMapController}
+                          onJumpQuestion={onOverlayJumpQuestion}
+                          onJumpNode={onJumpToMindMapNode}
+                          onJumpEvidence={onOverlayJumpEvidence}
+                        />
+                      </div>
+                    </div>
+                  </>
+                )}
               </div>
               <div className={workspaceMode === "mindmap" ? "hidden h-full" : "h-full"}>
                 <SidebarRight

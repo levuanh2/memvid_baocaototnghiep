@@ -5,7 +5,7 @@
 // whoever owns both the canvas and the Inspector (WorkspaceContainer/MainLayout),
 // so both consume the SAME state instead of two copies of it.
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
-import { buildGraphIndex, relationsFor, headingPath } from "../utils/mindmapGraph";
+import { buildGraphIndex, relationsFor, headingPath, findNodeByChunk as findNodeByChunkInIndex } from "../utils/mindmapGraph";
 import { useStudyContext } from "../study/useStudyContext";
 
 export function useMindMapController(data) {
@@ -92,6 +92,14 @@ export function useMindMapController(data) {
   // canvas) correctly reports false instead of silently no-op'ing.
   const canJumpTo = useCallback((id) => sidecarRef.current.has(id), []);
 
+  // Feature Pack B (Cross Navigation) — Chat -> MindMap node. Delegates to
+  // the pure `findNodeByChunk` in mindmapGraph.js (unit-tested there, same
+  // module `relationsFor`/`headingPath` already live in), over the SAME
+  // `graphIndexRef` this controller already builds — no second data
+  // structure, no sidecar dependency.
+  const findNodeByChunk = useCallback(
+    (chunkId) => findNodeByChunkInIndex(graphIndexRef.current, chunkId), []);
+
   const goBack = useCallback(() => {
     const h = historyRef.current;
     if (h.index <= 0) return;
@@ -147,7 +155,7 @@ export function useMindMapController(data) {
     // consumed by MindElixirView (canvas):
     registerMindInstance, onNodeSelected, sidecarRef,
     // consumed by KnowledgeInspector (and MindElixirView, for its own toolbar bits if needed):
-    selected, relations, breadcrumb, jumpTo, canJumpTo, goBack, goForward, togglePin,
+    selected, relations, breadcrumb, jumpTo, canJumpTo, findNodeByChunk, goBack, goForward, togglePin,
     nav: { canBack, canForward, onBack: goBack, onForward: goForward, recent: recentItems, pinned: pinnedItems, isPinned, onTogglePin: togglePin },
   };
 }

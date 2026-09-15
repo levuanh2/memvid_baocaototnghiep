@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
-import { useParams } from "react-router-dom";
+import { Link, useParams } from "react-router-dom";
 import Tree from "react-d3-tree";
 import StudyShell, { EmptyState } from "../../components/study/StudyShell";
 import { Icon } from "../../components/ui/Icon";
@@ -58,6 +58,19 @@ export default function StudyMapView() {
   // (đã fetch qua `getDocument`) mang cả hai, `source_stem` là cầu nối chung.
   const { selectDocument, selectNode } = useStudyContext();
   const [doc, setDoc] = useState(null);
+  // Feature Pack B (Cross Navigation) — `doc.source_stem` is the SAME bridge
+  // value this component already sends into StudyContext on load (see
+  // `selectDocument(d?.source_stem, ...)` below); Workspace.jsx already
+  // supports `?source=` as an initializer (Library's own "Hỏi AI" button
+  // uses it). `tab=mindmap&right=timeline` reuses the same one-param-per-
+  // initial-value convention, extended by this pass, so "back to source"
+  // actually lands where the user asked for, not just on the default Chat
+  // pane with the right document merely selected in the background.
+  const linkVeNguon = useMemo(() => {
+    if (!doc?.source_stem) return null;
+    const qs = new URLSearchParams({ source: doc.source_stem, tab: "mindmap", right: "timeline" });
+    return `/app?${qs.toString()}`;
+  }, [doc?.source_stem]);
   const [map, setMap] = useState(null);
   const [chunks, setChunks] = useState(new Map());
   const [selected, setSelected] = useState(null);
@@ -441,16 +454,24 @@ export default function StudyMapView() {
       onRetry={load}
       width="max-w-[1400px]"
       actions={
-        map && (
-          <button
-            type="button"
-            className="btn-secondary text-small inline-flex items-center gap-1.5"
-            disabled={starting || job.running}
-            onClick={() => build({ force: true })}
-          >
-            {starting || job.running ? <Spinner size={13} /> : <Icon name="RotateCcw" size={14} />} Dựng lại
-          </button>
-        )
+        <>
+          {linkVeNguon && (
+            <Link to={linkVeNguon} className="btn-secondary text-small inline-flex items-center gap-1.5"
+                  title="Quay lại tài liệu trong Phòng đọc — mở sẵn sơ đồ tư duy và dòng thời gian">
+              <Icon name="ArrowLeft" size={14} /> Về nguồn
+            </Link>
+          )}
+          {map && (
+            <button
+              type="button"
+              className="btn-secondary text-small inline-flex items-center gap-1.5"
+              disabled={starting || job.running}
+              onClick={() => build({ force: true })}
+            >
+              {starting || job.running ? <Spinner size={13} /> : <Icon name="RotateCcw" size={14} />} Dựng lại
+            </button>
+          )}
+        </>
       }
     >
       {job.jobId && job.running && (

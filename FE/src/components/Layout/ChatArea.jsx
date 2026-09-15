@@ -13,7 +13,7 @@ import { shouldFocusComposer, shouldRefocusComposer, shouldFocusOnSlash } from "
 import { Icon } from "../ui/Icon";
 import { PROSE } from "../ui/Markdown";
 import { useStudyContext } from "../../study/useStudyContext";
-import { nodeLabel, processCitations, parseCiteHref, normStem } from "../../utils/evidence";
+import { nodeLabel, processCitations, parseCiteHref, normStem, citeKey } from "../../utils/evidence";
 import { pickImageFromClipboard, downscaleImage, transcribeImage, getVisionStatus, buildQuestionWithImage, IMAGE_TYPES } from "../../utils/chatImage";
 import { QUERY_SSE_ERR_FALLBACK, ensureErrMsg, pickQueryDisplayText, sseErrorToMessage } from "../../utils/queryText";
 
@@ -103,7 +103,13 @@ function AnswerProse({ content, mdComponents, dropCap = false }) {
   );
 }
 
-export default function ChatArea({ selectedSources, sources = [], onEvidence, highlight, onHighlight, onOpenLeft, askAboutDraft }) {
+export default function ChatArea({
+  selectedSources, sources = [], onEvidence, highlight, onHighlight, onOpenLeft, askAboutDraft,
+  // Feature Pack B (Cross Navigation) — Chat -> Summary. `hasSummary` gates a
+  // real link, never a dead one; `onOpenSummary` reuses MainLayout's existing
+  // workspaceMode switch (same shape as the pre-existing `onSwitchToChat`).
+  hasSummary = false, onOpenSummary,
+}) {
   // Feature Pack A (Research Timeline) — ChatArea never touched Study Context
   // before this; it's the one surface where the user's two most-timeline-
   // worthy actions (ask a question, open a citation) actually happen.
@@ -142,11 +148,14 @@ export default function ChatArea({ selectedSources, sources = [], onEvidence, hi
   // re-parse toàn bộ text mỗi token — xem utils/streamPreview.js).
   const previewThrottleRef = useRef(null);
 
-  // `chunkId` composite (`stem::chunkId`) matches the key SidebarRight's own
-  // evidence list already builds for the same chunk — one id shape for the
-  // same real thing, not a second encoding invented for the timeline alone.
+  // Feature Pack B — was a hand-rolled `${normStem(stem)}::${chunkId}`
+  // template literal, duplicating `citeKey` (utils/evidence.js), which
+  // already exists and is already this app's one canonical id shape for a
+  // citation (used internally by `processCitations`). Now the actual same
+  // function, not a second formula that happened to produce the same string
+  // — SidebarRight's evidence-frame click (same pack) uses the same import.
   const handleEvidenceOpen = useCallback((cite) => {
-    selectEvidence(`${normStem(cite.stem)}::${cite.chunkId}`, {
+    selectEvidence(citeKey(cite.stem, cite.chunkId), {
       source: "chat", label: `${cite.stem} · đoạn ${cite.chunkId}`,
     });
   }, [selectEvidence]);
@@ -678,6 +687,18 @@ export default function ChatArea({ selectedSources, sources = [], onEvidence, hi
           </span>
         )}
         <div className="flex-1" />
+        {/* Feature Pack B (Cross Navigation) — only when a summary genuinely
+            exists (never a link to a surface that isn't there yet); reuses
+            the exact same tab-switch MainLayout already exposes for "back to
+            chat" from elsewhere, just the other direction. */}
+        {hasSummary && (
+          <button
+            onClick={onOpenSummary}
+            className="pill-action !py-1 !text-small"
+            title="Xem bản tóm tắt của tài liệu đang chọn">
+            <Icon name="ScrollText" size={13} /> Xem tóm tắt
+          </button>
+        )}
         <button
           onClick={handleNewChat} disabled={loading || Boolean(pendingReview)}
           className="pill-action !py-1 !text-small disabled:opacity-40"

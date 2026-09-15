@@ -41,6 +41,23 @@ export function relationsFor(index, nodeId) {
   return { parent: summarize(parent), children, siblings, prev, next };
 }
 
+// Feature Pack B (Cross Navigation) — Chat -> MindMap node. Reads the SAME
+// per-node `chunkRefs` `normalizeMindmapRecord` already attaches (see
+// mindmapNormalize.js) — no second data source, no sidecar dependency, one
+// more pure reader over the exact index `relationsFor`/`headingPath` already
+// use. Several nodes citing the same chunk is real and possible; returns the
+// FIRST match in `byId`'s own iteration order — deterministic (Maps preserve
+// insertion order, `byId` is built from `norm.nodes` in that same order
+// every load), not "whichever happens to match."
+export function findNodeByChunk(index, chunkId) {
+  const target = String(chunkId ?? "");
+  if (!target) return null;
+  for (const [id, node] of index.byId) {
+    if ((node.chunkRefs || []).some((c) => String(c) === target)) return id;
+  }
+  return null;
+}
+
 // Task 6 — "current heading": ancestor chain from root down to (excluding)
 // this node, for a breadcrumb. Root itself excluded (it's the document, not
 // a heading).

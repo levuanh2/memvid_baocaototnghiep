@@ -1,5 +1,5 @@
 import { describe, it, expect } from "vitest";
-import { buildGraphIndex, relationsFor, headingPath } from "./mindmapGraph";
+import { buildGraphIndex, relationsFor, headingPath, findNodeByChunk } from "./mindmapGraph";
 
 const REC = {
   schema_version: 2, title: "T",
@@ -7,8 +7,8 @@ const REC = {
     { id: "n0", parent: null, kind: "root", title: "T", order: 0 },
     { id: "n1", parent: "n0", kind: "section", title: "1. Mở đầu", number: "1", order: 0 },
     { id: "n2", parent: "n0", kind: "section", title: "2. Phương pháp", number: "2", order: 1 },
-    { id: "n3", parent: "n1", kind: "idea", title: "Bối cảnh", order: 0 },
-    { id: "n4", parent: "n1", kind: "idea", title: "Mục tiêu", order: 1 },
+    { id: "n3", parent: "n1", kind: "idea", title: "Bối cảnh", order: 0, chunk_refs: ["c1", "c2"] },
+    { id: "n4", parent: "n1", kind: "idea", title: "Mục tiêu", order: 1, chunk_refs: ["c2", "c3"] },
   ],
   relations: [], generator: {},
 };
@@ -46,5 +46,37 @@ describe("mindmapGraph", () => {
   it("buildGraphIndex tolerates garbage records (reuses normalizeMindmapRecord's own contract)", () => {
     const idx = buildGraphIndex(null);
     expect(relationsFor(idx, "anything")).toEqual({ parent: null, children: [], siblings: [], prev: null, next: null });
+  });
+
+  // Feature Pack B (Cross Navigation) — Chat -> MindMap node.
+  describe("findNodeByChunk", () => {
+    it("finds the one node citing a chunk", () => {
+      const idx = buildGraphIndex(REC);
+      expect(findNodeByChunk(idx, "c1")).toBe("n3");
+    });
+
+    it("two nodes citing the same chunk: deterministic first match, not either-or", () => {
+      const idx = buildGraphIndex(REC);
+      // c2 is on both n3 and n4 — n3 comes first in `norm.nodes` order.
+      expect(findNodeByChunk(idx, "c2")).toBe("n3");
+    });
+
+    it("no node cites this chunk → null, not a guess", () => {
+      const idx = buildGraphIndex(REC);
+      expect(findNodeByChunk(idx, "not-a-real-chunk")).toBeNull();
+    });
+
+    it("numeric vs string chunk id still matches (compares as strings)", () => {
+      const idx = buildGraphIndex(REC);
+      expect(findNodeByChunk(idx, 1)).toBeNull();   // "1" was never a chunk id here
+      expect(findNodeByChunk(idx, "c1")).toBe("n3");
+    });
+
+    it("empty/missing chunkId never matches anything", () => {
+      const idx = buildGraphIndex(REC);
+      expect(findNodeByChunk(idx, "")).toBeNull();
+      expect(findNodeByChunk(idx, null)).toBeNull();
+      expect(findNodeByChunk(idx, undefined)).toBeNull();
+    });
   });
 });

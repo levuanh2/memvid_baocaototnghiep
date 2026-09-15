@@ -16,10 +16,11 @@ import { toast } from "../ui/Toaster";
 import { Icon } from "../ui/Icon";
 import Disclosure from "../ui/Disclosure";
 import Spinner from "../ui/Spinner";
-import { normStem } from "../../utils/evidence";
+import { normStem, citeKey } from "../../utils/evidence";
 import MdSnippet from "../ui/Markdown";
 import TutorPanel from "../study/TutorPanel";
 import ResearchTimeline from "../study/ResearchTimeline";
+import { useStudyContext } from "../../study/useStudyContext";
 
 const IDLE_JOB_UI = { running: false, label: "", progress: null, stalled: false };
 
@@ -87,6 +88,7 @@ export default function SidebarRight({
   // WorkspaceContainer can dock it into the central region instead.
   onMindmapDataChange, onSummaryDataChange, onSwitchToChat,
 }) {
+  const { selectEvidence } = useStudyContext();
   const [artifactTab, setArtifactTab] = useState("mindmap");
   // "Ghim"/"Tách nổi" CHỈ đổi kiểu hiển thị của tab Gia sư AI TRONG cột này —
   // không tách sang cây DOM khác, không đụng bề rộng cột (đó là việc của
@@ -712,15 +714,34 @@ export default function SidebarRight({
               {chunks.map((c, i) => {
                 const stem = c.stem || "";
                 const chunkId = c.chunk_id ?? "";
-                const key = `${normStem(stem)}::${String(chunkId)}`;
+                // Feature Pack B — same canonical id (`citeKey`, utils/evidence.js)
+                // ChatArea's citation-click now uses too, not a second formula.
+                const key = citeKey(stem, chunkId);
                 const active = highlight && normStem(highlight.stem) === normStem(stem) && String(highlight.chunkId) === String(chunkId);
+                // Feature Pack B (Cross Navigation) — this list is a SECOND
+                // rendering of the same citation data the prose's inline chips
+                // already show; the chips log to the Timeline on click (Pack
+                // A), this list never did. Same id shape (`key`, already
+                // computed above), same selectEvidence contract, click only
+                // (hover keeps its existing, unlogged onHighlight — unchanged).
+                const openEvidence = () => selectEvidence(key, { source: "chat", label: `${stem} · đoạn ${chunkId}` });
+                // Chat -> MindMap node: a PURE lookup over data the mindmap
+                // already built at load time (each node's sidecar already
+                // lists its own chunkRefs) — no new data, no API call. `null`
+                // when no node cites this exact chunk; the button below is
+                // simply absent then, never a disabled fake.
+                const mindMapNodeId = mindMapController?.findNodeByChunk?.(chunkId);
                 return (
                   <div
                     key={`${key}-${i}`}
                     ref={(el) => { if (el) frameRefs.current.set(key, el); else frameRefs.current.delete(key); }}
-                    className={`evidence-frame ${active ? "evidence-frame--active" : ""} p-3 cursor-default`}
+                    className={`evidence-frame ${active ? "evidence-frame--active" : ""} p-3 cursor-pointer`}
+                    role="button"
+                    tabIndex={0}
                     onMouseEnter={() => onHighlight?.({ stem, chunkId })}
                     onMouseLeave={() => onHighlight?.(null)}
+                    onClick={openEvidence}
+                    onKeyDown={(e) => { if (e.key === "Enter" || e.key === " ") { e.preventDefault(); openEvidence(); } }}
                   >
                     <div className="flex items-center gap-2 mb-1.5">
                       <span className="w-5 h-5 rounded-[4px] inline-flex items-center justify-center text-caption font-mono font-semibold flex-shrink-0"
@@ -730,6 +751,17 @@ export default function SidebarRight({
                       <span className="coord truncate flex-1" title={stem}>
                         {stem || "nguồn"}{chunkId !== "" ? ` · đoạn ${chunkId}` : ""}
                       </span>
+                      {mindMapNodeId && (
+                        <button
+                          type="button"
+                          onClick={(e) => { e.stopPropagation(); onJumpToMindMapNode?.(mindMapNodeId); }}
+                          className="icon-btn w-6 h-6 flex-shrink-0"
+                          title="Xem nhánh này trong sơ đồ tư duy"
+                          aria-label="Xem nhánh này trong sơ đồ tư duy"
+                        >
+                          <Icon name="Network" size={12} />
+                        </button>
+                      )}
                     </div>
                     {c.snippet && (
                       <MdSnippet text={c.snippet}
