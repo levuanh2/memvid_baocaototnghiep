@@ -29,7 +29,7 @@ export default function ShortcutsOverlay({ open, onClose }) {
                   <span className="text-small text-text-secondary">
                     {s.label}
                     {s.isNew && (
-                      <span className="ml-1.5 text-caption font-mono uppercase text-forest">Mới</span>
+                      <span className="ml-1.5 text-caption font-mono uppercase text-accent">Mới</span>
                     )}
                   </span>
                   <kbd className="font-mono text-caption text-text-muted border border-border rounded px-1.5 py-0.5 whitespace-nowrap flex-shrink-0">

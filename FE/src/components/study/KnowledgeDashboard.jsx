@@ -236,7 +236,7 @@ export default function KnowledgeDashboard({
                       <div className="flex flex-col gap-1">
                         {compareResult.shared.slice(0, 12).map((c) => (
                           <div key={`${c.kind}::${c.name}`} className="flex items-center gap-1.5 text-small">
-                            <Icon name={c.kind === "topic" ? "Tag" : "Sparkles"} size={11} className="shrink-0 text-forest" />
+                            <Icon name={c.kind === "topic" ? "Tag" : "Sparkles"} size={11} className="shrink-0 text-accent" />
                             <span className="text-text-primary truncate flex-1">{c.name}</span>
                             <span className="text-caption text-text-muted shrink-0" title={c.docIds.map((id) => docNameById.get(id)).join(", ")}>
                               {c.docIds.length} tài liệu
@@ -294,7 +294,7 @@ export default function KnowledgeDashboard({
             )}
             {onOpenTimeline && (
               <button type="button" onClick={onOpenTimeline}
-                      className="mt-1.5 text-caption font-mono text-forest hover:underline">
+                      className="mt-1.5 text-caption font-mono text-accent hover:underline">
                 Xem toàn bộ dòng thời gian →
               </button>
             )}

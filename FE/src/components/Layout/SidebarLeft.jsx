@@ -257,10 +257,10 @@ export default function SidebarLeft({ selectedSources, setSelectedSources, onSou
       <div className="px-4 pt-4 pb-3 border-b border-border flex items-center justify-between flex-shrink-0">
         <div className="min-w-0">
           <div className="text-small font-semibold text-text-primary flex items-center gap-1.5">
-            <Icon name="Library" size={14} className="text-forest" /> Thư mục nguồn
+            <Icon name="Library" size={14} className="text-accent" /> Thư mục nguồn
           </div>
           <div className="text-caption text-text-muted mt-1 font-mono">
-            {sources.length} tài liệu · <span className="text-forest">{selectedSources.length} đang chọn</span>
+            {sources.length} tài liệu · <span className="text-accent">{selectedSources.length} đang chọn</span>
           </div>
         </div>
         {/* Khổ hẹp: đóng ngăn kéo. Khổ rộng: thu cột về gáy sách. */}
@@ -314,7 +314,7 @@ export default function SidebarLeft({ selectedSources, setSelectedSources, onSou
             when absent — no orphaned focus target. */}
         {readySources.length > 1 && (
           <label className="flex items-center gap-2 cursor-pointer px-1 py-0.5">
-            <input type="checkbox" checked={allSelected} onChange={(e) => handleSelectAll(e.target.checked)} className="w-3.5 h-3.5 accent-forest cursor-pointer rounded" />
+            <input type="checkbox" checked={allSelected} onChange={(e) => handleSelectAll(e.target.checked)} className="w-3.5 h-3.5 accent-accent cursor-pointer rounded" />
             <span className="text-small text-text-secondary font-medium">Chọn tất cả tài liệu sẵn sàng</span>
           </label>
         )}
@@ -386,9 +386,9 @@ export default function SidebarLeft({ selectedSources, setSelectedSources, onSou
                   checked={isSelected}
                   onChange={(e) => { e.stopPropagation(); toggleSelect(src); }}
                   disabled={!checkboxEnabled}
-                  className="mt-0.5 w-3.5 h-3.5 accent-forest flex-shrink-0 cursor-pointer"
+                  className="mt-0.5 w-3.5 h-3.5 accent-accent flex-shrink-0 cursor-pointer"
                 />
-                <Icon name="FileText" size={14} className={`flex-shrink-0 mt-0.5 ${isSelected ? "text-forest" : "text-text-muted"}`} />
+                <Icon name="FileText" size={14} className={`flex-shrink-0 mt-0.5 ${isSelected ? "text-accent" : "text-text-muted"}`} />
 
                 <div className="flex-1 min-w-0">
                   <div className="flex items-center gap-1.5">

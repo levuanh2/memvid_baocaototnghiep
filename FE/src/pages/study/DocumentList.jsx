@@ -532,7 +532,7 @@ export default function DocumentList() {
                     </div>
                     {mucLoc.map(([khoa, nhan]) => (
                       <label key={khoa} className="flex items-center gap-2 py-[3px] cursor-pointer">
-                        <input type="checkbox" className="w-3.5 h-3.5 accent-forest rounded"
+                        <input type="checkbox" className="w-3.5 h-3.5 accent-accent rounded"
                                checked={boLoc.includes(khoa)}
                                onChange={(e) => setBoLoc((prev) => e.target.checked
                                  ? [...prev, khoa] : prev.filter((k) => k !== khoa))} />
@@ -543,7 +543,7 @@ export default function DocumentList() {
                 ))}
                 {boLoc.length > 0 && (
                   <button type="button" onClick={() => setBoLoc([])}
-                          className="mt-1 text-small text-forest">Xoá bộ lọc</button>
+                          className="mt-1 text-small text-accent">Xoá bộ lọc</button>
                 )}
               </div>
             </>
@@ -563,7 +563,7 @@ export default function DocumentList() {
         <label className="flex items-center gap-2 cursor-pointer px-1">
           <input type="checkbox" checked={hienLuuTru}
                  onChange={(e) => setHienLuuTru(e.target.checked)}
-                 className="w-3.5 h-3.5 accent-forest rounded" />
+                 className="w-3.5 h-3.5 accent-accent rounded" />
           <span className="text-small text-text-secondary">Hiện đã lưu trữ</span>
         </label>
 
@@ -574,7 +574,7 @@ export default function DocumentList() {
               checked={daChonHet(daChon, mucHienThi.tatCa)}
               onChange={(e) => setDaChon(e.target.checked
                 ? chonTatCa(mucHienThi.tatCa) : xoaChon())}
-              className="w-3.5 h-3.5 accent-forest rounded"
+              className="w-3.5 h-3.5 accent-accent rounded"
             />
             {/* Nói rõ phạm vi: "tất cả" ở đây là những gì ĐANG hiện, không phải cả
                 thư viện — chọn 300 tài liệu đang ẩn rồi xoá là mất dữ liệu. */}

@@ -150,7 +150,7 @@ export function Clamp({ children, lines = 6 }) {
           type="button"
           onClick={() => setOpen((v) => !v)}
           aria-expanded={open}
-          className="mt-1 text-caption font-medium text-forest hover:underline"
+          className="mt-1 text-caption font-medium text-accent hover:underline"
         >
           {open ? "Thu gọn" : "Xem thêm"}
         </button>
@@ -270,7 +270,7 @@ export const EvidenceCard = memo(function EvidenceCard({ entry, index, onAskAbou
           {typeof onAskAbout === "function" && (
             <button
               onClick={() => onAskAbout(entry.text)}
-              className="mt-2 inline-flex items-center gap-1.5 text-caption font-medium text-forest hover:underline"
+              className="mt-2 inline-flex items-center gap-1.5 text-caption font-medium text-accent hover:underline"
             >
               <Icon name="MessageCircleQuestion" size={12} /> Hỏi về đoạn này
             </button>

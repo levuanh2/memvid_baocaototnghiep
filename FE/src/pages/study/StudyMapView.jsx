@@ -566,7 +566,7 @@ export default function StudyMapView() {
 
           {!trinhChieu && !selected && (
             <div className="surface-card !p-2.5 mb-3 inline-flex items-center gap-2 text-small text-text-secondary">
-              <Icon name="MousePointerClick" size={14} className="text-forest flex-shrink-0" />
+              <Icon name="MousePointerClick" size={14} className="text-accent flex-shrink-0" />
               Bắt đầu từ đây — bấm vào nút gốc (node lớn nhất) để xem chi tiết và mở nhánh.
             </div>
           )}
