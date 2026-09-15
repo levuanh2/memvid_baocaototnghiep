@@ -19,6 +19,7 @@ import Spinner from "../ui/Spinner";
 import { normStem } from "../../utils/evidence";
 import MdSnippet from "../ui/Markdown";
 import TutorPanel from "../study/TutorPanel";
+import ResearchTimeline from "../study/ResearchTimeline";
 
 const IDLE_JOB_UI = { running: false, label: "", progress: null, stalled: false };
 
@@ -75,6 +76,11 @@ export default function SidebarRight({
   // biết tab nào đang mở); `artifactRequest` là lệnh một-lần (nonce) để "Xem
   // sơ đồ"/"Xem tóm tắt" ở Tutor chuyển đúng tab Artifacts bên dưới.
   rightView = "evidence", onRightViewChange, artifactRequest, askDirect, openArtifact, tutorMemory,
+  // Feature Pack A — Research Timeline is a THIRD tab in this same column
+  // (still one column, per the hard constraint above), so it reuses the
+  // exact same controller/callbacks the other two tabs already receive
+  // rather than opening a second wiring channel for "jump to X".
+  mindMapController, onJumpToMindMapNode,
   // Workspace architecture (approved audit) — MindMap/Summary no longer render
   // as modals FROM HERE; this component keeps 100% of its generation/polling
   // logic and just forwards the computed data upward so MainLayout/
@@ -647,6 +653,15 @@ export default function SidebarRight({
                   aria-pressed={rightView === "tutor"}>
             <Icon name="Sparkles" size={13} /> Gia sư AI
           </button>
+          {/* Feature Pack A — peer of the two tabs above, same pill-tab weight
+              and aria-pressed semantics (this is a top-level view switch, not
+              a sub-section — unlike the demoted pill-tab--sub artifact tabs
+              inside the Evidence view below). */}
+          <button type="button" onClick={() => onRightViewChange?.("timeline")}
+                  className={`pill-tab !px-2.5 !py-1 ${rightView === "timeline" ? "pill-tab-active" : ""}`}
+                  aria-pressed={rightView === "timeline"}>
+            <Icon name="Clock" size={13} /> Dòng thời gian
+          </button>
         </div>
         <div className="flex items-center gap-1 flex-shrink-0">
           {/* Ghim/Tách nổi — chỉ có ý nghĩa trên màn rộng, nơi cột này có chỗ
@@ -674,6 +689,16 @@ export default function SidebarRight({
         <div className={`flex-1 min-h-0 overflow-y-auto co-the-cuon-them ${tutorFloating ? "md:m-2.5 md:rounded-[12px] md:shadow-card-hover md:border md:border-border" : ""}`}>
           <TutorPanel askDirect={askDirect} openArtifact={openArtifact} memory={tutorMemory} />
         </div>
+      ) : rightView === "timeline" ? (
+        <ResearchTimeline
+          mindMapController={mindMapController}
+          onJumpQuestion={askDirect}
+          onJumpNode={onJumpToMindMapNode}
+          onJumpEvidence={({ stem, chunkId }) => {
+            onRightViewChange?.("evidence");
+            onHighlight?.({ stem, chunkId });
+          }}
+        />
       ) : (
       <>
       {/* ── EVIDENCE MARGIN ── */}
@@ -750,7 +775,7 @@ export default function SidebarRight({
               <button
                 key={a.key}
                 onClick={() => setArtifactTab(a.key)}
-                className={`pill-tab !px-2.5 !py-1 ${artifactTab === a.key ? "pill-tab-active" : ""}`}
+                className={`pill-tab--sub ${artifactTab === a.key ? "pill-tab-active" : ""}`}
                 aria-pressed={artifactTab === a.key}
               >
                 <Icon name={a.icon} size={13} /> {a.label}

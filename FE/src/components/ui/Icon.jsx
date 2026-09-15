@@ -4,21 +4,21 @@
 // registry liệt kê đủ. Thêm icon mới → thêm import + 1 dòng vào ICONS
 // (tên lạ → warn DEV + render null, y hệt hành vi cũ với typo).
 import {
-  AlertCircle, Archive, ArchiveRestore, ArrowLeft, ArrowRight, BadgeCheck, Ban, BookOpen,
+  AlertCircle, AlignJustify, Archive, ArchiveRestore, ArrowLeft, ArrowRight, BadgeCheck, Ban, BookOpen,
   Check, ChevronDown, CircleDashed, Clock, Download, Eraser, EyeOff, Filter,
   FileStack, FileText, FolderOpen, HelpCircle, Image, ImagePlus, Info, KeyRound, Library, LogOut, Maximize, Menu,
   MessageCircleQuestion, MessageSquare, MessageSquareText, MessagesSquare, Moon,
-  MoreVertical, Network, PanelRight, Pencil, Plus, Quote, RotateCcw, Scan, ScrollText,
+  MoreVertical, MousePointerClick, Network, PanelRight, Pencil, Plus, Quote, RotateCcw, Rows3, Scan, ScrollText,
   Search, Send, Spline, Square, Sun, Trash2, TrendingDown, TriangleAlert, Unlink, Upload, UserRound, X,
   Sparkles, Star, Tag, Pin, Zap, ZoomIn, ZoomOut,
 } from "lucide-react";
 
 const ICONS = {
-  AlertCircle, Archive, ArchiveRestore, ArrowLeft, ArrowRight, BadgeCheck, Ban, BookOpen,
+  AlertCircle, AlignJustify, Archive, ArchiveRestore, ArrowLeft, ArrowRight, BadgeCheck, Ban, BookOpen,
   Check, ChevronDown, CircleDashed, Clock, Download, Eraser, EyeOff, Filter,
   FileStack, FileText, FolderOpen, HelpCircle, Image, ImagePlus, Info, KeyRound, Library, LogOut, Maximize, Menu,
   MessageCircleQuestion, MessageSquare, MessageSquareText, MessagesSquare, Moon,
-  MoreVertical, Network, PanelRight, Pencil, Plus, Quote, RotateCcw, Scan, ScrollText,
+  MoreVertical, MousePointerClick, Network, PanelRight, Pencil, Plus, Quote, RotateCcw, Rows3, Scan, ScrollText,
   Search, Send, Spline, Square, Sun, Trash2, TrendingDown, TriangleAlert, Unlink, Upload, UserRound, X,
   Sparkles, Star, Tag, Pin, Zap, ZoomIn, ZoomOut,
 };

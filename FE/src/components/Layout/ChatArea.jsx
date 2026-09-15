@@ -11,47 +11,63 @@ import { getToken } from "../../auth/tokenStore";
 import { createPreviewThrottle } from "../../utils/streamPreview";
 import { shouldFocusComposer, shouldRefocusComposer, shouldFocusOnSlash } from "../../utils/chatFocus";
 import { Icon } from "../ui/Icon";
+import { PROSE } from "../ui/Markdown";
+import { useStudyContext } from "../../study/useStudyContext";
 import { nodeLabel, processCitations, parseCiteHref, normStem } from "../../utils/evidence";
 import { pickImageFromClipboard, downscaleImage, transcribeImage, getVisionStatus, buildQuestionWithImage, IMAGE_TYPES } from "../../utils/chatImage";
 import { QUERY_SSE_ERR_FALLBACK, ensureErrMsg, pickQueryDisplayText, sseErrorToMessage } from "../../utils/queryText";
 
 // ── Quick question chips (fill the composer; functional, not decorative) ──
-const SUGGESTIONS = [
+// Generic fallback — used only when no source is selected yet (nothing to name).
+const SUGGESTIONS_GENERIC = [
   "Các ý chính của tài liệu là gì?",
   "Tóm tắt nội dung chính.",
   "Giải thích khái niệm quan trọng nhất.",
 ];
 
+// Product Experience Redesign, Question stage — JTBD + Priming (Growth.Design):
+// a chip that already names the real selected document primes "ask about THIS"
+// instead of a generic prompt the user has to mentally re-target. Real filenames
+// only — never fabricated titles, honest per Hallmark's no-invented-content rule.
+function buildSuggestions(selectedSources, sources) {
+  const stems = Array.isArray(selectedSources) ? selectedSources : [];
+  if (!stems.length) return SUGGESTIONS_GENERIC;
+  const names = stems
+    .map((stem) => sources.find((s) => (s.video_stem || s.video) === stem)?.filename)
+    .filter(Boolean);
+  if (!names.length) return SUGGESTIONS_GENERIC;
+  const label = names.length > 1 ? `${names.length} tài liệu đã chọn` : names[0];
+  return [
+    `Tóm tắt ${label}.`,
+    `Ý chính của ${label} là gì?`,
+    `Khái niệm nào trong ${label} khó hiểu nhất?`,
+  ];
+}
+
 // ── Markdown components for the answer prose ──────────
-// `a` handles citation chips ([n](#cite:stem:chunkId)); everything else is
-// styled for serif reading.
-function makeMdComponents({ highlight, onHighlight }) {
+// Frontend V3 (Reading Experience, §1) — built on the shared PROSE base
+// (ui/Markdown.jsx) instead of a near-duplicate set of p/ul/ol/blockquote/
+// table renderers. This is a real, cited fix, not a style refresh: PROSE's
+// own comments document that ChatArea's old blockquote carried a decorative
+// `italic` on the whole block — exactly the "generic AI redesign" tell
+// Sprint G already found and removed from every OTHER prose surface
+// (SummaryPane). Only `a` genuinely needs to differ here (citation chips,
+// [n](#cite:stem:chunkId)); everything else now renders through the same
+// path the rest of the app already uses ("một đường render").
+// Feature Pack A (Research Timeline) — `onEvidenceOpen` fires ONLY from a
+// deliberate click/keypress, never from hover. Hover already drives
+// `onHighlight` (transient, no record kept); logging that too would flood
+// the timeline with every citation the cursor happened to pass over, not
+// what the user actually opened (reviewed and agreed: evidence logs on
+// click only).
+function makeMdComponents({ highlight, onHighlight, onEvidenceOpen }) {
   return {
-    p: ({ node, ...p }) => <p className="mb-2.5 last:mb-0 text-body-lg text-text-primary" {...p} />,
-    code: ({ node, inline, children, ...props }) =>
-      inline ? (
-        <code className="bg-surface-elevated border border-border px-1.5 py-0.5 rounded text-small font-mono text-text-secondary" {...props}>{children}</code>
-      ) : (
-        <pre className="bg-surface-elevated border border-border rounded-[7px] p-3 overflow-x-auto my-2.5">
-          <code className="text-small font-mono text-text-secondary" {...props}>{children}</code>
-        </pre>
-      ),
-    ul: ({ node, ...p }) => <ul className="pl-5 my-2.5 list-disc marker:text-slate text-body-lg text-text-primary" {...p} />,
-    ol: ({ node, ...p }) => <ol className="pl-5 my-2.5 list-decimal marker:text-slate text-body-lg text-text-primary" {...p} />,
-    li: ({ node, ...p }) => <li className="mb-1.5" {...p} />,
-    strong: ({ node, ...p }) => <strong className="text-text-primary font-semibold" {...p} />,
-    em: ({ node, ...p }) => <em className="italic" {...p} />,
-    h1: ({ node, ...p }) => <h1 className="font-display text-h3 font-semibold my-3 text-text-primary" {...p} />,
-    h2: ({ node, ...p }) => <h2 className="font-display text-title font-semibold my-2.5 text-text-primary" {...p} />,
-    h3: ({ node, ...p }) => <h3 className="font-display text-body-lg font-semibold my-2 text-text-secondary" {...p} />,
-    blockquote: ({ node, ...p }) => <blockquote className="border-l-2 border-brand/50 pl-3.5 my-2.5 text-text-secondary italic" {...p} />,
-    table: ({ node, ...p }) => <div className="overflow-x-auto my-2.5"><table className="w-full text-small border-collapse font-body" {...p} /></div>,
-    th: ({ node, ...p }) => <th className="bg-surface-elevated px-2.5 py-1.5 text-left text-text-primary border border-border font-semibold" {...p} />,
-    td: ({ node, ...p }) => <td className="px-2.5 py-1.5 text-text-secondary border border-border" {...p} />,
+    ...PROSE,
     a: ({ node, href, children, ...props }) => {
       const cite = parseCiteHref(href);
       if (cite) {
         const active = highlight && normStem(highlight.stem) === normStem(cite.stem) && String(highlight.chunkId) === String(cite.chunkId);
+        const open = () => { onHighlight?.(cite); onEvidenceOpen?.(cite); };
         return (
           <sup
             className={`cite-chip ${active ? "cite-chip--active" : ""}`}
@@ -60,8 +76,8 @@ function makeMdComponents({ highlight, onHighlight }) {
             title={`Nguồn: ${cite.stem} · đoạn ${cite.chunkId}`}
             onMouseEnter={() => onHighlight?.(cite)}
             onMouseLeave={() => onHighlight?.(null)}
-            onClick={() => onHighlight?.(cite)}
-            onKeyDown={(e) => { if (e.key === "Enter" || e.key === " ") { e.preventDefault(); onHighlight?.(cite); } }}
+            onClick={open}
+            onKeyDown={(e) => { if (e.key === "Enter" || e.key === " ") { e.preventDefault(); open(); } }}
           >
             {children}
           </sup>
@@ -73,16 +89,25 @@ function makeMdComponents({ highlight, onHighlight }) {
 }
 
 // ── Answer block (memo-light): runs citation pass once per content ──
-function AnswerProse({ content, mdComponents }) {
+// `dropCap` — the editorial opening-paragraph flourish (MdProse's own rule,
+// reused via the same `.prose-drop-cap` class it defines in index.css).
+// Applied to the FIRST answer of a session only, per that rule's own
+// constraint ("use on ONE reading surface's first block, never repeated") —
+// wired at the call site below, not decided in here.
+function AnswerProse({ content, mdComponents, dropCap = false }) {
   const { md } = useMemo(() => processCitations(content), [content]);
   return (
-    <div className="font-display">
+    <div className={dropCap ? "font-display prose-drop-cap" : "font-display"}>
       <ReactMarkdown remarkPlugins={[remarkGfm, remarkBreaks]} components={mdComponents}>{md}</ReactMarkdown>
     </div>
   );
 }
 
 export default function ChatArea({ selectedSources, sources = [], onEvidence, highlight, onHighlight, onOpenLeft, askAboutDraft }) {
+  // Feature Pack A (Research Timeline) — ChatArea never touched Study Context
+  // before this; it's the one surface where the user's two most-timeline-
+  // worthy actions (ask a question, open a citation) actually happen.
+  const { selectQuestion, selectEvidence } = useStudyContext();
   const [messages, setMessages] = useState([]);
   const [input, setInput] = useState("");
   const [loading, setLoading] = useState(false);
@@ -117,7 +142,22 @@ export default function ChatArea({ selectedSources, sources = [], onEvidence, hi
   // re-parse toàn bộ text mỗi token — xem utils/streamPreview.js).
   const previewThrottleRef = useRef(null);
 
-  const mdComponents = useMemo(() => makeMdComponents({ highlight, onHighlight }), [highlight, onHighlight]);
+  // `chunkId` composite (`stem::chunkId`) matches the key SidebarRight's own
+  // evidence list already builds for the same chunk — one id shape for the
+  // same real thing, not a second encoding invented for the timeline alone.
+  const handleEvidenceOpen = useCallback((cite) => {
+    selectEvidence(`${normStem(cite.stem)}::${cite.chunkId}`, {
+      source: "chat", label: `${cite.stem} · đoạn ${cite.chunkId}`,
+    });
+  }, [selectEvidence]);
+  const mdComponents = useMemo(
+    () => makeMdComponents({ highlight, onHighlight, onEvidenceOpen: handleEvidenceOpen }),
+    [highlight, onHighlight, handleEvidenceOpen],
+  );
+  const suggestions = useMemo(() => buildSuggestions(selectedSources, sources), [selectedSources, sources]);
+  // First assistant answer only — the drop-cap is an "a reading surface begins
+  // here" signal (MdProse's own rule), not a per-turn decoration.
+  const firstAssistantIdx = useMemo(() => messages.findIndex((m) => m.role === "ai"), [messages]);
 
   // Stop any in-flight SSE stream / status-polling loop when the component unmounts
   // (cancelledRef is what pollQueryStatus checks each iteration).
@@ -458,6 +498,10 @@ export default function ChatArea({ selectedSources, sources = [], onEvidence, hi
       imageName,
     };
     setMessages((prev) => [...prev, userMsg]);
+    // Feature Pack A (Research Timeline) — the moment a question is genuinely
+    // submitted (not every keystroke, not a suggestion merely filled into the
+    // composer), matching the other five select* actions' "log the action" rule.
+    selectQuestion(userMsg.content, { source: "chat", label: userMsg.content });
     setInput("");
     clearImage();
     setLoading(true); resetJobState(); setSeenNodes(["Queued"]);
@@ -701,7 +745,7 @@ export default function ChatArea({ selectedSources, sources = [], onEvidence, hi
             </p>
             {selectedSources?.length > 0 ? (
               <div className="flex flex-wrap gap-2 justify-center">
-                {SUGGESTIONS.map((q) => (
+                {suggestions.map((q) => (
                   <button key={q} onClick={() => fillSuggestion(q)} className="pill-action">{q}</button>
                 ))}
               </div>
@@ -747,8 +791,18 @@ export default function ChatArea({ selectedSources, sources = [], onEvidence, hi
                 ) : null}
               </div>
               <div className="text-text-primary">
-                <AnswerProse content={msg.content} mdComponents={mdComponents} />
+                <AnswerProse content={msg.content} mdComponents={mdComponents} dropCap={idx === firstAssistantIdx} />
               </div>
+              {/* Product Experience Redesign, Question→Evidence handoff — Peak-End Rule:
+                  the resting point of a reading turn (not mid-stream, not every turn)
+                  gets a distinct settled marker instead of fading identically into the
+                  next question. Real citation count only — no count means no claim. */}
+              {idx === messages.length - 1 && !loading && msg.evidence?.sources?.length > 0 && (
+                <div className="flex items-center gap-1.5 text-caption font-mono text-text-muted pt-0.5">
+                  <Icon name="BadgeCheck" size={12} className="text-forest" />
+                  Đã trả lời với {msg.evidence.sources.length} nguồn — xem chi tiết ở lề phải
+                </div>
+              )}
             </div>
           )
         )}
@@ -822,7 +876,7 @@ export default function ChatArea({ selectedSources, sources = [], onEvidence, hi
         {/* Follow-up suggestions */}
         {messages.length > 0 && !loading && !pendingReview && (
           <div className="px-4 sm:px-8 pt-3 pb-1 flex gap-2 overflow-x-auto scrollbar-none">
-            {SUGGESTIONS.map((q) => (
+            {suggestions.map((q) => (
               <button key={q} onClick={() => fillSuggestion(q)} className="pill-action flex-shrink-0">{q}</button>
             ))}
           </div>

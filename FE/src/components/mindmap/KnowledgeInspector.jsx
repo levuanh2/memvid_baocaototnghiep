@@ -56,7 +56,13 @@ const RelatedPill = ({ item, onNavigate, icon }) => !item ? null : (
 // ONCE per section, above the list — see the "Bằng chứng" section below).
 // Sprint A item 4 — Copy quote / Copy citation, clipboard-only.
 // Sprint A item 5 — skeleton instead of spinner while `text` loads.
-function CitationCard({ chunkId, text, loading, error, index, sourceLabel, heading, highlighted, onToggleHighlight }) {
+// Product Experience Redesign, Evidence stage — restructured Claim → Supporting
+// evidence → Confidence, per the user's explicit target shape. `claim` and
+// `confidencePct` are both real data already computed by the caller (node title,
+// node-level average confidence) — no per-citation confidence exists in the
+// pipeline yet, so this does not fabricate a number finer-grained than what was
+// actually measured (Hallmark honest-copy rule).
+function CitationCard({ chunkId, text, loading, error, index, sourceLabel, heading, claim, confidencePct, highlighted, onToggleHighlight }) {
   const copyQuote = async () => {
     const ok = await copyText(text);
     toast(ok ? "Đã sao chép trích đoạn" : "Không sao chép được", { type: ok ? "success" : "error" });
@@ -92,14 +98,27 @@ function CitationCard({ chunkId, text, loading, error, index, sourceLabel, headi
           <Icon name="Pin" size={12} />
         </button>
       </div>
+      {claim && (
+        <div className="text-caption font-mono uppercase text-text-muted mb-1">
+          Hỗ trợ cho · <span className="normal-case font-sans">{claim}</span>
+        </div>
+      )}
       {loading ? (
         <EvidenceSkeleton />
       ) : error ? (
         <p className="text-small text-text-muted italic">Không tải được trích đoạn này.</p>
       ) : (
-        <Clamp lines={7}>
-          <MdSnippet text={text} className="font-display text-small text-text-secondary" />
-        </Clamp>
+        <>
+          <Clamp lines={7}>
+            <MdSnippet text={text} className="font-display text-small text-text-secondary" />
+          </Clamp>
+          {confidencePct != null && (
+            <div className="mt-1.5 pt-1.5 border-t border-border flex items-center gap-1.5 text-caption text-text-muted">
+              <Icon name="BadgeCheck" size={11} className="text-forest flex-shrink-0" />
+              Độ tin cậy trung bình của nhánh: {confidencePct}%
+            </div>
+          )}
+        </>
       )}
     </div>
   );
@@ -292,6 +311,7 @@ export default function KnowledgeInspector({
                   key={`${entry.chunkId}-${i}`}
                   chunkId={entry.chunkId} text={entry.text} loading={entry.loading} error={entry.error}
                   index={i} sourceLabel={sourceLabel} heading={node.title}
+                  claim={node.title} confidencePct={avgConfidencePct}
                   highlighted={highlightedIds.has(entry.chunkId)}
                   onToggleHighlight={() => toggleHighlight(entry.chunkId)}
                 />

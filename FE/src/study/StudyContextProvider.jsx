@@ -1,8 +1,8 @@
 import { useCallback, useMemo, useState } from "react";
 import { StudyContext } from "./studyContext";
 import {
-  chonDoc, chonEntity, chonNode, chonQuestion, chonSummary, chonTopic,
-  datLearningMode, TRANG_THAI_RONG, xoaLuaChon,
+  chonDoc, chonEntity, chonEvidence, chonNode, chonQuestion, chonSummary, chonTopic,
+  datLearningMode, TRANG_THAI_RONG, xoaLichSu, xoaLuaChon,
 } from "./studySelection";
 
 /**
@@ -18,6 +18,10 @@ import {
  * trong một trang cụ thể (`Workspace`, `StudyMapView`...), đổi route sẽ unmount
  * Provider và tạo lại state rỗng, đúng lỗi mất-lựa-chọn-khi-điều-hướng mà Phase 4
  * tồn tại để sửa.
+ *
+ * Feature Pack A (Research Timeline) thêm `selectEvidence` (mirror đúng năm hành
+ * động chọn trên) và `clearHistory` — cả hai chỉ PHÁT thêm, không đổi cách năm
+ * hành động cũ hoạt động.
  */
 export function StudyContextProvider({ children }) {
   const [state, setState] = useState(TRANG_THAI_RONG);
@@ -37,17 +41,20 @@ export function StudyContextProvider({ children }) {
     (nodeId, opts) => setState((s) => chonNode(s, nodeId, opts)), []);
   const selectQuestion = useCallback(
     (questionId, opts) => setState((s) => chonQuestion(s, questionId, opts)), []);
+  const selectEvidence = useCallback(
+    (evidenceId, opts) => setState((s) => chonEvidence(s, evidenceId, opts)), []);
   const setLearningMode = useCallback((mode) => setState((s) => datLearningMode(s, mode)), []);
   const clearSelection = useCallback((key) => setState((s) => xoaLuaChon(s, key)), []);
+  const clearHistory = useCallback(() => setState((s) => xoaLichSu(s)), []);
 
   // `value` chỉ đổi khi CHÍNH `state` đổi — các hàm chọn đều `useCallback([])` nên
   // tham chiếu ổn định qua mọi lần render, không kéo theo re-render thừa ở nơi dùng.
   const value = useMemo(() => ({
     ...state,
     selectDocument, selectTopic, selectEntity, selectSummary, selectNode,
-    selectQuestion, setLearningMode, clearSelection,
+    selectQuestion, selectEvidence, setLearningMode, clearSelection, clearHistory,
   }), [state, selectDocument, selectTopic, selectEntity, selectSummary, selectNode,
-      selectQuestion, setLearningMode, clearSelection]);
+      selectQuestion, selectEvidence, setLearningMode, clearSelection, clearHistory]);
 
   return <StudyContext.Provider value={value}>{children}</StudyContext.Provider>;
 }

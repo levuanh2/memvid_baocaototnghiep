@@ -358,11 +358,17 @@ export default function StudyMapView() {
       // một trường BE mới (cấm). Không có ánh xạ thật thì không bịa — đúng yêu cầu
       // "if mappings do not exist, say so. Do NOT invent mappings."
       const hasBranch = Boolean(nodeDatum.children?.length || nodeDatum._children?.length);
+      // Product Experience Redesign, StudyMap "Start Here" — Spark Effect: an inert
+      // map on load has nothing inviting the first click, so nothing sparks
+      // exploration. A soft pulsing ring on the (real, always-present) root node
+      // gives that entry point without touching layout or requiring new data.
+      // Disappears the moment ANY node is picked — it is an invitation, not a badge.
+      const isSparkRoot = !selected && attrs.node_type === "root";
       const onPick = () => {
         if (attrs.node_id) {
           setSelected(attrs);
           setFocusedId(attrs.node_id);
-          selectNode(attrs.node_id, { source: "mindmap" });
+          selectNode(attrs.node_id, { source: "mindmap", label: nodeDatum.name });
         }
         if (hasBranch) toggleNode();
       };
@@ -379,6 +385,14 @@ export default function StudyMapView() {
           {isMatch && !isActiveMatch && (
             <circle r={m.r + 3} fill="none" stroke="var(--accent)" strokeWidth={1.2}
                     strokeDasharray="2 2" />
+          )}
+          {isSparkRoot && (
+            // motion-safe: Tailwind variant — this project's reduced-motion rules are
+            // per-class opt-outs (index.css), not global; raw animate-pulse would skip
+            // prefers-reduced-motion entirely. Ring shape (not color alone) carries the
+            // cue, so it still reads under color-vision deficiency with motion off.
+            <circle r={m.r + 5} fill="none" stroke="var(--accent)" strokeWidth={1.5}
+                    opacity={0.55} className="motion-safe:animate-pulse" />
           )}
           {/* Nhánh đang thu: chấm đặc bên trong = "còn nội dung bên dưới".
               Không có dấu này thì lá và nhánh đã thu trông y hệt nhau. */}
@@ -526,6 +540,13 @@ export default function StudyMapView() {
                 ) : null,
               )}
               {map.edges?.length > 0 && <span>· {map.edges.length} liên kết ngang</span>}
+            </div>
+          )}
+
+          {!trinhChieu && !selected && (
+            <div className="surface-card !p-2.5 mb-3 inline-flex items-center gap-2 text-small text-text-secondary">
+              <Icon name="MousePointerClick" size={14} className="text-forest flex-shrink-0" />
+              Bắt đầu từ đây — bấm vào nút gốc (node lớn nhất) để xem chi tiết và mở nhánh.
             </div>
           )}
 

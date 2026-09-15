@@ -59,6 +59,17 @@ export default function MainLayout({ selectedSources, setSelectedSources, initia
   // survives switching modes because it lives HERE, not inside MindElixirView.
   const mindMapController = useMindMapController(mindmapData?.data);
 
+  // Feature Pack A (Research Timeline) — "Jump" to a mindmap-node entry must
+  // switch the pane INTO view before scrolling it: MindElixirView stays
+  // permanently mounted once it's had data (WorkspaceContainer toggles CSS
+  // `hidden`, never unmounts it — see that file's own comment), but a
+  // `display:none` pane has no layout box, so `scrollIntoView` needs one
+  // paint after becoming visible before it can compute anything real.
+  const onJumpToMindMapNode = useCallback((id) => {
+    setWorkspaceMode("mindmap");
+    requestAnimationFrame(() => mindMapController.jumpTo(id));
+  }, [mindMapController]);
+
   // Task 3 "Open source" (Knowledge Inspector) — reuses the EXISTING Study
   // Context selector, same call SummaryPane already makes; "closing" now
   // means switching the Workspace back to Chat, not dismissing a modal.
@@ -406,6 +417,8 @@ export default function MainLayout({ selectedSources, setSelectedSources, initia
                   onMindmapDataChange={setMindmapData}
                   onSummaryDataChange={setSummaryData}
                   onSwitchToChat={onSwitchToChat}
+                  mindMapController={mindMapController}
+                  onJumpToMindMapNode={onJumpToMindMapNode}
                 />
               </div>
             </aside>

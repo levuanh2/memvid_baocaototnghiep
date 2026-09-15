@@ -4,6 +4,7 @@ import StudyShell, { EmptyState } from "../../components/study/StudyShell";
 import StudyCard from "../../components/study/StudyCard";
 import AiInsightCard from "../../components/study/AiInsightCard";
 import LearningDashboard from "../../components/study/LearningDashboard";
+import Disclosure from "../../components/ui/Disclosure";
 import CollectionSidebar from "../../components/study/CollectionSidebar";
 import BulkBar from "../../components/study/BulkBar";
 import SealMeter from "../../components/study/SealMeter";
@@ -49,6 +50,26 @@ const NHOM_LOC = [
                 ["review_ready", "Ôn tập"]]],
 ];
 
+// Frontend V2, Library wave — flat lookup so active filters can render as
+// dismissable chips (Find-Open-Study-Review artifact, Phase A) without a
+// second copy of the label list.
+const NHAN_LOC = new Map(NHOM_LOC.flatMap(([, mucLoc]) => mucLoc));
+
+// Same localStorage discipline as `memvidx.panels.v1` (hooks/panelLayout.js) and
+// `memvidx.inspector.collapsed.v1` (knowledgeParts.jsx) — try/catch, fails silent.
+const KHOA_TQHT_MO = "memvidx.library.dashboardOpen.v1";
+const KHOA_MAT_DO = "memvidx.library.density.v1";
+
+function docBool(khoa, macDinh) {
+  try {
+    const raw = localStorage.getItem(khoa);
+    return raw === null ? macDinh : raw === "1";
+  } catch { return macDinh; }
+}
+function ghiBool(khoa, gia) {
+  try { localStorage.setItem(khoa, gia ? "1" : "0"); } catch { /* riêng tư/đầy — bỏ qua */ }
+}
+
 function DocumentSkeleton() {
   return (
     <div className="flex flex-col gap-2.5" aria-hidden="true">
@@ -91,6 +112,19 @@ export default function DocumentList() {
   const [boLoc, setBoLoc] = useState([]);
   const [hienLuuTru, setHienLuuTru] = useState(false);
   const [moBangLoc, setMoBangLoc] = useState(false);
+  // Frontend V2, Library wave — density is a per-browser display preference
+  // (Find-Open-Study-Review artifact, Phase B: "Denser cards? Yes, default
+  // stays Comfortable"), read once at init like every other localStorage flag
+  // in this app (panelLayout.js's own comment explains why init-time, not
+  // an effect, is safe here: this is a pure SPA, no server render to fight).
+  const [matDo, setMatDo] = useState(() => (docBool(KHOA_MAT_DO, false) ? "compact" : "comfortable"));
+  const doiMatDo = useCallback(() => {
+    setMatDo((prev) => {
+      const next = prev === "compact" ? "comfortable" : "compact";
+      ghiBool(KHOA_MAT_DO, next === "compact");
+      return next;
+    });
+  }, []);
   const [dangDoiTen, setDangDoiTen] = useState(null);
   const [dangLuu, setDangLuu] = useState(false);
   const [loiThaoTac, setLoiThaoTac] = useState(null);
@@ -343,6 +377,7 @@ export default function DocumentList() {
       onChon={(id) => setDaChon((prev) => batTatChon(prev, id))}
       tabIndex={chiSo == null ? undefined : (chiSo === Math.max(0, chiSoFocus) ? 0 : -1)}
       onKeyDown={chiSo == null ? undefined : (e) => xuLyPhim(e, doc, chiSo)}
+      matDo={matDo}
     />
   );
 
@@ -445,7 +480,17 @@ export default function DocumentList() {
 
       {/* Thanh công cụ */}
       <div className="mb-6 flex flex-wrap items-center gap-2">
-        <div className="header-search !rounded-control !min-w-0 !px-3 !py-2 flex-1 min-w-[200px]">
+        {/* Frontend V3 (Responsive, §7) — `!min-w-0` and `min-w-[200px]` were
+            both on this element, fighting over the same property: Tailwind's
+            `!` compiles to `!important`, so `!min-w-0` always won regardless
+            of source order, making `min-w-[200px]` dead code. Effective floor
+            was 0, not 200px — confirmed live at 390px width (the input
+            rendered ~2 characters of its own placeholder). One value now:
+            enough to stay usable on a phone without starving `Mới nhất`/
+            `Lọc`/`Đủ` next to it, wider on anything roomier. Nothing inside
+            this div depends on `min-width:0` for truncation (the input is
+            `w-full`, no `overflow-hidden`/`truncate` descendant). */}
+        <div className="header-search !rounded-control !px-3 !py-2 flex-1 min-w-[140px] sm:min-w-[220px]">
           <Icon name="Search" size={14} className="text-text-muted flex-shrink-0" />
           <input
             type="text" value={truyVan} onChange={(e) => setTruyVan(e.target.value)}
@@ -505,6 +550,16 @@ export default function DocumentList() {
           )}
         </div>
 
+        {/* Frontend V2, Library wave — density toggle (Find-Open-Study-Review
+            artifact, Phase B). Same CSS-variant-only contract as StudyCard's
+            own `matDo` prop: no new data, no new fetch. */}
+        <button type="button" onClick={doiMatDo} className="pill-action !py-2"
+                aria-pressed={matDo === "compact"}
+                title={matDo === "compact" ? "Đang xem gọn — bấm để xem đủ" : "Đang xem đủ — bấm để xem gọn"}>
+          <Icon name={matDo === "compact" ? "AlignJustify" : "Rows3"} size={13} />
+          {matDo === "compact" ? "Gọn" : "Đủ"}
+        </button>
+
         <label className="flex items-center gap-2 cursor-pointer px-1">
           <input type="checkbox" checked={hienLuuTru}
                  onChange={(e) => setHienLuuTru(e.target.checked)}
@@ -530,15 +585,54 @@ export default function DocumentList() {
         )}
       </div>
 
+      {/* Frontend V2, Library wave — active filters as dismissable chips
+          (Find-Open-Study-Review artifact, Phase A): "you can't see what's
+          currently filtering without opening it" was the exact finding. Same
+          `boLoc` state, same `setBoLoc` toggle — rendering layer only. */}
+      {boLoc.length > 0 && (
+        <div className="mb-4 flex flex-wrap items-center gap-1.5">
+          {boLoc.map((khoa) => (
+            <button key={khoa} type="button"
+                    onClick={() => setBoLoc((prev) => prev.filter((k) => k !== khoa))}
+                    className="inline-flex items-center gap-1 rounded-full px-2.5 py-1 text-caption font-medium"
+                    style={{ background: "color-mix(in srgb, var(--accent) 10%, transparent)",
+                             border: "1px solid color-mix(in srgb, var(--accent) 35%, transparent)",
+                             color: "var(--accent)" }}
+                    aria-label={`Bỏ lọc ${NHAN_LOC.get(khoa) || khoa}`}>
+              {NHAN_LOC.get(khoa) || khoa} <Icon name="X" size={11} />
+            </button>
+          ))}
+          <button type="button" onClick={() => setBoLoc([])}
+                  className="text-caption text-text-muted hover:text-text-primary">
+            Xoá tất cả
+          </button>
+        </div>
+      )}
+
+      {/* Product Experience / Signature System pass — Analytics used to render full-
+          weight ABOVE the document grid on every visit (the single highest-leverage
+          "feels like a dashboard" finding in docs/MEMVIDX_SIGNATURE_SYSTEM.md §10).
+          Library's job is Find→Open, which happens every visit; Analytics is a
+          reflect-occasionally surface — collapsed by default re-tiers it without
+          removing it. Reuses the existing Disclosure primitive, no new component.
+          Frontend V2 wave: default-collapsed is now a REMEMBERED preference, not
+          just a fixed behavior — closes the exact gap flagged in
+          docs/FINAL_VISUAL_REVIEW.md's "acceptance criterion not met" note. */}
       {documents.length > 0 && (
-        <LearningDashboard
-          documents={documents}
-          overview={overview}
-          weak={weak}
-          attempts={attempts}
-          mucHienThi={mucHienThi}
-          onMo={moBeMat}
-        />
+        <section className="surface-card !p-0 mb-7">
+          <Disclosure title="Tổng quan học tập" dense
+                      defaultOpen={docBool(KHOA_TQHT_MO, false)}
+                      onToggle={(open) => ghiBool(KHOA_TQHT_MO, open)}>
+            <LearningDashboard
+              documents={documents}
+              overview={overview}
+              weak={weak}
+              attempts={attempts}
+              mucHienThi={mucHienThi}
+              onMo={moBeMat}
+            />
+          </Disclosure>
+        </section>
       )}
 
       {/* Tiếp tục học */}
@@ -597,10 +691,16 @@ export default function DocumentList() {
                 title={rong.tieuDe}
                 hint={rong.goiY}
                 action={rong.hanhDong ? (
+                  // Frontend V3 (Workspace hierarchy, §2) — this used to also
+                  // render as `btn-seal` when the action is "upload," which put
+                  // two seal-red primary buttons on screen at once (this one +
+                  // StudyShell's own "Tải tài liệu" in the header actions slot,
+                  // always rendered, doing the exact same thing). One primary
+                  // per screen: the header owns it, this stays a secondary
+                  // shortcut into the same file picker.
                   <button
                     type="button"
-                    className={rong.khoaHanhDong === "tai_len"
-                      ? "btn-seal text-small mt-1 disabled:opacity-60" : "pill-action mt-1"}
+                    className="pill-action mt-1 disabled:opacity-60"
                     disabled={rong.khoaHanhDong === "tai_len" && uploading}
                     onClick={() => {
                       if (rong.khoaHanhDong === "tai_len") return fileRef.current?.click();

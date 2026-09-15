@@ -8,7 +8,7 @@ import { Icon } from "./Icon";
  * được và cần phần đầu khối vẫn dính khi cuộn — `<summary>` không làm được cả
  * hai mà không phải chống lại kiểu hiển thị mặc định của trình duyệt.
  */
-export default function Disclosure({ title, count, defaultOpen = true, children, dense = false }) {
+export default function Disclosure({ title, count, defaultOpen = true, children, dense = false, onToggle }) {
   const [open, setOpen] = useState(defaultOpen);
   const id = useId();
 
@@ -20,7 +20,11 @@ export default function Disclosure({ title, count, defaultOpen = true, children,
           className="disclosure__toggle"
           aria-expanded={open}
           aria-controls={id}
-          onClick={() => setOpen((v) => !v)}
+          onClick={() => setOpen((v) => {
+            const next = !v;
+            onToggle?.(next);
+            return next;
+          })}
         >
           <Icon
             name="ArrowRight"
