@@ -7,7 +7,7 @@
 // jumpTo/canJumpTo ResearchTimeline.jsx already established the discipline
 // for (Feature Pack A/B) — a kind with no real jump target renders disabled
 // with a reason, never a fake success.
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { Icon } from "../ui/Icon";
 import { useStudyContext } from "../../study/useStudyContext";
 import { formatRelativeTime } from "../../utils/relativeTime";
@@ -15,6 +15,10 @@ import {
   KIND_META, canJumpEntry, evolutionGroups, sessionSummary,
   reviewSuggestions, partitionNodesByVisit, nodeHeatmap,
 } from "../../utils/knowledgeEvolution";
+import { getLibrary } from "../../utils/studyApi";
+import { tenHienThi } from "../../utils/thuVienTaiLieu";
+import { extractConcepts, compareConcepts, matchDocumentsToStems, evidenceCoverage } from "../../utils/multiDocument";
+import { parseCiteKey } from "../../utils/evidence";
 
 function Stat({ value, label }) {
   return (
@@ -64,11 +68,58 @@ function JumpRow({ entry, meta, trailing, onJump, canJumpNode }) {
 
 const EMPTY = <p className="text-small text-text-muted italic py-1">Chưa có gì để hiện.</p>;
 
-export default function KnowledgeDashboard({ mindMapController, onJumpQuestion, onJumpEvidence, onJumpNode, onOpenTimeline }) {
+export default function KnowledgeDashboard({
+  mindMapController, onJumpQuestion, onJumpEvidence, onJumpNode, onOpenTimeline,
+  // Feature epic M1 (Multi-Document Intelligence) — the workspace's checked
+  // sources (SidebarLeft), threaded through SidebarRight (which already
+  // consumes this same prop for mindmap/summary generation). Enables the
+  // "So sánh tài liệu" section below.
+  selectedSources = [],
+}) {
   const {
     history, selectTopic, selectEntity, selectSummary, selectNode, selectQuestion, selectEvidence,
   } = useStudyContext();
   const [now] = useState(() => Date.now()); // đọc một lần khi mở panel — cùng lý do ResearchTimeline.jsx đã có
+
+  // Concept Merge + Compare Documents (mục 5 + 6) — fetch the SAME existing
+  // `/api/library` payload CommandPalette/DocumentList already call (no new
+  // endpoint), filter to the workspace's selected stems, and compute
+  // deterministic name-overlap purely on the client. Only fires with 2+
+  // sources selected — a single document has nothing to compare against.
+  const [compareDocs, setCompareDocs] = useState(null); // null = not fetched yet
+  const [compareLoading, setCompareLoading] = useState(false);
+  const [compareError, setCompareError] = useState(null);
+  useEffect(() => {
+    if ((selectedSources || []).length < 2) { setCompareDocs(null); setCompareError(null); return; }
+    let cancelled = false;
+    setCompareLoading(true);
+    setCompareError(null);
+    getLibrary()
+      .then((documents) => {
+        if (cancelled) return;
+        setCompareDocs(matchDocumentsToStems(documents, selectedSources));
+      })
+      .catch(() => { if (!cancelled) setCompareError("Không tải được dữ liệu tài liệu để so sánh."); })
+      .finally(() => { if (!cancelled) setCompareLoading(false); });
+    return () => { cancelled = true; };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [JSON.stringify(selectedSources)]);
+
+  const compareResult = useMemo(() => {
+    if (!compareDocs?.length) return null;
+    const docs = compareDocs.map((d) => ({ id: d.document_id, concepts: extractConcepts(d) }));
+    return { docs, ...compareConcepts(docs) };
+  }, [compareDocs]);
+  const docNameById = useMemo(() => {
+    const m = new Map();
+    for (const d of compareDocs || []) m.set(d.document_id, tenHienThi(d) || d.source_stem);
+    return m;
+  }, [compareDocs]);
+  // Per-document vs. cross-document coverage (mục 8) — the one real signal
+  // for "has this document actually contributed to the session yet": an
+  // opened citation. See multiDocument.js::evidenceCoverage's own comment
+  // for why this is evidence-only, not every history kind.
+  const coverage = useMemo(() => evidenceCoverage(history, selectedSources), [history, selectedSources]);
 
   const canJumpNode = mindMapController?.canJumpTo || (() => false);
   const allNodes = useMemo(() => mindMapController?.allNodes || [], [mindMapController]);
@@ -77,9 +128,7 @@ export default function KnowledgeDashboard({ mindMapController, onJumpQuestion, 
   const jump = (entry) => {
     if (entry.kind === "question") { selectQuestion(entry.id, { source: "chat", label: entry.label }); onJumpQuestion?.(entry.label); return; }
     if (entry.kind === "evidence") {
-      const i = entry.id.lastIndexOf("::");
-      const stem = i === -1 ? entry.id : entry.id.slice(0, i);
-      const chunkId = i === -1 ? "" : entry.id.slice(i + 2);
+      const { stem, chunkId } = parseCiteKey(entry.id);
       selectEvidence(entry.id, { source: "chat", label: entry.label });
       onJumpEvidence?.({ stem, chunkId });
       return;
@@ -107,7 +156,9 @@ export default function KnowledgeDashboard({ mindMapController, onJumpQuestion, 
 
   const recentToday = useMemo(() => [...history].reverse().slice(0, 5), [history]);
 
-  const hasAnything = history.length > 0;
+  // Feature epic M1 — 2+ selected sources is itself something real to show
+  // (the Compare section below), even with zero chat/mindmap activity yet.
+  const hasAnything = history.length > 0 || (selectedSources || []).length >= 2;
 
   return (
     <div className="flex flex-col h-full min-h-0 overflow-y-auto">
@@ -134,6 +185,81 @@ export default function KnowledgeDashboard({ mindMapController, onJumpQuestion, 
               <Stat value={summary.nodes} label="Nhánh sơ đồ" />
             </div>
           </Section>
+
+          {/* Concept Merge + Compare Documents — mục 5 + 6. Only meaningful
+              with 2+ sources selected; a single document has nothing to
+              compare against, so the section itself doesn't render then. */}
+          {(selectedSources || []).length >= 2 && (
+            <Section title="So sánh tài liệu" count={compareResult ? compareDocs.length : null}>
+              {compareLoading ? (
+                <p className="text-small text-text-muted italic py-1">Đang tải dữ liệu để so sánh…</p>
+              ) : compareError ? (
+                <p className="text-small text-text-muted italic py-1">{compareError}</p>
+              ) : !compareResult ? (
+                <p className="text-small text-text-muted italic py-1">
+                  Không tìm thấy dữ liệu chủ đề/thực thể cho các tài liệu đã chọn.
+                </p>
+              ) : (
+                <div className="flex flex-col gap-3">
+                  {coverage.covered.length > 0 && (
+                    <div className="text-caption text-text-muted">
+                      Đã mở trích dẫn từ {coverage.covered.length}/{selectedSources.length} tài liệu trong phiên này
+                      {coverage.uncovered.length > 0 && ` — chưa chạm tới: ${coverage.uncovered.length}`}
+                    </div>
+                  )}
+                  <div>
+                    <div className="text-caption text-text-muted mb-1">
+                      Chung nhau ({compareResult.shared.length})
+                    </div>
+                    {compareResult.shared.length === 0 ? (
+                      <p className="text-small text-text-muted italic">
+                        Không có chủ đề/thực thể nào trùng tên nguyên văn giữa các tài liệu này.
+                      </p>
+                    ) : (
+                      <div className="flex flex-col gap-1">
+                        {compareResult.shared.slice(0, 12).map((c) => (
+                          <div key={`${c.kind}::${c.name}`} className="flex items-center gap-1.5 text-small">
+                            <Icon name={c.kind === "topic" ? "Tag" : "Sparkles"} size={11} className="shrink-0 text-forest" />
+                            <span className="text-text-primary truncate flex-1">{c.name}</span>
+                            <span className="text-caption text-text-muted shrink-0" title={c.docIds.map((id) => docNameById.get(id)).join(", ")}>
+                              {c.docIds.length} tài liệu
+                            </span>
+                          </div>
+                        ))}
+                      </div>
+                    )}
+                  </div>
+                  <div>
+                    <div className="text-caption text-text-muted mb-1">Riêng từng tài liệu</div>
+                    <div className="flex flex-col gap-2">
+                      {compareDocs.map((d) => {
+                        const unique = compareResult.uniquePerDoc.get(d.document_id) || [];
+                        return (
+                          <div key={d.document_id}>
+                            <div className="text-small font-semibold text-text-primary truncate">{docNameById.get(d.document_id)}</div>
+                            {unique.length === 0 ? (
+                              <p className="text-caption text-text-muted italic">Không có mục riêng nào (mọi chủ đề/thực thể đều chung với tài liệu khác).</p>
+                            ) : (
+                              <div className="flex flex-wrap gap-1 mt-0.5">
+                                {unique.slice(0, 6).map((c) => (
+                                  <span key={`${c.kind}::${c.name}`} className="pill-action !text-caption !py-0.5" style={{ cursor: "default" }}>
+                                    {c.name}
+                                  </span>
+                                ))}
+                                {unique.length > 6 && (
+                                  <span className="text-caption text-text-muted">+{unique.length - 6}</span>
+                                )}
+                              </div>
+                            )}
+                          </div>
+                        );
+                      })}
+                    </div>
+                  </div>
+                </div>
+              )}
+            </Section>
+          )}
 
           {/* Learning Journey — mục 3. "Hôm nay" là nhãn CHÍNH XÁC: history
               không lưu qua lần tải lại trang nên chưa từng thực sự cũ hơn một

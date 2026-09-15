@@ -718,6 +718,7 @@ export default function SidebarRight({
             onHighlight?.({ stem, chunkId });
           }}
           onOpenTimeline={() => onRightViewChange?.("timeline")}
+          selectedSources={selectedSources}
         />
       ) : (
       <>
