@@ -130,6 +130,29 @@ No new deployment system — uses the existing Render Blueprint (`render.yaml`) 
 
 ---
 
-## Phase 7-10 — not executed
+## Phase 6 authorization
 
-Per the epic's own stop condition and this session's standing practice: Phase 7 (deployment), Phase 8 (production smoke matrix), and Phase 9 (restart/persistence check) are **not executed** in this document, pending the Phase 6 authorization above. If authorized, this document will be extended (not replaced) with those results, and the final verdict (`PRODUCTION GO` / `PRODUCTION GO WITH KNOWN LIMITATIONS` / `PRODUCTION NO-GO`) will be added only after Phase 8/9 actually run — not asserted in advance.
+**Explicitly authorized by the release owner**: merge `release/p0-p0.5-verification` into `main` and deploy, run the full Phase 7-9 sequence, update this document with live evidence, end with exactly one verdict, then stop (no new epic after).
+
+## Phase 7 — Merge / deploy
+
+Before merging, `origin/main` was found to have moved independently (a human-merged PR #3 had already brought `main` up through `6401ee2`, Feature Pack A's final commit — the same release branch's own earlier history). `git merge-base origin/main origin/release/p0-p0.5-verification` confirmed `6401ee2` exactly — `main` was a clean ancestor of the release branch, so this was expected to be (and was) a non-conflicting merge.
+
+```
+Rollback target (main tip before this merge): 7c9bc7f
+Merge commit:                                 fdc1c9d
+origin/main:                                   7c9bc7f -> fdc1c9d
+```
+
+No force-push. No WIP touched (merge performed in an isolated worktree, not the primary working tree holding other in-progress BE work).
+
+**Render auto-deploy status: mixed/incomplete at time of writing.**
+
+- Frontend (static site): rebuilt and live on the new code (new asset `last-modified` timestamp confirmed).
+- Backend (Gunicorn service): `/health` returns `200` (service is up), but a live CORS preflight against an arbitrary origin (`evil.test`) **still returns `Access-Control-Allow-Origin: evil.test`** — the pre-fix behavior. The backend has not yet rolled to the new build.
+
+**Smoke matrix (Phase 8) intentionally NOT run yet** — testing against a backend still serving old code would produce misleading results (the CORS fix would show FAIL not because the fix is wrong, but because it isn't live yet; the citation fix couldn't be meaningfully tested against old code either). This is a deliberate pause, not a hidden BLOCKED result.
+
+**No critical regression observed.** `/health` responding normally means the backend service itself is healthy and running — this reads as a normal Render backend-build-takes-longer-than-static-frontend-build propagation delay, not a broken deploy. No rollback triggered on this basis alone; monitoring continues.
+
+<!-- Phase 8/9 results and final verdict are appended below once the backend deploy completes and live verification actually runs. -->
