@@ -268,4 +268,70 @@ docker compose -f docker-compose.prod.yml exec backend env | grep CORS_ORIGINS  
 
 **LIVE CORS: PASS.**
 
-<!-- Phase 8 smoke matrix and Phase 9 persistence results appended below as they complete. -->
+## Phase 8 — Production smoke matrix
+
+Disposable accounts used, disclosed, not deleted: `postmerge-gate-20260916@example.com` (main smoke), `postmerge-empty-20260916@example.com` (empty-workspace check). Test doc `release-gate-smoke.txt`, `source_id 9b8dd23b-6d06-40c8-8c54-ea4f170f2ad5`. Query job `f99699b1-7ab2-4479-9b01-d53b1320b8f1`.
+
+| Item | Result | Evidence |
+|---|---|---|
+| AUTH | PASS | register/login live |
+| UPLOAD | PASS | `ready`, `memory_tree_ready`, `can_query=true` |
+| PROCESSING | PASS | job completed |
+| INDEXING | PASS | index-ready confirmed |
+| RETRIEVAL | PASS | grounded answer returned |
+| CITATION | PASS | `chunk_id=216` returned, non-empty (root-cause fix confirmed live) |
+| EVIDENCE | PASS | `GET /chunk-text/216` returned the exact uploaded text |
+| PROVENANCE (absent case) | PASS | StudyMap node with no real chunks correctly shows `chunk_ids=[]`, no source_stems — absent, not fabricated |
+| MINDMAP | DEGRADED — KNOWN LIMITATION | job `done`, 1 root node, missing skeleton/enrich stages. Matches `.playbook/known-issues.md:3888-3925`, predicted exactly here as a pre-existing, already-scoped-out issue (LLM branch errors flag `degraded=True` by design), not a new regression from this release |
+| SUMMARY | DEGRADED — KNOWN LIMITATION | job `done`, missing skeleton/section/synthesize; same known-issues.md root cause |
+| STUDYMAP (single-doc) | DEGRADED — KNOWN LIMITATION | job completed, 1 node, same root cause |
+| Invalid upload (empty file field) | PASS | 400 `Missing file` |
+| Missing resource | PASS | `GET /chunk-text/999999999` → 404 `Chunk not found` |
+| Unauthorized request | PASS | unauthenticated `/auth/me` and `/query` → 401 |
+| Cross-user authorization isolation | PASS | other account's token against this study map → 404 (not leaked) |
+| Empty workspace | PASS | fresh account, `/api/library` → `collections=[]`, `documents=[]` |
+| Legacy / pre-M2 record | UNVERIFIED | no live legacy record exists in reachable accounts to test against; tolerance covered only by existing FE/BE test suite, not live-verified this gate |
+| Timeline | UNVERIFIED / BLOCKED | UI-only feature, Codex has no browser access, not independently verified |
+| Cross Navigation | UNVERIFIED / BLOCKED | same reason |
+| Knowledge Evolution | UNVERIFIED / BLOCKED | same reason |
+| Multi-document workspace | UNVERIFIED / BLOCKED | same reason |
+| Compare Documents | UNVERIFIED / BLOCKED | same reason |
+
+## Phase 9 — Persistence
+
+`PERSISTENCE: BLOCKED — MANUAL RESTART VERIFICATION REQUIRED.` Not proven passing, not proven broken. The backend container *was* recreated during the CORS fix (Phase 8 above), but that recreate happened **before** the smoke-test document (`release-gate-smoke.txt`) was uploaded — so it does not demonstrate that this specific data survives a restart. Retrieval/index data lives on EC2 host-disk bind mounts (`/opt/memvid/data/index`, `/opt/memvid/data/memory`, `/opt/memvid/data/input_docs` per `docker-compose.prod.yml`), which — being host-disk, not container-internal — is architecturally likely to survive a container restart, but this has not been independently observed by triggering a real restart after data existed. No independent restart was available to this gate (no SSH/dashboard access). Explicitly not conflated with the earlier, now-resolved environment-file persistence issue (Phase 8's CORS fix) — these are separate concerns per the epic's own instruction.
+
+## Final verification matrix
+
+| Gate | Status |
+|---|---|
+| MERGE STATE | VERIFIED (git ancestry, `merge-base --is-ancestor`) |
+| DEPLOYMENT STATUS | VERIFIED (container recreated, healthy, correct code+env confirmed live) |
+| LIVE CORS | PASS |
+| AUTH | PASS |
+| UPLOAD | PASS |
+| PROCESSING | PASS |
+| INDEXING | PASS |
+| RETRIEVAL | PASS |
+| CITATION | PASS |
+| EVIDENCE | PASS |
+| PROVENANCE | PASS |
+| MINDMAP | DEGRADED — KNOWN LIMITATION (pre-existing, documented, out of this gate's scope) |
+| SUMMARY | DEGRADED — KNOWN LIMITATION (same) |
+| STUDYMAP (single-document) | DEGRADED — KNOWN LIMITATION (same) |
+| TIMELINE | NOT VERIFIED (UI-only, no browser access) |
+| CROSS NAVIGATION | NOT VERIFIED (same) |
+| KNOWLEDGE EVOLUTION | NOT VERIFIED (same) |
+| MULTI-DOCUMENT | NOT VERIFIED (same) |
+| COMPARE DOCUMENTS | NOT VERIFIED (same) |
+| FAILURE PATHS (invalid upload, 404, 401, cross-user isolation, empty workspace) | PASS |
+| LEGACY / PRE-M2 RECORD | UNVERIFIED (no live record reachable; test-suite coverage only) |
+| PERSISTENCE | BLOCKED — MANUAL RESTART VERIFICATION REQUIRED |
+
+## Final verdict
+
+None of the epic's NO-GO trigger conditions are met: deployment is proven, CORS no longer permits arbitrary origins, upload/indexing/retrieval/citation all genuinely verified against real production data, no data loss observed, no local-Ollama dependency, and the one flow-level issue found (MindMap/Summary/StudyMap degraded output) is a pre-existing, already-documented, explicitly-out-of-scope issue — not a new P0 regression introduced by this release.
+
+Open items are real and undisguised: UI-only navigation features unverified (no browser access from this gate), one legacy-record path unverified live, and restart persistence unverified for the newly-uploaded data specifically.
+
+**PRODUCTION GO WITH KNOWN LIMITATIONS.**
