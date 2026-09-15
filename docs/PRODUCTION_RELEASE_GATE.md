@@ -238,4 +238,34 @@ cd /opt/memvid/app
 
 **After the release owner confirms** (a) the env file was updated, (b) the backend was restarted via the above, and (c) `scripts/health.sh` succeeded — production will be re-probed externally (CORS preflight with the real origin and with `evil.test`, plus a normal request) and the result recorded as `LIVE CORS: PASS` or `LIVE CORS: FAIL` below. **Not inferred from `/health` alone.**
 
-<!-- Phase 8/9 results and final verdict are appended below once the CORS environment change is confirmed applied and live verification actually runs. -->
+## Phase 8 — Live CORS verification (actual timeline)
+
+**First applied-fix attempt (owner reported "applied", ~18:38-18:39):** re-probe still showed `LIVE CORS: FAIL` — `evil.test` preflight still received `Access-Control-Allow-Origin: https://evil.test`. Investigated via external evidence only (no code/config touched):
+
+- Raw response headers captured for both the allowed origin and `evil.test` preflights. Both showed `cf-cache-status: DYNAMIC`, no `Age`/`x-cache`/`Via` — ruled out a CDN/caching layer (Cloudflare sits in front of the EC2 host for TLS termination only, confirmed pass-through, not the cause).
+- Both responses carried `Vary: Origin` and identically reflected whatever `Origin` header was sent — the signature of Flask-CORS substituting the literal request `Origin` when the configured origins value is still effectively a wildcard (spec forbids literal `*` with credentials, so the library echoes the incoming origin instead).
+- Diagnosis: the **running container** still had the old `CORS_ORIGINS` value loaded, not what was on disk in `/opt/memvid/env/.env` — `env_file` is read once at container start, not live-reloaded.
+- Release owner ran `docker compose -f docker-compose.prod.yml exec backend env | grep CORS_ORIGINS` → returned `CORS_ORIGINS=*`.
+- Release owner then checked the file itself: `grep -n '^CORS_ORIGINS=' /opt/memvid/env/.env` → **also** returned `CORS_ORIGINS=*`. Root cause: the file had never actually been edited on the first attempt (the "applied" report was mistaken, not a container-staleness issue as first hypothesized — the container-staleness theory was a reasonable intermediate hypothesis, ruled out once the file itself was checked).
+
+**Second, actual fix (18:51 local):**
+
+```
+sudo cp /opt/memvid/env/.env /opt/memvid/env/.env.bak.<timestamp>
+sudo sed -i 's/^CORS_ORIGINS=.*/CORS_ORIGINS=https:\/\/studymap-web.onrender.com/' /opt/memvid/env/.env
+grep -n '^CORS_ORIGINS=' /opt/memvid/env/.env   # confirmed: CORS_ORIGINS=https://studymap-web.onrender.com
+docker compose -f docker-compose.prod.yml up -d --force-recreate backend
+./scripts/health.sh   # backend healthy after 10s
+docker compose -f docker-compose.prod.yml exec backend env | grep CORS_ORIGINS   # confirmed loaded: CORS_ORIGINS=https://studymap-web.onrender.com
+```
+
+**Live re-verification (18:51:59-18:52:00), external, real origin header tests, not inferred from `/health`:**
+
+- Allowed-origin `OPTIONS` preflight against `https://api.studymap.space` → `Access-Control-Allow-Origin: https://studymap-web.onrender.com` (exact match).
+- `evil.test` origin `OPTIONS` preflight → **no** `Access-Control-Allow-Origin` header returned (correctly rejected).
+- Normal allowed-origin `GET` request → exact origin echoed back correctly.
+- `/health` → 200.
+
+**LIVE CORS: PASS.**
+
+<!-- Phase 8 smoke matrix and Phase 9 persistence results appended below as they complete. -->
