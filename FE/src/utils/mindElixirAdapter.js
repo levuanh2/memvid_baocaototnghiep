@@ -50,6 +50,12 @@ export function recordToMindElixir(record) {
       // `selectNodes` listener; additive, never written back on save (mirrors
       // note/chunkRefs' own existing sidecar-only lifecycle).
       number: n.number || "", level: n.level || 0, enrichment: n.enrichment || [],
+      // M2.5 (Provenance Adoption) — same sidecar-only lifecycle as the fields
+      // above. `n.sourceStems` is already `undefined` (never `[]`) when
+      // mindmapNormalize.js couldn't resolve it; that exact absence is
+      // preserved here rather than defaulted, so useMindMapController's
+      // `selected.sourceStems` stays undefined too, not a fabricated `[]`.
+      sourceStems: n.sourceStems,
     });
     if (!root && (n.kind === "root" || n.parent == null)) { root = n; continue; }
     if (n.parent == null || !ids.has(n.parent)) { orphans.push(n); continue; }
@@ -76,6 +82,14 @@ export function recordToMindElixir(record) {
     const tags = [];
     if (n.number) tags.push({ text: n.number, className: "mm-tag-number" });
     if (n.chunkRefs?.length) tags.push({ text: `※ ${n.chunkRefs.length}`, className: "mm-tag-citations" });
+    // M2.5 (Provenance Adoption, mục 3 — Cross-document MindMap) — subtle,
+    // canvas-native signal reusing the exact tag mechanism citations/number
+    // already use, not a map-wide recolor. Shared ONLY (2+ resolved source
+    // stems, deterministic, never inferred from title similarity) — a
+    // single-source node gets no tag (that's the default/majority case, no
+    // need to flag it) and an unresolved node gets no tag either (absence of
+    // data is not itself a state worth badging on every legacy node).
+    if (n.sourceStems?.length > 1) tags.push({ text: `⇄ ${n.sourceStems.length}`, className: "mm-tag-shared" });
     const style = levelStyle(n.level);
     return {
       id: n.id, topic: stripMarkdown(n.title),

@@ -100,6 +100,17 @@ html.dark .me-container { --mm-relation: #7e90c4; }
   border-color: color-mix(in srgb, var(--seal) 35%, transparent);
 }
 
+/* M2.5 (Provenance Adoption) — shared-across-documents node badge. Same
+   --seal token as citations above (seal already IS this app's provenance
+   color — no new hue introduced), a light fill differentiates it from the
+   citation tag at a glance without a map-wide recolor. Only ever appears on
+   a node with 2+ deterministically resolved source_stems. */
+.me-container me-tpc .tags span.mm-tag-shared {
+  color: var(--seal);
+  border-color: color-mix(in srgb, var(--seal) 35%, transparent);
+  background: color-mix(in srgb, var(--seal) 12%, transparent);
+}
+
 /* Sprint F — depth-signaled connectors. mind-elixir draws root->main-branch
    edges into one `.lines` SVG and every deeper edge (branch->child and
    below) into a per-branch `.subLines` SVG that flattens its WHOLE subtree

@@ -1939,15 +1939,19 @@ def _attach_evidence(payload: dict, out: dict, max_chunks: int = 12) -> None:
             payload["sources"] = seen
     chunks = out.get("retrieved_chunks")
     stems = out.get("retrieved_stems")
+    chunk_ids = out.get("retrieved_chunk_ids")
     if isinstance(chunks, list) and chunks and not payload.get("chunks"):
         ev: list[dict] = []
         for i, c in enumerate(chunks[:max_chunks]):
             text = str(c) if c is not None else ""
             stem, chunk_id = "", ""
+            if isinstance(chunk_ids, list) and i < len(chunk_ids) and chunk_ids[i] is not None:
+                chunk_id = str(chunk_ids[i]).strip()
             m = _CITE_PREFIX_RE.match(text)
             if m:
                 stem = m.group(1).strip()
-                chunk_id = m.group(2)
+                if not chunk_id:
+                    chunk_id = m.group(2)
                 text = text[m.end():]
             elif isinstance(stems, list) and i < len(stems) and stems[i]:
                 stem = str(stems[i]).strip()

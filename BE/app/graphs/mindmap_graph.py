@@ -113,6 +113,8 @@ def build_mindmap_graph(*, data_dir: Path, index_meta_path: Path,
         from services.mindmap.pipeline.modelcfg import resolve_mindmap_model
         elapsed = time.time() - (state.get("_t0") or time.time())
         clean_nodes = mm_schema.sanitize_nodes(state["nodes"])
+        from services.provenance import attach_node_source_stems
+        clean_nodes = attach_node_source_stems(clean_nodes, state["mm_input"])
         record = mm_schema.build_record(
             title=state["mm_input"]["title"], sources=state["mm_input"]["sources"],
             nodes=clean_nodes,

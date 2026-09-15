@@ -6,7 +6,7 @@
 import {
   AlertCircle, AlignJustify, Archive, ArchiveRestore, ArrowLeft, ArrowRight, BadgeCheck, Ban, BookOpen,
   Check, ChevronDown, CircleDashed, Clock, Download, Eraser, EyeOff, Filter,
-  FileStack, FileText, FolderOpen, HelpCircle, Image, ImagePlus, Info, KeyRound, Library, LogOut, Maximize, Menu,
+  FileStack, FileText, FolderOpen, HelpCircle, Image, ImagePlus, Info, KeyRound, Keyboard, Library, LogOut, Maximize, Menu,
   MessageCircleQuestion, MessageSquare, MessageSquareText, MessagesSquare, Moon,
   MoreVertical, MousePointerClick, Network, PanelRight, Pencil, Plus, Quote, RotateCcw, Rows3, Scan, ScrollText,
   Search, Send, Spline, Square, Sun, Trash2, TrendingDown, TriangleAlert, Unlink, Upload, UserRound, X,
@@ -16,7 +16,7 @@ import {
 const ICONS = {
   AlertCircle, AlignJustify, Archive, ArchiveRestore, ArrowLeft, ArrowRight, BadgeCheck, Ban, BookOpen,
   Check, ChevronDown, CircleDashed, Clock, Download, Eraser, EyeOff, Filter,
-  FileStack, FileText, FolderOpen, HelpCircle, Image, ImagePlus, Info, KeyRound, Library, LogOut, Maximize, Menu,
+  FileStack, FileText, FolderOpen, HelpCircle, Image, ImagePlus, Info, KeyRound, Keyboard, Library, LogOut, Maximize, Menu,
   MessageCircleQuestion, MessageSquare, MessageSquareText, MessagesSquare, Moon,
   MoreVertical, MousePointerClick, Network, PanelRight, Pencil, Plus, Quote, RotateCcw, Rows3, Scan, ScrollText,
   Search, Send, Spline, Square, Sun, Trash2, TrendingDown, TriangleAlert, Unlink, Upload, UserRound, X,

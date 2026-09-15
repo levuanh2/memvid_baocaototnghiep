@@ -35,6 +35,7 @@ def build_graph(
     nodes: List[Dict[str, Any]],
     relations: List[Dict[str, Any]],
     chunk_map: Dict[str, Dict[str, Any]],
+    source_stems: Optional[List[str]] = None,
 ) -> Tuple[List[Dict[str, Any]], List[Dict[str, Any]]]:
     """(node_rows, edge_rows).
 
@@ -44,6 +45,8 @@ def build_graph(
     node_rows: {key, parent_key, title, summary, node_type, level, order_index,
     section_id, chunk_ids} — cha LUÔN đứng trước con để resolve FK khi insert.
     """
+    from services.provenance import source_stems_for_single_document
+    resolved_stems = source_stems_for_single_document((source_stems or [None])[0])
     by_key: Dict[str, Dict[str, Any]] = {}
     for n in nodes or []:
         key = str(n.get("id") or "").strip()
@@ -90,7 +93,7 @@ def build_graph(
         seen.add(key)
         n = by_key[key]
         chunk_ids, section_id = _resolve_chunks(n.get("chunk_refs") or [], chunk_map)
-        node_rows.append({
+        row = {
             "key": key,
             "parent_key": parent_of[key],
             "title": n["title"].strip()[:500],
@@ -100,7 +103,10 @@ def build_graph(
             "order_index": len(node_rows),
             "section_id": section_id,
             "chunk_ids": chunk_ids,
-        })
+        }
+        if chunk_ids and resolved_stems is not None:
+            row["source_stems"] = resolved_stems
+        node_rows.append(row)
         for child in reversed(children.get(key, [])):
             stack.append((child, level + 1))
 

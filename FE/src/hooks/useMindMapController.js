@@ -5,7 +5,7 @@
 // whoever owns both the canvas and the Inspector (WorkspaceContainer/MainLayout),
 // so both consume the SAME state instead of two copies of it.
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
-import { buildGraphIndex, relationsFor, headingPath } from "../utils/mindmapGraph";
+import { buildGraphIndex, relationsFor, headingPath, findNodeByChunk as findNodeByChunkInIndex, allNodeSummaries } from "../utils/mindmapGraph";
 import { useStudyContext } from "../study/useStudyContext";
 
 export function useMindMapController(data) {
@@ -70,6 +70,12 @@ export function useMindMapController(data) {
     setSelected({
       id: n.id, title: n.topic, note: side?.note || "", chunkRefs: side?.chunkRefs || [],
       number: side?.number || "", level: side?.level || 0, enrichment: side?.enrichment || [],
+      // M2.5 (Provenance Adoption) — same undefined-not-[] discipline as the
+      // sidecar/normalizer it comes from; not defaulted to `[]` like the
+      // fields above, since "unresolved" and "resolved to zero" are
+      // different, real states a consumer (KnowledgeInspector) must be able
+      // to tell apart.
+      sourceStems: side?.sourceStems,
     });
     pushHistory(n.id);
     selectNodeInContext(n.id, { source: "mindmap", label: n.topic });
@@ -91,6 +97,14 @@ export function useMindMapController(data) {
   // `source:"mindmap"` tag was used by StudyMapView's own — separate —
   // canvas) correctly reports false instead of silently no-op'ing.
   const canJumpTo = useCallback((id) => sidecarRef.current.has(id), []);
+
+  // Feature Pack B (Cross Navigation) — Chat -> MindMap node. Delegates to
+  // the pure `findNodeByChunk` in mindmapGraph.js (unit-tested there, same
+  // module `relationsFor`/`headingPath` already live in), over the SAME
+  // `graphIndexRef` this controller already builds — no second data
+  // structure, no sidecar dependency.
+  const findNodeByChunk = useCallback(
+    (chunkId) => findNodeByChunkInIndex(graphIndexRef.current, chunkId), []);
 
   const goBack = useCallback(() => {
     const h = historyRef.current;
@@ -116,6 +130,15 @@ export function useMindMapController(data) {
       return next;
     });
   }, [selected?.id]);
+
+  // Feature Pack D (Personal Knowledge Graph) — the FULL node set of the
+  // currently loaded mindmap, not just the selected node's neighborhood.
+  // `graphIndexRef` only changes identity when `data?.id` does (see the
+  // effect above), so that's the correct dependency here — unlike
+  // `relations`/`breadcrumb` below, this doesn't need to recompute on every
+  // selection change.
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  const allNodes = useMemo(() => allNodeSummaries(graphIndexRef.current), [data?.id]);
 
   const relations = useMemo(() => relationsFor(graphIndexRef.current, selected?.id), [selected?.id]);
   const breadcrumb = useMemo(() => headingPath(graphIndexRef.current, selected?.id), [selected?.id]);
@@ -147,7 +170,9 @@ export function useMindMapController(data) {
     // consumed by MindElixirView (canvas):
     registerMindInstance, onNodeSelected, sidecarRef,
     // consumed by KnowledgeInspector (and MindElixirView, for its own toolbar bits if needed):
-    selected, relations, breadcrumb, jumpTo, canJumpTo, goBack, goForward, togglePin,
+    selected, relations, breadcrumb, jumpTo, canJumpTo, findNodeByChunk, goBack, goForward, togglePin,
+    // Feature Pack D — consumed by KnowledgeDashboard.jsx:
+    allNodes,
     nav: { canBack, canForward, onBack: goBack, onForward: goForward, recent: recentItems, pinned: pinnedItems, isPinned, onTogglePin: togglePin },
   };
 }

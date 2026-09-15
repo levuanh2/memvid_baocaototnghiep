@@ -222,7 +222,7 @@ services:
       # Auth is Bearer-token, so a cross-origin reader still cannot obtain a
       # token. Tighten to the studymap-web URL once it is known.
       - key: CORS_ORIGINS
-        value: "*"
+        value: https://studymap-web.onrender.com
 
       # --- auth: production posture ---------------------------------------
       - key: AUTH_REQUIRE_SECRET

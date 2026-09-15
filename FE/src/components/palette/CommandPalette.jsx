@@ -13,6 +13,11 @@ import { tiepTucHoc } from "../../utils/tiepTucHoc";
 import { timKiemToanCuc } from "../../utils/paletteSearch";
 import { phimBang } from "../../utils/paletteKeyboard";
 import { docLichSu, ghiLichSu, themTimKiem, themLenh } from "../../utils/commandHistory";
+import { boDau } from "../../utils/thuVienTaiLieu";
+import { openShortcutsOverlay } from "../../utils/shortcutsBus";
+import { KIND_META as TIMELINE_KIND_META } from "../../utils/knowledgeEvolution";
+import { getWorkspaceSources } from "../../utils/workspaceSourcesBus";
+import { matchDocumentsToStems } from "../../utils/multiDocument";
 
 /**
  * Command Palette toàn cục (Phase 7). Ctrl+K/⌘K mở từ BẤT KỲ trang nào trong
@@ -32,6 +37,11 @@ const DANH_SACH_LENH = [
   { id: "tiep-tuc-hoc", nhan: "Tiếp tục học", icon: "ArrowRight", moTa: "Về đúng chỗ tài liệu gần nhất đang dở" },
   { id: "mo-gia-su", nhan: "Mở Gia sư AI", icon: "Sparkles", moTa: "Vào Workspace — Ctrl+/ mở Gia sư AI ở đó" },
   { id: "mo-phan-tich", nhan: "Xem phân tích học tập", icon: "TrendingDown", moTa: "Mở Thư viện học tập — mục Tổng quan học tập" },
+  // Feature Pack C (Keyboard-first Research Workspace) — mục 7 (Discoverability):
+  // "?" mở overlay này từ trong Workspace; đây là đường vào THỨ HAI từ palette,
+  // đúng yêu cầu "mở từ ? hoặc Command Palette" — cùng MỘT overlay, không có
+  // trạng thái mở/đóng thứ hai (xem utils/shortcutsBus.js).
+  { id: "phim-tat", nhan: "Phím tắt", icon: "Keyboard", moTa: "Xem toàn bộ phím tắt (hoặc bấm ?)" },
 ];
 
 // Bề mặt mở nhanh trên MỘT kết quả tài liệu — đúng bốn khoá `duongDi()` thật đã
@@ -100,7 +110,10 @@ export default function CommandPalette() {
   const { user } = useAuth();
   const navigate = useNavigate();
   const moTheoDoi = useOpenSurface();
-  const { selectedDocument } = useStudyContext();
+  // `history` (Feature Pack A) — nhật ký chọn lựa toàn app đã có sẵn trong
+  // Study Context, đọc thẳng để tìm được Dòng thời gian/phiên gần đây (mục 2)
+  // mà không thêm một nguồn dữ liệu thứ hai.
+  const { selectedDocument, history } = useStudyContext();
 
   const [open, setOpen] = useState(false);
   const [query, setQuery] = useState("");
@@ -163,14 +176,25 @@ export default function CommandPalette() {
     return d ? tenHienThi(d) : null;
   }, [selectedDocument, documents]);
 
+  // Feature epic M1 (mục 9) — "Không gian nghiên cứu" phạm vi thứ ba, đọc
+  // qua workspaceSourcesBus.js (Workspace.jsx là cây React KHÁC, xem file đó
+  // để biết vì sao là một mirror module, không phải StudyContext). Đọc MỖI
+  // LẦN mở palette — cùng lý do thư viện tải lại mỗi lần mở ở effect dưới:
+  // không tin một bản nhớ cũ, người dùng có thể đã đổi lựa chọn ở cột trái
+  // trong lúc palette đóng.
+  const [workspaceStems, setWorkspaceStems] = useState([]);
+  useEffect(() => { if (open) setWorkspaceStems(getWorkspaceSources()); }, [open]);
+
   // Phạm vi "Tài liệu hiện tại" — LỌC trên dữ liệu thư viện đã tải sẵn (Issue 3),
   // không phải một truy vấn mới: mọi thứ dưới đây vẫn chạy qua CHÍNH
-  // `timKiemToanCuc` như trước.
-  const phamViDocuments = useMemo(() => (
-    scope === "current" && selectedDocument
-      ? documents.filter((d) => d.document_id === selectedDocument)
-      : documents
-  ), [scope, selectedDocument, documents]);
+  // `timKiemToanCuc` như trước. "Không gian nghiên cứu" cùng nguyên tắc, lọc
+  // qua `matchDocumentsToStems` (multiDocument.js) — hàm đã có, không viết
+  // lại phép so khớp stem lần thứ hai ở đây.
+  const phamViDocuments = useMemo(() => {
+    if (scope === "current" && selectedDocument) return documents.filter((d) => d.document_id === selectedDocument);
+    if (scope === "workspace" && workspaceStems.length > 1) return matchDocumentsToStems(documents, workspaceStems);
+    return documents;
+  }, [scope, selectedDocument, workspaceStems, documents]);
 
   // Tải thư viện MỖI LẦN mở — không tin một bản nhớ từ lần mở trước, tài liệu có
   // thể đã đổi (đổi tên, ghim, upload mới) ở một trang khác trong lúc đóng.
@@ -206,6 +230,22 @@ export default function CommandPalette() {
     return DANH_SACH_LENH.filter((l) => l.nhan.toLowerCase().includes(q));
   }, [query]);
 
+  // Feature Pack C — mục 2: tìm trong Dòng thời gian/phiên gần đây. Cùng phép
+  // so khớp bỏ dấu-không-phân-biệt-hoa-thường ResearchTimeline.jsx đã dùng cho
+  // CHÍNH mảng `history` này; giới hạn 5 mục MỚI NHẤT khớp, không phải toàn bộ
+  // 50 mục (palette là tra cứu nhanh, không phải trang duyệt lại lịch sử).
+  const ketQuaLichSu = useMemo(() => {
+    const q = boDau(query.trim());
+    if (!q) return [];
+    const out = [];
+    for (let i = history.length - 1; i >= 0 && out.length < 5; i--) {
+      const e = history[i];
+      const nhan = TIMELINE_KIND_META[e.kind]?.label || e.kind;
+      if (boDau(`${e.label} ${nhan}`).includes(q)) out.push(e);
+    }
+    return out;
+  }, [history, query]);
+
   const dangRong = !query.trim();
 
   // ── Dồn mọi nhóm thành MỘT mảng phẳng — điều hướng bàn phím không cần biết
@@ -221,9 +261,10 @@ export default function CommandPalette() {
       ...ketQua.collections.map((c) => ({ loai: "bo_suu_tap", key: `bst-${c.collection_id}`, ...c })),
       ...ketQua.topics.map((t) => ({ loai: "chu_de", key: `t-${t.ten}`, ...t })),
       ...ketQua.entities.map((e) => ({ loai: "thuc_the", key: `e-${e.ten}`, ...e })),
+      ...ketQuaLichSu.map((e) => ({ loai: "dong_thoi_gian", key: `ts-${e.kind}-${e.id}-${e.at}`, entry: e })),
       ...danhSachLenhLoc.map((l) => ({ loai: "lenh", key: `c-${l.id}`, ...l })),
     ];
-  }, [dangRong, ketQua, danhSachLenhLoc, lichSu]);
+  }, [dangRong, ketQua, ketQuaLichSu, danhSachLenhLoc, lichSu]);
 
   useEffect(() => { setChiSo((c) => Math.min(c, Math.max(0, dsPhang.length - 1))); }, [dsPhang.length]);
 
@@ -257,6 +298,9 @@ export default function CommandPalette() {
         moTheoDoi(gioiHan, resume?.beMat || gioiHan.last_workspace || "studymap");
         break;
       }
+      case "phim-tat":
+        openShortcutsOverlay();
+        break;
       default:
         break;
     }
@@ -280,6 +324,14 @@ export default function CommandPalette() {
     if (muc.loai === "chu_de") return locTheo("topic", muc.ten);
     if (muc.loai === "thuc_the") return locTheo("entity", muc.ten);
     if (muc.loai === "lenh") return chayLenh(muc);
+    // Dòng thời gian — CommandPalette là component mount NGOÀI cây Workspace
+    // (App.jsx, cạnh <Routes>, xem comment đầu file), nên không có đường thật
+    // nào tới `mindMapController`/canvas để "Jump" như ResearchTimeline.jsx tự
+    // làm được (đó là state cục bộ của MainLayout, một cây React khác). Hành
+    // động THẬT duy nhất palette có thể làm trung thực ở đây: tìm lại đúng chữ
+    // đã ghi trong nhật ký — giống hệt cách "lich_su_tim" phía dưới đã làm cho
+    // lịch sử TÌM KIẾM, không phải một cú nhảy giả.
+    if (muc.loai === "dong_thoi_gian") { setQuery(muc.entry.label); inputRef.current?.focus(); return; }
     if (muc.loai === "lich_su_tim") return setQuery(muc.q);
     if (muc.loai === "lich_su_lenh") {
       const lenh = DANH_SACH_LENH.find((l) => l.id === muc.id);
@@ -326,6 +378,7 @@ export default function CommandPalette() {
           expanded={moRong} onToggle={toggleMoRong}
           onInsertToken={chenToanTu} onExactPhrase={cumChinhXac}
           scope={scope} onScopeChange={setScope} currentDocLabel={taiLieuHienTaiTen}
+          workspaceCount={workspaceStems.length}
           tags={theTanSo} collections={collections}
           onPickTag={(t) => locTheo("tag", t)} onPickCollection={(c) => locTheo("collection", c)}
         />
@@ -433,12 +486,29 @@ export default function CommandPalette() {
             </>
           )}
 
+          {/* Feature Pack C — mục 2: Dòng thời gian/phiên gần đây. */}
+          {!dangTai && !dangRong && ketQuaLichSu.length > 0 && (
+            <>
+              <TieuDeNhom>Dòng thời gian</TieuDeNhom>
+              {ketQuaLichSu.map((e, i) => {
+                const idx = ketQua.documents.length + ketQua.collections.length + ketQua.topics.length
+                  + ketQua.entities.length + i;
+                const meta = TIMELINE_KIND_META[e.kind] || { icon: "Tag", label: e.kind };
+                return (
+                  <Muc key={`ts-${e.kind}-${e.id}-${e.at}`} icon={meta.icon} chinh={e.label} phu={meta.label}
+                       lyDo="Tìm lại" hoatDong={chiSo === idx} onMouseEnter={() => setChiSo(idx)}
+                       onClick={() => { setQuery(e.label); inputRef.current?.focus(); }} />
+                );
+              })}
+            </>
+          )}
+
           {!dangTai && !dangRong && danhSachLenhLoc.length > 0 && (
             <>
               <TieuDeNhom>Lệnh</TieuDeNhom>
               {danhSachLenhLoc.map((l, i) => {
                 const idx = ketQua.documents.length + ketQua.collections.length + ketQua.topics.length
-                  + ketQua.entities.length + i;
+                  + ketQua.entities.length + ketQuaLichSu.length + i;
                 return (
                   <Muc key={l.id} icon={l.icon} chinh={l.nhan} phu={l.moTa}
                        hoatDong={chiSo === idx} onMouseEnter={() => setChiSo(idx)}

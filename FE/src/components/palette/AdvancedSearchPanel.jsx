@@ -35,6 +35,10 @@ const Disabled = ({ children, title }) => (
 export default function AdvancedSearchPanel({
   expanded, onToggle, onInsertToken, onExactPhrase,
   scope, onScopeChange, currentDocLabel,
+  // Feature epic M1 (mục 9) — số tài liệu đang chọn trong Không gian nghiên
+  // cứu (SidebarLeft checkboxes). < 2 thì phạm vi này không có ý nghĩa hơn
+  // "Tất cả tài liệu" — cùng lý do "Tài liệu hiện tại" đã tắt khi chưa chọn gì.
+  workspaceCount = 0,
   tags, collections, onPickTag, onPickCollection,
 }) {
   return (
@@ -75,6 +79,14 @@ export default function AdvancedSearchPanel({
                 </Chip>
               ) : (
                 <Disabled title="Chưa chọn tài liệu nào trong phiên học hiện tại">Tài liệu hiện tại</Disabled>
+              )}
+              {workspaceCount > 1 ? (
+                <Chip active={scope === "workspace"} onClick={() => onScopeChange("workspace")}
+                      title={`${workspaceCount} tài liệu đang chọn trong Không gian nghiên cứu`}>
+                  Không gian nghiên cứu ({workspaceCount})
+                </Chip>
+              ) : (
+                <Disabled title="Chọn từ 2 tài liệu trở lên bên trái để dùng phạm vi này">Không gian nghiên cứu</Disabled>
               )}
             </div>
           </div>

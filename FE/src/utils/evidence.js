@@ -45,6 +45,48 @@ export function citeKey(stem, chunkId) {
   return `${normStem(stem)}::${String(chunkId ?? "")}`;
 }
 
+// Feature epic M1 (Multi-Document Intelligence, mục 7 — Workspace Timeline) —
+// the inverse of `citeKey`. An evidence-kind Study Context history entry's
+// `id` IS a `citeKey` string (see studySelection.js::chonEvidence) — this is
+// the ONE history kind that carries real per-document provenance today
+// (`stem` was already normalized when the key was built, so this is a
+// string split, not a lookup). ResearchTimeline.jsx and KnowledgeDashboard.jsx
+// each used to re-implement this split inline — consolidated here so a third
+// copy never gets written.
+export function parseCiteKey(key) {
+  const s = String(key ?? "");
+  const i = s.lastIndexOf("::");
+  if (i === -1) return { stem: s, chunkId: "" };
+  return { stem: s.slice(0, i), chunkId: s.slice(i + 2) };
+}
+
+// M2.5 (Provenance Adoption) — defensive normalization for BE's
+// `source_stems` field (BE/services/provenance.py::attach_node_source_stems /
+// attach_section_source_stems / source_stems_for_single_document). BE's own
+// contract already guarantees "absent means unresolved, never an empty
+// array" — this function re-derives that same guarantee independently on
+// the FE side rather than trusting the wire payload blindly (a malformed/
+// truncated/older-shape response must degrade the same safe way): non-array,
+// non-string entries, blank strings, and duplicate stems are all dropped: an
+// empty result after cleaning returns `undefined` (never `[]`), so a caller
+// can `if (stems)` and never has to special-case an empty-but-present array.
+// Order is preserved as given — BE already returns `sorted(stems)`, this
+// does not re-sort, only dedupes (stable ordering owned by BE, not refought
+// here — this function only ever REMOVES entries, never reorders them).
+export function normalizeSourceStems(raw) {
+  if (!Array.isArray(raw)) return undefined;
+  const seen = new Set();
+  const out = [];
+  for (const s of raw) {
+    if (typeof s !== "string") continue;
+    const v = s.trim();
+    if (!v || seen.has(v)) continue;
+    seen.add(v);
+    out.push(v);
+  }
+  return out.length ? out : undefined;
+}
+
 // ── Citation linkifying ──────────────────────────────────────────
 // The query graph annotates context chunks as "[Nguồn: <stem>, đoạn <id>]".
 // If the answer reproduces those markers, turn each into a numbered chip

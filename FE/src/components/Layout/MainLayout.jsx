@@ -4,6 +4,7 @@ import SidebarLeft from "./SidebarLeft";
 import SidebarRight from "./SidebarRight";
 import WorkspaceContainer from "./WorkspaceContainer";
 import KnowledgeInspector from "../mindmap/KnowledgeInspector";
+import ResearchTimeline from "../study/ResearchTimeline";
 import { useMindMapController } from "../../hooks/useMindMapController";
 import PanelSpine from "./PanelSpine";
 import PanelDivider from "./PanelDivider";
@@ -18,8 +19,21 @@ import StudyBreadcrumb from "../study/StudyBreadcrumb";
 import { useStudyContext } from "../../study/useStudyContext";
 import { openCommandPalette } from "../../utils/commandPaletteBus";
 import { useTutorMemory } from "../../study/useTutorMemory";
+import { globalShortcutAction, mindmapRelationAction } from "../../utils/keyboardShortcuts";
+import { OPEN_SHORTCUTS_EVENT } from "../../utils/shortcutsBus";
+import ShortcutsOverlay from "../shortcuts/ShortcutsOverlay";
 
-export default function MainLayout({ selectedSources, setSelectedSources, initialAskAbout = null }) {
+export default function MainLayout({
+  selectedSources, setSelectedSources, initialAskAbout = null,
+  // Feature Pack B (Cross Navigation) — read once as the INITIAL value only,
+  // same contract as `initialAskAbout` above (Workspace.jsx already documents
+  // why: "sau đó [state] làm chủ y như cũ", so a later click is never
+  // fought by a stale URL). A page that lands with `tab=mindmap` but no
+  // mindmap data loaded yet shows the same brief blank pane a fresh page
+  // load already can (WorkspaceContainer only mounts the MindMap pane once
+  // `hasMindmap` is true) — a pre-existing rough edge, not a new one.
+  initialWorkspaceMode = "chat", initialRightView = "evidence",
+}) {
   const [sources, setSources] = useState([]);
   const [leftOpen, setLeftOpen] = useState(false);   // chỉ dùng ở chế độ ngăn kéo (<768px)
   const [rightOpen, setRightOpen] = useState(false);
@@ -37,7 +51,7 @@ export default function MainLayout({ selectedSources, setSelectedSources, initia
   // generation/polling logic (untouched) and just FORWARDS its computed data
   // here via `onMindmapDataChange`/`onSummaryDataChange` instead of portaling
   // a modal — see SidebarRight.jsx's two small forwarding effects.
-  const [workspaceMode, setWorkspaceMode] = useState("chat");
+  const [workspaceMode, setWorkspaceMode] = useState(initialWorkspaceMode);
   const [mindmapData, setMindmapData] = useState(null);   // { data, onRegenerate, regenerating } | null
   const [summaryData, setSummaryData] = useState(null);   // summary record | null
   // Auto-switch to a newly-populated tab ONCE (null → non-null), not on every
@@ -53,11 +67,22 @@ export default function MainLayout({ selectedSources, setSelectedSources, initia
     hadSummaryRef.current = Boolean(summaryData);
   }, [summaryData]);
   const onSwitchToChat = useCallback(() => setWorkspaceMode("chat"), []);
+  // Feature Pack B — the other direction of the same switch, for Chat's own
+  // "Xem tóm tắt" button.
+  const onSwitchToSummary = useCallback(() => setWorkspaceMode("summary"), []);
 
   // ONE controller, ONE Inspector, shared by MindElixirView (via WorkspaceContainer)
   // and the KnowledgeInspector rendered directly below — selection state
   // survives switching modes because it lives HERE, not inside MindElixirView.
   const mindMapController = useMindMapController(mindmapData?.data);
+  // Feature Pack C (Keyboard-first Research Workspace) — the individual
+  // callbacks below are each `useCallback`-stabilized INSIDE the hook, but
+  // the object `useMindMapController` returns is a fresh literal every
+  // render (pre-existing — see `onJumpToMindMapNode`'s own dependency on the
+  // whole object just below). Destructuring the specific pieces this file's
+  // new keyboard effects need keeps THOSE effects from re-subscribing on
+  // every unrelated render, without touching the hook itself.
+  const { goBack: mmGoBack, goForward: mmGoForward, jumpTo: mmJumpTo, selected: mmSelected, relations: mmRelations } = mindMapController;
 
   // Feature Pack A (Research Timeline) — "Jump" to a mindmap-node entry must
   // switch the pane INTO view before scrolling it: MindElixirView stays
@@ -138,7 +163,7 @@ export default function MainLayout({ selectedSources, setSelectedSources, initia
 
   // Gia sư AI + Lề bằng chứng dùng chung MỘT cột (hard constraint: không thêm
   // cột thứ ba) — `rightView` chọn tab nào đang hiện trong nó.
-  const [rightView, setRightView] = useState("evidence");   // "evidence" | "tutor"
+  const [rightView, setRightView] = useState(initialRightView);   // "evidence" | "tutor" | "timeline"
   // Lệnh một-lần (nonce) để "Xem sơ đồ"/"Xem tóm tắt" ở Tutor chuyển đúng tab
   // Artifacts trong SidebarRight — KHÔNG điều hướng, KHÔNG route mới (tutorActions.js
   // giải thích lý do: Workspace không có `document_id` để gọi `duongDi`).
@@ -153,6 +178,57 @@ export default function MainLayout({ selectedSources, setSelectedSources, initia
     if (panel.drawer) setRightOpen(true); else panel.setCollapsedFor("right", false);
   }, [panel]);
 
+  // Feature Pack B (Cross Navigation) — real dead end found: while on the
+  // MindMap tab, the right column shows ONLY KnowledgeInspector (see the
+  // `workspaceMode === "mindmap"` swap below); SidebarRight, and with it the
+  // Research Timeline tab, is entirely unreachable. Everywhere else `rightView
+  // = "timeline"` already works (SidebarRight is what's showing). This is the
+  // ONE case that needs an actual overlay — a floating panel ON TOP of the
+  // Inspector, not a replacement for it (Inspector must stay mounted/visible
+  // underneath, not lose its own state).
+  const [timelineOverlayOpen, setTimelineOverlayOpen] = useState(false);
+  const openTimeline = useCallback(() => {
+    if (workspaceMode === "mindmap") { setTimelineOverlayOpen(true); return; }
+    setRightView("timeline");
+    if (panel.drawer) setRightOpen(true); else panel.setCollapsedFor("right", false);
+  }, [workspaceMode, panel]);
+  useEffect(() => {
+    if (!timelineOverlayOpen) return;
+    const onKey = (e) => { if (e.key === "Escape") setTimelineOverlayOpen(false); };
+    window.addEventListener("keydown", onKey);
+    return () => window.removeEventListener("keydown", onKey);
+  }, [timelineOverlayOpen]);
+  // Jumping to a question/evidence entry from the MindMap-mode overlay must
+  // switch workspaceMode itself, or the jump has no visible effect (the
+  // panel it lands in — Chat's composer, the Evidence tab — isn't the one on
+  // screen). Closes the overlay too: once you've jumped away from MindMap,
+  // there's nothing left for it to float over.
+  const onOverlayJumpQuestion = useCallback((text) => {
+    setWorkspaceMode("chat");
+    askDirect(text);
+    setTimelineOverlayOpen(false);
+  }, [askDirect]);
+  const onOverlayJumpEvidence = useCallback(({ stem, chunkId }) => {
+    setWorkspaceMode("chat");
+    setRightView("evidence");
+    if (panel.drawer) setRightOpen(true); else panel.setCollapsedFor("right", false);
+    onHighlight?.({ stem, chunkId });
+    setTimelineOverlayOpen(false);
+  }, [onHighlight, panel]);
+
+  // Feature Pack D — Knowledge Dashboard entry point. Deliberately NOT given
+  // the MindMap-mode floating-overlay treatment Timeline got in Feature Pack
+  // B: on the MindMap tab this behaves the same way the pre-existing "Gia sư
+  // AI" button already does (`openTutor`, above) — sets `rightView` without
+  // checking `workspaceMode`, a real no-visible-effect no-op while
+  // SidebarRight is swapped for KnowledgeInspector. That's an existing,
+  // documented rough edge (see docs/FEATURE_PACK_D_REPORT.md), not a new one
+  // this pack introduces or is scoped to fix.
+  const openInsights = useCallback(() => {
+    setRightView("insights");
+    if (panel.drawer) setRightOpen(true); else panel.setCollapsedFor("right", false);
+  }, [panel]);
+
   // Step 10 — Ctrl+/ (hoặc Cmd+/) mở Gia sư AI từ bất cứ đâu trong Workspace.
   useEffect(() => {
     const onKey = (e) => {
@@ -161,6 +237,87 @@ export default function MainLayout({ selectedSources, setSelectedSources, initia
     window.addEventListener("keydown", onKey);
     return () => window.removeEventListener("keydown", onKey);
   }, [openTutor]);
+
+  // Feature Pack C (Keyboard-first Research Workspace) — "?" and the global
+  // Alt+ workspace shortcuts (mục 3 + 7). ShortcutsOverlay's open state lives
+  // HERE, same reasoning as `timelineOverlayOpen` above: it's the one place
+  // already reachable both from the header AND from CommandPalette.jsx (a
+  // sibling component mounted outside this tree — see shortcutsBus.js for
+  // why that needs a DOM event instead of a prop).
+  const [shortcutsOpen, setShortcutsOpen] = useState(false);
+  useEffect(() => {
+    const onExternalOpen = () => setShortcutsOpen(true);
+    window.addEventListener(OPEN_SHORTCUTS_EVENT, onExternalOpen);
+    return () => window.removeEventListener(OPEN_SHORTCUTS_EVENT, onExternalOpen);
+  }, []);
+  useEffect(() => {
+    const onKey = (e) => {
+      const action = globalShortcutAction(e, { activeElement: document.activeElement });
+      if (!action) return;
+      // Global shortcuts must not reach THROUGH an open modal (ShortcutsOverlay
+      // itself, Command Palette, the Summary modal, the MindMap-mode Timeline
+      // overlay's `.me-container`-adjacent siblings...) — same selector
+      // MainLayout's own right-drawer Escape effect already guards with below.
+      // "help" is the ONE exception: it must still be able to TOGGLE its own
+      // overlay closed while that overlay is the thing open, same self-toggle
+      // exception CommandPalette's own Ctrl+K already has for its own modal.
+      if (action !== "help" && document.querySelector('[aria-modal="true"], .me-container')) return;
+      e.preventDefault();
+      switch (action) {
+        case "help": return setShortcutsOpen((v) => !v);
+        case "nav-chat": return onSwitchToChat();
+        // Alt+M mirrors WorkspaceTabs.jsx's own gate exactly (`enabled.mindmap
+        // = hasMindmap`) — a keyboard shortcut for a disabled tab must stay a
+        // no-op, not switch into an empty pane the click path itself refuses.
+        case "nav-mindmap": return mindmapData?.data && setWorkspaceMode("mindmap");
+        // Alt+S mirrors the EXISTING header "StudyMap" <Link to="/app/study">
+        // above — same destination, no new route invented.
+        case "nav-studymap": return navigate("/app/study");
+        case "nav-timeline": return openTimeline();
+        case "history-back": return mmGoBack();
+        case "history-forward": return mmGoForward();
+        default: return;
+      }
+    };
+    window.addEventListener("keydown", onKey);
+    return () => window.removeEventListener("keydown", onKey);
+  }, [onSwitchToChat, mindmapData, navigate, openTimeline, mmGoBack, mmGoForward]);
+
+  // Feature Pack C — MindMap relation navigation (mục 4 + 5): center / parent /
+  // child / sibling, bare c/u/d/[/]. Scoped to `workspaceMode === "mindmap"`
+  // only, and skipped entirely while the mind-elixir canvas itself has focus
+  // (`.me-container` — see keyboardShortcuts.js's `mindmapRelationAction` doc
+  // comment for why: that canvas is `editable: true` and binds its OWN
+  // Arrow/Enter/Tab/Delete keymap directly on the container; this effect
+  // never claims any key mind-elixir's table already uses, so the two never
+  // fight over the same press). `jumpTo` already both selects AND centers
+  // (mind.selectNode + scrollIntoView, see useMindMapController.js), so
+  // "center" and every relation jump share the one existing primitive.
+  useEffect(() => {
+    if (workspaceMode !== "mindmap") return;
+    const onKey = (e) => {
+      if (document.activeElement?.closest?.(".me-container")) return;
+      // Same open-modal guard as the global effect above — belt-and-suspenders
+      // alongside `mindmapRelationAction`'s own interactive-target check
+      // (ShortcutsOverlay's close button already blocks it that way, since
+      // Modal.jsx focuses that button on open; this also covers a modal open
+      // while focus happens to sit on non-interactive text inside it).
+      if (document.querySelector('[aria-modal="true"]')) return;
+      const action = mindmapRelationAction(e, { activeElement: document.activeElement });
+      if (!action || !mmSelected?.id) return;
+      e.preventDefault();
+      switch (action) {
+        case "center": return mmJumpTo(mmSelected.id);
+        case "parent": return mmRelations.parent && mmJumpTo(mmRelations.parent.id);
+        case "child": return mmRelations.children[0] && mmJumpTo(mmRelations.children[0].id);
+        case "prev-sibling": return mmRelations.prev && mmJumpTo(mmRelations.prev.id);
+        case "next-sibling": return mmRelations.next && mmJumpTo(mmRelations.next.id);
+        default: return;
+      }
+    };
+    window.addEventListener("keydown", onKey);
+    return () => window.removeEventListener("keydown", onKey);
+  }, [workspaceMode, mmSelected, mmRelations, mmJumpTo]);
 
   // Step 10 — Escape đóng ngăn kéo lề phải (khổ hẹp). Bỏ qua khi một overlay
   // khác đang mở (modal tóm tắt/sơ đồ — `[aria-modal]`/`.me-container`) để
@@ -217,6 +374,16 @@ export default function MainLayout({ selectedSources, setSelectedSources, initia
             // too), so the breadcrumb gets squeezed into near-zero space and
             // truncates to one letter. `lg` (1024px) gives it room.
             <StudyBreadcrumb showChat className="hidden lg:flex" />
+          ) : selectedSources?.length > 1 ? (
+            // Feature epic M1 (Multi-Document Intelligence, mục 1) — real signal
+            // that chat/mindmap/summary generation below will draw from every
+            // checked source, not silently just one. `selectedDocument` stays
+            // null here on purpose (Study Context's single-document pointer is
+            // a separate concept — see docs/MULTI_DOCUMENT_WORKSPACE.md).
+            <span className="hidden lg:flex items-center gap-1.5 text-metadata uppercase text-text-muted font-mono truncate">
+              <Icon name="FileStack" size={12} className="text-forest" />
+              Không gian nghiên cứu · {selectedSources.length} tài liệu
+            </span>
           ) : (
             <span className="hidden lg:block text-metadata uppercase text-text-muted font-mono truncate">
               Đọc · Truy hồi · Dẫn chứng
@@ -230,7 +397,7 @@ export default function MainLayout({ selectedSources, setSelectedSources, initia
           <Link
             to="/app/study"
             className="pill-action"
-            title="Quiz chẩn đoán, ôn tập theo lỗ hổng"
+            title="Quiz chẩn đoán, ôn tập theo lỗ hổng (Alt+S)"
           >
             <Icon name="ScrollText" size={14} />
             <span className="hidden sm:inline">StudyMap</span>
@@ -257,6 +424,22 @@ export default function MainLayout({ selectedSources, setSelectedSources, initia
           <button onClick={openTutor} className="hidden md:inline-flex pill-action !text-small"
                   title="Gia sư AI (Ctrl+/)">
             <Icon name="Sparkles" size={14} /> Gia sư AI
+          </button>
+          {/* Feature Pack B — luôn có mặt, kể cả khi đang ở sơ đồ tư duy (nơi
+              cột phải bị Trình khám phá tri thức chiếm, xem openTimeline). */}
+          <button onClick={openTimeline} className="hidden md:inline-flex pill-action !text-small"
+                  title="Dòng thời gian nghiên cứu (Alt+T)">
+            <Icon name="Clock" size={14} /> Dòng thời gian
+          </button>
+          {/* Feature Pack D — Knowledge Dashboard. */}
+          <button onClick={openInsights} className="hidden md:inline-flex pill-action !text-small"
+                  title="Kiến thức của bạn">
+            <Icon name="Network" size={14} /> Kiến thức
+          </button>
+          {/* Feature Pack C — Discoverability (mục 7). */}
+          <button onClick={() => setShortcutsOpen(true)} className="hidden md:inline-flex icon-btn w-9 h-9"
+                  title="Phím tắt (?)" aria-label="Xem phím tắt">
+            <Icon name="Keyboard" size={16} />
           </button>
           {/* Theme toggle */}
           <div className="hidden sm:flex theme-toggle" role="group" aria-label="Chế độ sáng/tối">
@@ -342,6 +525,7 @@ export default function MainLayout({ selectedSources, setSelectedSources, initia
               selectedSources, sources, onEvidence: setEvidence, highlight, onHighlight,
               onOpenLeft: () => (panel.drawer ? setLeftOpen(true) : panel.setCollapsedFor("left", false)),
               askAboutDraft,
+              hasSummary: Boolean(summaryData), onOpenSummary: onSwitchToSummary,
             }}
             mindmapData={mindmapData}
             summaryData={summaryData}
@@ -398,6 +582,48 @@ export default function MainLayout({ selectedSources, setSelectedSources, initia
                   tabs (unrelated to node selection, unaffected by this refactor). */}
               <div className={workspaceMode === "mindmap" ? "h-full" : "hidden h-full"}>
                 <KnowledgeInspector {...inspectorProps} />
+                {/* Feature Pack B — floating OVER the Inspector, not replacing
+                    it (Inspector stays mounted/visible underneath, keeps its
+                    own scroll/selection). Fixed-position slide-in, same shape
+                    as the mobile right-drawer elsewhere in this file, just
+                    available regardless of viewport width because this is
+                    the one case with no other way to reach the Timeline. */}
+                {timelineOverlayOpen && (
+                  <>
+                    <div
+                      className="fixed inset-0 z-40 bg-black/20"
+                      onClick={() => setTimelineOverlayOpen(false)}
+                      aria-hidden="true"
+                    />
+                    <div
+                      role="dialog"
+                      aria-modal="true"
+                      aria-label="Dòng thời gian nghiên cứu"
+                      className="fixed top-[58px] right-0 h-[calc(100vh-58px)] z-50 w-[326px] max-w-[90vw]
+                                 bg-surface-sidebar border-l border-border shadow-card-hover
+                                 flex flex-col"
+                    >
+                      <div className="flex items-center justify-between px-3 py-2 border-b border-border flex-shrink-0">
+                        <span className="text-caption text-text-muted">
+                          Nổi trên Trình khám phá tri thức
+                        </span>
+                        <button type="button" onClick={() => setTimelineOverlayOpen(false)}
+                                className="icon-btn w-7 h-7" autoFocus
+                                aria-label="Đóng dòng thời gian" title="Đóng (Esc)">
+                          <Icon name="X" size={14} />
+                        </button>
+                      </div>
+                      <div className="flex-1 min-h-0">
+                        <ResearchTimeline
+                          mindMapController={mindMapController}
+                          onJumpQuestion={onOverlayJumpQuestion}
+                          onJumpNode={onJumpToMindMapNode}
+                          onJumpEvidence={onOverlayJumpEvidence}
+                        />
+                      </div>
+                    </div>
+                  </>
+                )}
               </div>
               <div className={workspaceMode === "mindmap" ? "hidden h-full" : "h-full"}>
                 <SidebarRight
@@ -428,6 +654,10 @@ export default function MainLayout({ selectedSources, setSelectedSources, initia
 
       {/* ── TOAST STACK ── */}
       <Toaster />
+
+      {/* Feature Pack C — Discoverability (mục 7): "?" hoặc lệnh "Phím tắt"
+          trong Command Palette đều mở đúng overlay này. */}
+      <ShortcutsOverlay open={shortcutsOpen} onClose={() => setShortcutsOpen(false)} />
     </div>
   );
 }

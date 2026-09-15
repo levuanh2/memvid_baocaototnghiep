@@ -89,4 +89,53 @@ describe("normalizeMindmapRecord", () => {
     expect(out.nodes[0].level).toBe(0);
     expect(out.nodes[0].enrichment).toEqual([]);
   });
+
+  // M2.5 (Provenance Adoption) — source_stems (BE/services/provenance.py).
+  // The v2 node mapper used to be a strict allowlist that silently dropped
+  // this field entirely; these lock the fix down.
+  describe("v2: source_stems", () => {
+    const node = (extra) => ({
+      schema_version: 2,
+      nodes: [{ id: "n0", parent: null, title: "T", ...extra }],
+      relations: [], generator: {},
+    });
+
+    it("single source", () => {
+      const out = normalizeMindmapRecord(node({ source_stems: ["paper-a"] }));
+      expect(out.nodes[0].sourceStems).toEqual(["paper-a"]);
+    });
+
+    it("multiple sources — order preserved as BE sent it, not re-sorted", () => {
+      const out = normalizeMindmapRecord(node({ source_stems: ["paper-b", "paper-a"] }));
+      expect(out.nodes[0].sourceStems).toEqual(["paper-b", "paper-a"]);
+    });
+
+    it("missing field — key is absent, never [] and never present as undefined", () => {
+      const out = normalizeMindmapRecord(node({}));
+      expect(out.nodes[0]).not.toHaveProperty("sourceStems");
+      expect("sourceStems" in out.nodes[0]).toBe(false);
+    });
+
+    it("invalid values (not an array, non-string entries, blank strings) degrade to absent", () => {
+      expect(normalizeMindmapRecord(node({ source_stems: "paper-a" })).nodes[0]).not.toHaveProperty("sourceStems");
+      expect(normalizeMindmapRecord(node({ source_stems: [null, 42, "  "] })).nodes[0]).not.toHaveProperty("sourceStems");
+      expect(normalizeMindmapRecord(node({ source_stems: [] })).nodes[0]).not.toHaveProperty("sourceStems");
+    });
+
+    it("duplicate stems are deduped, first occurrence wins position", () => {
+      const out = normalizeMindmapRecord(node({ source_stems: ["paper-a", "paper-b", "paper-a"] }));
+      expect(out.nodes[0].sourceStems).toEqual(["paper-a", "paper-b"]);
+    });
+
+    it("a mix of valid and invalid entries keeps only the valid ones, in order", () => {
+      const out = normalizeMindmapRecord(node({ source_stems: ["paper-a", null, "", "paper-b", 5] }));
+      expect(out.nodes[0].sourceStems).toEqual(["paper-a", "paper-b"]);
+    });
+
+    it("old (v1/legacy) records never carry the field — untouched, no crash", () => {
+      const rec = { title: "L", nodes: [{ id: "root", parent: null, title: "L" }] };
+      const out = normalizeMindmapRecord(rec);
+      expect(out.nodes[0]).not.toHaveProperty("sourceStems");
+    });
+  });
 });

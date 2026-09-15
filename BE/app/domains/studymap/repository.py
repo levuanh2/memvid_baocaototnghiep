@@ -59,6 +59,10 @@ def save_graph(map_id: str, document_id: str, node_rows: List[Dict[str, Any]],
                 title=row["title"], summary=row.get("summary"),
                 node_type=row["node_type"], level=int(row["level"]),
                 order_index=int(row["order_index"]),
+                metadata_json=(
+                    {"source_stems": list(row["source_stems"])}
+                    if row.get("source_stems") else None
+                ),
             ))
         s.flush()
         for row in node_rows:
@@ -128,6 +132,8 @@ def get_map(map_id: str) -> Optional[Dict[str, Any]]:
                 "level": n.level,
                 "order_index": n.order_index,
                 "chunk_ids": by_node.get(n.id, []),
+                **({"source_stems": (n.metadata_json or {}).get("source_stems")}
+                   if (n.metadata_json or {}).get("source_stems") else {}),
             } for n in nodes],
             "edges": [{
                 "edge_id": e.id,

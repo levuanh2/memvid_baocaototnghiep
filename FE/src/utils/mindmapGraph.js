@@ -19,7 +19,17 @@ export function buildGraphIndex(record) {
   return { byId, childrenOf };
 }
 
-const summarize = (n) => (n ? { id: n.id, title: n.title, number: n.number, kind: n.kind } : null);
+// M2.5 (Provenance Adoption) — `sourceStems` only added to the summary when
+// the node actually has it (never defaulted to `[]`); every existing caller
+// of `summarize()` (relations/breadcrumb pills) gets real provenance for
+// free, no new plumbing. `allNodeSummaries` below is what `classifyByProvenance`
+// (also this file) and Knowledge Dashboard's node lists read.
+const summarize = (n) => {
+  if (!n) return null;
+  const out = { id: n.id, title: n.title, number: n.number, kind: n.kind };
+  if (n.sourceStems?.length) out.sourceStems = n.sourceStems;
+  return out;
+};
 
 // Task 4 — parent / children / siblings / prev / next, all from the tree
 // shape alone. "Horizontal neighbours" and "previous/next" are the same
@@ -39,6 +49,50 @@ export function relationsFor(index, nodeId) {
   const next = myIndex >= 0 && myIndex < siblingList.length - 1 ? summarize(siblingList[myIndex + 1]) : null;
 
   return { parent: summarize(parent), children, siblings, prev, next };
+}
+
+// Feature Pack B (Cross Navigation) — Chat -> MindMap node. Reads the SAME
+// per-node `chunkRefs` `normalizeMindmapRecord` already attaches (see
+// mindmapNormalize.js) — no second data source, no sidecar dependency, one
+// more pure reader over the exact index `relationsFor`/`headingPath` already
+// use. Several nodes citing the same chunk is real and possible; returns the
+// FIRST match in `byId`'s own iteration order — deterministic (Maps preserve
+// insertion order, `byId` is built from `norm.nodes` in that same order
+// every load), not "whichever happens to match."
+export function findNodeByChunk(index, chunkId) {
+  const target = String(chunkId ?? "");
+  if (!target) return null;
+  for (const [id, node] of index.byId) {
+    if ((node.chunkRefs || []).some((c) => String(c) === target)) return id;
+  }
+  return null;
+}
+
+// Feature Pack D (Personal Knowledge Graph) — every non-root node in the
+// currently loaded mindmap, as the same `summarize()` shape `relationsFor`
+// already returns for parent/children/siblings. Used by
+// `knowledgeEvolution.js`'s `partitionNodesByVisit`/`nodeHeatmap` to know the
+// FULL set a session's `history[]` node visits are a subset of — without
+// this, "unvisited"/"never opened" would have nothing to be relative to.
+export function allNodeSummaries(index) {
+  const out = [];
+  for (const n of index.byId.values()) {
+    if (n.kind === "root") continue;
+    out.push(summarize(n));
+  }
+  return out;
+}
+
+// M2.5 (Provenance Adoption, mục 3 — Cross-document MindMap) — closes the
+// blocker Feature Pack C/D and M1 each documented (no per-node source data
+// existed to classify with). Purely `source_stems`-driven, nothing else:
+// no title comparison, no semantic similarity, no chunk-content inspection.
+// A node is "shared" ONLY when BE resolved 2+ distinct source stems for it —
+// never inferred from two nodes merely having a similar-looking title.
+export function classifyByProvenance(node) {
+  const stems = node?.sourceStems;
+  if (!stems?.length) return "unresolved";
+  return stems.length > 1 ? "shared" : "single-source";
 }
 
 // Task 6 — "current heading": ancestor chain from root down to (excluding)
