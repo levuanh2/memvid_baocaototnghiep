@@ -11,7 +11,8 @@ Frontend adoption of the `source_stems` contract landed in M2. Closes the per-no
 - `85182e4` — non-destructive corrective follow-up. **This is the effective M2 tip** — the tree that actually matches the contract.
 - `b88ee7d` — doc correction (Claude) describing the above.
 
-**M2.5 (FE, this pass, Claude):** committed and pushed in the same session this report was written — see the GIT section below for the exact hashes, added after commit.
+**M2.5 (FE, this pass, Claude):**
+- `4c31991` — `feat(ui): adopt source_stems provenance contract`. All 15 FE files + this report doc, in one commit (normalization fix, sidecar/hook fixes, MindMap/Summary/StudyMap adoption, and M1 closure enrichment are one tightly-coupled change, not artificially split).
 
 ---
 
