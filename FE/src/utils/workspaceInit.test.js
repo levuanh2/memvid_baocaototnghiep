@@ -26,10 +26,11 @@ describe("resolveInitialTab", () => {
 });
 
 describe("resolveInitialRightView", () => {
-  it("accepts the three real right-column views", () => {
+  it("accepts the four real right-column views", () => {
     expect(resolveInitialRightView("timeline")).toBe("timeline");
     expect(resolveInitialRightView("tutor")).toBe("tutor");
     expect(resolveInitialRightView("evidence")).toBe("evidence");
+    expect(resolveInitialRightView("insights")).toBe("insights"); // Feature Pack D
   });
   it("unknown value falls back to evidence, the pre-existing default", () => {
     expect(resolveInitialRightView("inspector")).toBe("evidence");

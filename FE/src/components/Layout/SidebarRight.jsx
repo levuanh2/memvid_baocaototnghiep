@@ -20,6 +20,7 @@ import { normStem, citeKey } from "../../utils/evidence";
 import MdSnippet from "../ui/Markdown";
 import TutorPanel from "../study/TutorPanel";
 import ResearchTimeline from "../study/ResearchTimeline";
+import KnowledgeDashboard from "../study/KnowledgeDashboard";
 import { useStudyContext } from "../../study/useStudyContext";
 
 const IDLE_JOB_UI = { running: false, label: "", progress: null, stalled: false };
@@ -664,6 +665,12 @@ export default function SidebarRight({
                   aria-pressed={rightView === "timeline"}>
             <Icon name="Clock" size={13} /> Dòng thời gian
           </button>
+          {/* Feature Pack D — same peer weight as Timeline above. */}
+          <button type="button" onClick={() => onRightViewChange?.("insights")}
+                  className={`pill-tab !px-2.5 !py-1 ${rightView === "insights" ? "pill-tab-active" : ""}`}
+                  aria-pressed={rightView === "insights"}>
+            <Icon name="Network" size={13} /> Kiến thức
+          </button>
         </div>
         <div className="flex items-center gap-1 flex-shrink-0">
           {/* Ghim/Tách nổi — chỉ có ý nghĩa trên màn rộng, nơi cột này có chỗ
@@ -700,6 +707,17 @@ export default function SidebarRight({
             onRightViewChange?.("evidence");
             onHighlight?.({ stem, chunkId });
           }}
+        />
+      ) : rightView === "insights" ? (
+        <KnowledgeDashboard
+          mindMapController={mindMapController}
+          onJumpQuestion={askDirect}
+          onJumpNode={onJumpToMindMapNode}
+          onJumpEvidence={({ stem, chunkId }) => {
+            onRightViewChange?.("evidence");
+            onHighlight?.({ stem, chunkId });
+          }}
+          onOpenTimeline={() => onRightViewChange?.("timeline")}
         />
       ) : (
       <>

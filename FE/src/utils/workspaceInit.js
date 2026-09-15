@@ -10,7 +10,7 @@
 const VALID_TABS = new Set(["chat", "mindmap", "summary"]);
 const DEFAULT_TAB = "chat";
 
-const VALID_RIGHT_VIEWS = new Set(["evidence", "tutor", "timeline"]);
+const VALID_RIGHT_VIEWS = new Set(["evidence", "tutor", "timeline", "insights"]);
 const DEFAULT_RIGHT_VIEW = "evidence";
 
 export function resolveInitialTab(raw) {

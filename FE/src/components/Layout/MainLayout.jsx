@@ -216,6 +216,19 @@ export default function MainLayout({
     setTimelineOverlayOpen(false);
   }, [onHighlight, panel]);
 
+  // Feature Pack D — Knowledge Dashboard entry point. Deliberately NOT given
+  // the MindMap-mode floating-overlay treatment Timeline got in Feature Pack
+  // B: on the MindMap tab this behaves the same way the pre-existing "Gia sư
+  // AI" button already does (`openTutor`, above) — sets `rightView` without
+  // checking `workspaceMode`, a real no-visible-effect no-op while
+  // SidebarRight is swapped for KnowledgeInspector. That's an existing,
+  // documented rough edge (see docs/FEATURE_PACK_D_REPORT.md), not a new one
+  // this pack introduces or is scoped to fix.
+  const openInsights = useCallback(() => {
+    setRightView("insights");
+    if (panel.drawer) setRightOpen(true); else panel.setCollapsedFor("right", false);
+  }, [panel]);
+
   // Step 10 — Ctrl+/ (hoặc Cmd+/) mở Gia sư AI từ bất cứ đâu trong Workspace.
   useEffect(() => {
     const onKey = (e) => {
@@ -407,6 +420,11 @@ export default function MainLayout({
           <button onClick={openTimeline} className="hidden md:inline-flex pill-action !text-small"
                   title="Dòng thời gian nghiên cứu (Alt+T)">
             <Icon name="Clock" size={14} /> Dòng thời gian
+          </button>
+          {/* Feature Pack D — Knowledge Dashboard. */}
+          <button onClick={openInsights} className="hidden md:inline-flex pill-action !text-small"
+                  title="Kiến thức của bạn">
+            <Icon name="Network" size={14} /> Kiến thức
           </button>
           {/* Feature Pack C — Discoverability (mục 7). */}
           <button onClick={() => setShortcutsOpen(true)} className="hidden md:inline-flex icon-btn w-9 h-9"
