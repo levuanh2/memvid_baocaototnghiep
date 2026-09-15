@@ -1,6 +1,13 @@
 # M2 — Provenance Contract
 
-Backend infrastructure sprint, implemented and owned by Codex (BE), documented here against the actual landed local diff — not the epic's original wishlist. As of this writing the diff is **landed locally, not staged, not committed, not pushed**. A full-repo `pytest` run was attempted and did not complete (see Tests below — a pre-existing, unrelated collection error, not something this document treats as "full suite green"). This document will be corrected if the final commit differs from what's described here.
+Backend infrastructure sprint, implemented and owned by Codex (BE), documented here against the actual landed commits — not the epic's original wishlist. A full-repo `pytest` run was attempted and did not complete (see Tests below — a pre-existing, unrelated collection error, not something this document treats as "full suite green").
+
+**Commit history — read this before the file list below.** M2 landed as TWO commits on `release/p0-p0.5-verification`, not one, and the first is NOT an isolated M2 diff:
+
+- **`a47aa34`** — the original M2 commit. It correctly scoped to the 7 files named in this document, but `app/graphs/mindmap_graph.py` was staged as a whole dirty file, which also carried Codex's own **pre-existing, unrelated, uncommitted Phase 2B / quality / recovery WIP** (~148 lines) that happened to be sitting in that file at the time. **`a47aa34` is historical, mixed content — it is not a clean M2-only commit, and this document's earlier claim that "no pipeline logic was touched" is not accurate for `a47aa34` specifically.**
+- **`85182e4`** — a non-destructive follow-up commit (no reset, no rewrite of `a47aa34`, no rebase — shared branch, other pushes had already landed on top of it). It restores `app/graphs/mindmap_graph.py`'s effective content to its pre-`a47aa34` parent state and reapplies **only** the provenance-attachment wiring. The unrelated Phase 2B/quality/recovery WIP that had leaked into `a47aa34` was moved back to Codex's local working tree (uncommitted, not lost, not pushed).
+
+**The correct thing to read is the branch tip after `85182e4`, not `a47aa34` in isolation.** At that tip, the effective tree genuinely matches every claim in this document: `source_stems` only, no pipeline/prompt/hierarchy/LLM logic changed, exactly the 7 files below. Everything below describes that effective state unless stated otherwise.
 
 ---
 
@@ -12,7 +19,7 @@ Backend infrastructure sprint, implemented and owned by Codex (BE), documented h
 - **Summary**: a section's existing `chunk_refs` are resolved the same way, via `services.summary.pipeline.pointers._chunk_meta_index` (chunk key → source stem), which already existed for a different purpose in the summary pipeline.
 - **StudyMap**: the current generator is single-document (one `document_id` per map, `KnowledgeMap`/`KnowledgeNode` both FK to a single document). There is no multi-source chunk-to-stem mapping available (`chunks_by_embedding(document_id)` returns `chunk_id`/`section_id`/`chunk_index`, not a stem). `source_stems` here is therefore always the ONE canonical stem resolved from the map's own `Document` row — a single-element array, attached only to nodes that actually have `chunk_ids`. This is a genuine, intentional scope boundary, not an oversight — see Limitations.
 - Attachment happens **after** each pipeline's existing `sanitize_nodes`/section-sanitize step and **before** the build/persist step — sanitization already strips unrecognized fields, so provenance has to be added after it survives that gate, not before.
-- **No pipeline, prompt, hierarchy, or LLM logic was touched.** `source_stems` is metadata bolted onto an already-built node/section, never an input to generation.
+- **No pipeline, prompt, hierarchy, or LLM logic was touched** — at the effective, post-`85182e4` tree (see Commit history above; `a47aa34` alone briefly mixed in unrelated pre-existing WIP, corrected non-destructively). `source_stems` is metadata bolted onto an already-built node/section, never an input to generation.
 
 ---
 
@@ -60,19 +67,19 @@ Verified against the actual FE normalizer code, not assumed:
 
 ---
 
-## Files changed (BE, Codex-owned; not committed as of this report)
+## Files changed (BE, Codex-owned; landed and pushed as `a47aa34` + corrective `85182e4`)
 
 | File | Status |
 |---|---|
 | `BE/services/provenance.py` | new — the shared deterministic resolver |
 | `BE/tests/test_provenance.py` | new |
-| `BE/app/graphs/mindmap_graph.py` | modified |
+| `BE/app/graphs/mindmap_graph.py` | modified — see commit-history note above; effective (post-`85182e4`) content is provenance-attachment only |
 | `BE/app/graphs/summary_graph.py` | modified |
 | `BE/app/domains/studymap/generator.py` | modified |
 | `BE/app/application/study_map_generation.py` | modified |
 | `BE/app/domains/studymap/repository.py` | modified |
 
-Zero FE files in this diff. No prompt/LLM/hierarchy-logic files touched (confirmed by file list above — none of these are prompt or generation-logic modules; `provenance.py` is metadata-only, and the three modified graph/generator/application/repository files are wiring, not generation logic).
+Zero FE files in either commit. No prompt/LLM/hierarchy-logic files touched, at the effective (post-`85182e4`) tree — none of these 7 files are prompt or generation-logic modules; `provenance.py` is metadata-only, and the other six are wiring, not generation logic. (`a47aa34` alone, before the correction, is not evidence of this — see Commit history above.)
 
 ---
 
@@ -89,7 +96,7 @@ Zero FE files in this diff. No prompt/LLM/hierarchy-logic files touched (confirm
 
 **The full BE `pytest` suite has NOT been run green end-to-end for this change, and this document does not claim otherwise.** A full-suite run was attempted and stopped during collection with a `ModuleNotFoundError: langchain_core.pydantic_v1` across 9 query/CRAG-related modules. This is a pre-existing environment issue — those 9 modules are unrelated to this diff (none of the 7 files this epic touched are among them), and no test body from them ran either way, so it's neither a pass nor a fail caused by M2, just a collection-time gap in this local environment that predates this epic. The 49+57 focused/regression numbers above are what's actually been verified; "full suite green" is not a claim made anywhere in this document.
 
-The test matrix covers, per the design discussion before implementation: single-source, multi-source/shared, unresolved (field absent), stem canonicalization, and duplicate-chunk ordering. Old-record backward compatibility is covered by construction (new-records-only means an old record's test fixture simply has no `source_stems` key to begin with, and the regression suite passing confirms nothing about existing record handling changed).
+The test matrix (`BE/tests/test_provenance.py`, 6 tests) covers: stem canonicalization, shared multi-source union, unresolved/empty input, input immutability (the resolver doesn't mutate what it's given), and StudyMap's ref-bound single-source case. Old-record backward compatibility is covered by construction (new-records-only means an old record's test fixture simply has no `source_stems` key to begin with, and the regression suite passing confirms nothing about existing record handling changed).
 
 ---
 
@@ -99,5 +106,6 @@ The test matrix covers, per the design discussion before implementation: single-
 - **A concept/section with no chunk references at all has no provenance claim.** `source_stems` is omitted rather than inherited from the containing map/document's full source list — a concept that can't point to a specific chunk gets no claim about where it came from, not a fabricated broad one.
 - **`source_document_id`, `source_chunk_ids`, `source_hash`, `generation_stage`** from the epic's own example list were not implemented. `source_stems` alone was judged sufficient for the FE's actual consumption needs (it's the exact shape `citeKey`/`normStem` already expect) and is what landed.
 - **No migration/backfill exists or is planned for old records.** They will never carry `source_stems`; this is permanent, not a "not yet."
-- **This document was written before the BE diff was staged, committed, or pushed.** A full-repo `pytest` run did not complete (blocked at collection by a pre-existing, unrelated `langchain_core.pydantic_v1` import error in 9 query/CRAG modules — none of which this epic touched). Verified coverage is the 49 focused + 57 regression tests reported above, not a full-suite green. If the final landed shape or full-suite result differs from what's described here, this document needs a follow-up correction — it describes the diff as reported, not a verified-on-main state.
+- **`a47aa34` alone is not a clean, isolated M2 commit** — it also carries unrelated pre-existing WIP that leaked in from staging a whole dirty file. The corrective `85182e4` fixes this non-destructively on top. Anyone diffing "M2's changes" against `main`/a base should diff the effective post-`85182e4` tree, not `a47aa34` by itself, or they will see ~148 lines of unrelated Phase 2B/quality/recovery work that isn't part of this contract.
+- **A full-repo `pytest` run did not complete** (blocked at collection by a pre-existing, unrelated `langchain_core.pydantic_v1` import error in 9 query/CRAG modules — none of which this epic touched). Verified coverage is the 49 focused + 57 regression tests reported above, not a full-suite green.
 - **The frontend does not yet surface `source_stems` in any UI.** This pass confirmed tolerance (no breakage), not adoption. A future pass would be needed to actually display per-node/per-section provenance to a user — the exact FE follow-up Feature Pack D/M1 left as an open door once this BE contract existed.
