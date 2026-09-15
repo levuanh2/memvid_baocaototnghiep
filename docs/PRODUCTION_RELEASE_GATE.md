@@ -146,6 +146,29 @@ origin/main:                                   7c9bc7f -> fdc1c9d
 
 No force-push. No WIP touched (merge performed in an isolated worktree, not the primary working tree holding other in-progress BE work).
 
+---
+
+## Architecture correction — actual production topology
+
+**The paragraph immediately below this box was written under a wrong assumption and is preserved, not deleted, for an accurate trail — read it in light of this correction, not as fact.**
+
+The real production topology, confirmed by reading `.github/workflows/deploy.yml`, `docs/AWS_DEPLOYMENT.md`, `docker-compose.prod.yml`, and `scripts/_lib.sh` directly (not guessed):
+
+| | |
+|---|---|
+| **Frontend** | Render static site — this part of the earlier assumption was correct. |
+| **Backend** (`api.studymap.space`) | **AWS EC2 + Docker Compose.** `render.yaml`'s `studymap-api` service is a separate, unrelated Render backend blueprint — it is **not** what serves `api.studymap.space`. |
+| **Deployment trigger** | `git push`/PR-merge to `main` → `.github/workflows/ci.yml` runs → on success, `.github/workflows/deploy.yml`'s `workflow_run` trigger fires → SSH into EC2 (`EC2_USER@EC2_HOST`, GitHub Secrets) → `scripts/deploy.sh` (sync to `origin/main`, rebuild, migrate, restart, health-check; fails the whole deploy if unhealthy). |
+| **Production runtime config source** | `/opt/memvid/env/.env` on the EC2 host — **outside this git repository entirely.** `docker-compose.prod.yml`'s `backend` service loads it via `env_file:`, read once at container start (not live-reloaded). |
+
+**Root cause, now confirmed precisely:** commit `86241c7` (`fix(release): restrict production cors origins`) edited `render.yaml`'s `CORS_ORIGINS` value. That value is read by the *unused Render backend blueprint*, never by the actual EC2-hosted production backend. **`86241c7` was a real, correct, minimal code-adjacent fix — but for the wrong deployment target.** It does not touch, and was never going to affect, `api.studymap.space`'s actual CORS behavior. `docs/AWS_DEPLOYMENT.md` itself documents that the EC2 `.env`'s `CORS_ORIGINS` default is `*` — consistent with every live probe result observed throughout this gate, at every point, regardless of how many times `main` was merged into or how long anyone waited.
+
+This commit is **not being reverted or rewritten** — it's a legitimate fix for the Render blueprint (relevant if that service is ever brought into real use) and remains accurate history of this gate's process. The actual production CORS fix is a separate, EC2-side, manual environment change — see the instructions below.
+
+---
+
+**Preserved for the record (written before the topology correction above, do not read as current fact):**
+
 **Render auto-deploy status: mixed/incomplete at time of writing.**
 
 - Frontend (static site): rebuilt and live on the new code (new asset `last-modified` timestamp confirmed).
@@ -155,4 +178,160 @@ No force-push. No WIP touched (merge performed in an isolated worktree, not the 
 
 **No critical regression observed.** `/health` responding normally means the backend service itself is healthy and running — this reads as a normal Render backend-build-takes-longer-than-static-frontend-build propagation delay, not a broken deploy. No rollback triggered on this basis alone; monitoring continues.
 
-<!-- Phase 8/9 results and final verdict are appended below once the backend deploy completes and live verification actually runs. -->
+*(Correction: the reasoning above about "backend has not yet rolled" was itself based on the wrong deployment-target assumption. The EC2 backend almost certainly HAD already rolled the `e7819fe` citation-serialization fix via the normal CI→deploy.yml→SSH path — that fix is real application code, portable to whichever backend runs it. Only the CORS behavior was misdiagnosed as "still deploying" when the real explanation is "reads a config file this gate never touched." This will be confirmed, not assumed, once the CORS environment change below is applied and production is re-probed.)*
+
+---
+
+## Production CORS fix — release-owner manual procedure (EC2, `/opt/memvid/env/.env`)
+
+**Not executed by either agent.** No SSH access exists in either environment; this is the release owner's action, based on the actual scripts/docs read above, not guessed.
+
+```bash
+# 1. Backup — no dedicated script exists for /opt/memvid/env specifically
+#    (scripts/backup.sh only covers /opt/memvid/data); a plain timestamped
+#    copy is the safe equivalent.
+cp /opt/memvid/env/.env /opt/memvid/env/.env.bak-$(date +%Y%m%d-%H%M%S)
+
+# 2. Edit ONLY CORS_ORIGINS — confirmed exact key name/format from
+#    .env.example.aws:31 (CORS_ORIGINS=*). A targeted single-line edit,
+#    not a full-file rewrite, preserves every other real value untouched.
+#    Manual edit (open in an editor, change just that one line) is the
+#    lowest-risk option for a one-off change. If a scripted edit is
+#    preferred instead:
+sed -i 's/^CORS_ORIGINS=.*/CORS_ORIGINS=https:\/\/studymap-web.onrender.com/' /opt/memvid/env/.env
+
+# 3. Confirm only that one line changed (compare against the backup):
+diff /opt/memvid/env/.env.bak-<timestamp> /opt/memvid/env/.env
+# Expect exactly one line to differ: CORS_ORIGINS.
+
+# 4. Apply — the repo's own sanctioned, documented update path
+#    (docs/AWS_DEPLOYMENT.md "Updating": "Same as Deployment... No
+#    separate update script"). Self-verifying: fails non-zero if the
+#    backend doesn't come up healthy after restart.
+cd /opt/memvid/app
+./scripts/deploy.sh
+
+#    A faster equivalent exists directly from docker-compose.prod.yml's
+#    own documented invocation (its header comment), IF a lighter,
+#    code-unchanged env-only restart is preferred over the full
+#    sync/build/migrate cycle deploy.sh performs (that cycle is a safe
+#    no-op when nothing but the env file changed, just not the minimum
+#    possible action):
+#      docker compose -f docker-compose.prod.yml --env-file /opt/memvid/env/.env up -d --force-recreate backend
+#      scripts/health.sh   # run manually afterward if using this path — deploy.sh runs it automatically, this does not
+
+# 5. Verify health explicitly (deploy.sh already ran this as its last
+#    step and would have failed loudly if unhealthy — this is belt-and-
+#    suspenders):
+scripts/health.sh
+```
+
+**Rollback (if the backend fails to come up healthy, or CORS still misbehaves):**
+
+```bash
+cp /opt/memvid/env/.env.bak-<timestamp> /opt/memvid/env/.env
+cd /opt/memvid/app
+./scripts/deploy.sh   # re-applies the restored, known-good env
+```
+
+`scripts/rollback.sh <git-ref>` is a **separate** mechanism (code rollback to a specific git ref) — not needed here since no code is changing, only the environment file. Do not use it for this step.
+
+**After the release owner confirms** (a) the env file was updated, (b) the backend was restarted via the above, and (c) `scripts/health.sh` succeeded — production will be re-probed externally (CORS preflight with the real origin and with `evil.test`, plus a normal request) and the result recorded as `LIVE CORS: PASS` or `LIVE CORS: FAIL` below. **Not inferred from `/health` alone.**
+
+## Phase 8 — Live CORS verification (actual timeline)
+
+**First applied-fix attempt (owner reported "applied", ~18:38-18:39):** re-probe still showed `LIVE CORS: FAIL` — `evil.test` preflight still received `Access-Control-Allow-Origin: https://evil.test`. Investigated via external evidence only (no code/config touched):
+
+- Raw response headers captured for both the allowed origin and `evil.test` preflights. Both showed `cf-cache-status: DYNAMIC`, no `Age`/`x-cache`/`Via` — ruled out a CDN/caching layer (Cloudflare sits in front of the EC2 host for TLS termination only, confirmed pass-through, not the cause).
+- Both responses carried `Vary: Origin` and identically reflected whatever `Origin` header was sent — the signature of Flask-CORS substituting the literal request `Origin` when the configured origins value is still effectively a wildcard (spec forbids literal `*` with credentials, so the library echoes the incoming origin instead).
+- Diagnosis: the **running container** still had the old `CORS_ORIGINS` value loaded, not what was on disk in `/opt/memvid/env/.env` — `env_file` is read once at container start, not live-reloaded.
+- Release owner ran `docker compose -f docker-compose.prod.yml exec backend env | grep CORS_ORIGINS` → returned `CORS_ORIGINS=*`.
+- Release owner then checked the file itself: `grep -n '^CORS_ORIGINS=' /opt/memvid/env/.env` → **also** returned `CORS_ORIGINS=*`. Root cause: the file had never actually been edited on the first attempt (the "applied" report was mistaken, not a container-staleness issue as first hypothesized — the container-staleness theory was a reasonable intermediate hypothesis, ruled out once the file itself was checked).
+
+**Second, actual fix (18:51 local):**
+
+```
+sudo cp /opt/memvid/env/.env /opt/memvid/env/.env.bak.<timestamp>
+sudo sed -i 's/^CORS_ORIGINS=.*/CORS_ORIGINS=https:\/\/studymap-web.onrender.com/' /opt/memvid/env/.env
+grep -n '^CORS_ORIGINS=' /opt/memvid/env/.env   # confirmed: CORS_ORIGINS=https://studymap-web.onrender.com
+docker compose -f docker-compose.prod.yml up -d --force-recreate backend
+./scripts/health.sh   # backend healthy after 10s
+docker compose -f docker-compose.prod.yml exec backend env | grep CORS_ORIGINS   # confirmed loaded: CORS_ORIGINS=https://studymap-web.onrender.com
+```
+
+**Live re-verification (18:51:59-18:52:00), external, real origin header tests, not inferred from `/health`:**
+
+- Allowed-origin `OPTIONS` preflight against `https://api.studymap.space` → `Access-Control-Allow-Origin: https://studymap-web.onrender.com` (exact match).
+- `evil.test` origin `OPTIONS` preflight → **no** `Access-Control-Allow-Origin` header returned (correctly rejected).
+- Normal allowed-origin `GET` request → exact origin echoed back correctly.
+- `/health` → 200.
+
+**LIVE CORS: PASS.**
+
+## Phase 8 — Production smoke matrix
+
+Disposable accounts used, disclosed, not deleted: `postmerge-gate-20260916@example.com` (main smoke), `postmerge-empty-20260916@example.com` (empty-workspace check). Test doc `release-gate-smoke.txt`, `source_id 9b8dd23b-6d06-40c8-8c54-ea4f170f2ad5`. Query job `f99699b1-7ab2-4479-9b01-d53b1320b8f1`.
+
+| Item | Result | Evidence |
+|---|---|---|
+| AUTH | PASS | register/login live |
+| UPLOAD | PASS | `ready`, `memory_tree_ready`, `can_query=true` |
+| PROCESSING | PASS | job completed |
+| INDEXING | PASS | index-ready confirmed |
+| RETRIEVAL | PASS | grounded answer returned |
+| CITATION | PASS | `chunk_id=216` returned, non-empty (root-cause fix confirmed live) |
+| EVIDENCE | PASS | `GET /chunk-text/216` returned the exact uploaded text |
+| PROVENANCE (absent case) | PASS | StudyMap node with no real chunks correctly shows `chunk_ids=[]`, no source_stems — absent, not fabricated |
+| MINDMAP | DEGRADED — KNOWN LIMITATION | job `done`, 1 root node, missing skeleton/enrich stages. Matches `.playbook/known-issues.md:3888-3925`, predicted exactly here as a pre-existing, already-scoped-out issue (LLM branch errors flag `degraded=True` by design), not a new regression from this release |
+| SUMMARY | DEGRADED — KNOWN LIMITATION | job `done`, missing skeleton/section/synthesize; same known-issues.md root cause |
+| STUDYMAP (single-doc) | DEGRADED — KNOWN LIMITATION | job completed, 1 node, same root cause |
+| Invalid upload (empty file field) | PASS | 400 `Missing file` |
+| Missing resource | PASS | `GET /chunk-text/999999999` → 404 `Chunk not found` |
+| Unauthorized request | PASS | unauthenticated `/auth/me` and `/query` → 401 |
+| Cross-user authorization isolation | PASS | other account's token against this study map → 404 (not leaked) |
+| Empty workspace | PASS | fresh account, `/api/library` → `collections=[]`, `documents=[]` |
+| Legacy / pre-M2 record | UNVERIFIED | no live legacy record exists in reachable accounts to test against; tolerance covered only by existing FE/BE test suite, not live-verified this gate |
+| Timeline | UNVERIFIED / BLOCKED | UI-only feature, Codex has no browser access, not independently verified |
+| Cross Navigation | UNVERIFIED / BLOCKED | same reason |
+| Knowledge Evolution | UNVERIFIED / BLOCKED | same reason |
+| Multi-document workspace | UNVERIFIED / BLOCKED | same reason |
+| Compare Documents | UNVERIFIED / BLOCKED | same reason |
+
+## Phase 9 — Persistence
+
+`PERSISTENCE: BLOCKED — MANUAL RESTART VERIFICATION REQUIRED.` Not proven passing, not proven broken. The backend container *was* recreated during the CORS fix (Phase 8 above), but that recreate happened **before** the smoke-test document (`release-gate-smoke.txt`) was uploaded — so it does not demonstrate that this specific data survives a restart. Retrieval/index data lives on EC2 host-disk bind mounts (`/opt/memvid/data/index`, `/opt/memvid/data/memory`, `/opt/memvid/data/input_docs` per `docker-compose.prod.yml`), which — being host-disk, not container-internal — is architecturally likely to survive a container restart, but this has not been independently observed by triggering a real restart after data existed. No independent restart was available to this gate (no SSH/dashboard access). Explicitly not conflated with the earlier, now-resolved environment-file persistence issue (Phase 8's CORS fix) — these are separate concerns per the epic's own instruction.
+
+## Final verification matrix
+
+| Gate | Status |
+|---|---|
+| MERGE STATE | VERIFIED (git ancestry, `merge-base --is-ancestor`) |
+| DEPLOYMENT STATUS | VERIFIED (container recreated, healthy, correct code+env confirmed live) |
+| LIVE CORS | PASS |
+| AUTH | PASS |
+| UPLOAD | PASS |
+| PROCESSING | PASS |
+| INDEXING | PASS |
+| RETRIEVAL | PASS |
+| CITATION | PASS |
+| EVIDENCE | PASS |
+| PROVENANCE | PASS |
+| MINDMAP | DEGRADED — KNOWN LIMITATION (pre-existing, documented, out of this gate's scope) |
+| SUMMARY | DEGRADED — KNOWN LIMITATION (same) |
+| STUDYMAP (single-document) | DEGRADED — KNOWN LIMITATION (same) |
+| TIMELINE | NOT VERIFIED (UI-only, no browser access) |
+| CROSS NAVIGATION | NOT VERIFIED (same) |
+| KNOWLEDGE EVOLUTION | NOT VERIFIED (same) |
+| MULTI-DOCUMENT | NOT VERIFIED (same) |
+| COMPARE DOCUMENTS | NOT VERIFIED (same) |
+| FAILURE PATHS (invalid upload, 404, 401, cross-user isolation, empty workspace) | PASS |
+| LEGACY / PRE-M2 RECORD | UNVERIFIED (no live record reachable; test-suite coverage only) |
+| PERSISTENCE | BLOCKED — MANUAL RESTART VERIFICATION REQUIRED |
+
+## Final verdict
+
+None of the epic's NO-GO trigger conditions are met: deployment is proven, CORS no longer permits arbitrary origins, upload/indexing/retrieval/citation all genuinely verified against real production data, no data loss observed, no local-Ollama dependency, and the one flow-level issue found (MindMap/Summary/StudyMap degraded output) is a pre-existing, already-documented, explicitly-out-of-scope issue — not a new P0 regression introduced by this release.
+
+Open items are real and undisguised: UI-only navigation features unverified (no browser access from this gate), one legacy-record path unverified live, and restart persistence unverified for the newly-uploaded data specifically.
+
+**PRODUCTION GO WITH KNOWN LIMITATIONS.**

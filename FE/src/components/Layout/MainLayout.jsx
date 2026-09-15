@@ -420,21 +420,30 @@ export default function MainLayout({
                   title="Tìm kiếm (Ctrl+K)">
             <Icon name="Search" size={14} /> Tìm kiếm
           </button>
-          {/* Gia sư AI — luôn có mặt (ẩn trên mobile để tránh chật hàng nút; Ctrl+/ vẫn mở được). */}
-          <button onClick={openTutor} className="hidden md:inline-flex pill-action !text-small"
-                  title="Gia sư AI (Ctrl+/)">
-            <Icon name="Sparkles" size={14} /> Gia sư AI
+          {/* Gia sư AI / Dòng thời gian / Kiến thức — these are the SAME
+              views as the Inspector's own `.inspector-tab` row
+              (Layout/SidebarRight.jsx); this header row's only job is to
+              open/focus the panel to that view from anywhere (incl. when
+              the panel is collapsed), not to be a second equal-weight
+              navigation bar (Visual Identity Reset, Part C ownership:
+              Inspector owns these views, header only owns the shortcut).
+              Demoted to icon-only so they read as utilities, not Level-1
+              nav — label + shortcut still surface via title/aria-label,
+              and the hotkeys (Ctrl+/, Alt+T) are unchanged. */}
+          <button onClick={openTutor} className="hidden md:inline-flex icon-btn w-9 h-9"
+                  title="Gia sư AI (Ctrl+/)" aria-label="Mở Gia sư AI">
+            <Icon name="Sparkles" size={16} />
           </button>
           {/* Feature Pack B — luôn có mặt, kể cả khi đang ở sơ đồ tư duy (nơi
               cột phải bị Trình khám phá tri thức chiếm, xem openTimeline). */}
-          <button onClick={openTimeline} className="hidden md:inline-flex pill-action !text-small"
-                  title="Dòng thời gian nghiên cứu (Alt+T)">
-            <Icon name="Clock" size={14} /> Dòng thời gian
+          <button onClick={openTimeline} className="hidden md:inline-flex icon-btn w-9 h-9"
+                  title="Dòng thời gian nghiên cứu (Alt+T)" aria-label="Mở dòng thời gian nghiên cứu">
+            <Icon name="Clock" size={16} />
           </button>
           {/* Feature Pack D — Knowledge Dashboard. */}
-          <button onClick={openInsights} className="hidden md:inline-flex pill-action !text-small"
-                  title="Kiến thức của bạn">
-            <Icon name="Network" size={14} /> Kiến thức
+          <button onClick={openInsights} className="hidden md:inline-flex icon-btn w-9 h-9"
+                  title="Kiến thức của bạn" aria-label="Mở kiến thức của bạn">
+            <Icon name="Network" size={16} />
           </button>
           {/* Feature Pack C — Discoverability (mục 7). */}
           <button onClick={() => setShortcutsOpen(true)} className="hidden md:inline-flex icon-btn w-9 h-9"

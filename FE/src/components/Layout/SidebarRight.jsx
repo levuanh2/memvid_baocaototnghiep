@@ -643,31 +643,37 @@ export default function SidebarRight({
   return (
     <div className="sidebar-right flex flex-col h-full overflow-hidden transition-theme" style={{ background: "var(--surface-contrast)" }}>
 
-      {/* Header — hai tab của MỘT cột: Bằng chứng (cũ) / Gia sư AI (Phase 4C) */}
+      {/* Header — bốn view của MỘT cột: Bằng chứng / Gia sư AI / Dòng thời
+          gian / Kiến thức. Visual Identity Reset: demoted from `.pill-tab`
+          (permanently bordered+filled box) to `.inspector-tab` (underline,
+          border-free at rest) — these are the same feature as the header's
+          shortcut buttons (Layout/MainLayout.jsx), so the Inspector no
+          longer reads as a second, equal-weight navigation bar duplicating
+          the global header. */}
       <div className="px-4 pt-4 pb-3 border-b border-border flex items-center justify-between flex-shrink-0 gap-2">
         <div className="flex gap-1 min-w-0">
           <button type="button" onClick={() => onRightViewChange?.("evidence")}
-                  className={`pill-tab !px-2.5 !py-1 ${rightView === "evidence" ? "pill-tab-active" : ""}`}
+                  className={`inspector-tab ${rightView === "evidence" ? "pill-tab-active" : ""}`}
                   aria-pressed={rightView === "evidence"}>
             <Icon name="Quote" size={13} /> Bằng chứng
           </button>
           <button type="button" onClick={() => onRightViewChange?.("tutor")}
-                  className={`pill-tab !px-2.5 !py-1 ${rightView === "tutor" ? "pill-tab-active" : ""}`}
+                  className={`inspector-tab ${rightView === "tutor" ? "pill-tab-active" : ""}`}
                   aria-pressed={rightView === "tutor"}>
             <Icon name="Sparkles" size={13} /> Gia sư AI
           </button>
-          {/* Feature Pack A — peer of the two tabs above, same pill-tab weight
-              and aria-pressed semantics (this is a top-level view switch, not
-              a sub-section — unlike the demoted pill-tab--sub artifact tabs
-              inside the Evidence view below). */}
+          {/* Feature Pack A — peer of the two tabs above, same inspector-tab
+              weight and aria-pressed semantics (this is a top-level view
+              switch, not a sub-section — unlike the demoted pill-tab--sub
+              artifact tabs inside the Evidence view below). */}
           <button type="button" onClick={() => onRightViewChange?.("timeline")}
-                  className={`pill-tab !px-2.5 !py-1 ${rightView === "timeline" ? "pill-tab-active" : ""}`}
+                  className={`inspector-tab ${rightView === "timeline" ? "pill-tab-active" : ""}`}
                   aria-pressed={rightView === "timeline"}>
             <Icon name="Clock" size={13} /> Dòng thời gian
           </button>
           {/* Feature Pack D — same peer weight as Timeline above. */}
           <button type="button" onClick={() => onRightViewChange?.("insights")}
-                  className={`pill-tab !px-2.5 !py-1 ${rightView === "insights" ? "pill-tab-active" : ""}`}
+                  className={`inspector-tab ${rightView === "insights" ? "pill-tab-active" : ""}`}
                   aria-pressed={rightView === "insights"}>
             <Icon name="Network" size={13} /> Kiến thức
           </button>
