@@ -233,60 +233,109 @@ zero):
   border/color shift only, no motion.
 - No new animation was added anywhere this pass; nothing here needed fixing.
 
-### Accent color: forest vs. the prototype's blue — found, not fixed, and why
+### Accent color: forest vs. blue — RESOLVED, third pass
 
-`AGENTS.md` in the prototype folder explicitly says *"Keep the cool-neutral
-blue visual system"* for Option 2 — a real, documented mismatch against
-what the first pass shipped (forest green, completing this app's own
-separate, pre-existing "Signature Contract" plan; see first pass above).
+Superseding the P3 open item above: the user decided explicitly — switch
+primary interactive to the approved Learning Canvas blue. Exact values,
+via centralized semantic tokens (`FE/src/index.css`), not a blind
+find-replace:
 
-Investigated converting to blue properly before deciding against it this
-pass: `grep`-ing the whole `FE/src` tree for `text-forest`/`bg-forest`/
-`border-forest`/`accent-forest` (the Tailwind utility class that most of the
-app — not just this workspace — already uses directly as its action color,
-independent of the `--accent` CSS variable touched in the first pass) found
-**22 files**: `Login.jsx`, `Register.jsx`, `Landing.jsx`, `QuizSetup.jsx`,
-`StudyMapView.jsx`, `DocumentList.jsx`, `KnowledgeDashboard.jsx`, and more —
-essentially the whole app's accent, not just the 3-file workspace scope
-this epic and the coordinator's message have both scoped work to. `--forest`
-itself is also directly consumed by MindMap's own CSS (`mindmap.css`'s node
-hover border, `MindElixirView`'s selection ring, `::selection`) — the
-coordinator explicitly said not to touch MindMap work absent a regression,
-and MindMap has none here.
+| Token | Light | Dark | Role |
+|---|---|---|---|
+| `--accent` | `#126CF2` | `#5B9DF5` | primary / action / selected / focus |
+| `--accent-hover` | `#0C55CC` | `#82B8F8` | primary hover/pressed |
+| `--accent-subtle` | `#EAF3FF` | `#1B2F4D` | primary soft surface (selection wash, badges) |
 
-Given that real scope (a whole-app-wide, ~22-file recolor, not a
-workspace-scoped fix) versus the actual severity (a hue preference — the
-epic's own "indigo/cobalt/blue-violet" direction was written as a
-recommendation, not an absolute requirement; the hard requirement, "red
-must not be brand," is fully satisfied either way; forest is already
-coherent, contrast-verified, and shipped), this reads as a **P3 open design
-decision**, not a P0/P1/P2 defect this pass is obligated to fix
-unilaterally. Flagged here explicitly rather than silently kept or silently
-changed — a human call on whether to spend a dedicated, properly-scoped pass
-converting the whole app from forest to blue.
+Light-mode values are exactly the user's instructed hex (`#126CF2`/
+`#0C55CC`/`#EAF3FF`) — and, checked directly, exactly match the prototype's
+own `src/styles.css` (`--blue`/`--blue-deep`/`--blue-soft`), so there was no
+discrepancy to reconcile. Dark-mode values are brightened for contrast on
+the navy surface, same pattern already used for dark-mode forest — not
+separately specified by the user, so derived rather than guessed at.
+
+`--forest`/`--forest-rgb` are **numerically unchanged** (`#1F4033` light /
+`#6FA98A` dark) — only their *role* narrows, per the user's instruction, to
+success/ready-status/progress, never primary interactive. Two component
+rules that read `--accent` for what is actually a progress indicator were
+repointed to `--forest` instead: `.progress-fill` (the upload/processing
+progress bar) and `.apparatus-dot--active` (ChatArea's retrieval-step
+dots) — both are genuinely "progress," not a button/tab/selection, and the
+user named "progress" as a role forest keeps.
+
+**How the 22-file, ~56-occurrence `text-forest`/`bg-forest`/`border-forest`/
+`accent-forest` surface was resolved without a blind find-replace:** added
+a new `accent` Tailwind color (`FE/tailwind.config.js`, `DEFAULT`/`hover`/
+`subtle` → the three CSS vars above), then went file by file and recolored
+only the occurrences that are genuinely primary-interactive (links, hover
+states, active/selected/focus indicators, checkboxes) to `text-accent`/
+`bg-accent`/`border-accent`/`accent-accent`. **Left on forest** (5 of the
+56, deliberately, each commented in place): `ProtectedRoute.jsx`'s
+session-restore spinner (progress), `ChatArea.jsx`'s "Đã trả lời..."
+settled/done marker and its streaming-cursor blink (a completion marker and
+a progress indicator), and `KnowledgeInspector.jsx`'s two `BadgeCheck`
+confidence/verified markers (success-adjacent, not interactive) — one of
+which is the "answered with N sources" resting-point marker `ChatArea.jsx`
+itself already calls out as a deliberate Peak-End-Rule signal, reinforcing
+that it's a completion state, not a button.
+
+MindMap needed **no** token-source change, let alone a behavior change:
+`MindElixirView.jsx`'s `THEME.cssVar` already reads `"--selected": "var(--forest)"`
+(a token reference, not a hardcoded hex) and `mindmap.css`'s node-hover
+border already reads `var(--forest)` directly — since `--forest`'s value is
+untouched, MindMap's pan, hover, selection, and viewport behavior are all
+byte-for-byte unchanged. Confirmed by grep, not assumed.
+
+`docs/StudyMap-Learning-Canvas-Prototype/AGENTS.md` updated with one added
+line confirming the shipped hex values match its own `styles.css` exactly
+(see "Prototype AGENTS.md" below) — no stale mismatch note existed there to
+remove (the mismatch was only ever documented in this file, not in the
+prototype's own docs).
+
+**Re-verified visually, not just by source-reading**, same scaffolding as
+the second pass (dev server + mocked backend + Playwright, same three
+viewports and states, dev server killed after). Screenshots (scratchpad,
+`.../scratchpad/shots2/`): `workspace-desktop-no-doc.png` — workspace tab
+underline and Inspector's "Bằng chứng" active state now read blue where
+expected (main-content tabs) and stay bronze where expected (graphite
+Inspector's own `--contrast-focus`, unaffected by this change, still
+correct); `workspace-desktop-doc-selected.png` — checkboxes filled blue,
+left accent bar blue, "2 đang chọn" text blue, "SẴN SÀNG" status badges
+**still green** (`--ok`, a separate token, correctly untouched — confirms
+blue/success stay visually distinct); `workspace-mobile-right-drawer-open.png`
+— Inspector drawer unchanged, bronze active tab as before;
+`focus-ring-header.png` — focus ring on the graphite surface still bronze,
+clearly visible, no contrast regression from this change;
+`hover-upload-button.png` — primary upload button unaffected (it's ink-fill,
+not accent-driven).
+
+No P0/P1/P2 found in this re-verification.
+
+### Prototype AGENTS.md
+
+Checked before editing: it contains prose ("keep the cool-neutral blue
+visual system") but no explicit hex values, and no stale forest/blue
+mismatch note (that note only ever lived in this file, not in the prototype
+folder). Added one line recording that the real app's tokens now match its
+`styles.css` values exactly, with a pointer back to this document.
 
 ## Tests
 
-No new tests were added this pass. Confirmed before deciding that, not
-assumed: `find src -iname "*.test.jsx"` across the **entire** `FE/src` tree
-returns nothing — this codebase has **zero** React component-render tests
-anywhere (`MainLayout`/`SidebarRight`/`SidebarLeft` included), only pure
-logic/util tests (1020 of them). Building React Testing Library-style
-render infrastructure from scratch, for the first time in this codebase,
-to cover one visual/structural assertion, was judged disproportionate to
-the change — consistent with the same judgment call made in the first pass,
-now confirmed by an exhaustive search rather than inspection of two files.
-Real verification for this pass was the screenshot evidence above instead.
+No new tests were added in this pass either, for the same reason as the
+second pass (confirmed again, not re-assumed): no React component-render
+test infrastructure exists anywhere in this codebase. The token/class
+changes here are exactly the kind of thing that infrastructure would cover
+if it existed; screenshot verification (above) was the real check instead.
 
 `mindmapViewport.test.js` (pure-function, pre-existing) still passes — no
-MindMap code was touched, so no new coverage was needed there either.
+MindMap code was touched (confirmed above: token-value unchanged, so no
+token-source change was even needed there).
 
 ```
-npm run build     →  clean, 5.7s (no source changed this pass; re-run to confirm)
-npm run test      →  79 files, 1020/1020 passed — unchanged from the first-pass
-                      and RC2 baselines, no regression
-npx eslint src    →  58 errors / 8 warnings — identical pre-existing baseline,
-                      no new errors (no source changed this pass)
+npm run build     →  clean, 5.7s
+npm run test      →  79 files, 1020/1020 passed — unchanged, no regression
+npx eslint src    →  66 problems / 58 errors / 8 warnings — identical
+                      pre-existing baseline, no new errors introduced by
+                      this pass's token/class changes
 git diff --check  →  clean
 ```
 
@@ -302,18 +351,21 @@ git diff --check  →  clean
 - Left sidebar box chrome — confirmed already low-chrome; no change needed.
 - Primary workspace hierarchy obvious — visually confirmed at all 3
   viewports.
-- Colors form one coherent system — true for the workspace scope touched;
-  **not** true app-wide, since the wider app still reads `--forest` as green
-  while this workspace's `--accent` is also forest (same hue, consistent) —
-  the *inconsistency* is the unresolved forest-vs-blue question above, not
-  a mismatch introduced by this pass.
+- Colors form one coherent system, **app-wide** — resolved in the third
+  pass: primary interactive is blue everywhere via the centralized
+  `accent` token/Tailwind color, forest is success/ready/progress only
+  everywhere, matching the Learning Canvas Option 2 prototype's own blue
+  exactly (checked, not assumed).
 - MindMap pan / node interaction / viewport preservation / no auto-zoom —
-  all pre-existing and confirmed untouched, no regression found.
+  all pre-existing and confirmed untouched, no regression found; the third
+  pass's accent-hue change required no MindMap token-source change either
+  (confirmed by grep: MindMap already reads `--forest` by reference, and
+  `--forest`'s value never changed).
 - Responsive behavior usable at 1440/1024/390 — confirmed, no P0/P1/P2 found.
 - Build/tests remain healthy — confirmed, 1020/1020, clean build.
 
-**Not met / explicitly open:** the prototype's specific blue hue (see
-above — a named, reasoned, human-decidable gap, not an oversight). No
-interactive filter-typing or upload-flow test was performed (only static
-states were screenshotted). Hallmark was not run as a literal separate tool
-invocation.
+**Not met / explicitly open:** no interactive filter-typing or upload-flow
+test was performed (only static states were screenshotted). Hallmark was
+not run as a literal separate tool invocation, both passes. The
+forest-vs-blue question from the second pass is now resolved (see above) —
+no longer open.
