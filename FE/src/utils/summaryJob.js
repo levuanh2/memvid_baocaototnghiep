@@ -1,5 +1,6 @@
 // Job tóm tắt: nhãn giai đoạn + poller + normalize record (v2/legacy).
 import { createJobPoller } from "./jobPoller";
+import { normalizeSourceStems } from "./evidence";
 
 export const LENGTH_MODES = [
   { value: "short", label: "Ngắn" },
@@ -50,7 +51,18 @@ export const normalizeSummaryRecord = (record) => {
     // mode thiếu (record cũ trước Phase 3) → "standard" để render y hệt cũ.
     mode: record.mode === "study" ? "study" : "standard",
     overview: record.overview || "",
-    sections: Array.isArray(record.sections) ? record.sections : [],
+    // M2.5 (Provenance Adoption) — sections previously passed through as-is,
+    // trusting the wire payload's `source_stems` blindly. Now defensively
+    // normalized the same way mindmapNormalize.js does (same shared helper,
+    // same absent-not-[] contract) and renamed to `sourceStems` for the same
+    // camelCase convention every other normalized field here already uses.
+    // Every other section field is preserved unchanged (id/title/summary/
+    // key_points/chunk_refs — SummaryPane.jsx's existing reads keep working).
+    sections: (Array.isArray(record.sections) ? record.sections : []).map((s) => {
+      if (!s || typeof s !== "object") return s;
+      const stems = normalizeSourceStems(s.source_stems);
+      return stems ? { ...s, sourceStems: stems } : s;
+    }),
     entities: Array.isArray(record.entities) ? record.entities : [],
     // Block study chỉ có khi mode=study; record khác → null (SummaryModal null-safe).
     study: record.study && typeof record.study === "object" ? record.study : null,

@@ -248,6 +248,16 @@ export default function KnowledgeInspector({
         {dominantType && <MetaChip icon={dominantType.icon}>{dominantType.label}</MetaChip>}
         {avgConfidencePct != null && <MetaChip icon="BadgeCheck" title="Độ tin cậy trung bình">{avgConfidencePct}%</MetaChip>}
         {node.chunkRefs?.length > 0 && <MetaChip icon="Quote" title="Số trích dẫn">{node.chunkRefs.length}</MetaChip>}
+        {/* M2.5 — deterministic provenance (source_stems, BE/services/provenance.py).
+            Renders ONCE for the selected node here, never repeated per Evidence
+            card below (that would be the same claim restated N times for no
+            reason). Absent means unresolved — render nothing, no "Unknown
+            document" filler, no guess. */}
+        {node.sourceStems?.length > 0 && (
+          <MetaChip icon="FileStack" title="Nguồn xác định">
+            Nguồn: {node.sourceStems.join(" · ")}
+          </MetaChip>
+        )}
       </div>
     </div>
   ) : null;
@@ -301,7 +311,22 @@ export default function KnowledgeInspector({
             <div className="flex items-center gap-1.5 flex-wrap mb-2">
               {sourceLabel && <MetaChip icon="FileStack" title="Tài liệu nguồn">{sourceLabel}</MetaChip>}
               <MetaChip icon="BookOpen" title="Mục">{node.title}</MetaChip>
-              {sources?.length === 1 && (
+              {/* M2.5 (Provenance Adoption, mục 7 — Cross Navigation) — a node's
+                  OWN source_stems (real per-node provenance) is more precise
+                  than the whole-mindmap `sources` fallback below it, and is
+                  used first when the node has it. Multiple stems get one
+                  button EACH (existing button primitive, just repeated) —
+                  never auto-picks stems[0] and calls it "the" source. Falls
+                  back to the pre-existing whole-mindmap single-source case
+                  only when the node itself has no resolved provenance. */}
+              {node.sourceStems?.length > 0 ? (
+                node.sourceStems.map((stem) => (
+                  <button key={stem} type="button" onClick={() => onOpenSource(stem)}
+                    className="inline-flex items-center gap-1 text-caption font-mono text-forest hover:underline">
+                    <Icon name="FolderOpen" size={10} /> Mở nguồn: {stem}
+                  </button>
+                ))
+              ) : sources?.length === 1 && (
                 <button type="button" onClick={() => onOpenSource(sources[0])}
                   className="inline-flex items-center gap-1 text-caption font-mono text-forest hover:underline">
                   <Icon name="FolderOpen" size={10} /> Mở nguồn

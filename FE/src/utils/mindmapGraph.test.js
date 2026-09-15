@@ -1,5 +1,5 @@
 import { describe, it, expect } from "vitest";
-import { buildGraphIndex, relationsFor, headingPath, findNodeByChunk, allNodeSummaries } from "./mindmapGraph";
+import { buildGraphIndex, relationsFor, headingPath, findNodeByChunk, allNodeSummaries, classifyByProvenance } from "./mindmapGraph";
 
 const REC = {
   schema_version: 2, title: "T",
@@ -95,6 +95,35 @@ describe("mindmapGraph", () => {
 
     it("garbage/empty record → empty array, never throws", () => {
       expect(allNodeSummaries(buildGraphIndex(null))).toEqual([]);
+    });
+
+    // M2.5 — sourceStems passthrough into summarized nodes.
+    it("includes sourceStems when the node has it, omits the key otherwise", () => {
+      const rec = {
+        ...REC,
+        nodes: REC.nodes.map((n) => n.id === "n3" ? { ...n, source_stems: ["paper-a", "paper-b"] } : n),
+      };
+      const idx = buildGraphIndex(rec);
+      const summaries = allNodeSummaries(idx);
+      expect(summaries.find((n) => n.id === "n3").sourceStems).toEqual(["paper-a", "paper-b"]);
+      expect(summaries.find((n) => n.id === "n4")).not.toHaveProperty("sourceStems");
+    });
+  });
+
+  // M2.5 (Provenance Adoption, mục 3) — deterministic classification, source_stems only.
+  describe("classifyByProvenance", () => {
+    it("unresolved: no sourceStems at all", () => {
+      expect(classifyByProvenance({ id: "n1" })).toBe("unresolved");
+      expect(classifyByProvenance(null)).toBe("unresolved");
+    });
+
+    it("single-source: exactly one stem", () => {
+      expect(classifyByProvenance({ sourceStems: ["paper-a"] })).toBe("single-source");
+    });
+
+    it("shared: two or more stems — never fewer, never inferred from anything but the count", () => {
+      expect(classifyByProvenance({ sourceStems: ["paper-a", "paper-b"] })).toBe("shared");
+      expect(classifyByProvenance({ sourceStems: ["a", "b", "c"] })).toBe("shared");
     });
   });
 });

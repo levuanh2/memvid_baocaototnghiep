@@ -76,6 +76,30 @@ describe("recordToMindElixir", () => {
     expect(mindData.nodeData.topic).toBe("L");
     expect(mindData.arrows).toEqual([]);
   });
+
+  // M2.5 (Provenance Adoption) — source_stems flows BE record -> normalizer ->
+  // sidecar, the full chain useMindMapController's `selected.sourceStems`
+  // (and from there KnowledgeInspector) reads from.
+  it("source_stems reaches the sidecar when the BE record has it", () => {
+    const rec = { ...REC, nodes: REC.nodes.map((n) => n.id === "n1" ? { ...n, source_stems: ["paper-a", "paper-b"] } : n) };
+    const { sidecar } = recordToMindElixir(rec);
+    expect(sidecar.get("n1").sourceStems).toEqual(["paper-a", "paper-b"]);
+  });
+
+  it("source_stems stays undefined in the sidecar when the BE record omits it — never []", () => {
+    const { sidecar } = recordToMindElixir(REC); // REC's nodes never had source_stems
+    expect(sidecar.get("n1").sourceStems).toBeUndefined();
+    expect("sourceStems" in sidecar.get("n1")).toBe(true); // key present, value undefined — not silently dropped
+  });
+
+  it("source_stems is never echoed back into the save payload — server-derived, read-only", () => {
+    const rec = { ...REC, nodes: REC.nodes.map((n) => n.id === "n1" ? { ...n, source_stems: ["paper-a"] } : n) };
+    const { mindData, sidecar } = recordToMindElixir(rec);
+    const out = mindElixirToRecord(mindData, sidecar, rec);
+    const n1 = out.nodes.find((n) => n.id === "n1");
+    expect(n1).not.toHaveProperty("source_stems");
+    expect(n1).not.toHaveProperty("sourceStems");
+  });
 });
 
 describe("mindElixirToRecord", () => {
@@ -114,6 +138,22 @@ describe("redesign Phòng đọc (tags + relation color + type từ label)", () 
     const sec1 = mindData.nodeData.children[0];
     expect(sec1.tags).toEqual([{ text: "※ 1", className: "mm-tag-citations" }]);
     expect(mindData.nodeData.tags).toBeUndefined(); // root không có refs
+  });
+
+  // M2.5 (Provenance Adoption, mục 3) — canvas-native shared-node badge.
+  it("2+ source_stems gets a shared-node tag; 1 or 0 gets none", () => {
+    const rec = {
+      ...REC,
+      nodes: REC.nodes.map((n) => {
+        if (n.id === "n1") return { ...n, source_stems: ["paper-a", "paper-b"] }; // shared
+        if (n.id === "n2") return { ...n, source_stems: ["paper-a"] }; // single-source
+        return n; // n3/n4/root: unresolved
+      }),
+    };
+    const { mindData } = recordToMindElixir(rec);
+    const [sec1, sec2] = mindData.nodeData.children;
+    expect(sec1.tags).toContainEqual({ text: "⇄ 2", className: "mm-tag-shared" });
+    expect(sec2.tags?.some((t) => t.className === "mm-tag-shared")).toBeFalsy();
   });
 
   it("arrow dùng --mm-relation (seal đỏ chỉ dành cho provenance)", () => {

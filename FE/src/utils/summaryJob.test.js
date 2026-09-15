@@ -109,6 +109,45 @@ describe("normalizeSummaryRecord", () => {
     expect(normalizeSummaryRecord({ id: "o3", summary: "raw" }).legacyMd).toBe("raw");
   });
 
+  // M2.5 (Provenance Adoption) — section-level source_stems, defensively normalized.
+  it("section source_stems: single source", () => {
+    const rec = normalizeSummaryRecord({
+      id: "s1", sections: [{ id: "x", title: "M", source_stems: ["paper-a"] }],
+    });
+    expect(rec.sections[0].sourceStems).toEqual(["paper-a"]);
+  });
+
+  it("section source_stems: multiple sources", () => {
+    const rec = normalizeSummaryRecord({
+      id: "s1", sections: [{ id: "x", title: "M", source_stems: ["paper-a", "paper-b"] }],
+    });
+    expect(rec.sections[0].sourceStems).toEqual(["paper-a", "paper-b"]);
+  });
+
+  it("section source_stems missing → key absent, never []", () => {
+    const rec = normalizeSummaryRecord({ id: "s1", sections: [{ id: "x", title: "M" }] });
+    expect(rec.sections[0]).not.toHaveProperty("sourceStems");
+  });
+
+  it("section source_stems invalid (not an array, blank/dup entries) degrades safely, other fields untouched", () => {
+    const rec = normalizeSummaryRecord({
+      id: "s1",
+      sections: [
+        { id: "x", title: "M", summary: "s", chunk_refs: ["0"], source_stems: "paper-a" },
+        { id: "y", title: "N", source_stems: ["a", "", "a", null] },
+      ],
+    });
+    expect(rec.sections[0]).not.toHaveProperty("sourceStems");
+    expect(rec.sections[0]).toMatchObject({ id: "x", title: "M", summary: "s", chunk_refs: ["0"] });
+    expect(rec.sections[1].sourceStems).toEqual(["a"]);
+  });
+
+  it("old (legacy/pre-M2) summary sections never have the field — no crash", () => {
+    const rec = normalizeSummaryRecord({ id: "s1", sections: [{ id: "x", title: "M", summary: "s" }] });
+    expect(rec.sections[0]).not.toHaveProperty("sourceStems");
+    expect(rec.sections[0]).toMatchObject({ id: "x", title: "M", summary: "s" });
+  });
+
   it("input rác → null, field thiếu → default an toàn", () => {
     expect(normalizeSummaryRecord(null)).toBeNull();
     expect(normalizeSummaryRecord("x")).toBeNull();

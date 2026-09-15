@@ -70,6 +70,12 @@ export function useMindMapController(data) {
     setSelected({
       id: n.id, title: n.topic, note: side?.note || "", chunkRefs: side?.chunkRefs || [],
       number: side?.number || "", level: side?.level || 0, enrichment: side?.enrichment || [],
+      // M2.5 (Provenance Adoption) — same undefined-not-[] discipline as the
+      // sidecar/normalizer it comes from; not defaulted to `[]` like the
+      // fields above, since "unresolved" and "resolved to zero" are
+      // different, real states a consumer (KnowledgeInspector) must be able
+      // to tell apart.
+      sourceStems: side?.sourceStems,
     });
     pushHistory(n.id);
     selectNodeInContext(n.id, { source: "mindmap", label: n.topic });

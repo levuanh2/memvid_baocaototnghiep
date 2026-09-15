@@ -742,6 +742,17 @@ function NodeDetail({ node, chunks, edges, nodeById }) {
       {node.summary && (
         <p className="text-body text-text-secondary mt-2.5">{node.summary}</p>
       )}
+      {/* M2.5 (Provenance Adoption) — deterministic source metadata
+          (source_stems, BE/app/domains/studymap/repository.py). StudyMap is
+          single-document today (see docs/PROVENANCE_CONTRACT.md) so this is
+          always at most one stem — genuine metadata for this concept, not a
+          claim of multi-document support. Absent (older map, or this
+          concept's chunk_ids didn't resolve) renders nothing. */}
+      {Array.isArray(node.source_stems) && node.source_stems.length > 0 && (
+        <p className="text-caption text-text-muted mt-1.5">
+          Nguồn: {node.source_stems.join(" · ")}
+        </p>
+      )}
 
       {edges.length > 0 && (
         <div className="mt-5">

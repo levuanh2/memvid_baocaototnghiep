@@ -121,6 +121,16 @@ export default function SummaryPane({ data }) {
                         {s.title}
                       </button>
                     </h3>
+                    {/* M2.5 (Provenance Adoption) — deterministic per-section
+                        source (source_stems, BE/services/provenance.py).
+                        Absent means unresolved — render nothing, no
+                        "Unknown document" filler, no fallback to the
+                        summary's whole-record `rec.sources`. */}
+                    {s.sourceStems?.length > 0 && (
+                      <p className="text-caption text-text-muted mb-1.5">
+                        Nguồn: {s.sourceStems.join(" · ")}
+                      </p>
+                    )}
                     {s.summary
                       ? <MdProse text={s.summary} />
                       : <p className="text-small italic text-text-muted">Mục này chưa tóm tắt được.</p>}

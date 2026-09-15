@@ -19,7 +19,17 @@ export function buildGraphIndex(record) {
   return { byId, childrenOf };
 }
 
-const summarize = (n) => (n ? { id: n.id, title: n.title, number: n.number, kind: n.kind } : null);
+// M2.5 (Provenance Adoption) — `sourceStems` only added to the summary when
+// the node actually has it (never defaulted to `[]`); every existing caller
+// of `summarize()` (relations/breadcrumb pills) gets real provenance for
+// free, no new plumbing. `allNodeSummaries` below is what `classifyByProvenance`
+// (also this file) and Knowledge Dashboard's node lists read.
+const summarize = (n) => {
+  if (!n) return null;
+  const out = { id: n.id, title: n.title, number: n.number, kind: n.kind };
+  if (n.sourceStems?.length) out.sourceStems = n.sourceStems;
+  return out;
+};
 
 // Task 4 — parent / children / siblings / prev / next, all from the tree
 // shape alone. "Horizontal neighbours" and "previous/next" are the same
@@ -71,6 +81,18 @@ export function allNodeSummaries(index) {
     out.push(summarize(n));
   }
   return out;
+}
+
+// M2.5 (Provenance Adoption, mục 3 — Cross-document MindMap) — closes the
+// blocker Feature Pack C/D and M1 each documented (no per-node source data
+// existed to classify with). Purely `source_stems`-driven, nothing else:
+// no title comparison, no semantic similarity, no chunk-content inspection.
+// A node is "shared" ONLY when BE resolved 2+ distinct source stems for it —
+// never inferred from two nodes merely having a similar-looking title.
+export function classifyByProvenance(node) {
+  const stems = node?.sourceStems;
+  if (!stems?.length) return "unresolved";
+  return stems.length > 1 ? "shared" : "single-source";
 }
 
 // Task 6 — "current heading": ancestor chain from root down to (excluding)

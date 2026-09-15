@@ -19,6 +19,7 @@ import { getLibrary } from "../../utils/studyApi";
 import { tenHienThi } from "../../utils/thuVienTaiLieu";
 import { extractConcepts, compareConcepts, matchDocumentsToStems, evidenceCoverage } from "../../utils/multiDocument";
 import { parseCiteKey } from "../../utils/evidence";
+import { classifyByProvenance } from "../../utils/mindmapGraph";
 
 function Stat({ value, label }) {
   return (
@@ -47,13 +48,25 @@ function Section({ title, count, children, defaultOpen = true }) {
 
 /** Một mục có thể Jump — cùng hình dạng ResearchTimeline.jsx dùng, tái dùng
  * `canJumpEntry` chung thay vì viết lại luật đó lần thứ ba. */
-function JumpRow({ entry, meta, trailing, onJump, canJumpNode }) {
+// M2.5 (Provenance Adoption, mục 8 — Knowledge Evolution) — `sourceStems`
+// is an OPTIONAL enrichment, never a new classification rule: discovered/
+// frequent/needs-review are computed exactly as Feature Pack D already
+// established (recency+frequency only), this just adds a real "shared
+// across documents" hint next to a node-kind entry when the CURRENT
+// mindmap's `allNodes` resolves one for it. Never shown for non-node kinds
+// (they have no comparable per-node provenance to look up).
+function JumpRow({ entry, meta, trailing, onJump, canJumpNode, sourceStems }) {
   const kha_thi = canJumpEntry(entry, { canJumpNode });
   const m = meta || KIND_META[entry.kind] || { icon: "Tag", label: entry.kind };
+  const shared = sourceStems?.length > 1;
   return (
     <li className="flex items-center gap-2 py-1.5">
       <Icon name={m.icon} size={13} className="shrink-0 text-text-muted" />
       <span className="text-small text-text-primary truncate flex-1" title={entry.label}>{entry.label}</span>
+      {shared && (
+        <Icon name="FileStack" size={11} className="shrink-0 text-seal"
+              title={`Chung ${sourceStems.length} tài liệu: ${sourceStems.join(" · ")}`} />
+      )}
       {trailing && <span className="text-caption text-text-muted shrink-0">{trailing}</span>}
       <button type="button" disabled={!kha_thi.kha_thi}
               title={kha_thi.kha_thi ? "Đi tới" : kha_thi.ly_do}
@@ -123,6 +136,10 @@ export default function KnowledgeDashboard({
 
   const canJumpNode = mindMapController?.canJumpTo || (() => false);
   const allNodes = useMemo(() => mindMapController?.allNodes || [], [mindMapController]);
+  // M2.5 — for enriching node-kind history entries with real provenance
+  // below (never a new classification rule, see JumpRow's own comment).
+  const nodesById = useMemo(() => new Map(allNodes.map((n) => [n.id, n])), [allNodes]);
+  const sourceStemsFor = (entry) => (entry.kind === "node" ? nodesById.get(entry.id)?.sourceStems : undefined);
   const hasMindmap = allNodes.length > 0;
 
   const jump = (entry) => {
@@ -270,7 +287,8 @@ export default function KnowledgeDashboard({
               <ul className="flex flex-col">
                 {recentToday.map((e, i) => (
                   <JumpRow key={`${e.kind}-${e.id}-${e.at}-${i}`} entry={e}
-                           trailing={formatRelativeTime(e.at, now)} onJump={jump} canJumpNode={canJumpNode} />
+                           trailing={formatRelativeTime(e.at, now)} onJump={jump} canJumpNode={canJumpNode}
+                           sourceStems={sourceStemsFor(e)} />
                 ))}
               </ul>
             )}
@@ -291,7 +309,8 @@ export default function KnowledgeDashboard({
                 {evolution.discovered.length === 0 ? EMPTY : (
                   <ul className="flex flex-col">
                     {evolution.discovered.map((e) => (
-                      <JumpRow key={`d-${e.kind}-${e.id}`} entry={e} onJump={jump} canJumpNode={canJumpNode} />
+                      <JumpRow key={`d-${e.kind}-${e.id}`} entry={e} onJump={jump} canJumpNode={canJumpNode}
+                               sourceStems={sourceStemsFor(e)} />
                     ))}
                   </ul>
                 )}
@@ -301,7 +320,8 @@ export default function KnowledgeDashboard({
                 {evolution.frequent.length === 0 ? EMPTY : (
                   <ul className="flex flex-col">
                     {evolution.frequent.map((e) => (
-                      <JumpRow key={`f-${e.kind}-${e.id}`} entry={e} trailing={`×${e.count}`} onJump={jump} canJumpNode={canJumpNode} />
+                      <JumpRow key={`f-${e.kind}-${e.id}`} entry={e} trailing={`×${e.count}`} onJump={jump} canJumpNode={canJumpNode}
+                               sourceStems={sourceStemsFor(e)} />
                     ))}
                   </ul>
                 )}
@@ -319,7 +339,8 @@ export default function KnowledgeDashboard({
               <ul className="flex flex-col">
                 {suggestions.map((e) => (
                   <JumpRow key={`r-${e.kind}-${e.id}`} entry={e}
-                           trailing={formatRelativeTime(e.lastAt, now)} onJump={jump} canJumpNode={canJumpNode} />
+                           trailing={formatRelativeTime(e.lastAt, now)} onJump={jump} canJumpNode={canJumpNode}
+                           sourceStems={sourceStemsFor(e)} />
                 ))}
               </ul>
             )}
@@ -370,12 +391,26 @@ export default function KnowledgeDashboard({
                     <p className="text-small text-text-muted italic">Đã xem hết mọi nhánh của sơ đồ này.</p>
                   ) : (
                     <div className="flex flex-wrap gap-1.5">
-                      {unvisited.slice(0, 8).map((n) => (
-                        <button key={n.id} type="button" onClick={() => jumpNodeDirect(n.id, n.title)}
-                                className="pill-action !text-caption !py-0.5" title="Chưa từng mở nhánh này">
-                          <Icon name="Network" size={10} /> {n.title}
-                        </button>
-                      ))}
+                      {/* M2.5 — closes the M1/Pack C blocker: this couldn't
+                          say WHICH unvisited nodes are worth checking because
+                          multi-document provenance didn't exist yet. `⇄` marks
+                          a node with 2+ resolved source_stems only — never
+                          inferred from title, never shown for single-source
+                          or unresolved nodes. */}
+                      {unvisited.slice(0, 8).map((n) => {
+                        const shared = classifyByProvenance(n) === "shared";
+                        const title = shared
+                          ? `Chưa từng mở nhánh này · chung ${n.sourceStems.length} tài liệu (${n.sourceStems.join(" · ")})`
+                          : "Chưa từng mở nhánh này";
+                        return (
+                          <button key={n.id} type="button" onClick={() => jumpNodeDirect(n.id, n.title)}
+                                  className="pill-action !text-caption !py-0.5" title={title}>
+                            <Icon name={shared ? "FileStack" : "Network"} size={10}
+                                  className={shared ? "text-seal" : undefined} />
+                            {n.title}
+                          </button>
+                        );
+                      })}
                     </div>
                   )}
                 </div>
@@ -393,7 +428,7 @@ export default function KnowledgeDashboard({
                       {heatmap.frequent.map((n) => (
                         <JumpRow key={n.id} entry={{ kind: "node", id: n.id, label: n.title }}
                                  meta={{ icon: "Network", label: "" }} trailing={`×${n.visitCount}`}
-                                 onJump={jump} canJumpNode={canJumpNode} />
+                                 onJump={jump} canJumpNode={canJumpNode} sourceStems={n.sourceStems} />
                       ))}
                     </ul>
                   )}

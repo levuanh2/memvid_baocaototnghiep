@@ -11,6 +11,17 @@
 //     relations:[{source,target,type,label}], degraded, missing }
 //
 // No React imports, no side effects — safe to unit test in isolation.
+//
+// M2.5 (Provenance Adoption) — v2 nodes may additionally carry `source_stems`
+// (BE/services/provenance.py, see docs/PROVENANCE_CONTRACT.md). The previous
+// version of this normalizer's node mapper was an explicit field allowlist
+// that silently dropped any field not named here — `source_stems` included.
+// Fixed below via `normalizeSourceStems` (utils/evidence.js): present only
+// when BE resolved it to a real, non-empty, deduped stem list; absent
+// (key omitted from the node entirely) otherwise — never `[]`, never a
+// fabricated fallback. v1/legacy records never carry this field (it did not
+// exist before M2) and are not touched here.
+import { normalizeSourceStems } from "./evidence";
 
 const KIND_ROOT = "root";
 const KIND_DEFAULT = "idea";
@@ -26,7 +37,7 @@ const normalizeV2 = (record) => {
     .filter((n) => n && n.id != null)
     .map((n) => {
       const parent = n.parent == null ? null : String(n.parent);
-      return {
+      const node = {
         id: String(n.id),
         parent,
         title: n.title || "",
@@ -42,6 +53,13 @@ const normalizeV2 = (record) => {
         level: Number.isFinite(Number(n.level)) ? Number(n.level) : 0,
         enrichment: Array.isArray(n.enrichment) ? n.enrichment : [],
       };
+      // M2.5 — deliberately NOT defaulted to `[]` like every field above.
+      // `sourceStems` absent means "unresolved", a real distinct state from
+      // "resolved to zero sources" (which cannot happen — BE never emits an
+      // empty array either). A caller must be able to tell the two apart.
+      const sourceStems = normalizeSourceStems(n.source_stems);
+      if (sourceStems) node.sourceStems = sourceStems;
+      return node;
     });
 
   const relations = rawRelations
