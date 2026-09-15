@@ -45,6 +45,21 @@ export function citeKey(stem, chunkId) {
   return `${normStem(stem)}::${String(chunkId ?? "")}`;
 }
 
+// Feature epic M1 (Multi-Document Intelligence, mục 7 — Workspace Timeline) —
+// the inverse of `citeKey`. An evidence-kind Study Context history entry's
+// `id` IS a `citeKey` string (see studySelection.js::chonEvidence) — this is
+// the ONE history kind that carries real per-document provenance today
+// (`stem` was already normalized when the key was built, so this is a
+// string split, not a lookup). ResearchTimeline.jsx and KnowledgeDashboard.jsx
+// each used to re-implement this split inline — consolidated here so a third
+// copy never gets written.
+export function parseCiteKey(key) {
+  const s = String(key ?? "");
+  const i = s.lastIndexOf("::");
+  if (i === -1) return { stem: s, chunkId: "" };
+  return { stem: s.slice(0, i), chunkId: s.slice(i + 2) };
+}
+
 // ── Citation linkifying ──────────────────────────────────────────
 // The query graph annotates context chunks as "[Nguồn: <stem>, đoạn <id>]".
 // If the answer reproduces those markers, turn each into a numbered chip

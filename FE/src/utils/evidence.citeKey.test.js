@@ -1,5 +1,5 @@
 import { describe, it, expect } from "vitest";
-import { citeKey } from "./evidence";
+import { citeKey, parseCiteKey } from "./evidence";
 
 // Feature Pack B (Cross Navigation) — `citeKey` already existed (used
 // internally by `processCitations`) but had no direct test and no other
@@ -25,5 +25,19 @@ describe("citeKey", () => {
   it("missing stem still produces a usable key, never throws", () => {
     expect(citeKey(undefined, 3)).toBe("::3");
     expect(citeKey(null, 3)).toBe("::3");
+  });
+});
+
+describe("parseCiteKey", () => {
+  it("is the exact inverse of citeKey for a real key", () => {
+    expect(parseCiteKey(citeKey("Bai_1", 3))).toEqual({ stem: "bai_1", chunkId: "3" });
+  });
+  it("a key with no :: separator is treated as a bare stem with no chunk", () => {
+    expect(parseCiteKey("just_a_stem")).toEqual({ stem: "just_a_stem", chunkId: "" });
+  });
+  it("empty/null/undefined never throws", () => {
+    expect(parseCiteKey("")).toEqual({ stem: "", chunkId: "" });
+    expect(parseCiteKey(null)).toEqual({ stem: "", chunkId: "" });
+    expect(parseCiteKey(undefined)).toEqual({ stem: "", chunkId: "" });
   });
 });
