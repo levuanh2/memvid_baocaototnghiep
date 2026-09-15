@@ -1,7 +1,8 @@
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { useSearchParams } from "react-router-dom";
 import MainLayout from "../components/Layout/MainLayout";
 import { resolveInitialTab, resolveInitialRightView } from "../utils/workspaceInit";
+import { setWorkspaceSources } from "../utils/workspaceSourcesBus";
 
 // Workspace — the authenticated app screen (mounted at /app).
 // Holds `selectedSources` (lifted out of the old App.jsx) so the chosen files
@@ -34,6 +35,14 @@ export default function Workspace() {
   // ever fights a later click.
   const [initialWorkspaceMode] = useState(() => resolveInitialTab(searchParams.get("tab")));
   const [initialRightView] = useState(() => resolveInitialRightView(searchParams.get("right")));
+  // Feature epic M1 (mục 9) — mirror the current selection for CommandPalette's
+  // "workspace" search scope (see utils/workspaceSourcesBus.js for why a plain
+  // module mirror, not a StudyContext lift). Cleared on unmount so a stale
+  // selection never leaks into a later session (e.g. after logout/back to `/`).
+  useEffect(() => {
+    setWorkspaceSources(selectedSources);
+    return () => setWorkspaceSources([]);
+  }, [selectedSources]);
   return (
     <MainLayout
       selectedSources={selectedSources}

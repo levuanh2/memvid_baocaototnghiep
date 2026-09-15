@@ -16,6 +16,8 @@ import { docLichSu, ghiLichSu, themTimKiem, themLenh } from "../../utils/command
 import { boDau } from "../../utils/thuVienTaiLieu";
 import { openShortcutsOverlay } from "../../utils/shortcutsBus";
 import { KIND_META as TIMELINE_KIND_META } from "../../utils/knowledgeEvolution";
+import { getWorkspaceSources } from "../../utils/workspaceSourcesBus";
+import { matchDocumentsToStems } from "../../utils/multiDocument";
 
 /**
  * Command Palette toàn cục (Phase 7). Ctrl+K/⌘K mở từ BẤT KỲ trang nào trong
@@ -174,14 +176,25 @@ export default function CommandPalette() {
     return d ? tenHienThi(d) : null;
   }, [selectedDocument, documents]);
 
+  // Feature epic M1 (mục 9) — "Không gian nghiên cứu" phạm vi thứ ba, đọc
+  // qua workspaceSourcesBus.js (Workspace.jsx là cây React KHÁC, xem file đó
+  // để biết vì sao là một mirror module, không phải StudyContext). Đọc MỖI
+  // LẦN mở palette — cùng lý do thư viện tải lại mỗi lần mở ở effect dưới:
+  // không tin một bản nhớ cũ, người dùng có thể đã đổi lựa chọn ở cột trái
+  // trong lúc palette đóng.
+  const [workspaceStems, setWorkspaceStems] = useState([]);
+  useEffect(() => { if (open) setWorkspaceStems(getWorkspaceSources()); }, [open]);
+
   // Phạm vi "Tài liệu hiện tại" — LỌC trên dữ liệu thư viện đã tải sẵn (Issue 3),
   // không phải một truy vấn mới: mọi thứ dưới đây vẫn chạy qua CHÍNH
-  // `timKiemToanCuc` như trước.
-  const phamViDocuments = useMemo(() => (
-    scope === "current" && selectedDocument
-      ? documents.filter((d) => d.document_id === selectedDocument)
-      : documents
-  ), [scope, selectedDocument, documents]);
+  // `timKiemToanCuc` như trước. "Không gian nghiên cứu" cùng nguyên tắc, lọc
+  // qua `matchDocumentsToStems` (multiDocument.js) — hàm đã có, không viết
+  // lại phép so khớp stem lần thứ hai ở đây.
+  const phamViDocuments = useMemo(() => {
+    if (scope === "current" && selectedDocument) return documents.filter((d) => d.document_id === selectedDocument);
+    if (scope === "workspace" && workspaceStems.length > 1) return matchDocumentsToStems(documents, workspaceStems);
+    return documents;
+  }, [scope, selectedDocument, workspaceStems, documents]);
 
   // Tải thư viện MỖI LẦN mở — không tin một bản nhớ từ lần mở trước, tài liệu có
   // thể đã đổi (đổi tên, ghim, upload mới) ở một trang khác trong lúc đóng.
@@ -365,6 +378,7 @@ export default function CommandPalette() {
           expanded={moRong} onToggle={toggleMoRong}
           onInsertToken={chenToanTu} onExactPhrase={cumChinhXac}
           scope={scope} onScopeChange={setScope} currentDocLabel={taiLieuHienTaiTen}
+          workspaceCount={workspaceStems.length}
           tags={theTanSo} collections={collections}
           onPickTag={(t) => locTheo("tag", t)} onPickCollection={(c) => locTheo("collection", c)}
         />
