@@ -164,6 +164,19 @@ export default function ChatArea({
     [highlight, onHighlight, handleEvidenceOpen],
   );
   const suggestions = useMemo(() => buildSuggestions(selectedSources, sources), [selectedSources, sources]);
+  // Feature epic M1 (Multi-Document Intelligence, mục 2) — names the real
+  // contributing documents for a small set, same stem->filename resolution
+  // `buildSuggestions` above already uses (not a second lookup convention).
+  // Falls back to the raw stem when no matching source is found (never
+  // fabricates a name), and to a plain count once there are too many to
+  // read as a label — same threshold SummaryPane/KnowledgeInspector use.
+  const sourcesLabel = useCallback((stems) => {
+    const list = Array.isArray(stems) ? stems : [];
+    if (!list.length) return "";
+    const nameOf = (stem) => sources.find((s) => (s.video_stem || s.video) === stem)?.filename || stem;
+    if (list.length <= 4) return list.length === 1 ? nameOf(list[0]) : list.map(nameOf).join(" · ");
+    return `${list.length} nguồn`;
+  }, [sources]);
   // First assistant answer only — the drop-cap is an "a reading surface begins
   // here" signal (MdProse's own rule), not a per-turn decoration.
   const firstAssistantIdx = useMemo(() => messages.findIndex((m) => m.role === "ai"), [messages]);
@@ -808,7 +821,7 @@ export default function ChatArea({
               <div className="flex items-center gap-2 text-metadata font-mono uppercase text-text-muted">
                 <Icon name="BookOpen" size={13} className="text-forest" /> Trả lời
                 {msg.evidence?.sources?.length ? (
-                  <span className="text-text-muted">· {msg.evidence.sources.length} nguồn</span>
+                  <span className="text-text-muted">· {sourcesLabel(msg.evidence.sources)}</span>
                 ) : null}
               </div>
               <div className="text-text-primary">
@@ -817,11 +830,15 @@ export default function ChatArea({
               {/* Product Experience Redesign, Question→Evidence handoff — Peak-End Rule:
                   the resting point of a reading turn (not mid-stream, not every turn)
                   gets a distinct settled marker instead of fading identically into the
-                  next question. Real citation count only — no count means no claim. */}
+                  next question. Real citation count only — no count means no claim.
+                  Feature epic M1 — names the sources instead of just a count, when
+                  the answer drew from more than one document: `evidence.sources` is
+                  the SAME real, backend-returned array `onEvidence` already forwards
+                  to the Evidence panel, not a new signal. */}
               {idx === messages.length - 1 && !loading && msg.evidence?.sources?.length > 0 && (
                 <div className="flex items-center gap-1.5 text-caption font-mono text-text-muted pt-0.5">
                   <Icon name="BadgeCheck" size={12} className="text-forest" />
-                  Đã trả lời với {msg.evidence.sources.length} nguồn — xem chi tiết ở lề phải
+                  Đã trả lời với {sourcesLabel(msg.evidence.sources)} — xem chi tiết ở lề phải
                 </div>
               )}
             </div>

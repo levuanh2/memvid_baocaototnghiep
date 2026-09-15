@@ -374,6 +374,16 @@ export default function MainLayout({
             // too), so the breadcrumb gets squeezed into near-zero space and
             // truncates to one letter. `lg` (1024px) gives it room.
             <StudyBreadcrumb showChat className="hidden lg:flex" />
+          ) : selectedSources?.length > 1 ? (
+            // Feature epic M1 (Multi-Document Intelligence, mục 1) — real signal
+            // that chat/mindmap/summary generation below will draw from every
+            // checked source, not silently just one. `selectedDocument` stays
+            // null here on purpose (Study Context's single-document pointer is
+            // a separate concept — see docs/MULTI_DOCUMENT_WORKSPACE.md).
+            <span className="hidden lg:flex items-center gap-1.5 text-metadata uppercase text-text-muted font-mono truncate">
+              <Icon name="FileStack" size={12} className="text-forest" />
+              Không gian nghiên cứu · {selectedSources.length} tài liệu
+            </span>
           ) : (
             <span className="hidden lg:block text-metadata uppercase text-text-muted font-mono truncate">
               Đọc · Truy hồi · Dẫn chứng

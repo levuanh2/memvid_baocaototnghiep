@@ -164,10 +164,17 @@ export default function KnowledgeInspector({
     };
   }, [enrichment]);
 
+  // Feature epic M1 (Multi-Document Intelligence) — when a mindmap was
+  // generated from a small number of sources, name them (real data, already
+  // on the record's own `sources` array — no per-node attribution exists to
+  // go further than this whole-mindmap level, see docs/MULTI_DOCUMENT_WORKSPACE.md).
+  // A larger set falls back to the count, same as before — a title-length
+  // list of 8 stems is noise, not provenance.
   const sourceLabel = useMemo(() => {
     const list = Array.isArray(sources) ? sources : [];
     if (list.length === 1) return list[0];
-    if (list.length > 1) return `${list.length} tài liệu`;
+    if (list.length > 1 && list.length <= 4) return list.join(" · ");
+    if (list.length > 4) return `${list.length} tài liệu`;
     return null;
   }, [sources]);
   const avgConfidencePct = useMemo(() => {

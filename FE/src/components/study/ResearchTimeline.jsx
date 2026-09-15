@@ -10,9 +10,26 @@ import { useStudyContext } from "../../study/useStudyContext";
 import { boDau } from "../../utils/thuVienTaiLieu";
 import { formatRelativeTime } from "../../utils/relativeTime";
 import { KIND_META, canJumpEntry } from "../../utils/knowledgeEvolution";
+import { parseCiteKey } from "../../utils/evidence";
+
+// Feature epic M1 (Multi-Document Intelligence, mục 7) — the Timeline already
+// spans every document the session touched (`history` resets only on a
+// SINGLE-document `selectDocument` call — a multi-source chat session, which
+// never calls that, accumulates entries across every selected document
+// already). What was missing: which document. "evidence" is the one kind
+// whose `id` genuinely encodes it (a `citeKey`, `stem::chunkId`) — the other
+// five kinds (topic/entity/summary/node/question) carry no document field at
+// all in their `history` entry, so this stays evidence-only rather than
+// inventing a source for kinds that don't have one.
+function goiYNguon(entry) {
+  if (entry.kind !== "evidence") return null;
+  const { stem } = parseCiteKey(entry.id);
+  return stem || null;
+}
 
 function MucDongThoiGian({ entry, now, kha_thi_jump, onJump }) {
   const meta = KIND_META[entry.kind] || { icon: "Tag", label: entry.kind };
+  const nguon = goiYNguon(entry);
   return (
     <li className="flex items-start gap-2 py-2 px-2.5 rounded-[7px] hover:bg-surface-elevated">
       <Icon name={meta.icon} size={14} className="mt-0.5 shrink-0 text-text-muted" />
@@ -21,6 +38,12 @@ function MucDongThoiGian({ entry, now, kha_thi_jump, onJump }) {
           <span className="font-mono uppercase">{meta.label}</span>
           <span aria-hidden="true">·</span>
           <span>{formatRelativeTime(entry.at, now)}</span>
+          {nguon && (
+            <>
+              <span aria-hidden="true">·</span>
+              <span className="truncate" title={`Nguồn: ${nguon}`}>{nguon}</span>
+            </>
+          )}
         </div>
         <p className="text-small text-text-primary truncate" title={entry.label}>{entry.label}</p>
       </div>
@@ -69,9 +92,7 @@ export default function ResearchTimeline({ mindMapController, onJumpQuestion, on
       return;
     }
     if (entry.kind === "evidence") {
-      const i = entry.id.lastIndexOf("::");
-      const stem = i === -1 ? entry.id : entry.id.slice(0, i);
-      const chunkId = i === -1 ? "" : entry.id.slice(i + 2);
+      const { stem, chunkId } = parseCiteKey(entry.id);
       selectEvidence(entry.id, { source: "chat", label: entry.label });
       onJumpEvidence?.({ stem, chunkId });
       return;

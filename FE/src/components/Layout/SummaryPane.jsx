@@ -72,7 +72,15 @@ export default function SummaryPane({ data }) {
         <div className="font-display text-body font-semibold truncate text-text-primary">{rec.title || "Tóm tắt tài liệu"}</div>
         {(rec.sources?.length || lengthLabel) && (
           <div className="text-caption text-text-muted mt-0.5">
-            {[rec.sources?.length ? `${rec.sources.length} tài liệu` : null, lengthLabel ? `độ dài: ${lengthLabel}` : null]
+            {/* Feature epic M1 — name the sources for a small set (real
+                provenance, `rec.sources` was always the full array; the
+                comment above only ever read index 0 elsewhere, the count-only
+                label here was the same truncation). A larger set falls back
+                to the count — matches KnowledgeInspector's own rule. */}
+            {[rec.sources?.length
+                ? (rec.sources.length <= 4 ? rec.sources.join(" · ") : `${rec.sources.length} tài liệu`)
+                : null,
+              lengthLabel ? `độ dài: ${lengthLabel}` : null]
               .filter(Boolean).join(" · ")}
           </div>
         )}
