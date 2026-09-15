@@ -11,31 +11,37 @@
 ═══════════════════════════════════════════════════ */
 @layer base {
   :root {
-    /* Surfaces — giấy dó */
-    --bg-base:     #ECE7DB;   /* paper-base — app background */
-    --bg-sidebar:  #F5F1E8;   /* paper-raised — panels */
-    --bg-card:     #F5F1E8;   /* paper-raised — cards */
-    --bg-elevated: #E3DCCB;   /* paper-sunken — inputs, wells */
-    --bg-panel:    #F5F1E8;
-    --bg-hover:    #E7E0D0;   /* hover wash */
+    /* Surfaces — cool research paper (Visual Identity Reset, see
+       docs/VISUAL_IDENTITY_WORKSPACE_REDESIGN.md). Was warm giấy-dó beige;
+       moved to a cool off-white/slate family so the app reads as a research
+       instrument, not a paper simulation. Ink text tokens below were
+       already navy-charcoal and are unchanged. */
+    --bg-base:     #F5F7FA;   /* app background — cool off-white */
+    --bg-sidebar:  #FFFFFF;   /* panels — clean white surface */
+    --bg-card:     #FFFFFF;   /* cards — clean white surface */
+    --bg-elevated: #EEF1F6;   /* inputs, wells — light slate-blue */
+    --bg-panel:    #FFFFFF;
+    --bg-hover:    #EAEEF3;   /* hover wash — cool */
 
-    /* Text — ink */
+    /* Text — ink (unchanged; already navy-charcoal, matches the reset) */
     --text-primary:   #1B2A41;
     --text-secondary: #4A5567;
-    --text-muted:     #8A8475;
-    --text-inverse:   #F5F1E8;
+    --text-muted:     #7C879C;
+    --text-inverse:   #F5F7FA;
 
     /* Rules — hairline ink */
     --border-color:  rgba(27, 42, 65, 0.12);
     --border-strong: rgba(27, 42, 65, 0.22);
 
-    /* Accent — action/selection role (Signature Contract §1). Wave 2: value
-       is STILL seal-red for now (flips to forest once every provenance-role
-       consumer below has migrated to `--seal` instead — see the wave's
-       commit message for the full migration ledger). */
-    --accent:        #B23A2E;
-    --accent-light:  #C8472E;
-    --brand-rgb:     178 58 46;   /* seal, for alpha utilities (bg-brand/8 …) */
+    /* Accent — action/selection role (Signature Contract §1). Completes the
+       Wave-2-planned flip: general UI action/selection now uses forest
+       (was seal-red). `--seal`/`--brand-rgb` below are UNCHANGED and stay
+       red — that channel is provenance/citation + the MemVidX wordmark
+       accent only, never a button, tab, or focus ring (Signature Contract
+       §7; verified no citation/provenance consumer reads `--accent`). */
+    --accent:        #1F4033;
+    --accent-light:  #2C5943;
+    --brand-rgb:     178 58 46;   /* seal + wordmark accent only, kept red on purpose */
     --ink-rgb:       27 42 65;
     --slate:         #5C6B7A;
 
@@ -88,9 +94,9 @@
     --shadow-card:       0 1px 2px rgba(27,42,65,0.06), 0 1px 1px rgba(27,42,65,0.04);
     --shadow-card-hover: 0 6px 18px rgba(27,42,65,0.10), 0 2px 6px rgba(27,42,65,0.06);
 
-    /* Scrollbar */
-    --scrollbar-thumb: rgba(178,58,46,0.28);
-    --scrollbar-hover: rgba(178,58,46,0.50);
+    /* Scrollbar — follows the new forest accent, not the old red */
+    --scrollbar-thumb: rgba(31,64,51,0.28);
+    --scrollbar-hover: rgba(31,64,51,0.50);
   }
 
   /* ═══════════════════════════════════════════════════
@@ -112,8 +118,12 @@
     --border-color:  rgba(236, 231, 219, 0.10);
     --border-strong: rgba(236, 231, 219, 0.20);
 
-    --accent:        #D86A53;
-    --accent-light:  #E4836C;
+    /* Same accent/seal split as :root above — general action/selection is
+       forest (dark-mode-tuned value, same one MindMap's selection ring and
+       ::selection already use), seal/brand stay red (provenance + wordmark
+       only). */
+    --accent:        #6FA98A;
+    --accent-light:  #82BC9C;
     --brand-rgb:     216 106 83;
     --ink-rgb:       236 231 219;
     --slate:         #8FA0B3;
@@ -132,8 +142,8 @@
     --shadow-card:       0 1px 3px rgba(0,0,0,0.35), 0 1px 2px rgba(0,0,0,0.25);
     --shadow-card-hover: 0 6px 20px rgba(0,0,0,0.45), 0 2px 8px rgba(0,0,0,0.30);
 
-    --scrollbar-thumb: rgba(216,106,83,0.32);
-    --scrollbar-hover: rgba(216,106,83,0.55);
+    --scrollbar-thumb: rgba(111,169,138,0.32);
+    --scrollbar-hover: rgba(111,169,138,0.55);
   }
 
   html, body, #root { height: 100%; }
@@ -330,6 +340,47 @@
   }
   .pill-tab--sub:focus-visible {
     outline: 2px solid var(--accent);
+    outline-offset: 2px;
+    transition: none;
+  }
+
+  /* Visual Identity Reset — Inspector's own top-level view switch (Bằng
+     chứng / Gia sư AI / Dòng thời gian / Kiến thức). These control the
+     WHOLE right column, one tier heavier than `.pill-tab--sub`'s nested
+     artifact tabs, but no longer a permanently bordered+filled box like
+     `.pill-tab` — matches the global header's equivalent shortcut buttons
+     (`.pill-action`, border-on-hover-only), so the same feature doesn't
+     read as two different weights of control depending on where it's
+     clicked from. See docs/VISUAL_IDENTITY_WORKSPACE_REDESIGN.md. */
+  .inspector-tab {
+    @apply inline-flex items-center gap-1.5 px-2.5 py-1.5 text-[13px] font-semibold transition-colors relative;
+    background: transparent;
+    border: none;
+    color: var(--on-contrast-muted);
+  }
+  .inspector-tab::after {
+    content: '';
+    position: absolute;
+    left: 8px;
+    right: 8px;
+    bottom: -1px;
+    height: 2px;
+    border-radius: 2px 2px 0 0;
+    background: transparent;
+  }
+  .inspector-tab:hover { color: var(--on-contrast); }
+  .inspector-tab.pill-tab-active {
+    background: transparent;
+    border-color: transparent;
+    color: var(--on-contrast);
+  }
+  /* --contrast-focus (bronze), not --accent — the graphite surface fails
+     contrast against forest (measured 1.36:1, see --contrast-focus's own
+     comment above); bronze is the pre-verified token for text/rings on
+     this specific surface (6.14:1). */
+  .inspector-tab.pill-tab-active::after { background: var(--contrast-focus); }
+  .inspector-tab:focus-visible {
+    outline: 2px solid var(--contrast-focus);
     outline-offset: 2px;
     transition: none;
   }
