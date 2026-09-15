@@ -19,6 +19,9 @@ import StudyBreadcrumb from "../study/StudyBreadcrumb";
 import { useStudyContext } from "../../study/useStudyContext";
 import { openCommandPalette } from "../../utils/commandPaletteBus";
 import { useTutorMemory } from "../../study/useTutorMemory";
+import { globalShortcutAction, mindmapRelationAction } from "../../utils/keyboardShortcuts";
+import { OPEN_SHORTCUTS_EVENT } from "../../utils/shortcutsBus";
+import ShortcutsOverlay from "../shortcuts/ShortcutsOverlay";
 
 export default function MainLayout({
   selectedSources, setSelectedSources, initialAskAbout = null,
@@ -72,6 +75,14 @@ export default function MainLayout({
   // and the KnowledgeInspector rendered directly below — selection state
   // survives switching modes because it lives HERE, not inside MindElixirView.
   const mindMapController = useMindMapController(mindmapData?.data);
+  // Feature Pack C (Keyboard-first Research Workspace) — the individual
+  // callbacks below are each `useCallback`-stabilized INSIDE the hook, but
+  // the object `useMindMapController` returns is a fresh literal every
+  // render (pre-existing — see `onJumpToMindMapNode`'s own dependency on the
+  // whole object just below). Destructuring the specific pieces this file's
+  // new keyboard effects need keeps THOSE effects from re-subscribing on
+  // every unrelated render, without touching the hook itself.
+  const { goBack: mmGoBack, goForward: mmGoForward, jumpTo: mmJumpTo, selected: mmSelected, relations: mmRelations } = mindMapController;
 
   // Feature Pack A (Research Timeline) — "Jump" to a mindmap-node entry must
   // switch the pane INTO view before scrolling it: MindElixirView stays
@@ -214,6 +225,87 @@ export default function MainLayout({
     return () => window.removeEventListener("keydown", onKey);
   }, [openTutor]);
 
+  // Feature Pack C (Keyboard-first Research Workspace) — "?" and the global
+  // Alt+ workspace shortcuts (mục 3 + 7). ShortcutsOverlay's open state lives
+  // HERE, same reasoning as `timelineOverlayOpen` above: it's the one place
+  // already reachable both from the header AND from CommandPalette.jsx (a
+  // sibling component mounted outside this tree — see shortcutsBus.js for
+  // why that needs a DOM event instead of a prop).
+  const [shortcutsOpen, setShortcutsOpen] = useState(false);
+  useEffect(() => {
+    const onExternalOpen = () => setShortcutsOpen(true);
+    window.addEventListener(OPEN_SHORTCUTS_EVENT, onExternalOpen);
+    return () => window.removeEventListener(OPEN_SHORTCUTS_EVENT, onExternalOpen);
+  }, []);
+  useEffect(() => {
+    const onKey = (e) => {
+      const action = globalShortcutAction(e, { activeElement: document.activeElement });
+      if (!action) return;
+      // Global shortcuts must not reach THROUGH an open modal (ShortcutsOverlay
+      // itself, Command Palette, the Summary modal, the MindMap-mode Timeline
+      // overlay's `.me-container`-adjacent siblings...) — same selector
+      // MainLayout's own right-drawer Escape effect already guards with below.
+      // "help" is the ONE exception: it must still be able to TOGGLE its own
+      // overlay closed while that overlay is the thing open, same self-toggle
+      // exception CommandPalette's own Ctrl+K already has for its own modal.
+      if (action !== "help" && document.querySelector('[aria-modal="true"], .me-container')) return;
+      e.preventDefault();
+      switch (action) {
+        case "help": return setShortcutsOpen((v) => !v);
+        case "nav-chat": return onSwitchToChat();
+        // Alt+M mirrors WorkspaceTabs.jsx's own gate exactly (`enabled.mindmap
+        // = hasMindmap`) — a keyboard shortcut for a disabled tab must stay a
+        // no-op, not switch into an empty pane the click path itself refuses.
+        case "nav-mindmap": return mindmapData?.data && setWorkspaceMode("mindmap");
+        // Alt+S mirrors the EXISTING header "StudyMap" <Link to="/app/study">
+        // above — same destination, no new route invented.
+        case "nav-studymap": return navigate("/app/study");
+        case "nav-timeline": return openTimeline();
+        case "history-back": return mmGoBack();
+        case "history-forward": return mmGoForward();
+        default: return;
+      }
+    };
+    window.addEventListener("keydown", onKey);
+    return () => window.removeEventListener("keydown", onKey);
+  }, [onSwitchToChat, mindmapData, navigate, openTimeline, mmGoBack, mmGoForward]);
+
+  // Feature Pack C — MindMap relation navigation (mục 4 + 5): center / parent /
+  // child / sibling, bare c/u/d/[/]. Scoped to `workspaceMode === "mindmap"`
+  // only, and skipped entirely while the mind-elixir canvas itself has focus
+  // (`.me-container` — see keyboardShortcuts.js's `mindmapRelationAction` doc
+  // comment for why: that canvas is `editable: true` and binds its OWN
+  // Arrow/Enter/Tab/Delete keymap directly on the container; this effect
+  // never claims any key mind-elixir's table already uses, so the two never
+  // fight over the same press). `jumpTo` already both selects AND centers
+  // (mind.selectNode + scrollIntoView, see useMindMapController.js), so
+  // "center" and every relation jump share the one existing primitive.
+  useEffect(() => {
+    if (workspaceMode !== "mindmap") return;
+    const onKey = (e) => {
+      if (document.activeElement?.closest?.(".me-container")) return;
+      // Same open-modal guard as the global effect above — belt-and-suspenders
+      // alongside `mindmapRelationAction`'s own interactive-target check
+      // (ShortcutsOverlay's close button already blocks it that way, since
+      // Modal.jsx focuses that button on open; this also covers a modal open
+      // while focus happens to sit on non-interactive text inside it).
+      if (document.querySelector('[aria-modal="true"]')) return;
+      const action = mindmapRelationAction(e, { activeElement: document.activeElement });
+      if (!action || !mmSelected?.id) return;
+      e.preventDefault();
+      switch (action) {
+        case "center": return mmJumpTo(mmSelected.id);
+        case "parent": return mmRelations.parent && mmJumpTo(mmRelations.parent.id);
+        case "child": return mmRelations.children[0] && mmJumpTo(mmRelations.children[0].id);
+        case "prev-sibling": return mmRelations.prev && mmJumpTo(mmRelations.prev.id);
+        case "next-sibling": return mmRelations.next && mmJumpTo(mmRelations.next.id);
+        default: return;
+      }
+    };
+    window.addEventListener("keydown", onKey);
+    return () => window.removeEventListener("keydown", onKey);
+  }, [workspaceMode, mmSelected, mmRelations, mmJumpTo]);
+
   // Step 10 — Escape đóng ngăn kéo lề phải (khổ hẹp). Bỏ qua khi một overlay
   // khác đang mở (modal tóm tắt/sơ đồ — `[aria-modal]`/`.me-container`) để
   // không tranh phím Escape với overlay đó, giống guard đã có ở
@@ -282,7 +374,7 @@ export default function MainLayout({
           <Link
             to="/app/study"
             className="pill-action"
-            title="Quiz chẩn đoán, ôn tập theo lỗ hổng"
+            title="Quiz chẩn đoán, ôn tập theo lỗ hổng (Alt+S)"
           >
             <Icon name="ScrollText" size={14} />
             <span className="hidden sm:inline">StudyMap</span>
@@ -313,8 +405,13 @@ export default function MainLayout({
           {/* Feature Pack B — luôn có mặt, kể cả khi đang ở sơ đồ tư duy (nơi
               cột phải bị Trình khám phá tri thức chiếm, xem openTimeline). */}
           <button onClick={openTimeline} className="hidden md:inline-flex pill-action !text-small"
-                  title="Dòng thời gian nghiên cứu">
+                  title="Dòng thời gian nghiên cứu (Alt+T)">
             <Icon name="Clock" size={14} /> Dòng thời gian
+          </button>
+          {/* Feature Pack C — Discoverability (mục 7). */}
+          <button onClick={() => setShortcutsOpen(true)} className="hidden md:inline-flex icon-btn w-9 h-9"
+                  title="Phím tắt (?)" aria-label="Xem phím tắt">
+            <Icon name="Keyboard" size={16} />
           </button>
           {/* Theme toggle */}
           <div className="hidden sm:flex theme-toggle" role="group" aria-label="Chế độ sáng/tối">
@@ -529,6 +626,10 @@ export default function MainLayout({
 
       {/* ── TOAST STACK ── */}
       <Toaster />
+
+      {/* Feature Pack C — Discoverability (mục 7): "?" hoặc lệnh "Phím tắt"
+          trong Command Palette đều mở đúng overlay này. */}
+      <ShortcutsOverlay open={shortcutsOpen} onClose={() => setShortcutsOpen(false)} />
     </div>
   );
 }
