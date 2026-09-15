@@ -5,7 +5,7 @@
 // whoever owns both the canvas and the Inspector (WorkspaceContainer/MainLayout),
 // so both consume the SAME state instead of two copies of it.
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
-import { buildGraphIndex, relationsFor, headingPath, findNodeByChunk as findNodeByChunkInIndex } from "../utils/mindmapGraph";
+import { buildGraphIndex, relationsFor, headingPath, findNodeByChunk as findNodeByChunkInIndex, allNodeSummaries } from "../utils/mindmapGraph";
 import { useStudyContext } from "../study/useStudyContext";
 
 export function useMindMapController(data) {
@@ -125,6 +125,15 @@ export function useMindMapController(data) {
     });
   }, [selected?.id]);
 
+  // Feature Pack D (Personal Knowledge Graph) — the FULL node set of the
+  // currently loaded mindmap, not just the selected node's neighborhood.
+  // `graphIndexRef` only changes identity when `data?.id` does (see the
+  // effect above), so that's the correct dependency here — unlike
+  // `relations`/`breadcrumb` below, this doesn't need to recompute on every
+  // selection change.
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  const allNodes = useMemo(() => allNodeSummaries(graphIndexRef.current), [data?.id]);
+
   const relations = useMemo(() => relationsFor(graphIndexRef.current, selected?.id), [selected?.id]);
   const breadcrumb = useMemo(() => headingPath(graphIndexRef.current, selected?.id), [selected?.id]);
   const recentItems = useMemo(() => {
@@ -156,6 +165,8 @@ export function useMindMapController(data) {
     registerMindInstance, onNodeSelected, sidecarRef,
     // consumed by KnowledgeInspector (and MindElixirView, for its own toolbar bits if needed):
     selected, relations, breadcrumb, jumpTo, canJumpTo, findNodeByChunk, goBack, goForward, togglePin,
+    // Feature Pack D — consumed by KnowledgeDashboard.jsx:
+    allNodes,
     nav: { canBack, canForward, onBack: goBack, onForward: goForward, recent: recentItems, pinned: pinnedItems, isPinned, onTogglePin: togglePin },
   };
 }

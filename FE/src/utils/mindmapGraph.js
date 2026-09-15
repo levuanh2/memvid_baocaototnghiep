@@ -58,6 +58,21 @@ export function findNodeByChunk(index, chunkId) {
   return null;
 }
 
+// Feature Pack D (Personal Knowledge Graph) — every non-root node in the
+// currently loaded mindmap, as the same `summarize()` shape `relationsFor`
+// already returns for parent/children/siblings. Used by
+// `knowledgeEvolution.js`'s `partitionNodesByVisit`/`nodeHeatmap` to know the
+// FULL set a session's `history[]` node visits are a subset of — without
+// this, "unvisited"/"never opened" would have nothing to be relative to.
+export function allNodeSummaries(index) {
+  const out = [];
+  for (const n of index.byId.values()) {
+    if (n.kind === "root") continue;
+    out.push(summarize(n));
+  }
+  return out;
+}
+
 // Task 6 — "current heading": ancestor chain from root down to (excluding)
 // this node, for a breadcrumb. Root itself excluded (it's the document, not
 // a heading).

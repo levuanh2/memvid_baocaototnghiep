@@ -1,5 +1,5 @@
 import { describe, it, expect } from "vitest";
-import { buildGraphIndex, relationsFor, headingPath, findNodeByChunk } from "./mindmapGraph";
+import { buildGraphIndex, relationsFor, headingPath, findNodeByChunk, allNodeSummaries } from "./mindmapGraph";
 
 const REC = {
   schema_version: 2, title: "T",
@@ -77,6 +77,24 @@ describe("mindmapGraph", () => {
       expect(findNodeByChunk(idx, "")).toBeNull();
       expect(findNodeByChunk(idx, null)).toBeNull();
       expect(findNodeByChunk(idx, undefined)).toBeNull();
+    });
+  });
+
+  // Feature Pack D (Personal Knowledge Graph) — every node except root.
+  describe("allNodeSummaries", () => {
+    it("returns every non-root node, summarized", () => {
+      const idx = buildGraphIndex(REC);
+      const ids = allNodeSummaries(idx).map((n) => n.id).sort();
+      expect(ids).toEqual(["n1", "n2", "n3", "n4"]);
+    });
+
+    it("root is excluded", () => {
+      const idx = buildGraphIndex(REC);
+      expect(allNodeSummaries(idx).some((n) => n.id === "n0")).toBe(false);
+    });
+
+    it("garbage/empty record → empty array, never throws", () => {
+      expect(allNodeSummaries(buildGraphIndex(null))).toEqual([]);
     });
   });
 });
