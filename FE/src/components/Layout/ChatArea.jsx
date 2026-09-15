@@ -12,6 +12,7 @@ import { createPreviewThrottle } from "../../utils/streamPreview";
 import { shouldFocusComposer, shouldRefocusComposer, shouldFocusOnSlash } from "../../utils/chatFocus";
 import { Icon } from "../ui/Icon";
 import { PROSE } from "../ui/Markdown";
+import { useStudyContext } from "../../study/useStudyContext";
 import { nodeLabel, processCitations, parseCiteHref, normStem } from "../../utils/evidence";
 import { pickImageFromClipboard, downscaleImage, transcribeImage, getVisionStatus, buildQuestionWithImage, IMAGE_TYPES } from "../../utils/chatImage";
 import { QUERY_SSE_ERR_FALLBACK, ensureErrMsg, pickQueryDisplayText, sseErrorToMessage } from "../../utils/queryText";
@@ -53,13 +54,20 @@ function buildSuggestions(selectedSources, sources) {
 // (SummaryPane). Only `a` genuinely needs to differ here (citation chips,
 // [n](#cite:stem:chunkId)); everything else now renders through the same
 // path the rest of the app already uses ("một đường render").
-function makeMdComponents({ highlight, onHighlight }) {
+// Feature Pack A (Research Timeline) — `onEvidenceOpen` fires ONLY from a
+// deliberate click/keypress, never from hover. Hover already drives
+// `onHighlight` (transient, no record kept); logging that too would flood
+// the timeline with every citation the cursor happened to pass over, not
+// what the user actually opened (reviewed and agreed: evidence logs on
+// click only).
+function makeMdComponents({ highlight, onHighlight, onEvidenceOpen }) {
   return {
     ...PROSE,
     a: ({ node, href, children, ...props }) => {
       const cite = parseCiteHref(href);
       if (cite) {
         const active = highlight && normStem(highlight.stem) === normStem(cite.stem) && String(highlight.chunkId) === String(cite.chunkId);
+        const open = () => { onHighlight?.(cite); onEvidenceOpen?.(cite); };
         return (
           <sup
             className={`cite-chip ${active ? "cite-chip--active" : ""}`}
@@ -68,8 +76,8 @@ function makeMdComponents({ highlight, onHighlight }) {
             title={`Nguồn: ${cite.stem} · đoạn ${cite.chunkId}`}
             onMouseEnter={() => onHighlight?.(cite)}
             onMouseLeave={() => onHighlight?.(null)}
-            onClick={() => onHighlight?.(cite)}
-            onKeyDown={(e) => { if (e.key === "Enter" || e.key === " ") { e.preventDefault(); onHighlight?.(cite); } }}
+            onClick={open}
+            onKeyDown={(e) => { if (e.key === "Enter" || e.key === " ") { e.preventDefault(); open(); } }}
           >
             {children}
           </sup>
@@ -96,6 +104,10 @@ function AnswerProse({ content, mdComponents, dropCap = false }) {
 }
 
 export default function ChatArea({ selectedSources, sources = [], onEvidence, highlight, onHighlight, onOpenLeft, askAboutDraft }) {
+  // Feature Pack A (Research Timeline) — ChatArea never touched Study Context
+  // before this; it's the one surface where the user's two most-timeline-
+  // worthy actions (ask a question, open a citation) actually happen.
+  const { selectQuestion, selectEvidence } = useStudyContext();
   const [messages, setMessages] = useState([]);
   const [input, setInput] = useState("");
   const [loading, setLoading] = useState(false);
@@ -130,7 +142,18 @@ export default function ChatArea({ selectedSources, sources = [], onEvidence, hi
   // re-parse toàn bộ text mỗi token — xem utils/streamPreview.js).
   const previewThrottleRef = useRef(null);
 
-  const mdComponents = useMemo(() => makeMdComponents({ highlight, onHighlight }), [highlight, onHighlight]);
+  // `chunkId` composite (`stem::chunkId`) matches the key SidebarRight's own
+  // evidence list already builds for the same chunk — one id shape for the
+  // same real thing, not a second encoding invented for the timeline alone.
+  const handleEvidenceOpen = useCallback((cite) => {
+    selectEvidence(`${normStem(cite.stem)}::${cite.chunkId}`, {
+      source: "chat", label: `${cite.stem} · đoạn ${cite.chunkId}`,
+    });
+  }, [selectEvidence]);
+  const mdComponents = useMemo(
+    () => makeMdComponents({ highlight, onHighlight, onEvidenceOpen: handleEvidenceOpen }),
+    [highlight, onHighlight, handleEvidenceOpen],
+  );
   const suggestions = useMemo(() => buildSuggestions(selectedSources, sources), [selectedSources, sources]);
   // First assistant answer only — the drop-cap is an "a reading surface begins
   // here" signal (MdProse's own rule), not a per-turn decoration.
@@ -475,6 +498,10 @@ export default function ChatArea({ selectedSources, sources = [], onEvidence, hi
       imageName,
     };
     setMessages((prev) => [...prev, userMsg]);
+    // Feature Pack A (Research Timeline) — the moment a question is genuinely
+    // submitted (not every keystroke, not a suggestion merely filled into the
+    // composer), matching the other five select* actions' "log the action" rule.
+    selectQuestion(userMsg.content, { source: "chat", label: userMsg.content });
     setInput("");
     clearImage();
     setLoading(true); resetJobState(); setSeenNodes(["Queued"]);

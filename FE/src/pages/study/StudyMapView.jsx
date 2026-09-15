@@ -368,7 +368,7 @@ export default function StudyMapView() {
         if (attrs.node_id) {
           setSelected(attrs);
           setFocusedId(attrs.node_id);
-          selectNode(attrs.node_id, { source: "mindmap" });
+          selectNode(attrs.node_id, { source: "mindmap", label: nodeDatum.name });
         }
         if (hasBranch) toggleNode();
       };

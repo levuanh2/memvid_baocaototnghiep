@@ -72,7 +72,7 @@ export function useMindMapController(data) {
       number: side?.number || "", level: side?.level || 0, enrichment: side?.enrichment || [],
     });
     pushHistory(n.id);
-    selectNodeInContext(n.id, { source: "mindmap" });
+    selectNodeInContext(n.id, { source: "mindmap", label: n.topic });
   }, [pushHistory, selectNodeInContext]);
 
   const jumpTo = useCallback((id) => {
@@ -82,6 +82,15 @@ export function useMindMapController(data) {
     mind.selectNode(tpc);
     mind.scrollIntoView?.(tpc, true);
   }, []);
+
+  // Feature Pack A (Research Timeline) — a timeline entry's "Jump" must be
+  // real or absent, never a dead click (per review). `sidecarRef` is built
+  // fresh by MindElixirView for whichever mindmap is CURRENTLY loaded, so a
+  // node id present there is genuinely jumpable right now; anything else
+  // (a stale id after regeneration, or an id logged while the same
+  // `source:"mindmap"` tag was used by StudyMapView's own — separate —
+  // canvas) correctly reports false instead of silently no-op'ing.
+  const canJumpTo = useCallback((id) => sidecarRef.current.has(id), []);
 
   const goBack = useCallback(() => {
     const h = historyRef.current;
@@ -138,7 +147,7 @@ export function useMindMapController(data) {
     // consumed by MindElixirView (canvas):
     registerMindInstance, onNodeSelected, sidecarRef,
     // consumed by KnowledgeInspector (and MindElixirView, for its own toolbar bits if needed):
-    selected, relations, breadcrumb, jumpTo, goBack, goForward, togglePin,
+    selected, relations, breadcrumb, jumpTo, canJumpTo, goBack, goForward, togglePin,
     nav: { canBack, canForward, onBack: goBack, onForward: goForward, recent: recentItems, pinned: pinnedItems, isPinned, onTogglePin: togglePin },
   };
 }
