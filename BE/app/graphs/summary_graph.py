@@ -151,6 +151,8 @@ def build_summary_graph(*, data_dir: Path, index_meta_path: Path,
         if smode == "study":
             from services.summary.pipeline.study import build_study
             study = build_study(sections)
+        from services.provenance import attach_section_source_stems
+        sections = attach_section_source_stems(sections, mm)
         record = sm_schema.build_record(
             title=(meta.get("title") or mm["title"]),
             sources=mm["sources"],

@@ -85,6 +85,7 @@ def run_study_map_job(job_id: str, document_id: str, user_id: Optional[str] = No
         rels = mindmap_schema.validate_relations(relations, clean)
         node_rows, edge_rows = _sm_gen.build_graph(
             clean, rels, _docs.chunks_by_embedding(document_id),
+            source_stems=[stem],
         )
         if not node_rows:
             raise ValueError("Pipeline không dựng được node nào.")
