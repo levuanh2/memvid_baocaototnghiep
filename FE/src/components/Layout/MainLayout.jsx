@@ -347,9 +347,10 @@ export default function MainLayout({
         </button>
 
         {/* Wordmark — a stamped seal + serif name. This IS the seal-stamp
-            signature itself (Signature Contract §7) — stays --seal even
-            after --accent flips to forest; every other component only
-            REFERENCES this motif, never duplicates its exact treatment. */}
+            signature itself (Signature Contract §7) — stays --seal
+            regardless of what --accent's general action/selection color is
+            (forest, then blue); every other component only REFERENCES this
+            motif, never duplicates its exact treatment. */}
         <div className="flex items-center gap-2.5 flex-shrink-0 select-none">
           <span
             className="w-[30px] h-[30px] rounded-[6px] inline-flex items-center justify-center font-display text-body-lg font-semibold flex-shrink-0"
@@ -381,7 +382,7 @@ export default function MainLayout({
             // null here on purpose (Study Context's single-document pointer is
             // a separate concept — see docs/MULTI_DOCUMENT_WORKSPACE.md).
             <span className="hidden lg:flex items-center gap-1.5 text-metadata uppercase text-text-muted font-mono truncate">
-              <Icon name="FileStack" size={12} className="text-forest" />
+              <Icon name="FileStack" size={12} className="text-accent" />
               Không gian nghiên cứu · {selectedSources.length} tài liệu
             </span>
           ) : (

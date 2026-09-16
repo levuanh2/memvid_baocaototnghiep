@@ -40,7 +40,7 @@ const formatTimeAgo = (isoDate) => {
 const ListCard = ({ title, meta, icon, onOpen, onDelete, deleteLabel = "Xóa" }) => (
   <div
     onClick={onOpen}
-    className="flex items-center gap-3 px-3 py-2.5 rounded-[7px] border border-border hover:border-forest/30 cursor-pointer transition-all group transition-theme"
+    className="flex items-center gap-3 px-3 py-2.5 rounded-[7px] border border-border hover:border-accent/30 cursor-pointer transition-all group transition-theme"
     style={{ background: "var(--bg-card)" }}
   >
     <div className="w-8 h-8 rounded-[6px] flex items-center justify-center flex-shrink-0 text-seal" style={{ background: "color-mix(in srgb, var(--seal) 10%, transparent)" }}>
@@ -683,7 +683,7 @@ export default function SidebarRight({
               để "nổi" lên trên nội dung thay vì nằm phẳng trong hàng cột. */}
           {rightView === "tutor" && (
             <button type="button" onClick={() => setTutorFloating((v) => !v)}
-                    className={`icon-btn w-8 h-8 hidden md:inline-flex ${tutorFloating ? "text-forest" : ""}`}
+                    className={`icon-btn w-8 h-8 hidden md:inline-flex ${tutorFloating ? "text-accent" : ""}`}
                     aria-pressed={tutorFloating}
                     title={tutorFloating ? "Ghim vào cột" : "Tách nổi"}
                     aria-label={tutorFloating ? "Ghim Gia sư AI vào cột" : "Tách Gia sư AI nổi lên"}>

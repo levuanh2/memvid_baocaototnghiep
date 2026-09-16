@@ -79,7 +79,7 @@ export default function AccountMenu({ user, onLogout }) {
 
           <button
             role="menuitem"
-            className={`${muc} text-text-secondary hover:text-forest`}
+            className={`${muc} text-text-secondary hover:text-accent`}
             onClick={() => { setMoMenu(false); setMoHoSo(true); }}
           >
             <Icon name="UserRound" size={15} /> Hồ sơ tài khoản
@@ -91,7 +91,7 @@ export default function AccountMenu({ user, onLogout }) {
           {hoSo.nhaCungCap === "NKS" && (
             <button
               role="menuitem"
-              className={`${muc} text-text-secondary hover:text-forest`}
+              className={`${muc} text-text-secondary hover:text-accent`}
               onClick={() => { setMoMenu(false); setMoDoiMatKhau(true); }}
             >
               <Icon name="KeyRound" size={15} /> Đổi mật khẩu
@@ -100,7 +100,7 @@ export default function AccountMenu({ user, onLogout }) {
 
           <div className="my-1 border-t" style={{ borderColor: "var(--border-color)" }} />
 
-          <button role="menuitem" className={`${muc} text-text-secondary hover:text-forest`} onClick={() => { setMoMenu(false); onLogout?.(); }}>
+          <button role="menuitem" className={`${muc} text-text-secondary hover:text-accent`} onClick={() => { setMoMenu(false); onLogout?.(); }}>
             <Icon name="LogOut" size={15} /> Đăng xuất
           </button>
         </div>

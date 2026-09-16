@@ -205,7 +205,7 @@ export default function StudyCard({
             checked={Boolean(daChon)}
             onChange={() => onChon(doc.document_id)}
             aria-label={nhanOChon(ten, Boolean(daChon))}
-            className="w-[15px] h-[15px] mt-[4px] accent-forest rounded cursor-pointer shrink-0"
+            className="w-[15px] h-[15px] mt-[4px] accent-accent rounded cursor-pointer shrink-0"
           />
         ) : (
           <Icon name="FileText" size={18} className="text-text-muted shrink-0 mt-[3px]" />
@@ -220,8 +220,8 @@ export default function StudyCard({
               <span className="font-display text-title font-semibold text-text-primary truncate">
                 {ten}
               </span>
-              {doc.pinned && <Icon name="Pin" size={13} className="shrink-0 text-forest" />}
-              {doc.favorite && <Icon name="Star" size={13} className="shrink-0 text-forest" />}
+              {doc.pinned && <Icon name="Pin" size={13} className="shrink-0 text-accent" />}
+              {doc.favorite && <Icon name="Star" size={13} className="shrink-0 text-accent" />}
               {doc.archived_at && (
                 <span className="shrink-0 text-caption text-text-muted">· đã lưu trữ</span>
               )}
@@ -289,7 +289,7 @@ export default function StudyCard({
         <ul className="flex flex-col gap-1 pl-0.5">
           {(gon ? yChinh.slice(0, 1) : yChinh).map((y, i) => (
             <li key={i} className="flex gap-2 text-body text-text-primary">
-              <Icon name="Sparkles" size={12} className="mt-[4px] shrink-0 text-forest" />
+              <Icon name="Sparkles" size={12} className="mt-[4px] shrink-0 text-accent" />
               <span>{y}</span>
             </li>
           ))}

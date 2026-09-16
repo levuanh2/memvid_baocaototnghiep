@@ -105,9 +105,9 @@ export default function Landing() {
             <span className="font-display font-semibold text-title tracking-tight text-text-primary">MemVid<span className="text-seal">X</span></span>
           </div>
           <div className="flex-1" />
-          <button onClick={() => scrollTo("tinhnang")} className="hidden md:inline text-body text-text-secondary hover:text-forest transition-theme">Tính năng</button>
-          <button onClick={() => scrollTo("quytrinh")} className="hidden md:inline text-body text-text-secondary hover:text-forest transition-theme">Quy trình</button>
-          <button onClick={() => scrollTo("demo")} className="hidden md:inline text-body text-text-secondary hover:text-forest transition-theme">Demo</button>
+          <button onClick={() => scrollTo("tinhnang")} className="hidden md:inline text-body text-text-secondary hover:text-accent transition-theme">Tính năng</button>
+          <button onClick={() => scrollTo("quytrinh")} className="hidden md:inline text-body text-text-secondary hover:text-accent transition-theme">Quy trình</button>
+          <button onClick={() => scrollTo("demo")} className="hidden md:inline text-body text-text-secondary hover:text-accent transition-theme">Demo</button>
           <button onClick={toggleTheme} className="icon-btn w-8 h-8" aria-label="Đổi giao diện sáng/tối" title="Sáng/tối">
             <Icon name={isDark ? "Sun" : "Moon"} size={15} />
           </button>
@@ -175,7 +175,7 @@ export default function Landing() {
         <div className="grid sm:grid-cols-2 lg:grid-cols-5 gap-x-6 gap-y-10">
           {SOLUTIONS.map((s) => (
             <div key={s.title} className="p-1">
-              <Icon name={s.icon} size={20} className="text-forest mb-3" />
+              <Icon name={s.icon} size={20} className="text-accent mb-3" />
               <div className="font-display font-semibold text-body-lg text-text-primary mb-1">{s.title}</div>
               <div className="text-small text-text-secondary leading-relaxed">{s.desc}</div>
             </div>
@@ -212,7 +212,7 @@ export default function Landing() {
           {FEATURES.map((f, i) => (
             <div key={f.title}
               className={`flex items-start gap-3 py-4 ${i < FEATURES.length - 2 ? "border-b border-border" : ""}`}>
-              <Icon name={f.icon} size={18} className="text-forest mt-0.5 flex-shrink-0" />
+              <Icon name={f.icon} size={18} className="text-accent mt-0.5 flex-shrink-0" />
               <div>
                 <div className="font-display font-semibold text-body-lg text-text-primary mb-1">{f.title}</div>
                 <div className="text-small text-text-secondary leading-relaxed">{f.desc}</div>
@@ -237,7 +237,7 @@ export default function Landing() {
               Bình lọc Hải Đăng 3000 giải quyết nước <strong>nhiễm phèn và nhiễm mặn</strong> ở đồng bằng sông Cửu Long.<span className="cite-chip">2</span>
             </ChatBubble>
             <div className="pt-2 mt-1 border-t border-border flex items-center gap-2 text-small text-text-muted">
-              <Icon name="MessagesSquare" size={13} className="text-forest" />
+              <Icon name="MessagesSquare" size={13} className="text-accent" />
               Hiểu “nó” nhờ ngữ cảnh hội thoại — không cần nhắc lại tên tài liệu.
             </div>
           </div>

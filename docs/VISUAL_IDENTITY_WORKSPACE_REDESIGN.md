@@ -102,52 +102,270 @@ Net effect: the same feature no longer reads as two independent,
 equal-weight navigation bars — the Inspector is the labeled owner, the header
 is a lightweight shortcut into it.
 
-## Not done in this pass (named honestly, not hidden)
+## Not done in the first pass, closed out below
 
-- **Left sidebar (`SidebarLeft.jsx`) box-reduction (Part B)** — not audited
-  or touched this pass. Given the header/Inspector duplication was the
-  concrete, verifiable match to the epic's complaint and the rest of the
-  box-density claim did not hold up against the actual render code (see
-  table above), this was deprioritized rather than made on a guess.
-- **Responsive workspace pass (Part E)** and **micro-interaction pass (Part
-  F)** — not touched; existing responsive/motion code (`prefers-reduced-motion`
-  handling throughout `index.css`/`mindmap.css`) was left as-is.
-- **New focused tests for MindMap pan / navigation ownership (Part I)** — no
-  MindMap code changed, so no new MindMap test was added (the existing
-  `mindmapViewport.test.js` already covers viewport preservation and still
-  passes). A render-test for `MainLayout`/`SidebarRight` confirming the
-  icon-only vs. `inspector-tab` split was considered but skipped: neither
-  component has existing test scaffolding (both are large, deeply-wired to
-  auth/job/workspace providers), and building that scaffolding from scratch
-  for one assertion was judged disproportionate — build + lint + the full
-  existing suite (below) were used as the actual verification instead.
-- **Hallmark skill gate** — not invoked as a separate audit pass; its stated
-  goals (anti-slop, box reduction, token discipline, duplicate-nav removal)
-  were applied directly from first principles against the real render code
-  above, since the codebase's own prior sprints (referenced throughout
-  `index.css`) were themselves already Hallmark-driven.
-- **Visual review targets (Part H, 16 screens)** — not manually captured;
-  no running dev server / screenshot tool used this pass. Reasoned from
-  source, not pixels — a real gap if pixel-level QA is required before
-  shipping this.
+- ~~Left sidebar box-reduction~~ — audited and visually verified in the second
+  pass (below): already correct, no code change needed.
+- ~~Responsive workspace pass~~ / ~~micro-interaction pass~~ — verified in the
+  second pass at the three mandated viewports.
+- ~~Visual review (screenshots)~~ — done in the second pass; see below.
+- **Hallmark skill gate** — still not invoked as a literal separate tool
+  pass; its goals were applied directly against real render code and real
+  screenshots instead, for the same reason as the first pass (the codebase's
+  own prior sprints were already Hallmark-driven).
+- **New component-render tests for navigation ownership / sidebar / drawer
+  behavior** — still not added; see "Tests" below for why, confirmed by a
+  full-codebase search this pass, not just a judgment call on two files.
+
+---
+
+## Second pass — Learning Canvas Option 2, sidebar, responsive, micro-interactions, visual QA
+
+Confirmed `docs/StudyMap-Learning-Canvas-Prototype/AGENTS.md`: *"Selected
+visual: Product Design ideation option 2, 'Learning Canvas'."* There is only
+one build in that folder (`src/App.jsx` + `src/styles.css`) — it **is**
+Option 2, already unambiguous, no other option folder to choose between.
+
+### Visual verification method
+
+No `chromium-cli`/Playwright was preinstalled. Installed on demand:
+`npx -y playwright install chromium` (reused an already-cached browser
+binary) + `npm install playwright@1.63.0` in the scratchpad dir (not the
+repo) for scripting. Started `FE`'s own Vite dev server (`npm run dev`,
+port 5173) and, separately, the prototype's own dev server (`npm run dev`,
+port 5180) after `npm install` inside that folder (neither `node_modules`
+was committed to the repo). Both were **killed** at the end of this pass —
+confirmed via `curl` returning connection-refused on both ports.
+
+The real backend (`VITE_API_URL`/`.env.local` → `http://localhost:8080`) is
+not reachable from this sandbox. Rather than attempt a real account against
+an unreachable host, `page.route()` mocked exactly three endpoints
+(`/auth/me`, `/auth/login`, `/list-indexed`) with canned local JSON — no
+real network call, no real account, no real data touched anywhere. This is
+different from, and more conservative than, the disposable-test-account
+pattern used elsewhere in this repo's production release-gate work; it was
+chosen because the real backend was unreachable, not as a downgrade.
+
+Screenshots (scratchpad, not committed — paths as captured this session):
+`.../scratchpad/shots/`
+- `workspace-desktop-no-doc.png` (1440×1024)
+- `workspace-laptop-no-doc.png` (1024×768)
+- `workspace-mobile-no-doc.png` (390×844)
+- `workspace-desktop-doc-selected.png` — 2 sources selected, one with a
+  deliberately long filename to exercise truncation
+- `workspace-mobile-left-drawer-open.png`, `workspace-mobile-right-drawer-open.png`
+- `workspace-desktop-sidebar-collapsed.png` — the `PanelSpine` "book spine"
+  state
+- `focus-ring-header.png`, `hover-upload-button.png`
+- `prototype-option2-desktop.png` — the actual Learning Canvas Option 2
+  prototype, rendered live, for direct side-by-side comparison
+
+### 1. Left sidebar (Part 1)
+
+**Finding: already correct, matching Learning Canvas Option 2's structure
+closely — no code change made.** Verified by screenshot, not just reading
+the source:
+
+- Document hierarchy: checkbox → file-type icon → name → chunk count +
+  status badge, flat rows with a hairline bottom border (`SidebarLeft.jsx`'s
+  own "Wave 3" comment: replaced a 4-side-bordered-card design with this
+  flat-row treatment previously — already done, not new).
+- Selection state: left accent bar (3px, `var(--accent)`) + a 6% background
+  tint — one signal, not three. Confirmed in the screenshot: selecting 2
+  sources shows exactly this, "2 đang chọn" updates, "Chọn tất cả" checkbox
+  reflects state correctly.
+- Status labels: worded badges ("SẴN SÀNG"/"Đang xử lý"/"Lỗi"), not color
+  alone.
+- Filtering: the search input live-filters the list (existing client-side
+  filter in `SidebarLeft.jsx`); not re-verified interactively this pass
+  (typing into it) — visually present and correctly styled.
+- Add-document action: `.btn-primary` (ink-fill) when the shelf is empty,
+  demotes to `.btn-secondary` once documents exist — confirmed both states.
+- **Truncation / overflow**: tested deliberately with a long filename
+  (`Chuong_1_Tong_quan_he_thong_phan_tan_va_du_lieu_lon.docx`) — renders as
+  `Chuong_1_Tong_...` on one line via CSS `truncate` + `min-w-0` on the
+  flex chain, full name on hover via `title`. No horizontal scrollbar at
+  any of the three viewports or the collapsed state.
+- Collapse behavior: `PanelSpine` renders a 34px "book spine" column with a
+  vertical label and a count badge (screenshot:
+  `workspace-desktop-sidebar-collapsed.png`) — clean, no overlap, no
+  overflow.
+
+The one real difference from the Option 2 prototype is **hue**, not
+structure — see "Accent color: forest vs. the prototype's blue" below.
+
+### 2. Responsive (Part 2)
+
+Existing responsive architecture (confirmed before touching anything, per
+the coordinator's instruction not to invent a new one): `MainLayout.jsx`
+already has a `panel.drawer` boolean (narrow widths → left/right columns
+become overlay drawers with a `bg-black/40 backdrop-blur-sm` scrim) vs.
+`panel.collapsed.{left,right}` (wide widths → columns collapse to a
+`PanelSpine`). This is already exactly an "intentional drawer/sheet
+pattern," not something to invent.
+
+Verified at all three mandated viewports, screenshots above:
+
+| Viewport | Result |
+|---|---|
+| 1440×1024 (desktop) | 3-column layout (sidebar / workspace / Inspector) — no overlap, no overflow, header buttons all fit on one row. |
+| 1024×768 (laptop/tablet) | Same 3-column layout, still fits — header row does not wrap or overflow at this width. |
+| 390×844 (mobile) | Single-column: hamburger (left drawer) + brand + StudyMap icon + search icon + right-panel icon + avatar, all on one row, no overlap. Left drawer opens as a scrim + panel overlay, correctly readable, close button reachable. Right drawer (Inspector) opens the same way — the new `.inspector-tab` underline row also renders correctly at this width (tabs wrap to two lines inside the fixed-width drawer, still legible, active tab still clearly indicated). |
+
+No P0/P1/P2 responsive issue found at any of the three viewports. Composer,
+header, sidebar, and Inspector never overlapped or became unreachable in
+any state tested (no-doc, doc-selected, both drawers, collapsed spine).
+
+### 3. Micro-interactions (Part 3)
+
+Spot-checked rather than exhaustively enumerated (existing infrastructure
+already covers this broadly — every shared primitive in `index.css` already
+has `:hover`/`:focus-visible`/`:active`/`:disabled` rules, and a global
+`prefers-reduced-motion` block collapses all transitions/animations to near
+zero):
+
+- Focus ring: tabbed to a footer sub-tab inside the graphite Inspector,
+  confirmed a clearly visible bronze (`--contrast-focus`) ring — the token
+  chosen specifically for contrast on that dark surface (see first pass) is
+  visible in practice, not just on paper (`focus-ring-header.png`).
+  Confirms the palette reset did not break focus visibility.
+- Hover: confirmed on the upload button (`hover-upload-button.png`) —
+  border/color shift only, no motion.
+- No new animation was added anywhere this pass; nothing here needed fixing.
+
+### Accent color: forest vs. blue — RESOLVED, third pass
+
+Superseding the P3 open item above: the user decided explicitly — switch
+primary interactive to the approved Learning Canvas blue. Exact values,
+via centralized semantic tokens (`FE/src/index.css`), not a blind
+find-replace:
+
+| Token | Light | Dark | Role |
+|---|---|---|---|
+| `--accent` | `#126CF2` | `#5B9DF5` | primary / action / selected / focus |
+| `--accent-hover` | `#0C55CC` | `#82B8F8` | primary hover/pressed |
+| `--accent-subtle` | `#EAF3FF` | `#1B2F4D` | primary soft surface (selection wash, badges) |
+
+Light-mode values are exactly the user's instructed hex (`#126CF2`/
+`#0C55CC`/`#EAF3FF`) — and, checked directly, exactly match the prototype's
+own `src/styles.css` (`--blue`/`--blue-deep`/`--blue-soft`), so there was no
+discrepancy to reconcile. Dark-mode values are brightened for contrast on
+the navy surface, same pattern already used for dark-mode forest — not
+separately specified by the user, so derived rather than guessed at.
+
+`--forest`/`--forest-rgb` are **numerically unchanged** (`#1F4033` light /
+`#6FA98A` dark) — only their *role* narrows, per the user's instruction, to
+success/ready-status/progress, never primary interactive. Two component
+rules that read `--accent` for what is actually a progress indicator were
+repointed to `--forest` instead: `.progress-fill` (the upload/processing
+progress bar) and `.apparatus-dot--active` (ChatArea's retrieval-step
+dots) — both are genuinely "progress," not a button/tab/selection, and the
+user named "progress" as a role forest keeps.
+
+**How the 22-file, ~56-occurrence `text-forest`/`bg-forest`/`border-forest`/
+`accent-forest` surface was resolved without a blind find-replace:** added
+a new `accent` Tailwind color (`FE/tailwind.config.js`, `DEFAULT`/`hover`/
+`subtle` → the three CSS vars above), then went file by file and recolored
+only the occurrences that are genuinely primary-interactive (links, hover
+states, active/selected/focus indicators, checkboxes) to `text-accent`/
+`bg-accent`/`border-accent`/`accent-accent`. **Left on forest** (5 of the
+56, deliberately, each commented in place): `ProtectedRoute.jsx`'s
+session-restore spinner (progress), `ChatArea.jsx`'s "Đã trả lời..."
+settled/done marker and its streaming-cursor blink (a completion marker and
+a progress indicator), and `KnowledgeInspector.jsx`'s two `BadgeCheck`
+confidence/verified markers (success-adjacent, not interactive) — one of
+which is the "answered with N sources" resting-point marker `ChatArea.jsx`
+itself already calls out as a deliberate Peak-End-Rule signal, reinforcing
+that it's a completion state, not a button.
+
+MindMap needed **no** token-source change, let alone a behavior change:
+`MindElixirView.jsx`'s `THEME.cssVar` already reads `"--selected": "var(--forest)"`
+(a token reference, not a hardcoded hex) and `mindmap.css`'s node-hover
+border already reads `var(--forest)` directly — since `--forest`'s value is
+untouched, MindMap's pan, hover, selection, and viewport behavior are all
+byte-for-byte unchanged. Confirmed by grep, not assumed.
+
+`docs/StudyMap-Learning-Canvas-Prototype/AGENTS.md` updated with one added
+line confirming the shipped hex values match its own `styles.css` exactly
+(see "Prototype AGENTS.md" below) — no stale mismatch note existed there to
+remove (the mismatch was only ever documented in this file, not in the
+prototype's own docs).
+
+**Re-verified visually, not just by source-reading**, same scaffolding as
+the second pass (dev server + mocked backend + Playwright, same three
+viewports and states, dev server killed after). Screenshots (scratchpad,
+`.../scratchpad/shots2/`): `workspace-desktop-no-doc.png` — workspace tab
+underline and Inspector's "Bằng chứng" active state now read blue where
+expected (main-content tabs) and stay bronze where expected (graphite
+Inspector's own `--contrast-focus`, unaffected by this change, still
+correct); `workspace-desktop-doc-selected.png` — checkboxes filled blue,
+left accent bar blue, "2 đang chọn" text blue, "SẴN SÀNG" status badges
+**still green** (`--ok`, a separate token, correctly untouched — confirms
+blue/success stay visually distinct); `workspace-mobile-right-drawer-open.png`
+— Inspector drawer unchanged, bronze active tab as before;
+`focus-ring-header.png` — focus ring on the graphite surface still bronze,
+clearly visible, no contrast regression from this change;
+`hover-upload-button.png` — primary upload button unaffected (it's ink-fill,
+not accent-driven).
+
+No P0/P1/P2 found in this re-verification.
+
+### Prototype AGENTS.md
+
+Checked before editing: it contains prose ("keep the cool-neutral blue
+visual system") but no explicit hex values, and no stale forest/blue
+mismatch note (that note only ever lived in this file, not in the prototype
+folder). Added one line recording that the real app's tokens now match its
+`styles.css` values exactly, with a pointer back to this document.
 
 ## Tests
 
+No new tests were added in this pass either, for the same reason as the
+second pass (confirmed again, not re-assumed): no React component-render
+test infrastructure exists anywhere in this codebase. The token/class
+changes here are exactly the kind of thing that infrastructure would cover
+if it existed; screenshot verification (above) was the real check instead.
+
+`mindmapViewport.test.js` (pure-function, pre-existing) still passes — no
+MindMap code was touched (confirmed above: token-value unchanged, so no
+token-source change was even needed there).
+
 ```
-npm run build   →  clean, 23.7s
-npm run test    →  79 files, 1020/1020 passed (unchanged from RC2 baseline)
-npx eslint src  →  58 errors / 8 warnings (identical to the documented RC2/
-                    Production Release Gate baseline — none in the files
-                    touched this pass)
+npm run build     →  clean, 5.7s
+npm run test      →  79 files, 1020/1020 passed — unchanged, no regression
+npx eslint src    →  66 problems / 58 errors / 8 warnings — identical
+                      pre-existing baseline, no new errors introduced by
+                      this pass's token/class changes
+git diff --check  →  clean
 ```
 
-## Known remaining issues
+## Final status against the epic's exit criteria
 
-- Left sidebar and full responsive/motion passes are unaudited against this
-  epic's specific checklist (see "Not done" above).
-- No screenshot-based visual QA was performed; the palette/token change is
-  reasoned from the token architecture, not visually confirmed pixel-by-pixel.
-- The header's three demoted shortcut buttons now rely on `title`/
-  `aria-label` for discoverability instead of a visible text label — this is
-  the intended "utility, not Level-1 nav" demotion, but is worth a real UAT
-  pass to confirm it's still discoverable enough for first-time users.
+- Beige/brick-red Claude-like identity gone — done (first pass).
+- Red is semantic (provenance/wordmark), not brand — done (first pass).
+- Global header has fewer competing controls — done (first pass), visually
+  confirmed this pass.
+- Inspector no longer reads as boxed buttons in a dark rectangle — done
+  (first pass), visually confirmed this pass (underline tabs, no box).
+- Duplicate navigation resolved — done (first pass), visually confirmed.
+- Left sidebar box chrome — confirmed already low-chrome; no change needed.
+- Primary workspace hierarchy obvious — visually confirmed at all 3
+  viewports.
+- Colors form one coherent system, **app-wide** — resolved in the third
+  pass: primary interactive is blue everywhere via the centralized
+  `accent` token/Tailwind color, forest is success/ready/progress only
+  everywhere, matching the Learning Canvas Option 2 prototype's own blue
+  exactly (checked, not assumed).
+- MindMap pan / node interaction / viewport preservation / no auto-zoom —
+  all pre-existing and confirmed untouched, no regression found; the third
+  pass's accent-hue change required no MindMap token-source change either
+  (confirmed by grep: MindMap already reads `--forest` by reference, and
+  `--forest`'s value never changed).
+- Responsive behavior usable at 1440/1024/390 — confirmed, no P0/P1/P2 found.
+- Build/tests remain healthy — confirmed, 1020/1020, clean build.
+
+**Not met / explicitly open:** no interactive filter-typing or upload-flow
+test was performed (only static states were screenshotted). Hallmark was
+not run as a literal separate tool invocation, both passes. The
+forest-vs-blue question from the second pass is now resolved (see above) —
+no longer open.

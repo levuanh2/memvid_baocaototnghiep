@@ -11,6 +11,8 @@ export default function ProtectedRoute({ children }) {
   const state = getAuthRedirectState({ loading, user, path: location.pathname + location.search });
 
   if (state.action === "loading") {
+    // Session-restore spinner — progress, not an interactive control
+    // (accent flip carve-out: forest stays for success/ready/progress).
     return (
       <div className="h-screen flex items-center justify-center text-forest" style={{ background: "var(--bg-base)" }}>
         <Spinner size={22} />

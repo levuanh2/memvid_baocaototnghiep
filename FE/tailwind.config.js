@@ -14,12 +14,26 @@ module.exports = {
           ink:     "rgb(var(--ink-rgb) / <alpha-value>)",
         },
         seal: "rgb(var(--brand-rgb) / <alpha-value>)",
-        // Wave 1 (additive): the new forest/bronze roles from the Signature
-        // Contract. NOT wired up as the default action/selection color yet —
-        // `--accent`'s ~110 existing consumers mix genuine primary-action
-        // uses with provenance/citation uses that must stay seal-red, so the
-        // split happens per-component across Waves 2-7, not as one blind
-        // repoint here (see docs/UI_IMPLEMENTATION_PLAN.md's revision note).
+        // Visual Identity Reset, blue decision: primary interactive is
+        // `accent` (--accent/--accent-hover/--accent-subtle, blue). Exposed
+        // as a Tailwind color so the ~50 JSX call sites that used to reach
+        // for `text-forest`/`bg-forest`/`accent-forest` as "the" action
+        // color can reach for `text-accent`/`accent-accent` etc. instead,
+        // one JSX class swap per call site rather than a token-only fix —
+        // deliberate, not a blind find-replace (see
+        // docs/VISUAL_IDENTITY_WORKSPACE_REDESIGN.md for the per-file
+        // categorization: interactive/selected/focus → accent,
+        // success/ready/progress → stays forest).
+        accent: {
+          DEFAULT: "var(--accent)",
+          hover:   "var(--accent-hover)",
+          subtle:  "var(--accent-subtle)",
+        },
+        // forest keeps its Wave-1 value and role narrows to success/
+        // ready-status/progress only (MindMap's own selection ring/hover
+        // and `::selection` also read `--forest` directly and are
+        // unaffected — its VALUE did not change, only which JSX call sites
+        // reach for it as a Tailwind class).
         forest: "rgb(var(--forest-rgb) / <alpha-value>)",
         bronze: "rgb(var(--bronze-rgb) / <alpha-value>)",
         // Surface/text/border reference CSS variables so they flip

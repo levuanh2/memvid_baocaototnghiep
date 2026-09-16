@@ -33,14 +33,18 @@
     --border-color:  rgba(27, 42, 65, 0.12);
     --border-strong: rgba(27, 42, 65, 0.22);
 
-    /* Accent — action/selection role (Signature Contract §1). Completes the
-       Wave-2-planned flip: general UI action/selection now uses forest
-       (was seal-red). `--seal`/`--brand-rgb` below are UNCHANGED and stay
-       red — that channel is provenance/citation + the MemVidX wordmark
-       accent only, never a button, tab, or focus ring (Signature Contract
-       §7; verified no citation/provenance consumer reads `--accent`). */
-    --accent:        #1F4033;
-    --accent-light:  #2C5943;
+    /* Accent — action/selection/focus role (Signature Contract §1). User
+       decision (supersedes the forest-vs-blue open item from the first
+       redesign pass): primary interactive is the Learning Canvas Option 2
+       blue, not forest. Forest is kept (see --forest below, value
+       UNCHANGED) but its role narrows to success/ready-status/progress
+       only — never a button, tab, link, checkbox, or focus ring.
+       `--seal`/`--brand-rgb` below are UNCHANGED and stay red — provenance/
+       citation + the MemVidX wordmark accent only (Signature Contract §7;
+       verified no citation/provenance consumer reads `--accent`). */
+    --accent:        #126CF2;   /* primary / action / selected / focus */
+    --accent-hover:  #0C55CC;   /* primary hover/pressed */
+    --accent-subtle: #EAF3FF;   /* primary soft surface (selection wash, badges) */
     --brand-rgb:     178 58 46;   /* seal + wordmark accent only, kept red on purpose */
     --ink-rgb:       27 42 65;
     --slate:         #5C6B7A;
@@ -94,9 +98,9 @@
     --shadow-card:       0 1px 2px rgba(27,42,65,0.06), 0 1px 1px rgba(27,42,65,0.04);
     --shadow-card-hover: 0 6px 18px rgba(27,42,65,0.10), 0 2px 6px rgba(27,42,65,0.06);
 
-    /* Scrollbar — follows the new forest accent, not the old red */
-    --scrollbar-thumb: rgba(31,64,51,0.28);
-    --scrollbar-hover: rgba(31,64,51,0.50);
+    /* Scrollbar — follows the accent (now blue) */
+    --scrollbar-thumb: rgba(18,108,242,0.28);
+    --scrollbar-hover: rgba(18,108,242,0.50);
   }
 
   /* ═══════════════════════════════════════════════════
@@ -118,12 +122,15 @@
     --border-color:  rgba(236, 231, 219, 0.10);
     --border-strong: rgba(236, 231, 219, 0.20);
 
-    /* Same accent/seal split as :root above — general action/selection is
-       forest (dark-mode-tuned value, same one MindMap's selection ring and
-       ::selection already use), seal/brand stay red (provenance + wordmark
-       only). */
-    --accent:        #6FA98A;
-    --accent-light:  #82BC9C;
+    /* Same accent/seal split as :root above — general action/selection/focus
+       is blue (dark-mode-tuned: brightened off the light-mode #126CF2/
+       #0C55CC/#EAF3FF for readability on navy, same pattern already used
+       for dark-mode forest below), seal/brand stay red (provenance +
+       wordmark only). Forest (below) is UNCHANGED and still the one
+       MindMap's selection ring and ::selection read from directly. */
+    --accent:        #5B9DF5;
+    --accent-hover:  #82B8F8;
+    --accent-subtle: #1B2F4D;
     --brand-rgb:     216 106 83;
     --ink-rgb:       236 231 219;
     --slate:         #8FA0B3;
@@ -142,8 +149,8 @@
     --shadow-card:       0 1px 3px rgba(0,0,0,0.35), 0 1px 2px rgba(0,0,0,0.25);
     --shadow-card-hover: 0 6px 20px rgba(0,0,0,0.45), 0 2px 8px rgba(0,0,0,0.30);
 
-    --scrollbar-thumb: rgba(111,169,138,0.32);
-    --scrollbar-hover: rgba(111,169,138,0.55);
+    --scrollbar-thumb: rgba(91,157,245,0.32);
+    --scrollbar-hover: rgba(91,157,245,0.55);
   }
 
   html, body, #root { height: 100%; }
@@ -304,9 +311,10 @@
     box-shadow: 0 0 0 3px color-mix(in srgb, var(--accent) 12%, transparent);
   }
 
-  /* Progress bar */
+  /* Progress bar — carved out of the accent flip, same reasoning as
+     .apparatus-dot--active above: this is the "progress" role forest keeps. */
   .progress-track { @apply rounded-full h-1 overflow-hidden; background: var(--border-color); }
-  .progress-fill  { background: var(--accent); @apply h-full rounded-full transition-all; }
+  .progress-fill  { background: var(--forest); @apply h-full rounded-full transition-all; }
 
   /* Tabs — quiet, forest underline when active (selection, not provenance) */
   .pill-tab {
@@ -545,11 +553,14 @@
     position: relative;
   }
   .apparatus-dot--done   { background: var(--slate); border-color: var(--slate); }
-  .apparatus-dot--active { border-color: var(--accent); background: var(--accent); }
+  /* Retrieval-step progress indicator — carved out of the accent flip:
+     forest's role narrows to success/ready-status/progress, and this dot
+     is literally "current step in progress," not a button/tab/selection. */
+  .apparatus-dot--active { border-color: var(--forest); background: var(--forest); }
   .apparatus-dot--active::after {
     content: ''; position: absolute; inset: -4px;
     border-radius: 999px;
-    border: 1.5px solid var(--accent);
+    border: 1.5px solid var(--forest);
     animation: scanPulse 1.4s ease-out infinite;
   }
   /* Wave 8 cleanup: `.apparatus-rail` removed — grep-confirmed zero JSX

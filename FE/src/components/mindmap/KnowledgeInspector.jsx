@@ -114,6 +114,8 @@ function CitationCard({ chunkId, text, loading, error, index, sourceLabel, headi
           </Clamp>
           {confidencePct != null && (
             <div className="mt-1.5 pt-1.5 border-t border-border flex items-center gap-1.5 text-caption text-text-muted">
+              {/* Verified/quality marker (accent flip carve-out: forest
+                  stays for success/ready/progress, not interactive). */}
               <Icon name="BadgeCheck" size={11} className="text-forest flex-shrink-0" />
               Độ tin cậy trung bình của nhánh: {confidencePct}%
             </div>
@@ -322,13 +324,13 @@ export default function KnowledgeInspector({
               {node.sourceStems?.length > 0 ? (
                 node.sourceStems.map((stem) => (
                   <button key={stem} type="button" onClick={() => onOpenSource(stem)}
-                    className="inline-flex items-center gap-1 text-caption font-mono text-forest hover:underline">
+                    className="inline-flex items-center gap-1 text-caption font-mono text-accent hover:underline">
                     <Icon name="FolderOpen" size={10} /> Mở nguồn: {stem}
                   </button>
                 ))
               ) : sources?.length === 1 && (
                 <button type="button" onClick={() => onOpenSource(sources[0])}
-                  className="inline-flex items-center gap-1 text-caption font-mono text-forest hover:underline">
+                  className="inline-flex items-center gap-1 text-caption font-mono text-accent hover:underline">
                   <Icon name="FolderOpen" size={10} /> Mở nguồn
                 </button>
               )}

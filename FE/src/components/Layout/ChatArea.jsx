@@ -83,7 +83,7 @@ function makeMdComponents({ highlight, onHighlight, onEvidenceOpen }) {
           </sup>
         );
       }
-      return <a href={href} target="_blank" rel="noreferrer" className="text-forest underline underline-offset-2" {...props}>{children}</a>;
+      return <a href={href} target="_blank" rel="noreferrer" className="text-accent underline underline-offset-2" {...props}>{children}</a>;
     },
   };
 }
@@ -695,7 +695,7 @@ export default function ChatArea({
         style={{ borderColor: "var(--border-color)", background: "var(--bg-sidebar)" }}>
         {usingContext && (
           <span className="inline-flex items-center gap-1.5 text-caption font-mono text-text-muted">
-            <Icon name="MessageSquare" size={12} className="text-forest" />
+            <Icon name="MessageSquare" size={12} className="text-accent" />
             Đang dùng ngữ cảnh cuộc trò chuyện
           </span>
         )}
@@ -746,7 +746,7 @@ export default function ChatArea({
       {notice && (
         <div className="px-5 sm:px-8 py-1.5 text-small flex items-center gap-2 border-b flex-shrink-0"
           style={{ borderColor: "var(--border-color)", background: "color-mix(in srgb, var(--accent) 8%, transparent)", color: "var(--text-secondary)" }}>
-          <Icon name="Info" size={13} className="text-forest" />
+          <Icon name="Info" size={13} className="text-accent" />
           <span>{notice}</span>
         </div>
       )}
@@ -819,7 +819,7 @@ export default function ChatArea({
           ) : (
             <div key={idx} className="self-start w-full max-w-[760px] flex flex-col gap-2 animate-fadeUp">
               <div className="flex items-center gap-2 text-metadata font-mono uppercase text-text-muted">
-                <Icon name="BookOpen" size={13} className="text-forest" /> Trả lời
+                <Icon name="BookOpen" size={13} className="text-accent" /> Trả lời
                 {msg.evidence?.sources?.length ? (
                   <span className="text-text-muted">· {sourcesLabel(msg.evidence.sources)}</span>
                 ) : null}
@@ -837,6 +837,8 @@ export default function ChatArea({
                   to the Evidence panel, not a new signal. */}
               {idx === messages.length - 1 && !loading && msg.evidence?.sources?.length > 0 && (
                 <div className="flex items-center gap-1.5 text-caption font-mono text-text-muted pt-0.5">
+                  {/* Success/settled marker (accent flip carve-out: forest
+                      stays for success/ready/progress, not interactive). */}
                   <Icon name="BadgeCheck" size={12} className="text-forest" />
                   Đã trả lời với {sourcesLabel(msg.evidence.sources)} — xem chi tiết ở lề phải
                 </div>
@@ -898,6 +900,8 @@ export default function ChatArea({
               {streamingPreview && (
                 <div className="mt-3 pt-3 border-t border-border font-display text-body text-text-primary max-h-[42vh] overflow-y-auto">
                   <ReactMarkdown remarkPlugins={[remarkGfm, remarkBreaks]}>{streamingPreview}</ReactMarkdown>
+                  {/* Streaming/in-progress cursor (accent flip carve-out:
+                      forest stays for success/ready/progress). */}
                   <span className="inline-block w-0.5 h-4 bg-forest animate-pulse ml-0.5 align-middle rounded-sm" aria-hidden />
                 </div>
               )}
