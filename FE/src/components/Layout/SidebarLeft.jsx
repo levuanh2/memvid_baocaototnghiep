@@ -388,6 +388,11 @@ export default function SidebarLeft({ selectedSources, setSelectedSources, onSou
                 <input
                   type="checkbox"
                   checked={isSelected}
+                  // `change` and `click` are two separate native events on a checkbox —
+                  // stopPropagation() on `change` alone still lets `click` bubble to the
+                  // row's own onClick below, firing toggleSelect a SECOND time and
+                  // cancelling the first (net: the box never visibly toggles on click).
+                  onClick={(e) => e.stopPropagation()}
                   onChange={(e) => { e.stopPropagation(); toggleSelect(src); }}
                   disabled={!checkboxEnabled}
                   className="mt-0.5 w-3.5 h-3.5 accent-accent flex-shrink-0 cursor-pointer"
