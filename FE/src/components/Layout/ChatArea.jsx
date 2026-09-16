@@ -703,147 +703,6 @@ export default function ChatArea({
   return (
     <div className="flex flex-col h-full min-h-0" style={{ background: "var(--bg-base)" }}>
 
-      {/* Conversation toolbar: context indicator + controls (New chat / Clear /
-          Delete). No border/background of its own (IA pass round 5) — it
-          sits directly under LessonHeader's single toolbar border now, so a
-          second border here would double-stack rather than separate
-          anything real. */}
-      <div className="flex items-center gap-2 px-5 sm:px-8 h-8 flex-shrink-0">
-
-        {usingContext && (
-          <span className="inline-flex items-center gap-1.5 text-caption font-mono text-text-muted">
-            <Icon name="MessageSquare" size={12} className="text-accent" />
-            Đang dùng ngữ cảnh cuộc trò chuyện
-          </span>
-        )}
-        <div className="flex-1" />
-        {/* Feature Pack B (Cross Navigation) — only when a summary genuinely
-            exists (never a link to a surface that isn't there yet); reuses
-            the exact same tab-switch MainLayout already exposes for "back to
-            chat" from elsewhere, just the other direction. */}
-        {hasSummary && (
-          <button
-            onClick={onOpenSummary}
-            className="pill-action !py-1 !text-small"
-            title="Xem bản tóm tắt của tài liệu đang chọn">
-            <Icon name="ScrollText" size={13} /> Xem tóm tắt
-          </button>
-        )}
-        <button
-          onClick={handleNewChat} disabled={loading || Boolean(pendingReview)}
-          className="pill-action !py-1 !text-small disabled:opacity-40"
-          title="Bắt đầu cuộc trò chuyện mới">
-          <Icon name="Plus" size={13} /> Chat mới
-        </button>
-        <div className="relative">
-          <button
-            onClick={() => setMenuOpen((v) => !v)} disabled={loading || Boolean(pendingReview)}
-            className="icon-btn w-8 h-8 disabled:opacity-40"
-            aria-label="Tùy chọn cuộc trò chuyện" aria-expanded={menuOpen}>
-            <Icon name="MoreVertical" size={16} />
-          </button>
-          {menuOpen && (
-            <>
-              <div className="fixed inset-0 z-10" onClick={() => setMenuOpen(false)} aria-hidden />
-              <div className="absolute right-0 top-9 z-20 min-w-[190px] rounded-[8px] border py-1 shadow-card-hover"
-                style={{ borderColor: "var(--border-color)", background: "var(--bg-elevated)" }}>
-                <button onClick={handleClearContext} className="menu-item">
-                  <Icon name="Eraser" size={14} /> Xóa ngữ cảnh
-                </button>
-                <button onClick={handleDeleteHistory} className="menu-item menu-item--danger">
-                  <Icon name="Trash2" size={14} /> Xóa lịch sử chat
-                </button>
-              </div>
-            </>
-          )}
-        </div>
-      </div>
-
-      {/* Goal banner + next action (IA pass round 5, item 4). Real, derived
-          content only — no per-user "learning objective" exists in this
-          app's data model, so the banner states real readiness instead of
-          an invented goal. Compact (44-48px) full form before any question;
-          collapses to a slim single-line row (not hidden entirely — round
-          4's full-hide was a stricter interim fix for a real contradiction:
-          this banner's copy is live-derived from selectedSources, which can
-          lag behind reality right after a send, see
-          docs/VISUAL_IDENTITY_WORKSPACE_REDESIGN.md) once a conversation has
-          an answer, click to re-expand. */}
-      <div className="px-5 sm:px-8 pt-3 flex-shrink-0 flex flex-col gap-2">
-        {messages.length === 0 ? (
-          <div className="flex items-center gap-3 rounded-control px-4 h-11"
-            style={{ background: "var(--accent-subtle)" }}>
-            <Icon name="Target" size={16} className="text-accent flex-shrink-0" />
-            {selectedSources?.length > 0 ? (
-              <p className="text-small text-text-secondary flex-1 truncate">
-                {readyCount}/{selectedSources.length} tài liệu đã chọn sẵn sàng tra cứu.
-                {readyCount < selectedSources.length && " Một số tài liệu vẫn đang lập chỉ mục."}
-              </p>
-            ) : (
-              <p className="text-small text-text-secondary flex-1 truncate">
-                Chưa chọn tài liệu nào.
-              </p>
-            )}
-            <button type="button" onClick={onOpenLeft} className="text-small font-medium text-accent flex-shrink-0">
-              {selectedSources?.length > 0 ? "Sửa" : "Chọn tài liệu"}
-            </button>
-          </div>
-        ) : (
-          <button type="button" onClick={() => setGoalExpanded((v) => !v)}
-            className="flex items-center gap-2 rounded-control px-3 h-7 text-caption text-text-muted hover:text-text-secondary transition-colors self-start"
-            aria-expanded={goalExpanded}>
-            <Icon name="Target" size={12} className="text-accent flex-shrink-0" />
-            {readyCount}/{selectedSources?.length || 0} tài liệu
-            <Icon name={goalExpanded ? "ChevronUp" : "ChevronDown"} size={12} />
-          </button>
-        )}
-        {messages.length > 0 && goalExpanded && (
-          <div className="flex items-center gap-3 rounded-control px-4 h-11"
-            style={{ background: "var(--accent-subtle)" }}>
-            <p className="text-small text-text-secondary flex-1 truncate">
-              {readyCount}/{selectedSources?.length || 0} tài liệu đã chọn sẵn sàng tra cứu.
-            </p>
-            <button type="button" onClick={onOpenLeft} className="text-small font-medium text-accent flex-shrink-0">Sửa</button>
-          </div>
-        )}
-
-        {/* Next action — ONE contextual button, not a permanent 3-button
-            strip: "Mind Map/Summary mode navigation must not be repeated as
-            next-action buttons" — those two now live only as
-            WorkspaceEmptyState's own CTA inside their own mode (previous
-            commit), never duplicated here. Decision pulled into a real,
-            tested pure function (utils/nextAction.js) instead of an inline
-            ternary. */}
-        {nextAction === "ask-question" && (
-          <button type="button" onClick={focusComposer} className="btn-primary !text-small !py-1.5 self-start">
-            <Icon name="Sparkles" size={14} /> Đặt câu hỏi
-          </button>
-        )}
-        {nextAction === "select-sources" && (
-          <button type="button" onClick={onOpenLeft} className="btn-primary !text-small !py-1.5 self-start">
-            <Icon name="FileStack" size={14} /> Chọn tài liệu
-          </button>
-        )}
-      </div>
-
-      {/* Transient feedback (New chat / Clear context / Delete history) */}
-      {notice && (
-        <div className="px-5 sm:px-8 py-1.5 text-small flex items-center gap-2 border-b flex-shrink-0"
-          style={{ borderColor: "var(--border-color)", background: "color-mix(in srgb, var(--accent) 8%, transparent)", color: "var(--text-secondary)" }}>
-          <Icon name="Info" size={13} className="text-accent" />
-          <span>{notice}</span>
-        </div>
-      )}
-
-      {/* Notice: sources still indexing */}
-      {hasIndexReadySources && (
-        <div className="px-5 py-2 text-small flex items-center gap-2 border-b flex-shrink-0"
-          style={{ borderColor: "var(--border-color)", background: "color-mix(in srgb, var(--warn) 10%, transparent)", color: "var(--warn)" }}>
-          <Icon name="Info" size={14} />
-          <span>Một số tài liệu vẫn đang lập chỉ mục — câu trả lời có thể chưa đầy đủ.</span>
-        </div>
-      )}
-
       {/* Reading session — click vùng trống bất kỳ là vào thẳng ô nhập (xem handlePanelMouseUp) */}
       <div onMouseUp={handlePanelMouseUp}
         // KHÔNG dùng `co-the-cuon-them` ở đây: khung chat neo nội dung ở ĐÁY, tin mới nhất
@@ -851,9 +710,154 @@ export default function ChatArea({
         // đúng cho danh sách neo từ trên xuống (hai cột bên).
         className="flex-1 min-h-0 overflow-y-auto px-5 sm:px-8 py-7 flex flex-col gap-6">
 
+        {/* In-flow conversation header (round 7): conversation controls
+            (context indicator / New chat / kebab), transient notices, and
+            the goal banner + next action all scroll away with content now —
+            "only two persistent horizontal layers: global header,
+            workspace toolbar" (strategy point 1). These used to be up to
+            three separate always-pinned rows stacked under LessonHeader
+            (conv-toolbar 32px + notice rows + goal banner up to ~96px);
+            grouped into one block here so they read as a section, not
+            scattered rows, and share ONE `gap-2` instead of each carrying
+            its own duplicate top padding. */}
+        <div className="flex flex-col gap-2 flex-shrink-0">
+          <div className="flex items-center gap-2 h-8 -mx-5 sm:-mx-8 px-5 sm:px-8">
+            {usingContext && (
+              <span className="inline-flex items-center gap-1.5 text-caption font-mono text-text-muted">
+                <Icon name="MessageSquare" size={12} className="text-accent" />
+                Đang dùng ngữ cảnh cuộc trò chuyện
+              </span>
+            )}
+            <div className="flex-1" />
+            {/* Feature Pack B (Cross Navigation) — only when a summary genuinely
+                exists (never a link to a surface that isn't there yet); reuses
+                the exact same tab-switch MainLayout already exposes for "back to
+                chat" from elsewhere, just the other direction. */}
+            {hasSummary && (
+              <button
+                onClick={onOpenSummary}
+                className="pill-action !py-1 !text-small"
+                title="Xem bản tóm tắt của tài liệu đang chọn">
+                <Icon name="ScrollText" size={13} /> Xem tóm tắt
+              </button>
+            )}
+            <button
+              onClick={handleNewChat} disabled={loading || Boolean(pendingReview)}
+              className="pill-action !py-1 !text-small disabled:opacity-40"
+              title="Bắt đầu cuộc trò chuyện mới">
+              <Icon name="Plus" size={13} /> Chat mới
+            </button>
+            <div className="relative">
+              <button
+                onClick={() => setMenuOpen((v) => !v)} disabled={loading || Boolean(pendingReview)}
+                className="icon-btn w-8 h-8 disabled:opacity-40"
+                aria-label="Tùy chọn cuộc trò chuyện" aria-expanded={menuOpen}>
+                <Icon name="MoreVertical" size={16} />
+              </button>
+              {menuOpen && (
+                <>
+                  <div className="fixed inset-0 z-10" onClick={() => setMenuOpen(false)} aria-hidden />
+                  <div className="absolute right-0 top-9 z-20 min-w-[190px] rounded-[8px] border py-1 shadow-card-hover"
+                    style={{ borderColor: "var(--border-color)", background: "var(--bg-elevated)" }}>
+                    <button onClick={handleClearContext} className="menu-item">
+                      <Icon name="Eraser" size={14} /> Xóa ngữ cảnh
+                    </button>
+                    <button onClick={handleDeleteHistory} className="menu-item menu-item--danger">
+                      <Icon name="Trash2" size={14} /> Xóa lịch sử chat
+                    </button>
+                  </div>
+                </>
+              )}
+            </div>
+          </div>
+
+          {/* Transient feedback (New chat / Clear context / Delete history) */}
+          {notice && (
+            <div className="-mx-5 sm:-mx-8 px-5 sm:px-8 py-1.5 text-small flex items-center gap-2 border-y"
+              style={{ borderColor: "var(--border-color)", background: "color-mix(in srgb, var(--accent) 8%, transparent)", color: "var(--text-secondary)" }}>
+              <Icon name="Info" size={13} className="text-accent" />
+              <span>{notice}</span>
+            </div>
+          )}
+
+          {/* Notice: sources still indexing */}
+          {hasIndexReadySources && (
+            <div className="-mx-5 sm:-mx-8 px-5 sm:px-8 py-2 text-small flex items-center gap-2 border-y"
+              style={{ borderColor: "var(--border-color)", background: "color-mix(in srgb, var(--warn) 10%, transparent)", color: "var(--warn)" }}>
+              <Icon name="Info" size={14} />
+              <span>Một số tài liệu vẫn đang lập chỉ mục — câu trả lời có thể chưa đầy đủ.</span>
+            </div>
+          )}
+
+          {/* Goal banner + next action (IA pass round 5, item 4). Real,
+              derived content only — no per-user "learning objective" exists
+              in this app's data model, so the banner states real readiness
+              instead of an invented goal. Compact (44px) full form before
+              any question; collapses to a slim single-line row (not hidden
+              entirely — round 4's full-hide was a stricter interim fix for a
+              real contradiction: this banner's copy is live-derived from
+              selectedSources, which can lag behind reality right after a
+              send, see docs/VISUAL_IDENTITY_WORKSPACE_REDESIGN.md) once a
+              conversation has an answer, click to re-expand. */}
+          {messages.length === 0 ? (
+            <div className="flex items-center gap-3 rounded-control px-4 h-11"
+              style={{ background: "var(--accent-subtle)" }}>
+              <Icon name="Target" size={16} className="text-accent flex-shrink-0" />
+              {selectedSources?.length > 0 ? (
+                <p className="text-small text-text-secondary flex-1 truncate">
+                  {readyCount}/{selectedSources.length} tài liệu đã chọn sẵn sàng tra cứu.
+                  {readyCount < selectedSources.length && " Một số tài liệu vẫn đang lập chỉ mục."}
+                </p>
+              ) : (
+                <p className="text-small text-text-secondary flex-1 truncate">
+                  Chưa chọn tài liệu nào.
+                </p>
+              )}
+              <button type="button" onClick={onOpenLeft} className="text-small font-medium text-accent flex-shrink-0">
+                {selectedSources?.length > 0 ? "Sửa" : "Chọn tài liệu"}
+              </button>
+            </div>
+          ) : (
+            <button type="button" onClick={() => setGoalExpanded((v) => !v)}
+              className="flex items-center gap-2 rounded-control px-3 h-7 text-caption text-text-muted hover:text-text-secondary transition-colors self-start"
+              aria-expanded={goalExpanded}>
+              <Icon name="Target" size={12} className="text-accent flex-shrink-0" />
+              {readyCount}/{selectedSources?.length || 0} tài liệu
+              <Icon name={goalExpanded ? "ChevronUp" : "ChevronDown"} size={12} />
+            </button>
+          )}
+          {messages.length > 0 && goalExpanded && (
+            <div className="flex items-center gap-3 rounded-control px-4 h-11"
+              style={{ background: "var(--accent-subtle)" }}>
+              <p className="text-small text-text-secondary flex-1 truncate">
+                {readyCount}/{selectedSources?.length || 0} tài liệu đã chọn sẵn sàng tra cứu.
+              </p>
+              <button type="button" onClick={onOpenLeft} className="text-small font-medium text-accent flex-shrink-0">Sửa</button>
+            </div>
+          )}
+
+          {/* Next action — ONE contextual button, not a permanent 3-button
+              strip: "Mind Map/Summary mode navigation must not be repeated as
+              next-action buttons" — those two now live only as
+              WorkspaceEmptyState's own CTA inside their own mode (previous
+              commit), never duplicated here. Decision pulled into a real,
+              tested pure function (utils/nextAction.js) instead of an inline
+              ternary. */}
+          {nextAction === "ask-question" && (
+            <button type="button" onClick={focusComposer} className="btn-primary !text-small !py-1.5 self-start">
+              <Icon name="Sparkles" size={14} /> Đặt câu hỏi
+            </button>
+          )}
+          {nextAction === "select-sources" && (
+            <button type="button" onClick={onOpenLeft} className="btn-primary !text-small !py-1.5 self-start">
+              <Icon name="FileStack" size={14} /> Chọn tài liệu
+            </button>
+          )}
+        </div>
+
         {/* Empty state — the reading-room thesis */}
         {messages.length === 0 && !loading && (
-          <div className="flex flex-col items-center justify-center h-full text-center pb-16 animate-fadeUp max-w-[440px] mx-auto">
+          <div className="flex-1 flex flex-col items-center justify-center text-center pb-16 animate-fadeUp max-w-[440px] mx-auto">
             <div className="font-mono text-metadata uppercase text-text-muted mb-4">Phòng đọc</div>
             <h1 className="font-display text-[26px] sm:text-[30px] leading-[1.2] font-semibold text-text-primary mb-3">
               Hỏi tài liệu của bạn — <span className="text-seal">kèm dẫn chứng</span>.
