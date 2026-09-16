@@ -292,10 +292,10 @@ export default function MainLayout({
       switch (action) {
         case "help": return setShortcutsOpen((v) => !v);
         case "nav-chat": return onSwitchToChat();
-        // Alt+M mirrors WorkspaceTabs.jsx's own gate exactly (`enabled.mindmap
-        // = hasMindmap`) — a keyboard shortcut for a disabled tab must stay a
-        // no-op, not switch into an empty pane the click path itself refuses.
-        case "nav-mindmap": return mindmapData?.data && setWorkspaceMode("mindmap");
+        // Alt+M mirrors LessonHeader's own mode tabs (IA pass, round 5: the
+        // Mind Map tab is now always enabled — see WorkspaceEmptyState for
+        // what renders with no map yet, same as clicking the tab does).
+        case "nav-mindmap": return setWorkspaceMode("mindmap");
         // Alt+S mirrors the EXISTING header "StudyMap" <Link to="/app/study">
         // above — same destination, no new route invented.
         case "nav-studymap": return navigate("/app/study");
@@ -307,7 +307,7 @@ export default function MainLayout({
     };
     window.addEventListener("keydown", onKey);
     return () => window.removeEventListener("keydown", onKey);
-  }, [onSwitchToChat, mindmapData, navigate, openTimeline, mmGoBack, mmGoForward]);
+  }, [onSwitchToChat, navigate, openTimeline, mmGoBack, mmGoForward]);
 
   // Feature Pack C — MindMap relation navigation (mục 4 + 5): center / parent /
   // child / sibling, bare c/u/d/[/]. Scoped to `workspaceMode === "mindmap"`
@@ -364,7 +364,7 @@ export default function MainLayout({
 
       {/* ── TOP HEADER ── */}
       <header
-        className="flex items-center gap-4 px-4 sm:px-5 h-[58px] border-b border-border flex-shrink-0 transition-theme"
+        className="flex items-center gap-4 px-4 sm:px-5 h-[56px] border-b border-border flex-shrink-0 transition-theme"
         style={{ background: "var(--bg-sidebar)" }}
       >
         {/* Mobile: open source library */}
@@ -434,10 +434,23 @@ export default function MainLayout({
           <button onClick={openCommandPalette} className="md:hidden icon-btn w-9 h-9" aria-label="Tìm kiếm">
             <Icon name="Search" size={18} />
           </button>
-          {/* Mobile: open right column (whichever tab — Bằng chứng/Gia sư AI — was last open) */}
+          {/* IA pass (round 5), nav-ownership: Inspector is the ONLY
+              persistent owner of Evidence/AI Tutor/Timeline/Knowledge — the
+              header's Feature-Pack-B/C/D icon buttons for Gia sư AI/Dòng
+              thời gian/Kiến thức are REMOVED (they duplicated the Inspector's
+              own `.inspector-tab` row, SidebarRight.jsx), not just demoted.
+              This one button is the sole header-level "open the panel"
+              affordance, generic rather than feature-specific — it opens
+              whichever Inspector tab was last active (`rightView`), same as
+              before, just relabeled since it's no longer one of several
+              feature-specific buttons. On desktop the panel is already
+              reachable via its own PanelSpine expand click when collapsed,
+              so this stays mobile-only (a second desktop entry point would
+              itself violate "one owner"). Hotkeys (Ctrl+/, Alt+T) still work
+              — removing the visible button doesn't remove the shortcut. */}
           <button onClick={() => setRightOpen(true)} className="md:hidden icon-btn w-9 h-9"
-                  aria-label={rightView === "tutor" ? "Mở Gia sư AI" : "Mở lề bằng chứng"}>
-            <Icon name={rightView === "tutor" ? "Sparkles" : "PanelRight"} size={18} />
+                  aria-label="Mở công cụ">
+            <Icon name="PanelRight" size={18} />
           </button>
           {/* UI/UX Polish Issue 2 — search's discoverable HOME is the Study
               Workspace now, not buried in Library. Same global CommandPalette
@@ -446,31 +459,6 @@ export default function MainLayout({
           <button onClick={openCommandPalette} className="hidden md:inline-flex pill-action !text-small"
                   title="Tìm kiếm (Ctrl+K)">
             <Icon name="Search" size={14} /> Tìm kiếm
-          </button>
-          {/* Gia sư AI / Dòng thời gian / Kiến thức — these are the SAME
-              views as the Inspector's own `.inspector-tab` row
-              (Layout/SidebarRight.jsx); this header row's only job is to
-              open/focus the panel to that view from anywhere (incl. when
-              the panel is collapsed), not to be a second equal-weight
-              navigation bar (Visual Identity Reset, Part C ownership:
-              Inspector owns these views, header only owns the shortcut).
-              Demoted to icon-only so they read as utilities, not Level-1
-              nav — label + shortcut still surface via title/aria-label,
-              and the hotkeys (Ctrl+/, Alt+T) are unchanged. */}
-          <button onClick={openTutor} className="hidden md:inline-flex icon-btn w-9 h-9"
-                  title="Gia sư AI (Ctrl+/)" aria-label="Mở Gia sư AI">
-            <Icon name="Sparkles" size={16} />
-          </button>
-          {/* Feature Pack B — luôn có mặt, kể cả khi đang ở sơ đồ tư duy (nơi
-              cột phải bị Trình khám phá tri thức chiếm, xem openTimeline). */}
-          <button onClick={openTimeline} className="hidden md:inline-flex icon-btn w-9 h-9"
-                  title="Dòng thời gian nghiên cứu (Alt+T)" aria-label="Mở dòng thời gian nghiên cứu">
-            <Icon name="Clock" size={16} />
-          </button>
-          {/* Feature Pack D — Knowledge Dashboard. */}
-          <button onClick={openInsights} className="hidden md:inline-flex icon-btn w-9 h-9"
-                  title="Kiến thức của bạn" aria-label="Mở kiến thức của bạn">
-            <Icon name="Network" size={16} />
           </button>
           {/* Feature Pack C — Discoverability (mục 7). */}
           <button onClick={() => setShortcutsOpen(true)} className="hidden md:inline-flex icon-btn w-9 h-9"
@@ -518,7 +506,7 @@ export default function MainLayout({
             <aside
               className={
                 panel.drawer
-                  ? `fixed top-[58px] left-0 h-[calc(100vh-58px)] z-40 w-[252px] shrink-0
+                  ? `fixed top-[56px] left-0 h-[calc(100vh-56px)] z-40 w-[252px] shrink-0
                      bg-surface-sidebar border-r border-border
                      transition-transform duration-200 ease-in-out
                      ${leftOpen ? "translate-x-0" : "-translate-x-full"}`
@@ -607,7 +595,7 @@ export default function MainLayout({
                        bg-surface-sidebar border-t border-border rounded-t-[14px]
                        transition-transform duration-200 ease-in-out
                        ${rightOpen ? "translate-y-0" : "translate-y-full"}`
-                    : `fixed top-[58px] right-0 h-[calc(100vh-58px)] z-40 w-[326px] shrink-0
+                    : `fixed top-[56px] right-0 h-[calc(100vh-56px)] z-40 w-[326px] shrink-0
                        bg-surface-sidebar border-l border-border
                        transition-transform duration-200 ease-in-out
                        ${rightOpen ? "translate-x-0" : "translate-x-full"}`
@@ -639,7 +627,7 @@ export default function MainLayout({
                       role="dialog"
                       aria-modal="true"
                       aria-label="Dòng thời gian nghiên cứu"
-                      className="fixed top-[58px] right-0 h-[calc(100vh-58px)] z-50 w-[326px] max-w-[90vw]
+                      className="fixed top-[56px] right-0 h-[calc(100vh-56px)] z-50 w-[326px] max-w-[90vw]
                                  bg-surface-sidebar border-l border-border shadow-card-hover
                                  flex flex-col"
                     >
