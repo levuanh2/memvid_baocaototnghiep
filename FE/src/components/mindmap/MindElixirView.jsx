@@ -90,7 +90,9 @@ export const THEME = {
 export default function MindElixirView({ data, onRegenerate, regenerating, controller }) {
   const containerRef = useRef(null);
   const mindRef = useRef(null);
+  const canvasWrapRef = useRef(null);
   const [showRelations, setShowRelations] = useState(true);
+  const [isFullscreen, setIsFullscreen] = useState(false);
   const [dirty, setDirty] = useState(false);
   const [saving, setSaving] = useState(false);
   const [zoom, setZoom] = useState(1);              // readout — nguồn sự thật là bus "scale"
@@ -290,6 +292,20 @@ export default function MindElixirView({ data, onRegenerate, regenerating, contr
   // Click vào readout = chỉ trả thu phóng về 100%, giữ nguyên vị trí đang xem.
   const resetZoom = useCallback(() => { mindRef.current?.scale(1); }, []);
 
+  // Fullscreen (IA pass round 5) — native Fullscreen API on the canvas
+  // wrapper only, no mind-elixir instance state touched. `fullscreenchange`
+  // also fires for Esc/browser-chrome exits, so isFullscreen tracks the
+  // real DOM state rather than just this button's own clicks.
+  const toggleFullscreen = useCallback(() => {
+    if (document.fullscreenElement) document.exitFullscreen?.();
+    else canvasWrapRef.current?.requestFullscreen?.();
+  }, []);
+  useEffect(() => {
+    const onChange = () => setIsFullscreen(document.fullscreenElement === canvasWrapRef.current);
+    document.addEventListener("fullscreenchange", onChange);
+    return () => document.removeEventListener("fullscreenchange", onChange);
+  }, []);
+
   const handleExportPng = async () => {
     const mind = mindRef.current;
     // Chụp mind.map (.map-canvas) chứ KHÔNG phải mind.nodes: rule layout then chốt
@@ -415,7 +431,7 @@ export default function MindElixirView({ data, onRegenerate, regenerating, contr
       )}
       {/* Canvas + legend — legend là sibling (cleanup xoá innerHTML của container
           nên không được đặt con React bên trong div ref) */}
-      <div className="relative flex-1 min-h-0 overflow-hidden mm-canvas-wrap">
+      <div ref={canvasWrapRef} className="relative flex-1 min-h-0 overflow-hidden mm-canvas-wrap">
         {/* Ref target owns h/w-full (normal flow) — mind-elixir sets el.style.position
             = "relative" inline (verified dist), which defeats `absolute inset-0` (inline
             beats class) and collapses the container to content height, breaking scaleFit
@@ -471,6 +487,20 @@ export default function MindElixirView({ data, onRegenerate, regenerating, contr
           </button>
           <button onClick={handleExportPng} aria-label="Xuất PNG" title="Xuất PNG" className="icon-btn w-8 h-8">
             <Icon name="Download" size={14} />
+          </button>
+          {/* Fullscreen (IA pass round 5, item 7) — same native Fullscreen
+              API pattern mind-elixir's own built-in toolbar uses internally
+              (verified in node_modules/mind-elixir/dist/MindElixir.js:
+              `e.el.requestFullscreen()`/`document.exitFullscreen()`), just
+              wired to this app's own floating toolbar instead — mind-
+              elixir's own toolbar is off (`toolBar: false`) so it doesn't
+              double up with this one. Toggles on the map's own wrapper
+              (`.mm-canvas-wrap`), not the container ref mind-elixir owns
+              (untouched), so this is presentation-only, no library state. */}
+          <button onClick={toggleFullscreen} aria-pressed={isFullscreen}
+            aria-label={isFullscreen ? "Thoát toàn màn hình" : "Toàn màn hình"}
+            title={isFullscreen ? "Thoát toàn màn hình" : "Toàn màn hình"} className="icon-btn w-8 h-8">
+            <Icon name="Expand" size={14} />
           </button>
         </div>
       </div>
