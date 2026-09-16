@@ -6,14 +6,15 @@
 //   - switching tabs never re-inits mind-elixir or re-fetches the summary,
 //   - the mindmap canvas is never recreated by a mode switch (only by a real
 //     document/mindmap change — MindElixirView's own effect keys on `data?.id`).
-// MindMap/Summary only mount the FIRST time they have data (no point paying
-// mind-elixir's init cost before anything's been generated) — once mounted,
-// they never unmount for the lifetime of this WorkspaceContainer instance.
+// MindMap/Summary only mount the real MindElixirView/SummaryPane the FIRST
+// time they have data — before that, the mode switch is still fully
+// reachable (IA pass, round 5: no more disabled tabs) and shows
+// WorkspaceEmptyState with one contextual "Create" CTA instead.
 import ChatArea from "./ChatArea";
 import MindElixirView from "../mindmap/MindElixirView";
 import SummaryPane from "./SummaryPane";
-import WorkspaceTabs from "./WorkspaceTabs";
 import LessonHeader from "./LessonHeader";
+import WorkspaceEmptyState from "./WorkspaceEmptyState";
 import { computeReadyCount } from "../../utils/workspaceReadiness";
 
 const paneClass = (active) => (active ? "flex-1 min-h-0" : "hidden");
@@ -35,33 +36,34 @@ export default function WorkspaceContainer({
         title={lessonTitle}
         selectedCount={selectedSources.length}
         readyCount={readyCount}
-        hasMindmap={hasMindmap}
-        hasSummary={hasSummary}
-        onMindmapAction={onMindmapAction}
-        onSummaryAction={onSummaryAction}
+        mode={mode}
+        onModeChange={onModeChange}
       />
-      <WorkspaceTabs mode={mode} onChange={onModeChange} hasMindmap={hasMindmap} hasSummary={hasSummary} />
 
       <div className={paneClass(mode === "chat")}>
         <ChatArea {...chatProps} />
       </div>
 
-      {hasMindmap && (
-        <div className={paneClass(mode === "mindmap")}>
+      <div className={paneClass(mode === "mindmap")}>
+        {hasMindmap ? (
           <MindElixirView
             data={mindmapData.data}
             onRegenerate={mindmapData.onRegenerate}
             regenerating={mindmapData.regenerating}
             controller={controller}
           />
-        </div>
-      )}
+        ) : (
+          <WorkspaceEmptyState kind="mindmap" selectedCount={selectedSources.length} onCreate={onMindmapAction} />
+        )}
+      </div>
 
-      {hasSummary && (
-        <div className={paneClass(mode === "summary")}>
+      <div className={paneClass(mode === "summary")}>
+        {hasSummary ? (
           <SummaryPane data={summaryData} />
-        </div>
-      )}
+        ) : (
+          <WorkspaceEmptyState kind="summary" selectedCount={selectedSources.length} onCreate={onSummaryAction} />
+        )}
+      </div>
     </div>
   );
 }

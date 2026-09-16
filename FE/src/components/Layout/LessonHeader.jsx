@@ -1,23 +1,29 @@
-// Learning Canvas Option 2 structural piece: the lesson header row above the
-// workspace tabs (docs/VISUAL_IDENTITY_WORKSPACE_REDESIGN.md, structural
-// refactor pass). Real data only, no invented per-user "goal" or "step"
-// concept — title/count/readiness are derived from the same
-// sources/selectedSources state SidebarLeft already renders from, and the
-// two action buttons call the SAME generate/switch handlers the Inspector's
-// own "Tạo sơ đồ"/"Tạo tóm tắt" buttons and WorkspaceTabs already use
-// (MainLayout wires onMindmapAction/onSummaryAction once, shared with
-// ChatArea's next-action strip below the fold — see that file).
+// Compact workspace shell (Learning Canvas IA pass, round 5). Replaces the
+// old two-row stack (a title/action row + a separate WorkspaceTabs row)
+// with ONE toolbar: title/meta on the left, the Chat | Mind Map | Summary
+// mode switch in the center — the ONLY persistent navigation for those
+// three modes anywhere in the app (nav-ownership requirement — see
+// docs/VISUAL_IDENTITY_WORKSPACE_REDESIGN.md). No per-mode "create"
+// buttons here anymore; those live as ONE contextual next-action inside
+// each pane's own empty state (ChatArea's next-action strip / MindMap's
+// own empty state), never duplicated as a second set of buttons here.
 import { Icon } from "../ui/Icon";
+
+const TABS = [
+  { key: "chat", label: "Trò chuyện", icon: "MessageSquareText" },
+  { key: "mindmap", label: "Sơ đồ tư duy", icon: "Network" },
+  { key: "summary", label: "Tóm tắt", icon: "ScrollText" },
+];
 
 export default function LessonHeader({
   title, selectedCount, readyCount,
-  hasMindmap, hasSummary, onMindmapAction, onSummaryAction,
+  mode, onModeChange,
 }) {
   const hasSelection = selectedCount > 0;
   const progressPct = hasSelection ? Math.round((readyCount / selectedCount) * 100) : 0;
 
   return (
-    <div className="flex items-center gap-3 px-4 sm:px-5 h-11 border-b flex-shrink-0 min-w-0"
+    <div className="flex items-center gap-3 px-4 sm:px-5 h-12 sm:h-[52px] border-b flex-shrink-0 min-w-0"
       style={{ borderColor: "var(--border-color)", background: "var(--bg-sidebar)" }}>
       <div className="min-w-0 flex-1 flex items-center gap-3 overflow-hidden">
         <span className="font-display text-small font-semibold text-text-primary truncate flex-shrink" title={title}>
@@ -25,41 +31,58 @@ export default function LessonHeader({
         </span>
         {hasSelection && (
           <>
-            {/* This header sits inside a variable-width CENTER column of a
-                3-column layout (left sidebar + this + right Inspector), not
-                the full viewport — Tailwind's breakpoints are viewport-width-
-                based, so `md:`/`lg:` alone under-estimate how cramped this
-                column actually is at e.g. 1024px viewport with both side
-                panels open (~446px real width there, found via screenshot:
-                the progress bar was overlapping the action buttons at
-                exactly that viewport). Pushed to `xl:` so it only appears
-                once there's very likely real room, and wrapped the whole
-                secondary-info group in its own min-w-0/overflow-hidden so
-                if a breakpoint guess is ever still wrong, content clips
-                instead of overlapping the buttons. */}
+            {/* Viewport-width breakpoints under-estimate this column's real
+                width (it's the center of a 3-column layout, not the full
+                viewport — found overlapping at 1024px viewport with both
+                side panels open, ~446px real width there), so this stays
+                hidden until xl: and clips via overflow-hidden above rather
+                than risk overlapping the tabs again. */}
             <span className="hidden xl:inline text-caption font-mono text-text-muted flex-shrink-0 whitespace-nowrap">
-              {selectedCount} tài liệu đang chọn
+              {selectedCount} tài liệu · Bước {readyCount}/{selectedCount}
             </span>
-            {/* Readiness — real, derived from source status, not a fabricated
-                multi-step flow (the prototype's "Bước 2/4" has no equivalent
-                concept in this app's data model). */}
             <div className="hidden xl:flex items-center gap-1.5 flex-shrink-0" title={`${readyCount}/${selectedCount} tài liệu sẵn sàng`}>
-              <div className="progress-track w-16"><div className="progress-fill" style={{ width: `${progressPct}%` }} /></div>
-              <span className="text-caption font-mono text-text-muted whitespace-nowrap">{readyCount}/{selectedCount}</span>
+              <div className="progress-track w-14"><div className="progress-fill" style={{ width: `${progressPct}%` }} /></div>
             </div>
           </>
         )}
       </div>
-      <div className="flex items-center gap-2 flex-shrink-0">
-        <button type="button" onClick={onMindmapAction} className="pill-action !text-small"
-          title={hasMindmap ? "Xem sơ đồ tư duy" : "Tạo sơ đồ tư duy từ tài liệu đã chọn"}>
-          <Icon name="Network" size={14} /> <span className="hidden sm:inline">Sơ đồ tư duy</span>
-        </button>
-        <button type="button" onClick={onSummaryAction} className="pill-action !text-small"
-          title={hasSummary ? "Xem tóm tắt" : "Tạo tóm tắt từ tài liệu đã chọn"}>
-          <Icon name="ScrollText" size={14} /> <span className="hidden sm:inline">Tóm tắt</span>
-        </button>
-      </div>
+
+      {/* Mode switch — the ONLY persistent Chat/Mind Map/Summary navigation
+          anywhere (nav-ownership requirement). Always enabled: switching
+          into an empty Mind Map/Summary pane shows that pane's own empty
+          state with one contextual CTA, not a disabled tab — a disabled
+          tab hides the feature instead of explaining it. */}
+      <nav role="tablist" aria-label="Chế độ Workspace" className="flex items-center gap-1 flex-shrink-0">
+        {TABS.map((t) => {
+          const active = mode === t.key;
+          return (
+            <button
+              key={t.key}
+              type="button"
+              role="tab"
+              aria-selected={active}
+              onClick={() => onModeChange(t.key)}
+              title={t.label}
+              className="flex items-center gap-1.5 px-3 py-1.5 text-small rounded-control border-b-2 -mb-px transition-colors"
+              style={{
+                borderColor: active ? "var(--accent)" : "transparent",
+                color: active ? "var(--text-primary)" : "var(--text-secondary)",
+                fontWeight: active ? 600 : 500,
+              }}
+            >
+              <Icon name={t.icon} size={14} />
+              <span className="hidden sm:inline">{t.label}</span>
+            </button>
+          );
+        })}
+      </nav>
+
+      {/* Balances the tab group so it reads as visually centered against
+          the title on the left; chat-specific actions (New chat / kebab)
+          stay owned by ChatArea's own slim action row below this one —
+          lifting that state up here would risk the chat session/history
+          logic for a purely cosmetic gain, not attempted this pass. */}
+      <div className="flex-1 min-w-0" aria-hidden="true" />
     </div>
   );
 }
