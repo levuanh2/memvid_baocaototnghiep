@@ -40,6 +40,17 @@ const formatFileName = (name = "") => name.replace(/\.(mp4|avi|mov|mkv|webm|mp3|
 
 export default function SidebarLeft({ selectedSources, setSelectedSources, onSourcesChange, onClose, collapsible = false }) {
   const [sources, setSources] = useState([]);
+  // Round 9 fix: mirrors `sources` for `fetchSourcesFromBackend` below to read
+  // as "the previous sources" WITHOUT depending on execution-order between
+  // two separate `setState` calls (see that function's own comment for the
+  // bug this replaces) and WITHOUT risking a stale closure — `fetchSources
+  // FromBackend`'s `.then()` can fire long after the render that created it
+  // (e.g. via `onKetThuc`'s `setTimeout`, itself captured at upload time),
+  // so reading the plain `sources` closure variable directly would silently
+  // go stale; a ref stays current as of the latest commit regardless of
+  // which render's closure eventually reads it.
+  const sourcesRef = useRef([]);
+  useEffect(() => { sourcesRef.current = sources; }, [sources]);
   const [menuOpen, setMenuOpen] = useState(null);
   // Sprint H: "..." menu had no dismiss path except its own Xóa button or
   // re-clicking the toggle — click elsewhere / Escape left it floating open
@@ -130,15 +141,25 @@ export default function SidebarLeft({ selectedSources, setSelectedSources, onSou
         const backendSources = data.sources || [];
         // Merge + selection reconciliation both live in utils/sourceReconciliation.js
         // (testable, see its own file for the investigation this hardening is
-        // based on). `prevSnapshot` captures the pre-merge `sources` so the
-        // selection reconciliation can look up a selected stem's *filename* —
-        // the functional setSources updater below runs synchronously, so
-        // `prevSnapshot` is populated before the setSelectedSources call.
-        let prevSnapshot = [];
-        setSources((prev) => {
-          prevSnapshot = prev;
-          return mergeSources(prev, backendSources, formatFileName);
-        });
+        // based on). `prevSnapshot` needs to be "the sources as of just before
+        // this merge" for the selection reconciliation to look up a selected
+        // stem's *filename* on a rename.
+        //
+        // Round 9 fix: this used to capture `prevSnapshot` as a SIDE EFFECT
+        // inside the `setSources` updater above, then read it from the
+        // separate `setSelectedSources` call below — relying on an
+        // unspecified execution-order detail between two independent
+        // dispatches (React's own contract only guarantees an updater is
+        // pure and sees the latest state, not WHEN relative to surrounding
+        // statements it runs). `sourcesRef` gives the same "latest committed
+        // sources" value directly, with no dependency on setSources's own
+        // internal timing — `setSources` itself stays a functional updater
+        // (kept, not simplified away: two `fetchSourcesFromBackend()` calls
+        // CAN race — e.g. the mount effect and a manual "Thử lại" retry — and
+        // the functional form is what keeps a second merge from clobbering
+        // the first instead of building on it).
+        const prevSnapshot = sourcesRef.current;
+        setSources((prev) => mergeSources(prev, backendSources, formatFileName));
         setSelectedSources((prevSel) => reconcileSelectedSources(prevSnapshot, backendSources, prevSel));
         setLoiTai(null);
       })
