@@ -389,7 +389,15 @@ export default function SidebarRight({
   // bay không dừng được, job có thể vẫn chạy xong và persist. Vì vậy KHÔNG stop
   // poller ngay: gửi cancel rồi tiếp tục poll tới trạng thái terminal thật
   // ("Đang huỷ…" → onCancelled xác nhận / onDone nếu job kịp xong trước cancel).
-  const handleCancelMindMap = () => {
+  // `modalMapData` below memoizes on this reference — an un-memoized function
+  // here recomputes that memo (and the effect that forwards it to
+  // onMindmapDataChange) on EVERY render, which is invisible while
+  // `showModalMap` is falsy (the memo's ternary always returns the same `null`)
+  // but becomes an infinite render loop the moment a real map is open (every
+  // render produces a new object, the effect fires, setMindmapData fires,
+  // the parent re-renders this component, repeat) — found live watching a
+  // real generation render for the first time; round 5 never got this far.
+  const handleCancelMindMap = useCallback(() => {
     const jobId = currentMindmapJobIdRef.current;
     if (!jobId) { // không có job đang theo dõi — dọn UI là đủ
       pollerRef.current?.stop();
@@ -403,7 +411,7 @@ export default function SidebarRight({
     cancelRequestedRef.current = true;
     setMindmapJobUi((prev) => ({ ...prev, running: true, label: "Đang huỷ…" }));
     cancelMindmap(jobId).catch((err) => console.error("[MindMap] cancel request failed:", err));
-  };
+  }, [showCancelNotice]);
 
   // "Hỏi về đoạn này" (EvidenceDrawer) → switch the Workspace back to the Chat
   // tab (mindmap stays generated, NOT cleared — Workspace architecture: a tab
