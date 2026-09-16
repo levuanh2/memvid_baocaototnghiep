@@ -1001,3 +1001,181 @@ npx eslint src    →  66 problems / 58 errors / 8 warnings — identical
                       see commit history)
 git diff --check  →  clean
 ```
+
+## Sixth pass — watching a real Mind Map generation to a terminal state
+
+Narrow-scope follow-up to the fifth pass: that round confirmed a Mind Map
+generation *request registers* (a real click against production reaches
+`generate-mindmap`) but explicitly did **not** stay with it through to a
+finished map — no node/edge evidence, no post-render interaction checks. This
+round's only task was to actually sit through one real generation end to end
+against `https://api.studymap.space`, with the same disposable-account /
+`--disable-web-security` Playwright approach as every prior round, and
+capture the evidence the fifth pass couldn't.
+
+Explicitly out of scope this round (left as follow-ups, not started): the
+top-chrome refactor, and the Layout/Expand-collapse toolbar buttons.
+
+### What actually happened
+
+The very first real, populated Mind Map ever rendered in this project's live
+QA history (five prior rounds never got past the empty state or an
+in-flight request) immediately surfaced **two real product bugs**, neither
+visible from source reading or from any state this epic had reached before:
+
+**Bug 1 — source checkbox double-toggle (dead end).** Clicking a source's
+checkbox in the left sidebar visibly did nothing: `isChecked()` stayed
+`false` across a click and a retry-click, "0 đang chọn" never moved, and the
+Mind Map generator's CTA stayed disabled — a real user could never select a
+source and could never reach generation at all. Root cause: for a
+`<input type="checkbox">`, React fires `onChange` off the native `click`
+event too — the checkbox's own `onChange` called `e.stopPropagation()`, but
+that only stops the *change* event; the row's own `onClick` (a bigger click
+target wrapping the whole card) still received the bubbled `click` event and
+called `toggleSelect` a second time, cancelling the first out. Fixed by
+adding `onClick={(e) => e.stopPropagation()}` to the checkbox itself, next
+to its existing `onChange`. Commit `9c4639f`.
+
+**Bug 2 — continuous "Maximum update depth exceeded" loop once a real map is
+open.** The instant a populated map rendered, the console started flooding
+with React's nested-update-depth warning — confirmed via bisection to be
+driven purely by elapsed time (0 → 2 → 11 → 22 errors across two 5s *idle*
+windows with zero user interaction), not by any specific click. A captured
+JS stack (via a `console.error` override + `page.addInitScript`, since the
+Vite dev server serves near-unminified source) pointed straight at
+`SidebarRight.jsx`'s `onMindmapDataChange` effect. Root cause:
+`handleCancelMindMap` was a plain (non-`useCallback`) function — a new
+reference every render — and `modalMapData`'s `useMemo` lists it as a
+dependency. While `showModalMap` was `null` (true for every prior round),
+the memo's ternary always returned the same primitive `null` regardless of
+the unstable dependency, so the bug was invisible. The moment a real map is
+open, the object branch runs on every (unnecessarily triggered) recompute
+and produces a brand-new object each time; the effect forwarding
+`modalMapData` to `onMindmapDataChange` sees a "changed" value every render
+and fires again, which is exactly what re-renders the parent (and this
+component) — forever. Its three sibling callbacks
+(`handleAskAbout`/`handleAskDirect`/`handleMindmapSaved`) were already
+correctly `useCallback`-wrapped; this one was missed. Fixed by wrapping it
+the same way. Commit `e6418ef`.
+
+Both fixes were verified against the real backend, not just by the passing
+unit tests: a bisection script (`r6_bisect.mjs`, not committed — scratchpad
+only) reproduced 0 → 37 cumulative errors across generate → select → zoom →
+fullscreen-enter → fullscreen-exit → pan on the pre-fix code, then 0 errors
+across the identical sequence post-fix, twice (once via direct in-session
+regeneration, once via the full original watch script end-to-end).
+
+A third suspect (a test-script bug, not a product bug) surfaced along the
+way and is worth recording so it isn't mistaken for a finding: the watch
+script's own `button:has-text("Tạo sơ đồ")` locator matched the empty-state
+CTA ("Tạo sơ đồ **tư duy**", a superset string) before the real generator
+button inside the Inspector panel ("Tạo sơ đồ", exact) — `.first()` picked
+the CTA (which only opens/focuses the panel) both times, so the very first
+watch attempt registered zero real generation requests despite "clicking
+generate" twice. Fixed by scoping the locator to the right `<aside>` and
+using an exact-text `getByRole` match.
+
+### Real generation, watched to a terminal state
+
+- Minimal source: same `MoTa_SanPham.txt` single-document pattern reused
+  across this whole epic (disposable accounts:
+  `ia-round6-mmwatch-20260916@example.com`,
+  `ia-round6-mmwatch2-20260916@example.com`,
+  `ia-round6-postfix-20260916@example.com`,
+  `ia-round6-realgen-20260916@example.com`,
+  `ia-round6-postloopfix-20260916@example.com`,
+  `ia-round6-final-20260916@example.com` — none deleted, per this epic's
+  standing pattern).
+- Generation-mode selector: confirmed **not present** in the DOM (checked
+  the full page text for Fast/Balanced/Quality/Nhanh/Cân bằng/Chất lượng
+  before generating) — there is exactly one "Tạo sơ đồ" action, no mode
+  choice to make.
+- One real request: `POST /generate-mindmap` with
+  `{"sources":["mota_sanpham__18__txt"],"q":"tóm tắt tài liệu","force":false}`
+  → `202 {"job_id":"...","status":"started"}`.
+- Watched to terminal state: `GET /mindmap-status/<job_id>` → `200`,
+  `"status":"done"` within **6 seconds** (this backend's real
+  content-hash-cached / degraded-pipeline path for a near-empty document —
+  `"generator":{"degraded":true,"missing":["skeleton","enrich"]}`, 1 root
+  node, 0 relations — an honest reflection of how little there is to
+  extract from this minimal test file, not a bug).
+- Final state: `GET /mindmaps` → the new record present in the saved list.
+- Console: exactly the 3 expected startup lines (vite connect ×2, React
+  DevTools notice), **zero errors**, in the final full run with both fixes
+  applied.
+- Screenshots (scratchpad only, not committed —
+  `r6final/r6b-{1..12}*.png` and `r6final/r6b-progress-poll-0.png`):
+  sources-selected → mindmap-empty-state → before-cta-click →
+  generator-configured → request-submitted → loading-progress →
+  terminal-state (real "mota_sanpham18txt" root node rendered on canvas,
+  degraded banner honest, "Sơ đồ sẵn sàng" toast) → before/after node-select
+  → Inspector-after-select (real node title, Bằng chứng/Liên hệ sections,
+  6 Learning Action buttons — Giải thích đơn giản/sâu, Tạo flashcard, Kiểm
+  tra tôi, Thêm ví dụ, Hỏi AI) → zoomed-in → fullscreen-entered →
+  fullscreen-exited → after-pan.
+
+### Post-render verification (all against the real rendered map)
+
+| Check | Result |
+|---|---|
+| Real generated node present (not stub/empty) | ✅ `.me-container me-root` count 1, title = document filename |
+| Node selection doesn't reset zoom/viewport | ✅ `.map-container` transform identical before/after select |
+| Zoom controls work | ✅ "Phóng to" button visible and clickable |
+| Fullscreen opens | ✅ `document.fullscreenElement` set after click |
+| Fullscreen exits | ✅ `document.fullscreenElement` cleared after second click |
+| Pan | Attempted (drag on canvas); transform unchanged — plausible given a
+  single-node map has nothing to pan *to*, not re-tested against a
+  multi-node map this round (the test document is intentionally minimal) |
+| Inspector open/select doesn't duplicate controls | ✅ exactly 1 "Tạo sơ đồ*" button visible throughout |
+| Generator still reachable after use | ✅ same session, same panel, no dead end |
+
+### Tests
+
+Two new tests, both a first for this codebase (zero React-component-render
+test infrastructure existed before this round — noted as a gap in the fifth
+pass's own report):
+
+- `SidebarLeft.checkbox.test.jsx` — renders the real `SidebarLeft`
+  component in `jsdom`, mocks `/list-indexed` to return one ready source,
+  dispatches a real `checkbox.click()`, asserts the selection updater runs
+  exactly once (not twice). Confirmed red without the fix (2 calls) and
+  green with it (1 call).
+- `SidebarRight.loopFix.test.jsx` — renders the real `SidebarRight`
+  component, opens a saved map via the same `setShowModalMap(map)` path a
+  real click uses, forces one genuine unrelated state-driven re-render (a
+  sibling harness's own state, not anything mindmap-related), and asserts
+  `onMindmapDataChange` is not re-fired with a new object. Confirmed red
+  without the fix (3 calls) and green with it (2 calls) — the first attempt
+  at this test passed even on the broken code because the test harness
+  itself passed inert inline-arrow-function props, which are *themselves*
+  unstable and masked the bug; fixed by using stable module-level no-ops,
+  same class of mistake the real bug was.
+
+One new devDependency: `jsdom` (for the `// @vitest-environment jsdom`
+pragma both tests use) — the only addition needed, since `react`/
+`react-dom` were already present and `react-dom/test-utils`' `act` covers
+what these two tests need without pulling in React Testing Library too.
+
+```
+npm run build     →  clean, ~16-20s
+npm run test      →  84 files, 1045/1045 passed (1043 prior baseline + 2 new)
+npx eslint .      →  67-68 problems, 60 errors / 7-8 warnings — matches the
+                      baseline measured both with and without this round's
+                      diff stashed (confirmed via git stash), zero new
+                      lint errors introduced
+git diff --check  →  clean
+```
+
+### Not done / honestly out of scope
+
+- Pan was only exercised against a 1-node map (this round's minimal test
+  document produces exactly one root node) — a real multi-branch pan/zoom
+  stress test is still open from earlier rounds' honesty sections.
+- Top-chrome refactor and Layout/Expand-collapse toolbar buttons —
+  explicitly deferred per this round's own instructions, not started.
+- Cleanup: FE dev server stopped, `.env.development.local` deleted,
+  Docker Desktop (found running again mid-round, unrelated to this app's
+  data — see earlier rounds' note that it points at the same hosted
+  Supabase project) stopped again to free memory during a resource-
+  contention troubleshooting detour that turned out unrelated to either
+  bug found.
