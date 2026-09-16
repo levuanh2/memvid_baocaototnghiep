@@ -9,7 +9,7 @@ import {
   FileStack, FileText, FolderOpen, HelpCircle, Image, ImagePlus, Info, KeyRound, Keyboard, Library, LogOut, Maximize, Menu,
   MessageCircleQuestion, MessageSquare, MessageSquareText, MessagesSquare, Moon,
   MoreVertical, MousePointerClick, Network, PanelRight, Pencil, Plus, Quote, RotateCcw, Rows3, Scan, ScrollText,
-  Search, Send, Spline, Square, Sun, Trash2, TrendingDown, TriangleAlert, Unlink, Upload, UserRound, X,
+  Search, Send, Spline, Square, Sun, Target, Trash2, TrendingDown, TriangleAlert, Unlink, Upload, UserRound, X,
   Sparkles, Star, Tag, Pin, Zap, ZoomIn, ZoomOut,
 } from "lucide-react";
 
@@ -19,7 +19,7 @@ const ICONS = {
   FileStack, FileText, FolderOpen, HelpCircle, Image, ImagePlus, Info, KeyRound, Keyboard, Library, LogOut, Maximize, Menu,
   MessageCircleQuestion, MessageSquare, MessageSquareText, MessagesSquare, Moon,
   MoreVertical, MousePointerClick, Network, PanelRight, Pencil, Plus, Quote, RotateCcw, Rows3, Scan, ScrollText,
-  Search, Send, Spline, Square, Sun, Trash2, TrendingDown, TriangleAlert, Unlink, Upload, UserRound, X,
+  Search, Send, Spline, Square, Sun, Target, Trash2, TrendingDown, TriangleAlert, Unlink, Upload, UserRound, X,
   Sparkles, Star, Tag, Pin, Zap, ZoomIn, ZoomOut,
 };
 

@@ -43,6 +43,18 @@ export default function MainLayout({
   const { user, logout } = useAuth();
   const { selectedDocument, selectDocument } = useStudyContext();
   const tutorMemory = useTutorMemory();
+  // Lesson header title — real, derived from the same sources/selection
+  // state SidebarLeft already renders from (`selectedDocument` is a stem
+  // string, not a title object; resolved the same way SidebarLeft/ChatArea
+  // already resolve a stem -> display filename). No fabricated per-user
+  // title.
+  const lessonTitle = useMemo(() => {
+    const bySource = (stem) => sources.find((s) => (s.video_stem || s.video) === stem)?.filename || stem;
+    if (selectedDocument) return bySource(selectedDocument);
+    if (selectedSources?.length === 1) return bySource(selectedSources[0]);
+    if (selectedSources?.length > 1) return "Không gian nghiên cứu";
+    return "Phòng đọc";
+  }, [selectedDocument, selectedSources, sources]);
   const navigate = useNavigate();
 
   // ── Workspace architecture (approved audit) ──────────────────────────────
@@ -177,6 +189,20 @@ export default function MainLayout({
     setArtifactRequest({ tab, nonce: Date.now() });
     if (panel.drawer) setRightOpen(true); else panel.setCollapsedFor("right", false);
   }, [panel]);
+
+  // Structural refactor (Learning Canvas lesson header + next-action strip) —
+  // ONE real action per artifact type, shared by LessonHeader's always-on
+  // buttons and ChatArea's next-action strip: switch to the pane if it
+  // already has data (same as clicking the WorkspaceTabs tab), otherwise
+  // bounce to the Inspector's existing "Tạo sơ đồ"/"Tạo tóm tắt" generator
+  // via the SAME openArtifact mechanism Tutor's "Xem sơ đồ"/"Xem tóm tắt"
+  // links already use just above — no new generation logic, no mock.
+  const onMindmapAction = useCallback(() => {
+    if (mindmapData?.data) setWorkspaceMode("mindmap"); else openArtifact("mindmap");
+  }, [mindmapData, openArtifact]);
+  const onSummaryAction = useCallback(() => {
+    if (summaryData) setWorkspaceMode("summary"); else openArtifact("summary");
+  }, [summaryData, openArtifact]);
 
   // Feature Pack B (Cross Navigation) — real dead end found: while on the
   // MindMap tab, the right column shows ONLY KnowledgeInspector (see the
@@ -531,11 +557,15 @@ export default function MainLayout({
           <WorkspaceContainer
             mode={workspaceMode}
             onModeChange={setWorkspaceMode}
+            lessonTitle={lessonTitle}
+            onMindmapAction={onMindmapAction}
+            onSummaryAction={onSummaryAction}
             chatProps={{
               selectedSources, sources, onEvidence: setEvidence, highlight, onHighlight,
               onOpenLeft: () => (panel.drawer ? setLeftOpen(true) : panel.setCollapsedFor("left", false)),
               askAboutDraft,
               hasSummary: Boolean(summaryData), onOpenSummary: onSwitchToSummary,
+              hasMindmap: Boolean(mindmapData?.data), onMindmapAction, onSummaryAction,
             }}
             mindmapData={mindmapData}
             summaryData={summaryData}
