@@ -5,6 +5,7 @@ import Badge from "../ui/Badge";
 import Spinner from "../ui/Spinner";
 import { nguonConDangXuLy, nhoNguon, quenNguon } from "../../utils/nguonDangXuLy";
 import { taoBoTheoDoiNguon } from "../../utils/theoDoiNguon";
+import { mergeSources, reconcileSelectedSources } from "../../utils/sourceReconciliation";
 
 /** Phase sau FAISS: memory tree. memory_tree_ready = đã xong — không hiện « đang tối ưu ». */
 const SUBSTATUS_OPTIMIZING = new Set(["faiss_ready", "building_memory_tree"]);
@@ -127,15 +128,18 @@ export default function SidebarLeft({ selectedSources, setSelectedSources, onSou
       })
       .then((data) => {
         const backendSources = data.sources || [];
-        const keyOf = (s) => s.video_stem || s.video;
+        // Merge + selection reconciliation both live in utils/sourceReconciliation.js
+        // (testable, see its own file for the investigation this hardening is
+        // based on). `prevSnapshot` captures the pre-merge `sources` so the
+        // selection reconciliation can look up a selected stem's *filename* —
+        // the functional setSources updater below runs synchronously, so
+        // `prevSnapshot` is populated before the setSelectedSources call.
+        let prevSnapshot = [];
         setSources((prev) => {
-          const activeSources = prev.filter((s) => s.status === "processing" || s.status === "index_ready");
-          const readySources = backendSources.map((s) => ({ source_id: null, filename: s.filename || formatFileName(keyOf(s)), video_stem: keyOf(s), status: "ready", progress: 1.0, substatus: null, capabilities: { chunk_query: true, memory_query: true }, can_query: true, num_chunks: s.num_chunks }));
-          const combined = [...activeSources];
-          readySources.forEach((rs) => { if (!combined.some((ps) => (ps.video_stem || ps.video) === rs.video_stem)) combined.push(rs); });
-          return combined;
+          prevSnapshot = prev;
+          return mergeSources(prev, backendSources, formatFileName);
         });
-        setSelectedSources((prev) => prev.filter((p) => backendSources.some((s) => keyOf(s) === p)));
+        setSelectedSources((prevSel) => reconcileSelectedSources(prevSnapshot, backendSources, prevSel));
         setLoiTai(null);
       })
       .catch((err) => {
