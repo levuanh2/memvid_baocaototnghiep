@@ -74,6 +74,34 @@ export function globalShortcutAction(event, { activeElement } = {}) {
 }
 
 /**
+ * Round 9 fix — MainLayout's global-shortcut guard used to be a bare
+ * `document.querySelector('[aria-modal="true"], .me-container')` existence
+ * check. `.me-container` stays PERMANENTLY in the DOM once a Mind Map has
+ * ever been shown (WorkspaceContainer keeps panes mounted, only toggling
+ * the wrapper's `hidden` class — see round 2/7's "ChatArea must never
+ * remount" work), so that check matched it even while hidden, silently
+ * blocking Alt+C/M/S/T and history back/forward forever after the first
+ * generation.
+ *
+ * Pulled out as its own pure function (same THUẦN shape as the rest of this
+ * file) so it's testable with plain stub objects — jsdom itself doesn't
+ * implement `offsetParent` at all (it's always `null` regardless of real
+ * visibility, a known jsdom gap), so a test relying on jsdom's own layout
+ * can't tell a hidden element from a visible one; passing in objects that
+ * merely SHAPE like elements (`{ offsetParent }`) tests the actual
+ * decision logic instead. Same visibility convention Modal.jsx's own
+ * focus-trap already uses (`el.offsetParent !== null`).
+ *
+ * `elements`: whatever `document.querySelectorAll(...)` returns (or any
+ * element-like iterable) — checks ALL of them, not just the first match,
+ * so a real visible modal isn't missed just because a hidden `.me-container`
+ * happens to be earlier in DOM order for the combined selector.
+ */
+export function hasVisibleBlockingOverlay(elements) {
+  return Array.from(elements || []).some((el) => el?.offsetParent != null);
+}
+
+/**
  * Sơ đồ tư duy — mục 4 + 5. Caller CHỈ được gọi hàm này khi
  * `workspaceMode === "mindmap"` VÀ activeElement không nằm trong `.me-container`
  * (canvas mind-elixir tự bắt ArrowUp/Down/Left/Right/Enter/Tab/Delete/Backspace

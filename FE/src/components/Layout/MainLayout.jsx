@@ -19,7 +19,7 @@ import StudyBreadcrumb from "../study/StudyBreadcrumb";
 import { useStudyContext } from "../../study/useStudyContext";
 import { openCommandPalette } from "../../utils/commandPaletteBus";
 import { useTutorMemory } from "../../study/useTutorMemory";
-import { globalShortcutAction, mindmapRelationAction } from "../../utils/keyboardShortcuts";
+import { globalShortcutAction, mindmapRelationAction, hasVisibleBlockingOverlay } from "../../utils/keyboardShortcuts";
 import { OPEN_SHORTCUTS_EVENT } from "../../utils/shortcutsBus";
 import ShortcutsOverlay from "../shortcuts/ShortcutsOverlay";
 
@@ -65,6 +65,7 @@ export default function MainLayout({
   // a modal — see SidebarRight.jsx's two small forwarding effects.
   const [workspaceMode, setWorkspaceMode] = useState(initialWorkspaceMode);
   const [mindmapData, setMindmapData] = useState(null);   // { data, onRegenerate, regenerating } | null
+  const hasMindmap = Boolean(mindmapData?.data);
   const [summaryData, setSummaryData] = useState(null);   // summary record | null
   // Auto-switch to a newly-populated tab ONCE (null → non-null), not on every
   // later update (Save/regenerate) — those must not yank the user off Chat.
@@ -205,19 +206,20 @@ export default function MainLayout({
   }, [summaryData, openArtifact]);
 
   // Feature Pack B (Cross Navigation) — real dead end found: while on the
-  // MindMap tab, the right column shows ONLY KnowledgeInspector (see the
-  // `workspaceMode === "mindmap"` swap below); SidebarRight, and with it the
-  // Research Timeline tab, is entirely unreachable. Everywhere else `rightView
-  // = "timeline"` already works (SidebarRight is what's showing). This is the
-  // ONE case that needs an actual overlay — a floating panel ON TOP of the
-  // Inspector, not a replacement for it (Inspector must stay mounted/visible
-  // underneath, not lose its own state).
+  // MindMap tab WITH a map loaded, the right column shows ONLY
+  // KnowledgeInspector (see the `workspaceMode === "mindmap" && hasMindmap`
+  // swap below); SidebarRight, and with it the Research Timeline tab, is
+  // unreachable. Everywhere else `rightView = "timeline"` already works
+  // (SidebarRight is what's showing — including MindMap mode with NO map
+  // yet, round 5: SidebarRight shows its own generator there, not
+  // KnowledgeInspector). This is the ONE case that needs an actual overlay —
+  // a floating panel ON TOP of the Inspector, not a replacement for it.
   const [timelineOverlayOpen, setTimelineOverlayOpen] = useState(false);
   const openTimeline = useCallback(() => {
-    if (workspaceMode === "mindmap") { setTimelineOverlayOpen(true); return; }
+    if (workspaceMode === "mindmap" && hasMindmap) { setTimelineOverlayOpen(true); return; }
     setRightView("timeline");
     if (panel.drawer) setRightOpen(true); else panel.setCollapsedFor("right", false);
-  }, [workspaceMode, panel]);
+  }, [workspaceMode, hasMindmap, panel]);
   useEffect(() => {
     if (!timelineOverlayOpen) return;
     const onKey = (e) => { if (e.key === "Escape") setTimelineOverlayOpen(false); };
@@ -242,18 +244,6 @@ export default function MainLayout({
     setTimelineOverlayOpen(false);
   }, [onHighlight, panel]);
 
-  // Feature Pack D — Knowledge Dashboard entry point. Deliberately NOT given
-  // the MindMap-mode floating-overlay treatment Timeline got in Feature Pack
-  // B: on the MindMap tab this behaves the same way the pre-existing "Gia sư
-  // AI" button already does (`openTutor`, above) — sets `rightView` without
-  // checking `workspaceMode`, a real no-visible-effect no-op while
-  // SidebarRight is swapped for KnowledgeInspector. That's an existing,
-  // documented rough edge (see docs/FEATURE_PACK_D_REPORT.md), not a new one
-  // this pack introduces or is scoped to fix.
-  const openInsights = useCallback(() => {
-    setRightView("insights");
-    if (panel.drawer) setRightOpen(true); else panel.setCollapsedFor("right", false);
-  }, [panel]);
 
   // Step 10 — Ctrl+/ (hoặc Cmd+/) mở Gia sư AI từ bất cứ đâu trong Workspace.
   useEffect(() => {
@@ -287,15 +277,25 @@ export default function MainLayout({
       // "help" is the ONE exception: it must still be able to TOGGLE its own
       // overlay closed while that overlay is the thing open, same self-toggle
       // exception CommandPalette's own Ctrl+K already has for its own modal.
-      if (action !== "help" && document.querySelector('[aria-modal="true"], .me-container')) return;
+      //
+      // Round 9 fix: `.me-container` stays PERMANENTLY in the DOM once a Mind
+      // Map has ever been shown (WorkspaceContainer keeps panes mounted, only
+      // toggling the wrapper's `hidden` class, so ChatArea/mind-elixir never
+      // remount on a mode switch) — a bare existence check therefore matched
+      // it even while hidden, silently blocking every global shortcut
+      // (Alt+C/M/S/T, history back/forward) forever after the first
+      // generation. `hasVisibleBlockingOverlay` (keyboardShortcuts.js)
+      // restricts the guard to an element that's actually on screen.
+      const overlayCandidates = document.querySelectorAll('[aria-modal="true"], .me-container');
+      if (action !== "help" && hasVisibleBlockingOverlay(overlayCandidates)) return;
       e.preventDefault();
       switch (action) {
         case "help": return setShortcutsOpen((v) => !v);
         case "nav-chat": return onSwitchToChat();
-        // Alt+M mirrors WorkspaceTabs.jsx's own gate exactly (`enabled.mindmap
-        // = hasMindmap`) — a keyboard shortcut for a disabled tab must stay a
-        // no-op, not switch into an empty pane the click path itself refuses.
-        case "nav-mindmap": return mindmapData?.data && setWorkspaceMode("mindmap");
+        // Alt+M mirrors LessonHeader's own mode tabs (IA pass, round 5: the
+        // Mind Map tab is now always enabled — see WorkspaceEmptyState for
+        // what renders with no map yet, same as clicking the tab does).
+        case "nav-mindmap": return setWorkspaceMode("mindmap");
         // Alt+S mirrors the EXISTING header "StudyMap" <Link to="/app/study">
         // above — same destination, no new route invented.
         case "nav-studymap": return navigate("/app/study");
@@ -307,7 +307,7 @@ export default function MainLayout({
     };
     window.addEventListener("keydown", onKey);
     return () => window.removeEventListener("keydown", onKey);
-  }, [onSwitchToChat, mindmapData, navigate, openTimeline, mmGoBack, mmGoForward]);
+  }, [onSwitchToChat, navigate, openTimeline, mmGoBack, mmGoForward]);
 
   // Feature Pack C — MindMap relation navigation (mục 4 + 5): center / parent /
   // child / sibling, bare c/u/d/[/]. Scoped to `workspaceMode === "mindmap"`
@@ -364,7 +364,7 @@ export default function MainLayout({
 
       {/* ── TOP HEADER ── */}
       <header
-        className="flex items-center gap-4 px-4 sm:px-5 h-[58px] border-b border-border flex-shrink-0 transition-theme"
+        className="flex items-center gap-4 px-4 sm:px-5 h-[56px] border-b border-border flex-shrink-0 transition-theme"
         style={{ background: "var(--bg-sidebar)" }}
       >
         {/* Mobile: open source library */}
@@ -434,10 +434,23 @@ export default function MainLayout({
           <button onClick={openCommandPalette} className="md:hidden icon-btn w-9 h-9" aria-label="Tìm kiếm">
             <Icon name="Search" size={18} />
           </button>
-          {/* Mobile: open right column (whichever tab — Bằng chứng/Gia sư AI — was last open) */}
+          {/* IA pass (round 5), nav-ownership: Inspector is the ONLY
+              persistent owner of Evidence/AI Tutor/Timeline/Knowledge — the
+              header's Feature-Pack-B/C/D icon buttons for Gia sư AI/Dòng
+              thời gian/Kiến thức are REMOVED (they duplicated the Inspector's
+              own `.inspector-tab` row, SidebarRight.jsx), not just demoted.
+              This one button is the sole header-level "open the panel"
+              affordance, generic rather than feature-specific — it opens
+              whichever Inspector tab was last active (`rightView`), same as
+              before, just relabeled since it's no longer one of several
+              feature-specific buttons. On desktop the panel is already
+              reachable via its own PanelSpine expand click when collapsed,
+              so this stays mobile-only (a second desktop entry point would
+              itself violate "one owner"). Hotkeys (Ctrl+/, Alt+T) still work
+              — removing the visible button doesn't remove the shortcut. */}
           <button onClick={() => setRightOpen(true)} className="md:hidden icon-btn w-9 h-9"
-                  aria-label={rightView === "tutor" ? "Mở Gia sư AI" : "Mở lề bằng chứng"}>
-            <Icon name={rightView === "tutor" ? "Sparkles" : "PanelRight"} size={18} />
+                  aria-label="Mở công cụ">
+            <Icon name="PanelRight" size={18} />
           </button>
           {/* UI/UX Polish Issue 2 — search's discoverable HOME is the Study
               Workspace now, not buried in Library. Same global CommandPalette
@@ -446,31 +459,6 @@ export default function MainLayout({
           <button onClick={openCommandPalette} className="hidden md:inline-flex pill-action !text-small"
                   title="Tìm kiếm (Ctrl+K)">
             <Icon name="Search" size={14} /> Tìm kiếm
-          </button>
-          {/* Gia sư AI / Dòng thời gian / Kiến thức — these are the SAME
-              views as the Inspector's own `.inspector-tab` row
-              (Layout/SidebarRight.jsx); this header row's only job is to
-              open/focus the panel to that view from anywhere (incl. when
-              the panel is collapsed), not to be a second equal-weight
-              navigation bar (Visual Identity Reset, Part C ownership:
-              Inspector owns these views, header only owns the shortcut).
-              Demoted to icon-only so they read as utilities, not Level-1
-              nav — label + shortcut still surface via title/aria-label,
-              and the hotkeys (Ctrl+/, Alt+T) are unchanged. */}
-          <button onClick={openTutor} className="hidden md:inline-flex icon-btn w-9 h-9"
-                  title="Gia sư AI (Ctrl+/)" aria-label="Mở Gia sư AI">
-            <Icon name="Sparkles" size={16} />
-          </button>
-          {/* Feature Pack B — luôn có mặt, kể cả khi đang ở sơ đồ tư duy (nơi
-              cột phải bị Trình khám phá tri thức chiếm, xem openTimeline). */}
-          <button onClick={openTimeline} className="hidden md:inline-flex icon-btn w-9 h-9"
-                  title="Dòng thời gian nghiên cứu (Alt+T)" aria-label="Mở dòng thời gian nghiên cứu">
-            <Icon name="Clock" size={16} />
-          </button>
-          {/* Feature Pack D — Knowledge Dashboard. */}
-          <button onClick={openInsights} className="hidden md:inline-flex icon-btn w-9 h-9"
-                  title="Kiến thức của bạn" aria-label="Mở kiến thức của bạn">
-            <Icon name="Network" size={16} />
           </button>
           {/* Feature Pack C — Discoverability (mục 7). */}
           <button onClick={() => setShortcutsOpen(true)} className="hidden md:inline-flex icon-btn w-9 h-9"
@@ -518,7 +506,7 @@ export default function MainLayout({
             <aside
               className={
                 panel.drawer
-                  ? `fixed top-[58px] left-0 h-[calc(100vh-58px)] z-40 w-[252px] shrink-0
+                  ? `fixed top-[56px] left-0 h-[calc(100vh-56px)] z-40 w-[252px] shrink-0
                      bg-surface-sidebar border-r border-border
                      transition-transform duration-200 ease-in-out
                      ${leftOpen ? "translate-x-0" : "-translate-x-full"}`
@@ -565,7 +553,6 @@ export default function MainLayout({
               onOpenLeft: () => (panel.drawer ? setLeftOpen(true) : panel.setCollapsedFor("left", false)),
               askAboutDraft,
               hasSummary: Boolean(summaryData), onOpenSummary: onSwitchToSummary,
-              hasMindmap: Boolean(mindmapData?.data), onMindmapAction, onSummaryAction,
             }}
             mindmapData={mindmapData}
             summaryData={summaryData}
@@ -607,7 +594,7 @@ export default function MainLayout({
                        bg-surface-sidebar border-t border-border rounded-t-[14px]
                        transition-transform duration-200 ease-in-out
                        ${rightOpen ? "translate-y-0" : "translate-y-full"}`
-                    : `fixed top-[58px] right-0 h-[calc(100vh-58px)] z-40 w-[326px] shrink-0
+                    : `fixed top-[56px] right-0 h-[calc(100vh-56px)] z-40 w-[326px] shrink-0
                        bg-surface-sidebar border-l border-border
                        transition-transform duration-200 ease-in-out
                        ${rightOpen ? "translate-x-0" : "translate-x-full"}`
@@ -617,10 +604,18 @@ export default function MainLayout({
             >
               {/* Workspace architecture — exactly ONE Inspector, ONE SidebarRight,
                   both ALWAYS mounted (CSS `hidden`, never conditional JSX) so
-                  neither remounts when `workspaceMode` changes. MindMap mode shows
-                  the Inspector; Chat/Summary keep SidebarRight's evidence/tutor
-                  tabs (unrelated to node selection, unaffected by this refactor). */}
-              <div className={workspaceMode === "mindmap" ? "h-full" : "hidden h-full"}>
+                  neither remounts when `workspaceMode` changes. MindMap mode
+                  shows KnowledgeInspector ONLY once a map actually exists —
+                  before that, WorkspaceEmptyState's "Tạo sơ đồ tư duy" CTA
+                  calls onMindmapAction, which (no map yet) bounces to
+                  SidebarRight's own generator via openArtifact(); found via
+                  a live screenshot (round 5 QA) that the CTA was a complete
+                  no-op with the old `workspaceMode === "mindmap"` condition
+                  alone, because SidebarRight — the panel that CTA opens —
+                  was hidden in favor of an empty KnowledgeInspector the
+                  whole time it mattered. Chat/Summary keep SidebarRight's
+                  evidence/tutor tabs as before. */}
+              <div className={workspaceMode === "mindmap" && hasMindmap ? "h-full" : "hidden h-full"}>
                 <KnowledgeInspector {...inspectorProps} />
                 {/* Feature Pack B — floating OVER the Inspector, not replacing
                     it (Inspector stays mounted/visible underneath, keeps its
@@ -639,7 +634,7 @@ export default function MainLayout({
                       role="dialog"
                       aria-modal="true"
                       aria-label="Dòng thời gian nghiên cứu"
-                      className="fixed top-[58px] right-0 h-[calc(100vh-58px)] z-50 w-[326px] max-w-[90vw]
+                      className="fixed top-[56px] right-0 h-[calc(100vh-56px)] z-50 w-[326px] max-w-[90vw]
                                  bg-surface-sidebar border-l border-border shadow-card-hover
                                  flex flex-col"
                     >
@@ -665,7 +660,7 @@ export default function MainLayout({
                   </>
                 )}
               </div>
-              <div className={workspaceMode === "mindmap" ? "hidden h-full" : "h-full"}>
+              <div className={workspaceMode === "mindmap" && hasMindmap ? "hidden h-full" : "h-full"}>
                 <SidebarRight
                   selectedSources={selectedSources}
                   evidence={evidence}
