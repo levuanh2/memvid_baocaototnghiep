@@ -625,3 +625,200 @@ screenshot evidence above.
 flow and the upload UI's own drag-and-drop path were not separately
 exercised (file input was used programmatically). The `selectedSources`/
 `video_stem` divergence above remains open, named, not fixed.
+
+---
+
+## Fourth pass — hardening the selection race, corrected finding
+
+Directive: root-cause the `selectedSources`/`video_stem` timing problem
+named (not fixed) in the third pass, not just its banner symptom. This pass
+traced it end to end and reached a **different conclusion than the third
+pass's own writeup implied** — reported here honestly, not smoothed over.
+
+### What the investigation actually found
+
+Traced upload → indexing completion → backend identity assignment →
+`selectedSources` sync by reading the real backend code first
+(`_ingest_uploaded_file`, `/sources/<id>/status`, `/list-indexed` in
+`BE/app/main.py`), then testing live against production with several
+rounds of Playwright scripts.
+
+**First reads of the backend code found a real, narrow inconsistency**:
+`/sources/<id>/status` returns `status_info.get('source_stem')` raw, while
+`/list-indexed` runs the same value through `_normalize_video_stem()`
+first — two endpoints computing a nominally-the-same field two different
+ways. This looked like a plausible mechanism for exactly the reported
+symptom.
+
+**Live testing did not confirm it causes the reported symptom.** Two
+early diagnostic runs (`diag.mjs`, `diag3.mjs`) appeared to reproduce
+"selection cleared after answering," but re-running the identical scenario
+with corrected instrumentation gave a different, consistent result:
+
+- `diag2.mjs`/`diag3.mjs`'s apparent stem drift ("Chuong1.2" gaining a
+  "(4)" suffix moments after first appearing) was traced to **test
+  pollution, not the product**: this VM had over a dozen stray
+  node/chromium processes left running from earlier verification rounds,
+  all hitting the same real backend and uploading same-named files
+  concurrently — a shared/global filename-dedup counter shifting under
+  concurrent, unrelated test runs, not a single real user's session.
+- The "0 checked" / "0 đang chọn" readings across several scripts
+  (`diag.mjs`, `diag3.mjs`, and — in hindsight — the original third-pass
+  observation this whole investigation started from) were traced to a
+  **test-script selector bug**: `.overflow-y-auto` is used by at least
+  nine different scrollable containers across this app (ChatArea's message
+  pane, SidebarRight's evidence/tutor panes, SummaryPane, EvidenceDrawer,
+  KnowledgeInspector, ResearchTimeline, ...), so `.overflow-y-auto
+  input[type="checkbox"]` and similar selectors in the test scripts were
+  not reliably scoped to the actual left sidebar.
+- Re-run with processes cleaned up and selectors scoped to `page.locator("aside").first()`
+  (`diag5.mjs`, then `final_e2e.mjs`): selection stayed **correct and
+  checked** through select → ask → real grounded answer, in every clean
+  run, including a deliberate same-filename-collision scenario
+  (`diag4.mjs`: uploading a second file with the identical name as an
+  already-selected one) — the first file's selection was unaffected.
+  `/list-indexed` itself returned an identical, stable `video_stem` across
+  five consecutive calls for the same document in an isolated session
+  (`diag2.mjs`).
+
+**Honest conclusion: no reproducible `selectedSources`/`video_stem` race
+was confirmed in the real product under correctly-isolated testing.** The
+third pass's "found, not fixed" framing was itself based on contaminated
+evidence (concurrent test runs + an ambiguous CSS selector), not a
+demonstrated backend/FE synchronization bug.
+
+### What was done anyway, and why that's not a contradiction
+
+The `/sources/<id>/status` vs `/list-indexed` normalization difference is
+real, in the code, right now — just not shown to produce a visible
+mismatch in this pass's live testing. And the frontend's own reconciliation
+pattern (matching a selection by a recomputed string value against an
+independently-fetched list, with no stable identifier available from
+`/list-indexed` to correlate against) is architecturally fragile regardless
+of whether today's specific backend implementation happens to keep the two
+endpoints in sync. Given that, this pass added a **defensive hardening**,
+not a bug fix for a confirmed defect — framed as such in the code, not
+oversold:
+
+- **`FE/src/utils/sourceReconciliation.js`** (new) — `mergeSources()` (the
+  existing processing/ready merge logic, extracted unchanged) and
+  `reconcileSelectedSources()` (new): instead of dropping a selected stem
+  that no longer appears in a fresh `/list-indexed` response, it looks up
+  the filename that stem used to belong to (from the pre-merge local
+  state) and migrates the selection to whichever backend entry now has
+  that same filename, before falling back to dropping it. Filename is the
+  one thing that's stable across this specific transition (assigned once
+  at upload, per `BE/app/main.py`'s `_unique_display_filename`).
+- **`FE/src/components/Layout/SidebarLeft.jsx`** — `fetchSourcesFromBackend()`
+  now calls the two extracted functions instead of inlining the same
+  logic; behavior is identical for every case that isn't the
+  rename-detection path (verified: build/tests/lint clean, and the final
+  live re-verification below shows the same correct behavior as before).
+- **`FE/src/utils/sourceReconciliation.test.js`** (new) — exercises the
+  actual race pattern directly (a selected stem that no longer matches by
+  string equality but does match by filename → migrates; a genuinely
+  deleted source → drops; two old stems colliding onto one new entry →
+  de-dupes; a same-stem no-op case; a different-filename case that must
+  NOT migrate), not just a UI-level symptom. This is real, deterministic
+  test coverage of the exact mechanism the coordinator's hypothesis named,
+  independent of whether that mechanism is currently reachable live.
+
+### Consumers re-verified after the hardening (item 2 of this round's ask)
+
+All confirmed via the live `final_e2e.mjs` run below, not asserted from
+source alone:
+
+- **Lesson-header source count** — "2 tài liệu đang chọn", correct
+  throughout select → ask → answer.
+- **Goal banner** — correctly absent once a conversation exists (third
+  pass's fix); correct empty-state copy confirmed again in a fresh account.
+- **MindMap/Summary enabled-state gating** — `WorkspaceTabs`' disabled
+  state and `LessonHeader`/next-action-strip's "Tạo..."/"Xem..." label
+  swap both read `hasMindmap`/`hasSummary` unchanged by this pass.
+- **Evidence/source context panel** — 2 real evidence cards, correct
+  citations, in the light-Inspector re-skin from the third pass.
+- **Composer submission context** — confirmed by reading
+  `ChatArea.jsx:handleSend` directly: the `/query` request's `sources`
+  field is `selectedSources` read fresh at send time, independent of the
+  reconciliation change (that only affects what `selectedSources` *is*
+  between fetches, not how it's sent).
+
+### New P1 found via the side-by-side comparison, fixed
+
+Built one composite image (`side-by-side-comparison.png`, both source
+screenshots embedded in a static HTML page rendered with Playwright — not
+two separate files) and inspected it directly. Most of the header/nav/
+evidence-panel/goal-banner differences visible in it are **prior, already-
+justified architectural decisions** (icon-only global header vs. the
+mock's text nav, the persistent Inspector column vs. the mock's inline
+evidence card, the goal banner/action strip hidden once a conversation
+exists) — not new mismatches, not re-litigated here.
+
+One **new, real P1** did turn up, from a plain screenshot at the tablet
+viewport (not from the composite): `LessonHeader`'s readiness count and
+progress bar (added in this round's design, `hidden md:flex`/`hidden
+sm:inline`) overlapped the "Sơ đồ tư duy"/"Tóm tắt" buttons at 1024×768.
+Root cause: those Tailwind breakpoints are viewport-width-based, but
+`LessonHeader` sits in the *center column* of a 3-column layout — at a
+1024px viewport with both side panels open, the real available width is
+roughly 446px, well under what `md:`/`sm:` assume. Fixed by moving both to
+`xl:` (only shows when there's very likely real room) and wrapping the
+secondary-info group in its own `min-w-0 overflow-hidden` so a future
+breakpoint misjudgment clips instead of overlapping. Re-verified at
+1024×768 with a fresh screenshot — clean, no overlap
+(`final-active-tablet-fixed.png`).
+
+### Screenshots (scratchpad, dev server killed after)
+
+`.../scratchpad/final/`: `final-empty-{desktop,tablet,mobile}.png`,
+`final-selected-desktop.png` (two sources checked, real),
+`final-active-{desktop,tablet,mobile}.png` (real grounded answer, real
+citations — `tablet` is the pre-fix overlap, kept for the record;
+`final-active-tablet-fixed.png` is the corrected re-check),
+`side-by-side-comparison.png` (the required composite).
+
+Account: `structural-refactor-final-20260916@example.com` (disclosed, not
+deleted). Documents: `MoTa_SanPham.txt`, `Chuong1.2.txt` (same
+mock-derived content as the third pass). Diagnostic-only accounts from
+this pass's investigation, also disclosed, not deleted:
+`structural-refactor-diag{,2,3,4,5}-20260916@example.com`.
+
+### Tests
+
+```
+npm run build     →  clean, ~7.5s
+npm run test      →  81 files, 1039/1039 passed (1026 prior + 13 new in
+                      sourceReconciliation.test.js, all passing, no
+                      regression)
+npx eslint src    →  66 problems / 58 errors / 8 warnings — identical
+                      pre-existing baseline, no new errors
+git diff --check  →  clean
+```
+
+### Final status against this round's requirements
+
+- Root cause traced end to end, honestly reported even though it didn't
+  land where the directive assumed it would — a real code-level
+  inconsistency exists (`/sources/<id>/status` vs `/list-indexed`
+  normalization) but was not shown to cause the reported symptom live;
+  the reported symptom itself was traced to test-methodology defects,
+  named specifically, not hand-waved.
+- Defensive synchronization hardening implemented anyway (filename-based
+  migration instead of silent drop), with real regression tests
+  exercising the mechanism directly, not the UI symptom.
+- All five named consumers re-verified live, correct.
+- New real screenshots at all three viewports, both empty and active
+  states, from a real account with real uploads and a real grounded
+  answer citing real content.
+- Side-by-side composite built and actually inspected; one new P1 found
+  (tablet header overlap) and fixed, re-verified.
+- No expansion into the cramped-mobile-markdown-table issue — untouched,
+  still a named follow-up from the third pass.
+
+**Remaining, P3-only:** sidebar file-type icons don't carry the mock's
+per-format color differentiation (PDF vs DOCX) — cosmetic, not attempted
+this pass to avoid further scope creep this late in the round. The
+`/sources/<id>/status` vs `/list-indexed` normalization inconsistency
+itself remains unfixed in the backend (out of scope per this round's own
+"do not touch backend work" constraint) — the frontend hardening above is
+the mitigation.
