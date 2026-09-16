@@ -292,6 +292,50 @@ export default function MindElixirView({ data, onRegenerate, regenerating, contr
   // Click vào readout = chỉ trả thu phóng về 100%, giữ nguyên vị trí đang xem.
   const resetZoom = useCallback(() => { mindRef.current?.scale(1); }, []);
 
+  // Expand/Collapse (round 8) — Feasibility check before writing any of this
+  // (see docs/VISUAL_IDENTITY_WORKSPACE_REDESIGN.md): mind-elixir 5.13's own
+  // TYPED public prototype (node_modules/mind-elixir/dist/types/index.d.ts)
+  // exposes `expandNodeAll(el: Topic, isExpand?: boolean)`, and its actual
+  // implementation (dist/MindElixir.js) captures the target node's screen
+  // position, toggles `expanded` on it AND every descendant, re-renders,
+  // then calls `this.move()` to put that SAME node back at the SAME screen
+  // position — a real, built-in viewport-preserving mechanism, not
+  // something bolted on here. Scale/zoom is never touched by it either.
+  // `findEle(id)` is the same public lookup `useMindMapController.jumpTo`
+  // already uses elsewhere in this codebase — no private DOM querying, no
+  // internals poked, no instance rebuild.
+  //
+  // Deliberately NOT implemented this round: a Layout/orientation control
+  // (initLeft/initRight/initSide). Those are equally public and typed, but
+  // their own implementation unconditionally ends in `toCenter()` — it
+  // recenters the pan position every time (zoom is preserved, verified in
+  // the same dist file, but center is not) as an intrinsic part of what a
+  // direction change even means, not a side effect avoidable by calling the
+  // API differently. That conflicts with this round's explicit "preserve
+  // viewport center" bar, and there is no public way to change direction
+  // without it — so it's deferred rather than shipped as a control that
+  // silently violates that bar. See the epic-closing report for the exact
+  // API/version citation.
+  //
+  // Scoped to the selected node's subtree when one is selected (the
+  // "targeting only descendants of the selected node" capability), falling
+  // back to the map's own root (`mind.nodeData` — a typed, public instance
+  // property) for a real "expand/collapse everything".
+  const expandCollapseAll = useCallback((isExpand) => {
+    const mind = mindRef.current;
+    if (!mind) return;
+    const targetId = controller?.selected?.id || mind.nodeData?.id;
+    if (!targetId) return;
+    const topic = mind.findEle?.(targetId);
+    if (!topic) return;
+    mind.expandNodeAll(topic, isExpand);
+  }, [controller]);
+  const expandAll = useCallback(() => expandCollapseAll(true), [expandCollapseAll]);
+  const collapseAll = useCallback(() => expandCollapseAll(false), [expandCollapseAll]);
+  const expandCollapseLabel = controller?.selected?.id
+    ? { expand: "Mở rộng nhánh đã chọn", collapse: "Thu gọn nhánh đã chọn" }
+    : { expand: "Mở rộng tất cả", collapse: "Thu gọn tất cả" };
+
   // Fullscreen (IA pass round 5) — native Fullscreen API on the canvas
   // wrapper only, no mind-elixir instance state touched. `fullscreenchange`
   // also fires for Esc/browser-chrome exits, so isFullscreen tracks the
@@ -478,6 +522,18 @@ export default function MindElixirView({ data, onRegenerate, regenerating, contr
           </button>
           <button onClick={() => mindRef.current?.toCenter()} aria-label="Căn giữa" title="Căn giữa" className="icon-btn w-8 h-8">
             <Icon name="Maximize" size={15} />
+          </button>
+          <div className="mm-floating-toolbar__sep" aria-hidden="true" />
+          {/* Round 8 — Expand/Collapse. Scoped to the selected node's subtree
+              when one is selected, else the whole map (see expandCollapseAll
+              above for the full public-API feasibility note). */}
+          <button onClick={expandAll} aria-label={expandCollapseLabel.expand} title={expandCollapseLabel.expand}
+            className="icon-btn w-8 h-8">
+            <Icon name="ChevronsUpDown" size={15} />
+          </button>
+          <button onClick={collapseAll} aria-label={expandCollapseLabel.collapse} title={expandCollapseLabel.collapse}
+            className="icon-btn w-8 h-8">
+            <Icon name="ChevronsDownUp" size={15} />
           </button>
           <div className="mm-floating-toolbar__sep" aria-hidden="true" />
           <button onClick={() => setShowRelations((v) => !v)} aria-pressed={showRelations}
