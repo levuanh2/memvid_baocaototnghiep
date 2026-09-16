@@ -13,18 +13,33 @@ import ChatArea from "./ChatArea";
 import MindElixirView from "../mindmap/MindElixirView";
 import SummaryPane from "./SummaryPane";
 import WorkspaceTabs from "./WorkspaceTabs";
+import LessonHeader from "./LessonHeader";
+import { computeReadyCount } from "../../utils/workspaceReadiness";
 
 const paneClass = (active) => (active ? "flex-1 min-h-0" : "hidden");
 
 export default function WorkspaceContainer({
   mode, onModeChange,
   chatProps, mindmapData, summaryData, controller,
+  lessonTitle, onMindmapAction, onSummaryAction,
 }) {
   const hasMindmap = Boolean(mindmapData?.data);
   const hasSummary = Boolean(summaryData);
+  const selectedSources = chatProps?.selectedSources || [];
+  const sources = chatProps?.sources || [];
+  const readyCount = computeReadyCount(sources, selectedSources);
 
   return (
     <div className="flex flex-1 flex-col min-w-0 min-h-0">
+      <LessonHeader
+        title={lessonTitle}
+        selectedCount={selectedSources.length}
+        readyCount={readyCount}
+        hasMindmap={hasMindmap}
+        hasSummary={hasSummary}
+        onMindmapAction={onMindmapAction}
+        onSummaryAction={onSummaryAction}
+      />
       <WorkspaceTabs mode={mode} onChange={onModeChange} hasMindmap={hasMindmap} hasSummary={hasSummary} />
 
       <div className={paneClass(mode === "chat")}>

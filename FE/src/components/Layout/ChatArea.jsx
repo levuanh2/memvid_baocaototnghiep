@@ -16,6 +16,7 @@ import { useStudyContext } from "../../study/useStudyContext";
 import { nodeLabel, processCitations, parseCiteHref, normStem, citeKey } from "../../utils/evidence";
 import { pickImageFromClipboard, downscaleImage, transcribeImage, getVisionStatus, buildQuestionWithImage, IMAGE_TYPES } from "../../utils/chatImage";
 import { QUERY_SSE_ERR_FALLBACK, ensureErrMsg, pickQueryDisplayText, sseErrorToMessage } from "../../utils/queryText";
+import { computeReadyCount } from "../../utils/workspaceReadiness";
 
 // ── Quick question chips (fill the composer; functional, not decorative) ──
 // Generic fallback — used only when no source is selected yet (nothing to name).
@@ -109,6 +110,10 @@ export default function ChatArea({
   // real link, never a dead one; `onOpenSummary` reuses MainLayout's existing
   // workspaceMode switch (same shape as the pre-existing `onSwitchToChat`).
   hasSummary = false, onOpenSummary,
+  // Structural refactor (Learning Canvas next-action strip) — same two
+  // combined switch-or-generate actions LessonHeader uses (MainLayout wires
+  // them once), plus hasMindmap for the strip's enabled/disabled label.
+  hasMindmap = false, onMindmapAction, onSummaryAction,
 }) {
   // Feature Pack A (Research Timeline) — ChatArea never touched Study Context
   // before this; it's the one surface where the user's two most-timeline-
@@ -164,6 +169,13 @@ export default function ChatArea({
     [highlight, onHighlight, handleEvidenceOpen],
   );
   const suggestions = useMemo(() => buildSuggestions(selectedSources, sources), [selectedSources, sources]);
+  // Structural refactor (Learning Canvas goal banner) — real readiness count,
+  // same can_query/status data SidebarLeft's own badges already read, not an
+  // invented multi-step "goal" flow. Shared, tested pure fn — see
+  // utils/workspaceReadiness.js (LessonHeader/WorkspaceContainer use the
+  // same one, was duplicated inline in both places before).
+  const readyCount = useMemo(() => computeReadyCount(sources, selectedSources), [sources, selectedSources]);
+  const focusComposer = useCallback(() => textareaRef.current?.focus(), []);
   // Feature epic M1 (Multi-Document Intelligence, mục 2) — names the real
   // contributing documents for a small set, same stem->filename resolution
   // `buildSuggestions` above already uses (not a second lookup convention).
@@ -741,6 +753,54 @@ export default function ChatArea({
           )}
         </div>
       </div>
+
+      {/* Learning Canvas goal banner + next-action strip. Real, derived
+          content only — no per-user "learning objective" exists in this
+          app's data model, so the banner states real readiness instead of
+          an invented goal (docs/VISUAL_IDENTITY_WORKSPACE_REDESIGN.md).
+          Gated to messages.length === 0 (same condition the empty-state
+          hero below already uses) — deliberately NOT "always visible" like
+          the approved mock's static GoalBar: that mock's copy is invented
+          and can never go stale, but this banner's copy is live-derived
+          from selectedSources, which can lag behind reality after a send
+          (a real, pre-existing timing gap — see
+          docs/VISUAL_IDENTITY_WORKSPACE_REDESIGN.md). Showing "Chưa chọn
+          tài liệu nào" directly above an answer that just cited real
+          documents would be actively contradictory, not just cluttered. */}
+      {messages.length === 0 && (
+      <div className="px-5 sm:px-8 pt-4 flex-shrink-0 flex flex-col gap-2.5">
+        <div className="flex items-center gap-3 rounded-[10px] px-4 py-3 min-h-[52px]"
+          style={{ background: "var(--accent-subtle)" }}>
+          <Icon name="Target" size={18} className="text-accent flex-shrink-0" />
+          {selectedSources?.length > 0 ? (
+            <p className="text-small text-text-secondary flex-1">
+              {readyCount}/{selectedSources.length} tài liệu đã chọn sẵn sàng tra cứu.
+              {readyCount < selectedSources.length && " Một số tài liệu vẫn đang lập chỉ mục."}
+            </p>
+          ) : (
+            <p className="text-small text-text-secondary flex-1">
+              Chưa chọn tài liệu nào. Chọn tài liệu bên trái để bắt đầu.
+            </p>
+          )}
+          {!selectedSources?.length && (
+            <button type="button" onClick={onOpenLeft} className="text-small font-medium text-accent flex-shrink-0">
+              Chọn tài liệu
+            </button>
+          )}
+        </div>
+        <div className="flex items-center gap-2 flex-wrap">
+          <button type="button" onClick={focusComposer} className="btn-primary !text-small !py-1.5">
+            <Icon name="Sparkles" size={14} /> Đặt câu hỏi
+          </button>
+          <button type="button" onClick={onSummaryAction} className="btn-secondary !text-small !py-1.5">
+            <Icon name="ScrollText" size={14} /> {hasSummary ? "Xem tóm tắt" : "Tóm tắt nội dung"}
+          </button>
+          <button type="button" onClick={onMindmapAction} className="btn-secondary !text-small !py-1.5">
+            <Icon name="Network" size={14} /> {hasMindmap ? "Xem sơ đồ tư duy" : "Tạo sơ đồ tư duy"}
+          </button>
+        </div>
+      </div>
+      )}
 
       {/* Transient feedback (New chat / Clear context / Delete history) */}
       {notice && (

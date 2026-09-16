@@ -369,3 +369,259 @@ test was performed (only static states were screenshotted). Hallmark was
 not run as a literal separate tool invocation, both passes. The
 forest-vs-blue question from the second pass is now resolved (see above) —
 no longer open.
+
+---
+
+## Third pass — structural refactor: real Learning Canvas layout in the real /app workspace
+
+The first two passes only borrowed the Learning Canvas prototype's *tokens*
+(color, box-reduction). The actual `/app` workspace's structure — three
+columns, MainLayout/WorkspaceContainer/ChatArea/SidebarRight — was
+untouched. This pass adds the prototype's structural pieces (lesson header,
+goal banner, next-action strip, light contextual evidence panel) **inside**
+the real, existing component tree — no new prototype, no mock data, all
+existing chat/document/auth/routing logic preserved.
+
+### What changed, and how it maps onto existing logic
+
+- **`Layout/LessonHeader.jsx`** (new) — rendered by `WorkspaceContainer`
+  above the existing `WorkspaceTabs` row. Title, selected-source count, and
+  a readiness indicator, all real (see below), plus two always-present
+  "Sơ đồ tư duy"/"Tóm tắt" buttons.
+- **`onMindmapAction`/`onSummaryAction`** (new, `MainLayout.jsx`) — the
+  *only* new piece of real logic this pass adds, and it's a two-line
+  dispatcher, not new generation logic: if `mindmapData`/`summaryData`
+  already exists, switch `workspaceMode` (exactly what clicking a
+  `WorkspaceTabs` tab already does); otherwise call the pre-existing
+  `openArtifact("mindmap"|"summary")` (the same mechanism Tutor's "Xem sơ
+  đồ"/"Xem tóm tắt" links already used, which opens/expands the Inspector
+  to its real "Tạo sơ đồ"/"Tạo tóm tắt" generator). Shared by
+  `LessonHeader`'s buttons and the next-action strip below — one real
+  action per artifact type, not two.
+- **Goal banner + next-action strip** (new, inside `ChatArea.jsx`, above the
+  message list) — real, derived content only. There is no per-user "learning
+  objective" in this app's data model, so the banner states real document
+  readiness (`X/Y tài liệu sẵn sàng`) instead of inventing one, unlike the
+  prototype's own static, fabricated goal text. "Đặt câu hỏi" focuses the
+  real composer textarea; "Tóm tắt nội dung"/"Tạo sơ đồ tư duy" call the two
+  shared actions above.
+  - **Gated to `messages.length === 0`** (same condition the pre-existing
+    empty-state hero uses), not always-visible like the prototype. Found
+    during real-data verification (see below): `selectedSources` can lag
+    behind the backend's actual indexed-source identity for a moment after
+    a send (a real, pre-existing timing gap, not introduced by this pass),
+    and an always-visible "Chưa chọn tài liệu nào" banner sitting directly
+    above an answer that just cited real documents was actively
+    contradictory, not just cluttered. Gating it to the pre-conversation
+    state is the honest fix given that constraint — the prototype's static
+    copy never has this problem because it isn't derived from anything.
+- **`utils/workspaceReadiness.js`** (new) — `computeReadyCount(sources,
+  selectedSources)`, pulled out of what was duplicated inline in both
+  `LessonHeader`'s host (`WorkspaceContainer.jsx`) and `ChatArea.jsx`. Pure,
+  tested (see Tests below).
+- **SidebarRight → light contextual panel** (`SidebarRight.jsx`,
+  `mindmap.css`, `index.css`) — this is the "replace the permanent dark
+  Inspector" requirement. `SidebarRight.jsx`'s background changed from
+  `var(--surface-contrast)` (graphite) to `var(--bg-sidebar)` (paper).
+  `mindmap.css`'s "Sprint F graphite register" — a block of Tailwind-utility
+  overrides that forced `.text-text-primary`/`.border-border`/`.icon-btn`
+  etc. to graphite-appropriate colors — had `.sidebar-right` removed from
+  every selector in it; `.knowledge-inspector`/`.evidence-drawer`
+  (MindMap's own overlay components, a different context, explicitly
+  preserved per the "don't touch MindMap" constraint) keep the register
+  exactly as before. `index.css`'s `.inspector-tab` (the underline tab row
+  added in the second pass) switched from the graphite-tuned
+  `--on-contrast*`/`--contrast-focus` tokens to the standard light-surface
+  `--text-muted`/`--text-primary`/`--accent`. No JSX in `TutorPanel`,
+  `ResearchTimeline`, `KnowledgeDashboard`, or any other SidebarRight child
+  needed touching — all of them only ever consumed the Tailwind utility
+  classes the register was overriding, never the graphite tokens directly
+  (verified by grep before editing, not assumed). **All Inspector
+  functionality — which of the four tabs is open, citation click-through,
+  generation, navigation — is unchanged; this is strictly a background/text
+  color re-skin.**
+- **`ui/Icon.jsx`** — added `Target` (the goal-banner icon) to the explicit
+  lucide-react registry, following the file's own documented pattern for
+  adding a new icon (one import + one `ICONS` entry).
+
+### Local backend investigated, production API used instead — why
+
+Checked `docker-compose.yml` / `BE/ENV_SETUP.md` first, per the
+coordinator's explicit preference. Docker Desktop and a full local Ollama
+model set (`qwen2.5:7b-instruct`, matching the compose default) were both
+already present on this machine and were brought up successfully. However,
+`docker-compose.yml`'s `DATABASE_URL`/`SUPABASE_URL` (read from the repo
+root `.env`, already configured) point at the **same real, hosted Supabase
+project** production uses — not a separate local database. Running the
+backend via Docker on this machine would create real user/document rows in
+that same real database, exactly like calling the production API directly
+would; the only isolation gained would be that index/embedding files land
+on local disk and inference runs on local Ollama instead of whatever
+production uses. Given that isolation difference doesn't materially change
+the "don't touch production data" concern the preference is protecting
+against, and stands to cost significant additional time (image build,
+model downloads, migration run) for a UI verification task, the FE dev
+server was pointed at the real production API
+(`https://api.studymap.space`) instead, via a temporary,
+gitignored-by-`FE/.gitignore`'s `*.local` pattern `.env.development.local`
+(deleted after this pass — never committed).
+
+**Disclosed test accounts and documents** (production, not deleted, per
+the standing disclosure pattern used elsewhere in this release cycle):
+- `structural-refactor-qa-20260916@example.com` — first attempt; two
+  uploads (`MoTa_SanPham.txt`, `Chuong1.2.txt`) failed with a real backend
+  error ("Cannot read file content") traced to a bug in this pass's OWN
+  first verification script (see below), not the product; a third,
+  curl-uploaded copy of `MoTa_SanPham.txt` succeeded. Left as-is along with
+  a later 3-document mixed-selection query against this account (see
+  "found, not fixed" below for what that query's answer revealed).
+- `structural-refactor-qa2-20260916@example.com` — the clean account the
+  reported screenshots and citations come from. Two real documents
+  (`MoTa_SanPham.txt`, `Chuong1.2.txt`, content below) uploaded, indexed,
+  and cited for real.
+
+**Root-caused, not worked around:** the first verification attempt's
+uploads failed for real, traced to *my own test script*, not the app —
+routing the app's `fetch()` calls through Playwright's `route.fetch()`/
+`route.fulfill()` (a CORS-bypass technique) corrupted the multipart
+file-upload body specifically, while working fine for JSON requests
+(confirmed via a direct `curl` upload of the exact same file, which
+succeeded). Fixed by launching Chromium with `--disable-web-security`
+instead — the browser makes the real request over the real network
+natively; nothing is proxied, intercepted, or mocked. (Production's CORS
+allowlist correctly still only permits the real deployed frontend origins,
+not this local dev server — confirmed as the actual, expected cause of the
+first failure to even reach the API at all, before the upload-corruption
+issue was found underneath it.)
+
+**Content used**, since the prototype's `MoTa_SanPham.pdf`/`Chuong1.2.docx`
+are fictional filenames with fabricated example quotes and no real file
+exists anywhere in the prototype folder (checked — `find` for the names and
+any `.pdf`/`.docx` came back empty): two real `.txt` documents were written
+using the prototype's own citation quotes as ground-truth source content
+(so the real backend would have real text to actually retrieve and cite,
+not just a plausible-sounding filename), uploaded under the exact names
+`MoTa_SanPham.txt` / `Chuong1.2.txt`.
+
+### Verification — empty state and active state, both real
+
+Method: FE dev server (`npm run dev`) against the real production API,
+Playwright (installed on demand in the scratchpad, not the repo) driving
+real registration, real upload, real polling for real indexing completion,
+real document selection, real question submission, real streamed answer.
+Dev server killed after (confirmed via `curl` connection-refused).
+
+**Empty state** (fresh account, zero documents) — `real2-empty-desktop-1440x1024.png`,
+`real2-empty-laptop-1024x768.png`, `real2-empty-mobile-390x844.png`. Lesson
+header, goal banner (real "no documents" copy, real "Chọn tài liệu" link
+wired to the real `onOpenLeft`), and next-action strip all render correctly
+at all three viewports; strip wraps to 2 rows at 390px without overlap.
+
+**Active state** — asked the exact mock question ("Theo các tài liệu đã
+chọn, ưu điểm chính của sản phẩm là gì? Có những hạn chế nào cần lưu ý?",
+found verbatim in the prototype's `src/App.jsx`) against the two real,
+selected, indexed documents. Real grounded answer came back citing both
+real documents by name, with two real evidence cards in the (now light)
+Inspector panel showing real excerpted text and real chunk references
+(`chuong1_2__3__txt · đoạn 221`, `mota_sanpham__4__txt · đoạn 220`) —
+`real2-active-answer-desktop-1440x1024.png` (this screenshot predates the
+goal-banner gating fix below and shows exactly the contradiction that fix
+addresses), and after the fix, a fresh follow-up question
+(`real2-fixed-active-desktop-1440x1024.png`,
+`real2-fixed-active-mobile-390x844.png`) producing a second real grounded
+answer (including a real Markdown table the model generated) with no
+stray banner above it. Desktop, mobile, and laptop (though the laptop
+capture landed on a fresh empty conversation with both side panels
+collapsed to their spine — itself a real, working, pre-existing
+collapse-state-persistence feature, not a bug) all confirmed no
+overlapping or inaccessible controls.
+
+### P0/P1/P2 found and fixed
+
+- **P1 — goal banner contradicts the answer once a conversation exists.**
+  Found via the real-data active-state screenshot (not visible in any
+  mocked-backend test, since a mock never produces this specific
+  selection/citation timing gap). Fixed by gating the banner+strip to
+  `messages.length === 0` (see above). Re-verified visually after the fix.
+- No other P0/P1/P2 found in the structural layout itself at any of the
+  three viewports, in either state.
+
+### Observed, not fixed (real, pre-existing, out of this pass's scope)
+
+- **`selectedSources` can momentarily diverge from the backend's post-index
+  `video_stem` identity for the same logical document** — observed once,
+  on the first (messier, multi-account) verification attempt: a chat send
+  succeeded using whatever was selected at that moment, but the visible
+  checkbox state read back as unselected shortly after. Plausible
+  mechanism: the placeholder source row created at upload time can carry a
+  different `video_stem` than the one the backend settles on once
+  `/list-indexed` reconciles it as ready, and `selectedSources` (a list of
+  stem strings) doesn't get migrated when that swap happens. This is
+  chat/document state logic explicitly out of this pass's scope to change
+  ("map EXISTING functionality," "preserve chat state") — named here for
+  the record, not fixed. The goal-banner P1 above is a direct, visible
+  symptom of this gap; gating the banner addresses the symptom's user-
+  facing confusion, not the underlying timing gap itself.
+- Markdown tables in a grounded answer are cramped at 390px (seen in
+  `real2-fixed-active-mobile-390x844.png`) — this is generic Markdown-table
+  rendering behavior for any long answer, not something this pass's layout
+  changes introduced or were asked to address.
+
+### Tests
+
+```
+npm run build     →  clean, 8.2s
+npm run test      →  80 files, 1026/1026 passed (1020 prior baseline + 6 new,
+                      all passing — no regression)
+npx eslint src    →  66 problems / 58 errors / 8 warnings — identical
+                      pre-existing baseline, no new errors
+git diff --check  →  clean
+```
+
+New test file: `utils/workspaceReadiness.test.js` — 6 cases covering the
+extracted `computeReadyCount` (selected+ready intersection, ready-but-not-
+selected exclusion, the legacy `.video` fallback, empty/undefined/null
+inputs, selected-but-not-ready exclusion). No new component-render tests —
+same reasoning as the second pass, reconfirmed: this codebase still has no
+React component-render test infrastructure anywhere. Real verification for
+the new `LessonHeader.jsx`/goal-banner/SidebarRight re-skin was the
+screenshot evidence above.
+
+### Files changed this pass
+
+`FE/src/components/Layout/LessonHeader.jsx` (new),
+`FE/src/utils/workspaceReadiness.js` (new),
+`FE/src/utils/workspaceReadiness.test.js` (new),
+`FE/src/components/Layout/MainLayout.jsx`,
+`FE/src/components/Layout/WorkspaceContainer.jsx`,
+`FE/src/components/Layout/ChatArea.jsx`,
+`FE/src/components/Layout/SidebarRight.jsx`,
+`FE/src/components/mindmap/mindmap.css`,
+`FE/src/components/ui/Icon.jsx`,
+`FE/src/index.css`.
+
+### Final status against this round's requirements
+
+- Lesson header (title/count/progress/MindMap+Summary actions) — done.
+- Learning-goal banner — done, real data, gated to avoid the contradiction
+  found above.
+- Next-action strip — done, all three actions real.
+- Source sidebar — audited again; still composes correctly under the new
+  header/banner/strip stack, no restructuring needed.
+- Central grounded-answer workspace — unchanged (already correct), goal
+  banner/strip inserted above it.
+- Contextual light evidence panel — done; MindMap's own Inspector/Evidence
+  Drawer explicitly left dark (different context, protected).
+  Persistent composer — unchanged, still present and reachable in every
+  state/viewport tested.
+- Responsive drawer/sheet behavior — re-verified at all three viewports in
+  both empty and active states; still holds.
+- Colors — no new palette decisions; reused the already-shipped `#126CF2`/
+  `#0C55CC`/`#EAF3FF` tokens throughout.
+- Functional correctness proven with real data, both states, not claimed
+  from source-reading or tests alone.
+
+**Not verified / explicitly open:** the interactive filter/search-typing
+flow and the upload UI's own drag-and-drop path were not separately
+exercised (file input was used programmatically). The `selectedSources`/
+`video_stem` divergence above remains open, named, not fixed.
