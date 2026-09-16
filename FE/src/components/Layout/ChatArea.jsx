@@ -110,10 +110,6 @@ export default function ChatArea({
   // real link, never a dead one; `onOpenSummary` reuses MainLayout's existing
   // workspaceMode switch (same shape as the pre-existing `onSwitchToChat`).
   hasSummary = false, onOpenSummary,
-  // Structural refactor (Learning Canvas next-action strip) — same two
-  // combined switch-or-generate actions LessonHeader uses (MainLayout wires
-  // them once), plus hasMindmap for the strip's enabled/disabled label.
-  hasMindmap = false, onMindmapAction, onSummaryAction,
 }) {
   // Feature Pack A (Research Timeline) — ChatArea never touched Study Context
   // before this; it's the one surface where the user's two most-timeline-
@@ -128,6 +124,9 @@ export default function ChatArea({
   const [menuOpen, setMenuOpen] = useState(false);
   const [notice, setNotice] = useState("");
   const [contextCleared, setContextCleared] = useState(false);
+  // Goal banner collapse (IA pass round 5, item 4) — collapsed by default
+  // once a conversation has an answer, click to re-expand.
+  const [goalExpanded, setGoalExpanded] = useState(false);
   const [jobProgress, setJobProgress] = useState(0);
   const [seenNodes, setSeenNodes] = useState([]);
   const [streamingPreview, setStreamingPreview] = useState("");
@@ -702,9 +701,13 @@ export default function ChatArea({
   return (
     <div className="flex flex-col h-full min-h-0" style={{ background: "var(--bg-base)" }}>
 
-      {/* Conversation toolbar: context indicator + controls (New chat / Clear / Delete) */}
-      <div className="flex items-center gap-2 px-5 sm:px-8 h-9 border-b flex-shrink-0"
-        style={{ borderColor: "var(--border-color)", background: "var(--bg-sidebar)" }}>
+      {/* Conversation toolbar: context indicator + controls (New chat / Clear /
+          Delete). No border/background of its own (IA pass round 5) — it
+          sits directly under LessonHeader's single toolbar border now, so a
+          second border here would double-stack rather than separate
+          anything real. */}
+      <div className="flex items-center gap-2 px-5 sm:px-8 h-8 flex-shrink-0">
+
         {usingContext && (
           <span className="inline-flex items-center gap-1.5 text-caption font-mono text-text-muted">
             <Icon name="MessageSquare" size={12} className="text-accent" />
@@ -754,53 +757,71 @@ export default function ChatArea({
         </div>
       </div>
 
-      {/* Learning Canvas goal banner + next-action strip. Real, derived
+      {/* Goal banner + next action (IA pass round 5, item 4). Real, derived
           content only — no per-user "learning objective" exists in this
           app's data model, so the banner states real readiness instead of
-          an invented goal (docs/VISUAL_IDENTITY_WORKSPACE_REDESIGN.md).
-          Gated to messages.length === 0 (same condition the empty-state
-          hero below already uses) — deliberately NOT "always visible" like
-          the approved mock's static GoalBar: that mock's copy is invented
-          and can never go stale, but this banner's copy is live-derived
-          from selectedSources, which can lag behind reality after a send
-          (a real, pre-existing timing gap — see
-          docs/VISUAL_IDENTITY_WORKSPACE_REDESIGN.md). Showing "Chưa chọn
-          tài liệu nào" directly above an answer that just cited real
-          documents would be actively contradictory, not just cluttered. */}
-      {messages.length === 0 && (
-      <div className="px-5 sm:px-8 pt-4 flex-shrink-0 flex flex-col gap-2.5">
-        <div className="flex items-center gap-3 rounded-[10px] px-4 py-3 min-h-[52px]"
-          style={{ background: "var(--accent-subtle)" }}>
-          <Icon name="Target" size={18} className="text-accent flex-shrink-0" />
-          {selectedSources?.length > 0 ? (
-            <p className="text-small text-text-secondary flex-1">
-              {readyCount}/{selectedSources.length} tài liệu đã chọn sẵn sàng tra cứu.
-              {readyCount < selectedSources.length && " Một số tài liệu vẫn đang lập chỉ mục."}
-            </p>
-          ) : (
-            <p className="text-small text-text-secondary flex-1">
-              Chưa chọn tài liệu nào. Chọn tài liệu bên trái để bắt đầu.
-            </p>
-          )}
-          {!selectedSources?.length && (
+          an invented goal. Compact (44-48px) full form before any question;
+          collapses to a slim single-line row (not hidden entirely — round
+          4's full-hide was a stricter interim fix for a real contradiction:
+          this banner's copy is live-derived from selectedSources, which can
+          lag behind reality right after a send, see
+          docs/VISUAL_IDENTITY_WORKSPACE_REDESIGN.md) once a conversation has
+          an answer, click to re-expand. */}
+      <div className="px-5 sm:px-8 pt-3 flex-shrink-0 flex flex-col gap-2">
+        {messages.length === 0 ? (
+          <div className="flex items-center gap-3 rounded-control px-4 h-11"
+            style={{ background: "var(--accent-subtle)" }}>
+            <Icon name="Target" size={16} className="text-accent flex-shrink-0" />
+            {selectedSources?.length > 0 ? (
+              <p className="text-small text-text-secondary flex-1 truncate">
+                {readyCount}/{selectedSources.length} tài liệu đã chọn sẵn sàng tra cứu.
+                {readyCount < selectedSources.length && " Một số tài liệu vẫn đang lập chỉ mục."}
+              </p>
+            ) : (
+              <p className="text-small text-text-secondary flex-1 truncate">
+                Chưa chọn tài liệu nào.
+              </p>
+            )}
             <button type="button" onClick={onOpenLeft} className="text-small font-medium text-accent flex-shrink-0">
-              Chọn tài liệu
+              {selectedSources?.length > 0 ? "Sửa" : "Chọn tài liệu"}
             </button>
-          )}
-        </div>
-        <div className="flex items-center gap-2 flex-wrap">
-          <button type="button" onClick={focusComposer} className="btn-primary !text-small !py-1.5">
-            <Icon name="Sparkles" size={14} /> Đặt câu hỏi
+          </div>
+        ) : (
+          <button type="button" onClick={() => setGoalExpanded((v) => !v)}
+            className="flex items-center gap-2 rounded-control px-3 h-7 text-caption text-text-muted hover:text-text-secondary transition-colors self-start"
+            aria-expanded={goalExpanded}>
+            <Icon name="Target" size={12} className="text-accent flex-shrink-0" />
+            {readyCount}/{selectedSources?.length || 0} tài liệu
+            <Icon name={goalExpanded ? "ChevronUp" : "ChevronDown"} size={12} />
           </button>
-          <button type="button" onClick={onSummaryAction} className="btn-secondary !text-small !py-1.5">
-            <Icon name="ScrollText" size={14} /> {hasSummary ? "Xem tóm tắt" : "Tóm tắt nội dung"}
-          </button>
-          <button type="button" onClick={onMindmapAction} className="btn-secondary !text-small !py-1.5">
-            <Icon name="Network" size={14} /> {hasMindmap ? "Xem sơ đồ tư duy" : "Tạo sơ đồ tư duy"}
-          </button>
-        </div>
+        )}
+        {messages.length > 0 && goalExpanded && (
+          <div className="flex items-center gap-3 rounded-control px-4 h-11"
+            style={{ background: "var(--accent-subtle)" }}>
+            <p className="text-small text-text-secondary flex-1 truncate">
+              {readyCount}/{selectedSources?.length || 0} tài liệu đã chọn sẵn sàng tra cứu.
+            </p>
+            <button type="button" onClick={onOpenLeft} className="text-small font-medium text-accent flex-shrink-0">Sửa</button>
+          </div>
+        )}
+
+        {/* Next action — ONE contextual button, not a permanent 3-button
+            strip: "Mind Map/Summary mode navigation must not be repeated as
+            next-action buttons" — those two now live only as
+            WorkspaceEmptyState's own CTA inside their own mode (previous
+            commit), never duplicated here. */}
+        {messages.length === 0 && (
+          selectedSources?.length > 0 ? (
+            <button type="button" onClick={focusComposer} className="btn-primary !text-small !py-1.5 self-start">
+              <Icon name="Sparkles" size={14} /> Đặt câu hỏi
+            </button>
+          ) : (
+            <button type="button" onClick={onOpenLeft} className="btn-primary !text-small !py-1.5 self-start">
+              <Icon name="FileStack" size={14} /> Chọn tài liệu
+            </button>
+          )
+        )}
       </div>
-      )}
 
       {/* Transient feedback (New chat / Clear context / Delete history) */}
       {notice && (
@@ -1005,22 +1026,27 @@ export default function ChatArea({
           </div>
         )}
 
-        {/* Khổ hẹp: lề và khoảng cách thu lại, nếu không nút kèm ảnh + nút gửi ăn
-              hết chỗ và khung gõ bị bóp xuống dưới 46px. */}
-        <div className="px-3 sm:px-8 py-3 sm:py-4 flex items-end gap-2 sm:gap-3">
-          {visionReady && (
-            <>
-              <input ref={imageInputRef} type="file" className="hidden"
-                accept={IMAGE_TYPES.join(",")} onChange={handlePickImage} />
-              <button type="button" onClick={() => imageInputRef.current?.click()}
-                disabled={loading || Boolean(pendingReview) || transcribing}
-                className="icon-btn w-11 h-11 flex-shrink-0 disabled:opacity-40"
-                aria-label="Đính kèm ảnh" title="Đính kèm ảnh, hoặc dán thẳng vào ô nhập">
-                <Icon name="ImagePlus" size={17} />
-              </button>
-            </>
-          )}
-          <div className="flex-1 relative">
+        {/* Resting height 56-64px (IA pass round 5, item 5): tightened outer
+            padding, textarea min-height brought closer to the 40-44px send
+            button instead of a taller independent 46px. Attachment button
+            moved INSIDE the same input-surface as the textarea (one shared
+            border, not two separate bordered elements) — "integrate
+            attachment into input area". Max-height capped to ~4 lines
+            (was 140px, roughly 6-7 lines). */}
+        <div className="px-3 sm:px-6 py-2.5 sm:py-3 flex items-end gap-2 sm:gap-3">
+          <div className="flex-1 relative flex items-end input-surface !p-0 gap-1">
+            {visionReady && (
+              <>
+                <input ref={imageInputRef} type="file" className="hidden"
+                  accept={IMAGE_TYPES.join(",")} onChange={handlePickImage} />
+                <button type="button" onClick={() => imageInputRef.current?.click()}
+                  disabled={loading || Boolean(pendingReview) || transcribing}
+                  className="w-9 h-9 my-auto ml-1 flex-shrink-0 rounded-control inline-flex items-center justify-center text-text-muted hover:text-accent hover:bg-surface-hover transition-colors disabled:opacity-40"
+                  aria-label="Đính kèm ảnh" title="Đính kèm ảnh, hoặc dán thẳng vào ô nhập">
+                  <Icon name="ImagePlus" size={17} />
+                </button>
+              </>
+            )}
             <textarea
               ref={textareaRef}
               rows={1}
@@ -1031,7 +1057,7 @@ export default function ChatArea({
               onKeyDown={handleKeyDown}
               onPaste={handlePaste}
               disabled={loading || Boolean(pendingReview) || transcribing}
-              className="w-full input-surface text-body resize-none min-h-[46px] max-h-[140px] disabled:opacity-60"
+              className="w-full bg-transparent outline-none text-body resize-none min-h-[40px] max-h-[112px] px-3 py-2.5 disabled:opacity-60"
               style={{ lineHeight: 1.55 }}
             />
           </div>
@@ -1039,7 +1065,7 @@ export default function ChatArea({
           {loading && !pendingReview ? (
             <button
               onClick={handleCancel}
-              className="btn-danger w-11 h-11 !p-0 rounded-[9px] inline-flex items-center justify-center flex-shrink-0"
+              className="btn-danger w-10 h-10 !p-0 rounded-[9px] inline-flex items-center justify-center flex-shrink-0"
               aria-label="Huỷ truy vấn" title="Huỷ"
             >
               <Icon name="Square" size={15} />
@@ -1048,7 +1074,7 @@ export default function ChatArea({
             <button
               onClick={handleSend}
               disabled={(!input.trim() && !attachedImage) || Boolean(pendingReview) || transcribing}
-              className="btn-primary w-11 h-11 !p-0 rounded-[9px] inline-flex items-center justify-center flex-shrink-0"
+              className="btn-primary w-10 h-10 !p-0 rounded-[9px] inline-flex items-center justify-center flex-shrink-0"
               aria-label="Gửi câu hỏi"
             >
               <Icon name="Send" size={16} strokeWidth={2} />

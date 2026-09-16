@@ -5,8 +5,8 @@
 // (tên lạ → warn DEV + render null, y hệt hành vi cũ với typo).
 import {
   AlertCircle, AlignJustify, Archive, ArchiveRestore, ArrowLeft, ArrowRight, BadgeCheck, Ban, BookOpen,
-  Check, ChevronDown, CircleDashed, Clock, Download, Eraser, EyeOff, Filter,
-  FileStack, FileText, FolderOpen, HelpCircle, Image, ImagePlus, Info, KeyRound, Keyboard, Library, LogOut, Maximize, Menu,
+  Check, ChevronDown, ChevronUp, CircleDashed, Clock, Download, Eraser, EyeOff, Filter,
+  Expand, FileStack, FileText, FolderOpen, HelpCircle, Image, ImagePlus, Info, KeyRound, Keyboard, Library, LogOut, Maximize, Menu,
   MessageCircleQuestion, MessageSquare, MessageSquareText, MessagesSquare, Moon,
   MoreVertical, MousePointerClick, Network, PanelRight, Pencil, Plus, Quote, RotateCcw, Rows3, Scan, ScrollText,
   Search, Send, Spline, Square, Sun, Target, Trash2, TrendingDown, TriangleAlert, Unlink, Upload, UserRound, X,
@@ -15,8 +15,8 @@ import {
 
 const ICONS = {
   AlertCircle, AlignJustify, Archive, ArchiveRestore, ArrowLeft, ArrowRight, BadgeCheck, Ban, BookOpen,
-  Check, ChevronDown, CircleDashed, Clock, Download, Eraser, EyeOff, Filter,
-  FileStack, FileText, FolderOpen, HelpCircle, Image, ImagePlus, Info, KeyRound, Keyboard, Library, LogOut, Maximize, Menu,
+  Check, ChevronDown, ChevronUp, CircleDashed, Clock, Download, Eraser, EyeOff, Filter,
+  Expand, FileStack, FileText, FolderOpen, HelpCircle, Image, ImagePlus, Info, KeyRound, Keyboard, Library, LogOut, Maximize, Menu,
   MessageCircleQuestion, MessageSquare, MessageSquareText, MessagesSquare, Moon,
   MoreVertical, MousePointerClick, Network, PanelRight, Pencil, Plus, Quote, RotateCcw, Rows3, Scan, ScrollText,
   Search, Send, Spline, Square, Sun, Target, Trash2, TrendingDown, TriangleAlert, Unlink, Upload, UserRound, X,

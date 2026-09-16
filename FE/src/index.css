@@ -308,7 +308,14 @@
     color: var(--text-primary);
   }
   .input-surface::placeholder { color: var(--text-muted); }
-  .input-surface:focus {
+  /* :focus-within too — the composer (IA pass round 5) applies this class
+     to a WRAPPER div around the textarea, not the textarea itself
+     (integrating the attach button into the same input surface), so a
+     plain :focus never fires there; :focus-within is a strict superset
+     (also matches a directly-focused element), safe for every other
+     .input-surface consumer that applies the class straight to an
+     <input>/<textarea>. */
+  .input-surface:focus, .input-surface:focus-within {
     border-color: color-mix(in srgb, var(--accent) 55%, transparent);
     box-shadow: 0 0 0 3px color-mix(in srgb, var(--accent) 12%, transparent);
   }

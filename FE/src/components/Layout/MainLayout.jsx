@@ -242,18 +242,6 @@ export default function MainLayout({
     setTimelineOverlayOpen(false);
   }, [onHighlight, panel]);
 
-  // Feature Pack D — Knowledge Dashboard entry point. Deliberately NOT given
-  // the MindMap-mode floating-overlay treatment Timeline got in Feature Pack
-  // B: on the MindMap tab this behaves the same way the pre-existing "Gia sư
-  // AI" button already does (`openTutor`, above) — sets `rightView` without
-  // checking `workspaceMode`, a real no-visible-effect no-op while
-  // SidebarRight is swapped for KnowledgeInspector. That's an existing,
-  // documented rough edge (see docs/FEATURE_PACK_D_REPORT.md), not a new one
-  // this pack introduces or is scoped to fix.
-  const openInsights = useCallback(() => {
-    setRightView("insights");
-    if (panel.drawer) setRightOpen(true); else panel.setCollapsedFor("right", false);
-  }, [panel]);
 
   // Step 10 — Ctrl+/ (hoặc Cmd+/) mở Gia sư AI từ bất cứ đâu trong Workspace.
   useEffect(() => {
@@ -553,7 +541,6 @@ export default function MainLayout({
               onOpenLeft: () => (panel.drawer ? setLeftOpen(true) : panel.setCollapsedFor("left", false)),
               askAboutDraft,
               hasSummary: Boolean(summaryData), onOpenSummary: onSwitchToSummary,
-              hasMindmap: Boolean(mindmapData?.data), onMindmapAction, onSummaryAction,
             }}
             mindmapData={mindmapData}
             summaryData={summaryData}
