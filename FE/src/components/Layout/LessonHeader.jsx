@@ -26,7 +26,19 @@ export default function LessonHeader({
     <div className="flex items-center gap-3 px-4 sm:px-5 h-12 sm:h-[52px] border-b flex-shrink-0 min-w-0"
       style={{ borderColor: "var(--border-color)", background: "var(--bg-sidebar)" }}>
       <div className="min-w-0 flex-1 flex items-center gap-3 overflow-hidden">
-        <span className="font-display text-small font-semibold text-text-primary truncate flex-shrink" title={title}>
+        {/* Round 8 fix: `flex-shrink` alone gives this span a flex-basis of
+            `auto` (its full, unbroken content width — `truncate`'s
+            `white-space: nowrap` means that's the ENTIRE title string, e.g.
+            800px+ for a long real Vietnamese lesson title). Flexbox's
+            shrink algorithm distributes the shrink deficit proportional to
+            each item's flex-basis, and the metadata/progress siblings are
+            pinned `flex-shrink-0` — so a long enough title absorbed nearly
+            ALL of it, collapsing to a few px (effectively invisible)
+            instead of a readable truncated line. `flex-1` (0% basis) makes
+            it shrink from an even, size-appropriate starting point instead
+            — same fix already used for exactly this shape of bug in
+            ChatArea's own suggestion-chip truncation. */}
+        <span className="font-display text-small font-semibold text-text-primary truncate flex-1 min-w-0" title={title}>
           {title}
         </span>
         {hasSelection && (
@@ -77,12 +89,22 @@ export default function LessonHeader({
         })}
       </nav>
 
-      {/* Balances the tab group so it reads as visually centered against
-          the title on the left; chat-specific actions (New chat / kebab)
-          stay owned by ChatArea's own slim action row below this one —
-          lifting that state up here would risk the chat session/history
-          logic for a purely cosmetic gain, not attempted this pass. */}
-      <div className="flex-1 min-w-0" aria-hidden="true" />
+      {/* Balances the tab group so it reads as roughly centered against the
+          title on the left; chat-specific actions (New chat / kebab) stay
+          owned by ChatArea's own slim action row below this one — lifting
+          that state up here would risk the chat session/history logic for
+          a purely cosmetic gain, not attempted this pass.
+          Round 8 fix: this used to be an EQUAL `flex-1` against the title
+          block on the left — with two `flex-1` siblings splitting the
+          leftover width 50/50, a real long Vietnamese lesson title only
+          ever got HALF the row's free space (measured: ~230px of a
+          ~1440px-wide viewport), and once its own metadata/progress-bar
+          siblings ate most of that, the title itself collapsed to a few px
+          — effectively invisible, not a readable truncated line. Capped at
+          a small `max-w-16` (64px) so it still nudges the tabs rightward
+          for rough balance without competing with the title for space;
+          flexbox hands whatever's left past that cap to the title block. */}
+      <div className="flex-1 min-w-0 max-w-16" aria-hidden="true" />
     </div>
   );
 }

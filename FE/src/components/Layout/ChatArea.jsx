@@ -721,7 +721,7 @@ export default function ChatArea({
             scattered rows, and share ONE `gap-2` instead of each carrying
             its own duplicate top padding. */}
         <div className="flex flex-col gap-2 flex-shrink-0">
-          <div className="flex items-center gap-2 h-8 -mx-5 sm:-mx-8 px-5 sm:px-8">
+          <div className="flex items-center gap-2 py-1 -mx-5 sm:-mx-8 px-5 sm:px-8">
             {usingContext && (
               <span className="inline-flex items-center gap-1.5 text-caption font-mono text-text-muted">
                 <Icon name="MessageSquare" size={12} className="text-accent" />
@@ -741,23 +741,30 @@ export default function ChatArea({
                 <Icon name="ScrollText" size={13} /> Xem tóm tắt
               </button>
             )}
+            {/* Round 8 (touch-target pass) — grown from a 32px row-height
+                pill to a real 40px hit target: `!h-10` sets the target, icon
+                bumped 13->18 to stay proportional at the new size (`.pill-
+                action`'s own px-3/gap-1.5 already give it compact spacing,
+                unchanged). This row moved OUT of persistent chrome in round
+                7 (scrolls with content now), so growing it doesn't touch
+                the 108px persistent-chrome measurement at all. */}
             <button
               onClick={handleNewChat} disabled={loading || Boolean(pendingReview)}
-              className="pill-action !py-1 !text-small disabled:opacity-40"
-              title="Bắt đầu cuộc trò chuyện mới">
-              <Icon name="Plus" size={13} /> Chat mới
+              className="pill-action !h-10 !text-small disabled:opacity-40"
+              title="Bắt đầu cuộc trò chuyện mới" aria-label="Bắt đầu cuộc trò chuyện mới">
+              <Icon name="Plus" size={18} /> Chat mới
             </button>
             <div className="relative">
               <button
                 onClick={() => setMenuOpen((v) => !v)} disabled={loading || Boolean(pendingReview)}
-                className="icon-btn w-8 h-8 disabled:opacity-40"
-                aria-label="Tùy chọn cuộc trò chuyện" aria-expanded={menuOpen}>
-                <Icon name="MoreVertical" size={16} />
+                className="icon-btn w-10 h-10 disabled:opacity-40"
+                aria-label="Tùy chọn cuộc trò chuyện" title="Tùy chọn cuộc trò chuyện" aria-expanded={menuOpen}>
+                <Icon name="MoreVertical" size={18} />
               </button>
               {menuOpen && (
                 <>
                   <div className="fixed inset-0 z-10" onClick={() => setMenuOpen(false)} aria-hidden />
-                  <div className="absolute right-0 top-9 z-20 min-w-[190px] rounded-[8px] border py-1 shadow-card-hover"
+                  <div className="absolute right-0 top-11 z-20 min-w-[190px] rounded-[8px] border py-1 shadow-card-hover"
                     style={{ borderColor: "var(--border-color)", background: "var(--bg-elevated)" }}>
                     <button onClick={handleClearContext} className="menu-item">
                       <Icon name="Eraser" size={14} /> Xóa ngữ cảnh
