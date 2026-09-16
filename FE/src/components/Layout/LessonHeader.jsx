@@ -19,21 +19,33 @@ export default function LessonHeader({
   return (
     <div className="flex items-center gap-3 px-4 sm:px-5 h-11 border-b flex-shrink-0 min-w-0"
       style={{ borderColor: "var(--border-color)", background: "var(--bg-sidebar)" }}>
-      <div className="min-w-0 flex-1 flex items-center gap-3">
-        <span className="font-display text-small font-semibold text-text-primary truncate" title={title}>
+      <div className="min-w-0 flex-1 flex items-center gap-3 overflow-hidden">
+        <span className="font-display text-small font-semibold text-text-primary truncate flex-shrink" title={title}>
           {title}
         </span>
         {hasSelection && (
           <>
-            <span className="hidden sm:inline text-caption font-mono text-text-muted flex-shrink-0">
+            {/* This header sits inside a variable-width CENTER column of a
+                3-column layout (left sidebar + this + right Inspector), not
+                the full viewport — Tailwind's breakpoints are viewport-width-
+                based, so `md:`/`lg:` alone under-estimate how cramped this
+                column actually is at e.g. 1024px viewport with both side
+                panels open (~446px real width there, found via screenshot:
+                the progress bar was overlapping the action buttons at
+                exactly that viewport). Pushed to `xl:` so it only appears
+                once there's very likely real room, and wrapped the whole
+                secondary-info group in its own min-w-0/overflow-hidden so
+                if a breakpoint guess is ever still wrong, content clips
+                instead of overlapping the buttons. */}
+            <span className="hidden xl:inline text-caption font-mono text-text-muted flex-shrink-0 whitespace-nowrap">
               {selectedCount} tài liệu đang chọn
             </span>
             {/* Readiness — real, derived from source status, not a fabricated
                 multi-step flow (the prototype's "Bước 2/4" has no equivalent
                 concept in this app's data model). */}
-            <div className="hidden md:flex items-center gap-1.5 flex-shrink-0" title={`${readyCount}/${selectedCount} tài liệu sẵn sàng`}>
+            <div className="hidden xl:flex items-center gap-1.5 flex-shrink-0" title={`${readyCount}/${selectedCount} tài liệu sẵn sàng`}>
               <div className="progress-track w-16"><div className="progress-fill" style={{ width: `${progressPct}%` }} /></div>
-              <span className="text-caption font-mono text-text-muted">{readyCount}/{selectedCount}</span>
+              <span className="text-caption font-mono text-text-muted whitespace-nowrap">{readyCount}/{selectedCount}</span>
             </div>
           </>
         )}
