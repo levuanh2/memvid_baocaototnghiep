@@ -19,7 +19,7 @@ import StudyBreadcrumb from "../study/StudyBreadcrumb";
 import { useStudyContext } from "../../study/useStudyContext";
 import { openCommandPalette } from "../../utils/commandPaletteBus";
 import { useTutorMemory } from "../../study/useTutorMemory";
-import { globalShortcutAction, mindmapRelationAction } from "../../utils/keyboardShortcuts";
+import { globalShortcutAction, mindmapRelationAction, hasVisibleBlockingOverlay } from "../../utils/keyboardShortcuts";
 import { OPEN_SHORTCUTS_EVENT } from "../../utils/shortcutsBus";
 import ShortcutsOverlay from "../shortcuts/ShortcutsOverlay";
 
@@ -277,7 +277,17 @@ export default function MainLayout({
       // "help" is the ONE exception: it must still be able to TOGGLE its own
       // overlay closed while that overlay is the thing open, same self-toggle
       // exception CommandPalette's own Ctrl+K already has for its own modal.
-      if (action !== "help" && document.querySelector('[aria-modal="true"], .me-container')) return;
+      //
+      // Round 9 fix: `.me-container` stays PERMANENTLY in the DOM once a Mind
+      // Map has ever been shown (WorkspaceContainer keeps panes mounted, only
+      // toggling the wrapper's `hidden` class, so ChatArea/mind-elixir never
+      // remount on a mode switch) — a bare existence check therefore matched
+      // it even while hidden, silently blocking every global shortcut
+      // (Alt+C/M/S/T, history back/forward) forever after the first
+      // generation. `hasVisibleBlockingOverlay` (keyboardShortcuts.js)
+      // restricts the guard to an element that's actually on screen.
+      const overlayCandidates = document.querySelectorAll('[aria-modal="true"], .me-container');
+      if (action !== "help" && hasVisibleBlockingOverlay(overlayCandidates)) return;
       e.preventDefault();
       switch (action) {
         case "help": return setShortcutsOpen((v) => !v);

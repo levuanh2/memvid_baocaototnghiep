@@ -1,5 +1,5 @@
 import { describe, it, expect } from "vitest";
-import { SHORTCUT_REGISTRY, globalShortcutAction, mindmapRelationAction } from "./keyboardShortcuts";
+import { SHORTCUT_REGISTRY, globalShortcutAction, mindmapRelationAction, hasVisibleBlockingOverlay } from "./keyboardShortcuts";
 
 const ev = (key, mods = {}) => ({ key, ctrlKey: false, metaKey: false, altKey: false, shiftKey: false, ...mods });
 const input = { tagName: "INPUT", isContentEditable: false };
@@ -78,5 +78,38 @@ describe("mindmapRelationAction", () => {
     const link = { tagName: "A", isContentEditable: false };
     expect(mindmapRelationAction(ev("d"), { activeElement: button })).toBeNull();
     expect(mindmapRelationAction(ev("u"), { activeElement: link })).toBeNull();
+  });
+});
+
+describe("hasVisibleBlockingOverlay", () => {
+  // Round 9 regression: `.me-container` stays permanently in the DOM once a
+  // Mind Map has ever been shown (only its wrapper's `hidden` class toggles),
+  // so a bare existence check silently ate every global shortcut forever
+  // after the first generation. This must treat a hidden `.me-container` as
+  // NOT blocking, and a genuinely visible one (or a real open modal) as
+  // blocking.
+  const hiddenMeContainer = { offsetParent: null };
+  const visibleMeContainer = { offsetParent: {} };
+  const visibleModal = { offsetParent: {} };
+
+  it("false when the only match is a hidden .me-container (the exact regression)", () => {
+    expect(hasVisibleBlockingOverlay([hiddenMeContainer])).toBe(false);
+  });
+
+  it("true when .me-container is actually visible", () => {
+    expect(hasVisibleBlockingOverlay([visibleMeContainer])).toBe(true);
+  });
+
+  it("true when a real modal is visible even if a hidden .me-container sorts first", () => {
+    // Guards against checking only the FIRST querySelectorAll match —
+    // .me-container commonly sits earlier in DOM order (center column)
+    // than a portal-rendered modal.
+    expect(hasVisibleBlockingOverlay([hiddenMeContainer, visibleModal])).toBe(true);
+  });
+
+  it("false for an empty or missing match list", () => {
+    expect(hasVisibleBlockingOverlay([])).toBe(false);
+    expect(hasVisibleBlockingOverlay(null)).toBe(false);
+    expect(hasVisibleBlockingOverlay(undefined)).toBe(false);
   });
 });
