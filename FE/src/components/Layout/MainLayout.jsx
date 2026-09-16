@@ -65,6 +65,7 @@ export default function MainLayout({
   // a modal — see SidebarRight.jsx's two small forwarding effects.
   const [workspaceMode, setWorkspaceMode] = useState(initialWorkspaceMode);
   const [mindmapData, setMindmapData] = useState(null);   // { data, onRegenerate, regenerating } | null
+  const hasMindmap = Boolean(mindmapData?.data);
   const [summaryData, setSummaryData] = useState(null);   // summary record | null
   // Auto-switch to a newly-populated tab ONCE (null → non-null), not on every
   // later update (Save/regenerate) — those must not yank the user off Chat.
@@ -205,19 +206,20 @@ export default function MainLayout({
   }, [summaryData, openArtifact]);
 
   // Feature Pack B (Cross Navigation) — real dead end found: while on the
-  // MindMap tab, the right column shows ONLY KnowledgeInspector (see the
-  // `workspaceMode === "mindmap"` swap below); SidebarRight, and with it the
-  // Research Timeline tab, is entirely unreachable. Everywhere else `rightView
-  // = "timeline"` already works (SidebarRight is what's showing). This is the
-  // ONE case that needs an actual overlay — a floating panel ON TOP of the
-  // Inspector, not a replacement for it (Inspector must stay mounted/visible
-  // underneath, not lose its own state).
+  // MindMap tab WITH a map loaded, the right column shows ONLY
+  // KnowledgeInspector (see the `workspaceMode === "mindmap" && hasMindmap`
+  // swap below); SidebarRight, and with it the Research Timeline tab, is
+  // unreachable. Everywhere else `rightView = "timeline"` already works
+  // (SidebarRight is what's showing — including MindMap mode with NO map
+  // yet, round 5: SidebarRight shows its own generator there, not
+  // KnowledgeInspector). This is the ONE case that needs an actual overlay —
+  // a floating panel ON TOP of the Inspector, not a replacement for it.
   const [timelineOverlayOpen, setTimelineOverlayOpen] = useState(false);
   const openTimeline = useCallback(() => {
-    if (workspaceMode === "mindmap") { setTimelineOverlayOpen(true); return; }
+    if (workspaceMode === "mindmap" && hasMindmap) { setTimelineOverlayOpen(true); return; }
     setRightView("timeline");
     if (panel.drawer) setRightOpen(true); else panel.setCollapsedFor("right", false);
-  }, [workspaceMode, panel]);
+  }, [workspaceMode, hasMindmap, panel]);
   useEffect(() => {
     if (!timelineOverlayOpen) return;
     const onKey = (e) => { if (e.key === "Escape") setTimelineOverlayOpen(false); };
@@ -592,10 +594,18 @@ export default function MainLayout({
             >
               {/* Workspace architecture — exactly ONE Inspector, ONE SidebarRight,
                   both ALWAYS mounted (CSS `hidden`, never conditional JSX) so
-                  neither remounts when `workspaceMode` changes. MindMap mode shows
-                  the Inspector; Chat/Summary keep SidebarRight's evidence/tutor
-                  tabs (unrelated to node selection, unaffected by this refactor). */}
-              <div className={workspaceMode === "mindmap" ? "h-full" : "hidden h-full"}>
+                  neither remounts when `workspaceMode` changes. MindMap mode
+                  shows KnowledgeInspector ONLY once a map actually exists —
+                  before that, WorkspaceEmptyState's "Tạo sơ đồ tư duy" CTA
+                  calls onMindmapAction, which (no map yet) bounces to
+                  SidebarRight's own generator via openArtifact(); found via
+                  a live screenshot (round 5 QA) that the CTA was a complete
+                  no-op with the old `workspaceMode === "mindmap"` condition
+                  alone, because SidebarRight — the panel that CTA opens —
+                  was hidden in favor of an empty KnowledgeInspector the
+                  whole time it mattered. Chat/Summary keep SidebarRight's
+                  evidence/tutor tabs as before. */}
+              <div className={workspaceMode === "mindmap" && hasMindmap ? "h-full" : "hidden h-full"}>
                 <KnowledgeInspector {...inspectorProps} />
                 {/* Feature Pack B — floating OVER the Inspector, not replacing
                     it (Inspector stays mounted/visible underneath, keeps its
@@ -640,7 +650,7 @@ export default function MainLayout({
                   </>
                 )}
               </div>
-              <div className={workspaceMode === "mindmap" ? "hidden h-full" : "h-full"}>
+              <div className={workspaceMode === "mindmap" && hasMindmap ? "hidden h-full" : "h-full"}>
                 <SidebarRight
                   selectedSources={selectedSources}
                   evidence={evidence}

@@ -17,6 +17,7 @@ import { nodeLabel, processCitations, parseCiteHref, normStem, citeKey } from ".
 import { pickImageFromClipboard, downscaleImage, transcribeImage, getVisionStatus, buildQuestionWithImage, IMAGE_TYPES } from "../../utils/chatImage";
 import { QUERY_SSE_ERR_FALLBACK, ensureErrMsg, pickQueryDisplayText, sseErrorToMessage } from "../../utils/queryText";
 import { computeReadyCount } from "../../utils/workspaceReadiness";
+import { computeNextAction } from "../../utils/nextAction";
 
 // ── Quick question chips (fill the composer; functional, not decorative) ──
 // Generic fallback — used only when no source is selected yet (nothing to name).
@@ -174,6 +175,7 @@ export default function ChatArea({
   // utils/workspaceReadiness.js (LessonHeader/WorkspaceContainer use the
   // same one, was duplicated inline in both places before).
   const readyCount = useMemo(() => computeReadyCount(sources, selectedSources), [sources, selectedSources]);
+  const nextAction = computeNextAction({ messagesCount: messages.length, selectedCount: selectedSources?.length || 0 });
   const focusComposer = useCallback(() => textareaRef.current?.focus(), []);
   // Feature epic M1 (Multi-Document Intelligence, mục 2) — names the real
   // contributing documents for a small set, same stem->filename resolution
@@ -809,17 +811,18 @@ export default function ChatArea({
             strip: "Mind Map/Summary mode navigation must not be repeated as
             next-action buttons" — those two now live only as
             WorkspaceEmptyState's own CTA inside their own mode (previous
-            commit), never duplicated here. */}
-        {messages.length === 0 && (
-          selectedSources?.length > 0 ? (
-            <button type="button" onClick={focusComposer} className="btn-primary !text-small !py-1.5 self-start">
-              <Icon name="Sparkles" size={14} /> Đặt câu hỏi
-            </button>
-          ) : (
-            <button type="button" onClick={onOpenLeft} className="btn-primary !text-small !py-1.5 self-start">
-              <Icon name="FileStack" size={14} /> Chọn tài liệu
-            </button>
-          )
+            commit), never duplicated here. Decision pulled into a real,
+            tested pure function (utils/nextAction.js) instead of an inline
+            ternary. */}
+        {nextAction === "ask-question" && (
+          <button type="button" onClick={focusComposer} className="btn-primary !text-small !py-1.5 self-start">
+            <Icon name="Sparkles" size={14} /> Đặt câu hỏi
+          </button>
+        )}
+        {nextAction === "select-sources" && (
+          <button type="button" onClick={onOpenLeft} className="btn-primary !text-small !py-1.5 self-start">
+            <Icon name="FileStack" size={14} /> Chọn tài liệu
+          </button>
         )}
       </div>
 

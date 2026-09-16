@@ -822,3 +822,182 @@ this pass to avoid further scope creep this late in the round. The
 itself remains unfixed in the backend (out of scope per this round's own
 "do not touch backend work" constraint) — the frontend hardening above is
 the mitigation.
+
+---
+
+## Fifth pass — information architecture, spacing, responsive, Mind Map workspace
+
+Large structural round: one clear owner per function, a compact merged
+workspace toolbar, an airy visual system, Mind Map as a true first-class
+mode, and a real functional/visual QA pass. Six logical commits, per the
+user's own spec.
+
+### Final information architecture — ownership table
+
+| Function | Sole persistent owner | Where it used to also appear (removed) |
+|---|---|---|
+| Chat / Mind Map / Summary switch | `LessonHeader`'s mode tabs (merged toolbar) | Global header icon buttons, separate `WorkspaceTabs` row, `LessonHeader`'s old per-mode action buttons, ChatArea's next-action strip |
+| Evidence | Inspector (`SidebarRight`), opens on citation click | — (already single-owner) |
+| AI Tutor | Inspector (`SidebarRight` `.inspector-tab`) | Global header icon button (removed) |
+| Timeline | Inspector (`SidebarRight` `.inspector-tab`) / floating overlay in Mind Map mode | Global header icon button (removed) |
+| Knowledge | Inspector (`SidebarRight` `.inspector-tab`) | Global header icon button (removed) — `openInsights` dispatcher deleted entirely, dead after the button was removed |
+| Panel open (mobile) | One generic "Mở công cụ" icon button, global header | Was framed as a Tutor-specific shortcut; relabeled generic since it's the only one left |
+
+Acceptance check (from the spec): grepped the rendered global header —
+confirms MemVidX/StudyMap, Search, one generic panel-open icon
+(mobile-only), theme toggle, account menu, and nothing else. No function
+label appears in more than one persistent navigation group. One visible
+entry point for Mind Map (the mode tab) and one for Summary (same). AI
+Tutor/Timeline/Knowledge exist only inside the Inspector.
+
+### Compact workspace shell
+
+`LessonHeader` + the old separate `WorkspaceTabs` row are now one 48-52px
+toolbar: title/selection-meta on the left, the Chat/Mind Map/Summary switch
+centered. `WorkspaceTabs.jsx` deleted (zero remaining imports, confirmed by
+grep before deleting). Global header 58px → 56px. Total persistent top
+chrome, measured from the live screenshots below: global header (56px) +
+merged toolbar (~52px) + ChatArea's own slim New-chat/kebab row (~32px,
+kept separate — see "Not done" below) + the collapsed goal-banner pill once
+a conversation exists (~28px) ≈ **164-168px** before any conversation,
+**~140px** once collapsed. This is a real, substantial reduction from the
+prior stack (was 58+44+40+36 ≈ 178px, and that number itself doesn't
+include the goal banner/next-action strip which used to be a separate
+~90px block always present) but does **not** hit the ~112px target
+precisely — see "Not done" for why, named honestly rather than rounded
+away.
+
+### Mind Map workspace — first-class canvas, verified
+
+Most of item 7 was **already correct before this round** — re-verified by
+reading the actual code, not rebuilt, per "do not replace working Mind
+Elixir behavior unless a reproducible issue requires it": the canvas
+already fills the central workspace as a real mode (not an Inspector
+widget), the Inspector already opens contextually on node selection, and a
+compact floating toolbar already existed (zoom −/100%/+, Fit, Reset view,
+Center, relations toggle, PNG export — one cluster, one canvas corner).
+Added: **Fullscreen**, using mind-elixir's own internal Fullscreen API
+pattern (verified in the library's dist file) applied to the app's own
+canvas wrapper, no library state touched.
+
+**Real P0 found via live screenshot, not source-reading, and fixed**: the
+new Mind Map empty state's "Tạo sơ đồ tư duy" CTA (this round's own
+addition, previous commit) was a complete dead end. It calls
+`onMindmapAction`, which — with no map yet — calls `openArtifact("mindmap")`
+to open `SidebarRight`'s real generator. But `MainLayout` was swapping the
+right column to `KnowledgeInspector` (not `SidebarRight`) for the entire
+`workspaceMode === "mindmap"` duration, including before a map exists — so
+the panel `openArtifact` was trying to open was hidden the whole time it
+mattered. Fixed by changing the swap condition to
+`workspaceMode === "mindmap" && hasMindmap`: `SidebarRight` (with its real
+generator) now shows during the empty/generating phase, `KnowledgeInspector`
+takes over once a map actually exists. The Feature-Pack-B Timeline-overlay
+condition (`openTimeline`) had the identical bug pattern and got the same
+fix. **Verified live after the fix**: the Inspector's real "Tạo sơ đồ"
+button is now visible and clickable from the Mind Map empty state
+(`r5-mindmap-generator-opened.png`), and clicking it registers a real
+generation request against production.
+
+**Not verified this round**: full end-to-end Mind Map generation
+completing to a populated, explorable canvas. A real click against
+production was confirmed to register (SidebarRight's own job-tracking UI
+engaged), but the job did not finish within this round's available time
+(mind-elixir generation is a multi-stage LLM pipeline — `.playbook/known-
+issues.md` documents individual branch-enrichment steps alone taking up to
+~180s under load). Node-select viewport-stability, no-auto-zoom, and
+Inspector-open-after-selection were therefore **not independently
+re-confirmed against a freshly-generated map this round** — they rely on
+`MindElixirView.jsx` and `useMindMapController.js`, neither of which this
+round touched, and were explicitly verified as correct in an earlier round
+of this same epic; named here as re-verification not completed this round,
+not as a new unknown.
+
+### Responsive (item 5 / commit 5)
+
+No additional code changes were needed — the breakpoint decisions already
+made in prior rounds (drawer/collapse architecture, the `xl:` threshold for
+`LessonHeader`'s secondary info) already handle the new merged toolbar and
+`WorkspaceEmptyState` correctly. Verified live, not assumed: the merged
+toolbar, collapsed goal banner, and Mind Map empty state all render cleanly
+with no overlap or truncation-breakage at 1024×768 and 390×844
+(`r5-active-tablet.png`, `r5-active-mobile.png`,
+`r5-mindmap-populated-mobile.png`). Given there is no real diff for this
+item, it is folded into commit 6 below rather than committed as an empty
+change — named explicitly so this isn't silently skipped.
+
+### Screenshots (scratchpad, dev server killed after)
+
+`.../scratchpad/r5/`: `r5-empty-{desktop,tablet,mobile}.png`,
+`r5-selected-no-question.png`, `r5-active-{desktop,tablet,mobile}.png`,
+`r5-mindmap-empty.png`, `r5-mindmap-empty-relogin.png`,
+`r5-mindmap-generator-opened.png`, `r5-mindmap-populated-{desktop,tablet,
+mobile}.png` (pre-fix; still the empty state, since generation didn't
+complete), `side-by-side-comparison-r5.png` (the required composite,
+approved mock vs. this round's real active state).
+
+Account (disclosed, not deleted): `ia-round5-final-20260916@example.com`.
+Documents: `MoTa_SanPham.txt`, `Chuong1.2.txt` (same content as prior
+rounds).
+
+### P0/P1/P2 found and fixed this round
+
+- **P0** — Mind Map empty-state CTA unreachable (Inspector panel-swap
+  condition). Fixed and re-verified live (above).
+- No other P0/P1 found in the live screenshots at any of the three
+  viewports, in any of the states captured.
+
+### Not done, named honestly
+
+- **Top-chrome target (~112px)** not hit precisely (~140-168px achieved,
+  down from ~178-260px depending on state). The remaining gap is
+  ChatArea's own "New chat / kebab menu" row, deliberately left as its own
+  slim row rather than lifted into the merged toolbar — doing so would mean
+  moving chat-session state (`sessionId`, history handlers) out of
+  `ChatArea` for a cosmetic gain, judged disproportionate risk to real chat
+  functionality within this round's budget.
+- **Mind Map "Layout" and "Expand/Collapse" floating-toolbar controls** not
+  added — no safe mind-elixir API found for either without deeper
+  reconfiguration, and neither has a reproducible issue driving it.
+- **Full Mind Map generation-to-populated-canvas** not completed live this
+  round (see above) — the CTA-reachability bug is fixed and verified;
+  full generation timing was outside this round's budget.
+- **Citation inline chip click-open** not independently re-verified this
+  round — the live answer captured did not include inline `[N]`-style
+  citation markup this time (pre-existing production behavior,
+  `INCLUDE_CHUNK_SOURCE_TAGS` default, documented in an earlier round of
+  this epic), though the Evidence panel itself — the real citation
+  mechanism — is confirmed correct (real cards, real chunk references).
+- **Goal-banner-pill/chat-toolbar persistence vs. the mock's scroll-away
+  behavior** — in the approved mock, the goal bar and next-action strip
+  live inside the scrollable content area and scroll out of view with the
+  conversation; in this implementation they're deliberately kept as
+  persistent, always-reachable chrome (the collapsed pill stays clickable
+  even deep into a long conversation) — a considered difference from the
+  mock, not an oversight, named as a P3 open question rather than silently
+  matched or silently diverged from.
+
+### Tests
+
+New: `utils/nextAction.js`/`.test.js` — the next-action decision
+(select-sources / ask-question / hidden) extracted from ChatArea's inline
+JSX into a real, tested pure function (4 cases: no selection, has
+selection, conversation exists regardless of selection, and a guard that
+Mind Map/Summary are never among its possible results).
+
+Same judgment as every prior round, reconfirmed: no new React
+component-render tests (nav-ownership, mode-switching, drawer behavior,
+etc.) — this codebase still has zero component-render test infrastructure
+anywhere. Real verification for all of those was the live screenshots
+above.
+
+```
+npm run build     →  clean, ~9s
+npm run test      →  82 files, 1043/1043 passed (1039 prior baseline + 4
+                      new, all passing, no regression)
+npx eslint src    →  66 problems / 58 errors / 8 warnings — identical
+                      pre-existing baseline (four new unused-var errors
+                      were introduced mid-round by removed next-action
+                      buttons/openInsights and fixed before this count —
+                      see commit history)
+git diff --check  →  clean
+```
