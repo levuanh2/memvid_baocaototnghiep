@@ -171,16 +171,31 @@ html.dark .me-container { --mm-relation: #7e90c4; }
 }
 
 /* ═══════════════════════════════════════════════════
-   Sprint F — the graphite register. Knowledge Inspector,
-   Evidence Drawer, and the right sidebar are permanently
-   dark (see index.css's --surface-contrast/--on-contrast:
-   declared once, no html.dark override — the reader
-   focuses on paper, the tools stay on graphite, regardless
-   of which reading theme is active).
+   Sprint F — the graphite register. Knowledge Inspector and
+   Evidence Drawer (both MindMap-scoped overlays — MindMap's
+   own behavior/treatment, explicitly preserved) are
+   permanently dark (see index.css's --surface-contrast/
+   --on-contrast: declared once, no html.dark override — the
+   reader focuses on paper, the MindMap tools stay on
+   graphite, regardless of which reading theme is active).
 
-   Mechanism: override the TAILWIND UTILITY CLASSES these
-   components already use (`.text-text-primary`, `.border-
-   border`, etc. — real class names Tailwind generates from
+   Structural refactor (Learning Canvas): `.sidebar-right` —
+   the persistent /app workspace Inspector (Evidence/Tutor/
+   Timeline/Knowledge) — is REMOVED from this register. It's
+   now a light contextual panel like the rest of the
+   workspace (SidebarRight.jsx's own background changed from
+   --surface-contrast to --bg-sidebar to match); its former
+   graphite overrides and their evidence-frame "give the paper
+   look back" exception are both gone because neither is
+   needed once the panel itself is already paper. All of its
+   functionality (which tab is open, generation, citations,
+   navigation) is unchanged — this is a re-skin, not a
+   behavior change.
+
+   Mechanism (Knowledge Inspector / Evidence Drawer only, now):
+   override the TAILWIND UTILITY CLASSES these components
+   already use (`.text-text-primary`, `.border-border`, etc. —
+   real class names Tailwind generates from
    `colors.text.primary`/`colors.border`), scoped under each
    graphite container by selector specificity. This reaches
    every consumer of those classes without editing any JSX,
@@ -196,69 +211,54 @@ html.dark .me-container { --mm-relation: #7e90c4; }
    directly and are unaffected either way).
 ═══════════════════════════════════════════════════ */
 .knowledge-inspector,
-.evidence-drawer,
-.sidebar-right {
+.evidence-drawer {
   --accent: var(--contrast-focus);
 }
 .knowledge-inspector .text-text-primary,
-.evidence-drawer .text-text-primary,
-.sidebar-right .text-text-primary { color: var(--on-contrast); }
+.evidence-drawer .text-text-primary { color: var(--on-contrast); }
 .knowledge-inspector .text-text-secondary,
 .evidence-drawer .text-text-secondary,
-.sidebar-right .text-text-secondary,
 .knowledge-inspector .text-text-muted,
-.evidence-drawer .text-text-muted,
-.sidebar-right .text-text-muted { color: var(--on-contrast-muted); }
+.evidence-drawer .text-text-muted { color: var(--on-contrast-muted); }
 .knowledge-inspector .border-border,
-.evidence-drawer .border-border,
-.sidebar-right .border-border { border-color: var(--contrast-border); }
+.evidence-drawer .border-border { border-color: var(--contrast-border); }
 .knowledge-inspector .icon-btn,
-.evidence-drawer .icon-btn,
-.sidebar-right .icon-btn {
+.evidence-drawer .icon-btn {
   background: transparent;
   border-color: var(--contrast-border);
   color: var(--on-contrast-muted);
 }
 .knowledge-inspector .icon-btn:hover,
-.evidence-drawer .icon-btn:hover,
-.sidebar-right .icon-btn:hover {
+.evidence-drawer .icon-btn:hover {
   border-color: var(--contrast-focus);
   color: var(--on-contrast);
 }
 .knowledge-inspector .icon-btn:disabled,
-.evidence-drawer .icon-btn:disabled,
-.sidebar-right .icon-btn:disabled { color: var(--on-contrast-muted); }
+.evidence-drawer .icon-btn:disabled { color: var(--on-contrast-muted); }
 
 /* Evidence/citation cards stay paper — revert the overrides above for
    anything inside `.evidence-frame` (one selector-specificity level deeper
    always beats the panel-wide rules, regardless of source order). */
 .knowledge-inspector .evidence-frame,
-.evidence-drawer .evidence-frame,
-.sidebar-right .evidence-frame {
+.evidence-drawer .evidence-frame {
   --accent: var(--seal);
 }
 .knowledge-inspector .evidence-frame .text-text-primary,
-.evidence-drawer .evidence-frame .text-text-primary,
-.sidebar-right .evidence-frame .text-text-primary { color: var(--text-primary); }
+.evidence-drawer .evidence-frame .text-text-primary { color: var(--text-primary); }
 .knowledge-inspector .evidence-frame .text-text-secondary,
 .evidence-drawer .evidence-frame .text-text-secondary,
-.sidebar-right .evidence-frame .text-text-secondary,
 .knowledge-inspector .evidence-frame .text-text-muted,
-.evidence-drawer .evidence-frame .text-text-muted,
-.sidebar-right .evidence-frame .text-text-muted { color: var(--text-muted); }
+.evidence-drawer .evidence-frame .text-text-muted { color: var(--text-muted); }
 .knowledge-inspector .evidence-frame .border-border,
-.evidence-drawer .evidence-frame .border-border,
-.sidebar-right .evidence-frame .border-border { border-color: var(--border-color); }
+.evidence-drawer .evidence-frame .border-border { border-color: var(--border-color); }
 .knowledge-inspector .evidence-frame .icon-btn,
-.evidence-drawer .evidence-frame .icon-btn,
-.sidebar-right .evidence-frame .icon-btn {
+.evidence-drawer .evidence-frame .icon-btn {
   background: var(--bg-card);
   border-color: var(--border-color);
   color: var(--text-secondary);
 }
 .knowledge-inspector .evidence-frame .icon-btn:hover,
-.evidence-drawer .evidence-frame .icon-btn:hover,
-.sidebar-right .evidence-frame .icon-btn:hover {
+.evidence-drawer .evidence-frame .icon-btn:hover {
   border-color: var(--accent);
   color: var(--accent);
 }

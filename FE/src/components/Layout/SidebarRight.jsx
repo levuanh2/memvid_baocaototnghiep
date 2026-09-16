@@ -641,7 +641,7 @@ export default function SidebarRight({
 
   // ── Render ────────────────────────────────────────
   return (
-    <div className="sidebar-right flex flex-col h-full overflow-hidden transition-theme" style={{ background: "var(--surface-contrast)" }}>
+    <div className="sidebar-right flex flex-col h-full overflow-hidden transition-theme" style={{ background: "var(--bg-sidebar)" }}>
 
       {/* Header — bốn view của MỘT cột: Bằng chứng / Gia sư AI / Dòng thời
           gian / Kiến thức. Visual Identity Reset: demoted from `.pill-tab`

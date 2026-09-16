@@ -61,9 +61,11 @@
     --forest: #1F4033;
     --bronze: #A06A3B;
 
-    /* Sprint F — the graphite register (Inspector / Evidence Drawer / right
-       sidebar). Declared ONCE, here, with NO redefinition in the `html.dark`
-       block below — that's what makes it a permanent register rather than a
+    /* Sprint F — the graphite register (Knowledge Inspector / Evidence
+       Drawer, both MindMap-scoped; the persistent /app workspace's
+       SidebarRight left this register in the structural refactor pass, see
+       mindmap.css's own comment there). Declared ONCE, here, with NO
+       redefinition in the `html.dark` block below — that's what makes it a permanent register rather than a
        dark-mode variant: these values are the SAME regardless of which
        reading theme is active, verified by the fact that nothing below
        redeclares them. Warm graphite, not black — distinct from BOTH the
@@ -359,12 +361,16 @@
      `.pill-tab` — matches the global header's equivalent shortcut buttons
      (`.pill-action`, border-on-hover-only), so the same feature doesn't
      read as two different weights of control depending on where it's
-     clicked from. See docs/VISUAL_IDENTITY_WORKSPACE_REDESIGN.md. */
+     clicked from. See docs/VISUAL_IDENTITY_WORKSPACE_REDESIGN.md.
+     Structural refactor: now on the light surface (SidebarRight left the
+     graphite register — see mindmap.css) — colors switched from the
+     graphite-tuned on-contrast and contrast-focus tokens to the standard
+     light-surface text-muted / text-primary / accent tokens. */
   .inspector-tab {
     @apply inline-flex items-center gap-1.5 px-2.5 py-1.5 text-[13px] font-semibold transition-colors relative;
     background: transparent;
     border: none;
-    color: var(--on-contrast-muted);
+    color: var(--text-muted);
   }
   .inspector-tab::after {
     content: '';
@@ -376,19 +382,15 @@
     border-radius: 2px 2px 0 0;
     background: transparent;
   }
-  .inspector-tab:hover { color: var(--on-contrast); }
+  .inspector-tab:hover { color: var(--text-primary); }
   .inspector-tab.pill-tab-active {
     background: transparent;
     border-color: transparent;
-    color: var(--on-contrast);
+    color: var(--text-primary);
   }
-  /* --contrast-focus (bronze), not --accent — the graphite surface fails
-     contrast against forest (measured 1.36:1, see --contrast-focus's own
-     comment above); bronze is the pre-verified token for text/rings on
-     this specific surface (6.14:1). */
-  .inspector-tab.pill-tab-active::after { background: var(--contrast-focus); }
+  .inspector-tab.pill-tab-active::after { background: var(--accent); }
   .inspector-tab:focus-visible {
-    outline: 2px solid var(--contrast-focus);
+    outline: 2px solid var(--accent);
     outline-offset: 2px;
     transition: none;
   }
