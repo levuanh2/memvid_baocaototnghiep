@@ -55,13 +55,19 @@ function findByText(root, text) {
 }
 
 describe("ChatArea compact context row", () => {
-  it("shows exactly one visible 'Chọn nguồn' action in the empty state, and no duplicate 'Chọn tài liệu'/'Sửa' banner button", async () => {
+  it("removes redundant 'Chọn nguồn' text button on desktop when sidebar is visible and keeps compact icon for drawer", async () => {
     await renderChatArea();
+    // Desktop Chat has no redundant textual "Chọn nguồn" CTA button
     const matches = findByText(container, "Chọn nguồn");
-    expect(matches.length).toBe(1);
-    // the old blue goal banner's own action button (removed this round).
+    expect(matches.length).toBe(0);
+    // Old blue banner buttons remain gone
     expect(findByText(container, "Chọn tài liệu").length).toBe(0);
     expect(findByText(container, "Sửa").length).toBe(0);
+    // Compact source icon button exists for tablet/mobile drawer
+    const sourceIconBtn = container.querySelector('button[aria-label="Mở thư mục nguồn"]');
+    expect(sourceIconBtn).toBeTruthy();
+    expect(sourceIconBtn.className).toMatch(/(^|\s)w-10(\s|$)/);
+    expect(sourceIconBtn.className).toMatch(/(^|\s)h-10(\s|$)/);
   });
 
   it("context row is a single flex-shrink-0 h-12 (48px) row directly under mount, with real >=40px controls", async () => {
@@ -73,8 +79,8 @@ describe("ChatArea compact context row", () => {
     // scrollable message area, not scrolled-away in-flow chrome).
     expect(row.parentElement.firstElementChild).toBe(row);
 
-    const chonNguon = findByText(row, "Chọn nguồn")[0];
-    expect(chonNguon.className).toMatch(/(^|\s)!?h-10(\s|$)/);
+    const sourceBtn = row.querySelector('button[aria-label="Mở thư mục nguồn"]');
+    expect(sourceBtn.className).toMatch(/(^|\s)h-10(\s|$)/);
     const newChatBtn = row.querySelector('button[aria-label="Cuộc trò chuyện mới"]');
     expect(newChatBtn.className).toMatch(/(^|\s)w-10(\s|$)/);
     expect(newChatBtn.className).toMatch(/(^|\s)h-10(\s|$)/);

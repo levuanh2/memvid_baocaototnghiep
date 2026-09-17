@@ -102,7 +102,7 @@ export default function MindElixirView({ data, onRegenerate, regenerating, contr
   // Banner ở lại tới khi tự đóng hoặc tới lần thao tác sau.
   const [errorMsg, setErrorMsg] = useState(null);
   const [inspectorOpen, setInspectorOpen] = useState(false);
-  const [overflowOpen, setOverflowOpen] = useState(false);
+  const [contextOverflowOpen, setContextOverflowOpen] = useState(false);
   const [mapSelectorOpen, setMapSelectorOpen] = useState(false);
 
   const degraded = Boolean(data?.generator?.degraded);
@@ -410,7 +410,7 @@ export default function MindElixirView({ data, onRegenerate, regenerating, contr
           the canvas itself (below); this row now holds only what's genuinely
           page-identity: kicker, title, dirty flag, Lưu. Quieter by
           subtraction, not by re-styling what stays. */}
-      <div className="flex flex-wrap items-center gap-2 px-3 py-2 border-b flex-shrink-0"
+      <div className="hidden flex flex-wrap items-center gap-2 px-3 py-2 border-b flex-shrink-0"
         style={{ borderColor: "var(--border-color)", background: "var(--bg-sidebar)" }}>
         <div className="min-w-0">
           <div className="font-mono text-metadata uppercase" style={{ color: "var(--text-secondary)" }}>
@@ -479,9 +479,24 @@ export default function MindElixirView({ data, onRegenerate, regenerating, contr
           {degraded ? "Thiếu liên kết" : "Đã kiểm tra"}
         </span>
         <button type="button" className="mm-context-link" onClick={onRegenerate} disabled={regenerating || generating}>Tạo lại</button>
-        <span className="mm-saved-status"><Icon name="Check" size={14} /> Đã lưu</span>
-        <button type="button" className="mm-overflow-trigger" aria-expanded={overflowOpen} aria-haspopup="menu"
-          onClick={() => setOverflowOpen((v) => !v)} aria-label="Thêm tùy chọn" title="Thêm tùy chọn"><Icon name="MoreVertical" size={18} /></button>
+        <span className={`mm-saved-status ${dirty ? "is-dirty" : ""}`}>
+          <Icon name={dirty ? "Pencil" : "Check"} size={14} /> {dirty ? "Chưa lưu" : "Đã lưu"}
+        </span>
+        <div className="mm-toolbar-menu-wrap">
+          <button type="button" className="mm-overflow-trigger" aria-expanded={contextOverflowOpen} aria-haspopup="menu"
+            onClick={() => setContextOverflowOpen((v) => !v)} aria-label="Thêm tùy chọn" title="Thêm tùy chọn"><Icon name="MoreVertical" size={18} /></button>
+          {contextOverflowOpen && (
+            <div className="mm-toolbar-menu" role="menu">
+              {data?.id && data.id !== "preview" && !data.generating && (
+                <button role="menuitem" onClick={handleSave} disabled={!dirty || saving}><Icon name="Save" size={14} /> Lưu sơ đồ</button>
+              )}
+              <button role="menuitem" onClick={resetView}><Icon name="RotateCcw" size={14} /> Đặt lại khung nhìn</button>
+              <button role="menuitem" onClick={() => mindRef.current?.toCenter()}><Icon name="Maximize" size={14} /> Căn giữa</button>
+              <button role="menuitem" onClick={() => setShowRelations((v) => !v)} aria-pressed={showRelations}><Icon name="Spline" size={14} /> {showRelations ? "Ẩn quan hệ" : "Hiện quan hệ"}</button>
+              <button role="menuitem" onClick={handleExportPng}><Icon name="Download" size={14} /> Xuất PNG</button>
+            </div>
+          )}
+        </div>
       </div>
       {/* Generating banner — nút Huỷ ngay trong toolbar */}
       {generating && (
@@ -505,7 +520,7 @@ export default function MindElixirView({ data, onRegenerate, regenerating, contr
       )}
       {/* Degraded banner giữ từ v2 — ẩn nút Tạo lại khi đang generate (tránh double-trigger) */}
       {degraded && (
-        <div className="px-3 py-1.5 text-small flex items-center gap-2 border-b"
+        <div className="hidden px-3 py-1.5 text-small flex items-center gap-2 border-b"
           style={{ color: "var(--warn)", borderColor: "var(--border-color)", background: "var(--bg-elevated)" }}>
           <span>Bản đồ chưa đầy đủ{missing.length ? ` (thiếu: ${missing.join(", ")})` : ""}.</span>
           {!generating && (
@@ -577,20 +592,6 @@ export default function MindElixirView({ data, onRegenerate, regenerating, contr
             <Icon name="ChevronsDownUp" size={15} />
           </button>
           <div className="mm-floating-toolbar__sep" aria-hidden="true" />
-          <div className="mm-toolbar-menu-wrap">
-            <button onClick={() => setOverflowOpen((v) => !v)} aria-expanded={overflowOpen} aria-haspopup="menu"
-              aria-label="Thêm thao tác sơ đồ" title="Thêm thao tác" className="icon-btn w-8 h-8">
-              <Icon name="MoreVertical" size={15} />
-            </button>
-            {overflowOpen && (
-              <div className="mm-toolbar-menu" role="menu">
-                <button role="menuitem" onClick={resetView}><Icon name="RotateCcw" size={14} /> Đặt lại khung nhìn</button>
-                <button role="menuitem" onClick={() => mindRef.current?.toCenter()}><Icon name="Maximize" size={14} /> Căn giữa</button>
-                <button role="menuitem" onClick={() => setShowRelations((v) => !v)} aria-pressed={showRelations}><Icon name="Spline" size={14} /> {showRelations ? "Ẩn quan hệ" : "Hiện quan hệ"}</button>
-                <button role="menuitem" onClick={handleExportPng}><Icon name="Download" size={14} /> Xuất PNG</button>
-              </div>
-            )}
-          </div>
         </div>
 
         {/* Round 10 (mockup parity) — fullscreen moved OUT of the main

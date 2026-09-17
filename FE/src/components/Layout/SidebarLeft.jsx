@@ -430,7 +430,17 @@ export default function SidebarLeft({ selectedSources, setSelectedSources, onSou
                     {isSelectable && src.num_chunks ? (
                       <span className="text-caption text-text-muted font-mono">{src.num_chunks} đoạn</span>
                     ) : null}
-                    {statusConfig.badgeText && <Badge tone={statusConfig.tone}>{statusConfig.badgeText}</Badge>}
+                    {statusConfig.badgeText === "Sẵn sàng" ? (
+                      <span
+                        className="inline-flex items-center text-[var(--ok)] flex-shrink-0"
+                        title="Sẵn sàng"
+                        aria-label="Sẵn sàng"
+                      >
+                        <Icon name="CheckCircle2" size={15} className="text-[var(--ok)]" />
+                      </span>
+                    ) : (
+                      statusConfig.badgeText && <Badge tone={statusConfig.tone}>{statusConfig.badgeText}</Badge>
+                    )}
                   </div>
 
                   {statusConfig.subText && <div className="text-caption text-text-muted mt-1">{statusConfig.subText}</div>}

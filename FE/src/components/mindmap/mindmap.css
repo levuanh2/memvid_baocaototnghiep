@@ -403,6 +403,7 @@ html.dark .me-container { --mm-relation: #7e90c4; }
 .mm-context-action, .mm-overflow-trigger { flex: 0 0 40px; width: 40px; height: 40px; display: inline-flex; align-items: center; justify-content: center; border: 1px solid var(--border-color); border-radius: 50%; color: var(--accent); background: var(--bg-card); cursor: pointer; }
 .mm-context-action:hover, .mm-overflow-trigger:hover { background: var(--bg-hover); }
 .mm-quality-status, .mm-saved-status { display: inline-flex; align-items: center; gap: 5px; white-space: nowrap; color: var(--forest); font-size: 12px; }
+.mm-saved-status.is-dirty { color: var(--warn); }
 .mm-quality-status.is-warning { color: var(--warn); }
 .mm-context-link { padding: 6px 4px; border: 0; background: transparent; color: var(--accent); cursor: pointer; white-space: nowrap; }
 .mm-context-link:disabled, .mm-context-action:disabled { opacity: .45; cursor: not-allowed; }

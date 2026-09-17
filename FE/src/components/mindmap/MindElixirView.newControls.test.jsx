@@ -56,6 +56,8 @@ describe("MindElixirView Part B canvas controls", () => {
     const onCreateNew = vi.fn();
     await renderView(vi.fn(), { data: { onSelectMap, onCreateNew } });
     expect(container.querySelector(".mm-context-row")).toBeTruthy();
+    expect(container.querySelectorAll(".mm-context-row")).toHaveLength(1);
+    expect(container.querySelectorAll(".mm-overflow-trigger")).toHaveLength(1);
     expect(container.querySelector(".mm-map-selector__menu")).toBeNull();
     await act(async () => { container.querySelector(".mm-map-selector__trigger").click(); });
     expect(container.querySelectorAll(".mm-map-selector__item")).toHaveLength(1);
