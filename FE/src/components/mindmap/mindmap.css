@@ -353,6 +353,33 @@ html.dark .me-container { --mm-relation: #7e90c4; }
   .mm-floating-toolbar { right: 8px; bottom: 8px; padding: 3px; gap: 1px; }
 }
 
+/* Round 10 (mockup parity) — bottom-center "generate a new map" CTA and a
+   standalone bottom-right fullscreen button, both real reference elements
+   this canvas was missing (previously the only generate entry point was
+   inside SidebarRight's panel; fullscreen lived merged into the main
+   floating toolbar). Same absolute-inside-`.mm-canvas-wrap` pattern as
+   `.mm-legend`/`.mm-floating-toolbar` above — small footprint, doesn't
+   intercept pan/click outside itself. */
+.mm-generate-cta {
+  position: absolute;
+  left: 50%;
+  bottom: 16px;
+  transform: translateX(-50%);
+  z-index: 6;
+  pointer-events: auto;
+}
+.mm-fullscreen-corner {
+  position: absolute;
+  right: 12px;
+  bottom: 58px;
+  z-index: 6;
+  pointer-events: auto;
+}
+@media (max-width: 480px) {
+  .mm-generate-cta { bottom: 10px; }
+  .mm-fullscreen-corner { right: 8px; bottom: 46px; }
+}
+
 /* Sprint Omega — edge vignette (Phase 9: "atlas feeling, museum feeling").
    The reason this exists at all: an atlas or a museum case-map has a real
    edge — your eye knows where the map stops and the room begins. A flat
