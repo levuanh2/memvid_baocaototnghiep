@@ -403,6 +403,20 @@ export default function KnowledgeInspector({
   // nav bar; hidden entirely (not just empty) when there's no node to act on.
   const footer = node ? (
     <div className="px-4 py-3 border-t border-border" style={{ background: "var(--surface-contrast)" }}>
+      {/* Round 10 (mockup parity) — the approved reference for this panel
+          leads its footer with ONE full-width primary CTA to ask about the
+          selected node, ahead of the Learning Actions grid below (kept
+          as-is — real, working, pre-existing functionality from an earlier
+          sprint, not something this pass removes). Reuses the SAME
+          `onAskAI` pipeline every other action here already calls — no new
+          AI endpoint, no new state. */}
+      <button
+        type="button"
+        onClick={() => onAskAI(`Về "${node.title || "nhánh này"}": `)}
+        className="btn-primary w-full !py-2.5 justify-center mb-3"
+      >
+        Hỏi về nhánh này <Icon name="ArrowRight" size={15} />
+      </button>
       <div className="text-metadata font-mono uppercase text-text-muted mb-2">Hành động học tập</div>
       <div className="grid grid-cols-2 gap-1.5">
         {ACTIONS.map((a) => (
