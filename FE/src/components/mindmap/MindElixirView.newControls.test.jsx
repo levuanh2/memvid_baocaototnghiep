@@ -1,93 +1,87 @@
 // @vitest-environment jsdom
-//
-// Regression for round 10 (mockup parity): two new floating canvas controls
-// added to match the approved reference image — a bottom-center "generate a
-// new map" CTA (previously the only entry point lived inside SidebarRight's
-// own panel) and a standalone bottom-right fullscreen button (previously
-// merged into the main zoom/view toolbar). Both reuse existing, already-
-// wired behavior (`onRegenerate` prop, the same native-Fullscreen-API
-// `toggleFullscreen` this view already had) — this only proves the NEW JSX
-// is wired to the right handler, not that regenerate/fullscreen themselves
-// work (those predate this round).
 import { describe, it, expect, vi, afterEach, beforeAll } from "vitest";
 import { createRoot } from "react-dom/client";
 import { act } from "react-dom/test-utils";
 import MindElixirView from "./MindElixirView";
 
 beforeAll(() => {
-  window.matchMedia = window.matchMedia || function () {
-    return { matches: false, addEventListener() {}, removeEventListener() {} };
-  };
-  // jsdom implements neither — this view's own ResizeObserver effect
-  // (re-layout on the canvas becoming visible) and mind-elixir's own
-  // internal use of MutationObserver's target need at least a no-op stand-in.
-  window.ResizeObserver = window.ResizeObserver || class {
-    observe() {} unobserve() {} disconnect() {}
-  };
+  window.matchMedia = window.matchMedia || (() => ({ matches: false, addEventListener() {}, removeEventListener() {} }));
+  window.ResizeObserver = window.ResizeObserver || class { observe() {} unobserve() {} disconnect() {} };
 });
 
 const DATA = {
   id: "map-1", title: "Test Map",
   nodes: [{ id: "root", kind: "root", title: "Root", parent: null }],
   relations: [], sources: [], schema_version: 2,
+  mindMaps: [{ id: "map-1", title: "Test Map", sources: [] }],
 };
-
-const CONTROLLER = {
-  registerMindInstance: vi.fn(),
-  onNodeSelected: vi.fn(),
-  selected: null,
-  sidecarRef: { current: new Map() },
-};
-
+const CONTROLLER = { registerMindInstance: vi.fn(), onNodeSelected: vi.fn(), selected: null, sidecarRef: { current: new Map() } };
 let container;
 
 afterEach(() => {
-  if (container) {
-    document.body.removeChild(container);
-    container = null;
-  }
+  if (container) { document.body.removeChild(container); container = null; }
   vi.restoreAllMocks();
 });
 
-async function renderView(onRegenerate) {
+async function renderView(onRegenerate, props = {}) {
   container = document.createElement("div");
   document.body.appendChild(container);
   const root = createRoot(container);
+  const { data: dataProps = {}, ...viewProps } = props;
   await act(async () => {
-    root.render(<MindElixirView data={DATA} onRegenerate={onRegenerate} regenerating={false} controller={CONTROLLER} />);
+    root.render(<MindElixirView data={{ ...DATA, ...dataProps }} onRegenerate={onRegenerate} regenerating={false} controller={CONTROLLER} {...viewProps} />);
   });
   return root;
 }
 
-describe("MindElixirView new canvas controls (round 10)", () => {
-  it("bottom-center generate CTA calls onRegenerate, not some new/duplicate generation path", async () => {
+describe("MindElixirView Part B canvas controls", () => {
+  it("removes the obsolete centered generate CTA", async () => {
     const onRegenerate = vi.fn();
     await renderView(onRegenerate);
-
-    const cta = container.querySelector(".mm-generate-cta");
-    expect(cta).toBeTruthy();
-    expect(cta.textContent).toContain("Tạo sơ đồ mới");
-    // Exactly one button at this position — no separate dropdown/chevron
-    // trigger next to it, since nothing in this product backs a second
-    // generation option (see MindElixirView.jsx's comment at the button's
-    // definition for why none was added).
-    expect(container.querySelectorAll(".mm-generate-cta").length).toBe(1);
-
-    await act(async () => { cta.dispatchEvent(new MouseEvent("click", { bubbles: true, cancelable: true })); });
-    expect(onRegenerate).toHaveBeenCalledTimes(1);
+    expect(container.querySelector(".mm-generate-cta")).toBeNull();
+    expect(onRegenerate).not.toHaveBeenCalled();
   });
 
-  it("fullscreen is a standalone corner button, separate from the main toolbar", async () => {
+  it("keeps fullscreen separate from the main toolbar", async () => {
     await renderView(vi.fn());
-
     const toolbar = container.querySelector(".mm-floating-toolbar");
     const corner = container.querySelector(".mm-fullscreen-corner");
     expect(toolbar).toBeTruthy();
     expect(corner).toBeTruthy();
-    // The fullscreen button must NOT be a descendant of the main toolbar —
-    // that's the actual regression this test guards (it used to be the
-    // toolbar's last child).
     expect(toolbar.contains(corner)).toBe(false);
-    expect(corner.getAttribute("aria-label")).toMatch(/toàn màn hình/i);
+  });
+
+  it("uses the real map list and keeps the source drawer closed by default", async () => {
+    const onSelectMap = vi.fn();
+    const onCreateNew = vi.fn();
+    await renderView(vi.fn(), { data: { onSelectMap, onCreateNew } });
+    expect(container.querySelector(".mm-context-row")).toBeTruthy();
+    expect(container.querySelector(".mm-map-selector__menu")).toBeNull();
+    await act(async () => { container.querySelector(".mm-map-selector__trigger").click(); });
+    expect(container.querySelectorAll(".mm-map-selector__item")).toHaveLength(1);
+    expect(container.querySelector(".mm-map-selector__item").textContent).toContain("Test Map");
+    await act(async () => { container.querySelector(".mm-map-selector__item").click(); });
+    expect(onSelectMap).toHaveBeenCalledWith(DATA.mindMaps[0]);
+    await act(async () => { container.querySelector(".mm-map-selector__trigger").click(); });
+    await act(async () => { container.querySelector(".mm-map-selector__new").click(); });
+    expect(onCreateNew).toHaveBeenCalledTimes(1);
+    expect(container.querySelector(".mm-inspector-drawer")).toBeNull();
+  });
+
+  it("mounts the Inspector as a closed canvas overlay", async () => {
+    await renderView(vi.fn(), {
+      inspectorProps: {
+        node: null, relations: { parent: null, children: [], prev: null, next: null, siblings: [] },
+        breadcrumb: [], documentTitle: "", sources: [], generating: false,
+        onNavigate: vi.fn(), onAskAI: vi.fn(), onOpenSource: vi.fn(),
+        nav: { canBack: false, canForward: false, onBack: vi.fn(), onForward: vi.fn(), pinned: [], recent: [], isPinned: false, onTogglePin: vi.fn() },
+      },
+    });
+    const drawer = container.querySelector(".mm-inspector-drawer");
+    expect(drawer).toBeTruthy();
+    expect(drawer.getAttribute("aria-hidden")).toBe("true");
+    await act(async () => { container.querySelector(".mm-inspector-tab").click(); });
+    expect(drawer.classList.contains("is-open")).toBe(true);
+    expect(drawer.querySelector("button[aria-label='Đóng bảng kiểm tra']")).toBeTruthy();
   });
 });

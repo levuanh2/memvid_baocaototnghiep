@@ -16,8 +16,6 @@ import { useStudyContext } from "../../study/useStudyContext";
 import { nodeLabel, processCitations, parseCiteHref, normStem, citeKey } from "../../utils/evidence";
 import { pickImageFromClipboard, downscaleImage, transcribeImage, getVisionStatus, buildQuestionWithImage, IMAGE_TYPES } from "../../utils/chatImage";
 import { QUERY_SSE_ERR_FALLBACK, ensureErrMsg, pickQueryDisplayText, sseErrorToMessage } from "../../utils/queryText";
-import { computeReadyCount } from "../../utils/workspaceReadiness";
-import { computeNextAction } from "../../utils/nextAction";
 
 // ── Quick question chips (fill the composer; functional, not decorative) ──
 // Generic fallback — used only when no source is selected yet (nothing to name).
@@ -125,9 +123,16 @@ export default function ChatArea({
   const [menuOpen, setMenuOpen] = useState(false);
   const [notice, setNotice] = useState("");
   const [contextCleared, setContextCleared] = useState(false);
-  // Goal banner collapse (IA pass round 5, item 4) — collapsed by default
-  // once a conversation has an answer, click to re-expand.
-  const [goalExpanded, setGoalExpanded] = useState(false);
+  // Round 12 (compact context row) — conversation title lives only on this
+  // client (no rename endpoint exists); a real, editable local label is
+  // honest here since nothing claims it's synced anywhere. Replaces the old
+  // always-"Sửa"/"Chọn tài liệu" blue goal banner (removed this round — the
+  // new row below is the one visible "Chọn nguồn" action, per the approved
+  // reference image).
+  const [title, setTitle] = useState("Cuộc trò chuyện mới");
+  const [titleEditing, setTitleEditing] = useState(false);
+  const [titleDraft, setTitleDraft] = useState(title);
+  const titleInputRef = useRef(null);
   const [jobProgress, setJobProgress] = useState(0);
   const [seenNodes, setSeenNodes] = useState([]);
   const [streamingPreview, setStreamingPreview] = useState("");
@@ -174,9 +179,18 @@ export default function ChatArea({
   // invented multi-step "goal" flow. Shared, tested pure fn — see
   // utils/workspaceReadiness.js (LessonHeader/WorkspaceContainer use the
   // same one, was duplicated inline in both places before).
-  const readyCount = useMemo(() => computeReadyCount(sources, selectedSources), [sources, selectedSources]);
-  const nextAction = computeNextAction({ messagesCount: messages.length, selectedCount: selectedSources?.length || 0 });
-  const focusComposer = useCallback(() => textareaRef.current?.focus(), []);
+  const startEditTitle = useCallback(() => {
+    setTitleDraft(title);
+    setTitleEditing(true);
+  }, [title]);
+  const commitTitle = useCallback(() => {
+    const t = titleDraft.trim();
+    setTitle(t || "Cuộc trò chuyện mới");
+    setTitleEditing(false);
+  }, [titleDraft]);
+  useEffect(() => {
+    if (titleEditing) titleInputRef.current?.focus();
+  }, [titleEditing]);
   // Feature epic M1 (Multi-Document Intelligence, mục 2) — names the real
   // contributing documents for a small set, same stem->filename resolution
   // `buildSuggestions` above already uses (not a second lookup convention).
@@ -703,6 +717,95 @@ export default function ChatArea({
   return (
     <div className="flex flex-col h-full min-h-0" style={{ background: "var(--bg-base)" }}>
 
+      {/* Round 12 — compact conversation context row, pinned directly below
+          the global 60px header (approved reference image:
+          docs/b87b5a7b-...png). Replaces the old two-layer chrome (a
+          conv-controls row + a separate blue goal banner with its own
+          "Chọn tài liệu"/"Sửa" button): exactly ONE "Chọn nguồn" action now
+          exists in the empty Chat state, matching that image exactly.
+          Target height 44-48px (h-12 = 48px); every button here is a real
+          40x40px+ target on desktop. */}
+      <div className="flex items-center gap-3 px-5 sm:px-8 h-12 border-b flex-shrink-0 transition-theme"
+        style={{ borderColor: "var(--border-color)", background: "var(--bg-sidebar)" }}>
+        <div className="flex items-center gap-1 min-w-0 flex-shrink">
+          {titleEditing ? (
+            <input
+              ref={titleInputRef}
+              value={titleDraft}
+              onChange={(e) => setTitleDraft(e.target.value)}
+              onBlur={commitTitle}
+              onKeyDown={(e) => {
+                if (e.key === "Enter") { e.preventDefault(); commitTitle(); }
+                if (e.key === "Escape") { e.preventDefault(); setTitleEditing(false); setTitleDraft(title); }
+              }}
+              className="input-surface !h-7 !py-0 text-body font-semibold w-[200px]"
+              aria-label="Tên cuộc trò chuyện"
+            />
+          ) : (
+            <span className="font-display text-body font-semibold text-text-primary truncate max-w-[220px]" title={title}>
+              {title}
+            </span>
+          )}
+          <button type="button" onClick={startEditTitle}
+            className="icon-btn w-7 h-7 flex-shrink-0"
+            aria-label="Đổi tên cuộc trò chuyện" title="Đổi tên cuộc trò chuyện">
+            <Icon name="Pencil" size={12} />
+          </button>
+        </div>
+
+        <div className="hidden sm:flex items-center gap-1.5 text-small text-text-muted flex-shrink-0">
+          <Icon name="Library" size={13} />
+          {selectedSources?.length > 0 ? `${selectedSources.length} nguồn đã chọn` : "Chưa chọn nguồn"}
+        </div>
+
+        <div className="flex-1" />
+
+        {/* The ONE visible "Chọn nguồn" action in Chat mode. Round 12 spec:
+            "button targets min 40x40px desktop" — h-10 (40px). */}
+        <button type="button" onClick={onOpenLeft} className="btn-primary !h-10 !text-small flex-shrink-0">
+          <Icon name="FolderOpen" size={14} /> Chọn nguồn
+        </button>
+
+        <button type="button" onClick={handleNewChat} disabled={loading || Boolean(pendingReview)}
+          className="icon-btn w-10 h-10 flex-shrink-0 disabled:opacity-40"
+          aria-label="Cuộc trò chuyện mới" title="Cuộc trò chuyện mới">
+          <Icon name="MessageSquare" size={16} />
+        </button>
+
+        <div className="relative flex-shrink-0">
+          <button
+            onClick={() => setMenuOpen((v) => !v)} disabled={loading || Boolean(pendingReview)}
+            className="icon-btn w-10 h-10 disabled:opacity-40"
+            aria-label="Tùy chọn cuộc trò chuyện" title="Tùy chọn cuộc trò chuyện" aria-expanded={menuOpen}>
+            <Icon name="MoreVertical" size={16} />
+          </button>
+          {menuOpen && (
+            <>
+              <div className="fixed inset-0 z-10" onClick={() => setMenuOpen(false)} aria-hidden />
+              <div className="absolute right-0 top-11 z-20 min-w-[190px] rounded-[8px] border py-1 shadow-card-hover"
+                style={{ borderColor: "var(--border-color)", background: "var(--bg-elevated)" }}>
+                {/* Feature Pack B (Cross Navigation) — only when a summary
+                    genuinely exists (never a link to a surface that isn't
+                    there yet); folded into the overflow menu this round so
+                    the compact row's control list matches the reference
+                    image exactly (it has no 6th button for this). */}
+                {hasSummary && (
+                  <button onClick={() => { setMenuOpen(false); onOpenSummary?.(); }} className="menu-item">
+                    <Icon name="ScrollText" size={14} /> Xem tóm tắt
+                  </button>
+                )}
+                <button onClick={handleClearContext} className="menu-item">
+                  <Icon name="Eraser" size={14} /> Xóa ngữ cảnh
+                </button>
+                <button onClick={handleDeleteHistory} className="menu-item menu-item--danger">
+                  <Icon name="Trash2" size={14} /> Xóa lịch sử chat
+                </button>
+              </div>
+            </>
+          )}
+        </div>
+      </div>
+
       {/* Reading session — click vùng trống bất kỳ là vào thẳng ô nhập (xem handlePanelMouseUp) */}
       <div onMouseUp={handlePanelMouseUp}
         // KHÔNG dùng `co-the-cuon-them` ở đây: khung chat neo nội dung ở ĐÁY, tin mới nhất
@@ -710,75 +813,16 @@ export default function ChatArea({
         // đúng cho danh sách neo từ trên xuống (hai cột bên).
         className="flex-1 min-h-0 overflow-y-auto px-5 sm:px-8 py-7 flex flex-col gap-6">
 
-        {/* In-flow conversation header (round 7): conversation controls
-            (context indicator / New chat / kebab), transient notices, and
-            the goal banner + next action all scroll away with content now —
-            "only two persistent horizontal layers: global header,
-            workspace toolbar" (strategy point 1). These used to be up to
-            three separate always-pinned rows stacked under LessonHeader
-            (conv-toolbar 32px + notice rows + goal banner up to ~96px);
-            grouped into one block here so they read as a section, not
-            scattered rows, and share ONE `gap-2` instead of each carrying
-            its own duplicate top padding. */}
+        {/* Transient feedback + notices — scroll away with content, unlike
+            the pinned context row above (round 12). */}
         <div className="flex flex-col gap-2 flex-shrink-0">
-          <div className="flex items-center gap-2 py-1 -mx-5 sm:-mx-8 px-5 sm:px-8">
-            {usingContext && (
-              <span className="inline-flex items-center gap-1.5 text-caption font-mono text-text-muted">
-                <Icon name="MessageSquare" size={12} className="text-accent" />
-                Đang dùng ngữ cảnh cuộc trò chuyện
-              </span>
-            )}
-            <div className="flex-1" />
-            {/* Feature Pack B (Cross Navigation) — only when a summary genuinely
-                exists (never a link to a surface that isn't there yet); reuses
-                the exact same tab-switch MainLayout already exposes for "back to
-                chat" from elsewhere, just the other direction. */}
-            {hasSummary && (
-              <button
-                onClick={onOpenSummary}
-                className="pill-action !py-1 !text-small"
-                title="Xem bản tóm tắt của tài liệu đang chọn">
-                <Icon name="ScrollText" size={13} /> Xem tóm tắt
-              </button>
-            )}
-            {/* Round 8 (touch-target pass) — grown from a 32px row-height
-                pill to a real 40px hit target: `!h-10` sets the target, icon
-                bumped 13->18 to stay proportional at the new size (`.pill-
-                action`'s own px-3/gap-1.5 already give it compact spacing,
-                unchanged). This row moved OUT of persistent chrome in round
-                7 (scrolls with content now), so growing it doesn't touch
-                the 108px persistent-chrome measurement at all. */}
-            <button
-              onClick={handleNewChat} disabled={loading || Boolean(pendingReview)}
-              className="pill-action !h-10 !text-small disabled:opacity-40"
-              title="Bắt đầu cuộc trò chuyện mới" aria-label="Bắt đầu cuộc trò chuyện mới">
-              <Icon name="Plus" size={18} /> Chat mới
-            </button>
-            <div className="relative">
-              <button
-                onClick={() => setMenuOpen((v) => !v)} disabled={loading || Boolean(pendingReview)}
-                className="icon-btn w-10 h-10 disabled:opacity-40"
-                aria-label="Tùy chọn cuộc trò chuyện" title="Tùy chọn cuộc trò chuyện" aria-expanded={menuOpen}>
-                <Icon name="MoreVertical" size={18} />
-              </button>
-              {menuOpen && (
-                <>
-                  <div className="fixed inset-0 z-10" onClick={() => setMenuOpen(false)} aria-hidden />
-                  <div className="absolute right-0 top-11 z-20 min-w-[190px] rounded-[8px] border py-1 shadow-card-hover"
-                    style={{ borderColor: "var(--border-color)", background: "var(--bg-elevated)" }}>
-                    <button onClick={handleClearContext} className="menu-item">
-                      <Icon name="Eraser" size={14} /> Xóa ngữ cảnh
-                    </button>
-                    <button onClick={handleDeleteHistory} className="menu-item menu-item--danger">
-                      <Icon name="Trash2" size={14} /> Xóa lịch sử chat
-                    </button>
-                  </div>
-                </>
-              )}
-            </div>
-          </div>
+          {usingContext && (
+            <span className="inline-flex items-center gap-1.5 text-caption font-mono text-text-muted self-start">
+              <Icon name="MessageSquare" size={12} className="text-accent" />
+              Đang dùng ngữ cảnh cuộc trò chuyện
+            </span>
+          )}
 
-          {/* Transient feedback (New chat / Clear context / Delete history) */}
           {notice && (
             <div className="-mx-5 sm:-mx-8 px-5 sm:px-8 py-1.5 text-small flex items-center gap-2 border-y"
               style={{ borderColor: "var(--border-color)", background: "color-mix(in srgb, var(--accent) 8%, transparent)", color: "var(--text-secondary)" }}>
@@ -795,71 +839,6 @@ export default function ChatArea({
               <span>Một số tài liệu vẫn đang lập chỉ mục — câu trả lời có thể chưa đầy đủ.</span>
             </div>
           )}
-
-          {/* Goal banner + next action (IA pass round 5, item 4). Real,
-              derived content only — no per-user "learning objective" exists
-              in this app's data model, so the banner states real readiness
-              instead of an invented goal. Compact (44px) full form before
-              any question; collapses to a slim single-line row (not hidden
-              entirely — round 4's full-hide was a stricter interim fix for a
-              real contradiction: this banner's copy is live-derived from
-              selectedSources, which can lag behind reality right after a
-              send, see docs/VISUAL_IDENTITY_WORKSPACE_REDESIGN.md) once a
-              conversation has an answer, click to re-expand. */}
-          {messages.length === 0 ? (
-            <div className="flex items-center gap-3 rounded-control px-4 h-11"
-              style={{ background: "var(--accent-subtle)" }}>
-              <Icon name="Target" size={16} className="text-accent flex-shrink-0" />
-              {selectedSources?.length > 0 ? (
-                <p className="text-small text-text-secondary flex-1 truncate">
-                  {readyCount}/{selectedSources.length} tài liệu đã chọn sẵn sàng tra cứu.
-                  {readyCount < selectedSources.length && " Một số tài liệu vẫn đang lập chỉ mục."}
-                </p>
-              ) : (
-                <p className="text-small text-text-secondary flex-1 truncate">
-                  Chưa chọn tài liệu nào.
-                </p>
-              )}
-              <button type="button" onClick={onOpenLeft} className="text-small font-medium text-accent flex-shrink-0">
-                {selectedSources?.length > 0 ? "Sửa" : "Chọn tài liệu"}
-              </button>
-            </div>
-          ) : (
-            <button type="button" onClick={() => setGoalExpanded((v) => !v)}
-              className="flex items-center gap-2 rounded-control px-3 h-7 text-caption text-text-muted hover:text-text-secondary transition-colors self-start"
-              aria-expanded={goalExpanded}>
-              <Icon name="Target" size={12} className="text-accent flex-shrink-0" />
-              {readyCount}/{selectedSources?.length || 0} tài liệu
-              <Icon name={goalExpanded ? "ChevronUp" : "ChevronDown"} size={12} />
-            </button>
-          )}
-          {messages.length > 0 && goalExpanded && (
-            <div className="flex items-center gap-3 rounded-control px-4 h-11"
-              style={{ background: "var(--accent-subtle)" }}>
-              <p className="text-small text-text-secondary flex-1 truncate">
-                {readyCount}/{selectedSources?.length || 0} tài liệu đã chọn sẵn sàng tra cứu.
-              </p>
-              <button type="button" onClick={onOpenLeft} className="text-small font-medium text-accent flex-shrink-0">Sửa</button>
-            </div>
-          )}
-
-          {/* Next action — ONE contextual button, not a permanent 3-button
-              strip: "Mind Map/Summary mode navigation must not be repeated as
-              next-action buttons" — those two now live only as
-              WorkspaceEmptyState's own CTA inside their own mode (previous
-              commit), never duplicated here. Decision pulled into a real,
-              tested pure function (utils/nextAction.js) instead of an inline
-              ternary. */}
-          {nextAction === "ask-question" && (
-            <button type="button" onClick={focusComposer} className="btn-primary !text-small !py-1.5 self-start">
-              <Icon name="Sparkles" size={14} /> Đặt câu hỏi
-            </button>
-          )}
-          {nextAction === "select-sources" && (
-            <button type="button" onClick={onOpenLeft} className="btn-primary !text-small !py-1.5 self-start">
-              <Icon name="FileStack" size={14} /> Chọn tài liệu
-            </button>
-          )}
         </div>
 
         {/* Empty state — the reading-room thesis */}
@@ -872,16 +851,17 @@ export default function ChatArea({
             <p className="font-display text-body-lg text-text-secondary mb-6">
               Mỗi câu trả lời được truy hồi từ tài liệu đã chọn và gắn nguồn ở lề phải. Chọn tài liệu bên trái, rồi đặt câu hỏi.
             </p>
-            {selectedSources?.length > 0 ? (
+            {/* Round 12 — the old mobile-only "Mở thư mục nguồn" fallback
+                button here called the exact same `onOpenLeft` as the
+                compact row's "Chọn nguồn" button above, which is visible at
+                every breakpoint now (not `md:hidden`) — removed as a
+                duplicate, keeping exactly one "Chọn nguồn" action. */}
+            {selectedSources?.length > 0 && (
               <div className="flex flex-wrap gap-2 justify-center">
                 {suggestions.map((q) => (
                   <button key={q} onClick={() => fillSuggestion(q)} className="pill-action">{q}</button>
                 ))}
               </div>
-            ) : (
-              <button onClick={onOpenLeft} className="md:hidden pill-action">
-                <Icon name="Menu" size={14} /> Mở thư mục nguồn
-              </button>
             )}
           </div>
         )}

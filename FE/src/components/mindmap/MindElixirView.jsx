@@ -19,6 +19,7 @@ import { updateMindmap } from "../../utils/api";
 import { toast } from "../ui/Toaster";
 import { Icon } from "../ui/Icon";
 import Spinner from "../ui/Spinner";
+import KnowledgeInspector from "./KnowledgeInspector";
 import "./mindmap.css";
 
 // Palette nhánh: archival ink hexes (Phòng đọc theme) — trước đây sống ở
@@ -87,7 +88,7 @@ export const THEME = {
 // shape from before this refactor, just no longer wrapped in a portal.
 // `controller`: the ONE `useMindMapController()` instance, owned by whoever
 // renders both this component and KnowledgeInspector (WorkspaceContainer).
-export default function MindElixirView({ data, onRegenerate, regenerating, controller }) {
+export default function MindElixirView({ data, onRegenerate, regenerating, controller, inspectorProps }) {
   const containerRef = useRef(null);
   const mindRef = useRef(null);
   const canvasWrapRef = useRef(null);
@@ -100,6 +101,9 @@ export default function MindElixirView({ data, onRegenerate, regenerating, contr
   // map vẫn đang dirty: user quay đi quay lại là mất luôn lý do hỏng, tưởng đã lưu xong.
   // Banner ở lại tới khi tự đóng hoặc tới lần thao tác sau.
   const [errorMsg, setErrorMsg] = useState(null);
+  const [inspectorOpen, setInspectorOpen] = useState(false);
+  const [overflowOpen, setOverflowOpen] = useState(false);
+  const [mapSelectorOpen, setMapSelectorOpen] = useState(false);
 
   const degraded = Boolean(data?.generator?.degraded);
   const missing = data?.generator?.missing || [];
@@ -441,6 +445,44 @@ export default function MindElixirView({ data, onRegenerate, regenerating, contr
           </button>
         </div>
       )}
+      <div className="mm-context-row">
+        <div className="mm-map-selector">
+          <button type="button" className="mm-map-selector__trigger" aria-haspopup="listbox"
+            aria-expanded={mapSelectorOpen} onClick={() => setMapSelectorOpen((v) => !v)}>
+            <Icon name="Network" size={16} />
+            <span className="mm-map-selector__label">
+              <strong>{data?.title || "Sơ đồ tư duy"}</strong>
+              <small>{Array.isArray(data?.mindMaps) ? `${data.mindMaps.length} sơ đồ` : "Sơ đồ hiện tại"}</small>
+            </span>
+            <Icon name="ChevronDown" size={15} />
+          </button>
+          {mapSelectorOpen && (
+            <div className="mm-map-selector__menu" role="listbox" aria-label="Chọn sơ đồ">
+              {(data.mindMaps || []).map((map) => (
+                <button type="button" role="option" aria-selected={map.id === data.id} key={map.id}
+                  className={`mm-map-selector__item ${map.id === data.id ? "is-active" : ""}`}
+                  onClick={() => { setMapSelectorOpen(false); data.onSelectMap?.(map); }}>
+                  <span>{map.title || "Sơ đồ tư duy"}</span>
+                  <small>{map.id === data.id ? "Đang mở" : `${map.sources?.length || 0} tài liệu`}</small>
+                </button>
+              ))}
+              <button type="button" className="mm-map-selector__new" onClick={() => { setMapSelectorOpen(false); data.onCreateNew?.(); }} disabled={data.creating}>
+                <Icon name="Plus" size={14} /> Tạo sơ đồ mới
+              </button>
+            </div>
+          )}
+        </div>
+        <button type="button" className="mm-context-action" onClick={data.onCreateNew} disabled={data.creating}
+          aria-label="Tạo sơ đồ mới" title="Tạo sơ đồ mới"><Icon name="Plus" size={18} /></button>
+        <span className={`mm-quality-status ${degraded ? "is-warning" : ""}`}>
+          <Icon name={degraded ? "TriangleAlert" : "BadgeCheck"} size={14} />
+          {degraded ? "Thiếu liên kết" : "Đã kiểm tra"}
+        </span>
+        <button type="button" className="mm-context-link" onClick={onRegenerate} disabled={regenerating || generating}>Tạo lại</button>
+        <span className="mm-saved-status"><Icon name="Check" size={14} /> Đã lưu</span>
+        <button type="button" className="mm-overflow-trigger" aria-expanded={overflowOpen} aria-haspopup="menu"
+          onClick={() => setOverflowOpen((v) => !v)} aria-label="Thêm tùy chọn" title="Thêm tùy chọn"><Icon name="MoreVertical" size={18} /></button>
+      </div>
       {/* Generating banner — nút Huỷ ngay trong toolbar */}
       {generating && (
         <div className="px-3 py-1.5 text-small flex items-center gap-2 border-b"
@@ -535,21 +577,20 @@ export default function MindElixirView({ data, onRegenerate, regenerating, contr
             <Icon name="ChevronsDownUp" size={15} />
           </button>
           <div className="mm-floating-toolbar__sep" aria-hidden="true" />
-          <button onClick={resetView} aria-label="Đặt lại khung nhìn" title="Đặt lại khung nhìn (0)" className="icon-btn w-8 h-8">
-            <Icon name="RotateCcw" size={14} />
-          </button>
-          <button onClick={() => mindRef.current?.toCenter()} aria-label="Căn giữa" title="Căn giữa" className="icon-btn w-8 h-8">
-            <Icon name="Maximize" size={15} />
-          </button>
-          <div className="mm-floating-toolbar__sep" aria-hidden="true" />
-          <button onClick={() => setShowRelations((v) => !v)} aria-pressed={showRelations}
-            aria-label="Bật/tắt quan hệ" title="Quan hệ" className="icon-btn w-8 h-8"
-            style={{ color: showRelations ? "var(--text-primary)" : "var(--text-secondary)", opacity: showRelations ? 1 : 0.55 }}>
-            <Icon name="Spline" size={15} />
-          </button>
-          <button onClick={handleExportPng} aria-label="Xuất PNG" title="Xuất PNG" className="icon-btn w-8 h-8">
-            <Icon name="Download" size={14} />
-          </button>
+          <div className="mm-toolbar-menu-wrap">
+            <button onClick={() => setOverflowOpen((v) => !v)} aria-expanded={overflowOpen} aria-haspopup="menu"
+              aria-label="Thêm thao tác sơ đồ" title="Thêm thao tác" className="icon-btn w-8 h-8">
+              <Icon name="MoreVertical" size={15} />
+            </button>
+            {overflowOpen && (
+              <div className="mm-toolbar-menu" role="menu">
+                <button role="menuitem" onClick={resetView}><Icon name="RotateCcw" size={14} /> Đặt lại khung nhìn</button>
+                <button role="menuitem" onClick={() => mindRef.current?.toCenter()}><Icon name="Maximize" size={14} /> Căn giữa</button>
+                <button role="menuitem" onClick={() => setShowRelations((v) => !v)} aria-pressed={showRelations}><Icon name="Spline" size={14} /> {showRelations ? "Ẩn quan hệ" : "Hiện quan hệ"}</button>
+                <button role="menuitem" onClick={handleExportPng}><Icon name="Download" size={14} /> Xuất PNG</button>
+              </div>
+            )}
+          </div>
         </div>
 
         {/* Round 10 (mockup parity) — fullscreen moved OUT of the main
@@ -572,25 +613,16 @@ export default function MindElixirView({ data, onRegenerate, regenerating, contr
           <Icon name="Expand" size={14} />
         </button>
 
-        {/* Round 10 (mockup parity) — bottom-center "generate a new map"
-            entry point directly on the canvas (previously the only trigger
-            lived inside SidebarRight's own panel). Reuses the SAME
-            `onRegenerate` this view already receives (the "Tạo lại" link
-            in the degraded banner above calls the exact same prop) — no
-            new generation logic, no new wiring into SidebarRight. No
-            dropdown/chevron: the reference image shows one next to this
-            button, but there is no second generation option (mode
-            selector, etc.) actually implemented anywhere in this product
-            (confirmed absent from the backend response in an earlier
-            round's live verification) — adding a chevron with nothing
-            real behind it would be exactly the "button that only visually
-            exists" this project's own rules rule out. */}
-        {!generating && (
-          <button onClick={onRegenerate} disabled={regenerating}
-            className="mm-generate-cta btn-primary !py-2.5 disabled:opacity-60">
-            <Icon name="Plus" size={15} />
-            {regenerating ? "Đang tạo…" : "Tạo sơ đồ mới"}
-          </button>
+        {inspectorProps && (
+          <>
+            <button type="button" className="mm-inspector-tab" onClick={() => setInspectorOpen((v) => !v)}
+              aria-expanded={inspectorOpen} aria-controls="mindmap-inspector" aria-label={inspectorOpen ? "Đóng bảng bằng chứng" : "Mở bảng bằng chứng"}>
+              <Icon name="PanelRight" size={15} /><span>Bằng chứng</span><Icon name={inspectorOpen ? "ChevronRight" : "ChevronLeft"} size={13} />
+            </button>
+            <aside id="mindmap-inspector" className={`mm-inspector-drawer ${inspectorOpen ? "is-open" : ""}`} aria-hidden={!inspectorOpen}>
+              <KnowledgeInspector {...inspectorProps} onClose={() => setInspectorOpen(false)} />
+            </aside>
+          </>
         )}
       </div>
     </div>

@@ -60,11 +60,14 @@ async function renderChatArea() {
 describe("ChatArea conversation-toolbar touch targets", () => {
   it("New Chat button is a real >=40px hit target with an accessible name and tooltip", async () => {
     await renderChatArea();
-    const btn = Array.from(container.querySelectorAll("button")).find((b) => b.textContent.includes("Chat mới"));
+    // Round 12 — moved into the compact context row and became icon-only
+    // (matches the approved reference image); identify it by aria-label now.
+    const btn = container.querySelector('button[aria-label="Cuộc trò chuyện mới"]');
     expect(btn).toBeTruthy();
-    expect(btn.className).toMatch(/(^|\s)!?h-10(\s|$)/);
+    expect(btn.className).toMatch(/(^|\s)w-10(\s|$)/);
+    expect(btn.className).toMatch(/(^|\s)h-10(\s|$)/);
     expect(btn.getAttribute("title")).toBeTruthy();
-    expect(btn.getAttribute("aria-label") || btn.textContent.trim()).toBeTruthy();
+    expect(btn.getAttribute("aria-label")).toBeTruthy();
   });
 
   it("kebab/more button is a real 40x40px hit target with an accessible name and tooltip", async () => {
