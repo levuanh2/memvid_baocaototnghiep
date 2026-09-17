@@ -15,7 +15,7 @@ Implemented the Mind Map workspace chrome against the approved reference image. 
 ## Verification
 
 - Targeted Part B test: 4/4 passing in `MindElixirView.newControls.test.jsx`.
-- Full FE suite: 1066/1066 passing, 92 test files.
+- Full FE suite: 1067/1067 passing, 92 test files.
 - Production build: passed (`vite build`, 2368 modules).
 - FE lint: 67 findings (60 errors, 7 warnings), matching the repository baseline in this worktree; no new findings in `SidebarRight.jsx`, `WorkspaceContainer.jsx`, or the Part B test. Existing findings remain in `MindElixirView.jsx` (exported theme constant) and `KnowledgeInspector.jsx` (pre-existing unused parameter).
 - `git diff --check`: clean apart from Git's normal LF-to-CRLF notices for the touched FE files.
