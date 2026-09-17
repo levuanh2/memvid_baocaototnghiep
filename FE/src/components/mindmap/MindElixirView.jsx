@@ -517,16 +517,15 @@ export default function MindElixirView({ data, onRegenerate, regenerating, contr
           <button onClick={fitView} aria-label="Vừa khung" title="Vừa khung (F)" className="icon-btn w-8 h-8">
             <Icon name="Scan" size={14} />
           </button>
-          <button onClick={resetView} aria-label="Đặt lại khung nhìn" title="Đặt lại khung nhìn (0)" className="icon-btn w-8 h-8">
-            <Icon name="RotateCcw" size={14} />
-          </button>
-          <button onClick={() => mindRef.current?.toCenter()} aria-label="Căn giữa" title="Căn giữa" className="icon-btn w-8 h-8">
-            <Icon name="Maximize" size={15} />
-          </button>
           <div className="mm-floating-toolbar__sep" aria-hidden="true" />
           {/* Round 8 — Expand/Collapse. Scoped to the selected node's subtree
               when one is selected, else the whole map (see expandCollapseAll
-              above for the full public-API feasibility note). */}
+              above for the full public-API feasibility note).
+              Round 11 (mockup parity) — reordered to sit right after zoom+fit,
+              matching the reference image's exact sequence (was after a
+              reset/center pair that has no mockup equivalent — those two
+              moved after this, not removed; still real, working
+              functionality). */}
           <button onClick={expandAll} aria-label={expandCollapseLabel.expand} title={expandCollapseLabel.expand}
             className="icon-btn w-8 h-8">
             <Icon name="ChevronsUpDown" size={15} />
@@ -534,6 +533,13 @@ export default function MindElixirView({ data, onRegenerate, regenerating, contr
           <button onClick={collapseAll} aria-label={expandCollapseLabel.collapse} title={expandCollapseLabel.collapse}
             className="icon-btn w-8 h-8">
             <Icon name="ChevronsDownUp" size={15} />
+          </button>
+          <div className="mm-floating-toolbar__sep" aria-hidden="true" />
+          <button onClick={resetView} aria-label="Đặt lại khung nhìn" title="Đặt lại khung nhìn (0)" className="icon-btn w-8 h-8">
+            <Icon name="RotateCcw" size={14} />
+          </button>
+          <button onClick={() => mindRef.current?.toCenter()} aria-label="Căn giữa" title="Căn giữa" className="icon-btn w-8 h-8">
+            <Icon name="Maximize" size={15} />
           </button>
           <div className="mm-floating-toolbar__sep" aria-hidden="true" />
           <button onClick={() => setShowRelations((v) => !v)} aria-pressed={showRelations}

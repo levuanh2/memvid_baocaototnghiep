@@ -402,7 +402,7 @@ export default function KnowledgeInspector({
   // it's chrome the whole panel is oriented around, same reasoning as the
   // nav bar; hidden entirely (not just empty) when there's no node to act on.
   const footer = node ? (
-    <div className="px-4 py-3 border-t border-border" style={{ background: "var(--surface-contrast)" }}>
+    <div className="px-4 py-3 border-t border-border" style={{ background: "var(--bg-sidebar)" }}>
       {/* Round 10 (mockup parity) — the approved reference for this panel
           leads its footer with ONE full-width primary CTA to ask about the
           selected node, ahead of the Learning Actions grid below (kept
@@ -435,7 +435,7 @@ export default function KnowledgeInspector({
   ) : null;
 
   return (
-    <aside role="complementary" aria-label="Trình khám phá tri thức" className="knowledge-inspector border-l border-border flex-shrink-0" style={{ background: "var(--surface-contrast)" }}>
+    <aside role="complementary" aria-label="Trình khám phá tri thức" className="knowledge-inspector border-l border-border flex-shrink-0" style={{ background: "var(--bg-sidebar)" }}>
       {navBar}
       {recentPinnedRow}
       {nodeHeader}
