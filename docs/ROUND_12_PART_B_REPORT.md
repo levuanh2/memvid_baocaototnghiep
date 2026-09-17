@@ -32,3 +32,14 @@ The test harness verifies the closed-by-default overlay and the real map-list se
 ## Accepted limitations
 
 Branch color cycling and left/right balance were investigated before this pass and remain unchanged. Exact subtree-size balancing would require precomputing direction in `mindElixirAdapter.js`; it is not part of this implementation. Existing MindElixir zoom/pan behavior is intentionally untouched.
+
+## Handoff hardening
+
+The follow-up FE pass completed the remaining presentation wiring without touching BE:
+
+- Desktop Chat keeps only the selected-source count when the source sidebar is visible; the existing source drawer is opened by one compact icon at tablet/mobile widths.
+- Readiness is represented by a `CheckCircle2` with the exact `Sẵn sàng` title and accessible label. Unknown states remain textual and are not misclassified as ready.
+- The MindMap right column remains mounted and usable in MindMap mode. The Inspector is the canvas-local, closed-by-default overlay; its drawer does not participate in flex sizing. The old title/save row and degraded banner are display-suppressed so only the compact context row is visible.
+- The context-row overflow owns save/reset/center/relations/export actions; the floating toolbar retains zoom, fit, expand, and collapse only.
+
+This handoff was verified structurally and by build/lint/test commands. No authenticated local server was available in the workspace, so a live regenerated multi-node map, screenshots at the three requested viewports, and browser-console evidence remain blocked rather than claimed.

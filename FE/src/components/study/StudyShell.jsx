@@ -97,11 +97,20 @@ export function EmptyState({ icon = "FileText", title, hint, action }) {
   );
 }
 
-/** Nhãn trạng thái dạng chữ (không bao giờ chỉ dùng màu). */
 export function StatusTag({ status }) {
+  if (status === "ready") {
+    return (
+      <span
+        className="inline-flex items-center text-[var(--ok)]"
+        title="Sẵn sàng"
+        aria-label="Sẵn sàng"
+      >
+        <Icon name="CheckCircle2" size={15} className="text-[var(--ok)] flex-shrink-0" />
+      </span>
+    );
+  }
   const map = {
     completed: ["badge-ready", "Đã xử lý"],
-    ready: ["badge-ready", "Sẵn sàng"],
     graded: ["badge-ready", "Đã chấm"],
     processing: ["badge-processing", "Đang xử lý"],
     index_ready: ["badge-processing", "Đang xử lý"],

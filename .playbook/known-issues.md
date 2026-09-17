@@ -5247,3 +5247,13 @@ Và một lỗi thiết kế của chính bản sửa, đã sửa lại: điều
 là `REDIS_URL`. Sai — `REDIS_URL` có mặt vì cache ngữ nghĩa, không phải vì có worker. Điều
 kiện đúng là `QUEUE_ENABLED` **và** `REDIS_URL`: rủi ro hai tiến trình cùng ghi chỉ tồn
 tại khi thật sự có worker RQ.
+
+### MindMap chrome phải có một chủ sở hữu hiển thị
+
+MindMap có Inspector dạng overlay trong canvas nhưng vẫn dùng SidebarRight cho các
+luồng tạo map, chọn map và dữ liệu nền. Không được ẩn toàn bộ SidebarRight chỉ vì
+`workspaceMode === "mindmap"`: thao tác tạo/chọn map sẽ biến mất và overlay không còn
+được mở qua đường dẫn UI bình thường. Quy tắc phòng ngừa: MainLayout luôn giữ một
+right-column owner; Inspector contextual phải dùng absolute positioning bên trong
+canvas, còn toolbar/context-row là hai vùng chức năng khác nhau và không được nhân
+bản menu overflow.

@@ -109,6 +109,7 @@ export default function ChatArea({
   // real link, never a dead one; `onOpenSummary` reuses MainLayout's existing
   // workspaceMode switch (same shape as the pre-existing `onSwitchToChat`).
   hasSummary = false, onOpenSummary,
+  isLeftVisible = true,
 }) {
   // Feature Pack A (Research Timeline) — ChatArea never touched Study Context
   // before this; it's the one surface where the user's two most-timeline-
@@ -753,17 +754,22 @@ export default function ChatArea({
           </button>
         </div>
 
-        <div className="hidden sm:flex items-center gap-1.5 text-small text-text-muted flex-shrink-0">
+        <div className="flex items-center gap-1.5 text-small text-text-muted flex-shrink-0">
           <Icon name="Library" size={13} />
           {selectedSources?.length > 0 ? `${selectedSources.length} nguồn đã chọn` : "Chưa chọn nguồn"}
         </div>
 
         <div className="flex-1" />
 
-        {/* The ONE visible "Chọn nguồn" action in Chat mode. Round 12 spec:
-            "button targets min 40x40px desktop" — h-10 (40px). */}
-        <button type="button" onClick={onOpenLeft} className="btn-primary !h-10 !text-small flex-shrink-0">
-          <Icon name="FolderOpen" size={14} /> Chọn nguồn
+        {/* On tablet/mobile, use one compact source icon to open the existing drawer — no duplicate modal */}
+        <button
+          type="button"
+          onClick={onOpenLeft}
+          className={`icon-btn w-10 h-10 flex-shrink-0 ${isLeftVisible ? "md:hidden" : ""}`}
+          aria-label="Mở thư mục nguồn"
+          title="Mở thư mục nguồn"
+        >
+          <Icon name="FolderOpen" size={16} />
         </button>
 
         <button type="button" onClick={handleNewChat} disabled={loading || Boolean(pendingReview)}

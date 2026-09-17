@@ -538,6 +538,7 @@ export default function MainLayout({
             chatProps={{
               selectedSources, sources, onEvidence: setEvidence, highlight, onHighlight,
               onOpenLeft: () => (panel.drawer ? setLeftOpen(true) : panel.setCollapsedFor("left", false)),
+              isLeftVisible: !panel.drawer && !panel.collapsed.left,
               askAboutDraft,
               hasSummary: Boolean(summaryData), onOpenSummary: onSwitchToSummary,
             }}
@@ -590,65 +591,6 @@ export default function MainLayout({
               }
               style={panel.drawer ? undefined : { width: panel.width.right }}
             >
-              {/* Workspace architecture — exactly ONE Inspector, ONE SidebarRight,
-                  both ALWAYS mounted (CSS `hidden`, never conditional JSX) so
-                  neither remounts when `workspaceMode` changes. MindMap mode
-                  shows KnowledgeInspector ONLY once a map actually exists —
-                  before that, WorkspaceEmptyState's "Tạo sơ đồ tư duy" CTA
-                  calls onMindmapAction, which (no map yet) bounces to
-                  SidebarRight's own generator via openArtifact(); found via
-                  a live screenshot (round 5 QA) that the CTA was a complete
-                  no-op with the old `workspaceMode === "mindmap"` condition
-                  alone, because SidebarRight — the panel that CTA opens —
-                  was hidden in favor of an empty KnowledgeInspector the
-                  whole time it mattered. Chat/Summary keep SidebarRight's
-                  evidence/tutor tabs as before. */}
-              <div className="hidden h-full">
-                {/* MindElixirView owns the canvas-local Inspector overlay so opening it never resizes the canvas. */}
-                {/* Feature Pack B — floating OVER the Inspector, not replacing
-                    it (Inspector stays mounted/visible underneath, keeps its
-                    own scroll/selection). Fixed-position slide-in, same shape
-                    as the mobile right-drawer elsewhere in this file, just
-                    available regardless of viewport width because this is
-                    the one case with no other way to reach the Timeline. */}
-                {/* Legacy Timeline floating-dialog markup removed in Part B; Timeline now stays in the normal right column. */}
-                {/*
-                  <>
-                    <div
-                      className="fixed inset-0 z-40 bg-black/20"
-                      onClick={() => setTimelineOverlayOpen(false)}
-                      aria-hidden="true"
-                    />
-                    <div
-                      role="dialog"
-                      aria-modal="true"
-                      aria-label="Dòng thời gian nghiên cứu"
-                      className="fixed top-[60px] right-0 h-[calc(100vh-60px)] z-50 w-[326px] max-w-[90vw]
-                                 bg-surface-sidebar border-l border-border shadow-card-hover
-                                 flex flex-col"
-                    >
-                      <div className="flex items-center justify-between px-3 py-2 border-b border-border flex-shrink-0">
-                        <span className="text-caption text-text-muted">
-                          Nổi trên Trình khám phá tri thức
-                        </span>
-                        <button type="button" onClick={() => setTimelineOverlayOpen(false)}
-                                className="icon-btn w-7 h-7" autoFocus
-                                aria-label="Đóng dòng thời gian" title="Đóng (Esc)">
-                          <Icon name="X" size={14} />
-                        </button>
-                      </div>
-                      <div className="flex-1 min-h-0">
-                        <ResearchTimeline
-                          mindMapController={mindMapController}
-                          onJumpQuestion={onOverlayJumpQuestion}
-                          onJumpNode={onJumpToMindMapNode}
-                          onJumpEvidence={onOverlayJumpEvidence}
-                        />
-                      </div>
-                    </div>
-                  </>
-                */}
-              </div>
               <div className="h-full">
                 <SidebarRight
                   selectedSources={selectedSources}
