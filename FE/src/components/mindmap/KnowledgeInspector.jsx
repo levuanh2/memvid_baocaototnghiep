@@ -137,7 +137,7 @@ const BUCKET_META = {
 
 export default function KnowledgeInspector({
   node, relations, breadcrumb, documentTitle, sources, generating,
-  onNavigate, onAskAI, onOpenSource, nav,
+  onNavigate, onAskAI, onOpenSource, nav, onClose,
 }) {
   const cacheRef = useRef(new Map()); // session-lifetime — Inspector no longer unmounts per click (Task 1)
   const [highlightedIds, setHighlightedIds] = useState(() => new Set());
@@ -202,6 +202,11 @@ export default function KnowledgeInspector({
         Trình khám phá tri thức
       </span>
       <div className="flex-1" />
+      {onClose && (
+        <button type="button" onClick={onClose} className="icon-btn w-7 h-7" aria-label="Đóng bảng kiểm tra" title="Đóng">
+          <Icon name="X" size={14} />
+        </button>
+      )}
       {node && (
         <button aria-pressed={nav.isPinned} onClick={nav.onTogglePin}
           aria-label={nav.isPinned ? "Bỏ ghim nhánh này" : "Ghim nhánh này"}

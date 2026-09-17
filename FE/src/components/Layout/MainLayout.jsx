@@ -3,8 +3,6 @@ import { Link, useNavigate } from "react-router-dom";
 import SidebarLeft from "./SidebarLeft";
 import SidebarRight from "./SidebarRight";
 import WorkspaceContainer from "./WorkspaceContainer";
-import KnowledgeInspector from "../mindmap/KnowledgeInspector";
-import ResearchTimeline from "../study/ResearchTimeline";
 import { useMindMapController } from "../../hooks/useMindMapController";
 import PanelSpine from "./PanelSpine";
 import PanelDivider from "./PanelDivider";
@@ -68,7 +66,6 @@ export default function MainLayout({
   // a modal — see SidebarRight.jsx's two small forwarding effects.
   const [workspaceMode, setWorkspaceMode] = useState(initialWorkspaceMode);
   const [mindmapData, setMindmapData] = useState(null);   // { data, onRegenerate, regenerating } | null
-  const hasMindmap = Boolean(mindmapData?.data);
   const [summaryData, setSummaryData] = useState(null);   // summary record | null
   // Auto-switch to a newly-populated tab ONCE (null → non-null), not on every
   // later update (Save/regenerate) — those must not yank the user off Chat.
@@ -86,6 +83,10 @@ export default function MainLayout({
   // Feature Pack B — the other direction of the same switch, for Chat's own
   // "Xem tóm tắt" button.
   const onSwitchToSummary = useCallback(() => setWorkspaceMode("summary"), []);
+  const openTimeline = useCallback(() => {
+    setRightView("timeline");
+    if (panel.drawer) setRightOpen(true); else panel.setCollapsedFor("right", false);
+  }, [panel]);
 
   // ONE controller, ONE Inspector, shared by MindElixirView (via WorkspaceContainer)
   // and the KnowledgeInspector rendered directly below — selection state
@@ -217,35 +218,11 @@ export default function MainLayout({
   // yet, round 5: SidebarRight shows its own generator there, not
   // KnowledgeInspector). This is the ONE case that needs an actual overlay —
   // a floating panel ON TOP of the Inspector, not a replacement for it.
-  const [timelineOverlayOpen, setTimelineOverlayOpen] = useState(false);
-  const openTimeline = useCallback(() => {
-    if (workspaceMode === "mindmap" && hasMindmap) { setTimelineOverlayOpen(true); return; }
-    setRightView("timeline");
-    if (panel.drawer) setRightOpen(true); else panel.setCollapsedFor("right", false);
-  }, [workspaceMode, hasMindmap, panel]);
-  useEffect(() => {
-    if (!timelineOverlayOpen) return;
-    const onKey = (e) => { if (e.key === "Escape") setTimelineOverlayOpen(false); };
-    window.addEventListener("keydown", onKey);
-    return () => window.removeEventListener("keydown", onKey);
-  }, [timelineOverlayOpen]);
   // Jumping to a question/evidence entry from the MindMap-mode overlay must
   // switch workspaceMode itself, or the jump has no visible effect (the
   // panel it lands in — Chat's composer, the Evidence tab — isn't the one on
   // screen). Closes the overlay too: once you've jumped away from MindMap,
   // there's nothing left for it to float over.
-  const onOverlayJumpQuestion = useCallback((text) => {
-    setWorkspaceMode("chat");
-    askDirect(text);
-    setTimelineOverlayOpen(false);
-  }, [askDirect]);
-  const onOverlayJumpEvidence = useCallback(({ stem, chunkId }) => {
-    setWorkspaceMode("chat");
-    setRightView("evidence");
-    if (panel.drawer) setRightOpen(true); else panel.setCollapsedFor("right", false);
-    onHighlight?.({ stem, chunkId });
-    setTimelineOverlayOpen(false);
-  }, [onHighlight, panel]);
 
 
   // Step 10 — Ctrl+/ (hoặc Cmd+/) mở Gia sư AI từ bất cứ đâu trong Workspace.
@@ -567,6 +544,7 @@ export default function MainLayout({
             mindmapData={mindmapData}
             summaryData={summaryData}
             controller={mindMapController}
+            inspectorProps={inspectorProps}
           />
         </main>
 
@@ -625,15 +603,16 @@ export default function MainLayout({
                   was hidden in favor of an empty KnowledgeInspector the
                   whole time it mattered. Chat/Summary keep SidebarRight's
                   evidence/tutor tabs as before. */}
-              <div className={workspaceMode === "mindmap" && hasMindmap ? "h-full" : "hidden h-full"}>
-                <KnowledgeInspector {...inspectorProps} />
+              <div className="hidden h-full">
+                {/* MindElixirView owns the canvas-local Inspector overlay so opening it never resizes the canvas. */}
                 {/* Feature Pack B — floating OVER the Inspector, not replacing
                     it (Inspector stays mounted/visible underneath, keeps its
                     own scroll/selection). Fixed-position slide-in, same shape
                     as the mobile right-drawer elsewhere in this file, just
                     available regardless of viewport width because this is
                     the one case with no other way to reach the Timeline. */}
-                {timelineOverlayOpen && (
+                {/* Legacy Timeline floating-dialog markup removed in Part B; Timeline now stays in the normal right column. */}
+                {/*
                   <>
                     <div
                       className="fixed inset-0 z-40 bg-black/20"
@@ -668,9 +647,9 @@ export default function MainLayout({
                       </div>
                     </div>
                   </>
-                )}
+                */}
               </div>
-              <div className={workspaceMode === "mindmap" && hasMindmap ? "hidden h-full" : "h-full"}>
+              <div className="h-full">
                 <SidebarRight
                   selectedSources={selectedSources}
                   evidence={evidence}

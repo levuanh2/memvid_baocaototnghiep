@@ -136,6 +136,7 @@ export default function SidebarRight({
   // Params của lần chạy gần nhất — nguồn context cho retry (kể cả job resume).
   const lastMindmapRunRef = useRef(null);
   const lastSummaryRunRef = useRef(null);
+  const createMindmapRef = useRef(null);
 
   // ── Mindmap job refs ───────────────────────────────
   const pollerRef = useRef(null); // fresh createMindmapPoller() instance per run
@@ -373,6 +374,8 @@ export default function SidebarRight({
   };
 
   const handleGenerateMindMap = () => runMindmapGeneration(selectedSources, { force: false });
+  createMindmapRef.current = handleGenerateMindMap;
+  const onCreateNewMindmap = useCallback(() => createMindmapRef.current?.(), []);
 
   // Degraded-banner "Tạo lại": regenerate the map that's currently open, using
   // the sources it was built from (falls back to the sidebar selection if the
@@ -626,10 +629,14 @@ export default function SidebarRight({
     onAskAbout: handleAskAbout,
     onAskDirect: handleAskDirect,
     onSaved: handleMindmapSaved,
+    mindMaps,
+    onSelectMap: setShowModalMap,
+    onCreateNew: onCreateNewMindmap,
+    creating: loading || mindmapJobUi.running,
     // PR#8: viewer báo dirty lên đây — handleRegenerateMindMap đọc ref này để
     // confirm trước khi "Tạo lại" thay thế bản đang sửa.
     onDirtyChange: (d) => { mindmapDirtyRef.current = Boolean(d); },
-  } : null), [showModalMap, mindmapGenerating, mindmapJobUi.progress, handleCancelMindMap, handleAskAbout, handleAskDirect, handleMindmapSaved]);
+  } : null), [showModalMap, mindMaps, loading, mindmapJobUi.running, mindmapGenerating, mindmapJobUi.progress, handleCancelMindMap, handleAskAbout, handleAskDirect, handleMindmapSaved, onCreateNewMindmap]);
 
   // Workspace architecture — forward the SAME `modalMapData` a portal used to
   // consume, plus the two extra props MindElixirView takes directly
@@ -637,7 +644,7 @@ export default function SidebarRight({
   // `data`). `showModalMap.initialLayoutType` was dead (MindMapModal accepted
   // it but never forwarded it to MindElixirView) — not carried forward.
   useEffect(() => {
-    onMindmapDataChange?.(modalMapData ? {
+      onMindmapDataChange?.(modalMapData ? {
       data: modalMapData, onRegenerate: handleRegenerateMindMap, regenerating: mindmapGenerating,
     } : null);
     // eslint-disable-next-line react-hooks/exhaustive-deps
