@@ -1007,12 +1007,25 @@ export default function ChatArea({
         <div ref={messagesEndRef} />
       </div>
 
-      {/* ── COMPOSER ── */}
-      <div onMouseUp={handlePanelMouseUp}
-        className="flex-shrink-0 border-t border-border transition-theme" style={{ background: "var(--bg-sidebar)" }}>
+      {/* ── COMPOSER ──
+          Round 10 (Chat-mode text spec, no mockup provided) — was a
+          full-width, edge-to-edge, top-bordered footer (flat bar the whole
+          width of the pane). Spec calls for "a compact floating/sticky
+          command bar near the bottom of the central canvas, NOT a
+          full-width boxed footer" — the outer band below is now just
+          transparent inset padding (no border, no fill spanning the full
+          width); the actual visible surface is the rounded, bordered,
+          shadowed card centered inside it, matching the reading column's
+          own width instead of the pane's full width. Every inner element
+          (suggestions row, attached-image preview, input row, all their
+          handlers) is unchanged — only the outer wrapper's chrome moved. */}
+      <div onMouseUp={handlePanelMouseUp} className="flex-shrink-0 px-3 sm:px-6 pb-3 sm:pb-4 pt-2">
+      <div
+        className="mx-auto w-full max-w-[720px] rounded-[14px] border transition-theme"
+        style={{ borderColor: "var(--border-color)", background: "var(--bg-sidebar)", boxShadow: "var(--shadow-card)" }}>
         {/* Follow-up suggestions */}
         {messages.length > 0 && !loading && !pendingReview && (
-          <div className="px-4 sm:px-8 pt-3 pb-1 flex gap-2 overflow-x-auto scrollbar-none">
+          <div className="px-4 sm:px-6 pt-3 pb-1 flex gap-2 overflow-x-auto scrollbar-none">
             {suggestions.map((q) => (
               <button key={q} onClick={() => fillSuggestion(q)} className="pill-action flex-shrink-0">{q}</button>
             ))}
@@ -1020,7 +1033,7 @@ export default function ChatArea({
         )}
 
         {attachedImage && (
-          <div className="px-4 sm:px-8 pt-3 -mb-1">
+          <div className="px-4 sm:px-6 pt-3 -mb-1">
             <div className="inline-flex items-center gap-2.5 rounded-[9px] border px-2 py-2"
               style={{ borderColor: "var(--border-color)", background: "var(--bg-elevated)" }}>
               <img src={attachedImage.previewUrl} alt="Ảnh sắp gửi kèm câu hỏi"
@@ -1095,6 +1108,7 @@ export default function ChatArea({
             </button>
           )}
         </div>
+      </div>
       </div>
 
       <style>{`

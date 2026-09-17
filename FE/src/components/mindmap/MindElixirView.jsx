@@ -517,16 +517,15 @@ export default function MindElixirView({ data, onRegenerate, regenerating, contr
           <button onClick={fitView} aria-label="Vừa khung" title="Vừa khung (F)" className="icon-btn w-8 h-8">
             <Icon name="Scan" size={14} />
           </button>
-          <button onClick={resetView} aria-label="Đặt lại khung nhìn" title="Đặt lại khung nhìn (0)" className="icon-btn w-8 h-8">
-            <Icon name="RotateCcw" size={14} />
-          </button>
-          <button onClick={() => mindRef.current?.toCenter()} aria-label="Căn giữa" title="Căn giữa" className="icon-btn w-8 h-8">
-            <Icon name="Maximize" size={15} />
-          </button>
           <div className="mm-floating-toolbar__sep" aria-hidden="true" />
           {/* Round 8 — Expand/Collapse. Scoped to the selected node's subtree
               when one is selected, else the whole map (see expandCollapseAll
-              above for the full public-API feasibility note). */}
+              above for the full public-API feasibility note).
+              Round 11 (mockup parity) — reordered to sit right after zoom+fit,
+              matching the reference image's exact sequence (was after a
+              reset/center pair that has no mockup equivalent — those two
+              moved after this, not removed; still real, working
+              functionality). */}
           <button onClick={expandAll} aria-label={expandCollapseLabel.expand} title={expandCollapseLabel.expand}
             className="icon-btn w-8 h-8">
             <Icon name="ChevronsUpDown" size={15} />
@@ -534,6 +533,13 @@ export default function MindElixirView({ data, onRegenerate, regenerating, contr
           <button onClick={collapseAll} aria-label={expandCollapseLabel.collapse} title={expandCollapseLabel.collapse}
             className="icon-btn w-8 h-8">
             <Icon name="ChevronsDownUp" size={15} />
+          </button>
+          <div className="mm-floating-toolbar__sep" aria-hidden="true" />
+          <button onClick={resetView} aria-label="Đặt lại khung nhìn" title="Đặt lại khung nhìn (0)" className="icon-btn w-8 h-8">
+            <Icon name="RotateCcw" size={14} />
+          </button>
+          <button onClick={() => mindRef.current?.toCenter()} aria-label="Căn giữa" title="Căn giữa" className="icon-btn w-8 h-8">
+            <Icon name="Maximize" size={15} />
           </button>
           <div className="mm-floating-toolbar__sep" aria-hidden="true" />
           <button onClick={() => setShowRelations((v) => !v)} aria-pressed={showRelations}
@@ -544,21 +550,48 @@ export default function MindElixirView({ data, onRegenerate, regenerating, contr
           <button onClick={handleExportPng} aria-label="Xuất PNG" title="Xuất PNG" className="icon-btn w-8 h-8">
             <Icon name="Download" size={14} />
           </button>
-          {/* Fullscreen (IA pass round 5, item 7) — same native Fullscreen
-              API pattern mind-elixir's own built-in toolbar uses internally
-              (verified in node_modules/mind-elixir/dist/MindElixir.js:
-              `e.el.requestFullscreen()`/`document.exitFullscreen()`), just
-              wired to this app's own floating toolbar instead — mind-
-              elixir's own toolbar is off (`toolBar: false`) so it doesn't
-              double up with this one. Toggles on the map's own wrapper
-              (`.mm-canvas-wrap`), not the container ref mind-elixir owns
-              (untouched), so this is presentation-only, no library state. */}
-          <button onClick={toggleFullscreen} aria-pressed={isFullscreen}
-            aria-label={isFullscreen ? "Thoát toàn màn hình" : "Toàn màn hình"}
-            title={isFullscreen ? "Thoát toàn màn hình" : "Toàn màn hình"} className="icon-btn w-8 h-8">
-            <Icon name="Expand" size={14} />
-          </button>
         </div>
+
+        {/* Round 10 (mockup parity) — fullscreen moved OUT of the main
+            toolbar into its own standalone bottom-right corner control,
+            matching the reference image's separate fullscreen button
+            (distinct from the toolbar's fit icon). Same native Fullscreen
+            API pattern mind-elixir's own built-in toolbar uses internally
+            (verified in node_modules/mind-elixir/dist/MindElixir.js:
+            `e.el.requestFullscreen()`/`document.exitFullscreen()`) —
+            mind-elixir's own toolbar is off (`toolBar: false`) so it
+            doesn't double up with this one. Toggles on the map's own
+            wrapper (`.mm-canvas-wrap`), not the container ref mind-elixir
+            owns (untouched), so this is presentation-only, no library
+            state. */}
+        <button onClick={toggleFullscreen} aria-pressed={isFullscreen}
+          aria-label={isFullscreen ? "Thoát toàn màn hình" : "Toàn màn hình"}
+          title={isFullscreen ? "Thoát toàn màn hình" : "Toàn màn hình"}
+          className="mm-fullscreen-corner icon-btn w-8 h-8"
+          style={{ background: "color-mix(in srgb, var(--bg-card) 92%, transparent)", border: "1px solid var(--border-color)", boxShadow: "var(--shadow-card)" }}>
+          <Icon name="Expand" size={14} />
+        </button>
+
+        {/* Round 10 (mockup parity) — bottom-center "generate a new map"
+            entry point directly on the canvas (previously the only trigger
+            lived inside SidebarRight's own panel). Reuses the SAME
+            `onRegenerate` this view already receives (the "Tạo lại" link
+            in the degraded banner above calls the exact same prop) — no
+            new generation logic, no new wiring into SidebarRight. No
+            dropdown/chevron: the reference image shows one next to this
+            button, but there is no second generation option (mode
+            selector, etc.) actually implemented anywhere in this product
+            (confirmed absent from the backend response in an earlier
+            round's live verification) — adding a chevron with nothing
+            real behind it would be exactly the "button that only visually
+            exists" this project's own rules rule out. */}
+        {!generating && (
+          <button onClick={onRegenerate} disabled={regenerating}
+            className="mm-generate-cta btn-primary !py-2.5 disabled:opacity-60">
+            <Icon name="Plus" size={15} />
+            {regenerating ? "Đang tạo…" : "Tạo sơ đồ mới"}
+          </button>
+        )}
       </div>
     </div>
   );

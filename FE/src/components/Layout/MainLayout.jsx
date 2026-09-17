@@ -15,13 +15,22 @@ import { useAuth } from "../../auth/useAuth";
 import { Icon } from "../ui/Icon";
 import Toaster from "../ui/Toaster";
 import AccountMenu from "./AccountMenu";
-import StudyBreadcrumb from "../study/StudyBreadcrumb";
 import { useStudyContext } from "../../study/useStudyContext";
 import { openCommandPalette } from "../../utils/commandPaletteBus";
 import { useTutorMemory } from "../../study/useTutorMemory";
 import { globalShortcutAction, mindmapRelationAction, hasVisibleBlockingOverlay } from "../../utils/keyboardShortcuts";
 import { OPEN_SHORTCUTS_EVENT } from "../../utils/shortcutsBus";
 import ShortcutsOverlay from "../shortcuts/ShortcutsOverlay";
+
+// Round 11 (mockup parity, explicit user decision) — the Chat/Mind Map/
+// Summary mode switch, moved here from the now-deleted LessonHeader.jsx
+// (was its own `TABS` constant there). Same three entries, same order,
+// same icons — this is a render-location move, not a redesign.
+const MODE_TABS = [
+  { key: "chat", label: "Trò chuyện", icon: "MessageSquareText" },
+  { key: "mindmap", label: "Sơ đồ tư duy", icon: "Network" },
+  { key: "summary", label: "Tóm tắt", icon: "ScrollText" },
+];
 
 export default function MainLayout({
   selectedSources, setSelectedSources, initialAskAbout = null,
@@ -41,20 +50,14 @@ export default function MainLayout({
   const panel = usePanelLayout();
   const { isDark, setLight, setDark } = useTheme();
   const { user, logout } = useAuth();
-  const { selectedDocument, selectDocument } = useStudyContext();
+  // `selectedDocument` (Study Context's single-document pointer) used to
+  // feed the header's center eyebrow/breadcrumb and the LessonHeader title
+  // — both removed in round 11 (the merged single-row header has no
+  // eyebrow/title slot, matching the approved reference image). Only
+  // `selectDocument` (the setter, used by the Mind Map jump-to-node flow
+  // below) is still needed from this hook.
+  const { selectDocument } = useStudyContext();
   const tutorMemory = useTutorMemory();
-  // Lesson header title — real, derived from the same sources/selection
-  // state SidebarLeft already renders from (`selectedDocument` is a stem
-  // string, not a title object; resolved the same way SidebarLeft/ChatArea
-  // already resolve a stem -> display filename). No fabricated per-user
-  // title.
-  const lessonTitle = useMemo(() => {
-    const bySource = (stem) => sources.find((s) => (s.video_stem || s.video) === stem)?.filename || stem;
-    if (selectedDocument) return bySource(selectedDocument);
-    if (selectedSources?.length === 1) return bySource(selectedSources[0]);
-    if (selectedSources?.length > 1) return "Không gian nghiên cứu";
-    return "Phòng đọc";
-  }, [selectedDocument, selectedSources, sources]);
   const navigate = useNavigate();
 
   // ── Workspace architecture (approved audit) ──────────────────────────────
@@ -192,9 +195,9 @@ export default function MainLayout({
   }, [panel]);
 
   // Structural refactor (Learning Canvas lesson header + next-action strip) —
-  // ONE real action per artifact type, shared by LessonHeader's always-on
-  // buttons and ChatArea's next-action strip: switch to the pane if it
-  // already has data (same as clicking the WorkspaceTabs tab), otherwise
+  // ONE real action per artifact type, shared by the header's mode-switch
+  // tabs and ChatArea's next-action strip: switch to the pane if it
+  // already has data (same as clicking a mode tab), otherwise
   // bounce to the Inspector's existing "Tạo sơ đồ"/"Tạo tóm tắt" generator
   // via the SAME openArtifact mechanism Tutor's "Xem sơ đồ"/"Xem tóm tắt"
   // links already use just above — no new generation logic, no mock.
@@ -292,9 +295,9 @@ export default function MainLayout({
       switch (action) {
         case "help": return setShortcutsOpen((v) => !v);
         case "nav-chat": return onSwitchToChat();
-        // Alt+M mirrors LessonHeader's own mode tabs (IA pass, round 5: the
-        // Mind Map tab is now always enabled — see WorkspaceEmptyState for
-        // what renders with no map yet, same as clicking the tab does).
+        // Alt+M mirrors the header's own mode tabs above (IA pass, round 5:
+        // the Mind Map tab is now always enabled — see WorkspaceEmptyState
+        // for what renders with no map yet, same as clicking the tab does).
         case "nav-mindmap": return setWorkspaceMode("mindmap");
         // Alt+S mirrors the EXISTING header "StudyMap" <Link to="/app/study">
         // above — same destination, no new route invented.
@@ -364,7 +367,7 @@ export default function MainLayout({
 
       {/* ── TOP HEADER ── */}
       <header
-        className="flex items-center gap-4 px-4 sm:px-5 h-[56px] border-b border-border flex-shrink-0 transition-theme"
+        className="flex items-center gap-4 px-4 sm:px-5 h-[60px] border-b border-border flex-shrink-0 transition-theme"
         style={{ background: "var(--bg-sidebar)" }}
       >
         {/* Mobile: open source library */}
@@ -376,7 +379,12 @@ export default function MainLayout({
             signature itself (Signature Contract §7) — stays --seal
             regardless of what --accent's general action/selection color is
             (forest, then blue); every other component only REFERENCES this
-            motif, never duplicates its exact treatment. */}
+            motif, never duplicates its exact treatment.
+            Round 11 (mockup parity) — "StudyMap" moved here, right next to
+            the wordmark, matching the approved reference image's brand
+            cluster; it's still the SAME real `<Link to="/app/study">`
+            (Alt+S, quiz/practice mode) that used to sit in the right-side
+            icon cluster, just relocated — not duplicated there anymore. */}
         <div className="flex items-center gap-2.5 flex-shrink-0 select-none">
           <span
             className="w-[30px] h-[30px] rounded-[6px] inline-flex items-center justify-center font-display text-body-lg font-semibold flex-shrink-0"
@@ -388,48 +396,52 @@ export default function MainLayout({
           <span className="font-display font-semibold text-title tracking-tight text-text-primary hidden sm:block">
             MemVid<span className="text-seal">X</span>
           </span>
+          <Link
+            to="/app/study"
+            className="hidden sm:inline text-small font-medium text-text-muted hover:text-accent transition-colors"
+            title="Quiz chẩn đoán, ôn tập theo lỗ hổng (Alt+S)"
+          >
+            StudyMap
+          </Link>
         </div>
 
-        {/* Center eyebrow — the thesis, not a dead search box. Phase 4B #8: khi
-            Study Context có tài liệu đang chọn (tới đây qua moBeMat), thay eyebrow
-            tĩnh bằng chặng đường thật Document > Bề mặt > Chủ đề > Câu hỏi > Chat —
-            KHÔNG suy từ URL, chỉ đọc context. Chưa có lựa chọn thì giữ eyebrow cũ. */}
-        <div className="flex-1 flex justify-center px-2 min-w-0">
-          {selectedDocument ? (
-            // Final QA: was `md:flex` (768px) — at that width this row also has
-            // the StudyMap/search/tutor buttons appearing (all `hidden md:*`
-            // too), so the breadcrumb gets squeezed into near-zero space and
-            // truncates to one letter. `lg` (1024px) gives it room.
-            <StudyBreadcrumb showChat className="hidden lg:flex" />
-          ) : selectedSources?.length > 1 ? (
-            // Feature epic M1 (Multi-Document Intelligence, mục 1) — real signal
-            // that chat/mindmap/summary generation below will draw from every
-            // checked source, not silently just one. `selectedDocument` stays
-            // null here on purpose (Study Context's single-document pointer is
-            // a separate concept — see docs/MULTI_DOCUMENT_WORKSPACE.md).
-            <span className="hidden lg:flex items-center gap-1.5 text-metadata uppercase text-text-muted font-mono truncate">
-              <Icon name="FileStack" size={12} className="text-accent" />
-              Không gian nghiên cứu · {selectedSources.length} tài liệu
-            </span>
-          ) : (
-            <span className="hidden lg:block text-metadata uppercase text-text-muted font-mono truncate">
-              Đọc · Truy hồi · Dẫn chứng
-            </span>
-          )}
-        </div>
+        {/* Mode switch — Round 11 (mockup parity, explicit user decision):
+            moved here from the now-deleted LessonHeader.jsx/WorkspaceContainer
+            second row, merging the app's two persistent chrome rows (global
+            header 56px + workspace toolbar 52px = 108px) into the ONE row
+            the approved reference image shows. Same `workspaceMode`/
+            `setWorkspaceMode` state this file already owned before this
+            round (LessonHeader only ever received it as a prop) — no new
+            state, no prop drilling added, just rendered one level up.
+            Pill styling (filled accent when active) matches the reference
+            image; icon-only below `sm` so it still fits the mobile header
+            alongside the hamburger/account/search icons (mode-switching
+            must stay reachable on mobile — see round 10's own checklist
+            item on this). */}
+        <nav role="tablist" aria-label="Chế độ Workspace"
+          className="flex items-center gap-1 p-1 rounded-full flex-shrink-0 mx-auto"
+          style={{ background: "var(--bg-card)", border: "1px solid var(--border-color)" }}>
+          {MODE_TABS.map((t) => {
+            const active = workspaceMode === t.key;
+            return (
+              <button key={t.key} type="button" role="tab" aria-selected={active}
+                onClick={() => setWorkspaceMode(t.key)}
+                title={t.label}
+                className="flex items-center gap-1.5 px-2.5 sm:px-3 py-1.5 text-small rounded-full transition-colors"
+                style={{
+                  background: active ? "var(--accent)" : "transparent",
+                  color: active ? "#FFFFFF" : "var(--text-secondary)",
+                  fontWeight: active ? 600 : 500,
+                }}>
+                <Icon name={t.icon} size={14} />
+                <span className="hidden sm:inline">{t.label}</span>
+              </button>
+            );
+          })}
+        </nav>
 
         {/* Right actions */}
         <div className="flex items-center gap-2 flex-shrink-0">
-          {/* Sang gian StudyMap — cùng toà nhà, khác việc: đọc ở đây, kiểm tra ở kia. */}
-          <Link
-            to="/app/study"
-            className="pill-action"
-            title="Quiz chẩn đoán, ôn tập theo lỗ hổng (Alt+S)"
-          >
-            <Icon name="ScrollText" size={14} />
-            <span className="hidden sm:inline">StudyMap</span>
-          </Link>
-
           {/* Mobile: search has no keyboard shortcut to fall back on — needs its own icon button. */}
           <button onClick={openCommandPalette} className="md:hidden icon-btn w-9 h-9" aria-label="Tìm kiếm">
             <Icon name="Search" size={18} />
@@ -506,7 +518,7 @@ export default function MainLayout({
             <aside
               className={
                 panel.drawer
-                  ? `fixed top-[56px] left-0 h-[calc(100vh-56px)] z-40 w-[252px] shrink-0
+                  ? `fixed top-[60px] left-0 h-[calc(100vh-60px)] z-40 w-[252px] shrink-0
                      bg-surface-sidebar border-r border-border
                      transition-transform duration-200 ease-in-out
                      ${leftOpen ? "translate-x-0" : "-translate-x-full"}`
@@ -544,8 +556,6 @@ export default function MainLayout({
         <main className="flex flex-1 flex-col min-w-0 min-h-0">
           <WorkspaceContainer
             mode={workspaceMode}
-            onModeChange={setWorkspaceMode}
-            lessonTitle={lessonTitle}
             onMindmapAction={onMindmapAction}
             onSummaryAction={onSummaryAction}
             chatProps={{
@@ -594,7 +604,7 @@ export default function MainLayout({
                        bg-surface-sidebar border-t border-border rounded-t-[14px]
                        transition-transform duration-200 ease-in-out
                        ${rightOpen ? "translate-y-0" : "translate-y-full"}`
-                    : `fixed top-[56px] right-0 h-[calc(100vh-56px)] z-40 w-[326px] shrink-0
+                    : `fixed top-[60px] right-0 h-[calc(100vh-60px)] z-40 w-[326px] shrink-0
                        bg-surface-sidebar border-l border-border
                        transition-transform duration-200 ease-in-out
                        ${rightOpen ? "translate-x-0" : "translate-x-full"}`
@@ -634,7 +644,7 @@ export default function MainLayout({
                       role="dialog"
                       aria-modal="true"
                       aria-label="Dòng thời gian nghiên cứu"
-                      className="fixed top-[56px] right-0 h-[calc(100vh-56px)] z-50 w-[326px] max-w-[90vw]
+                      className="fixed top-[60px] right-0 h-[calc(100vh-60px)] z-50 w-[326px] max-w-[90vw]
                                  bg-surface-sidebar border-l border-border shadow-card-hover
                                  flex flex-col"
                     >

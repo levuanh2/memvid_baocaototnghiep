@@ -13,33 +13,31 @@
 import ChatArea from "./ChatArea";
 import MindElixirView from "../mindmap/MindElixirView";
 import SummaryPane from "./SummaryPane";
-import LessonHeader from "./LessonHeader";
 import WorkspaceEmptyState from "./WorkspaceEmptyState";
-import { computeReadyCount } from "../../utils/workspaceReadiness";
 
 const paneClass = (active) => (active ? "flex-1 min-h-0" : "hidden");
 
+// Round 11 (mockup parity, explicit user decision) — LessonHeader.jsx
+// (title + mode-switch tabs row) is REMOVED. Its mode-switch moved up into
+// MainLayout's own single merged header (see MainLayout.jsx's `MODE_TABS`);
+// its title/selection-count display had no equivalent slot in the merged
+// header and is dropped, matching the approved reference image (the left
+// source drawer and each pane's own in-content state already show
+// selection/title info — Mind Map's own toolbar row keeps its title,
+// ChatArea's own goal banner keeps selection state). `mode` is still a
+// required prop here — this component still uses it for the actual pane-
+// switching logic below, untouched.
 export default function WorkspaceContainer({
-  mode, onModeChange,
+  mode,
   chatProps, mindmapData, summaryData, controller,
-  lessonTitle, onMindmapAction, onSummaryAction,
+  onMindmapAction, onSummaryAction,
 }) {
   const hasMindmap = Boolean(mindmapData?.data);
   const hasSummary = Boolean(summaryData);
   const selectedSources = chatProps?.selectedSources || [];
-  const sources = chatProps?.sources || [];
-  const readyCount = computeReadyCount(sources, selectedSources);
 
   return (
     <div className="flex flex-1 flex-col min-w-0 min-h-0">
-      <LessonHeader
-        title={lessonTitle}
-        selectedCount={selectedSources.length}
-        readyCount={readyCount}
-        mode={mode}
-        onModeChange={onModeChange}
-      />
-
       <div className={paneClass(mode === "chat")}>
         <ChatArea {...chatProps} />
       </div>

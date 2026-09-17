@@ -74,7 +74,7 @@ export default function EvidenceDrawer({ node, onClose, generating, onAskAbout, 
         aria-modal="false"
         aria-label={`Bằng chứng cho ${node.title || "nhánh"}`}
         className="evidence-drawer h-full w-full max-w-[380px] flex flex-col border-l border-border shadow-card-hover animate-drawerIn"
-        style={{ background: "var(--surface-contrast)" }}
+        style={{ background: "var(--bg-sidebar)" }}
         onMouseDown={(e) => e.stopPropagation()}
       >
         <div className="flex items-start gap-2 px-4 py-3.5 border-b border-border flex-shrink-0">
