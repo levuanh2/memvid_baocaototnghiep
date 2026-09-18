@@ -92,6 +92,11 @@ were changed. The clean base does not contain `cbeb475` as an ancestor.
 
 ## Automated verification
 
+The post-fidelity full run was `npm test -- --run` = 1076/1076, `npm run build`
+exit 0, `npx eslint src` = 64 findings (58 errors, 6 warnings), unchanged from
+the candidate baseline, and `git diff --check` exit 0. The CRLF notices emitted
+by Git are conversion notices, not diff-check failures.
+
 Commands run from `FE/`:
 
 | Command | Result |
