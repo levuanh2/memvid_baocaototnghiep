@@ -49,10 +49,17 @@
 
 ## Deployment and live verification boundary
 
-The current branch and `origin/release/p0-p0.5-verification` remain at
-`60bc15f`; the V2 working-tree changes are not deployed. The production
-workflow deploys only `main` through the EC2 GitHub Actions path, so production
-cannot be used as evidence for these uncommitted changes.
+Gate A candidate commits are now pushed to
+`origin/release/p0-p0.5-verification`:
+
+- `7f74d73` — FE Mind Elixir V2 layout/lifecycle/workspace/tests
+- `cbeb475` — BE V2 contract/constraints/tests
+- `335f196` — implementation report
+
+The release branch is not deployed. The production workflow deploys only
+`main` through the EC2 GitHub Actions path; no branch preview workflow exists
+in this repository. Therefore production cannot be used as evidence for this
+release branch yet.
 
 Shell probes to `https://studymap.space/app` and the configured production API
 were blocked by the local network proxy, and no browser surface was available
@@ -91,3 +98,27 @@ FE tests/build are green; lint remains the documented baseline.
 generation, persisted 15+ node map, screenshots, browser console/network
 evidence, or live UI result is claimed. Gate A must be committed and pushed
 before this gate can begin.
+
+The exact target for the authorized deployment is:
+
+- Frontend: `https://studymap.space/app`
+- API: the configured production API used by that frontend
+- Expected deployed candidate SHA: `335f196` (or a later main merge SHA that
+  contains `7f74d73`, `cbeb475`, and `335f196`)
+- QA data requirements: disposable account; document/map names beginning
+  `QA-MINDMAP-V2-`; no real-user data and no fabricated records.
+
+When Chromium is available, the live runner should be invoked as:
+
+```text
+BASE_URL=https://studymap.space/app QA_EMAIL=<disposable-account> QA_PASSWORD=<password> python tools/mindmap_v2_live_acceptance.py
+```
+
+The checked-in harness captures browser/network evidence and basic V2 chrome
+invariants; the QA operator must extend the same run with the real upload and
+generation steps before calling Gate B green. It must capture the generation
+request/status sequence, returned map
+ID, persisted hierarchy counts, light/dark screenshots at 1440x1024, 1024x768,
+and 390x844, console errors, unhandled rejections, and failed requests. This
+environment has no usable browser surface and Playwright Chromium cannot spawn
+under the current sandbox, so that command has not been claimed as run.
