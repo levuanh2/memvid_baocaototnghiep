@@ -24,6 +24,7 @@ import KnowledgeDashboard from "../study/KnowledgeDashboard";
 import { useStudyContext } from "../../study/useStudyContext";
 
 const IDLE_JOB_UI = { running: false, label: "", progress: null, stalled: false };
+const legacyInspectorSurfacesEnabled = false;
 
 // ── Helpers ──────────────────────────────────────────
 const formatTimeAgo = (isoDate) => {
@@ -88,6 +89,7 @@ export default function SidebarRight({
   // logic and just forwards the computed data upward so MainLayout/
   // WorkspaceContainer can dock it into the central region instead.
   onMindmapDataChange, onSummaryDataChange, onSwitchToChat,
+  onMindmapLibraryChange, onSummaryLibraryChange,
 }) {
   const { selectEvidence } = useStudyContext();
   const [artifactTab, setArtifactTab] = useState("mindmap");
@@ -552,6 +554,10 @@ export default function SidebarRight({
 
   const handleGenerateSummary = () =>
     runSummaryGeneration(selectedSources, { lengthMode: summaryLength, mode: summaryMode });
+  // The runner is intentionally an existing imperative function; this wrapper
+  // keeps the library callback stable without changing generation behavior.
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  const createSummaryFromLibrary = useCallback(() => handleGenerateSummary(), [selectedSources, summaryLength, summaryMode]);
 
   // Cancel thật (mirror mindmap): gửi cờ rồi TIẾP TỤC poll tới terminal —
   // LLM call đang bay không dừng được, job có thể vẫn kịp xong.
@@ -654,6 +660,28 @@ export default function SidebarRight({
     onSummaryDataChange?.(showSummaryModal || null);
   }, [showSummaryModal, onSummaryDataChange]);
 
+  useEffect(() => {
+    onMindmapLibraryChange?.({
+      mindMaps,
+      actions: {
+        select: setShowModalMap,
+        create: onCreateNewMindmap,
+        creating: loading || mindmapJobUi.running,
+      },
+    });
+  }, [mindMaps, loading, mindmapJobUi.running, onCreateNewMindmap, onMindmapLibraryChange]);
+
+  useEffect(() => {
+    onSummaryLibraryChange?.({
+      summaries,
+      actions: {
+        select: setShowSummaryModal,
+        create: createSummaryFromLibrary,
+        creating: summaryLoading || summaryJobUi.running,
+      },
+    });
+  }, [summaries, summaryLoading, summaryJobUi.running, createSummaryFromLibrary, onSummaryLibraryChange]);
+
   // ── Render ────────────────────────────────────────
   return (
     <div className="sidebar-right flex flex-col h-full overflow-hidden transition-theme" style={{ background: "var(--bg-sidebar)" }}>
@@ -665,7 +693,16 @@ export default function SidebarRight({
           shortcut buttons (Layout/MainLayout.jsx), so the Inspector no
           longer reads as a second, equal-weight navigation bar duplicating
           the global header. */}
-      <div className="px-4 pt-4 pb-3 border-b border-border flex items-center justify-between flex-shrink-0 gap-2">
+      <div className="study-surface-header">
+        <div className="flex items-center gap-2 min-w-0">
+          <Icon name={rightView === "tutor" ? "Sparkles" : rightView === "timeline" ? "Clock" : rightView === "insights" ? "Network" : "Quote"} size={15} />
+          <strong className="truncate">{rightView === "tutor" ? "Gia sư AI" : rightView === "timeline" ? "Dòng thời gian" : rightView === "insights" ? "Kiến thức" : "Bằng chứng"}</strong>
+        </div>
+        <button type="button" onClick={onClose} className="icon-btn w-9 h-9" aria-label="Đóng công cụ học" title="Đóng">
+          <Icon name="X" size={16} />
+        </button>
+      </div>
+      {legacyInspectorSurfacesEnabled && <div className="px-4 pt-4 pb-3 border-b border-border flex items-center justify-between flex-shrink-0 gap-2" aria-hidden="true">
         <div className="flex gap-1 min-w-0">
           <button type="button" onClick={() => onRightViewChange?.("evidence")}
                   className={`inspector-tab ${rightView === "evidence" ? "pill-tab-active" : ""}`}
@@ -713,7 +750,7 @@ export default function SidebarRight({
             <Icon name="X" size={16} />
           </button>
         </div>
-      </div>
+      </div>}
 
       {rightView === "tutor" ? (
         <div className={`flex-1 min-h-0 overflow-y-auto co-the-cuon-them ${tutorFloating ? "md:m-2.5 md:rounded-[12px] md:shadow-card-hover md:border md:border-border" : ""}`}>
@@ -839,7 +876,7 @@ export default function SidebarRight({
       {/* ── ARTIFACTS — tạo từ tài liệu ──
           Gập được: khối này chiếm chỗ cố định ở đáy cột, gập lại thì danh sách
           bằng chứng phía trên được nguyên chiều cao. */}
-      <div className="flex-shrink-0 border-t border-border">
+      {legacyInspectorSurfacesEnabled && <div className="flex-shrink-0 border-t border-border">
         <Disclosure title="Tạo từ tài liệu">
         <div className="flex items-center gap-2 mb-2.5">
           <div className="flex gap-1 ml-auto">
@@ -990,7 +1027,7 @@ export default function SidebarRight({
           )}
         </div>
         </Disclosure>
-      </div>
+      </div>}
       </>
       )}
 
