@@ -117,7 +117,7 @@ that environment prerequisite; no generated files were added to the candidate.
 
 - FE clean commit: 21b55af
 - BE V2 constraints commit: 5a0f9c4
-- This report commit: pending until the final report-only commit
+- This report commit: 13aeb8a (the hash is recorded by this follow-up line)
 
 ## Gate B — pending
 
