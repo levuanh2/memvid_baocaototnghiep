@@ -32,6 +32,8 @@ Only `FE/src/index.css`, `FE/src/utils/mindmapLayout.js`, the existing palette i
 
 ### Comparison evidence
 
+Final fidelity commit: `6bdefac` on `feature/studymap-workspace-v3`.
+
 Brave rendered the local candidate at the requested sizes with QA-only GET fixtures. This is visual evidence only, not a real account/document/map. The run recorded zero console errors and zero failed requests.
 
 ![Desktop comparison](qa-screenshots/studymap-workspace-v3/comparison-desktop-light.png)
