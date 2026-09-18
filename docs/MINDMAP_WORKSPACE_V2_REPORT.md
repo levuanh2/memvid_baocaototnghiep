@@ -87,14 +87,21 @@ committed, or pushed.
 
 ## Gate A — code candidate
 
-**PASSED locally.** The exact V2 fixture assertion now separates the legacy
-stage failures (`enrich`, `relations`) from the required structural flags for
-the deliberately one-branch V2 fixture. Relevant Mind Map tests are green;
-FE tests/build are green; lint remains the documented baseline.
+**NOT COMPLETE — scope hygiene correction required.** The exact V2 fixture
+assertion now separates the legacy stage failures (`enrich`, `relations`) from
+the required structural flags for the deliberately one-branch V2 fixture, and
+all relevant tests are green. However, post-push diff audit found that
+`cbeb475` also contains pre-existing dirty WIP hunks in
+`mindmap_graph.py`, `outline.py`, `schema.py`, and `test_mindmap_graph.py`.
+Those hunks were not isolated before staging. The candidate therefore does not
+yet satisfy the required “no unrelated BE WIP” Gate A condition. No force-push
+or destructive cleanup was performed; a surgical ownership decision is needed
+before this can be called a clean release candidate.
 
 ## Gate B — deployed live acceptance
 
-**PENDING.** The V2 working tree is not deployed yet. No authenticated real
+**BLOCKED.** The V2 candidate is not a clean isolated BE release yet and is
+not deployed. No authenticated real
 generation, persisted 15+ node map, screenshots, browser console/network
 evidence, or live UI result is claimed. Gate A must be committed and pushed
 before this gate can begin.
