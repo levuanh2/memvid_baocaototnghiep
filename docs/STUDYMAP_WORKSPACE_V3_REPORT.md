@@ -2,7 +2,7 @@
 
 ## Status
 
-`Implementation exists; automated verification passed; visual QA blocked by browser availability.`
+`Implementation exists; automated verification passed; visual QA blocked by local-origin CORS and unavailable authenticated workspace data.`
 
 This work was performed in an isolated worktree from `177c717` on
 `feature/studymap-workspace-v3`. The original dirty worktree and all backend
@@ -62,14 +62,42 @@ regression were both rerun after the final corrections.
 
 ## Visual QA / browser evidence
 
-Blocked, not claimed. `cua.listBrowsers()` returned no browser providers, and
-`npx playwright --version` could not resolve a cached Playwright package. No
-authenticated QA account or real saved Mind Map was available in this execution
-environment, so there are no honest implementation screenshots for the required
-1440×1024, 1024×768, or 390×844 states. Production Gate B remains pending.
+Brave was found and launched through the installed Python Playwright package at
+`C:\Program Files\BraveSoftware\Brave-Browser\Application\brave.exe`; no browser
+dependency was added to package metadata. The candidate ran locally at
+`http://127.0.0.1:5173/` with the temporary, non-persisted override
+`VITE_API_URL=https://api.studymap.space`.
 
-The exact runnable target when a browser is available is the local FE at
-`http://127.0.0.1:5173/` started with:
+The real registration attempt used the disposable account
+`qa-mindmap-v3-20260919@example.com` and failed before account creation because
+the production API correctly rejected the local origin during the registration
+preflight:
+
+```text
+Access to fetch at https://api.studymap.space/auth/register from origin
+http://127.0.0.1:5173 has been blocked by CORS policy: Response to preflight
+request doesn't pass access control check: No Access-Control-Allow-Origin header.
+```
+
+Therefore no account, document, map, or authenticated workspace state was
+created by this attempt. This is a genuine environment/deployment boundary, not
+a reason to bypass CORS or call the login screen a Mind Map acceptance pass.
+
+The following screenshots are attached directly as blocker evidence. They show
+the candidate's real login surface at the requested dimensions, not fabricated
+workspace states:
+
+![Local candidate login at 1440 light](qa-screenshots/studymap-workspace-v3/login-1440-light.png)
+![Local candidate login at 1440 dark](qa-screenshots/studymap-workspace-v3/login-1440-dark.png)
+![Local candidate login at 1024 light](qa-screenshots/studymap-workspace-v3/login-1024-light.png)
+![Local candidate login at 390 light](qa-screenshots/studymap-workspace-v3/login-390-light.png)
+
+These are explicitly **not** evidence for the required library, drawer, map
+selector, viewport, or real-data checks. Those checks require either a preview
+origin included by the production CORS allowlist or deployment of this candidate
+to an authorized preview; neither is available under the no-deploy constraint.
+
+The exact local command was:
 
 ```text
 npm run dev -- --host 127.0.0.1
@@ -84,8 +112,11 @@ transform checks while switching maps and opening/closing transient surfaces.
 
 - This candidate has not been deployed; it must not be used as production
   acceptance evidence.
-- Browser visual QA and real-data interaction verification remain outstanding.
+- Browser tooling itself is available, but authenticated workspace visual QA and
+  real-data interaction verification remain outstanding because local-origin
+  access to the production API is blocked by CORS.
 - The existing Mind Elixir V2 renderer and its documented map-switch/fit
   invariants were intentionally preserved rather than reimplemented.
 
-Final status: **NOT COMPLETE — implementation exists but visual QA is blocked.**
+Final status: **BLOCKED — implementation candidate is pushed, but Gate B cannot
+run without an authorized preview/production origin or a CORS policy change.**
