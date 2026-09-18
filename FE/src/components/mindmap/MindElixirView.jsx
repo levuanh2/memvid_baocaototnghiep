@@ -35,7 +35,7 @@ import "./mindmap.css";
 // coincidence. Replaced with a muted seal-adjacent tone that reads as the
 // same archival-ink family without the collision; forest/bronze slots now
 // use the Signature Contract's own exact values for direct consistency.
-const PALETTE = ["#126CF2", "#1F4033", "#B5821F", "#4A5A8A", "#8A4A3E", "#6B4F3A", "#2C6777", "#6A4C93"];
+const PALETTE = ["#126CF2", "#FF9800", "#18B86A", "#8C4DFF", "#F2353A", "#2B9CF3", "#7B61FF", "#16A085"];
 
 // MindElixir.css tiêu thụ đủ bộ var dưới đây KHÔNG có fallback — thiếu var nào
 // là declaration đó invalid và spacing/màu sụp đổ. Phải set đủ (guard bằng test

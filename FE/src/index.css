@@ -16,22 +16,22 @@
        moved to a cool off-white/slate family so the app reads as a research
        instrument, not a paper simulation. Ink text tokens below were
        already navy-charcoal and are unchanged. */
-    --bg-base:     #F5F7FA;   /* app background — cool off-white */
-    --bg-sidebar:  #FFFFFF;   /* panels — clean white surface */
+    --bg-base:     #F4F8FC;   /* mock canvas/background: sampled flat #F4F8FC */
+    --bg-sidebar:  #FEFEFE;   /* mock header/sidebar: sampled flat #FEFEFE */
     --bg-card:     #FFFFFF;   /* cards — clean white surface */
-    --bg-elevated: #EEF1F6;   /* inputs, wells — light slate-blue */
+    --bg-elevated: #F1F6FB;   /* mock input/well surface */
     --bg-panel:    #FFFFFF;
-    --bg-hover:    #EAEEF3;   /* hover wash — cool */
+    --bg-hover:    #EAF3FF;   /* blue-soft hover/selection wash */
 
     /* Text — ink (unchanged; already navy-charcoal, matches the reset) */
-    --text-primary:   #1B2A41;
-    --text-secondary: #4A5567;
-    --text-muted:     #7C879C;
-    --text-inverse:   #F5F7FA;
+    --text-primary:   #102A5D;
+    --text-secondary: #5B7096;
+    --text-muted:     #8294B1;
+    --text-inverse:   #F4F8FC;
 
     /* Rules — hairline ink */
-    --border-color:  rgba(27, 42, 65, 0.12);
-    --border-strong: rgba(27, 42, 65, 0.22);
+    --border-color:  rgba(29, 67, 117, 0.14);
+    --border-strong: rgba(29, 67, 117, 0.24);
 
     /* Accent — action/selection/focus role (Signature Contract §1). User
        decision (supersedes the forest-vs-blue open item from the first
@@ -42,10 +42,10 @@
        `--seal`/`--brand-rgb` below are UNCHANGED and stay red — provenance/
        citation + the MemVidX wordmark accent only (Signature Contract §7;
        verified no citation/provenance consumer reads `--accent`). */
-    --accent:        #126CF2;   /* primary / action / selected / focus */
-    --accent-hover:  #0C55CC;   /* primary hover/pressed */
+    --accent:        #006BFE;   /* mock primary sampled around #006BFE */
+    --accent-hover:  #0059D6;   /* primary hover/pressed */
     --accent-subtle: #EAF3FF;   /* primary soft surface (selection wash, badges) */
-    --brand-rgb:     178 58 46;   /* seal + wordmark accent only, kept red on purpose */
+    --brand-rgb:     241 51 58;   /* mock seal/citation red */
     --ink-rgb:       27 42 65;
     --slate:         #5C6B7A;
 
@@ -53,7 +53,7 @@
        seal-meter mastery visualization). Same value as `--accent` today by
        construction (they haven't diverged yet); kept as its OWN named var so
        provenance consumers stay correct once `--accent` flips to forest. */
-    --seal: #B23A2E;
+    --seal: #F1333A;
 
     /* Wave 1 (additive) — forest/bronze from the Signature Contract. */
     --forest-rgb: 31 64 51;     /* #1F4033 */
@@ -88,17 +88,17 @@
     --contrast-focus:          #C99A6C;
 
     /* Semantic status */
-    --ok:    #3E6B57;   /* indexed */
-    --ok-bg: rgba(62,107,87,0.12);   /* Wave 0: was an undeclared var(--ok-bg) everywhere, silently
+    --ok:    #16B36A;   /* mock ready/success green */
+    --ok-bg: rgba(22,179,106,0.12);   /* Wave 0: was an undeclared var(--ok-bg) everywhere, silently
                                         falling back to rgba(34,150,94,0.12) — a DIFFERENT, brighter
                                         green than --ok itself. Declared for real, derived from --ok's
                                         own rgb so the badge background actually matches the badge text. */
-    --warn: #B5821F;   /* processing */
-    --err:  #B23A2E;   /* error (also the seal) */
+    --warn: #F39A1B;   /* mock warning/technology orange */
+    --err:  #F1333A;   /* error (also the seal) */
 
     /* Shadows — soft, paper-on-paper */
-    --shadow-card:       0 1px 2px rgba(27,42,65,0.06), 0 1px 1px rgba(27,42,65,0.04);
-    --shadow-card-hover: 0 6px 18px rgba(27,42,65,0.10), 0 2px 6px rgba(27,42,65,0.06);
+    --shadow-card:       0 1px 2px rgba(29,67,117,0.06), 0 1px 1px rgba(29,67,117,0.04);
+    --shadow-card-hover: 0 6px 18px rgba(29,67,117,0.10), 0 2px 6px rgba(29,67,117,0.06);
 
     /* Scrollbar — follows the accent (now blue) */
     --scrollbar-thumb: rgba(18,108,242,0.28);

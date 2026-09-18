@@ -10,7 +10,7 @@ export const MAX_TOPIC_LENGTH = 100;
 // source order of a top-level branch, never from the result of side balancing,
 // so the same record keeps the same visual identity across renders.
 export const BRANCH_COLORS = [
-  "#126CF2", "#1F4033", "#B5821F", "#4A5A8A", "#8A4A3E", "#6B4F3A", "#2C6777", "#6A4C93",
+  "#126CF2", "#FF9800", "#18B86A", "#8C4DFF", "#F2353A", "#2B9CF3", "#7B61FF", "#16A085",
 ];
 
 const byOrder = (a, b) => (a.order ?? 0) - (b.order ?? 0);

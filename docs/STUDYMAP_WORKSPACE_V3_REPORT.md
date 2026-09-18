@@ -1,5 +1,49 @@
 # StudyMap Workspace V3 — implementation candidate
 
+## Approved mock fidelity pass (2026-09-19)
+
+Official references opened full-resolution, read-only:
+
+| Role | File | Resolution | SHA-256 |
+|---|---|---:|---|
+| Desktop mock | `docs/e00640ad-e749-4706-8671-9d869f6f4616.png` | 1487x1058 | `541EF6C5207D85F0D87AB394CC244A742CCD6D3C8EF50C336ACCCAB65421564F` |
+| Mobile mock | `docs/7ff064b6-a4f3-4125-9a0b-ccb59060fe82.png` | 853x1844 | `7B5DB069DBB2B94C2387A0451E6DD8DE1DEC141DB3B7B19356E792D3F8C708D1` |
+
+The `(1)` mobile file was byte-identical and excluded as a duplicate. Older blocker captures were not used as source of truth.
+
+### Measured visual decisions
+
+| Semantic role | Mock flat-region color | Current token / renderer value | Decision |
+|---|---|---|---|
+| App/canvas background | `#F4F8FC` | `--bg-base: #F4F8FC` | aligned |
+| Header/sidebar surface | `#FEFEFE` | `--bg-sidebar: #FEFEFE` | aligned |
+| Card/popover surface | `#FFFFFF` | `--bg-card: #FFFFFF` | preserved |
+| Elevated/hover surface | `#F1F6FB` / `#EAF3FF` | `--bg-elevated`, `--bg-hover` | aligned |
+| Primary/active | `#006BFE` | `--accent: #006BFE` | corrected |
+| Main text | approximately `#102A5D` | `--text-primary: #102A5D` | aligned |
+| Secondary/muted text | cool slate blue | `--text-secondary: #5B7096`, `--text-muted: #8294B1` | aligned |
+| Dividers | cool blue-gray | `rgba(29,67,117,.14/.24)` | aligned |
+| Ready/success | approximately `#16B36A` | `--ok: #16B36A` | separate from primary |
+| Warning | warm amber | `--warn: #F39A1B` | separate from primary |
+| Citation/provenance | red | `--seal/--err: #F1333A` | provenance-only |
+| Mind Map branches | blue/orange/green/purple/red/cyan | vivid `BRANCH_COLORS`/`PALETTE` | corrected |
+
+Only `FE/src/index.css`, `FE/src/utils/mindmapLayout.js`, the existing palette in `FE/src/components/mindmap/MindElixirView.jsx`, and its branch-color contract assertion changed for this pass. No layout, lifecycle, API, or business logic changed.
+
+### Comparison evidence
+
+Brave rendered the local candidate at the requested sizes with QA-only GET fixtures. This is visual evidence only, not a real account/document/map. The run recorded zero console errors and zero failed requests.
+
+![Desktop comparison](qa-screenshots/studymap-workspace-v3/comparison-desktop-light.png)
+
+![Mobile comparison](qa-screenshots/studymap-workspace-v3/comparison-mobile-light.png)
+
+Additional captures cover neutral, library, StudyMap tools, and source-filter states at 1440x1024 and 1024x768, plus light/dark neutral mobile captures. The fixture map list rendered, but selected-map canvas/drawer behavior was not used as acceptance evidence because the fixture did not reproduce the full authenticated map-selection runtime state.
+
+`COLOR ALIGNMENT: PASS` for the inspected surfaces, active state, text hierarchy, borders, status colors, and branch palette.
+
+`LIVE GATE B: BLOCKED BY CORS` — no production deployment, account, real document, or real map was used or claimed.
+
 ## Status
 
 `Implementation exists; automated verification passed; visual QA blocked by local-origin CORS and unavailable authenticated workspace data.`
