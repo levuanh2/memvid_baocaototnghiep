@@ -39,6 +39,23 @@ describe("recordToMindElixir", () => {
     expect(a.delta1).toBeTruthy(); // arrows inject qua data cần delta
   });
 
+  it("assigns deterministic side directions and compacts topics for the renderer", () => {
+    const rec = {
+      ...REC,
+      nodes: [
+        REC.nodes[0],
+        { ...REC.nodes[1], title: "Một đoạn giải thích dài ".repeat(12) },
+        REC.nodes[2], REC.nodes[3],
+      ],
+    };
+    const { mindData } = recordToMindElixir(rec);
+    const topics = [mindData.nodeData.topic, ...mindData.nodeData.children.flatMap((n) => [n.topic, ...(n.children || []).map((c) => c.topic)])];
+    expect(topics.every((topic) => topic.length <= 100)).toBe(true);
+    expect(mindData.nodeData.children[0].direction).toBe(0);
+    expect(mindData.nodeData.children[1].direction).toBe(1);
+    expect(mindData.direction).toBe(2);
+  });
+
   it("multi-root: node parent null thứ hai được đưa về dưới root + round-trip giữ lại", () => {
     const rec = {
       ...REC,

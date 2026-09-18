@@ -35,7 +35,7 @@ import "./mindmap.css";
 // coincidence. Replaced with a muted seal-adjacent tone that reads as the
 // same archival-ink family without the collision; forest/bronze slots now
 // use the Signature Contract's own exact values for direct consistency.
-const PALETTE = ["#5C6B7A", "#1F4033", "#B5821F", "#8A4A3E", "#4A5A8A", "#A06A3B"];
+const PALETTE = ["#126CF2", "#1F4033", "#B5821F", "#4A5A8A", "#8A4A3E", "#6B4F3A", "#2C6777", "#6A4C93"];
 
 // MindElixir.css tiêu thụ đủ bộ var dưới đây KHÔNG có fallback — thiếu var nào
 // là declaration đó invalid và spacing/màu sụp đổ. Phải set đủ (guard bằng test
@@ -53,15 +53,11 @@ export const THEME = {
     "--root-radius": "8px",
     "--main-radius": "6px",
     "--topic-padding": "4px",
-    // Final sprint: root is now typographic (Spectral + bronze rule, see
-    // mindmap.css's `!important` override on `.me-container me-root me-tpc`)
-    // — these three stay set only because mind-elixir's own stylesheet has
-    // no fallback for an undefined var (an invalid declaration would break
-    // the rule entirely); their VALUES no longer paint anything, the
-    // override always wins.
-    "--root-color": "var(--bg-base)",
-    "--root-bgcolor": "var(--text-primary)",
-    "--root-border-color": "transparent",
+    // Root identity: blue action surface with white type. These values stay
+    // explicit because Mind Elixir has no fallback for missing cssVar entries.
+    "--root-color": "#FFFFFF",
+    "--root-bgcolor": "var(--accent)",
+    "--root-border-color": "var(--accent)",
     // section = thẻ giấy nổi, viền đậm
     "--main-color": "var(--text-primary)",
     "--main-bgcolor": "var(--bg-card)",
@@ -92,6 +88,7 @@ export default function MindElixirView({ data, onRegenerate, regenerating, contr
   const containerRef = useRef(null);
   const mindRef = useRef(null);
   const canvasWrapRef = useRef(null);
+  const pendingFitRef = useRef(false);
   const [showRelations, setShowRelations] = useState(true);
   const [isFullscreen, setIsFullscreen] = useState(false);
   const [dirty, setDirty] = useState(false);
@@ -107,15 +104,26 @@ export default function MindElixirView({ data, onRegenerate, regenerating, contr
 
   const degraded = Boolean(data?.generator?.degraded);
   const missing = data?.generator?.missing || [];
+  const missingRelations = !Object.prototype.hasOwnProperty.call(data || {}, "relations");
+  const missingEnrichment = Array.isArray(data?.nodes)
+    && data.nodes.some((node) => !Object.prototype.hasOwnProperty.call(node || {}, "enrichment"));
+  const generatorMissing = Array.isArray(data?.generator?.missing) ? data.generator.missing : [];
+  const upgradeRequired = Number(data?.schema_version) < 2 || missingRelations || missingEnrichment
+    || generatorMissing.includes("enrich") || generatorMissing.includes("relations");
   // "Tạo lại" đang chạy nền (SidebarRight bơm generating/progress/onCancel vào
   // data) — banner + nút Huỷ ngay trong toolbar.
   const generating = Boolean(data?.generating);
 
-  // (re)init khi đổi record — KHÔNG còn phụ thuộc mount/unmount của một modal:
-  // mode switch (Chat ⇄ MindMap) không unmount component này nữa (WorkspaceContainer
-  // giữ cả ba mode luôn mounted), nên đây là NƠI DUY NHẤT mind-elixir tái tạo,
-  // và chỉ khi `data?.id` thật sự đổi (tài liệu/mindmap khác) — không phải khi
-  // chuyển tab.
+  const fitIfReady = useCallback(() => {
+    const el = containerRef.current;
+    const mind = mindRef.current;
+    if (!pendingFitRef.current || !mind || !el || el.clientWidth <= 0 || el.clientHeight <= 0) return;
+    pendingFitRef.current = false;
+    mind.scaleFit?.();
+  }, []);
+
+  // Create once per mounted viewer. Switching saved maps refreshes this same
+  // public Mind Elixir instance instead of rebuilding the canvas.
   useEffect(() => {
     if (!containerRef.current || !data) return;
     setDirty(false);
@@ -123,45 +131,47 @@ export default function MindElixirView({ data, onRegenerate, regenerating, contr
     setZoom(1);
     setErrorMsg(null);
     const { mindData, sidecar } = recordToMindElixir(data);
-    const mind = new MindElixir({
-      el: containerRef.current,
-      direction: MindElixir.SIDE,
-      editable: true,       // gate kéo node (re-parent/đổi thứ tự) — `draggable` đã deprecated
-      contextMenu: true,
-      toolBar: false,       // toolbar riêng của mình
-      keypress: true,
-      allowUndo: true,
-      // 2 = chuột PHẢI box-select → kéo-TRÁI trên nền = pan canvas (trực quan hơn
-      // mặc định bắt Space+kéo).
-      mouseSelectionButton: 2,
-      theme: THEME,
-    });
-    mind.init(mindData);
-    mindRef.current = mind;
+    let mind = mindRef.current;
+    if (!mind) {
+      mind = new MindElixir({
+        el: containerRef.current,
+        direction: MindElixir.SIDE,
+        compact: true,
+        editable: true,
+        contextMenu: true,
+        toolBar: false,
+        keypress: true,
+        allowUndo: true,
+        mouseSelectionButton: 2,
+        theme: THEME,
+      });
+      mind.init(mindData);
+      mindRef.current = mind;
+
+      mind.bus.addListener("scale", (v) => setZoom(v));
+      mind.bus.addListener("selectNodes", (nodes) => {
+        controller.onNodeSelected(nodes);
+        if (nodes?.[0]) setInspectorOpen(true);
+      });
+      mind.bus.addListener("operation", () => setDirty(true));
+    } else {
+      mind.refresh?.(mindData);
+      mind.clearHistory?.();
+    }
     controller.registerMindInstance(mind, sidecar);
     setZoom(mind.scaleVal || 1);
-
-    // Readout thu phóng. Thư viện fire "scale" (number) ở MỌI đường đổi scale —
-    // nút bấm, ctrl+wheel, VÀ scaleFit() (verified dist/MindElixir.js: `fn` kết thúc
-    // bằng `this.bus.fire("scale", n)`) — nên chỉ cần nghe một chỗ này.
-    // KHÔNG kẹp giá trị ở đây: scaleFit() không đọc scaleMin nên map rất lớn có thể
-    // xuống dưới 0.2; kẹp readout sẽ hiện số SAI so với map đang vẽ.
-    mind.bus.addListener("scale", (v) => setZoom(v));
-    mind.bus.addListener("selectNodes", (nodes) => controller.onNodeSelected(nodes));
-    mind.bus.addListener("operation", () => setDirty(true));
-
-    return () => {
-      // mind-elixir's own destroy() unregisters the bus listeners above AND the
-      // container keydown handler it wires internally (init() -> On()); without
-      // it, re-init on a data.id change (e.g. regenerate) would leave the old
-      // instance's listeners attached to the same container DOM node, stacking
-      // duplicate handlers on every re-init.
-      mindRef.current?.destroy?.();
-      mindRef.current = null;
-      containerRef.current && (containerRef.current.innerHTML = "");
-    };
+    pendingFitRef.current = true;
+    if (typeof requestAnimationFrame === "function") requestAnimationFrame(fitIfReady);
+    else fitIfReady();
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [data?.id]);
+  }, [data?.id, fitIfReady]);
+
+  useEffect(() => () => {
+    pendingFitRef.current = false;
+    mindRef.current?.destroy?.();
+    mindRef.current = null;
+    containerRef.current && (containerRef.current.innerHTML = "");
+  }, []);
 
   // Sprint I fix (P0-1): mind-elixir merges `THEME.cssVar` with its OWN
   // internal light/dark default palette at `changeTheme()` time based on
@@ -195,8 +205,6 @@ export default function MindElixirView({ data, onRegenerate, regenerating, contr
       const mind = mindRef.current;
       if (!mind) return;
       mind.changeTheme?.(THEME);
-      mind.layout?.();
-      mind.linkDiv?.();
     });
     observer.observe(html, { attributes: true, attributeFilter: ["class"] });
     return () => observer.disconnect();
@@ -221,17 +229,14 @@ export default function MindElixirView({ data, onRegenerate, regenerating, contr
     const el = containerRef.current;
     if (!el) return;
     const ro = new ResizeObserver((entries) => {
-      const mind = mindRef.current;
-      if (!mind) return;
       const { width, height } = entries[0].contentRect;
       if (width > 0 && height > 0) {
-        mind.layout?.();
-        mind.linkDiv?.();
+        fitIfReady();
       }
     });
     ro.observe(el);
     return () => ro.disconnect();
-  }, []);
+  }, [fitIfReady]);
 
   // PR#8: thread dirty lên SidebarRight (data.onDirtyChange) — parent cần biết
   // để confirm TRƯỚC khi "Tạo lại" thay thế bản đang sửa (fix thật của known-issue
@@ -474,9 +479,9 @@ export default function MindElixirView({ data, onRegenerate, regenerating, contr
         </div>
         <button type="button" className="mm-context-action" onClick={data.onCreateNew} disabled={data.creating}
           aria-label="Tạo sơ đồ mới" title="Tạo sơ đồ mới"><Icon name="Plus" size={18} /></button>
-        <span className={`mm-quality-status ${degraded ? "is-warning" : ""}`}>
-          <Icon name={degraded ? "TriangleAlert" : "BadgeCheck"} size={14} />
-          {degraded ? "Thiếu liên kết" : "Đã kiểm tra"}
+        <span className={`mm-quality-status ${upgradeRequired || degraded ? "is-warning" : ""}`}>
+          <Icon name={upgradeRequired || degraded ? "TriangleAlert" : "BadgeCheck"} size={14} />
+          {upgradeRequired ? "Sơ đồ cũ · Nâng cấp" : degraded ? "Thiếu liên kết" : "Đã kiểm tra"}
         </span>
         <button type="button" className="mm-context-link" onClick={onRegenerate} disabled={regenerating || generating}>Tạo lại</button>
         <span className={`mm-saved-status ${dirty ? "is-dirty" : ""}`}>

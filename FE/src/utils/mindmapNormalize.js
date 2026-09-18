@@ -22,16 +22,23 @@
 // fabricated fallback. v1/legacy records never carry this field (it did not
 // exist before M2) and are not touched here.
 import { normalizeSourceStems } from "./evidence";
+import { generationProfileFor, layoutVersionFor } from "./mindmapLayout";
 
 const KIND_ROOT = "root";
 const KIND_DEFAULT = "idea";
 
-const emptyModel = () => ({ title: "", nodes: [], relations: [], degraded: false, missing: [] });
+const emptyModel = () => ({
+  title: "", nodes: [], relations: [], degraded: false, missing: [], schemaVersion: 1,
+  layoutVersion: "", generationProfile: "", upgradeRequired: true,
+});
 
 const normalizeV2 = (record) => {
   const rawNodes = Array.isArray(record.nodes) ? record.nodes : [];
   const rawRelations = Array.isArray(record.relations) ? record.relations : [];
   const generator = record.generator && typeof record.generator === "object" ? record.generator : {};
+  const schemaVersion = Number(record.schema_version) || 1;
+  const relationsMissing = !Object.prototype.hasOwnProperty.call(record, "relations");
+  const enrichmentMissing = rawNodes.some((node) => !Object.prototype.hasOwnProperty.call(node || {}, "enrichment"));
 
   const nodes = rawNodes
     .filter((n) => n && n.id != null)
@@ -77,6 +84,11 @@ const normalizeV2 = (record) => {
     relations,
     degraded: Boolean(generator.degraded),
     missing: Array.isArray(generator.missing) ? generator.missing : [],
+    schemaVersion,
+    layoutVersion: layoutVersionFor(record),
+    generationProfile: generationProfileFor(record),
+    upgradeRequired: schemaVersion < 2 || relationsMissing || enrichmentMissing
+      || generator.missing?.includes?.("enrich") || generator.missing?.includes?.("relations"),
   };
 };
 
@@ -162,13 +174,17 @@ const normalizeV1 = (record) => {
     relations,
     degraded: false,
     missing: [],
+    schemaVersion: 1,
+    layoutVersion: "",
+    generationProfile: "",
+    upgradeRequired: true,
   };
 };
 
 export const normalizeMindmapRecord = (record) => {
   if (!record || typeof record !== "object") return emptyModel();
 
-  if (record.schema_version === 2) return normalizeV2(record);
+  if (Number(record.schema_version) === 2) return normalizeV2(record);
 
   return normalizeV1(record);
 };
