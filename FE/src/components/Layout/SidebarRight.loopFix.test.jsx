@@ -34,13 +34,14 @@ const noop = () => {};
 // A wrapper with its OWN state to force a genuine, state-driven re-render of
 // SidebarRight (an unrelated tick) rather than relying on root.render()
 // reference semantics, which React may bail out of differently.
-function Harness({ onMindmapDataChange }) {
+function Harness({ onMindmapDataChange, onMindmapLibraryChange }) {
   const [, forceRerender] = useState(0);
   return (
     <StudyContextProvider>
       <button data-testid="force-rerender" onClick={() => forceRerender((n) => n + 1)}>force</button>
       <SidebarRight
         selectedSources={[]} evidence={null} onMindmapDataChange={onMindmapDataChange}
+        onMindmapLibraryChange={onMindmapLibraryChange}
         onSummaryDataChange={noop} onSwitchToChat={noop}
       />
     </StudyContextProvider>
@@ -80,19 +81,19 @@ describe("SidebarRight modalMapData stability", () => {
     document.body.appendChild(container);
     const root = createRoot(container);
     const onMindmapDataChange = vi.fn();
+    let libraryActions;
 
     await act(async () => {
-      root.render(<Harness onMindmapDataChange={onMindmapDataChange} />);
+      root.render(<Harness onMindmapDataChange={onMindmapDataChange} onMindmapLibraryChange={(value) => { libraryActions = value.actions; }} />);
     });
     // let fetchMindMaps()/fetchSummaries() settle
     await act(async () => {
       await Promise.resolve(); await Promise.resolve(); await Promise.resolve();
     });
 
-    const card = Array.from(container.querySelectorAll("div")).find((el) => el.textContent === SAVED_MAP.title);
-    expect(card).toBeTruthy();
+    expect(libraryActions?.select).toBeTypeOf("function");
     await act(async () => {
-      card.dispatchEvent(new MouseEvent("click", { bubbles: true, cancelable: true }));
+      libraryActions.select(SAVED_MAP);
     });
 
     const callsAfterOpen = onMindmapDataChange.mock.calls.length;
