@@ -2,6 +2,7 @@
 import { describe, it, expect, vi, afterEach, beforeAll } from "vitest";
 import { createRoot } from "react-dom/client";
 import { act } from "react-dom/test-utils";
+import MindElixir from "mind-elixir";
 import MindElixirView from "./MindElixirView";
 
 beforeAll(() => {
@@ -85,5 +86,14 @@ describe("MindElixirView Part B canvas controls", () => {
     await act(async () => { container.querySelector(".mm-inspector-tab").click(); });
     expect(drawer.classList.contains("is-open")).toBe(true);
     expect(drawer.querySelector("button[aria-label='Đóng bảng kiểm tra']")).toBeTruthy();
+  });
+
+  it("switches saved maps through refresh without creating a second instance", async () => {
+    const refresh = vi.spyOn(MindElixir.prototype, "refresh");
+    const root = await renderView(vi.fn());
+    await act(async () => {
+      root.render(<MindElixirView data={{ ...DATA, id: "map-2", title: "Second Map" }} onRegenerate={vi.fn()} regenerating={false} controller={CONTROLLER} />);
+    });
+    expect(refresh).toHaveBeenCalledTimes(1);
   });
 });

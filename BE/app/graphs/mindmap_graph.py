@@ -111,17 +111,26 @@ def build_mindmap_graph(*, data_dir: Path, index_meta_path: Path,
     @_guard("AssemblePersist")
     def assemble_node(state: dict) -> dict:
         from services.mindmap.pipeline.modelcfg import resolve_mindmap_model
+        from services.mindmap.pipeline.v2_constraints import issue_codes, validate_hierarchy
         elapsed = time.time() - (state.get("_t0") or time.time())
         clean_nodes = mm_schema.sanitize_nodes(state["nodes"])
         from services.provenance import attach_node_source_stems
         clean_nodes = attach_node_source_stems(clean_nodes, state["mm_input"])
+        missing = list(state.get("degraded_missing") or [])
+        validation = validate_hierarchy(
+            clean_nodes,
+            require_rich_size=len(state["mm_input"].get("chunks") or []) >= 10,
+        )
+        for code in issue_codes(validation):
+            if code not in missing:
+                missing.append(code)
         record = mm_schema.build_record(
             title=state["mm_input"]["title"], sources=state["mm_input"]["sources"],
             nodes=clean_nodes,
             relations=mm_schema.validate_relations(state.get("relations") or [], clean_nodes),
             content_hash_value=state["content_hash"],
             model=resolve_mindmap_model(),
-            elapsed_sec=elapsed, degraded_missing=state.get("degraded_missing") or [],
+            elapsed_sec=elapsed, degraded_missing=missing,
             skeleton_method=state.get("skeleton_method") or "")
         # Phase D: bind the record owner (None when unprotected → today's behavior).
         persist_record(record, user_id=state.get("user_id"))

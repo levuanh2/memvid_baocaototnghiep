@@ -51,6 +51,8 @@ def test_build_record_shape():
                          content_hash_value="x" * 64, model="m", elapsed_sec=1.5,
                          degraded_missing=["relations"])
     assert rec["schema_version"] == 2
+    assert rec["layout_version"] == s.LAYOUT_VERSION
+    assert rec["generation_profile"] == s.GENERATION_PROFILE
     assert rec["generator"]["degraded"] is True
     assert rec["generator"]["missing"] == ["relations"]
     assert rec["content_hash"] == "x" * 64
@@ -77,3 +79,14 @@ def test_build_record_carries_skeleton_method():
                           content_hash_value="h", model="m", elapsed_sec=1.0,
                           degraded_missing=[])
     assert rec2["generator"]["skeleton_method"] == ""
+
+
+def test_sanitize_compacts_topic_and_preserves_full_text_in_note():
+    long_title = " ".join(["important"] * 30)
+    out = s.sanitize_nodes([
+        {"id": "root", "parent": None, "kind": "root", "title": "R"},
+        {"id": "n1", "parent": "root", "kind": "idea", "title": long_title},
+    ])
+    node = next(n for n in out if n["id"] == "n1")
+    assert len(node["title"]) <= s.MAX_TOPIC_LENGTH
+    assert long_title in node["note"]

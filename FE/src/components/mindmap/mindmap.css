@@ -36,6 +36,12 @@ html.dark .me-container { --mm-relation: #7e90c4; }
 /* Typography theo kind — mind-elixir style theo ĐỘ SÂU, map 1:1 với kind:
    root (me-root) / section (me-main cấp 1) / idea+detail (sâu hơn).
    Selectors verified against mind-elixir 5.13 dist — kiểm lại khi nâng version. */
+/* Root identity: a blue anchor card makes the map's center legible at a
+   glance, while child branches remain paper/ink cards and compact leaves.
+   The selector follows Mind Elixir's rendered structure; no library internals
+   are patched. */
+/* Legacy explanation retained below for the renderer contract: root styling
+   stays scoped to the rendered root element and never changes node data. */
 /* Final sprint: root was a solid `--text-primary`-filled block (white-on-ink
    box, THEME.cssVar's `--root-bgcolor`) — the exact "giant colored block"
    the original audit named as needing a typographic root instead. Overriding
@@ -57,12 +63,12 @@ html.dark .me-container { --mm-relation: #7e90c4; }
   font-weight: 600;
   font-size: 24px;
   letter-spacing: 0.01em;
-  background: transparent !important;
-  color: var(--text-primary) !important;
-  border: none !important;
-  border-bottom: 2px solid var(--bronze) !important;
-  border-radius: 0 !important;
-  padding: 4px 2px 8px !important;
+  background: var(--accent) !important;
+  color: #fff !important;
+  border: 2px solid var(--accent) !important;
+  border-radius: 14px !important;
+  padding: 8px 14px !important;
+  max-width: 220px;
 }
 .me-container me-main > me-wrapper > me-parent > me-tpc {
   font-family: "Spectral", Georgia, serif;
