@@ -74,4 +74,9 @@ def test_degraded_stage_flows_to_result(tmp_path):
                     "current_node": "", "error": None},
                    config={"configurable": {"thread_id": "j3"}})
     assert out["result"]["generator"]["degraded"] is True
-    assert set(out["result"]["generator"]["missing"]) == {"enrich", "relations"}
+    # This fixture exercises a newly generated V2 record; its one-branch tree is
+    # intentionally incomplete, so the structural V2 diagnostics are expected.
+    assert set(out["result"]["generator"]["missing"]) == {
+        "enrich", "relations", "V2_TOP_LEVEL_BRANCHES:1",
+        "V2_CHILDREN_CARDINALITY:n0:1",
+    }

@@ -11,9 +11,22 @@ from pydantic import BaseModel, Field
 PIPELINE_VERSION = "skeleton_v3"
 MAX_NODES = 120
 MAX_RELATIONS = 20
+LAYOUT_VERSION = "side-balanced-v2"
+GENERATION_PROFILE = "learning-map-v2"
+MAX_TOPIC_LENGTH = 100
 KINDS = ("root", "section", "idea", "detail")
 REL_TYPES = ("relates_to", "leads_to", "causes", "supports", "contrasts", "contains")
 _KIND_PRIORITY = {"root": 0, "section": 1, "idea": 2, "detail": 3}
+
+
+def compact_topic(value: str, max_length: int = MAX_TOPIC_LENGTH) -> str:
+    """Keep node labels scannable while retaining source text in note."""
+    text = " ".join(str(value or "").split())
+    if len(text) <= max_length:
+        return text
+    cutoff = max_length - 1
+    boundary = text.rfind(" ", 0, cutoff)
+    return text[: boundary if boundary > 0 else cutoff].rstrip() + "…"
 
 
 class NodeV2(BaseModel):
@@ -57,7 +70,14 @@ def sanitize_nodes(nodes: list[dict]) -> list[dict]:
     clean: list[dict] = []
     for n in nodes or []:
         try:
-            m = NodeV2(**{**n, "kind": n.get("kind") if n.get("kind") in KINDS else "idea"})
+            original_title = " ".join(str(n.get("title") or "").split())
+            payload = {**n, "kind": n.get("kind") if n.get("kind") in KINDS else "idea"}
+            payload["title"] = compact_topic(original_title)
+            if original_title and payload["title"] != original_title:
+                payload["note"] = "\n\n".join(
+                    part for part in (original_title, str(payload.get("note") or "")) if part
+                )
+            m = NodeV2(**payload)
         except Exception:
             continue
         if not m.id or m.id in seen or not (m.title or "").strip():
@@ -108,6 +128,8 @@ def build_record(*, title: str, sources: list[str], nodes: list[dict], relations
     return {
         "id": str(uuid.uuid4()),
         "schema_version": 2,
+        "layout_version": LAYOUT_VERSION,
+        "generation_profile": GENERATION_PROFILE,
         "title": title,
         "sources": list(sources or []),
         "content_hash": content_hash_value,
