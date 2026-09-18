@@ -57,6 +57,23 @@ def test_build_record_shape():
     assert rec["id"] and rec["created_at"].endswith("Z")
 
 
+def test_build_record_declares_versioned_learning_map_contract():
+    rec = s.build_record(title="T", sources=["a"], nodes=_nodes(), relations=[],
+                         content_hash_value="x" * 64, model="m", elapsed_sec=1.5,
+                         degraded_missing=[])
+    assert rec["schema_version"] == 2
+    assert rec["layout_version"] == "side-balanced-v2"
+    assert rec["generation_profile"] == "learning-map-v2"
+    assert rec["generator"]["layout_version"] == "side-balanced-v2"
+
+
+def test_sanitize_compacts_topic_and_preserves_explanation_in_note():
+    long_title = "Một đoạn giải thích dài " * 12
+    out = s.sanitize_nodes([{"id": "root", "parent": None, "kind": "root", "title": long_title}])
+    assert len(out[0]["title"]) <= s.MAX_TOPIC_LENGTH
+    assert out[0]["note"] == long_title.strip()
+
+
 def test_content_hash_sensitive_to_headings():
     # Re-ingest phục hồi heading_path (text không đổi) phải ra hash MỚI,
     # nếu không cache trả mãi bản mindmap nông cũ.

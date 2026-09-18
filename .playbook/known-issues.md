@@ -5257,3 +5257,23 @@ luồng tạo map, chọn map và dữ liệu nền. Không được ẩn toàn 
 right-column owner; Inspector contextual phải dùng absolute positioning bên trong
 canvas, còn toolbar/context-row là hai vùng chức năng khác nhau và không được nhân
 bản menu overflow.
+
+### Mind Elixir map switch must refresh one instance
+
+Saved-map switching used to destroy and recreate the canvas from a `data.id`
+effect. That made viewport/lifecycle behavior depend on React remount timing and
+made it easy for selection or drawer changes to accidentally become layout
+triggers. The renderer now creates one instance per mounted viewer, uses the
+documented `refresh()` and `clearHistory()` APIs for a real map switch, and has
+one pending `scaleFit()` request that waits for a non-zero canvas. Theme changes
+use `changeTheme()` only. Keep this boundary when adding future map chrome.
+
+### MindMap V2 hierarchy must be validated at persistence boundary (2026-09-18)
+
+The existing MindMap pipeline emitted `schema_version=2` and compacted topics,
+but did not validate the V2 branch/depth/cardinality contract before persisting.
+That made a structurally incomplete map look version-complete to the frontend.
+The validator now runs after existing cleanup/recovery and records stable
+`V2_*` issue codes in `generator.missing`; it does not invent siblings or drop
+overflow nodes. Keep this check at the assemble boundary when changing the
+generation pipeline.
