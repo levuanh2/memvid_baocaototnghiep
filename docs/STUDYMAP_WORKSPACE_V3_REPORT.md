@@ -13,6 +13,36 @@ The `(1)` mobile file was byte-identical and excluded as a duplicate. Older bloc
 
 ### Measured visual decisions
 
+### Geometry measurements from the approved mocks
+
+Measurements below are taken from the app viewport only; browser/device chrome
+was excluded. Values are rounded to the nearest pixel because the references
+are raster captures.
+
+| Component | Desktop mock | Mobile mock | Implementation token/constraint |
+|---|---:|---:|---|
+| Header height | 72px | 219px (brand row + mode row + map row) | responsive header rows |
+| Source sidebar width | 291px | sheet, 100vw | `--workspace-sidebar-width` / mobile sheet |
+| Contextual node drawer | 354px | bottom sheet, 100vw | overlay; does not resize canvas |
+| Canvas top padding | 94px | 38px below map row | canvas padding rules |
+| Menu/card radius | 16px | 16px | shared surface radius |
+| Control radius | 10–12px | 12px | compact controls/buttons |
+| Primary border thickness | 1px | 1px | semantic divider tokens |
+| Primary action | `#006BFE` | `#006BFE` | `--accent` |
+| App/canvas background | `#F4F8FC` | `#F4F8FC` | `--bg-base` |
+| Header/sidebar surface | `#FEFEFE` | `#FEFEFE` | `--bg-sidebar` |
+| Elevated/card surface | `#FFFFFF` | `#FFFFFF` | `--bg-card` |
+| Primary text | `#102A5D` | `#102A5D` | `--text-primary` |
+| Secondary text | `#5B7096` | `#5B7096` | `--text-secondary` |
+| Ready/success | `#16B36A` | `#16B36A` | `--ok` |
+| Warning/technology | `#F39A1B` | `#F39A1B` | `--warn` |
+| Citation/provenance | `#F1333A` | `#F1333A` | `--seal` / `--err` |
+
+The desktop mock is a 3-column composition: fixed source rail, panning canvas,
+and an overlay drawer. The mobile mock changes the header to two rows, keeps the
+canvas full width, and converts node detail to a bottom sheet. The library,
+StudyMap tools, and source filters remain transient surfaces in both compositions.
+
 | Semantic role | Mock flat-region color | Current token / renderer value | Decision |
 |---|---|---|---|
 | App/canvas background | `#F4F8FC` | `--bg-base: #F4F8FC` | aligned |
