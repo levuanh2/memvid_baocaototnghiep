@@ -58,6 +58,18 @@ describe("GuidedMindmapDialog", () => {
     expect(container.textContent).toContain("Đang tạo");
   });
 
+  it("prevents duplicate submissions from rapid double click", async () => {
+    suggest.mockResolvedValue({ suggestions: [] });
+    const onSubmit = vi.fn();
+    await act(async () => render({ onSubmit }));
+    await act(async () => {
+      const button = container.querySelector('button[type="submit"]');
+      button.click();
+      button.click();
+    });
+    expect(onSubmit).toHaveBeenCalledTimes(1);
+  });
+
   it("closes on Escape and restores focus to the opener", async () => {
     const opener = document.createElement("button");
     document.body.appendChild(opener);
