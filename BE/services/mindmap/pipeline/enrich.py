@@ -83,6 +83,9 @@ def _enrich_one(mm_input: dict, branch: dict, allowed: list[str], model: str, ti
     ctx = _branch_context(mm_input, allowed)
     user = (f"Nhánh: {branch['title']}\nDanh sách id hợp lệ: {', '.join(sorted(set(allowed)))}\n\n"
             f"<<<TÀI LIỆU>>>\n{ctx}\n<<<HẾT>>>")
+    intent = mm_input.get("generation_intent") or {}
+    if intent:
+        user += "\nUSER GUIDANCE: " + str(intent.get("instruction") or "") + "; purpose=" + str(intent.get("preset") or "overview") + "; detail=" + str(intent.get("detail_level") or "balanced")
     data = _ask_json(user, model, timeout_sec)
     allowed_set = set(allowed)
 

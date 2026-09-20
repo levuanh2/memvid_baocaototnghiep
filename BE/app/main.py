@@ -1561,6 +1561,21 @@ def _ensure_owned_sources(source_names: list, user_id: Optional[str]):
     return None
 
 
+def _ensure_ready_sources(source_names: list[str]):
+    """Reject guided generation until every selected source has indexed chunks."""
+    registry = _load_source_registry()
+    if not registry:
+        return None  # legacy/open installs may only have index.json
+    for requested in source_names:
+        norm = _normalize_video_stem(requested)
+        rows = [row for sid, row in registry.items()
+                if isinstance(row, dict) and (sid == requested or
+                   _normalize_video_stem(row.get("source_stem") or row.get("filename") or "") == norm)]
+        if rows and any((row.get("status") or row.get("pipeline_status") or "ready") not in ("ready", "index_ready") for row in rows):
+            return jsonify({"error": "source_not_ready", "source": requested}), 409
+    return None
+
+
 def _chunk_owner_stem(chunk_id) -> str:
     """Canonical source stem a chunk_id belongs to (from index.json), or '' if unknown.
     Used to owner-check /chunk-text without trusting any client-supplied identity."""
@@ -4962,7 +4977,8 @@ def _mindmap_input_and_hash(source_names: list[str]) -> tuple[dict, str]:
     return mm, h
 
 
-def _start_mindmap_job(source_names: list[str], mm_input: dict, content_hash: str) -> str:
+def _start_mindmap_job(source_names: list[str], mm_input: dict, content_hash: str,
+                       generation_intent: Optional[dict] = None) -> str:
     """Phase 5 Step 3: dispatch Mindmap v3 via enqueue_job — daemon thread when
     QUEUE_ENABLED=false (default, unchanged), RQ 'mindmap' queue when true. FE polling
     (/mindmap-status) unchanged; result still in mindmap_store."""
@@ -4992,6 +5008,39 @@ def run_mindmap_job(job_id: str, source_names: list[str], mm_input: dict, conten
 
 
 # -------------------------
+@app.post("/mindmaps/suggest-topics")
+def suggest_mindmap_topics():
+    uid, err = _require_app_user()
+    if err:
+        return err
+    data = request.json or {}
+    raw_sources = data.get("source_ids") or data.get("sources") or []
+    if not isinstance(raw_sources, list) or not raw_sources:
+        return jsonify({"error": "No sources selected"}), 400
+    source_names = []
+    for item in raw_sources:
+        value = item if isinstance(item, str) else (item.get("video") or item.get("name") or item.get("id") or item.get("source"))
+        if isinstance(value, str) and value.strip() and value.strip() not in source_names:
+            source_names.append(value.strip())
+    if not source_names:
+        return jsonify({"error": "No sources selected"}), 400
+    src_err = _ensure_owned_sources(source_names, uid)
+    if src_err:
+        return src_err
+    ready_err = _ensure_ready_sources(source_names)
+    if ready_err:
+        return ready_err
+    try:
+        mm_input, _ = _mindmap_input_and_hash(source_names)
+    except Exception as exc:
+        return jsonify({"error": f"Không đọc được dữ liệu nguồn: {exc}"}), 500
+    if not mm_input.get("chunks"):
+        return jsonify({"suggestions": [], "status": "empty"}), 200
+    from app.domains.mindmap.guided import suggest_topics
+    return jsonify({"suggestions": suggest_topics(mm_input, str(data.get("query") or "")),
+                    "source_ids": source_names}), 200
+
+
 @app.post("/generate-mindmap")
 def generate_mindmap():
     uid, err = _require_app_user()
@@ -5025,6 +5074,17 @@ def generate_mindmap():
     if src_err:
         return src_err
 
+    ready_err = _ensure_ready_sources(source_names)
+    if ready_err:
+        return ready_err
+
+    from app.domains.mindmap.guided import intent_hash, normalize_intent, suggest_topics
+    guided_requested = any(key in data for key in ("instruction", "selected_topic_ids", "selected_topics", "preset", "detail_level"))
+    try:
+        intent = normalize_intent(data) if guided_requested else None
+    except ValueError as exc:
+        return jsonify({"error": str(exc), "error_code": "invalid_guided_request"}), 400
+
     force = bool(data.get("force"))
     try:
         mm_input, content_hash = _mindmap_input_and_hash(source_names)
@@ -5032,14 +5092,37 @@ def generate_mindmap():
         return jsonify({"error": f"Không đọc được dữ liệu nguồn: {e}"}), 500
     if not mm_input.get("chunks"):
         return jsonify({"error": "Nguồn chưa có dữ liệu đã index"}), 400
+    if intent:
+        available_topics = suggest_topics(mm_input)
+        by_id = {row["id"]: row for row in available_topics}
+        selected_ids = intent["selected_topic_ids"]
+        grounded = [by_id[item]["title"] for item in selected_ids if item in by_id]
+        # Client text is only a user preference; evidence remains server-derived.
+        intent["selected_topics"] = grounded or intent["selected_topics"]
+        mm_input = {**mm_input, "generation_intent": intent,
+                    "guided_topics": available_topics}
+        content_hash = intent_hash(content_hash, intent)
+
+    idempotency_key = str(data.get("idempotency_key") or "").strip()
+    if idempotency_key:
+        cache_key = f"{uid or 'anonymous'}:{idempotency_key}"
+        existing = getattr(generate_mindmap, "_idempotency", {}).get(cache_key)
+        if existing:
+            return jsonify(existing), 202
     if not force:
         # Phase D: user-scoped cache lookup — no cross-user reuse on identical content_hash.
         cached = (mindmap_store.get_by_hash(content_hash, user_id=uid, enforce_owner=True)
                   if _auth_protect_enabled() else mindmap_store.get_by_hash(content_hash))
         if cached:
             return jsonify({"status": "done", "result": cached, "cached": True}), 200
-    job_id = _start_mindmap_job(source_names, mm_input, content_hash)
-    return jsonify({"job_id": job_id, "status": "started"}), 202
+    job_id = _start_mindmap_job(source_names, mm_input, content_hash, intent)
+    response = {"job_id": job_id, "status": "queued", "status_url": f"/mindmap-status/{job_id}"}
+    if idempotency_key:
+        cache = getattr(generate_mindmap, "_idempotency", None)
+        if cache is None:
+            cache = generate_mindmap._idempotency = {}
+        cache[cache_key] = response
+    return jsonify(response), 202
 
 
 @app.get("/mindmap-status/<job_id>")

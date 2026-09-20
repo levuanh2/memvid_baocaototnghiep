@@ -131,7 +131,15 @@ def build_mindmap_graph(*, data_dir: Path, index_meta_path: Path,
             content_hash_value=state["content_hash"],
             model=resolve_mindmap_model(),
             elapsed_sec=elapsed, degraded_missing=missing,
-            skeleton_method=state.get("skeleton_method") or "")
+            skeleton_method=state.get("skeleton_method") or "",
+            generation_intent=state["mm_input"].get("generation_intent"),
+            job_id=state["job_id"])
+        if record.get("schema_version") == 3:
+            for issue in mm_schema.validate_v3_record(record):
+                if issue not in missing:
+                    missing.append(issue)
+            record["generator"]["missing"] = missing
+            record["generator"]["degraded"] = bool(missing)
         # Phase D: bind the record owner (None when unprotected → today's behavior).
         persist_record(record, user_id=state.get("user_id"))
         _set_job(state["job_id"], status="done", progress=100,

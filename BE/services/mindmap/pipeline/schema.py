@@ -13,6 +13,7 @@ MAX_NODES = 120
 MAX_RELATIONS = 20
 LAYOUT_VERSION = "side-balanced-v2"
 GENERATION_PROFILE = "learning-map-v2"
+GUIDED_GENERATION_PROFILE = "guided-learning-map-v3"
 MAX_TOPIC_LENGTH = 100
 KINDS = ("root", "section", "idea", "detail")
 REL_TYPES = ("relates_to", "leads_to", "causes", "supports", "contrasts", "contains")
@@ -124,19 +125,73 @@ def validate_relations(relations: list[dict], nodes: list[dict]) -> list[dict]:
 
 def build_record(*, title: str, sources: list[str], nodes: list[dict], relations: list[dict],
                  content_hash_value: str, model: str, elapsed_sec: float,
-                 degraded_missing: list[str], skeleton_method: str = "") -> dict:
+                 degraded_missing: list[str], skeleton_method: str = "",
+                 generation_intent: Optional[dict] = None, job_id: Optional[str] = None) -> dict:
+    guided = generation_intent is not None
+    generator = {
+        "pipeline": PIPELINE_VERSION,
+        "model": model,
+        "elapsed_sec": round(float(elapsed_sec), 1),
+        "degraded": bool(degraded_missing),
+        "missing": list(degraded_missing or []),
+        "skeleton_method": skeleton_method or "",
+    }
+
+    if guided:
+        generator.update({"generation_intent": dict(generation_intent), "job_id": job_id or ""})
     return {
         "id": str(uuid.uuid4()),
-        "schema_version": 2,
+        "schema_version": 3 if guided else 2,
         "layout_version": LAYOUT_VERSION,
-        "generation_profile": GENERATION_PROFILE,
+        "generation_profile": GUIDED_GENERATION_PROFILE if guided else GENERATION_PROFILE,
         "title": title,
         "sources": list(sources or []),
         "content_hash": content_hash_value,
         "created_at": datetime.now(timezone.utc).isoformat().replace("+00:00", "Z"),
         "nodes": nodes,
         "relations": relations,
-        "generator": {
+        "generator": generator,
+    }
+
+
+def validate_v3_record(record: dict) -> list[str]:
+    """Return bounded structural/semantic issues for a guided record."""
+    issues: list[str] = []
+    nodes = record.get("nodes") or []
+    roots = [n for n in nodes if n.get("parent") is None or n.get("kind") == "root"]
+    if len(roots) != 1:
+        issues.append("v3_invalid_root")
+    ids = {n.get("id") for n in nodes}
+    for n in nodes:
+        label = str(n.get("title") or "")
+        if len(label) > MAX_TOPIC_LENGTH or len(label.split()) > 12:
+            issues.append("v3_label_too_long")
+            break
+    for parent in {n.get("parent") for n in nodes}:
+        labels = [str(n.get("title") or "").casefold() for n in nodes if n.get("parent") == parent]
+        if len(labels) != len(set(labels)):
+            issues.append("v3_duplicate_sibling")
+            break
+    for relation in record.get("relations") or []:
+        if relation.get("source") not in ids or relation.get("target") not in ids:
+            issues.append("v3_relation_endpoint")
+            break
+    return list(dict.fromkeys(issues))
+    if guided:
+        generator.update({"generation_intent": dict(generation_intent), "job_id": job_id or ""})
+    return {
+        "id": str(uuid.uuid4()),
+        "schema_version": 3 if guided else 2,
+        "layout_version": LAYOUT_VERSION,
+        "generation_profile": GUIDED_GENERATION_PROFILE if guided else GENERATION_PROFILE,
+        "title": title,
+        "sources": list(sources or []),
+        "content_hash": content_hash_value,
+        "created_at": datetime.now(timezone.utc).isoformat().replace("+00:00", "Z"),
+        "nodes": nodes,
+        "relations": relations,
+        "generator": generator,
+        "_legacy_generator": {
             "pipeline": PIPELINE_VERSION,
             "model": model,
             "elapsed_sec": round(float(elapsed_sec), 1),
