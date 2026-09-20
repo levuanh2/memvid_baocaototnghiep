@@ -58,12 +58,13 @@ def main():
         page.locator('label:has(input[value="process"])').click()
         page.locator('label:has(input[value="detailed"])').click()
         touch_targets = page.locator("button").evaluate_all("els => els.map(e => ({name:e.getAttribute('aria-label') || e.textContent.trim(), w:e.getBoundingClientRect().width, h:e.getBoundingClientRect().height}))")
+        duplicate_guard_disabled = page.locator('button[type="submit"]').is_disabled()
         page.keyboard.press("Escape")
         escape_closed = page.get_by_role("dialog").count() == 0
         browser.close()
     for item in records:
         item["console_errors"] = len(console_errors)
-    print(json.dumps({"browser": BRAVE, "records": records, "console_errors": console_errors, "page_errors": page_errors, "escape_closed": escape_closed, "touch_targets": touch_targets}, ensure_ascii=True))
+    print(json.dumps({"browser": BRAVE, "records": records, "console_errors": console_errors, "page_errors": page_errors, "escape_closed": escape_closed, "duplicate_guard_disabled": duplicate_guard_disabled, "touch_targets": touch_targets}, ensure_ascii=True))
 
 
 if __name__ == "__main__":
