@@ -137,6 +137,46 @@ bottom-sheet behavior. No fabricated screenshot paths are recorded.
 **FIXTURE VISUAL GATE BLOCKED** — live authenticated data and a fixture harness
 are still required. This is separate from the passing FE automated suite.
 
+## Guided Generation implementation pass (after d2452e7)
+
+This pass implements a first vertical slice in the clean worktree
+`E:/memvid_NCKH/guided-mindmap-v3`, branch
+`feature/guided-mindmap-generation-v3`. The original dirty BE worktree was not
+edited, staged, stashed, reset, or cleaned.
+
+Commits:
+
+- `8d2f2f0` — Guided FE dialog, source summary, API payload, topic loading, and the existing library/empty-state owner wiring.
+- `4d705d7` — Suggested-topic route, readiness/ownership/idempotency contract, guided intent propagation, schema V3 metadata and validator.
+- `bfa67bb` — FE dialog and deterministic Guided V3 regression tests.
+
+Coverage implemented: desktop modal/mobile bottom sheet; custom instruction,
+purpose and detail level; backend-derived suggestions from selected indexed
+chunks; source ownership/readiness validation; idempotency response and status
+URL; real outline/enrichment prompt intent propagation; V3 guided metadata and
+validator; persisted node context/citations/relations; and V2-compatible
+default schema behavior. Full adaptive retrieval/planning/repair acceptance is
+still partial and is not claimed complete.
+
+Verification:
+
+- FE: `npm test -- --run` PASS, 97 files / 1,079 tests; `npm run build` PASS, 2,373 modules; changed-file ESLint PASS with 0 errors and 0 warnings.
+- Repository lint: FAIL WITH BASELINE, 60 errors and 6 warnings, all in unrelated existing debt; no changed-file findings.
+- BE relevant Mind Map/Guided suite: PASS, 85 tests and 5 warnings.
+- `python scripts/build_proto.py`: PASS; generated protobuf modules are ignored build artifacts.
+- `git diff --check`: PASS.
+
+The earlier SQLite failure was reproduced as a permission problem creating
+isolated test database/checkpoint files and passed in the permitted isolated
+run. The `shared.proto.gen` collection error was caused by generated modules
+missing from the checkout and was fixed by the repository generation script;
+production configuration was not changed.
+
+No authenticated account/document/map, model-provider credential, or fixture
+browser harness was available. Therefore no visual screenshot or real-provider
+generation pass is claimed. The original BE dirty worktree remains byte-for-byte
+untouched.
+
 ## Final verdict
 
 - **LOCAL FE GATE: FAIL** — tests/build pass; repository lint fails on existing lint debt.
