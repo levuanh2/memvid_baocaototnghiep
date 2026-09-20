@@ -136,7 +136,7 @@ const BUCKET_META = {
 };
 
 export default function KnowledgeInspector({
-  node, relations, breadcrumb, documentTitle, sources, generating,
+  node, relations, breadcrumb, documentTitle, sources, generating, mapMeta,
   onNavigate, onAskAI, onOpenSource, nav, onClose,
 }) {
   const cacheRef = useRef(new Map()); // session-lifetime — Inspector no longer unmounts per click (Task 1)
@@ -276,7 +276,9 @@ export default function KnowledgeInspector({
     <div className="h-full flex items-center justify-center text-center px-6">
       <div>
         <Icon name="Network" size={26} className="mx-auto mb-2.5 opacity-50 text-text-muted" />
-        <p className="text-small text-text-secondary">Chọn một nhánh trên sơ đồ để xem chi tiết.</p>
+        <h3 className="font-display text-body-lg font-semibold text-text-primary mb-1">Chi tiết sơ đồ</h3>
+        <p className="text-small text-text-secondary">Chọn một nhánh để xem giải thích và bằng chứng.</p>
+        {mapMeta && <p className="text-caption text-text-muted mt-3">{mapMeta.sources} nguồn · {mapMeta.nodes} node · {mapMeta.created}</p>}
       </div>
     </div>
   ) : (

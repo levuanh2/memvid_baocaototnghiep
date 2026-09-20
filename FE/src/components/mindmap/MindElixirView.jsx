@@ -19,7 +19,6 @@ import { updateMindmap } from "../../utils/api";
 import { toast } from "../ui/Toaster";
 import { Icon } from "../ui/Icon";
 import Spinner from "../ui/Spinner";
-import KnowledgeInspector from "./KnowledgeInspector";
 import "./mindmap.css";
 
 // Palette nhánh: archival ink hexes (Phòng đọc theme) — trước đây sống ở
@@ -84,7 +83,7 @@ export const THEME = {
 // shape from before this refactor, just no longer wrapped in a portal.
 // `controller`: the ONE `useMindMapController()` instance, owned by whoever
 // renders both this component and KnowledgeInspector (WorkspaceContainer).
-export default function MindElixirView({ data, onRegenerate, regenerating, controller, inspectorProps }) {
+export default function MindElixirView({ data, onRegenerate, regenerating, controller }) {
   const containerRef = useRef(null);
   const mindRef = useRef(null);
   const canvasWrapRef = useRef(null);
@@ -98,7 +97,6 @@ export default function MindElixirView({ data, onRegenerate, regenerating, contr
   // map vẫn đang dirty: user quay đi quay lại là mất luôn lý do hỏng, tưởng đã lưu xong.
   // Banner ở lại tới khi tự đóng hoặc tới lần thao tác sau.
   const [errorMsg, setErrorMsg] = useState(null);
-  const [inspectorOpen, setInspectorOpen] = useState(false);
   const [contextOverflowOpen, setContextOverflowOpen] = useState(false);
   const [mapSelectorOpen, setMapSelectorOpen] = useState(false);
 
@@ -151,7 +149,6 @@ export default function MindElixirView({ data, onRegenerate, regenerating, contr
       mind.bus.addListener("scale", (v) => setZoom(v));
       mind.bus.addListener("selectNodes", (nodes) => {
         controller.onNodeSelected(nodes);
-        if (nodes?.[0]) setInspectorOpen(true);
       });
       mind.bus.addListener("operation", () => setDirty(true));
     } else {
@@ -619,17 +616,6 @@ export default function MindElixirView({ data, onRegenerate, regenerating, contr
           <Icon name="Expand" size={14} />
         </button>
 
-        {inspectorProps && (
-          <>
-            <button type="button" className="mm-inspector-tab" onClick={() => setInspectorOpen((v) => !v)}
-              aria-expanded={inspectorOpen} aria-controls="mindmap-inspector" aria-label={inspectorOpen ? "Đóng bảng bằng chứng" : "Mở bảng bằng chứng"}>
-              <Icon name="PanelRight" size={15} /><span>Bằng chứng</span><Icon name={inspectorOpen ? "ChevronRight" : "ChevronLeft"} size={13} />
-            </button>
-            <aside id="mindmap-inspector" className={`mm-inspector-drawer ${inspectorOpen ? "is-open" : ""}`} aria-hidden={!inspectorOpen}>
-              <KnowledgeInspector {...inspectorProps} onClose={() => setInspectorOpen(false)} />
-            </aside>
-          </>
-        )}
       </div>
     </div>
   );

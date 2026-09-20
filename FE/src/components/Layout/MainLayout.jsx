@@ -1,7 +1,7 @@
 import { useState, useCallback, useEffect, useRef, useMemo } from "react";
 import { useNavigate } from "react-router-dom";
 import SidebarLeft from "./SidebarLeft";
-import SidebarRight from "./SidebarRight";
+import ContextInspector from "./ContextInspector";
 import WorkspaceContainer from "./WorkspaceContainer";
 import { useMindMapController } from "../../hooks/useMindMapController";
 import PanelSpine from "./PanelSpine";
@@ -68,6 +68,7 @@ export default function MainLayout({
   const [workspaceMode, setWorkspaceMode] = useState(initialWorkspaceMode);
   const [mindmapData, setMindmapData] = useState(null);   // { data, onRegenerate, regenerating } | null
   const [summaryData, setSummaryData] = useState(null);   // summary record | null
+  const [summaryContext, setSummaryContext] = useState(null);
   // Auto-switch to a newly-populated tab ONCE (null → non-null), not on every
   // later update (Save/regenerate) — those must not yank the user off Chat.
   const hadMindmapRef = useRef(false);
@@ -101,6 +102,16 @@ export default function MainLayout({
   // new keyboard effects need keeps THOSE effects from re-subscribing on
   // every unrelated render, without touching the hook itself.
   const { goBack: mmGoBack, goForward: mmGoForward, jumpTo: mmJumpTo, selected: mmSelected, relations: mmRelations } = mindMapController;
+  const { drawer: panelDrawer, setCollapsedFor: setPanelCollapsed } = panel;
+
+  // Node/citation triggers open the same inspector used by Chat and Summary.
+  // The controller remains mounted, so opening this surface never touches the
+  // Mind Elixir instance or its viewport transform.
+  useEffect(() => {
+    if (!mmSelected?.id) return;
+    if (panelDrawer) setRightOpen(true);
+    else setPanelCollapsed("right", false);
+  }, [mmSelected?.id, panelDrawer, setPanelCollapsed]);
 
   // Feature Pack A (Research Timeline) — "Jump" to a mindmap-node entry must
   // switch the pane INTO view before scrolling it: MindElixirView stays
@@ -130,6 +141,11 @@ export default function MainLayout({
     generating: Boolean(mindmapData?.data?.generating),
     documentTitle: mindmapData?.data?.title || "",
     sources: Array.isArray(mindmapData?.data?.sources) ? mindmapData.data.sources : [],
+    mapMeta: mindmapData?.data ? {
+      sources: Array.isArray(mindmapData.data.sources) ? mindmapData.data.sources.length : 0,
+      nodes: Array.isArray(mindmapData.data.nodes) ? mindmapData.data.nodes.length : 0,
+      created: mindmapData.data.created_at ? new Date(mindmapData.data.created_at).toLocaleDateString() : "",
+    } : null,
     onNavigate: mindMapController.jumpTo, onAskAI: onInspectorAskAI, onOpenSource: onInspectorOpenSource,
     nav: mindMapController.nav,
   }), [mindMapController, mindmapData, onInspectorAskAI, onInspectorOpenSource]);
@@ -365,8 +381,8 @@ export default function MainLayout({
     return () => window.removeEventListener("keydown", onKey);
   }, [panel.drawer, rightOpen]);
 
-  const rightSurfaceVisible = workspaceMode !== "mindmap" || rightOpen;
-  const mindmapToolOverlay = workspaceMode === "mindmap" && rightOpen;
+  const rightSurfaceVisible = true;
+  const mindmapToolOverlay = false;
 
   return (
     <div className="flex flex-col h-screen overflow-hidden font-body transition-theme" style={{ background: "var(--bg-base)", color: "var(--text-primary)" }}>
@@ -583,8 +599,8 @@ export default function MainLayout({
             }}
             mindmapData={mindmapData}
             summaryData={summaryData}
+            onSummaryContextChange={setSummaryContext}
             controller={mindMapController}
-            inspectorProps={inspectorProps}
           />
         </main>
 
@@ -619,27 +635,24 @@ export default function MainLayout({
                   // Gia sư AI trên mobile là bottom sheet (đúng yêu cầu Step 1),
                   // Bằng chứng vẫn là ngăn kéo trượt từ cạnh phải như cũ — cùng
                   // `rightOpen`/nền mờ, chỉ đổi hướng trượt theo `rightView`.
-                  ? rightView === "tutor"
-                    ? `fixed inset-x-0 bottom-0 max-h-[80vh] z-40 shrink-0
-                       bg-surface-sidebar border-t border-border rounded-t-[14px]
-                       transition-transform duration-200 ease-in-out
-                       ${rightOpen ? "translate-y-0" : "translate-y-full"}`
-                    : `fixed top-[60px] right-0 h-[calc(100vh-60px)] z-40 w-[326px] shrink-0
-                       bg-surface-sidebar border-l border-border
-                       transition-transform duration-200 ease-in-out
-                       ${rightOpen ? "translate-x-0" : "translate-x-full"}`
-                  : "shrink-0 bg-surface-sidebar overflow-hidden"
+                  ? `context-inspector-shell fixed inset-x-0 bottom-0 max-h-[82vh] z-40 shrink-0
+                     bg-surface-sidebar border-t border-border rounded-t-[16px]
+                     transition-transform duration-200 ease-in-out
+                     ${rightOpen ? "translate-y-0" : "translate-y-full"}`
+                  : "context-inspector-shell shrink-0 bg-surface-sidebar overflow-hidden"
               }
               style={!panel.drawer && !mindmapToolOverlay ? { width: panel.width.right } : undefined}
             >
               <div className="h-full">
-                <SidebarRight
+                <ContextInspector
+                  mode={workspaceMode}
                   selectedSources={selectedSources}
                   evidence={evidence}
                   highlight={highlight}
                   onHighlight={onHighlight}
                   onClose={() => ((panel.drawer || mindmapToolOverlay) ? setRightOpen(false) : panel.setCollapsedFor("right", true))}
                   onAskAbout={onAskAbout}
+                  onOpenSource={onInspectorOpenSource}
                   collapsible={!panel.drawer}
                   rightView={rightView}
                   onRightViewChange={setRightView}
@@ -653,6 +666,8 @@ export default function MainLayout({
                   onSummaryLibraryChange={updateSummaryLibrary}
                   onSwitchToChat={onSwitchToChat}
                   mindMapController={mindMapController}
+                  mindMapContext={inspectorProps}
+                  summaryData={summaryData ? { ...summaryData, context: summaryContext } : null}
                   onJumpToMindMapNode={onJumpToMindMapNode}
                 />
               </div>

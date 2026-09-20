@@ -21,10 +21,39 @@ import MdSnippet from "../ui/Markdown";
 import TutorPanel from "../study/TutorPanel";
 import ResearchTimeline from "../study/ResearchTimeline";
 import KnowledgeDashboard from "../study/KnowledgeDashboard";
+import KnowledgeInspector from "../mindmap/KnowledgeInspector";
+import { normalizeSummaryRecord } from "../../utils/summaryJob";
 import { useStudyContext } from "../../study/useStudyContext";
 
 const IDLE_JOB_UI = { running: false, label: "", progress: null, stalled: false };
 const legacyInspectorSurfacesEnabled = false;
+
+function SummaryEvidenceContent({ data, context, onOpenSource }) {
+  const rec = normalizeSummaryRecord(data);
+  const section = rec?.sections?.find((item) => item.id === context?.sectionId) || rec?.sections?.[0];
+  const refs = Array.isArray(section?.chunk_refs) ? section.chunk_refs : [];
+  if (!rec) return <div className="context-inspector-empty">Mở một bản tóm tắt để xem nguồn và bằng chứng.</div>;
+  return (
+    <div className="flex-1 min-h-0 overflow-y-auto co-the-cuon-them px-3 py-3">
+      <div className="text-metadata font-mono uppercase text-text-muted mb-2 px-1">Nguồn của bản tóm tắt</div>
+      <div className="evidence-frame p-3 mb-3">
+        <div className="text-small font-semibold text-text-primary truncate">{rec.title || "Tóm tắt tài liệu"}</div>
+        <div className="text-caption text-text-muted mt-1">{rec.sources?.length || 0} tài liệu</div>
+        {rec.sources?.length > 0 && <button type="button" onClick={() => onOpenSource?.(rec.sources[0])} className="text-caption text-accent hover:underline mt-2">Mở nguồn</button>}
+      </div>
+      {section ? (
+        <>
+          <div className="text-metadata font-mono uppercase text-text-muted mb-2 px-1">Mục đang chọn</div>
+          <div className="evidence-frame p-3">
+            <div className="text-small font-semibold text-text-primary">{section.title}</div>
+            {section.sourceStems?.length > 0 && <div className="text-caption text-text-muted mt-1">Nguồn: {section.sourceStems.join(" · ")}</div>}
+            {refs.length > 0 ? <div className="flex flex-wrap gap-1.5 mt-2">{refs.map((ref) => <span key={ref} className="cite-chip !text-caption">đoạn {ref}</span>)}</div> : <p className="text-small text-text-muted italic mt-2">Mục này chưa có trích dẫn được xác minh.</p>}
+          </div>
+        </>
+      ) : <div className="context-inspector-empty">Chọn một mục trong bản tóm tắt để xem bằng chứng.</div>}
+    </div>
+  );
+}
 
 // ── Helpers ──────────────────────────────────────────
 const formatTimeAgo = (isoDate) => {
@@ -72,7 +101,8 @@ const ARTIFACTS = [
 
 // ── Main component ────────────────────────────────────
 export default function SidebarRight({
-  selectedSources, evidence, highlight, onHighlight, onClose, onAskAbout, collapsible = false,
+  selectedSources, evidence, highlight, onHighlight, onClose, onAskAbout, onOpenSource, collapsible = false,
+  mode = "chat", mindMapContext, summaryData,
   // Phase 4C — Gia sư AI sống trong CÙNG cột này, không phải một cột thứ ba
   // (xem hard constraint "no new sidebar"). `rightView` là CONTROLLED từ
   // MainLayout (Ctrl+/ và trạng thái ngăn kéo/bottom-sheet trên mobile cần
@@ -684,7 +714,7 @@ export default function SidebarRight({
 
   // ── Render ────────────────────────────────────────
   return (
-    <div className="sidebar-right flex flex-col h-full overflow-hidden transition-theme" style={{ background: "var(--bg-sidebar)" }}>
+    <div id="context-inspector" role="region" aria-label="Bộ kiểm tra ngữ cảnh" className="sidebar-right flex flex-col h-full overflow-hidden transition-theme" style={{ background: "var(--bg-sidebar)" }}>
 
       {/* Header — bốn view của MỘT cột: Bằng chứng / Gia sư AI / Dòng thời
           gian / Kiến thức. Visual Identity Reset: demoted from `.pill-tab`
@@ -696,9 +726,9 @@ export default function SidebarRight({
       <div className="study-surface-header">
         <div className="flex items-center gap-2 min-w-0">
           <Icon name={rightView === "tutor" ? "Sparkles" : rightView === "timeline" ? "Clock" : rightView === "insights" ? "Network" : "Quote"} size={15} />
-          <strong className="truncate">{rightView === "tutor" ? "Gia sư AI" : rightView === "timeline" ? "Dòng thời gian" : rightView === "insights" ? "Kiến thức" : "Bằng chứng"}</strong>
+          <strong className="truncate">{mode === "mindmap" ? "Chi tiết sơ đồ" : mode === "summary" ? "Nguồn bản tóm tắt" : "Bằng chứng câu trả lời"}</strong>
         </div>
-        <button type="button" onClick={onClose} className="icon-btn w-9 h-9" aria-label="Đóng công cụ học" title="Đóng">
+        <button type="button" onClick={onClose} className="icon-btn w-9 h-9" aria-expanded="true" aria-controls="context-inspector" aria-label="Thu gọn bộ kiểm tra ngữ cảnh" title="Thu gọn">
           <Icon name="X" size={16} />
         </button>
       </div>
@@ -752,7 +782,11 @@ export default function SidebarRight({
         </div>
       </div>}
 
-      {rightView === "tutor" ? (
+      {mode === "mindmap" ? (
+        <KnowledgeInspector {...mindMapContext} onClose={undefined} />
+      ) : mode === "summary" ? (
+        <SummaryEvidenceContent data={summaryData} context={summaryData?.context} onOpenSource={onOpenSource} />
+      ) : rightView === "tutor" ? (
         <div className={`flex-1 min-h-0 overflow-y-auto co-the-cuon-them ${tutorFloating ? "md:m-2.5 md:rounded-[12px] md:shadow-card-hover md:border md:border-border" : ""}`}>
           <TutorPanel askDirect={askDirect} openArtifact={openArtifact} memory={tutorMemory} />
         </div>
