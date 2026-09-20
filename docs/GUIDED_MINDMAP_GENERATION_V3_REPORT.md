@@ -268,3 +268,108 @@ or `cbeb475` ancestry was introduced.
 - **FIXTURE VISUAL GATE: BLOCKED** — no authenticated fixture harness available.
 - **IMPLEMENTATION SCOPE: PARTIAL** — Guided BE generation/planning pipeline is not present in this branch.
 - **LIVE GATE B: BLOCKED BY CORS** — no real account/document/map acceptance was claimed.
+## Fixture visual gate and release-readiness audit (2026-09-21)
+
+This section supersedes the earlier browser-blocked fixture note above. The
+approved reference PNGs named `e00640ad-e749-4706-8671-9d869f6f4616.png` and
+`7ff064b6-a4f3-4125-9a0b-ccb59060fe82.png` were not present in this clean
+worktree's `docs/`, so no pixel-diff comparison against those files was possible.
+
+### Browser and fixture runtime
+
+- System browser: `C:\Program Files\BraveSoftware\Brave-Browser\Application\brave.exe`.
+  File version: **153.1.95.104**; Python Playwright reported browser version
+  **153.0.8010.53**.
+- Python: `C:\Users\Vu Anh\AppData\Local\Programs\Python\Python311\python.exe`.
+  Python Playwright **1.60.0** launched Brave with `executable_path` directly.
+  Node Playwright and `playwright-core` were not installed; no browser bundle
+  was downloaded.
+- Probe/help command: `python "C:\Users\Vu Anh\.codex\skills\webapp-testing\scripts\with_server.py" --help` (exit 0).
+- Fixture server: `npm run dev -- --host 127.0.0.1 --port 4173` (exit 0).
+- Capture command: `python qa/capture_guided_mindmap_fixture.py` (exit 0).
+- The harness is test-only (`FE/qa/guided-mindmap-harness.html` and
+  `GuidedMindmapHarness.testonly.jsx`), renders production components, and is
+  absent from the production bundle (`dist/qa` absent; no fixture harness strings
+  found in `dist`). Fixture route responses are injected only by the QA script.
+
+### Screenshot manifest
+
+All files are under `docs/qa-screenshots/guided-mindmap-v3/`:
+
+- `guided-dialog-desktop-light.png`, `guided-dialog-desktop-dark.png`
+- `guided-dialog-tablet-light.png`, `guided-dialog-tablet-dark.png`
+- `guided-bottom-sheet-mobile-light.png`, `guided-bottom-sheet-mobile-dark.png`
+- `guided-dialog-loading-desktop.png`, `guided-dialog-empty-desktop.png`,
+  `guided-dialog-error-desktop.png`, `guided-dialog-ready-desktop.png`
+- `guided-workspace-inspector-desktop.png`,
+  `guided-workspace-inspector-tablet.png`,
+  `guided-workspace-inspector-mobile.png`
+
+The captures cover 1440x1024 desktop, 1024x768 tablet, and 390x844 mobile,
+light/dark dialog states, suggestion loading/empty/error/ready states, and the
+real Shared Context Inspector shell in desktop/tablet/mobile fixture states.
+The fixture cannot prove real provider generation or live Chat/Summary data.
+
+### Interaction and DOM checks
+
+- Console errors: **0**; page errors/unhandled Playwright page errors: **0**.
+- `document.documentElement.scrollWidth > clientWidth`: **false** for every
+  capture; no horizontal overflow observed.
+- Escape closed the dialog: **true**. Mobile close control measured 40x40;
+  topic chips measured at least 40px high; primary CTA remained a full-width
+  touch target. Focus restoration and duplicate-submit protection are covered by
+  the focused dialog tests (7/7 pass); the synchronous submit guard prevents a
+  rapid double click from creating a second request.
+- Fixture states rendered the actual production dialog and inspector. Existing
+  FE tests cover source readiness, payload propagation, job lifecycle, library
+  updates, Mind Elixir preservation, and V2 compatibility. Live provider job
+  transitions, account-backed map switching, and real viewport preservation were
+  not claimed here.
+
+### Release-readiness audit
+
+| Check | Status | Evidence | Deployment action |
+|---|---|---|---|
+| V3 API compatibility | PASS | Guided fields are optional on the existing generate route; legacy V2 tests pass | Keep optional defaults during rollout |
+| V2 map open/compatibility | PASS | V2 schema/lifecycle regression coverage passes | Keep explicit legacy/upgrade path |
+| DB migration | PASS | No new V3 migration in this branch; existing startup migration remains | Run existing migration procedure before release |
+| Async worker/restart durability | PARTIAL | Render has `QUEUE_ENABLED=false`; guided jobs use process-local async execution and `/tmp` job state | Use durable worker/queue and persistent job storage before production rollout |
+| Required environment | PARTIAL | Render declares `DATABASE_URL`, Supabase secrets, and `GEMINI_API_KEY` as `sync:false` | Provision and verify secrets without logging them |
+| Provider binding/fail-closed | PASS | Production graph checks configured provider; missing provider raises `guided_provider_not_configured` | Keep Gemini/provider health check; do not fall back to fixtures |
+| Retry/idempotency across restart | PARTIAL | In-memory idempotency prevents same-process double submit but is lost on restart | Persist idempotency/job state or use durable queue semantics |
+| API timeout/proxy | PARTIAL | LLM timeout is 110s and Gunicorn timeout 120s; static production FE uses `VITE_API_BASE` | Verify proxy/load-balancer timeout exceeds worst-case job request |
+| Storage compatibility | PARTIAL | Existing Supabase/Postgres map store is reused; `/tmp/studymap` is ephemeral | Move job artifacts/ledger off ephemeral disk |
+| Feature flag/rollback | PARTIAL | No dedicated guided-generation production flag; branch revert is available | Add controlled rollout flag before enabling broadly |
+| Production CORS | BLOCKED | Current Render value is `https://studymap-web.onrender.com`; `https://studymap.space` is not configured | Configure the allowed production origin at deployment; do not add localhost |
+
+### Current verification and commits
+
+- FE after the visual changes: **1087/1087 tests pass**, production build
+  **2373 modules**, changed-file lint **0 errors / 0 warnings**, and
+  `git diff --check` clean. Repository lint remains **60 errors / 6 warnings**
+  baseline in unrelated files.
+- Relevant BE suite remains **88 pass / 5 warnings** from the prior verified
+  run; no BE file changed in this visual round.
+- Visual commits: `902b401`, `4bbd781`, `a584279`.
+- Fixture/screenshot commit: `8f2c352`.
+- Source/visual tip before this report commit: `8f2c352`.
+- The main worktree's dirty BE WIP was not modified, staged, stashed, reset, or
+  cleaned. No merge, deploy, force-push, CORS/config edit, or `cbeb475` ancestry
+  was introduced.
+
+### Final verdict for this round
+
+**FIXTURE VISUAL PASS** — fixture-backed screenshots and DOM checks pass; the
+approved reference files were unavailable for pixel comparison.
+
+**IMPLEMENTATION PARTIAL** — the prior implementation status remains partial;
+fixture capture does not turn provider-backed generation into a live proof.
+
+**RELEASE CANDIDATE NO** — durable jobs/idempotency, production origin CORS, and
+controlled rollout actions remain unresolved.
+
+**REAL LOCAL GENERATION BLOCKED** — no provider credential was used in this
+environment.
+
+**LIVE GATE B BLOCKED** — no account/document/map acceptance on the deployed
+origin was claimed.
