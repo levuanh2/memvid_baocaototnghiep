@@ -181,6 +181,85 @@ untouched.
 
 ## Final verdict
 
+## Latest semantic-generation pass (after `ab447cb`)
+
+The clean worktree stayed isolated from the original dirty BE WIP. The latest
+implementation is split into these commits:
+
+- `ef2e379` — adaptive, evidence-backed Guided V3 planner wired into the graph.
+- `c57c03e` — V3 validator, bounded repair, relation/citation checks, and BE tests.
+- `e0a2e6b` — FE guided dialog readiness/idempotency payload and job lifecycle coverage.
+- `32d6467` — test-only fixture harness for the real guided dialog.
+- Docs commit: this report update.
+
+### Coverage matrix
+
+| Capability | Before | After | Evidence/tests |
+|---|---|---|---|
+| Shared Context Inspector | Implemented | Implemented | `ContextInspector.jsx`, `MainLayout.jsx`, node-context tests |
+| Guided dialog/custom instruction/topics | Implemented | Implemented | `GuidedMindmapDialog.jsx`, dialog tests |
+| Preset/detail propagation | Adapter only | Implemented in intent/planning config | `guided.py`, `guided_planner.py`, planner tests |
+| Source-backed suggestions | Implemented | Implemented | `suggest_topics`, ownership/readiness route tests |
+| Guided API/job/idempotency | Implemented | Implemented | guided route/job tests; FE job tests |
+| Retrieval/planning | Adapter only | Implemented deterministic evidence-backed planner | `plan_guided`, multi-source/query/budget tests |
+| Adaptive hierarchy/relations | Missing/partial | Implemented bounded planner | `guided_planner.py`; process/contrast tests |
+| V3 schema/validator/repair | Partial | Implemented | `schema.py`, duplicate/orphan/relation/repair tests |
+| Persistence/node context | Implemented | Implemented | `context.py`, node-context suite |
+| V2 compatibility | Partial | Preserved | schema V2 tests, relevant suite |
+| Runtime mock fallback | Unknown | No production mock fallback; provider absence fails closed | graph provider guard; test-only fakes |
+
+### Actual call graph
+
+`GuidedMindmapDialog` → `suggestMindmapTopics` / guided generate service →
+`POST /mindmaps/generate` → persisted async job → `build_mindmap_graph` →
+`collect_input` → `LocalMindmapPipeline.guided_plan` → indexed-chunk selection
+and query plan → configured-provider enrichment/relations → `build_record` →
+`validate_v3_record` → bounded `repair_v3_record` → persisted map → Mind Elixir /
+Shared Context Inspector. Node selection reads persisted context and does not
+start a generation job or call an LLM.
+
+The production guided path checks the provider registry and fails with
+`guided_provider_not_configured` when no provider is configured. Deterministic
+fakes are used only in tests; the fixture harness injects only topic suggestions
+for UI state setup and is not imported by the production entrypoint.
+
+### Verification
+
+- FE `npm test -- --run`: **PASS — 98 files, 1085 tests, 8.51s**.
+- FE `npm run build`: **PASS — 2373 modules, 11.63s**.
+- Changed-file ESLint: **PASS — 0 errors, 0 warnings**.
+- Repository `npm run lint`: **FAIL WITH BASELINE — 60 errors, 6 warnings**;
+  findings remain in pre-existing files and do not occur in changed feature files.
+- Relevant BE Mind Map/Guided command: **PASS — 88 tests, 5 warnings, 15.43s**.
+- `git diff --check`: **PASS**.
+- Fixture harness: served at `FE/qa/guided-mindmap-harness.html`; DOM harness
+  tests pass. PNG screenshots are **not available** because Playwright is not
+  installed/cached and no browser provider is available; no path is fabricated.
+
+### Remaining blockers and verdict
+
+- Real model-provider generation was not run because no configured provider
+  credential was available in this environment.
+- Fixture visual screenshots are blocked by the missing browser/Playwright
+  runtime, although the test-only harness is present and served locally.
+- Live account/document/map acceptance remains unverified; no CORS or production
+  configuration was changed.
+
+**IMPLEMENTATION: PARTIAL**
+
+**LOCAL FE PASS**
+
+**LOCAL BE PASS**
+
+**FIXTURE VISUAL BLOCKED**
+
+**REAL LOCAL GENERATION BLOCKED**
+
+**LIVE GATE B BLOCKED**
+
+The original BE WIP worktree remains untouched; no merge, deploy, force-push,
+or `cbeb475` ancestry was introduced.
+
 - **LOCAL FE GATE: FAIL** — tests/build pass; repository lint fails on existing lint debt.
 - **LOCAL BE GATE: BLOCKED/FAIL** — deterministic targeted groups pass, full Mind Map suite has the documented collection/environment failures.
 - **FIXTURE VISUAL GATE: BLOCKED** — no authenticated fixture harness available.
