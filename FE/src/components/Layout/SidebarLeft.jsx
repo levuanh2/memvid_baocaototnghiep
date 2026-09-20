@@ -38,7 +38,7 @@ const getStatusConfig = (status, substatus, canQuery) => {
 
 const formatFileName = (name = "") => name.replace(/\.(mp4|avi|mov|mkv|webm|mp3|wav|pdf|txt|docx)$/i, "");
 
-export default function SidebarLeft({ selectedSources, setSelectedSources, onSourcesChange, onClose, collapsible = false }) {
+export default function SidebarLeft({ selectedSources, setSelectedSources, onSourcesChange, onClose, collapsible = false, onTransientSurfaceOpen }) {
   const [sources, setSources] = useState([]);
   // Round 9 fix: mirrors `sources` for `fetchSourcesFromBackend` below to read
   // as "the previous sources" WITHOUT depending on execution-order between
@@ -74,6 +74,9 @@ export default function SidebarLeft({ selectedSources, setSelectedSources, onSou
   const [loiTai, setLoiTai] = useState(null);
   const [loiUpload, setLoiUpload] = useState(null);
   const [query, setQuery] = useState("");
+  const [filterOpen, setFilterOpen] = useState(false);
+  const [draftFilters, setDraftFilters] = useState({ type: "", status: "", date: "" });
+  const [appliedFilters, setAppliedFilters] = useState({ type: "", status: "", date: "" });
   const fileInputRef = useRef(null);
   const pollersRef = useRef({});
 
@@ -193,6 +196,22 @@ export default function SidebarLeft({ selectedSources, setSelectedSources, onSou
   }, []);
   useEffect(() => { if (onSourcesChange) onSourcesChange(sources); }, [sources, onSourcesChange]);
 
+  useEffect(() => {
+    if (!filterOpen) return undefined;
+    const onKeyDown = (event) => {
+      if (event.key === "Escape") setFilterOpen(false);
+    };
+    const onPointerDown = (event) => {
+      if (!event.target.closest?.(".source-filter-popover, .source-filter-trigger")) setFilterOpen(false);
+    };
+    document.addEventListener("keydown", onKeyDown);
+    document.addEventListener("mousedown", onPointerDown);
+    return () => {
+      document.removeEventListener("keydown", onKeyDown);
+      document.removeEventListener("mousedown", onPointerDown);
+    };
+  }, [filterOpen]);
+
   // ── Upload logic (unchanged) ───────────────────────
   const handleAddFiles = async (e) => {
     const files = Array.from(e.target.files || []);
@@ -270,9 +289,34 @@ export default function SidebarLeft({ selectedSources, setSelectedSources, onSou
 
   // ── Client-side search filter ──────────────────────
   const q = query.trim().toLowerCase();
-  const visibleSources = q
-    ? sources.filter((s) => (s.filename || formatFileName(s.video || s.video_stem || "")).toLowerCase().includes(q))
-    : sources;
+  const sourceType = (source) => {
+    const name = source.filename || source.video || source.video_stem || "";
+    return String(name).split(".").pop()?.toLowerCase() || "khác";
+  };
+  const matchesDate = (source) => {
+    if (!appliedFilters.date) return true;
+    const uploaded = new Date(source.created_at || source.createdAt || source.uploaded_at || 0).getTime();
+    if (!uploaded) return false;
+    const age = Date.now() - uploaded;
+    if (appliedFilters.date === "older") return age > 30 * 86400000;
+    const days = appliedFilters.date === "7" ? 7 : 30;
+    return age <= days * 86400000;
+  };
+  const visibleSources = sources.filter((source) => {
+    const name = (source.filename || formatFileName(source.video || source.video_stem || "")).toLowerCase();
+    return (!q || name.includes(q))
+      && (!appliedFilters.type || sourceType(source) === appliedFilters.type)
+      && (!appliedFilters.status || (appliedFilters.status === "ready" ? source.can_query === true : source.status === appliedFilters.status))
+      && matchesDate(source);
+  });
+  const activeFilterCount = Object.values(appliedFilters).filter(Boolean).length;
+  const applyFilters = () => { setAppliedFilters(draftFilters); setFilterOpen(false); };
+  const clearFilters = () => {
+    const empty = { type: "", status: "", date: "" };
+    setDraftFilters(empty);
+    setAppliedFilters(empty);
+    setFilterOpen(false);
+  };
 
   // ── Render ─────────────────────────────────────────
   return (
@@ -311,15 +355,14 @@ export default function SidebarLeft({ selectedSources, setSelectedSources, onSou
           <input ref={fileInputRef} type="file" multiple className="hidden" onChange={handleAddFiles} disabled={uploading} />
         </label>
 
-        {/* Search — functional filter */}
-        <div className="header-search !rounded-control !min-w-0 !px-3 !py-2">
+        <div className="source-search-row">
           <Icon name="Search" size={14} className="text-text-muted flex-shrink-0" />
           <input
             type="text"
             value={query}
             onChange={(e) => setQuery(e.target.value)}
-            placeholder="Lọc theo tên tài liệu…"
-            aria-label="Lọc tài liệu"
+            placeholder="Tìm trong tài liệu…"
+            aria-label="Tìm trong tài liệu"
             className="bg-transparent outline-none text-small text-text-primary placeholder:text-text-muted w-full"
           />
           {query && (
@@ -327,7 +370,40 @@ export default function SidebarLeft({ selectedSources, setSelectedSources, onSou
               <Icon name="X" size={13} />
             </button>
           )}
+          <button type="button" className={"source-filter-trigger" + (activeFilterCount ? " is-active" : "")}
+            onClick={() => { onTransientSurfaceOpen?.(); setFilterOpen((value) => !value); }}
+            aria-expanded={filterOpen} aria-haspopup="dialog"
+            aria-label={activeFilterCount ? "Bộ lọc, " + activeFilterCount + " đang áp dụng" : "Mở bộ lọc nâng cao"}
+            title="Bộ lọc nâng cao">
+            <Icon name="Filter" size={14} />
+            {activeFilterCount > 0 && <span>{activeFilterCount}</span>}
+          </button>
         </div>
+
+        {filterOpen && (
+          <div className="source-filter-popover" role="dialog" aria-label="Bộ lọc nâng cao">
+            <div className="source-filter-popover__head"><strong>Bộ lọc nâng cao</strong><button type="button" className="icon-btn w-8 h-8" onClick={() => setFilterOpen(false)} aria-label="Đóng bộ lọc"><Icon name="X" size={14} /></button></div>
+            <label>Loại tài liệu
+              <select value={draftFilters.type} onChange={(event) => setDraftFilters((prev) => ({ ...prev, type: event.target.value }))}>
+                <option value="">Tất cả loại</option><option value="pdf">PDF</option><option value="docx">DOCX</option><option value="md">Markdown</option><option value="txt">TXT</option>
+              </select>
+            </label>
+            <label>Trạng thái
+              <select value={draftFilters.status} onChange={(event) => setDraftFilters((prev) => ({ ...prev, status: event.target.value }))}>
+                <option value="">Tất cả trạng thái</option><option value="ready">Sẵn sàng</option><option value="processing">Đang xử lý</option><option value="error">Lỗi</option>
+              </select>
+            </label>
+            <label>Ngày tải lên
+              <select value={draftFilters.date} onChange={(event) => setDraftFilters((prev) => ({ ...prev, date: event.target.value }))}>
+                <option value="">Mọi thời điểm</option><option value="7">7 ngày qua</option><option value="30">30 ngày qua</option><option value="older">Cũ hơn</option>
+              </select>
+            </label>
+            <div className="source-filter-popover__foot">
+              <button type="button" className="text-small text-text-muted hover:text-text-primary" onClick={clearFilters}>Xóa lọc</button>
+              <button type="button" className="btn-primary !py-1.5 !px-3 text-small" onClick={applyFilters}>Áp dụng</button>
+            </div>
+          </div>
+        )}
 
         {/* Select all — Sprint Omega: was always rendered, even with zero or
             one ready source, where "bulk"-select has nothing to act on. Gate

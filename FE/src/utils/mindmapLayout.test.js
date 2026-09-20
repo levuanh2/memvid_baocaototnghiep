@@ -24,7 +24,7 @@ describe("mindmap layout contract", () => {
     const result = assignBranchDirections(nodes);
     expect(result.branches.map((node) => node.id)).toEqual(["first", "second", "third"]);
     expect(result.colors.get("first")).toBe("#126CF2");
-    expect(result.colors.get("second")).toBe("#1F4033");
+    expect(result.colors.get("second")).toBe("#FF9800");
     expect([...result.directions.values()]).toEqual([LEFT, RIGHT, LEFT]);
   });
 

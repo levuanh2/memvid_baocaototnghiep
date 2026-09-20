@@ -1,5 +1,5 @@
 import { useState, useCallback, useEffect, useRef, useMemo } from "react";
-import { Link, useNavigate } from "react-router-dom";
+import { useNavigate } from "react-router-dom";
 import SidebarLeft from "./SidebarLeft";
 import SidebarRight from "./SidebarRight";
 import WorkspaceContainer from "./WorkspaceContainer";
@@ -14,11 +14,12 @@ import { Icon } from "../ui/Icon";
 import Toaster from "../ui/Toaster";
 import AccountMenu from "./AccountMenu";
 import { useStudyContext } from "../../study/useStudyContext";
-import { openCommandPalette } from "../../utils/commandPaletteBus";
 import { useTutorMemory } from "../../study/useTutorMemory";
 import { globalShortcutAction, mindmapRelationAction, hasVisibleBlockingOverlay } from "../../utils/keyboardShortcuts";
 import { OPEN_SHORTCUTS_EVENT } from "../../utils/shortcutsBus";
 import ShortcutsOverlay from "../shortcuts/ShortcutsOverlay";
+import ModeLibraryMenu from "./ModeLibraryMenu";
+import StudyToolsMenu from "./StudyToolsMenu";
 
 // Round 11 (mockup parity, explicit user decision) — the Chat/Mind Map/
 // Summary mode switch, moved here from the now-deleted LessonHeader.jsx
@@ -181,6 +182,10 @@ export default function MainLayout({
   // Gia sư AI + Lề bằng chứng dùng chung MỘT cột (hard constraint: không thêm
   // cột thứ ba) — `rightView` chọn tab nào đang hiện trong nó.
   const [rightView, setRightView] = useState(initialRightView);   // "evidence" | "tutor" | "timeline"
+  const [headerSurface, setHeaderSurface] = useState(null); // mindmap | summary | study-tools
+  const [libraries, setLibraries] = useState({ mindMaps: [], summaries: [], mindMapActions: null, summaryActions: null });
+  const updateMindmapLibrary = useCallback((value) => setLibraries((prev) => ({ ...prev, mindMaps: value.mindMaps || [], mindMapActions: value.actions || null })), []);
+  const updateSummaryLibrary = useCallback((value) => setLibraries((prev) => ({ ...prev, summaries: value.summaries || [], summaryActions: value.actions || null })), []);
   // Lệnh một-lần (nonce) để "Xem sơ đồ"/"Xem tóm tắt" ở Tutor chuyển đúng tab
   // Artifacts trong SidebarRight — KHÔNG điều hướng, KHÔNG route mới (tutorActions.js
   // giải thích lý do: Workspace không có `document_id` để gọi `duongDi`).
@@ -194,6 +199,27 @@ export default function MainLayout({
     setArtifactRequest({ tab, nonce: Date.now() });
     if (panel.drawer) setRightOpen(true); else panel.setCollapsedFor("right", false);
   }, [panel]);
+
+  const closeHeaderSurface = useCallback(() => setHeaderSurface(null), []);
+  const openModeLibrary = useCallback((mode) => {
+    setWorkspaceMode(mode);
+    setHeaderSurface((current) => current === mode ? null : mode);
+  }, []);
+  const openStudyTool = useCallback((view) => {
+    setRightView(view);
+    setHeaderSurface(null);
+    setRightOpen(true);
+  }, []);
+  const selectMapFromLibrary = useCallback((map) => {
+    libraries.mindMapActions?.select?.(map);
+    setWorkspaceMode("mindmap");
+    setHeaderSurface(null);
+  }, [libraries.mindMapActions]);
+  const selectSummaryFromLibrary = useCallback((summary) => {
+    libraries.summaryActions?.select?.(summary);
+    setWorkspaceMode("summary");
+    setHeaderSurface(null);
+  }, [libraries.summaryActions]);
 
   // Structural refactor (Learning Canvas lesson header + next-action strip) —
   // ONE real action per artifact type, shared by the header's mode-switch
@@ -339,6 +365,9 @@ export default function MainLayout({
     return () => window.removeEventListener("keydown", onKey);
   }, [panel.drawer, rightOpen]);
 
+  const rightSurfaceVisible = workspaceMode !== "mindmap" || rightOpen;
+  const mindmapToolOverlay = workspaceMode === "mindmap" && rightOpen;
+
   return (
     <div className="flex flex-col h-screen overflow-hidden font-body transition-theme" style={{ background: "var(--bg-base)", color: "var(--text-primary)" }}>
 
@@ -373,13 +402,6 @@ export default function MainLayout({
           <span className="font-display font-semibold text-title tracking-tight text-text-primary hidden sm:block">
             MemVid<span className="text-seal">X</span>
           </span>
-          <Link
-            to="/app/study"
-            className="hidden sm:inline text-small font-medium text-text-muted hover:text-accent transition-colors"
-            title="Quiz chẩn đoán, ôn tập theo lỗ hổng (Alt+S)"
-          >
-            StudyMap
-          </Link>
         </div>
 
         {/* Mode switch — Round 11 (mockup parity, explicit user decision):
@@ -396,13 +418,16 @@ export default function MainLayout({
             must stay reachable on mobile — see round 10's own checklist
             item on this). */}
         <nav role="tablist" aria-label="Chế độ Workspace"
-          className="flex items-center gap-1 p-1 rounded-full flex-shrink-0 mx-auto"
+          className="workspace-mode-switch relative flex items-center gap-1 p-1 rounded-full flex-shrink-0 mx-auto"
           style={{ background: "var(--bg-card)", border: "1px solid var(--border-color)" }}>
           {MODE_TABS.map((t) => {
             const active = workspaceMode === t.key;
+            const count = t.key === "mindmap" ? libraries.mindMaps.length : libraries.summaries.length;
             return (
               <button key={t.key} type="button" role="tab" aria-selected={active}
-                onClick={() => setWorkspaceMode(t.key)}
+                aria-haspopup={t.key === "chat" ? undefined : "dialog"}
+                aria-expanded={t.key === "chat" ? undefined : headerSurface === t.key}
+                onClick={() => t.key === "chat" ? setWorkspaceMode("chat") : openModeLibrary(t.key)}
                 title={t.label}
                 className="flex items-center gap-1.5 px-2.5 sm:px-3 py-1.5 text-small rounded-full transition-colors"
                 style={{
@@ -411,18 +436,35 @@ export default function MainLayout({
                   fontWeight: active ? 600 : 500,
                 }}>
                 <Icon name={t.icon} size={14} />
-                <span className="hidden sm:inline">{t.label}</span>
+                <span className="hidden sm:inline">{t.label}{t.key !== "chat" && <small className="ml-1 font-mono text-[10px] opacity-80">{count} ▾</small>}</span>
               </button>
             );
           })}
+          {headerSurface === "mindmap" && (
+            <ModeLibraryMenu mode="mindmap" items={libraries.mindMaps} selectedId={mindmapData?.data?.id}
+              onSelect={selectMapFromLibrary} onCreate={libraries.mindMapActions?.create}
+              creating={libraries.mindMapActions?.creating} selectedSources={selectedSources}
+              onClose={closeHeaderSurface} />
+          )}
+          {headerSurface === "summary" && (
+            <ModeLibraryMenu mode="summary" items={libraries.summaries} selectedId={summaryData?.id}
+              onSelect={selectSummaryFromLibrary} onCreate={libraries.summaryActions?.create}
+              creating={libraries.summaryActions?.creating} selectedSources={selectedSources}
+              onClose={closeHeaderSurface} />
+          )}
         </nav>
 
         {/* Right actions */}
         <div className="flex items-center gap-2 flex-shrink-0">
           {/* Mobile: search has no keyboard shortcut to fall back on — needs its own icon button. */}
-          <button onClick={openCommandPalette} className="md:hidden icon-btn w-9 h-9" aria-label="Tìm kiếm">
-            <Icon name="Search" size={18} />
-          </button>
+          <div className="relative">
+            <button type="button" className="study-tools-trigger"
+              onClick={() => setHeaderSurface((current) => current === "study-tools" ? null : "study-tools")}
+              aria-haspopup="menu" aria-expanded={headerSurface === "study-tools"}>
+              <span>StudyMap</span><Icon name="ChevronDown" size={14} />
+            </button>
+            <StudyToolsMenu open={headerSurface === "study-tools"} onClose={closeHeaderSurface} onSelect={openStudyTool} />
+          </div>
           {/* IA pass (round 5), nav-ownership: Inspector is the ONLY
               persistent owner of Evidence/AI Tutor/Timeline/Knowledge — the
               header's Feature-Pack-B/C/D icon buttons for Gia sư AI/Dòng
@@ -445,10 +487,6 @@ export default function MainLayout({
               Workspace now, not buried in Library. Same global CommandPalette
               as Ctrl+K (Issue 2 doesn't ask for a second search engine, just
               a visible entry point reachable from here). */}
-          <button onClick={openCommandPalette} className="hidden md:inline-flex pill-action !text-small"
-                  title="Tìm kiếm (Ctrl+K)">
-            <Icon name="Search" size={14} /> Tìm kiếm
-          </button>
           {/* Feature Pack C — Discoverability (mục 7). */}
           <button onClick={() => setShortcutsOpen(true)} className="hidden md:inline-flex icon-btn w-9 h-9"
                   title="Phím tắt (?)" aria-label="Xem phím tắt">
@@ -475,7 +513,7 @@ export default function MainLayout({
       <div className="flex flex-1 min-h-0 overflow-hidden">
 
         {/* Nền mờ của ngăn kéo — chỉ tồn tại ở khổ hẹp */}
-        {panel.drawer && (leftOpen || rightOpen) && (
+        {(panel.drawer && (leftOpen || rightOpen) || mindmapToolOverlay) && (
           <div
             className="fixed inset-0 bg-black/40 z-30 backdrop-blur-sm"
             onClick={() => { setLeftOpen(false); setRightOpen(false); }}
@@ -510,6 +548,7 @@ export default function MainLayout({
                 setSelectedSources={setSelectedSources}
                 onSourcesChange={setSources}
                 onClose={() => (panel.drawer ? setLeftOpen(false) : panel.setCollapsedFor("left", true))}
+                onTransientSurfaceOpen={closeHeaderSurface}
                 collapsible={!panel.drawer}
               />
             </aside>
@@ -550,7 +589,7 @@ export default function MainLayout({
         </main>
 
         {/* ── LỀ PHẢI — Bằng chứng và bản tạo ra ── */}
-        {!panel.drawer && panel.collapsed.right ? (
+        {!rightSurfaceVisible ? null : !panel.drawer && panel.collapsed.right ? (
           <PanelSpine
             side="right"
             label={PANELS.right.label}
@@ -559,7 +598,7 @@ export default function MainLayout({
           />
         ) : (
           <>
-            {!panel.drawer && (
+            {!panel.drawer && !mindmapToolOverlay && (
               <PanelDivider
                 side="right"
                 label={PANELS.right.label}
@@ -574,7 +613,9 @@ export default function MainLayout({
             )}
             <aside
               className={
-                panel.drawer
+                mindmapToolOverlay
+                  ? "mindmap-tools-overlay fixed top-[60px] right-3 bottom-3 z-40 w-[360px] bg-surface-sidebar border border-border rounded-[12px] shadow-card-hover overflow-hidden"
+                  : panel.drawer
                   // Gia sư AI trên mobile là bottom sheet (đúng yêu cầu Step 1),
                   // Bằng chứng vẫn là ngăn kéo trượt từ cạnh phải như cũ — cùng
                   // `rightOpen`/nền mờ, chỉ đổi hướng trượt theo `rightView`.
@@ -589,7 +630,7 @@ export default function MainLayout({
                        ${rightOpen ? "translate-x-0" : "translate-x-full"}`
                   : "shrink-0 bg-surface-sidebar overflow-hidden"
               }
-              style={panel.drawer ? undefined : { width: panel.width.right }}
+              style={!panel.drawer && !mindmapToolOverlay ? { width: panel.width.right } : undefined}
             >
               <div className="h-full">
                 <SidebarRight
@@ -597,7 +638,7 @@ export default function MainLayout({
                   evidence={evidence}
                   highlight={highlight}
                   onHighlight={onHighlight}
-                  onClose={() => (panel.drawer ? setRightOpen(false) : panel.setCollapsedFor("right", true))}
+                  onClose={() => ((panel.drawer || mindmapToolOverlay) ? setRightOpen(false) : panel.setCollapsedFor("right", true))}
                   onAskAbout={onAskAbout}
                   collapsible={!panel.drawer}
                   rightView={rightView}
@@ -608,6 +649,8 @@ export default function MainLayout({
                   tutorMemory={tutorMemory}
                   onMindmapDataChange={setMindmapData}
                   onSummaryDataChange={setSummaryData}
+                  onMindmapLibraryChange={updateMindmapLibrary}
+                  onSummaryLibraryChange={updateSummaryLibrary}
                   onSwitchToChat={onSwitchToChat}
                   mindMapController={mindMapController}
                   onJumpToMindMapNode={onJumpToMindMapNode}
