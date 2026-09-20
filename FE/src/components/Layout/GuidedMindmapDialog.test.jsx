@@ -34,4 +34,27 @@ describe("GuidedMindmapDialog", () => {
     expect(container.querySelector('button[type="submit"]').disabled).toBe(true);
     expect(suggest).not.toHaveBeenCalled();
   });
+
+  it("blocks submit while a selected source is not READY", async () => {
+    suggest.mockResolvedValue({ suggestions: [] });
+    const onSubmit = vi.fn();
+    await act(async () => render({ sources: [{ id: "doc-1", status: "processing" }], onSubmit }));
+    expect(container.querySelector('button[type="submit"]').disabled).toBe(true);
+    await act(async () => container.querySelector('button[type="submit"]').click());
+    expect(onSubmit).not.toHaveBeenCalled();
+  });
+
+  it("shows retry when backend topic loading fails", async () => {
+    const suggestTopics = vi.fn().mockRejectedValue(new Error("offline"));
+    await act(async () => render({ suggestTopics }));
+    expect(container.textContent).toContain("Không tải được gợi ý");
+    expect(container.textContent).toContain("Thử lại");
+  });
+
+  it("shows the submit loading state without a second CTA", async () => {
+    await act(async () => render({ loading: true }));
+    expect(container.querySelectorAll('button[type="submit"]')).toHaveLength(1);
+    expect(container.querySelector('button[type="submit"]').disabled).toBe(true);
+    expect(container.textContent).toContain("Đang tạo");
+  });
 });
