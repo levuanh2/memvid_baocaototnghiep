@@ -71,7 +71,7 @@ describe("MindElixirView Part B canvas controls", () => {
     expect(container.querySelector(".mm-inspector-drawer")).toBeNull();
   });
 
-  it("mounts the Inspector as a closed canvas overlay", async () => {
+  it("does not mount a duplicate inspector inside the canvas", async () => {
     await renderView(vi.fn(), {
       inspectorProps: {
         node: null, relations: { parent: null, children: [], prev: null, next: null, siblings: [] },
@@ -80,12 +80,8 @@ describe("MindElixirView Part B canvas controls", () => {
         nav: { canBack: false, canForward: false, onBack: vi.fn(), onForward: vi.fn(), pinned: [], recent: [], isPinned: false, onTogglePin: vi.fn() },
       },
     });
-    const drawer = container.querySelector(".mm-inspector-drawer");
-    expect(drawer).toBeTruthy();
-    expect(drawer.getAttribute("aria-hidden")).toBe("true");
-    await act(async () => { container.querySelector(".mm-inspector-tab").click(); });
-    expect(drawer.classList.contains("is-open")).toBe(true);
-    expect(drawer.querySelector("button[aria-label='Đóng bảng kiểm tra']")).toBeTruthy();
+    expect(container.querySelector(".mm-inspector-drawer")).toBeNull();
+    expect(container.querySelector(".mm-inspector-tab")).toBeNull();
   });
 
   it("switches saved maps through refresh without creating a second instance", async () => {
@@ -97,3 +93,5 @@ describe("MindElixirView Part B canvas controls", () => {
     expect(refresh).toHaveBeenCalledTimes(1);
   });
 });
+
+
