@@ -186,6 +186,8 @@ untouched.
 The clean worktree stayed isolated from the original dirty BE WIP. The latest
 implementation is split into these commits:
 
+Final HEAD: `fd6dce1` (`fd6dce1` is the current branch tip after this report).
+
 - `ef2e379` — adaptive, evidence-backed Guided V3 planner wired into the graph.
 - `c57c03e` — V3 validator, bounded repair, relation/citation checks, and BE tests.
 - `e0a2e6b` — FE guided dialog readiness/idempotency payload and job lifecycle coverage.
