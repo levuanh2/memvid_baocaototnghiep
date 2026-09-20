@@ -308,7 +308,9 @@ All files are under `docs/qa-screenshots/guided-mindmap-v3/`:
 The captures cover 1440x1024 desktop, 1024x768 tablet, and 390x844 mobile,
 light/dark dialog states, suggestion loading/empty/error/ready states, and the
 real Shared Context Inspector shell in desktop/tablet/mobile fixture states.
-The fixture cannot prove real provider generation or live Chat/Summary data.
+The fixture does **not yet** capture generation progress/failed-retry states or
+the multi-map library state, so the required fixture gate is not closed. The
+fixture also cannot prove real provider generation or live Chat/Summary data.
 
 ### Interaction and DOM checks
 
@@ -359,8 +361,10 @@ The fixture cannot prove real provider generation or live Chat/Summary data.
 
 ### Final verdict for this round
 
-**FIXTURE VISUAL PASS** — fixture-backed screenshots and DOM checks pass; the
-approved reference files were unavailable for pixel comparison.
+**FIXTURE VISUAL FAIL** — the captured dialog/inspector screenshots and DOM
+checks pass, but required generation progress/failed-retry and multi-map library
+captures are missing; the approved reference files were also unavailable for
+pixel comparison.
 
 **IMPLEMENTATION PARTIAL** — the prior implementation status remains partial;
 fixture capture does not turn provider-backed generation into a live proof.
