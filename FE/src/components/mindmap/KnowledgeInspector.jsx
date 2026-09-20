@@ -136,7 +136,7 @@ const BUCKET_META = {
 };
 
 export default function KnowledgeInspector({
-  node, relations, breadcrumb, documentTitle, sources, generating,
+  node, relations, breadcrumb, documentTitle, sources, generating, mapMeta, backendContext,
   onNavigate, onAskAI, onOpenSource, nav, onClose,
 }) {
   const cacheRef = useRef(new Map()); // session-lifetime — Inspector no longer unmounts per click (Task 1)
@@ -149,7 +149,13 @@ export default function KnowledgeInspector({
     });
   }, []);
 
-  const evidence = useChunkEvidence(node?.chunkRefs, cacheRef);
+  const fetchedEvidence = useChunkEvidence(node?.chunkRefs, cacheRef);
+  const evidence = backendContext?.citations?.map((citation) => ({
+    chunkId: citation.chunk_id,
+    text: citation.excerpt,
+    loading: false,
+    error: false,
+  })) || fetchedEvidence;
 
   const enrichment = Array.isArray(node?.enrichment) ? node.enrichment : [];
   const buckets = useMemo(() => {
@@ -180,10 +186,11 @@ export default function KnowledgeInspector({
     return null;
   }, [sources]);
   const avgConfidencePct = useMemo(() => {
+    if (Number.isFinite(backendContext?.confidence)) return Math.round(backendContext.confidence * 100);
     const vals = enrichment.map((e) => e.confidence).filter((c) => Number.isFinite(c));
     if (!vals.length) return null;
     return Math.round((vals.reduce((a, b) => a + b, 0) / vals.length) * 100);
-  }, [enrichment]);
+  }, [backendContext?.confidence, enrichment]);
   const dominantType = enrichment[0]?.semantic_type ? semanticMeta(enrichment[0].semantic_type) : null;
 
   // Row 1 — nav bar. Chrome, not per-node content: visible whether or not a
@@ -276,7 +283,9 @@ export default function KnowledgeInspector({
     <div className="h-full flex items-center justify-center text-center px-6">
       <div>
         <Icon name="Network" size={26} className="mx-auto mb-2.5 opacity-50 text-text-muted" />
-        <p className="text-small text-text-secondary">Chọn một nhánh trên sơ đồ để xem chi tiết.</p>
+        <h3 className="font-display text-body-lg font-semibold text-text-primary mb-1">Chi tiết sơ đồ</h3>
+        <p className="text-small text-text-secondary">Chọn một nhánh để xem giải thích và bằng chứng.</p>
+        {mapMeta && <p className="text-caption text-text-muted mt-3">{mapMeta.sources} nguồn · {mapMeta.nodes} node · {mapMeta.created}</p>}
       </div>
     </div>
   ) : (
