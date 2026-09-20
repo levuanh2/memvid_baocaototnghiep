@@ -186,7 +186,8 @@ untouched.
 The clean worktree stayed isolated from the original dirty BE WIP. The latest
 implementation is split into these commits:
 
-Final HEAD: `23f7c97` (current branch tip after this report update).
+Final implementation SHA before report-only commits: `fd6dce1`. The current
+branch tip is the report-only commit that records this verification.
 
 - `ef2e379` — adaptive, evidence-backed Guided V3 planner wired into the graph.
 - `c57c03e` — V3 validator, bounded repair, relation/citation checks, and BE tests.
