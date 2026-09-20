@@ -5085,6 +5085,59 @@ def get_chunk_text(chunk_id: int):
     return jsonify({"chunk_id": chunk_id, "text": text}), 200
 
 
+@app.get("/mindmaps/<mindmap_id>/nodes/<node_id>/context")
+def get_mindmap_node_context(mindmap_id: str, node_id: str):
+    """Return persisted, owner-scoped context for one mind-map node.
+
+    Selection is intentionally read-only: no retriever, LLM, or generation job is
+    invoked.  A foreign map/node is indistinguishable from a missing one.
+    """
+    uid, err = _require_app_user()
+    if err:
+        return err
+    record = (mindmap_store.get_record(mindmap_id, user_id=uid, enforce_owner=True)
+              if _auth_protect_enabled() else mindmap_store.get_record(mindmap_id))
+    if not record:
+        return jsonify({"error": "Mind map not found"}), 404
+    try:
+        with open(INDEX_META_JSON_PATH, encoding="utf-8") as handle:
+            index_meta = json.load(handle)
+    except Exception:
+        index_meta = {}
+    registry = _load_source_registry()
+    from app.domains.mindmap.context import build_node_context
+    from app.domains.vectorstore import chunk_text_store
+
+    def _meta(ref):
+        value = index_meta.get(str(ref))
+        return value if isinstance(value, dict) else None
+
+    def _source_info(stem):
+        normalized = _normalize_video_stem(stem)
+        for sid, row in registry.items():
+            if not isinstance(row, dict):
+                continue
+            row_stem = _normalize_video_stem(row.get("source_stem") or row.get("filename") or "")
+            if sid == stem or row_stem == normalized:
+                return {"id": sid, **row}
+        return None
+
+    def _allowed(stem):
+        return (not _auth_protect_enabled()) or _source_owner_ok(stem, uid)
+
+    context = build_node_context(
+        record,
+        node_id,
+        chunk_meta=_meta,
+        chunk_text=lambda ref: chunk_text_store.get_text(int(ref)) if str(ref).isdigit() else None,
+        source_info=_source_info,
+        source_allowed=_allowed,
+    )
+    if context is None:
+        return jsonify({"error": "Mind map node not found"}), 404
+    return jsonify(context), 200
+
+
 @app.get('/mindmaps')
 def list_mindmaps():
     uid, err = _require_app_user()
