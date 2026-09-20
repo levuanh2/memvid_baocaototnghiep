@@ -28,8 +28,8 @@ chunks are omitted rather than guessed or fabricated.
 
 ## Commits
 
-- FE: `50941f9` — `feat(ui): wire shared inspector to persisted mind map context`
-- BE: `97d5f00` — `feat(api): expose persisted mind map node context`
+- FE: `50941f9`, `0d7b77c` — shared inspector wiring and ask-about context propagation
+- BE: `97d5f00`, `e2efb9e` — persisted node context endpoint and query-job propagation
 - Tests: `6d7b7a2` — `test: cover shared inspector and node context mapping`
 - Docs: this report (commit created after verification)
 
