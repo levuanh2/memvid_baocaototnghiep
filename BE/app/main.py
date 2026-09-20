@@ -4168,6 +4168,13 @@ def query():
     session_id = (data.get("session_id") or "").strip()
     f_category = (data.get('category') or '').strip() or None
     f_language = (data.get('language') or '').strip() or None
+    node_context = data.get("node_context") or {
+        "node_id": data.get("node_id"),
+        "map_id": data.get("map_id"),
+        "citations": data.get("citation_context") or [],
+    }
+    if not isinstance(node_context, dict):
+        node_context = {}
 
     # Phase C: auth gate FIRST (before input validation) so a no-token request is
     # 401, not 400. /query stays in-process. Then owner-scope the selected sources.
@@ -4366,6 +4373,14 @@ def query():
                 "retrieved_chunks": [],
                 "retrieved_sources": [],
                 "context": "",
+                # Context supplied by the verified Mind Map inspector. The graph
+                # may use this as conversational context; citations remain server
+                # data and are never synthesized from this client field.
+                "node_context": {
+                    "node_id": str(node_context.get("node_id") or ""),
+                    "map_id": str(node_context.get("map_id") or ""),
+                    "citations": node_context.get("citations") if isinstance(node_context.get("citations"), list) else [],
+                },
                 "answer": "",
                 "retry_count": 0,
                 "low_confidence": False,
