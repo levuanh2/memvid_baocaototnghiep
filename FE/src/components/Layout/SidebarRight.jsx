@@ -462,9 +462,9 @@ export default function SidebarRight({
   // `handleAskAbout`'s raw quoted snippet, so they reuse `askDirect` (already
   // threaded into this component for TutorPanel) instead of wrapping it in
   // `onAskAbout`'s "Về đoạn này..." template. Same switch-then-forward shape.
-  const handleAskDirect = useCallback((text) => {
+  const handleAskDirect = useCallback((text, context = null) => {
     onSwitchToChat?.();
-    askDirect?.(text);
+    askDirect?.(text, context);
   }, [askDirect, onSwitchToChat]);
 
   // Task 8: after MindElixirView's explicit Save (PUT /mindmaps/<id>) succeeds,

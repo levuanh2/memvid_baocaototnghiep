@@ -144,8 +144,14 @@ export default function MainLayout({
     selectDocument(stem, { source: "mindmap" });
     setWorkspaceMode("chat");
   }, [selectDocument]);
-  const onInspectorAskAI = useCallback((text) => {
-    mindmapData?.data?.onAskDirect?.(text);
+  const onInspectorAskAI = useCallback((request) => {
+    const text = typeof request === "string" ? request : request?.text;
+    if (!text) return;
+    mindmapData?.data?.onAskDirect?.(text, {
+      mapId: mindmapData?.data?.id,
+      nodeId: request?.nodeId,
+      citations: request?.citations || [],
+    });
   }, [mindmapData]);
 
   const inspectorProps = useMemo(() => ({
@@ -202,10 +208,10 @@ export default function MainLayout({
   // chat qua CHÍNH `setAskAboutDraft` ở trên, không bọc mẫu "Về đoạn này...",
   // giống hệt cách `initialAskAbout` (Câu hỏi gợi ý, Phase 4A.3) đã seed state
   // này. Không tạo state chat thứ hai.
-  const askDirect = useCallback((text) => {
+  const askDirect = useCallback((text, context = null) => {
     const t = String(text || "").trim();
     if (!t) return;
-    setAskAboutDraft({ text: t, nonce: Date.now() });
+    setAskAboutDraft({ text: t, nonce: Date.now(), context });
   }, []);
 
   // Gia sư AI + Lề bằng chứng dùng chung MỘT cột (hard constraint: không thêm
