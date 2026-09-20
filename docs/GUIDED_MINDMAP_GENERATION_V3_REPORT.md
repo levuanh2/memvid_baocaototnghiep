@@ -150,6 +150,8 @@ Commits:
 - `4d705d7` — Suggested-topic route, readiness/ownership/idempotency contract, guided intent propagation, schema V3 metadata and validator.
 - `bfa67bb` — FE dialog and deterministic Guided V3 regression tests.
 
+Final SHA for this pass: `fa01273478d7489122028bbd408a78d60137ef66`.
+
 Coverage implemented: desktop modal/mobile bottom sheet; custom instruction,
 purpose and detail level; backend-derived suggestions from selected indexed
 chunks; source ownership/readiness validation; idempotency response and status
