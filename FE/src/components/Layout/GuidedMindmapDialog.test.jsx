@@ -57,4 +57,17 @@ describe("GuidedMindmapDialog", () => {
     expect(container.querySelector('button[type="submit"]').disabled).toBe(true);
     expect(container.textContent).toContain("Đang tạo");
   });
+
+  it("closes on Escape and restores focus to the opener", async () => {
+    const opener = document.createElement("button");
+    document.body.appendChild(opener);
+    opener.focus();
+    const root = createRoot(container = document.createElement("div"));
+    document.body.appendChild(container);
+    await act(async () => root.render(<GuidedMindmapDialog sources={["doc-1"]} onClose={() => root.render(null)} onSubmit={() => {}} suggestTopics={vi.fn().mockResolvedValue({ suggestions: [] })} />));
+    expect(document.activeElement).toBe(container.querySelector("button"));
+    await act(async () => document.dispatchEvent(new KeyboardEvent("keydown", { key: "Escape", bubbles: true })));
+    expect(document.activeElement).toBe(opener);
+    opener.remove();
+  });
 });
