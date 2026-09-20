@@ -160,11 +160,22 @@ export const getCurrentUser = async () => {
 // expected ({ sources, q, force }); kept as a helper so callers don't repeat
 // the JSON/header boilerplate. Response is passed through as-is — the caller
 // decides how to branch on `status` ("done" on cache-hit vs "started").
-export const generateMindmap = async (sources, { force = false } = {}) => {
+export const suggestMindmapTopics = async (sources, { query = "", locale = "vi" } = {}) => {
+  const res = await apiFetch(`/mindmaps/suggest-topics`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ source_ids: sources, query, locale }),
+  });
+  if (!res.ok) throw await _appError(res);
+  return res.json();
+};
+
+export const generateMindmap = async (sources, options = {}) => {
+  const { force = false, instruction = "", selectedTopicIds = [], selectedTopics = [], preset = "overview", detailLevel = "balanced", locale = "vi", idempotencyKey = "" } = options;
   const res = await apiFetch(`/generate-mindmap`, {
     method: "POST",
     headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({ sources, q: "tóm tắt tài liệu", force: Boolean(force) }),
+    body: JSON.stringify({ sources, source_ids: sources, q: "tóm tắt tài liệu", force: Boolean(force), instruction, selected_topic_ids: selectedTopicIds, selected_topics: selectedTopics, preset, detail_level: detailLevel, locale, idempotency_key: idempotencyKey }),
   });
   if (!res.ok) throw await _appError(res);
   return res.json();

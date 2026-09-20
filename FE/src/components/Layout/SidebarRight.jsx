@@ -1,5 +1,6 @@
 import { useState, useEffect, useCallback, useRef, useMemo } from "react";
 import { apiFetch, generateMindmap, cancelMindmap, generateSummary, cancelSummary, isUnauthorizedError, isNotFoundOrForbiddenError, getUserFriendlyApiError } from "../../utils/api";
+import GuidedMindmapDialog from "./GuidedMindmapDialog";
 
 // Permission-safe toast text: 401/403/404 → friendly line (no raw error/id); else
 // keep the existing detail message.
@@ -129,12 +130,17 @@ export default function SidebarRight({
   // ở MainLayout.
   const [tutorFloating, setTutorFloating] = useState(false);
 
-  useEffect(() => {
-    if (artifactRequest?.tab) setArtifactTab(artifactRequest.tab);
-  }, [artifactRequest]);
   const [mindMaps, setMindMaps]           = useState([]);
   const [showModalMap, setShowModalMap]   = useState(null);
+  const [guidedOpen, setGuidedOpen] = useState(false);
+  const [guidedError, setGuidedError] = useState(null);
   const [showSummaryModal, setShowSummaryModal] = useState(null);
+  useEffect(() => {
+    if (artifactRequest?.tab) {
+      setArtifactTab(artifactRequest.tab);
+      if (artifactRequest.tab === "mindmap" && !mindMaps.length && selectedSources?.length) setGuidedOpen(true);
+    }
+  }, [artifactRequest, mindMaps.length, selectedSources]);
   // Task 4 — background generation: chip state driven by the Task 1 poller
   // (no FE hard-timeout; onTick reports stage label / progress / stalled).
   const [mindmapJobUi, setMindmapJobUi] = useState(IDLE_JOB_UI);
@@ -368,7 +374,7 @@ export default function SidebarRight({
   // ── Handlers ───────────────────────────────────────
   // Shared by "Tạo sơ đồ" (force=false, uses BE content-hash cache) and the
   // mindmap viewer's degraded-banner "Tạo lại" (force=true, bypasses cache).
-  const runMindmapGeneration = async (sourceList, { force = false } = {}) => {
+  const runMindmapGeneration = async (sourceList, { force = false, ...guidedOptions } = {}) => {
     if (!sourceList?.length) { toast("Vui lòng chọn ít nhất một tài liệu để tạo Sơ đồ!", { type: "error" }); return; }
     // PR#8: chạy job mới = hết trạng thái lỗi cũ; nhớ params cho retry lần sau.
     lastMindmapRunRef.current = { sources: sourceList, force };
@@ -378,7 +384,7 @@ export default function SidebarRight({
     cancelNoticeShownRef.current = false;
     if (force) setMindmapGenerating(true); // keep the open viewer's banner up during "Tạo lại"
     try {
-      const startData = await generateMindmap(sourceList, { force });
+      const startData = await generateMindmap(sourceList, { force, ...guidedOptions });
       if (startData.error) throw new Error(startData.error);
 
       if (startData.status === "done" && startData.result) {
@@ -398,6 +404,10 @@ export default function SidebarRight({
     } catch (err) {
       console.error("Mind Map Error:", err);
       toast(_errText(err, "Không tạo được sơ đồ", "Không tạo được sơ đồ, kiểm tra console!"), { type: "error" });
+      if (Object.keys(guidedOptions).length) {
+        setGuidedError(err?.message || "Không tạo được sơ đồ.");
+        setGuidedOpen(true);
+      }
       if (force) setMindmapGenerating(false);
     }
     finally {
@@ -405,9 +415,14 @@ export default function SidebarRight({
     }
   };
 
-  const handleGenerateMindMap = () => runMindmapGeneration(selectedSources, { force: false });
+  const handleGenerateMindMap = () => setGuidedOpen(true);
   createMindmapRef.current = handleGenerateMindMap;
-  const onCreateNewMindmap = useCallback(() => createMindmapRef.current?.(), []);
+  const onCreateNewMindmap = useCallback(() => setGuidedOpen(true), []);
+  const submitGuidedMindmap = (options) => {
+    setGuidedOpen(false);
+    setGuidedError(null);
+    runMindmapGeneration(options.sourceIds, options).catch((error) => setGuidedError(error?.message || "Không tạo được sơ đồ."));
+  };
 
   // Degraded-banner "Tạo lại": regenerate the map that's currently open, using
   // the sources it was built from (falls back to the sidebar selection if the
@@ -1063,6 +1078,16 @@ export default function SidebarRight({
         </Disclosure>
       </div>}
       </>
+      )}
+
+      {guidedOpen && (
+        <GuidedMindmapDialog
+          sources={selectedSources}
+          onClose={() => setGuidedOpen(false)}
+          onSubmit={submitGuidedMindmap}
+          loading={loading}
+          error={guidedError}
+        />
       )}
 
       <style>{`@media (min-width: 768px) { .md\\:hidden { display: none !important; } }`}</style>
