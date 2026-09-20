@@ -3,6 +3,7 @@ from __future__ import annotations
 
 import hashlib
 import uuid
+from difflib import SequenceMatcher
 from datetime import datetime, timezone
 from typing import Optional
 
@@ -16,7 +17,8 @@ GENERATION_PROFILE = "learning-map-v2"
 GUIDED_GENERATION_PROFILE = "guided-learning-map-v3"
 MAX_TOPIC_LENGTH = 100
 KINDS = ("root", "section", "idea", "detail")
-REL_TYPES = ("relates_to", "leads_to", "causes", "supports", "contrasts", "contains")
+REL_TYPES = ("relates_to", "leads_to", "causes", "supports", "contrasts", "contains",
+             "part_of", "prerequisite", "cause_effect", "sequence", "contrast", "example", "related")
 _KIND_PRIORITY = {"root": 0, "section": 1, "idea": 2, "detail": 3}
 
 
@@ -126,7 +128,8 @@ def validate_relations(relations: list[dict], nodes: list[dict]) -> list[dict]:
 def build_record(*, title: str, sources: list[str], nodes: list[dict], relations: list[dict],
                  content_hash_value: str, model: str, elapsed_sec: float,
                  degraded_missing: list[str], skeleton_method: str = "",
-                 generation_intent: Optional[dict] = None, job_id: Optional[str] = None) -> dict:
+                 generation_intent: Optional[dict] = None, job_id: Optional[str] = None,
+                 generation_config: Optional[dict] = None) -> dict:
     guided = generation_intent is not None
     generator = {
         "pipeline": PIPELINE_VERSION,
@@ -139,7 +142,7 @@ def build_record(*, title: str, sources: list[str], nodes: list[dict], relations
 
     if guided:
         generator.update({"generation_intent": dict(generation_intent), "job_id": job_id or ""})
-    return {
+    record = {
         "id": str(uuid.uuid4()),
         "schema_version": 3 if guided else 2,
         "layout_version": LAYOUT_VERSION,
@@ -152,6 +155,9 @@ def build_record(*, title: str, sources: list[str], nodes: list[dict], relations
         "relations": relations,
         "generator": generator,
     }
+    if guided:
+        record["generation_config"] = dict(generation_config or {})
+    return record
 
 
 def validate_v3_record(record: dict) -> list[str]:
@@ -167,38 +173,80 @@ def validate_v3_record(record: dict) -> list[str]:
         if len(label) > MAX_TOPIC_LENGTH or len(label.split()) > 12:
             issues.append("v3_label_too_long")
             break
+        parent = n.get("parent")
+        if parent is not None and parent not in ids:
+            issues.append("v3_orphan_node")
+            break
+    for node in nodes:
+        seen: set[str] = set()
+        current = node.get("id")
+        while current is not None:
+            if current in seen:
+                issues.append("v3_hierarchy_cycle")
+                break
+            seen.add(current)
+            parent = next((item.get("parent") for item in nodes if item.get("id") == current), None)
+            current = parent
+        if "v3_hierarchy_cycle" in issues:
+            break
     for parent in {n.get("parent") for n in nodes}:
         labels = [str(n.get("title") or "").casefold() for n in nodes if n.get("parent") == parent]
         if len(labels) != len(set(labels)):
             issues.append("v3_duplicate_sibling")
             break
+        for left_idx, left in enumerate(labels):
+            if any(SequenceMatcher(None, left, right).ratio() >= 0.92 for right in labels[left_idx + 1:]):
+                issues.append("v3_near_duplicate_sibling")
+                break
+        if "v3_near_duplicate_sibling" in issues:
+            break
     for relation in record.get("relations") or []:
         if relation.get("source") not in ids or relation.get("target") not in ids:
             issues.append("v3_relation_endpoint")
             break
+        if relation.get("type") not in REL_TYPES:
+            issues.append("v3_relation_type")
+            break
+    config = record.get("generation_config") or {}
+    known_refs = {str(ref) for ref in config.get("available_chunk_refs") or []}
+    if known_refs and any(str(ref) not in known_refs for node in nodes for ref in node.get("chunk_refs") or []):
+        issues.append("v3_citation_chunk_missing")
+    budget = config.get("node_budget")
+    if isinstance(budget, int) and len(nodes) > budget:
+        issues.append("v3_detail_budget_exceeded")
     return list(dict.fromkeys(issues))
-    if guided:
-        generator.update({"generation_intent": dict(generation_intent), "job_id": job_id or ""})
-    return {
-        "id": str(uuid.uuid4()),
-        "schema_version": 3 if guided else 2,
-        "layout_version": LAYOUT_VERSION,
-        "generation_profile": GUIDED_GENERATION_PROFILE if guided else GENERATION_PROFILE,
-        "title": title,
-        "sources": list(sources or []),
-        "content_hash": content_hash_value,
-        "created_at": datetime.now(timezone.utc).isoformat().replace("+00:00", "Z"),
-        "nodes": nodes,
-        "relations": relations,
-        "generator": generator,
-        "_legacy_generator": {
-            "pipeline": PIPELINE_VERSION,
-            "model": model,
-            "elapsed_sec": round(float(elapsed_sec), 1),
-            "degraded": bool(degraded_missing),
-            "missing": list(degraded_missing or []),
+
+
+def repair_v3_record(record: dict, *, max_attempts: int = 2) -> tuple[dict, list[str]]:
+    """Repair only deterministic, diagnosed shape errors; never invent evidence."""
+    repaired = {**record, "nodes": [dict(node) for node in record.get("nodes") or []],
+                "relations": [dict(rel) for rel in record.get("relations") or []]}
+    issues: list[str] = []
+    for _attempt in range(max(0, max_attempts)):
+        before = validate_v3_record(repaired)
+        if not before:
+            break
+        changed = False
+        ids = {node.get("id") for node in repaired["nodes"]}
+        root = next((node for node in repaired["nodes"] if node.get("kind") == "root"), None)
+        root_id = root.get("id") if root else None
+        if root_id:
+            for node in repaired["nodes"]:
+                if node.get("id") != root_id and node.get("parent") not in ids:
+                    node["parent"] = root_id; changed = True
+                if node.get("id") != root_id and node.get("parent") == node.get("id"):
+                    node["parent"] = root_id; changed = True
+        valid_relations = [rel for rel in repaired["relations"]
+                           if rel.get("source") in ids and rel.get("target") in ids
+                           and rel.get("type") in REL_TYPES]
+        if len(valid_relations) != len(repaired["relations"]):
+            repaired["relations"] = valid_relations; changed = True
+        if not changed:
+            issues.extend(before)
+            break
+        issues.extend(code for code in before if code not in issues)
+    remaining = validate_v3_record(repaired)
+    issues.extend(code for code in remaining if code not in issues)
+    return repaired, list(dict.fromkeys(issues))
             # Provenance: khung xương đến từ đâu (headings/tree_sections/clusters/
             # llm_outline/single) — không có nó thì record đã lưu không chẩn đoán được.
-            "skeleton_method": skeleton_method or "",
-        },
-    }

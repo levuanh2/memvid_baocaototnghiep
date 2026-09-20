@@ -1,5 +1,6 @@
 from app.domains.mindmap.guided import normalize_intent, suggest_topics
-from services.mindmap.pipeline.schema import build_record, validate_v3_record
+from services.mindmap.pipeline.schema import build_record, repair_v3_record, validate_v3_record
+from services.mindmap.pipeline.guided_planner import plan_guided
 
 
 def test_guided_intent_preserves_instruction_and_defaults():
@@ -38,3 +39,39 @@ def test_schema_v3_validator_flags_duplicate_siblings_and_bad_relation():
               "relations": [{"source": "a", "target": "missing"}]}
     assert "v3_duplicate_sibling" in validate_v3_record(record)
     assert "v3_relation_endpoint" in validate_v3_record(record)
+
+
+def test_schema_v3_repair_is_bounded_and_does_not_invent_evidence():
+    record = {"nodes": [{"id": "r", "parent": None, "kind": "root", "title": "Root"},
+                         {"id": "a", "parent": "missing", "kind": "idea", "title": "A", "chunk_refs": ["c1"]}],
+              "relations": [{"source": "a", "target": "missing", "type": "related"}],
+              "generation_config": {"available_chunk_refs": ["c1"]}}
+    repaired, issues = repair_v3_record(record, max_attempts=2)
+    assert "v3_orphan_node" in issues
+    assert repaired["nodes"][1]["parent"] == "r"
+    assert repaired["relations"] == []
+    assert repaired["nodes"][1]["chunk_refs"] == ["c1"]
+
+
+def _corpus():
+    return {"chunks": [
+        {"chunk_keys": ["1"], "source_stem": "a", "heading_path": "Deploy / Build", "text": "Build và kiểm thử quy trình."},
+        {"chunk_keys": ["2"], "source_stem": "a", "heading_path": "Deploy / Release", "text": "Release theo từng bước."},
+        {"chunk_keys": ["3"], "source_stem": "b", "heading_path": "Architecture / API", "text": "API và kiến trúc dịch vụ."},
+        {"chunk_keys": ["4"], "source_stem": "b", "heading_path": "Architecture / Tradeoffs", "text": "So sánh tradeoff giữa hai hướng."},
+    ]}
+
+
+def test_guided_planner_changes_queries_and_budget_by_intent():
+    process_nodes, _, process_plan, _ = plan_guided({**_corpus(), "generation_intent": {"preset": "process", "detail_level": "compact", "instruction": "Tập trung triển khai"}})
+    compare_nodes, compare_relations, compare_plan, _ = plan_guided({**_corpus(), "generation_intent": {"preset": "comparison", "detail_level": "detailed", "instruction": "So sánh A và B"}})
+    assert process_plan["retrieval_queries"] != compare_plan["retrieval_queries"]
+    assert process_plan["node_budget"] < compare_plan["node_budget"]
+    assert any(rel["type"] == "contrast" for rel in compare_relations) or len(compare_nodes) >= 2
+
+
+def test_guided_planner_keeps_multiple_sources_and_evidence_on_nodes():
+    nodes, _relations, plan, missing = plan_guided({**_corpus(), "generation_intent": {"preset": "overview", "detail_level": "balanced"}})
+    assert not missing
+    assert plan["max_depth"] == 3
+    assert {ref for node in nodes for ref in node.get("chunk_refs", [])} >= {"1", "2", "3", "4"}
