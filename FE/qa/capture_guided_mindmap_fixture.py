@@ -12,8 +12,14 @@ BRAVE = r"C:\Program Files\BraveSoftware\Brave-Browser\Application\brave.exe"
 
 def capture(page, *, name, width, height, state="ready", mobile=False, dark=False):
     page.set_viewport_size({"width": width, "height": height})
-    page.goto(f"{URL}?state={state}&mobile={int(mobile)}&dark={int(dark)}")
-    page.wait_for_load_state("networkidle")
+    page.goto(f"{URL}?state={state}&mobile={int(mobile)}&dark={int(dark)}", wait_until="domcontentloaded", timeout=30000)
+    try:
+        page.wait_for_load_state("networkidle", timeout=5000)
+    except Exception:
+        # SidebarRight may keep a polling request open; DOM state is still stable
+        # after the short fixture settle below.
+        pass
+    page.wait_for_timeout(300)
     page.screenshot(path=str(OUT / f"{name}.png"), full_page=True)
     dialog = page.get_by_role("dialog")
     return {
@@ -36,7 +42,7 @@ def main():
     with sync_playwright() as playwright:
         browser = playwright.chromium.launch(headless=True, executable_path=BRAVE)
         page = browser.new_page()
-        page.route("http://localhost:8080/**", lambda route: route.fulfill(status=200, content_type="application/json", body='{"mindmaps":[{"id":"fixture-map-1","title":"Triển khai hệ thống","sources":["fixture-source"],"created_at":"2026-09-20T00:00:00Z"},{"id":"fixture-map-2","title":"So sánh kiến trúc","sources":["fixture-source"],"created_at":"2026-09-19T00:00:00Z"}],"summaries":[]}'))
+        page.route("http://localhost:8080/**", lambda route: route.fulfill(status=200, content_type="application/json", body='{"mindmaps":[{"id":"fixture-map-1","title":"Triển khai hệ thống","sources":["fixture-source"],"created_at":"2026-09-20T00:00:00Z"},{"id":"fixture-map-2","title":"So sánh kiến trúc","sources":["fixture-source"],"created_at":"2026-09-19T00:00:00Z"},{"id":"fixture-map-3","title":"Một tiêu đề sơ đồ rất dài để kiểm tra truncate","sources":["fixture-source"],"created_at":"2026-09-18T00:00:00Z"}],"summaries":[]}'))
         page.on("console", lambda message: console_errors.append(message.text) if message.type == "error" else None)
         page.on("pageerror", lambda error: page_errors.append(str(error)))
         for dark in (False, True):
@@ -45,13 +51,20 @@ def main():
             records.append(capture(page, name=f"guided-bottom-sheet-mobile-{'dark' if dark else 'light'}", width=390, height=844, mobile=True, dark=dark))
         for state in ("loading", "empty", "error", "ready"):
             records.append(capture(page, name=f"guided-dialog-{state}-desktop", width=1440, height=1024, state=state))
+        records.append(capture(page, name="guided-generation-progress-desktop-light", width=1440, height=1024, state="progress"))
+        records.append(capture(page, name="guided-generation-failed-desktop-light", width=1440, height=1024, state="failed"))
+        records.append(capture(page, name="guided-generation-failed-desktop-dark", width=1440, height=1024, state="failed", dark=True))
+        records.append(capture(page, name="guided-generation-progress-mobile-light", width=390, height=844, state="progress", mobile=True))
+        records.append(capture(page, name="guided-generation-failed-mobile-light", width=390, height=844, state="failed", mobile=True))
+        records.append(capture(page, name="guided-mindmap-library-desktop-dark", width=1440, height=1024, state="library", dark=True))
+        records.append(capture(page, name="guided-mindmap-library-tablet-inspector", width=1024, height=768, state="library"))
         records.append(capture(page, name="guided-workspace-inspector-desktop", width=1440, height=1024, state="workspace"))
         records.append(capture(page, name="guided-workspace-inspector-tablet", width=1024, height=768, state="workspace"))
         records.append(capture(page, name="guided-workspace-inspector-mobile", width=390, height=844, state="workspace", mobile=True))
 
         # Interaction probe on the real dialog component.
         page.goto(f"{URL}?state=ready&mobile=1")
-        page.wait_for_load_state("networkidle")
+        page.wait_for_timeout(500)
         dialog = page.get_by_role("dialog")
         dialog.locator('button[title="Fixture evidence"]').nth(1).click()
         page.locator("textarea").fill("Tập trung vào quy trình triển khai")
