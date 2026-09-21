@@ -1,18 +1,101 @@
 # Guided Mind Map Generation V3 — implementation report
 
-## CURRENT AUTHORITATIVE STATUS — Production Durability Round
+## CURRENT AUTHORITATIVE STATUS — Postgres Integration & Deploy-Like Restart Closed
 
-This section supersedes the earlier release-hardening verdicts below. Those
-sections are historical evidence and must not be read as the current gate state.
+This section supersedes every section below it, including the "Production
+Durability Round" section immediately following (which is now itself
+historical — it correctly reported both gates BLOCKED at the time because no
+Postgres test environment was reachable; that has since changed).
 
 - Worktree: `E:\memvid_NCKH\guided-mindmap-v3`
 - Branch: `feature/guided-mindmap-generation-v3`
-- Pre-round HEAD: `089735921b2d242c0b5215b60a6ea62b4adf7275`
-- Current pre-report HEAD: `eb25c2c` (`fac55bf`, `35f0a42`, `fd9f3b7`, `eb25c2c` are the new commits)
+- Round start HEAD: `6d261086902403ffa5a3dd6b271630f2812bece1`
+- Round end HEAD (before this report commit): `8b02a0350bf57547bb17ad14b72298247bfcc79b`
 - `168541b` is an ancestor; `cbeb475` is not an ancestor.
-- The original main worktree BE WIP was not edited, staged, reset, stashed, or cleaned.
+- Claude took this round over directly from Codex, which stood down cleanly
+  (worktree verified clean before handoff, no uncommitted work lost).
+- The original main worktree BE WIP was not edited, staged, reset, stashed, or
+  cleaned. Confirmed by `git diff --name-only 6d26108..HEAD`: exactly two
+  files changed, both new/modified test files, zero overlap with any of the
+  35 do-not-touch manifest paths from the prior read-only architecture review.
 
-### Durable architecture
+### What changed this round
+
+`docker info` was retried and Docker Desktop was *not* already running, but
+was reachable — it was started, and a disposable `postgres:16-alpine`
+container was brought up locally (`localhost:55432`, throwaway credentials,
+never production). Alembic migrations were applied to it directly (not
+production), including the `20260921_guided_job_ledger` migration already on
+this branch.
+
+Running the existing `test_guided_postgres_store.py` against this real
+Postgres surfaced one genuine bug: `test_concurrent_claims_have_one_winner`
+failed because the test table was never truncated between runs, so a leftover
+`queued` row from an earlier run — older than the row the test just created —
+won `claim_next_job()`'s FIFO ordering instead. This is a real test-isolation
+gap, not a concurrency-correctness bug in `claim_next_job()` itself (which is
+correctly FIFO, and correctly serializes concurrent claims via `FOR UPDATE
+SKIP LOCKED`). Fixed with an autouse `TRUNCATE` fixture.
+
+Added the required-but-missing coverage in the same file: migrations
+re-apply safely, a job's result survives engine recreation (the restart code
+path), an expired lease is recovered by a second worker while a live lease
+resists a steal attempt, and `worker_healthy()` correctly flips from
+false→true→false as heartbeats arrive and go stale, with the V2 (SQLite)
+store confirmed independently reachable throughout.
+
+Added a new file, `test_guided_deploy_like_restart.py`, that runs two
+**actual separate OS processes** (via `subprocess.run`, not threads) against
+the same disposable Postgres: worker A claims the job and is killed mid-task
+(a real non-zero process exit simulating a crash/deploy), its lease is left
+to expire, worker B — a second real process — recovers the expired lease and
+completes the job with a deterministic result (this is the "injected test
+provider" stand-in the task asked for; it is not, and does not touch, the
+real provider path). The test process itself then resets its engine
+(simulating a web-process restart), confirms the job/result is still
+readable, confirms resubmitting the same idempotency key returns the same
+job and map, and confirms exactly one result map exists for the job.
+
+### Verification, this round
+
+Scoped runs (Postgres env vars kept out of the general suite's environment,
+learned the hard way — an earlier combined run leaked `TEST_DATABASE_URL`
+into two unrelated `test_production_migration_contract.py` tests that assert
+on connection-rejection behavior against a deliberately fake host, and they
+failed only because of that leak; confirmed by re-running them with a clean
+environment, where they correctly skip):
+
+- `pytest tests/test_guided_mindmap_v3.py tests/test_guided_release_hardening.py tests/test_mindmap_node_context.py tests/test_mindmap_routes.py tests/test_mindmap_schema_v2.py tests/test_mindmap_v2_constraints.py tests/test_mindmap_relations.py tests/test_mindmap_graph.py tests/test_mindmap_store.py tests/test_cors_methods.py tests/test_migration_guard.py tests/test_production_migration_contract.py` (no Postgres env vars set): exit 0, **68 passed, 12 skipped**.
+- `TEST_DATABASE_URL=postgresql://postgres:test@localhost:55432/guided_test pytest tests/test_guided_postgres_store.py tests/test_guided_deploy_like_restart.py`: exit 0, **8 passed**.
+- `git diff --check`: exit 0 (line-ending notices only, no real issue).
+- `git diff --name-only 6d26108..8b02a03`: two files, both test-only, zero manifest-path overlap.
+- FE was not touched this round; the FE suite (1088/1088), FE build, and FE
+  lint results already recorded below remain the last-known evidence for FE —
+  not independently re-run here since no FE file changed.
+
+### Updated gate evidence
+
+| Gate | Status | Evidence |
+|---|---|---|
+| DURABLE JOB CODE GATE | PASS | Unchanged from the prior round — Postgres ledger, atomic idempotency, lease claim, heartbeat worker, fail-closed production selection. |
+| POSTGRES INTEGRATION GATE | **PASS** | Real disposable `postgres:16-alpine` container, real Alembic migration applied, 8/8 tests passed including the newly-added migration-reapply, restart-survival, lease-recovery, and worker-health tests. Not SQLite-substituted. |
+| DEPLOY-LIKE RESTART GATE | **PASS** | `test_guided_deploy_like_restart.py`: two genuinely separate OS processes, real kill-mid-job, real lease-expiry-based recovery by a second process, restart-then-poll, idempotent resubmission, single-result-map invariant — all confirmed. Provider is a deterministic stand-in, explicitly not a real-provider proof. |
+| CONTROLLED DEPLOYMENT CANDIDATE | **YES** | Postgres integration passes, deploy-like restart passes, `render.yaml` no longer depends on `/tmp` for Guided V3 (uses the Postgres ledger + a defined `studymap-mindmap-worker` service), global flag stays OFF, QA allowlist (`GUIDED_MINDMAP_V3_QA_USER_IDS`) is wired and tested, V2 fallback is proven reachable independent of Postgres health. This means the code/config is ready for a controlled (flag-off, QA-only) deployment — it does not mean the feature is ready for general users. |
+| PRODUCTION DURABILITY PROOF | BLOCKED | Still requires an actual deployment and an observed real restart/recovery in that environment — this round proved the mechanism locally, not in production. |
+| REAL PROVIDER GATE | BLOCKED | No credential was read, used, or printed this round. Requires QA deployment with a real provider configured. |
+| PRODUCTION ENABLEMENT | NO | `GUIDED_MINDMAP_V3_ENABLED` stays false; V2 remains the only enabled path. |
+
+**Cost/infrastructure note, restated plainly:** `render.yaml`'s existing
+`studymap-mindmap-worker` block is a `type: worker` service, which is a paid
+Render offering — this repo's web service is explicitly on the free tier
+(512 MB, one Gunicorn worker, chosen specifically so pause/resume state can
+stay in-process). Turning on the worker service is a real, non-zero recurring
+cost decision for a human to make; nothing in this round created, started, or
+billed any such resource — this is a config-readiness statement only.
+
+---
+
+### Durable architecture (historical — see "CURRENT AUTHORITATIVE STATUS" above)
 
 Guided V3 now selects `BE/app/domains/jobs/guided_store.py`: production web and
 worker processes use `JOBS_DATABASE_URL` or `DATABASE_URL` and fail closed when
@@ -36,7 +119,7 @@ provider variables (`GEMINI_API_KEY`/other configured provider). Render now has
 a separate paid `studymap-mindmap-worker` definition; no worker was created or
 deployed. Global Guided remains OFF and V2 remains the fallback.
 
-### Gate evidence
+### Gate evidence (historical — superseded by "Updated gate evidence" above; POSTGRES INTEGRATION and DEPLOY-LIKE RESTART are no longer BLOCKED)
 
 | Gate | Status | Evidence |
 |---|---|---|
