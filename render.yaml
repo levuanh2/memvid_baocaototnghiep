@@ -219,10 +219,18 @@ services:
       # Must stay under Render's own request ceiling and above the LLM timeouts.
       - key: GUNICORN_TIMEOUT
         value: "120"
-      # Auth is Bearer-token, so a cross-origin reader still cannot obtain a
-      # token. Tighten to the studymap-web URL once it is known.
+      # Exact production frontend origin. Do not use wildcard/localhost here.
       - key: CORS_ORIGINS
-        value: https://studymap-web.onrender.com
+        value: https://studymap.space
+
+      # Guided Mind Map V3 rollout is server-authoritative and defaults OFF.
+      # QA can be enabled by setting GUIDED_MINDMAP_V3_QA_USER_IDS out of band.
+      - key: GUIDED_MINDMAP_V3_ENABLED
+        value: "false"
+      - key: GUIDED_MINDMAP_V3_QA_USER_IDS
+        sync: false
+      - key: GUIDED_JOB_RECOVERY_ENABLED
+        value: "true"
 
       # --- auth: production posture ---------------------------------------
       - key: AUTH_REQUIRE_SECRET
