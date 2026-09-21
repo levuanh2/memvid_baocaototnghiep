@@ -71,6 +71,44 @@ the pre-existing BE WIP files only; this round did not touch them.
 
 Historical sections follow.
 
+### WIP boundary update — authoritative after `0239751`
+
+Claude's read-only WIP review confirms that the original dirty main worktree is
+a separate backend initiative: Document AST, Semantic AST, Citation Engine V2,
+enrichment rewrite, validators, and Adaptive Skeleton. Guided V3 and that WIP
+are **not integrated** and this branch is not claimed to be cleanly mergeable
+with it.
+
+Integrity snapshot before this boundary-only report change:
+
+- starting HEAD: `0239751a3fecabb42a7bb759e4168c2a8b45f5ff`
+- `BE/services/mindmap/pipeline/enrich.py`: `4e6d0a5a1bb5fb39115590576ca60638b11288ab`
+- `BE/app/clients/mindmap_factory.py`: `1336bfa8e3e8116aa452d3b18ea842c8b637f42f`
+- WIP-owned paths `BE/services/document_ast/`, `BE/services/semantic_ast/`,
+  `BE/services/citation/`, `BE/services/mindmap/analytics/`, and the listed
+  Adaptive Skeleton modules are absent at this clean-branch HEAD; their dirty
+  main-worktree files were not read, copied, or staged.
+
+Boundary rules for this round: no changes to `enrich.py`, `mindmap_factory.py`,
+extraction/cleaning/chunking, Document AST, Semantic AST, Citation Engine V2,
+or Adaptive Skeleton/concept-extraction core. `context.py` remains only the
+temporary compatibility adapter used by Shared Context Inspector. Integration
+debt is explicit: **replace the persisted legacy context provider with the
+Citation Engine V2 provider after the WIP contract stabilizes**. The current
+endpoint remains because Guided UI depends on it.
+
+Future integration must use a dedicated integration branch with WIP-owner
+review. `enrich.py` and `mindmap_factory.py` have known future merge conflicts;
+they must not be resolved with `ours` or `theirs`. The temporary `context.py`
+adapter is likely to be superseded when Citation Engine V2 is wired into the
+endpoint.
+
+Post-change proof: `git diff --name-only 0239751a3fecabb42a7bb759e4168c2a8b45f5ff..HEAD`
+contains only this report. No new commit touches `enrich.py`,
+`mindmap_factory.py`, or any WIP-owned path. The original main worktree remains
+dirty with its pre-existing WIP and was not modified, staged, reset, stashed, or
+cleaned.
+
 ## Scope and provenance
 
 - Worktree: `E:\memvid_NCKH\guided-mindmap-v3`
