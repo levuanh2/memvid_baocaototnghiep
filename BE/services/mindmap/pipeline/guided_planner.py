@@ -10,6 +10,8 @@ import re
 from collections import Counter, defaultdict
 from typing import Any
 
+from services.mindmap.pipeline.knowledge_planner import plan_global
+
 REL_TYPES = {"part_of", "prerequisite", "cause_effect", "sequence", "contrast", "example", "related"}
 _STOP = {"của", "và", "các", "cho", "trong", "một", "được", "với", "là", "the", "and", "for", "from", "this", "that"}
 
@@ -72,18 +74,13 @@ def _select_chunks(chunks: list[dict], intent: dict[str, Any]) -> tuple[list[dic
     return chosen, queries
 
 
-def plan_guided(mm_input: dict[str, Any]) -> tuple[list[dict], list[dict], dict[str, Any], list[str]]:
-    intent = dict(mm_input.get("generation_intent") or {})
-    chunks, queries = _select_chunks(list(mm_input.get("chunks") or []), intent)
-    missing: list[str] = []
-    if not chunks:
-        return [], [], {"retrieval_queries": queries, "node_budget": 0, "max_depth": 0}, ["guided_no_evidence"]
-    detail = intent.get("detail_level") or "balanced"
-    preset = intent.get("preset") or "overview"
-    node_budget = {"compact": 12, "balanced": 24, "detailed": 42}.get(detail, 24)
-    max_depth = {"compact": 2, "balanced": 3, "detailed": 4}.get(detail, 3)
-    root_id = "n0"
-    nodes = [{"id": root_id, "parent": None, "kind": "root", "title": _root_title(chunks, intent), "note": "", "chunk_refs": [], "order": 0}]
+def _heading_groups(chunks: list[dict], preset: str) -> dict[str, list[dict]]:
+    """Pre-existing fallback: chunk -> first heading token -> branch.
+
+    Only reached when the global knowledge plan (knowledge_planner.plan_global)
+    is unavailable/degraded — a heading is not a concept, so this stays a
+    fallback, never the primary grouping strategy when a model is configured.
+    """
     groups: dict[str, list[dict]] = defaultdict(list)
     for chunk in chunks:
         heading = str(chunk.get("heading_path") or "").split(" > ")[0].strip()
@@ -96,15 +93,61 @@ def plan_guided(mm_input: dict[str, Any]) -> tuple[list[dict], list[dict], dict[
         for chunk in chunks:
             by_source[str(chunk.get("source_stem") or "Nguồn")].append(chunk)
         groups = defaultdict(list, {k: v for k, v in by_source.items()})
+    return groups
+
+
+def plan_guided(mm_input: dict[str, Any], *, model: str = "", timeout_sec: float = 90.0
+                ) -> tuple[list[dict], list[dict], dict[str, Any], list[str]]:
+    intent = dict(mm_input.get("generation_intent") or {})
+    chunks, queries = _select_chunks(list(mm_input.get("chunks") or []), intent)
+    missing: list[str] = []
+    if not chunks:
+        return [], [], {"retrieval_queries": queries, "node_budget": 0, "max_depth": 0}, ["guided_no_evidence"]
+    detail = intent.get("detail_level") or "balanced"
+    preset = intent.get("preset") or "overview"
+    node_budget = {"compact": 12, "balanced": 24, "detailed": 42}.get(detail, 24)
+    max_depth = {"compact": 2, "balanced": 3, "detailed": 4}.get(detail, 3)
+    root_id = "n0"
+
+    # Stage 0 — reason about the whole evidence set BEFORE any branch exists.
+    # Conceptual groups (by meaning) instead of heading-derived groups; falls
+    # back to the pre-existing by-heading grouping when no model is available
+    # or the call degrades — never blocks generation, always records why.
+    # No model passed (test/back-compat direct calls) means global planning
+    # was never attempted — that is NOT a degrade, it's the deterministic
+    # mode this function always had. A degrade is only real once we actually
+    # tried (model was given) and plan_global itself came back empty.
+    global_plan = None
+    if model:
+        global_plan, plan_degraded = plan_global(chunks, intent, model=model, timeout_sec=timeout_sec)
+        if plan_degraded:
+            missing.append("guided_global_plan_degraded")
+
+    central_subject = None
+    cross_group_relation_specs: list[dict] = []
+    if global_plan:
+        central_subject = global_plan.get("central_subject") or None
+        groups = {g["name"]: g["chunks"] for g in global_plan["groups"] if g["chunks"]}
+        cross_group_relation_specs = global_plan.get("relations") or []
+    else:
+        groups = _heading_groups(chunks, preset)
+
+    nodes = [{"id": root_id, "parent": None, "kind": "root",
+             "title": central_subject or _root_title(chunks, intent), "note": "", "chunk_refs": [], "order": 0}]
     relations: list[dict] = []
     next_id = 1
     previous_branch_id = None
+    group_branch_id: dict[str, str] = {}
     for group_idx, (label, group_chunks) in enumerate(groups.items()):
         if len(nodes) >= node_budget:
             missing.append("guided_node_budget")
             break
         branch_id = f"n{next_id}"; next_id += 1
-        branch_title = label.title()[:100]
+        group_branch_id[label] = branch_id
+        # Global-plan group names are already well-formed titles from the
+        # model; only heading-derived labels (casefolded in _heading_groups)
+        # need .title() to look like a title again.
+        branch_title = label[:100] if global_plan else label.title()[:100]
         branch_refs = [str(ref) for c in group_chunks for ref in c.get("chunk_keys") or []]
         nodes.append({"id": branch_id, "parent": root_id, "kind": "section", "title": branch_title, "note": "", "chunk_refs": list(dict.fromkeys(branch_refs)), "order": group_idx})
         previous_child_id = None
@@ -124,11 +167,20 @@ def plan_guided(mm_input: dict[str, Any]) -> tuple[list[dict], list[dict], dict[
                 relations.append({"source": previous_child_id, "target": child_id, "type": "sequence", "label": "trình tự"})
             previous_child_id = child_id
         previous_branch_id = branch_id
+    # Resolve the global plan's group-name relations to actual branch node
+    # ids now that every group has one. A group dropped by the node budget
+    # has no entry in group_branch_id, so its relations are silently
+    # unresolvable — skip rather than reference a node that doesn't exist.
+    for spec in cross_group_relation_specs:
+        src = group_branch_id.get(spec["source_group"])
+        tgt = group_branch_id.get(spec["target_group"])
+        if src and tgt and src != tgt:
+            relations.append({"source": src, "target": tgt, "type": spec["type"], "label": spec["label"]})
     if len(nodes) <= 1:
         missing.append("guided_no_semantic_groups")
-    if len(nodes) > 1 and max_depth >= 3 and len(chunks) >= 8:
-        # The planner intentionally records the budget/depth decision. A later
-        # model enrichment pass may add details, but cannot invent citations.
-        pass
-    config = {"retrieval_queries": queries, "node_budget": node_budget, "max_depth": max_depth, "branch_target": {"compact": "3-5", "balanced": "4-7", "detailed": "5-8"}.get(detail, "4-7"), "preset": preset, "detail_level": detail, "available_chunk_refs": [str(ref) for chunk in chunks for ref in chunk.get("chunk_keys") or []]}
+    config = {"retrieval_queries": queries, "node_budget": node_budget, "max_depth": max_depth,
+             "branch_target": {"compact": "3-5", "balanced": "4-7", "detailed": "5-8"}.get(detail, "4-7"),
+             "preset": preset, "detail_level": detail,
+             "available_chunk_refs": [str(ref) for chunk in chunks for ref in chunk.get("chunk_keys") or []],
+             "global_plan_used": bool(global_plan), "central_subject": central_subject}
     return nodes, relations, config, list(dict.fromkeys(missing))
