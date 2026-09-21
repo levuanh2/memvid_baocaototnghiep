@@ -17,6 +17,14 @@ describe("stageLabel", () => {
     expect(stageLabel({ current_node: "Relations" })).toBe("Tìm quan hệ chéo…");
     expect(stageLabel({})).toBe("Đang tạo sơ đồ…");
   });
+
+  it("labels the real Guided V3 lifecycle stages", () => {
+    expect(stageLabel({ current_node: "retrieving" })).toContain("truy xuất");
+    expect(stageLabel({ current_node: "planning" })).toContain("kế hoạch");
+    expect(stageLabel({ current_node: "generating" })).toContain("sinh");
+    expect(stageLabel({ current_node: "validating" })).toContain("kiểm tra");
+    expect(stageLabel({ current_node: "saving" })).toContain("lưu");
+  });
 });
 
 describe("createMindmapPoller", () => {

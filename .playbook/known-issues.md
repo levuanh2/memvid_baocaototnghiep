@@ -1,5 +1,14 @@
 # Known Issues
 
+## Guided durable worker integration: annotations must be available at module import (2026-09-21)
+
+The first integration placed a typed dispatch helper above the `typing.Any` import
+in `BE/app/main.py`. Python evaluates that annotation during module import, so the
+application failed with `NameError: Any is not defined` before the existing release
+hardening tests could load it. The fix imports `Any` before the helper. Prevention:
+when adding module-level helpers during a split/import refactor, run an import smoke
+test (or the narrowest existing pytest file) before running broader checks.
+
 ## (MỘT PHẦN ĐÃ SỬA 2026-09-03) Ba món nợ lộ ra khi wire retriever (Phase 2A)
 
 **Mục 2 và 3 đã dọn** trong commit cleanup 2026-09-03: bỏ hẳn hai tham số chết khỏi

@@ -42,7 +42,7 @@
        `--seal`/`--brand-rgb` below are UNCHANGED and stay red — provenance/
        citation + the MemVidX wordmark accent only (Signature Contract §7;
        verified no citation/provenance consumer reads `--accent`). */
-    --accent:        #006BFE;   /* mock primary sampled around #006BFE */
+    --accent:        #126CF2;   /* approved primary accent */
     --accent-hover:  #0059D6;   /* primary hover/pressed */
     --accent-subtle: #EAF3FF;   /* primary soft surface (selection wash, badges) */
     --brand-rgb:     241 51 58;   /* mock seal/citation red */
@@ -965,6 +965,9 @@
 .study-tools-menu__item { min-height: 58px; }
 .study-tools-menu__item-arrow { color: var(--text-muted); }
 .study-surface-header { display: flex; align-items: center; justify-content: space-between; gap: 8px; min-height: 48px; padding: 4px 10px 4px 14px; flex: 0 0 48px; border-bottom: 1px solid var(--border-color); color: var(--text-primary); background: var(--bg-sidebar); }
+.context-inspector-shell { min-width: 0; }
+.context-inspector-shell [role="region"], .context-inspector-shell .sidebar-right { min-height: 0; }
+.context-inspector-empty { display: grid; place-items: center; min-height: 180px; padding: 24px; color: var(--text-secondary); text-align: center; }
 .source-search-row { position: relative; display: flex; align-items: center; gap: 7px; min-width: 0; min-height: 38px; padding: 0 7px 0 10px; border: 1px solid var(--border-color); border-radius: 8px; background: var(--bg-card); }
 .source-search-row:focus-within { border-color: var(--accent); box-shadow: 0 0 0 2px color-mix(in srgb, var(--accent) 15%, transparent); }
 .source-filter-trigger { position: relative; display: inline-grid; place-items: center; flex: 0 0 32px; width: 32px; height: 32px; border: 0; border-radius: 6px; color: var(--text-muted); background: transparent; cursor: pointer; }
@@ -988,6 +991,15 @@
   .study-tools-trigger span { display: none; }
   .mindmap-tools-overlay { inset: auto 0 0 0 !important; width: auto !important; max-height: 80vh; border-radius: 16px 16px 0 0 !important; }
   .source-filter-popover { top: 112px; left: 8px; right: 8px; }
+  .context-inspector-shell { width: 100% !important; max-height: 82vh; }
+  .context-inspector-shell .sidebar-right { max-height: 82vh; }
+  .context-inspector-shell .study-surface-header::before { content: ""; position: absolute; top: 6px; left: 50%; width: 42px; height: 4px; transform: translateX(-50%); border-radius: 99px; background: var(--text-muted); opacity: .45; }
+  .context-inspector-shell .study-surface-header { position: relative; padding-top: 14px; }
+}
+
+@media (min-width: 768px) and (max-width: 1279px) {
+  .context-inspector-shell { position: fixed !important; top: 60px; right: 0; bottom: 0; z-index: 40; width: min(360px, 42vw) !important; border-left: 1px solid var(--border-color); box-shadow: var(--shadow-card-hover); }
+  .context-inspector-shell .sidebar-right { height: 100%; }
 }
 
 @media (prefers-reduced-motion: reduce) {

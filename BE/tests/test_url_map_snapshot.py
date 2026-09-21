@@ -99,9 +99,13 @@ def test_tong_so_route_khop(client, cu):
       RULE của Flask nên `GET` và `POST` cùng một đường dẫn là hai dòng.
     +1 ngày 2026-09-09 (Phase 1C.2a): `GET /api/documents/<id>/questions` — câu hỏi
       gợi ý, LƯỜI và suy ra. Không sinh tóm tắt, không gọi embedding, không có LLM.
+    +3 ngày 2026-09-21 (Guided Mind Map V3): `GET /mindmaps/<mindmap_id>/nodes/<node_id>/context`
+      (persisted node context cho Shared Context Inspector), `GET /mindmaps/capability`
+      (rollout flag + durable-store/worker health, fail-closed về V2), `POST
+      /mindmaps/suggest-topics` (gợi ý chủ đề thật từ indexed chunks trước khi tạo).
     Con số ở đây CỐ Ý viết cứng — sửa nó là một dòng diff mà người review phải nhìn
     thấy, đúng mục đích của cả file này."""
-    assert len(_hien_tai()) == len(cu) == 99
+    assert len(_hien_tai()) == len(cu) == 102
 
 
 def test_khong_co_cap_duong_dan_method_trung(client):

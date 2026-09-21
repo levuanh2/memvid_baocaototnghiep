@@ -2,6 +2,7 @@
 from __future__ import annotations
 
 import time
+import os
 from pathlib import Path
 from typing import Any, Callable
 
@@ -58,7 +59,8 @@ def build_mindmap_graph(*, data_dir: Path, index_meta_path: Path,
 
     @_guard("CollectInput")
     def collect_node(state: dict) -> dict:
-        _set_job(state["job_id"], status="running", progress=5, current_node="CollectInput")
+        _set_job(state["job_id"], status="running", progress=5,
+                 current_node="retrieving" if state.get("mm_input", {}).get("generation_intent") else "CollectInput")
         mm = state.get("mm_input") or collect_input(index_meta_path, state.get("source_names") or [])
         ch = state.get("content_hash") or mm_schema.content_hash(
             mm.get("sources") or [], [c["text"] for c in mm.get("chunks") or []],
@@ -70,9 +72,21 @@ def build_mindmap_graph(*, data_dir: Path, index_meta_path: Path,
 
     @_guard("Skeleton")
     def skeleton_node(state: dict) -> dict:
-        _set_job(state["job_id"], progress=15, current_node="Skeleton")
-        nodes, method = pipeline.skeleton(state["mm_input"])
+        _set_job(state["job_id"], progress=15,
+                 current_node="planning" if state.get("mm_input", {}).get("generation_intent") else "Skeleton")
+        if state["mm_input"].get("generation_intent") and hasattr(pipeline, "guided_plan"):
+            if os.getenv("SKIP_MODEL_LOAD") != "1":
+                from app.clients.llm_factory import PROVIDERS
+                if not PROVIDERS:
+                    raise RuntimeError("guided_provider_not_configured")
+            nodes, guided_relations, plan, guided_missing = pipeline.guided_plan(state["mm_input"])
+            state["mm_input"]["guided_plan"] = plan
+            method = "guided_semantic_planner"
+        else:
+            nodes, method = pipeline.skeleton(state["mm_input"])
+            guided_relations, guided_missing = [], []
         missing = list(state.get("degraded_missing") or [])
+        missing.extend(code for code in guided_missing if code not in missing)
         if method == "single":
             # Cả deterministic lẫn LLM outline đều không dựng được khung —
             # record chỉ có root, phải báo degraded thay vì im lặng.
@@ -81,16 +95,26 @@ def build_mindmap_graph(*, data_dir: Path, index_meta_path: Path,
         _set_job(state["job_id"], progress=20,
                  result={"partial": {"title": state["mm_input"]["title"], "nodes": nodes}})
         return {**state, "skeleton": nodes, "skeleton_method": method,
+                "relations": guided_relations,
                 "degraded_missing": missing, "progress": 20, "current_node": "Skeleton"}
 
     @_guard("Enrich")
     def enrich_node(state: dict) -> dict:
-        _set_job(state["job_id"], progress=30, current_node="Enrich")
+        _set_job(state["job_id"], progress=30,
+                 current_node="generating" if state.get("mm_input", {}).get("generation_intent") else "Enrich")
         def _prog(p: int, msg: str) -> None:
             _set_job(state["job_id"], progress=p, current_node=msg)
-        nodes, degraded = pipeline.enrich(state["mm_input"], state["skeleton"],
-                                          progress_cb=_prog,
-                                          cancel_cb=lambda: _cancelled(state["job_id"]))
+        if state["mm_input"].get("generation_intent") and state.get("skeleton_method") == "guided_semantic_planner":
+            if os.getenv("SKIP_MODEL_LOAD") == "1":
+                nodes, degraded = state["skeleton"], True
+            else:
+                nodes, degraded = pipeline.enrich(state["mm_input"], state["skeleton"],
+                                                  progress_cb=_prog,
+                                                  cancel_cb=lambda: _cancelled(state["job_id"]))
+        else:
+            nodes, degraded = pipeline.enrich(state["mm_input"], state["skeleton"],
+                                              progress_cb=_prog,
+                                              cancel_cb=lambda: _cancelled(state["job_id"]))
         missing = list(state.get("degraded_missing") or [])
         if degraded:
             missing.append("enrich")
@@ -99,9 +123,18 @@ def build_mindmap_graph(*, data_dir: Path, index_meta_path: Path,
 
     @_guard("Relations")
     def relations_node(state: dict) -> dict:
-        _set_job(state["job_id"], progress=75, current_node="Relations")
-        rels, degraded = pipeline.relations(state["nodes"],
-                                            cancel_cb=lambda: _cancelled(state["job_id"]))
+        _set_job(state["job_id"], progress=75,
+                 current_node="generating_relations" if state.get("mm_input", {}).get("generation_intent") else "Relations")
+        if state["mm_input"].get("generation_intent") and state.get("skeleton_method") == "guided_semantic_planner":
+            if os.getenv("SKIP_MODEL_LOAD") == "1":
+                rels, degraded = state.get("relations") or [], True
+            else:
+                model_relations, degraded = pipeline.relations(state["nodes"],
+                                                               cancel_cb=lambda: _cancelled(state["job_id"]))
+                rels = list(state.get("relations") or []) + list(model_relations or [])
+        else:
+            rels, degraded = pipeline.relations(state["nodes"],
+                                                cancel_cb=lambda: _cancelled(state["job_id"]))
         missing = list(state.get("degraded_missing") or [])
         if degraded:
             missing.append("relations")
@@ -113,6 +146,8 @@ def build_mindmap_graph(*, data_dir: Path, index_meta_path: Path,
         from services.mindmap.pipeline.modelcfg import resolve_mindmap_model
         from services.mindmap.pipeline.v2_constraints import issue_codes, validate_hierarchy
         elapsed = time.time() - (state.get("_t0") or time.time())
+        if state["mm_input"].get("generation_intent"):
+            _set_job(state["job_id"], progress=88, current_node="validating")
         clean_nodes = mm_schema.sanitize_nodes(state["nodes"])
         from services.provenance import attach_node_source_stems
         clean_nodes = attach_node_source_stems(clean_nodes, state["mm_input"])
@@ -131,8 +166,23 @@ def build_mindmap_graph(*, data_dir: Path, index_meta_path: Path,
             content_hash_value=state["content_hash"],
             model=resolve_mindmap_model(),
             elapsed_sec=elapsed, degraded_missing=missing,
-            skeleton_method=state.get("skeleton_method") or "")
+            skeleton_method=state.get("skeleton_method") or "",
+            generation_intent=state["mm_input"].get("generation_intent"),
+            job_id=state["job_id"],
+            generation_config=state["mm_input"].get("guided_plan"))
+        if record.get("schema_version") == 3:
+            for issue in mm_schema.validate_v3_record(record):
+                if issue not in missing:
+                    missing.append(issue)
+            record, repair_issues = mm_schema.repair_v3_record(record)
+            for issue in repair_issues:
+                repair_code = f"repair:{issue}"
+                if repair_code not in missing:
+                    missing.append(repair_code)
+            record["generator"]["missing"] = missing
+            record["generator"]["degraded"] = bool(missing)
         # Phase D: bind the record owner (None when unprotected → today's behavior).
+        _set_job(state["job_id"], progress=95, current_node="saving")
         persist_record(record, user_id=state.get("user_id"))
         _set_job(state["job_id"], status="done", progress=100,
                  current_node="AssemblePersist", result=record)
