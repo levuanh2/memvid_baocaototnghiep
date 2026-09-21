@@ -432,10 +432,7 @@ export default function SidebarRight({
     else runMindmapGeneration(selectedSources);
   };
   createMindmapRef.current = handleGenerateMindMap;
-  const onCreateNewMindmap = useCallback(() => {
-    if (guidedCapability) setGuidedOpen(true);
-    else runMindmapGeneration(selectedSources);
-  }, [guidedCapability, selectedSources]);
+  const onCreateNewMindmap = useCallback(() => createMindmapRef.current?.(), []);
   const submitGuidedMindmap = (options) => {
     setGuidedOpen(false);
     setGuidedError(null);
