@@ -1,5 +1,76 @@
 # Guided Mind Map Generation V3 — implementation report
 
+## CURRENT AUTHORITATIVE STATUS — Production Durability Round
+
+This section supersedes the earlier release-hardening verdicts below. Those
+sections are historical evidence and must not be read as the current gate state.
+
+- Worktree: `E:\memvid_NCKH\guided-mindmap-v3`
+- Branch: `feature/guided-mindmap-generation-v3`
+- Pre-round HEAD: `089735921b2d242c0b5215b60a6ea62b4adf7275`
+- Current pre-report HEAD: `eb25c2c` (`fac55bf`, `35f0a42`, `fd9f3b7`, `eb25c2c` are the new commits)
+- `168541b` is an ancestor; `cbeb475` is not an ancestor.
+- The original main worktree BE WIP was not edited, staged, reset, stashed, or cleaned.
+
+### Durable architecture
+
+Guided V3 now selects `BE/app/domains/jobs/guided_store.py`: production web and
+worker processes use `JOBS_DATABASE_URL` or `DATABASE_URL` and fail closed when
+the Postgres ledger is unavailable. The additive Alembic migration
+`20260921_guided_job_ledger` creates `guided_mindmap_jobs` and
+`guided_mindmap_worker_heartbeats`; it is forward-only on downgrade so a
+controlled rollback does not delete job history.
+
+The web process only inserts a durable row and returns 202 for Guided requests.
+`python -m app.jobs.guided_worker` is the supervised worker entrypoint
+(`PROCESS_ROLE=mindmap-worker`). Claiming uses `FOR UPDATE SKIP LOCKED`, leases,
+heartbeat renewal, bounded retry/backoff, and result-hash reconciliation before
+a provider call. The worker reconstructs source input from source IDs and guided
+config; document content and credentials are not stored in the job row.
+
+Required variable names (values intentionally omitted): `DATABASE_URL` or
+`JOBS_DATABASE_URL`, `PROCESS_ROLE`, `GUIDED_JOB_STORE_BACKEND=postgres`,
+`GUIDED_WORKER_HEARTBEAT_TTL_SEC`, `GUIDED_JOB_LEASE_SECONDS`,
+`GUIDED_JOB_MAX_ATTEMPTS`, `GUIDED_WORKER_POLL_SECONDS`, and the existing real
+provider variables (`GEMINI_API_KEY`/other configured provider). Render now has
+a separate paid `studymap-mindmap-worker` definition; no worker was created or
+deployed. Global Guided remains OFF and V2 remains the fallback.
+
+### Gate evidence
+
+| Gate | Status | Evidence |
+|---|---|---|
+| DURABLE JOB CODE GATE | PASS | Postgres ledger, atomic idempotency, lease claim, heartbeat worker, fail-closed production selection; `BE/tests/test_guided_release_hardening.py` 7 passed and AST/import checks passed. |
+| POSTGRES INTEGRATION GATE | BLOCKED | New `BE/tests/test_guided_postgres_store.py`: 3 skipped because `TEST_DATABASE_URL` is absent; no `psql`, Docker daemon unavailable. No production DB was used. |
+| DEPLOY-LIKE RESTART GATE | BLOCKED | Cannot run web+worker against a disposable Postgres without the same missing test database. SQLite is not substituted for this gate. |
+| CONTROLLED DEPLOYMENT CANDIDATE | NO | Postgres integration and deploy-like restart evidence are still blocked. |
+| PRODUCTION DURABILITY PROOF | BLOCKED | Requires controlled QA deployment and restart/recovery observation. |
+| REAL PROVIDER GATE | BLOCKED | No credential was read or printed in this round; QA deployment is required. |
+| PRODUCTION ENABLEMENT | NO | `GUIDED_MINDMAP_V3_ENABLED=false`; V2 fallback preserved. |
+
+### Configuration and integrity
+
+Render web uses `PROCESS_ROLE=web`, exact CORS `https://studymap.space`, and
+`GUIDED_JOB_STORE_BACKEND=postgres`; the worker uses the same code revision and
+database with `PROCESS_ROLE=mindmap-worker`. The existing `JOBS_DB_PATH` is
+legacy-only configuration and is not selected by Guided production code.
+Migration is additive and repeat-safe through Alembic. Rollback means deploy
+the prior application with the new tables retained; destructive table removal
+requires a separately approved cleanup migration. The main worktree still has
+the pre-existing BE WIP files only; this round did not touch them.
+
+### Verification run
+
+- FE `npm test -- --run`: exit 0, **1088/1088 passed** (98 files), 17.08s.
+- FE `npm run build`: exit 0, Vite production build completed, 2373 modules transformed.
+- FE repository lint `npx eslint src`: exit 1, **58 errors / 6 warnings**; unchanged baseline class and outside this BE durability scope. No FE files changed.
+- BE relevant command: `PYTHONPATH=BE pytest -q BE/tests/test_guided_mindmap_v3.py BE/tests/test_guided_release_hardening.py BE/tests/test_mindmap_node_context.py BE/tests/test_mindmap_routes.py BE/tests/test_mindmap_schema_v2.py BE/tests/test_mindmap_v2_constraints.py BE/tests/test_mindmap_relations.py BE/tests/test_mindmap_graph.py BE/tests/test_mindmap_store.py BE/tests/test_cors_methods.py BE/tests/test_migration_guard.py BE/tests/test_production_migration_contract.py BE/tests/test_guided_postgres_store.py`: exit 0, **68 passed / 15 skipped**, 15.62s. Postgres tests are the 3 skips inside that total.
+- Narrow hardening command: `PYTHONPATH=BE pytest -q BE/tests/test_guided_release_hardening.py`: exit 0, **7 passed**.
+- `git diff --check`: exit 0. Python AST parse of changed Python files: exit 0.
+- Postgres probe: no `TEST_DATABASE_URL`, no `psql`, and Docker daemon was unavailable; no production or shared database was contacted.
+
+Historical sections follow.
+
 ## Scope and provenance
 
 - Worktree: `E:\memvid_NCKH\guided-mindmap-v3`
