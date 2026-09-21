@@ -170,12 +170,22 @@ export const suggestMindmapTopics = async (sources, { query = "", locale = "vi" 
   return res.json();
 };
 
+export const getMindmapCapability = async () => {
+  const res = await apiFetch(`/mindmaps/capability`);
+  if (!res.ok) throw await _appError(res);
+  return res.json();
+};
+
 export const generateMindmap = async (sources, options = {}) => {
   const { force = false, instruction = "", selectedTopicIds = [], selectedTopics = [], preset = "overview", detailLevel = "balanced", locale = "vi", idempotencyKey = "" } = options;
+  const guided = ["instruction", "selectedTopicIds", "selectedTopics", "preset", "detailLevel", "locale", "idempotencyKey"]
+    .some((key) => Object.prototype.hasOwnProperty.call(options, key));
+  const body = { sources, source_ids: sources, q: "tóm tắt tài liệu", force: Boolean(force) };
+  if (guided) Object.assign(body, { instruction, selected_topic_ids: selectedTopicIds, selected_topics: selectedTopics, preset, detail_level: detailLevel, locale, idempotency_key: idempotencyKey });
   const res = await apiFetch(`/generate-mindmap`, {
     method: "POST",
     headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({ sources, source_ids: sources, q: "tóm tắt tài liệu", force: Boolean(force), instruction, selected_topic_ids: selectedTopicIds, selected_topics: selectedTopics, preset, detail_level: detailLevel, locale, idempotency_key: idempotencyKey }),
+    body: JSON.stringify(body),
   });
   if (!res.ok) throw await _appError(res);
   return res.json();

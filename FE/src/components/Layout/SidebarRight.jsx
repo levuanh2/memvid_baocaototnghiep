@@ -1,5 +1,5 @@
 import { useState, useEffect, useCallback, useRef, useMemo } from "react";
-import { apiFetch, generateMindmap, cancelMindmap, generateSummary, cancelSummary, isUnauthorizedError, isNotFoundOrForbiddenError, getUserFriendlyApiError } from "../../utils/api";
+import { apiFetch, generateMindmap, cancelMindmap, generateSummary, cancelSummary, getMindmapCapability, isUnauthorizedError, isNotFoundOrForbiddenError, getUserFriendlyApiError } from "../../utils/api";
 import GuidedMindmapDialog from "./GuidedMindmapDialog";
 
 // Permission-safe toast text: 401/403/404 → friendly line (no raw error/id); else
@@ -133,6 +133,7 @@ export default function SidebarRight({
   const [mindMaps, setMindMaps]           = useState([]);
   const [showModalMap, setShowModalMap]   = useState(null);
   const [guidedOpen, setGuidedOpen] = useState(false);
+  const [guidedCapability, setGuidedCapability] = useState(false);
   const [guidedError, setGuidedError] = useState(null);
   const [showSummaryModal, setShowSummaryModal] = useState(null);
   useEffect(() => {
@@ -166,6 +167,17 @@ export default function SidebarRight({
   const [summaryRetry, setSummaryRetry] = useState(null);
   // PR#8 stall banner snooze ("Chờ tiếp"): timestamp lần dismiss gần nhất.
   const [stallDismissedAt, setStallDismissedAt] = useState({ mindmap: 0, summary: 0 });
+
+  useEffect(() => {
+    let active = true;
+    getMindmapCapability().then((data) => {
+      if (active) setGuidedCapability(data?.guided_mindmap_v3 === true);
+    }).catch(() => {
+      // Capability failure fails closed for Guided V3; the legacy V2 flow stays usable.
+      if (active) setGuidedCapability(false);
+    });
+    return () => { active = false; };
+  }, []);
 
   const frameRefs = useRef(new Map());
   // PR#8: dirty state của viewer mindmap (thread từ MindElixirView.onDirtyChange)
@@ -415,9 +427,15 @@ export default function SidebarRight({
     }
   };
 
-  const handleGenerateMindMap = () => setGuidedOpen(true);
+  const handleGenerateMindMap = () => {
+    if (guidedCapability) setGuidedOpen(true);
+    else runMindmapGeneration(selectedSources);
+  };
   createMindmapRef.current = handleGenerateMindMap;
-  const onCreateNewMindmap = useCallback(() => setGuidedOpen(true), []);
+  const onCreateNewMindmap = useCallback(() => {
+    if (guidedCapability) setGuidedOpen(true);
+    else runMindmapGeneration(selectedSources);
+  }, [guidedCapability, selectedSources]);
   const submitGuidedMindmap = (options) => {
     setGuidedOpen(false);
     setGuidedError(null);
