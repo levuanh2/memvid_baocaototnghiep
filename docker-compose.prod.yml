@@ -16,6 +16,13 @@
 # Run from the repo root with an explicit env file:
 #   docker compose -f docker-compose.prod.yml --env-file /opt/memvid/env/.env up -d
 # (scripts/deploy.sh already does this).
+#
+# mindmap-worker: the Guided Mind Map V3 background worker. Same image/build
+# as backend (no separate Dockerfile), same host, zero new AWS resources —
+# just a second container. GUIDED_MINDMAP_V3_ENABLED defaults to "false" in
+# app code when unset, so this container is safe to run even before the
+# rollout flag/QA allowlist is turned on: it will simply find nothing to
+# claim. No public port. See BE/app/jobs/guided_worker.py.
 
 services:
   backend:
@@ -38,6 +45,7 @@ services:
       LOG_DB_PATH: /app/memory/logs.sqlite
       CONVERSATIONS_DB_PATH: /app/memory/conversations.sqlite
       USERS_DB_PATH: /app/memory/users.sqlite
+      PROCESS_ROLE: web
     volumes:
       - /opt/memvid/data/index:/app/index
       - /opt/memvid/data/memory:/app/memory
@@ -58,6 +66,34 @@ services:
       # while the backend was still loading. scripts/health.sh polls Docker's
       # own status too, so this just keeps `docker inspect` honest with reality.
       start_period: 90s
+    logging:
+      driver: json-file
+      options:
+        max-size: "10m"
+        max-file: "3"
+
+  mindmap-worker:
+    build:
+      context: ./BE
+      dockerfile: Dockerfile
+    container_name: memvid_mindmap_worker
+    command: ["python", "-m", "app.jobs.guided_worker"]
+    restart: unless-stopped
+    env_file:
+      - /opt/memvid/env/.env
+    environment:
+      DATA_DIR: /app
+      PROCESS_ROLE: mindmap-worker
+      GUIDED_JOB_STORE_BACKEND: postgres
+    volumes:
+      # Same durable data as backend — the worker reads/writes index and memory
+      # for the same sources the web process serves.
+      - /opt/memvid/data/index:/app/index
+      - /opt/memvid/data/memory:/app/memory
+      - /opt/memvid/data/input_docs:/app/input_docs
+    depends_on:
+      backend:
+        condition: service_healthy
     logging:
       driver: json-file
       options:
