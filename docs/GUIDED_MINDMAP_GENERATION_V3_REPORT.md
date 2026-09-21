@@ -377,3 +377,116 @@ environment.
 
 **LIVE GATE B BLOCKED** — no account/document/map acceptance on the deployed
 origin was claimed.
+## Release hardening round (2026-09-21)
+
+### Durable Guided jobs and idempotency
+
+The existing SQLite jobs store is now the durable ledger for Guided requests.
+Its additive startup migration adds `map_id`, `result_map_id`,
+`idempotency_key`, `request_fingerprint`, `source_ids_json`,
+`guided_config_json`, `stage`, `attempts`, lease timestamps/owner, terminal
+timestamps, and structured `error_code`. A partial unique index on
+`(user_id, idempotency_key)` makes same-user concurrent creation atomic.
+
+Same key plus same fingerprint returns the existing job; same key plus a
+different fingerprint returns `409 idempotency_conflict`. The worker claims a
+job with an atomic lease update, increments attempts, rejects a second active
+claim, and turns expired running leases back to `pending`. Startup recovery can
+rebuild `mm_input` from persisted source IDs and guided configuration; document
+chunks and credentials are not stored in the job row. The existing map
+persistence/content-hash path remains the deduplication boundary for result
+save.
+
+This closes the in-process idempotency gap, but the current Render deployment
+still points `JOBS_DB_PATH` at ephemeral `/tmp/studymap/jobs.sqlite` and keeps
+`QUEUE_ENABLED=false`. Therefore restart durability across a Render instance
+replacement is **not yet production-proven**. A persistent disk or Postgres job
+ledger plus a supervised worker is still required before enabling the feature
+globally. Forward migration is additive and idempotent; rollback is to deploy
+the previous code after preserving the new nullable columns (no destructive
+rollback is required).
+
+### Server-authoritative rollout
+
+`GET /mindmaps/capability` returns `guided_mindmap_v3` and `fallback: v2`.
+`GUIDED_MINDMAP_V3_ENABLED=false` is the tracked production default;
+`GUIDED_MINDMAP_V3_QA_USER_IDS` is an out-of-band QA allowlist. With global OFF,
+non-QA users receive a fail-closed `guided_v3_disabled` response from Guided
+endpoints while the FE falls back to the existing V2 generate flow. Capability
+fetch failure also fails closed for Guided UI and leaves V2 available. With
+global ON, authenticated eligible users may use Guided V3. Client state is not
+the security boundary.
+
+### Effective production CORS
+
+Tracked Render configuration now sets the exact allowlist origin to
+`https://studymap.space`, with no wildcard and no localhost. No `www` origin was
+added because that is not the confirmed production route. Flask-CORS retains
+the existing Authorization/Content-Type headers and GET/POST/PUT/PATCH/DELETE/
+OPTIONS methods. No deployment was performed; preflight must be rechecked after
+the deployment environment applies the tracked value.
+
+### Fixture visual manifest
+
+The Brave/Python Playwright fixture capture now includes:
+
+- `guided-generation-progress-desktop-light.png`
+- `guided-generation-failed-desktop-light.png`
+- `guided-generation-failed-desktop-dark.png`
+- `guided-generation-progress-mobile-light.png`
+- `guided-generation-failed-mobile-light.png`
+- `guided-mindmap-library-desktop-dark.png`
+- `guided-mindmap-library-tablet-inspector.png`
+
+The prior dialog, suggestion, and Shared Inspector captures remain in the same
+directory. The new library uses production `ModeLibraryMenu` with three maps,
+active-map state and a long-title truncation case; the dialog progress/failed
+states use the real `GuidedMindmapDialog`. Capture command exited 0 at 1440x1024,
+1024x768, and 390x844. Console errors: 0. Page errors: 0. Horizontal overflow:
+false for every record. Touch-target probe retained a 40x40 close control and
+40px-high topic chips.
+
+### Verification
+
+- FE full suite: **1088/1088 pass**, 98 files.
+- FE production build: **pass**, 2373 modules.
+- Changed JS/JSX lint: **0 errors / 0 warnings**. QA Python was AST-checked;
+  ESLint correctly ignores `.py`.
+- Relevant BE hardening + Guided/Mind Map/job/queue suite:
+  **74 pass, 4 warnings**.
+- `git diff --check`: clean.
+- Repository lint remains the existing baseline: **60 errors / 6 warnings**;
+  unrelated findings were not changed.
+
+### Release plan (not executed)
+
+1. Merge candidate/deploy with `GUIDED_MINDMAP_V3_ENABLED=false`, apply the
+   additive jobs migration, provision durable job storage/worker, and verify
+   health/recovery.
+2. Set only `GUIDED_MINDMAP_V3_QA_USER_IDS` for QA. With the configured Gemini
+   provider, create a real map from an owned document, verify suggestions,
+   citations, typed relations, reload and Inspector context, then restart the
+   worker/app and verify recovery/idempotency.
+3. If Gate B passes, enable globally. If it fails, set the global flag OFF;
+   V2 remains available. Preserve the nullable migration columns on rollback.
+
+### Verdict
+
+**FIXTURE VISUAL PASS**
+
+**DURABLE JOB GATE FAIL** — SQLite schema/atomic idempotency/lease recovery are
+implemented and tested, but the current `/tmp` deployment storage and disabled
+queue do not prove restart durability in production.
+
+**CORS GATE PASS** — tracked production allowlist is exactly
+`https://studymap.space`; deployment application/preflight remains pending.
+
+**ROLLOUT GATE PASS** — server capability, QA allowlist, safe default and V2
+fallback are implemented and tested.
+
+**IMPLEMENTATION PARTIAL**
+
+**CONTROLLED DEPLOYMENT CANDIDATE NO** — durable storage/worker hardening must
+precede even a QA deployment candidate.
+
+**PRODUCTION ENABLEMENT NO** — real provider Gate B has not passed.
