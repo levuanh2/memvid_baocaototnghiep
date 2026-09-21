@@ -11,25 +11,43 @@ Ràng buộc tầng: file này KHÔNG import flask, faiss, ollama.
 
 from __future__ import annotations
 
+import os
+import uuid
 from typing import Any, Optional
 
 from app.application.shared import _job_error_text, _langgraph_invoke
 
 def run_mindmap_job(job_id: str, source_names: list[str], mm_input: dict,
                     content_hash: str, user_id: Optional[str] = None,
-                    *, graph: Any = None) -> None:
+                    *, graph: Any = None, already_claimed: bool = False) -> None:
     """Mindmap v3 execution body. Runs in a daemon thread (QUEUE_ENABLED=false) OR an RQ
     worker process (QUEUE_ENABLED=true) — identical behaviour, no Flask request context
     needed. Enqueued by dotted path `app.main.run_mindmap_job`. The graph owns the
     done/result write (atomic); this wraps errors -> job error. Cancellation uses the
     existing cooperative flag (mindmap graph `_guard` checks jobs_store cancel_requested)."""
     print(f"mindmap_job_running job_id={job_id}", flush=True)
+    lease_owner = f"mindmap:{os.getpid()}:{uuid.uuid4().hex[:8]}"
+    from app.domains.jobs import guided_store
+    if not already_claimed:
+        if guided_store.use_postgres():
+            current = guided_store.get_job(job_id, user_id=user_id)
+            if not current:
+                print(f"mindmap_job_not_claimed job_id={job_id}", flush=True)
+                return
+        else:
+            from app.domains.jobs.jobs_store import claim_job
+            if not claim_job(job_id, lease_owner, lease_seconds=int(os.getenv("GUIDED_JOB_LEASE_SECONDS", "900"))):
+                print(f"mindmap_job_not_claimed job_id={job_id}", flush=True)
+                return
     from app.graphs.logger import begin_llm_count, flush_llm_count
     _llm_counter = begin_llm_count()
     try:
         from app.domains.jobs.jobs_store import update_job as _uj
         try:
-            _uj(job_id, status="running", current_node="Mindmap")
+            if guided_store.use_postgres():
+                guided_store.update_job(job_id, status="running", stage="generating", current_node="Mindmap", heartbeat=True)
+            else:
+                _uj(job_id, status="running", current_node="Mindmap")
         except Exception:
             pass
         if graph is None:
@@ -41,8 +59,11 @@ def run_mindmap_job(job_id: str, source_names: list[str], mm_input: dict,
         }, thread_id=job_id)
         print(f"mindmap_job_done job_id={job_id}", flush=True)
     except Exception as e:
-        from app.domains.jobs.jobs_store import update_job
-        update_job(job_id, status="error", error_text=_job_error_text(e))
+        if guided_store.use_postgres():
+            guided_store.update_job(job_id, status="failed", stage="failed", error_code="generation_failed", error_message=_job_error_text(e))
+        else:
+            from app.domains.jobs.jobs_store import update_job
+            update_job(job_id, status="error", error_text=_job_error_text(e))
         print(f"mindmap_job_failed job_id={job_id} err={str(e)[:80]}", flush=True)
     finally:
         flush_llm_count(job_id, _llm_counter)

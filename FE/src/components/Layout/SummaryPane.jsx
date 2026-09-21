@@ -4,9 +4,8 @@
 // region now, not portaled as a focus-trapped overlay. Summary GENERATION
 // logic (SidebarRight's job/poller) is untouched — this component only ever
 // displays a finished record, exactly as SummaryModal did.
-import { useCallback, useEffect, useState } from "react";
+import { useEffect } from "react";
 import { MdProse } from "../ui/Markdown";
-import EvidenceDrawer from "../mindmap/EvidenceDrawer";
 import { Icon } from "../ui/Icon";
 import { normalizeSummaryRecord } from "../../utils/summaryJob";
 import { useStudyContext } from "../../study/useStudyContext";
@@ -28,9 +27,7 @@ function StudyList({ title, items }) {
   );
 }
 
-export default function SummaryPane({ data }) {
-  const [drawerNode, setDrawerNode] = useState(null);
-  const closeDrawer = useCallback(() => setDrawerNode(null), []);
+export default function SummaryPane({ data, onContextChange }) {
   // Study Context (Phase 4A.2) — cùng khoá STEM mà StudyMapView dùng. `rec.sources`
   // là mảng vì API hỗ trợ tóm tắt nhiều nguồn, nhưng luồng dùng thật của app luôn
   // đúng một tài liệu mỗi lượt mở — lấy phần tử đầu là đủ.
@@ -57,13 +54,7 @@ export default function SummaryPane({ data }) {
   const missing = Array.isArray(rec.generator?.missing) ? rec.generator.missing : [];
   const lengthLabel = LENGTH_LABELS[rec.lengthMode];
 
-  const openEvidence = (section) =>
-    setDrawerNode({
-      id: section.id,
-      title: section.title,
-      note: "",
-      chunkRefs: Array.isArray(section.chunk_refs) ? section.chunk_refs : [],
-    });
+  const openEvidence = (section) => onContextChange?.({ sectionId: section.id });
 
   return (
     <div className="relative h-full overflow-y-auto">
@@ -115,7 +106,7 @@ export default function SummaryPane({ data }) {
                   <section key={s.id} className="surface-card font-display"
                            style={daChon ? { borderColor: "var(--accent)" } : undefined}>
                     <h3 className="mb-2">
-                      <button type="button" onClick={() => selectSummary(s.id, { source: "summary" })}
+                      <button type="button" onClick={() => { selectSummary(s.id, { source: "summary" }); onContextChange?.({ sectionId: s.id }); }}
                               className="font-display text-title font-semibold text-left"
                               style={{ color: daChon ? "var(--accent)" : "var(--text-primary)" }}>
                         {s.title}
@@ -225,7 +216,6 @@ export default function SummaryPane({ data }) {
         )}
       </div>
 
-      {drawerNode && <EvidenceDrawer node={drawerNode} onClose={closeDrawer} />}
     </div>
   );
 }

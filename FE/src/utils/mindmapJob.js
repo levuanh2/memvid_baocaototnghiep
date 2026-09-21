@@ -6,6 +6,11 @@ export { STALL_MS, pollIntervalMs, MAX_CONSECUTIVE_FETCH_FAILURES } from "./jobP
 export const stageLabel = (status = {}) => {
   const node = String(status.current_node || "");
   const msg = String(status.message || "");
+  if (/retriev/i.test(node)) return "Đang truy xuất bằng chứng…";
+  if (/plann/i.test(node)) return "Đang lập kế hoạch…";
+  if (/generat/i.test(node)) return "Đang sinh nội dung…";
+  if (/validat/i.test(node)) return "Đang kiểm tra sơ đồ…";
+  if (/saving|saved/i.test(node)) return "Đang lưu sơ đồ…";
   if (/skeleton|collect/i.test(node)) return "Dựng khung xương…";
   if (/enrich/i.test(node)) return msg ? `Làm giàu ${msg}…` : "Làm giàu nhánh…";
   if (/relation/i.test(node)) return "Tìm quan hệ chéo…";

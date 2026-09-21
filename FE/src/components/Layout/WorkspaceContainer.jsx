@@ -30,7 +30,7 @@ const paneClass = (active) => (active ? "flex-1 min-h-0" : "hidden");
 export default function WorkspaceContainer({
   mode,
   chatProps, mindmapData, summaryData, controller,
-  onMindmapAction, onSummaryAction, inspectorProps,
+  onMindmapAction, onSummaryAction, onSummaryContextChange,
 }) {
   const hasMindmap = Boolean(mindmapData?.data);
   const hasSummary = Boolean(summaryData);
@@ -49,7 +49,6 @@ export default function WorkspaceContainer({
             onRegenerate={mindmapData.onRegenerate}
             regenerating={mindmapData.regenerating}
             controller={controller}
-            inspectorProps={inspectorProps}
           />
         ) : (
           <WorkspaceEmptyState kind="mindmap" selectedCount={selectedSources.length} onCreate={onMindmapAction} />
@@ -58,7 +57,7 @@ export default function WorkspaceContainer({
 
       <div className={paneClass(mode === "summary")}>
         {hasSummary ? (
-          <SummaryPane data={summaryData} />
+          <SummaryPane data={summaryData} onContextChange={onSummaryContextChange} />
         ) : (
           <WorkspaceEmptyState kind="summary" selectedCount={selectedSources.length} onCreate={onSummaryAction} />
         )}

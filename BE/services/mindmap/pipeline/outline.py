@@ -57,6 +57,9 @@ def build_outline(mm_input: dict, *, model: str, timeout_sec: float = 120.0) -> 
             break
     user = (f"Danh sách id hợp lệ: {', '.join(sorted(allowed))}\n\n"
             f"<<<TÀI LIỆU>>>\n" + "\n\n".join(parts) + "\n<<<HẾT>>>")
+    intent = mm_input.get("generation_intent") or {}
+    if intent:
+        user += "\nUSER GUIDANCE: " + str(intent.get("instruction") or "") + "; purpose=" + str(intent.get("preset") or "overview") + "; detail=" + str(intent.get("detail_level") or "balanced") + "; topics=" + ", ".join(intent.get("selected_topics") or [])
     ex = ThreadPoolExecutor(max_workers=1)
     try:
         fut = ctx_submit(ex, ask_ai, user, system_prompt=_SYSTEM, model=model,

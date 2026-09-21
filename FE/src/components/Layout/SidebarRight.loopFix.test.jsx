@@ -60,6 +60,7 @@ vi.mock("../../utils/api", () => ({
     return { ok: true, json: async () => ({}) };
   }),
   generateMindmap: vi.fn(), cancelMindmap: vi.fn(), generateSummary: vi.fn(), cancelSummary: vi.fn(),
+  getMindmapCapability: vi.fn(async () => ({ guided_mindmap_v3: true })),
   isUnauthorizedError: vi.fn(() => false), isNotFoundOrForbiddenError: vi.fn(() => false),
   getUserFriendlyApiError: vi.fn((e) => String(e)),
 }));
