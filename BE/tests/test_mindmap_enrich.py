@@ -127,3 +127,39 @@ def test_enrich_bao_progress_TRUOC_khi_nhanh_dau_chay_xong(monkeypatch):
     assert moc, "khong goi LLM lan nao"
     assert moc[0][1] >= 1, "LLM dau tien chay ma chua bao progress lan nao"
     assert bao[0][0] == 30 and "1/" in bao[0][1]
+
+
+def test_enrich_persists_node_type_through_sanitize(monkeypatch):
+    """Regression for the "every node is just topic+summary" fix: node_type
+    must survive both enrich_branches' own dict construction AND
+    sanitize_nodes' NodeV2 round-trip (which previously would have silently
+    dropped it — Pydantic's default extra="ignore" behavior)."""
+    monkeypatch.delenv("SKIP_MODEL_LOAD", raising=False)
+    def fake_ask(prompt, system_prompt=None, model=None, feature=None, options=None, **kw):
+        return json.dumps({"title": "Khái niệm A", "node_type": "definition", "note": "Ý nghĩa.",
+                           "children": [{"title": "Bước 1", "node_type": "process", "note": "n",
+                                        "chunk_keys": ["0"]}]})
+    monkeypatch.setattr(en, "ask_ai", fake_ask)
+    mm, skeleton = _input_and_skeleton()
+    nodes, degraded = en.enrich_branches(mm, skeleton, model="m", timeout_sec=5)
+    assert degraded is False
+    branch = next(n for n in nodes if n["title"] == "Khái niệm A")
+    assert branch["node_type"] == "definition"
+    kid = next(n for n in nodes if n["title"] == "Bước 1")
+    assert kid["node_type"] == "process"
+
+
+def test_enrich_off_taxonomy_node_type_defaults_to_concept(monkeypatch):
+    """Never persist a value outside NODE_TYPES, whether the model invents one
+    or omits the field entirely — same safety net as `kind`'s own default."""
+    monkeypatch.delenv("SKIP_MODEL_LOAD", raising=False)
+    def fake_ask(prompt, system_prompt=None, model=None, feature=None, options=None, **kw):
+        return json.dumps({"title": "X", "node_type": "not_a_real_type", "note": "",
+                           "children": [{"title": "Y", "note": "", "chunk_keys": ["0"]}]})
+    monkeypatch.setattr(en, "ask_ai", fake_ask)
+    mm, skeleton = _input_and_skeleton()
+    nodes, _ = en.enrich_branches(mm, skeleton, model="m", timeout_sec=5)
+    branch = next(n for n in nodes if n["title"] == "X")
+    assert branch["node_type"] == "concept"
+    kid = next(n for n in nodes if n["title"] == "Y")
+    assert kid["node_type"] == "concept"  # field omitted entirely by the model

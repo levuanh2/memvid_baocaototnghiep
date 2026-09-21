@@ -20,6 +20,13 @@ KINDS = ("root", "section", "idea", "detail")
 REL_TYPES = ("relates_to", "leads_to", "causes", "supports", "contrasts", "contains",
              "part_of", "prerequisite", "cause_effect", "sequence", "contrast", "example", "related")
 _KIND_PRIORITY = {"root": 0, "section": 1, "idea": 2, "detail": 3}
+# node_type: compact SEMANTIC taxonomy, additive to (never replacing) `kind`.
+# `kind` stays purely structural/depth-based (root/section/idea/detail) and is
+# load-bearing for sort/repair below; node_type answers "what kind of
+# knowledge unit is this" instead of "how deep is it". Old records without
+# this field default to "concept" via NodeV2's field default — no migration
+# needed, no break for existing V2 records.
+NODE_TYPES = ("concept", "definition", "process", "cause_effect", "comparison", "example", "rule", "evidence")
 
 
 def compact_topic(value: str, max_length: int = MAX_TOPIC_LENGTH) -> str:
@@ -38,6 +45,7 @@ class NodeV2(BaseModel):
     kind: str = "idea"
     title: str
     note: str = ""
+    node_type: str = "concept"
     chunk_refs: list[str] = Field(default_factory=list)
     order: int = 0
 
@@ -74,7 +82,8 @@ def sanitize_nodes(nodes: list[dict]) -> list[dict]:
     for n in nodes or []:
         try:
             original_title = " ".join(str(n.get("title") or "").split())
-            payload = {**n, "kind": n.get("kind") if n.get("kind") in KINDS else "idea"}
+            payload = {**n, "kind": n.get("kind") if n.get("kind") in KINDS else "idea",
+                       "node_type": n.get("node_type") if n.get("node_type") in NODE_TYPES else "concept"}
             payload["title"] = compact_topic(original_title)
             if original_title and payload["title"] != original_title:
                 payload["note"] = "\n\n".join(

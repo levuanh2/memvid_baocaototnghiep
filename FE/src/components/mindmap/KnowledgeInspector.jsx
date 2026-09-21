@@ -191,7 +191,14 @@ export default function KnowledgeInspector({
     if (!vals.length) return null;
     return Math.round((vals.reduce((a, b) => a + b, 0) / vals.length) * 100);
   }, [backendContext?.confidence, enrichment]);
-  const dominantType = enrichment[0]?.semantic_type ? semanticMeta(enrichment[0].semantic_type) : null;
+  // Prefer chunk-level enrichment[].semantic_type (Phase 2B, currently unused
+  // in the deployed pipeline — enrichment is always []); fall back to the
+  // node-level node_type (services/mindmap/pipeline/schema.py::NODE_TYPES,
+  // populated by every enrich.py branch call). Without this fallback the chip
+  // never renders in production at all, since enrichment[0] is never set.
+  const dominantType = enrichment[0]?.semantic_type
+    ? semanticMeta(enrichment[0].semantic_type)
+    : node?.nodeType ? semanticMeta(node.nodeType) : null;
 
   // Row 1 — nav bar. Chrome, not per-node content: visible whether or not a
   // node is selected, so selection history is always legible.
