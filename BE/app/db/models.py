@@ -683,4 +683,55 @@ class AIValidationLog(Base):
     )
 
 
+class GuidedMindmapJob(Base):
+    """Durable job ledger for Guided Mind Map V3 (see BE/app/domains/jobs/guided_store.py).
+
+    Declared here purely so schema-completeness/RLS tests (test_db_schema.py)
+    see this table — guided_store.py itself queries it via SQLAlchemy Core,
+    not this ORM class.
+    """
+
+    __tablename__ = "guided_mindmap_jobs"
+
+    job_id = Column(Text, primary_key=True)
+    user_id = Column(Text, nullable=False)
+    map_id = Column(Text)
+    result_map_id = Column(Text)
+    idempotency_key = Column(Text, nullable=False)
+    request_fingerprint = Column(Text, nullable=False)
+    source_ids_json = Column(JSONB, nullable=False)
+    guided_config_json = Column(JSONB, nullable=False)
+    status = Column(Text, nullable=False, server_default=text("'queued'"))
+    stage = Column(Text, nullable=False, server_default=text("'queued'"))
+    attempts = Column(Integer, nullable=False, server_default=text("0"))
+    progress = Column(Integer, nullable=False, server_default=text("0"))
+    current_node = Column(Text)
+    lease_owner = Column(Text)
+    lease_expires_at = Column(DateTime(timezone=True))
+    heartbeat_at = Column(DateTime(timezone=True))
+    not_before = Column(DateTime(timezone=True))
+    created_at = Column(DateTime(timezone=True), nullable=False, server_default=func.now())
+    updated_at = Column(DateTime(timezone=True), nullable=False, server_default=func.now())
+    started_at = Column(DateTime(timezone=True))
+    completed_at = Column(DateTime(timezone=True))
+    error_code = Column(Text)
+    error_message = Column(Text)
+    result_json = Column(JSONB)
+
+    __table_args__ = (
+        UniqueConstraint("user_id", "idempotency_key", name="uq_guided_job_user_idempotency"),
+        Index("ix_guided_jobs_status_lease", "status", "lease_expires_at"),
+    )
+
+
+class GuidedMindmapWorkerHeartbeat(Base):
+    """Worker liveness for the Guided Mind Map supervised worker."""
+
+    __tablename__ = "guided_mindmap_worker_heartbeats"
+
+    worker_id = Column(Text, primary_key=True)
+    heartbeat_at = Column(DateTime(timezone=True), nullable=False)
+    ttl_seconds = Column(Integer, nullable=False, server_default=text("90"))
+
+
 ALL_TABLES = tuple(Base.metadata.tables.keys())

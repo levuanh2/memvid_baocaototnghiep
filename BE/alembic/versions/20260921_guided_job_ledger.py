@@ -45,6 +45,14 @@ def upgrade():
         sa.Column("heartbeat_at", sa.DateTime(timezone=True), nullable=False),
         sa.Column("ttl_seconds", sa.Integer(), nullable=False, server_default="90"),
     )
+    # Every table in this schema gets RLS enabled with zero policies right
+    # after create_table (deny-all for the Supabase publishable/anon key —
+    # the backend's own service-role key bypasses RLS entirely, see
+    # 102c36a01548 and b1d7a4c9e210). 08eb199dc5e0 fixed one migration that
+    # missed this; doing it here directly since this migration has not
+    # shipped anywhere yet.
+    op.execute('ALTER TABLE public."guided_mindmap_jobs" ENABLE ROW LEVEL SECURITY')
+    op.execute('ALTER TABLE public."guided_mindmap_worker_heartbeats" ENABLE ROW LEVEL SECURITY')
 
 
 def downgrade():
