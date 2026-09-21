@@ -223,6 +223,18 @@ services:
       - key: CORS_ORIGINS
         value: https://studymap.space
 
+      # Guided V3 is never process-local in production. The web process only
+      # writes the Postgres ledger and returns 202; the background worker below
+      # claims and executes jobs.
+      - key: PROCESS_ROLE
+        value: web
+      - key: GUIDED_JOB_STORE_BACKEND
+        value: postgres
+      - key: GUIDED_WORKER_HEARTBEAT_TTL_SEC
+        value: "90"
+      - key: GUIDED_JOB_MAX_ATTEMPTS
+        value: "3"
+
       # Guided Mind Map V3 rollout is server-authoritative and defaults OFF.
       # QA can be enabled by setting GUIDED_MINDMAP_V3_QA_USER_IDS out of band.
       - key: GUIDED_MINDMAP_V3_ENABLED
@@ -250,6 +262,64 @@ services:
         value: "false"
       - key: CONVERSATION_CONTEXT_ENABLED
         value: "true"
+      - key: SUPABASE_STORAGE_BUCKET
+        value: documents
+
+  # ---------- Guided Mind Map worker (paid Render background worker) ----------
+  # Uses the same repository revision and Postgres database as the web service.
+  # This is intentionally a separate process: no Gunicorn worker owns a
+  # process-local Guided queue. A Starter worker has an infrastructure cost;
+  # creating/deploying it is an explicit release step and is not done here.
+  - type: worker
+    name: studymap-mindmap-worker
+    runtime: python
+    plan: starter
+    region: singapore
+    branch: main
+    autoDeploy: true
+    rootDir: BE
+    buildCommand: >-
+      pip install --upgrade pip &&
+      pip install -r requirements.txt &&
+      python scripts/build_proto.py
+    startCommand: python -m app.jobs.guided_worker
+    envVars:
+      - key: PYTHON_VERSION
+        value: "3.11"
+      - key: PROCESS_ROLE
+        value: mindmap-worker
+      - key: GUIDED_JOB_STORE_BACKEND
+        value: postgres
+      - key: DATABASE_URL
+        sync: false
+      - key: SUPABASE_URL
+        sync: false
+      - key: SUPABASE_SECRET_KEY
+        sync: false
+      - key: GEMINI_API_KEY
+        sync: false
+      - key: GEMINI_CHAT_MODEL
+        value: gemini-2.5-flash
+      - key: OLLAMA_HOST
+        value: ""
+      - key: SKIP_MODEL_LOAD
+        value: "1"
+      - key: MINDMAP_LLM_TIMEOUT_SEC
+        value: "110"
+      - key: GUIDED_MINDMAP_V3_ENABLED
+        value: "false"
+      - key: GUIDED_MINDMAP_V3_QA_USER_IDS
+        sync: false
+      - key: GUIDED_WORKER_HEARTBEAT_TTL_SEC
+        value: "90"
+      - key: GUIDED_JOB_MAX_ATTEMPTS
+        value: "3"
+      - key: GUIDED_JOB_LEASE_SECONDS
+        value: "900"
+      - key: GUIDED_WORKER_POLL_SECONDS
+        value: "2"
+      - key: INDEX_PERSISTENCE_ENABLED
+        value: "1"
       - key: SUPABASE_STORAGE_BUCKET
         value: documents
 
