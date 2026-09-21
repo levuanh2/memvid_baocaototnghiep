@@ -9,6 +9,7 @@ except Exception:
     pass
 
 import json
+import hashlib
 import re
 import uuid
 import contextlib
@@ -4978,14 +4979,16 @@ def _mindmap_input_and_hash(source_names: list[str]) -> tuple[dict, str]:
 
 
 def _start_mindmap_job(source_names: list[str], mm_input: dict, content_hash: str,
-                       generation_intent: Optional[dict] = None) -> str:
+                       generation_intent: Optional[dict] = None, *, job_id: Optional[str] = None,
+                       job_metadata: Optional[dict] = None) -> str:
     """Phase 5 Step 3: dispatch Mindmap v3 via enqueue_job — daemon thread when
     QUEUE_ENABLED=false (default, unchanged), RQ 'mindmap' queue when true. FE polling
     (/mindmap-status) unchanged; result still in mindmap_store."""
-    job_id = str(uuid.uuid4())
+    job_id = job_id or str(uuid.uuid4())
     uid = _current_user_id()  # request context: stamp job + record owner (Phase D)
     from app.domains.jobs.jobs_store import create_job
-    create_job(job_id, job_type="mindmap", status="pending", progress=0, current_node="Queued", user_id=uid)
+    if not job_metadata:
+        create_job(job_id, job_type="mindmap", status="pending", progress=0, current_node="Queued", user_id=uid)
     from app.jobs.queue import enqueue_job
     res = enqueue_job(run_mindmap_job,
                       args=(job_id, source_names, mm_input, content_hash, uid),
@@ -5007,12 +5010,63 @@ def run_mindmap_job(job_id: str, source_names: list[str], mm_input: dict, conten
                  graph=MINDMAP_GRAPH)
 
 
+def _recover_guided_jobs() -> None:
+    """Re-enqueue durable Guided requests after a web/worker restart.
+
+    Only source IDs and guided configuration are persisted. Chunks are rebuilt
+    from the current indexed source store, so the jobs table never stores
+    document content or credentials.
+    """
+    if (os.getenv("GUIDED_JOB_RECOVERY_ENABLED", "false") or "").strip().lower() not in ("1", "true", "yes", "on"):
+        return
+    try:
+        from app.domains.jobs.jobs_store import recover_expired_jobs, list_recoverable_mindmap_jobs
+        recover_expired_jobs()
+        from app.domains.mindmap.guided import intent_hash, suggest_topics
+        for row in list_recoverable_mindmap_jobs():
+            source_names = row.get("source_ids") or []
+            mm_input, content_hash = _mindmap_input_and_hash(source_names)
+            intent = row.get("guided_config") or None
+            if intent:
+                topics = suggest_topics(mm_input)
+                mm_input = {**mm_input, "generation_intent": intent, "guided_topics": topics}
+                content_hash = intent_hash(content_hash, intent)
+            _start_mindmap_job(source_names, mm_input, content_hash, intent,
+                               job_id=row["job_id"], job_metadata=row)
+    except Exception as exc:
+        print(f"guided_job_recovery_failed err={str(exc)[:120]}", flush=True)
+
+
 # -------------------------
+def _guided_v3_enabled(user_id: Optional[str]) -> bool:
+    """Server-authoritative rollout gate; client flags are never trusted."""
+    # The repository's explicit open/dev mode remains backward-compatible for
+    # legacy test clients. Production has AUTH_PROTECT_APP_APIS=true, so this
+    # branch cannot grant an unauthenticated production caller access.
+    if not _auth_protect_enabled():
+        return True
+    if not user_id:
+        return False
+    qa_ids = {item.strip() for item in (os.getenv("GUIDED_MINDMAP_V3_QA_USER_IDS") or "").split(",") if item.strip()}
+    enabled = (os.getenv("GUIDED_MINDMAP_V3_ENABLED", "false") or "").strip().lower() in ("1", "true", "yes", "on")
+    return enabled or user_id in qa_ids
+
+
+@app.get("/mindmaps/capability")
+def mindmap_capability():
+    uid, err = _require_app_user()
+    if err:
+        return err
+    return jsonify({"guided_mindmap_v3": _guided_v3_enabled(uid), "fallback": "v2"}), 200
+
+
 @app.post("/mindmaps/suggest-topics")
 def suggest_mindmap_topics():
     uid, err = _require_app_user()
     if err:
         return err
+    if not _guided_v3_enabled(uid):
+        return jsonify({"error": "Guided Mind Map V3 is not enabled for this account", "error_code": "guided_v3_disabled", "fallback": "v2"}), 404
     data = request.json or {}
     raw_sources = data.get("source_ids") or data.get("sources") or []
     if not isinstance(raw_sources, list) or not raw_sources:
@@ -5047,6 +5101,9 @@ def generate_mindmap():
     if err:
         return err
     data = request.json or {}
+    guided_requested = any(key in data for key in ("instruction", "selected_topic_ids", "selected_topics", "preset", "detail_level"))
+    if guided_requested and not _guided_v3_enabled(uid):
+        return jsonify({"error": "Guided Mind Map V3 is not enabled for this account", "error_code": "guided_v3_disabled", "fallback": "v2"}), 404
     raw_sources = data.get("sources") or []
     if not isinstance(raw_sources, list):
         return jsonify({"error": "Sources phải là list"}), 400
@@ -5079,7 +5136,6 @@ def generate_mindmap():
         return ready_err
 
     from app.domains.mindmap.guided import intent_hash, normalize_intent, suggest_topics
-    guided_requested = any(key in data for key in ("instruction", "selected_topic_ids", "selected_topics", "preset", "detail_level"))
     try:
         intent = normalize_intent(data) if guided_requested else None
     except ValueError as exc:
@@ -5104,24 +5160,30 @@ def generate_mindmap():
         content_hash = intent_hash(content_hash, intent)
 
     idempotency_key = str(data.get("idempotency_key") or "").strip()
-    if idempotency_key:
-        cache_key = f"{uid or 'anonymous'}:{idempotency_key}"
-        existing = getattr(generate_mindmap, "_idempotency", {}).get(cache_key)
-        if existing:
-            return jsonify(existing), 202
+    request_fingerprint = hashlib.sha256(json.dumps({"sources": source_names, "intent": intent, "force": force}, ensure_ascii=False, sort_keys=True, separators=(",", ":")).encode("utf-8")).hexdigest()
+    durable_job = None
+    if idempotency_key and uid:
+        from app.domains.jobs.jobs_store import create_idempotent_job
+        outcome, durable_job = create_idempotent_job(
+            str(uuid.uuid4()), user_id=uid, idempotency_key=idempotency_key,
+            request_fingerprint=request_fingerprint, source_ids_json=json.dumps(source_names),
+            guided_config_json=json.dumps(intent or {}, ensure_ascii=False), stage="queued")
+        if outcome == "conflict":
+            return jsonify({"error": "Idempotency key was already used with a different request", "error_code": "idempotency_conflict"}), 409
+        if outcome == "existing":
+            if durable_job.get("status") == "done" and durable_job.get("result"):
+                return jsonify({"status": "done", "result": durable_job["result"], "job_id": durable_job["job_id"]}), 200
+            return jsonify({"job_id": durable_job["job_id"], "status": durable_job.get("status") or "queued", "status_url": f"/mindmap-status/{durable_job['job_id']}"}), 202
     if not force:
         # Phase D: user-scoped cache lookup — no cross-user reuse on identical content_hash.
         cached = (mindmap_store.get_by_hash(content_hash, user_id=uid, enforce_owner=True)
                   if _auth_protect_enabled() else mindmap_store.get_by_hash(content_hash))
         if cached:
             return jsonify({"status": "done", "result": cached, "cached": True}), 200
-    job_id = _start_mindmap_job(source_names, mm_input, content_hash, intent)
+    job_id = _start_mindmap_job(source_names, mm_input, content_hash, intent,
+                                job_id=durable_job.get("job_id") if durable_job else None,
+                                job_metadata=durable_job)
     response = {"job_id": job_id, "status": "queued", "status_url": f"/mindmap-status/{job_id}"}
-    if idempotency_key:
-        cache = getattr(generate_mindmap, "_idempotency", None)
-        if cache is None:
-            cache = generate_mindmap._idempotency = {}
-        cache[cache_key] = response
     return jsonify(response), 202
 
 
@@ -5690,6 +5752,9 @@ def get_memory_tree(source_stem: str):
         import traceback
         traceback.print_exc()
         return jsonify({"error": str(e)}), 500
+
+
+_recover_guided_jobs()
 
 
 if __name__ == '__main__':

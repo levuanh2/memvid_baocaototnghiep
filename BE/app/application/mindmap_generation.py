@@ -11,6 +11,8 @@ Ràng buộc tầng: file này KHÔNG import flask, faiss, ollama.
 
 from __future__ import annotations
 
+import os
+import uuid
 from typing import Any, Optional
 
 from app.application.shared import _job_error_text, _langgraph_invoke
@@ -24,6 +26,11 @@ def run_mindmap_job(job_id: str, source_names: list[str], mm_input: dict,
     done/result write (atomic); this wraps errors -> job error. Cancellation uses the
     existing cooperative flag (mindmap graph `_guard` checks jobs_store cancel_requested)."""
     print(f"mindmap_job_running job_id={job_id}", flush=True)
+    from app.domains.jobs.jobs_store import claim_job
+    lease_owner = f"mindmap:{os.getpid()}:{uuid.uuid4().hex[:8]}"
+    if not claim_job(job_id, lease_owner, lease_seconds=int(os.getenv("GUIDED_JOB_LEASE_SECONDS", "900"))):
+        print(f"mindmap_job_not_claimed job_id={job_id}", flush=True)
+        return
     from app.graphs.logger import begin_llm_count, flush_llm_count
     _llm_counter = begin_llm_count()
     try:

@@ -56,6 +56,25 @@ def _ensure_job_columns(conn: sqlite3.Connection) -> None:
     if "user_id" not in cols:
         conn.execute("ALTER TABLE jobs ADD COLUMN user_id TEXT")
         conn.execute("CREATE INDEX IF NOT EXISTS idx_jobs_user ON jobs(user_id)")
+    additive = {
+        "map_id": "TEXT",
+        "result_map_id": "TEXT",
+        "idempotency_key": "TEXT",
+        "request_fingerprint": "TEXT",
+        "source_ids_json": "TEXT",
+        "guided_config_json": "TEXT",
+        "stage": "TEXT",
+        "attempts": "INT DEFAULT 0",
+        "started_at": "TEXT",
+        "completed_at": "TEXT",
+        "lease_owner": "TEXT",
+        "lease_expires_at": "TEXT",
+        "error_code": "TEXT",
+    }
+    for name, definition in additive.items():
+        if name not in cols:
+            conn.execute(f"ALTER TABLE jobs ADD COLUMN {name} {definition}")
+    conn.execute("CREATE UNIQUE INDEX IF NOT EXISTS uq_jobs_user_idempotency ON jobs(user_id, idempotency_key) WHERE idempotency_key IS NOT NULL AND idempotency_key <> ''")
 
 
 def init_db() -> None:
@@ -87,18 +106,20 @@ def _now() -> str:
     return datetime.now(timezone.utc).isoformat()
 
 
-def create_job(job_id: str, job_type: str, status: str = "pending", progress: int = 0, current_node: str = "", user_id: Optional[str] = None) -> None:
+def create_job(job_id: str, job_type: str, status: str = "pending", progress: int = 0, current_node: str = "", user_id: Optional[str] = None, **metadata: Any) -> None:
     init_db()
     with _lock:
         conn = get_conn()
         try:
-            conn.execute(
-                """
-                INSERT OR IGNORE INTO jobs(job_id, job_type, status, progress, current_node, created_at, updated_at, user_id)
-                VALUES(?,?,?,?,?,?,?,?)
-                """,
-                (job_id, job_type, status, int(progress), current_node, _now(), _now(), user_id),
-            )
+            columns = ["job_id", "job_type", "status", "progress", "current_node", "created_at", "updated_at", "user_id"]
+            values: list[Any] = [job_id, job_type, status, int(progress), current_node, _now(), _now(), user_id]
+            allowed = ("map_id", "result_map_id", "idempotency_key", "request_fingerprint", "source_ids_json", "guided_config_json", "stage", "attempts", "started_at", "completed_at", "lease_owner", "lease_expires_at", "error_code")
+            for key in allowed:
+                if key in metadata:
+                    columns.append(key)
+                    values.append(metadata[key])
+            placeholders = ",".join("?" for _ in columns)
+            conn.execute(f"INSERT OR IGNORE INTO jobs({','.join(columns)}) VALUES({placeholders})", values)
             conn.commit()
         finally:
             conn.close()
@@ -130,7 +151,7 @@ def update_job(job_id: str, **kwargs: Any) -> None:
     if kwargs.get("status") in _CLEAR_BUFFER_STATUSES and "token_buffer" not in kwargs:
         kwargs["token_buffer"] = ""
 
-    for k in ("job_type", "status", "progress", "current_node", "result_json", "error_text", "token_buffer"):
+    for k in ("job_type", "status", "progress", "current_node", "result_json", "error_text", "token_buffer", "map_id", "result_map_id", "idempotency_key", "request_fingerprint", "source_ids_json", "guided_config_json", "stage", "attempts", "started_at", "completed_at", "lease_owner", "lease_expires_at", "error_code"):
         if k in kwargs:
             fields.append(f"{k}=?")
             values.append(kwargs[k])
@@ -155,7 +176,7 @@ def get_job(job_id: str) -> Optional[dict]:
         conn = get_conn()
         try:
             cur = conn.execute(
-                "SELECT job_id, job_type, status, progress, current_node, created_at, updated_at, result_json, error_text, token_buffer, cancel_requested, user_id FROM jobs WHERE job_id=?",
+                "SELECT job_id, job_type, status, progress, current_node, created_at, updated_at, result_json, error_text, token_buffer, cancel_requested, user_id, map_id, result_map_id, idempotency_key, request_fingerprint, source_ids_json, guided_config_json, stage, attempts, started_at, completed_at, lease_owner, lease_expires_at, error_code FROM jobs WHERE job_id=?",
                 (job_id,),
             )
             row = cur.fetchone()
@@ -180,8 +201,121 @@ def get_job(job_id: str) -> Optional[dict]:
                 "token_buffer": row[9] if len(row) > 9 and row[9] is not None else "",
                 "cancel_requested": bool(row[10]) if len(row) > 10 and row[10] is not None else False,
                 "user_id": row[11] if len(row) > 11 else None,
+                "map_id": row[12], "result_map_id": row[13], "idempotency_key": row[14],
+                "request_fingerprint": row[15], "source_ids": json.loads(row[16]) if row[16] else [],
+                "guided_config": json.loads(row[17]) if row[17] else None, "stage": row[18],
+                "attempts": row[19] or 0, "started_at": row[20], "completed_at": row[21],
+                "lease_owner": row[22], "lease_expires_at": row[23], "error_code": row[24],
             }
             return job
+        finally:
+            conn.close()
+
+
+def get_by_idempotency(user_id: Optional[str], idempotency_key: str) -> Optional[dict]:
+    """Return the durable job for one user's key, never another user's job."""
+    if not user_id or not idempotency_key:
+        return None
+    init_db()
+    job_id = None
+    existing_job_id = None
+    with _lock:
+        conn = get_conn()
+        try:
+            row = conn.execute("SELECT job_id FROM jobs WHERE user_id=? AND idempotency_key=?", (user_id, idempotency_key)).fetchone()
+            job_id = row[0] if row else None
+        finally:
+            conn.close()
+    return get_job(job_id) if job_id else None
+
+
+def create_idempotent_job(job_id: str, *, user_id: str, idempotency_key: str, request_fingerprint: str, job_type: str = "mindmap", **metadata: Any) -> tuple[str, dict]:
+    """Atomically create or retrieve a user's idempotent job.
+
+    Returns (created|existing|conflict, durable row). SQLite's unique partial
+    index is the cross-process lock; callers must compare the fingerprint for a
+    same-key/different-payload 409.
+    """
+    init_db()
+    existing_job_id = None
+    return_outcome = None
+    with _lock:
+        conn = get_conn()
+        try:
+            conn.execute("BEGIN IMMEDIATE")
+            row = conn.execute("SELECT job_id, request_fingerprint FROM jobs WHERE user_id=? AND idempotency_key=?", (user_id, idempotency_key)).fetchone()
+            if row:
+                conn.commit()
+                existing_job_id = row[0]
+                outcome = "existing" if row[1] == request_fingerprint else "conflict"
+                # Read the full row after releasing the store lock below.
+                return_outcome = outcome
+            else:
+                return_outcome = None
+            if return_outcome:
+                pass
+            else:
+                columns = ["job_id", "job_type", "status", "progress", "current_node", "created_at", "updated_at", "user_id", "idempotency_key", "request_fingerprint"]
+                values: list[Any] = [job_id, job_type, "pending", 0, "Queued", _now(), _now(), user_id, idempotency_key, request_fingerprint]
+                for key in ("map_id", "source_ids_json", "guided_config_json", "stage", "attempts", "lease_expires_at"):
+                    if key in metadata:
+                        columns.append(key); values.append(metadata[key])
+                conn.execute(f"INSERT INTO jobs({','.join(columns)}) VALUES({','.join('?' for _ in columns)})", values)
+                conn.commit()
+        except Exception:
+            conn.rollback()
+            raise
+        finally:
+            conn.close()
+    if existing_job_id:
+        return return_outcome, get_job(existing_job_id)
+    return "created", get_job(job_id)
+
+
+def claim_job(job_id: str, lease_owner: str, lease_seconds: int = 900) -> bool:
+    """Atomically claim a queued job or an expired running lease."""
+    init_db()
+    now = datetime.now(timezone.utc)
+    expires = (now + timedelta(seconds=max(1, lease_seconds))).isoformat()
+    with _lock:
+        conn = get_conn()
+        try:
+            cur = conn.execute(
+                """UPDATE jobs SET status='running', stage=COALESCE(stage,'retrieving'),
+                   attempts=COALESCE(attempts,0)+1, started_at=COALESCE(started_at,?),
+                   lease_owner=?, lease_expires_at=?, updated_at=?
+                   WHERE job_id=? AND (status IN ('pending','queued','interrupted')
+                     OR (status='running' AND (lease_expires_at IS NULL OR lease_expires_at < ?)))""",
+                (now.isoformat(), lease_owner, expires, now.isoformat(), job_id, now.isoformat()),
+            )
+            conn.commit()
+            return cur.rowcount == 1
+        finally:
+            conn.close()
+
+
+def recover_expired_jobs() -> int:
+    """Make expired Guided jobs claimable without losing their durable request."""
+    init_db()
+    now = _now()
+    with _lock:
+        conn = get_conn()
+        try:
+            cur = conn.execute("UPDATE jobs SET status='pending', stage='queued', lease_owner=NULL, lease_expires_at=NULL, updated_at=? WHERE job_type='mindmap' AND status='running' AND lease_expires_at IS NOT NULL AND lease_expires_at < ?", (now, now))
+            conn.commit()
+            return max(cur.rowcount, 0)
+        finally:
+            conn.close()
+
+
+def list_recoverable_mindmap_jobs() -> list[dict[str, Any]]:
+    """Return queued/expired Guided requests without document content."""
+    init_db()
+    with _lock:
+        conn = get_conn()
+        try:
+            rows = conn.execute("SELECT job_id, user_id, source_ids_json, guided_config_json, status FROM jobs WHERE job_type='mindmap' AND status IN ('pending','queued') AND source_ids_json IS NOT NULL").fetchall()
+            return [{"job_id": r[0], "user_id": r[1], "source_ids": json.loads(r[2] or "[]"), "guided_config": json.loads(r[3] or "{}"), "status": r[4]} for r in rows]
         finally:
             conn.close()
 
