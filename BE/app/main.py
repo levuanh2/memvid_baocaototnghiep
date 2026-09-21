@@ -1,5 +1,6 @@
 import os
 from pathlib import Path
+from typing import Any
 
 # Load .env early so all modules see env vars (Windows/dev friendly).
 try:
@@ -7,6 +8,19 @@ try:
     load_project_env(override=False)
 except Exception:
     pass
+
+
+def _jobs_update_dispatch(job_id: str, **kwargs: Any) -> None:
+    """Keep Guided progress in Postgres; legacy jobs stay on SQLite."""
+    try:
+        from app.domains.jobs import guided_store
+        if guided_store.use_postgres() and guided_store.get_job(job_id) is not None:
+            guided_store.update_job(job_id, **kwargs)
+            return
+    except Exception:
+        pass
+    if _jobs_update_job is not None:
+        _jobs_update_job(job_id, **kwargs)
 
 import json
 import hashlib
@@ -1845,7 +1859,7 @@ _graphs = _build_graphs(
     split_text=split_text,
     append_to_index=append_to_index,
     build_memory_tree_for_sources=build_memory_tree_for_sources,
-    jobs_update=_jobs_update_job,
+    jobs_update=_jobs_update_dispatch,
     make_cache_key=_make_query_cache_key,
     get_cached=_get_cached_query,
     set_cached=_set_cached_query,
@@ -4987,8 +5001,18 @@ def _start_mindmap_job(source_names: list[str], mm_input: dict, content_hash: st
     job_id = job_id or str(uuid.uuid4())
     uid = _current_user_id()  # request context: stamp job + record owner (Phase D)
     from app.domains.jobs.jobs_store import create_job
+    from app.domains.jobs import guided_store
     if not job_metadata:
-        create_job(job_id, job_type="mindmap", status="pending", progress=0, current_node="Queued", user_id=uid)
+        if guided_store.use_postgres() and generation_intent is not None:
+            # The Postgres row is created by the request route. A missing row is
+            # a programming/configuration error; never start a process-local job.
+            if not guided_store.get_job(job_id, user_id=uid):
+                raise RuntimeError("durable_store_unavailable")
+        else:
+            create_job(job_id, job_type="mindmap", status="pending", progress=0, current_node="Queued", user_id=uid)
+    if guided_store.use_postgres() and generation_intent is not None:
+        print(f"mindmap_job_durable_enqueue job_id={job_id}", flush=True)
+        return job_id
     from app.jobs.queue import enqueue_job
     res = enqueue_job(run_mindmap_job,
                       args=(job_id, source_names, mm_input, content_hash, uid),
@@ -5004,10 +5028,10 @@ def _start_mindmap_job(source_names: list[str], mm_input: dict, content_hash: st
 # Thân hàm đã chuyển sang `app/application/`. Giữ tên ở ĐÚNG chỗ này vì RQ
 # serialize hàm theo `module.qualname` (`app.main.<ten>`) — job đã nằm trong
 # hàng đợi trước lúc deploy vẫn phải resolve được. Chữ ký giữ NGUYÊN.
-def run_mindmap_job(job_id: str, source_names: list[str], mm_input: dict, content_hash: str, user_id: Optional[str] = None) -> None:
+def run_mindmap_job(job_id: str, source_names: list[str], mm_input: dict, content_hash: str, user_id: Optional[str] = None, *, already_claimed: bool = False) -> None:
     from app.application.mindmap_generation import run_mindmap_job as _impl
     return _impl(job_id, source_names, mm_input, content_hash, user_id,
-                 graph=MINDMAP_GRAPH)
+                 graph=MINDMAP_GRAPH, already_claimed=already_claimed)
 
 
 def _recover_guided_jobs() -> None:
@@ -5052,12 +5076,32 @@ def _guided_v3_enabled(user_id: Optional[str]) -> bool:
     return enabled or user_id in qa_ids
 
 
+def _guided_capability(user_id: Optional[str]) -> dict[str, Any]:
+    if not _guided_v3_enabled(user_id):
+        return {"guided_mindmap_v3": False, "fallback": "v2", "reason": "guided_v3_disabled"}
+    from app.domains.jobs import guided_store
+    store = guided_store.health()
+    if guided_store.use_postgres() and not store.get("available"):
+        return {"guided_mindmap_v3": False, "fallback": "v2", "reason": "durable_store_unavailable"}
+    if guided_store.use_postgres() and not guided_store.worker_healthy(int(os.getenv("GUIDED_WORKER_HEARTBEAT_TTL_SEC", "90"))):
+        return {"guided_mindmap_v3": False, "fallback": "v2", "reason": "worker_unhealthy"}
+    try:
+        from app.clients.llm_factory import PROVIDERS
+        configured_provider = any((os.getenv(key) or "").strip() for key in (
+            "GEMINI_API_KEY", "GROQ_API_KEY", "FPT_AI_API_KEY", "LLM_GATEWAY_ADDR"))
+        if not PROVIDERS or (os.getenv("PROCESS_ROLE", "").strip().lower() in {"web", "mindmap-worker"} and not configured_provider):
+            return {"guided_mindmap_v3": False, "fallback": "v2", "reason": "provider_not_configured"}
+    except Exception:
+        return {"guided_mindmap_v3": False, "fallback": "v2", "reason": "provider_not_configured"}
+    return {"guided_mindmap_v3": True, "fallback": "v2", "reason": None}
+
+
 @app.get("/mindmaps/capability")
 def mindmap_capability():
     uid, err = _require_app_user()
     if err:
         return err
-    return jsonify({"guided_mindmap_v3": _guided_v3_enabled(uid), "fallback": "v2"}), 200
+    return jsonify(_guided_capability(uid)), 200
 
 
 @app.post("/mindmaps/suggest-topics")
@@ -5065,8 +5109,9 @@ def suggest_mindmap_topics():
     uid, err = _require_app_user()
     if err:
         return err
-    if not _guided_v3_enabled(uid):
-        return jsonify({"error": "Guided Mind Map V3 is not enabled for this account", "error_code": "guided_v3_disabled", "fallback": "v2"}), 404
+    capability = _guided_capability(uid)
+    if not capability["guided_mindmap_v3"]:
+        return jsonify({"error": "Guided Mind Map V3 is unavailable", "error_code": capability["reason"], "fallback": "v2"}), 404
     data = request.json or {}
     raw_sources = data.get("source_ids") or data.get("sources") or []
     if not isinstance(raw_sources, list) or not raw_sources:
@@ -5102,8 +5147,9 @@ def generate_mindmap():
         return err
     data = request.json or {}
     guided_requested = any(key in data for key in ("instruction", "selected_topic_ids", "selected_topics", "preset", "detail_level"))
-    if guided_requested and not _guided_v3_enabled(uid):
-        return jsonify({"error": "Guided Mind Map V3 is not enabled for this account", "error_code": "guided_v3_disabled", "fallback": "v2"}), 404
+    capability = _guided_capability(uid) if guided_requested else None
+    if guided_requested and not capability["guided_mindmap_v3"]:
+        return jsonify({"error": "Guided Mind Map V3 is unavailable", "error_code": capability["reason"], "fallback": "v2"}), 404
     raw_sources = data.get("sources") or []
     if not isinstance(raw_sources, list):
         return jsonify({"error": "Sources phải là list"}), 400
@@ -5160,11 +5206,16 @@ def generate_mindmap():
         content_hash = intent_hash(content_hash, intent)
 
     idempotency_key = str(data.get("idempotency_key") or "").strip()
+    from app.domains.jobs import guided_store
+    if guided_requested and guided_store.use_postgres() and not idempotency_key:
+        # The durable ledger requires a key even when an older client does not
+        # send one; this generated key is unique to this request and preserves
+        # the old client contract without allowing duplicate retries to merge.
+        idempotency_key = f"auto:{uuid.uuid4()}"
     request_fingerprint = hashlib.sha256(json.dumps({"sources": source_names, "intent": intent, "force": force}, ensure_ascii=False, sort_keys=True, separators=(",", ":")).encode("utf-8")).hexdigest()
     durable_job = None
-    if idempotency_key and uid:
-        from app.domains.jobs.jobs_store import create_idempotent_job
-        outcome, durable_job = create_idempotent_job(
+    if guided_requested and idempotency_key and uid:
+        outcome, durable_job = guided_store.create_idempotent_job(
             str(uuid.uuid4()), user_id=uid, idempotency_key=idempotency_key,
             request_fingerprint=request_fingerprint, source_ids_json=json.dumps(source_names),
             guided_config_json=json.dumps(intent or {}, ensure_ascii=False), stage="queued")
@@ -5193,8 +5244,11 @@ def mindmap_status(job_id: str):
     if err:
         return err
     _run_jobs_maintenance()
-    from app.domains.jobs.jobs_store import get_job as _js_get
-    j = _js_get(job_id)
+    from app.domains.jobs import guided_store
+    j = guided_store.get_job(job_id, user_id=uid) if guided_store.use_postgres() else None
+    if j is None:
+        from app.domains.jobs.jobs_store import get_job as _js_get
+        j = _js_get(job_id)
     if not j or j.get("job_type") not in ("mindmap", None):
         return jsonify({"error": "Job not found"}), 404
     if _auth_protect_enabled() and j.get("user_id") != uid:
