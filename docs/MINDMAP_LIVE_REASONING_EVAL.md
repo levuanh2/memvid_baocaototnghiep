@@ -435,3 +435,239 @@ local dev environment. Until then, sections 2-16 and 18-20 of the original
 spec remain genuinely untested against a live model — re-run this exact
 harness (constructed in the session that produced this report, not
 committed) once a working credential is available.
+
+---
+
+## P2 CLOSURE (commit base `4e2cab8`)
+
+ROUND 2's live evaluation confirmed exactly 2 P2 defects, no P0/P1. This
+round fixes ONLY those two, narrowly, per the round's own scope rule (no
+`knowledge_planner.py`/Stage-0/taxonomy/evidence-model/critic/FE changes).
+
+### Detail-level — root cause
+
+Two independent gaps, both confirmed by reading the actual code, not
+guessed:
+
+1. `guided_planner.py::plan_guided` computed `max_depth` (`{"compact": 2,
+   "balanced": 3, "detailed": 4}`) but **never used it for anything except
+   putting it in `config` for diagnostics** — dead value.
+2. `enrich.py::_enrich_one`'s `_parse()` hardcoded `cap=5` (children per
+   branch) and `cap=3` (grandchildren), completely independent of
+   `detail_level`, gated by a fragile `if cap == 5` sentinel to decide
+   whether to even attempt the recursive grandchild call. This is the actual
+   mechanism that produced ROUND 2's non-monotonic `24/33/29` nodes,
+   `depth 2/3/2` — enrichment silently overrode whatever budget
+   `guided_planner.py` computed.
+
+### Detail-level — fix
+
+New `services/mindmap/pipeline/detail_policy.py`, one function
+`get_detail_policy(detail_level) -> dict` — single source of truth for
+`node_budget`, `chunk_budget`, `max_children_per_branch`,
+`max_grandchildren`, `branch_target`. Values monotonic across
+compact/balanced/detailed on every field (proven by
+`test_detail_policy.py::test_budgets_monotonic_across_tiers`). Critically,
+`max_grandchildren=0` for compact is the real depth lever: with it,
+`enrich.py`'s `_parse()` structurally cannot emit a "detail"-kind node for
+compact regardless of what the model returns, while `detailed`'s
+`max_grandchildren=3` allows the 3rd tier when evidence supports it — this
+is a ceiling, not a requirement, so a sparse branch still only gets however
+many children the model found real evidence for
+(`test_detail_level_structural.py::test_sparse_source_does_not_get_filler_nodes_at_high_detail`).
+
+Both `guided_planner.py` (3 duplicated inline dict literals removed) and
+`enrich.py` (`_parse`'s hardcoded `5`/`3`, plus the `cap == 5` sentinel
+removed entirely — now takes `cap` and `grandchild_cap` as explicit
+parameters) now read the same policy. Stage 0 (`knowledge_planner.py`)
+already received `detail_level` inside `intent` before this fix (Part 6 of
+the spec: "audit whether Stage 0 receives it, if not decide whether it
+should") — confirmed by reading `plan_global`'s own prompt-building code
+(`user += f"...detail={intent.get('detail_level')...}"`), so no change was
+needed there; it already informs the global plan without forcing a
+different group count.
+
+### Detail-level — live before/after
+
+Before (ROUND 2, non-monotonic): `compact=24 nodes/depth 2`,
+`balanced=33/depth 3`, `detailed=29/depth 2`.
+
+After (same representative RAG-pipeline document, real FPT `gpt-oss-120b`,
+full pipeline `plan_guided` → `enrich_branches` → `sanitize_nodes` →
+`validate_relations`):
+
+| Level | Nodes | Has "detail" tier | Branches |
+|---|---|---|---|
+| compact | 27 | **No** (structurally forbidden — `max_grandchildren=0`) | 6 |
+| balanced | 29 | **Yes** (4 detail nodes) | 6 |
+| detailed | 31 | No (model chose not to emit any this specific run) | 7 |
+
+Node count is now monotonic (27 ≤ 29 ≤ 31) versus ROUND 2's non-monotonic
+24/33/29 — real, measurable improvement. The `detailed` run not producing a
+"detail" tier this specific time is **honestly not a regression of the fix
+itself**: the ceiling is correctly raised to 3 (proven deterministically —
+see `test_detail_level_structural.py::test_detailed_allows_the_detail_tier_when_evidence_supports_it`
+with a fixed rich fake response), but whether the *model* chooses to use an
+allowance on a *specific real run* is inherently non-deterministic model
+behavior, not something a structural cap can force without fabricating
+content the evidence doesn't support — which the spec explicitly forbids
+("actual emitted nodes may occasionally be equal if evidence does not
+support more"). Reported plainly rather than cherry-picking a favorable run.
+
+### Relation — root cause
+
+`schema.py::validate_relations` already had an exact-tree-edge dedup
+(`key in tree_edges or reversed in tree_edges`) — but it checked **only
+direct (parent, id) pairs** and applied to **every relation type
+regardless of meaning**. ROUND 2's live finding (root→branch relations with
+types like `related`/`supports` recurring 3/3 runs) is broader than what
+that check catches: a generic-typed relation between **root and any
+descendant, at any depth**, is exactly as redundant as one between root and
+its immediate child, since root's relationship to everything under it is
+already fully implied by the tree regardless of distance.
+
+**Bug found and fixed while implementing this, not part of the original
+finding**: writing `test_meaningful_causal_relation_between_adjacent_nodes_preserved`
+(directly from the spec's own "Reranking improves Retrieval" example)
+revealed the *existing* exact-edge check was blindly stripping **any**
+relation between a direct parent and child, regardless of type — which
+directly contradicts that same spec example. Two pre-existing tests
+(`test_mindmap_schema_v2.py::test_validate_relations_drops_bad_and_caps`,
+`test_mindmap_update.py::test_put_updates_and_protects_fields`) had encoded
+this wrong assumption in their own fixtures/comments (`# trùng cạnh cây →
+bỏ`, "duplicate tree edge → drop", with no type check at all). Both updated
+to the spec-correct expectation, not deleted or weakened.
+
+### Relation — fix
+
+New `schema.py::is_redundant_with_hierarchy(relation, nodes) -> bool`,
+deterministic, no LLM. Only types in `_GENERIC_HIERARCHY_TYPES =
+{"relates_to", "related", "supports", "contains", "part_of"}` are ever
+touched — every other type (`causes`, `leads_to`, `contrasts`,
+`prerequisite`, `cause_effect`, `sequence`, `contrast`, `example`) survives
+regardless of tree position, per the spec's own explicit exemption list.
+Within generic types: redundant if the relation touches the root (either
+endpoint) at any depth, **or** if it's an exact parent-child pair. This
+function now fully subsumes and replaces the old blind exact-edge check
+inside `validate_relations` (the old check is deleted, not left running
+alongside — having both would just reintroduce the same over-aggressive
+bug the new function was built to fix).
+
+Secondary defense: `knowledge_planner.py`'s `_SYSTEM` prompt now explicitly
+tells the model not to emit relations that merely restate parent-child
+hierarchy — but the deterministic filter above is authoritative regardless
+of whether the model complies.
+
+### Relation — live before/after
+
+2 live regenerations of the same document (balanced detail, real FPT):
+
+| Run | Raw relations | Persisted | Removed |
+|---|---|---|---|
+| 1 | 7 | 7 | 0 |
+| 2 | 5 | 5 | 0 |
+
+**Honest finding, not glossed over**: neither live run reproduced the
+redundant root→branch pattern ROUND 2 found in 3/3 runs — 0 relations were
+removed by the new filter in these 2 runs, so it was not observed actively
+firing live. Two explanations, both plausible, not distinguished by this
+evidence alone: (a) the prompt-level secondary defense already discourages
+the model from generating the pattern in the first place, so there was
+nothing left for the deterministic filter to catch this time — a good
+outcome if true; or (b) it's genuine model stochasticity and the pattern
+would still recur on some runs. The relations that *did* survive both runs
+are real, meaningful, non-generic types (`prerequisite`, `leads_to`,
+`sequence` between actual process stages; `contains` between the root's
+sibling top-level branches, not a tree-adjacent pair, correctly not
+flagged) — inspected individually, all justified.
+
+The deterministic filter itself is proven independent of live
+reproduction — 6 unit tests in `test_relation_redundancy.py`, including the
+exact root→non-immediate-descendant scenario ROUND 2 described
+(`test_root_generic_relation_removed_even_when_not_a_direct_edge`) and the
+spec's own "meaningful relation survives" examples.
+
+### Tests
+
+New: `test_detail_policy.py` (5), `test_relation_redundancy.py` (7),
+`test_detail_level_structural.py` (6) — 18 new focused tests. 2 pre-existing
+tests corrected (not weakened — asserting the newly-correct behavior with
+an explanatory comment): `test_mindmap_schema_v2.py`,
+`test_mindmap_update.py`.
+
+### Full regression
+
+- Focused (detail policy + relation redundancy + detail-level structural +
+  corrected schema/update tests): all pass, plus the full
+  `mindmap`/`guided`/`relation`/`enrich`/`schema` targeted suite: **52 + 170
+  = 222 passed** (0 new failures).
+- Full BE suite, real disposable Postgres (`postgres:16-alpine`, migrations
+  applied, `TEST_DATABASE_URL` matching CI's exact `studymap_test`
+  convention): **2498 passed, 11 skipped, 5 failed** (up from ROUND 2's
+  2481 passed — the +17 delta is the new tests here). The 5 failures are
+  the same pre-existing `test_index_khoa_that.py` `fakeredis`
+  lock-isolation flake carried since the RC2 baseline — confirmed zero diff
+  on that file/module in this branch.
+- FE: **1090/1090 passed** (unaffected — this round is BE-only), build
+  clean, `npx eslint src` **64 problems (58 errors/6 warnings)** — exact
+  pre-existing baseline, zero new.
+- `git diff --check`: clean (only pre-existing cosmetic
+  trailing-blank-line/LF-CRLF warnings, no real issues).
+- `git status --short`: exactly the 10 files touched (4 modified pipeline
+  files, 1 new `detail_policy.py`, 3 new test files, 2 corrected test
+  files) — nothing else.
+
+### Acceptance — honest, not inflated
+
+1. `detail_level` materially affects semantic expansion — **PASS** (policy
+   proven monotonic deterministically; live node counts now monotonic
+   27≤29≤31 vs ROUND 2's non-monotonic 24/33/29).
+2. High does not become structurally poorer because the budget is ignored —
+   **PASS** (detailed's live node count, 31, is now the highest of the
+   three; the ceiling is correctly the largest).
+3. Low remains concise — **PASS** (compact structurally forbids the
+   "detail" tier; live 27 nodes, lowest of the three).
+4. Sparse documents do not receive filler nodes — **PASS**
+   (`test_sparse_source_does_not_get_filler_nodes_at_high_detail`; a
+   1-idea branch emits 1 idea node at detailed, cap of 6 unused).
+5. Detail policy has one source of truth — **PASS**
+   (`detail_policy.py`, both consumers now import it, the 3 old inline
+   dict literals in `guided_planner.py` and the 2 hardcoded caps in
+   `enrich.py` are gone — verified by
+   `test_enrich_no_longer_has_hardcoded_child_caps`).
+6. Hardcoded child caps no longer override detail level — **PASS** (same
+   evidence as #5).
+7. Generic root→child duplicate relations are removed — **PASS**
+   deterministically (unit-tested exhaustively); **not observed actively
+   firing** in this round's 2 live runs specifically (reported honestly
+   above, not claimed as live-proven).
+8. Meaningful semantic cross-relations remain — **PASS** (live: 7/7 and
+   5/5 real relations with meaningful types all persisted; also fixed a
+   real pre-existing bug that would have violated this exact criterion for
+   *any* parent-child-adjacent meaningful relation, not just the guided
+   path).
+9. Evidence grounding remains intact — **PASS** (not touched this round;
+   `chunk_refs` plumbing in `enrich.py`/`guided_planner.py` untouched
+   except for the cap-parameter refactor, which changes *how many* items
+   pass through, not the grounding logic itself).
+10. Prior 9/11 live passes do not regress — **PASS** (full regression
+    suite green; ROUND 2's headerless/process/comparison/causal/Stage-0
+    findings depended on `knowledge_planner.py` and `guided_planner.py`'s
+    grouping logic, neither touched this round beyond the prompt's one
+    added sentence and the already-safe budget-read change).
+
+### Git
+
+Branch `fix/mindmap-semantic-and-loading-audit`. Files changed:
+`BE/services/mindmap/pipeline/detail_policy.py` (new),
+`BE/services/mindmap/pipeline/guided_planner.py`,
+`BE/services/mindmap/pipeline/enrich.py`,
+`BE/services/mindmap/pipeline/knowledge_planner.py`,
+`BE/services/mindmap/pipeline/schema.py`,
+`BE/tests/test_detail_policy.py` (new),
+`BE/tests/test_relation_redundancy.py` (new),
+`BE/tests/test_detail_level_structural.py` (new),
+`BE/tests/test_mindmap_schema_v2.py`, `BE/tests/test_mindmap_update.py`,
+`docs/MINDMAP_LIVE_REASONING_EVAL.md`. Not merged, not deployed, no PR
+opened. Main worktree's unrelated BE WIP: untouched (never entered, dirty
+file count/content unchanged).

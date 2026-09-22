@@ -113,9 +113,39 @@ def sanitize_nodes(nodes: list[dict]) -> list[dict]:
     return clean
 
 
+# Relation types that only restate "X belongs under/near Y" — hierarchy
+# already communicates this via parent/child, so these carry no independent
+# claim. Everything else (causes, leads_to, contrasts, prerequisite,
+# cause_effect, sequence, contrast, example) is presumed to carry real
+# semantic content and is never touched by is_redundant_with_hierarchy,
+# regardless of tree position — a child that "improves"/"causes"/"requires"
+# its own parent is a real claim, not a duplicate of the tree edge.
+_GENERIC_HIERARCHY_TYPES = frozenset({"relates_to", "related", "supports", "contains", "part_of"})
+
+
+def is_redundant_with_hierarchy(relation: dict, nodes: list[dict]) -> bool:
+    """P2 fix (2026-09-22): live eval found the model repeatably (3/3 runs)
+    emitting a generic relation between root and a branch that adds nothing
+    beyond the parent-child edge already implied by the tree. The pre-existing
+    exact-tree-edge check below only catches a DIRECT (parent, id) pair; this
+    catches the broader case the live eval actually hit — a generic-typed
+    relation touching the root at any distance, not just its immediate
+    children — since root's relationship to everything under it is already
+    fully implied by the hierarchy regardless of depth.
+    """
+    rtype = str(relation.get("type") or "")
+    if rtype not in _GENERIC_HIERARCHY_TYPES:
+        return False
+    source, target = relation.get("source"), relation.get("target")
+    root_ids = {n["id"] for n in nodes or [] if n.get("kind") == "root" or n.get("parent") is None}
+    if source in root_ids or target in root_ids:
+        return True
+    parent_of = {n["id"]: n.get("parent") for n in nodes or []}
+    return parent_of.get(source) == target or parent_of.get(target) == source
+
+
 def validate_relations(relations: list[dict], nodes: list[dict]) -> list[dict]:
     ids = {n["id"] for n in nodes or []}
-    tree_edges = {(n["parent"], n["id"]) for n in nodes or [] if n.get("parent")}
     out: list[dict] = []
     seen: set[tuple] = set()
     for r in relations or []:
@@ -124,8 +154,14 @@ def validate_relations(relations: list[dict], nodes: list[dict]) -> list[dict]:
         except Exception:
             continue
         key = (m.source, m.target)
+        # is_redundant_with_hierarchy subsumes the old blind "any parent-child
+        # pair in either direction" check (P2 fix, 2026-09-22): that older
+        # check stripped a direct-adjacent relation regardless of type,
+        # which silently deleted genuinely meaningful ones too (e.g. a child
+        # "improves" its own parent) — only a *generic*-typed relation
+        # touching its own parent/child or the root is actually redundant.
         if (m.source not in ids or m.target not in ids or m.source == m.target
-                or key in tree_edges or (key[1], key[0]) in tree_edges or key in seen):
+                or key in seen or is_redundant_with_hierarchy(m.model_dump(), nodes)):
             continue
         seen.add(key)
         out.append(m.model_dump())

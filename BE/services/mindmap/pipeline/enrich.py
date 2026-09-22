@@ -10,6 +10,7 @@ from typing import Callable, Optional
 from app.clients.llm_factory import ask_ai
 from app.graphs.logger import ctx_submit  # Phase 0: propagate LLM counter qua pool
 from services.mindmap.jsonrepair import repair_json_text
+from services.mindmap.pipeline.detail_policy import get_detail_policy
 from services.mindmap.pipeline.schema import sanitize_nodes, NODE_TYPES
 
 _SYSTEM = """Bạn là trợ lý dựng sơ đồ tư duy tiếng Việt.
@@ -95,6 +96,7 @@ def _enrich_one(mm_input: dict, branch: dict, allowed: list[str], model: str, ti
         user += "\nUSER GUIDANCE: " + str(intent.get("instruction") or "") + "; purpose=" + str(intent.get("preset") or "overview") + "; detail=" + str(intent.get("detail_level") or "balanced")
     data = _ask_json(user, model, timeout_sec)
     allowed_set = set(allowed)
+    policy = get_detail_policy(intent.get("detail_level"))
 
     def _node_type(raw) -> str:
         # Never trust the model's value blindly — default to "concept" exactly
@@ -103,7 +105,7 @@ def _enrich_one(mm_input: dict, branch: dict, allowed: list[str], model: str, ti
         v = (raw or "").strip().lower()
         return v if v in NODE_TYPES else "concept"
 
-    def _parse(items: list, cap: int) -> list[dict]:
+    def _parse(items: list, cap: int, grandchild_cap: int) -> list[dict]:
         out = []
         for i, ch in enumerate((items or [])[:cap]):
             title = (ch.get("title") or "").strip()
@@ -114,13 +116,16 @@ def _enrich_one(mm_input: dict, branch: dict, allowed: list[str], model: str, ti
                         # ép str: model hay trả số [0] — giữ int là vỡ lookup chuỗi hạ nguồn
                         "chunk_refs": [str(k) for k in (ch.get("chunk_keys") or []) if str(k) in allowed_set],
                         "order": i,
-                        # tầng detail (0-3) — chỉ 2 tầng, không đệ quy sâu hơn
-                        "children": _parse(ch.get("children"), 3) if cap == 5 else []})
+                        # tầng detail (0-3) — chỉ 2 tầng, không đệ quy sâu hơn. Cap
+                        # theo detail_level (detail_policy.py), không còn hằng số cố
+                        # định — compact (grandchild_cap=0) không bao giờ sinh tầng
+                        # "detail" dù model có trả về, detailed cho phép tới 3.
+                        "children": _parse(ch.get("children"), grandchild_cap, 0) if grandchild_cap else []})
         return out
 
     return {"title": (data.get("title") or branch["title"]).strip() or branch["title"],
             "note": (data.get("note") or "").strip(), "node_type": _node_type(data.get("node_type")),
-            "children": _parse(data.get("children"), 5)}
+            "children": _parse(data.get("children"), policy["max_children_per_branch"], policy["max_grandchildren"])}
 
 
 def enrich_branches(mm_input: dict, skeleton_nodes: list[dict], *, model: str,

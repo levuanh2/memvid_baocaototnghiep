@@ -10,6 +10,7 @@ import re
 from collections import Counter, defaultdict
 from typing import Any
 
+from services.mindmap.pipeline.detail_policy import get_detail_policy
 from services.mindmap.pipeline.knowledge_planner import plan_global
 
 REL_TYPES = {"part_of", "prerequisite", "cause_effect", "sequence", "contrast", "example", "related"}
@@ -66,7 +67,7 @@ def _select_chunks(chunks: list[dict], intent: dict[str, Any]) -> tuple[list[dic
     chosen: list[dict] = []
     for rows in by_source.values():
         chosen.append(rows[0][1])
-    budget = {"compact": 12, "balanced": 24, "detailed": 42}.get(intent.get("detail_level"), 24)
+    budget = get_detail_policy(intent.get("detail_level"))["chunk_budget"]
     for _score, _idx, chunk in sorted(scored, key=lambda row: (-row[0], row[1])):
         if chunk not in chosen and len(chosen) < budget:
             chosen.append(chunk)
@@ -105,8 +106,13 @@ def plan_guided(mm_input: dict[str, Any], *, model: str = "", timeout_sec: float
         return [], [], {"retrieval_queries": queries, "node_budget": 0, "max_depth": 0}, ["guided_no_evidence"]
     detail = intent.get("detail_level") or "balanced"
     preset = intent.get("preset") or "overview"
-    node_budget = {"compact": 12, "balanced": 24, "detailed": 42}.get(detail, 24)
-    max_depth = {"compact": 2, "balanced": 3, "detailed": 4}.get(detail, 3)
+    policy = get_detail_policy(detail)
+    node_budget = policy["node_budget"]
+    # Advisory only (recorded in config for diagnostics) — the actual depth
+    # lever is enrich.py's max_grandchildren via this same policy; a branch
+    # here with real per-chunk "idea" children still only ever reaches 2
+    # levels below root until enrichment runs.
+    max_depth = 2 if policy["max_grandchildren"] == 0 else 3
     root_id = "n0"
 
     # Stage 0 — reason about the whole evidence set BEFORE any branch exists.
@@ -179,7 +185,7 @@ def plan_guided(mm_input: dict[str, Any], *, model: str = "", timeout_sec: float
     if len(nodes) <= 1:
         missing.append("guided_no_semantic_groups")
     config = {"retrieval_queries": queries, "node_budget": node_budget, "max_depth": max_depth,
-             "branch_target": {"compact": "3-5", "balanced": "4-7", "detailed": "5-8"}.get(detail, "4-7"),
+             "branch_target": policy["branch_target"],
              "preset": preset, "detail_level": detail,
              "available_chunk_refs": [str(ref) for chunk in chunks for ref in chunk.get("chunk_keys") or []],
              "global_plan_used": bool(global_plan), "central_subject": central_subject}
