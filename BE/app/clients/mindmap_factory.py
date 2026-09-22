@@ -27,7 +27,7 @@ class LocalMindmapPipeline:
 
     def guided_plan(self, mm_input):
         from services.mindmap.pipeline.guided_planner import plan_guided
-        return plan_guided(mm_input)
+        return plan_guided(mm_input, model=self._model(), timeout_sec=self._timeout())
 
     def _enrich_parallel(self) -> int:
         """Số nhánh chạy song song — KHÔNG bao giờ vượt số slot của cổng LLM.

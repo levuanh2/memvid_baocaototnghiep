@@ -75,7 +75,12 @@ export default function MainLayout({
   const hadMindmapRef = useRef(false);
   const hadSummaryRef = useRef(false);
   useEffect(() => {
-    if (mindmapData && !hadMindmapRef.current) setWorkspaceMode("mindmap");
+    // __restoredOnLoad (SidebarRight's auto-select-most-recent-map-on-load
+    // fix): a library restore on mount must not also yank a Chat-first user
+    // into Mind Map mode, only a freshly-finished generation should.
+    if (mindmapData && !hadMindmapRef.current && !mindmapData?.data?.__restoredOnLoad) {
+      setWorkspaceMode("mindmap");
+    }
     hadMindmapRef.current = Boolean(mindmapData);
   }, [mindmapData]);
   useEffect(() => {
@@ -219,7 +224,13 @@ export default function MainLayout({
   const [rightView, setRightView] = useState(initialRightView);   // "evidence" | "tutor" | "timeline"
   const [headerSurface, setHeaderSurface] = useState(null); // mindmap | summary | study-tools
   const [libraries, setLibraries] = useState({ mindMaps: [], summaries: [], mindMapActions: null, summaryActions: null });
-  const updateMindmapLibrary = useCallback((value) => setLibraries((prev) => ({ ...prev, mindMaps: value.mindMaps || [], mindMapActions: value.actions || null })), []);
+  const updateMindmapLibrary = useCallback((value) => setLibraries((prev) => ({
+    ...prev,
+    mindMaps: value.mindMaps || [],
+    mindMapActions: value.actions || null,
+    mindMapInitialLoading: Boolean(value.initialLoading),
+    mindMapLoadError: value.loadError || null,
+  })), []);
   const updateSummaryLibrary = useCallback((value) => setLibraries((prev) => ({ ...prev, summaries: value.summaries || [], summaryActions: value.actions || null })), []);
   // Lệnh một-lần (nonce) để "Xem sơ đồ"/"Xem tóm tắt" ở Tutor chuyển đúng tab
   // Artifacts trong SidebarRight — KHÔNG điều hướng, KHÔNG route mới (tutorActions.js
@@ -617,6 +628,8 @@ export default function MainLayout({
               hasSummary: Boolean(summaryData), onOpenSummary: onSwitchToSummary,
             }}
             mindmapData={mindmapData}
+            mindmapInitialLoading={libraries.mindMapInitialLoading}
+            mindmapLoadError={libraries.mindMapLoadError}
             summaryData={summaryData}
             onSummaryContextChange={setSummaryContext}
             controller={mindMapController}

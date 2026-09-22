@@ -23,7 +23,7 @@ describe("recordToMindElixir", () => {
     expect(mindData.nodeData.children.map((c) => c.topic)).toEqual(["1. Mở đầu", "2. Phương pháp"]);
     expect(mindData.nodeData.children[0].children[0].id).toBe("n3");
     expect(sidecar.get("n1")).toEqual({
-      note: "tóm ý", chunkRefs: ["3"], kind: "section",
+      note: "tóm ý", chunkRefs: ["3"], kind: "section", nodeType: "",
       number: "", level: 0, enrichment: [], // Renderer V2 additive fields
     });
   });

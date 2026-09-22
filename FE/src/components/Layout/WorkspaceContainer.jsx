@@ -29,7 +29,7 @@ const paneClass = (active) => (active ? "flex-1 min-h-0" : "hidden");
 // switching logic below, untouched.
 export default function WorkspaceContainer({
   mode,
-  chatProps, mindmapData, summaryData, controller,
+  chatProps, mindmapData, mindmapInitialLoading, mindmapLoadError, summaryData, controller,
   onMindmapAction, onSummaryAction, onSummaryContextChange,
 }) {
   const hasMindmap = Boolean(mindmapData?.data);
@@ -51,7 +51,13 @@ export default function WorkspaceContainer({
             controller={controller}
           />
         ) : (
-          <WorkspaceEmptyState kind="mindmap" selectedCount={selectedSources.length} onCreate={onMindmapAction} />
+          <WorkspaceEmptyState
+            kind="mindmap"
+            selectedCount={selectedSources.length}
+            onCreate={onMindmapAction}
+            loading={mindmapInitialLoading}
+            error={mindmapLoadError}
+          />
         )}
       </div>
 
