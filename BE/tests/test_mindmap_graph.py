@@ -80,3 +80,48 @@ def test_degraded_stage_flows_to_result(tmp_path):
         "enrich", "relations", "V2_TOP_LEVEL_BRANCHES:1",
         "V2_CHILDREN_CARDINALITY:n0:1",
     }
+
+
+def test_guided_end_to_end_carries_diagnostics_and_dedup_repair(tmp_path, monkeypatch):
+    """Real graph, guided intent, stub pipeline standing in for a global-plan-
+    aware guided_plan — proves AssemblePersist actually wires up (a) the
+    bounded duplicate-title repair and (b) Part 19 structural diagnostics on
+    a real end-to-end guided run, not just at the unit level."""
+    monkeypatch.setenv("SKIP_MODEL_LOAD", "1")  # stub never calls a real provider anyway
+
+    class GuidedStubPipeline:
+        def guided_plan(self, mm):
+            nodes = [
+                {"id": "n0", "parent": None, "kind": "root", "title": "Doc", "chunk_refs": [], "order": 0},
+                {"id": "n1", "parent": "n0", "kind": "section", "title": "A", "chunk_refs": ["0"], "order": 0},
+                {"id": "n2", "parent": "n1", "kind": "idea", "title": "Dup", "chunk_refs": ["0"], "order": 0},
+                {"id": "n3", "parent": "n1", "kind": "idea", "title": "Dup", "chunk_refs": ["0"], "order": 1},
+            ]
+            config = {"node_budget": 24, "max_depth": 3, "global_plan_used": True, "central_subject": "Doc"}
+            return nodes, [], config, []
+
+        def enrich(self, mm, skeleton, progress_cb=None, cancel_cb=None):
+            return skeleton, False
+
+        def relations(self, nodes, cancel_cb=None):
+            return [], False
+
+    g = _build(tmp_path, pipeline=GuidedStubPipeline())
+    out = g.invoke({"job_id": "j4", "source_names": ["a_docx"], "progress": 0,
+                    "current_node": "", "error": None,
+                    "mm_input": {"title": "Doc", "sources": ["a_docx"],
+                                "chunks": [{"chunk_keys": ["0"], "text": "t", "heading_path": "1"}],
+                                "generation_intent": {"preset": "overview", "detail_level": "balanced"}}},
+                   config={"configurable": {"thread_id": "j4"}})
+    rec = out["result"]
+    assert rec["schema_version"] == 3
+    # bounded dedup repair actually ran: the two "Dup" siblings became one,
+    # with both chunk_refs preserved on the survivor.
+    dup_titles = [n for n in rec["nodes"] if n["title"] == "Dup"]
+    assert len(dup_titles) == 1
+    assert set(dup_titles[0]["chunk_refs"]) == {"0"}
+    assert "repair:duplicate_title_merged" in rec["generator"]["missing"]
+    # Part 19 diagnostics landed on the real persisted record.
+    diag = rec["generator"]["diagnostics"]
+    assert diag["nodes_emitted"] == len(rec["nodes"])
+    assert "summary_tree_smell" in diag

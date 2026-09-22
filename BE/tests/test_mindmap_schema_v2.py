@@ -36,15 +36,20 @@ def test_sanitize_caps_total_keeps_root_sections_first():
     assert "root" in kinds and "section" in kinds
 
 def test_validate_relations_drops_bad_and_caps():
+    # P2 fix (2026-09-22): a relation matching a tree edge is dropped only
+    # when it's a *generic* type ("relates_to" etc, no claim beyond "belongs
+    # under") — a meaningful type on the same pair (e.g. "leads_to") is a real
+    # semantic claim and must survive, matching the spec's own "Reranking
+    # improves Retrieval" example. See is_redundant_with_hierarchy.
     nodes = _nodes()
     rels = [
-        {"source": "n2", "target": "n3", "type": "leads_to", "label": "dẫn tới"},   # trùng cạnh cây (n3.parent=n2) → bỏ
+        {"source": "n2", "target": "n3", "type": "leads_to", "label": "dẫn tới"},   # meaningful, on a tree edge → kept
         {"source": "n2", "target": "n2", "type": "relates_to", "label": ""},        # self-loop → bỏ
         {"source": "n2", "target": "XX", "type": "relates_to", "label": ""},        # id lạ → bỏ
-        {"source": "n3", "target": "n1", "type": "kind_la", "label": ""},           # type lạ → relates_to
+        {"source": "n3", "target": "n1", "type": "kind_la", "label": ""},           # type lạ → relates_to, n1 là root → generic+root → bỏ
     ]
     out = s.validate_relations(rels, nodes)
-    assert len(out) == 1 and out[0]["type"] == "relates_to"
+    assert len(out) == 1 and out[0]["type"] == "leads_to"
 
 def test_build_record_shape():
     rec = s.build_record(title="T", sources=["a"], nodes=_nodes(), relations=[],

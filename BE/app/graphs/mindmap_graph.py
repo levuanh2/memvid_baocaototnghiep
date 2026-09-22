@@ -152,6 +152,15 @@ def build_mindmap_graph(*, data_dir: Path, index_meta_path: Path,
         from services.provenance import attach_node_source_stems
         clean_nodes = attach_node_source_stems(clean_nodes, state["mm_input"])
         missing = list(state.get("degraded_missing") or [])
+        if state["mm_input"].get("generation_intent"):
+            # Bounded, deterministic structure repair (Part 13) — merges
+            # exact-duplicate-title siblings only, never invents/drops
+            # evidence. Runs before build_record so the persisted node list
+            # is already the repaired one, not a side-channel patch.
+            from services.mindmap.pipeline.structure_critic import repair_duplicate_titles
+            clean_nodes, merged = repair_duplicate_titles(clean_nodes)
+            if merged:
+                missing.append("repair:duplicate_title_merged")
         validation = validate_hierarchy(
             clean_nodes,
             require_rich_size=len(state["mm_input"].get("chunks") or []) >= 10,
@@ -181,6 +190,12 @@ def build_mindmap_graph(*, data_dir: Path, index_meta_path: Path,
                     missing.append(repair_code)
             record["generator"]["missing"] = missing
             record["generator"]["degraded"] = bool(missing)
+            # Part 19 — structural regression diagnostics, computed on the
+            # FINAL post-repair node/relation list. Never a rejection
+            # threshold: purely informational metadata on the record.
+            from services.mindmap.pipeline.structure_critic import compute_diagnostics
+            record["generator"]["diagnostics"] = compute_diagnostics(
+                record.get("nodes") or [], record.get("relations") or [])
         # Phase D: bind the record owner (None when unprotected → today's behavior).
         _set_job(state["job_id"], progress=95, current_node="saving")
         persist_record(record, user_id=state.get("user_id"))

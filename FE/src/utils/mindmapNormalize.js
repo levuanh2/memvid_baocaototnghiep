@@ -50,6 +50,10 @@ const normalizeV2 = (record) => {
         title: n.title || "",
         note: n.note || "",
         kind: n.kind || (parent == null ? KIND_ROOT : KIND_DEFAULT),
+        // node_type: SEMANTIC role (concept/definition/process/...), additive
+        // passthrough same as number/level/enrichment below — `kind` stays the
+        // purely structural root/section/idea/detail value, untouched.
+        nodeType: n.node_type || "",
         chunkRefs: Array.isArray(n.chunk_refs) ? n.chunk_refs : [],
         order: Number.isFinite(Number(n.order)) ? Number(n.order) : 0,
         // Renderer V2 (Task 3/4) — additive passthrough of fields the BE

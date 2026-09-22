@@ -383,6 +383,29 @@ export default function SidebarRight({
 
   useEffect(() => () => { pollerRef.current?.stop(); summaryPollerRef.current?.stop(); }, []);
 
+  // Auto-select most recent map on load (intermittent "no map" bug): showModalMap
+  // defaulted to null and only became truthy via an explicit library click or a
+  // resumed job's own completion handler — a user with existing completed maps
+  // and no running job saw "no map" on every fresh /app load even though mindMaps
+  // (the library) was already fully populated, because nothing ever auto-opened
+  // one. store.list_records already orders by created_at DESC, so mindMaps[0] is
+  // the most recent map. Skipped while a job is resuming/running so that job's
+  // own completion picks the map instead; re-checked once it settles so a job
+  // that fails without ever calling setShowModalMap still falls back correctly.
+  const autoSelectedMapRef = useRef(false);
+  useEffect(() => {
+    if (autoSelectedMapRef.current || showModalMap) return;
+    if (mindmapJobUi.running || loadActiveMindmapJob()?.jobId) return;
+    if (mindMaps.length === 0) return;
+    autoSelectedMapRef.current = true;
+    // __restoredOnLoad: this is a library restore, not a freshly-finished
+    // generation — MainLayout's own "auto-jump to a newly-populated tab"
+    // effect must not fire for it (that effect exists so a real new map still
+    // pulls the user to it; a page reload must not yank a Chat-first user
+    // into Mind Map mode just because they happen to have an old map saved).
+    setShowModalMap({ ...mindMaps[0], __restoredOnLoad: true });
+  }, [mindMaps, showModalMap, mindmapJobUi.running]);
+
   // ── Handlers ───────────────────────────────────────
   // Shared by "Tạo sơ đồ" (force=false, uses BE content-hash cache) and the
   // mindmap viewer's degraded-banner "Tạo lại" (force=true, bypasses cache).
@@ -723,13 +746,18 @@ export default function SidebarRight({
   useEffect(() => {
     onMindmapLibraryChange?.({
       mindMaps,
+      // initialLoading/loadError let the empty-state distinguish "still
+      // loading" and "failed to load" from genuinely "no maps yet" instead
+      // of collapsing all three into the same "Chưa có sơ đồ" screen.
+      initialLoading,
+      loadError: loiTaiMindmap,
       actions: {
         select: setShowModalMap,
         create: onCreateNewMindmap,
         creating: loading || mindmapJobUi.running,
       },
     });
-  }, [mindMaps, loading, mindmapJobUi.running, onCreateNewMindmap, onMindmapLibraryChange]);
+  }, [mindMaps, loading, mindmapJobUi.running, onCreateNewMindmap, onMindmapLibraryChange, initialLoading, loiTaiMindmap]);
 
   useEffect(() => {
     onSummaryLibraryChange?.({

@@ -23,9 +23,31 @@ const COPY = {
   },
 };
 
-export default function WorkspaceEmptyState({ kind, selectedCount, onCreate }) {
+export default function WorkspaceEmptyState({ kind, selectedCount, onCreate, loading, error }) {
   const copy = COPY[kind];
   const hasSelection = selectedCount > 0;
+
+  // Loading/error must read differently from genuinely-empty (intermittent
+  // "no map" bug) — a slow or failed /mindmaps fetch previously rendered the
+  // exact same "Chưa có sơ đồ" screen as a real empty library, so a user with
+  // saved maps couldn't tell a real gap from "still loading" or "failed".
+  if (loading) {
+    return (
+      <div className="flex-1 flex flex-col items-center justify-center text-center px-6 gap-3" style={{ background: "var(--bg-base)" }}>
+        <Icon name={copy.icon} size={22} className="text-text-muted animate-pulse" />
+        <p className="text-small text-text-secondary">Đang tải…</p>
+      </div>
+    );
+  }
+  if (error) {
+    return (
+      <div className="flex-1 flex flex-col items-center justify-center text-center px-6 gap-3" style={{ background: "var(--bg-base)" }}>
+        <Icon name="TriangleAlert" size={22} className="text-danger" />
+        <p className="text-small text-text-secondary max-w-[380px]">{error}</p>
+      </div>
+    );
+  }
+
   return (
     <div className="flex-1 flex flex-col items-center justify-center text-center px-6 gap-3" style={{ background: "var(--bg-base)" }}>
       <div className="w-12 h-12 rounded-full flex items-center justify-center flex-shrink-0" style={{ background: "var(--accent-subtle)" }}>
