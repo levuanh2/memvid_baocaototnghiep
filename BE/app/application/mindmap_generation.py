@@ -31,7 +31,13 @@ def run_mindmap_job(job_id: str, source_names: list[str], mm_input: dict,
     if not already_claimed:
         if guided_store.use_postgres():
             current = guided_store.get_job(job_id, user_id=user_id)
-            if not current:
+            # `current is None` means this job_id was never inserted into the
+            # guided ledger at all -- i.e. it's a legacy V2 job (guided_store
+            # only tracks Guided V3 jobs, see its module docstring), not an
+            # unclaimed Guided job. Only reject when the job IS in the ledger
+            # but wasn't actually claimed (no lease_owner) -- that's the real
+            # duplicate-invocation guard this branch exists for.
+            if current is not None and not current.get("lease_owner"):
                 print(f"mindmap_job_not_claimed job_id={job_id}", flush=True)
                 return
         else:
