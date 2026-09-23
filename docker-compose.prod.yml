@@ -85,6 +85,11 @@ services:
       DATA_DIR: /app
       PROCESS_ROLE: mindmap-worker
       GUIDED_JOB_STORE_BACKEND: postgres
+      # Without this, log_db_path() falls back to DATA_DIR/logs.sqlite = /app/logs.sqlite,
+      # which is NOT under the /app/memory bind mount below — ephemeral, container-local,
+      # invisible to `backend`'s node_logs reads. backend already sets this explicitly
+      # (see its environment block above); the worker needs the same value to share it.
+      LOG_DB_PATH: /app/memory/logs.sqlite
     volumes:
       # Same durable data as backend — the worker reads/writes index and memory
       # for the same sources the web process serves.

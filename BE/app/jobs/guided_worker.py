@@ -48,10 +48,15 @@ def run_once(worker_id: str | None = None) -> bool:
             topics = suggest_topics(mm_input)
             mm_input = {**mm_input, "generation_intent": intent, "guided_topics": topics}
             content_hash = intent_hash(content_hash, intent)
-        existing = main.mindmap_store.get_by_hash(content_hash, user_id=job.get("user_id"), enforce_owner=True)
-        if existing:
-            guided_store.update_job(job_id, status="done", stage="done", result_map_id=existing.get("id"), result=existing)
-            return True
+        # `force` is set at request time (app/main.py's /generate-mindmap) and
+        # persisted on the job row precisely so this reuse check can honour it
+        # -- without it, a forced regeneration request still silently replayed
+        # whatever the content_hash last resolved to (2026-09-23 finding).
+        if not job.get("force"):
+            existing = main.mindmap_store.get_by_hash(content_hash, user_id=job.get("user_id"), enforce_owner=True)
+            if existing:
+                guided_store.update_job(job_id, status="done", stage="done", result_map_id=existing.get("id"), result=existing)
+                return True
         main.run_mindmap_job(job_id, source_names, mm_input, content_hash,
                              job.get("user_id"), already_claimed=True)
         return True

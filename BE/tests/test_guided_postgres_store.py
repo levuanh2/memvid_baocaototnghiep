@@ -144,3 +144,30 @@ def test_worker_unhealthy_disables_capability_v2_still_usable():
     # V2 (SQLite-backed legacy store) must remain reachable regardless of Postgres health
     from app.domains.jobs import jobs_store
     assert hasattr(jobs_store, "create_idempotent_job")
+
+
+def test_force_flag_persists_and_survives_claim():
+    """2026-09-23 fix: `force` must round-trip API -> durable row -> worker
+    claim, since that's the exact gap that let a forced regeneration silently
+    replay a stale content-hash cache."""
+    j = _job()
+    outcome, row = guided_store.create_idempotent_job(j["job_id"], user_id=j["user_id"],
+        idempotency_key=j["key"], request_fingerprint=j["fingerprint"],
+        source_ids_json="[]", guided_config_json="{}", force=True)
+    assert outcome == "created"
+    assert row["force"] is True
+
+    fetched = guided_store.get_job(j["job_id"], user_id=j["user_id"])
+    assert fetched["force"] is True
+
+    claimed = guided_store.claim_next_job("worker-force", lease_seconds=60)
+    assert claimed["job_id"] == j["job_id"]
+    assert claimed["force"] is True
+
+
+def test_force_flag_defaults_false_when_not_passed():
+    j = _job()
+    _, row = guided_store.create_idempotent_job(j["job_id"], user_id=j["user_id"],
+        idempotency_key=j["key"], request_fingerprint=j["fingerprint"],
+        source_ids_json="[]", guided_config_json="{}")
+    assert row["force"] is False

@@ -111,30 +111,31 @@ def _select_sql() -> str:
     return """SELECT job_id,user_id,map_id,result_map_id,idempotency_key,request_fingerprint,
         source_ids_json,guided_config_json,status,stage,attempts,progress,current_node,
         lease_owner,lease_expires_at,heartbeat_at,created_at,updated_at,started_at,
-        completed_at,error_code,error_message,result_json AS result_json FROM guided_mindmap_jobs"""
+        completed_at,error_code,error_message,force,result_json AS result_json FROM guided_mindmap_jobs"""
 
 
 def create_idempotent_job(job_id: str, *, user_id: str, idempotency_key: str,
                           request_fingerprint: str, source_ids_json: str,
                           guided_config_json: str, stage: str = "queued",
-                          map_id: Optional[str] = None) -> tuple[str, dict[str, Any]]:
+                          map_id: Optional[str] = None,
+                          force: bool = False) -> tuple[str, dict[str, Any]]:
     if not use_postgres():
         from app.domains.jobs.jobs_store import create_idempotent_job as legacy
         return legacy(job_id, user_id=user_id, idempotency_key=idempotency_key,
                       request_fingerprint=request_fingerprint, source_ids_json=source_ids_json,
-                      guided_config_json=guided_config_json, stage=stage)
+                      guided_config_json=guided_config_json, stage=stage, force=force)
     now = datetime.now(timezone.utc)
     with _get_engine().begin() as conn:
         conn.execute(text("""INSERT INTO guided_mindmap_jobs
             (job_id,user_id,map_id,idempotency_key,request_fingerprint,source_ids_json,
-             guided_config_json,status,stage,created_at,updated_at)
+             guided_config_json,status,stage,force,created_at,updated_at)
             VALUES (:job_id,:user_id,:map_id,:key,:fingerprint,CAST(:sources AS jsonb),
-                    CAST(:config AS jsonb),'queued',:stage,:now,:now)
+                    CAST(:config AS jsonb),'queued',:stage,:force,:now,:now)
             ON CONFLICT (user_id,idempotency_key) DO NOTHING"""), {
                 "job_id": job_id, "user_id": user_id, "map_id": map_id,
                 "key": idempotency_key, "fingerprint": request_fingerprint,
                 "sources": source_ids_json, "config": guided_config_json,
-                "stage": stage, "now": now,
+                "stage": stage, "force": bool(force), "now": now,
             })
         row = conn.execute(text(_select_sql() + " WHERE user_id=:uid AND idempotency_key=:key"),
                            {"uid": user_id, "key": idempotency_key}).fetchone()
