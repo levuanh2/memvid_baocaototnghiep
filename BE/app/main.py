@@ -5229,6 +5229,20 @@ def generate_mindmap():
                     "guided_topics": available_topics}
         content_hash = intent_hash(content_hash, intent)
 
+    if not force:
+        # Phase D: user-scoped cache lookup — no cross-user reuse on identical content_hash.
+        # 2026-09-24: MUST run before create_idempotent_job below. It used to run
+        # after, so every cache-hit still inserted a real row into the durable
+        # Postgres ledger and the guided worker would claim and re-run it for
+        # nothing -- wasted a full generation cycle on every "same config as
+        # before" click, invisible to the caller (who got the synchronous cached
+        # response) and to the job itself (which completed correctly but nobody
+        # was ever waiting on its result). Found while correlating a real QA
+        # browser click against the job ledger.
+        cached = (mindmap_store.get_by_hash(content_hash, user_id=uid, enforce_owner=True)
+                  if _auth_protect_enabled() else mindmap_store.get_by_hash(content_hash))
+        if cached:
+            return jsonify({"status": "done", "result": cached, "cached": True}), 200
     idempotency_key = str(data.get("idempotency_key") or "").strip()
     from app.domains.jobs import guided_store
     if guided_requested and guided_store.use_postgres() and not idempotency_key:
@@ -5250,12 +5264,6 @@ def generate_mindmap():
             if durable_job.get("status") == "done" and durable_job.get("result"):
                 return jsonify({"status": "done", "result": durable_job["result"], "job_id": durable_job["job_id"]}), 200
             return jsonify({"job_id": durable_job["job_id"], "status": durable_job.get("status") or "queued", "status_url": f"/mindmap-status/{durable_job['job_id']}"}), 202
-    if not force:
-        # Phase D: user-scoped cache lookup — no cross-user reuse on identical content_hash.
-        cached = (mindmap_store.get_by_hash(content_hash, user_id=uid, enforce_owner=True)
-                  if _auth_protect_enabled() else mindmap_store.get_by_hash(content_hash))
-        if cached:
-            return jsonify({"status": "done", "result": cached, "cached": True}), 200
     job_id = _start_mindmap_job(source_names, mm_input, content_hash, intent,
                                 job_id=durable_job.get("job_id") if durable_job else None,
                                 job_metadata=durable_job)
