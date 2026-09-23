@@ -426,6 +426,8 @@ export default function SidebarRight({
         // Cache-hit (content_hash match, force=false): BE returns the record
         // straight away with no job_id — skip polling entirely instead of
         // throwing "Server không trả job_id." (known issue, fixed here).
+        // Request outcome is known now (success) — safe to close the dialog.
+        if (Object.keys(guidedOptions).length) setGuidedOpen(false);
         await handleMindmapDone(startData.result, sourceList, { resumed: false, isRegenerate: force });
         return;
       }
@@ -435,11 +437,23 @@ export default function SidebarRight({
       // mid-flight can resume polling (Task 4 point 6) instead of the user
       // having to F5 and lose track of it.
       saveActiveMindmapJob({ jobId: startData.job_id, sources: sourceList, startedAt: Date.now() });
+      // 2026-09-24: this used to close BEFORE the request even started
+      // (submitGuidedMindmap called setGuidedOpen(false) synchronously on
+      // submit) — a real QA browser job ran for a genuine ~60s in the
+      // background with zero visible feedback anywhere, because the only
+      // surface that showed progress (this dialog) was already gone. Close
+      // only now that the job is actually queued and the poller (which
+      // drives mindmapJobUi, the visible progress chip) is about to start.
+      if (Object.keys(guidedOptions).length) setGuidedOpen(false);
       startMindmapPoller(startData.job_id, sourceList, { resumed: false, isRegenerate: force });
     } catch (err) {
       console.error("Mind Map Error:", err);
       toast(_errText(err, "Không tạo được sơ đồ", "Không tạo được sơ đồ, kiểm tra console!"), { type: "error" });
       if (Object.keys(guidedOptions).length) {
+        // Request failed before we ever confirmed acceptance — dialog was
+        // never closed on this path (see above), so this just makes sure
+        // it's visibly open with the error rather than assuming it needs
+        // reopening.
         setGuidedError(err?.message || "Không tạo được sơ đồ.");
         setGuidedOpen(true);
       }
@@ -456,8 +470,13 @@ export default function SidebarRight({
   };
   createMindmapRef.current = handleGenerateMindMap;
   const onCreateNewMindmap = useCallback(() => createMindmapRef.current?.(), []);
+  // 2026-09-24: no longer closes the dialog here -- runMindmapGeneration now
+  // closes it only once the create request's outcome is actually known
+  // (queued/done), so a failure keeps the dialog open with a visible error
+  // instead of silently vanishing while work is unresolved. The dialog's own
+  // `loading` prop (still wired below) keeps the submit button disabled and
+  // showing "Đang tạo…" for the request round-trip in the meantime.
   const submitGuidedMindmap = (options) => {
-    setGuidedOpen(false);
     setGuidedError(null);
     runMindmapGeneration(options.sourceIds, options).catch((error) => setGuidedError(error?.message || "Không tạo được sơ đồ."));
   };
