@@ -803,6 +803,16 @@ def _readiness() -> tuple[bool, dict]:
     queue_depth = qs.get("queued_count")
     if qs.get("enabled") and isinstance(queue_depth, int) and queue_depth > _queue_depth_max():
         reasons.append("queue_full")
+    # 2026-09-23: SKIP_MODEL_LOAD=1 leaked into the shared production .env and
+    # silently no-op'd every LLM-gated stage (Guided V3 Stage 0/Enrich/Relations,
+    # legacy V2's outline fallback, Summary, Memory Tree) for an unknown window —
+    # no exception, no crash, `/health` even said `"mode":"ci"`. It's a
+    # deliberate test/CI-only flag with no business being true on a process
+    # PROCESS_ROLE marks as serving real traffic. Fail readiness loudly instead
+    # of silently degrading every AI feature to a stub again.
+    from app.domains.jobs.guided_store import _production_role
+    if _production_role() and os.environ.get("SKIP_MODEL_LOAD") == "1":
+        reasons.append("skip_model_load_in_production")
     ready = not reasons
     detail = {
         "status": "ready" if ready else "not_ready",
@@ -834,15 +844,29 @@ def home():
 
 @app.get('/health')
 def health():
+    skip_model_load = os.environ.get("SKIP_MODEL_LOAD") == "1"
     payload: Dict[str, Any] = {
         "status": "ok",
-        "mode": "ci" if os.environ.get("SKIP_MODEL_LOAD") == "1" else "normal",
+        "mode": "ci" if skip_model_load else "normal",
         "query_graph_ready": QUERY_GRAPH is not None,
         "ingest_graph_ready": INGEST_GRAPH is not None,
     }
     err = globals().get("QUERY_GRAPH_BUILD_ERROR")
     if err:
         payload["query_graph_error"] = err[:800]
+    # 2026-09-23: SKIP_MODEL_LOAD=1 leaked into the shared production .env for
+    # an unknown window and silently stubbed out every LLM-gated feature with
+    # no crash. `/health` said "ok" the whole time -- keep it 200 here (Docker's
+    # healthcheck + scripts/health.sh gate deploys on this exact endpoint, and
+    # this guard has not been through that gating path yet), but make the
+    # misconfiguration impossible to miss. /ready fails closed on this same
+    # condition for callers that do act on non-200.
+    if skip_model_load:
+        from app.domains.jobs.guided_store import _production_role
+        if _production_role():
+            payload["warning"] = ("SKIP_MODEL_LOAD=1 is active on a production-role process "
+                                  "(PROCESS_ROLE/AUTH_PROTECT_APP_APIS) -- every LLM-gated "
+                                  "feature is silently running in stub/no-op mode.")
     return jsonify(payload), 200
 
 
@@ -5218,7 +5242,8 @@ def generate_mindmap():
         outcome, durable_job = guided_store.create_idempotent_job(
             str(uuid.uuid4()), user_id=uid, idempotency_key=idempotency_key,
             request_fingerprint=request_fingerprint, source_ids_json=json.dumps(source_names),
-            guided_config_json=json.dumps(intent or {}, ensure_ascii=False), stage="queued")
+            guided_config_json=json.dumps(intent or {}, ensure_ascii=False), stage="queued",
+            force=force)
         if outcome == "conflict":
             return jsonify({"error": "Idempotency key was already used with a different request", "error_code": "idempotency_conflict"}), 409
         if outcome == "existing":

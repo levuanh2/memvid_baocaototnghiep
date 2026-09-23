@@ -145,6 +145,58 @@ def test_ready_503_when_redis_required_down(monkeypatch):
         redis_client.reset_for_tests(None)
 
 
+# ------------------------------------------------ SKIP_MODEL_LOAD prod guard
+# 2026-09-23: SKIP_MODEL_LOAD=1 leaked into the shared production .env and
+# silently stubbed every LLM-gated feature with zero crash/log. These lock
+# the new fail-closed /ready guard and the /health warning field.
+
+def test_ready_503_when_skip_model_load_in_production(monkeypatch):
+    monkeypatch.setattr(main, "QUERY_GRAPH", object())
+    monkeypatch.setenv("PROCESS_ROLE", "web")
+    monkeypatch.setenv("SKIP_MODEL_LOAD", "1")
+    r = app.test_client().get("/ready")
+    assert r.status_code == 503
+    assert "skip_model_load_in_production" in r.get_json()["reason"]
+
+
+def test_ready_ok_when_skip_model_load_outside_production(monkeypatch):
+    """A dev/CI box with no PROCESS_ROLE and auth-protect off is not production
+    -- SKIP_MODEL_LOAD=1 there is the intended, safe use of the flag."""
+    monkeypatch.setattr(main, "QUERY_GRAPH", object())
+    monkeypatch.delenv("PROCESS_ROLE", raising=False)
+    monkeypatch.setenv("AUTH_PROTECT_APP_APIS", "false")
+    monkeypatch.setenv("SKIP_MODEL_LOAD", "1")
+    r = app.test_client().get("/ready")
+    assert r.status_code == 200
+
+
+def test_ready_ok_when_production_but_skip_model_load_unset(monkeypatch):
+    monkeypatch.setattr(main, "QUERY_GRAPH", object())
+    monkeypatch.setenv("PROCESS_ROLE", "mindmap-worker")
+    monkeypatch.delenv("SKIP_MODEL_LOAD", raising=False)
+    r = app.test_client().get("/ready")
+    assert r.status_code == 200
+
+
+def test_health_warns_when_skip_model_load_in_production(monkeypatch):
+    monkeypatch.setenv("PROCESS_ROLE", "web")
+    monkeypatch.setenv("SKIP_MODEL_LOAD", "1")
+    r = app.test_client().get("/health")
+    assert r.status_code == 200  # liveness stays 200 -- see comment at the route
+    body = r.get_json()
+    assert body["mode"] == "ci"
+    assert "warning" in body and "SKIP_MODEL_LOAD" in body["warning"]
+
+
+def test_health_no_warning_when_skip_model_load_outside_production(monkeypatch):
+    monkeypatch.delenv("PROCESS_ROLE", raising=False)
+    monkeypatch.setenv("AUTH_PROTECT_APP_APIS", "false")
+    monkeypatch.setenv("SKIP_MODEL_LOAD", "1")
+    r = app.test_client().get("/health")
+    assert r.status_code == 200
+    assert "warning" not in r.get_json()
+
+
 def test_ready_503_when_admission_saturated(monkeypatch):
     monkeypatch.setattr(main, "QUERY_GRAPH", object())
     redis_client.reset_for_tests(FakeRedis())
