@@ -79,7 +79,8 @@ def build_mindmap_graph(*, data_dir: Path, index_meta_path: Path,
                 from app.clients.llm_factory import PROVIDERS
                 if not PROVIDERS:
                     raise RuntimeError("guided_provider_not_configured")
-            nodes, guided_relations, plan, guided_missing = pipeline.guided_plan(state["mm_input"])
+            nodes, guided_relations, plan, guided_missing = pipeline.guided_plan(
+                state["mm_input"], job_id=state["job_id"])
             state["mm_input"]["guided_plan"] = plan
             method = "guided_semantic_planner"
         else:
@@ -110,11 +111,13 @@ def build_mindmap_graph(*, data_dir: Path, index_meta_path: Path,
             else:
                 nodes, degraded = pipeline.enrich(state["mm_input"], state["skeleton"],
                                                   progress_cb=_prog,
-                                                  cancel_cb=lambda: _cancelled(state["job_id"]))
+                                                  cancel_cb=lambda: _cancelled(state["job_id"]),
+                                                  job_id=state["job_id"])
         else:
             nodes, degraded = pipeline.enrich(state["mm_input"], state["skeleton"],
                                               progress_cb=_prog,
-                                              cancel_cb=lambda: _cancelled(state["job_id"]))
+                                              cancel_cb=lambda: _cancelled(state["job_id"]),
+                                              job_id=state["job_id"])
         missing = list(state.get("degraded_missing") or [])
         if degraded:
             missing.append("enrich")
@@ -129,12 +132,14 @@ def build_mindmap_graph(*, data_dir: Path, index_meta_path: Path,
             if os.getenv("SKIP_MODEL_LOAD") == "1":
                 rels, degraded = state.get("relations") or [], True
             else:
-                model_relations, degraded = pipeline.relations(state["nodes"],
-                                                               cancel_cb=lambda: _cancelled(state["job_id"]))
+                model_relations, degraded = pipeline.relations(
+                    state["nodes"], cancel_cb=lambda: _cancelled(state["job_id"]),
+                    job_id=state["job_id"])
                 rels = list(state.get("relations") or []) + list(model_relations or [])
         else:
             rels, degraded = pipeline.relations(state["nodes"],
-                                                cancel_cb=lambda: _cancelled(state["job_id"]))
+                                                cancel_cb=lambda: _cancelled(state["job_id"]),
+                                                job_id=state["job_id"])
         missing = list(state.get("degraded_missing") or [])
         if degraded:
             missing.append("relations")

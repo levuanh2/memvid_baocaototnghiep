@@ -19,9 +19,9 @@ def _build(tmp_path, pipeline=None, persist=None, jobs_updates=None):
             return ([{"id": "n0", "parent": None, "kind": "root", "title": "Doc"},
                      {"id": "n1", "parent": "n0", "kind": "section", "title": "1. Mở đầu", "chunk_refs": ["0"]}],
                     "headings")
-        def enrich(self, mm, skeleton, progress_cb=None, cancel_cb=None):
+        def enrich(self, mm, skeleton, progress_cb=None, cancel_cb=None, job_id=""):
             return skeleton, False
-        def relations(self, nodes, cancel_cb=None):
+        def relations(self, nodes, cancel_cb=None, job_id=""):
             return [], False
 
     def _jobs_update(job_id, **kw):
@@ -65,9 +65,9 @@ def test_degraded_stage_flows_to_result(tmp_path):
         def skeleton(self, mm):
             return ([{"id": "n0", "parent": None, "kind": "root", "title": "Doc"},
                      {"id": "n1", "parent": "n0", "kind": "section", "title": "S"}], "headings")
-        def enrich(self, mm, sk, progress_cb=None, cancel_cb=None):
+        def enrich(self, mm, sk, progress_cb=None, cancel_cb=None, job_id=""):
             return sk, True
-        def relations(self, nodes, cancel_cb=None):
+        def relations(self, nodes, cancel_cb=None, job_id=""):
             return [], True
     g = _build(tmp_path, pipeline=DegradedPipeline())
     out = g.invoke({"job_id": "j3", "source_names": ["a_docx"], "progress": 0,
@@ -90,7 +90,7 @@ def test_guided_end_to_end_carries_diagnostics_and_dedup_repair(tmp_path, monkey
     monkeypatch.setenv("SKIP_MODEL_LOAD", "1")  # stub never calls a real provider anyway
 
     class GuidedStubPipeline:
-        def guided_plan(self, mm):
+        def guided_plan(self, mm, job_id=""):
             nodes = [
                 {"id": "n0", "parent": None, "kind": "root", "title": "Doc", "chunk_refs": [], "order": 0},
                 {"id": "n1", "parent": "n0", "kind": "section", "title": "A", "chunk_refs": ["0"], "order": 0},
@@ -100,10 +100,10 @@ def test_guided_end_to_end_carries_diagnostics_and_dedup_repair(tmp_path, monkey
             config = {"node_budget": 24, "max_depth": 3, "global_plan_used": True, "central_subject": "Doc"}
             return nodes, [], config, []
 
-        def enrich(self, mm, skeleton, progress_cb=None, cancel_cb=None):
+        def enrich(self, mm, skeleton, progress_cb=None, cancel_cb=None, job_id=""):
             return skeleton, False
 
-        def relations(self, nodes, cancel_cb=None):
+        def relations(self, nodes, cancel_cb=None, job_id=""):
             return [], False
 
     g = _build(tmp_path, pipeline=GuidedStubPipeline())

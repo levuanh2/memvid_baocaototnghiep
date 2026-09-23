@@ -8,7 +8,7 @@ from concurrent.futures import TimeoutError as FuturesTimeoutError
 from typing import Callable, Optional
 
 from app.clients.llm_factory import ask_ai
-from app.graphs.logger import ctx_submit  # Phase 0: propagate LLM counter qua pool
+from app.graphs.logger import _Timer, ctx_submit, log_node_event  # Phase 0: propagate LLM counter qua pool
 from services.mindmap.jsonrepair import repair_json_text
 from services.mindmap.pipeline.detail_policy import get_detail_policy
 from services.mindmap.pipeline.schema import sanitize_nodes, NODE_TYPES
@@ -128,20 +128,36 @@ def _enrich_one(mm_input: dict, branch: dict, allowed: list[str], model: str, ti
             "children": _parse(data.get("children"), policy["max_children_per_branch"], policy["max_grandchildren"])}
 
 
+def _log(job_id: str, status: str, duration_ms: float, metadata: dict) -> None:
+    if not job_id:
+        return
+    try:
+        log_node_event(job_id, "Enrich", status, duration_ms, metadata)
+    except Exception:
+        pass  # diagnostics must never break generation
+
+
 def enrich_branches(mm_input: dict, skeleton_nodes: list[dict], *, model: str,
                     timeout_sec: float = 120.0, max_workers: int = 2,
                     progress_cb: Optional[Callable[[int, str], None]] = None,
-                    cancel_cb: Optional[Callable[[], bool]] = None) -> tuple[list[dict], bool]:
+                    cancel_cb: Optional[Callable[[], bool]] = None,
+                    job_id: str = "") -> tuple[list[dict], bool]:
+    t = _Timer()
     if os.getenv("SKIP_MODEL_LOAD") == "1":
         # Không có LLM = khung xương chưa được làm giàu — phải khai degraded,
         # không được im lặng trả skeleton như bản "hoàn chỉnh".
+        _log(job_id, "error", t.ms(), {"stage": "enrich", "reason": "skip_model_load",
+                                       "input_count": 0, "raw_output_count": 0, "accepted_output_count": 0})
         return skeleton_nodes, True
     nodes = [dict(n) for n in skeleton_nodes]
     root = next((n for n in nodes if n["kind"] == "root"), None)
     if root is None:
+        _log(job_id, "error", t.ms(), {"stage": "enrich", "reason": "no_root",
+                                       "input_count": 0, "raw_output_count": 0, "accepted_output_count": 0})
         return nodes, True
     branches = [n for n in nodes if n.get("parent") == root["id"] and n["kind"] == "section"]
     degraded = False
+    branch_failures = 0
     next_id = max((int(n["id"][1:]) for n in nodes if n["id"][1:].isdigit()), default=0) + 1
 
     def _run(branch: dict):
@@ -151,6 +167,9 @@ def enrich_branches(mm_input: dict, skeleton_nodes: list[dict], *, model: str,
     # as_completed thay vì duyệt theo thứ tự submit: 1 nhánh treo không chặn
     # các nhánh đã xong, và cancel được kiểm giữa từng completion (codex #1).
     if cancel_cb and cancel_cb():
+        _log(job_id, "error", t.ms(), {"stage": "enrich", "reason": "cancelled",
+                                       "input_count": len(branches), "raw_output_count": 0,
+                                       "accepted_output_count": 0})
         return nodes, degraded      # huỷ trước khi tốn bất kỳ LLM call nào
     done = 0
     # Báo TRƯỚC khi submit. Nếu không, dòng progress đầu tiên chỉ đến khi một nhánh
@@ -173,6 +192,9 @@ def enrich_branches(mm_input: dict, skeleton_nodes: list[dict], *, model: str,
             if cancel_cb and cancel_cb():
                 for f in futs:
                     f.cancel()
+                _log(job_id, "error", t.ms(), {"stage": "enrich", "reason": "cancelled",
+                                               "input_count": len(branches), "raw_output_count": done,
+                                               "accepted_output_count": done - branch_failures})
                 return sanitize_nodes(nodes), degraded
             b = futs[fut]
             try:
@@ -192,12 +214,24 @@ def enrich_branches(mm_input: dict, skeleton_nodes: list[dict], *, model: str,
                 msg = str(e).strip() or type(e).__name__
                 print(f"[mindmap] enrich branch '{b.get('title', '')[:40]}' failed: {msg}")
                 degraded = True     # giữ skeleton nhánh này
+                branch_failures += 1
             done += 1
             if progress_cb:
                 progress_cb(int(30 + 40 * done / max(1, len(branches))),
                             f"Đang làm giàu nhánh {done}/{len(branches)}...")
     except FuturesTimeoutError:
         degraded = True             # nhánh chưa xong trong ngân sách → giữ skeleton
+        _log(job_id, "timeout", t.ms(), {"stage": "enrich", "reason": "budget_timeout",
+                                         "input_count": len(branches), "raw_output_count": done,
+                                         "accepted_output_count": done - branch_failures})
     finally:
         ex.shutdown(wait=False)
+    if degraded and branch_failures:
+        _log(job_id, "error", t.ms(), {"stage": "enrich", "reason": "branch_exceptions",
+                                       "input_count": len(branches), "raw_output_count": done,
+                                       "accepted_output_count": done - branch_failures})
+    elif not degraded:
+        _log(job_id, "ok", t.ms(), {"stage": "enrich", "input_count": len(branches),
+                                    "raw_output_count": done, "accepted_output_count": done,
+                                    "elapsed_ms": t.ms()})
     return sanitize_nodes(nodes), degraded
