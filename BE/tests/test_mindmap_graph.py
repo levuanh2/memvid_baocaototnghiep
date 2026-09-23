@@ -47,6 +47,25 @@ def test_real_graph_compiles_and_produces_v2_record(tmp_path):
     assert rec["schema_version"] == 2 and rec["nodes"] and "relations" in rec
     assert saved and saved[0]["id"] == rec["id"]
 
+def test_assemble_persist_sets_result_map_id_on_job_row(tmp_path):
+    """2026-09-24: assemble_node's final _set_job(status="done", ...) passed
+    result=record but never result_map_id, so the durable job row's own
+    result_map_id column stayed NULL after every fresh (non-cache-hit)
+    completion -- found while tracing a real QA browser job that showed
+    status=done, result_map_id=None despite a successfully-persisted map."""
+    saved = []
+    updates = []
+    g = _build(tmp_path, persist=saved.append, jobs_updates=updates)
+    out = g.invoke({"job_id": "j3", "source_names": ["a_docx"], "progress": 0,
+                    "current_node": "", "error": None},
+                   config={"configurable": {"thread_id": "j3"}})
+    assert out.get("error") is None
+    rec = out["result"]
+    done_updates = [u for u in updates if u.get("status") == "done"]
+    assert done_updates, "no status=done job update recorded"
+    assert done_updates[-1].get("result_map_id") == rec["id"]
+
+
 def test_cancel_before_enrich_stops_without_persist(tmp_path, monkeypatch):
     from app.domains.jobs import jobs_store as js
     monkeypatch.setenv("DATA_DIR", str(tmp_path))

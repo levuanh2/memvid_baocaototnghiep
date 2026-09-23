@@ -204,8 +204,15 @@ def build_mindmap_graph(*, data_dir: Path, index_meta_path: Path,
         # Phase D: bind the record owner (None when unprotected → today's behavior).
         _set_job(state["job_id"], progress=95, current_node="saving")
         persist_record(record, user_id=state.get("user_id"))
+        # 2026-09-24: result_map_id was never passed here -- only guided_worker.py's
+        # separate cache-hit reuse path set it (via existing.get("id")). The job row's
+        # own `result` (result_json) blob already carries the full record including
+        # its id, so /mindmap-status kept working, but result_map_id stayed NULL for
+        # every fresh (non-cache-hit) completion -- a real ledger gap, found while
+        # investigating why a QA browser job (100e2012) showed status=done with
+        # result_map_id=None despite a real, successfully-persisted map.
         _set_job(state["job_id"], status="done", progress=100,
-                 current_node="AssemblePersist", result=record)
+                 current_node="AssemblePersist", result=record, result_map_id=record.get("id"))
         return {**state, "result": record, "progress": 100, "current_node": "AssemblePersist"}
 
     def cancelled_node(state: dict) -> dict:
