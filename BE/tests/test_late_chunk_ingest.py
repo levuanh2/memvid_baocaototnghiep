@@ -86,6 +86,52 @@ def test_late_embeddings_flow_to_append(tmp_path, monkeypatch):
     cfg.reload()
 
 
+def test_late_chunking_config_flag_disables_even_when_model_load_allowed(tmp_path, monkeypatch):
+    """2026-09-23 fix: LATE_CHUNKING=0 was never actually read at the ingest_graph
+    call site -- only SKIP_MODEL_LOAD gated it, so this config knob (the documented
+    emergency kill-switch for BAAI/bge-m3's ~2GB in-process load) was silently a
+    no-op. This locks that LATE_CHUNKING=0 alone is now sufficient to skip it,
+    independent of SKIP_MODEL_LOAD."""
+    monkeypatch.setenv("SKIP_MODEL_LOAD", "0")  # model load otherwise allowed
+    monkeypatch.setenv("LATE_CHUNKING", "0")    # but explicitly disabled
+    cfg = _markdown_env(monkeypatch, tmp_path)
+
+    called = []
+
+    class ExplodingEnc:
+        def warmup(self):
+            called.append(True)
+            raise AssertionError("late-chunk encoder must not load when LATE_CHUNKING=0")
+
+    import app.domains.ingest.late_chunk as lc
+    monkeypatch.setattr(lc, "get_late_chunk_encoder", lambda *a, **k: ExplodingEnc())
+
+    captured = {}
+
+    def fake_append(chunks, source_name, custom_metadata=None, batch_size=32, embeddings=None):
+        captured["embeddings"] = embeddings
+
+    from app.graphs.ingest_graph import build_ingest_graph
+
+    g = build_ingest_graph(
+        update_source_status=lambda *a, **k: None,
+        data_dir=tmp_path,
+        extract_text=lambda p: Path(p).read_text(encoding="utf-8"),
+        split_text=lambda t: [t],
+        append_to_index=fake_append,
+        build_memory_tree_for_sources=lambda srcs: None,
+        jobs_update=None,
+    )
+
+    out = g.invoke(_md_state(tmp_path), config={"configurable": {"thread_id": "j1"}})
+
+    assert out.get("error") is None, out.get("error")
+    assert called == [], "late-chunk encoder was invoked despite LATE_CHUNKING=0"
+    assert captured.get("embeddings") is None
+
+    cfg.reload()
+
+
 def test_heading_path_aligned_with_chunks(tmp_path, monkeypatch):
     """heading_path đi kèm đúng chunk — chunk_headings aligned 1:1 với chunks."""
     monkeypatch.setenv("SKIP_MODEL_LOAD", "1")  # không cần vector cho test này
