@@ -33,7 +33,9 @@ class GrpcMindmapPipeline:
         )
         return json.loads(reply.nodes_json or "[]"), reply.method or ""
 
-    def enrich(self, mm_input, skeleton_nodes, progress_cb=None, cancel_cb=None):
+    def enrich(self, mm_input, skeleton_nodes, progress_cb=None, cancel_cb=None, job_id: str = ""):
+        # job_id: accepted for interface parity with LocalMindmapPipeline's
+        # diagnostics (2026-09-23); the remote service logs on its own side.
         if cancel_cb is not None and cancel_cb():
             return list(skeleton_nodes or []), False
         final_event = None
@@ -52,7 +54,7 @@ class GrpcMindmapPipeline:
             raise RuntimeError("mindmap service stream ended without final event")
         return json.loads(final_event.nodes_json or "[]"), bool(final_event.degraded)
 
-    def relations(self, nodes, cancel_cb=None):
+    def relations(self, nodes, cancel_cb=None, job_id: str = ""):
         if cancel_cb is not None and cancel_cb():
             return [], False
         reply = self._client().Relations(

@@ -115,7 +115,7 @@ class _FakePipeline:
     def skeleton(self, mm_input):
         return [{"id": "r", "parent": None, "kind": "root", "title": "Goc", "order": 0}], "headings"
 
-    def enrich(self, mm_input, skeleton_nodes, progress_cb=None, cancel_cb=None):
+    def enrich(self, mm_input, skeleton_nodes, progress_cb=None, cancel_cb=None, job_id=""):
         if progress_cb:
             progress_cb(50, "Enrich")
         return skeleton_nodes + [
@@ -126,7 +126,7 @@ class _FakePipeline:
             {"id": "c", "parent": "a", "kind": "detail", "title": "Vi du", "order": 3},
         ], False
 
-    def relations(self, nodes, cancel_cb=None):
+    def relations(self, nodes, cancel_cb=None, job_id=""):
         # b và c là anh em — cạnh chéo giữa cha-con bị `validate_relations` bỏ
         # vì đã có trong cây.
         return [{"source": "b", "target": "c", "type": "supports", "label": "bo tro"}], False

@@ -97,8 +97,8 @@ def _heading_groups(chunks: list[dict], preset: str) -> dict[str, list[dict]]:
     return groups
 
 
-def plan_guided(mm_input: dict[str, Any], *, model: str = "", timeout_sec: float = 90.0
-                ) -> tuple[list[dict], list[dict], dict[str, Any], list[str]]:
+def plan_guided(mm_input: dict[str, Any], *, model: str = "", timeout_sec: float = 90.0,
+                job_id: str = "") -> tuple[list[dict], list[dict], dict[str, Any], list[str]]:
     intent = dict(mm_input.get("generation_intent") or {})
     chunks, queries = _select_chunks(list(mm_input.get("chunks") or []), intent)
     missing: list[str] = []
@@ -125,7 +125,8 @@ def plan_guided(mm_input: dict[str, Any], *, model: str = "", timeout_sec: float
     # tried (model was given) and plan_global itself came back empty.
     global_plan = None
     if model:
-        global_plan, plan_degraded = plan_global(chunks, intent, model=model, timeout_sec=timeout_sec)
+        global_plan, plan_degraded = plan_global(chunks, intent, model=model, timeout_sec=timeout_sec,
+                                                 job_id=job_id)
         if plan_degraded:
             missing.append("guided_global_plan_degraded")
 
