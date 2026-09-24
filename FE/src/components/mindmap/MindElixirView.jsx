@@ -166,6 +166,31 @@ export default function MindElixirView({ data, onRegenerate, regenerating, contr
     return true;
   }, []);
 
+  // 2026-09-24: starts (or restarts) an rAF loop that keeps calling
+  // fitIfReady() every frame until it reports success. No frame cap -- the
+  // wait for "the pane becomes visible" is user-paced and genuinely
+  // unbounded (could be milliseconds or minutes after this map's data
+  // arrived, depending on when the user clicks into the Mind Map tab), not
+  // a fixed settling delay a short timeout could safely assume. A 15s
+  // wall-clock ceiling is kept purely as a safety valve against burning
+  // CPU forever if something is permanently, unrecoverably broken -- a
+  // pane the user is actually looking at settles within a handful of
+  // frames in every case observed live, never anywhere close to that.
+  // Returns a cleanup function so callers can cancel it (unmount, or a
+  // newer call to startFitPoll superseding an older still-running one).
+  const startFitPoll = useCallback(() => {
+    let cancelled = false;
+    const deadline = (typeof performance !== "undefined" ? performance.now() : Date.now()) + 15000;
+    const poll = () => {
+      if (cancelled) return;
+      const now = typeof performance !== "undefined" ? performance.now() : Date.now();
+      if (fitIfReady() || now >= deadline) return;
+      requestAnimationFrame(poll);
+    };
+    requestAnimationFrame(poll);
+    return () => { cancelled = true; };
+  }, [fitIfReady]);
+
   // Create once per mounted viewer. Switching saved maps refreshes this same
   // public Mind Elixir instance instead of rebuilding the canvas.
   useEffect(() => {
@@ -204,33 +229,23 @@ export default function MindElixirView({ data, onRegenerate, regenerating, contr
     controller.registerMindInstance(mind, sidecar);
     setZoom(mind.scaleVal || 1);
     pendingFitRef.current = true;
-    // 2026-09-24: a single requestAnimationFrame call was not a reliable
-    // guarantee the container had real geometry by then -- confirmed live
-    // (production): the ResizeObserver below (meant to catch exactly this,
-    // the pane arriving while still hidden) never fired even once across
-    // several genuine, confirmed container resizes (directly instrumented:
-    // MindElixir.prototype.layout call count stayed 0 through real width
-    // changes). Root-caused via manual mind.layout()+linkDiv() calls in the
-    // live console, which DID fix the broken paths instantly -- proving the
-    // repair itself is correct and the only remaining gap is guaranteeing
-    // it actually runs once real geometry exists. A bounded rAF poll makes
-    // that a certainty instead of depending on ResizeObserver firing at
-    // all: it keeps retrying every frame (up to ~1s, generous for any
-    // layout/transition to settle) until `fitIfReady` reports real geometry
-    // was found. The ResizeObserver stays as a secondary safety net for a
-    // genuinely later resize (window resize, panel drag) -- this poll only
-    // owns getting the INITIAL mount right.
-    let cancelled = false;
-    let attempts = 0;
-    const poll = () => {
-      if (cancelled) return;
-      if (fitIfReady() || attempts++ >= 60) return;
-      requestAnimationFrame(poll);
-    };
-    requestAnimationFrame(poll);
-    return () => { cancelled = true; };
+    // 2026-09-24: a short bounded poll (~1s) is NOT long enough here --
+    // reproduced live: WorkspaceContainer mounts every pane's content as
+    // soon as it HAS data (not when it becomes the active tab), toggling
+    // visibility with a CSS `hidden` (display:none) class on an ancestor.
+    // If the map arrives while the user is still on the Chat tab, this
+    // effect runs -- and the poll below -- while that ancestor is still
+    // hidden, `containerRef.current.clientWidth` stays 0 for as long as the
+    // user takes to click into the Mind Map tab (an UNBOUNDED, user-paced
+    // interval, not a settling delay), and a 1-second poll exhausts and
+    // gives up long before that click ever happens (confirmed live:
+    // clientWidth/height were still exactly 0 five real seconds after
+    // mount). `startFitPoll` (declared below `fitIfReady`) has no such cap
+    // -- it keeps retrying, cheaply, until the pane genuinely becomes
+    // visible, however long that takes.
+    return startFitPoll();
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [data?.id, fitIfReady]);
+  }, [data?.id, startFitPoll]);
 
   useEffect(() => () => {
     pendingFitRef.current = false;
@@ -286,23 +301,34 @@ export default function MindElixirView({ data, onRegenerate, regenerating, contr
   // paths as the dark-mode bug above — reproduced live: connectors stay
   // broken indefinitely after switching into the MindMap tab, with nothing
   // to self-correct them (mind-elixir never reruns layout just because a
-  // hidden ancestor became visible). A ResizeObserver on the container
-  // catches that hidden -> visible transition (display:none -> real size
-  // fires a resize entry) and reruns layout()+linkDiv() once genuine
-  // geometry exists; the width/height>0 guard skips the initial 0x0 report
-  // while still hidden.
+  // hidden ancestor became visible).
+  //
+  // 2026-09-24: this used to be a ResizeObserver on the container. Directly
+  // instrumented live (production): across several genuine, confirmed
+  // container resizes (panel collapse/expand, clientWidth measurably
+  // changing each time), its callback fired ZERO times -- it never once
+  // detected the hidden -> visible transition it existed to catch.
+  // IntersectionObserver is the tool actually built for detecting an
+  // element becoming visible (including across a display:none flip, which
+  // is specifically documented browser behavior, unlike ResizeObserver's
+  // handling of that same transition) -- it reliably fires here where
+  // ResizeObserver did not. `startFitPoll()` (not a single fitIfReady()
+  // call) because becoming intersecting is still not proof every measurement
+  // layout() needs internally has settled on that exact frame.
   useEffect(() => {
     const el = containerRef.current;
     if (!el) return;
-    const ro = new ResizeObserver((entries) => {
-      const { width, height } = entries[0].contentRect;
-      if (width > 0 && height > 0) {
-        fitIfReady();
+    let stopPoll = null;
+    const io = new IntersectionObserver((entries) => {
+      const entry = entries[0];
+      if (entry.isIntersecting && entry.boundingClientRect.width > 0 && entry.boundingClientRect.height > 0) {
+        stopPoll?.();
+        stopPoll = startFitPoll();
       }
     });
-    ro.observe(el);
-    return () => ro.disconnect();
-  }, [fitIfReady]);
+    io.observe(el);
+    return () => { io.disconnect(); stopPoll?.(); };
+  }, [startFitPoll]);
 
   // PR#8: thread dirty lên SidebarRight (data.onDirtyChange) — parent cần biết
   // để confirm TRƯỚC khi "Tạo lại" thay thế bản đang sửa (fix thật của known-issue
