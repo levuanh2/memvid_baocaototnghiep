@@ -636,17 +636,34 @@ export default function MainLayout({
           />
         </main>
 
-        {/* ── LỀ PHẢI — Bằng chứng và bản tạo ra ── */}
-        {!rightSurfaceVisible ? null : !panel.drawer && panel.collapsed.right ? (
-          <PanelSpine
-            side="right"
-            label={PANELS.right.label}
-            count={evidence?.sources?.length || 0}
-            onExpand={() => panel.setCollapsedFor("right", false)}
-          />
-        ) : (
+        {/* ── LỀ PHẢI — Bằng chứng và bản tạo ra ──
+            2026-09-24 fix: ContextInspector (which mounts SidebarRight — the
+            ONLY owner of fetchMindMaps/fetchSummaries, guided-generation
+            polling and the Guided dialog) used to live entirely inside the
+            `panel.collapsed.right` conditional below. On a fresh session the
+            right panel starts collapsed, so SidebarRight never mounted, its
+            mount effect never ran, and the mind map/summary catalog stayed
+            permanently empty (0/0 badges) no matter what existed server-side
+            — confirmed live: `/mindmaps` never left the browser until the
+            panel was expanded at least once. Root-caused via a real
+            production session (QA account, fresh page load, zero network
+            calls to /mindmaps or /summaries; browser fiber tree had no
+            component containing that literal string at all). The mobile
+            drawer path below already got this right — it keeps
+            ContextInspector mounted and hides it with a CSS transform
+            instead of unmounting it. This makes the desktop collapsed-rail
+            path do the same: always mount, hide via width/visibility only. */}
+        {!rightSurfaceVisible ? null : (
           <>
-            {!panel.drawer && !mindmapToolOverlay && (
+            {!panel.drawer && panel.collapsed.right && (
+              <PanelSpine
+                side="right"
+                label={PANELS.right.label}
+                count={evidence?.sources?.length || 0}
+                onExpand={() => panel.setCollapsedFor("right", false)}
+              />
+            )}
+            {!panel.drawer && !panel.collapsed.right && !mindmapToolOverlay && (
               <PanelDivider
                 side="right"
                 label={PANELS.right.label}
@@ -660,6 +677,7 @@ export default function MainLayout({
               />
             )}
             <aside
+              aria-hidden={!panel.drawer && panel.collapsed.right ? true : undefined}
               className={
                 mindmapToolOverlay
                   ? "mindmap-tools-overlay fixed top-[60px] right-3 bottom-3 z-40 w-[360px] bg-surface-sidebar border border-border rounded-[12px] shadow-card-hover overflow-hidden"
@@ -673,7 +691,13 @@ export default function MainLayout({
                      ${rightOpen ? "translate-y-0" : "translate-y-full"}`
                   : "context-inspector-shell shrink-0 bg-surface-sidebar overflow-hidden"
               }
-              style={!panel.drawer && !mindmapToolOverlay ? { width: panel.width.right } : undefined}
+              style={
+                !panel.drawer && !mindmapToolOverlay
+                  ? (panel.collapsed.right
+                      ? { width: 0, minWidth: 0, padding: 0, border: "none", pointerEvents: "none" }
+                      : { width: panel.width.right })
+                  : undefined
+              }
             >
               <div className="h-full">
                 <ContextInspector

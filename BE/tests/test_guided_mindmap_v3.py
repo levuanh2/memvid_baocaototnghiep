@@ -1,6 +1,21 @@
-from app.domains.mindmap.guided import normalize_intent, suggest_topics
+from app.domains.mindmap.guided import intent_hash, normalize_intent, suggest_topics
 from services.mindmap.pipeline.schema import build_record, repair_v3_record, validate_v3_record
 from services.mindmap.pipeline.guided_planner import plan_guided
+
+
+def test_intent_hash_changes_when_layout_version_bumps(monkeypatch):
+    """2026-09-24: a future schema/layout/profile bump must bust every
+    existing cached content_hash, so a request that now expects the new
+    shape can never be satisfied by an old-shape cached record. Before this,
+    intent_hash only salted with the literal "guided-v3" -- constant across
+    any schema/layout/profile change, so it could not have caught this."""
+    import services.mindmap.pipeline.schema as schema_mod
+    intent = {"preset": "overview", "detail_level": "balanced", "instruction": "",
+              "selected_topic_ids": [], "selected_topics": [], "locale": "vi"}
+    before = intent_hash("base-hash", intent)
+    monkeypatch.setattr(schema_mod, "LAYOUT_VERSION", "side-balanced-v3")
+    after = intent_hash("base-hash", intent)
+    assert before != after
 
 
 def test_guided_intent_preserves_instruction_and_defaults():

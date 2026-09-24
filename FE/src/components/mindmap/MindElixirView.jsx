@@ -102,11 +102,18 @@ export default function MindElixirView({ data, onRegenerate, regenerating, contr
 
   const degraded = Boolean(data?.generator?.degraded);
   const missing = data?.generator?.missing || [];
+  const schemaVersion = Number(data?.schema_version);
   const missingRelations = !Object.prototype.hasOwnProperty.call(data || {}, "relations");
-  const missingEnrichment = Array.isArray(data?.nodes)
+  // "enrichment" is a V2-only per-node field (LLM-added supplementary text).
+  // V3 guided nodes never have it (they use note/chunk_refs/node_type
+  // instead) -- gating this check to schema_version < 3 fixes every valid,
+  // complete V3 map being permanently mislabeled "Sơ đồ cũ · Nâng cấp" below
+  // regardless of actual quality (2026-09-24, found via a real production
+  // record with real hierarchy/relations still showing the "old map" badge).
+  const missingEnrichment = schemaVersion < 3 && Array.isArray(data?.nodes)
     && data.nodes.some((node) => !Object.prototype.hasOwnProperty.call(node || {}, "enrichment"));
   const generatorMissing = Array.isArray(data?.generator?.missing) ? data.generator.missing : [];
-  const upgradeRequired = Number(data?.schema_version) < 2 || missingRelations || missingEnrichment
+  const upgradeRequired = schemaVersion < 2 || missingRelations || missingEnrichment
     || generatorMissing.includes("enrich") || generatorMissing.includes("relations");
   // "Tạo lại" đang chạy nền (SidebarRight bơm generating/progress/onCancel vào
   // data) — banner + nút Huỷ ngay trong toolbar.
