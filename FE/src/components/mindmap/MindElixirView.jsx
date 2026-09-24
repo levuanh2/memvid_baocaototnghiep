@@ -122,22 +122,33 @@ export default function MindElixirView({ data, onRegenerate, regenerating, contr
   const fitIfReady = useCallback(() => {
     const el = containerRef.current;
     const mind = mindRef.current;
-    if (!pendingFitRef.current || !mind || !el || el.clientWidth <= 0 || el.clientHeight <= 0) return;
-    pendingFitRef.current = false;
+    if (!mind || !el || el.clientWidth <= 0 || el.clientHeight <= 0) return;
     // 2026-09-24: `scaleFit()` only computes a zoom/pan transform from the
     // node elements' EXISTING offsetWidth/offsetHeight -- it never calls
     // `layout()`/`linkDiv()`, so it cannot repair the broken NaN root-level
     // `.lines` connector paths that `mind.init()` produces when it first ran
     // against this same 0x0 container (verified against mind-elixir's own
     // source: `scaleFit` and `linkDiv` are two separate, unrelated
-    // functions). The comment on the ResizeObserver below already correctly
-    // diagnosed this as needing "layout()+linkDiv()" -- this was the gap
-    // between that diagnosis and what the code actually called. `layout()`
-    // recomputes every node's real position from `this.nodeData` (safe, no
-    // args, no data loss); `linkDiv()` redraws the connector paths from
-    // those positions -- same pair mind-elixir's own `refresh()` runs.
+    // functions). `layout()` recomputes every node's real position from
+    // `this.nodeData` (safe, no args, no data loss); `linkDiv()` redraws the
+    // connector paths from those positions -- same pair mind-elixir's own
+    // `refresh()` runs.
+    //
+    // NOT gated by pendingFitRef: the first ResizeObserver entry to report a
+    // positive width/height is not reliably the container's SETTLED size --
+    // it can fire mid CSS-transition (the right panel's own
+    // `transition-transform duration-200`, tab-switch animations), so a
+    // one-shot repair could still run against a transitional, still-wrong
+    // size and never get a second chance (reproduced live: connectors
+    // stayed broken even after the container measured a healthy final size,
+    // because the one-shot flag had already been spent on an earlier,
+    // smaller intermediate report). layout()+linkDiv() are cheap and
+    // idempotent -- mind-elixir already reruns them on every theme toggle --
+    // so rerunning them on every qualifying resize is safe.
     mind.layout?.();
     mind.linkDiv?.();
+    if (!pendingFitRef.current) return;
+    pendingFitRef.current = false;
     mind.scaleFit?.();
   }, []);
 
