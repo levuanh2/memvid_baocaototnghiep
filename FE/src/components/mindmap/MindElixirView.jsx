@@ -124,6 +124,20 @@ export default function MindElixirView({ data, onRegenerate, regenerating, contr
     const mind = mindRef.current;
     if (!pendingFitRef.current || !mind || !el || el.clientWidth <= 0 || el.clientHeight <= 0) return;
     pendingFitRef.current = false;
+    // 2026-09-24: `scaleFit()` only computes a zoom/pan transform from the
+    // node elements' EXISTING offsetWidth/offsetHeight -- it never calls
+    // `layout()`/`linkDiv()`, so it cannot repair the broken NaN root-level
+    // `.lines` connector paths that `mind.init()` produces when it first ran
+    // against this same 0x0 container (verified against mind-elixir's own
+    // source: `scaleFit` and `linkDiv` are two separate, unrelated
+    // functions). The comment on the ResizeObserver below already correctly
+    // diagnosed this as needing "layout()+linkDiv()" -- this was the gap
+    // between that diagnosis and what the code actually called. `layout()`
+    // recomputes every node's real position from `this.nodeData` (safe, no
+    // args, no data loss); `linkDiv()` redraws the connector paths from
+    // those positions -- same pair mind-elixir's own `refresh()` runs.
+    mind.layout?.();
+    mind.linkDiv?.();
     mind.scaleFit?.();
   }, []);
 
