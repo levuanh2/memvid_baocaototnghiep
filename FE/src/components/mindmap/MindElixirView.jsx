@@ -88,6 +88,7 @@ export default function MindElixirView({ data, onRegenerate, regenerating, contr
   const mindRef = useRef(null);
   const canvasWrapRef = useRef(null);
   const pendingFitRef = useRef(false);
+  const pollActiveRef = useRef(false);
   const [showRelations, setShowRelations] = useState(true);
   const [isFullscreen, setIsFullscreen] = useState(false);
   const [dirty, setDirty] = useState(false);
@@ -166,29 +167,55 @@ export default function MindElixirView({ data, onRegenerate, regenerating, contr
     return true;
   }, []);
 
-  // 2026-09-24: starts (or restarts) an rAF loop that keeps calling
-  // fitIfReady() every frame until it reports success. No frame cap -- the
-  // wait for "the pane becomes visible" is user-paced and genuinely
-  // unbounded (could be milliseconds or minutes after this map's data
-  // arrived, depending on when the user clicks into the Mind Map tab), not
-  // a fixed settling delay a short timeout could safely assume. A 15s
-  // wall-clock ceiling is kept purely as a safety valve against burning
-  // CPU forever if something is permanently, unrecoverably broken -- a
-  // pane the user is actually looking at settles within a handful of
-  // frames in every case observed live, never anywhere close to that.
-  // Returns a cleanup function so callers can cancel it (unmount, or a
-  // newer call to startFitPoll superseding an older still-running one).
+  // 2026-09-24: starts a single rAF loop that keeps calling fitIfReady()
+  // every frame -- cheap when not ready (an early-return on clientWidth) --
+  // until it reports success, WHETHER OR NOT the pane is visible yet. This
+  // replaced two earlier designs, both tried live and confirmed broken:
+  //
+  // - A 60-frame (~1s) capped poll: too short. WorkspaceContainer mounts a
+  //   pane's content as soon as it HAS data, not when it becomes the
+  //   active tab, so the container can stay hidden (display:none) for
+  //   however long the user takes to click into Mind Map -- an unbounded,
+  //   user-paced interval, not a brief settling delay. Confirmed live:
+  //   clientWidth was still exactly 0 five real seconds after mount.
+  // - An IntersectionObserver restarting the poll on every "became
+  //   visible" report: ResizeObserver was directly instrumented live and
+  //   confirmed to never fire at all in this app, so it was replaced with
+  //   IntersectionObserver -- which reliably fires, but fires REPEATEDLY
+  //   during the right panel's own CSS transition (not just once on the
+  //   hidden -> visible edge), each firing with a real, positive, but
+  //   still mid-transition boundingClientRect. Cancelling and restarting
+  //   the poll on every one of those firings kept resetting it before it
+  //   had landed a frame where geometry was actually correct -- confirmed
+  //   live: it never succeeded even once across its full former 15s
+  //   window, while a single manual `mind.layout(); mind.linkDiv();` call
+  //   from the console, made well after the transition had visibly
+  //   settled, fixed it instantly every time.
+  //
+  // A single continuous poll sidesteps needing to correctly time an
+  // external visibility signal at all: it simply notices real geometry the
+  // very next frame after it exists, hidden or not, transitioning or not.
+  // pollActiveRef guards against a second concurrent poll (e.g. an
+  // unrelated re-render) rather than against any specific external
+  // trigger. The wall-clock ceiling is generous (2 minutes) purely as a
+  // safety valve against looping forever on something permanently,
+  // unrecoverably broken -- not a real constraint on how long a user may
+  // reasonably take to click into this tab.
+  // Returns a cleanup function so callers can cancel it (unmount).
   const startFitPoll = useCallback(() => {
+    if (pollActiveRef.current) return () => {};
+    pollActiveRef.current = true;
     let cancelled = false;
-    const deadline = (typeof performance !== "undefined" ? performance.now() : Date.now()) + 15000;
+    const deadline = (typeof performance !== "undefined" ? performance.now() : Date.now()) + 120000;
+    const stop = () => { cancelled = true; pollActiveRef.current = false; };
     const poll = () => {
       if (cancelled) return;
       const now = typeof performance !== "undefined" ? performance.now() : Date.now();
-      if (fitIfReady() || now >= deadline) return;
+      if (fitIfReady() || now >= deadline) { pollActiveRef.current = false; return; }
       requestAnimationFrame(poll);
     };
     requestAnimationFrame(poll);
-    return () => { cancelled = true; };
+    return stop;
   }, [fitIfReady]);
 
   // Create once per mounted viewer. Switching saved maps refreshes this same
@@ -298,37 +325,18 @@ export default function MindElixirView({ data, onRegenerate, regenerating, contr
   // Chat tab, `mind.init()` (and its internal first layout()/linkDiv()) runs
   // against a 0x0 container (display:none collapses every descendant's
   // offsetWidth/offsetHeight to 0), producing the exact same NaN subLines
-  // paths as the dark-mode bug above — reproduced live: connectors stay
-  // broken indefinitely after switching into the MindMap tab, with nothing
-  // to self-correct them (mind-elixir never reruns layout just because a
-  // hidden ancestor became visible).
+  // paths as the dark-mode bug above.
   //
-  // 2026-09-24: this used to be a ResizeObserver on the container. Directly
-  // instrumented live (production): across several genuine, confirmed
-  // container resizes (panel collapse/expand, clientWidth measurably
-  // changing each time), its callback fired ZERO times -- it never once
-  // detected the hidden -> visible transition it existed to catch.
-  // IntersectionObserver is the tool actually built for detecting an
-  // element becoming visible (including across a display:none flip, which
-  // is specifically documented browser behavior, unlike ResizeObserver's
-  // handling of that same transition) -- it reliably fires here where
-  // ResizeObserver did not. `startFitPoll()` (not a single fitIfReady()
-  // call) because becoming intersecting is still not proof every measurement
-  // layout() needs internally has settled on that exact frame.
-  useEffect(() => {
-    const el = containerRef.current;
-    if (!el) return;
-    let stopPoll = null;
-    const io = new IntersectionObserver((entries) => {
-      const entry = entries[0];
-      if (entry.isIntersecting && entry.boundingClientRect.width > 0 && entry.boundingClientRect.height > 0) {
-        stopPoll?.();
-        stopPoll = startFitPoll();
-      }
-    });
-    io.observe(el);
-    return () => { io.disconnect(); stopPoll?.(); };
-  }, [startFitPoll]);
+  // 2026-09-24: this used to be a ResizeObserver, then an
+  // IntersectionObserver, both meant to catch the hidden -> visible
+  // transition and (re)start the repair poll at that moment. Both were
+  // tried live and confirmed broken -- see the long comment on
+  // `startFitPoll` above for exactly how. No observer-based "catch the
+  // transition" effect exists here anymore: `startFitPoll()` (called once,
+  // in the mount effect below) already runs continuously until real
+  // geometry exists, regardless of when the pane becomes visible, which
+  // makes a separate visibility-detection effect redundant -- one moving
+  // part sidesteps needing to correctly time an external signal at all.
 
   // PR#8: thread dirty lên SidebarRight (data.onDirtyChange) — parent cần biết
   // để confirm TRƯỚC khi "Tạo lại" thay thế bản đang sửa (fix thật của known-issue

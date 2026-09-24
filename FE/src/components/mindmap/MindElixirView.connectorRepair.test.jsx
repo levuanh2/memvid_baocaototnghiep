@@ -1,67 +1,55 @@
 // @vitest-environment jsdom
 //
-// 2026-09-24 regression, five rounds of the same bug family, each only
+// 2026-09-24 regression, six rounds of the same bug family, each only
 // found by re-verifying live against a real production record instead of
 // trusting that a fix which looked correct on paper had actually landed:
 //
-// Round 1 -- mind.init() run against a 0x0 container (the map arriving
-// while a hidden pane, or before the container's first real layout pass)
-// leaves mind-elixir's root-level `.lines` connector paths permanently
-// broken (`d="M NaN 0 Q NaN 0 0 0"`). An existing ResizeObserver caught the
-// hidden -> visible transition but only called `scaleFit()`, which
-// mind-elixir's own source shows only recomputes a zoom/pan transform from
-// EXISTING element offsets -- it never calls `layout()`/`linkDiv()`, so it
-// could not have repaired the broken paths.
+// Round 1 -- mind.init() run against a 0x0 container leaves mind-elixir's
+// root-level `.lines` connector paths permanently broken
+// (`d="M NaN 0 Q NaN 0 0 0"`). An existing ResizeObserver caught the
+// hidden -> visible transition but only called `scaleFit()`, which never
+// calls `layout()`/`linkDiv()`, so it could not have repaired the paths.
 //
 // Round 2 -- after wiring in layout()+linkDiv(), still broken live. The
-// repair was gated behind a one-shot `pendingFitRef` flag that the FIRST
-// qualifying resize report consumed -- but that first report is not
-// reliably the container's settled size.
+// repair was gated behind a one-shot flag that the FIRST qualifying resize
+// report consumed, not reliably the container's settled size.
 //
-// Round 3 -- after removing that one-shot gate, still broken live. Directly
-// instrumented MindElixir.prototype.layout in the live browser console: the
-// call count stayed at 0 through several genuine, confirmed resizes -- the
-// ResizeObserver never fired its callback at all in production. Replaced
-// the trigger with a bounded requestAnimationFrame poll on mount.
+// Round 3 -- after removing that gate, still broken live. The
+// ResizeObserver never fired its callback at all in production (directly
+// instrumented). Replaced with a bounded requestAnimationFrame poll.
 //
-// Round 4 -- deployed the poll, still broken live. The poll's readiness
-// check (`el.clientWidth > 0`) is not sufficient: the container reported a
-// real width on the very FIRST poll frame, layout()+linkDiv() ran, and the
-// paths were STILL NaN. `fitIfReady()` now verifies the actual rendered
-// path data instead of trusting `clientWidth` as a proxy.
+// Round 4 -- the poll's readiness check (`el.clientWidth > 0`) was not
+// sufficient: the container reported a real width on the very FIRST poll
+// frame, layout()+linkDiv() ran, and the paths were STILL NaN.
+// `fitIfReady()` now verifies the actual rendered path data instead of
+// trusting `clientWidth` as a proxy.
 //
-// Round 5 (this one) -- deployed the self-verifying poll, STILL broken
-// live, five real seconds after mount, with clientWidth/clientHeight
-// confirmed to still be exactly 0 at that point. Root cause: WorkspaceContainer
-// mounts every pane's content as soon as it HAS data, not when it becomes
-// the active tab -- if the map arrives while the user is on the Chat tab,
-// the container stays hidden (display:none) for however long the user
-// takes to click into Mind Map, an UNBOUNDED, user-paced interval. The
-// poll's ~1s (60-frame) cap exhausted and gave up long before that click
-// ever happened. `startFitPoll()` now has no frame cap (only a generous 15s
-// wall-clock safety valve), and the ResizeObserver -- confirmed live to
-// never fire at all in this app -- was replaced with an IntersectionObserver,
-// the tool actually built for detecting a display:none -> visible
-// transition, which restarts the poll whenever the pane genuinely becomes
-// visible however long after mount that is.
+// Round 5 -- the poll's ~1s (60-frame) cap gave up long before the user
+// clicked into the Mind Map tab (an unbounded, user-paced wait, not a
+// brief settling delay) -- clientWidth confirmed still 0 five real seconds
+// after mount. Replaced with an IntersectionObserver that restarted an
+// uncapped poll on every "became visible" report.
+//
+// Round 6 (this one) -- IntersectionObserver fires REPEATEDLY during the
+// right panel's own CSS transition, and cancelling + restarting the poll
+// on every one of those firings kept resetting it before it landed a
+// frame where geometry was actually correct -- confirmed live it never
+// succeeded across a full 15s window, while a single manual
+// mind.layout()+linkDiv() call from the console, made after everything
+// had visibly settled, fixed it instantly every time. Removed the
+// observer entirely: a single continuous poll (generous 2-minute
+// wall-clock ceiling, guarded against a second concurrent poll) started
+// once at mount notices real geometry the next frame after it exists,
+// hidden or not, transitioning or not -- no external visibility signal to
+// time correctly at all.
 import { describe, it, expect, vi, afterEach, beforeAll } from "vitest";
 import { createRoot } from "react-dom/client";
 import { act } from "react-dom/test-utils";
 import MindElixir from "mind-elixir";
 import MindElixirView from "./MindElixirView";
 
-let ioCallback = null;
 beforeAll(() => {
   window.matchMedia = window.matchMedia || (() => ({ matches: false, addEventListener() {}, removeEventListener() {} }));
-  window.ResizeObserver = window.ResizeObserver || class {
-    observe() {} unobserve() {} disconnect() {}
-  };
-  window.IntersectionObserver = class {
-    constructor(cb) { ioCallback = cb; }
-    observe() {}
-    unobserve() {}
-    disconnect() {}
-  };
 });
 
 const DATA = {
@@ -74,17 +62,16 @@ const DATA = {
 };
 const CONTROLLER = { registerMindInstance: vi.fn(), onNodeSelected: vi.fn(), selected: null, sidecarRef: { current: new Map() } };
 let container;
-
 let root;
+
 afterEach(async () => {
   // Unmount properly (not just detach the DOM node) so each test's rAF
-  // poll -- unbounded except for a 15s wall-clock ceiling since this round
-  // -- actually stops via its effect cleanup, instead of lingering in the
-  // background across tests and calling into a since-restored (or a later
-  // test's freshly re-spied) MindElixir.prototype.
+  // poll -- unbounded except for a 2-minute wall-clock ceiling -- actually
+  // stops via its effect cleanup, instead of lingering in the background
+  // across tests and calling into a since-restored (or a later test's
+  // freshly re-spied) MindElixir.prototype.
   if (root) { await act(async () => { root.unmount(); }); root = null; }
   if (container) { document.body.removeChild(container); container = null; }
-  ioCallback = null;
   vi.restoreAllMocks();
 });
 
@@ -166,7 +153,8 @@ describe("MindElixirView connector repair", () => {
     expect(scaleFitSpy).not.toHaveBeenCalled(); // correctly still not fixed -- container is still 0x0
 
     // The pane becomes visible now (matches the user finally clicking into
-    // the Mind Map tab, however long after mount that took).
+    // the Mind Map tab, however long after mount that took) -- no observer,
+    // no event, just the container measuring real size on the next poll tick.
     const realEl = container.querySelector(".me-container");
     Object.defineProperty(realEl, "clientWidth", { value: 800, configurable: true });
     Object.defineProperty(realEl, "clientHeight", { value: 600, configurable: true });
@@ -176,25 +164,4 @@ describe("MindElixirView connector repair", () => {
     }, { timeout: 3000 });
     expect(linkDivSpy.mock.calls.length).toBeGreaterThanOrEqual(1);
   }, 10000);
-
-  it("IntersectionObserver restarts the poll when the pane becomes visible (ResizeObserver confirmed live to never fire in this app)", async () => {
-    const { layoutSpy, linkDivSpy } = await renderMounted({ fixFromCallNumber: 1, startVisible: false });
-
-    await new Promise((resolve) => setTimeout(resolve, 100));
-    layoutSpy.mockClear();
-    linkDivSpy.mockClear();
-
-    const realEl = container.querySelector(".me-container");
-    Object.defineProperty(realEl, "clientWidth", { value: 800, configurable: true });
-    Object.defineProperty(realEl, "clientHeight", { value: 600, configurable: true });
-
-    await act(async () => {
-      ioCallback?.([{ isIntersecting: true, boundingClientRect: { width: 800, height: 600 } }]);
-    });
-
-    await vi.waitFor(() => {
-      expect(layoutSpy).toHaveBeenCalled();
-      expect(linkDivSpy).toHaveBeenCalled();
-    }, { timeout: 3000 });
-  });
 });
