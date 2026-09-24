@@ -1,40 +1,47 @@
 // @vitest-environment jsdom
 //
-// 2026-09-24 regression, two rounds of the same bug family:
+// 2026-09-24 regression, three rounds of the same bug family, each only
+// found by re-verifying live against a real production record instead of
+// trusting that a fix which looked correct on paper had actually landed:
 //
 // Round 1 -- mind.init() run against a 0x0 container (the map arriving
 // while a hidden pane, or before the container's first real layout pass)
 // leaves mind-elixir's root-level `.lines` connector paths permanently
-// broken (`d="M NaN 0 Q NaN 0 0 0"` -- confirmed live against a real
-// production record). An existing ResizeObserver caught the hidden ->
-// visible transition but only called `scaleFit()`, which mind-elixir's own
-// source shows only recomputes a zoom/pan transform from EXISTING element
-// offsets -- it never calls `layout()`/`linkDiv()`, so it could not have
-// repaired the broken paths.
+// broken (`d="M NaN 0 Q NaN 0 0 0"`). An existing ResizeObserver caught the
+// hidden -> visible transition but only called `scaleFit()`, which
+// mind-elixir's own source shows only recomputes a zoom/pan transform from
+// EXISTING element offsets -- it never calls `layout()`/`linkDiv()`, so it
+// could not have repaired the broken paths.
 //
-// Round 2 -- after wiring in layout()+linkDiv(), the connectors were STILL
-// broken live even though the container measured a healthy final size.
-// Root cause: the repair was gated behind a one-shot `pendingFitRef` flag
-// that the FIRST qualifying ResizeObserver entry (width>0 && height>0)
-// consumed -- but that first entry is not reliably the container's settled
-// size; it can fire mid CSS-transition (the right panel's own
-// transform transition, tab-switch animation) against a still-wrong
-// intermediate size, permanently spending the one repair attempt. This
-// proves layout()/linkDiv() now rerun on a SECOND resize report too, not
-// just the first.
+// Round 2 -- after wiring in layout()+linkDiv(), still broken live. The
+// repair was gated behind a one-shot `pendingFitRef` flag that the FIRST
+// qualifying resize report consumed -- but that first report is not
+// reliably the container's settled size, so the one repair attempt could
+// be spent on a still-wrong intermediate size.
 //
-// Round 3 -- deployed round 2, re-verified live: STILL broken. Directly
-// instrumented MindElixir.prototype.layout in the live browser console and
-// triggered several genuine, confirmed container resizes (right panel
-// collapse/expand, clientWidth measurably changing) -- the call count
-// stayed at 0 through all of them. The ResizeObserver this whole repair
-// depended on never fired its callback at all in production, for reasons
-// that resisted further live diagnosis. Manually calling
-// mind.layout()+linkDiv() in the same console DID fix the paths instantly,
-// proving the repair logic itself was never the problem -- only the
-// trigger. Replaced the ResizeObserver as the primary trigger with a
-// bounded requestAnimationFrame poll on mount, which does not depend on
-// ResizeObserver firing at all.
+// Round 3 -- after removing that one-shot gate, still broken live, even
+// after several genuine, confirmed container resizes (right panel
+// collapse/expand). Directly instrumented MindElixir.prototype.layout in
+// the live browser console: the call count stayed at 0 through every
+// resize -- the ResizeObserver never fired its callback at all in
+// production. Manually calling mind.layout()+linkDiv() in that console DID
+// fix the paths, proving the logic itself was correct -- only the trigger
+// was unreliable. Replaced the trigger with a bounded requestAnimationFrame
+// poll on mount, independent of ResizeObserver entirely.
+//
+// Round 4 (this one) -- deployed the poll, still broken live. The poll's
+// readiness check (`el.clientWidth > 0`) is not sufficient either:
+// reproduced live with layout()/linkDiv() instrumented from BEFORE mount
+// (via a fresh dynamic import of the mind-elixir module, patched before
+// the app ever created an instance) -- the container reported a real width
+// on the very FIRST poll frame, layout()+linkDiv() ran exactly once, and
+// the paths were STILL NaN (something layout() measures internally, e.g.
+// the root topic element's own offsetWidth/offsetHeight per mind-elixir's
+// source, was not yet settled even though the outer container's width
+// already was). `fitIfReady()` now verifies the actual rendered path data
+// instead of trusting `clientWidth` as a proxy, and only reports success
+// once no `.lines path` still contains "NaN" -- the poll keeps retrying
+// otherwise.
 import { describe, it, expect, vi, afterEach, beforeAll } from "vitest";
 import { createRoot } from "react-dom/client";
 import { act } from "react-dom/test-utils";
@@ -69,9 +76,33 @@ afterEach(() => {
   vi.restoreAllMocks();
 });
 
-async function renderMounted() {
+// jsdom has no real layout engine -- mind-elixir's REAL linkDiv() will
+// always compute NaN geometry there, regardless of clientWidth. To test
+// OUR retry/self-verification logic (not mind-elixir's internals, which
+// are out of scope and third-party), this mock calls the real
+// implementation through (so genuine call-count assertions still mean
+// something) and then, starting from the Nth call, stamps valid path data
+// onto the real `.lines` elements the real implementation created --
+// simulating "geometry has now genuinely settled", matching what a real
+// browser eventually produces once layout truly stabilizes.
+function mockLinkDivFixedFromCall(fixFromCallNumber) {
+  const orig = MindElixir.prototype.linkDiv;
+  let calls = 0;
+  return vi.spyOn(MindElixir.prototype, "linkDiv").mockImplementation(function (...args) {
+    calls++;
+    const result = orig.apply(this, args);
+    if (calls >= fixFromCallNumber) {
+      this.container.querySelectorAll(".lines path").forEach((p) => {
+        p.setAttribute("d", "M 100 100 L 200 200");
+      });
+    }
+    return result;
+  });
+}
+
+async function renderMounted({ fixFromCallNumber = 1 } = {}) {
   const layoutSpy = vi.spyOn(MindElixir.prototype, "layout");
-  const linkDivSpy = vi.spyOn(MindElixir.prototype, "linkDiv");
+  const linkDivSpy = mockLinkDivFixedFromCall(fixFromCallNumber);
   const scaleFitSpy = vi.spyOn(MindElixir.prototype, "scaleFit");
 
   container = document.createElement("div");
@@ -81,82 +112,49 @@ async function renderMounted() {
     root.render(<MindElixirView data={DATA} onRegenerate={vi.fn()} regenerating={false} controller={CONTROLLER} />);
   });
 
-  // Container starts at jsdom's default 0x0 -- init() ran against it
-  // already. Give it a real size for the manual observer callbacks below.
   const realEl = container.querySelector(".me-container");
   Object.defineProperty(realEl, "clientWidth", { value: 800, configurable: true });
   Object.defineProperty(realEl, "clientHeight", { value: 600, configurable: true });
 
-  layoutSpy.mockClear();
-  linkDivSpy.mockClear();
-  scaleFitSpy.mockClear();
-  return { layoutSpy, linkDivSpy, scaleFitSpy };
+  return { layoutSpy, linkDivSpy, scaleFitSpy, realEl };
 }
 
-describe("MindElixirView connector repair on hidden -> visible transition", () => {
-  it("calls layout() and linkDiv() (not just scaleFit()) once the container reports a real size", async () => {
-    const { layoutSpy, linkDivSpy, scaleFitSpy } = await renderMounted();
-
-    await act(async () => {
-      resizeCallback?.([{ contentRect: { width: 800, height: 600 } }]);
-    });
-
-    expect(layoutSpy).toHaveBeenCalled();
-    expect(linkDivSpy).toHaveBeenCalled();
-    expect(scaleFitSpy).toHaveBeenCalled();
-  });
-
-  it("still repairs geometry on a SECOND resize report, after the one-shot fit was already spent", async () => {
-    const { layoutSpy, linkDivSpy, scaleFitSpy } = await renderMounted();
-
-    // First report: an intermediate size mid CSS-transition -- this is what
-    // used to permanently consume the one-shot repair attempt.
-    await act(async () => {
-      resizeCallback?.([{ contentRect: { width: 200, height: 100 } }]);
-    });
-    expect(scaleFitSpy).toHaveBeenCalledTimes(1);
-
-    layoutSpy.mockClear();
-    linkDivSpy.mockClear();
-
-    // Second report: the container's real, settled size.
-    await act(async () => {
-      resizeCallback?.([{ contentRect: { width: 800, height: 600 } }]);
-    });
-
-    expect(layoutSpy).toHaveBeenCalled();
-    expect(linkDivSpy).toHaveBeenCalled();
-  });
-
-  it("repairs geometry via the mount-time rAF poll alone, even if the ResizeObserver never fires", async () => {
-    const layoutSpy = vi.spyOn(MindElixir.prototype, "layout");
-    const linkDivSpy = vi.spyOn(MindElixir.prototype, "linkDiv");
-
-    container = document.createElement("div");
-    document.body.appendChild(container);
-    const root = createRoot(container);
-    await act(async () => {
-      root.render(<MindElixirView data={DATA} onRegenerate={vi.fn()} regenerating={false} controller={CONTROLLER} />);
-    });
-
-    // clientWidth stays at jsdom's default 0 for a beat -- matching a
-    // container that is still settling layout -- then becomes real. The
-    // ResizeObserver callback (`resizeCallback`) is deliberately never
-    // invoked in this test: only the poll can make this test pass.
-    const realEl = container.querySelector(".me-container");
-    Object.defineProperty(realEl, "clientWidth", { value: 0, configurable: true });
-    Object.defineProperty(realEl, "clientHeight", { value: 0, configurable: true });
-    layoutSpy.mockClear();
-    linkDivSpy.mockClear();
-
-    setTimeout(() => {
-      Object.defineProperty(realEl, "clientWidth", { value: 800, configurable: true });
-      Object.defineProperty(realEl, "clientHeight", { value: 600, configurable: true });
-    }, 50);
+describe("MindElixirView connector repair", () => {
+  it("keeps polling past a call where the container measured real size but the paths were still NaN", async () => {
+    // Simulate the exact round-4 bug: first call still broken, second call
+    // is where geometry has genuinely settled.
+    const { layoutSpy, linkDivSpy, scaleFitSpy } = await renderMounted({ fixFromCallNumber: 2 });
 
     await vi.waitFor(() => {
-      expect(layoutSpy).toHaveBeenCalled();
-      expect(linkDivSpy).toHaveBeenCalled();
+      expect(linkDivSpy.mock.calls.length).toBeGreaterThanOrEqual(2);
     }, { timeout: 3000 });
+
+    expect(layoutSpy).toHaveBeenCalled();
+    expect(scaleFitSpy).toHaveBeenCalledTimes(1); // one-shot fit, even though the repair itself retried
+  });
+
+  it("does not report success (and does not fire scaleFit) while paths are still NaN", async () => {
+    // Geometry never settles in this run -- the poll should keep trying
+    // (bounded, ~60 frames) without ever calling scaleFit prematurely.
+    const { linkDivSpy, scaleFitSpy } = await renderMounted({ fixFromCallNumber: Infinity });
+
+    await new Promise((resolve) => setTimeout(resolve, 300));
+
+    expect(linkDivSpy.mock.calls.length).toBeGreaterThan(1); // kept retrying
+    expect(scaleFitSpy).not.toHaveBeenCalled(); // never falsely reported fixed
+  });
+
+  it("also repairs geometry when only the ResizeObserver fires (secondary safety net still works)", async () => {
+    const { layoutSpy, linkDivSpy } = await renderMounted({ fixFromCallNumber: 1 });
+    await vi.waitFor(() => expect(linkDivSpy.mock.calls.length).toBeGreaterThanOrEqual(1), { timeout: 3000 });
+    layoutSpy.mockClear();
+    linkDivSpy.mockClear();
+
+    await act(async () => {
+      resizeCallback?.([{ contentRect: { width: 800, height: 600 } }]);
+    });
+
+    expect(layoutSpy).toHaveBeenCalled();
+    expect(linkDivSpy).toHaveBeenCalled();
   });
 });
