@@ -382,7 +382,29 @@ export default function MainLayout({
   }, [panel.drawer, rightOpen]);
 
   const rightSurfaceVisible = true;
-  const mindmapToolOverlay = false;
+  // 2026-09-21: Mind Map's node-detail surface must be a closed-by-default
+  // overlay that does not consume grid width (spec section 8) -- distinct
+  // from Chat/Summary's persistent evidence rail, which stays as-is.
+  // `mindmapToolOverlay`'s fixed/floating styling already existed below
+  // (`.mindmap-tools-overlay`) but this flag was hardcoded `false`, so that
+  // branch never actually rendered -- Mind Map mode fell through to the
+  // same always-visible persistent-rail behavior as Chat/Summary, taking
+  // real grid width and showing an empty state with nothing selected,
+  // contradicting both the approved desktop mock and this section's
+  // explicit "closed by default... must not consume grid width... overlay
+  // the right edge" requirement.
+  const mindmapToolOverlay = workspaceMode === "mindmap" && !panel.drawer;
+
+  // Auto-open the overlay exactly when there's a node to show evidence for
+  // (contextual, per section 4's ownership table); auto-close when the
+  // selection is cleared or the mode is switched away, so the panel never
+  // shows stale content from a previous node or a previous map. Manual
+  // close (the drawer's own X) always wins until the next selection.
+  const mindmapSelectedNodeId = mindMapController.selected?.id ?? null;
+  useEffect(() => {
+    if (!mindmapToolOverlay) return;
+    setRightOpen(Boolean(mindmapSelectedNodeId));
+  }, [mindmapToolOverlay, mindmapSelectedNodeId]);
 
   return (
     <div className="flex flex-col h-screen overflow-hidden font-body transition-theme" style={{ background: "var(--bg-base)", color: "var(--text-primary)" }}>
@@ -528,8 +550,12 @@ export default function MainLayout({
           Từ 768px: nới được bằng cách kéo, thu về gáy sách được, nhớ qua phiên. */}
       <div className="flex flex-1 min-h-0 overflow-hidden">
 
-        {/* Nền mờ của ngăn kéo — chỉ tồn tại ở khổ hẹp */}
-        {(panel.drawer && (leftOpen || rightOpen) || mindmapToolOverlay) && (
+        {/* Nền mờ của ngăn kéo — chỉ tồn tại ở khổ hẹp. The desktop Mind Map
+            overlay drawer deliberately does NOT get a backdrop: it floats
+            over the canvas edge while leaving the canvas itself interactive
+            (pan/zoom/select another node) -- a full-screen dim would turn a
+            lightweight contextual panel into an unwanted modal. */}
+        {(panel.drawer && (leftOpen || rightOpen)) && (
           <div
             className="fixed inset-0 bg-black/40 z-30 backdrop-blur-sm"
             onClick={() => { setLeftOpen(false); setRightOpen(false); }}
@@ -604,8 +630,34 @@ export default function MainLayout({
           />
         </main>
 
-        {/* ── LỀ PHẢI — Bằng chứng và bản tạo ra ── */}
-        {!rightSurfaceVisible ? null : !panel.drawer && panel.collapsed.right ? (
+        {/* ── LỀ PHẢI — Bằng chứng và bản tạo ra ──
+            2026-09-21 (2nd pass): the first version of this overlay branch
+            only rendered <ContextInspector> (i.e. SidebarRight -- the owner
+            of fetchMindMaps/fetchSummaries, generation/polling, and the
+            library's onSelect handling) when `rightOpen` was true. Since
+            `rightOpen` starts false, SidebarRight never mounted in Mind Map
+            mode at all until a node was selected -- and nothing could ever
+            select a node, because the library's own map-select handler
+            lives inside the very component that hadn't mounted. Confirmed
+            live: with this bug, choosing a map from the library visibly
+            closed the popover (its own onClose fired) but never loaded the
+            map. Reverting to the ORIGINAL code (mindmapToolOverlay
+            hardcoded false, so SidebarRight was always in the DOM) made
+            selection work again immediately -- isolating this exact branch
+            as the cause. This is the identical bug class fixed earlier
+            today in a different part of this codebase: a component that
+            owns background data/generation logic must stay mounted
+            regardless of whether its OWN visual surface is currently shown.
+            Also: having two separate conditionally-rendered <aside> blocks
+            (one here, one in the persistent-rail branch below) would remount
+            SidebarRight -- and abandon any in-flight generation poll -- on
+            every mode switch between Mind Map and Chat/Summary, since React
+            sees them as different tree positions. Merged back into ONE
+            aside+ContextInspector, always mounted whenever
+            `rightSurfaceVisible`, with only its wrapping className/style
+            varying by mode; the overlay case hides via opacity/visibility/
+            pointer-events (never unmounts) instead of conditional JSX. */}
+        {!rightSurfaceVisible ? null : !mindmapToolOverlay && !panel.drawer && panel.collapsed.right ? (
           <PanelSpine
             side="right"
             label={PANELS.right.label}
@@ -628,9 +680,10 @@ export default function MainLayout({
               />
             )}
             <aside
+              aria-hidden={mindmapToolOverlay && !rightOpen ? true : undefined}
               className={
                 mindmapToolOverlay
-                  ? "mindmap-tools-overlay fixed top-[60px] right-3 bottom-3 z-40 w-[360px] bg-surface-sidebar border border-border rounded-[12px] shadow-card-hover overflow-hidden"
+                  ? "mindmap-tools-overlay fixed top-[60px] right-3 bottom-3 z-40 w-[320px] bg-surface-sidebar border border-border rounded-[12px] shadow-card-hover overflow-hidden transition-opacity duration-150"
                   : panel.drawer
                   // Gia sư AI trên mobile là bottom sheet (đúng yêu cầu Step 1),
                   // Bằng chứng vẫn là ngăn kéo trượt từ cạnh phải như cũ — cùng
@@ -641,7 +694,13 @@ export default function MainLayout({
                      ${rightOpen ? "translate-y-0" : "translate-y-full"}`
                   : "context-inspector-shell shrink-0 bg-surface-sidebar overflow-hidden"
               }
-              style={!panel.drawer && !mindmapToolOverlay ? { width: panel.width.right } : undefined}
+              style={
+                mindmapToolOverlay
+                  ? (rightOpen ? undefined : { opacity: 0, pointerEvents: "none", visibility: "hidden" })
+                  : !panel.drawer
+                  ? { width: panel.width.right }
+                  : undefined
+              }
             >
               <div className="h-full">
                 <ContextInspector
@@ -653,7 +712,7 @@ export default function MainLayout({
                   onClose={() => ((panel.drawer || mindmapToolOverlay) ? setRightOpen(false) : panel.setCollapsedFor("right", true))}
                   onAskAbout={onAskAbout}
                   onOpenSource={onInspectorOpenSource}
-                  collapsible={!panel.drawer}
+                  collapsible={!panel.drawer && !mindmapToolOverlay}
                   rightView={rightView}
                   onRightViewChange={setRightView}
                   artifactRequest={artifactRequest}
