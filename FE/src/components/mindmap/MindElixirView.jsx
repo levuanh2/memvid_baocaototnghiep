@@ -119,9 +119,8 @@ export default function MindElixirView({ data, onRegenerate, regenerating, contr
   // data) — banner + nút Huỷ ngay trong toolbar.
   const generating = Boolean(data?.generating);
 
-  // Returns true once it actually ran the repair (container had real size),
-  // false if there was nothing to do yet -- the caller (the polling loop
-  // below) uses this to know when it can stop retrying.
+  // Returns true once the repair is VERIFIED to have actually worked, false
+  // if the caller (the polling loop below) should keep retrying.
   const fitIfReady = useCallback(() => {
     const el = containerRef.current;
     const mind = mindRef.current;
@@ -147,6 +146,19 @@ export default function MindElixirView({ data, onRegenerate, regenerating, contr
     // so rerunning them on every qualifying call is safe.
     mind.layout?.();
     mind.linkDiv?.();
+    // 2026-09-24: `el.clientWidth > 0` alone is NOT a reliable readiness
+    // signal -- reproduced live: the container reported a real width on the
+    // very first poll frame, layout()+linkDiv() ran, and the `.lines` paths
+    // were STILL `NaN` (something layout() itself measures internally --
+    // e.g. the root topic element's own offsetWidth/offsetHeight, per
+    // mind-elixir's source -- was not yet settled even though the outer
+    // container's width already was). Verify the actual rendered output
+    // instead of trusting the proxy: if any root-level connector path still
+    // contains "NaN", the repair did not really take -- report not-ready so
+    // the poll keeps retrying on a later frame instead of giving up early.
+    const stillBroken = Array.from(el.querySelectorAll(".lines path"))
+      .some((p) => (p.getAttribute("d") || "").includes("NaN"));
+    if (stillBroken) return false;
     if (pendingFitRef.current) {
       pendingFitRef.current = false;
       mind.scaleFit?.();
