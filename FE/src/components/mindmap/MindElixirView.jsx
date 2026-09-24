@@ -235,6 +235,63 @@ export default function MindElixirView({ data, onRegenerate, regenerating, contr
     return () => ro.disconnect();
   }, [fitIfReady]);
 
+  // Background-pan fix: dragging the empty canvas is supposed to move the
+  // viewport (constructor sets `mouseSelectionButton: 2` specifically to
+  // free the LEFT button for panning, right button for box-select). It
+  // never did — confirmed live: `.map-canvas`'s `translate3d(...)` was
+  // byte-identical before/after a left-button drag from empty space.
+  // Root cause is inside mind-elixir 5.13.0 itself (dist/MindElixir.js,
+  // the pointerdown handler `u`): `if (editable && target.className ===
+  // "map-container" && button === 0 && pointerType === "mouse") { ptState =
+  // BoxSelect; return }` fires UNCONDITIONALLY on left-button-down over the
+  // bare canvas, ignoring `mouseSelectionButton` entirely, and returns
+  // before the pan-button logic below it (which DOES respect the config)
+  // ever runs. `BoxSelect` then has no `pointermove` case in the library's
+  // own switch, so it's a silent dead end — no pan, no visible selection
+  // box either. Can't patch node_modules. Mind-elixir does expose a public,
+  // typed `move(dx, dy, smooth?)` (used internally for wheel-panning, see
+  // dist/MindElixir.js `e.move(-deltaX, -deltaY)`) that reads/writes the
+  // live `.map-canvas` transform mind-elixir itself later re-parses from
+  // the DOM — safe to drive from outside. Attached to the WRAPPER
+  // (`canvasWrapRef`, parent of the node mind-elixir binds to) so it fires
+  // independently of — not fighting — mind-elixir's own inert BoxSelect
+  // branch. Gated to `<me-tpc>` misses (mind-elixir topics are the custom
+  // element `<me-tpc>`, not a `.me-tpc` class) so node drag/reparent still
+  // goes through mind-elixir's own Drag state untouched.
+  useEffect(() => {
+    const wrap = canvasWrapRef.current;
+    if (!wrap) return;
+    let pan = null;
+    const onDown = (e) => {
+      if (e.button !== 0 || e.target.closest("me-tpc, me-epd, .mm-floating-toolbar, .mm-legend, .mm-fullscreen-corner")) return;
+      pan = { x: e.clientX, y: e.clientY, id: e.pointerId };
+      wrap.setPointerCapture?.(e.pointerId);
+    };
+    const onMove = (e) => {
+      if (!pan || e.pointerId !== pan.id) return;
+      const dx = e.clientX - pan.x;
+      const dy = e.clientY - pan.y;
+      pan.x = e.clientX;
+      pan.y = e.clientY;
+      mindRef.current?.move?.(dx, dy);
+    };
+    const onUp = (e) => {
+      if (!pan || e.pointerId !== pan.id) return;
+      wrap.releasePointerCapture?.(e.pointerId);
+      pan = null;
+    };
+    wrap.addEventListener("pointerdown", onDown);
+    wrap.addEventListener("pointermove", onMove);
+    wrap.addEventListener("pointerup", onUp);
+    wrap.addEventListener("pointercancel", onUp);
+    return () => {
+      wrap.removeEventListener("pointerdown", onDown);
+      wrap.removeEventListener("pointermove", onMove);
+      wrap.removeEventListener("pointerup", onUp);
+      wrap.removeEventListener("pointercancel", onUp);
+    };
+  }, []);
+
   // PR#8: thread dirty lên SidebarRight (data.onDirtyChange) — parent cần biết
   // để confirm TRƯỚC khi "Tạo lại" thay thế bản đang sửa (fix thật của known-issue
   // "Tạo lại xong ghi đè chỉnh sửa chưa lưu"). Unmount → báo false (hết phiên sửa).
