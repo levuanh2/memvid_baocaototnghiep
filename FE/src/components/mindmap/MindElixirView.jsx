@@ -88,6 +88,7 @@ export default function MindElixirView({ data, onRegenerate, regenerating, contr
   const mindRef = useRef(null);
   const canvasWrapRef = useRef(null);
   const pendingFitRef = useRef(false);
+  const pollActiveRef = useRef(false);
   const [showRelations, setShowRelations] = useState(true);
   const [isFullscreen, setIsFullscreen] = useState(false);
   const [dirty, setDirty] = useState(false);
@@ -102,23 +103,125 @@ export default function MindElixirView({ data, onRegenerate, regenerating, contr
 
   const degraded = Boolean(data?.generator?.degraded);
   const missing = data?.generator?.missing || [];
+  const schemaVersion = Number(data?.schema_version);
   const missingRelations = !Object.prototype.hasOwnProperty.call(data || {}, "relations");
-  const missingEnrichment = Array.isArray(data?.nodes)
+  // "enrichment" is a V2-only per-node field (LLM-added supplementary text).
+  // V3 guided nodes never have it (they use note/chunk_refs/node_type
+  // instead) -- gating this check to schema_version < 3 fixes every valid,
+  // complete V3 map being permanently mislabeled "Sơ đồ cũ · Nâng cấp" below
+  // regardless of actual quality (2026-09-24, found via a real production
+  // record with real hierarchy/relations still showing the "old map" badge).
+  const missingEnrichment = schemaVersion < 3 && Array.isArray(data?.nodes)
     && data.nodes.some((node) => !Object.prototype.hasOwnProperty.call(node || {}, "enrichment"));
   const generatorMissing = Array.isArray(data?.generator?.missing) ? data.generator.missing : [];
-  const upgradeRequired = Number(data?.schema_version) < 2 || missingRelations || missingEnrichment
+  const upgradeRequired = schemaVersion < 2 || missingRelations || missingEnrichment
     || generatorMissing.includes("enrich") || generatorMissing.includes("relations");
   // "Tạo lại" đang chạy nền (SidebarRight bơm generating/progress/onCancel vào
   // data) — banner + nút Huỷ ngay trong toolbar.
   const generating = Boolean(data?.generating);
 
+  // Returns true once the repair is VERIFIED to have actually worked, false
+  // if the caller (the polling loop below) should keep retrying.
   const fitIfReady = useCallback(() => {
     const el = containerRef.current;
     const mind = mindRef.current;
-    if (!pendingFitRef.current || !mind || !el || el.clientWidth <= 0 || el.clientHeight <= 0) return;
-    pendingFitRef.current = false;
-    mind.scaleFit?.();
+    if (!mind || !el || el.clientWidth <= 0 || el.clientHeight <= 0) return false;
+    // 2026-09-24: `scaleFit()` only computes a zoom/pan transform from the
+    // node elements' EXISTING offsetWidth/offsetHeight -- it never calls
+    // `layout()`/`linkDiv()`, so it cannot repair the broken NaN root-level
+    // `.lines` connector paths that `mind.init()` produces when it first ran
+    // against this same 0x0 container (verified against mind-elixir's own
+    // source: `scaleFit` and `linkDiv` are two separate, unrelated
+    // functions). `layout()` recomputes every node's real position from
+    // `this.nodeData` (safe, no args, no data loss); `linkDiv()` redraws the
+    // connector paths from those positions -- same pair mind-elixir's own
+    // `refresh()` runs.
+    //
+    // NOT gated by pendingFitRef: the first caller to report a positive
+    // width/height is not reliably the container's SETTLED size -- it can
+    // run mid CSS-transition (the right panel's own
+    // `transition-transform duration-200`, tab-switch animations), so a
+    // one-shot repair could still run against a transitional, still-wrong
+    // size and never get a second chance. layout()+linkDiv() are cheap and
+    // idempotent -- mind-elixir already reruns them on every theme toggle --
+    // so rerunning them on every qualifying call is safe.
+    mind.layout?.();
+    mind.linkDiv?.();
+    // 2026-09-24: `el.clientWidth > 0` alone is NOT a reliable readiness
+    // signal -- reproduced live: the container reported a real width on the
+    // very first poll frame, layout()+linkDiv() ran, and the `.lines` paths
+    // were STILL `NaN` (something layout() itself measures internally --
+    // e.g. the root topic element's own offsetWidth/offsetHeight, per
+    // mind-elixir's source -- was not yet settled even though the outer
+    // container's width already was). Verify the actual rendered output
+    // instead of trusting the proxy: if any root-level connector path still
+    // contains "NaN", the repair did not really take -- report not-ready so
+    // the poll keeps retrying on a later frame instead of giving up early.
+    const stillBroken = Array.from(el.querySelectorAll(".lines path"))
+      .some((p) => (p.getAttribute("d") || "").includes("NaN"));
+    if (stillBroken) return false;
+    if (pendingFitRef.current) {
+      pendingFitRef.current = false;
+      mind.scaleFit?.();
+    }
+    return true;
   }, []);
+
+  // 2026-09-24: starts a single polling loop that keeps calling
+  // fitIfReady() -- cheap when not ready (an early-return on clientWidth)
+  // -- until it reports success, WHETHER OR NOT the pane is visible yet.
+  // This replaced three earlier designs, all tried live and confirmed
+  // broken:
+  //
+  // - A 60-frame (~1s) capped rAF poll: too short. WorkspaceContainer
+  //   mounts a pane's content as soon as it HAS data, not when it becomes
+  //   the active tab, so the container can stay hidden for however long
+  //   the user takes to click into Mind Map -- an unbounded, user-paced
+  //   interval, not a brief settling delay.
+  // - An IntersectionObserver restarting an uncapped rAF poll on every
+  //   "became visible" report: fires REPEATEDLY during the right panel's
+  //   own CSS transition, and cancelling + restarting the poll on every
+  //   firing kept resetting it before it landed a frame where geometry
+  //   was actually correct.
+  // - A single continuous, uncapped rAF poll (no observer at all): still
+  //   confirmed broken live, and root-caused precisely this time --
+  //   `document.visibilityState` was `"hidden"` for the Cloud Browser tab
+  //   used for verification (confirmed directly: a bare rAF loop's own
+  //   counter stayed at exactly 0 after 5+ real seconds). Chrome fully
+  //   SUSPENDS requestAnimationFrame callbacks for a tab it considers
+  //   backgrounded -- not throttles, suspends -- so an rAF-driven poll
+  //   never ran even once in that environment, while a manual synchronous
+  //   `mind.layout(); mind.linkDiv()` call (unaffected by rAF suspension)
+  //   fixed it instantly every single time, in every round. `setTimeout`
+  //   is throttled in a hidden tab (backed off to ~1s between calls after
+  //   a few seconds) but, unlike rAF, is never fully suspended -- it still
+  //   reliably fires. Switching to it fixes the exact failure mode that
+  //   produced five straight "still broken live" results, and is at least
+  //   as good for a real, foreground, visible tab (rAF and a ~16ms
+  //   setTimeout both settle within a frame or two there).
+  //
+  // pollActiveRef guards against a second concurrent poll (e.g. an
+  // unrelated re-render) rather than against any specific external
+  // trigger. The wall-clock ceiling is generous (2 minutes) purely as a
+  // safety valve against looping forever on something permanently,
+  // unrecoverably broken.
+  // Returns a cleanup function so callers can cancel it (unmount).
+  const startFitPoll = useCallback(() => {
+    if (pollActiveRef.current) return () => {};
+    pollActiveRef.current = true;
+    let cancelled = false;
+    let timer = null;
+    const deadline = (typeof performance !== "undefined" ? performance.now() : Date.now()) + 120000;
+    const stop = () => { cancelled = true; pollActiveRef.current = false; if (timer) clearTimeout(timer); };
+    const poll = () => {
+      if (cancelled) return;
+      const now = typeof performance !== "undefined" ? performance.now() : Date.now();
+      if (fitIfReady() || now >= deadline) { pollActiveRef.current = false; return; }
+      timer = setTimeout(poll, 16);
+    };
+    timer = setTimeout(poll, 16);
+    return stop;
+  }, [fitIfReady]);
 
   // Create once per mounted viewer. Switching saved maps refreshes this same
   // public Mind Elixir instance instead of rebuilding the canvas.
@@ -158,10 +261,23 @@ export default function MindElixirView({ data, onRegenerate, regenerating, contr
     controller.registerMindInstance(mind, sidecar);
     setZoom(mind.scaleVal || 1);
     pendingFitRef.current = true;
-    if (typeof requestAnimationFrame === "function") requestAnimationFrame(fitIfReady);
-    else fitIfReady();
+    // 2026-09-24: a short bounded poll (~1s) is NOT long enough here --
+    // reproduced live: WorkspaceContainer mounts every pane's content as
+    // soon as it HAS data (not when it becomes the active tab), toggling
+    // visibility with a CSS `hidden` (display:none) class on an ancestor.
+    // If the map arrives while the user is still on the Chat tab, this
+    // effect runs -- and the poll below -- while that ancestor is still
+    // hidden, `containerRef.current.clientWidth` stays 0 for as long as the
+    // user takes to click into the Mind Map tab (an UNBOUNDED, user-paced
+    // interval, not a settling delay), and a 1-second poll exhausts and
+    // gives up long before that click ever happens (confirmed live:
+    // clientWidth/height were still exactly 0 five real seconds after
+    // mount). `startFitPoll` (declared below `fitIfReady`) has no such cap
+    // -- it keeps retrying, cheaply, until the pane genuinely becomes
+    // visible, however long that takes.
+    return startFitPoll();
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [data?.id, fitIfReady]);
+  }, [data?.id, startFitPoll]);
 
   useEffect(() => () => {
     pendingFitRef.current = false;
@@ -214,26 +330,18 @@ export default function MindElixirView({ data, onRegenerate, regenerating, contr
   // Chat tab, `mind.init()` (and its internal first layout()/linkDiv()) runs
   // against a 0x0 container (display:none collapses every descendant's
   // offsetWidth/offsetHeight to 0), producing the exact same NaN subLines
-  // paths as the dark-mode bug above — reproduced live: connectors stay
-  // broken indefinitely after switching into the MindMap tab, with nothing
-  // to self-correct them (mind-elixir never reruns layout just because a
-  // hidden ancestor became visible). A ResizeObserver on the container
-  // catches that hidden -> visible transition (display:none -> real size
-  // fires a resize entry) and reruns layout()+linkDiv() once genuine
-  // geometry exists; the width/height>0 guard skips the initial 0x0 report
-  // while still hidden.
-  useEffect(() => {
-    const el = containerRef.current;
-    if (!el) return;
-    const ro = new ResizeObserver((entries) => {
-      const { width, height } = entries[0].contentRect;
-      if (width > 0 && height > 0) {
-        fitIfReady();
-      }
-    });
-    ro.observe(el);
-    return () => ro.disconnect();
-  }, [fitIfReady]);
+  // paths as the dark-mode bug above.
+  //
+  // 2026-09-24: this used to be a ResizeObserver, then an
+  // IntersectionObserver, both meant to catch the hidden -> visible
+  // transition and (re)start the repair poll at that moment. Both were
+  // tried live and confirmed broken -- see the long comment on
+  // `startFitPoll` above for exactly how. No observer-based "catch the
+  // transition" effect exists here anymore: `startFitPoll()` (called once,
+  // in the mount effect below) already runs continuously until real
+  // geometry exists, regardless of when the pane becomes visible, which
+  // makes a separate visibility-detection effect redundant -- one moving
+  // part sidesteps needing to correctly time an external signal at all.
 
   // Background-pan fix: dragging the empty canvas is supposed to move the
   // viewport (constructor sets `mouseSelectionButton: 2` specifically to

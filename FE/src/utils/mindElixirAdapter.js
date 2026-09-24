@@ -50,7 +50,7 @@ export function recordToMindElixir(record) {
   for (const n of norm.nodes) {
     sidecar.set(n.id, {
       note: n.note || (n.title && compactTopic(n.title) !== stripMarkdown(n.title) ? stripMarkdown(n.title) : ""),
-      chunkRefs: n.chunkRefs || [], kind: n.kind,
+      chunkRefs: n.chunkRefs || [], kind: n.kind, nodeType: n.nodeType || "",
       // Renderer V2 (Task 2/6) — EvidenceDrawer reads these via MindElixirView's
       // `selectNodes` listener; additive, never written back on save (mirrors
       // note/chunkRefs' own existing sidecar-only lifecycle).

@@ -8,15 +8,23 @@ from concurrent.futures import TimeoutError as FuturesTimeoutError
 from typing import Callable, Optional
 
 from app.clients.llm_factory import ask_ai
-from app.graphs.logger import ctx_submit  # Phase 0: propagate LLM counter qua pool
+from app.graphs.logger import _Timer, ctx_submit, log_node_event  # Phase 0: propagate LLM counter qua pool
 from services.mindmap.jsonrepair import repair_json_text
-from services.mindmap.pipeline.schema import sanitize_nodes
+from services.mindmap.pipeline.detail_policy import get_detail_policy
+from services.mindmap.pipeline.schema import sanitize_nodes, NODE_TYPES
 
 _SYSTEM = """Bạn là trợ lý dựng sơ đồ tư duy tiếng Việt.
 Cho MỘT nhánh (tiêu đề + nội dung các đoạn), trả về DUY NHẤT JSON:
-{"title": "tiêu đề nhánh gọn 2-8 từ", "note": "tóm ý nhánh trong 1-2 câu",
- "children": [{"title": "ý con 2-8 từ", "note": "1 câu", "chunk_keys": ["id đoạn làm bằng chứng"],
-  "children": [{"title": "ý nhỏ hơn 2-8 từ", "note": "1 câu", "chunk_keys": ["id đoạn"]}]}]}
+{"title": "tiêu đề nhánh gọn 2-8 từ", "node_type": "concept|definition|process|cause_effect|comparison|example|rule|evidence",
+ "note": "Ý NGHĨA/VAI TRÒ của nhánh này trong tài liệu — KHÔNG phải tóm tắt lại câu chữ. Trả lời: điều này LÀ gì, vì sao nó quan trọng.",
+ "children": [{"title": "ý con 2-8 từ", "node_type": "concept|definition|process|cause_effect|comparison|example|rule|evidence",
+  "note": "ý nghĩa/vai trò của ý con này, không phải câu tóm tắt", "chunk_keys": ["id đoạn làm bằng chứng"],
+  "children": [{"title": "ý nhỏ hơn 2-8 từ", "node_type": "concept|definition|process|cause_effect|comparison|example|rule|evidence",
+   "note": "ý nghĩa/vai trò", "chunk_keys": ["id đoạn"]}]}]}
+node_type PHẢI là một trong 8 giá trị trên, chọn giá trị mô tả ĐÚNG NHẤT bản chất của ý đó (ví dụ:
+một bước trong quy trình → "process"; một khái niệm được định nghĩa → "definition"; so sánh hai thứ
+→ "comparison"; một quy tắc/ràng buộc → "rule"). Không bịa "process"/"comparison" nếu nội dung không
+thực sự mô tả quy trình/so sánh — mặc định "concept" khi không rõ.
 Quy tắc: 2-5 children; mỗi ý con CÓ THỂ có 0-3 "children" nhỏ hơn nhưng CHỈ khi nội dung
 thực sự chứa các ý chi tiết tách bạch — không bịa để lấp đầy; chunk_keys CHỈ chọn từ danh
 sách id được cấp; không markdown; không giải thích.
@@ -83,41 +91,73 @@ def _enrich_one(mm_input: dict, branch: dict, allowed: list[str], model: str, ti
     ctx = _branch_context(mm_input, allowed)
     user = (f"Nhánh: {branch['title']}\nDanh sách id hợp lệ: {', '.join(sorted(set(allowed)))}\n\n"
             f"<<<TÀI LIỆU>>>\n{ctx}\n<<<HẾT>>>")
+    intent = mm_input.get("generation_intent") or {}
+    if intent:
+        user += "\nUSER GUIDANCE: " + str(intent.get("instruction") or "") + "; purpose=" + str(intent.get("preset") or "overview") + "; detail=" + str(intent.get("detail_level") or "balanced")
     data = _ask_json(user, model, timeout_sec)
     allowed_set = set(allowed)
+    policy = get_detail_policy(intent.get("detail_level"))
 
-    def _parse(items: list, cap: int) -> list[dict]:
+    def _node_type(raw) -> str:
+        # Never trust the model's value blindly — default to "concept" exactly
+        # like the prompt tells it to when unsure, so an off-taxonomy string
+        # degrades to the safe default rather than polluting persisted data.
+        v = (raw or "").strip().lower()
+        return v if v in NODE_TYPES else "concept"
+
+    def _parse(items: list, cap: int, grandchild_cap: int) -> list[dict]:
         out = []
         for i, ch in enumerate((items or [])[:cap]):
             title = (ch.get("title") or "").strip()
             if not title:
                 continue
             out.append({"title": title, "note": (ch.get("note") or "").strip(),
+                        "node_type": _node_type(ch.get("node_type")),
                         # ép str: model hay trả số [0] — giữ int là vỡ lookup chuỗi hạ nguồn
                         "chunk_refs": [str(k) for k in (ch.get("chunk_keys") or []) if str(k) in allowed_set],
                         "order": i,
-                        # tầng detail (0-3) — chỉ 2 tầng, không đệ quy sâu hơn
-                        "children": _parse(ch.get("children"), 3) if cap == 5 else []})
+                        # tầng detail (0-3) — chỉ 2 tầng, không đệ quy sâu hơn. Cap
+                        # theo detail_level (detail_policy.py), không còn hằng số cố
+                        # định — compact (grandchild_cap=0) không bao giờ sinh tầng
+                        # "detail" dù model có trả về, detailed cho phép tới 3.
+                        "children": _parse(ch.get("children"), grandchild_cap, 0) if grandchild_cap else []})
         return out
 
     return {"title": (data.get("title") or branch["title"]).strip() or branch["title"],
-            "note": (data.get("note") or "").strip(), "children": _parse(data.get("children"), 5)}
+            "note": (data.get("note") or "").strip(), "node_type": _node_type(data.get("node_type")),
+            "children": _parse(data.get("children"), policy["max_children_per_branch"], policy["max_grandchildren"])}
+
+
+def _log(job_id: str, status: str, duration_ms: float, metadata: dict) -> None:
+    if not job_id:
+        return
+    try:
+        log_node_event(job_id, "Enrich", status, duration_ms, metadata)
+    except Exception:
+        pass  # diagnostics must never break generation
 
 
 def enrich_branches(mm_input: dict, skeleton_nodes: list[dict], *, model: str,
                     timeout_sec: float = 120.0, max_workers: int = 2,
                     progress_cb: Optional[Callable[[int, str], None]] = None,
-                    cancel_cb: Optional[Callable[[], bool]] = None) -> tuple[list[dict], bool]:
+                    cancel_cb: Optional[Callable[[], bool]] = None,
+                    job_id: str = "") -> tuple[list[dict], bool]:
+    t = _Timer()
     if os.getenv("SKIP_MODEL_LOAD") == "1":
         # Không có LLM = khung xương chưa được làm giàu — phải khai degraded,
         # không được im lặng trả skeleton như bản "hoàn chỉnh".
+        _log(job_id, "error", t.ms(), {"stage": "enrich", "reason": "skip_model_load",
+                                       "input_count": 0, "raw_output_count": 0, "accepted_output_count": 0})
         return skeleton_nodes, True
     nodes = [dict(n) for n in skeleton_nodes]
     root = next((n for n in nodes if n["kind"] == "root"), None)
     if root is None:
+        _log(job_id, "error", t.ms(), {"stage": "enrich", "reason": "no_root",
+                                       "input_count": 0, "raw_output_count": 0, "accepted_output_count": 0})
         return nodes, True
     branches = [n for n in nodes if n.get("parent") == root["id"] and n["kind"] == "section"]
     degraded = False
+    branch_failures = 0
     next_id = max((int(n["id"][1:]) for n in nodes if n["id"][1:].isdigit()), default=0) + 1
 
     def _run(branch: dict):
@@ -127,6 +167,9 @@ def enrich_branches(mm_input: dict, skeleton_nodes: list[dict], *, model: str,
     # as_completed thay vì duyệt theo thứ tự submit: 1 nhánh treo không chặn
     # các nhánh đã xong, và cancel được kiểm giữa từng completion (codex #1).
     if cancel_cb and cancel_cb():
+        _log(job_id, "error", t.ms(), {"stage": "enrich", "reason": "cancelled",
+                                       "input_count": len(branches), "raw_output_count": 0,
+                                       "accepted_output_count": 0})
         return nodes, degraded      # huỷ trước khi tốn bất kỳ LLM call nào
     done = 0
     # Báo TRƯỚC khi submit. Nếu không, dòng progress đầu tiên chỉ đến khi một nhánh
@@ -149,11 +192,14 @@ def enrich_branches(mm_input: dict, skeleton_nodes: list[dict], *, model: str,
             if cancel_cb and cancel_cb():
                 for f in futs:
                     f.cancel()
+                _log(job_id, "error", t.ms(), {"stage": "enrich", "reason": "cancelled",
+                                               "input_count": len(branches), "raw_output_count": done,
+                                               "accepted_output_count": done - branch_failures})
                 return sanitize_nodes(nodes), degraded
             b = futs[fut]
             try:
                 r = fut.result()
-                b["title"], b["note"] = r["title"], r["note"]
+                b["title"], b["note"], b["node_type"] = r["title"], r["note"], r["node_type"]
                 for ch in r["children"]:
                     subs = ch.pop("children", [])
                     idea_id = f"n{next_id}"
@@ -168,12 +214,24 @@ def enrich_branches(mm_input: dict, skeleton_nodes: list[dict], *, model: str,
                 msg = str(e).strip() or type(e).__name__
                 print(f"[mindmap] enrich branch '{b.get('title', '')[:40]}' failed: {msg}")
                 degraded = True     # giữ skeleton nhánh này
+                branch_failures += 1
             done += 1
             if progress_cb:
                 progress_cb(int(30 + 40 * done / max(1, len(branches))),
                             f"Đang làm giàu nhánh {done}/{len(branches)}...")
     except FuturesTimeoutError:
         degraded = True             # nhánh chưa xong trong ngân sách → giữ skeleton
+        _log(job_id, "timeout", t.ms(), {"stage": "enrich", "reason": "budget_timeout",
+                                         "input_count": len(branches), "raw_output_count": done,
+                                         "accepted_output_count": done - branch_failures})
     finally:
         ex.shutdown(wait=False)
+    if degraded and branch_failures:
+        _log(job_id, "error", t.ms(), {"stage": "enrich", "reason": "branch_exceptions",
+                                       "input_count": len(branches), "raw_output_count": done,
+                                       "accepted_output_count": done - branch_failures})
+    elif not degraded:
+        _log(job_id, "ok", t.ms(), {"stage": "enrich", "input_count": len(branches),
+                                    "raw_output_count": done, "accepted_output_count": done,
+                                    "elapsed_ms": t.ms()})
     return sanitize_nodes(nodes), degraded

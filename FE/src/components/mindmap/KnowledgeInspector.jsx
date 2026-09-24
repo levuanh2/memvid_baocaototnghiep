@@ -136,7 +136,7 @@ const BUCKET_META = {
 };
 
 export default function KnowledgeInspector({
-  node, relations, breadcrumb, documentTitle, sources, generating, mapMeta,
+  node, relations, breadcrumb, documentTitle, sources, generating, mapMeta, backendContext,
   onNavigate, onAskAI, onOpenSource, nav, onClose,
 }) {
   const cacheRef = useRef(new Map()); // session-lifetime — Inspector no longer unmounts per click (Task 1)
@@ -149,7 +149,13 @@ export default function KnowledgeInspector({
     });
   }, []);
 
-  const evidence = useChunkEvidence(node?.chunkRefs, cacheRef);
+  const fetchedEvidence = useChunkEvidence(node?.chunkRefs, cacheRef);
+  const evidence = backendContext?.citations?.map((citation) => ({
+    chunkId: citation.chunk_id,
+    text: citation.excerpt,
+    loading: false,
+    error: false,
+  })) || fetchedEvidence;
 
   const enrichment = Array.isArray(node?.enrichment) ? node.enrichment : [];
   const buckets = useMemo(() => {
@@ -180,11 +186,19 @@ export default function KnowledgeInspector({
     return null;
   }, [sources]);
   const avgConfidencePct = useMemo(() => {
+    if (Number.isFinite(backendContext?.confidence)) return Math.round(backendContext.confidence * 100);
     const vals = enrichment.map((e) => e.confidence).filter((c) => Number.isFinite(c));
     if (!vals.length) return null;
     return Math.round((vals.reduce((a, b) => a + b, 0) / vals.length) * 100);
-  }, [enrichment]);
-  const dominantType = enrichment[0]?.semantic_type ? semanticMeta(enrichment[0].semantic_type) : null;
+  }, [backendContext?.confidence, enrichment]);
+  // Prefer chunk-level enrichment[].semantic_type (Phase 2B, currently unused
+  // in the deployed pipeline — enrichment is always []); fall back to the
+  // node-level node_type (services/mindmap/pipeline/schema.py::NODE_TYPES,
+  // populated by every enrich.py branch call). Without this fallback the chip
+  // never renders in production at all, since enrichment[0] is never set.
+  const dominantType = enrichment[0]?.semantic_type
+    ? semanticMeta(enrichment[0].semantic_type)
+    : node?.nodeType ? semanticMeta(node.nodeType) : null;
 
   // Row 1 — nav bar. Chrome, not per-node content: visible whether or not a
   // node is selected, so selection history is always legible.

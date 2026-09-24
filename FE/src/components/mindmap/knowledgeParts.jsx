@@ -17,6 +17,14 @@ export const SEMANTIC_META = {
   rule: { label: "Quy tắc", icon: "Star" },
   formula: { label: "Công thức", icon: "Star" },
   example: { label: "Ví dụ", icon: "Quote" },
+  // Node-level taxonomy (services/mindmap/pipeline/schema.py::NODE_TYPES) —
+  // shares this SAME map/chip mechanism as chunk-level `enrichment[].semantic_type`
+  // above, not a separate UI; "process"/"rule"/"example"/"definition"/"concept"
+  // already overlap by design, these four fill the remaining gap.
+  process: { label: "Quy trình", icon: "ScrollText" },
+  cause_effect: { label: "Nhân quả", icon: "GitBranch" },
+  comparison: { label: "So sánh", icon: "Scale" },
+  evidence: { label: "Bằng chứng", icon: "Quote" },
   note: { label: "Ghi chú", icon: "Pin" },
   warning: { label: "Lưu ý", icon: "TriangleAlert" },
   procedure: { label: "Quy trình", icon: "ScrollText" },

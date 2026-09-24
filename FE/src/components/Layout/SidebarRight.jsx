@@ -1,5 +1,6 @@
 import { useState, useEffect, useCallback, useRef, useMemo } from "react";
-import { apiFetch, generateMindmap, cancelMindmap, generateSummary, cancelSummary, isUnauthorizedError, isNotFoundOrForbiddenError, getUserFriendlyApiError } from "../../utils/api";
+import { apiFetch, generateMindmap, cancelMindmap, generateSummary, cancelSummary, getMindmapCapability, isUnauthorizedError, isNotFoundOrForbiddenError, getUserFriendlyApiError } from "../../utils/api";
+import GuidedMindmapDialog from "./GuidedMindmapDialog";
 
 // Permission-safe toast text: 401/403/404 → friendly line (no raw error/id); else
 // keep the existing detail message.
@@ -129,12 +130,18 @@ export default function SidebarRight({
   // ở MainLayout.
   const [tutorFloating, setTutorFloating] = useState(false);
 
-  useEffect(() => {
-    if (artifactRequest?.tab) setArtifactTab(artifactRequest.tab);
-  }, [artifactRequest]);
   const [mindMaps, setMindMaps]           = useState([]);
   const [showModalMap, setShowModalMap]   = useState(null);
+  const [guidedOpen, setGuidedOpen] = useState(false);
+  const [guidedCapability, setGuidedCapability] = useState(false);
+  const [guidedError, setGuidedError] = useState(null);
   const [showSummaryModal, setShowSummaryModal] = useState(null);
+  useEffect(() => {
+    if (artifactRequest?.tab) {
+      setArtifactTab(artifactRequest.tab);
+      if (artifactRequest.tab === "mindmap" && !mindMaps.length && selectedSources?.length) setGuidedOpen(true);
+    }
+  }, [artifactRequest, mindMaps.length, selectedSources]);
   // Task 4 — background generation: chip state driven by the Task 1 poller
   // (no FE hard-timeout; onTick reports stage label / progress / stalled).
   const [mindmapJobUi, setMindmapJobUi] = useState(IDLE_JOB_UI);
@@ -160,6 +167,17 @@ export default function SidebarRight({
   const [summaryRetry, setSummaryRetry] = useState(null);
   // PR#8 stall banner snooze ("Chờ tiếp"): timestamp lần dismiss gần nhất.
   const [stallDismissedAt, setStallDismissedAt] = useState({ mindmap: 0, summary: 0 });
+
+  useEffect(() => {
+    let active = true;
+    getMindmapCapability().then((data) => {
+      if (active) setGuidedCapability(data?.guided_mindmap_v3 === true);
+    }).catch(() => {
+      // Capability failure fails closed for Guided V3; the legacy V2 flow stays usable.
+      if (active) setGuidedCapability(false);
+    });
+    return () => { active = false; };
+  }, []);
 
   const frameRefs = useRef(new Map());
   // PR#8: dirty state của viewer mindmap (thread từ MindElixirView.onDirtyChange)
@@ -365,10 +383,33 @@ export default function SidebarRight({
 
   useEffect(() => () => { pollerRef.current?.stop(); summaryPollerRef.current?.stop(); }, []);
 
+  // Auto-select most recent map on load (intermittent "no map" bug): showModalMap
+  // defaulted to null and only became truthy via an explicit library click or a
+  // resumed job's own completion handler — a user with existing completed maps
+  // and no running job saw "no map" on every fresh /app load even though mindMaps
+  // (the library) was already fully populated, because nothing ever auto-opened
+  // one. store.list_records already orders by created_at DESC, so mindMaps[0] is
+  // the most recent map. Skipped while a job is resuming/running so that job's
+  // own completion picks the map instead; re-checked once it settles so a job
+  // that fails without ever calling setShowModalMap still falls back correctly.
+  const autoSelectedMapRef = useRef(false);
+  useEffect(() => {
+    if (autoSelectedMapRef.current || showModalMap) return;
+    if (mindmapJobUi.running || loadActiveMindmapJob()?.jobId) return;
+    if (mindMaps.length === 0) return;
+    autoSelectedMapRef.current = true;
+    // __restoredOnLoad: this is a library restore, not a freshly-finished
+    // generation — MainLayout's own "auto-jump to a newly-populated tab"
+    // effect must not fire for it (that effect exists so a real new map still
+    // pulls the user to it; a page reload must not yank a Chat-first user
+    // into Mind Map mode just because they happen to have an old map saved).
+    setShowModalMap({ ...mindMaps[0], __restoredOnLoad: true });
+  }, [mindMaps, showModalMap, mindmapJobUi.running]);
+
   // ── Handlers ───────────────────────────────────────
   // Shared by "Tạo sơ đồ" (force=false, uses BE content-hash cache) and the
   // mindmap viewer's degraded-banner "Tạo lại" (force=true, bypasses cache).
-  const runMindmapGeneration = async (sourceList, { force = false } = {}) => {
+  const runMindmapGeneration = async (sourceList, { force = false, ...guidedOptions } = {}) => {
     if (!sourceList?.length) { toast("Vui lòng chọn ít nhất một tài liệu để tạo Sơ đồ!", { type: "error" }); return; }
     // PR#8: chạy job mới = hết trạng thái lỗi cũ; nhớ params cho retry lần sau.
     lastMindmapRunRef.current = { sources: sourceList, force };
@@ -378,13 +419,15 @@ export default function SidebarRight({
     cancelNoticeShownRef.current = false;
     if (force) setMindmapGenerating(true); // keep the open viewer's banner up during "Tạo lại"
     try {
-      const startData = await generateMindmap(sourceList, { force });
+      const startData = await generateMindmap(sourceList, { force, ...guidedOptions });
       if (startData.error) throw new Error(startData.error);
 
       if (startData.status === "done" && startData.result) {
         // Cache-hit (content_hash match, force=false): BE returns the record
         // straight away with no job_id — skip polling entirely instead of
         // throwing "Server không trả job_id." (known issue, fixed here).
+        // Request outcome is known now (success) — safe to close the dialog.
+        if (Object.keys(guidedOptions).length) setGuidedOpen(false);
         await handleMindmapDone(startData.result, sourceList, { resumed: false, isRegenerate: force });
         return;
       }
@@ -394,10 +437,26 @@ export default function SidebarRight({
       // mid-flight can resume polling (Task 4 point 6) instead of the user
       // having to F5 and lose track of it.
       saveActiveMindmapJob({ jobId: startData.job_id, sources: sourceList, startedAt: Date.now() });
+      // 2026-09-24: this used to close BEFORE the request even started
+      // (submitGuidedMindmap called setGuidedOpen(false) synchronously on
+      // submit) — a real QA browser job ran for a genuine ~60s in the
+      // background with zero visible feedback anywhere, because the only
+      // surface that showed progress (this dialog) was already gone. Close
+      // only now that the job is actually queued and the poller (which
+      // drives mindmapJobUi, the visible progress chip) is about to start.
+      if (Object.keys(guidedOptions).length) setGuidedOpen(false);
       startMindmapPoller(startData.job_id, sourceList, { resumed: false, isRegenerate: force });
     } catch (err) {
       console.error("Mind Map Error:", err);
       toast(_errText(err, "Không tạo được sơ đồ", "Không tạo được sơ đồ, kiểm tra console!"), { type: "error" });
+      if (Object.keys(guidedOptions).length) {
+        // Request failed before we ever confirmed acceptance — dialog was
+        // never closed on this path (see above), so this just makes sure
+        // it's visibly open with the error rather than assuming it needs
+        // reopening.
+        setGuidedError(err?.message || "Không tạo được sơ đồ.");
+        setGuidedOpen(true);
+      }
       if (force) setMindmapGenerating(false);
     }
     finally {
@@ -405,9 +464,22 @@ export default function SidebarRight({
     }
   };
 
-  const handleGenerateMindMap = () => runMindmapGeneration(selectedSources, { force: false });
+  const handleGenerateMindMap = () => {
+    if (guidedCapability) setGuidedOpen(true);
+    else runMindmapGeneration(selectedSources);
+  };
   createMindmapRef.current = handleGenerateMindMap;
   const onCreateNewMindmap = useCallback(() => createMindmapRef.current?.(), []);
+  // 2026-09-24: no longer closes the dialog here -- runMindmapGeneration now
+  // closes it only once the create request's outcome is actually known
+  // (queued/done), so a failure keeps the dialog open with a visible error
+  // instead of silently vanishing while work is unresolved. The dialog's own
+  // `loading` prop (still wired below) keeps the submit button disabled and
+  // showing "Đang tạo…" for the request round-trip in the meantime.
+  const submitGuidedMindmap = (options) => {
+    setGuidedError(null);
+    runMindmapGeneration(options.sourceIds, options).catch((error) => setGuidedError(error?.message || "Không tạo được sơ đồ."));
+  };
 
   // Degraded-banner "Tạo lại": regenerate the map that's currently open, using
   // the sources it was built from (falls back to the sidebar selection if the
@@ -462,9 +534,9 @@ export default function SidebarRight({
   // `handleAskAbout`'s raw quoted snippet, so they reuse `askDirect` (already
   // threaded into this component for TutorPanel) instead of wrapping it in
   // `onAskAbout`'s "Về đoạn này..." template. Same switch-then-forward shape.
-  const handleAskDirect = useCallback((text) => {
+  const handleAskDirect = useCallback((text, context = null) => {
     onSwitchToChat?.();
-    askDirect?.(text);
+    askDirect?.(text, context);
   }, [askDirect, onSwitchToChat]);
 
   // Task 8: after MindElixirView's explicit Save (PUT /mindmaps/<id>) succeeds,
@@ -693,13 +765,18 @@ export default function SidebarRight({
   useEffect(() => {
     onMindmapLibraryChange?.({
       mindMaps,
+      // initialLoading/loadError let the empty-state distinguish "still
+      // loading" and "failed to load" from genuinely "no maps yet" instead
+      // of collapsing all three into the same "Chưa có sơ đồ" screen.
+      initialLoading,
+      loadError: loiTaiMindmap,
       actions: {
         select: setShowModalMap,
         create: onCreateNewMindmap,
         creating: loading || mindmapJobUi.running,
       },
     });
-  }, [mindMaps, loading, mindmapJobUi.running, onCreateNewMindmap, onMindmapLibraryChange]);
+  }, [mindMaps, loading, mindmapJobUi.running, onCreateNewMindmap, onMindmapLibraryChange, initialLoading, loiTaiMindmap]);
 
   useEffect(() => {
     onSummaryLibraryChange?.({
@@ -1063,6 +1140,16 @@ export default function SidebarRight({
         </Disclosure>
       </div>}
       </>
+      )}
+
+      {guidedOpen && (
+        <GuidedMindmapDialog
+          sources={selectedSources}
+          onClose={() => setGuidedOpen(false)}
+          onSubmit={submitGuidedMindmap}
+          loading={loading}
+          error={guidedError}
+        />
       )}
 
       <style>{`@media (min-width: 768px) { .md\\:hidden { display: none !important; } }`}</style>

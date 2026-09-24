@@ -566,7 +566,15 @@ export default function ChatArea({
       const res = await apiFetch(`/query`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ q: question, sources: payloadSources?.length ? payloadSources : null, session_id: sessionId || undefined }),
+        body: JSON.stringify({
+          q: question,
+          sources: payloadSources?.length ? payloadSources : null,
+          session_id: sessionId || undefined,
+          node_id: askAboutDraft?.context?.nodeId || undefined,
+          map_id: askAboutDraft?.context?.mapId || undefined,
+          citation_context: askAboutDraft?.context?.citations || undefined,
+          node_context: askAboutDraft?.context || undefined,
+        }),
         signal: abortControllerRef.current.signal,
       });
       if (!res.ok) throw await _appError(res);  // carries .status for 401/403/404 UX

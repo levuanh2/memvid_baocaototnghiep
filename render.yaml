@@ -219,10 +219,30 @@ services:
       # Must stay under Render's own request ceiling and above the LLM timeouts.
       - key: GUNICORN_TIMEOUT
         value: "120"
-      # Auth is Bearer-token, so a cross-origin reader still cannot obtain a
-      # token. Tighten to the studymap-web URL once it is known.
+      # Exact production frontend origin. Do not use wildcard/localhost here.
       - key: CORS_ORIGINS
-        value: https://studymap-web.onrender.com
+        value: https://studymap.space
+
+      # Guided V3 is never process-local in production. The web process only
+      # writes the Postgres ledger and returns 202; the background worker below
+      # claims and executes jobs.
+      - key: PROCESS_ROLE
+        value: web
+      - key: GUIDED_JOB_STORE_BACKEND
+        value: postgres
+      - key: GUIDED_WORKER_HEARTBEAT_TTL_SEC
+        value: "90"
+      - key: GUIDED_JOB_MAX_ATTEMPTS
+        value: "3"
+
+      # Guided Mind Map V3 rollout is server-authoritative and defaults OFF.
+      # QA can be enabled by setting GUIDED_MINDMAP_V3_QA_USER_IDS out of band.
+      - key: GUIDED_MINDMAP_V3_ENABLED
+        value: "false"
+      - key: GUIDED_MINDMAP_V3_QA_USER_IDS
+        sync: false
+      - key: GUIDED_JOB_RECOVERY_ENABLED
+        value: "true"
 
       # --- auth: production posture ---------------------------------------
       - key: AUTH_REQUIRE_SECRET
@@ -244,6 +264,14 @@ services:
         value: "true"
       - key: SUPABASE_STORAGE_BUCKET
         value: documents
+
+  # NOTE: a Render "worker" service for the Guided Mind Map background job was
+  # deliberately NOT added here. render.yaml's studymap-api blueprint is not
+  # the real production backend (that's AWS EC2 + Docker Compose, see
+  # docker-compose.prod.yml and docs/AWS_DEPLOYMENT.md) and a Render worker
+  # would be a new paid resource with no purpose — the real worker runs as a
+  # second container on the existing EC2 host instead (see
+  # docker-compose.prod.yml's mindmap-worker service).
 
   # ---------- Frontend: static site (free, no instance hours) ----------
   - type: web

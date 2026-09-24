@@ -20,6 +20,7 @@ import { OPEN_SHORTCUTS_EVENT } from "../../utils/shortcutsBus";
 import ShortcutsOverlay from "../shortcuts/ShortcutsOverlay";
 import ModeLibraryMenu from "./ModeLibraryMenu";
 import StudyToolsMenu from "./StudyToolsMenu";
+import { fetchMindmapNodeContext } from "../../utils/mindmapNodeContext";
 
 // Round 11 (mockup parity, explicit user decision) — the Chat/Mind Map/
 // Summary mode switch, moved here from the now-deleted LessonHeader.jsx
@@ -74,7 +75,12 @@ export default function MainLayout({
   const hadMindmapRef = useRef(false);
   const hadSummaryRef = useRef(false);
   useEffect(() => {
-    if (mindmapData && !hadMindmapRef.current) setWorkspaceMode("mindmap");
+    // __restoredOnLoad (SidebarRight's auto-select-most-recent-map-on-load
+    // fix): a library restore on mount must not also yank a Chat-first user
+    // into Mind Map mode, only a freshly-finished generation should.
+    if (mindmapData && !hadMindmapRef.current && !mindmapData?.data?.__restoredOnLoad) {
+      setWorkspaceMode("mindmap");
+    }
     hadMindmapRef.current = Boolean(mindmapData);
   }, [mindmapData]);
   useEffect(() => {
@@ -102,6 +108,17 @@ export default function MainLayout({
   // new keyboard effects need keeps THOSE effects from re-subscribing on
   // every unrelated render, without touching the hook itself.
   const { goBack: mmGoBack, goForward: mmGoForward, jumpTo: mmJumpTo, selected: mmSelected, relations: mmRelations } = mindMapController;
+  const [mindMapBackendContext, setMindMapBackendContext] = useState(null);
+  useEffect(() => {
+    const mapId = mindmapData?.data?.id;
+    const nodeId = mmSelected?.id;
+    if (!mapId || !nodeId) { setMindMapBackendContext(null); return undefined; }
+    const controller = new AbortController();
+    fetchMindmapNodeContext(mapId, nodeId, controller.signal)
+      .then(setMindMapBackendContext)
+      .catch((error) => { if (error.name !== "AbortError") setMindMapBackendContext(null); });
+    return () => controller.abort();
+  }, [mindmapData?.data?.id, mmSelected?.id]);
   const { drawer: panelDrawer, setCollapsedFor: setPanelCollapsed } = panel;
 
   // Node/citation triggers open the same inspector used by Chat and Summary.
@@ -132,8 +149,14 @@ export default function MainLayout({
     selectDocument(stem, { source: "mindmap" });
     setWorkspaceMode("chat");
   }, [selectDocument]);
-  const onInspectorAskAI = useCallback((text) => {
-    mindmapData?.data?.onAskDirect?.(text);
+  const onInspectorAskAI = useCallback((request) => {
+    const text = typeof request === "string" ? request : request?.text;
+    if (!text) return;
+    mindmapData?.data?.onAskDirect?.(text, {
+      mapId: mindmapData?.data?.id,
+      nodeId: request?.nodeId,
+      citations: request?.citations || [],
+    });
   }, [mindmapData]);
 
   const inspectorProps = useMemo(() => ({
@@ -146,9 +169,10 @@ export default function MainLayout({
       nodes: Array.isArray(mindmapData.data.nodes) ? mindmapData.data.nodes.length : 0,
       created: mindmapData.data.created_at ? new Date(mindmapData.data.created_at).toLocaleDateString() : "",
     } : null,
+    backendContext: mindMapBackendContext,
     onNavigate: mindMapController.jumpTo, onAskAI: onInspectorAskAI, onOpenSource: onInspectorOpenSource,
     nav: mindMapController.nav,
-  }), [mindMapController, mindmapData, onInspectorAskAI, onInspectorOpenSource]);
+  }), [mindMapController, mindmapData, mindMapBackendContext, onInspectorAskAI, onInspectorOpenSource]);
   // Đăng xuất thường giữ NGUYÊN hành vi cũ: về trang chủ, không thông báo gì.
   // Chỉ ca đăng xuất-vì-vừa-đổi-mật-khẩu mới đi tới `/login` kèm một MÃ thông báo —
   // người dùng cần thấy xác nhận rằng mật khẩu đã đổi, và cần đăng nhập lại ngay ở
@@ -189,10 +213,10 @@ export default function MainLayout({
   // chat qua CHÍNH `setAskAboutDraft` ở trên, không bọc mẫu "Về đoạn này...",
   // giống hệt cách `initialAskAbout` (Câu hỏi gợi ý, Phase 4A.3) đã seed state
   // này. Không tạo state chat thứ hai.
-  const askDirect = useCallback((text) => {
+  const askDirect = useCallback((text, context = null) => {
     const t = String(text || "").trim();
     if (!t) return;
-    setAskAboutDraft({ text: t, nonce: Date.now() });
+    setAskAboutDraft({ text: t, nonce: Date.now(), context });
   }, []);
 
   // Gia sư AI + Lề bằng chứng dùng chung MỘT cột (hard constraint: không thêm
@@ -200,7 +224,13 @@ export default function MainLayout({
   const [rightView, setRightView] = useState(initialRightView);   // "evidence" | "tutor" | "timeline"
   const [headerSurface, setHeaderSurface] = useState(null); // mindmap | summary | study-tools
   const [libraries, setLibraries] = useState({ mindMaps: [], summaries: [], mindMapActions: null, summaryActions: null });
-  const updateMindmapLibrary = useCallback((value) => setLibraries((prev) => ({ ...prev, mindMaps: value.mindMaps || [], mindMapActions: value.actions || null })), []);
+  const updateMindmapLibrary = useCallback((value) => setLibraries((prev) => ({
+    ...prev,
+    mindMaps: value.mindMaps || [],
+    mindMapActions: value.actions || null,
+    mindMapInitialLoading: Boolean(value.initialLoading),
+    mindMapLoadError: value.loadError || null,
+  })), []);
   const updateSummaryLibrary = useCallback((value) => setLibraries((prev) => ({ ...prev, summaries: value.summaries || [], summaryActions: value.actions || null })), []);
   // Lệnh một-lần (nonce) để "Xem sơ đồ"/"Xem tóm tắt" ở Tutor chuyển đúng tab
   // Artifacts trong SidebarRight — KHÔNG điều hướng, KHÔNG route mới (tutorActions.js
@@ -392,7 +422,9 @@ export default function MainLayout({
   // real grid width and showing an empty state with nothing selected,
   // contradicting both the approved desktop mock and this section's
   // explicit "closed by default... must not consume grid width... overlay
-  // the right edge" requirement.
+  // the right edge" requirement. (main independently kept this flag wired
+  // through its own JSX but left it hardcoded `false` -- turning it on here
+  // is what this branch's whole redesign is built around.)
   const mindmapToolOverlay = workspaceMode === "mindmap" && !panel.drawer;
 
   // Auto-open the overlay exactly when there's a node to show evidence for
@@ -624,6 +656,8 @@ export default function MainLayout({
               hasSummary: Boolean(summaryData), onOpenSummary: onSwitchToSummary,
             }}
             mindmapData={mindmapData}
+            mindmapInitialLoading={libraries.mindMapInitialLoading}
+            mindmapLoadError={libraries.mindMapLoadError}
             summaryData={summaryData}
             onSummaryContextChange={setSummaryContext}
             controller={mindMapController}
@@ -631,42 +665,45 @@ export default function MainLayout({
         </main>
 
         {/* ── LỀ PHẢI — Bằng chứng và bản tạo ra ──
-            2026-09-21 (2nd pass): the first version of this overlay branch
-            only rendered <ContextInspector> (i.e. SidebarRight -- the owner
-            of fetchMindMaps/fetchSummaries, generation/polling, and the
-            library's onSelect handling) when `rightOpen` was true. Since
-            `rightOpen` starts false, SidebarRight never mounted in Mind Map
-            mode at all until a node was selected -- and nothing could ever
-            select a node, because the library's own map-select handler
-            lives inside the very component that hadn't mounted. Confirmed
-            live: with this bug, choosing a map from the library visibly
-            closed the popover (its own onClose fired) but never loaded the
-            map. Reverting to the ORIGINAL code (mindmapToolOverlay
-            hardcoded false, so SidebarRight was always in the DOM) made
-            selection work again immediately -- isolating this exact branch
-            as the cause. This is the identical bug class fixed earlier
-            today in a different part of this codebase: a component that
-            owns background data/generation logic must stay mounted
-            regardless of whether its OWN visual surface is currently shown.
-            Also: having two separate conditionally-rendered <aside> blocks
-            (one here, one in the persistent-rail branch below) would remount
-            SidebarRight -- and abandon any in-flight generation poll -- on
-            every mode switch between Mind Map and Chat/Summary, since React
-            sees them as different tree positions. Merged back into ONE
-            aside+ContextInspector, always mounted whenever
-            `rightSurfaceVisible`, with only its wrapping className/style
-            varying by mode; the overlay case hides via opacity/visibility/
-            pointer-events (never unmounts) instead of conditional JSX. */}
-        {!rightSurfaceVisible ? null : !mindmapToolOverlay && !panel.drawer && panel.collapsed.right ? (
-          <PanelSpine
-            side="right"
-            label={PANELS.right.label}
-            count={evidence?.sources?.length || 0}
-            onExpand={() => panel.setCollapsedFor("right", false)}
-          />
-        ) : (
+            Two independent same-day fixes for the same underlying rule
+            ("a component that owns background data/generation logic must
+            stay mounted regardless of whether its own visual surface is
+            shown"), reconciled here:
+            2026-09-21 (this branch): the Mind Map overlay's first draft only
+            rendered <ContextInspector> (SidebarRight -- owner of
+            fetchMindMaps/fetchSummaries/generation-polling/the library's
+            onSelect handling) when `rightOpen` was true. Since `rightOpen`
+            starts false, SidebarRight never mounted in Mind Map mode until a
+            node was selected -- and nothing could ever select a node,
+            because the library's own map-select handler lives inside the
+            very component that hadn't mounted. Confirmed live via a
+            `git stash` A/B test. Fixed by keeping the overlay's <aside>
+            always mounted, hiding it via opacity/visibility/pointer-events
+            instead of conditional JSX.
+            2026-09-24 (main, independently): the desktop collapsed-rail case
+            had the identical bug for a different visual state -- on a fresh
+            session the right panel starts collapsed, so the old
+            `panel.collapsed.right ? <PanelSpine/> : <aside>...</aside>`
+            ternary never mounted the aside at all, and the mind map/summary
+            catalog stayed permanently empty. Confirmed live: zero network
+            calls to /mindmaps until the panel was expanded once. Fixed the
+            same way -- PanelSpine renders ALONGSIDE the aside (not instead
+            of it), aside hidden via width:0 when collapsed.
+            Combined: the aside is now unconditionally mounted whenever
+            `rightSurfaceVisible`, for all three visual states (Mind Map
+            overlay, collapsed rail, mobile drawer) -- only className/style
+            vary per state, never JSX presence. */}
+        {!rightSurfaceVisible ? null : (
           <>
-            {!panel.drawer && !mindmapToolOverlay && (
+            {!mindmapToolOverlay && !panel.drawer && panel.collapsed.right && (
+              <PanelSpine
+                side="right"
+                label={PANELS.right.label}
+                count={evidence?.sources?.length || 0}
+                onExpand={() => panel.setCollapsedFor("right", false)}
+              />
+            )}
+            {!panel.drawer && !panel.collapsed.right && !mindmapToolOverlay && (
               <PanelDivider
                 side="right"
                 label={PANELS.right.label}
@@ -680,7 +717,11 @@ export default function MainLayout({
               />
             )}
             <aside
-              aria-hidden={mindmapToolOverlay && !rightOpen ? true : undefined}
+              aria-hidden={
+                (mindmapToolOverlay && !rightOpen)
+                || (!mindmapToolOverlay && !panel.drawer && panel.collapsed.right)
+                  ? true : undefined
+              }
               className={
                 mindmapToolOverlay
                   ? "mindmap-tools-overlay fixed top-[60px] right-3 bottom-3 z-40 w-[320px] bg-surface-sidebar border border-border rounded-[12px] shadow-card-hover overflow-hidden transition-opacity duration-150"
@@ -698,7 +739,9 @@ export default function MainLayout({
                 mindmapToolOverlay
                   ? (rightOpen ? undefined : { opacity: 0, pointerEvents: "none", visibility: "hidden" })
                   : !panel.drawer
-                  ? { width: panel.width.right }
+                  ? (panel.collapsed.right
+                      ? { width: 0, minWidth: 0, padding: 0, border: "none", pointerEvents: "none" }
+                      : { width: panel.width.right })
                   : undefined
               }
             >

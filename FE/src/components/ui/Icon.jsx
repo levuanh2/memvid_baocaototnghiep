@@ -6,9 +6,9 @@
 import {
   AlertCircle, AlignJustify, Archive, ArchiveRestore, ArrowLeft, ArrowRight, BadgeCheck, Ban, BookOpen,
   Check, CheckCircle, CheckCircle2, ChevronDown, ChevronLeft, ChevronRight, ChevronsDownUp, ChevronsUpDown, ChevronUp, CircleDashed, Clock, Download, Eraser, EyeOff, Filter,
-  Expand, FileStack, FileText, FolderOpen, HelpCircle, Image, ImagePlus, Info, KeyRound, Keyboard, Library, LogOut, Maximize, Menu,
+  Expand, FileStack, FileText, FolderOpen, GitBranch, HelpCircle, Image, ImagePlus, Info, KeyRound, Keyboard, Library, LogOut, Maximize, Menu,
   MessageCircleQuestion, MessageSquare, MessageSquareText, MessagesSquare, Moon,
-  MoreVertical, MousePointerClick, Network, PanelRight, Pencil, Plus, Quote, RotateCcw, Rows3, Scan, ScrollText,
+  MoreVertical, MousePointerClick, Network, PanelRight, Pencil, Plus, Quote, RotateCcw, Rows3, Scale, Scan, ScrollText,
   Search, Send, Spline, Square, Sun, Target, Trash2, TrendingDown, TriangleAlert, Unlink, Upload, UserRound, X, Save,
   Sparkles, Star, Tag, Pin, Zap, ZoomIn, ZoomOut,
 } from "lucide-react";
@@ -16,9 +16,9 @@ import {
 const ICONS = {
   AlertCircle, AlignJustify, Archive, ArchiveRestore, ArrowLeft, ArrowRight, BadgeCheck, Ban, BookOpen,
   Check, CheckCircle, CheckCircle2, ChevronDown, ChevronLeft, ChevronRight, ChevronsDownUp, ChevronsUpDown, ChevronUp, CircleDashed, Clock, Download, Eraser, EyeOff, Filter,
-  Expand, FileStack, FileText, FolderOpen, HelpCircle, Image, ImagePlus, Info, KeyRound, Keyboard, Library, LogOut, Maximize, Menu,
+  Expand, FileStack, FileText, FolderOpen, GitBranch, HelpCircle, Image, ImagePlus, Info, KeyRound, Keyboard, Library, LogOut, Maximize, Menu,
   MessageCircleQuestion, MessageSquare, MessageSquareText, MessagesSquare, Moon,
-  MoreVertical, MousePointerClick, Network, PanelRight, Pencil, Plus, Quote, RotateCcw, Rows3, Scan, ScrollText,
+  MoreVertical, MousePointerClick, Network, PanelRight, Pencil, Plus, Quote, RotateCcw, Rows3, Scale, Scan, ScrollText,
   Search, Send, Spline, Square, Sun, Target, Trash2, TrendingDown, TriangleAlert, Unlink, Upload, UserRound, X, Save,
   Sparkles, Star, Tag, Pin, Zap, ZoomIn, ZoomOut,
 };

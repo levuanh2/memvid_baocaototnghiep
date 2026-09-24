@@ -82,8 +82,6 @@ describe("MindElixirView Part B canvas controls", () => {
     });
     expect(container.querySelector(".mm-inspector-drawer")).toBeNull();
     expect(container.querySelector(".mm-inspector-tab")).toBeNull();
-    const drawer = { querySelector: () => ({ toBeTruthy: () => {} }) };
-    expect(drawer.querySelector("button[aria-label='Đóng bảng kiểm tra']")).toBeTruthy();
   });
 
   it("switches saved maps through refresh without creating a second instance", async () => {

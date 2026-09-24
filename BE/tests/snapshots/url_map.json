@@ -567,11 +567,32 @@
     "rule": "/mindmaps/<mindmap_id>"
   },
   {
+    "endpoint": "get_mindmap_node_context",
+    "methods": [
+      "GET"
+    ],
+    "rule": "/mindmaps/<mindmap_id>/nodes/<node_id>/context"
+  },
+  {
     "endpoint": "delete_mindmap",
     "methods": [
       "DELETE"
     ],
     "rule": "/mindmaps/<string:mindmap_id>"
+  },
+  {
+    "endpoint": "mindmap_capability",
+    "methods": [
+      "GET"
+    ],
+    "rule": "/mindmaps/capability"
+  },
+  {
+    "endpoint": "suggest_mindmap_topics",
+    "methods": [
+      "POST"
+    ],
+    "rule": "/mindmaps/suggest-topics"
   },
   {
     "endpoint": "query",

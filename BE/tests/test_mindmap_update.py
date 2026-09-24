@@ -45,6 +45,9 @@ def test_put_updates_and_protects_fields(tmp_path, monkeypatch):
     body["title"] = "Đã sửa"
     body["nodes"].append({"id": "n2", "parent": "n1", "kind": "idea", "title": "Ý mới", "note": "", "chunk_refs": [], "order": 0})
     body["relations"] = [
+        # n1->n2 is a real tree edge (n2.parent=n1), but "leads_to" is a
+        # meaningful type, not a generic hierarchy-restating one — must
+        # survive (P2 fix, 2026-09-22; is_redundant_with_hierarchy).
         {"source": "n1", "target": "n2", "type": "leads_to", "label": "dẫn"},
         {"source": "n2", "target": "XX", "type": "relates_to", "label": ""},
     ]
@@ -56,7 +59,7 @@ def test_put_updates_and_protects_fields(tmp_path, monkeypatch):
     assert saved["sources"] == ["a_docx"]
     assert saved["created_at"] == "2026-07-04T00:00:00Z"
     assert any(n["id"] == "n2" for n in saved["nodes"])
-    assert saved["relations"] == []
+    assert saved["relations"] == [{"source": "n1", "target": "n2", "type": "leads_to", "label": "dẫn"}]
     assert saved["generator"]["edited"] is True
     assert saved["updated_at"].endswith("Z")
 

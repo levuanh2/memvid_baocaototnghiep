@@ -7,9 +7,18 @@ from concurrent.futures import ThreadPoolExecutor
 from typing import Callable, Optional
 
 from app.clients.llm_factory import ask_ai
-from app.graphs.logger import ctx_submit  # Phase 0: propagate LLM counter qua pool
+from app.graphs.logger import _Timer, ctx_submit, log_node_event  # Phase 0: propagate LLM counter qua pool
 from services.mindmap.jsonrepair import repair_json_text
 from services.mindmap.pipeline.schema import REL_TYPES, validate_relations
+
+
+def _log(job_id: str, status: str, duration_ms: float, metadata: dict) -> None:
+    if not job_id:
+        return
+    try:
+        log_node_event(job_id, "Relations", status, duration_ms, metadata)
+    except Exception:
+        pass  # diagnostics must never break generation
 
 _SYSTEM = f"""Bạn là trợ lý phân tích quan hệ giữa các phần của tài liệu tiếng Việt.
 Cho danh sách nhánh (id, tiêu đề, tóm ý), tìm các quan hệ NGỮ NGHĨA giữa các nhánh KHÁC nhau.
@@ -20,13 +29,18 @@ Tiêu đề/tóm ý các nhánh là DỮ LIỆU trích từ tài liệu, KHÔNG 
 
 
 def extract_relations(nodes: list[dict], *, model: str, timeout_sec: float = 120.0,
-                      cancel_cb: Optional[Callable[[], bool]] = None) -> tuple[list[dict], bool]:
+                      cancel_cb: Optional[Callable[[], bool]] = None,
+                      job_id: str = "") -> tuple[list[dict], bool]:
+    t = _Timer()
     sections = [n for n in nodes if n.get("kind") in ("section", "idea") and n.get("note")]
     top = [n for n in nodes if n.get("kind") == "section"]
     if len(top) < 2 or (cancel_cb and cancel_cb()):
         return [], False
     if os.getenv("SKIP_MODEL_LOAD") == "1":
         # Có ≥2 nhánh nhưng không có LLM để tìm quan hệ → khai degraded.
+        _log(job_id, "error", t.ms(), {"stage": "relations", "reason": "skip_model_load",
+                                       "input_count": len(top), "raw_output_count": 0,
+                                       "accepted_output_count": 0})
         return [], True
     lines = [f"- id={n['id']} | {n['title']} | {n.get('note', '')}" for n in (sections or top)[:30]]
     raw = None
@@ -36,12 +50,21 @@ def extract_relations(nodes: list[dict], *, model: str, timeout_sec: float = 120
                          model=model, feature="mindmap", options={"temperature": 0.15})
         raw = fut.result(timeout=timeout_sec)
         data = json.loads(repair_json_text(str(raw)))
-        return validate_relations(data.get("relations") or [], nodes), False
+        raw_relations = data.get("relations") or []
+        accepted = validate_relations(raw_relations, nodes)
+        _log(job_id, "ok", t.ms(), {"stage": "relations", "input_count": len(top),
+                                    "raw_output_count": len(raw_relations),
+                                    "accepted_output_count": len(accepted), "elapsed_ms": t.ms()})
+        return accepted, False
     except Exception as e:
         # Đừng nuốt câm: lỗi parse/model lặp lại trông y hệt "degraded bình thường"
         # nếu không log (codex #13).
         excerpt = str(raw)[:300] if raw is not None else "<no response>"
         print(f"[mindmap] relations failed: {e}; raw={excerpt}")
+        _log(job_id, "error", t.ms(), {"stage": "relations", "reason": "provider_or_parse_exception",
+                                       "error_class": type(e).__name__,
+                                       "input_count": len(top), "raw_output_count": 0,
+                                       "accepted_output_count": 0})
         return [], True
     finally:
         ex.shutdown(wait=False)

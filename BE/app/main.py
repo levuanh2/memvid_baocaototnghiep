@@ -1,5 +1,6 @@
 import os
 from pathlib import Path
+from typing import Any
 
 # Load .env early so all modules see env vars (Windows/dev friendly).
 try:
@@ -8,7 +9,21 @@ try:
 except Exception:
     pass
 
+
+def _jobs_update_dispatch(job_id: str, **kwargs: Any) -> None:
+    """Keep Guided progress in Postgres; legacy jobs stay on SQLite."""
+    try:
+        from app.domains.jobs import guided_store
+        if guided_store.use_postgres() and guided_store.get_job(job_id) is not None:
+            guided_store.update_job(job_id, **kwargs)
+            return
+    except Exception:
+        pass
+    if _jobs_update_job is not None:
+        _jobs_update_job(job_id, **kwargs)
+
 import json
+import hashlib
 import re
 import uuid
 import contextlib
@@ -788,6 +803,16 @@ def _readiness() -> tuple[bool, dict]:
     queue_depth = qs.get("queued_count")
     if qs.get("enabled") and isinstance(queue_depth, int) and queue_depth > _queue_depth_max():
         reasons.append("queue_full")
+    # 2026-09-23: SKIP_MODEL_LOAD=1 leaked into the shared production .env and
+    # silently no-op'd every LLM-gated stage (Guided V3 Stage 0/Enrich/Relations,
+    # legacy V2's outline fallback, Summary, Memory Tree) for an unknown window —
+    # no exception, no crash, `/health` even said `"mode":"ci"`. It's a
+    # deliberate test/CI-only flag with no business being true on a process
+    # PROCESS_ROLE marks as serving real traffic. Fail readiness loudly instead
+    # of silently degrading every AI feature to a stub again.
+    from app.domains.jobs.guided_store import _production_role
+    if _production_role() and os.environ.get("SKIP_MODEL_LOAD") == "1":
+        reasons.append("skip_model_load_in_production")
     ready = not reasons
     detail = {
         "status": "ready" if ready else "not_ready",
@@ -819,15 +844,29 @@ def home():
 
 @app.get('/health')
 def health():
+    skip_model_load = os.environ.get("SKIP_MODEL_LOAD") == "1"
     payload: Dict[str, Any] = {
         "status": "ok",
-        "mode": "ci" if os.environ.get("SKIP_MODEL_LOAD") == "1" else "normal",
+        "mode": "ci" if skip_model_load else "normal",
         "query_graph_ready": QUERY_GRAPH is not None,
         "ingest_graph_ready": INGEST_GRAPH is not None,
     }
     err = globals().get("QUERY_GRAPH_BUILD_ERROR")
     if err:
         payload["query_graph_error"] = err[:800]
+    # 2026-09-23: SKIP_MODEL_LOAD=1 leaked into the shared production .env for
+    # an unknown window and silently stubbed out every LLM-gated feature with
+    # no crash. `/health` said "ok" the whole time -- keep it 200 here (Docker's
+    # healthcheck + scripts/health.sh gate deploys on this exact endpoint, and
+    # this guard has not been through that gating path yet), but make the
+    # misconfiguration impossible to miss. /ready fails closed on this same
+    # condition for callers that do act on non-200.
+    if skip_model_load:
+        from app.domains.jobs.guided_store import _production_role
+        if _production_role():
+            payload["warning"] = ("SKIP_MODEL_LOAD=1 is active on a production-role process "
+                                  "(PROCESS_ROLE/AUTH_PROTECT_APP_APIS) -- every LLM-gated "
+                                  "feature is silently running in stub/no-op mode.")
     return jsonify(payload), 200
 
 
@@ -1561,6 +1600,21 @@ def _ensure_owned_sources(source_names: list, user_id: Optional[str]):
     return None
 
 
+def _ensure_ready_sources(source_names: list[str]):
+    """Reject guided generation until every selected source has indexed chunks."""
+    registry = _load_source_registry()
+    if not registry:
+        return None  # legacy/open installs may only have index.json
+    for requested in source_names:
+        norm = _normalize_video_stem(requested)
+        rows = [row for sid, row in registry.items()
+                if isinstance(row, dict) and (sid == requested or
+                   _normalize_video_stem(row.get("source_stem") or row.get("filename") or "") == norm)]
+        if rows and any((row.get("status") or row.get("pipeline_status") or "ready") not in ("ready", "index_ready") for row in rows):
+            return jsonify({"error": "source_not_ready", "source": requested}), 409
+    return None
+
+
 def _chunk_owner_stem(chunk_id) -> str:
     """Canonical source stem a chunk_id belongs to (from index.json), or '' if unknown.
     Used to owner-check /chunk-text without trusting any client-supplied identity."""
@@ -1829,7 +1883,7 @@ _graphs = _build_graphs(
     split_text=split_text,
     append_to_index=append_to_index,
     build_memory_tree_for_sources=build_memory_tree_for_sources,
-    jobs_update=_jobs_update_job,
+    jobs_update=_jobs_update_dispatch,
     make_cache_key=_make_query_cache_key,
     get_cached=_get_cached_query,
     set_cached=_set_cached_query,
@@ -4168,6 +4222,13 @@ def query():
     session_id = (data.get("session_id") or "").strip()
     f_category = (data.get('category') or '').strip() or None
     f_language = (data.get('language') or '').strip() or None
+    node_context = data.get("node_context") or {
+        "node_id": data.get("node_id"),
+        "map_id": data.get("map_id"),
+        "citations": data.get("citation_context") or [],
+    }
+    if not isinstance(node_context, dict):
+        node_context = {}
 
     # Phase C: auth gate FIRST (before input validation) so a no-token request is
     # 401, not 400. /query stays in-process. Then owner-scope the selected sources.
@@ -4366,6 +4427,14 @@ def query():
                 "retrieved_chunks": [],
                 "retrieved_sources": [],
                 "context": "",
+                # Context supplied by the verified Mind Map inspector. The graph
+                # may use this as conversational context; citations remain server
+                # data and are never synthesized from this client field.
+                "node_context": {
+                    "node_id": str(node_context.get("node_id") or ""),
+                    "map_id": str(node_context.get("map_id") or ""),
+                    "citations": node_context.get("citations") if isinstance(node_context.get("citations"), list) else [],
+                },
                 "answer": "",
                 "retry_count": 0,
                 "low_confidence": False,
@@ -4947,14 +5016,27 @@ def _mindmap_input_and_hash(source_names: list[str]) -> tuple[dict, str]:
     return mm, h
 
 
-def _start_mindmap_job(source_names: list[str], mm_input: dict, content_hash: str) -> str:
+def _start_mindmap_job(source_names: list[str], mm_input: dict, content_hash: str,
+                       generation_intent: Optional[dict] = None, *, job_id: Optional[str] = None,
+                       job_metadata: Optional[dict] = None) -> str:
     """Phase 5 Step 3: dispatch Mindmap v3 via enqueue_job — daemon thread when
     QUEUE_ENABLED=false (default, unchanged), RQ 'mindmap' queue when true. FE polling
     (/mindmap-status) unchanged; result still in mindmap_store."""
-    job_id = str(uuid.uuid4())
+    job_id = job_id or str(uuid.uuid4())
     uid = _current_user_id()  # request context: stamp job + record owner (Phase D)
     from app.domains.jobs.jobs_store import create_job
-    create_job(job_id, job_type="mindmap", status="pending", progress=0, current_node="Queued", user_id=uid)
+    from app.domains.jobs import guided_store
+    if not job_metadata:
+        if guided_store.use_postgres() and generation_intent is not None:
+            # The Postgres row is created by the request route. A missing row is
+            # a programming/configuration error; never start a process-local job.
+            if not guided_store.get_job(job_id, user_id=uid):
+                raise RuntimeError("durable_store_unavailable")
+        else:
+            create_job(job_id, job_type="mindmap", status="pending", progress=0, current_node="Queued", user_id=uid)
+    if guided_store.use_postgres() and generation_intent is not None:
+        print(f"mindmap_job_durable_enqueue job_id={job_id}", flush=True)
+        return job_id
     from app.jobs.queue import enqueue_job
     res = enqueue_job(run_mindmap_job,
                       args=(job_id, source_names, mm_input, content_hash, uid),
@@ -4970,19 +5052,128 @@ def _start_mindmap_job(source_names: list[str], mm_input: dict, content_hash: st
 # Thân hàm đã chuyển sang `app/application/`. Giữ tên ở ĐÚNG chỗ này vì RQ
 # serialize hàm theo `module.qualname` (`app.main.<ten>`) — job đã nằm trong
 # hàng đợi trước lúc deploy vẫn phải resolve được. Chữ ký giữ NGUYÊN.
-def run_mindmap_job(job_id: str, source_names: list[str], mm_input: dict, content_hash: str, user_id: Optional[str] = None) -> None:
+def run_mindmap_job(job_id: str, source_names: list[str], mm_input: dict, content_hash: str, user_id: Optional[str] = None, *, already_claimed: bool = False) -> None:
     from app.application.mindmap_generation import run_mindmap_job as _impl
     return _impl(job_id, source_names, mm_input, content_hash, user_id,
-                 graph=MINDMAP_GRAPH)
+                 graph=MINDMAP_GRAPH, already_claimed=already_claimed)
+
+
+def _recover_guided_jobs() -> None:
+    """Re-enqueue durable Guided requests after a web/worker restart.
+
+    Only source IDs and guided configuration are persisted. Chunks are rebuilt
+    from the current indexed source store, so the jobs table never stores
+    document content or credentials.
+    """
+    if (os.getenv("GUIDED_JOB_RECOVERY_ENABLED", "false") or "").strip().lower() not in ("1", "true", "yes", "on"):
+        return
+    try:
+        from app.domains.jobs.jobs_store import recover_expired_jobs, list_recoverable_mindmap_jobs
+        recover_expired_jobs()
+        from app.domains.mindmap.guided import intent_hash, suggest_topics
+        for row in list_recoverable_mindmap_jobs():
+            source_names = row.get("source_ids") or []
+            mm_input, content_hash = _mindmap_input_and_hash(source_names)
+            intent = row.get("guided_config") or None
+            if intent:
+                topics = suggest_topics(mm_input)
+                mm_input = {**mm_input, "generation_intent": intent, "guided_topics": topics}
+                content_hash = intent_hash(content_hash, intent)
+            _start_mindmap_job(source_names, mm_input, content_hash, intent,
+                               job_id=row["job_id"], job_metadata=row)
+    except Exception as exc:
+        print(f"guided_job_recovery_failed err={str(exc)[:120]}", flush=True)
 
 
 # -------------------------
+def _guided_v3_enabled(user_id: Optional[str]) -> bool:
+    """Server-authoritative rollout gate; client flags are never trusted."""
+    # The repository's explicit open/dev mode remains backward-compatible for
+    # legacy test clients. Production has AUTH_PROTECT_APP_APIS=true, so this
+    # branch cannot grant an unauthenticated production caller access.
+    if not _auth_protect_enabled():
+        return True
+    if not user_id:
+        return False
+    qa_ids = {item.strip() for item in (os.getenv("GUIDED_MINDMAP_V3_QA_USER_IDS") or "").split(",") if item.strip()}
+    enabled = (os.getenv("GUIDED_MINDMAP_V3_ENABLED", "false") or "").strip().lower() in ("1", "true", "yes", "on")
+    return enabled or user_id in qa_ids
+
+
+def _guided_capability(user_id: Optional[str]) -> dict[str, Any]:
+    if not _guided_v3_enabled(user_id):
+        return {"guided_mindmap_v3": False, "fallback": "v2", "reason": "guided_v3_disabled"}
+    from app.domains.jobs import guided_store
+    store = guided_store.health()
+    if guided_store.use_postgres() and not store.get("available"):
+        return {"guided_mindmap_v3": False, "fallback": "v2", "reason": "durable_store_unavailable"}
+    if guided_store.use_postgres() and not guided_store.worker_healthy(int(os.getenv("GUIDED_WORKER_HEARTBEAT_TTL_SEC", "90"))):
+        return {"guided_mindmap_v3": False, "fallback": "v2", "reason": "worker_unhealthy"}
+    try:
+        from app.clients.llm_factory import PROVIDERS
+        configured_provider = any((os.getenv(key) or "").strip() for key in (
+            "GEMINI_API_KEY", "GROQ_API_KEY", "FPT_AI_API_KEY", "LLM_GATEWAY_ADDR"))
+        if not PROVIDERS or (os.getenv("PROCESS_ROLE", "").strip().lower() in {"web", "mindmap-worker"} and not configured_provider):
+            return {"guided_mindmap_v3": False, "fallback": "v2", "reason": "provider_not_configured"}
+    except Exception:
+        return {"guided_mindmap_v3": False, "fallback": "v2", "reason": "provider_not_configured"}
+    return {"guided_mindmap_v3": True, "fallback": "v2", "reason": None}
+
+
+@app.get("/mindmaps/capability")
+def mindmap_capability():
+    uid, err = _require_app_user()
+    if err:
+        return err
+    return jsonify(_guided_capability(uid)), 200
+
+
+@app.post("/mindmaps/suggest-topics")
+def suggest_mindmap_topics():
+    uid, err = _require_app_user()
+    if err:
+        return err
+    capability = _guided_capability(uid)
+    if not capability["guided_mindmap_v3"]:
+        return jsonify({"error": "Guided Mind Map V3 is unavailable", "error_code": capability["reason"], "fallback": "v2"}), 404
+    data = request.json or {}
+    raw_sources = data.get("source_ids") or data.get("sources") or []
+    if not isinstance(raw_sources, list) or not raw_sources:
+        return jsonify({"error": "No sources selected"}), 400
+    source_names = []
+    for item in raw_sources:
+        value = item if isinstance(item, str) else (item.get("video") or item.get("name") or item.get("id") or item.get("source"))
+        if isinstance(value, str) and value.strip() and value.strip() not in source_names:
+            source_names.append(value.strip())
+    if not source_names:
+        return jsonify({"error": "No sources selected"}), 400
+    src_err = _ensure_owned_sources(source_names, uid)
+    if src_err:
+        return src_err
+    ready_err = _ensure_ready_sources(source_names)
+    if ready_err:
+        return ready_err
+    try:
+        mm_input, _ = _mindmap_input_and_hash(source_names)
+    except Exception as exc:
+        return jsonify({"error": f"Không đọc được dữ liệu nguồn: {exc}"}), 500
+    if not mm_input.get("chunks"):
+        return jsonify({"suggestions": [], "status": "empty"}), 200
+    from app.domains.mindmap.guided import suggest_topics
+    return jsonify({"suggestions": suggest_topics(mm_input, str(data.get("query") or "")),
+                    "source_ids": source_names}), 200
+
+
 @app.post("/generate-mindmap")
 def generate_mindmap():
     uid, err = _require_app_user()
     if err:
         return err
     data = request.json or {}
+    guided_requested = any(key in data for key in ("instruction", "selected_topic_ids", "selected_topics", "preset", "detail_level"))
+    capability = _guided_capability(uid) if guided_requested else None
+    if guided_requested and not capability["guided_mindmap_v3"]:
+        return jsonify({"error": "Guided Mind Map V3 is unavailable", "error_code": capability["reason"], "fallback": "v2"}), 404
     raw_sources = data.get("sources") or []
     if not isinstance(raw_sources, list):
         return jsonify({"error": "Sources phải là list"}), 400
@@ -5010,6 +5201,16 @@ def generate_mindmap():
     if src_err:
         return src_err
 
+    ready_err = _ensure_ready_sources(source_names)
+    if ready_err:
+        return ready_err
+
+    from app.domains.mindmap.guided import intent_hash, normalize_intent, suggest_topics
+    try:
+        intent = normalize_intent(data) if guided_requested else None
+    except ValueError as exc:
+        return jsonify({"error": str(exc), "error_code": "invalid_guided_request"}), 400
+
     force = bool(data.get("force"))
     try:
         mm_input, content_hash = _mindmap_input_and_hash(source_names)
@@ -5017,14 +5218,57 @@ def generate_mindmap():
         return jsonify({"error": f"Không đọc được dữ liệu nguồn: {e}"}), 500
     if not mm_input.get("chunks"):
         return jsonify({"error": "Nguồn chưa có dữ liệu đã index"}), 400
+    if intent:
+        available_topics = suggest_topics(mm_input)
+        by_id = {row["id"]: row for row in available_topics}
+        selected_ids = intent["selected_topic_ids"]
+        grounded = [by_id[item]["title"] for item in selected_ids if item in by_id]
+        # Client text is only a user preference; evidence remains server-derived.
+        intent["selected_topics"] = grounded or intent["selected_topics"]
+        mm_input = {**mm_input, "generation_intent": intent,
+                    "guided_topics": available_topics}
+        content_hash = intent_hash(content_hash, intent)
+
     if not force:
         # Phase D: user-scoped cache lookup — no cross-user reuse on identical content_hash.
+        # 2026-09-24: MUST run before create_idempotent_job below. It used to run
+        # after, so every cache-hit still inserted a real row into the durable
+        # Postgres ledger and the guided worker would claim and re-run it for
+        # nothing -- wasted a full generation cycle on every "same config as
+        # before" click, invisible to the caller (who got the synchronous cached
+        # response) and to the job itself (which completed correctly but nobody
+        # was ever waiting on its result). Found while correlating a real QA
+        # browser click against the job ledger.
         cached = (mindmap_store.get_by_hash(content_hash, user_id=uid, enforce_owner=True)
                   if _auth_protect_enabled() else mindmap_store.get_by_hash(content_hash))
         if cached:
             return jsonify({"status": "done", "result": cached, "cached": True}), 200
-    job_id = _start_mindmap_job(source_names, mm_input, content_hash)
-    return jsonify({"job_id": job_id, "status": "started"}), 202
+    idempotency_key = str(data.get("idempotency_key") or "").strip()
+    from app.domains.jobs import guided_store
+    if guided_requested and guided_store.use_postgres() and not idempotency_key:
+        # The durable ledger requires a key even when an older client does not
+        # send one; this generated key is unique to this request and preserves
+        # the old client contract without allowing duplicate retries to merge.
+        idempotency_key = f"auto:{uuid.uuid4()}"
+    request_fingerprint = hashlib.sha256(json.dumps({"sources": source_names, "intent": intent, "force": force}, ensure_ascii=False, sort_keys=True, separators=(",", ":")).encode("utf-8")).hexdigest()
+    durable_job = None
+    if guided_requested and idempotency_key and uid:
+        outcome, durable_job = guided_store.create_idempotent_job(
+            str(uuid.uuid4()), user_id=uid, idempotency_key=idempotency_key,
+            request_fingerprint=request_fingerprint, source_ids_json=json.dumps(source_names),
+            guided_config_json=json.dumps(intent or {}, ensure_ascii=False), stage="queued",
+            force=force)
+        if outcome == "conflict":
+            return jsonify({"error": "Idempotency key was already used with a different request", "error_code": "idempotency_conflict"}), 409
+        if outcome == "existing":
+            if durable_job.get("status") == "done" and durable_job.get("result"):
+                return jsonify({"status": "done", "result": durable_job["result"], "job_id": durable_job["job_id"]}), 200
+            return jsonify({"job_id": durable_job["job_id"], "status": durable_job.get("status") or "queued", "status_url": f"/mindmap-status/{durable_job['job_id']}"}), 202
+    job_id = _start_mindmap_job(source_names, mm_input, content_hash, intent,
+                                job_id=durable_job.get("job_id") if durable_job else None,
+                                job_metadata=durable_job)
+    response = {"job_id": job_id, "status": "queued", "status_url": f"/mindmap-status/{job_id}"}
+    return jsonify(response), 202
 
 
 @app.get("/mindmap-status/<job_id>")
@@ -5033,8 +5277,11 @@ def mindmap_status(job_id: str):
     if err:
         return err
     _run_jobs_maintenance()
-    from app.domains.jobs.jobs_store import get_job as _js_get
-    j = _js_get(job_id)
+    from app.domains.jobs import guided_store
+    j = guided_store.get_job(job_id, user_id=uid) if guided_store.use_postgres() else None
+    if j is None:
+        from app.domains.jobs.jobs_store import get_job as _js_get
+        j = _js_get(job_id)
     if not j or j.get("job_type") not in ("mindmap", None):
         return jsonify({"error": "Job not found"}), 404
     if _auth_protect_enabled() and j.get("user_id") != uid:
@@ -5083,6 +5330,59 @@ def get_chunk_text(chunk_id: int):
     if _auth_protect_enabled() and not _source_owner_ok(_chunk_owner_stem(chunk_id), uid):
         return jsonify({"error": "Chunk not found"}), 404
     return jsonify({"chunk_id": chunk_id, "text": text}), 200
+
+
+@app.get("/mindmaps/<mindmap_id>/nodes/<node_id>/context")
+def get_mindmap_node_context(mindmap_id: str, node_id: str):
+    """Return persisted, owner-scoped context for one mind-map node.
+
+    Selection is intentionally read-only: no retriever, LLM, or generation job is
+    invoked.  A foreign map/node is indistinguishable from a missing one.
+    """
+    uid, err = _require_app_user()
+    if err:
+        return err
+    record = (mindmap_store.get_record(mindmap_id, user_id=uid, enforce_owner=True)
+              if _auth_protect_enabled() else mindmap_store.get_record(mindmap_id))
+    if not record:
+        return jsonify({"error": "Mind map not found"}), 404
+    try:
+        with open(INDEX_META_JSON_PATH, encoding="utf-8") as handle:
+            index_meta = json.load(handle)
+    except Exception:
+        index_meta = {}
+    registry = _load_source_registry()
+    from app.domains.mindmap.context import build_node_context
+    from app.domains.vectorstore import chunk_text_store
+
+    def _meta(ref):
+        value = index_meta.get(str(ref))
+        return value if isinstance(value, dict) else None
+
+    def _source_info(stem):
+        normalized = _normalize_video_stem(stem)
+        for sid, row in registry.items():
+            if not isinstance(row, dict):
+                continue
+            row_stem = _normalize_video_stem(row.get("source_stem") or row.get("filename") or "")
+            if sid == stem or row_stem == normalized:
+                return {"id": sid, **row}
+        return None
+
+    def _allowed(stem):
+        return (not _auth_protect_enabled()) or _source_owner_ok(stem, uid)
+
+    context = build_node_context(
+        record,
+        node_id,
+        chunk_meta=_meta,
+        chunk_text=lambda ref: chunk_text_store.get_text(int(ref)) if str(ref).isdigit() else None,
+        source_info=_source_info,
+        source_allowed=_allowed,
+    )
+    if context is None:
+        return jsonify({"error": "Mind map node not found"}), 404
+    return jsonify(context), 200
 
 
 @app.get('/mindmaps')
@@ -5539,6 +5839,9 @@ def get_memory_tree(source_stem: str):
         import traceback
         traceback.print_exc()
         return jsonify({"error": str(e)}), 500
+
+
+_recover_guided_jobs()
 
 
 if __name__ == '__main__':

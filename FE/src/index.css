@@ -42,7 +42,7 @@
        `--seal`/`--brand-rgb` below are UNCHANGED and stay red — provenance/
        citation + the MemVidX wordmark accent only (Signature Contract §7;
        verified no citation/provenance consumer reads `--accent`). */
-    --accent:        #006BFE;   /* mock primary sampled around #006BFE */
+    --accent:        #126CF2;   /* approved primary accent */
     --accent-hover:  #0059D6;   /* primary hover/pressed */
     --accent-subtle: #EAF3FF;   /* primary soft surface (selection wash, badges) */
     --brand-rgb:     241 51 58;   /* mock seal/citation red */

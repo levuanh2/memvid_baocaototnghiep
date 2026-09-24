@@ -171,7 +171,14 @@ def build_ingest_graph(
             late_embeddings = None
             late_chunking_eligible = bool(chunks and spans and len(spans) == len(chunks))
             late_chunking_fallback_reason = None
-            if chunks and spans and len(spans) == len(chunks) and os.getenv("SKIP_MODEL_LOAD") != "1":
+            # `s.late_chunking` (LATE_CHUNKING env, shared/config.py) was never actually
+            # read here -- only SKIP_MODEL_LOAD gated this block, so LATE_CHUNKING=0 in
+            # production's .env was silently a no-op. Loads BAAI/bge-m3 (~2GB) into THIS
+            # process on first eligible ingest; on a memory-constrained host that's a
+            # real OOM risk (2026-09-23 incident), and the config knob that was supposed
+            # to be the emergency kill-switch for exactly that never worked.
+            if (chunks and spans and len(spans) == len(chunks)
+                    and os.getenv("SKIP_MODEL_LOAD") != "1" and s.late_chunking):
                 try:
                     from app.domains.ingest.late_chunk import get_late_chunk_encoder
                     enc = get_late_chunk_encoder()
@@ -192,6 +199,8 @@ def build_ingest_graph(
                 late_chunking_fallback_reason = "not_structure_eligible"
             elif os.getenv("SKIP_MODEL_LOAD") == "1":
                 late_chunking_fallback_reason = "model_load_disabled"
+            elif not s.late_chunking:
+                late_chunking_fallback_reason = "late_chunking_config_disabled"
 
             log_node_event(state["job_id"], "Chunk", "ok", t.ms(), {"chunks": len(chunks), "md": bool(markdown)})
             return {
