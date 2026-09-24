@@ -82,5 +82,18 @@ def suggest_topics(mm_input: dict[str, Any], query: str = "") -> list[dict[str, 
 
 
 def intent_hash(base_hash: str, intent: dict[str, Any]) -> str:
-    payload = json.dumps(intent, ensure_ascii=False, sort_keys=True, separators=(",", ":"))
+    # 2026-09-24: mix in schema/layout/profile version constants so a future
+    # bump to any of them (record shape, renderer layout algorithm, or the
+    # guided generation profile) automatically busts every existing cached
+    # hash instead of silently serving an old-shape record under a request
+    # that now expects a new one. `guided-v3` alone only ever distinguished
+    # a guided request's hash space from a plain (V2) one's -- it carries no
+    # information about which schema/layout/profile version produced the
+    # cached record, so it could not have caught that class of drift.
+    from services.mindmap.pipeline.schema import (
+        LAYOUT_VERSION, GUIDED_GENERATION_PROFILE,
+    )
+    versioned = {"schema_version": 3, "layout_version": LAYOUT_VERSION,
+                 "generation_profile": GUIDED_GENERATION_PROFILE, "intent": intent}
+    payload = json.dumps(versioned, ensure_ascii=False, sort_keys=True, separators=(",", ":"))
     return hashlib.sha256((base_hash + "|guided-v3|" + payload).encode("utf-8")).hexdigest()
