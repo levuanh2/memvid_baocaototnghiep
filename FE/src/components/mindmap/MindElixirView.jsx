@@ -119,10 +119,13 @@ export default function MindElixirView({ data, onRegenerate, regenerating, contr
   // data) — banner + nút Huỷ ngay trong toolbar.
   const generating = Boolean(data?.generating);
 
+  // Returns true once it actually ran the repair (container had real size),
+  // false if there was nothing to do yet -- the caller (the polling loop
+  // below) uses this to know when it can stop retrying.
   const fitIfReady = useCallback(() => {
     const el = containerRef.current;
     const mind = mindRef.current;
-    if (!mind || !el || el.clientWidth <= 0 || el.clientHeight <= 0) return;
+    if (!mind || !el || el.clientWidth <= 0 || el.clientHeight <= 0) return false;
     // 2026-09-24: `scaleFit()` only computes a zoom/pan transform from the
     // node elements' EXISTING offsetWidth/offsetHeight -- it never calls
     // `layout()`/`linkDiv()`, so it cannot repair the broken NaN root-level
@@ -134,22 +137,21 @@ export default function MindElixirView({ data, onRegenerate, regenerating, contr
     // connector paths from those positions -- same pair mind-elixir's own
     // `refresh()` runs.
     //
-    // NOT gated by pendingFitRef: the first ResizeObserver entry to report a
-    // positive width/height is not reliably the container's SETTLED size --
-    // it can fire mid CSS-transition (the right panel's own
+    // NOT gated by pendingFitRef: the first caller to report a positive
+    // width/height is not reliably the container's SETTLED size -- it can
+    // run mid CSS-transition (the right panel's own
     // `transition-transform duration-200`, tab-switch animations), so a
     // one-shot repair could still run against a transitional, still-wrong
-    // size and never get a second chance (reproduced live: connectors
-    // stayed broken even after the container measured a healthy final size,
-    // because the one-shot flag had already been spent on an earlier,
-    // smaller intermediate report). layout()+linkDiv() are cheap and
+    // size and never get a second chance. layout()+linkDiv() are cheap and
     // idempotent -- mind-elixir already reruns them on every theme toggle --
-    // so rerunning them on every qualifying resize is safe.
+    // so rerunning them on every qualifying call is safe.
     mind.layout?.();
     mind.linkDiv?.();
-    if (!pendingFitRef.current) return;
-    pendingFitRef.current = false;
-    mind.scaleFit?.();
+    if (pendingFitRef.current) {
+      pendingFitRef.current = false;
+      mind.scaleFit?.();
+    }
+    return true;
   }, []);
 
   // Create once per mounted viewer. Switching saved maps refreshes this same
@@ -190,8 +192,31 @@ export default function MindElixirView({ data, onRegenerate, regenerating, contr
     controller.registerMindInstance(mind, sidecar);
     setZoom(mind.scaleVal || 1);
     pendingFitRef.current = true;
-    if (typeof requestAnimationFrame === "function") requestAnimationFrame(fitIfReady);
-    else fitIfReady();
+    // 2026-09-24: a single requestAnimationFrame call was not a reliable
+    // guarantee the container had real geometry by then -- confirmed live
+    // (production): the ResizeObserver below (meant to catch exactly this,
+    // the pane arriving while still hidden) never fired even once across
+    // several genuine, confirmed container resizes (directly instrumented:
+    // MindElixir.prototype.layout call count stayed 0 through real width
+    // changes). Root-caused via manual mind.layout()+linkDiv() calls in the
+    // live console, which DID fix the broken paths instantly -- proving the
+    // repair itself is correct and the only remaining gap is guaranteeing
+    // it actually runs once real geometry exists. A bounded rAF poll makes
+    // that a certainty instead of depending on ResizeObserver firing at
+    // all: it keeps retrying every frame (up to ~1s, generous for any
+    // layout/transition to settle) until `fitIfReady` reports real geometry
+    // was found. The ResizeObserver stays as a secondary safety net for a
+    // genuinely later resize (window resize, panel drag) -- this poll only
+    // owns getting the INITIAL mount right.
+    let cancelled = false;
+    let attempts = 0;
+    const poll = () => {
+      if (cancelled) return;
+      if (fitIfReady() || attempts++ >= 60) return;
+      requestAnimationFrame(poll);
+    };
+    requestAnimationFrame(poll);
+    return () => { cancelled = true; };
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [data?.id, fitIfReady]);
 
