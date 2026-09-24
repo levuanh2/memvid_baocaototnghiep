@@ -78,6 +78,44 @@ Additional captures cover neutral, library, StudyMap tools, and source-filter st
 
 ## Status
 
+## Shared Context Inspector follow-up (2026-09-20)
+
+The right-side context surface is now one shared owner for Chat, Summary, and
+Mind Map. `ContextInspector` owns the mounted shell; the existing evidence and
+generation logic remains in `SidebarRight`, while variant content is selected
+by `mode`. Mind Map no longer mounts `KnowledgeInspector` inside
+`MindElixirView`, and Summary citation chips now update the shared inspector
+instead of opening a second `EvidenceDrawer`.
+
+| Mode | Shared inspector content |
+|---|---|
+| Chat | Existing answer citation list, source/chunk excerpts, highlight and Mind Map cross-navigation |
+| Summary | Summary source list, selected section context, citation refs and open-source action |
+| Mind Map | Existing node detail/evidence/relations/CTA content, plus honest no-citation state and map metadata empty state |
+
+The desktop rail remains the existing 326px panel; 768–1279px uses the same
+inspector as a right overlay; below 768px it uses a bottom sheet with a drag
+handle. Switching modes preserves the mounted controller and Mind Elixir
+instance. Node selection opens the shared inspector without calling `scaleFit`,
+re-centering, or resetting the viewport.
+
+### Regression evidence
+
+- `ContextInspector.test.jsx`: one shared owner survives Chat → Mind Map mode change.
+- Updated Mind Elixir controls regression: no duplicate canvas inspector is mounted.
+- Targeted suite: **8/8 pass** (ContextInspector, MainLayout mode ownership, MindElixir lifecycle).
+- Production build: **pass** (Vite 7.2.1).
+- `git diff --check`: **pass**.
+- Full FE lint remains the pre-existing baseline debt; no new lint error was introduced by the shared-shell changes.
+
+### Live acceptance
+
+Live account/document/map E2E remains **BLOCKED BY CORS** under the existing
+local-origin constraint. No account, production document, production map,
+CORS change, deployment, or browser-security bypass was used. The existing
+fixture-backed screenshots remain visual evidence for the prior workspace
+surface; they are not claimed as the required live three-mode acceptance set.
+
 `Implementation exists; automated verification passed; visual QA blocked by local-origin CORS and unavailable authenticated workspace data.`
 
 This work was performed in an isolated worktree from `177c717` on

@@ -93,5 +93,3 @@ describe("MindElixirView Part B canvas controls", () => {
     expect(refresh).toHaveBeenCalledTimes(1);
   });
 });
-
-
