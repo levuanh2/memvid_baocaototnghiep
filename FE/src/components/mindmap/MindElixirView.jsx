@@ -167,54 +167,59 @@ export default function MindElixirView({ data, onRegenerate, regenerating, contr
     return true;
   }, []);
 
-  // 2026-09-24: starts a single rAF loop that keeps calling fitIfReady()
-  // every frame -- cheap when not ready (an early-return on clientWidth) --
-  // until it reports success, WHETHER OR NOT the pane is visible yet. This
-  // replaced two earlier designs, both tried live and confirmed broken:
+  // 2026-09-24: starts a single polling loop that keeps calling
+  // fitIfReady() -- cheap when not ready (an early-return on clientWidth)
+  // -- until it reports success, WHETHER OR NOT the pane is visible yet.
+  // This replaced three earlier designs, all tried live and confirmed
+  // broken:
   //
-  // - A 60-frame (~1s) capped poll: too short. WorkspaceContainer mounts a
-  //   pane's content as soon as it HAS data, not when it becomes the
-  //   active tab, so the container can stay hidden (display:none) for
-  //   however long the user takes to click into Mind Map -- an unbounded,
-  //   user-paced interval, not a brief settling delay. Confirmed live:
-  //   clientWidth was still exactly 0 five real seconds after mount.
-  // - An IntersectionObserver restarting the poll on every "became
-  //   visible" report: ResizeObserver was directly instrumented live and
-  //   confirmed to never fire at all in this app, so it was replaced with
-  //   IntersectionObserver -- which reliably fires, but fires REPEATEDLY
-  //   during the right panel's own CSS transition (not just once on the
-  //   hidden -> visible edge), each firing with a real, positive, but
-  //   still mid-transition boundingClientRect. Cancelling and restarting
-  //   the poll on every one of those firings kept resetting it before it
-  //   had landed a frame where geometry was actually correct -- confirmed
-  //   live: it never succeeded even once across its full former 15s
-  //   window, while a single manual `mind.layout(); mind.linkDiv();` call
-  //   from the console, made well after the transition had visibly
-  //   settled, fixed it instantly every time.
+  // - A 60-frame (~1s) capped rAF poll: too short. WorkspaceContainer
+  //   mounts a pane's content as soon as it HAS data, not when it becomes
+  //   the active tab, so the container can stay hidden for however long
+  //   the user takes to click into Mind Map -- an unbounded, user-paced
+  //   interval, not a brief settling delay.
+  // - An IntersectionObserver restarting an uncapped rAF poll on every
+  //   "became visible" report: fires REPEATEDLY during the right panel's
+  //   own CSS transition, and cancelling + restarting the poll on every
+  //   firing kept resetting it before it landed a frame where geometry
+  //   was actually correct.
+  // - A single continuous, uncapped rAF poll (no observer at all): still
+  //   confirmed broken live, and root-caused precisely this time --
+  //   `document.visibilityState` was `"hidden"` for the Cloud Browser tab
+  //   used for verification (confirmed directly: a bare rAF loop's own
+  //   counter stayed at exactly 0 after 5+ real seconds). Chrome fully
+  //   SUSPENDS requestAnimationFrame callbacks for a tab it considers
+  //   backgrounded -- not throttles, suspends -- so an rAF-driven poll
+  //   never ran even once in that environment, while a manual synchronous
+  //   `mind.layout(); mind.linkDiv()` call (unaffected by rAF suspension)
+  //   fixed it instantly every single time, in every round. `setTimeout`
+  //   is throttled in a hidden tab (backed off to ~1s between calls after
+  //   a few seconds) but, unlike rAF, is never fully suspended -- it still
+  //   reliably fires. Switching to it fixes the exact failure mode that
+  //   produced five straight "still broken live" results, and is at least
+  //   as good for a real, foreground, visible tab (rAF and a ~16ms
+  //   setTimeout both settle within a frame or two there).
   //
-  // A single continuous poll sidesteps needing to correctly time an
-  // external visibility signal at all: it simply notices real geometry the
-  // very next frame after it exists, hidden or not, transitioning or not.
   // pollActiveRef guards against a second concurrent poll (e.g. an
   // unrelated re-render) rather than against any specific external
   // trigger. The wall-clock ceiling is generous (2 minutes) purely as a
   // safety valve against looping forever on something permanently,
-  // unrecoverably broken -- not a real constraint on how long a user may
-  // reasonably take to click into this tab.
+  // unrecoverably broken.
   // Returns a cleanup function so callers can cancel it (unmount).
   const startFitPoll = useCallback(() => {
     if (pollActiveRef.current) return () => {};
     pollActiveRef.current = true;
     let cancelled = false;
+    let timer = null;
     const deadline = (typeof performance !== "undefined" ? performance.now() : Date.now()) + 120000;
-    const stop = () => { cancelled = true; pollActiveRef.current = false; };
+    const stop = () => { cancelled = true; pollActiveRef.current = false; if (timer) clearTimeout(timer); };
     const poll = () => {
       if (cancelled) return;
       const now = typeof performance !== "undefined" ? performance.now() : Date.now();
       if (fitIfReady() || now >= deadline) { pollActiveRef.current = false; return; }
-      requestAnimationFrame(poll);
+      timer = setTimeout(poll, 16);
     };
-    requestAnimationFrame(poll);
+    timer = setTimeout(poll, 16);
     return stop;
   }, [fitIfReady]);
 
