@@ -26,7 +26,7 @@ export function usePanelLayout() {
   // máy chủ, nên chạm localStorage lúc khởi tạo là an toàn.
   const stored = useRef(undefined);
   if (stored.current === undefined) {
-    stored.current = readStored(typeof window === "undefined" ? null : window.localStorage);
+    stored.current = readStored(typeof window === "undefined" ? null : window.localStorage, viewport());
   }
 
   const [drawer, setDrawer] = useState(() => isDrawerMode(viewport()));
@@ -50,7 +50,20 @@ export function usePanelLayout() {
   }, [width, collapsed]);
 
   useEffect(() => {
-    const onResize = () => setDrawer(isDrawerMode(window.innerWidth));
+    const onResize = () => {
+      setDrawer(isDrawerMode(window.innerWidth));
+      // The right panel's real ceiling is min(480px, 40vw) -- a persisted
+      // width from a wide session (e.g. 480px saved at 1920px) can end up
+      // above that ceiling after the viewport shrinks (browser resize, or
+      // rotating a tablet). Re-clamp on every resize so a stale stored
+      // width never renders wider than the current viewport allows; a no-op
+      // when the current width already fits.
+      const vw = window.innerWidth;
+      setWidth((prev) => {
+        const next = { left: clampWidth("left", prev.left, vw), right: clampWidth("right", prev.right, vw) };
+        return (next.left === prev.left && next.right === prev.right) ? prev : next;
+      });
+    };
     window.addEventListener("resize", onResize);
     return () => window.removeEventListener("resize", onResize);
   }, []);
@@ -64,11 +77,11 @@ export function usePanelLayout() {
   }, []);
 
   const resetWidth = useCallback((key) => {
-    setWidth((prev) => ({ ...prev, [key]: PANELS[key].initial }));
+    setWidth((prev) => ({ ...prev, [key]: clampWidth(key, PANELS[key].initial, viewport()) }));
   }, []);
 
   const nudgeWidth = useCallback((key, deltaPx) => {
-    setWidth((prev) => ({ ...prev, [key]: clampWidth(key, prev[key] + deltaPx) }));
+    setWidth((prev) => ({ ...prev, [key]: clampWidth(key, prev[key] + deltaPx, viewport()) }));
   }, []);
 
   const startDrag = useCallback((key, event) => {
@@ -78,7 +91,7 @@ export function usePanelLayout() {
     setDragging(key);
 
     const onMove = (e) => {
-      setWidth((prev) => ({ ...prev, [key]: widthFromDrag(key, startWidth, e.clientX - startX) }));
+      setWidth((prev) => ({ ...prev, [key]: widthFromDrag(key, startWidth, e.clientX - startX, viewport()) }));
     };
     const onUp = () => {
       setDragging(null);
