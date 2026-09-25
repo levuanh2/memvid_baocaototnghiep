@@ -120,6 +120,33 @@ export default function MindElixirView({ data, onRegenerate, regenerating, contr
   // data) — banner + nút Huỷ ngay trong toolbar.
   const generating = Boolean(data?.generating);
 
+  // `mind.init()` and `mind.refresh()` (called right below, in the mount
+  // effect) both run mind-elixir's own internal layout()->linkDiv()
+  // synchronously and unconditionally -- with no container-size check. When
+  // this effect runs while the Mind Map pane is still CSS-hidden
+  // (WorkspaceContainer keeps every pane mounted, only toggling a `hidden`
+  // class -- e.g. right after a page reload lands on Chat), that internal
+  // layout computes connector geometry from zero-sized node boxes,
+  // producing literal "NaN" in every `.lines path`'s `d` attribute.
+  // Reproduced live: reload -> Chat active -> hidden Mind Map pane had 60
+  // real nodes / 7 total paths, all 7 "NaN", canvas 0x0 -- sitting in the
+  // DOM for however long the user stayed on another tab. `fitIfReady`
+  // below already repairs this correctly once the pane becomes visible
+  // (confirmed live, NaN->0 within ~0.18-1.6s, no visible broken frame
+  // since the pane is `display:none` the whole time) -- that mechanism is
+  // untouched here. This only stops the invalid markup from persisting in
+  // the meantime: neutralizes it to an empty (harmless, valid) `d` in the
+  // SAME tick it's created, instead of leaving "NaN" sitting there
+  // indefinitely for anything that reads the DOM while hidden (a screen
+  // reader, "Xuất PNG", devtools). A no-op when the pane is already visible
+  // (real geometry never produces NaN in the first place).
+  const sanitizeHiddenNaNPaths = (el) => {
+    if (!el || (el.clientWidth > 0 && el.clientHeight > 0)) return;
+    el.querySelectorAll(".lines path").forEach((p) => {
+      if ((p.getAttribute("d") || "").includes("NaN")) p.setAttribute("d", "");
+    });
+  };
+
   // Returns true once the repair is VERIFIED to have actually worked, false
   // if the caller (the polling loop below) should keep retrying.
   const fitIfReady = useCallback(() => {
@@ -258,6 +285,7 @@ export default function MindElixirView({ data, onRegenerate, regenerating, contr
       mind.refresh?.(mindData);
       mind.clearHistory?.();
     }
+    sanitizeHiddenNaNPaths(containerRef.current);
     controller.registerMindInstance(mind, sidecar);
     setZoom(mind.scaleVal || 1);
     pendingFitRef.current = true;
