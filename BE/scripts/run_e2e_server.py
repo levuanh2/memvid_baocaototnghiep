@@ -2,13 +2,12 @@
 """Deterministic backend for Playwright E2E (FE/e2e/**).
 
 Boots the REAL Flask app (real routes, real DB models, real auth, real job
-polling loop, real ingest pipeline) but swaps the two things that would
-otherwise call a live model provider — QUERY_GRAPH and MINDMAP_GRAPH — for
-mock objects mirroring the ones `BE/tests/conftest.py` uses for the pytest
-`client` fixture. Ingest is NOT bypassed (unlike that fixture): a real
-browser flow selects sources via SidebarLeft, which needs real chunks in
-the retrieval index, not just a `documents.status` flag — see the comment
-in `main()` below for the full reasoning.
+polling loop) but swaps the two things that would otherwise call a live
+model provider — QUERY_GRAPH and MINDMAP_GRAPH — for mock objects mirroring
+the ones `BE/tests/conftest.py` uses for the pytest `client` fixture. Ingest
+is ALSO faked, but not the way conftest.py fakes it (see `_fast_ingest`'s
+own docstring in `main()` below for why a real-browser flow needs a
+different fake than a pytest-fixture flow does here).
 
 This is deliberately NOT `app.main:app` run directly under gunicorn (that
 would use the real graphs and try to reach FPT/Ollama). It is the one place
@@ -144,17 +143,53 @@ def main() -> None:
     be_main.QUERY_GRAPH = MockQueryGraph()
     be_main.MINDMAP_GRAPH = MockMindmapGraph()
 
-    # Deliberately NOT patching _trigger_background_ingest (unlike
-    # conftest.py's `client` fixture, which bypasses ingest entirely for
-    # pytest tests that call the API directly). A real browser flow selects
-    # sources through SidebarLeft, which reads GET /list-indexed — that
-    # endpoint reads REAL chunks from the retrieval index (INDEX_META_JSON_PATH),
-    # not documents.status. A source with status=index_ready but no real
-    # chunks is invisible there, so mind map/chat generation could never be
-    # exercised through the actual UI. Since the FE fixture only uploads a
-    # tiny plain-text file, the REAL ingest pipeline (extract -> chunk ->
-    # FakeEmbeddings, same SKIP_MODEL_LOAD=1 fake used everywhere else in CI)
-    # completes in well under a second — no OCR, no real model, no network.
+    def _fast_ingest(source_id: str, file_path: str, filename: str):
+        """Deterministic stand-in for the real INGEST_GRAPH.
+
+        First attempt here just flipped documents.status to index_ready —
+        that made the source appear in DocumentList (Postgres-backed) but
+        stay permanently invisible in SidebarLeft, because SidebarLeft's
+        fetchSourcesFromBackend calls GET /list-indexed, which reads the
+        RETRIEVAL index (chunks in INDEX_META_JSON_PATH / chunk_text_store),
+        never documents.status.
+
+        Second attempt let the REAL INGEST_GRAPH run — but
+        vectorstore/store.py's own `_skip_faiss_in_ci()` intentionally makes
+        `append_to_index(..., embeddings=None)` a no-op whenever
+        SKIP_MODEL_LOAD=1 and no FPT key is set (exactly this job's env):
+        "embedding qua HTTP không nạp gì... nếu áp thì... index vẫn không
+        bao giờ được ghi ở đúng nơi cần nó nhất" — i.e. this CI-mode skip is
+        deliberate for the pytest suite (which never needs a real index —
+        it drives the API directly, not the SidebarLeft UI), and it silently
+        made every E2E upload permanently unselectable in the real browser.
+
+        Fix: call `append_to_index` directly with EXPLICIT fake embeddings
+        (not None) — that one condition (`embeddings is None`) is exactly
+        what the CI-skip checks, so passing a real (if fake) vector bypasses
+        it and writes a genuine FAISS index + index.json + chunk_text_store,
+        deterministically and near-instantly (no model, no network).
+        """
+        from shared.source_id import canonical_source_stem
+        stem = canonical_source_stem(filename)
+        try:
+            text = Path(file_path).read_text(encoding="utf-8", errors="ignore")
+        except Exception:
+            text = filename
+        chunks = [p.strip() for p in text.split("\n\n") if p.strip()] or [text or filename]
+
+        import numpy as np
+        from app.domains.vectorstore import store as vector_store
+        vector_store.append_to_index(
+            chunks, source_name=stem,
+            custom_metadata=[{"source_stem": stem, "heading_path": stem} for _ in chunks],
+            embeddings=np.zeros((len(chunks), 8), dtype="float32"),
+        )
+        be_main._update_source_status(
+            source_id, "index_ready", progress=1.0,
+            capabilities={"chunk_query": True},
+        )
+
+    be_main._trigger_background_ingest = lambda sid, fp, fn: _fast_ingest(sid, fp, fn)
     Path(be_main.INPUT_DIR).mkdir(parents=True, exist_ok=True)
 
     port = int(os.environ.get("PORT", "8080"))
