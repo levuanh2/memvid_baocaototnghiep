@@ -65,8 +65,11 @@ async function openDialogAndSubmit() {
   // let suggestMindmapTopics() settle so the dialog is fully rendered
   await act(async () => { await Promise.resolve(); await Promise.resolve(); });
 
-  expect(container.querySelector('[role="dialog"]')).toBeTruthy();
-  await act(async () => { container.querySelector('button[type="submit"]').click(); });
+  // GuidedMindmapDialog portals its content onto document.body (fix: it must
+  // stay visible regardless of SidebarRight's own hidden/visible state), so
+  // it's not inside `container` anymore.
+  expect(document.body.querySelector('[role="dialog"]')).toBeTruthy();
+  await act(async () => { document.body.querySelector('button[type="submit"]').click(); });
   return container;
 }
 
@@ -79,14 +82,14 @@ describe("Guided Mind Map dialog close timing", () => {
     // Before the fix, the dialog was already gone at this exact point --
     // setGuidedOpen(false) fired synchronously in submitGuidedMindmap, before
     // generateMindmap() was even called.
-    expect(container.querySelector('[role="dialog"]')).toBeTruthy();
+    expect(document.body.querySelector('[role="dialog"]')).toBeTruthy();
 
     await act(async () => {
       resolveCreate({ job_id: "job-1" });
       await Promise.resolve(); await Promise.resolve(); await Promise.resolve();
     });
     // Outcome is known now (queued) -- dialog should close.
-    expect(container.querySelector('[role="dialog"]')).toBeFalsy();
+    expect(document.body.querySelector('[role="dialog"]')).toBeFalsy();
   });
 
   it("stays open on create failure and shows the error instead of vanishing", async () => {
@@ -96,7 +99,7 @@ describe("Guided Mind Map dialog close timing", () => {
     await act(async () => { await Promise.resolve(); await Promise.resolve(); await Promise.resolve(); });
 
     // Failure must not silently close the dialog with no feedback.
-    expect(container.querySelector('[role="dialog"]')).toBeTruthy();
-    expect(container.textContent).toContain("boom");
+    expect(document.body.querySelector('[role="dialog"]')).toBeTruthy();
+    expect(document.body.textContent).toContain("boom");
   });
 });
