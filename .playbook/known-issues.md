@@ -5266,3 +5266,34 @@ luồng tạo map, chọn map và dữ liệu nền. Không được ẩn toàn 
 right-column owner; Inspector contextual phải dùng absolute positioning bên trong
 canvas, còn toolbar/context-row là hai vùng chức năng khác nhau và không được nhân
 bản menu overflow.
+
+### Vitest tự nhặt luôn file `.spec.js` của Playwright
+
+Thêm `FE/e2e/**/*.spec.js` (Playwright, 2026-09-27) làm `npm test` (Vitest) vỡ ngay:
+Vitest mặc định include glob `**/*.spec.js`, không phân biệt runner nào sở hữu file
+đó. Playwright's `test()` gọi ngoài runner của nó ném lỗi rối (`_TestTypeImpl` stack),
+không phải lỗi cú pháp — dễ đoán nhầm là bug trong spec.
+
+**Fix:** `FE/vite.config.js` thêm `test.exclude` — GIỮ NGUYÊN danh sách exclude mặc
+định của Vitest (`node_modules`, `dist`, `.git`, các file `*.config.*`, ...) rồi thêm
+`'e2e/**'` vào, không thay hẳn bằng một mảng chỉ có `e2e/**` (làm vậy sẽ vô tình bỏ
+loại trừ `vite.config.js`/`vitest.config.js` chính nó ra khỏi bộ lọc).
+
+**Phòng ngừa:** bất cứ bộ test thứ hai nào thêm vào repo (Playwright, Cypress, ...)
+đặt trong thư mục riêng (`e2e/`) và phải tự kiểm `npm test` (Vitest) còn xanh trước khi
+coi là xong — không chỉ chạy runner mới rồi dừng.
+
+### ESLint: file chạy dưới Node (không phải browser) báo `'process' is not defined`
+
+`FE/eslint.config.js` chỉ có một block `languageOptions.globals: globals.browser` áp
+dụng cho MỌI `*.js`/`*.jsx` — đúng cho code app (chạy trong browser), sai cho file cấu
+hình/script chạy dưới Node (`playwright.config.js`, `scripts/*.mjs`, `e2e/**`, và
+`tailwind.config.js` cũ vốn đã có nợ lint kiểu này với `module`/`require`).
+
+**Fix:** thêm một block `files: ['playwright.config.js', 'e2e/**/*.js',
+'scripts/**/*.mjs']` với `languageOptions.globals: globals.node`, KHÔNG sửa rule chung
+— giữ browser code lint chặt như cũ, chỉ mở đúng phạm vi file chạy dưới Node.
+
+**Phòng ngừa:** file mới chạy dưới Node (script CLI, config tool) luôn kiểm `npx eslint
+<file>` trước khi commit — `no-undef` trên `process`/`__dirname`/`require` là dấu hiệu
+file đó cần vào block `globals.node`, không phải dấu hiệu cần disable rule.
