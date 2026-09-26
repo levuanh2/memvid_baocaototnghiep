@@ -20,10 +20,19 @@ on:
     workflows: ["CI"]
     types: [completed]
 
+concurrency:
+  group: production-deployment
+  cancel-in-progress: false
+
+permissions:
+  contents: read
+
 jobs:
   deploy:
     name: Deploy backend to EC2
     runs-on: ubuntu-latest
+    timeout-minutes: 15
+    environment: production
     # Both conditions matter: `head_branch == 'main'` scopes to main (a PR's
     # CI run has head_branch == the PR's source branch, never "main", unless
     # the PR itself is main -> main which GitHub doesn't allow); `event ==
