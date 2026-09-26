@@ -1,9 +1,62 @@
 # CI Audit Report: StudyMap / MemVid
 
-**Repository**: `levuanh2/memvid_baocaototnghiep` (StudyMap / MemVid NCKH)  
-**Date**: September 2026  
-**Auditor**: Antigravity CI Architecture Engine  
+**Repository**: `levuanh2/memvid_baocaototnghiep` (StudyMap / MemVid NCKH)
+**Date**: September 2026
+**Auditor**: Antigravity CI Architecture Engine
 **Status**: Comprehensive Baseline Established
+
+---
+
+## 0. 2026-09-27 re-audit note (Claude, continuing AGY's work)
+
+This document was written against the OLD pre-AGY `ci.yml` (4 flat jobs). Before
+building on top of it, every claim below and in `CI_ARCHITECTURE.md` was
+re-verified against the actual file contents on disk, not trusted as-is —
+AGY's own audit can go stale relative to later hand-edits. Discrepancies found:
+
+- **§3.1 ESLint count was stale.** Documented as "66 problems (60 errors, 6
+  warnings)". Running `npm run lint` directly on 2026-09-27 measured **67
+  problems (61 errors, 6 warnings)** — one more error than documented. The
+  ratchet baseline (`FE/.eslint-baseline.json`) uses the freshly-measured 67,
+  not the stale 66.
+- **`CI_ARCHITECTURE.md` §4.2 Redis options were aspirational, not real.** The
+  doc described `--maxmemory 256mb --maxmemory-policy allkeys-lru
+  --appendonly no`; the actual `redis` service in `ci.yml` has no such
+  options, only a healthcheck.
+- **§4.1 Postgres healthcheck command was overstated.** Documented as
+  `pg_isready -U postgres`; the actual command is bare `pg_isready` (no
+  `-U` flag). Cosmetic, but the doc should describe the real command.
+- **§5 Live-provider cron time was wrong.** Documented as `0 2 * * 1`
+  (02:00 UTC Monday); the actual `live-integration.yml` cron is `0 3 * * 1`
+  (03:00 UTC Monday).
+- **§7 Artifact names didn't match the workflow.** Documented artifact name
+  `backend-test-results`; the actual `upload-artifact` step names it
+  `backend-junit-report`. Also, the documented `docker-compose-logs`
+  artifact **does not exist** — the "Logs on failure" step in
+  `docker-compose-run-test` prints to the runner's stdout only, nothing is
+  ever uploaded as an artifact under that name.
+- **§9 "Security / Dependency Gates — Yes" overstated what existed.** The
+  actual `security-and-static` job only ran a `git diff --check` and a grep
+  for accidentally-committed private key headers. There was no `pip-audit`,
+  no `npm audit`, no dependency-diff gate of any kind — this pass adds
+  `actions/dependency-review-action` (PR-only, new critical/high only) and a
+  report-only `pip-audit` step; see `CI_ARCHITECTURE.md` §9 for the actual
+  policy now in place.
+- **The DAG's "Layer 7: Deterministic E2E / Regressions" was not browser
+  E2E.** `BE/tests/test_ci_regressions.py::test_guided_v3_full_deterministic_flow`
+  is a pure-Python simulation (`FakeGuidedWorker`, no Flask, no HTTP, no
+  rendered frontend) asserting the *shape* of a guided-job lifecycle. It
+  never drove a real browser against a real running frontend + backend.
+  This is exactly the gap the current pass (B2/B3) fills with
+  `FE/playwright.config.js` + `FE/e2e/**`, wired in as the new
+  `e2e-critical` job. `test_ci_regressions.py` now says so explicitly in a
+  header comment, and is kept (it's a fast, useful contract check) but no
+  longer conflated with "E2E" in this document or `CI_ARCHITECTURE.md`.
+
+Nothing above was a regression AGY introduced on purpose — this is the normal
+drift of documentation vs. a workflow that kept getting hand-edited. Fixed in
+this pass; see `CI_ARCHITECTURE.md` for the corrected, current-state
+description of every section listed here.
 
 ---
 
@@ -13,9 +66,11 @@ A comprehensive audit was performed across all GitHub Actions workflows, build s
 
 The existing CI configuration (`.github/workflows/ci.yml`) is functional for a basic two-tier monolith (Node 22 frontend + Python 3.11 backend) with throwaway PostgreSQL 16 containerization. However, it lacks a modern directed acyclic graph (DAG) structure, lacks path-filtering optimizations, lacks explicit contract testing between frontend and backend, runs Docker and compose validation sequentially on every push, lacks automated coverage tracking and JUnit artifact emission, lacks security vulnerability scanning, and has no isolated live-provider verification layer.
 
+*(This paragraph describes the ORIGINAL pre-AGY state that motivated this whole audit — it is intentionally left as historical record. See §0 above and `CI_ARCHITECTURE.md` for what the pipeline actually does today.)*
+
 ---
 
-## 2. Existing Workflow Inventory
+## 2. Existing Workflow Inventory (historical — pre-AGY baseline)
 
 ### Workflow 1: `.github/workflows/ci.yml`
 - **Name**: `CI`
@@ -58,11 +113,16 @@ The existing CI configuration (`.github/workflows/ci.yml`) is functional for a b
   2. Install deploy key to `~/.ssh/deploy_key` (chmod 600).
   3. SSH command executes remote `/opt/memvid/app/scripts/deploy.sh`.
   4. Status reporting.
-- **Safety Analysis**:
+- **Safety Analysis (original)**:
   - Strict host key checking is enabled (`StrictHostKeyChecking=yes`).
   - Deploy is strictly gated on `conclusion == 'success'` of `CI` on `main`.
   - Feature branch PRs are cleanly excluded (`head_branch == 'main' && event == 'push'`).
-  - Gaps: No timeout specified on the deploy job; concurrency is not restricted (two rapid pushes to `main` could trigger concurrent SSH deployments).
+  - Gaps (fixed by this pass — see `CI_ARCHITECTURE.md` §8/B10): no
+    concurrency group was present, so two rapid pushes to `main` could
+    trigger two simultaneous SSH deployments. AGY's earlier pass already
+    added `concurrency: { group: production-deployment, cancel-in-progress:
+    false }` to `deploy.yml` — verified still present and correct in this
+    pass (B10), not re-added.
 
 ---
 
@@ -72,9 +132,17 @@ The existing CI configuration (`.github/workflows/ci.yml`) is functional for a b
 - **Package Manager**: `npm` (`FE/package-lock.json` lockfileVersion 3).
 - **Core Framework**: React 19.1.0, React Router DOM 7.7.1, Vite 7.0.4.
 - **Test Framework**: Vitest 4.1.9 with `jsdom` 29.1.1.
-- **Test Inventory**: 93 test files, 1072 unit and component tests passing.
+- **Test Inventory**: 93 test files, 1072 unit and component tests passing (unchanged by this pass).
 - **Build Output**: `npm run build` outputs static assets into `FE/dist/` (vendor splitting: `react`, `markdown`, `mindmap`). Build time: ~28s.
-- **Linting**: ESLint 9 (`eslint.config.js`). Currently reports 66 problems (60 errors, 6 warnings) mostly concerning unused parameters, Fast Refresh exports, and Tailwind configuration module syntax. `ci.yml` correctly executes linting with `continue-on-error: true` so pre-existing debt does not mask critical failures.
+- **Linting**: ESLint 9 (`eslint.config.js`). Measured 2026-09-27: **67 problems
+  (61 errors, 6 warnings)**, mostly unused parameters, Fast Refresh exports,
+  and Tailwind config module syntax (`no-undef` on `module`/`require` in
+  `tailwind.config.js` — that file is CommonJS by necessity, not a real bug).
+  `ci.yml`'s `npm run lint` step stays `continue-on-error: true` for
+  visibility; a new `npm run lint:ratchet` step (see `FE/scripts/lint-ratchet.mjs`)
+  is now blocking and fails only if the total count exceeds the committed
+  baseline (`FE/.eslint-baseline.json`, currently 67).
+- **E2E**: `FE/e2e/**` (Playwright), new in this pass. See `CI_ARCHITECTURE.md` §7.
 
 ### 3.2 Backend (`BE/`)
 - **Runtime**: Python 3.11.
@@ -87,6 +155,10 @@ The existing CI configuration (`.github/workflows/ci.yml`) is functional for a b
   - Sets `SKIP_MODEL_LOAD=1` to substitute heavy neural encoders with `FakeEmbeddings`.
   - Sets `DATA_DIR` to temporary directories per test session.
   - Requires `TEST_DATABASE_URL` via fixture `can_db_test` for database-writing tests, cleanly preventing writes to live Supabase production.
+  - `BE/scripts/run_e2e_server.py` (new) mirrors this exact isolation
+    pattern for a REAL running server process (not the pytest test client),
+    for the Playwright suite to drive over real HTTP — see
+    `CI_ARCHITECTURE.md` §7.
 
 ### 3.3 Database & Migrations
 - **Framework**: Alembic with SQLAlchemy.
@@ -106,23 +178,14 @@ The existing CI configuration (`.github/workflows/ci.yml`) is functional for a b
 
 ---
 
-## 4. Known Duplication & Gaps in Current CI
+## 4. Known Duplication & Gaps in Current CI (historical — pre-AGY baseline)
 
-1. **No Job DAG / Excessive Sequential Run**:
-   - `frontend` and `backend-tests` run concurrently, but `docker-build-test` and `docker-compose-run-test` run unconditionally on every PR push. Building full Docker images for both FE and BE on every commit adds 7–10 minutes of redundant CI time.
-2. **Missing Path Filtering**:
-   - A markdown doc change or frontend CSS tweak triggers backend pytest and full Docker builds.
-3. **No Coverage Reporting**:
-   - Neither FE nor BE generates XML/LCOV coverage artifacts. Coverage tracking does not exist in CI.
-4. **No Test Report Artifacts**:
-   - Failures only output to console logs. No JUnit XML or test summary artifacts are uploaded for easy triage.
-5. **No Contract Validation Gate**:
-   - No explicit automated gate verifies that API models returned by the backend match frontend expectation contracts (particularly critical for `/mindmaps/capability`, `/generate-mindmap`, `/generate-summary`, and job poller contracts).
-6. **No Deterministic E2E / Flow Verification Gate**:
-   - UI testing is restricted to Vitest unit/component mocks. There is no automated full-flow regression gate ensuring the end-to-end lifecycle (submit -> queue -> process -> done -> reload).
-7. **No Separate Live Provider Workflow**:
-   - Any test touching FPT AI or live models is either skipped or disabled in CI. There is no scheduled workflow to monitor live provider health.
-8. **Missing PR Concurrency Cancellation**:
-   - Rapid pushes on the same pull request queue up redundant CI runs, exhausting GitHub Actions concurrency quotas.
-9. **Single Point of Gate Failure**:
-   - Branch protection requires individual job names. Refactoring job names in `ci.yml` breaks branch protection rules on GitHub unless an aggregate status check (`CI / required`) is used.
+1. **No Job DAG / Excessive Sequential Run** — fixed (path-filtered DAG, see `CI_ARCHITECTURE.md` §2).
+2. **Missing Path Filtering** — fixed (`detect-changes` job + `dorny/paths-filter`).
+3. **No Coverage Reporting** — still open, deliberately (see `CI_ARCHITECTURE.md` §6, "no arbitrary hard gate").
+4. **No Test Report Artifacts** — fixed (`backend-junit-report` artifact).
+5. **No Contract Validation Gate** — fixed (`test_ci_contracts.py`).
+6. **No Deterministic E2E / Flow Verification Gate** — fixed THIS PASS (`e2e-critical` job, Playwright against a real FE + real BE). Previously only had the pure-Python simulation described in §0 above.
+7. **No Separate Live Provider Workflow** — fixed (`live-integration.yml`).
+8. **Missing PR Concurrency Cancellation** — fixed (`concurrency:` block in `ci.yml`).
+9. **Single Point of Gate Failure** — fixed (`ci-success` aggregate gate — see `CI_ARCHITECTURE.md` §8 for the exact skip/fail semantics, verified line-by-line this pass).
