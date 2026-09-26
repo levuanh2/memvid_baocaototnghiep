@@ -67,7 +67,22 @@ export function createJobPoller({
     const stalled = now() - lastChangeTs > STALL_MS;
     onTick?.(status, { stalled });
     if (status.status === "done") { stopped = true; onDone?.(status.result); return; }
-    if (status.status === "error" || status.status === "timeout") {
+    // "failed" = the guided worker's own terminal-failure status
+    // (guided_worker.py, mindmap_generation.py: set after retry exhaustion
+    // or an unrecoverable exception during generation; guided_store.py
+    // treats it as equivalent to "error" for completed_at bookkeeping).
+    // This poller only recognized "error"/"timeout" as terminal failures --
+    // "failed" fell through every check below and hit the plain
+    // `schedule(jobId)` at the bottom, so a real backend failure polled
+    // forever: onTick kept firing with an unchanged terminal status,
+    // stageLabel() didn't match any of its regexes for it, so the UI kept
+    // showing the generic "Đang tạo sơ đồ…" label indefinitely instead of
+    // ever surfacing the real error -- exactly the reported "Generate ->
+    // dialog closes -> ~5s -> nothing" symptom, with the job actually dead
+    // on the server the whole time. `status.error` is already populated
+    // correctly on this path (guided_store.py's own read-side row mapping:
+    // `d["error"] = d.get("error_message")`), so no other change needed.
+    if (status.status === "error" || status.status === "timeout" || status.status === "failed") {
       stopped = true; onError?.(new Error(status.error || msgs.error)); return;
     }
     if (status.status === "cancelled") { stopped = true; onCancelled?.(); return; }
