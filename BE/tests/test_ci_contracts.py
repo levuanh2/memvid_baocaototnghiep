@@ -85,12 +85,20 @@ def test_generate_mindmap_request_contract(client, can_db_test, monkeypatch):
         "q": "tóm tắt tài liệu",
         "force": False
     })
-    # Must accept the request and respond with started or done status
+    # Must accept the request and respond with queued or done status. The
+    # real POST /generate-mindmap contract (app/main.py's generate_mindmap())
+    # returns status="queued" for a freshly-started job — confirmed by
+    # actually running this against a real backend + real Postgres for the
+    # first time (2026-09-27); "started" (asserted here originally) was
+    # never the real mindmap contract. generate-summary genuinely DOES use
+    # "started" (see test_generate_summary_request_contract below) — the two
+    # endpoints have different status vocabularies, this isn't a copy typo
+    # to "fix" into matching.
     assert res.status_code in (200, 202)
     data = res.get_json()
     assert "status" in data
-    assert data["status"] in ("started", "done")
-    if data["status"] == "started":
+    assert data["status"] in ("queued", "done")
+    if data["status"] == "queued":
         assert "job_id" in data
     elif data["status"] == "done":
         assert "mindmap" in data or "result" in data
