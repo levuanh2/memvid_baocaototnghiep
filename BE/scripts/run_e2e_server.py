@@ -2,11 +2,13 @@
 """Deterministic backend for Playwright E2E (FE/e2e/**).
 
 Boots the REAL Flask app (real routes, real DB models, real auth, real job
-polling loop) but swaps the two things that would otherwise call a live model
-provider — QUERY_GRAPH and MINDMAP_GRAPH — for the SAME mock objects
-`BE/tests/conftest.py` already uses for the pytest `client` fixture. Also
-mirrors conftest's `_fast_ingest` patch so document upload doesn't need real
-OCR/embeddings.
+polling loop, real ingest pipeline) but swaps the two things that would
+otherwise call a live model provider — QUERY_GRAPH and MINDMAP_GRAPH — for
+mock objects mirroring the ones `BE/tests/conftest.py` uses for the pytest
+`client` fixture. Ingest is NOT bypassed (unlike that fixture): a real
+browser flow selects sources via SidebarLeft, which needs real chunks in
+the retrieval index, not just a `documents.status` flag — see the comment
+in `main()` below for the full reasoning.
 
 This is deliberately NOT `app.main:app` run directly under gunicorn (that
 would use the real graphs and try to reach FPT/Ollama). It is the one place
@@ -142,13 +144,17 @@ def main() -> None:
     be_main.QUERY_GRAPH = MockQueryGraph()
     be_main.MINDMAP_GRAPH = MockMindmapGraph()
 
-    def _fast_ingest(source_id: str, file_path: str, filename: str):
-        be_main._update_source_status(
-            source_id, "index_ready", progress=1.0,
-            capabilities={"chunk_query": True},
-        )
-
-    be_main._trigger_background_ingest = lambda sid, fp, fn: _fast_ingest(sid, fp, fn)
+    # Deliberately NOT patching _trigger_background_ingest (unlike
+    # conftest.py's `client` fixture, which bypasses ingest entirely for
+    # pytest tests that call the API directly). A real browser flow selects
+    # sources through SidebarLeft, which reads GET /list-indexed — that
+    # endpoint reads REAL chunks from the retrieval index (INDEX_META_JSON_PATH),
+    # not documents.status. A source with status=index_ready but no real
+    # chunks is invisible there, so mind map/chat generation could never be
+    # exercised through the actual UI. Since the FE fixture only uploads a
+    # tiny plain-text file, the REAL ingest pipeline (extract -> chunk ->
+    # FakeEmbeddings, same SKIP_MODEL_LOAD=1 fake used everywhere else in CI)
+    # completes in well under a second — no OCR, no real model, no network.
     Path(be_main.INPUT_DIR).mkdir(parents=True, exist_ok=True)
 
     port = int(os.environ.get("PORT", "8080"))
