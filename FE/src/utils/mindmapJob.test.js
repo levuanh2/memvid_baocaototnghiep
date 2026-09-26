@@ -108,4 +108,31 @@ describe("createMindmapPoller", () => {
     expect(events.cancelled).toBe(1);
     poller.stop(); // idempotent, không ném
   });
+
+  // Real production bug, traced to exact file:line before this fix:
+  // guided_worker.py:67 and mindmap_generation.py:69 both set
+  // `status="failed"` on the backend's own terminal-failure path (retry
+  // exhaustion / unrecoverable generation exception) -- guided_store.py:193
+  // treats "failed" as equivalent to "error" for completed_at bookkeeping,
+  // so this is a deliberate, real backend terminal status, not an edge
+  // case. The poller only recognized "error"/"timeout" as terminal
+  // failures, so a real "failed" job polled forever: onTick kept firing
+  // with the SAME unrecognized status.status every tick, stageLabel()
+  // never matched it (falls through to the generic "Đang tạo sơ đồ…"),
+  // and onError never fired -- exactly the reported "Generate -> dialog
+  // closes -> ~5s -> nothing visible, no map, no error" symptom, with the
+  // job already dead on the server the entire time.
+  it("'failed' (backend's real terminal-failure status, distinct from 'error') stops the poll and calls onError -- does not poll forever", async () => {
+    const { poller, events, fetchStatus } = mk([
+      { status: "failed", error: "worker_retry_exhausted: LLM timeout" },
+    ]);
+    poller.start("j1");
+    await vi.advanceTimersByTimeAsync(30_000);
+    expect(events.errors).toHaveLength(1);
+    expect(events.errors[0].message).toContain("LLM timeout");
+    expect(events.done).toHaveLength(0);
+    // Terminal on the FIRST tick that reports "failed" -- must not keep
+    // polling waiting for some later status that will never come.
+    expect(fetchStatus).toHaveBeenCalledTimes(1);
+  });
 });
