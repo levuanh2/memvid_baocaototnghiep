@@ -41,20 +41,38 @@ export const SAMPLE_DOC_PATH = path.join(__dirname, "fixtures", "sample-doc.txt"
  * mark it ready — deterministic, no OCR/embeddings involved. */
 export async function uploadSampleDocument(page) {
   await page.goto("/app/study");
+  const uploadResponse = page.waitForResponse(
+    (res) => res.url().includes("/api/documents/upload") && res.request().method() === "POST",
+    { timeout: 20_000 },
+  );
   await page.locator('input[type="file"]').setInputFiles(SAMPLE_DOC_PATH);
-  // AiInsightCard renders while `uploading` is true and doesn't require
-  // network idle; the upload+list-refresh round trip is the real "done" signal.
-  await page.getByRole("button", { name: "Tải tài liệu" }).waitFor({ state: "visible" });
-  await page.getByText("Đang tải lên…").waitFor({ state: "hidden", timeout: 20_000 }).catch(() => {});
+  await uploadResponse;
+  // The upload response confirms the server accepted the file and
+  // (via run_e2e_server.py's fast-ingest patch) marked it index_ready
+  // synchronously — give the DOM one settle tick before callers navigate
+  // away and rely on ANOTHER component's (SidebarLeft's) own fetch seeing it.
+  await page.waitForTimeout(250);
 }
 
 /** Select every ready source in the left sidebar (needed before Guided
  * Mind Map's "create" is enabled — GuidedMindmapDialog disables submit when
- * `sourceIds` is empty). */
+ * `sourceIds` is empty). SidebarLeft fetches its own source list independently
+ * of DocumentList's upload flow, so this waits for the uploaded document's
+ * OWN row to actually render (not just a generic checkbox, which can exist
+ * in a stale/empty-list DOM state before that fetch resolves) before touching
+ * the "select all" control — reloading once if the first fetch races the
+ * navigation. */
 export async function selectAllSources(page) {
   await page.goto("/app");
+  const sourceRow = page.getByText(/sample-doc/i).first();
+  try {
+    await sourceRow.waitFor({ state: "visible", timeout: 15_000 });
+  } catch {
+    await page.reload();
+    await sourceRow.waitFor({ state: "visible", timeout: 15_000 });
+  }
   const selectAll = page.locator('input[type="checkbox"]').first();
-  await selectAll.waitFor({ state: "visible", timeout: 15_000 });
+  await selectAll.waitFor({ state: "visible", timeout: 5_000 });
   if (!(await selectAll.isChecked())) await selectAll.check();
 }
 
