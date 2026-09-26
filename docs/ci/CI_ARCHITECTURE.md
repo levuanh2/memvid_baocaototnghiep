@@ -286,12 +286,20 @@ similar, i.e. does not modify `.github/**`.
 Evaluated all four options named in the task brief:
 
 - **`actions/dependency-review-action`** — **added**, PR-only
-  (`security-and-static` job), `fail-on-severity: high`. Diffs the PR's own
-  dependency manifest changes against the base branch, so it can only ever
-  flag NEW advisories introduced by THIS PR — it structurally cannot go red
-  over a pre-existing advisory nobody touched, which is exactly the "gate
-  only new critical/high, never silently suppress existing" policy the task
-  requires.
+  (`security-and-static` job), `fail-on-severity: high`, `continue-on-error:
+  true`. Diffs the PR's own dependency manifest changes against the base
+  branch, so it can only ever flag NEW advisories introduced by THIS PR —
+  it structurally cannot go red over a pre-existing advisory nobody
+  touched, which is exactly the "gate only new critical/high, never
+  silently suppress existing" policy the task requires. **Confirmed on the
+  first real CI run (PR #38, 2026-09-27) that this repo doesn't have
+  "Dependency graph" enabled** (Settings > Code security — the action's
+  own error: "Dependency review is not supported on this repository"),
+  which the action hard-requires and which a repo admin, not this change,
+  needs to turn on. `continue-on-error: true` keeps the step wired up
+  (ready the moment someone enables it) without permanently reddening the
+  required gate over a repo setting rather than a real vulnerability —
+  tracked as a P1 gap in the task's final report.
 - **`pip-audit`** — **added**, report-only (`continue-on-error: true` in
   `backend-contracts-and-unit`). Existing/accepted advisories in
   `requirements.txt` are documented debt (this file), not gated — a

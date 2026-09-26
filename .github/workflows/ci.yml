@@ -15,6 +15,12 @@ concurrency:
 
 permissions:
   contents: read
+  # dorny/paths-filter needs this to list a PR's changed files via the
+  # GitHub API (detect-changes) — without it the call 403s with "Resource
+  # not accessible by integration" and every downstream job never runs.
+  # Found on the first real CI run of this workflow (2026-09-27); AGY's
+  # config never actually executed before this PR to surface it.
+  pull-requests: read
 
 jobs:
   # ---------------------------------------------------------------------------
@@ -77,8 +83,18 @@ jobs:
       # base branch itself, so pre-existing/accepted advisories (documented
       # debt, see docs/ci/CI_ARCHITECTURE.md §9) never fail this. PR-only:
       # the action needs a base ref to diff against.
+      #
+      # continue-on-error: this repo is private without the "Dependency
+      # graph" repo setting enabled (Settings > Code security), which the
+      # action hard-requires — confirmed on the first real CI run
+      # (2026-09-27): "Dependency review is not supported on this
+      # repository." Flipping that setting is a repo-admin action outside
+      # this change's scope, so the step stays wired up (ready the moment
+      # someone with admin access enables it) without permanently reddening
+      # the required gate over a repo setting, not a real vulnerability.
       - name: Dependency Review (new critical/high advisories only)
         if: github.event_name == 'pull_request'
+        continue-on-error: true
         uses: actions/dependency-review-action@v4
         with:
           fail-on-severity: high
