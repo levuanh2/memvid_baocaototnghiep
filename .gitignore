@@ -46,6 +46,11 @@ dist/
 dist-ssr/
 *.local
 
+# Playwright (FE/e2e)
+FE/playwright-report/
+FE/test-results/
+FE/blob-report/
+
 # Logs
 *.log
 logs/

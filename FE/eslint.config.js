@@ -26,4 +26,14 @@ export default defineConfig([
       'no-unused-vars': ['error', { varsIgnorePattern: '^[A-Z_]' }],
     },
   },
+  {
+    // Playwright config + E2E specs + Node CLI scripts run under Node, not
+    // the browser — `process`/`__dirname`-equivalents are real globals here,
+    // not undeclared variables. Scoped narrowly so this doesn't loosen
+    // linting for actual app/browser code.
+    files: ['playwright.config.js', 'e2e/**/*.js', 'scripts/**/*.mjs'],
+    languageOptions: {
+      globals: globals.node,
+    },
+  },
 ])

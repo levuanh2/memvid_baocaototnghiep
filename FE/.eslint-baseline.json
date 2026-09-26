@@ -1,0 +1,7 @@
+{
+  "problems": 67,
+  "errors": 61,
+  "warnings": 6,
+  "note": "Pre-existing lint debt ratchet baseline. Measured 2026-09-27 by running `npm run lint` directly (see scripts/lint-ratchet.mjs). This number must never go UP — fix problems or lower it, never raise it to make CI pass.",
+  "updated": "2026-09-27"
+}

@@ -1,0 +1,13 @@
+Introduction to Retrieval-Augmented Generation
+
+Retrieval-Augmented Generation combines a retriever with a language model.
+The retriever finds relevant passages; the model uses them to answer.
+
+Key Concepts
+
+Dense retrieval uses embeddings to find semantically similar chunks.
+Reranking improves precision by scoring candidates with a second model.
+
+Evaluation
+
+Answer quality is measured with groundedness and citation accuracy.
