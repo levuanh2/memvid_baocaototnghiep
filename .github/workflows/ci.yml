@@ -361,11 +361,15 @@ jobs:
           --health-timeout 5s
           --health-retries 5
 
+    # DATABASE_URL is deliberately NOT set at job level (test_db_isolation.py
+    # guards this): alembic/env.py reads TEST_DATABASE_URL directly and
+    # never needs DATABASE_URL; BE/scripts/run_e2e_server.py (the only step
+    # that runs OUTSIDE pytest/alembic and does need it) sets its own
+    # DATABASE_URL default matching this exact Postgres service.
     env:
       SKIP_MODEL_LOAD: "1"
       MEMVID_DISABLE_LC_DEFAULTS: "1"
       TEST_DATABASE_URL: postgresql://postgres:postgres@localhost:5432/studymap_test
-      DATABASE_URL: postgresql://postgres:postgres@localhost:5432/studymap_test
       # Scoped to THIS job only — never written to a real .env, never the
       # project-wide default (which stays false). See BE/scripts/run_e2e_server.py.
       GUIDED_MINDMAP_V3_ENABLED: "true"

@@ -63,8 +63,23 @@ def test_job_status_response_contract():
             assert "error" in status_obj
 
 
-def test_generate_mindmap_request_contract(client, can_db_test):
-    """Test POST /generate-mindmap contract against real backend endpoint with mock graph."""
+def test_generate_mindmap_request_contract(client, can_db_test, monkeypatch):
+    """Test POST /generate-mindmap contract against real backend endpoint with mock graph.
+
+    "sample_doc.pdf" is never actually ingested in this test session — with a
+    real Postgres DB (TEST_DATABASE_URL, only present when this file runs as
+    part of the full suite, not the file-scoped backend-contracts-and-unit
+    job), the real `_mindmap_input_and_hash` legitimately 500s
+    ("Không đọc được dữ liệu nguồn") for a source with no indexed chunks;
+    that 500 is app/main.py's own intentional error path, not a bug. Patch
+    it to return fake-but-nonempty chunks instead, same pattern
+    test_mindmap_ownership.py::test_owner_generate_cache_hit_no_cross_user
+    already uses to exercise this endpoint without a real ingest pipeline —
+    this is a CONTRACT test (shape of the response), not an ingest test.
+    """
+    import app.main as be_main
+    monkeypatch.setattr(be_main, "_mindmap_input_and_hash",
+                         lambda sources: ({"chunks": [{"chunk_id": "c1", "text": "x"}]}, "ci-contract-mindmap-hash"))
     res = client.post("/generate-mindmap", json={
         "sources": ["sample_doc.pdf"],
         "q": "tóm tắt tài liệu",
@@ -81,8 +96,16 @@ def test_generate_mindmap_request_contract(client, can_db_test):
         assert "mindmap" in data or "result" in data
 
 
-def test_generate_summary_request_contract(client, can_db_test):
-    """Test POST /generate-summary contract against real backend endpoint."""
+def test_generate_summary_request_contract(client, can_db_test, monkeypatch):
+    """Test POST /generate-summary contract against real backend endpoint.
+
+    Same fake-source-data patch as test_generate_mindmap_request_contract
+    above, and for the same reason (see its docstring) — `_summary_input_and_hash`
+    is generate-summary's equivalent of generate-mindmap's `_mindmap_input_and_hash`.
+    """
+    import app.main as be_main
+    monkeypatch.setattr(be_main, "_summary_input_and_hash",
+                         lambda sources, length_mode, mode: ({"chunks": [{"chunk_id": "c1", "text": "x"}]}, "ci-contract-summary-hash"))
     res = client.post("/generate-summary", json={
         "sources": ["sample_doc.pdf"],
         "length_mode": "medium",
