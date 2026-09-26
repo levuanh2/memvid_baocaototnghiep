@@ -82,6 +82,13 @@ export async function selectAllSources(page) {
  * hard to fail if a concurrent fix for that regression hasn't landed yet. */
 export async function openGuidedDialogFromHeader(page) {
   await page.getByRole("tab", { name: "Sơ đồ tư duy" }).click();
-  await page.getByRole("button", { name: "Tạo sơ đồ mới" }).click();
+  // Once a map already exists, MindElixirView also renders its OWN
+  // "Tạo sơ đồ mới" context action inside the canvas (`.mm-context-action`)
+  // — same accessible name, different button. Scope to the library menu
+  // dialog specifically (ModeLibraryMenu.jsx: role="dialog" aria-label="Sơ
+  // đồ tư duy") so this stays the header entry point, not whichever button
+  // happens to match first.
+  const libraryMenu = page.getByRole("dialog", { name: "Sơ đồ tư duy" });
+  await libraryMenu.getByRole("button", { name: "Tạo sơ đồ mới" }).click();
   return page.getByRole("dialog", { name: "Tạo sơ đồ tư duy" });
 }
