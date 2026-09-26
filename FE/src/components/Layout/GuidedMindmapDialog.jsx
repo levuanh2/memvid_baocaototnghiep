@@ -1,4 +1,5 @@
 import { useEffect, useMemo, useRef, useState } from "react";
+import { createPortal } from "react-dom";
 import { suggestMindmapTopics } from "../../utils/api";
 import { Icon } from "../ui/Icon";
 
@@ -57,7 +58,14 @@ export default function GuidedMindmapDialog({ sources = [], onClose, onSubmit, l
       if (restore && typeof restore.focus === "function" && document.contains(restore)) restore.focus();
     };
   }, [onClose]);
-  return <div className="fixed inset-0 z-50 flex items-end sm:items-center justify-center bg-black/35 p-0 sm:p-6" role="presentation" onMouseDown={(event) => event.target === event.currentTarget && onClose?.()}>
+  // Portalled to document.body: this dialog is opened from SidebarRight, which
+  // stays mounted-but-hidden (visibility:hidden) whenever its own panel surface
+  // isn't the active one (e.g. triggered from the Mind Map tab's header, where
+  // SidebarRight renders as the collapsed .mindmap-tools-overlay aside). Without
+  // the portal, `position: fixed` does NOT escape an ancestor's visibility:hidden
+  // — the dialog mounted, fetched topics, and held focus, but was invisible.
+  // Confirmed live via getComputedStyle on production before this fix.
+  return createPortal(<div className="fixed inset-0 z-50 flex items-end sm:items-center justify-center bg-black/35 p-0 sm:p-6" role="presentation" onMouseDown={(event) => event.target === event.currentTarget && onClose?.()}>
     <form ref={dialogRef} onSubmit={submit} role="dialog" aria-modal="true" aria-labelledby="guided-mindmap-title" className="w-full sm:max-w-[620px] max-h-[92vh] overflow-y-auto rounded-t-[18px] sm:rounded-[16px] border border-border bg-surface-card shadow-card-hover p-5 sm:p-6">
       <div className="flex items-start gap-3 mb-5"><div className="flex-1"><h2 id="guided-mindmap-title" className="font-display text-title font-semibold text-text-primary">Tạo sơ đồ tư duy</h2><p className="text-small text-text-secondary mt-1">Định hướng nội dung trước khi tạo từ {sourceIds.length} tài liệu đã chọn.</p></div><button type="button" onClick={onClose} className="icon-btn w-10 h-10" aria-label="Đóng"><Icon name="X" size={17} /></button></div>
       <div className="surface-card p-3 mb-4"><div className="text-caption uppercase font-mono text-text-muted mb-1">Tài liệu đang dùng</div><div className="text-small text-text-primary">{sourceIds.join(" · ") || "Chưa có nguồn"}</div></div>
@@ -66,5 +74,5 @@ export default function GuidedMindmapDialog({ sources = [], onClose, onSubmit, l
       <div className="grid sm:grid-cols-2 gap-4 mb-5"><fieldset><legend className="text-small font-semibold text-text-primary mb-2">Mục đích</legend><div className="flex flex-wrap gap-2">{PURPOSES.map(([id, label]) => <label key={id} className={`cursor-pointer min-h-[40px] flex items-center px-3 py-2 rounded-lg border text-small ${purpose === id ? "border-accent text-accent bg-accent/10" : "border-border text-text-secondary"}`}><input className="sr-only" type="radio" name="guided-purpose" value={id} checked={purpose === id} onChange={() => setPurpose(id)} />{label}</label>)}</div></fieldset><fieldset><legend className="text-small font-semibold text-text-primary mb-2">Độ chi tiết</legend><div className="flex flex-wrap gap-2">{DETAILS.map(([id, label]) => <label key={id} className={`cursor-pointer min-h-[40px] flex items-center px-3 py-2 rounded-lg border text-small ${detailLevel === id ? "border-accent text-accent bg-accent/10" : "border-border text-text-secondary"}`}><input className="sr-only" type="radio" name="guided-detail" value={id} checked={detailLevel === id} onChange={() => setDetailLevel(id)} />{label}</label>)}</div></fieldset></div>
       {hasNonReadySource && <p className="text-small text-warning mb-3">Nguồn đang được xử lý. Hãy chờ nguồn ở trạng thái sẵn sàng.</p>}{error && <p className="text-small text-warning mb-3">{error}</p>}<div className="sticky bottom-0 pt-3 bg-surface-card"><button type="submit" disabled={!sourceIds.length || hasNonReadySource || loading || submitStarted} className="btn-primary w-full justify-center !py-3 disabled:opacity-40">{loading || submitStarted ? "Đang tạo…" : "Tạo sơ đồ"}<Icon name="ArrowRight" size={15} /></button></div>
     </form>
-  </div>;
+  </div>, document.body);
 }
