@@ -31,6 +31,9 @@ export default function WorkspaceContainer({
   mode,
   chatProps, mindmapData, mindmapInitialLoading, mindmapLoadError, summaryData, controller,
   onMindmapAction, onSummaryAction, onSummaryContextChange,
+  // P2 fix: generation-in-progress/failed status for the no-map-yet case —
+  // WorkspaceEmptyState has no other way to know a job is running.
+  mindmapCreating, mindmapJobLabel, mindmapJobProgress, mindmapJobError, onRetryMindmap,
 }) {
   const hasMindmap = Boolean(mindmapData?.data);
   const hasSummary = Boolean(summaryData);
@@ -57,6 +60,11 @@ export default function WorkspaceContainer({
             onCreate={onMindmapAction}
             loading={mindmapInitialLoading}
             error={mindmapLoadError}
+            creating={mindmapCreating}
+            jobLabel={mindmapJobLabel}
+            jobProgress={mindmapJobProgress}
+            jobError={mindmapJobError}
+            onRetry={onRetryMindmap}
           />
         )}
       </div>

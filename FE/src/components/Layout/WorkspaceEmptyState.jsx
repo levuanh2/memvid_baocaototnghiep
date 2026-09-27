@@ -7,6 +7,7 @@
 // generator the Inspector's own "Tạo sơ đồ"/"Tạo tóm tắt" button already
 // triggers, no new generation logic.
 import { Icon } from "../ui/Icon";
+import Spinner from "../ui/Spinner";
 
 const COPY = {
   mindmap: {
@@ -23,7 +24,13 @@ const COPY = {
   },
 };
 
-export default function WorkspaceEmptyState({ kind, selectedCount, onCreate, loading, error }) {
+export default function WorkspaceEmptyState({
+  kind, selectedCount, onCreate, loading, error,
+  // P2 fix: a Guided generation started from here (no map open yet) had
+  // zero visible surface between dialog-close and the eventual toast --
+  // this screen just sat there showing the same static CTA the whole time.
+  creating, jobLabel, jobProgress, jobError, onRetry,
+}) {
   const copy = COPY[kind];
   const hasSelection = selectedCount > 0;
 
@@ -44,6 +51,33 @@ export default function WorkspaceEmptyState({ kind, selectedCount, onCreate, loa
       <div className="flex-1 flex flex-col items-center justify-center text-center px-6 gap-3" style={{ background: "var(--bg-base)" }}>
         <Icon name="TriangleAlert" size={22} className="text-danger" />
         <p className="text-small text-text-secondary max-w-[380px]">{error}</p>
+      </div>
+    );
+  }
+  if (kind === "mindmap" && creating) {
+    return (
+      <div className="flex-1 flex flex-col items-center justify-center text-center px-6 gap-3" style={{ background: "var(--bg-base)" }}>
+        <Spinner size={22} />
+        <p className="text-small text-text-secondary">
+          {jobLabel || "Đang tạo sơ đồ…"}{typeof jobProgress === "number" ? ` (${jobProgress}%)` : ""}
+        </p>
+      </div>
+    );
+  }
+  if (kind === "mindmap" && jobError) {
+    return (
+      <div className="flex-1 flex flex-col items-center justify-center text-center px-6 gap-3" style={{ background: "var(--bg-base)" }}>
+        <Icon name="TriangleAlert" size={22} className="text-danger" />
+        <p className="text-small text-text-secondary max-w-[380px]">{jobError}</p>
+        {typeof onRetry === "function" ? (
+          <button type="button" onClick={onRetry} className="btn-primary !text-small mt-1">
+            <Icon name="RotateCcw" size={14} /> Thử lại
+          </button>
+        ) : (
+          <button type="button" onClick={onCreate} disabled={!hasSelection} className="btn-primary !text-small mt-1 disabled:opacity-40 disabled:cursor-not-allowed">
+            <Icon name={copy.icon} size={14} /> {copy.cta}
+          </button>
+        )}
       </div>
     );
   }
