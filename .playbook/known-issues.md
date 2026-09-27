@@ -5266,3 +5266,87 @@ luồng tạo map, chọn map và dữ liệu nền. Không được ẩn toàn 
 right-column owner; Inspector contextual phải dùng absolute positioning bên trong
 canvas, còn toolbar/context-row là hai vùng chức năng khác nhau và không được nhân
 bản menu overflow.
+
+### Vitest tự nhặt luôn file `.spec.js` của Playwright
+
+Thêm `FE/e2e/**/*.spec.js` (Playwright, 2026-09-27) làm `npm test` (Vitest) vỡ ngay:
+Vitest mặc định include glob `**/*.spec.js`, không phân biệt runner nào sở hữu file
+đó. Playwright's `test()` gọi ngoài runner của nó ném lỗi rối (`_TestTypeImpl` stack),
+không phải lỗi cú pháp — dễ đoán nhầm là bug trong spec.
+
+**Fix:** `FE/vite.config.js` thêm `test.exclude` — GIỮ NGUYÊN danh sách exclude mặc
+định của Vitest (`node_modules`, `dist`, `.git`, các file `*.config.*`, ...) rồi thêm
+`'e2e/**'` vào, không thay hẳn bằng một mảng chỉ có `e2e/**` (làm vậy sẽ vô tình bỏ
+loại trừ `vite.config.js`/`vitest.config.js` chính nó ra khỏi bộ lọc).
+
+**Phòng ngừa:** bất cứ bộ test thứ hai nào thêm vào repo (Playwright, Cypress, ...)
+đặt trong thư mục riêng (`e2e/`) và phải tự kiểm `npm test` (Vitest) còn xanh trước khi
+coi là xong — không chỉ chạy runner mới rồi dừng.
+
+### ESLint: file chạy dưới Node (không phải browser) báo `'process' is not defined`
+
+`FE/eslint.config.js` chỉ có một block `languageOptions.globals: globals.browser` áp
+dụng cho MỌI `*.js`/`*.jsx` — đúng cho code app (chạy trong browser), sai cho file cấu
+hình/script chạy dưới Node (`playwright.config.js`, `scripts/*.mjs`, `e2e/**`, và
+`tailwind.config.js` cũ vốn đã có nợ lint kiểu này với `module`/`require`).
+
+**Fix:** thêm một block `files: ['playwright.config.js', 'e2e/**/*.js',
+'scripts/**/*.mjs']` với `languageOptions.globals: globals.node`, KHÔNG sửa rule chung
+— giữ browser code lint chặt như cũ, chỉ mở đúng phạm vi file chạy dưới Node.
+
+**Phòng ngừa:** file mới chạy dưới Node (script CLI, config tool) luôn kiểm `npx eslint
+<file>` trước khi commit — `no-undef` trên `process`/`__dirname`/`require` là dấu hiệu
+file đó cần vào block `globals.node`, không phải dấu hiệu cần disable rule.
+
+### Guided dialog "Yêu cầu riêng" label không gắn với textarea — Playwright `getByLabel` treo tới hết test timeout
+
+`GuidedMindmapDialog.jsx` có `<label>Yêu cầu riêng...</label>` và `<textarea>` là hai
+phần tử SIBLING, không có `htmlFor`/`id` nối nhau, textarea cũng không nằm lồng trong
+label. Về accessible-name resolution, hai phần tử này KHÔNG liên kết — ảnh hưởng cả
+Playwright's `getByLabel` lẫn screen reader thật, không chỉ test.
+
+Hậu quả trong CI (`E2E Critical Flows`, run 36314116607, 2026-09-27): test "A -> B ->
+A -> B map switching" gọi `dialog.getByLabel(/Yêu cầu riêng/).fill(...)` — locator
+không bao giờ resolve, treo tới khi hết `Test timeout of 45000ms exceeded`, teardown
+đóng page giữa lúc đang chờ nên lỗi hiển thị ra là `locator.fill: Target page, context
+or browser has been closed` (triệu chứng, không phải nguyên nhân). Vì
+`test.describe.serial` có retry, thất bại này kéo theo chạy lại TOÀN BỘ file, và lần
+chạy lại lại bắt trúng "happy path" test giữa lúc đang poll job → báo thất bại thứ hai
+trông như không liên quan (`aria-selected` vẫn `false` sau 20s).
+
+**Fix:** thêm `htmlFor="guided-instruction"` vào `<label>` và `id="guided-instruction"`
+vào `<textarea>` (commit `bc92574`). Không đổi test timeout, không đổi cấu hình retry —
+gốc bệnh nằm ở markup, sửa test/CI-config sẽ không giải quyết được.
+
+**Phòng ngừa:** field nào dùng `<label>` + input riêng (không lồng nhau) đều PHẢI có
+`htmlFor`/`id` khớp cặp. Một lỗi accessible-name loại này thường lộ ra qua `getByLabel`
+treo vô thời hạn (không phải lỗi rõ ràng) — nếu một test Playwright bị "Test timeout
+exceeded" ở đúng bước `.fill()`/`.click()` trên `getByLabel(...)`, kiểm tra ngay
+markup label/input trước khi nghi ngờ timing hay backend.
+
+### `run_e2e_server.py`'s force-fail mock đọc sai tầng state — `__E2E_FORCE_FAIL__` không bao giờ trúng cho job Guided thật
+
+Sau khi sửa lỗi label ở trên, `E2E Critical Flows` (run 36318766819, 2026-09-27) lộ ra
+lỗi thứ hai, KHÁC hẳn: test "Guided create failure surfaces a visible error" chờ 20s
+một banner lỗi (`/lỗi|thất bại|failed/i`) không bao giờ xuất hiện.
+
+`MockMindmapGraph.invoke` (`BE/scripts/run_e2e_server.py`) tìm marker bằng
+`state.get("instruction")` / `state.get("generation_intent")` ở TẦNG NGOÀI CÙNG của
+state. Nhưng state thật do `run_mindmap_job`
+(`BE/app/application/mindmap_generation.py` dòng ~62) dựng ra chỉ có
+`job_id/source_names/mm_input/content_hash/user_id/progress/current_node/error` — chữ
+`instruction` của Guided nằm lồng ở `mm_input["generation_intent"]["instruction"]`.
+Kết quả: `text_blob` luôn rỗng cho một job Guided thật, marker không bao giờ khớp, job
+luôn chạy xong `"done"` thay vì `"failed"` — banner lỗi phía FE vì vậy không bao giờ có
+gì để hiển thị.
+
+**Fix:** đọc thêm `(state.get("mm_input") or {}).get("generation_intent") or
+{}).get("instruction")` vào `text_blob` (commit `663e3a2`). Không đổi
+`FE/e2e/critical-flows.spec.js`, không đổi timeout — lỗi nằm ở mock đọc sai field, test
+đã viết đúng.
+
+**Phòng ngừa:** khi viết/sửa một double/mock đọc field từ một state dict lớn (LangGraph
+state, job payload, ...), luôn đối chiếu với NƠI THẬT dựng ra state đó (ở đây là
+`run_mindmap_job`'s `_langgraph_invoke(graph, {...})` call), không suy đoán tên field từ
+tên tham số phía trên (route, request body). Field trùng tên ở tầng ngoài (`q`) không
+có nghĩa field khác cũng ở tầng ngoài.

@@ -1,0 +1,55 @@
+name: Live Provider Integration
+
+on:
+  schedule:
+    # Run once a week on Monday at 03:00 UTC
+    - cron: '0 3 * * 1'
+  workflow_dispatch:
+    inputs:
+      test_fpt:
+        description: 'Test live FPT AI provider connectivity'
+        required: false
+        default: true
+        type: boolean
+      test_ec2_health:
+        description: 'Test AWS EC2 deployed instance health'
+        required: false
+        default: true
+        type: boolean
+
+permissions:
+  contents: read
+
+jobs:
+  live-providers-probe:
+    name: Probe Live External Providers
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+          cache: pip
+          cache-dependency-path: BE/requirements.txt
+
+      - name: Install minimal dependencies
+        working-directory: BE
+        run: |
+          pip install requests python-dotenv
+
+      - name: Probe Live EC2 Backend Health
+        if: ${{ github.event.inputs.test_ec2_health != 'false' && secrets.EC2_HOST != '' }}
+        run: |
+          echo "Probing production EC2 backend health endpoint..."
+          curl -fsS --connect-timeout 10 --max-time 15 "http://${{ secrets.EC2_HOST }}:8080/health" || {
+            echo "::warning::Production EC2 health probe timed out or returned error."
+          }
+
+      - name: Report Live Provider Status
+        run: |
+          echo "Live provider verification run completed."

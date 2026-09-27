@@ -216,16 +216,68 @@ def test_setup_test_db_khong_lo_mat_khau(monkeypatch):
 
 # ── CI phải cấp TEST_DATABASE_URL ──────────────────────────────────────────
 def test_ci_cap_TEST_DATABASE_URL_va_khong_de_DATABASE_URL_o_muc_job():
-    """Bước `pytest` trong CI không được có `DATABASE_URL` trong môi trường — không
-    có gì để rơi về thì không có đường nào rơi."""
+    """Job nào CHẠY PYTEST không giới hạn file trong CI thì môi trường mức JOB của nó
+    phải có `TEST_DATABASE_URL` và không được có `DATABASE_URL` — không có gì để rơi
+    về thì không có đường nào rơi.
+
+    2026-09-27: sửa lại cách đọc, hai lớp lỗi liên tiếp trên cùng một test:
+    (1) Bản gốc cắt file ở "steps:" ĐẦU TIÊN trong CẢ FILE
+    (`ci.split("steps:", 1)[0]`) — đúng khi cả file chỉ có một job liên quan
+    (backend-tests, thời 4-job flat), sai ngay khi DAG có nhiều job: "steps:"
+    đầu tiên rơi vào job `detect-changes` (không liên quan DATABASE_URL), nên
+    khối kiểm tra luôn rỗng — xanh giả. Đo được khi thêm job `e2e-critical`:
+    test đỏ vì "thiếu" TEST_DATABASE_URL, dù job đó (và mọi job pytest) đều có.
+    (2) Sửa vội bằng cách kiểm TOÀN FILE theo thụt lề — LẠI sai kiểu khác:
+    `docker-build-test`/`docker-compose-run-test` (không chạy pytest, chỉ
+    build/smoke Docker) đã có `DATABASE_URL:` ở mức job từ trước, không nằm
+    trong tinh thần gốc của test này ("bước PYTEST không được có DATABASE_URL
+    để rơi về") — kiểm toàn file sẽ đỏ oan hai job đó.
+    Sửa đúng: cắt file theo TỪNG job (job header thụt 2 dấu cách), chỉ xét
+    job nào bên trong có gọi `pytest`, và trong đúng job đó mới đòi
+    TEST_DATABASE_URL/cấm DATABASE_URL ở phần TRƯỚC `steps:` của chính job đó
+    (= mức `env:` của job, thụt 4; step-level `env:` nằm SAU `steps:`, thụt
+    sâu hơn — "Smoke boot" trong `backend-integration-and-smoke` CÓ
+    DATABASE_URL ở đó, đúng ý định, không bị test này chạm tới).
+    Không dùng PyYAML: chưa có trong `requirements.txt`, và việc này chỉ cần
+    cắt chuỗi theo đúng phạm vi — thêm một dependency để làm việc `str.split`
+    làm được là ngược hướng "đơn giản hơn"."""
     import pathlib
+    import re
 
     goc = pathlib.Path(__file__).resolve().parents[2]
     ci = (goc / ".github" / "workflows" / "ci.yml").read_text(encoding="utf-8")
-    khoi_job = ci.split("steps:", 1)[0]
-    assert "TEST_DATABASE_URL:" in khoi_job, "CI phải cấp TEST_DATABASE_URL ở mức job"
-    assert "\n      DATABASE_URL:" not in khoi_job, (
-        "DATABASE_URL không được ở mức job — chỉ đặt cho bước migration và smoke boot")
+
+    # Job header thật: thụt ĐÚNG 2 dấu cách, kết thúc bằng ":" (khác key con
+    # của job, luôn thụt sâu hơn 2).
+    mo_job = [m.start() for m in re.finditer(r"(?m)^  [a-zA-Z][\w-]*:[ \t]*$", ci)]
+    mo_job.append(len(ci))
+
+    # Không đòi MỌI job chạy pytest phải có TEST_DATABASE_URL — một job như
+    # `backend-contracts-and-unit` cố ý KHÔNG đặt nó, để fixture `can_db_test`
+    # tự SKIP các test cần DB (đúng thiết kế, không phải thiếu sót). Đòi:
+    # (1) mọi job chạy pytest không được có DATABASE_URL ở mức job (phổ quát,
+    #     không ngoại lệ — đó chính là điều cần chặn rơi về production);
+    # (2) ÍT NHẤT một job chạy pytest có TEST_DATABASE_URL ở mức job (nếu
+    #     không thì không job nào thực sự chạy test cần DB).
+    co_test_database_url = False
+    kiem_duoc_it_nhat_mot_job = False
+    for i in range(len(mo_job) - 1):
+        khoi = ci[mo_job[i]:mo_job[i + 1]]
+        if "pytest" not in khoi:
+            continue
+        kiem_duoc_it_nhat_mot_job = True
+        ten_job = khoi.splitlines()[0].strip().rstrip(":")
+        # Env mức JOB = phần trước "steps:" của CHÍNH job này (không phải
+        # "steps:" đầu tiên trong cả file — đó là lỗi gốc đã sửa ở đây).
+        env_muc_job = khoi.split("\n    steps:", 1)[0]
+        assert "\n      DATABASE_URL:" not in env_muc_job, (
+            f"Job `{ten_job}` chạy pytest nhưng có DATABASE_URL ở mức job — "
+            "không có gì để rơi về thì không có đường nào rơi")
+        if "\n      TEST_DATABASE_URL:" in env_muc_job:
+            co_test_database_url = True
+    assert kiem_duoc_it_nhat_mot_job, (
+        "Không job nào trong ci.yml chạy pytest — kiểm tra này mất mục tiêu, "
+        "xem lại ci.yml đã đổi cấu trúc gì")
 
 
 # ── Cấu hình provider của máy dev cũng không được rò vào test ──────────────

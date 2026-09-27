@@ -6,23 +6,253 @@ on:
   pull_request:
     branches: ["main"]
 
+# Concurrency control:
+# - PRs: cancel outdated in-progress runs when a new commit is pushed.
+# - main branch: cancel-in-progress is FALSE to ensure deploy is never disrupted midway.
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: ${{ github.ref != 'refs/heads/main' }}
+
+permissions:
+  contents: read
+  # dorny/paths-filter needs this to list a PR's changed files via the
+  # GitHub API (detect-changes) — without it the call 403s with "Resource
+  # not accessible by integration" and every downstream job never runs.
+  # Found on the first real CI run of this workflow (2026-09-27); AGY's
+  # config never actually executed before this PR to surface it.
+  pull-requests: read
+
 jobs:
-  # ---------------------------------------------------------------
-  # Backend test suite (the real one — pytest, not just an import).
-  #
-  # Postgres runs as a service container: `tests/conftest.py` talks to
-  # the `documents` / `users` tables through SQLAlchemy, and without a
-  # live DB ~96 tests fail with `assert 500 == 201` or blow up inside
-  # psycopg. A throwaway container is free on GitHub-hosted runners and
-  # keeps the suite off anybody's Supabase project.
-  #
-  # SKIP_MODEL_LOAD=1 is what the suite already uses (see conftest):
-  # embeddings become FakeEmbeddings, so CI never downloads torch
-  # weights, never needs a GPU, and never starts Ollama.
-  # ---------------------------------------------------------------
-  backend-tests:
-    name: Backend Tests (Python 3.11)
+  # ---------------------------------------------------------------------------
+  # Stage 0: Change Detection & Path Filtering
+  # ---------------------------------------------------------------------------
+  detect-changes:
+    name: Detect Changed Paths
     runs-on: ubuntu-latest
+    outputs:
+      frontend: ${{ steps.filter.outputs.frontend }}
+      backend: ${{ steps.filter.outputs.backend }}
+      shared: ${{ steps.filter.outputs.shared }}
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Path Filter
+        id: filter
+        uses: dorny/paths-filter@v3
+        with:
+          filters: |
+            frontend:
+              - 'FE/**'
+              - 'package*.json'
+            backend:
+              - 'BE/**'
+              - 'scripts/**'
+            shared:
+              - '.github/**'
+              - 'docker-compose*'
+              - '*.yml'
+              - '*.yaml'
+              - 'alembic/**'
+
+  # ---------------------------------------------------------------------------
+  # Stage 1: Security & Static Integrity
+  # ---------------------------------------------------------------------------
+  security-and-static:
+    name: Security & Static Checks
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Check Git Whitespace and Diffs
+        run: git diff --check
+
+      - name: Scan for Accidental Secrets & Private Keys
+        run: |
+          echo "Scanning for accidental committed private keys or production secrets..."
+          if grep -rn --exclude-dir={.git,node_modules,dist,__pycache__} -E "BEGIN (RSA|OPENSSH|EC|DSA) PRIVATE KEY" .; then
+            echo "::error::Found private key committed in repository!"
+            exit 1
+          fi
+          echo "Secret check passed."
+
+      # Gates only NEW critical/high advisories introduced by THIS PR's own
+      # dependency changes (npm + pip manifests) — GitHub diffs against the
+      # base branch itself, so pre-existing/accepted advisories (documented
+      # debt, see docs/ci/CI_ARCHITECTURE.md §9) never fail this. PR-only:
+      # the action needs a base ref to diff against.
+      #
+      # continue-on-error: this repo is private without the "Dependency
+      # graph" repo setting enabled (Settings > Code security), which the
+      # action hard-requires — confirmed on the first real CI run
+      # (2026-09-27): "Dependency review is not supported on this
+      # repository." Flipping that setting is a repo-admin action outside
+      # this change's scope, so the step stays wired up (ready the moment
+      # someone with admin access enables it) without permanently reddening
+      # the required gate over a repo setting, not a real vulnerability.
+      - name: Dependency Review (new critical/high advisories only)
+        if: github.event_name == 'pull_request'
+        continue-on-error: true
+        uses: actions/dependency-review-action@v4
+        with:
+          fail-on-severity: high
+
+  # ---------------------------------------------------------------------------
+  # Stage 2: Frontend Pipeline (Vitest, Lint, Vite Build)
+  # ---------------------------------------------------------------------------
+  frontend-tests:
+    name: Frontend Tests (Node 22)
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    needs: detect-changes
+    if: >
+      github.ref == 'refs/heads/main' ||
+      needs.detect-changes.outputs.frontend == 'true' ||
+      needs.detect-changes.outputs.shared == 'true'
+    defaults:
+      run:
+        working-directory: FE
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+          cache: npm
+          cache-dependency-path: FE/package-lock.json
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Run frontend tests (Vitest)
+        run: npm test
+
+      # Reported, never blocking. The repo carries a known, pre-existing
+      # eslint backlog; fixing it is out of scope for CI stabilization.
+      - name: Lint (report only — known pre-existing debt)
+        run: npm run lint
+        continue-on-error: true
+
+      # Ratchet: fails only if the TOTAL problem count grows past the
+      # committed baseline (FE/.eslint-baseline.json). Pre-existing debt
+      # stays allowed; new debt does not. See FE/scripts/lint-ratchet.mjs.
+      - name: Lint ratchet (blocking — no NEW problems beyond baseline)
+        run: npm run lint:ratchet
+
+  frontend-build:
+    name: Frontend Production Build
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    needs: [detect-changes, frontend-tests]
+    if: >
+      github.ref == 'refs/heads/main' ||
+      needs.detect-changes.outputs.frontend == 'true' ||
+      needs.detect-changes.outputs.shared == 'true'
+    defaults:
+      run:
+        working-directory: FE
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+          cache: npm
+          cache-dependency-path: FE/package-lock.json
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Build frontend production bundle
+        run: npm run build
+
+      - name: Upload frontend build artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: frontend-dist
+          path: FE/dist/
+          retention-days: 7
+
+  # ---------------------------------------------------------------------------
+  # Stage 3: Backend Pipeline (Proto, Unit, Contracts, DB & Integration)
+  # ---------------------------------------------------------------------------
+  backend-contracts-and-unit:
+    name: Backend Unit & Contract Tests
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    needs: detect-changes
+    if: >
+      github.ref == 'refs/heads/main' ||
+      needs.detect-changes.outputs.backend == 'true' ||
+      needs.detect-changes.outputs.shared == 'true'
+    defaults:
+      run:
+        working-directory: BE
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+          cache: pip
+          cache-dependency-path: BE/requirements.txt
+
+      - name: Install dependencies
+        run: |
+          python -m pip install --upgrade pip
+          pip install -r requirements.txt
+
+      - name: Generate gRPC stubs
+        run: python scripts/build_proto.py
+
+      - name: Compile check (app.main)
+        run: python -m py_compile app/main.py
+
+      - name: Run fast contract & regression tests
+        run: python -m pytest -q tests/test_ci_contracts.py tests/test_ci_regressions.py
+
+      # Existing/accepted advisories are documented debt (see
+      # docs/ci/CI_ARCHITECTURE.md §9), never silently suppressed — this
+      # report-only step keeps them visible without turning CI permanently
+      # red over pre-existing, untriaged findings. New critical/high
+      # advisories on a PR's OWN dependency changes are instead gated by
+      # dependency-review-action in security-and-static (diffs against base).
+      - name: pip-audit (report only — pre-existing debt tracked, not gated here)
+        run: |
+          pip install --quiet pip-audit
+          pip-audit -r requirements.txt || echo "::warning::pip-audit found pre-existing advisories — see docs/ci/CI_ARCHITECTURE.md §9"
+        continue-on-error: true
+
+  backend-integration-and-smoke:
+    name: Backend Integration Suite & Migrations
+    runs-on: ubuntu-latest
+    # 2026-09-27: 15 was too tight -- reproduced across 3 of 4 real CI runs,
+    # cancelled every time on "Run full backend test suite" itself (the full
+    # pytest suite, not setup): confirmed via the job's own step timings the
+    # suite was still running at 13m43s when the job-level timeout fired at
+    # 15min from job start (~1m30s of which is setup before pytest even
+    # starts). Not a hang -- the suite genuinely needs more headroom than
+    # this job budgeted, and each attempted timing fix earlier in this
+    # session was a genuine root-cause fix for a DIFFERENT test (the A/B
+    # map-switching content-hash bug), not this. 25 min gives real margin
+    # without being unbounded.
+    timeout-minutes: 25
+    needs: [detect-changes, backend-contracts-and-unit]
+    if: >
+      github.ref == 'refs/heads/main' ||
+      needs.detect-changes.outputs.backend == 'true' ||
+      needs.detect-changes.outputs.shared == 'true'
 
     services:
       postgres:
@@ -39,27 +269,20 @@ jobs:
           --health-timeout 5s
           --health-retries 5
 
+      redis:
+        image: redis:7-alpine
+        ports:
+          - 6379:6379
+        options: >-
+          --health-cmd "redis-cli ping"
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
+
     env:
       SKIP_MODEL_LOAD: "1"
-      # Plain `postgresql://` is fine — app/db/__init__.py rewrites it to
-      # `postgresql+psycopg://` because psycopg2 is not installed.
-      #
-      # Only TEST_DATABASE_URL lives at job scope. DATABASE_URL is set per-step,
-      # on the two steps that are not pytest (migrations, gunicorn smoke boot),
-      # so that during `pytest` there is no production-shaped URL in the
-      # environment at all. `app/db.database_url()` refuses to fall back to
-      # DATABASE_URL under pytest — that fallback is exactly how the local suite
-      # wrote to, and hard-deleted from, the production database for weeks:
-      # BE/.env supplies DATABASE_URL and conftest never overrode it.
       TEST_DATABASE_URL: postgresql://postgres:postgres@localhost:5432/studymap_test
-      # Stops shared/env_loader from setdefault-ing the USE_LC_* flags, so the
-      # suite reads the same flag values it does locally. conftest sets this for
-      # itself too; declaring it here also covers tests that never build the
-      # `client` fixture.
-      #
-      # No API keys are set anywhere in this workflow, and none are needed:
-      # with no GEMINI_API_KEY / GROQ_API_KEY, llm_factory falls back to the
-      # ollama provider, and every heavy call is mocked by conftest.
+      REDIS_URL: redis://localhost:6379/0
       MEMVID_DISABLE_LC_DEFAULTS: "1"
 
     steps:
@@ -79,33 +302,29 @@ jobs:
           python -m pip install --upgrade pip
           pip install -r requirements.txt
 
-      # gen/ is gitignored, so a fresh clone has no gRPC stubs. Nothing on the
-      # boot path imports them (the gateway clients are lazy, behind
-      # LLM_GATEWAY_ADDR), but generating them keeps parity with BE/Dockerfile.
       - name: Generate gRPC stubs
         working-directory: BE
         run: python scripts/build_proto.py
 
-      # No DATABASE_URL here on purpose. alembic/env.py now picks its own target via
-      # shared.migration_guard.chon_dich(), which reads TEST_DATABASE_URL and refuses
-      # to fall back to DATABASE_URL. Setting DATABASE_URL to the same value would
-      # actually FAIL the guard: "target identity == DATABASE_URL identity" is how it
-      # detects a test URL that is really the production database.
       - name: Run migrations
         working-directory: BE
         run: alembic upgrade head
 
-      - name: Run backend test suite
+      - name: Run full backend test suite
         working-directory: BE
-        run: python -m pytest -q
+        run: python -m pytest -q --junitxml=reports/backend-junit.xml
 
-      # Boots the app the way Render does (gunicorn -> app.main:app) and hits
-      # the health path named in render.yaml. Catches "imports fine, dies on
-      # boot" and "healthCheckPath points at nothing" before a deploy does.
+      - name: Upload test report artifact
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: backend-junit-report
+          path: BE/reports/backend-junit.xml
+          retention-days: 14
+
       - name: Smoke boot under gunicorn + health check
         working-directory: BE
         env:
-          # Same shape as the Render Free service: no Ollama, no local weights.
           OLLAMA_HOST: ""
           SKIP_MODEL_LOAD: "1"
           DATABASE_URL: postgresql://postgres:postgres@localhost:5432/studymap_test
@@ -123,19 +342,74 @@ jobs:
           echo
           kill "$pid" || true
 
-  # ---------------------------------------------------------------
-  # Frontend: tests + production build.
-  # ---------------------------------------------------------------
-  frontend:
-    name: Frontend Tests & Build (Node 22)
+  # ---------------------------------------------------------------------------
+  # Stage 3.5: Deterministic Browser E2E (Playwright, real FE + real BE)
+  # ---------------------------------------------------------------------------
+  e2e-critical:
+    name: E2E Critical Flows (Playwright)
     runs-on: ubuntu-latest
-    defaults:
-      run:
-        working-directory: FE
+    timeout-minutes: 15
+    needs: [detect-changes, frontend-build, backend-integration-and-smoke]
+    if: >
+      github.ref == 'refs/heads/main' ||
+      needs.detect-changes.outputs.frontend == 'true' ||
+      needs.detect-changes.outputs.backend == 'true' ||
+      needs.detect-changes.outputs.shared == 'true'
+
+    services:
+      postgres:
+        image: postgres:16-alpine
+        env:
+          POSTGRES_USER: postgres
+          POSTGRES_PASSWORD: postgres
+          POSTGRES_DB: studymap_test
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd pg_isready
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
+
+    # DATABASE_URL is deliberately NOT set at job level (test_db_isolation.py
+    # guards this): alembic/env.py reads TEST_DATABASE_URL directly and
+    # never needs DATABASE_URL; BE/scripts/run_e2e_server.py (the only step
+    # that runs OUTSIDE pytest/alembic and does need it) sets its own
+    # DATABASE_URL default matching this exact Postgres service.
+    env:
+      SKIP_MODEL_LOAD: "1"
+      MEMVID_DISABLE_LC_DEFAULTS: "1"
+      TEST_DATABASE_URL: postgresql://postgres:postgres@localhost:5432/studymap_test
+      # Scoped to THIS job only — never written to a real .env, never the
+      # project-wide default (which stays false). See BE/scripts/run_e2e_server.py.
+      GUIDED_MINDMAP_V3_ENABLED: "true"
+      GUIDED_JOB_STORE_BACKEND: "sqlite"
+      PORT: "8080"
 
     steps:
       - name: Checkout
         uses: actions/checkout@v4
+
+      - name: Setup Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+          cache: pip
+          cache-dependency-path: BE/requirements.txt
+
+      - name: Install backend dependencies
+        working-directory: BE
+        run: |
+          python -m pip install --upgrade pip
+          pip install -r requirements.txt
+
+      - name: Generate gRPC stubs
+        working-directory: BE
+        run: python scripts/build_proto.py
+
+      - name: Run migrations
+        working-directory: BE
+        run: alembic upgrade head
 
       - name: Setup Node
         uses: actions/setup-node@v4
@@ -144,34 +418,46 @@ jobs:
           cache: npm
           cache-dependency-path: FE/package-lock.json
 
-      - name: Install dependencies
+      - name: Install frontend dependencies
+        working-directory: FE
         run: npm ci
 
-      - name: Run frontend tests
-        run: npm test
-
-      - name: Build frontend
+      - name: Build frontend pointed at the local E2E backend
+        working-directory: FE
+        env:
+          VITE_API_URL: http://127.0.0.1:8080
         run: npm run build
 
-      # Reported, never blocking. The repo carries a known, pre-existing
-      # eslint backlog; fixing it is deliberately out of scope for the
-      # deployment work, and failing CI on it would only hide new problems
-      # behind old ones. Read the annotation, don't ignore the step.
-      - name: Lint (report only — known pre-existing debt)
-        run: npm run lint
-        continue-on-error: true
+      - name: Install Playwright browsers
+        working-directory: FE
+        run: npx playwright install --with-deps chromium
 
-  # ---------------------------------------------------------------
-  # Pre-existing jobs, kept as they were.
-  # ---------------------------------------------------------------
+      - name: Run Playwright critical-flow suite
+        working-directory: FE
+        run: npx playwright test
+
+      - name: Upload Playwright report & traces on failure
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: playwright-report
+          path: |
+            FE/playwright-report/
+            FE/test-results/
+          retention-days: 10
+
+  # ---------------------------------------------------------------------------
+  # Stage 4: Docker & Compose Validation (Main or Shared Infra PRs)
+  # ---------------------------------------------------------------------------
   docker-build-test:
     name: Docker Build Test
     runs-on: ubuntu-latest
+    timeout-minutes: 15
+    needs: detect-changes
+    if: >
+      github.ref == 'refs/heads/main' ||
+      needs.detect-changes.outputs.shared == 'true'
 
-    # Compose nội suy TOÀN BỘ file trước mọi lệnh, kể cả `build`, nên
-    # `${DATABASE_URL:?}` ở docker-compose.yml làm `docker compose build` dừng trước khi
-    # build. Build KHÔNG kết nối DB — giá trị giả dưới đây chỉ để thoả mãn nội suy.
-    # KHÔNG phải secret, không trỏ tới hệ thống nào có thật.
     env:
       DATABASE_URL: postgresql://ci:ci@localhost:5432/ci_build_only
 
@@ -190,9 +476,9 @@ jobs:
   docker-compose-run-test:
     name: Docker Compose Run Test
     runs-on: ubuntu-latest
+    timeout-minutes: 15
     needs: docker-build-test
 
-    # Cùng lý do với job trên: `docker compose up` cũng nội suy cả file trước khi chạy.
     env:
       DATABASE_URL: postgresql://ci:ci@localhost:5432/ci_build_only
 
@@ -226,3 +512,36 @@ jobs:
       - name: Down
         if: always()
         run: docker compose down -v
+
+  # ---------------------------------------------------------------------------
+  # Stage 5: Aggregate Status Gate for Branch Protection
+  # ---------------------------------------------------------------------------
+  ci-success:
+    name: CI / required
+    runs-on: ubuntu-latest
+    if: always()
+    needs:
+      - security-and-static
+      - frontend-tests
+      - frontend-build
+      - backend-contracts-and-unit
+      - backend-integration-and-smoke
+      - e2e-critical
+      - docker-build-test
+      - docker-compose-run-test
+    steps:
+      - name: Evaluate Aggregate CI Results
+        run: |
+          results="${{ join(needs.*.result, ' ') }}"
+          echo "Pipeline job results: $results"
+
+          # If any executed job failed or was cancelled, fail the aggregate gate
+          for res in $results; do
+            if [ "$res" = "failure" ] || [ "$res" = "cancelled" ]; then
+              echo "::error::One or more required CI jobs did not succeed."
+              exit 1
+            fi
+          done
+
+          echo "All active CI checks succeeded."
+          exit 0

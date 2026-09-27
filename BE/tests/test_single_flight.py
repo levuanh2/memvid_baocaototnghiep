@@ -156,6 +156,13 @@ def test_follower_fail_open_when_leader_vanishes(sf_env):
 def test_redis_down_bypass(monkeypatch):
     monkeypatch.setenv("SINGLE_FLIGHT_ENABLED", "true")
     monkeypatch.setattr(main, "_get_session_history_safe", lambda sid, n, user_id=None: [])
+    # See test_overload.py::test_rate_limit_require_redis_rejects_when_down
+    # for why REDIS_URL must be removed, not just `reset_for_tests(None)`:
+    # that only clears an injected FAKE client, it doesn't stop `get_redis()`
+    # from connecting for real when REDIS_URL is actually set and reachable
+    # — true since backend-integration-and-smoke started running a real
+    # Redis service (first real CI run surfaced this, 2026-09-27).
+    monkeypatch.delenv("REDIS_URL", raising=False)
     redis_client.reset_for_tests(None)  # no client -> get_redis() returns None
     try:
         r = main._single_flight_try("j6", "nội dung là gì", [], True, None, None, "s1")
