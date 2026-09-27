@@ -108,23 +108,31 @@ test.describe.serial("critical flows", () => {
 
   test("A -> B -> A -> B map switching preserves correct active map identity", async () => {
     // Create a second, distinct map ("B") alongside the one from the happy-
-    // path test ("A") — run_e2e_server.py's mock suffixes the title with the
-    // job id, so A and B are guaranteed to read as different maps.
+    // path test ("A"). 2026-09-27: the original version of this test clicked
+    // "Tạo sơ đồ" with IDENTICAL params to the happy-path test (same sources,
+    // no custom instruction) and just waited for a second library entry to
+    // appear. That never happened, at any timeout length -- the real
+    // /generate-mindmap route content-hashes the request and, on a match,
+    // returns the EXISTING cached record synchronously (HTTP 200, no job_id)
+    // *before* ever reaching run_e2e_server.py's mocked graph, so no second
+    // job -- and no second map -- was ever created. Confirmed from the
+    // WebServer access log: "POST /generate-mindmap HTTP/1.1" 200 (cache-hit
+    // shape), not 202 (queued). A differentiating custom instruction changes
+    // the content hash, guaranteeing a genuinely distinct second map instead
+    // of racing a wait condition that could never pass.
+    // (This is also what caused the describe.serial whole-file retry that
+    // crashed the last test in this file with "Target page, context or
+    // browser has been closed" -- fixing the real cause here removes that
+    // retry entirely, which is a more reliable fix than hardening the
+    // unrelated last test against a crash it only inherited.)
     await selectAllSources(page);
     const dialog = await openGuidedDialogFromHeader(page);
+    await dialog.getByLabel(/Yêu cầu riêng/).fill("second distinct map for A/B switching test");
     await dialog.getByRole("button", { name: "Tạo sơ đồ" }).click();
-    // 2026-09-27: flaky under CI runner load -- 20s occasionally wasn't enough
-    // margin for the second guided job to finish and the library list to
-    // refresh, and describe.serial's whole-file retry-on-failure then reused
-    // a browser page that had already accumulated 8 tests' worth of real
-    // DOM/canvas state, which crashed on the LAST test in the file ("Target
-    // page, context or browser has been closed"). Widening the margin here
-    // avoids the retry (and therefore the crash) far more reliably than
-    // hardening the unrelated last test would.
     await expect(async () => {
       await page.getByRole("tab", { name: "Sơ đồ tư duy" }).click();
       expect(await page.getByRole("option").count()).toBeGreaterThan(1);
-    }).toPass({ timeout: 40_000, intervals: [1000] });
+    }).toPass({ timeout: 20_000, intervals: [1000] });
 
     const options = page.getByRole("option");
     const titleB = await options.first().locator("strong").innerText(); // newest first
