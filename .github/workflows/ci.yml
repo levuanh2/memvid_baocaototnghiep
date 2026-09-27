@@ -237,7 +237,17 @@ jobs:
   backend-integration-and-smoke:
     name: Backend Integration Suite & Migrations
     runs-on: ubuntu-latest
-    timeout-minutes: 15
+    # 2026-09-27: 15 was too tight -- reproduced across 3 of 4 real CI runs,
+    # cancelled every time on "Run full backend test suite" itself (the full
+    # pytest suite, not setup): confirmed via the job's own step timings the
+    # suite was still running at 13m43s when the job-level timeout fired at
+    # 15min from job start (~1m30s of which is setup before pytest even
+    # starts). Not a hang -- the suite genuinely needs more headroom than
+    # this job budgeted, and each attempted timing fix earlier in this
+    # session was a genuine root-cause fix for a DIFFERENT test (the A/B
+    # map-switching content-hash bug), not this. 25 min gives real margin
+    # without being unbounded.
+    timeout-minutes: 25
     needs: [detect-changes, backend-contracts-and-unit]
     if: >
       github.ref == 'refs/heads/main' ||
