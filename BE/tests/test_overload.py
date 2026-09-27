@@ -77,6 +77,16 @@ def test_rate_limit_redis_down_fail_open(monkeypatch):
 def test_rate_limit_require_redis_rejects_when_down(monkeypatch):
     monkeypatch.setenv("RATE_LIMIT_ENABLED", "true")
     monkeypatch.setenv("RATE_LIMIT_REQUIRE_REDIS", "true")
+    # `reset_for_tests(None)` alone only clears an INJECTED fake client — it
+    # does not force `get_redis()` unavailable. On a machine/CI job with no
+    # REDIS_URL configured that's moot (`_enabled()` already returns False),
+    # which is the only environment this test had ever run in before
+    # backend-integration-and-smoke started providing a REAL, reachable
+    # Redis service (2026-09-27, first real CI run of this job): with
+    # REDIS_URL actually set, `get_redis()` happily connects for real and
+    # this "down" test silently exercises the "up" path instead. Force it by
+    # removing REDIS_URL for the duration of this test specifically.
+    monkeypatch.delenv("REDIS_URL", raising=False)
     redis_client.reset_for_tests(None)
     try:
         allowed, retry = main._rate_limit_check("ip:x")
