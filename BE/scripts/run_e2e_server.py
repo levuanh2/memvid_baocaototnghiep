@@ -91,7 +91,17 @@ class MockMindmapGraph:
         from app.domains.jobs.jobs_store import update_job
 
         job_id = state.get("job_id")
-        text_blob = " ".join(str(state.get(k) or "") for k in ("q", "instruction", "generation_intent"))
+        # Guided V3 requests carry the instruction nested at
+        # mm_input.generation_intent.instruction (see
+        # app/application/mindmap_generation.py's graph.invoke state shape),
+        # not as a top-level state["instruction"]/state["generation_intent"] —
+        # reading only the top level here meant the marker was never found in
+        # a real guided job's state and this branch never fired.
+        generation_intent = (state.get("mm_input") or {}).get("generation_intent") or {}
+        text_blob = " ".join(str(v or "") for v in (
+            state.get("q"), state.get("instruction"), state.get("generation_intent"),
+            generation_intent.get("instruction"),
+        ))
         if FORCE_FAIL_MARKER in text_blob:
             if job_id:
                 try:
