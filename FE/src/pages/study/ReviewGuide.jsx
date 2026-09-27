@@ -2,10 +2,27 @@ import { useCallback, useEffect, useState } from "react";
 import { Link, useNavigate, useParams } from "react-router-dom";
 import StudyShell, { EmptyState } from "../../components/study/StudyShell";
 import SealMeter from "../../components/study/SealMeter";
+import {
+  DifficultyControl,
+  QuestionBuilderSummary,
+  QuestionCountControl,
+  QuestionTypeControl,
+} from "../../components/study/QuestionBuilder";
+import Modal from "../../components/ui/Modal";
 import { Icon } from "../../components/ui/Icon";
 import Spinner from "../../components/ui/Spinner";
 import { useStudyJob } from "../../hooks/useStudyJob";
 import { MASTERY_LABEL, moTaLoi, generatePractice, generateReviewPlan, getReviewPlan } from "../../utils/studyApi";
+
+// "Luyện ngay" smart defaults — byte-identical to the prior hardcoded
+// request (question_types intentionally OMITTED, exactly as before: BE's
+// cau_hinh_quiz() defaults an absent field to all question types, so leaving
+// it out here is what preserves that behavior, not naming all three).
+const PRACTICE_QUICK_DEFAULTS = { question_count: 5, difficulty: "easy" };
+// The Customize dialog needs an explicit starting value for every field
+// (it's a real controlled form) — mirrors PRACTICE_QUICK_DEFAULTS's effective
+// behavior (all three types allowed) rather than inventing a new default.
+const PRACTICE_CUSTOM_DEFAULTS = { question_count: 5, difficulty: "easy", question_types: ["multiple_choice", "true_false", "short_answer"] };
 
 export default function ReviewGuide() {
   const { attemptId } = useParams();
@@ -15,6 +32,7 @@ export default function ReviewGuide() {
   const [error, setError] = useState(null);
   const [busy, setBusy] = useState(false);
   const [practiceFor, setPracticeFor] = useState(null);
+  const [customizeItem, setCustomizeItem] = useState(null);
 
   const job = useStudyJob({
     onDone: (result) => {
@@ -54,19 +72,19 @@ export default function ReviewGuide() {
     }
   };
 
-  const practise = async (item) => {
+  // `config` defaults to the exact prior hardcoded body ("Luyện ngay"); the
+  // Customize dialog calls this with a user-built config instead. Either way
+  // it's the same job-start path, so job/error handling doesn't fork.
+  const practise = async (item, config = PRACTICE_QUICK_DEFAULTS) => {
     // Cờ đặt TRƯỚC await và nút đọc chính cờ này, không đọc `job.running`: `job.jobId`
     // chỉ có SAU khi 202 về, nên giữa lúc bấm và lúc đó nút vẫn bấm được và mỗi lần bấm
     // là một job luyện tập nữa tranh 1 slot LLM. Đúng lỗi Q1 vòng 7, chưa vá ở đây.
     if (practiceFor) return;
     setPracticeFor(item.review_item_id);
+    setCustomizeItem(null);
     setError(null);
     try {
-      const body = await generatePractice({
-        review_item_id: item.review_item_id,
-        question_count: 5,
-        difficulty: "easy",
-      });
+      const body = await generatePractice({ review_item_id: item.review_item_id, ...config });
       if (body?.job_id) job.start(body.job_id);
       else {
         setError("Máy chủ không trả về mã tiến trình nào. Thử lại.");
@@ -146,17 +164,27 @@ export default function ReviewGuide() {
                   busy={practiceFor === item.review_item_id}
                   disabled={Boolean(practiceFor) || job.running}
                   onPractise={() => practise(item)}
+                  onCustomize={() => setCustomizeItem(item)}
                 />
               ))}
             </ol>
           )}
         </>
       )}
+
+      {customizeItem && (
+        <PracticeCustomizeDialog
+          item={customizeItem}
+          submitting={practiceFor === customizeItem.review_item_id}
+          onClose={() => setCustomizeItem(null)}
+          onSubmit={(config) => practise(customizeItem, config)}
+        />
+      )}
     </StudyShell>
   );
 }
 
-function ReviewItem({ item, busy, disabled, onPractise }) {
+function ReviewItem({ item, busy, disabled, onPractise, onCustomize }) {
   return (
     <li className="surface-card">
       <div className="flex items-start gap-4">
@@ -197,11 +225,75 @@ function ReviewItem({ item, busy, disabled, onPractise }) {
             )}
             <button type="button" className="btn-seal text-small inline-flex items-center gap-1.5"
               disabled={disabled} onClick={onPractise}>
-              {busy ? <><Spinner size={12} /> Đang soạn…</> : <><Icon name="Zap" size={13} /> Luyện thêm 5 câu</>}
+              {busy ? <><Spinner size={12} /> Đang soạn…</> : <><Icon name="Zap" size={13} /> Luyện ngay (5 câu)</>}
+            </button>
+            <button type="button" className="btn-secondary text-small inline-flex items-center gap-1.5"
+              disabled={disabled} onClick={onCustomize}>
+              <Icon name="Sliders" size={13} /> Tùy chỉnh
             </button>
           </div>
         </div>
       </div>
     </li>
+  );
+}
+
+// Pre-filled with the SAME reusable Question Builder controls QuizSetup
+// uses. The weak topic / authoritative chunk source is fixed context, shown
+// read-only — the user tunes count/difficulty/types, never re-picks the
+// topic (that would let a client request questions from chunks outside the
+// review item's authoritative scope).
+function PracticeCustomizeDialog({ item, submitting, onClose, onSubmit }) {
+  const [count, setCount] = useState(PRACTICE_CUSTOM_DEFAULTS.question_count);
+  const [difficulty, setDifficulty] = useState(PRACTICE_CUSTOM_DEFAULTS.difficulty);
+  const [types, setTypes] = useState(PRACTICE_CUSTOM_DEFAULTS.question_types);
+  const [typeError, setTypeError] = useState(null);
+
+  const submit = () => {
+    if (!types.length) { setTypeError("Chọn ít nhất một dạng câu hỏi."); return; }
+    onSubmit({ question_count: count, difficulty, question_types: types });
+  };
+
+  return (
+    <Modal open title="Tùy chỉnh luyện tập" subtitle={item.topic} onClose={submitting ? undefined : onClose}
+      footer={
+        <div className="flex justify-end gap-2">
+          <button type="button" className="btn-secondary text-small" disabled={submitting} onClick={onClose}>Huỷ</button>
+          <button type="button" className="btn-seal text-small inline-flex items-center gap-1.5"
+            disabled={submitting} onClick={submit}>
+            {submitting ? <><Spinner size={13} /> Đang soạn…</> : <><Icon name="Zap" size={13} /> Tạo câu luyện tập</>}
+          </button>
+        </div>
+      }
+    >
+      <div className="flex flex-col gap-5 p-5">
+        <div className="surface-card !p-3 flex items-center gap-2 font-mono text-caption text-text-muted">
+          <Icon name="Quote" size={12} />
+          Nguồn: {item.chunk_ids?.length || 0} đoạn từ chủ đề "{item.topic}" — cố định, không đổi được ở đây.
+        </div>
+
+        <div className="flex flex-col gap-2">
+          <span className="font-mono text-metadata uppercase text-text-muted">Số câu</span>
+          <QuestionCountControl value={count} onChange={setCount} />
+        </div>
+
+        <div className="flex flex-col gap-2">
+          <span className="font-mono text-metadata uppercase text-text-muted">Độ khó</span>
+          <DifficultyControl value={difficulty} onChange={setDifficulty} />
+        </div>
+
+        <div className="flex flex-col gap-2">
+          <span className="font-mono text-metadata uppercase text-text-muted">Dạng câu hỏi</span>
+          <QuestionTypeControl value={types} onChange={(v) => { setTypeError(null); setTypes(v); }} />
+          {typeError && (
+            <span className="text-small flex items-center gap-1.5" style={{ color: "var(--err)" }}>
+              <Icon name="AlertCircle" size={14} /> {typeError}
+            </span>
+          )}
+        </div>
+
+        <QuestionBuilderSummary count={count} difficulty={difficulty} types={types} scopeLabel={`Chủ đề: ${item.topic}`} />
+      </div>
+    </Modal>
   );
 }

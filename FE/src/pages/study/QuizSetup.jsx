@@ -1,26 +1,22 @@
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useNavigate, useSearchParams } from "react-router-dom";
 import StudyShell from "../../components/study/StudyShell";
+import {
+  DifficultyControl,
+  QuestionBuilderSummary,
+  QuestionCountControl,
+  QuestionTypeControl,
+} from "../../components/study/QuestionBuilder";
 import { Icon } from "../../components/ui/Icon";
 import Spinner from "../../components/ui/Spinner";
 import { useStudyJob } from "../../hooks/useStudyJob";
 import {
-  QUESTION_TYPE_LABEL,
   generateQuiz,
   getDocument,
   listDocuments,
   listSections,
   moTaLoi,
 } from "../../utils/studyApi";
-
-const COUNTS = [5, 10, 15, 20];
-const DIFFICULTIES = [
-  ["mixed", "Trộn"],
-  ["easy", "Dễ"],
-  ["medium", "Trung bình"],
-  ["hard", "Khó"],
-];
-const TYPES = ["multiple_choice", "true_false", "short_answer"];
 
 export default function QuizSetup() {
   const navigate = useNavigate();
@@ -39,6 +35,11 @@ export default function QuizSetup() {
   const [sectionIds, setSectionIds] = useState([]);
   const [submitError, setSubmitError] = useState(null);
   const [submitting, setSubmitting] = useState(false);
+  // A ref, not just the `submitting` state: two rapid clicks in the same
+  // tick both dispatch onSubmit before React's first setSubmitting(true)
+  // commits, so a state-only guard lets both through (see GuidedMindmapDialog
+  // .jsx's submitStartedRef for the same fix). The ref mutates synchronously.
+  const submittingRef = useRef(false);
 
   const job = useStudyJob({
     onDone: (result) => {
@@ -80,9 +81,6 @@ export default function QuizSetup() {
 
   useEffect(() => { load(); }, [load]);
 
-  const toggleType = (t) =>
-    setTypes((prev) => (prev.includes(t) ? prev.filter((x) => x !== t) : [...prev, t]));
-
   const toggleSection = (id) =>
     setSectionIds((prev) => (prev.includes(id) ? prev.filter((x) => x !== id) : [...prev, id]));
 
@@ -97,8 +95,11 @@ export default function QuizSetup() {
     if (!types.length) return setSubmitError("Chọn ít nhất một dạng câu hỏi.");
     // Giữa lúc bấm và lúc 202 về, form không đổi gì — nên bấm thêm là phản xạ đúng của
     // người dùng, và mỗi lần bấm là một job LLM nữa. Máy chỉ có 1 slot: job thừa xếp
-    // hàng rồi chết với "LLM busy", kể cả khi quiz thật đã ra xong. Cờ đặt TRƯỚC await.
-    if (submitting) return;
+    // hàng rồi chết với "LLM busy", kể cả khi quiz thật đã ra xong. Cờ đặt TRƯỚC await,
+    // và trên REF (không chỉ state): hai click liên tiếp trong cùng một tick đều đọc
+    // `submitting` cũ trước khi setSubmitting(true) đầu tiên kịp commit.
+    if (submittingRef.current) return;
+    submittingRef.current = true;
     setSubmitting(true);
     try {
       const body = await generateQuiz({
@@ -115,6 +116,7 @@ export default function QuizSetup() {
     } catch (err) {
       setSubmitError(moTaLoi(err, "Không tạo được quiz."));
     } finally {
+      submittingRef.current = false;
       setSubmitting(false);
     }
   };
@@ -155,33 +157,15 @@ export default function QuizSetup() {
       ) : (
         <form onSubmit={onSubmit} className="flex flex-col gap-6">
           <Field label="Số câu">
-            <div className="flex flex-wrap gap-2">
-              {COUNTS.map((n) => (
-                <button key={n} type="button"
-                  className={`pill-tab ${count === n ? "pill-tab-active" : ""}`}
-                  onClick={() => setCount(n)}>{n} câu</button>
-              ))}
-            </div>
+            <QuestionCountControl value={count} onChange={setCount} />
           </Field>
 
           <Field label="Độ khó">
-            <div className="flex flex-wrap gap-2">
-              {DIFFICULTIES.map(([value, label]) => (
-                <button key={value} type="button"
-                  className={`pill-tab ${difficulty === value ? "pill-tab-active" : ""}`}
-                  onClick={() => setDifficulty(value)}>{label}</button>
-              ))}
-            </div>
+            <DifficultyControl value={difficulty} onChange={setDifficulty} />
           </Field>
 
           <Field label="Dạng câu hỏi" hint="Trả lời ngắn được chấm bằng AI nên mất thêm ít phút.">
-            <div className="flex flex-wrap gap-2">
-              {TYPES.map((t) => (
-                <button key={t} type="button"
-                  className={`pill-tab ${types.includes(t) ? "pill-tab-active" : ""}`}
-                  onClick={() => toggleType(t)}>{QUESTION_TYPE_LABEL[t]}</button>
-              ))}
-            </div>
+            <QuestionTypeControl value={types} onChange={setTypes} />
           </Field>
 
           {sections.length > 0 && (
@@ -207,6 +191,8 @@ export default function QuizSetup() {
             </Field>
           )}
 
+          <QuestionBuilderSummary count={count} difficulty={difficulty} types={types} scopeLabel={scopeLabel} />
+
           {submitError && (
             <div className="text-small flex items-center gap-1.5" style={{ color: "var(--err)" }}>
               <Icon name="AlertCircle" size={14} /> {submitError}
@@ -224,15 +210,20 @@ export default function QuizSetup() {
   );
 }
 
+// A plain <div>, not <label>: children include real labelable controls
+// (QuestionCountControl's custom-count <input>), and a <label> wrapping
+// multiple/foreign labelable descendants makes the browser treat the first
+// one as this wrapper's implicit target — clicking an unrelated preset pill
+// would silently steal focus onto that input.
 function Field({ label, hint, children }) {
   return (
-    <label className="flex flex-col gap-2">
+    <div className="flex flex-col gap-2">
       <span className="font-mono text-metadata uppercase text-text-muted">
         {label}
       </span>
       {children}
       {hint && <span className="text-small text-text-muted">{hint}</span>}
-    </label>
+    </div>
   );
 }
 

@@ -5381,3 +5381,47 @@ của job kia. Nếu không, kiểm tra `if:` của job được `needs` — n�
 job đang khai `needs`, thêm nó vào chắc chắn tạo cascade-skip sai cho đúng những PR mà
 `if:` của job hiện tại nói là NÊN chạy. Việc thêm `needs:` chỉ để "sắp thứ tự chạy" (không
 dùng artifact) phải kiểm lại `if:` hai bên trước, không thêm tùy ý.
+
+### `<input type="number" max="…">` hiển thị giá trị CHƯA kẹp — form submit im lặng không chạy
+
+Xây `QuestionCountControl` (Question Builder, tái dùng ở `QuizSetup` và practice
+Customize dialog, 2026-09-28): bản đầu `commit(raw)` gọi `onChange(kẹp(n))` đúng, nhưng
+`setDraft(raw)` lưu CHUỖI GỐC chưa kẹp làm giá trị hiển thị của input. Test tích hợp
+(submit thật qua `<form onSubmit>`, không phải gọi thẳng hàm) bắt được: gõ "500" với
+`max={50}` → React state `count` đúng là 50, nhưng DOM `<input>` vẫn hiển thị "500" —
+vi phạm `max` của chính nó, trình duyệt (và jsdom) CHẶN native form validation, sự kiện
+`submit` không bao giờ bắn, `onSubmit` không chạy, `generateQuiz` 0 lần gọi. Không lỗi,
+không thông báo, nút chỉ im lặng không làm gì — đúng kiểu lỗi "bấm mà tuyệt đối không có
+gì xảy ra" file này đã ghi nhận ở chỗ khác.
+
+**Fix:** `commit()` kẹp SỐ TRƯỚC, rồi dùng chính số đã kẹp cho CẢ `draft` (hiển thị) lẫn
+`onChange` (giá trị thật) — chỉ giữ chuỗi thô khi `parseInt` thất bại (ô đang rỗng/gõ dở),
+vì "" không vi phạm constraint validation.
+
+**Phòng ngừa:** input HTML có `min`/`max`/`pattern` riêng (không chỉ dựa vào validate ở
+tầng JS) mà tách "giá trị hiển thị" (draft/local state) khỏi "giá trị đã xử lý" (báo lên
+qua onChange) — luôn kẹp/chuẩn hoá TRƯỚC khi gán vào state hiển thị, không chỉ trước khi
+gọi callback. Test phải submit qua đường THẬT (`<form>` + click nút submit), không gọi
+thẳng handler — gọi thẳng bỏ qua đúng bước native constraint validation nơi lỗi này nằm.
+
+### Double-submit guard đọc `state`, không phải `ref` — hai click cùng tick đều lọt qua
+
+`QuizSetup.jsx`'s `onSubmit` gốc: `if (submitting) return; setSubmitting(true);` — cùng
+hình dạng bug `GuidedMindmapDialog.jsx` đã vá trước đó trong session này
+(`submitStartedRef`), nhưng KHÔNG được áp dụng lại ở đây khi `QuizSetup` được viết. Test
+tích hợp bấm nút submit HAI LẦN LIÊN TIẾP trong cùng một `act()` (mô phỏng double-click
+thật) bắt được: cả hai lần gọi `onSubmit` đều đọc `submitting === false` (React batch hai
+`setSubmitting(true)` lại, chưa commit giữa hai lần đọc) → `generateQuiz` bị gọi 2 lần cho
+một lần người dùng có ý định bấm — đúng lỗi máy chỉ có 1 slot LLM mà comment ngay phía
+trên dòng code đó đã cảnh báo, nhưng bảo vệ bằng `state` không đủ nhanh để chặn.
+
+**Fix:** thêm `submittingRef` (ref, không phải state) — đọc/ghi TRƯỚC `await`, cùng kỹ
+thuật `GuidedMindmapDialog.jsx` đã dùng.
+
+**Phòng ngừa:** bảo vệ "đừng gọi hai lần" cho một hành động async luôn cần một REF đọc/ghi
+đồng bộ, không phải `state` — `setState` không commit ngay trong cùng tick, nên hai lệnh
+gọi liên tiếp (double-click thật, hoặc test bấm 2 lần) đều thấy giá trị CŨ. Khi thêm một
+form submit mới có gọi API, chép lại đúng pattern `submitStartedRef`/`submittingRef` đã có
+sẵn trong repo thay vì viết lại bằng `state`. Test double-submit phải bấm 2 LẦN LIÊN TIẾP
+TRONG CÙNG MỘT tick (không `await` giữa hai lần bấm) — bấm rồi `await` rồi bấm lại không
+bao giờ bắt được lớp bug này.
