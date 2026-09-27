@@ -5350,3 +5350,34 @@ state, job payload, ...), luôn đối chiếu với NƠI THẬT dựng ra state
 `run_mindmap_job`'s `_langgraph_invoke(graph, {...})` call), không suy đoán tên field từ
 tên tham số phía trên (route, request body). Field trùng tên ở tầng ngoài (`q`) không
 có nghĩa field khác cũng ở tầng ngoài.
+
+### `e2e-critical` khai `needs:` vào hai job có `if:` HẸP HƠN chính nó — PR chỉ đổi FE bị cascade-skip cả E2E
+
+PR #39 (chỉ đổi file FE — `SidebarRight.jsx`, `MindElixirView.jsx`,
+`WorkspaceEmptyState.jsx`, ...) chạy CI (run 36322729264, 2026-09-27):
+`backend-integration-and-smoke` SKIP đúng (không có gì backend đổi — if của nó chỉ xét
+`backend`/`shared`). Nhưng `e2e-critical` cũng SKIP theo, dù `if:` của chính nó liệt
+`needs.detect-changes.outputs.frontend == 'true'` như một điều kiện ĐỦ để chạy. Kết quả:
+gate "e2e-critical = success" người dùng yêu cầu chưa từng thực sự thực thi cho PR này —
+`CI / required` vẫn báo success vì aggregator (`ci-success`) chỉ fail khi có
+`failure`/`cancelled`, coi `skipped` là ổn.
+
+**Nguyên nhân:** GitHub Actions — một job bị SKIP thì MỌI job có `needs:` trỏ tới nó
+cũng tự động SKIP, bất kể `if:` riêng của job phụ thuộc nói gì. `e2e-critical` khai
+`needs: [detect-changes, frontend-build, backend-integration-and-smoke]` nhưng đọc hết
+các step của nó (checkout riêng, pip install riêng, npm build riêng, migrate riêng —
+`BE/scripts/run_e2e_server.py` tự set DATABASE_URL) thì KHÔNG hề dùng artifact nào từ
+hai job đó — hai `needs` này thuần túy dư, không có lý do chức năng. `if:` của
+`e2e-critical` (chạy khi frontend HOẶC backend HOẶC shared đổi) rộng hơn if của cả hai
+job kia (mỗi job chỉ xét đúng một domain của nó), nên bất cứ PR chỉ đổi một phía
+(chỉ FE hoặc chỉ BE) đều khiến job còn lại SKIP rồi cascade-skip luôn E2E.
+
+**Fix:** bỏ `frontend-build` và `backend-integration-and-smoke` khỏi `needs:` của
+`e2e-critical`, chỉ giữ `detect-changes` (dùng cho `if:` của chính nó). Không đổi logic
+test, không đổi `if:`, không đổi job nào khác.
+
+**Phòng ngừa:** một `needs:` chỉ nên tồn tại nếu job hiện tại THẬT SỰ dùng artifact/output
+của job kia. Nếu không, kiểm tra `if:` của job được `needs` — nếu nó HẸP HƠN `if:` của
+job đang khai `needs`, thêm nó vào chắc chắn tạo cascade-skip sai cho đúng những PR mà
+`if:` của job hiện tại nói là NÊN chạy. Việc thêm `needs:` chỉ để "sắp thứ tự chạy" (không
+dùng artifact) phải kiểm lại `if:` hai bên trước, không thêm tùy ý.

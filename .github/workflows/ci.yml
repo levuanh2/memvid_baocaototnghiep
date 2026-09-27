@@ -349,7 +349,20 @@ jobs:
     name: E2E Critical Flows (Playwright)
     runs-on: ubuntu-latest
     timeout-minutes: 15
-    needs: [detect-changes, frontend-build, backend-integration-and-smoke]
+    # needs is intentionally just detect-changes (for its outputs, used
+    # below) -- NOT frontend-build/backend-integration-and-smoke. This job
+    # is fully self-contained (its own checkout/pip install/npm build/
+    # migrations below), so it never consumes either job's artifacts. Listing
+    # them anyway meant a FE-only change (frontend-build runs,
+    # backend-integration-and-smoke SKIPS since backend didn't change)
+    # cascade-skipped this job too, even though the if: below explicitly
+    # says it should run for a frontend-only change (2026-09-27, PR #39:
+    # a FE-only diff got e2e-critical=skipped despite frontend=='true').
+    # GitHub Actions skips a job whenever ANY of its needs was skipped,
+    # regardless of this job's own if: -- so a needs entry whose OWN if:
+    # is narrower than this job's is never safe to add without also
+    # narrowing this job's if: to match.
+    needs: [detect-changes]
     if: >
       github.ref == 'refs/heads/main' ||
       needs.detect-changes.outputs.frontend == 'true' ||
