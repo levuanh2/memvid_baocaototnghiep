@@ -5297,3 +5297,29 @@ hình/script chạy dưới Node (`playwright.config.js`, `scripts/*.mjs`, `e2e/
 **Phòng ngừa:** file mới chạy dưới Node (script CLI, config tool) luôn kiểm `npx eslint
 <file>` trước khi commit — `no-undef` trên `process`/`__dirname`/`require` là dấu hiệu
 file đó cần vào block `globals.node`, không phải dấu hiệu cần disable rule.
+
+### Guided dialog "Yêu cầu riêng" label không gắn với textarea — Playwright `getByLabel` treo tới hết test timeout
+
+`GuidedMindmapDialog.jsx` có `<label>Yêu cầu riêng...</label>` và `<textarea>` là hai
+phần tử SIBLING, không có `htmlFor`/`id` nối nhau, textarea cũng không nằm lồng trong
+label. Về accessible-name resolution, hai phần tử này KHÔNG liên kết — ảnh hưởng cả
+Playwright's `getByLabel` lẫn screen reader thật, không chỉ test.
+
+Hậu quả trong CI (`E2E Critical Flows`, run 36314116607, 2026-09-27): test "A -> B ->
+A -> B map switching" gọi `dialog.getByLabel(/Yêu cầu riêng/).fill(...)` — locator
+không bao giờ resolve, treo tới khi hết `Test timeout of 45000ms exceeded`, teardown
+đóng page giữa lúc đang chờ nên lỗi hiển thị ra là `locator.fill: Target page, context
+or browser has been closed` (triệu chứng, không phải nguyên nhân). Vì
+`test.describe.serial` có retry, thất bại này kéo theo chạy lại TOÀN BỘ file, và lần
+chạy lại lại bắt trúng "happy path" test giữa lúc đang poll job → báo thất bại thứ hai
+trông như không liên quan (`aria-selected` vẫn `false` sau 20s).
+
+**Fix:** thêm `htmlFor="guided-instruction"` vào `<label>` và `id="guided-instruction"`
+vào `<textarea>` (commit `bc92574`). Không đổi test timeout, không đổi cấu hình retry —
+gốc bệnh nằm ở markup, sửa test/CI-config sẽ không giải quyết được.
+
+**Phòng ngừa:** field nào dùng `<label>` + input riêng (không lồng nhau) đều PHẢI có
+`htmlFor`/`id` khớp cặp. Một lỗi accessible-name loại này thường lộ ra qua `getByLabel`
+treo vô thời hạn (không phải lỗi rõ ràng) — nếu một test Playwright bị "Test timeout
+exceeded" ở đúng bước `.fill()`/`.click()` trên `getByLabel(...)`, kiểm tra ngay
+markup label/input trước khi nghi ngờ timing hay backend.
