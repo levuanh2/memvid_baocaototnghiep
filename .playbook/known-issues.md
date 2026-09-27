@@ -5323,3 +5323,30 @@ gốc bệnh nằm ở markup, sửa test/CI-config sẽ không giải quyết �
 treo vô thời hạn (không phải lỗi rõ ràng) — nếu một test Playwright bị "Test timeout
 exceeded" ở đúng bước `.fill()`/`.click()` trên `getByLabel(...)`, kiểm tra ngay
 markup label/input trước khi nghi ngờ timing hay backend.
+
+### `run_e2e_server.py`'s force-fail mock đọc sai tầng state — `__E2E_FORCE_FAIL__` không bao giờ trúng cho job Guided thật
+
+Sau khi sửa lỗi label ở trên, `E2E Critical Flows` (run 36318766819, 2026-09-27) lộ ra
+lỗi thứ hai, KHÁC hẳn: test "Guided create failure surfaces a visible error" chờ 20s
+một banner lỗi (`/lỗi|thất bại|failed/i`) không bao giờ xuất hiện.
+
+`MockMindmapGraph.invoke` (`BE/scripts/run_e2e_server.py`) tìm marker bằng
+`state.get("instruction")` / `state.get("generation_intent")` ở TẦNG NGOÀI CÙNG của
+state. Nhưng state thật do `run_mindmap_job`
+(`BE/app/application/mindmap_generation.py` dòng ~62) dựng ra chỉ có
+`job_id/source_names/mm_input/content_hash/user_id/progress/current_node/error` — chữ
+`instruction` của Guided nằm lồng ở `mm_input["generation_intent"]["instruction"]`.
+Kết quả: `text_blob` luôn rỗng cho một job Guided thật, marker không bao giờ khớp, job
+luôn chạy xong `"done"` thay vì `"failed"` — banner lỗi phía FE vì vậy không bao giờ có
+gì để hiển thị.
+
+**Fix:** đọc thêm `(state.get("mm_input") or {}).get("generation_intent") or
+{}).get("instruction")` vào `text_blob` (commit `663e3a2`). Không đổi
+`FE/e2e/critical-flows.spec.js`, không đổi timeout — lỗi nằm ở mock đọc sai field, test
+đã viết đúng.
+
+**Phòng ngừa:** khi viết/sửa một double/mock đọc field từ một state dict lớn (LangGraph
+state, job payload, ...), luôn đối chiếu với NƠI THẬT dựng ra state đó (ở đây là
+`run_mindmap_job`'s `_langgraph_invoke(graph, {...})` call), không suy đoán tên field từ
+tên tham số phía trên (route, request body). Field trùng tên ở tầng ngoài (`q`) không
+có nghĩa field khác cũng ở tầng ngoài.
