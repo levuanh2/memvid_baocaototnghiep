@@ -113,10 +113,18 @@ test.describe.serial("critical flows", () => {
     await selectAllSources(page);
     const dialog = await openGuidedDialogFromHeader(page);
     await dialog.getByRole("button", { name: "Tạo sơ đồ" }).click();
+    // 2026-09-27: flaky under CI runner load -- 20s occasionally wasn't enough
+    // margin for the second guided job to finish and the library list to
+    // refresh, and describe.serial's whole-file retry-on-failure then reused
+    // a browser page that had already accumulated 8 tests' worth of real
+    // DOM/canvas state, which crashed on the LAST test in the file ("Target
+    // page, context or browser has been closed"). Widening the margin here
+    // avoids the retry (and therefore the crash) far more reliably than
+    // hardening the unrelated last test would.
     await expect(async () => {
       await page.getByRole("tab", { name: "Sơ đồ tư duy" }).click();
       expect(await page.getByRole("option").count()).toBeGreaterThan(1);
-    }).toPass({ timeout: 20_000, intervals: [1000] });
+    }).toPass({ timeout: 40_000, intervals: [1000] });
 
     const options = page.getByRole("option");
     const titleB = await options.first().locator("strong").innerText(); // newest first
