@@ -301,6 +301,32 @@ def test_practice_generate_bo_sung_dung_sau_khoa_truy_vet(be, client, monkeypatc
     assert config["scope"] == {"type": "full_document", "section_ids": []}
 
 
+def test_practice_generate_client_gui_count_do_kho_loai_cau_thi_toi_dung_job_khong_bi_ghi_de(
+        be, client, monkeypatch, bat):
+    """FE V1 (Question Builder): trước bản này, FE hardcode question_count=5,
+    difficulty="easy" cho practice và KHÔNG test nào từng gửi override qua route —
+    test bên trên chỉ khoá đường MẶC ĐỊNH. Route đã nhận `data` (whole request
+    body) và đi qua `cau_hinh_quiz(data)` giống hệt quiz chẩn đoán từ trước, nên
+    phần dưới lẽ ra đã đúng — bài test này CHỨNG MINH bằng cách gửi override
+    thật và đọc lại đúng config mà `day_job` nhận, không suy đoán từ code."""
+    _item_hop_le(monkeypatch)
+
+    client.post("/api/practice/generate", json={
+        "review_item_id": "ri1",
+        "question_count": 20,
+        "difficulty": "hard",
+        "question_types": ["multiple_choice", "short_answer"],
+    })
+    config = bat["enqueue"][0]["args"][2]
+
+    assert config["question_count"] == 20
+    assert config["difficulty"] == "hard"
+    assert config["question_types"] == ["multiple_choice", "short_answer"]
+    # Nguồn ngữ liệu (FR-11.2/11.4) vẫn phải là review item, KHÔNG bị override.
+    assert config["chunk_ids"] == ["c1", "c2"]
+    assert config["source_review_item_id"] == "ri1"
+
+
 def test_practice_generate_thieu_review_item_id_400(be, client, monkeypatch, bat):
     r = client.post("/api/practice/generate", json={})
     assert r.status_code == 400
