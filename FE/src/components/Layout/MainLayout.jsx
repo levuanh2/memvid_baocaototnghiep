@@ -658,6 +658,11 @@ export default function MainLayout({
             mindmapData={mindmapData}
             mindmapInitialLoading={libraries.mindMapInitialLoading}
             mindmapLoadError={libraries.mindMapLoadError}
+            mindmapCreating={libraries.mindMapActions?.creating}
+            mindmapJobLabel={libraries.mindMapActions?.jobLabel}
+            mindmapJobProgress={libraries.mindMapActions?.jobProgress}
+            mindmapJobError={libraries.mindMapActions?.jobError}
+            onRetryMindmap={libraries.mindMapActions?.onRetry}
             summaryData={summaryData}
             onSummaryContextChange={setSummaryContext}
             controller={mindMapController}

@@ -164,6 +164,11 @@ export default function SidebarRight({
   // PR#8 retry: context của lần chạy hỏng gần nhất ({sources, ...params}) —
   // null = không có lỗi cần retry. Set ở onError, clear khi chạy job mới.
   const [mindmapRetry, setMindmapRetry] = useState(null);
+  // P2 fix: the progress chip that used to show this text lived behind the
+  // permanently-dead `legacyInspectorSurfacesEnabled` flag, so a failed
+  // generation had no persistent visible error -- only an ephemeral toast.
+  // Rehomed into modalMapData/onMindmapLibraryChange instead of that flag.
+  const [mindmapJobError, setMindmapJobError] = useState(null);
   const [summaryRetry, setSummaryRetry] = useState(null);
   // PR#8 stall banner snooze ("Chờ tiếp"): timestamp lần dismiss gần nhất.
   const [stallDismissedAt, setStallDismissedAt] = useState({ mindmap: 0, summary: 0 });
@@ -262,6 +267,7 @@ export default function SidebarRight({
   const handleMindmapDone = useCallback(async (data, sourceList, { resumed = false, isRegenerate = false } = {}) => {
     clearActiveMindmapJob();
     if (isRegenerate) setMindmapGenerating(false);
+    setMindmapJobError(null);
     const hasNodes = (Array.isArray(data?.nodes) && data.nodes.length > 0) ||
       (Array.isArray(data?.diagram?.nodes) && data.diagram.nodes.length > 0);
     if (!hasNodes) {
@@ -298,9 +304,13 @@ export default function SidebarRight({
     clearActiveMindmapJob();
     if (isRegenerate) setMindmapGenerating(false);
     console.error("Mind Map Error:", err);
-    toast(err?.message ? `Không tạo được sơ đồ: ${err.message}` : "Không tạo được sơ đồ, kiểm tra console!", { type: "error" });
+    const message = err?.message || "Không tạo được sơ đồ, kiểm tra console!";
+    toast(err?.message ? `Không tạo được sơ đồ: ${err.message}` : message, { type: "error" });
     // PR#8: giữ context để hiện "Thử lại" — chỉ khi biết sources của lần chạy hỏng.
     setMindmapRetry(lastMindmapRunRef.current);
+    // Persisted (not just toasted) so it survives past the toast's own
+    // timeout -- shown in the generating banner / empty-state below.
+    setMindmapJobError(message);
   }, []);
 
   // Starts a fresh poller instance (Task 1's createMindmapPoller has no hard
@@ -414,6 +424,7 @@ export default function SidebarRight({
     // PR#8: chạy job mới = hết trạng thái lỗi cũ; nhớ params cho retry lần sau.
     lastMindmapRunRef.current = { sources: sourceList, force };
     setMindmapRetry(null);
+    setMindmapJobError(null);
     setLoading(true);
     setMindmapCancelNotice(false);
     cancelNoticeShownRef.current = false;
@@ -731,8 +742,16 @@ export default function SidebarRight({
   // reopened from the saved list), not just the live-generation preview.
   const modalMapData = useMemo(() => (showModalMap ? {
     ...showModalMap,
-    generating: mindmapGenerating,
+    // P2 fix: `mindmapGenerating` alone only ever turns true for the "Tạo
+    // lại" (force=true) path -- a genuinely NEW guided generation with a map
+    // already open left this banner off, the only visible surface being the
+    // (dead, legacyInspectorSurfacesEnabled) chip. `mindmapJobUi.running`
+    // covers both.
+    generating: mindmapGenerating || mindmapJobUi.running,
     progress: mindmapJobUi.progress,
+    jobLabel: mindmapJobUi.label,
+    jobError: mindmapJobError,
+    onRetryJob: canRetry(mindmapRetry) ? () => runMindmapGeneration(mindmapRetry.sources, { force: Boolean(mindmapRetry.force) }) : null,
     onCancel: handleCancelMindMap,
     onAskAbout: handleAskAbout,
     onAskDirect: handleAskDirect,
@@ -744,7 +763,11 @@ export default function SidebarRight({
     // PR#8: viewer báo dirty lên đây — handleRegenerateMindMap đọc ref này để
     // confirm trước khi "Tạo lại" thay thế bản đang sửa.
     onDirtyChange: (d) => { mindmapDirtyRef.current = Boolean(d); },
-  } : null), [showModalMap, mindMaps, loading, mindmapJobUi.running, mindmapGenerating, mindmapJobUi.progress, handleCancelMindMap, handleAskAbout, handleAskDirect, handleMindmapSaved, onCreateNewMindmap]);
+    // runMindmapGeneration (used by onRetryJob above) is a plain closure
+    // recreated every render, not memoized; including it in deps would just
+    // always be "changed", defeating this memo for no benefit.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  } : null), [showModalMap, mindMaps, loading, mindmapJobUi.running, mindmapJobUi.label, mindmapGenerating, mindmapJobUi.progress, mindmapJobError, mindmapRetry, handleCancelMindMap, handleAskAbout, handleAskDirect, handleMindmapSaved, onCreateNewMindmap]);
 
   // Workspace architecture — forward the SAME `modalMapData` a portal used to
   // consume, plus the two extra props MindElixirView takes directly
@@ -774,9 +797,19 @@ export default function SidebarRight({
         select: setShowModalMap,
         create: onCreateNewMindmap,
         creating: loading || mindmapJobUi.running,
+        // P2 fix: same job-status fields as modalMapData, for the case where
+        // no map is open yet (WorkspaceEmptyState) -- there's no viewer to
+        // put a banner into otherwise.
+        jobLabel: mindmapJobUi.label,
+        jobProgress: mindmapJobUi.progress,
+        jobError: mindmapJobError,
+        onRetry: canRetry(mindmapRetry) ? () => runMindmapGeneration(mindmapRetry.sources, { force: Boolean(mindmapRetry.force) }) : null,
       },
     });
-  }, [mindMaps, loading, mindmapJobUi.running, onCreateNewMindmap, onMindmapLibraryChange, initialLoading, loiTaiMindmap]);
+    // runMindmapGeneration (used by onRetry above) is a plain closure
+    // recreated every render, not memoized -- see modalMapData above.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [mindMaps, loading, mindmapJobUi.running, mindmapJobUi.label, mindmapJobUi.progress, mindmapJobError, mindmapRetry, onCreateNewMindmap, onMindmapLibraryChange, initialLoading, loiTaiMindmap]);
 
   useEffect(() => {
     onSummaryLibraryChange?.({

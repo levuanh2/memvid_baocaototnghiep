@@ -693,13 +693,16 @@ export default function MindElixirView({ data, onRegenerate, regenerating, contr
           )}
         </div>
       </div>
-      {/* Generating banner — nút Huỷ ngay trong toolbar */}
+      {/* Generating banner — nút Huỷ ngay trong toolbar. `jobLabel` (real
+          pipeline stage, e.g. "Dựng khung xương…") is preferred over the
+          generic fallback -- covers both "Tạo lại" and a fresh guided
+          generation (see modalMapData's `generating` in SidebarRight.jsx). */}
       {generating && (
         <div className="px-3 py-1.5 text-small flex items-center gap-2 border-b"
           style={{ color: "var(--text-secondary)", borderColor: "var(--border-color)", background: "var(--bg-elevated)" }}>
           <Spinner size={12} />
           <span>
-            Đang tạo lại sơ đồ…{typeof data?.progress === "number" ? ` (${data.progress}%)` : ""}
+            {data?.jobLabel || "Đang tạo sơ đồ…"}{typeof data?.progress === "number" ? ` (${data.progress}%)` : ""}
             {/* Honest mitigation: when the regenerate finishes, SidebarRight swaps
                 the record → this viewer re-inits and dirty edits are discarded.
                 Full prevention needs dirty-state plumbing to the parent (tracked
@@ -709,6 +712,21 @@ export default function MindElixirView({ data, onRegenerate, regenerating, contr
           {typeof data?.onCancel === "function" && (
             <button onClick={data.onCancel} className="underline" style={{ color: "var(--accent)" }}>
               Huỷ
+            </button>
+          )}
+        </div>
+      )}
+      {/* Failed banner — P2 fix: a failed generation used to have no
+          persistent visible surface at all (only a toast that disappears).
+          Never shown while a new attempt is already running. */}
+      {!generating && data?.jobError && (
+        <div className="px-3 py-1.5 text-small flex items-center gap-2 border-b"
+          style={{ color: "var(--warn)", borderColor: "var(--border-color)", background: "var(--bg-elevated)" }}>
+          <Icon name="TriangleAlert" size={13} />
+          <span className="flex-1">{data.jobError}</span>
+          {typeof data.onRetryJob === "function" && (
+            <button onClick={data.onRetryJob} className="underline" style={{ color: "var(--accent)" }}>
+              Thử lại
             </button>
           )}
         </div>
