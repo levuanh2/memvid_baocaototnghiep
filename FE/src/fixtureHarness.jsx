@@ -1,80 +1,9 @@
-// Export Studio fixture harness (Round 2, section 2) — DEV-ONLY, never
-// imported by the shipped app (a separate Vite HTML entry,
-// fixture-harness.html, not linked from index.html or any route). Renders
-// MindElixirView directly against a deterministic local fixture, with NO
-// backend/API call and NO auth: `data`/`controller` are built entirely in
-// this file, matching exactly what MindElixirView.jsx itself reads from
-// them (registerMindInstance/onNodeSelected/selected/sidecarRef — grepped
-// directly from the component, not guessed) and nothing else.
-//
-// This exists because the prior round's attempt to fixture-QA against the
-// real production API hit a CORS/connectivity wall from a local dev
-// origin — a deterministic, backend-free harness sidesteps that
-// entirely, per this round's explicit requirement.
-import { useCallback, useMemo, useRef, useState } from "react";
+// Export Studio fixture harness entry (Round 2, section 2) — DEV-ONLY,
+// never imported by the shipped app (a separate Vite HTML entry,
+// fixture-harness.html, not linked from index.html or any route). See
+// dev/FixtureHarnessApp.jsx for what actually renders and why.
 import ReactDOM from "react-dom/client";
-import MindElixirView from "./components/mindmap/MindElixirView";
-import { FIXTURE_MAP_A, FIXTURE_MAP_B, FIXTURE_COLLAPSED_NODE_IDS } from "./dev/mindmapFixtures";
+import FixtureHarnessApp from "./dev/FixtureHarnessApp";
 import "./index.css";
 
-const MAPS = [FIXTURE_MAP_A, FIXTURE_MAP_B];
-
-function useFixtureController() {
-  const mindRef = useRef(null);
-  const sidecarRef = useRef(new Map());
-  const [selected, setSelected] = useState(null);
-
-  const registerMindInstance = useCallback((mind, sidecar) => {
-    mindRef.current = mind;
-    sidecarRef.current = sidecar;
-    // Collapse the fixture's designated branches once, right after this
-    // specific mind-elixir instance/sidecar pair is (re)registered (covers
-    // both first mount and a later map switch/refresh) -- matches the
-    // "collapsed and expanded branches" fixture requirement without
-    // needing the record format to carry an `expanded` field (it can't --
-    // confirmed in mindElixirAdapter.js, which never sets one). Root node
-    // id is always `${mapId}-root` (see mindmapFixtures.js's buildMap).
-    const rootId = mind?.nodeData?.id || "";
-    const mapId = rootId.endsWith("-root") ? rootId.slice(0, -"-root".length) : rootId;
-    (FIXTURE_COLLAPSED_NODE_IDS[mapId] || []).forEach((id) => {
-      const topic = mind.findEle?.(id);
-      if (topic) mind.expandNode(topic, false);
-    });
-  }, []);
-
-  const onNodeSelected = useCallback((nodes) => {
-    const n = nodes?.[0];
-    if (!n) return;
-    const side = sidecarRef.current.get(n.id);
-    setSelected({ id: n.id, title: n.topic, note: side?.note || "", chunkRefs: side?.chunkRefs || [] });
-  }, []);
-
-  return { registerMindInstance, onNodeSelected, selected, sidecarRef };
-}
-
-function Harness() {
-  const controller = useFixtureController();
-  const [activeMapId, setActiveMapId] = useState(FIXTURE_MAP_A.id);
-  const [saveLog, setSaveLog] = useState([]);
-
-  const activeRecord = useMemo(() => MAPS.find((m) => m.id === activeMapId), [activeMapId]);
-
-  const data = useMemo(() => ({
-    ...activeRecord,
-    mindMaps: MAPS.map((m) => ({ id: m.id, title: m.title, sources: [] })),
-    onSelectMap: (m) => setActiveMapId(m.id),
-    onCreateNew: () => {},
-    // No backend PUT -- record the attempt locally so a test can assert
-    // "Save" was clicked without this harness making any network call.
-    onSaved: () => setSaveLog((l) => [...l, { at: Date.now(), mapId: activeMapId }]),
-    onDirtyChange: () => {},
-  }), [activeRecord, activeMapId]);
-
-  return (
-    <div style={{ height: "100vh", width: "100vw" }} data-testid="fixture-harness-root" data-save-log={JSON.stringify(saveLog)}>
-      <MindElixirView data={data} onRegenerate={() => {}} regenerating={false} controller={controller} />
-    </div>
-  );
-}
-
-ReactDOM.createRoot(document.getElementById("root")).render(<Harness />);
+ReactDOM.createRoot(document.getElementById("root")).render(<FixtureHarnessApp />);

@@ -428,7 +428,16 @@ export default function MindElixirView({ data, onRegenerate, regenerating, contr
     if (!wrap) return;
     let pan = null;
     const onDown = (e) => {
-      if (e.button !== 0 || e.target.closest("me-tpc, me-epd, .mm-floating-toolbar, .mm-legend, .mm-fullscreen-corner")) return;
+      // Round 2 real-browser find: without ".mm-selection-bar" here,
+      // setPointerCapture(wrap) below hijacks the CLICK that follows a
+      // pointerdown on the bar's own buttons — Chromium redirects the
+      // synthesized click's target to the captured element (`wrap`)
+      // instead of the button, so "Tiếp tục"/"Xóa chọn"/"Hủy" silently do
+      // nothing. jsdom doesn't model pointer-capture click redirection, so
+      // this was invisible to every jsdom-based test; only caught by
+      // driving a real Chromium instance (see e2e-fixture's multi-branch
+      // export spec).
+      if (e.button !== 0 || e.target.closest("me-tpc, me-epd, .mm-floating-toolbar, .mm-legend, .mm-fullscreen-corner, .mm-selection-bar")) return;
       pan = { x: e.clientX, y: e.clientY, id: e.pointerId };
       wrap.setPointerCapture?.(e.pointerId);
     };

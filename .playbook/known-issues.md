@@ -1,5 +1,44 @@
 # Known Issues
 
+## (ĐÃ SỬA 2026-09-28) MindElixirView's background-pan pointer capture hijacked clicks on the Export Studio selection bar
+
+`MindElixirView.jsx`'s background-pan `pointerdown` handler (added to make left-click-drag
+pan the canvas, working around a mind-elixir 5.13.0 internal bug — see that handler's own
+long comment) calls `wrap.setPointerCapture(e.pointerId)` for any pointerdown whose target
+doesn't match an exclusion list (`me-tpc, me-epd, .mm-floating-toolbar, .mm-legend,
+.mm-fullscreen-corner`). The Export Studio multi-branch selection bar (`.mm-selection-bar`,
+rendered as a descendant of the same pan-listening wrapper) was **not** in that list.
+
+Effect verified with real Chromium (Playwright against `FE/fixture-harness.html`, NOT
+jsdom): a `pointerdown` on the bar's "Tiếp tục"/"Xóa chọn"/"Hủy" buttons correctly hits the
+button, but Chromium then redirects the synthesized `click` that follows to the
+pointer-captured element (`wrap`) instead of the button — so the button's own `onClick`
+never fires. No error, no console warning; the UI just silently does nothing. Confirmed by
+instrumenting capture-phase `pointerdown`/`click` listeners on `document`: `pointerdown`
+logged the `<BUTTON>` as target, `click` logged the `.mm-canvas-wrap` `<DIV>` as target.
+
+**Root cause**: exclusion list incompleteness — a floating overlay added later
+(`.mm-selection-bar`, part of this round's multi-branch export work) was never added to the
+pan handler's target-exclusion selector.
+
+**Why no existing test caught it**: every prior test of the selection bar's buttons ran in
+jsdom (`MindElixirView.exportStudio.test.jsx`), and jsdom does not implement
+pointer-capture-based click-target redirection — clicks there always land on the literal
+button regardless of `setPointerCapture` calls. The behavior is Chromium-(and likely other
+real-browser-)specific, invisible without driving an actual browser.
+
+**Fix**: added `.mm-selection-bar` to the pan handler's exclusion selector
+(`MindElixirView.jsx`'s `onDown`).
+
+**Prevention**: any new floating/overlay UI rendered inside `canvasWrapRef` (toolbars,
+selection bars, context menus, drawers) MUST be added to that same pointerdown exclusion
+list, or its buttons will silently stop responding to clicks in a real browser while still
+appearing to work in every jsdom-based test. This class of bug is exactly why the round's
+own Section 10 mandate ("real files, real browser") exists — added a Playwright regression
+test (`FE/e2e-fixture/export-studio.spec.js`, "regression: selection-bar buttons are not
+hijacked by the canvas's background-pan pointer capture") against the real fixture harness
+to guard it going forward.
+
 ## Guided durable worker integration: annotations must be available at module import (2026-09-21)
 
 The first integration placed a typed dispatch helper above the `typing.Any` import
