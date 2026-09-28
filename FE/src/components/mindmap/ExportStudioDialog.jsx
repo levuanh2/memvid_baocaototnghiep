@@ -44,6 +44,10 @@ function resolveBackgroundColor(key) {
  * notes/citations/source-name/logo toggles) is also not implemented this
  * round — background variant, resolution scale, and "kèm quan hệ" are the
  * real, working subset; see the round's report.
+ *
+ * "Các nhánh được chọn" composes selected branches via an OFFSCREEN
+ * mind-elixir instance (mindmapImageExport.js's exportMindmapImageMultiBranch)
+ * — the live canvas is never touched.
  */
 export default function ExportStudioDialog({
   open, onClose, mind, title, selectedNodeId, selectedBranchIds, onRequestBranchSelection,
@@ -89,18 +93,8 @@ export default function ExportStudioDialog({
 
   const filename = sanitizeExportFilename(filenameOverride || title);
 
-  // Image formats (this round: PNG/JPEG/SVG) each capture ONE DOM element.
-  // "Toàn bộ"/"nhánh hiện tại"/"hiển thị" each have exactly one natural
-  // target element to capture. "Các nhánh được chọn" can have SEVERAL
-  // disjoint roots scattered across the canvas — capturing them as one
-  // image needs multi-region compositing, which isn't implemented this
-  // round (see the round's report). Blocking it here, with an honest
-  // message, rather than silently substituting the whole map for what the
-  // user actually selected — that would export the WRONG content, not
-  // just a missing feature.
-  const imageMultiRootUnsupported = scopeType === "selected_branches";
   const canAdvanceFromScope = scopeResult?.ok;
-  const canExport = scopeResult?.ok && !imageMultiRootUnsupported;
+  const canExport = scopeResult?.ok;
   const close = () => { if (!exporting) onClose?.(); };
 
   const runExport = async () => {
@@ -111,6 +105,7 @@ export default function ExportStudioDialog({
       const effectiveScopeType = visibleOnly && scopeType === "full" ? "visible" : scopeType;
       const info = await exportMindmapImage({
         mind, scopeType: effectiveScopeType, targetNodeId: selectedNodeId,
+        branchRootIds: selectedBranchIds ? [...selectedBranchIds] : [], visibleOnly,
         format, backgroundColor: resolveBackgroundColor(background), scale, title: filename,
       });
       setDone(info);
@@ -246,12 +241,6 @@ export default function ExportStudioDialog({
                 <span>{scopeLabel}{scopeResult?.ok ? ` · ${scopeResult.count} node${scopeResult.hidden ? ` · gồm ${scopeResult.hidden} node đang thu gọn` : ""}` : ""}</span>
                 <span>{format.toUpperCase()} · {BACKGROUNDS.find(([v]) => v === background)?.[1]} · {scale}×</span>
                 <span>{filename}-YYYYMMDD.{format === "jpeg" ? "jpg" : format}</span>
-              </div>
-            )}
-            {imageMultiRootUnsupported && !done && (
-              <div className="text-small flex items-center gap-1.5" style={{ color: "var(--warn)" }}>
-                <Icon name="TriangleAlert" size={14} />
-                Xuất ảnh cho nhiều nhánh rời rạc chưa được hỗ trợ ở bản này — dùng "Nhánh hiện tại" cho từng nhánh, hoặc chờ bản PDF/DOCX/XLSX (hỗ trợ nhiều nhánh trực tiếp).
               </div>
             )}
             {error && (

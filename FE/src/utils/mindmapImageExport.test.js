@@ -137,3 +137,195 @@ describe("exportMindmapImage", () => {
     expect(mind.nodeData.children[0].expanded).toBe(false); // still restored, not left force-expanded
   });
 });
+
+// Multi-branch fixture: c1 (left) has children c1a, c1b; c2 (right) has
+// child c2a; c3 (right) has child c3a which is COLLAPSED and hides c3a1.
+// Doc order is c1, c2, c3 — selection-order tests deliberately pass ids in
+// a different order to prove output order is document order, not click
+// order (mindmapExportScope.js's own contract).
+function makeMultiBranchMind() {
+  const el = document.createElement("div");
+  document.body.appendChild(el);
+  const mind = new MindElixir({ el, direction: MindElixir.SIDE, compact: true, editable: true, toolBar: false });
+  mind.init({
+    nodeData: {
+      id: "r", topic: "Root", expanded: true,
+      children: [
+        { id: "c1", topic: "C1", direction: 0, expanded: true, children: [
+          { id: "c1a", topic: "C1a", expanded: true, children: [] },
+          { id: "c1b", topic: "C1b", expanded: true, children: [] },
+        ] },
+        { id: "c2", topic: "C2", direction: 1, expanded: true, children: [
+          { id: "c2a", topic: "C2a", expanded: true, children: [] },
+        ] },
+        { id: "c3", topic: "C3", direction: 1, expanded: true, children: [
+          { id: "c3a", topic: "C3a", expanded: false, children: [
+            { id: "c3a1", topic: "C3a1", expanded: true, children: [] },
+          ] },
+        ] },
+      ],
+    },
+  });
+  return mind;
+}
+
+function spyCtor(RealCtor) {
+  const spy = vi.fn(function ctor(...args) { return new RealCtor(...args); });
+  spy.SIDE = RealCtor.SIDE;
+  return spy;
+}
+
+/** node ids present in a captured target, as mind-elixir's own "me"+id dataset convention (see the existing 'current_branch' test above). */
+function capturedNodeIds(target) {
+  return [...target.querySelectorAll("me-tpc[data-nodeid]")].map((el) => el.dataset.nodeid);
+}
+
+describe("exportMindmapImage — scopeType: selected_branches (multi-branch)", () => {
+  it("two sibling branches: builds an offscreen instance and captures both subtrees, not the live map", async () => {
+    mind = makeMultiBranchMind();
+    const result = fakeResult();
+    const snapdom = vi.fn().mockResolvedValue(result);
+    const MindElixirCtor = spyCtor(MindElixir);
+    await exportMindmapImage({
+      mind, scopeType: "selected_branches", branchRootIds: ["c1", "c2"],
+      format: "png", title: "T", snapdom, settleMs: 0, MindElixirCtor,
+    });
+    expect(MindElixirCtor).toHaveBeenCalledTimes(1);
+    const target = snapdom.mock.calls[0][0];
+    expect(target).not.toBe(mind.map);
+    const ids = capturedNodeIds(target);
+    expect(ids).toEqual(expect.arrayContaining(["mec1", "mec1a", "mec1b", "mec2", "mec2a"]));
+    expect(ids).not.toContain("mec3");
+  });
+
+  it("branches from opposite sides (direction 0 and 1) both preserved in the clone", async () => {
+    mind = makeMultiBranchMind();
+    const result = fakeResult();
+    const snapdom = vi.fn().mockResolvedValue(result);
+    const MindElixirCtor = spyCtor(MindElixir);
+    await exportMindmapImage({
+      mind, scopeType: "selected_branches", branchRootIds: ["c1", "c2"],
+      format: "png", title: "T", snapdom, settleMs: 0, MindElixirCtor,
+    });
+    const target = snapdom.mock.calls[0][0];
+    const ids = capturedNodeIds(target);
+    expect(ids).toContain("mec1");
+    expect(ids).toContain("mec2");
+  });
+
+  it("parent+child selection dedupes to the parent and falls back to the single-branch path (no offscreen instance)", async () => {
+    mind = makeMultiBranchMind();
+    const result = fakeResult();
+    const snapdom = vi.fn().mockResolvedValue(result);
+    const MindElixirCtor = spyCtor(MindElixir);
+    await exportMindmapImage({
+      mind, scopeType: "selected_branches", branchRootIds: ["c1a", "c1"],
+      format: "png", title: "T", snapdom, settleMs: 0, MindElixirCtor,
+    });
+    expect(MindElixirCtor).not.toHaveBeenCalled();
+    const target = snapdom.mock.calls[0][0];
+    expect(target.tagName).toBe("ME-WRAPPER");
+    expect(target.querySelector("me-tpc")?.dataset.nodeid).toBe("mec1");
+  });
+
+  it("three selected branches all appear in the composed capture", async () => {
+    mind = makeMultiBranchMind();
+    const result = fakeResult();
+    const snapdom = vi.fn().mockResolvedValue(result);
+    const MindElixirCtor = spyCtor(MindElixir);
+    await exportMindmapImage({
+      mind, scopeType: "selected_branches", branchRootIds: ["c1", "c2", "c3"],
+      format: "png", title: "T", snapdom, settleMs: 0, MindElixirCtor,
+    });
+    const ids = capturedNodeIds(snapdom.mock.calls[0][0]);
+    expect(ids).toEqual(expect.arrayContaining(["mec1", "mec2", "mec3"]));
+  });
+
+  it("a single selected branch falls back to ordinary single-branch export behavior", async () => {
+    mind = makeMultiBranchMind();
+    const result = fakeResult();
+    const snapdom = vi.fn().mockResolvedValue(result);
+    const MindElixirCtor = spyCtor(MindElixir);
+    await exportMindmapImage({
+      mind, scopeType: "selected_branches", branchRootIds: ["c2"],
+      format: "png", title: "T", snapdom, settleMs: 0, MindElixirCtor,
+    });
+    expect(MindElixirCtor).not.toHaveBeenCalled();
+    const target = snapdom.mock.calls[0][0];
+    expect(target.querySelector("me-tpc")?.dataset.nodeid).toBe("mec2");
+  });
+
+  it("invalid/cross-map node ids reject instead of silently exporting a partial selection", async () => {
+    mind = makeMultiBranchMind();
+    const snapdom = vi.fn();
+    await expect(exportMindmapImage({
+      mind, scopeType: "selected_branches", branchRootIds: ["c1", "does-not-exist"],
+      format: "png", title: "T", snapdom, settleMs: 0,
+    })).rejects.toThrow();
+    expect(snapdom).not.toHaveBeenCalled();
+  });
+
+  it("selection order different from document order still composes in document order", async () => {
+    mind = makeMultiBranchMind();
+    const result = fakeResult();
+    const snapdom = vi.fn().mockResolvedValue(result);
+    const MindElixirCtor = spyCtor(MindElixir);
+    // clicked c3 first, then c1 — document order is c1, c2... c3 last.
+    await exportMindmapImage({
+      mind, scopeType: "selected_branches", branchRootIds: ["c3", "c1"],
+      format: "png", title: "T", snapdom, settleMs: 0, MindElixirCtor,
+    });
+    const ctorCall = MindElixirCtor.mock.calls[0][0];
+    // The offscreen instance is init'd separately from construction — assert
+    // via the captured target's DOM order instead, which reflects render
+    // order of virtualRoot.children (built directly from the resolver's
+    // ordered rootIds, not the caller's array order).
+    expect(ctorCall).toBeTruthy();
+    const target = snapdom.mock.calls[0][0];
+    const order = capturedNodeIds(target);
+    expect(order.indexOf("mec1")).toBeLessThan(order.indexOf("mec3"));
+  });
+
+  it("collapsed descendants are included by default (image export ignores current collapse state)", async () => {
+    mind = makeMultiBranchMind();
+    const result = fakeResult();
+    const snapdom = vi.fn().mockResolvedValue(result);
+    const MindElixirCtor = spyCtor(MindElixir);
+    await exportMindmapImage({
+      mind, scopeType: "selected_branches", branchRootIds: ["c3", "c1"],
+      format: "png", title: "T", snapdom, settleMs: 0, MindElixirCtor,
+    });
+    const ids = capturedNodeIds(snapdom.mock.calls[0][0]);
+    expect(ids).toContain("mec3a1"); // c3a is collapsed but its child is exported anyway
+  });
+
+  it("visibleOnly excludes descendants hidden by a collapsed ancestor", async () => {
+    mind = makeMultiBranchMind();
+    const result = fakeResult();
+    const snapdom = vi.fn().mockResolvedValue(result);
+    const MindElixirCtor = spyCtor(MindElixir);
+    await exportMindmapImage({
+      mind, scopeType: "selected_branches", branchRootIds: ["c3", "c1"],
+      visibleOnly: true,
+      format: "png", title: "T", snapdom, settleMs: 0, MindElixirCtor,
+    });
+    const ids = capturedNodeIds(snapdom.mock.calls[0][0]);
+    expect(ids).toContain("mec3a"); // c3a itself still visible
+    expect(ids).not.toContain("mec3a1"); // hidden by c3a's own collapse
+  });
+
+  it("live map is never mutated and the offscreen container is removed after export", async () => {
+    mind = makeMultiBranchMind();
+    const result = fakeResult();
+    const snapdom = vi.fn().mockResolvedValue(result);
+    const MindElixirCtor = spyCtor(MindElixir);
+    const bodyChildrenBefore = document.body.childElementCount;
+    const liveExpandedBefore = mind.nodeData.children[2].children[0].expanded; // c3a
+    await exportMindmapImage({
+      mind, scopeType: "selected_branches", branchRootIds: ["c1", "c3"],
+      format: "png", title: "T", snapdom, settleMs: 0, MindElixirCtor,
+    });
+    expect(document.body.childElementCount).toBe(bodyChildrenBefore);
+    expect(mind.nodeData.children[2].children[0].expanded).toBe(liveExpandedBefore);
+  });
+});

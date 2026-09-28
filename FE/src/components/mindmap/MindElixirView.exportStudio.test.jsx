@@ -120,7 +120,7 @@ describe("MindElixirView Export Studio", () => {
     expect(dialog.textContent).toContain("Chưa chọn nhánh nào"); // selection was cleared
   });
 
-  it("multi-branch export is explicitly blocked with a message, not silently exported as the whole map", async () => {
+  it("multi-branch export is a real, enabled path (no longer blocked) once 2+ branches are selected", async () => {
     await render(makeController());
     await act(async () => { container.querySelector('[aria-label="Xuất sơ đồ"]').click(); });
     await act(async () => { document.body.querySelector('input[value="selected_branches"]').click(); });
@@ -128,7 +128,9 @@ describe("MindElixirView Export Studio", () => {
       [...document.body.querySelectorAll("button")].find((b) => b.textContent.includes("Chọn nhánh trên sơ đồ")).click();
     });
     const s1Tpc = [...container.querySelectorAll("me-tpc")].find((t) => t.nodeObj?.id === "s1");
+    const s2Tpc = [...container.querySelectorAll("me-tpc")].find((t) => t.nodeObj?.id === "s2");
     await act(async () => { s1Tpc.dispatchEvent(new MouseEvent("click", { bubbles: true })); });
+    await act(async () => { s2Tpc.dispatchEvent(new MouseEvent("click", { bubbles: true })); });
     const continueBtn = [...container.querySelectorAll(".mm-selection-bar button")].find((b) => b.textContent === "Tiếp tục");
     await act(async () => { continueBtn.click(); });
 
@@ -138,8 +140,8 @@ describe("MindElixirView Export Studio", () => {
       await act(async () => { nextBtn.click(); });
     }
     const dialog = document.body.querySelector('[role="dialog"]');
-    expect(dialog.textContent).toContain("chưa được hỗ trợ");
+    expect(dialog.textContent).not.toContain("chưa được hỗ trợ");
     const exportBtn = [...dialog.querySelectorAll("button")].find((b) => b.textContent.includes("Xuất"));
-    expect(exportBtn.disabled).toBe(true);
+    expect(exportBtn.disabled).toBe(false);
   });
 });
