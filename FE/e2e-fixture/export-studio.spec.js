@@ -164,6 +164,45 @@ test.describe("Export Studio — fixture harness, real files", () => {
     expect(svgText).not.toMatch(/mm-export-toolbar|mm-selection-bar|Xuất sơ đồ/);
   });
 
+  test("appearance: 'Trình bày' preset (legend + branding + monochrome/custom-palette color) actually changes the exported SVG markup", async ({ page }) => {
+    await openExportStudio(page);
+    await chooseScope(page, "full");
+    await clickNext(page); // -> format step
+    await chooseFormat(page, "svg");
+    await clickNext(page); // -> appearance step
+    await page.getByRole("button", { name: "Trình bày" }).click(); // presentation preset
+    await clickNext(page); // -> preview step
+    const filePath = await exportAndSave(page, "preset-presentation-svg");
+
+    const svgText = fs.readFileSync(filePath, "utf8");
+    expect(svgText).not.toMatch(/NaN|undefined|Infinity/);
+    // Branding overlay text, real output of applyTargetAppearance's overlay.
+    expect(svgText).toContain("StudyMap");
+    // Legend overlay lists each top-level branch's own topic text.
+    expect(svgText).toContain("Kiến trúc hệ thống");
+  });
+
+  test("appearance: font change (serif) and spacing change (compact) do not corrupt the exported SVG geometry", async ({ page }) => {
+    await openExportStudio(page);
+    await chooseScope(page, "full");
+    await clickNext(page);
+    await chooseFormat(page, "svg");
+    await clickNext(page); // -> appearance step
+    await page.getByRole("button", { name: "Serif (Spectral)" }).click();
+    await page.getByRole("button", { name: "Gọn" }).click(); // spacing: compact
+    await clickNext(page);
+    const filePath = await exportAndSave(page, "appearance-font-spacing-svg");
+
+    const svgText = fs.readFileSync(filePath, "utf8");
+    expect(svgText).not.toMatch(/NaN|undefined|Infinity/);
+    const viewBoxMatch = svgText.match(/viewBox="([\d.\s-]+)"/);
+    expect(viewBoxMatch).toBeTruthy();
+    const [, , vbw, vbh] = viewBoxMatch[1].trim().split(/\s+/).map(Number);
+    expect(vbw).toBeGreaterThan(0);
+    expect(vbh).toBeGreaterThan(0);
+    expect(svgText).toContain("Kiến trúc hệ thống");
+  });
+
   test("SVG: branch-only scope includes the selected branch's label and excludes an unselected branch's label", async ({ page }) => {
     const s1Id = `${MAP_A_ID}-m0`; // "Kiến trúc hệ thống"
     const s2Id = `${MAP_A_ID}-m1`; // "Bảo mật & xác thực" — deliberately NOT selected

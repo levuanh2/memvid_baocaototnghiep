@@ -314,6 +314,52 @@ describe("exportMindmapImage — scopeType: selected_branches (multi-branch)", (
     expect(ids).not.toContain("mec3a1"); // hidden by c3a's own collapse
   });
 
+  it("appearance: font/spacing changes on 'current_branch' scope resolve target AFTER relayout (no stale/detached element)", async () => {
+    mind = makeMultiBranchMind();
+    const result = fakeResult();
+    let capturedTarget = null;
+    const snapdom = vi.fn(async (target) => { capturedTarget = target; return result; });
+    await exportMindmapImage({
+      mind, scopeType: "current_branch", targetNodeId: "c1",
+      appearance: { font: "serif", branchColorMode: "keep", spacing: "compact", connectorThickness: "normal", content: { relations: true, citations: true, legend: false, branding: false } },
+      format: "png", title: "T", snapdom, settleMs: 0,
+    });
+    // Same structural-correctness assertion the pre-existing 'current_branch'
+    // capture test uses (see this file's other test on why: layout() can
+    // swap DOM node identity, so identity/attachment isn't the meaningful
+    // check here — real attachment end-to-end is covered by the Playwright
+    // fixture-harness suite, e2e-fixture/export-studio.spec.js).
+    expect(capturedTarget.tagName).toBe("ME-WRAPPER");
+    expect(capturedTarget.querySelector("me-tpc")?.dataset.nodeid).toBe("mec1");
+  });
+
+  it("appearance: monochrome branch color is restored on the live tree after a 'full' scope export", async () => {
+    mind = makeMultiBranchMind();
+    const result = fakeResult();
+    const snapdom = vi.fn().mockResolvedValue(result);
+    const before = mind.nodeData.children.map((c) => c.branchColor);
+    await exportMindmapImage({
+      mind, scopeType: "full",
+      appearance: { font: "canvas", branchColorMode: "monochrome", spacing: "normal", connectorThickness: "normal", content: { relations: true, citations: true, legend: false, branding: false } },
+      format: "png", title: "T", snapdom, settleMs: 0,
+    });
+    expect(mind.nodeData.children.map((c) => c.branchColor)).toEqual(before);
+  });
+
+  it("appearance: legend content option adds an overlay to the captured multi-branch target", async () => {
+    mind = makeMultiBranchMind();
+    const result = fakeResult();
+    let capturedTarget = null;
+    const snapdom = vi.fn(async (target) => { capturedTarget = target; return result; });
+    const MindElixirCtor = spyCtor(MindElixir);
+    await exportMindmapImage({
+      mind, scopeType: "selected_branches", branchRootIds: ["c1", "c2"],
+      appearance: { font: "canvas", branchColorMode: "keep", spacing: "normal", connectorThickness: "normal", content: { relations: true, citations: true, legend: true, branding: false } },
+      format: "png", title: "T", snapdom, settleMs: 0, MindElixirCtor,
+    });
+    expect(capturedTarget.querySelector(".mm-export-overlay")).toBeTruthy();
+  });
+
   it("live map is never mutated and the offscreen container is removed after export", async () => {
     mind = makeMultiBranchMind();
     const result = fakeResult();

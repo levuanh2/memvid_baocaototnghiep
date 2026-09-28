@@ -23,6 +23,7 @@ import RealMindElixir from "mind-elixir";
 import { THEME } from "../components/mindmap/mindElixirTheme";
 import { resolveExportScope } from "./mindmapExportScope";
 import { exportFilenameFor } from "./mindmapExportFilename";
+import { DEFAULT_APPEARANCE, applyContainerAppearance, applyTargetAppearance, needsRelayout as appearanceNeedsRelayout } from "./mindmapExportAppearance";
 
 function snapshotExpanded(nodeObj, into) {
   into.set(nodeObj.id, nodeObj.expanded);
@@ -44,9 +45,48 @@ function subtreeElementFor(mind, nodeId) {
   return topic?.closest("me-wrapper") || mind.map;
 }
 
+/**
+ * A REAL (not fabricated) size estimate for the Export Studio preview
+ * summary — reads actual `getBoundingClientRect()`s of the live-rendered
+ * elements the current selection maps to, scaled by the chosen resolution.
+ * It's an ESTIMATE, not the final size (force-expand/appearance changes
+ * made during the real export can shift it slightly), which is why callers
+ * should label it "≈". Returns null when nothing is measurable (e.g. jsdom,
+ * which has no real layout engine and always reports zero-size rects —
+ * real-browser measurement is covered by the Playwright fixture-harness
+ * suite, not this function's own unit tests).
+ */
+export function estimateExportDimensions({ mind, scopeType, targetNodeId, branchRootIds, scale = 2 }) {
+  if (!mind?.map) return null;
+
+  let rects = [];
+  if (scopeType === "selected_branches" && branchRootIds?.length) {
+    rects = branchRootIds
+      .map((id) => subtreeElementFor(mind, id)?.getBoundingClientRect())
+      .filter(Boolean);
+  } else if (scopeType === "current_branch" && targetNodeId) {
+    const r = subtreeElementFor(mind, targetNodeId)?.getBoundingClientRect();
+    if (r) rects = [r];
+  } else {
+    const r = mind.map.getBoundingClientRect();
+    rects = [r];
+  }
+
+  if (!rects.length) return null;
+  const left = Math.min(...rects.map((r) => r.left));
+  const top = Math.min(...rects.map((r) => r.top));
+  const right = Math.max(...rects.map((r) => r.right));
+  const bottom = Math.max(...rects.map((r) => r.bottom));
+  const width = Math.round((right - left) * scale);
+  const height = Math.round((bottom - top) * scale);
+  if (!width || !height) return null; // jsdom / not-yet-laid-out — nothing honest to show
+  return { width, height };
+}
+
 export async function exportMindmapImage({
   mind, scopeType, targetNodeId, branchRootIds, includeDescendants = true, visibleOnly = false,
   format, backgroundColor, scale = 2, quality = 1, title,
+  appearance = DEFAULT_APPEARANCE,
   snapdom = realSnapdom, settleMs = 30, MindElixirCtor = RealMindElixir,
 }) {
   if (!mind?.map) throw new Error("Mind Elixir chưa sẵn sàng.");
@@ -54,7 +94,7 @@ export async function exportMindmapImage({
   if (scopeType === "selected_branches") {
     return exportMindmapImageMultiBranch({
       mind, rootIds: branchRootIds, includeDescendants, visibleOnly,
-      format, backgroundColor, scale, quality, title, snapdom, settleMs, MindElixirCtor,
+      format, backgroundColor, scale, quality, title, appearance, snapdom, settleMs, MindElixirCtor,
     });
   }
 
@@ -66,25 +106,44 @@ export async function exportMindmapImage({
   const subtreeRoot = needsForceExpand
     ? (scopeType === "full" ? mind.nodeData : mind.findEle?.(effectiveTargetId)?.nodeObj)
     : null;
+  const needsLayout = needsForceExpand || appearanceNeedsRelayout(appearance);
 
+  // Container-level appearance (font/spacing/branch color) is safe to apply
+  // up front — `mind.container` itself survives a relayout. Target-level
+  // appearance (style class/relations/overlay) is applied further down,
+  // AFTER `target` is (re-)resolved post-relayout: for "current_branch",
+  // force-expand's layout() rebuilds the branch's DOM wholesale, so a
+  // `target` captured before that would be a stale, detached element (see
+  // this file's other tests for the same "resolve target after force-
+  // expand" rule).
+  const restoreContainerAppearance = applyContainerAppearance({ mind, appearance });
   const snapshot = new Map();
-  if (needsForceExpand && subtreeRoot) {
-    snapshotExpanded(subtreeRoot, snapshot);
-    forceExpandAll(subtreeRoot);
-    mind.layout?.();
-    mind.linkDiv?.();
-    if (settleMs > 0) await new Promise((r) => setTimeout(r, settleMs));
-  }
-
+  let restoreTargetAppearance = () => {};
   try {
+    if (needsForceExpand && subtreeRoot) {
+      snapshotExpanded(subtreeRoot, snapshot);
+      forceExpandAll(subtreeRoot);
+    }
+    if (needsLayout) {
+      mind.layout?.();
+      mind.linkDiv?.();
+      if (settleMs > 0) await new Promise((r) => setTimeout(r, settleMs));
+    }
+
     const target = scopeType === "current_branch" ? subtreeElementFor(mind, effectiveTargetId) : mind.map;
+    restoreTargetAppearance = applyTargetAppearance({ mind, target, appearance });
+
     const result = await snapdom(target, { backgroundColor, scale, quality });
     const filename = exportFilenameFor(title, format === "jpeg" ? "jpg" : format);
     await result.download({ format, filename, quality });
     return { filename };
   } finally {
+    restoreTargetAppearance();
+    restoreContainerAppearance();
     if (needsForceExpand && subtreeRoot) {
       restoreExpanded(subtreeRoot, snapshot);
+    }
+    if (needsLayout) {
       mind.layout?.();
       mind.linkDiv?.();
     }
@@ -138,7 +197,7 @@ function indexById(nodeData) {
  */
 async function exportMindmapImageMultiBranch({
   mind, rootIds, includeDescendants, visibleOnly,
-  format, backgroundColor, scale, quality, title, snapdom, settleMs, MindElixirCtor,
+  format, backgroundColor, scale, quality, title, appearance, snapdom, settleMs, MindElixirCtor,
 }) {
   if (!rootIds?.length) throw new Error("Chưa chọn nhánh để xuất.");
 
@@ -150,7 +209,7 @@ async function exportMindmapImageMultiBranch({
   if (orderedRootIds.length === 1) {
     return exportMindmapImage({
       mind, scopeType: "current_branch", targetNodeId: orderedRootIds[0],
-      format, backgroundColor, scale, quality, title, snapdom, settleMs, MindElixirCtor,
+      format, backgroundColor, scale, quality, title, appearance, snapdom, settleMs, MindElixirCtor,
     });
   }
 
@@ -184,6 +243,13 @@ async function exportMindmapImageMultiBranch({
       editable: false, contextMenu: false, toolBar: false, theme: THEME,
     });
     offscreenMind.init({ nodeData: virtualRoot, arrows: [] });
+    // Throwaway instance, destroyed right after capture — no restore()
+    // needed (unlike the live-canvas path), so appearance is applied
+    // directly rather than through the snapshot/restore functions.
+    applyContainerAppearance({ mind: offscreenMind, appearance });
+    offscreenMind.layout?.();
+    offscreenMind.linkDiv?.();
+    applyTargetAppearance({ mind: offscreenMind, target: offscreenMind.map, appearance });
     offscreenMind.scaleFit?.(); // this THROWAWAY instance's own viewport — never the live one
     if (settleMs > 0) await new Promise((r) => setTimeout(r, settleMs));
 

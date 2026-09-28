@@ -6,8 +6,9 @@ import {
   resolveExportScope, countIncluded, countHiddenIncluded,
   UnknownNodeIdError, NoSelectionError,
 } from "../../utils/mindmapExportScope";
-import { exportMindmapImage } from "../../utils/mindmapImageExport";
+import { exportMindmapImage, estimateExportDimensions } from "../../utils/mindmapImageExport";
 import { sanitizeExportFilename } from "../../utils/mindmapExportFilename";
+import { PRESETS, DEFAULT_APPEARANCE } from "../../utils/mindmapExportAppearance";
 
 const STEPS = ["Phạm vi", "Định dạng", "Giao diện", "Xem trước"];
 
@@ -22,32 +23,46 @@ const BACKGROUNDS = [
   ["white", "Trắng"],
   ["dark", "Tối"],
   ["transparent", "Trong suốt"],
+  ["custom", "Tuỳ chỉnh"],
 ];
 
 const BACKGROUND_COLOR = { white: "#FFFFFF", dark: "#15171C", transparent: "transparent" };
 
-function resolveBackgroundColor(key) {
+function resolveBackgroundColor(key, customColor) {
   if (key === "canvas") {
     return getComputedStyle(document.documentElement).getPropertyValue("--bg-base").trim() || "#ECE7DB";
   }
+  if (key === "custom") return customColor || "#FFFFFF";
   return BACKGROUND_COLOR[key] || "#FFFFFF";
 }
 
+const PRESET_OPTIONS = [
+  ["canvas", "Giống canvas", PRESETS.canvas],
+  ["study", "Tài liệu học tập", PRESETS.study],
+  ["minimal", "Tối giản", PRESETS.minimal],
+  ["presentation", "Trình bày", PRESETS.presentation],
+];
+
+const FONT_OPTIONS = [["canvas", "Giống canvas"], ["sans", "Sans (Inter)"], ["serif", "Serif (Spectral)"]];
+const BRANCH_COLOR_OPTIONS = [["keep", "Giữ nguyên"], ["monochrome", "Đơn sắc"], ["customPalette", "Bảng màu riêng"]];
+const SPACING_OPTIONS = [["compact", "Gọn"], ["normal", "Vừa"], ["spacious", "Rộng"]];
+const THICKNESS_OPTIONS = [["thin", "Mảnh"], ["normal", "Vừa"], ["thick", "Đậm"]];
+
 /**
- * Export Studio, round 1 (client-side image formats). PDF/DOCX/XLSX are
- * backend document-export jobs — a genuinely separate feature (new job
- * type, new download route, three new serializers) — and are intentionally
- * NOT offered here; see the round's own report for exactly what that
- * leaves out rather than presenting a format picker with dead options.
+ * Export Studio, round 2. Client-side image formats (PNG/JPEG/SVG) with a
+ * real scope model (full/current-branch/selected-branches/visible), real
+ * multi-branch composition via an offscreen mind-elixir instance
+ * (mindmapImageExport.js's exportMindmapImageMultiBranch — the live canvas
+ * is never touched), and the appearance subset from mindmapExportAppearance.js
+ * that can actually change the exported artifact (font, branch/connector
+ * color, spacing, connector thickness, relations/citations/legend/branding
+ * visibility) — see that module's header comment for what was deliberately
+ * left out and why (note-text rendering has no existing on-canvas hook to
+ * reuse yet).
  *
- * Full appearance control (font/palette/connector styling/spacing/legend/
- * notes/citations/source-name/logo toggles) is also not implemented this
- * round — background variant, resolution scale, and "kèm quan hệ" are the
- * real, working subset; see the round's report.
- *
- * "Các nhánh được chọn" composes selected branches via an OFFSCREEN
- * mind-elixir instance (mindmapImageExport.js's exportMindmapImageMultiBranch)
- * — the live canvas is never touched.
+ * PDF/DOCX/XLSX are backend document-export jobs — a genuinely separate
+ * feature (new job type, new download route, three new serializers) — and
+ * are intentionally NOT offered here.
  */
 export default function ExportStudioDialog({
   open, onClose, mind, title, selectedNodeId, selectedBranchIds, onRequestBranchSelection,
@@ -57,20 +72,29 @@ export default function ExportStudioDialog({
   const [visibleOnly, setVisibleOnly] = useState(false);
   const [format, setFormat] = useState("png");
   const [background, setBackground] = useState("canvas");
+  const [customColor, setCustomColor] = useState("#FFFFFF");
   const [scale, setScale] = useState(2);
   const [filenameOverride, setFilenameOverride] = useState("");
+  const [appearance, setAppearance] = useState(DEFAULT_APPEARANCE);
+  const [presetName, setPresetName] = useState("canvas");
   const [exporting, setExporting] = useState(false);
   const [error, setError] = useState(null);
   const [done, setDone] = useState(null);
 
   const hasBranchSelection = (selectedBranchIds?.size || 0) > 0;
 
+  const applyPreset = (name) => {
+    setPresetName(name);
+    setAppearance(PRESETS[name]);
+  };
+  const updateAppearance = (patch) => { setPresetName(null); setAppearance((a) => ({ ...a, ...patch })); };
+  const updateContent = (key, value) => { setPresetName(null); setAppearance((a) => ({ ...a, content: { ...a.content, [key]: value } })); };
+
   const scopeResult = useMemo(() => {
     if (!mind?.nodeData) return null;
     try {
-      const effectiveScopeType = scopeType === "selected_branches" ? "selected_branches" : scopeType;
       const resolved = resolveExportScope({
-        nodeData: mind.nodeData, scopeType: effectiveScopeType,
+        nodeData: mind.nodeData, scopeType,
         selectedNodeId, selectedBranchRootIds: selectedBranchIds ? [...selectedBranchIds] : [],
         visibleOnly,
       });
@@ -93,6 +117,14 @@ export default function ExportStudioDialog({
 
   const filename = sanitizeExportFilename(filenameOverride || title);
 
+  const estimatedDimensions = useMemo(() => {
+    if (!mind?.map || !scopeResult?.ok) return null;
+    return estimateExportDimensions({
+      mind, scopeType, targetNodeId: selectedNodeId,
+      branchRootIds: selectedBranchIds ? [...selectedBranchIds] : [], scale,
+    });
+  }, [mind, scopeType, selectedNodeId, selectedBranchIds, scale, scopeResult]);
+
   const canAdvanceFromScope = scopeResult?.ok;
   const canExport = scopeResult?.ok;
   const close = () => { if (!exporting) onClose?.(); };
@@ -106,7 +138,8 @@ export default function ExportStudioDialog({
       const info = await exportMindmapImage({
         mind, scopeType: effectiveScopeType, targetNodeId: selectedNodeId,
         branchRootIds: selectedBranchIds ? [...selectedBranchIds] : [], visibleOnly,
-        format, backgroundColor: resolveBackgroundColor(background), scale, title: filename,
+        format, backgroundColor: resolveBackgroundColor(background, customColor), scale, title: filename,
+        appearance,
       });
       setDone(info);
     } catch (e) {
@@ -200,13 +233,26 @@ export default function ExportStudioDialog({
         {step === 2 && (
           <div className="flex flex-col gap-5">
             <div>
-              <div className="font-mono text-metadata uppercase text-text-muted mb-2">Nền</div>
+              <div className="font-mono text-metadata uppercase text-text-muted mb-2">Mẫu dựng sẵn</div>
               <div className="flex flex-wrap gap-2">
+                {PRESET_OPTIONS.map(([value, label]) => (
+                  <button key={value} type="button" className={`pill-tab ${presetName === value ? "pill-tab-active" : ""}`}
+                    onClick={() => applyPreset(value)}>{label}</button>
+                ))}
+              </div>
+            </div>
+            <div>
+              <div className="font-mono text-metadata uppercase text-text-muted mb-2">Nền</div>
+              <div className="flex flex-wrap items-center gap-2">
                 {BACKGROUNDS.map(([value, label]) => (
                   <button key={value} type="button" className={`pill-tab ${background === value ? "pill-tab-active" : ""}`}
                     disabled={value === "transparent" && format === "jpeg"}
                     onClick={() => setBackground(value)}>{label}</button>
                 ))}
+                {background === "custom" && (
+                  <input type="color" value={customColor} onChange={(e) => setCustomColor(e.target.value)}
+                    aria-label="Màu nền tuỳ chỉnh" className="w-8 h-8 rounded border border-border-color" />
+                )}
               </div>
             </div>
             <div>
@@ -214,6 +260,58 @@ export default function ExportStudioDialog({
               <div className="flex gap-2">
                 {[1, 2, 4].map((s) => (
                   <button key={s} type="button" className={`pill-tab ${scale === s ? "pill-tab-active" : ""}`} onClick={() => setScale(s)}>{s}×</button>
+                ))}
+              </div>
+            </div>
+            <div>
+              <div className="font-mono text-metadata uppercase text-text-muted mb-2">Phông chữ</div>
+              <div className="flex gap-2">
+                {FONT_OPTIONS.map(([value, label]) => (
+                  <button key={value} type="button" className={`pill-tab ${appearance.font === value ? "pill-tab-active" : ""}`}
+                    onClick={() => updateAppearance({ font: value })}>{label}</button>
+                ))}
+              </div>
+            </div>
+            <div>
+              <div className="font-mono text-metadata uppercase text-text-muted mb-2">Màu nhánh & đường nối</div>
+              <div className="flex gap-2">
+                {BRANCH_COLOR_OPTIONS.map(([value, label]) => (
+                  <button key={value} type="button" className={`pill-tab ${appearance.branchColorMode === value ? "pill-tab-active" : ""}`}
+                    onClick={() => updateAppearance({ branchColorMode: value })}>{label}</button>
+                ))}
+              </div>
+            </div>
+            <div>
+              <div className="font-mono text-metadata uppercase text-text-muted mb-2">Khoảng cách</div>
+              <div className="flex gap-2">
+                {SPACING_OPTIONS.map(([value, label]) => (
+                  <button key={value} type="button" className={`pill-tab ${appearance.spacing === value ? "pill-tab-active" : ""}`}
+                    onClick={() => updateAppearance({ spacing: value })}>{label}</button>
+                ))}
+              </div>
+            </div>
+            <div>
+              <div className="font-mono text-metadata uppercase text-text-muted mb-2">Độ dày đường nối</div>
+              <div className="flex gap-2">
+                {THICKNESS_OPTIONS.map(([value, label]) => (
+                  <button key={value} type="button" className={`pill-tab ${appearance.connectorThickness === value ? "pill-tab-active" : ""}`}
+                    onClick={() => updateAppearance({ connectorThickness: value })}>{label}</button>
+                ))}
+              </div>
+            </div>
+            <div>
+              <div className="font-mono text-metadata uppercase text-text-muted mb-2">Nội dung kèm theo</div>
+              <div className="flex flex-col gap-1.5">
+                {[
+                  ["relations", "Đường quan hệ giữa các node"],
+                  ["citations", "Nhãn trích dẫn"],
+                  ["legend", "Chú giải màu nhánh"],
+                  ["branding", "Nhãn StudyMap"],
+                ].map(([key, label]) => (
+                  <label key={key} className="flex items-center gap-2 text-small text-text-secondary">
+                    <input type="checkbox" checked={appearance.content[key]} onChange={(e) => updateContent(key, e.target.checked)} />
+                    {label}
+                  </label>
                 ))}
               </div>
             </div>
@@ -239,7 +337,8 @@ export default function ExportStudioDialog({
             ) : (
               <div className="surface-card !p-3.5 flex flex-col gap-1 font-mono text-caption text-text-secondary">
                 <span>{scopeLabel}{scopeResult?.ok ? ` · ${scopeResult.count} node${scopeResult.hidden ? ` · gồm ${scopeResult.hidden} node đang thu gọn` : ""}` : ""}</span>
-                <span>{format.toUpperCase()} · {BACKGROUNDS.find(([v]) => v === background)?.[1]} · {scale}×</span>
+                <span>{format.toUpperCase()} · {BACKGROUNDS.find(([v]) => v === background)?.[1]} · {scale}×{estimatedDimensions ? ` · ≈${estimatedDimensions.width}×${estimatedDimensions.height}px` : ""}</span>
+                <span>Phông: {FONT_OPTIONS.find(([v]) => v === appearance.font)?.[1]} · Màu nhánh: {BRANCH_COLOR_OPTIONS.find(([v]) => v === appearance.branchColorMode)?.[1]} · Khoảng cách: {SPACING_OPTIONS.find(([v]) => v === appearance.spacing)?.[1]}</span>
                 <span>{filename}-YYYYMMDD.{format === "jpeg" ? "jpg" : format}</span>
               </div>
             )}
