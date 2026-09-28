@@ -567,6 +567,13 @@
     "rule": "/mindmaps/<mindmap_id>"
   },
   {
+    "endpoint": "create_mindmap_export",
+    "methods": [
+      "POST"
+    ],
+    "rule": "/mindmaps/<mindmap_id>/exports"
+  },
+  {
     "endpoint": "get_mindmap_node_context",
     "methods": [
       "GET"
@@ -586,6 +593,27 @@
       "GET"
     ],
     "rule": "/mindmaps/capability"
+  },
+  {
+    "endpoint": "get_mindmap_export",
+    "methods": [
+      "GET"
+    ],
+    "rule": "/mindmaps/exports/<job_id>"
+  },
+  {
+    "endpoint": "cancel_mindmap_export",
+    "methods": [
+      "POST"
+    ],
+    "rule": "/mindmaps/exports/<job_id>/cancel"
+  },
+  {
+    "endpoint": "download_mindmap_export",
+    "methods": [
+      "GET"
+    ],
+    "rule": "/mindmaps/exports/<job_id>/download"
   },
   {
     "endpoint": "suggest_mindmap_topics",

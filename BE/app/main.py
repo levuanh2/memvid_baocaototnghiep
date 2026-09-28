@@ -62,6 +62,7 @@ from shared.config import DEFAULT_LOCAL_MODEL
 SLM_MODEL = os.environ.get("SLM_MODEL_CHAT", os.environ.get("SLM_MODEL", DEFAULT_LOCAL_MODEL))
 from app.domains.mindmap import store as mindmap_store
 from app.domains.mindmap.input_collector import collect_mindmap_input
+from app.domains.jobs import export_jobs
 from services.mindmap.pipeline import schema as mindmap_schema
 from app.domains.summary import store as summary_store
 from services.summary.pipeline import schema as summary_schema
@@ -254,8 +255,14 @@ def _run_jobs_maintenance(force: bool = False) -> None:
         pruned = cleanup_terminal_jobs()
         from app.graphs.logger import cleanup_old_node_logs
         logs = cleanup_old_node_logs()
-        if swept or pruned or logs:
-            print(f"jobs_maintenance swept={swept} pruned={pruned} logs={logs}", flush=True)
+        # Export jobs are the only job type that write a FILE to disk;
+        # cleanup_terminal_jobs() above only prunes the DB ROW, so without
+        # this an export job's output would outlive its own job record
+        # forever — see .playbook/known-issues.md's Section 7 audit entry.
+        from app.domains.jobs import export_jobs as _export_jobs
+        exported_files_pruned = _export_jobs.cleanup_terminal_export_files()
+        if swept or pruned or logs or exported_files_pruned:
+            print(f"jobs_maintenance swept={swept} pruned={pruned} logs={logs} export_files_pruned={exported_files_pruned}", flush=True)
     except Exception:
         pass
 
@@ -5449,6 +5456,206 @@ def delete_mindmap(mindmap_id: str):
     if not ok:
         return jsonify({"error": "Mind map not found"}), 404
     return jsonify({"message": "Deleted"})
+
+
+# -------------------------
+# 📄 Mindmap document export (DOCX/XLSX/PDF) — Export Studio Round 2, section 8.
+# Client-side image formats (PNG/JPEG/SVG) never touch the backend; only the
+# three document formats, which need real server-side generation, go through
+# a job (see app/application/mindmap_export.py + app/domains/jobs/export_jobs.py).
+# -------------------------
+_EXPORT_FORMATS = ("docx", "xlsx", "pdf")
+_EXPORT_SCOPE_TYPES = ("full", "current_branch", "selected_branches")
+_EXPORT_PDF_MODES = ("outline", "map", "map_and_outline")
+_EXPORT_PAGE_SIZES = ("A4", "A3")
+_EXPORT_ORIENTATIONS = ("portrait", "landscape")
+
+
+def _export_job_owner_or_404(job_id: str, uid: Optional[str]):
+    """Loads an export job and enforces ownership the same way every other
+    owner-scoped read in this file does: a foreign job reads as 404, never
+    403 (no existence leak). Returns (job, None) or (None, error_response)."""
+    from app.domains.jobs import jobs_store
+    job = jobs_store.get_job(job_id)
+    if not job or job.get("job_type") != export_jobs.EXPORT_JOB_TYPE:
+        return None, (jsonify({"error": "Export job not found"}), 404)
+    if _auth_protect_enabled() and job.get("user_id") and job.get("user_id") != uid:
+        return None, (jsonify({"error": "Export job not found"}), 404)
+    return job, None
+
+
+@app.post("/mindmaps/<mindmap_id>/exports")
+def create_mindmap_export(mindmap_id: str):
+    uid, err = _require_app_user()
+    if err:
+        return err
+    base = (mindmap_store.get_record(mindmap_id, user_id=uid, enforce_owner=True)
+            if _auth_protect_enabled() else mindmap_store.get_record(mindmap_id))
+    if not base:
+        return jsonify({"error": "Mind map not found"}), 404
+
+    body = request.get_json(silent=True) or {}
+    fmt = str(body.get("format") or "").strip()
+    if fmt not in _EXPORT_FORMATS:
+        return jsonify({"error": f"format phải là một trong {_EXPORT_FORMATS}", "error_code": "invalid_format"}), 400
+
+    scope_body = body.get("scope") or {}
+    scope_type = str(scope_body.get("scope_type") or "full").strip()
+    if scope_type not in _EXPORT_SCOPE_TYPES:
+        return jsonify({"error": f"scope_type phải là một trong {_EXPORT_SCOPE_TYPES}", "error_code": "invalid_scope_type"}), 400
+    scope_params = {
+        "scope_type": scope_type,
+        "selected_node_id": scope_body.get("selected_node_id"),
+        "selected_branch_root_ids": scope_body.get("selected_branch_root_ids") or [],
+        "include_descendants": bool(scope_body.get("include_descendants", True)),
+    }
+
+    # Node membership validation — fail fast with a real 400, not a job that
+    # dies asynchronously for something checkable right now.
+    from services.mindmap.export.scope import resolve_export_scope, ExportScopeError, UnknownNodeIdError, NoSelectionError
+    try:
+        resolve_export_scope(base.get("nodes") or [], **scope_params)
+    except UnknownNodeIdError:
+        return jsonify({"error": "Một hoặc nhiều node đã chọn không còn tồn tại trên sơ đồ này", "error_code": "unknown_node_id"}), 400
+    except NoSelectionError:
+        return jsonify({"error": "Chưa có lựa chọn cho phạm vi này", "error_code": "no_selection"}), 400
+    except ExportScopeError as e:
+        return jsonify({"error": str(e), "error_code": "invalid_scope"}), 400
+
+    options_body = body.get("options") or {}
+    format_options: dict[str, Any] = {}
+    if fmt == "docx":
+        format_options["include_citations"] = bool(options_body.get("include_citations", True))
+    elif fmt == "xlsx":
+        format_options["include_citations"] = bool(options_body.get("include_citations", True))
+        format_options["include_relations"] = bool(options_body.get("include_relations", True))
+    elif fmt == "pdf":
+        mode = str(options_body.get("mode") or "outline").strip()
+        if mode not in _EXPORT_PDF_MODES:
+            return jsonify({"error": f"mode phải là một trong {_EXPORT_PDF_MODES}", "error_code": "invalid_pdf_mode"}), 400
+        page_size = str(options_body.get("page_size") or "A4").strip()
+        if page_size not in _EXPORT_PAGE_SIZES:
+            return jsonify({"error": f"page_size phải là một trong {_EXPORT_PAGE_SIZES}", "error_code": "invalid_page_size"}), 400
+        orientation = str(options_body.get("orientation") or "portrait").strip()
+        if orientation not in _EXPORT_ORIENTATIONS:
+            return jsonify({"error": f"orientation phải là một trong {_EXPORT_ORIENTATIONS}", "error_code": "invalid_orientation"}), 400
+        format_options.update(mode=mode, page_size=page_size, orientation=orientation, single_page=bool(options_body.get("single_page", False)))
+
+    map_image_bytes = None
+    if body.get("map_image_base64"):
+        import base64
+        try:
+            map_image_bytes = base64.b64decode(body["map_image_base64"], validate=True)
+        except Exception:
+            return jsonify({"error": "map_image_base64 không hợp lệ", "error_code": "invalid_image"}), 400
+    if fmt == "pdf" and format_options.get("mode") in ("map", "map_and_outline") and not map_image_bytes:
+        return jsonify({"error": "Chế độ này cần ảnh sơ đồ (map_image_base64)", "error_code": "missing_map_image"}), 400
+
+    from app.domains.jobs import jobs_store
+    request_fingerprint = hashlib.sha256(json.dumps(
+        {"map_id": mindmap_id, "format": fmt, "scope": scope_params, "options": format_options},
+        ensure_ascii=False, sort_keys=True, separators=(",", ":"),
+    ).encode("utf-8")).hexdigest()
+    idempotency_key = str(body.get("idempotency_key") or "").strip()
+
+    job_id = export_jobs.new_job_id()
+    if idempotency_key and uid:
+        outcome, durable = jobs_store.create_idempotent_job(
+            job_id, user_id=uid, idempotency_key=idempotency_key,
+            request_fingerprint=request_fingerprint, job_type=export_jobs.EXPORT_JOB_TYPE,
+        )
+        if outcome == "conflict":
+            return jsonify({"error": "idempotency_key đã dùng cho một yêu cầu khác", "error_code": "idempotency_conflict"}), 409
+        if outcome == "existing":
+            return jsonify({"job_id": durable["job_id"], "status": durable.get("status") or "queued"}), 202
+        job_id = durable["job_id"]
+    else:
+        jobs_store.create_job(job_id, job_type=export_jobs.EXPORT_JOB_TYPE, status="pending", current_node="Queued", user_id=uid,
+                              map_id=mindmap_id, idempotency_key=idempotency_key or None, request_fingerprint=request_fingerprint)
+
+    from app.jobs.queue import enqueue_job
+    from app.application.mindmap_export import run_export_job
+    enqueue_job(run_export_job, args=(job_id, mindmap_id, uid, fmt, scope_params, format_options, map_image_bytes), queue="mindmap_export", job_id=job_id)
+    return jsonify({"job_id": job_id, "status": "queued", "status_url": f"/mindmaps/exports/{job_id}"}), 202
+
+
+@app.get("/mindmaps/exports/<job_id>")
+def get_mindmap_export(job_id: str):
+    uid, err = _require_app_user()
+    if err:
+        return err
+    _run_jobs_maintenance()
+    job, err = _export_job_owner_or_404(job_id, uid)
+    if err:
+        return err
+    payload = {
+        "job_id": job["job_id"], "status": job["status"], "progress": job.get("progress") or 0,
+        "stage": job.get("stage"), "error": job.get("error"), "error_code": job.get("error_code"),
+        "result": job.get("result"),
+    }
+    if job["status"] == "done":
+        payload["download_token"] = export_jobs.make_download_token(job_id, uid)
+        payload["download_url"] = f"/mindmaps/exports/{job_id}/download?token={payload['download_token']}"
+    return jsonify(payload)
+
+
+@app.post("/mindmaps/exports/<job_id>/cancel")
+def cancel_mindmap_export(job_id: str):
+    uid, err = _require_app_user()
+    if err:
+        return err
+    job, err = _export_job_owner_or_404(job_id, uid)
+    if err:
+        return err
+    from app.domains.jobs import jobs_store
+    jobs_store.request_cancel(job_id)
+    return jsonify({"job_id": job_id, "status": "cancel_requested"})
+
+
+@app.get("/mindmaps/exports/<job_id>/download")
+def download_mindmap_export(job_id: str):
+    # Two independent auth paths, either sufficient — see export_jobs.py's
+    # own header comment for why: a direct browser navigation can't carry
+    # an Authorization header, so the short-lived signed token (minted by
+    # the status endpoint once status=="done") is the one the FE actually
+    # uses; the bearer-token path stays available for programmatic fetches.
+    from app.domains.jobs import jobs_store as _js
+    job = _js.get_job(job_id)
+    if not job or job.get("job_type") != export_jobs.EXPORT_JOB_TYPE:
+        return jsonify({"error": "Export job not found"}), 404
+
+    job_owner = job.get("user_id")
+    token = request.args.get("token") or ""
+    token_payload = export_jobs.read_download_token(token) if token else None
+    token_ok = bool(token_payload) and token_payload.get("job_id") == job_id and (
+        not _auth_protect_enabled() or not job_owner or token_payload.get("uid") == job_owner
+    )
+
+    bearer_ok = False
+    if not token_ok:
+        uid = _current_user_id()
+        bearer_ok = (not _auth_protect_enabled()) or (uid is not None and (not job_owner or uid == job_owner))
+
+    if not (token_ok or bearer_ok):
+        return jsonify({"error": "unauthorized"}), 401
+
+    if job["status"] != "done":
+        return jsonify({"error": "Export chưa hoàn tất", "error_code": "not_ready", "status": job["status"]}), 409
+
+    fmt = (job.get("result") or {}).get("format")
+    path = export_jobs.output_path_for(job_id, fmt) if fmt else None
+    if not path or not path.is_file():
+        return jsonify({"error": "File xuất không còn tồn tại (có thể đã hết hạn)", "error_code": "file_expired"}), 410
+
+    from flask import send_file
+    map_title = None
+    base = mindmap_store.get_record(job.get("map_id")) if job.get("map_id") else None
+    if base:
+        map_title = base.get("title")
+    filename = export_jobs.display_filename(map_title or "mindmap", fmt)
+    mimetypes = {"docx": "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
+                 "xlsx": "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet", "pdf": "application/pdf"}
+    return send_file(str(path), mimetype=mimetypes.get(fmt, "application/octet-stream"), as_attachment=True, download_name=filename)
 
 
 # -------------------------
