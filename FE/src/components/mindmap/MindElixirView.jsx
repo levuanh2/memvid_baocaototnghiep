@@ -12,14 +12,15 @@ import MindElixir from "mind-elixir";
 // BẮT BUỘC: toàn bộ layout của mind-elixir (me-nodes flex, me-tpc block, gaps)
 // nằm trong CSS này — thiếu nó mọi node rơi về display:inline và sơ đồ vỡ hoàn toàn.
 import "mind-elixir/style";
-import { snapdom } from "@zumer/snapdom";
 import { recordToMindElixir, mindElixirToRecord } from "../../utils/mindElixirAdapter";
 import { attachExpandDecorator } from "../../utils/mindElixirExpandDecorator";
 import { setExpandedToDepth } from "../../utils/mindElixirExpandDepth";
+import { attachBranchSelectionMode } from "../../utils/mindmapBranchSelectionMode";
 import { nextScale, formatZoom, viewportKeyAction, ZOOM_STEP } from "../../utils/mindmapViewport";
 import { updateMindmap } from "../../utils/api";
 import { toast } from "../ui/Toaster";
 import { Icon } from "../ui/Icon";
+import ExportStudioDialog from "./ExportStudioDialog";
 import Spinner from "../ui/Spinner";
 import "./mindmap.css";
 
@@ -110,6 +111,14 @@ export default function MindElixirView({ data, onRegenerate, regenerating, contr
   // (selectedExpanded, selectedHasChildren) re-reads the live tree fresh on
   // every render regardless of what triggered it.
   const [, setExpandTick] = useState(0);
+
+  // Export Studio (Round: Export Studio + expand/collapse redesign).
+  const [exportOpen, setExportOpen] = useState(false);
+  const [selectionModeActive, setSelectionModeActive] = useState(false);
+  const [selectedBranchIds, setSelectedBranchIds] = useState(() => new Set());
+  const selectionActiveRef = useRef(false);
+  const selectedBranchIdsRef = useRef(selectedBranchIds);
+  const branchSelectionHandleRef = useRef(null);
 
   const degraded = Boolean(data?.generator?.degraded);
   const missing = data?.generator?.missing || [];
@@ -345,6 +354,35 @@ export default function MindElixirView({ data, onRegenerate, regenerating, contr
   // the component's lifetime is correct; it doesn't need to re-attach when
   // `data.id` changes.
   useEffect(() => attachExpandDecorator(containerRef.current), []);
+
+  // Export Selection Mode — same "attach once, container persists across
+  // map switches" lifecycle as the expand decorator above. `isActiveRef`/
+  // `isSelectedFn` read refs kept in sync by the two effects right below,
+  // not the raw state values directly: the decorator's own callbacks run
+  // from real DOM events (imperative, outside React's render cycle), so
+  // they need the CURRENT value at call time, not whatever was captured in
+  // this effect's closure when it ran once on mount.
+  useEffect(() => {
+    const handle = attachBranchSelectionMode(containerRef.current, {
+      isActiveRef: selectionActiveRef,
+      isSelectedFn: (id) => selectedBranchIdsRef.current.has(id),
+      onToggle: (id) => setSelectedBranchIds((prev) => {
+        const next = new Set(prev);
+        if (next.has(id)) next.delete(id); else next.add(id);
+        return next;
+      }),
+    });
+    branchSelectionHandleRef.current = handle;
+    return handle.detach;
+  }, []);
+  useEffect(() => {
+    selectionActiveRef.current = selectionModeActive;
+    branchSelectionHandleRef.current?.resync();
+  }, [selectionModeActive]);
+  useEffect(() => {
+    selectedBranchIdsRef.current = selectedBranchIds;
+    branchSelectionHandleRef.current?.resync();
+  }, [selectedBranchIds]);
 
   useEffect(() => () => {
     pendingFitRef.current = false;
@@ -627,28 +665,6 @@ export default function MindElixirView({ data, onRegenerate, regenerating, contr
     return () => document.removeEventListener("fullscreenchange", onChange);
   }, []);
 
-  const handleExportPng = async () => {
-    const mind = mindRef.current;
-    // Chụp mind.map (.map-canvas) chứ KHÔNG phải mind.nodes: rule layout then chốt
-    // là descendant selector `.map-canvas me-nodes{display:flex}` — clone me-nodes
-    // tách khỏi .map-canvas sẽ không match và PNG vỡ (text dồn 1 dòng).
-    const target = mind?.map;
-    if (!target) return;
-
-    setErrorMsg(null);
-    try {
-      const backgroundColor =
-        getComputedStyle(document.documentElement).getPropertyValue("--bg-base").trim() || "#ECE7DB";
-      const result = await snapdom(target, { backgroundColor, scale: 2 });
-      const date = new Date().toISOString().slice(0, 10).replace(/-/g, "");
-      const safeTitle = String(data?.title || "mindmap").replace(/[\\/:*?"<>|]+/g, "_").slice(0, 60);
-      await result.download({ format: "png", filename: `mindmap-${safeTitle}-${date}` });
-    } catch (err) {
-      const message = err instanceof Error ? err.message : String(err);
-      setErrorMsg(`Không xuất được PNG: ${message}`);
-    }
-  };
-
   // Workspace architecture — there's no more "close" (a workspace tab has
   // nothing to dismiss to); only zoom/view shortcuts remain here. Regenerate's
   // own dirty-confirm (SidebarRight's `confirmRegenerateIfDirty`) still guards
@@ -755,6 +771,15 @@ export default function MindElixirView({ data, onRegenerate, regenerating, contr
         <span className={`mm-saved-status ${dirty ? "is-dirty" : ""}`}>
           <Icon name={dirty ? "Pencil" : "Check"} size={14} /> {dirty ? "Chưa lưu" : "Đã lưu"}
         </span>
+        {/* Section 3 — a real header-level entry point (not buried in the
+            overflow menu, and not the floating zoom toolbar, which stays
+            purely pan/zoom). Text hides at narrow widths via the same
+            .mm-context-row responsive rule mm-quality-status/mm-saved-status
+            already use — aria-label/title stay regardless. */}
+        <button type="button" className="mm-export-trigger" onClick={() => setExportOpen(true)}
+          aria-label="Xuất sơ đồ" title="Xuất sơ đồ">
+          <Icon name="Download" size={14} /> <span>Xuất</span>
+        </button>
         <div className="mm-toolbar-menu-wrap">
           <button type="button" className="mm-overflow-trigger" aria-expanded={contextOverflowOpen} aria-haspopup="menu"
             onClick={() => setContextOverflowOpen((v) => !v)} aria-label="Thêm tùy chọn" title="Thêm tùy chọn"><Icon name="MoreVertical" size={18} /></button>
@@ -775,7 +800,6 @@ export default function MindElixirView({ data, onRegenerate, regenerating, contr
               <button role="menuitem" onClick={() => expandCollapseWholeMap(false)}><Icon name="ChevronsDownUp" size={14} /> Thu gọn tất cả</button>
               <button role="menuitem" onClick={() => expandToDepth(2)}><Icon name="Rows3" size={14} /> Mở đến cấp 2</button>
               <button role="menuitem" onClick={() => expandToDepth(3)}><Icon name="Rows3" size={14} /> Mở đến cấp 3</button>
-              <button role="menuitem" onClick={handleExportPng}><Icon name="Download" size={14} /> Xuất PNG</button>
             </div>
           )}
         </div>
@@ -917,7 +941,35 @@ export default function MindElixirView({ data, onRegenerate, regenerating, contr
           <Icon name="Expand" size={14} />
         </button>
 
+        {/* Export Selection Mode — overlaid on the canvas itself (not the
+            floating zoom toolbar, which stays pan/zoom-only), matching
+            section 5C's bar exactly: "Đã chọn N nhánh · Xóa chọn · Tiếp tục
+            · Hủy". Node-detail-drawer suppression and the checkbox
+            affordance live in mindmapBranchSelectionMode.js, driven by
+            `selectionActiveRef` — this bar is just its visible chrome. */}
+        {selectionModeActive && (
+          <div className="mm-selection-bar" role="status" aria-live="polite">
+            <span>Đã chọn {selectedBranchIds.size} nhánh</span>
+            <span className="mm-selection-bar__sep" aria-hidden="true">·</span>
+            <button type="button" disabled={!selectedBranchIds.size} onClick={() => setSelectedBranchIds(new Set())}>Xóa chọn</button>
+            <span className="mm-selection-bar__sep" aria-hidden="true">·</span>
+            <button type="button" disabled={!selectedBranchIds.size}
+              onClick={() => { setSelectionModeActive(false); setExportOpen(true); }}>Tiếp tục</button>
+            <span className="mm-selection-bar__sep" aria-hidden="true">·</span>
+            <button type="button" onClick={() => { setSelectionModeActive(false); setSelectedBranchIds(new Set()); setExportOpen(true); }}>Hủy</button>
+          </div>
+        )}
       </div>
+
+      <ExportStudioDialog
+        open={exportOpen && !selectionModeActive}
+        onClose={() => setExportOpen(false)}
+        mind={mindRef.current}
+        title={data?.title}
+        selectedNodeId={controller?.selected?.id}
+        selectedBranchIds={selectedBranchIds}
+        onRequestBranchSelection={() => { setExportOpen(false); setSelectionModeActive(true); }}
+      />
     </div>
   );
 }
