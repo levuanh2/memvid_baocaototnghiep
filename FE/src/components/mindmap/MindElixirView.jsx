@@ -14,6 +14,8 @@ import MindElixir from "mind-elixir";
 import "mind-elixir/style";
 import { snapdom } from "@zumer/snapdom";
 import { recordToMindElixir, mindElixirToRecord } from "../../utils/mindElixirAdapter";
+import { attachExpandDecorator } from "../../utils/mindElixirExpandDecorator";
+import { setExpandedToDepth } from "../../utils/mindElixirExpandDepth";
 import { nextScale, formatZoom, viewportKeyAction, ZOOM_STEP } from "../../utils/mindmapViewport";
 import { updateMindmap } from "../../utils/api";
 import { toast } from "../ui/Toaster";
@@ -100,6 +102,14 @@ export default function MindElixirView({ data, onRegenerate, regenerating, contr
   const [errorMsg, setErrorMsg] = useState(null);
   const [contextOverflowOpen, setContextOverflowOpen] = useState(false);
   const [mapSelectorOpen, setMapSelectorOpen] = useState(false);
+  // Round 8 redesign: expand/collapse state lives on mind-elixir's own live
+  // nodeData tree (`node.expanded`), not React state — mirroring it into a
+  // separate state value would risk drifting from the real render. This
+  // setter is a pure "please re-render, something in that tree changed"
+  // bump; the value itself is never read — everything derived from it below
+  // (selectedExpanded, selectedHasChildren) re-reads the live tree fresh on
+  // every render regardless of what triggered it.
+  const [, setExpandTick] = useState(0);
 
   const degraded = Boolean(data?.generator?.degraded);
   const missing = data?.generator?.missing || [];
@@ -281,6 +291,13 @@ export default function MindElixirView({ data, onRegenerate, regenerating, contr
         controller.onNodeSelected(nodes);
       });
       mind.bus.addListener("operation", () => setDirty(true));
+      // Clicking a per-node caret calls mind-elixir's own `expandNode`,
+      // which fires this bus event (dist/MindElixir.js) — but NOT for
+      // `expandNodeAll` (verified: no bus.fire in that function). The
+      // floating toolbar's own single-branch toggle below calls
+      // expandNodeAll directly and bumps expandTick itself right after,
+      // so this listener only needs to cover the caret's path.
+      mind.bus.addListener("expandNode", () => setExpandTick((v) => v + 1));
     } else {
       mind.refresh?.(mindData);
       mind.clearHistory?.();
@@ -288,6 +305,18 @@ export default function MindElixirView({ data, onRegenerate, regenerating, contr
     sanitizeHiddenNaNPaths(containerRef.current);
     controller.registerMindInstance(mind, sidecar);
     setZoom(mind.scaleVal || 1);
+    // Round 8: selectedHasChildren/selectedExpanded below are derived at
+    // render time from `mindRef.current` — a REF, which doesn't itself
+    // trigger a re-render when it's newly populated here. `setZoom` right
+    // above usually forces one anyway (mount effect runs before first
+    // paint, so `zoom` state is still its initial `1` and `mind.scaleVal`
+    // is also 1 -- Object.is(1,1) makes THAT particular setState a no-op
+    // bail-out), so it can't be relied on. This one exists purely to
+    // guarantee at least one real re-render happens once mindRef is ready,
+    // so a node selected before this component finished mounting (or a
+    // fresh map switch) doesn't leave the contextual branch toggle
+    // permanently absent.
+    setExpandTick((v) => v + 1);
     pendingFitRef.current = true;
     // 2026-09-24: a short bounded poll (~1s) is NOT long enough here --
     // reproduced live: WorkspaceContainer mounts every pane's content as
@@ -306,6 +335,16 @@ export default function MindElixirView({ data, onRegenerate, regenerating, contr
     return startFitPoll();
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [data?.id, startFitPoll]);
+
+  // Round 8 — per-node branch caret a11y (see mindElixirExpandDecorator.js
+  // for why this has to be a MutationObserver rather than a one-shot pass:
+  // mind-elixir replaces, not mutates, <me-epd> on every internal
+  // re-render). The container div itself is created once and persists
+  // across map switches (this component's whole "create once, refresh in
+  // place" architecture — see the mount effect above), so one observer for
+  // the component's lifetime is correct; it doesn't need to re-attach when
+  // `data.id` changes.
+  useEffect(() => attachExpandDecorator(containerRef.current), []);
 
   useEffect(() => () => {
     pendingFitRef.current = false;
@@ -516,24 +555,63 @@ export default function MindElixirView({ data, onRegenerate, regenerating, contr
   // silently violates that bar. See the epic-closing report for the exact
   // API/version citation.
   //
-  // Scoped to the selected node's subtree when one is selected (the
-  // "targeting only descendants of the selected node" capability), falling
-  // back to the map's own root (`mind.nodeData` — a typed, public instance
-  // property) for a real "expand/collapse everything".
-  const expandCollapseAll = useCallback((isExpand) => {
+  // Round 8 REDESIGN (2026-09-28 — Export Studio round): the toolbar used to
+  // show two always-present buttons ("Mở rộng"/"Thu gọn") whose LABELS
+  // changed based on selection, both still doing the same "selected branch
+  // or whole map" scoping. New spec: exactly ONE contextual action, shown
+  // only when a node with children is selected — global "expand/collapse
+  // everything" and depth presets move to the overflow menu permanently,
+  // independent of whatever's currently selected. Two separate helpers
+  // below, matching that split; neither invents a new toggle mechanism —
+  // both still call mind-elixir's own public `expandNodeAll` (see the
+  // feasibility note above this block, unchanged and still accurate for
+  // both call sites) or `layout()+linkDiv()` for the depth case, the same
+  // side-effect-free re-render pair `fitIfReady` already established.
+  //
+  // Derived fresh on every render (not memoized): mind-elixir's node tree
+  // can change (a caret click, this toolbar's own button) without React
+  // knowing on its own — `expandTick`'s only job is forcing a re-render so
+  // these reads happen again, not carrying any value itself.
+  const selectedId = controller?.selected?.id;
+  const selectedTopicEl = selectedId ? mindRef.current?.findEle?.(selectedId) : null;
+  const selectedNodeObj = selectedTopicEl?.nodeObj;
+  const selectedHasChildren = Boolean(selectedNodeObj?.children?.length);
+  const selectedExpanded = selectedNodeObj?.expanded !== false;
+
+  const toggleSelectedBranch = useCallback(() => {
     const mind = mindRef.current;
-    if (!mind) return;
-    const targetId = controller?.selected?.id || mind.nodeData?.id;
-    if (!targetId) return;
-    const topic = mind.findEle?.(targetId);
+    const id = controller?.selected?.id;
+    if (!mind || !id) return;
+    const topic = mind.findEle?.(id);
+    const nodeObj = topic?.nodeObj;
+    if (!topic || !nodeObj?.children?.length) return;
+    mind.expandNodeAll(topic, nodeObj.expanded === false);
+    setExpandTick((v) => v + 1); // expandNodeAll fires no bus event of its own
+  }, [controller]);
+
+  // True global actions — always target the map's own root regardless of
+  // whatever node happens to be selected, unlike toggleSelectedBranch above.
+  const expandCollapseWholeMap = useCallback((isExpand) => {
+    const mind = mindRef.current;
+    if (!mind?.nodeData) return;
+    const topic = mind.findEle?.(mind.nodeData.id);
     if (!topic) return;
     mind.expandNodeAll(topic, isExpand);
-  }, [controller]);
-  const expandAll = useCallback(() => expandCollapseAll(true), [expandCollapseAll]);
-  const collapseAll = useCallback(() => expandCollapseAll(false), [expandCollapseAll]);
-  const expandCollapseLabel = controller?.selected?.id
-    ? { expand: "Mở rộng nhánh đã chọn", collapse: "Thu gọn nhánh đã chọn" }
-    : { expand: "Mở rộng tất cả", collapse: "Thu gọn tất cả" };
+    setExpandTick((v) => v + 1);
+  }, []);
+
+  // "Mở đến cấp N" — mind-elixir has no native depth-based expand; walks
+  // nodeData directly (setExpandedToDepth) and re-renders geometry only,
+  // same as the global actions above: no scaleFit, no toCenter, no zoom
+  // change.
+  const expandToDepth = useCallback((depth) => {
+    const mind = mindRef.current;
+    if (!mind?.nodeData) return;
+    setExpandedToDepth(mind.nodeData, depth);
+    mind.layout?.();
+    mind.linkDiv?.();
+    setExpandTick((v) => v + 1);
+  }, []);
 
   // Fullscreen (IA pass round 5) — native Fullscreen API on the canvas
   // wrapper only, no mind-elixir instance state touched. `fullscreenchange`
@@ -688,6 +766,15 @@ export default function MindElixirView({ data, onRegenerate, regenerating, contr
               <button role="menuitem" onClick={resetView}><Icon name="RotateCcw" size={14} /> Đặt lại khung nhìn</button>
               <button role="menuitem" onClick={() => mindRef.current?.toCenter()}><Icon name="Maximize" size={14} /> Căn giữa</button>
               <button role="menuitem" onClick={() => setShowRelations((v) => !v)} aria-pressed={showRelations}><Icon name="Spline" size={14} /> {showRelations ? "Ẩn quan hệ" : "Hiện quan hệ"}</button>
+              {/* Round 8 redesign — global expand/collapse actions live here
+                  now, unconditionally (not selection-scoped): the floating
+                  toolbar's single contextual toggle below covers the
+                  selected-branch case, so these two never need to fork on
+                  selection state the way the old two-button pair did. */}
+              <button role="menuitem" onClick={() => expandCollapseWholeMap(true)}><Icon name="ChevronsUpDown" size={14} /> Mở rộng tất cả</button>
+              <button role="menuitem" onClick={() => expandCollapseWholeMap(false)}><Icon name="ChevronsDownUp" size={14} /> Thu gọn tất cả</button>
+              <button role="menuitem" onClick={() => expandToDepth(2)}><Icon name="Rows3" size={14} /> Mở đến cấp 2</button>
+              <button role="menuitem" onClick={() => expandToDepth(3)}><Icon name="Rows3" size={14} /> Mở đến cấp 3</button>
               <button role="menuitem" onClick={handleExportPng}><Icon name="Download" size={14} /> Xuất PNG</button>
             </div>
           )}
@@ -787,24 +874,27 @@ export default function MindElixirView({ data, onRegenerate, regenerating, contr
           <button onClick={fitView} aria-label="Vừa khung" title="Vừa khung (F)" className="icon-btn w-8 h-8">
             <Icon name="Scan" size={14} />
           </button>
-          <div className="mm-floating-toolbar__sep" aria-hidden="true" />
-          {/* Round 8 — Expand/Collapse. Scoped to the selected node's subtree
-              when one is selected, else the whole map (see expandCollapseAll
-              above for the full public-API feasibility note).
-              Round 11 (mockup parity) — reordered to sit right after zoom+fit,
-              matching the reference image's exact sequence (was after a
-              reset/center pair that has no mockup equivalent — those two
-              moved after this, not removed; still real, working
-              functionality). */}
-          <button onClick={expandAll} aria-label={expandCollapseLabel.expand} title={expandCollapseLabel.expand}
-            className="icon-btn w-8 h-8">
-            <Icon name="ChevronsUpDown" size={15} />
-          </button>
-          <button onClick={collapseAll} aria-label={expandCollapseLabel.collapse} title={expandCollapseLabel.collapse}
-            className="icon-btn w-8 h-8">
-            <Icon name="ChevronsDownUp" size={15} />
-          </button>
-          <div className="mm-floating-toolbar__sep" aria-hidden="true" />
+          {/* Round 8 REDESIGN — one contextual branch toggle, shown only
+              when a node WITH CHILDREN is selected (never for a leaf, never
+              with nothing selected — global expand/collapse now lives
+              permanently in the overflow menu, see expandCollapseWholeMap).
+              The separator moves inside this block too, so nothing selected
+              means no dangling divider with an empty slot after it.
+              Round 11 (mockup parity) positioning note (still true): sits
+              right after zoom+fit, matching the reference image's sequence. */}
+          {selectedHasChildren && (
+            <>
+              <div className="mm-floating-toolbar__sep" aria-hidden="true" />
+              <button onClick={toggleSelectedBranch}
+                aria-label={selectedExpanded ? "Thu nhánh" : "Mở nhánh"}
+                title={selectedExpanded ? "Thu nhánh" : "Mở nhánh"}
+                aria-expanded={selectedExpanded}
+                className="icon-btn w-8 h-8">
+                <Icon name={selectedExpanded ? "ChevronsDownUp" : "ChevronsUpDown"} size={15} />
+              </button>
+              <div className="mm-floating-toolbar__sep" aria-hidden="true" />
+            </>
+          )}
         </div>
 
         {/* Round 10 (mockup parity) — fullscreen moved OUT of the main
