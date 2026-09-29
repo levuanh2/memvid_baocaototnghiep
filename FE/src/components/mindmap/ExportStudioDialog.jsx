@@ -189,6 +189,28 @@ export default function ExportStudioDialog({
 
   useEffect(() => () => abortRef.current?.abort(), []);
 
+  // Map A<->B isolation: neither MindElixirView nor this dialog remounts on
+  // a map switch (WorkspaceContainer.jsx renders MindElixirView with no
+  // `key` — mind-elixir re-inits internally via its own `data?.id`-keyed
+  // effect instead), so without this, a completed/failed/in-flight
+  // document-export job's status would keep showing after switching to a
+  // DIFFERENT map — a stale "Đã xuất" banner naming the wrong file, or a
+  // "Huỷ xuất" button that would cancel a job belonging to a different map
+  // entirely. Aborts any in-flight poll and clears every export-RUN-
+  // specific field the moment the map identity changes; deliberately
+  // leaves format/scope/appearance/docOptions alone (a chosen preference
+  // carrying over between maps is a convenience, not a correctness bug the
+  // way a wrong completed-job banner is).
+  useEffect(() => {
+    abortRef.current?.abort();
+    setExporting(false);
+    setError(null);
+    setDone(null);
+    setJobStatus(null);
+    setJobProgress(0);
+    setJobId(null);
+  }, [mapId]);
+
   const effectiveScopeType = visibleOnly && scopeType === "full" ? "visible" : scopeType;
 
   const captureMapImageForBackend = async () => {

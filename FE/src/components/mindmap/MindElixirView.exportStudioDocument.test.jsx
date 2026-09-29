@@ -183,4 +183,36 @@ describe("Export Studio — document formats", () => {
     expect(cancelSpy).toHaveBeenCalledWith("j1");
     void resolvePoll;
   });
+
+  it("Map A<->B isolation: a completed export's state does not leak into a different map (no remount, same pattern WorkspaceContainer.jsx actually uses)", async () => {
+    vi.spyOn(docExport, "createMindmapExport").mockResolvedValue({ job_id: "j1", status: "queued" });
+    vi.spyOn(docExport, "pollMindmapExportUntilDone").mockResolvedValue({
+      status: "done", download_url: "/mindmaps/exports/j1/download?token=abc",
+    });
+    vi.spyOn(docExport, "triggerMindmapExportDownload").mockImplementation(() => {});
+
+    const controller = makeController();
+    await render(controller);
+    const dialog1 = await openToFormatStep();
+    await act(async () => { dialog1.querySelector('input[value="pdf"]').click(); });
+    await act(async () => { [...dialog1.querySelectorAll("button")].find((b) => b.textContent === "Tiếp tục").click(); });
+    await act(async () => { [...dialog1.querySelectorAll("button")].find((b) => b.textContent === "Tiếp tục").click(); });
+    const exportBtn1 = [...dialog1.querySelectorAll("button")].find((b) => b.textContent.includes("Xuất"));
+    await act(async () => { exportBtn1.click(); });
+    expect(dialog1.textContent).toContain("Đã xuất");
+
+    // Close, then re-render the SAME root with a DIFFERENT map — real
+    // WorkspaceContainer.jsx renders MindElixirView with no `key` prop, so
+    // this is the actual update path a map switch takes, not a remount.
+    const closeBtn = [...document.body.querySelectorAll("button")].find((b) => b.textContent === "Đóng");
+    await act(async () => { closeBtn.click(); });
+    await act(async () => {
+      root.render(<MindElixirView data={dataFor("m2")} onRegenerate={vi.fn()} regenerating={false} controller={controller} />);
+    });
+
+    await act(async () => { container.querySelector('[aria-label="Xuất sơ đồ"]').click(); });
+    const dialog2 = document.body.querySelector('[role="dialog"]');
+    expect(dialog2.textContent).not.toContain("Đã xuất");
+    expect(dialog2.textContent).not.toContain("Hoàn tất");
+  });
 });
