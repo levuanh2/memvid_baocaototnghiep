@@ -28,7 +28,7 @@ def test_xlsx_has_summary_and_nodes_sheets_with_correct_row_count():
     assert "Nodes" in wb.sheetnames
     nodes_ws = wb["Nodes"]
     header = [c.value for c in nodes_ws[1]]
-    assert header == ["node_id", "parent_id", "branch_path", "depth", "order", "topic", "note"]
+    assert header == ["node_id", "parent_id", "branch_path", "depth", "order", "topic"]
     # header + 4 nodes (r, c1, c1a, c2)
     assert nodes_ws.max_row == 5
 
@@ -72,6 +72,59 @@ def test_xlsx_relations_sheet_only_appears_when_requested_and_present():
     no_rel_tree = _tree()
     wb_none = load_workbook(io.BytesIO(serialize_xlsx(no_rel_tree, include_relations=True)))
     assert "Relations" not in wb_none.sheetnames
+
+
+def test_xlsx_notes_and_source_names_columns_are_opt_in():
+    nodes = _nodes()
+    nodes[1]["chunk_refs"] = ["doc1#p3", "doc2#p7"]  # c1 gets citations
+    tree = _tree(nodes)
+    default_wb = load_workbook(io.BytesIO(serialize_xlsx(tree)))
+    header_default = [c.value for c in default_wb["Nodes"][1]]
+    assert "note" not in header_default
+    assert "source_names" not in header_default
+
+    full_wb = load_workbook(io.BytesIO(serialize_xlsx(tree, content={"notes": True, "sourceNames": True})))
+    header_full = [c.value for c in full_wb["Nodes"][1]]
+    assert "note" in header_full
+    assert "source_names" in header_full
+    rows = {row[0].value: row for row in full_wb["Nodes"].iter_rows(min_row=2)}
+    source_names_col = header_full.index("source_names")
+    assert "doc1" in rows["c1"][source_names_col].value
+    assert "doc2" in rows["c1"][source_names_col].value
+
+
+def test_xlsx_font_selection_applied_to_header_and_body():
+    wb = load_workbook(io.BytesIO(serialize_xlsx(_tree(), font="serif")))
+    ws = wb["Nodes"]
+    assert ws["A1"].font.name == "Times New Roman"
+    assert ws["A2"].font.name == "Times New Roman"
+
+
+def test_xlsx_header_style_monochrome_and_custom_palette_fill_the_header_row():
+    keep_wb = load_workbook(io.BytesIO(serialize_xlsx(_tree(), header_style_mode="keep")))
+    mono_wb = load_workbook(io.BytesIO(serialize_xlsx(_tree(), header_style_mode="monochrome")))
+    palette_wb = load_workbook(io.BytesIO(serialize_xlsx(_tree(), header_style_mode="customPalette")))
+    assert keep_wb["Nodes"]["A1"].fill.fgColor.rgb in (None, "00000000")
+    assert mono_wb["Nodes"]["A1"].fill.fgColor.rgb == "002B2620" or mono_wb["Nodes"]["A1"].fill.fgColor.rgb == "FF2B2620"
+    assert palette_wb["Nodes"]["A1"].fill.fgColor.rgb != mono_wb["Nodes"]["A1"].fill.fgColor.rgb
+
+
+def test_xlsx_header_row_frozen_and_autofilter_enabled():
+    wb = load_workbook(io.BytesIO(serialize_xlsx(_tree())))
+    ws = wb["Nodes"]
+    assert ws.freeze_panes == "A2"
+    assert ws.auto_filter.ref is not None
+
+
+def test_xlsx_column_widths_are_sensible_not_default():
+    wb = load_workbook(io.BytesIO(serialize_xlsx(_tree())))
+    ws = wb["Nodes"]
+    # "branch_path" column holds long strings — its width must reflect that,
+    # not openpyxl's bare default (~8.43).
+    branch_path_col = [c.value for c in ws[1]].index("branch_path")
+    from openpyxl.utils import get_column_letter
+    letter = get_column_letter(branch_path_col + 1)
+    assert ws.column_dimensions[letter].width > 15
 
 
 def test_xlsx_excludes_scope_outside_selection():

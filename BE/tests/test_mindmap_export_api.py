@@ -131,7 +131,7 @@ def test_invalid_pdf_mode_rejected(be, client, monkeypatch):
     _protect(be, monkeypatch, "userA", on=True)
     resp = client.post("/mindmaps/m1/exports", json={"format": "pdf", "options": {"mode": "bogus"}})
     assert resp.status_code == 400
-    assert resp.get_json()["error_code"] == "invalid_pdf_mode"
+    assert resp.get_json()["error_code"] == "invalid_option"
 
 
 # ---- idempotency --------------------------------------------------------------

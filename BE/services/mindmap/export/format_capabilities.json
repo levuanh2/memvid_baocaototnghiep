@@ -1,0 +1,74 @@
+{
+  "_comment": "Single source of truth for which appearance/content controls apply to each export format, and their default values. Read by BOTH the backend (services/mindmap/export/capabilities.py) and the frontend (a byte-identical copy at FE/src/utils/exportFormatCapabilities.json — Vite can't import a file outside its project root at build time, and the production BE Docker image never bundles FE/, so a single cross-language runtime read isn't possible; instead a contract test, BE/tests/test_mindmap_export_contract.py, asserts the two files stay byte-identical). Never scatter format-specific conditionals in components/routes — read this instead.",
+  "image": {
+    "controls": {
+      "font": true,
+      "background": { "transparent": true, "custom": true },
+      "branchColor": true,
+      "spacing": true,
+      "connectorThickness": true,
+      "content": ["relations", "citations", "legend", "branding"]
+    },
+    "defaults": {
+      "font": "canvas",
+      "background": "canvas",
+      "branchColorMode": "keep",
+      "spacing": "normal",
+      "connectorThickness": "normal",
+      "content": { "relations": true, "citations": true, "legend": false, "branding": false }
+    }
+  },
+  "pdf": {
+    "controls": {
+      "font": true,
+      "background": { "transparent": false, "custom": true },
+      "branchColor": true,
+      "margins": true,
+      "pageSize": ["A4", "A3"],
+      "orientation": ["portrait", "landscape"],
+      "singlePage": true,
+      "mode": ["outline", "map", "map_and_outline"],
+      "content": ["notes", "citations", "sourceNames", "relations", "legend", "branding"]
+    },
+    "defaults": {
+      "font": "sans",
+      "background": "white",
+      "branchColorMode": "keep",
+      "margins": "normal",
+      "pageSize": "A4",
+      "orientation": "portrait",
+      "singlePage": false,
+      "mode": "outline",
+      "content": { "notes": false, "citations": true, "sourceNames": false, "relations": true, "legend": false, "branding": false }
+    }
+  },
+  "docx": {
+    "controls": {
+      "font": true,
+      "headingColor": true,
+      "mapImage": true,
+      "orientation": ["portrait", "landscape"],
+      "margins": true,
+      "content": ["notes", "citations", "sourceNames", "relations", "branding"]
+    },
+    "defaults": {
+      "font": "sans",
+      "headingColorMode": "keep",
+      "orientation": "portrait",
+      "margins": "normal",
+      "content": { "notes": true, "citations": true, "sourceNames": false, "relations": true, "branding": false }
+    }
+  },
+  "xlsx": {
+    "controls": {
+      "font": true,
+      "headerStyle": true,
+      "content": ["citations", "relations", "notes", "sourceNames"]
+    },
+    "defaults": {
+      "font": "sans",
+      "headerStyleMode": "keep",
+      "content": { "citations": true, "relations": true, "notes": false, "sourceNames": false }
+    }
+  }
+}

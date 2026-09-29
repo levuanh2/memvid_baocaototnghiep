@@ -5466,9 +5466,6 @@ def delete_mindmap(mindmap_id: str):
 # -------------------------
 _EXPORT_FORMATS = ("docx", "xlsx", "pdf")
 _EXPORT_SCOPE_TYPES = ("full", "current_branch", "selected_branches")
-_EXPORT_PDF_MODES = ("outline", "map", "map_and_outline")
-_EXPORT_PAGE_SIZES = ("A4", "A3")
-_EXPORT_ORIENTATIONS = ("portrait", "landscape")
 
 
 def _export_job_owner_or_404(job_id: str, uid: Optional[str]):
@@ -5522,24 +5519,19 @@ def create_mindmap_export(mindmap_id: str):
     except ExportScopeError as e:
         return jsonify({"error": str(e), "error_code": "invalid_scope"}), 400
 
+    # Section 2/3 (format-capability model): the SAME format_capabilities.json
+    # that drives which controls the FE shows is what validates and
+    # normalizes the request here — never a second, hand-rolled per-format
+    # if/elif block. validate_options REJECTS (400) any control this format
+    # doesn't declare or any out-of-range value; normalize_options then fills
+    # in this format's own defaults for whatever the request left unset.
+    from services.mindmap.export.capabilities import validate_options, normalize_options, UnsupportedOptionError
     options_body = body.get("options") or {}
-    format_options: dict[str, Any] = {}
-    if fmt == "docx":
-        format_options["include_citations"] = bool(options_body.get("include_citations", True))
-    elif fmt == "xlsx":
-        format_options["include_citations"] = bool(options_body.get("include_citations", True))
-        format_options["include_relations"] = bool(options_body.get("include_relations", True))
-    elif fmt == "pdf":
-        mode = str(options_body.get("mode") or "outline").strip()
-        if mode not in _EXPORT_PDF_MODES:
-            return jsonify({"error": f"mode phải là một trong {_EXPORT_PDF_MODES}", "error_code": "invalid_pdf_mode"}), 400
-        page_size = str(options_body.get("page_size") or "A4").strip()
-        if page_size not in _EXPORT_PAGE_SIZES:
-            return jsonify({"error": f"page_size phải là một trong {_EXPORT_PAGE_SIZES}", "error_code": "invalid_page_size"}), 400
-        orientation = str(options_body.get("orientation") or "portrait").strip()
-        if orientation not in _EXPORT_ORIENTATIONS:
-            return jsonify({"error": f"orientation phải là một trong {_EXPORT_ORIENTATIONS}", "error_code": "invalid_orientation"}), 400
-        format_options.update(mode=mode, page_size=page_size, orientation=orientation, single_page=bool(options_body.get("single_page", False)))
+    try:
+        validate_options(fmt, options_body)
+    except UnsupportedOptionError as e:
+        return jsonify({"error": str(e), "error_code": "invalid_option"}), 400
+    format_options = normalize_options(fmt, options_body)
 
     map_image_bytes = None
     if body.get("map_image_base64"):
