@@ -301,6 +301,7 @@ jobs:
         run: |
           python -m pip install --upgrade pip
           pip install -r requirements.txt
+          pip install pytest-timeout
 
       - name: Generate gRPC stubs
         working-directory: BE
@@ -312,7 +313,7 @@ jobs:
 
       - name: Run full backend test suite
         working-directory: BE
-        run: python -m pytest -q --junitxml=reports/backend-junit.xml
+        run: python -m pytest -q --timeout=30 --timeout-method=thread --junitxml=reports/backend-junit.xml
 
       - name: Upload test report artifact
         if: always()
