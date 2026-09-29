@@ -4,17 +4,19 @@ import react from '@vitejs/plugin-react'
 export default defineConfig({
   plugins: [react()],
   test: {
-    // FE/e2e/**/*.spec.js are Playwright specs (run via `npx playwright
-    // test`, see playwright.config.js) — Vitest's default include glob
+    // FE/e2e/**/*.spec.js and FE/e2e-fixture/**/*.spec.js are Playwright
+    // specs (run via `npx playwright test`, see playwright.config.js /
+    // playwright.fixture.config.js) — Vitest's default include glob
     // (**/*.spec.js) would otherwise pick them up too and crash trying to
     // run Playwright's `test()` outside its own runner. Vitest's own
     // defaults (node_modules, dist, .git, config files, ...) are kept and
-    // `e2e/**` is added on top, rather than replaced.
+    // `e2e/**` / `e2e-fixture/**` are added on top, rather than replaced.
     exclude: [
       '**/node_modules/**', '**/dist/**', '**/cypress/**',
       '**/.{idea,git,cache,output,temp}/**',
       '**/{karma,rollup,webpack,vite,vitest,jest,ava,babel,nyc,cypress,tsup,build}.config.*',
       'e2e/**',
+      'e2e-fixture/**',
     ],
   },
   build: {

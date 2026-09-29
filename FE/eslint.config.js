@@ -31,7 +31,7 @@ export default defineConfig([
     // the browser — `process`/`__dirname`-equivalents are real globals here,
     // not undeclared variables. Scoped narrowly so this doesn't loosen
     // linting for actual app/browser code.
-    files: ['playwright.config.js', 'e2e/**/*.js', 'scripts/**/*.mjs'],
+    files: ['playwright.config.js', 'playwright.fixture.config.js', 'e2e/**/*.js', 'e2e-fixture/**/*.js', 'scripts/**/*.mjs'],
     languageOptions: {
       globals: globals.node,
     },

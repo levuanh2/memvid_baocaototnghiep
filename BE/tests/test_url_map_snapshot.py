@@ -103,9 +103,13 @@ def test_tong_so_route_khop(client, cu):
       (persisted node context cho Shared Context Inspector), `GET /mindmaps/capability`
       (rollout flag + durable-store/worker health, fail-closed về V2), `POST
       /mindmaps/suggest-topics` (gợi ý chủ đề thật từ indexed chunks trước khi tạo).
+    +4 ngày 2026-09-28 (Export Studio, section 8): `POST /mindmaps/<mindmap_id>/exports`
+      (tạo job xuất DOCX/XLSX/PDF), `GET /mindmaps/exports/<job_id>` (poll trạng thái +
+      mint download token khi done), `POST /mindmaps/exports/<job_id>/cancel`,
+      `GET /mindmaps/exports/<job_id>/download` (token HMAC ngắn hạn hoặc bearer chủ sở hữu).
     Con số ở đây CỐ Ý viết cứng — sửa nó là một dòng diff mà người review phải nhìn
     thấy, đúng mục đích của cả file này."""
-    assert len(_hien_tai()) == len(cu) == 102
+    assert len(_hien_tai()) == len(cu) == 106
 
 
 def test_khong_co_cap_duong_dan_method_trung(client):

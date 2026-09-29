@@ -1,5 +1,29 @@
 # Lessons Learned
 
+## 2026-09-28 - jsdom không mô phỏng pointer-capture click-redirect: chỉ trình duyệt thật mới bắt được nút "câm"
+
+- **Một nút bấm không lỗi, không cảnh báo, chỉ đơn giản không làm gì — và jsdom nói nó
+  hoạt động hoàn hảo.** Export Studio's multi-branch selection bar (`.mm-selection-bar`)
+  có ba nút "Tiếp tục"/"Xóa chọn"/"Hủy" nằm bên trong canvas wrapper mà một pan-handler
+  khác đang lắng nghe `pointerdown` để gọi `setPointerCapture()`. Handler đó có danh sách
+  loại trừ target (`me-tpc, me-epd, .mm-floating-toolbar, ...`) nhưng thiếu
+  `.mm-selection-bar`. Kết quả thật trên Chromium: `pointerdown` trúng đúng nút, nhưng
+  `click` theo sau bị trình duyệt định tuyến lại về phần tử đã `setPointerCapture` — nút
+  không bao giờ nhận `onClick`. Không exception, không console warning.
+
+- **jsdom KHÔNG mô phỏng hành vi định tuyến lại click do pointer capture** — mọi test cũ
+  của các nút này (`MindElixirView.exportStudio.test.jsx`, chạy trên jsdom) đều xanh, vì
+  jsdom luôn để click trúng đúng phần tử bất kể `setPointerCapture` đã gọi hay chưa. Bug
+  hoàn toàn vô hình cho tới khi chạy Playwright + Chromium thật (`FE/e2e-fixture/`).
+
+- **Quy tắc rút ra**: mọi overlay/toolbar/thanh nổi mới thêm vào bên trong một vùng có
+  pan/drag handler riêng (kiểm bằng grep `setPointerCapture`/`pointerdown` trong cùng
+  component) PHẢI được thêm vào đúng danh sách loại trừ của handler đó, và việc xác nhận
+  "nút này thật sự gọi tay cầm của nó" cho những khu vực như vậy cần ít nhất một test chạy
+  trên trình duyệt thật, không chỉ jsdom — xem `[[known-issues]]` mục "MindElixirView's
+  background-pan pointer capture hijacked clicks..." (2026-09-28) để biết chi tiết root
+  cause và bản vá.
+
 ## 2026-09-09 - Trạng thái AI phải phân biệt kho BỀN VỮNG với kho PHÙ DU
 
 - **Đọc chỗ trống thành "đang tạo" là một lời nói dối có lịch chạy.** Thư viện học tập

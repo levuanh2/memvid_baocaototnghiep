@@ -408,6 +408,13 @@ html.dark .me-container { --mm-relation: #7e90c4; }
 .mm-map-selector__new { justify-content: flex-start; margin-top: 4px; border-top: 1px solid var(--border-color); border-radius: 0; color: var(--accent); }
 .mm-context-action, .mm-overflow-trigger { flex: 0 0 40px; width: 40px; height: 40px; display: inline-flex; align-items: center; justify-content: center; border: 1px solid var(--border-color); border-radius: 50%; color: var(--accent); background: var(--bg-card); cursor: pointer; }
 .mm-context-action:hover, .mm-overflow-trigger:hover { background: var(--bg-hover); }
+/* Section 3 — a real header-level export entry point, distinct from the
+   floating zoom toolbar (pan/zoom only) and the overflow menu (kept for
+   less-used actions). Icon + text on desktop; the text hides at narrow
+   widths via the same rule mm-quality-status/mm-saved-status already use
+   below, while aria-label/title (set in the JSX) keep it identifiable. */
+.mm-export-trigger { display: inline-flex; align-items: center; gap: 6px; height: 40px; padding: 0 12px; border: 1px solid var(--border-color); border-radius: 20px; color: var(--accent); background: var(--bg-card); cursor: pointer; white-space: nowrap; font-size: 13px; }
+.mm-export-trigger:hover, .mm-export-trigger:focus-visible { background: var(--bg-hover); }
 .mm-quality-status, .mm-saved-status { display: inline-flex; align-items: center; gap: 5px; white-space: nowrap; color: var(--forest); font-size: 12px; }
 .mm-saved-status.is-dirty { color: var(--warn); }
 .mm-quality-status.is-warning { color: var(--warn); }
@@ -430,7 +437,150 @@ html.dark .me-container { --mm-relation: #7e90c4; }
   .mm-context-link { display: none; }
   .mm-map-selector { flex-basis: 145px; }
   .mm-inspector-drawer { width: min(340px, calc(100% - 28px)); }
+  .mm-export-trigger { width: 40px; padding: 0; justify-content: center; border-radius: 50%; }
+  .mm-export-trigger span { display: none; }
 }
 @media (prefers-reduced-motion: reduce) {
   .mm-inspector-drawer { transition: none; }
 }
+
+/* Per-node branch caret (Round: Export Studio + expand/collapse redesign).
+   `<me-epd>` is mind-elixir's OWN element — decorated (not replaced) by
+   mindElixirExpandDecorator.js with role/tabindex/aria-*. Its click handler
+   reads the RAW event target's tagName (no `.closest()` — verified in
+   node_modules/mind-elixir/dist/MindElixir.js), so every visual addition
+   here is background/mask-image or a pseudo-element, never a DOM child —
+   a real child would become the click target instead of <me-epd> itself
+   and silently break the toggle. */
+.map-container me-epd.mm-epd {
+  /* mind-elixir's own base rule sets width/height:18px and background-image
+     to its default plus/minus glyph; override the glyph only — width/height
+     and the top/left percentage math elsewhere in this stylesheet all
+     assume that native 18px box, and changing it would misposition every
+     caret relative to its node. The 40px hit target below is layered on
+     top via ::before instead, so the visible icon can stay small while the
+     clickable area meets the 40x40 floor. */
+  background-image: none;
+  -webkit-mask-repeat: no-repeat; mask-repeat: no-repeat;
+  -webkit-mask-position: center; mask-position: center;
+  -webkit-mask-size: 14px 14px; mask-size: 14px 14px;
+  background-color: var(--text-secondary);
+  /* collapsed = chevron-right */
+  -webkit-mask-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='%23000' stroke-width='2.25' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpolyline points='9 18 15 12 9 6'/%3E%3C/svg%3E");
+  mask-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='%23000' stroke-width='2.25' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpolyline points='9 18 15 12 9 6'/%3E%3C/svg%3E");
+}
+.map-container me-epd.mm-epd.minus {
+  /* expanded = chevron-down */
+  -webkit-mask-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='%23000' stroke-width='2.25' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpolyline points='6 9 12 15 18 9'/%3E%3C/svg%3E");
+  mask-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='%23000' stroke-width='2.25' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpolyline points='6 9 12 15 18 9'/%3E%3C/svg%3E");
+}
+/* Enlarge the clickable/tappable area to ~40x40 without moving the visible
+   18px box mind-elixir positions via its own top/left math. A pseudo-
+   element's painted area is still attributed to its host element on click
+   (pseudo-elements have no DOM identity of their own to become
+   event.target), so this is safe under the raw-tagName click check above. */
+.map-container me-epd.mm-epd::before {
+  content: ""; position: absolute; inset: -11px;
+}
+/* Visibility: mind-elixir's own default already keeps the COLLAPSED-state
+   glyph always visible (opacity:.8, no gating — a real fully-hidden branch
+   should never be silently undiscoverable) and only fades the EXPANDED-
+   state glyph until hover/touch. `:has()` extends that same fade-in rule to
+   keyboard focus and to the node currently being selected, per spec
+   ("hiện rõ khi hover, focus hoặc node đang selected"). */
+.map-container me-parent:has(> me-tpc.selected) me-epd.mm-epd.minus,
+.map-container me-epd.mm-epd.minus:focus-visible {
+  opacity: .8;
+}
+.map-container me-epd.mm-epd:focus-visible {
+  opacity: 1;
+  outline: 2px solid var(--forest, var(--accent));
+  outline-offset: 2px;
+  border-radius: 4px;
+}
+/* Hidden-descendant-count badge — a data attribute, not a DOM child (same
+   raw-tagName constraint as the icon swap above). `content: attr(...)`
+   pulls the number straight from the attribute mindElixirExpandDecorator.js
+   sets, so there is nothing here to keep in sync by hand. */
+.map-container me-epd.mm-epd[data-hidden-count]::after {
+  content: "+" attr(data-hidden-count);
+  position: absolute;
+  left: 100%; top: 50%; transform: translateY(-50%);
+  margin-left: 3px;
+  padding: 0 4px;
+  min-width: 14px;
+  font-size: 10px; line-height: 15px; text-align: center;
+  font-family: var(--font-mono, monospace);
+  color: var(--text-secondary);
+  background: var(--bg-card);
+  border: 1px solid var(--border-color);
+  border-radius: 8px;
+  white-space: nowrap;
+  pointer-events: none;
+}
+@media (hover: none) {
+  /* Touch: affordance must always read as tappable, not just on the
+     collapsed glyph mind-elixir already keeps visible by default. */
+  .map-container me-epd.mm-epd.minus { opacity: .8; }
+}
+
+/* Export Selection Mode (Export Studio, "Các nhánh được chọn"). A brand-new
+   element — see mindmapBranchSelectionMode.js for why nothing existing was
+   available to reuse — positioned at each node's top-left corner (mind-
+   elixir's own `<me-epd>` already occupies the bottom/side edges, this
+   avoids colliding with it). `<me-parent>` is `position: relative` in
+   mind-elixir's own base stylesheet, so this needs no wrapper of its own. */
+.map-container me-export-check {
+  position: absolute;
+  top: -9px; left: -9px;
+  width: 18px; height: 18px;
+  min-width: 40px; min-height: 40px; /* hit target — box itself stays small, ::before below expands the tappable area */
+  display: block;
+  border-radius: 4px;
+  border: 1.5px solid var(--border-strong, #888);
+  background: var(--bg-card, #fff);
+  cursor: pointer;
+  z-index: 11; /* above me-tpc, below the context-menu layer */
+}
+.map-container me-export-check::before {
+  content: ""; position: absolute; inset: -11px; /* real hit target, same technique as .mm-epd */
+}
+.map-container me-export-check.is-checked {
+  background: var(--accent);
+  border-color: var(--accent);
+}
+.map-container me-export-check.is-checked::after {
+  content: "";
+  position: absolute; left: 5px; top: 1px; width: 5px; height: 9px;
+  border: solid #fff; border-width: 0 2px 2px 0;
+  transform: rotate(45deg);
+}
+.map-container me-export-check:focus-visible {
+  outline: 2px solid var(--forest, var(--accent));
+  outline-offset: 2px;
+}
+
+/* Selection bar — "Đã chọn N nhánh · Xóa chọn · Tiếp tục · Hủy", overlaid
+   on the canvas (not inside the floating zoom toolbar, which stays purely
+   about pan/zoom) while Export Selection Mode is active. */
+.mm-selection-bar {
+  position: absolute;
+  left: 50%; bottom: 16px; transform: translateX(-50%);
+  z-index: 15;
+  display: flex; align-items: center; gap: 10px;
+  padding: 8px 14px;
+  background: var(--bg-card);
+  border: 1px solid var(--border-color);
+  border-radius: 999px;
+  box-shadow: var(--shadow-card-hover);
+  font-size: 13px;
+  color: var(--text-primary);
+  white-space: nowrap;
+}
+.mm-selection-bar button {
+  border: 0; background: transparent; color: var(--accent); cursor: pointer;
+  padding: 4px 6px; border-radius: 6px;
+}
+.mm-selection-bar button:hover, .mm-selection-bar button:focus-visible { background: var(--bg-hover); }
+.mm-selection-bar button:disabled { opacity: .4; cursor: not-allowed; }
+.mm-selection-bar__sep { color: var(--border-strong); }
