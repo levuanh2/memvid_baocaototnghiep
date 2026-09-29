@@ -37,6 +37,7 @@ PyMuPDF
 pymupdf4llm
 pytesseract
 pytest>=8.0.0
+pytest-timeout>=2.3.1  # per-test watchdog (thread method) so a single stuck test fails fast with a stack trace instead of silently hanging the whole CI job for its 25min budget. See .github/workflows/ci.yml's --timeout flag and .playbook/known-issues.md.
 pydantic>=2.7.4,<2.11      # 2.11+ kéo typing_inspection → ForbiddenQualifier('not_required') khi StateGraph(QueryState) build từ TypedDict có NotRequired (langgraph 0.2.x). Xem .playbook
 python-docx
 python-dotenv

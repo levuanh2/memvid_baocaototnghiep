@@ -312,7 +312,13 @@ jobs:
 
       - name: Run full backend test suite
         working-directory: BE
-        run: python -m pytest -q --junitxml=reports/backend-junit.xml
+        # --timeout is per-test (thread method dumps the stuck test's stack
+        # and fails just that test), not a whole-job budget -- see the
+        # timeout-minutes comment above for why a job-level-only timeout
+        # silently ate 20+ min with zero diagnostic output. 60s is generous
+        # headroom over every real test's actual runtime (the full suite
+        # normally clears in a few minutes; see .playbook/known-issues.md).
+        run: python -m pytest -q --timeout=60 --timeout-method=thread --junitxml=reports/backend-junit.xml
 
       - name: Upload test report artifact
         if: always()
