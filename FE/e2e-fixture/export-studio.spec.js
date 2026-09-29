@@ -61,6 +61,16 @@ async function exportAndSave(page, filenameHint) {
   return savePath;
 }
 
+/** Same as exportAndSave, but keeps the EXACT filename given (no timestamp) — used for the Section 8 named QA specimens (full-map.png etc.) so there's one canonical file per format to point a report at. */
+async function exportAndSaveExact(page, exactFilename) {
+  const downloadPromise = page.waitForEvent("download");
+  await page.getByRole("button", { name: /Xuất$/ }).click();
+  const download = await downloadPromise;
+  const savePath = path.join(ARTIFACT_DIR, exactFilename);
+  await download.saveAs(savePath);
+  return savePath;
+}
+
 /** Real browser Image decode — proves the file is actually a valid, decodable raster image, not just bytes with a matching header. */
 async function decodeImageDimensions(page, filePath) {
   const buf = fs.readFileSync(filePath);
@@ -321,5 +331,53 @@ test.describe("Export Studio — fixture harness, real files", () => {
     await expect(page.locator(".mm-selection-bar")).toContainText("Đã chọn 1 nhánh");
     await page.locator(".mm-selection-bar").getByRole("button", { name: "Xóa chọn" }).click();
     await expect(page.locator(".mm-selection-bar")).toContainText("Đã chọn 0 nhánh");
+  });
+
+  test("Section 8 artifact quality gate: full-map.png is retained and valid", async ({ page }) => {
+    await openExportStudio(page);
+    await chooseScope(page, "full");
+    await advanceToPreview(page);
+    const filePath = await exportAndSaveExact(page, "full-map.png");
+    const buf = fs.readFileSync(filePath);
+    expect(buf.subarray(0, 8)).toEqual(Buffer.from([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a]));
+    const { width, height } = await decodeImageDimensions(page, filePath);
+    expect(width).toBeGreaterThan(0);
+    expect(height).toBeGreaterThan(0);
+  });
+
+  test("Section 8 artifact quality gate: selected-branch.jpeg is retained and valid", async ({ page }) => {
+    const s1Id = `${MAP_A_ID}-m0`;
+    await page.locator(nodeSelector(s1Id)).click();
+    await openExportStudio(page);
+    await chooseScope(page, "current_branch");
+    await clickNext(page); // -> format step
+    await chooseFormat(page, "jpeg");
+    await clickNext(page); // -> appearance step
+    await clickNext(page); // -> preview step
+    const filePath = await exportAndSaveExact(page, "selected-branch.jpeg");
+    const buf = fs.readFileSync(filePath);
+    expect(buf.subarray(0, 3)).toEqual(Buffer.from([0xff, 0xd8, 0xff]));
+    const { width, height } = await decodeImageDimensions(page, filePath);
+    expect(width).toBeGreaterThan(0);
+    expect(height).toBeGreaterThan(0);
+  });
+
+  test("Section 8 artifact quality gate: multi-branch.svg is retained and valid", async ({ page }) => {
+    await openExportStudio(page);
+    await chooseScope(page, "selected_branches");
+    await page.getByRole("button", { name: "Chọn nhánh trên sơ đồ" }).click();
+    await page.locator(nodeSelector(`${MAP_A_ID}-m0`)).click();
+    await page.locator(nodeSelector(`${MAP_A_ID}-m1`)).click();
+    await page.locator(".mm-selection-bar").getByRole("button", { name: "Tiếp tục" }).click();
+    await clickNext(page); // -> format step
+    await chooseFormat(page, "svg");
+    await clickNext(page); // -> appearance step
+    await clickNext(page); // -> preview step
+    const filePath = await exportAndSaveExact(page, "multi-branch.svg");
+    const svgText = fs.readFileSync(filePath, "utf8");
+    expect(svgText).toMatch(/<svg[^>]*>/);
+    expect(svgText).not.toMatch(/NaN|undefined|Infinity/);
+    const viewBoxMatch = svgText.match(/viewBox="([\d.\s-]+)"/);
+    expect(viewBoxMatch).toBeTruthy();
   });
 });
