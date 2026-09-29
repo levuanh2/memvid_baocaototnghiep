@@ -1,5 +1,114 @@
 # Known Issues
 
+## (2026-09-29) Export Studio document-export storage readiness — full audit
+
+Consolidates and supersedes the Section 7 audit entry below for anything
+specific to the NEW `mindmap_export` job type this round added. Read that
+entry first for the general jobs-infrastructure findings (render.yaml is a
+decoy, real production is AWS EC2 + docker-compose.prod.yml, no queue/Redis
+anywhere); this entry is the export-file-specific follow-up.
+
+**Where generated files are written**: `BE/app/domains/jobs/export_jobs.py`'s
+`export_output_dir()` resolves `MEMORY_DIR` env var, falling back to
+`BE_ROOT/memory` — the EXACT same resolution `app/domains/mindmap/store.py`'s
+`db_path()` already uses for `mindmaps.sqlite`. Files land at
+`<that>/exports/<job_id>.<ext>`, keyed by a server-generated UUID only.
+
+**Do web and worker share this path?** There is no separate "worker"
+process for this job type — `QUEUE_ENABLED=false` everywhere (Render and
+AWS both), so export jobs run as an in-process daemon thread inside the
+SAME Gunicorn worker that received the HTTP request (via the existing
+`app.jobs.queue.enqueue_job` single switch point). No cross-process file
+sharing is needed for this job type today. (The separate `mindmap-worker`
+container in `docker-compose.prod.yml` is Guided Mind Map V3-only, a
+different job type entirely, and does NOT run export jobs.)
+
+**Does the production path survive a container restart?** Yes, on the
+real AWS deployment — confirmed by reading `docker-compose.prod.yml`:
+`backend`'s `JOBS_DB_PATH=/app/memory/jobs.sqlite` sits under the
+`/opt/memvid/data/memory:/app/memory` HOST bind mount, and
+`export_output_dir()`'s fallback (`BE_ROOT/memory` = `/app/memory` inside
+the container, since `DATA_DIR=/app` and `BE_ROOT` resolves relative to
+the app's own working directory) lands on that exact same durable volume.
+**On Render Free** (the decoy backend, not real production — see the
+Section 7 entry below), `DATA_DIR=/tmp/studymap` is explicitly ephemeral,
+so export files there do NOT survive a deploy/restart/spin-down. This
+distinction matters and is not hidden behind passing serializer tests.
+
+**Token-signing mechanism**: `itsdangerous.URLSafeTimedSerializer`, reusing
+`app.domains.auth.tokens._get_secret()` (same `AUTH_SECRET` resolution,
+including its fail-closed behavior under `AUTH_REQUIRE_SECRET=true`) with
+a dedicated salt (`mv-export-download-v1`) so the download-token namespace
+can never collide with the bearer-token namespace.
+
+**Token TTL**: 300 seconds (`DOWNLOAD_TOKEN_TTL_SEC`), re-minted fresh on
+every `GET /mindmaps/exports/<job_id>` poll once status is `done` — a
+client that keeps polling always has a valid token; one that stops polling
+has ~5 minutes before it needs a fresh poll to download.
+
+**File TTL / cleanup trigger**: no dedicated TTL on the file itself — it is
+deleted the same moment its job ROW is pruned by the existing
+`jobs_store.cleanup_terminal_jobs()` (default `JOB_RETENTION_DAYS=7`,
+piggybacked onto the same rate-limited (`JOB_SWEEP_INTERVAL_SECONDS=300`)
+maintenance sweep every job type already uses — see
+`export_jobs.cleanup_terminal_export_files()`, wired into
+`_run_jobs_maintenance()` in `app/main.py`). Verified with a real test
+(`test_cleanup_removes_orphaned_export_file_once_its_job_row_is_pruned`).
+
+**Maximum artifact size**: not explicitly capped beyond Flask's existing
+global `MAX_CONTENT_LENGTH` (100 MB, `MAX_UPLOAD_MB` env-configurable) on
+the REQUEST (map_image_base64 upload) — there is no separate cap on the
+GENERATED output file size. A pathological map (very deep, very many
+nodes) could in principle produce a very large PDF/DOCX/XLSX; nothing here
+bounds that today. Flagged as a real gap, not fixed this round (would need
+either a node-count ceiling on the request or a post-generation size check
+before writing to disk).
+
+**Maximum node count**: none enforced by the export path itself. The
+mindmap GENERATION pipeline already caps map size (`MAX_NODES` in
+`services/mindmap/pipeline/schema.py`'s `sanitize_nodes`), so in practice
+every map reaching export already went through that ceiling — but the
+export code path has no INDEPENDENT limit of its own if that upstream cap
+were ever bypassed (e.g. a manually-edited record via `PUT /mindmaps/<id>`,
+which does call `sanitize_nodes` too, so this is currently covered
+transitively, not directly).
+
+**Behavior when storage is unavailable**: if `export_output_dir()` can't be
+created/written (disk full, permissions), the exception propagates up
+through `run_export_job`'s own `except Exception` catch-all and lands the
+job in `status="error"` with a generic message — never a silently "done"
+job with no file, and never an unhandled thread crash that leaves the job
+stuck at `running` forever (that class of failure is instead caught by
+`sweep_stuck_jobs()`, see below). Not explicitly tested this round (would
+need a real disk-full simulation); the code path is the same generic
+exception handler already covering every other export failure mode.
+
+**Lease recovery / worker restart** — the one real limitation: this job
+type has NO dedicated lease-recovery/auto-resume path (unlike Guided Mind
+Map V3, which has `recover_expired_jobs()` + re-enqueue logic in
+`app/main.py`'s `_recover_guided_jobs`). If the process hosting an export
+job's daemon thread crashes or restarts mid-export, the job row is left at
+`status="running"` with a stale `updated_at`. The ONLY thing that catches
+this is the generic `jobs_store.sweep_stuck_jobs()` (`JOB_STUCK_AFTER_
+SECONDS=900` default — confirmed to have no `job_type` filter, so export
+jobs ARE caught, verified by
+`test_stuck_export_job_is_swept_like_any_other_job_type`), which marks it
+`interrupted` — but nothing then automatically retries or resumes it. A
+user whose export job died mid-flight sees `running` for up to 15 minutes,
+then `interrupted`, and must manually resubmit. **This is an honest,
+documented gap, not something to hide behind passing tests.**
+
+**Verdict: PRODUCTION STORAGE GATE — PASS for durability of the file
+itself (real bind mount, confirmed path resolution, real cleanup), but
+WITH the lease-recovery gap above as a known, undocumented-until-now
+limitation.** Given the durability question specifically (does the file
+survive a restart) is answered yes on real production, and the recovery
+gap is a availability/UX limitation rather than a data-loss risk (the
+underlying mindmap data is never touched — only the export job's own
+transient state), this does not block the release candidate on its own,
+but should be read alongside the rest of this round's report before any
+release decision.
+
 ## (ĐÃ SỬA 2026-09-28) MindElixirView's background-pan pointer capture hijacked clicks on the Export Studio selection bar
 
 `MindElixirView.jsx`'s background-pan `pointerdown` handler (added to make left-click-drag
