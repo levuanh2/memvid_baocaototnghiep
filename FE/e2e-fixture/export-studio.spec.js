@@ -164,6 +164,32 @@ test.describe("Export Studio — fixture harness, real files", () => {
     expect(svgText).not.toMatch(/mm-export-toolbar|mm-selection-bar|Xuất sơ đồ/);
   });
 
+  test("Section 7 gate: the exact representative Vietnamese character set renders correctly in real SVG (XML text)", async ({ page }) => {
+    // ă â ê ô ơ ư đ Á Ế Ỗ Ờ Ữ — the fixture's dedicated `${MAP_A_ID}-vn-gate`
+    // node (mindmapFixtures.js) carries exactly this string.
+    await openExportStudio(page);
+    await chooseScope(page, "full");
+    await clickNext(page); // -> format step
+    await chooseFormat(page, "svg");
+    await clickNext(page); // -> appearance step
+    await clickNext(page); // -> preview step
+    const svgPath = await exportAndSave(page, "vn-gate-svg");
+    const svgText = fs.readFileSync(svgPath, "utf8");
+    expect(svgText).toContain("ă â ê ô ơ ư đ Á Ế Ỗ Ờ Ữ");
+  });
+
+  test("Section 7 gate: the exact representative Vietnamese character set does not corrupt a real decodable PNG", async ({ page }) => {
+    await openExportStudio(page);
+    await chooseScope(page, "full");
+    await advanceToPreview(page); // format defaults to png
+    const pngPath = await exportAndSave(page, "vn-gate-png");
+    const buf = fs.readFileSync(pngPath);
+    expect(buf.subarray(0, 8)).toEqual(Buffer.from([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a]));
+    const { width, height } = await decodeImageDimensions(page, pngPath);
+    expect(width).toBeGreaterThan(0);
+    expect(height).toBeGreaterThan(0);
+  });
+
   test("appearance: 'Trình bày' preset (legend + branding + monochrome/custom-palette color) actually changes the exported SVG markup", async ({ page }) => {
     await openExportStudio(page);
     await chooseScope(page, "full");

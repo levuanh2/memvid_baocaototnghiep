@@ -9,7 +9,8 @@
 // Shape: 4 main branches (depth 1) x 3 sub-branches (depth 2) x 3 leaf ideas
 // (depth 3) = 4 + 12 + 36 = 52, plus root = 53, plus 7 hand-placed extra
 // leaves under specific sub-branches (for realistic uneven density and to
-// round toward "~60 node") = 60 total. Vietnamese text throughout. A subset
+// round toward "~60 node") = 60, plus 1 dedicated Vietnamese-character-set
+// gate node (Section 7) = 61 total. Vietnamese text throughout. A subset
 // of nodes carry `note`/`chunk_refs` (citations); a handful of cross-branch
 // `relations` connect leaves in different main branches.
 
@@ -62,6 +63,16 @@ function buildMap(mapId, title) {
   ];
   extras.forEach(([parent, title], i) => {
     nodes.push({ id: `${mapId}-extra${i}`, kind: "idea", title, parent, order: 99 + i });
+  });
+
+  // Section 7 (final hardening round): a dedicated node carrying the EXACT
+  // representative Vietnamese character set the round specified, so real
+  // export-format QA can assert it renders correctly rather than relying
+  // on the incidental diacritics already scattered through the topics
+  // above. Stable, predictable id for tests to target directly.
+  nodes.push({
+    id: `${mapId}-vn-gate`, kind: "idea", title: "ă â ê ô ơ ư đ Á Ế Ỗ Ờ Ữ",
+    parent: `${mapId}-root`, order: 200,
   });
 
   // A handful of cross-branch relations (must connect nodes that actually exist).
