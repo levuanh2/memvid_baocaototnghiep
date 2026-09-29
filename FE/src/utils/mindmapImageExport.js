@@ -45,6 +45,25 @@ function subtreeElementFor(mind, nodeId) {
   return topic?.closest("me-wrapper") || mind.map;
 }
 
+function blobToBase64(blob) {
+  return new Promise((resolve, reject) => {
+    const reader = new FileReader();
+    reader.onload = () => resolve(String(reader.result).split(",")[1] || "");
+    reader.onerror = () => reject(reader.error);
+    reader.readAsDataURL(blob);
+  });
+}
+
+/** Shared tail for both capture paths: "download" triggers the real browser download (existing behavior); "base64" returns {base64} instead — used by captureMapImageBase64 to hand a PNG to the PDF/DOCX backend job as `map_image_base64`, never triggering a download of its own. */
+async function _finishCapture(result, { outputMode, format, filename, quality }) {
+  if (outputMode === "base64") {
+    const blob = await result.toBlob({ type: format === "jpeg" ? "jpg" : format });
+    return { base64: await blobToBase64(blob) };
+  }
+  await result.download({ format, filename, quality });
+  return { filename };
+}
+
 /**
  * A REAL (not fabricated) size estimate for the Export Studio preview
  * summary — reads actual `getBoundingClientRect()`s of the live-rendered
@@ -83,10 +102,16 @@ export function estimateExportDimensions({ mind, scopeType, targetNodeId, branch
   return { width, height };
 }
 
+/** Captures the SAME scope a document export (PDF map mode, DOCX optional image) is about to use, as a real PNG — returned as base64 (no `data:` prefix, ready for BE's `map_image_base64`), never triggering a browser download. Thin wrapper over exportMindmapImage with outputMode:"base64"; every real-DOM-capture rule (force-expand, appearance, multi-branch offscreen composition) is shared, not reimplemented. */
+export async function captureMapImageBase64(opts) {
+  const { base64 } = await exportMindmapImage({ ...opts, format: "png", outputMode: "base64" });
+  return base64;
+}
+
 export async function exportMindmapImage({
   mind, scopeType, targetNodeId, branchRootIds, includeDescendants = true, visibleOnly = false,
   format, backgroundColor, scale = 2, quality = 1, title,
-  appearance = DEFAULT_APPEARANCE,
+  appearance = DEFAULT_APPEARANCE, outputMode = "download",
   snapdom = realSnapdom, settleMs = 30, MindElixirCtor = RealMindElixir,
 }) {
   if (!mind?.map) throw new Error("Mind Elixir chưa sẵn sàng.");
@@ -94,7 +119,7 @@ export async function exportMindmapImage({
   if (scopeType === "selected_branches") {
     return exportMindmapImageMultiBranch({
       mind, rootIds: branchRootIds, includeDescendants, visibleOnly,
-      format, backgroundColor, scale, quality, title, appearance, snapdom, settleMs, MindElixirCtor,
+      format, backgroundColor, scale, quality, title, appearance, outputMode, snapdom, settleMs, MindElixirCtor,
     });
   }
 
@@ -135,8 +160,7 @@ export async function exportMindmapImage({
 
     const result = await snapdom(target, { backgroundColor, scale, quality });
     const filename = exportFilenameFor(title, format === "jpeg" ? "jpg" : format);
-    await result.download({ format, filename, quality });
-    return { filename };
+    return await _finishCapture(result, { outputMode, format, filename, quality });
   } finally {
     restoreTargetAppearance();
     restoreContainerAppearance();
@@ -197,7 +221,7 @@ function indexById(nodeData) {
  */
 async function exportMindmapImageMultiBranch({
   mind, rootIds, includeDescendants, visibleOnly,
-  format, backgroundColor, scale, quality, title, appearance, snapdom, settleMs, MindElixirCtor,
+  format, backgroundColor, scale, quality, title, appearance, outputMode, snapdom, settleMs, MindElixirCtor,
 }) {
   if (!rootIds?.length) throw new Error("Chưa chọn nhánh để xuất.");
 
@@ -209,7 +233,7 @@ async function exportMindmapImageMultiBranch({
   if (orderedRootIds.length === 1) {
     return exportMindmapImage({
       mind, scopeType: "current_branch", targetNodeId: orderedRootIds[0],
-      format, backgroundColor, scale, quality, title, appearance, snapdom, settleMs, MindElixirCtor,
+      format, backgroundColor, scale, quality, title, appearance, outputMode, snapdom, settleMs, MindElixirCtor,
     });
   }
 
@@ -255,8 +279,7 @@ async function exportMindmapImageMultiBranch({
 
     const result = await snapdom(offscreenMind.map, { backgroundColor, scale, quality });
     const filename = exportFilenameFor(title, format === "jpeg" ? "jpg" : format);
-    await result.download({ format, filename, quality });
-    return { filename };
+    return await _finishCapture(result, { outputMode, format, filename, quality });
   } finally {
     offscreenMind?.destroy?.();
     offscreen.remove();

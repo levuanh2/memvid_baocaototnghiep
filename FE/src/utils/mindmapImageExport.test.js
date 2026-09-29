@@ -8,7 +8,7 @@
 // invariants) is real library behavior, not a hand-rolled mock of it.
 import { describe, it, expect, vi, afterEach, beforeAll } from "vitest";
 import MindElixir from "mind-elixir";
-import { exportMindmapImage } from "./mindmapImageExport";
+import { exportMindmapImage, captureMapImageBase64 } from "./mindmapImageExport";
 
 beforeAll(() => {
   window.matchMedia = window.matchMedia || (() => ({ matches: false, addEventListener() {}, removeEventListener() {} }));
@@ -31,7 +31,10 @@ function makeMind() {
 }
 
 function fakeResult() {
-  return { download: vi.fn().mockResolvedValue(undefined) };
+  return {
+    download: vi.fn().mockResolvedValue(undefined),
+    toBlob: vi.fn().mockResolvedValue(new Blob([new Uint8Array([1, 2, 3, 4])], { type: "image/png" })),
+  };
 }
 
 let mind;
@@ -373,5 +376,32 @@ describe("exportMindmapImage — scopeType: selected_branches (multi-branch)", (
     });
     expect(document.body.childElementCount).toBe(bodyChildrenBefore);
     expect(mind.nodeData.children[2].children[0].expanded).toBe(liveExpandedBefore);
+  });
+});
+
+describe("captureMapImageBase64", () => {
+  it("returns base64 (no data: prefix) instead of triggering a download", async () => {
+    mind = makeMind();
+    const result = fakeResult();
+    const snapdom = vi.fn().mockResolvedValue(result);
+    const base64 = await captureMapImageBase64({ mind, scopeType: "visible", snapdom, settleMs: 0 });
+    expect(result.download).not.toHaveBeenCalled();
+    expect(result.toBlob).toHaveBeenCalledWith({ type: "png" });
+    expect(base64).not.toMatch(/^data:/);
+    expect(base64.length).toBeGreaterThan(0);
+    // Real base64 round-trips back to the exact bytes toBlob produced.
+    expect(atob(base64)).toBe(String.fromCharCode(1, 2, 3, 4));
+  });
+
+  it("works for a multi-branch scope, composing via the same offscreen pipeline", async () => {
+    mind = makeMultiBranchMind();
+    const result = fakeResult();
+    const snapdom = vi.fn().mockResolvedValue(result);
+    const MindElixirCtor = spyCtor(MindElixir);
+    const base64 = await captureMapImageBase64({
+      mind, scopeType: "selected_branches", branchRootIds: ["c1", "c2"], snapdom, settleMs: 0, MindElixirCtor,
+    });
+    expect(MindElixirCtor).toHaveBeenCalledTimes(1);
+    expect(base64.length).toBeGreaterThan(0);
   });
 });
