@@ -437,7 +437,17 @@ export default function MindElixirView({ data, onRegenerate, regenerating, contr
       // this was invisible to every jsdom-based test; only caught by
       // driving a real Chromium instance (see e2e-fixture's multi-branch
       // export spec).
-      if (e.button !== 0 || e.target.closest("me-tpc, me-epd, .mm-floating-toolbar, .mm-legend, .mm-fullscreen-corner, .mm-selection-bar")) return;
+      // Same class of bug, same fix, for `me-export-check` (hotfix round):
+      // pointerdown/mousedown correctly hit the checkbox (confirmed once
+      // mindmap.css's own missing `pointer-events: auto` on it was fixed),
+      // but without it excluded HERE too, this same setPointerCapture(wrap)
+      // still fires on that pointerdown and hijacks mouseup/click to `wrap`
+      // a moment later — the checkbox's own click listener never runs.
+      // Real evidence (Playwright event-target log): pointerdown/mousedown
+      // target ME-EXPORT-CHECK, then mouseup/click both retarget to the
+      // canvas wrap div. The CSS fix alone was necessary but not
+      // sufficient; this exclusion is the other half.
+      if (e.button !== 0 || e.target.closest("me-tpc, me-epd, me-export-check, .mm-floating-toolbar, .mm-legend, .mm-fullscreen-corner, .mm-selection-bar")) return;
       pan = { x: e.clientX, y: e.clientY, id: e.pointerId };
       wrap.setPointerCapture?.(e.pointerId);
     };

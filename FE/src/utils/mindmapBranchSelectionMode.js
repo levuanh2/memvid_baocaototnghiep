@@ -71,7 +71,18 @@ export function attachBranchSelectionMode(containerEl, { isActiveRef, isSelected
   if (!containerEl) return { detach: () => {}, resync: () => {} };
 
   const scan = () => {
-    if (!isActiveRef.current) return;
+    if (!isActiveRef.current) {
+      // Mode just went inactive (or a re-render fired mid-inactive, a no-op
+      // once this has already run): sweep any leftover checkboxes. Turning
+      // the mode off previously only stopped `decorateParent` from creating
+      // NEW ones — existing `<me-export-check>` elements were never told to
+      // leave, so they kept rendering (and, once pointer-events was fixed,
+      // stayed fully clickable) on the canvas after "Tiếp tục"/"Hủy" closed
+      // the selection bar. Same removal `detach()` already does on unmount,
+      // just triggered by mode-off instead of component teardown.
+      containerEl.querySelectorAll("me-export-check").forEach((el) => el.remove());
+      return;
+    }
     containerEl.querySelectorAll("me-parent, me-root").forEach((el) => decorateParent(el, { isSelectedFn, onToggle }));
   };
   scan();

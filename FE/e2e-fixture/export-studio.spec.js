@@ -381,3 +381,189 @@ test.describe("Export Studio — fixture harness, real files", () => {
     expect(viewBoxMatch).toBeTruthy();
   });
 });
+
+/** The actual `<me-export-check>` checkbox for a node, by its aria-label
+ * (mindmapBranchSelectionMode.js sets `Chọn nhánh: ${topic}`) — distinct
+ * from `nodeSelector(id)` above, which targets `<me-tpc>` (the topic label
+ * itself). Every OTHER test in this file clicks the label, which routes
+ * through a separate "click the topic while in selection mode" handler and
+ * was never affected by the bug this block guards: production's real
+ * checkbox had `pointer-events: none` (inherited from mind-elixir's own
+ * `.map-canvas`, which is `none` so panning/dragging aren't blocked by
+ * arbitrary canvas content — `<me-tpc>`/`<me-epd>` opt back in via mind-
+ * elixir's own base rules, this brand-new element had no such rule). A
+ * jsdom `dispatchEvent` (every existing unit test) or a Playwright click on
+ * `<me-tpc>` (every existing test above) cannot see that regression class
+ * at all — jsdom does no CSS hit-testing, and the label was never blocked.
+ * Only a real Playwright click AT THE CHECKBOX'S OWN COORDINATES, which
+ * performs real actionability/hit-testing against computed CSS, can. */
+function checkboxFor(topicTitle) {
+  return `me-export-check[aria-label="Chọn nhánh: ${topicTitle}"]`;
+}
+
+test.describe("Export Selection Mode — checkbox pointer regression (hotfix)", () => {
+  test.beforeEach(async ({ page }) => {
+    await page.goto("/fixture-harness.html");
+    await expect(page.getByTestId("fixture-harness-root")).toBeVisible();
+    await expect(page.locator(nodeSelector(`${MAP_A_ID}-root`))).toBeVisible();
+  });
+
+  test("A: a real click on the checkbox itself toggles selection 0 -> 1 -> 0, opens no node-detail drawer, and leaves the canvas transform untouched", async ({ page }) => {
+    const beforeTransform = await page.locator(".map-canvas").evaluate((el) => el.style.transform || "");
+    await openExportStudio(page);
+    await chooseScope(page, "selected_branches");
+    await page.getByRole("button", { name: "Chọn nhánh trên sơ đồ" }).click();
+
+    const check = page.locator(checkboxFor("Kiến trúc hệ thống"));
+    await expect(check).toBeVisible();
+    // Real hit-testing click — this is the assertion that fails on
+    // unfixed code (pointer-events:none means Playwright's own
+    // actionability check finds the element is not the hit-test target
+    // at its own center, and the click never registers).
+    await check.click();
+    await expect(page.locator(".mm-selection-bar")).toContainText("Đã chọn 1 nhánh");
+    await expect(check).toHaveAttribute("aria-checked", "true");
+
+    // No node-detail drawer opened from the checkbox click.
+    await expect(page.getByText("Chi tiết sơ đồ")).toHaveCount(0);
+
+    // Canvas didn't pan/zoom from this click.
+    const midTransform = await page.locator(".map-canvas").evaluate((el) => el.style.transform || "");
+    expect(midTransform).toBe(beforeTransform);
+
+    // Click again -> back to 0 (real toggle, not just "always sets true").
+    await check.click();
+    await expect(page.locator(".mm-selection-bar")).toContainText("Đã chọn 0 nhánh");
+    await expect(check).toHaveAttribute("aria-checked", "false");
+    const afterTransform = await page.locator(".map-canvas").evaluate((el) => el.style.transform || "");
+    expect(afterTransform).toBe(beforeTransform);
+  });
+
+  test("B: two real checkbox clicks on different branches both register, and 'Xóa chọn' returns count to 0", async ({ page }) => {
+    await openExportStudio(page);
+    await chooseScope(page, "selected_branches");
+    await page.getByRole("button", { name: "Chọn nhánh trên sơ đồ" }).click();
+
+    await page.locator(checkboxFor("Kiến trúc hệ thống")).click();
+    await page.locator(checkboxFor("Trải nghiệm người dùng")).click(); // opposite end of the branch list
+    await expect(page.locator(".mm-selection-bar")).toContainText("Đã chọn 2 nhánh");
+    await expect(page.locator(checkboxFor("Kiến trúc hệ thống"))).toHaveAttribute("aria-checked", "true");
+    await expect(page.locator(checkboxFor("Trải nghiệm người dùng"))).toHaveAttribute("aria-checked", "true");
+
+    await page.locator(checkboxFor("Kiến trúc hệ thống")).click(); // uncheck just this one
+    await expect(page.locator(".mm-selection-bar")).toContainText("Đã chọn 1 nhánh");
+    await expect(page.locator(checkboxFor("Kiến trúc hệ thống"))).toHaveAttribute("aria-checked", "false");
+
+    await page.locator(".mm-selection-bar").getByRole("button", { name: "Xóa chọn" }).click();
+    await expect(page.locator(".mm-selection-bar")).toContainText("Đã chọn 0 nhánh");
+    await expect(page.locator(checkboxFor("Trải nghiệm người dùng"))).toHaveAttribute("aria-checked", "false");
+  });
+
+  test("C: checking a branch's checkbox AND its own child's checkbox exports the child's content exactly once (dedupe), with the child's sibling still included via the parent", async ({ page }) => {
+    await openExportStudio(page);
+    await chooseScope(page, "selected_branches");
+    await page.getByRole("button", { name: "Chọn nhánh trên sơ đồ" }).click();
+
+    await page.locator(checkboxFor("Kiến trúc hệ thống")).click(); // parent (main branch)
+    await page.locator(checkboxFor("Nguyên lý — Kiến trúc hệ thống")).click(); // its own child (sub-branch)
+    await expect(page.locator(".mm-selection-bar")).toContainText("Đã chọn 2 nhánh"); // UI counts both picks, resolver dedupes on export
+    await page.locator(".mm-selection-bar").getByRole("button", { name: "Tiếp tục" }).click();
+
+    await clickNext(page); // -> format step
+    await chooseFormat(page, "svg");
+    await clickNext(page); // -> appearance step
+    await clickNext(page); // -> preview step
+    const filePath = await exportAndSave(page, "checkbox-parent-child-dedupe-svg");
+
+    const svgText = fs.readFileSync(filePath, "utf8");
+    expect(svgText).not.toMatch(/NaN|undefined|Infinity/);
+    // The child's own NODE (its `data-nodeid`, not just its title text —
+    // the title legitimately appears twice for one real node: once in the
+    // visible label, once in its own <me-epd>'s `aria-label="Thu nhánh:
+    // ..."`) is rendered exactly once, not duplicated by being reachable
+    // through both the parent selection and its own selection.
+    const childNodeOccurrences = svgText.split(`data-nodeid="me${MAP_A_ID}-m0-s0"`).length - 1;
+    expect(childNodeOccurrences).toBe(1);
+    // The child's SIBLING sub-branch is still present — it's only reachable
+    // through the parent pick, proving the parent's full subtree wasn't
+    // dropped in favor of just the explicitly-checked child.
+    expect(svgText).toContain("Triển khai thực tế — Kiến trúc hệ thống");
+  });
+
+  test("D: leaving selection mode (Tiếp tục or Hủy) removes every injected checkbox from the canvas — no orphaned, still-clickable UI left behind", async ({ page }) => {
+    await openExportStudio(page);
+    await chooseScope(page, "selected_branches");
+    await page.getByRole("button", { name: "Chọn nhánh trên sơ đồ" }).click();
+    await page.locator(checkboxFor("Kiến trúc hệ thống")).click();
+    await expect(page.locator(".mm-selection-bar")).toContainText("Đã chọn 1 nhánh");
+
+    await page.locator(".mm-selection-bar").getByRole("button", { name: "Tiếp tục" }).click();
+    await expect(page.getByRole("dialog")).toBeVisible(); // dialog reopened at the scope step (a selection already exists)
+    // Root cause this guards: turning selectionModeActive off only stopped
+    // NEW checkboxes from being created — it never removed the ones already
+    // in the DOM, which (once pointer-events was fixed) stayed fully
+    // clickable on the live canvas after the selection UI was supposed to
+    // be gone.
+    await expect(page.locator("me-export-check")).toHaveCount(0);
+
+    // Re-enter selection mode for the OTHER exit path. Label reads "Chọn
+    // LẠI trên sơ đồ" now — a selection already exists from above.
+    await page.getByRole("button", { name: "Chọn lại trên sơ đồ" }).click();
+    await page.locator(checkboxFor("Kiến trúc hệ thống")).click();
+    await page.locator(".mm-selection-bar").getByRole("button", { name: "Hủy" }).click();
+    await expect(page.locator("me-export-check")).toHaveCount(0);
+  });
+
+  test("E: selection mode leaves <me-epd> expand/collapse and background pan fully intact", async ({ page }) => {
+    const collapseToggle = page.locator(`me-parent:has(${nodeSelector(`${MAP_A_ID}-m0`)}) > me-epd`).first();
+    await expect(collapseToggle).toBeVisible();
+
+    await openExportStudio(page);
+    await chooseScope(page, "selected_branches");
+    await page.getByRole("button", { name: "Chọn nhánh trên sơ đồ" }).click();
+    await page.locator(checkboxFor("Kiến trúc hệ thống")).click();
+    await page.locator(".mm-selection-bar").getByRole("button", { name: "Hủy" }).click();
+    await page.getByRole("button", { name: "Hủy" }).click(); // close the dialog, back to a plain canvas
+
+    // <me-epd> still collapses its branch after a selection-mode round trip.
+    await expect(page.locator(nodeSelector(`${MAP_A_ID}-m0-s0`))).toBeVisible();
+    await collapseToggle.click();
+    await expect(page.locator(nodeSelector(`${MAP_A_ID}-m0-s0`))).toHaveCount(0);
+    await collapseToggle.click(); // restore, don't leak state into other tests
+    await expect(page.locator(nodeSelector(`${MAP_A_ID}-m0-s0`))).toBeVisible();
+
+    // Background pan (dragging empty canvas) still moves the map. Must drag
+    // from a point that's actually empty background — `.map-canvas` itself
+    // is `pointer-events: none` (mind-elixir's own base stylesheet; that's
+    // *why* panning works via its ancestor `.mm-canvas-wrap`'s own
+    // container-level listener instead of being blocked by canvas content),
+    // so its bounding box can still overlap real node content at some
+    // points. Find a real gap via elementFromPoint instead of guessing a
+    // fixed offset.
+    const beforeTransform = await page.locator(".map-canvas").evaluate((el) => el.style.transform || "");
+    const emptySpot = await page.evaluate(() => {
+      // ".map-canvas" itself is `pointer-events: none` (see the pan-handler
+      // comment in MindElixirView.jsx), so a genuinely empty point hits
+      // whatever's behind it — its parent ".map-container" — not the canvas
+      // element itself; that's the correct/expected background hit, not a
+      // miss.
+      const wrap = document.querySelector(".mm-canvas-wrap");
+      const r = wrap.getBoundingClientRect();
+      for (let fx = 0.05; fx <= 0.95; fx += 0.05) {
+        for (let fy = 0.05; fy <= 0.95; fy += 0.05) {
+          const x = r.x + r.width * fx, y = r.y + r.height * fy;
+          const el = document.elementFromPoint(x, y);
+          if (el === wrap || el?.classList?.contains("map-container")) return { x, y };
+        }
+      }
+      return null;
+    });
+    expect(emptySpot).toBeTruthy(); // fixture layout guarantee, not a product assertion
+    await page.mouse.move(emptySpot.x, emptySpot.y);
+    await page.mouse.down();
+    await page.mouse.move(emptySpot.x - 60, emptySpot.y - 60, { steps: 5 });
+    await page.mouse.up();
+    const afterTransform = await page.locator(".map-canvas").evaluate((el) => el.style.transform || "");
+    expect(afterTransform).not.toBe(beforeTransform);
+  });
+});
