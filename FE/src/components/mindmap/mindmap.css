@@ -541,6 +541,19 @@ html.dark .me-container { --mm-relation: #7e90c4; }
   background: var(--bg-card, #fff);
   cursor: pointer;
   z-index: 11; /* above me-tpc, below the context-menu layer */
+  /* mind-elixir's own canvas wrapper (.map-canvas, its base stylesheet, not
+     ours) is `pointer-events: none` so panning/dragging work via its own
+     container-level listeners instead of being blocked by arbitrary canvas
+     content — <me-tpc>/<me-epd> opt back in via mind-elixir's own rules
+     (computed `pointer-events: all`), but this brand-new element had no such
+     rule, so it silently inherited `none` and was completely unclickable in
+     production (verified: getComputedStyle -> "none", elementFromPoint at
+     its center resolved to the ancestor <div class="map-container"> instead
+     of this element). pointer-events is inherited but a descendant's own
+     declaration always wins over what it inherited, regardless of how many
+     ancestors are `none` — so this one rule, on this one element, is the
+     complete fix; no ancestor needs touching. */
+  pointer-events: auto;
 }
 .map-container me-export-check::before {
   content: ""; position: absolute; inset: -11px; /* real hit target, same technique as .mm-epd */

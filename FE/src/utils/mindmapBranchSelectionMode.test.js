@@ -121,6 +121,28 @@ describe("attachBranchSelectionMode", () => {
     expect(container.querySelector("me-export-check").getAttribute("aria-checked")).toBe("false");
   });
 
+  it("resync() after isActiveRef flips to false removes every already-injected checkbox (mode-off cleanup, not just 'no new ones')", async () => {
+    // Root cause this guards: `scan()` used to just `return` when inactive,
+    // which correctly stopped creating NEW checkboxes but left whatever was
+    // already in the DOM untouched — turning selection mode off (the
+    // dialog's own "Tiếp tục"/"Hủy" buttons, which flip isActiveRef then
+    // call resync()) left every already-rendered `<me-export-check>` sitting
+    // on the live canvas, fully clickable once the separate pointer-events
+    // bug was fixed. The "injects no checkbox while inactive" test above
+    // only covers starting inactive — this covers the actual transition.
+    const container = document.createElement("div");
+    document.body.appendChild(container);
+    container.appendChild(buildParent({ id: "a", topic: "Alpha" }));
+    const isActiveRef = { current: true };
+    handle = attachBranchSelectionMode(container, { isActiveRef, isSelectedFn: () => false, onToggle: vi.fn() });
+    await Promise.resolve();
+    expect(container.querySelector("me-export-check")).toBeTruthy();
+
+    isActiveRef.current = false; // e.g. "Tiếp tục"/"Hủy" setting selectionModeActive(false)
+    handle.resync();
+    expect(container.querySelector("me-export-check")).toBeNull();
+  });
+
   it("detach() removes every injected checkbox and stops further decoration", async () => {
     const container = document.createElement("div");
     document.body.appendChild(container);
