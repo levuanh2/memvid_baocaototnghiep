@@ -577,24 +577,6 @@ export default function SidebarLeft({ selectedSources, setSelectedSources, onSou
         })}
       </div>
 
-      {/* Round 11 (mockup parity, explicit user decision) — replaces the old
-          full-height "book spine" collapsed-state metaphor (PanelSpine.jsx)
-          with the approved reference image's small chevron control docked
-          at the drawer's own edge, low (near the bottom, not centered or
-          at the top). Same collapse trigger as the header's existing X
-          button above (`onClose` — desktop mode collapses the column,
-          mobile mode dismisses the drawer) — this is a second, additional
-          entry point matching the reference's affordance, not a
-          replacement for the header button, and touches no state logic.
-          Only rendered in `collapsible` (desktop, non-drawer) mode — in
-          drawer mode the header X is already the one real dismiss action. */}
-      {collapsible && (
-        <button onClick={onClose} className="panel-collapse-btn panel-collapse-btn--left"
-          aria-label="Thu gọn cột" title="Thu gọn cột">
-          <Icon name="ChevronLeft" size={14} />
-        </button>
-      )}
-
       <style>{`@media (min-width: 768px) { .md\\:hidden { display: none !important; } }`}</style>
     </div>
   );

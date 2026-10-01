@@ -96,14 +96,14 @@ html.dark .me-container { --mm-relation: #7e90c4; }
 .me-container me-root me-tpc {
   font-family: "Spectral", Georgia, serif;
   font-weight: 600;
-  font-size: 24px;
+  font-size: 20px;
   letter-spacing: 0.01em;
   background: var(--accent) !important;
   color: #fff !important;
   border: 2px solid var(--accent) !important;
   border-radius: 14px !important;
-  padding: 8px 14px !important;
-  max-width: 220px;
+  padding: 6px 12px !important;
+  max-width: 190px;
 }
 .me-container me-main > me-wrapper > me-parent > me-tpc {
   font-family: "Spectral", Georgia, serif;

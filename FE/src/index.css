@@ -928,7 +928,7 @@
   overflow: hidden; border: 1px solid var(--border-color); border-radius: 12px;
   background: var(--bg-card); box-shadow: var(--shadow-card-hover);
 }
-.mode-library-menu { left: 50%; right: auto; transform: translateX(-50%); }
+.mode-library-menu { left: 50%; right: auto; width: min(400px, calc(100vw - 24px)); transform: translateX(-50%); }
 .mode-library-menu__head, .study-tools-menu__head {
   display: flex; align-items: flex-start; justify-content: space-between; gap: 10px;
   padding: 14px 15px 11px; border-bottom: 1px solid var(--border-color);
@@ -987,8 +987,8 @@
   .workspace-mode-switch { flex: 1 1 auto; overflow-x: auto; scrollbar-width: none; }
   .workspace-mode-switch::-webkit-scrollbar { display: none; }
   .workspace-mode-switch > button { flex: 0 0 auto; min-height: 40px; padding-inline: 9px; }
-  .mode-library-menu { position: fixed; top: 96px; left: 8px; right: 8px; width: auto; max-height: calc(100vh - 112px); transform: none; }
-  .study-tools-menu { position: fixed; top: 58px; left: 8px; right: 8px; width: auto; max-height: calc(100vh - 70px); }
+  .mode-library-menu { position: fixed; top: 64px; left: 8px; right: 8px; width: auto; max-height: calc(100vh - 80px); transform: none; }
+  .study-tools-menu { position: fixed; top: 56px; left: 8px; right: 8px; width: auto; max-height: calc(100vh - 68px); }
   .study-tools-trigger { width: 40px; padding: 0; justify-content: center; }
   .study-tools-trigger span { display: none; }
   .mindmap-tools-overlay { inset: auto 0 0 0 !important; width: auto !important; max-height: 80vh; border-radius: 16px 16px 0 0 !important; }

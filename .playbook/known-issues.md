@@ -1,5 +1,16 @@
 # Known Issues
 
+## (2026-10-01) Compact StudyMap workspace ownership
+
+The workspace already keeps Chat/MindElixir/Summary mounted and uses overlay
+surfaces for the inspector and map library. During the compact redesign, two
+secondary collapse buttons were found on both source and inspector surfaces;
+they duplicated the header owner and made the canvas chrome feel denser than
+the available laptop viewport. Keep one close/collapse affordance per surface,
+keep the inspector mounted, and change only presentation/offsets around the
+existing state owners. Regression coverage lives in
+`FE/src/components/Layout/compactWorkspace.test.js`.
+
 ## (2026-09-29) Export Studio document-export storage readiness — full audit
 
 Consolidates and supersedes the Section 7 audit entry below for anything
