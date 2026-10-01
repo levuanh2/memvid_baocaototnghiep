@@ -281,10 +281,12 @@ def fpt_headers() -> dict:
 class _FptChatResponse:
     """Chỉ mang `.content` — đủ cho `lc_ai_message_text` đọc."""
 
-    __slots__ = ("content",)
+    __slots__ = ("content", "usage_metadata", "response_metadata")
 
-    def __init__(self, content: str) -> None:
+    def __init__(self, content: str, usage: dict | None = None) -> None:
         self.content = content
+        self.usage_metadata = usage or {}
+        self.response_metadata = {"usage": self.usage_metadata} if usage else {}
 
 
 class _FptChatLLM:
@@ -394,7 +396,15 @@ class _FptChatLLM:
             raise RuntimeError(
                 f"FPT thiếu `choices[0].message.content`: {str(body)[:200]}")
 
-        return _FptChatResponse(lc_message_content_text(message.get("content")))
+        raw_usage = loi.get("usage") if isinstance(loi.get("usage"), dict) else None
+        usage = None
+        if raw_usage:
+            usage = {
+                "input_tokens": int(raw_usage.get("prompt_tokens", raw_usage.get("input_tokens", 0)) or 0),
+                "output_tokens": int(raw_usage.get("completion_tokens", raw_usage.get("output_tokens", 0)) or 0),
+                "total_tokens": int(raw_usage.get("total_tokens", 0) or 0),
+            }
+        return _FptChatResponse(lc_message_content_text(message.get("content")), usage)
 
 
     def stream(self, messages: Any, **_kw: Any) -> Any:

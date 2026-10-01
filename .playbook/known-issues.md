@@ -1,5 +1,15 @@
 # Known Issues
 
+## (2026-10-01) Usage metering rollout boundary
+
+The durable usage ledger and quota API are additive and fail closed for usage
+requests, but existing LangChain graph workers do not yet carry a user-scoped
+reservation context through every streaming/retry path. Do not enable hard
+quota enforcement globally until those call sites emit provider usage and
+commit/release the reservation exactly once. Local/Ollama and embedding paths
+must remain `estimated` or unmetered unless the provider returns official token
+usage; never present an estimate as actual.
+
 ## (2026-10-01) Compact StudyMap workspace ownership
 
 The workspace already keeps Chat/MindElixir/Summary mounted and uses overlay

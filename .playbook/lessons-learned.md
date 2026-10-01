@@ -1,5 +1,15 @@
 # Lessons Learned
 
+## 2026-10-01 - Meter provider usage at the execution boundary
+
+- A ledger/API alone cannot make token counts truthful. The reservation context
+  must travel with the authenticated request/job into the provider execution
+  boundary, including retries, streams, cache hits, failures, and worker restarts.
+- Provider metadata should be preserved on response objects first; only official
+  provider counts may be marked `provider`. Local or inferred counts need an
+  explicit `estimated` source and must not drive a hard production quota until
+  audited.
+
 ## 2026-10-01 - Compact workspace: simplify ownership before changing state
 
 - The map library and inspector were already correct state owners. The useful

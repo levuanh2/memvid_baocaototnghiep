@@ -21,6 +21,7 @@ import ShortcutsOverlay from "../shortcuts/ShortcutsOverlay";
 import ModeLibraryMenu from "./ModeLibraryMenu";
 import StudyToolsMenu from "./StudyToolsMenu";
 import { fetchMindmapNodeContext } from "../../utils/mindmapNodeContext";
+import UsageChip from "./UsageChip";
 
 // Round 11 (mockup parity, explicit user decision) — the Chat/Mind Map/
 // Summary mode switch, moved here from the now-deleted LessonHeader.jsx
@@ -571,6 +572,8 @@ export default function MainLayout({
               <Icon name="Moon" size={15} />
             </button>
           </div>
+
+          <UsageChip />
 
           {/* Account: ảnh + tên + menu (hồ sơ · đổi mật khẩu · đăng xuất) */}
           {user && <AccountMenu user={user} onLogout={handleLogout} />}

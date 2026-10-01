@@ -1509,6 +1509,52 @@ def _require_app_user():
     return uid, None
 
 
+def _require_usage_user():
+    """Usage is never fail-open: quota and ledger responses require ownership."""
+    uid = _current_user_id()
+    if not uid:
+        return None, (jsonify({"error": "unauthorized"}), 401)
+    return str(uid), None
+
+
+@app.get("/usage/me")
+def usage_me():
+    uid, error = _require_usage_user()
+    if error:
+        return error
+    from app.domains.usage.metering import get_summary
+    return jsonify(get_summary(uid)), 200
+
+
+@app.get("/usage/me/events")
+def usage_me_events():
+    uid, error = _require_usage_user()
+    if error:
+        return error
+    from app.domains.usage.metering import list_events
+    return jsonify({"events": list_events(uid, request.args.get("limit", 25, type=int))}), 200
+
+
+@app.get("/usage/me/breakdown")
+def usage_me_breakdown():
+    uid, error = _require_usage_user()
+    if error:
+        return error
+    from app.domains.usage.metering import get_summary
+    summary = get_summary(uid)
+    return jsonify({"plan": summary["plan"], "breakdown": summary["breakdown"], "reset_at": summary["reset_at"]}), 200
+
+
+@app.get("/billing/capability")
+def billing_capability():
+    uid, error = _require_usage_user()
+    if error:
+        return error
+    from app.domains.usage.metering import get_summary
+    summary = get_summary(uid)
+    return jsonify({"plan": summary["plan"], "monthly_token_limit": summary["limit"], "per_request_token_limit": int(os.getenv("USAGE_PER_REQUEST_LIMIT", "8000")), "enforcement_enabled": (os.getenv("USAGE_ENFORCEMENT_ENABLED", "0") or "").lower() in ("1", "true", "yes", "on"), "reset_at": summary["reset_at"]}), 200
+
+
 def owned_stems(user_id: Optional[str]) -> set:
     """Canonical source stems owned by `user_id`, from the registry.
 
