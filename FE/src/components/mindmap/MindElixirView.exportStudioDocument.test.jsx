@@ -76,14 +76,14 @@ describe("Export Studio — document formats", () => {
     await act(async () => { [...dialog.querySelectorAll("button")].find((b) => b.textContent === "Tiếp tục").click(); });
     const panel = dialog.querySelector('[data-testid="doc-appearance"]');
     expect(panel).toBeTruthy();
-    const text = panel.textContent;
-    expect(text).toContain("Khổ giấy");
-    expect(text).toContain("Hướng trang");
-    expect(text).toContain("Chế độ");
-    expect(text).toContain("Nền");
-    expect(text).toContain("Phông chữ");
-    expect(text).not.toContain("Khoảng cách"); // image-only (spacing)
-    expect(text).not.toContain("Độ dày đường nối"); // image-only (connectorThickness)
+    expect(panel.textContent).toContain("Khổ giấy");
+    expect(panel.textContent).toContain("Hướng trang");
+    expect(panel.textContent).toContain("Chế độ");
+    await act(async () => { [...panel.querySelectorAll("button")].find((b) => b.textContent === "Màu và kiểu chữ").click(); });
+    expect(panel.textContent).toContain("Nền");
+    expect(panel.textContent).toContain("Phông chữ");
+    expect(panel.textContent).not.toContain("Khoảng cách"); // image-only (spacing)
+    expect(panel.textContent).not.toContain("Độ dày đường nối"); // image-only (connectorThickness)
   });
 
   it("XLSX appearance step shows font/header-style/content only — no background, no orientation, no page size", async () => {
@@ -92,12 +92,12 @@ describe("Export Studio — document formats", () => {
     await act(async () => { dialog.querySelector('input[value="xlsx"]').click(); });
     await act(async () => { [...dialog.querySelectorAll("button")].find((b) => b.textContent === "Tiếp tục").click(); });
     const panel = dialog.querySelector('[data-testid="doc-appearance"]');
-    const text = panel.textContent;
-    expect(text).toContain("Phông chữ");
-    expect(text).toContain("Màu tiêu đề bảng");
-    expect(text).not.toContain("Nền");
-    expect(text).not.toContain("Hướng trang");
-    expect(text).not.toContain("Khổ giấy");
+    await act(async () => { [...panel.querySelectorAll("button")].find((b) => b.textContent === "Màu và kiểu chữ").click(); });
+    expect(panel.textContent).toContain("Phông chữ");
+    expect(panel.textContent).toContain("Màu tiêu đề bảng");
+    expect(panel.textContent).not.toContain("Nền");
+    expect(panel.textContent).not.toContain("Hướng trang");
+    expect(panel.textContent).not.toContain("Khổ giấy");
   });
 
   it("DOCX appearance step has no legend content toggle (docx doesn't declare it)", async () => {
@@ -106,6 +106,7 @@ describe("Export Studio — document formats", () => {
     await act(async () => { dialog.querySelector('input[value="docx"]').click(); });
     await act(async () => { [...dialog.querySelectorAll("button")].find((b) => b.textContent === "Tiếp tục").click(); });
     const panel = dialog.querySelector('[data-testid="doc-appearance"]');
+    await act(async () => { [...panel.querySelectorAll("button")].find((b) => b.textContent === "Nội dung kèm theo").click(); });
     expect(panel.textContent).not.toContain("Chú giải màu nhánh");
     expect(panel.textContent).toContain("Kèm ảnh sơ đồ"); // docx's mapImage control
   });
@@ -126,7 +127,7 @@ describe("Export Studio — document formats", () => {
     await act(async () => { [...dialog.querySelectorAll("button")].find((b) => b.textContent === "Tiếp tục").click(); }); // -> appearance
     await act(async () => { [...dialog.querySelectorAll("button")].find((b) => b.textContent === "Tiếp tục").click(); }); // -> preview
 
-    const exportBtn = [...dialog.querySelectorAll("button")].find((b) => b.textContent.includes("Xuất"));
+    const exportBtn = [...dialog.querySelectorAll("button")].find((b) => b.textContent.includes("Tạo PDF"));
     await act(async () => { exportBtn.click(); });
 
     expect(docExport.createMindmapExport).toHaveBeenCalledWith("m1", expect.objectContaining({ format: "pdf" }));
@@ -144,7 +145,7 @@ describe("Export Studio — document formats", () => {
     await act(async () => { [...dialog.querySelectorAll("button")].find((b) => b.textContent === "Tiếp tục").click(); });
     await act(async () => { [...dialog.querySelectorAll("button")].find((b) => b.textContent === "Tiếp tục").click(); });
 
-    const exportBtn = [...dialog.querySelectorAll("button")].find((b) => b.textContent.includes("Xuất"));
+    const exportBtn = [...dialog.querySelectorAll("button")].find((b) => b.textContent.includes("Tạo DOCX"));
     await act(async () => { exportBtn.click(); });
 
     expect(dialog.textContent).toContain("Lỗi máy chủ");
@@ -174,10 +175,10 @@ describe("Export Studio — document formats", () => {
     await act(async () => { [...dialog.querySelectorAll("button")].find((b) => b.textContent === "Tiếp tục").click(); });
     await act(async () => { [...dialog.querySelectorAll("button")].find((b) => b.textContent === "Tiếp tục").click(); });
 
-    const exportBtn = [...dialog.querySelectorAll("button")].find((b) => b.textContent.includes("Xuất"));
+    const exportBtn = [...dialog.querySelectorAll("button")].find((b) => b.textContent.includes("Tạo XLSX"));
     await act(async () => { exportBtn.click(); });
 
-    const cancelBtn = [...dialog.querySelectorAll("button")].find((b) => b.textContent === "Huỷ xuất");
+    const cancelBtn = [...dialog.querySelectorAll("button")].find((b) => b.textContent === "Hủy xuất");
     expect(cancelBtn).toBeTruthy();
     await act(async () => { cancelBtn.click(); });
     expect(cancelSpy).toHaveBeenCalledWith("j1");
@@ -197,7 +198,7 @@ describe("Export Studio — document formats", () => {
     await act(async () => { dialog1.querySelector('input[value="pdf"]').click(); });
     await act(async () => { [...dialog1.querySelectorAll("button")].find((b) => b.textContent === "Tiếp tục").click(); });
     await act(async () => { [...dialog1.querySelectorAll("button")].find((b) => b.textContent === "Tiếp tục").click(); });
-    const exportBtn1 = [...dialog1.querySelectorAll("button")].find((b) => b.textContent.includes("Xuất"));
+    const exportBtn1 = [...dialog1.querySelectorAll("button")].find((b) => b.textContent.includes("Tạo PDF"));
     await act(async () => { exportBtn1.click(); });
     expect(dialog1.textContent).toContain("Đã xuất");
 

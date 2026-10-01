@@ -117,7 +117,7 @@ describe("MindElixirView Export Studio", () => {
     expect(container.querySelector(".mm-selection-bar")).toBeFalsy();
     const dialog = document.body.querySelector('[role="dialog"]');
     expect(dialog).toBeTruthy();
-    expect(dialog.textContent).toContain("Chưa chọn nhánh nào"); // selection was cleared
+    expect(dialog.textContent).toContain("0 nhánh"); // selection was cleared
   });
 
   it("multi-branch export is a real, enabled path (no longer blocked) once 2+ branches are selected", async () => {

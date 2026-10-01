@@ -2,660 +2,87 @@ import { useEffect, useMemo, useRef, useState } from "react";
 import Modal from "../ui/Modal";
 import { Icon } from "../ui/Icon";
 import Spinner from "../ui/Spinner";
-import {
-  resolveExportScope, countIncluded, countHiddenIncluded,
-  UnknownNodeIdError, NoSelectionError,
-} from "../../utils/mindmapExportScope";
+import { resolveExportScope, countIncluded, countHiddenIncluded, UnknownNodeIdError, NoSelectionError } from "../../utils/mindmapExportScope";
 import { exportMindmapImage, estimateExportDimensions, captureMapImageBase64 } from "../../utils/mindmapImageExport";
 import { sanitizeExportFilename } from "../../utils/mindmapExportFilename";
 import { PRESETS, DEFAULT_APPEARANCE } from "../../utils/mindmapExportAppearance";
 import { getExportFormatCapabilities, isDocumentFormat } from "../../utils/mindmapExportFormatCapabilities";
 import { createMindmapExport, pollMindmapExportUntilDone, cancelMindmapExport, triggerMindmapExportDownload } from "../../utils/mindmapDocumentExport";
+import "./exportStudio.css";
 
-const STEPS = ["Phạm vi", "Định dạng", "Giao diện", "Xem trước"];
-
-const IMAGE_FORMATS = [
-  ["png", "PNG", "Ảnh raster, nền có thể trong suốt."],
-  ["jpeg", "JPEG", "Ảnh raster, nhẹ hơn PNG, không hỗ trợ nền trong suốt."],
-  ["svg", "SVG", "Ảnh vector, phóng to không vỡ nét."],
-];
-const DOCUMENT_FORMATS = [
-  ["pdf", "PDF", "Tài liệu phân trang, có thể kèm ảnh sơ đồ."],
-  ["docx", "DOCX", "Văn bản Word, phân cấp theo tiêu đề."],
-  ["xlsx", "XLSX", "Bảng tính, mỗi node một dòng."],
-];
-
-const BACKGROUNDS = [
-  ["canvas", "Giống canvas"],
-  ["white", "Trắng"],
-  ["dark", "Tối"],
-  ["transparent", "Trong suốt"],
-  ["custom", "Tuỳ chỉnh"],
-];
-const DOC_BACKGROUNDS = [["white", "Trắng"], ["dark", "Tối"], ["custom", "Tuỳ chỉnh"]];
-
-const BACKGROUND_COLOR = { white: "#FFFFFF", dark: "#15171C", transparent: "transparent" };
-
-function resolveBackgroundColor(key, customColor) {
-  if (key === "canvas") {
-    return getComputedStyle(document.documentElement).getPropertyValue("--bg-base").trim() || "#ECE7DB";
-  }
-  if (key === "custom") return customColor || "#FFFFFF";
-  return BACKGROUND_COLOR[key] || "#FFFFFF";
-}
-
-const PRESET_OPTIONS = [
-  ["canvas", "Giống canvas", PRESETS.canvas],
-  ["study", "Tài liệu học tập", PRESETS.study],
-  ["minimal", "Tối giản", PRESETS.minimal],
-  ["presentation", "Trình bày", PRESETS.presentation],
-];
-
+const STEPS = [["Nội dung", "Chọn phạm vi xuất", "BookOpen"], ["Định dạng", "Chọn loại file", "FileStack"], ["Giao diện", "Tùy chỉnh hiển thị", "Sliders"], ["Kiểm tra", "Xem trước và xuất", "CheckCircle2"]];
+const SCOPES = [["full", "Toàn bộ sơ đồ", "Bao gồm toàn bộ cây, kể cả nhánh đang thu gọn.", "Network"], ["current_branch", "Nhánh hiện tại", "Xuất từ node đang chọn trên canvas.", "GitBranch"], ["selected_branches", "Các nhánh được chọn", "Kết hợp nhiều nhánh trong một lần xuất.", "MousePointerClick"], ["visible", "Phần đang hiển thị", "Chỉ các node đang hiện trên canvas.", "EyeOff"]];
+const IMAGE_FORMATS = [["png", "PNG", "Ảnh sắc nét, hỗ trợ nền trong suốt.", "Image"], ["jpeg", "JPEG", "Ảnh nhẹ, phù hợp để chia sẻ.", "Image"], ["svg", "SVG", "Ảnh vector, phóng to không vỡ nét.", "Spline"]];
+const DOCUMENT_FORMATS = [["pdf", "PDF", "Sơ đồ và dàn ý để học hoặc in.", "FileText"], ["docx", "DOCX", "Tài liệu Word theo cấu trúc nhánh.", "ScrollText"], ["xlsx", "XLSX", "Bảng dữ liệu, mỗi node một dòng.", "Rows3"]];
+const BACKGROUNDS = [["canvas", "Giống canvas"], ["white", "Trắng"], ["dark", "Tối"], ["transparent", "Trong suốt"], ["custom", "Tùy chỉnh"]];
+const DOC_BACKGROUNDS = [["white", "Trắng"], ["dark", "Tối"], ["custom", "Tùy chỉnh"]];
+const PRESET_OPTIONS = [["canvas", "Giống canvas"], ["study", "Tài liệu học tập"], ["minimal", "Tối giản"], ["presentation", "Trình bày"]];
 const FONT_OPTIONS = [["canvas", "Giống canvas"], ["sans", "Sans (Inter)"], ["serif", "Serif (Spectral)"]];
-const DOC_FONT_OPTIONS = [["sans", "Sans"], ["serif", "Serif"]];
-const BRANCH_COLOR_OPTIONS = [["keep", "Giữ nguyên"], ["monochrome", "Đơn sắc"], ["customPalette", "Bảng màu riêng"]];
+const DOC_FONT_OPTIONS = [["sans", "Sans (Inter)"], ["serif", "Serif (Spectral)"]];
+const COLOR_OPTIONS = [["keep", "Giữ nguyên"], ["monochrome", "Đơn sắc"], ["customPalette", "Bảng màu riêng"]];
 const SPACING_OPTIONS = [["compact", "Gọn"], ["normal", "Vừa"], ["spacious", "Rộng"]];
 const THICKNESS_OPTIONS = [["thin", "Mảnh"], ["normal", "Vừa"], ["thick", "Đậm"]];
 const MARGIN_OPTIONS = [["narrow", "Hẹp"], ["normal", "Vừa"], ["wide", "Rộng"]];
-const PAGE_SIZE_OPTIONS = [["A4", "A4"], ["A3", "A3"]];
+const PAGE_OPTIONS = [["A4", "A4"], ["A3", "A3"]];
 const ORIENTATION_OPTIONS = [["portrait", "Dọc"], ["landscape", "Ngang"]];
 const PDF_MODE_OPTIONS = [["outline", "Chỉ dàn ý"], ["map", "Chỉ sơ đồ"], ["map_and_outline", "Sơ đồ + dàn ý"]];
-const CONTENT_LABELS = {
-  notes: "Ghi chú", citations: "Trích dẫn", sourceNames: "Tên nguồn",
-  relations: "Đường quan hệ", legend: "Chú giải màu nhánh", branding: "Nhãn StudyMap",
-};
+const CONTENT_LABELS = { notes: "Ghi chú", citations: "Trích dẫn", sourceNames: "Tên nguồn", relations: "Đường quan hệ", legend: "Chú giải màu nhánh", branding: "Nhãn StudyMap" };
 
-/** The value-key a format's "color mode" control lives under — see
- * BE/services/mindmap/export/capabilities.py's own _VALUE_KEY_TO_FLAG_KEY
- * for why these three differ (pdf: branch color; docx: heading color;
- * xlsx: header style) even though they're the same underlying keep/
- * monochrome/customPalette control conceptually. */
-function colorModeKeyFor(format) {
-  if (format === "docx") return "headingColorMode";
-  if (format === "xlsx") return "headerStyleMode";
-  return "branchColorMode";
-}
+const documentDefaults = () => ({ pdf: getExportFormatCapabilities("pdf").defaults, docx: getExportFormatCapabilities("docx").defaults, xlsx: getExportFormatCapabilities("xlsx").defaults });
+const colorKey = (format) => format === "docx" ? "headingColorMode" : format === "xlsx" ? "headerStyleMode" : "branchColorMode";
+function backgroundColor(key, custom) { if (key === "canvas") return getComputedStyle(document.documentElement).getPropertyValue("--bg-base").trim() || "#fff"; if (key === "custom") return custom; return { white: "#fff", dark: "#15171C", transparent: "transparent" }[key] || "#fff"; }
 
-/**
- * Export Studio, final hardening round. Client-side image formats (PNG/
- * JPEG/SVG) capture in-browser via mindmapImageExport.js. Document formats
- * (PDF/DOCX/XLSX) are real backend jobs (mindmapDocumentExport.js): create
- * -> poll queued/running -> download on done, retry (same idempotency key)
- * on error, cancel while running. Every appearance/content control shown
- * for a format comes from mindmapExportFormatCapabilities.js's
- * getExportFormatCapabilities() — the SAME format_capabilities.json the
- * backend validates against (contract-tested byte-identical) — never a
- * hand-rolled per-format conditional here.
- */
-export default function ExportStudioDialog({
-  open, onClose, mind, mapId, title, selectedNodeId, selectedBranchIds, onRequestBranchSelection,
-}) {
-  const [step, setStep] = useState(0);
-  const [scopeType, setScopeType] = useState(selectedNodeId ? "current_branch" : "full");
-  const [visibleOnly, setVisibleOnly] = useState(false);
-  const [format, setFormat] = useState("png");
-  const [background, setBackground] = useState("canvas");
-  const [customColor, setCustomColor] = useState("#FFFFFF");
-  const [scale, setScale] = useState(2);
-  const [filenameOverride, setFilenameOverride] = useState("");
-  const [appearance, setAppearance] = useState(DEFAULT_APPEARANCE);
-  const [presetName, setPresetName] = useState("canvas");
-  const [docOptions, setDocOptions] = useState(() => getExportFormatCapabilities("pdf").defaults);
-  const [includeMapImage, setIncludeMapImage] = useState(false);
-  const [exporting, setExporting] = useState(false);
-  const [error, setError] = useState(null);
-  const [done, setDone] = useState(null);
-  const [jobStatus, setJobStatus] = useState(null); // null | "queued" | "running" | "done" | "error" | "cancelled"
-  const [jobProgress, setJobProgress] = useState(0);
-  const [jobId, setJobId] = useState(null);
-  const abortRef = useRef(null);
+function Segmented({ options, value, onChange, disabled = () => false }) { return <div className="export-segments">{options.map(([key, label]) => <button key={key} type="button" className={`pill-tab ${value === key ? "is-selected pill-tab-active" : ""}`} aria-pressed={value === key} disabled={disabled(key)} onClick={() => onChange(key)}>{label}</button>)}</div>; }
+function Control({ label, children }) { return <div className="export-control"><div className="export-control__label">{label}</div>{children}</div>; }
+function Accordion({ id, title, icon, open, onToggle, children }) { return <section className="export-accordion"><button type="button" className="export-accordion__trigger" aria-expanded={open} aria-controls={id} onClick={onToggle}><span><Icon name={icon} size={17} />{title}</span><Icon name={open ? "ChevronUp" : "ChevronDown"} size={17} /></button>{open && <div id={id} className="export-accordion__body">{children}</div>}</section>; }
 
-  const isDoc = isDocumentFormat(format);
-  const capabilities = useMemo(() => getExportFormatCapabilities(format), [format]);
-  const colorModeKey = colorModeKeyFor(format);
+export default function ExportStudioDialog({ open, onClose, mind, mapId, title, selectedNodeId, selectedBranchIds, onRequestBranchSelection }) {
+  const [step, setStep] = useState(0), [furthest, setFurthest] = useState(0);
+  const [scopeType, setScopeType] = useState(selectedNodeId ? "current_branch" : "full"), [visibleOnly, setVisibleOnly] = useState(false), [advanced, setAdvanced] = useState(false);
+  const [format, setFormat] = useState("png"), [background, setBackground] = useState("canvas"), [customColor, setCustomColor] = useState("#FFFFFF"), [scale, setScale] = useState(2);
+  const [filenameOverride, setFilenameOverride] = useState(""), [appearance, setAppearance] = useState(DEFAULT_APPEARANCE), [appearancePreset, setAppearancePreset] = useState("canvas"), [quickPreset, setQuickPreset] = useState(null);
+  const [docs, setDocs] = useState(documentDefaults), [includeMapImage, setIncludeMapImage] = useState(false), [openSection, setOpenSection] = useState("colors");
+  const [exporting, setExporting] = useState(false), [error, setError] = useState(null), [done, setDone] = useState(null), [jobStatus, setJobStatus] = useState(null), [jobProgress, setJobProgress] = useState(0), [jobId, setJobId] = useState(null);
+  const abortRef = useRef(null), isDoc = isDocumentFormat(format), capabilities = useMemo(() => getExportFormatCapabilities(format), [format]), docOptions = docs[format] || docs.pdf, branchCount = selectedBranchIds?.size || 0;
+  const custom = () => setQuickPreset(null);
+  const changeFormat = (next, manual = true) => { setFormat(next); setOpenSection(isDocumentFormat(next) ? (next === "xlsx" ? "content" : "layout") : "colors"); if (manual) custom(); };
+  const updateDoc = (key, value) => { custom(); setAppearancePreset(null); setDocs((all) => ({ ...all, [format]: { ...all[format], [key]: value } })); };
+  const updateDocContent = (key, value) => { custom(); setAppearancePreset(null); setDocs((all) => ({ ...all, [format]: { ...all[format], content: { ...all[format].content, [key]: value } } })); };
+  const updateAppearance = (patch) => { custom(); setAppearancePreset(null); setAppearance((old) => ({ ...old, ...patch })); };
+  const updateContent = (key, value) => { custom(); setAppearancePreset(null); setAppearance((old) => ({ ...old, content: { ...old.content, [key]: value } })); };
+  const applyQuick = (name) => { setQuickPreset(name); if (name === "png") { changeFormat("png", false); setBackground("canvas"); setScale(2); setAppearance(PRESETS.canvas); setAppearancePreset("canvas"); } else if (name === "pdf") { changeFormat("pdf", false); setAppearancePreset("study"); const base = getExportFormatCapabilities("pdf").defaults; setDocs((all) => ({ ...all, pdf: { ...base, mode: "map_and_outline", content: { ...base.content, notes: true } } })); } else { changeFormat("xlsx", false); setAppearancePreset("canvas"); setDocs((all) => ({ ...all, xlsx: getExportFormatCapabilities("xlsx").defaults })); } };
+  const applyAppearancePreset = (name) => { custom(); setAppearancePreset(name); if (!isDoc) return setAppearance(PRESETS[name]); const visual = PRESETS[name]; setDocs((all) => { const next = { ...all[format], font: visual.font === "serif" ? "serif" : "sans" }; if (capabilities.controls.branchColor || capabilities.controls.headingColor || capabilities.controls.headerStyle) next[colorKey(format)] = visual.branchColorMode; const content = { ...next.content }; Object.keys(content).forEach((key) => { if (key in visual.content) content[key] = visual.content[key]; }); return { ...all, [format]: { ...next, content } }; }); };
 
-  const changeFormat = (nextFormat) => {
-    setFormat(nextFormat);
-    if (isDocumentFormat(nextFormat)) {
-      setDocOptions(getExportFormatCapabilities(nextFormat).defaults);
-      setIncludeMapImage(false);
-    }
-  };
-
-  const updateDocOption = (key, value) => setDocOptions((o) => ({ ...o, [key]: value }));
-  const updateDocContent = (key, value) => setDocOptions((o) => ({ ...o, content: { ...o.content, [key]: value } }));
-
-  const hasBranchSelection = (selectedBranchIds?.size || 0) > 0;
-
-  const applyPreset = (name) => {
-    setPresetName(name);
-    setAppearance(PRESETS[name]);
-  };
-  const updateAppearance = (patch) => { setPresetName(null); setAppearance((a) => ({ ...a, ...patch })); };
-  const updateContent = (key, value) => { setPresetName(null); setAppearance((a) => ({ ...a, content: { ...a.content, [key]: value } })); };
-
-  const scopeResult = useMemo(() => {
-    if (!mind?.nodeData) return null;
-    try {
-      const resolved = resolveExportScope({
-        nodeData: mind.nodeData, scopeType,
-        selectedNodeId, selectedBranchRootIds: selectedBranchIds ? [...selectedBranchIds] : [],
-        visibleOnly,
-      });
-      return {
-        ok: true,
-        count: countIncluded(resolved.includedIds),
-        hidden: countHiddenIncluded(mind.nodeData, resolved.includedIds),
-      };
-    } catch (e) {
-      if (e instanceof NoSelectionError) return { ok: false, message: "Chưa có lựa chọn cho phạm vi này." };
-      if (e instanceof UnknownNodeIdError) return { ok: false, message: "Lựa chọn không còn hợp lệ trên sơ đồ này." };
-      return { ok: false, message: e.message };
-    }
-  }, [mind, scopeType, selectedNodeId, selectedBranchIds, visibleOnly]);
-
-  const scopeLabel = {
-    full: "Toàn bộ sơ đồ", current_branch: "Nhánh hiện tại",
-    selected_branches: "Các nhánh được chọn", visible: "Phần đang hiển thị",
-  }[scopeType];
-
-  const filename = sanitizeExportFilename(filenameOverride || title);
-
-  const estimatedDimensions = useMemo(() => {
-    if (!mind?.map || !scopeResult?.ok || isDoc) return null;
-    return estimateExportDimensions({
-      mind, scopeType, targetNodeId: selectedNodeId,
-      branchRootIds: selectedBranchIds ? [...selectedBranchIds] : [], scale,
-    });
-  }, [mind, scopeType, selectedNodeId, selectedBranchIds, scale, scopeResult, isDoc]);
-
-  // Same idempotency key across re-renders while the request is unchanged
-  // (so a "Thử lại" click on a failed job reuses it — the backend's own
-  // idempotent-job contract then either resumes or safely re-runs the
-  // SAME request), and a FRESH one whenever scope/format/options actually
-  // change (so an edited request is never rejected as a stale-key conflict).
-  const branchIdsKey = selectedBranchIds ? [...selectedBranchIds].sort().join(",") : "";
-  const idempotencyKey = useMemo(() => (
-    typeof crypto !== "undefined" && crypto.randomUUID ? crypto.randomUUID() : `${Date.now()}-${Math.random()}`
-  ), [format, scopeType, selectedNodeId, branchIdsKey, visibleOnly, JSON.stringify(docOptions), includeMapImage]); // eslint-disable-line react-hooks/exhaustive-deps
-
-  const canAdvanceFromScope = scopeResult?.ok;
-  const canExport = scopeResult?.ok && !(isDoc && !mapId);
-  const close = () => {
-    if (exporting) return;
-    abortRef.current?.abort();
-    onClose?.();
-  };
-
+  const scopeResult = useMemo(() => { if (!mind?.nodeData) return null; try { const resolved = resolveExportScope({ nodeData: mind.nodeData, scopeType, selectedNodeId, selectedBranchRootIds: selectedBranchIds ? [...selectedBranchIds] : [], visibleOnly }); return { ok: true, count: countIncluded(resolved.includedIds), hidden: countHiddenIncluded(mind.nodeData, resolved.includedIds) }; } catch (e) { if (e instanceof NoSelectionError) return { ok: false, message: scopeType === "selected_branches" ? "Chọn ít nhất một nhánh để tiếp tục." : "Chọn một node trên canvas để tiếp tục." }; if (e instanceof UnknownNodeIdError) return { ok: false, message: "Lựa chọn không còn hợp lệ trên sơ đồ này." }; return { ok: false, message: e.message }; } }, [mind, scopeType, selectedNodeId, selectedBranchIds, visibleOnly]);
+  const scopeLabel = { full: "Toàn bộ sơ đồ", current_branch: "Nhánh hiện tại", selected_branches: "Các nhánh được chọn", visible: "Phần đang hiển thị" }[scopeType], filename = sanitizeExportFilename(filenameOverride || title), extension = format === "jpeg" ? "jpg" : format;
+  const estimated = useMemo(() => !mind?.map || !scopeResult?.ok || isDoc ? null : estimateExportDimensions({ mind, scopeType, targetNodeId: selectedNodeId, branchRootIds: selectedBranchIds ? [...selectedBranchIds] : [], scale }), [mind, scopeType, selectedNodeId, selectedBranchIds, scale, scopeResult, isDoc]);
+  const branchesKey = selectedBranchIds ? [...selectedBranchIds].sort().join(",") : "";
+  const idempotencyKey = useMemo(() => crypto.randomUUID?.() || `${Date.now()}-${Math.random()}`, [format, scopeType, selectedNodeId, branchesKey, visibleOnly, JSON.stringify(docOptions), includeMapImage]); // eslint-disable-line react-hooks/exhaustive-deps
+  const canAdvance = scopeResult?.ok, canExport = canAdvance && !(isDoc && !mapId), effectiveScope = visibleOnly && scopeType === "full" ? "visible" : scopeType;
+  const close = () => { if (!exporting) { abortRef.current?.abort(); onClose?.(); } };
   useEffect(() => () => abortRef.current?.abort(), []);
+  useEffect(() => { abortRef.current?.abort(); setExporting(false); setError(null); setDone(null); setJobStatus(null); setJobProgress(0); setJobId(null); }, [mapId]);
 
-  // Map A<->B isolation: neither MindElixirView nor this dialog remounts on
-  // a map switch (WorkspaceContainer.jsx renders MindElixirView with no
-  // `key` — mind-elixir re-inits internally via its own `data?.id`-keyed
-  // effect instead), so without this, a completed/failed/in-flight
-  // document-export job's status would keep showing after switching to a
-  // DIFFERENT map — a stale "Đã xuất" banner naming the wrong file, or a
-  // "Huỷ xuất" button that would cancel a job belonging to a different map
-  // entirely. Aborts any in-flight poll and clears every export-RUN-
-  // specific field the moment the map identity changes; deliberately
-  // leaves format/scope/appearance/docOptions alone (a chosen preference
-  // carrying over between maps is a convenience, not a correctness bug the
-  // way a wrong completed-job banner is).
-  useEffect(() => {
-    abortRef.current?.abort();
-    setExporting(false);
-    setError(null);
-    setDone(null);
-    setJobStatus(null);
-    setJobProgress(0);
-    setJobId(null);
-  }, [mapId]);
+  const runImage = async () => setDone(await exportMindmapImage({ mind, scopeType: effectiveScope, targetNodeId: selectedNodeId, branchRootIds: selectedBranchIds ? [...selectedBranchIds] : [], visibleOnly, format, backgroundColor: backgroundColor(background, customColor), scale, title: filename, appearance }));
+  const runDocument = async () => { setJobStatus("queued"); setJobProgress(0); setJobId(null); let mapImageBase64; if ((format === "pdf" && docOptions.mode !== "outline") || (format === "docx" && includeMapImage)) mapImageBase64 = await captureMapImageBase64({ mind, scopeType: effectiveScope, targetNodeId: selectedNodeId, branchRootIds: selectedBranchIds ? [...selectedBranchIds] : [], visibleOnly }); const created = await createMindmapExport(mapId, { format, scope: { scope_type: effectiveScope, selected_node_id: selectedNodeId, selected_branch_root_ids: selectedBranchIds ? [...selectedBranchIds] : [], include_descendants: true }, options: docOptions, mapImageBase64, idempotencyKey }); setJobId(created.job_id); const controller = new AbortController(); abortRef.current = controller; const final = await pollMindmapExportUntilDone(created.job_id, { signal: controller.signal, onUpdate: (s) => { setJobStatus(s.status); setJobProgress(s.progress || 0); } }); if (final.status === "done") { setDone({ filename: `${filename}.${format}` }); if (final.download_url) triggerMindmapExportDownload(final.download_url); } else if (final.status === "cancelled") throw new Error("Đã hủy xuất tài liệu."); else throw new Error(final.error || "Xuất tài liệu thất bại."); };
+  const runExport = async () => { if (!mind || !canExport) return; setExporting(true); setError(null); try { if (isDoc) await runDocument(); else await runImage(); } catch (e) { if (e?.name !== "AbortError") setError(e?.message || "Không xuất được sơ đồ."); setJobStatus((s) => ["queued", "running"].includes(s) ? "error" : s); } finally { setExporting(false); } };
+  const cancel = async () => { abortRef.current?.abort(); if (jobId) try { await cancelMindmapExport(jobId); } catch { /* best effort */ } setJobStatus("cancelled"); setExporting(false); };
+  const next = () => { if (step === 0 && !canAdvance) return; setStep((old) => { const value = Math.min(3, old + 1); setFurthest((seen) => Math.max(seen, value)); return value; }); };
+  const summary = `${scopeLabel} · ${format.toUpperCase()}${scopeResult?.ok ? ` · ${scopeResult.count} node` : ""}`, cta = format === "pdf" ? "Tạo PDF" : format === "docx" ? "Tạo DOCX" : format === "xlsx" ? "Tạo XLSX" : `Xuất ${format.toUpperCase()}`;
 
-  const effectiveScopeType = visibleOnly && scopeType === "full" ? "visible" : scopeType;
+  const contentStep = <div className="export-step"><header className="export-step__header"><h3>Nội dung xuất</h3><p>Chọn nhanh một cấu hình hoặc tự thiết lập phạm vi.</p></header><section><div className="export-section-title"><span>Xuất nhanh</span>{!quickPreset && <small>Tùy chỉnh</small>}</div><div className="export-quick-grid">{[["png", "Ảnh PNG", "Image"], ["pdf", "PDF học tập", "FileText"], ["xlsx", "Dữ liệu XLSX", "Rows3"]].map(([key, label, icon]) => <button key={key} type="button" className={quickPreset === key ? "is-selected" : ""} aria-pressed={quickPreset === key} onClick={() => applyQuick(key)}><Icon name={icon} size={17} />{label}</button>)}</div></section><section><div className="export-section-title"><span>Phạm vi xuất</span></div><div className="export-choice-list" role="radiogroup" aria-label="Phạm vi xuất">{SCOPES.map(([key, label, hint, icon]) => <label key={key} className={scopeType === key ? "is-selected" : ""}><Icon name={icon} size={18} /><span className="export-choice-list__copy"><strong>{label}</strong><small id={`scope-${key}-desc`}>{key === "current_branch" && !selectedNodeId ? "Chưa chọn node. Chọn một node trên canvas trước." : hint}</small></span>{key === "selected_branches" && <><span className="export-count">{branchCount} nhánh</span><button type="button" className="export-inline-action" onClick={(e) => { e.preventDefault(); onRequestBranchSelection?.(); }}>Chọn trên canvas<span className="sr-only"> {branchCount ? "Chọn lại trên sơ đồ" : "Chọn nhánh trên sơ đồ"}</span></button></>}<input type="radio" name="mm-export-scope" value={key} checked={scopeType === key} aria-describedby={`scope-${key}-desc`} onChange={() => { custom(); setScopeType(key); }} /></label>)}</div></section><section className="export-advanced"><button type="button" aria-expanded={advanced} onClick={() => setAdvanced((v) => !v)}><Icon name="Sliders" size={16} />Nâng cao<Icon name={advanced ? "ChevronUp" : "ChevronDown"} size={16} /></button>{advanced && <div className="export-advanced__body"><label className="export-check"><input name="mm-export-visible-only" type="checkbox" checked={visibleOnly} onChange={(e) => { custom(); setVisibleOnly(e.target.checked); }} /><span><strong>Chỉ giữ node đang hiển thị trong phạm vi đã chọn</strong><small>Áp dụng thêm bộ lọc hiển thị cho phạm vi hiện tại.</small></span></label></div>}</section>{scopeResult && !scopeResult.ok && <div className="export-message export-message--error" role="alert"><Icon name="AlertCircle" size={16} />{scopeResult.message}</div>}</div>;
 
-  const captureMapImageForBackend = async () => {
-    return captureMapImageBase64({
-      mind, scopeType: effectiveScopeType, targetNodeId: selectedNodeId,
-      branchRootIds: selectedBranchIds ? [...selectedBranchIds] : [], visibleOnly,
-    });
-  };
+  const formatStep = <div className="export-step"><header className="export-step__header"><h3>Chọn định dạng</h3><p>Mỗi định dạng chỉ hiển thị các tùy chọn mà hệ thống hỗ trợ.</p></header>{[["Ảnh", IMAGE_FORMATS], ["Tài liệu", DOCUMENT_FORMATS]].map(([group, formats]) => <section key={group}><div className="export-section-title"><span>{group}</span></div>{group === "Tài liệu" && !mapId && <p className="export-helper">Lưu sơ đồ trước khi xuất định dạng tài liệu.</p>}<div className="export-format-grid" role="radiogroup" aria-label={`Định dạng ${group.toLowerCase()}`}>{formats.map(([key, label, hint, icon]) => <label key={key} className={`${format === key ? "is-selected" : ""} ${group === "Tài liệu" && !mapId ? "is-disabled" : ""}`}><Icon name={icon} size={20} /><span><strong>{label}</strong><small>{hint}</small></span><input type="radio" name="mm-export-format" value={key} checked={format === key} disabled={group === "Tài liệu" && !mapId} onChange={() => changeFormat(key)} /></label>)}</div></section>)}</div>;
 
-  const runImageExport = async () => {
-    const info = await exportMindmapImage({
-      mind, scopeType: effectiveScopeType, targetNodeId: selectedNodeId,
-      branchRootIds: selectedBranchIds ? [...selectedBranchIds] : [], visibleOnly,
-      format, backgroundColor: resolveBackgroundColor(background, customColor), scale, title: filename,
-      appearance,
-    });
-    setDone(info);
-  };
+  const imageColors = <><Control label="Nền"><Segmented options={BACKGROUNDS} value={background} disabled={(v) => v === "transparent" && format === "jpeg"} onChange={(v) => { custom(); setBackground(v); }} />{background === "custom" && <input type="color" aria-label="Màu nền tùy chỉnh" value={customColor} onChange={(e) => { custom(); setCustomColor(e.target.value); }} />}</Control><Control label="Phông chữ"><Segmented options={FONT_OPTIONS} value={appearance.font} onChange={(v) => updateAppearance({ font: v })} /></Control><Control label="Màu nhánh"><Segmented options={COLOR_OPTIONS} value={appearance.branchColorMode} onChange={(v) => updateAppearance({ branchColorMode: v })} /></Control><Control label="Độ dày đường nối"><Segmented options={THICKNESS_OPTIONS} value={appearance.connectorThickness} onChange={(v) => updateAppearance({ connectorThickness: v })} /></Control></>;
+  const imageLayout = <><Control label="Khoảng cách"><Segmented options={SPACING_OPTIONS} value={appearance.spacing} onChange={(v) => updateAppearance({ spacing: v })} /></Control><Control label="Độ phân giải"><Segmented options={[[1, "1×"], [2, "2×"], [4, "4×"]]} value={scale} onChange={(v) => { custom(); setScale(v); }} /></Control></>;
+  const docColors = <>{capabilities.controls.font && <Control label="Phông chữ"><Segmented options={DOC_FONT_OPTIONS} value={docOptions.font} onChange={(v) => updateDoc("font", v)} /></Control>}{capabilities.controls.background && <Control label="Nền"><Segmented options={DOC_BACKGROUNDS} value={docOptions.background} onChange={(v) => updateDoc("background", v)} /></Control>}{(capabilities.controls.branchColor || capabilities.controls.headingColor || capabilities.controls.headerStyle) && <Control label={format === "docx" ? "Màu tiêu đề" : format === "xlsx" ? "Màu tiêu đề bảng" : "Màu nhánh"}><Segmented options={COLOR_OPTIONS} value={docOptions[colorKey(format)]} onChange={(v) => updateDoc(colorKey(format), v)} /></Control>}</>;
+  const docLayout = <>{capabilities.controls.mode && <Control label="Chế độ"><Segmented options={PDF_MODE_OPTIONS} value={docOptions.mode} onChange={(v) => updateDoc("mode", v)} /></Control>}{capabilities.controls.pageSize && <Control label="Khổ giấy"><Segmented options={PAGE_OPTIONS} value={docOptions.pageSize} onChange={(v) => updateDoc("pageSize", v)} /></Control>}{capabilities.controls.orientation && <Control label="Hướng trang"><Segmented options={ORIENTATION_OPTIONS} value={docOptions.orientation} onChange={(v) => updateDoc("orientation", v)} /></Control>}{capabilities.controls.margins && <Control label="Lề"><Segmented options={MARGIN_OPTIONS} value={docOptions.margins} onChange={(v) => updateDoc("margins", v)} /></Control>}{capabilities.controls.singlePage && <label className="export-check"><input type="checkbox" checked={docOptions.singlePage} onChange={(e) => updateDoc("singlePage", e.target.checked)} /><span><strong>Một trang dài duy nhất</strong></span></label>}</>;
+  const contentKeys = isDoc ? capabilities.controls.content : ["relations", "citations", "legend", "branding"];
+  const appearanceStep = <div className="export-step" data-testid={isDoc ? "doc-appearance" : "image-appearance"}><header className="export-step__header"><h3>Giao diện</h3><p>Các tùy chỉnh được gom theo nhóm để dễ quét.</p></header><section><div className="export-section-title"><span>Mẫu dựng sẵn</span>{!appearancePreset && <small>Tùy chỉnh</small>}</div><Segmented options={PRESET_OPTIONS} value={appearancePreset} onChange={applyAppearancePreset} /></section><div className="export-preview" aria-label="Xem trước giao diện"><div className="export-preview__canvas"><span className="export-preview__root" /><i /><span /><i /><span /></div><div><strong>{PRESET_OPTIONS.find(([v]) => v === appearancePreset)?.[1] || "Tùy chỉnh"}</strong><small>{format.toUpperCase()} · {isDoc ? docOptions?.font : appearance.font}</small></div></div><div className="export-accordions"><Accordion id="export-colors" title="Màu và kiểu chữ" icon="Sliders" open={openSection === "colors"} onToggle={() => setOpenSection(openSection === "colors" ? null : "colors")}>{isDoc ? docColors : imageColors}</Accordion><Accordion id="export-layout" title="Bố cục" icon="Rows3" open={openSection === "layout"} onToggle={() => setOpenSection(openSection === "layout" ? null : "layout")}>{isDoc ? docLayout : imageLayout}</Accordion><Accordion id="export-content" title="Nội dung kèm theo" icon="FileStack" open={openSection === "content"} onToggle={() => setOpenSection(openSection === "content" ? null : "content")}><div className="export-check-grid">{contentKeys.map((key) => <label className="export-check" key={key}><input type="checkbox" checked={isDoc ? !!docOptions.content?.[key] : appearance.content[key]} onChange={(e) => isDoc ? updateDocContent(key, e.target.checked) : updateContent(key, e.target.checked)} /><span><strong>{CONTENT_LABELS[key]}</strong></span></label>)}{isDoc && capabilities.controls.mapImage && <label className="export-check"><input type="checkbox" checked={includeMapImage} onChange={(e) => { custom(); setIncludeMapImage(e.target.checked); }} /><span><strong>Kèm ảnh sơ đồ</strong></span></label>}</div></Accordion><Accordion id="export-filename" title="Tên file" icon="FileText" open={openSection === "filename"} onToggle={() => setOpenSection(openSection === "filename" ? null : "filename")}><label className="export-filename"><span>Tên file</span><div><input type="text" value={filenameOverride} onChange={(e) => { custom(); setFilenameOverride(e.target.value); }} placeholder={sanitizeExportFilename(title)} /><b>.{extension}</b></div><small>Tên không hợp lệ sẽ được tự động làm sạch.</small></label></Accordion></div></div>;
 
-  const runDocumentExport = async () => {
-    setJobStatus("queued");
-    setJobProgress(0);
-    setJobId(null);
-    let mapImageBase64;
-    const needsMapImage = (format === "pdf" && docOptions.mode !== "outline") || (format === "docx" && includeMapImage);
-    if (needsMapImage) mapImageBase64 = await captureMapImageForBackend();
+  const included = (isDoc ? Object.entries(docOptions?.content || {}) : Object.entries(appearance.content)).filter(([, value]) => value).map(([key]) => CONTENT_LABELS[key]);
+  const reviewStep = <div className="export-step"><header className="export-step__header"><h3>Kiểm tra trước khi xuất</h3><p>Xác nhận cấu hình. Xem trước không thay đổi canvas hiện tại.</p></header>{done ? <div className="export-success"><Icon name="CheckCircle2" size={22} /><div><strong>Đã xuất: {done.filename}</strong><span>File đã tải xuống trình duyệt.</span></div></div> : <div className="export-review" aria-label="Tóm tắt cấu hình xuất"><div className="export-review__thumb"><div className="export-preview__canvas"><span className="export-preview__root" /><i /><span /><i /><span /></div><small>{format.toUpperCase()}</small></div><dl><div><dt>Phạm vi</dt><dd>{scopeLabel}</dd></div><div><dt>Định dạng</dt><dd>{format.toUpperCase()}</dd></div><div><dt>Số node/nhánh</dt><dd>{scopeResult?.ok ? `${scopeResult.count} node${scopeType === "selected_branches" ? ` · ${branchCount} nhánh` : ""}` : "Chưa hợp lệ"}</dd></div><div><dt>Mẫu giao diện</dt><dd>{PRESET_OPTIONS.find(([v]) => v === appearancePreset)?.[1] || "Tùy chỉnh"}</dd></div><div><dt>Nội dung kèm theo</dt><dd>{included.join(", ") || "Không có"}</dd></div><div><dt>Tên file</dt><dd>{filename}.{extension}</dd></div>{estimated && <div><dt>Kích thước</dt><dd>≈{estimated.width}×{estimated.height}px</dd></div>}</dl></div>}{isDoc && jobStatus && <div className="export-message"><Spinner size={14} />{{ queued: "Đang xếp hàng", running: `Đang xử lý (${jobProgress}%)`, done: "Hoàn tất", error: "Thất bại", cancelled: "Đã hủy" }[jobStatus]}</div>}{error && <div className="export-message export-message--error" role="alert"><Icon name="AlertCircle" size={16} />{error}</div>}</div>;
 
-    const created = await createMindmapExport(mapId, {
-      format,
-      scope: {
-        scope_type: effectiveScopeType, selected_node_id: selectedNodeId,
-        selected_branch_root_ids: selectedBranchIds ? [...selectedBranchIds] : [],
-        include_descendants: true,
-      },
-      options: docOptions,
-      mapImageBase64,
-      idempotencyKey,
-    });
-    setJobId(created.job_id);
-
-    const controller = new AbortController();
-    abortRef.current = controller;
-    const final = await pollMindmapExportUntilDone(created.job_id, {
-      signal: controller.signal,
-      onUpdate: (s) => { setJobStatus(s.status); setJobProgress(s.progress || 0); },
-    });
-
-    if (final.status === "done") {
-      setDone({ filename: `${filename}.${format}` });
-      if (final.download_url) triggerMindmapExportDownload(final.download_url);
-    } else if (final.status === "cancelled") {
-      throw new Error("Đã huỷ xuất tài liệu.");
-    } else {
-      throw new Error(final.error || "Xuất tài liệu thất bại.");
-    }
-  };
-
-  const runExport = async () => {
-    if (!mind || !canExport) return;
-    setExporting(true);
-    setError(null);
-    try {
-      if (isDoc) await runDocumentExport();
-      else await runImageExport();
-    } catch (e) {
-      if (e?.name !== "AbortError") setError(e?.message || "Không xuất được sơ đồ.");
-      setJobStatus((s) => (s === "queued" || s === "running" ? "error" : s));
-    } finally {
-      setExporting(false);
-    }
-  };
-
-  const cancelRunningJob = async () => {
-    abortRef.current?.abort();
-    if (jobId) {
-      try { await cancelMindmapExport(jobId); } catch { /* best-effort — status poll already stopped */ }
-    }
-    setJobStatus("cancelled");
-    setExporting(false);
-  };
-
-  return (
-    <Modal open={open} title="Xuất sơ đồ" onClose={exporting ? undefined : close} maxWidth={960}
-      footer={
-        <div className="flex items-center justify-between gap-3">
-          <div className="flex gap-1.5" role="tablist" aria-label="Các bước xuất sơ đồ">
-            {STEPS.map((s, i) => (
-              <span key={s} className={`w-2 h-2 rounded-full ${i === step ? "bg-accent" : "bg-border-color"}`} aria-hidden="true" />
-            ))}
-          </div>
-          <div className="flex gap-2">
-            {step > 0 && !done && (
-              <button type="button" className="btn-secondary text-small" disabled={exporting} onClick={() => setStep((s) => s - 1)}>Quay lại</button>
-            )}
-            {exporting && (jobStatus === "queued" || jobStatus === "running") ? (
-              <button type="button" className="btn-secondary text-small" onClick={cancelRunningJob}>Huỷ xuất</button>
-            ) : (
-              <button type="button" className="btn-secondary text-small" disabled={exporting} onClick={close}>{done ? "Đóng" : "Hủy"}</button>
-            )}
-            {step < 3 && (
-              <button type="button" className="btn-primary text-small" disabled={step === 0 && !canAdvanceFromScope}
-                onClick={() => setStep((s) => s + 1)}>Tiếp tục</button>
-            )}
-            {step === 3 && !done && (
-              <button type="button" className="btn-primary text-small inline-flex items-center gap-1.5" disabled={exporting || !canExport}
-                onClick={runExport}>
-                {exporting
-                  ? <><Spinner size={13} /> {jobStatus === "queued" ? "Đang xếp hàng…" : jobStatus === "running" ? `Đang xuất… ${jobProgress}%` : "Đang xuất…"}</>
-                  : (jobStatus === "error" ? <><Icon name="RotateCcw" size={14} /> Thử lại</> : <><Icon name="Download" size={14} /> Xuất</>)}
-              </button>
-            )}
-          </div>
-        </div>
-      }
-    >
-      <div className="p-5">
-        <div className="font-mono text-caption uppercase text-text-muted mb-4">Bước {step + 1}/4 · {STEPS[step]}</div>
-
-        {step === 0 && (
-          <div className="flex flex-col gap-3">
-            {[
-              ["full", "Toàn bộ sơ đồ", "Bao gồm toàn bộ cây, không phụ thuộc nhánh đang thu gọn."],
-              ["current_branch", "Nhánh hiện tại", selectedNodeId ? "Xuất từ node đang chọn trên canvas." : "Chọn một node trên canvas trước."],
-              ["selected_branches", "Các nhánh được chọn", hasBranchSelection ? `Đã chọn ${selectedBranchIds.size} nhánh.` : "Chưa chọn nhánh nào."],
-              ["visible", "Phần đang hiển thị", "Chỉ node đang hiện trên canvas — không phải toàn bộ dữ liệu."],
-            ].map(([value, label, hint]) => (
-              <label key={value} className={`surface-card !p-3 flex items-start gap-3 cursor-pointer ${scopeType === value ? "border-accent" : ""}`}>
-                <input type="radio" name="mm-export-scope" value={value} checked={scopeType === value}
-                  onChange={() => setScopeType(value)} className="mt-1" />
-                <span>
-                  <span className="block text-body font-semibold text-text-primary">{label}</span>
-                  <span className="block text-small text-text-muted">{hint}</span>
-                </span>
-              </label>
-            ))}
-            {scopeType === "selected_branches" && (
-              <button type="button" className="btn-secondary text-small self-start" onClick={onRequestBranchSelection}>
-                <Icon name="MousePointerClick" size={14} /> {hasBranchSelection ? "Chọn lại trên sơ đồ" : "Chọn nhánh trên sơ đồ"}
-              </button>
-            )}
-            {scopeType !== "visible" && (
-              <label className="flex items-center gap-2 text-small text-text-secondary mt-1">
-                <input type="checkbox" checked={visibleOnly} onChange={(e) => setVisibleOnly(e.target.checked)} />
-                Chỉ các node đang hiển thị
-              </label>
-            )}
-            {scopeResult && !scopeResult.ok && (
-              <div className="text-small flex items-center gap-1.5" style={{ color: "var(--err)" }}>
-                <Icon name="AlertCircle" size={14} /> {scopeResult.message}
-              </div>
-            )}
-          </div>
-        )}
-
-        {step === 1 && (
-          <div className="flex flex-col gap-4">
-            <div>
-              <div className="font-mono text-metadata uppercase text-text-muted mb-2">Ảnh</div>
-              <div className="flex flex-col gap-2">
-                {IMAGE_FORMATS.map(([value, label, hint]) => (
-                  <label key={value} className={`surface-card !p-3 flex items-start gap-3 cursor-pointer ${format === value ? "border-accent" : ""}`}>
-                    <input type="radio" name="mm-export-format" value={value} checked={format === value} onChange={() => changeFormat(value)} className="mt-1" />
-                    <span>
-                      <span className="block text-body font-semibold text-text-primary">{label}</span>
-                      <span className="block text-small text-text-muted">{hint}</span>
-                    </span>
-                  </label>
-                ))}
-              </div>
-            </div>
-            <div>
-              <div className="font-mono text-metadata uppercase text-text-muted mb-2">Tài liệu</div>
-              {!mapId && (
-                <div className="text-small text-text-muted mb-2 flex items-center gap-1.5">
-                  <Icon name="AlertCircle" size={14} /> Lưu sơ đồ trước khi xuất định dạng tài liệu.
-                </div>
-              )}
-              <div className="flex flex-col gap-2">
-                {DOCUMENT_FORMATS.map(([value, label, hint]) => (
-                  <label key={value} className={`surface-card !p-3 flex items-start gap-3 cursor-pointer ${format === value ? "border-accent" : ""} ${!mapId ? "opacity-50 pointer-events-none" : ""}`}>
-                    <input type="radio" name="mm-export-format" value={value} checked={format === value} onChange={() => changeFormat(value)} className="mt-1" disabled={!mapId} />
-                    <span>
-                      <span className="block text-body font-semibold text-text-primary">{label}</span>
-                      <span className="block text-small text-text-muted">{hint}</span>
-                    </span>
-                  </label>
-                ))}
-              </div>
-            </div>
-          </div>
-        )}
-
-        {step === 2 && !isDoc && (
-          <div className="flex flex-col gap-5">
-            <div>
-              <div className="font-mono text-metadata uppercase text-text-muted mb-2">Mẫu dựng sẵn</div>
-              <div className="flex flex-wrap gap-2">
-                {PRESET_OPTIONS.map(([value, label]) => (
-                  <button key={value} type="button" className={`pill-tab ${presetName === value ? "pill-tab-active" : ""}`}
-                    onClick={() => applyPreset(value)}>{label}</button>
-                ))}
-              </div>
-            </div>
-            <div>
-              <div className="font-mono text-metadata uppercase text-text-muted mb-2">Nền</div>
-              <div className="flex flex-wrap items-center gap-2">
-                {BACKGROUNDS.map(([value, label]) => (
-                  <button key={value} type="button" className={`pill-tab ${background === value ? "pill-tab-active" : ""}`}
-                    disabled={value === "transparent" && format === "jpeg"}
-                    onClick={() => setBackground(value)}>{label}</button>
-                ))}
-                {background === "custom" && (
-                  <input type="color" value={customColor} onChange={(e) => setCustomColor(e.target.value)}
-                    aria-label="Màu nền tuỳ chỉnh" className="w-8 h-8 rounded border border-border-color" />
-                )}
-              </div>
-            </div>
-            <div>
-              <div className="font-mono text-metadata uppercase text-text-muted mb-2">Độ phân giải</div>
-              <div className="flex gap-2">
-                {[1, 2, 4].map((s) => (
-                  <button key={s} type="button" className={`pill-tab ${scale === s ? "pill-tab-active" : ""}`} onClick={() => setScale(s)}>{s}×</button>
-                ))}
-              </div>
-            </div>
-            <div>
-              <div className="font-mono text-metadata uppercase text-text-muted mb-2">Phông chữ</div>
-              <div className="flex gap-2">
-                {FONT_OPTIONS.map(([value, label]) => (
-                  <button key={value} type="button" className={`pill-tab ${appearance.font === value ? "pill-tab-active" : ""}`}
-                    onClick={() => updateAppearance({ font: value })}>{label}</button>
-                ))}
-              </div>
-            </div>
-            <div>
-              <div className="font-mono text-metadata uppercase text-text-muted mb-2">Màu nhánh & đường nối</div>
-              <div className="flex gap-2">
-                {BRANCH_COLOR_OPTIONS.map(([value, label]) => (
-                  <button key={value} type="button" className={`pill-tab ${appearance.branchColorMode === value ? "pill-tab-active" : ""}`}
-                    onClick={() => updateAppearance({ branchColorMode: value })}>{label}</button>
-                ))}
-              </div>
-            </div>
-            <div>
-              <div className="font-mono text-metadata uppercase text-text-muted mb-2">Khoảng cách</div>
-              <div className="flex gap-2">
-                {SPACING_OPTIONS.map(([value, label]) => (
-                  <button key={value} type="button" className={`pill-tab ${appearance.spacing === value ? "pill-tab-active" : ""}`}
-                    onClick={() => updateAppearance({ spacing: value })}>{label}</button>
-                ))}
-              </div>
-            </div>
-            <div>
-              <div className="font-mono text-metadata uppercase text-text-muted mb-2">Độ dày đường nối</div>
-              <div className="flex gap-2">
-                {THICKNESS_OPTIONS.map(([value, label]) => (
-                  <button key={value} type="button" className={`pill-tab ${appearance.connectorThickness === value ? "pill-tab-active" : ""}`}
-                    onClick={() => updateAppearance({ connectorThickness: value })}>{label}</button>
-                ))}
-              </div>
-            </div>
-            <div>
-              <div className="font-mono text-metadata uppercase text-text-muted mb-2">Nội dung kèm theo</div>
-              <div className="flex flex-col gap-1.5">
-                {["relations", "citations", "legend", "branding"].map((key) => (
-                  <label key={key} className="flex items-center gap-2 text-small text-text-secondary">
-                    <input type="checkbox" checked={appearance.content[key]} onChange={(e) => updateContent(key, e.target.checked)} />
-                    {CONTENT_LABELS[key]}
-                  </label>
-                ))}
-              </div>
-            </div>
-            <div>
-              <div className="font-mono text-metadata uppercase text-text-muted mb-2">Tên file</div>
-              <input type="text" value={filenameOverride} onChange={(e) => setFilenameOverride(e.target.value)}
-                placeholder={sanitizeExportFilename(title)} className="input-surface w-full" />
-              <div className="text-caption font-mono text-text-muted mt-1">{filename}-YYYYMMDD.{format === "jpeg" ? "jpg" : format}</div>
-            </div>
-          </div>
-        )}
-
-        {step === 2 && isDoc && (
-          <div className="flex flex-col gap-5" data-testid="doc-appearance">
-            {capabilities.controls.font && (
-              <div>
-                <div className="font-mono text-metadata uppercase text-text-muted mb-2">Phông chữ</div>
-                <div className="flex gap-2">
-                  {DOC_FONT_OPTIONS.map(([value, label]) => (
-                    <button key={value} type="button" className={`pill-tab ${docOptions.font === value ? "pill-tab-active" : ""}`}
-                      onClick={() => updateDocOption("font", value)}>{label}</button>
-                  ))}
-                </div>
-              </div>
-            )}
-            {capabilities.controls.background && (
-              <div>
-                <div className="font-mono text-metadata uppercase text-text-muted mb-2">Nền</div>
-                <div className="flex flex-wrap items-center gap-2">
-                  {DOC_BACKGROUNDS.map(([value, label]) => (
-                    <button key={value} type="button" className={`pill-tab ${docOptions.background === value ? "pill-tab-active" : ""}`}
-                      onClick={() => updateDocOption("background", value)}>{label}</button>
-                  ))}
-                  {docOptions.background === "custom" && (
-                    <input type="color" value={customColor} onChange={(e) => { setCustomColor(e.target.value); updateDocOption("background", e.target.value); }}
-                      aria-label="Màu nền tuỳ chỉnh" className="w-8 h-8 rounded border border-border-color" />
-                  )}
-                </div>
-              </div>
-            )}
-            {(capabilities.controls.branchColor || capabilities.controls.headingColor || capabilities.controls.headerStyle) && (
-              <div>
-                <div className="font-mono text-metadata uppercase text-text-muted mb-2">
-                  {format === "docx" ? "Màu tiêu đề" : format === "xlsx" ? "Màu tiêu đề bảng" : "Màu nhánh"}
-                </div>
-                <div className="flex gap-2">
-                  {BRANCH_COLOR_OPTIONS.map(([value, label]) => (
-                    <button key={value} type="button" className={`pill-tab ${docOptions[colorModeKey] === value ? "pill-tab-active" : ""}`}
-                      onClick={() => updateDocOption(colorModeKey, value)}>{label}</button>
-                  ))}
-                </div>
-              </div>
-            )}
-            {capabilities.controls.margins && (
-              <div>
-                <div className="font-mono text-metadata uppercase text-text-muted mb-2">Lề</div>
-                <div className="flex gap-2">
-                  {MARGIN_OPTIONS.map(([value, label]) => (
-                    <button key={value} type="button" className={`pill-tab ${docOptions.margins === value ? "pill-tab-active" : ""}`}
-                      onClick={() => updateDocOption("margins", value)}>{label}</button>
-                  ))}
-                </div>
-              </div>
-            )}
-            {capabilities.controls.pageSize && (
-              <div>
-                <div className="font-mono text-metadata uppercase text-text-muted mb-2">Khổ giấy</div>
-                <div className="flex gap-2">
-                  {PAGE_SIZE_OPTIONS.map(([value, label]) => (
-                    <button key={value} type="button" className={`pill-tab ${docOptions.pageSize === value ? "pill-tab-active" : ""}`}
-                      onClick={() => updateDocOption("pageSize", value)}>{label}</button>
-                  ))}
-                </div>
-              </div>
-            )}
-            {capabilities.controls.orientation && (
-              <div>
-                <div className="font-mono text-metadata uppercase text-text-muted mb-2">Hướng trang</div>
-                <div className="flex gap-2">
-                  {ORIENTATION_OPTIONS.map(([value, label]) => (
-                    <button key={value} type="button" className={`pill-tab ${docOptions.orientation === value ? "pill-tab-active" : ""}`}
-                      onClick={() => updateDocOption("orientation", value)}>{label}</button>
-                  ))}
-                </div>
-              </div>
-            )}
-            {capabilities.controls.mode && (
-              <div>
-                <div className="font-mono text-metadata uppercase text-text-muted mb-2">Chế độ</div>
-                <div className="flex gap-2 flex-wrap">
-                  {PDF_MODE_OPTIONS.map(([value, label]) => (
-                    <button key={value} type="button" className={`pill-tab ${docOptions.mode === value ? "pill-tab-active" : ""}`}
-                      onClick={() => updateDocOption("mode", value)}>{label}</button>
-                  ))}
-                </div>
-              </div>
-            )}
-            {capabilities.controls.singlePage && (
-              <label className="flex items-center gap-2 text-small text-text-secondary">
-                <input type="checkbox" checked={docOptions.singlePage} onChange={(e) => updateDocOption("singlePage", e.target.checked)} />
-                Một trang dài duy nhất (không phân trang)
-              </label>
-            )}
-            {capabilities.controls.mapImage && (
-              <label className="flex items-center gap-2 text-small text-text-secondary">
-                <input type="checkbox" checked={includeMapImage} onChange={(e) => setIncludeMapImage(e.target.checked)} />
-                Kèm ảnh sơ đồ
-              </label>
-            )}
-            {capabilities.controls.content?.length > 0 && (
-              <div>
-                <div className="font-mono text-metadata uppercase text-text-muted mb-2">Nội dung kèm theo</div>
-                <div className="flex flex-col gap-1.5">
-                  {capabilities.controls.content.map((key) => (
-                    <label key={key} className="flex items-center gap-2 text-small text-text-secondary">
-                      <input type="checkbox" checked={!!docOptions.content?.[key]} onChange={(e) => updateDocContent(key, e.target.checked)} />
-                      {CONTENT_LABELS[key]}
-                    </label>
-                  ))}
-                </div>
-              </div>
-            )}
-            <div>
-              <div className="font-mono text-metadata uppercase text-text-muted mb-2">Tên file</div>
-              <input type="text" value={filenameOverride} onChange={(e) => setFilenameOverride(e.target.value)}
-                placeholder={sanitizeExportFilename(title)} className="input-surface w-full" />
-              <div className="text-caption font-mono text-text-muted mt-1">{filename}.{format}</div>
-            </div>
-          </div>
-        )}
-
-        {step === 3 && (
-          <div className="flex flex-col gap-4">
-            {done ? (
-              <div className="surface-card !p-4 flex items-center gap-3">
-                <Icon name="CheckCircle2" size={20} className="text-forest" />
-                <div>
-                  <div className="text-body font-semibold text-text-primary">Đã xuất: {done.filename}</div>
-                  <div className="text-small text-text-muted">File đã tải xuống trình duyệt.</div>
-                </div>
-              </div>
-            ) : (
-              <div className="surface-card !p-3.5 flex flex-col gap-1 font-mono text-caption text-text-secondary">
-                <span>{scopeLabel}{scopeResult?.ok ? ` · ${scopeResult.count} node${scopeResult.hidden ? ` · gồm ${scopeResult.hidden} node đang thu gọn` : ""}` : ""}</span>
-                {!isDoc && (
-                  <span>{format.toUpperCase()} · {BACKGROUNDS.find(([v]) => v === background)?.[1]} · {scale}×{estimatedDimensions ? ` · ≈${estimatedDimensions.width}×${estimatedDimensions.height}px` : ""}</span>
-                )}
-                {!isDoc && (
-                  <span>Phông: {FONT_OPTIONS.find(([v]) => v === appearance.font)?.[1]} · Màu nhánh: {BRANCH_COLOR_OPTIONS.find(([v]) => v === appearance.branchColorMode)?.[1]} · Khoảng cách: {SPACING_OPTIONS.find(([v]) => v === appearance.spacing)?.[1]}</span>
-                )}
-                {isDoc && (
-                  <span>{format.toUpperCase()} · Phông: {DOC_FONT_OPTIONS.find(([v]) => v === docOptions.font)?.[1] || docOptions.font}
-                    {capabilities.controls.pageSize ? ` · ${docOptions.pageSize} ${ORIENTATION_OPTIONS.find(([v]) => v === docOptions.orientation)?.[1] || ""}` : ""}
-                    {capabilities.controls.mode ? ` · ${PDF_MODE_OPTIONS.find(([v]) => v === docOptions.mode)?.[1]}` : ""}
-                  </span>
-                )}
-                <span>{filename}.{format === "jpeg" && !isDoc ? "jpg" : format}</span>
-                {isDoc && jobStatus && (
-                  <span className="flex items-center gap-1.5">
-                    {(jobStatus === "queued" || jobStatus === "running") && <Spinner size={12} />}
-                    Trạng thái: {{
-                      queued: "Đang xếp hàng", running: `Đang xử lý (${jobProgress}%)`,
-                      done: "Hoàn tất", error: "Thất bại", cancelled: "Đã huỷ",
-                    }[jobStatus] || jobStatus}
-                  </span>
-                )}
-              </div>
-            )}
-            {error && (
-              <div className="text-small flex items-center gap-1.5" style={{ color: "var(--err)" }}>
-                <Icon name="AlertCircle" size={14} /> {error}
-              </div>
-            )}
-          </div>
-        )}
-      </div>
-    </Modal>
-  );
+  return <Modal open={open} title="Xuất sơ đồ" subtitle="Export Studio" onClose={exporting ? undefined : close} maxWidth={1080} fullBleed className="export-studio-modal"><div className="export-studio"><nav className="export-rail" aria-label="Tiến trình xuất sơ đồ"><ol>{STEPS.map(([label, description, icon], index) => { const state = index === step ? "current" : index < furthest ? "completed" : "pending"; return <li key={label} data-state={state}><button type="button" disabled={index > furthest || exporting} aria-current={index === step ? "step" : undefined} onClick={() => index <= furthest && setStep(index)}><span className="export-rail__marker">{state === "completed" ? <Icon name="Check" size={16} /> : <Icon name={icon} size={17} />}</span><span><strong>{label}</strong><small>{description}</small></span></button></li>; })}</ol></nav><div className="export-workspace"><main className="export-workspace__scroll">{step === 0 ? contentStep : step === 1 ? formatStep : step === 2 ? appearanceStep : reviewStep}</main><footer className="export-footer"><div className="export-footer__summary">{summary}</div><div className="export-footer__actions">{step > 0 && !done && <button type="button" className="btn-secondary" disabled={exporting} onClick={() => setStep((v) => v - 1)}>Quay lại</button>}{exporting && ["queued", "running"].includes(jobStatus) ? <button type="button" className="btn-secondary" onClick={cancel}>Hủy xuất</button> : <button type="button" className="btn-secondary" disabled={exporting} onClick={close}>{done ? "Đóng" : "Hủy"}</button>}{step < 3 && <button type="button" className="btn-primary" disabled={(step === 0 && !canAdvance) || exporting} onClick={next}>Tiếp tục</button>}{step === 3 && !done && <button type="button" className="btn-primary" disabled={exporting || !canExport} onClick={runExport}>{exporting ? <><Spinner size={14} />Đang xuất…</> : jobStatus === "error" ? <><Icon name="RotateCcw" size={15} />Thử lại</> : <><Icon name="Download" size={15} />{cta}</>}</button>}</div></footer></div></div></Modal>;
 }

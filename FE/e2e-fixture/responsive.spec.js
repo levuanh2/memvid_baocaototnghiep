@@ -116,7 +116,7 @@ test.describe("Export Studio — responsive QA", () => {
         await page.locator('[aria-label="Xuất sơ đồ"]').click();
         const dialog = page.getByRole("dialog");
         await expect(dialog.locator('input[name="mm-export-scope"]')).toHaveCount(4);
-        const footer = dialog.locator('[role="tablist"][aria-label="Các bước xuất sơ đồ"]');
+        const footer = dialog.locator(".export-footer");
         await expect(footer).toBeVisible();
         const footerBox = await footer.boundingBox();
         expect(footerBox.y + footerBox.height).toBeLessThanOrEqual(vp.height + 1); // never pushed off-screen
@@ -138,7 +138,7 @@ test.describe("Export Studio — responsive QA", () => {
         await gotoFixture(page, vp);
         await page.locator('[aria-label="Xuất sơ đồ"]').click();
         await page.locator('input[name="mm-export-scope"][value="selected_branches"]').check();
-        await page.getByRole("button", { name: "Chọn nhánh trên sơ đồ" }).click();
+        await page.locator(".export-inline-action").click();
         await expect(page.locator(".mm-selection-bar")).toBeVisible();
         await page.locator(nodeSelector(`${MAP_A_ID}-m0`)).click();
         await expect(page.locator(".mm-selection-bar")).toContainText("Đã chọn 1 nhánh");
@@ -180,6 +180,7 @@ test.describe("Export Studio — responsive QA", () => {
         await gotoFixture(page, vp);
         await goToAppearanceStep(page, "docx");
         const panel = page.locator('[data-testid="doc-appearance"]');
+        await panel.getByRole("button", { name: "Nội dung kèm theo" }).click();
         await expect(panel).toContainText("Kèm ảnh sơ đồ");
         await assertNoHorizontalOverflow(page);
         await shot(page, vp.name, "10-appearance-docx");
@@ -189,6 +190,7 @@ test.describe("Export Studio — responsive QA", () => {
         await gotoFixture(page, vp);
         await goToAppearanceStep(page, "xlsx");
         const panel = page.locator('[data-testid="doc-appearance"]');
+        await panel.getByRole("button", { name: "Màu và kiểu chữ" }).click();
         await expect(panel).toContainText("Màu tiêu đề bảng");
         await assertNoHorizontalOverflow(page);
         await shot(page, vp.name, "11-appearance-xlsx");
@@ -210,11 +212,11 @@ test.describe("Export Studio — responsive QA", () => {
         await gotoFixture(page, vp);
         await goToAppearanceStep(page, "docx");
         await page.getByRole("button", { name: "Tiếp tục" }).click(); // -> preview
-        await page.getByRole("button", { name: /Xuất$/ }).click();
+        await page.getByRole("button", { name: /^(Xuất|Tạo) (PNG|JPEG|SVG|PDF|DOCX|XLSX)$/ }).click();
         await expect(page.getByRole("dialog")).toContainText("Đang x", { timeout: 5000 });
         await assertNoHorizontalOverflow(page);
         await shot(page, vp.name, "13-export-running");
-        await page.getByRole("button", { name: "Huỷ xuất" }).click().catch(() => {}); // stop the poll before the test ends
+        await page.getByRole("button", { name: "Hủy xuất" }).click().catch(() => {}); // stop the poll before the test ends
       });
 
       test("state 14: export failed shows a retry control without overflow", async ({ page }) => {
@@ -222,7 +224,7 @@ test.describe("Export Studio — responsive QA", () => {
         await gotoFixture(page, vp);
         await goToAppearanceStep(page, "xlsx");
         await page.getByRole("button", { name: "Tiếp tục" }).click();
-        await page.getByRole("button", { name: /Xuất$/ }).click();
+        await page.getByRole("button", { name: /^(Xuất|Tạo) (PNG|JPEG|SVG|PDF|DOCX|XLSX)$/ }).click();
         await expect(page.getByRole("dialog")).toContainText("Lỗi máy chủ", { timeout: 5000 });
         await expect(page.getByRole("button", { name: "Thử lại" })).toBeVisible();
         await assertNoHorizontalOverflow(page);
@@ -234,7 +236,7 @@ test.describe("Export Studio — responsive QA", () => {
         await gotoFixture(page, vp);
         await goToAppearanceStep(page, "pdf");
         await page.getByRole("button", { name: "Tiếp tục" }).click();
-        await page.getByRole("button", { name: /Xuất$/ }).click();
+        await page.getByRole("button", { name: /^(Xuất|Tạo) (PNG|JPEG|SVG|PDF|DOCX|XLSX)$/ }).click();
         await expect(page.getByRole("dialog")).toContainText("Đã xuất", { timeout: 5000 });
         await assertNoHorizontalOverflow(page);
         await shot(page, vp.name, "15-export-completed");
