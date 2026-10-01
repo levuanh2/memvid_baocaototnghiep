@@ -19,6 +19,7 @@ export default function Modal({
   footer,
   maxWidth = 920,
   fullBleed = false,
+  className = "",
 }) {
   const dialogRef = useRef(null);
   const focusTraKhiDongRef = useRef(null);
@@ -75,7 +76,7 @@ export default function Modal({
         ref={dialogRef}
         tabIndex={-1}
         onKeyDown={bayTab}
-        className="relative flex flex-col w-full max-h-[90vh] rounded-control border overflow-hidden animate-fadeIn"
+        className={`relative flex flex-col w-full max-h-[90vh] rounded-control border overflow-hidden animate-fadeIn ${className}`}
         style={{ maxWidth, background: "var(--bg-card)", borderColor: "var(--border-strong)", outline: "none" }}
       >
         {(title || onClose) && (
