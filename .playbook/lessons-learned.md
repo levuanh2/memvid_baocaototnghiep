@@ -3007,3 +3007,14 @@ Còn một bẫy riêng đáng nhớ: `test_role_nks_map_dung_khi_luu` khẳng �
 vì thiếu `TEST_DATABASE_URL` nên nó SKIP**, trong khi CI có Postgres và sẽ chạy nó thật.
 Test bị skip không phải test đang xanh. Sửa một bảng ánh xạ thì phải grep xem test nào
 khoá theo giá trị cũ, đừng chỉ nhìn kết quả chạy ở máy mình.
+## MindElixir render readiness is a state machine, not a timeout (2026-10-01)
+
+`clientWidth > 0` and a successful `changeTheme()` call are only proxies. A
+Mind Elixir instance can have nodes in the DOM while connector geometry is
+still NaN or stale, especially when its pane was mounted under `display:none`.
+The safe contract is to run layout/linking, validate every connector path and
+visible-tree relationship, and expose a bounded retry/error state. Theme
+changes must use the same relink/validate path and must never recenter the
+viewport. For expand-to-depth, use the library's public expansion API so the
+DOM subtree and connector groups are rebuilt together; mutating `nodeData`
+alone is not a sufficient render contract.
