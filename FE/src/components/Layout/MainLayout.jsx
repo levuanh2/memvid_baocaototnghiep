@@ -443,7 +443,7 @@ export default function MainLayout({
 
       {/* ── TOP HEADER ── */}
       <header
-        className="flex items-center gap-4 px-4 sm:px-5 h-[60px] border-b border-border flex-shrink-0 transition-theme"
+        className="flex items-center gap-4 px-4 sm:px-5 h-[56px] border-b border-border flex-shrink-0 transition-theme"
         style={{ background: "var(--bg-sidebar)" }}
       >
         {/* Mobile: open source library */}
@@ -607,7 +607,7 @@ export default function MainLayout({
             <aside
               className={
                 panel.drawer
-                  ? `fixed top-[60px] left-0 h-[calc(100vh-60px)] z-40 w-[252px] shrink-0
+                  ? `fixed top-[56px] left-0 h-[calc(100vh-56px)] z-40 w-[252px] shrink-0
                      bg-surface-sidebar border-r border-border
                      transition-transform duration-200 ease-in-out
                      ${leftOpen ? "translate-x-0" : "-translate-x-full"}`
@@ -729,7 +729,7 @@ export default function MainLayout({
               }
               className={
                 mindmapToolOverlay
-                  ? "mindmap-tools-overlay fixed top-[60px] right-3 bottom-3 z-40 w-[320px] bg-surface-sidebar border border-border rounded-[12px] shadow-card-hover overflow-hidden transition-opacity duration-150"
+                  ? "mindmap-tools-overlay fixed top-[56px] right-3 bottom-3 z-40 w-[340px] bg-surface-sidebar border border-border rounded-[12px] shadow-card-hover overflow-hidden transition-opacity duration-150"
                   : panel.drawer
                   // Gia sư AI trên mobile là bottom sheet (đúng yêu cầu Step 1),
                   // Bằng chứng vẫn là ngăn kéo trượt từ cạnh phải như cũ — cùng

@@ -102,7 +102,7 @@ const ARTIFACTS = [
 
 // ── Main component ────────────────────────────────────
 export default function SidebarRight({
-  selectedSources, evidence, highlight, onHighlight, onClose, onAskAbout, onOpenSource, collapsible = false,
+  selectedSources, evidence, highlight, onHighlight, onClose, onAskAbout, onOpenSource,
   mode = "chat", mindMapContext, summaryData,
   // Phase 4C — Gia sư AI sống trong CÙNG cột này, không phải một cột thứ ba
   // (xem hard constraint "no new sidebar"). `rightView` là CONTROLLED từ
@@ -882,13 +882,6 @@ export default function SidebarRight({
               <Icon name="Pin" size={15} />
             </button>
           )}
-          {/* Khổ hẹp: đóng ngăn kéo. Khổ rộng: thu cột về gáy sách. */}
-          <button onClick={onClose}
-            className={`icon-btn w-8 h-8${collapsible ? "" : " md:hidden"}`}
-            aria-label={collapsible ? "Thu gọn cột" : "Đóng"}
-            title={collapsible ? "Thu gọn cột" : "Đóng"}>
-            <Icon name="X" size={16} />
-          </button>
         </div>
       </div>}
 

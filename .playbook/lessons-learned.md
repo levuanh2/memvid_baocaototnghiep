@@ -1,5 +1,14 @@
 # Lessons Learned
 
+## 2026-10-01 - Compact workspace: simplify ownership before changing state
+
+- The map library and inspector were already correct state owners. The useful
+  redesign was a presentation pass: reduce header/overlay offsets, constrain
+  library width for readable scanning, and remove duplicate collapse controls.
+- Preserve mounted panes and callbacks when changing layout. This keeps ChatArea
+  history and MindElixir viewport/lifecycle state intact while panels open or
+  close.
+
 ## 2026-09-28 - jsdom không mô phỏng pointer-capture click-redirect: chỉ trình duyệt thật mới bắt được nút "câm"
 
 - **Một nút bấm không lỗi, không cảnh báo, chỉ đơn giản không làm gì — và jsdom nói nó
