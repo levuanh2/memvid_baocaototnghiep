@@ -21,7 +21,7 @@ export default function UsageChip() {
   return (
     <div className="relative hidden sm:block">
       <button type="button" className="icon-btn h-9 px-2.5 gap-1.5 inline-flex" aria-expanded={open} aria-haspopup="dialog" title="Mức sử dụng AI" onClick={() => setOpen((value) => !value)}>
-        <Icon name="Gauge" size={15} />
+        <Icon name="Activity" size={15} />
         <span className={warning ? "text-warn" : ""}>AI {Math.round(usage.percentage)}%</span>
       </button>
       {open && <div role="dialog" aria-label="Mức sử dụng AI" className="absolute right-0 top-[calc(100%+8px)] z-50 w-[280px] rounded-[10px] border border-border bg-card p-3 shadow-card-hover">
