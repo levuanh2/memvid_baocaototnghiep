@@ -15,9 +15,9 @@ import "mind-elixir/style";
 import { THEME } from "./mindElixirTheme";
 import { recordToMindElixir, mindElixirToRecord } from "../../utils/mindElixirAdapter";
 import { attachExpandDecorator } from "../../utils/mindElixirExpandDecorator";
-import { setExpandedToDepth } from "../../utils/mindElixirExpandDepth";
 import { attachBranchSelectionMode } from "../../utils/mindmapBranchSelectionMode";
 import { nextScale, formatZoom, viewportKeyAction, ZOOM_STEP } from "../../utils/mindmapViewport";
+import { validateMindMapRender } from "../../utils/mindmapRenderLifecycle";
 import { updateMindmap } from "../../utils/api";
 import { toast } from "../ui/Toaster";
 import { Icon } from "../ui/Icon";
@@ -44,6 +44,7 @@ export default function MindElixirView({ data, onRegenerate, regenerating, contr
   const canvasWrapRef = useRef(null);
   const pendingFitRef = useRef(false);
   const pollActiveRef = useRef(false);
+  const renderPollStopRef = useRef(null);
   const [showRelations, setShowRelations] = useState(true);
   const [isFullscreen, setIsFullscreen] = useState(false);
   const [dirty, setDirty] = useState(false);
@@ -53,6 +54,8 @@ export default function MindElixirView({ data, onRegenerate, regenerating, contr
   // map vẫn đang dirty: user quay đi quay lại là mất luôn lý do hỏng, tưởng đã lưu xong.
   // Banner ở lại tới khi tự đóng hoặc tới lần thao tác sau.
   const [errorMsg, setErrorMsg] = useState(null);
+  const [renderState, setRenderState] = useState("idle");
+  const [renderError, setRenderError] = useState(null);
   const [contextOverflowOpen, setContextOverflowOpen] = useState(false);
   const [mapSelectorOpen, setMapSelectorOpen] = useState(false);
   // Round 8 redesign: expand/collapse state lives on mind-elixir's own live
@@ -113,7 +116,7 @@ export default function MindElixirView({ data, onRegenerate, regenerating, contr
   // (real geometry never produces NaN in the first place).
   const sanitizeHiddenNaNPaths = (el) => {
     if (!el || (el.clientWidth > 0 && el.clientHeight > 0)) return;
-    el.querySelectorAll(".lines path").forEach((p) => {
+    el.querySelectorAll(".lines path, .subLines path").forEach((p) => {
       if ((p.getAttribute("d") || "").includes("NaN")) p.setAttribute("d", "");
     });
   };
@@ -143,7 +146,9 @@ export default function MindElixirView({ data, onRegenerate, regenerating, contr
     // size and never get a second chance. layout()+linkDiv() are cheap and
     // idempotent -- mind-elixir already reruns them on every theme toggle --
     // so rerunning them on every qualifying call is safe.
+    setRenderState("laying_out");
     mind.layout?.();
+    setRenderState("linking");
     mind.linkDiv?.();
     // 2026-09-24: `el.clientWidth > 0` alone is NOT a reliable readiness
     // signal -- reproduced live: the container reported a real width on the
@@ -155,13 +160,15 @@ export default function MindElixirView({ data, onRegenerate, regenerating, contr
     // instead of trusting the proxy: if any root-level connector path still
     // contains "NaN", the repair did not really take -- report not-ready so
     // the poll keeps retrying on a later frame instead of giving up early.
-    const stillBroken = Array.from(el.querySelectorAll(".lines path"))
-      .some((p) => (p.getAttribute("d") || "").includes("NaN"));
-    if (stillBroken) return false;
+    setRenderState("validating");
+    const validation = validateMindMapRender(el);
+    if (!validation.ok) return false;
     if (pendingFitRef.current) {
       pendingFitRef.current = false;
       mind.scaleFit?.();
     }
+    setRenderError(null);
+    setRenderState("ready");
     return true;
   }, []);
 
@@ -209,22 +216,41 @@ export default function MindElixirView({ data, onRegenerate, regenerating, contr
     pollActiveRef.current = true;
     let cancelled = false;
     let timer = null;
-    const deadline = (typeof performance !== "undefined" ? performance.now() : Date.now()) + 120000;
-    const stop = () => { cancelled = true; pollActiveRef.current = false; if (timer) clearTimeout(timer); };
+    const deadline = (typeof performance !== "undefined" ? performance.now() : Date.now()) + 10000;
+    const stop = () => { cancelled = true; pollActiveRef.current = false; if (timer) clearTimeout(timer); if (renderPollStopRef.current === stop) renderPollStopRef.current = null; };
     const poll = () => {
       if (cancelled) return;
       const now = typeof performance !== "undefined" ? performance.now() : Date.now();
-      if (fitIfReady() || now >= deadline) { pollActiveRef.current = false; return; }
+      if (fitIfReady()) { stop(); return; }
+      if (now >= deadline) {
+        pollActiveRef.current = false;
+        renderPollStopRef.current = null;
+        setRenderError("Không thể dựng connector trong thời gian cho phép.");
+        setRenderState("error");
+        return;
+      }
       timer = setTimeout(poll, 16);
     };
     timer = setTimeout(poll, 16);
+    renderPollStopRef.current = stop;
     return stop;
   }, [fitIfReady]);
+
+  const retryRender = useCallback(() => {
+    renderPollStopRef.current?.();
+    setRenderError(null);
+    setRenderState("waiting_for_size");
+    pendingFitRef.current = true;
+    renderPollStopRef.current = startFitPoll();
+  }, [startFitPoll]);
 
   // Create once per mounted viewer. Switching saved maps refreshes this same
   // public Mind Elixir instance instead of rebuilding the canvas.
   useEffect(() => {
     if (!containerRef.current || !data) return;
+    renderPollStopRef.current?.();
+    setRenderState("mounting");
+    setRenderError(null);
     setDirty(false);
     setSaving(false);
     setZoom(1);
@@ -293,7 +319,9 @@ export default function MindElixirView({ data, onRegenerate, regenerating, contr
     // mount). `startFitPoll` (declared below `fitIfReady`) has no such cap
     // -- it keeps retrying, cheaply, until the pane genuinely becomes
     // visible, however long that takes.
-    return startFitPoll();
+    setRenderState("waiting_for_size");
+    renderPollStopRef.current = startFitPoll();
+    return () => renderPollStopRef.current?.();
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [data?.id, startFitPoll]);
 
@@ -338,6 +366,7 @@ export default function MindElixirView({ data, onRegenerate, regenerating, contr
 
   useEffect(() => () => {
     pendingFitRef.current = false;
+    renderPollStopRef.current?.();
     mindRef.current?.destroy?.();
     mindRef.current = null;
     containerRef.current && (containerRef.current.innerHTML = "");
@@ -373,12 +402,27 @@ export default function MindElixirView({ data, onRegenerate, regenerating, contr
     const html = document.documentElement;
     const observer = new MutationObserver(() => {
       const mind = mindRef.current;
-      if (!mind) return;
+      const el = containerRef.current;
+      if (!mind || !el) return;
+      renderPollStopRef.current?.();
+      pendingFitRef.current = false;
       mind.changeTheme?.(THEME);
+      if (el.clientWidth <= 0 || el.clientHeight <= 0) {
+        setRenderState("waiting_for_size");
+        renderPollStopRef.current = startFitPoll();
+        return;
+      }
+      setRenderState("laying_out");
+      mind.layout?.();
+      setRenderState("linking");
+      mind.linkDiv?.();
+      setRenderState("validating");
+      if (validateMindMapRender(el).ok) setRenderState("ready");
+      else renderPollStopRef.current = startFitPoll();
     });
     observer.observe(html, { attributes: true, attributeFilter: ["class"] });
     return () => observer.disconnect();
-  }, []);
+  }, [startFitPoll]);
 
   // Final QA fix (2nd bug, same family): WorkspaceContainer mounts every
   // pane's content as soon as it HAS data, toggling only CSS `hidden`
@@ -616,9 +660,28 @@ export default function MindElixirView({ data, onRegenerate, regenerating, contr
   const expandToDepth = useCallback((depth) => {
     const mind = mindRef.current;
     if (!mind?.nodeData) return;
-    setExpandedToDepth(mind.nodeData, depth);
-    mind.layout?.();
-    mind.linkDiv?.();
+    const rootTopic = mind.findEle?.(mind.nodeData.id);
+    if (!rootTopic) return;
+    // Use Mind Elixir's public expandNodeAll for the actual DOM lifecycle.
+    // Mutating nodeData followed by layout/linkDiv can leave stale descendant
+    // wrappers in older 5.13 builds; expanding everything first, then
+    // collapsing each cutoff node, makes the library remove those wrappers and
+    // rebuild the corresponding connector groups consistently.
+    mind.expandNodeAll?.(rootTopic, true);
+    const cutoffIds = [];
+    const collect = (node, currentDepth) => {
+      if (!node?.children?.length) return;
+      if (currentDepth >= depth) {
+        cutoffIds.push(node.id);
+        return;
+      }
+      node.children.forEach((child) => collect(child, currentDepth + 1));
+    };
+    collect(mind.nodeData, 0);
+    cutoffIds.forEach((id) => {
+      const topic = mind.findEle?.(id);
+      if (topic) mind.expandNodeAll?.(topic, false);
+    });
     setExpandTick((v) => v + 1);
   }, []);
 
@@ -827,7 +890,22 @@ export default function MindElixirView({ data, onRegenerate, regenerating, contr
       )}
       {/* Canvas + legend — legend là sibling (cleanup xoá innerHTML của container
           nên không được đặt con React bên trong div ref) */}
-      <div ref={canvasWrapRef} className="relative flex-1 min-h-0 overflow-hidden mm-canvas-wrap">
+      <div ref={canvasWrapRef} className="relative flex-1 min-h-0 overflow-hidden mm-canvas-wrap" data-mindmap-render-state={renderState}>
+        {renderState !== "ready" && (
+          <div className={`mm-render-overlay ${renderState === "error" ? "is-error" : ""}`} data-testid="mindmap-render-overlay" role={renderState === "error" ? "alert" : "status"} aria-live="polite">
+            <div className="mm-render-overlay__card">
+              {renderState === "error" ? (
+                <>
+                  <Icon name="TriangleAlert" size={18} />
+                  <span>{renderError || "Không thể dựng sơ đồ."}</span>
+                  <button type="button" data-action="retry-mindmap-render" onClick={retryRender}>Thử lại</button>
+                </>
+              ) : (
+                <><Spinner size={14} /><span>Đang dựng sơ đồ…</span></>
+              )}
+            </div>
+          </div>
+        )}
         {/* Ref target owns h/w-full (normal flow) — mind-elixir sets el.style.position
             = "relative" inline (verified dist), which defeats `absolute inset-0` (inline
             beats class) and collapses the container to content height, breaking scaleFit

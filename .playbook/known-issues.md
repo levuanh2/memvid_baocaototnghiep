@@ -5573,3 +5573,29 @@ form submit mới có gọi API, chép lại đúng pattern `submitStartedRef`/`
 sẵn trong repo thay vì viết lại bằng `state`. Test double-submit phải bấm 2 LẦN LIÊN TIẾP
 TRONG CÙNG MỘT tick (không `await` giữa hai lần bấm) — bấm rồi `await` rồi bấm lại không
 bao giờ bắt được lớp bug này.
+# (ĐÃ SỬA 2026-10-01) MindElixir render lifecycle could expose stale connectors
+
+## Root cause
+
+`MindElixirView` previously treated `mind.init()`/`refresh()` as sufficient even
+when the map container was still 0×0, and the theme observer only called
+`changeTheme()`. That left connector paths unvalidated after hidden-canvas load
+or light/dark changes. The depth action also mutated `nodeData` directly before
+calling layout/linking, which did not guarantee that stale descendant wrappers
+were removed in every Mind Elixir render path.
+
+## Fix and regression coverage
+
+The viewer now exposes an explicit idle → mounting → waiting_for_size →
+laying_out → linking → validating → ready/error lifecycle. Connector paths are
+validated for finite geometry and a plausible count; the bounded retry ends in
+an actionable “Thử lại” error instead of an infinite spinner. Theme changes
+run `changeTheme()` followed by layout/linking and validation without
+`scaleFit()`/`toCenter()`. Depth expansion uses the public `expandNodeAll()` API
+to rebuild visible descendant DOM and connectors.
+
+Regression coverage lives in
+`FE/src/components/mindmap/MindElixirView.renderLifecycle.test.jsx` and the
+real Chromium fixture suite. Prevention: any renderer lifecycle change must
+test hidden-canvas load, repeated theme toggles, visible node/connector counts,
+map switching, and transform preservation in a real browser.

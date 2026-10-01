@@ -15,6 +15,41 @@
 .me-container { outline: none; }
 .me-container :focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
 
+/* Render lifecycle: keep the canvas sized while Mind Elixir settles, but block
+   accidental node/toolbar interaction until connector geometry is validated. */
+.mm-render-overlay {
+  position: absolute;
+  inset: 0;
+  z-index: 30;
+  display: grid;
+  place-items: center;
+  pointer-events: auto;
+  background: color-mix(in srgb, var(--bg-base) 48%, transparent);
+}
+.mm-render-overlay__card {
+  display: inline-flex;
+  align-items: center;
+  gap: 9px;
+  min-height: 40px;
+  padding: 9px 13px;
+  border: 1px solid var(--border-color);
+  border-radius: 8px;
+  color: var(--text-secondary);
+  background: var(--bg-card);
+  box-shadow: var(--shadow-card);
+  font-size: 13px;
+}
+.mm-render-overlay.is-error .mm-render-overlay__card { color: var(--err); }
+.mm-render-overlay__card button {
+  min-height: 32px;
+  padding: 0 10px;
+  border: 1px solid var(--accent);
+  border-radius: 6px;
+  color: var(--accent);
+  background: transparent;
+  cursor: pointer;
+}
+
 /* Affordance "nền kéo được": mind-elixir CHỈ đặt cursor grab khi giữ Space
    (`.map-container.space-pressed`) — nhưng option `mouseSelectionButton: 2` cho kéo-TRÁI
    pan ngay, không cần Space, nên nền trông như ảnh tĩnh dù kéo được.
