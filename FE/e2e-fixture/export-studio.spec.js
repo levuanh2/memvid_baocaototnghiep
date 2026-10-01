@@ -54,7 +54,7 @@ async function advanceToPreview(page) {
 
 async function exportAndSave(page, filenameHint) {
   const downloadPromise = page.waitForEvent("download");
-  await page.getByRole("button", { name: /Xuất$/ }).click();
+  await page.getByRole("button", { name: /^(Xuất|Tạo) (PNG|JPEG|SVG|PDF|DOCX|XLSX)$/ }).click();
   const download = await downloadPromise;
   const savePath = path.join(ARTIFACT_DIR, `${filenameHint}-${Date.now()}${path.extname(download.suggestedFilename())}`);
   await download.saveAs(savePath);
@@ -64,7 +64,7 @@ async function exportAndSave(page, filenameHint) {
 /** Same as exportAndSave, but keeps the EXACT filename given (no timestamp) — used for the Section 8 named QA specimens (full-map.png etc.) so there's one canonical file per format to point a report at. */
 async function exportAndSaveExact(page, exactFilename) {
   const downloadPromise = page.waitForEvent("download");
-  await page.getByRole("button", { name: /Xuất$/ }).click();
+  await page.getByRole("button", { name: /^(Xuất|Tạo) (PNG|JPEG|SVG|PDF|DOCX|XLSX)$/ }).click();
   const download = await downloadPromise;
   const savePath = path.join(ARTIFACT_DIR, exactFilename);
   await download.saveAs(savePath);
@@ -225,6 +225,7 @@ test.describe("Export Studio — fixture harness, real files", () => {
     await chooseFormat(page, "svg");
     await clickNext(page); // -> appearance step
     await page.getByRole("button", { name: "Serif (Spectral)" }).click();
+    await page.getByRole("button", { name: "Bố cục" }).click();
     await page.getByRole("button", { name: "Gọn" }).click(); // spacing: compact
     await clickNext(page);
     const filePath = await exportAndSave(page, "appearance-font-spacing-svg");
@@ -271,7 +272,7 @@ test.describe("Export Studio — fixture harness, real files", () => {
 
     await openExportStudio(page);
     await chooseScope(page, "selected_branches");
-    await page.getByRole("button", { name: "Chọn nhánh trên sơ đồ" }).click();
+    await page.locator(".export-inline-action").click();
     await expect(page.getByRole("dialog")).toHaveCount(0);
     await page.locator(nodeSelector(m0)).click();
     await page.locator(nodeSelector(m1)).click();
@@ -282,7 +283,7 @@ test.describe("Export Studio — fixture harness, real files", () => {
     await chooseFormat(page, "svg");
     await clickNext(page); // -> appearance step
     await clickNext(page); // -> preview step
-    const exportBtn = page.getByRole("button", { name: /Xuất$/ });
+    const exportBtn = page.getByRole("button", { name: /^(Xuất|Tạo) (PNG|JPEG|SVG|PDF|DOCX|XLSX)$/ });
     await expect(exportBtn).toBeEnabled();
     const filePath = await exportAndSave(page, "multi-branch-svg");
 
@@ -298,7 +299,7 @@ test.describe("Export Studio — fixture harness, real files", () => {
     const beforeTransform = await page.locator(".map-canvas").evaluate((el) => el.style.transform || "");
     await openExportStudio(page);
     await chooseScope(page, "selected_branches");
-    await page.getByRole("button", { name: "Chọn nhánh trên sơ đồ" }).click();
+    await page.locator(".export-inline-action").click();
     await page.locator(nodeSelector(`${MAP_A_ID}-m0`)).click();
     await page.locator(nodeSelector(`${MAP_A_ID}-m1`)).click();
     await page.locator(".mm-selection-bar").getByRole("button", { name: "Hủy" }).click();
@@ -308,7 +309,7 @@ test.describe("Export Studio — fixture harness, real files", () => {
     // list) — assert the visible effect, not just that nothing crashed.
     await expect(page.locator(".mm-selection-bar")).toHaveCount(0);
     await expect(page.getByRole("dialog")).toBeVisible();
-    await expect(page.getByRole("dialog")).toContainText("Chưa chọn nhánh nào"); // selection cleared
+    await expect(page.getByRole("dialog")).toContainText("0 nhánh"); // selection cleared
     const afterTransform = await page.locator(".map-canvas").evaluate((el) => el.style.transform || "");
     expect(afterTransform).toBe(beforeTransform);
     // Map A's root is still the one rendered — no leaked switch to map B.
@@ -326,7 +327,7 @@ test.describe("Export Studio — fixture harness, real files", () => {
     // doesn't model pointer-capture click redirection.
     await openExportStudio(page);
     await chooseScope(page, "selected_branches");
-    await page.getByRole("button", { name: "Chọn nhánh trên sơ đồ" }).click();
+    await page.locator(".export-inline-action").click();
     await page.locator(nodeSelector(`${MAP_A_ID}-m0`)).click();
     await expect(page.locator(".mm-selection-bar")).toContainText("Đã chọn 1 nhánh");
     await page.locator(".mm-selection-bar").getByRole("button", { name: "Xóa chọn" }).click();
@@ -365,7 +366,7 @@ test.describe("Export Studio — fixture harness, real files", () => {
   test("Section 8 artifact quality gate: multi-branch.svg is retained and valid", async ({ page }) => {
     await openExportStudio(page);
     await chooseScope(page, "selected_branches");
-    await page.getByRole("button", { name: "Chọn nhánh trên sơ đồ" }).click();
+    await page.locator(".export-inline-action").click();
     await page.locator(nodeSelector(`${MAP_A_ID}-m0`)).click();
     await page.locator(nodeSelector(`${MAP_A_ID}-m1`)).click();
     await page.locator(".mm-selection-bar").getByRole("button", { name: "Tiếp tục" }).click();
@@ -412,7 +413,7 @@ test.describe("Export Selection Mode — checkbox pointer regression (hotfix)", 
     const beforeTransform = await page.locator(".map-canvas").evaluate((el) => el.style.transform || "");
     await openExportStudio(page);
     await chooseScope(page, "selected_branches");
-    await page.getByRole("button", { name: "Chọn nhánh trên sơ đồ" }).click();
+    await page.locator(".export-inline-action").click();
 
     const check = page.locator(checkboxFor("Kiến trúc hệ thống"));
     await expect(check).toBeVisible();
@@ -442,7 +443,7 @@ test.describe("Export Selection Mode — checkbox pointer regression (hotfix)", 
   test("B: two real checkbox clicks on different branches both register, and 'Xóa chọn' returns count to 0", async ({ page }) => {
     await openExportStudio(page);
     await chooseScope(page, "selected_branches");
-    await page.getByRole("button", { name: "Chọn nhánh trên sơ đồ" }).click();
+    await page.locator(".export-inline-action").click();
 
     await page.locator(checkboxFor("Kiến trúc hệ thống")).click();
     await page.locator(checkboxFor("Trải nghiệm người dùng")).click(); // opposite end of the branch list
@@ -462,7 +463,7 @@ test.describe("Export Selection Mode — checkbox pointer regression (hotfix)", 
   test("C: checking a branch's checkbox AND its own child's checkbox exports the child's content exactly once (dedupe), with the child's sibling still included via the parent", async ({ page }) => {
     await openExportStudio(page);
     await chooseScope(page, "selected_branches");
-    await page.getByRole("button", { name: "Chọn nhánh trên sơ đồ" }).click();
+    await page.locator(".export-inline-action").click();
 
     await page.locator(checkboxFor("Kiến trúc hệ thống")).click(); // parent (main branch)
     await page.locator(checkboxFor("Nguyên lý — Kiến trúc hệ thống")).click(); // its own child (sub-branch)
@@ -493,7 +494,7 @@ test.describe("Export Selection Mode — checkbox pointer regression (hotfix)", 
   test("D: leaving selection mode (Tiếp tục or Hủy) removes every injected checkbox from the canvas — no orphaned, still-clickable UI left behind", async ({ page }) => {
     await openExportStudio(page);
     await chooseScope(page, "selected_branches");
-    await page.getByRole("button", { name: "Chọn nhánh trên sơ đồ" }).click();
+    await page.locator(".export-inline-action").click();
     await page.locator(checkboxFor("Kiến trúc hệ thống")).click();
     await expect(page.locator(".mm-selection-bar")).toContainText("Đã chọn 1 nhánh");
 
@@ -508,7 +509,7 @@ test.describe("Export Selection Mode — checkbox pointer regression (hotfix)", 
 
     // Re-enter selection mode for the OTHER exit path. Label reads "Chọn
     // LẠI trên sơ đồ" now — a selection already exists from above.
-    await page.getByRole("button", { name: "Chọn lại trên sơ đồ" }).click();
+    await page.locator(".export-inline-action").click();
     await page.locator(checkboxFor("Kiến trúc hệ thống")).click();
     await page.locator(".mm-selection-bar").getByRole("button", { name: "Hủy" }).click();
     await expect(page.locator("me-export-check")).toHaveCount(0);
@@ -520,7 +521,7 @@ test.describe("Export Selection Mode — checkbox pointer regression (hotfix)", 
 
     await openExportStudio(page);
     await chooseScope(page, "selected_branches");
-    await page.getByRole("button", { name: "Chọn nhánh trên sơ đồ" }).click();
+    await page.locator(".export-inline-action").click();
     await page.locator(checkboxFor("Kiến trúc hệ thống")).click();
     await page.locator(".mm-selection-bar").getByRole("button", { name: "Hủy" }).click();
     await page.getByRole("button", { name: "Hủy" }).click(); // close the dialog, back to a plain canvas
