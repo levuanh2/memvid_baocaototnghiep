@@ -67,6 +67,7 @@ export const normalizeSummaryRecord = (record) => {
     // Block study chỉ có khi mode=study; record khác → null (SummaryModal null-safe).
     study: record.study && typeof record.study === "object" ? record.study : null,
     generator: record.generator || null,
+    usage: record.__usage || record.usage || null,
     legacyMd: Array.isArray(record.sections) && record.sections.length ? "" : String(legacyMd || ""),
   };
 };

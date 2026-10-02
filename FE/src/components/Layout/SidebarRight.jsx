@@ -439,7 +439,11 @@ export default function SidebarRight({
         // throwing "Server không trả job_id." (known issue, fixed here).
         // Request outcome is known now (success) — safe to close the dialog.
         if (Object.keys(guidedOptions).length) setGuidedOpen(false);
-        await handleMindmapDone(startData.result, sourceList, { resumed: false, isRegenerate: force });
+        await handleMindmapDone(
+          { ...startData.result, __usage: startData.usage || null },
+          sourceList,
+          { resumed: false, isRegenerate: force },
+        );
         return;
       }
 
@@ -651,7 +655,10 @@ export default function SidebarRight({
 
       if (startData.status === "done" && startData.result) {
         // Cache-hit: BE trả record thẳng, KHÔNG có job_id — branch trước (aec6017)
-        await handleSummaryDone(startData.result, { resumed: false });
+        await handleSummaryDone(
+          { ...startData.result, __usage: startData.usage || null },
+          { resumed: false },
+        );
         return;
       }
 

@@ -3,6 +3,7 @@ import { apiFetch, _appError, isUnauthorizedError, isNotFoundOrForbiddenError, g
 import { Icon } from "../ui/Icon";
 import Badge from "../ui/Badge";
 import Spinner from "../ui/Spinner";
+import OperationUsage from "./OperationUsage";
 import { nguonConDangXuLy, nhoNguon, quenNguon } from "../../utils/nguonDangXuLy";
 import { taoBoTheoDoiNguon } from "../../utils/theoDoiNguon";
 import { mergeSources, reconcileSelectedSources } from "../../utils/sourceReconciliation";
@@ -94,7 +95,7 @@ export default function SidebarLeft({ selectedSources, setSelectedSources, onSou
     const bo = taoBoTheoDoiNguon({
       layTrangThai,
       onTrangThai: (data) => {
-        setSources((prev) => prev.map((s) => s.source_id === sourceId ? { ...s, status: data.status, progress: data.progress ?? s.progress, substatus: data.substatus, capabilities: data.capabilities, can_query: data.can_query === true, video_stem: data.video_stem ?? s.video_stem, error: data.error, trucTracTamThoi: false, matDauVet: false } : s));
+        setSources((prev) => prev.map((s) => s.source_id === sourceId ? { ...s, status: data.status, progress: data.progress ?? s.progress, substatus: data.substatus, capabilities: data.capabilities, can_query: data.can_query === true, video_stem: data.video_stem ?? s.video_stem, error: data.error, usage: data.usage ?? s.usage, trucTracTamThoi: false, matDauVet: false } : s));
       },
       onKetThuc: (data) => {
         stopPolling(sourceId);
@@ -172,6 +173,8 @@ export default function SidebarLeft({ selectedSources, setSelectedSources, onSou
       });
   };
 
+  // Initial load only; later refreshes are driven by upload/poll completion.
+  // eslint-disable-next-line react-hooks/exhaustive-deps
   useEffect(() => { fetchSourcesFromBackend(); }, []);
 
   // Dựng lại thẻ cho những tài liệu còn đang xử lý và theo dõi tiếp. `/list-indexed`
@@ -518,6 +521,7 @@ export default function SidebarLeft({ selectedSources, setSelectedSources, onSou
                       statusConfig.badgeText && <Badge tone={statusConfig.tone}>{statusConfig.badgeText}</Badge>
                     )}
                   </div>
+                  <OperationUsage usage={src.usage} className="block mt-1" />
 
                   {statusConfig.subText && <div className="text-caption text-text-muted mt-1">{statusConfig.subText}</div>}
 

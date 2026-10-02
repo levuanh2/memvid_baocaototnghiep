@@ -66,7 +66,14 @@ export function createJobPoller({
     if (fp !== lastFingerprint) { lastFingerprint = fp; lastChangeTs = now(); }
     const stalled = now() - lastChangeTs > STALL_MS;
     onTick?.(status, { stalled });
-    if (status.status === "done") { stopped = true; onDone?.(status.result); return; }
+    if (status.status === "done") {
+      stopped = true;
+      const result = status.usage && status.result && typeof status.result === "object"
+        ? { ...status.result, __usage: status.usage }
+        : status.result;
+      onDone?.(result);
+      return;
+    }
     // "failed" = the guided worker's own terminal-failure status
     // (guided_worker.py, mindmap_generation.py: set after retry exhaustion
     // or an unrecoverable exception during generation; guided_store.py
