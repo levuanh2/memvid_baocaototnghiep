@@ -128,12 +128,22 @@ def build_ingest_graph(
                 # Structured: cắt theo heading; Enriched: contextual + hypo-QA (gate trong enrich)
                 from app.domains.ingest.chunking import chunk_markdown_spans
                 from app.domains.ingest import enrich
+                from app.domains.usage import UsageReservationContext
                 doc_text, pieces = chunk_markdown_spans(markdown)
                 doc_context = doc_text[:2000]
+                usage_context = UsageReservationContext.from_dict(state.get("usage_context"))
                 chunks = []
-                for p in pieces:
-                    txt = enrich.contextualize(p["text"], doc_context)
-                    qa = enrich.hypothetical_qa(p["text"])
+                for piece_index, p in enumerate(pieces):
+                    txt = enrich.contextualize(
+                        p["text"], doc_context,
+                        usage_context=usage_context,
+                        usage_attempt_id=f"upload:contextualize:{piece_index}",
+                    )
+                    qa = enrich.hypothetical_qa(
+                        p["text"],
+                        usage_context=usage_context,
+                        usage_attempt_id=f"upload:hypothetical-qa:{piece_index}",
+                    )
                     if qa:
                         txt = txt + "\n\n" + qa
                     if txt.strip():
@@ -329,6 +339,25 @@ def build_ingest_graph(
                     log_node_event(state["job_id"], "EmbedAndIndex", "late_map_skip", t.ms(), {"reason": str(ee)})
                     embeddings = None
 
+            # Remote embedding usage must be captured at the provider boundary.
+            # Compute before taking the shared index lock so network latency never
+            # blocks unrelated index writers. Local encoders remain unmetered.
+            if embeddings is None and state.get("usage_context"):
+                from app.clients.llm_factory import FptEmbeddings, get_embeddings
+                from app.domains.usage import UsageReservationContext
+                usage_context = UsageReservationContext.from_dict(state.get("usage_context"))
+                embedding_client = get_embeddings()
+                if usage_context is not None and isinstance(embedding_client, FptEmbeddings):
+                    import numpy as _np
+                    embeddings = _np.asarray(
+                        embedding_client.embed_documents_metered(
+                            all_chunks,
+                            usage_context=usage_context,
+                            attempt_prefix="upload:embedding",
+                        ),
+                        dtype="float32",
+                    )
+
             # BỐN việc dưới đây là MỘT: kéo bản index mới nhất về, gán vị trí trong
             # FAISS, ghi vị trí ấy xuống Postgres, rồi đẩy chính index ấy lên kho bền.
             # Tách ra là mở cửa cho trạng thái mà chunk trỏ vào một vector không tồn
@@ -436,7 +465,13 @@ def build_ingest_graph(
 
             lock_path = str(data_dir / "memory_tree.lock")
             with FileLock(lock_path):
-                build_memory_tree_for_sources([state["source_stem"]])
+                if state.get("usage_context"):
+                    build_memory_tree_for_sources(
+                        [state["source_stem"]],
+                        usage_context=state.get("usage_context"),
+                    )
+                else:
+                    build_memory_tree_for_sources([state["source_stem"]])
 
             update_source_status(
                 state["source_id"],

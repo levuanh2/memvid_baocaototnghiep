@@ -19,6 +19,23 @@ def build_summary_graph(*, data_dir: Path, index_meta_path: Path,
                         collect_input: Callable[..., dict],
                         pipeline: Any,
                         persist_record: Callable[..., None]) -> Any:
+    def _usage_context(state: dict):
+        from app.domains.usage import UsageReservationContext
+        return UsageReservationContext.from_dict(state.get("usage_context"))
+
+    def _call_with_usage(fn, state: dict, *args, **kwargs):
+        import inspect
+        try:
+            params = inspect.signature(fn).parameters
+            accepts = "usage_context" in params or any(
+                p.kind == p.VAR_KEYWORD for p in params.values()
+            )
+        except (TypeError, ValueError):
+            accepts = False
+        if accepts:
+            kwargs["usage_context"] = _usage_context(state)
+        return fn(*args, **kwargs)
+
     def _set_job(job_id: str, **kw: Any) -> None:
         if jobs_update is None:
             return
@@ -78,7 +95,9 @@ def build_summary_graph(*, data_dir: Path, index_meta_path: Path,
     @_guard("Sections")
     def sections_node(state: dict) -> dict:
         _set_job(state["job_id"], progress=15, current_node="Sections")
-        sections, method = pipeline.sections(state["mm_input"])
+        sections, method = _call_with_usage(
+            pipeline.sections, state, state["mm_input"],
+        )
         missing = list(state.get("degraded_missing") or [])
         if method == "single":
             # Không dựng được mục lục (deterministic + LLM outline đều bó tay) —
@@ -111,6 +130,8 @@ def build_summary_graph(*, data_dir: Path, index_meta_path: Path,
             params = inspect.signature(pipeline.summarize).parameters
             if "diagnostics_sink" in params or any(p.kind == p.VAR_KEYWORD for p in params.values()):
                 summarize_kwargs["diagnostics_sink"] = diag_sink
+            if "usage_context" in params or any(p.kind == p.VAR_KEYWORD for p in params.values()):
+                summarize_kwargs["usage_context"] = _usage_context(state)
         except (TypeError, ValueError):
             pass
         summaries, missing_sections = pipeline.summarize(
@@ -123,9 +144,13 @@ def build_summary_graph(*, data_dir: Path, index_meta_path: Path,
     @_guard("Synthesize")
     def synthesize_node(state: dict) -> dict:
         _set_job(state["job_id"], progress=75, current_node="Synthesize")
-        meta, degraded = pipeline.synthesize(
-            state["section_summaries"], doc_title=state["mm_input"]["title"],
-            length_mode=state.get("length_mode") or "medium")
+        meta, degraded = _call_with_usage(
+            pipeline.synthesize,
+            state,
+            state["section_summaries"],
+            doc_title=state["mm_input"]["title"],
+            length_mode=state.get("length_mode") or "medium",
+        )
         missing = list(state.get("degraded_missing") or [])
         if degraded:
             missing.append("synthesize")
@@ -182,7 +207,7 @@ def build_summary_graph(*, data_dir: Path, index_meta_path: Path,
         cov_fn = getattr(pipeline, "coverage", None)
         if cov_fn is not None:
             try:
-                cov = cov_fn(record)
+                cov = _call_with_usage(cov_fn, state, record)
             except Exception:
                 cov = None
             if cov:
@@ -194,8 +219,12 @@ def build_summary_graph(*, data_dir: Path, index_meta_path: Path,
         # Phase D: bind the record owner (None when unprotected → today's behavior).
         persist_record(record, user_id=state.get("user_id"))
         # done PHẢI đi cùng result trong MỘT update (bài học race 2026-07-06)
-        _set_job(state["job_id"], status="done", progress=100,
-                 current_node="AssemblePersist", result=record)
+        if state.get("usage_context"):
+            _set_job(state["job_id"], status="running", progress=99,
+                     current_node="UsageFinalize", result=record)
+        else:
+            _set_job(state["job_id"], status="done", progress=100,
+                     current_node="AssemblePersist", result=record)
         # P0.5 Blocker #1: diagnostics ONLY — logged/persisted separately, never
         # merged into `record`/`generator` (same non-exposure rule MindMap's own
         # quality_report follows). Own try/except so a diagnostics-write failure
@@ -209,13 +238,21 @@ def build_summary_graph(*, data_dir: Path, index_meta_path: Path,
         return {**state, "result": record, "progress": 100, "current_node": "AssemblePersist"}
 
     def cancelled_node(state: dict) -> dict:
-        _set_job(state["job_id"], status="cancelled", progress=0, current_node="Cancelled")
+        if state.get("usage_context"):
+            _set_job(state["job_id"], status="running", progress=99,
+                     current_node="UsageFinalize")
+        else:
+            _set_job(state["job_id"], status="cancelled", progress=0, current_node="Cancelled")
         return {**state, "cancelled": True, "current_node": "Cancelled"}
 
     def error_node(state: dict) -> dict:
         err = (str(state.get("error") or "").strip()) or "unknown error"
-        _set_job(state["job_id"], status="error", progress=0,
-                 current_node="ErrorHandler", error_text=err)
+        if state.get("usage_context"):
+            _set_job(state["job_id"], status="running", progress=99,
+                     current_node="UsageFinalize", error_text=err)
+        else:
+            _set_job(state["job_id"], status="error", progress=0,
+                     current_node="ErrorHandler", error_text=err)
         return {**state, "current_node": "ErrorHandler"}
 
     def _route(s: dict) -> str:

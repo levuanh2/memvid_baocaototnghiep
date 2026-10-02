@@ -219,12 +219,19 @@ class LLMReranker:
         # 'grade' → factual temperature (≈0): chấm điểm 0-10 cần tất định, không "sáng tạo".
         self.feature = feature
 
-    def _score_one(self, query: str, text: str) -> float:
+    def _score_one(
+        self, query: str, text: str, *, usage_context=None,
+        usage_attempt_id: str = "query-rerank:0:0",
+    ) -> float:
         from langchain_core.messages import HumanMessage, SystemMessage
 
         from app.clients.llm_factory import get_llm, lc_ai_message_text
 
-        llm = get_llm(feature=self.feature)
+        llm = get_llm(
+            feature=self.feature,
+            usage_context=usage_context,
+            usage_attempt_id=usage_attempt_id if usage_context is not None else None,
+        )
         prompt = f"Câu hỏi: {query}\n\nĐoạn văn bản:\n{(text or '')[:2000]}"
         out = llm.invoke(
             [SystemMessage(content=self._SYS), HumanMessage(content=prompt)],
@@ -235,11 +242,18 @@ class LLMReranker:
         return float(m.group()) if m else 0.0
 
     def rerank(
-        self, query: str, texts: List[str], *, top_n: Optional[int] = None
+        self, query: str, texts: List[str], *, top_n: Optional[int] = None,
+        usage_context=None, attempt_prefix: str = "query-rerank:0",
     ) -> List[Tuple[int, float]]:
         if not texts:
             return []
-        scored = [(i, self._score_one(query, t)) for i, t in enumerate(texts)]
+        scored = [
+            (i, self._score_one(
+                query, t, usage_context=usage_context,
+                usage_attempt_id=f"{attempt_prefix}:{i}",
+            ))
+            for i, t in enumerate(texts)
+        ]
         scored.sort(key=lambda x: x[1], reverse=True)
         return scored[: _clip_top_n(len(scored), top_n)]
 
@@ -298,14 +312,21 @@ def get_reranker() -> Reranker:
 
 
 def rerank_texts(
-    query: str, texts: List[str], *, top_n: Optional[int] = None
+    query: str, texts: List[str], *, top_n: Optional[int] = None,
+    usage_context=None, attempt_prefix: str = "query-rerank:0",
 ) -> List[Tuple[int, float]]:
     """Wrapper an toàn: trả [(index, score)]; mọi lỗi predict → giữ nguyên thứ tự."""
     if not texts:
         return []
     reranker = get_reranker()
     try:
-        out = reranker.rerank(query, texts, top_n=top_n)
+        if isinstance(reranker, LLMReranker):
+            out = reranker.rerank(
+                query, texts, top_n=top_n, usage_context=usage_context,
+                attempt_prefix=attempt_prefix,
+            )
+        else:
+            out = reranker.rerank(query, texts, top_n=top_n)
         if out:
             return out
     except Exception as exc:

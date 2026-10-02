@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import json
+import inspect
 import logging
 import math
 import os
@@ -99,6 +100,25 @@ def build_query_graph(
 
     Giữ nguyên API contract bằng cách trả về (payload, status_code) qua state["payload"]/state["status_code"].
     """
+
+    def _usage_context(state: dict):
+        from app.domains.usage import UsageReservationContext
+        return UsageReservationContext.from_dict(state.get("usage_context"))
+
+    def _call_with_usage(callback, *args, state: dict, attempt_id: str, **kwargs):
+        """Preserve injected-test callback compatibility while production gets context."""
+        try:
+            parameters = inspect.signature(callback).parameters.values()
+            accepts = any(
+                item.name == "usage_context" or item.kind == item.VAR_KEYWORD
+                for item in parameters
+            )
+        except (TypeError, ValueError):
+            accepts = False
+        if accepts:
+            kwargs["usage_context"] = _usage_context(state)
+            kwargs["usage_attempt_id"] = attempt_id
+        return callback(*args, **kwargs)
 
     AI_TIMEOUT = int(os.getenv("AI_TIMEOUT_SEC", "180"))
     EVAL_ENABLED = (os.getenv("EVAL_ENABLED", "false") or "").strip().lower() == "true"
@@ -204,14 +224,18 @@ def build_query_graph(
                 {"category": state.get("category"), "language": state.get("language")},
                 state.get("cache_scope") or "public",  # Phase E: user-scoped bucket
             )
-            cached = get_cached(cache_key)
+            cached = _call_with_usage(
+                get_cached, cache_key, state=state,
+                attempt_id="query-cache-judge:0",
+            )
             payload = cached.get("payload") if isinstance(cached, dict) else None
             if isinstance(payload, dict) and str(payload.get("answer") or "").strip():
                 status = int(cached.get("status", 200))
                 log_node_event(state["job_id"], "CacheLookup", "ok", t.ms(), {"hit": True})
                 return {**state, "payload": payload, "status_code": status, "cache_key": cache_key,
                         "evaluation_provenance": cached.get("evaluation_provenance"),
-                        "runtime_path": "cache", "done": True, "progress": 5, "current_node": "CacheLookup"}
+                        "runtime_path": "cache", "usage_cache_hit": True,
+                        "done": True, "progress": 5, "current_node": "CacheLookup"}
             if payload is not None:
                 # Hit nhưng answer rỗng (entry độc/di sản) → coi là MISS, đi tiếp pipeline.
                 llm_cache.METRICS["empty_cached_answer"] += 1
@@ -240,7 +264,13 @@ def build_query_graph(
 
             # Ch\u1ea1y memory tree v\u1edbi timeout ri\u00eang \u2014 n\u1ebfu v\u01b0\u1ee3t th\u00ec fallback FAISS
             def _query_mem():
-                return query_with_memory_tree(state["q"], selected_sources=state.get("selected_sources") or [])
+                return _call_with_usage(
+                    query_with_memory_tree,
+                    state["q"],
+                    selected_sources=state.get("selected_sources") or [],
+                    state=state,
+                    attempt_id="query-memory-answer:0",
+                )
 
             mem_result = None
             try:
@@ -388,7 +418,21 @@ def build_query_graph(
                     or (state.get("standalone_question") or "").strip()
                     or state["q"]
                 )
-                return rerank.rerank_texts(retrieval_q, chunks, top_n=RERANK_TOP_N)
+                kwargs = {"top_n": RERANK_TOP_N}
+                try:
+                    parameters = inspect.signature(rerank.rerank_texts).parameters.values()
+                    accepts_usage = any(
+                        item.name == "usage_context" or item.kind == item.VAR_KEYWORD
+                        for item in parameters
+                    )
+                except (TypeError, ValueError):
+                    accepts_usage = False
+                if accepts_usage:
+                    kwargs.update({
+                        "usage_context": _usage_context(state),
+                        "attempt_prefix": f"query-rerank:{int(state.get('retry_count') or 0)}",
+                    })
+                return rerank.rerank_texts(retrieval_q, chunks, **kwargs)
 
             scored_ok = True
             try:
@@ -574,6 +618,9 @@ def build_query_graph(
                 hist = []
 
             q_effective = q
+            from app.domains.usage import UsageReservationContext
+            usage_context = UsageReservationContext.from_dict(state.get("usage_context"))
+            usage_attempt_base = f"query-answer:{int(state.get('retry_count') or 0)}"
             if not USE_LC_QA_CHAIN and isinstance(hist, list) and hist:
                 lines: list[str] = []
                 for m in hist[-8:]:
@@ -600,9 +647,15 @@ def build_query_graph(
                         q,
                         ctx,
                         history=hist if isinstance(hist, list) else None,
+                        usage_context=usage_context,
+                        usage_attempt_id=f"{usage_attempt_base}:invoke",
                         feature="answer",  # factual temp (≈0): bám context, giảm bịa
                     )
-                return summarize_results(q_effective, chunks, model=state.get("model"))
+                return summarize_results(
+                    q_effective, chunks, model=state.get("model"),
+                    usage_context=usage_context,
+                    usage_attempt_id=f"{usage_attempt_base}:invoke",
+                )
 
             answer = ""
             if QUERY_STREAM_TOKENS and USE_LC_QA_CHAIN:
@@ -619,6 +672,8 @@ def build_query_graph(
                             q,
                             ctx,
                             history=hist if isinstance(hist, list) else None,
+                            usage_context=usage_context,
+                            usage_attempt_id=f"{usage_attempt_base}:stream",
                             feature="answer",  # factual temp (≈0): bám context, giảm bịa
                         ):
                             parts.append(piece)
@@ -814,7 +869,13 @@ def build_query_graph(
         try:
             _set_job(state["job_id"], progress=58, current_node="RewriteQuery")
             try:
-                new_q = _call_llm_with_timeout(lambda: query_rewrite.rewrite_query(original_q))
+                from app.domains.usage import UsageReservationContext
+                usage_context = UsageReservationContext.from_dict(state.get("usage_context"))
+                new_q = _call_llm_with_timeout(lambda: query_rewrite.rewrite_query(
+                    original_q,
+                    usage_context=usage_context,
+                    usage_attempt_id=f"query-crag-rewrite:{rc}",
+                ))
             except TimeoutError:
                 # LLM rewrite quá hạn → giữ câu gốc nhưng vẫn tăng budget để chặn vòng lặp.
                 new_q = original_q

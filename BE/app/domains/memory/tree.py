@@ -103,7 +103,8 @@ def _embed_batch(texts: List[str], batch_size: int = 32) -> List[List[float]]:
     return all_embeds
 
 
-def _classify_intent_type(text: str, title: str = "") -> str:
+def _classify_intent_type(text: str, title: str = "", *, usage_context=None,
+                          usage_attempt_id: str = "memory:intent") -> str:
     """
     Phân loại intent_type của node dựa trên summary/title.
     Trả về một trong: "definition" | "procedure" | "argument" | "comparison" | "reference"
@@ -136,7 +137,10 @@ def _classify_intent_type(text: str, title: str = "") -> str:
     user_prompt = f"Tiêu đề: {title}\n\nNội dung: {combined[:500]}\n\nLoại intent:"
     
     try:
-        result = ask_ai(user_prompt, system_prompt=system_prompt, model=SLM_MODEL_INTENT).strip().lower()
+        result = ask_ai(
+            user_prompt, system_prompt=system_prompt, model=SLM_MODEL_INTENT,
+            usage_context=usage_context, usage_attempt_id=usage_attempt_id,
+        ).strip().lower()
         # Validate kết quả
         valid = {"definition", "procedure", "argument", "comparison", "reference"}
         for v in valid:
@@ -171,7 +175,8 @@ def so_worker_tom_tat() -> int:
     return max(1, min(muon, inproc_slots()))
 
 
-def _llm_summarize_for_memory(text: str, level: str) -> str:
+def _llm_summarize_for_memory(text: str, level: str, *, usage_context=None,
+                              usage_attempt_id: str = "memory:summary") -> str:
     """
     Tóm tắt cho node Memory Tree (document / section / topic).
     """
@@ -187,7 +192,10 @@ def _llm_summarize_for_memory(text: str, level: str) -> str:
         "- Ưu tiên các mục tiêu, khái niệm, giải pháp chính.\n"
     )
     user_prompt = f"Văn bản nguồn:\n{text[:6000]}\n\nHãy tóm tắt ở cấp {level}:"
-    return ask_ai(user_prompt, system_prompt=system_prompt, model=SLM_MODEL)
+    return ask_ai(
+        user_prompt, system_prompt=system_prompt, model=SLM_MODEL,
+        usage_context=usage_context, usage_attempt_id=usage_attempt_id,
+    )
 
 
 def _load_index_meta() -> Dict[str, Any]:
@@ -380,11 +388,14 @@ def _enumerate_chunks(chunks: List[Dict[str, Any]]) -> List[Tuple[Dict[str, Any]
     return out
 
 
-def build_memory_tree_for_sources(source_stems: List[str]) -> Dict[str, Any]:
+def build_memory_tree_for_sources(source_stems: List[str], *, usage_context=None) -> Dict[str, Any]:
     """
     Build cây trí nhớ cho 1 hoặc nhiều nguồn (stem đã normalize như FE dùng).
     KHÔNG thay đổi chunk/index hiện có.
     """
+    from app.domains.usage import UsageReservationContext
+    if isinstance(usage_context, dict):
+        usage_context = UsageReservationContext.from_dict(usage_context)
     meta = _load_index_meta()
     if not meta:
         return {"error": "No index metadata found"}
@@ -439,10 +450,16 @@ def build_memory_tree_for_sources(source_stems: List[str]) -> Dict[str, Any]:
         chunks_sorted = sorted(chunks, key=lambda c: int(c.get("chunk_id") or 0))
         doc_id = f"mem_doc_{stem}"
         doc_text = _join_chunk_text(chunks_sorted, max_chars=8000)
-        doc_summary = _llm_summarize_for_memory(doc_text, level="document")
+        doc_summary = _llm_summarize_for_memory(
+            doc_text, level="document", usage_context=usage_context,
+            usage_attempt_id=f"upload:memory:{stem}:document-summary",
+        )
         doc_emb = _embed(doc_summary)
 
-        doc_intent = _classify_intent_type(doc_summary, f"Tài liệu: {stem}")
+        doc_intent = _classify_intent_type(
+            doc_summary, f"Tài liệu: {stem}", usage_context=usage_context,
+            usage_attempt_id=f"upload:memory:{stem}:document-intent",
+        )
         
         doc_node = MemoryNode(
             memory_id=doc_id,
@@ -497,7 +514,10 @@ def build_memory_tree_for_sources(source_stems: List[str]) -> Dict[str, Any]:
         # Hàm worker để tóm tắt
         def _summarize_section(item):
             idx, spec, sec_chunks, sec_text, sec_title = item
-            sec_summary = _llm_summarize_for_memory(sec_text, level="section")
+            sec_summary = _llm_summarize_for_memory(
+                sec_text, level="section", usage_context=usage_context,
+                usage_attempt_id=f"upload:memory:{stem}:section-{idx}:summary",
+            )
             return (idx, spec, sec_chunks, sec_summary, sec_title)
 
         max_workers = so_worker_tom_tat()
@@ -520,7 +540,10 @@ def build_memory_tree_for_sources(source_stems: List[str]) -> Dict[str, Any]:
         # Tạo section nodes với embeddings đã batch
         for (idx, spec, sec_chunks, sec_summary, sec_title), sec_emb in zip(section_data, section_embeddings):
             sec_id = f"mem_sec_{stem}_{idx}"
-            sec_intent = _classify_intent_type(sec_summary, sec_title)
+            sec_intent = _classify_intent_type(
+                sec_summary, sec_title, usage_context=usage_context,
+                usage_attempt_id=f"upload:memory:{stem}:section-{idx}:intent",
+            )
             
             sec_node = MemoryNode(
                 memory_id=sec_id,
@@ -823,7 +846,14 @@ def _classify_query_type(query: str) -> str:
 
 
 
-def generate_notebooklm_style_answer(question: str, human_context: str, intent_type: Optional[str] = None) -> str:
+def generate_notebooklm_style_answer(
+    question: str,
+    human_context: str,
+    intent_type: Optional[str] = None,
+    *,
+    usage_context=None,
+    usage_attempt_id: str = "query-memory-answer:0",
+) -> str:
     """
     Generate answer theo phong cách NotebookLM: giải thích lại nội dung tài liệu cho người dùng.
     """
@@ -919,10 +949,27 @@ def generate_notebooklm_style_answer(question: str, human_context: str, intent_t
     
     # feature='answer' → factual temp (≈0): đây là sinh đáp án grounded trên tài liệu,
     # giữ nhất quán với GenerateAnswer/summarize_results (giảm bịa đặt).
-    return ask_ai(user_prompt, system_prompt=system_prompt, model=SLM_MODEL, feature="answer")
+    usage_kwargs = ({
+        "usage_context": usage_context,
+        "usage_attempt_id": usage_attempt_id,
+    } if usage_context is not None else {})
+    return ask_ai(
+        user_prompt,
+        system_prompt=system_prompt,
+        model=SLM_MODEL,
+        feature="answer",
+        **usage_kwargs,
+    )
 
 
-def query_with_memory_tree(query: str, selected_sources: Optional[List[str]] = None, top_k: int = 5) -> Optional[Dict[str, Any]]:
+def query_with_memory_tree(
+    query: str,
+    selected_sources: Optional[List[str]] = None,
+    top_k: int = 5,
+    *,
+    usage_context=None,
+    usage_attempt_id: str = "query-memory-answer:0",
+) -> Optional[Dict[str, Any]]:
     """
     Query theo pipeline với query routing:
       1) Phân loại query_type (overview | main_points | detail | how | why | compare | locate | fact)
@@ -1137,7 +1184,13 @@ def query_with_memory_tree(query: str, selected_sources: Optional[List[str]] = N
         if first_node_id and first_node_id in node_map:
             primary_intent = node_map[first_node_id].get("intent_type")
     
-    answer = generate_notebooklm_style_answer(query, human_context, intent_type=primary_intent)
+    answer = generate_notebooklm_style_answer(
+        query,
+        human_context,
+        intent_type=primary_intent,
+        usage_context=usage_context,
+        usage_attempt_id=usage_attempt_id,
+    )
 
     return {
         "answer": answer,

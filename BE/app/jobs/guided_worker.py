@@ -23,6 +23,16 @@ def run_once(worker_id: str | None = None) -> bool:
     beat_stop = threading.Event()
     ttl = int(os.getenv("GUIDED_WORKER_HEARTBEAT_TTL_SEC", "90"))
     lease = int(os.getenv("GUIDED_JOB_LEASE_SECONDS", "900"))
+    usage_context = None
+    if job.get("usage_reservation_id"):
+        try:
+            from app.domains.usage import UsageReservationContext, get_reservation
+            reservation = get_reservation(
+                str(job["usage_reservation_id"]), user_id=str(job.get("user_id") or ""),
+            )
+            usage_context = UsageReservationContext.from_reservation(reservation) if reservation else None
+        except Exception:
+            usage_context = None
 
     def _beat_job():
         while not beat_stop.wait(max(1.0, min(ttl, lease) / 3)):
@@ -31,6 +41,13 @@ def run_once(worker_id: str | None = None) -> bool:
                 from datetime import datetime, timedelta, timezone
                 guided_store.update_job(job_id, heartbeat=True,
                                         lease_expires_at=datetime.now(timezone.utc) + timedelta(seconds=lease))
+                if usage_context and usage_context.lease_owner:
+                    from app.domains.usage import renew_reservation_lease
+                    renew_reservation_lease(
+                        usage_context.reservation_id,
+                        lease_owner=usage_context.lease_owner,
+                        lease_seconds=lease,
+                    )
             except Exception:
                 pass
 
@@ -55,10 +72,35 @@ def run_once(worker_id: str | None = None) -> bool:
         if not job.get("force"):
             existing = main.mindmap_store.get_by_hash(content_hash, user_id=job.get("user_id"), enforce_owner=True)
             if existing:
-                guided_store.update_job(job_id, status="done", stage="done", result_map_id=existing.get("id"), result=existing)
+                usage = None
+                if usage_context:
+                    from app.domains.usage import commit_reservation, get_operation_usage
+                    commit_reservation(
+                        usage_context.reservation_id, attempt_id="mindmap:cache-hit",
+                        total_tokens=0, usage_source="system", status="cache_hit",
+                        metadata={"cache_hit": True}, job_id=job_id,
+                    )
+                    usage = get_operation_usage(
+                        usage_context.reservation_id, user_id=usage_context.user_id,
+                    ) or {}
+                # Terminal publication is last so a poller never observes a
+                # completed cache hit before its zero-charge audit is durable.
+                guided_store.update_job(
+                    job_id, status="done", stage="done",
+                    result_map_id=existing.get("id"), result=existing,
+                    **({"usage_summary": usage} if usage is not None else {}),
+                )
                 return True
-        main.run_mindmap_job(job_id, source_names, mm_input, content_hash,
-                             job.get("user_id"), already_claimed=True)
+        if usage_context is None:
+            main.run_mindmap_job(
+                job_id, source_names, mm_input, content_hash,
+                job.get("user_id"), already_claimed=True,
+            )
+        else:
+            main.run_mindmap_job(
+                job_id, source_names, mm_input, content_hash,
+                job.get("user_id"), usage_context.to_dict(), already_claimed=True,
+            )
         return True
     except Exception as exc:
         attempts = int(job.get("attempts") or 1)

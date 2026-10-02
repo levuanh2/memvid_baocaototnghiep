@@ -47,11 +47,17 @@ def answer_with_document_context(
     *,
     history: Optional[List[Dict[str, Any]]] = None,
     feature: str = "chat",
+    usage_context=None,
+    usage_attempt_id: str | None = None,
 ) -> str:
     """
     Trả lời dựa trên một khối context (đã gồm citation nếu có).
     """
-    llm = get_llm(feature=feature)
+    llm = get_llm(
+        feature=feature,
+        usage_context=usage_context,
+        usage_attempt_id=usage_attempt_id,
+    )
     msgs = _qa_messages(question, context_text, history=history)
     out = llm.invoke(msgs, stream=False)
     return lc_ai_message_text(out).strip()
@@ -63,8 +69,14 @@ def answer_with_document_context_stream(
     *,
     history: Optional[List[Dict[str, Any]]] = None,
     feature: str = "chat",
+    usage_context=None,
+    usage_attempt_id: str | None = None,
 ):
     """Yield từng chunk text từ LLM.stream (SSE)."""
-    llm = get_llm(feature=feature)
+    llm = get_llm(
+        feature=feature,
+        usage_context=usage_context,
+        usage_attempt_id=usage_attempt_id,
+    )
     msgs = _qa_messages(question, context_text, history=history)
     yield from stream_chat_tokens(llm, msgs)

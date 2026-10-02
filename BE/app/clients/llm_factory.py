@@ -184,7 +184,18 @@ def _resolve_temperature(feature: str, options: dict | None = None) -> float:
     return float(os.getenv("LLM_TEMPERATURE", "0.3"))
 
 
-def _invoke_chat(llm: Any, user: str, system_prompt: str | None, timeout: float | None = None) -> str:
+def _invoke_chat(
+    llm: Any,
+    user: str,
+    system_prompt: str | None,
+    timeout: float | None = None,
+    *,
+    usage_context: Any = None,
+    usage_attempt_id: str | None = None,
+    provider: str | None = None,
+    model: str | None = None,
+) -> str:
+    import time
     from langchain_core.messages import HumanMessage, SystemMessage
     from concurrent.futures import ThreadPoolExecutor, TimeoutError as FuturesTimeout
 
@@ -197,6 +208,7 @@ def _invoke_chat(llm: Any, user: str, system_prompt: str | None, timeout: float 
     def _call():
         return llm.invoke(msgs, stream=False)
 
+    started = time.monotonic()
     if timeout is not None and timeout > 0:
         with ThreadPoolExecutor(max_workers=1) as ex:
             fut = ex.submit(_call)
@@ -206,6 +218,19 @@ def _invoke_chat(llm: Any, user: str, system_prompt: str | None, timeout: float 
                 raise TimeoutError(f"LLM call timed out after {timeout:.0f}s") from None
     else:
         out = _call()
+    if usage_context is not None:
+        if not usage_attempt_id:
+            raise ValueError("usage_attempt_id is required with usage_context")
+        from app.domains.usage.accounting import record_provider_response
+        record_provider_response(
+            usage_context,
+            out,
+            attempt_id=usage_attempt_id,
+            provider=provider,
+            model=model or getattr(llm, "model", None) or getattr(llm, "model_name", None),
+            usage_source="estimated" if provider == "ollama" else "provider",
+            latency_ms=int((time.monotonic() - started) * 1000),
+        )
     return lc_ai_message_text(out).strip()
 
 
@@ -592,7 +617,79 @@ def stream_chat_tokens(llm: Any, messages: list) -> Iterator[str]:
             yield piece
 
 
-def get_llm(feature: str = "chat") -> Any:
+class _MeteredChatModel:
+    """Explicit per-operation wrapper; no global or thread-local usage state."""
+
+    def __init__(self, llm: Any, context: Any, attempt_id: str, provider: str) -> None:
+        self._llm = llm
+        self._context = context
+        self._attempt_id = attempt_id
+        self._provider = provider
+
+    def __getattr__(self, name: str) -> Any:
+        return getattr(self._llm, name)
+
+    def _record(
+        self, response: Any, *, latency_ms: int | None = None,
+        status: str = "committed",
+    ) -> None:
+        from app.domains.usage.accounting import record_provider_response
+        record_provider_response(
+            self._context,
+            response,
+            attempt_id=self._attempt_id,
+            provider=self._provider,
+            model=(getattr(self._llm, "model", None)
+                   or getattr(self._llm, "model_name", None)),
+            usage_source="estimated" if self._provider == "ollama" else "provider",
+            status=status,
+            latency_ms=latency_ms,
+        )
+
+    def invoke(self, *args: Any, **kwargs: Any) -> Any:
+        import time
+        started = time.monotonic()
+        response = self._llm.invoke(*args, **kwargs)
+        self._record(response, latency_ms=int((time.monotonic() - started) * 1000))
+        return response
+
+    def stream(self, *args: Any, **kwargs: Any) -> Any:
+        import time
+        from app.domains.usage.accounting import raw_provider_usage
+
+        started = time.monotonic()
+        latest_usage_chunk = None
+        try:
+            for chunk in self._llm.stream(*args, **kwargs):
+                # Some providers emit cumulative counters more than once. Keep
+                # the latest evidence and write one idempotent event only after
+                # normal exhaustion; otherwise an early cumulative chunk would
+                # permanently win over the final official usage chunk.
+                if raw_provider_usage(chunk):
+                    latest_usage_chunk = chunk
+                yield chunk
+        except BaseException:
+            if latest_usage_chunk is not None:
+                self._record(
+                    latest_usage_chunk,
+                    status="partial",
+                    latency_ms=int((time.monotonic() - started) * 1000),
+                )
+            raise
+        else:
+            if latest_usage_chunk is not None:
+                self._record(
+                    latest_usage_chunk,
+                    latency_ms=int((time.monotonic() - started) * 1000),
+                )
+
+
+def get_llm(
+    feature: str = "chat",
+    *,
+    usage_context: Any = None,
+    usage_attempt_id: str | None = None,
+) -> Any:
     """Chat model cho các chain gọi `.invoke()`/`.stream()` trực tiếp.
 
     Trước đây hàm này hardcode Ollama. Trên production `OLLAMA_HOST` rỗng, nên NĂM
@@ -612,16 +709,26 @@ def get_llm(feature: str = "chat") -> Any:
     hai luật cùng nói về một chuyện.
     """
     loi: Exception | None = None
+    if usage_context is not None and not usage_attempt_id:
+        raise ValueError("usage_attempt_id is required with usage_context")
     for provider in PROVIDERS:
         try:
             if provider == "fpt":
-                return _fpt_chat_llm(feature, None)
+                llm = _fpt_chat_llm(feature, None)
+                return (_MeteredChatModel(llm, usage_context, usage_attempt_id, provider)
+                        if usage_context is not None else llm)
             if provider == "gemini":
-                return _gemini_chat_llm(feature, None)
+                llm = _gemini_chat_llm(feature, None)
+                return (_MeteredChatModel(llm, usage_context, usage_attempt_id, provider)
+                        if usage_context is not None else llm)
             if provider == "groq":
-                return _groq_chat_llm(feature, None)
+                llm = _groq_chat_llm(feature, None)
+                return (_MeteredChatModel(llm, usage_context, usage_attempt_id, provider)
+                        if usage_context is not None else llm)
             if provider == "ollama":
-                return _ollama_chat_llm(None, feature, None)
+                llm = _ollama_chat_llm(None, feature, None)
+                return (_MeteredChatModel(llm, usage_context, usage_attempt_id, provider)
+                        if usage_context is not None else llm)
         except Exception as exc:  # noqa: BLE001 — thiếu khoá thì thử provider kế
             loi = exc
             continue
@@ -712,7 +819,8 @@ class FptEmbeddings(_LCEmbeddings):
                              json={"model": self.model_name, "input": texts},
                              timeout=self._timeout)
 
-    def _goi(self, texts: list[str]) -> list[list[float]]:
+    def _goi(self, texts: list[str], *, usage_context=None,
+             usage_attempt_id: str | None = None) -> list[list[float]]:
         """Gọi `/embeddings`, thử lại khi bị giới hạn tần suất hoặc server lỗi tạm.
 
         Vì sao cần retry ở ĐÂY chứ không để caller lo: dựng lại index là vài nghìn
@@ -786,6 +894,16 @@ class FptEmbeddings(_LCEmbeddings):
         if sorted(theo_idx) != list(range(len(texts))):
             raise _loi.EmbeddingRequestFailed(
                 f"FPT embeddings thiếu/lệch `index`: {sorted(theo_idx)[:10]}")
+        if usage_context is not None and usage_attempt_id and isinstance(body.get("usage"), dict):
+            from app.domains.usage import commit_reservation, normalize_provider_usage
+            commit_reservation(
+                usage_context.reservation_id,
+                attempt_id=usage_attempt_id,
+                close_reservation=False,
+                provider="fpt", model=self.model_name,
+                usage_source="provider", status="committed",
+                **normalize_provider_usage(body["usage"], kind="embedding"),
+            )
         return [theo_idx[i] for i in range(len(texts))]
 
     def embed_documents(self, texts: list[str]) -> list[list[float]]:
@@ -796,6 +914,18 @@ class FptEmbeddings(_LCEmbeddings):
 
     def embed_query(self, text: str) -> list[float]:
         return self._goi([text])[0]
+
+    def embed_documents_metered(self, texts: list[str], *, usage_context,
+                                attempt_prefix: str) -> list[list[float]]:
+        """Explicit upload/rebuild path; never relies on thread-local context."""
+        result: list[list[float]] = []
+        for i in range(0, len(texts), self._batch):
+            result.extend(self._goi(
+                list(texts[i:i + self._batch]),
+                usage_context=usage_context,
+                usage_attempt_id=f"{attempt_prefix}:batch-{i // self._batch + 1}",
+            ))
+        return result
 
 
 def get_embeddings() -> Any:
@@ -1028,6 +1158,9 @@ def ask_ai(
     options: dict | None = None,
     feature: str = "chat",
     timeout: float | None = None,
+    *,
+    usage_context: Any = None,
+    usage_attempt_id: str | None = None,
 ) -> str:
     """Gọi AI qua Ollama. `feature` xác định model mặc định khi `model` không truyền.
     feature='chat'    -> SLM_MODEL_CHAT (mặc định DEFAULT_LOCAL_MODEL)
@@ -1042,6 +1175,8 @@ def ask_ai(
         note_llm_call()
     except Exception:
         pass
+    if usage_context is not None and not usage_attempt_id:
+        raise ValueError("usage_attempt_id is required with usage_context")
     _addr = _gateway_addr()
     if _addr:
         # Định tuyến qua llm-gateway. Temperature resolve theo `feature` ở PHÍA SERVER
@@ -1070,19 +1205,48 @@ def ask_ai(
             try:
                 if provider == "ollama":
                     llm = _ollama_chat_llm(effective_model, feature, options)
-                    return _invoke_chat(llm, prompt, system_prompt, timeout=timeout)
+                    return _invoke_chat(
+                        llm, prompt, system_prompt, timeout=timeout,
+                        **({
+                            "usage_context": usage_context,
+                            "usage_attempt_id": f"{usage_attempt_id}:{provider}",
+                            "provider": provider,
+                            "model": effective_model,
+                        } if usage_context is not None else {}),
+                    )
 
                 if provider == "fpt":
                     llm = _fpt_chat_llm(feature, options, timeout=timeout)
-                    return _invoke_chat(llm, prompt, system_prompt, timeout=timeout)
+                    return _invoke_chat(
+                        llm, prompt, system_prompt, timeout=timeout,
+                        **({
+                            "usage_context": usage_context,
+                            "usage_attempt_id": f"{usage_attempt_id}:{provider}",
+                            "provider": provider,
+                        } if usage_context is not None else {}),
+                    )
 
                 if provider == "gemini":
                     llm = _gemini_chat_llm(feature, options)
-                    return _invoke_chat(llm, prompt, system_prompt, timeout=timeout)
+                    return _invoke_chat(
+                        llm, prompt, system_prompt, timeout=timeout,
+                        **({
+                            "usage_context": usage_context,
+                            "usage_attempt_id": f"{usage_attempt_id}:{provider}",
+                            "provider": provider,
+                        } if usage_context is not None else {}),
+                    )
 
                 if provider == "groq":
                     llm = _groq_chat_llm(feature, options)
-                    return _invoke_chat(llm, prompt, system_prompt, timeout=timeout)
+                    return _invoke_chat(
+                        llm, prompt, system_prompt, timeout=timeout,
+                        **({
+                            "usage_context": usage_context,
+                            "usage_attempt_id": f"{usage_attempt_id}:{provider}",
+                            "provider": provider,
+                        } if usage_context is not None else {}),
+                    )
             except Exception as e:
                 # Chỉ giữ `last_error` là nuốt mất lỗi của provider ĐẦU. Khi Ollama
                 # timeout rồi rơi sang Gemini hết hạn key, thông báo cuối là "Gemini
@@ -1105,7 +1269,14 @@ def ask_ai(
         "All AI providers failed — " + " | ".join(errors or [str(last_error)]))
 
 
-def summarize_results(query: str, chunks: list[str], model: str | None = None) -> str:
+def summarize_results(
+    query: str,
+    chunks: list[str],
+    model: str | None = None,
+    *,
+    usage_context: Any = None,
+    usage_attempt_id: str | None = None,
+) -> str:
     sources = "\n".join(f"{i + 1}. {c}" for i, c in enumerate(chunks))
     system_prompt = (
         "Bạn là trợ lý nghiên cứu cá nhân. Trả lời bằng tiếng Việt, tự nhiên, đi thẳng vào nội dung.\n"
@@ -1128,4 +1299,11 @@ def summarize_results(query: str, chunks: list[str], model: str | None = None) -
         "Hãy trả lời trực tiếp câu hỏi, mạch lạc."
     )
     # feature='answer' → factual temperature (≈0): bám đoạn trích, giảm bịa đặt.
-    return ask_ai(user_msg, system_prompt=system_prompt, model=model, feature="answer")
+    return ask_ai(
+        user_msg,
+        system_prompt=system_prompt,
+        model=model,
+        feature="answer",
+        usage_context=usage_context,
+        usage_attempt_id=usage_attempt_id,
+    )
