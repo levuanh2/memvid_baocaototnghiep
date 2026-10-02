@@ -1,5 +1,27 @@
 # Lessons Learned
 
+## Publish terminal job state after accounting (2026-10-02)
+
+- A correct ledger can still vanish from the UI when a poller sees `done`
+  before `usage_summary` is written. Treat terminal publication as the final
+  step: provider event -> reservation finalize -> aggregate -> job `done`.
+- Streaming providers may emit cumulative usage more than once. Keep the last
+  evidenced chunk and write one event after normal exhaustion; on an exception
+  or disconnect, persist only the latest evidenced counters as `partial`.
+- Failure before a durable worker exists must release the whole reservation.
+  Returning 202 when an ingest graph/queue is unavailable leaves quota held by
+  a job that can never run.
+
+## Usage ledger must be database-owned (2026-10-01)
+
+Quota accounting is shared mutable state. A request-path `CREATE TABLE`, SQLite
+WAL, or `threading.RLock` can make a single-process test pass while concurrent
+web/worker instances oversubscribe the quota. Keep schema in Alembic, lock the
+entitlement row inside the same PostgreSQL transaction as reservation/commit,
+and make the local adapter opt-in. A provider can consume more than its reserve,
+so commit must always write actual usage and close the reservation with an
+explicit `overage` terminal state instead of raising before the event is stored.
+
 ## 2026-10-01 - Meter provider usage at the execution boundary
 
 - A ledger/API alone cannot make token counts truthful. The reservation context
@@ -3037,3 +3059,11 @@ changes must use the same relink/validate path and must never recenter the
 viewport. For expand-to-depth, use the library's public expansion API so the
 DOM subtree and connector groups are rebuilt together; mutating `nodeData`
 alone is not a sufficient render contract.
+## 2026-10-02 — Backend availability does not identify job ownership
+
+When legacy and durable Guided jobs share one execution function, the fact that
+the PostgreSQL Guided store is enabled does not mean the current job belongs to
+that store. Resolve the job row once, retain that ownership decision, and use it
+for every success, cancellation, and exception update. Re-probing or branching
+only on `use_postgres()` can write a legacy job's terminal state to the wrong
+ledger.

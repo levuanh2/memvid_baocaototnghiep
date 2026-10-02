@@ -1,5 +1,28 @@
 # Known Issues
 
+## PR #47 terminal usage publication and inactive gateway limit (2026-10-02)
+
+Job pollers stop as soon as they observe `done`. Publishing that state before
+the reservation aggregate was stored caused Chat/Summary/MindMap inline usage
+to disappear nondeterministically. Usage-aware jobs now hold at
+`UsageFinalize`, persist the safe aggregate, and publish their terminal state
+last. Pure cache hits remain zero-charge; a semantic cache judge that actually
+calls a provider is reported as provider usage instead of being disguised as a
+free hit. The optional gRPC LLM gateway still has no usage fields in its
+protobuf and must remain outside hard quota enforcement until that contract is
+extended.
+
+## PR #47 usage metering quota (2026-10-01)
+
+The first implementation stored the usage ledger in `usage.sqlite`, created its
+tables from request code, and protected quota with a process-local `RLock`.
+That is not safe for multiple web/worker processes. The replacement uses the
+existing SQLAlchemy/PostgreSQL infrastructure and an Alembic-owned ledger;
+SQLite remains only as an explicit local unit-test adapter. The implementation
+also records `period_start`/`period_end`, lease expiry, terminal reservation
+statuses, and provider actual overage events. End-to-end reservation propagation
+through every provider/worker execution path still needs separate verification.
+
 ## (2026-10-01) Usage metering rollout boundary
 
 The durable usage ledger and quota API are additive and fail closed for usage
