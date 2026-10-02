@@ -1,0 +1,14 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64">
+  <!-- Rounded stamp seal container -->
+  <rect x="4" y="4" width="56" height="56" rx="14" fill="#B23A2E" />
+  
+  <!-- Subtle inner border imitating traditional carved seal stamp -->
+  <rect x="9" y="9" width="46" height="46" rx="10" fill="none" stroke="#FFFFFF" stroke-opacity="0.3" stroke-width="1.5" stroke-dasharray="3 2" />
+  
+  <!-- Stylized Serif 'M' in ivory/paper tone -->
+  <text x="32" y="45" font-family="'Spectral', 'Georgia', 'Times New Roman', serif" font-size="34" font-weight="700" fill="#FAF8F5" text-anchor="middle">M</text>
+  
+  <!-- Distinctive 'X' accent mark in deep ink contrast with gold/paper glow -->
+  <circle cx="49" cy="15" r="7.5" fill="#1B2A41" />
+  <path d="M46 12 L52 18 M52 12 L46 18" stroke="#FAF8F5" stroke-width="2" stroke-linecap="round" />
+</svg>
