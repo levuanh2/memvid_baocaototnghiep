@@ -70,6 +70,8 @@ def _ensure_job_columns(conn: sqlite3.Connection) -> None:
         "lease_owner": "TEXT",
         "lease_expires_at": "TEXT",
         "error_code": "TEXT",
+        "usage_reservation_id": "TEXT",
+        "usage_summary_json": "TEXT",
     }
     for name, definition in additive.items():
         if name not in cols:
@@ -113,7 +115,7 @@ def create_job(job_id: str, job_type: str, status: str = "pending", progress: in
         try:
             columns = ["job_id", "job_type", "status", "progress", "current_node", "created_at", "updated_at", "user_id"]
             values: list[Any] = [job_id, job_type, status, int(progress), current_node, _now(), _now(), user_id]
-            allowed = ("map_id", "result_map_id", "idempotency_key", "request_fingerprint", "source_ids_json", "guided_config_json", "stage", "attempts", "started_at", "completed_at", "lease_owner", "lease_expires_at", "error_code")
+            allowed = ("map_id", "result_map_id", "idempotency_key", "request_fingerprint", "source_ids_json", "guided_config_json", "stage", "attempts", "started_at", "completed_at", "lease_owner", "lease_expires_at", "error_code", "usage_reservation_id", "usage_summary_json")
             for key in allowed:
                 if key in metadata:
                     columns.append(key)
@@ -151,7 +153,7 @@ def update_job(job_id: str, **kwargs: Any) -> None:
     if kwargs.get("status") in _CLEAR_BUFFER_STATUSES and "token_buffer" not in kwargs:
         kwargs["token_buffer"] = ""
 
-    for k in ("job_type", "status", "progress", "current_node", "result_json", "error_text", "token_buffer", "map_id", "result_map_id", "idempotency_key", "request_fingerprint", "source_ids_json", "guided_config_json", "stage", "attempts", "started_at", "completed_at", "lease_owner", "lease_expires_at", "error_code"):
+    for k in ("job_type", "status", "progress", "current_node", "result_json", "error_text", "token_buffer", "map_id", "result_map_id", "idempotency_key", "request_fingerprint", "source_ids_json", "guided_config_json", "stage", "attempts", "started_at", "completed_at", "lease_owner", "lease_expires_at", "error_code", "usage_reservation_id", "usage_summary_json"):
         if k in kwargs:
             fields.append(f"{k}=?")
             values.append(kwargs[k])
@@ -176,7 +178,7 @@ def get_job(job_id: str) -> Optional[dict]:
         conn = get_conn()
         try:
             cur = conn.execute(
-                "SELECT job_id, job_type, status, progress, current_node, created_at, updated_at, result_json, error_text, token_buffer, cancel_requested, user_id, map_id, result_map_id, idempotency_key, request_fingerprint, source_ids_json, guided_config_json, stage, attempts, started_at, completed_at, lease_owner, lease_expires_at, error_code FROM jobs WHERE job_id=?",
+                "SELECT job_id, job_type, status, progress, current_node, created_at, updated_at, result_json, error_text, token_buffer, cancel_requested, user_id, map_id, result_map_id, idempotency_key, request_fingerprint, source_ids_json, guided_config_json, stage, attempts, started_at, completed_at, lease_owner, lease_expires_at, error_code, usage_reservation_id, usage_summary_json FROM jobs WHERE job_id=?",
                 (job_id,),
             )
             row = cur.fetchone()
@@ -206,6 +208,8 @@ def get_job(job_id: str) -> Optional[dict]:
                 "guided_config": json.loads(row[17]) if row[17] else None, "stage": row[18],
                 "attempts": row[19] or 0, "started_at": row[20], "completed_at": row[21],
                 "lease_owner": row[22], "lease_expires_at": row[23], "error_code": row[24],
+                "usage_reservation_id": row[25],
+                "usage_summary": json.loads(row[26]) if row[26] else None,
             }
             return job
         finally:
@@ -257,7 +261,7 @@ def create_idempotent_job(job_id: str, *, user_id: str, idempotency_key: str, re
             else:
                 columns = ["job_id", "job_type", "status", "progress", "current_node", "created_at", "updated_at", "user_id", "idempotency_key", "request_fingerprint"]
                 values: list[Any] = [job_id, job_type, "pending", 0, "Queued", _now(), _now(), user_id, idempotency_key, request_fingerprint]
-                for key in ("map_id", "source_ids_json", "guided_config_json", "stage", "attempts", "lease_expires_at"):
+                for key in ("map_id", "source_ids_json", "guided_config_json", "stage", "attempts", "lease_expires_at", "usage_reservation_id"):
                     if key in metadata:
                         columns.append(key); values.append(metadata[key])
                 conn.execute(f"INSERT INTO jobs({','.join(columns)}) VALUES({','.join('?' for _ in columns)})", values)
