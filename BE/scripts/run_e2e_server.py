@@ -199,7 +199,9 @@ def main() -> None:
             capabilities={"chunk_query": True},
         )
 
-    be_main._trigger_background_ingest = lambda sid, fp, fn: _fast_ingest(sid, fp, fn)
+    be_main._trigger_background_ingest = (
+        lambda sid, fp, fn, usage_context_data=None: _fast_ingest(sid, fp, fn)
+    )
     Path(be_main.INPUT_DIR).mkdir(parents=True, exist_ok=True)
 
     port = int(os.environ.get("PORT", "8080"))

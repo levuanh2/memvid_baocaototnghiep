@@ -427,6 +427,13 @@
     "rule": "/auth/register"
   },
   {
+    "endpoint": "billing_capability",
+    "methods": [
+      "GET"
+    ],
+    "rule": "/billing/capability"
+  },
+  {
     "endpoint": "get_chunk_text",
     "methods": [
       "GET"
@@ -738,5 +745,26 @@
       "POST"
     ],
     "rule": "/upload-multiple"
+  },
+  {
+    "endpoint": "usage_me",
+    "methods": [
+      "GET"
+    ],
+    "rule": "/usage/me"
+  },
+  {
+    "endpoint": "usage_me_breakdown",
+    "methods": [
+      "GET"
+    ],
+    "rule": "/usage/me/breakdown"
+  },
+  {
+    "endpoint": "usage_me_events",
+    "methods": [
+      "GET"
+    ],
+    "rule": "/usage/me/events"
   }
 ]

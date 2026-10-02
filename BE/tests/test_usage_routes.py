@@ -1,4 +1,5 @@
-def test_usage_routes_require_authenticated_owner(client, monkeypatch):
+def test_usage_routes_require_authenticated_owner(client, monkeypatch, tmp_path):
+    monkeypatch.setenv("USAGE_DB_PATH", str(tmp_path / "usage-routes.sqlite"))
     assert client.get("/usage/me").status_code == 401
     import app.main as main
     monkeypatch.setattr(main, "_current_user_id", lambda: "usage-user")

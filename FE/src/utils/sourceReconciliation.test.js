@@ -29,6 +29,14 @@ describe("mergeSources", () => {
     expect(mergeSources(prev, backend, noExtFallback)).toHaveLength(1);
   });
 
+  it("preserves completed upload usage across the indexed-list refresh", () => {
+    const usage = { total_tokens: 1284, input_tokens: 1000, output_tokens: 284 };
+    const prev = [{ video_stem: "doc", filename: "doc.pdf", status: "ready", usage }];
+    const backend = [{ video_stem: "doc", filename: "doc.pdf", num_chunks: 8 }];
+
+    expect(mergeSources(prev, backend, noExtFallback)[0].usage).toEqual(usage);
+  });
+
   it("drops a locally-known 'ready' entry not present in backend (replaced, not duplicated)", () => {
     const prev = [{ video_stem: "old_stem", status: "ready", can_query: true, filename: "a.txt" }];
     const backend = [{ video_stem: "new_stem", filename: "a.txt" }];
