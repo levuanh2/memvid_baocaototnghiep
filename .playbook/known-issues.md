@@ -1,5 +1,24 @@
 # Known Issues
 
+## PR #47 Guided idempotency could orphan a new usage reservation (fixed 2026-10-03)
+
+`POST /generate-mindmap` reserved quota before the PostgreSQL Guided store
+resolved `(user_id, idempotency_key)`. An `existing` or `conflict` outcome then
+returned immediately. Historical jobs created before usage metering have no
+`usage_reservation_id`, so their first retry created a fresh 8,000-token
+reservation that remained `reserved` until lease expiry even though no worker
+ran. The same audit found a query single-flight follower could return after a
+failed admission retry without closing its reservation.
+
+The route now releases only a reservation whose persisted `job_id` proves it
+was created by the current losing submission and which the winning durable row
+did not attach. This double check prevents releasing a concurrent winner's or
+an existing in-flight job's legitimate reservation. Query readmission rejection
+releases immediately because that path never reaches a provider. PostgreSQL
+route tests cover historical completed/queued/running jobs, conflicts, exact
+retries, two-process identical submissions, cache hits, and reservation/event
+totals.
+
 ## PR #47 terminal usage publication and inactive gateway limit (2026-10-02)
 
 Job pollers stop as soon as they observe `done`. Publishing that state before

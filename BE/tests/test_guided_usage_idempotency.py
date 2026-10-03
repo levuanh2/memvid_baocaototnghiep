@@ -31,10 +31,9 @@ PAYLOAD = {
 
 
 def _intent_and_fingerprint(payload: dict) -> tuple[dict, str]:
-    from app.domains.mindmap.guided import intent_hash, normalize_intent
+    from app.domains.mindmap.guided import normalize_intent
 
     intent = normalize_intent(payload)
-    content_hash = intent_hash(BASE_HASH, intent)
     fingerprint = hashlib.sha256(json.dumps(
         {"sources": [SOURCE], "intent": intent, "force": bool(payload.get("force"))},
         ensure_ascii=False,

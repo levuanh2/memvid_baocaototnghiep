@@ -3067,3 +3067,21 @@ that store. Resolve the job row once, retain that ownership decision, and use it
 for every success, cancellation, and exception update. Re-probing or branching
 only on `use_postgres()` can write a legacy job's terminal state to the wrong
 ledger.
+
+# Idempotency losers must prove reservation ownership before cleanup (2026-10-03)
+
+Quota reservation and durable-job insertion are separate transactions in the
+Guided route. Merely observing `existing` or `conflict` is not enough reason to
+release the reservation returned to the request: under concurrency, that row
+may have been created by a peer and attached to the winning job. Safe cleanup
+requires two independent facts: the reservation's stored `job_id` equals this
+request's newly generated job ID, and the durable winner does not reference the
+reservation. Historical jobs with no usage context then release immediately;
+legitimate in-flight reservations remain untouched.
+
+Audit every return after reservation creation, including returns inside worker
+closures. Cache hits, admission rejection, idempotency conflicts, and existing
+job responses are terminal lifecycle branches even when they do not look like
+provider failures. A reservation must be committed, released, or deliberately
+retained for resume before each branch returns; lease expiry is recovery, not
+normal control flow.

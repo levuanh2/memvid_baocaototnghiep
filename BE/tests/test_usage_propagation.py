@@ -2,6 +2,7 @@
 from __future__ import annotations
 
 import io
+import threading
 import time
 from types import SimpleNamespace
 
@@ -108,3 +109,53 @@ def test_upload_passes_serializable_context_and_releases_before_worker_failure(
     assert captured["finished_context"] is context
     assert captured["status"] == "released"
     assert captured["job_id"] == captured["source_id"]
+
+
+def test_query_singleflight_readmission_rejection_releases_reservation(
+    client, monkeypatch,
+):
+    """A cache follower rejected on re-admission never reaches the graph."""
+    import app.main as main
+
+    context = UsageReservationContext(
+        user_id="readmit-user",
+        reservation_id="readmit-reservation",
+        idempotency_key="readmit-idempotency",
+        job_id="readmit-job",
+    )
+    finished = {}
+    terminal = threading.Event()
+
+    class Admission:
+        def __init__(self):
+            self.acquires = 0
+
+        def acquire(self, blocking=False):
+            self.acquires += 1
+            return self.acquires == 1  # route wins; follower re-admission loses
+
+        def release(self):
+            return None
+
+    def become_follower(*args, **kwargs):
+        kwargs["release_for_wait"]()
+        return {"served": False, "lock": None}
+
+    def finish(ctx, *, status, job_id=None):
+        finished.update({"context": ctx, "status": status, "job_id": job_id})
+        terminal.set()
+
+    monkeypatch.setattr(main, "_current_user_id", lambda: "readmit-user")
+    monkeypatch.setattr(main, "_query_semaphore", Admission())
+    monkeypatch.setattr(main, "_reserve_usage_context", lambda *a, **k: context)
+    monkeypatch.setattr(main, "_single_flight_try", become_follower)
+    monkeypatch.setattr(main, "_finish_usage_context", finish)
+    monkeypatch.setattr(main, "QUERY_GRAPH", object())
+
+    response = client.post("/query", json={"q": "test", "sources": []})
+
+    assert response.status_code == 202
+    assert terminal.wait(2), "reservation was not finalized on readmission rejection"
+    assert finished["context"] is context
+    assert finished["status"] == "released"
+    assert finished["job_id"] == response.get_json()["job_id"]

@@ -1600,6 +1600,33 @@ def _finish_usage_context(context, *, status: str, job_id: Optional[str] = None)
     return usage
 
 
+def _release_unattached_usage_context(
+    context,
+    *,
+    requested_job_id: str,
+    durable_job: Optional[dict],
+) -> bool:
+    """Release only a reservation created by this losing Guided submission.
+
+    Guided job insertion and usage reservation currently use separate database
+    transactions.  A concurrent request can therefore return the same
+    reservation after another request created it.  The reservation's ``job_id``
+    proves which request created it, while the durable row proves whether that
+    reservation won the idempotency race and is legitimately attached.
+    """
+    if context is None:
+        return False
+    reservation_id = str(context.reservation_id)
+    if durable_job and durable_job.get("usage_reservation_id") == reservation_id:
+        return False
+    from app.domains.usage import get_reservation, release_reservation
+
+    reservation = get_reservation(reservation_id, user_id=str(context.user_id))
+    if not reservation or str(reservation.get("job_id") or "") != requested_job_id:
+        return False
+    return release_reservation(reservation_id)
+
+
 @app.get("/usage/me")
 def usage_me():
     uid, error = _require_usage_user()
@@ -4642,6 +4669,11 @@ def query():
                             _jobs_update_job(jid, status="error", error_text=busy_msg)
                         except Exception:
                             pass
+                    # This follower never reached the graph/provider. Close its
+                    # reservation now instead of waiting for the lease sweeper.
+                    _finish_usage_context(
+                        usage_context, status="released", job_id=jid,
+                    )
                     return
 
             try:
@@ -5689,15 +5721,33 @@ def generate_mindmap():
         raise
     durable_job = None
     if guided_requested and idempotency_key and uid:
-        outcome, durable_job = guided_store.create_idempotent_job(
-            requested_job_id, user_id=uid, idempotency_key=idempotency_key,
-            request_fingerprint=request_fingerprint, source_ids_json=json.dumps(source_names),
-            guided_config_json=json.dumps(intent or {}, ensure_ascii=False), stage="queued",
-            force=force,
-            usage_reservation_id=(usage_context.reservation_id if usage_context else None))
+        try:
+            outcome, durable_job = guided_store.create_idempotent_job(
+                requested_job_id, user_id=uid, idempotency_key=idempotency_key,
+                request_fingerprint=request_fingerprint, source_ids_json=json.dumps(source_names),
+                guided_config_json=json.dumps(intent or {}, ensure_ascii=False), stage="queued",
+                force=force,
+                usage_reservation_id=(usage_context.reservation_id if usage_context else None))
+        except Exception:
+            _release_unattached_usage_context(
+                usage_context,
+                requested_job_id=requested_job_id,
+                durable_job=None,
+            )
+            raise
         if outcome == "conflict":
+            _release_unattached_usage_context(
+                usage_context,
+                requested_job_id=requested_job_id,
+                durable_job=durable_job,
+            )
             return jsonify({"error": "Idempotency key was already used with a different request", "error_code": "idempotency_conflict"}), 409
         if outcome == "existing":
+            _release_unattached_usage_context(
+                usage_context,
+                requested_job_id=requested_job_id,
+                durable_job=durable_job,
+            )
             if durable_job.get("status") == "done" and durable_job.get("result"):
                 return jsonify({
                     "status": "done",
