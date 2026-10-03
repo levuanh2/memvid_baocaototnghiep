@@ -91,7 +91,7 @@ def _row(row) -> Optional[dict[str, Any]]:
     if row is None:
         return None
     d = dict(row._mapping)
-    for key in ("source_ids", "guided_config", "result"):
+    for key in ("source_ids", "guided_config", "result", "usage_summary"):
         raw = d.pop(key + "_json", None)
         if raw is None:
             d[key] = None
@@ -111,31 +111,35 @@ def _select_sql() -> str:
     return """SELECT job_id,user_id,map_id,result_map_id,idempotency_key,request_fingerprint,
         source_ids_json,guided_config_json,status,stage,attempts,progress,current_node,
         lease_owner,lease_expires_at,heartbeat_at,created_at,updated_at,started_at,
-        completed_at,error_code,error_message,force,result_json AS result_json FROM guided_mindmap_jobs"""
+        completed_at,error_code,error_message,force,result_json AS result_json,
+        usage_reservation_id,usage_summary_json FROM guided_mindmap_jobs"""
 
 
 def create_idempotent_job(job_id: str, *, user_id: str, idempotency_key: str,
                           request_fingerprint: str, source_ids_json: str,
                           guided_config_json: str, stage: str = "queued",
                           map_id: Optional[str] = None,
-                          force: bool = False) -> tuple[str, dict[str, Any]]:
+                          force: bool = False,
+                          usage_reservation_id: Optional[str] = None) -> tuple[str, dict[str, Any]]:
     if not use_postgres():
         from app.domains.jobs.jobs_store import create_idempotent_job as legacy
         return legacy(job_id, user_id=user_id, idempotency_key=idempotency_key,
                       request_fingerprint=request_fingerprint, source_ids_json=source_ids_json,
-                      guided_config_json=guided_config_json, stage=stage, force=force)
+                      guided_config_json=guided_config_json, stage=stage, force=force,
+                      usage_reservation_id=usage_reservation_id)
     now = datetime.now(timezone.utc)
     with _get_engine().begin() as conn:
         conn.execute(text("""INSERT INTO guided_mindmap_jobs
             (job_id,user_id,map_id,idempotency_key,request_fingerprint,source_ids_json,
-             guided_config_json,status,stage,force,created_at,updated_at)
+             guided_config_json,status,stage,force,usage_reservation_id,created_at,updated_at)
             VALUES (:job_id,:user_id,:map_id,:key,:fingerprint,CAST(:sources AS jsonb),
-                    CAST(:config AS jsonb),'queued',:stage,:force,:now,:now)
+                    CAST(:config AS jsonb),'queued',:stage,:force,:usage_reservation_id,:now,:now)
             ON CONFLICT (user_id,idempotency_key) DO NOTHING"""), {
                 "job_id": job_id, "user_id": user_id, "map_id": map_id,
                 "key": idempotency_key, "fingerprint": request_fingerprint,
                 "sources": source_ids_json, "config": guided_config_json,
-                "stage": stage, "force": bool(force), "now": now,
+                "stage": stage, "force": bool(force),
+                "usage_reservation_id": usage_reservation_id, "now": now,
             })
         row = conn.execute(text(_select_sql() + " WHERE user_id=:uid AND idempotency_key=:key"),
                            {"uid": user_id, "key": idempotency_key}).fetchone()
@@ -179,7 +183,9 @@ def update_job(job_id: str, **kwargs: Any) -> None:
                "error_code": "error_code", "error_message": "error_message",
                "error_text": "error_message", "result_json": "result_json",
                "result": "result_json", "lease_owner": "lease_owner",
-               "lease_expires_at": "lease_expires_at", "not_before": "not_before"}
+               "lease_expires_at": "lease_expires_at", "not_before": "not_before",
+               "usage_reservation_id": "usage_reservation_id",
+               "usage_summary": "usage_summary_json"}
     fields = ["updated_at=NOW()"]
     values: dict[str, Any] = {"job_id": job_id}
     for source, target in mapping.items():
@@ -187,10 +193,14 @@ def update_job(job_id: str, **kwargs: Any) -> None:
             continue
         fields.append(f"{target}=:v_{target}")
         value = kwargs[source]
-        values[f"v_{target}"] = _json(value) if target == "result_json" and not isinstance(value, str) else value
-    if kwargs.get("status") == "done":
-        fields += ["completed_at=COALESCE(completed_at,NOW())", "lease_owner=NULL", "lease_expires_at=NULL"]
-    if kwargs.get("status") in {"error", "failed"}:
+        values[f"v_{target}"] = (
+            _json(value)
+            if target in {"result_json", "usage_summary_json"} and not isinstance(value, str)
+            else value
+        )
+        if target in {"result_json", "usage_summary_json"}:
+            fields[-1] = f"{target}=CAST(:v_{target} AS jsonb)"
+    if kwargs.get("status") in {"done", "cancelled", "error", "failed"}:
         fields += ["completed_at=COALESCE(completed_at,NOW())", "lease_owner=NULL", "lease_expires_at=NULL"]
     if kwargs.get("heartbeat") or kwargs.get("status") == "running":
         fields.append("heartbeat_at=NOW()")

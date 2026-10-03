@@ -34,6 +34,7 @@ class IngestState(TypedDict):
     # BuildMemoryTree đọc lại để không xoá mất cờ khi nó ghi capabilities (update_status
     # THAY chứ không gộp). Thiếu dòng khai báo này thì LangGraph loại field giữa hai node.
     structured_query: NotRequired[bool]
+    usage_context: NotRequired[Optional[dict[str, Any]]]
 
 
 class QueryState(TypedDict):
@@ -96,6 +97,8 @@ class QueryState(TypedDict):
     cache_write_allowed: NotRequired[bool]
     runtime_path: NotRequired[str]
     evaluation_provenance: NotRequired[Optional[dict]]
+    usage_context: NotRequired[Optional[dict[str, Any]]]
+    usage_cache_hit: NotRequired[bool]
 
 
 class SummaryState(TypedDict):
@@ -119,6 +122,7 @@ class SummaryState(TypedDict):
     error: Optional[str]
     # LangGraph chỉ giữ field có trong TypedDict — _t0 tính elapsed_sec ở AssemblePersist.
     _t0: NotRequired[float]
+    usage_context: NotRequired[Optional[dict[str, Any]]]
 
 
 class MindmapState(TypedDict):
@@ -139,4 +143,5 @@ class MindmapState(TypedDict):
     error: Optional[str]
     # LangGraph chỉ giữ field có trong TypedDict — _t0 dùng để tính elapsed_sec ở AssemblePersist.
     _t0: NotRequired[float]
+    usage_context: NotRequired[Optional[dict[str, Any]]]
 

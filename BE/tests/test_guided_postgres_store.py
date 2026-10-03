@@ -74,6 +74,44 @@ def test_same_key_different_payload_is_conflict():
     assert outcome == "conflict"
 
 
+def test_existing_historical_job_does_not_adopt_retry_reservation():
+    """Job idempotency never transfers a losing request's reservation."""
+    j = _job()
+    guided_store.create_idempotent_job(
+        j["job_id"], user_id=j["user_id"], idempotency_key=j["key"],
+        request_fingerprint=j["fingerprint"], source_ids_json="[]",
+        guided_config_json="{}",
+    )
+
+    outcome, row = guided_store.create_idempotent_job(
+        str(uuid.uuid4()), user_id=j["user_id"], idempotency_key=j["key"],
+        request_fingerprint=j["fingerprint"], source_ids_json="[]",
+        guided_config_json="{}", usage_reservation_id="losing-reservation",
+    )
+
+    assert outcome == "existing"
+    assert row["job_id"] == j["job_id"]
+    assert row["usage_reservation_id"] is None
+
+
+def test_existing_job_keeps_its_legitimate_attached_reservation():
+    j = _job()
+    guided_store.create_idempotent_job(
+        j["job_id"], user_id=j["user_id"], idempotency_key=j["key"],
+        request_fingerprint=j["fingerprint"], source_ids_json="[]",
+        guided_config_json="{}", usage_reservation_id="winning-reservation",
+    )
+
+    outcome, row = guided_store.create_idempotent_job(
+        str(uuid.uuid4()), user_id=j["user_id"], idempotency_key=j["key"],
+        request_fingerprint=j["fingerprint"], source_ids_json="[]",
+        guided_config_json="{}", usage_reservation_id="losing-reservation",
+    )
+
+    assert outcome == "existing"
+    assert row["usage_reservation_id"] == "winning-reservation"
+
+
 def test_concurrent_claims_have_one_winner():
     j = _job()
     guided_store.create_idempotent_job(j["job_id"], user_id=j["user_id"],

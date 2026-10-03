@@ -29,8 +29,8 @@ from __future__ import annotations
 import pytest
 
 # Tập khoá CHÍNH XÁC. Sửa hai hằng này chỉ khi CỐ Ý đổi API.
-KHOA_SUMMARY = {"status", "progress", "current_node", "result", "error"}
-KHOA_MINDMAP = {"status", "progress", "current_node", "result", "error"}
+KHOA_SUMMARY = {"status", "progress", "current_node", "result", "error", "usage"}
+KHOA_MINDMAP = {"status", "progress", "current_node", "result", "error", "usage"}
 
 
 @pytest.fixture()

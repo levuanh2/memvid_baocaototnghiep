@@ -276,4 +276,5 @@ def test_builder_cu_khong_doi_chu_ky(monkeypatch):
     assert list(inspect.signature(lf._ollama_chat_llm).parameters) == [
         "model", "feature", "options", "timeout"]
     assert list(inspect.signature(lf.ask_ai).parameters) == [
-        "prompt", "system_prompt", "model", "options", "feature", "timeout"]
+        "prompt", "system_prompt", "model", "options", "feature", "timeout",
+        "usage_context", "usage_attempt_id"]

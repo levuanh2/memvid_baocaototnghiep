@@ -68,7 +68,8 @@ def descendant_refs(branch_id: str, nodes: list[dict]) -> list[str]:
 _descendant_refs = descendant_refs  # alias giữ import cũ (summary pipeline dùng tên public)
 
 
-def _ask_json(user: str, model: str, timeout_sec: float) -> dict:
+def _ask_json(user: str, model: str, timeout_sec: float, *, usage_context=None,
+              usage_attempt_prefix: str = "mindmap:enrich") -> dict:
     """1 call + parse; retry đúng 1 lần khi JSON hỏng (đo thật: ~1/4 nhánh qwen trả
     JSON lỗi delimiter — retry rẻ hơn nhiều so với mất cả nhánh vào degraded)."""
     last_err: Exception | None = None
@@ -76,7 +77,9 @@ def _ask_json(user: str, model: str, timeout_sec: float) -> dict:
         ex = ThreadPoolExecutor(max_workers=1)
         try:
             fut = ctx_submit(ex, ask_ai, user, system_prompt=_SYSTEM, model=model,
-                             feature="mindmap", options={"temperature": 0.15})
+                             feature="mindmap", options={"temperature": 0.15},
+                             usage_context=usage_context,
+                             usage_attempt_id=f"{usage_attempt_prefix}:json-{_attempt + 1}")
             raw = fut.result(timeout=timeout_sec)
         finally:
             ex.shutdown(wait=False)      # timeout phải TRẢ NGAY (bài học warmup)
@@ -87,14 +90,16 @@ def _ask_json(user: str, model: str, timeout_sec: float) -> dict:
     raise last_err
 
 
-def _enrich_one(mm_input: dict, branch: dict, allowed: list[str], model: str, timeout_sec: float) -> dict:
+def _enrich_one(mm_input: dict, branch: dict, allowed: list[str], model: str, timeout_sec: float,
+                *, usage_context=None) -> dict:
     ctx = _branch_context(mm_input, allowed)
     user = (f"Nhánh: {branch['title']}\nDanh sách id hợp lệ: {', '.join(sorted(set(allowed)))}\n\n"
             f"<<<TÀI LIỆU>>>\n{ctx}\n<<<HẾT>>>")
     intent = mm_input.get("generation_intent") or {}
     if intent:
         user += "\nUSER GUIDANCE: " + str(intent.get("instruction") or "") + "; purpose=" + str(intent.get("preset") or "overview") + "; detail=" + str(intent.get("detail_level") or "balanced")
-    data = _ask_json(user, model, timeout_sec)
+    data = _ask_json(user, model, timeout_sec, usage_context=usage_context,
+                     usage_attempt_prefix=f"mindmap:enrich:{branch.get('id', 'branch')}")
     allowed_set = set(allowed)
     policy = get_detail_policy(intent.get("detail_level"))
 
@@ -141,7 +146,7 @@ def enrich_branches(mm_input: dict, skeleton_nodes: list[dict], *, model: str,
                     timeout_sec: float = 120.0, max_workers: int = 2,
                     progress_cb: Optional[Callable[[int, str], None]] = None,
                     cancel_cb: Optional[Callable[[], bool]] = None,
-                    job_id: str = "") -> tuple[list[dict], bool]:
+                    job_id: str = "", usage_context=None) -> tuple[list[dict], bool]:
     t = _Timer()
     if os.getenv("SKIP_MODEL_LOAD") == "1":
         # Không có LLM = khung xương chưa được làm giàu — phải khai degraded,
@@ -162,7 +167,8 @@ def enrich_branches(mm_input: dict, skeleton_nodes: list[dict], *, model: str,
 
     def _run(branch: dict):
         allowed = _descendant_refs(branch["id"], nodes)
-        return _enrich_one(mm_input, branch, allowed, model, timeout_sec)
+        return _enrich_one(mm_input, branch, allowed, model, timeout_sec,
+                           usage_context=usage_context)
 
     # as_completed thay vì duyệt theo thứ tự submit: 1 nhánh treo không chặn
     # các nhánh đã xong, và cancel được kiểm giữa từng completion (codex #1).

@@ -11,7 +11,13 @@ _SYS = (
 )
 
 
-def rewrite_query(question: str, *, feature: str = "chat") -> str:
+def rewrite_query(
+    question: str,
+    *,
+    feature: str = "chat",
+    usage_context=None,
+    usage_attempt_id: str | None = None,
+) -> str:
     """Viết lại câu hỏi bằng LLM. Trả về câu gốc nếu kết quả rỗng/không đổi.
 
     Lazy-import get_llm để test có thể monkeypatch app.clients.llm_factory.get_llm.
@@ -22,7 +28,11 @@ def rewrite_query(question: str, *, feature: str = "chat") -> str:
 
     from app.clients.llm_factory import get_llm, lc_ai_message_text
 
-    llm = get_llm(feature=feature)
+    llm = get_llm(
+        feature=feature,
+        usage_context=usage_context,
+        usage_attempt_id=usage_attempt_id,
+    )
     out = llm.invoke([SystemMessage(content=_SYS), HumanMessage(content=q)], stream=False)
     rewritten = (lc_ai_message_text(out) or "").strip()
     if not rewritten or rewritten.lower() == q.lower():

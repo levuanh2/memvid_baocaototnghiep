@@ -8,6 +8,7 @@ import { cancelJob } from "../../utils/studyApi";
 import { pollQueryStatus, shouldPollFallback } from "../../utils/queryPolling";
 import { streamSse } from "../../utils/sseStream";
 import { getToken } from "../../auth/tokenStore";
+import OperationUsage from "./OperationUsage";
 import { createPreviewThrottle } from "../../utils/streamPreview";
 import { shouldFocusComposer, shouldRefocusComposer, shouldFocusOnSlash } from "../../utils/chatFocus";
 import { Icon } from "../ui/Icon";
@@ -64,6 +65,7 @@ function makeMdComponents({ highlight, onHighlight, onEvidenceOpen }) {
   return {
     ...PROSE,
     a: ({ node, href, children, ...props }) => {
+      void node; // ReactMarkdown AST metadata must not reach the DOM anchor.
       const cite = parseCiteHref(href);
       if (cite) {
         const active = highlight && normStem(highlight.stem) === normStem(cite.stem) && String(highlight.chunkId) === String(cite.chunkId);
@@ -232,7 +234,7 @@ export default function ChatArea({
       previewThrottleRef.current?.cancel();
       const throttle = createPreviewThrottle(() => setStreamingPreview(streamAccRef.current));
       previewThrottleRef.current = throttle;
-      if (eventSourceRef.current) { try { eventSourceRef.current.close(); } catch {} }
+      if (eventSourceRef.current) { try { eventSourceRef.current.close(); } catch { /* already closed */ } }
 
       // `fetch` + ReadableStream thay cho `EventSource`: EventSource không gửi được
       // header nên không đính được Bearer, và /query-stream gọi _require_app_user()
@@ -243,9 +245,9 @@ export default function ChatArea({
       eventSourceRef.current = es;
 
       const tick = setInterval(() => {
-        if (cancelledRef.current) { clearInterval(tick); try { es.close(); } catch {} reject(new Error("CANCELLED")); }
+        if (cancelledRef.current) { clearInterval(tick); try { es.close(); } catch { /* already closed */ } reject(new Error("CANCELLED")); }
         if (Date.now() - start > timeoutMs) {
-          clearInterval(tick); try { es.close(); } catch {}
+          clearInterval(tick); try { es.close(); } catch { /* already closed */ }
           reject(new Error(`Quá thời gian chờ phản hồi (~${Math.round(timeoutMs / 1000)}s). Vui lòng thử lại.`));
         }
       }, 500);
@@ -262,17 +264,17 @@ export default function ChatArea({
               setSeenNodes((prev) => (prev[prev.length - 1] === k || prev.includes(k) ? prev : [...prev, k]));
             }
             if (d.status === "done") {
-              clearInterval(tick); try { es.close(); } catch {}
+              clearInterval(tick); try { es.close(); } catch { /* already closed */ }
               throttle.cancel();
               const streamed = streamAccRef.current; streamAccRef.current = ""; setStreamingPreview("");
               resolve({ result: d.result, streamed });
             } else if (d.status === "interrupted" && d?.result?.payload?.review?.type === "review") {
-              clearInterval(tick); try { es.close(); } catch {}
+              clearInterval(tick); try { es.close(); } catch { /* already closed */ }
               throttle.cancel();
               streamAccRef.current = ""; setStreamingPreview("");
               resolve({ result: d.result, streamed: "", interrupted: true });
             } else if (d.status === "error") {
-              clearInterval(tick); try { es.close(); } catch {}
+              clearInterval(tick); try { es.close(); } catch { /* already closed */ }
               throttle.cancel();
               streamAccRef.current = ""; setStreamingPreview("");
               const HARD = "Loi query SSE (status=error). Xem log server.";
@@ -281,7 +283,7 @@ export default function ChatArea({
               reject(new Error(String(msg || "").trim() || HARD));
             }
           }
-        } catch {}
+        } catch { /* malformed SSE frame: ignore and continue */ }
       };
 
       const token = getToken();
@@ -342,7 +344,7 @@ export default function ChatArea({
     if (pendingReview) return;
     cancelledRef.current = true;
     abortControllerRef.current?.abort();
-    try { eventSourceRef.current?.close(); } catch {}
+    try { eventSourceRef.current?.close(); } catch { /* already closed */ }
     resetJobState(); setLoading(false);
     setMessages((prev) => [...prev, { role: "cancelled", content: "Đang dừng truy vấn…" }]);
 
@@ -434,7 +436,10 @@ export default function ChatArea({
       sources: Array.isArray(data.sources) ? data.sources : [],
       chunks: Array.isArray(data.chunks) ? data.chunks : [],
     };
-    setMessages((prev) => [...prev, { role: "ai", content: aiContent, evidence }]);
+    setMessages((prev) => [...prev, {
+      role: "ai", content: aiContent, evidence,
+      usage: jobResult?.usage || jobResult?.payload?.usage || null,
+    }]);
     onEvidence?.(evidence);
   };
 
@@ -916,6 +921,7 @@ export default function ChatArea({
               <div className="text-text-primary">
                 <AnswerProse content={msg.content} mdComponents={mdComponents} dropCap={idx === firstAssistantIdx} />
               </div>
+              <OperationUsage usage={msg.usage} />
               {/* Product Experience Redesign, Question→Evidence handoff — Peak-End Rule:
                   the resting point of a reading turn (not mid-stream, not every turn)
                   gets a distinct settled marker instead of fading identically into the

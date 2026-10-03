@@ -80,7 +80,8 @@ def _provider_name() -> str:
 
 
 def _ask_json(user: str, system: str, model: str | None, timeout_sec: float,
-              diag: dict | None = None) -> dict:
+              diag: dict | None = None, *, usage_context=None,
+              usage_attempt_base: str = "summary-json") -> dict:
     """1 call + parse; retry đúng 1 lần khi JSON hỏng (bài học enrich: ~1/4 call qwen).
 
     P0.5 Blocker #1 (instrumentation only): `diag`, when given a dict, gets
@@ -92,7 +93,9 @@ def _ask_json(user: str, system: str, model: str | None, timeout_sec: float,
         ex = ThreadPoolExecutor(max_workers=1)
         try:
             fut = ctx_submit(ex, ask_ai, user, system_prompt=system, model=model,
-                             feature="summary", options={"temperature": 0})
+                             feature="summary", options={"temperature": 0},
+                             usage_context=usage_context,
+                             usage_attempt_id=f"{usage_attempt_base}:{attempt}")
             raw = fut.result(timeout=timeout_sec)
         finally:
             ex.shutdown(wait=False)      # timeout phải TRẢ NGAY (bài học warmup)
@@ -111,7 +114,7 @@ def _ask_json(user: str, system: str, model: str | None, timeout_sec: float,
 def _summarize_one(mm_input: dict, section: dict, model: str | None,
                    timeout_sec: float, length_mode: str,
                    with_facts: bool = False, two_pass: bool = False,
-                   diag: dict | None = None) -> dict:
+                   diag: dict | None = None, *, usage_context=None) -> dict:
     # two_pass = seam cho chế độ chất lượng cao (extract → summarize tách 2 call) —
     # CHƯA cài (Phase 1). Gọi với True là lỗi lập trình, không phải fallback im lặng.
     if two_pass:
@@ -123,7 +126,11 @@ def _summarize_one(mm_input: dict, section: dict, model: str | None,
     user = (f"Mục: {section['title']}\nDanh sách id hợp lệ: {', '.join(sorted(set(allowed)))}\n\n"
             f"<<<TÀI LIỆU>>>\n{ctx}\n<<<HẾT>>>")
     t0 = time.time()
-    data = _ask_json(user, system, model, timeout_sec, diag=diag)
+    data = _ask_json(
+        user, system, model, timeout_sec, diag=diag,
+        usage_context=usage_context,
+        usage_attempt_base=f"summary-section:{section['id']}",
+    )
     if diag is not None:
         diag["elapsed_ms"] = int((time.time() - t0) * 1000)
         diag["provider"] = _provider_name()
@@ -158,7 +165,8 @@ def summarize_sections(mm_input: dict, sections: list[dict], *, model: str | Non
                        with_facts: bool | None = None,
                        progress_cb: Optional[Callable[[int, str], None]] = None,
                        cancel_cb: Optional[Callable[[], bool]] = None,
-                       diagnostics_sink: Optional[list[dict]] = None) -> tuple[list[dict], list[str]]:
+                       diagnostics_sink: Optional[list[dict]] = None,
+                       usage_context=None) -> tuple[list[dict], list[str]]:
     """Trả (sections đã có summary, missing). Section lỗi → giữ skeleton (summary rỗng)
     + missing "section:<title>" — degraded trung thực, không bịa.
 
@@ -213,8 +221,10 @@ def summarize_sections(mm_input: dict, sections: list[dict], *, model: str | Non
         progress_cb(30, f"Đang tóm tắt mục 1/{len(sections)}...")
     ex = ThreadPoolExecutor(max_workers=max_workers)
     futs = {
-        ctx_submit(ex, _summarize_one, mm_input, s, model, timeout_sec, length_mode, with_facts,
-                  diag=diag_by_id.get(s["id"])): s
+        ctx_submit(
+            ex, _summarize_one, mm_input, s, model, timeout_sec, length_mode,
+            with_facts, diag=diag_by_id.get(s["id"]), usage_context=usage_context,
+        ): s
         for s in sections
     }
     budget = timeout_sec * ((len(sections) + max_workers - 1) // max_workers) + 15 if sections else 1

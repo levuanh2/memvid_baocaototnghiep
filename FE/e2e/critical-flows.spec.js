@@ -181,6 +181,6 @@ test.describe.serial("critical flows", () => {
     // GuidedMindmapDialog's `error` effect) until the user closes it, and the
     // failure must be visible, not a silent disappearance ("no false 'chưa
     // có sơ đồ'" — SidebarRight surfaces `guidedError`, not an empty-state).
-    await expect(page.getByText(/lỗi|thất bại|failed/i).first()).toBeVisible({ timeout: 20_000 });
+    await expect(page.getByText(/lỗi|thất bại|fail(?:ed|ure)/i).first()).toBeVisible({ timeout: 20_000 });
   });
 });

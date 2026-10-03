@@ -315,7 +315,10 @@ except Exception:
 
 def _cleanup_old_query_jobs() -> None:
     if QUERY_JOB_TTL_MINUTES <= 0:
-        return
+        # The upload route owns the reservation until a durable job exists.
+        # Raising lets it release the full budget instead of returning 202
+        # with a reservation that no worker can ever finish.
+        raise IngestQueueRequired("Ingest LangGraph unavailable")
     cutoff = time.time() - (QUERY_JOB_TTL_MINUTES * 60)
     with query_jobs_lock:
         expired = [
@@ -352,7 +355,10 @@ def _make_query_cache_key(q: str, selected_sources: list, use_memory_tree: bool,
         sort_keys=True
     )
 
-def _get_cached_query(cache_key: str) -> Optional[dict]:
+def _get_cached_query(
+    cache_key: str, *, usage_context=None,
+    usage_attempt_id: str = "query-cache-judge:0",
+) -> Optional[dict]:
     now = time.time()
     with _query_cache_lock:
         entry = _query_cache.get(cache_key)
@@ -363,7 +369,11 @@ def _get_cached_query(cache_key: str) -> Optional[dict]:
                 _query_cache.move_to_end(cache_key)
                 return entry["value"]
     # L2: semantic cache Redis (cross-worker, exact + cosine) — fail-open, None nếu miss/Redis chết.
-    return llm_cache.semantic_lookup(cache_key)
+    return llm_cache.semantic_lookup(
+        cache_key,
+        usage_context=usage_context,
+        usage_attempt_id=usage_attempt_id,
+    )
 
 def _set_cached_query(cache_key: str, value: dict) -> None:
     # INVARIANT: answer rỗng không được vào L1 lẫn L2 — hit sau sẽ trả "Không có phản hồi."
@@ -1509,6 +1519,160 @@ def _require_app_user():
     return uid, None
 
 
+def _require_usage_user():
+    """Usage is never fail-open: quota and ledger responses require ownership."""
+    uid = _current_user_id()
+    if not uid:
+        return None, (jsonify({"error": "unauthorized"}), 401)
+    return str(uid), None
+
+
+def _reserve_usage_context(
+    user_id: Optional[str],
+    *,
+    feature: str,
+    operation: str,
+    idempotency_key: str,
+    request_id: Optional[str] = None,
+    job_id: Optional[str] = None,
+    lease_owner: Optional[str] = None,
+):
+    """Reserve one user operation and return its explicit, serializable context."""
+    if not user_id:
+        return None
+    from app.domains.usage import UsageReservationContext, get_summary, reserve
+    capability = get_summary(str(user_id))
+    reservation = reserve(
+        str(user_id),
+        feature=feature,
+        operation=operation,
+        tokens=int(capability["per_request_token_limit"]),
+        idempotency_key=idempotency_key,
+        request_id=request_id,
+        job_id=job_id,
+        lease_owner=lease_owner,
+    )
+    return UsageReservationContext.from_reservation(reservation)
+
+
+def _quota_error_response(exc):
+    return jsonify(exc.payload), 429
+
+
+def _zero_cache_hit_usage() -> dict:
+    """Safe display contract for a cache hit that consumed no provider tokens."""
+    return {
+        "input_tokens": 0,
+        "output_tokens": 0,
+        "embedding_tokens": 0,
+        "cached_input_tokens": 0,
+        "total_tokens": 0,
+        "usage_source": "system",
+        "estimated": False,
+        "cache_hit": True,
+        "attempt_count": 0,
+        "status": "cache_hit",
+    }
+
+
+def _finish_usage_context(context, *, status: str, job_id: Optional[str] = None):
+    """Close a reservation and persist only its safe aggregate on a job."""
+    if context is None:
+        return None
+    from app.domains.usage import finalize_reservation, get_operation_usage
+    finalize_reservation(context.reservation_id, status=status)
+    usage = get_operation_usage(context.reservation_id, user_id=context.user_id)
+    if job_id and _jobs_update_job:
+        try:
+            _jobs_update_job(
+                job_id,
+                usage_summary_json=json.dumps(usage or {}, ensure_ascii=False),
+            )
+        except Exception:
+            pass
+    if job_id:
+        try:
+            with query_jobs_lock:
+                if job_id in query_jobs:
+                    query_jobs[job_id]["usage_summary"] = usage
+        except Exception:
+            pass
+    return usage
+
+
+def _release_unattached_usage_context(
+    context,
+    *,
+    requested_job_id: str,
+    durable_job: Optional[dict],
+) -> bool:
+    """Release only a reservation created by this losing Guided submission.
+
+    Guided job insertion and usage reservation currently use separate database
+    transactions.  A concurrent request can therefore return the same
+    reservation after another request created it.  The reservation's ``job_id``
+    proves which request created it, while the durable row proves whether that
+    reservation won the idempotency race and is legitimately attached.
+    """
+    if context is None:
+        return False
+    reservation_id = str(context.reservation_id)
+    if durable_job and durable_job.get("usage_reservation_id") == reservation_id:
+        return False
+    from app.domains.usage import get_reservation, release_reservation
+
+    reservation = get_reservation(reservation_id, user_id=str(context.user_id))
+    if not reservation or str(reservation.get("job_id") or "") != requested_job_id:
+        return False
+    return release_reservation(reservation_id)
+
+
+@app.get("/usage/me")
+def usage_me():
+    uid, error = _require_usage_user()
+    if error:
+        return error
+    from app.domains.usage.metering import get_summary
+    return jsonify(get_summary(uid)), 200
+
+
+@app.get("/usage/me/events")
+def usage_me_events():
+    uid, error = _require_usage_user()
+    if error:
+        return error
+    from app.domains.usage.metering import list_events
+    raw_limit = request.args.get("limit", "25")
+    try:
+        limit = int(raw_limit)
+        if limit < 1:
+            raise ValueError
+        events = list_events(uid, limit, cursor=request.args.get("cursor"))
+    except ValueError:
+        return jsonify({"error": "invalid pagination"}), 400
+    return jsonify({"events": events}), 200
+
+
+@app.get("/usage/me/breakdown")
+def usage_me_breakdown():
+    uid, error = _require_usage_user()
+    if error:
+        return error
+    from app.domains.usage.metering import get_summary
+    summary = get_summary(uid)
+    return jsonify({"plan": summary["plan"], "breakdown": summary["breakdown"], "reset_at": summary["reset_at"]}), 200
+
+
+@app.get("/billing/capability")
+def billing_capability():
+    uid, error = _require_usage_user()
+    if error:
+        return error
+    from app.domains.usage.metering import get_summary
+    summary = get_summary(uid)
+    return jsonify({"plan": summary["plan"], "monthly_token_limit": summary["limit"], "per_request_token_limit": summary["per_request_token_limit"], "enforcement_enabled": summary["enforcement_enabled"], "reset_at": summary["reset_at"], "period_start": summary.get("period_start"), "period_end": summary.get("period_end")}), 200
+
+
 def owned_stems(user_id: Optional[str]) -> set:
     """Canonical source stems owned by `user_id`, from the registry.
 
@@ -2222,13 +2386,37 @@ def _don_file_tam(source_id: str, file_path: str) -> None:
         print(f"⚠️ [Ingest] Không xoá được bản tạm {file_path}: {exc}")
 
 
-def _run_ingest_job(source_id: str, file_path: str, filename: str) -> None:
+def _run_ingest_job(
+    source_id: str,
+    file_path: str,
+    filename: str,
+    usage_context_data: Optional[dict] = None,
+) -> None:
     """Ingest execution body. Runs EITHER in a daemon thread (QUEUE_ENABLED=false)
     OR in an RQ worker process (QUEUE_ENABLED=true) — identical behaviour. Enqueued
     by dotted path `app.main._run_ingest_job`, so the worker builds/reuses INGEST_GRAPH
     on import. Status/result land in the shared jobs.sqlite; the graph nodes own the
     done/error writes (atomic-with-result invariant preserved)."""
     job_id = source_id
+    from app.domains.usage import (
+        UsageReservationContext,
+        finalize_reservation,
+        get_operation_usage,
+    )
+    usage_context = UsageReservationContext.from_dict(usage_context_data)
+
+    def _finish_usage(status: str) -> None:
+        if usage_context is None:
+            return
+        finalize_reservation(usage_context.reservation_id, status=status)
+        usage = get_operation_usage(
+            usage_context.reservation_id, user_id=usage_context.user_id,
+        )
+        if _jobs_update_job:
+            _jobs_update_job(
+                job_id,
+                usage_summary_json=json.dumps(usage or {}, ensure_ascii=False),
+            )
     try:
         if _jobs_update_job:
             _jobs_update_job(job_id, status="running", current_node="Ingest")
@@ -2245,7 +2433,23 @@ def _run_ingest_job(source_id: str, file_path: str, filename: str) -> None:
             "artifacts": {},
             "error": None,
         }
-        _langgraph_invoke(INGEST_GRAPH, init_state, thread_id=job_id)
+        init_state["usage_context"] = (
+            usage_context.to_dict() if usage_context is not None else None
+        )
+        result_state = _langgraph_invoke(INGEST_GRAPH, init_state, thread_id=job_id)
+        current_usage = (
+            get_operation_usage(
+                usage_context.reservation_id, user_id=usage_context.user_id,
+            )
+            if usage_context is not None else None
+        )
+        if result_state.get("error"):
+            _finish_usage(
+                "failed" if current_usage and current_usage.get("total_tokens", 0)
+                else "released"
+            )
+        else:
+            _finish_usage("committed")
     except Exception as exc:
         try:
             _update_source_status(source_id, "error", progress=0.0, error=_job_error_text(exc))
@@ -2257,7 +2461,12 @@ def _run_ingest_job(source_id: str, file_path: str, filename: str) -> None:
         _don_file_tam(source_id, file_path)
 
 
-def _trigger_background_ingest(source_id: str, file_path: str, filename: str):
+def _trigger_background_ingest(
+    source_id: str,
+    file_path: str,
+    filename: str,
+    usage_context_data: Optional[dict] = None,
+):
     """
     Trigger ingest qua LangGraph. Phase 5: qua enqueue_job — daemon thread khi
     QUEUE_ENABLED=false (mặc định), RQ worker khi bật. FE polling không đổi.
@@ -2272,13 +2481,23 @@ def _trigger_background_ingest(source_id: str, file_path: str, filename: str):
 
     job_id = source_id  # re-use source_id làm job_id để FE polling đơn giản
     try:
-        _jobs_create_job(job_id, job_type="ingest", status="pending", progress=0, current_node="Queued", user_id=_current_user_id())
+        _jobs_create_job(
+            job_id,
+            job_type="ingest",
+            status="pending",
+            progress=0,
+            current_node="Queued",
+            user_id=_current_user_id(),
+            usage_reservation_id=(usage_context_data or {}).get("reservation_id"),
+        )
     except Exception:
         pass
 
     from app.jobs.queue import EnqueueFailed, enqueue_job
     try:
-        res = enqueue_job(_run_ingest_job, args=(source_id, file_path, filename),
+        res = enqueue_job(
+            _run_ingest_job,
+            args=(source_id, file_path, filename, usage_context_data),
                           queue="ingest", job_id=job_id, fail_closed=True)
     except EnqueueFailed as exc:
         # Bật queue mà Redis/RQ không đẩy được: KHÔNG chạy ingest trong tiến trình web.
@@ -2407,6 +2626,35 @@ def _ingest_uploaded_file(file) -> dict:
         raise UnsupportedFileType(os.path.splitext(_name)[1].lower() or _name)
 
     source_id = str(uuid.uuid4())
+    uid = _current_user_id()
+    usage_context = _reserve_usage_context(
+        uid,
+        feature="upload",
+        operation="ingest",
+        idempotency_key=f"upload:{source_id}",
+        request_id=request.headers.get("X-Request-ID") or source_id,
+        job_id=source_id,
+        lease_owner=f"ingest:{source_id}",
+    )
+    try:
+        return _ingest_uploaded_file_reserved(
+            file, source_id=source_id, uid=uid, usage_context=usage_context,
+        )
+    except Exception:
+        # No provider call can happen before the worker is enqueued. Releasing is
+        # idempotent, so this also safely covers queue/storage failures.
+        _finish_usage_context(usage_context, status="released", job_id=source_id)
+        raise
+
+
+def _ingest_uploaded_file_reserved(
+    file,
+    *,
+    source_id: str,
+    uid: Optional[str],
+    usage_context,
+) -> dict:
+    """Persist and enqueue one validated upload under an explicit reservation."""
     registry = _load_source_registry()
     # Tên hiển thị (chống trùng) — canonical stem suy từ tên này nên FE chọn theo
     # tên hiển thị sẽ khớp chunk; lưu vật lý theo path an toàn riêng.
@@ -2416,8 +2664,6 @@ def _ingest_uploaded_file(file) -> dict:
     file.save(save_path)
 
     source_stem = _normalize_video_stem(filename)
-    uid = _current_user_id()
-
     # Bản gốc lên Supabase Storage (bucket private) và đó là kho lưu DUY NHẤT.
     # File local chỉ là chỗ đặt TẠM để pipeline ingest có đường dẫn mà đọc —
     # `_don_file_tam` xoá nó trong `finally` của job ingest.
@@ -2460,7 +2706,12 @@ def _ingest_uploaded_file(file) -> dict:
         input_path=save_path,   # để xóa file gốc khi delete
         file_size=(os.path.getsize(save_path) if os.path.exists(save_path) else None),
     )
-    _trigger_background_ingest(source_id, save_path, filename)
+    _trigger_background_ingest(
+        source_id,
+        save_path,
+        filename,
+        usage_context.to_dict() if usage_context is not None else None,
+    )
     return {
         'source_id': source_id,
         'filename': filename,
@@ -2511,12 +2762,17 @@ def upload_file():
         return jsonify({'error': 'Missing file'}), 400
     try:
         return jsonify(_ingest_uploaded_file(file))
-    except UnsupportedFileType as exc:
-        return _unsupported_response(exc)
-    except DurableStorageRequired as exc:
-        return _storage_required_response(exc)
-    except IngestQueueRequired as exc:
-        return _queue_required_response(exc)
+    except Exception as exc:
+        from app.domains.usage import QuotaExceeded
+        if isinstance(exc, QuotaExceeded):
+            return _quota_error_response(exc)
+        if isinstance(exc, UnsupportedFileType):
+            return _unsupported_response(exc)
+        if isinstance(exc, DurableStorageRequired):
+            return _storage_required_response(exc)
+        if isinstance(exc, IngestQueueRequired):
+            return _queue_required_response(exc)
+        raise
 
 
 @app.post('/upload')
@@ -2567,6 +2823,13 @@ def get_source_status(source_id: str):
         'can_query': bool(can_query),
         'video_stem': status_info.get('source_stem') or status_info.get('video_stem'),
     }
+    try:
+        from app.domains.jobs.jobs_store import get_job as _js_get
+        usage_job = _js_get(source_id)
+        if usage_job and (not _auth_protect_enabled() or usage_job.get("user_id") == uid):
+            response["usage"] = usage_job.get("usage_summary")
+    except Exception:
+        pass
     
     if status_info.get('error'):
         response['error'] = status_info['error']
@@ -2602,9 +2865,13 @@ def upload_multiple():
             results.append({'file': file.filename, 'error': f'Kho lưu trữ bền chưa sẵn sàng: {exc}'})
         except IngestQueueRequired as exc:
             results.append({'file': file.filename, 'error': f'Hàng đợi xử lý chưa sẵn sàng: {exc}'})
-        except Exception as e:
+        except Exception as exc:
+            from app.domains.usage import QuotaExceeded
+            if isinstance(exc, QuotaExceeded):
+                results.append({'file': file.filename, **exc.payload})
+                continue
             import traceback; traceback.print_exc()
-            results.append({'file': file.filename, 'error': f'Upload failed: {str(e)}'})
+            results.append({'file': file.filename, 'error': f'Upload failed: {str(exc)}'})
 
     return jsonify({'sources': sources, 'results': results})
 # -------------------------
@@ -2765,12 +3032,17 @@ def api_documents_upload():
         return jsonify({'error': 'Missing file'}), 400
     try:
         info = _ingest_uploaded_file(file)
-    except UnsupportedFileType as exc:
-        return _unsupported_response(exc)
-    except DurableStorageRequired as exc:
-        return _storage_required_response(exc)
-    except IngestQueueRequired as exc:
-        return _queue_required_response(exc)
+    except Exception as exc:
+        from app.domains.usage import QuotaExceeded
+        if isinstance(exc, QuotaExceeded):
+            return _quota_error_response(exc)
+        if isinstance(exc, UnsupportedFileType):
+            return _unsupported_response(exc)
+        if isinstance(exc, DurableStorageRequired):
+            return _storage_required_response(exc)
+        if isinstance(exc, IngestQueueRequired):
+            return _queue_required_response(exc)
+        raise
     from app.domains.documents import repository as _docs
     row = _docs.get(info['source_id']) or {}
     return jsonify(_doc_public(info['source_id'], row)), 201
@@ -4275,6 +4547,29 @@ def query():
     # already 401s without a user, so req_user_id is set here under enforcement; the
     # sentinel is a fail-safe that still never collapses to "public".
     cache_scope = (req_user_id or "\x00__no_user__") if auth_enforce else "public"
+    usage_context = None
+    if req_user_id:
+        usage_key = str(
+            data.get("idempotency_key")
+            or request.headers.get("Idempotency-Key")
+            or f"query:{job_id}"
+        )
+        try:
+            usage_context = _reserve_usage_context(
+                req_user_id,
+                feature="chat",
+                operation="ask",
+                idempotency_key=usage_key,
+                request_id=request.headers.get("X-Request-ID") or job_id,
+                job_id=job_id,
+                lease_owner=f"query-web:{os.getpid()}",
+            )
+        except Exception as exc:
+            from app.domains.usage import QuotaExceeded
+            _query_semaphore.release()
+            if isinstance(exc, QuotaExceeded):
+                return _quota_error_response(exc)
+            raise
     # Conversation Context Layer: ensure the conversation row exists (flag-gated, fail-open).
     if _conversation_enabled() and not (conv_enforce and not req_user_id):
         try:
@@ -4285,7 +4580,11 @@ def query():
             pass
     try:
         from app.domains.jobs.jobs_store import create_job as _js_create
-        _js_create(job_id, job_type="query", status="pending", progress=0, current_node="Queued", user_id=req_user_id)
+        _js_create(
+            job_id, job_type="query", status="pending", progress=0,
+            current_node="Queued", user_id=req_user_id,
+            usage_reservation_id=(usage_context.reservation_id if usage_context else None),
+        )
     except Exception:
         pass
     with query_jobs_lock:
@@ -4295,6 +4594,7 @@ def query():
             "error": None,
             "created_at": time.time(),
             "user_id": req_user_id,  # Phase C: owner guard for status/stream/resume
+            "usage_context": usage_context.to_dict() if usage_context else None,
         }
 
     def process_query_job(jid: str, question: str, sources: list, use_mem: bool, category: str | None = None, language: str | None = None) -> None:
@@ -4334,6 +4634,19 @@ def query():
             except Exception:
                 _sf = {"served": False, "lock": None}  # single-flight must never break the answer path
             if _sf.get("served"):
+                if usage_context is not None:
+                    from app.domains.usage import commit_reservation
+                    commit_reservation(
+                        usage_context.reservation_id,
+                        attempt_id="cache-hit:single-flight",
+                        total_tokens=0,
+                        usage_source="system",
+                        status="cache_hit",
+                        metadata={"cache_hit": True},
+                    )
+                    _finish_usage_context(
+                        usage_context, status="committed", job_id=jid,
+                    )
                 return  # follower finalized from the leader's cached answer
             sf_lock = _sf.get("lock")
 
@@ -4356,6 +4669,11 @@ def query():
                             _jobs_update_job(jid, status="error", error_text=busy_msg)
                         except Exception:
                             pass
+                    # This follower never reached the graph/provider. Close its
+                    # reservation now instead of waiting for the lease sweeper.
+                    _finish_usage_context(
+                        usage_context, status="released", job_id=jid,
+                    )
                     return
 
             try:
@@ -4402,7 +4720,13 @@ def query():
                 context_sig = conv_ctx.context_signature
                 try:
                     from app.domains.conversation.rewrite import rewrite_followup_question, decide_context_mode
-                    _rw = rewrite_followup_question(question, conv_ctx, sources or [])
+                    _rw = rewrite_followup_question(
+                        question,
+                        conv_ctx,
+                        sources or [],
+                        usage_context=usage_context,
+                        usage_attempt_id="query-context-rewrite:0",
+                    )
                     context_mode = decide_context_mode(_rw)
                     if context_mode == "contextual":
                         standalone_q = (_rw.get("standalone_question") or question)
@@ -4431,6 +4755,7 @@ def query():
                 # when the flag is off → shared cache unchanged). Replaces the Phase C
                 # auth_no_cache bypass.
                 "cache_scope": cache_scope,
+                "usage_context": usage_context.to_dict() if usage_context else None,
                 "retrieved_chunks": [],
                 "retrieved_sources": [],
                 "context": "",
@@ -4460,7 +4785,29 @@ def query():
             if review is not None:
                 _mark_query_interrupted(jid, review)
                 return
-            _finalize_query_job(jid, session_id, question, out, user_id=req_user_id, enforce_owner=conv_enforce)
+            if usage_context is not None:
+                if out.get("usage_cache_hit"):
+                    from app.domains.usage import commit_reservation
+                    commit_reservation(
+                        usage_context.reservation_id,
+                        attempt_id="cache-hit:query-graph",
+                        total_tokens=0,
+                        usage_source="system",
+                        status="cache_hit",
+                        metadata={"cache_hit": True},
+                    )
+                    _finish_usage_context(
+                        usage_context, status="committed", job_id=jid,
+                    )
+                else:
+                    _finish_usage_context(usage_context, status="committed", job_id=jid)
+            # Publish terminal job status only after the usage aggregate is
+            # durable/in-memory. Pollers stop on `done`, so the reverse order
+            # races and permanently loses the inline usage display.
+            _finalize_query_job(
+                jid, session_id, question, out,
+                user_id=req_user_id, enforce_owner=conv_enforce,
+            )
         except Exception as exc:
             err_txt = _job_error_text(exc)
             with query_jobs_lock:
@@ -4473,6 +4820,16 @@ def query():
                 except Exception:
                     pass
             logging.exception("[QUERY_JOB] job_id=%s failed: %s", jid, err_txt)
+            if usage_context is not None:
+                try:
+                    from app.domains.usage import get_operation_usage
+                    current_usage = get_operation_usage(
+                        usage_context.reservation_id, user_id=usage_context.user_id,
+                    )
+                    terminal = "failed" if int((current_usage or {}).get("total_tokens") or 0) else "released"
+                    _finish_usage_context(usage_context, status=terminal, job_id=jid)
+                except Exception:
+                    logging.exception("[QUERY_USAGE] failed to close reservation job_id=%s", jid)
         finally:
             flush_llm_count(jid, _llm_counter)
             # Release the single-flight lock AFTER finalize (cache already written) so
@@ -4521,6 +4878,7 @@ def query_status(job_id: str):
                     "status": j.get("status"),
                     "result": j.get("result"),
                     "error": j.get("error"),
+                    "usage": j.get("usage_summary"),
                 }), 200
         except Exception:
             pass
@@ -4532,6 +4890,7 @@ def query_status(job_id: str):
             "status": job.get("status"),
             "result": job.get("result"),
             "error": job.get("error"),
+            "usage": job.get("usage_summary"),
         }), 200
 
 
@@ -4563,6 +4922,8 @@ def query_resume(job_id: str):
         tid = job.get("thread_id") or job_id
         session_id = job.get("session_id") or ""
         question = job.get("question") or ""
+        from app.domains.usage import UsageReservationContext
+        resume_usage_context = UsageReservationContext.from_dict(job.get("usage_context"))
         job["status"] = "running"
 
     acquired = _query_semaphore.acquire(blocking=False)
@@ -4585,6 +4946,10 @@ def query_resume(job_id: str):
                 _mark_query_interrupted(job_id, review)
                 return
             _finalize_query_job(job_id, session_id, question, out, user_id=resume_uid, enforce_owner=resume_enforce)
+            if resume_usage_context is not None:
+                _finish_usage_context(
+                    resume_usage_context, status="committed", job_id=job_id,
+                )
         except Exception as exc:
             err_txt = _job_error_text(exc)
             with query_jobs_lock:
@@ -4597,6 +4962,20 @@ def query_resume(job_id: str):
                 except Exception:
                     pass
             logging.exception("[QUERY_RESUME] job_id=%s failed: %s", job_id, err_txt)
+            if resume_usage_context is not None:
+                try:
+                    from app.domains.usage import get_operation_usage
+                    used = get_operation_usage(
+                        resume_usage_context.reservation_id,
+                        user_id=resume_usage_context.user_id,
+                    )
+                    _finish_usage_context(
+                        resume_usage_context,
+                        status="failed" if int((used or {}).get("total_tokens") or 0) else "released",
+                        job_id=job_id,
+                    )
+                except Exception:
+                    logging.exception("[QUERY_USAGE] failed to close resumed reservation")
         finally:
             _query_semaphore.release()
 
@@ -4654,6 +5033,7 @@ def query_stream(job_id: str):
                 "current_node": j.get("current_node"),
                 "result": j.get("result"),
                 "error": err_sse or None,
+                "usage": j.get("usage_summary"),
             }
             yield f"data: {json.dumps(payload, ensure_ascii=False)}\n\n"
             if st in ("done", "error", "interrupted"):
@@ -4692,18 +5072,40 @@ def _summary_input_and_hash(source_names: list[str], length_mode: str,
 
 
 def _start_summary_job(source_names: list[str], mm_input: dict, content_hash: str,
-                       length_mode: str, mode: str = "standard") -> str:
+                       length_mode: str, mode: str = "standard", *,
+                       usage_idempotency_key: Optional[str] = None,
+                       operation: str = "generate") -> str:
     """Phase 5 Step 2: dispatch Summary v2 via enqueue_job — daemon thread when
     QUEUE_ENABLED=false (default, unchanged), RQ 'summary' queue when true. FE polling
     (/summary-status) unchanged; result still in summary_store."""
     job_id = str(uuid.uuid4())
     uid = _current_user_id()  # request context: stamp job + record owner (Phase D)
+    usage_context = _reserve_usage_context(
+        uid,
+        feature="summary",
+        operation=operation,
+        idempotency_key=usage_idempotency_key or f"summary:{job_id}",
+        request_id=request.headers.get("X-Request-ID") or job_id,
+        job_id=job_id,
+        lease_owner=f"summary-web:{os.getpid()}",
+    )
     from app.domains.jobs.jobs_store import create_job
-    create_job(job_id, job_type="summary", status="pending", progress=0, current_node="Queued", user_id=uid)
+    create_job(
+        job_id, job_type="summary", status="pending", progress=0,
+        current_node="Queued", user_id=uid,
+        usage_reservation_id=(usage_context.reservation_id if usage_context else None),
+    )
     from app.jobs.queue import enqueue_job
-    res = enqueue_job(run_summary_job,
-                      args=(job_id, source_names, mm_input, content_hash, length_mode, uid, mode),
-                      queue="summary", job_id=job_id)
+    try:
+        res = enqueue_job(
+            run_summary_job,
+            args=(job_id, source_names, mm_input, content_hash, length_mode, uid,
+                  mode, usage_context.to_dict() if usage_context else None),
+            queue="summary", job_id=job_id,
+        )
+    except Exception:
+        _finish_usage_context(usage_context, status="released", job_id=job_id)
+        raise
     _event = {"rq": "summary_enqueue_rq", "thread": "summary_enqueue_thread",
               "thread_fallback": "summary_queue_fallback_thread"}.get(res.get("mode"),
                                                                       f"summary_enqueue_{res.get('mode')}")
@@ -4717,12 +5119,12 @@ def _start_summary_job(source_names: list[str], mm_input: dict, content_hash: st
 # hàng đợi trước lúc deploy vẫn phải resolve được. Chữ ký giữ NGUYÊN.
 def run_summary_job(job_id: str, source_names: list[str], mm_input: dict,
                     content_hash: str, length_mode: str, user_id: Optional[str] = None,
-                    mode: str = "standard") -> None:
+                    mode: str = "standard", usage_context_data: Optional[dict] = None) -> None:
     # Graph là biến module của file này (dựng lúc khởi động) — TIÊM vào use case
     # thay vì để tầng application import ngược lên tầng API.
     from app.application.summary_generation import run_summary_job as _impl
     return _impl(job_id, source_names, mm_input, content_hash, length_mode, user_id,
-                 mode, graph=SUMMARY_GRAPH)
+                 mode, usage_context_data, graph=SUMMARY_GRAPH)
 
 
 # -------------------------
@@ -4849,8 +5251,32 @@ def generate_summary():
                   if _auth_protect_enabled() else summary_store.get_by_hash(content_hash))
         if cached:
             # Cache hit KHÔNG có job_id — FE phải branch theo status="done" trước (aec6017)
-            return jsonify({"status": "done", "result": cached, "cached": True}), 200
-    job_id = _start_summary_job(source_names, mm_input, content_hash, length_mode, mode)
+            return jsonify({
+                "status": "done", "result": cached, "cached": True,
+                "usage": _zero_cache_hit_usage(),
+            }), 200
+    usage_key = str(
+        data.get("idempotency_key") or request.headers.get("Idempotency-Key")
+        or f"summary:{uuid.uuid4()}"
+    )
+    try:
+        import inspect
+        start_kwargs = {}
+        start_params = inspect.signature(_start_summary_job).parameters.values()
+        if any(p.name == "usage_idempotency_key" or p.kind == p.VAR_KEYWORD
+               for p in start_params):
+            start_kwargs = {
+                "usage_idempotency_key": usage_key,
+                "operation": "regenerate" if force else "generate",
+            }
+        job_id = _start_summary_job(
+            source_names, mm_input, content_hash, length_mode, mode, **start_kwargs,
+        )
+    except Exception as exc:
+        from app.domains.usage import QuotaExceeded
+        if isinstance(exc, QuotaExceeded):
+            return _quota_error_response(exc)
+        raise
     return jsonify({"job_id": job_id, "status": "started"}), 202
 
 
@@ -4872,6 +5298,7 @@ def summary_status(job_id: str):
         "current_node": j.get("current_node") or "",
         "result": j.get("result"),
         "error": j.get("error"),
+        "usage": j.get("usage_summary"),
     }), 200
 
 
@@ -5025,7 +5452,8 @@ def _mindmap_input_and_hash(source_names: list[str]) -> tuple[dict, str]:
 
 def _start_mindmap_job(source_names: list[str], mm_input: dict, content_hash: str,
                        generation_intent: Optional[dict] = None, *, job_id: Optional[str] = None,
-                       job_metadata: Optional[dict] = None) -> str:
+                       job_metadata: Optional[dict] = None,
+                       usage_context_data: Optional[dict] = None) -> str:
     """Phase 5 Step 3: dispatch Mindmap v3 via enqueue_job — daemon thread when
     QUEUE_ENABLED=false (default, unchanged), RQ 'mindmap' queue when true. FE polling
     (/mindmap-status) unchanged; result still in mindmap_store."""
@@ -5040,14 +5468,26 @@ def _start_mindmap_job(source_names: list[str], mm_input: dict, content_hash: st
             if not guided_store.get_job(job_id, user_id=uid):
                 raise RuntimeError("durable_store_unavailable")
         else:
-            create_job(job_id, job_type="mindmap", status="pending", progress=0, current_node="Queued", user_id=uid)
+            create_job(
+                job_id, job_type="mindmap", status="pending", progress=0,
+                current_node="Queued", user_id=uid,
+                usage_reservation_id=(usage_context_data or {}).get("reservation_id"),
+            )
     if guided_store.use_postgres() and generation_intent is not None:
         print(f"mindmap_job_durable_enqueue job_id={job_id}", flush=True)
         return job_id
     from app.jobs.queue import enqueue_job
-    res = enqueue_job(run_mindmap_job,
-                      args=(job_id, source_names, mm_input, content_hash, uid),
-                      queue="mindmap", job_id=job_id)
+    try:
+        res = enqueue_job(run_mindmap_job,
+                          args=(job_id, source_names, mm_input, content_hash, uid, usage_context_data),
+                          queue="mindmap", job_id=job_id)
+    except Exception:
+        from app.domains.usage import UsageReservationContext
+        _finish_usage_context(
+            UsageReservationContext.from_dict(usage_context_data),
+            status="released", job_id=job_id,
+        )
+        raise
     _event = {"rq": "mindmap_enqueue_rq", "thread": "mindmap_enqueue_thread",
               "thread_fallback": "mindmap_queue_fallback_thread"}.get(res.get("mode"),
                                                                       f"mindmap_enqueue_{res.get('mode')}")
@@ -5059,9 +5499,11 @@ def _start_mindmap_job(source_names: list[str], mm_input: dict, content_hash: st
 # Thân hàm đã chuyển sang `app/application/`. Giữ tên ở ĐÚNG chỗ này vì RQ
 # serialize hàm theo `module.qualname` (`app.main.<ten>`) — job đã nằm trong
 # hàng đợi trước lúc deploy vẫn phải resolve được. Chữ ký giữ NGUYÊN.
-def run_mindmap_job(job_id: str, source_names: list[str], mm_input: dict, content_hash: str, user_id: Optional[str] = None, *, already_claimed: bool = False) -> None:
+def run_mindmap_job(job_id: str, source_names: list[str], mm_input: dict, content_hash: str,
+                    user_id: Optional[str] = None, usage_context_data: Optional[dict] = None,
+                    *, already_claimed: bool = False) -> None:
     from app.application.mindmap_generation import run_mindmap_job as _impl
-    return _impl(job_id, source_names, mm_input, content_hash, user_id,
+    return _impl(job_id, source_names, mm_input, content_hash, user_id, usage_context_data,
                  graph=MINDMAP_GRAPH, already_claimed=already_claimed)
 
 
@@ -5249,7 +5691,10 @@ def generate_mindmap():
         cached = (mindmap_store.get_by_hash(content_hash, user_id=uid, enforce_owner=True)
                   if _auth_protect_enabled() else mindmap_store.get_by_hash(content_hash))
         if cached:
-            return jsonify({"status": "done", "result": cached, "cached": True}), 200
+            return jsonify({
+                "status": "done", "result": cached, "cached": True,
+                "usage": _zero_cache_hit_usage(),
+            }), 200
     idempotency_key = str(data.get("idempotency_key") or "").strip()
     from app.domains.jobs import guided_store
     if guided_requested and guided_store.use_postgres() and not idempotency_key:
@@ -5258,22 +5703,63 @@ def generate_mindmap():
         # the old client contract without allowing duplicate retries to merge.
         idempotency_key = f"auto:{uuid.uuid4()}"
     request_fingerprint = hashlib.sha256(json.dumps({"sources": source_names, "intent": intent, "force": force}, ensure_ascii=False, sort_keys=True, separators=(",", ":")).encode("utf-8")).hexdigest()
+    requested_job_id = str(uuid.uuid4())
+    usage_key = f"mindmap:{idempotency_key or requested_job_id}"
+    try:
+        usage_context = _reserve_usage_context(
+            uid, feature="mindmap",
+            operation="regenerate" if force else ("guided_generate" if guided_requested else "generate"),
+            idempotency_key=usage_key,
+            request_id=request.headers.get("X-Request-ID") or requested_job_id,
+            job_id=requested_job_id,
+            lease_owner=f"mindmap-web:{os.getpid()}",
+        )
+    except Exception as exc:
+        from app.domains.usage import QuotaExceeded
+        if isinstance(exc, QuotaExceeded):
+            return _quota_error_response(exc)
+        raise
     durable_job = None
     if guided_requested and idempotency_key and uid:
-        outcome, durable_job = guided_store.create_idempotent_job(
-            str(uuid.uuid4()), user_id=uid, idempotency_key=idempotency_key,
-            request_fingerprint=request_fingerprint, source_ids_json=json.dumps(source_names),
-            guided_config_json=json.dumps(intent or {}, ensure_ascii=False), stage="queued",
-            force=force)
+        try:
+            outcome, durable_job = guided_store.create_idempotent_job(
+                requested_job_id, user_id=uid, idempotency_key=idempotency_key,
+                request_fingerprint=request_fingerprint, source_ids_json=json.dumps(source_names),
+                guided_config_json=json.dumps(intent or {}, ensure_ascii=False), stage="queued",
+                force=force,
+                usage_reservation_id=(usage_context.reservation_id if usage_context else None))
+        except Exception:
+            _release_unattached_usage_context(
+                usage_context,
+                requested_job_id=requested_job_id,
+                durable_job=None,
+            )
+            raise
         if outcome == "conflict":
+            _release_unattached_usage_context(
+                usage_context,
+                requested_job_id=requested_job_id,
+                durable_job=durable_job,
+            )
             return jsonify({"error": "Idempotency key was already used with a different request", "error_code": "idempotency_conflict"}), 409
         if outcome == "existing":
+            _release_unattached_usage_context(
+                usage_context,
+                requested_job_id=requested_job_id,
+                durable_job=durable_job,
+            )
             if durable_job.get("status") == "done" and durable_job.get("result"):
-                return jsonify({"status": "done", "result": durable_job["result"], "job_id": durable_job["job_id"]}), 200
+                return jsonify({
+                    "status": "done",
+                    "result": durable_job["result"],
+                    "job_id": durable_job["job_id"],
+                    "usage": durable_job.get("usage_summary"),
+                }), 200
             return jsonify({"job_id": durable_job["job_id"], "status": durable_job.get("status") or "queued", "status_url": f"/mindmap-status/{durable_job['job_id']}"}), 202
     job_id = _start_mindmap_job(source_names, mm_input, content_hash, intent,
-                                job_id=durable_job.get("job_id") if durable_job else None,
-                                job_metadata=durable_job)
+                                job_id=durable_job.get("job_id") if durable_job else requested_job_id,
+                                job_metadata=durable_job,
+                                usage_context_data=usage_context.to_dict() if usage_context else None)
     response = {"job_id": job_id, "status": "queued", "status_url": f"/mindmap-status/{job_id}"}
     return jsonify(response), 202
 
@@ -5302,6 +5788,7 @@ def mindmap_status(job_id: str):
         "current_node": j.get("current_node") or "",
         "result": result,
         "error": j.get("error"),
+        "usage": j.get("usage_summary"),
     }
     # Passthrough preview khi đang chạy (Skeleton node ghi result={"partial": {...}}).
     if j.get("status") == "running" and isinstance(result, dict) and "partial" in result:
@@ -5854,6 +6341,16 @@ def _validate_source_exists(source_id: str, source_stem: str) -> Tuple[bool, Opt
                     return True, None  # Tồn tại nhưng không có trong registry
         except Exception:
             pass
+        current_usage = (
+            get_operation_usage(
+                usage_context.reservation_id, user_id=usage_context.user_id,
+            )
+            if usage_context is not None else None
+        )
+        _finish_usage(
+            "failed" if current_usage and current_usage.get("total_tokens", 0)
+            else "released"
+        )
     
     # Kiểm tra trong memory_trees.json
     try:

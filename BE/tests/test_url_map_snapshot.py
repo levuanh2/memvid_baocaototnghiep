@@ -109,7 +109,7 @@ def test_tong_so_route_khop(client, cu):
       `GET /mindmaps/exports/<job_id>/download` (token HMAC ngắn hạn hoặc bearer chủ sở hữu).
     Con số ở đây CỐ Ý viết cứng — sửa nó là một dòng diff mà người review phải nhìn
     thấy, đúng mục đích của cả file này."""
-    assert len(_hien_tai()) == len(cu) == 106
+    assert len(_hien_tai()) == len(cu) == 110
 
 
 def test_khong_co_cap_duong_dan_method_trung(client):

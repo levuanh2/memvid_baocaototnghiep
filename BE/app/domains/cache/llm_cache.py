@@ -348,7 +348,13 @@ Rules:
 """
 
 
-def judge_reuse(new_q: str, cached_q: str) -> bool:
+def judge_reuse(
+    new_q: str,
+    cached_q: str,
+    *,
+    usage_context=None,
+    usage_attempt_id: str = "query-cache-judge:0",
+) -> bool:
     """LLM gác cổng cho hit vùng borderline. Mọi lỗi/timeout/JSON hỏng → False (miss, fail-safe).
     Monkeypatch điểm này trong test."""
     if os.getenv("SKIP_MODEL_LOAD") == "1":
@@ -360,7 +366,12 @@ def judge_reuse(new_q: str, cached_q: str) -> bool:
         from app.clients.llm_factory import get_llm
 
         def _ask() -> str:
-            resp = get_llm("chat").invoke(_JUDGE_PROMPT.format(cached_q=cached_q[:300], new_q=new_q[:300]))
+            llm = get_llm(
+                "chat",
+                usage_context=usage_context,
+                usage_attempt_id=usage_attempt_id if usage_context is not None else None,
+            )
+            resp = llm.invoke(_JUDGE_PROMPT.format(cached_q=cached_q[:300], new_q=new_q[:300]))
             return str(getattr(resp, "content", None) or resp)
 
         with ThreadPoolExecutor(max_workers=1) as ex:
@@ -401,7 +412,12 @@ def _hit(entry: dict, kind: str, bucket: str, sim: Optional[float] = None) -> di
     return {"payload": entry.get("payload"), "status": int(entry.get("status", 200))}
 
 
-def semantic_lookup(cache_key: str) -> Optional[dict]:
+def semantic_lookup(
+    cache_key: str,
+    *,
+    usage_context=None,
+    usage_attempt_id: str = "query-cache-judge:0",
+) -> Optional[dict]:
     """Trả {'payload':..., 'status':...} nếu hit, None nếu miss/bypass/lỗi.
     Thứ tự: exact (O(1)) → alias không-dấu (verify cosine) → semantic scan (direct ≥0.88,
     borderline [0.80, 0.88) qua judge nếu bật, else threshold thường)."""
@@ -448,7 +464,17 @@ def semantic_lookup(cache_key: str) -> Optional[dict]:
             if raw:
                 entry = json.loads(raw)
                 if _answer_ok(entry):
-                    if not judge_active or judge_reuse(q, str(entry.get("q", ""))):
+                    if not judge_active:
+                        return _hit(entry, "exact_nodia", bucket)
+                    judge_ok = (
+                        judge_reuse(
+                            q, str(entry.get("q", "")), usage_context=usage_context,
+                            usage_attempt_id=usage_attempt_id,
+                        )
+                        if usage_context is not None
+                        else judge_reuse(q, str(entry.get("q", "")))
+                    )
+                    if judge_ok:
                         return _hit(entry, "exact_nodia", bucket)
                     METRICS["misses"] += 1
                     logger.info("[cache] event=cache_miss reason=nodia_judge_denied q=%r", q[:80])
@@ -502,7 +528,15 @@ def semantic_lookup(cache_key: str) -> Optional[dict]:
                 if best_sim >= max(THRESHOLD, _JUDGE_HIGH):
                     return _hit(best_entry, "semantic", bucket, best_sim)
                 if best_sim >= _JUDGE_LOW:
-                    if judge_reuse(q, str(best_entry.get("q", ""))):
+                    judge_ok = (
+                        judge_reuse(
+                            q, str(best_entry.get("q", "")), usage_context=usage_context,
+                            usage_attempt_id=usage_attempt_id,
+                        )
+                        if usage_context is not None
+                        else judge_reuse(q, str(best_entry.get("q", "")))
+                    )
+                    if judge_ok:
                         return _hit(best_entry, "semantic_judged", bucket, best_sim)
                     METRICS["misses"] += 1
                     logger.info("[cache] event=cache_miss reason=judge_denied sim=%.4f q=%r",

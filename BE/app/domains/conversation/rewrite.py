@@ -104,6 +104,8 @@ def rewrite_followup_question(
     selected_sources: Optional[list] = None,
     *,
     feature: str = "extract",
+    usage_context=None,
+    usage_attempt_id: str | None = None,
 ) -> dict:
     """Return a machine-readable rewrite decision. Fail-open to the original question.
 
@@ -123,7 +125,11 @@ def rewrite_followup_question(
         from app.clients.llm_factory import get_llm, lc_ai_message_text
 
         human = f"Ngữ cảnh gần đây:\n{ctx_text}\n\nCâu hỏi hiện tại:\n{q}\n\nTrả về JSON:"
-        llm = get_llm(feature=feature)
+        llm = get_llm(
+            feature=feature,
+            usage_context=usage_context,
+            usage_attempt_id=usage_attempt_id,
+        )
         out = llm.invoke([SystemMessage(content=_SYS), HumanMessage(content=human)], stream=False)
         raw = (lc_ai_message_text(out) or "").strip()
     except Exception:

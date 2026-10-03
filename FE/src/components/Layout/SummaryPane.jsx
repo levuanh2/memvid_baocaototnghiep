@@ -9,6 +9,7 @@ import { MdProse } from "../ui/Markdown";
 import { Icon } from "../ui/Icon";
 import { normalizeSummaryRecord } from "../../utils/summaryJob";
 import { useStudyContext } from "../../study/useStudyContext";
+import OperationUsage from "./OperationUsage";
 
 const CHIP_CAP = 6;
 
@@ -75,6 +76,7 @@ export default function SummaryPane({ data, onContextChange }) {
               .filter(Boolean).join(" · ")}
           </div>
         )}
+        <OperationUsage usage={rec.usage} className="block mt-1" />
       </div>
 
       <div className="p-5 max-w-[840px] mx-auto">

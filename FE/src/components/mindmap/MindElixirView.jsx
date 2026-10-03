@@ -23,6 +23,7 @@ import { toast } from "../ui/Toaster";
 import { Icon } from "../ui/Icon";
 import ExportStudioDialog from "./ExportStudioDialog";
 import Spinner from "../ui/Spinner";
+import OperationUsage from "../Layout/OperationUsage";
 import "./mindmap.css";
 
 // Round 2: moved to mindElixirTheme.js (importing it FROM here inside
@@ -810,6 +811,7 @@ export default function MindElixirView({ data, onRegenerate, regenerating, contr
             purely pan/zoom). Text hides at narrow widths via the same
             .mm-context-row responsive rule mm-quality-status/mm-saved-status
             already use — aria-label/title stay regardless. */}
+        <OperationUsage usage={data?.__usage || data?.usage} className="mm-operation-usage" />
         <button type="button" className="mm-export-trigger" onClick={() => setExportOpen(true)}
           aria-label="Xuất sơ đồ" title="Xuất sơ đồ">
           <Icon name="Download" size={14} /> <span>Xuất</span>

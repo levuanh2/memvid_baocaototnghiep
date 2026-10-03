@@ -22,7 +22,7 @@ from shared.config import get_settings
 def _default_ask(prompt: str, system_prompt: Optional[str] = None, **kw: Any) -> str:
     from app.clients.llm_factory import ask_ai
 
-    return ask_ai(prompt, system_prompt=system_prompt, feature="summary")
+    return ask_ai(prompt, system_prompt=system_prompt, feature="summary", **kw)
 
 
 def _detect_language(text: str) -> str:
@@ -63,6 +63,8 @@ def contextualize(
     doc_context: str = "",
     *,
     ask: Optional[Callable[..., str]] = None,
+    usage_context=None,
+    usage_attempt_id: str | None = None,
 ) -> str:
     """Chèn 1 câu định vị đầu chunk nếu bật CONTEXTUAL_EMBEDDINGS; nếu không, trả nguyên."""
     if not get_settings().contextual_embeddings:
@@ -76,7 +78,11 @@ def contextualize(
         f"<đoạn trích>\n{chunk_text[:1500]}\n</đoạn trích>"
     )
     try:
-        sentence = (ask(prompt) or "").strip()
+        usage_kwargs = ({
+            "usage_context": usage_context,
+            "usage_attempt_id": usage_attempt_id,
+        } if usage_context is not None else {})
+        sentence = (ask(prompt, **usage_kwargs) or "").strip()
     except Exception:
         sentence = ""
     if not sentence:
@@ -88,6 +94,8 @@ def hypothetical_qa(
     chunk_text: str,
     *,
     ask: Optional[Callable[..., str]] = None,
+    usage_context=None,
+    usage_attempt_id: str | None = None,
 ) -> str:
     """Sinh 2-3 câu hỏi giả định mà đoạn trả lời được (thu hẹp vocab gap). '' nếu tắt."""
     if not get_settings().hypo_qa:
@@ -99,7 +107,11 @@ def hypothetical_qa(
         f"{chunk_text[:1800]}"
     )
     try:
-        qa = (ask(prompt) or "").strip()
+        usage_kwargs = ({
+            "usage_context": usage_context,
+            "usage_attempt_id": usage_attempt_id,
+        } if usage_context is not None else {})
+        qa = (ask(prompt, **usage_kwargs) or "").strip()
     except Exception:
         qa = ""
     if not qa:

@@ -78,12 +78,13 @@ CHU_KY = {
     "run_short_answer_grading_job": ["job_id", "attempt_id", "user_id"],
     "run_memory_tree_job": ["source_stems"],
     "run_summary_job": ["job_id", "source_names", "mm_input", "content_hash",
-                        "length_mode", "user_id", "mode"],
+                        "length_mode", "user_id", "mode", "usage_context_data"],
     # 2026-09-21: Guided Mind Map V3's supervised worker re-invokes this wrapper
     # for a job it already claimed via the durable Postgres ledger, so the
     # normal `enqueue_job` path (which never claims first) must not re-claim.
     # Keyword-only with a default — existing positional call sites unaffected.
-    "run_mindmap_job": ["job_id", "source_names", "mm_input", "content_hash", "user_id", "already_claimed"],
+    "run_mindmap_job": ["job_id", "source_names", "mm_input", "content_hash",
+                        "user_id", "usage_context_data", "already_claimed"],
 }
 
 

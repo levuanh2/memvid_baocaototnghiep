@@ -10,9 +10,13 @@ from app.application import mindmap_generation as mg
 
 
 def _run(monkeypatch, guided_job, graph_invoked):
-    monkeypatch.setattr(mg, "_langgraph_invoke", lambda *a, **k: graph_invoked.append(True))
+    monkeypatch.setattr(
+        mg, "_langgraph_invoke",
+        lambda *a, **k: (graph_invoked.append(True), {"result": {}})[1],
+    )
     with patch("app.domains.jobs.guided_store.use_postgres", return_value=True), \
-         patch("app.domains.jobs.guided_store.get_job", return_value=guided_job):
+         patch("app.domains.jobs.guided_store.get_job", return_value=guided_job), \
+         patch("app.domains.jobs.guided_store.update_job"):
         mg.run_mindmap_job("job-1", ["doc"], {}, "hash", "user-1", graph=object())
 
 

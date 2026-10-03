@@ -3,6 +3,7 @@ from __future__ import annotations
 
 import time
 import os
+import inspect
 from pathlib import Path
 from typing import Any, Callable
 
@@ -19,6 +20,17 @@ def build_mindmap_graph(*, data_dir: Path, index_meta_path: Path,
                         collect_input: Callable[..., dict],
                         pipeline: Any,
                         persist_record: Callable[..., None]) -> Any:
+    def _usage_context(state: dict):
+        from app.domains.usage import UsageReservationContext
+        return UsageReservationContext.from_dict(state.get("usage_context"))
+
+    def _call_pipeline(method, *args, state: dict, **kwargs):
+        """Pass usage context only to implementations that declare the seam."""
+        params = inspect.signature(method).parameters.values()
+        if any(p.name == "usage_context" or p.kind == p.VAR_KEYWORD for p in params):
+            kwargs["usage_context"] = _usage_context(state)
+        return method(*args, **kwargs)
+
     def _set_job(job_id: str, **kw: Any) -> None:
         if jobs_update is None:
             return
@@ -79,12 +91,13 @@ def build_mindmap_graph(*, data_dir: Path, index_meta_path: Path,
                 from app.clients.llm_factory import PROVIDERS
                 if not PROVIDERS:
                     raise RuntimeError("guided_provider_not_configured")
-            nodes, guided_relations, plan, guided_missing = pipeline.guided_plan(
-                state["mm_input"], job_id=state["job_id"])
+            nodes, guided_relations, plan, guided_missing = _call_pipeline(
+                pipeline.guided_plan, state["mm_input"], job_id=state["job_id"], state=state)
             state["mm_input"]["guided_plan"] = plan
             method = "guided_semantic_planner"
         else:
-            nodes, method = pipeline.skeleton(state["mm_input"])
+            nodes, method = _call_pipeline(
+                pipeline.skeleton, state["mm_input"], state=state)
             guided_relations, guided_missing = [], []
         missing = list(state.get("degraded_missing") or [])
         missing.extend(code for code in guided_missing if code not in missing)
@@ -109,15 +122,15 @@ def build_mindmap_graph(*, data_dir: Path, index_meta_path: Path,
             if os.getenv("SKIP_MODEL_LOAD") == "1":
                 nodes, degraded = state["skeleton"], True
             else:
-                nodes, degraded = pipeline.enrich(state["mm_input"], state["skeleton"],
-                                                  progress_cb=_prog,
-                                                  cancel_cb=lambda: _cancelled(state["job_id"]),
-                                                  job_id=state["job_id"])
+                nodes, degraded = _call_pipeline(
+                    pipeline.enrich, state["mm_input"], state["skeleton"],
+                    progress_cb=_prog, cancel_cb=lambda: _cancelled(state["job_id"]),
+                    job_id=state["job_id"], state=state)
         else:
-            nodes, degraded = pipeline.enrich(state["mm_input"], state["skeleton"],
-                                              progress_cb=_prog,
-                                              cancel_cb=lambda: _cancelled(state["job_id"]),
-                                              job_id=state["job_id"])
+            nodes, degraded = _call_pipeline(
+                pipeline.enrich, state["mm_input"], state["skeleton"],
+                progress_cb=_prog, cancel_cb=lambda: _cancelled(state["job_id"]),
+                job_id=state["job_id"], state=state)
         missing = list(state.get("degraded_missing") or [])
         if degraded:
             missing.append("enrich")
@@ -132,14 +145,16 @@ def build_mindmap_graph(*, data_dir: Path, index_meta_path: Path,
             if os.getenv("SKIP_MODEL_LOAD") == "1":
                 rels, degraded = state.get("relations") or [], True
             else:
-                model_relations, degraded = pipeline.relations(
-                    state["nodes"], cancel_cb=lambda: _cancelled(state["job_id"]),
-                    job_id=state["job_id"])
+                model_relations, degraded = _call_pipeline(
+                    pipeline.relations, state["nodes"],
+                    cancel_cb=lambda: _cancelled(state["job_id"]),
+                    job_id=state["job_id"], state=state)
                 rels = list(state.get("relations") or []) + list(model_relations or [])
         else:
-            rels, degraded = pipeline.relations(state["nodes"],
-                                                cancel_cb=lambda: _cancelled(state["job_id"]),
-                                                job_id=state["job_id"])
+            rels, degraded = _call_pipeline(
+                pipeline.relations, state["nodes"],
+                cancel_cb=lambda: _cancelled(state["job_id"]),
+                job_id=state["job_id"], state=state)
         missing = list(state.get("degraded_missing") or [])
         if degraded:
             missing.append("relations")
@@ -211,18 +226,32 @@ def build_mindmap_graph(*, data_dir: Path, index_meta_path: Path,
         # every fresh (non-cache-hit) completion -- a real ledger gap, found while
         # investigating why a QA browser job (100e2012) showed status=done with
         # result_map_id=None despite a real, successfully-persisted map.
-        _set_job(state["job_id"], status="done", progress=100,
-                 current_node="AssemblePersist", result=record, result_map_id=record.get("id"))
+        if state.get("usage_context"):
+            _set_job(state["job_id"], status="running", progress=99,
+                     current_node="UsageFinalize", result=record,
+                     result_map_id=record.get("id"))
+        else:
+            _set_job(state["job_id"], status="done", progress=100,
+                     current_node="AssemblePersist", result=record,
+                     result_map_id=record.get("id"))
         return {**state, "result": record, "progress": 100, "current_node": "AssemblePersist"}
 
     def cancelled_node(state: dict) -> dict:
-        _set_job(state["job_id"], status="cancelled", progress=0, current_node="Cancelled")
+        if state.get("usage_context"):
+            _set_job(state["job_id"], status="running", progress=99,
+                     current_node="UsageFinalize")
+        else:
+            _set_job(state["job_id"], status="cancelled", progress=0, current_node="Cancelled")
         return {**state, "cancelled": True, "current_node": "Cancelled"}
 
     def error_node(state: dict) -> dict:
         err = (str(state.get("error") or "").strip()) or "unknown error"
-        _set_job(state["job_id"], status="error", progress=0,
-                 current_node="ErrorHandler", error_text=err)
+        if state.get("usage_context"):
+            _set_job(state["job_id"], status="running", progress=99,
+                     current_node="UsageFinalize", error_text=err)
+        else:
+            _set_job(state["job_id"], status="error", progress=0,
+                     current_node="ErrorHandler", error_text=err)
         return {**state, "current_node": "ErrorHandler"}
 
     def _route(s: dict) -> str:

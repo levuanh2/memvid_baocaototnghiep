@@ -72,6 +72,13 @@ def test_web_and_worker_restart_recovery_is_single_map(tmp_path, monkeypatch):
     monkeypatch.setenv("GUIDED_JOB_STORE_BACKEND", "postgres")
     monkeypatch.setenv("JOBS_DATABASE_URL", TEST_DSN)
     guided_store.reset_engine()
+    # claim_next_job is a global FIFO. This proof must not let a queued row
+    # left by an earlier test masquerade as worker A/B's target job.
+    from sqlalchemy import text
+    with guided_store._get_engine().begin() as conn:
+        conn.execute(text(
+            "TRUNCATE guided_mindmap_jobs, guided_mindmap_worker_heartbeats"
+        ))
 
     # "web process" enqueues the job (this test process stands in for it)
     job_id, user_id, key = str(uuid.uuid4()), "restart-user-" + uuid.uuid4().hex, "restart-" + uuid.uuid4().hex
@@ -107,7 +114,6 @@ def test_web_and_worker_restart_recovery_is_single_map(tmp_path, monkeypatch):
     # Exactly one result map for this job -- a third worker claiming nothing
     # (job already done) and calling the reconciliation branch would no-op.
     with guided_store._get_engine().connect() as conn:
-        from sqlalchemy import text
         count = conn.execute(text(
             "SELECT COUNT(*) FROM guided_mindmap_jobs WHERE job_id=:j AND result_map_id IS NOT NULL"
         ), {"j": job_id}).scalar()

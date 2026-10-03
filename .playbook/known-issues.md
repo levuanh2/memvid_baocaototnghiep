@@ -1,5 +1,57 @@
 # Known Issues
 
+## PR #47 Guided idempotency could orphan a new usage reservation (fixed 2026-10-03)
+
+`POST /generate-mindmap` reserved quota before the PostgreSQL Guided store
+resolved `(user_id, idempotency_key)`. An `existing` or `conflict` outcome then
+returned immediately. Historical jobs created before usage metering have no
+`usage_reservation_id`, so their first retry created a fresh 8,000-token
+reservation that remained `reserved` until lease expiry even though no worker
+ran. The same audit found a query single-flight follower could return after a
+failed admission retry without closing its reservation.
+
+The route now releases only a reservation whose persisted `job_id` proves it
+was created by the current losing submission and which the winning durable row
+did not attach. This double check prevents releasing a concurrent winner's or
+an existing in-flight job's legitimate reservation. Query readmission rejection
+releases immediately because that path never reaches a provider. PostgreSQL
+route tests cover historical completed/queued/running jobs, conflicts, exact
+retries, two-process identical submissions, cache hits, and reservation/event
+totals.
+
+## PR #47 terminal usage publication and inactive gateway limit (2026-10-02)
+
+Job pollers stop as soon as they observe `done`. Publishing that state before
+the reservation aggregate was stored caused Chat/Summary/MindMap inline usage
+to disappear nondeterministically. Usage-aware jobs now hold at
+`UsageFinalize`, persist the safe aggregate, and publish their terminal state
+last. Pure cache hits remain zero-charge; a semantic cache judge that actually
+calls a provider is reported as provider usage instead of being disguised as a
+free hit. The optional gRPC LLM gateway still has no usage fields in its
+protobuf and must remain outside hard quota enforcement until that contract is
+extended.
+
+## PR #47 usage metering quota (2026-10-01)
+
+The first implementation stored the usage ledger in `usage.sqlite`, created its
+tables from request code, and protected quota with a process-local `RLock`.
+That is not safe for multiple web/worker processes. The replacement uses the
+existing SQLAlchemy/PostgreSQL infrastructure and an Alembic-owned ledger;
+SQLite remains only as an explicit local unit-test adapter. The implementation
+also records `period_start`/`period_end`, lease expiry, terminal reservation
+statuses, and provider actual overage events. End-to-end reservation propagation
+through every provider/worker execution path still needs separate verification.
+
+## (2026-10-01) Usage metering rollout boundary
+
+The durable usage ledger and quota API are additive and fail closed for usage
+requests, but existing LangChain graph workers do not yet carry a user-scoped
+reservation context through every streaming/retry path. Do not enable hard
+quota enforcement globally until those call sites emit provider usage and
+commit/release the reservation exactly once. Local/Ollama and embedding paths
+must remain `estimated` or unmetered unless the provider returns official token
+usage; never present an estimate as actual.
+
 ## (2026-10-01) Compact StudyMap workspace ownership
 
 The workspace already keeps Chat/MindElixir/Summary mounted and uses overlay

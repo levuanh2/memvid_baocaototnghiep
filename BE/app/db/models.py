@@ -734,4 +734,9 @@ class GuidedMindmapWorkerHeartbeat(Base):
     ttl_seconds = Column(Integer, nullable=False, server_default=text("90"))
 
 
-ALL_TABLES = tuple(Base.metadata.tables.keys())
+# The usage ledger is intentionally migration-owned (request code must never
+# create it via ORM metadata), but it remains part of the production schema
+# contract checked by tests/test_db_schema.py.
+ALL_TABLES = tuple(Base.metadata.tables.keys()) + (
+    "usage_entitlements", "usage_reservations", "usage_events",
+)

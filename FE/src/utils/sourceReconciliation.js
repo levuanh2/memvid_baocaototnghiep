@@ -26,17 +26,23 @@ export function mergeSources(prevSources, backendSources, formatFileName) {
   const prev = Array.isArray(prevSources) ? prevSources : [];
   const list = Array.isArray(backendSources) ? backendSources : [];
   const activeSources = prev.filter((s) => s.status === "processing" || s.status === "index_ready");
-  const readySources = list.map((s) => ({
-    source_id: null,
-    filename: s.filename || formatFileName(keyOfSource(s)),
-    video_stem: keyOfSource(s),
-    status: "ready",
-    progress: 1.0,
-    substatus: null,
-    capabilities: { chunk_query: true, memory_query: true },
-    can_query: true,
-    num_chunks: s.num_chunks,
-  }));
+  const readySources = list.map((s) => {
+    const previous = prev.find((item) => keyOfSource(item) === keyOfSource(s));
+    return {
+      source_id: null,
+      filename: s.filename || formatFileName(keyOfSource(s)),
+      video_stem: keyOfSource(s),
+      status: "ready",
+      progress: 1.0,
+      substatus: null,
+      capabilities: { chunk_query: true, memory_query: true },
+      can_query: true,
+      num_chunks: s.num_chunks,
+      // /sources/:id/status owns the per-upload aggregate. Preserve it when
+      // /list-indexed replaces the optimistic row after completion.
+      ...(previous?.usage ? { usage: previous.usage } : {}),
+    };
+  });
   const combined = [...activeSources];
   readySources.forEach((rs) => {
     if (!combined.some((ps) => keyOfSource(ps) === rs.video_stem)) combined.push(rs);

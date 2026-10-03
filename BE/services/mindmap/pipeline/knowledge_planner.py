@@ -74,7 +74,7 @@ def _log(job_id: str, status: str, duration_ms: float, metadata: dict[str, Any])
 
 
 def plan_global(chunks: list[dict], intent: dict[str, Any], *, model: str,
-                timeout_sec: float = 90.0, job_id: str = "") -> tuple[dict | None, bool]:
+                timeout_sec: float = 90.0, job_id: str = "", usage_context=None) -> tuple[dict | None, bool]:
     """Return (plan, degraded). plan is None iff degraded is True."""
     from app.graphs.logger import _Timer
     t = _Timer()
@@ -121,7 +121,9 @@ def plan_global(chunks: list[dict], intent: dict[str, Any], *, model: str,
     ex = ThreadPoolExecutor(max_workers=1)
     try:
         fut = ctx_submit(ex, ask_ai, user, system_prompt=_SYSTEM, model=model,
-                         feature="mindmap", options={"temperature": 0.15})
+                         feature="mindmap", options={"temperature": 0.15},
+                         usage_context=usage_context,
+                         usage_attempt_id="mindmap:guided-plan")
         try:
             raw = fut.result(timeout=timeout_sec)
         except FutureTimeoutError as e:

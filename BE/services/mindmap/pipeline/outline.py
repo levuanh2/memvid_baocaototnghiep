@@ -37,7 +37,14 @@ _SYSTEM += (
 )
 
 
-def build_outline(mm_input: dict, *, model: str, timeout_sec: float = 120.0) -> list[dict] | None:
+def build_outline(
+    mm_input: dict,
+    *,
+    model: str,
+    timeout_sec: float = 120.0,
+    usage_context=None,
+    usage_attempt_id: str = "mindmap-outline",
+) -> list[dict] | None:
     if os.getenv("SKIP_MODEL_LOAD") == "1":
         return None
     chunks = mm_input.get("chunks") or []
@@ -63,7 +70,9 @@ def build_outline(mm_input: dict, *, model: str, timeout_sec: float = 120.0) -> 
     ex = ThreadPoolExecutor(max_workers=1)
     try:
         fut = ctx_submit(ex, ask_ai, user, system_prompt=_SYSTEM, model=model,
-                         feature="mindmap", options={"temperature": 0.15})
+                         feature="mindmap", options={"temperature": 0.15},
+                         usage_context=usage_context,
+                         usage_attempt_id=usage_attempt_id)
         raw = fut.result(timeout=timeout_sec)
         data = json.loads(repair_json_text(str(raw)))
     except Exception as e:
