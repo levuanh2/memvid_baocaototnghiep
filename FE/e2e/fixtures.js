@@ -81,8 +81,18 @@ export async function selectAllSources(page) {
  * dialog locator so callers can assert visibility explicitly and decide how
  * hard to fail if a concurrent fix for that regression hasn't landed yet. */
 export async function openGuidedDialogFromHeader(page) {
-  const listbox = await openMapLibrary(page);
-  await listbox.getByRole("button", { name: "Tạo sơ đồ mới" }).click();
+  await page.getByRole("tab", { name: "Sơ đồ tư duy" }).click();
+  const hasMaps = await page.getByRole("button", { name: "Mở thư viện sơ đồ" })
+    .waitFor({ state: "visible", timeout: 5_000 }).then(() => true, () => false);
+  if (hasMaps) {
+    const listbox = await openMapLibrary(page);
+    await listbox.getByRole("button", { name: "Tạo sơ đồ mới" }).click();
+  } else {
+    // No map yet: the workspace empty-state CTA routes through openArtifact,
+    // which opens the same Guided dialog (SidebarRight: mindmap request +
+    // selected sources, no maps).
+    await page.getByRole("button", { name: "Tạo sơ đồ tư duy" }).click();
+  }
   return page.getByRole("dialog", { name: "Tạo sơ đồ tư duy" });
 }
 
