@@ -42,6 +42,8 @@ export function useMindMapController(data) {
     setHistoryVersion(0);
     setPinned(new Set());
     setSelected(null);
+    // A new object for the same saved map must not reset navigation state.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [data?.id]);
 
   const pushHistory = useCallback((id) => {
@@ -80,6 +82,11 @@ export function useMindMapController(data) {
     pushHistory(n.id);
     selectNodeInContext(n.id, { source: "mindmap", label: n.topic });
   }, [pushHistory, selectNodeInContext]);
+
+  // Root-only presentation removes the selected topic from the rendered
+  // tree. Clear the React-side selection at the same time so the overlay
+  // drawer and contextual branch action cannot retain a stale hidden node.
+  const clearSelectedNode = useCallback(() => setSelected(null), []);
 
   const jumpTo = useCallback((id) => {
     const mind = mindRef.current;
@@ -168,7 +175,7 @@ export function useMindMapController(data) {
 
   return {
     // consumed by MindElixirView (canvas):
-    registerMindInstance, onNodeSelected, sidecarRef,
+    registerMindInstance, onNodeSelected, clearSelectedNode, sidecarRef,
     // consumed by KnowledgeInspector (and MindElixirView, for its own toolbar bits if needed):
     selected, relations, breadcrumb, jumpTo, canJumpTo, findNodeByChunk, goBack, goForward, togglePin,
     // Feature Pack D — consumed by KnowledgeDashboard.jsx:
