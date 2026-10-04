@@ -57,7 +57,9 @@ test.describe.serial("critical flows", () => {
     // present in the DOM under an ancestor with opacity:0/visibility:hidden.
     // Written defensively: if this is still broken when this suite runs,
     // fail loud with a clear message rather than hanging on a 45s timeout.
-    const visible = await dialog.isVisible().catch(() => false);
+    // The guided dialog mounts through an effect chain after the create click,
+    // so wait for visibility instead of sampling it once.
+    const visible = await dialog.waitFor({ state: "visible", timeout: 10_000 }).then(() => true, () => false);
     if (!visible) {
       test.info().annotations.push({
         type: "known-issue",
