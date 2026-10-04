@@ -409,14 +409,8 @@ html.dark .me-container { --mm-relation: #7e90c4; }
 .mm-context-row {
   position: relative;
   z-index: 12;
-  min-height: 46px;
-  display: flex;
-  align-items: center;
-  gap: 10px;
-  padding: 6px 14px;
-  border-bottom: 1px solid var(--border-color);
-  background: var(--bg-card);
-  flex-shrink: 0;
+  height: 48px;
+  min-height: 48px;
 }
 .mm-map-selector { position: relative; min-width: 0; flex: 1 1 260px; }
 .mm-map-selector__trigger {
@@ -441,8 +435,8 @@ html.dark .me-container { --mm-relation: #7e90c4; }
 .mm-map-selector__item small { color: var(--text-muted); font: 10px "IBM Plex Mono", monospace; }
 .mm-map-selector__item:hover, .mm-map-selector__item.is-active { background: color-mix(in srgb, var(--accent) 10%, transparent); }
 .mm-map-selector__new { justify-content: flex-start; margin-top: 4px; border-top: 1px solid var(--border-color); border-radius: 0; color: var(--accent); }
-.mm-context-action, .mm-overflow-trigger { flex: 0 0 40px; width: 40px; height: 40px; display: inline-flex; align-items: center; justify-content: center; border: 1px solid var(--border-color); border-radius: 50%; color: var(--accent); background: var(--bg-card); cursor: pointer; }
-.mm-context-action:hover, .mm-overflow-trigger:hover { background: var(--bg-hover); }
+.mm-overflow-trigger { flex: 0 0 40px; width: 40px; height: 40px; display: inline-flex; align-items: center; justify-content: center; border: 1px solid var(--border-color); border-radius: 50%; color: var(--accent); background: var(--bg-card); cursor: pointer; }
+.mm-overflow-trigger:hover { background: var(--bg-hover); }
 /* Section 3 — a real header-level export entry point, distinct from the
    floating zoom toolbar (pan/zoom only) and the overflow menu (kept for
    less-used actions). Icon + text on desktop; the text hides at narrow
@@ -454,9 +448,11 @@ html.dark .me-container { --mm-relation: #7e90c4; }
 .mm-saved-status.is-dirty { color: var(--warn); }
 .mm-quality-status.is-warning { color: var(--warn); }
 .mm-context-link { padding: 6px 4px; border: 0; background: transparent; color: var(--accent); cursor: pointer; white-space: nowrap; }
-.mm-context-link:disabled, .mm-context-action:disabled { opacity: .45; cursor: not-allowed; }
+.mm-context-link:disabled { opacity: .45; cursor: not-allowed; }
 .mm-toolbar-menu-wrap { position: relative; }
-.mm-toolbar-menu { position: absolute; right: 0; top: calc(100% + 5px); min-width: 170px; padding: 5px; background: var(--bg-card); border: 1px solid var(--border-color); border-radius: 8px; box-shadow: var(--shadow-card-hover); z-index: 20; }
+.mm-toolbar-menu { position: absolute; right: 0; top: calc(100% + 5px); width: 238px; max-height: min(620px, calc(100vh - 120px)); overflow-y: auto; padding: 6px; background: var(--bg-card); border: 1px solid var(--border-color); border-radius: 10px; box-shadow: var(--shadow-card-hover); z-index: 20; }
+.mm-toolbar-menu__group + .mm-toolbar-menu__group { margin-top: 5px; padding-top: 5px; border-top: 1px solid var(--border-color); }
+.mm-toolbar-menu__heading { padding: 4px 8px 2px; color: var(--text-muted); font: 600 10px/1.2 "IBM Plex Mono", monospace; letter-spacing: .06em; text-transform: uppercase; }
 .mm-toolbar-menu button { width: 100%; display: flex; align-items: center; gap: 8px; padding: 8px; border: 0; border-radius: 5px; color: var(--text-primary); background: transparent; text-align: left; cursor: pointer; }
 .mm-toolbar-menu button:hover, .mm-toolbar-menu button:focus-visible { background: var(--bg-hover); }
 .mm-inspector-tab { position: absolute; top: 50%; right: 0; z-index: 9; transform: translateY(-50%); display: inline-flex; align-items: center; gap: 5px; padding: 11px 6px; writing-mode: vertical-rl; color: var(--text-primary); background: var(--bg-card); border: 1px solid var(--border-color); border-right: 0; border-radius: 9px 0 0 9px; box-shadow: var(--shadow-card); cursor: pointer; }
@@ -474,6 +470,18 @@ html.dark .me-container { --mm-relation: #7e90c4; }
   .mm-inspector-drawer { width: min(340px, calc(100% - 28px)); }
   .mm-export-trigger { width: 40px; padding: 0; justify-content: center; border-radius: 50%; }
   .mm-export-trigger span { display: none; }
+  .mm-toolbar-menu {
+    position: fixed;
+    inset: auto 8px 8px;
+    width: auto;
+    max-height: min(70vh, 560px);
+    border-radius: 14px;
+    padding: 8px;
+  }
+  .mm-toolbar-menu button { min-height: 40px; }
+}
+@media (max-width: 1100px) {
+  .mm-operation-usage, .mm-context-link { display: none; }
 }
 @media (prefers-reduced-motion: reduce) {
   .mm-inspector-drawer { transition: none; }

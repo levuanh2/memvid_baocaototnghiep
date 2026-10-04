@@ -59,24 +59,21 @@ export default function SummaryPane({ data, onContextChange }) {
 
   return (
     <div className="relative h-full overflow-y-auto">
-      <div className="px-3 py-2 border-b border-border flex-shrink-0 sticky top-0 z-10" style={{ background: "var(--bg-sidebar)" }}>
-        <div className="font-mono text-metadata uppercase text-text-secondary">Tóm tắt tài liệu</div>
-        <div className="font-display text-body font-semibold truncate text-text-primary">{rec.title || "Tóm tắt tài liệu"}</div>
-        {(rec.sources?.length || lengthLabel) && (
-          <div className="text-caption text-text-muted mt-0.5">
-            {/* Feature epic M1 — name the sources for a small set (real
-                provenance, `rec.sources` was always the full array; the
-                comment above only ever read index 0 elsewhere, the count-only
-                label here was the same truncation). A larger set falls back
-                to the count — matches KnowledgeInspector's own rule. */}
-            {[rec.sources?.length
-                ? (rec.sources.length <= 4 ? rec.sources.join(" · ") : `${rec.sources.length} tài liệu`)
-                : null,
-              lengthLabel ? `độ dài: ${lengthLabel}` : null]
-              .filter(Boolean).join(" · ")}
-          </div>
-        )}
-        <OperationUsage usage={rec.usage} className="block mt-1" />
+      <div className="artifact-toolbar sticky top-0 z-10">
+        <Icon name="ScrollText" size={16} className="artifact-toolbar__icon" />
+        <div className="artifact-toolbar__identity">
+          <strong>{rec.title || "Tóm tắt tài liệu"}</strong>
+          {(rec.sources?.length || lengthLabel) && (
+            <small>
+              {[rec.sources?.length
+                  ? (rec.sources.length <= 4 ? rec.sources.join(" · ") : `${rec.sources.length} tài liệu`)
+                  : null,
+                lengthLabel ? `độ dài: ${lengthLabel}` : null]
+                .filter(Boolean).join(" · ")}
+            </small>
+          )}
+        </div>
+        <OperationUsage usage={rec.usage} className="artifact-toolbar__usage" />
       </div>
 
       <div className="p-5 max-w-[840px] mx-auto">
