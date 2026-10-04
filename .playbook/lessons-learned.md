@@ -1,5 +1,22 @@
 # Lessons Learned
 
+## Root collapse is a renderer contract, not an `expanded` flag (2026-10-04)
+
+- Verify third-party tree behavior against its real DOM. In Mind Elixir 5.13,
+  the root renderer ignores `root.expanded`; a method named "collapse all" is
+  therefore not evidence that only the root remains.
+- A presentation-only adapter can preserve data and branch-local state by
+  changing the render input only during one synchronous refresh. Tests must
+  assert topics and connectors together, plus viewport transform and instance
+  identity—not just internal flags.
+- Cross-map selection is briefly stale by design because React effects run
+  after render. Any imperative lookup used while deriving JSX must tolerate an
+  id from the previous record, especially when the library throws on a miss.
+- Ownership should follow context: global mode tabs switch modes; artifact
+  selection/create/status/export belong to the artifact toolbar. Count badges
+  and dropdown arrows on global tabs silently turn navigation into a second
+  state owner.
+
 ## Publish terminal job state after accounting (2026-10-02)
 
 - A correct ledger can still vanish from the UI when a poller sees `done`
