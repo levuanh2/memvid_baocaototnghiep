@@ -640,3 +640,16 @@ html.dark .me-container { --mm-relation: #7e90c4; }
 .mm-selection-bar button:hover, .mm-selection-bar button:focus-visible { background: var(--bg-hover); }
 .mm-selection-bar button:disabled { opacity: .4; cursor: not-allowed; }
 .mm-selection-bar__sep { color: var(--border-strong); }
+
+/* Touch-target floor for the contextual Mind Map toolbar: every control is at
+   least 40x40. Glyphs keep their 16-18px size; only the hit box grows, so the
+   48px toolbar height does not change. */
+.mm-context-link,
+.mm-map-selector__trigger,
+.mm-export-trigger,
+.mm-overflow-trigger,
+.mm-floating-toolbar button,
+.mm-fullscreen-corner {
+  min-width: 40px;
+  min-height: 40px;
+}

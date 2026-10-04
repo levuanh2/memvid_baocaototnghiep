@@ -39,6 +39,20 @@ export { THEME };
 // previous map or a currently collapsed branch. Render-time derived UI must
 // treat that transient condition as "not selected", especially during A↔B
 // switches before the controller's id-keyed effect clears React selection.
+// Initial placement on narrow canvases. scaleFit alone shrinks a wide tree to
+// ~27% (390px wide canvas: node labels unreadable, the map floats in empty space).
+// The fit stays the single initial operation; the scale is then floored at a
+// readable size and the root is centred. Horizontal panning covers the rest.
+const MOBILE_FIT_MAX_WIDTH = 640;
+const MOBILE_READABLE_MIN_SCALE = 0.75;
+
+function applyReadableFloor(mind, el) {
+  if (!mind || !el || el.clientWidth > MOBILE_FIT_MAX_WIDTH) return;
+  if ((mind.scaleVal ?? 1) >= MOBILE_READABLE_MIN_SCALE) return;
+  mind.scale(MOBILE_READABLE_MIN_SCALE);
+  mind.toCenter?.();
+}
+
 function findTopicSafely(mind, id) {
   if (!mind || !id) return null;
   try { return mind.findEle?.(id) || null; }
@@ -70,6 +84,21 @@ export default function MindElixirView({ data, onRegenerate, regenerating, contr
   const [renderError, setRenderError] = useState(null);
   const [contextOverflowOpen, setContextOverflowOpen] = useState(false);
   const [mapSelectorOpen, setMapSelectorOpen] = useState(false);
+
+  // Escape or any pointer press outside the overflow menu dismisses it. Without
+  // this the open menu stays on top of the canvas and the next topic tap lands on
+  // one of its items instead of the topic (mobile first-click defect).
+  useEffect(() => {
+    if (!contextOverflowOpen) return undefined;
+    const onKey = (e) => { if (e.key === "Escape") setContextOverflowOpen(false); };
+    const onPointer = (e) => { if (!e.target.closest?.(".mm-toolbar-menu-wrap")) setContextOverflowOpen(false); };
+    document.addEventListener("keydown", onKey);
+    document.addEventListener("pointerdown", onPointer, true);
+    return () => {
+      document.removeEventListener("keydown", onKey);
+      document.removeEventListener("pointerdown", onPointer, true);
+    };
+  }, [contextOverflowOpen]);
   // Round 8 redesign: expand/collapse state lives on mind-elixir's own live
   // nodeData tree (`node.expanded`), not React state — mirroring it into a
   // separate state value would risk drifting from the real render. This
@@ -179,6 +208,7 @@ export default function MindElixirView({ data, onRegenerate, regenerating, contr
     if (pendingFitRef.current) {
       pendingFitRef.current = false;
       mind.scaleFit?.();
+      applyReadableFloor(mind, el);
     }
     setRenderError(null);
     setRenderState("ready");
