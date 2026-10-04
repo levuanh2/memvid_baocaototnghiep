@@ -5717,3 +5717,18 @@ map switching, and transform preservation in a real browser.
   `FE/src/components/Layout/ContextPanelCloseButton.test.jsx`.
 - Prevention: any popover or menu over the canvas must dismiss on Escape and on
   outside pointerdown, and tests must click through the real canvas after dismissal.
+
+## Mobile node-detail close hid the sheet but kept the selection (2026-10-04)
+
+- Symptom: on 390px, closing the node-detail bottom sheet (X, Escape or backdrop)
+  hides it, but the node stays selected; tapping the same node does not reopen it.
+- Root cause: on mobile `panel.drawer` is true. The close handler took the generic
+  drawer branch, which only hid the sheet. Escape was also blocked by a
+  `.me-container` guard that is present for the whole MindMap mode.
+- Fix: one `closeRightPanel` in MainLayout for X, backdrop and Escape. Closing the
+  MindMap node detail clears the controller and canvas selection on desktop and
+  mobile. Chat, Summary, the generic drawer and Guided restore are unchanged.
+- Regression tests: `FE/src/components/Layout/MainLayout.mobileClose.test.jsx`.
+- Prevention: every close path of a contextual surface must clear its source of
+  truth, not only its visibility. Test each path under the drawer layout as well as
+  the overlay layout.

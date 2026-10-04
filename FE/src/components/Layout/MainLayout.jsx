@@ -121,6 +121,24 @@ export default function MainLayout({
   }, [mindmapData?.data?.id, mmSelected?.id]);
   const { drawer: panelDrawer, setCollapsedFor: setPanelCollapsed } = panel;
 
+  // The one close path for the right panel (X, backdrop, Escape). Closing the
+  // Mind Map node detail -- desktop overlay or mobile bottom sheet -- also clears
+  // the contextual selection, so the same node can be tapped again and the closed
+  // detail does not come back. Chat, Summary and the generic drawer keep their
+  // existing close behaviour; Guided close never comes through here.
+  const closeRightPanel = useCallback(() => {
+    if (workspaceMode === "mindmap") {
+      mmClearSelectedNode();
+      setRightOpen(false);
+      return;
+    }
+    if (panel.drawer) {
+      setRightOpen(false);
+      return;
+    }
+    panel.setCollapsedFor("right", true);
+  }, [workspaceMode, mmClearSelectedNode, panel]);
+
   // Node/citation triggers open the same inspector used by Chat and Summary.
   // The controller remains mounted, so opening this surface never touches the
   // Mind Elixir instance or its viewport transform.
@@ -397,12 +415,14 @@ export default function MainLayout({
   useEffect(() => {
     const onKey = (e) => {
       if (e.key !== "Escape" || !panel.drawer || !rightOpen) return;
-      if (document.querySelector('[aria-modal="true"], .me-container')) return;
-      setRightOpen(false);
+      // Defer to real modal dialogs only. `.me-container` is the Mind Map canvas
+      // itself, present for the whole MindMap mode, so it must not block Escape.
+      if (document.querySelector('[aria-modal="true"]')) return;
+      closeRightPanel();
     };
     window.addEventListener("keydown", onKey);
     return () => window.removeEventListener("keydown", onKey);
-  }, [panel.drawer, rightOpen]);
+  }, [panel.drawer, rightOpen, closeRightPanel]);
 
   const rightSurfaceVisible = true;
   // 2026-09-21: Mind Map's node-detail surface must be a closed-by-default
@@ -448,23 +468,6 @@ export default function MainLayout({
       setRightOpen(saved.rightOpen);
     }
   }, [mindmapToolOverlay, mindmapSelectedNodeId, panel]);
-
-  // Close of the right panel's own X. Only the MindMap overlay owns a contextual
-  // node, so only it clears the selection; Guided close (above) never comes
-  // through here and keeps the node. Chat/Summary and the drawer keep their
-  // existing close behaviour.
-  const handleRightPanelClose = useCallback(() => {
-    if (mindmapToolOverlay) {
-      mmClearSelectedNode();
-      setRightOpen(false);
-      return;
-    }
-    if (panel.drawer) {
-      setRightOpen(false);
-      return;
-    }
-    panel.setCollapsedFor("right", true);
-  }, [mindmapToolOverlay, mmClearSelectedNode, panel]);
 
   // Leaving MindMap (to Chat or Summary) ends the contextual node: clear the
   // selection and close the overlay. MindElixirView stays mounted while hidden,
@@ -618,7 +621,7 @@ export default function MainLayout({
         {(panel.drawer && (leftOpen || rightOpen)) && (
           <div
             className="fixed inset-0 bg-black/40 z-30 backdrop-blur-sm"
-            onClick={() => { setLeftOpen(false); setRightOpen(false); }}
+            onClick={() => { setLeftOpen(false); closeRightPanel(); }}
           />
         )}
 
@@ -785,7 +788,7 @@ export default function MainLayout({
                   evidence={evidence}
                   highlight={highlight}
                   onHighlight={onHighlight}
-                  onClose={handleRightPanelClose}
+                  onClose={closeRightPanel}
                   onGuidedClose={restoreAfterGuidedClose}
                   onAskAbout={onAskAbout}
                   onOpenSource={onInspectorOpenSource}
