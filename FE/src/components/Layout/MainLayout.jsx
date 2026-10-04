@@ -243,7 +243,8 @@ export default function MainLayout({
   const openArtifact = useCallback((tab) => {
     setRightView("evidence");
     setArtifactRequest({ tab, nonce: Date.now() });
-    if (panel.drawer) setRightOpen(true); else panel.setCollapsedFor("right", false);
+    setRightOpen(true);
+    if (!panel.drawer) panel.setCollapsedFor("right", false);
   }, [panel]);
 
   const closeHeaderSurface = useCallback(() => setHeaderSurface(null), []);
