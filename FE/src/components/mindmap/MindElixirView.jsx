@@ -18,7 +18,7 @@ import { attachExpandDecorator } from "../../utils/mindElixirExpandDecorator";
 import { attachBranchSelectionMode } from "../../utils/mindmapBranchSelectionMode";
 import { nextScale, formatZoom, viewportKeyAction, ZOOM_STEP } from "../../utils/mindmapViewport";
 import { validateMindMapRender } from "../../utils/mindmapRenderLifecycle";
-import { isRootOnly, reapplyRootOnly, setRootOnly } from "../../utils/mindElixirRootOnly";
+import { clearRootOnly, isRootOnly, reapplyRootOnly, setRootOnly } from "../../utils/mindElixirRootOnly";
 import { updateMindmap } from "../../utils/api";
 import { toast } from "../ui/Toaster";
 import { Icon } from "../ui/Icon";
@@ -302,7 +302,7 @@ export default function MindElixirView({ data, onRegenerate, regenerating, contr
       // so this listener only needs to cover the caret's path.
       mind.bus.addListener("expandNode", () => setExpandTick((v) => v + 1));
     } else {
-      setRootOnly(mind, false);
+      clearRootOnly(mind);
       mind.refresh?.(mindData);
       mind.clearHistory?.();
     }

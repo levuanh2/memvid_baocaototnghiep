@@ -1,7 +1,7 @@
 // @vitest-environment jsdom
 import { describe, it, expect, afterEach, beforeAll, vi } from "vitest";
 import MindElixir from "mind-elixir";
-import { setRootOnly, reapplyRootOnly, isRootOnly, hiddenBranchCount } from "./mindElixirRootOnly";
+import { setRootOnly, reapplyRootOnly, isRootOnly, hiddenBranchCount, clearRootOnly } from "./mindElixirRootOnly";
 
 beforeAll(() => {
   window.matchMedia = window.matchMedia || (() => ({ matches: false, addEventListener() {}, removeEventListener() {} }));
@@ -166,5 +166,72 @@ describe("mindElixirRootOnly — real Mind Elixir 5.13 DOM", () => {
     const leaf = new MindElixir({ el: container, direction: MindElixir.SIDE, keypress: false, toolBar: false, contextMenu: false });
     leaf.init({ nodeData: { id: "solo", topic: "Solo", children: [] }, arrows: [], summaries: [] });
     expect(setRootOnly(leaf, true)).toBe(false);
+  });
+});
+
+describe("mindElixirRootOnly — atomic failure handling", () => {
+  const failOnce = (mind) => vi.spyOn(mind, "refresh").mockImplementationOnce(() => { throw new Error("refresh failed"); });
+
+  it("collapse: a failed root-only render restores children, keeps state false, and the next collapse succeeds", () => {
+    mount();
+    const base = visibleTopicIds();
+    const branches = mind.nodeData.children;
+    failOnce(mind);
+
+    expect(setRootOnly(mind, true)).toBe(false);
+    expect(mind.nodeData.children).toBe(branches);
+    expect(mind.nodeData.children.length).toBe(4);
+    expect(isRootOnly(mind)).toBe(false);
+    expect(hiddenBranchCount(mind)).toBe(0);
+    expect(visibleTopicIds()).toEqual(base);
+
+    expect(setRootOnly(mind, true)).toBe(true);
+    expect(isRootOnly(mind)).toBe(true);
+    expect(visibleTopicIds()).toEqual(["root"]);
+  });
+
+  it("expand: a failed restore keeps root-only state so the UI never reports expanded over a collapsed DOM", () => {
+    mount();
+    const base = visibleTopicIds();
+    expect(setRootOnly(mind, true)).toBe(true);
+    failOnce(mind);
+
+    expect(setRootOnly(mind, false)).toBe(false);
+    expect(isRootOnly(mind)).toBe(true);
+    expect(mind.nodeData.children.length).toBe(4);
+    expect(visibleTopicIds()).toEqual(["root"]);
+
+    expect(setRootOnly(mind, false)).toBe(true);
+    expect(isRootOnly(mind)).toBe(false);
+    expect(visibleTopicIds()).toEqual(base);
+  });
+
+  it("a failed expand does not lose a per-node collapse", () => {
+    mount();
+    mind.expandNode(mind.findEle("a"), false);
+    expect(setRootOnly(mind, true)).toBe(true);
+    failOnce(mind);
+    expect(setRootOnly(mind, false)).toBe(false);
+    expect(setRootOnly(mind, false)).toBe(true);
+    expect(mind.nodeData.children[0].expanded).toBe(false);
+    expect(visibleTopicIds()).not.toContain("a1");
+  });
+
+  it("map switch after a failed expand does not carry root-only state into the new map", () => {
+    mount();
+    expect(setRootOnly(mind, true)).toBe(true);
+    failOnce(mind);
+    expect(setRootOnly(mind, false)).toBe(false);
+
+    clearRootOnly(mind);
+    mind.refresh({
+      nodeData: { id: "rootB", topic: "B", children: [{ id: "x", topic: "X", children: [] }] },
+      arrows: [], summaries: [],
+    });
+
+    expect(isRootOnly(mind)).toBe(false);
+    expect(hiddenBranchCount(mind)).toBe(0);
+    expect(reapplyRootOnly(mind)).toBe(false);
+    expect(visibleTopicIds()).toEqual(["rootB", "x"]);
   });
 });
