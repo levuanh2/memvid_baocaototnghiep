@@ -16,7 +16,33 @@ const transform = (page) => page.locator(".map-canvas").evaluate((el) => el.styl
 async function openFixture(page, viewport = { width: 1440, height: 1024 }) {
   await page.setViewportSize(viewport);
   await page.goto("/fixture-harness.html");
+  await page.addStyleTag({ content: "*,*::before,*::after{transition:none!important;animation:none!important}" });
   await page.locator(`[data-nodeid="me${ROOT_A}"]`).waitFor({ state: "visible" });
+}
+
+// The fixture harness finishes its own initial placement a few hundred ms after
+// load, so a single read can precede a canvas move. Require the root box and the
+// canvas transform to stay identical for a sustained window before trusting them.
+async function settledRootBox(page) {
+  const locator = page.locator(`[data-nodeid="me${ROOT_A}"]`);
+  const snapshot = async () => ({
+    box: await locator.boundingBox(),
+    canvas: await transform(page),
+  });
+  let last = await snapshot();
+  let quiet = 0;
+  for (let attempt = 0; attempt < 100; attempt++) {
+    await page.waitForTimeout(100);
+    const next = await snapshot();
+    const same = next.box && last.box
+      && Math.abs(next.box.x - last.box.x) < 0.25 && Math.abs(next.box.y - last.box.y) < 0.25
+      && Math.abs(next.box.width - last.box.width) < 0.25 && Math.abs(next.box.height - last.box.height) < 0.25
+      && next.canvas === last.canvas;
+    quiet = same ? quiet + 1 : 0;
+    last = next;
+    if (quiet >= 5) return next.box;
+  }
+  throw new Error("root box did not settle");
 }
 
 async function openOverflow(page) {
@@ -28,7 +54,7 @@ test("root-only collapse leaves one topic and zero tree connectors, then restore
   const initialNodes = await topics(page).count();
   const initialConnectors = await treeConnectors(page).count();
   const initialTransform = await transform(page);
-  const initialRootBox = await page.locator(`[data-nodeid="me${ROOT_A}"]`).boundingBox();
+  const initialRootBox = await settledRootBox(page);
   expect(initialNodes).toBeGreaterThan(1);
   expect(initialConnectors).toBeGreaterThan(0);
   await openOverflow(page);
@@ -36,7 +62,7 @@ test("root-only collapse leaves one topic and zero tree connectors, then restore
   await expect(topics(page)).toHaveCount(1);
   await expect(treeConnectors(page)).toHaveCount(0);
   expect(await transform(page)).toBe(initialTransform);
-  const rootBox = await page.locator(`[data-nodeid="me${ROOT_A}"]`).boundingBox();
+  const rootBox = await settledRootBox(page);
   expect(rootBox.x + rootBox.width).toBeGreaterThan(0);
   expect(rootBox.y + rootBox.height).toBeGreaterThan(48);
   expect(rootBox.x).toBeLessThan(1440);
