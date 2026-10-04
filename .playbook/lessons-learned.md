@@ -3102,3 +3102,12 @@ job responses are terminal lifecycle branches even when they do not look like
 provider failures. A reservation must be committed, released, or deliberately
 retained for resume before each branch returns; lease expiry is recovery, not
 normal control flow.
+
+## A visibility flag is not the selection (2026-10-04)
+
+A panel's open flag and the selection that drives its content are two separate
+states. Closing the panel must clear the selection, or any effect keyed on that
+selection will reopen the panel on the next render. The same applies to the
+canvas: a hidden but still-mounted instance keeps its own selection, so clear it
+through the public API (`clearSelection`) as well. Verify with a real instance
+and a round trip through every mode, not just the close click.
