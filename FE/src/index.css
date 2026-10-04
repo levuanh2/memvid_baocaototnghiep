@@ -1002,3 +1002,29 @@
 @media (prefers-reduced-motion: reduce) {
   .mode-library-menu, .study-tools-menu, .source-filter-popover { transition: none; }
 }
+/* Shared artifact chrome: Summary and Mind Map keep one compact persistent
+   row so switching modes does not change the available canvas height. */
+.artifact-toolbar {
+  height: 48px;
+  min-height: 48px;
+  width: 100%;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 4px 12px;
+  border-bottom: 1px solid var(--border-color);
+  background: var(--bg-card);
+  flex: 0 0 48px;
+  min-width: 0;
+}
+.artifact-toolbar__icon { flex: 0 0 auto; color: var(--text-secondary); }
+.artifact-toolbar__identity { min-width: 0; flex: 1; display: flex; flex-direction: column; line-height: 1.15; }
+.artifact-toolbar__identity strong,
+.artifact-toolbar__identity small { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.artifact-toolbar__identity strong { color: var(--text-primary); font: 600 14px/1.15 var(--font-display); }
+.artifact-toolbar__identity small { margin-top: 2px; color: var(--text-muted); font: 11px/1.1 var(--font-mono); }
+.artifact-toolbar__usage { flex: 0 1 auto; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+@media (max-width: 700px) {
+  .artifact-toolbar { gap: 6px; padding-inline: 8px; }
+  .artifact-toolbar__identity small, .artifact-toolbar__usage { display: none; }
+}

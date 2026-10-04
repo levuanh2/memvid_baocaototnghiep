@@ -1,5 +1,29 @@
 # Known Issues
 
+## MindMap duplicate ownership, root-only collapse, and stale A↔B selection (fixed 2026-10-04)
+
+The global workspace tabs had accumulated map/summary counts, dropdown state,
+selection, and create actions even though MindMap already owned the same map
+library in its contextual row. This produced two owners and a duplicate `+`
+create trigger. Global tabs now switch modes only; the single 48px MindMap
+artifact toolbar owns map identity, library/select/create, status, export, and
+grouped overflow actions.
+
+Mind Elixir 5.13 renders root children unconditionally: `expandNodeAll(root,
+false)` collapses descendants but deliberately leaves level-one topics. The
+application adapter now renders a root-only presentation by temporarily
+withholding `root.children` for one synchronous `refresh()`, restoring the
+same array immediately. It never recreates the instance, changes persisted
+data, calls `scaleFit()`/`toCenter()`, or overwrites per-node `expanded` flags.
+Real-package and Chromium tests assert one topic, zero tree connectors, exact
+restore, and byte-identical viewport transform.
+
+A real A→B fixture switch also exposed a separate render crash: the controller
+selection still referred to an A node for one render, while Mind Elixir's
+`findEle()` throws for missing/collapsed ids instead of returning null. Derived
+toolbar state now uses a safe lookup and treats that transition as no
+selection until the controller's id-keyed reset completes.
+
 ## PR #47 Guided idempotency could orphan a new usage reservation (fixed 2026-10-03)
 
 `POST /generate-mindmap` reserved quota before the PostgreSQL Guided store

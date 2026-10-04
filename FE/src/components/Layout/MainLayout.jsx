@@ -18,7 +18,6 @@ import { useTutorMemory } from "../../study/useTutorMemory";
 import { globalShortcutAction, mindmapRelationAction, hasVisibleBlockingOverlay } from "../../utils/keyboardShortcuts";
 import { OPEN_SHORTCUTS_EVENT } from "../../utils/shortcutsBus";
 import ShortcutsOverlay from "../shortcuts/ShortcutsOverlay";
-import ModeLibraryMenu from "./ModeLibraryMenu";
 import StudyToolsMenu from "./StudyToolsMenu";
 import { fetchMindmapNodeContext } from "../../utils/mindmapNodeContext";
 import UsageChip from "./UsageChip";
@@ -223,7 +222,7 @@ export default function MainLayout({
   // Gia sư AI + Lề bằng chứng dùng chung MỘT cột (hard constraint: không thêm
   // cột thứ ba) — `rightView` chọn tab nào đang hiện trong nó.
   const [rightView, setRightView] = useState(initialRightView);   // "evidence" | "tutor" | "timeline"
-  const [headerSurface, setHeaderSurface] = useState(null); // mindmap | summary | study-tools
+  const [headerSurface, setHeaderSurface] = useState(null); // study-tools
   const [libraries, setLibraries] = useState({ mindMaps: [], summaries: [], mindMapActions: null, summaryActions: null });
   const updateMindmapLibrary = useCallback((value) => setLibraries((prev) => ({
     ...prev,
@@ -241,33 +240,26 @@ export default function MainLayout({
     setRightView("tutor");
     if (panel.drawer) setRightOpen(true); else panel.setCollapsedFor("right", false);
   }, [panel]);
+  // Snapshot of the right panel before an artifact request takes it over, so
+  // closing the Guided dialog can put back exactly what was there (node detail,
+  // another Inspector tab, or a collapsed panel) instead of blanking it.
+  const panelBeforeArtifactRef = useRef(null);
   const openArtifact = useCallback((tab) => {
+    if (!panelBeforeArtifactRef.current) {
+      panelBeforeArtifactRef.current = { rightOpen, rightView, collapsed: panel.collapsed.right };
+    }
     setRightView("evidence");
     setArtifactRequest({ tab, nonce: Date.now() });
-    if (panel.drawer) setRightOpen(true); else panel.setCollapsedFor("right", false);
-  }, [panel]);
+    setRightOpen(true);
+    if (!panel.drawer) panel.setCollapsedFor("right", false);
+  }, [panel, rightOpen, rightView]);
 
   const closeHeaderSurface = useCallback(() => setHeaderSurface(null), []);
-  const openModeLibrary = useCallback((mode) => {
-    setWorkspaceMode(mode);
-    setHeaderSurface((current) => current === mode ? null : mode);
-  }, []);
   const openStudyTool = useCallback((view) => {
     setRightView(view);
     setHeaderSurface(null);
     setRightOpen(true);
   }, []);
-  const selectMapFromLibrary = useCallback((map) => {
-    libraries.mindMapActions?.select?.(map);
-    setWorkspaceMode("mindmap");
-    setHeaderSurface(null);
-  }, [libraries.mindMapActions]);
-  const selectSummaryFromLibrary = useCallback((summary) => {
-    libraries.summaryActions?.select?.(summary);
-    setWorkspaceMode("summary");
-    setHeaderSurface(null);
-  }, [libraries.summaryActions]);
-
   // Structural refactor (Learning Canvas lesson header + next-action strip) —
   // ONE real action per artifact type, shared by the header's mode-switch
   // tabs and ChatArea's next-action strip: switch to the pane if it
@@ -439,6 +431,24 @@ export default function MainLayout({
     setRightOpen(Boolean(mindmapSelectedNodeId));
   }, [mindmapToolOverlay, mindmapSelectedNodeId]);
 
+  // Explicit close of the Guided dialog (X / Escape). Restores the panel state
+  // captured by openArtifact; a selected MindMap node keeps the overlay open so
+  // node detail reappears underneath. A successful submit does not call this,
+  // so generation progress stays visible.
+  const restoreAfterGuidedClose = useCallback(() => {
+    const saved = panelBeforeArtifactRef.current;
+    panelBeforeArtifactRef.current = null;
+    if (!saved) return;
+    setRightView(saved.rightView);
+    if (mindmapToolOverlay) {
+      setRightOpen(saved.rightOpen || Boolean(mindmapSelectedNodeId));
+    } else if (!panel.drawer) {
+      panel.setCollapsedFor("right", saved.collapsed);
+    } else {
+      setRightOpen(saved.rightOpen);
+    }
+  }, [mindmapToolOverlay, mindmapSelectedNodeId, panel]);
+
   return (
     <div className="flex flex-col h-screen overflow-hidden font-body transition-theme" style={{ background: "var(--bg-base)", color: "var(--text-primary)" }}>
 
@@ -493,12 +503,9 @@ export default function MainLayout({
           style={{ background: "var(--bg-card)", border: "1px solid var(--border-color)" }}>
           {MODE_TABS.map((t) => {
             const active = workspaceMode === t.key;
-            const count = t.key === "mindmap" ? libraries.mindMaps.length : libraries.summaries.length;
             return (
               <button key={t.key} type="button" role="tab" aria-selected={active}
-                aria-haspopup={t.key === "chat" ? undefined : "dialog"}
-                aria-expanded={t.key === "chat" ? undefined : headerSurface === t.key}
-                onClick={() => t.key === "chat" ? setWorkspaceMode("chat") : openModeLibrary(t.key)}
+                onClick={() => { setWorkspaceMode(t.key); closeHeaderSurface(); }}
                 title={t.label}
                 className="flex items-center gap-1.5 px-2.5 sm:px-3 py-1.5 text-small rounded-full transition-colors"
                 style={{
@@ -507,22 +514,10 @@ export default function MainLayout({
                   fontWeight: active ? 600 : 500,
                 }}>
                 <Icon name={t.icon} size={14} />
-                <span className="hidden sm:inline">{t.label}{t.key !== "chat" && <small className="ml-1 font-mono text-[10px] opacity-80">{count} ▾</small>}</span>
+                <span className="hidden sm:inline">{t.label}</span>
               </button>
             );
           })}
-          {headerSurface === "mindmap" && (
-            <ModeLibraryMenu mode="mindmap" items={libraries.mindMaps} selectedId={mindmapData?.data?.id}
-              onSelect={selectMapFromLibrary} onCreate={libraries.mindMapActions?.create}
-              creating={libraries.mindMapActions?.creating} selectedSources={selectedSources}
-              onClose={closeHeaderSurface} />
-          )}
-          {headerSurface === "summary" && (
-            <ModeLibraryMenu mode="summary" items={libraries.summaries} selectedId={summaryData?.id}
-              onSelect={selectSummaryFromLibrary} onCreate={libraries.summaryActions?.create}
-              creating={libraries.summaryActions?.creating} selectedSources={selectedSources}
-              onClose={closeHeaderSurface} />
-          )}
         </nav>
 
         {/* Right actions */}
@@ -761,6 +756,7 @@ export default function MainLayout({
                   highlight={highlight}
                   onHighlight={onHighlight}
                   onClose={() => ((panel.drawer || mindmapToolOverlay) ? setRightOpen(false) : panel.setCollapsedFor("right", true))}
+                  onGuidedClose={restoreAfterGuidedClose}
                   onAskAbout={onAskAbout}
                   onOpenSource={onInspectorOpenSource}
                   collapsible={!panel.drawer && !mindmapToolOverlay}

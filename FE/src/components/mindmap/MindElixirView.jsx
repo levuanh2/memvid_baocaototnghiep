@@ -18,6 +18,7 @@ import { attachExpandDecorator } from "../../utils/mindElixirExpandDecorator";
 import { attachBranchSelectionMode } from "../../utils/mindmapBranchSelectionMode";
 import { nextScale, formatZoom, viewportKeyAction, ZOOM_STEP } from "../../utils/mindmapViewport";
 import { validateMindMapRender } from "../../utils/mindmapRenderLifecycle";
+import { clearRootOnly, isRootOnly, reapplyRootOnly, setRootOnly } from "../../utils/mindElixirRootOnly";
 import { updateMindmap } from "../../utils/api";
 import { toast } from "../ui/Toaster";
 import { Icon } from "../ui/Icon";
@@ -33,6 +34,16 @@ import "./mindmap.css";
 // re-imported) so `theme.test.js`'s existing `import { THEME } from
 // "./MindElixirView"` keeps working unchanged.
 export { THEME };
+
+// Mind Elixir throws (instead of returning null) when an id belongs to the
+// previous map or a currently collapsed branch. Render-time derived UI must
+// treat that transient condition as "not selected", especially during A↔B
+// switches before the controller's id-keyed effect clears React selection.
+function findTopicSafely(mind, id) {
+  if (!mind || !id) return null;
+  try { return mind.findEle?.(id) || null; }
+  catch { return null; }
+}
 
 // `data`: the mindmap record + generation-status fields SidebarRight already
 // computes (generating/progress/onCancel/onSaved/onDirtyChange) — UNCHANGED
@@ -148,9 +159,10 @@ export default function MindElixirView({ data, onRegenerate, regenerating, contr
     // idempotent -- mind-elixir already reruns them on every theme toggle --
     // so rerunning them on every qualifying call is safe.
     setRenderState("laying_out");
-    mind.layout?.();
+    if (isRootOnly(mind)) reapplyRootOnly(mind);
+    else mind.layout?.();
     setRenderState("linking");
-    mind.linkDiv?.();
+    if (!isRootOnly(mind)) mind.linkDiv?.();
     // 2026-09-24: `el.clientWidth > 0` alone is NOT a reliable readiness
     // signal -- reproduced live: the container reported a real width on the
     // very first poll frame, layout()+linkDiv() ran, and the `.lines` paths
@@ -278,7 +290,10 @@ export default function MindElixirView({ data, onRegenerate, regenerating, contr
       mind.bus.addListener("selectNodes", (nodes) => {
         controller.onNodeSelected(nodes);
       });
-      mind.bus.addListener("operation", () => setDirty(true));
+      mind.bus.addListener("operation", () => {
+        setDirty(true);
+        reapplyRootOnly(mind);
+      });
       // Clicking a per-node caret calls mind-elixir's own `expandNode`,
       // which fires this bus event (dist/MindElixir.js) — but NOT for
       // `expandNodeAll` (verified: no bus.fire in that function). The
@@ -287,6 +302,7 @@ export default function MindElixirView({ data, onRegenerate, regenerating, contr
       // so this listener only needs to cover the caret's path.
       mind.bus.addListener("expandNode", () => setExpandTick((v) => v + 1));
     } else {
+      clearRootOnly(mind);
       mind.refresh?.(mindData);
       mind.clearHistory?.();
     }
@@ -414,9 +430,10 @@ export default function MindElixirView({ data, onRegenerate, regenerating, contr
         return;
       }
       setRenderState("laying_out");
-      mind.layout?.();
+      if (isRootOnly(mind)) reapplyRootOnly(mind);
+      else mind.layout?.();
       setRenderState("linking");
-      mind.linkDiv?.();
+      if (!isRootOnly(mind)) mind.linkDiv?.();
       setRenderState("validating");
       if (validateMindMapRender(el).ok) setRenderState("ready");
       else renderPollStopRef.current = startFitPoll();
@@ -627,7 +644,7 @@ export default function MindElixirView({ data, onRegenerate, regenerating, contr
   // knowing on its own — `expandTick`'s only job is forcing a re-render so
   // these reads happen again, not carrying any value itself.
   const selectedId = controller?.selected?.id;
-  const selectedTopicEl = selectedId ? mindRef.current?.findEle?.(selectedId) : null;
+  const selectedTopicEl = findTopicSafely(mindRef.current, selectedId);
   const selectedNodeObj = selectedTopicEl?.nodeObj;
   const selectedHasChildren = Boolean(selectedNodeObj?.children?.length);
   const selectedExpanded = selectedNodeObj?.expanded !== false;
@@ -636,7 +653,7 @@ export default function MindElixirView({ data, onRegenerate, regenerating, contr
     const mind = mindRef.current;
     const id = controller?.selected?.id;
     if (!mind || !id) return;
-    const topic = mind.findEle?.(id);
+    const topic = findTopicSafely(mind, id);
     const nodeObj = topic?.nodeObj;
     if (!topic || !nodeObj?.children?.length) return;
     mind.expandNodeAll(topic, nodeObj.expanded === false);
@@ -648,11 +665,23 @@ export default function MindElixirView({ data, onRegenerate, regenerating, contr
   const expandCollapseWholeMap = useCallback((isExpand) => {
     const mind = mindRef.current;
     if (!mind?.nodeData) return;
+    if (!isExpand) {
+      controller?.clearSelectedNode?.();
+      setRootOnly(mind, true);
+      setExpandTick((v) => v + 1);
+      return;
+    }
+    // Leaving root-only restores the exact tree state captured before the
+    // presentation collapse, including any independently collapsed branch.
+    if (setRootOnly(mind, false)) {
+      setExpandTick((v) => v + 1);
+      return;
+    }
     const topic = mind.findEle?.(mind.nodeData.id);
     if (!topic) return;
     mind.expandNodeAll(topic, isExpand);
     setExpandTick((v) => v + 1);
-  }, []);
+  }, [controller]);
 
   // "Mở đến cấp N" — mind-elixir has no native depth-based expand; walks
   // nodeData directly (setExpandedToDepth) and re-renders geometry only,
@@ -661,6 +690,7 @@ export default function MindElixirView({ data, onRegenerate, regenerating, contr
   const expandToDepth = useCallback((depth) => {
     const mind = mindRef.current;
     if (!mind?.nodeData) return;
+    setRootOnly(mind, false);
     const rootTopic = mind.findEle?.(mind.nodeData.id);
     if (!rootTopic) return;
     // Use Mind Elixir's public expandNodeAll for the actual DOM lifecycle.
@@ -769,10 +799,11 @@ export default function MindElixirView({ data, onRegenerate, regenerating, contr
           </button>
         </div>
       )}
-      <div className="mm-context-row">
+      <div className="artifact-toolbar mm-context-row">
         <div className="mm-map-selector">
           <button type="button" className="mm-map-selector__trigger" aria-haspopup="listbox"
-            aria-expanded={mapSelectorOpen} onClick={() => setMapSelectorOpen((v) => !v)}>
+            aria-expanded={mapSelectorOpen} aria-label="Mở thư viện sơ đồ"
+            onClick={() => setMapSelectorOpen((v) => !v)}>
             <Icon name="Network" size={16} />
             <span className="mm-map-selector__label">
               <strong>{data?.title || "Sơ đồ tư duy"}</strong>
@@ -796,8 +827,6 @@ export default function MindElixirView({ data, onRegenerate, regenerating, contr
             </div>
           )}
         </div>
-        <button type="button" className="mm-context-action" onClick={data.onCreateNew} disabled={data.creating}
-          aria-label="Tạo sơ đồ mới" title="Tạo sơ đồ mới"><Icon name="Plus" size={18} /></button>
         <span className={`mm-quality-status ${upgradeRequired || degraded ? "is-warning" : ""}`}>
           <Icon name={upgradeRequired || degraded ? "TriangleAlert" : "BadgeCheck"} size={14} />
           {upgradeRequired ? "Sơ đồ cũ · Nâng cấp" : degraded ? "Thiếu liên kết" : "Đã kiểm tra"}
@@ -821,21 +850,29 @@ export default function MindElixirView({ data, onRegenerate, regenerating, contr
             onClick={() => setContextOverflowOpen((v) => !v)} aria-label="Thêm tùy chọn" title="Thêm tùy chọn"><Icon name="MoreVertical" size={18} /></button>
           {contextOverflowOpen && (
             <div className="mm-toolbar-menu" role="menu">
-              {data?.id && data.id !== "preview" && !data.generating && (
-                <button role="menuitem" onClick={handleSave} disabled={!dirty || saving}><Icon name="Save" size={14} /> Lưu sơ đồ</button>
-              )}
-              <button role="menuitem" onClick={resetView}><Icon name="RotateCcw" size={14} /> Đặt lại khung nhìn</button>
-              <button role="menuitem" onClick={() => mindRef.current?.toCenter()}><Icon name="Maximize" size={14} /> Căn giữa</button>
-              <button role="menuitem" onClick={() => setShowRelations((v) => !v)} aria-pressed={showRelations}><Icon name="Spline" size={14} /> {showRelations ? "Ẩn quan hệ" : "Hiện quan hệ"}</button>
-              {/* Round 8 redesign — global expand/collapse actions live here
-                  now, unconditionally (not selection-scoped): the floating
-                  toolbar's single contextual toggle below covers the
-                  selected-branch case, so these two never need to fork on
-                  selection state the way the old two-button pair did. */}
-              <button role="menuitem" onClick={() => expandCollapseWholeMap(true)}><Icon name="ChevronsUpDown" size={14} /> Mở rộng tất cả</button>
-              <button role="menuitem" onClick={() => expandCollapseWholeMap(false)}><Icon name="ChevronsDownUp" size={14} /> Thu gọn tất cả</button>
-              <button role="menuitem" onClick={() => expandToDepth(2)}><Icon name="Rows3" size={14} /> Mở đến cấp 2</button>
-              <button role="menuitem" onClick={() => expandToDepth(3)}><Icon name="Rows3" size={14} /> Mở đến cấp 3</button>
+              <div className="mm-toolbar-menu__group" role="group" aria-label="Hiển thị">
+                <div className="mm-toolbar-menu__heading">Hiển thị</div>
+                <button role="menuitem" onClick={() => { setContextOverflowOpen(false); resetView(); }}><Icon name="RotateCcw" size={14} /> Đặt lại khung nhìn</button>
+                <button role="menuitem" onClick={() => { setContextOverflowOpen(false); mindRef.current?.toCenter(); }}><Icon name="Maximize" size={14} /> Căn giữa</button>
+                <button role="menuitem" onClick={() => { setContextOverflowOpen(false); setShowRelations((v) => !v); }} aria-pressed={showRelations}><Icon name="Spline" size={14} /> {showRelations ? "Ẩn quan hệ" : "Hiện quan hệ"}</button>
+              </div>
+              <div className="mm-toolbar-menu__group" role="group" aria-label="Cấu trúc">
+                <div className="mm-toolbar-menu__heading">Cấu trúc</div>
+                <button role="menuitem" onClick={() => { setContextOverflowOpen(false); expandCollapseWholeMap(true); }}><Icon name="ChevronsUpDown" size={14} /> Mở rộng tất cả</button>
+                <button role="menuitem" onClick={() => { setContextOverflowOpen(false); expandCollapseWholeMap(false); }}><Icon name="ChevronsDownUp" size={14} /> Thu gọn về chủ đề chính</button>
+                <button role="menuitem" onClick={() => { setContextOverflowOpen(false); expandToDepth(2); }}><Icon name="Rows3" size={14} /> Mở đến cấp 2</button>
+                <button role="menuitem" onClick={() => { setContextOverflowOpen(false); expandToDepth(3); }}><Icon name="Rows3" size={14} /> Mở đến cấp 3</button>
+              </div>
+              <div className="mm-toolbar-menu__group" role="group" aria-label="Xuất sơ đồ">
+                <div className="mm-toolbar-menu__heading">Xuất sơ đồ</div>
+                <button role="menuitem" onClick={() => { setContextOverflowOpen(false); setExportOpen(true); }}><Icon name="Download" size={14} /> Mở Export Studio</button>
+              </div>
+              <div className="mm-toolbar-menu__group" role="group" aria-label="Tác vụ khác">
+                <div className="mm-toolbar-menu__heading">Tác vụ khác</div>
+                {data?.id && data.id !== "preview" && !data.generating && (
+                  <button role="menuitem" onClick={() => { setContextOverflowOpen(false); handleSave(); }} disabled={!dirty || saving}><Icon name="Save" size={14} /> Lưu sơ đồ</button>
+                )}
+              </div>
             </div>
           )}
         </div>
