@@ -6,7 +6,7 @@
 import { test, expect } from "@playwright/test";
 import {
   registerAndEnterApp, uploadSampleDocument, selectAllSources,
-  openGuidedDialogFromHeader,
+  openGuidedDialogFromHeader, openMapLibrary,
 } from "./fixtures.js";
 
 test.describe.serial("critical flows", () => {
@@ -77,7 +77,7 @@ test.describe.serial("critical flows", () => {
     // (mindmap_store, not just the job row — see run_e2e_server.py) by
     // reopening the library and finding a selected, non-empty entry.
     await expect(async () => {
-      await page.getByRole("tab", { name: "Sơ đồ tư duy" }).click();
+      await openMapLibrary(page);
       const options = page.getByRole("option");
       expect(await options.count()).toBeGreaterThan(0);
       await expect(options.first()).toHaveAttribute("aria-selected", "true");
@@ -86,12 +86,12 @@ test.describe.serial("critical flows", () => {
   });
 
   test("existing/persisted map restores correctly from the map list", async () => {
-    await page.getByRole("tab", { name: "Sơ đồ tư duy" }).click();
+    await openMapLibrary(page);
     const firstTitle = await page.getByRole("option").first().locator("strong").innerText();
     await page.getByRole("option").first().click();
     // Re-open the library: the just-selected item must still read as selected
     // (identity survives close/reopen, not just the initial click).
-    await page.getByRole("tab", { name: "Sơ đồ tư duy" }).click();
+    await openMapLibrary(page);
     await expect(page.getByRole("option").first()).toHaveAttribute("aria-selected", "true");
     expect(await page.getByRole("option").first().locator("strong").innerText()).toBe(firstTitle);
     await page.keyboard.press("Escape");
@@ -130,7 +130,7 @@ test.describe.serial("critical flows", () => {
     await dialog.getByLabel(/Yêu cầu riêng/).fill("second distinct map for A/B switching test");
     await dialog.getByRole("button", { name: "Tạo sơ đồ" }).click();
     await expect(async () => {
-      await page.getByRole("tab", { name: "Sơ đồ tư duy" }).click();
+      await openMapLibrary(page);
       expect(await page.getByRole("option").count()).toBeGreaterThan(1);
     }).toPass({ timeout: 20_000, intervals: [1000] });
 
@@ -140,14 +140,14 @@ test.describe.serial("critical flows", () => {
     expect(titleA).not.toBe(titleB);
 
     const activeTitle = async () => {
-      await page.getByRole("tab", { name: "Sơ đồ tư duy" }).click();
+      await openMapLibrary(page);
       const selected = page.getByRole("option", { selected: true }).first();
       const t = await selected.locator("strong").innerText();
       await page.keyboard.press("Escape");
       return t;
     };
     const selectByTitle = async (title) => {
-      await page.getByRole("tab", { name: "Sơ đồ tư duy" }).click();
+      await openMapLibrary(page);
       await page.getByRole("option").filter({ hasText: title }).click();
     };
 
@@ -164,7 +164,7 @@ test.describe.serial("critical flows", () => {
   test("Mind Map -> Chat -> Summary -> Mind Map switching causes no accidental regeneration", async () => {
     const postsBefore = generateMindmapPosts.length;
     await page.getByRole("tab", { name: "Trò chuyện" }).click();
-    await page.getByRole("tab", { name: "Sơ đồ tư duy" }).click();
+    await openMapLibrary(page);
     // Selecting an existing map from the library (not "create") must not POST.
     const existingItem = page.getByRole("option").first();
     if (await existingItem.isVisible().catch(() => false)) await existingItem.click();
