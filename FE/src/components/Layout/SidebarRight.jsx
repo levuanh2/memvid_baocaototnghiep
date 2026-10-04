@@ -102,7 +102,7 @@ const ARTIFACTS = [
 
 // ── Main component ────────────────────────────────────
 export default function SidebarRight({
-  selectedSources, evidence, highlight, onHighlight, onClose, onAskAbout, onOpenSource,
+  selectedSources, evidence, highlight, onHighlight, onClose, onGuidedClose, onAskAbout, onOpenSource,
   mode = "chat", mindMapContext, summaryData,
   // Phase 4C — Gia sư AI sống trong CÙNG cột này, không phải một cột thứ ba
   // (xem hard constraint "no new sidebar"). `rightView` là CONTROLLED từ
@@ -1178,7 +1178,7 @@ export default function SidebarRight({
       {guidedOpen && (
         <GuidedMindmapDialog
           sources={selectedSources}
-          onClose={() => setGuidedOpen(false)}
+          onClose={() => { setGuidedOpen(false); onGuidedClose?.(); }}
           onSubmit={submitGuidedMindmap}
           loading={loading}
           error={guidedError}

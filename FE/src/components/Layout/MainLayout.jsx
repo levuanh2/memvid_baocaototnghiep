@@ -240,12 +240,19 @@ export default function MainLayout({
     setRightView("tutor");
     if (panel.drawer) setRightOpen(true); else panel.setCollapsedFor("right", false);
   }, [panel]);
+  // Snapshot of the right panel before an artifact request takes it over, so
+  // closing the Guided dialog can put back exactly what was there (node detail,
+  // another Inspector tab, or a collapsed panel) instead of blanking it.
+  const panelBeforeArtifactRef = useRef(null);
   const openArtifact = useCallback((tab) => {
+    if (!panelBeforeArtifactRef.current) {
+      panelBeforeArtifactRef.current = { rightOpen, rightView, collapsed: panel.collapsed.right };
+    }
     setRightView("evidence");
     setArtifactRequest({ tab, nonce: Date.now() });
     setRightOpen(true);
     if (!panel.drawer) panel.setCollapsedFor("right", false);
-  }, [panel]);
+  }, [panel, rightOpen, rightView]);
 
   const closeHeaderSurface = useCallback(() => setHeaderSurface(null), []);
   const openStudyTool = useCallback((view) => {
@@ -423,6 +430,24 @@ export default function MainLayout({
     if (!mindmapToolOverlay) return;
     setRightOpen(Boolean(mindmapSelectedNodeId));
   }, [mindmapToolOverlay, mindmapSelectedNodeId]);
+
+  // Explicit close of the Guided dialog (X / Escape). Restores the panel state
+  // captured by openArtifact; a selected MindMap node keeps the overlay open so
+  // node detail reappears underneath. A successful submit does not call this,
+  // so generation progress stays visible.
+  const restoreAfterGuidedClose = useCallback(() => {
+    const saved = panelBeforeArtifactRef.current;
+    panelBeforeArtifactRef.current = null;
+    if (!saved) return;
+    setRightView(saved.rightView);
+    if (mindmapToolOverlay) {
+      setRightOpen(saved.rightOpen || Boolean(mindmapSelectedNodeId));
+    } else if (!panel.drawer) {
+      panel.setCollapsedFor("right", saved.collapsed);
+    } else {
+      setRightOpen(saved.rightOpen);
+    }
+  }, [mindmapToolOverlay, mindmapSelectedNodeId, panel]);
 
   return (
     <div className="flex flex-col h-screen overflow-hidden font-body transition-theme" style={{ background: "var(--bg-base)", color: "var(--text-primary)" }}>
@@ -731,6 +756,7 @@ export default function MainLayout({
                   highlight={highlight}
                   onHighlight={onHighlight}
                   onClose={() => ((panel.drawer || mindmapToolOverlay) ? setRightOpen(false) : panel.setCollapsedFor("right", true))}
+                  onGuidedClose={restoreAfterGuidedClose}
                   onAskAbout={onAskAbout}
                   onOpenSource={onInspectorOpenSource}
                   collapsible={!panel.drawer && !mindmapToolOverlay}
