@@ -3119,3 +3119,10 @@ whatever it covers. When a first tap on the canvas misses, check
 `document.elementsFromPoint` at the target before blaming timing: a stale layer
 looks like a flaky first click. Dismissal belongs in the component, and the test
 must perform the dismiss gesture and then the canvas tap.
+
+## Guard checks must not match the canvas itself (2026-10-04)
+
+A keyboard guard that looks for a generic container class (here `.me-container`)
+silently disables the shortcut in the mode where that container is always present.
+Guards should check for the real competing surface, such as `[aria-modal="true"]`,
+and each close shortcut needs a test under the layout where it is used.
