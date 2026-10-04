@@ -107,7 +107,7 @@ export default function MainLayout({
   // whole object just below). Destructuring the specific pieces this file's
   // new keyboard effects need keeps THOSE effects from re-subscribing on
   // every unrelated render, without touching the hook itself.
-  const { goBack: mmGoBack, goForward: mmGoForward, jumpTo: mmJumpTo, selected: mmSelected, relations: mmRelations } = mindMapController;
+  const { goBack: mmGoBack, goForward: mmGoForward, jumpTo: mmJumpTo, selected: mmSelected, relations: mmRelations, clearSelectedNode: mmClearSelectedNode } = mindMapController;
   const [mindMapBackendContext, setMindMapBackendContext] = useState(null);
   useEffect(() => {
     const mapId = mindmapData?.data?.id;
@@ -449,6 +449,36 @@ export default function MainLayout({
     }
   }, [mindmapToolOverlay, mindmapSelectedNodeId, panel]);
 
+  // Close of the right panel's own X. Only the MindMap overlay owns a contextual
+  // node, so only it clears the selection; Guided close (above) never comes
+  // through here and keeps the node. Chat/Summary and the drawer keep their
+  // existing close behaviour.
+  const handleRightPanelClose = useCallback(() => {
+    if (mindmapToolOverlay) {
+      mmClearSelectedNode();
+      setRightOpen(false);
+      return;
+    }
+    if (panel.drawer) {
+      setRightOpen(false);
+      return;
+    }
+    panel.setCollapsedFor("right", true);
+  }, [mindmapToolOverlay, mmClearSelectedNode, panel]);
+
+  // Leaving MindMap (to Chat or Summary) ends the contextual node: clear the
+  // selection and close the overlay. MindElixirView stays mounted while hidden,
+  // so without this the old selection would reopen the detail on the next
+  // MindMap visit.
+  const previousWorkspaceModeRef = useRef(workspaceMode);
+  useEffect(() => {
+    const previous = previousWorkspaceModeRef.current;
+    previousWorkspaceModeRef.current = workspaceMode;
+    if (previous !== "mindmap" || workspaceMode === "mindmap") return;
+    mmClearSelectedNode();
+    setRightOpen(false);
+  }, [workspaceMode, mmClearSelectedNode]);
+
   return (
     <div className="flex flex-col h-screen overflow-hidden font-body transition-theme" style={{ background: "var(--bg-base)", color: "var(--text-primary)" }}>
 
@@ -755,7 +785,7 @@ export default function MainLayout({
                   evidence={evidence}
                   highlight={highlight}
                   onHighlight={onHighlight}
-                  onClose={() => ((panel.drawer || mindmapToolOverlay) ? setRightOpen(false) : panel.setCollapsedFor("right", true))}
+                  onClose={handleRightPanelClose}
                   onGuidedClose={restoreAfterGuidedClose}
                   onAskAbout={onAskAbout}
                   onOpenSource={onInspectorOpenSource}

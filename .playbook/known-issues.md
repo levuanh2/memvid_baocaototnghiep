@@ -5686,3 +5686,18 @@ Regression coverage lives in
 real Chromium fixture suite. Prevention: any renderer lifecycle change must
 test hidden-canvas load, repeated theme toggles, visible node/connector counts,
 map switching, and transform preservation in a real browser.
+
+## Node detail reopens after MindMap -> Chat -> MindMap (2026-10-04)
+
+- Symptom: close the contextual node detail, switch to Chat and back to MindMap,
+  and the detail reopens for the old node.
+- Root cause: the open-on-selection effect in `MainLayout` runs whenever the
+  overlay mode returns. The manual close only set `rightOpen=false`, so the
+  controller's `selected` survived and re-opened the detail. Leaving MindMap
+  never cleared it either. `MindElixirView` stays mounted while hidden, so the
+  canvas selection also survived.
+- Regression tests: `FE/src/hooks/useMindMapController.selectionLifecycle.test.jsx`
+  and `FE/src/components/Layout/MainLayout.selectionLifecycle.test.jsx`.
+- Prevention: any close or mode-exit path that hides a contextual surface must
+  clear its source of truth (the controller selection), not just the visibility
+  flag. Tests must cover the reopen-on-return path, not only the immediate close.

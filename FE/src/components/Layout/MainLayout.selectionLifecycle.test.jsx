@@ -57,7 +57,7 @@ vi.mock("./SidebarRight", () => ({
 // Canvas stub: registers the mind instance once (as MindElixirView does after
 // init), and drives selection through the controller's real canvas entry point.
 vi.mock("./WorkspaceContainer", () => ({
-  default: ({ mode, controller, onMindmapAction }) => {
+  default: function WorkspaceStub({ mode, controller, onMindmapAction }) {
     useEffect(() => { controller.registerMindInstance(fakeMind, new Map()); }, [controller]);
     return (
       <div data-testid="workspace-stub" data-mode={mode}>

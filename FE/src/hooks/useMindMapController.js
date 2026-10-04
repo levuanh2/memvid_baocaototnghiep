@@ -83,10 +83,15 @@ export function useMindMapController(data) {
     selectNodeInContext(n.id, { source: "mindmap", label: n.topic });
   }, [pushHistory, selectNodeInContext]);
 
-  // Root-only presentation removes the selected topic from the rendered
-  // tree. Clear the React-side selection at the same time so the overlay
-  // drawer and contextual branch action cannot retain a stale hidden node.
-  const clearSelectedNode = useCallback(() => setSelected(null), []);
+  // Clears the contextual node on BOTH sides: the React selection (drives the
+  // node-detail overlay and branch actions) and the canvas selection. The
+  // canvas instance stays mounted across modes, so leaving it selected would
+  // let the same node re-select silently and keep stale highlight. Root-only
+  // presentation also relies on this to drop a hidden node.
+  const clearSelectedNode = useCallback(() => {
+    setSelected(null);
+    mindRef.current?.clearSelection?.();
+  }, []);
 
   const jumpTo = useCallback((id) => {
     const mind = mindRef.current;
