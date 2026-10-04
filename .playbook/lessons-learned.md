@@ -3111,3 +3111,11 @@ selection will reopen the panel on the next render. The same applies to the
 canvas: a hidden but still-mounted instance keeps its own selection, so clear it
 through the public API (`clearSelection`) as well. Verify with a real instance
 and a round trip through every mode, not just the close click.
+
+## An open popover is a hit-test layer, not just a visual state (2026-10-04)
+
+A menu that stays rendered after its dismiss gesture still owns pointer hits over
+whatever it covers. When a first tap on the canvas misses, check
+`document.elementsFromPoint` at the target before blaming timing: a stale layer
+looks like a flaky first click. Dismissal belongs in the component, and the test
+must perform the dismiss gesture and then the canvas tap.

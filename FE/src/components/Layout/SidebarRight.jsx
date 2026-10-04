@@ -15,6 +15,7 @@ import { saveActiveSummaryJob, loadActiveSummaryJob, clearActiveSummaryJob } fro
 import { confirmRegenerateIfDirty, stallBannerVisible, canRetry } from "../../utils/jobRecovery";
 import { toast } from "../ui/Toaster";
 import { Icon } from "../ui/Icon";
+import ContextPanelCloseButton from "./ContextPanelCloseButton";
 import Disclosure from "../ui/Disclosure";
 import Spinner from "../ui/Spinner";
 import { normStem, citeKey } from "../../utils/evidence";
@@ -102,7 +103,7 @@ const ARTIFACTS = [
 
 // ── Main component ────────────────────────────────────
 export default function SidebarRight({
-  selectedSources, evidence, highlight, onHighlight, onClose, onGuidedClose, onAskAbout, onOpenSource,
+  selectedSources, evidence, highlight, onHighlight, onClose, onGuidedClose, onAskAbout, onOpenSource, collapsible = true,
   mode = "chat", mindMapContext, summaryData,
   // Phase 4C — Gia sư AI sống trong CÙNG cột này, không phải một cột thứ ba
   // (xem hard constraint "no new sidebar"). `rightView` là CONTROLLED từ
@@ -845,9 +846,7 @@ export default function SidebarRight({
           <Icon name={rightView === "tutor" ? "Sparkles" : rightView === "timeline" ? "Clock" : rightView === "insights" ? "Network" : "Quote"} size={15} />
           <strong className="truncate">{mode === "mindmap" ? "Chi tiết sơ đồ" : mode === "summary" ? "Nguồn bản tóm tắt" : "Bằng chứng câu trả lời"}</strong>
         </div>
-        <button type="button" onClick={onClose} className="icon-btn w-9 h-9" aria-expanded="true" aria-controls="context-inspector" aria-label="Thu gọn bộ kiểm tra ngữ cảnh" title="Thu gọn">
-          <Icon name="X" size={16} />
-        </button>
+        <ContextPanelCloseButton collapsible={collapsible} onClose={onClose} />
       </div>
       {legacyInspectorSurfacesEnabled && <div className="px-4 pt-4 pb-3 border-b border-border flex items-center justify-between flex-shrink-0 gap-2" aria-hidden="true">
         <div className="flex gap-1 min-w-0">

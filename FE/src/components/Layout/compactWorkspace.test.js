@@ -22,7 +22,9 @@ describe("compact StudyMap workspace contract", () => {
     const left = read("src/components/Layout/SidebarLeft.jsx");
     const right = read("src/components/Layout/SidebarRight.jsx");
     expect(left.match(/onClick=\{onClose\}/g)).toHaveLength(1);
-    expect(right.match(/onClick=\{onClose\}/g)).toHaveLength(1);
+    const closeButton = read("src/components/Layout/ContextPanelCloseButton.jsx");
+    expect(right.match(/<ContextPanelCloseButton/g)).toHaveLength(1);
+    expect(closeButton.match(/onClick=\{onClose\}/g)).toHaveLength(1);
   });
 
   it("keeps the global mode switch responsible for mode switching only", () => {

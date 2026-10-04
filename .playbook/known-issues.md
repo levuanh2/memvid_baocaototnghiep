@@ -5701,3 +5701,19 @@ map switching, and transform preservation in a real browser.
 - Prevention: any close or mode-exit path that hides a contextual surface must
   clear its source of truth (the controller selection), not just the visibility
   flag. Tests must cover the reopen-on-return path, not only the immediate close.
+
+## Mobile first tap on a topic lands on the overflow menu (2026-10-04)
+
+- Symptom: on a 390px canvas, open the contextual overflow menu (⋮), dismiss it
+  with Escape or a tap outside, then tap a topic: the first tap does not select
+  it; a second tap does.
+- Root cause: the overflow menu had no Escape or outside-pointer dismissal. The
+  open menu stayed on top of the canvas, so the first tap reached a menu item.
+- Also fixed in this PR: the node-detail close control was named "Thu gọn bộ kiểm
+  tra ngữ cảnh" (collapse) at 36px; the mobile initial fit left a 390px map at
+  about 27% (unreadable labels); toolbar zoom and "Tạo lại" targets were below 40px.
+- Regression tests: `FE/e2e-fixture/mindmap-responsive-interactions.spec.js`
+  (real MindElixirView, fixture harness) and
+  `FE/src/components/Layout/ContextPanelCloseButton.test.jsx`.
+- Prevention: any popover or menu over the canvas must dismiss on Escape and on
+  outside pointerdown, and tests must click through the real canvas after dismissal.
