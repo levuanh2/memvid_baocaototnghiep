@@ -186,3 +186,238 @@ test.describe.serial("critical flows", () => {
     await expect(page.getByText(/lỗi|thất bại|fail(?:ed|ure)/i).first()).toBeVisible({ timeout: 20_000 });
   });
 });
+
+// ── Guided panel restoration (browser) ──────────────────────────────────────
+// Scenarios A–D pin the contract from 667d394: opening the Guided dialog from
+// the Mind Map workspace reveals the right aside, and closing it restores the
+// aside to what the user had before (closed with nothing selected, open with a
+// selected node). Own registered user, so zero-map state is real. Maps are
+// seeded through the real POST /generate-mindmap API (the CI backend runs the
+// deterministic stub graph, so no provider is called), never through the UI,
+// never with force, and never with a Generate retry.
+
+const ASIDE = "aside.mindmap-tools-overlay, aside.context-inspector-shell";
+
+async function rightAsideOpen(page) {
+  return page.locator(ASIDE).first().evaluate((el) => {
+    const style = getComputedStyle(el);
+    return style.visibility !== "hidden" && style.opacity !== "0" && style.pointerEvents !== "none";
+  });
+}
+
+// Mind Elixir canvas identity: the root element's instance marker (a re-mount
+// gets a new marker), its transform, and every topic's text, selection and box.
+async function canvasState(page) {
+  return page.evaluate(() => {
+    const root = document.querySelector("me-root");
+    if (root && !root.dataset.e2eInstance) root.dataset.e2eInstance = Math.random().toString(36).slice(2);
+    const box = (el) => {
+      const r = el.getBoundingClientRect();
+      return [r.x, r.y, r.width, r.height].map((v) => Math.round(v));
+    };
+    return {
+      instance: root?.dataset.e2eInstance ?? null,
+      transform: root?.style.transform ?? "",
+      topics: [...document.querySelectorAll("me-tpc")].map((t) => ({
+        text: t.textContent.trim(),
+        selected: t.classList.contains("selected"),
+        box: box(t),
+      })),
+    };
+  });
+}
+
+// Two consecutive equal samples, polled without a fixed sleep.
+async function settled(read) {
+  let prev = await read();
+  let next = prev;
+  await expect.poll(async () => {
+    next = await read();
+    const same = JSON.stringify(next) === JSON.stringify(prev);
+    prev = next;
+    return same;
+  }, { timeout: 5_000, intervals: [100] }).toBe(true);
+  return next;
+}
+
+async function apiSession(page) {
+  const token = await page.evaluate(() => localStorage.getItem("memvid-token"));
+  expect(token, "auth token stored after register").toBeTruthy();
+  return { base: `http://127.0.0.1:${process.env.PORT || 8080}`, headers: { Authorization: `Bearer ${token}` } };
+}
+
+async function sourceStem(request, api, needle) {
+  let stem = null;
+  await expect.poll(async () => {
+    const body = await (await request.get(`${api.base}/list-indexed`, { headers: api.headers })).json();
+    stem = body.sources.find((s) => String(s.filename ?? "").includes(needle))?.video_stem ?? null;
+    return stem;
+  }, { timeout: 20_000 }).not.toBeNull();
+  return stem;
+}
+
+async function uploadSecondDocument(request, api) {
+  const res = await request.post(`${api.base}/api/documents/upload`, {
+    headers: api.headers,
+    multipart: { file: { name: "second-doc.txt", mimeType: "text/plain", buffer: Buffer.from("Tài liệu thứ hai cho kiểm thử chuyển sơ đồ.") } },
+  });
+  expect(res.status(), "second document upload").toBe(201);
+}
+
+async function seedMap(request, api, stem) {
+  const res = await request.post(`${api.base}/generate-mindmap`, {
+    headers: api.headers,
+    data: { sources: [stem], source_ids: [stem], q: "tóm tắt tài liệu", force: false },
+  });
+  expect(res.ok(), `seed POST /generate-mindmap -> ${res.status()}`).toBeTruthy();
+  const body = await res.json();
+  if (body.status === "done") return; // cache hit: already persisted
+  await expect.poll(async () => {
+    const st = await request.get(`${api.base}/mindmap-status/${body.job_id}`, { headers: api.headers });
+    return (await st.json()).status;
+  }, { timeout: 60_000 }).toBe("done");
+}
+
+async function reloadApp(page) {
+  await page.reload();
+  await page.getByRole("tablist", { name: "Chế độ Workspace" }).waitFor({ state: "visible" });
+}
+
+async function selectedMapTitle(page) {
+  await openMapLibrary(page);
+  const title = await page.getByRole("option", { selected: true }).first().locator("span").first().innerText();
+  await page.keyboard.press("Escape");
+  return title;
+}
+
+async function mapTitles(page) {
+  await openMapLibrary(page);
+  const options = page.getByRole("option");
+  await expect(options).toHaveCount(2);
+  const titles = [];
+  for (let i = 0; i < 2; i++) titles.push(await options.nth(i).locator("span").first().innerText());
+  await page.keyboard.press("Escape");
+  return titles;
+}
+
+async function selectMapByTitle(page, title) {
+  await openMapLibrary(page);
+  await page.getByRole("option").filter({ hasText: title }).click();
+}
+
+test.describe.serial("guided panel restoration (browser)", () => {
+  let page;
+  let api;
+
+  test.beforeAll(async ({ browser }) => {
+    page = await browser.newPage();
+  });
+  test.afterAll(async () => { await page.close(); });
+
+  test("setup: fresh user, one source, zero maps", async () => {
+    await registerAndEnterApp(page);
+    await uploadSampleDocument(page);
+    await selectAllSources(page);
+    api = await apiSession(page);
+  });
+
+  test("A1 zero maps: X close restores the aside to its pre-open state", async () => {
+    await page.getByRole("tab", { name: "Sơ đồ tư duy" }).click();
+    const before = await settled(() => rightAsideOpen(page));
+    expect(before, "zero maps, nothing selected: aside starts closed").toBe(false);
+
+    await page.getByRole("button", { name: "Tạo sơ đồ tư duy", exact: true }).click();
+    const dialog = page.getByRole("dialog", { name: "Tạo sơ đồ tư duy" });
+    await expect(dialog).toBeVisible();
+    expect(await settled(() => rightAsideOpen(page)), "opening Guided reveals the aside").toBe(true);
+
+    await dialog.getByRole("button", { name: "Đóng", exact: true }).click();
+    await expect(dialog).toBeHidden();
+    expect(await settled(() => rightAsideOpen(page)), "X close restores pre-open state").toBe(before);
+  });
+
+  test("A2 zero maps: Escape close restores the same state", async () => {
+    const before = await settled(() => rightAsideOpen(page));
+    expect(before).toBe(false);
+
+    await page.getByRole("button", { name: "Tạo sơ đồ tư duy", exact: true }).click();
+    const dialog = page.getByRole("dialog", { name: "Tạo sơ đồ tư duy" });
+    await expect(dialog).toBeVisible();
+    await page.keyboard.press("Escape");
+    await expect(dialog).toBeHidden();
+    expect(await settled(() => rightAsideOpen(page)), "Escape close restores pre-open state").toBe(before);
+  });
+
+  test("seed: one map through the generate API, then reload", async ({ request }) => {
+    const stem = await sourceStem(request, api, "sample-doc");
+    await seedMap(request, api, stem);
+    await selectAllSources(page);
+  });
+
+  test("B1 existing map: Guided close leaves transform, instance, topics and aside unchanged", async () => {
+    await page.getByRole("tab", { name: "Sơ đồ tư duy" }).click();
+    await page.locator("me-root").first().waitFor({ state: "visible" });
+    const beforeCanvas = await settled(() => canvasState(page));
+    const beforeAside = await settled(() => rightAsideOpen(page));
+    const beforeTitle = await selectedMapTitle(page);
+
+    const dialog = await openGuidedDialogFromHeader(page);
+    await expect(dialog).toBeVisible();
+    await dialog.getByRole("button", { name: "Đóng", exact: true }).click();
+    await expect(dialog).toBeHidden();
+
+    expect(await settled(() => canvasState(page))).toEqual(beforeCanvas);
+    expect(await settled(() => rightAsideOpen(page))).toBe(beforeAside);
+    expect(await selectedMapTitle(page)).toBe(beforeTitle);
+  });
+
+  test("C1 node detail: Guided close restores the open node detail", async () => {
+    await page.locator("me-tpc").first().click();
+    await expect(page.locator("me-tpc.selected")).toHaveCount(1);
+    expect(await settled(() => rightAsideOpen(page)), "selecting a node opens its detail").toBe(true);
+    const beforeCanvas = await settled(() => canvasState(page));
+
+    const dialog = await openGuidedDialogFromHeader(page);
+    await expect(dialog).toBeVisible();
+    await dialog.getByRole("button", { name: "Đóng", exact: true }).click();
+    await expect(dialog).toBeHidden();
+
+    await expect(page.locator("me-tpc.selected")).toHaveCount(1);
+    expect(await settled(() => rightAsideOpen(page)), "node detail restored after Guided close").toBe(true);
+    expect(await settled(() => canvasState(page))).toEqual(beforeCanvas);
+  });
+
+  test("D1 node detail default-closed on fresh load and after reload", async () => {
+    await page.goto("/app");
+    await page.getByRole("tablist", { name: "Chế độ Workspace" }).waitFor({ state: "visible" });
+    await page.getByRole("tab", { name: "Sơ đồ tư duy" }).click();
+    await page.locator("me-root").first().waitFor({ state: "visible" });
+    expect(await settled(() => rightAsideOpen(page)), "fresh load: no node detail").toBe(false);
+
+    await reloadApp(page);
+    await page.getByRole("tab", { name: "Sơ đồ tư duy" }).click();
+    await page.locator("me-root").first().waitFor({ state: "visible" });
+    expect(await settled(() => rightAsideOpen(page)), "after reload: no node detail").toBe(false);
+  });
+
+  test("D2 node detail stays closed across A -> B -> A map switching", async ({ request }) => {
+    await uploadSecondDocument(request, api);
+    await seedMap(request, api, await sourceStem(request, api, "second-doc"));
+    await reloadApp(page);
+    await page.getByRole("tab", { name: "Sơ đồ tư duy" }).click();
+
+    const [titleNewest, titleOlder] = await mapTitles(page);
+    expect(titleNewest).not.toBe(titleOlder);
+    for (const title of [titleOlder, titleNewest, titleOlder]) {
+      await selectMapByTitle(page, title);
+      expect(await settled(() => rightAsideOpen(page)), `closed after switching to ${title}`).toBe(false);
+    }
+  });
+
+  test("D3 node detail stays closed after Chat -> Mind Map", async () => {
+    await page.getByRole("tab", { name: "Trò chuyện" }).click();
+    await page.getByRole("tab", { name: "Sơ đồ tư duy" }).click();
+    await page.locator("me-root").first().waitFor({ state: "visible" });
+    expect(await settled(() => rightAsideOpen(page))).toBe(false);
+  });
+});
