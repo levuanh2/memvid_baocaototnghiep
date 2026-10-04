@@ -96,11 +96,14 @@ async function seedMap(request, api, stem) {
   });
   expect(res.ok(), `seed POST /generate-mindmap -> ${res.status()}`).toBeTruthy();
   const body = await res.json();
-  if (body.status === "done") return; // cache hit: already persisted
+  if (body.status === "done") return body.result.id; // cache hit: already persisted
+  let payload = null;
   await expect.poll(async () => {
     const st = await request.get(`${api.base}/mindmap-status/${body.job_id}`, { headers: api.headers });
-    return (await st.json()).status;
+    payload = await st.json();
+    return payload.status;
   }, { timeout: 60_000 }).toBe("done");
+  return payload.result.id;
 }
 
 async function reloadApp(page) {
@@ -133,11 +136,17 @@ async function selectMapByTitle(page, title) {
 test.describe.serial("guided panel restoration (browser)", () => {
   let page;
   let api;
+  const seededMapIds = [];
 
   test.beforeAll(async ({ browser }) => {
     page = await browser.newPage();
   });
-  test.afterAll(async () => { await page.close(); });
+  // Remove only the maps this block seeded, so the critical-flows suite that
+  // runs next starts from the zero-map state it was written against.
+  test.afterAll(async () => {
+    for (const id of seededMapIds) await page.request.delete(`${api.base}/mindmaps/${id}`, { headers: api.headers });
+    await page.close();
+  });
 
   test("setup: fresh user, one source, zero maps", async () => {
     await registerAndEnterApp(page);
@@ -175,7 +184,7 @@ test.describe.serial("guided panel restoration (browser)", () => {
 
   test("seed: one map through the generate API, then reload", async ({ request }) => {
     const stem = await sourceStem(request, api, "sample-doc");
-    await seedMap(request, api, stem);
+    seededMapIds.push(await seedMap(request, api, stem));
     await selectAllSources(page);
   });
 
@@ -199,7 +208,7 @@ test.describe.serial("guided panel restoration (browser)", () => {
   test("C1 node detail: Guided close restores the open node detail", async () => {
     await page.locator("me-tpc").first().click();
     await expect(page.locator("me-tpc.selected")).toHaveCount(1);
-    expect(await settled(() => rightAsideOpen(page)), "selecting a node opens its detail").toBe(true);
+    await expect.poll(() => rightAsideOpen(page), { timeout: 5_000 }).toBe(true);
     const beforeCanvas = await settled(() => canvasState(page));
 
     const dialog = await openGuidedDialogFromHeader(page);
@@ -208,7 +217,7 @@ test.describe.serial("guided panel restoration (browser)", () => {
     await expect(dialog).toBeHidden();
 
     await expect(page.locator("me-tpc.selected")).toHaveCount(1);
-    expect(await settled(() => rightAsideOpen(page)), "node detail restored after Guided close").toBe(true);
+    await expect.poll(() => rightAsideOpen(page), { timeout: 5_000 }).toBe(true);
     expect(await settled(() => canvasState(page))).toEqual(beforeCanvas);
   });
 
@@ -227,7 +236,7 @@ test.describe.serial("guided panel restoration (browser)", () => {
 
   test("D2 node detail stays closed across A -> B -> A map switching", async ({ request }) => {
     await uploadSecondDocument(request, api);
-    await seedMap(request, api, await sourceStem(request, api, "second-doc"));
+    seededMapIds.push(await seedMap(request, api, await sourceStem(request, api, "second-doc")));
     await reloadApp(page);
     await page.getByRole("tab", { name: "Sơ đồ tư duy" }).click();
 
