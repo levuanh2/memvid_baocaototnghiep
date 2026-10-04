@@ -89,13 +89,13 @@ test.describe.serial("critical flows", () => {
 
   test("existing/persisted map restores correctly from the map list", async () => {
     await openMapLibrary(page);
-    const firstTitle = await page.getByRole("option").first().locator("strong").innerText();
+    const firstTitle = await page.getByRole("option").first().locator("span").first().innerText();
     await page.getByRole("option").first().click();
     // Re-open the library: the just-selected item must still read as selected
     // (identity survives close/reopen, not just the initial click).
     await openMapLibrary(page);
     await expect(page.getByRole("option").first()).toHaveAttribute("aria-selected", "true");
-    expect(await page.getByRole("option").first().locator("strong").innerText()).toBe(firstTitle);
+    expect(await page.getByRole("option").first().locator("span").first().innerText()).toBe(firstTitle);
     await page.keyboard.press("Escape");
   });
 
@@ -137,14 +137,14 @@ test.describe.serial("critical flows", () => {
     }).toPass({ timeout: 20_000, intervals: [1000] });
 
     const options = page.getByRole("option");
-    const titleB = await options.first().locator("strong").innerText(); // newest first
-    const titleA = await options.nth(1).locator("strong").innerText();
+    const titleB = await options.first().locator("span").first().innerText(); // newest first
+    const titleA = await options.nth(1).locator("span").first().innerText();
     expect(titleA).not.toBe(titleB);
 
     const activeTitle = async () => {
       await openMapLibrary(page);
       const selected = page.getByRole("option", { selected: true }).first();
-      const t = await selected.locator("strong").innerText();
+      const t = await selected.locator("span").first().innerText();
       await page.keyboard.press("Escape");
       return t;
     };
