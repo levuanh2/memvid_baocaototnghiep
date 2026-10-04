@@ -92,7 +92,7 @@ describe("MindElixirView branch toggle (Round 8 redesign)", () => {
     await act(async () => { container.querySelector(".mm-overflow-trigger").click(); });
     const items = [...container.querySelectorAll('[role="menuitem"]')].map((b) => b.textContent);
     expect(items.some((t) => t.includes("Mở rộng tất cả"))).toBe(true);
-    expect(items.some((t) => t.includes("Thu gọn tất cả"))).toBe(true);
+    expect(items.some((t) => t.includes("Thu gọn về chủ đề chính"))).toBe(true);
     expect(items.some((t) => t.includes("Mở đến cấp 2"))).toBe(true);
     expect(items.some((t) => t.includes("Mở đến cấp 3"))).toBe(true);
   });

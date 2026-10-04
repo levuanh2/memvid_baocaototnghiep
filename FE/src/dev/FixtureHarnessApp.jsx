@@ -57,7 +57,9 @@ function useFixtureController() {
     setSelected({ id: n.id, title: n.topic, note: side?.note || "", chunkRefs: side?.chunkRefs || [] });
   }, []);
 
-  return { registerMindInstance, onNodeSelected, selected, sidecarRef };
+  const clearSelectedNode = useCallback(() => setSelected(null), []);
+
+  return { registerMindInstance, onNodeSelected, clearSelectedNode, selected, sidecarRef };
 }
 
 export default function FixtureHarnessApp() {
@@ -79,7 +81,8 @@ export default function FixtureHarnessApp() {
   }), [activeRecord, activeMapId]);
 
   return (
-    <div style={{ height: "100vh", width: "100vw" }} data-testid="fixture-harness-root" data-save-log={JSON.stringify(saveLog)}>
+    <div style={{ height: "100vh", width: "100vw" }} data-testid="fixture-harness-root"
+      data-selected-node={controller.selected?.id || ""} data-save-log={JSON.stringify(saveLog)}>
       <MindElixirView data={data} onRegenerate={() => {}} regenerating={false} controller={controller} />
     </div>
   );

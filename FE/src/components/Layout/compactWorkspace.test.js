@@ -24,4 +24,34 @@ describe("compact StudyMap workspace contract", () => {
     expect(left.match(/onClick=\{onClose\}/g)).toHaveLength(1);
     expect(right.match(/onClick=\{onClose\}/g)).toHaveLength(1);
   });
+
+  it("keeps the global mode switch responsible for mode switching only", () => {
+    const layout = read("src/components/Layout/MainLayout.jsx");
+    const modeSwitch = layout.slice(
+      layout.indexOf('<nav role="tablist" aria-label="Chế độ Workspace"'),
+      layout.indexOf("{/* Right actions */}"),
+    );
+
+    expect(modeSwitch).not.toContain("ModeLibraryMenu");
+    expect(modeSwitch).not.toContain("const count =");
+    expect(modeSwitch).not.toContain("▾");
+    expect(modeSwitch).not.toContain("openModeLibrary");
+  });
+
+  it("uses one shared 48px contextual-toolbar contract for Summary and Mind Map", () => {
+    const summary = read("src/components/Layout/SummaryPane.jsx");
+    const mindmap = read("src/components/mindmap/MindElixirView.jsx");
+    const css = read("src/index.css") + read("src/components/mindmap/mindmap.css");
+
+    expect(summary).toContain('className="artifact-toolbar');
+    expect(mindmap).toContain('className="artifact-toolbar');
+    expect(css).toMatch(/\.artifact-toolbar\s*\{[^}]*height:\s*48px/);
+  });
+
+  it("exposes one Mind Map library trigger and one create-new action inside that library", () => {
+    const mindmap = read("src/components/mindmap/MindElixirView.jsx");
+    expect(mindmap.match(/aria-label="Mở thư viện sơ đồ"/g)).toHaveLength(1);
+    expect(mindmap.match(/Tạo sơ đồ mới/g)).toHaveLength(1);
+    expect(mindmap).not.toContain('className="mm-context-action"');
+  });
 });
