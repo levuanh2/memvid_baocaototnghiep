@@ -1,5 +1,48 @@
 # Known Issues
 
+## Guided "Tạo sơ đồ mới" could take the legacy path before capability loaded (fixed 2026-10-05)
+
+**Symptom:** on production, clicking "Tạo sơ đồ mới" sometimes did not open the
+Guided dialog at widths 1023, 1024, and 1025 alike. The same width gave both
+outcomes across repeat runs, so it was never a breakpoint issue.
+
+**Root cause:** `SidebarRight` initialised `guidedCapability` to `false`. That
+value means "guided is off", but it is also the value before
+`GET /mindmaps/capability` resolves. A click in that window took
+`runMindmapGeneration` (the legacy path) instead of waiting for the server
+answer. With no source selected it only showed the toast "Vui lòng chọn ít nhất
+một tài liệu", but with sources selected it would POST `/generate-mindmap`.
+
+**Interim fix (superseded):** starting the state as `null` and opening Guided
+unless capability was a confirmed `false`. That opened Guided before the server
+confirmed it, which broke the server-authoritative rollout: non-QA and global-OFF
+users could briefly receive Guided UI. Replaced by the state machine below.
+
+**Fix:** capability is one of `loading | enabled | disabled | error` (the
+request starts on mount, so there is no separate "unknown" state). A click
+decides from the settled value only:
+- `enabled`: open Guided once.
+- `disabled` or `error`: run the legacy path once (error keeps the fail-closed
+  policy, and the source validation still applies).
+- `loading`: park ONE create intent, show "Đang kiểm tra tính năng…" with
+  `aria-busy`, open nothing, POST nothing. Repeated clicks reuse the same
+  intent. The request resolves once and runs the parked intent once.
+
+The request runs once per mount, guarded by a ref. React StrictMode runs
+effects twice in dev, and without the guard that issued a duplicate
+`/mindmaps/capability` request. The settle path checks `mountedRef`, so an
+unmount while loading never opens a dialog.
+
+**Regression:** `SidebarRight.guidedCapabilityPending.test.jsx` (11 cases:
+pending/true/false/error, rapid click, already enabled/disabled, non-QA mount
+observer, unmount, validation toast) and `e2e-fixture/guided-capability-delay.spec.js`
+(held capability response at 390, 1023, 1024, 1025, 1440).
+
+**Prevention:** a tri-state gate needs a distinct value for "not known yet".
+Do not reuse the `false` default as "off". Any action that depends on a server
+flag must wait for the server answer and must not render the gated UI in the
+meantime. Use the StrictMode-safe request guard for effects that fire requests.
+
 ## MindMap duplicate ownership, root-only collapse, and stale A↔B selection (fixed 2026-10-04)
 
 The global workspace tabs had accumulated map/summary counts, dropdown state,

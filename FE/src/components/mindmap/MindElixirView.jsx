@@ -84,6 +84,13 @@ export default function MindElixirView({ data, onRegenerate, regenerating, contr
   const [renderError, setRenderError] = useState(null);
   const [contextOverflowOpen, setContextOverflowOpen] = useState(false);
   const [mapSelectorOpen, setMapSelectorOpen] = useState(false);
+  // Keep the library open while the create route is still being decided, then
+  // close it once that settles (SidebarRight owns the create intent).
+  const wasCreatePending = useRef(false);
+  useEffect(() => {
+    if (wasCreatePending.current && !data.createPending) setMapSelectorOpen(false);
+    wasCreatePending.current = Boolean(data.createPending);
+  }, [data.createPending]);
 
   // Escape or any pointer press outside the overflow menu dismisses it. Without
   // this the open menu stays on top of the canvas and the next topic tap lands on
@@ -851,8 +858,12 @@ export default function MindElixirView({ data, onRegenerate, regenerating, contr
                   <small>{map.id === data.id ? "Đang mở" : `${map.sources?.length || 0} tài liệu`}</small>
                 </button>
               ))}
-              <button type="button" className="mm-map-selector__new" onClick={() => { setMapSelectorOpen(false); data.onCreateNew?.(); }} disabled={data.creating}>
-                <Icon name="Plus" size={14} /> Tạo sơ đồ mới
+              <button type="button" className="mm-map-selector__new" aria-busy={data.createPending || undefined}
+                onClick={() => { const parked = data.onCreateNew?.(); if (!parked) setMapSelectorOpen(false); }}
+                disabled={data.creating || data.createPending}>
+                {data.createPending
+                  ? <><Spinner size={14} /> Đang kiểm tra tính năng…</>
+                  : <><Icon name="Plus" size={14} /> Tạo sơ đồ mới</>}
               </button>
             </div>
           )}

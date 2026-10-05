@@ -102,6 +102,15 @@ const ARTIFACTS = [
 ];
 
 // ── Main component ────────────────────────────────────
+// Capability decision for "Tạo sơ đồ mới". Only a settled capability picks a
+// route; unknown/loading never opens Guided or starts the legacy generator.
+// enabled -> open Guided; disabled/error -> legacy V2 (error keeps fail-closed).
+function createActionFor(capability) {
+  if (capability === "enabled") return "opening_guided";
+  if (capability === "disabled" || capability === "error") return "starting_legacy";
+  return "waiting_for_capability";
+}
+
 export default function SidebarRight({
   selectedSources, evidence, highlight, onHighlight, onClose, onGuidedClose, onAskAbout, onOpenSource, collapsible = true,
   mode = "chat", mindMapContext, summaryData,
@@ -134,13 +143,26 @@ export default function SidebarRight({
   const [mindMaps, setMindMaps]           = useState([]);
   const [showModalMap, setShowModalMap]   = useState(null);
   const [guidedOpen, setGuidedOpen] = useState(false);
-  const [guidedCapability, setGuidedCapability] = useState(false);
+  // Guided capability is server-authoritative (GET /mindmaps/capability). The
+  // request starts on mount, so the value begins "loading" (the "unknown" state
+  // has no separate existence). Refs keep click handlers on the latest settled
+  // value, never a stale render closure. Nothing may open Guided or start the
+  // legacy generator until this settles.
+  const guidedCapRef = useRef("loading"); // loading | enabled | disabled | error
+  // One parked create intent while the capability request is in flight.
+  const pendingCreateRef = useRef(false);
+  const createRunRef = useRef(null);
+  const mountedRef = useRef(false);
+  const capabilityRequestedRef = useRef(false);
+  const [createWaiting, setCreateWaiting] = useState(false); // loading UI only
   const [guidedError, setGuidedError] = useState(null);
   const [showSummaryModal, setShowSummaryModal] = useState(null);
   useEffect(() => {
     if (artifactRequest?.tab) {
       setArtifactTab(artifactRequest.tab);
-      if (artifactRequest.tab === "mindmap" && !mindMaps.length && selectedSources?.length) setGuidedOpen(true);
+      // Artifact-driven Guided open only when capability is already confirmed on.
+      // While loading it is dropped (no intent parked); disabled never mounts Guided.
+      if (artifactRequest.tab === "mindmap" && !mindMaps.length && selectedSources?.length && guidedCapRef.current === "enabled") setGuidedOpen(true);
     }
   }, [artifactRequest, mindMaps.length, selectedSources]);
   // Task 4 — background generation: chip state driven by the Task 1 poller
@@ -175,14 +197,27 @@ export default function SidebarRight({
   const [stallDismissedAt, setStallDismissedAt] = useState({ mindmap: 0, summary: 0 });
 
   useEffect(() => {
-    let active = true;
-    getMindmapCapability().then((data) => {
-      if (active) setGuidedCapability(data?.guided_mindmap_v3 === true);
-    }).catch(() => {
-      // Capability failure fails closed for Guided V3; the legacy V2 flow stays usable.
-      if (active) setGuidedCapability(false);
-    });
-    return () => { active = false; };
+    mountedRef.current = true;
+    // Settles once: a parked create intent (if any) runs exactly once here.
+    const settle = (capability) => {
+      guidedCapRef.current = capability;
+      if (!mountedRef.current || !pendingCreateRef.current) return;
+      pendingCreateRef.current = false;
+      setCreateWaiting(false);
+      createRunRef.current?.(createActionFor(capability));
+    };
+    // One request per mount lifetime. StrictMode runs this effect twice in dev,
+    // so the flag stops the second run from issuing a duplicate request.
+    if (!capabilityRequestedRef.current) {
+      capabilityRequestedRef.current = true;
+      getMindmapCapability().then(
+        (data) => settle(data?.guided_mindmap_v3 === true ? "enabled" : "disabled"),
+        // Capability failure fails closed for Guided V3; the legacy V2 flow stays usable.
+        () => settle("error"),
+      );
+    }
+    // Unmounted while pending: mountedRef is false, so nothing runs or updates state.
+    return () => { mountedRef.current = false; };
   }, []);
 
   const frameRefs = useRef(new Map());
@@ -480,9 +515,23 @@ export default function SidebarRight({
     }
   };
 
-  const handleGenerateMindMap = () => {
-    if (guidedCapability) setGuidedOpen(true);
+  const runCreateAction = (action) => {
+    if (action === "opening_guided") setGuidedOpen(true);
     else runMindmapGeneration(selectedSources);
+  };
+  createRunRef.current = runCreateAction;
+  const handleGenerateMindMap = () => {
+    const action = createActionFor(guidedCapRef.current);
+    if (action === "waiting_for_capability") {
+      // One intent: repeated clicks while loading neither re-request nor re-queue.
+      if (!pendingCreateRef.current) {
+        pendingCreateRef.current = true;
+        setCreateWaiting(true);
+      }
+      return true; // parked: the caller keeps the library open until the route is known
+    }
+    runCreateAction(action);
+    return false;
   };
   createMindmapRef.current = handleGenerateMindMap;
   const onCreateNewMindmap = useCallback(() => createMindmapRef.current?.(), []);
@@ -768,6 +817,7 @@ export default function SidebarRight({
     onSelectMap: setShowModalMap,
     onCreateNew: onCreateNewMindmap,
     creating: loading || mindmapJobUi.running,
+    createPending: createWaiting,
     // PR#8: viewer báo dirty lên đây — handleRegenerateMindMap đọc ref này để
     // confirm trước khi "Tạo lại" thay thế bản đang sửa.
     onDirtyChange: (d) => { mindmapDirtyRef.current = Boolean(d); },
@@ -775,7 +825,7 @@ export default function SidebarRight({
     // recreated every render, not memoized; including it in deps would just
     // always be "changed", defeating this memo for no benefit.
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  } : null), [showModalMap, mindMaps, loading, mindmapJobUi.running, mindmapJobUi.label, mindmapGenerating, mindmapJobUi.progress, mindmapJobError, mindmapRetry, handleCancelMindMap, handleAskAbout, handleAskDirect, handleMindmapSaved, onCreateNewMindmap]);
+  } : null), [showModalMap, mindMaps, loading, createWaiting, mindmapJobUi.running, mindmapJobUi.label, mindmapGenerating, mindmapJobUi.progress, mindmapJobError, mindmapRetry, handleCancelMindMap, handleAskAbout, handleAskDirect, handleMindmapSaved, onCreateNewMindmap]);
 
   // Workspace architecture — forward the SAME `modalMapData` a portal used to
   // consume, plus the two extra props MindElixirView takes directly
@@ -805,6 +855,7 @@ export default function SidebarRight({
         select: setShowModalMap,
         create: onCreateNewMindmap,
         creating: loading || mindmapJobUi.running,
+        createPending: createWaiting,
         // P2 fix: same job-status fields as modalMapData, for the case where
         // no map is open yet (WorkspaceEmptyState) -- there's no viewer to
         // put a banner into otherwise.
@@ -817,7 +868,7 @@ export default function SidebarRight({
     // runMindmapGeneration (used by onRetry above) is a plain closure
     // recreated every render, not memoized -- see modalMapData above.
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [mindMaps, loading, mindmapJobUi.running, mindmapJobUi.label, mindmapJobUi.progress, mindmapJobError, mindmapRetry, onCreateNewMindmap, onMindmapLibraryChange, initialLoading, loiTaiMindmap]);
+  }, [mindMaps, loading, createWaiting, mindmapJobUi.running, mindmapJobUi.label, mindmapJobUi.progress, mindmapJobError, mindmapRetry, onCreateNewMindmap, onMindmapLibraryChange, initialLoading, loiTaiMindmap]);
 
   useEffect(() => {
     onSummaryLibraryChange?.({
@@ -1075,11 +1126,12 @@ export default function SidebarRight({
 
         <button
           onClick={onGenerate}
-          disabled={isGenerating || !selectedSources?.length}
+          aria-busy={createWaiting || undefined}
+          disabled={isGenerating || createWaiting || !selectedSources?.length}
           className="btn-secondary w-full !py-2.5 inline-flex items-center justify-center gap-2"
         >
-          {isGenerating ? (
-            <><Spinner size={14} /> Đang tạo…</>
+          {isGenerating || createWaiting ? (
+            <><Spinner size={14} /> {createWaiting ? "Đang kiểm tra tính năng…" : "Đang tạo…"}</>
           ) : (
             <><Icon name="Plus" size={15} /> Tạo {artifactTab === "mindmap" ? "sơ đồ" : "tóm tắt"}</>
           )}
