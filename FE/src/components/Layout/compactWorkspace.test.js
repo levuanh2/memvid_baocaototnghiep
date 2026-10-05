@@ -8,8 +8,8 @@ describe("compact StudyMap workspace contract", () => {
   it("uses compact header and library dimensions", () => {
     const layout = read("src/components/Layout/MainLayout.jsx");
     const css = read("src/index.css");
-    // Phones: one row with 8px side padding and 6px gaps; desktop keeps gap-4 / px-5.
-    expect(layout).toContain('className="flex items-center gap-1.5 sm:gap-4 px-2 sm:px-5 h-[56px]');
+    // Compact one row below 1024px (8px side padding, 6px gaps); full header from lg.
+    expect(layout).toContain('className="flex items-center gap-1.5 lg:gap-4 px-2 lg:px-5 h-[56px]');
     expect(css).toMatch(/\.mode-library-menu\s*\{[^}]*width:\s*min\(400px/);
   });
 

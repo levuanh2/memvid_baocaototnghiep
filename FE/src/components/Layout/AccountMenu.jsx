@@ -59,12 +59,12 @@ export default function AccountMenu({ user, onLogout }) {
         aria-expanded={moMenu}
         title={hoSo.email}
         aria-label={`Tài khoản: ${hoSo.ten}`}
-        className="flex items-center justify-center md:justify-start gap-2 w-10 h-10 md:w-auto md:h-auto pl-0 md:pl-1 pr-0 md:pr-1.5 py-0 md:py-1 rounded-full border transition-theme hover:border-[rgba(178,58,46,0.30)]"
+        className="flex items-center justify-center lg:justify-start gap-2 w-10 h-10 lg:w-auto lg:h-auto pl-0 lg:pl-1 pr-0 lg:pr-1.5 py-0 lg:py-1 rounded-full border transition-theme hover:border-[rgba(178,58,46,0.30)]"
         style={{ borderColor: "var(--border-color)" }}
       >
         <Avatar src={hoSo.avatar} chuCai={hoSo.chuCai} size={28} />
-        <span className="hidden md:inline text-small text-text-secondary max-w-[140px] truncate">{hoSo.ten}</span>
-        <Icon name="ChevronDown" size={14} className={`hidden md:block ${moMenu ? "rotate-180 transition-transform" : "transition-transform"}`} />
+        <span className="hidden lg:inline text-small text-text-secondary max-w-[140px] truncate">{hoSo.ten}</span>
+        <Icon name="ChevronDown" size={14} className={`hidden lg:block ${moMenu ? "rotate-180 transition-transform" : "transition-transform"}`} />
       </button>
 
       {moMenu && (
