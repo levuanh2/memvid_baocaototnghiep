@@ -983,14 +983,19 @@
 .source-filter-popover__foot { margin-top: 13px; padding-top: 10px; border-top: 1px solid var(--border-color); }
 .mindmap-tools-overlay { isolation: isolate; }
 
-@media (max-width: 767px) {
-  .workspace-mode-switch { flex: 1 1 auto; overflow-x: auto; scrollbar-width: none; }
-  .workspace-mode-switch::-webkit-scrollbar { display: none; }
-  .workspace-mode-switch > button { flex: 0 0 auto; min-height: 40px; padding-inline: 9px; }
-  .mode-library-menu { position: fixed; top: 64px; left: 8px; right: 8px; width: auto; max-height: calc(100vh - 80px); transform: none; }
-  .study-tools-menu { position: fixed; top: 56px; left: 8px; right: 8px; width: auto; max-height: calc(100vh - 68px); }
+/* Compact global header below 1024px (lg). The full desktop header needs 956px of
+   content (measured, header-width-audit.spec.js), so 768-1023 use the compact header:
+   fixed-width 40px icon tabs, never scrolled or shrunk, and one tools trigger. */
+@media (max-width: 1023px) {
+  .workspace-mode-switch { flex: 0 0 auto; overflow: visible; }
+  .workspace-mode-switch > button { flex: 0 0 auto; }
   .study-tools-trigger { width: 40px; padding: 0; justify-content: center; }
   .study-tools-trigger span { display: none; }
+}
+
+@media (max-width: 767px) {
+  .mode-library-menu { position: fixed; top: 64px; left: 8px; right: 8px; width: auto; max-height: calc(100vh - 80px); transform: none; }
+  .study-tools-menu { position: fixed; top: 56px; left: 8px; right: 8px; width: auto; max-height: calc(100vh - 68px); }
   .mindmap-tools-overlay { inset: auto 0 0 0 !important; width: auto !important; max-height: 80vh; border-radius: 16px 16px 0 0 !important; }
   .source-filter-popover { top: 112px; left: 8px; right: 8px; }
   .context-inspector-shell { width: 100% !important; max-height: 82vh; }

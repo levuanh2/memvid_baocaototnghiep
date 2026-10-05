@@ -1,5 +1,5 @@
 import { useState, useCallback, useEffect, useRef, useMemo } from "react";
-import { useNavigate } from "react-router-dom";
+import { Link, useNavigate } from "react-router-dom";
 import SidebarLeft from "./SidebarLeft";
 import ContextInspector from "./ContextInspector";
 import WorkspaceContainer from "./WorkspaceContainer";
@@ -487,13 +487,9 @@ export default function MainLayout({
 
       {/* ── TOP HEADER ── */}
       <header
-        className="flex items-center gap-4 px-4 sm:px-5 h-[56px] border-b border-border flex-shrink-0 transition-theme"
+        className="flex items-center gap-1.5 lg:gap-4 px-2 lg:px-5 h-[56px] border-b border-border flex-shrink-0 transition-theme"
         style={{ background: "var(--bg-sidebar)" }}
       >
-        {/* Mobile: open source library */}
-        <button onClick={() => setLeftOpen(true)} className="md:hidden icon-btn w-9 h-9" aria-label="Mở thư mục nguồn">
-          <Icon name="Menu" size={18} />
-        </button>
 
         {/* Wordmark — a stamped seal + serif name. This IS the seal-stamp
             signature itself (Signature Contract §7) — stays --seal
@@ -505,7 +501,8 @@ export default function MainLayout({
             cluster; it's still the SAME real `<Link to="/app/study">`
             (Alt+S, quiz/practice mode) that used to sit in the right-side
             icon cluster, just relocated — not duplicated there anymore. */}
-        <div className="flex items-center gap-2.5 flex-shrink-0 select-none">
+        <Link to="/app" aria-label="MemVidX — trang chủ"
+          className="flex items-center justify-center lg:justify-start gap-2.5 w-10 h-10 lg:w-auto lg:h-10 flex-shrink-0 select-none">
           <span
             className="w-[30px] h-[30px] rounded-[6px] inline-flex items-center justify-center font-display text-body-lg font-semibold flex-shrink-0"
             style={{ color: "var(--seal)", border: "1.5px solid var(--seal)", transform: "rotate(-4deg)" }}
@@ -513,10 +510,10 @@ export default function MainLayout({
           >
             M
           </span>
-          <span className="font-display font-semibold text-title tracking-tight text-text-primary hidden sm:block">
+          <span className="font-display font-semibold text-title tracking-tight text-text-primary hidden lg:block">
             MemVid<span className="text-seal">X</span>
           </span>
-        </div>
+        </Link>
 
         {/* Mode switch — Round 11 (mockup parity, explicit user decision):
             moved here from the now-deleted LessonHeader.jsx/WorkspaceContainer
@@ -532,37 +529,42 @@ export default function MainLayout({
             must stay reachable on mobile — see round 10's own checklist
             item on this). */}
         <nav role="tablist" aria-label="Chế độ Workspace"
-          className="workspace-mode-switch relative flex items-center gap-1 p-1 rounded-full flex-shrink-0 mx-auto"
+          className="workspace-mode-switch relative flex items-center gap-0 lg:gap-1 p-0 lg:p-1 rounded-full flex-shrink-0 mx-auto"
           style={{ background: "var(--bg-card)", border: "1px solid var(--border-color)" }}>
           {MODE_TABS.map((t) => {
             const active = workspaceMode === t.key;
             return (
               <button key={t.key} type="button" role="tab" aria-selected={active}
                 onClick={() => { setWorkspaceMode(t.key); closeHeaderSurface(); }}
-                title={t.label}
-                className="flex items-center gap-1.5 px-2.5 sm:px-3 py-1.5 text-small rounded-full transition-colors"
+                title={t.label} aria-label={t.label}
+                className="flex items-center justify-center gap-1.5 w-10 h-10 lg:w-auto lg:h-auto px-0 lg:px-3 py-0 lg:py-1.5 text-small rounded-full transition-colors shrink-0"
                 style={{
                   background: active ? "var(--accent)" : "transparent",
                   color: active ? "#FFFFFF" : "var(--text-secondary)",
                   fontWeight: active ? 600 : 500,
                 }}>
                 <Icon name={t.icon} size={14} />
-                <span className="hidden sm:inline">{t.label}</span>
+                <span className="hidden lg:inline">{t.label}</span>
               </button>
             );
           })}
         </nav>
 
         {/* Right actions */}
-        <div className="flex items-center gap-2 flex-shrink-0">
-          {/* Mobile: search has no keyboard shortcut to fall back on — needs its own icon button. */}
+        <div className="flex items-center gap-1 lg:gap-2 flex-shrink-0">
+          {/* Mobile: one workspace-tools owner. Its menu also carries the actions
+              that used to be separate phone buttons (source library, inspector). */}
           <div className="relative">
-            <button type="button" className="study-tools-trigger"
+            <button type="button" className="study-tools-trigger" aria-label="Mở công cụ StudyMap"
               onClick={() => setHeaderSurface((current) => current === "study-tools" ? null : "study-tools")}
               aria-haspopup="menu" aria-expanded={headerSurface === "study-tools"}>
               <span>StudyMap</span><Icon name="ChevronDown" size={14} />
             </button>
-            <StudyToolsMenu open={headerSurface === "study-tools"} onClose={closeHeaderSurface} onSelect={openStudyTool} />
+            <StudyToolsMenu open={headerSurface === "study-tools"} onClose={closeHeaderSurface} onSelect={openStudyTool}
+              extraActions={[
+                { key: "sources", label: "Mở thư mục nguồn", icon: "Menu", onSelect: () => setLeftOpen(true) },
+                { key: "inspector", label: "Mở công cụ", icon: "PanelRight", onSelect: () => setRightOpen(true) },
+              ]} />
           </div>
           {/* IA pass (round 5), nav-ownership: Inspector is the ONLY
               persistent owner of Evidence/AI Tutor/Timeline/Knowledge — the
@@ -578,21 +580,17 @@ export default function MainLayout({
               so this stays mobile-only (a second desktop entry point would
               itself violate "one owner"). Hotkeys (Ctrl+/, Alt+T) still work
               — removing the visible button doesn't remove the shortcut. */}
-          <button onClick={() => setRightOpen(true)} className="md:hidden icon-btn w-9 h-9"
-                  aria-label="Mở công cụ">
-            <Icon name="PanelRight" size={18} />
-          </button>
           {/* UI/UX Polish Issue 2 — search's discoverable HOME is the Study
               Workspace now, not buried in Library. Same global CommandPalette
               as Ctrl+K (Issue 2 doesn't ask for a second search engine, just
               a visible entry point reachable from here). */}
           {/* Feature Pack C — Discoverability (mục 7). */}
-          <button onClick={() => setShortcutsOpen(true)} className="hidden md:inline-flex icon-btn w-9 h-9"
+          <button onClick={() => setShortcutsOpen(true)} className="hidden lg:inline-flex icon-btn w-9 h-9"
                   title="Phím tắt (?)" aria-label="Xem phím tắt">
             <Icon name="Keyboard" size={16} />
           </button>
           {/* Theme toggle */}
-          <div className="hidden sm:flex theme-toggle" role="group" aria-label="Chế độ sáng/tối">
+          <div className="hidden lg:flex theme-toggle" role="group" aria-label="Chế độ sáng/tối">
             <button onClick={setLight} title="Nền sáng" aria-pressed={!isDark} className={`theme-toggle-btn ${!isDark ? "theme-toggle-btn-active" : ""}`} aria-label="Nền sáng">
               <Icon name="Sun" size={15} />
             </button>

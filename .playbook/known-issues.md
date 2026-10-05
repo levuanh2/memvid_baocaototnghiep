@@ -5732,3 +5732,36 @@ map switching, and transform preservation in a real browser.
 - Prevention: every close path of a contextual surface must clear its source of
   truth, not only its visibility. Test each path under the drawer layout as well as
   the overlay layout.
+
+## Phone mode switch tabs were 32px and clipped in Mind Map mode (2026-10-05)
+
+- Symptom: on 390px, Chat / Mind Map / Summary tabs were 32px wide. In Mind Map
+  mode the header row overflowed, the nav collapsed to 11px and its tabs were
+  clipped, so taps landed on the StudyMap trigger or the header.
+- Root cause: mobile CSS made the nav `flex: 1 1 auto; overflow-x: auto`, so a
+  squeezed scroll container clipped its own tabs. Tab padding gave 32px targets.
+  The phone header also carried five separate right-side owners.
+- Fix: fixed-width nav with 40px icon tabs; one 40px workspace-tools owner whose
+  menu holds the source library and inspector actions on phones; compact 40px usage
+  control with a status dot (numbers stay in the popover, now pinned to the
+  viewport on phones); avatar-only 40px account control; brand mark as a 40px home link.
+- Known, outside this change: at 768px the header row is wider than the viewport
+  (desktop classes, unchanged here). Tracked separately.
+- Regression tests: `FE/e2e-fixture/mobile-header.spec.js` (hit tests in each mode),
+  `FE/e2e-fixture/mobile-header-visual.spec.js` (captures and measurements).
+
+## Full header overflowed between 768 and 1023px; usage warning colours never rendered (2026-10-05)
+
+- Full desktop header needs 956px (measured with `header-width-audit.spec.js`). At
+  768 to 912 it overflowed the viewport. Fix: compact header below `lg` (1024px),
+  full header from 1024px. Breakpoint moved from sm/md to lg for header classes only;
+  the mindmap overlay and library-menu mobile rules keep their 767px breakpoint.
+- `text-warn`, `text-danger` and `bg-warn`/`bg-danger` were never generated (no such
+  colours in tailwind.config.js), so the usage warning and exhausted states had no
+  colour in the popover bar or the header. Fixed by using the defined `--warn` and
+  `--err` variables directly.
+- Regression tests: `FE/e2e-fixture/mobile-header.spec.js` (breakpoints, targets, hit
+  tests in each mode, usage states, menu dismissal, lifecycle invariants) and
+  `FE/src/components/Layout/UsageChip.test.jsx`.
+- Known, not changed: desktop usage button is 36px tall and the account chip about 38px
+  (pre-existing desktop sizes, outside the compact target floor).

@@ -7,7 +7,9 @@ const TOOLS = [
   { key: "insights", label: "Kiến thức", detail: "Khám phá khái niệm liên quan", icon: "Network" },
 ];
 
-export default function StudyToolsMenu({ open, onClose, onSelect }) {
+// `extraActions` are the phone-only workspace actions (source library, inspector) that
+// no longer have their own header button below md. They render only on phones.
+export default function StudyToolsMenu({ open, onClose, onSelect, extraActions = [] }) {
   const ref = useRef(null);
   useEffect(() => {
     if (!open) return undefined;
@@ -40,6 +42,17 @@ export default function StudyToolsMenu({ open, onClose, onSelect }) {
           <Icon name="ChevronRight" size={14} className="study-tools-menu__arrow" aria-hidden />
         </button>
       ))}
+      {extraActions.length > 0 && (
+        <div className="lg:hidden border-t border-border mt-1 pt-1">
+          {extraActions.map((action) => (
+            <button key={action.key} type="button" role="menuitem" className="study-tools-menu__item"
+              onClick={() => { action.onSelect?.(); onClose?.(); }}>
+              <span className="study-tools-menu__item-icon"><Icon name={action.icon} size={16} /></span>
+              <span className="study-tools-menu__item-copy"><strong className="study-tools-menu__item-title">{action.label}</strong></span>
+            </button>
+          ))}
+        </div>
+      )}
     </div>
   );
 }

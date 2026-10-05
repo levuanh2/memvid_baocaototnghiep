@@ -58,7 +58,8 @@ describe("UsageChip", () => {
     await flush();
     const trigger = container.querySelector('button[aria-haspopup="dialog"]');
     expect(trigger.textContent).toContain("AI 80%");
-    expect(trigger.querySelector(".text-warn")).toBeTruthy();
+    // The warning colour is the defined --warn variable (the old text-warn class was never generated).
+    expect(trigger.querySelector('span[aria-hidden="true"]').className).toContain("var(--warn)");
   });
 
   it("retries after an error and renders the exhausted danger state", async () => {
@@ -72,9 +73,9 @@ describe("UsageChip", () => {
     await flush();
     const trigger = container.querySelector('button[aria-haspopup="dialog"]');
     expect(trigger.textContent).toContain("AI 100%");
-    expect(trigger.querySelector(".text-danger")).toBeTruthy();
+    expect(trigger.querySelector('span[aria-hidden="true"]').className).toContain("var(--err)");
     await act(async () => trigger.click());
-    expect(container.querySelector(".bg-danger")).toBeTruthy();
+    expect(container.querySelector("div.h-full").className).toContain("var(--err)");
   });
 
   it("closes on Escape and outside click and constrains the mobile popover", async () => {

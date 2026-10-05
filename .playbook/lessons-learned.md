@@ -3126,3 +3126,17 @@ A keyboard guard that looks for a generic container class (here `.me-container`)
 silently disables the shortcut in the mode where that container is always present.
 Guards should check for the real competing surface, such as `[aria-modal="true"]`,
 and each close shortcut needs a test under the layout where it is used.
+
+## Squeezed scroll containers hide their own targets (2026-10-05)
+
+A flex child with `overflow: auto` can shrink to near zero, and its children are
+then clipped while still looking present. Fixed-size controls in a header need
+`flex: 0 0 auto` and no scroll container. Check `elementFromPoint` at each target's
+centre in every mode, because the header's width changes with mode content.
+
+## Check a Tailwind class is generated before trusting it (2026-10-05)
+
+A class name in JSX is not evidence that a utility exists. If the theme does not
+define the colour, the class silently produces nothing, and a unit test that only
+checks the class name passes. Assert the computed style in a real browser for any
+state colour, and use the defined CSS variables when a token is missing.
