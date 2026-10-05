@@ -1,5 +1,31 @@
 # Known Issues
 
+## Guided "Tạo sơ đồ mới" could take the legacy generation path before capability loaded (fixed 2026-10-05)
+
+**Symptom:** on production, clicking "Tạo sơ đồ mới" sometimes did not open the
+Guided dialog at widths 1023, 1024, and 1025 alike. The same width gave both
+outcomes across repeat runs, so it was never a breakpoint issue.
+
+**Root cause:** `SidebarRight` initialised `guidedCapability` to `false`. That
+value means "guided is off", but it is also the value before
+`GET /mindmaps/capability` resolves. A click in that window took
+`runMindmapGeneration` (the legacy path) instead of opening Guided. With no
+source selected it only showed the toast "Vui lòng chọn ít nhất một tài liệu",
+but with sources selected it would POST `/generate-mindmap`.
+
+**Fix:** the state starts as `null` (unknown). `handleGenerateMindMap` opens
+Guided unless capability is a confirmed `false`. The fail-closed behaviour on
+capability error (`false`) is unchanged.
+
+**Regression:** `SidebarRight.guidedCapabilityPending.test.jsx`. A click while
+capability is pending must open Guided and must not call `generateMindmap`. A
+confirmed `false` must still take the legacy path.
+
+**Prevention:** a tri-state flag (`null` unknown / `true` / `false`) needs a
+distinct value for "not known yet". Do not reuse the `false` default as the
+"off" signal.
+
+
 ## MindMap duplicate ownership, root-only collapse, and stale A↔B selection (fixed 2026-10-04)
 
 The global workspace tabs had accumulated map/summary counts, dropdown state,

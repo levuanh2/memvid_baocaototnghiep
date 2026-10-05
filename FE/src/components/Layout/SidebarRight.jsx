@@ -134,7 +134,9 @@ export default function SidebarRight({
   const [mindMaps, setMindMaps]           = useState([]);
   const [showModalMap, setShowModalMap]   = useState(null);
   const [guidedOpen, setGuidedOpen] = useState(false);
-  const [guidedCapability, setGuidedCapability] = useState(false);
+  // null = capability not fetched yet. Only a confirmed `false` may take the
+  // legacy generation path; a click during the fetch must open Guided.
+  const [guidedCapability, setGuidedCapability] = useState(null);
   const [guidedError, setGuidedError] = useState(null);
   const [showSummaryModal, setShowSummaryModal] = useState(null);
   useEffect(() => {
@@ -481,7 +483,7 @@ export default function SidebarRight({
   };
 
   const handleGenerateMindMap = () => {
-    if (guidedCapability) setGuidedOpen(true);
+    if (guidedCapability !== false) setGuidedOpen(true);
     else runMindmapGeneration(selectedSources);
   };
   createMindmapRef.current = handleGenerateMindMap;
