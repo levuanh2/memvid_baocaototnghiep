@@ -5732,3 +5732,20 @@ map switching, and transform preservation in a real browser.
 - Prevention: every close path of a contextual surface must clear its source of
   truth, not only its visibility. Test each path under the drawer layout as well as
   the overlay layout.
+
+## Phone mode switch tabs were 32px and clipped in Mind Map mode (2026-10-05)
+
+- Symptom: on 390px, Chat / Mind Map / Summary tabs were 32px wide. In Mind Map
+  mode the header row overflowed, the nav collapsed to 11px and its tabs were
+  clipped, so taps landed on the StudyMap trigger or the header.
+- Root cause: mobile CSS made the nav `flex: 1 1 auto; overflow-x: auto`, so a
+  squeezed scroll container clipped its own tabs. Tab padding gave 32px targets.
+  The phone header also carried five separate right-side owners.
+- Fix: fixed-width nav with 40px icon tabs; one 40px workspace-tools owner whose
+  menu holds the source library and inspector actions on phones; compact 40px usage
+  control with a status dot (numbers stay in the popover, now pinned to the
+  viewport on phones); avatar-only 40px account control; brand mark as a 40px home link.
+- Known, outside this change: at 768px the header row is wider than the viewport
+  (desktop classes, unchanged here). Tracked separately.
+- Regression tests: `FE/e2e-fixture/mobile-header.spec.js` (hit tests in each mode),
+  `FE/e2e-fixture/mobile-header-visual.spec.js` (captures and measurements).

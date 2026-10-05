@@ -3126,3 +3126,10 @@ A keyboard guard that looks for a generic container class (here `.me-container`)
 silently disables the shortcut in the mode where that container is always present.
 Guards should check for the real competing surface, such as `[aria-modal="true"]`,
 and each close shortcut needs a test under the layout where it is used.
+
+## Squeezed scroll containers hide their own targets (2026-10-05)
+
+A flex child with `overflow: auto` can shrink to near zero, and its children are
+then clipped while still looking present. Fixed-size controls in a header need
+`flex: 0 0 auto` and no scroll container. Check `elementFromPoint` at each target's
+centre in every mode, because the header's width changes with mode content.

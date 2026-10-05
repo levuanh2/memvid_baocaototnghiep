@@ -34,18 +34,31 @@ export default function UsageChip() {
     return () => { document.removeEventListener("mousedown", close); document.removeEventListener("keydown", escape); };
   }, [open]);
 
-  if (loading && !usage) return <span className="text-caption text-text-muted" aria-label="Đang tải mức sử dụng">…</span>;
-  if (error && !usage) return <button type="button" className="text-caption text-warn" onClick={load}>Usage ↻</button>;
+  // Phones get 40x40 boxes (the header has no room for text); desktop keeps the text forms.
+  if (loading && !usage) return <span className="w-10 h-10 md:w-auto md:h-auto inline-flex items-center justify-center text-caption text-text-muted" aria-label="Đang tải mức sử dụng">…</span>;
+  if (error && !usage) return (
+    <button type="button" className="w-10 h-10 md:w-auto md:h-auto inline-flex items-center justify-center text-caption text-warn" aria-label="Thử lại mức sử dụng AI" title="Thử lại mức sử dụng AI" onClick={load}>
+      <span className="md:hidden" aria-hidden="true">↻</span>
+      <span className="hidden md:inline">Usage ↻</span>
+    </button>
+  );
   if (!usage) return null;
   const warning = usage.percentage >= 80 && usage.remaining > 0;
   const exhausted = usage.remaining <= 0;
   return (
     <div ref={rootRef} className="relative z-[60]">
-      <button type="button" className="icon-btn h-9 px-2.5 gap-1.5 inline-flex" aria-expanded={open} aria-haspopup="dialog" title="Mức sử dụng AI" onClick={() => setOpen((value) => !value)}>
+      {/* Phones: a 40x40 icon with a status dot (ok / warning / exhausted); the numbers
+          stay in the popover. Desktop keeps the "AI n%" text. Name carries the percentage. */}
+      <button type="button" className="icon-btn relative w-10 h-10 md:w-auto md:h-9 md:px-2.5 gap-1.5 inline-flex items-center justify-center"
+        aria-expanded={open} aria-haspopup="dialog" aria-label={`Mức sử dụng AI ${Math.round(usage.percentage)}%`} title="Mức sử dụng AI"
+        onClick={() => setOpen((value) => !value)}>
         <Icon name="Activity" size={15} />
-        <span className={exhausted ? "text-danger" : warning ? "text-warn" : ""}>AI {Math.round(usage.percentage)}%</span>
+        <span aria-hidden="true" className={`md:hidden absolute right-1 top-1 w-2.5 h-2.5 rounded-full ${exhausted ? "bg-danger" : warning ? "bg-warn" : "bg-accent"}`} />
+        <span className={`hidden md:inline ${exhausted ? "text-danger" : warning ? "text-warn" : ""}`}>AI {Math.round(usage.percentage)}%</span>
       </button>
-      {open && <div role="dialog" aria-label="Mức sử dụng AI" className="absolute right-0 md:right-[120px] top-[calc(100%+8px)] z-50 w-[min(280px,calc(100vw-16px))] rounded-[10px] border border-border bg-card p-3 shadow-card-hover">
+      {/* Phones: pinned to the viewport (the chip sits near the right edge, so an anchored
+          popover would run off a 320px screen). Desktop keeps the anchored placement. */}
+      {open && <div role="dialog" aria-label="Mức sử dụng AI" className="fixed left-2 right-2 top-14 md:absolute md:left-auto md:right-[120px] md:top-[calc(100%+8px)] md:w-[min(280px,calc(100vw-16px))] z-50 rounded-[10px] border border-border bg-card p-3 shadow-card-hover">
         <div className="flex items-center justify-between"><strong className="text-small">Gói {usage.plan}</strong><button type="button" className="icon-btn w-7 h-7" aria-label="Đóng" onClick={() => setOpen(false)}><Icon name="X" size={14} /></button></div>
         <div className="mt-3 h-2 overflow-hidden rounded-full bg-elevated"><div className={exhausted ? "h-full bg-danger" : warning ? "h-full bg-warn" : "h-full bg-accent"} style={{ width: `${Math.min(100, usage.percentage)}%` }} /></div>
         <p className="mt-2 text-caption text-text-secondary">{formatTokens(usage.used)} dùng · {formatTokens(usage.reserved)} giữ · {formatTokens(usage.limit)} token tháng</p>

@@ -984,9 +984,10 @@
 .mindmap-tools-overlay { isolation: isolate; }
 
 @media (max-width: 767px) {
-  .workspace-mode-switch { flex: 1 1 auto; overflow-x: auto; scrollbar-width: none; }
-  .workspace-mode-switch::-webkit-scrollbar { display: none; }
-  .workspace-mode-switch > button { flex: 0 0 auto; min-height: 40px; padding-inline: 9px; }
+  /* Fixed-width mode switch: three 40px icon tabs, never shrunk and never
+     scrolled. A squeezed scroll container clipped its own tabs. */
+  .workspace-mode-switch { flex: 0 0 auto; overflow: visible; }
+  .workspace-mode-switch > button { flex: 0 0 auto; }
   .mode-library-menu { position: fixed; top: 64px; left: 8px; right: 8px; width: auto; max-height: calc(100vh - 80px); transform: none; }
   .study-tools-menu { position: fixed; top: 56px; left: 8px; right: 8px; width: auto; max-height: calc(100vh - 68px); }
   .study-tools-trigger { width: 40px; padding: 0; justify-content: center; }
