@@ -1,5 +1,20 @@
 # Lessons Learned
 
+## A repair budget must count only time the output can be repaired (2026-10-06)
+
+- Verify a timeout against the code path that consumes it. Here the poll's deadline
+  came from mount, but the output could only be repaired once the pane was visible.
+  Reading the code before reproducing made the threshold (about 10 s) predictable.
+- Measure a boundary before you call it root cause. Dwell 9950 ms was ready, and
+  10000 ms was persistent. The poll checks fitIfReady() before the deadline, so a
+  tick that sees a visible pane succeeds even past the deadline.
+- Compare with the base build before asserting an invariant. Tab activation
+  re-creates the mind-elixir root on the base build too, so "same element before
+  and after the switch" was the wrong assertion. Check it against the base first.
+- Back up uncommitted work before running a comparison that restores files. A
+  git checkout of one file during a base comparison reverted the uncommitted fix,
+  and it had to be reapplied. Save a copy first, or commit a WIP before comparing.
+
 ## Root collapse is a renderer contract, not an `expanded` flag (2026-10-04)
 
 - Verify third-party tree behavior against its real DOM. In Mind Elixir 5.13,

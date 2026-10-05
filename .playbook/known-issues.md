@@ -1,5 +1,38 @@
 # Known Issues
 
+## Mind Map repair banner stayed after a long hidden Chat dwell (fixed 2026-10-06)
+
+**Symptom:** a map that initialised while the Chat tab was active showed the
+"Không thể dựng connector" error banner once the user switched to Mind Map,
+and the map never became ready. Production reproduction: 7/7 at a hidden dwell
+of 10000 ms or more; 3/3 ready at 9950 ms or less (QA account, 1440x1024).
+
+**Root cause:** two parts.
+- The NaN precursor is vendor-level. mind-elixir `linkDiv` writes
+  `M NaN 0 Q NaN` connector paths when the container is 0x0. The sanitizer
+  then neutralises them to `d=""`. Confirmed by stack trace.
+- The banner is app lifecycle. `startFitPoll` used an absolute 10 s deadline
+  counted from mount. The deadline expired while the pane was still hidden, and
+  `setRenderState("error")` ran. Nothing restarted the poll when the pane became
+  visible, so the error stayed until the user pressed Thử lại.
+- The code comment said the ceiling was "2 minutes", but the code used 10 s.
+
+**Fix:** the repair budget (`VISIBLE_REPAIR_TIMEOUT_MS`, still 10 s) counts only
+time the container has real size. The budget starts on the first sized tick and
+resets when the container drops back to 0x0. The poll stays at 16 ms while hidden.
+Rejected: raising the deadline to 120 s only postpones the failure.
+
+**Regression:** `MindElixirView.visibleRepairDeadline.test.jsx` (cases A and C
+fail on `origin/main`, pass after the fix). `MindElixirView.renderLifecycle.test.jsx`
+now asserts the visible-but-invalid error case, and a separate test asserts that a
+never-sized container stays in `waiting_for_size` with no error.
+`FE/e2e-fixture/mindmap-visible-repair-deadline.spec.js` holds Chat for 11 s
+at three widths in light and dark (base fails at 1440 light, state `error`).
+
+**Prevention:** a repair budget must count only time the output can actually be
+repaired. Do not hide a timeout behind an absolute clock that starts before the
+output is visible.
+
 ## Guided "Tạo sơ đồ mới" could take the legacy path before capability loaded (fixed 2026-10-05)
 
 **Symptom:** on production, clicking "Tạo sơ đồ mới" sometimes did not open the
