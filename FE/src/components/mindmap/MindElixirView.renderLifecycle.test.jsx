@@ -92,7 +92,24 @@ describe("MindElixir render lifecycle", () => {
     expect(host.querySelector('[data-nodeid="mechild"]')).toBeTruthy();
   });
 
-  it("moves to an actionable error instead of polling forever when geometry never settles", async () => {
+  it("moves to an actionable error when a visible container never gets valid geometry", async () => {
+    vi.useFakeTimers();
+    await act(async () => {
+      host = document.createElement("div");
+      document.body.appendChild(host);
+      root = createRoot(host);
+      root.render(<MindElixirView data={DATA} onRegenerate={vi.fn()} regenerating={false} controller={controller()} />);
+    });
+    // The repair budget only counts while the container has real size.
+    const pane = host.querySelector(".me-container");
+    Object.defineProperty(pane, "clientWidth", { value: 800, configurable: true });
+    Object.defineProperty(pane, "clientHeight", { value: 600, configurable: true });
+    await act(async () => { await vi.advanceTimersByTimeAsync(12_000); });
+    expect(host.querySelector('[data-mindmap-render-state="error"]')).toBeTruthy();
+    expect(host.querySelector('button[data-action="retry-mindmap-render"]')).toBeTruthy();
+  });
+
+  it("stays waiting, with no error, while the container never has size (hidden time is not budgeted)", async () => {
     vi.useFakeTimers();
     await act(async () => {
       host = document.createElement("div");
@@ -101,7 +118,7 @@ describe("MindElixir render lifecycle", () => {
       root.render(<MindElixirView data={DATA} onRegenerate={vi.fn()} regenerating={false} controller={controller()} />);
     });
     await act(async () => { await vi.advanceTimersByTimeAsync(12_000); });
-    expect(host.querySelector('[data-mindmap-render-state="error"]')).toBeTruthy();
-    expect(host.querySelector('button[data-action="retry-mindmap-render"]')).toBeTruthy();
+    expect(host.querySelector('[data-mindmap-render-state="error"]')).toBeNull();
+    expect(host.querySelector('[data-mindmap-render-state="waiting_for_size"]')).toBeTruthy();
   });
 });

@@ -66,7 +66,7 @@ let root;
 
 afterEach(async () => {
   // Unmount properly (not just detach the DOM node) so each test's rAF
-  // poll -- unbounded except for a 2-minute wall-clock ceiling -- actually
+  // poll -- whose budget counts only time the container has real size -- actually
   // stops via its effect cleanup, instead of lingering in the background
   // across tests and calling into a since-restored (or a later test's
   // freshly re-spied) MindElixir.prototype.
