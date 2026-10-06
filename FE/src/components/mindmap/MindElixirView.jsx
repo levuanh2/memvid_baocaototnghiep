@@ -980,7 +980,7 @@ export default function MindElixirView({ data, onRegenerate, regenerating, contr
       )}
       {/* Canvas + legend — legend là sibling (cleanup xoá innerHTML của container
           nên không được đặt con React bên trong div ref) */}
-      <div ref={canvasWrapRef} className="relative flex-1 min-h-0 overflow-hidden mm-canvas-wrap" data-mindmap-render-state={renderState}>
+      <div ref={canvasWrapRef} className={`relative flex-1 min-h-0 overflow-hidden mm-canvas-wrap${selectionModeActive ? " mm-selection-active" : ""}`} data-mindmap-render-state={renderState}>
         {renderState !== "ready" && (
           <div className={`mm-render-overlay ${renderState === "error" ? "is-error" : ""}`} data-testid="mindmap-render-overlay" role={renderState === "error" ? "alert" : "status"} aria-live="polite">
             <div className="mm-render-overlay__card">
@@ -1088,13 +1088,16 @@ export default function MindElixirView({ data, onRegenerate, regenerating, contr
             `selectionActiveRef` — this bar is just its visible chrome. */}
         {selectionModeActive && (
           <div className="mm-selection-bar" role="status" aria-live="polite">
-            <span>Đã chọn {selectedBranchIds.size} nhánh</span>
-            <span className="mm-selection-bar__sep" aria-hidden="true">·</span>
-            <button type="button" disabled={!selectedBranchIds.size} onClick={() => setSelectedBranchIds(new Set())}>Xóa chọn</button>
-            <span className="mm-selection-bar__sep" aria-hidden="true">·</span>
-            <button type="button" disabled={!selectedBranchIds.size}
+            {selectedBranchIds.size === 0 ? (
+              <span className="mm-selection-bar__hint">Chọn các nhánh muốn xuất</span>
+            ) : (
+              <>
+                <span className="mm-selection-bar__badge">{selectedBranchIds.size} nhánh đã chọn</span>
+                <button type="button" onClick={() => setSelectedBranchIds(new Set())}>Xóa chọn</button>
+              </>
+            )}
+            <button type="button" className="mm-selection-bar__primary" disabled={!selectedBranchIds.size}
               onClick={() => { setSelectionModeActive(false); setExportOpen(true); }}>Tiếp tục</button>
-            <span className="mm-selection-bar__sep" aria-hidden="true">·</span>
             <button type="button" onClick={() => { setSelectionModeActive(false); setSelectedBranchIds(new Set()); setExportOpen(true); }}>Hủy</button>
           </div>
         )}
