@@ -25,14 +25,23 @@ async function measure(page) {
     const barRect = bar ? bar.getBoundingClientRect() : null;
     const legRect = legend ? legend.getBoundingClientRect() : null;
     const markers = [...document.querySelectorAll("me-export-check")].map((el) => {
-      const cs = getComputedStyle(el, "::before");
-      return { side: el.dataset.side, w: el.offsetWidth, h: el.offsetHeight, hitW: Math.round(parseFloat(cs.width)), hitH: Math.round(parseFloat(cs.height)) };
+      const dot = el.querySelector(".mm-export-check__dot");
+      const d = dot ? dot.getBoundingClientRect() : null;
+      const tpc = el.parentElement && el.parentElement.querySelector(":scope > me-tpc");
+      const t = tpc ? tpc.getBoundingClientRect() : null;
+      // Dot centre must sit on the topic's outer edge (left edge for left branches, right edge for right branches), within 3 screen px.
+      const cx = d && t ? d.left + d.width / 2 : null;
+      const edge = el.dataset.side === "left" ? (t ? t.left : null) : (t ? t.right : null);
+      const sideOk = cx !== null && edge !== null && Math.abs(cx - edge) <= 3;
+      return { side: el.dataset.side, sideOk, w: Math.round(el.getBoundingClientRect().width), h: Math.round(el.getBoundingClientRect().height), dotW: d ? Math.round(d.width) : null };
     });
     return {
       bar: r(bar), legend: r(legend), barOverlapsLegend: overlap(barRect, legRect),
       barButtonSizes: barBtns,
       markerCount: markers.length,
-      markerSizes: [...new Set(markers.map((m) => `${m.w}x${m.h}/hit${m.hitW}x${m.hitH}`))],
+      markerSizes: [...new Set(markers.map((m) => `host${m.w}x${m.h}/dot${m.dotW}`))],
+      markersSideOk: markers.filter((m) => m.sideOk).length,
+      markersSideBad: markers.filter((m) => !m.sideOk).length,
       horizontalOverflow: document.documentElement.scrollWidth > document.documentElement.clientWidth,
       invalidSvgPaths: [...document.querySelectorAll(".lines path, .subLines path")].filter((p) => /NaN|undefined|Infinity/.test(p.getAttribute("d") || "")).length,
       transform: document.querySelector(".map-canvas") ? document.querySelector(".map-canvas").style.transform : "",
@@ -98,14 +107,26 @@ for (const vp of VIEWPORTS) {
       await page.screenshot({ path: path.join(OUT, `${tag}-5-selection-2.png`) });
       rec.selection2 = await measure(page);
       // 6. after pan (real drag on empty background)
+      // Pick a start point on empty canvas: the selection bar and legend sit over the bottom of the map at 1024px.
       const mb = await page.locator(".map-container").first().boundingBox();
-      await page.mouse.move(mb.x + mb.width * 0.5, mb.y + mb.height * 0.85);
+      const panY = await page.evaluate(({ x, top, h }) => {
+        for (const f of [0.3, 0.4, 0.5, 0.6, 0.2]) {
+          const e = document.elementFromPoint(x, top + h * f);
+          if (e && !e.closest(".mm-selection-bar, .mm-legend, me-tpc, me-export-check, me-epd, me-wrapper, me-parent, .mm-canvas-toolbar, button, a, input")) return top + h * f;
+        }
+        return null;
+      }, { x: mb.x + mb.width * 0.5, top: mb.y, h: mb.height });
+      expect(panY).not.toBeNull();
+      await page.mouse.move(mb.x + mb.width * 0.5, panY);
       await page.mouse.down();
-      await page.mouse.move(mb.x + mb.width * 0.5 + 60, mb.y + mb.height * 0.85, { steps: 8 });
+      await page.mouse.move(mb.x + mb.width * 0.5 + 60, panY, { steps: 8 });
       await page.mouse.up();
       await page.waitForTimeout(300);
       await page.screenshot({ path: path.join(OUT, `${tag}-6-after-pan.png`) });
       rec.afterPan = await measure(page);
+      expect(rec.afterPan.transform).not.toBe(rec.selection2.transform);
+      expect(rec.afterPan.markersSideBad).toBe(0);
+      expect(rec.selection2.markersSideBad).toBe(0);
       // 7. cancel then reopen
       await page.getByRole("button", { name: "Hủy", exact: true }).first().click();
       await page.waitForTimeout(300);

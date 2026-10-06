@@ -574,51 +574,62 @@ html.dark .me-container { --mm-relation: #7e90c4; }
    avoids colliding with it). `<me-parent>` is `position: relative` in
    mind-elixir's own base stylesheet, so this needs no wrapper of its own. */
 /* Branch selection marker (Export Studio, "Các nhánh được chọn").
-   Visible indicator: 20px circle. Interactive hitbox: 40x40 transparent
-   pseudo-element centred on the indicator, so the marker itself never grows.
-   Side-aware corner: left/right branches place the marker on the OUTER TOP
-   corner of their node (connectors meet the node at mid-height and text is
-   centred, so the top corner is clear of both); root uses the top-right
-   corner. Position is relative to mind-elixir's own position:relative <me-parent>. */
+   Structure: <me-export-check> is a 40x40 focusable HOST (the hitbox, role=checkbox).
+   Its child .mm-export-check__dot is the visible 20x20 circle, which is the target
+   a user aims at, so it paints above neighbouring hosts.
+   Screen size must not depend on map zoom: the decorator mirrors 1/zoom into
+   --mm-marker-inv on the container. Host and dot are sized in map units by that
+   factor, not by transform, so no stacking context forms around the host and the
+   dot's z-index can lift it above sibling hosts (40px hosts overlap when topics
+   stack closer than 40 screen px, which happens below ~0.96 zoom). */
 .map-container me-export-check {
   position: absolute;
-  top: -10px;
-  left: -10px;
-  width: 20px; height: 20px;
+  top: calc(-20px * var(--mm-marker-inv, 1));
+  width: calc(40px * var(--mm-marker-inv, 1));
+  height: calc(40px * var(--mm-marker-inv, 1));
   box-sizing: border-box;
   display: block;
-  border-radius: 50%;
-  border: 1.5px solid var(--border-strong, #888);
-  background: var(--bg-card, #fff);
-  box-shadow: 0 1px 2px rgba(0, 0, 0, 0.12);
+  padding: 0; margin: 0;
+  border: 0;
+  background: transparent;
   cursor: pointer;
-  z-index: 11; /* above me-tpc, below the context-menu layer */
   /* See the pointer-events note on mind-elixir canvas wrapper: this element
      must opt back in or it inherits none from .map-canvas. */
   pointer-events: auto;
 }
-.map-container me-export-check::before {
-  content: "";
-  /* 40x40 hitbox centred on the indicator. Offsets are measured from the padding
-     box, which starts 1.5px inside the border, so -11.5px centres it exactly. */
-  position: absolute; left: -11.5px; top: -11.5px; width: 40px; height: 40px;
+.map-container me-export-check .mm-export-check__dot {
+  position: absolute;
+  left: calc(10px * var(--mm-marker-inv, 1));
+  top: calc(10px * var(--mm-marker-inv, 1));
+  width: calc(20px * var(--mm-marker-inv, 1));
+  height: calc(20px * var(--mm-marker-inv, 1));
+  z-index: 12; /* above sibling hosts; the visible dot wins where hitboxes overlap */
+  box-sizing: border-box;
+  border-radius: 50%;
+  border: calc(1.5px * var(--mm-marker-inv, 1)) solid var(--border-strong, #888);
+  background: var(--bg-card, #fff);
+  box-shadow: 0 1px 2px rgba(0, 0, 0, 0.12);
+  pointer-events: auto;
 }
-.map-container me-export-check.is-checked {
+.map-container me-export-check:hover .mm-export-check__dot {
+  box-shadow: 0 0 0 3px rgba(18, 108, 242, 0.18);
+}
+.map-container me-export-check.is-checked .mm-export-check__dot {
   background: #126CF2;
   border-color: #126CF2;
 }
-.map-container me-export-check.is-checked::after {
+.map-container me-export-check.is-checked .mm-export-check__dot::after {
   content: "";
-  position: absolute; left: 6px; top: 3px; width: 4px; height: 8px;
-  border: solid #fff; border-width: 0 2px 2px 0;
+  position: absolute;
+  left: calc(6px * var(--mm-marker-inv, 1)); top: calc(3px * var(--mm-marker-inv, 1));
+  width: calc(4px * var(--mm-marker-inv, 1)); height: calc(8px * var(--mm-marker-inv, 1));
+  border: solid #fff; border-width: 0 calc(2px * var(--mm-marker-inv, 1)) calc(2px * var(--mm-marker-inv, 1)) 0;
   transform: rotate(45deg);
-}
-.map-container me-export-check:hover {
-  box-shadow: 0 0 0 3px rgba(18, 108, 242, 0.18);
 }
 .map-container me-export-check:focus-visible {
   outline: 2px solid #126CF2;
   outline-offset: 2px;
+  border-radius: 50%;
 }
 
 /* Selection bar — "Đã chọn N nhánh · Xóa chọn · Tiếp tục · Hủy", overlaid

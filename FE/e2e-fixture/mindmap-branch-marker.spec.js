@@ -26,18 +26,20 @@ async function measureMarkers(page) {
     const out = [];
     document.querySelectorAll("me-export-check").forEach((el) => {
       const mr = el.getBoundingClientRect();
-      const cs = getComputedStyle(el, "::before");
       const tpc = el.parentElement && el.parentElement.querySelector(":scope > me-tpc");
       const tr = tpc ? tpc.getBoundingClientRect() : null;
-      // Canvas zoom scales both boxes equally; the marker's own layout width is 20 map units.
-      const zoom = el.offsetWidth ? mr.width / el.offsetWidth : 1;
+      // Sizes are measured on screen (the host is 40 screen px at any zoom).
+      const dotEl = el.querySelector(".mm-export-check__dot");
+      const dr = dotEl ? dotEl.getBoundingClientRect() : null;
       out.push({
         side: el.dataset.side,
-        w: el.offsetWidth, h: el.offsetHeight,
-        hitW: Math.round(parseFloat(cs.width)), hitH: Math.round(parseFloat(cs.height)),
+        w: Math.round(mr.width * 10) / 10, h: Math.round(mr.height * 10) / 10,
+        dotW: dr ? Math.round(dr.width * 10) / 10 : null,
+        hitW: Math.round(mr.width * 10) / 10, hitH: Math.round(mr.height * 10) / 10,
         // Marker left edge relative to the topic's left and right edges, in map units.
-        fromTopicLeft: tr ? Math.round((mr.left - tr.left) / zoom) : null,
-        fromTopicRight: tr ? Math.round((mr.left - tr.right) / zoom) : null,
+        // Screen px: the dot's left edge against the topic's left and right edges.
+        fromTopicLeft: tr && dr ? Math.round(dr.left - tr.left) : null,
+        fromTopicRight: tr && dr ? Math.round(dr.left - tr.right) : null,
         label: el.getAttribute("aria-label"),
       });
     });
@@ -58,12 +60,12 @@ test.describe("Branch selection marker: geometry and interaction", () => {
     const markers = await measureMarkers(page);
     expect(markers.length).toBeGreaterThan(0);
     for (const m of markers) {
-      expect(m.w).toBeGreaterThanOrEqual(19);
-      expect(m.w).toBeLessThanOrEqual(21);
-      expect(m.h).toBeGreaterThanOrEqual(19);
-      expect(m.h).toBeLessThanOrEqual(21);
-      expect(m.hitW).toBeGreaterThanOrEqual(40);
-      expect(m.hitH).toBeGreaterThanOrEqual(40);
+      expect(m.w).toBeGreaterThanOrEqual(39);
+      expect(m.w).toBeLessThanOrEqual(41);
+      expect(m.h).toBeGreaterThanOrEqual(39);
+      expect(m.h).toBeLessThanOrEqual(41);
+      expect(m.dotW).toBeGreaterThanOrEqual(19);
+      expect(m.dotW).toBeLessThanOrEqual(21);
     }
     for (const m of markers.filter((x) => x.side === "left")) {
       expect(Math.abs(m.fromTopicLeft - -10)).toBeLessThanOrEqual(2); // left edge 10px outside the topic's left edge
