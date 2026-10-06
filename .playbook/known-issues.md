@@ -5868,3 +5868,55 @@ map switching, and transform preservation in a real browser.
   `FE/src/components/Layout/UsageChip.test.jsx`.
 - Known, not changed: desktop usage button is 36px tall and the account chip about 38px
   (pre-existing desktop sizes, outside the compact target floor).
+
+## Branch markers: Tab skipped, overlapping hitboxes stole clicks, marker size drifted with zoom (fixed 2026-10-06)
+
+**Symptom:** Tab never moved from one branch marker to the next inside the map, and
+Shift+Tab did not leave the group. At low zoom a click on a lower dot could toggle the
+neighbouring branch because the upper marker's 40px hitbox covered it. Marker on-screen
+size varied with canvas zoom (about 10 to 15px at 0.49 to 0.75).
+
+**Root cause:**
+- mind-elixir's editable `.me-container` calls `preventDefault()` on every key while focus
+  is inside it. Markers live inside that container, so the keydown bubbled up and was
+  cancelled. Separately, native sequential focus navigation did not reach the next marker
+  from inside the canvas, although it did reach an ordinary injected button.
+- Sibling topics sit about 41.5 map units apart. A 40px screen hitbox is larger than that
+  gap below zoom about 0.96, so hitboxes overlap, and the marker host (`transform: scale`)
+  created a stacking context that trapped the dot's z-index.
+- The marker was sized by `transform: scale(1/zoom)`, which tied the on-screen size to a
+  value that mind-elixir changes on every pan and zoom.
+
+**Fix:** host and dot are sized in map units by `--mm-marker-inv` (= 1/zoom), not by
+transform, so there is no stacking context and the dot can sit above sibling hosts.
+Pointer clicks resolve to the nearest dot centre (`resolveClickId`); keyboard never uses
+the resolver. Tab and Shift+Tab step to the neighbouring marker in DOM order and stop
+propagation so the container does not cancel them; at the first and last marker focus
+leaves the map natively. The focus ring is drawn on the dot, not on the 40px host.
+
+**Known limitation (not a bug to re-open):** at low zoom the nominal 40px target can
+overlap a neighbour. Pointer resolution goes to the nearest dot; the visible dots stay
+separate (measured minimum same-side centre gap 20.4px at 1024, dot diameter 20px). The
+effective hit area of each marker is not 40px in every direction.
+
+**Regression:**
+- `MindElixirView.selectionInstance.test.jsx`: one mounted instance and root through
+  select/tick/cancel/reopen; no scaleFit/toCenter/refresh/layout calls; transform only on pan.
+- `mindmapBranchSelectionMarker.test.js`: Space/Enter toggle, side attribute.
+- `e2e-fixture/marker-keyboard.spec.js` (1440, 1024, 390): Tab order equals DOM order on
+  two walks; Space/Enter toggle the focused marker; focus ring on dot, host outline none.
+- `e2e-fixture/marker-click-resolution.spec.js`: real mouse clicks on each dot after pans.
+  1440 48/48, 1024 48/48 (18 covered by a neighbour), 390 18/48 reached (see note below).
+- `e2e-fixture/marker-screen-size.spec.js`: host 40x40, dot 20x20 on screen at zoom 0.49,
+  0.69 and 0.75; dots not overlapping (min gap 20.4 > 20).
+
+**Note:** at 390 only 18 of 48 markers were brought on screen by the pan schedule. The rest
+were never inside the viewport in this run, so they are not claimed as clicked.
+
+**Prevention:**
+- A keydown handler that matters for focus must be checked in the browser, not only in
+  jsdom. Probe `preventDefault` callers with a stack trace before assuming native focus works.
+- A fixed screen-pixel hitbox must be checked against the smallest neighbour gap at the lowest
+  zoom. Do not size a click target by a CSS transform that the canvas also transforms.
+- Pointer-start points for drags must be picked with `elementFromPoint` against the map, not a
+  fixed fraction of the container (the selection bar covered the fixed point at 1024).

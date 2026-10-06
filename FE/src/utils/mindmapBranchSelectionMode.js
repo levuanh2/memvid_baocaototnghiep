@@ -59,6 +59,17 @@ function decorateParent(parentEl, { isSelectedFn, onToggle, resolveClickId }) {
       if (target) onToggle(target);
     });
     check.addEventListener("keydown", (e) => {
+      // Tab moves between markers in DOM order. Native sequential navigation skipped from one
+      // marker to the next inside the canvas, so step to the neighbour explicitly. At the first
+      // and last marker the event is left alone and focus leaves the map natively.
+      // stopPropagation keeps mind-elixir's editable container from cancelling the key.
+      if (e.key === "Tab") {
+        e.stopPropagation();
+        const list = [...(check.closest(".me-container") || document).querySelectorAll("me-export-check")];
+        const next = list[list.indexOf(check) + (e.shiftKey ? -1 : 1)];
+        if (next) { e.preventDefault(); next.focus(); }
+        return;
+      }
       if (e.key !== "Enter" && e.key !== " ") return;
       e.preventDefault();
       e.stopPropagation();

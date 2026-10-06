@@ -626,10 +626,15 @@ html.dark .me-container { --mm-relation: #7e90c4; }
   border: solid #fff; border-width: 0 calc(2px * var(--mm-marker-inv, 1)) calc(2px * var(--mm-marker-inv, 1)) 0;
   transform: rotate(45deg);
 }
+/* Focus ring sits on the visible dot, not on the 40px host, so keyboard focus
+   shows a circle the size of the marker instead of a square hitbox outline. */
+.map-container me-export-check:focus,
 .map-container me-export-check:focus-visible {
-  outline: 2px solid #126CF2;
-  outline-offset: 2px;
-  border-radius: 50%;
+  outline: none;
+}
+.map-container me-export-check:focus-visible .mm-export-check__dot {
+  box-shadow: 0 0 0 calc(2px * var(--mm-marker-inv, 1)) var(--bg-card, #fff),
+              0 0 0 calc(4px * var(--mm-marker-inv, 1)) #126CF2;
 }
 
 /* Selection bar — "Đã chọn N nhánh · Xóa chọn · Tiếp tục · Hủy", overlaid
