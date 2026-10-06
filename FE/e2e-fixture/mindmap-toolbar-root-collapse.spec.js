@@ -86,9 +86,11 @@ test("library and overflow overlays preserve viewport; create exists only in the
   await page.getByRole("button", { name: "Mở thư viện sơ đồ" }).click();
   expect(await transform(page)).toBe(before);
   await openOverflow(page);
-  for (const group of ["Hiển thị", "Cấu trúc", "Xuất sơ đồ", "Tác vụ khác"]) {
+  // The overflow menu no longer repeats the export entry (the toolbar "Xuất" is the only trigger).
+  for (const group of ["Hiển thị", "Cấu trúc", "Tác vụ khác"]) {
     await expect(page.getByRole("group", { name: group })).toBeVisible();
   }
+  await expect(page.getByRole("group", { name: "Xuất sơ đồ" })).toHaveCount(0);
   await page.getByRole("button", { name: "Thêm tùy chọn" }).click();
   expect(await transform(page)).toBe(before);
 });

@@ -81,7 +81,7 @@ describe("MindElixirView Export Studio", () => {
     await act(async () => { enterBtn.click(); });
     expect(document.body.querySelector('[role="dialog"]')).toBeFalsy(); // dialog closed while selecting
     expect(container.querySelector(".mm-selection-bar")).toBeTruthy();
-    expect(container.querySelector(".mm-selection-bar").textContent).toContain("Đã chọn 0 nhánh");
+    expect(container.querySelector(".mm-selection-bar").textContent).toContain("Chọn các nhánh muốn xuất");
   });
 
   it("clicking a node while in selection mode toggles selection WITHOUT opening the node-detail drawer", async () => {
@@ -97,7 +97,7 @@ describe("MindElixirView Export Studio", () => {
     const s1Tpc = [...container.querySelectorAll("me-tpc")].find((t) => t.nodeObj?.id === "s1");
     await act(async () => { s1Tpc.dispatchEvent(new MouseEvent("click", { bubbles: true })); });
 
-    expect(container.querySelector(".mm-selection-bar").textContent).toContain("Đã chọn 1 nhánh");
+    expect(container.querySelector(".mm-selection-bar").textContent).toContain("1 nhánh đã chọn");
     expect(controller.onNodeSelected).not.toHaveBeenCalled(); // the load-bearing assertion
   });
 
