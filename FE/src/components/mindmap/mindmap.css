@@ -573,47 +573,68 @@ html.dark .me-container { --mm-relation: #7e90c4; }
    elixir's own `<me-epd>` already occupies the bottom/side edges, this
    avoids colliding with it). `<me-parent>` is `position: relative` in
    mind-elixir's own base stylesheet, so this needs no wrapper of its own. */
+/* Branch selection marker (Export Studio, "Các nhánh được chọn").
+   Structure: <me-export-check> is a 40x40 focusable HOST (the hitbox, role=checkbox).
+   Its child .mm-export-check__dot is the visible 20x20 circle, which is the target
+   a user aims at, so it paints above neighbouring hosts.
+   Screen size must not depend on map zoom: the decorator mirrors 1/zoom into
+   --mm-marker-inv on the container. Host and dot are sized in map units by that
+   factor, not by transform, so no stacking context forms around the host and the
+   dot's z-index can lift it above sibling hosts (40px hosts overlap when topics
+   stack closer than 40 screen px, which happens below ~0.96 zoom). */
 .map-container me-export-check {
   position: absolute;
-  top: -9px; left: -9px;
-  width: 18px; height: 18px;
-  min-width: 40px; min-height: 40px; /* hit target — box itself stays small, ::before below expands the tappable area */
+  top: calc(-20px * var(--mm-marker-inv, 1));
+  width: calc(40px * var(--mm-marker-inv, 1));
+  height: calc(40px * var(--mm-marker-inv, 1));
+  box-sizing: border-box;
   display: block;
-  border-radius: 4px;
-  border: 1.5px solid var(--border-strong, #888);
-  background: var(--bg-card, #fff);
+  padding: 0; margin: 0;
+  border: 0;
+  background: transparent;
   cursor: pointer;
-  z-index: 11; /* above me-tpc, below the context-menu layer */
-  /* mind-elixir's own canvas wrapper (.map-canvas, its base stylesheet, not
-     ours) is `pointer-events: none` so panning/dragging work via its own
-     container-level listeners instead of being blocked by arbitrary canvas
-     content — <me-tpc>/<me-epd> opt back in via mind-elixir's own rules
-     (computed `pointer-events: all`), but this brand-new element had no such
-     rule, so it silently inherited `none` and was completely unclickable in
-     production (verified: getComputedStyle -> "none", elementFromPoint at
-     its center resolved to the ancestor <div class="map-container"> instead
-     of this element). pointer-events is inherited but a descendant's own
-     declaration always wins over what it inherited, regardless of how many
-     ancestors are `none` — so this one rule, on this one element, is the
-     complete fix; no ancestor needs touching. */
+  /* See the pointer-events note on mind-elixir canvas wrapper: this element
+     must opt back in or it inherits none from .map-canvas. */
   pointer-events: auto;
 }
-.map-container me-export-check::before {
-  content: ""; position: absolute; inset: -11px; /* real hit target, same technique as .mm-epd */
+.map-container me-export-check .mm-export-check__dot {
+  position: absolute;
+  left: calc(10px * var(--mm-marker-inv, 1));
+  top: calc(10px * var(--mm-marker-inv, 1));
+  width: calc(20px * var(--mm-marker-inv, 1));
+  height: calc(20px * var(--mm-marker-inv, 1));
+  z-index: 12; /* above sibling hosts; the visible dot wins where hitboxes overlap */
+  box-sizing: border-box;
+  border-radius: 50%;
+  border: calc(1.5px * var(--mm-marker-inv, 1)) solid var(--border-strong, #888);
+  background: var(--bg-card, #fff);
+  box-shadow: 0 1px 2px rgba(0, 0, 0, 0.12);
+  pointer-events: auto;
 }
-.map-container me-export-check.is-checked {
-  background: var(--accent);
-  border-color: var(--accent);
+.map-container me-export-check:hover .mm-export-check__dot {
+  box-shadow: 0 0 0 3px rgba(18, 108, 242, 0.18);
 }
-.map-container me-export-check.is-checked::after {
+.map-container me-export-check.is-checked .mm-export-check__dot {
+  background: #126CF2;
+  border-color: #126CF2;
+}
+.map-container me-export-check.is-checked .mm-export-check__dot::after {
   content: "";
-  position: absolute; left: 5px; top: 1px; width: 5px; height: 9px;
-  border: solid #fff; border-width: 0 2px 2px 0;
+  position: absolute;
+  left: calc(6px * var(--mm-marker-inv, 1)); top: calc(3px * var(--mm-marker-inv, 1));
+  width: calc(4px * var(--mm-marker-inv, 1)); height: calc(8px * var(--mm-marker-inv, 1));
+  border: solid #fff; border-width: 0 calc(2px * var(--mm-marker-inv, 1)) calc(2px * var(--mm-marker-inv, 1)) 0;
   transform: rotate(45deg);
 }
+/* Focus ring sits on the visible dot, not on the 40px host, so keyboard focus
+   shows a circle the size of the marker instead of a square hitbox outline. */
+.map-container me-export-check:focus,
 .map-container me-export-check:focus-visible {
-  outline: 2px solid var(--forest, var(--accent));
-  outline-offset: 2px;
+  outline: none;
+}
+.map-container me-export-check:focus-visible .mm-export-check__dot {
+  box-shadow: 0 0 0 calc(2px * var(--mm-marker-inv, 1)) var(--bg-card, #fff),
+              0 0 0 calc(4px * var(--mm-marker-inv, 1)) #126CF2;
 }
 
 /* Selection bar — "Đã chọn N nhánh · Xóa chọn · Tiếp tục · Hủy", overlaid
@@ -640,6 +661,27 @@ html.dark .me-container { --mm-relation: #7e90c4; }
 .mm-selection-bar button:hover, .mm-selection-bar button:focus-visible { background: var(--bg-hover); }
 .mm-selection-bar button:disabled { opacity: .4; cursor: not-allowed; }
 .mm-selection-bar__sep { color: var(--border-strong); }
+/* Floating action pill: sits ABOVE the legend (legend is bottom-left, ~48px tall)
+   so the two never overlap on desktop. Counter is a badge; continue is primary. */
+.mm-selection-bar { bottom: 64px; max-width: calc(100% - 32px); }
+.mm-selection-bar__hint { color: var(--text-secondary); }
+.mm-selection-bar__badge {
+  padding: 2px 10px; border-radius: 999px; background: #126CF2; color: #fff; font-weight: 600;
+}
+.mm-selection-bar__primary {
+  background: #126CF2 !important; color: #fff !important; font-weight: 600;
+}
+.mm-selection-bar__primary:disabled { opacity: .4; }
+/* Narrow screens: full-width bottom bar with the device safe area; legend hides
+   in selection mode so it cannot cover the markers or the bar. */
+@media (max-width: 767px) {
+  .mm-selection-bar {
+    left: 8px; right: 8px; transform: none; bottom: calc(8px + env(safe-area-inset-bottom, 0px));
+    justify-content: space-between; border-radius: 16px; white-space: normal; max-width: none;
+  }
+  .mm-selection-bar button { min-height: 40px; min-width: 40px; }
+  .mm-selection-active .mm-legend { display: none; }
+}
 
 /* Touch-target floor for the contextual Mind Map toolbar: every control is at
    least 40x40. Glyphs keep their 16-18px size; only the hit box grows, so the

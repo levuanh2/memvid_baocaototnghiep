@@ -141,7 +141,7 @@ test.describe("Export Studio — responsive QA", () => {
         await page.locator(".export-inline-action").click();
         await expect(page.locator(".mm-selection-bar")).toBeVisible();
         await page.locator(nodeSelector(`${MAP_A_ID}-m0`)).click();
-        await expect(page.locator(".mm-selection-bar")).toContainText("Đã chọn 1 nhánh");
+        await expect(page.locator(".mm-selection-bar")).toContainText("1 nhánh đã chọn");
         await expect(page.getByRole("dialog")).toHaveCount(0); // no node-detail drawer opened
         await assertNoHorizontalOverflow(page);
         await shot(page, vp.name, "06-multi-branch-selection");

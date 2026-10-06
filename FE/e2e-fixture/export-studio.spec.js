@@ -276,7 +276,7 @@ test.describe("Export Studio — fixture harness, real files", () => {
     await expect(page.getByRole("dialog")).toHaveCount(0);
     await page.locator(nodeSelector(m0)).click();
     await page.locator(nodeSelector(m1)).click();
-    await expect(page.locator(".mm-selection-bar")).toContainText("Đã chọn 2 nhánh");
+    await expect(page.locator(".mm-selection-bar")).toContainText("2 nhánh đã chọn");
     await page.locator(".mm-selection-bar").getByRole("button", { name: "Tiếp tục" }).click();
 
     await clickNext(page); // -> format step
@@ -329,9 +329,9 @@ test.describe("Export Studio — fixture harness, real files", () => {
     await chooseScope(page, "selected_branches");
     await page.locator(".export-inline-action").click();
     await page.locator(nodeSelector(`${MAP_A_ID}-m0`)).click();
-    await expect(page.locator(".mm-selection-bar")).toContainText("Đã chọn 1 nhánh");
+    await expect(page.locator(".mm-selection-bar")).toContainText("1 nhánh đã chọn");
     await page.locator(".mm-selection-bar").getByRole("button", { name: "Xóa chọn" }).click();
-    await expect(page.locator(".mm-selection-bar")).toContainText("Đã chọn 0 nhánh");
+    await expect(page.locator(".mm-selection-bar")).toContainText("Chọn các nhánh muốn xuất");
   });
 
   test("Section 8 artifact quality gate: full-map.png is retained and valid", async ({ page }) => {
@@ -422,7 +422,7 @@ test.describe("Export Selection Mode — checkbox pointer regression (hotfix)", 
     // actionability check finds the element is not the hit-test target
     // at its own center, and the click never registers).
     await check.click();
-    await expect(page.locator(".mm-selection-bar")).toContainText("Đã chọn 1 nhánh");
+    await expect(page.locator(".mm-selection-bar")).toContainText("1 nhánh đã chọn");
     await expect(check).toHaveAttribute("aria-checked", "true");
 
     // No node-detail drawer opened from the checkbox click.
@@ -434,7 +434,7 @@ test.describe("Export Selection Mode — checkbox pointer regression (hotfix)", 
 
     // Click again -> back to 0 (real toggle, not just "always sets true").
     await check.click();
-    await expect(page.locator(".mm-selection-bar")).toContainText("Đã chọn 0 nhánh");
+    await expect(page.locator(".mm-selection-bar")).toContainText("Chọn các nhánh muốn xuất");
     await expect(check).toHaveAttribute("aria-checked", "false");
     const afterTransform = await page.locator(".map-canvas").evaluate((el) => el.style.transform || "");
     expect(afterTransform).toBe(beforeTransform);
@@ -447,16 +447,16 @@ test.describe("Export Selection Mode — checkbox pointer regression (hotfix)", 
 
     await page.locator(checkboxFor("Kiến trúc hệ thống")).click();
     await page.locator(checkboxFor("Trải nghiệm người dùng")).click(); // opposite end of the branch list
-    await expect(page.locator(".mm-selection-bar")).toContainText("Đã chọn 2 nhánh");
+    await expect(page.locator(".mm-selection-bar")).toContainText("2 nhánh đã chọn");
     await expect(page.locator(checkboxFor("Kiến trúc hệ thống"))).toHaveAttribute("aria-checked", "true");
     await expect(page.locator(checkboxFor("Trải nghiệm người dùng"))).toHaveAttribute("aria-checked", "true");
 
     await page.locator(checkboxFor("Kiến trúc hệ thống")).click(); // uncheck just this one
-    await expect(page.locator(".mm-selection-bar")).toContainText("Đã chọn 1 nhánh");
+    await expect(page.locator(".mm-selection-bar")).toContainText("1 nhánh đã chọn");
     await expect(page.locator(checkboxFor("Kiến trúc hệ thống"))).toHaveAttribute("aria-checked", "false");
 
     await page.locator(".mm-selection-bar").getByRole("button", { name: "Xóa chọn" }).click();
-    await expect(page.locator(".mm-selection-bar")).toContainText("Đã chọn 0 nhánh");
+    await expect(page.locator(".mm-selection-bar")).toContainText("Chọn các nhánh muốn xuất");
     await expect(page.locator(checkboxFor("Trải nghiệm người dùng"))).toHaveAttribute("aria-checked", "false");
   });
 
@@ -467,7 +467,7 @@ test.describe("Export Selection Mode — checkbox pointer regression (hotfix)", 
 
     await page.locator(checkboxFor("Kiến trúc hệ thống")).click(); // parent (main branch)
     await page.locator(checkboxFor("Nguyên lý — Kiến trúc hệ thống")).click(); // its own child (sub-branch)
-    await expect(page.locator(".mm-selection-bar")).toContainText("Đã chọn 2 nhánh"); // UI counts both picks, resolver dedupes on export
+    await expect(page.locator(".mm-selection-bar")).toContainText("2 nhánh đã chọn"); // UI counts both picks, resolver dedupes on export
     await page.locator(".mm-selection-bar").getByRole("button", { name: "Tiếp tục" }).click();
 
     await clickNext(page); // -> format step
@@ -496,7 +496,7 @@ test.describe("Export Selection Mode — checkbox pointer regression (hotfix)", 
     await chooseScope(page, "selected_branches");
     await page.locator(".export-inline-action").click();
     await page.locator(checkboxFor("Kiến trúc hệ thống")).click();
-    await expect(page.locator(".mm-selection-bar")).toContainText("Đã chọn 1 nhánh");
+    await expect(page.locator(".mm-selection-bar")).toContainText("1 nhánh đã chọn");
 
     await page.locator(".mm-selection-bar").getByRole("button", { name: "Tiếp tục" }).click();
     await expect(page.getByRole("dialog")).toBeVisible(); // dialog reopened at the scope step (a selection already exists)
