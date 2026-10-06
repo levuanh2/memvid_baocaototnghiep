@@ -918,10 +918,6 @@ export default function MindElixirView({ data, onRegenerate, regenerating, contr
                 <button role="menuitem" onClick={() => { setContextOverflowOpen(false); expandToDepth(2); }}><Icon name="Rows3" size={14} /> Mở đến cấp 2</button>
                 <button role="menuitem" onClick={() => { setContextOverflowOpen(false); expandToDepth(3); }}><Icon name="Rows3" size={14} /> Mở đến cấp 3</button>
               </div>
-              <div className="mm-toolbar-menu__group" role="group" aria-label="Xuất sơ đồ">
-                <div className="mm-toolbar-menu__heading">Xuất sơ đồ</div>
-                <button role="menuitem" onClick={() => { setContextOverflowOpen(false); setExportOpen(true); }}><Icon name="Download" size={14} /> Mở Export Studio</button>
-              </div>
               <div className="mm-toolbar-menu__group" role="group" aria-label="Tác vụ khác">
                 <div className="mm-toolbar-menu__heading">Tác vụ khác</div>
                 {data?.id && data.id !== "preview" && !data.generating && (
