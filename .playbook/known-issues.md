@@ -5920,3 +5920,59 @@ were never inside the viewport in this run, so they are not claimed as clicked.
   zoom. Do not size a click target by a CSS transform that the canvas also transforms.
 - Pointer-start points for drags must be picked with `elementFromPoint` against the map, not a
   fixed fraction of the container (the selection bar covered the fixed point at 1024).
+
+## Mind Elixir transient NaN during hidden-canvas initialization (baseline, non-gating, 2026-10-06)
+
+**Symptom:** when the Mind Map canvas is initialized while its pane is hidden (Chat is
+shown, so the container is 0×0), Mind Elixir 5.13.0 `linkDiv`/init can write two SVG
+connector paths of the form `M NaN 0 Q NaN 0 0 0`. The browser logs two console errors:
+`<path> attribute d: Expected number, "M NaN 0 Q NaN 0 …"`. When the Mind Map pane becomes
+visible, the application repair runs and the connectors become valid again.
+
+**Root cause:** Mind Elixir computes connector geometry from container dimensions. In a
+0×0 or `display: none` container those dimensions are NaN. Connector rendering and the
+hidden-canvas lifecycle are library behaviour; this application does not change them.
+
+**Classification:** pre-existing baseline, transient, non-gating. It is not a regression of
+PR #56 or #55, and it does not block release. It counts as non-gating only if every condition
+below holds. If any one fails, stop the release and investigate.
+
+- The error appears during hidden-init and has the same signature as above.
+- No NaN or `undefined` path remains after the canvas becomes visible.
+- No render-error banner appears.
+- The connector count is correct, and the user can see the whole tree.
+- No new error comes from interaction, pan, zoom or theme switch.
+
+**Stop and investigate if:** NaN appears when the canvas is already visible; an invalid path
+remains at 250 ms or 1000 ms after visibility; an error banner appears; connectors are missing;
+the error count or signature changes; or the error returns after selection, pan, zoom or a
+theme switch.
+
+**Evidence:**
+- Production report for PR #55 on baseline `cc2e834`: the same two errors on every hidden-init,
+  fixed within a few milliseconds, with no invalid paths before visibility and none after.
+  The repair also succeeded after hidden periods of 11 s and 30 s.
+- Library-level reproduction with Mind Elixir 5.13.0: mounting into a `display: none` container
+  logs the same signature twice. The repro does not include the application repair, so it
+  shows the source of the error, not the repair timing.
+- Production after PR #56 (merged as `7ad09b6`): two transient errors at load; after the Mind
+  Map became visible, 0 NaN paths and 10 connector paths; no banner.
+- Application-level execution of the old `cc2e834` frontend against production was not run.
+  Production CORS rejects localhost, and redeploying an old build only for comparison was
+  judged unsafe and unnecessary. This is a limitation of the evidence, not a result.
+
+**Known limitation:** Mind Elixir writes two NaN connector paths transiently during init in a
+hidden canvas. The DOM recovers before the user sees the map. No persistent NaN, no banner, and
+no regression from PR #56. Do not describe connectors as error-free overall.
+
+**Do not:** blanket-ignore console errors; change tests to hide a persistent NaN; patch the
+renderer or dependency to silence this signature; or treat the application-level baseline as
+verified when it was not run.
+
+**Regression notes:** any future test that tolerates this signature must accept only the exact
+transient pattern during hidden-init, and only before the canvas becomes visible. A persistent
+NaN, or any NaN after visibility, must still fail.
+
+**Prevention:** when a console error appears in production, record the stage (load, hidden,
+visible, interaction), the count, and the source library. Classify it as baseline only with
+evidence from the same signature and an explicit stop-condition list, and state what was not run.
