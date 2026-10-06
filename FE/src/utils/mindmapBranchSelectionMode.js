@@ -52,6 +52,17 @@ function decorateParent(parentEl, { isSelectedFn, onToggle }) {
     });
     parentEl.insertBefore(check, tpc);
   }
+  // Side comes from mind-elixir's own `me-main` container (`lhs` / `rhs`); the
+  // root has no `me-main` ancestor. Read on every scan: cheap, and it stays
+  // correct if the node is re-parented.
+  const main = parentEl.closest("me-main");
+  const side = !main ? "root" : main.className.includes("lhs") ? "left" : "right";
+  check.dataset.side = side;
+  // Horizontal anchor comes from the topic's own offsets, not from the wrapper:
+  // mind-elixir pads <me-parent> beyond the topic, so a CSS 100%/0 anchor would
+  // drift outward. offsetLeft/offsetWidth are map units and ignore canvas zoom.
+  const x = side === "left" ? tpc.offsetLeft - 10 : tpc.offsetLeft + tpc.offsetWidth - 10;
+  check.style.left = x + "px";
   const selected = isSelectedFn(id);
   check.setAttribute("aria-checked", String(selected));
   check.classList.toggle("is-checked", selected);
