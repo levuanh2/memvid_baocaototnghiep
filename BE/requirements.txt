@@ -58,7 +58,8 @@ striprtf         # .rtf
 --extra-index-url https://download.pytorch.org/whl/cpu
 torch==2.5.1+cpu
 tqdm
-transformers
+# 5.19.0 calls torch.accelerator, unavailable in pinned torch 2.5.1+cpu.
+transformers==5.18.0
 sentencepiece>=0.2.0   # tokenizer cho mDeBERTa NLI (DebertaV2) — leaf dep, không chạm langgraph; chỉ cần khi NLI_ENABLED=1
 
 # PostgreSQL (Supabase) — lược đồ nghiệp vụ StudyMap, migration bằng Alembic
