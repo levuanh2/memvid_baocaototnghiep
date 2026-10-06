@@ -1,5 +1,32 @@
 # Known Issues
 
+## Mind Map export had two triggers and a square checkbox marker (fixed 2026-10-06)
+
+**Symptom:** the Export Studio opened from two places: the toolbar "Xuất" and an
+overflow menu item "Mở Export Studio". The branch selection marker was an 18px
+square, which covered node text, and its dialog subtitle showed "Export Studio".
+
+**Root cause:** the overflow item was a duplicate of the toolbar trigger
+(both call `setExportOpen(true)`). The marker was a single square box at the
+parent's top-left, with no side awareness and no separate hit target.
+
+**Fix:** remove the overflow export item and its group. Subtitle copy changes to
+"Chọn phạm vi, định dạng và cách trình bày". The marker becomes a 20px circle
+inside a 40x40 hitbox, anchored from the topic's own offsets on the outer top
+corner (root: top-right), using mind-elixir's `me-main` lhs/rhs class for side.
+The selection bar becomes a floating pill above the legend; on narrow screens it
+is a bottom bar with safe-area padding, and the legend hides only in selection mode.
+
+**Regression:** `MindElixirView.exportEntry.test.jsx` (fails on origin/main at the
+overflow item and the subtitle), `mindmapBranchSelectionMarker.test.js` (side
+attribute), `e2e-fixture/mindmap-branch-marker.spec.js` (20px/40px, placement,
+click, keyboard, transform), `e2e-fixture/branch-export-visual.spec.js` (visual
+states and measurements).
+
+**Prevention:** one trigger per action. A new entry point must replace an old one,
+not sit beside it. Measure overlays from the element they anchor to, not from a
+wrapper that mind-elixir pads.
+
 ## Mind Map repair banner stayed after a long hidden Chat dwell (fixed 2026-10-06)
 
 **Symptom:** a map that initialised while the Chat tab was active showed the
