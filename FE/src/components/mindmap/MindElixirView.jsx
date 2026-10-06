@@ -44,6 +44,8 @@ export { THEME };
 // The fit stays the single initial operation; the scale is then floored at a
 // readable size and the root is centred. Horizontal panning covers the rest.
 const MOBILE_FIT_MAX_WIDTH = 640;
+// Connector repair budget. Counted only while the container has real size; see startFitPoll.
+const VISIBLE_REPAIR_TIMEOUT_MS = 10000;
 const MOBILE_READABLE_MIN_SCALE = 0.75;
 
 function applyReadableFloor(mind, el) {
@@ -257,22 +259,34 @@ export default function MindElixirView({ data, onRegenerate, regenerating, contr
   //
   // pollActiveRef guards against a second concurrent poll (e.g. an
   // unrelated re-render) rather than against any specific external
-  // trigger. The wall-clock ceiling is generous (2 minutes) purely as a
-  // safety valve against looping forever on something permanently,
-  // unrecoverably broken.
+  // trigger.
+  //
+  // The repair budget (VISIBLE_REPAIR_TIMEOUT_MS) counts only time the
+  // container actually has real size. The budget starts on the first tick
+  // that sees a sized container and is cleared whenever the container drops
+  // back to 0x0, so hidden time never consumes it. A deadline counted from
+  // mount expired while the pane was still hidden and left the error banner
+  // up after the pane became visible, because nothing restarted the poll.
   // Returns a cleanup function so callers can cancel it (unmount).
   const startFitPoll = useCallback(() => {
     if (pollActiveRef.current) return () => {};
     pollActiveRef.current = true;
     let cancelled = false;
     let timer = null;
-    const deadline = (typeof performance !== "undefined" ? performance.now() : Date.now()) + 10000;
+    let visibleDeadline = null;
     const stop = () => { cancelled = true; pollActiveRef.current = false; if (timer) clearTimeout(timer); if (renderPollStopRef.current === stop) renderPollStopRef.current = null; };
     const poll = () => {
       if (cancelled) return;
+      const el = containerRef.current;
+      if (!el || el.clientWidth <= 0 || el.clientHeight <= 0) {
+        visibleDeadline = null;
+        timer = setTimeout(poll, 16);
+        return;
+      }
       const now = typeof performance !== "undefined" ? performance.now() : Date.now();
+      if (visibleDeadline === null) visibleDeadline = now + VISIBLE_REPAIR_TIMEOUT_MS;
       if (fitIfReady()) { stop(); return; }
-      if (now >= deadline) {
+      if (now >= visibleDeadline) {
         pollActiveRef.current = false;
         renderPollStopRef.current = null;
         setRenderError("Không thể dựng connector trong thời gian cho phép.");
