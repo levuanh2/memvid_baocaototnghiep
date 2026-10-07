@@ -1107,6 +1107,7 @@ export default function MindElixirView({ data, onRegenerate, regenerating, contr
         open={exportOpen && !selectionModeActive}
         onClose={() => setExportOpen(false)}
         mind={mindRef.current}
+        record={data}
         mapId={data?.id}
         title={data?.title}
         selectedNodeId={controller?.selected?.id}

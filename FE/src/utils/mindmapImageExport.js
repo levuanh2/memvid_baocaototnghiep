@@ -21,6 +21,7 @@
 import { snapdom as realSnapdom } from "@zumer/snapdom";
 import RealMindElixir from "mind-elixir";
 import { THEME } from "../components/mindmap/mindElixirTheme";
+import { recordToMindElixir, liveRecordForExport } from "./mindElixirAdapter";
 import { resolveExportScope } from "./mindmapExportScope";
 import { exportFilenameFor } from "./mindmapExportFilename";
 import { DEFAULT_APPEARANCE, applyContainerAppearance, applyTargetAppearance, needsRelayout as appearanceNeedsRelayout } from "./mindmapExportAppearance";
@@ -55,9 +56,31 @@ function blobToBase64(blob) {
 }
 
 /** Shared tail for both capture paths: "download" triggers the real browser download (existing behavior); "base64" returns {base64} instead — used by captureMapImageBase64 to hand a PNG to the PDF/DOCX backend job as `map_image_base64`, never triggering a download of its own. */
+/** Rejects an empty or single-colour capture so a blank map never becomes a "successful" export. Pixel sampling runs only where a canvas can decode the image (browsers); a zero-byte blob is rejected everywhere. */
+async function assertMeaningfulBlob(blob) {
+  if (!blob || blob.size === 0) throw new Error("Ảnh xuất rỗng, không tạo được file.");
+  if (typeof createImageBitmap !== "function" || typeof document === "undefined") return;
+  let bitmap;
+  try { bitmap = await createImageBitmap(blob); } catch { return; }
+  const canvas = document.createElement("canvas");
+  canvas.width = Math.min(bitmap.width, 256);
+  canvas.height = Math.min(bitmap.height, 256);
+  const ctx = canvas.getContext?.("2d");
+  if (!ctx) return;
+  ctx.drawImage(bitmap, 0, 0, canvas.width, canvas.height);
+  const { data } = ctx.getImageData(0, 0, canvas.width, canvas.height);
+  const [r0, g0, b0, a0] = data;
+  let differs = false;
+  for (let i = 4; i < data.length; i += 4) {
+    if (data[i] !== r0 || data[i + 1] !== g0 || data[i + 2] !== b0 || data[i + 3] !== a0) { differs = true; break; }
+  }
+  if (!differs) throw new Error("Ảnh xuất không có nội dung (toàn một màu).");
+}
+
 async function _finishCapture(result, { outputMode, format, filename, quality }) {
+  const blob = await result.toBlob({ type: format === "jpeg" ? "jpg" : format });
+  await assertMeaningfulBlob(blob);
   if (outputMode === "base64") {
-    const blob = await result.toBlob({ type: format === "jpeg" ? "jpg" : format });
     return { base64: await blobToBase64(blob) };
   }
   await result.download({ format, filename, quality });
@@ -108,12 +131,130 @@ export async function captureMapImageBase64(opts) {
   return base64;
 }
 
+
+
+/** The canonical record for one branch: the target node and its descendants, with the target promoted to root. Relations are kept only when both ends are inside the branch. Built from the record, never from the live map. */
+function branchRecordFor(record, targetNodeId) {
+  const nodes = record?.nodes || [];
+  const inside = new Set([targetNodeId]);
+  let grew = true;
+  while (grew) {
+    grew = false;
+    for (const n of nodes) {
+      if (!inside.has(n.id) && n.parent != null && inside.has(n.parent)) { inside.add(n.id); grew = true; }
+    }
+  }
+  return {
+    ...record,
+    nodes: nodes.filter((n) => inside.has(n.id)).map((n) => (n.id === targetNodeId ? { ...n, parent: null, kind: "root" } : n)),
+    relations: (record.relations || []).filter((r) => inside.has(r.source) && inside.has(r.target)),
+  };
+}
+
+const EXPORT_PADDING_PX = 32;
+
+/** Resolves once fonts and every <img> under `root` have loaded, so the snapshot never catches a placeholder. */
+async function waitForRenderResources(root) {
+  if (typeof document !== "undefined" && document.fonts?.ready) await document.fonts.ready;
+  const pending = [...(root?.querySelectorAll?.("img") || [])]
+    .filter((img) => !img.complete)
+    .map((img) => new Promise((resolve) => { img.onload = resolve; img.onerror = resolve; }));
+  await Promise.all(pending);
+}
+
+/** Union of the on-screen boxes that carry visible map content (topic text, expand carets, connectors). Boxes are measured even when clipped by an overflow-hidden parent. */
+function contentBoundsRelativeTo(origin, root) {
+  const rects = [...root.querySelectorAll("me-tpc, me-epd, path")].map((el) => el.getBoundingClientRect())
+    .filter((r) => r.width > 0 && r.height > 0);
+  if (!rects.length) return null;
+  return {
+    minX: Math.min(...rects.map((r) => r.left - origin.left)),
+    minY: Math.min(...rects.map((r) => r.top - origin.top)),
+    maxX: Math.max(...rects.map((r) => r.right - origin.left)),
+    maxY: Math.max(...rects.map((r) => r.bottom - origin.top)),
+  };
+}
+
+/**
+ * Canonical full-map export scene (PR A). Built from the canonical record with
+ * full titles, in an offscreen real-sized instance that the live canvas never
+ * sees. Nothing here touches the live `mind`: no layout, linkDiv, fit or centre
+ * on it, and no pan/zoom/collapse/selection state is read or changed. The
+ * scene is rendered at natural scale (no fit), then translated so its content
+ * bounds start at a fixed padding, and the container is sized to those bounds.
+ */
+async function exportCanonicalFullMap({
+  record, format, backgroundColor, scale, quality, title, appearance, outputMode,
+  snapdom, settleMs, MindElixirCtor,
+}) {
+  // `record` is already live-aware (see liveRecordForExport) and, for a branch export,
+  // already filtered to that branch — both done by the caller, before any live reads.
+  const { mindData } = recordToMindElixir(record, { fullTitles: true });
+  const offscreen = document.createElement("div");
+  offscreen.className = "mm-export-offscreen";
+  offscreen.style.cssText = "position:fixed; left:-99999px; top:0; width:2400px; height:1600px; overflow:hidden; pointer-events:none;";
+  const mountEl = document.createElement("div");
+  mountEl.style.cssText = "width:100%; height:100%;";
+  offscreen.appendChild(mountEl);
+  document.body.appendChild(offscreen);
+  let instance = null;
+  try {
+    instance = new MindElixirCtor({
+      el: mountEl, direction: MindElixirCtor.SIDE, compact: true,
+      editable: false, contextMenu: false, toolBar: false, theme: THEME,
+    });
+    instance.init({ nodeData: mindData.nodeData, arrows: mindData.arrows });
+    applyContainerAppearance({ mind: instance, appearance });
+    instance.layout?.();
+    instance.linkDiv?.();
+    applyTargetAppearance({ mind: instance, target: instance.map, appearance });
+    await waitForRenderResources(instance.map);
+    instance.map.style.transform = "translate3d(0px, 0px, 0px) scale(1)";
+    if (settleMs > 0) await new Promise((r) => setTimeout(r, settleMs));
+
+    const origin = mountEl.getBoundingClientRect();
+    const bounds = contentBoundsRelativeTo(origin, instance.map);
+    if (!bounds) throw new Error("Không có nội dung để xuất.");
+    const width = Math.ceil(bounds.maxX - bounds.minX + 2 * EXPORT_PADDING_PX);
+    const height = Math.ceil(bounds.maxY - bounds.minY + 2 * EXPORT_PADDING_PX);
+    mountEl.style.width = `${width}px`;
+    mountEl.style.height = `${height}px`;
+    offscreen.style.width = `${width}px`;
+    offscreen.style.height = `${height}px`;
+    instance.map.style.transform = `translate3d(${EXPORT_PADDING_PX - bounds.minX}px, ${EXPORT_PADDING_PX - bounds.minY}px, 0px) scale(1)`;
+    if (settleMs > 0) await new Promise((r) => setTimeout(r, settleMs));
+
+    const result = await snapdom(mountEl, { backgroundColor, scale, quality });
+    const filename = exportFilenameFor(title, format === "jpeg" ? "jpg" : format);
+    return await _finishCapture(result, { outputMode, format, filename, quality });
+  } finally {
+    instance?.destroy?.();
+    offscreen.remove();
+  }
+}
+
 export async function exportMindmapImage({
-  mind, scopeType, targetNodeId, branchRootIds, includeDescendants = true, visibleOnly = false,
+  mind, record, scopeType, targetNodeId, branchRootIds, includeDescendants = true, visibleOnly = false,
   format, backgroundColor, scale = 2, quality = 1, title,
   appearance = DEFAULT_APPEARANCE, outputMode = "download",
   snapdom = realSnapdom, settleMs = 30, MindElixirCtor = RealMindElixir,
 }) {
+  if ((scopeType === "full" || scopeType === "current_branch") && record) {
+    // Live structure/unsaved-title merge happens once here, reading only mind.nodeData/arrows
+    // (already in memory) — never the DOM, never a layout/fit/centre call on the live instance.
+    const liveAwareRecord = mind ? liveRecordForExport(mind, record) : record;
+    if (scopeType === "full") {
+      return exportCanonicalFullMap({
+        record: liveAwareRecord, format, backgroundColor, scale, quality, title, appearance, outputMode, snapdom, settleMs, MindElixirCtor,
+      });
+    }
+    if (targetNodeId) {
+      return exportCanonicalFullMap({
+        record: branchRecordFor(liveAwareRecord, targetNodeId), format, backgroundColor, scale, quality, title, appearance, outputMode,
+        snapdom, settleMs, MindElixirCtor,
+      });
+    }
+  }
   if (!mind?.map) throw new Error("Mind Elixir chưa sẵn sàng.");
 
   if (scopeType === "selected_branches") {

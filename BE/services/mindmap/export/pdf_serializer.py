@@ -19,6 +19,8 @@ from typing import Any, Optional
 
 import fitz
 
+from services.mindmap.export.image_guard import validate_map_image
+
 from shared.paths import BE_ROOT
 
 PAGE_SIZES_PT = {"A4": (595.0, 842.0), "A3": (842.0, 1191.0)}
@@ -227,6 +229,8 @@ def serialize_pdf(
     """mode: "outline" | "map" | "map_and_outline". Returns real PDF bytes."""
     if mode in ("map", "map_and_outline") and not map_image_bytes:
         raise ValueError(f"mode={mode!r} requires map_image_bytes")
+    if mode in ("map", "map_and_outline"):
+        validate_map_image(map_image_bytes)
 
     content = content or {}
     margin = MARGINS_PT.get(margins, MARGINS_PT["normal"])

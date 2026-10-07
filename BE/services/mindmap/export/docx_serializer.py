@@ -18,6 +18,8 @@ import docx
 from docx.enum.section import WD_ORIENT
 from docx.shared import Inches, Pt, RGBColor
 
+from services.mindmap.export.image_guard import validate_map_image
+
 MAX_HEADING_LEVEL = 9
 
 FONT_NAMES = {"sans": "Calibri", "serif": "Times New Roman"}  # both Vietnamese-diacritic-safe, both ship with Office/LibreOffice defaults — no embedding needed, DOCX stores real UTF-8 text regardless of the nominal font name
@@ -105,6 +107,9 @@ def serialize_docx(
     doc.add_heading(title, level=0)
 
     if map_image_bytes:
+        # The map image is optional here, but once supplied it must be a real, non-blank capture
+        # (same guard as the PDF map page) — never a silently embedded blank picture.
+        validate_map_image(map_image_bytes)
         doc.add_picture(io.BytesIO(map_image_bytes), width=Inches(6.5))
 
     for i, root in enumerate(tree["roots"]):

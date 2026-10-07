@@ -39,8 +39,12 @@ const LABEL_TO_TYPE = Object.fromEntries(
   Object.entries(REL_LABELS).map(([type, label]) => [label, type])
 );
 
-export function recordToMindElixir(record) {
+// `fullTitles` (export only): keep each node's complete title instead of the
+// canvas-compacted topic. The canvas keeps compactTopic() and its 100-char
+// limit; the export scene reads the original title from the canonical record.
+export function recordToMindElixir(record, { fullTitles = false } = {}) {
   const norm = normalizeMindmapRecord(record);
+  const topicOf = (title) => (fullTitles ? stripMarkdown(title) : compactTopic(stripMarkdown(title)));
   const sidecar = new Map();
   const layout = assignBranchDirections(norm.nodes);
   const byParent = new Map();
@@ -100,7 +104,7 @@ export function recordToMindElixir(record) {
     const direction = depth === 1 ? layout.directions.get(n.id) : undefined;
     const branchColor = currentBranchId ? layout.colors.get(currentBranchId) : undefined;
     return {
-      id: n.id, topic: compactTopic(stripMarkdown(n.title)),
+      id: n.id, topic: topicOf(n.title),
       ...(direction == null ? {} : { direction }),
       ...(branchColor ? { branchColor } : {}),
       ...(tags.length ? { tags } : {}),
@@ -112,7 +116,7 @@ export function recordToMindElixir(record) {
   };
   const nodeData = root
     ? toTree(root)
-    : { id: "n0", topic: compactTopic(norm.title || "Sơ đồ tư duy"), children: [] };
+    : { id: "n0", topic: fullTitles ? (norm.title || "Sơ đồ tư duy") : compactTopic(norm.title || "Sơ đồ tư duy"), children: [] };
   const arrows = (norm.relations || []).map((r, i) => ({
     id: `rel-${i}`, label: r.label || REL_LABELS[r.type] || "liên quan",
     from: r.source, to: r.target,
@@ -135,6 +139,36 @@ export function recordToMindElixir(record) {
       branchColors: BRANCH_COLORS,
     },
   };
+}
+
+/**
+ * A record that reflects the LIVE canvas structure (so new/deleted/moved nodes and
+ * unsaved edits are not missed by export), while recovering the full original title
+ * for every node the user has NOT touched since load.
+ *
+ * Title per node: if this id exists in `baseRecord` and the live topic still equals
+ * compactTopic(stripMarkdown(savedTitle)) — i.e. unchanged since load — the full saved
+ * title is used. Otherwise the live topic is used as-is: a live edit is never compacted
+ * by mind-elixir, so the on-canvas text already IS the full current title. This never
+ * reads `sidecar.note` for a title — a real user note there would be indistinguishable
+ * from a stored "full title" marker, so it is not a certain source (see compactTopic).
+ * Reads only `mind.nodeData`/`mind.arrows` (already in memory) — no DOM, no layout.
+ */
+export function liveRecordForExport(mind, baseRecord) {
+  const savedTitleById = new Map((baseRecord?.nodes || []).map((n) => [n.id, n.title]));
+  const nodes = [];
+  const walk = (node, parent, order) => {
+    const saved = savedTitleById.get(node.id);
+    const unchanged = saved != null && compactTopic(stripMarkdown(saved)) === node.topic;
+    nodes.push({ id: node.id, parent, title: unchanged ? saved : (node.topic || ""), order });
+    (node.children || []).forEach((c, i) => walk(c, node.id, i));
+  };
+  if (mind?.nodeData) walk(mind.nodeData, null, 0);
+  const baseType = new Map((baseRecord?.relations || []).map((r) => [`${r.source}→${r.target}`, r.type]));
+  const relations = (mind?.arrows || []).map((a) => ({
+    source: a.from, target: a.to, type: baseType.get(`${a.from}→${a.to}`) || LABEL_TO_TYPE[a.label] || "relates_to", label: a.label || "",
+  }));
+  return { ...baseRecord, nodes, relations };
 }
 
 export function mindElixirToRecord(mindData, sidecar, baseRecord) {
