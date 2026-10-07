@@ -93,3 +93,30 @@ export const FIXTURE_COLLAPSED_NODE_IDS = {
   [FIXTURE_MAP_A.id]: [`${FIXTURE_MAP_A.id}-m2`, `${FIXTURE_MAP_A.id}-m2-s0`],
   [FIXTURE_MAP_B.id]: [`${FIXTURE_MAP_B.id}-m1`],
 };
+
+// PR A export-rendering fixture (fake data only). Used by the export-v3
+// Playwright spec via ?map=export-v3. Long multi-line Vietnamese root title,
+// four main branches (one with many leaves so it extends further than the
+// viewport), a collapsed branch whose deepest node must still be exported.
+const EXPORT_V3_ID = "export-v3";
+function buildExportV3() {
+  const nodes = [{
+    id: `${EXPORT_V3_ID}-root`, kind: "root",
+    title: "Bản đồ kiểm thử xuất file: tiêu đề tiếng Việt có dấu rất dài để kiểm tra xuống dòng và không cắt chữ ở mép",
+    parent: null, order: 0,
+  }];
+  const mains = ["Nhánh trái thứ nhất", "Nhánh phải thứ nhất", "Nhánh trái thứ hai", "Nhánh phải thứ hai"];
+  mains.forEach((t, mi) => {
+    const mainId = `${EXPORT_V3_ID}-m${mi}`;
+    nodes.push({ id: mainId, kind: "section", title: t, parent: `${EXPORT_V3_ID}-root`, order: mi });
+    const leafCount = mi === 2 ? 14 : 3;
+    for (let li = 0; li < leafCount; li++) {
+      nodes.push({ id: `${mainId}-l${li}`, kind: "idea", title: `Ý ${li + 1} của ${t.toLowerCase()} — có dấu tiếng Việt`, parent: mainId, order: li });
+    }
+  });
+  // Collapsed branch: a deep node under m1 that must still appear in a full export.
+  nodes.push({ id: `${EXPORT_V3_ID}-m1-deep`, kind: "idea", title: "Node sâu trong nhánh đang thu gọn", parent: `${EXPORT_V3_ID}-m1-l0`, order: 0 });
+  return { id: EXPORT_V3_ID, title: "Bản đồ kiểm thử xuất file", nodes, relations: [], sources: [], schema_version: 2 };
+}
+export const FIXTURE_EXPORT_V3 = buildExportV3();
+export const FIXTURE_EXPORT_V3_COLLAPSED = { [FIXTURE_EXPORT_V3.id]: [`${FIXTURE_EXPORT_V3.id}-m1-l0`] };

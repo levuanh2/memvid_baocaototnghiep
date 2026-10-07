@@ -16,9 +16,11 @@
 // definitions of its own keeps Vite's react-refresh plugin happy.
 import { useCallback, useMemo, useRef, useState } from "react";
 import MindElixirView from "../components/mindmap/MindElixirView";
-import { FIXTURE_MAP_A, FIXTURE_MAP_B, FIXTURE_COLLAPSED_NODE_IDS } from "./mindmapFixtures";
+import { FIXTURE_MAP_A, FIXTURE_MAP_B, FIXTURE_COLLAPSED_NODE_IDS, FIXTURE_EXPORT_V3, FIXTURE_EXPORT_V3_COLLAPSED } from "./mindmapFixtures";
 
-const MAPS = [FIXTURE_MAP_A, FIXTURE_MAP_B];
+const MAPS = [FIXTURE_MAP_A, FIXTURE_MAP_B, FIXTURE_EXPORT_V3];
+const COLLAPSED_BY_MAP = { ...FIXTURE_COLLAPSED_NODE_IDS, ...FIXTURE_EXPORT_V3_COLLAPSED };
+const INITIAL_MAP_ID = new URLSearchParams(typeof window !== "undefined" ? window.location.search : "").get("map") === "export-v3" ? FIXTURE_EXPORT_V3.id : FIXTURE_MAP_A.id;
 
 function useFixtureController() {
   const mindRef = useRef(null);
@@ -43,7 +45,7 @@ function useFixtureController() {
     // Collapsing a parent first removes its children from the DOM,
     // making a later findEle() for a child throw ("maybe it's collapsed")
     // instead of finding a real element.
-    const ids = [...(FIXTURE_COLLAPSED_NODE_IDS[mapId] || [])].sort((a, b) => b.length - a.length);
+    const ids = [...(COLLAPSED_BY_MAP[mapId] || [])].sort((a, b) => b.length - a.length);
     ids.forEach((id) => {
       const topic = mind.findEle?.(id);
       if (topic) mind.expandNode(topic, false);
@@ -64,7 +66,7 @@ function useFixtureController() {
 
 export default function FixtureHarnessApp() {
   const controller = useFixtureController();
-  const [activeMapId, setActiveMapId] = useState(FIXTURE_MAP_A.id);
+  const [activeMapId, setActiveMapId] = useState(INITIAL_MAP_ID);
   const [saveLog, setSaveLog] = useState([]);
 
   const activeRecord = useMemo(() => MAPS.find((m) => m.id === activeMapId), [activeMapId]);
