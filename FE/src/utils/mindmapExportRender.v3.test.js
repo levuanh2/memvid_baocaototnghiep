@@ -88,6 +88,19 @@ describe("full-map export does not touch the live canvas", () => {
   });
 });
 
+describe("current-branch export does not touch the live canvas", () => {
+  it("exports the branch from the record without layout/linkDiv/expansion on the live instance", async () => {
+    const mind = makeMind();
+    const expandedBefore = JSON.stringify(mind.nodeData);
+    const targets = [];
+    await exportMindmapImage({ mind, record: RECORD, scopeType: "current_branch", targetNodeId: "a", format: "png", backgroundColor: "#fff", snapdom: fakeSnapdom(targets), settleMs: 0, MindElixirCtor: FakeOffscreenMind });
+    expect(mind.layout).not.toHaveBeenCalled();
+    expect(mind.linkDiv).not.toHaveBeenCalled();
+    expect(JSON.stringify(mind.nodeData)).toBe(expandedBefore);
+    expect(targets.some((t) => t === mind.map)).toBe(false);
+  });
+});
+
 describe("capture must fail loudly when the image is empty", () => {
   it("rejects an empty capture instead of returning a base64 string", async () => {
     const mind = makeMind();

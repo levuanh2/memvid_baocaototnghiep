@@ -132,6 +132,25 @@ export async function captureMapImageBase64(opts) {
 }
 
 
+
+/** The canonical record for one branch: the target node and its descendants, with the target promoted to root. Relations are kept only when both ends are inside the branch. Built from the record, never from the live map. */
+function branchRecordFor(record, targetNodeId) {
+  const nodes = record?.nodes || [];
+  const inside = new Set([targetNodeId]);
+  let grew = true;
+  while (grew) {
+    grew = false;
+    for (const n of nodes) {
+      if (!inside.has(n.id) && n.parent != null && inside.has(n.parent)) { inside.add(n.id); grew = true; }
+    }
+  }
+  return {
+    ...record,
+    nodes: nodes.filter((n) => inside.has(n.id)).map((n) => (n.id === targetNodeId ? { ...n, parent: null, kind: "root" } : n)),
+    relations: (record.relations || []).filter((r) => inside.has(r.source) && inside.has(r.target)),
+  };
+}
+
 const EXPORT_PADDING_PX = 32;
 
 /** Resolves once fonts and every <img> under `root` have loaded, so the snapshot never catches a placeholder. */
@@ -221,6 +240,12 @@ export async function exportMindmapImage({
   if (scopeType === "full" && record) {
     return exportCanonicalFullMap({
       record, format, backgroundColor, scale, quality, title, appearance, outputMode, snapdom, settleMs, MindElixirCtor,
+    });
+  }
+  if (scopeType === "current_branch" && record && targetNodeId) {
+    return exportCanonicalFullMap({
+      record: branchRecordFor(record, targetNodeId), format, backgroundColor, scale, quality, title, appearance, outputMode,
+      snapdom, settleMs, MindElixirCtor,
     });
   }
   if (!mind?.map) throw new Error("Mind Elixir chưa sẵn sàng.");
