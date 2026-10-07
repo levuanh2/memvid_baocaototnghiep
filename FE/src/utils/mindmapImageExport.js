@@ -22,7 +22,7 @@ import { snapdom as realSnapdom } from "@zumer/snapdom";
 import RealMindElixir from "mind-elixir";
 import { THEME } from "../components/mindmap/mindElixirTheme";
 import { recordToMindElixir, liveRecordForExport } from "./mindElixirAdapter";
-import { resolveExportScope } from "./mindmapExportScope";
+import { resolveExportScope, resolveExportScopeFromRecord } from "./mindmapExportScope";
 import { exportFilenameFor } from "./mindmapExportFilename";
 import { DEFAULT_APPEARANCE, applyContainerAppearance, applyTargetAppearance, needsRelayout as appearanceNeedsRelayout } from "./mindmapExportAppearance";
 
@@ -133,21 +133,27 @@ export async function captureMapImageBase64(opts) {
 
 
 
-/** The canonical record for one branch: the target node and its descendants, with the target promoted to root. Relations are kept only when both ends are inside the branch. Built from the record, never from the live map. */
-function branchRecordFor(record, targetNodeId) {
-  const nodes = record?.nodes || [];
-  const inside = new Set([targetNodeId]);
-  let grew = true;
-  while (grew) {
-    grew = false;
-    for (const n of nodes) {
-      if (!inside.has(n.id) && n.parent != null && inside.has(n.parent)) { inside.add(n.id); grew = true; }
-    }
-  }
+/**
+ * The ONE record-pruning step behind every non-"full" image scope — "current
+ * branch" and "selected branches" alike, replacing what used to be two
+ * separate algorithms (`branchRecordFor`'s own ancestor-less promote-to-root,
+ * and `exportMindmapImageMultiBranch`'s live-DOM clone). Delegates id
+ * resolution to `resolveExportScopeFromRecord` (the same core the FE preview
+ * and BE document resolver use — see mindmapExportScope.js's header), then
+ * filters the record down to includedIds ∪ contextIds: the map's true root
+ * stays the root, so a selected branch keeps its real ancestor-context path
+ * instead of being promoted — matching the document-export tree shape.
+ */
+function recordScopedForExport(record, { scopeType, selectedNodeId, selectedBranchRootIds, includeDescendants = true }) {
+  if (scopeType === "full") return record;
+  const { includedIds, contextIds } = resolveExportScopeFromRecord(record?.nodes || [], {
+    scopeType, selectedNodeId, selectedBranchRootIds, includeDescendants,
+  });
+  const renderSet = new Set([...includedIds, ...contextIds]);
   return {
     ...record,
-    nodes: nodes.filter((n) => inside.has(n.id)).map((n) => (n.id === targetNodeId ? { ...n, parent: null, kind: "root" } : n)),
-    relations: (record.relations || []).filter((r) => inside.has(r.source) && inside.has(r.target)),
+    nodes: (record?.nodes || []).filter((n) => renderSet.has(n.id)),
+    relations: (record?.relations || []).filter((r) => renderSet.has(r.source) && renderSet.has(r.target)),
   };
 }
 
@@ -239,24 +245,24 @@ export async function exportMindmapImage({
   appearance = DEFAULT_APPEARANCE, outputMode = "download",
   snapdom = realSnapdom, settleMs = 30, MindElixirCtor = RealMindElixir,
 }) {
-  if ((scopeType === "full" || scopeType === "current_branch") && record) {
+  if ((scopeType === "full" || scopeType === "current_branch" || scopeType === "selected_branches") && record) {
     // Live structure/unsaved-title merge happens once here, reading only mind.nodeData/arrows
     // (already in memory) — never the DOM, never a layout/fit/centre call on the live instance.
     const liveAwareRecord = mind ? liveRecordForExport(mind, record) : record;
-    if (scopeType === "full") {
-      return exportCanonicalFullMap({
-        record: liveAwareRecord, format, backgroundColor, scale, quality, title, appearance, outputMode, snapdom, settleMs, MindElixirCtor,
-      });
-    }
-    if (targetNodeId) {
-      return exportCanonicalFullMap({
-        record: branchRecordFor(liveAwareRecord, targetNodeId), format, backgroundColor, scale, quality, title, appearance, outputMode,
-        snapdom, settleMs, MindElixirCtor,
-      });
-    }
+    if (scopeType === "current_branch" && !targetNodeId) throw new Error("Chưa chọn nhánh để xuất.");
+    if (scopeType === "selected_branches" && !branchRootIds?.length) throw new Error("Chưa chọn nhánh để xuất.");
+    const scopedRecord = recordScopedForExport(liveAwareRecord, {
+      scopeType, selectedNodeId: targetNodeId, selectedBranchRootIds: branchRootIds, includeDescendants,
+    });
+    return exportCanonicalFullMap({
+      record: scopedRecord, format, backgroundColor, scale, quality, title, appearance, outputMode, snapdom, settleMs, MindElixirCtor,
+    });
   }
   if (!mind?.map) throw new Error("Mind Elixir chưa sẵn sàng.");
 
+  // No `record` supplied — fall back to the live-DOM capture paths below
+  // (pre-PR-B behaviour, still exercised by callers/tests that only have a
+  // live `mind` instance to work with).
   if (scopeType === "selected_branches") {
     return exportMindmapImageMultiBranch({
       mind, rootIds: branchRootIds, includeDescendants, visibleOnly,
