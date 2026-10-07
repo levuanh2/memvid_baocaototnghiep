@@ -82,6 +82,7 @@ def run_export_job(
         tree = build_export_tree(
             nodes, relations, scope["root_ids"], scope["included_ids"],
             map_id=map_id, title=record.get("title") or "",
+            context_ids=scope["context_ids"],
         )
         jobs_store.update_job(job_id, progress=50, stage="serializing")
 
