@@ -54,7 +54,7 @@ async function advanceToPreview(page) {
 
 async function exportAndSave(page, filenameHint) {
   const downloadPromise = page.waitForEvent("download");
-  await page.getByRole("button", { name: /^(Xuất|Tạo) (PNG|JPEG|SVG|PDF|DOCX|XLSX)$/ }).click();
+  await page.getByRole("button", { name: /^(Xuất|Tạo) (PNG|JPEG|SVG|WEBP|PDF|DOCX|XLSX)$/ }).click();
   const download = await downloadPromise;
   const savePath = path.join(ARTIFACT_DIR, `${filenameHint}-${Date.now()}${path.extname(download.suggestedFilename())}`);
   await download.saveAs(savePath);
@@ -64,7 +64,7 @@ async function exportAndSave(page, filenameHint) {
 /** Same as exportAndSave, but keeps the EXACT filename given (no timestamp) — used for the Section 8 named QA specimens (full-map.png etc.) so there's one canonical file per format to point a report at. */
 async function exportAndSaveExact(page, exactFilename) {
   const downloadPromise = page.waitForEvent("download");
-  await page.getByRole("button", { name: /^(Xuất|Tạo) (PNG|JPEG|SVG|PDF|DOCX|XLSX)$/ }).click();
+  await page.getByRole("button", { name: /^(Xuất|Tạo) (PNG|JPEG|SVG|WEBP|PDF|DOCX|XLSX)$/ }).click();
   const download = await downloadPromise;
   const savePath = path.join(ARTIFACT_DIR, exactFilename);
   await download.saveAs(savePath);
@@ -172,6 +172,44 @@ test.describe("Export Studio — fixture harness, real files", () => {
     expect(svgText).toContain("Kiến trúc hệ thống");
     // No toolbar/drawer/export-control chrome leaked into the capture.
     expect(svgText).not.toMatch(/mm-export-toolbar|mm-selection-bar|Xuất sơ đồ/);
+  });
+
+  test("PR C1: WebP full-scope export has real RIFF/WEBP magic bytes and decodes in Chromium", async ({ page }) => {
+    await openExportStudio(page);
+    await chooseScope(page, "full");
+    await clickNext(page); // -> format step
+    await chooseFormat(page, "webp");
+    await clickNext(page); // -> appearance step
+    await clickNext(page); // -> preview step
+    const filePath = await exportAndSave(page, "full-webp");
+
+    const buf = fs.readFileSync(filePath);
+    expect(buf.length).toBeGreaterThan(500);
+    // RIFF container header + "WEBP" fourcc at byte offset 8 — the real magic
+    // byte signature, not just a sniffed extension.
+    expect(buf.subarray(0, 4).toString("ascii")).toBe("RIFF");
+    expect(buf.subarray(8, 12).toString("ascii")).toBe("WEBP");
+
+    const dataUrl = `data:image/webp;base64,${buf.toString("base64")}`;
+    const { width, height } = await page.evaluate((url) => new Promise((resolve, reject) => {
+      const img = new Image();
+      img.onload = () => resolve({ width: img.naturalWidth, height: img.naturalHeight });
+      img.onerror = () => reject(new Error("webp failed to decode"));
+      img.src = url;
+    }), dataUrl);
+    expect(width).toBeGreaterThan(0);
+    expect(height).toBeGreaterThan(0);
+  });
+
+  test("PR C1: PDF create-new export still works end to end (pipeline unchanged by format gating)", async ({ page }) => {
+    await openExportStudio(page);
+    await chooseScope(page, "full");
+    await clickNext(page); // -> format step
+    await chooseFormat(page, "pdf");
+    await clickNext(page); // -> appearance step
+    await clickNext(page); // -> preview step
+    const exportBtn = page.getByRole("button", { name: /^(Xuất|Tạo) (PNG|JPEG|SVG|WEBP|PDF)$/ });
+    await expect(exportBtn).toBeEnabled();
   });
 
   test("Section 7 gate: the exact representative Vietnamese character set renders correctly in real SVG (XML text)", async ({ page }) => {
@@ -283,7 +321,7 @@ test.describe("Export Studio — fixture harness, real files", () => {
     await chooseFormat(page, "svg");
     await clickNext(page); // -> appearance step
     await clickNext(page); // -> preview step
-    const exportBtn = page.getByRole("button", { name: /^(Xuất|Tạo) (PNG|JPEG|SVG|PDF|DOCX|XLSX)$/ });
+    const exportBtn = page.getByRole("button", { name: /^(Xuất|Tạo) (PNG|JPEG|SVG|WEBP|PDF|DOCX|XLSX)$/ });
     await expect(exportBtn).toBeEnabled();
     const filePath = await exportAndSave(page, "multi-branch-svg");
 

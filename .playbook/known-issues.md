@@ -6111,3 +6111,47 @@ shared by every consumer prevents the second failure mode this entry's "pruneClo
 and "branchRecordFor" were: a scope rule fixed in one place (FE preview) silently
 never reaching a sibling code path that re-implemented the same concept against a
 different data source (the live DOM instead of the canonical record).
+
+## PR C1: new export jobs could still be created as DOCX/XLSX; WebP was unavailable (fixed 2026-10-07)
+
+**Symptom:** the Export Studio "new export" format grid offered DOCX/XLSX (now
+out of scope for new jobs per product decision) and had no WebP option, even
+though the image-capture pipeline (snapdom) already supports it.
+
+**Root cause:** none — this was a planned capability change, not a defect.
+`app/main.py`'s `_EXPORT_FORMATS` tuple was the only place a new export job's
+format is gated; it had never been narrowed to match the new product decision.
+
+**Fix:** `_EXPORT_FORMATS = ("pdf",)` — DOCX/XLSX requests to
+`POST /mindmaps/<id>/exports` now get a clean 400 `invalid_format`.
+`run_export_job`, `jobs_store`, and the status/download routes are untouched,
+so a DOCX/XLSX job created before this deployed — or completed by the worker
+directly, bypassing the route's gate — still reads and downloads normally.
+WebP joins png/jpeg/svg in the FE's `mindmapExportFormatCapabilities.js`
+"image" capability set; no BE or `mindmapImageExport.js` change was needed
+since image formats never go through a BE job and the format string already
+flowed through that pipeline generically (verified via `@zumer/snapdom`'s own
+`.d.ts`, not assumed — `BlobType` already includes `"webp"`).
+
+**Regression:** `BE/tests/test_mindmap_export_webp_format_gating_v3.py`
+(DOCX/XLSX create rejected; PDF still allowed; a job the WORKER runs directly
+still completes/downloads — the shape of one queued before this gate
+shipped). `BE/tests/test_mindmap_export_api.py`'s
+`test_legacy_docx_xlsx_worker_direct_across_real_scopes` extends that legacy
+guard across every scope. FE: `ExportStudioDialog.formatGating.v3.test.jsx`,
+`mindmapExportFormatCapabilities.test.js`, `mindmapImageExport.test.js`
+(WebP-specific), and a real-browser Playwright test decoding a downloaded
+WebP's actual RIFF/WEBP magic bytes. Pre-existing tests that used
+docx/xlsx only as an incidental vehicle format were switched to pdf; two that
+exercised a DOCX/XLSX-only appearance panel through a live click are removed
+(unreachable now) with their capability-level coverage intact elsewhere.
+
+**Prevention:** when a Playwright locator matches button text built from
+`format.toUpperCase()` (or similar), the regex must match that exact
+rendered case — `WebP` against rendered text `WEBP` doesn't error, it just
+never matches, so the test TIMES OUT waiting for a click target instead of
+failing on a clear assertion. The bug first showed up as a 45-second
+timeout, not a readable diff — worth remembering the next time a Playwright
+test times out on a `getByRole`/`getByText` locator: check for a case or
+whitespace mismatch against the actual rendered string before assuming a
+slower root cause (network, animation, a missing feature).

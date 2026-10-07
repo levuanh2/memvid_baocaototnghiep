@@ -5954,7 +5954,13 @@ def delete_mindmap(mindmap_id: str):
 # three document formats, which need real server-side generation, go through
 # a job (see app/application/mindmap_export.py + app/domains/jobs/export_jobs.py).
 # -------------------------
-_EXPORT_FORMATS = ("docx", "xlsx", "pdf")
+# PR C1: DOCX/XLSX are no longer creatable via this route — a new job's
+# format is one of the 5 public export formats. A pre-existing DOCX/XLSX
+# job (created before this gate shipped, or completed directly by the
+# worker — see run_export_job, which has no format restriction of its own)
+# still reads and downloads normally through the routes below; this tuple
+# only gates the CREATE path.
+_EXPORT_FORMATS = ("pdf",)
 _EXPORT_SCOPE_TYPES = ("full", "current_branch", "selected_branches")
 
 

@@ -117,7 +117,7 @@ def test_unknown_node_id_rejected(be, client, monkeypatch):
     _stub_get_record(monkeypatch, be)
     _protect(be, monkeypatch, "userA", on=True)
     resp = client.post("/mindmaps/m1/exports", json={
-        "format": "docx", "scope": {"scope_type": "current_branch", "selected_node_id": "does-not-exist"},
+        "format": "pdf", "scope": {"scope_type": "current_branch", "selected_node_id": "does-not-exist"},
     })
     assert resp.status_code == 400
     assert resp.get_json()["error_code"] == "unknown_node_id"
@@ -144,7 +144,7 @@ def test_invalid_pdf_mode_rejected(be, client, monkeypatch):
 def test_idempotency_same_key_returns_same_job(be, client, monkeypatch, sync_enqueue, export_dir):
     _stub_get_record(monkeypatch, be)
     _protect(be, monkeypatch, "userA", on=True)
-    body = {"format": "docx", "idempotency_key": "k1"}
+    body = {"format": "pdf", "idempotency_key": "k1"}
     r1 = client.post("/mindmaps/m1/exports", json=body)
     r2 = client.post("/mindmaps/m1/exports", json=body)
     assert r1.status_code == 202 and r2.status_code == 202
@@ -152,21 +152,28 @@ def test_idempotency_same_key_returns_same_job(be, client, monkeypatch, sync_enq
 
 
 def test_idempotency_key_reused_with_different_payload_conflicts(be, client, monkeypatch, sync_enqueue, export_dir):
+    # PR C1: pdf is the only remaining creatable document format, so the two
+    # conflicting requests now vary by scope (not format) to get different
+    # request fingerprints — the idempotency check itself doesn't care which
+    # field differs, only that the SAME key was reused for a DIFFERENT request.
     _stub_get_record(monkeypatch, be)
     _protect(be, monkeypatch, "userA", on=True)
-    client.post("/mindmaps/m1/exports", json={"format": "docx", "idempotency_key": "k2"})
-    resp = client.post("/mindmaps/m1/exports", json={"format": "xlsx", "idempotency_key": "k2"})
+    client.post("/mindmaps/m1/exports", json={"format": "pdf", "idempotency_key": "k2"})
+    resp = client.post("/mindmaps/m1/exports", json={
+        "format": "pdf", "idempotency_key": "k2",
+        "scope": {"scope_type": "current_branch", "selected_node_id": "c1"},
+    })
     assert resp.status_code == 409
     assert resp.get_json()["error_code"] == "idempotency_conflict"
 
 
 # ---- end-to-end: create -> poll -> download ------------------------------------
 
-def test_docx_export_end_to_end_real_file_download(be, client, monkeypatch, sync_enqueue, export_dir):
+def test_pdf_export_end_to_end_real_file_download(be, client, monkeypatch, sync_enqueue, export_dir):
     _stub_get_record(monkeypatch, be)
     _protect(be, monkeypatch, "userA", on=True)
 
-    create = client.post("/mindmaps/m1/exports", json={"format": "docx"})
+    create = client.post("/mindmaps/m1/exports", json={"format": "pdf"})
     assert create.status_code == 202
     job_id = create.get_json()["job_id"]
 
@@ -178,14 +185,14 @@ def test_docx_export_end_to_end_real_file_download(be, client, monkeypatch, sync
 
     download = client.get(body["download_url"])
     assert download.status_code == 200
-    assert download.data[:2] == b"PK"  # real docx (zip) bytes, not a stub
-    assert download.mimetype == "application/vnd.openxmlformats-officedocument.wordprocessingml.document"
+    assert download.data[:4] == b"%PDF"  # real pdf bytes, not a stub
+    assert download.mimetype == "application/pdf"
 
 
 def test_download_requires_valid_token_or_owner(be, client, monkeypatch, sync_enqueue, export_dir):
     _stub_get_record(monkeypatch, be)
     _protect(be, monkeypatch, "userA", on=True)
-    create = client.post("/mindmaps/m1/exports", json={"format": "xlsx"})
+    create = client.post("/mindmaps/m1/exports", json={"format": "pdf"})
     job_id = create.get_json()["job_id"]
 
     # No token, foreign user -> 401.
@@ -235,7 +242,7 @@ def test_cross_map_node_id_rejected(be, client, monkeypatch):
     _stub_get_record(monkeypatch, be, owner="userA")  # map "m1"'s real nodes: root, c1
     _protect(be, monkeypatch, "userA", on=True)
     resp = client.post("/mindmaps/m1/exports", json={
-        "format": "docx",
+        "format": "pdf",
         "scope": {"scope_type": "current_branch", "selected_node_id": "node-that-belongs-to-a-different-map"},
     })
     assert resp.status_code == 400
@@ -264,7 +271,7 @@ def test_failed_job_can_be_retried_with_a_new_idempotency_key_and_succeeds(be, c
 
     from app.application import mindmap_export as mm_export_app
     call_count = {"n": 0}
-    real_serialize = mm_export_app.serialize_docx
+    real_serialize = mm_export_app.serialize_pdf
 
     def _flaky(*args, **kwargs):
         call_count["n"] += 1
@@ -273,17 +280,18 @@ def test_failed_job_can_be_retried_with_a_new_idempotency_key_and_succeeds(be, c
         return real_serialize(*args, **kwargs)
 
     # Patched where the name is actually looked up (mindmap_export.py did
-    # `from ...docx_serializer import serialize_docx`, so it holds its own
-    # bound reference — patching docx_serializer.serialize_docx itself
-    # wouldn't touch that already-bound name).
-    monkeypatch.setattr(mm_export_app, "serialize_docx", _flaky)
+    # `from ...pdf_serializer import serialize_pdf`, so it holds its own
+    # bound reference — patching pdf_serializer.serialize_pdf itself
+    # wouldn't touch that already-bound name). PR C1: pdf is the only
+    # remaining creatable document format, so this is the vehicle now.
+    monkeypatch.setattr(mm_export_app, "serialize_pdf", _flaky)
 
-    r1 = client.post("/mindmaps/m1/exports", json={"format": "docx", "idempotency_key": "retry-key-1"})
+    r1 = client.post("/mindmaps/m1/exports", json={"format": "pdf", "idempotency_key": "retry-key-1"})
     job1 = r1.get_json()["job_id"]
     status1 = client.get(f"/mindmaps/exports/{job1}").get_json()
     assert status1["status"] == "error"
 
-    r2 = client.post("/mindmaps/m1/exports", json={"format": "docx", "idempotency_key": "retry-key-2"})
+    r2 = client.post("/mindmaps/m1/exports", json={"format": "pdf", "idempotency_key": "retry-key-2"})
     job2 = r2.get_json()["job_id"]
     assert job2 != job1
     status2 = client.get(f"/mindmaps/exports/{job2}").get_json()
@@ -349,7 +357,11 @@ _SCOPE_CASES = [
 _FORMAT_MAGIC = {"docx": b"PK", "xlsx": b"PK", "pdf": b"%PDF"}
 
 
-@pytest.mark.parametrize("fmt", ["pdf", "docx", "xlsx"])
+# PR C1: pdf is the only document format still creatable through the real
+# API — docx/xlsx are covered separately below via the WORKER directly
+# (test_legacy_docx_xlsx_worker_direct_across_real_scopes), the shape of a
+# job that was queued/processed before this gate shipped.
+@pytest.mark.parametrize("fmt", ["pdf"])
 @pytest.mark.parametrize("scope_name,scope_body", _SCOPE_CASES)
 def test_every_document_format_through_the_real_api_across_real_scopes(
     be, client, monkeypatch, sync_enqueue, export_dir, fmt, scope_name, scope_body,
@@ -365,6 +377,40 @@ def test_every_document_format_through_the_real_api_across_real_scopes(
     create = client.post("/mindmaps/m1/exports", json={"format": fmt, "scope": scope_body})
     assert create.status_code == 202, (fmt, scope_name, create.get_json())
     job_id = create.get_json()["job_id"]
+
+    status = client.get(f"/mindmaps/exports/{job_id}").get_json()
+    assert status["status"] == "done", (fmt, scope_name, status)
+
+    download = client.get(status["download_url"])
+    assert download.status_code == 200
+    assert download.data[:4].startswith(_FORMAT_MAGIC[fmt][:min(4, len(_FORMAT_MAGIC[fmt]))])
+
+
+@pytest.mark.parametrize("fmt", ["docx", "xlsx"])
+@pytest.mark.parametrize("scope_name,scope_body", _SCOPE_CASES)
+def test_legacy_docx_xlsx_worker_direct_across_real_scopes(
+    be, client, monkeypatch, export_dir, fmt, scope_name, scope_body,
+):
+    """DOCX/XLSX are no longer creatable through the create route (see the
+    pdf-only test above), but a job the WORKER processes directly — the
+    shape of one queued before this gate shipped — must still produce a
+    real, downloadable file across every scope, exactly like before."""
+    from app.domains.jobs import jobs_store as js
+    from app.application.mindmap_export import run_export_job
+    from app.domains.mindmap import store
+
+    nodes = [
+        {"id": "root", "parent": None, "kind": "root", "title": "Bản đồ tư duy", "order": 0},
+        {"id": "c1", "parent": "root", "kind": "section", "title": "Kiến trúc hệ thống", "order": 0},
+        {"id": "c2", "parent": "root", "kind": "section", "title": "Bảo mật", "order": 1},
+    ]
+    rec = _stub_get_record(monkeypatch, be, record=_rec(nodes=nodes))
+    monkeypatch.setattr(store, "get_record", lambda mid, **kwargs: rec if mid == rec["id"] else None)
+    _protect(be, monkeypatch, "userA", on=True)
+
+    job_id = f"legacy-{fmt}-{scope_name}"
+    js.create_job(job_id, job_type="mindmap_export", status="pending", user_id="userA", map_id="m1")
+    run_export_job(job_id, "m1", "userA", fmt, scope_body, {"font": "sans", "content": {}}, None)
 
     status = client.get(f"/mindmaps/exports/{job_id}").get_json()
     assert status["status"] == "done", (fmt, scope_name, status)
@@ -393,7 +439,7 @@ def test_filename_injection_in_map_title_is_sanitized(be, client, monkeypatch, s
     rec["title"] = malicious_title
     _stub_get_record(monkeypatch, be, record=rec)
     _protect(be, monkeypatch, "userA", on=True)
-    create = client.post("/mindmaps/m1/exports", json={"format": "docx"})
+    create = client.post("/mindmaps/m1/exports", json={"format": "pdf"})
     job_id = create.get_json()["job_id"]
     status = client.get(f"/mindmaps/exports/{job_id}").get_json()
     assert status["status"] == "done", status
@@ -408,7 +454,7 @@ def test_expired_download_token_rejected(be, client, monkeypatch, sync_enqueue, 
     monkeypatch.setattr(export_jobs, "DOWNLOAD_TOKEN_TTL_SEC", 0)  # every token is immediately "expired"
     _stub_get_record(monkeypatch, be)
     _protect(be, monkeypatch, "userA", on=True)
-    create = client.post("/mindmaps/m1/exports", json={"format": "xlsx"})
+    create = client.post("/mindmaps/m1/exports", json={"format": "pdf"})
     job_id = create.get_json()["job_id"]
     token = export_jobs.make_download_token(job_id, "userA")
     import time

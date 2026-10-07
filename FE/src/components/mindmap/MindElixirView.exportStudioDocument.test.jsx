@@ -60,12 +60,12 @@ async function openToFormatStep() {
 }
 
 describe("Export Studio — document formats", () => {
-  it("lists PDF/DOCX/XLSX as a separate group, selectable when a map id exists", async () => {
+  it("PR C1: lists PDF as the only document format — DOCX/XLSX no longer selectable", async () => {
     await render(makeController());
     const dialog = await openToFormatStep();
     expect(dialog.querySelector('input[name="mm-export-format"][value="pdf"]')).toBeTruthy();
-    expect(dialog.querySelector('input[name="mm-export-format"][value="docx"]')).toBeTruthy();
-    expect(dialog.querySelector('input[name="mm-export-format"][value="xlsx"]')).toBeTruthy();
+    expect(dialog.querySelector('input[name="mm-export-format"][value="docx"]')).toBeFalsy();
+    expect(dialog.querySelector('input[name="mm-export-format"][value="xlsx"]')).toBeFalsy();
     expect(dialog.querySelector('input[name="mm-export-format"][value="pdf"]').disabled).toBe(false);
   });
 
@@ -84,31 +84,6 @@ describe("Export Studio — document formats", () => {
     expect(panel.textContent).toContain("Phông chữ");
     expect(panel.textContent).not.toContain("Khoảng cách"); // image-only (spacing)
     expect(panel.textContent).not.toContain("Độ dày đường nối"); // image-only (connectorThickness)
-  });
-
-  it("XLSX appearance step shows font/header-style/content only — no background, no orientation, no page size", async () => {
-    await render(makeController());
-    const dialog = await openToFormatStep();
-    await act(async () => { dialog.querySelector('input[value="xlsx"]').click(); });
-    await act(async () => { [...dialog.querySelectorAll("button")].find((b) => b.textContent === "Tiếp tục").click(); });
-    const panel = dialog.querySelector('[data-testid="doc-appearance"]');
-    await act(async () => { [...panel.querySelectorAll("button")].find((b) => b.textContent === "Màu và kiểu chữ").click(); });
-    expect(panel.textContent).toContain("Phông chữ");
-    expect(panel.textContent).toContain("Màu tiêu đề bảng");
-    expect(panel.textContent).not.toContain("Nền");
-    expect(panel.textContent).not.toContain("Hướng trang");
-    expect(panel.textContent).not.toContain("Khổ giấy");
-  });
-
-  it("DOCX appearance step has no legend content toggle (docx doesn't declare it)", async () => {
-    await render(makeController());
-    const dialog = await openToFormatStep();
-    await act(async () => { dialog.querySelector('input[value="docx"]').click(); });
-    await act(async () => { [...dialog.querySelectorAll("button")].find((b) => b.textContent === "Tiếp tục").click(); });
-    const panel = dialog.querySelector('[data-testid="doc-appearance"]');
-    await act(async () => { [...panel.querySelectorAll("button")].find((b) => b.textContent === "Nội dung kèm theo").click(); });
-    expect(panel.textContent).not.toContain("Chú giải màu nhánh");
-    expect(panel.textContent).toContain("Kèm ảnh sơ đồ"); // docx's mapImage control
   });
 
   it("full job lifecycle: queued -> running -> done triggers a real download call", async () => {
@@ -141,11 +116,11 @@ describe("Export Studio — document formats", () => {
 
     await render(makeController());
     const dialog = await openToFormatStep();
-    await act(async () => { dialog.querySelector('input[value="docx"]').click(); });
+    await act(async () => { dialog.querySelector('input[value="pdf"]').click(); });
     await act(async () => { [...dialog.querySelectorAll("button")].find((b) => b.textContent === "Tiếp tục").click(); });
     await act(async () => { [...dialog.querySelectorAll("button")].find((b) => b.textContent === "Tiếp tục").click(); });
 
-    const exportBtn = [...dialog.querySelectorAll("button")].find((b) => b.textContent.includes("Tạo DOCX"));
+    const exportBtn = [...dialog.querySelectorAll("button")].find((b) => b.textContent.includes("Tạo PDF"));
     await act(async () => { exportBtn.click(); });
 
     expect(dialog.textContent).toContain("Lỗi máy chủ");
@@ -171,11 +146,11 @@ describe("Export Studio — document formats", () => {
 
     await render(makeController());
     const dialog = await openToFormatStep();
-    await act(async () => { dialog.querySelector('input[value="xlsx"]').click(); });
+    await act(async () => { dialog.querySelector('input[value="pdf"]').click(); });
     await act(async () => { [...dialog.querySelectorAll("button")].find((b) => b.textContent === "Tiếp tục").click(); });
     await act(async () => { [...dialog.querySelectorAll("button")].find((b) => b.textContent === "Tiếp tục").click(); });
 
-    const exportBtn = [...dialog.querySelectorAll("button")].find((b) => b.textContent.includes("Tạo XLSX"));
+    const exportBtn = [...dialog.querySelectorAll("button")].find((b) => b.textContent.includes("Tạo PDF"));
     await act(async () => { exportBtn.click(); });
 
     const cancelBtn = [...dialog.querySelectorAll("button")].find((b) => b.textContent === "Hủy xuất");

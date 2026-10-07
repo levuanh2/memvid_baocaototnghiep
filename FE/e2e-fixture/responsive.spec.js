@@ -152,7 +152,7 @@ test.describe("Export Studio — responsive QA", () => {
         await page.locator('[aria-label="Xuất sơ đồ"]').click();
         await page.getByRole("button", { name: "Tiếp tục" }).click();
         const dialog = page.getByRole("dialog");
-        await expect(dialog.locator('input[name="mm-export-format"]')).toHaveCount(6);
+        await expect(dialog.locator('input[name="mm-export-format"]')).toHaveCount(5); // PR C1: png/jpeg/svg/webp/pdf
         await assertNoHorizontalOverflow(page);
         await shot(page, vp.name, "07-format-step");
       });
@@ -176,24 +176,14 @@ test.describe("Export Studio — responsive QA", () => {
         await shot(page, vp.name, "09-appearance-pdf");
       });
 
-      test("state 10: appearance controls for DOCX render its own control set without overflow", async ({ page }) => {
+      test("state 10 (PR C1): appearance controls for WEBP render the image control set, not a doc panel, without overflow", async ({ page }) => {
         await gotoFixture(page, vp);
-        await goToAppearanceStep(page, "docx");
-        const panel = page.locator('[data-testid="doc-appearance"]');
-        await panel.getByRole("button", { name: "Nội dung kèm theo" }).click();
-        await expect(panel).toContainText("Kèm ảnh sơ đồ");
+        await goToAppearanceStep(page, "webp");
+        const dialog = page.getByRole("dialog");
+        await expect(dialog.locator('[data-testid="image-appearance"]')).toBeVisible();
+        await expect(dialog.locator('[data-testid="doc-appearance"]')).toHaveCount(0);
         await assertNoHorizontalOverflow(page);
-        await shot(page, vp.name, "10-appearance-docx");
-      });
-
-      test("state 11: appearance controls for XLSX render its own control set without overflow", async ({ page }) => {
-        await gotoFixture(page, vp);
-        await goToAppearanceStep(page, "xlsx");
-        const panel = page.locator('[data-testid="doc-appearance"]');
-        await panel.getByRole("button", { name: "Màu và kiểu chữ" }).click();
-        await expect(panel).toContainText("Màu tiêu đề bảng");
-        await assertNoHorizontalOverflow(page);
-        await shot(page, vp.name, "11-appearance-xlsx");
+        await shot(page, vp.name, "10-appearance-webp");
       });
 
       test("state 12: preview step summary renders without overflow", async ({ page }) => {
@@ -210,9 +200,9 @@ test.describe("Export Studio — responsive QA", () => {
       test("state 13: export queued/running renders progress without overflow", async ({ page }) => {
         await mockExportApi(page, { statuses: [{ status: "queued" }, { status: "running", progress: 40 }, { status: "running", progress: 40 }] });
         await gotoFixture(page, vp);
-        await goToAppearanceStep(page, "docx");
+        await goToAppearanceStep(page, "pdf");
         await page.getByRole("button", { name: "Tiếp tục" }).click(); // -> preview
-        await page.getByRole("button", { name: /^(Xuất|Tạo) (PNG|JPEG|SVG|PDF|DOCX|XLSX)$/ }).click();
+        await page.getByRole("button", { name: /^(Xuất|Tạo) (PNG|JPEG|SVG|WEBP|PDF|DOCX|XLSX)$/ }).click();
         await expect(page.getByRole("dialog")).toContainText("Đang x", { timeout: 5000 });
         await assertNoHorizontalOverflow(page);
         await shot(page, vp.name, "13-export-running");
@@ -222,9 +212,9 @@ test.describe("Export Studio — responsive QA", () => {
       test("state 14: export failed shows a retry control without overflow", async ({ page }) => {
         await mockExportApi(page, { statuses: [{ status: "error", error: "Lỗi máy chủ (mô phỏng)" }] });
         await gotoFixture(page, vp);
-        await goToAppearanceStep(page, "xlsx");
+        await goToAppearanceStep(page, "pdf");
         await page.getByRole("button", { name: "Tiếp tục" }).click();
-        await page.getByRole("button", { name: /^(Xuất|Tạo) (PNG|JPEG|SVG|PDF|DOCX|XLSX)$/ }).click();
+        await page.getByRole("button", { name: /^(Xuất|Tạo) (PNG|JPEG|SVG|WEBP|PDF|DOCX|XLSX)$/ }).click();
         await expect(page.getByRole("dialog")).toContainText("Lỗi máy chủ", { timeout: 5000 });
         await expect(page.getByRole("button", { name: "Thử lại" })).toBeVisible();
         await assertNoHorizontalOverflow(page);
@@ -236,7 +226,7 @@ test.describe("Export Studio — responsive QA", () => {
         await gotoFixture(page, vp);
         await goToAppearanceStep(page, "pdf");
         await page.getByRole("button", { name: "Tiếp tục" }).click();
-        await page.getByRole("button", { name: /^(Xuất|Tạo) (PNG|JPEG|SVG|PDF|DOCX|XLSX)$/ }).click();
+        await page.getByRole("button", { name: /^(Xuất|Tạo) (PNG|JPEG|SVG|WEBP|PDF|DOCX|XLSX)$/ }).click();
         await expect(page.getByRole("dialog")).toContainText("Đã xuất", { timeout: 5000 });
         await assertNoHorizontalOverflow(page);
         await shot(page, vp.name, "15-export-completed");
