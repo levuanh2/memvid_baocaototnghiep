@@ -5,14 +5,16 @@
 // across components — read this instead.
 import raw from "./exportFormatCapabilities.json";
 
-const IMAGE_FORMATS = new Set(["png", "jpeg", "svg"]);
+// PR C1: webp joins the same "image" capability set as png/jpeg/svg — all
+// four are client-side captures through snapdom, none go through a BE job.
+const IMAGE_FORMATS = new Set(["png", "jpeg", "svg", "webp"]);
 const DOCUMENT_FORMATS = new Set(["pdf", "docx", "xlsx"]);
 
 function capabilityKeyFor(format) {
   return IMAGE_FORMATS.has(format) ? "image" : format;
 }
 
-/** Returns {controls, defaults} for a concrete export format (png/jpeg/svg/pdf/docx/xlsx — the three image formats all share the "image" capability set). */
+/** Returns {controls, defaults} for a concrete export format (png/jpeg/svg/webp/pdf/docx/xlsx — the four image formats all share the "image" capability set). */
 export function getExportFormatCapabilities(format) {
   const key = capabilityKeyFor(format);
   const entry = raw[key];
