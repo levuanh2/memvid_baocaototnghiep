@@ -172,13 +172,25 @@ export function liveRecordForExport(mind, baseRecord) {
 }
 
 export function mindElixirToRecord(mindData, sidecar, baseRecord) {
+  // "Lưu sơ đồ cắt tiêu đề dài": node.topic is the CANVAS-COMPACTED display string
+  // (compactTopic(stripMarkdown(title)), set at load by recordToMindElixir), never the
+  // canonical title on its own. Saving node.topic verbatim permanently truncated any
+  // title over MAX_TOPIC_LENGTH the first time a map was saved, with no certain way to
+  // recover it afterwards. Fix: for a node whose live topic still equals the compacted
+  // form of its ORIGINAL title (i.e. untouched since load), persist that original —
+  // never the compacted string. A node the user actually edited (or a new node) has a
+  // live topic that already IS the full current text, since live edits are never
+  // auto-compacted, so it is used as-is: a real rename is saved, not reverted.
+  const baseTitleById = new Map((baseRecord?.nodes || []).map((n) => [n.id, n.title]));
   const nodes = [];
   const walk = (node, parent, depth, order) => {
     const side = sidecar.get(node.id);
+    const baseTitle = baseTitleById.get(node.id);
+    const untouched = baseTitle != null && compactTopic(stripMarkdown(baseTitle)) === node.topic;
     nodes.push({
       id: node.id, parent,
       kind: side?.kind || (depth === 0 ? "root" : depth === 1 ? "section" : "idea"),
-      title: node.topic || "", note: side?.note || "",
+      title: untouched ? baseTitle : (node.topic || ""), note: side?.note || "",
       chunk_refs: side?.chunkRefs || [], order,
     });
     (node.children || []).forEach((c, i) => walk(c, node.id, depth + 1, i));

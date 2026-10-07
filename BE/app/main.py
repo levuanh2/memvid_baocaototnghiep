@@ -5905,7 +5905,10 @@ def update_mindmap(mindmap_id: str):
     body = request.get_json(silent=True) or {}
     from services.mindmap.pipeline.schema import sanitize_nodes, validate_relations
 
-    nodes = sanitize_nodes(body.get("nodes") or [])
+    # compact_titles=False: this is the user-edit save route, not generation — the
+    # client already sends the canonical title (see sanitize_nodes's own docstring
+    # for why compacting here a second time silently truncated long titles).
+    nodes = sanitize_nodes(body.get("nodes") or [], compact_titles=False)
     if not nodes:
         return jsonify({"error": "nodes trống hoặc không hợp lệ"}), 400
 
