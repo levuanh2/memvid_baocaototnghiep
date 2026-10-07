@@ -295,6 +295,28 @@ test.describe("Export Studio — fixture harness, real files", () => {
     void m2;
   });
 
+  test("PR B: current_branch SVG export keeps the minimal ancestor path as context, never a sibling", async ({ page }) => {
+    // "Nguyên lý — Kiến trúc hệ thống" is m0's own sub-branch (depth 2) — its
+    // ancestor chain is [root, m0]. m1 ("Bảo mật & xác thực") is neither an
+    // ancestor nor a descendant, so it must never appear, context or not.
+    const target = `${MAP_A_ID}-m0-s0`;
+    await page.locator(nodeSelector(target)).click();
+    await openExportStudio(page);
+    await chooseScope(page, "current_branch");
+    await clickNext(page); // -> format step
+    await chooseFormat(page, "svg");
+    await clickNext(page); // -> appearance step
+    await clickNext(page); // -> preview step
+    const filePath = await exportAndSave(page, "branch-ancestor-context-svg");
+
+    const svgText = fs.readFileSync(filePath, "utf8");
+    expect(svgText).toContain("Nguyên lý"); // the selected branch itself
+    expect(svgText).toContain("Kiến trúc hệ thống"); // m0, kept as ancestor context
+    expect(svgText).toContain("Bản đồ tư duy: Hệ thống StudyMap (Fixture A)"); // map root, kept as ancestor context
+    expect(svgText).not.toContain("Bảo mật &amp; xác thực"); // m1 — not an ancestor, never included
+    expect(svgText).not.toContain("Hiệu năng &amp; mở rộng"); // m2 — not an ancestor, never included
+  });
+
   test("closing Export Studio after a multi-branch selection leaves the live canvas viewport and map A/B state unchanged", async ({ page }) => {
     const beforeTransform = await page.locator(".map-canvas").evaluate((el) => el.style.transform || "");
     await openExportStudio(page);
