@@ -202,7 +202,7 @@ test.describe("Export Studio — responsive QA", () => {
         await gotoFixture(page, vp);
         await goToAppearanceStep(page, "pdf");
         await page.getByRole("button", { name: "Tiếp tục" }).click(); // -> preview
-        await page.getByRole("button", { name: /^(Xuất|Tạo) (PNG|JPEG|SVG|WebP|PDF|DOCX|XLSX)$/ }).click();
+        await page.getByRole("button", { name: /^(Xuất|Tạo) (PNG|JPEG|SVG|WEBP|PDF|DOCX|XLSX)$/ }).click();
         await expect(page.getByRole("dialog")).toContainText("Đang x", { timeout: 5000 });
         await assertNoHorizontalOverflow(page);
         await shot(page, vp.name, "13-export-running");
@@ -214,7 +214,7 @@ test.describe("Export Studio — responsive QA", () => {
         await gotoFixture(page, vp);
         await goToAppearanceStep(page, "pdf");
         await page.getByRole("button", { name: "Tiếp tục" }).click();
-        await page.getByRole("button", { name: /^(Xuất|Tạo) (PNG|JPEG|SVG|WebP|PDF|DOCX|XLSX)$/ }).click();
+        await page.getByRole("button", { name: /^(Xuất|Tạo) (PNG|JPEG|SVG|WEBP|PDF|DOCX|XLSX)$/ }).click();
         await expect(page.getByRole("dialog")).toContainText("Lỗi máy chủ", { timeout: 5000 });
         await expect(page.getByRole("button", { name: "Thử lại" })).toBeVisible();
         await assertNoHorizontalOverflow(page);
@@ -226,7 +226,7 @@ test.describe("Export Studio — responsive QA", () => {
         await gotoFixture(page, vp);
         await goToAppearanceStep(page, "pdf");
         await page.getByRole("button", { name: "Tiếp tục" }).click();
-        await page.getByRole("button", { name: /^(Xuất|Tạo) (PNG|JPEG|SVG|WebP|PDF|DOCX|XLSX)$/ }).click();
+        await page.getByRole("button", { name: /^(Xuất|Tạo) (PNG|JPEG|SVG|WEBP|PDF|DOCX|XLSX)$/ }).click();
         await expect(page.getByRole("dialog")).toContainText("Đã xuất", { timeout: 5000 });
         await assertNoHorizontalOverflow(page);
         await shot(page, vp.name, "15-export-completed");
