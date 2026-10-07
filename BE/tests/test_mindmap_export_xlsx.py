@@ -28,7 +28,7 @@ def test_xlsx_has_summary_and_nodes_sheets_with_correct_row_count():
     assert "Nodes" in wb.sheetnames
     nodes_ws = wb["Nodes"]
     header = [c.value for c in nodes_ws[1]]
-    assert header == ["node_id", "parent_id", "branch_path", "depth", "order", "topic"]
+    assert header == ["node_id", "parent_id", "branch_path", "depth", "order", "topic", "is_context"]
     # header + 4 nodes (r, c1, c1a, c2)
     assert nodes_ws.max_row == 5
 

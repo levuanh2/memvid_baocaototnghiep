@@ -102,20 +102,32 @@ def serialize_xlsx(
             cell.font = Font(name=font_name)
 
     nodes_ws = wb.create_sheet("Nodes")
-    header = ["node_id", "parent_id", "branch_path", "depth", "order", "topic"]
+    # "is_context" is always present (never gated behind a content toggle): it's
+    # structural metadata distinguishing an ancestor kept only for orientation
+    # ("đã mô tả trong is_context" — see mindmapExportScope.js's header comment)
+    # from a node the user actually selected, not optional document content.
+    header = ["node_id", "parent_id", "branch_path", "depth", "order", "topic", "is_context"]
     if content["notes"]:
         header.append("note")
     if content["sourceNames"]:
         header.append("source_names")
     nodes_ws.append(header)
     for r in rows:
-        row_values = [r["node_id"], r["parent_id"] or "", r["branch_path"], r["depth"], r["order"], r["topic"]]
+        row_values = [r["node_id"], r["parent_id"] or "", r["branch_path"], r["depth"], r["order"], r["topic"], r["is_context"]]
         if content["notes"]:
             row_values.append(r["note"])
         if content["sourceNames"]:
             row_values.append(", ".join(sorted({_source_name(c) for c in r["citations"]})))
         nodes_ws.append(row_values)
     _finalize_sheet(nodes_ws, font_name, header_style_mode)
+    # Context rows get an italic topic cell so a reader can tell "shown for
+    # orientation" apart from "this is what you selected" at a glance, without
+    # a second pass over cells already styled by _finalize_sheet above.
+    topic_col = header.index("topic") + 1
+    for idx, r in enumerate(rows, start=2):
+        if r["is_context"]:
+            cell = nodes_ws.cell(row=idx, column=topic_col)
+            cell.font = Font(name=font_name, italic=True)
 
     any_citations = any(r["citations"] for r in rows)
     if content["citations"] and any_citations:

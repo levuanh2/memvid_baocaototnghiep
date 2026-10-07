@@ -77,6 +77,7 @@ def flatten_export_tree(tree: dict[str, Any]) -> list[dict[str, Any]]:
             "node_id": node["node_id"], "parent_id": node["parent_id"],
             "branch_path": " / ".join(path), "depth": node["depth"], "order": order,
             "topic": node["topic"], "note": node["note"], "citations": node["citations"],
+            "is_context": node["is_context"],
         })
         order += 1
         for c in node["children"]:
