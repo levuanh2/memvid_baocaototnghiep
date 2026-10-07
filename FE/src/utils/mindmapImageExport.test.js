@@ -112,6 +112,15 @@ describe("exportMindmapImage", () => {
     expect(result.download).toHaveBeenCalledWith(expect.objectContaining({ format: "jpeg", filename: expect.stringMatching(/^Bad_Title-\d{8}\.jpg$/) }));
   });
 
+  it("PR C1: webp downloads with a .webp filename and an unmapped 'webp' blob type (no jpeg-style remap)", async () => {
+    mind = makeMind();
+    const result = fakeResult();
+    const snapdom = vi.fn().mockResolvedValue(result);
+    await exportMindmapImage({ mind, scopeType: "visible", format: "webp", title: "T", snapdom, settleMs: 0 });
+    expect(result.download).toHaveBeenCalledWith(expect.objectContaining({ format: "webp", filename: expect.stringMatching(/^T-\d{8}\.webp$/) }));
+    expect(result.toBlob).toHaveBeenCalledWith({ type: "webp" });
+  });
+
   it("passes backgroundColor/scale/quality through to the capture call", async () => {
     mind = makeMind();
     const result = fakeResult();

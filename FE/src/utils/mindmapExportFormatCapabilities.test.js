@@ -23,6 +23,11 @@ describe("getExportFormatCapabilities", () => {
   it("throws for an unknown format", () => {
     expect(() => getExportFormatCapabilities("csv")).toThrow();
   });
+
+  it("PR C1: webp resolves to the SAME image capability set as png/jpeg/svg", () => {
+    const webp = getExportFormatCapabilities("webp");
+    expect(webp).toEqual(getExportFormatCapabilities("png"));
+  });
 });
 
 describe("isDocumentFormat / isImageFormat", () => {
@@ -31,6 +36,11 @@ describe("isDocumentFormat / isImageFormat", () => {
     expect(isImageFormat("pdf")).toBe(false);
     expect(isDocumentFormat("docx")).toBe(true);
     expect(isDocumentFormat("svg")).toBe(false);
+  });
+
+  it("PR C1: webp classifies as an image format, never a document format", () => {
+    expect(isImageFormat("webp")).toBe(true);
+    expect(isDocumentFormat("webp")).toBe(false);
   });
 });
 
