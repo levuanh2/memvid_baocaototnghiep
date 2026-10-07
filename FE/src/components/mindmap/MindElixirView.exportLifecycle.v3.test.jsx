@@ -120,7 +120,10 @@ describe("Export lifecycle — attempts and idempotency", () => {
     await clickByText(dialog, "Tạo PDF");
     await clickByText(dialog, "Tạo bản xuất mới");
     expect(dialog.textContent).not.toContain("Đã xuất");
-    expect(dialog.querySelector('input[value="pdf"]')).toBeTruthy();
+    // Back at the configuration step (scope), with the previous format kept as a default.
+    expect(dialog.querySelector('input[name="mm-export-scope"]')).toBeTruthy();
+    await act(async () => { [...dialog.querySelectorAll("button")].find((b) => b.textContent === "Tiếp tục").click(); });
+    expect(dialog.querySelector('input[value="pdf"]').checked).toBe(true);
   });
 
   it("closing and reopening the dialog can export again", async () => {
