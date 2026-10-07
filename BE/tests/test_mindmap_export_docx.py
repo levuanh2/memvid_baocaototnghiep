@@ -1,6 +1,7 @@
 import io
 
 import docx
+import pytest
 
 from services.mindmap.export.scope import resolve_export_scope
 from services.mindmap.export.tree import build_export_tree
@@ -86,9 +87,10 @@ def test_docx_relations_section_lists_real_topics_not_ids():
 
 
 def _real_1x1_png() -> bytes:
-    """A genuinely valid, minimal 1x1 white PNG, built with real zlib/CRC —
+    """A genuinely valid, minimal 2x2 PNG with real content, built with real zlib/CRC —
     not hand-typed hex (a single wrong nibble there previously produced a
-    corrupt PNG that python-docx's own chunk parser correctly rejected)."""
+    corrupt PNG that python-docx's own chunk parser correctly rejected). Non-uniform
+    (one dark pixel among white ones): a pure white capture is rejected by the image guard."""
     import struct
     import zlib
 
@@ -96,8 +98,8 @@ def _real_1x1_png() -> bytes:
         return struct.pack(">I", len(data)) + tag + data + struct.pack(">I", zlib.crc32(tag + data) & 0xFFFFFFFF)
 
     sig = b"\x89PNG\r\n\x1a\n"
-    ihdr = chunk(b"IHDR", struct.pack(">IIBBBBB", 1, 1, 8, 2, 0, 0, 0))
-    raw = b"\x00\xff\xff\xff"  # filter byte + one RGB white pixel
+    ihdr = chunk(b"IHDR", struct.pack(">IIBBBBB", 2, 2, 8, 2, 0, 0, 0))
+    raw = b"\x00\x00\x00\x00\xff\xff\xff" + b"\x00\xff\xff\xff\x00\x00\x00"  # two rows, one dark pixel
     idat = chunk(b"IDAT", zlib.compress(raw))
     iend = chunk(b"IEND", b"")
     return sig + ihdr + idat + iend
@@ -164,3 +166,18 @@ def test_docx_embeds_map_image_when_provided():
     file_bytes = serialize_docx(_tree(), map_image_bytes=_real_1x1_png())
     doc = docx.Document(io.BytesIO(file_bytes))
     assert len(doc.inline_shapes) == 1
+
+
+def test_docx_rejects_a_blank_map_image_instead_of_embedding_it():
+    import struct
+    import zlib
+    def chunk(tag: bytes, data: bytes) -> bytes:
+        return struct.pack(">I", len(data)) + tag + data + struct.pack(">I", zlib.crc32(tag + data) & 0xFFFFFFFF)
+    width, height = 20, 12
+    row = b"\x00" + b"\xff\xff\xff" * width  # filter byte + all-white pixels
+    sig = b"\x89PNG\r\n\x1a\n"
+    ihdr = chunk(b"IHDR", struct.pack(">IIBBBBB", width, height, 8, 2, 0, 0, 0))
+    idat = chunk(b"IDAT", zlib.compress(row * height))
+    blank = sig + ihdr + idat + chunk(b"IEND", b"")
+    with pytest.raises(ValueError):
+        serialize_docx(_tree(), map_image_bytes=blank)
