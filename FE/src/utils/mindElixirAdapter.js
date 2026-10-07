@@ -141,6 +141,36 @@ export function recordToMindElixir(record, { fullTitles = false } = {}) {
   };
 }
 
+/**
+ * A record that reflects the LIVE canvas structure (so new/deleted/moved nodes and
+ * unsaved edits are not missed by export), while recovering the full original title
+ * for every node the user has NOT touched since load.
+ *
+ * Title per node: if this id exists in `baseRecord` and the live topic still equals
+ * compactTopic(stripMarkdown(savedTitle)) — i.e. unchanged since load — the full saved
+ * title is used. Otherwise the live topic is used as-is: a live edit is never compacted
+ * by mind-elixir, so the on-canvas text already IS the full current title. This never
+ * reads `sidecar.note` for a title — a real user note there would be indistinguishable
+ * from a stored "full title" marker, so it is not a certain source (see compactTopic).
+ * Reads only `mind.nodeData`/`mind.arrows` (already in memory) — no DOM, no layout.
+ */
+export function liveRecordForExport(mind, baseRecord) {
+  const savedTitleById = new Map((baseRecord?.nodes || []).map((n) => [n.id, n.title]));
+  const nodes = [];
+  const walk = (node, parent, order) => {
+    const saved = savedTitleById.get(node.id);
+    const unchanged = saved != null && compactTopic(stripMarkdown(saved)) === node.topic;
+    nodes.push({ id: node.id, parent, title: unchanged ? saved : (node.topic || ""), order });
+    (node.children || []).forEach((c, i) => walk(c, node.id, i));
+  };
+  if (mind?.nodeData) walk(mind.nodeData, null, 0);
+  const baseType = new Map((baseRecord?.relations || []).map((r) => [`${r.source}→${r.target}`, r.type]));
+  const relations = (mind?.arrows || []).map((a) => ({
+    source: a.from, target: a.to, type: baseType.get(`${a.from}→${a.to}`) || LABEL_TO_TYPE[a.label] || "relates_to", label: a.label || "",
+  }));
+  return { ...baseRecord, nodes, relations };
+}
+
 export function mindElixirToRecord(mindData, sidecar, baseRecord) {
   const nodes = [];
   const walk = (node, parent, depth, order) => {

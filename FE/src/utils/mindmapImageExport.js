@@ -21,7 +21,7 @@
 import { snapdom as realSnapdom } from "@zumer/snapdom";
 import RealMindElixir from "mind-elixir";
 import { THEME } from "../components/mindmap/mindElixirTheme";
-import { recordToMindElixir } from "./mindElixirAdapter";
+import { recordToMindElixir, liveRecordForExport } from "./mindElixirAdapter";
 import { resolveExportScope } from "./mindmapExportScope";
 import { exportFilenameFor } from "./mindmapExportFilename";
 import { DEFAULT_APPEARANCE, applyContainerAppearance, applyTargetAppearance, needsRelayout as appearanceNeedsRelayout } from "./mindmapExportAppearance";
@@ -187,6 +187,8 @@ async function exportCanonicalFullMap({
   record, format, backgroundColor, scale, quality, title, appearance, outputMode,
   snapdom, settleMs, MindElixirCtor,
 }) {
+  // `record` is already live-aware (see liveRecordForExport) and, for a branch export,
+  // already filtered to that branch — both done by the caller, before any live reads.
   const { mindData } = recordToMindElixir(record, { fullTitles: true });
   const offscreen = document.createElement("div");
   offscreen.className = "mm-export-offscreen";
@@ -237,16 +239,21 @@ export async function exportMindmapImage({
   appearance = DEFAULT_APPEARANCE, outputMode = "download",
   snapdom = realSnapdom, settleMs = 30, MindElixirCtor = RealMindElixir,
 }) {
-  if (scopeType === "full" && record) {
-    return exportCanonicalFullMap({
-      record, format, backgroundColor, scale, quality, title, appearance, outputMode, snapdom, settleMs, MindElixirCtor,
-    });
-  }
-  if (scopeType === "current_branch" && record && targetNodeId) {
-    return exportCanonicalFullMap({
-      record: branchRecordFor(record, targetNodeId), format, backgroundColor, scale, quality, title, appearance, outputMode,
-      snapdom, settleMs, MindElixirCtor,
-    });
+  if ((scopeType === "full" || scopeType === "current_branch") && record) {
+    // Live structure/unsaved-title merge happens once here, reading only mind.nodeData/arrows
+    // (already in memory) — never the DOM, never a layout/fit/centre call on the live instance.
+    const liveAwareRecord = mind ? liveRecordForExport(mind, record) : record;
+    if (scopeType === "full") {
+      return exportCanonicalFullMap({
+        record: liveAwareRecord, format, backgroundColor, scale, quality, title, appearance, outputMode, snapdom, settleMs, MindElixirCtor,
+      });
+    }
+    if (targetNodeId) {
+      return exportCanonicalFullMap({
+        record: branchRecordFor(liveAwareRecord, targetNodeId), format, backgroundColor, scale, quality, title, appearance, outputMode,
+        snapdom, settleMs, MindElixirCtor,
+      });
+    }
   }
   if (!mind?.map) throw new Error("Mind Elixir chưa sẵn sàng.");
 
