@@ -54,7 +54,7 @@ async function advanceToPreview(page) {
 
 async function exportAndSave(page, filenameHint) {
   const downloadPromise = page.waitForEvent("download");
-  await page.getByRole("button", { name: /^(Xuất|Tạo) (PNG|JPEG|SVG|PDF|DOCX|XLSX)$/ }).click();
+  await page.getByRole("button", { name: /^(Xuất|Tạo) (PNG|JPEG|SVG|WebP|PDF|DOCX|XLSX)$/ }).click();
   const download = await downloadPromise;
   const savePath = path.join(ARTIFACT_DIR, `${filenameHint}-${Date.now()}${path.extname(download.suggestedFilename())}`);
   await download.saveAs(savePath);
@@ -64,7 +64,7 @@ async function exportAndSave(page, filenameHint) {
 /** Same as exportAndSave, but keeps the EXACT filename given (no timestamp) — used for the Section 8 named QA specimens (full-map.png etc.) so there's one canonical file per format to point a report at. */
 async function exportAndSaveExact(page, exactFilename) {
   const downloadPromise = page.waitForEvent("download");
-  await page.getByRole("button", { name: /^(Xuất|Tạo) (PNG|JPEG|SVG|PDF|DOCX|XLSX)$/ }).click();
+  await page.getByRole("button", { name: /^(Xuất|Tạo) (PNG|JPEG|SVG|WebP|PDF|DOCX|XLSX)$/ }).click();
   const download = await downloadPromise;
   const savePath = path.join(ARTIFACT_DIR, exactFilename);
   await download.saveAs(savePath);
@@ -321,7 +321,7 @@ test.describe("Export Studio — fixture harness, real files", () => {
     await chooseFormat(page, "svg");
     await clickNext(page); // -> appearance step
     await clickNext(page); // -> preview step
-    const exportBtn = page.getByRole("button", { name: /^(Xuất|Tạo) (PNG|JPEG|SVG|PDF|DOCX|XLSX)$/ });
+    const exportBtn = page.getByRole("button", { name: /^(Xuất|Tạo) (PNG|JPEG|SVG|WebP|PDF|DOCX|XLSX)$/ });
     await expect(exportBtn).toBeEnabled();
     const filePath = await exportAndSave(page, "multi-branch-svg");
 

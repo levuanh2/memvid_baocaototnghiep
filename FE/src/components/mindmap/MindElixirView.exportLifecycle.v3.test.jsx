@@ -88,8 +88,8 @@ describe("Export lifecycle — attempts and idempotency", () => {
     vi.spyOn(docExport, "createMindmapExport").mockResolvedValue({ job_id: "j1", status: "queued" });
     vi.spyOn(docExport, "pollMindmapExportUntilDone").mockResolvedValue({ status: "error", error: "Lỗi máy chủ" });
     await render(makeController());
-    const dialog = await openToPreview("docx");
-    await clickByText(dialog, "Tạo DOCX");
+    const dialog = await openToPreview("pdf");
+    await clickByText(dialog, "Tạo PDF");
     await clickByText(dialog, "Thử lại");
     const calls = docExport.createMindmapExport.mock.calls;
     expect(calls.length).toBe(2);
