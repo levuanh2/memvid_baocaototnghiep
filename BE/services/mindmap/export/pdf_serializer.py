@@ -38,6 +38,10 @@ CUSTOM_PALETTE_RGB = [  # matches FE's CUSTOM_PALETTE hex values exactly
     (0xF2 / 255, 0x35 / 255, 0x3A / 255),  # #F2353A
 ]
 DEFAULT_TEXT_RGB = (0.0, 0.0, 0.0)
+# No italic variant of the bundled DejaVu fonts exists (assets/fonts has only
+# the regular weight) — a context-only ancestor is distinguished by muted
+# gray text instead, overriding branch color for that one line.
+CONTEXT_TEXT_RGB = (0.55, 0.55, 0.55)
 
 # PyMuPDF's built-in "helv"/base-14 fonts are WinAnsi-only and mangle every
 # Vietnamese diacritic (ế, ồ, ư, ệ... silently become "?"/mojibake) — this
@@ -98,7 +102,7 @@ def _outline_lines(tree: dict[str, Any], content: dict[str, bool]) -> list[dict[
     lines: list[dict[str, Any]] = []
 
     def walk(node: dict, root_index: int) -> None:
-        lines.append({"depth": node["depth"], "text": node["topic"] or "", "root_index": root_index})
+        lines.append({"depth": node["depth"], "text": node["topic"] or "", "root_index": root_index, "is_context": bool(node.get("is_context"))})
         if content.get("notes") and node.get("note"):
             lines.append({"depth": node["depth"] + 1, "text": f"— {node['note']}", "root_index": root_index})
         if content.get("citations") and node.get("citations"):
@@ -176,7 +180,7 @@ def _write_outline_pages(
         font_alias = _register_font(page, font)
         y = draw_header(page, font_alias)
         for line in lines:
-            color = _root_branch_color(line["root_index"], branch_color_mode) if line["root_index"] >= 0 else DEFAULT_TEXT_RGB
+            color = CONTEXT_TEXT_RGB if line.get("is_context") else (_root_branch_color(line["root_index"], branch_color_mode) if line["root_index"] >= 0 else DEFAULT_TEXT_RGB)
             page.insert_text((margin + line["depth"] * INDENT_PER_DEPTH, y), line["text"], fontsize=BASE_FONT_SIZE, fontname=font_alias, color=color or DEFAULT_TEXT_RGB)
             y += LINE_HEIGHT
         if content.get("branding"):
@@ -196,7 +200,7 @@ def _write_outline_pages(
         lines_per_page = max(1, int((h - margin - y) // LINE_HEIGHT))
         chunk = lines[idx: idx + lines_per_page]
         for line in chunk:
-            color = _root_branch_color(line["root_index"], branch_color_mode) if line["root_index"] >= 0 else DEFAULT_TEXT_RGB
+            color = CONTEXT_TEXT_RGB if line.get("is_context") else (_root_branch_color(line["root_index"], branch_color_mode) if line["root_index"] >= 0 else DEFAULT_TEXT_RGB)
             page.insert_text((margin + line["depth"] * INDENT_PER_DEPTH, y), line["text"], fontsize=BASE_FONT_SIZE, fontname=font_alias, color=color or DEFAULT_TEXT_RGB)
             y += LINE_HEIGHT
         if content.get("branding"):

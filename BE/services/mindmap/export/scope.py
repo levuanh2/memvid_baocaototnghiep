@@ -126,4 +126,14 @@ def resolve_export_scope(
     for rid in root_ids:
         collect(rid)
 
-    return {"root_ids": root_ids, "included_ids": included_ids}
+    # contextNodes = union(ancestors(root) for root in root_ids) - effectiveNodes. Only the
+    # direct path up to the map root — never a sibling, never a sibling's own subtree.
+    context_ids: set[str] = set()
+    for rid in root_ids:
+        cur = parent_of.get(rid)
+        while cur is not None:
+            if cur not in included_ids:
+                context_ids.add(cur)
+            cur = parent_of.get(cur)
+
+    return {"root_ids": root_ids, "included_ids": included_ids, "context_ids": context_ids}

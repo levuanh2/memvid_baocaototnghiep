@@ -133,18 +133,25 @@ describe("resolveExportScope", () => {
 });
 
 describe("buildExportTree", () => {
-  it("builds a nested tree carrying note/citations/direction/branch_color per node", () => {
+  it("builds a nested tree carrying note/citations/direction/branch_color per node, rooted at the true map root", () => {
     const t = tree();
-    const { rootIds, includedIds } = resolveExportScope({ nodeData: t, scopeType: "current_branch", selectedNodeId: "a" });
+    const { includedIds, contextIds } = resolveExportScope({ nodeData: t, scopeType: "current_branch", selectedNodeId: "a" });
     const exportTree = buildExportTree({
-      nodeData: t, rootIds, includedIds, sidecar, arrows, mapId: "map-1", schemaVersion: 2,
+      nodeData: t, includedIds, contextIds, sidecar, arrows, mapId: "map-1", schemaVersion: 2,
     });
     expect(exportTree.map_id).toBe("map-1");
-    const root = exportTree.roots[0];
-    expect(root.node_id).toBe("a");
-    expect(root.direction).toBe(0);
-    expect(root.branch_color).toBe("#126CF2");
-    const a1 = root.children.find((c) => c.node_id === "a1");
+    // The tree always starts at the real map root now — "a" is a context-only ancestor
+    // (false here, since "a" is the explicit root), with "root" as a context node above it.
+    const mapRoot = exportTree.roots[0];
+    expect(mapRoot.node_id).toBe("root");
+    expect(mapRoot.is_context).toBe(true);
+    expect(mapRoot.children).toHaveLength(1); // "b" is not in scope, so it never appears here
+    const a = mapRoot.children[0];
+    expect(a.node_id).toBe("a");
+    expect(a.is_context).toBe(false);
+    expect(a.direction).toBe(0);
+    expect(a.branch_color).toBe("#126CF2");
+    const a1 = a.children.find((c) => c.node_id === "a1");
     expect(a1.expanded).toBe(false);
     const a1x = a1.children[0];
     expect(a1x.note).toBe("hidden note");
@@ -168,26 +175,39 @@ describe("buildExportTree", () => {
     expect(exportTree.relations).toEqual([{ source: "a1x", target: "b1", label: "liên quan" }]);
   });
 
-  it("multi-root scope produces multiple top-level tree roots", () => {
+  it("a multi-branch selection is ONE tree from the map root, with unselected siblings pruned out", () => {
     const t = tree();
-    const { rootIds, includedIds } = resolveExportScope({
+    const { includedIds, contextIds } = resolveExportScope({
       nodeData: t, scopeType: "selected_branches", selectedBranchRootIds: ["a1", "b"],
     });
-    const exportTree = buildExportTree({ nodeData: t, rootIds, includedIds, sidecar, arrows, mapId: "map-1", schemaVersion: 2 });
-    expect(exportTree.roots.map((r) => r.node_id)).toEqual(["a1", "b"]);
+    const exportTree = buildExportTree({ nodeData: t, includedIds, contextIds, sidecar, arrows, mapId: "map-1", schemaVersion: 2 });
+    expect(exportTree.roots).toHaveLength(1);
+    const mapRoot = exportTree.roots[0];
+    expect(mapRoot.node_id).toBe("root");
+    // "a" is context-only (kept only because it leads to a1); its OWN sibling "a2" never appears.
+    expect(mapRoot.children.map((c) => c.node_id)).toEqual(["a", "b"]);
+    const a = mapRoot.children.find((c) => c.node_id === "a");
+    expect(a.is_context).toBe(true);
+    expect(a.children.map((c) => c.node_id)).toEqual(["a1"]); // a2 pruned
+    const bNode = mapRoot.children.find((c) => c.node_id === "b");
+    expect(bNode.is_context).toBe(false);
+    expect(bNode.children.map((c) => c.node_id)).toEqual(["b1"]); // b's own full subtree
   });
 });
 
 describe("flattenExportTree", () => {
   it("produces stable-ordered rows with branch_path and node identity by node_id, not title", () => {
     const t = tree();
-    const { rootIds, includedIds } = resolveExportScope({ nodeData: t, scopeType: "current_branch", selectedNodeId: "a" });
-    const exportTree = buildExportTree({ nodeData: t, rootIds, includedIds, sidecar, arrows, mapId: "map-1", schemaVersion: 2 });
+    const { includedIds, contextIds } = resolveExportScope({ nodeData: t, scopeType: "current_branch", selectedNodeId: "a" });
+    const exportTree = buildExportTree({ nodeData: t, includedIds, contextIds, sidecar, arrows, mapId: "map-1", schemaVersion: 2 });
     const rows = flattenExportTree(exportTree);
-    expect(rows.map((r) => r.node_id)).toEqual(["a", "a1", "a1x", "a2"]);
+    // "root" leads the rows now — it's the map root, kept as context for "a".
+    expect(rows.map((r) => r.node_id)).toEqual(["root", "a", "a1", "a1x", "a2"]);
+    expect(rows[0].is_context).toBe(true);
     const a1x = rows.find((r) => r.node_id === "a1x");
-    expect(a1x.branch_path).toBe("Alpha / A1 / A1X");
+    expect(a1x.branch_path).toBe("Root / Alpha / A1 / A1X");
     expect(a1x.parent_id).toBe("a1");
-    expect(a1x.order).toBe(2);
+    expect(a1x.is_context).toBe(false);
+    expect(a1x.order).toBe(3);
   });
 });

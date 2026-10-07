@@ -40,16 +40,20 @@ def test_docx_has_correct_heading_hierarchy_and_stable_order():
 
 
 def test_docx_heading_levels_reflect_depth():
-    # Full scope's tree root is the true document root ("Bản đồ tư duy", depth
-    # 0), so its direct children sit at depth 1, not 0 — assert against a
-    # branch-scoped tree instead, where the selected node IS the root (depth 0).
+    # The tree always starts at the TRUE map root now, so "r" (kept as
+    # ancestor context for "c1") sits at depth 0 and the selected node "c1"
+    # sits at depth 1 -> level 2.
     nodes = _nodes()
     scope = resolve_export_scope(nodes, scope_type="current_branch", selected_node_id="c1")
-    tree = build_export_tree(nodes, [], scope["root_ids"], scope["included_ids"], title="T")
+    tree = build_export_tree(
+        nodes, [], scope["root_ids"], scope["included_ids"], title="T",
+        context_ids=scope["context_ids"],
+    )
     doc = docx.Document(io.BytesIO(serialize_docx(tree)))
     by_text = {p.text: p.style.name for p in doc.paragraphs}
-    assert by_text["Kiến trúc hệ thống"] == "Heading 1"  # selected node itself -> depth 0 -> level 1
-    assert by_text["Chi tiết A"] == "Heading 2"  # its child -> depth 1 -> level 2
+    assert by_text["Bản đồ tư duy"] == "Heading 1"  # context ancestor (map root) -> depth 0 -> level 1
+    assert by_text["Kiến trúc hệ thống"] == "Heading 2"  # selected node -> depth 1 -> level 2
+    assert by_text["Chi tiết A"] == "Heading 3"  # its child -> depth 2 -> level 3
 
 
 def test_docx_includes_note_beneath_its_node():

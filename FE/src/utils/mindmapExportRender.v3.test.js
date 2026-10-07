@@ -90,6 +90,39 @@ describe("full-map export does not touch the live canvas", () => {
 });
 
 
+describe("selected_branches image export preserves full titles (same bug PR #60 fixed for save)", () => {
+  it("does not read the canvas-compacted topic for an untouched node's title with 2+ selected branches", async () => {
+    const longTitleA = "Tiêu đề nhánh A rất dài vượt quá giới hạn một trăm ký tự, dùng để kiểm tra xuất nhiều nhánh không bị cắt chữ của node chưa chỉnh sửa";
+    const longTitleB = "Tiêu đề nhánh B cũng rất dài tương tự, viết bằng tiếng Việt có dấu, cho một nhánh khác được chọn cùng lúc trong Export Studio";
+    const mind = makeMind();
+    mind.nodeData = {
+      id: "root", topic: "Root", expanded: true,
+      children: [
+        { id: "a", topic: compactTopic(longTitleA), expanded: true, children: [] },
+        { id: "b", topic: compactTopic(longTitleB), expanded: true, children: [] },
+      ],
+    };
+    const record = {
+      id: "m1", title: "Bản đồ", schema_version: 2, relations: [], sources: [],
+      nodes: [
+        { id: "root", kind: "root", title: "Root", parent: null },
+        { id: "a", kind: "section", title: longTitleA, parent: "root" },
+        { id: "b", kind: "section", title: longTitleB, parent: "root" },
+      ],
+    };
+    const targets = [];
+    await exportMindmapImage({
+      mind, record, scopeType: "selected_branches", branchRootIds: ["a", "b"],
+      format: "png", backgroundColor: "#fff", snapdom: fakeSnapdom(targets), settleMs: 0, MindElixirCtor: FakeOffscreenMind,
+    });
+    const exported = FakeOffscreenMind.instances.at(-1).initNodeData;
+    const byId = new Map();
+    (function walk(n) { byId.set(n.id, n.topic); (n.children || []).forEach(walk); })(exported);
+    expect(byId.get("a")).toBe(longTitleA);
+    expect(byId.get("b")).toBe(longTitleB);
+  });
+});
+
 describe("full-map export reflects unsaved live edits without truncating untouched titles", () => {
   it("includes a live-renamed node and a live-added node, and drops a node deleted live", async () => {
     const longTitle = "Tiêu đề rất dài vượt quá giới hạn rút gọn trên canvas để kiểm tra khôi phục đầy đủ khi xuất file ngay cả khi node đó chưa được chỉnh sửa trong phiên làm việc này";

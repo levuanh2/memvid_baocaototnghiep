@@ -6037,3 +6037,77 @@ or import pipeline, check what that shared function does to each field for the
 save/update case specifically — a default meant for one caller (cap AI output) can
 silently become data loss for another (persist a user edit) if no one asks whether
 every caller actually wants the same transform.
+
+## Export scope had no ancestor context, and three separate scope algorithms disagreed (fixed 2026-10-07)
+
+**Symptom:** exporting "Nhánh hiện tại" (current branch) or "Các nhánh được chọn"
+(selected branches) produced a tree with the selected node(s) promoted to a fake
+root — no parent/breadcrumb context at all — in the FE preview and BE document
+export, while the image (PNG/JPEG/SVG) export for "selected_branches" additionally
+read the LIVE canvas's `topic` directly for every node, reproducing the exact
+"Lưu sơ đồ" title-truncation bug (see the entry above) on an untouched node whose
+title was over 100 characters.
+
+**Root cause:** the scope-resolution contract (`resolveExportScope`/
+`resolve_export_scope`) computed `rootIds`/`includedIds` but never an ancestor-
+context set, so `buildExportTree`/`build_export_tree` built one tree PER root id
+instead of one tree from the map's true root — there was no way to represent "kept
+only because it leads to a selected branch" at all. Separately,
+`exportMindmapImageMultiBranch`'s `pruneClone` cloned live mind-elixir `nodeObj`s and
+read `liveNode.topic` — the canvas-compacted DISPLAY string — never the canonical
+record, so it never benefited from the PR #60 title fix at all; `branchRecordFor`
+(current_branch's own image-export path) was a second, independent algorithm that
+promoted the target to root instead of resolving scope at all.
+
+**Fix:** `_resolveCore` (FE, `mindmapExportScope.js`) and `resolve_export_scope` (BE,
+`scope.py`) now also return `contextIds`/`context_ids` — `union(ancestors(root) for
+root in rootIds) - includedIds`: only the direct path up to the map's true root,
+never a sibling or a sibling's own subtree. `buildExportTree`/`build_export_tree`
+build ONE tree starting at the true root, pruned to `includedIds | contextIds`, with
+each node carrying `is_context` — the prune step itself is what keeps an ancestor's
+unselected sibling branch out, with no separate dedupe logic needed.
+`mindmapImageExport.js`'s `exportMindmapImage` now routes `current_branch` AND
+`selected_branches` (when a canonical `record` is available) through one
+`recordScopedForExport()` helper built on `resolveExportScopeFromRecord` — the same
+core the FE preview and BE resolver use — feeding the existing record-based offscreen
+renderer (`exportCanonicalFullMap`) instead of either `branchRecordFor` or the
+live-DOM clone path. `branchRecordFor` and the live-DOM multi-branch clone are gone
+from the `record`-available path; the live-DOM path remains only as a fallback for a
+caller with no `record`.
+
+Follow-up caught by review before merge: `is_context` existed on every tree node but
+nothing read it, so a context ancestor (e.g. "Root", "A" when only "A1" was selected)
+rendered as an ordinary heading/row identical to the actual selection — confusing in a
+document with a heading and no content of its own underneath. Fixed in the same PR:
+DOCX renders a context heading's run italic; PDF (no italic variant of the bundled
+DejaVu fonts exists) renders context lines in muted gray instead
+(`pdf_serializer.CONTEXT_TEXT_RGB`); XLSX's Nodes sheet gained an `is_context` column
+and italicizes the topic cell for a context row. BE's own `flatten_export_tree` was
+missing `is_context` on its row dict entirely (the FE version already had it) — added
+there too, since XLSX reads rows through that function.
+
+**Regression:** `FE/src/utils/mindmapExportScope.v3.test.js` and
+`BE/tests/test_mindmap_export_scope_v3.py` (exact-set fail-before: ancestor context
+for `current_branch` at multiple depths, two-sided `selected_branches` union with a
+shared single-occurrence ancestor, connector edges requiring both endpoints in the
+render set). `FE/src/utils/mindmapExportRender.v3.test.js`'s "selected_branches
+image export preserves full titles" test (fails on origin/main — exported topic was
+the compacted form, not the full title). `e2e-fixture/export-studio.spec.js`'s new
+"current_branch SVG export keeps the minimal ancestor path as context, never a
+sibling" test, against a real downloaded SVG file.
+`BE/tests/test_mindmap_export_context_styling_v3.py` (italic DOCX heading, gray PDF
+text via real `fitz` span-color extraction, `is_context` XLSX column + italic cell —
+each asserted against the actual context ancestor AND the actual selected node, never
+just one side). Pre-existing FE/BE tree-shape tests (`mindmapExportScope.test.js`,
+`test_mindmap_export_docx.py`, `test_mindmap_export_xlsx.py`) updated to the new
+single-root-with-context contract/header they previously encoded as multi-root/no-context.
+
+**Prevention:** when a scope/selection concept has a "this node is only here for
+context, not because the user picked it" case, make that a first-class field
+(`is_context`) on every consumer's output from the start, not something each
+serializer infers later — otherwise each consumer (preview/image/PDF/DOCX/XLSX)
+either omits context entirely or invents its own ancestor logic. A pure resolver
+shared by every consumer prevents the second failure mode this entry's "pruneClone"
+and "branchRecordFor" were: a scope rule fixed in one place (FE preview) silently
+never reaching a sibling code path that re-implemented the same concept against a
+different data source (the live DOM instead of the canonical record).

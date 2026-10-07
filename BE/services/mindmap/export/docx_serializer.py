@@ -50,9 +50,14 @@ def _add_node(doc, node: dict[str, Any], *, root_index: int, heading_color_mode:
     level = min(node["depth"] + 1, MAX_HEADING_LEVEL)
     heading = doc.add_heading(node["topic"] or "(không có tiêu đề)", level=level)
     color = _root_heading_color(root_index, heading_color_mode)
-    if color is not None:
-        for run in heading.runs:
+    for run in heading.runs:
+        if color is not None:
             run.font.color.rgb = color
+        # An ancestor kept only as orientation context (PR B's "is_context")
+        # renders italic — the only way to tell it apart from a branch the
+        # user actually selected, without touching heading level/shape/theme.
+        if node.get("is_context"):
+            run.font.italic = True
     if content.get("notes", True) and node.get("note"):
         doc.add_paragraph(node["note"])
     if content.get("citations", True) and node.get("citations"):
