@@ -39,8 +39,12 @@ const LABEL_TO_TYPE = Object.fromEntries(
   Object.entries(REL_LABELS).map(([type, label]) => [label, type])
 );
 
-export function recordToMindElixir(record) {
+// `fullTitles` (export only): keep each node's complete title instead of the
+// canvas-compacted topic. The canvas keeps compactTopic() and its 100-char
+// limit; the export scene reads the original title from the canonical record.
+export function recordToMindElixir(record, { fullTitles = false } = {}) {
   const norm = normalizeMindmapRecord(record);
+  const topicOf = (title) => (fullTitles ? stripMarkdown(title) : compactTopic(stripMarkdown(title)));
   const sidecar = new Map();
   const layout = assignBranchDirections(norm.nodes);
   const byParent = new Map();
@@ -100,7 +104,7 @@ export function recordToMindElixir(record) {
     const direction = depth === 1 ? layout.directions.get(n.id) : undefined;
     const branchColor = currentBranchId ? layout.colors.get(currentBranchId) : undefined;
     return {
-      id: n.id, topic: compactTopic(stripMarkdown(n.title)),
+      id: n.id, topic: topicOf(n.title),
       ...(direction == null ? {} : { direction }),
       ...(branchColor ? { branchColor } : {}),
       ...(tags.length ? { tags } : {}),
@@ -112,7 +116,7 @@ export function recordToMindElixir(record) {
   };
   const nodeData = root
     ? toTree(root)
-    : { id: "n0", topic: compactTopic(norm.title || "Sơ đồ tư duy"), children: [] };
+    : { id: "n0", topic: fullTitles ? (norm.title || "Sơ đồ tư duy") : compactTopic(norm.title || "Sơ đồ tư duy"), children: [] };
   const arrows = (norm.relations || []).map((r, i) => ({
     id: `rel-${i}`, label: r.label || REL_LABELS[r.type] || "liên quan",
     from: r.source, to: r.target,

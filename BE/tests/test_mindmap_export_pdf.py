@@ -22,12 +22,13 @@ def _tree(n_children: int = 3):
     return build_export_tree(nodes, [], scope["root_ids"], scope["included_ids"], title="Bản đồ tư duy")
 
 
-def _real_1x1_png() -> bytes:
+def _real_content_png() -> bytes:
+    """2x2 RGB PNG with one dark pixel: a real, non-uniform image. A pure white capture is rejected by the image guard."""
     def chunk(tag: bytes, data: bytes) -> bytes:
         return struct.pack(">I", len(data)) + tag + data + struct.pack(">I", zlib.crc32(tag + data) & 0xFFFFFFFF)
     sig = b"\x89PNG\r\n\x1a\n"
-    ihdr = chunk(b"IHDR", struct.pack(">IIBBBBB", 1, 1, 8, 2, 0, 0, 0))
-    idat = chunk(b"IDAT", zlib.compress(b"\x00\xff\xff\xff"))
+    ihdr = chunk(b"IHDR", struct.pack(">IIBBBBB", 2, 2, 8, 2, 0, 0, 0))
+    idat = chunk(b"IDAT", zlib.compress(b"\x00\x00\x00\x00\xff\xff\xff" + b"\x00\xff\xff\xff\x00\x00\x00"))
     return sig + ihdr + idat + chunk(b"IEND", b"")
 
 
@@ -88,7 +89,7 @@ def test_map_mode_embeds_a_real_image_and_requires_one():
     with pytest.raises(ValueError):
         serialize_pdf(_tree(), mode="map")  # no image bytes -> must fail, not silently produce a blank page
 
-    file_bytes = serialize_pdf(_tree(), mode="map", map_image_bytes=_real_1x1_png())
+    file_bytes = serialize_pdf(_tree(), mode="map", map_image_bytes=_real_content_png())
     doc = fitz.open(stream=file_bytes, filetype="pdf")
     assert doc.page_count == 1
     assert len(doc[0].get_images()) == 1
@@ -96,7 +97,7 @@ def test_map_mode_embeds_a_real_image_and_requires_one():
 
 
 def test_map_and_outline_mode_produces_image_page_then_outline_pages():
-    file_bytes = serialize_pdf(_tree(), mode="map_and_outline", map_image_bytes=_real_1x1_png())
+    file_bytes = serialize_pdf(_tree(), mode="map_and_outline", map_image_bytes=_real_content_png())
     doc = fitz.open(stream=file_bytes, filetype="pdf")
     assert doc.page_count == 2
     assert len(doc[0].get_images()) == 1
