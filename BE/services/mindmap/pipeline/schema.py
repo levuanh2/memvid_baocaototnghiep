@@ -75,8 +75,22 @@ def content_hash(source_stems: list[str], chunk_texts: list[str],
     return h.hexdigest()
 
 
-def sanitize_nodes(nodes: list[dict]) -> list[dict]:
-    """Dedupe id, kind lạ → idea, mồ côi → về root, cap MAX_NODES (root/section ưu tiên giữ)."""
+def sanitize_nodes(nodes: list[dict], *, compact_titles: bool = True) -> list[dict]:
+    """Dedupe id, kind lạ → idea, mồ côi → về root, cap MAX_NODES (root/section ưu tiên giữ).
+
+    `compact_titles=True` (default, every generation-pipeline caller): titles are
+    capped to MAX_TOPIC_LENGTH the same way the canvas display is, with the full
+    original text folded into `note` when that changes the title — generated node
+    titles are meant to be scannable from the moment they're created.
+
+    `compact_titles=False` (PUT /mindmaps/<id>, the user-edit "Lưu sơ đồ" route only):
+    the title is stored exactly as sent, never compacted. This route already receives
+    the CANONICAL title (the frontend sends the full original for an untouched node,
+    its current live text for an edited one — see mindElixirAdapter.js's
+    mindElixirToRecord). Compacting here a second time was "Lưu sơ đồ cắt tiêu đề dài":
+    every save permanently truncated any title over 100 chars, with no certain way to
+    recover it — the canvas's own 100-char display cap is a rendering concern, not a
+    storage one, and must not reach the saved record a second time."""
     seen: set[str] = set()
     clean: list[dict] = []
     for n in nodes or []:
@@ -84,11 +98,14 @@ def sanitize_nodes(nodes: list[dict]) -> list[dict]:
             original_title = " ".join(str(n.get("title") or "").split())
             payload = {**n, "kind": n.get("kind") if n.get("kind") in KINDS else "idea",
                        "node_type": n.get("node_type") if n.get("node_type") in NODE_TYPES else "concept"}
-            payload["title"] = compact_topic(original_title)
-            if original_title and payload["title"] != original_title:
-                payload["note"] = "\n\n".join(
-                    part for part in (original_title, str(payload.get("note") or "")) if part
-                )
+            if compact_titles:
+                payload["title"] = compact_topic(original_title)
+                if original_title and payload["title"] != original_title:
+                    payload["note"] = "\n\n".join(
+                        part for part in (original_title, str(payload.get("note") or "")) if part
+                    )
+            else:
+                payload["title"] = original_title
             m = NodeV2(**payload)
         except Exception:
             continue
