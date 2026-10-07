@@ -5976,3 +5976,64 @@ NaN, or any NaN after visibility, must still fail.
 **Prevention:** when a console error appears in production, record the stage (load, hidden,
 visible, interaction), the count, and the source library. Classify it as baseline only with
 evidence from the same signature and an explicit stop-condition list, and state what was not run.
+
+## "Lưu sơ đồ" permanently truncated node titles over 100 characters (fixed 2026-10-07)
+
+**Symptom:** a node title longer than 100 characters survived on the canvas and in a
+fresh export, but any node titled that way lost everything past 100 characters the
+first time anyone clicked "Lưu sơ đồ" on that map — including for an unrelated edit
+elsewhere on the same map. No error, no warning; the save reported success.
+
+**Root cause (two layers, same bug, found by tracing canonical record -> adapter ->
+PUT payload -> backend -> SQLite -> reload, with a real Flask test client against a
+real store, no mocks):**
+- `mindElixirAdapter.js`'s `mindElixirToRecord` (what "Lưu sơ đồ" calls) sent
+  `node.topic` — the canvas's `compactTopic()`-shortened DISPLAY string — as the
+  title for every node the user had not retyped, instead of the original title from
+  the record that was loaded. Display compaction leaked into the field meant to hold
+  the canonical title.
+- Independently, `update_mindmap`'s `sanitize_nodes()` (backend) re-applied
+  `compact_topic()` to ANY title over 100 chars a second time. Fixing only the
+  frontend was not enough — confirmed by rerunning the fail-before test after the
+  frontend-only fix, which still failed for exactly this reason.
+- Because the frontend already sent a compacted (≤100-char) string, the backend's own
+  existing "fold the original into `note`" safety net (same function, generation
+  path) never triggered: that net only fires when the backend itself detects
+  compaction, and it never saw anything longer than 100 chars to detect.
+
+**Fix:** `mindElixirToRecord` sends the saved record's original title when the node's
+live canvas topic still equals `compactTopic(stripMarkdown(originalTitle))` (untouched
+since load); otherwise it sends the live topic, which is already full since live edits
+are never auto-compacted — a real rename is saved, never reverted. `sanitize_nodes()`
+gained `compact_titles: bool = True`; every generation-pipeline caller is unchanged
+(generated titles are still capped on creation, as intended); only the PUT
+`/mindmaps/<id>` route now passes `compact_titles=False`, because by the time a
+request reaches that route the client has already sent the canonical text.
+
+**Production impact (read-only audit via the real backend container, sanitized
+aggregate output only — see session record for the exact method):** 39 maps / 807
+nodes checked. 0 nodes showed the truncation signature (title ending in the
+compaction's own "…" at ≤100 chars) — no map had actually been damaged yet. 3 nodes
+across 2 maps (same user) carried an intact title over 100 characters and had never
+been saved since generation (`updated_at` absent) — these were about to be the next
+victims and are now safe to edit and save. No migration-on-read was needed or added,
+since nothing in production needed migrating.
+
+**Regression:** `BE/tests/test_mindmap_title_roundtrip_v3.py` (real Flask test client
++ real SQLite store, tmp_path, no mocks): full title survives save+reload; canvas
+display stays compacted while the saved title is full; a real user note is untouched
+and was never a title backup; a real rename is saved, not reverted; a deliberate
+shortening is not "restored"; parent/child mapping intact; a historical (pre-fix)
+reproduction test kept as documentation; legacy-recoverable vs. legacy-unrecoverable
+decoding logic (never guessed from an unrelated real note). `FE/src/utils/mindElixirAdapter.titleRoundtrip.test.js` covers the same cases at the
+adapter level. Full generation-pipeline test suite re-run to confirm
+`compact_titles=True` default left every other `sanitize_nodes()` caller unchanged.
+
+**Prevention:** a value computed for DISPLAY (anything that calls a function named
+like `compact*`/`truncate*`/`format*`) must never be assumed to also be safe to
+PERSIST, even when it looks identical to the canonical value in the common case.
+When a save/update route re-validates input with a function shared with a generation
+or import pipeline, check what that shared function does to each field for the
+save/update case specifically — a default meant for one caller (cap AI output) can
+silently become data loss for another (persist a user edit) if no one asks whether
+every caller actually wants the same transform.
