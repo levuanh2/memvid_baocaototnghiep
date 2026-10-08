@@ -574,6 +574,13 @@
     "rule": "/mindmaps/<mindmap_id>"
   },
   {
+    "endpoint": "patch_mindmap_appearance",
+    "methods": [
+      "PATCH"
+    ],
+    "rule": "/mindmaps/<mindmap_id>/appearance"
+  },
+  {
     "endpoint": "create_mindmap_export",
     "methods": [
       "POST"
