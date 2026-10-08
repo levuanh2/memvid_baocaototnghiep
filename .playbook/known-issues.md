@@ -1,5 +1,108 @@
 # Known Issues
 
+## Appearance V2 — cold-load race: a saved appearance could silently fail to render, and two real-browser-only races could wipe it after it did (fixed 2026-10-09)
+
+**Symptom (live production QA, real EC2 backend, real QA account, found while
+closing out the Cancel-rollback anomaly from PR #63's own QA):** a map with a
+saved, server-confirmed non-default `appearance` sometimes loaded showing the
+plain default look instead — 1 failure in 4 cold loads of the SAME map in the
+SAME fresh tab, no PATCH ever fired, server record correct throughout.
+Reloading again (no other state change) then showed it correctly every time
+— the signature of a timing race, not a data-loss bug. A side-agent note
+independently reproduced the same symptom while this was mid-investigation.
+
+**Root cause 1 (the actual miss):** `MindElixirView`'s mount effect — the one
+that creates/refreshes the mind-elixir instance — keys on
+`[data?.id, startFitPoll]` only, deliberately: a local "Áp dụng" PATCH
+success must never re-trigger `recordToMindElixir`/`refresh()`. The old code
+applied `data?.appearance` directly inside that SAME effect, inheriting its
+blind spot: if the `data` object for the current id was first seen with
+`appearance` still absent/stale, the canvas stayed on default forever —
+nothing ever gave a later-updated `appearance` for that same id a second
+chance to apply.
+
+**Root cause 2 (found via Playwright against the fixture harness, narrow
+viewport — ≤ `MOBILE_FIT_MAX_WIDTH`):** `applyReadableFloor`'s
+`mind.scale()` (the mobile "floor the zoom at a readable minimum" call,
+already an established part of the render lifecycle) rewrites every topic
+element's inline style as part of recomputing the scaled layout. An
+appearance applied before that pass runs gets silently overwritten — node
+elements never remount, no React effect ever reruns or cleans up (confirmed
+with an instrumented trace: the apply effect fires exactly once, no cleanup
+log, yet the style is gone once the scale pass lands). jsdom never catches
+this because it never lays anything out for real.
+
+**Root cause 3 (same family, found the same way):** the dark-mode
+`MutationObserver` effect's `mind.changeTheme?.(THEME)` call (added for an
+earlier, unrelated bug — see the "Final QA fix" comment at its definition)
+re-merges mind-elixir's own light/dark node-color palette, directly
+overwriting the SAME inline `background`/`color` properties the appearance
+engine sets. A theme toggle landing after an appearance apply silently reverts
+it to the native theme colors.
+
+**Fix:**
+1. Split appearance application into its own effect, keyed on
+   `[data?.id, data?.appearance, canvasReadyId, renderState]` —
+   `canvasReadyId` is set by the mount effect only once `init()`/`refresh()`
+   has actually run for the current id, so a late-arriving/updated
+   `appearance` for the SAME id now gets a real second chance instead of
+   being stranded.
+2. The same effect also gates on `renderState === "ready"` — the exact
+   settled signal `fitIfReady` itself already defines for "mind-elixir
+   hasn't finished its own internal layout yet" — so the apply always runs
+   strictly after every mind-elixir-internal pass for this mount, narrow
+   viewport included, closing root cause 2.
+3. `appearanceAppliedRef` makes the apply idempotent per
+   (mapId, resolved-signature, mind instance) and restore-before-reapply:
+   every run undoes exactly what the previous run applied (via the cleanup
+   React always runs before the next effect body) before applying the new
+   one — the mechanism that stops a connector `<style
+   data-mm-appearance-connector>` tag (appended once per
+   `applyLiveCanvasAppearance` call, never deduped by that function itself)
+   from accumulating across a map switch, a same-map re-render, or a React
+   StrictMode dev double-invoke (mount → cleanup → mount).
+4. The dark-mode `changeTheme()` observer now reapplies the SAME resolved
+   appearance (tracked in the same `appearanceAppliedRef`, including the
+   resolved value itself so it can be reapplied without recomputation) right
+   after its own `changeTheme()`/`layout()`/`linkDiv()` sequence, restoring
+   its own previous connector `<style>` tag first — closing root cause 3
+   without touching the unrelated bug that `MutationObserver` was originally
+   added to fix.
+
+**Regression:** `MindElixirView.appearanceColdLoad.test.jsx` — every race
+shape requested: appearance arriving before/with/after the instance, A→B→A
+(including the connector `<style>`-tag-leak check), a React StrictMode
+double mount/cleanup/mount, unmount cleanup, and idempotent re-render.
+Reaching `renderState === "ready"` in jsdom needs the same two fixtures
+`MindElixirView.lifecycle.test.jsx` already established: real
+`clientWidth`/`clientHeight` on `.me-container`, and a `linkDiv()` spy that
+writes valid (non-`NaN`) `d` attributes, since jsdom never lays anything out
+for real. `e2e-fixture/appearance-coldload.spec.js` — real-browser cold-load
+visual QA at 1440×1024 and 390×844, light/dark, plus the A→B→A leak check;
+needed a `?initialAppearance=<preset>` hook added to the dev-only fixture
+harness (`FixtureHarnessApp.jsx`) since the harness builds `data`
+synchronously and has no backend to carry a persisted appearance across a
+reload otherwise. Checked via the node's own INLINE style
+(`el.style.borderRadius`/`cssText`), never `getComputedStyle` — the root
+role in this theme carries its own pre-existing `!important` accent-color
+CSS, unrelated to Appearance V2, that wins the cascade visually regardless
+of inline style (this is also the explanation for why the live QA session's
+`men1` background stayed the map's own blue accent color despite Study
+preset being genuinely, correctly applied underneath — a loose end from that
+session, resolved here).
+
+**Prevention:** an effect that applies something derived from a prop must
+depend on every piece of that prop its own logic reads, not just whichever
+field happens to key its sibling effect — "local save must never retrigger
+the heavy mount effect" and "appearance must react to its own data" are two
+different constraints and need two different effects. Any code that writes
+inline styles to mind-elixir topic elements directly (not through
+`applyLiveCanvasAppearance`) is a write hazard for Appearance V2 specifically
+because they share the same DOM properties — `mind.scale()`,
+`mind.changeTheme()`, and anything else discovered later in this family must
+either run before the appearance effect's readiness gate or explicitly
+reapply through the same `appearanceAppliedRef`-tracked path afterward.
+
 ## Appearance V2 — typography/padding/density must never touch the live canvas; a "default" preset must be a true no-op; `findEle` throws for collapsed nodes (fixed 2026-10-08)
 
 **Symptom (closure-pass measurement, caught before any implementation commit):**

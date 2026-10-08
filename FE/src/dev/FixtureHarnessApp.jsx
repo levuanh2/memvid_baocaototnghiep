@@ -20,7 +20,18 @@ import { FIXTURE_MAP_A, FIXTURE_MAP_B, FIXTURE_COLLAPSED_NODE_IDS, FIXTURE_EXPOR
 
 const MAPS = [FIXTURE_MAP_A, FIXTURE_MAP_B, FIXTURE_EXPORT_V3];
 const COLLAPSED_BY_MAP = { ...FIXTURE_COLLAPSED_NODE_IDS, ...FIXTURE_EXPORT_V3_COLLAPSED };
-const INITIAL_MAP_ID = new URLSearchParams(typeof window !== "undefined" ? window.location.search : "").get("map") === "export-v3" ? FIXTURE_EXPORT_V3.id : FIXTURE_MAP_A.id;
+const SEARCH = new URLSearchParams(typeof window !== "undefined" ? window.location.search : "");
+const INITIAL_MAP_ID = SEARCH.get("map") === "export-v3" ? FIXTURE_EXPORT_V3.id : FIXTURE_MAP_A.id;
+// cold-load appearance race fix (PR follow-up to #63) — `?initialAppearance=study`
+// bakes a saved appearance onto FIXTURE_MAP_A's record from the FIRST render,
+// the same way a real cold page load would (server record already has it,
+// never built up client-side), so Playwright can assert what's actually on
+// screen the instant the page paints rather than only after round-tripping
+// through the toolbar editor + a mocked PATCH.
+const INITIAL_APPEARANCE_PRESET = SEARCH.get("initialAppearance");
+const INITIAL_APPEARANCE = INITIAL_APPEARANCE_PRESET
+  ? { version: 2, preset: INITIAL_APPEARANCE_PRESET, overrides: { canvas: {}, connector: {}, node: { root: {}, branch: {}, leaf: {} } } }
+  : undefined;
 
 function useFixtureController() {
   const mindRef = useRef(null);
@@ -73,6 +84,11 @@ export default function FixtureHarnessApp() {
 
   const data = useMemo(() => ({
     ...activeRecord,
+    // Only the map the harness actually starts on gets the URL-driven
+    // appearance baked in — switching to a different map must show that
+    // map's own (default, no-op) appearance, exactly like a real backend
+    // record would.
+    appearance: activeMapId === INITIAL_MAP_ID ? INITIAL_APPEARANCE : activeRecord?.appearance,
     mindMaps: MAPS.map((m) => ({ id: m.id, title: m.title, sources: [] })),
     onSelectMap: (m) => setActiveMapId(m.id),
     onCreateNew: () => {},
