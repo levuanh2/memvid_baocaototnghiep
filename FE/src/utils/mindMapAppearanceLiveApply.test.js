@@ -54,6 +54,21 @@ describe("default preset applies zero DOM changes (regression: shipping this mus
   });
 });
 
+describe("applyLiveCanvasAppearance — a collapsed/not-rendered node never crashes", () => {
+  it("findEle throwing for one node (mind-elixir's real behavior for a collapsed branch, not a null return) is caught and that node is simply skipped", () => {
+    const mind = makeMind();
+    const originalFindEle = mind.findEle;
+    mind.findEle = (id) => {
+      if (id === "a1") throw new Error(`FindEle: Node ${id} not found, maybe it's collapsed.`);
+      return originalFindEle(id);
+    };
+    const resolved = resolveCanvasAppearance({ savedAppearance: { version: 2, preset: "study", overrides: {} } });
+    expect(() => applyLiveCanvasAppearance({ mind, resolved })).not.toThrow();
+    // Siblings not affected by the thrown node still get styled normally.
+    expect(mind.findEle("root").style.background).not.toBe("");
+  });
+});
+
 describe("applyLiveCanvasAppearance", () => {
   it("never calls layout/linkDiv/refresh/scaleFit/toCenter", () => {
     const mind = makeMind();

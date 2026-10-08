@@ -42,12 +42,28 @@ function gridBackgroundImage(grid) {
  * style tag removed) — call it on Cancel/Escape, or before applying a new
  * draft on top of a previous preview.
  */
+// mind-elixir's `findEle` THROWS (never returns null/undefined) for a node
+// that isn't currently rendered — most commonly one inside a collapsed
+// branch (verified by reading dist/mind-elixir.js: `throw new Error`, not a
+// null return). A collapsed branch is completely ordinary on any real map,
+// so this isn't an edge case to special-case around — it's the normal
+// shape of findEle itself, same as MindElixirView.jsx's own
+// `findTopicSafely` helper already treats it. Caught before merge: an
+// earlier draft used `mind.findEle?.(id)` (optional-chaining only guards a
+// MISSING method, not one that throws), which crashed the whole React tree
+// — real-browser Playwright QA against a map with a collapsed branch is
+// what caught it; jsdom-based unit tests never exercise a real collapsed
+// node here.
+function findEleSafely(mind, id) {
+  try { return mind.findEle?.(id) || null; } catch { return null; }
+}
+
 export function applyLiveCanvasAppearance({ mind, resolved }) {
   const touchedNodes = [];
   const walk = (node, depth) => {
     const role = resolved.node[roleForDepth(depth)];
     if (!roleIsNoop(role)) {
-      const el = mind.findEle?.(node.id);
+      const el = findEleSafely(mind, node.id);
       if (el) {
         touchedNodes.push({
           el,
