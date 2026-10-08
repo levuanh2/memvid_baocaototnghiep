@@ -8,6 +8,10 @@ import { sanitizeExportFilename } from "../../utils/mindmapExportFilename";
 import { PRESETS, DEFAULT_APPEARANCE } from "../../utils/mindmapExportAppearance";
 import { getExportFormatCapabilities, isDocumentFormat } from "../../utils/mindmapExportFormatCapabilities";
 import { createMindmapExport, pollMindmapExportUntilDone, cancelMindmapExport, triggerMindmapExportDownload } from "../../utils/mindmapDocumentExport";
+// PR C2: Segmented/Control/Accordion moved to AppearanceControls.jsx so the
+// toolbar "Giao diện" editor and this dialog's appearance override step
+// share the exact same primitives — never two hand-rolled copies.
+import { Segmented, Control, Accordion } from "./AppearanceControls";
 import "./exportStudio.css";
 
 const STEPS = [["Nội dung", "Chọn phạm vi xuất", "BookOpen"], ["Định dạng", "Chọn loại file", "FileStack"], ["Giao diện", "Tùy chỉnh hiển thị", "Sliders"], ["Kiểm tra", "Xem trước và xuất", "CheckCircle2"]];
@@ -36,10 +40,6 @@ const CONTENT_LABELS = { notes: "Ghi chú", citations: "Trích dẫn", sourceNam
 const documentDefaults = () => ({ pdf: getExportFormatCapabilities("pdf").defaults, docx: getExportFormatCapabilities("docx").defaults, xlsx: getExportFormatCapabilities("xlsx").defaults });
 const colorKey = (format) => format === "docx" ? "headingColorMode" : format === "xlsx" ? "headerStyleMode" : "branchColorMode";
 function backgroundColor(key, custom) { if (key === "canvas") return getComputedStyle(document.documentElement).getPropertyValue("--bg-base").trim() || "#fff"; if (key === "custom") return custom; return { white: "#fff", dark: "#15171C", transparent: "transparent" }[key] || "#fff"; }
-
-function Segmented({ options, value, onChange, disabled = () => false }) { return <div className="export-segments">{options.map(([key, label]) => <button key={key} type="button" className={`pill-tab ${value === key ? "is-selected pill-tab-active" : ""}`} aria-pressed={value === key} disabled={disabled(key)} onClick={() => onChange(key)}>{label}</button>)}</div>; }
-function Control({ label, children }) { return <div className="export-control"><div className="export-control__label">{label}</div>{children}</div>; }
-function Accordion({ id, title, icon, open, onToggle, children }) { return <section className="export-accordion"><button type="button" className="export-accordion__trigger" aria-expanded={open} aria-controls={id} onClick={onToggle}><span><Icon name={icon} size={17} />{title}</span><Icon name={open ? "ChevronUp" : "ChevronDown"} size={17} /></button>{open && <div id={id} className="export-accordion__body">{children}</div>}</section>; }
 
 export default function ExportStudioDialog({ open, onClose, mind, record, mapId, title, selectedNodeId, selectedBranchIds, onRequestBranchSelection }) {
   const [step, setStep] = useState(0), [furthest, setFurthest] = useState(0);

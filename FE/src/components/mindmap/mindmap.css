@@ -442,8 +442,8 @@ html.dark .me-container { --mm-relation: #7e90c4; }
    less-used actions). Icon + text on desktop; the text hides at narrow
    widths via the same rule mm-quality-status/mm-saved-status already use
    below, while aria-label/title (set in the JSX) keep it identifiable. */
-.mm-export-trigger { display: inline-flex; align-items: center; gap: 6px; height: 40px; padding: 0 12px; border: 1px solid var(--border-color); border-radius: 20px; color: var(--accent); background: var(--bg-card); cursor: pointer; white-space: nowrap; font-size: 13px; }
-.mm-export-trigger:hover, .mm-export-trigger:focus-visible { background: var(--bg-hover); }
+.mm-export-trigger, .mm-appearance-trigger { display: inline-flex; align-items: center; gap: 6px; height: 40px; padding: 0 12px; border: 1px solid var(--border-color); border-radius: 20px; color: var(--accent); background: var(--bg-card); cursor: pointer; white-space: nowrap; font-size: 13px; }
+.mm-export-trigger:hover, .mm-export-trigger:focus-visible, .mm-appearance-trigger:hover, .mm-appearance-trigger:focus-visible { background: var(--bg-hover); }
 .mm-quality-status, .mm-saved-status { display: inline-flex; align-items: center; gap: 5px; white-space: nowrap; color: var(--forest); font-size: 12px; }
 .mm-saved-status.is-dirty { color: var(--warn); }
 .mm-quality-status.is-warning { color: var(--warn); }
@@ -468,8 +468,8 @@ html.dark .me-container { --mm-relation: #7e90c4; }
   .mm-context-link { display: none; }
   .mm-map-selector { flex-basis: 145px; }
   .mm-inspector-drawer { width: min(340px, calc(100% - 28px)); }
-  .mm-export-trigger { width: 40px; padding: 0; justify-content: center; border-radius: 50%; }
-  .mm-export-trigger span { display: none; }
+  .mm-export-trigger, .mm-appearance-trigger { width: 40px; padding: 0; justify-content: center; border-radius: 50%; }
+  .mm-export-trigger span, .mm-appearance-trigger span { display: none; }
   .mm-toolbar-menu {
     position: fixed;
     inset: auto 8px 8px;
@@ -689,6 +689,7 @@ html.dark .me-container { --mm-relation: #7e90c4; }
 .mm-context-link,
 .mm-map-selector__trigger,
 .mm-export-trigger,
+.mm-appearance-trigger,
 .mm-overflow-trigger,
 .mm-floating-toolbar button,
 .mm-fullscreen-corner {

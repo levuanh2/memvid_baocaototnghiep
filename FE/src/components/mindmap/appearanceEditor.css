@@ -1,0 +1,28 @@
+/* PR C2 — Appearance V2 shared controls. Reuses exportStudio.css's generic
+   .export-* primitives (segments/accordion/control/check/message) for the
+   chrome; this file only adds the handful of controls those don't cover
+   (a color swatch field, the role/connector/canvas grouping grids). */
+.appearance-role-editor,
+.appearance-connector-editor,
+.appearance-canvas-editor {
+  display: grid;
+  gap: 14px;
+}
+.appearance-color-field {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+.appearance-color-field input[type="color"] {
+  width: 36px;
+  height: 36px;
+  padding: 0;
+  border: 1px solid var(--border-color);
+  border-radius: 7px;
+  background: var(--bg-card);
+  cursor: pointer;
+}
+.appearance-role-editor input[type="range"] {
+  width: 100%;
+  accent-color: var(--accent);
+}
