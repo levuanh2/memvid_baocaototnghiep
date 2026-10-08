@@ -23,6 +23,9 @@ import { updateMindmap } from "../../utils/api";
 import { toast } from "../ui/Toaster";
 import { Icon } from "../ui/Icon";
 import ExportStudioDialog from "./ExportStudioDialog";
+import AppearanceEditorDrawer from "./AppearanceEditorDrawer";
+import { resolveCanvasAppearance } from "../../utils/mindMapAppearanceV2";
+import { applyLiveCanvasAppearance } from "../../utils/mindMapAppearanceLiveApply";
 import Spinner from "../ui/Spinner";
 import OperationUsage from "../Layout/OperationUsage";
 import "./mindmap.css";
@@ -119,6 +122,14 @@ export default function MindElixirView({ data, onRegenerate, regenerating, contr
 
   // Export Studio (Round: Export Studio + expand/collapse redesign).
   const [exportOpen, setExportOpen] = useState(false);
+  // PR C2 — Appearance V2. `appearance` is this map's own saved canvas
+  // appearance, seeded fresh from `data.appearance` on every true mount
+  // (data.id change — see the mount effect below), then updated locally by
+  // the editor's "Áp dụng" without ever touching `data` itself, so a PATCH
+  // success never re-triggers the mount effect's recordToMindElixir/
+  // refresh() path (that effect's deps are [data?.id, startFitPoll] only).
+  const [appearanceOpen, setAppearanceOpen] = useState(false);
+  const [appearance, setAppearance] = useState(data?.appearance);
   const [selectionModeActive, setSelectionModeActive] = useState(false);
   const [selectedBranchIds, setSelectedBranchIds] = useState(() => new Set());
   const selectionActiveRef = useRef(false);
@@ -359,6 +370,12 @@ export default function MindElixirView({ data, onRegenerate, regenerating, contr
     }
     sanitizeHiddenNaNPaths(containerRef.current);
     controller.registerMindInstance(mind, sidecar);
+    // PR C2 — apply this map's own saved LIVE_SAFE appearance once per true
+    // mount (map switch). Zero layout/linkDiv/refresh/fit/center calls (see
+    // applyLiveCanvasAppearance's own guarantees) — purely additive to the
+    // lifecycle above, never gating or delaying it.
+    setAppearance(data?.appearance);
+    applyLiveCanvasAppearance({ mind, resolved: resolveCanvasAppearance({ savedAppearance: data?.appearance }) });
     setZoom(mind.scaleVal || 1);
     // Round 8: selectedHasChildren/selectedExpanded below are derived at
     // render time from `mindRef.current` — a REF, which doesn't itself
@@ -896,6 +913,10 @@ export default function MindElixirView({ data, onRegenerate, regenerating, contr
             .mm-context-row responsive rule mm-quality-status/mm-saved-status
             already use — aria-label/title stay regardless. */}
         <OperationUsage usage={data?.__usage || data?.usage} className="mm-operation-usage" />
+        <button type="button" className="mm-appearance-trigger" onClick={() => setAppearanceOpen(true)}
+          aria-label="Giao diện" title="Giao diện">
+          <Icon name="Sliders" size={14} /> <span>Giao diện</span>
+        </button>
         <button type="button" className="mm-export-trigger" onClick={() => setExportOpen(true)}
           aria-label="Xuất sơ đồ" title="Xuất sơ đồ">
           <Icon name="Download" size={14} /> <span>Xuất</span>
@@ -1113,6 +1134,23 @@ export default function MindElixirView({ data, onRegenerate, regenerating, contr
         selectedNodeId={controller?.selected?.id}
         selectedBranchIds={selectedBranchIds}
         onRequestBranchSelection={() => { setExportOpen(false); setSelectionModeActive(true); }}
+        savedAppearance={appearance}
+        onAppearanceSaved={setAppearance}
+      />
+
+      {/* PR C2 — `key={data?.id}` so switching maps always remounts the
+          editor fresh: a draft/history from map A can never leak into map
+          B's own editor session (A -> B -> A each starts clean from that
+          map's own saved appearance, read fresh via the `savedAppearance`
+          prop below). */}
+      <AppearanceEditorDrawer
+        key={data?.id}
+        open={appearanceOpen}
+        onClose={() => setAppearanceOpen(false)}
+        mind={mindRef.current}
+        mapId={data?.id}
+        savedAppearance={appearance}
+        onSaved={setAppearance}
       />
     </div>
   );

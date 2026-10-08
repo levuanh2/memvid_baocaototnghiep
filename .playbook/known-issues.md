@@ -1,5 +1,76 @@
 # Known Issues
 
+## Appearance V2 — typography/padding/density must never touch the live canvas; a "default" preset must be a true no-op; `findEle` throws for collapsed nodes (fixed 2026-10-08)
+
+**Symptom (closure-pass measurement, caught before any implementation commit):**
+Mind Elixir's live `me-root` moves 14–420px purely from the container's CSS
+flex-reflow centering whenever node padding, font metrics, or title wrap
+change — independent of whether `linkDiv()`/`layout()` runs. A property
+earlier assumed "LINKDIV_SAFE" (safe as long as a `linkDiv()` follows it) was
+never actually safe on the real canvas: the reflow happens from the raw CSS
+change alone, before any JS call. This ruled out ANY typography/padding/
+density control on the live canvas, at any debounce.
+
+**Symptom (self-review before first commit, flagged by a side-agent note and
+verified independently):** the initial "default" appearance preset gave every
+role `radius: 6, shape: "roundedRect"`. Since every map with no saved
+`appearance` resolves through "default", shipping this would have restyled
+every existing map on deploy — not just ones a user customizes.
+
+**Symptom (found only via real-browser Playwright, never by jsdom unit
+tests):** `mind.findEle(id)` **throws** (`FindEle: Node <id> not found, maybe
+it's collapsed.`) for any node inside a currently-collapsed branch — it never
+returns `null`. An early draft used `mind.findEle?.(node.id)`; optional
+chaining only guards a *missing* method, not one that throws, so opening the
+Appearance Editor against FIXTURE_MAP_A's own pre-collapsed node crashed the
+whole React tree ("An error occurred in the `<AppearanceEditorDrawer>`
+component"). Only surfaced because a Playwright smoke test timed out waiting
+on a locator that had vanished from the DOM — no jsdom test exercises a real
+collapsed node.
+
+**Root cause:** (1) typography/padding/density are geometry-affecting by
+nature of browser CSS flex layout, not by any mind-elixir API choice — no
+amount of debouncing or batching linkDiv avoids the reflow. (2) the preset
+author defaulted every role field to a visible value instead of a no-op
+sentinel, so "default" was indistinguishable from "study"/"pastel" in kind,
+just different numbers. (3) `findEle?.()` only null-guards; it does not
+catch.
+
+**Fix:** (1) typography/padding/density were downgraded contract-wide to
+REFLOW_REQUIRED and excluded from the live canvas entirely — they exist only
+inside Export Studio's own disposable offscreen scene
+(`exportCanonicalFullMap`), never persisted via the appearance PATCH. (2)
+`roleBase()` in both `mindMapAppearanceV2.js` and the BE mirror
+`appearance.py` now defaults every field to `null`/`0`/`false`; "default"
+preset uses bare `roleBase()` for every role; added `roleIsNoop(role)`, used
+by the live-apply engine to skip touching an element/the container entirely
+(not just write an equivalent no-op value) — proven by a jsdom test asserting
+`el.style.cssText`/`container.style.cssText` stay byte-identical before/after
+applying "default". (3) added `findEleSafely(mind, id)` (try/catch, mirroring
+the pre-existing `findTopicSafely` pattern already used elsewhere in
+`MindElixirView.jsx` for this exact mind-elixir behavior) in
+`mindMapAppearanceLiveApply.js`; added a jsdom regression test with a fake
+`findEle` that throws for one id, asserting the engine doesn't throw and
+unaffected siblings still get styled.
+
+**Regression:** `mindMapAppearanceV2.test.js` (`roleIsNoop` on every role,
+default preset's canvas/connector all-default — "default preset is a true
+no-op" section), `mindMapAppearanceLiveApply.test.js` ("default preset
+applies zero DOM changes", "a collapsed/not-rendered node never crashes"),
+`test_mindmap_appearance_v2.py::TestDefaultPresetIsATrueNoop` (BE mirror),
+`e2e-fixture/appearance-editor.spec.js` (6-viewport/theme smoke matrix +
+apply/undo/reset/PATCH-failure/map-isolation/export-override cases, all
+against the real browser/DOM, not jsdom).
+
+**Prevention:** never trust a "safe because X runs after it" argument for a
+geometry-adjacent CSS property without measuring the live DOM directly —
+reflow can happen from the style write alone. A preset meant to be the
+no-change baseline must use the same no-op sentinel as "untouched", not a
+visible default value re-used across presets. Any `mind.findEle`-style
+lookup against mind-elixir must be try/catch, never optional-chained — it
+throws for an ordinary, common state (a collapsed branch), not just a missing
+method.
+
 ## Mind Map export had two triggers and a square checkbox marker (fixed 2026-10-06)
 
 **Symptom:** the Export Studio opened from two places: the toolbar "Xuất" and an

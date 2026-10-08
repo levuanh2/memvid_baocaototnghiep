@@ -64,6 +64,38 @@ def test_put_updates_and_protects_fields(tmp_path, monkeypatch):
     assert saved["updated_at"].endswith("Z")
 
 
+def test_put_preserves_appearance_set_by_a_separate_patch(tmp_path, monkeypatch):
+    """PR C2: PATCH /mindmaps/<id>/appearance and PUT /mindmaps/<id> (node/
+    title save) are two independent concerns on the same record — neither
+    may clobber the other. A plain node/title PUT must never touch an
+    `appearance` field a prior PATCH already set."""
+    client = _client(tmp_path, monkeypatch)
+    rec = _rec()
+    rec["appearance"] = {"version": 2, "preset": "pastel", "overrides": {}}
+    store.save_record(rec)
+    body = _rec()
+    body["title"] = "Đã sửa, không đụng appearance"
+    r = client.put("/mindmaps/m1", data=json.dumps(body), content_type="application/json")
+    assert r.status_code == 200
+    saved = store.get_record("m1")
+    assert saved["title"] == "Đã sửa, không đụng appearance"
+    assert saved["appearance"]["preset"] == "pastel"
+
+
+def test_patch_appearance_preserves_nodes_set_by_a_separate_put(tmp_path, monkeypatch):
+    client = _client(tmp_path, monkeypatch)
+    store.save_record(_rec())
+    body = _rec()
+    body["title"] = "Đã sửa trước"
+    client.put("/mindmaps/m1", data=json.dumps(body), content_type="application/json")
+
+    r = client.patch("/mindmaps/m1/appearance", data=json.dumps({"appearance": {"version": 2, "preset": "study", "overrides": {}}}), content_type="application/json")
+    assert r.status_code == 200
+    saved = store.get_record("m1")
+    assert saved["title"] == "Đã sửa trước"
+    assert saved["appearance"]["preset"] == "study"
+
+
 def test_put_404_unknown_id(tmp_path, monkeypatch):
     client = _client(tmp_path, monkeypatch)
     r = client.put("/mindmaps/khong_co", data=json.dumps(_rec()), content_type="application/json")

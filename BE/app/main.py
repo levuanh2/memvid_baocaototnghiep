@@ -5936,6 +5936,44 @@ def update_mindmap(mindmap_id: str):
     return jsonify(record)
 
 
+@app.route("/mindmaps/<mindmap_id>/appearance", methods=["PATCH"])
+def patch_mindmap_appearance(mindmap_id: str):
+    """PR C2 — merges ONLY the record's `appearance` field. Never reads or
+    rewrites nodes/relations/title, so it can never lose a concurrent edit
+    from the ordinary PUT route beyond the same last-write-wins race that
+    route already has on the shared record_json blob — out of scope here,
+    not introduced by this route. Reads `base` fresh on every call, so
+    "merge into the latest record" is just "spread base, overwrite one
+    field", the same pattern `update_mindmap` already uses."""
+    uid, err = _require_app_user()
+    if err:
+        return err
+    base = (mindmap_store.get_record(mindmap_id, user_id=uid, enforce_owner=True)
+            if _auth_protect_enabled() else mindmap_store.get_record(mindmap_id))
+    if not base:
+        return jsonify({"error": "Mind map not found"}), 404
+
+    from services.mindmap.appearance import (
+        AppearanceSanitizeError, sanitize_appearance_payload, validate_appearance_envelope,
+    )
+    body = request.get_json(silent=True)
+    if not isinstance(body, dict) or "appearance" not in body:
+        return jsonify({"error": "appearance là bắt buộc", "error_code": "invalid_appearance"}), 400
+    try:
+        validate_appearance_envelope(body.get("appearance"))
+    except AppearanceSanitizeError as e:
+        return jsonify({"error": str(e), "error_code": "invalid_appearance"}), 400
+    sanitized = sanitize_appearance_payload(body.get("appearance"))
+
+    record = {**base, "appearance": sanitized}
+    record["updated_at"] = datetime.now(timezone.utc).isoformat().replace("+00:00", "Z")
+    if _auth_protect_enabled():
+        mindmap_store.save_record(record, user_id=uid)
+    else:
+        mindmap_store.save_record(record)
+    return jsonify({"appearance": sanitized, "updated_at": record["updated_at"]})
+
+
 @app.delete('/mindmaps/<string:mindmap_id>')
 def delete_mindmap(mindmap_id: str):
     uid, err = _require_app_user()

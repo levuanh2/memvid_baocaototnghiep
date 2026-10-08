@@ -107,9 +107,12 @@ def test_tong_so_route_khop(client, cu):
       (tạo job xuất DOCX/XLSX/PDF), `GET /mindmaps/exports/<job_id>` (poll trạng thái +
       mint download token khi done), `POST /mindmaps/exports/<job_id>/cancel`,
       `GET /mindmaps/exports/<job_id>/download` (token HMAC ngắn hạn hoặc bearer chủ sở hữu).
+    +1 ngày 2026-10-08 (Appearance V2, PR C2): `PATCH /mindmaps/<mindmap_id>/appearance`
+      (merges ONLY record.appearance — node/connector/canvas LIVE_SAFE subset — never
+      nodes/relations/title; see services/mindmap/appearance.py).
     Con số ở đây CỐ Ý viết cứng — sửa nó là một dòng diff mà người review phải nhìn
     thấy, đúng mục đích của cả file này."""
-    assert len(_hien_tai()) == len(cu) == 110
+    assert len(_hien_tai()) == len(cu) == 111
 
 
 def test_khong_co_cap_duong_dan_method_trung(client):

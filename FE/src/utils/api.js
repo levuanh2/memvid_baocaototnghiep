@@ -215,6 +215,20 @@ export const updateMindmap = async (id, record) => {
   return res.json();
 };
 
+// PR C2 — merges ONLY the map's persisted canvas appearance (the LIVE_SAFE
+// subset). Never sends/receives nodes/relations/title — see
+// app/main.py's patch_mindmap_appearance route. Returns {appearance,
+// updated_at}, never the full record.
+export const patchMindmapAppearance = async (id, appearance) => {
+  const res = await apiFetch(`/mindmaps/${encodeURIComponent(id)}/appearance`, {
+    method: "PATCH",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ appearance }),
+  });
+  if (!res.ok) throw await _appError(res);
+  return res.json();
+};
+
 // ── Summary v2: generate / cancel (mirror mindmap; poll qua /summary-status) ──
 // Caller branch theo `status` ("done" cache-hit — KHÔNG có job_id — vs "started").
 export const generateSummary = async (sources, { lengthMode = "medium", mode = "standard", force = false } = {}) => {

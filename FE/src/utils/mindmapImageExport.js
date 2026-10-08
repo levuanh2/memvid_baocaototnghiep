@@ -25,6 +25,8 @@ import { recordToMindElixir, liveRecordForExport } from "./mindElixirAdapter";
 import { resolveExportScope, resolveExportScopeFromRecord } from "./mindmapExportScope";
 import { exportFilenameFor } from "./mindmapExportFilename";
 import { DEFAULT_APPEARANCE, applyContainerAppearance, applyTargetAppearance, needsRelayout as appearanceNeedsRelayout } from "./mindmapExportAppearance";
+import { resolveExportAppearance } from "./mindMapAppearanceV2";
+import { applyLiveCanvasAppearance } from "./mindMapAppearanceLiveApply";
 
 function snapshotExpanded(nodeObj, into) {
   into.set(nodeObj.id, nodeObj.expanded);
@@ -191,7 +193,7 @@ function contentBoundsRelativeTo(origin, root) {
  */
 async function exportCanonicalFullMap({
   record, format, backgroundColor, scale, quality, title, appearance, outputMode,
-  snapdom, settleMs, MindElixirCtor,
+  snapdom, settleMs, MindElixirCtor, canvasAppearance, exportStyleOverride,
 }) {
   // `record` is already live-aware (see liveRecordForExport) and, for a branch export,
   // already filtered to that branch — both done by the caller, before any live reads.
@@ -214,6 +216,17 @@ async function exportCanonicalFullMap({
     instance.layout?.();
     instance.linkDiv?.();
     applyTargetAppearance({ mind: instance, target: instance.map, appearance });
+    // PR C2 — the map's own saved LIVE_SAFE canvas appearance (node fill/
+    // text/border/radius/shadow/shape, connector color/thickness/style),
+    // optionally overridden for this export only via Export Studio's "Tùy
+    // chỉnh riêng bản xuất". Applied AFTER layout/linkDiv (same ordering
+    // the live canvas uses), via the identical zero-further-layout engine —
+    // "canvas and export resolve the same appearance contract" is this one
+    // function call, not two parallel implementations.
+    applyLiveCanvasAppearance({
+      mind: instance,
+      resolved: resolveExportAppearance({ canvasAppearance, exportOverride: exportStyleOverride }),
+    });
     await waitForRenderResources(instance.map);
     instance.map.style.transform = "translate3d(0px, 0px, 0px) scale(1)";
     if (settleMs > 0) await new Promise((r) => setTimeout(r, settleMs));
@@ -243,6 +256,7 @@ export async function exportMindmapImage({
   mind, record, scopeType, targetNodeId, branchRootIds, includeDescendants = true, visibleOnly = false,
   format, backgroundColor, scale = 2, quality = 1, title,
   appearance = DEFAULT_APPEARANCE, outputMode = "download",
+  canvasAppearance, exportStyleOverride,
   snapdom = realSnapdom, settleMs = 30, MindElixirCtor = RealMindElixir,
 }) {
   if ((scopeType === "full" || scopeType === "current_branch" || scopeType === "selected_branches") && record) {
@@ -256,6 +270,7 @@ export async function exportMindmapImage({
     });
     return exportCanonicalFullMap({
       record: scopedRecord, format, backgroundColor, scale, quality, title, appearance, outputMode, snapdom, settleMs, MindElixirCtor,
+      canvasAppearance, exportStyleOverride,
     });
   }
   if (!mind?.map) throw new Error("Mind Elixir chưa sẵn sàng.");
