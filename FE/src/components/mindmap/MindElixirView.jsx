@@ -130,6 +130,17 @@ export default function MindElixirView({ data, onRegenerate, regenerating, contr
   // refresh() path (that effect's deps are [data?.id, startFitPoll] only).
   const [appearanceOpen, setAppearanceOpen] = useState(false);
   const [appearance, setAppearance] = useState(data?.appearance);
+  // PR C2 cold-load race fix — see the dedicated appearance-apply effect
+  // below (deps [data?.id, data?.appearance, canvasReadyId, renderState])
+  // for why this exists: `canvasReadyId` only becomes `data?.id` AFTER the mount effect
+  // has actually built/refreshed the mind-elixir instance for that id, so
+  // the appearance effect never touches a not-yet-ready or already-stale
+  // instance. `appearanceAppliedRef` makes that effect idempotent and
+  // restore-before-reapply (never two overlapping applications, never a
+  // leaked connector <style> tag across a map switch or a StrictMode
+  // double-invoke) — see .playbook/known-issues.md for the full race.
+  const [canvasReadyId, setCanvasReadyId] = useState(null);
+  const appearanceAppliedRef = useRef({ mapId: null, signature: null, mind: null, restore: null, resolved: null });
   const [selectionModeActive, setSelectionModeActive] = useState(false);
   const [selectedBranchIds, setSelectedBranchIds] = useState(() => new Set());
   const selectionActiveRef = useRef(false);
@@ -370,12 +381,13 @@ export default function MindElixirView({ data, onRegenerate, regenerating, contr
     }
     sanitizeHiddenNaNPaths(containerRef.current);
     controller.registerMindInstance(mind, sidecar);
-    // PR C2 — apply this map's own saved LIVE_SAFE appearance once per true
-    // mount (map switch). Zero layout/linkDiv/refresh/fit/center calls (see
-    // applyLiveCanvasAppearance's own guarantees) — purely additive to the
-    // lifecycle above, never gating or delaying it.
+    // PR C2 — seed the editor's local draft state here; the actual LIVE_SAFE
+    // apply to the canvas happens in the dedicated effect below, gated on
+    // `canvasReadyId === data?.id` so it only ever runs against an instance
+    // that has genuinely finished init()/refresh() for THIS map (cold-load
+    // race fix — see .playbook/known-issues.md).
     setAppearance(data?.appearance);
-    applyLiveCanvasAppearance({ mind, resolved: resolveCanvasAppearance({ savedAppearance: data?.appearance }) });
+    setCanvasReadyId(data?.id);
     setZoom(mind.scaleVal || 1);
     // Round 8: selectedHasChildren/selectedExpanded below are derived at
     // render time from `mindRef.current` — a REF, which doesn't itself
@@ -409,6 +421,81 @@ export default function MindElixirView({ data, onRegenerate, regenerating, contr
     return () => renderPollStopRef.current?.();
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [data?.id, startFitPoll]);
+
+  // PR C2 cold-load race fix. The mount effect above keys ONLY on
+  // [data?.id, startFitPoll] (deliberately — a local "Áp dụng" PATCH success
+  // must never re-trigger recordToMindElixir/refresh()). Applying appearance
+  // directly inside that effect inherited the same blind spot: if `data`
+  // for the CURRENT id is first seen with `appearance` still absent/stale
+  // (e.g. the record that made `hasMindmap` true arrived before a later
+  // update to the same object populated `appearance`), the canvas was stuck
+  // on default forever — the mount effect would never run again for that
+  // id, so the correct appearance never got a second chance to apply.
+  // Reproduced live: a freshly opened tab's first load showed the map with
+  // zero saved-appearance styling while the server record already had it;
+  // reloading again (same tab, no further state) then showed it correctly.
+  //
+  // Fix: a separate effect, keyed on the actual data that determines what
+  // SHOULD be on screen — `data?.id`, `data?.appearance`, and
+  // `canvasReadyId` (set by the mount effect only once init()/refresh() has
+  // actually run for this id). It re-fires whenever any of those change,
+  // not just on id change, so a late-arriving/updated appearance for the
+  // SAME id gets applied instead of silently stranded.
+  //
+  // `canvasReadyId !== data?.id` is the "instance not ready yet for this
+  // map" guard — covers both "mind.init() for id B hasn't committed yet"
+  // (switching maps) and "this is the very first render, mindRef.current is
+  // still null" (cold load) in one check, with no setTimeout/polling: the
+  // mount effect flips it the moment the instance is actually ready, and
+  // this effect reacts to that like any other dependency.
+  //
+  // `appearanceAppliedRef` makes the apply idempotent per (mapId, resolved
+  // signature, mind instance) and restore-before-reapply: every run undoes
+  // exactly what the PREVIOUS run of this effect applied (via the cleanup
+  // function, which React always runs before the next effect body — never
+  // concurrently) before applying the new one. This is what stops a
+  // connector <style data-mm-appearance-connector> tag — appended once per
+  // `applyLiveCanvasAppearance` call, never deduped by that function itself
+  // — from accumulating across a map switch, a same-map re-render, or a
+  // React StrictMode dev double-invoke (mount → cleanup → mount): the
+  // cleanup from the first invoke restores cleanly before the second invoke
+  // re-applies, so the end state is identical to a single invoke.
+  useEffect(() => {
+    const mind = mindRef.current;
+    if (!mind || canvasReadyId !== data?.id) return undefined;
+    // Real-browser-only race, found via Playwright against the fixture
+    // harness at mobile width (390px): `applyReadableFloor` (just above —
+    // runs once `fitIfReady` validates, narrow canvases only, ≤
+    // MOBILE_FIT_MAX_WIDTH) calls `mind.scale()`/`mind.toCenter()`, and
+    // mind-elixir's own scale pass rewrites each topic element's inline
+    // `style` wholesale as part of recomputing its scaled layout — wiping
+    // an appearance applied before that pass even though nothing in THIS
+    // component's own React tree ever reran or cleaned up (confirmed with
+    // an instrumented trace: apply fires once, no cleanup logs, yet the
+    // style is gone after the viewport's ≤640px scale pass runs). jsdom
+    // never catches this because it doesn't lay anything out for real.
+    // Gating on `renderState === "ready"` — the SAME settled signal
+    // `fitIfReady` itself defines, already proven for exactly this class of
+    // "mind-elixir hasn't finished its own internal layout yet" problem —
+    // means this effect's apply always runs strictly after every
+    // mind-elixir-internal pass for this mount, narrow viewport included.
+    if (renderState !== "ready") return undefined;
+    const resolved = resolveCanvasAppearance({ savedAppearance: data?.appearance });
+    const signature = JSON.stringify(resolved);
+    const prevApplied = appearanceAppliedRef.current;
+    if (prevApplied.mind === mind && prevApplied.mapId === data.id && prevApplied.signature === signature) {
+      return undefined; // already exactly this — no-op, not a fresh restore+reapply
+    }
+    prevApplied.restore?.();
+    const restore = applyLiveCanvasAppearance({ mind, resolved });
+    appearanceAppliedRef.current = { mapId: data.id, signature, mind, restore, resolved };
+    return () => {
+      restore();
+      if (appearanceAppliedRef.current.restore === restore) {
+        appearanceAppliedRef.current = { mapId: null, signature: null, mind: null, restore: null, resolved: null };
+      }
+    };
+  }, [data?.id, data?.appearance, canvasReadyId, renderState]);
 
   // Round 8 — per-node branch caret a11y (see mindElixirExpandDecorator.js
   // for why this has to be a MutationObserver rather than a one-shot pass:
@@ -505,6 +592,22 @@ export default function MindElixirView({ data, onRegenerate, regenerating, contr
       setRenderState("validating");
       if (validateMindMapRender(el).ok) setRenderState("ready");
       else renderPollStopRef.current = startFitPoll();
+      // `changeTheme()` above rewrites every node's fill/text color from
+      // mind-elixir's own light/dark palette — the exact same properties
+      // the dedicated appearance effect (below) sets. Whichever ran most
+      // recently wins; without this, a theme toggle on a map with a saved
+      // appearance silently reverts it to the native theme colors until
+      // something else happens to re-trigger that other effect. Reapply
+      // the SAME resolved appearance this instance already has (tracked in
+      // appearanceAppliedRef by the appearance effect) on top of the fresh
+      // theme, restoring its own previous connector <style> tag first so a
+      // toggle never leaves two behind.
+      const applied = appearanceAppliedRef.current;
+      if (applied.mind === mind && applied.resolved) {
+        applied.restore?.();
+        const restore = applyLiveCanvasAppearance({ mind, resolved: applied.resolved });
+        appearanceAppliedRef.current = { ...applied, restore };
+      }
     });
     observer.observe(html, { attributes: true, attributeFilter: ["class"] });
     return () => observer.disconnect();
