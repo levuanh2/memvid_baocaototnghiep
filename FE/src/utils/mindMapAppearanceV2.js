@@ -260,6 +260,31 @@ export function resolveCanvasAppearance({ savedAppearance } = {}) {
   return resolved;
 }
 
+/**
+ * Export-only resolve order: resolved canvas appearance (the map's own
+ * saved LIVE_SAFE look) -> export LIVE_SAFE overrides, when Export Studio's
+ * "Tùy chỉnh riêng bản xuất" is chosen. `exportOverride` is the SAME
+ * `overrides` shape as a saved appearance payload's own `overrides` — it is
+ * sanitized exactly like a saved one (no arbitrary CSS/colors/enums reach
+ * the result) and is NEVER persisted by this function; only an explicit
+ * "Áp dụng cho sơ đồ" action (a real PATCH call, built elsewhere) saves
+ * anything. Typography/padding/density are NOT part of this function's
+ * output at all — those stay export-only, resolved separately by
+ * mindmapExportAppearance.js against its own disposable offscreen scene,
+ * never touching this contract or the live canvas.
+ */
+export function resolveExportAppearance({ canvasAppearance, exportOverride } = {}) {
+  const resolved = resolveCanvasAppearance({ savedAppearance: canvasAppearance });
+  if (!exportOverride) return resolved;
+  const sanitized = sanitizeAppearancePayload({ version: APPEARANCE_VERSION, preset: "default", overrides: exportOverride }).overrides;
+  Object.assign(resolved.canvas, sanitized.canvas);
+  for (const role of NODE_ROLES) Object.assign(resolved.node[role], sanitized.node[role]);
+  Object.assign(resolved.connector, sanitized.connector);
+  if (resolved.canvas.background === "light") resolved.canvas.background = "#FFFFFF";
+  else if (resolved.canvas.background === "dark") resolved.canvas.background = "#15171C";
+  return resolved;
+}
+
 /** Node role by depth — depth 0 (the map root) is "root", depth 1 ("main
  * branch" in mind-elixir's own vocabulary) is "branch", everything deeper is
  * "leaf". Mirrors mindElixirAdapter.js's own `kind` mapping

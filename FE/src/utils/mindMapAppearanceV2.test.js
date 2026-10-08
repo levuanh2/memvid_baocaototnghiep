@@ -5,7 +5,7 @@
 import { describe, it, expect } from "vitest";
 import {
   APPEARANCE_VERSION, CANVAS_PRESETS_V2, defaultAppearanceV2,
-  resolveCanvasAppearance, sanitizeAppearancePayload, roleForDepth, roleIsNoop,
+  resolveCanvasAppearance, resolveExportAppearance, sanitizeAppearancePayload, roleForDepth, roleIsNoop,
 } from "./mindMapAppearanceV2";
 
 describe("roleForDepth", () => {
@@ -156,6 +156,42 @@ describe("sanitizeAppearancePayload — malformed/geometry-affecting fields neve
   it("strict mode throws on a non-object payload (used by the PATCH route to reject the request outright)", () => {
     expect(() => sanitizeAppearancePayload(null, { strict: true })).toThrow();
     expect(() => sanitizeAppearancePayload("nope", { strict: true })).toThrow();
+  });
+});
+
+describe("resolveExportAppearance — canvas appearance base -> export LIVE_SAFE overrides", () => {
+  it("with no export override, resolves to exactly the map's own saved canvas appearance", () => {
+    const canvasAppearance = { version: 2, preset: "pastel", overrides: {} };
+    const exportResolved = resolveExportAppearance({ canvasAppearance });
+    const canvasResolved = resolveCanvasAppearance({ savedAppearance: canvasAppearance });
+    expect(exportResolved).toEqual(canvasResolved);
+  });
+
+  it("an export override wins over the inherited canvas appearance for the fields it sets, leaving the rest inherited", () => {
+    const canvasAppearance = { version: 2, preset: "pastel", overrides: {} };
+    const exportResolved = resolveExportAppearance({
+      canvasAppearance,
+      exportOverride: { node: { root: { fill: "#010203" }, branch: {}, leaf: {} }, connector: {}, canvas: {} },
+    });
+    expect(exportResolved.node.root.fill).toBe("#010203");
+    expect(exportResolved.node.branch.fill).toBe(CANVAS_PRESETS_V2.pastel.node.branch.fill); // inherited, untouched
+  });
+
+  it("an export override is sanitized exactly like a saved payload — geometry/junk fields never reach the result", () => {
+    const exportResolved = resolveExportAppearance({
+      canvasAppearance: defaultAppearanceV2(),
+      exportOverride: { node: { root: { fill: "#010203", padding: 99 }, branch: {}, leaf: {} }, typography: { family: "serif" } },
+    });
+    expect(exportResolved.node.root.fill).toBe("#010203");
+    expect(exportResolved.node.root.padding).toBeUndefined();
+    expect(exportResolved.typography).toBeUndefined();
+  });
+
+  it("never mutates the canvasAppearance input it was given", () => {
+    const canvasAppearance = { version: 2, preset: "default", overrides: {} };
+    const frozenCopy = JSON.parse(JSON.stringify(canvasAppearance));
+    resolveExportAppearance({ canvasAppearance, exportOverride: { node: { root: { fill: "#010203" }, branch: {}, leaf: {} } } });
+    expect(canvasAppearance).toEqual(frozenCopy);
   });
 });
 

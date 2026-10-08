@@ -1135,6 +1135,7 @@ export default function MindElixirView({ data, onRegenerate, regenerating, contr
         selectedBranchIds={selectedBranchIds}
         onRequestBranchSelection={() => { setExportOpen(false); setSelectionModeActive(true); }}
         savedAppearance={appearance}
+        onAppearanceSaved={setAppearance}
       />
 
       {/* PR C2 — `key={data?.id}` so switching maps always remounts the

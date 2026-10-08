@@ -45,6 +45,18 @@ async function renderDrawer(overrides = {}) {
 
 async function click(el) { await act(async () => { el.click(); }); }
 
+// React patches HTMLInputElement's native `value` setter to track the
+// "last known" value; setting `.value` directly through that same patched
+// setter can make a subsequent native event a silent no-op. Bypassing the
+// patched setter (the standard RTL/jsdom technique) is what makes the
+// event register as a real external change.
+function setInputValue(input, value) {
+  const setter = Object.getOwnPropertyDescriptor(window.HTMLInputElement.prototype, "value").set;
+  setter.call(input, value);
+  input.dispatchEvent(new Event("input", { bubbles: true }));
+  input.dispatchEvent(new Event("change", { bubbles: true }));
+}
+
 afterEach(() => {
   if (root) act(() => root.unmount());
   host?.remove();
@@ -74,10 +86,7 @@ describe("AppearanceEditorDrawer — zero layout/linkDiv/refresh/fit/center duri
     const nodeTrigger = [...dialog.querySelectorAll("button")].find((b) => b.textContent.includes("Màu & kiểu node"));
     await click(nodeTrigger);
     const colorInput = dialog.querySelector('input[type="color"]');
-    await act(async () => {
-      colorInput.value = "#112233";
-      colorInput.dispatchEvent(new Event("change", { bubbles: true }));
-    });
+    await act(async () => { setInputValue(colorInput, "#112233"); });
     expect(mind.layout).not.toHaveBeenCalled();
     expect(mind.linkDiv).not.toHaveBeenCalled();
     expect(mind.refresh).not.toHaveBeenCalled();
