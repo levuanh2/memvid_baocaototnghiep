@@ -143,11 +143,18 @@ function computeVisibleIds(nodeData) {
  */
 export function resolveExportScope({
   nodeData, scopeType, selectedNodeId, selectedBranchRootIds,
-  includeDescendants = true, visibleOnly = false,
+  includeDescendants = true, visibleOnly = false, visibleIdsOverride = null,
 }) {
   if (!nodeData) throw new ExportScopeError("resolveExportScope: nodeData is required");
   const index = indexTree(nodeData);
-  const visibleIds = visibleOnly || scopeType === "visible" ? computeVisibleIds(nodeData) : null;
+  // `visibleIdsOverride` lets a caller supply the visible-id set directly
+  // instead of deriving it from `node.expanded` — needed because some
+  // presentation states (e.g. root-only, see mindElixirRootOnly.js) never
+  // touch `node.expanded` at all. Only honored for scopeType === "visible";
+  // this resolver has no concept of root-only or any other UI presentation.
+  const visibleIds = scopeType === "visible"
+    ? (visibleIdsOverride || computeVisibleIds(nodeData))
+    : (visibleOnly ? computeVisibleIds(nodeData) : null);
   const result = _resolveCore({
     rootNodeId: nodeData.id,
     hasId: (id) => index.byId.has(id),

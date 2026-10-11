@@ -6329,3 +6329,65 @@ timeout, not a readable diff — worth remembering the next time a Playwright
 test times out on a `getByRole`/`getByText` locator: check for a case or
 whitespace mismatch against the actual rendered string before assuming a
 slower root cause (network, animation, a missing feature).
+
+## Document export (PDF) never supported scope_type "visible" — pre-existing, independent of root-only, still BLOCKED (found 2026-10-12, during PR D's mind-map depth-level rework)
+
+**Symptom:** investigating whether the new "Chỉ chủ đề chính" (root-only)
+depth preset needed a backend fix for document export's "Phần đang hiển thị"
+(visible) scope. Expected to find a root-only-specific gap; found something
+broader and already fully blocking, unrelated to root-only.
+
+**Root cause:** `BE/services/mindmap/export/scope.py`'s `SCOPE_TYPES =
+("full", "current_branch", "selected_branches")` has never included
+`"visible"` — the module's own docstring says so deliberately ("`visible_only`
+from the FE contract has no server-side analogue ... and is not ported": a
+document export is a snapshot of the authoritative saved record, never of
+a browser tab's live collapse state). `BE/app/main.py`'s
+`create_mindmap_export` route double-checks the same invariant with its own
+`_EXPORT_SCOPE_TYPES` tuple (same three values) and returns a clean
+`400 invalid_scope_type` synchronously, before a job is even created. The
+FE (`ExportStudioDialog.jsx`) never gates this: `scopeType "visible"` is one
+of the 4 radio options shown regardless of export format, and `canAdvance`
+only checks the FE's own `resolveExportScope` (which DOES support
+`"visible"`) — so a user can walk the whole wizard, click export, and only
+then get a 400. This predates root-only and has nothing to do with
+collapse/expand state: it fails the exact same way whether the map is fully
+expanded, partially collapsed, or root-only.
+
+**Current scope:** only PDF is a creatable document format at all (PR C1 —
+`_EXPORT_FORMATS = ("pdf",)`; DOCX/XLSX create requests already 400
+`invalid_format` before scope is even looked at, also unrelated to this).
+So in practice this is "PDF + visible scope" that's blocked, synchronously,
+with a clear error code — not a silent wrong-content export.
+
+**Not fixed in PR D:** fixing this needs either a BE contract change (new
+`scope_type` or an explicit FE-supplied visible-id list accepted by
+`resolve_export_scope`) or a FE-side feature cut (hide/disable "Phần đang
+hiển thị" for document formats) — both out of scope for PR D, which is
+forbidden from touching backend code and is scoped to the depth-level UX
+only. The two live image-only consequences of root-only ARE already correct
+and needed no fix: PNG/JPEG/SVG/WebP's "visible" scope is a direct
+`snapdom` screenshot of the live DOM (`mindmapImageExport.js`'s own header
+comment — "whatever's currently rendered IS what's visible"), and so is the
+map image PDF's "map"/"map_and_outline" modes embed via
+`captureMapImageBase64` — only PDF's server-built TEXT outline is blocked,
+by the scope-type check above, before either mode's image step matters.
+
+**Regression (pins today's gap so a later fix has to touch this, not drift
+past it silently):** `FE/src/components/mindmap/MindElixirView.exportStudioDocument.test.jsx`'s
+"PRE-EXISTING GAP: 'Phần đang hiển thị' scope is still submitted verbatim for
+PDF export" — confirms the FE still sends `scope_type: "visible"` as-is with
+no client-side prevention. No BE test added (BE is out of scope for this
+PR); the BE behavior itself was verified by reading
+`BE/app/main.py`'s `create_mindmap_export` and
+`BE/services/mindmap/export/scope.py`'s `resolve_export_scope` directly, not
+by running the server.
+
+**Prevention / follow-up:** a future PR should either (a) teach
+`resolve_export_scope` (both FE's `resolveExportScope`'s `visibleIdsOverride`
+path and a new BE param) to accept an explicit FE-supplied visible-id
+snapshot for `scope_type: "visible"`, with request validation and a
+backward-compatible default when the field is absent, or (b) hide "Phần
+đang hiển thị" from `SCOPES` in `ExportStudioDialog.jsx` whenever
+`isDocumentFormat(format)` is true. Either needs its own PR — this entry
+exists so nobody rediscovers "visible scope + PDF export" as a surprise.
