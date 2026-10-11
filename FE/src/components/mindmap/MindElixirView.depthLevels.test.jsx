@@ -138,9 +138,14 @@ describe("Mind Map depth menu — selected-state ARIA per level (RED: no such in
     await openMenu();
     const item = menuItem("Hiện 2 tầng nhánh") || menuItem("Mở đến cấp 2");
     await act(async () => { item.click(); });
-    // Manually re-expand a cutoff node via its caret, breaking the depth=2 exact match.
+    // Manually collapse "a" (visible, depth 1, currently expanded under the
+    // depth<=2 preset) via its own caret — "g" (the other depth-1 branch)
+    // stays expanded, so depth 1 is no longer uniformly expanded/collapsed:
+    // breaks the depth=2 match without accidentally reconstructing a
+    // DIFFERENT preset's exact node set.
     await act(async () => {
-      const epd = [...container.querySelectorAll("me-epd")].find((e) => e.closest("me-tpc")?.nextSibling);
+      const tpcA = container.querySelector('[data-nodeid="mea"]');
+      const epd = tpcA?.parentElement?.querySelector("me-epd");
       epd?.click();
     });
     await openMenu();
@@ -180,5 +185,26 @@ describe("Mind Map depth menu — keyboard operability (guard: native buttons al
     const items = [...group.querySelectorAll('[role="menuitem"]')];
     expect(items.length).toBeGreaterThan(0);
     items.forEach((btn) => { expect(btn.tagName).toBe("BUTTON"); });
+  });
+});
+
+describe("Mind Map depth menu — exact node/connector counts per level (real DOM, Phase 3 implementation)", () => {
+  // root=0,a=1,b=2,c=3,d=4 ; f=1(leaf) ; g=1,h=2(leaf). Connector = one <path>
+  // per parent-child edge regardless of its (jsdom-unreliable) `d` geometry —
+  // see mindmapRenderLifecycle.js's own ".lines path, .subLines path" selector.
+  const EXPECTED = [
+    ["Chỉ chủ đề chính", 1, 0],
+    ["Hiện 1 tầng nhánh", 4, 3],
+    ["Hiện 2 tầng nhánh", 6, 5],
+    ["Hiện 3 tầng nhánh", 7, 6],
+    ["Mở toàn bộ", 8, 7],
+  ];
+
+  it.each(EXPECTED)("%s -> %i node(s), %i connector(s)", async (label, nodeCount, connectorCount) => {
+    await render(makeController(null));
+    await openMenu();
+    await act(async () => { menuItem(label).click(); });
+    expect(container.querySelectorAll("me-tpc").length).toBe(nodeCount);
+    expect(container.querySelectorAll(".lines path, .subLines path").length).toBe(connectorCount);
   });
 });
