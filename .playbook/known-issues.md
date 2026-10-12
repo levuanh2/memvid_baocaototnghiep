@@ -6391,3 +6391,49 @@ backward-compatible default when the field is absent, or (b) hide "Phần
 đang hiển thị" from `SCOPES` in `ExportStudioDialog.jsx` whenever
 `isDocumentFormat(format)` is true. Either needs its own PR — this entry
 exists so nobody rediscovers "visible scope + PDF export" as a surprise.
+
+**RESOLVED (PR E, `fix/mindmap-document-visible-export`, 2026-10-13):** took
+option (a). Contract:
+
+```json
+{
+  "scope_type": "visible",
+  "visible_node_ids": ["root", "..."],
+  "include_descendants": false
+}
+```
+
+- `services/mindmap/export/scope.py`'s `resolve_export_scope` now accepts
+  `visible_node_ids` for `scope_type="visible"` — validated strictly
+  against a FRESH server-side node fetch, never trusting client content:
+  shape/count/length, per-map membership (`UnknownNodeIdError` — a foreign
+  map's real id reads identically to a fabricated one, no existence leak),
+  no duplicates (`DuplicateNodeIdError`, rejected not deduped), root
+  present (`VisibleRootMissingError`), ancestor-closed
+  (`AncestorNotClosedError`). `error_code_for(exc)` is the one place that
+  maps an `ExportScopeError` subtype to its `error_code`, shared by the
+  route (`app/main.py`) and the worker (`app/application/mindmap_export.py`)
+  so the two can't drift on naming between "caught at request time" and
+  "caught at run time."
+- Stale-snapshot defense: `visible_snapshot_fingerprint(nodes, relations,
+  included_ids)` hashes exactly the content a visible export would render
+  (id/parent/topic/note/citations per included node + relations touching
+  the set). Computed once at request time (route, from the first record
+  fetch) and once again at run time (worker, from its own independent
+  second fetch); a mismatch fails the job as `error_code=
+  "stale_visible_snapshot"` instead of silently pairing a stale text
+  outline with the map image the client captured. Deliberately does NOT
+  fire for a node added or edited OUTSIDE the visible set — only content
+  the snapshot actually renders is fingerprinted. No new schema/migration:
+  the fingerprint is a plain function argument passed straight to
+  `run_export_job`, same as `scope_params` already was — nothing persisted.
+- `FE/src/utils/mindmapDocumentScopePayload.js`'s `buildDocumentScopePayload`
+  computes `visible_node_ids` from the LIVE mind-elixir instance at the
+  exact moment `ExportStudioDialog.jsx`'s `runDocument` runs (export-button
+  click), reusing the same `resolveExportScope`/`isRootOnly` path the
+  on-screen preview count already uses — never a stale read from when the
+  review step was opened, never any node title/text.
+- Image formats (PNG/JPEG/SVG/WebP, and PDF's own "map image" modes) needed
+  no change — confirmed unaffected in the original audit above and still
+  true: they were never routed through `resolve_export_scope` at all.
+- DOCX/XLSX stay disabled (PR C1, untouched by this PR).

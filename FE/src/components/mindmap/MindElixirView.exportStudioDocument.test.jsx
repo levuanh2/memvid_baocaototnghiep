@@ -160,19 +160,14 @@ describe("Export Studio — document formats", () => {
     void resolvePoll;
   });
 
-  // PRE-EXISTING GAP (not caused by, and not fixed by, the PR D depth-level
-  // work): the FE lets a user pick scope "Phần đang hiển thị" for a PDF
-  // export and submits scope_type:"visible" verbatim -- but neither
-  // BE/app/main.py's `_EXPORT_SCOPE_TYPES` nor
-  // BE/services/mindmap/export/scope.py's `SCOPE_TYPES` has ever included
-  // "visible" (scope.py's own docstring: "`visible_only` from the FE
-  // contract has no server-side analogue ... and is not ported"). The real
-  // server returns 400 `invalid_scope_type` synchronously, before a job is
-  // even created -- independent of root-only, independent of any collapse
-  // state. This test pins today's FE-side half of that gap (it still sends
-  // the request) so a future fix (client-side prevention, or a BE contract
-  // change) has to touch this assertion instead of silently drifting.
-  it("PRE-EXISTING GAP: 'Phần đang hiển thị' scope is still submitted verbatim for PDF export (BE rejects scope_type 'visible' for every document format, not just root-only)", async () => {
+  // PR E closed the gap this test used to pin (PR D-era note, kept for
+  // history): "Phần đang hiển thị" now submits scope_type:"visible" WITH a
+  // validated visible_node_ids snapshot (see
+  // MindElixirView.exportVisibleSnapshot.test.jsx for the full contract —
+  // root-only/depth/manual-collapse sets, click-time snapshot, no leak
+  // across map switch). This test keeps pinning only that the scope_type
+  // itself is still submitted verbatim for PDF.
+  it("'Phần đang hiển thị' scope is submitted for PDF export (full contract pinned in MindElixirView.exportVisibleSnapshot.test.jsx)", async () => {
     vi.spyOn(docExport, "createMindmapExport").mockResolvedValue({ job_id: "j1", status: "queued" });
     vi.spyOn(docExport, "pollMindmapExportUntilDone").mockResolvedValue({ status: "done", download_url: "/x" });
     vi.spyOn(docExport, "triggerMindmapExportDownload").mockImplementation(() => {});
