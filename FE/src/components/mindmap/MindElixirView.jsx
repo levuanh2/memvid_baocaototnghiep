@@ -896,6 +896,20 @@ export default function MindElixirView({ data, onRegenerate, regenerating, contr
         });
       }
     }
+    // setRootOnly/expandNodeAll each call mind.refresh() internally, which
+    // rewrites every topic's DOM wholesale and wipes any inline style
+    // Appearance V2 wrote earlier (confirmed: borderRadius goes from
+    // "10px" to "" after any depth change) — the exact class of problem
+    // the dark/light MutationObserver above already handles for a theme
+    // toggle. Reapply the SAME resolved appearance this instance already
+    // has, the same way that observer does, so a depth change never
+    // silently reverts a saved appearance to the native look.
+    const applied = appearanceAppliedRef.current;
+    if (applied.mind === mind && applied.resolved) {
+      applied.restore?.();
+      const restore = applyLiveCanvasAppearance({ mind, resolved: applied.resolved });
+      appearanceAppliedRef.current = { ...applied, restore };
+    }
     // Read the freshest selection from `controller` (closed over fresh via
     // the dep array below, never stale) and check the REAL post-apply DOM —
     // covers depth 0 too, since root-only truly removes child DOM nodes.
