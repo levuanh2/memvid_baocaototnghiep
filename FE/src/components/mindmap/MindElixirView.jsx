@@ -64,6 +64,31 @@ function findTopicSafely(mind, id) {
   catch { return null; }
 }
 
+// Derives which of the 5 depth presets (0/1/2/3/"all", or "custom") the live
+// tree currently matches, purely from real `node.expanded`/`isRootOnly`
+// state — never the button last clicked. Pure function of `mind`, so it's
+// cheap to call fresh on every render instead of caching it in state.
+function matchDepthPreset(mind) {
+  if (!mind?.nodeData) return "custom";
+  if (isRootOnly(mind)) return 0;
+  const byDepth = new Map();
+  const walk = (node, depth) => {
+    if (!node?.children?.length) return;
+    const bucket = byDepth.get(depth) || { collapsed: 0, expanded: 0 };
+    if (node.expanded === false) bucket.collapsed += 1; else bucket.expanded += 1;
+    byDepth.set(depth, bucket);
+    node.children.forEach((child) => walk(child, depth + 1));
+  };
+  walk(mind.nodeData, 0);
+  let shallowestCollapsed = null;
+  byDepth.forEach((bucket, depth) => {
+    if (bucket.collapsed > 0 && (shallowestCollapsed === null || depth < shallowestCollapsed)) shallowestCollapsed = depth;
+  });
+  if (shallowestCollapsed === null) return "all";
+  if (![1, 2, 3].includes(shallowestCollapsed)) return "custom";
+  return byDepth.get(shallowestCollapsed).expanded > 0 ? "custom" : shallowestCollapsed;
+}
+
 // `data`: the mindmap record + generation-status fields SidebarRight already
 // computes (generating/progress/onCancel/onSaved/onDirtyChange) — UNCHANGED
 // shape from before this refactor, just no longer wrapped in a portal.
@@ -819,6 +844,7 @@ export default function MindElixirView({ data, onRegenerate, regenerating, contr
   const selectedNodeObj = selectedTopicEl?.nodeObj;
   const selectedHasChildren = Boolean(selectedNodeObj?.children?.length);
   const selectedExpanded = selectedNodeObj?.expanded !== false;
+  const activeDepthPreset = matchDepthPreset(mindRef.current);
 
   const toggleSelectedBranch = useCallback(() => {
     const mind = mindRef.current;
@@ -831,61 +857,68 @@ export default function MindElixirView({ data, onRegenerate, regenerating, contr
     setExpandTick((v) => v + 1); // expandNodeAll fires no bus event of its own
   }, [controller]);
 
-  // True global actions — always target the map's own root regardless of
-  // whatever node happens to be selected, unlike toggleSelectedBranch above.
-  const expandCollapseWholeMap = useCallback((isExpand) => {
+  // Target UX (PR D): exactly 5 depth presets — 0 (root only), 1, 2, 3, "all"
+  // — applied through ONE handler, never branching on the Vietnamese button
+  // label. Depth 0 is special: Mind Elixir 5.13's root renderer ignores
+  // `root.expanded` entirely (.playbook "Root collapse is a renderer
+  // contract", 2026-10-04) — `expandNodeAll(root, false)` would leave every
+  // first-level branch visible. `setRootOnly` is the only proven-safe way to
+  // actually hide them (see mindElixirRootOnly.js). Depths 1-3/"all" reuse
+  // the existing cutoff strategy: expand everything via the public
+  // `expandNodeAll` API, then collapse each cutoff node the same way —
+  // mutating `nodeData` directly and calling layout()/linkDiv() ourselves can
+  // leave stale descendant wrappers in this Mind Elixir build (same comment,
+  // now generalized across all 4 non-root levels).
+  const applyDepthLevel = useCallback((level) => {
     const mind = mindRef.current;
     if (!mind?.nodeData) return;
-    if (!isExpand) {
-      controller?.clearSelectedNode?.();
+    if (level === 0) {
       setRootOnly(mind, true);
-      setExpandTick((v) => v + 1);
-      return;
+    } else {
+      setRootOnly(mind, false);
+      const rootTopic = mind.findEle?.(mind.nodeData.id);
+      if (!rootTopic) return;
+      mind.expandNodeAll?.(rootTopic, true);
+      if (level !== "all") {
+        const cutoffIds = [];
+        const collect = (node, currentDepth) => {
+          if (!node?.children?.length) return;
+          if (currentDepth >= level) {
+            cutoffIds.push(node.id);
+            return;
+          }
+          node.children.forEach((child) => collect(child, currentDepth + 1));
+        };
+        collect(mind.nodeData, 0);
+        cutoffIds.forEach((id) => {
+          const topic = mind.findEle?.(id);
+          if (topic) mind.expandNodeAll?.(topic, false);
+        });
+      }
     }
-    // Leaving root-only restores the exact tree state captured before the
-    // presentation collapse, including any independently collapsed branch.
-    if (setRootOnly(mind, false)) {
-      setExpandTick((v) => v + 1);
-      return;
+    // setRootOnly/expandNodeAll each call mind.refresh() internally, which
+    // rewrites every topic's DOM wholesale and wipes any inline style
+    // Appearance V2 wrote earlier (confirmed: borderRadius goes from
+    // "10px" to "" after any depth change) — the exact class of problem
+    // the dark/light MutationObserver above already handles for a theme
+    // toggle. Reapply the SAME resolved appearance this instance already
+    // has, the same way that observer does, so a depth change never
+    // silently reverts a saved appearance to the native look.
+    const applied = appearanceAppliedRef.current;
+    if (applied.mind === mind && applied.resolved) {
+      applied.restore?.();
+      const restore = applyLiveCanvasAppearance({ mind, resolved: applied.resolved });
+      appearanceAppliedRef.current = { ...applied, restore };
     }
-    const topic = mind.findEle?.(mind.nodeData.id);
-    if (!topic) return;
-    mind.expandNodeAll(topic, isExpand);
+    // Read the freshest selection from `controller` (closed over fresh via
+    // the dep array below, never stale) and check the REAL post-apply DOM —
+    // covers depth 0 too, since root-only truly removes child DOM nodes.
+    const curSelectedId = controller?.selected?.id;
+    if (curSelectedId && !findTopicSafely(mind, curSelectedId)) {
+      controller?.clearSelectedNode?.();
+    }
     setExpandTick((v) => v + 1);
   }, [controller]);
-
-  // "Mở đến cấp N" — mind-elixir has no native depth-based expand; walks
-  // nodeData directly (setExpandedToDepth) and re-renders geometry only,
-  // same as the global actions above: no scaleFit, no toCenter, no zoom
-  // change.
-  const expandToDepth = useCallback((depth) => {
-    const mind = mindRef.current;
-    if (!mind?.nodeData) return;
-    setRootOnly(mind, false);
-    const rootTopic = mind.findEle?.(mind.nodeData.id);
-    if (!rootTopic) return;
-    // Use Mind Elixir's public expandNodeAll for the actual DOM lifecycle.
-    // Mutating nodeData followed by layout/linkDiv can leave stale descendant
-    // wrappers in older 5.13 builds; expanding everything first, then
-    // collapsing each cutoff node, makes the library remove those wrappers and
-    // rebuild the corresponding connector groups consistently.
-    mind.expandNodeAll?.(rootTopic, true);
-    const cutoffIds = [];
-    const collect = (node, currentDepth) => {
-      if (!node?.children?.length) return;
-      if (currentDepth >= depth) {
-        cutoffIds.push(node.id);
-        return;
-      }
-      node.children.forEach((child) => collect(child, currentDepth + 1));
-    };
-    collect(mind.nodeData, 0);
-    cutoffIds.forEach((id) => {
-      const topic = mind.findEle?.(id);
-      if (topic) mind.expandNodeAll?.(topic, false);
-    });
-    setExpandTick((v) => v + 1);
-  }, []);
 
   // Fullscreen (IA pass round 5) — native Fullscreen API on the canvas
   // wrapper only, no mind-elixir instance state touched. `fullscreenchange`
@@ -1037,10 +1070,11 @@ export default function MindElixirView({ data, onRegenerate, regenerating, contr
               </div>
               <div className="mm-toolbar-menu__group" role="group" aria-label="Cấu trúc">
                 <div className="mm-toolbar-menu__heading">Cấu trúc</div>
-                <button role="menuitem" onClick={() => { setContextOverflowOpen(false); expandCollapseWholeMap(true); }}><Icon name="ChevronsUpDown" size={14} /> Mở rộng tất cả</button>
-                <button role="menuitem" onClick={() => { setContextOverflowOpen(false); expandCollapseWholeMap(false); }}><Icon name="ChevronsDownUp" size={14} /> Thu gọn về chủ đề chính</button>
-                <button role="menuitem" onClick={() => { setContextOverflowOpen(false); expandToDepth(2); }}><Icon name="Rows3" size={14} /> Mở đến cấp 2</button>
-                <button role="menuitem" onClick={() => { setContextOverflowOpen(false); expandToDepth(3); }}><Icon name="Rows3" size={14} /> Mở đến cấp 3</button>
+                <button role="menuitem" aria-pressed={activeDepthPreset === 0} onClick={() => { setContextOverflowOpen(false); applyDepthLevel(0); }}><Icon name="ChevronsDownUp" size={14} /> Chỉ chủ đề chính</button>
+                <button role="menuitem" aria-pressed={activeDepthPreset === 1} onClick={() => { setContextOverflowOpen(false); applyDepthLevel(1); }}><Icon name="Rows3" size={14} /> Hiện 1 tầng nhánh</button>
+                <button role="menuitem" aria-pressed={activeDepthPreset === 2} onClick={() => { setContextOverflowOpen(false); applyDepthLevel(2); }}><Icon name="Rows3" size={14} /> Hiện 2 tầng nhánh</button>
+                <button role="menuitem" aria-pressed={activeDepthPreset === 3} onClick={() => { setContextOverflowOpen(false); applyDepthLevel(3); }}><Icon name="Rows3" size={14} /> Hiện 3 tầng nhánh</button>
+                <button role="menuitem" aria-pressed={activeDepthPreset === "all"} onClick={() => { setContextOverflowOpen(false); applyDepthLevel("all"); }}><Icon name="ChevronsUpDown" size={14} /> Mở toàn bộ</button>
               </div>
               <div className="mm-toolbar-menu__group" role="group" aria-label="Tác vụ khác">
                 <div className="mm-toolbar-menu__heading">Tác vụ khác</div>
@@ -1164,7 +1198,7 @@ export default function MindElixirView({ data, onRegenerate, regenerating, contr
           {/* Round 8 REDESIGN — one contextual branch toggle, shown only
               when a node WITH CHILDREN is selected (never for a leaf, never
               with nothing selected — global expand/collapse now lives
-              permanently in the overflow menu, see expandCollapseWholeMap).
+              permanently in the overflow menu, see applyDepthLevel).
               The separator moves inside this block too, so nothing selected
               means no dangling divider with an empty slot after it.
               Round 11 (mockup parity) positioning note (still true): sits

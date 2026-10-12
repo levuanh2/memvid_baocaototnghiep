@@ -87,36 +87,37 @@ describe("MindElixirView branch toggle (Round 8 redesign)", () => {
     expect(fitSpy).not.toHaveBeenCalled();
   });
 
-  it("overflow menu offers global expand/collapse-all and depth presets", async () => {
+  it("overflow menu offers exactly the 5 depth presets (PR D contract)", async () => {
     await render(makeController(null));
     await act(async () => { container.querySelector(".mm-overflow-trigger").click(); });
     const items = [...container.querySelectorAll('[role="menuitem"]')].map((b) => b.textContent);
-    expect(items.some((t) => t.includes("Mở rộng tất cả"))).toBe(true);
-    expect(items.some((t) => t.includes("Thu gọn về chủ đề chính"))).toBe(true);
-    expect(items.some((t) => t.includes("Mở đến cấp 2"))).toBe(true);
-    expect(items.some((t) => t.includes("Mở đến cấp 3"))).toBe(true);
+    expect(items.some((t) => t.includes("Chỉ chủ đề chính"))).toBe(true);
+    expect(items.some((t) => t.includes("Hiện 1 tầng nhánh"))).toBe(true);
+    expect(items.some((t) => t.includes("Hiện 2 tầng nhánh"))).toBe(true);
+    expect(items.some((t) => t.includes("Hiện 3 tầng nhánh"))).toBe(true);
+    expect(items.some((t) => t.includes("Mở toàn bộ"))).toBe(true);
   });
 
-  it("'Mở rộng tất cả' targets the map root regardless of the current selection, and does not call scaleFit", async () => {
+  it("'Mở toàn bộ' targets the map root regardless of the current selection, and does not call scaleFit", async () => {
     let mind = null;
     await render(makeController({ id: "i1" }, (m) => { mind = m; }));
     const fitSpy = vi.spyOn(mind, "scaleFit");
     const expandAllSpy = vi.spyOn(mind, "expandNodeAll");
     await act(async () => { container.querySelector(".mm-overflow-trigger").click(); });
-    const item = [...container.querySelectorAll('[role="menuitem"]')].find((b) => b.textContent.includes("Mở rộng tất cả"));
+    const item = [...container.querySelectorAll('[role="menuitem"]')].find((b) => b.textContent.includes("Mở toàn bộ"));
     await act(async () => { item.click(); });
     expect(fitSpy).not.toHaveBeenCalled();
     expect(expandAllSpy).toHaveBeenCalled();
     expect(expandAllSpy.mock.calls[0][0].nodeObj.id).toBe("root"); // root, not the selected "i1"
   });
 
-  it("'Mở đến cấp 2' does not call scaleFit or toCenter", async () => {
+  it("'Hiện 2 tầng nhánh' does not call scaleFit or toCenter", async () => {
     let mind = null;
     await render(makeController(null, (m) => { mind = m; }));
     const fitSpy = vi.spyOn(mind, "scaleFit");
     const centerSpy = vi.spyOn(mind, "toCenter");
     await act(async () => { container.querySelector(".mm-overflow-trigger").click(); });
-    const item = [...container.querySelectorAll('[role="menuitem"]')].find((b) => b.textContent.includes("Mở đến cấp 2"));
+    const item = [...container.querySelectorAll('[role="menuitem"]')].find((b) => b.textContent.includes("Hiện 2 tầng nhánh"));
     await act(async () => { item.click(); });
     expect(fitSpy).not.toHaveBeenCalled();
     expect(centerSpy).not.toHaveBeenCalled();

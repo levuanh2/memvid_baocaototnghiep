@@ -132,6 +132,57 @@ describe("resolveExportScope", () => {
   });
 });
 
+// PR D: root-only hiding (mindElixirRootOnly.js) never touches `node.expanded`,
+// so "visible" scope can't see it via computeVisibleIds. `visibleIdsOverride`
+// lets a caller (ExportStudioDialog) hand the resolver an explicit visible-id
+// set for that one call — WITHOUT the resolver ever knowing "root-only" exists.
+describe("resolveExportScope: visibleIdsOverride (visible-scope only, no UI concepts)", () => {
+  it("visible + override of just the root -> includes only the root", () => {
+    const { rootIds, includedIds, contextIds } = resolveExportScope({
+      nodeData: tree(), scopeType: "visible", visibleIdsOverride: new Set(["root"]),
+    });
+    expect(rootIds).toEqual(["root"]);
+    expect([...includedIds]).toEqual(["root"]);
+    expect([...contextIds]).toEqual([]);
+  });
+
+  it("visible with no override falls back to computeVisibleIds (old behavior unchanged)", () => {
+    const withOverride = resolveExportScope({ nodeData: tree(), scopeType: "visible", visibleIdsOverride: null });
+    const withoutParam = resolveExportScope({ nodeData: tree(), scopeType: "visible" });
+    expect([...withOverride.includedIds].sort()).toEqual([...withoutParam.includedIds].sort());
+    expect([...withoutParam.includedIds].sort()).toEqual(["a", "a1", "a2", "b", "b1", "root"]);
+  });
+
+  it("full/current_branch/selected_branches ignore visibleIdsOverride entirely", () => {
+    const override = new Set(["root"]);
+    const full = resolveExportScope({ nodeData: tree(), scopeType: "full", visibleIdsOverride: override });
+    expect([...full.includedIds].sort()).toEqual(["a", "a1", "a1x", "a2", "b", "b1", "root"]);
+
+    const branch = resolveExportScope({ nodeData: tree(), scopeType: "current_branch", selectedNodeId: "a", visibleIdsOverride: override });
+    expect([...branch.includedIds].sort()).toEqual(["a", "a1", "a1x", "a2"]);
+
+    const selected = resolveExportScope({ nodeData: tree(), scopeType: "selected_branches", selectedBranchRootIds: ["b"], visibleIdsOverride: override });
+    expect([...selected.includedIds].sort()).toEqual(["b", "b1"]);
+  });
+
+  it("root-only override on one call does not leak into a later depth-2-equivalent call without override", () => {
+    const rootOnlyCall = resolveExportScope({ nodeData: tree(), scopeType: "visible", visibleIdsOverride: new Set(["root"]) });
+    expect([...rootOnlyCall.includedIds]).toEqual(["root"]);
+    // Next call, same tree, no override: must see the FULL real visible set,
+    // not the stale single-root set from the previous call.
+    const noOverrideCall = resolveExportScope({ nodeData: tree(), scopeType: "visible" });
+    expect([...noOverrideCall.includedIds].sort()).toEqual(["a", "a1", "a2", "b", "b1", "root"]);
+  });
+
+  it("A -> B -> A call sequence: override from the B call never bleeds into the second A call", () => {
+    const callA1 = resolveExportScope({ nodeData: tree(), scopeType: "visible" });
+    const callB = resolveExportScope({ nodeData: tree(), scopeType: "visible", visibleIdsOverride: new Set(["root", "b"]) });
+    const callA2 = resolveExportScope({ nodeData: tree(), scopeType: "visible" });
+    expect([...callB.includedIds].sort()).toEqual(["b", "root"]);
+    expect([...callA2.includedIds].sort()).toEqual([...callA1.includedIds].sort());
+  });
+});
+
 describe("buildExportTree", () => {
   it("builds a nested tree carrying note/citations/direction/branch_color per node, rooted at the true map root", () => {
     const t = tree();

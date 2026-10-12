@@ -120,3 +120,25 @@ function buildExportV3() {
 }
 export const FIXTURE_EXPORT_V3 = buildExportV3();
 export const FIXTURE_EXPORT_V3_COLLAPSED = { [FIXTURE_EXPORT_V3.id]: [`${FIXTURE_EXPORT_V3.id}-m1-l0`] };
+
+// PR D depth-preset QA fixture (?map=depth). Same shape as
+// MindElixirView.depthLevels.test.jsx's `dataFor()` fixture — 5 distinct
+// depths (0..4), unbalanced (one branch 4 generations deep, two shallow
+// branches) — so the 5 presets produce genuinely different node sets and
+// the exact topic/connector counts the Vitest suite already proved
+// (1/0, 4/3, 6/5, 7/6, 8/7) carry over unchanged to a real browser.
+const DEPTH_ID = "fixture-depth";
+function buildDepthFixture() {
+  const nodes = [
+    { id: `${DEPTH_ID}-root`, kind: "root", title: "Root", parent: null, order: 0 },
+    { id: `${DEPTH_ID}-a`, kind: "section", title: "A", parent: `${DEPTH_ID}-root`, order: 0 },
+    { id: `${DEPTH_ID}-b`, kind: "section", title: "B", parent: `${DEPTH_ID}-a`, order: 0 },
+    { id: `${DEPTH_ID}-c`, kind: "section", title: "C", parent: `${DEPTH_ID}-b`, order: 0 },
+    { id: `${DEPTH_ID}-d`, kind: "idea", title: "D", parent: `${DEPTH_ID}-c`, order: 0 },
+    { id: `${DEPTH_ID}-f`, kind: "section", title: "F", parent: `${DEPTH_ID}-root`, order: 1 },
+    { id: `${DEPTH_ID}-g`, kind: "section", title: "G", parent: `${DEPTH_ID}-root`, order: 2 },
+    { id: `${DEPTH_ID}-h`, kind: "idea", title: "H", parent: `${DEPTH_ID}-g`, order: 0 },
+  ];
+  return { id: DEPTH_ID, title: "Bản đồ kiểm thử mức thu/mở (Fixture Depth)", nodes, relations: [], sources: [], schema_version: 2 };
+}
+export const FIXTURE_DEPTH = buildDepthFixture();

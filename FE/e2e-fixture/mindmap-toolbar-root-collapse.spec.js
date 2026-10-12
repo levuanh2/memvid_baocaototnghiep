@@ -49,7 +49,7 @@ async function openOverflow(page) {
   await page.getByRole("button", { name: "Thêm tùy chọn" }).click();
 }
 
-test("root-only collapse leaves one topic and zero tree connectors, then restores the tree without moving the viewport", async ({ page }) => {
+test("root-only collapse leaves one topic and zero tree connectors, then 'Mở toàn bộ' fully expands (absolute from root, not a restore of the pre-collapse snapshot) without moving the viewport", async ({ page }) => {
   await openFixture(page);
   const initialNodes = await topics(page).count();
   const initialConnectors = await treeConnectors(page).count();
@@ -58,7 +58,7 @@ test("root-only collapse leaves one topic and zero tree connectors, then restore
   expect(initialNodes).toBeGreaterThan(1);
   expect(initialConnectors).toBeGreaterThan(0);
   await openOverflow(page);
-  await page.getByRole("menuitem", { name: "Thu gọn về chủ đề chính" }).click();
+  await page.getByRole("menuitem", { name: "Chỉ chủ đề chính" }).click();
   await expect(topics(page)).toHaveCount(1);
   await expect(treeConnectors(page)).toHaveCount(0);
   expect(await transform(page)).toBe(initialTransform);
@@ -71,10 +71,34 @@ test("root-only collapse leaves one topic and zero tree connectors, then restore
   expect(Math.abs((rootBox.y + rootBox.height / 2) - (initialRootBox.y + initialRootBox.height / 2))).toBeLessThanOrEqual(1);
   await page.screenshot({ path: path.join(ARTIFACT_DIR, "root-only-1440x1024-light.png") });
   await openOverflow(page);
-  await page.getByRole("menuitem", { name: "Mở rộng tất cả" }).click();
-  await expect(topics(page)).toHaveCount(initialNodes);
-  await expect(treeConnectors(page)).toHaveCount(initialConnectors);
-  expect(await transform(page)).toBe(initialTransform);
+  await page.getByRole("menuitem", { name: "Mở toàn bộ" }).click();
+  // PR D contract: depth is always absolute from root, never relative to
+  // whatever was collapsed before root-only -- "Mở toàn bộ" must fully
+  // expand the ENTIRE tree, including the fixture's own independently
+  // pre-collapsed branches (m2/m2-s0), not just restore the partially
+  // collapsed snapshot that was on screen before root-only. So the node
+  // count here is strictly greater than `initialNodes` (which excluded
+  // those pre-collapsed branches), and node/connector counts satisfy the
+  // tree invariant (nodes = connectors + 1) for a fully-connected, fully
+  // expanded map -- asserted structurally rather than against a hardcoded
+  // total so this test doesn't rot if the fixture's node count changes.
+  const fullNodes = await topics(page).count();
+  const fullConnectors = await treeConnectors(page).count();
+  expect(fullNodes).toBeGreaterThan(initialNodes);
+  expect(fullConnectors).toBeGreaterThan(initialConnectors);
+  expect(fullNodes).toBe(fullConnectors + 1);
+  // The raw transform STRING legitimately differs here (unlike the
+  // root-only step above): the content layout grew back to its full size,
+  // so the position-compensation math recomputes a different translate to
+  // keep root visually fixed -- scale staying byte-identical is what
+  // proves no scaleFit ran. The actual hard invariant is root SCREEN
+  // CENTER within 1px, verified below the same way the root-only step
+  // above verifies it.
+  const initialScale = initialTransform.match(/scale\([^)]+\)/)?.[0];
+  expect(await transform(page)).toContain(initialScale);
+  const fullBox = await settledRootBox(page);
+  expect(Math.abs((fullBox.x + fullBox.width / 2) - (initialRootBox.x + initialRootBox.width / 2))).toBeLessThanOrEqual(1);
+  expect(Math.abs((fullBox.y + fullBox.height / 2) - (initialRootBox.y + initialRootBox.height / 2))).toBeLessThanOrEqual(1);
 });
 
 test("library and overflow overlays preserve viewport; create exists only in the library", async ({ page }) => {

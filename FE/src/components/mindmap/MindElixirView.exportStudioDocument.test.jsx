@@ -160,6 +160,40 @@ describe("Export Studio — document formats", () => {
     void resolvePoll;
   });
 
+  // PRE-EXISTING GAP (not caused by, and not fixed by, the PR D depth-level
+  // work): the FE lets a user pick scope "Phần đang hiển thị" for a PDF
+  // export and submits scope_type:"visible" verbatim -- but neither
+  // BE/app/main.py's `_EXPORT_SCOPE_TYPES` nor
+  // BE/services/mindmap/export/scope.py's `SCOPE_TYPES` has ever included
+  // "visible" (scope.py's own docstring: "`visible_only` from the FE
+  // contract has no server-side analogue ... and is not ported"). The real
+  // server returns 400 `invalid_scope_type` synchronously, before a job is
+  // even created -- independent of root-only, independent of any collapse
+  // state. This test pins today's FE-side half of that gap (it still sends
+  // the request) so a future fix (client-side prevention, or a BE contract
+  // change) has to touch this assertion instead of silently drifting.
+  it("PRE-EXISTING GAP: 'Phần đang hiển thị' scope is still submitted verbatim for PDF export (BE rejects scope_type 'visible' for every document format, not just root-only)", async () => {
+    vi.spyOn(docExport, "createMindmapExport").mockResolvedValue({ job_id: "j1", status: "queued" });
+    vi.spyOn(docExport, "pollMindmapExportUntilDone").mockResolvedValue({ status: "done", download_url: "/x" });
+    vi.spyOn(docExport, "triggerMindmapExportDownload").mockImplementation(() => {});
+
+    await render(makeController());
+    await act(async () => { container.querySelector('[aria-label="Xuất sơ đồ"]').click(); });
+    const dialog = document.body.querySelector('[role="dialog"]');
+    await act(async () => { dialog.querySelector('input[name="mm-export-scope"][value="visible"]').click(); });
+    await act(async () => { [...dialog.querySelectorAll("button")].find((b) => b.textContent === "Tiếp tục").click(); }); // -> format
+    await act(async () => { dialog.querySelector('input[value="pdf"]').click(); });
+    await act(async () => { [...dialog.querySelectorAll("button")].find((b) => b.textContent === "Tiếp tục").click(); }); // -> appearance
+    await act(async () => { [...dialog.querySelectorAll("button")].find((b) => b.textContent === "Tiếp tục").click(); }); // -> preview
+
+    const exportBtn = [...dialog.querySelectorAll("button")].find((b) => b.textContent.includes("Tạo PDF"));
+    await act(async () => { exportBtn.click(); });
+
+    expect(docExport.createMindmapExport).toHaveBeenCalledWith("m1", expect.objectContaining({
+      scope: expect.objectContaining({ scope_type: "visible" }),
+    }));
+  });
+
   it("Map A<->B isolation: a completed export's state does not leak into a different map (no remount, same pattern WorkspaceContainer.jsx actually uses)", async () => {
     vi.spyOn(docExport, "createMindmapExport").mockResolvedValue({ job_id: "j1", status: "queued" });
     vi.spyOn(docExport, "pollMindmapExportUntilDone").mockResolvedValue({

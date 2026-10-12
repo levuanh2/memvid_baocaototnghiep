@@ -86,7 +86,7 @@ describe("MindElixir render lifecycle", () => {
     await vi.waitFor(() => expect(host.querySelector('[data-mindmap-render-state="ready"]')).toBeTruthy(), { timeout: 3000 });
     await act(async () => { host.querySelector(".mm-overflow-trigger").click(); });
     const depthAction = [...document.body.querySelectorAll('[role="menuitem"]')]
-      .find((item) => item.textContent.includes("Mở đến cấp 2"));
+      .find((item) => item.textContent.includes("Hiện 2 tầng nhánh"));
     await act(async () => { depthAction.click(); });
     expect(host.querySelector('[data-nodeid="megrandchild"]')).toBeNull();
     expect(host.querySelector('[data-nodeid="mechild"]')).toBeTruthy();
