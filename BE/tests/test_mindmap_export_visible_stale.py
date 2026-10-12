@@ -86,6 +86,23 @@ def test_visible_node_reparented_is_stale(monkeypatch, tmp_path):
     assert job["error_code"] in ("stale_visible_snapshot", "ancestor_not_closed")
 
 
+def test_visible_sibling_reorder_with_no_other_change_is_stale(monkeypatch, tmp_path):
+    # "a" and "e" are sibling branches under root, both visible, both
+    # otherwise unchanged -- only their `order` is swapped. build_export_tree
+    # uses `order` to decide branch sequence in the outline, so a reorder
+    # alone must still count as stale (the rendered PDF would otherwise
+    # silently show branches in a different sequence than what was on
+    # screen when the snapshot was taken).
+    route_time = _rec(_nodes())
+    worker_time = _rec(_nodes())
+    a = next(n for n in worker_time["nodes"] if n["id"] == "a")
+    e = next(n for n in worker_time["nodes"] if n["id"] == "e")
+    a["order"], e["order"] = e["order"], a["order"]
+    job = _run(monkeypatch, tmp_path, worker_time, fingerprint_from=route_time)
+    assert job["status"] == "error"
+    assert job["error_code"] == "stale_visible_snapshot"
+
+
 def test_node_added_outside_visible_set_is_not_stale(monkeypatch, tmp_path):
     route_time = _rec(_nodes())
     worker_time = _rec(_nodes())

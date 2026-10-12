@@ -251,6 +251,12 @@ def visible_snapshot_fingerprint(nodes: list[dict], relations: list[dict], inclu
         {
             "id": node_id,
             "parent": (by_id.get(node_id) or {}).get("parent"),
+            # build_export_tree sorts each node's children by `order` to
+            # decide the sequence branches appear in the outline/map — a
+            # reorder with no other content change must still count as
+            # stale, or the rendered PDF could silently diverge from what
+            # was on screen at export time.
+            "order": int((by_id.get(node_id) or {}).get("order") or 0),
             "topic": (by_id.get(node_id) or {}).get("title") or "",
             "note": (by_id.get(node_id) or {}).get("note") or "",
             "citations": sorted((by_id.get(node_id) or {}).get("chunk_refs") or []),
