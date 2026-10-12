@@ -16,13 +16,14 @@
 // definitions of its own keeps Vite's react-refresh plugin happy.
 import { useCallback, useMemo, useRef, useState } from "react";
 import MindElixirView from "../components/mindmap/MindElixirView";
-import { FIXTURE_MAP_A, FIXTURE_MAP_B, FIXTURE_COLLAPSED_NODE_IDS, FIXTURE_EXPORT_V3, FIXTURE_EXPORT_V3_COLLAPSED, FIXTURE_DEPTH } from "./mindmapFixtures";
+import { FIXTURE_MAP_A, FIXTURE_MAP_B, FIXTURE_COLLAPSED_NODE_IDS, FIXTURE_EXPORT_V3, FIXTURE_EXPORT_V3_COLLAPSED, FIXTURE_DEPTH, FIXTURE_SHALLOW3 } from "./mindmapFixtures";
 
-const MAPS = [FIXTURE_MAP_A, FIXTURE_MAP_B, FIXTURE_EXPORT_V3, FIXTURE_DEPTH];
+const MAPS = [FIXTURE_MAP_A, FIXTURE_MAP_B, FIXTURE_EXPORT_V3, FIXTURE_DEPTH, FIXTURE_SHALLOW3];
 const COLLAPSED_BY_MAP = { ...FIXTURE_COLLAPSED_NODE_IDS, ...FIXTURE_EXPORT_V3_COLLAPSED };
 const SEARCH = new URLSearchParams(typeof window !== "undefined" ? window.location.search : "");
 const INITIAL_MAP_ID = SEARCH.get("map") === "export-v3" ? FIXTURE_EXPORT_V3.id
   : SEARCH.get("map") === "depth" ? FIXTURE_DEPTH.id
+  : SEARCH.get("map") === "shallow3" ? FIXTURE_SHALLOW3.id
   : FIXTURE_MAP_A.id;
 // cold-load appearance race fix (PR follow-up to #63) — `?initialAppearance=study`
 // bakes a saved appearance onto FIXTURE_MAP_A's record from the FIRST render,

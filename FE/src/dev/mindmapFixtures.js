@@ -142,3 +142,23 @@ function buildDepthFixture() {
   return { id: DEPTH_ID, title: "Bản đồ kiểm thử mức thu/mở (Fixture Depth)", nodes, relations: [], sources: [], schema_version: 2 };
 }
 export const FIXTURE_DEPTH = buildDepthFixture();
+
+// Exactly 3 levels deep (root->a->b->c), plus a second depth-1 branch that
+// also has its own child (root->e->f) -- the real-browser counterpart of
+// MindElixirView.depthPresetIndicatorIntent.test.jsx's shallowData3. Used to
+// prove the depth3==all preset-indicator fix against REAL layout/geometry
+// (root-center, scale, instance identity, invalid paths), which jsdom can't
+// compute reliably.
+const SHALLOW3_ID = "fixture-shallow3";
+function buildShallow3Fixture() {
+  const nodes = [
+    { id: `${SHALLOW3_ID}-root`, kind: "root", title: "Root", parent: null, order: 0 },
+    { id: `${SHALLOW3_ID}-a`, kind: "section", title: "A", parent: `${SHALLOW3_ID}-root`, order: 0 },
+    { id: `${SHALLOW3_ID}-b`, kind: "section", title: "B", parent: `${SHALLOW3_ID}-a`, order: 0 },
+    { id: `${SHALLOW3_ID}-c`, kind: "idea", title: "C", parent: `${SHALLOW3_ID}-b`, order: 0 },
+    { id: `${SHALLOW3_ID}-e`, kind: "section", title: "E", parent: `${SHALLOW3_ID}-root`, order: 1 },
+    { id: `${SHALLOW3_ID}-f`, kind: "idea", title: "F", parent: `${SHALLOW3_ID}-e`, order: 0 },
+  ];
+  return { id: SHALLOW3_ID, title: "Bản đồ kiểm thử preset indicator (Fixture Shallow3)", nodes, relations: [], sources: [], schema_version: 2 };
+}
+export const FIXTURE_SHALLOW3 = buildShallow3Fixture();
