@@ -173,7 +173,7 @@ describe("<me-epd> decorator lifecycle audit (Round 2)", () => {
     await act(async () => {
       container.querySelector(".mm-overflow-trigger").click();
     });
-    const item = [...document.body.querySelectorAll('[role="menuitem"]')].find((b) => b.textContent.includes("Mở rộng tất cả"));
+    const item = [...document.body.querySelectorAll('[role="menuitem"]')].find((b) => b.textContent.includes("Mở toàn bộ"));
     await act(async () => { item.click(); });
 
     const i1Epd = findEpdFor(container, "i1");
