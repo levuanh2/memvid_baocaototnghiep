@@ -319,11 +319,11 @@ def test_idempotency_same_visible_set_different_order_same_fingerprint(be, clien
     _stub_get_record(monkeypatch, be)
     _protect(be, monkeypatch, "userA", on=True)
     r1 = client.post("/mindmaps/m1/exports", json={
-        "format": "pdf", "idempotency_key": "k1",
+        "format": "pdf", "idempotency_key": "visible-k1",
         "scope": {"scope_type": "visible", "visible_node_ids": ["root", "a", "e"], "include_descendants": False},
     })
     r2 = client.post("/mindmaps/m1/exports", json={
-        "format": "pdf", "idempotency_key": "k1",
+        "format": "pdf", "idempotency_key": "visible-k1",
         "scope": {"scope_type": "visible", "visible_node_ids": ["e", "root", "a"], "include_descendants": False},
     })
     assert r1.status_code == 202 and r2.status_code == 202
@@ -334,11 +334,11 @@ def test_idempotency_different_visible_set_same_key_conflicts(be, client, monkey
     _stub_get_record(monkeypatch, be)
     _protect(be, monkeypatch, "userA", on=True)
     client.post("/mindmaps/m1/exports", json={
-        "format": "pdf", "idempotency_key": "k2",
+        "format": "pdf", "idempotency_key": "visible-k2",
         "scope": {"scope_type": "visible", "visible_node_ids": ["root"], "include_descendants": False},
     })
     resp = client.post("/mindmaps/m1/exports", json={
-        "format": "pdf", "idempotency_key": "k2",
+        "format": "pdf", "idempotency_key": "visible-k2",
         "scope": {"scope_type": "visible", "visible_node_ids": ["root", "a"], "include_descendants": False},
     })
     assert resp.status_code == 409

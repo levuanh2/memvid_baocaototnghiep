@@ -23,7 +23,7 @@ from typing import Any, Optional
 from app.domains.jobs import jobs_store
 from app.domains.jobs import export_jobs
 from app.domains.mindmap import store as mindmap_store
-from services.mindmap.export.scope import resolve_export_scope, ExportScopeError
+from services.mindmap.export.scope import resolve_export_scope, ExportScopeError, error_code_for, visible_snapshot_fingerprint
 from services.mindmap.export.tree import build_export_tree
 from services.mindmap.export.docx_serializer import serialize_docx
 from services.mindmap.export.xlsx_serializer import serialize_xlsx
@@ -58,6 +58,7 @@ def run_export_job(
     job_id: str, map_id: str, user_id: Optional[str], fmt: str,
     scope_params: dict[str, Any], format_options: dict[str, Any],
     map_image_bytes: Optional[bytes] = None,
+    expected_visible_fingerprint: Optional[str] = None,
 ) -> None:
     jobs_store.update_job(job_id, status="running", stage="building", progress=10)
     try:
@@ -72,8 +73,28 @@ def run_export_job(
         try:
             scope = resolve_export_scope(nodes, **scope_params)
         except ExportScopeError as e:
-            jobs_store.update_job(job_id, status="error", error_text=str(e), error_code="invalid_scope")
+            # Re-validated independently against THIS (second, worker-time)
+            # fetch — classified the same way the route classifies it, not
+            # collapsed into a generic "export_failed" just because it
+            # surfaced here instead of at request time.
+            jobs_store.update_job(job_id, status="error", error_text=str(e), error_code=error_code_for(e))
             return
+
+        # Stale-snapshot defense (PR E, "visible" scope only) — see
+        # services.mindmap.export.scope.visible_snapshot_fingerprint's own
+        # docstring for exactly what this does and doesn't catch. Recomputes
+        # against THIS fetch (never trusts the route's own computation) and
+        # fails the job deterministically rather than silently pairing a
+        # stale outline with whatever map_image_bytes the client captured.
+        if scope_params.get("scope_type") == "visible" and expected_visible_fingerprint is not None:
+            actual_fingerprint = visible_snapshot_fingerprint(nodes, relations, scope["included_ids"])
+            if actual_fingerprint != expected_visible_fingerprint:
+                jobs_store.update_job(
+                    job_id, status="error",
+                    error_text="Nội dung phần đang hiển thị đã thay đổi trước khi xuất hoàn tất, vui lòng thử lại",
+                    error_code="stale_visible_snapshot",
+                )
+                return
 
         if jobs_store.is_cancel_requested(job_id):
             jobs_store.update_job(job_id, status="cancelled", current_node="Cancelled")

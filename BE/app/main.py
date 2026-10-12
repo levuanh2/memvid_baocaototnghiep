@@ -5999,7 +5999,7 @@ def delete_mindmap(mindmap_id: str):
 # still reads and downloads normally through the routes below; this tuple
 # only gates the CREATE path.
 _EXPORT_FORMATS = ("pdf",)
-_EXPORT_SCOPE_TYPES = ("full", "current_branch", "selected_branches")
+_EXPORT_SCOPE_TYPES = ("full", "current_branch", "selected_branches", "visible")
 
 
 def _export_job_owner_or_404(job_id: str, uid: Optional[str]):
@@ -6040,18 +6040,50 @@ def create_mindmap_export(mindmap_id: str):
         "selected_branch_root_ids": scope_body.get("selected_branch_root_ids") or [],
         "include_descendants": bool(scope_body.get("include_descendants", True)),
     }
+    # visible_node_ids only has meaning for scope_type="visible" — never read
+    # (let alone trusted) for any other scope, same as selected_node_id is
+    # ignored outside current_branch.
+    if scope_type == "visible":
+        scope_params["visible_node_ids"] = scope_body.get("visible_node_ids")
 
     # Node membership validation — fail fast with a real 400, not a job that
     # dies asynchronously for something checkable right now.
-    from services.mindmap.export.scope import resolve_export_scope, ExportScopeError, UnknownNodeIdError, NoSelectionError
+    from services.mindmap.export.scope import resolve_export_scope, ExportScopeError, error_code_for, visible_snapshot_fingerprint
     try:
-        resolve_export_scope(base.get("nodes") or [], **scope_params)
-    except UnknownNodeIdError:
-        return jsonify({"error": "Một hoặc nhiều node đã chọn không còn tồn tại trên sơ đồ này", "error_code": "unknown_node_id"}), 400
-    except NoSelectionError:
-        return jsonify({"error": "Chưa có lựa chọn cho phạm vi này", "error_code": "no_selection"}), 400
+        resolved_scope = resolve_export_scope(base.get("nodes") or [], **scope_params)
     except ExportScopeError as e:
-        return jsonify({"error": str(e), "error_code": "invalid_scope"}), 400
+        error_code = error_code_for(e)
+        error_text = {
+            "unknown_node_id": "Một hoặc nhiều node đã chọn không còn tồn tại trên sơ đồ này",
+            "no_selection": "Chưa có lựa chọn cho phạm vi này",
+            "visible_root_missing": "Phần đang hiển thị phải bao gồm chủ đề gốc",
+            "ancestor_not_closed": "Phần đang hiển thị thiếu node tổ tiên của một node đã chọn",
+            "duplicate_node_id": "Phần đang hiển thị chứa node trùng lặp",
+        }.get(error_code, str(e))
+        return jsonify({"error": error_text, "error_code": error_code}), 400
+
+    # Stale-snapshot defense (PR E, "visible" scope only): fingerprints the
+    # EXACT content the validated snapshot resolves to right now — node id/
+    # parent/topic/note/citations and any relation touching the included
+    # set — never trusting a client-supplied hash. The worker (fetching the
+    # record a second time, independently) recomputes the same fingerprint
+    # against whatever the record looks like when it actually runs; a
+    # mismatch means the visible node set's CONTENT changed underneath the
+    # snapshot (a title edit, a delete, a re-parent) between request and
+    # run — see services.mindmap.export.scope's own docstring for why a
+    # node merely being ADDED elsewhere in the map is deliberately NOT
+    # staleness. Nothing persisted: a plain argument passed straight to the
+    # worker call, same as every other job parameter here.
+    visible_snapshot_fp = (
+        visible_snapshot_fingerprint(base.get("nodes") or [], base.get("relations") or [], resolved_scope["included_ids"])
+        if scope_type == "visible" else None
+    )
+    if scope_type == "visible":
+        # Canonicalize to server-derived sorted order before this dict feeds
+        # the idempotency fingerprint below — two requests for the exact
+        # same visible SET sent in different array order must hash
+        # identically; the client's own ordering is never trusted or hashed.
+        scope_params["visible_node_ids"] = sorted(resolved_scope["included_ids"])
 
     # Section 2/3 (format-capability model): the SAME format_capabilities.json
     # that drives which controls the FE shows is what validates and
@@ -6101,7 +6133,7 @@ def create_mindmap_export(mindmap_id: str):
 
     from app.jobs.queue import enqueue_job
     from app.application.mindmap_export import run_export_job
-    enqueue_job(run_export_job, args=(job_id, mindmap_id, uid, fmt, scope_params, format_options, map_image_bytes), queue="mindmap_export", job_id=job_id)
+    enqueue_job(run_export_job, args=(job_id, mindmap_id, uid, fmt, scope_params, format_options, map_image_bytes, visible_snapshot_fp), queue="mindmap_export", job_id=job_id)
     return jsonify({"job_id": job_id, "status": "queued", "status_url": f"/mindmaps/exports/{job_id}"}), 202
 
 
