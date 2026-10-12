@@ -101,6 +101,18 @@ export default function MindElixirView({ data, onRegenerate, regenerating, contr
   const pendingFitRef = useRef(false);
   const pollActiveRef = useRef(false);
   const renderPollStopRef = useRef(null);
+  // The depth preset the user last explicitly clicked (0/1/2/3/"all"), or
+  // `null` when no explicit choice is in force (initial load, after a
+  // manual caret/branch toggle, or right after switching maps). Takes
+  // priority over `matchDepthPreset`'s structural inference below: a shallow
+  // tree where "Hiện 3 tầng nhánh" and "Mở toàn bộ" produce an IDENTICAL
+  // visible set must still show the button the user actually clicked, not
+  // whichever one the tree shape happens to also match (found live on a
+  // real 3-level-deep production map — matchDepthPreset alone silently
+  // relabeled an explicit depth-3 click as "all"). Cleared (not left stale)
+  // on any mutation that isn't a depth-preset click, so it never survives
+  // past the explicit action it recorded.
+  const explicitDepthPresetRef = useRef(null);
   const [showRelations, setShowRelations] = useState(true);
   const [isFullscreen, setIsFullscreen] = useState(false);
   const [dirty, setDirty] = useState(false);
@@ -359,6 +371,10 @@ export default function MindElixirView({ data, onRegenerate, regenerating, contr
   // public Mind Elixir instance instead of rebuilding the canvas.
   useEffect(() => {
     if (!containerRef.current || !data) return;
+    // New map identity (true mount or an A->B switch): no explicit depth
+    // choice carries over. Initial load has no explicit action to prefer,
+    // so this intentionally falls back to matchDepthPreset's structural read.
+    explicitDepthPresetRef.current = null;
     renderPollStopRef.current?.();
     setRenderState("mounting");
     setRenderError(null);
@@ -398,7 +414,12 @@ export default function MindElixirView({ data, onRegenerate, regenerating, contr
       // floating toolbar's own single-branch toggle below calls
       // expandNodeAll directly and bumps expandTick itself right after,
       // so this listener only needs to cover the caret's path.
-      mind.bus.addListener("expandNode", () => setExpandTick((v) => v + 1));
+      mind.bus.addListener("expandNode", () => {
+        // A per-node caret click is a manual mutation, not a preset click —
+        // any explicit preset choice in force no longer describes the tree.
+        explicitDepthPresetRef.current = null;
+        setExpandTick((v) => v + 1);
+      });
     } else {
       clearRootOnly(mind);
       mind.refresh?.(mindData);
@@ -844,7 +865,9 @@ export default function MindElixirView({ data, onRegenerate, regenerating, contr
   const selectedNodeObj = selectedTopicEl?.nodeObj;
   const selectedHasChildren = Boolean(selectedNodeObj?.children?.length);
   const selectedExpanded = selectedNodeObj?.expanded !== false;
-  const activeDepthPreset = matchDepthPreset(mindRef.current);
+  const activeDepthPreset = explicitDepthPresetRef.current !== null
+    ? explicitDepthPresetRef.current
+    : matchDepthPreset(mindRef.current);
 
   const toggleSelectedBranch = useCallback(() => {
     const mind = mindRef.current;
@@ -854,6 +877,9 @@ export default function MindElixirView({ data, onRegenerate, regenerating, contr
     const nodeObj = topic?.nodeObj;
     if (!topic || !nodeObj?.children?.length) return;
     mind.expandNodeAll(topic, nodeObj.expanded === false);
+    // Manual branch-level toggle, not a depth-preset click — same reasoning
+    // as the per-node caret listener above.
+    explicitDepthPresetRef.current = null;
     setExpandTick((v) => v + 1); // expandNodeAll fires no bus event of its own
   }, [controller]);
 
@@ -917,6 +943,9 @@ export default function MindElixirView({ data, onRegenerate, regenerating, contr
     if (curSelectedId && !findTopicSafely(mind, curSelectedId)) {
       controller?.clearSelectedNode?.();
     }
+    // Record the explicit choice itself, not a re-derivation from the tree
+    // it just produced — see explicitDepthPresetRef's own comment for why.
+    explicitDepthPresetRef.current = level;
     setExpandTick((v) => v + 1);
   }, [controller]);
 
