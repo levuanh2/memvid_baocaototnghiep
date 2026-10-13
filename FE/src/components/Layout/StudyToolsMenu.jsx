@@ -1,4 +1,4 @@
-import { useEffect, useRef } from "react";
+import { useCallback, useEffect, useRef } from "react";
 import { Icon } from "../ui/Icon";
 
 const TOOLS = [
@@ -7,17 +7,34 @@ const TOOLS = [
   { key: "insights", label: "Kiến thức", detail: "Khám phá khái niệm liên quan", icon: "Network" },
 ];
 
-// `extraActions` are the phone-only workspace actions (source library, inspector) that
+// Any focusable element a real outside click could have legitimately
+// landed on and already claimed focus for -- if so, closing the menu must
+// never steal it back.
+const FOCUSABLE_SELECTOR = 'button, a[href], input, select, textarea, [tabindex]';
+
+// `extraActions` are the phone-only workspace actions (source library, inspector, theme) that
 // no longer have their own header button below md. They render only on phones.
-export default function StudyToolsMenu({ open, onClose, onSelect, extraActions = [] }) {
+//
+// Focus restoration contract (mobile theme control PR): Escape and
+// selecting any item always return focus to `triggerRef`'s element; an
+// outside click that lands on another focusable control leaves focus where
+// the browser already put it; an outside click on inert background returns
+// focus to the trigger.
+export default function StudyToolsMenu({ open, onClose, onSelect, extraActions = [], triggerRef }) {
   const ref = useRef(null);
+  const close = useCallback(() => {
+    triggerRef?.current?.focus();
+    onClose?.();
+  }, [onClose, triggerRef]);
   useEffect(() => {
     if (!open) return undefined;
     const onPointerDown = (event) => {
-      if (!ref.current?.contains(event.target)) onClose?.();
+      if (ref.current?.contains(event.target)) return;
+      if (!event.target.closest?.(FOCUSABLE_SELECTOR)) triggerRef?.current?.focus();
+      onClose?.();
     };
     const onKeyDown = (event) => {
-      if (event.key === "Escape") onClose?.();
+      if (event.key === "Escape") close();
     };
     document.addEventListener("mousedown", onPointerDown);
     document.addEventListener("keydown", onKeyDown);
@@ -25,7 +42,7 @@ export default function StudyToolsMenu({ open, onClose, onSelect, extraActions =
       document.removeEventListener("mousedown", onPointerDown);
       document.removeEventListener("keydown", onKeyDown);
     };
-  }, [open, onClose]);
+  }, [open, onClose, close, triggerRef]);
   if (!open) return null;
   return (
     <div ref={ref} className="study-tools-menu" role="menu" aria-label="Công cụ học">
@@ -36,7 +53,7 @@ export default function StudyToolsMenu({ open, onClose, onSelect, extraActions =
         </div>
       </div>
       {TOOLS.map((tool) => (
-        <button key={tool.key} type="button" role="menuitem" className="study-tools-menu__item" onClick={() => { onSelect?.(tool.key); onClose?.(); }}>
+        <button key={tool.key} type="button" role="menuitem" className="study-tools-menu__item" onClick={() => { onSelect?.(tool.key); close(); }}>
           <span className="study-tools-menu__item-icon"><Icon name={tool.icon} size={16} /></span>
           <span className="study-tools-menu__item-copy"><strong className="study-tools-menu__item-title">{tool.label}</strong><small className="study-tools-menu__item-meta">{tool.detail}</small></span>
           <Icon name="ChevronRight" size={14} className="study-tools-menu__arrow" aria-hidden />
@@ -46,7 +63,7 @@ export default function StudyToolsMenu({ open, onClose, onSelect, extraActions =
         <div className="lg:hidden border-t border-border mt-1 pt-1">
           {extraActions.map((action) => (
             <button key={action.key} type="button" role="menuitem" className="study-tools-menu__item"
-              onClick={() => { action.onSelect?.(); onClose?.(); }}>
+              onClick={() => { action.onSelect?.(); close(); }}>
               <span className="study-tools-menu__item-icon"><Icon name={action.icon} size={16} /></span>
               <span className="study-tools-menu__item-copy"><strong className="study-tools-menu__item-title">{action.label}</strong></span>
             </button>
