@@ -198,6 +198,24 @@ export function resolveExportScopeFromRecord(nodes, { scopeType, selectedNodeId,
   return { ...result, byId };
 }
 
+/**
+ * What scope Export Studio should open with, derived from the live canvas
+ * selection at the moment the dialog transitions closed -> open (PR G —
+ * the dialog used to seed this ONCE at its very first mount via a `useState`
+ * initializer, which never re-ran on a later open; confirmed with a real
+ * exported SVG and a real exported PDF that a selected node's scope silently
+ * stayed "full" until the user noticed and re-picked the radio by hand).
+ * Priority: an explicit multi-branch selection beats a single selected node,
+ * which beats "full" — never a function of anything else (not visibleOnly,
+ * not the previous session's own manual choice, which the caller is
+ * responsible for not re-deriving while already open).
+ */
+export function deriveOpeningScope({ selectedBranchIds, selectedNodeId }) {
+  if (selectedBranchIds?.size) return "selected_branches";
+  if (selectedNodeId) return "current_branch";
+  return "full";
+}
+
 /** Total descendant+self count for a node currently included (used by the UI summary line — "3 nhánh · 28 node · gồm 19 node đang thu gọn"). This is the EXPLICIT selection's own weight — context ancestors are never counted here, so the counter always reflects what the user ticked, not the full render set. */
 export function countIncluded(includedIds) {
   return includedIds.size;
