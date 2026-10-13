@@ -6437,3 +6437,68 @@ option (a). Contract:
   no change — confirmed unaffected in the original audit above and still
   true: they were never routed through `resolve_export_scope` at all.
 - DOCX/XLSX stay disabled (PR C1, untouched by this PR).
+
+## Mobile/tablet had zero reachable Light/Dark control (fixed 2026-10-13)
+
+**Symptom:** `MainLayout.jsx`'s only theme toggle (two buttons, `role="group"
+aria-label="Chế độ sáng/tối"`) was `hidden lg:flex` — hidden at every width
+below 1024px, not merely squeezed. Below that breakpoint the app only ever
+followed `prefers-color-scheme`; a user with an explicit preference already
+set (or none at all) had no way to change it on a phone or tablet. Found
+during PR #66's production smoke (`fix/mindmap-depth-preset-indicator-intent`),
+explicitly deferred out of that PR's scope.
+
+**Root cause:** the toggle was built desktop-first and never given a mobile
+counterpart when the header's phone/tablet actions were consolidated into
+`StudyToolsMenu`'s overflow menu — `sources`/`inspector` got `extraActions`
+entries at that time, theme did not.
+
+**Fix:** reused `useTheme()`'s existing `isDark`/`toggleTheme` — no second
+state source, no new storage key, no "System" mode, `useTheme.js` itself
+untouched. Added exactly one dynamic item to `StudyToolsMenu`'s existing
+`extraActions` array (`MainLayout.jsx`), already wrapped in the same
+`lg:hidden` div as `sources`/`inspector` — label/icon computed from `isDark`
+("Chuyển sang nền tối" / "Chuyển sang nền sáng", naming the NEXT action, not
+the current state). Desktop's `hidden lg:flex` toggle is untouched.
+
+**Second finding, same PR:** `StudyToolsMenu.jsx` never restored focus to its
+own trigger (`.study-tools-trigger`) on close — true for every existing
+action (tools list, sources, inspector), not specific to theme. Required to
+make the new action keyboard/screen-reader usable. Fixed by adding a
+`triggerRef` prop and a `close()` helper: Escape and selecting any item
+always focus the trigger; an outside click on another focusable element
+(matches `button, a[href], input, select, textarea, [tabindex]`) leaves
+focus where the browser already put it — closing the menu must never steal
+focus back from a control the user just clicked; an outside click on inert
+background focuses the trigger.
+
+**Regression coverage:** `src/hooks/useTheme.test.jsx` (OS-fallback contract
+unchanged — guard, not red), `src/components/Layout/StudyToolsMenu.test.jsx`
+(focus-restoration: Escape/select/outside-click-on-focusable/outside-click-
+on-background/no-focus-loop — 4 of 5 red before the fix, 1 trivially green
+already), `src/components/Layout/MainLayout.mobileThemeControl.test.jsx`
+(the action exists in the overflow menu at narrow widths; stays inside the
+`lg:hidden` wrapper at desktop widths; Light<->Dark via a real click, never
+`classList` injection; storage key `memvid-theme` written; label always
+names the next action; reload persistence; theme state survives a resize
+across the 1023/1024 breakpoint; desktop toggle unaffected; no canvas
+remount, no `scaleFit`/`toCenter` call). All ten integration assertions were
+confirmed red against the unmodified base before the fix.
+
+**Known limitation:** true per-breakpoint visual exclusivity (is the control
+*actually* invisible by the real CSS cascade, not just carrying the right
+Tailwind class), real hit-target pixels, real horizontal-overflow pixels,
+and native-button Enter/Space activation are NOT provable in jsdom —
+confirmed empirically (a bare `<button>` with no custom key handler does
+not auto-fire `click` on an Enter/Space `keydown` in this repo's jsdom 29).
+These need a real Chromium pass (Playwright) against the actual header,
+which needs the `e2e/` suite's real backend (`BE/scripts/run_e2e_server.py`,
+Postgres on `localhost:5432`) — not available in this environment at
+checkpoint time (no local Postgres, Docker daemon not running). Deferred,
+flagged to the user rather than silently skipped or faked.
+
+**Prevention:** when consolidating per-breakpoint header actions into one
+overflow menu, give every action (not just the ones in scope for the PR at
+hand) the same close/focus lifecycle — a trigger-focus gap is easy to miss
+because it only shows up under keyboard/screen-reader use, never under a
+mouse-only click-through.
