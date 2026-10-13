@@ -2,7 +2,7 @@ import { useEffect, useMemo, useRef, useState } from "react";
 import Modal from "../ui/Modal";
 import { Icon } from "../ui/Icon";
 import Spinner from "../ui/Spinner";
-import { resolveExportScope, countIncluded, countHiddenIncluded, UnknownNodeIdError, NoSelectionError } from "../../utils/mindmapExportScope";
+import { resolveExportScope, countIncluded, countHiddenIncluded, deriveOpeningScope, UnknownNodeIdError, NoSelectionError } from "../../utils/mindmapExportScope";
 import { isRootOnly } from "../../utils/mindElixirRootOnly";
 import { exportMindmapImage, estimateExportDimensions, captureMapImageBase64 } from "../../utils/mindmapImageExport";
 import { sanitizeExportFilename } from "../../utils/mindmapExportFilename";
@@ -58,7 +58,12 @@ export default function ExportStudioDialog({ open, onClose, mind, record, mapId,
   const [styleRole, setStyleRole] = useState("root");
   const [applyingToMap, setApplyingToMap] = useState(false);
   const [applyToMapError, setApplyToMapError] = useState(null);
-  const [scopeType, setScopeType] = useState(selectedNodeId ? "current_branch" : "full"), [visibleOnly, setVisibleOnly] = useState(false), [advanced, setAdvanced] = useState(false);
+  // PR G — real initial value comes from the closed->open edge effect below
+  // (deriveOpeningScope), not this useState call: a plain initializer only
+  // ever runs once, at this component's first mount, which happens with no
+  // selection yet (see this file's PR G comment on that effect for why that
+  // was the bug).
+  const [scopeType, setScopeType] = useState("full"), [visibleOnly, setVisibleOnly] = useState(false), [advanced, setAdvanced] = useState(false);
   const [format, setFormat] = useState("png"), [background, setBackground] = useState("canvas"), [customColor, setCustomColor] = useState("#FFFFFF"), [scale, setScale] = useState(2);
   const [filenameOverride, setFilenameOverride] = useState(""), [appearance, setAppearance] = useState(DEFAULT_APPEARANCE), [appearancePreset, setAppearancePreset] = useState("canvas"), [quickPreset, setQuickPreset] = useState(null);
   const [docs, setDocs] = useState(documentDefaults), [includeMapImage, setIncludeMapImage] = useState(false), [openSection, setOpenSection] = useState("colors");
@@ -88,6 +93,19 @@ export default function ExportStudioDialog({ open, onClose, mind, record, mapId,
   const resetTransient = () => { abortRef.current?.abort(); inFlightRef.current = false; setExporting(false); setError(null); setDone(null); setJobStatus(null); setJobProgress(0); setJobId(null); };
   // Reopening always starts at the configuration step with no leftover artifact or job.
   useEffect(() => { if (open) { resetTransient(); setStep(0); setFurthest(0); setUseMapAppearance(true); setStyleOverride(null); setApplyToMapError(null); } }, [open]);
+  // PR G — re-derive the scope radio ONLY on the closed->open edge (a ref,
+  // not just the `[open]` dependency array, so this stays correct even if a
+  // future caller ever adds another effect that also depends on `open`).
+  // Never fires again while the dialog stays open, even if the selection
+  // changes under it or the user flips the radio by hand — both must stick
+  // for the rest of this open session.
+  const wasOpenRef = useRef(false);
+  useEffect(() => {
+    if (open && !wasOpenRef.current) {
+      setScopeType(deriveOpeningScope({ selectedBranchIds, selectedNodeId }));
+    }
+    wasOpenRef.current = open;
+  }, [open, selectedBranchIds, selectedNodeId]);
   const startNewExport = () => { resetTransient(); setStep(0); setFurthest(0); setUseMapAppearance(true); setStyleOverride(null); setApplyToMapError(null); };
   // PR C2 — lazily seeds the draft from the map's OWN resolved appearance
   // (not a blank slate) the first time the user switches to custom.
