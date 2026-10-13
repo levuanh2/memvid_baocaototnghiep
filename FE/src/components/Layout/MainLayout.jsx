@@ -48,7 +48,7 @@ export default function MainLayout({
   const [rightOpen, setRightOpen] = useState(false);
   // Từ 768px trở lên hai cột nới được và thu về gáy sách được; trạng thái nhớ qua phiên.
   const panel = usePanelLayout();
-  const { isDark, setLight, setDark } = useTheme();
+  const { isDark, setLight, setDark, toggleTheme } = useTheme();
   const { user, logout } = useAuth();
   // `selectedDocument` (Study Context's single-document pointer) used to
   // feed the header's center eyebrow/breadcrumb and the LessonHeader title
@@ -241,6 +241,7 @@ export default function MainLayout({
   // cột thứ ba) — `rightView` chọn tab nào đang hiện trong nó.
   const [rightView, setRightView] = useState(initialRightView);   // "evidence" | "tutor" | "timeline"
   const [headerSurface, setHeaderSurface] = useState(null); // study-tools
+  const studyToolsTriggerRef = useRef(null);
   const [libraries, setLibraries] = useState({ mindMaps: [], summaries: [], mindMapActions: null, summaryActions: null });
   const updateMindmapLibrary = useCallback((value) => setLibraries((prev) => ({
     ...prev,
@@ -555,15 +556,22 @@ export default function MainLayout({
           {/* Mobile: one workspace-tools owner. Its menu also carries the actions
               that used to be separate phone buttons (source library, inspector). */}
           <div className="relative">
-            <button type="button" className="study-tools-trigger" aria-label="Mở công cụ StudyMap"
+            <button type="button" ref={studyToolsTriggerRef} className="study-tools-trigger" aria-label="Mở công cụ StudyMap"
               onClick={() => setHeaderSurface((current) => current === "study-tools" ? null : "study-tools")}
               aria-haspopup="menu" aria-expanded={headerSurface === "study-tools"}>
               <span>StudyMap</span><Icon name="ChevronDown" size={14} />
             </button>
             <StudyToolsMenu open={headerSurface === "study-tools"} onClose={closeHeaderSurface} onSelect={openStudyTool}
+              triggerRef={studyToolsTriggerRef}
               extraActions={[
                 { key: "sources", label: "Mở thư mục nguồn", icon: "Menu", onSelect: () => setLeftOpen(true) },
                 { key: "inspector", label: "Mở công cụ", icon: "PanelRight", onSelect: () => setRightOpen(true) },
+                {
+                  key: "theme",
+                  label: isDark ? "Chuyển sang nền sáng" : "Chuyển sang nền tối",
+                  icon: isDark ? "Sun" : "Moon",
+                  onSelect: toggleTheme,
+                },
               ]} />
           </div>
           {/* IA pass (round 5), nav-ownership: Inspector is the ONLY
