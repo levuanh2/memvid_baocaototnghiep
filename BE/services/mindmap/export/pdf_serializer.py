@@ -20,6 +20,10 @@ from typing import Any, Optional
 import fitz
 
 from services.mindmap.export.image_guard import validate_map_image
+from services.mindmap.export.pdf_layout import (
+    OutlineBlock, centered_fit_rect, choose_map_orientation, fits_on_page,
+    indent_for_depth, wrap_multiline,
+)
 
 from shared.paths import BE_ROOT
 
@@ -76,6 +80,14 @@ def _register_font(page: "fitz.Page", font: str) -> str:
     alias = FONT_ALIASES.get(font, FONT_ALIASES["sans"])
     page.insert_font(fontname=alias, fontfile=str(FONT_FILES.get(font, FONT_FILES["sans"])))
     return alias
+
+
+def _measure_font(font: str) -> "fitz.Font":
+    """A page-independent font object for real-glyph-metric text
+    measurement (wrap decisions) -- the SAME font file `_register_font`
+    embeds for drawing, so a wrap decision can never disagree with what
+    actually gets painted."""
+    return fitz.Font(fontfile=str(FONT_FILES.get(font, FONT_FILES["sans"])))
 
 
 def _fill_background(page: "fitz.Page", background: str) -> None:
@@ -154,15 +166,52 @@ def _write_relations_lines(tree: dict[str, Any]) -> list[str]:
     return out
 
 
+def _entry_color(entry: dict[str, Any], branch_color_mode: str) -> tuple[float, float, float]:
+    if entry.get("is_context"):
+        return CONTEXT_TEXT_RGB
+    if entry["root_index"] >= 0:
+        return _root_branch_color(entry["root_index"], branch_color_mode) or DEFAULT_TEXT_RGB
+    return DEFAULT_TEXT_RGB
+
+
+def _build_blocks(
+    entries: list[dict[str, Any]], *, measure_font: "fitz.Font", page_w: float, margin: float,
+    branch_color_mode: str,
+) -> list[OutlineBlock]:
+    """Converts flat logical outline entries (one topic/note/citation/...
+    line each) into OutlineBlocks whose `.height` reflects the REAL number
+    of wrapped physical lines -- the fix for the "chồng chữ" bug, where a
+    multi-paragraph note's extra lines were invisible to the cursor math."""
+    available_width = page_w - 2 * margin
+    blocks: list[OutlineBlock] = []
+    for entry in entries:
+        indent = indent_for_depth(entry["depth"], available_width, INDENT_PER_DEPTH)
+        max_width = max(available_width - indent, 10.0)  # never a zero/negative wrap width
+        wrapped = wrap_multiline(entry["text"], font=measure_font, fontsize=BASE_FONT_SIZE, max_width=max_width)
+        blocks.append(OutlineBlock(
+            lines=wrapped, x=margin + indent, fontsize=BASE_FONT_SIZE,
+            color=_entry_color(entry, branch_color_mode), line_height=LINE_HEIGHT,
+        ))
+    return blocks
+
+
+def _draw_block(page: "fitz.Page", block: OutlineBlock, *, y: float, font_alias: str) -> None:
+    for i, line in enumerate(block.lines):
+        if line:  # an empty wrapped line (blank paragraph) still advances the cursor, just draws nothing
+            page.insert_text((block.x, y + i * block.line_height), line, fontsize=block.fontsize, fontname=font_alias, color=block.color)
+
+
 def _write_outline_pages(
     doc: "fitz.Document", tree: dict[str, Any], *, page_size: str, orientation: str, single_page: bool,
     font: str, background: str, branch_color_mode: str, margin: float, content: dict[str, bool],
 ) -> None:
-    lines = _outline_lines(tree, content)
+    entries = _outline_lines(tree, content)
     if content.get("relations"):
         for rel_line in _write_relations_lines(tree):
-            lines.append({"depth": 0, "text": rel_line, "root_index": -1})
+            entries.append({"depth": 0, "text": rel_line, "root_index": -1, "is_context": False})
     w, h = _page_dims(page_size, orientation)
+    measure_font = _measure_font(font)
+    blocks = _build_blocks(entries, measure_font=measure_font, page_w=w, margin=margin, branch_color_mode=branch_color_mode)
 
     def draw_header(page: "fitz.Page", font_alias: str) -> float:
         y = margin
@@ -174,22 +223,22 @@ def _write_outline_pages(
         return y
 
     if single_page:
-        total_h = margin * 2 + max(1, len(lines)) * LINE_HEIGHT + 60
+        header_h = LINE_HEIGHT * 1.6 + (LINE_HEIGHT * 1.4 if content.get("legend") else 0)
+        total_h = margin * 2 + header_h + sum(b.height for b in blocks) + 20
         page = doc.new_page(width=w, height=total_h)
         _fill_background(page, background)
         font_alias = _register_font(page, font)
         y = draw_header(page, font_alias)
-        for line in lines:
-            color = CONTEXT_TEXT_RGB if line.get("is_context") else (_root_branch_color(line["root_index"], branch_color_mode) if line["root_index"] >= 0 else DEFAULT_TEXT_RGB)
-            page.insert_text((margin + line["depth"] * INDENT_PER_DEPTH, y), line["text"], fontsize=BASE_FONT_SIZE, fontname=font_alias, color=color or DEFAULT_TEXT_RGB)
-            y += LINE_HEIGHT
+        for block in blocks:
+            _draw_block(page, block, y=y, font_alias=font_alias)
+            y += block.height
         if content.get("branding"):
             _draw_branding(page, font=font_alias, w=w, h=total_h, margin=margin)
         return
 
     idx = 0
     first = True
-    while idx < len(lines) or first:
+    while idx < len(blocks) or first:
         page = doc.new_page(width=w, height=h)
         _fill_background(page, background)
         font_alias = _register_font(page, font)
@@ -197,24 +246,43 @@ def _write_outline_pages(
         if first:
             y = draw_header(page, font_alias)
             first = False
-        lines_per_page = max(1, int((h - margin - y) // LINE_HEIGHT))
-        chunk = lines[idx: idx + lines_per_page]
-        for line in chunk:
-            color = CONTEXT_TEXT_RGB if line.get("is_context") else (_root_branch_color(line["root_index"], branch_color_mode) if line["root_index"] >= 0 else DEFAULT_TEXT_RGB)
-            page.insert_text((margin + line["depth"] * INDENT_PER_DEPTH, y), line["text"], fontsize=BASE_FONT_SIZE, fontname=font_alias, color=color or DEFAULT_TEXT_RGB)
-            y += LINE_HEIGHT
+        placed = 0
+        for block in blocks[idx:]:
+            if not fits_on_page(y, block, h, margin):
+                if placed == 0:
+                    # Pathological case: a single block (e.g. one gigantic
+                    # unbroken token) is taller than an entire fresh page.
+                    # Draw it anyway rather than looping forever on a page
+                    # that can never fit it -- content is never silently
+                    # dropped, even if this one page overflows.
+                    _draw_block(page, block, y=y, font_alias=font_alias)
+                    y += block.height
+                    placed += 1
+                break
+            _draw_block(page, block, y=y, font_alias=font_alias)
+            y += block.height
+            placed += 1
         if content.get("branding"):
             _draw_branding(page, font=font_alias, w=w, h=h, margin=margin)
-        idx += len(chunk)
-        if not chunk and idx >= len(lines):
+        idx += placed
+        if placed == 0 and idx >= len(blocks):
             break
 
 
-def _write_image_page(doc: "fitz.Document", image_bytes: bytes, *, page_size: str, orientation: str, background: str, margin: float) -> None:
-    w, h = _page_dims(page_size, orientation)
-    page = doc.new_page(width=w, height=h)
+def _write_image_page(doc: "fitz.Document", image_bytes: bytes, *, page_size: str, background: str, margin: float) -> None:
+    """mode="map"/"map_and_outline"'s map page. Orientation is chosen by
+    the REAL decoded image's own contain-fit scale (PR H contract) -- the
+    caller no longer passes an `orientation` for this page at all. The
+    destination rect is computed by hand (centered_fit_rect), never left
+    to `insert_image`'s own `keep_proportion` (see pdf_layout.py's
+    docstring for the confirmed PyMuPDF 1.27.2.3 square-image bug this
+    avoids)."""
+    pix = fitz.Pixmap(image_bytes)
+    img_w, img_h = float(pix.width), float(pix.height)
+    choice = choose_map_orientation(img_w, img_h, PAGE_SIZES_PT.get(page_size, PAGE_SIZES_PT["A4"]), margin)
+    page = doc.new_page(width=choice.page_w, height=choice.page_h)
     _fill_background(page, background)
-    rect = fitz.Rect(margin, margin, w - margin, h - margin)
+    rect = centered_fit_rect(img_w, img_h, choice.page_w, choice.page_h, margin)
     page.insert_image(rect, stream=image_bytes)
 
 
@@ -230,7 +298,18 @@ def serialize_pdf(
     font: str = "sans", background: str = "white", branch_color_mode: str = "keep",
     margins: str = "normal", content: Optional[dict[str, bool]] = None,
 ) -> bytes:
-    """mode: "outline" | "map" | "map_and_outline". Returns real PDF bytes."""
+    """mode: "outline" | "map" | "map_and_outline". Returns real PDF bytes.
+
+    `orientation` (accepted for backward compatibility — old stored job
+    options must still parse) no longer controls the map page's own
+    orientation: that page always picks whichever of A4 portrait/landscape
+    gives the real image a larger contain-fit scale (PR H contract, tie ->
+    portrait). It still controls standalone mode="outline" pages exactly
+    as before. mode="map_and_outline"'s outline pages are always A4
+    portrait, independent of both `orientation` and whatever the map page
+    ended up as -- a PDF can legitimately mix a landscape map page with
+    portrait outline pages.
+    """
     if mode in ("map", "map_and_outline") and not map_image_bytes:
         raise ValueError(f"mode={mode!r} requires map_image_bytes")
     if mode in ("map", "map_and_outline"):
@@ -242,10 +321,11 @@ def serialize_pdf(
     doc = fitz.open()
     try:
         if mode in ("map", "map_and_outline"):
-            _write_image_page(doc, map_image_bytes, page_size=page_size, orientation=orientation, background=background, margin=margin)
+            _write_image_page(doc, map_image_bytes, page_size=page_size, background=background, margin=margin)
         if mode in ("outline", "map_and_outline"):
+            outline_orientation = "portrait" if mode == "map_and_outline" else orientation
             _write_outline_pages(
-                doc, tree, page_size=page_size, orientation=orientation, single_page=single_page,
+                doc, tree, page_size=page_size, orientation=outline_orientation, single_page=single_page,
                 font=font, background=background, branch_color_mode=branch_color_mode, margin=margin, content=content,
             )
         return doc.tobytes()
