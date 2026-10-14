@@ -183,6 +183,17 @@ export default function MindElixirView({ data, onRegenerate, regenerating, contr
   const selectionActiveRef = useRef(false);
   const selectedBranchIdsRef = useRef(selectedBranchIds);
   const branchSelectionHandleRef = useRef(null);
+  // H3A — closing the node-detail panel (MainLayout's closeRightPanel)
+  // deliberately clears `controller.selected` so the same node can be
+  // tapped again (MainLayout.selectionLifecycle.test.jsx). That clear used
+  // to also silently revert Export Studio's "current_branch" scope to
+  // "full" the moment the user dismissed the panel — the export pipeline
+  // itself was always scope-correct (see .playbook's "Export scope had no
+  // ancestor context" entry), the bug was losing WHICH branch was picked
+  // before the dialog even opened. This ref remembers the last node the
+  // user actually selected on this map, independent of panel visibility,
+  // so Export Studio keeps seeing it even after a manual close.
+  const exportStickySelectedIdRef = useRef(null);
 
   const degraded = Boolean(data?.generator?.degraded);
   const missing = data?.generator?.missing || [];
@@ -861,6 +872,12 @@ export default function MindElixirView({ data, onRegenerate, regenerating, contr
   // knowing on its own — `expandTick`'s only job is forcing a re-render so
   // these reads happen again, not carrying any value itself.
   const selectedId = controller?.selected?.id;
+  // H3A — reset the sticky export selection whenever the map itself
+  // changes (never let a branch picked on map A leak into map B's export);
+  // update it whenever a real selection exists, survive it being cleared.
+  useEffect(() => { exportStickySelectedIdRef.current = null; }, [data?.id]);
+  useEffect(() => { if (selectedId) exportStickySelectedIdRef.current = selectedId; }, [selectedId]);
+  const exportSelectedNodeId = selectedId || exportStickySelectedIdRef.current;
   const selectedTopicEl = findTopicSafely(mindRef.current, selectedId);
   const selectedNodeObj = selectedTopicEl?.nodeObj;
   const selectedHasChildren = Boolean(selectedNodeObj?.children?.length);
@@ -1297,7 +1314,7 @@ export default function MindElixirView({ data, onRegenerate, regenerating, contr
         record={data}
         mapId={data?.id}
         title={data?.title}
-        selectedNodeId={controller?.selected?.id}
+        selectedNodeId={exportSelectedNodeId}
         selectedBranchIds={selectedBranchIds}
         onRequestBranchSelection={() => { setExportOpen(false); setSelectionModeActive(true); }}
         savedAppearance={appearance}

@@ -6502,3 +6502,70 @@ overflow menu, give every action (not just the ones in scope for the PR at
 hand) the same close/focus lifecycle — a trigger-focus gap is easy to miss
 because it only shows up under keyboard/screen-reader use, never under a
 mouse-only click-through.
+
+## Export Studio silently reverted "current_branch" to "full" after the node-detail panel was closed (H3A, found/fixed 2026-10-14)
+
+**Symptom:** user selects a single branch on the canvas intending to export
+just that branch, then opens Export Studio — the resulting PDF/image is the
+WHOLE map, with no error and no visible sign anything went wrong except the
+review step's own "Phạm vi: Toàn bộ sơ đồ" line (easy to miss). Every scope-
+resolution algorithm downstream (`resolveExportScope`/`resolve_export_scope`,
+`recordScopedForExport`, `build_export_tree`, the H2 geometry-manifest
+re-validation) was already correct for "selected_branches"/"current_branch"
+— the 2026-10-07 ancestor-context fix and PR E's "visible" scope fix both
+hold. The defect was earlier than any of that: by the time Export Studio
+even read a selection, it was already gone.
+
+**Root cause:** `MainLayout.jsx`'s `closeRightPanel()` (the ONE close path
+for the node-detail panel — X button, backdrop, Escape) deliberately clears
+`controller.selected` on the mindmap surface, including the real mind-elixir
+canvas selection (`fakeMind.clearSelection()`), so the same node can be
+tapped again later — see `MainLayout.selectionLifecycle.test.jsx`'s "clears
+the canvas selection" assertion, a correct and already-tested contract for
+the detail panel. `MindElixirView.jsx` rendered `ExportStudioDialog` with
+`selectedNodeId={controller?.selected?.id}` straight from that same live
+value. A completely ordinary flow — select a branch, glance at its detail
+panel, close the panel, THEN open Export Studio — read `controller.selected`
+AFTER it had already been cleared by an unrelated UI dismissal.
+`deriveOpeningScope({ selectedBranchIds, selectedNodeId })` has no
+"selection used to exist" case; an empty `selectedNodeId` falls straight
+through to `"full"`, which is a perfectly valid scope on its own (not a bug
+in that function), so nothing downstream had any signal that something had
+gone wrong.
+
+**Fix:** `MindElixirView.jsx` now keeps a `exportStickySelectedIdRef` —
+remembers the last real `controller.selected.id` independently of the
+node-detail panel's own lifecycle, reset only when the map identity
+(`data?.id`) changes. `ExportStudioDialog` receives
+`selectedNodeId={exportSelectedNodeId}` (live selection, falling back to the
+sticky one) instead of reading `controller.selected.id` directly. Nothing in
+`MainLayout.jsx`/`closeRightPanel`/`MainLayout.selectionLifecycle.test.jsx`
+changed — the detail panel still closes and clears canvas highlighting
+exactly as before; only Export Studio's OWN notion of "what did the user
+pick" got decoupled from that unrelated panel's visibility. If the sticky
+node no longer exists on the map (deleted/edited away), `resolveExportScope`
+still throws `UnknownNodeIdError` and Export Studio shows "Lựa chọn không
+còn hợp lệ trên sơ đồ này" — it never silently falls back to `full` for that
+case either.
+
+**Regression:** `MindElixirView.exportStickySelection.test.jsx` — red
+against the pre-fix code (confirmed by temporarily reverting the fix: the
+opening scope radio read `full` instead of `current_branch`), green after;
+asserts the exported scope payload's `scope_type`/`selected_node_id` too.
+A second case proves
+the sticky value is reset on map switch (A→B leaks nothing). Full
+`MindElixirView`/`ExportStudioDialog`/`MainLayout.selectionLifecycle` suites
+re-run clean — the fix is additive to one prop source, not a change to the
+detail-panel close contract.
+
+**Prevention:** when two independent UI surfaces (a detail/inspector panel
+and an export/action dialog) both derive their behavior from the SAME piece
+of shared selection state, and one of those surfaces has its own legitimate
+reason to clear that state (here: "let the same node be re-tapped"), treat
+the state as serving two different consumers with two different lifetimes —
+never assume a single live value is still valid by the time an unrelated,
+asynchronous user action (open a different dialog) reads it. A frozen
+snapshot (or sticky memory) for the consumer that actually needs "what did
+the user last pick," decoupled from whatever makes the OTHER consumer want
+to clear the live value, avoids this without having to relax the other
+consumer's existing (correct, tested) behavior.
