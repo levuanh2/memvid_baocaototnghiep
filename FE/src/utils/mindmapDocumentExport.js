@@ -4,13 +4,15 @@
 // SVG) never touch the backend; see mindmapImageExport.js for those.
 import { apiFetch, apiUrl, _appError } from "./api";
 
-export async function createMindmapExport(mapId, { format, scope, options, mapImageBase64, idempotencyKey }) {
+export async function createMindmapExport(mapId, { format, scope, options, mapImageBase64, mapGeometryManifest, idempotencyKey }) {
   const res = await apiFetch(`/mindmaps/${encodeURIComponent(mapId)}/exports`, {
     method: "POST",
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify({
       format, scope, options,
       ...(mapImageBase64 ? { map_image_base64: mapImageBase64 } : {}),
+      // PR H2 — only ever sent alongside an image, never on its own.
+      ...(mapGeometryManifest ? { map_geometry_manifest: mapGeometryManifest } : {}),
       ...(idempotencyKey ? { idempotency_key: idempotencyKey } : {}),
     }),
   });
