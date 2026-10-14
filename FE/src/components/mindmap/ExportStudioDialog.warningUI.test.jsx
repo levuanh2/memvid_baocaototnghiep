@@ -48,7 +48,10 @@ describe("Export Studio — ceiling-exceeded warning surfaces to the user (H2)",
     vi.spyOn(docExport, "createMindmapExport").mockResolvedValue({ job_id: "j1", status: "queued" });
     vi.spyOn(docExport, "pollMindmapExportUntilDone").mockResolvedValue({
       status: "done", download_url: "/x",
-      warning: { code: "detail_pages_skipped_ceiling_exceeded", page_ceiling: 12, best_min_pt_found: 5.4 },
+      // real shape: BE nests warning inside the job's own `result` dict
+      // (see app/application/mindmap_export.py's run_export_job), never
+      // at the top level of the status payload.
+      result: { format: "pdf", size_bytes: 1234, node_count: 5, warning: { code: "detail_pages_skipped_ceiling_exceeded", page_ceiling: 12, best_min_pt_found: 5.4 } },
     });
     vi.spyOn(docExport, "triggerMindmapExportDownload").mockImplementation(() => {});
 
