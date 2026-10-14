@@ -79,10 +79,18 @@ def _png_b64(color=(30, 100, 220)):
     return base64.b64encode(buf.getvalue()).decode()
 
 
-def _manifest(x=80):
+def _manifest(x=5):
+    # image is 40x20 (see _png_b64 below) -- node must stay within bounds
+    # (x + width <= 40), so callers picking a "different" manifest must
+    # vary x within [0, 20], not an arbitrary out-of-bounds value. _rec()
+    # (scope=full) resolves included_ids={"root","c1"} -- the manifest
+    # must carry BOTH, an exact match, not a subset.
     return {
         "version": 1, "image_width_px": 40, "image_height_px": 20,
-        "nodes": [{"id": "c1", "x": x, "y": 2, "width": 20, "height": 10, "font_size_px": 16}],
+        "nodes": [
+            {"id": "root", "x": 0, "y": 0, "width": 10, "height": 8, "font_size_px": 20},
+            {"id": "c1", "x": x, "y": 10, "width": 20, "height": 8, "font_size_px": 16},
+        ],
         "connectors": [],
     }
 
@@ -107,22 +115,28 @@ def test_same_key_different_manifest_currently_WRONGLY_treated_as_same_request(b
     with the same job_id as r1, not 409."""
     _stub_get_record(monkeypatch, be)
     _protect(be, monkeypatch, "userA", on=True)
-    client.post("/mindmaps/m1/exports", json=_map_body("k-manifest", manifest=_manifest(x=80)))
-    r2 = client.post("/mindmaps/m1/exports", json=_map_body("k-manifest", manifest=_manifest(x=999)))
+    client.post("/mindmaps/m1/exports", json=_map_body("k-manifest", manifest=_manifest(x=5)))
+    r2 = client.post("/mindmaps/m1/exports", json=_map_body("k-manifest", manifest=_manifest(x=15)))
     assert r2.status_code == 409, f"expected idempotency_conflict for a changed manifest, got {r2.status_code}: {r2.get_json()}"
     assert r2.get_json().get("error_code") == "idempotency_conflict"
 
 
-def test_same_key_different_image_currently_WRONGLY_treated_as_same_request(be, client, monkeypatch, sync_enqueue, export_dir):
-    """RED (Section 8): request_fingerprint today is {map_id, format,
-    scope, options} ONLY -- map_image_base64 bytes are decoded/validated
-    but never hashed. Two requests sharing idempotency_key with a
-    DIFFERENT image currently return the same job_id instead of 409."""
+def test_same_key_same_manifest_different_image_currently_WRONGLY_treated_as_same_request(be, client, monkeypatch, sync_enqueue, export_dir):
+    """RED (Section 8): render_input_sha256 = SHA256(image_sha256 +
+    manifest_sha256) only exists for a request that carries a manifest at
+    all -- a plain image-only request (no manifest) is explicitly OUT of
+    this fix's scope and keeps PR #70's legacy fingerprint untouched (see
+    test_legacy_request_without_manifest_fingerprint_unaffected below).
+    So this test pins the real target precisely: SAME manifest content,
+    DIFFERENT image bytes, same idempotency_key -- must conflict, because
+    image_sha256 changed even though manifest_sha256 didn't. Today
+    (no render_input_sha256 concept at all) it doesn't."""
     _stub_get_record(monkeypatch, be)
     _protect(be, monkeypatch, "userA", on=True)
-    client.post("/mindmaps/m1/exports", json=_map_body("k-image", image_color=(30, 100, 220)))
-    r2 = client.post("/mindmaps/m1/exports", json=_map_body("k-image", image_color=(200, 10, 10)))
-    assert r2.status_code == 409, f"expected idempotency_conflict for a changed image, got {r2.status_code}: {r2.get_json()}"
+    m = _manifest(x=5)
+    client.post("/mindmaps/m1/exports", json=_map_body("k-image", image_color=(30, 100, 220), manifest=m))
+    r2 = client.post("/mindmaps/m1/exports", json=_map_body("k-image", image_color=(200, 10, 10), manifest=m))
+    assert r2.status_code == 409, f"expected idempotency_conflict for a changed image (same manifest), got {r2.status_code}: {r2.get_json()}"
     assert r2.get_json().get("error_code") == "idempotency_conflict"
 
 
@@ -140,8 +154,8 @@ def test_same_key_same_manifest_different_json_key_order_is_the_same_request(be,
     m = {
         "version": 1, "image_width_px": 40, "image_height_px": 20,
         "nodes": [
-            {"id": "c1", "x": 80, "y": 2, "width": 20, "height": 10, "font_size_px": 16},
-            {"id": "root", "x": 0, "y": 0, "width": 10, "height": 10, "font_size_px": 20},
+            {"id": "c1", "x": 5, "y": 10, "width": 20, "height": 8, "font_size_px": 16},
+            {"id": "root", "x": 0, "y": 0, "width": 10, "height": 8, "font_size_px": 20},
         ],
         "connectors": [],
     }

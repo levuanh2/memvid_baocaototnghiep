@@ -4,7 +4,7 @@ import { Icon } from "../ui/Icon";
 import Spinner from "../ui/Spinner";
 import { resolveExportScope, countIncluded, countHiddenIncluded, deriveOpeningScope, UnknownNodeIdError, NoSelectionError } from "../../utils/mindmapExportScope";
 import { isRootOnly } from "../../utils/mindElixirRootOnly";
-import { exportMindmapImage, estimateExportDimensions, captureMapImageBase64 } from "../../utils/mindmapImageExport";
+import { exportMindmapImage, estimateExportDimensions, captureMapImageBase64, captureMapImageWithGeometry } from "../../utils/mindmapImageExport";
 import { sanitizeExportFilename } from "../../utils/mindmapExportFilename";
 import { PRESETS, DEFAULT_APPEARANCE } from "../../utils/mindmapExportAppearance";
 import { getExportFormatCapabilities, isDocumentFormat } from "../../utils/mindmapExportFormatCapabilities";
@@ -134,7 +134,33 @@ export default function ExportStudioDialog({ open, onClose, mind, record, mapId,
 
   const exportAppearanceParams = { canvasAppearance: savedAppearance, exportStyleOverride: useMapAppearance ? null : styleOverride };
   const runImage = async () => setDone(await exportMindmapImage({ mind, record, scopeType: effectiveScope, targetNodeId: selectedNodeId, branchRootIds: selectedBranchIds ? [...selectedBranchIds] : [], visibleOnly, format, backgroundColor: backgroundColor(background, customColor), scale, title: filename, appearance, ...exportAppearanceParams }));
-  const runDocument = async (attemptKey) => { setJobStatus("queued"); setJobProgress(0); setJobId(null); let mapImageBase64; if ((format === "pdf" && docOptions.mode !== "outline") || (format === "docx" && includeMapImage)) mapImageBase64 = await captureMapImageBase64({ mind, record, scopeType: effectiveScope, targetNodeId: selectedNodeId, branchRootIds: selectedBranchIds ? [...selectedBranchIds] : [], visibleOnly, ...exportAppearanceParams }); const scope = buildDocumentScopePayload({ mind, scopeType, selectedNodeId, selectedBranchRootIds: selectedBranchIds ? [...selectedBranchIds] : [], visibleOnly }); const created = await createMindmapExport(mapId, { format, scope, options: docOptions, mapImageBase64, idempotencyKey: attemptKey }); setJobId(created.job_id); const controller = new AbortController(); abortRef.current = controller; const final = await pollMindmapExportUntilDone(created.job_id, { signal: controller.signal, onUpdate: (s) => { setJobStatus(s.status); setJobProgress(s.progress || 0); } }); if (final.status === "done") { setDone({ filename: `${filename}.${format}` }); if (final.download_url) triggerMindmapExportDownload(final.download_url); } else if (final.status === "cancelled") throw new Error("Đã hủy xuất tài liệu."); else throw new Error(final.error || "Xuất tài liệu thất bại."); };
+  const runDocument = async (attemptKey) => {
+    setJobStatus("queued"); setJobProgress(0); setJobId(null);
+    let mapImageBase64, mapGeometryManifest;
+    if (format === "pdf" && docOptions.mode !== "outline") {
+      // PR H2 — same capture lifecycle as before, now also returns a
+      // geometry manifest built from the SAME DOM snapdom just captured
+      // (never a second render just to measure geometry).
+      const captured = await captureMapImageWithGeometry({ mind, record, scopeType: effectiveScope, targetNodeId: selectedNodeId, branchRootIds: selectedBranchIds ? [...selectedBranchIds] : [], visibleOnly, ...exportAppearanceParams });
+      mapImageBase64 = captured.base64;
+      mapGeometryManifest = captured.geometryManifest;
+    } else if (format === "docx" && includeMapImage) {
+      mapImageBase64 = await captureMapImageBase64({ mind, record, scopeType: effectiveScope, targetNodeId: selectedNodeId, branchRootIds: selectedBranchIds ? [...selectedBranchIds] : [], visibleOnly, ...exportAppearanceParams });
+    }
+    const scope = buildDocumentScopePayload({ mind, scopeType, selectedNodeId, selectedBranchRootIds: selectedBranchIds ? [...selectedBranchIds] : [], visibleOnly });
+    const created = await createMindmapExport(mapId, { format, scope, options: docOptions, mapImageBase64, mapGeometryManifest, idempotencyKey: attemptKey });
+    setJobId(created.job_id);
+    const controller = new AbortController(); abortRef.current = controller;
+    const final = await pollMindmapExportUntilDone(created.job_id, { signal: controller.signal, onUpdate: (s) => { setJobStatus(s.status); setJobProgress(s.progress || 0); } });
+    if (final.status === "done") {
+      // PR H2 — the ceiling-exceeded warning (when present) lives inside
+      // the job's own `result` dict, never at the top level of the status
+      // payload (see app/application/mindmap_export.py's run_export_job).
+      setDone({ filename: `${filename}.${format}`, warning: final.result?.warning || null });
+      if (final.download_url) triggerMindmapExportDownload(final.download_url);
+    } else if (final.status === "cancelled") throw new Error("Đã hủy xuất tài liệu.");
+    else throw new Error(final.error || "Xuất tài liệu thất bại.");
+  };
   const runExport = async () => { if (!mind || !canExport || inFlightRef.current) return; inFlightRef.current = true; setExporting(true); setError(null); try { if (isDoc) await runDocument(newAttemptKey()); else await runImage(); } catch (e) { if (e?.name !== "AbortError") setError(e?.message || "Không xuất được sơ đồ."); setJobStatus((s) => ["queued", "running"].includes(s) ? "error" : s); } finally { inFlightRef.current = false; setExporting(false); } };
   const cancel = async () => { abortRef.current?.abort(); if (jobId) try { await cancelMindmapExport(jobId); } catch { /* best effort */ } setJobStatus("cancelled"); setExporting(false); };
   const next = () => { if (step === 0 && !canAdvance) return; setStep((old) => { const value = Math.min(3, old + 1); setFurthest((seen) => Math.max(seen, value)); return value; }); };

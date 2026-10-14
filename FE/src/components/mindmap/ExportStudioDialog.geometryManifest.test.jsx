@@ -75,7 +75,7 @@ describe("Export Studio — map geometry manifest payload (H2)", () => {
     vi.spyOn(docExport, "createMindmapExport").mockResolvedValue({ job_id: "j1", status: "queued" });
     vi.spyOn(docExport, "pollMindmapExportUntilDone").mockResolvedValue({ status: "done", download_url: "/x" });
     vi.spyOn(docExport, "triggerMindmapExportDownload").mockImplementation(() => {});
-    vi.spyOn(imageExport, "captureMapImageBase64").mockResolvedValue("ZmFrZS1iYXNlNjQ=");
+    vi.spyOn(imageExport, "captureMapImageWithGeometry").mockResolvedValue({ base64: "ZmFrZS1iYXNlNjQ=", geometryManifest: { version: 1, image_width_px: 10, image_height_px: 10, nodes: [], connectors: [] } });
 
     await render(makeController());
     const dialog = await openPdfAppearance();
@@ -92,7 +92,7 @@ describe("Export Studio — map geometry manifest payload (H2)", () => {
     vi.spyOn(docExport, "createMindmapExport").mockResolvedValue({ job_id: "j1", status: "queued" });
     vi.spyOn(docExport, "pollMindmapExportUntilDone").mockResolvedValue({ status: "done", download_url: "/x" });
     vi.spyOn(docExport, "triggerMindmapExportDownload").mockImplementation(() => {});
-    vi.spyOn(imageExport, "captureMapImageBase64").mockResolvedValue("ZmFrZS1iYXNlNjQ=");
+    vi.spyOn(imageExport, "captureMapImageWithGeometry").mockResolvedValue({ base64: "ZmFrZS1iYXNlNjQ=", geometryManifest: { version: 1, image_width_px: 10, image_height_px: 10, nodes: [], connectors: [] } });
 
     await render(makeController());
     const dialog = await openPdfAppearance();
@@ -108,7 +108,7 @@ describe("Export Studio — map geometry manifest payload (H2)", () => {
     vi.spyOn(docExport, "createMindmapExport").mockResolvedValue({ job_id: "j1", status: "queued" });
     vi.spyOn(docExport, "pollMindmapExportUntilDone").mockResolvedValue({ status: "done", download_url: "/x" });
     vi.spyOn(docExport, "triggerMindmapExportDownload").mockImplementation(() => {});
-    const captureSpy = vi.spyOn(imageExport, "captureMapImageBase64");
+    const captureSpy = vi.spyOn(imageExport, "captureMapImageWithGeometry");
 
     await render(makeController());
     const dialog = await openPdfAppearance(); // default mode=outline

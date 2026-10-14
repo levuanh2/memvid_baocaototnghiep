@@ -124,7 +124,7 @@ describe("Export Studio — PDF orientation control reflects the real auto-orien
     vi.spyOn(docExport, "createMindmapExport").mockResolvedValue({ job_id: "j1", status: "queued" });
     vi.spyOn(docExport, "pollMindmapExportUntilDone").mockResolvedValue({ status: "done", download_url: "/x" });
     vi.spyOn(docExport, "triggerMindmapExportDownload").mockImplementation(() => {});
-    vi.spyOn(imageExport, "captureMapImageBase64").mockResolvedValue("ZmFrZS1iYXNlNjQ=");
+    vi.spyOn(imageExport, "captureMapImageWithGeometry").mockResolvedValue({ base64: "ZmFrZS1iYXNlNjQ=", geometryManifest: null });
 
     await render(makeController());
     const dialog = await openPdfAppearance();

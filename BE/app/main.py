@@ -6109,9 +6109,53 @@ def create_mindmap_export(mindmap_id: str):
     if fmt == "pdf" and format_options.get("mode") in ("map", "map_and_outline") and not map_image_bytes:
         return jsonify({"error": "Chế độ này cần ảnh sơ đồ (map_image_base64)", "error_code": "missing_map_image"}), 400
 
+    # PR H2 — geometry manifest (optional, parallel to map_image_base64):
+    # validated here BEFORE any job is created, exactly like node-membership
+    # validation above — never a job that dies asynchronously for something
+    # checkable right now. expected_rendered_ids is server-derived from the
+    # SAME resolved_scope this request already computed (included_ids for
+    # "visible" — context_ids is always empty there by construction;
+    # included_ids UNION context_ids for every other scope) — the client
+    # never gets to decide which ids "should" be in the manifest.
+    geometry_manifest = body.get("map_geometry_manifest")
+    expected_geometry_fp = None
+    if geometry_manifest is not None:
+        import fitz
+        from services.mindmap.export.geometry_manifest import GeometryManifestError, geometry_source_fingerprint, validate_manifest
+        try:
+            decoded_pix = fitz.Pixmap(map_image_bytes) if map_image_bytes else None
+        except Exception:
+            return jsonify({"error": "map_image_base64 không hợp lệ", "error_code": "invalid_image"}), 400
+        if decoded_pix is None:
+            return jsonify({"error": "map_geometry_manifest cần kèm map_image_base64", "error_code": "invalid_geometry_manifest"}), 400
+        expected_rendered_ids = set(resolved_scope["included_ids"]) | set(resolved_scope.get("context_ids") or set())
+        try:
+            validate_manifest(
+                geometry_manifest, decoded_image_w=decoded_pix.width, decoded_image_h=decoded_pix.height,
+                expected_rendered_ids=expected_rendered_ids,
+            )
+        except GeometryManifestError as e:
+            return jsonify({"error": str(e), "error_code": "invalid_geometry_manifest"}), 400
+        # Stale-snapshot defense (PR H2, same pattern as visible_snapshot_fp
+        # below) — fingerprints the record CONTENT that determines canvas
+        # geometry for expected_rendered_ids right now; the worker
+        # recomputes it against a second, independent fetch.
+        expected_geometry_fp = geometry_source_fingerprint(
+            base.get("nodes") or [], base.get("relations") or [], expected_rendered_ids,
+        )
+
     from app.domains.jobs import jobs_store
+    from services.mindmap.export.geometry_manifest import render_input_sha256
+    fingerprint_payload = {"map_id": mindmap_id, "format": fmt, "scope": scope_params, "options": format_options}
+    # Legacy requests (no manifest) get BYTE-FOR-BYTE the PR #70 fingerprint
+    # — no key is added, not even a null, so the hashed JSON object is
+    # identical to before this field existed. Only a request that actually
+    # carries a manifest gets render_input_sha256 added.
+    render_sha = render_input_sha256(map_image_bytes, geometry_manifest) if (map_image_bytes and geometry_manifest is not None) else None
+    if render_sha is not None:
+        fingerprint_payload["render_input_sha256"] = render_sha
     request_fingerprint = hashlib.sha256(json.dumps(
-        {"map_id": mindmap_id, "format": fmt, "scope": scope_params, "options": format_options},
+        fingerprint_payload,
         ensure_ascii=False, sort_keys=True, separators=(",", ":"),
     ).encode("utf-8")).hexdigest()
     idempotency_key = str(body.get("idempotency_key") or "").strip()
@@ -6133,7 +6177,11 @@ def create_mindmap_export(mindmap_id: str):
 
     from app.jobs.queue import enqueue_job
     from app.application.mindmap_export import run_export_job
-    enqueue_job(run_export_job, args=(job_id, mindmap_id, uid, fmt, scope_params, format_options, map_image_bytes, visible_snapshot_fp), queue="mindmap_export", job_id=job_id)
+    enqueue_job(
+        run_export_job,
+        args=(job_id, mindmap_id, uid, fmt, scope_params, format_options, map_image_bytes, visible_snapshot_fp, geometry_manifest, expected_geometry_fp),
+        queue="mindmap_export", job_id=job_id,
+    )
     return jsonify({"job_id": job_id, "status": "queued", "status_url": f"/mindmaps/exports/{job_id}"}), 202
 
 

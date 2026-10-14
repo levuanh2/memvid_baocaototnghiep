@@ -271,7 +271,7 @@ def test_failed_job_can_be_retried_with_a_new_idempotency_key_and_succeeds(be, c
 
     from app.application import mindmap_export as mm_export_app
     call_count = {"n": 0}
-    real_serialize = mm_export_app.serialize_pdf
+    real_serialize = mm_export_app.serialize_pdf_with_result
 
     def _flaky(*args, **kwargs):
         call_count["n"] += 1
@@ -280,11 +280,13 @@ def test_failed_job_can_be_retried_with_a_new_idempotency_key_and_succeeds(be, c
         return real_serialize(*args, **kwargs)
 
     # Patched where the name is actually looked up (mindmap_export.py did
-    # `from ...pdf_serializer import serialize_pdf`, so it holds its own
-    # bound reference — patching pdf_serializer.serialize_pdf itself
-    # wouldn't touch that already-bound name). PR C1: pdf is the only
-    # remaining creatable document format, so this is the vehicle now.
-    monkeypatch.setattr(mm_export_app, "serialize_pdf", _flaky)
+    # `from ...pdf_serializer import serialize_pdf, serialize_pdf_with_result`,
+    # so it holds its own bound reference — patching pdf_serializer's own
+    # module-level name wouldn't touch that already-bound name). PR H2:
+    # the worker's PDF path now calls serialize_pdf_with_result (for
+    # detail-page/warning metadata), not plain serialize_pdf — that's the
+    # vehicle to patch here, matching what _serialize() actually calls.
+    monkeypatch.setattr(mm_export_app, "serialize_pdf_with_result", _flaky)
 
     r1 = client.post("/mindmaps/m1/exports", json={"format": "pdf", "idempotency_key": "retry-key-1"})
     job1 = r1.get_json()["job_id"]

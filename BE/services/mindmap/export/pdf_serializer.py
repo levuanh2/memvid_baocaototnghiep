@@ -15,14 +15,16 @@ valid, only how to render what capabilities.py already validated.
 """
 from __future__ import annotations
 
+from dataclasses import dataclass
 from typing import Any, Optional
 
 import fitz
 
 from services.mindmap.export.image_guard import validate_map_image
 from services.mindmap.export.pdf_layout import (
-    OutlineBlock, centered_fit_rect, choose_map_orientation, fits_on_page,
-    indent_for_depth, wrap_multiline,
+    NavigationBands, OutlineBlock, Rect, TARGET_MEDIAN_PT, TARGET_MIN_PT,
+    centered_fit_rect, choose_map_orientation, exact_grid_search_verbose,
+    fits_on_page, indent_for_depth, place_detail_tile, wrap_multiline,
 )
 
 from shared.paths import BE_ROOT
@@ -61,6 +63,23 @@ FONT_FILES = {
     "serif": BE_ROOT / "assets" / "fonts" / "DejaVuSerif.ttf",
 }
 FONT_ALIASES = {"sans": "dejavu-sans", "serif": "dejavu-serif"}
+
+# PR H2 -- when a geometry manifest is present and the overview alone can't
+# hit this readability target, overview+detail tiling kicks in. Region-code
+# overlay colour reuses the PR H "Hướng trang tự động" accent blue so the
+# two features read as one coherent system, not two unrelated designs.
+REGION_ACCENT_RGB = (0.169, 0.337, 0.831)  # ~ #2B56D4, matches Export Studio's accent blue family
+
+
+@dataclass(frozen=True)
+class PdfSerializationResult:
+    """Wraps serialize_pdf's real output for callers that need more than
+    raw bytes (the worker, for job result metadata) -- serialize_pdf()
+    itself keeps returning plain `bytes` for every existing caller
+    (unwraps `.content`), so PR #70's own public contract never changes."""
+    content: bytes
+    detail_pages: int
+    warning: Optional[dict[str, Any]]
 
 
 def _hex_to_rgb01(value: str) -> tuple[float, float, float]:
@@ -269,21 +288,114 @@ def _write_outline_pages(
             break
 
 
-def _write_image_page(doc: "fitz.Document", image_bytes: bytes, *, page_size: str, background: str, margin: float) -> None:
-    """mode="map"/"map_and_outline"'s map page. Orientation is chosen by
-    the REAL decoded image's own contain-fit scale (PR H contract) -- the
-    caller no longer passes an `orientation` for this page at all. The
-    destination rect is computed by hand (centered_fit_rect), never left
-    to `insert_image`'s own `keep_proportion` (see pdf_layout.py's
-    docstring for the confirmed PyMuPDF 1.27.2.3 square-image bug this
-    avoids)."""
+def _region_code(index: int) -> str:
+    return f"A{index + 1}"
+
+
+def _draw_region_overlay(page: "fitz.Page", *, overview_rect: "fitz.Rect", image_w: float, image_h: float, tiles: list[Rect], font_alias: str) -> None:
+    """Draws each detail tile's boundary as a thin dashed outline over the
+    overview image, with a small non-filling-the-region corner badge
+    (never a solid fill -- must never occlude a node under it). The badge
+    sits at the region's own top-left corner, inside the dashed border."""
+    scale = overview_rect.width / image_w if image_w else 0.0
+    for i, tile in enumerate(tiles):
+        rx0 = overview_rect.x0 + tile.x * scale
+        ry0 = overview_rect.y0 + tile.y * scale
+        rx1 = overview_rect.x0 + tile.right * scale
+        ry1 = overview_rect.y0 + tile.bottom * scale
+        region_rect = fitz.Rect(rx0, ry0, rx1, ry1)
+        page.draw_rect(region_rect, color=REGION_ACCENT_RGB, width=0.75, dashes="[3 2] 0")
+        code = _region_code(i)
+        badge = fitz.Rect(rx0 + 4, ry0 + 4, rx0 + 14 + 7 * len(code), ry0 + 18)
+        page.draw_rect(badge, color=REGION_ACCENT_RGB, fill=(1, 1, 1), width=0.75)
+        page.insert_text((badge.x0 + 4, badge.y1 - 5), code, fontsize=9, fontname=font_alias, color=REGION_ACCENT_RGB)
+
+
+def _draw_overview_legend(page: "fitz.Page", *, region_count: int, font_alias: str, margin: float, page_h: float) -> None:
+    codes = ", ".join(_region_code(i) for i in range(region_count))
+    page.insert_text((margin, page_h - margin + 18), f"Overview — vùng chi tiết: {codes}", fontsize=9, fontname=font_alias, color=(0.3, 0.3, 0.3))
+
+
+def _draw_detail_header(page: "fitz.Page", *, code: str, font_alias: str, margin: float) -> None:
+    page.insert_text((margin, margin - 14), f"Chi tiết — vùng {code}", fontsize=13, fontname=font_alias, color=DEFAULT_TEXT_RGB)
+
+
+def _node_effective_pts(nodes: list[dict], rect_w_pt: float, tile_w_px: float) -> list[float]:
+    return [float(n["font_size_px"]) * rect_w_pt / tile_w_px for n in nodes if tile_w_px]
+
+
+def _write_image_or_detail_pages(
+    doc: "fitz.Document", image_bytes: bytes, *, page_size: str, background: str, margin: float,
+    geometry_manifest: Optional[dict[str, Any]] = None,
+) -> tuple[int, Optional[dict[str, Any]]]:
+    """mode="map"/"map_and_outline"'s map page(s). Returns
+    (detail_page_count, warning). Orientation/placement for the OVERVIEW
+    page (and, when tiling, every detail page) is chosen by the real
+    decoded image's own contain-fit scale (PR H contract) -- destination
+    rects are always computed by hand (never `insert_image`'s own
+    `keep_proportion` -- see pdf_layout.py's docstring for the confirmed
+    PyMuPDF square-image bug this avoids). When `geometry_manifest` is
+    None, behavior is BYTE-FOR-BYTE PR #70 (no manifest, no tiling logic
+    even touched).
+    """
     pix = fitz.Pixmap(image_bytes)
     img_w, img_h = float(pix.width), float(pix.height)
-    choice = choose_map_orientation(img_w, img_h, PAGE_SIZES_PT.get(page_size, PAGE_SIZES_PT["A4"]), margin)
-    page = doc.new_page(width=choice.page_w, height=choice.page_h)
-    _fill_background(page, background)
-    rect = centered_fit_rect(img_w, img_h, choice.page_w, choice.page_h, margin)
-    page.insert_image(rect, stream=image_bytes)
+    page_size_pt = PAGE_SIZES_PT.get(page_size, PAGE_SIZES_PT["A4"])
+    choice = choose_map_orientation(img_w, img_h, page_size_pt, margin)
+    overview_page = doc.new_page(width=choice.page_w, height=choice.page_h)
+    _fill_background(overview_page, background)
+    overview_rect = centered_fit_rect(img_w, img_h, choice.page_w, choice.page_h, margin)
+    # Insert ONCE; the returned xref is REUSED (never re-embedded/
+    # re-compressed) for every detail page below -- see pdf_layout.py's
+    # place_detail_tile and the Phase 1.5 Pillow-vs-PyMuPDF benchmark
+    # (~4x faster, ~35-48% less peak RSS than per-tile Pillow crop+encode).
+    xref = overview_page.insert_image(overview_rect, stream=image_bytes)
+
+    if geometry_manifest is None:
+        return 0, None
+
+    bands = NavigationBands(margin_pt=margin)
+    overview_pts = _node_effective_pts(geometry_manifest.get("nodes") or [], overview_rect.width, img_w)
+    if overview_pts:
+        overview_pts_sorted = sorted(overview_pts)
+        median_pt = overview_pts_sorted[len(overview_pts_sorted) // 2]
+        min_pt = overview_pts_sorted[0]
+        if median_pt >= TARGET_MEDIAN_PT and min_pt >= TARGET_MIN_PT:
+            return 0, None  # overview is already readable -- stays single-page, exactly like PR #70
+
+    result, candidates = exact_grid_search_verbose(geometry_manifest, bands=bands, page_size_pt=page_size_pt)
+    if result is None:
+        best_min_pt = max((c.min_pt for c in candidates), default=0.0)
+        return 0, {
+            "code": "detail_pages_skipped_ceiling_exceeded",
+            "page_ceiling": 12,
+            "best_min_pt_found": round(best_min_pt, 2),
+        }
+
+    font_alias = _register_font(overview_page, "sans")
+    _draw_region_overlay(overview_page, overview_rect=overview_rect, image_w=img_w, image_h=img_h, tiles=result.tiles, font_alias=font_alias)
+    _draw_overview_legend(overview_page, region_count=len(result.tiles), font_alias=font_alias, margin=margin, page_h=choice.page_h)
+
+    for i, tile in enumerate(result.tiles):
+        placement = place_detail_tile(tile.w, tile.h, bands, page_size_pt)
+        detail_page = doc.new_page(width=placement.page_w, height=placement.page_h)
+        _fill_background(detail_page, background)
+        detail_font_alias = _register_font(detail_page, "sans")
+        code = _region_code(i)
+        _draw_detail_header(detail_page, code=code, font_alias=detail_font_alias, margin=margin)
+        # Crop-via-placement-and-page-clip (Phase 1.5 Section 9): insert the
+        # SAME full image (reusing `xref`, never re-embedding its bytes),
+        # scaled so tile.x/tile.y lands exactly at the detail rect's own
+        # origin; everything outside the page's own MediaBox is clipped by
+        # MuPDF at render time -- no second copy of pixel data is stored.
+        scale = placement.image_rect.w / tile.w if tile.w else 0.0
+        full_w_pt, full_h_pt = img_w * scale, img_h * scale
+        rx0 = placement.image_rect.x - tile.x * scale
+        ry0 = placement.image_rect.y - tile.y * scale
+        full_place_rect = fitz.Rect(rx0, ry0, rx0 + full_w_pt, ry0 + full_h_pt)
+        detail_page.insert_image(full_place_rect, xref=xref)
+
+    return len(result.tiles), None
 
 
 def _page_dims(page_size: str, orientation: str) -> tuple[float, float]:
@@ -291,14 +403,15 @@ def _page_dims(page_size: str, orientation: str) -> tuple[float, float]:
     return (h, w) if orientation == "landscape" else (w, h)
 
 
-def serialize_pdf(
+def _serialize_pdf_impl(
     tree: dict[str, Any], *, mode: str = "outline", page_size: str = "A4",
     orientation: str = "portrait", single_page: bool = False,
     map_image_bytes: Optional[bytes] = None,
     font: str = "sans", background: str = "white", branch_color_mode: str = "keep",
     margins: str = "normal", content: Optional[dict[str, bool]] = None,
-) -> bytes:
-    """mode: "outline" | "map" | "map_and_outline". Returns real PDF bytes.
+    geometry_manifest: Optional[dict[str, Any]] = None,
+) -> PdfSerializationResult:
+    """mode: "outline" | "map" | "map_and_outline".
 
     `orientation` (accepted for backward compatibility — old stored job
     options must still parse) no longer controls the map page's own
@@ -309,6 +422,12 @@ def serialize_pdf(
     portrait, independent of both `orientation` and whatever the map page
     ended up as -- a PDF can legitimately mix a landscape map page with
     portrait outline pages.
+
+    `geometry_manifest` (PR H2, optional): when present AND the overview
+    alone doesn't meet the readability target, the map page becomes an
+    overview + N detail pages instead of one page -- see
+    _write_image_or_detail_pages. None (the default) is byte-for-byte
+    PR #70 behavior; this parameter is never required.
     """
     if mode in ("map", "map_and_outline") and not map_image_bytes:
         raise ValueError(f"mode={mode!r} requires map_image_bytes")
@@ -320,14 +439,56 @@ def serialize_pdf(
 
     doc = fitz.open()
     try:
+        detail_pages, warning = 0, None
         if mode in ("map", "map_and_outline"):
-            _write_image_page(doc, map_image_bytes, page_size=page_size, background=background, margin=margin)
+            detail_pages, warning = _write_image_or_detail_pages(
+                doc, map_image_bytes, page_size=page_size, background=background, margin=margin,
+                geometry_manifest=geometry_manifest,
+            )
         if mode in ("outline", "map_and_outline"):
             outline_orientation = "portrait" if mode == "map_and_outline" else orientation
             _write_outline_pages(
                 doc, tree, page_size=page_size, orientation=outline_orientation, single_page=single_page,
                 font=font, background=background, branch_color_mode=branch_color_mode, margin=margin, content=content,
             )
-        return doc.tobytes()
+        return PdfSerializationResult(content=doc.tobytes(), detail_pages=detail_pages, warning=warning)
     finally:
         doc.close()
+
+
+def serialize_pdf(
+    tree: dict[str, Any], *, mode: str = "outline", page_size: str = "A4",
+    orientation: str = "portrait", single_page: bool = False,
+    map_image_bytes: Optional[bytes] = None,
+    font: str = "sans", background: str = "white", branch_color_mode: str = "keep",
+    margins: str = "normal", content: Optional[dict[str, bool]] = None,
+    geometry_manifest: Optional[dict[str, Any]] = None,
+) -> bytes:
+    """PR #70's own public contract, UNCHANGED: returns raw PDF bytes.
+    Every existing caller keeps working exactly as before. Callers that
+    need detail_pages/warning metadata (the worker) use
+    serialize_pdf_with_result instead."""
+    return _serialize_pdf_impl(
+        tree, mode=mode, page_size=page_size, orientation=orientation, single_page=single_page,
+        map_image_bytes=map_image_bytes, font=font, background=background, branch_color_mode=branch_color_mode,
+        margins=margins, content=content, geometry_manifest=geometry_manifest,
+    ).content
+
+
+def serialize_pdf_with_result(
+    tree: dict[str, Any], *, mode: str = "outline", page_size: str = "A4",
+    orientation: str = "portrait", single_page: bool = False,
+    map_image_bytes: Optional[bytes] = None,
+    font: str = "sans", background: str = "white", branch_color_mode: str = "keep",
+    margins: str = "normal", content: Optional[dict[str, bool]] = None,
+    geometry_manifest: Optional[dict[str, Any]] = None,
+) -> PdfSerializationResult:
+    """Same rendering as serialize_pdf, but returns the full
+    PdfSerializationResult (content/detail_pages/warning) -- used by the
+    worker (app/application/mindmap_export.py) so a ceiling-exceeded
+    warning can reach the job result."""
+    return _serialize_pdf_impl(
+        tree, mode=mode, page_size=page_size, orientation=orientation, single_page=single_page,
+        map_image_bytes=map_image_bytes, font=font, background=background, branch_color_mode=branch_color_mode,
+        margins=margins, content=content, geometry_manifest=geometry_manifest,
+    )

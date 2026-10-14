@@ -73,7 +73,16 @@ def _stub_get_record(monkeypatch, be, owner="userA", record=None):
 
 
 def _png_bytes(w, h, color=(30, 100, 220)):
-    img = Image.new("RGB", (w, h), color)
+    # image_guard.py (PR H, pre-existing) rejects a perfectly uniform image
+    # as "no content to export" -- fill an inner rect (ImageDraw, not
+    # putpixel -- some fixtures here are multi-megapixel and putpixel-per-
+    # pixel would be far too slow) so these are never mistaken for a
+    # blank/degenerate export.
+    from PIL import ImageDraw
+    img = Image.new("RGB", (w, h), (255, 255, 255))
+    inset = max(1, min(w, h) // 20)
+    if w > 2 * inset and h > 2 * inset:
+        ImageDraw.Draw(img).rectangle([inset, inset, w - inset - 1, h - inset - 1], fill=color)
     buf = io.BytesIO()
     img.save(buf, format="PNG")
     return buf.getvalue()
@@ -84,9 +93,14 @@ def _png_b64(w, h, color=(30, 100, 220)):
 
 
 def _valid_manifest(iw=40, ih=20):
+    # _rec() (default stub record) resolves included_ids={"root","c1"} for
+    # scope=full -- exact-id-match requires BOTH, not just "c1".
     return {
         "version": 1, "image_width_px": iw, "image_height_px": ih,
-        "nodes": [{"id": "c1", "x": 10, "y": 2, "width": 20, "height": 10, "font_size_px": 16}],
+        "nodes": [
+            {"id": "root", "x": 0, "y": 0, "width": 8, "height": 8, "font_size_px": 20},
+            {"id": "c1", "x": 10, "y": 2, "width": 20, "height": 10, "font_size_px": 16},
+        ],
         "connectors": [],
     }
 
@@ -122,18 +136,20 @@ def test_malformed_manifest_currently_accepted_instead_of_400(be, client, monkey
 
 def test_valid_manifest_currently_never_reaches_serialize_pdf(be, client, monkeypatch, sync_enqueue, export_dir):
     """RED: even a well-formed manifest is dropped on the floor today --
-    _serialize()/serialize_pdf() receive no geometry_manifest argument at
-    all. Patches the ALREADY-EXISTING serialize_pdf symbol (no new import)
+    _serialize() receives no geometry_manifest argument at all, and calls
+    plain serialize_pdf() rather than serialize_pdf_with_result(). Patches
+    the ALREADY-EXISTING serialize_pdf_with_result symbol (no new import --
+    pdf_serializer.py already defines it, just unused by the worker yet)
     to record its call kwargs and asserts the manifest was threaded through."""
     import app.application.mindmap_export as worker_mod
     calls = []
-    real_serialize_pdf = worker_mod.serialize_pdf
+    real_serialize_pdf = worker_mod.serialize_pdf_with_result
 
     def _spy(*args, **kwargs):
         calls.append(kwargs)
         return real_serialize_pdf(*args, **kwargs)
 
-    monkeypatch.setattr(worker_mod, "serialize_pdf", _spy)
+    monkeypatch.setattr(worker_mod, "serialize_pdf_with_result", _spy)
     _stub_get_record(monkeypatch, be)
     _protect(be, monkeypatch, "userA", on=True)
     client.post("/mindmaps/m1/exports", json={
@@ -202,20 +218,40 @@ def test_ceiling_exceeded_currently_produces_no_warning_at_all(be, client, monke
     manifest is never read. Target: result.warning.code ==
     'detail_pages_skipped_ceiling_exceeded'."""
     from app.domains.jobs import jobs_store
-    _stub_get_record(monkeypatch, be)
+    # record + manifest must describe the SAME node set (exact-id-match is
+    # enforced) -- 130 flat children, matching the extreme/unreadable
+    # geometry below (width=200 vs height=20000, AR 1:100 -- even the max
+    # 12-row single-column tiling can't reach 6pt minimum, verified by
+    # hand: tile 200x1666.67, contain-fit scale on A4 portrait usable
+    # ~0.457, rendered_w_pt~91.4, effective_pt = 10*91.4/200 ~ 4.57pt).
+    _stub_get_record(monkeypatch, be, record={
+        "id": "m1", "schema_version": 2, "title": "Bản đồ lớn", "sources": [],
+        "content_hash": "h" * 64, "created_at": "2026-07-13T00:00:00Z",
+        "nodes": [{"id": "root", "parent": None, "kind": "root", "title": "Root", "order": 0}] + [
+            {"id": f"c{i}", "parent": "root", "kind": "section", "title": f"Nhánh {i}", "order": i} for i in range(130)
+        ],
+        "relations": [], "generator": {"degraded": False, "missing": []},
+    })
     _protect(be, monkeypatch, "userA", on=True)
-    # a pathologically unreadable manifest (tiny font vs huge image) --
-    # would need far more than 12 tiles to reach 8pt median once grid
-    # search exists.
+    # image_guard.py's MAX_DIMENSION=12000 (pre-existing, PR H) caps any
+    # single dimension -- 10000 stays under that while keeping the AR
+    # extreme enough that NO rows*cols<=12 grid has a valid (node-
+    # uncutting) partition at all (verified directly against
+    # exact_grid_search_verbose: 1 candidate even attempted, result=None).
+    n = 130
+    row_h = (10000 - 100) / n
     huge_manifest = {
-        "version": 1, "image_width_px": 200, "image_height_px": 20000,
-        "nodes": [{"id": "c1", "x": 10, "y": i * 150, "width": 180, "height": 100, "font_size_px": 10} for i in range(130)],
+        "version": 1, "image_width_px": 200, "image_height_px": 10000,
+        "nodes": (
+            [{"id": "root", "x": 10, "y": 0, "width": 180, "height": 80, "font_size_px": 20}]
+            + [{"id": f"c{i}", "x": 10, "y": 100 + i * row_h, "width": 180, "height": min(60, row_h - 2), "font_size_px": 10} for i in range(n)]
+        ),
         "connectors": [],
     }
     resp = client.post("/mindmaps/m1/exports", json={
         "format": "pdf", "idempotency_key": "k-ceiling",
         "options": {"mode": "map"},
-        "map_image_base64": _png_b64(200, 1000),  # dims deliberately mismatched too -- not the point of THIS test
+        "map_image_base64": _png_b64(200, 10000),  # must match the manifest's declared dims exactly
         "map_geometry_manifest": huge_manifest,
     })
     assert resp.status_code in (202,)
