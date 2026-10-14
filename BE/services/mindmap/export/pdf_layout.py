@@ -190,3 +190,332 @@ def fits_on_page(cursor_y: float, block: OutlineBlock, page_h: float, margin: fl
     """Whether `block` can be drawn starting at cursor_y without any of
     its lines crossing the bottom margin."""
     return cursor_y + block.height <= page_h - margin
+
+
+# ---------------------------------------------------------------------------
+# PR H2 — exact deterministic tiling for readable overview+detail pages.
+# Construction-based coverage (Phase 1.5/2 closure audit): a grid tile set
+# is built so the image/connector union coverage is TRUE BY CONSTRUCTION
+# (an exact mathematical partition, overlap only ever grows tiles, clamped
+# to image bounds) -- never "proven" by post-hoc pixel sampling. Connector
+# bboxes are never a hard cut-avoidance obstacle (a flat/star-topology map's
+# root-to-child connector bbox can span nearly the whole image -- avoiding
+# every one is mathematically impossible); they are used only for the exact
+# union-coverage check below (diagnostics/tests) and for
+# tile_has_context_overlap (does a reader get enough visual continuity at a
+# seam), never to reject or reroute a tile boundary.
+# ---------------------------------------------------------------------------
+
+A4_PORTRAIT_PT = (595.0, 842.0)
+
+
+@dataclass(frozen=True)
+class Rect:
+    x: float
+    y: float
+    w: float
+    h: float
+
+    @property
+    def right(self) -> float:
+        return self.x + self.w
+
+    @property
+    def bottom(self) -> float:
+        return self.y + self.h
+
+    def intersects(self, other: "Rect") -> bool:
+        return self.x < other.right and other.x < self.right and self.y < other.bottom and other.y < self.bottom
+
+
+def build_core_partition(image_w: float, image_h: float, rows: int, cols: int) -> list[Rect]:
+    """EXACT mathematical partition of [0,image_w]x[0,image_h] into
+    rows*cols rectangles with boundaries at i*image_w/cols, j*image_h/rows
+    -- adjacent tiles share an exact edge (floating-point equal, not
+    approximate), so the union trivially covers the image by construction.
+    Never verified by sampling; see module docstring."""
+    tiles: list[Rect] = []
+    for r in range(rows):
+        y0 = image_h * r / rows
+        y1 = image_h * (r + 1) / rows
+        for c in range(cols):
+            x0 = image_w * c / cols
+            x1 = image_w * (c + 1) / cols
+            tiles.append(Rect(x0, y0, x1 - x0, y1 - y0))
+    return tiles
+
+
+def add_overlap(tiles: list[Rect], overlap_px: float, image_w: float, image_h: float) -> list[Rect]:
+    """Grows each core tile by overlap_px on every side, clamped to
+    [0,image_w]x[0,image_h] -- can only ever GROW coverage from the core
+    partition's already-exact union, never produce a gap, and never
+    produces a rect outside the image."""
+    grown = []
+    for t in tiles:
+        x0 = max(0.0, t.x - overlap_px)
+        y0 = max(0.0, t.y - overlap_px)
+        x1 = min(image_w, t.right + overlap_px)
+        y1 = min(image_h, t.bottom + overlap_px)
+        grown.append(Rect(x0, y0, x1 - x0, y1 - y0))
+    return grown
+
+
+def node_fully_covered(node: Rect, tiles: list[Rect], safe_pad: float = 0.0) -> bool:
+    """True iff `node` (shrunk by safe_pad on each side) lies entirely
+    inside at least ONE tile -- never satisfied by a union of several
+    tiles. A node split across tiles is always a hard fail."""
+    padded = Rect(node.x + safe_pad, node.y + safe_pad, max(0.0, node.w - 2 * safe_pad), max(0.0, node.h - 2 * safe_pad))
+    return any(t.x <= padded.x and t.y <= padded.y and t.right >= padded.right and t.bottom >= padded.bottom for t in tiles)
+
+
+def _rect_subtract(target: Rect, hole: Rect) -> list[Rect]:
+    """Clips `target` by removing its overlap with `hole`, returning the
+    0-4 rectangular pieces of `target` left uncovered. Exact, no sampling
+    -- the standard axis-aligned rectangle-subtraction decomposition."""
+    if not target.intersects(hole):
+        return [target]
+    pieces: list[Rect] = []
+    if hole.y > target.y:
+        pieces.append(Rect(target.x, target.y, target.w, hole.y - target.y))
+    if hole.bottom < target.bottom:
+        pieces.append(Rect(target.x, hole.bottom, target.w, target.bottom - hole.bottom))
+    mid_y0, mid_y1 = max(target.y, hole.y), min(target.bottom, hole.bottom)
+    if mid_y1 > mid_y0:
+        if hole.x > target.x:
+            pieces.append(Rect(target.x, mid_y0, hole.x - target.x, mid_y1 - mid_y0))
+        if hole.right < target.right:
+            pieces.append(Rect(hole.right, mid_y0, target.right - hole.right, mid_y1 - mid_y0))
+    return [p for p in pieces if p.w > 1e-9 and p.h > 1e-9]
+
+
+def _rect_union_covers(target: Rect, tiles: list[Rect]) -> bool:
+    """Exact (never sampled) check: does the union of `tiles` fully cover
+    `target`? Iteratively subtracts each tile from the remaining
+    uncovered pieces of `target`; fully covered iff nothing remains."""
+    remaining = [target]
+    for tile in tiles:
+        if not remaining:
+            return True
+        next_remaining: list[Rect] = []
+        for piece in remaining:
+            next_remaining.extend(_rect_subtract(piece, tile))
+        remaining = next_remaining
+    return not remaining
+
+
+def image_fully_covered(image_w: float, image_h: float, tiles: list[Rect]) -> bool:
+    """Exact (construction) coverage check for the whole image rect."""
+    return _rect_union_covers(Rect(0.0, 0.0, image_w, image_h), tiles)
+
+
+def connector_union_covered(connector: Rect, tiles: list[Rect]) -> bool:
+    """A connector MAY legitimately cross a tile boundary -- this checks
+    only that the UNION of tiles covers every pixel of its bbox, never
+    that one single tile contains it whole."""
+    return _rect_union_covers(connector, tiles)
+
+
+def tile_has_context_overlap(tile_a: Rect, tile_b: Rect, min_overlap_px: float) -> bool:
+    """True iff two tiles share enough overlap for a reader to recognize
+    visual continuity across the seam. For tiles adjacent along one axis
+    (the normal grid-neighbor case), the shared span along the OTHER axis
+    is simply the tiles' full height/width and carries no overlap
+    information by itself -- the real "how much do they actually overlap"
+    signal is the SMALLER of the two intersection dimensions."""
+    if not tile_a.intersects(tile_b):
+        return False
+    ix = max(0.0, min(tile_a.right, tile_b.right) - max(tile_a.x, tile_b.x))
+    iy = max(0.0, min(tile_a.bottom, tile_b.bottom) - max(tile_a.y, tile_b.y))
+    return min(ix, iy) >= min_overlap_px
+
+
+@dataclass(frozen=True)
+class NavigationBands:
+    """Fixed space RESERVED in every page's own layout, subtracted from
+    the usable rect BEFORE grid search ever runs -- never squeezed into
+    "whatever space is left over". header_pt: detail-page title band.
+    legend_pt: overview region-code legend band. margin_pt: ordinary page
+    margin on all four sides."""
+    header_pt: float = 24.0
+    legend_pt: float = 20.0
+    margin_pt: float = 40.0
+
+
+def usable_rect_after_bands(page_w: float, page_h: float, bands: NavigationBands) -> Rect:
+    """The margin-and-band-bounded usable rect for placing map/detail
+    content -- grid search must use THIS, never the raw page rect, or a
+    fixture can pass on paper but fail once the real header/legend bands
+    are actually drawn (Section 4's exact bug class)."""
+    w = page_w - 2 * bands.margin_pt
+    h = page_h - 2 * bands.margin_pt - bands.header_pt - bands.legend_pt
+    return Rect(bands.margin_pt, bands.margin_pt, max(0.0, w), max(0.0, h))
+
+
+def _best_tile_rect_pt(tile_w_px: float, tile_h_px: float, bands: NavigationBands, page_size_pt: tuple[float, float] = A4_PORTRAIT_PT) -> tuple[str, float, float]:
+    """Returns (orientation, rendered_rect_w_pt, scale) -- the larger of
+    portrait/landscape contain-fit scale on the BANDED usable rect (never
+    the raw page rect). Tie -> portrait, matching PR H's map-orientation
+    contract."""
+    pw, ph = page_size_pt
+    portrait_usable = usable_rect_after_bands(pw, ph, bands)
+    landscape_usable = usable_rect_after_bands(ph, pw, bands)
+    portrait_scale = contain_fit_scale(tile_w_px, tile_h_px, portrait_usable.w, portrait_usable.h)
+    landscape_scale = contain_fit_scale(tile_w_px, tile_h_px, landscape_usable.w, landscape_usable.h)
+    if landscape_scale > portrait_scale:
+        return "landscape", tile_w_px * landscape_scale, landscape_scale
+    return "portrait", tile_w_px * portrait_scale, portrait_scale
+
+
+@dataclass(frozen=True)
+class TilePlacement:
+    orientation: str
+    page_w: float
+    page_h: float
+    image_rect: Rect  # where to place the (clipped) image within the page, in pt
+
+
+def place_detail_tile(tile_w_px: float, tile_h_px: float, bands: NavigationBands, page_size_pt: tuple[float, float] = A4_PORTRAIT_PT) -> TilePlacement:
+    """Full placement for one detail (or overview) page showing a
+    tile_w_px x tile_h_px region: picks the better-fitting A4 orientation
+    (banded usable rect, never raw), then centers the contain-fit image
+    rect within that usable rect -- used identically by the overview page
+    (whole image as one "tile") and every real detail tile."""
+    pw, ph = page_size_pt
+    orientation, _rect_w_pt, scale = _best_tile_rect_pt(tile_w_px, tile_h_px, bands, page_size_pt)
+    page_w, page_h = (ph, pw) if orientation == "landscape" else (pw, ph)
+    usable = usable_rect_after_bands(page_w, page_h, bands)
+    w, h = tile_w_px * scale, tile_h_px * scale
+    x0 = usable.x + (usable.w - w) / 2
+    y0 = usable.y + bands.header_pt + (usable.h - bands.header_pt - h) / 2
+    return TilePlacement(orientation=orientation, page_w=page_w, page_h=page_h, image_rect=Rect(x0, y0, w, h))
+
+
+TARGET_MEDIAN_PT = 8.0
+TARGET_MIN_PT = 6.0
+MIN_CONTEXT_OVERLAP_PX = 24.0
+
+
+@dataclass
+class GridCandidate:
+    rows: int
+    cols: int
+    overlap_px: float
+    tiles: list[Rect]
+    median_pt: float
+    min_pt: float
+    meets_target: bool
+    node_coverage_ok: bool
+    image_coverage_ok: bool
+    connector_coverage_ok: bool
+    total_overlap_area: float
+    page_count: int
+
+
+@dataclass
+class GridResult(GridCandidate):
+    all_candidates: list[GridCandidate] = None  # type: ignore[assignment]
+
+
+def _manifest_rects(manifest: dict) -> tuple[list[tuple[str, Rect, float]], list[Rect], float, float]:
+    image_w = float(manifest["image_width_px"])
+    image_h = float(manifest["image_height_px"])
+    nodes = [(n["id"], Rect(n["x"], n["y"], n["width"], n["height"]), float(n["font_size_px"])) for n in manifest.get("nodes") or []]
+    connectors = [Rect(c["x"], c["y"], c["width"], c["height"]) for c in manifest.get("connectors") or []]
+    return nodes, connectors, image_w, image_h
+
+
+def exact_grid_search(
+    manifest: dict, *, page_ceiling: int = 12, bands: NavigationBands = NavigationBands(),
+    page_size_pt: tuple[float, float] = A4_PORTRAIT_PT, overlap_fraction: float = 0.08,
+) -> GridResult | None:
+    result, _all_candidates = exact_grid_search_verbose(
+        manifest, page_ceiling=page_ceiling, bands=bands, page_size_pt=page_size_pt, overlap_fraction=overlap_fraction,
+    )
+    return result
+
+
+def exact_grid_search_verbose(
+    manifest: dict, *, page_ceiling: int = 12, bands: NavigationBands = NavigationBands(),
+    page_size_pt: tuple[float, float] = A4_PORTRAIT_PT, overlap_fraction: float = 0.08,
+) -> tuple[GridResult | None, list[GridCandidate]]:
+    """Same search as exact_grid_search, but also returns every candidate
+    tried (even when none meets the target) -- used by the ceiling-
+    exceeded warning path to report `best_min_pt_found` for diagnostics."""
+    """Exhaustive deterministic search over every rows*cols <= page_ceiling
+    grid. For each candidate: build the exact core partition, add overlap
+    (clamped to image bounds), verify EVERY node is fully covered by some
+    single tile (a candidate that cuts a node is dropped entirely, never
+    silently accepted), compute each tile's real contain-fit scale against
+    the banded usable rect (trying both orientations), derive every node's
+    effective font pt, and verify image/connector union coverage (exact,
+    never sampled).
+
+    Selection order (first match wins): (1) meets readability target
+    (median >= 8pt AND every node's own effective pt >= 6pt), (2) fewest
+    pages, (3) highest minimum effective pt, (4) smallest total overlap
+    area, (5) deterministic tie-break on (rows, cols).
+    """
+    nodes, connectors, image_w, image_h = _manifest_rects(manifest)
+    if not nodes:
+        return None, []
+
+    candidates: list[GridCandidate] = []
+    for rows in range(1, page_ceiling + 1):
+        for cols in range(1, page_ceiling + 1):
+            if rows * cols > page_ceiling:
+                continue
+            overlap_px = overlap_fraction * min(image_w / cols, image_h / rows)
+            core = build_core_partition(image_w, image_h, rows, cols)
+            tiles = add_overlap(core, overlap_px, image_w, image_h)
+
+            node_ok = all(node_fully_covered(rect, tiles) for (_id, rect, _fs) in nodes)
+            if not node_ok:
+                continue
+
+            per_node_pts: list[float] = []
+            for (_id, rect, font_size) in nodes:
+                owning_tiles = [t for t in tiles if node_fully_covered(rect, [t])]
+                if not owning_tiles:
+                    continue
+                tile = min(owning_tiles, key=lambda t: t.w * t.h)  # tightest-fitting tile for this node
+                _orient, rect_w_pt, _scale = _best_tile_rect_pt(tile.w, tile.h, bands, page_size_pt)
+                per_node_pts.append(font_size * rect_w_pt / tile.w)
+            if not per_node_pts:
+                continue
+            per_node_pts.sort()
+            median_pt = per_node_pts[len(per_node_pts) // 2]
+            min_pt = per_node_pts[0]
+            meets_target = median_pt >= TARGET_MEDIAN_PT and min_pt >= TARGET_MIN_PT
+
+            image_ok = image_fully_covered(image_w, image_h, tiles) if meets_target else True
+            connector_ok = all(connector_union_covered(c, tiles) for c in connectors) if meets_target else True
+
+            total_overlap = 0.0
+            for i in range(len(tiles)):
+                for j in range(i + 1, len(tiles)):
+                    a, b = tiles[i], tiles[j]
+                    if a.intersects(b):
+                        ix = max(0.0, min(a.right, b.right) - max(a.x, b.x))
+                        iy = max(0.0, min(a.bottom, b.bottom) - max(a.y, b.y))
+                        total_overlap += ix * iy
+
+            candidates.append(GridCandidate(
+                rows=rows, cols=cols, overlap_px=overlap_px, tiles=tiles,
+                median_pt=median_pt, min_pt=min_pt, meets_target=meets_target,
+                node_coverage_ok=node_ok, image_coverage_ok=image_ok, connector_coverage_ok=connector_ok,
+                total_overlap_area=total_overlap, page_count=rows * cols,
+            ))
+
+    valid = [c for c in candidates if c.meets_target and c.node_coverage_ok and c.image_coverage_ok and c.connector_coverage_ok]
+    if not valid:
+        return None, candidates
+    valid.sort(key=lambda c: (c.page_count, -c.min_pt, c.total_overlap_area, c.rows, c.cols))
+    best = valid[0]
+    result = GridResult(
+        rows=best.rows, cols=best.cols, overlap_px=best.overlap_px, tiles=best.tiles,
+        median_pt=best.median_pt, min_pt=best.min_pt, meets_target=best.meets_target,
+        node_coverage_ok=best.node_coverage_ok, image_coverage_ok=best.image_coverage_ok,
+        connector_coverage_ok=best.connector_coverage_ok, total_overlap_area=best.total_overlap_area,
+        page_count=best.page_count, all_candidates=candidates,
+    )
+    return result, candidates

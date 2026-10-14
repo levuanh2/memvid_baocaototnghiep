@@ -1,0 +1,95 @@
+<!doctype html>
+<html lang="vi">
+  <head>
+    <meta charset="UTF-8" />
+    <title>Visible-scope geometry/transform harness (dev only, test-support — not part of the shipped app)</title>
+  </head>
+  <body>
+    <div id="root" style="width:900px;height:600px;"></div>
+    <script type="module">
+      import RealMindElixir from "/node_modules/mind-elixir/dist/MindElixir.js";
+      import "mind-elixir/style";
+      import { exportMindmapImage } from "/src/utils/mindmapImageExport.js";
+
+      function buildLiveInstance() {
+        const el = document.getElementById("root");
+        const instance = new RealMindElixir({
+          el, direction: RealMindElixir.SIDE, compact: true,
+          editable: false, contextMenu: false, toolBar: false,
+        });
+        const nodeData = {
+          id: "r", topic: "Root",
+          children: Array.from({ length: 8 }, (_, i) => ({ id: `c${i}`, topic: `Nhánh ${i}`, children: [] })),
+        };
+        instance.init({ nodeData, arrows: [] });
+        return instance;
+      }
+
+      async function capture(instance, outputMode = "base64") {
+        const { base64 } = await exportMindmapImage({
+          mind: instance, scopeType: "visible", format: "png",
+          backgroundColor: "white", scale: 2, outputMode,
+        });
+        return base64;
+      }
+
+      function decodePngDims(base64) {
+        // PNG IHDR: width at byte offset 16 (4 bytes BE), height at 20.
+        const bytes = Uint8Array.from(atob(base64), (c) => c.charCodeAt(0));
+        const dv = new DataView(bytes.buffer);
+        return { w: dv.getUint32(16), h: dv.getUint32(20) };
+      }
+
+      window.__captureAtZoom = async (zoom) => {
+        const instance = buildLiveInstance();
+        instance.map.style.transform = `translate3d(0px,0px,0px) scale(${zoom})`;
+        await new Promise((r) => setTimeout(r, 50));
+        const b64 = await capture(instance);
+        instance.destroy();
+        return decodePngDims(b64);
+      };
+
+      window.__captureAtPan = async (dx, dy) => {
+        const instance = buildLiveInstance();
+        instance.map.style.transform = `translate3d(${dx}px,${dy}px,0px) scale(1)`;
+        await new Promise((r) => setTimeout(r, 50));
+        const b64 = await capture(instance);
+        instance.destroy();
+        return decodePngDims(b64);
+      };
+
+      window.__captureWithTransformCheck = async (initialTransform) => {
+        const instance = buildLiveInstance();
+        instance.map.style.transform = initialTransform;
+        await new Promise((r) => setTimeout(r, 50));
+        const transformBefore = instance.map.style.transform;
+        await capture(instance);
+        const transformAfter = instance.map.style.transform;
+        instance.destroy();
+        return { transformBefore, transformAfter };
+      };
+
+      function expandedSnapshot(nodeData) {
+        // nodeData has circular parent<->children refs (mind-elixir links
+        // them post-init) -- JSON.stringify chokes on that, so walk by hand
+        // and collect only id+expanded, never touching `.parent`.
+        const out = {};
+        (function walk(n) { out[n.id] = n.expanded !== false; (n.children || []).forEach(walk); })(nodeData);
+        return out;
+      }
+
+      window.__captureAndCheckInstanceStable = async () => {
+        const instance = buildLiveInstance();
+        const before = expandedSnapshot(instance.nodeData);
+        await capture(instance);
+        const sameInstance = true; // same `instance` reference used throughout, by construction
+        const after = expandedSnapshot(instance.nodeData);
+        const expandedStateUnchanged = JSON.stringify(before) === JSON.stringify(after);
+        instance.destroy();
+        return { sameInstance, expandedStateUnchanged };
+      };
+
+      window.__harnessReady = true;
+    </script>
+  </body>
+</html>

@@ -27,30 +27,37 @@ from services.mindmap.export.scope import resolve_export_scope, ExportScopeError
 from services.mindmap.export.tree import build_export_tree
 from services.mindmap.export.docx_serializer import serialize_docx
 from services.mindmap.export.xlsx_serializer import serialize_xlsx
-from services.mindmap.export.pdf_serializer import serialize_pdf
+from services.mindmap.export.pdf_serializer import serialize_pdf_with_result
 
 
-def _serialize(fmt: str, tree: dict, options: dict[str, Any], map_image_bytes: Optional[bytes]) -> bytes:
+def _serialize(
+    fmt: str, tree: dict, options: dict[str, Any], map_image_bytes: Optional[bytes],
+    geometry_manifest: Optional[dict[str, Any]] = None,
+) -> tuple[bytes, Optional[dict[str, Any]]]:
+    """Returns (file_bytes, warning) -- warning is always None for docx/xlsx
+    (and for a PDF request with no geometry_manifest, byte-for-byte PR #70).
+    """
     content = options.get("content") or {}
     if fmt == "docx":
         return serialize_docx(
             tree, font=options.get("font", "sans"), heading_color_mode=options.get("headingColorMode", "keep"),
             orientation=options.get("orientation", "portrait"), margins=options.get("margins", "normal"),
             content=content, map_image_bytes=map_image_bytes,
-        )
+        ), None
     if fmt == "xlsx":
         return serialize_xlsx(
             tree, font=options.get("font", "sans"), header_style_mode=options.get("headerStyleMode", "keep"),
             content=content,
-        )
+        ), None
     if fmt == "pdf":
-        return serialize_pdf(
+        result = serialize_pdf_with_result(
             tree, mode=options.get("mode", "outline"), page_size=options.get("pageSize", "A4"),
             orientation=options.get("orientation", "portrait"), single_page=bool(options.get("singlePage", False)),
             font=options.get("font", "sans"), background=options.get("background", "white"),
             branch_color_mode=options.get("branchColorMode", "keep"), margins=options.get("margins", "normal"),
-            content=content, map_image_bytes=map_image_bytes,
+            content=content, map_image_bytes=map_image_bytes, geometry_manifest=geometry_manifest,
         )
+        return result.content, result.warning
     raise ValueError(f"unsupported format: {fmt}")
 
 
@@ -59,6 +66,8 @@ def run_export_job(
     scope_params: dict[str, Any], format_options: dict[str, Any],
     map_image_bytes: Optional[bytes] = None,
     expected_visible_fingerprint: Optional[str] = None,
+    geometry_manifest: Optional[dict[str, Any]] = None,
+    expected_geometry_fingerprint: Optional[str] = None,
 ) -> None:
     jobs_store.update_job(job_id, status="running", stage="building", progress=10)
     try:
@@ -100,6 +109,56 @@ def run_export_job(
             jobs_store.update_job(job_id, status="cancelled", current_node="Cancelled")
             return
 
+        # PR H2 geometry defense. Two independent checks, same reason as the
+        # visible-snapshot check above: never trust what the route already
+        # validated once at request time, re-derive everything from THIS
+        # fresh fetch.
+        #
+        # 1. Structural re-validation -- the route's own validate_manifest()
+        # call only ran against the request-time scope/image. Re-running it
+        # here against the worker's own fresh scope/image means a bypass of
+        # route validation (or a scope that resolves differently by the time
+        # the job runs) can't smuggle an out-of-bounds or wrong-id-set
+        # manifest into the serializer.
+        if geometry_manifest is not None:
+            import fitz
+            from services.mindmap.export.geometry_manifest import GeometryManifestError, validate_manifest
+            rendered_ids = scope["included_ids"] | scope["context_ids"]
+            try:
+                decoded_pix = fitz.Pixmap(map_image_bytes) if map_image_bytes else None
+            except Exception:
+                decoded_pix = None
+            if decoded_pix is None:
+                jobs_store.update_job(
+                    job_id, status="error", error_text="map_geometry_manifest cần kèm map_image_base64",
+                    error_code="invalid_geometry_manifest",
+                )
+                return
+            try:
+                validate_manifest(
+                    geometry_manifest, decoded_image_w=decoded_pix.width, decoded_image_h=decoded_pix.height,
+                    expected_rendered_ids=rendered_ids,
+                )
+            except GeometryManifestError as e:
+                jobs_store.update_job(job_id, status="error", error_text=str(e), error_code="invalid_geometry_manifest")
+                return
+
+        # 2. Stale-fingerprint defense -- a manifest can stay STRUCTURALLY
+        # valid (ids still match) while its geometry is now describing
+        # content that has since changed (topic/parent/order edited). The
+        # structural check above can't catch that; this hash comparison can.
+        if geometry_manifest is not None and expected_geometry_fingerprint is not None:
+            from services.mindmap.export.geometry_manifest import geometry_source_fingerprint
+            rendered_ids = scope["included_ids"] | scope["context_ids"]
+            actual_geometry_fp = geometry_source_fingerprint(nodes, relations, rendered_ids)
+            if actual_geometry_fp != expected_geometry_fingerprint:
+                jobs_store.update_job(
+                    job_id, status="error",
+                    error_text="Cấu trúc sơ đồ đã thay đổi trước khi xuất hoàn tất, vui lòng thử lại",
+                    error_code="stale_geometry_manifest",
+                )
+                return
+
         tree = build_export_tree(
             nodes, relations, scope["root_ids"], scope["included_ids"],
             map_id=map_id, title=record.get("title") or "",
@@ -108,7 +167,7 @@ def run_export_job(
         jobs_store.update_job(job_id, progress=50, stage="serializing")
 
         try:
-            file_bytes = _serialize(fmt, tree, format_options, map_image_bytes)
+            file_bytes, warning = _serialize(fmt, tree, format_options, map_image_bytes, geometry_manifest)
         except ValueError as e:
             jobs_store.update_job(job_id, status="error", error_text=str(e), error_code="unsupported_format")
             return
@@ -119,9 +178,9 @@ def run_export_job(
 
         path = export_jobs.output_path_for(job_id, fmt)
         path.write_bytes(file_bytes)
-        jobs_store.update_job(
-            job_id, status="done", progress=100, stage="done",
-            result={"format": fmt, "size_bytes": len(file_bytes), "node_count": len(scope["included_ids"])},
-        )
+        result = {"format": fmt, "size_bytes": len(file_bytes), "node_count": len(scope["included_ids"])}
+        if warning is not None:
+            result["warning"] = warning
+        jobs_store.update_job(job_id, status="done", progress=100, stage="done", result=result)
     except Exception as exc:  # noqa: BLE001 — a job failure must land as a terminal status, never an unhandled thread crash
         jobs_store.update_job(job_id, status="error", error_text=str(exc)[:300], error_code="export_failed")
