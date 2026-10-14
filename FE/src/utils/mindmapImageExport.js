@@ -79,11 +79,85 @@ async function assertMeaningfulBlob(blob) {
   if (!differs) throw new Error("Ảnh xuất không có nội dung (toàn một màu).");
 }
 
-async function _finishCapture(result, { outputMode, format, filename, quality }) {
+// PR H2 — mirrors services/mindmap/export/image_guard.py's MAX_DIMENSION/
+// MAX_PIXELS exactly (no shared JS/Python constant file exists; keep these
+// two in sync by hand if the BE values ever change). A geometry manifest
+// built from a bitmap that already violates these is worthless (the BE
+// would reject the image outright anyway) — failing HERE, before any POST,
+// gives a clear client-side error instead of a wasted round trip.
+const MAX_CAPTURE_DIMENSION_PX = 12000;
+const MAX_CAPTURE_PIXELS = 40_000_000;
+
+/** Thrown pre-POST when a capture's real decoded bitmap violates the
+ * backend's own hard image limits (clamped/truncated by the browser's own
+ * canvas size ceiling counts as a violation too, since the resulting
+ * pixels would silently not be what the manifest's geometry describes). */
+export class MapCaptureLimitError extends Error {
+  constructor(message, details) {
+    super(message);
+    this.name = "MapCaptureLimitError";
+    this.code = "map_capture_dimension_limit";
+    this.details = details;
+  }
+}
+
+/** Reads node/connector geometry + font-size directly from `mountEl`'s own
+ * DOM — the SAME dom snapdom just captured, never re-rendered — in BITMAP
+ * PIXEL coordinates. `effective_scale` is derived from the REAL decoded
+ * bitmap width vs. this element's own CSS width (never devicePixelRatio,
+ * never the UI's "1x/2x/4x" selector value — see Phase 1.5 closure audit:
+ * snapdom's actual raster scale is `scale option x devicePixelRatio`, so
+ * only a post-capture measurement is trustworthy). font_size_px reads
+ * `me-tpc`'s own computed font-size (the primary label), never descending
+ * into `.tags`/`.icons` sub-badges and never `rect.height` (padding/
+ * border/multi-line all inflate height without changing glyph size). */
+function extractGeometryManifest(mountEl, realImageWidthPx, realImageHeightPx) {
+  const origin = mountEl.getBoundingClientRect();
+  const effScale = origin.width ? realImageWidthPx / origin.width : 1;
+  const nodes = [...mountEl.querySelectorAll("me-tpc")].map((el) => {
+    const r = el.getBoundingClientRect();
+    const id = (el.dataset.nodeid || "").replace(/^me/, "");
+    const fontSizePx = parseFloat(getComputedStyle(el).fontSize) * effScale;
+    return {
+      id,
+      x: Math.round((r.left - origin.left) * effScale),
+      y: Math.round((r.top - origin.top) * effScale),
+      width: Math.round(r.width * effScale),
+      height: Math.round(r.height * effScale),
+      font_size_px: Math.round(fontSizePx * 100) / 100,
+    };
+  });
+  const connectors = [...mountEl.querySelectorAll("path")].map((p) => {
+    const r = p.getBoundingClientRect();
+    return {
+      x: Math.round((r.left - origin.left) * effScale),
+      y: Math.round((r.top - origin.top) * effScale),
+      width: Math.round(r.width * effScale),
+      height: Math.round(r.height * effScale),
+    };
+  });
+  return { version: 1, image_width_px: realImageWidthPx, image_height_px: realImageHeightPx, nodes, connectors };
+}
+
+async function _finishCapture(result, { outputMode, format, filename, quality, buildManifest }) {
   const blob = await result.toBlob({ type: format === "jpeg" ? "jpg" : format });
   await assertMeaningfulBlob(blob);
+  let geometryManifest = null;
+  if (buildManifest) {
+    const bitmap = await createImageBitmap(blob);
+    if (
+      bitmap.width > MAX_CAPTURE_DIMENSION_PX || bitmap.height > MAX_CAPTURE_DIMENSION_PX
+      || bitmap.width * bitmap.height > MAX_CAPTURE_PIXELS
+    ) {
+      throw new MapCaptureLimitError(
+        "Sơ đồ quá lớn để chụp ảnh xuất PDF (vượt giới hạn kích thước ảnh).",
+        { width: bitmap.width, height: bitmap.height },
+      );
+    }
+    geometryManifest = buildManifest(bitmap.width, bitmap.height);
+  }
   if (outputMode === "base64") {
-    return { base64: await blobToBase64(blob) };
+    return { base64: await blobToBase64(blob), geometryManifest };
   }
   await result.download({ format, filename, quality });
   return { filename };
@@ -127,10 +201,28 @@ export function estimateExportDimensions({ mind, scopeType, targetNodeId, branch
   return { width, height };
 }
 
-/** Captures the SAME scope a document export (PDF map mode, DOCX optional image) is about to use, as a real PNG — returned as base64 (no `data:` prefix, ready for BE's `map_image_base64`), never triggering a browser download. Thin wrapper over exportMindmapImage with outputMode:"base64"; every real-DOM-capture rule (force-expand, appearance, multi-branch offscreen composition) is shared, not reimplemented. */
+/** Captures the SAME scope a document export (PDF map mode, DOCX optional image) is about to use, as a real PNG — returned as base64 (no `data:` prefix, ready for BE's `map_image_base64`), never triggering a browser download. Thin wrapper over exportMindmapImage with outputMode:"base64"; every real-DOM-capture rule (force-expand, appearance, multi-branch offscreen composition) is shared, not reimplemented.
+ * Return shape is UNCHANGED (plain base64 string) — DOCX's optional map
+ * image, and every existing caller/test, keeps working exactly as before.
+ * PDF's map mode (the only caller that needs a geometry manifest too)
+ * uses captureMapImageWithGeometry instead, see below. */
 export async function captureMapImageBase64(opts) {
   const { base64 } = await exportMindmapImage({ ...opts, format: "png", outputMode: "base64" });
   return base64;
+}
+
+/** Same capture as captureMapImageBase64, but also returns `geometryManifest`
+ * (PR H2) — built from the SAME DOM snapdom just captured, in the SAME
+ * capture lifecycle (never a second render just to measure geometry).
+ * `geometryManifest` is null for the live-DOM multi-branch fallback path
+ * (exportMindmapImageMultiBranch — only reached when the caller has no
+ * `record`, which ExportStudioDialog always supplies) and for "visible"
+ * scope callers that don't pass one in (scope defaults never build a
+ * manifest unless explicitly asked — see exportMindmapImage's own
+ * `withGeometryManifest` flag). */
+export async function captureMapImageWithGeometry(opts) {
+  const { base64, geometryManifest } = await exportMindmapImage({ ...opts, format: "png", outputMode: "base64", withGeometryManifest: true });
+  return { base64, geometryManifest: geometryManifest || null };
 }
 
 
@@ -194,6 +286,7 @@ function contentBoundsRelativeTo(origin, root) {
 async function exportCanonicalFullMap({
   record, format, backgroundColor, scale, quality, title, appearance, outputMode,
   snapdom, settleMs, MindElixirCtor, canvasAppearance, exportStyleOverride,
+  withGeometryManifest = false,
 }) {
   // `record` is already live-aware (see liveRecordForExport) and, for a branch export,
   // already filtered to that branch — both done by the caller, before any live reads.
@@ -245,7 +338,10 @@ async function exportCanonicalFullMap({
 
     const result = await snapdom(mountEl, { backgroundColor, scale, quality });
     const filename = exportFilenameFor(title, format === "jpeg" ? "jpg" : format);
-    return await _finishCapture(result, { outputMode, format, filename, quality });
+    const buildManifest = withGeometryManifest
+      ? (realW, realH) => extractGeometryManifest(mountEl, realW, realH)
+      : null;
+    return await _finishCapture(result, { outputMode, format, filename, quality, buildManifest });
   } finally {
     instance?.destroy?.();
     offscreen.remove();
@@ -258,6 +354,7 @@ export async function exportMindmapImage({
   appearance = DEFAULT_APPEARANCE, outputMode = "download",
   canvasAppearance, exportStyleOverride,
   snapdom = realSnapdom, settleMs = 30, MindElixirCtor = RealMindElixir,
+  withGeometryManifest = false,
 }) {
   if ((scopeType === "full" || scopeType === "current_branch" || scopeType === "selected_branches") && record) {
     // Live structure/unsaved-title merge happens once here, reading only mind.nodeData/arrows
@@ -270,7 +367,7 @@ export async function exportMindmapImage({
     });
     return exportCanonicalFullMap({
       record: scopedRecord, format, backgroundColor, scale, quality, title, appearance, outputMode, snapdom, settleMs, MindElixirCtor,
-      canvasAppearance, exportStyleOverride,
+      canvasAppearance, exportStyleOverride, withGeometryManifest,
     });
   }
   if (!mind?.map) throw new Error("Mind Elixir chưa sẵn sàng.");
@@ -306,6 +403,17 @@ export async function exportMindmapImage({
   const restoreContainerAppearance = applyContainerAppearance({ mind, appearance });
   const snapshot = new Map();
   let restoreTargetAppearance = () => {};
+  // PR H2 fix (Phase 1.5/2 closure audit — a REAL, pre-existing bug): this
+  // live-DOM path captures whatever pan/zoom transform the user's canvas
+  // currently has, so the exported bitmap's pixel dimensions used to
+  // depend on the live zoom level even for the IDENTICAL node-set
+  // (confirmed live: zoom 1 -> 1360x?, zoom 2 -> 2720x?, exactly 2x).
+  // `mind.map` carries that transform (not a subtree wrapper) regardless
+  // of which element is actually captured, so it's always what gets
+  // neutralized-then-restored here — a current_branch capture of a
+  // subtree inherits the ancestor's live transform the same way a
+  // "visible" capture of mind.map itself does.
+  const liveTransform = mind.map.style.transform;
   try {
     if (needsForceExpand && subtreeRoot) {
       snapshotExpanded(subtreeRoot, snapshot);
@@ -316,16 +424,21 @@ export async function exportMindmapImage({
       mind.linkDiv?.();
       if (settleMs > 0) await new Promise((r) => setTimeout(r, settleMs));
     }
+    mind.map.style.transform = "translate3d(0px, 0px, 0px) scale(1)";
 
     const target = scopeType === "current_branch" ? subtreeElementFor(mind, effectiveTargetId) : mind.map;
     restoreTargetAppearance = applyTargetAppearance({ mind, target, appearance });
 
     const result = await snapdom(target, { backgroundColor, scale, quality });
     const filename = exportFilenameFor(title, format === "jpeg" ? "jpg" : format);
-    return await _finishCapture(result, { outputMode, format, filename, quality });
+    const buildManifest = withGeometryManifest
+      ? (realW, realH) => extractGeometryManifest(target, realW, realH)
+      : null;
+    return await _finishCapture(result, { outputMode, format, filename, quality, buildManifest });
   } finally {
     restoreTargetAppearance();
     restoreContainerAppearance();
+    mind.map.style.transform = liveTransform; // never leave the user's own pan/zoom view mutated
     if (needsForceExpand && subtreeRoot) {
       restoreExpanded(subtreeRoot, snapshot);
     }
