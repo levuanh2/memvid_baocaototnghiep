@@ -109,13 +109,44 @@ def run_export_job(
             jobs_store.update_job(job_id, status="cancelled", current_node="Cancelled")
             return
 
-        # PR H2 stale-geometry defense -- same pattern as the visible-
-        # snapshot check above, applied whenever a request carried a
-        # manifest (any scope, not just "visible"): recomputed against
-        # THIS fresh fetch, never trusting the route's own computation. A
-        # mismatch means the rendered set's id/parent/order/topic or its
-        # relations changed between request and run -- the manifest's
-        # geometry could no longer correspond to the record's real shape.
+        # PR H2 geometry defense. Two independent checks, same reason as the
+        # visible-snapshot check above: never trust what the route already
+        # validated once at request time, re-derive everything from THIS
+        # fresh fetch.
+        #
+        # 1. Structural re-validation -- the route's own validate_manifest()
+        # call only ran against the request-time scope/image. Re-running it
+        # here against the worker's own fresh scope/image means a bypass of
+        # route validation (or a scope that resolves differently by the time
+        # the job runs) can't smuggle an out-of-bounds or wrong-id-set
+        # manifest into the serializer.
+        if geometry_manifest is not None:
+            import fitz
+            from services.mindmap.export.geometry_manifest import GeometryManifestError, validate_manifest
+            rendered_ids = scope["included_ids"] | scope["context_ids"]
+            try:
+                decoded_pix = fitz.Pixmap(map_image_bytes) if map_image_bytes else None
+            except Exception:
+                decoded_pix = None
+            if decoded_pix is None:
+                jobs_store.update_job(
+                    job_id, status="error", error_text="map_geometry_manifest cần kèm map_image_base64",
+                    error_code="invalid_geometry_manifest",
+                )
+                return
+            try:
+                validate_manifest(
+                    geometry_manifest, decoded_image_w=decoded_pix.width, decoded_image_h=decoded_pix.height,
+                    expected_rendered_ids=rendered_ids,
+                )
+            except GeometryManifestError as e:
+                jobs_store.update_job(job_id, status="error", error_text=str(e), error_code="invalid_geometry_manifest")
+                return
+
+        # 2. Stale-fingerprint defense -- a manifest can stay STRUCTURALLY
+        # valid (ids still match) while its geometry is now describing
+        # content that has since changed (topic/parent/order edited). The
+        # structural check above can't catch that; this hash comparison can.
         if geometry_manifest is not None and expected_geometry_fingerprint is not None:
             from services.mindmap.export.geometry_manifest import geometry_source_fingerprint
             rendered_ids = scope["included_ids"] | scope["context_ids"]
