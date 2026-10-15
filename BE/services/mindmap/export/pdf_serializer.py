@@ -23,7 +23,7 @@ import fitz
 from services.mindmap.export.image_guard import validate_map_image
 from services.mindmap.export.pdf_layout import (
     NavigationBands, OutlineBlock, Rect, TARGET_MEDIAN_PT, TARGET_MIN_PT,
-    centered_fit_rect, choose_map_orientation, exact_grid_search_verbose,
+    branch_aware_grid_search_verbose, centered_fit_rect, choose_map_orientation, exact_grid_search_verbose,
     fits_on_page, indent_for_depth, place_detail_tile, wrap_multiline,
 )
 
@@ -324,9 +324,51 @@ def _node_effective_pts(nodes: list[dict], rect_w_pt: float, tile_w_px: float) -
     return [float(n["font_size_px"]) * rect_w_pt / tile_w_px for n in nodes if tile_w_px]
 
 
+def _node_effective_pt_by_id(nodes: list[dict], node_id: str, rect_w_pt: float, tile_w_px: float) -> Optional[float]:
+    if not tile_w_px:
+        return None
+    node = next((n for n in nodes if n["id"] == node_id), None)
+    if node is None:
+        return None
+    return float(node["font_size_px"]) * rect_w_pt / tile_w_px
+
+
+def _true_root_node_id(tree: dict[str, Any]) -> Optional[str]:
+    true_root = (tree.get("roots") or [None])[0]
+    return true_root["node_id"] if true_root else None
+
+
+def _branch_groups_from_tree(tree: dict[str, Any]) -> list[tuple[str, set[str]]]:
+    """[(branch_id, {node_id, ...}), ...] in document order, one entry per
+    DIRECT CHILD of the map's true root (`tree["roots"][0]`) -- the export
+    tree always has exactly one entry in `roots` (build_export_tree's own
+    contract: one tree from the true root, never one per selected branch),
+    so "top-level branch" here means the root's own children, not
+    `tree["roots"]` itself. Each set is that child's own node_id plus every
+    descendant's node_id (the branch's full subtree) -- never the root's
+    own id, which is never inside any branch's own detail crop (H3B).
+    Empty when the tree is just a bare root with no children (nothing to
+    branch-tile; the caller's whole-image search already covers that)."""
+    true_root = (tree.get("roots") or [None])[0]
+    if not true_root:
+        return []
+
+    def collect(node: dict[str, Any], into: set[str]) -> None:
+        into.add(node["node_id"])
+        for c in node["children"]:
+            collect(c, into)
+
+    groups: list[tuple[str, set[str]]] = []
+    for child in true_root["children"]:
+        ids: set[str] = set()
+        collect(child, ids)
+        groups.append((child["node_id"], ids))
+    return groups
+
+
 def _write_image_or_detail_pages(
     doc: "fitz.Document", image_bytes: bytes, *, page_size: str, background: str, margin: float,
-    geometry_manifest: Optional[dict[str, Any]] = None,
+    geometry_manifest: Optional[dict[str, Any]] = None, tree: Optional[dict[str, Any]] = None,
 ) -> tuple[int, Optional[dict[str, Any]]]:
     """mode="map"/"map_and_outline"'s map page(s). Returns
     (detail_page_count, warning). Orientation/placement for the OVERVIEW
@@ -364,19 +406,71 @@ def _write_image_or_detail_pages(
             return 0, None  # overview is already readable -- stays single-page, exactly like PR #70
 
     result, candidates = exact_grid_search_verbose(geometry_manifest, bands=bands, page_size_pt=page_size_pt)
-    if result is None:
-        best_min_pt = max((c.min_pt for c in candidates), default=0.0)
-        return 0, {
-            "code": "detail_pages_skipped_ceiling_exceeded",
-            "page_ceiling": 12,
-            "best_min_pt_found": round(best_min_pt, 2),
-        }
+    tiles: list[Rect]
+    if result is not None:
+        tiles = result.tiles
+    else:
+        # H3B — exact_grid_search's single uniform grid over the WHOLE image
+        # couldn't hit the readability target within the page ceiling. Try
+        # tiling each top-level branch against its OWN bounding box instead
+        # (see pdf_layout.py's branch_aware_grid_search for the real,
+        # measured win this produces over a uniform grid when branches are
+        # spread out with real empty space between them). Only attempted
+        # here, never before the whole-image search, so every map that
+        # already worked under H2 renders byte-for-byte identically.
+        branch_groups = _branch_groups_from_tree(tree) if tree is not None else []
+        # H3B review finding — branch-aware tiling deliberately never puts
+        # the true root inside any branch's own detail crop (it's the one
+        # node every branch's ancestor path already excludes), so without
+        # this check root would ONLY ever be as readable as the overview
+        # page happens to make it -- unlike H2's whole-image tiling, where
+        # root was covered by some tile too and got a detail-page-level
+        # font like everything else. Give root its OWN single-node detail
+        # region, exactly like a branch, whenever the overview's own scale
+        # doesn't already make it independently readable (own font pt,
+        # never the median/min of the whole overview, which root's own
+        # label does not have to carry).
+        # A single-node group's own "meets target" bar is necessarily the
+        # stricter TARGET_MEDIAN_PT (median_pt == min_pt for one node), and
+        # unlike a multi-node branch there is no "add a tile" escape hatch
+        # (a lone node can only ever occupy exactly one tile -- splitting
+        # it is never a valid candidate). If root's own label is wide
+        # enough that even an isolated full-page crop can't clear that bar,
+        # branch_aware_grid_search_verbose below returns None for the
+        # WHOLE attempt (same explicit, bounded "can't do it" as any other
+        # branch that can't be tiled) rather than silently shipping an
+        # unreadable root.
+        root_id = _true_root_node_id(tree) if tree is not None else None
+        if root_id and branch_groups:
+            root_overview_pt = _node_effective_pt_by_id(geometry_manifest.get("nodes") or [], root_id, overview_rect.width, img_w)
+            if root_overview_pt is None or root_overview_pt < TARGET_MIN_PT:
+                branch_groups = [(root_id, {root_id})] + branch_groups
+        branch_result, branch_best_attempted = (
+            branch_aware_grid_search_verbose(geometry_manifest, branch_groups, bands=bands, page_size_pt=page_size_pt)
+            if branch_groups else (None, 0.0)
+        )
+        if branch_result is not None and branch_result.all_meet_target:
+            tiles = branch_result.tiles
+        else:
+            # Neither strategy can produce a fully readable result within
+            # the page ceiling -- explicit warning, never a silently
+            # degraded "success" (same contract as PR H2). best_min_pt_found
+            # reports the best REAL measurement from whichever attempt got
+            # closer -- branch_best_attempted is 0.0 only when branch-aware
+            # truly never measured anything (e.g. no branch groups at all),
+            # never a number implying a search that didn't run.
+            whole_image_best = max((c.min_pt for c in candidates), default=0.0)
+            return 0, {
+                "code": "detail_pages_skipped_ceiling_exceeded",
+                "page_ceiling": 12,
+                "best_min_pt_found": round(max(whole_image_best, branch_best_attempted), 2),
+            }
 
     font_alias = _register_font(overview_page, "sans")
-    _draw_region_overlay(overview_page, overview_rect=overview_rect, image_w=img_w, image_h=img_h, tiles=result.tiles, font_alias=font_alias)
-    _draw_overview_legend(overview_page, region_count=len(result.tiles), font_alias=font_alias, margin=margin, page_h=choice.page_h)
+    _draw_region_overlay(overview_page, overview_rect=overview_rect, image_w=img_w, image_h=img_h, tiles=tiles, font_alias=font_alias)
+    _draw_overview_legend(overview_page, region_count=len(tiles), font_alias=font_alias, margin=margin, page_h=choice.page_h)
 
-    for i, tile in enumerate(result.tiles):
+    for i, tile in enumerate(tiles):
         placement = place_detail_tile(tile.w, tile.h, bands, page_size_pt)
         detail_page = doc.new_page(width=placement.page_w, height=placement.page_h)
         _fill_background(detail_page, background)
@@ -395,7 +489,7 @@ def _write_image_or_detail_pages(
         full_place_rect = fitz.Rect(rx0, ry0, rx0 + full_w_pt, ry0 + full_h_pt)
         detail_page.insert_image(full_place_rect, xref=xref)
 
-    return len(result.tiles), None
+    return len(tiles), None
 
 
 def _page_dims(page_size: str, orientation: str) -> tuple[float, float]:
@@ -443,7 +537,7 @@ def _serialize_pdf_impl(
         if mode in ("map", "map_and_outline"):
             detail_pages, warning = _write_image_or_detail_pages(
                 doc, map_image_bytes, page_size=page_size, background=background, margin=margin,
-                geometry_manifest=geometry_manifest,
+                geometry_manifest=geometry_manifest, tree=tree,
             )
         if mode in ("outline", "map_and_outline"):
             outline_orientation = "portrait" if mode == "map_and_outline" else orientation
