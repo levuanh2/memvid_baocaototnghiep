@@ -6678,3 +6678,98 @@ state and the clear function into the one place that already sees both
 callers, and give the clear function an explicit parameter for which
 reason applies — don't leave a downstream consumer trying to infer intent
 from a value that looks identical either way.
+
+## H2's PDF detail tiling wastes budget on inter-branch whitespace — large maps fell back to overview-only (H3B, fixed 2026-10-15)
+
+**Symptom:** a production 57-node map export (PDF, mode="map") produced
+only a 1-page overview with `detail_pages_skipped_ceiling_exceeded`
+(`best_min_pt_found: 5.66`), ~83.7MB. H2's own design intent (overview +
+readable detail tiles) never actually fired for this map — confirmed with
+a REAL repro, not assumed: a synthetic 57-node fixture (safe QA
+placeholder content, uneven branch spacing matching the real map's
+topology) was captured via a real Chromium session through the app's own
+`captureMapImageWithGeometry` code path, giving a real geometry manifest
+(4650×1908px image, 57 nodes, 9 top-level branches) and a real PDF
+(35,492,688 bytes, 1 page, `best_min_pt_found: 5.24` — same failure
+shape, same order of magnitude as production).
+
+**Root cause:** `pdf_layout.exact_grid_search` (H2) slices the WHOLE
+image into one uniform `rows x cols` grid. For a map whose branches are
+spread out with real empty space between them — measured on the real
+fixture: the two branch clusters occupied x≈64–1694 and x≈2917–4585,
+leaving ~1223px (~26% of the image's own width) of pure inter-branch
+gap — a uniform grid must still slice tiles across that gap at the SAME
+resolution as the branches themselves, wasting tile budget that could
+have gone toward making the branches' own content bigger. Within
+`page_ceiling=12`, the best uniform-grid candidate for the real fixture
+topped out at `min_pt=5.24` (target is median≥8/min≥6) — not close, by
+construction, no uniform grid of ≤12 cells can do much better when a
+quarter of the image is blank.
+
+**Fix:** `pdf_layout.branch_aware_grid_search` (new) tiles each top-level
+branch against its OWN bounding box instead of the whole image, reusing
+100% of H2's existing construction-based coverage math (`build_core_partition`/
+`add_overlap`/`node_fully_covered`/`connector_union_covered`/
+`exact_grid_search_verbose` — nothing duplicated) via a translate-to-local-
+coordinates / search / translate-back-to-whole-image-coordinates wrapper,
+so the existing overview-overlay and detail-page-crop code in
+`pdf_serializer.py` needed zero changes once fed the resulting tiles. Each
+branch independently finds its own smallest tile budget that ALREADY
+meets the readability target (`exact_grid_search_verbose` never returns a
+non-None result otherwise — an earlier "greedy grow toward target" design
+was written, benchmarked, found to be dead code given that contract, and
+deleted rather than kept "just in case"). `pdf_serializer._write_image_or_detail_pages`
+tries the existing whole-image search FIRST, completely unchanged (byte-
+for-byte identical output for every map that already worked); only on
+`None` does it attempt branch-aware, via a new `tree` parameter threaded
+through from `_serialize_pdf_impl` (already available there — the
+worker's own call site, `app/application/mindmap_export.py`, needed zero
+changes, since it already passed `tree` positionally). If branch-aware
+also can't fit every branch within the SAME `page_ceiling=12`, the
+existing overview-only warning fires — same error code/shape as H2,
+`best_min_pt_found` reporting whichever attempt (whole-image or
+branch-aware) got closer.
+
+On the real fixture: every one of the 9 real branches reached
+14.2–31.1pt (well over the 6/8pt target) using only 9 of the 12 tiles —
+10 total pages (1 overview + 9 detail), `warning=None`, `36,287,985`
+bytes (+2.2% vs the 1-page baseline — extra page/text overhead only, the
+map image is still embedded exactly ONCE and reused across all 10 pages,
+confirmed via a single real `xref`), peak RSS identical (+0.0%, same
+subprocess-isolated measurement methodology as H2's own resource gate),
+runtime +0.063s (0.312s → 0.375s). Real PyMuPDF inspection: 10 pages,
+region codes A1–A9 correct in the overview legend AND each detail page's
+own header, in order, Vietnamese diacritics (`vùng`, `Chi tiết`) correct.
+
+**Regression:** `test_pdf_layout_branch_aware.py` — pins the real
+captured 57-node manifest as a module constant (`REAL_57NODE_MANIFEST`)
+and asserts: (1) the real failure under whole-image search
+(`best_min_pt_found < 6.0`, confirmed red before this fix existed), (2)
+branch-aware succeeds within the same ceiling with every branch's
+`min_pt >= 10.0`, (3) every tile is translated back into whole-image
+coordinates, (4) no node lost across branch plans (every manifest node id
+fully covered by exactly its own branch's tiles), (5) clean `None` when a
+branch can't fit standalone or the minimum allocation exceeds the
+ceiling, (6) `all_meet_target` is always `True` on a non-None result
+(pins the dead-code deletion), (7) `_branch_groups_from_tree` unit tests
+(one entry per true-root child, empty for a bare root, root's own id
+never included). `test_mindmap_export_pdf_branch_aware.py` — integration-
+level, through the REAL `build_export_tree` (not a hand-built tree dict):
+the real fixture end to end (10 pages, single reused xref, correct region
+headers), a bare-root tree falling back to the exact H2 warning shape,
+and `geometry_manifest=None` staying byte-for-byte PR #70 (1 page, no
+warning). Pre-existing `test_pdf_layout_tiling.py` and every other H2/H3A
+PDF-export test (170 total across both old and new files) re-run clean —
+zero regression, since the whole-image path is tried first and unchanged.
+
+**Prevention:** when a uniform/exhaustive search over a WHOLE resource
+fails to meet a target, check whether the resource's own CONTENT is
+naturally clustered (branches, sections, groups) before concluding "no
+solution exists" or widening the search's own ceiling — a uniform
+partition spends budget proportional to AREA, but readability (or
+whatever the target measures) is usually proportional to CONTENT
+DENSITY, and those two are only the same thing when content is evenly
+spread. Measure the real gap (here: ~26% of the image was blank) before
+designing around it, and real-browser-captured fixture data beats a
+hand-rolled synthetic manifest whose numbers might not actually reproduce
+the reported failure at all.

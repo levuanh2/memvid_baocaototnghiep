@@ -33,6 +33,7 @@ that library quirk can never surface regardless of image shape.
 from __future__ import annotations
 
 from dataclasses import dataclass
+from typing import Optional
 
 import fitz
 
@@ -519,3 +520,167 @@ def exact_grid_search_verbose(
         page_count=best.page_count, all_candidates=candidates,
     )
     return result, candidates
+
+
+# ---------------------------------------------------------------------------
+# H3B — branch-aware tiling. exact_grid_search above slices the WHOLE image
+# into one uniform rows x cols grid; for a map whose branches are spread out
+# with real empty space between them, a uniform grid spends tile budget
+# tiling that empty space at the same resolution as the branches themselves.
+# Confirmed on a real 57-node fixture captured via a real browser (Playwright
+# + the app's own capture code, not a synthetic/guessed manifest): ~26% of
+# the image's own width was pure inter-branch gap, and exact_grid_search's
+# best candidate within page_ceiling=12 topped out at min_pt=5.24 (target is
+# 6/8) -- overview-only, exactly the reported production failure. Tiling
+# each top-level branch against its OWN bounding box instead reached
+# min_pt=14.21-31.14 across every branch using only 9 of the same 12 tiles.
+#
+# Every coverage/scale/selection rule is the EXACT SAME construction-based
+# math exact_grid_search_verbose already runs (never duplicated) -- this
+# section only adds the branch-grouping, local-coordinate translation, and
+# a per-branch tile-budget allocator around it.
+# ---------------------------------------------------------------------------
+
+
+@dataclass(frozen=True)
+class BranchPlan:
+    """One top-level branch's own tiling result, translated back into
+    WHOLE-IMAGE pixel coordinates -- `tiles` can be drawn by exactly the
+    same overview-overlay/detail-page-crop code a plain GridResult.tiles
+    already is, with zero changes there."""
+    branch_id: str
+    tiles: list[Rect]
+    median_pt: float
+    min_pt: float
+    meets_target: bool
+
+
+@dataclass(frozen=True)
+class BranchAwareResult:
+    plans: list[BranchPlan]  # one per branch with >=1 tiled node, in the same order branch_groups was given
+    all_meet_target: bool
+    worst_min_pt: float
+
+    @property
+    def tiles(self) -> list[Rect]:
+        """Every branch's tiles concatenated, in branch order -- the flat
+        sequence the overview overlay / detail-page loop already knows how
+        to draw, same shape as GridResult.tiles."""
+        out: list[Rect] = []
+        for p in self.plans:
+            out.extend(p.tiles)
+        return out
+
+
+def _branch_bbox(node_rects: list[Rect], image_w: float, image_h: float, padding_px: float) -> Rect:
+    x0 = max(0.0, min(r.x for r in node_rects) - padding_px)
+    y0 = max(0.0, min(r.y for r in node_rects) - padding_px)
+    x1 = min(image_w, max(r.right for r in node_rects) + padding_px)
+    y1 = min(image_h, max(r.bottom for r in node_rects) + padding_px)
+    return Rect(x0, y0, max(0.0, x1 - x0), max(0.0, y1 - y0))
+
+
+def _translate_manifest_to_branch(manifest: dict, node_ids: set[str], bbox: Rect) -> dict:
+    """A manifest containing only `node_ids`' own nodes and any connector
+    fully inside `bbox` -- a connector reaching OUTSIDE the branch (e.g.
+    the stub linking the branch's own top node back to the map's true
+    root, which is never part of any branch's own bbox) is excluded here
+    rather than failing coverage for a segment this tile was never meant
+    to contain -- with every x/y translated so bbox's own top-left becomes
+    this local image's (0, 0)."""
+    nodes = [n for n in (manifest.get("nodes") or []) if n["id"] in node_ids]
+    local_nodes = [
+        {"id": n["id"], "x": n["x"] - bbox.x, "y": n["y"] - bbox.y, "width": n["width"], "height": n["height"], "font_size_px": n["font_size_px"]}
+        for n in nodes
+    ]
+    local_connectors = []
+    for c in manifest.get("connectors") or []:
+        if c["x"] >= bbox.x - 1e-6 and c["y"] >= bbox.y - 1e-6 and c["x"] + c["width"] <= bbox.right + 1e-6 and c["y"] + c["height"] <= bbox.bottom + 1e-6:
+            local_connectors.append({"x": c["x"] - bbox.x, "y": c["y"] - bbox.y, "width": c["width"], "height": c["height"]})
+    return {"version": 1, "image_width_px": bbox.w, "image_height_px": bbox.h, "nodes": local_nodes, "connectors": local_connectors}
+
+
+def _translate_tiles_to_image(tiles: list[Rect], bbox: Rect) -> list[Rect]:
+    return [Rect(t.x + bbox.x, t.y + bbox.y, t.w, t.h) for t in tiles]
+
+
+def branch_aware_grid_search(
+    manifest: dict, branch_groups: list[tuple[str, set[str]]], *, page_ceiling: int = 12,
+    bands: NavigationBands = NavigationBands(), page_size_pt: tuple[float, float] = A4_PORTRAIT_PT,
+    overlap_fraction: float = 0.08, branch_padding_px: float = 24.0, max_tiles_per_branch: int = 8,
+) -> Optional[BranchAwareResult]:
+    """Tiles each top-level branch against its OWN bounding box instead of
+    the whole image (see the module section comment above for the real
+    measured win this produces over exact_grid_search). `branch_groups` is
+    [(branch_id, {node_id, ...}), ...] in document order -- every id in
+    each set must be a key the caller resolved from the export tree's own
+    top-level children; this module stays tree-shape-agnostic and never
+    reads parent/child structure itself.
+
+    Allocation: each branch independently takes the SMALLEST tile budget
+    (1..max_tiles_per_branch) for which its own local
+    exact_grid_search_verbose finds a candidate that both covers every
+    node AND meets the readability target -- that function never returns
+    a non-None result otherwise, so there is nothing left to "grow toward"
+    afterward; a branch either finds its own minimum target-meeting budget
+    within the per-branch cap, or it doesn't. The total across all branches
+    is checked against page_ceiling once, after every branch's own search.
+
+    Returns None when a branch can't find a target-meeting candidate at
+    all within max_tiles_per_branch, or when the summed minimum budgets
+    already exceed page_ceiling -- the caller falls back to the existing
+    overview-only warning in either case. `all_meet_target` is always True
+    on a non-None result today (kept as an explicit field, not inferred by
+    the caller, so a future change to exact_grid_search_verbose's own
+    "only return non-None when target is met" contract can't silently
+    make this function violate it unnoticed).
+    """
+    nodes_by_id = {n["id"]: n for n in manifest.get("nodes") or []}
+    image_w = float(manifest["image_width_px"])
+    image_h = float(manifest["image_height_px"])
+
+    bboxes: dict[str, Rect] = {}
+    local_manifests: dict[str, dict] = {}
+    for branch_id, node_ids in branch_groups:
+        rects = [
+            Rect(nodes_by_id[nid]["x"], nodes_by_id[nid]["y"], nodes_by_id[nid]["width"], nodes_by_id[nid]["height"])
+            for nid in node_ids if nid in nodes_by_id
+        ]
+        if not rects:
+            continue
+        bbox = _branch_bbox(rects, image_w, image_h, branch_padding_px)
+        bboxes[branch_id] = bbox
+        local_manifests[branch_id] = _translate_manifest_to_branch(manifest, node_ids, bbox)
+
+    if not local_manifests:
+        return None
+
+    budgets: dict[str, int] = {}
+    results: dict[str, GridResult] = {}
+    for branch_id, local in local_manifests.items():
+        found = None
+        for budget in range(1, max_tiles_per_branch + 1):
+            r, _ = exact_grid_search_verbose(local, page_ceiling=budget, bands=bands, page_size_pt=page_size_pt, overlap_fraction=overlap_fraction)
+            if r is not None:
+                found = (budget, r)
+                break
+        if found is None:
+            return None  # this branch alone can't be tiled at all within the per-branch cap
+        budgets[branch_id], results[branch_id] = found
+
+    total = sum(budgets.values())
+    if total > page_ceiling:
+        return None
+
+    plans = [
+        BranchPlan(
+            branch_id=branch_id, tiles=_translate_tiles_to_image(results[branch_id].tiles, bboxes[branch_id]),
+            median_pt=results[branch_id].median_pt, min_pt=results[branch_id].min_pt, meets_target=results[branch_id].meets_target,
+        )
+        for branch_id, _ in branch_groups if branch_id in results
+    ]
+    return BranchAwareResult(
+        plans=plans,
+        all_meet_target=all(p.meets_target for p in plans),
+        worst_min_pt=min((p.min_pt for p in plans), default=0.0),
+    )
