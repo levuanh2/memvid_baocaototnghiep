@@ -6773,3 +6773,122 @@ spread. Measure the real gap (here: ~26% of the image was blank) before
 designing around it, and real-browser-captured fixture data beats a
 hand-rolled synthetic manifest whose numbers might not actually reproduce
 the reported failure at all.
+
+## H3B review follow-up: root readability and diagnostic accuracy (fixed 2026-10-15)
+
+A pre-merge review of branch-aware tiling (PR #73) raised five content-
+coverage questions. Two were real gaps (fixed); three were verified safe
+with real evidence (no code change needed, documented + tested instead).
+
+**1. Root readability — real gap, fixed.** Branch-aware tiling deliberately
+excludes the true root from every branch group (root is the one node
+every branch's own ancestor path already excludes), so unlike H2's
+whole-image tiling — where root was covered by SOME uniform tile too,
+getting a detail-page-level font like any other node — root's readability
+was left entirely to whatever scale the OVERVIEW page happened to give
+it, with no check at all. A wide map or a long root label could silently
+leave root barely legible while every branch around it was perfectly
+readable. **Fix:** `pdf_serializer._write_image_or_detail_pages` now
+checks root's own overview-scale effective pt (`_node_effective_pt_by_id`,
+new) against `TARGET_MIN_PT` and, when it falls short, prepends root as
+its own single-node branch group — through the exact same
+`branch_aware_grid_search_verbose` machinery, nothing special-cased.
+Discovered along the way: a single-node group's OWN "meets target" bar is
+necessarily the stricter `TARGET_MEDIAN_PT` (8pt) — median equals min for
+one node — and a lone node can never be rescued by "add a tile" the way a
+multi-node branch can (splitting it is never a valid candidate). So when
+root's label is so wide that even an isolated full-page crop can't clear
+8pt, the WHOLE branch-aware attempt now declines cleanly (same `None`
+contract as any other unfittable branch) rather than shipping a plan with
+an unreadable root — pdf_serializer falls back to the existing
+ceiling-exceeded warning, same as always. Tested at the pdf_layout level
+(`test_root_gets_its_own_readable_detail_region_when_overview_is_too_small`,
+`test_root_unreadable_even_isolated_declines_cleanly_not_silently`) and
+end to end through the real serializer with real PyMuPDF inspection
+(root's region lands first, `A1`, when triggered).
+
+**2. Connector coverage — verified correct with real captured geometry,
+no code change.** The main 57-node test fixture's connectors were
+`connectors: []` for brevity, which never actually exercised
+`connector_union_covered` against real geometry. Re-embedded the REAL 56
+connectors the original Playwright capture produced. Measured: 47 are
+INTRA-branch (parent-child edges with both ends in the same top-level
+branch — every one correctly retained in that branch's own local manifest
+and covered by its own tiles, verified `len(local.connectors) ==
+len(branch_node_ids) - 1` for every one of the 9 branches) and 9 are
+ROOT-TO-BRANCH "bridge" stubs (one per branch, one endpoint is root,
+which is never inside any branch's own bbox) — deliberately excluded from
+every branch's own local manifest, same as before, and still fully
+visible on the untouched overview page. Clarified in both code comments
+and tests: "relations" (cross-branch logical links) are a TEXT-ONLY
+outline concept (`tree.relations`, rendered only via `content.relations`)
+— never drawn on the canvas/raster image at all, so they have zero raster-
+coverage surface to begin with; this was true before H3B and is
+unaffected by it.
+
+**3. Branch isolation (overlapping padded bboxes) — verified safe, no
+code change.** Two branches close enough that their own `branch_padding_px`
+-padded bboxes overlap still get a fully correct, disjoint NODE
+assignment (coverage is governed by each branch's own explicit node-id
+set from the tree, never by which pixels fall inside a padded bbox —
+confirmed with a dedicated overlap test). The one real, accepted
+trade-off: because a branch's detail page crops the ORIGINAL full-image
+raster via a plain rectangular window (the same technique H2's own
+whole-image tiles already use — never a second, re-encoded per-branch
+image), a detail page CAN show a few pixels spilling in from a very close
+neighbour at the crop's edge. This is strictly LESS cross-branch bleed
+than H2's own uniform grid ever had (a shared uniform tile could contain
+MULTIPLE full branches with zero visual distinction at all) — never a
+regression, and never affects which nodes are considered a branch's own
+CONTENT for coverage/validation, only the raster framing at a crop's
+extreme edge. Documented in code comments and the test's own docstring
+rather than engineering pixel-level masking for a cosmetic, strictly-
+improved-over-H2 edge case.
+
+**4. H3A compatibility — confirmed, no code change.** Scope resolution
+(`scope.py`) and `build_export_tree` are completely untouched by H3B;
+`_branch_groups_from_tree` only ever reads the ALREADY-scoped/pruned tree
+it's handed. Added tests proving this generalizes correctly through the
+REAL `resolve_export_scope` → `build_export_tree` pipeline: a
+`selected_branches` scope picking two DEEP, disjoint nodes (neither a
+direct child of the true root) produces exactly 2 branch groups, each
+correctly including its own context ancestor and never an unselected
+sibling or the true root itself; selecting a parent AND its own
+descendant together dedupes to one group (matching `resolve_export_scope`'s
+own existing dedup, never a duplicate/overlapping branch); `mode=
+"map_and_outline"` still places every outline page strictly after every
+map page (overview + any branch-aware detail pages), unaffected by H3B,
+since only the inside of the map-page step changed.
+
+**5. Diagnostics — real gap, fixed.** When `branch_aware_grid_search`
+returned `None` (branch-aware couldn't do it either), the caller had NO
+measurement of how close branch-aware actually got — `best_min_pt_found`
+in the warning fell back to silently reporting only the whole-image
+attempt's own number, understating what was actually tried. **Fix:** new
+`branch_aware_grid_search_verbose` (the existing `branch_aware_grid_search`
+is now a thin wrapper over it) returns `(result, best_min_pt_attempted)` —
+a REAL measurement from every budget every branch tried, even ones that
+never found a target-meeting candidate, even when the eventual failure
+was only the total page COUNT exceeding the ceiling (every branch had
+already individually succeeded). `best_min_pt_found` in the warning is
+now `max(whole_image_best, branch_best_attempted)` — the best REAL number
+from whichever attempt got closer, 0.0 only when truly nothing was ever
+measured, never a number implying a search that didn't run.
+
+**Resource/regression:** re-measured H2-vs-H3B peak RSS (subprocess-
+isolated, 3 fresh runs after the review fixes): delta ranged -2.2% to
++2.0% — noise-band, no material regression. Combined test count after
+this round: 192 passed (26 new/extended H3B tests + 166 pre-existing
+H2/H3A). `page_ceiling` stayed 12 throughout — root's own detail region,
+when added, counts toward the SAME budget, never a separate allowance.
+
+**Prevention:** when a new tiling/partition strategy deliberately excludes
+one entity (here: the root) from every group it creates, that entity's
+OWN readability needs an explicit check — "every group meets target" is
+not the same claim as "every rendered thing is readable" the moment
+something is excluded from every group by design. And when a diagnostic
+field can be fed by TWO different attempts (here: whole-image vs
+branch-aware), make sure a failure in the SECOND attempt doesn't
+silently discard everything the second attempt actually measured just
+because the simpler/older attempt's own number is still available as a
+fallback.

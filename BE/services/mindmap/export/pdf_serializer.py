@@ -23,7 +23,7 @@ import fitz
 from services.mindmap.export.image_guard import validate_map_image
 from services.mindmap.export.pdf_layout import (
     NavigationBands, OutlineBlock, Rect, TARGET_MEDIAN_PT, TARGET_MIN_PT,
-    branch_aware_grid_search, centered_fit_rect, choose_map_orientation, exact_grid_search_verbose,
+    branch_aware_grid_search_verbose, centered_fit_rect, choose_map_orientation, exact_grid_search_verbose,
     fits_on_page, indent_for_depth, place_detail_tile, wrap_multiline,
 )
 
@@ -324,6 +324,20 @@ def _node_effective_pts(nodes: list[dict], rect_w_pt: float, tile_w_px: float) -
     return [float(n["font_size_px"]) * rect_w_pt / tile_w_px for n in nodes if tile_w_px]
 
 
+def _node_effective_pt_by_id(nodes: list[dict], node_id: str, rect_w_pt: float, tile_w_px: float) -> Optional[float]:
+    if not tile_w_px:
+        return None
+    node = next((n for n in nodes if n["id"] == node_id), None)
+    if node is None:
+        return None
+    return float(node["font_size_px"]) * rect_w_pt / tile_w_px
+
+
+def _true_root_node_id(tree: dict[str, Any]) -> Optional[str]:
+    true_root = (tree.get("roots") or [None])[0]
+    return true_root["node_id"] if true_root else None
+
+
 def _branch_groups_from_tree(tree: dict[str, Any]) -> list[tuple[str, set[str]]]:
     """[(branch_id, {node_id, ...}), ...] in document order, one entry per
     DIRECT CHILD of the map's true root (`tree["roots"][0]`) -- the export
@@ -405,21 +419,51 @@ def _write_image_or_detail_pages(
         # here, never before the whole-image search, so every map that
         # already worked under H2 renders byte-for-byte identically.
         branch_groups = _branch_groups_from_tree(tree) if tree is not None else []
-        branch_result = branch_aware_grid_search(geometry_manifest, branch_groups, bands=bands, page_size_pt=page_size_pt) if branch_groups else None
+        # H3B review finding — branch-aware tiling deliberately never puts
+        # the true root inside any branch's own detail crop (it's the one
+        # node every branch's ancestor path already excludes), so without
+        # this check root would ONLY ever be as readable as the overview
+        # page happens to make it -- unlike H2's whole-image tiling, where
+        # root was covered by some tile too and got a detail-page-level
+        # font like everything else. Give root its OWN single-node detail
+        # region, exactly like a branch, whenever the overview's own scale
+        # doesn't already make it independently readable (own font pt,
+        # never the median/min of the whole overview, which root's own
+        # label does not have to carry).
+        # A single-node group's own "meets target" bar is necessarily the
+        # stricter TARGET_MEDIAN_PT (median_pt == min_pt for one node), and
+        # unlike a multi-node branch there is no "add a tile" escape hatch
+        # (a lone node can only ever occupy exactly one tile -- splitting
+        # it is never a valid candidate). If root's own label is wide
+        # enough that even an isolated full-page crop can't clear that bar,
+        # branch_aware_grid_search_verbose below returns None for the
+        # WHOLE attempt (same explicit, bounded "can't do it" as any other
+        # branch that can't be tiled) rather than silently shipping an
+        # unreadable root.
+        root_id = _true_root_node_id(tree) if tree is not None else None
+        if root_id and branch_groups:
+            root_overview_pt = _node_effective_pt_by_id(geometry_manifest.get("nodes") or [], root_id, overview_rect.width, img_w)
+            if root_overview_pt is None or root_overview_pt < TARGET_MIN_PT:
+                branch_groups = [(root_id, {root_id})] + branch_groups
+        branch_result, branch_best_attempted = (
+            branch_aware_grid_search_verbose(geometry_manifest, branch_groups, bands=bands, page_size_pt=page_size_pt)
+            if branch_groups else (None, 0.0)
+        )
         if branch_result is not None and branch_result.all_meet_target:
             tiles = branch_result.tiles
         else:
             # Neither strategy can produce a fully readable result within
             # the page ceiling -- explicit warning, never a silently
             # degraded "success" (same contract as PR H2). best_min_pt_found
-            # reports whichever attempt got closer, so the diagnostic is
-            # never worse than what was actually tried.
+            # reports the best REAL measurement from whichever attempt got
+            # closer -- branch_best_attempted is 0.0 only when branch-aware
+            # truly never measured anything (e.g. no branch groups at all),
+            # never a number implying a search that didn't run.
             whole_image_best = max((c.min_pt for c in candidates), default=0.0)
-            branch_best = branch_result.worst_min_pt if branch_result is not None else 0.0
             return 0, {
                 "code": "detail_pages_skipped_ceiling_exceeded",
                 "page_ceiling": 12,
-                "best_min_pt_found": round(max(whole_image_best, branch_best), 2),
+                "best_min_pt_found": round(max(whole_image_best, branch_best_attempted), 2),
             }
 
     font_alias = _register_font(overview_page, "sans")

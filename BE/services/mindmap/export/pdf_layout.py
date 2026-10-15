@@ -609,6 +609,21 @@ def branch_aware_grid_search(
     bands: NavigationBands = NavigationBands(), page_size_pt: tuple[float, float] = A4_PORTRAIT_PT,
     overlap_fraction: float = 0.08, branch_padding_px: float = 24.0, max_tiles_per_branch: int = 8,
 ) -> Optional[BranchAwareResult]:
+    """Thin wrapper over branch_aware_grid_search_verbose for callers that
+    only need the result, not the diagnostic. See that function's own
+    docstring for the full contract."""
+    result, _best_min_pt_attempted = branch_aware_grid_search_verbose(
+        manifest, branch_groups, page_ceiling=page_ceiling, bands=bands, page_size_pt=page_size_pt,
+        overlap_fraction=overlap_fraction, branch_padding_px=branch_padding_px, max_tiles_per_branch=max_tiles_per_branch,
+    )
+    return result
+
+
+def branch_aware_grid_search_verbose(
+    manifest: dict, branch_groups: list[tuple[str, set[str]]], *, page_ceiling: int = 12,
+    bands: NavigationBands = NavigationBands(), page_size_pt: tuple[float, float] = A4_PORTRAIT_PT,
+    overlap_fraction: float = 0.08, branch_padding_px: float = 24.0, max_tiles_per_branch: int = 8,
+) -> tuple[Optional[BranchAwareResult], float]:
     """Tiles each top-level branch against its OWN bounding box instead of
     the whole image (see the module section comment above for the real
     measured win this produces over exact_grid_search). `branch_groups` is
@@ -626,14 +641,21 @@ def branch_aware_grid_search(
     within the per-branch cap, or it doesn't. The total across all branches
     is checked against page_ceiling once, after every branch's own search.
 
-    Returns None when a branch can't find a target-meeting candidate at
-    all within max_tiles_per_branch, or when the summed minimum budgets
-    already exceed page_ceiling -- the caller falls back to the existing
-    overview-only warning in either case. `all_meet_target` is always True
-    on a non-None result today (kept as an explicit field, not inferred by
-    the caller, so a future change to exact_grid_search_verbose's own
-    "only return non-None when target is met" contract can't silently
-    make this function violate it unnoticed).
+    Returns (None, best_min_pt_attempted) when a branch can't find a
+    target-meeting candidate at all within max_tiles_per_branch, or when
+    the summed minimum budgets already exceed page_ceiling -- the caller
+    falls back to the existing overview-only warning in either case. The
+    second element is a REAL measurement (the best min_pt actually seen
+    across every budget every branch tried, even a branch that never
+    found a target-meeting one, and even across branches that DID
+    succeed when the failure was only the total exceeding page_ceiling)
+    -- 0.0 only when truly nothing was ever measured (e.g. no branch had
+    any node at all), never a number implying a search that didn't run.
+    `all_meet_target` on a non-None BranchAwareResult is always True
+    today (kept as an explicit field, not inferred by the caller, so a
+    future change to exact_grid_search_verbose's own "only return
+    non-None when target is met" contract can't silently make this
+    function violate it unnoticed).
     """
     nodes_by_id = {n["id"]: n for n in manifest.get("nodes") or []}
     image_w = float(manifest["image_width_px"])
@@ -653,24 +675,37 @@ def branch_aware_grid_search(
         local_manifests[branch_id] = _translate_manifest_to_branch(manifest, node_ids, bbox)
 
     if not local_manifests:
-        return None
+        return None, 0.0
 
     budgets: dict[str, int] = {}
     results: dict[str, GridResult] = {}
+    best_min_pt_attempted = 0.0
+    failed_branch = False
     for branch_id, local in local_manifests.items():
         found = None
         for budget in range(1, max_tiles_per_branch + 1):
-            r, _ = exact_grid_search_verbose(local, page_ceiling=budget, bands=bands, page_size_pt=page_size_pt, overlap_fraction=overlap_fraction)
+            r, candidates = exact_grid_search_verbose(local, page_ceiling=budget, bands=bands, page_size_pt=page_size_pt, overlap_fraction=overlap_fraction)
+            branch_best = max((c.min_pt for c in candidates), default=0.0)
+            best_min_pt_attempted = max(best_min_pt_attempted, branch_best)
             if r is not None:
                 found = (budget, r)
                 break
         if found is None:
-            return None  # this branch alone can't be tiled at all within the per-branch cap
+            failed_branch = True
+            continue  # keep measuring the rest of the branches too -- the diagnostic should reflect every attempt, not stop at the first failure
         budgets[branch_id], results[branch_id] = found
+
+    if failed_branch:
+        return None, round(best_min_pt_attempted, 2)  # this branch alone can't be tiled at all within the per-branch cap
 
     total = sum(budgets.values())
     if total > page_ceiling:
-        return None
+        # Every branch individually succeeded (each result already meets
+        # target), so their own min_pt values are a more informative
+        # diagnostic than the per-candidate scan above -- the failure here
+        # is page-COUNT, not readability.
+        best_min_pt_attempted = max(best_min_pt_attempted, min((r.min_pt for r in results.values()), default=0.0))
+        return None, round(best_min_pt_attempted, 2)
 
     plans = [
         BranchPlan(
@@ -679,8 +714,9 @@ def branch_aware_grid_search(
         )
         for branch_id, _ in branch_groups if branch_id in results
     ]
-    return BranchAwareResult(
+    result = BranchAwareResult(
         plans=plans,
         all_meet_target=all(p.meets_target for p in plans),
         worst_min_pt=min((p.min_pt for p in plans), default=0.0),
     )
+    return result, round(result.worst_min_pt, 2)
