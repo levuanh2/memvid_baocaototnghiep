@@ -861,6 +861,15 @@ export default function MindElixirView({ data, onRegenerate, regenerating, contr
   // knowing on its own — `expandTick`'s only job is forcing a re-render so
   // these reads happen again, not carrying any value itself.
   const selectedId = controller?.selected?.id;
+  // H3A — Export Studio reads `lastSelectedForExport` (owned by
+  // useMindMapController), not the live, clearable `selected`: closing the
+  // node-detail panel clears `selected` via `clearSelectedNode({
+  // preserveExportIntent: true })` so the panel itself can be re-opened for
+  // the same node, but that alone must not make Export Studio forget which
+  // branch was picked. Leaving the mindmap workspace or switching maps
+  // clears BOTH (see useMindMapController.js), so a stale pick never
+  // survives either of those stronger "start fresh" signals.
+  const exportSelectedNodeId = selectedId || controller?.lastSelectedForExport || null;
   const selectedTopicEl = findTopicSafely(mindRef.current, selectedId);
   const selectedNodeObj = selectedTopicEl?.nodeObj;
   const selectedHasChildren = Boolean(selectedNodeObj?.children?.length);
@@ -941,7 +950,12 @@ export default function MindElixirView({ data, onRegenerate, regenerating, contr
     // covers depth 0 too, since root-only truly removes child DOM nodes.
     const curSelectedId = controller?.selected?.id;
     if (curSelectedId && !findTopicSafely(mind, curSelectedId)) {
-      controller?.clearSelectedNode?.();
+      // H3A — a depth preset HIDING the node is not the same as it being
+      // deleted; the node still exists in the data and export is
+      // deliberately collapse/view-independent by design (see
+      // mindmapImageExport.js's own header comment), so Export Studio must
+      // not forget the pick just because a preset made it invisible.
+      controller?.clearSelectedNode?.({ preserveExportIntent: true });
     }
     // Record the explicit choice itself, not a re-derivation from the tree
     // it just produced — see explicitDepthPresetRef's own comment for why.
@@ -1297,7 +1311,7 @@ export default function MindElixirView({ data, onRegenerate, regenerating, contr
         record={data}
         mapId={data?.id}
         title={data?.title}
-        selectedNodeId={controller?.selected?.id}
+        selectedNodeId={exportSelectedNodeId}
         selectedBranchIds={selectedBranchIds}
         onRequestBranchSelection={() => { setExportOpen(false); setSelectionModeActive(true); }}
         savedAppearance={appearance}

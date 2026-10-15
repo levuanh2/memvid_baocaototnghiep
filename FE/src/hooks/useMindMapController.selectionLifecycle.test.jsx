@@ -117,3 +117,51 @@ describe("useMindMapController — selection lifecycle with a real Mind Elixir i
     expect(mindRef.current.selected).toBeNull();
   });
 });
+
+describe("useMindMapController — lastSelectedForExport (H3A)", () => {
+  it("clearSelectedNode({ preserveExportIntent: true }) clears the live selection but keeps lastSelectedForExport", async () => {
+    const mindRef = { current: null };
+    await renderController(record("map-a", ["a", "b"]), mindRef);
+    await act(async () => { mindRef.current.onNodeSelected([{ id: "a", topic: "A" }]); });
+    expect(mindRef.current.selected?.id).toBe("a");
+    expect(mindRef.current.lastSelectedForExport).toBe("a");
+
+    await act(async () => { mindRef.current.clearSelectedNode({ preserveExportIntent: true }); });
+
+    expect(mindRef.current.selected).toBeNull();
+    expect(mindRef.current.lastSelectedForExport).toBe("a"); // survives a panel-only close
+  });
+
+  it("plain clearSelectedNode() (no args) clears BOTH the live selection and lastSelectedForExport", async () => {
+    const mindRef = { current: null };
+    await renderController(record("map-a", ["a", "b"]), mindRef);
+    await act(async () => { mindRef.current.onNodeSelected([{ id: "a", topic: "A" }]); });
+
+    await act(async () => { mindRef.current.clearSelectedNode(); });
+
+    expect(mindRef.current.selected).toBeNull();
+    expect(mindRef.current.lastSelectedForExport).toBeNull(); // leaving the workspace is a real "start fresh" signal
+  });
+
+  it("selecting a different node after a preserved close updates lastSelectedForExport to the new node", async () => {
+    const mindRef = { current: null };
+    await renderController(record("map-a", ["a", "b"]), mindRef);
+    await act(async () => { mindRef.current.onNodeSelected([{ id: "a", topic: "A" }]); });
+    await act(async () => { mindRef.current.clearSelectedNode({ preserveExportIntent: true }); });
+    expect(mindRef.current.lastSelectedForExport).toBe("a");
+
+    await act(async () => { mindRef.current.onNodeSelected([{ id: "b", topic: "B" }]); });
+    expect(mindRef.current.lastSelectedForExport).toBe("b");
+  });
+
+  it("switching maps clears lastSelectedForExport too -- never leaks a pick from one map into another", async () => {
+    const mindRef = { current: null };
+    await renderController(record("map-a", ["a"]), mindRef);
+    await act(async () => { mindRef.current.onNodeSelected([{ id: "a", topic: "A" }]); });
+    await act(async () => { mindRef.current.clearSelectedNode({ preserveExportIntent: true }); });
+    expect(mindRef.current.lastSelectedForExport).toBe("a");
+
+    await rerenderController(record("map-b", ["x"]), mindRef);
+    expect(mindRef.current.lastSelectedForExport).toBeNull();
+  });
+});

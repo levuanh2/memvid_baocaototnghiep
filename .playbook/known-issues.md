@@ -6502,3 +6502,179 @@ overflow menu, give every action (not just the ones in scope for the PR at
 hand) the same close/focus lifecycle — a trigger-focus gap is easy to miss
 because it only shows up under keyboard/screen-reader use, never under a
 mouse-only click-through.
+
+## Export Studio silently reverted "current_branch" to "full" after the node-detail panel was closed (H3A, found/fixed 2026-10-14)
+
+**Symptom:** user selects a single branch on the canvas intending to export
+just that branch, then opens Export Studio — the resulting PDF/image is the
+WHOLE map, with no error and no visible sign anything went wrong except the
+review step's own "Phạm vi: Toàn bộ sơ đồ" line (easy to miss). Every scope-
+resolution algorithm downstream (`resolveExportScope`/`resolve_export_scope`,
+`recordScopedForExport`, `build_export_tree`, the H2 geometry-manifest
+re-validation) was already correct for "selected_branches"/"current_branch"
+— the 2026-10-07 ancestor-context fix and PR E's "visible" scope fix both
+hold. The defect was earlier than any of that: by the time Export Studio
+even read a selection, it was already gone.
+
+**Root cause:** `MainLayout.jsx`'s `closeRightPanel()` (the ONE close path
+for the node-detail panel — X button, backdrop, Escape) deliberately clears
+`controller.selected` on the mindmap surface, including the real mind-elixir
+canvas selection (`fakeMind.clearSelection()`), so the same node can be
+tapped again later — see `MainLayout.selectionLifecycle.test.jsx`'s "clears
+the canvas selection" assertion, a correct and already-tested contract for
+the detail panel. `MindElixirView.jsx` rendered `ExportStudioDialog` with
+`selectedNodeId={controller?.selected?.id}` straight from that same live
+value. A completely ordinary flow — select a branch, glance at its detail
+panel, close the panel, THEN open Export Studio — read `controller.selected`
+AFTER it had already been cleared by an unrelated UI dismissal.
+`deriveOpeningScope({ selectedBranchIds, selectedNodeId })` has no
+"selection used to exist" case; an empty `selectedNodeId` falls straight
+through to `"full"`, which is a perfectly valid scope on its own (not a bug
+in that function), so nothing downstream had any signal that something had
+gone wrong.
+
+**Fix:** `MindElixirView.jsx` now keeps a `exportStickySelectedIdRef` —
+remembers the last real `controller.selected.id` independently of the
+node-detail panel's own lifecycle, reset only when the map identity
+(`data?.id`) changes. `ExportStudioDialog` receives
+`selectedNodeId={exportSelectedNodeId}` (live selection, falling back to the
+sticky one) instead of reading `controller.selected.id` directly. Nothing in
+`MainLayout.jsx`/`closeRightPanel`/`MainLayout.selectionLifecycle.test.jsx`
+changed — the detail panel still closes and clears canvas highlighting
+exactly as before; only Export Studio's OWN notion of "what did the user
+pick" got decoupled from that unrelated panel's visibility. If the sticky
+node no longer exists on the map (deleted/edited away), `resolveExportScope`
+still throws `UnknownNodeIdError` and Export Studio shows "Lựa chọn không
+còn hợp lệ trên sơ đồ này" — it never silently falls back to `full` for that
+case either.
+
+**Regression:** `MindElixirView.exportStickySelection.test.jsx` — red
+against the pre-fix code (confirmed by temporarily reverting the fix: the
+opening scope radio read `full` instead of `current_branch`), green after;
+asserts the exported scope payload's `scope_type`/`selected_node_id` too.
+A second case proves
+the sticky value is reset on map switch (A→B leaks nothing). Full
+`MindElixirView`/`ExportStudioDialog`/`MainLayout.selectionLifecycle` suites
+re-run clean — the fix is additive to one prop source, not a change to the
+detail-panel close contract.
+
+**Prevention:** when two independent UI surfaces (a detail/inspector panel
+and an export/action dialog) both derive their behavior from the SAME piece
+of shared selection state, and one of those surfaces has its own legitimate
+reason to clear that state (here: "let the same node be re-tapped"), treat
+the state as serving two different consumers with two different lifetimes —
+never assume a single live value is still valid by the time an unrelated,
+asynchronous user action (open a different dialog) reads it. A frozen
+snapshot (or sticky memory) for the consumer that actually needs "what did
+the user last pick," decoupled from whatever makes the OTHER consumer want
+to clear the live value, avoids this without having to relax the other
+consumer's existing (correct, tested) behavior.
+
+## Export Studio's "visible-only" checkbox silently no-op'd for branch scopes while still skewing the preview count (H3A / A6, found/fixed 2026-10-14)
+
+**Symptom:** auditing the brief's explicit A6 item ("the `visibleOnly`
+option appears to convert full+visibleOnly into visible, while other
+selected scopes may not receive the same filtering — do not silently ignore
+a setting the UI says applies"). Checking "Chỉ giữ node đang hiển thị trong
+phạm vi đã chọn" while scope was "Nhánh hiện tại"/"Các nhánh được chọn" did
+nothing to the real exported artifact, but DID shrink the on-screen preview
+count — the opposite of safe: the number the user is told to trust before
+exporting was the one thing that lied.
+
+**Root cause:** `ExportStudioDialog.jsx`'s `scopeResult` preview always
+called the FE's live-tree resolver (`resolveExportScope` over
+`mind.nodeData`) with the raw `visibleOnly` flag, and that resolver's core
+(`mindmapExportScope.js`'s `_resolveCore`) applies a visible-only filter
+unconditionally for ANY `scopeType`, not just `"full"`. But the REAL export
+for `current_branch`/`selected_branches` never goes through that live-tree
+resolver — it goes through the record-based
+`recordScopedForExport`/`resolveExportScopeFromRecord`, which has no
+visible-only parameter at all (by design: `services/mindmap/export/scope.py`
+documents that a document export is a snapshot of the saved record, never
+of a browser tab's collapse state, except through the separate, explicitly
+validated `"visible"` scope type). So the preview's node count and the
+actual exported content were computed by two different functions with two
+different (and, for this one flag, contradictory) contracts.
+
+**Fix:** `ExportStudioDialog.jsx` now computes one clamped
+`effectiveVisibleOnly = scopeType === "full" && visibleOnly` and uses it
+everywhere a raw `visibleOnly` used to be read (the preview's
+`resolveExportScope` call, `runImage`, `captureMapImageWithGeometry`,
+`captureMapImageBase64`, `buildDocumentScopePayload`) — exactly mirroring
+the existing `effectiveScope` clamp this file already had for the
+full+visibleOnly→"visible" mapping. The checkbox itself is now `disabled`
+whenever `scopeType !== "full"`, with its helper text explaining why,
+instead of staying clickable and silently doing nothing.
+
+**Regression:** `ExportStudioDialog.visibleOnlyScopeGating.test.jsx` — red
+against the pre-fix code (checkbox was enabled for `current_branch`); after
+the fix: checkbox disabled for `current_branch`, preview count for
+`current_branch`+checked matches the UNFILTERED real export (a collapsed
+descendant stays counted), and preview count for `full`+checked IS filtered
+(the one scope the contract was always real for). Full
+`ExportStudioDialog`/`MindElixirView` export-related suites re-run clean.
+
+**Prevention:** when a UI flag is threaded through to TWO different
+resolvers for the SAME stated purpose (here: a live-tree preview resolver
+and a record-based real-export resolver), and only one of them actually
+implements the flag, compute a single clamped/effective value at the one
+place the flag is read for ANY consumer, and feed every consumer from that
+same value — never pass the raw flag to one consumer and trust that
+mismatched behavior downstream "just won't matter."
+
+## Export Studio's sticky export-selection could go stale within the SAME map (H3A final audit, found/fixed 2026-10-15)
+
+**Symptom:** auditing the first H3A fix's own `exportStickySelectedIdRef`
+(a `MindElixirView`-local ref that remembered the last real
+`controller.selected.id`, reset only on `data?.id` change) against every
+listed scenario. Found one real gap: pick branch A → leave the mindmap
+workspace for Chat/Summary → come back → open Export Studio. The map
+identity never changed, so the ref never reset, and Export Studio still
+silently opened on `current_branch = A` even though the EXISTING, already-
+tested contract (`MainLayout.selectionLifecycle.test.jsx`'s "MindMap ->
+Chat -> MindMap does not reopen the old node detail") treats leaving the
+workspace as a full reset of that session's contextual node. The sticky
+memory was right about surviving a detail-panel close, but too persistent
+about surviving a workspace-mode round trip.
+
+**Root cause:** both "close the node-detail panel" (`MainLayout`'s
+`closeRightPanel`) and "leave the mindmap workspace for Chat/Summary"
+(`MainLayout`'s mode-leave effect) called the exact same
+`controller.clearSelectedNode()`, with no way for a ref living inside
+`MindElixirView` to tell which of the two actually happened — it could
+only see that `controller.selected` went back to `null`, the same way for
+either cause.
+
+**Fix:** moved the sticky value OUT of `MindElixirView` and INTO
+`useMindMapController` itself (the one place that already owns `selected`
+and both call sites of `clearSelectedNode`), as a new
+`lastSelectedForExport` field. `clearSelectedNode` now takes an optional
+`{ preserveExportIntent: true }` — `closeRightPanel` (panel-only dismissal)
+passes it; the mode-leave effect and every other caller keep calling it
+with no arguments, which clears `lastSelectedForExport` right along with
+`selected`. A depth-preset hiding the selected node (a THIRD, unrelated
+`clearSelectedNode()` call site, `MindElixirView.jsx`) also now passes
+`preserveExportIntent: true` — the node still exists in the data and
+export has always been collapse/view-independent by design, so hiding it
+behind a preset is not a reason to forget the pick either.
+`MindElixirView` now just reads `controller.selected?.id ||
+controller.lastSelectedForExport` — no local ref/effects of its own left.
+
+**Regression:** `useMindMapController.selectionLifecycle.test.jsx` gained
+4 cases (preserve vs. default clear, reselection updates it, map switch
+clears it) — all confirmed red against the pre-fix hook (the field didn't
+exist) via a temporary stash, green after.
+`MindElixirView.exportStickySelection.test.jsx` gained the workspace-leave
+scenario, same red/green confirmation. `MindElixirView.depthLevels.test.jsx`
+(asserts `clearSelectedNode` was/wasn't called, not with what arguments)
+and the full FE suite (1570/1573, same 3 pre-existing fake-timer flake
+tests, unrelated) re-run clean.
+
+**Prevention:** when a piece of state has two DIFFERENT callers invoking
+the same clear function for two DIFFERENT reasons (one a cosmetic
+dismissal, one a real "start fresh" signal), and a THIRD component only
+sees the state's resulting value (not which caller fired), move the
+state and the clear function into the one place that already sees both
+callers, and give the clear function an explicit parameter for which
+reason applies — don't leave a downstream consumer trying to infer intent
+from a value that looks identical either way.
