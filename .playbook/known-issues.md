@@ -6569,3 +6569,55 @@ snapshot (or sticky memory) for the consumer that actually needs "what did
 the user last pick," decoupled from whatever makes the OTHER consumer want
 to clear the live value, avoids this without having to relax the other
 consumer's existing (correct, tested) behavior.
+
+## Export Studio's "visible-only" checkbox silently no-op'd for branch scopes while still skewing the preview count (H3A / A6, found/fixed 2026-10-14)
+
+**Symptom:** auditing the brief's explicit A6 item ("the `visibleOnly`
+option appears to convert full+visibleOnly into visible, while other
+selected scopes may not receive the same filtering — do not silently ignore
+a setting the UI says applies"). Checking "Chỉ giữ node đang hiển thị trong
+phạm vi đã chọn" while scope was "Nhánh hiện tại"/"Các nhánh được chọn" did
+nothing to the real exported artifact, but DID shrink the on-screen preview
+count — the opposite of safe: the number the user is told to trust before
+exporting was the one thing that lied.
+
+**Root cause:** `ExportStudioDialog.jsx`'s `scopeResult` preview always
+called the FE's live-tree resolver (`resolveExportScope` over
+`mind.nodeData`) with the raw `visibleOnly` flag, and that resolver's core
+(`mindmapExportScope.js`'s `_resolveCore`) applies a visible-only filter
+unconditionally for ANY `scopeType`, not just `"full"`. But the REAL export
+for `current_branch`/`selected_branches` never goes through that live-tree
+resolver — it goes through the record-based
+`recordScopedForExport`/`resolveExportScopeFromRecord`, which has no
+visible-only parameter at all (by design: `services/mindmap/export/scope.py`
+documents that a document export is a snapshot of the saved record, never
+of a browser tab's collapse state, except through the separate, explicitly
+validated `"visible"` scope type). So the preview's node count and the
+actual exported content were computed by two different functions with two
+different (and, for this one flag, contradictory) contracts.
+
+**Fix:** `ExportStudioDialog.jsx` now computes one clamped
+`effectiveVisibleOnly = scopeType === "full" && visibleOnly` and uses it
+everywhere a raw `visibleOnly` used to be read (the preview's
+`resolveExportScope` call, `runImage`, `captureMapImageWithGeometry`,
+`captureMapImageBase64`, `buildDocumentScopePayload`) — exactly mirroring
+the existing `effectiveScope` clamp this file already had for the
+full+visibleOnly→"visible" mapping. The checkbox itself is now `disabled`
+whenever `scopeType !== "full"`, with its helper text explaining why,
+instead of staying clickable and silently doing nothing.
+
+**Regression:** `ExportStudioDialog.visibleOnlyScopeGating.test.jsx` — red
+against the pre-fix code (checkbox was enabled for `current_branch`); after
+the fix: checkbox disabled for `current_branch`, preview count for
+`current_branch`+checked matches the UNFILTERED real export (a collapsed
+descendant stays counted), and preview count for `full`+checked IS filtered
+(the one scope the contract was always real for). Full
+`ExportStudioDialog`/`MindElixirView` export-related suites re-run clean.
+
+**Prevention:** when a UI flag is threaded through to TWO different
+resolvers for the SAME stated purpose (here: a live-tree preview resolver
+and a record-based real-export resolver), and only one of them actually
+implements the flag, compute a single clamped/effective value at the one
+place the flag is read for ANY consumer, and feed every consumer from that
+same value — never pass the raw flag to one consumer and trust that
+mismatched behavior downstream "just won't matter."
