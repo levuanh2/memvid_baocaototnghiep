@@ -31,6 +31,16 @@ export function useMindMapController(data) {
   const [historyVersion, setHistoryVersion] = useState(0);
   const [pinned, setPinned] = useState(() => new Set());
   const [selected, setSelected] = useState(null);
+  // H3A — "what the user last actually picked, for export purposes" is a
+  // DIFFERENT lifetime than `selected` (which the node-detail panel also
+  // owns): closing the panel clears `selected` so the same node can be
+  // re-tapped, but that dismissal alone must not make Export Studio forget
+  // which branch was picked (see .playbook's "Export Studio silently
+  // reverted..." entry). `clearSelectedNode({ preserveExportIntent: true })`
+  // is the panel's own close path; every other caller (leaving the mindmap
+  // workspace, switching maps) uses the default and resets both together —
+  // those ARE strong "start fresh" signals.
+  const [lastSelectedForExport, setLastSelectedForExport] = useState(null);
 
   // New document (or first load) → the graph and the session both restart.
   // Deliberately does NOT reset when the SAME document's mindmap record just
@@ -42,6 +52,7 @@ export function useMindMapController(data) {
     setHistoryVersion(0);
     setPinned(new Set());
     setSelected(null);
+    setLastSelectedForExport(null);
     // A new object for the same saved map must not reset navigation state.
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [data?.id]);
@@ -79,6 +90,7 @@ export function useMindMapController(data) {
       // to tell apart.
       sourceStems: side?.sourceStems,
     });
+    setLastSelectedForExport(n.id);
     pushHistory(n.id);
     selectNodeInContext(n.id, { source: "mindmap", label: n.topic });
   }, [pushHistory, selectNodeInContext]);
@@ -88,9 +100,16 @@ export function useMindMapController(data) {
   // canvas instance stays mounted across modes, so leaving it selected would
   // let the same node re-select silently and keep stale highlight. Root-only
   // presentation also relies on this to drop a hidden node.
-  const clearSelectedNode = useCallback(() => {
+  //
+  // `preserveExportIntent` (H3A): the node-detail panel's OWN close button/
+  // backdrop/Escape calls this to hide itself, never to say "forget which
+  // branch I picked" — pass true there. Every other caller (leaving the
+  // mindmap workspace for Chat/Summary, a depth preset hiding the node)
+  // leaves it false, clearing `lastSelectedForExport` too.
+  const clearSelectedNode = useCallback(({ preserveExportIntent = false } = {}) => {
     setSelected(null);
     mindRef.current?.clearSelection?.();
+    if (!preserveExportIntent) setLastSelectedForExport(null);
   }, []);
 
   const jumpTo = useCallback((id) => {
@@ -182,7 +201,7 @@ export function useMindMapController(data) {
     // consumed by MindElixirView (canvas):
     registerMindInstance, onNodeSelected, clearSelectedNode, sidecarRef,
     // consumed by KnowledgeInspector (and MindElixirView, for its own toolbar bits if needed):
-    selected, relations, breadcrumb, jumpTo, canJumpTo, findNodeByChunk, goBack, goForward, togglePin,
+    selected, lastSelectedForExport, relations, breadcrumb, jumpTo, canJumpTo, findNodeByChunk, goBack, goForward, togglePin,
     // Feature Pack D — consumed by KnowledgeDashboard.jsx:
     allNodes,
     nav: { canBack, canForward, onBack: goBack, onForward: goForward, recent: recentItems, pinned: pinnedItems, isPinned, onTogglePin: togglePin },

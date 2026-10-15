@@ -6621,3 +6621,60 @@ implements the flag, compute a single clamped/effective value at the one
 place the flag is read for ANY consumer, and feed every consumer from that
 same value — never pass the raw flag to one consumer and trust that
 mismatched behavior downstream "just won't matter."
+
+## Export Studio's sticky export-selection could go stale within the SAME map (H3A final audit, found/fixed 2026-10-15)
+
+**Symptom:** auditing the first H3A fix's own `exportStickySelectedIdRef`
+(a `MindElixirView`-local ref that remembered the last real
+`controller.selected.id`, reset only on `data?.id` change) against every
+listed scenario. Found one real gap: pick branch A → leave the mindmap
+workspace for Chat/Summary → come back → open Export Studio. The map
+identity never changed, so the ref never reset, and Export Studio still
+silently opened on `current_branch = A` even though the EXISTING, already-
+tested contract (`MainLayout.selectionLifecycle.test.jsx`'s "MindMap ->
+Chat -> MindMap does not reopen the old node detail") treats leaving the
+workspace as a full reset of that session's contextual node. The sticky
+memory was right about surviving a detail-panel close, but too persistent
+about surviving a workspace-mode round trip.
+
+**Root cause:** both "close the node-detail panel" (`MainLayout`'s
+`closeRightPanel`) and "leave the mindmap workspace for Chat/Summary"
+(`MainLayout`'s mode-leave effect) called the exact same
+`controller.clearSelectedNode()`, with no way for a ref living inside
+`MindElixirView` to tell which of the two actually happened — it could
+only see that `controller.selected` went back to `null`, the same way for
+either cause.
+
+**Fix:** moved the sticky value OUT of `MindElixirView` and INTO
+`useMindMapController` itself (the one place that already owns `selected`
+and both call sites of `clearSelectedNode`), as a new
+`lastSelectedForExport` field. `clearSelectedNode` now takes an optional
+`{ preserveExportIntent: true }` — `closeRightPanel` (panel-only dismissal)
+passes it; the mode-leave effect and every other caller keep calling it
+with no arguments, which clears `lastSelectedForExport` right along with
+`selected`. A depth-preset hiding the selected node (a THIRD, unrelated
+`clearSelectedNode()` call site, `MindElixirView.jsx`) also now passes
+`preserveExportIntent: true` — the node still exists in the data and
+export has always been collapse/view-independent by design, so hiding it
+behind a preset is not a reason to forget the pick either.
+`MindElixirView` now just reads `controller.selected?.id ||
+controller.lastSelectedForExport` — no local ref/effects of its own left.
+
+**Regression:** `useMindMapController.selectionLifecycle.test.jsx` gained
+4 cases (preserve vs. default clear, reselection updates it, map switch
+clears it) — all confirmed red against the pre-fix hook (the field didn't
+exist) via a temporary stash, green after.
+`MindElixirView.exportStickySelection.test.jsx` gained the workspace-leave
+scenario, same red/green confirmation. `MindElixirView.depthLevels.test.jsx`
+(asserts `clearSelectedNode` was/wasn't called, not with what arguments)
+and the full FE suite (1570/1573, same 3 pre-existing fake-timer flake
+tests, unrelated) re-run clean.
+
+**Prevention:** when a piece of state has two DIFFERENT callers invoking
+the same clear function for two DIFFERENT reasons (one a cosmetic
+dismissal, one a real "start fresh" signal), and a THIRD component only
+sees the state's resulting value (not which caller fired), move the
+state and the clear function into the one place that already sees both
+callers, and give the clear function an explicit parameter for which
+reason applies — don't leave a downstream consumer trying to infer intent
+from a value that looks identical either way.

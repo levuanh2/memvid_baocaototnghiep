@@ -183,17 +183,6 @@ export default function MindElixirView({ data, onRegenerate, regenerating, contr
   const selectionActiveRef = useRef(false);
   const selectedBranchIdsRef = useRef(selectedBranchIds);
   const branchSelectionHandleRef = useRef(null);
-  // H3A — closing the node-detail panel (MainLayout's closeRightPanel)
-  // deliberately clears `controller.selected` so the same node can be
-  // tapped again (MainLayout.selectionLifecycle.test.jsx). That clear used
-  // to also silently revert Export Studio's "current_branch" scope to
-  // "full" the moment the user dismissed the panel — the export pipeline
-  // itself was always scope-correct (see .playbook's "Export scope had no
-  // ancestor context" entry), the bug was losing WHICH branch was picked
-  // before the dialog even opened. This ref remembers the last node the
-  // user actually selected on this map, independent of panel visibility,
-  // so Export Studio keeps seeing it even after a manual close.
-  const exportStickySelectedIdRef = useRef(null);
 
   const degraded = Boolean(data?.generator?.degraded);
   const missing = data?.generator?.missing || [];
@@ -872,12 +861,15 @@ export default function MindElixirView({ data, onRegenerate, regenerating, contr
   // knowing on its own — `expandTick`'s only job is forcing a re-render so
   // these reads happen again, not carrying any value itself.
   const selectedId = controller?.selected?.id;
-  // H3A — reset the sticky export selection whenever the map itself
-  // changes (never let a branch picked on map A leak into map B's export);
-  // update it whenever a real selection exists, survive it being cleared.
-  useEffect(() => { exportStickySelectedIdRef.current = null; }, [data?.id]);
-  useEffect(() => { if (selectedId) exportStickySelectedIdRef.current = selectedId; }, [selectedId]);
-  const exportSelectedNodeId = selectedId || exportStickySelectedIdRef.current;
+  // H3A — Export Studio reads `lastSelectedForExport` (owned by
+  // useMindMapController), not the live, clearable `selected`: closing the
+  // node-detail panel clears `selected` via `clearSelectedNode({
+  // preserveExportIntent: true })` so the panel itself can be re-opened for
+  // the same node, but that alone must not make Export Studio forget which
+  // branch was picked. Leaving the mindmap workspace or switching maps
+  // clears BOTH (see useMindMapController.js), so a stale pick never
+  // survives either of those stronger "start fresh" signals.
+  const exportSelectedNodeId = selectedId || controller?.lastSelectedForExport || null;
   const selectedTopicEl = findTopicSafely(mindRef.current, selectedId);
   const selectedNodeObj = selectedTopicEl?.nodeObj;
   const selectedHasChildren = Boolean(selectedNodeObj?.children?.length);
@@ -958,7 +950,12 @@ export default function MindElixirView({ data, onRegenerate, regenerating, contr
     // covers depth 0 too, since root-only truly removes child DOM nodes.
     const curSelectedId = controller?.selected?.id;
     if (curSelectedId && !findTopicSafely(mind, curSelectedId)) {
-      controller?.clearSelectedNode?.();
+      // H3A — a depth preset HIDING the node is not the same as it being
+      // deleted; the node still exists in the data and export is
+      // deliberately collapse/view-independent by design (see
+      // mindmapImageExport.js's own header comment), so Export Studio must
+      // not forget the pick just because a preset made it invisible.
+      controller?.clearSelectedNode?.({ preserveExportIntent: true });
     }
     // Record the explicit choice itself, not a re-derivation from the tree
     // it just produced — see explicitDepthPresetRef's own comment for why.

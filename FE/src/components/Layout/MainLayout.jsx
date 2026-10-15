@@ -128,7 +128,10 @@ export default function MainLayout({
   // existing close behaviour; Guided close never comes through here.
   const closeRightPanel = useCallback(() => {
     if (workspaceMode === "mindmap") {
-      mmClearSelectedNode();
+      // H3A — this close is about hiding the detail panel (so the same
+      // node can be re-tapped), never about telling Export Studio the
+      // user's branch pick is forgotten.
+      mmClearSelectedNode({ preserveExportIntent: true });
       setRightOpen(false);
       return;
     }
