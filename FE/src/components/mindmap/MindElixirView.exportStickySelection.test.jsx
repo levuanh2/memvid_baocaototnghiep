@@ -3,13 +3,18 @@
 // H3A red test. Reproduces the reported defect: pick a branch on the
 // canvas (controller.selected set), then dismiss the node-detail panel the
 // same way MainLayout's closeRightPanel does for the mindmap surface —
-// `mmClearSelectedNode()` clears `controller.selected` itself (see
-// MainLayout.selectionLifecycle.test.jsx's "...and clears the canvas
-// selection" assertion). Before the fix, Export Studio's opening-scope
+// `mmClearSelectedNode({ preserveExportIntent: true })` clears
+// `controller.selected` but keeps `controller.lastSelectedForExport` (see
+// useMindMapController.selectionLifecycle.test.jsx for the hook-level
+// contract this simulates). Before the fix, Export Studio's opening-scope
 // derivation (`deriveOpeningScope`) read `controller?.selected?.id`
 // straight from the live controller, found it empty, and silently
 // defaulted to "full" — the user believed they were exporting one branch
 // and got the whole map, matching the H3 brief's reported symptom exactly.
+// This file exercises MindElixirView's own consumption of
+// `controller.lastSelectedForExport` with a hand-built fake controller;
+// the hook's OWN preserveExportIntent/map-switch/reselection contract is
+// covered directly in useMindMapController.selectionLifecycle.test.jsx.
 import { describe, it, expect, vi, afterEach, beforeAll } from "vitest";
 import { createRoot } from "react-dom/client";
 import { act } from "react-dom/test-utils";
@@ -36,8 +41,8 @@ function dataFor(id) {
   };
 }
 
-function makeController(selected = null) {
-  return { registerMindInstance: vi.fn(), onNodeSelected: vi.fn(), selected, sidecarRef: { current: new Map() } };
+function makeController(selected = null, lastSelectedForExport = selected?.id ?? null) {
+  return { registerMindInstance: vi.fn(), onNodeSelected: vi.fn(), selected, lastSelectedForExport, sidecarRef: { current: new Map() } };
 }
 
 let container, root;
@@ -92,10 +97,11 @@ describe("Export Studio keeps the branch selection after the node-detail panel i
     await render(controller, dataFor("m1"));
 
     // Pick branch "a" on the canvas.
-    await render({ ...controller, selected: { id: "a" } }, dataFor("m1"));
+    await render({ ...controller, selected: { id: "a" }, lastSelectedForExport: "a" }, dataFor("m1"));
     // Dismiss the node-detail panel -- same effect as MainLayout's
-    // closeRightPanel: controller.selected goes back to null.
-    await render({ ...controller, selected: null }, dataFor("m1"));
+    // closeRightPanel: controller.selected goes back to null, but
+    // lastSelectedForExport survives (preserveExportIntent: true).
+    await render({ ...controller, selected: null, lastSelectedForExport: "a" }, dataFor("m1"));
 
     const dialog = await openExportDialog();
     const currentBranchRadio = dialog.querySelector('input[name="mm-export-scope"][value="current_branch"]');
@@ -111,11 +117,30 @@ describe("Export Studio keeps the branch selection after the node-detail panel i
     mockHappyExport();
     const controller = makeController(null);
     await render(controller, dataFor("mapA"));
-    await render({ ...controller, selected: { id: "a" } }, dataFor("mapA"));
-    await render({ ...controller, selected: null }, dataFor("mapA"));
+    await render({ ...controller, selected: { id: "a" }, lastSelectedForExport: "a" }, dataFor("mapA"));
+    await render({ ...controller, selected: null, lastSelectedForExport: "a" }, dataFor("mapA"));
 
-    // Switch to a different map -- never selected anything there.
-    await render({ ...controller, selected: null }, dataFor("mapB"));
+    // Switch to a different map -- useMindMapController's own data?.id
+    // effect clears lastSelectedForExport along with selected; the fake
+    // controller here mirrors that real contract.
+    await render({ ...controller, selected: null, lastSelectedForExport: null }, dataFor("mapB"));
+
+    const dialog = await openExportDialog();
+    const fullRadio = dialog.querySelector('input[name="mm-export-scope"][value="full"]');
+    expect(fullRadio.checked).toBe(true);
+  });
+
+  it("leaving the mindmap workspace and coming back resets to full, even though the map never changed", async () => {
+    mockHappyExport();
+    const controller = makeController(null);
+    await render(controller, dataFor("m1"));
+    await render({ ...controller, selected: { id: "a" }, lastSelectedForExport: "a" }, dataFor("m1"));
+    await render({ ...controller, selected: null, lastSelectedForExport: "a" }, dataFor("m1")); // panel closed, pick preserved
+
+    // Leaving the workspace (MainLayout's mode-leave effect) calls
+    // clearSelectedNode() with NO args -- clears lastSelectedForExport too,
+    // same map identity the whole time.
+    await render({ ...controller, selected: null, lastSelectedForExport: null }, dataFor("m1"));
 
     const dialog = await openExportDialog();
     const fullRadio = dialog.querySelector('input[name="mm-export-scope"][value="full"]');
