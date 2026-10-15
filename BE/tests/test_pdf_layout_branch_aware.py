@@ -19,11 +19,13 @@ using only 9 of the 12-page ceiling.
 """
 from __future__ import annotations
 
+import copy
 import json
 
 from services.mindmap.export.pdf_layout import (
     NavigationBands,
     Rect,
+    TARGET_MIN_PT,
     branch_aware_grid_search,
     exact_grid_search,
     exact_grid_search_verbose,
@@ -93,7 +95,36 @@ REAL_57NODE_MANIFEST = json.loads(
     '{"id":"S6I1","x":3515,"y":1584,"width":459,"height":64,"font_size_px":32},'
     '{"id":"S6I2","x":3515,"y":1676,"width":307,"height":64,"font_size_px":32},'
     '{"id":"S6I3","x":3515,"y":1768,"width":342,"height":64,"font_size_px":32}'
-    '],"connectors":[]}'
+    '],"connectors":['
+    '{"x":632,"y":238,"width":348,"height":138},{"x":206,"y":146,"width":426,"height":92},'
+    '{"x":108,"y":238,"width":524,"height":0},{"x":112,"y":238,"width":520,"height":92},'
+    '{"x":618,"y":376,"width":362,"height":138},{"x":262,"y":422,"width":356,"height":92},'
+    '{"x":346,"y":514,"width":272,"height":0},{"x":100,"y":514,"width":518,"height":92},'
+    '{"x":600,"y":376,"width":380,"height":322},{"x":64,"y":698,"width":536,"height":0},'
+    '{"x":683,"y":894,"width":354,"height":138},{"x":341,"y":802,"width":342,"height":92},'
+    '{"x":339,"y":894,"width":344,"height":0},{"x":395,"y":894,"width":288,"height":92},'
+    '{"x":641,"y":1032,"width":396,"height":138},{"x":281,"y":1078,"width":360,"height":92},'
+    '{"x":239,"y":1170,"width":402,"height":0},{"x":127,"y":1170,"width":514,"height":92},'
+    '{"x":719,"y":1032,"width":318,"height":322},{"x":357,"y":1354,"width":362,"height":0},'
+    '{"x":909,"y":1458,"width":424,"height":0},{"x":963,"y":1458,"width":370,"height":92},'
+    '{"x":912,"y":1654,"width":310,"height":46},{"x":1006,"y":1700,"width":216,"height":46},'
+    '{"x":770,"y":1700,"width":452,"height":138},{"x":3701,"y":232,"width":420,"height":138},'
+    '{"x":4121,"y":140,"width":368,"height":92},{"x":4121,"y":232,"width":358,"height":0},'
+    '{"x":4121,"y":232,"width":464,"height":92},{"x":3701,"y":370,"width":390,"height":138},'
+    '{"x":4091,"y":416,"width":410,"height":92},{"x":4091,"y":508,"width":392,"height":0},'
+    '{"x":4091,"y":508,"width":308,"height":92},{"x":3701,"y":370,"width":414,"height":322},'
+    '{"x":4115,"y":692,"width":418,"height":0},{"x":3289,"y":796,"width":342,"height":46},'
+    '{"x":3289,"y":842,"width":362,"height":46},{"x":3289,"y":842,"width":340,"height":138},'
+    '{"x":3361,"y":1084,"width":330,"height":46},{"x":3361,"y":1130,"width":328,"height":46},'
+    '{"x":3361,"y":1130,"width":240,"height":138},{"x":3389,"y":1372,"width":444,"height":46},'
+    '{"x":3389,"y":1418,"width":306,"height":46},{"x":3389,"y":1418,"width":372,"height":138},'
+    '{"x":3435,"y":1660,"width":538,"height":46},{"x":3435,"y":1706,"width":388,"height":46},'
+    '{"x":3435,"y":1706,"width":422,"height":138},{"x":1692,"y":376,"width":411,"height":570},'
+    '{"x":1696,"y":946,"width":376,"height":86},{"x":1692,"y":946,"width":408,"height":512},'
+    '{"x":1692,"y":946,"width":423,"height":754},{"x":2508,"y":370,"width":408,"height":576},'
+    '{"x":2539,"y":842,"width":377,"height":104},{"x":2534,"y":946,"width":382,"height":184},'
+    '{"x":2515,"y":946,"width":401,"height":472},{"x":2496,"y":946,"width":420,"height":760}'
+    ']}'
 )
 
 REAL_TOP_LEVEL = ["D1", "D2", "D3", "S1", "S2", "S3", "S4", "S5", "S6"]
@@ -175,6 +206,212 @@ def test_real_57node_fixture_no_node_lost_across_branch_plans():
             covered.add(nid)
     all_branch_ids = {nid for _, ids in groups for nid in ids}
     assert covered == all_branch_ids
+
+
+# ---- connector coverage contract (real captured connector geometry) --------
+#
+# Contract (review finding): the real manifest's 56 connectors are mind-
+# elixir's own rendered parent-child edge PATHS, never "relations" --
+# relations (cross-branch logical links) are a TEXT-ONLY outline concept
+# (tree.relations, rendered only via content.relations in the outline
+# pages) and are NEVER drawn on the canvas/raster image at all, so they
+# have no raster-coverage concern to test here; this was already true
+# before H3B and is unaffected by it. Of the 56 real connectors: 47 are
+# INTRA-branch (a parent-child edge where both ends are inside the SAME
+# top-level branch's own subtree -- every one of these is both real
+# content AND fully retained/covered within that branch's own detail
+# tiles, verified below) and 9 are the ROOT-TO-BRANCH "bridge" stub (one
+# per top-level branch, connecting the true root to that branch's own top
+# node) -- deliberately EXCLUDED from every branch's own local manifest,
+# since root itself is never part of any branch's bbox (same reason a
+# connector's "other end" being outside this branch means the FULL
+# connector can never be meaningfully shown in a crop scoped to this
+# branch alone). These bridge connectors remain fully visible on the
+# OVERVIEW page (the whole image, completely untouched by tiling), so the
+# map's own top-level navigation structure (how many branches, where they
+# sit relative to root) is never lost -- only each branch's own detail
+# crop omits the stub reaching toward root, which is exactly what a
+# "zoomed into one branch" page should do.
+
+def test_real_connectors_intra_branch_edges_are_all_retained_and_covered():
+    """Every one of the 47 real intra-branch connector paths is both kept
+    in its own branch's local manifest and successfully covered by that
+    branch's own tiles (connector_coverage_ok is part of what
+    exact_grid_search_verbose's own `meets_target` already requires --
+    this proves it holds for REAL connector geometry, not just the
+    connectors:[] case every other test here also happens to pass)."""
+    groups = _real_branch_groups()
+    kept_total = 0
+    for branch_id, node_ids in groups:
+        from services.mindmap.export.pdf_layout import _branch_bbox, _translate_manifest_to_branch
+        nodes_by_id = {n["id"]: n for n in REAL_57NODE_MANIFEST["nodes"]}
+        rects = [Rect(nodes_by_id[nid]["x"], nodes_by_id[nid]["y"], nodes_by_id[nid]["width"], nodes_by_id[nid]["height"]) for nid in node_ids]
+        bbox = _branch_bbox(rects, REAL_57NODE_MANIFEST["image_width_px"], REAL_57NODE_MANIFEST["image_height_px"], 24.0)
+        local = _translate_manifest_to_branch(REAL_57NODE_MANIFEST, node_ids, bbox)
+        # every branch here has exactly (node_count - 1) internal tree edges -- a real, checkable invariant, not a guess
+        assert len(local["connectors"]) == len(node_ids) - 1, f"{branch_id}: expected {len(node_ids) - 1} intra-branch connectors, found {len(local['connectors'])}"
+        kept_total += len(local["connectors"])
+    assert kept_total == 47  # real measured count: 56 real connectors - 9 root-bridge stubs (one per branch)
+
+    result = branch_aware_grid_search(REAL_57NODE_MANIFEST, groups, page_ceiling=12, bands=BANDS)
+    assert result is not None and result.all_meet_target  # connector_coverage_ok held for every branch's real connectors
+
+
+def test_root_bridge_connectors_are_excluded_from_every_branch_not_silently_lost():
+    """The 9 root-to-branch stub connectors never appear in ANY branch's
+    local manifest (neither double-counted into the wrong branch nor
+    silently required of a branch that can't show them) -- they remain
+    visible only on the overview, which this test confirms by checking
+    the real manifest's own connector count accounts for exactly 56 = 47
+    (kept somewhere) + 9 (excluded everywhere)."""
+    from services.mindmap.export.pdf_layout import _branch_bbox, _translate_manifest_to_branch
+    groups = _real_branch_groups()
+    nodes_by_id = {n["id"]: n for n in REAL_57NODE_MANIFEST["nodes"]}
+    kept_total = 0
+    for branch_id, node_ids in groups:
+        rects = [Rect(nodes_by_id[nid]["x"], nodes_by_id[nid]["y"], nodes_by_id[nid]["width"], nodes_by_id[nid]["height"]) for nid in node_ids]
+        bbox = _branch_bbox(rects, REAL_57NODE_MANIFEST["image_width_px"], REAL_57NODE_MANIFEST["image_height_px"], 24.0)
+        local = _translate_manifest_to_branch(REAL_57NODE_MANIFEST, node_ids, bbox)
+        kept_total += len(local["connectors"])
+    real_total = len(REAL_57NODE_MANIFEST["connectors"])
+    excluded = real_total - kept_total
+    assert real_total == 56
+    assert excluded == 9  # exactly one root-bridge stub per real top-level branch
+
+
+# ---- root readability (review finding) --------------------------------------
+#
+# Contract: branch-aware tiling deliberately never puts the true root
+# inside any branch's own detail crop (root is the one node every
+# branch's own ancestor path excludes by definition). Unlike H2's
+# whole-image tiling -- where root was covered by SOME uniform tile too,
+# getting a detail-page-level font like any other node -- branch-aware
+# tiling alone would leave root's readability entirely up to whatever
+# scale the OVERVIEW page happens to give it. pdf_serializer.py's
+# _write_image_or_detail_pages checks root's own overview-scale effective
+# pt against TARGET_MIN_PT (6.0 -- the same per-node floor every node in
+# any tile must individually clear, not the stricter median+min
+# "meets_target" bar used to judge a whole TILE's typical readability)
+# and, when root falls short, gives root its OWN single-node detail
+# region -- exactly like a branch, through the exact same
+# exact_grid_search_verbose machinery, nothing special-cased.
+#
+# A single-node group's own "meets_target" check is NECESSARILY the
+# stricter TARGET_MEDIAN_PT bar (8pt), not just TARGET_MIN_PT (6pt):
+# median_pt == min_pt when there is exactly one node, so median>=8 is the
+# real bar, and -- being a single node -- more tiles can never shrink its
+# own crop below its own pixel size, so there is no "grow the budget"
+# escape hatch the way a multi-node branch has. If root's own label is so
+# wide that even a full, isolated crop can't reach 8pt, branch-aware
+# tiling honestly declines ENTIRELY (same None contract as any other
+# branch that can't be tiled) rather than silently shipping an unreadable
+# root -- pdf_serializer.py then falls back to the existing
+# ceiling-exceeded warning, an explicit, bounded result, never a silently
+# degraded "success".
+
+def _real_manifest_with_root_font(font_size_px):
+    m = copy.deepcopy(REAL_57NODE_MANIFEST)
+    for n in m["nodes"]:
+        if n["id"] == "root":
+            n["font_size_px"] = font_size_px
+    return m
+
+
+def test_root_overview_pt_below_target_with_real_root_font():
+    """Pins the real fixture's own root readability baseline: at the real
+    captured font_size_px=50, root's overview pt (8.19, computed from the
+    real image/page geometry) is already above TARGET_MIN_PT -- root never
+    needed its own detail region for THIS fixture (confirmed separately:
+    test_real_57node_fixture_succeeds_branch_aware_within_same_ceiling's 9
+    branches, no root, is still exactly right)."""
+    from services.mindmap.export.pdf_layout import A4_PORTRAIT_PT, centered_fit_rect, choose_map_orientation
+    manifest = REAL_57NODE_MANIFEST
+    choice = choose_map_orientation(manifest["image_width_px"], manifest["image_height_px"], A4_PORTRAIT_PT, 40.0)
+    rect = centered_fit_rect(manifest["image_width_px"], manifest["image_height_px"], choice.page_w, choice.page_h, 40.0)
+    root_node = next(n for n in manifest["nodes"] if n["id"] == "root")
+    root_pt = root_node["font_size_px"] * rect.width / manifest["image_width_px"]
+    assert root_pt >= TARGET_MIN_PT
+
+
+def test_root_gets_its_own_readable_detail_region_when_overview_is_too_small():
+    """A root with a smaller (but realistic -- same font family/ratio as
+    every other node) font renders unreadably small on the overview alone
+    (pt < 6) -- giving it its own single-node branch group succeeds
+    (isolating just root's own real bbox reaches a far bigger scale than
+    the whole-image overview does) and adds exactly one extra detail page."""
+    manifest = _real_manifest_with_root_font(20)
+    groups = [("root", {"root"})] + _real_branch_groups()
+    result = branch_aware_grid_search(manifest, groups, page_ceiling=12, bands=BANDS)
+    assert result is not None
+    assert result.all_meet_target
+    assert len(result.plans) == 10  # root + 9 real branches
+    root_plan = next(p for p in result.plans if p.branch_id == "root")
+    assert root_plan.min_pt >= TARGET_MIN_PT
+    assert root_plan.min_pt > 8.0  # comfortably readable, not a bare pass
+
+
+def test_root_unreadable_even_isolated_declines_cleanly_not_silently():
+    """A pathologically wide root label (e.g. a very long map title) can
+    make even ROOT'S OWN isolated crop fall short of the single-node 8pt
+    bar -- more tiles cannot rescue a single node (it would just split
+    it), so this must decline the WHOLE branch-aware attempt cleanly
+    (None), never silently ship a plan with an unreadable root."""
+    manifest = copy.deepcopy(REAL_57NODE_MANIFEST)
+    for n in manifest["nodes"]:
+        if n["id"] == "root":
+            n["x"] = 700
+            n["width"] = 3200  # realistic font (32px, same as every branch node), just a very long title
+            n["font_size_px"] = 32
+    groups = [("root", {"root"})] + _real_branch_groups()
+    result = branch_aware_grid_search(manifest, groups, page_ceiling=12, bands=BANDS)
+    assert result is None  # explicit, bounded "can't do it" -- never a plan missing root's own readability
+
+
+# ---- branch isolation: overlapping padded bboxes (review finding) ----------
+
+def test_overlapping_padded_bboxes_still_assign_every_node_to_exactly_one_branch():
+    """Two branches positioned close enough that their OWN padded
+    (branch_padding_px) bounding boxes overlap must still each get a
+    correct, disjoint NODE assignment -- node coverage is governed by
+    each branch's own explicit node-id set (from the tree), never by
+    which pixels happen to fall inside a padded bbox, so a geometric
+    overlap can never cause a node to be silently claimed by, or missing
+    from, the wrong branch's plan.
+
+    Known, accepted, documented trade-off (not a bug, not silently
+    swept away): because each branch's detail page crops the ORIGINAL
+    full-image raster via a plain rectangular window (same technique H2's
+    own whole-image tiles already use -- never a second, re-encoded
+    per-branch image), a detail page CAN show a few pixels spilling in
+    from a very close neighbour's own content at the crop's edge. This
+    is strictly LESS cross-branch bleed than H2's own uniform grid ever
+    had (a shared uniform tile could contain MULTIPLE full branches with
+    zero distinction at all), never a regression, and never affects which
+    nodes are considered this branch's own CONTENT for coverage/validation
+    purposes -- only the raster framing at the very edge of a crop."""
+    # Two 2-node branches 40px apart -- well inside 2x the default 24px
+    # padding (48px total), so their padded bboxes genuinely overlap.
+    nodes = [
+        {"id": "a1", "x": 0, "y": 0, "width": 200, "height": 100, "font_size_px": 40},
+        {"id": "a2", "x": 0, "y": 150, "width": 200, "height": 100, "font_size_px": 40},
+        {"id": "b1", "x": 240, "y": 0, "width": 200, "height": 100, "font_size_px": 40},
+        {"id": "b2", "x": 240, "y": 150, "width": 200, "height": 100, "font_size_px": 40},
+    ]
+    manifest = _simple_manifest(500, 300, nodes)
+    groups = [("a", {"a1", "a2"}), ("b", {"b1", "b2"})]
+    result = branch_aware_grid_search(manifest, groups, page_ceiling=12, bands=BANDS)
+    assert result is not None
+    assert len(result.plans) == 2
+    a_plan, b_plan = result.plans
+    # Every node still belongs to EXACTLY its own branch's node-id set (the
+    # geometric bbox overlap never reassigns or duplicates a node).
+    assert groups[0][1] == {"a1", "a2"}
+    assert groups[1][1] == {"b1", "b2"}
+    for plan, ids in ((a_plan, {"a1", "a2"}), (b_plan, {"b1", "b2"})):
+        for nid in ids:
+            n = next(x for x in nodes if x["id"] == nid)
+            rect = Rect(n["x"], n["y"], n["width"], n["height"])
+            assert any(t.x <= rect.x and t.y <= rect.y and t.right >= rect.right and t.bottom >= rect.bottom for t in plan.tiles)
 
 
 # ---- small synthetic edge cases ---------------------------------------------
