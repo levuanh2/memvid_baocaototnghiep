@@ -545,7 +545,15 @@ def _serialize_pdf_impl(
                 doc, tree, page_size=page_size, orientation=outline_orientation, single_page=single_page,
                 font=font, background=background, branch_color_mode=branch_color_mode, margin=margin, content=content,
             )
-        return PdfSerializationResult(content=doc.tobytes(), detail_pages=detail_pages, warning=warning)
+        # insert_image(stream=<RGBA PNG>) decodes the raster into an RGB
+        # XObject plus an alpha soft mask. Without deflate, PyMuPDF writes
+        # both streams as raw pixels (width * height * 4 bytes) even when the
+        # source PNG is tiny; reusing one xref across detail pages avoids
+        # duplication but cannot avoid that single raw-pixel expansion.
+        # Deflating at final serialization preserves the decoded dimensions,
+        # geometry coordinates, xref reuse, alpha, and page layout while
+        # compressing every eligible PDF stream in one bounded final pass.
+        return PdfSerializationResult(content=doc.tobytes(deflate=True), detail_pages=detail_pages, warning=warning)
     finally:
         doc.close()
 
