@@ -3166,3 +3166,19 @@ readiness marker that proves the live instance belongs to the active record,
 and a consumer snapshot boundary (here, each closed → open edge). Revalidate
 the snapshot at the irreversible action; if it changed, update the preview and
 require confirmation instead of silently exporting different content.
+
+## Source-image compression does not imply PDF-stream compression (2026-10-17)
+
+A small PNG and a single reused PDF image XREF can still produce a huge PDF.
+Image insertion may decode the PNG into raw RGB plus a raw alpha soft mask;
+XREF reuse only prevents additional copies of those streams. Inspect the XRef
+dictionaries and raw stream lengths before changing capture resolution or
+encoding. In this case the safe boundary was final PDF serialization:
+`tobytes(deflate=True)` preserved pixels, geometry, pagination, and XREF reuse
+while eliminating the raw-stream expansion.
+
+Benchmark format changes with rendered-page hashes as well as file size. A
+lossless claim is strongest when every page rasterizes identically and
+extractable text, page count, blank-page count, and XREF cardinality also match.
+Measure peak RSS in fresh subprocesses; in-process before/after readings hide
+native allocator peaks and cache effects.

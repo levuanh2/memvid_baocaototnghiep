@@ -6929,3 +6929,34 @@ and covers an in-place same-map refresh. `ExportStudioDialog.scopeFreshness.test
 proves the not-ready state and confirmation-time mismatch guard. Existing
 opening-scope, selected-branches, visible-only, root-only and selection-lifecycle
 suites protect their prior semantics.
+
+## PyMuPDF embedded RGBA map rasters were stored as raw PDF streams (H3C, fixed 2026-10-17)
+
+**Symptom:** PDF pagination and image-XREF reuse were correct, but a 57-node
+production-browser export was 28,162,621 bytes even though its 5066×1350 source
+PNG request was only 729,172 bytes. The earlier reported production map
+was 84,504,157 bytes for seven pages.
+
+**Root cause:** `Page.insert_image(stream=<RGBA PNG>)` decoded the capture into
+one RGB image XObject and one alpha soft mask. Reusing that XREF across overview
+and detail pages prevented duplication, but `_serialize_pdf_impl` finished with
+plain `doc.tobytes()`. PyMuPDF therefore wrote both decoded streams without a
+filter: 20,517,300 raw RGB bytes plus 6,839,100 raw alpha bytes for the measured
+fixture. Page count was not the size multiplier; the single uncompressed raster
+was.
+
+**Fix:** finalize with `doc.tobytes(deflate=True)`. This losslessly compresses
+eligible PDF streams after all pages have reused the same image XREF. It does
+not resize/re-encode the frontend PNG, alter decoded dimensions, touch geometry
+coordinates, change pagination, or add a dependency. On the exact downloaded
+artifact, the result was 886,057 bytes (31.78× smaller) with identical rendered
+page hashes, identical extracted text, six unchanged pages, and one unchanged
+image XREF. Eleven controlled fixtures measured 9.8×–48.23× reductions, no
+material peak-RSS change, and 61–384 ms additional serialization time.
+
+**Prevention:** PDF image deduplication and PDF stream compression are separate
+contracts. Tests must inspect the actual image and soft-mask XRef dictionaries,
+not infer storage efficiency from source PNG size or XREF count. Keep a
+representative RGBA regression fixture that fails when the main image is not
+Flate-filtered or the alpha mask is left raw, and compare rendered pages before
+and after any future serializer optimization.
