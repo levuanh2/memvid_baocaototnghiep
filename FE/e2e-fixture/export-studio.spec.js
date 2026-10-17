@@ -25,6 +25,8 @@ fs.mkdirSync(ARTIFACT_DIR, { recursive: true });
 
 const MAP_A_ID = "fixture-map-a";
 const MAP_B_ID = "fixture-map-b";
+const SCOPE_MAP_A_ID = "scope-map-a";
+const SCOPE_MAP_B_ID = "scope-map-b";
 
 function nodeSelector(id) {
   return `[data-nodeid="me${id}"]`;
@@ -110,6 +112,37 @@ test.describe("Export Studio — fixture harness, real files", () => {
     // Fixture map A's root renders synchronously off static data — no
     // network wait needed (this harness makes zero API calls).
     await expect(page.locator(nodeSelector(`${MAP_A_ID}-root`))).toBeVisible();
+  });
+
+  test("H3B.1: reused Mind Elixir instance reports A(11) → B(57) → A(11) and exports B's real content", async ({ page }) => {
+    await page.goto("/fixture-harness.html?map=scope-a");
+    await expect(page.locator(nodeSelector(`${SCOPE_MAP_A_ID}-root`))).toBeVisible();
+
+    await openExportStudio(page);
+    await expect(page.locator(".export-footer__summary")).toContainText("11 node");
+    await page.getByRole("button", { name: "Hủy" }).click();
+
+    await page.getByRole("button", { name: "Mở thư viện sơ đồ" }).click();
+    await page.getByRole("option", { name: /H3B\.1 Map B/ }).click();
+    await expect(page.locator(nodeSelector(`${SCOPE_MAP_B_ID}-root`))).toBeVisible();
+    await openExportStudio(page);
+    await expect(page.locator(".export-footer__summary")).toContainText("57 node");
+    await clickNext(page);
+    await chooseFormat(page, "svg");
+    await clickNext(page);
+    await clickNext(page);
+    await expect(page.getByRole("definition").filter({ hasText: "57 node" })).toBeVisible();
+    const exported = await exportAndSave(page, "h3b1-map-b-57");
+    const svg = fs.readFileSync(exported, "utf8");
+    expect(svg).toContain("H3B.1 Map B");
+    expect(svg).toContain("node 56");
+
+    await page.getByRole("button", { name: "Đóng", exact: true }).click();
+    await page.getByRole("button", { name: "Mở thư viện sơ đồ" }).click();
+    await page.getByRole("option", { name: /H3B\.1 Map A/ }).click();
+    await expect(page.locator(nodeSelector(`${SCOPE_MAP_A_ID}-root`))).toBeVisible();
+    await openExportStudio(page);
+    await expect(page.locator(".export-footer__summary")).toContainText("11 node");
   });
 
   test("PNG: full-scope export produces a valid, decodable, non-trivial PNG file", async ({ page }) => {

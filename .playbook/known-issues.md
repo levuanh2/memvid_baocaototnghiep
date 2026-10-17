@@ -6892,3 +6892,40 @@ branch-aware), make sure a failure in the SECOND attempt doesn't
 silently discard everything the second attempt actually measured just
 because the simpler/older attempt's own number is still available as a
 fallback.
+
+## Export Studio scope preview survived an in-place Mind Elixir refresh (H3B.1, fixed 2026-10-16)
+
+**Symptom:** in one app session, open Map A (11 nodes), open/close Export
+Studio, switch to Map B (57 nodes), then reopen Export Studio. The footer and
+review step still reported 11 nodes, while the real PDF job correctly resolved
+57. Switching B → A could retain B's count in the same way.
+
+**Root cause:** `MindElixirView.jsx` intentionally creates one Mind Elixir
+instance and calls `mind.refresh(mindData)` on map switches. That mutates
+`mind.nodeData` without changing the `mind` object identity.
+`ExportStudioDialog.jsx` memoized `scopeResult` and `estimated` using `mind`
+plus scope/selection inputs; when those inputs were unchanged, React reused the
+old preview. `mapId` alone would still be unsafe because the prop can change one
+render before `refresh()` commits the new tree. It also would not cover an
+updated node structure with the same map id.
+
+**Fix/freshness contract:** `canvasReadyId` gates preview resolution so a map
+transition shows a not-ready status until the live instance has actually been
+initialized/refreshed for that map. The dialog's closed → open edge is the
+explicit preview-snapshot revision: it re-reads the live tree even when both
+the Mind Elixir identity and map id are stable, while avoiding traversal on
+unrelated renders. The export confirmation click resolves once more and
+compares both the included-node signature and a structural/content signature
+with the displayed snapshot; if the tree changed while the modal was open,
+export is blocked, the preview is refreshed, and the user confirms again. The
+existing `effectiveVisibleOnly`, sticky
+selection, root-only and branch-scope contracts remain the single inputs to
+both resolutions.
+
+**Regression:**
+`MindElixirView.exportScopePreviewFreshness.test.jsx` exercises a real mounted
+viewer through A(11) → B(57) → A, proves the Mind Elixir instance is reused,
+and covers an in-place same-map refresh. `ExportStudioDialog.scopeFreshness.test.jsx`
+proves the not-ready state and confirmation-time mismatch guard. Existing
+opening-scope, selected-branches, visible-only, root-only and selection-lifecycle
+suites protect their prior semantics.

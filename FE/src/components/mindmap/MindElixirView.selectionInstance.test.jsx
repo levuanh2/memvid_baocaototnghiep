@@ -24,6 +24,16 @@ const DATA = {
   ],
   relations: [], sources: [],
 };
+const DATA_B = {
+  ...DATA,
+  id: "map-selection-instance-b",
+  title: "Selection instance B",
+  nodes: DATA.nodes.map((node) => ({
+    ...node,
+    id: `b-${node.id}`,
+    parent: node.parent ? `b-${node.parent}` : null,
+  })),
+};
 const CONTROLLER = { registerMindInstance: vi.fn(), onNodeSelected: vi.fn(), selected: null, sidecarRef: { current: new Map() } };
 let container;
 let root;
@@ -110,5 +120,42 @@ describe("Branch selection: instance, root and transform are untouched", () => {
     // Connector geometry stays valid.
     const bad = [...container.querySelectorAll(".lines path, .subLines path")].filter((p) => /NaN|undefined|Infinity/.test(p.getAttribute("d") || "")).length;
     expect(bad).toBe(0);
+  });
+
+  it("keeps branch picks sticky on one map but clears them before a different map opens", async () => {
+    container = document.createElement("div");
+    document.body.appendChild(container);
+    root = createRoot(container);
+    await act(async () => {
+      root.render(<MindElixirView data={DATA} onRegenerate={vi.fn()} regenerating={false} controller={CONTROLLER} />);
+    });
+
+    await startSelection();
+    const leftMarker = markers().find((marker) => marker.dataset.side === "left");
+    await act(async () => {
+      leftMarker.dispatchEvent(new KeyboardEvent("keydown", { key: " ", bubbles: true, cancelable: true }));
+    });
+    await act(async () => {
+      [...container.querySelectorAll(".mm-selection-bar button")]
+        .find((button) => button.textContent.trim() === "Tiếp tục")
+        .click();
+    });
+    expect(document.querySelector('input[value="selected_branches"]').checked).toBe(true);
+
+    await act(async () => {
+      root.render(<MindElixirView data={DATA_B} onRegenerate={vi.fn()} regenerating={false} controller={CONTROLLER} />);
+    });
+    const dialog = document.body.querySelector('[role="dialog"]');
+    expect(dialog.querySelector('[role="status"]')).toBeNull();
+    expect(dialog.querySelector('input[value="selected_branches"]').checked).toBe(true);
+    expect(dialog.textContent).toContain("Chọn ít nhất một nhánh để tiếp tục.");
+
+    await act(async () => {
+      [...dialog.querySelectorAll("button")].find((button) => button.textContent.trim() === "Hủy").click();
+    });
+    await act(async () => { container.querySelector(".mm-export-trigger").click(); });
+    const reopened = document.body.querySelector('[role="dialog"]');
+    expect(reopened.querySelector('input[value="full"]').checked).toBe(true);
+    expect(reopened.querySelector('.export-footer__summary').textContent).toContain("3 node");
   });
 });
