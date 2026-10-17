@@ -371,6 +371,11 @@ export default function MindElixirView({ data, onRegenerate, regenerating, contr
   // public Mind Elixir instance instead of rebuilding the canvas.
   useEffect(() => {
     if (!containerRef.current || !data) return;
+    // Branch picks are scoped to one saved map. Keep them sticky while the
+    // user closes/reopens Export Studio on that map, but never carry their
+    // ids into the next in-place `mind.refresh()`.
+    setSelectionModeActive(false);
+    setSelectedBranchIds(new Set());
     // New map identity (true mount or an A->B switch): no explicit depth
     // choice carries over. Initial load has no explicit action to prefer,
     // so this intentionally falls back to matchDepthPreset's structural read.
@@ -1310,6 +1315,7 @@ export default function MindElixirView({ data, onRegenerate, regenerating, contr
         mind={mindRef.current}
         record={data}
         mapId={data?.id}
+        canvasReadyId={canvasReadyId}
         title={data?.title}
         selectedNodeId={exportSelectedNodeId}
         selectedBranchIds={selectedBranchIds}

@@ -88,6 +88,30 @@ function buildMap(mapId, title) {
 export const FIXTURE_MAP_A = buildMap("fixture-map-a", "Bản đồ tư duy: Hệ thống StudyMap (Fixture A)");
 export const FIXTURE_MAP_B = buildMap("fixture-map-b", "Bản đồ tư duy: Quy trình học tập (Fixture B)");
 
+function buildScopeFreshnessMap(id, title, nodeCount) {
+  return {
+    id,
+    title,
+    nodes: [
+      { id: `${id}-root`, kind: "root", title, parent: null, order: 0 },
+      ...Array.from({ length: nodeCount - 1 }, (_, index) => ({
+        id: `${id}-n${index}`,
+        kind: "idea",
+        title: `${title} — node ${index + 1}`,
+        parent: `${id}-root`,
+        order: index,
+      })),
+    ],
+    relations: [],
+    sources: [],
+    schema_version: 2,
+  };
+}
+
+// H3B.1 production-shape fixtures: exact counts from the stale-preview report.
+export const FIXTURE_SCOPE_A = buildScopeFreshnessMap("scope-map-a", "H3B.1 Map A — 11 nodes", 11);
+export const FIXTURE_SCOPE_B = buildScopeFreshnessMap("scope-map-b", "H3B.1 Map B — 57 nodes", 57);
+
 /** Node ids to pre-collapse right after mount, so the fixture always has a real mix of expanded/collapsed branches (not just "everything open"). */
 export const FIXTURE_COLLAPSED_NODE_IDS = {
   [FIXTURE_MAP_A.id]: [`${FIXTURE_MAP_A.id}-m2`, `${FIXTURE_MAP_A.id}-m2-s0`],

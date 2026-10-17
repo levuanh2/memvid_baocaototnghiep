@@ -45,7 +45,48 @@ const documentDefaults = () => ({ pdf: getExportFormatCapabilities("pdf").defaul
 const colorKey = (format) => format === "docx" ? "headingColorMode" : format === "xlsx" ? "headerStyleMode" : "branchColorMode";
 function backgroundColor(key, custom) { if (key === "canvas") return getComputedStyle(document.documentElement).getPropertyValue("--bg-base").trim() || "#fff"; if (key === "custom") return custom; return { white: "#fff", dark: "#15171C", transparent: "transparent" }[key] || "#fff"; }
 
-export default function ExportStudioDialog({ open, onClose, mind, record, mapId, title, selectedNodeId, selectedBranchIds, onRequestBranchSelection, savedAppearance, onAppearanceSaved }) {
+function liveTreeSnapshot(node) {
+  return [
+    node.id,
+    node.topic,
+    node.expanded !== false,
+    node.direction ?? null,
+    node.style ?? null,
+    (node.children || []).map(liveTreeSnapshot),
+  ];
+}
+
+function liveTreeSignature(node) {
+  return node ? JSON.stringify(liveTreeSnapshot(node)) : "";
+}
+
+function resolveScopePreview({ mind, mapId, scopeType, selectedNodeId, selectedBranchIds, visibleOnly }) {
+  try {
+    const resolved = resolveExportScope({
+      nodeData: mind.nodeData,
+      scopeType,
+      selectedNodeId,
+      selectedBranchRootIds: selectedBranchIds ? [...selectedBranchIds] : [],
+      visibleOnly,
+      visibleIdsOverride: isRootOnly(mind) ? new Set([mind.nodeData.id]) : null,
+    });
+    const includedIds = [...resolved.includedIds].sort();
+    return {
+      ok: true,
+      mapId,
+      scopeKey: includedIds.join("\u0000"),
+      treeKey: liveTreeSignature(mind.nodeData),
+      count: countIncluded(resolved.includedIds),
+      hidden: countHiddenIncluded(mind.nodeData, resolved.includedIds),
+    };
+  } catch (e) {
+    if (e instanceof NoSelectionError) return { ok: false, message: scopeType === "selected_branches" ? "Chọn ít nhất một nhánh để tiếp tục." : "Chọn một node trên canvas để tiếp tục." };
+    if (e instanceof UnknownNodeIdError) return { ok: false, message: "Lựa chọn không còn hợp lệ trên sơ đồ này." };
+    return { ok: false, message: e.message };
+  }
+}
+
+export default function ExportStudioDialog({ open, onClose, mind, record, mapId, canvasReadyId, title, selectedNodeId, selectedBranchIds, onRequestBranchSelection, savedAppearance, onAppearanceSaved }) {
   const [step, setStep] = useState(0), [furthest, setFurthest] = useState(0);
   // PR C2 — "Dùng giao diện của sơ đồ" (default) vs "Tùy chỉnh riêng bản
   // xuất". `styleOverride` is lazily seeded from the map's OWN resolved
@@ -91,9 +132,21 @@ export default function ExportStudioDialog({ open, onClose, mind, record, mapId,
   // the checkbox's own enabled state, and the real export in agreement.
   const visibleOnlyApplies = scopeType === "full";
   const effectiveVisibleOnly = visibleOnlyApplies && visibleOnly;
-  const scopeResult = useMemo(() => { if (!mind?.nodeData) return null; try { const resolved = resolveExportScope({ nodeData: mind.nodeData, scopeType, selectedNodeId, selectedBranchRootIds: selectedBranchIds ? [...selectedBranchIds] : [], visibleOnly: effectiveVisibleOnly, visibleIdsOverride: isRootOnly(mind) ? new Set([mind.nodeData.id]) : null }); return { ok: true, count: countIncluded(resolved.includedIds), hidden: countHiddenIncluded(mind.nodeData, resolved.includedIds) }; } catch (e) { if (e instanceof NoSelectionError) return { ok: false, message: scopeType === "selected_branches" ? "Chọn ít nhất một nhánh để tiếp tục." : "Chọn một node trên canvas để tiếp tục." }; if (e instanceof UnknownNodeIdError) return { ok: false, message: "Lựa chọn không còn hợp lệ trên sơ đồ này." }; return { ok: false, message: e.message }; } }, [mind, scopeType, selectedNodeId, selectedBranchIds, effectiveVisibleOnly]);
+  // MindElixirView reuses one instance and refreshes nodeData in place, so
+  // object identity is not a freshness signal. canvasReadyId proves that
+  // init/refresh has committed for this map; until then the previous tree
+  // must not be previewed. The open edge snapshots same-map mutations too,
+  // without traversing the tree on unrelated renders. The readiness prop is
+  // optional for direct dialog callers that own their mind fixture.
+  const mindReady = canvasReadyId === undefined || canvasReadyId === mapId;
+  const [previewRevision, setPreviewRevision] = useState(0);
+  const scopeResult = useMemo(() => {
+    void previewRevision;
+    if (!open || !mindReady || !mind?.nodeData) return null;
+    return resolveScopePreview({ mind, mapId, scopeType, selectedNodeId, selectedBranchIds, visibleOnly: effectiveVisibleOnly });
+  }, [open, mind, mindReady, mapId, scopeType, selectedNodeId, selectedBranchIds, effectiveVisibleOnly, previewRevision]);
   const scopeLabel = { full: "Toàn bộ sơ đồ", current_branch: "Nhánh hiện tại", selected_branches: "Các nhánh được chọn", visible: "Phần đang hiển thị" }[scopeType], filename = sanitizeExportFilename(filenameOverride || title), extension = format === "jpeg" ? "jpg" : format;
-  const estimated = useMemo(() => !mind?.map || !scopeResult?.ok || isDoc ? null : estimateExportDimensions({ mind, scopeType, targetNodeId: selectedNodeId, branchRootIds: selectedBranchIds ? [...selectedBranchIds] : [], scale }), [mind, scopeType, selectedNodeId, selectedBranchIds, scale, scopeResult, isDoc]);
+  const estimated = useMemo(() => !open || !mindReady || !mind?.map || !scopeResult?.ok || isDoc ? null : estimateExportDimensions({ mind, scopeType, targetNodeId: selectedNodeId, branchRootIds: selectedBranchIds ? [...selectedBranchIds] : [], scale }), [open, mind, mindReady, scopeType, selectedNodeId, selectedBranchIds, scale, scopeResult, isDoc]);
   // One idempotency key per export ATTEMPT (each click of export/retry/re-export), never per configuration: a re-export is a new job.
   const attemptKeyRef = useRef(null);
   const newAttemptKey = () => { attemptKeyRef.current = crypto.randomUUID?.() || `${Date.now()}-${Math.random()}`; return attemptKeyRef.current; };
@@ -174,12 +227,31 @@ export default function ExportStudioDialog({ open, onClose, mind, record, mapId,
     } else if (final.status === "cancelled") throw new Error("Đã hủy xuất tài liệu.");
     else throw new Error(final.error || "Xuất tài liệu thất bại.");
   };
-  const runExport = async () => { if (!mind || !canExport || inFlightRef.current) return; inFlightRef.current = true; setExporting(true); setError(null); try { if (isDoc) await runDocument(newAttemptKey()); else await runImage(); } catch (e) { if (e?.name !== "AbortError") setError(e?.message || "Không xuất được sơ đồ."); setJobStatus((s) => ["queued", "running"].includes(s) ? "error" : s); } finally { inFlightRef.current = false; setExporting(false); } };
+  const runExport = async () => {
+    if (!mind || !canExport || inFlightRef.current) return;
+    // Re-resolve at the confirmation click. If the live tree changed while
+    // the modal was open, update the displayed snapshot and require one more
+    // confirmation instead of exporting a scope different from the preview.
+    const latest = mindReady && mind.nodeData
+      ? resolveScopePreview({ mind, mapId, scopeType, selectedNodeId, selectedBranchIds, visibleOnly: effectiveVisibleOnly })
+      : null;
+    if (!latest?.ok || latest.mapId !== scopeResult?.mapId || latest.scopeKey !== scopeResult?.scopeKey || latest.treeKey !== scopeResult?.treeKey) {
+      setPreviewRevision((value) => value + 1);
+      setError("Sơ đồ vừa thay đổi. Phạm vi xem trước đã được cập nhật; vui lòng xác nhận lại.");
+      return;
+    }
+    inFlightRef.current = true;
+    setExporting(true);
+    setError(null);
+    try { if (isDoc) await runDocument(newAttemptKey()); else await runImage(); }
+    catch (e) { if (e?.name !== "AbortError") setError(e?.message || "Không xuất được sơ đồ."); setJobStatus((s) => ["queued", "running"].includes(s) ? "error" : s); }
+    finally { inFlightRef.current = false; setExporting(false); }
+  };
   const cancel = async () => { abortRef.current?.abort(); if (jobId) try { await cancelMindmapExport(jobId); } catch { /* best effort */ } setJobStatus("cancelled"); setExporting(false); };
   const next = () => { if (step === 0 && !canAdvance) return; setStep((old) => { const value = Math.min(3, old + 1); setFurthest((seen) => Math.max(seen, value)); return value; }); };
   const summary = `${scopeLabel} · ${format.toUpperCase()}${scopeResult?.ok ? ` · ${scopeResult.count} node` : ""}`, cta = format === "pdf" ? "Tạo PDF" : format === "docx" ? "Tạo DOCX" : format === "xlsx" ? "Tạo XLSX" : `Xuất ${format.toUpperCase()}`;
 
-  const contentStep = <div className="export-step"><header className="export-step__header"><h3>Nội dung xuất</h3><p>Chọn nhanh một cấu hình hoặc tự thiết lập phạm vi.</p></header><section><div className="export-section-title"><span>Xuất nhanh</span>{!quickPreset && <small>Tùy chỉnh</small>}</div><div className="export-quick-grid">{[["png", "Ảnh PNG", "Image"], ["pdf", "PDF học tập", "FileText"], ["webp", "Ảnh WebP", "Image"]].map(([key, label, icon]) => <button key={key} type="button" className={quickPreset === key ? "is-selected" : ""} aria-pressed={quickPreset === key} onClick={() => applyQuick(key)}><Icon name={icon} size={17} />{label}</button>)}</div></section><section><div className="export-section-title"><span>Phạm vi xuất</span></div><div className="export-choice-list" role="radiogroup" aria-label="Phạm vi xuất">{SCOPES.map(([key, label, hint, icon]) => <label key={key} className={scopeType === key ? "is-selected" : ""}><Icon name={icon} size={18} /><span className="export-choice-list__copy"><strong>{label}</strong><small id={`scope-${key}-desc`}>{key === "current_branch" && !selectedNodeId ? "Chưa chọn node. Chọn một node trên canvas trước." : hint}</small></span>{key === "selected_branches" && <><span className="export-count">{branchCount} nhánh</span><button type="button" className="export-inline-action" onClick={(e) => { e.preventDefault(); onRequestBranchSelection?.(); }}>Chọn trên canvas<span className="sr-only"> {branchCount ? "Chọn lại trên sơ đồ" : "Chọn nhánh trên sơ đồ"}</span></button></>}<input type="radio" name="mm-export-scope" value={key} checked={scopeType === key} aria-describedby={`scope-${key}-desc`} onChange={() => { custom(); setScopeType(key); }} /></label>)}</div></section><section className="export-advanced"><button type="button" aria-expanded={advanced} onClick={() => setAdvanced((v) => !v)}><Icon name="Sliders" size={16} />Nâng cao<Icon name={advanced ? "ChevronUp" : "ChevronDown"} size={16} /></button>{advanced && <div className="export-advanced__body"><label className={`export-check ${!visibleOnlyApplies ? "is-disabled" : ""}`}><input name="mm-export-visible-only" type="checkbox" checked={visibleOnly} disabled={!visibleOnlyApplies} aria-describedby="visible-only-desc" onChange={(e) => { custom(); setVisibleOnly(e.target.checked); }} /><span><strong>Chỉ giữ node đang hiển thị trong phạm vi đã chọn</strong><small id="visible-only-desc">{visibleOnlyApplies ? "Áp dụng thêm bộ lọc hiển thị cho phạm vi hiện tại." : "Chỉ áp dụng được cho phạm vi \"Toàn bộ sơ đồ\" — không ảnh hưởng tới nhánh hiện tại hoặc các nhánh được chọn."}</small></span></label></div>}</section>{scopeResult && !scopeResult.ok && <div className="export-message export-message--error" role="alert"><Icon name="AlertCircle" size={16} />{scopeResult.message}</div>}</div>;
+  const contentStep = <div className="export-step"><header className="export-step__header"><h3>Nội dung xuất</h3><p>Chọn nhanh một cấu hình hoặc tự thiết lập phạm vi.</p></header>{!scopeResult && <div className="export-message" role="status"><Spinner size={14} />Đang đồng bộ phạm vi từ sơ đồ hiện tại…</div>}<section><div className="export-section-title"><span>Xuất nhanh</span>{!quickPreset && <small>Tùy chỉnh</small>}</div><div className="export-quick-grid">{[["png", "Ảnh PNG", "Image"], ["pdf", "PDF học tập", "FileText"], ["webp", "Ảnh WebP", "Image"]].map(([key, label, icon]) => <button key={key} type="button" className={quickPreset === key ? "is-selected" : ""} aria-pressed={quickPreset === key} onClick={() => applyQuick(key)}><Icon name={icon} size={17} />{label}</button>)}</div></section><section><div className="export-section-title"><span>Phạm vi xuất</span></div><div className="export-choice-list" role="radiogroup" aria-label="Phạm vi xuất">{SCOPES.map(([key, label, hint, icon]) => <label key={key} className={scopeType === key ? "is-selected" : ""}><Icon name={icon} size={18} /><span className="export-choice-list__copy"><strong>{label}</strong><small id={`scope-${key}-desc`}>{key === "current_branch" && !selectedNodeId ? "Chưa chọn node. Chọn một node trên canvas trước." : hint}</small></span>{key === "selected_branches" && <><span className="export-count">{branchCount} nhánh</span><button type="button" className="export-inline-action" onClick={(e) => { e.preventDefault(); onRequestBranchSelection?.(); }}>Chọn trên canvas<span className="sr-only"> {branchCount ? "Chọn lại trên sơ đồ" : "Chọn nhánh trên sơ đồ"}</span></button></>}<input type="radio" name="mm-export-scope" value={key} checked={scopeType === key} aria-describedby={`scope-${key}-desc`} onChange={() => { custom(); setScopeType(key); }} /></label>)}</div></section><section className="export-advanced"><button type="button" aria-expanded={advanced} onClick={() => setAdvanced((v) => !v)}><Icon name="Sliders" size={16} />Nâng cao<Icon name={advanced ? "ChevronUp" : "ChevronDown"} size={16} /></button>{advanced && <div className="export-advanced__body"><label className={`export-check ${!visibleOnlyApplies ? "is-disabled" : ""}`}><input name="mm-export-visible-only" type="checkbox" checked={visibleOnly} disabled={!visibleOnlyApplies} aria-describedby="visible-only-desc" onChange={(e) => { custom(); setVisibleOnly(e.target.checked); }} /><span><strong>Chỉ giữ node đang hiển thị trong phạm vi đã chọn</strong><small id="visible-only-desc">{visibleOnlyApplies ? "Áp dụng thêm bộ lọc hiển thị cho phạm vi hiện tại." : "Chỉ áp dụng được cho phạm vi \"Toàn bộ sơ đồ\" — không ảnh hưởng tới nhánh hiện tại hoặc các nhánh được chọn."}</small></span></label></div>}</section>{scopeResult && !scopeResult.ok && <div className="export-message export-message--error" role="alert"><Icon name="AlertCircle" size={16} />{scopeResult.message}</div>}</div>;
 
   const formatStep = <div className="export-step"><header className="export-step__header"><h3>Chọn định dạng</h3><p>Mỗi định dạng chỉ hiển thị các tùy chọn mà hệ thống hỗ trợ.</p></header>{[["Ảnh", IMAGE_FORMATS], ["Tài liệu", DOCUMENT_FORMATS]].map(([group, formats]) => <section key={group}><div className="export-section-title"><span>{group}</span></div>{group === "Tài liệu" && !mapId && <p className="export-helper">Lưu sơ đồ trước khi xuất định dạng tài liệu.</p>}<div className="export-format-grid" role="radiogroup" aria-label={`Định dạng ${group.toLowerCase()}`}>{formats.map(([key, label, hint, icon]) => <label key={key} className={`${format === key ? "is-selected" : ""} ${group === "Tài liệu" && !mapId ? "is-disabled" : ""}`}><Icon name={icon} size={20} /><span><strong>{label}</strong><small>{hint}</small></span><input type="radio" name="mm-export-format" value={key} checked={format === key} disabled={group === "Tài liệu" && !mapId} onChange={() => changeFormat(key)} /></label>)}</div></section>)}</div>;
 

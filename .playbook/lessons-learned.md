@@ -3155,3 +3155,14 @@ A class name in JSX is not evidence that a utility exists. If the theme does not
 define the colour, the class silently produces nothing, and a unit test that only
 checks the class name passes. Assert the computed style in a real browser for any
 state colour, and use the defined CSS variables when a token is missing.
+
+## Mutable library state needs an explicit consumer snapshot boundary (2026-10-16)
+
+A stable wrapper object is not a freshness signal when a third-party library
+mutates its tree in place. Keying React memoization on the wrapper — or only on
+the record id — can preserve derived UI after both cross-record refreshes and
+same-record edits. For modal previews, use two separate signals: a producer
+readiness marker that proves the live instance belongs to the active record,
+and a consumer snapshot boundary (here, each closed → open edge). Revalidate
+the snapshot at the irreversible action; if it changed, update the preview and
+require confirmation instead of silently exporting different content.
