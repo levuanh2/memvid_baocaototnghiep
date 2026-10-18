@@ -123,24 +123,35 @@ export function attachBranchSelectionMode(containerEl, { isActiveRef, isSelected
     }
     containerEl.querySelectorAll("me-parent, me-root").forEach((el) => decorateParent(el, { isSelectedFn, onToggle, resolveClickId }));
   };
-  // Click resolver: start from the host that received the click, then switch only
-  // to a marker whose dot centre is strictly nearer the pointer. A click on the
-  // clicked marker's own dot keeps it; a click on a neighbour's dot goes to that dot.
+  // Click resolver: the browser may target an overlapping 40px host even when
+  // the pointer is visibly inside a neighbouring dot. Only override the host
+  // in that concrete case. Pure centre-distance is not enough: at low zoom a
+  // parent's dot can be nearer to empty space inside a child's host, which
+  // silently rewrites an explicit child pick into a parent pick.
   const resolveClickId = (e) => {
     const own = e.currentTarget;
-    const centreDist = (el) => {
+    const dotRect = (el) => {
       const dot = el.querySelector(".mm-export-check__dot") || el;
-      const r = dot.getBoundingClientRect();
-      return Math.hypot(e.clientX - (r.left + r.width / 2), e.clientY - (r.top + r.height / 2));
+      return dot.getBoundingClientRect();
     };
-    let best = own;
-    let bestDist = centreDist(own);
+    const containsPointer = (r) => (
+      r.width > 0 && r.height > 0
+      && e.clientX >= r.left && e.clientX <= r.right
+      && e.clientY >= r.top && e.clientY <= r.bottom
+    );
+    const containing = [];
     containerEl.querySelectorAll("me-export-check").forEach((el) => {
-      if (el === own) return;
-      const d = centreDist(el);
-      if (d < bestDist) { bestDist = d; best = el; }
+      const r = dotRect(el);
+      if (containsPointer(r)) {
+        containing.push({
+          el,
+          distance: Math.hypot(e.clientX - (r.left + r.width / 2), e.clientY - (r.top + r.height / 2)),
+        });
+      }
     });
-    return best.dataset.nodeId || null;
+    if (!containing.length) return own.dataset.nodeId || null;
+    containing.sort((a, b) => a.distance - b.distance);
+    return containing[0].el.dataset.nodeId || null;
   };
   scan();
   const observer = new MutationObserver(scan);

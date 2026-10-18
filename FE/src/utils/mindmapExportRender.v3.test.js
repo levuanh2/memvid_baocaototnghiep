@@ -91,6 +91,46 @@ describe("full-map export does not touch the live canvas", () => {
 
 
 describe("selected_branches image export preserves full titles (same bug PR #60 fixed for save)", () => {
+  it.each(["png", "svg"])("%s keeps P as context, excludes sibling C, and crops to scoped content", async (format) => {
+    const mind = makeMind();
+    mind.nodeData = {
+      id: "root", topic: "Root", expanded: true,
+      children: [{
+        id: "p", topic: "P", expanded: true,
+        children: [
+          { id: "a", topic: "A", expanded: true, children: [] },
+          { id: "b", topic: "B", expanded: true, children: [] },
+          { id: "c", topic: "C", expanded: true, children: [] },
+        ],
+      }],
+    };
+    const record = {
+      id: "m1", title: "Map", schema_version: 2, relations: [], sources: [],
+      nodes: [
+        { id: "root", kind: "root", title: "Root", parent: null },
+        { id: "p", kind: "section", title: "P", parent: "root" },
+        { id: "a", kind: "idea", title: "A", parent: "p" },
+        { id: "b", kind: "idea", title: "B", parent: "p" },
+        { id: "c", kind: "idea", title: "C", parent: "p" },
+      ],
+    };
+    const targets = [];
+
+    await exportMindmapImage({
+      mind, record, scopeType: "selected_branches", branchRootIds: ["a", "b"],
+      format, backgroundColor: "#fff", snapdom: fakeSnapdom(targets), settleMs: 0,
+      MindElixirCtor: FakeOffscreenMind,
+    });
+
+    const exported = FakeOffscreenMind.instances.at(-1).initNodeData;
+    const ids = [];
+    (function walk(node) { ids.push(node.id); (node.children || []).forEach(walk); })(exported);
+    expect(ids).toEqual(["root", "p", "a", "b"]);
+    expect(ids).not.toContain("c");
+    expect(targets[0].style.width).toBe("264px");
+    expect(targets[0].style.height).toBe("104px");
+  });
+
   it("does not read the canvas-compacted topic for an untouched node's title with 2+ selected branches", async () => {
     const longTitleA = "Tiêu đề nhánh A rất dài vượt quá giới hạn một trăm ký tự, dùng để kiểm tra xuất nhiều nhánh không bị cắt chữ của node chưa chỉnh sửa";
     const longTitleB = "Tiêu đề nhánh B cũng rất dài tương tự, viết bằng tiếng Việt có dấu, cho một nhánh khác được chọn cùng lúc trong Export Studio";

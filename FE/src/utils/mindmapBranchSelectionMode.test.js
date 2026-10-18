@@ -55,6 +55,73 @@ describe("attachBranchSelectionMode", () => {
     document.body.removeEventListener("click", outerClick);
   });
 
+  it("keeps the clicked marker id when the pointer is only inside its hitbox, even if a parent dot is geometrically nearer", async () => {
+    const container = document.createElement("div");
+    document.body.appendChild(container);
+    container.appendChild(buildParent({ id: "parent", topic: "Parent" }));
+    container.appendChild(buildParent({ id: "child", topic: "Child" }));
+    const onToggle = vi.fn();
+    handle = attachBranchSelectionMode(container, {
+      isActiveRef: { current: true },
+      isSelectedFn: () => false,
+      onToggle,
+    });
+    await Promise.resolve();
+
+    const parentCheck = container.querySelector('me-export-check[data-node-id="parent"]');
+    const childCheck = container.querySelector('me-export-check[data-node-id="child"]');
+    parentCheck.querySelector(".mm-export-check__dot").getBoundingClientRect = () => ({
+      left: 55, right: 65, top: 45, bottom: 55, width: 10, height: 10,
+    });
+    childCheck.querySelector(".mm-export-check__dot").getBoundingClientRect = () => ({
+      left: 75, right: 85, top: 45, bottom: 55, width: 10, height: 10,
+    });
+
+    // The browser targeted the child's 40px host. The pointer is not inside
+    // either visible dot, so proximity to the parent must not rewrite the
+    // explicit user pick from child -> parent.
+    childCheck.dispatchEvent(new MouseEvent("click", {
+      bubbles: true,
+      clientX: 68,
+      clientY: 50,
+    }));
+
+    expect(onToggle).toHaveBeenCalledWith("child");
+  });
+
+  it("routes an overlapping host click to the visible dot that actually contains the pointer", async () => {
+    const container = document.createElement("div");
+    document.body.appendChild(container);
+    container.appendChild(buildParent({ id: "parent", topic: "Parent" }));
+    container.appendChild(buildParent({ id: "child", topic: "Child" }));
+    const onToggle = vi.fn();
+    handle = attachBranchSelectionMode(container, {
+      isActiveRef: { current: true },
+      isSelectedFn: () => false,
+      onToggle,
+    });
+    await Promise.resolve();
+
+    const parentCheck = container.querySelector('me-export-check[data-node-id="parent"]');
+    const childCheck = container.querySelector('me-export-check[data-node-id="child"]');
+    parentCheck.querySelector(".mm-export-check__dot").getBoundingClientRect = () => ({
+      left: 55, right: 65, top: 45, bottom: 55, width: 10, height: 10,
+    });
+    childCheck.querySelector(".mm-export-check__dot").getBoundingClientRect = () => ({
+      left: 75, right: 85, top: 45, bottom: 55, width: 10, height: 10,
+    });
+
+    // A large child host is on top, but the pointer is visibly inside the
+    // parent's dot. This is the only case where host ownership is overridden.
+    childCheck.dispatchEvent(new MouseEvent("click", {
+      bubbles: true,
+      clientX: 60,
+      clientY: 50,
+    }));
+
+    expect(onToggle).toHaveBeenCalledWith("parent");
+  });
+
   it("clicking the node's own label (me-tpc) ALSO toggles selection, and suppresses the click from reaching mind-elixir's own listeners", async () => {
     const container = document.createElement("div");
     document.body.appendChild(container);

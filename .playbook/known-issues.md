@@ -1,5 +1,40 @@
 # Known Issues
 
+## Selected-branch marker proximity could promote a child click to its parent, and export counts/framing omitted context (fixed 2026-10-18)
+
+**Symptom:** at low zoom, clicking the 40px marker hitbox for a child could add
+its parent id to the explicit selection. Once the parent was present, the
+existing (correct) subtree resolver exported the parent's whole subtree, so an
+unselected sibling appeared in PDF/PNG/SVG. Separately, Export Studio and the
+worker reported only selected roots + descendants as `node_count`, although the
+artifact also rendered minimal context ancestors. The image-size estimate
+measured only selected subtree wrappers, omitting the context path shown in the
+artifact.
+
+**Root causes:** `mindmapBranchSelectionMode.js` globally chose whichever
+marker dot centre was nearest to the pointer, even when the pointer was not
+inside that dot; proximity could therefore rewrite the browser-targeted child
+host to a parent. `ExportStudioDialog.jsx` called `countIncluded()` and
+`mindmap_export.py` used `len(included_ids)`, both excluding `context_ids`.
+`estimateExportDimensions()` unioned only explicit subtree boxes rather than
+the resolver's exact render set.
+
+**Fix:** marker ownership now changes only when the pointer is actually inside
+a non-zero visible dot; otherwise the browser-targeted host id wins. Preview,
+review, and worker result counts use `included_ids | context_ids`, while the
+explicit branch badge remains the raw user-picked Set size. Dimension estimates
+resolve the same render set and union its live node boxes. The already-shipped
+canonical record pruning/crop path remains the artifact source: real root and
+minimal context survive, unrelated siblings do not.
+
+**Regression:** `mindmapBranchSelectionMode.test.js` covers both empty-hitbox
+and truly-overlapping-dot cases; `mindmapExportScope.v3.test.js` and
+`ExportStudioDialog.scopeFreshness.test.jsx` separate rendered-node count from
+explicit-branch count; `mindmapImageExportEstimate.test.js` covers context-aware
+framing; `test_mindmap_export_worker_integration.py` verifies exact PDF text and
+status count; the fixture Playwright flow downloads real SVG/PNG artifacts for
+two siblings under one parent and checks sibling exclusion and crop.
+
 ## Appearance V2 — cold-load race: a saved appearance could silently fail to render, and two real-browser-only races could wipe it after it did (fixed 2026-10-09)
 
 **Symptom (live production QA, real EC2 backend, real QA account, found while

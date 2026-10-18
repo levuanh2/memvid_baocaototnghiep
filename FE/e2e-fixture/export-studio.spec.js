@@ -366,6 +366,70 @@ test.describe("Export Studio — fixture harness, real files", () => {
     void m2;
   });
 
+  test("selected siblings keep their parent as context, exclude the third sibling, and report exact counts", async ({ page }) => {
+    const parentId = `${MAP_A_ID}-m0`;
+    const selectedA = `${parentId}-s0`;
+    const selectedB = `${parentId}-s1`;
+    const unselectedC = `${parentId}-s2`;
+
+    await openExportStudio(page);
+    await chooseScope(page, "selected_branches");
+    await page.locator(".export-inline-action").click();
+    await page.locator(nodeSelector(selectedA)).click();
+    await page.locator(nodeSelector(selectedB)).click();
+    await expect(page.locator(".mm-selection-bar")).toContainText("2 nhánh đã chọn");
+    await page.locator(".mm-selection-bar").getByRole("button", { name: "Tiếp tục" }).click();
+
+    // Each selected sub-branch has four leaf descendants in this fixture.
+    // Rendered set = 10 selected/descendant nodes + root/main-branch context.
+    await expect(page.locator(".export-footer__summary")).toContainText("12 node");
+    await clickNext(page);
+    await chooseFormat(page, "svg");
+    await clickNext(page);
+    await clickNext(page);
+    await expect(page.locator(".export-review")).toContainText("12 node · 2 nhánh");
+
+    const filePath = await exportAndSave(page, "same-parent-selected-branches-svg");
+    const svgText = fs.readFileSync(filePath, "utf8");
+    expect(svgText).toContain("Kiến trúc hệ thống"); // parent context
+    expect(svgText).toContain("Nguyên lý");
+    expect(svgText).toContain("Triển khai thực tế");
+    expect(svgText).toContain("Định nghĩa: nguyên lý"); // descendant of selected A
+    expect(svgText).not.toContain("Rủi ro &amp; hạn chế");
+    void unselectedC;
+  });
+
+  test("PNG selected siblings are cropped substantially tighter than the full map", async ({ page }) => {
+    await openExportStudio(page);
+    await chooseScope(page, "full");
+    await clickNext(page);
+    await chooseFormat(page, "png");
+    await clickNext(page);
+    await clickNext(page);
+    const fullPath = await exportAndSave(page, "full-map-framing-reference");
+    const fullSize = await decodeImageDimensions(page, fullPath);
+
+    await page.reload();
+    await expect(page.getByTestId("fixture-harness-root")).toBeVisible();
+    const parentId = `${MAP_A_ID}-m0`;
+    await openExportStudio(page);
+    await chooseScope(page, "selected_branches");
+    await page.locator(".export-inline-action").click();
+    await page.locator(nodeSelector(`${parentId}-s0`)).click();
+    await page.locator(nodeSelector(`${parentId}-s1`)).click();
+    await page.locator(".mm-selection-bar").getByRole("button", { name: "Tiếp tục" }).click();
+    await clickNext(page);
+    await chooseFormat(page, "png");
+    await clickNext(page);
+    await clickNext(page);
+    const selectedPath = await exportAndSave(page, "same-parent-selected-branches-png");
+    const selectedSize = await decodeImageDimensions(page, selectedPath);
+
+    expect(selectedSize.width).toBeGreaterThan(0);
+    expect(selectedSize.height).toBeGreaterThan(0);
+    expect(selectedSize.width * selectedSize.height).toBeLessThan(fullSize.width * fullSize.height * 0.65);
+  });
+
   test("PR B: current_branch SVG export keeps the minimal ancestor path as context, never a sibling", async ({ page }) => {
     // "Nguyên lý — Kiến trúc hệ thống" is m0's own sub-branch (depth 2) — its
     // ancestor chain is [root, m0]. m1 ("Bảo mật & xác thực") is neither an

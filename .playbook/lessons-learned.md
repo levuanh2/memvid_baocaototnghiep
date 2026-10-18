@@ -1,5 +1,24 @@
 # Lessons Learned
 
+## Hitbox ownership, explicit selection, and render membership are three different contracts (2026-10-18)
+
+- A nearest-centre heuristic may repair overlapping hit targets, but it must not
+  override the browser's target unless the pointer is inside the competing
+  visible affordance. Otherwise geometric proximity silently changes a child
+  click into a parent selection and downstream subtree logic looks guilty even
+  when it is correct.
+- Keep the raw user-picked Set as the explicit-selection source of truth. Context
+  ancestors and auto-included descendants belong only to render membership.
+  The branch badge counts explicit picks; artifact/preview/job `node_count`
+  counts the render set.
+- Preview geometry must resolve the same node set as artifact generation. A box
+  around explicit subtrees alone is not an honest estimate when the artifact
+  intentionally retains an ancestor connector path.
+- When an artifact leaks siblings, test the ids entering the resolver before
+  changing the resolver. Here the resolver and canonical PNG/SVG/PDF pruning
+  were already exact; the parent id had been injected earlier by pointer hit
+  resolution.
+
 ## A repair budget must count only time the output can be repaired (2026-10-06)
 
 - Verify a timeout against the code path that consumes it. Here the poll's deadline

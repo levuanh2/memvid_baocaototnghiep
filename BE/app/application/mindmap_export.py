@@ -178,7 +178,8 @@ def run_export_job(
 
         path = export_jobs.output_path_for(job_id, fmt)
         path.write_bytes(file_bytes)
-        result = {"format": fmt, "size_bytes": len(file_bytes), "node_count": len(scope["included_ids"])}
+        rendered_ids = scope["included_ids"] | scope["context_ids"]
+        result = {"format": fmt, "size_bytes": len(file_bytes), "node_count": len(rendered_ids)}
         if warning is not None:
             result["warning"] = warning
         jobs_store.update_job(job_id, status="done", progress=100, stage="done", result=result)
