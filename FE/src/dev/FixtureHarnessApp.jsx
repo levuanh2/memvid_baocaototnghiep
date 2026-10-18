@@ -45,6 +45,11 @@ function useFixtureController() {
   const registerMindInstance = useCallback((mind, sidecar) => {
     mindRef.current = mind;
     sidecarRef.current = sidecar;
+    // DEV fixture inspection hook: artifact-level Playwright gates need to
+    // drive Mind Elixir's real scale API (and assert scaleVal), which cannot
+    // be inferred reliably from a CSS transform or a rounded toolbar label.
+    // This module is never imported by the production entry point.
+    window.__STUDYMAP_FIXTURE__ = { mind, sidecar };
     // Collapse the fixture's designated branches once, right after this
     // specific mind-elixir instance/sidecar pair is (re)registered (covers
     // both first mount and a later map switch/refresh) -- matches the

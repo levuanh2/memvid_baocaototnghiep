@@ -1,5 +1,17 @@
 # Lessons Learned
 
+## Artifact gates must drive the engine state and carry the same captured bytes across boundaries
+
+A rounded zoom label or a CSS transform is not proof of Mind Elixir's actual
+zoom. A browser regression for marker hit-testing should call the real
+`mind.scale()` API and assert `scaleVal`, then use real pointer hit-testing at
+the marker edge while another host overlaps it. Likewise, PDF validation must
+not replace the browser capture with a synthetic image after checking the FE
+payload: save the exact PNG and geometry manifest sent by Export Studio, pass
+those bytes to the serializer, render the resulting PDF pages, and compare the
+embedded raster pixels. Text extraction remains useful for the outline, but it
+cannot prove what appeared on raster map pages.
+
 ## Hitbox ownership, explicit selection, and render membership are three different contracts (2026-10-18)
 
 - A nearest-centre heuristic may repair overlapping hit targets, but it must not

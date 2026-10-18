@@ -35,6 +35,18 @@ framing; `test_mindmap_export_worker_integration.py` verifies exact PDF text and
 status count; the fixture Playwright flow downloads real SVG/PNG artifacts for
 two siblings under one parent and checks sibling exclusion and crop.
 
+**Final artifact gate (2026-10-18):** `exact-branch-artifact-gates.spec.js`
+drives the real Mind Elixir instance to `scaleVal=0.69`, clicks the visible A/B
+markers, forces their 40px hosts to overlap, and repeats an edge toggle before
+asserting P/C remain unchecked and the document payload contains only A/B as
+explicit roots. It downloads real SVG/PNG files and captures the exact PNG plus
+geometry manifest used by both PDF map modes. `qa/verify_pr76_pdf_artifacts.py`
+then feeds those Chromium bytes through the real PDF serializer, renders every
+map page with PyMuPDF, checks pixel-level source reuse, context flags, outline
+agreement, node count, H3B page order, and H3C single-image embedding. The
+fixture exposes its Mind Elixir instance only through a dev-entry inspection
+hook; no production runtime global was added.
+
 ## Appearance V2 — cold-load race: a saved appearance could silently fail to render, and two real-browser-only races could wipe it after it did (fixed 2026-10-09)
 
 **Symptom (live production QA, real EC2 backend, real QA account, found while
