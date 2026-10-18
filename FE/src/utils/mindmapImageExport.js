@@ -178,13 +178,30 @@ export function estimateExportDimensions({ mind, scopeType, targetNodeId, branch
   if (!mind?.map) return null;
 
   let rects = [];
-  if (scopeType === "selected_branches" && branchRootIds?.length) {
-    rects = branchRootIds
-      .map((id) => subtreeElementFor(mind, id)?.getBoundingClientRect())
-      .filter(Boolean);
-  } else if (scopeType === "current_branch" && targetNodeId) {
-    const r = subtreeElementFor(mind, targetNodeId)?.getBoundingClientRect();
-    if (r) rects = [r];
+  if (
+    (scopeType === "selected_branches" && branchRootIds?.length)
+    || (scopeType === "current_branch" && targetNodeId)
+  ) {
+    try {
+      const resolved = resolveExportScope({
+        nodeData: mind.nodeData,
+        scopeType,
+        selectedNodeId: targetNodeId,
+        selectedBranchRootIds: branchRootIds || [],
+      });
+      const renderIds = new Set([...resolved.includedIds, ...resolved.contextIds]);
+      rects = [...renderIds]
+        .map((id) => mind.findEle?.(id)?.getBoundingClientRect())
+        .filter(Boolean);
+    } catch {
+      // The preview resolver owns validation/error copy. If the live DOM is
+      // between Mind Elixir refreshes, fall back to the pre-existing subtree
+      // estimate instead of turning a harmless estimate into an export error.
+      const ids = scopeType === "selected_branches" ? branchRootIds : [targetNodeId];
+      rects = ids
+        .map((id) => subtreeElementFor(mind, id)?.getBoundingClientRect())
+        .filter(Boolean);
+    }
   } else {
     const r = mind.map.getBoundingClientRect();
     rects = [r];

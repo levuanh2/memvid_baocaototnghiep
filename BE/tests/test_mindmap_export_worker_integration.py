@@ -198,6 +198,50 @@ def test_legacy_job_without_manifest_still_runs_to_done(be, client, monkeypatch,
     assert "warning" not in (job["result"] or {})
 
 
+def test_selected_siblings_pdf_and_status_count_match_the_exact_render_tree(
+    be, client, monkeypatch, sync_enqueue, export_dir,
+):
+    """P remains context for A/B, while sibling C is absent everywhere."""
+    import fitz
+    from app.domains.jobs import export_jobs, jobs_store
+
+    nodes = [
+        {"id": "root", "parent": None, "kind": "root", "title": "Root", "order": 0},
+        {"id": "p", "parent": "root", "kind": "section", "title": "Parent P", "order": 0},
+        {"id": "a", "parent": "p", "kind": "idea", "title": "Selected A", "order": 0},
+        {"id": "b", "parent": "p", "kind": "idea", "title": "Selected B", "order": 1},
+        {"id": "c", "parent": "p", "kind": "idea", "title": "Unselected C", "order": 2},
+    ]
+    _mutable_store(monkeypatch, be, _rec(nodes=nodes))
+    _protect(be, monkeypatch, "userA", on=True)
+
+    resp = client.post("/mindmaps/m1/exports", json={
+        "format": "pdf",
+        "idempotency_key": "k-exact-selected-siblings",
+        "scope": {
+            "scope_type": "selected_branches",
+            "selected_branch_root_ids": ["a", "b"],
+            "include_descendants": True,
+        },
+        "options": {"mode": "outline"},
+    })
+    assert resp.status_code == 202, resp.get_json()
+    job_id = resp.get_json()["job_id"]
+    job = jobs_store.get_job(job_id)
+    assert job["status"] == "done", job
+    assert job["result"]["node_count"] == 4  # Root + P context + explicit A + B
+
+    pdf_path = export_jobs.output_path_for(job_id, "pdf")
+    doc = fitz.open(stream=pdf_path.read_bytes(), filetype="pdf")
+    text = "".join(page.get_text() for page in doc)
+    doc.close()
+    assert "Root" in text
+    assert "Parent P" in text
+    assert "Selected A" in text
+    assert "Selected B" in text
+    assert "Unselected C" not in text
+
+
 # ---- 5. warning flows serializer -> jobs_store.result -> poll response ----
 
 def test_ceiling_warning_flows_from_serializer_through_jobs_store_to_poll_response(be, client, monkeypatch, sync_enqueue, export_dir):

@@ -2,7 +2,7 @@ import { useEffect, useMemo, useRef, useState } from "react";
 import Modal from "../ui/Modal";
 import { Icon } from "../ui/Icon";
 import Spinner from "../ui/Spinner";
-import { resolveExportScope, countIncluded, countHiddenIncluded, deriveOpeningScope, UnknownNodeIdError, NoSelectionError } from "../../utils/mindmapExportScope";
+import { resolveExportScope, countRendered, countHiddenIncluded, deriveOpeningScope, UnknownNodeIdError, NoSelectionError } from "../../utils/mindmapExportScope";
 import { isRootOnly } from "../../utils/mindElixirRootOnly";
 import { exportMindmapImage, estimateExportDimensions, captureMapImageBase64, captureMapImageWithGeometry } from "../../utils/mindmapImageExport";
 import { sanitizeExportFilename } from "../../utils/mindmapExportFilename";
@@ -76,7 +76,7 @@ function resolveScopePreview({ mind, mapId, scopeType, selectedNodeId, selectedB
       mapId,
       scopeKey: includedIds.join("\u0000"),
       treeKey: liveTreeSignature(mind.nodeData),
-      count: countIncluded(resolved.includedIds),
+      count: countRendered(resolved.includedIds, resolved.contextIds),
       hidden: countHiddenIncluded(mind.nodeData, resolved.includedIds),
     };
   } catch (e) {

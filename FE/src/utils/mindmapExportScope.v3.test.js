@@ -9,7 +9,7 @@
 //   │  └─ A2
 //   └─ B
 import { describe, it, expect } from "vitest";
-import { resolveExportScope } from "./mindmapExportScope";
+import { countRendered, resolveExportScope } from "./mindmapExportScope";
 
 function tree() {
   return {
@@ -68,6 +68,12 @@ describe("current_branch: ancestor context without sibling leakage", () => {
 });
 
 describe("selected_branches: union, dedupe, and context never absorbed into explicit roots", () => {
+  it("counts every rendered node while keeping context out of the explicit roots", () => {
+    const { rootIds, includedIds, contextIds } = resolveExactSet(tree(), ["A1", "A2"]);
+    expect(rootIds).toEqual(["A1", "A2"]);
+    expect(countRendered(includedIds, contextIds)).toBe(5); // root + A context + A1 + A1a + A2
+  });
+
   it("two sibling branches (A1, A2) union without pulling in B", () => {
     const { rootIds, includedIds, contextIds } = resolveExactSet(tree(), ["A1", "A2"]);
     expect(rootIds.sort()).toEqual(["A1", "A2"]);

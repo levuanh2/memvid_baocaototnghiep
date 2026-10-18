@@ -221,6 +221,13 @@ export function countIncluded(includedIds) {
   return includedIds.size;
 }
 
+/** Number of nodes that will actually be serialized/rendered. Context
+ * ancestors are not explicit branch picks, but they are real artifact nodes
+ * and therefore belong in the preview/review node count. */
+export function countRendered(includedIds, contextIds = new Set()) {
+  return new Set([...(includedIds || []), ...(contextIds || [])]).size;
+}
+
 /** How many of the included nodes are currently collapsed-and-hidden by the CURRENT view (i.e. would be invisible in the live canvas, but ARE included because includeDescendants ignored collapse state). */
 export function countHiddenIncluded(nodeData, includedIds) {
   const visibleIds = computeVisibleIds(nodeData);

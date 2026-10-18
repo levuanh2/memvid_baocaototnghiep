@@ -98,9 +98,10 @@ describe("Export Studio — visibleOnly only ever filters the 'full' scope (H3A 
     // effective filter must never apply outside "full".
     expect(visibleOnlyCheckbox().checked).toBe(false);
     await goToReview();
-    // a, a1, a2 all included -- a2 is hidden on screen but still exported,
-    // exactly like unchecked visibleOnly already behaved.
-    expect(nodeCount()).toContain("3 node");
+    // a, a1, a2 are included and the real map root is rendered as context.
+    // a2 is hidden on screen but still exported, exactly like unchecked
+    // visibleOnly already behaved.
+    expect(nodeCount()).toContain("4 node");
   });
 
   it("full + visibleOnly checked: preview count IS filtered (the one scope where the contract is real)", async () => {

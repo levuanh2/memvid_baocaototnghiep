@@ -139,4 +139,35 @@ describe("Export Studio scope freshness contract", () => {
     expect(dialog.textContent).toContain("≈570×800px");
     expect(estimateExportDimensionsMock).toHaveBeenCalled();
   });
+
+  it("reports rendered-node count separately from explicit selected-branch count", async () => {
+    const scopedMind = {
+      map: document.createElement("div"),
+      container: document.createElement("div"),
+      nodeData: {
+        id: "root", topic: "Root", expanded: true,
+        children: [{
+          id: "p", topic: "P", expanded: true,
+          children: [
+            { id: "a", topic: "A", expanded: true, children: [] },
+            { id: "b", topic: "B", expanded: true, children: [] },
+            { id: "c", topic: "C", expanded: true, children: [] },
+          ],
+        }],
+      },
+    };
+    const dialog = await renderDialog({
+      mind: scopedMind,
+      selectedBranchIds: new Set(["a", "b"]),
+    });
+
+    expect(summary(dialog)).toContain("4 node"); // Root + P context + A + B
+    expect(dialog.querySelector(".export-count").textContent).toMatch(/^2\s/);
+
+    for (let index = 0; index < 3; index += 1) {
+      await act(async () => dialog.querySelector(".export-footer .btn-primary").click());
+    }
+    const reviewValues = [...dialog.querySelectorAll(".export-review dd")].map((node) => node.textContent);
+    expect(reviewValues.some((value) => value.includes("4 node") && value.includes("2 "))).toBe(true);
+  });
 });
