@@ -1,4 +1,4 @@
-"""Build and visually verify PR #76 PDFs from real Chromium capture payloads.
+"""Build and visually verify exact-node V2 PDFs from Chromium payloads.
 
 Input is produced by FE/e2e-fixture/exact-branch-artifact-gates.spec.js. The
 script deliberately consumes that browser PNG and geometry manifest rather
@@ -91,7 +91,8 @@ def verify_mode(request_path: Path, output_dir: Path) -> dict:
     )
     tree = build_export_tree(
         nodes, [], scope["root_ids"], scope["included_ids"],
-        context_ids=scope["context_ids"], map_id=MAP_ID, title="PR76 exact selected scope",
+        context_ids=scope["context_ids"], presentation_root_id=scope["presentation_root_id"],
+        map_id=MAP_ID, title="Exact node selection V2",
     )
     rows = flatten_export_tree(tree)
     result = serialize_pdf_with_result(
@@ -138,20 +139,23 @@ def verify_mode(request_path: Path, output_dir: Path) -> dict:
 
     outline_text = "\n".join(doc[index].get_text() for index in outline_page_indexes)
     if mode == "map_and_outline":
-        for expected in ("ROOT_CONTEXT", "P_CONTEXT", "A_SELECTED", "A_DESC_0", "B_SELECTED", "B_DESC_0"):
+        for expected in ("P_CONTEXT", "A_SELECTED", "A_DESC_0", "B_SELECTED"):
             assert expected in outline_text
+        for absent in ("ROOT_CONTEXT", "A_DESC_1", "B_DESC_0"):
+            assert absent not in outline_text
         assert "C_UNSELECTED" not in outline_text
 
     manifest_ids = {node["id"] for node in manifest["nodes"]}
-    for expected in (ROOT, P, A, f"{A}-l0", B, f"{B}-l0"):
+    for expected in (P, A, f"{A}-l0", B):
         assert expected in manifest_ids
+    assert ROOT not in manifest_ids
     assert C not in manifest_ids
     assert f"{C}-l0" not in manifest_ids
 
     # Pixel-level evidence from the browser raster at the manifest's own node
     # rectangles. Text extraction cannot satisfy these assertions.
     crop_stddev = {}
-    for node_id in (P, A, f"{A}-l0", B, f"{B}-l0"):
+    for node_id in (P, A, f"{A}-l0", B):
         node = next(item for item in manifest["nodes"] if item["id"] == node_id)
         crop = source.crop((node["x"], node["y"], node["x"] + node["width"], node["y"] + node["height"]))
         value = max(ImageStat.Stat(crop).stddev)
@@ -168,7 +172,8 @@ def verify_mode(request_path: Path, output_dir: Path) -> dict:
         "node_count": len(render_ids),
         "context_ids": sorted(scope["context_ids"]),
         "explicit_root_ids": sorted(scope["root_ids"]),
-        "context_flags": {ROOT: row_by_id[ROOT]["is_context"], P: row_by_id[P]["is_context"], A: row_by_id[A]["is_context"], B: row_by_id[B]["is_context"]},
+        "presentation_root_id": scope["presentation_root_id"],
+        "context_flags": {P: row_by_id[P]["is_context"], A: row_by_id[A]["is_context"], B: row_by_id[B]["is_context"]},
         "pdf_bytes": len(result.content),
         "pdf_pages": len(map_page_indexes) + len(outline_page_indexes),
         "map_pages": [index + 1 for index in map_page_indexes],
@@ -188,7 +193,7 @@ def main() -> None:
     parser.add_argument(
         "--artifact-dir",
         type=Path,
-        default=REPO_ROOT / "FE" / "qa-artifacts" / "pr76-final-gates",
+        default=REPO_ROOT / "FE" / "qa-artifacts" / "exact-node-v2",
     )
     args = parser.parse_args()
     args.artifact_dir.mkdir(parents=True, exist_ok=True)

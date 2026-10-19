@@ -103,7 +103,7 @@ for (const vp of VIEWPORTS) {
         await page.mouse.click(c.cx, c.cy);
         await page.waitForTimeout(250);
       }
-      await expect(page.locator(".mm-selection-bar")).toContainText("2 nhánh đã chọn");
+      await expect(page.locator(".mm-selection-bar")).toContainText("2 node đã tick");
       await page.screenshot({ path: path.join(OUT, `${tag}-5-selection-2.png`) });
       rec.selection2 = await measure(page);
       // 6. after pan (real drag on empty background)

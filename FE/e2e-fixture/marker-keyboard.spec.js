@@ -49,7 +49,7 @@ for (const [w, h] of [[1440, 1024], [1024, 768], [390, 844]]) {
     await page.locator("me-export-check").first().focus();
     const f0 = await focusedLabel(page);
     await page.keyboard.press("Space");
-    await expect(page.locator(".mm-selection-bar")).toContainText("1 nhánh đã chọn");
+    await expect(page.locator(".mm-selection-bar")).toContainText("1 node đã tick");
     expect(await focusedLabel(page)).toBe(f0);
     expect(await page.locator("me-export-check").first().getAttribute("aria-checked")).toBe("true");
 
@@ -57,7 +57,7 @@ for (const [w, h] of [[1440, 1024], [1024, 768], [390, 844]]) {
     await page.keyboard.press("Tab");
     const f1 = await focusedLabel(page);
     await page.keyboard.press("Enter");
-    await expect(page.locator(".mm-selection-bar")).toContainText("2 nhánh đã chọn");
+    await expect(page.locator(".mm-selection-bar")).toContainText("2 node đã tick");
     const checked = await page.evaluate(() => [...document.querySelectorAll("me-export-check")].filter((el) => el.getAttribute("aria-checked") === "true").map((el) => el.getAttribute("aria-label")));
     expect(checked.sort()).toEqual([f0, f1].sort());
 
@@ -66,7 +66,7 @@ for (const [w, h] of [[1440, 1024], [1024, 768], [390, 844]]) {
     await page.keyboard.press("Space");
     await page.keyboard.press("Tab");
     await page.keyboard.press("Space");
-    await expect(page.locator(".mm-selection-bar")).toContainText("Chọn các nhánh muốn xuất");
+    await expect(page.locator(".mm-selection-bar")).toContainText("Chọn các node muốn xuất");
 
     // Focus ring: on the dot, not on the host. Host outline is none; dot box-shadow carries the accent.
     await page.locator("me-export-check").first().focus();

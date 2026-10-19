@@ -105,6 +105,6 @@ for (const [w, h] of [[1440, 1024], [1024, 768], [390, 844]]) {
     expect(dotsTotal).toBeGreaterThan(0);
     expect(failures).toEqual([]);
     // Pans move the canvas on purpose; the click-driven tick rounds themselves must not.
-    await expect(page.locator(".mm-selection-bar")).toContainText("Chọn các nhánh muốn xuất");
+    await expect(page.locator(".mm-selection-bar")).toContainText("Chọn các node muốn xuất");
   });
 }

@@ -221,7 +221,7 @@ def test_selected_siblings_pdf_and_status_count_match_the_exact_render_tree(
         "scope": {
             "scope_type": "selected_branches",
             "selected_branch_root_ids": ["a", "b"],
-            "include_descendants": True,
+            "include_descendants": False,
         },
         "options": {"mode": "outline"},
     })
@@ -229,13 +229,13 @@ def test_selected_siblings_pdf_and_status_count_match_the_exact_render_tree(
     job_id = resp.get_json()["job_id"]
     job = jobs_store.get_job(job_id)
     assert job["status"] == "done", job
-    assert job["result"]["node_count"] == 4  # Root + P context + explicit A + B
+    assert job["result"]["node_count"] == 3  # P context + exact A + B
 
     pdf_path = export_jobs.output_path_for(job_id, "pdf")
     doc = fitz.open(stream=pdf_path.read_bytes(), filetype="pdf")
     text = "".join(page.get_text() for page in doc)
     doc.close()
-    assert "Root" in text
+    assert "Root" not in text
     assert "Parent P" in text
     assert "Selected A" in text
     assert "Selected B" in text

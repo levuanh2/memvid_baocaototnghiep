@@ -77,11 +77,11 @@ describe("MindElixirView Export Studio", () => {
     await act(async () => { container.querySelector('[aria-label="Xuất sơ đồ"]').click(); });
     const scopeRadio = document.body.querySelector('input[value="selected_branches"]');
     await act(async () => { scopeRadio.click(); });
-    const enterBtn = [...document.body.querySelectorAll("button")].find((b) => b.textContent.includes("Chọn nhánh trên sơ đồ"));
+    const enterBtn = [...document.body.querySelectorAll("button")].find((b) => b.textContent.includes("Chọn node trên sơ đồ"));
     await act(async () => { enterBtn.click(); });
     expect(document.body.querySelector('[role="dialog"]')).toBeFalsy(); // dialog closed while selecting
     expect(container.querySelector(".mm-selection-bar")).toBeTruthy();
-    expect(container.querySelector(".mm-selection-bar").textContent).toContain("Chọn các nhánh muốn xuất");
+    expect(container.querySelector(".mm-selection-bar").textContent).toContain("Chọn các node muốn xuất");
   });
 
   it("clicking a node while in selection mode toggles selection WITHOUT opening the node-detail drawer", async () => {
@@ -90,14 +90,14 @@ describe("MindElixirView Export Studio", () => {
     await act(async () => { container.querySelector('[aria-label="Xuất sơ đồ"]').click(); });
     await act(async () => { document.body.querySelector('input[value="selected_branches"]').click(); });
     await act(async () => {
-      [...document.body.querySelectorAll("button")].find((b) => b.textContent.includes("Chọn nhánh trên sơ đồ")).click();
+      [...document.body.querySelectorAll("button")].find((b) => b.textContent.includes("Chọn node trên sơ đồ")).click();
     });
     controller.onNodeSelected.mockClear(); // clear any incidental calls from setup above
 
     const s1Tpc = [...container.querySelectorAll("me-tpc")].find((t) => t.nodeObj?.id === "s1");
     await act(async () => { s1Tpc.dispatchEvent(new MouseEvent("click", { bubbles: true })); });
 
-    expect(container.querySelector(".mm-selection-bar").textContent).toContain("1 nhánh đã chọn");
+    expect(container.querySelector(".mm-selection-bar").textContent).toContain("1 node đã tick");
     expect(controller.onNodeSelected).not.toHaveBeenCalled(); // the load-bearing assertion
   });
 
@@ -106,7 +106,7 @@ describe("MindElixirView Export Studio", () => {
     await act(async () => { container.querySelector('[aria-label="Xuất sơ đồ"]').click(); });
     await act(async () => { document.body.querySelector('input[value="selected_branches"]').click(); });
     await act(async () => {
-      [...document.body.querySelectorAll("button")].find((b) => b.textContent.includes("Chọn nhánh trên sơ đồ")).click();
+      [...document.body.querySelectorAll("button")].find((b) => b.textContent.includes("Chọn node trên sơ đồ")).click();
     });
     const s1Tpc = [...container.querySelectorAll("me-tpc")].find((t) => t.nodeObj?.id === "s1");
     await act(async () => { s1Tpc.dispatchEvent(new MouseEvent("click", { bubbles: true })); });
@@ -117,7 +117,7 @@ describe("MindElixirView Export Studio", () => {
     expect(container.querySelector(".mm-selection-bar")).toBeFalsy();
     const dialog = document.body.querySelector('[role="dialog"]');
     expect(dialog).toBeTruthy();
-    expect(dialog.textContent).toContain("0 nhánh"); // selection was cleared
+    expect(dialog.textContent).toContain("0 node đã tick"); // selection was cleared
   });
 
   it("multi-branch export is a real, enabled path (no longer blocked) once 2+ branches are selected", async () => {
@@ -125,7 +125,7 @@ describe("MindElixirView Export Studio", () => {
     await act(async () => { container.querySelector('[aria-label="Xuất sơ đồ"]').click(); });
     await act(async () => { document.body.querySelector('input[value="selected_branches"]').click(); });
     await act(async () => {
-      [...document.body.querySelectorAll("button")].find((b) => b.textContent.includes("Chọn nhánh trên sơ đồ")).click();
+      [...document.body.querySelectorAll("button")].find((b) => b.textContent.includes("Chọn node trên sơ đồ")).click();
     });
     const s1Tpc = [...container.querySelectorAll("me-tpc")].find((t) => t.nodeObj?.id === "s1");
     const s2Tpc = [...container.querySelectorAll("me-tpc")].find((t) => t.nodeObj?.id === "s2");

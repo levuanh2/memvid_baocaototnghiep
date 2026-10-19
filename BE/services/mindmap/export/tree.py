@@ -12,15 +12,17 @@ from typing import Any, Optional
 def build_export_tree(
     nodes: list[dict], relations: list[dict], root_ids: list[str], included_ids: set[str],
     *, map_id: str = "", title: str = "", context_ids: Optional[set[str]] = None,
+    presentation_root_id: Optional[str] = None,
 ) -> dict[str, Any]:
-    """Builds ONE tree rooted at the map's TRUE root, pruned to
+    """Builds ONE tree rooted at the canonical presentation root, pruned to
     `included_ids | context_ids` — never one tree per `root_ids` entry. An
     ancestor-context node naturally keeps only the child that leads to a
     selected branch (the prune IS the "minimal ancestor path" rule): a
     sibling branch, or a sibling's own subtree, is never in the render set,
     so it's pruned away during the same walk. `root_ids` is still accepted
     for API/metadata symmetry with `resolve_export_scope`'s return value, but
-    no longer drives the tree shape directly. Each node carries `is_context`
+    no longer drives the tree shape directly. When no presentation root is
+    supplied, the true root remains the compatibility default. Each node carries `is_context`
     (true for an ancestor-only node) so a serializer can style it differently
     without a second pass."""
     context_ids = context_ids or set()
@@ -56,7 +58,11 @@ def build_export_tree(
             "children": children,
         }
 
-    roots = [to_node(true_root["id"], 0)]
+    effective_root_id = presentation_root_id or true_root["id"]
+    if presentation_root_id is not None and effective_root_id not in render_set:
+        raise ValueError("build_export_tree: presentation root is outside render set")
+    roots = [to_node(effective_root_id, 0)]
+    roots[0]["parent_id"] = None
     kept_relations = [
         {"source": r["source"], "target": r["target"], "type": r.get("type") or "relates_to", "label": r.get("label") or ""}
         for r in (relations or [])

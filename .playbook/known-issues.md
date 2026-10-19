@@ -7007,3 +7007,34 @@ not infer storage efficiency from source PNG size or XREF count. Keep a
 representative RGBA regression fixture that fails when the main image is not
 Flate-filtered or the alpha mask is left raw, and compare rendered pages before
 and after any future serializer optimization.
+
+## Checkbox export treated checked parents as whole subtrees (fixed 2026-10-19)
+
+**Symptom:** checking nodes on one side could export unchecked children,
+siblings, the opposite side, and the global mind-map root. A checked parent also
+absorbed an explicitly checked child, so preview counts, image membership, PDF
+outline membership, and job `node_count` could no longer describe what the user
+actually ticked.
+
+**Root cause:** checkbox export reused the historical branch-root model:
+document payloads defaulted `include_descendants` to true, frontend and backend
+normalization dropped selected descendants when an ancestor was selected, and
+both export-tree builders forced the stored global root as their presentation
+root. Image rendering inherited that projection, so pruning still retained an
+unnecessary ancestor path and layout space.
+
+**Fix:** `selected_branches` now explicitly sends `include_descendants:false`.
+Both resolvers preserve `explicitSelectedIds`, set `includedIds` to exactly that
+set, compute the selected nodes' lowest common ancestor as
+`presentationRootId`, add only the paths from each selected node to that LCA as
+`contextIds`, and render `includedIds ∪ contextIds`. Export-only trees are
+re-rooted at the real LCA without mutating stored nodes or inventing a synthetic
+visible root. The backend recomputes all membership from authoritative saved
+nodes. Explicit legacy `include_descendants:true`, `current_branch`, full, and
+visible contracts remain compatible.
+
+**Regression:** paired FE/BE fixtures cover siblings, parent+child, a single
+node, deep/collapsed paths, left-only and cross-side selections, filtered
+relations, and legacy subtree behavior. Chromium at 69% verifies real SVG/PNG
+and both PDF modes; PyMuPDF checks embedded image pixels, geometry membership,
+outline identity, node count, pagination, and lossless stream compression.

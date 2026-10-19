@@ -4,9 +4,9 @@
 // surface. This is deliberate: serializing the currently-displayed HTML
 // (what an earlier PNG-only export did, out of necessity — an image has no
 // other source) would tie DOCX/PDF/XLSX generation to whatever happens to
-// be collapsed/visible/styled on screen at click time, when the whole point
-// of scope + "include descendants regardless of collapse" is that export
-// content is independent of current view state.
+// be collapsed/visible/styled on screen at click time. Subtree modes include
+// descendants regardless of collapse; exact checkbox mode includes only the
+// checked ids plus the minimal LCA connection path.
 //
 // mind-elixir's own `expandNodeAll`/`expandNode` toggle `node.expanded` on
 // the SAME live objects this reads (verified in mindElixirExpandDepth.js's
@@ -39,7 +39,7 @@ function isAncestorOf(parentOf, maybeAncestorId, id) {
 
 /**
  * "3 nhánh được chọn, một là con của nhánh khác" -> drop the descendant from
- * the ROOT list (its subtree is already covered by its ancestor's). Order
+ * the legacy subtree ROOT list (its subtree is already covered by its ancestor's). Order
  * preserved as document/tree order, not click order — callers pass ids in
  * whatever order the user clicked them; this re-sorts by each id's position
  * in `order` (a precomputed id -> document-order-rank map) so output order
@@ -48,6 +48,24 @@ function isAncestorOf(parentOf, maybeAncestorId, id) {
 function dedupeAndOrderRoots(ids, parentOf, order) {
   const kept = ids.filter((id) => !ids.some((other) => other !== id && isAncestorOf(parentOf, other, id)));
   return [...new Set(kept)].sort((a, b) => (order.get(a) ?? 0) - (order.get(b) ?? 0));
+}
+
+function orderUniqueIds(ids, order) {
+  return [...new Set(ids)].sort((a, b) => (order.get(a) ?? 0) - (order.get(b) ?? 0));
+}
+
+function pathToRoot(parentOf, id) {
+  const path = [];
+  let cur = id;
+  while (cur != null) { path.push(cur); cur = parentOf.get(cur); }
+  return path;
+}
+
+function lowestCommonAncestor(parentOf, ids) {
+  const [first, ...rest] = ids;
+  return pathToRoot(parentOf, first).find((candidate) => (
+    rest.every((id) => pathToRoot(parentOf, id).includes(candidate))
+  ));
 }
 
 /**
@@ -64,6 +82,8 @@ function _resolveCore({
   };
 
   let rootIds;
+  let explicitSelectedIds = [];
+  let exactSelection = false;
   if (scopeType === "full" || scopeType === "visible") {
     rootIds = [rootNodeId];
   } else if (scopeType === "current_branch") {
@@ -74,7 +94,11 @@ function _resolveCore({
     const ids = selectedBranchRootIds || [];
     if (!ids.length) throw new NoSelectionError("selected_branches scope requires at least one selected root");
     ids.forEach(assertKnown);
-    rootIds = dedupeAndOrderRoots(ids, parentOf, order);
+    explicitSelectedIds = orderUniqueIds(ids, order);
+    exactSelection = includeDescendants === false;
+    rootIds = exactSelection
+      ? explicitSelectedIds
+      : dedupeAndOrderRoots(explicitSelectedIds, parentOf, order);
   } else {
     throw new ExportScopeError(`unknown scopeType: ${scopeType}`);
   }
@@ -93,15 +117,22 @@ function _resolveCore({
   };
   rootIds.forEach(collect);
 
-  // contextNodes = union(ancestors(root) for root in rootIds) - effectiveNodes. Never a
-  // sibling, never a descendant of an ancestor — only the direct path up to the map root,
-  // so a branch's siblings and a sibling's own subtree never leak into the render set.
+  const presentationRootId = exactSelection
+    ? lowestCommonAncestor(parentOf, explicitSelectedIds)
+    : rootNodeId;
   const contextIds = new Set();
   rootIds.forEach((id) => {
-    ancestorsOf(parentOf, id).forEach((aid) => { if (!includedIds.has(aid)) contextIds.add(aid); });
+    if (id === presentationRootId) return;
+    let cur = parentOf.get(id);
+    while (cur != null) {
+      if (!includedIds.has(cur)) contextIds.add(cur);
+      if (cur === presentationRootId) break;
+      cur = parentOf.get(cur);
+    }
   });
 
-  return { rootIds, includedIds, contextIds };
+  const renderIds = new Set([...includedIds, ...contextIds]);
+  return { rootIds, explicitSelectedIds, includedIds, contextIds, presentationRootId, renderIds };
 }
 
 /** id -> node, id -> parentId, over the WHOLE live tree (used for validation, ancestor walks, and node_id/parent_id output), plus a document-order rank for every id. */
@@ -249,7 +280,7 @@ export function countHiddenIncluded(nodeData, includedIds) {
  * live relation list, filtered to only relations whose BOTH endpoints survived
  * the render set (a relation pointing outside it can't be rendered meaningfully).
  */
-export function buildExportTree({ nodeData, includedIds, contextIds, sidecar, arrows, mapId, schemaVersion }) {
+export function buildExportTree({ nodeData, includedIds, contextIds, presentationRootId, sidecar, arrows, mapId, schemaVersion }) {
   const index = indexTree(nodeData);
   const renderSet = new Set([...includedIds, ...(contextIds || [])]);
   const visibleIds = computeVisibleIds(nodeData);
@@ -262,7 +293,7 @@ export function buildExportTree({ nodeData, includedIds, contextIds, sidecar, ar
       .map((c) => toNode(c.id, depth + 1));
     return {
       node_id: id,
-      parent_id: index.parentOf.get(id),
+      parent_id: id === (presentationRootId || nodeData.id) ? null : index.parentOf.get(id),
       topic: node.topic || "",
       note: side?.note || "",
       depth,
@@ -275,7 +306,7 @@ export function buildExportTree({ nodeData, includedIds, contextIds, sidecar, ar
       children,
     };
   };
-  const roots = [toNode(nodeData.id, 0)];
+  const roots = [toNode(presentationRootId || nodeData.id, 0)];
   const relations = (arrows || [])
     .filter((a) => renderSet.has(a.from) && renderSet.has(a.to))
     .map((a) => ({ source: a.from, target: a.to, label: a.label || "" }));
