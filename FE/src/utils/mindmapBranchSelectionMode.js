@@ -48,7 +48,7 @@ function decorateParent(parentEl, { isSelectedFn, onToggle, resolveClickId }) {
     check.appendChild(dot);
     check.setAttribute("role", "checkbox");
     check.tabIndex = 0;
-    check.setAttribute("aria-label", `Chọn nhánh: ${tpc.nodeObj.topic || ""}`);
+    check.setAttribute("aria-label", `Chọn node: ${tpc.nodeObj.topic || ""}`);
     check.dataset.nodeId = id;
     // A click lands on whichever 40px host is painted topmost, and at low zoom a
     // neighbour's host can cover this dot. Resolve the click to the nearest dot

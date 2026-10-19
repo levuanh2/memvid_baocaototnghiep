@@ -81,7 +81,7 @@ test.describe("Branch selection marker: geometry and interaction", () => {
     const before = await page.locator(".map-canvas").evaluate((el) => el.style.transform || "");
     const check = page.locator("me-export-check").first();
     await check.click();
-    await expect(page.locator(".mm-selection-bar")).toContainText("1 nhánh đã chọn");
+    await expect(page.locator(".mm-selection-bar")).toContainText("1 node đã tick");
     await expect(check).toHaveAttribute("aria-checked", "true");
     const after = await page.locator(".map-canvas").evaluate((el) => el.style.transform || "");
     expect(after).toBe(before);
@@ -92,8 +92,8 @@ test.describe("Branch selection marker: geometry and interaction", () => {
     const check = page.locator("me-export-check").first();
     await check.focus();
     await page.keyboard.press("Space");
-    await expect(page.locator(".mm-selection-bar")).toContainText("1 nhánh đã chọn");
+    await expect(page.locator(".mm-selection-bar")).toContainText("1 node đã tick");
     await page.keyboard.press("Enter");
-    await expect(page.locator(".mm-selection-bar")).toContainText("Chọn các nhánh muốn xuất");
+    await expect(page.locator(".mm-selection-bar")).toContainText("Chọn các node muốn xuất");
   });
 });

@@ -4,7 +4,7 @@ import path from "node:path";
 import { fileURLToPath } from "node:url";
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
-const ARTIFACT_DIR = path.join(__dirname, "..", "qa-artifacts", "pr76-final-gates");
+const ARTIFACT_DIR = path.join(__dirname, "..", "qa-artifacts", "exact-node-v2");
 fs.mkdirSync(ARTIFACT_DIR, { recursive: true });
 
 const MAP_ID = "fixture-map-a";
@@ -33,7 +33,7 @@ async function openSelectionAt69(page) {
 async function pickExactSiblings(page, { overlap = false } = {}) {
   await page.locator(marker(A)).click();
   await page.locator(marker(B)).click();
-  await expect(page.locator(".mm-selection-bar")).toContainText("2 nhánh đã chọn");
+  await expect(page.locator(".mm-selection-bar")).toContainText("2 node đã tick");
   await expect(page.locator(marker(A))).toHaveAttribute("aria-checked", "true");
   await expect(page.locator(marker(B))).toHaveAttribute("aria-checked", "true");
   await expect(page.locator(marker(P))).toHaveAttribute("aria-checked", "false");
@@ -74,7 +74,7 @@ async function pickExactSiblings(page, { overlap = false } = {}) {
   await page.mouse.click(point.x, point.y);
   await expect(page.locator(marker(A))).toHaveAttribute("aria-checked", "true");
   await expect(page.locator(marker(B))).toHaveAttribute("aria-checked", "true");
-  await expect(page.locator(".mm-selection-bar")).toContainText("2 nhánh đã chọn");
+  await expect(page.locator(".mm-selection-bar")).toContainText("2 node đã tick");
 }
 
 async function continueFromSelection(page) {
@@ -115,12 +115,12 @@ test("Gate 1: Chromium 69% keeps exact A/B marker selection through overlapping 
   await chooseFormatAndPreview(page, "svg");
   const svgPath = await download(page, "gate1-selected-ab.svg");
   const svg = fs.readFileSync(svgPath, "utf8");
-  expect(svg).toContain(`data-nodeid="me${ROOT}"`);
+  expect(svg).not.toContain(`data-nodeid="me${ROOT}"`);
   expect(svg).toContain(`data-nodeid="me${P}"`);
   expect(svg).toContain(`data-nodeid="me${A}"`);
   expect(svg).toContain(`data-nodeid="me${B}"`);
-  expect(svg).toContain(`data-nodeid="me${A}-l0"`);
-  expect(svg).toContain(`data-nodeid="me${B}-l0"`);
+  expect(svg).not.toContain(`data-nodeid="me${A}-l0"`);
+  expect(svg).not.toContain(`data-nodeid="me${B}-l0"`);
   expect(svg).not.toContain(`data-nodeid="me${C}"`);
   const viewBox = svg.match(/viewBox="([\d.\s-]+)"/);
   expect(viewBox).toBeTruthy();
@@ -161,11 +161,20 @@ async function capturePdfRequest(page, mode) {
   await page.route(`**/mindmaps/exports/gate-${mode}`, (route) => route.fulfill({
     status: 200,
     contentType: "application/json",
-    body: JSON.stringify({ job_id: `gate-${mode}`, status: "done", progress: 100, result: { node_count: 12 } }),
+    body: JSON.stringify({ job_id: `gate-${mode}`, status: "done", progress: 100, result: { node_count: 4 } }),
   }));
 
   await openSelectionAt69(page);
-  await pickExactSiblings(page, { overlap: true });
+  // At 69% a deep-left marker can sit under the fixed map selector. Keyboard
+  // activation is the real accessible checkbox path and remains deterministic
+  // without bypassing the component event handler with a forced pointer click.
+  for (const nodeId of [A, B, `${A}-l0`]) {
+    const checkbox = page.locator(marker(nodeId));
+    await checkbox.focus();
+    await checkbox.press("Space");
+    await expect(checkbox).toHaveAttribute("aria-checked", "true");
+  }
+  await expect(page.locator(".mm-selection-bar")).toContainText("3 node đã tick");
   await continueFromSelection(page);
   await page.getByRole("button", { name: "Tiếp tục" }).click();
   await page.locator('input[name="mm-export-format"][value="pdf"]').check();
@@ -180,17 +189,16 @@ async function capturePdfRequest(page, mode) {
   expect({ ...requestBody.scope, selected_branch_root_ids: [...requestBody.scope.selected_branch_root_ids].sort() }).toEqual({
     scope_type: "selected_branches",
     selected_node_id: null,
-    selected_branch_root_ids: [A, B].sort(),
-    include_descendants: true,
+    selected_branch_root_ids: [A, `${A}-l0`, B].sort(),
+    include_descendants: false,
   });
   expect(requestBody.scope.selected_branch_root_ids).not.toContain(P);
   expect(requestBody.options.mode).toBe(mode);
   expect(requestBody.map_image_base64.length).toBeGreaterThan(5_000);
   expect(requestBody.map_geometry_manifest.nodes.map((node) => node.id).sort()).toEqual([
-    ROOT, P,
-    A, `${A}-l0`, `${A}-l1`, `${A}-l2`, `${MAP_ID}-extra0`,
-    B, `${B}-l0`, `${B}-l1`, `${B}-l2`, `${MAP_ID}-extra1`,
+    P, A, `${A}-l0`, B,
   ].sort());
+  expect(requestBody.map_geometry_manifest.nodes.some((node) => node.id === ROOT)).toBe(false);
   expect(requestBody.map_geometry_manifest.nodes.some((node) => node.id === C)).toBe(false);
 
   const base = path.join(ARTIFACT_DIR, `gate2-${mode}`);

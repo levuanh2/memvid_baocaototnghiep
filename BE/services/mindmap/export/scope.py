@@ -9,6 +9,11 @@ collapse/visibility state — a document export is a snapshot of the
 AUTHORITATIVE node set (`mindmap_store.get_record`), never of whatever a
 browser tab happened to have expanded.
 
+For ``selected_branches``, ``include_descendants=False`` is the exact checkbox
+contract: explicit ids are preserved and only the minimal path to their lowest
+common ancestor is added as context. Explicit ``True`` keeps the historical
+subtree-root behavior for stored and legacy requests.
+
 "visible" (PR E) IS allowed to take a client-supplied node-id set — but
 never client-supplied CONTENT: the set only selects WHICH authoritative
 nodes to include, every title/note/citation still comes from `nodes`
@@ -125,6 +130,27 @@ def _dedupe_and_order_roots(ids: list[str], nodes: list[dict], parent_of: dict, 
     return deduped
 
 
+def _order_unique_ids(ids: list[str], nodes: list[dict], children_of: dict[str, list[str]], root_id: str) -> list[str]:
+    rank = {node_id: idx for idx, node_id in enumerate(_document_order(nodes, children_of, root_id))}
+    return sorted(dict.fromkeys(ids), key=lambda node_id: rank.get(node_id, 0))
+
+
+def _path_to_root(parent_of: dict[str, Optional[str]], node_id: str) -> list[str]:
+    path: list[str] = []
+    cur: Optional[str] = node_id
+    while cur is not None:
+        path.append(cur)
+        cur = parent_of.get(cur)
+    return path
+
+
+def _lowest_common_ancestor(parent_of: dict[str, Optional[str]], ids: list[str]) -> str:
+    first, *rest = ids
+    other_paths = [set(_path_to_root(parent_of, node_id)) for node_id in rest]
+    return next(candidate for candidate in _path_to_root(parent_of, first)
+                if all(candidate in path for path in other_paths))
+
+
 def resolve_export_scope(
     nodes: list[dict], *, scope_type: str,
     selected_node_id: Optional[str] = None,
@@ -145,6 +171,8 @@ def resolve_export_scope(
         if node_id not in by_id:
             raise UnknownNodeIdError(f"node_id not in this map: {node_id}")
 
+    explicit_selected_ids: list[str] = []
+    exact_selection = False
     if scope_type == "full":
         root_ids = [root_id]
     elif scope_type == "current_branch":
@@ -158,7 +186,10 @@ def resolve_export_scope(
             raise NoSelectionError("selected_branches scope requires at least one selected root")
         for i in ids:
             assert_known(i)
-        root_ids = _dedupe_and_order_roots(ids, nodes, parent_of, children_of, root_id)
+        explicit_selected_ids = _order_unique_ids(ids, nodes, children_of, root_id)
+        exact_selection = include_descendants is False
+        root_ids = (explicit_selected_ids if exact_selection else
+                    _dedupe_and_order_roots(explicit_selected_ids, nodes, parent_of, children_of, root_id))
     elif scope_type == "visible":
         # include_descendants has no meaning for "visible": the caller-
         # supplied set already IS the exact membership, never a set of
@@ -203,17 +234,29 @@ def resolve_export_scope(
         for rid in root_ids:
             collect(rid)
 
-    # contextNodes = union(ancestors(root) for root in root_ids) - effectiveNodes. Only the
-    # direct path up to the map root — never a sibling, never a sibling's own subtree.
+    presentation_root_id = (_lowest_common_ancestor(parent_of, explicit_selected_ids)
+                            if exact_selection else root_id)
     context_ids: set[str] = set()
     for rid in root_ids:
+        if rid == presentation_root_id:
+            continue
         cur = parent_of.get(rid)
         while cur is not None:
             if cur not in included_ids:
                 context_ids.add(cur)
+            if cur == presentation_root_id:
+                break
             cur = parent_of.get(cur)
 
-    return {"root_ids": root_ids, "included_ids": included_ids, "context_ids": context_ids}
+    render_ids = included_ids | context_ids
+    return {
+        "root_ids": root_ids,
+        "explicit_selected_ids": explicit_selected_ids,
+        "included_ids": included_ids,
+        "context_ids": context_ids,
+        "presentation_root_id": presentation_root_id,
+        "render_ids": render_ids,
+    }
 
 
 def error_code_for(exc: ExportScopeError) -> str:

@@ -161,13 +161,13 @@ describe("Export Studio scope freshness contract", () => {
       selectedBranchIds: new Set(["a", "b"]),
     });
 
-    expect(summary(dialog)).toContain("4 node"); // Root + P context + A + B
+    expect(summary(dialog)).toContain("3 node thực tế"); // P context + exact A + B; Root is above the LCA
     expect(dialog.querySelector(".export-count").textContent).toMatch(/^2\s/);
 
     for (let index = 0; index < 3; index += 1) {
       await act(async () => dialog.querySelector(".export-footer .btn-primary").click());
     }
     const reviewValues = [...dialog.querySelectorAll(".export-review dd")].map((node) => node.textContent);
-    expect(reviewValues.some((value) => value.includes("4 node") && value.includes("2 "))).toBe(true);
+    expect(reviewValues.some((value) => value.includes("3 node thực tế") && value.includes("2 node đã tick"))).toBe(true);
   });
 });

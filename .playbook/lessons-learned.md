@@ -3213,3 +3213,23 @@ lossless claim is strongest when every page rasterizes identically and
 extractable text, page count, blank-page count, and XREF cardinality also match.
 Measure peak RSS in fresh subprocesses; in-process before/after readings hide
 native allocator peaks and cache effects.
+
+## Keep user intent separate from tree connectivity (2026-10-19)
+
+A checkbox is an explicit membership decision, not a request for the node's
+subtree. Preserve checked IDs before any normalization. Compute connectivity as
+a separate derived set: find the real LCA, add only the ancestor paths needed to
+reach it, and never count those context nodes as checked.
+
+Rooting and membership are also separate decisions. A stored map may require a
+global root, while a scoped export can safely project one connected tree rooted
+at a lower real node. Pass that presentation root through preview, raster/vector
+capture, geometry, backend resolution, serializers, outline generation, and job
+accounting. Validate each boundary independently from authoritative IDs; do not
+use hidden CSS nodes or client-supplied content to make disconnected selections
+look connected.
+
+Backward compatibility needs an explicit discriminator. Here,
+`include_descendants:false` is the exact checkbox contract while explicit true
+continues to mean historical subtree roots. Defaults can preserve stored jobs,
+but every new checkbox caller must opt into exact selection deliberately.

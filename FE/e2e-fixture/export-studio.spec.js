@@ -347,7 +347,7 @@ test.describe("Export Studio — fixture harness, real files", () => {
     await expect(page.getByRole("dialog")).toHaveCount(0);
     await page.locator(nodeSelector(m0)).click();
     await page.locator(nodeSelector(m1)).click();
-    await expect(page.locator(".mm-selection-bar")).toContainText("2 nhánh đã chọn");
+    await expect(page.locator(".mm-selection-bar")).toContainText("2 node đã tick");
     await page.locator(".mm-selection-bar").getByRole("button", { name: "Tiếp tục" }).click();
 
     await clickNext(page); // -> format step
@@ -377,24 +377,24 @@ test.describe("Export Studio — fixture harness, real files", () => {
     await page.locator(".export-inline-action").click();
     await page.locator(nodeSelector(selectedA)).click();
     await page.locator(nodeSelector(selectedB)).click();
-    await expect(page.locator(".mm-selection-bar")).toContainText("2 nhánh đã chọn");
+    await expect(page.locator(".mm-selection-bar")).toContainText("2 node đã tick");
     await page.locator(".mm-selection-bar").getByRole("button", { name: "Tiếp tục" }).click();
 
-    // Each selected sub-branch has four leaf descendants in this fixture.
-    // Rendered set = 10 selected/descendant nodes + root/main-branch context.
-    await expect(page.locator(".export-footer__summary")).toContainText("12 node");
+    // Exact membership = the two checked siblings plus their parent LCA.
+    await expect(page.locator(".export-footer__summary")).toContainText("2 node đã tick · 3 node thực tế");
     await clickNext(page);
     await chooseFormat(page, "svg");
     await clickNext(page);
     await clickNext(page);
-    await expect(page.locator(".export-review")).toContainText("12 node · 2 nhánh");
+    await expect(page.locator(".export-review")).toContainText("2 node đã tick · 3 node thực tế");
 
     const filePath = await exportAndSave(page, "same-parent-selected-branches-svg");
     const svgText = fs.readFileSync(filePath, "utf8");
     expect(svgText).toContain("Kiến trúc hệ thống"); // parent context
     expect(svgText).toContain("Nguyên lý");
     expect(svgText).toContain("Triển khai thực tế");
-    expect(svgText).toContain("Định nghĩa: nguyên lý"); // descendant of selected A
+    expect(svgText).not.toContain("Định nghĩa: nguyên lý"); // unchecked descendant
+    expect(svgText).not.toContain("Bản đồ tư duy: Hệ thống StudyMap (Fixture A)"); // above the LCA
     expect(svgText).not.toContain("Rủi ro &amp; hạn chế");
     void unselectedC;
   });
@@ -466,7 +466,7 @@ test.describe("Export Studio — fixture harness, real files", () => {
     // list) — assert the visible effect, not just that nothing crashed.
     await expect(page.locator(".mm-selection-bar")).toHaveCount(0);
     await expect(page.getByRole("dialog")).toBeVisible();
-    await expect(page.getByRole("dialog")).toContainText("0 nhánh"); // selection cleared
+    await expect(page.getByRole("dialog")).toContainText("0 node đã tick"); // selection cleared
     const afterTransform = await page.locator(".map-canvas").evaluate((el) => el.style.transform || "");
     expect(afterTransform).toBe(beforeTransform);
     // Map A's root is still the one rendered — no leaked switch to map B.
@@ -486,9 +486,9 @@ test.describe("Export Studio — fixture harness, real files", () => {
     await chooseScope(page, "selected_branches");
     await page.locator(".export-inline-action").click();
     await page.locator(nodeSelector(`${MAP_A_ID}-m0`)).click();
-    await expect(page.locator(".mm-selection-bar")).toContainText("1 nhánh đã chọn");
+    await expect(page.locator(".mm-selection-bar")).toContainText("1 node đã tick");
     await page.locator(".mm-selection-bar").getByRole("button", { name: "Xóa chọn" }).click();
-    await expect(page.locator(".mm-selection-bar")).toContainText("Chọn các nhánh muốn xuất");
+    await expect(page.locator(".mm-selection-bar")).toContainText("Chọn các node muốn xuất");
   });
 
   test("Section 8 artifact quality gate: full-map.png is retained and valid", async ({ page }) => {
@@ -541,7 +541,7 @@ test.describe("Export Studio — fixture harness, real files", () => {
 });
 
 /** The actual `<me-export-check>` checkbox for a node, by its aria-label
- * (mindmapBranchSelectionMode.js sets `Chọn nhánh: ${topic}`) — distinct
+ * (mindmapBranchSelectionMode.js sets `Chọn node: ${topic}`) — distinct
  * from `nodeSelector(id)` above, which targets `<me-tpc>` (the topic label
  * itself). Every OTHER test in this file clicks the label, which routes
  * through a separate "click the topic while in selection mode" handler and
@@ -556,7 +556,7 @@ test.describe("Export Studio — fixture harness, real files", () => {
  * Only a real Playwright click AT THE CHECKBOX'S OWN COORDINATES, which
  * performs real actionability/hit-testing against computed CSS, can. */
 function checkboxFor(topicTitle) {
-  return `me-export-check[aria-label="Chọn nhánh: ${topicTitle}"]`;
+  return `me-export-check[aria-label="Chọn node: ${topicTitle}"]`;
 }
 
 test.describe("Export Selection Mode — checkbox pointer regression (hotfix)", () => {
@@ -579,7 +579,7 @@ test.describe("Export Selection Mode — checkbox pointer regression (hotfix)", 
     // actionability check finds the element is not the hit-test target
     // at its own center, and the click never registers).
     await check.click();
-    await expect(page.locator(".mm-selection-bar")).toContainText("1 nhánh đã chọn");
+    await expect(page.locator(".mm-selection-bar")).toContainText("1 node đã tick");
     await expect(check).toHaveAttribute("aria-checked", "true");
 
     // No node-detail drawer opened from the checkbox click.
@@ -591,7 +591,7 @@ test.describe("Export Selection Mode — checkbox pointer regression (hotfix)", 
 
     // Click again -> back to 0 (real toggle, not just "always sets true").
     await check.click();
-    await expect(page.locator(".mm-selection-bar")).toContainText("Chọn các nhánh muốn xuất");
+    await expect(page.locator(".mm-selection-bar")).toContainText("Chọn các node muốn xuất");
     await expect(check).toHaveAttribute("aria-checked", "false");
     const afterTransform = await page.locator(".map-canvas").evaluate((el) => el.style.transform || "");
     expect(afterTransform).toBe(beforeTransform);
@@ -604,27 +604,27 @@ test.describe("Export Selection Mode — checkbox pointer regression (hotfix)", 
 
     await page.locator(checkboxFor("Kiến trúc hệ thống")).click();
     await page.locator(checkboxFor("Trải nghiệm người dùng")).click(); // opposite end of the branch list
-    await expect(page.locator(".mm-selection-bar")).toContainText("2 nhánh đã chọn");
+    await expect(page.locator(".mm-selection-bar")).toContainText("2 node đã tick");
     await expect(page.locator(checkboxFor("Kiến trúc hệ thống"))).toHaveAttribute("aria-checked", "true");
     await expect(page.locator(checkboxFor("Trải nghiệm người dùng"))).toHaveAttribute("aria-checked", "true");
 
     await page.locator(checkboxFor("Kiến trúc hệ thống")).click(); // uncheck just this one
-    await expect(page.locator(".mm-selection-bar")).toContainText("1 nhánh đã chọn");
+    await expect(page.locator(".mm-selection-bar")).toContainText("1 node đã tick");
     await expect(page.locator(checkboxFor("Kiến trúc hệ thống"))).toHaveAttribute("aria-checked", "false");
 
     await page.locator(".mm-selection-bar").getByRole("button", { name: "Xóa chọn" }).click();
-    await expect(page.locator(".mm-selection-bar")).toContainText("Chọn các nhánh muốn xuất");
+    await expect(page.locator(".mm-selection-bar")).toContainText("Chọn các node muốn xuất");
     await expect(page.locator(checkboxFor("Trải nghiệm người dùng"))).toHaveAttribute("aria-checked", "false");
   });
 
-  test("C: checking a branch's checkbox AND its own child's checkbox exports the child's content exactly once (dedupe), with the child's sibling still included via the parent", async ({ page }) => {
+  test("C: checking a parent and child preserves both exact IDs without unchecked siblings", async ({ page }) => {
     await openExportStudio(page);
     await chooseScope(page, "selected_branches");
     await page.locator(".export-inline-action").click();
 
     await page.locator(checkboxFor("Kiến trúc hệ thống")).click(); // parent (main branch)
     await page.locator(checkboxFor("Nguyên lý — Kiến trúc hệ thống")).click(); // its own child (sub-branch)
-    await expect(page.locator(".mm-selection-bar")).toContainText("2 nhánh đã chọn"); // UI counts both picks, resolver dedupes on export
+    await expect(page.locator(".mm-selection-bar")).toContainText("2 node đã tick");
     await page.locator(".mm-selection-bar").getByRole("button", { name: "Tiếp tục" }).click();
 
     await clickNext(page); // -> format step
@@ -635,17 +635,11 @@ test.describe("Export Selection Mode — checkbox pointer regression (hotfix)", 
 
     const svgText = fs.readFileSync(filePath, "utf8");
     expect(svgText).not.toMatch(/NaN|undefined|Infinity/);
-    // The child's own NODE (its `data-nodeid`, not just its title text —
-    // the title legitimately appears twice for one real node: once in the
-    // visible label, once in its own <me-epd>'s `aria-label="Thu nhánh:
-    // ..."`) is rendered exactly once, not duplicated by being reachable
-    // through both the parent selection and its own selection.
+    // Both explicit identities survive, with no duplicate rendering.
     const childNodeOccurrences = svgText.split(`data-nodeid="me${MAP_A_ID}-m0-s0"`).length - 1;
     expect(childNodeOccurrences).toBe(1);
-    // The child's SIBLING sub-branch is still present — it's only reachable
-    // through the parent pick, proving the parent's full subtree wasn't
-    // dropped in favor of just the explicitly-checked child.
-    expect(svgText).toContain("Triển khai thực tế — Kiến trúc hệ thống");
+    expect(svgText).not.toContain("Triển khai thực tế — Kiến trúc hệ thống");
+    expect(svgText).not.toContain("Bản đồ tư duy: Hệ thống StudyMap (Fixture A)");
   });
 
   test("D: leaving selection mode (Tiếp tục or Hủy) removes every injected checkbox from the canvas — no orphaned, still-clickable UI left behind", async ({ page }) => {
@@ -653,7 +647,7 @@ test.describe("Export Selection Mode — checkbox pointer regression (hotfix)", 
     await chooseScope(page, "selected_branches");
     await page.locator(".export-inline-action").click();
     await page.locator(checkboxFor("Kiến trúc hệ thống")).click();
-    await expect(page.locator(".mm-selection-bar")).toContainText("1 nhánh đã chọn");
+    await expect(page.locator(".mm-selection-bar")).toContainText("1 node đã tick");
 
     await page.locator(".mm-selection-bar").getByRole("button", { name: "Tiếp tục" }).click();
     await expect(page.getByRole("dialog")).toBeVisible(); // dialog reopened at the scope step (a selection already exists)

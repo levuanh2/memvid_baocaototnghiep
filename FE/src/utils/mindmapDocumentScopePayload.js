@@ -7,9 +7,9 @@
 // whatever is on screen right then, not whatever it was when the user
 // opened the review step.
 //
-// Only "visible" ever carries visible_node_ids (and only "visible" ever
-// sets include_descendants:false — every other scope keeps the existing
-// include_descendants:true). The BE independently re-validates and
+// Only "visible" ever carries visible_node_ids. Exact checkbox selection
+// (`selected_branches`) and visible scope send include_descendants:false;
+// current-branch/full retain their existing subtree behavior. The BE independently re-validates and
 // re-resolves everything this computes; this module's job is only to
 // decide WHICH node ids the user currently sees, never to decide their
 // content — no title/note/text of any node is read or sent here.
@@ -22,7 +22,7 @@ export function buildDocumentScopePayload({ mind, scopeType, selectedNodeId, sel
     scope_type: effectiveScope,
     selected_node_id: selectedNodeId,
     selected_branch_root_ids: selectedBranchRootIds || [],
-    include_descendants: true,
+    include_descendants: effectiveScope !== "selected_branches",
   };
   if (effectiveScope !== "visible") return base;
 

@@ -1288,17 +1288,17 @@ export default function MindElixirView({ data, onRegenerate, regenerating, contr
 
         {/* Export Selection Mode — overlaid on the canvas itself (not the
             floating zoom toolbar, which stays pan/zoom-only), matching
-            section 5C's bar exactly: "Đã chọn N nhánh · Xóa chọn · Tiếp tục
+            exact-node contract: "N node đã tick · Xóa chọn · Tiếp tục
             · Hủy". Node-detail-drawer suppression and the checkbox
             affordance live in mindmapBranchSelectionMode.js, driven by
             `selectionActiveRef` — this bar is just its visible chrome. */}
         {selectionModeActive && (
           <div className="mm-selection-bar" role="status" aria-live="polite">
             {selectedBranchIds.size === 0 ? (
-              <span className="mm-selection-bar__hint">Chọn các nhánh muốn xuất</span>
+              <span className="mm-selection-bar__hint">Chọn các node muốn xuất</span>
             ) : (
               <>
-                <span className="mm-selection-bar__badge">{selectedBranchIds.size} nhánh đã chọn</span>
+                <span className="mm-selection-bar__badge">{selectedBranchIds.size} node đã tick</span>
                 <button type="button" onClick={() => setSelectedBranchIds(new Set())}>Xóa chọn</button>
               </>
             )}

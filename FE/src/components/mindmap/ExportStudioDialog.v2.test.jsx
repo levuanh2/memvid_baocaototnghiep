@@ -103,7 +103,7 @@ describe("Export Studio UX v2", () => {
   it("shows selected-branch count and prevents continuing until a branch exists", async () => {
     const dialog = await renderDialog();
     await click(dialog.querySelector('input[value="selected_branches"]'));
-    expect(dialog.textContent).toContain("0 nhánh");
+    expect(dialog.textContent).toContain("0 node đã tick");
     expect([...dialog.querySelectorAll("button")].find((button) => button.textContent === "Tiếp tục").disabled).toBe(true);
     expect([...dialog.querySelectorAll("button")].find((button) => button.textContent.includes("Chọn trên canvas"))).toBeTruthy();
   });

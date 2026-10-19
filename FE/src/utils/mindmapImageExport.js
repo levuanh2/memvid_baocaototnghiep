@@ -174,7 +174,7 @@ async function _finishCapture(result, { outputMode, format, filename, quality, b
  * real-browser measurement is covered by the Playwright fixture-harness
  * suite, not this function's own unit tests).
  */
-export function estimateExportDimensions({ mind, scopeType, targetNodeId, branchRootIds, scale = 2 }) {
+export function estimateExportDimensions({ mind, scopeType, targetNodeId, branchRootIds, includeDescendants = true, scale = 2 }) {
   if (!mind?.map) return null;
 
   let rects = [];
@@ -188,6 +188,7 @@ export function estimateExportDimensions({ mind, scopeType, targetNodeId, branch
         scopeType,
         selectedNodeId: targetNodeId,
         selectedBranchRootIds: branchRootIds || [],
+        includeDescendants,
       });
       const renderIds = new Set([...resolved.includedIds, ...resolved.contextIds]);
       rects = [...renderIds]
@@ -251,19 +252,21 @@ export async function captureMapImageWithGeometry(opts) {
  * and `exportMindmapImageMultiBranch`'s live-DOM clone). Delegates id
  * resolution to `resolveExportScopeFromRecord` (the same core the FE preview
  * and BE document resolver use — see mindmapExportScope.js's header), then
- * filters the record down to includedIds ∪ contextIds: the map's true root
- * stays the root, so a selected branch keeps its real ancestor-context path
- * instead of being promoted — matching the document-export tree shape.
+ * filters the record down to includedIds ∪ contextIds. Exact checkbox
+ * selection is re-rooted at its real lowest common ancestor; legacy subtree
+ * and current-branch modes retain their existing true-root projection.
  */
 function recordScopedForExport(record, { scopeType, selectedNodeId, selectedBranchRootIds, includeDescendants = true }) {
   if (scopeType === "full") return record;
-  const { includedIds, contextIds } = resolveExportScopeFromRecord(record?.nodes || [], {
+  const { includedIds, contextIds, presentationRootId } = resolveExportScopeFromRecord(record?.nodes || [], {
     scopeType, selectedNodeId, selectedBranchRootIds, includeDescendants,
   });
   const renderSet = new Set([...includedIds, ...contextIds]);
   return {
     ...record,
-    nodes: (record?.nodes || []).filter((n) => renderSet.has(n.id)),
+    nodes: (record?.nodes || []).filter((n) => renderSet.has(n.id)).map((n) => (
+      n.id === presentationRootId ? { ...n, parent: null, kind: "root" } : n
+    )),
     relations: (record?.relations || []).filter((r) => renderSet.has(r.source) && renderSet.has(r.target)),
   };
 }
@@ -488,28 +491,13 @@ function indexById(nodeData) {
 }
 
 /**
- * Multi-branch image export (Round 2, section 4). Several disjoint selected
- * roots can't be captured with one `snapdom(target)` call the way a single
- * subtree can — there's no single existing DOM element that bounds exactly
- * "these N branches and nothing else". Composing them means an OFFSCREEN,
- * throwaway mind-elixir instance rendering DEEP CLONES of the selected
- * subtrees under one synthetic parent (never the live objects — the clones
- * share no object identity with `mind.nodeData` at all, so nothing this
- * function does — layout, scaleFit, force-expand — can reach the live map),
- * mounted in a real-sized (never zero/display:none — see the "NaN connector"
- * note below) container positioned off-screen so the user never sees it,
- * then destroyed immediately after capture.
+ * Scoped image export uses one OFFSCREEN, throwaway mind-elixir instance to
+ * render a deep-cloned, canonically pruned tree. The clone's root is the real
+ * presentationRootId (the selected nodes' LCA for exact checkbox mode), so
+ * no visible or hidden synthetic root is invented and no excluded sibling is
+ * left behind in layout. The live map is never mutated.
  *
- * The virtual root exists only to give mind-elixir something to lay the
- * branches out FROM (its layout algorithm always roots at one node) — an
- * empty topic plus a CSS rule scoped to this instance's own throwaway
- * container hides its box/text from the exported image, satisfying "must
- * not appear in the exported result unless explicitly required for
- * layout": it's required for layout, so it exists, but it isn't visible.
- *
- * Falls back to the existing single-branch path when only one root
- * survives scope resolution (parent+child dedupe can turn a 2-selection
- * into 1) — no virtual root or offscreen instance needed for that case.
+ * Legacy subtree selection retains its existing single-branch fast path.
  */
 async function exportMindmapImageMultiBranch({
   mind, rootIds, includeDescendants, visibleOnly,
@@ -517,12 +505,12 @@ async function exportMindmapImageMultiBranch({
 }) {
   if (!rootIds?.length) throw new Error("Chưa chọn nhánh để xuất.");
 
-  const { rootIds: orderedRootIds, includedIds } = resolveExportScope({
+  const { rootIds: orderedRootIds, renderIds, presentationRootId } = resolveExportScope({
     nodeData: mind.nodeData, scopeType: "selected_branches",
     selectedBranchRootIds: rootIds, includeDescendants, visibleOnly,
   });
 
-  if (orderedRootIds.length === 1) {
+  if (includeDescendants !== false && orderedRootIds.length === 1) {
     return exportMindmapImage({
       mind, scopeType: "current_branch", targetNodeId: orderedRootIds[0],
       format, backgroundColor, scale, quality, title, appearance, outputMode, snapdom, settleMs, MindElixirCtor,
@@ -530,8 +518,7 @@ async function exportMindmapImageMultiBranch({
   }
 
   const liveById = indexById(mind.nodeData);
-  const branchClones = orderedRootIds.map((id) => pruneClone(liveById.get(id), includedIds));
-  const virtualRoot = { id: "__export_virtual_root__", topic: "", children: branchClones };
+  const presentationRoot = pruneClone(liveById.get(presentationRootId), renderIds);
 
   // Real, positioned, REAL-SIZED container: mind-elixir's layout() computes
   // geometry from real offsetWidth/offsetHeight, and a zero-sized or
@@ -544,9 +531,6 @@ async function exportMindmapImageMultiBranch({
   const offscreen = document.createElement("div");
   offscreen.className = "mm-export-offscreen";
   offscreen.style.cssText = "position:fixed; left:-99999px; top:0; width:2400px; height:1600px; pointer-events:none;";
-  const style = document.createElement("style");
-  style.textContent = ".mm-export-offscreen me-root { opacity: 0 !important; }";
-  offscreen.appendChild(style);
   const mountEl = document.createElement("div");
   mountEl.style.cssText = "width:100%; height:100%;";
   offscreen.appendChild(mountEl);
@@ -558,7 +542,7 @@ async function exportMindmapImageMultiBranch({
       el: mountEl, direction: MindElixirCtor.SIDE, compact: true,
       editable: false, contextMenu: false, toolBar: false, theme: THEME,
     });
-    offscreenMind.init({ nodeData: virtualRoot, arrows: [] });
+    offscreenMind.init({ nodeData: presentationRoot, arrows: [] });
     // Throwaway instance, destroyed right after capture — no restore()
     // needed (unlike the live-canvas path), so appearance is applied
     // directly rather than through the snapshot/restore functions.

@@ -79,7 +79,7 @@ describe("Branch selection: instance, root and transform are untouched", () => {
 
     await startSelection();
     expect(container.querySelector(".mm-selection-bar")).toBeTruthy();
-    expect(counter()).toBe("Chọn các nhánh muốn xuất");
+    expect(counter()).toBe("Chọn các node muốn xuất");
     expect(markers().length).toBeGreaterThan(0);
 
     const byDecorator = (side) => markers().find((m) => m.dataset.side === side);
@@ -89,13 +89,13 @@ describe("Branch selection: instance, root and transform are untouched", () => {
     expect(rightMarker).toBeTruthy();
     const dispatchKey = (el, key) => el.dispatchEvent(new KeyboardEvent("keydown", { key, bubbles: true, cancelable: true }));
     await act(async () => { dispatchKey(leftMarker, " "); });
-    expect(counter()).toBe("1 nhánh đã chọn");
+    expect(counter()).toBe("1 node đã tick");
     await act(async () => { dispatchKey(rightMarker, "Enter"); });
-    expect(counter()).toBe("2 nhánh đã chọn");
+    expect(counter()).toBe("2 node đã tick");
     await act(async () => { dispatchKey(leftMarker, " "); });
-    expect(counter()).toBe("1 nhánh đã chọn");
+    expect(counter()).toBe("1 node đã tick");
     await act(async () => { dispatchKey(rightMarker, " "); });
-    expect(counter()).toBe("Chọn các nhánh muốn xuất");
+    expect(counter()).toBe("Chọn các node muốn xuất");
 
     // Pan again while in selection mode, then cancel.
     canvas.style.transform = "translate3d(90px, 60px, 0px) scale(0.5)";
@@ -106,7 +106,7 @@ describe("Branch selection: instance, root and transform are untouched", () => {
 
     // Reopen: starts at zero and no stale checked marker exists.
     await startSelection();
-    expect(counter()).toBe("Chọn các nhánh muốn xuất");
+    expect(counter()).toBe("Chọn các node muốn xuất");
     expect(markers().filter((m) => m.getAttribute("aria-checked") === "true")).toHaveLength(0);
 
     // Identity: same root element, transform changed only by the simulated pan.
@@ -148,7 +148,7 @@ describe("Branch selection: instance, root and transform are untouched", () => {
     const dialog = document.body.querySelector('[role="dialog"]');
     expect(dialog.querySelector('[role="status"]')).toBeNull();
     expect(dialog.querySelector('input[value="selected_branches"]').checked).toBe(true);
-    expect(dialog.textContent).toContain("Chọn ít nhất một nhánh để tiếp tục.");
+    expect(dialog.textContent).toContain("Chọn ít nhất một node để tiếp tục.");
 
     await act(async () => {
       [...dialog.querySelectorAll("button")].find((button) => button.textContent.trim() === "Hủy").click();

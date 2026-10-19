@@ -129,7 +129,7 @@ test.describe("Export Studio — responsive QA", () => {
         await page.locator(nodeSelector(`${MAP_A_ID}-m0`)).click();
         await page.locator('[aria-label="Xuất sơ đồ"]').click();
         await page.locator('input[name="mm-export-scope"][value="current_branch"]').click();
-        await expect(page.getByRole("dialog")).toContainText("Xuất từ node đang chọn trên canvas");
+        await expect(page.getByRole("dialog")).toContainText("Xuất toàn bộ cây con từ node đang chọn trên canvas");
         await assertNoHorizontalOverflow(page);
         await shot(page, vp.name, "05-single-branch-selection");
       });
@@ -141,7 +141,7 @@ test.describe("Export Studio — responsive QA", () => {
         await page.locator(".export-inline-action").click();
         await expect(page.locator(".mm-selection-bar")).toBeVisible();
         await page.locator(nodeSelector(`${MAP_A_ID}-m0`)).click();
-        await expect(page.locator(".mm-selection-bar")).toContainText("1 nhánh đã chọn");
+        await expect(page.locator(".mm-selection-bar")).toContainText("1 node đã tick");
         await expect(page.getByRole("dialog")).toHaveCount(0); // no node-detail drawer opened
         await assertNoHorizontalOverflow(page);
         await shot(page, vp.name, "06-multi-branch-selection");
