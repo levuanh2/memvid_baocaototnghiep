@@ -1,5 +1,26 @@
 # Known Issues
 
+## Selected-branch descendants could be disabled by a stale payload (fixed 2026-10-19)
+
+**Symptom:** the shipped UI sent `include_descendants:true`, but both FE and BE
+resolvers still honored `false` for `selected_branches`. A stale or alternate
+caller could therefore export only A and B instead of A/B plus their subtrees,
+violating the branch-selection contract while using the same scope type.
+
+**Root cause:** `include_descendants` was treated as a generic switch for every
+scope. The resolver also exposed only ancestor-deduped `root_ids`, so code could
+mistake effective render roots for the exact nodes the user picked.
+
+**Fix:** `selected_branches` now always expands descendants in both resolvers.
+They separately return the ordered explicit picks and the ancestor-deduped
+effective roots; context ancestors remain connector-only and never become
+explicit picks.
+
+**Regression:** `mindmapExportScope.v3.test.js` and
+`test_mindmap_export_scope_v3.py` pass `include_descendants:false` and prove the
+selected subtree still contains its grandchild, while parent+child picks remain
+explicit even though effective roots dedupe for rendering.
+
 ## Selected-branch marker proximity could promote a child click to its parent, and export counts/framing omitted context (fixed 2026-10-18)
 
 **Symptom:** at low zoom, clicking the 40px marker hitbox for a child could add

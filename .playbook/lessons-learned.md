@@ -1,5 +1,14 @@
 # Lessons Learned
 
+## A scope name must own its non-negotiable semantics (2026-10-19)
+
+- If `selected_branches` means selected roots plus their subtrees, a generic
+  `include_descendants` flag must not be able to weaken that contract. Enforce
+  the invariant inside every resolver, not only in today's UI payload builder.
+- Preserve user intent and render normalization as separate values. Explicit
+  picks drive selection counts and review text; ancestor-deduped effective
+  roots drive subtree traversal; context ancestors only connect the result.
+
 ## Artifact gates must drive the engine state and carry the same captured bytes across boundaries
 
 A rounded zoom label or a CSS transform is not proof of Mind Elixir's actual

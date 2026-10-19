@@ -64,6 +64,7 @@ function _resolveCore({
   };
 
   let rootIds;
+  let explicitSelectedRootIds = [];
   if (scopeType === "full" || scopeType === "visible") {
     rootIds = [rootNodeId];
   } else if (scopeType === "current_branch") {
@@ -74,18 +75,20 @@ function _resolveCore({
     const ids = selectedBranchRootIds || [];
     if (!ids.length) throw new NoSelectionError("selected_branches scope requires at least one selected root");
     ids.forEach(assertKnown);
-    rootIds = dedupeAndOrderRoots(ids, parentOf, order);
+    explicitSelectedRootIds = [...new Set(ids)].sort((a, b) => (order.get(a) ?? 0) - (order.get(b) ?? 0));
+    rootIds = dedupeAndOrderRoots(explicitSelectedRootIds, parentOf, order);
   } else {
     throw new ExportScopeError(`unknown scopeType: ${scopeType}`);
   }
 
   const effectiveVisibleOnly = visibleOnly || scopeType === "visible";
+  const effectiveIncludeDescendants = scopeType === "selected_branches" ? true : includeDescendants;
 
   const includedIds = new Set();
   const collect = (id) => {
     if (effectiveVisibleOnly && !isVisible(id)) return;
     includedIds.add(id);
-    if (!includeDescendants) return;
+    if (!effectiveIncludeDescendants) return;
     childrenOf(id).forEach((cid) => {
       if (effectiveVisibleOnly && !isVisible(cid)) return;
       collect(cid);
@@ -101,7 +104,7 @@ function _resolveCore({
     ancestorsOf(parentOf, id).forEach((aid) => { if (!includedIds.has(aid)) contextIds.add(aid); });
   });
 
-  return { rootIds, includedIds, contextIds };
+  return { rootIds, explicitSelectedRootIds, includedIds, contextIds };
 }
 
 /** id -> node, id -> parentId, over the WHOLE live tree (used for validation, ancestor walks, and node_id/parent_id output), plus a document-order rank for every id. */
@@ -134,7 +137,8 @@ function computeVisibleIds(nodeData) {
 
 /**
  * Resolves a scope request against the LIVE canvas tree (mind-elixir's nested
- * `nodeData`) into rootIds (explicit roots, deduped/ordered), includedIds
+ * `nodeData`) into explicitSelectedRootIds (the ordered user picks), rootIds
+ * (effective subtree roots, ancestor-deduped), includedIds
  * (effectiveNodes — rootIds + their descendants) and contextIds (the minimal
  * ancestor path from the map root down to each root's parent — never a
  * sibling, never a sibling's subtree). Throws UnknownNodeIdError for any id

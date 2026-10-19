@@ -9,6 +9,9 @@ collapse/visibility state — a document export is a snapshot of the
 AUTHORITATIVE node set (`mindmap_store.get_record`), never of whatever a
 browser tab happened to have expanded.
 
+`selected_branches` always expands each explicit root's subtree. The generic
+`include_descendants` switch cannot weaken that named scope contract.
+
 "visible" (PR E) IS allowed to take a client-supplied node-id set — but
 never client-supplied CONTENT: the set only selects WHICH authoritative
 nodes to include, every title/note/citation still comes from `nodes`
@@ -132,7 +135,7 @@ def resolve_export_scope(
     include_descendants: bool = True,
     visible_node_ids: Optional[list[str]] = None,
 ) -> dict[str, Any]:
-    """Returns {"root_ids": [...], "included_ids": set[...]}."""
+    """Return explicit picks, effective roots, included nodes, and context."""
     if not nodes:
         raise ExportScopeError("resolve_export_scope: nodes is required")
     by_id, parent_of, children_of = _index(nodes)
@@ -145,6 +148,7 @@ def resolve_export_scope(
         if node_id not in by_id:
             raise UnknownNodeIdError(f"node_id not in this map: {node_id}")
 
+    explicit_selected_root_ids: list[str] = []
     if scope_type == "full":
         root_ids = [root_id]
     elif scope_type == "current_branch":
@@ -158,7 +162,12 @@ def resolve_export_scope(
             raise NoSelectionError("selected_branches scope requires at least one selected root")
         for i in ids:
             assert_known(i)
-        root_ids = _dedupe_and_order_roots(ids, nodes, parent_of, children_of, root_id)
+        document_order = _document_order(nodes, children_of, root_id)
+        rank = {node_id: idx for idx, node_id in enumerate(document_order)}
+        explicit_selected_root_ids = sorted(
+            dict.fromkeys(ids), key=lambda node_id: rank.get(node_id, 0)
+        )
+        root_ids = _dedupe_and_order_roots(explicit_selected_root_ids, nodes, parent_of, children_of, root_id)
     elif scope_type == "visible":
         # include_descendants has no meaning for "visible": the caller-
         # supplied set already IS the exact membership, never a set of
@@ -191,11 +200,12 @@ def resolve_export_scope(
     if scope_type == "visible":
         included_ids = set(visible_node_ids)
     else:
+        effective_include_descendants = scope_type == "selected_branches" or include_descendants
         included_ids = set()
 
         def collect(node_id: str) -> None:
             included_ids.add(node_id)
-            if not include_descendants:
+            if not effective_include_descendants:
                 return
             for child_id in children_of.get(node_id, []):
                 collect(child_id)
@@ -213,7 +223,12 @@ def resolve_export_scope(
                 context_ids.add(cur)
             cur = parent_of.get(cur)
 
-    return {"root_ids": root_ids, "included_ids": included_ids, "context_ids": context_ids}
+    return {
+        "root_ids": root_ids,
+        "explicit_selected_root_ids": explicit_selected_root_ids,
+        "included_ids": included_ids,
+        "context_ids": context_ids,
+    }
 
 
 def error_code_for(exc: ExportScopeError) -> str:

@@ -61,15 +61,26 @@ class TestCurrentBranchAncestorContext:
 
 
 class TestSelectedBranchesUnionAndDedupe:
+    def test_selected_branches_always_include_descendants_even_when_payload_opts_out(self):
+        res = resolve_export_scope(
+            _nodes(),
+            scope_type="selected_branches",
+            selected_branch_root_ids=["A1", "A2"],
+            include_descendants=False,
+        )
+        assert sorted(res["included_ids"]) == ["A1", "A1a", "A2"]
+        assert sorted(res["context_ids"]) == ["A", "root"]
+
     def test_two_sibling_branches_union_without_pulling_in_b(self):
         res = resolve_export_scope(_nodes(), scope_type="selected_branches", selected_branch_root_ids=["A1", "A2"])
         assert sorted(res["root_ids"]) == ["A1", "A2"]
         assert sorted(res["included_ids"]) == ["A1", "A1a", "A2"]
         assert sorted(res["context_ids"]) == ["A", "root"]
 
-    def test_parent_and_child_selection_dedupes_child_out_of_roots(self):
+    def test_parent_and_child_remain_explicit_while_effective_roots_dedupe(self):
         res = resolve_export_scope(_nodes(), scope_type="selected_branches", selected_branch_root_ids=["A", "A1"])
-        assert res["root_ids"] == ["A"]  # already correct today
+        assert res["explicit_selected_root_ids"] == ["A", "A1"]
+        assert res["root_ids"] == ["A"]
         assert sorted(res["included_ids"]) == ["A", "A1", "A1a", "A2"]
 
     def test_branches_on_both_sides_union_root_is_shared_context_once(self):

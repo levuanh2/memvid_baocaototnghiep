@@ -68,6 +68,18 @@ describe("current_branch: ancestor context without sibling leakage", () => {
 });
 
 describe("selected_branches: union, dedupe, and context never absorbed into explicit roots", () => {
+  it("always includes descendants because selected branches are subtree roots", () => {
+    const { includedIds, contextIds } = resolveExportScope({
+      nodeData: tree(),
+      scopeType: "selected_branches",
+      selectedBranchRootIds: ["A1", "A2"],
+      includeDescendants: false,
+    });
+
+    expect([...includedIds].sort()).toEqual(["A1", "A1a", "A2"]);
+    expect([...contextIds].sort()).toEqual(["A", "root"]);
+  });
+
   it("counts every rendered node while keeping context out of the explicit roots", () => {
     const { rootIds, includedIds, contextIds } = resolveExactSet(tree(), ["A1", "A2"]);
     expect(rootIds).toEqual(["A1", "A2"]);
@@ -81,9 +93,10 @@ describe("selected_branches: union, dedupe, and context never absorbed into expl
     expect([...contextIds].sort()).toEqual(["A", "root"]);
   });
 
-  it("parent + child selection dedupes the child out of explicit roots, counter reflects 1 not 2", () => {
-    const { rootIds, includedIds } = resolveExactSet(tree(), ["A", "A1"]);
-    expect(rootIds).toEqual(["A"]); // A1 absorbed — this part already works today
+  it("preserves parent and child as explicit picks while deduping effective subtree roots", () => {
+    const { rootIds, explicitSelectedRootIds, includedIds } = resolveExactSet(tree(), ["A", "A1"]);
+    expect(explicitSelectedRootIds).toEqual(["A", "A1"]);
+    expect(rootIds).toEqual(["A"]);
     expect([...includedIds].sort()).toEqual(["A", "A1", "A1a", "A2"]);
   });
 
