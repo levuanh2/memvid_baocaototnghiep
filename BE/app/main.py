@@ -6034,15 +6034,15 @@ def create_mindmap_export(mindmap_id: str):
     scope_type = str(scope_body.get("scope_type") or "full").strip()
     if scope_type not in _EXPORT_SCOPE_TYPES:
         return jsonify({"error": f"scope_type phải là một trong {_EXPORT_SCOPE_TYPES}", "error_code": "invalid_scope_type"}), 400
-    include_descendants_raw = scope_body.get("include_descendants")
-    if include_descendants_raw is None:
+    if "include_descendants" not in scope_body:
         # Fail closed for the current checkbox contract. Older explicit
         # subtree clients remain compatible by sending true; omission must
         # not silently widen selected_branches to a parent subtree.
         include_descendants = scope_type != "selected_branches"
-    elif not isinstance(include_descendants_raw, bool):
-        return jsonify({"error": "include_descendants phải là boolean", "error_code": "invalid_include_descendants"}), 400
     else:
+        include_descendants_raw = scope_body["include_descendants"]
+        if not isinstance(include_descendants_raw, bool):
+            return jsonify({"error": "include_descendants phải là boolean", "error_code": "invalid_include_descendants"}), 400
         include_descendants = include_descendants_raw
     scope_params = {
         "scope_type": scope_type,

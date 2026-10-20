@@ -386,6 +386,26 @@ def test_selected_branches_omitted_descendant_flag_fails_closed_to_exact(
     assert status["result"]["node_count"] == 3
 
 
+@pytest.mark.parametrize("invalid_value", [None, "false", 0, 1])
+def test_selected_branches_explicit_invalid_descendant_flag_is_rejected(
+    be, client, monkeypatch, invalid_value,
+):
+    _stub_get_record(monkeypatch, be, record=_rec())
+    _protect(be, monkeypatch, "userA", on=True)
+
+    response = client.post("/mindmaps/m1/exports", json={
+        "format": "pdf",
+        "scope": {
+            "scope_type": "selected_branches",
+            "selected_branch_root_ids": ["root"],
+            "include_descendants": invalid_value,
+        },
+    })
+
+    assert response.status_code == 400
+    assert response.get_json()["error_code"] == "invalid_include_descendants"
+
+
 def test_selected_branches_explicit_descendant_flag_preserves_legacy_subtree(
     be, client, monkeypatch, sync_enqueue, export_dir,
 ):

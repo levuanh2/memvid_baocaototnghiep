@@ -294,14 +294,23 @@ function assertOffscreenMembership(instance, expectedIds) {
   if (!sameIds(treeIds, expectedIds)) {
     throw new Error("Phạm vi xuất đã thay đổi trong lúc dựng ảnh. Vui lòng chọn lại node và thử lại.");
   }
-  const domIds = new Set(
-    [...(instance?.map?.querySelectorAll?.("me-tpc") || [])]
-      .map((node) => node.nodeObj?.id || node.getAttribute("data-node-id") || node.getAttribute("data-nodeid")?.replace(/^me/, ""))
-      .filter(Boolean),
-  );
-  // Real Mind Elixir topics expose identity. Lightweight unit fakes may not;
-  // when identity is exposed it is authoritative and must match exactly.
-  if (domIds.size && !sameIds(domIds, expectedIds)) {
+  const topicElements = [...(instance?.map?.querySelectorAll?.("me-tpc") || [])];
+  const domIdList = topicElements.map((node) => (
+    node.nodeObj?.id
+    || node.getAttribute("data-node-id")
+    || node.getAttribute("data-nodeid")?.replace(/^me/, "")
+    || null
+  ));
+  const domIds = new Set(domIdList.filter(Boolean));
+  // Mind Elixir exposes identity synchronously on every topic. Validate the
+  // element count as well as the unique ids so missing, duplicate, or extra
+  // unidentified topics cannot turn this structural gate into a no-op.
+  if (
+    topicElements.length !== expectedIds.size
+    || domIdList.some((id) => !id)
+    || domIds.size !== topicElements.length
+    || !sameIds(domIds, expectedIds)
+  ) {
     throw new Error("Ảnh xuất chứa node ngoài phạm vi đã chọn. Đã hủy xuất để tránh lộ node chưa chọn.");
   }
 }
@@ -589,6 +598,7 @@ async function exportMindmapImageMultiBranch({
     offscreenMind.layout?.();
     offscreenMind.linkDiv?.();
     applyTargetAppearance({ mind: offscreenMind, target: offscreenMind.map, appearance });
+    assertOffscreenMembership(offscreenMind, renderIds);
     offscreenMind.scaleFit?.(); // this THROWAWAY instance's own viewport — never the live one
     if (settleMs > 0) await new Promise((r) => setTimeout(r, settleMs));
 

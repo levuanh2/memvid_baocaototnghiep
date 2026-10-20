@@ -83,3 +83,30 @@ test("checking then unchecking parent never selects descendants", async ({ page 
   await page.locator(marker("P")).press("Space");
   for (const id of ["ROOT", "P", ...CHILDREN]) await expect(page.locator(marker(id))).toHaveAttribute("aria-checked", "false");
 });
+
+test("real Chromium offscreen Mind Elixir topics expose complete identity", async ({ page }) => {
+  await openSelection(page);
+  await selectPair(page, ["B", "C"], false);
+  await page.evaluate(() => {
+    window.__OFFSCREEN_IDENTITY_SAMPLES__ = [];
+    window.__OFFSCREEN_IDENTITY_TIMER__ = window.setInterval(() => {
+      const topics = [...document.querySelectorAll(".mm-export-offscreen me-tpc")];
+      if (!topics.length) return;
+      window.__OFFSCREEN_IDENTITY_SAMPLES__.push(topics.map((topic) => ({
+        nodeObjId: topic.nodeObj?.id || null,
+        dataNodeId: topic.getAttribute("data-node-id"),
+        dataNodeid: topic.getAttribute("data-nodeid"),
+      })));
+    }, 1);
+  });
+
+  await exportSvg(page, ["B", "C"], 1);
+  const samples = await page.evaluate(() => {
+    window.clearInterval(window.__OFFSCREEN_IDENTITY_TIMER__);
+    return window.__OFFSCREEN_IDENTITY_SAMPLES__;
+  });
+  const complete = samples.find((sample) => sample.length === 3 && sample.every((topic) => topic.nodeObjId));
+  expect(complete).toBeTruthy();
+  expect(complete.map((topic) => topic.nodeObjId).sort()).toEqual(["B", "C", "P"]);
+  expect(complete.every((topic) => topic.dataNodeid === `me${topic.nodeObjId}`)).toBe(true);
+});

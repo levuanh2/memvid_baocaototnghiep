@@ -3247,3 +3247,14 @@ IDs into an immutable snapshot and use that same snapshot for preview, review,
 offscreen rendering, geometry and document requests. Finally compare the
 offscreen tree/DOM identities with the canonical pruned record and abort rather
 than returning a wider artifact when they differ.
+
+# 2026-10-21 — Presence and identity are separate boundary contracts
+
+- For optional JSON booleans, value lookup alone is insufficient when omitted
+  and explicit `null` have different meanings. Assert both presence and type.
+- A zero-size set is not proof of DOM correctness. When the renderer promises
+  identity, validate every rendered element and the cardinality before set
+  equality; otherwise missing identities can hide extra rendered content.
+- Verify third-party DOM contracts in the real browser, not only with jsdom
+  fakes. Chromium confirmed Mind Elixir sets `nodeObj.id` and `data-nodeid` on
+  every offscreen `me-tpc` topic.

@@ -44,16 +44,45 @@ class FakeOffscreenMind {
   static SIDE = 2;
   constructor({ el }) {
     this.map = document.createElement("div");
-    const tpc = document.createElement("me-tpc");
-    tpc.getBoundingClientRect = () => ({ left: 0, top: 0, right: 200, bottom: 40, width: 200, height: 40 });
-    this.map.appendChild(tpc);
     el.appendChild(this.map);
     this.layout = vi.fn(); this.linkDiv = vi.fn(); this.scaleFit = vi.fn(); this.destroy = vi.fn();
     FakeOffscreenMind.instances.push(this);
   }
-  init(data) { this.initNodeData = data?.nodeData; this.nodeData = data?.nodeData; }
+  init(data) {
+    this.initNodeData = data?.nodeData;
+    this.nodeData = data?.nodeData;
+    this.map.replaceChildren();
+    const addTopics = (node) => {
+      if (!node?.id) return;
+      const topic = document.createElement("me-tpc");
+      topic.nodeObj = { id: node.id };
+      topic.dataset.nodeid = `me${node.id}`;
+      topic.getBoundingClientRect = () => ({ left: 0, top: 0, right: 200, bottom: 40, width: 200, height: 40 });
+      this.map.appendChild(topic);
+      (node.children || []).forEach(addTopics);
+    };
+    addTopics(this.nodeData);
+  }
 }
 FakeOffscreenMind.instances = [];
+
+class MissingDomIdentityMind extends FakeOffscreenMind {
+  init(data) {
+    super.init(data);
+    this.map.querySelectorAll("me-tpc").forEach((topic) => {
+      delete topic.nodeObj;
+      topic.removeAttribute("data-nodeid");
+    });
+  }
+}
+
+class MismatchedDomIdentityMind extends FakeOffscreenMind {
+  init(data) {
+    super.init(data);
+    const topic = this.map.querySelector("me-tpc");
+    topic.nodeObj = { id: "outside-scope" };
+  }
+}
 
 describe("full-map export does not touch the live canvas", () => {
   it("does not call layout/linkDiv on the live instance", async () => {
@@ -267,5 +296,23 @@ describe("capture must fail loudly when the image is empty", () => {
     await expect(
       captureMapImageBase64({ mind, record: RECORD, scopeType: "full", format: "png", backgroundColor: "#fff", snapdom: fakeSnapdom([], { blobSize: 0 }), settleMs: 0, MindElixirCtor: FakeOffscreenMind }),
     ).rejects.toThrow();
+  });
+});
+
+describe("offscreen DOM membership is fail-closed", () => {
+  it("rejects a renderer whose topic DOM exposes no node identity", async () => {
+    const mind = makeMind();
+    await expect(exportMindmapImage({
+      mind, record: RECORD, scopeType: "full", format: "png", backgroundColor: "#fff",
+      snapdom: fakeSnapdom([]), settleMs: 0, MindElixirCtor: MissingDomIdentityMind,
+    })).rejects.toThrow(/identity|danh tính|node/i);
+  });
+
+  it("rejects a renderer whose DOM identity differs from the canonical record", async () => {
+    const mind = makeMind();
+    await expect(exportMindmapImage({
+      mind, record: RECORD, scopeType: "full", format: "png", backgroundColor: "#fff",
+      snapdom: fakeSnapdom([]), settleMs: 0, MindElixirCtor: MismatchedDomIdentityMind,
+    })).rejects.toThrow(/ngoài phạm vi|node/i);
   });
 });

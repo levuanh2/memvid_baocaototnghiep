@@ -7061,3 +7061,13 @@ any mismatch.
 at 69% with mouse and keyboard selection, repeated exports, cache reload, quick
 and manual format paths, and parent select/unselect behavior. FE and backend
 tests separately cover omitted versus explicitly true descendant semantics.
+
+# PR #79 pre-merge boundary review: omitted versus null and DOM identity
+
+- JSON `null` cannot be distinguished from an omitted field with `dict.get()`.
+  For `include_descendants`, test key presence first; omission receives the
+  scope-specific default, while an explicitly supplied non-boolean is a 400.
+- An offscreen membership assertion must not skip validation when no DOM IDs
+  are found. Real Mind Elixir topics expose both `nodeObj.id` and
+  `data-nodeid`; require one identity per topic, exact element count, unique
+  IDs, and exact membership before capture.
