@@ -359,6 +359,59 @@ _SCOPE_CASES = [
 _FORMAT_MAGIC = {"docx": b"PK", "xlsx": b"PK", "pdf": b"%PDF"}
 
 
+def test_selected_branches_omitted_descendant_flag_fails_closed_to_exact(
+    be, client, monkeypatch, sync_enqueue, export_dir,
+):
+    nodes = [
+        {"id": "root", "parent": None, "kind": "root", "title": "Root", "order": 0},
+        {"id": "p", "parent": "root", "kind": "section", "title": "Parent", "order": 0},
+        {"id": "a", "parent": "p", "kind": "idea", "title": "A", "order": 0},
+        {"id": "b", "parent": "p", "kind": "idea", "title": "B", "order": 1},
+        {"id": "c", "parent": "p", "kind": "idea", "title": "C", "order": 2},
+        {"id": "d", "parent": "p", "kind": "idea", "title": "D", "order": 3},
+    ]
+    _stub_get_record(monkeypatch, be, record=_rec(nodes=nodes))
+    _protect(be, monkeypatch, "userA", on=True)
+
+    create = client.post("/mindmaps/m1/exports", json={
+        "format": "pdf",
+        "scope": {
+            "scope_type": "selected_branches",
+            "selected_branch_root_ids": ["b", "c"],
+        },
+    })
+    assert create.status_code == 202
+    status = client.get(f"/mindmaps/exports/{create.get_json()['job_id']}").get_json()
+    assert status["status"] == "done"
+    assert status["result"]["node_count"] == 3
+
+
+def test_selected_branches_explicit_descendant_flag_preserves_legacy_subtree(
+    be, client, monkeypatch, sync_enqueue, export_dir,
+):
+    nodes = [
+        {"id": "root", "parent": None, "kind": "root", "title": "Root", "order": 0},
+        {"id": "p", "parent": "root", "kind": "section", "title": "Parent", "order": 0},
+        {"id": "a", "parent": "p", "kind": "idea", "title": "A", "order": 0},
+        {"id": "b", "parent": "p", "kind": "idea", "title": "B", "order": 1},
+    ]
+    _stub_get_record(monkeypatch, be, record=_rec(nodes=nodes))
+    _protect(be, monkeypatch, "userA", on=True)
+
+    create = client.post("/mindmaps/m1/exports", json={
+        "format": "pdf",
+        "scope": {
+            "scope_type": "selected_branches",
+            "selected_branch_root_ids": ["p"],
+            "include_descendants": True,
+        },
+    })
+    assert create.status_code == 202
+    status = client.get(f"/mindmaps/exports/{create.get_json()['job_id']}").get_json()
+    assert status["status"] == "done"
+    assert status["result"]["node_count"] == 4
+
+
 # PR C1: pdf is the only document format still creatable through the real
 # API — docx/xlsx are covered separately below via the WORKER directly
 # (test_legacy_docx_xlsx_worker_direct_across_real_scopes), the shape of a

@@ -115,6 +115,21 @@ describe("ExportStudioDialog — opening scope seeded on the closed->open edge",
     expect(checkedScope()).toBe("selected_branches");
   });
 
+  it("snapshots exact checked ids for the whole open confirmation session", async () => {
+    await mountClosed();
+    const checkedAtContinue = new Set(["a", "b"]);
+    await update({ open: false, selectedNodeId: null, selectedBranchIds: checkedAtContinue });
+    await update({ open: true, selectedNodeId: null, selectedBranchIds: checkedAtContinue });
+    expect(dialog().textContent).toContain("2 node đã tick");
+
+    // A parent rerender must not rewrite the already-confirmed checkbox
+    // snapshot while the dialog is open. A new selection is accepted only
+    // after closing and reopening the dialog.
+    await update({ open: true, selectedNodeId: null, selectedBranchIds: new Set(["a"]) });
+    expect(dialog().textContent).toContain("2 node đã tick");
+    expect(dialog().textContent).not.toContain("1 node đã tick");
+  });
+
   it("nothing selected, then opened: full", async () => {
     await mountClosed();
     await update({ open: true, selectedNodeId: null, selectedBranchIds: new Set() });
