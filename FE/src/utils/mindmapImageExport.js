@@ -174,7 +174,8 @@ async function _finishCapture(result, { outputMode, format, filename, quality, b
  * real-browser measurement is covered by the Playwright fixture-harness
  * suite, not this function's own unit tests).
  */
-export function estimateExportDimensions({ mind, scopeType, targetNodeId, branchRootIds, includeDescendants = true, scale = 2 }) {
+export function estimateExportDimensions({ mind, scopeType, targetNodeId, branchRootIds, includeDescendants, scale = 2 }) {
+  const effectiveIncludeDescendants = includeDescendants ?? scopeType !== "selected_branches";
   if (!mind?.map) return null;
 
   let rects = [];
@@ -188,7 +189,7 @@ export function estimateExportDimensions({ mind, scopeType, targetNodeId, branch
         scopeType,
         selectedNodeId: targetNodeId,
         selectedBranchRootIds: branchRootIds || [],
-        includeDescendants,
+        includeDescendants: effectiveIncludeDescendants,
       });
       const renderIds = new Set([...resolved.includedIds, ...resolved.contextIds]);
       rects = [...renderIds]
@@ -273,6 +274,47 @@ function recordScopedForExport(record, { scopeType, selectedNodeId, selectedBran
 
 const EXPORT_PADDING_PX = 32;
 
+function mindTreeIds(root) {
+  const ids = new Set();
+  const walk = (node) => {
+    if (!node?.id) return;
+    ids.add(node.id);
+    (node.children || []).forEach(walk);
+  };
+  walk(root);
+  return ids;
+}
+
+function sameIds(actual, expected) {
+  return actual.size === expected.size && [...actual].every((id) => expected.has(id));
+}
+
+function assertOffscreenMembership(instance, expectedIds) {
+  const treeIds = mindTreeIds(instance?.nodeData);
+  if (!sameIds(treeIds, expectedIds)) {
+    throw new Error("Phạm vi xuất đã thay đổi trong lúc dựng ảnh. Vui lòng chọn lại node và thử lại.");
+  }
+  const topicElements = [...(instance?.map?.querySelectorAll?.("me-tpc") || [])];
+  const domIdList = topicElements.map((node) => (
+    node.nodeObj?.id
+    || node.getAttribute("data-node-id")
+    || node.getAttribute("data-nodeid")?.replace(/^me/, "")
+    || null
+  ));
+  const domIds = new Set(domIdList.filter(Boolean));
+  // Mind Elixir exposes identity synchronously on every topic. Validate the
+  // element count as well as the unique ids so missing, duplicate, or extra
+  // unidentified topics cannot turn this structural gate into a no-op.
+  if (
+    topicElements.length !== expectedIds.size
+    || domIdList.some((id) => !id)
+    || domIds.size !== topicElements.length
+    || !sameIds(domIds, expectedIds)
+  ) {
+    throw new Error("Ảnh xuất chứa node ngoài phạm vi đã chọn. Đã hủy xuất để tránh lộ node chưa chọn.");
+  }
+}
+
 /** Resolves once fonts and every <img> under `root` have loaded, so the snapshot never catches a placeholder. */
 async function waitForRenderResources(root) {
   if (typeof document !== "undefined" && document.fonts?.ready) await document.fonts.ready;
@@ -311,6 +353,7 @@ async function exportCanonicalFullMap({
   // `record` is already live-aware (see liveRecordForExport) and, for a branch export,
   // already filtered to that branch — both done by the caller, before any live reads.
   const { mindData } = recordToMindElixir(record, { fullTitles: true });
+  const expectedIds = new Set((record?.nodes || []).map((node) => node.id));
   const offscreen = document.createElement("div");
   offscreen.className = "mm-export-offscreen";
   offscreen.style.cssText = "position:fixed; left:-99999px; top:0; width:2400px; height:1600px; overflow:hidden; pointer-events:none;";
@@ -329,6 +372,7 @@ async function exportCanonicalFullMap({
     instance.layout?.();
     instance.linkDiv?.();
     applyTargetAppearance({ mind: instance, target: instance.map, appearance });
+    assertOffscreenMembership(instance, expectedIds);
     // PR C2 — the map's own saved LIVE_SAFE canvas appearance (node fill/
     // text/border/radius/shadow/shape, connector color/thickness/style),
     // optionally overridden for this export only via Export Studio's "Tùy
@@ -369,13 +413,17 @@ async function exportCanonicalFullMap({
 }
 
 export async function exportMindmapImage({
-  mind, record, scopeType, targetNodeId, branchRootIds, includeDescendants = true, visibleOnly = false,
+  mind, record, scopeType, targetNodeId, branchRootIds, includeDescendants, visibleOnly = false,
   format, backgroundColor, scale = 2, quality = 1, title,
   appearance = DEFAULT_APPEARANCE, outputMode = "download",
   canvasAppearance, exportStyleOverride,
   snapdom = realSnapdom, settleMs = 30, MindElixirCtor = RealMindElixir,
   withGeometryManifest = false,
 }) {
+  // Checkbox selection is exact by default. Legacy subtree callers remain
+  // compatible only when they explicitly request `true`; an omitted option
+  // must never silently widen a selected_branches export.
+  const effectiveIncludeDescendants = includeDescendants ?? scopeType !== "selected_branches";
   if ((scopeType === "full" || scopeType === "current_branch" || scopeType === "selected_branches") && record) {
     // Live structure/unsaved-title merge happens once here, reading only mind.nodeData/arrows
     // (already in memory) — never the DOM, never a layout/fit/centre call on the live instance.
@@ -383,7 +431,7 @@ export async function exportMindmapImage({
     if (scopeType === "current_branch" && !targetNodeId) throw new Error("Chưa chọn nhánh để xuất.");
     if (scopeType === "selected_branches" && !branchRootIds?.length) throw new Error("Chưa chọn nhánh để xuất.");
     const scopedRecord = recordScopedForExport(liveAwareRecord, {
-      scopeType, selectedNodeId: targetNodeId, selectedBranchRootIds: branchRootIds, includeDescendants,
+      scopeType, selectedNodeId: targetNodeId, selectedBranchRootIds: branchRootIds, includeDescendants: effectiveIncludeDescendants,
     });
     return exportCanonicalFullMap({
       record: scopedRecord, format, backgroundColor, scale, quality, title, appearance, outputMode, snapdom, settleMs, MindElixirCtor,
@@ -397,7 +445,7 @@ export async function exportMindmapImage({
   // live `mind` instance to work with).
   if (scopeType === "selected_branches") {
     return exportMindmapImageMultiBranch({
-      mind, rootIds: branchRootIds, includeDescendants, visibleOnly,
+      mind, rootIds: branchRootIds, includeDescendants: effectiveIncludeDescendants, visibleOnly,
       format, backgroundColor, scale, quality, title, appearance, outputMode, snapdom, settleMs, MindElixirCtor,
     });
   }
@@ -550,6 +598,7 @@ async function exportMindmapImageMultiBranch({
     offscreenMind.layout?.();
     offscreenMind.linkDiv?.();
     applyTargetAppearance({ mind: offscreenMind, target: offscreenMind.map, appearance });
+    assertOffscreenMembership(offscreenMind, renderIds);
     offscreenMind.scaleFit?.(); // this THROWAWAY instance's own viewport — never the live one
     if (settleMs > 0) await new Promise((r) => setTimeout(r, settleMs));
 

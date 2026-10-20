@@ -7038,3 +7038,36 @@ node, deep/collapsed paths, left-only and cross-side selections, filtered
 relations, and legacy subtree behavior. Chromium at 69% verifies real SVG/PNG
 and both PDF modes; PyMuPDF checks embedded image pixels, geometry membership,
 outline identity, node count, pagination, and lossless stream compression.
+
+## Exact checkbox scope could widen when descendant policy was omitted (fixed 2026-10-20)
+
+**Symptom:** a caller that supplied `selected_branches` but omitted the
+descendant flag was treated as a historical subtree request. A second state
+hazard let an already-open Export Studio session follow later mutations of the
+canvas selection Set instead of retaining the IDs confirmed by the user.
+
+**Root cause:** image-export parameters and the HTTP route inherited the old
+`include_descendants=true` default, while the dialog repeatedly dereferenced a
+live React prop through preview and export confirmation.
+
+**Fix:** omission now fails closed to exact membership only for
+`selected_branches`; an explicit `true` still selects legacy subtrees. Export
+Studio snapshots checked IDs on each closed-to-open edge and uses that immutable
+array for preview, image capture, geometry and document payloads. Offscreen
+canonical rendering verifies its node identity set before capture and aborts on
+any mismatch.
+
+**Regression:** a deterministic four-child fixture covers all six child pairs
+at 69% with mouse and keyboard selection, repeated exports, cache reload, quick
+and manual format paths, and parent select/unselect behavior. FE and backend
+tests separately cover omitted versus explicitly true descendant semantics.
+
+# PR #79 pre-merge boundary review: omitted versus null and DOM identity
+
+- JSON `null` cannot be distinguished from an omitted field with `dict.get()`.
+  For `include_descendants`, test key presence first; omission receives the
+  scope-specific default, while an explicitly supplied non-boolean is a 400.
+- An offscreen membership assertion must not skip validation when no DOM IDs
+  are found. Real Mind Elixir topics expose both `nodeObj.id` and
+  `data-nodeid`; require one identity per topic, exact element count, unique
+  IDs, and exact membership before capture.

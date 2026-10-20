@@ -199,7 +199,7 @@ describe("exportMindmapImage — scopeType: selected_branches (multi-branch)", (
     const snapdom = vi.fn().mockResolvedValue(result);
     const MindElixirCtor = spyCtor(MindElixir);
     await exportMindmapImage({
-      mind, scopeType: "selected_branches", branchRootIds: ["c1", "c2"],
+      mind, scopeType: "selected_branches", branchRootIds: ["c1", "c2"], includeDescendants: true,
       format: "png", title: "T", snapdom, settleMs: 0, MindElixirCtor,
     });
     expect(MindElixirCtor).toHaveBeenCalledTimes(1);
@@ -216,7 +216,7 @@ describe("exportMindmapImage — scopeType: selected_branches (multi-branch)", (
     const snapdom = vi.fn().mockResolvedValue(result);
     const MindElixirCtor = spyCtor(MindElixir);
     await exportMindmapImage({
-      mind, scopeType: "selected_branches", branchRootIds: ["c1", "c2"],
+      mind, scopeType: "selected_branches", branchRootIds: ["c1", "c2"], includeDescendants: true,
       format: "png", title: "T", snapdom, settleMs: 0, MindElixirCtor,
     });
     const target = snapdom.mock.calls[0][0];
@@ -231,7 +231,7 @@ describe("exportMindmapImage — scopeType: selected_branches (multi-branch)", (
     const snapdom = vi.fn().mockResolvedValue(result);
     const MindElixirCtor = spyCtor(MindElixir);
     await exportMindmapImage({
-      mind, scopeType: "selected_branches", branchRootIds: ["c1a", "c1"],
+      mind, scopeType: "selected_branches", branchRootIds: ["c1a", "c1"], includeDescendants: true,
       format: "png", title: "T", snapdom, settleMs: 0, MindElixirCtor,
     });
     expect(MindElixirCtor).not.toHaveBeenCalled();
@@ -246,7 +246,7 @@ describe("exportMindmapImage — scopeType: selected_branches (multi-branch)", (
     const snapdom = vi.fn().mockResolvedValue(result);
     const MindElixirCtor = spyCtor(MindElixir);
     await exportMindmapImage({
-      mind, scopeType: "selected_branches", branchRootIds: ["c1", "c2", "c3"],
+      mind, scopeType: "selected_branches", branchRootIds: ["c1", "c2", "c3"], includeDescendants: true,
       format: "png", title: "T", snapdom, settleMs: 0, MindElixirCtor,
     });
     const ids = capturedNodeIds(snapdom.mock.calls[0][0]);
@@ -259,7 +259,7 @@ describe("exportMindmapImage — scopeType: selected_branches (multi-branch)", (
     const snapdom = vi.fn().mockResolvedValue(result);
     const MindElixirCtor = spyCtor(MindElixir);
     await exportMindmapImage({
-      mind, scopeType: "selected_branches", branchRootIds: ["c2"],
+      mind, scopeType: "selected_branches", branchRootIds: ["c2"], includeDescendants: true,
       format: "png", title: "T", snapdom, settleMs: 0, MindElixirCtor,
     });
     expect(MindElixirCtor).not.toHaveBeenCalled();
@@ -284,7 +284,7 @@ describe("exportMindmapImage — scopeType: selected_branches (multi-branch)", (
     const MindElixirCtor = spyCtor(MindElixir);
     // clicked c3 first, then c1 — document order is c1, c2... c3 last.
     await exportMindmapImage({
-      mind, scopeType: "selected_branches", branchRootIds: ["c3", "c1"],
+      mind, scopeType: "selected_branches", branchRootIds: ["c3", "c1"], includeDescendants: true,
       format: "png", title: "T", snapdom, settleMs: 0, MindElixirCtor,
     });
     const ctorCall = MindElixirCtor.mock.calls[0][0];
@@ -304,7 +304,7 @@ describe("exportMindmapImage — scopeType: selected_branches (multi-branch)", (
     const snapdom = vi.fn().mockResolvedValue(result);
     const MindElixirCtor = spyCtor(MindElixir);
     await exportMindmapImage({
-      mind, scopeType: "selected_branches", branchRootIds: ["c3", "c1"],
+      mind, scopeType: "selected_branches", branchRootIds: ["c3", "c1"], includeDescendants: true,
       format: "png", title: "T", snapdom, settleMs: 0, MindElixirCtor,
     });
     const ids = capturedNodeIds(snapdom.mock.calls[0][0]);
@@ -317,7 +317,7 @@ describe("exportMindmapImage — scopeType: selected_branches (multi-branch)", (
     const snapdom = vi.fn().mockResolvedValue(result);
     const MindElixirCtor = spyCtor(MindElixir);
     await exportMindmapImage({
-      mind, scopeType: "selected_branches", branchRootIds: ["c3", "c1"],
+      mind, scopeType: "selected_branches", branchRootIds: ["c3", "c1"], includeDescendants: true,
       visibleOnly: true,
       format: "png", title: "T", snapdom, settleMs: 0, MindElixirCtor,
     });

@@ -42,6 +42,6 @@ describe("estimateExportDimensions exact selected scope", () => {
       scopeType: "selected_branches",
       branchRootIds: ["a", "b"],
       scale: 2,
-    })).toEqual({ width: 600, height: 280 });
+    })).toEqual({ width: 400, height: 280 });
   });
 });

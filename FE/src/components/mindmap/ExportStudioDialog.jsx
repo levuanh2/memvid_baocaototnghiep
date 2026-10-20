@@ -109,10 +109,15 @@ export default function ExportStudioDialog({ open, onClose, mind, record, mapId,
   // was the bug).
   const [scopeType, setScopeType] = useState("full"), [visibleOnly, setVisibleOnly] = useState(false), [advanced, setAdvanced] = useState(false);
   const [format, setFormat] = useState("png"), [background, setBackground] = useState("canvas"), [customColor, setCustomColor] = useState("#FFFFFF"), [scale, setScale] = useState(2);
+  // Immutable for one open confirmation session. The live Set belongs to the
+  // canvas selection UI; format/preset changes and unrelated parent rerenders
+  // must not rewrite the ids the user confirmed by pressing "Tiếp tục".
+  const [selectedBranchSnapshot, setSelectedBranchSnapshot] = useState([]);
+  const selectedBranchSnapshotSet = useMemo(() => new Set(selectedBranchSnapshot), [selectedBranchSnapshot]);
   const [filenameOverride, setFilenameOverride] = useState(""), [appearance, setAppearance] = useState(DEFAULT_APPEARANCE), [appearancePreset, setAppearancePreset] = useState("canvas"), [quickPreset, setQuickPreset] = useState(null);
   const [docs, setDocs] = useState(documentDefaults), [includeMapImage, setIncludeMapImage] = useState(false), [openSection, setOpenSection] = useState("colors");
   const [exporting, setExporting] = useState(false), [error, setError] = useState(null), [done, setDone] = useState(null), [jobStatus, setJobStatus] = useState(null), [jobProgress, setJobProgress] = useState(0), [jobId, setJobId] = useState(null);
-  const abortRef = useRef(null), isDoc = isDocumentFormat(format), capabilities = useMemo(() => getExportFormatCapabilities(format), [format]), docOptions = docs[format] || docs.pdf, branchCount = selectedBranchIds?.size || 0;
+  const abortRef = useRef(null), isDoc = isDocumentFormat(format), capabilities = useMemo(() => getExportFormatCapabilities(format), [format]), docOptions = docs[format] || docs.pdf, branchCount = selectedBranchSnapshot.length;
   const custom = () => setQuickPreset(null);
   const changeFormat = (next, manual = true) => { setFormat(next); setOpenSection(isDocumentFormat(next) ? (next === "xlsx" ? "content" : "layout") : "colors"); if (manual) custom(); };
   const updateDoc = (key, value) => { custom(); setAppearancePreset(null); setDocs((all) => ({ ...all, [format]: { ...all[format], [key]: value } })); };
@@ -146,10 +151,10 @@ export default function ExportStudioDialog({ open, onClose, mind, record, mapId,
   const scopeResult = useMemo(() => {
     void previewRevision;
     if (!open || !mindReady || !mind?.nodeData) return null;
-    return resolveScopePreview({ mind, mapId, scopeType, selectedNodeId, selectedBranchIds, visibleOnly: effectiveVisibleOnly });
-  }, [open, mind, mindReady, mapId, scopeType, selectedNodeId, selectedBranchIds, effectiveVisibleOnly, previewRevision]);
+    return resolveScopePreview({ mind, mapId, scopeType, selectedNodeId, selectedBranchIds: selectedBranchSnapshotSet, visibleOnly: effectiveVisibleOnly });
+  }, [open, mind, mindReady, mapId, scopeType, selectedNodeId, selectedBranchSnapshotSet, effectiveVisibleOnly, previewRevision]);
   const scopeLabel = { full: "Toàn bộ sơ đồ", current_branch: "Nhánh hiện tại", selected_branches: "Các node được chọn", visible: "Phần đang hiển thị" }[scopeType], filename = sanitizeExportFilename(filenameOverride || title), extension = format === "jpeg" ? "jpg" : format;
-  const estimated = useMemo(() => !open || !mindReady || !mind?.map || !scopeResult?.ok || isDoc ? null : estimateExportDimensions({ mind, scopeType, targetNodeId: selectedNodeId, branchRootIds: selectedBranchIds ? [...selectedBranchIds] : [], includeDescendants: includeDescendantsFor(scopeType), scale }), [open, mind, mindReady, scopeType, selectedNodeId, selectedBranchIds, scale, scopeResult, isDoc]);
+  const estimated = useMemo(() => !open || !mindReady || !mind?.map || !scopeResult?.ok || isDoc ? null : estimateExportDimensions({ mind, scopeType, targetNodeId: selectedNodeId, branchRootIds: selectedBranchSnapshot, includeDescendants: includeDescendantsFor(scopeType), scale }), [open, mind, mindReady, scopeType, selectedNodeId, selectedBranchSnapshot, scale, scopeResult, isDoc]);
   // One idempotency key per export ATTEMPT (each click of export/retry/re-export), never per configuration: a re-export is a new job.
   const attemptKeyRef = useRef(null);
   const newAttemptKey = () => { attemptKeyRef.current = crypto.randomUUID?.() || `${Date.now()}-${Math.random()}`; return attemptKeyRef.current; };
@@ -157,7 +162,7 @@ export default function ExportStudioDialog({ open, onClose, mind, record, mapId,
   const canAdvance = scopeResult?.ok, canExport = canAdvance && !(isDoc && !mapId), effectiveScope = effectiveVisibleOnly ? "visible" : scopeType;
   const close = () => { if (!exporting) { abortRef.current?.abort(); onClose?.(); } };
   useEffect(() => () => abortRef.current?.abort(), []);
-  useEffect(() => { abortRef.current?.abort(); setExporting(false); setError(null); setDone(null); setJobStatus(null); setJobProgress(0); setJobId(null); }, [mapId]);
+  useEffect(() => { abortRef.current?.abort(); setExporting(false); setError(null); setDone(null); setJobStatus(null); setJobProgress(0); setJobId(null); setSelectedBranchSnapshot([]); }, [mapId]);
   // Clears everything tied to one attempt (artifact, job, error, in-flight guard). Configuration is kept.
   const resetTransient = () => { abortRef.current?.abort(); inFlightRef.current = false; setExporting(false); setError(null); setDone(null); setJobStatus(null); setJobProgress(0); setJobId(null); };
   // Reopening always starts at the configuration step with no leftover artifact or job.
@@ -171,6 +176,7 @@ export default function ExportStudioDialog({ open, onClose, mind, record, mapId,
   const wasOpenRef = useRef(false);
   useEffect(() => {
     if (open && !wasOpenRef.current) {
+      setSelectedBranchSnapshot([...(selectedBranchIds || [])]);
       setScopeType(deriveOpeningScope({ selectedBranchIds, selectedNodeId }));
     }
     wasOpenRef.current = open;
@@ -202,7 +208,7 @@ export default function ExportStudioDialog({ open, onClose, mind, record, mapId,
   const completed = Boolean(done) || jobStatus === "done";
 
   const exportAppearanceParams = { canvasAppearance: savedAppearance, exportStyleOverride: useMapAppearance ? null : styleOverride };
-  const runImage = async () => setDone(await exportMindmapImage({ mind, record, scopeType: effectiveScope, targetNodeId: selectedNodeId, branchRootIds: selectedBranchIds ? [...selectedBranchIds] : [], includeDescendants: includeDescendantsFor(effectiveScope), visibleOnly: effectiveVisibleOnly, format, backgroundColor: backgroundColor(background, customColor), scale, title: filename, appearance, ...exportAppearanceParams }));
+  const runImage = async () => setDone(await exportMindmapImage({ mind, record, scopeType: effectiveScope, targetNodeId: selectedNodeId, branchRootIds: selectedBranchSnapshot, includeDescendants: includeDescendantsFor(effectiveScope), visibleOnly: effectiveVisibleOnly, format, backgroundColor: backgroundColor(background, customColor), scale, title: filename, appearance, ...exportAppearanceParams }));
   const runDocument = async (attemptKey) => {
     setJobStatus("queued"); setJobProgress(0); setJobId(null);
     let mapImageBase64, mapGeometryManifest;
@@ -210,13 +216,13 @@ export default function ExportStudioDialog({ open, onClose, mind, record, mapId,
       // PR H2 — same capture lifecycle as before, now also returns a
       // geometry manifest built from the SAME DOM snapdom just captured
       // (never a second render just to measure geometry).
-      const captured = await captureMapImageWithGeometry({ mind, record, scopeType: effectiveScope, targetNodeId: selectedNodeId, branchRootIds: selectedBranchIds ? [...selectedBranchIds] : [], includeDescendants: includeDescendantsFor(effectiveScope), visibleOnly: effectiveVisibleOnly, ...exportAppearanceParams });
+      const captured = await captureMapImageWithGeometry({ mind, record, scopeType: effectiveScope, targetNodeId: selectedNodeId, branchRootIds: selectedBranchSnapshot, includeDescendants: includeDescendantsFor(effectiveScope), visibleOnly: effectiveVisibleOnly, ...exportAppearanceParams });
       mapImageBase64 = captured.base64;
       mapGeometryManifest = captured.geometryManifest;
     } else if (format === "docx" && includeMapImage) {
-      mapImageBase64 = await captureMapImageBase64({ mind, record, scopeType: effectiveScope, targetNodeId: selectedNodeId, branchRootIds: selectedBranchIds ? [...selectedBranchIds] : [], includeDescendants: includeDescendantsFor(effectiveScope), visibleOnly: effectiveVisibleOnly, ...exportAppearanceParams });
+      mapImageBase64 = await captureMapImageBase64({ mind, record, scopeType: effectiveScope, targetNodeId: selectedNodeId, branchRootIds: selectedBranchSnapshot, includeDescendants: includeDescendantsFor(effectiveScope), visibleOnly: effectiveVisibleOnly, ...exportAppearanceParams });
     }
-    const scope = buildDocumentScopePayload({ mind, scopeType, selectedNodeId, selectedBranchRootIds: selectedBranchIds ? [...selectedBranchIds] : [], visibleOnly: effectiveVisibleOnly });
+    const scope = buildDocumentScopePayload({ mind, scopeType, selectedNodeId, selectedBranchRootIds: selectedBranchSnapshot, visibleOnly: effectiveVisibleOnly });
     const created = await createMindmapExport(mapId, { format, scope, options: docOptions, mapImageBase64, mapGeometryManifest, idempotencyKey: attemptKey });
     setJobId(created.job_id);
     const controller = new AbortController(); abortRef.current = controller;
@@ -236,7 +242,7 @@ export default function ExportStudioDialog({ open, onClose, mind, record, mapId,
     // the modal was open, update the displayed snapshot and require one more
     // confirmation instead of exporting a scope different from the preview.
     const latest = mindReady && mind.nodeData
-      ? resolveScopePreview({ mind, mapId, scopeType, selectedNodeId, selectedBranchIds, visibleOnly: effectiveVisibleOnly })
+      ? resolveScopePreview({ mind, mapId, scopeType, selectedNodeId, selectedBranchIds: selectedBranchSnapshotSet, visibleOnly: effectiveVisibleOnly })
       : null;
     if (!latest?.ok || latest.mapId !== scopeResult?.mapId || latest.scopeKey !== scopeResult?.scopeKey || latest.treeKey !== scopeResult?.treeKey) {
       setPreviewRevision((value) => value + 1);

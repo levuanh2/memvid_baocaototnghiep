@@ -3233,3 +3233,28 @@ Backward compatibility needs an explicit discriminator. Here,
 `include_descendants:false` is the exact checkbox contract while explicit true
 continues to mean historical subtree roots. Defaults can preserve stored jobs,
 but every new checkbox caller must opt into exact selection deliberately.
+
+## Fail closed at defaults and confirmation boundaries (2026-10-20)
+
+Exact-selection safety cannot depend on every caller remembering a boolean.
+For a scope whose product meaning is exact membership, an omitted descendant
+policy must choose exact behavior; only an explicit `true` may request the
+legacy subtree contract. Apply the same rule at both the frontend API boundary
+and backend request normalization.
+
+Treat pressing “Tiếp tục” as a transaction boundary. Copy identity-bearing
+IDs into an immutable snapshot and use that same snapshot for preview, review,
+offscreen rendering, geometry and document requests. Finally compare the
+offscreen tree/DOM identities with the canonical pruned record and abort rather
+than returning a wider artifact when they differ.
+
+# 2026-10-21 — Presence and identity are separate boundary contracts
+
+- For optional JSON booleans, value lookup alone is insufficient when omitted
+  and explicit `null` have different meanings. Assert both presence and type.
+- A zero-size set is not proof of DOM correctness. When the renderer promises
+  identity, validate every rendered element and the cardinality before set
+  equality; otherwise missing identities can hide extra rendered content.
+- Verify third-party DOM contracts in the real browser, not only with jsdom
+  fakes. Chromium confirmed Mind Elixir sets `nodeObj.id` and `data-nodeid` on
+  every offscreen `me-tpc` topic.

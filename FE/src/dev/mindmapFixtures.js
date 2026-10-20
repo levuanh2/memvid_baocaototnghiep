@@ -186,3 +186,17 @@ function buildShallow3Fixture() {
   return { id: SHALLOW3_ID, title: "Bản đồ kiểm thử preset indicator (Fixture Shallow3)", nodes, relations: [], sources: [], schema_version: 2 };
 }
 export const FIXTURE_SHALLOW3 = buildShallow3Fixture();
+
+export const FIXTURE_POST_PR77 = {
+  id: "post-pr77-exact",
+  title: "An ninh mạng và quyền riêng tư",
+  nodes: [
+    { id: "ROOT", kind: "root", title: "An ninh mạng và quyền riêng tư", parent: null, order: 0 },
+    { id: "P", kind: "section", title: "Phát hiện và xử lý vi phạm mạng", parent: "ROOT", order: 0 },
+    { id: "A", kind: "idea", title: "Dung File Tập Trung Vào", parent: "P", order: 0 },
+    { id: "B", kind: "idea", title: "Phát hiện & xử lý vi phạm", parent: "P", order: 1 },
+    { id: "C", kind: "idea", title: "Đăng nhập trái phép", parent: "P", order: 2 },
+    { id: "D", kind: "idea", title: "Lắp đặt camera giám sát", parent: "P", order: 3 },
+  ],
+  relations: [], sources: [], schema_version: 2,
+};
