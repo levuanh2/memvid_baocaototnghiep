@@ -1,5 +1,30 @@
 # Known Issues
 
+## PDF outline could retain a misleading content-fit selection while the serializer used A4 (fixed 2026-10-21)
+
+**Symptom:** Export Studio allowed “Vừa nội dung — Xem trên màn hình” while
+PDF mode was “Chỉ dàn ý”. The request carried `pageSize=content_fit`, but the
+serializer intentionally treated the unknown outline sheet as A4. The output
+was correct and compatible, yet the UI promised a content-shaped page that an
+outline-only document cannot have.
+
+**Root cause:** page-size choices were rendered independently of PDF mode.
+H4 constrained content-fit inside the map-page writer, while the frontend had
+no matching applicability rule or explanatory copy for standalone outlines.
+
+**Fix:** disable content-fit for outline mode, explain that it applies only to
+map pages, and atomically normalize an already-selected content-fit value to A4
+when the user switches from map to outline. The backend A4 fallback remains for
+stored/API compatibility.
+
+**Regression:** a real Chromium test covers outline default, map/content-fit,
+and the map-to-outline transition; component tests assert the final request is
+`mode=outline, pageSize=A4`; a PyMuPDF test measures the fallback MediaBox.
+
+**Prevention:** when an option applies only to one output surface, encode that
+applicability in both the serializer and the control state. A compatibility
+fallback must not be the only place where the user-visible choice is resolved.
+
 ## Selected-branch marker proximity could promote a child click to its parent, and export counts/framing omitted context (fixed 2026-10-18)
 
 **Symptom:** at low zoom, clicking the 40px marker hitbox for a child could add

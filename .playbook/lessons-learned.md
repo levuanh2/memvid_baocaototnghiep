@@ -3272,3 +3272,12 @@ placement rectangle directly captures whitespace introduced by page geometry.
 Bound custom pages, preserve at least the default A4 scale, and keep existing
 standard-page detail/outline pagination as the fallback for maps that remain
 unreadable at the maximum edge.
+
+## 2026-10-21 — Compatibility fallback is not sufficient UX communication
+
+A serializer may safely accept an option outside its useful mode and fall back
+for old jobs, while the current UI must still prevent that impossible
+combination from looking effective. Keep the tolerant backend boundary, but
+normalize the live control state and explain why the option is unavailable.
+Test both the visible browser state and the final payload; either alone can
+miss a misleading selection.

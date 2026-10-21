@@ -14,6 +14,7 @@ import { createRoot } from "react-dom/client";
 import { act } from "react-dom/test-utils";
 import MindElixirView from "./MindElixirView";
 import * as docExport from "../../utils/mindmapDocumentExport";
+import * as imageExport from "../../utils/mindmapImageExport";
 
 beforeAll(() => {
   window.matchMedia = window.matchMedia || (() => ({ matches: false, addEventListener() {}, removeEventListener() {} }));
@@ -89,6 +90,7 @@ describe("Export Studio — document formats", () => {
   it("offers the screen-oriented content-fit page without changing the A4 default", async () => {
     vi.spyOn(docExport, "createMindmapExport").mockResolvedValue({ job_id: "j-fit", status: "queued" });
     vi.spyOn(docExport, "pollMindmapExportUntilDone").mockResolvedValue({ status: "done", progress: 100 });
+    vi.spyOn(imageExport, "captureMapImageWithGeometry").mockResolvedValue({ base64: "ZmFrZQ==", geometryManifest: null });
 
     await render(makeController());
     const dialog = await openToFormatStep();
@@ -100,6 +102,10 @@ describe("Export Studio — document formats", () => {
     const contentFit = [...panel.querySelectorAll("button")].find((b) => b.textContent === "Vừa nội dung — Xem trên màn hình");
     expect(a4?.getAttribute("aria-pressed")).toBe("true");
     expect(contentFit).toBeTruthy();
+    expect(contentFit.disabled).toBe(true);
+    expect(panel.textContent).toContain("“Vừa nội dung” chỉ áp dụng cho trang sơ đồ; khi chọn “Chỉ dàn ý”, khổ này chuyển về A4.");
+    await act(async () => { [...panel.querySelectorAll("button")].find((b) => b.textContent === "Chỉ sơ đồ").click(); });
+    expect(contentFit.disabled).toBe(false);
     await act(async () => { contentFit.click(); });
     expect(contentFit.getAttribute("aria-pressed")).toBe("true");
 
@@ -108,6 +114,31 @@ describe("Export Studio — document formats", () => {
 
     expect(docExport.createMindmapExport).toHaveBeenCalledWith("m1", expect.objectContaining({
       options: expect.objectContaining({ pageSize: "content_fit" }),
+    }));
+  });
+
+  it("switching from a content-fit map to outline exposes and sends the intentional A4 fallback", async () => {
+    vi.spyOn(docExport, "createMindmapExport").mockResolvedValue({ job_id: "j-outline", status: "queued" });
+    vi.spyOn(docExport, "pollMindmapExportUntilDone").mockResolvedValue({ status: "done", progress: 100 });
+
+    await render(makeController());
+    const dialog = await openToFormatStep();
+    await act(async () => { dialog.querySelector('input[value="pdf"]').click(); });
+    await act(async () => { [...dialog.querySelectorAll("button")].find((b) => b.textContent === "Tiếp tục").click(); });
+    const panel = dialog.querySelector('[data-testid="doc-appearance"]');
+    const button = (label) => [...panel.querySelectorAll("button")].find((b) => b.textContent === label);
+
+    await act(async () => { button("Chỉ sơ đồ").click(); });
+    await act(async () => { button("Vừa nội dung — Xem trên màn hình").click(); });
+    expect(button("Vừa nội dung — Xem trên màn hình").getAttribute("aria-pressed")).toBe("true");
+    await act(async () => { button("Chỉ dàn ý").click(); });
+    expect(button("Vừa nội dung — Xem trên màn hình").disabled).toBe(true);
+    expect(button("A4 — In tài liệu").getAttribute("aria-pressed")).toBe("true");
+
+    await act(async () => { [...dialog.querySelectorAll("button")].find((b) => b.textContent === "Tiếp tục").click(); });
+    await act(async () => { [...dialog.querySelectorAll("button")].find((b) => b.textContent.includes("Tạo PDF")).click(); });
+    expect(docExport.createMindmapExport).toHaveBeenCalledWith("m1", expect.objectContaining({
+      options: expect.objectContaining({ mode: "outline", pageSize: "A4" }),
     }));
   });
 

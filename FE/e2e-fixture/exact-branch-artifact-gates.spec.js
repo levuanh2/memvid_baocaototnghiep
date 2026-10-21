@@ -231,3 +231,27 @@ test("H4: Chromium sends content_fit with the same exact scoped PNG and geometry
     P, A, `${A}-l0`, B,
   ].sort());
 });
+
+test("H4 UX: outline explains its intentional A4 fallback and cannot retain content_fit", async ({ page }) => {
+  await page.goto("/fixture-harness.html");
+  await expect(page.getByTestId("fixture-harness-root")).toBeVisible();
+  await page.getByLabel("Xuất sơ đồ").click();
+  await page.getByRole("button", { name: "Tiếp tục" }).click();
+  await page.locator('input[name="mm-export-format"][value="pdf"]').check();
+  await page.getByRole("button", { name: "Tiếp tục" }).click();
+
+  const contentFit = page.getByRole("button", { name: "Vừa nội dung — Xem trên màn hình" });
+  const a4 = page.getByRole("button", { name: "A4 — In tài liệu" });
+  await expect(page.getByText("“Vừa nội dung” chỉ áp dụng cho trang sơ đồ; khi chọn “Chỉ dàn ý”, khổ này chuyển về A4.")).toBeVisible();
+  await expect(contentFit).toBeDisabled();
+  await expect(a4).toHaveAttribute("aria-pressed", "true");
+
+  await page.getByRole("button", { name: "Chỉ sơ đồ" }).click();
+  await expect(contentFit).toBeEnabled();
+  await contentFit.click();
+  await expect(contentFit).toHaveAttribute("aria-pressed", "true");
+
+  await page.getByRole("button", { name: "Chỉ dàn ý" }).click();
+  await expect(contentFit).toBeDisabled();
+  await expect(a4).toHaveAttribute("aria-pressed", "true");
+});
