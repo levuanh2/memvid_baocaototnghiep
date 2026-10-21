@@ -86,6 +86,31 @@ describe("Export Studio — document formats", () => {
     expect(panel.textContent).not.toContain("Độ dày đường nối"); // image-only (connectorThickness)
   });
 
+  it("offers the screen-oriented content-fit page without changing the A4 default", async () => {
+    vi.spyOn(docExport, "createMindmapExport").mockResolvedValue({ job_id: "j-fit", status: "queued" });
+    vi.spyOn(docExport, "pollMindmapExportUntilDone").mockResolvedValue({ status: "done", progress: 100 });
+
+    await render(makeController());
+    const dialog = await openToFormatStep();
+    await act(async () => { dialog.querySelector('input[value="pdf"]').click(); });
+    await act(async () => { [...dialog.querySelectorAll("button")].find((b) => b.textContent === "Tiếp tục").click(); });
+
+    const panel = dialog.querySelector('[data-testid="doc-appearance"]');
+    const a4 = [...panel.querySelectorAll("button")].find((b) => b.textContent === "A4 — In tài liệu");
+    const contentFit = [...panel.querySelectorAll("button")].find((b) => b.textContent === "Vừa nội dung — Xem trên màn hình");
+    expect(a4?.getAttribute("aria-pressed")).toBe("true");
+    expect(contentFit).toBeTruthy();
+    await act(async () => { contentFit.click(); });
+    expect(contentFit.getAttribute("aria-pressed")).toBe("true");
+
+    await act(async () => { [...dialog.querySelectorAll("button")].find((b) => b.textContent === "Tiếp tục").click(); });
+    await act(async () => { [...dialog.querySelectorAll("button")].find((b) => b.textContent.includes("Tạo PDF")).click(); });
+
+    expect(docExport.createMindmapExport).toHaveBeenCalledWith("m1", expect.objectContaining({
+      options: expect.objectContaining({ pageSize: "content_fit" }),
+    }));
+  });
+
   it("full job lifecycle: queued -> running -> done triggers a real download call", async () => {
     vi.spyOn(docExport, "createMindmapExport").mockResolvedValue({ job_id: "j1", status: "queued" });
     vi.spyOn(docExport, "pollMindmapExportUntilDone").mockImplementation(async (jobId, { onUpdate }) => {

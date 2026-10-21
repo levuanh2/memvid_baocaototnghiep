@@ -7071,3 +7071,31 @@ tests separately cover omitted versus explicitly true descendant semantics.
   are found. Real Mind Elixir topics expose both `nodeObj.id` and
   `data-nodeid`; require one identity per topic, exact element count, unique
   IDs, and exact membership before capture.
+
+## Fixed print MediaBoxes waste space on ultra-wide shallow maps (H4, fixed 2026-10-21)
+
+**Symptom:** automatic landscape orientation correctly maximized the scale of
+a 2436×296 map on A4, but the map could occupy only 17.98% of the usable page
+area because its 8.23:1 aspect ratio remained far wider than an A4 landscape
+page. The effective median label size was 7.51 pt and large bands of vertical
+whitespace were mathematically unavoidable on that print sheet.
+
+**Root cause:** orientation can only swap the two fixed page dimensions; it
+cannot make a fixed A4/A3 MediaBox match the content aspect ratio. Centered
+contain-fit was already correct, so stretching, cropping, or another
+orientation heuristic would trade whitespace for distortion or lost content.
+
+**Fix:** add the opt-in `content_fit` PDF page size for screen viewing. Its map
+overview uses a content-shaped MediaBox with the selected padding, targets a
+12 pt median label when geometry is available, never scales below automatic
+A4, never enlarges beyond source pixels, and caps every page edge at 1440 pt.
+Print A4/A3 code paths are unchanged. When the cap prevents a readable
+overview, existing H2/H3B detail pages remain standard A4; outline pages also
+remain standard A4 portrait. H3C still embeds one raster XREF and serializes
+with lossless deflate.
+
+**Measured regression:** the 2436×296 fixture moves from 17.98% to 100% map
+placement occupancy, 7.51 pt to 12 pt median labels, and five pages to one.
+The 5066×1350 fixture remains bounded at 1440 pt and retains six A4 detail
+pages. Deterministic balanced, tall, exact-three-node, and Vietnamese fixtures
+verify no distortion, clipping, topology loss, or exact-scope change.

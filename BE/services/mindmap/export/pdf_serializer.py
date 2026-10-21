@@ -23,7 +23,7 @@ import fitz
 from services.mindmap.export.image_guard import validate_map_image
 from services.mindmap.export.pdf_layout import (
     NavigationBands, OutlineBlock, Rect, TARGET_MEDIAN_PT, TARGET_MIN_PT,
-    branch_aware_grid_search_verbose, centered_fit_rect, choose_map_orientation, exact_grid_search_verbose,
+    branch_aware_grid_search_verbose, centered_fit_rect, choose_content_fit_page, choose_map_orientation, exact_grid_search_verbose,
     fits_on_page, indent_for_depth, place_detail_tile, wrap_multiline,
 )
 
@@ -382,8 +382,19 @@ def _write_image_or_detail_pages(
     """
     pix = fitz.Pixmap(image_bytes)
     img_w, img_h = float(pix.width), float(pix.height)
+    # content_fit affects the overview MediaBox only. Readability detail
+    # pages stay on standard A4, preserving H2/H3B navigation and print
+    # behavior; map_and_outline likewise keeps its outline on A4 portrait.
     page_size_pt = PAGE_SIZES_PT.get(page_size, PAGE_SIZES_PT["A4"])
-    choice = choose_map_orientation(img_w, img_h, page_size_pt, margin)
+    if page_size == "content_fit":
+        font_sizes = [
+            node.get("font_size_px")
+            for node in (geometry_manifest or {}).get("nodes", [])
+            if node.get("font_size_px")
+        ]
+        choice = choose_content_fit_page(img_w, img_h, margin, font_sizes_px=font_sizes)
+    else:
+        choice = choose_map_orientation(img_w, img_h, page_size_pt, margin)
     overview_page = doc.new_page(width=choice.page_w, height=choice.page_h)
     _fill_background(overview_page, background)
     overview_rect = centered_fit_rect(img_w, img_h, choice.page_w, choice.page_h, margin)
