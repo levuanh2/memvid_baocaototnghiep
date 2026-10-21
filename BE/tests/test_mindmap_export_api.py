@@ -139,6 +139,25 @@ def test_invalid_pdf_mode_rejected(be, client, monkeypatch):
     assert resp.get_json()["error_code"] == "invalid_option"
 
 
+def test_content_fit_page_size_is_accepted_but_arbitrary_custom_size_is_rejected(
+    be, client, monkeypatch, sync_enqueue, export_dir,
+):
+    _stub_get_record(monkeypatch, be)
+    _protect(be, monkeypatch, "userA", on=True)
+
+    accepted = client.post("/mindmaps/m1/exports", json={
+        "format": "pdf", "options": {"mode": "outline", "pageSize": "content_fit"},
+    })
+    assert accepted.status_code == 202
+    assert client.get(f"/mindmaps/exports/{accepted.get_json()['job_id']}").get_json()["status"] == "done"
+
+    rejected = client.post("/mindmaps/m1/exports", json={
+        "format": "pdf", "options": {"pageSize": "5000x50"},
+    })
+    assert rejected.status_code == 400
+    assert rejected.get_json()["error_code"] == "invalid_option"
+
+
 # ---- idempotency --------------------------------------------------------------
 
 def test_idempotency_same_key_returns_same_job(be, client, monkeypatch, sync_enqueue, export_dir):

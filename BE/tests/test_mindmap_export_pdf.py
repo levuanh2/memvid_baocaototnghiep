@@ -54,6 +54,17 @@ def test_outline_mode_produces_valid_paginated_pdf_with_extractable_vietnamese_t
     doc.close()
 
 
+def test_outline_content_fit_intentionally_falls_back_to_a4_portrait():
+    file_bytes = serialize_pdf(_tree(), mode="outline", page_size="content_fit", orientation="portrait")
+    doc = fitz.open(stream=file_bytes, filetype="pdf")
+    try:
+        page = doc[0]
+        assert page.rect.width == pytest.approx(fitz.paper_rect("a4").width, abs=0.1)
+        assert page.rect.height == pytest.approx(fitz.paper_rect("a4").height, abs=0.1)
+    finally:
+        doc.close()
+
+
 def test_outline_mode_paginates_when_content_exceeds_one_page():
     file_bytes = serialize_pdf(_tree(n_children=120), mode="outline", single_page=False)
     doc = fitz.open(stream=file_bytes, filetype="pdf")

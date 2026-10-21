@@ -32,6 +32,7 @@ that library quirk can never surface regardless of image shape.
 """
 from __future__ import annotations
 
+import statistics
 from dataclasses import dataclass
 from typing import Optional
 
@@ -58,6 +59,58 @@ class OrientationChoice:
     scale: float
     page_w: float
     page_h: float
+
+
+# H4 screen-viewing pages deliberately remain bounded. PDF points are
+# physical units (72 pt/in), so 1440 pt is a viewer-friendly 20-inch edge,
+# while 180 pt avoids pathological sliver pages for tiny maps. The map is
+# never enlarged beyond its source pixels and, when node geometry exists,
+# targets a comfortable 12 pt median label on the overview.
+CONTENT_FIT_MIN_PAGE_PT = 180.0
+CONTENT_FIT_MAX_PAGE_PT = 1440.0
+CONTENT_FIT_TARGET_MEDIAN_PT = 12.0
+CONTENT_FIT_REFERENCE_PAGE_PT = (595.0, 842.0)
+
+
+def choose_content_fit_page(
+    image_w: float,
+    image_h: float,
+    margin: float,
+    *,
+    font_sizes_px: Optional[list[float]] = None,
+) -> OrientationChoice:
+    """Return a bounded, content-shaped page for screen viewing.
+
+    This is intentionally separate from A4/A3 orientation selection. It
+    changes only the overview MediaBox: callers keep standard print-sized
+    detail and outline pages. A geometry manifest lets the overview target
+    a 12 pt median label and never chooses a smaller scale than automatic A4;
+    without one, source pixels map at most 1:1 to PDF points. In both cases
+    the maximum edge and source scale are capped.
+    """
+    if image_w <= 0 or image_h <= 0:
+        return OrientationChoice("portrait", 0.0, CONTENT_FIT_MIN_PAGE_PT, CONTENT_FIT_MIN_PAGE_PT)
+
+    usable_limit = max(CONTENT_FIT_MAX_PAGE_PT - 2 * margin, 1.0)
+    dimension_cap = min(usable_limit / image_w, usable_limit / image_h)
+    valid_fonts = [float(size) for size in (font_sizes_px or []) if float(size) > 0]
+    target_scale = (
+        CONTENT_FIT_TARGET_MEDIAN_PT / statistics.median(valid_fonts)
+        if valid_fonts else 1.0
+    )
+    reference_w, reference_h = CONTENT_FIT_REFERENCE_PAGE_PT
+    reference_scale = max(
+        contain_fit_scale(image_w, image_h, reference_w - 2 * margin, reference_h - 2 * margin),
+        contain_fit_scale(image_w, image_h, reference_h - 2 * margin, reference_w - 2 * margin),
+    )
+    desired_scale = max(target_scale, reference_scale)
+    scale = max(0.0, min(1.0, desired_scale, dimension_cap))
+    content_w, content_h = image_w * scale, image_h * scale
+    page_w = min(CONTENT_FIT_MAX_PAGE_PT, max(CONTENT_FIT_MIN_PAGE_PT, content_w + 2 * margin))
+    page_h = min(CONTENT_FIT_MAX_PAGE_PT, max(CONTENT_FIT_MIN_PAGE_PT, content_h + 2 * margin))
+    actual_scale = contain_fit_scale(image_w, image_h, page_w - 2 * margin, page_h - 2 * margin)
+    orientation = "landscape" if page_w > page_h else "portrait"
+    return OrientationChoice(orientation, actual_scale, page_w, page_h)
 
 
 def choose_map_orientation(image_w: float, image_h: float, portrait_page_pt: tuple[float, float], margin: float) -> OrientationChoice:

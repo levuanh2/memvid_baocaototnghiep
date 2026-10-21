@@ -24,7 +24,7 @@
       "background": { "transparent": false, "custom": true },
       "branchColor": true,
       "margins": true,
-      "pageSize": ["A4", "A3"],
+      "pageSize": ["A4", "A3", "content_fit"],
       "orientation": ["portrait", "landscape"],
       "singlePage": true,
       "mode": ["outline", "map", "map_and_outline"],

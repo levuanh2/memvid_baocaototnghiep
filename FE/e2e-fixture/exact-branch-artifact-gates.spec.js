@@ -151,7 +151,7 @@ test("Gate 1: Chromium 69% keeps exact A/B marker selection through overlapping 
   }, null, 2));
 });
 
-async function capturePdfRequest(page, mode) {
+async function capturePdfRequest(page, mode, pageSize = "A4") {
   let requestBody;
   await page.unrouteAll({ behavior: "wait" });
   await page.route("**/mindmaps/*/exports", async (route) => {
@@ -182,6 +182,13 @@ async function capturePdfRequest(page, mode) {
   const modeButton = page.locator("[data-testid=doc-appearance] .export-control").filter({ hasText: "Chế độ" })
     .locator("button", { hasText: mode === "map" ? "Chỉ sơ đồ" : "Sơ đồ + dàn ý" });
   await modeButton.click();
+  if (pageSize === "content_fit") {
+    const contentFit = page.getByRole("button", { name: "Vừa nội dung — Xem trên màn hình" });
+    await contentFit.click();
+    await expect(contentFit).toHaveAttribute("aria-pressed", "true");
+    await expect(page.getByRole("button", { name: "A4 — In tài liệu" })).toHaveAttribute("aria-pressed", "false");
+    await page.screenshot({ path: path.join(ARTIFACT_DIR, "h4-content-fit-option.png"), fullPage: true });
+  }
   await page.getByRole("button", { name: "Tiếp tục" }).click();
   await page.getByRole("button", { name: "Tạo PDF" }).click();
   await expect.poll(() => Boolean(requestBody), { timeout: 30_000 }).toBe(true);
@@ -194,6 +201,7 @@ async function capturePdfRequest(page, mode) {
   });
   expect(requestBody.scope.selected_branch_root_ids).not.toContain(P);
   expect(requestBody.options.mode).toBe(mode);
+  expect(requestBody.options.pageSize).toBe(pageSize);
   expect(requestBody.map_image_base64.length).toBeGreaterThan(5_000);
   expect(requestBody.map_geometry_manifest.nodes.map((node) => node.id).sort()).toEqual([
     P, A, `${A}-l0`, B,
@@ -201,7 +209,7 @@ async function capturePdfRequest(page, mode) {
   expect(requestBody.map_geometry_manifest.nodes.some((node) => node.id === ROOT)).toBe(false);
   expect(requestBody.map_geometry_manifest.nodes.some((node) => node.id === C)).toBe(false);
 
-  const base = path.join(ARTIFACT_DIR, `gate2-${mode}`);
+  const base = path.join(ARTIFACT_DIR, `gate2-${mode}-${pageSize}`);
   fs.writeFileSync(`${base}-source.png`, Buffer.from(requestBody.map_image_base64, "base64"));
   fs.writeFileSync(`${base}-request.json`, JSON.stringify(requestBody, null, 2));
   fs.writeFileSync(`${base}-manifest.json`, JSON.stringify(requestBody.map_geometry_manifest, null, 2));
@@ -214,4 +222,36 @@ test("Gate 2 capture: map and map_and_outline requests carry the exact Chromium 
   expect(combined.scope).toEqual(map.scope);
   expect(combined.map_geometry_manifest.nodes.map((node) => node.id).sort())
     .toEqual(map.map_geometry_manifest.nodes.map((node) => node.id).sort());
+});
+
+test("H4: Chromium sends content_fit with the same exact scoped PNG and geometry", async ({ page }) => {
+  const request = await capturePdfRequest(page, "map_and_outline", "content_fit");
+  expect(request.options.pageSize).toBe("content_fit");
+  expect(request.map_geometry_manifest.nodes.map((node) => node.id).sort()).toEqual([
+    P, A, `${A}-l0`, B,
+  ].sort());
+});
+
+test("H4 UX: outline explains its intentional A4 fallback and cannot retain content_fit", async ({ page }) => {
+  await page.goto("/fixture-harness.html");
+  await expect(page.getByTestId("fixture-harness-root")).toBeVisible();
+  await page.getByLabel("Xuất sơ đồ").click();
+  await page.getByRole("button", { name: "Tiếp tục" }).click();
+  await page.locator('input[name="mm-export-format"][value="pdf"]').check();
+  await page.getByRole("button", { name: "Tiếp tục" }).click();
+
+  const contentFit = page.getByRole("button", { name: "Vừa nội dung — Xem trên màn hình" });
+  const a4 = page.getByRole("button", { name: "A4 — In tài liệu" });
+  await expect(page.getByText("“Vừa nội dung” chỉ áp dụng cho trang sơ đồ; khi chọn “Chỉ dàn ý”, khổ này chuyển về A4.")).toBeVisible();
+  await expect(contentFit).toBeDisabled();
+  await expect(a4).toHaveAttribute("aria-pressed", "true");
+
+  await page.getByRole("button", { name: "Chỉ sơ đồ" }).click();
+  await expect(contentFit).toBeEnabled();
+  await contentFit.click();
+  await expect(contentFit).toHaveAttribute("aria-pressed", "true");
+
+  await page.getByRole("button", { name: "Chỉ dàn ý" }).click();
+  await expect(contentFit).toBeDisabled();
+  await expect(a4).toHaveAttribute("aria-pressed", "true");
 });

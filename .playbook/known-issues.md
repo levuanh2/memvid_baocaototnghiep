@@ -1,5 +1,30 @@
 # Known Issues
 
+## PDF outline could retain a misleading content-fit selection while the serializer used A4 (fixed 2026-10-21)
+
+**Symptom:** Export Studio allowed “Vừa nội dung — Xem trên màn hình” while
+PDF mode was “Chỉ dàn ý”. The request carried `pageSize=content_fit`, but the
+serializer intentionally treated the unknown outline sheet as A4. The output
+was correct and compatible, yet the UI promised a content-shaped page that an
+outline-only document cannot have.
+
+**Root cause:** page-size choices were rendered independently of PDF mode.
+H4 constrained content-fit inside the map-page writer, while the frontend had
+no matching applicability rule or explanatory copy for standalone outlines.
+
+**Fix:** disable content-fit for outline mode, explain that it applies only to
+map pages, and atomically normalize an already-selected content-fit value to A4
+when the user switches from map to outline. The backend A4 fallback remains for
+stored/API compatibility.
+
+**Regression:** a real Chromium test covers outline default, map/content-fit,
+and the map-to-outline transition; component tests assert the final request is
+`mode=outline, pageSize=A4`; a PyMuPDF test measures the fallback MediaBox.
+
+**Prevention:** when an option applies only to one output surface, encode that
+applicability in both the serializer and the control state. A compatibility
+fallback must not be the only place where the user-visible choice is resolved.
+
 ## Selected-branch marker proximity could promote a child click to its parent, and export counts/framing omitted context (fixed 2026-10-18)
 
 **Symptom:** at low zoom, clicking the 40px marker hitbox for a child could add
@@ -7071,3 +7096,31 @@ tests separately cover omitted versus explicitly true descendant semantics.
   are found. Real Mind Elixir topics expose both `nodeObj.id` and
   `data-nodeid`; require one identity per topic, exact element count, unique
   IDs, and exact membership before capture.
+
+## Fixed print MediaBoxes waste space on ultra-wide shallow maps (H4, fixed 2026-10-21)
+
+**Symptom:** automatic landscape orientation correctly maximized the scale of
+a 2436×296 map on A4, but the map could occupy only 17.98% of the usable page
+area because its 8.23:1 aspect ratio remained far wider than an A4 landscape
+page. The effective median label size was 7.51 pt and large bands of vertical
+whitespace were mathematically unavoidable on that print sheet.
+
+**Root cause:** orientation can only swap the two fixed page dimensions; it
+cannot make a fixed A4/A3 MediaBox match the content aspect ratio. Centered
+contain-fit was already correct, so stretching, cropping, or another
+orientation heuristic would trade whitespace for distortion or lost content.
+
+**Fix:** add the opt-in `content_fit` PDF page size for screen viewing. Its map
+overview uses a content-shaped MediaBox with the selected padding, targets a
+12 pt median label when geometry is available, never scales below automatic
+A4, never enlarges beyond source pixels, and caps every page edge at 1440 pt.
+Print A4/A3 code paths are unchanged. When the cap prevents a readable
+overview, existing H2/H3B detail pages remain standard A4; outline pages also
+remain standard A4 portrait. H3C still embeds one raster XREF and serializes
+with lossless deflate.
+
+**Measured regression:** the 2436×296 fixture moves from 17.98% to 100% map
+placement occupancy, 7.51 pt to 12 pt median labels, and five pages to one.
+The 5066×1350 fixture remains bounded at 1440 pt and retains six A4 detail
+pages. Deterministic balanced, tall, exact-three-node, and Vietnamese fixtures
+verify no distortion, clipping, topology loss, or exact-scope change.

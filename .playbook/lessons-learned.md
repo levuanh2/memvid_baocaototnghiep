@@ -3258,3 +3258,26 @@ than returning a wider artifact when they differ.
 - Verify third-party DOM contracts in the real browser, not only with jsdom
   fakes. Chromium confirmed Mind Elixir sets `nodeObj.id` and `data-nodeid` on
   every offscreen `me-tpc` topic.
+
+## 2026-10-21 — Page purpose must be explicit before optimizing whitespace
+
+A correct contain-fit on a fixed print sheet can still have low occupancy;
+that is a geometry limit, not a centering bug. Keep print page contracts fixed
+and offer content-shaped MediaBoxes only as an explicit screen-viewing mode.
+Do not stretch the raster or silently replace the user's requested paper size.
+
+Measure the placed image rectangle separately from the non-white pixel bounds.
+Overlays and sparse node drawings make pixel occupancy misleading, while the
+placement rectangle directly captures whitespace introduced by page geometry.
+Bound custom pages, preserve at least the default A4 scale, and keep existing
+standard-page detail/outline pagination as the fallback for maps that remain
+unreadable at the maximum edge.
+
+## 2026-10-21 — Compatibility fallback is not sufficient UX communication
+
+A serializer may safely accept an option outside its useful mode and fall back
+for old jobs, while the current UI must still prevent that impossible
+combination from looking effective. Keep the tolerant backend boundary, but
+normalize the live control state and explain why the option is unavailable.
+Test both the visible browser state and the final payload; either alone can
+miss a misleading selection.

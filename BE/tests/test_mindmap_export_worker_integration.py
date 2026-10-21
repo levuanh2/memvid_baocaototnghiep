@@ -118,6 +118,47 @@ def test_valid_manifest_flows_through_the_real_worker_to_a_done_job_with_tiling_
     assert job["result"].get("warning") is None
 
 
+def test_content_fit_flows_route_to_worker_and_writes_a_bounded_content_shaped_pdf(
+    be, client, monkeypatch, sync_enqueue, export_dir,
+):
+    import fitz
+    from app.domains.jobs import export_jobs, jobs_store
+
+    _mutable_store(monkeypatch, be, _rec())
+    _protect(be, monkeypatch, "userA", on=True)
+    manifest = {
+        "version": 1,
+        "image_width_px": 2436,
+        "image_height_px": 296,
+        "nodes": [
+            {"id": "root", "x": 80, "y": 100, "width": 300, "height": 80, "font_size_px": 24},
+            {"id": "c1", "x": 1900, "y": 100, "width": 300, "height": 80, "font_size_px": 24},
+        ],
+        "connectors": [{"x": 380, "y": 138, "width": 1520, "height": 4}],
+    }
+    resp = client.post("/mindmaps/m1/exports", json={
+        "format": "pdf",
+        "idempotency_key": "k-h4-content-fit-worker",
+        "options": {"mode": "map", "pageSize": "content_fit"},
+        "map_image_base64": _png_b64(2436, 296),
+        "map_geometry_manifest": manifest,
+    })
+    assert resp.status_code == 202, resp.get_json()
+    job_id = resp.get_json()["job_id"]
+    job = jobs_store.get_job(job_id)
+    assert job["status"] == "done", job
+    assert job["result"]["node_count"] == 2
+    assert job["result"].get("warning") is None
+
+    doc = fitz.open(stream=export_jobs.output_path_for(job_id, "pdf").read_bytes(), filetype="pdf")
+    page = doc[0]
+    assert (page.rect.width, page.rect.height) == pytest.approx((1298, 228), abs=0.1)
+    image = page.get_image_rects(page.get_images(full=True)[0][0])[0]
+    assert image.width / image.height == pytest.approx(2436 / 296, rel=0.005)
+    assert max(page.rect.width, page.rect.height) <= 1440
+    doc.close()
+
+
 # ---- 2. worker REVALIDATES the manifest independently (RED until fixed) ---
 
 def test_worker_independently_rejects_a_manifest_whose_node_ids_dont_match_fresh_scope(monkeypatch, export_dir):
