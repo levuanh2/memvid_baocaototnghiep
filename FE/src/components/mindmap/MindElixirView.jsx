@@ -181,6 +181,7 @@ export default function MindElixirView({ data, onRegenerate, regenerating, contr
   const [selectionModeActive, setSelectionModeActive] = useState(false);
   const [selectedBranchIds, setSelectedBranchIds] = useState(() => new Set());
   const selectionActiveRef = useRef(false);
+  const previousSelectionActiveRef = useRef(false);
   const selectedBranchIdsRef = useRef(selectedBranchIds);
   const branchSelectionHandleRef = useRef(null);
 
@@ -581,6 +582,10 @@ export default function MindElixirView({ data, onRegenerate, regenerating, contr
   useEffect(() => {
     selectionActiveRef.current = selectionModeActive;
     branchSelectionHandleRef.current?.resync();
+    if (selectionModeActive && !previousSelectionActiveRef.current) {
+      queueMicrotask(() => containerRef.current?.querySelector("me-export-check")?.focus());
+    }
+    previousSelectionActiveRef.current = selectionModeActive;
   }, [selectionModeActive]);
   useEffect(() => {
     selectedBranchIdsRef.current = selectedBranchIds;
@@ -1293,18 +1298,18 @@ export default function MindElixirView({ data, onRegenerate, regenerating, contr
             affordance live in mindmapBranchSelectionMode.js, driven by
             `selectionActiveRef` — this bar is just its visible chrome. */}
         {selectionModeActive && (
-          <div className="mm-selection-bar" role="status" aria-live="polite">
+          <div className="mm-selection-bar" role="group" aria-label="Chọn node để xuất">
             {selectedBranchIds.size === 0 ? (
-              <span className="mm-selection-bar__hint">Chọn các node muốn xuất</span>
+              <><span className="mm-selection-bar__hint">Chọn các node muốn xuất</span><span className="mm-selection-bar__hint">Tick node cha không tự chọn node con.</span></>
             ) : (
               <>
-                <span className="mm-selection-bar__badge">{selectedBranchIds.size} node đã tick</span>
+                <span className="mm-selection-bar__badge" role="status" aria-live="polite" aria-atomic="true">{selectedBranchIds.size} node đã tick</span>
                 <button type="button" onClick={() => setSelectedBranchIds(new Set())}>Xóa chọn</button>
               </>
             )}
             <button type="button" className="mm-selection-bar__primary" disabled={!selectedBranchIds.size}
               onClick={() => { setSelectionModeActive(false); setExportOpen(true); }}>Tiếp tục</button>
-            <button type="button" onClick={() => { setSelectionModeActive(false); setSelectedBranchIds(new Set()); setExportOpen(true); }}>Hủy</button>
+            <button type="button" onClick={() => { setSelectionModeActive(false); setSelectedBranchIds(new Set()); setExportOpen(true); }}>Bỏ chọn và quay lại</button>
           </div>
         )}
       </div>

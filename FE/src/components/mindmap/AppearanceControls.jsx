@@ -101,9 +101,9 @@ export function CanvasEditor({ value, onChange }) {
 /** Icon-labelled role tabs — "Màu & kiểu node" group, shared progressive-disclosure shell. */
 export function RoleTabs({ active, onChange }) {
   return (
-    <div className="export-segments" role="tablist" aria-label="Vai trò node">
+    <div className="export-segments" role="group" aria-label="Vai trò node">
       {["root", "branch", "leaf"].map((role) => (
-        <button key={role} type="button" role="tab" aria-selected={active === role}
+        <button key={role} type="button" aria-pressed={active === role}
           className={`pill-tab ${active === role ? "is-selected pill-tab-active" : ""}`} onClick={() => onChange(role)}>
           {ROLE_LABELS[role]}
         </button>

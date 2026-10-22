@@ -1,5 +1,32 @@
 # Known Issues
 
+## Export attempts could publish stale error, cancellation, or image-completion state into a newer session (fixed 2026-10-22)
+
+**Symptom:** after cancelling a PDF export and starting another attempt, a late
+capture rejection from the cancelled attempt could replace the newer attempt's
+running state with an error. A delayed server-cancellation response could mark a
+different map/session as cancelled. A client-side image export completing after
+a map switch could show the old filename as successfully exported on the new map.
+
+**Root cause:** H5 initially guarded `finally` and document poll updates with the
+attempt key, but the shared `catch`, the post-`await` portion of `cancel()`, and
+the image-export `setDone()` path still mutated React state without proving that
+their attempt remained current.
+
+**Fix:** gate the shared asynchronous catch and image completion on the current
+attempt key. Cancellation now snapshots the attempt key and job ID, invalidates
+the attempt, aborts it, and publishes the current session's cancelled UI before
+starting best-effort server cancellation; the server response performs no UI
+mutation.
+
+**Regression:** component tests cover a rejected old capture after a new attempt
+reaches running, a delayed cancel response after a map switch, cancel-then-retry,
+cancel-close-reopen, and stale image completion after a map switch.
+
+**Prevention:** every state mutation reached from an async completion must prove
+attempt ownership, not only cleanup in `finally`. Put current-session UI cleanup
+before best-effort remote cleanup, and keep its completion tail state-free.
+
 ## PDF outline could retain a misleading content-fit selection while the serializer used A4 (fixed 2026-10-21)
 
 **Symptom:** Export Studio allowed “Vừa nội dung — Xem trên màn hình” while
@@ -7124,3 +7151,24 @@ placement occupancy, 7.51 pt to 12 pt median labels, and five pages to one.
 The 5066×1350 fixture remains bounded at 1440 pt and retains six A4 detail
 pages. Deterministic balanced, tall, exact-three-node, and Vietnamese fixtures
 verify no distortion, clipping, topology loss, or exact-scope change.
+
+## Cancelling during client-side PDF capture could still create a job (fixed 2026-10-21)
+
+**Symptom:** Export Studio showed “Hủy xuất” while preparing a PDF map image,
+but cancelling before the create-job request did not stop the pending capture.
+After capture completed, the stale attempt could still create a backend job and
+download a file. Switching maps in the same window had the same risk.
+
+**Root cause:** the attempt AbortController was created only after the backend
+job existed. Local capture, scope payload creation and the create-job request
+therefore had no shared cancellation identity.
+
+**Fix:** create one attempt-scoped AbortController before capture, pass its
+signal into the create-job request, and verify both the signal and attempt key
+after every asynchronous boundary. Map switches and cancellation invalidate
+the attempt before aborting it; a late create response is best-effort cancelled
+and can never update UI state or trigger a download.
+
+**Regression:** deferred-capture tests cancel and switch maps before resolving
+capture, then assert zero create-job calls and zero downloads. The API-client
+test verifies that the create POST receives the attempt signal.

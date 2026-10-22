@@ -12,6 +12,7 @@ import { describe, it, expect, vi, afterEach, beforeAll } from "vitest";
 import { createRoot } from "react-dom/client";
 import { act } from "react-dom/test-utils";
 import MindElixirView from "./MindElixirView";
+import * as imageExport from "../../utils/mindmapImageExport";
 
 beforeAll(() => {
   window.matchMedia = window.matchMedia || (() => ({ matches: false, addEventListener() {}, removeEventListener() {} }));
@@ -80,8 +81,13 @@ describe("MindElixirView Export Studio", () => {
     const enterBtn = [...document.body.querySelectorAll("button")].find((b) => b.textContent.includes("Chọn node trên sơ đồ"));
     await act(async () => { enterBtn.click(); });
     expect(document.body.querySelector('[role="dialog"]')).toBeFalsy(); // dialog closed while selecting
-    expect(container.querySelector(".mm-selection-bar")).toBeTruthy();
-    expect(container.querySelector(".mm-selection-bar").textContent).toContain("Chọn các node muốn xuất");
+    const selectionBar = container.querySelector(".mm-selection-bar");
+    expect(selectionBar).toBeTruthy();
+    expect(selectionBar.getAttribute("role")).toBe("group");
+    expect(selectionBar.textContent).toContain("Chọn các node muốn xuất");
+    expect(selectionBar.textContent).toContain("Tick node cha không tự chọn node con.");
+    await act(async () => { await Promise.resolve(); });
+    expect(document.activeElement?.localName).toBe("me-export-check");
   });
 
   it("clicking a node while in selection mode toggles selection WITHOUT opening the node-detail drawer", async () => {
@@ -101,7 +107,7 @@ describe("MindElixirView Export Studio", () => {
     expect(controller.onNodeSelected).not.toHaveBeenCalled(); // the load-bearing assertion
   });
 
-  it("'Hủy' on the selection bar clears the selection and reopens the dialog", async () => {
+  it("'Bỏ chọn và quay lại' on the selection bar clears the selection and reopens the dialog", async () => {
     await render(makeController());
     await act(async () => { container.querySelector('[aria-label="Xuất sơ đồ"]').click(); });
     await act(async () => { document.body.querySelector('input[value="selected_branches"]').click(); });
@@ -111,7 +117,7 @@ describe("MindElixirView Export Studio", () => {
     const s1Tpc = [...container.querySelectorAll("me-tpc")].find((t) => t.nodeObj?.id === "s1");
     await act(async () => { s1Tpc.dispatchEvent(new MouseEvent("click", { bubbles: true })); });
 
-    const cancelBtn = [...container.querySelectorAll(".mm-selection-bar button")].find((b) => b.textContent === "Hủy");
+    const cancelBtn = [...container.querySelectorAll(".mm-selection-bar button")].find((b) => b.textContent === "Bỏ chọn và quay lại");
     await act(async () => { cancelBtn.click(); });
 
     expect(container.querySelector(".mm-selection-bar")).toBeFalsy();
@@ -143,5 +149,30 @@ describe("MindElixirView Export Studio", () => {
     expect(dialog.textContent).not.toContain("chưa được hỗ trợ");
     const exportBtn = [...dialog.querySelectorAll("button")].find((b) => b.textContent.includes("Xuất"));
     expect(exportBtn.disabled).toBe(false);
+  });
+
+  it("a stale image completion cannot mark a map-switched session as done", async () => {
+    let resolveImage;
+    vi.spyOn(imageExport, "exportMindmapImage").mockImplementation(() => new Promise((resolve) => { resolveImage = resolve; }));
+    const controller = makeController();
+    await render(controller);
+    await act(async () => { container.querySelector('[aria-label="Xuất sơ đồ"]').click(); });
+    const dialog = document.body.querySelector('[role="dialog"]');
+    for (let index = 0; index < 3; index += 1) {
+      await act(async () => { [...dialog.querySelectorAll("button")].find((b) => b.textContent === "Tiếp tục").click(); });
+    }
+    act(() => { [...dialog.querySelectorAll("button")].find((b) => b.textContent.includes("Xuất PNG")).click(); });
+    await act(async () => {
+      root.render(<MindElixirView data={dataFor("m2")} onRegenerate={vi.fn()} regenerating={false} controller={controller} />);
+      await Promise.resolve();
+    });
+
+    await act(async () => {
+      resolveImage({ filename: "stale-map-a.png" });
+      await Promise.resolve();
+    });
+
+    expect(dialog.textContent).not.toContain("stale-map-a.png");
+    expect(dialog.textContent).not.toContain("Đã xuất:");
   });
 });

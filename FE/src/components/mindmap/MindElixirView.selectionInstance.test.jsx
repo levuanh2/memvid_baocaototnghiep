@@ -99,7 +99,7 @@ describe("Branch selection: instance, root and transform are untouched", () => {
 
     // Pan again while in selection mode, then cancel.
     canvas.style.transform = "translate3d(90px, 60px, 0px) scale(0.5)";
-    const cancel = [...container.querySelectorAll(".mm-selection-bar button")].find((b) => b.textContent.trim() === "Hủy");
+    const cancel = [...container.querySelectorAll(".mm-selection-bar button")].find((b) => b.textContent.trim() === "Bỏ chọn và quay lại");
     await act(async () => { cancel.click(); });
     expect(markers().length).toBe(0);
     expect(container.querySelector(".mm-selection-bar")).toBeNull();
