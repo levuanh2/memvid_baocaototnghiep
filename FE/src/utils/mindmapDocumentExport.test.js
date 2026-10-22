@@ -29,6 +29,13 @@ describe("createMindmapExport", () => {
     expect(sentBody.idempotency_key).toBe("k1");
   });
 
+  it("passes an attempt abort signal to the create-job request", async () => {
+    globalThis.fetch = fakeFetch(202, { job_id: "j1", status: "queued" });
+    const controller = new AbortController();
+    await createMindmapExport("m1", { format: "pdf", scope: {}, options: {}, signal: controller.signal });
+    expect(globalThis.fetch.mock.calls[0][1].signal).toBe(controller.signal);
+  });
+
   it("throws with .status on a non-ok response", async () => {
     globalThis.fetch = fakeFetch(400, { error: "bad format", error_code: "invalid_format" });
     await expect(createMindmapExport("m1", { format: "csv", scope: {}, options: {} })).rejects.toMatchObject({ status: 400 });

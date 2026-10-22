@@ -459,7 +459,7 @@ test.describe("Export Studio — fixture harness, real files", () => {
     await page.locator(".export-inline-action").click();
     await page.locator(nodeSelector(`${MAP_A_ID}-m0`)).click();
     await page.locator(nodeSelector(`${MAP_A_ID}-m1`)).click();
-    await page.locator(".mm-selection-bar").getByRole("button", { name: "Hủy" }).click();
+    await page.locator(".mm-selection-bar").getByRole("button", { name: "Bỏ chọn và quay lại" }).click();
     // "Hủy" must actually register as a click on ITSELF, not get silently
     // swallowed by the canvas's own pan-gesture pointer capture (a real
     // bug this suite caught: see MindElixirView.jsx's onDown exclusion
@@ -662,7 +662,7 @@ test.describe("Export Selection Mode — checkbox pointer regression (hotfix)", 
     // LẠI trên sơ đồ" now — a selection already exists from above.
     await page.locator(".export-inline-action").click();
     await page.locator(checkboxFor("Kiến trúc hệ thống")).click();
-    await page.locator(".mm-selection-bar").getByRole("button", { name: "Hủy" }).click();
+    await page.locator(".mm-selection-bar").getByRole("button", { name: "Bỏ chọn và quay lại" }).click();
     await expect(page.locator("me-export-check")).toHaveCount(0);
   });
 
@@ -674,7 +674,7 @@ test.describe("Export Selection Mode — checkbox pointer regression (hotfix)", 
     await chooseScope(page, "selected_branches");
     await page.locator(".export-inline-action").click();
     await page.locator(checkboxFor("Kiến trúc hệ thống")).click();
-    await page.locator(".mm-selection-bar").getByRole("button", { name: "Hủy" }).click();
+    await page.locator(".mm-selection-bar").getByRole("button", { name: "Bỏ chọn và quay lại" }).click();
     await page.getByRole("button", { name: "Hủy" }).click(); // close the dialog, back to a plain canvas
 
     // <me-epd> still collapses its branch after a selection-mode round trip.

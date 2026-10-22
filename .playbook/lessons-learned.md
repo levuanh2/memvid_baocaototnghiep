@@ -3281,3 +3281,16 @@ combination from looking effective. Keep the tolerant backend boundary, but
 normalize the live control state and explain why the option is unavailable.
 Test both the visible browser state and the final payload; either alone can
 miss a misleading selection.
+
+## 2026-10-21 — Cancellation must start before the first expensive await
+
+An export attempt begins when the user confirms, not when a backend job ID is
+returned. Create its cancellation token and stable attempt identity before any
+client-side capture. Recheck both after every await, including a create request
+whose response can race with abort, and guard final state cleanup so an older
+attempt cannot clear the in-flight state of a newer one.
+
+Selection-mode accessibility follows the same handoff rule: when a modal closes
+to reveal an imperative canvas UI, move focus to the first real checkbox after
+the renderer has synchronized its markers. Keep the interactive toolbar out of
+a live-region container; announce only the changing selection count.

@@ -4,7 +4,7 @@
 // SVG) never touch the backend; see mindmapImageExport.js for those.
 import { apiFetch, apiUrl, _appError } from "./api";
 
-export async function createMindmapExport(mapId, { format, scope, options, mapImageBase64, mapGeometryManifest, idempotencyKey }) {
+export async function createMindmapExport(mapId, { format, scope, options, mapImageBase64, mapGeometryManifest, idempotencyKey, signal }) {
   const res = await apiFetch(`/mindmaps/${encodeURIComponent(mapId)}/exports`, {
     method: "POST",
     headers: { "Content-Type": "application/json" },
@@ -15,6 +15,7 @@ export async function createMindmapExport(mapId, { format, scope, options, mapIm
       ...(mapGeometryManifest ? { map_geometry_manifest: mapGeometryManifest } : {}),
       ...(idempotencyKey ? { idempotency_key: idempotencyKey } : {}),
     }),
+    signal,
   });
   if (!res.ok) throw await _appError(res);
   return res.json(); // {job_id, status, status_url}
@@ -39,6 +40,7 @@ export async function pollMindmapExportUntilDone(jobId, { intervalMs = 700, sign
   for (;;) {
     if (signal?.aborted) throw new DOMException("aborted", "AbortError");
     const status = await getMindmapExportStatus(jobId);
+    if (signal?.aborted) throw new DOMException("aborted", "AbortError");
     onUpdate?.(status);
     if (TERMINAL_STATUSES.has(status.status)) return status;
     await new Promise((resolve, reject) => {

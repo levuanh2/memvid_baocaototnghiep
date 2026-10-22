@@ -180,10 +180,10 @@ export default function ExportStudioDialog({ open, onClose, mind, record, mapId,
   const inFlightRef = useRef(false);
   const canAdvance = scopeResult?.ok, canExport = canAdvance && !(isDoc && !mapId), effectiveScope = effectiveVisibleOnly ? "visible" : scopeType;
   const close = () => { if (!exporting) { abortRef.current?.abort(); onClose?.(); } };
-  useEffect(() => () => abortRef.current?.abort(), []);
-  useEffect(() => { abortRef.current?.abort(); setExporting(false); setError(null); setDone(null); setJobStatus(null); setJobProgress(0); setJobId(null); setSelectedBranchSnapshot([]); }, [mapId]);
+  useEffect(() => () => { attemptKeyRef.current = null; abortRef.current?.abort(); }, []);
+  useEffect(() => { attemptKeyRef.current = null; abortRef.current?.abort(); inFlightRef.current = false; setExporting(false); setError(null); setDone(null); setJobStatus(null); setJobProgress(0); setJobId(null); setSelectedBranchSnapshot([]); }, [mapId]);
   // Clears everything tied to one attempt (artifact, job, error, in-flight guard). Configuration is kept.
-  const resetTransient = () => { abortRef.current?.abort(); inFlightRef.current = false; setExporting(false); setError(null); setDone(null); setJobStatus(null); setJobProgress(0); setJobId(null); };
+  const resetTransient = () => { attemptKeyRef.current = null; abortRef.current?.abort(); inFlightRef.current = false; setExporting(false); setError(null); setDone(null); setJobStatus(null); setJobProgress(0); setJobId(null); };
   // Reopening always starts at the configuration step with no leftover artifact or job.
   useEffect(() => { if (open) { resetTransient(); setStep(0); setFurthest(0); setUseMapAppearance(true); setStyleOverride(null); setApplyToMapError(null); } }, [open]);
   // PR G — re-derive the scope radio ONLY on the closed->open edge (a ref,
@@ -228,7 +228,11 @@ export default function ExportStudioDialog({ open, onClose, mind, record, mapId,
 
   const exportAppearanceParams = { canvasAppearance: savedAppearance, exportStyleOverride: useMapAppearance ? null : styleOverride };
   const runImage = async () => setDone(await exportMindmapImage({ mind, record, scopeType: effectiveScope, targetNodeId: selectedNodeId, branchRootIds: selectedBranchSnapshot, includeDescendants: includeDescendantsFor(effectiveScope), visibleOnly: effectiveVisibleOnly, format, backgroundColor: backgroundColor(background, customColor), scale, title: filename, appearance, ...exportAppearanceParams }));
-  const runDocument = async (attemptKey) => {
+  const runDocument = async (attemptKey, controller) => {
+    const { signal } = controller;
+    const assertActive = () => {
+      if (signal.aborted || attemptKeyRef.current !== attemptKey) throw new DOMException("aborted", "AbortError");
+    };
     setJobStatus("queued"); setJobProgress(0); setJobId(null);
     let mapImageBase64, mapGeometryManifest;
     if (format === "pdf" && docOptions.mode !== "outline") {
@@ -236,16 +240,23 @@ export default function ExportStudioDialog({ open, onClose, mind, record, mapId,
       // geometry manifest built from the SAME DOM snapdom just captured
       // (never a second render just to measure geometry).
       const captured = await captureMapImageWithGeometry({ mind, record, scopeType: effectiveScope, targetNodeId: selectedNodeId, branchRootIds: selectedBranchSnapshot, includeDescendants: includeDescendantsFor(effectiveScope), visibleOnly: effectiveVisibleOnly, ...exportAppearanceParams });
+      assertActive();
       mapImageBase64 = captured.base64;
       mapGeometryManifest = captured.geometryManifest;
     } else if (format === "docx" && includeMapImage) {
       mapImageBase64 = await captureMapImageBase64({ mind, record, scopeType: effectiveScope, targetNodeId: selectedNodeId, branchRootIds: selectedBranchSnapshot, includeDescendants: includeDescendantsFor(effectiveScope), visibleOnly: effectiveVisibleOnly, ...exportAppearanceParams });
+      assertActive();
     }
+    assertActive();
     const scope = buildDocumentScopePayload({ mind, scopeType, selectedNodeId, selectedBranchRootIds: selectedBranchSnapshot, visibleOnly: effectiveVisibleOnly });
-    const created = await createMindmapExport(mapId, { format, scope, options: docOptions, mapImageBase64, mapGeometryManifest, idempotencyKey: attemptKey });
+    const created = await createMindmapExport(mapId, { format, scope, options: docOptions, mapImageBase64, mapGeometryManifest, idempotencyKey: attemptKey, signal });
+    if (signal.aborted || attemptKeyRef.current !== attemptKey) {
+      if (created?.job_id) try { await cancelMindmapExport(created.job_id); } catch { /* best effort */ }
+      assertActive();
+    }
     setJobId(created.job_id);
-    const controller = new AbortController(); abortRef.current = controller;
-    const final = await pollMindmapExportUntilDone(created.job_id, { signal: controller.signal, onUpdate: (s) => { setJobStatus(s.status); setJobProgress(s.progress || 0); } });
+    const final = await pollMindmapExportUntilDone(created.job_id, { signal, onUpdate: (s) => { if (!signal.aborted && attemptKeyRef.current === attemptKey) { setJobStatus(s.status); setJobProgress(s.progress || 0); } } });
+    assertActive();
     if (final.status === "done") {
       // PR H2 — the ceiling-exceeded warning (when present) lives inside
       // the job's own `result` dict, never at the top level of the status
@@ -271,11 +282,14 @@ export default function ExportStudioDialog({ open, onClose, mind, record, mapId,
     inFlightRef.current = true;
     setExporting(true);
     setError(null);
-    try { if (isDoc) await runDocument(newAttemptKey()); else await runImage(); }
+    const attemptKey = newAttemptKey();
+    const controller = isDoc ? new AbortController() : null;
+    if (controller) abortRef.current = controller;
+    try { if (isDoc) await runDocument(attemptKey, controller); else await runImage(); }
     catch (e) { if (e?.name !== "AbortError") setError(e?.message || "Không xuất được sơ đồ."); setJobStatus((s) => ["queued", "running"].includes(s) ? "error" : s); }
-    finally { inFlightRef.current = false; setExporting(false); }
+    finally { if (attemptKeyRef.current === attemptKey) { inFlightRef.current = false; setExporting(false); } }
   };
-  const cancel = async () => { abortRef.current?.abort(); if (jobId) try { await cancelMindmapExport(jobId); } catch { /* best effort */ } setJobStatus("cancelled"); setExporting(false); };
+  const cancel = async () => { attemptKeyRef.current = null; abortRef.current?.abort(); inFlightRef.current = false; if (jobId) try { await cancelMindmapExport(jobId); } catch { /* best effort */ } setJobStatus("cancelled"); setExporting(false); };
   const next = () => { if (step === 0 && !canAdvance) return; setStep((old) => { const value = Math.min(3, old + 1); setFurthest((seen) => Math.max(seen, value)); return value; }); };
   const summary = `${scopeLabel} · ${format.toUpperCase()}${scopeResult?.ok ? ` · ${scopeType === "selected_branches" ? `${scopeResult.explicitCount} node đã tick · ` : ""}${scopeResult.count} node thực tế` : ""}`, cta = format === "pdf" ? "Tạo PDF" : format === "docx" ? "Tạo DOCX" : format === "xlsx" ? "Tạo XLSX" : `Xuất ${format.toUpperCase()}`;
 

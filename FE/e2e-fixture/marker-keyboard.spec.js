@@ -27,6 +27,8 @@ for (const [w, h] of [[1440, 1024], [1024, 768], [390, 844]]) {
     const total = await page.locator("me-export-check").count();
     expect(total).toBeGreaterThan(0);
     const domOrder = await page.evaluate(() => [...document.querySelectorAll("me-export-check")].map((el) => el.getAttribute("aria-label")));
+    expect(await focusedLabel(page)).toBe(domOrder[0]);
+    await expect(page.locator(".mm-selection-bar")).toContainText("Tick node cha không tự chọn node con.");
 
     // Walk Tab until focus lands on the first marker, then step through all of them.
     await page.locator("me-export-check").first().focus();

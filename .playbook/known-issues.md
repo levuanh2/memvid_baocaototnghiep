@@ -7124,3 +7124,24 @@ placement occupancy, 7.51 pt to 12 pt median labels, and five pages to one.
 The 5066×1350 fixture remains bounded at 1440 pt and retains six A4 detail
 pages. Deterministic balanced, tall, exact-three-node, and Vietnamese fixtures
 verify no distortion, clipping, topology loss, or exact-scope change.
+
+## Cancelling during client-side PDF capture could still create a job (fixed 2026-10-21)
+
+**Symptom:** Export Studio showed “Hủy xuất” while preparing a PDF map image,
+but cancelling before the create-job request did not stop the pending capture.
+After capture completed, the stale attempt could still create a backend job and
+download a file. Switching maps in the same window had the same risk.
+
+**Root cause:** the attempt AbortController was created only after the backend
+job existed. Local capture, scope payload creation and the create-job request
+therefore had no shared cancellation identity.
+
+**Fix:** create one attempt-scoped AbortController before capture, pass its
+signal into the create-job request, and verify both the signal and attempt key
+after every asynchronous boundary. Map switches and cancellation invalidate
+the attempt before aborting it; a late create response is best-effort cancelled
+and can never update UI state or trigger a download.
+
+**Regression:** deferred-capture tests cancel and switch maps before resolving
+capture, then assert zero create-job calls and zero downloads. The API-client
+test verifies that the create POST receives the attempt signal.
