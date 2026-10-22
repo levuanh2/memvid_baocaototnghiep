@@ -12,6 +12,7 @@ import { describe, it, expect, vi, afterEach, beforeAll } from "vitest";
 import { createRoot } from "react-dom/client";
 import { act } from "react-dom/test-utils";
 import MindElixirView from "./MindElixirView";
+import * as imageExport from "../../utils/mindmapImageExport";
 
 beforeAll(() => {
   window.matchMedia = window.matchMedia || (() => ({ matches: false, addEventListener() {}, removeEventListener() {} }));
@@ -148,5 +149,30 @@ describe("MindElixirView Export Studio", () => {
     expect(dialog.textContent).not.toContain("chưa được hỗ trợ");
     const exportBtn = [...dialog.querySelectorAll("button")].find((b) => b.textContent.includes("Xuất"));
     expect(exportBtn.disabled).toBe(false);
+  });
+
+  it("a stale image completion cannot mark a map-switched session as done", async () => {
+    let resolveImage;
+    vi.spyOn(imageExport, "exportMindmapImage").mockImplementation(() => new Promise((resolve) => { resolveImage = resolve; }));
+    const controller = makeController();
+    await render(controller);
+    await act(async () => { container.querySelector('[aria-label="Xuất sơ đồ"]').click(); });
+    const dialog = document.body.querySelector('[role="dialog"]');
+    for (let index = 0; index < 3; index += 1) {
+      await act(async () => { [...dialog.querySelectorAll("button")].find((b) => b.textContent === "Tiếp tục").click(); });
+    }
+    act(() => { [...dialog.querySelectorAll("button")].find((b) => b.textContent.includes("Xuất PNG")).click(); });
+    await act(async () => {
+      root.render(<MindElixirView data={dataFor("m2")} onRegenerate={vi.fn()} regenerating={false} controller={controller} />);
+      await Promise.resolve();
+    });
+
+    await act(async () => {
+      resolveImage({ filename: "stale-map-a.png" });
+      await Promise.resolve();
+    });
+
+    expect(dialog.textContent).not.toContain("stale-map-a.png");
+    expect(dialog.textContent).not.toContain("Đã xuất:");
   });
 });

@@ -1,5 +1,32 @@
 # Known Issues
 
+## Export attempts could publish stale error, cancellation, or image-completion state into a newer session (fixed 2026-10-22)
+
+**Symptom:** after cancelling a PDF export and starting another attempt, a late
+capture rejection from the cancelled attempt could replace the newer attempt's
+running state with an error. A delayed server-cancellation response could mark a
+different map/session as cancelled. A client-side image export completing after
+a map switch could show the old filename as successfully exported on the new map.
+
+**Root cause:** H5 initially guarded `finally` and document poll updates with the
+attempt key, but the shared `catch`, the post-`await` portion of `cancel()`, and
+the image-export `setDone()` path still mutated React state without proving that
+their attempt remained current.
+
+**Fix:** gate the shared asynchronous catch and image completion on the current
+attempt key. Cancellation now snapshots the attempt key and job ID, invalidates
+the attempt, aborts it, and publishes the current session's cancelled UI before
+starting best-effort server cancellation; the server response performs no UI
+mutation.
+
+**Regression:** component tests cover a rejected old capture after a new attempt
+reaches running, a delayed cancel response after a map switch, cancel-then-retry,
+cancel-close-reopen, and stale image completion after a map switch.
+
+**Prevention:** every state mutation reached from an async completion must prove
+attempt ownership, not only cleanup in `finally`. Put current-session UI cleanup
+before best-effort remote cleanup, and keep its completion tail state-free.
+
 ## PDF outline could retain a misleading content-fit selection while the serializer used A4 (fixed 2026-10-21)
 
 **Symptom:** Export Studio allowed “Vừa nội dung — Xem trên màn hình” while

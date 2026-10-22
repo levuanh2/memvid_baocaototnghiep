@@ -216,6 +216,112 @@ describe("Export Studio — document formats", () => {
     void resolvePoll;
   });
 
+  it("a delayed server cancellation cannot overwrite a map-switched session", async () => {
+    vi.spyOn(docExport, "createMindmapExport").mockResolvedValue({ job_id: "job-a", status: "queued" });
+    vi.spyOn(docExport, "pollMindmapExportUntilDone").mockImplementation((jobId, { onUpdate, signal }) => {
+      onUpdate({ status: "running", progress: 25 });
+      return new Promise((resolve, reject) => {
+        signal?.addEventListener("abort", () => reject(new DOMException("aborted", "AbortError")));
+      });
+    });
+    let resolveCancel;
+    vi.spyOn(docExport, "cancelMindmapExport").mockImplementation(() => new Promise((resolve) => { resolveCancel = resolve; }));
+    const controller = makeController();
+
+    await render(controller);
+    const dialog = await openToFormatStep();
+    await act(async () => { dialog.querySelector('input[value="pdf"]').click(); });
+    await act(async () => { [...dialog.querySelectorAll("button")].find((b) => b.textContent === "Tiếp tục").click(); });
+    await act(async () => { [...dialog.querySelectorAll("button")].find((b) => b.textContent === "Tiếp tục").click(); });
+    act(() => { [...dialog.querySelectorAll("button")].find((b) => b.textContent.includes("Tạo PDF")).click(); });
+    await act(async () => { await Promise.resolve(); });
+
+    act(() => { [...dialog.querySelectorAll("button")].find((b) => b.textContent === "Hủy xuất").click(); });
+    await act(async () => {
+      root.render(<MindElixirView data={dataFor("m2")} onRegenerate={vi.fn()} regenerating={false} controller={controller} />);
+      await Promise.resolve();
+    });
+    expect(dialog.textContent).not.toContain("Đã hủy");
+
+    await act(async () => {
+      resolveCancel({ status: "cancel_requested" });
+      await Promise.resolve();
+    });
+
+    expect(dialog.textContent).not.toContain("Đã hủy");
+    expect(dialog.textContent).not.toContain("Thất bại");
+  });
+
+  it("a cancelled export can retry with a fresh attempt and complete normally", async () => {
+    vi.spyOn(docExport, "createMindmapExport")
+      .mockResolvedValueOnce({ job_id: "job-a", status: "queued" })
+      .mockResolvedValueOnce({ job_id: "job-b", status: "queued" });
+    vi.spyOn(docExport, "pollMindmapExportUntilDone")
+      .mockImplementationOnce((jobId, { onUpdate, signal }) => {
+        onUpdate({ status: "running", progress: 15 });
+        return new Promise((resolve, reject) => {
+          signal?.addEventListener("abort", () => reject(new DOMException("aborted", "AbortError")));
+        });
+      })
+      .mockResolvedValueOnce({ status: "done", progress: 100, download_url: "/job-b" });
+    vi.spyOn(docExport, "cancelMindmapExport").mockResolvedValue({ status: "cancel_requested" });
+    const downloadSpy = vi.spyOn(docExport, "triggerMindmapExportDownload").mockImplementation(() => {});
+
+    await render(makeController());
+    const dialog = await openToFormatStep();
+    await act(async () => { dialog.querySelector('input[value="pdf"]').click(); });
+    await act(async () => { [...dialog.querySelectorAll("button")].find((b) => b.textContent === "Tiếp tục").click(); });
+    await act(async () => { [...dialog.querySelectorAll("button")].find((b) => b.textContent === "Tiếp tục").click(); });
+    act(() => { [...dialog.querySelectorAll("button")].find((b) => b.textContent.includes("Tạo PDF")).click(); });
+    await act(async () => { await Promise.resolve(); });
+    await act(async () => { [...dialog.querySelectorAll("button")].find((b) => b.textContent === "Hủy xuất").click(); });
+    expect(dialog.textContent).toContain("Đã hủy");
+
+    await act(async () => { [...dialog.querySelectorAll("button")].find((b) => b.textContent.includes("Tạo PDF")).click(); });
+
+    expect(docExport.createMindmapExport).toHaveBeenCalledTimes(2);
+    expect(downloadSpy).toHaveBeenCalledWith("/job-b");
+    expect(dialog.textContent).toContain("Đã xuất:");
+  });
+
+  it("cancel and reopen starts a clean session that can export", async () => {
+    vi.spyOn(docExport, "createMindmapExport")
+      .mockResolvedValueOnce({ job_id: "job-a", status: "queued" })
+      .mockResolvedValueOnce({ job_id: "job-b", status: "queued" });
+    vi.spyOn(docExport, "pollMindmapExportUntilDone")
+      .mockImplementationOnce((jobId, { onUpdate, signal }) => {
+        onUpdate({ status: "running", progress: 15 });
+        return new Promise((resolve, reject) => {
+          signal?.addEventListener("abort", () => reject(new DOMException("aborted", "AbortError")));
+        });
+      })
+      .mockResolvedValueOnce({ status: "done", progress: 100, download_url: "/job-b" });
+    vi.spyOn(docExport, "cancelMindmapExport").mockResolvedValue({ status: "cancel_requested" });
+    const downloadSpy = vi.spyOn(docExport, "triggerMindmapExportDownload").mockImplementation(() => {});
+
+    await render(makeController());
+    const dialog = await openToFormatStep();
+    await act(async () => { dialog.querySelector('input[value="pdf"]').click(); });
+    await act(async () => { [...dialog.querySelectorAll("button")].find((b) => b.textContent === "Tiếp tục").click(); });
+    await act(async () => { [...dialog.querySelectorAll("button")].find((b) => b.textContent === "Tiếp tục").click(); });
+    act(() => { [...dialog.querySelectorAll("button")].find((b) => b.textContent.includes("Tạo PDF")).click(); });
+    await act(async () => { await Promise.resolve(); });
+    await act(async () => { [...dialog.querySelectorAll("button")].find((b) => b.textContent === "Hủy xuất").click(); });
+    await act(async () => { [...dialog.querySelectorAll("button")].find((b) => b.textContent === "Hủy").click(); });
+
+    await act(async () => { container.querySelector('[aria-label="Xuất sơ đồ"]').click(); });
+    const reopened = document.body.querySelector('[role="dialog"]');
+    expect(reopened.textContent).not.toContain("Đã hủy");
+    await act(async () => { [...reopened.querySelectorAll("button")].find((b) => b.textContent === "Tiếp tục").click(); });
+    await act(async () => { [...reopened.querySelectorAll("button")].find((b) => b.textContent === "Tiếp tục").click(); });
+    await act(async () => { [...reopened.querySelectorAll("button")].find((b) => b.textContent === "Tiếp tục").click(); });
+    await act(async () => { [...reopened.querySelectorAll("button")].find((b) => b.textContent.includes("Tạo PDF")).click(); });
+
+    expect(docExport.createMindmapExport).toHaveBeenCalledTimes(2);
+    expect(downloadSpy).toHaveBeenCalledWith("/job-b");
+    expect(reopened.textContent).toContain("Đã xuất:");
+  });
+
   it("cancel during the local PDF capture never creates or downloads a backend job", async () => {
     let resolveCapture;
     vi.spyOn(imageExport, "captureMapImageWithGeometry").mockImplementation(() => new Promise((resolve) => { resolveCapture = resolve; }));
@@ -242,6 +348,45 @@ describe("Export Studio — document formats", () => {
     expect(createSpy).not.toHaveBeenCalled();
     expect(downloadSpy).not.toHaveBeenCalled();
     expect(dialog.textContent).toContain("Đã hủy");
+  });
+
+  it("a rejected stale capture cannot overwrite a newer running attempt", async () => {
+    let rejectFirstCapture;
+    let captureCount = 0;
+    vi.spyOn(imageExport, "captureMapImageWithGeometry").mockImplementation(() => {
+      captureCount += 1;
+      if (captureCount === 1) return new Promise((resolve, reject) => { rejectFirstCapture = reject; });
+      return Promise.resolve({ base64: "ZmFrZQ==", geometryManifest: { version: 1, nodes: [], connectors: [] } });
+    });
+    vi.spyOn(docExport, "createMindmapExport").mockResolvedValue({ job_id: "job-b", status: "queued" });
+    vi.spyOn(docExport, "pollMindmapExportUntilDone").mockImplementation((jobId, { onUpdate, signal }) => {
+      onUpdate({ status: "running", progress: 40 });
+      return new Promise((resolve, reject) => {
+        signal?.addEventListener("abort", () => reject(new DOMException("aborted", "AbortError")));
+      });
+    });
+
+    await render(makeController());
+    const dialog = await openToFormatStep();
+    await act(async () => { dialog.querySelector('input[value="pdf"]').click(); });
+    await act(async () => { [...dialog.querySelectorAll("button")].find((b) => b.textContent === "Tiếp tục").click(); });
+    await act(async () => { [...dialog.querySelectorAll("button")].find((b) => b.textContent === "Chỉ sơ đồ").click(); });
+    await act(async () => { [...dialog.querySelectorAll("button")].find((b) => b.textContent === "Tiếp tục").click(); });
+
+    act(() => { [...dialog.querySelectorAll("button")].find((b) => b.textContent.includes("Tạo PDF")).click(); });
+    await act(async () => {});
+    await act(async () => { [...dialog.querySelectorAll("button")].find((b) => b.textContent === "Hủy xuất").click(); });
+    act(() => { [...dialog.querySelectorAll("button")].find((b) => b.textContent.includes("Tạo PDF")).click(); });
+    await act(async () => { await Promise.resolve(); });
+    expect(dialog.textContent).toContain("Đang xử lý (40%)");
+
+    await act(async () => {
+      rejectFirstCapture(new Error("stale capture failed"));
+      await Promise.resolve();
+    });
+
+    expect(dialog.textContent).toContain("Đang xử lý (40%)");
+    expect(dialog.textContent).not.toContain("stale capture failed");
   });
 
   it("a map switch during local PDF capture invalidates the old attempt", async () => {

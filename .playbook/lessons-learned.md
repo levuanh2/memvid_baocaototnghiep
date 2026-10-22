@@ -3294,3 +3294,17 @@ Selection-mode accessibility follows the same handoff rule: when a modal closes
 to reveal an imperative canvas UI, move focus to the first real checkbox after
 the renderer has synchronized its markers. Keep the interactive toolbar out of
 a live-region container; announce only the changing selection count.
+
+## 2026-10-22 — Attempt identity must guard every async state publication
+
+Guarding only `finally` prevents an old attempt from clearing a new attempt's
+in-flight flag, but it does not protect error, terminal-status, or success state.
+Treat every mutation after an `await` as a publication boundary: compare the
+captured attempt identity with the current identity immediately before publishing.
+
+Cancellation has two different responsibilities. Local UI cancellation is
+deterministic and must happen synchronously after invalidating the attempt;
+remote job cancellation is best-effort cleanup and may finish much later. Capture
+the job ID before invalidation, start the remote request only for cleanup, and do
+not mutate UI in its completion tail. Apply the same ownership rule to purely
+client-side image exports, which can also outlive a map switch.

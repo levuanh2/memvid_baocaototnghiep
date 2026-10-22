@@ -227,7 +227,10 @@ export default function ExportStudioDialog({ open, onClose, mind, record, mapId,
   const completed = Boolean(done) || jobStatus === "done";
 
   const exportAppearanceParams = { canvasAppearance: savedAppearance, exportStyleOverride: useMapAppearance ? null : styleOverride };
-  const runImage = async () => setDone(await exportMindmapImage({ mind, record, scopeType: effectiveScope, targetNodeId: selectedNodeId, branchRootIds: selectedBranchSnapshot, includeDescendants: includeDescendantsFor(effectiveScope), visibleOnly: effectiveVisibleOnly, format, backgroundColor: backgroundColor(background, customColor), scale, title: filename, appearance, ...exportAppearanceParams }));
+  const runImage = async (attemptKey) => {
+    const result = await exportMindmapImage({ mind, record, scopeType: effectiveScope, targetNodeId: selectedNodeId, branchRootIds: selectedBranchSnapshot, includeDescendants: includeDescendantsFor(effectiveScope), visibleOnly: effectiveVisibleOnly, format, backgroundColor: backgroundColor(background, customColor), scale, title: filename, appearance, ...exportAppearanceParams });
+    if (attemptKeyRef.current === attemptKey) setDone(result);
+  };
   const runDocument = async (attemptKey, controller) => {
     const { signal } = controller;
     const assertActive = () => {
@@ -285,11 +288,21 @@ export default function ExportStudioDialog({ open, onClose, mind, record, mapId,
     const attemptKey = newAttemptKey();
     const controller = isDoc ? new AbortController() : null;
     if (controller) abortRef.current = controller;
-    try { if (isDoc) await runDocument(attemptKey, controller); else await runImage(); }
-    catch (e) { if (e?.name !== "AbortError") setError(e?.message || "Không xuất được sơ đồ."); setJobStatus((s) => ["queued", "running"].includes(s) ? "error" : s); }
+    try { if (isDoc) await runDocument(attemptKey, controller); else await runImage(attemptKey); }
+    catch (e) { if (attemptKeyRef.current === attemptKey) { if (e?.name !== "AbortError") setError(e?.message || "Không xuất được sơ đồ."); setJobStatus((s) => ["queued", "running"].includes(s) ? "error" : s); } }
     finally { if (attemptKeyRef.current === attemptKey) { inFlightRef.current = false; setExporting(false); } }
   };
-  const cancel = async () => { attemptKeyRef.current = null; abortRef.current?.abort(); inFlightRef.current = false; if (jobId) try { await cancelMindmapExport(jobId); } catch { /* best effort */ } setJobStatus("cancelled"); setExporting(false); };
+  const cancel = () => {
+    const cancellingAttemptKey = attemptKeyRef.current;
+    const cancellingJobId = jobId;
+    if (!cancellingAttemptKey) return;
+    attemptKeyRef.current = null;
+    abortRef.current?.abort();
+    inFlightRef.current = false;
+    setJobStatus("cancelled");
+    setExporting(false);
+    if (cancellingJobId) void cancelMindmapExport(cancellingJobId).catch(() => { /* best effort */ });
+  };
   const next = () => { if (step === 0 && !canAdvance) return; setStep((old) => { const value = Math.min(3, old + 1); setFurthest((seen) => Math.max(seen, value)); return value; }); };
   const summary = `${scopeLabel} · ${format.toUpperCase()}${scopeResult?.ok ? ` · ${scopeType === "selected_branches" ? `${scopeResult.explicitCount} node đã tick · ` : ""}${scopeResult.count} node thực tế` : ""}`, cta = format === "pdf" ? "Tạo PDF" : format === "docx" ? "Tạo DOCX" : format === "xlsx" ? "Tạo XLSX" : `Xuất ${format.toUpperCase()}`;
 
