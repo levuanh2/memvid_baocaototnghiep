@@ -7172,3 +7172,26 @@ and can never update UI state or trigger a download.
 **Regression:** deferred-capture tests cancel and switch maps before resolving
 capture, then assert zero create-job calls and zero downloads. The API-client
 test verifies that the create POST receives the attempt signal.
+
+## Live integration workflow failed before creating a job (fixed 2026-10-22)
+
+**Symptom:** every recorded `live-integration.yml` run failed immediately with
+zero jobs, zero check runs and no downloadable logs. Neither the weekly schedule
+nor manual dispatch had ever reached a runner.
+
+**Root cause:** the EC2 step referenced `secrets.EC2_HOST` directly in its
+step-level `if` expression. GitHub rejected the workflow at validation time
+with `Unrecognized named-value: 'secrets'` because the `secrets` context is not
+available there.
+
+**Fix:** the step condition now uses only `github` and typed `inputs`, while
+`EC2_HOST` is scoped to the probe step through `env` and checked inside its
+shell. Missing configuration and disabled probes report explicit skip states;
+EC2 failures remain non-blocking but are labeled `FAILED_NON_BLOCKING`. The
+unused FPT input now reports `SKIPPED_NOT_IMPLEMENTED` instead of implying a
+provider check occurred.
+
+**Regression:** actionlint validates the GitHub expression contexts, and the
+required backend contract suite asserts that schedule/manual triggers and both
+inputs remain present, no `if` references `secrets`, and all honest skip states
+remain encoded in the workflow.

@@ -7,7 +7,7 @@ on:
   workflow_dispatch:
     inputs:
       test_fpt:
-        description: 'Test live FPT AI provider connectivity'
+        description: 'Request FPT probe (not implemented; reports skipped)'
         required: false
         default: true
         type: boolean
@@ -27,29 +27,52 @@ jobs:
     timeout-minutes: 10
 
     steps:
-      - name: Checkout
-        uses: actions/checkout@v4
-
-      - name: Setup Python
-        uses: actions/setup-python@v5
-        with:
-          python-version: "3.11"
-          cache: pip
-          cache-dependency-path: BE/requirements.txt
-
-      - name: Install minimal dependencies
-        working-directory: BE
+      - name: Record FPT probe status
+        id: fpt-probe
+        if: ${{ github.event_name == 'schedule' || inputs.test_fpt }}
         run: |
-          pip install requests python-dotenv
+          echo "status=SKIPPED_NOT_IMPLEMENTED" >> "$GITHUB_OUTPUT"
+          echo "::notice::FPT live connectivity was requested, but this workflow does not implement an FPT probe."
+
+      - name: Record disabled FPT probe
+        id: fpt-disabled
+        if: ${{ github.event_name == 'workflow_dispatch' && !inputs.test_fpt }}
+        run: echo "status=SKIPPED_DISABLED" >> "$GITHUB_OUTPUT"
 
       - name: Probe Live EC2 Backend Health
-        if: ${{ github.event.inputs.test_ec2_health != 'false' && secrets.EC2_HOST != '' }}
+        id: ec2-probe
+        if: ${{ github.event_name == 'schedule' || inputs.test_ec2_health }}
+        env:
+          EC2_HOST: ${{ secrets.EC2_HOST }}
         run: |
-          echo "Probing production EC2 backend health endpoint..."
-          curl -fsS --connect-timeout 10 --max-time 15 "http://${{ secrets.EC2_HOST }}:8080/health" || {
-            echo "::warning::Production EC2 health probe timed out or returned error."
-          }
+          if [ -z "${EC2_HOST:-}" ]; then
+            echo "status=SKIPPED_MISSING_SECRET" >> "$GITHUB_OUTPUT"
+            echo "::notice::EC2 health probe skipped because EC2_HOST is not configured."
+          elif curl -fsS --connect-timeout 10 --max-time 15 "http://${EC2_HOST}:8080/health" >/dev/null 2>&1; then
+            echo "status=PASS" >> "$GITHUB_OUTPUT"
+            echo "EC2 health probe passed."
+          else
+            echo "status=FAILED_NON_BLOCKING" >> "$GITHUB_OUTPUT"
+            echo "::warning::EC2 health probe timed out or returned an error."
+          fi
+
+      - name: Record disabled EC2 probe
+        id: ec2-disabled
+        if: ${{ github.event_name == 'workflow_dispatch' && !inputs.test_ec2_health }}
+        run: echo "status=SKIPPED_DISABLED" >> "$GITHUB_OUTPUT"
 
       - name: Report Live Provider Status
+        if: ${{ always() }}
+        env:
+          FPT_STATUS: ${{ steps.fpt-probe.outputs.status || steps.fpt-disabled.outputs.status || 'UNKNOWN' }}
+          EC2_STATUS: ${{ steps.ec2-probe.outputs.status || steps.ec2-disabled.outputs.status || 'UNKNOWN' }}
         run: |
-          echo "Live provider verification run completed."
+          echo "FPT probe status: ${FPT_STATUS}"
+          echo "EC2 probe status: ${EC2_STATUS}"
+          {
+            echo "## Live Provider Integration"
+            echo "| Provider | Status |"
+            echo "| --- | --- |"
+            echo "| FPT | ${FPT_STATUS} |"
+            echo "| EC2 health | ${EC2_STATUS} |"
+          } >> "$GITHUB_STEP_SUMMARY"

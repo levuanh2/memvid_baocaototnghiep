@@ -6,6 +6,8 @@ BE/app/domains/jobs, BE/services/mindmap).
 """
 
 import json
+import re
+from pathlib import Path
 from typing import Any, Dict
 
 
@@ -154,3 +156,37 @@ def test_mindmaps_capability_contract_fallback():
     assert isinstance(capability_contract["guided_mindmap_v3"], bool)
     assert capability_contract["fallback"] == "v2"
     assert "reason" in capability_contract
+
+
+def test_live_integration_workflow_is_valid_and_reports_honest_skips():
+    """Guard the scheduled/manual provider probe against pre-job validation failures."""
+    workflow = (
+        Path(__file__).resolve().parents[2]
+        / ".github"
+        / "workflows"
+        / "live-integration.yml"
+    ).read_text(encoding="utf-8")
+
+    assert re.search(r"^\s*schedule:\s*$", workflow, re.MULTILINE)
+    assert re.search(r"^\s*workflow_dispatch:\s*$", workflow, re.MULTILINE)
+    assert re.search(r"^\s*test_fpt:\s*$", workflow, re.MULTILINE)
+    assert re.search(r"^\s*test_ec2_health:\s*$", workflow, re.MULTILINE)
+
+    if_expressions = re.findall(r"^\s*if:\s*(.+)$", workflow, re.MULTILINE)
+    assert if_expressions
+    assert all("secrets." not in expression for expression in if_expressions)
+
+    assert "Request FPT probe (not implemented; reports skipped)" in workflow
+    assert "if: ${{ github.event_name == 'schedule' || inputs.test_fpt }}" in workflow
+    assert "if: ${{ github.event_name == 'schedule' || inputs.test_ec2_health }}" in workflow
+    assert "if: ${{ github.event_name == 'workflow_dispatch' && !inputs.test_fpt }}" in workflow
+    assert "if: ${{ github.event_name == 'workflow_dispatch' && !inputs.test_ec2_health }}" in workflow
+    assert "EC2_HOST: ${{ secrets.EC2_HOST }}" in workflow
+    assert 'echo "status=PASS" >> "$GITHUB_OUTPUT"' in workflow
+    assert 'echo "status=FAILED_NON_BLOCKING" >> "$GITHUB_OUTPUT"' in workflow
+    assert "SKIPPED_DISABLED" in workflow
+    assert "SKIPPED_MISSING_SECRET" in workflow
+    assert "SKIPPED_NOT_IMPLEMENTED" in workflow
+    assert "if: ${{ always() }}" in workflow
+    assert "steps.fpt-probe.outputs.status || steps.fpt-disabled.outputs.status || 'UNKNOWN'" in workflow
+    assert "steps.ec2-probe.outputs.status || steps.ec2-disabled.outputs.status || 'UNKNOWN'" in workflow
