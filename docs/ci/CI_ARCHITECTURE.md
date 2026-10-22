@@ -151,8 +151,8 @@ frontend one, so it must not be skippable by a backend-only path filter.
 External providers (FPT AI, live Ollama SLM, live Supabase, AWS EC2) are **strictly decoupled** from pull request CI:
 
 - **Schedule**: Weekly cron, `0 3 * * 1` (03:00 UTC Monday — corrected 2026-09-27; previously documented as `0 2 * * 1`), or manual trigger (`workflow_dispatch`).
-- **Scope** (as actually implemented today): a live EC2 `/health` probe, gated on `secrets.EC2_HOST` being set and the `test_ec2_health` input not being explicitly `false`. (A live FPT embedding probe is scaffolded as a `workflow_dispatch` input, `test_fpt`, but no step currently acts on it — noted here rather than silently left as an undocumented gap.)
-- **Fail Policy**: Non-blocking for PR merges or deploys — a `::warning::` annotation on timeout/error, not a failed job.
+- **Scope** (as actually implemented today): a live EC2 `/health` probe selected on the weekly schedule or by the `test_ec2_health` manual input. A missing `EC2_HOST` reports `SKIPPED_MISSING_SECRET`; a disabled manual probe reports `SKIPPED_DISABLED`. The `test_fpt` input remains a scaffold, and a selected FPT check reports `SKIPPED_NOT_IMPLEMENTED` rather than claiming connectivity.
+- **Fail Policy**: Non-blocking for PR merges or deploys. EC2 success reports `PASS`; timeout/error reports `FAILED_NON_BLOCKING` with a warning. The summary always distinguishes PASS, failure and skip states.
 
 ---
 

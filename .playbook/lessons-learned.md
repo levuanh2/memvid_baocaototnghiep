@@ -3308,3 +3308,15 @@ remote job cancellation is best-effort cleanup and may finish much later. Captur
 the job ID before invalidation, start the remote request only for cleanup, and do
 not mutate UI in its completion tail. Apply the same ownership rule to purely
 client-side image exports, which can also outlive a map switch.
+
+## 2026-10-22 — Validate Actions contexts before relying on trigger coverage
+
+A workflow file can parse as YAML yet fail before runner allocation when an
+expression uses a context unavailable at that key. For step-level `if`, do not
+reference `secrets` directly. Select the step with `github`/`inputs`, scope the
+secret to that step through `env`, and evaluate presence inside the shell.
+
+Zero-job failed runs are validation evidence, not provider connectivity
+results. Preserve separate statuses for disabled, missing configuration,
+unimplemented probes, successful probes and non-blocking failures so a green
+workflow conclusion cannot be mistaken for a provider PASS.
