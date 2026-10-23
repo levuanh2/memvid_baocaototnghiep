@@ -425,6 +425,124 @@ def test_selected_branches_explicit_invalid_descendant_flag_is_rejected(
     assert response.get_json()["error_code"] == "invalid_include_descendants"
 
 
+@pytest.mark.parametrize("invalid_value", [None, "all", 0, True])
+def test_selected_branches_explicit_invalid_context_mode_is_rejected(
+    be, client, monkeypatch, invalid_value,
+):
+    _stub_get_record(monkeypatch, be, record=_rec())
+    _protect(be, monkeypatch, "userA", on=True)
+
+    response = client.post("/mindmaps/m1/exports", json={
+        "format": "pdf",
+        "scope": {
+            "scope_type": "selected_branches",
+            "selected_branch_root_ids": ["root"],
+            "include_descendants": False,
+            "context_mode": invalid_value,
+        },
+    })
+
+    assert response.status_code == 400
+    assert response.get_json()["error_code"] == "invalid_context_mode"
+
+
+@pytest.mark.parametrize("invalid_value", [None, "p", 0, True, ["p", 1], [""]])
+def test_selected_branches_explicit_invalid_suppressed_context_ids_are_rejected(
+    be, client, monkeypatch, invalid_value,
+):
+    _stub_get_record(monkeypatch, be, record=_rec())
+    _protect(be, monkeypatch, "userA", on=True)
+
+    response = client.post("/mindmaps/m1/exports", json={
+        "format": "pdf",
+        "scope": {
+            "scope_type": "selected_branches",
+            "selected_branch_root_ids": ["root"],
+            "include_descendants": False,
+            "context_mode": "minimal",
+            "suppressed_context_ids": invalid_value,
+        },
+    })
+
+    assert response.status_code == 400
+    assert response.get_json()["error_code"] == "invalid_suppressed_context_ids"
+
+
+def test_selected_branches_context_none_exports_only_explicit_nodes(
+    be, client, monkeypatch, sync_enqueue, export_dir,
+):
+    nodes = [
+        {"id": "root", "parent": None, "kind": "root", "title": "Root", "order": 0},
+        {"id": "left", "parent": "root", "kind": "section", "title": "Left", "order": 0},
+        {"id": "a", "parent": "left", "kind": "idea", "title": "A", "order": 0},
+        {"id": "right", "parent": "root", "kind": "section", "title": "Right", "order": 1},
+        {"id": "b", "parent": "right", "kind": "idea", "title": "B", "order": 0},
+    ]
+    _stub_get_record(monkeypatch, be, record=_rec(nodes=nodes))
+    _protect(be, monkeypatch, "userA", on=True)
+
+    create = client.post("/mindmaps/m1/exports", json={
+        "format": "pdf",
+        "scope": {
+            "scope_type": "selected_branches",
+            "selected_branch_root_ids": ["a", "b"],
+            "include_descendants": False,
+            "context_mode": "none",
+        },
+    })
+    assert create.status_code == 202
+    status = client.get(f"/mindmaps/exports/{create.get_json()['job_id']}").get_json()
+    assert status["status"] == "done"
+    assert status["result"]["node_count"] == 2
+    import fitz
+    artifact = client.get(status["download_url"])
+    document = fitz.open(stream=artifact.data, filetype="pdf")
+    text = "\n".join(page.get_text() for page in document)
+    document.close()
+    assert "A" in text
+    assert "B" in text
+    assert "Root" not in text
+    assert "Left" not in text
+    assert "Right" not in text
+
+
+def test_selected_branches_suppressed_parent_exports_only_explicit_nodes(
+    be, client, monkeypatch, sync_enqueue, export_dir,
+):
+    nodes = [
+        {"id": "root", "parent": None, "kind": "root", "title": "Global Root", "order": 0},
+        {"id": "p", "parent": "root", "kind": "section", "title": "Parent Section", "order": 0},
+        {"id": "a", "parent": "p", "kind": "idea", "title": "Selected Alpha", "order": 0},
+        {"id": "b", "parent": "p", "kind": "idea", "title": "Selected Beta", "order": 1},
+    ]
+    _stub_get_record(monkeypatch, be, record=_rec(nodes=nodes))
+    _protect(be, monkeypatch, "userA", on=True)
+
+    create = client.post("/mindmaps/m1/exports", json={
+        "format": "pdf",
+        "scope": {
+            "scope_type": "selected_branches",
+            "selected_branch_root_ids": ["a", "b"],
+            "include_descendants": False,
+            "context_mode": "minimal",
+            "suppressed_context_ids": ["p"],
+        },
+    })
+    assert create.status_code == 202
+    status = client.get(f"/mindmaps/exports/{create.get_json()['job_id']}").get_json()
+    assert status["status"] == "done"
+    assert status["result"]["node_count"] == 2
+    import fitz
+    artifact = client.get(status["download_url"])
+    document = fitz.open(stream=artifact.data, filetype="pdf")
+    text = "\n".join(page.get_text() for page in document)
+    document.close()
+    assert "Selected Alpha" in text
+    assert "Selected Beta" in text
+    assert "Parent Section" not in text
+    assert "Global Root" not in text
+
+
 def test_selected_branches_explicit_descendant_flag_preserves_legacy_subtree(
     be, client, monkeypatch, sync_enqueue, export_dir,
 ):

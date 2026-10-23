@@ -53,6 +53,30 @@ describe("exact checked-node selection V2", () => {
     expect(result.presentationRootId).toBe("a");
   });
 
+  it("keeps only explicit nodes when automatic parent inclusion is disabled", () => {
+    const result = resolveExportScope({
+      nodeData: fixture(), scopeType: "selected_branches",
+      selectedBranchRootIds: ["a", "r1"], includeDescendants: false,
+      contextMode: "none",
+    });
+    expect([...result.explicitSelectedIds]).toEqual(["a", "r1"]);
+    expect([...result.contextIds]).toEqual([]);
+    expect([...result.renderIds]).toEqual(["a", "r1"]);
+    expect(result.presentationRootIds).toEqual(["a", "r1"]);
+  });
+
+  it("respects an explicitly suppressed auto-added parent without changing checked IDs", () => {
+    const result = resolveExportScope({
+      nodeData: fixture(), scopeType: "selected_branches",
+      selectedBranchRootIds: ["a", "r1"], includeDescendants: false,
+      suppressedContextIds: ["root"],
+    });
+    expect([...result.explicitSelectedIds]).toEqual(["a", "r1"]);
+    expect([...result.contextIds].sort()).toEqual(["left", "p", "right"]);
+    expect([...result.renderIds]).not.toContain("root");
+    expect(result.presentationRootIds).toEqual(["left", "right"]);
+  });
+
   it("left-only selection omits the global root and right side", () => {
     const result = exact(["p", "a", "b"]);
     expect(result.presentationRootId).toBe("p");

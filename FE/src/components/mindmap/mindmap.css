@@ -112,6 +112,35 @@ html.dark .me-container { --mm-relation: #7e90c4; }
 }
 .me-container me-tpc { font-size: 13px; }
 
+/* Export projections may promote a source branch/leaf to the renderer's
+   structural root. Keep the source visual role instead of restyling that
+   node as the map's global root merely because ancestors were pruned. */
+.mm-export-offscreen me-root me-tpc[data-export-source-role="branch"] {
+  font-family: "Spectral", Georgia, serif;
+  font-weight: 600;
+  font-size: 14px;
+  letter-spacing: normal;
+  background: var(--main-bgcolor) !important;
+  color: var(--main-color) !important;
+  border: var(--main-border) !important;
+  border-radius: var(--main-radius) !important;
+  padding: var(--topic-padding) !important;
+  max-width: none;
+}
+
+.mm-export-offscreen me-tpc[data-export-source-role="leaf"] {
+  font-family: inherit;
+  font-weight: 400;
+  font-size: 13px;
+  letter-spacing: normal;
+  background: var(--bgcolor) !important;
+  color: var(--color) !important;
+  border: 0 !important;
+  border-radius: 0 !important;
+  padding: var(--topic-padding) !important;
+  max-width: none;
+}
+
 /* Tag ※N (số trích đoạn nguồn trên node) — mono + seal outline: đây là provenance,
    dùng seal đỏ là ĐÚNG vai (đồng bộ chip trích đoạn trong EvidenceDrawer).
    Sprint F: was `var(--accent)` — --accent's role is now action/selection

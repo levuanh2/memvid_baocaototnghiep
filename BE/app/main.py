@@ -6044,11 +6044,37 @@ def create_mindmap_export(mindmap_id: str):
         if not isinstance(include_descendants_raw, bool):
             return jsonify({"error": "include_descendants phải là boolean", "error_code": "invalid_include_descendants"}), 400
         include_descendants = include_descendants_raw
+    if "context_mode" not in scope_body:
+        # Backward-compatible V2 default: exact checkbox exports keep their
+        # minimal LCA context unless a V3 client explicitly opts out.
+        context_mode = "minimal"
+    else:
+        context_mode_raw = scope_body["context_mode"]
+        if not isinstance(context_mode_raw, str) or context_mode_raw not in ("minimal", "none"):
+            return jsonify({"error": "context_mode phải là 'minimal' hoặc 'none'", "error_code": "invalid_context_mode"}), 400
+        context_mode = context_mode_raw
+    suppressed_context_ids = []
+    if scope_type == "selected_branches" and "suppressed_context_ids" in scope_body:
+        suppressed_context_ids_raw = scope_body["suppressed_context_ids"]
+        if (
+            not isinstance(suppressed_context_ids_raw, list)
+            or any(
+                not isinstance(node_id, str) or not node_id or len(node_id) > 512
+                for node_id in suppressed_context_ids_raw
+            )
+        ):
+            return jsonify({
+                "error": "suppressed_context_ids phải là mảng ID node hợp lệ",
+                "error_code": "invalid_suppressed_context_ids",
+            }), 400
+        suppressed_context_ids = list(dict.fromkeys(suppressed_context_ids_raw))
     scope_params = {
         "scope_type": scope_type,
         "selected_node_id": scope_body.get("selected_node_id"),
         "selected_branch_root_ids": scope_body.get("selected_branch_root_ids") or [],
         "include_descendants": include_descendants,
+        "context_mode": context_mode,
+        "suppressed_context_ids": suppressed_context_ids,
     }
     # visible_node_ids only has meaning for scope_type="visible" — never read
     # (let alone trusted) for any other scope, same as selected_node_id is

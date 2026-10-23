@@ -73,3 +73,54 @@ def test_no_selection_for_selected_branches_raises():
 def test_include_descendants_false_excludes_children():
     result = resolve_export_scope(_nodes(), scope_type="current_branch", selected_node_id="c1", include_descendants=False)
     assert result["included_ids"] == {"c1"}
+
+
+def test_exact_selection_can_disable_automatic_parent_context():
+    result = resolve_export_scope(
+        _nodes(), scope_type="selected_branches",
+        selected_branch_root_ids=["c1a", "c2a"], include_descendants=False,
+        context_mode="none",
+    )
+    assert result["explicit_selected_ids"] == ["c1a", "c2a"]
+    assert result["context_ids"] == set()
+    assert result["render_ids"] == {"c1a", "c2a"}
+    assert result["presentation_root_ids"] == ["c1a", "c2a"]
+
+
+@pytest.mark.parametrize(("explicit", "context", "rendered"), [
+    (["c1a"], set(), {"c1a"}),
+    (["c1a", "c1b"], {"c1"}, {"c1", "c1a", "c1b"}),
+    (["c1", "c2"], {"r"}, {"r", "c1", "c2"}),
+    (["c1a", "c2"], {"r", "c1"}, {"r", "c1", "c1a", "c2"}),
+])
+def test_exact_selection_adds_only_recursive_minimal_parent_context(explicit, context, rendered):
+    result = resolve_export_scope(
+        _nodes(), scope_type="selected_branches",
+        selected_branch_root_ids=explicit, include_descendants=False,
+    )
+    assert result["explicit_selected_ids"] == explicit
+    assert result["context_ids"] == context
+    assert result["render_ids"] == rendered
+
+
+def test_exact_selection_keeps_suppressed_context_separate():
+    result = resolve_export_scope(
+        _nodes(), scope_type="selected_branches",
+        selected_branch_root_ids=["c1a", "c2"], include_descendants=False,
+        suppressed_context_ids=["c1"],
+    )
+    assert result["explicit_selected_ids"] == ["c1a", "c2"]
+    assert result["minimal_context_ids"] == {"r", "c1"}
+    assert result["context_ids"] == {"r"}
+    assert result["suppressed_context_ids"] == {"c1"}
+    assert result["render_ids"] == {"r", "c1a", "c2"}
+    assert result["presentation_root_ids"] == ["r", "c1a"]
+
+
+def test_exact_selection_rejects_unknown_suppressed_context_id():
+    with pytest.raises(UnknownNodeIdError):
+        resolve_export_scope(
+            _nodes(), scope_type="selected_branches",
+            selected_branch_root_ids=["c1a", "c2"], include_descendants=False,
+            suppressed_context_ids=["from-another-map"],
+        )

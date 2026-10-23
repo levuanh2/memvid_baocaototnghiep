@@ -27,6 +27,7 @@ import { exportFilenameFor } from "./mindmapExportFilename";
 import { DEFAULT_APPEARANCE, applyContainerAppearance, applyTargetAppearance, needsRelayout as appearanceNeedsRelayout } from "./mindmapExportAppearance";
 import { resolveExportAppearance } from "./mindMapAppearanceV2";
 import { applyLiveCanvasAppearance } from "./mindMapAppearanceLiveApply";
+import { assignBranchDirections } from "./mindmapLayout";
 
 function snapshotExpanded(nodeObj, into) {
   into.set(nodeObj.id, nodeObj.expanded);
@@ -174,7 +175,10 @@ async function _finishCapture(result, { outputMode, format, filename, quality, b
  * real-browser measurement is covered by the Playwright fixture-harness
  * suite, not this function's own unit tests).
  */
-export function estimateExportDimensions({ mind, scopeType, targetNodeId, branchRootIds, includeDescendants, scale = 2 }) {
+export function estimateExportDimensions({
+  mind, scopeType, targetNodeId, branchRootIds, includeDescendants,
+  contextMode = "minimal", suppressedContextIds = [], scale = 2,
+}) {
   const effectiveIncludeDescendants = includeDescendants ?? scopeType !== "selected_branches";
   if (!mind?.map) return null;
 
@@ -190,6 +194,8 @@ export function estimateExportDimensions({ mind, scopeType, targetNodeId, branch
         selectedNodeId: targetNodeId,
         selectedBranchRootIds: branchRootIds || [],
         includeDescendants: effectiveIncludeDescendants,
+        contextMode,
+        suppressedContextIds,
       });
       const renderIds = new Set([...resolved.includedIds, ...resolved.contextIds]);
       rects = [...renderIds]
@@ -257,16 +263,66 @@ export async function captureMapImageWithGeometry(opts) {
  * selection is re-rooted at its real lowest common ancestor; legacy subtree
  * and current-branch modes retain their existing true-root projection.
  */
-function recordScopedForExport(record, { scopeType, selectedNodeId, selectedBranchRootIds, includeDescendants = true }) {
+function sourceProjection(record, renderSet, presentationRootId, presentationRootIds) {
+  const nodes = record?.nodes || [];
+  const parentOf = new Map(nodes.map((node) => [node.id, node.parent ?? null]));
+  const trueRoot = nodes.find((node) => node.parent == null || node.kind === "root");
+  const layout = assignBranchDirections(nodes);
+  const sourceRoles = {};
+  const sourceDepth = new Map();
+  const topBranchOf = new Map();
+
+  const describe = (id) => {
+    if (sourceDepth.has(id)) return;
+    const parentId = parentOf.get(id);
+    if (parentId == null) {
+      sourceDepth.set(id, 0);
+      topBranchOf.set(id, null);
+      return;
+    }
+    describe(parentId);
+    const depth = (sourceDepth.get(parentId) || 0) + 1;
+    sourceDepth.set(id, depth);
+    topBranchOf.set(id, parentId === trueRoot?.id ? id : topBranchOf.get(parentId));
+  };
+  nodes.forEach((node) => describe(node.id));
+  renderSet.forEach((id) => {
+    const depth = sourceDepth.get(id) || 0;
+    sourceRoles[id] = depth === 0 ? "root" : depth === 1 ? "branch" : "leaf";
+  });
+
+  const directions = {};
+  const branchColors = {};
+  const projectedRoots = new Set(presentationRootIds || []);
+  nodes.forEach((node) => {
+    const isProjectedBranch = presentationRootId == null
+      ? projectedRoots.has(node.id)
+      : node.parent === presentationRootId;
+    if (!isProjectedBranch || !renderSet.has(node.id)) return;
+    const sourceBranchId = topBranchOf.get(node.id);
+    const direction = layout.directions.get(sourceBranchId);
+    const branchColor = layout.colors.get(sourceBranchId);
+    if (direction != null) directions[node.id] = direction;
+    if (branchColor) branchColors[node.id] = branchColor;
+  });
+  return { sourceRoles, directions, branchColors, presentationRootIds };
+}
+
+function recordScopedForExport(record, {
+  scopeType, selectedNodeId, selectedBranchRootIds, includeDescendants = true,
+  contextMode = "minimal", suppressedContextIds = [],
+}) {
   if (scopeType === "full") return record;
-  const { includedIds, contextIds, presentationRootId } = resolveExportScopeFromRecord(record?.nodes || [], {
-    scopeType, selectedNodeId, selectedBranchRootIds, includeDescendants,
+  const { includedIds, contextIds, presentationRootId, presentationRootIds } = resolveExportScopeFromRecord(record?.nodes || [], {
+    scopeType, selectedNodeId, selectedBranchRootIds, includeDescendants, contextMode, suppressedContextIds,
   });
   const renderSet = new Set([...includedIds, ...contextIds]);
+  const projectedRoots = new Set(presentationRootIds);
   return {
     ...record,
+    exportProjection: sourceProjection(record, renderSet, presentationRootId, presentationRootIds),
     nodes: (record?.nodes || []).filter((n) => renderSet.has(n.id)).map((n) => (
-      n.id === presentationRootId ? { ...n, parent: null, kind: "root" } : n
+      projectedRoots.has(n.id) ? { ...n, parent: null } : n
     )),
     relations: (record?.relations || []).filter((r) => renderSet.has(r.source) && renderSet.has(r.target)),
   };
@@ -291,6 +347,7 @@ function sameIds(actual, expected) {
 
 function assertOffscreenMembership(instance, expectedIds) {
   const treeIds = mindTreeIds(instance?.nodeData);
+  treeIds.delete("__studymap_export_anchor__");
   if (!sameIds(treeIds, expectedIds)) {
     throw new Error("Phạm vi xuất đã thay đổi trong lúc dựng ảnh. Vui lòng chọn lại node và thử lại.");
   }
@@ -313,6 +370,15 @@ function assertOffscreenMembership(instance, expectedIds) {
   ) {
     throw new Error("Ảnh xuất chứa node ngoài phạm vi đã chọn. Đã hủy xuất để tránh lộ node chưa chọn.");
   }
+}
+
+function markSourceVisualRoles(instance) {
+  const walk = (node) => {
+    const topic = instance.findEle?.(node.id);
+    if (topic && node.exportSourceRole) topic.dataset.exportSourceRole = node.exportSourceRole;
+    (node.children || []).forEach(walk);
+  };
+  if (instance?.nodeData) walk(instance.nodeData);
 }
 
 /** Resolves once fonts and every <img> under `root` have loaded, so the snapshot never catches a placeholder. */
@@ -352,7 +418,22 @@ async function exportCanonicalFullMap({
 }) {
   // `record` is already live-aware (see liveRecordForExport) and, for a branch export,
   // already filtered to that branch — both done by the caller, before any live reads.
-  const { mindData } = recordToMindElixir(record, { fullTitles: true });
+  const forestRoots = record?.exportProjection?.presentationRootIds || [];
+  const usesSyntheticAnchor = forestRoots.length > 1;
+  const renderRecord = usesSyntheticAnchor ? {
+    ...record,
+    nodes: [
+      { id: "__studymap_export_anchor__", parent: null, kind: "root", title: "", order: -1 },
+      ...(record.nodes || []).map((node) => (
+        forestRoots.includes(node.id) ? { ...node, parent: "__studymap_export_anchor__" } : node
+      )),
+    ],
+    exportProjection: {
+      ...record.exportProjection,
+      sourceRoles: { ...record.exportProjection.sourceRoles, __studymap_export_anchor__: "root" },
+    },
+  } : record;
+  const { mindData } = recordToMindElixir(renderRecord, { fullTitles: true });
   const expectedIds = new Set((record?.nodes || []).map((node) => node.id));
   const offscreen = document.createElement("div");
   offscreen.className = "mm-export-offscreen";
@@ -371,6 +452,11 @@ async function exportCanonicalFullMap({
     applyContainerAppearance({ mind: instance, appearance });
     instance.layout?.();
     instance.linkDiv?.();
+    markSourceVisualRoles(instance);
+    if (usesSyntheticAnchor) {
+      instance.findEle?.("__studymap_export_anchor__")?.remove();
+      instance.map.querySelector?.(".lines")?.remove();
+    }
     applyTargetAppearance({ mind: instance, target: instance.map, appearance });
     assertOffscreenMembership(instance, expectedIds);
     // PR C2 — the map's own saved LIVE_SAFE canvas appearance (node fill/
@@ -398,6 +484,7 @@ async function exportCanonicalFullMap({
     offscreen.style.width = `${width}px`;
     offscreen.style.height = `${height}px`;
     instance.map.style.transform = `translate3d(${EXPORT_PADDING_PX - bounds.minX}px, ${EXPORT_PADDING_PX - bounds.minY}px, 0px) scale(1)`;
+    instance.linkDiv?.();
     if (settleMs > 0) await new Promise((r) => setTimeout(r, settleMs));
 
     const result = await snapdom(mountEl, { backgroundColor, scale, quality });
@@ -414,6 +501,7 @@ async function exportCanonicalFullMap({
 
 export async function exportMindmapImage({
   mind, record, scopeType, targetNodeId, branchRootIds, includeDescendants, visibleOnly = false,
+  contextMode = "minimal", suppressedContextIds = [],
   format, backgroundColor, scale = 2, quality = 1, title,
   appearance = DEFAULT_APPEARANCE, outputMode = "download",
   canvasAppearance, exportStyleOverride,
@@ -431,7 +519,8 @@ export async function exportMindmapImage({
     if (scopeType === "current_branch" && !targetNodeId) throw new Error("Chưa chọn nhánh để xuất.");
     if (scopeType === "selected_branches" && !branchRootIds?.length) throw new Error("Chưa chọn nhánh để xuất.");
     const scopedRecord = recordScopedForExport(liveAwareRecord, {
-      scopeType, selectedNodeId: targetNodeId, selectedBranchRootIds: branchRootIds, includeDescendants: effectiveIncludeDescendants,
+      scopeType, selectedNodeId: targetNodeId, selectedBranchRootIds: branchRootIds,
+      includeDescendants: effectiveIncludeDescendants, contextMode, suppressedContextIds,
     });
     return exportCanonicalFullMap({
       record: scopedRecord, format, backgroundColor, scale, quality, title, appearance, outputMode, snapdom, settleMs, MindElixirCtor,

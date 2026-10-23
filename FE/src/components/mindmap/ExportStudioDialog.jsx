@@ -61,7 +61,17 @@ function liveTreeSignature(node) {
   return node ? JSON.stringify(liveTreeSnapshot(node)) : "";
 }
 
-function resolveScopePreview({ mind, mapId, scopeType, selectedNodeId, selectedBranchIds, visibleOnly }) {
+function indexLiveNodeLabels(node, labels = new Map()) {
+  if (!node) return labels;
+  labels.set(node.id, node.topic || node.title || node.id);
+  (node.children || []).forEach((child) => indexLiveNodeLabels(child, labels));
+  return labels;
+}
+
+function resolveScopePreview({
+  mind, mapId, scopeType, selectedNodeId, selectedBranchIds, visibleOnly,
+  contextMode = "minimal", suppressedContextIds = [],
+}) {
   try {
     const resolved = resolveExportScope({
       nodeData: mind.nodeData,
@@ -71,15 +81,21 @@ function resolveScopePreview({ mind, mapId, scopeType, selectedNodeId, selectedB
       includeDescendants: includeDescendantsFor(scopeType),
       visibleOnly,
       visibleIdsOverride: isRootOnly(mind) ? new Set([mind.nodeData.id]) : null,
+      contextMode,
+      suppressedContextIds,
     });
     const includedIds = [...resolved.includedIds].sort();
+    const renderedIds = [...resolved.renderIds].sort();
     return {
       ok: true,
       mapId,
-      scopeKey: includedIds.join("\u0000"),
+      scopeKey: renderedIds.join("\u0000"),
       treeKey: liveTreeSignature(mind.nodeData),
       count: countRendered(resolved.includedIds, resolved.contextIds),
       explicitCount: resolved.explicitSelectedIds.length,
+      contextCount: resolved.contextIds.size,
+      contextIds: [...resolved.contextIds],
+      minimalContextIds: [...resolved.minimalContextIds],
       hidden: countHiddenIncluded(mind.nodeData, resolved.includedIds),
     };
   } catch (e) {
@@ -114,6 +130,9 @@ export default function ExportStudioDialog({ open, onClose, mind, record, mapId,
   // must not rewrite the ids the user confirmed by pressing "Tiếp tục".
   const [selectedBranchSnapshot, setSelectedBranchSnapshot] = useState([]);
   const selectedBranchSnapshotSet = useMemo(() => new Set(selectedBranchSnapshot), [selectedBranchSnapshot]);
+  const [autoParentContext, setAutoParentContext] = useState(true);
+  const [suppressedAutoContextIds, setSuppressedAutoContextIds] = useState([]);
+  const contextMode = autoParentContext ? "minimal" : "none";
   const [filenameOverride, setFilenameOverride] = useState(""), [appearance, setAppearance] = useState(DEFAULT_APPEARANCE), [appearancePreset, setAppearancePreset] = useState("canvas"), [quickPreset, setQuickPreset] = useState(null);
   const [docs, setDocs] = useState(documentDefaults), [includeMapImage, setIncludeMapImage] = useState(false), [openSection, setOpenSection] = useState("colors");
   const [exporting, setExporting] = useState(false), [error, setError] = useState(null), [done, setDone] = useState(null), [jobStatus, setJobStatus] = useState(null), [jobProgress, setJobProgress] = useState(0), [jobId, setJobId] = useState(null);
@@ -170,10 +189,23 @@ export default function ExportStudioDialog({ open, onClose, mind, record, mapId,
   const scopeResult = useMemo(() => {
     void previewRevision;
     if (!open || !mindReady || !mind?.nodeData) return null;
-    return resolveScopePreview({ mind, mapId, scopeType, selectedNodeId, selectedBranchIds: selectedBranchSnapshotSet, visibleOnly: effectiveVisibleOnly });
-  }, [open, mind, mindReady, mapId, scopeType, selectedNodeId, selectedBranchSnapshotSet, effectiveVisibleOnly, previewRevision]);
+    return resolveScopePreview({
+      mind, mapId, scopeType, selectedNodeId, selectedBranchIds: selectedBranchSnapshotSet,
+      visibleOnly: effectiveVisibleOnly, contextMode, suppressedContextIds: suppressedAutoContextIds,
+    });
+  }, [open, mind, mindReady, mapId, scopeType, selectedNodeId, selectedBranchSnapshotSet, effectiveVisibleOnly, contextMode, suppressedAutoContextIds, previewRevision]);
+  const liveNodeLabels = useMemo(() => indexLiveNodeLabels(mind?.nodeData), [mind?.nodeData, previewRevision]);
+  const activeAutoContexts = useMemo(() => (
+    (scopeResult?.contextIds || []).map((id) => ({ id, label: liveNodeLabels.get(id) || id }))
+  ), [scopeResult?.contextIds, liveNodeLabels]);
+  const suppressedAutoContexts = useMemo(() => {
+    const required = new Set(scopeResult?.minimalContextIds || []);
+    return suppressedAutoContextIds
+      .filter((id) => required.has(id))
+      .map((id) => ({ id, label: liveNodeLabels.get(id) || id }));
+  }, [scopeResult?.minimalContextIds, suppressedAutoContextIds, liveNodeLabels]);
   const scopeLabel = { full: "Toàn bộ sơ đồ", current_branch: "Nhánh hiện tại", selected_branches: "Các node được chọn", visible: "Phần đang hiển thị" }[scopeType], filename = sanitizeExportFilename(filenameOverride || title), extension = format === "jpeg" ? "jpg" : format;
-  const estimated = useMemo(() => !open || !mindReady || !mind?.map || !scopeResult?.ok || isDoc ? null : estimateExportDimensions({ mind, scopeType, targetNodeId: selectedNodeId, branchRootIds: selectedBranchSnapshot, includeDescendants: includeDescendantsFor(scopeType), scale }), [open, mind, mindReady, scopeType, selectedNodeId, selectedBranchSnapshot, scale, scopeResult, isDoc]);
+  const estimated = useMemo(() => !open || !mindReady || !mind?.map || !scopeResult?.ok || isDoc ? null : estimateExportDimensions({ mind, scopeType, targetNodeId: selectedNodeId, branchRootIds: selectedBranchSnapshot, includeDescendants: includeDescendantsFor(scopeType), contextMode, suppressedContextIds: suppressedAutoContextIds, scale }), [open, mind, mindReady, scopeType, selectedNodeId, selectedBranchSnapshot, contextMode, suppressedAutoContextIds, scale, scopeResult, isDoc]);
   // One idempotency key per export ATTEMPT (each click of export/retry/re-export), never per configuration: a re-export is a new job.
   const attemptKeyRef = useRef(null);
   const newAttemptKey = () => { attemptKeyRef.current = crypto.randomUUID?.() || `${Date.now()}-${Math.random()}`; return attemptKeyRef.current; };
@@ -181,7 +213,7 @@ export default function ExportStudioDialog({ open, onClose, mind, record, mapId,
   const canAdvance = scopeResult?.ok, canExport = canAdvance && !(isDoc && !mapId), effectiveScope = effectiveVisibleOnly ? "visible" : scopeType;
   const close = () => { if (!exporting) { abortRef.current?.abort(); onClose?.(); } };
   useEffect(() => () => { attemptKeyRef.current = null; abortRef.current?.abort(); }, []);
-  useEffect(() => { attemptKeyRef.current = null; abortRef.current?.abort(); inFlightRef.current = false; setExporting(false); setError(null); setDone(null); setJobStatus(null); setJobProgress(0); setJobId(null); setSelectedBranchSnapshot([]); }, [mapId]);
+  useEffect(() => { attemptKeyRef.current = null; abortRef.current?.abort(); inFlightRef.current = false; setExporting(false); setError(null); setDone(null); setJobStatus(null); setJobProgress(0); setJobId(null); setSelectedBranchSnapshot([]); setAutoParentContext(true); setSuppressedAutoContextIds([]); }, [mapId]);
   // Clears everything tied to one attempt (artifact, job, error, in-flight guard). Configuration is kept.
   const resetTransient = () => { attemptKeyRef.current = null; abortRef.current?.abort(); inFlightRef.current = false; setExporting(false); setError(null); setDone(null); setJobStatus(null); setJobProgress(0); setJobId(null); };
   // Reopening always starts at the configuration step with no leftover artifact or job.
@@ -228,7 +260,7 @@ export default function ExportStudioDialog({ open, onClose, mind, record, mapId,
 
   const exportAppearanceParams = { canvasAppearance: savedAppearance, exportStyleOverride: useMapAppearance ? null : styleOverride };
   const runImage = async (attemptKey) => {
-    const result = await exportMindmapImage({ mind, record, scopeType: effectiveScope, targetNodeId: selectedNodeId, branchRootIds: selectedBranchSnapshot, includeDescendants: includeDescendantsFor(effectiveScope), visibleOnly: effectiveVisibleOnly, format, backgroundColor: backgroundColor(background, customColor), scale, title: filename, appearance, ...exportAppearanceParams });
+    const result = await exportMindmapImage({ mind, record, scopeType: effectiveScope, targetNodeId: selectedNodeId, branchRootIds: selectedBranchSnapshot, includeDescendants: includeDescendantsFor(effectiveScope), visibleOnly: effectiveVisibleOnly, contextMode, suppressedContextIds: suppressedAutoContextIds, format, backgroundColor: backgroundColor(background, customColor), scale, title: filename, appearance, ...exportAppearanceParams });
     if (attemptKeyRef.current === attemptKey) setDone(result);
   };
   const runDocument = async (attemptKey, controller) => {
@@ -242,16 +274,16 @@ export default function ExportStudioDialog({ open, onClose, mind, record, mapId,
       // PR H2 — same capture lifecycle as before, now also returns a
       // geometry manifest built from the SAME DOM snapdom just captured
       // (never a second render just to measure geometry).
-      const captured = await captureMapImageWithGeometry({ mind, record, scopeType: effectiveScope, targetNodeId: selectedNodeId, branchRootIds: selectedBranchSnapshot, includeDescendants: includeDescendantsFor(effectiveScope), visibleOnly: effectiveVisibleOnly, ...exportAppearanceParams });
+      const captured = await captureMapImageWithGeometry({ mind, record, scopeType: effectiveScope, targetNodeId: selectedNodeId, branchRootIds: selectedBranchSnapshot, includeDescendants: includeDescendantsFor(effectiveScope), visibleOnly: effectiveVisibleOnly, contextMode, suppressedContextIds: suppressedAutoContextIds, ...exportAppearanceParams });
       assertActive();
       mapImageBase64 = captured.base64;
       mapGeometryManifest = captured.geometryManifest;
     } else if (format === "docx" && includeMapImage) {
-      mapImageBase64 = await captureMapImageBase64({ mind, record, scopeType: effectiveScope, targetNodeId: selectedNodeId, branchRootIds: selectedBranchSnapshot, includeDescendants: includeDescendantsFor(effectiveScope), visibleOnly: effectiveVisibleOnly, ...exportAppearanceParams });
+      mapImageBase64 = await captureMapImageBase64({ mind, record, scopeType: effectiveScope, targetNodeId: selectedNodeId, branchRootIds: selectedBranchSnapshot, includeDescendants: includeDescendantsFor(effectiveScope), visibleOnly: effectiveVisibleOnly, contextMode, suppressedContextIds: suppressedAutoContextIds, ...exportAppearanceParams });
       assertActive();
     }
     assertActive();
-    const scope = buildDocumentScopePayload({ mind, scopeType, selectedNodeId, selectedBranchRootIds: selectedBranchSnapshot, visibleOnly: effectiveVisibleOnly });
+    const scope = buildDocumentScopePayload({ mind, scopeType, selectedNodeId, selectedBranchRootIds: selectedBranchSnapshot, visibleOnly: effectiveVisibleOnly, contextMode, suppressedContextIds: suppressedAutoContextIds });
     const created = await createMindmapExport(mapId, { format, scope, options: docOptions, mapImageBase64, mapGeometryManifest, idempotencyKey: attemptKey, signal });
     if (signal.aborted || attemptKeyRef.current !== attemptKey) {
       if (created?.job_id) try { await cancelMindmapExport(created.job_id); } catch { /* best effort */ }
@@ -275,7 +307,7 @@ export default function ExportStudioDialog({ open, onClose, mind, record, mapId,
     // the modal was open, update the displayed snapshot and require one more
     // confirmation instead of exporting a scope different from the preview.
     const latest = mindReady && mind.nodeData
-      ? resolveScopePreview({ mind, mapId, scopeType, selectedNodeId, selectedBranchIds: selectedBranchSnapshotSet, visibleOnly: effectiveVisibleOnly })
+      ? resolveScopePreview({ mind, mapId, scopeType, selectedNodeId, selectedBranchIds: selectedBranchSnapshotSet, visibleOnly: effectiveVisibleOnly, contextMode, suppressedContextIds: suppressedAutoContextIds })
       : null;
     if (!latest?.ok || latest.mapId !== scopeResult?.mapId || latest.scopeKey !== scopeResult?.scopeKey || latest.treeKey !== scopeResult?.treeKey) {
       setPreviewRevision((value) => value + 1);
@@ -304,9 +336,13 @@ export default function ExportStudioDialog({ open, onClose, mind, record, mapId,
     if (cancellingJobId) void cancelMindmapExport(cancellingJobId).catch(() => { /* best effort */ });
   };
   const next = () => { if (step === 0 && !canAdvance) return; setStep((old) => { const value = Math.min(3, old + 1); setFurthest((seen) => Math.max(seen, value)); return value; }); };
-  const summary = `${scopeLabel} · ${format.toUpperCase()}${scopeResult?.ok ? ` · ${scopeType === "selected_branches" ? `${scopeResult.explicitCount} node đã tick · ` : ""}${scopeResult.count} node thực tế` : ""}`, cta = format === "pdf" ? "Tạo PDF" : format === "docx" ? "Tạo DOCX" : format === "xlsx" ? "Tạo XLSX" : `Xuất ${format.toUpperCase()}`;
+  const selectionSummary = scopeResult?.ok && scopeType === "selected_branches"
+    ? `${scopeResult.explicitCount} node đã chọn · ${scopeResult.contextCount} node cha tự thêm · ${scopeResult.count} node được xuất`
+    : null;
+  const summary = `${scopeLabel} · ${format.toUpperCase()}${scopeResult?.ok ? ` · ${selectionSummary || `${scopeResult.count} node thực tế`}` : ""}`, cta = format === "pdf" ? "Tạo PDF" : format === "docx" ? "Tạo DOCX" : format === "xlsx" ? "Tạo XLSX" : `Xuất ${format.toUpperCase()}`;
 
-  const contentStep = <div className="export-step"><header className="export-step__header"><h3>Nội dung xuất</h3><p>Chọn nhanh một cấu hình hoặc tự thiết lập phạm vi.</p></header>{!scopeResult && <div className="export-message" role="status"><Spinner size={14} />Đang đồng bộ phạm vi từ sơ đồ hiện tại…</div>}<section><div className="export-section-title"><span>Xuất nhanh</span>{!quickPreset && <small>Tùy chỉnh</small>}</div><div className="export-quick-grid">{[["png", "Ảnh PNG", "Image"], ["pdf", "PDF học tập", "FileText"], ["webp", "Ảnh WebP", "Image"]].map(([key, label, icon]) => <button key={key} type="button" className={quickPreset === key ? "is-selected" : ""} aria-pressed={quickPreset === key} onClick={() => applyQuick(key)}><Icon name={icon} size={17} />{label}</button>)}</div></section><section><div className="export-section-title"><span>Phạm vi xuất</span></div><div className="export-choice-list" role="radiogroup" aria-label="Phạm vi xuất">{SCOPES.map(([key, label, hint, icon]) => <label key={key} className={scopeType === key ? "is-selected" : ""}><Icon name={icon} size={18} /><span className="export-choice-list__copy"><strong>{label}</strong><small id={`scope-${key}-desc`}>{key === "current_branch" && !selectedNodeId ? "Chưa chọn node. Chọn một node trên canvas trước." : hint}</small></span>{key === "selected_branches" && <><span className="export-count">{branchCount} node đã tick</span><button type="button" className="export-inline-action" onClick={(e) => { e.preventDefault(); onRequestBranchSelection?.(); }}>Chọn trên canvas<span className="sr-only"> {branchCount ? "Chọn lại node trên sơ đồ" : "Chọn node trên sơ đồ"}</span></button></>}<input type="radio" name="mm-export-scope" value={key} checked={scopeType === key} aria-describedby={`scope-${key}-desc`} onChange={() => { custom(); setScopeType(key); }} /></label>)}</div></section><section className="export-advanced"><button type="button" aria-expanded={advanced} onClick={() => setAdvanced((v) => !v)}><Icon name="Sliders" size={16} />Nâng cao<Icon name={advanced ? "ChevronUp" : "ChevronDown"} size={16} /></button>{advanced && <div className="export-advanced__body"><label className={`export-check ${!visibleOnlyApplies ? "is-disabled" : ""}`}><input name="mm-export-visible-only" type="checkbox" checked={visibleOnly} disabled={!visibleOnlyApplies} aria-describedby="visible-only-desc" onChange={(e) => { custom(); setVisibleOnly(e.target.checked); }} /><span><strong>Chỉ giữ node đang hiển thị trong phạm vi đã chọn</strong><small id="visible-only-desc">{visibleOnlyApplies ? "Áp dụng thêm bộ lọc hiển thị cho phạm vi hiện tại." : "Chỉ áp dụng được cho phạm vi \"Toàn bộ sơ đồ\" — không ảnh hưởng tới nhánh hiện tại hoặc các node được chọn."}</small></span></label></div>}</section>{scopeResult && !scopeResult.ok && <div className="export-message export-message--error" role="alert"><Icon name="AlertCircle" size={16} />{scopeResult.message}</div>}</div>;
+  const contextControls = scopeType === "selected_branches" && <section><div className="export-section-title"><span>Giữ cấu trúc</span></div><label className="export-check"><input type="checkbox" checked={autoParentContext} onChange={(e) => { custom(); setAutoParentContext(e.target.checked); }} /><span><strong>Tự động thêm node cha để giữ cấu trúc</strong><small>Chỉ thêm tổ tiên tối thiểu cần để nối các node đã chọn; không tự thêm node con hoặc node cùng cấp.</small></span></label>{autoParentContext && (activeAutoContexts.length > 0 || suppressedAutoContexts.length > 0) && <div className="export-context-list" aria-label="Node cha tự động"><p>Node cha được suy ra từ cấu trúc gốc. Bỏ một node sẽ tách các nhánh liên quan nhưng không đổi node đã tick.</p>{activeAutoContexts.map(({ id, label }) => <div key={id}><span><Icon name="GitBranch" size={14} /><strong>{label}</strong><small>Tự thêm để giữ quan hệ cha–con</small></span><button type="button" onClick={() => setSuppressedAutoContextIds((current) => current.includes(id) ? current : [...current, id])} aria-label={`Không thêm node cha ${label}`}>Không thêm</button></div>)}{suppressedAutoContexts.map(({ id, label }) => <div key={id} className="is-suppressed"><span><Icon name="Unlink" size={14} /><strong>{label}</strong><small>Đã loại khỏi bản xuất; các node đã tick vẫn được giữ</small></span><button type="button" onClick={() => setSuppressedAutoContextIds((current) => current.filter((item) => item !== id))} aria-label={`Khôi phục node cha ${label}`}>Khôi phục</button></div>)}</div>}</section>;
+  const contentStep = <div className="export-step"><header className="export-step__header"><h3>Nội dung xuất</h3><p>Chọn nhanh một cấu hình hoặc tự thiết lập phạm vi.</p></header>{!scopeResult && <div className="export-message" role="status"><Spinner size={14} />Đang đồng bộ phạm vi từ sơ đồ hiện tại…</div>}<section><div className="export-section-title"><span>Xuất nhanh</span>{!quickPreset && <small>Tùy chỉnh</small>}</div><div className="export-quick-grid">{[["png", "Ảnh PNG", "Image"], ["pdf", "PDF học tập", "FileText"], ["webp", "Ảnh WebP", "Image"]].map(([key, label, icon]) => <button key={key} type="button" className={quickPreset === key ? "is-selected" : ""} aria-pressed={quickPreset === key} onClick={() => applyQuick(key)}><Icon name={icon} size={17} />{label}</button>)}</div></section><section><div className="export-section-title"><span>Phạm vi xuất</span></div><div className="export-choice-list" role="radiogroup" aria-label="Phạm vi xuất">{SCOPES.map(([key, label, hint, icon]) => <label key={key} className={scopeType === key ? "is-selected" : ""}><Icon name={icon} size={18} /><span className="export-choice-list__copy"><strong>{label}</strong><small id={`scope-${key}-desc`}>{key === "current_branch" && !selectedNodeId ? "Chưa chọn node. Chọn một node trên canvas trước." : hint}</small></span>{key === "selected_branches" && <><span className="export-count">{branchCount} node đã tick</span><button type="button" className="export-inline-action" onClick={(e) => { e.preventDefault(); onRequestBranchSelection?.(); }}>Chọn trên canvas<span className="sr-only"> {branchCount ? "Chọn lại node trên sơ đồ" : "Chọn node trên sơ đồ"}</span></button></>}<input type="radio" name="mm-export-scope" value={key} checked={scopeType === key} aria-describedby={`scope-${key}-desc`} onChange={() => { custom(); setScopeType(key); }} /></label>)}</div></section>{contextControls}<section className="export-advanced"><button type="button" aria-expanded={advanced} onClick={() => setAdvanced((v) => !v)}><Icon name="Sliders" size={16} />Nâng cao<Icon name={advanced ? "ChevronUp" : "ChevronDown"} size={16} /></button>{advanced && <div className="export-advanced__body"><label className={`export-check ${!visibleOnlyApplies ? "is-disabled" : ""}`}><input name="mm-export-visible-only" type="checkbox" checked={visibleOnly} disabled={!visibleOnlyApplies} aria-describedby="visible-only-desc" onChange={(e) => { custom(); setVisibleOnly(e.target.checked); }} /><span><strong>Chỉ giữ node đang hiển thị trong phạm vi đã chọn</strong><small id="visible-only-desc">{visibleOnlyApplies ? "Áp dụng thêm bộ lọc hiển thị cho phạm vi hiện tại." : "Chỉ áp dụng được cho phạm vi \"Toàn bộ sơ đồ\" — không ảnh hưởng tới nhánh hiện tại hoặc các node được chọn."}</small></span></label></div>}</section>{scopeResult && !scopeResult.ok && <div className="export-message export-message--error" role="alert"><Icon name="AlertCircle" size={16} />{scopeResult.message}</div>}</div>;
 
   const formatStep = <div className="export-step"><header className="export-step__header"><h3>Chọn định dạng</h3><p>Mỗi định dạng chỉ hiển thị các tùy chọn mà hệ thống hỗ trợ.</p></header>{[["Ảnh", IMAGE_FORMATS], ["Tài liệu", DOCUMENT_FORMATS]].map(([group, formats]) => <section key={group}><div className="export-section-title"><span>{group}</span></div>{group === "Tài liệu" && !mapId && <p className="export-helper">Lưu sơ đồ trước khi xuất định dạng tài liệu.</p>}<div className="export-format-grid" role="radiogroup" aria-label={`Định dạng ${group.toLowerCase()}`}>{formats.map(([key, label, hint, icon]) => <label key={key} className={`${format === key ? "is-selected" : ""} ${group === "Tài liệu" && !mapId ? "is-disabled" : ""}`}><Icon name={icon} size={20} /><span><strong>{label}</strong><small>{hint}</small></span><input type="radio" name="mm-export-format" value={key} checked={format === key} disabled={group === "Tài liệu" && !mapId} onChange={() => changeFormat(key)} /></label>)}</div></section>)}</div>;
 

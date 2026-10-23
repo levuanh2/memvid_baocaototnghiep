@@ -164,6 +164,7 @@ def run_export_job(
             map_id=map_id, title=record.get("title") or "",
             context_ids=scope["context_ids"],
             presentation_root_id=scope["presentation_root_id"],
+            presentation_root_ids=scope["presentation_root_ids"],
         )
         jobs_store.update_job(job_id, progress=50, stage="serializing")
 

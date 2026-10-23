@@ -16,13 +16,20 @@
 import { resolveExportScope } from "./mindmapExportScope";
 import { isRootOnly } from "./mindElixirRootOnly";
 
-export function buildDocumentScopePayload({ mind, scopeType, selectedNodeId, selectedBranchRootIds, visibleOnly }) {
+export function buildDocumentScopePayload({
+  mind, scopeType, selectedNodeId, selectedBranchRootIds, visibleOnly,
+  contextMode = "minimal", suppressedContextIds = [],
+}) {
   const effectiveScope = visibleOnly && scopeType === "full" ? "visible" : scopeType;
   const base = {
     scope_type: effectiveScope,
     selected_node_id: selectedNodeId,
     selected_branch_root_ids: selectedBranchRootIds || [],
     include_descendants: effectiveScope !== "selected_branches",
+    ...(effectiveScope === "selected_branches" ? {
+      context_mode: contextMode,
+      suppressed_context_ids: suppressedContextIds,
+    } : {}),
   };
   if (effectiveScope !== "visible") return base;
 

@@ -61,18 +61,27 @@ function findEleSafely(mind, id) {
 export function applyLiveCanvasAppearance({ mind, resolved }) {
   const touchedNodes = [];
   const walk = (node, depth) => {
-    const role = resolved.node[roleForDepth(depth)];
+    const role = resolved.node[node.exportSourceRole || roleForDepth(depth)];
     if (!roleIsNoop(role)) {
       const el = findEleSafely(mind, node.id);
       if (el) {
+        const priority = node.exportSourceRole ? "important" : "";
         touchedNodes.push({
           el,
-          prev: { background: el.style.background, color: el.style.color, boxShadow: el.style.boxShadow, borderRadius: el.style.borderRadius },
+          prev: {
+            background: el.style.background,
+            backgroundPriority: el.style.getPropertyPriority("background"),
+            color: el.style.color,
+            colorPriority: el.style.getPropertyPriority("color"),
+            boxShadow: el.style.boxShadow,
+            borderRadius: el.style.borderRadius,
+            borderRadiusPriority: el.style.getPropertyPriority("border-radius"),
+          },
         });
-        el.style.background = role.shape === "underline" ? "transparent" : (role.fill || "");
-        el.style.color = role.textColor || "";
+        el.style.setProperty("background", role.shape === "underline" ? "transparent" : (role.fill || ""), priority);
+        el.style.setProperty("color", role.textColor || "", priority);
         el.style.boxShadow = composeBoxShadow(role);
-        el.style.borderRadius = roleRadiusPx(role);
+        el.style.setProperty("border-radius", roleRadiusPx(role), priority);
       }
     }
     (node.children || []).forEach((c) => walk(c, depth + 1));
@@ -115,10 +124,10 @@ export function applyLiveCanvasAppearance({ mind, resolved }) {
 
   return function restore() {
     touchedNodes.forEach(({ el, prev }) => {
-      el.style.background = prev.background;
-      el.style.color = prev.color;
+      el.style.setProperty("background", prev.background, prev.backgroundPriority);
+      el.style.setProperty("color", prev.color, prev.colorPriority);
       el.style.boxShadow = prev.boxShadow;
-      el.style.borderRadius = prev.borderRadius;
+      el.style.setProperty("border-radius", prev.borderRadius, prev.borderRadiusPriority);
     });
     if (prevContainer) {
       container.style.backgroundColor = prevContainer.backgroundColor;

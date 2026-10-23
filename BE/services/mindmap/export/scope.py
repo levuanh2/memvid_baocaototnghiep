@@ -157,6 +157,8 @@ def resolve_export_scope(
     selected_branch_root_ids: Optional[list[str]] = None,
     include_descendants: bool = True,
     visible_node_ids: Optional[list[str]] = None,
+    context_mode: str = "minimal",
+    suppressed_context_ids: Optional[list[str]] = None,
 ) -> dict[str, Any]:
     """Returns {"root_ids": [...], "included_ids": set[...]}."""
     if not nodes:
@@ -170,6 +172,10 @@ def resolve_export_scope(
     def assert_known(node_id: str) -> None:
         if node_id not in by_id:
             raise UnknownNodeIdError(f"node_id not in this map: {node_id}")
+
+    suppressed = set(suppressed_context_ids or [])
+    for node_id in suppressed:
+        assert_known(node_id)
 
     explicit_selected_ids: list[str] = []
     exact_selection = False
@@ -234,27 +240,39 @@ def resolve_export_scope(
         for rid in root_ids:
             collect(rid)
 
-    presentation_root_id = (_lowest_common_ancestor(parent_of, explicit_selected_ids)
-                            if exact_selection else root_id)
-    context_ids: set[str] = set()
+    lca_id = (_lowest_common_ancestor(parent_of, explicit_selected_ids)
+              if exact_selection else root_id)
+    minimal_context_ids: set[str] = set()
     for rid in root_ids:
-        if rid == presentation_root_id:
+        if rid == lca_id:
             continue
         cur = parent_of.get(rid)
         while cur is not None:
             if cur not in included_ids:
-                context_ids.add(cur)
-            if cur == presentation_root_id:
+                minimal_context_ids.add(cur)
+            if cur == lca_id:
                 break
             cur = parent_of.get(cur)
 
+    context_ids = (set() if context_mode == "none" else
+                   {node_id for node_id in minimal_context_ids if node_id not in suppressed})
     render_ids = included_ids | context_ids
+    order = _document_order(nodes, children_of, root_id)
+    rank = {node_id: idx for idx, node_id in enumerate(order)}
+    presentation_root_ids = sorted(
+        (node_id for node_id in render_ids if parent_of.get(node_id) not in render_ids),
+        key=lambda node_id: rank.get(node_id, 0),
+    )
+    presentation_root_id = presentation_root_ids[0] if len(presentation_root_ids) == 1 else None
     return {
         "root_ids": root_ids,
         "explicit_selected_ids": explicit_selected_ids,
         "included_ids": included_ids,
         "context_ids": context_ids,
+        "minimal_context_ids": minimal_context_ids,
+        "suppressed_context_ids": suppressed,
         "presentation_root_id": presentation_root_id,
+        "presentation_root_ids": presentation_root_ids,
         "render_ids": render_ids,
     }
 
