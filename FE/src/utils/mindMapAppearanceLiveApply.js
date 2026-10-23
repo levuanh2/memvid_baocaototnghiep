@@ -65,7 +65,7 @@ export function applyLiveCanvasAppearance({ mind, resolved }) {
     if (!roleIsNoop(role)) {
       const el = findEleSafely(mind, node.id);
       if (el) {
-        const priority = node.exportSourceRole ? "important" : "";
+        const priority = "important";
         touchedNodes.push({
           el,
           prev: {
@@ -74,13 +74,14 @@ export function applyLiveCanvasAppearance({ mind, resolved }) {
             color: el.style.color,
             colorPriority: el.style.getPropertyPriority("color"),
             boxShadow: el.style.boxShadow,
+            boxShadowPriority: el.style.getPropertyPriority("box-shadow"),
             borderRadius: el.style.borderRadius,
             borderRadiusPriority: el.style.getPropertyPriority("border-radius"),
           },
         });
         el.style.setProperty("background", role.shape === "underline" ? "transparent" : (role.fill || ""), priority);
         el.style.setProperty("color", role.textColor || "", priority);
-        el.style.boxShadow = composeBoxShadow(role);
+        el.style.setProperty("box-shadow", composeBoxShadow(role), priority);
         el.style.setProperty("border-radius", roleRadiusPx(role), priority);
       }
     }
@@ -126,7 +127,7 @@ export function applyLiveCanvasAppearance({ mind, resolved }) {
     touchedNodes.forEach(({ el, prev }) => {
       el.style.setProperty("background", prev.background, prev.backgroundPriority);
       el.style.setProperty("color", prev.color, prev.colorPriority);
-      el.style.boxShadow = prev.boxShadow;
+      el.style.setProperty("box-shadow", prev.boxShadow, prev.boxShadowPriority);
       el.style.setProperty("border-radius", prev.borderRadius, prev.borderRadiusPriority);
     });
     if (prevContainer) {

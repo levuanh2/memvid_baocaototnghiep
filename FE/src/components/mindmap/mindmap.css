@@ -93,7 +93,7 @@ html.dark .me-container { --mm-relation: #7e90c4; }
    `.selected`'s own 2px outline (mind-elixir's own class, THEME.cssVar's
    `--selected`) draws independently of this box's fill/border and is
    unaffected either way. */
-.me-container me-root me-tpc {
+.me-container me-root me-tpc:not([data-export-source-role="branch"]):not([data-export-source-role="leaf"]) {
   font-family: "Spectral", Georgia, serif;
   font-weight: 600;
   font-size: 20px;
