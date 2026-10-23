@@ -1,5 +1,11 @@
 # Lessons Learned
 
+## Author stylesheet specificity and inline priority must align between canvas and export (2026-10-23)
+
+- An !important rule on .me-container me-root me-tpc will silently prevent applyLiveCanvasAppearance from applying custom presets to the canvas root if inline styles lack !important.
+- If an offscreen export container lacks the same container classes (.me-container) as the live canvas, stylesheet rules will apply to the canvas but not to the export container, causing visual divergence in font-size, weight, padding, and color.
+- Always scope structural root overrides with :not([data-export-source-role="branch"]):not([data-export-source-role="leaf"]) when nodes can be promoted to root during partial/branch exports.
+
 ## Artifact gates must drive the engine state and carry the same captured bytes across boundaries
 
 A rounded zoom label or a CSS transform is not proof of Mind Elixir's actual

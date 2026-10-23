@@ -1,5 +1,15 @@
 # Known Issues
 
+## Export root node could lose appearance styling or differ from live canvas (fixed 2026-10-23)
+
+**Symptom:** on export (SVG/PNG/PDF), the ROOT node could take an unstyled or divergent appearance (e.g. low-contrast purple in pastel preset, or default MindElixir 25px font/8px radius) while the live canvas rendered a blue #126CF2 20px card. Additionally, promoted branch nodes could collide with root styling.
+
+**Root cause:** mindmap.css used .me-container me-root me-tpc with !important to define the default root card. On the live canvas, this !important rule blocked non-default presets (e.g. study or pastel) from applying to the root, keeping the canvas root locked to blue/white. Meanwhile, the export container mountEl only had mm-export-offscreen without me-container, so the author CSS did not apply there, leaving export root subject to preset inline styles without !important or library defaults.
+
+**Fix:** Added me-container to the export mountEl so typography and styles match the live canvas. Scoped default root styling in mindmap.css using :not([data-export-source-role="branch"]):not([data-export-source-role="leaf"]) to prevent leaking onto promoted branch/leaf nodes. Set priority = "important" in applyLiveCanvasAppearance so non-default presets and overrides cleanly take effect over base root styles on both canvas and export.
+
+**Regression:** e2e-fixture/export-root-color-fidelity.spec.js covers live vs exported root colors in light and dark themes (Tests A/E), promoted parent section styling (Test B), saved appearance fidelity for custom presets (Test C), and export-only appearance overrides (Test D).
+
 ## Export attempts could publish stale error, cancellation, or image-completion state into a newer session (fixed 2026-10-22)
 
 **Symptom:** after cancelling a PDF export and starting another attempt, a late
