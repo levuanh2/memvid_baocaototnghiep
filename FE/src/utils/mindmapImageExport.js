@@ -439,6 +439,14 @@ async function exportCanonicalFullMap({
   offscreen.className = "mm-export-offscreen";
   offscreen.style.cssText = "position:fixed; left:-99999px; top:0; width:2400px; height:1600px; overflow:hidden; pointer-events:none;";
   const mountEl = document.createElement("div");
+  // snapdom(mountEl, ...) below captures starting AT mountEl, not its real
+  // ancestors — a snapshot/clone of mountEl's subtree has no ancestor
+  // carrying .mm-export-offscreen (that class lives on `offscreen`, mountEl's
+  // parent, which is outside the captured subtree). The source-visual-role
+  // CSS override (mindmap.css: ".mm-export-offscreen me-root me-tpc[data-
+  // export-source-role=...]") needs that class to be reachable from inside
+  // the captured subtree, so it has to sit on mountEl itself too.
+  mountEl.className = "mm-export-offscreen";
   mountEl.style.cssText = "width:100%; height:100%;";
   offscreen.appendChild(mountEl);
   document.body.appendChild(offscreen);
