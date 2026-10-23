@@ -452,6 +452,7 @@ async function exportCanonicalFullMap({
   document.body.appendChild(offscreen);
   let instance = null;
   try {
+    await waitForRenderResources(offscreen);
     instance = new MindElixirCtor({
       el: mountEl, direction: MindElixirCtor.SIDE, compact: true,
       editable: false, contextMenu: false, toolBar: false, theme: THEME,
@@ -478,7 +479,6 @@ async function exportCanonicalFullMap({
       mind: instance,
       resolved: resolveExportAppearance({ canvasAppearance, exportOverride: exportStyleOverride }),
     });
-    await waitForRenderResources(instance.map);
     instance.map.style.transform = "translate3d(0px, 0px, 0px) scale(1)";
     if (settleMs > 0) await new Promise((r) => setTimeout(r, settleMs));
 
@@ -505,7 +505,7 @@ async function exportCanonicalFullMap({
     instance.linkDiv?.();
     if (settleMs > 0) await new Promise((r) => setTimeout(r, settleMs));
 
-    const result = await snapdom(mountEl, { backgroundColor, scale, quality });
+    const result = await snapdom(mountEl, { backgroundColor, scale, quality, embedFonts: true });
     const filename = exportFilenameFor(title, format === "jpeg" ? "jpg" : format);
     const buildManifest = withGeometryManifest
       ? (realW, realH) => extractGeometryManifest(mountEl, realW, realH)
@@ -710,7 +710,7 @@ async function exportMindmapImageMultiBranch({
     offscreenMind.scaleFit?.(); // this THROWAWAY instance's own viewport — never the live one
     if (settleMs > 0) await new Promise((r) => setTimeout(r, settleMs));
 
-    const result = await snapdom(offscreenMind.map, { backgroundColor, scale, quality });
+    const result = await snapdom(offscreenMind.map, { backgroundColor, scale, quality, embedFonts: true });
     const filename = exportFilenameFor(title, format === "jpeg" ? "jpg" : format);
     return await _finishCapture(result, { outputMode, format, filename, quality });
   } finally {

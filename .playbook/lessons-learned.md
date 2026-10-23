@@ -1,5 +1,11 @@
 # Lessons Learned
 
+## Export SVG/raster captures must embed fonts and wait for font resources before layout (2026-10-23)
+
+- Web browsers restrict SVG images inside `<img>` (used for rasterization onto Canvas) from loading external stylesheets or network fonts. If font embedding is not enabled (`embedFonts: true`), raster output falls back to system fonts, which have different character widths and cause unexpected text wrapping and clipping inside fixed-size boxes.
+- Always await `document.fonts.ready` BEFORE initializing Mind-Elixir or triggering layout, otherwise the first export pass computes topic positions and content bounds against fallback font metrics before the webfont settles.
+- Mind-Elixir's `layout()` clears and regenerates inner DOM topics; any custom DOM attributes stamped onto nodes (like `data-export-source-role`) must be applied after `layout()`, not before.
+
 ## Author stylesheet specificity and inline priority must align between canvas and export (2026-10-23)
 
 - An !important rule on .me-container me-root me-tpc will silently prevent applyLiveCanvasAppearance from applying custom presets to the canvas root if inline styles lack !important.

@@ -1,5 +1,21 @@
 # Known Issues
 
+## Export node text could overflow visible bounding box in SVG/PNG downloads (fixed 2026-10-23)
+
+**Symptom:** In exported SVG and raster images (PNG, JPEG, WebP), node text (particularly on the ROOT node and promoted parent P) could wrap to additional lines and overflow out of the bottom of the visible colored box (e.g. 18px on ROOT, 9px on P).
+
+**Root cause:**
+1. SnapDOM snapshots computed styles directly onto DOM elements, generating fixed height and block-size properties for each topic box based on live metrics.
+2. SVG images in browsers (used by snapdom when rendering SVG to <canvas> via new Image() for rasterization, and by external SVG viewers) run in a sandboxed context where external @import webfonts (Google Fonts "Spectral") cannot be loaded over the network. Text fell back to wider system fonts (e.g. Georgia), causing lines to wrap and exceed the hardcoded box height.
+3. In exportCanonicalFullMap, waitForRenderResources ran after Mind-Elixir had already run initial layout, meaning cold-cache runs could layout against fallback font metrics before Google Fonts finished loading.
+
+**Fix:**
+1. Enabled `embedFonts: true` in snapdom export options, inlining webfonts directly into the SVG as self-contained base64 @font-face data URIs so rasterizers and downloaded SVGs render identical typography and line wrapping everywhere.
+2. Moved `await waitForRenderResources(offscreen)` before Mind-Elixir initialization and layout so all initial geometry layout measures against settled fonts.
+3. Ensured `markSourceVisualRoles(instance)` is invoked after Mind-Elixir DOM generation so role attributes are preserved.
+
+**Regression:** `e2e-fixture/export-root-color-artifacts.spec.js` verifies that text bounding box content rect remains completely within the visible node box (<= 1px overflow) across SVG and real raster downloads (PNG, JPEG, WebP).
+
 ## Export root node could lose appearance styling or differ from live canvas (fixed 2026-10-23)
 
 **Symptom:** on export (SVG/PNG/PDF), the ROOT node could take an unstyled or divergent appearance (e.g. low-contrast purple in pastel preset, or default MindElixir 25px font/8px radius) while the live canvas rendered a blue #126CF2 20px card. Additionally, promoted branch nodes could collide with root styling.
