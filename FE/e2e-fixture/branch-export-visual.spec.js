@@ -128,7 +128,7 @@ for (const vp of VIEWPORTS) {
       expect(rec.afterPan.markersSideBad).toBe(0);
       expect(rec.selection2.markersSideBad).toBe(0);
       // 7. cancel then reopen
-      await page.getByRole("button", { name: "Hủy", exact: true }).first().click();
+      await page.getByRole("button", { name: "Bỏ chọn và quay lại", exact: true }).first().click();
       await page.waitForTimeout(300);
       if (await page.getByRole("dialog").count()) await page.keyboard.press("Escape");
       rec.afterCancel = { markers: await page.locator("me-export-check").count(), bar: await page.locator(".mm-selection-bar").count() };

@@ -161,7 +161,8 @@ describe("Export Studio scope freshness contract", () => {
       selectedBranchIds: new Set(["a", "b"]),
     });
 
-    expect(summary(dialog)).toContain("3 node thực tế"); // P context + exact A + B; Root is above the LCA
+    // P is the auto-included parent (context), A+B are the explicit ticks; Root is above the LCA.
+    expect(summary(dialog)).toContain("2 node đã chọn · 1 node cha tự thêm · 3 node được xuất");
     expect(dialog.querySelector(".export-count").textContent).toMatch(/^2\s/);
 
     for (let index = 0; index < 3; index += 1) {

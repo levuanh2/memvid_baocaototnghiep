@@ -484,6 +484,16 @@ async function exportCanonicalFullMap({
     offscreen.style.width = `${width}px`;
     offscreen.style.height = `${height}px`;
     instance.map.style.transform = `translate3d(${EXPORT_PADDING_PX - bounds.minX}px, ${EXPORT_PADDING_PX - bounds.minY}px, 0px) scale(1)`;
+    // linkDiv() ran once already (right after layout(), above), baking each
+    // connector's SVG path from each topic's offsetLeft/offsetTop at THAT
+    // moment. mountEl/offscreen were still their initial 2400x1600 size then;
+    // resizing them to this tight content-bound crop just above can shift
+    // where mind-elixir's own flex centering places nodes within the new
+    // (much smaller) container, so the earlier paths go stale — connectors
+    // visually disconnected from their real node position (confirmed via a
+    // real exported PNG screenshot: nodes landed on the correct side, but
+    // the connector curve looped off into empty space). Re-running linkDiv()
+    // here, after the crop is final, rebakes paths against real geometry.
     instance.linkDiv?.();
     if (settleMs > 0) await new Promise((r) => setTimeout(r, settleMs));
 
