@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import Modal from "../ui/Modal";
 import { Icon } from "../ui/Icon";
 import Spinner from "../ui/Spinner";
@@ -104,7 +104,15 @@ function resolveScopePreview({
   }
 }
 
-export default function ExportStudioDialog({ open, onClose, mind, record, mapId, canvasReadyId, title, selectedNodeId, selectedBranchIds, onRequestBranchSelection, savedAppearance, onAppearanceSaved }) {
+export default function ExportStudioDialog({
+  open, onClose, mind, record, mapId, canvasReadyId, title, selectedNodeId, selectedBranchIds, onRequestBranchSelection, savedAppearance, onAppearanceSaved,
+  // Optional controlled props: lifted to MindElixirView so Export Selection
+  // Mode's canvas markers (drawn before this dialog ever opens) can show
+  // and toggle the same auto-parent state. Falls back to local state for
+  // direct-construction callers/tests that don't thread these through.
+  autoParentContext: autoParentContextProp, onAutoParentContextChange,
+  suppressedAutoContextIds: suppressedAutoContextIdsProp, onSuppressedAutoContextIdsChange,
+}) {
   const [step, setStep] = useState(0), [furthest, setFurthest] = useState(0);
   // PR C2 — "Dùng giao diện của sơ đồ" (default) vs "Tùy chỉnh riêng bản
   // xuất". `styleOverride` is lazily seeded from the map's OWN resolved
@@ -129,8 +137,15 @@ export default function ExportStudioDialog({ open, onClose, mind, record, mapId,
   // must not rewrite the ids the user confirmed by pressing "Tiếp tục".
   const [selectedBranchSnapshot, setSelectedBranchSnapshot] = useState([]);
   const selectedBranchSnapshotSet = useMemo(() => new Set(selectedBranchSnapshot), [selectedBranchSnapshot]);
-  const [autoParentContext, setAutoParentContext] = useState(true);
-  const [suppressedAutoContextIds, setSuppressedAutoContextIds] = useState([]);
+  const [localAutoParentContext, setLocalAutoParentContext] = useState(true);
+  const [localSuppressedAutoContextIds, setLocalSuppressedAutoContextIds] = useState([]);
+  const autoParentContext = autoParentContextProp ?? localAutoParentContext;
+  const setAutoParentContext = onAutoParentContextChange ?? setLocalAutoParentContext;
+  const suppressedAutoContextIds = suppressedAutoContextIdsProp ?? localSuppressedAutoContextIds;
+  const setSuppressedAutoContextIds = useCallback((update) => {
+    if (!onSuppressedAutoContextIdsChange) { setLocalSuppressedAutoContextIds(update); return; }
+    onSuppressedAutoContextIdsChange((current) => (typeof update === "function" ? update(current) : update));
+  }, [onSuppressedAutoContextIdsChange]);
   const contextMode = autoParentContext ? "minimal" : "none";
   const [filenameOverride, setFilenameOverride] = useState(""), [appearance, setAppearance] = useState(DEFAULT_APPEARANCE), [appearancePreset, setAppearancePreset] = useState("canvas"), [quickPreset, setQuickPreset] = useState(null);
   const [docs, setDocs] = useState(documentDefaults), [includeMapImage, setIncludeMapImage] = useState(false), [openSection, setOpenSection] = useState("colors");
@@ -212,7 +227,7 @@ export default function ExportStudioDialog({ open, onClose, mind, record, mapId,
   const canAdvance = scopeResult?.ok, canExport = canAdvance && !(isDoc && !mapId), effectiveScope = effectiveVisibleOnly ? "visible" : scopeType;
   const close = () => { if (!exporting) { abortRef.current?.abort(); onClose?.(); } };
   useEffect(() => () => { attemptKeyRef.current = null; abortRef.current?.abort(); }, []);
-  useEffect(() => { attemptKeyRef.current = null; abortRef.current?.abort(); inFlightRef.current = false; setExporting(false); setError(null); setDone(null); setJobStatus(null); setJobProgress(0); setJobId(null); setSelectedBranchSnapshot([]); setAutoParentContext(true); setSuppressedAutoContextIds([]); }, [mapId]);
+  useEffect(() => { attemptKeyRef.current = null; abortRef.current?.abort(); inFlightRef.current = false; setExporting(false); setError(null); setDone(null); setJobStatus(null); setJobProgress(0); setJobId(null); setSelectedBranchSnapshot([]); setAutoParentContext(true); setSuppressedAutoContextIds([]); }, [mapId, setAutoParentContext, setSuppressedAutoContextIds]);
   // Clears everything tied to one attempt (artifact, job, error, in-flight guard). Configuration is kept.
   const resetTransient = () => { attemptKeyRef.current = null; abortRef.current?.abort(); inFlightRef.current = false; setExporting(false); setError(null); setDone(null); setJobStatus(null); setJobProgress(0); setJobId(null); };
   // Reopening always starts at the configuration step with no leftover artifact or job.

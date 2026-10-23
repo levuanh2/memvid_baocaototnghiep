@@ -655,6 +655,30 @@ html.dark .me-container { --mm-relation: #7e90c4; }
   border: solid #fff; border-width: 0 calc(2px * var(--mm-marker-inv, 1)) calc(2px * var(--mm-marker-inv, 1)) 0;
   transform: rotate(45deg);
 }
+/* Auto-context: an ancestor pulled in to keep the explicit picks connected
+   (never itself ticked) — a visibly DIFFERENT mark from a real tick, live on
+   the canvas before Export Studio's own "Node cha tự động" list is ever
+   seen. Dashed ring + light fill (not solid) reads as "included, not
+   chosen". Clicking it suppresses (handled in mindmapBranchSelectionMode.js,
+   not here), which drops it to the plain/.is-auto-suppressed look below. */
+.map-container me-export-check.is-auto-context .mm-export-check__dot {
+  background: rgba(18, 108, 242, 0.14);
+  border-style: dashed;
+  border-color: #126CF2;
+}
+.map-container me-export-check.is-auto-context .mm-export-check__dot::after {
+  content: "";
+  position: absolute;
+  left: calc(5.5px * var(--mm-marker-inv, 1)); top: calc(8.5px * var(--mm-marker-inv, 1));
+  width: calc(9px * var(--mm-marker-inv, 1)); height: calc(2px * var(--mm-marker-inv, 1));
+  background: #126CF2;
+  border-radius: 1px;
+}
+/* Suppressed auto-context: user clicked it off. Plain dot (same as an
+   untouched node) plus a faint ring so it's still findable to restore. */
+.map-container me-export-check.is-auto-suppressed .mm-export-check__dot {
+  box-shadow: 0 0 0 calc(1.5px * var(--mm-marker-inv, 1)) rgba(136, 136, 136, 0.35);
+}
 /* Focus ring sits on the visible dot, not on the 40px host, so keyboard focus
    shows a circle the size of the marker instead of a square hitbox outline. */
 .map-container me-export-check:focus,

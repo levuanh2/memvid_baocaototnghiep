@@ -16,6 +16,7 @@ import { THEME } from "./mindElixirTheme";
 import { recordToMindElixir, mindElixirToRecord } from "../../utils/mindElixirAdapter";
 import { attachExpandDecorator } from "../../utils/mindElixirExpandDecorator";
 import { attachBranchSelectionMode } from "../../utils/mindmapBranchSelectionMode";
+import { resolveExportScope } from "../../utils/mindmapExportScope";
 import { nextScale, formatZoom, viewportKeyAction, ZOOM_STEP } from "../../utils/mindmapViewport";
 import { validateMindMapRender } from "../../utils/mindmapRenderLifecycle";
 import { clearRootOnly, isRootOnly, reapplyRootOnly, setRootOnly } from "../../utils/mindElixirRootOnly";
@@ -184,6 +185,44 @@ export default function MindElixirView({ data, onRegenerate, regenerating, contr
   const previousSelectionActiveRef = useRef(false);
   const selectedBranchIdsRef = useRef(selectedBranchIds);
   const branchSelectionHandleRef = useRef(null);
+  // Auto-parent context: which ancestor(s) selecting the current explicit
+  // picks would pull in (three-set model — see ExportStudioDialog), lifted
+  // up here (not local to the dialog) so the canvas markers drawn during
+  // Export Selection Mode can show a 2nd-tier "auto-included" tick live,
+  // before the user ever opens the dialog, and so suppressing one survives
+  // leaving/re-entering selection mode. The dialog receives these as
+  // controlled props.
+  const [autoParentContext, setAutoParentContext] = useState(true);
+  const [suppressedAutoContextIds, setSuppressedAutoContextIds] = useState([]);
+  const autoParentContextRef = useRef(autoParentContext);
+  const suppressedAutoContextIdsRef = useRef(suppressedAutoContextIds);
+  // `contextIds` already excludes anything suppressed (that's what
+  // suppression means) — showing the "suppressed, click to restore" state
+  // needs the PRE-suppression ancestor set too, so a suppressed id doesn't
+  // just silently stop being auto-anything on the canvas.
+  const autoContextIdsRef = useRef(new Set());
+  const minimalContextIdsRef = useRef(new Set());
+  const recomputeAutoContext = () => {
+    const mind = mindRef.current;
+    if (!mind?.nodeData || selectedBranchIdsRef.current.size === 0) {
+      autoContextIdsRef.current = new Set();
+      minimalContextIdsRef.current = new Set();
+      return;
+    }
+    try {
+      const resolved = resolveExportScope({
+        nodeData: mind.nodeData, scopeType: "selected_branches",
+        selectedBranchRootIds: [...selectedBranchIdsRef.current], includeDescendants: false,
+        contextMode: autoParentContextRef.current ? "minimal" : "none",
+        suppressedContextIds: suppressedAutoContextIdsRef.current,
+      });
+      autoContextIdsRef.current = resolved.contextIds;
+      minimalContextIdsRef.current = resolved.minimalContextIds;
+    } catch {
+      autoContextIdsRef.current = new Set();
+      minimalContextIdsRef.current = new Set();
+    }
+  };
 
   const degraded = Boolean(data?.generator?.degraded);
   const missing = data?.generator?.missing || [];
@@ -377,6 +416,8 @@ export default function MindElixirView({ data, onRegenerate, regenerating, contr
     // ids into the next in-place `mind.refresh()`.
     setSelectionModeActive(false);
     setSelectedBranchIds(new Set());
+    setAutoParentContext(true);
+    setSuppressedAutoContextIds([]);
     // New map identity (true mount or an A->B switch): no explicit depth
     // choice carries over. Initial load has no explicit action to prefer,
     // so this intentionally falls back to matchDepthPreset's structural read.
@@ -570,11 +611,20 @@ export default function MindElixirView({ data, onRegenerate, regenerating, contr
     const handle = attachBranchSelectionMode(containerRef.current, {
       isActiveRef: selectionActiveRef,
       isSelectedFn: (id) => selectedBranchIdsRef.current.has(id),
+      isAutoContextFn: (id) => !selectedBranchIdsRef.current.has(id) && autoContextIdsRef.current.has(id),
+      isAutoSuppressedFn: (id) => (
+        !selectedBranchIdsRef.current.has(id)
+        && minimalContextIdsRef.current.has(id)
+        && suppressedAutoContextIdsRef.current.includes(id)
+      ),
       onToggle: (id) => setSelectedBranchIds((prev) => {
         const next = new Set(prev);
         if (next.has(id)) next.delete(id); else next.add(id);
         return next;
       }),
+      onToggleAutoContext: (id) => setSuppressedAutoContextIds((prev) => (
+        prev.includes(id) ? prev.filter((item) => item !== id) : [...prev, id]
+      )),
     });
     branchSelectionHandleRef.current = handle;
     return handle.detach;
@@ -589,8 +639,15 @@ export default function MindElixirView({ data, onRegenerate, regenerating, contr
   }, [selectionModeActive]);
   useEffect(() => {
     selectedBranchIdsRef.current = selectedBranchIds;
+    recomputeAutoContext();
     branchSelectionHandleRef.current?.resync();
   }, [selectedBranchIds]);
+  useEffect(() => {
+    autoParentContextRef.current = autoParentContext;
+    suppressedAutoContextIdsRef.current = suppressedAutoContextIds;
+    recomputeAutoContext();
+    branchSelectionHandleRef.current?.resync();
+  }, [autoParentContext, suppressedAutoContextIds]);
 
   useEffect(() => () => {
     pendingFitRef.current = false;
@@ -1324,6 +1381,10 @@ export default function MindElixirView({ data, onRegenerate, regenerating, contr
         title={data?.title}
         selectedNodeId={exportSelectedNodeId}
         selectedBranchIds={selectedBranchIds}
+        autoParentContext={autoParentContext}
+        onAutoParentContextChange={setAutoParentContext}
+        suppressedAutoContextIds={suppressedAutoContextIds}
+        onSuppressedAutoContextIdsChange={setSuppressedAutoContextIds}
         onRequestBranchSelection={() => { setExportOpen(false); setSelectionModeActive(true); }}
         savedAppearance={appearance}
         onAppearanceSaved={setAppearance}

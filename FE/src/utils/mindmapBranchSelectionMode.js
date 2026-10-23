@@ -26,7 +26,10 @@
 // ràng") — both routes call the same `onToggle`, the checkbox is just the
 // dedicated, always-visible target.
 
-function decorateParent(parentEl, { isSelectedFn, onToggle, resolveClickId }) {
+function decorateParent(parentEl, {
+  isSelectedFn, onToggle, resolveClickId,
+  isAutoContextFn = () => false, isAutoSuppressedFn = () => false, onToggleAutoContext = () => {},
+}) {
   const tpc = parentEl.querySelector("me-tpc");
   if (!tpc?.nodeObj) return;
   const id = tpc.nodeObj.id;
@@ -53,10 +56,21 @@ function decorateParent(parentEl, { isSelectedFn, onToggle, resolveClickId }) {
     // A click lands on whichever 40px host is painted topmost, and at low zoom a
     // neighbour's host can cover this dot. Resolve the click to the nearest dot
     // instead, so the visible dot always toggles its own branch.
+    // An auto-context node (ancestor pulled in to keep explicit picks
+    // connected, never itself ticked) toggles its OWN suppression instead of
+    // joining the explicit set — clicking it says "don't auto-include this",
+    // not "also check this node".
+    // isAutoContextFn alone misses the restore case: a SUPPRESSED id is, by
+    // definition, absent from the (post-suppression) auto-context set, so it
+    // has to be routed to onToggleAutoContext too, or a second press on it
+    // falls through to onToggle and wrongly adds it to the explicit picks.
+    const dispatch = (target) => (
+      (isAutoContextFn(target) || isAutoSuppressedFn(target)) ? onToggleAutoContext(target) : onToggle(target)
+    );
     check.addEventListener("click", (e) => {
       e.stopPropagation();
       const target = resolveClickId ? resolveClickId(e) : id;
-      if (target) onToggle(target);
+      if (target) dispatch(target);
     });
     check.addEventListener("keydown", (e) => {
       // Tab moves between markers in DOM order. Native sequential navigation skipped from one
@@ -73,7 +87,7 @@ function decorateParent(parentEl, { isSelectedFn, onToggle, resolveClickId }) {
       if (e.key !== "Enter" && e.key !== " ") return;
       e.preventDefault();
       e.stopPropagation();
-      onToggle(id);
+      dispatch(id);
     });
     parentEl.insertBefore(check, tpc);
   }
@@ -91,8 +105,21 @@ function decorateParent(parentEl, { isSelectedFn, onToggle, resolveClickId }) {
   const edge = side === "left" ? tpc.offsetLeft : tpc.offsetLeft + tpc.offsetWidth;
   check.style.left = `calc(${edge}px - 20px * var(--mm-marker-inv, 1))`;
   const selected = isSelectedFn(id);
+  // isAutoContextFn reads the POST-suppression set (what would actually
+  // export), which by definition never contains a suppressed id — so
+  // whether this id is suppressed has to be asked independently, not
+  // derived from autoContext being true.
+  const autoSuppressed = !selected && isAutoSuppressedFn(id);
+  const autoContext = !selected && !autoSuppressed && isAutoContextFn(id);
   check.setAttribute("aria-checked", String(selected));
   check.classList.toggle("is-checked", selected);
+  check.classList.toggle("is-auto-context", autoContext);
+  check.classList.toggle("is-auto-suppressed", autoSuppressed);
+  check.setAttribute("aria-label", autoSuppressed
+    ? `Khôi phục node cha tự động: ${tpc.nodeObj.topic || ""}`
+    : autoContext
+      ? `Node cha tự động thêm: ${tpc.nodeObj.topic || ""}. Bấm để không thêm.`
+      : `Chọn node: ${tpc.nodeObj.topic || ""}`);
 }
 
 /**
@@ -105,7 +132,10 @@ function decorateParent(parentEl, { isSelectedFn, onToggle, resolveClickId }) {
  * a path that isn't a click on the checkbox itself (e.g. a "Xóa chọn"
  * clear-all button).
  */
-export function attachBranchSelectionMode(containerEl, { isActiveRef, isSelectedFn, onToggle }) {
+export function attachBranchSelectionMode(containerEl, {
+  isActiveRef, isSelectedFn, onToggle,
+  isAutoContextFn, isAutoSuppressedFn, onToggleAutoContext,
+}) {
   if (!containerEl) return { detach: () => {}, resync: () => {} };
 
   const scan = () => {
@@ -121,7 +151,9 @@ export function attachBranchSelectionMode(containerEl, { isActiveRef, isSelected
       containerEl.querySelectorAll("me-export-check").forEach((el) => el.remove());
       return;
     }
-    containerEl.querySelectorAll("me-parent, me-root").forEach((el) => decorateParent(el, { isSelectedFn, onToggle, resolveClickId }));
+    containerEl.querySelectorAll("me-parent, me-root").forEach((el) => decorateParent(el, {
+      isSelectedFn, onToggle, resolveClickId, isAutoContextFn, isAutoSuppressedFn, onToggleAutoContext,
+    }));
   };
   // Click resolver: the browser may target an overlapping 40px host even when
   // the pointer is visibly inside a neighbouring dot. Only override the host
