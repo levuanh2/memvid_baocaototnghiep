@@ -679,6 +679,7 @@ async function exportMindmapImageMultiBranch({
   offscreen.className = "mm-export-offscreen";
   offscreen.style.cssText = "position:fixed; left:-99999px; top:0; width:2400px; height:1600px; pointer-events:none;";
   const mountEl = document.createElement("div");
+  mountEl.className = "mm-export-offscreen"; // see the sibling mountEl in exportCanonicalFullMap for why
   mountEl.style.cssText = "width:100%; height:100%;";
   offscreen.appendChild(mountEl);
   document.body.appendChild(offscreen);
