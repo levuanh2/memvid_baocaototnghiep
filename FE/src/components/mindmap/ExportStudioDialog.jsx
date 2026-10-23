@@ -84,7 +84,6 @@ function resolveScopePreview({
       contextMode,
       suppressedContextIds,
     });
-    const includedIds = [...resolved.includedIds].sort();
     const renderedIds = [...resolved.renderIds].sort();
     return {
       ok: true,
@@ -194,7 +193,7 @@ export default function ExportStudioDialog({ open, onClose, mind, record, mapId,
       visibleOnly: effectiveVisibleOnly, contextMode, suppressedContextIds: suppressedAutoContextIds,
     });
   }, [open, mind, mindReady, mapId, scopeType, selectedNodeId, selectedBranchSnapshotSet, effectiveVisibleOnly, contextMode, suppressedAutoContextIds, previewRevision]);
-  const liveNodeLabels = useMemo(() => indexLiveNodeLabels(mind?.nodeData), [mind?.nodeData, previewRevision]);
+  const liveNodeLabels = useMemo(() => { void previewRevision; return indexLiveNodeLabels(mind?.nodeData); }, [mind?.nodeData, previewRevision]);
   const activeAutoContexts = useMemo(() => (
     (scopeResult?.contextIds || []).map((id) => ({ id, label: liveNodeLabels.get(id) || id }))
   ), [scopeResult?.contextIds, liveNodeLabels]);
