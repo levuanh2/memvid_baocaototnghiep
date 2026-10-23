@@ -76,10 +76,13 @@ function lowestCommonAncestor(parentOf, ids) {
 function _resolveCore({
   rootNodeId, hasId, childrenOf, parentOf, order,
   scopeType, selectedNodeId, selectedBranchRootIds, includeDescendants, visibleOnly, isVisible,
+  contextMode = "minimal", suppressedContextIds = [],
 }) {
   const assertKnown = (id) => {
     if (!hasId(id)) throw new UnknownNodeIdError(`node_id not in this map: ${id}`);
   };
+  const suppressed = new Set(suppressedContextIds || []);
+  suppressed.forEach(assertKnown);
 
   let rootIds;
   let explicitSelectedIds = [];
@@ -117,22 +120,32 @@ function _resolveCore({
   };
   rootIds.forEach(collect);
 
-  const presentationRootId = exactSelection
+  const lcaId = exactSelection
     ? lowestCommonAncestor(parentOf, explicitSelectedIds)
     : rootNodeId;
-  const contextIds = new Set();
+  const minimalContextIds = new Set();
   rootIds.forEach((id) => {
-    if (id === presentationRootId) return;
+    if (id === lcaId) return;
     let cur = parentOf.get(id);
     while (cur != null) {
-      if (!includedIds.has(cur)) contextIds.add(cur);
-      if (cur === presentationRootId) break;
+      if (!includedIds.has(cur)) minimalContextIds.add(cur);
+      if (cur === lcaId) break;
       cur = parentOf.get(cur);
     }
   });
 
+  const contextIds = contextMode === "none"
+    ? new Set()
+    : new Set([...minimalContextIds].filter((id) => !suppressed.has(id)));
   const renderIds = new Set([...includedIds, ...contextIds]);
-  return { rootIds, explicitSelectedIds, includedIds, contextIds, presentationRootId, renderIds };
+  const presentationRootIds = [...renderIds]
+    .filter((id) => !renderIds.has(parentOf.get(id)))
+    .sort((a, b) => (order.get(a) ?? 0) - (order.get(b) ?? 0));
+  const presentationRootId = presentationRootIds.length === 1 ? presentationRootIds[0] : null;
+  return {
+    rootIds, explicitSelectedIds, includedIds, contextIds, minimalContextIds,
+    suppressedContextIds: suppressed, presentationRootId, presentationRootIds, renderIds,
+  };
 }
 
 /** id -> node, id -> parentId, over the WHOLE live tree (used for validation, ancestor walks, and node_id/parent_id output), plus a document-order rank for every id. */
@@ -175,6 +188,7 @@ function computeVisibleIds(nodeData) {
 export function resolveExportScope({
   nodeData, scopeType, selectedNodeId, selectedBranchRootIds,
   includeDescendants = true, visibleOnly = false, visibleIdsOverride = null,
+  contextMode = "minimal", suppressedContextIds = [],
 }) {
   if (!nodeData) throw new ExportScopeError("resolveExportScope: nodeData is required");
   const index = indexTree(nodeData);
@@ -194,6 +208,7 @@ export function resolveExportScope({
     order: index.order,
     scopeType, selectedNodeId, selectedBranchRootIds, includeDescendants, visibleOnly,
     isVisible: (id) => (visibleIds ? visibleIds.has(id) : true),
+    contextMode, suppressedContextIds,
   });
   return { ...result, index };
 }
@@ -203,7 +218,10 @@ export function resolveExportScope({
  * live-merged record `liveRecordForExport` builds — see mindmapImageExport.js).
  * No `visibleOnly`/`visible` scope: a record has no notion of canvas collapse.
  */
-export function resolveExportScopeFromRecord(nodes, { scopeType, selectedNodeId, selectedBranchRootIds, includeDescendants = true }) {
+export function resolveExportScopeFromRecord(nodes, {
+  scopeType, selectedNodeId, selectedBranchRootIds, includeDescendants = true,
+  contextMode = "minimal", suppressedContextIds = [],
+}) {
   if (!nodes?.length) throw new ExportScopeError("resolveExportScopeFromRecord: nodes is required");
   const byId = new Map(nodes.map((n) => [n.id, n]));
   const parentOf = new Map(nodes.map((n) => [n.id, n.parent ?? null]));
@@ -225,6 +243,7 @@ export function resolveExportScopeFromRecord(nodes, { scopeType, selectedNodeId,
     order,
     scopeType, selectedNodeId, selectedBranchRootIds, includeDescendants, visibleOnly: false,
     isVisible: () => true,
+    contextMode, suppressedContextIds,
   });
   return { ...result, byId };
 }
@@ -280,9 +299,13 @@ export function countHiddenIncluded(nodeData, includedIds) {
  * live relation list, filtered to only relations whose BOTH endpoints survived
  * the render set (a relation pointing outside it can't be rendered meaningfully).
  */
-export function buildExportTree({ nodeData, includedIds, contextIds, presentationRootId, sidecar, arrows, mapId, schemaVersion }) {
+export function buildExportTree({ nodeData, includedIds, contextIds, presentationRootId, presentationRootIds, sidecar, arrows, mapId, schemaVersion }) {
   const index = indexTree(nodeData);
   const renderSet = new Set([...includedIds, ...(contextIds || [])]);
+  const effectiveRootIds = presentationRootIds?.length
+    ? presentationRootIds
+    : [presentationRootId || nodeData.id];
+  const effectiveRootSet = new Set(effectiveRootIds);
   const visibleIds = computeVisibleIds(nodeData);
   const toNode = (id, depth) => {
     const entry = index.byId.get(id);
@@ -293,7 +316,7 @@ export function buildExportTree({ nodeData, includedIds, contextIds, presentatio
       .map((c) => toNode(c.id, depth + 1));
     return {
       node_id: id,
-      parent_id: id === (presentationRootId || nodeData.id) ? null : index.parentOf.get(id),
+      parent_id: effectiveRootSet.has(id) ? null : index.parentOf.get(id),
       topic: node.topic || "",
       note: side?.note || "",
       depth,
@@ -306,7 +329,7 @@ export function buildExportTree({ nodeData, includedIds, contextIds, presentatio
       children,
     };
   };
-  const roots = [toNode(presentationRootId || nodeData.id, 0)];
+  const roots = effectiveRootIds.map((id) => toNode(id, 0));
   const relations = (arrows || [])
     .filter((a) => renderSet.has(a.from) && renderSet.has(a.to))
     .map((a) => ({ source: a.from, target: a.to, label: a.label || "" }));

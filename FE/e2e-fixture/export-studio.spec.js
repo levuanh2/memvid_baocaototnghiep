@@ -381,7 +381,7 @@ test.describe("Export Studio — fixture harness, real files", () => {
     await page.locator(".mm-selection-bar").getByRole("button", { name: "Tiếp tục" }).click();
 
     // Exact membership = the two checked siblings plus their parent LCA.
-    await expect(page.locator(".export-footer__summary")).toContainText("2 node đã tick · 3 node thực tế");
+    await expect(page.locator(".export-footer__summary")).toContainText("2 node đã chọn · 1 node cha tự thêm · 3 node được xuất");
     await clickNext(page);
     await chooseFormat(page, "svg");
     await clickNext(page);

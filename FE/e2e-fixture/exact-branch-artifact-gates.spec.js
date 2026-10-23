@@ -198,6 +198,8 @@ async function capturePdfRequest(page, mode, pageSize = "A4") {
     selected_node_id: null,
     selected_branch_root_ids: [A, `${A}-l0`, B].sort(),
     include_descendants: false,
+    context_mode: "minimal",
+    suppressed_context_ids: [],
   });
   expect(requestBody.scope.selected_branch_root_ids).not.toContain(P);
   expect(requestBody.options.mode).toBe(mode);

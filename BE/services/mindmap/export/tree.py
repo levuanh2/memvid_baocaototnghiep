@@ -13,6 +13,7 @@ def build_export_tree(
     nodes: list[dict], relations: list[dict], root_ids: list[str], included_ids: set[str],
     *, map_id: str = "", title: str = "", context_ids: Optional[set[str]] = None,
     presentation_root_id: Optional[str] = None,
+    presentation_root_ids: Optional[list[str]] = None,
 ) -> dict[str, Any]:
     """Builds ONE tree rooted at the canonical presentation root, pruned to
     `included_ids | context_ids` — never one tree per `root_ids` entry. An
@@ -58,11 +59,20 @@ def build_export_tree(
             "children": children,
         }
 
-    effective_root_id = presentation_root_id or true_root["id"]
-    if presentation_root_id is not None and effective_root_id not in render_set:
+    explicit_roots_given = presentation_root_ids is not None or presentation_root_id is not None
+    effective_root_ids = (presentation_root_ids if presentation_root_ids is not None else
+                          [presentation_root_id or true_root["id"]])
+    # Only validate when the caller explicitly named a presentation root (the
+    # resolve_export_scope -> build_export_tree path always does). A caller
+    # that omits both args gets the true-root default with no check, same as
+    # before presentation_root_ids existed — several pre-V3 callers/tests pass
+    # included_ids/context_ids for a subtree without also threading a root id,
+    # relying on that lenient default.
+    if explicit_roots_given and any(root_id not in render_set for root_id in effective_root_ids):
         raise ValueError("build_export_tree: presentation root is outside render set")
-    roots = [to_node(effective_root_id, 0)]
-    roots[0]["parent_id"] = None
+    roots = [to_node(root_id, 0) for root_id in effective_root_ids]
+    for root in roots:
+        root["parent_id"] = None
     kept_relations = [
         {"source": r["source"], "target": r["target"], "type": r.get("type") or "relates_to", "label": r.get("label") or ""}
         for r in (relations or [])

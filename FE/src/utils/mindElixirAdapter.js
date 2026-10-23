@@ -44,6 +44,7 @@ const LABEL_TO_TYPE = Object.fromEntries(
 // limit; the export scene reads the original title from the canonical record.
 export function recordToMindElixir(record, { fullTitles = false } = {}) {
   const norm = normalizeMindmapRecord(record);
+  const exportProjection = record?.exportProjection || null;
   const topicOf = (title) => (fullTitles ? stripMarkdown(title) : compactTopic(stripMarkdown(title)));
   const sidecar = new Map();
   const layout = assignBranchDirections(norm.nodes);
@@ -101,10 +102,17 @@ export function recordToMindElixir(record, { fullTitles = false } = {}) {
     if (n.sourceStems?.length > 1) tags.push({ text: `⇄ ${n.sourceStems.length}`, className: "mm-tag-shared" });
     const style = levelStyle(n.level);
     const currentBranchId = depth === 1 ? n.id : branchId;
-    const direction = depth === 1 ? layout.directions.get(n.id) : undefined;
-    const branchColor = currentBranchId ? layout.colors.get(currentBranchId) : undefined;
+    const direction = depth === 1
+      ? (exportProjection?.directions?.[n.id] ?? layout.directions.get(n.id))
+      : undefined;
+    const branchColor = depth === 1
+      ? (exportProjection?.branchColors?.[n.id] ?? layout.colors.get(currentBranchId))
+      : (currentBranchId ? layout.colors.get(currentBranchId) : undefined);
     return {
       id: n.id, topic: topicOf(n.title),
+      ...(exportProjection?.sourceRoles?.[n.id]
+        ? { exportSourceRole: exportProjection.sourceRoles[n.id] }
+        : {}),
       ...(direction == null ? {} : { direction }),
       ...(branchColor ? { branchColor } : {}),
       ...(tags.length ? { tags } : {}),

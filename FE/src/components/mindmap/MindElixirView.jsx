@@ -1294,7 +1294,7 @@ export default function MindElixirView({ data, onRegenerate, regenerating, contr
         {/* Export Selection Mode — overlaid on the canvas itself (not the
             floating zoom toolbar, which stays pan/zoom-only), matching
             exact-node contract: "N node đã tick · Xóa chọn · Tiếp tục
-            · Hủy". Node-detail-drawer suppression and the checkbox
+            · Bỏ chọn và quay lại". Node-detail-drawer suppression and the checkbox
             affordance live in mindmapBranchSelectionMode.js, driven by
             `selectionActiveRef` — this bar is just its visible chrome. */}
         {selectionModeActive && (

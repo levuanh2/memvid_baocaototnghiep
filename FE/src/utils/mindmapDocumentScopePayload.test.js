@@ -30,6 +30,26 @@ describe("buildDocumentScopePayload", () => {
     expect(payload).not.toHaveProperty("visible_node_ids");
   });
 
+  it("versioned exact-selection scope carries context policy and manual suppression", () => {
+    const payload = buildDocumentScopePayload({
+      mind: mindFor(TREE),
+      scopeType: "selected_branches",
+      selectedNodeId: null,
+      selectedBranchRootIds: ["b", "f"],
+      visibleOnly: false,
+      contextMode: "minimal",
+      suppressedContextIds: ["a"],
+    });
+    expect(payload).toEqual({
+      scope_type: "selected_branches",
+      selected_node_id: null,
+      selected_branch_root_ids: ["b", "f"],
+      include_descendants: false,
+      context_mode: "minimal",
+      suppressed_context_ids: ["a"],
+    });
+  });
+
   it("visible scope (full tree expanded): include_descendants false, visible_node_ids = every node", () => {
     const payload = buildDocumentScopePayload({ mind: mindFor(TREE), scopeType: "full", selectedNodeId: null, selectedBranchRootIds: [], visibleOnly: true });
     expect(payload.scope_type).toBe("visible");

@@ -39,7 +39,7 @@ async function exportSvg(page, pair, index) {
   const dialog = page.locator('[role="dialog"]');
   await expect(dialog.locator('input[name="mm-export-scope"]:checked')).toHaveValue("selected_branches");
   await expect(dialog).toContainText("2 node đã tick");
-  await expect(dialog).toContainText("3 node thực tế");
+  await expect(dialog).toContainText("2 node đã chọn · 1 node cha tự thêm · 3 node được xuất");
   if (index % 2 === 0) await page.getByRole("button", { name: "Ảnh PNG" }).click();
   await page.getByRole("button", { name: "Tiếp tục" }).click();
   await page.locator('input[name="mm-export-format"][value="svg"]').check();

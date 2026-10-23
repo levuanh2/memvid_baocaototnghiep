@@ -92,7 +92,7 @@ describe("exportCanonicalFullMap applies the resolved export appearance", () => 
     expect(rootEl.style.background).toBe(probe.style.background);
   });
 
-  it("never calls layout()/linkDiv() a second time beyond the scene's own normal construction", async () => {
+  it("applying appearance never triggers an extra layout()/linkDiv() beyond the base export pipeline's own calls", async () => {
     FakeOffscreenMind.instances = [];
     const targets = [];
     await exportMindmapImage({
@@ -102,6 +102,11 @@ describe("exportCanonicalFullMap applies the resolved export appearance", () => 
     });
     const instance = FakeOffscreenMind.instances.at(-1);
     expect(instance.layout).toHaveBeenCalledTimes(1); // the scene's OWN normal construction call, not an extra one from appearance
-    expect(instance.linkDiv).toHaveBeenCalledTimes(1);
+    // linkDiv() runs twice regardless of appearance: once for the scene's own
+    // construction, once more after the crop/recenter transform repositions
+    // content — connector paths baked before that transform go stale (see
+    // mindmapImageExport.js's own comment at the second call site). Appearance
+    // application itself (applyLiveCanvasAppearance, LIVE_SAFE) adds zero more.
+    expect(instance.linkDiv).toHaveBeenCalledTimes(2);
   });
 });

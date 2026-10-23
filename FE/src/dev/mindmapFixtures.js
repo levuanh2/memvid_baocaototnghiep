@@ -200,3 +200,20 @@ export const FIXTURE_POST_PR77 = {
   ],
   relations: [], sources: [], schema_version: 2,
 };
+
+export const FIXTURE_EXACT_V3 = {
+  id: "exact-node-export-v3",
+  title: "Exact Node Export V3",
+  nodes: [
+    { id: "F", kind: "root", title: "F — Chủ đề", parent: null, order: 0 },
+    { id: "E", kind: "section", title: "E — Nhánh trái", parent: "F", order: 0 },
+    { id: "A", kind: "idea", title: "A — Ý thứ nhất", parent: "E", order: 0 },
+    { id: "B", kind: "idea", title: "B — Ý thứ hai", parent: "E", order: 1 },
+    { id: "C", kind: "idea", title: "C — Ý thứ ba", parent: "E", order: 2 },
+    { id: "D", kind: "idea", title: "D — Ý thứ tư", parent: "E", order: 3 },
+    { id: "J", kind: "section", title: "J — Nhánh phải", parent: "F", order: 1 },
+    { id: "K", kind: "idea", title: "K — Ý bên phải thứ nhất", parent: "J", order: 0 },
+    { id: "L", kind: "idea", title: "L — Ý bên phải thứ hai", parent: "J", order: 1 },
+  ],
+  relations: [], sources: [], schema_version: 2,
+};
