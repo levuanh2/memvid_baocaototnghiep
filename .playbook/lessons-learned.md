@@ -1,5 +1,11 @@
 # Lessons Learned
 
+## A CSS opacity rule can silently undo a correctly-set custom color (2026-10-24)
+
+- Setting `stroke: <color> !important` on an element does not guarantee that color is what gets rendered — a separate `opacity` rule on the same element (or an ancestor) still alpha-composites that exact color against whatever is behind it, producing a different final pixel. "The attribute is correct" and "the rendered pixel is correct" are not the same claim; verify both with real pixel sampling, not just a DOM/CSSOM read of the stroke value.
+- A depth-signaling or decorative opacity rule written for the *default* palette can quietly break contrast guarantees once a user sets an explicit custom color — audit every unconditional `opacity`/`filter` rule near a user-configurable color path and gate it behind the same "has the user overridden this?" condition the color logic already uses.
+- When a verifier flags "composite color detected" as a failure signal, also check the *exact-color* hit count on that same element before trusting it: normal anti-aliased edge pixels can coincidentally fall within tolerance of an old/wrong composite color even when the underlying bug is fixed, producing a false positive distinguishable from a real regression by the exact-hit count alone (near-zero for a real bug, in the thousands once fixed).
+
 ## SVG embedded webfonts in Chromium require cache warmup before first raster draw (2026-10-24)
 
 - Chromium's HTMLImageElement SVG renderer decodes embedded base64 `@font-face` definitions asynchronously. When drawing an SVG with embedded webfonts to a Canvas via `ctx.drawImage(img, 0, 0)`, the first draw on a cold cache can execute before the SVG font cache finishes decoding, causing text to render in fallback system fonts (e.g. Georgia instead of Spectral) which changes line wrap points.

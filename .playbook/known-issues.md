@@ -1,5 +1,15 @@
 # Known Issues
 
+## Custom connector color lost configured contrast on sub-branch connectors (fixed 2026-10-24)
+
+**Symptom:** With a custom connector color set via appearance (e.g. a saved preset or Export Studio override), the ROOT→first-branch connector rendered the exact configured color/contrast, but every deeper connector (branch→child and below) rendered visibly faded/low-contrast — on a screenshot this reads as the connector line being missing, even though node boxes and geometry were correct. Confirmed on `current_branch` export scope via a real Flask/Postgres/UI test with a fixed `#2563EB` connector color on `#FFF7ED` canvas (configured contrast 4.87): the three deeper connectors measured actual rendered contrast 2.49, with zero exact-color pixels and thousands of diluted composite-color pixels.
+
+**Root cause:** `mindmap.css` applies `.me-container .subLines path { opacity: 0.6; }` unconditionally — an intentional depth-signaling feature (Sprint F) that fades every connector below the first root→branch tier for the *default* palette. `mindMapAppearanceLiveApply.js` correctly set the exact custom `stroke` color on both `.lines` and `.subLines` paths via an injected `!important` rule, but did not clear that opacity dimming. The browser then alpha-composited the correctly-set stroke color at 60% opacity against the canvas background at render time, producing a diluted rendered pixel that no longer matched the configured color/contrast — a pure color/opacity bug, not a geometry or connector-presence bug. `mindMapAppearanceLiveApply.js` is the single shared appearance-application function for both the live canvas and every export path (full map, current_branch, multi-branch), so the defect reproduced identically everywhere a custom connector color was combined with nested connectors.
+
+**Fix:** Inside the existing `if (resolved.connector.colorMode !== "keep")` block in `mindMapAppearanceLiveApply.js`, added `rules.push(\`.subLines path[stroke] { opacity: 1 !important; }\`);` right after the stroke-color rule. This lifts the depth-signal dimming only when the user has explicitly chosen a connector color — the default/no-custom-color case (`colorMode === "keep"`) keeps the original Sprint F fade completely untouched.
+
+**Regression:** `FE/e2e/real-backend-current-branch-appearance.spec.js` (real Flask/Postgres/UI, PyMuPDF-verified PNG+PDF) asserts every connector renders within the configured contrast and exact stroke color, not just the first tier. `FE/src/utils/testHelpers/assertEveryNodeHasConnector.js` plus its unit tests pin connector geometry/membership across multi-branch, current-branch, and raster scenarios as a complementary regression gate.
+
 ## Cold-first export in Chromium clipped node text due to lazy SVG embedded font decoding (fixed 2026-10-24)
 
 **Symptom:** On a cold first PDF export (e.g. `map-a4`), parent node P clipped text (126 text-colored pixels escaped 7px below the measured topic box). Subsequent/warm exports (`map-content-fit`, `map-and-outline-content-fit`) passed cleanly with 0 escaped pixels.
