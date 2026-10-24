@@ -390,6 +390,47 @@ async function waitForRenderResources(root) {
   await Promise.all(pending);
 }
 
+let _exportFontsWarmedUp = false;
+
+/** Preloads webfonts and primes SnapDOM's SVG embedded-font decode cache so cold-first captures never fall back to system fonts. */
+async function warmUpExportFonts(snapdom) {
+  if (_exportFontsWarmedUp || typeof document === "undefined") return;
+  const sample = "ăâêôơưđÁẾỖỜỮ — ROOT Nhánh cha Kết nối màu sắc hình học";
+  if (document.fonts?.load) {
+    try {
+      await Promise.allSettled([
+        document.fonts.load('600 20px "Spectral"', sample),
+        document.fonts.load('600 14px "Spectral"', sample),
+        document.fonts.load('400 13px "Spectral"', sample),
+        document.fonts.load('700 14px "Spectral"', sample),
+        document.fonts.load('600 20px Inter', sample),
+        document.fonts.load('600 14px Inter', sample),
+        document.fonts.load('400 13px Inter', sample),
+      ]);
+      await document.fonts.ready;
+    } catch { /* best effort */ }
+  }
+  if (
+    typeof snapdom === "function"
+    && (snapdom === realSnapdom || (!snapdom.mock && !snapdom._isMockFunction))
+    && typeof createImageBitmap === "function"
+  ) {
+    try {
+      const dummy = document.createElement("div");
+      dummy.style.cssText = "position:fixed;left:-99999px;top:0;font-family:'Spectral', Georgia, serif;font-weight:600;font-size:14px;pointer-events:none;";
+      dummy.textContent = sample;
+      document.body.appendChild(dummy);
+      try {
+        const warmup = await snapdom(dummy, { embedFonts: true, scale: 1 });
+        await warmup?.toBlob?.({ type: "png" });
+      } finally {
+        dummy.remove();
+      }
+      _exportFontsWarmedUp = true;
+    } catch { /* best effort */ }
+  }
+}
+
 /** Union of the on-screen boxes that carry visible map content (topic text, expand carets, connectors). Boxes are measured even when clipped by an overflow-hidden parent. */
 function contentBoundsRelativeTo(origin, root) {
   const rects = [...root.querySelectorAll("me-tpc, me-epd, path")].map((el) => el.getBoundingClientRect())
@@ -452,6 +493,7 @@ async function exportCanonicalFullMap({
   document.body.appendChild(offscreen);
   let instance = null;
   try {
+    await warmUpExportFonts(snapdom);
     await waitForRenderResources(offscreen);
     instance = new MindElixirCtor({
       el: mountEl, direction: MindElixirCtor.SIDE, compact: true,
@@ -459,6 +501,7 @@ async function exportCanonicalFullMap({
     });
     instance.init({ nodeData: mindData.nodeData, arrows: mindData.arrows });
     applyContainerAppearance({ mind: instance, appearance });
+    await waitForRenderResources(instance.map);
     instance.layout?.();
     instance.linkDiv?.();
     markSourceVisualRoles(instance);
@@ -694,6 +737,7 @@ async function exportMindmapImageMultiBranch({
 
   let offscreenMind = null;
   try {
+    await warmUpExportFonts(snapdom);
     offscreenMind = new MindElixirCtor({
       el: mountEl, direction: MindElixirCtor.SIDE, compact: true,
       editable: false, contextMenu: false, toolBar: false, theme: THEME,
@@ -703,6 +747,7 @@ async function exportMindmapImageMultiBranch({
     // needed (unlike the live-canvas path), so appearance is applied
     // directly rather than through the snapshot/restore functions.
     applyContainerAppearance({ mind: offscreenMind, appearance });
+    await waitForRenderResources(offscreenMind.map);
     offscreenMind.layout?.();
     offscreenMind.linkDiv?.();
     applyTargetAppearance({ mind: offscreenMind, target: offscreenMind.map, appearance });

@@ -1,5 +1,11 @@
 # Lessons Learned
 
+## SVG embedded webfonts in Chromium require cache warmup before first raster draw (2026-10-24)
+
+- Chromium's HTMLImageElement SVG renderer decodes embedded base64 `@font-face` definitions asynchronously. When drawing an SVG with embedded webfonts to a Canvas via `ctx.drawImage(img, 0, 0)`, the first draw on a cold cache can execute before the SVG font cache finishes decoding, causing text to render in fallback system fonts (e.g. Georgia instead of Spectral) which changes line wrap points.
+- SnapDOM's internal warmup (`safariWarmupAttempts`) was mistakenly guarded to only run on WebKit/Safari (`H()`), leaving Chromium vulnerable to cold-first font decode lag.
+- Always prime the font cache using `document.fonts.load(..., sampleText)` and a single warm-up raster pass before cold capture, and ensure layout measures against settled fonts.
+
 ## Export SVG/raster captures must embed fonts and wait for font resources before layout (2026-10-23)
 
 - Web browsers restrict SVG images inside `<img>` (used for rasterization onto Canvas) from loading external stylesheets or network fonts. If font embedding is not enabled (`embedFonts: true`), raster output falls back to system fonts, which have different character widths and cause unexpected text wrapping and clipping inside fixed-size boxes.

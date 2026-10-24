@@ -1,5 +1,20 @@
 # Known Issues
 
+## Cold-first export in Chromium clipped node text due to lazy SVG embedded font decoding (fixed 2026-10-24)
+
+**Symptom:** On a cold first PDF export (e.g. `map-a4`), parent node P clipped text (126 text-colored pixels escaped 7px below the measured topic box). Subsequent/warm exports (`map-content-fit`, `map-and-outline-content-fit`) passed cleanly with 0 escaped pixels.
+
+**Root cause:**
+1. In Chromium, drawing an SVG containing `@font-face` data URLs to `<canvas>` via `<img src="svgDataUrl">` does not wait for embedded `@font-face` data URIs to finish decoding in the SVG renderer's font cache on the first paint. SnapDOM's authors added a 3-attempt warmup `Zi(t, e)` only for Safari under `if (H() ...)`, inadvertently skipping warmup on Chromium.
+2. In `exportCanonicalFullMap`, `await waitForRenderResources(offscreen)` ran while `offscreen` was still empty, meaning `document.fonts.ready` returned immediately without triggering or awaiting `Spectral` font-subsets (such as Vietnamese diacritics).
+3. As a result, the first cold canvas draw rendered with fallback Georgia glyph metrics, wrapping the last word ("cắt") to line 2 and escaping the 78px box by 7px. Subsequent warm captures rendered cleanly because the font was already cached in memory.
+
+**Fix:**
+1. Added `warmUpExportFonts(snapdom)` to preload all required font weights/subsets via `document.fonts.load()` with sample Vietnamese text, and prime SnapDOM's embedded font decode cache once per session before cold capture.
+2. Ensured `await waitForRenderResources(instance.map)` runs after nodes are initialized, settling resources before `instance.layout()` and `instance.linkDiv()` compute geometry and connector paths.
+
+**Regression:** Cold first export in Playwright with `captureMapImageWithGeometry` maintains <= 2 escaped pixels on parent node P across real browser rasterization.
+
 ## Export node text could overflow visible bounding box in SVG/PNG downloads (fixed 2026-10-23)
 
 **Symptom:** In exported SVG and raster images (PNG, JPEG, WebP), node text (particularly on the ROOT node and promoted parent P) could wrap to additional lines and overflow out of the bottom of the visible colored box (e.g. 18px on ROOT, 9px on P).

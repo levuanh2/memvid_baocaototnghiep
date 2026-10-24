@@ -15,7 +15,7 @@ describe("compact StudyMap workspace contract", () => {
 
   it("keeps mindmap typography within the compact reading scale", () => {
     const css = read("src/components/mindmap/mindmap.css");
-    expect(css).toMatch(/\.me-container me-root me-tpc\s*\{[^}]*font-size:\s*20px/);
+    expect(css).toMatch(/\.me-container me-root me-tpc[^{]*\{[^}]*font-size:\s*20px/);
     expect(css).toMatch(/\.me-container me-tpc\s*\{\s*font-size:\s*13px/);
   });
 
