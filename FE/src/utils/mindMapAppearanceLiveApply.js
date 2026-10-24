@@ -115,6 +115,12 @@ export function applyLiveCanvasAppearance({ mind, resolved }) {
   if (resolved.connector.colorMode !== "keep") {
     const color = resolved.connector.fixedColor || (resolved.connector.colorMode === "monochrome" ? "#2B2620" : "#126CF2");
     rules.push(`.lines path[stroke], .subLines path[stroke] { stroke: ${color} !important; }`);
+    // mindmap.css's `.subLines path { opacity: 0.6; }` depth-signal dimming
+    // composites with this stroke color at render time, diluting a custom
+    // color's actual rendered pixel/contrast below the value the user
+    // configured (geometry stays correct — only the rendered color is off).
+    // Only lift it when the user explicitly picked a connector color.
+    rules.push(`.subLines path[stroke] { opacity: 1 !important; }`);
   }
   if (rules.length && container) {
     styleEl = document.createElement("style");

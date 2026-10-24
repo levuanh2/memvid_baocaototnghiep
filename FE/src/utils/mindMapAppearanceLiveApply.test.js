@@ -105,6 +105,23 @@ describe("applyLiveCanvasAppearance", () => {
     expect(styleEl).toBeTruthy();
     expect(styleEl.textContent).toContain("stroke:");
     expect(styleEl.textContent).toContain("stroke-width:");
+    expect(styleEl.textContent).toContain(".subLines path[stroke] { opacity: 1 !important; }");
+  });
+
+  it("preserves native depth opacity when connector colorMode is keep", () => {
+    const mind = makeMind();
+    const resolved = resolveCanvasAppearance({
+      savedAppearance: {
+        version: 2,
+        preset: "default",
+        overrides: { connector: { thickness: "thick", colorMode: "keep" } },
+      },
+    });
+    applyLiveCanvasAppearance({ mind, resolved });
+    const styleEl = mind.container.querySelector("style[data-mm-appearance-connector]");
+    expect(styleEl).toBeTruthy();
+    expect(styleEl.textContent).toContain("stroke-width:");
+    expect(styleEl.textContent).not.toContain("opacity: 1");
   });
 
   it("rollback restores every touched node's inline style AND removes the connector <style> tag, leaving zero trace", () => {
