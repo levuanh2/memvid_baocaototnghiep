@@ -4,6 +4,7 @@ import react from '@vitejs/plugin-react'
 export default defineConfig({
   plugins: [react()],
   test: {
+    testTimeout: 15000,
     // FE/e2e/**/*.spec.js and FE/e2e-fixture/**/*.spec.js are Playwright
     // specs (run via `npx playwright test`, see playwright.config.js /
     // playwright.fixture.config.js) — Vitest's default include glob

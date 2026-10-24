@@ -390,6 +390,47 @@ async function waitForRenderResources(root) {
   await Promise.all(pending);
 }
 
+let _exportFontsWarmedUp = false;
+
+/** Preloads webfonts and primes SnapDOM's SVG embedded-font decode cache so cold-first captures never fall back to system fonts. */
+async function warmUpExportFonts(snapdom) {
+  if (_exportFontsWarmedUp || typeof document === "undefined") return;
+  const sample = "ăâêôơưđÁẾỖỜỮ — ROOT Nhánh cha Kết nối màu sắc hình học";
+  if (document.fonts?.load) {
+    try {
+      await Promise.allSettled([
+        document.fonts.load('600 20px "Spectral"', sample),
+        document.fonts.load('600 14px "Spectral"', sample),
+        document.fonts.load('400 13px "Spectral"', sample),
+        document.fonts.load('700 14px "Spectral"', sample),
+        document.fonts.load('600 20px Inter', sample),
+        document.fonts.load('600 14px Inter', sample),
+        document.fonts.load('400 13px Inter', sample),
+      ]);
+      await document.fonts.ready;
+    } catch { /* best effort */ }
+  }
+  if (
+    typeof snapdom === "function"
+    && (snapdom === realSnapdom || (!snapdom.mock && !snapdom._isMockFunction))
+    && typeof createImageBitmap === "function"
+  ) {
+    try {
+      const dummy = document.createElement("div");
+      dummy.style.cssText = "position:fixed;left:-99999px;top:0;font-family:'Spectral', Georgia, serif;font-weight:600;font-size:14px;pointer-events:none;";
+      dummy.textContent = sample;
+      document.body.appendChild(dummy);
+      try {
+        const warmup = await snapdom(dummy, { embedFonts: true, scale: 1 });
+        await warmup?.toBlob?.({ type: "png" });
+      } finally {
+        dummy.remove();
+      }
+      _exportFontsWarmedUp = true;
+    } catch { /* best effort */ }
+  }
+}
+
 /** Union of the on-screen boxes that carry visible map content (topic text, expand carets, connectors). Boxes are measured even when clipped by an overflow-hidden parent. */
 function contentBoundsRelativeTo(origin, root) {
   const rects = [...root.querySelectorAll("me-tpc, me-epd, path")].map((el) => el.getBoundingClientRect())
@@ -446,18 +487,21 @@ async function exportCanonicalFullMap({
   // CSS override (mindmap.css: ".mm-export-offscreen me-root me-tpc[data-
   // export-source-role=...]") needs that class to be reachable from inside
   // the captured subtree, so it has to sit on mountEl itself too.
-  mountEl.className = "mm-export-offscreen";
+  mountEl.className = "mm-export-offscreen me-container";
   mountEl.style.cssText = "width:100%; height:100%;";
   offscreen.appendChild(mountEl);
   document.body.appendChild(offscreen);
   let instance = null;
   try {
+    await warmUpExportFonts(snapdom);
+    await waitForRenderResources(offscreen);
     instance = new MindElixirCtor({
       el: mountEl, direction: MindElixirCtor.SIDE, compact: true,
       editable: false, contextMenu: false, toolBar: false, theme: THEME,
     });
     instance.init({ nodeData: mindData.nodeData, arrows: mindData.arrows });
     applyContainerAppearance({ mind: instance, appearance });
+    await waitForRenderResources(instance.map);
     instance.layout?.();
     instance.linkDiv?.();
     markSourceVisualRoles(instance);
@@ -478,7 +522,6 @@ async function exportCanonicalFullMap({
       mind: instance,
       resolved: resolveExportAppearance({ canvasAppearance, exportOverride: exportStyleOverride }),
     });
-    await waitForRenderResources(instance.map);
     instance.map.style.transform = "translate3d(0px, 0px, 0px) scale(1)";
     if (settleMs > 0) await new Promise((r) => setTimeout(r, settleMs));
 
@@ -505,7 +548,7 @@ async function exportCanonicalFullMap({
     instance.linkDiv?.();
     if (settleMs > 0) await new Promise((r) => setTimeout(r, settleMs));
 
-    const result = await snapdom(mountEl, { backgroundColor, scale, quality });
+    const result = await snapdom(mountEl, { backgroundColor, scale, quality, embedFonts: true });
     const filename = exportFilenameFor(title, format === "jpeg" ? "jpg" : format);
     const buildManifest = withGeometryManifest
       ? (realW, realH) => extractGeometryManifest(mountEl, realW, realH)
@@ -687,13 +730,14 @@ async function exportMindmapImageMultiBranch({
   offscreen.className = "mm-export-offscreen";
   offscreen.style.cssText = "position:fixed; left:-99999px; top:0; width:2400px; height:1600px; pointer-events:none;";
   const mountEl = document.createElement("div");
-  mountEl.className = "mm-export-offscreen"; // see the sibling mountEl in exportCanonicalFullMap for why
+  mountEl.className = "mm-export-offscreen me-container"; // see the sibling mountEl in exportCanonicalFullMap for why
   mountEl.style.cssText = "width:100%; height:100%;";
   offscreen.appendChild(mountEl);
   document.body.appendChild(offscreen);
 
   let offscreenMind = null;
   try {
+    await warmUpExportFonts(snapdom);
     offscreenMind = new MindElixirCtor({
       el: mountEl, direction: MindElixirCtor.SIDE, compact: true,
       editable: false, contextMenu: false, toolBar: false, theme: THEME,
@@ -703,6 +747,7 @@ async function exportMindmapImageMultiBranch({
     // needed (unlike the live-canvas path), so appearance is applied
     // directly rather than through the snapshot/restore functions.
     applyContainerAppearance({ mind: offscreenMind, appearance });
+    await waitForRenderResources(offscreenMind.map);
     offscreenMind.layout?.();
     offscreenMind.linkDiv?.();
     applyTargetAppearance({ mind: offscreenMind, target: offscreenMind.map, appearance });
@@ -710,7 +755,7 @@ async function exportMindmapImageMultiBranch({
     offscreenMind.scaleFit?.(); // this THROWAWAY instance's own viewport — never the live one
     if (settleMs > 0) await new Promise((r) => setTimeout(r, settleMs));
 
-    const result = await snapdom(offscreenMind.map, { backgroundColor, scale, quality });
+    const result = await snapdom(offscreenMind.map, { backgroundColor, scale, quality, embedFonts: true });
     const filename = exportFilenameFor(title, format === "jpeg" ? "jpg" : format);
     return await _finishCapture(result, { outputMode, format, filename, quality });
   } finally {

@@ -1,5 +1,23 @@
 # Lessons Learned
 
+## SVG embedded webfonts in Chromium require cache warmup before first raster draw (2026-10-24)
+
+- Chromium's HTMLImageElement SVG renderer decodes embedded base64 `@font-face` definitions asynchronously. When drawing an SVG with embedded webfonts to a Canvas via `ctx.drawImage(img, 0, 0)`, the first draw on a cold cache can execute before the SVG font cache finishes decoding, causing text to render in fallback system fonts (e.g. Georgia instead of Spectral) which changes line wrap points.
+- SnapDOM's internal warmup (`safariWarmupAttempts`) was mistakenly guarded to only run on WebKit/Safari (`H()`), leaving Chromium vulnerable to cold-first font decode lag.
+- Always prime the font cache using `document.fonts.load(..., sampleText)` and a single warm-up raster pass before cold capture, and ensure layout measures against settled fonts.
+
+## Export SVG/raster captures must embed fonts and wait for font resources before layout (2026-10-23)
+
+- Web browsers restrict SVG images inside `<img>` (used for rasterization onto Canvas) from loading external stylesheets or network fonts. If font embedding is not enabled (`embedFonts: true`), raster output falls back to system fonts, which have different character widths and cause unexpected text wrapping and clipping inside fixed-size boxes.
+- Always await `document.fonts.ready` BEFORE initializing Mind-Elixir or triggering layout, otherwise the first export pass computes topic positions and content bounds against fallback font metrics before the webfont settles.
+- Mind-Elixir's `layout()` clears and regenerates inner DOM topics; any custom DOM attributes stamped onto nodes (like `data-export-source-role`) must be applied after `layout()`, not before.
+
+## Author stylesheet specificity and inline priority must align between canvas and export (2026-10-23)
+
+- An !important rule on .me-container me-root me-tpc will silently prevent applyLiveCanvasAppearance from applying custom presets to the canvas root if inline styles lack !important.
+- If an offscreen export container lacks the same container classes (.me-container) as the live canvas, stylesheet rules will apply to the canvas but not to the export container, causing visual divergence in font-size, weight, padding, and color.
+- Always scope structural root overrides with :not([data-export-source-role="branch"]):not([data-export-source-role="leaf"]) when nodes can be promoted to root during partial/branch exports.
+
 ## Artifact gates must drive the engine state and carry the same captured bytes across boundaries
 
 A rounded zoom label or a CSS transform is not proof of Mind Elixir's actual

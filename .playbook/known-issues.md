@@ -1,5 +1,46 @@
 # Known Issues
 
+## Cold-first export in Chromium clipped node text due to lazy SVG embedded font decoding (fixed 2026-10-24)
+
+**Symptom:** On a cold first PDF export (e.g. `map-a4`), parent node P clipped text (126 text-colored pixels escaped 7px below the measured topic box). Subsequent/warm exports (`map-content-fit`, `map-and-outline-content-fit`) passed cleanly with 0 escaped pixels.
+
+**Root cause:**
+1. In Chromium, drawing an SVG containing `@font-face` data URLs to `<canvas>` via `<img src="svgDataUrl">` does not wait for embedded `@font-face` data URIs to finish decoding in the SVG renderer's font cache on the first paint. SnapDOM's authors added a 3-attempt warmup `Zi(t, e)` only for Safari under `if (H() ...)`, inadvertently skipping warmup on Chromium.
+2. In `exportCanonicalFullMap`, `await waitForRenderResources(offscreen)` ran while `offscreen` was still empty, meaning `document.fonts.ready` returned immediately without triggering or awaiting `Spectral` font-subsets (such as Vietnamese diacritics).
+3. As a result, the first cold canvas draw rendered with fallback Georgia glyph metrics, wrapping the last word ("cắt") to line 2 and escaping the 78px box by 7px. Subsequent warm captures rendered cleanly because the font was already cached in memory.
+
+**Fix:**
+1. Added `warmUpExportFonts(snapdom)` to preload all required font weights/subsets via `document.fonts.load()` with sample Vietnamese text, and prime SnapDOM's embedded font decode cache once per session before cold capture.
+2. Ensured `await waitForRenderResources(instance.map)` runs after nodes are initialized, settling resources before `instance.layout()` and `instance.linkDiv()` compute geometry and connector paths.
+
+**Regression:** Cold first export in Playwright with `captureMapImageWithGeometry` maintains <= 2 escaped pixels on parent node P across real browser rasterization.
+
+## Export node text could overflow visible bounding box in SVG/PNG downloads (fixed 2026-10-23)
+
+**Symptom:** In exported SVG and raster images (PNG, JPEG, WebP), node text (particularly on the ROOT node and promoted parent P) could wrap to additional lines and overflow out of the bottom of the visible colored box (e.g. 18px on ROOT, 9px on P).
+
+**Root cause:**
+1. SnapDOM snapshots computed styles directly onto DOM elements, generating fixed height and block-size properties for each topic box based on live metrics.
+2. SVG images in browsers (used by snapdom when rendering SVG to <canvas> via new Image() for rasterization, and by external SVG viewers) run in a sandboxed context where external @import webfonts (Google Fonts "Spectral") cannot be loaded over the network. Text fell back to wider system fonts (e.g. Georgia), causing lines to wrap and exceed the hardcoded box height.
+3. In exportCanonicalFullMap, waitForRenderResources ran after Mind-Elixir had already run initial layout, meaning cold-cache runs could layout against fallback font metrics before Google Fonts finished loading.
+
+**Fix:**
+1. Enabled `embedFonts: true` in snapdom export options, inlining webfonts directly into the SVG as self-contained base64 @font-face data URIs so rasterizers and downloaded SVGs render identical typography and line wrapping everywhere.
+2. Moved `await waitForRenderResources(offscreen)` before Mind-Elixir initialization and layout so all initial geometry layout measures against settled fonts.
+3. Ensured `markSourceVisualRoles(instance)` is invoked after Mind-Elixir DOM generation so role attributes are preserved.
+
+**Regression:** `e2e-fixture/export-root-color-artifacts.spec.js` verifies that text bounding box content rect remains completely within the visible node box (<= 1px overflow) across SVG and real raster downloads (PNG, JPEG, WebP).
+
+## Export root node could lose appearance styling or differ from live canvas (fixed 2026-10-23)
+
+**Symptom:** on export (SVG/PNG/PDF), the ROOT node could take an unstyled or divergent appearance (e.g. low-contrast purple in pastel preset, or default MindElixir 25px font/8px radius) while the live canvas rendered a blue #126CF2 20px card. Additionally, promoted branch nodes could collide with root styling.
+
+**Root cause:** mindmap.css used .me-container me-root me-tpc with !important to define the default root card. On the live canvas, this !important rule blocked non-default presets (e.g. study or pastel) from applying to the root, keeping the canvas root locked to blue/white. Meanwhile, the export container mountEl only had mm-export-offscreen without me-container, so the author CSS did not apply there, leaving export root subject to preset inline styles without !important or library defaults.
+
+**Fix:** Added me-container to the export mountEl so typography and styles match the live canvas. Scoped default root styling in mindmap.css using :not([data-export-source-role="branch"]):not([data-export-source-role="leaf"]) to prevent leaking onto promoted branch/leaf nodes. Set priority = "important" in applyLiveCanvasAppearance so non-default presets and overrides cleanly take effect over base root styles on both canvas and export.
+
+**Regression:** e2e-fixture/export-root-color-fidelity.spec.js covers live vs exported root colors in light and dark themes (Tests A/E), promoted parent section styling (Test B), saved appearance fidelity for custom presets (Test C), and export-only appearance overrides (Test D).
+
 ## Export attempts could publish stale error, cancellation, or image-completion state into a newer session (fixed 2026-10-22)
 
 **Symptom:** after cancelling a PDF export and starting another attempt, a late
