@@ -1,0 +1,634 @@
+<!doctype html>
+<html lang="vi">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Alternative B — Learning Action Matrix</title>
+  <style>
+    :root {
+      --accent: #126cf2;
+      --accent-hover: #0059d6;
+      --accent-subtle: #eaf3ff;
+      --bg-base: #f4f8fc;
+      --bg-card: #ffffff;
+      --bg-elevated: #f8fbfe;
+      --text-primary: #102a5d;
+      --text-secondary: #45618f;
+      --text-muted: #6e84a8;
+      --border-color: #d7e2f0;
+      --ok: #087f5b;
+      --ok-bg: #e7f7f0;
+      --warn: #9a5c08;
+      --warn-bg: #fff4db;
+      --shadow-card: 0 1px 2px rgba(16, 42, 93, .06);
+      --radius-surface: 10px;
+      --radius-control: 8px;
+    }
+    * { box-sizing: border-box; }
+    body {
+      margin: 0;
+      color: var(--text-primary);
+      background: var(--bg-base);
+      font: 14px/1.45 Inter, ui-sans-serif, system-ui, -apple-system, "Segoe UI", sans-serif;
+    }
+    button, input, select { font: inherit; }
+    button { cursor: pointer; }
+    button:focus-visible, a:focus-visible, input:focus-visible, select:focus-visible {
+      outline: 3px solid rgba(18, 108, 242, .35);
+      outline-offset: 2px;
+    }
+    .app-header {
+      min-height: 64px;
+      background: var(--bg-card);
+      border-bottom: 1px solid var(--border-color);
+      display: flex;
+      align-items: center;
+    }
+    .header-inner, .page { width: min(1180px, calc(100% - 40px)); margin: 0 auto; }
+    .header-inner { display: flex; align-items: center; gap: 18px; }
+    .back { color: var(--text-secondary); text-decoration: none; white-space: nowrap; }
+    .brand { min-width: 0; }
+    .eyebrow, .micro-label {
+      color: var(--text-muted);
+      font: 600 10px/1.2 ui-monospace, SFMono-Regular, Consolas, monospace;
+      letter-spacing: .16em;
+      text-transform: uppercase;
+    }
+    h1 { margin: 2px 0 0; font: 700 21px/1.1 Georgia, serif; }
+    .header-actions { margin-left: auto; display: flex; gap: 8px; }
+    .control, .primary, .quiet, .quick-action, .more-action {
+      min-height: 40px;
+      border: 1px solid var(--border-color);
+      border-radius: var(--radius-control);
+      padding: 0 13px;
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      gap: 6px;
+      color: var(--text-primary);
+      background: var(--bg-card);
+      text-decoration: none;
+    }
+    .primary { color: #fff; background: var(--accent); border-color: var(--accent); font-weight: 700; }
+    .primary:hover { background: var(--accent-hover); }
+    .quiet { color: var(--text-secondary); }
+    .page { padding: 30px 0 60px; }
+    .intro {
+      display: flex;
+      align-items: end;
+      justify-content: space-between;
+      gap: 24px;
+      padding-bottom: 20px;
+      border-bottom: 1px solid var(--border-color);
+    }
+    .intro p { margin: 6px 0 0; max-width: 720px; color: var(--text-secondary); }
+    .total { white-space: nowrap; }
+    .total strong { font: 700 28px/1 Georgia, serif; }
+    .workspace { display: grid; grid-template-columns: 190px minmax(0, 1fr); gap: 24px; margin-top: 22px; }
+    .sidebar { position: sticky; top: 18px; align-self: start; }
+    .sidebar section { margin-bottom: 22px; }
+    .sidebar-head { display: flex; justify-content: space-between; align-items: center; margin-bottom: 7px; }
+    .side-filter {
+      width: 100%;
+      min-height: 36px;
+      padding: 0 8px;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      border: 0;
+      border-radius: 7px;
+      color: var(--text-secondary);
+      background: transparent;
+    }
+    .side-filter[aria-pressed="true"] { color: var(--accent-hover); background: var(--accent-subtle); }
+    .side-filter span:last-child { color: var(--text-muted); font-size: 12px; }
+    .task-strip {
+      display: flex;
+      align-items: center;
+      gap: 4px;
+      padding: 5px;
+      border: 1px solid var(--border-color);
+      border-radius: var(--radius-surface);
+      background: var(--bg-card);
+      box-shadow: var(--shadow-card);
+    }
+    .task-view {
+      flex: 1;
+      min-height: 50px;
+      border: 0;
+      border-radius: 7px;
+      background: transparent;
+      color: var(--text-secondary);
+      display: flex;
+      align-items: flex-start;
+      justify-content: center;
+      flex-direction: column;
+      padding: 6px 11px;
+    }
+    .task-view strong { color: var(--text-primary); }
+    .task-view span { margin-top: 2px; color: var(--text-muted); font-size: 12px; }
+    .task-view[aria-pressed="true"] { background: var(--accent-subtle); }
+    .task-view[aria-pressed="true"] strong { color: var(--accent-hover); }
+    .toolbar {
+      margin-top: 12px;
+      display: grid;
+      grid-template-columns: minmax(200px, 1fr) 145px auto;
+      gap: 8px;
+    }
+    .toolbar input, .toolbar select {
+      width: 100%;
+      height: 42px;
+      padding: 0 12px;
+      border: 1px solid var(--border-color);
+      border-radius: var(--radius-control);
+      background: var(--bg-card);
+      color: var(--text-primary);
+    }
+    .toolbar-actions { display: flex; gap: 8px; }
+    .mobile-collections { display: none; }
+    .selection-bar {
+      min-height: 50px;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 12px;
+      color: var(--text-secondary);
+    }
+    .selection-bar label { display: inline-flex; align-items: center; gap: 8px; }
+    input[type="checkbox"] { width: 17px; height: 17px; accent-color: var(--accent); }
+    .result-count { color: var(--text-muted); font-size: 12px; }
+    .matrix {
+      border: 1px solid var(--border-color);
+      border-radius: var(--radius-surface);
+      background: var(--bg-card);
+      box-shadow: var(--shadow-card);
+      overflow: visible;
+    }
+    .matrix-header, .document-row {
+      display: grid;
+      grid-template-columns: 34px minmax(230px, 1fr) 178px 190px 72px;
+      gap: 10px;
+      align-items: center;
+    }
+    .matrix-header {
+      min-height: 38px;
+      padding: 0 14px;
+      border-bottom: 1px solid var(--border-color);
+      color: var(--text-muted);
+      font: 600 10px/1.2 ui-monospace, SFMono-Regular, Consolas, monospace;
+      letter-spacing: .12em;
+      text-transform: uppercase;
+    }
+    .document-row {
+      position: relative;
+      min-height: 100px;
+      padding: 13px 14px;
+      border-bottom: 1px solid var(--border-color);
+    }
+    .document-row:last-child { border-bottom: 0; }
+    .document-row[data-selected="true"] { background: var(--accent-subtle); }
+    .check-target {
+      width: 34px;
+      height: 44px;
+      display: flex;
+      align-items: center;
+      justify-content: flex-start;
+      cursor: pointer;
+    }
+    .doc-copy { min-width: 0; }
+    .title-line { display: flex; align-items: flex-start; gap: 7px; }
+    .doc-title {
+      min-width: 0;
+      overflow: hidden;
+      display: -webkit-box;
+      -webkit-box-orient: vertical;
+      -webkit-line-clamp: 2;
+      font-weight: 700;
+      font-size: 15px;
+      line-height: 1.35;
+    }
+    .state-badge {
+      flex: 0 0 auto;
+      border-radius: 999px;
+      padding: 2px 7px;
+      color: var(--ok);
+      background: var(--ok-bg);
+      font-size: 11px;
+      font-weight: 650;
+    }
+    .state-badge.warn { color: var(--warn); background: var(--warn-bg); }
+    .doc-summary { margin-top: 5px; color: var(--text-secondary); font-size: 13px; }
+    .doc-progress { margin-top: 4px; color: var(--text-muted); font-size: 12px; }
+    .primary-action { width: 100%; min-height: 42px; }
+    .quick-cluster { display: grid; grid-template-columns: 1fr 1fr; gap: 6px; }
+    .quick-action { min-height: 42px; padding: 0 8px; color: var(--accent-hover); background: var(--accent-subtle); border-color: transparent; font-weight: 650; }
+    .more-action { width: 100%; padding: 0 8px; color: var(--text-secondary); }
+    .tool-panel {
+      position: absolute;
+      right: 12px;
+      top: 64px;
+      z-index: 10;
+      width: 230px;
+      padding: 6px;
+      border: 1px solid var(--border-color);
+      border-radius: var(--radius-surface);
+      background: var(--bg-card);
+      box-shadow: 0 14px 40px rgba(16, 42, 93, .2);
+    }
+    .tool-panel[hidden] { display: none; }
+    .tool-head { display: flex; align-items: center; gap: 8px; padding: 2px 4px 5px 8px; }
+    .tool-panel h2 { margin: 0; min-width: 0; flex: 1; font-size: 13px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+    .panel-close { width: 36px !important; min-height: 36px !important; padding: 0 !important; text-align: center !important; font-weight: 700; }
+    .tool-panel button {
+      width: 100%;
+      min-height: 40px;
+      border: 0;
+      border-radius: 7px;
+      padding: 0 10px;
+      text-align: left;
+      color: var(--text-primary);
+      background: transparent;
+    }
+    .tool-panel button:hover { background: var(--accent-subtle); }
+    .sheet-backdrop { display: none; }
+    .status {
+      position: fixed;
+      left: 50%;
+      bottom: 22px;
+      transform: translateX(-50%);
+      z-index: 30;
+      padding: 10px 14px;
+      border-radius: 8px;
+      color: white;
+      background: var(--text-primary);
+      box-shadow: 0 12px 30px rgba(16, 42, 93, .22);
+    }
+    .status:empty { display: none; }
+    .prototype-note { margin-top: 14px; color: var(--text-muted); font-size: 11px; }
+
+    @media (max-width: 760px) {
+      .app-header { min-height: 58px; }
+      .header-inner, .page { width: calc(100% - 32px); }
+      .back { font-size: 0; }
+      .back::after { content: "Quay lại"; font-size: 13px; }
+      .brand .eyebrow { display: none; }
+      h1 { font-size: 18px; }
+      .header-actions .quiet { display: none; }
+      .header-actions .primary { min-height: 44px; padding: 0 12px; }
+      .page { padding-top: 22px; }
+      .intro { align-items: flex-start; }
+      .intro p { font-size: 13px; }
+      .total strong { font-size: 24px; }
+      .workspace { display: block; margin-top: 18px; }
+      .sidebar { display: none; }
+      .task-strip { display: grid; grid-template-columns: 1fr 1fr; gap: 5px; }
+      .task-view { min-height: 58px; }
+      .toolbar { grid-template-columns: minmax(0, 1fr) 124px; }
+      .toolbar-actions { grid-column: 1 / -1; }
+      .toolbar-actions .control { flex: 1; min-height: 44px; }
+      .mobile-collections { display: inline-flex; }
+      .matrix-header { display: none; }
+      .matrix { background: transparent; border: 0; box-shadow: none; display: grid; gap: 10px; }
+      .document-row {
+        min-height: 226px;
+        display: grid;
+        grid-template-columns: 44px minmax(0, 1fr);
+        gap: 10px;
+        align-items: start;
+        padding: 14px;
+        border: 1px solid var(--border-color);
+        border-radius: var(--radius-surface);
+        background: var(--bg-card);
+        box-shadow: var(--shadow-card);
+      }
+      .document-row:last-child { border-bottom: 1px solid var(--border-color); }
+      .check-target { width: 44px; height: 44px; justify-content: center; }
+      .doc-copy { grid-column: 2; }
+      .title-line { flex-wrap: wrap; }
+      .doc-title { width: 100%; }
+      .primary-action { grid-column: 2; min-height: 44px; }
+      .quick-cluster { grid-column: 2; }
+      .quick-action { min-height: 44px; }
+      .more-action { grid-column: 2; min-height: 44px; }
+      .tool-panel {
+        position: fixed;
+        left: 0;
+        right: 0;
+        top: auto;
+        bottom: 0;
+        z-index: 40;
+        width: 100%;
+        max-height: min(72vh, 560px);
+        overflow: auto;
+        border-radius: 16px 16px 0 0;
+        padding: 12px 16px calc(16px + env(safe-area-inset-bottom));
+      }
+      .tool-head { padding: 0 0 8px 4px; }
+      .tool-panel h2 { font-size: 16px; }
+      .panel-close { width: 44px !important; min-height: 44px !important; }
+      .tool-panel button { min-height: 48px; font-size: 15px; }
+      .sheet-backdrop[data-open="true"] {
+        display: block;
+        position: fixed;
+        inset: 0;
+        z-index: 35;
+        border: 0;
+        background: rgba(16, 42, 93, .38);
+      }
+      .prototype-note { padding-bottom: 50px; }
+    }
+  </style>
+</head>
+<body>
+  <header class="app-header">
+    <div class="header-inner">
+      <a class="back" href="#workspace">← Phòng đọc</a>
+      <div class="brand"><div class="eyebrow">StudyMap</div><h1>Thư viện học tập</h1></div>
+      <div class="header-actions">
+        <button type="button" class="primary">Tải tài liệu</button>
+        <button type="button" class="quiet">Xem thử</button>
+      </div>
+    </div>
+  </header>
+
+  <main class="page" id="main-content">
+    <section class="intro">
+      <div>
+        <div class="micro-label">Chọn mục tiêu, hành động ngay trên một bản ghi</div>
+        <p>Mỗi tài liệu xuất hiện một lần. Hành động chính thích ứng với góc nhìn; Tóm tắt và Sơ đồ luôn cách một lần nhấn.</p>
+      </div>
+      <div class="total"><strong>42</strong> tài liệu</div>
+    </section>
+
+    <div class="workspace">
+      <aside class="sidebar" aria-label="Bộ lọc thư viện">
+        <section>
+          <div class="sidebar-head"><span class="micro-label">Bộ sưu tập</span><button type="button" class="quiet">Tạo</button></div>
+          <button type="button" class="side-filter" aria-pressed="true"><span>Tất cả tài liệu</span><span>42</span></button>
+          <button type="button" class="side-filter" aria-pressed="false"><span>Chưa phân loại</span><span>42</span></button>
+        </section>
+        <section>
+          <div class="sidebar-head"><span class="micro-label">Lối tắt</span></div>
+          <button type="button" class="side-filter" aria-pressed="false"><span>Yêu thích</span><span>3</span></button>
+          <button type="button" class="side-filter" aria-pressed="false"><span>Đã ghim</span><span>2</span></button>
+          <button type="button" class="side-filter" aria-pressed="false"><span>Đã lưu trữ</span><span>0</span></button>
+        </section>
+      </aside>
+
+      <section aria-label="Ma trận hành động tài liệu">
+        <div class="task-strip" aria-label="Góc nhìn theo mục tiêu">
+          <button type="button" class="task-view" data-view="all" aria-pressed="true"><strong>Tất cả</strong><span>42 tài liệu</span></button>
+          <button type="button" class="task-view" data-view="continue" aria-pressed="false"><strong>Tiếp tục học</strong><span>1 đang dở</span></button>
+          <button type="button" class="task-view" data-view="quiz" aria-pressed="false"><strong>Cần quiz</strong><span>42 tài liệu</span></button>
+          <button type="button" class="task-view" data-view="summary" aria-pressed="false"><strong>Cần tóm tắt</strong><span>42 tài liệu</span></button>
+        </div>
+
+        <div class="toolbar">
+          <input id="search" type="search" aria-label="Tìm trong thư viện" placeholder="Tìm theo tên, thẻ, ý chính…" />
+          <select id="sort" aria-label="Sắp xếp"><option value="newest">Mới nhất</option><option value="az">A–Z</option><option value="recent">Mở gần đây</option></select>
+          <div class="toolbar-actions">
+            <button type="button" class="control mobile-collections">Bộ sưu tập</button>
+            <button type="button" class="control">Bộ lọc</button>
+          </div>
+        </div>
+
+        <div class="selection-bar">
+          <label><input id="select-all" type="checkbox" /> Chọn <span id="visible-count">42</span> đang hiện</label>
+          <span class="result-count" id="selected-count" aria-live="polite">0 đã chọn</span>
+        </div>
+
+        <div class="matrix" id="matrix" role="list" aria-label="42 tài liệu — mỗi tài liệu xuất hiện một lần">
+          <div class="matrix-header" aria-hidden="true"><span></span><span>Tài liệu và tiến độ</span><span>Việc tiếp theo</span><span>Truy cập nhanh</span><span>Khác</span></div>
+        </div>
+        <p class="prototype-note">Alternative B · Arrow Up/Down moves between primary actions · active task view changes every primary CTA · titles allow two lines.</p>
+      </section>
+    </div>
+  </main>
+  <button class="sheet-backdrop" id="sheet-backdrop" type="button" aria-label="Đóng bảng công cụ"></button>
+  <div class="status" id="status" role="status" aria-live="polite"></div>
+
+  <script>
+    const names = [
+      "ux-audit-secondary.txt", "sample-doc (35).txt", "sample-doc (34).txt", "sample-doc (33).txt",
+      "sample-doc (32).txt", "sample-doc (31).txt", "sample-doc (30).txt", "sample-doc (29).txt",
+      "sample-doc (28).txt", "sample-doc (27).txt", "sample-doc (26).txt", "sample-doc (25).txt",
+      "sample-doc (24).txt", "sample-doc (23).txt", "sample-doc (22).txt", "sample-doc (21).txt",
+      "sample-doc (20).txt", "second-doc.txt", "sample-doc (19).txt",
+      "Giáo trình Kiến thức về Hệ điều hành và Quản lý bộ nhớ — Chương 04.txt",
+      "Giáo trình Kiến thức về Mạng máy tính — Chương 03.txt",
+      "Giáo trình Kiến thức về Cấu trúc dữ liệu — Chương 02.txt",
+      "Giáo trình Kiến thức về Trí tuệ nhân tạo — Chương 01.txt",
+      "sample-doc (18).txt", "ux-audit-primary.txt", "sample-doc (17).txt", "sample-doc (16).txt",
+      "sample-doc (15).txt", "sample-doc (14).txt", "sample-doc (13).txt", "sample-doc (12).txt",
+      "sample-doc (11).txt", "sample-doc (10).txt", "sample-doc (9).txt", "sample-doc (8).txt",
+      "sample-doc (7).txt", "sample-doc (6).txt", "sample-doc (5).txt", "sample-doc (4).txt",
+      "sample-doc (3).txt", "sample-doc (2).txt", "sample-doc.txt"
+    ];
+    const docs = names.map((name, index) => ({
+      id: `doc-${index + 1}`,
+      name,
+      continuing: index === 0,
+      resume: index === 0 ? "Tiếp tục · Ôn tập" : "Bắt đầu · Tóm tắt",
+      summary: index % 7 === 0 ? "Tóm tắt đã sẵn sàng" : "Chưa có tóm tắt",
+      progress: index === 0 ? "4/5 công cụ sẵn sàng · Quiz 78% · mở 19 giờ trước" : "1/5 công cụ sẵn sàng · chưa bắt đầu quiz"
+    }));
+    const matrix = document.querySelector("#matrix");
+    const header = matrix.querySelector(".matrix-header");
+    const search = document.querySelector("#search");
+    const sort = document.querySelector("#sort");
+    const selectAll = document.querySelector("#select-all");
+    const selectedCount = document.querySelector("#selected-count");
+    const visibleCount = document.querySelector("#visible-count");
+    const status = document.querySelector("#status");
+    const backdrop = document.querySelector("#sheet-backdrop");
+    const main = document.querySelector("#main-content");
+    const appHeader = document.querySelector(".app-header");
+    let view = "all";
+    let selected = new Set();
+    let openDoc = null;
+    let lastTriggerId = null;
+
+    function announce(message) {
+      status.textContent = message;
+      clearTimeout(announce.timer);
+      announce.timer = setTimeout(() => status.textContent = "", 1800);
+    }
+    function isMobile() { return matchMedia("(max-width: 760px)").matches; }
+    function primaryLabel(doc) {
+      if (view === "quiz") return "Tạo quiz";
+      if (view === "summary") return "Tạo tóm tắt";
+      return doc.resume;
+    }
+    function visibleDocs() {
+      let result = docs.filter((doc) => doc.name.toLocaleLowerCase("vi").includes(search.value.trim().toLocaleLowerCase("vi")));
+      if (view === "continue") result = result.filter((doc) => doc.continuing);
+      if (sort.value === "az") result = [...result].sort((a, b) => a.name.localeCompare(b.name, "vi"));
+      if (sort.value === "recent") result = [...result].sort((a, b) => Number(b.continuing) - Number(a.continuing));
+      return result;
+    }
+    function closeTools({ restore = true } = {}) {
+      openDoc = null;
+      document.querySelectorAll("body > .tool-panel").forEach((panel) => panel.remove());
+      backdrop.dataset.open = "false";
+      main.inert = false;
+      appHeader.inert = false;
+      render();
+      if (restore && lastTriggerId) {
+        matrix.querySelector(`[data-document-id="${lastTriggerId}"] .more-action`)?.focus();
+      }
+    }
+    function action(label, doc) {
+      const button = document.createElement("button");
+      button.type = "button";
+      button.className = "tool-action";
+      button.textContent = label;
+      button.addEventListener("click", () => { announce(`${label}: ${doc.name}`); closeTools({ restore: false }); });
+      return button;
+    }
+    function render() {
+      const visible = visibleDocs();
+      matrix.replaceChildren(header);
+      visibleCount.textContent = visible.length;
+      selectedCount.textContent = `${selected.size} đã chọn`;
+      selectAll.checked = visible.length > 0 && visible.every((doc) => selected.has(doc.id));
+      selectAll.indeterminate = selected.size > 0 && !selectAll.checked;
+      matrix.setAttribute("aria-label", `${visible.length} tài liệu — mỗi tài liệu xuất hiện một lần`);
+
+      visible.forEach((doc, index) => {
+        const row = document.createElement("article");
+        row.className = "document-row";
+        row.dataset.documentId = doc.id;
+        row.dataset.selected = String(selected.has(doc.id));
+        row.setAttribute("role", "listitem");
+
+        const checkbox = document.createElement("input");
+        checkbox.type = "checkbox";
+        checkbox.checked = selected.has(doc.id);
+        checkbox.setAttribute("aria-label", `Chọn ${doc.name}`);
+        checkbox.addEventListener("change", () => { checkbox.checked ? selected.add(doc.id) : selected.delete(doc.id); render(); });
+        const checkTarget = document.createElement("label");
+        checkTarget.className = "check-target";
+        checkTarget.append(checkbox);
+
+        const copy = document.createElement("div");
+        copy.className = "doc-copy";
+        const titleLine = document.createElement("div");
+        titleLine.className = "title-line";
+        const title = document.createElement("span");
+        title.className = "doc-title";
+        title.textContent = doc.name;
+        title.title = doc.name;
+        const badge = document.createElement("span");
+        badge.className = `state-badge${doc.continuing ? "" : " warn"}`;
+        badge.textContent = doc.continuing ? "Đang học" : "Chưa bắt đầu";
+        titleLine.append(title, badge);
+        const summary = document.createElement("div");
+        summary.className = "doc-summary";
+        summary.textContent = doc.summary;
+        const progress = document.createElement("div");
+        progress.className = "doc-progress";
+        progress.textContent = doc.progress;
+        copy.append(titleLine, summary, progress);
+
+        const primary = document.createElement("button");
+        primary.type = "button";
+        primary.className = "primary primary-action";
+        primary.textContent = primaryLabel(doc);
+        primary.tabIndex = index === 0 ? 0 : -1;
+        primary.dataset.rovingPrimary = "true";
+        primary.addEventListener("click", () => announce(`${primaryLabel(doc)}: ${doc.name}`));
+        primary.addEventListener("keydown", (event) => {
+          if (event.key !== "ArrowDown" && event.key !== "ArrowUp") return;
+          event.preventDefault();
+          const actions = [...matrix.querySelectorAll('[data-roving-primary="true"]')];
+          const current = actions.indexOf(primary);
+          const next = event.key === "ArrowDown" ? Math.min(actions.length - 1, current + 1) : Math.max(0, current - 1);
+          actions.forEach((item, actionIndex) => item.tabIndex = actionIndex === next ? 0 : -1);
+          actions[next].focus();
+        });
+
+        const quick = document.createElement("div");
+        quick.className = "quick-cluster";
+        ["Tóm tắt", "Sơ đồ"].forEach((label) => {
+          const button = document.createElement("button");
+          button.type = "button";
+          button.className = "quick-action";
+          button.textContent = label;
+          button.addEventListener("click", () => announce(`${label}: ${doc.name}`));
+          quick.append(button);
+        });
+
+        const more = document.createElement("button");
+        more.type = "button";
+        more.className = "more-action";
+        more.textContent = "Thêm";
+        more.setAttribute("aria-label", `Công cụ khác cho ${doc.name}`);
+        more.setAttribute("aria-expanded", String(openDoc === doc.id));
+        more.addEventListener("click", () => {
+          lastTriggerId = doc.id;
+          openDoc = openDoc === doc.id ? null : doc.id;
+          render();
+          if (openDoc) {
+            let freshPanel = matrix.querySelector(`[data-document-id="${doc.id}"] .tool-panel`);
+            if (isMobile()) {
+              // A modal sheet cannot live inside the region it isolates. Move
+              // it beside the inert app content, matching a React portal.
+              document.body.append(freshPanel);
+              main.inert = true;
+              appHeader.inert = true;
+              backdrop.dataset.open = "true";
+            } else {
+              backdrop.dataset.open = "false";
+            }
+            freshPanel.querySelector("button")?.focus();
+          } else {
+            backdrop.dataset.open = "false";
+          }
+        });
+
+        const panel = document.createElement("div");
+        panel.className = "tool-panel";
+        panel.hidden = openDoc !== doc.id;
+        panel.setAttribute("role", "dialog");
+        panel.setAttribute("aria-label", `Công cụ cho ${doc.name}`);
+        const toolHead = document.createElement("div");
+        toolHead.className = "tool-head";
+        const heading = document.createElement("h2");
+        heading.textContent = `Công cụ · ${doc.name}`;
+        const close = document.createElement("button");
+        close.type = "button";
+        close.className = "panel-close";
+        close.textContent = "Đóng";
+        close.setAttribute("aria-label", "Đóng bảng công cụ");
+        close.addEventListener("click", () => closeTools());
+        toolHead.append(heading, close);
+        panel.append(toolHead);
+        ["Tóm tắt", "Sơ đồ tư duy", "Quiz", "Ôn tập", "Hỏi AI", "Chi tiết tài liệu"]
+          .forEach((label) => panel.append(action(label, doc)));
+        panel.addEventListener("keydown", (event) => {
+          if (event.key === "Escape") { event.preventDefault(); closeTools(); return; }
+          if (event.key !== "Tab" || !isMobile()) return;
+          const controls = [...panel.querySelectorAll("button")];
+          if (event.shiftKey && document.activeElement === controls[0]) { event.preventDefault(); controls.at(-1).focus(); }
+          if (!event.shiftKey && document.activeElement === controls.at(-1)) { event.preventDefault(); controls[0].focus(); }
+        });
+        row.append(checkTarget, copy, primary, quick, more, panel);
+        matrix.append(row);
+      });
+    }
+
+    document.querySelectorAll(".task-view").forEach((button) => button.addEventListener("click", () => {
+      view = button.dataset.view;
+      document.querySelectorAll(".task-view").forEach((item) => item.setAttribute("aria-pressed", String(item === button)));
+      openDoc = null;
+      render();
+    }));
+    search.addEventListener("input", render);
+    sort.addEventListener("change", render);
+    selectAll.addEventListener("change", () => { visibleDocs().forEach((doc) => selectAll.checked ? selected.add(doc.id) : selected.delete(doc.id)); render(); });
+    backdrop.addEventListener("click", () => closeTools());
+    addEventListener("resize", () => { if (!isMobile() && openDoc) { main.inert = false; appHeader.inert = false; backdrop.dataset.open = "false"; } });
+    render();
+  </script>
+</body>
+</html>

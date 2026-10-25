@@ -1,0 +1,148 @@
+{
+  "prototype": "E:\\memvid_NCKH\\MemVid_BaoCaoTotNghiep\\.worktrees\\ui-ux-v4-design\\docs\\ui-ux-v4-design\\04-document-library-redesign\\prototype-alternative-b.html",
+  "dataset": "42 document identities copied from the real baseline capture",
+  "desktopDefault": {
+    "viewport": {
+      "width": 1440,
+      "height": 900
+    },
+    "document": {
+      "scrollWidth": 1440,
+      "scrollHeight": 4735
+    },
+    "visibleInteractiveControls": 227,
+    "canonicalRows": 42,
+    "uniqueDocumentIds": 42,
+    "duplicateRowInstances": 0,
+    "primaryActions": 42,
+    "directQuickActions": 84,
+    "contextualTriggers": 42,
+    "focusableRows": 0,
+    "horizontalOverflow": false
+  },
+  "desktopTaskView": {
+    "view": "needs_summary",
+    "primaryLabels": [
+      "Tạo tóm tắt",
+      "Tạo tóm tắt",
+      "Tạo tóm tắt",
+      "Tạo tóm tắt",
+      "Tạo tóm tắt",
+      "Tạo tóm tắt",
+      "Tạo tóm tắt",
+      "Tạo tóm tắt",
+      "Tạo tóm tắt",
+      "Tạo tóm tắt",
+      "Tạo tóm tắt",
+      "Tạo tóm tắt",
+      "Tạo tóm tắt",
+      "Tạo tóm tắt",
+      "Tạo tóm tắt",
+      "Tạo tóm tắt",
+      "Tạo tóm tắt",
+      "Tạo tóm tắt",
+      "Tạo tóm tắt",
+      "Tạo tóm tắt",
+      "Tạo tóm tắt",
+      "Tạo tóm tắt",
+      "Tạo tóm tắt",
+      "Tạo tóm tắt",
+      "Tạo tóm tắt",
+      "Tạo tóm tắt",
+      "Tạo tóm tắt",
+      "Tạo tóm tắt",
+      "Tạo tóm tắt",
+      "Tạo tóm tắt",
+      "Tạo tóm tắt",
+      "Tạo tóm tắt",
+      "Tạo tóm tắt",
+      "Tạo tóm tắt",
+      "Tạo tóm tắt",
+      "Tạo tóm tắt",
+      "Tạo tóm tắt",
+      "Tạo tóm tắt",
+      "Tạo tóm tắt",
+      "Tạo tóm tắt",
+      "Tạo tóm tắt",
+      "Tạo tóm tắt"
+    ],
+    "allPrimaryLabelsMatchIntent": true
+  },
+  "desktopOneToolPanelOpen": {
+    "visibleInteractiveControls": 234,
+    "documentScopedActions": [
+      "Tóm tắt",
+      "Sơ đồ tư duy",
+      "Quiz",
+      "Ôn tập",
+      "Hỏi AI",
+      "Chi tiết tài liệu"
+    ]
+  },
+  "keyboard": {
+    "startDocumentId": "doc-1",
+    "afterArrowDownDocumentId": "doc-2",
+    "expectedDocumentId": "doc-2",
+    "passed": true,
+    "rowContainersFocusable": 0
+  },
+  "mobileDefault": {
+    "viewport": {
+      "width": 390,
+      "height": 844
+    },
+    "document": {
+      "scrollWidth": 390,
+      "scrollHeight": 13098
+    },
+    "visibleInteractiveControls": 221,
+    "canonicalRows": 42,
+    "uniqueDocumentIds": 42,
+    "duplicateRowInstances": 0,
+    "primaryActions": 42,
+    "directQuickActions": 84,
+    "contextualTriggers": 42,
+    "focusableRows": 0,
+    "horizontalOverflow": false
+  },
+  "mobileTargetGeometry": {
+    "checkboxes": {
+      "count": 42,
+      "minimumWidth": 44,
+      "minimumHeight": 44
+    },
+    "primaryActions": {
+      "count": 42,
+      "minimumWidth": 274,
+      "minimumHeight": 44
+    },
+    "quickActions": {
+      "count": 84,
+      "minimumWidth": 134,
+      "minimumHeight": 44
+    },
+    "moreActions": {
+      "count": 42,
+      "minimumWidth": 274,
+      "minimumHeight": 44
+    },
+    "minimumWidth": 44,
+    "minimumHeight": 44,
+    "allAtLeast44By44": true
+  },
+  "mobileToolSheet": {
+    "visibleInteractiveControls": 229,
+    "backdropVisible": true,
+    "backgroundInert": true,
+    "focusInside": true,
+    "actions": [
+      "Tóm tắt",
+      "Sơ đồ tư duy",
+      "Quiz",
+      "Ôn tập",
+      "Hỏi AI",
+      "Chi tiết tài liệu"
+    ],
+    "escapeRestoredTriggerFocus": true
+  }
+}
