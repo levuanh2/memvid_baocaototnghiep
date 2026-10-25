@@ -3426,3 +3426,19 @@ library destination separate from Tutor/Timeline/Knowledge, and preserve the
 Workspace's simultaneous-mount mode architecture. If returning from a route
 must restore a client-side pane, store only a remount seed in the current
 history entry; do not turn the panes themselves into routes.
+
+## Task views must filter membership, not only rename actions (2026-10-26)
+
+A task-oriented tab is a projection contract: eligibility, rendered membership,
+badge count, primary label, and destination must come from the same explicit
+record state. Relabelling every row as “Create Summary” or “Create Quiz” can make
+a queue look correct while completed work remains in it. Model ready, missing,
+and unknown states explicitly; never infer eligibility from presentation copy.
+
+Apply search, collection, task predicate, and stable sort through one projection
+pipeline. At that same boundary, synchronously intersect bulk-selected UUIDs
+with visible UUIDs before any destructive action can read the selection. A
+hidden checkbox is not a safe deletion target. Regression coverage must assert
+known ready and missing record identities—not counts or labels alone—plus active
+badge equality, empty results, composed filters, and roving focus after the
+result set changes.

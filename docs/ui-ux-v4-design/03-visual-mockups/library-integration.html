@@ -1,0 +1,34 @@
+<!doctype html>
+<html lang="vi" data-theme="light">
+<head>
+  <meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+  <title>MemVidX — Library visual-language integration</title>
+  <link rel="stylesheet" href="workspace.css"><link rel="stylesheet" href="library-integration.css">
+</head>
+<body>
+  <header class="global-header">
+    <a class="product" href="#"><span>M</span><b>MemVidX</b></a>
+    <nav><a href="#">Phòng đọc</a><a class="active" href="#">Thư viện</a><a href="#">Sơ đồ học</a></nav>
+    <div class="header-actions"><button class="upload">＋ Tải tài liệu</button><button class="avatar" aria-label="Tài khoản">VA</button></div>
+  </header>
+  <main class="page">
+    <header class="page-head"><div><span class="kicker">KHÔNG GIAN HỌC TẬP</span><h1>Thư viện tài liệu</h1><p>Mỗi tài liệu xuất hiện một lần. Chọn mục tiêu, rồi tiếp tục ngay.</p></div><div class="count"><b>42</b><span>tài liệu</span></div></header>
+    <div class="library-shell">
+      <aside class="collections"><section><header><span>BỘ SƯU TẬP</span><button>＋</button></header><button class="selected">Tất cả tài liệu <b>42</b></button><button>Chưa phân loại <b>42</b></button></section><section><header><span>LỐI TẮT</span></header><button>Yêu thích <b>3</b></button><button>Đã ghim <b>2</b></button><button>Đã lưu trữ <b>0</b></button></section><div class="tip"><b>Gợi ý</b><p>Dùng góc nhìn theo mục tiêu để nhóm việc cần làm.</p></div></aside>
+      <section class="library-main">
+        <div class="intent-tabs"><button class="selected"><b>Tất cả</b><span>42 tài liệu</span></button><button><b>Tiếp tục học</b><span>1 đang dở</span></button><button><b>Cần quiz</b><span>42 tài liệu</span></button><button><b>Cần tóm tắt</b><span>35 tài liệu</span></button></div>
+        <div class="tools"><label><span>⌕</span><input aria-label="Tìm tài liệu" placeholder="Tìm theo tên, thẻ, ý chính…"></label><select aria-label="Sắp xếp"><option>Mới nhất</option></select><button class="mobile-filter">Bộ lọc</button></div>
+        <div class="select-row"><label><input type="checkbox"> Chọn 42 đang hiện</label><span>0 đã chọn</span></div>
+        <div class="matrix-head"><span></span><span>TÀI LIỆU VÀ TIẾN ĐỘ</span><span>VIỆC TIẾP THEO</span><span>TRUY CẬP NHANH</span><span>KHÁC</span></div>
+        <div class="matrix">
+          <article class="doc-row featured"><label class="check"><input type="checkbox" aria-label="Chọn tài liệu"></label><div class="doc"><div class="doc-title"><span class="file">TXT</span><h2>Giáo trình Hệ điều hành và Quản lý bộ nhớ</h2><span class="pin">Đã ghim</span></div><p>4/5 công cụ sẵn sàng · Quiz 78% · mở 19 giờ trước</p><div class="progress"><i style="width:78%"></i></div></div><button class="primary">Tiếp tục ôn tập →</button><div class="quick"><button>Tóm tắt</button><button>Sơ đồ</button></div><button class="more">Thêm ···</button></article>
+          <article class="doc-row"><label class="check"><input type="checkbox" aria-label="Chọn tài liệu"></label><div class="doc"><div class="doc-title"><span class="file">PDF</span><h2>Kiến thức về Mạng máy tính — Chương 03</h2></div><p>2/5 công cụ sẵn sàng · chưa bắt đầu quiz</p><div class="progress"><i style="width:34%"></i></div></div><button class="primary">Bắt đầu · Tóm tắt →</button><div class="quick"><button>Tóm tắt</button><button>Sơ đồ</button></div><button class="more">Thêm ···</button></article>
+          <article class="doc-row"><label class="check"><input type="checkbox" aria-label="Chọn tài liệu"></label><div class="doc"><div class="doc-title"><span class="file">TXT</span><h2>Cấu trúc dữ liệu — cây, đồ thị và thuật toán duyệt</h2></div><p>1/5 công cụ sẵn sàng · thêm hôm qua</p><div class="progress"><i style="width:18%"></i></div></div><button class="primary">Bắt đầu · Tóm tắt →</button><div class="quick"><button>Tóm tắt</button><button>Sơ đồ</button></div><button class="more">Thêm ···</button></article>
+        </div>
+      </section>
+    </div>
+  </main>
+  <div class="prototype-badge"><b>Option B</b> Library integration · IA owned by Codex 2</div>
+  <script>const q=new URLSearchParams(location.search);document.documentElement.dataset.theme=q.get('theme')||'light';</script>
+</body>
+</html>

@@ -1,0 +1,55 @@
+{
+  "prototype": "E:\\memvid_NCKH\\MemVid_BaoCaoTotNghiep\\.worktrees\\ui-ux-v4-design\\docs\\ui-ux-v4-design\\04-document-library-redesign\\prototype-alternative-a.html",
+  "dataset": "42 document identities copied from the real baseline capture",
+  "desktopDefault": {
+    "viewport": {
+      "width": 1440,
+      "height": 900
+    },
+    "document": {
+      "scrollWidth": 1440,
+      "scrollHeight": 4608
+    },
+    "visibleInteractiveControls": 144,
+    "canonicalRows": 42,
+    "uniqueDocumentIds": 42,
+    "duplicateRowInstances": 0,
+    "primaryResumeActions": 42,
+    "contextualMenuTriggers": 42,
+    "horizontalOverflow": false
+  },
+  "desktopOneContextMenuOpen": {
+    "visibleInteractiveControls": 150,
+    "documentScopedActions": [
+      "Tóm tắt",
+      "Sơ đồ tư duy",
+      "Quiz",
+      "Ôn tập",
+      "Hỏi AI",
+      "Chi tiết tài liệu"
+    ]
+  },
+  "keyboard": {
+    "startDocumentId": "doc-1",
+    "afterArrowDownDocumentId": "doc-2",
+    "expectedDocumentId": "doc-2",
+    "passed": true
+  },
+  "mobileDefault": {
+    "viewport": {
+      "width": 390,
+      "height": 844
+    },
+    "document": {
+      "scrollWidth": 390,
+      "scrollHeight": 8407
+    },
+    "visibleInteractiveControls": 138,
+    "canonicalRows": 42,
+    "uniqueDocumentIds": 42,
+    "duplicateRowInstances": 0,
+    "primaryResumeActions": 42,
+    "contextualMenuTriggers": 42,
+    "horizontalOverflow": false
+  }
+}

@@ -1,0 +1,5096 @@
+[
+  {
+    "file": "codex1-visual-workspace-chat-1920x1080-light.png",
+    "name": "workspace-chat",
+    "w": 1920,
+    "h": 1080,
+    "theme": "light",
+    "kind": "chat",
+    "url": "/app",
+    "overflowX": 0,
+    "scrollHeight": 1080,
+    "dialogs": [],
+    "visibleButtons": [
+      {
+        "text": "Trò chuyện",
+        "aria": "Trò chuyện",
+        "rect": [
+          617,
+          8,
+          115,
+          40
+        ]
+      },
+      {
+        "text": "Sơ đồ tư duy",
+        "aria": "Sơ đồ tư duy",
+        "rect": [
+          736,
+          8,
+          123,
+          40
+        ]
+      },
+      {
+        "text": "Tóm tắt",
+        "aria": "Tóm tắt",
+        "rect": [
+          862,
+          8,
+          91,
+          40
+        ]
+      },
+      {
+        "text": "StudyMap",
+        "aria": "Mở công cụ StudyMap",
+        "rect": [
+          1432,
+          8,
+          99,
+          40
+        ]
+      },
+      {
+        "text": "",
+        "aria": "Xem phím tắt",
+        "rect": [
+          1539,
+          10,
+          36,
+          36
+        ]
+      },
+      {
+        "text": "",
+        "aria": "Nền sáng",
+        "rect": [
+          1588,
+          14,
+          28,
+          28
+        ]
+      },
+      {
+        "text": "",
+        "aria": "Nền tối",
+        "rect": [
+          1620,
+          14,
+          28,
+          28
+        ]
+      },
+      {
+        "text": "AI 0%",
+        "aria": "Mức sử dụng AI 0%",
+        "rect": [
+          1661,
+          10,
+          89,
+          36
+        ]
+      },
+      {
+        "text": "VA\nVisual Audit",
+        "aria": "Tài khoản: Visual Audit",
+        "rect": [
+          1757,
+          9,
+          143,
+          38
+        ]
+      },
+      {
+        "text": "",
+        "aria": "Thu gọn cột",
+        "rect": [
+          204,
+          76,
+          32,
+          32
+        ]
+      },
+      {
+        "text": "",
+        "aria": "Mở bộ lọc nâng cao",
+        "rect": [
+          200,
+          190,
+          32,
+          32
+        ]
+      },
+      {
+        "text": "",
+        "aria": "Tuỳ chọn",
+        "rect": [
+          200,
+          275,
+          28,
+          28
+        ]
+      },
+      {
+        "text": "",
+        "aria": "Tuỳ chọn",
+        "rect": [
+          200,
+          344,
+          28,
+          28
+        ]
+      },
+      {
+        "text": "",
+        "aria": "Đổi tên cuộc trò chuyện",
+        "rect": [
+          421,
+          66,
+          28,
+          28
+        ]
+      },
+      {
+        "text": "",
+        "aria": "Cuộc trò chuyện mới",
+        "rect": [
+          1435,
+          60,
+          40,
+          40
+        ]
+      },
+      {
+        "text": "",
+        "aria": "Tùy chọn cuộc trò chuyện",
+        "rect": [
+          1487,
+          60,
+          40,
+          40
+        ]
+      },
+      {
+        "text": "",
+        "aria": "Đính kèm ảnh",
+        "rect": [
+          576,
+          1011,
+          36,
+          36
+        ]
+      },
+      {
+        "text": "",
+        "aria": "Gửi câu hỏi",
+        "rect": [
+          1201,
+          1011,
+          40,
+          40
+        ]
+      },
+      {
+        "text": "",
+        "aria": "Thu gọn bộ kiểm tra ngữ cảnh",
+        "rect": [
+          1870,
+          60,
+          40,
+          40
+        ]
+      }
+    ]
+  },
+  {
+    "file": "codex1-visual-workspace-chat-1440x900-dark.png",
+    "name": "workspace-chat",
+    "w": 1440,
+    "h": 900,
+    "theme": "dark",
+    "kind": "chat",
+    "url": "/app",
+    "overflowX": 0,
+    "scrollHeight": 900,
+    "dialogs": [],
+    "visibleButtons": [
+      {
+        "text": "Trò chuyện",
+        "aria": "Trò chuyện",
+        "rect": [
+          377,
+          8,
+          115,
+          40
+        ]
+      },
+      {
+        "text": "Sơ đồ tư duy",
+        "aria": "Sơ đồ tư duy",
+        "rect": [
+          496,
+          8,
+          123,
+          40
+        ]
+      },
+      {
+        "text": "Tóm tắt",
+        "aria": "Tóm tắt",
+        "rect": [
+          622,
+          8,
+          91,
+          40
+        ]
+      },
+      {
+        "text": "StudyMap",
+        "aria": "Mở công cụ StudyMap",
+        "rect": [
+          952,
+          8,
+          99,
+          40
+        ]
+      },
+      {
+        "text": "",
+        "aria": "Xem phím tắt",
+        "rect": [
+          1059,
+          10,
+          36,
+          36
+        ]
+      },
+      {
+        "text": "",
+        "aria": "Nền sáng",
+        "rect": [
+          1108,
+          14,
+          28,
+          28
+        ]
+      },
+      {
+        "text": "",
+        "aria": "Nền tối",
+        "rect": [
+          1140,
+          14,
+          28,
+          28
+        ]
+      },
+      {
+        "text": "AI 0%",
+        "aria": "Mức sử dụng AI 0%",
+        "rect": [
+          1181,
+          10,
+          89,
+          36
+        ]
+      },
+      {
+        "text": "VA\nVisual Audit",
+        "aria": "Tài khoản: Visual Audit",
+        "rect": [
+          1277,
+          9,
+          143,
+          38
+        ]
+      },
+      {
+        "text": "",
+        "aria": "Thu gọn cột",
+        "rect": [
+          204,
+          76,
+          32,
+          32
+        ]
+      },
+      {
+        "text": "",
+        "aria": "Mở bộ lọc nâng cao",
+        "rect": [
+          200,
+          190,
+          32,
+          32
+        ]
+      },
+      {
+        "text": "",
+        "aria": "Tuỳ chọn",
+        "rect": [
+          200,
+          275,
+          28,
+          28
+        ]
+      },
+      {
+        "text": "",
+        "aria": "Tuỳ chọn",
+        "rect": [
+          200,
+          344,
+          28,
+          28
+        ]
+      },
+      {
+        "text": "",
+        "aria": "Đổi tên cuộc trò chuyện",
+        "rect": [
+          421,
+          66,
+          28,
+          28
+        ]
+      },
+      {
+        "text": "",
+        "aria": "Cuộc trò chuyện mới",
+        "rect": [
+          955,
+          60,
+          40,
+          40
+        ]
+      },
+      {
+        "text": "",
+        "aria": "Tùy chọn cuộc trò chuyện",
+        "rect": [
+          1007,
+          60,
+          40,
+          40
+        ]
+      },
+      {
+        "text": "",
+        "aria": "Đính kèm ảnh",
+        "rect": [
+          336,
+          831,
+          36,
+          36
+        ]
+      },
+      {
+        "text": "",
+        "aria": "Gửi câu hỏi",
+        "rect": [
+          961,
+          831,
+          40,
+          40
+        ]
+      },
+      {
+        "text": "",
+        "aria": "Thu gọn bộ kiểm tra ngữ cảnh",
+        "rect": [
+          1390,
+          60,
+          40,
+          40
+        ]
+      }
+    ]
+  },
+  {
+    "file": "codex1-visual-workspace-chat-1024x768-light.png",
+    "name": "workspace-chat",
+    "w": 1024,
+    "h": 768,
+    "theme": "light",
+    "kind": "chat",
+    "url": "/app",
+    "overflowX": 0,
+    "scrollHeight": 768,
+    "dialogs": [],
+    "visibleButtons": [
+      {
+        "text": "Trò chuyện",
+        "aria": "Trò chuyện",
+        "rect": [
+          169,
+          8,
+          115,
+          40
+        ]
+      },
+      {
+        "text": "Sơ đồ tư duy",
+        "aria": "Sơ đồ tư duy",
+        "rect": [
+          288,
+          8,
+          123,
+          40
+        ]
+      },
+      {
+        "text": "Tóm tắt",
+        "aria": "Tóm tắt",
+        "rect": [
+          414,
+          8,
+          91,
+          40
+        ]
+      },
+      {
+        "text": "StudyMap",
+        "aria": "Mở công cụ StudyMap",
+        "rect": [
+          536,
+          8,
+          99,
+          40
+        ]
+      },
+      {
+        "text": "",
+        "aria": "Xem phím tắt",
+        "rect": [
+          643,
+          10,
+          36,
+          36
+        ]
+      },
+      {
+        "text": "",
+        "aria": "Nền sáng",
+        "rect": [
+          692,
+          14,
+          28,
+          28
+        ]
+      },
+      {
+        "text": "",
+        "aria": "Nền tối",
+        "rect": [
+          724,
+          14,
+          28,
+          28
+        ]
+      },
+      {
+        "text": "AI 0%",
+        "aria": "Mức sử dụng AI 0%",
+        "rect": [
+          765,
+          10,
+          89,
+          36
+        ]
+      },
+      {
+        "text": "VA\nVisual Audit",
+        "aria": "Tài khoản: Visual Audit",
+        "rect": [
+          861,
+          9,
+          143,
+          38
+        ]
+      },
+      {
+        "text": "",
+        "aria": "Thu gọn cột",
+        "rect": [
+          204,
+          76,
+          32,
+          32
+        ]
+      },
+      {
+        "text": "",
+        "aria": "Mở bộ lọc nâng cao",
+        "rect": [
+          200,
+          190,
+          32,
+          32
+        ]
+      },
+      {
+        "text": "",
+        "aria": "Tuỳ chọn",
+        "rect": [
+          200,
+          275,
+          28,
+          28
+        ]
+      },
+      {
+        "text": "",
+        "aria": "Tuỳ chọn",
+        "rect": [
+          200,
+          344,
+          28,
+          28
+        ]
+      },
+      {
+        "text": "",
+        "aria": "Đổi tên cuộc trò chuyện",
+        "rect": [
+          347,
+          66,
+          28,
+          28
+        ]
+      },
+      {
+        "text": "",
+        "aria": "Cuộc trò chuyện mới",
+        "rect": [
+          539,
+          60,
+          40,
+          40
+        ]
+      },
+      {
+        "text": "",
+        "aria": "Tùy chọn cuộc trò chuyện",
+        "rect": [
+          591,
+          60,
+          40,
+          40
+        ]
+      },
+      {
+        "text": "",
+        "aria": "Đính kèm ảnh",
+        "rect": [
+          307,
+          699,
+          36,
+          36
+        ]
+      },
+      {
+        "text": "",
+        "aria": "Gửi câu hỏi",
+        "rect": [
+          574,
+          699,
+          40,
+          40
+        ]
+      },
+      {
+        "text": "",
+        "aria": "Thu gọn bộ kiểm tra ngữ cảnh",
+        "rect": [
+          974,
+          60,
+          40,
+          40
+        ]
+      }
+    ]
+  },
+  {
+    "file": "codex1-visual-workspace-chat-820x1180-dark.png",
+    "name": "workspace-chat",
+    "w": 820,
+    "h": 1180,
+    "theme": "dark",
+    "kind": "chat",
+    "url": "/app",
+    "overflowX": 0,
+    "scrollHeight": 1180,
+    "dialogs": [],
+    "visibleButtons": [
+      {
+        "text": "",
+        "aria": "Trò chuyện",
+        "rect": [
+          306,
+          8,
+          40,
+          40
+        ]
+      },
+      {
+        "text": "",
+        "aria": "Sơ đồ tư duy",
+        "rect": [
+          346,
+          8,
+          40,
+          40
+        ]
+      },
+      {
+        "text": "",
+        "aria": "Tóm tắt",
+        "rect": [
+          386,
+          8,
+          40,
+          40
+        ]
+      },
+      {
+        "text": "",
+        "aria": "Mở công cụ StudyMap",
+        "rect": [
+          684,
+          8,
+          40,
+          40
+        ]
+      },
+      {
+        "text": "",
+        "aria": "Mức sử dụng AI 0%",
+        "rect": [
+          728,
+          8,
+          40,
+          40
+        ]
+      },
+      {
+        "text": "VA",
+        "aria": "Tài khoản: Visual Audit",
+        "rect": [
+          772,
+          8,
+          40,
+          40
+        ]
+      },
+      {
+        "text": "",
+        "aria": "Thu gọn cột",
+        "rect": [
+          204,
+          76,
+          32,
+          32
+        ]
+      },
+      {
+        "text": "",
+        "aria": "Mở bộ lọc nâng cao",
+        "rect": [
+          200,
+          190,
+          32,
+          32
+        ]
+      },
+      {
+        "text": "",
+        "aria": "Tuỳ chọn",
+        "rect": [
+          200,
+          275,
+          28,
+          28
+        ]
+      },
+      {
+        "text": "",
+        "aria": "Tuỳ chọn",
+        "rect": [
+          200,
+          344,
+          28,
+          28
+        ]
+      },
+      {
+        "text": "",
+        "aria": "Đổi tên cuộc trò chuyện",
+        "rect": [
+          289,
+          66,
+          28,
+          28
+        ]
+      },
+      {
+        "text": "",
+        "aria": "Cuộc trò chuyện mới",
+        "rect": [
+          449,
+          60,
+          40,
+          40
+        ]
+      },
+      {
+        "text": "",
+        "aria": "Tùy chọn cuộc trò chuyện",
+        "rect": [
+          501,
+          60,
+          40,
+          40
+        ]
+      },
+      {
+        "text": "",
+        "aria": "Đính kèm ảnh",
+        "rect": [
+          307,
+          1111,
+          36,
+          36
+        ]
+      },
+      {
+        "text": "",
+        "aria": "Gửi câu hỏi",
+        "rect": [
+          402,
+          1111,
+          40,
+          40
+        ]
+      },
+      {
+        "text": "",
+        "aria": "Thu gọn bộ kiểm tra ngữ cảnh",
+        "rect": [
+          770,
+          60,
+          40,
+          40
+        ]
+      }
+    ]
+  },
+  {
+    "file": "codex1-visual-workspace-chat-430x932-light.png",
+    "name": "workspace-chat",
+    "w": 430,
+    "h": 932,
+    "theme": "light",
+    "kind": "chat",
+    "url": "/app",
+    "overflowX": 0,
+    "scrollHeight": 932,
+    "dialogs": [],
+    "visibleButtons": [
+      {
+        "text": "",
+        "aria": "Trò chuyện",
+        "rect": [
+          111,
+          8,
+          40,
+          40
+        ]
+      },
+      {
+        "text": "",
+        "aria": "Sơ đồ tư duy",
+        "rect": [
+          151,
+          8,
+          40,
+          40
+        ]
+      },
+      {
+        "text": "",
+        "aria": "Tóm tắt",
+        "rect": [
+          191,
+          8,
+          40,
+          40
+        ]
+      },
+      {
+        "text": "",
+        "aria": "Mở công cụ StudyMap",
+        "rect": [
+          294,
+          8,
+          40,
+          40
+        ]
+      },
+      {
+        "text": "",
+        "aria": "Mức sử dụng AI 0%",
+        "rect": [
+          338,
+          8,
+          40,
+          40
+        ]
+      },
+      {
+        "text": "VA",
+        "aria": "Tài khoản: Visual Audit",
+        "rect": [
+          382,
+          8,
+          40,
+          40
+        ]
+      },
+      {
+        "text": "",
+        "aria": "Đóng",
+        "rect": [
+          -49,
+          76,
+          32,
+          32
+        ]
+      },
+      {
+        "text": "",
+        "aria": "Mở bộ lọc nâng cao",
+        "rect": [
+          -53,
+          190,
+          32,
+          32
+        ]
+      },
+      {
+        "text": "",
+        "aria": "Tuỳ chọn",
+        "rect": [
+          -53,
+          275,
+          28,
+          28
+        ]
+      },
+      {
+        "text": "",
+        "aria": "Tuỳ chọn",
+        "rect": [
+          -53,
+          344,
+          28,
+          28
+        ]
+      },
+      {
+        "text": "",
+        "aria": "Đổi tên cuộc trò chuyện",
+        "rect": [
+          74,
+          66,
+          28,
+          28
+        ]
+      },
+      {
+        "text": "",
+        "aria": "Mở thư mục nguồn",
+        "rect": [
+          266,
+          60,
+          40,
+          40
+        ]
+      },
+      {
+        "text": "",
+        "aria": "Cuộc trò chuyện mới",
+        "rect": [
+          318,
+          60,
+          40,
+          40
+        ]
+      },
+      {
+        "text": "",
+        "aria": "Tùy chọn cuộc trò chuyện",
+        "rect": [
+          370,
+          60,
+          40,
+          40
+        ]
+      },
+      {
+        "text": "",
+        "aria": "Đính kèm ảnh",
+        "rect": [
+          30,
+          869,
+          36,
+          36
+        ]
+      },
+      {
+        "text": "",
+        "aria": "Gửi câu hỏi",
+        "rect": [
+          365,
+          869,
+          40,
+          40
+        ]
+      },
+      {
+        "text": "",
+        "aria": "Đóng chi tiết nhánh",
+        "rect": [
+          380,
+          942,
+          40,
+          40
+        ]
+      }
+    ]
+  },
+  {
+    "file": "codex1-visual-workspace-chat-320x568-dark.png",
+    "name": "workspace-chat",
+    "w": 320,
+    "h": 568,
+    "theme": "dark",
+    "kind": "chat",
+    "url": "/app",
+    "overflowX": 0,
+    "scrollHeight": 568,
+    "dialogs": [],
+    "visibleButtons": [
+      {
+        "text": "",
+        "aria": "Trò chuyện",
+        "rect": [
+          56,
+          8,
+          40,
+          40
+        ]
+      },
+      {
+        "text": "",
+        "aria": "Sơ đồ tư duy",
+        "rect": [
+          96,
+          8,
+          40,
+          40
+        ]
+      },
+      {
+        "text": "",
+        "aria": "Tóm tắt",
+        "rect": [
+          136,
+          8,
+          40,
+          40
+        ]
+      },
+      {
+        "text": "",
+        "aria": "Mở công cụ StudyMap",
+        "rect": [
+          184,
+          8,
+          40,
+          40
+        ]
+      },
+      {
+        "text": "",
+        "aria": "Mức sử dụng AI 0%",
+        "rect": [
+          228,
+          8,
+          40,
+          40
+        ]
+      },
+      {
+        "text": "VA",
+        "aria": "Tài khoản: Visual Audit",
+        "rect": [
+          272,
+          8,
+          40,
+          40
+        ]
+      },
+      {
+        "text": "",
+        "aria": "Đóng",
+        "rect": [
+          -49,
+          76,
+          32,
+          32
+        ]
+      },
+      {
+        "text": "",
+        "aria": "Mở bộ lọc nâng cao",
+        "rect": [
+          -53,
+          190,
+          32,
+          32
+        ]
+      },
+      {
+        "text": "",
+        "aria": "Tuỳ chọn",
+        "rect": [
+          -53,
+          275,
+          28,
+          28
+        ]
+      },
+      {
+        "text": "",
+        "aria": "Tuỳ chọn",
+        "rect": [
+          -53,
+          344,
+          28,
+          28
+        ]
+      },
+      {
+        "text": "",
+        "aria": "Đổi tên cuộc trò chuyện",
+        "rect": [
+          24,
+          66,
+          28,
+          28
+        ]
+      },
+      {
+        "text": "",
+        "aria": "Mở thư mục nguồn",
+        "rect": [
+          184,
+          60,
+          40,
+          40
+        ]
+      },
+      {
+        "text": "",
+        "aria": "Cuộc trò chuyện mới",
+        "rect": [
+          236,
+          60,
+          40,
+          40
+        ]
+      },
+      {
+        "text": "",
+        "aria": "Tùy chọn cuộc trò chuyện",
+        "rect": [
+          288,
+          60,
+          40,
+          40
+        ]
+      },
+      {
+        "text": "",
+        "aria": "Đính kèm ảnh",
+        "rect": [
+          30,
+          505,
+          36,
+          36
+        ]
+      },
+      {
+        "text": "",
+        "aria": "Gửi câu hỏi",
+        "rect": [
+          255,
+          505,
+          40,
+          40
+        ]
+      },
+      {
+        "text": "",
+        "aria": "Đóng chi tiết nhánh",
+        "rect": [
+          270,
+          578,
+          40,
+          40
+        ]
+      }
+    ]
+  },
+  {
+    "file": "codex1-visual-workspace-mindmap-1280x800-light.png",
+    "name": "workspace-mindmap",
+    "w": 1280,
+    "h": 800,
+    "theme": "light",
+    "kind": "mindmap",
+    "url": "/app",
+    "overflowX": 0,
+    "scrollHeight": 800,
+    "dialogs": [],
+    "visibleButtons": [
+      {
+        "text": "Trò chuyện",
+        "aria": "Trò chuyện",
+        "rect": [
+          297,
+          8,
+          114,
+          40
+        ]
+      },
+      {
+        "text": "Sơ đồ tư duy",
+        "aria": "Sơ đồ tư duy",
+        "rect": [
+          415,
+          8,
+          123,
+          40
+        ]
+      },
+      {
+        "text": "Tóm tắt",
+        "aria": "Tóm tắt",
+        "rect": [
+          542,
+          8,
+          91,
+          40
+        ]
+      },
+      {
+        "text": "StudyMap",
+        "aria": "Mở công cụ StudyMap",
+        "rect": [
+          792,
+          8,
+          99,
+          40
+        ]
+      },
+      {
+        "text": "",
+        "aria": "Xem phím tắt",
+        "rect": [
+          899,
+          10,
+          36,
+          36
+        ]
+      },
+      {
+        "text": "",
+        "aria": "Nền sáng",
+        "rect": [
+          948,
+          14,
+          28,
+          28
+        ]
+      },
+      {
+        "text": "",
+        "aria": "Nền tối",
+        "rect": [
+          980,
+          14,
+          28,
+          28
+        ]
+      },
+      {
+        "text": "AI 0%",
+        "aria": "Mức sử dụng AI 0%",
+        "rect": [
+          1021,
+          10,
+          89,
+          36
+        ]
+      },
+      {
+        "text": "VA\nVisual Audit",
+        "aria": "Tài khoản: Visual Audit",
+        "rect": [
+          1117,
+          9,
+          143,
+          38
+        ]
+      },
+      {
+        "text": "",
+        "aria": "Thu gọn cột",
+        "rect": [
+          204,
+          76,
+          32,
+          32
+        ]
+      },
+      {
+        "text": "",
+        "aria": "Mở bộ lọc nâng cao",
+        "rect": [
+          200,
+          190,
+          32,
+          32
+        ]
+      },
+      {
+        "text": "",
+        "aria": "Tuỳ chọn",
+        "rect": [
+          200,
+          275,
+          28,
+          28
+        ]
+      },
+      {
+        "text": "",
+        "aria": "Tuỳ chọn",
+        "rect": [
+          200,
+          344,
+          28,
+          28
+        ]
+      },
+      {
+        "text": "E2E mock mindmap 558cbf77\n1 sơ đồ",
+        "aria": "Mở thư viện sơ đồ",
+        "rect": [
+          265,
+          58,
+          478,
+          43
+        ]
+      },
+      {
+        "text": "Tạo lại",
+        "aria": null,
+        "rect": [
+          896,
+          60,
+          58,
+          40
+        ]
+      },
+      {
+        "text": "Giao diện",
+        "aria": "Giao diện",
+        "rect": [
+          1030,
+          60,
+          104,
+          40
+        ]
+      },
+      {
+        "text": "Xuất",
+        "aria": "Xuất sơ đồ",
+        "rect": [
+          1144,
+          60,
+          74,
+          40
+        ]
+      },
+      {
+        "text": "",
+        "aria": "Thêm tùy chọn",
+        "rect": [
+          1228,
+          60,
+          40,
+          40
+        ]
+      },
+      {
+        "text": "",
+        "aria": "Thu nhỏ",
+        "rect": [
+          270,
+          121,
+          40,
+          40
+        ]
+      },
+      {
+        "text": "100%",
+        "aria": "Đặt lại thu phóng",
+        "rect": [
+          312,
+          121,
+          46,
+          40
+        ]
+      },
+      {
+        "text": "",
+        "aria": "Phóng to",
+        "rect": [
+          360,
+          121,
+          40,
+          40
+        ]
+      },
+      {
+        "text": "",
+        "aria": "Vừa khung",
+        "rect": [
+          409,
+          121,
+          40,
+          40
+        ]
+      },
+      {
+        "text": "",
+        "aria": "Toàn màn hình",
+        "rect": [
+          1228,
+          702,
+          40,
+          40
+        ]
+      },
+      {
+        "text": "",
+        "aria": "Đóng chi tiết nhánh",
+        "rect": [
+          1217,
+          61,
+          40,
+          40
+        ]
+      },
+      {
+        "text": "",
+        "aria": "Quay lại",
+        "rect": [
+          942,
+          113,
+          28,
+          28
+        ]
+      },
+      {
+        "text": "",
+        "aria": "Đi tiếp",
+        "rect": [
+          974,
+          113,
+          28,
+          28
+        ]
+      }
+    ]
+  },
+  {
+    "file": "codex1-visual-workspace-mindmap-768x1024-dark.png",
+    "name": "workspace-mindmap",
+    "w": 768,
+    "h": 1024,
+    "theme": "dark",
+    "kind": "mindmap",
+    "url": "/app",
+    "overflowX": 0,
+    "scrollHeight": 1024,
+    "dialogs": [],
+    "visibleButtons": [
+      {
+        "text": "",
+        "aria": "Trò chuyện",
+        "rect": [
+          280,
+          8,
+          40,
+          40
+        ]
+      },
+      {
+        "text": "",
+        "aria": "Sơ đồ tư duy",
+        "rect": [
+          320,
+          8,
+          40,
+          40
+        ]
+      },
+      {
+        "text": "",
+        "aria": "Tóm tắt",
+        "rect": [
+          360,
+          8,
+          40,
+          40
+        ]
+      },
+      {
+        "text": "",
+        "aria": "Mở công cụ StudyMap",
+        "rect": [
+          632,
+          8,
+          40,
+          40
+        ]
+      },
+      {
+        "text": "",
+        "aria": "Mức sử dụng AI 0%",
+        "rect": [
+          676,
+          8,
+          40,
+          40
+        ]
+      },
+      {
+        "text": "VA",
+        "aria": "Tài khoản: Visual Audit",
+        "rect": [
+          720,
+          8,
+          40,
+          40
+        ]
+      },
+      {
+        "text": "",
+        "aria": "Thu gọn cột",
+        "rect": [
+          204,
+          76,
+          32,
+          32
+        ]
+      },
+      {
+        "text": "",
+        "aria": "Mở bộ lọc nâng cao",
+        "rect": [
+          200,
+          190,
+          32,
+          32
+        ]
+      },
+      {
+        "text": "",
+        "aria": "Tuỳ chọn",
+        "rect": [
+          200,
+          275,
+          28,
+          28
+        ]
+      },
+      {
+        "text": "",
+        "aria": "Tuỳ chọn",
+        "rect": [
+          200,
+          344,
+          28,
+          28
+        ]
+      },
+      {
+        "text": "E2E mock mindmap 558cbf77\n1 sơ đồ",
+        "aria": "Mở thư viện sơ đồ",
+        "rect": [
+          265,
+          58,
+          108,
+          43
+        ]
+      },
+      {
+        "text": "Giao diện",
+        "aria": "Giao diện",
+        "rect": [
+          592,
+          60,
+          58,
+          40
+        ]
+      },
+      {
+        "text": "Xuất",
+        "aria": "Xuất sơ đồ",
+        "rect": [
+          660,
+          60,
+          46,
+          40
+        ]
+      },
+      {
+        "text": "",
+        "aria": "Thêm tùy chọn",
+        "rect": [
+          716,
+          60,
+          40,
+          40
+        ]
+      },
+      {
+        "text": "",
+        "aria": "Thu nhỏ",
+        "rect": [
+          270,
+          121,
+          40,
+          40
+        ]
+      },
+      {
+        "text": "100%",
+        "aria": "Đặt lại thu phóng",
+        "rect": [
+          312,
+          121,
+          46,
+          40
+        ]
+      },
+      {
+        "text": "",
+        "aria": "Phóng to",
+        "rect": [
+          360,
+          121,
+          40,
+          40
+        ]
+      },
+      {
+        "text": "",
+        "aria": "Vừa khung",
+        "rect": [
+          409,
+          121,
+          40,
+          40
+        ]
+      },
+      {
+        "text": "",
+        "aria": "Toàn màn hình",
+        "rect": [
+          716,
+          926,
+          40,
+          40
+        ]
+      },
+      {
+        "text": "",
+        "aria": "Đóng chi tiết nhánh",
+        "rect": [
+          705,
+          61,
+          40,
+          40
+        ]
+      },
+      {
+        "text": "",
+        "aria": "Quay lại",
+        "rect": [
+          430,
+          113,
+          28,
+          28
+        ]
+      },
+      {
+        "text": "",
+        "aria": "Đi tiếp",
+        "rect": [
+          462,
+          113,
+          28,
+          28
+        ]
+      }
+    ]
+  },
+  {
+    "file": "codex1-visual-workspace-mindmap-390x844-light.png",
+    "name": "workspace-mindmap",
+    "w": 390,
+    "h": 844,
+    "theme": "light",
+    "kind": "mindmap",
+    "url": "/app",
+    "overflowX": 0,
+    "scrollHeight": 844,
+    "dialogs": [],
+    "visibleButtons": [
+      {
+        "text": "",
+        "aria": "Trò chuyện",
+        "rect": [
+          91,
+          8,
+          40,
+          40
+        ]
+      },
+      {
+        "text": "",
+        "aria": "Sơ đồ tư duy",
+        "rect": [
+          131,
+          8,
+          40,
+          40
+        ]
+      },
+      {
+        "text": "",
+        "aria": "Tóm tắt",
+        "rect": [
+          171,
+          8,
+          40,
+          40
+        ]
+      },
+      {
+        "text": "",
+        "aria": "Mở công cụ StudyMap",
+        "rect": [
+          254,
+          8,
+          40,
+          40
+        ]
+      },
+      {
+        "text": "",
+        "aria": "Mức sử dụng AI 0%",
+        "rect": [
+          298,
+          8,
+          40,
+          40
+        ]
+      },
+      {
+        "text": "VA",
+        "aria": "Tài khoản: Visual Audit",
+        "rect": [
+          342,
+          8,
+          40,
+          40
+        ]
+      },
+      {
+        "text": "",
+        "aria": "Đóng",
+        "rect": [
+          -49,
+          76,
+          32,
+          32
+        ]
+      },
+      {
+        "text": "",
+        "aria": "Mở bộ lọc nâng cao",
+        "rect": [
+          -53,
+          190,
+          32,
+          32
+        ]
+      },
+      {
+        "text": "",
+        "aria": "Tuỳ chọn",
+        "rect": [
+          -53,
+          275,
+          28,
+          28
+        ]
+      },
+      {
+        "text": "",
+        "aria": "Tuỳ chọn",
+        "rect": [
+          -53,
+          344,
+          28,
+          28
+        ]
+      },
+      {
+        "text": "E2E mock mindmap 558cbf77\n1 sơ đồ",
+        "aria": "Mở thư viện sơ đồ",
+        "rect": [
+          8,
+          58,
+          197,
+          43
+        ]
+      },
+      {
+        "text": "",
+        "aria": "Giao diện",
+        "rect": [
+          252,
+          60,
+          40,
+          40
+        ]
+      },
+      {
+        "text": "",
+        "aria": "Xuất sơ đồ",
+        "rect": [
+          297,
+          60,
+          40,
+          40
+        ]
+      },
+      {
+        "text": "",
+        "aria": "Thêm tùy chọn",
+        "rect": [
+          342,
+          60,
+          40,
+          40
+        ]
+      },
+      {
+        "text": "",
+        "aria": "Thu nhỏ",
+        "rect": [
+          12,
+          116,
+          40,
+          40
+        ]
+      },
+      {
+        "text": "100%",
+        "aria": "Đặt lại thu phóng",
+        "rect": [
+          53,
+          116,
+          46,
+          40
+        ]
+      },
+      {
+        "text": "",
+        "aria": "Phóng to",
+        "rect": [
+          100,
+          116,
+          40,
+          40
+        ]
+      },
+      {
+        "text": "",
+        "aria": "Vừa khung",
+        "rect": [
+          147,
+          116,
+          40,
+          40
+        ]
+      },
+      {
+        "text": "",
+        "aria": "Toàn màn hình",
+        "rect": [
+          342,
+          758,
+          40,
+          40
+        ]
+      },
+      {
+        "text": "",
+        "aria": "Đóng chi tiết nhánh",
+        "rect": [
+          340,
+          854,
+          40,
+          40
+        ]
+      },
+      {
+        "text": "",
+        "aria": "Quay lại",
+        "rect": [
+          13,
+          901,
+          28,
+          28
+        ]
+      },
+      {
+        "text": "",
+        "aria": "Đi tiếp",
+        "rect": [
+          45,
+          901,
+          28,
+          28
+        ]
+      }
+    ]
+  },
+  {
+    "file": "codex1-visual-workspace-mindmap-375x812-dark.png",
+    "name": "workspace-mindmap",
+    "w": 375,
+    "h": 812,
+    "theme": "dark",
+    "kind": "mindmap",
+    "url": "/app",
+    "overflowX": 0,
+    "scrollHeight": 812,
+    "dialogs": [],
+    "visibleButtons": [
+      {
+        "text": "",
+        "aria": "Trò chuyện",
+        "rect": [
+          84,
+          8,
+          40,
+          40
+        ]
+      },
+      {
+        "text": "",
+        "aria": "Sơ đồ tư duy",
+        "rect": [
+          124,
+          8,
+          40,
+          40
+        ]
+      },
+      {
+        "text": "",
+        "aria": "Tóm tắt",
+        "rect": [
+          164,
+          8,
+          40,
+          40
+        ]
+      },
+      {
+        "text": "",
+        "aria": "Mở công cụ StudyMap",
+        "rect": [
+          239,
+          8,
+          40,
+          40
+        ]
+      },
+      {
+        "text": "",
+        "aria": "Mức sử dụng AI 0%",
+        "rect": [
+          283,
+          8,
+          40,
+          40
+        ]
+      },
+      {
+        "text": "VA",
+        "aria": "Tài khoản: Visual Audit",
+        "rect": [
+          327,
+          8,
+          40,
+          40
+        ]
+      },
+      {
+        "text": "",
+        "aria": "Đóng",
+        "rect": [
+          -49,
+          76,
+          32,
+          32
+        ]
+      },
+      {
+        "text": "",
+        "aria": "Mở bộ lọc nâng cao",
+        "rect": [
+          -53,
+          190,
+          32,
+          32
+        ]
+      },
+      {
+        "text": "",
+        "aria": "Tuỳ chọn",
+        "rect": [
+          -53,
+          275,
+          28,
+          28
+        ]
+      },
+      {
+        "text": "",
+        "aria": "Tuỳ chọn",
+        "rect": [
+          -53,
+          344,
+          28,
+          28
+        ]
+      },
+      {
+        "text": "E2E mock mindmap 558cbf77\n1 sơ đồ",
+        "aria": "Mở thư viện sơ đồ",
+        "rect": [
+          8,
+          58,
+          182,
+          43
+        ]
+      },
+      {
+        "text": "",
+        "aria": "Giao diện",
+        "rect": [
+          237,
+          60,
+          40,
+          40
+        ]
+      },
+      {
+        "text": "",
+        "aria": "Xuất sơ đồ",
+        "rect": [
+          282,
+          60,
+          40,
+          40
+        ]
+      },
+      {
+        "text": "",
+        "aria": "Thêm tùy chọn",
+        "rect": [
+          327,
+          60,
+          40,
+          40
+        ]
+      },
+      {
+        "text": "",
+        "aria": "Thu nhỏ",
+        "rect": [
+          12,
+          116,
+          40,
+          40
+        ]
+      },
+      {
+        "text": "96%",
+        "aria": "Đặt lại thu phóng",
+        "rect": [
+          53,
+          116,
+          40,
+          40
+        ]
+      },
+      {
+        "text": "",
+        "aria": "Phóng to",
+        "rect": [
+          94,
+          116,
+          40,
+          40
+        ]
+      },
+      {
+        "text": "",
+        "aria": "Vừa khung",
+        "rect": [
+          141,
+          116,
+          40,
+          40
+        ]
+      },
+      {
+        "text": "",
+        "aria": "Toàn màn hình",
+        "rect": [
+          327,
+          726,
+          40,
+          40
+        ]
+      },
+      {
+        "text": "",
+        "aria": "Đóng chi tiết nhánh",
+        "rect": [
+          325,
+          822,
+          40,
+          40
+        ]
+      },
+      {
+        "text": "",
+        "aria": "Quay lại",
+        "rect": [
+          13,
+          869,
+          28,
+          28
+        ]
+      },
+      {
+        "text": "",
+        "aria": "Đi tiếp",
+        "rect": [
+          45,
+          869,
+          28,
+          28
+        ]
+      }
+    ]
+  },
+  {
+    "file": "codex1-visual-appearance-editor-1440x900-light.png",
+    "name": "appearance-editor",
+    "w": 1440,
+    "h": 900,
+    "theme": "light",
+    "kind": "appearance",
+    "url": "/app",
+    "overflowX": 0,
+    "scrollHeight": 900,
+    "dialogs": [
+      {
+        "text": "Giao diện\n\nMàu, hình dạng node và đường nối — chỉ áp dụng cho sơ đồ này\n\nMẫu dựng sẵn\nMặc định\nTối giản\nHọc tập\nPastel\nTương phản cao\nMàu & kiểu node\nĐường nối\nNền\nHoàn tác\nĐặt lại\nHủy\nÁp dụng",
+        "rect": [
+          0,
+          0,
+          1440,
+          900
+        ]
+      }
+    ],
+    "visibleButtons": [
+      {
+        "text": "Trò chuyện",
+        "aria": "Trò chuyện",
+        "rect": [
+          377,
+          8,
+          114,
+          40
+        ]
+      },
+      {
+        "text": "Sơ đồ tư duy",
+        "aria": "Sơ đồ tư duy",
+        "rect": [
+          495,
+          8,
+          123,
+          40
+        ]
+      },
+      {
+        "text": "Tóm tắt",
+        "aria": "Tóm tắt",
+        "rect": [
+          622,
+          8,
+          91,
+          40
+        ]
+      },
+      {
+        "text": "StudyMap",
+        "aria": "Mở công cụ StudyMap",
+        "rect": [
+          952,
+          8,
+          99,
+          40
+        ]
+      },
+      {
+        "text": "",
+        "aria": "Xem phím tắt",
+        "rect": [
+          1059,
+          10,
+          36,
+          36
+        ]
+      },
+      {
+        "text": "",
+        "aria": "Nền sáng",
+        "rect": [
+          1108,
+          14,
+          28,
+          28
+        ]
+      },
+      {
+        "text": "",
+        "aria": "Nền tối",
+        "rect": [
+          1140,
+          14,
+          28,
+          28
+        ]
+      },
+      {
+        "text": "AI 0%",
+        "aria": "Mức sử dụng AI 0%",
+        "rect": [
+          1181,
+          10,
+          89,
+          36
+        ]
+      },
+      {
+        "text": "VA\nVisual Audit",
+        "aria": "Tài khoản: Visual Audit",
+        "rect": [
+          1277,
+          9,
+          143,
+          38
+        ]
+      },
+      {
+        "text": "",
+        "aria": "Thu gọn cột",
+        "rect": [
+          204,
+          76,
+          32,
+          32
+        ]
+      },
+      {
+        "text": "",
+        "aria": "Mở bộ lọc nâng cao",
+        "rect": [
+          200,
+          190,
+          32,
+          32
+        ]
+      },
+      {
+        "text": "",
+        "aria": "Tuỳ chọn",
+        "rect": [
+          200,
+          275,
+          28,
+          28
+        ]
+      },
+      {
+        "text": "",
+        "aria": "Tuỳ chọn",
+        "rect": [
+          200,
+          344,
+          28,
+          28
+        ]
+      },
+      {
+        "text": "E2E mock mindmap 558cbf77\n1 sơ đồ",
+        "aria": "Mở thư viện sơ đồ",
+        "rect": [
+          265,
+          58,
+          638,
+          43
+        ]
+      },
+      {
+        "text": "Tạo lại",
+        "aria": null,
+        "rect": [
+          1056,
+          60,
+          58,
+          40
+        ]
+      },
+      {
+        "text": "Giao diện",
+        "aria": "Giao diện",
+        "rect": [
+          1190,
+          60,
+          104,
+          40
+        ]
+      },
+      {
+        "text": "Xuất",
+        "aria": "Xuất sơ đồ",
+        "rect": [
+          1304,
+          60,
+          74,
+          40
+        ]
+      },
+      {
+        "text": "",
+        "aria": "Thêm tùy chọn",
+        "rect": [
+          1388,
+          60,
+          40,
+          40
+        ]
+      },
+      {
+        "text": "",
+        "aria": "Thu nhỏ",
+        "rect": [
+          270,
+          121,
+          40,
+          40
+        ]
+      },
+      {
+        "text": "100%",
+        "aria": "Đặt lại thu phóng",
+        "rect": [
+          312,
+          121,
+          46,
+          40
+        ]
+      },
+      {
+        "text": "",
+        "aria": "Phóng to",
+        "rect": [
+          360,
+          121,
+          40,
+          40
+        ]
+      },
+      {
+        "text": "",
+        "aria": "Vừa khung",
+        "rect": [
+          409,
+          121,
+          40,
+          40
+        ]
+      },
+      {
+        "text": "",
+        "aria": "Toàn màn hình",
+        "rect": [
+          1388,
+          802,
+          40,
+          40
+        ]
+      },
+      {
+        "text": "",
+        "aria": "Đóng chi tiết nhánh",
+        "rect": [
+          1377,
+          61,
+          40,
+          40
+        ]
+      },
+      {
+        "text": "",
+        "aria": "Quay lại",
+        "rect": [
+          1102,
+          113,
+          28,
+          28
+        ]
+      },
+      {
+        "text": "",
+        "aria": "Đi tiếp",
+        "rect": [
+          1134,
+          113,
+          28,
+          28
+        ]
+      },
+      {
+        "text": "",
+        "aria": "Đóng hộp thoại",
+        "rect": [
+          877,
+          160,
+          32,
+          32
+        ]
+      },
+      {
+        "text": "Mẫu dựng sẵn",
+        "aria": null,
+        "rect": [
+          545,
+          243,
+          350,
+          48
+        ]
+      },
+      {
+        "text": "Mặc định",
+        "aria": null,
+        "rect": [
+          559,
+          306,
+          78,
+          36
+        ]
+      },
+      {
+        "text": "Tối giản",
+        "aria": null,
+        "rect": [
+          643,
+          306,
+          70,
+          36
+        ]
+      },
+      {
+        "text": "Học tập",
+        "aria": null,
+        "rect": [
+          719,
+          306,
+          69,
+          36
+        ]
+      },
+      {
+        "text": "Pastel",
+        "aria": null,
+        "rect": [
+          794,
+          306,
+          59,
+          36
+        ]
+      },
+      {
+        "text": "Tương phản cao",
+        "aria": null,
+        "rect": [
+          559,
+          348,
+          118,
+          36
+        ]
+      },
+      {
+        "text": "Màu & kiểu node",
+        "aria": null,
+        "rect": [
+          545,
+          423,
+          350,
+          48
+        ]
+      },
+      {
+        "text": "Đường nối",
+        "aria": null,
+        "rect": [
+          545,
+          496,
+          350,
+          48
+        ]
+      },
+      {
+        "text": "Nền",
+        "aria": null,
+        "rect": [
+          545,
+          569,
+          350,
+          48
+        ]
+      },
+      {
+        "text": "Hoàn tác",
+        "aria": null,
+        "rect": [
+          531,
+          670,
+          102,
+          81
+        ]
+      },
+      {
+        "text": "Đặt lại",
+        "aria": null,
+        "rect": [
+          641,
+          670,
+          81,
+          81
+        ]
+      },
+      {
+        "text": "Hủy",
+        "aria": null,
+        "rect": [
+          738,
+          670,
+          65,
+          81
+        ]
+      },
+      {
+        "text": "Áp dụng",
+        "aria": null,
+        "rect": [
+          811,
+          670,
+          98,
+          81
+        ]
+      }
+    ]
+  },
+  {
+    "file": "codex1-visual-appearance-editor-390x844-dark.png",
+    "name": "appearance-editor",
+    "w": 390,
+    "h": 844,
+    "theme": "dark",
+    "kind": "appearance",
+    "url": "/app",
+    "overflowX": 0,
+    "scrollHeight": 844,
+    "dialogs": [
+      {
+        "text": "Giao diện\n\nMàu, hình dạng node và đường nối — chỉ áp dụng cho sơ đồ này\n\nMẫu dựng sẵn\nMặc định\nTối giản\nHọc tập\nPastel\nTương phản cao\nMàu & kiểu node\nĐường nối\nNền\nHoàn tác\nĐặt lại\nHủy\nÁp dụng",
+        "rect": [
+          0,
+          0,
+          390,
+          844
+        ]
+      }
+    ],
+    "visibleButtons": [
+      {
+        "text": "",
+        "aria": "Trò chuyện",
+        "rect": [
+          91,
+          8,
+          40,
+          40
+        ]
+      },
+      {
+        "text": "",
+        "aria": "Sơ đồ tư duy",
+        "rect": [
+          131,
+          8,
+          40,
+          40
+        ]
+      },
+      {
+        "text": "",
+        "aria": "Tóm tắt",
+        "rect": [
+          171,
+          8,
+          40,
+          40
+        ]
+      },
+      {
+        "text": "",
+        "aria": "Mở công cụ StudyMap",
+        "rect": [
+          254,
+          8,
+          40,
+          40
+        ]
+      },
+      {
+        "text": "",
+        "aria": "Mức sử dụng AI 0%",
+        "rect": [
+          298,
+          8,
+          40,
+          40
+        ]
+      },
+      {
+        "text": "VA",
+        "aria": "Tài khoản: Visual Audit",
+        "rect": [
+          342,
+          8,
+          40,
+          40
+        ]
+      },
+      {
+        "text": "",
+        "aria": "Đóng",
+        "rect": [
+          -49,
+          76,
+          32,
+          32
+        ]
+      },
+      {
+        "text": "",
+        "aria": "Mở bộ lọc nâng cao",
+        "rect": [
+          -53,
+          190,
+          32,
+          32
+        ]
+      },
+      {
+        "text": "",
+        "aria": "Tuỳ chọn",
+        "rect": [
+          -53,
+          275,
+          28,
+          28
+        ]
+      },
+      {
+        "text": "",
+        "aria": "Tuỳ chọn",
+        "rect": [
+          -53,
+          344,
+          28,
+          28
+        ]
+      },
+      {
+        "text": "E2E mock mindmap 558cbf77\n1 sơ đồ",
+        "aria": "Mở thư viện sơ đồ",
+        "rect": [
+          8,
+          58,
+          197,
+          43
+        ]
+      },
+      {
+        "text": "",
+        "aria": "Giao diện",
+        "rect": [
+          252,
+          60,
+          40,
+          40
+        ]
+      },
+      {
+        "text": "",
+        "aria": "Xuất sơ đồ",
+        "rect": [
+          297,
+          60,
+          40,
+          40
+        ]
+      },
+      {
+        "text": "",
+        "aria": "Thêm tùy chọn",
+        "rect": [
+          342,
+          60,
+          40,
+          40
+        ]
+      },
+      {
+        "text": "",
+        "aria": "Thu nhỏ",
+        "rect": [
+          12,
+          116,
+          40,
+          40
+        ]
+      },
+      {
+        "text": "100%",
+        "aria": "Đặt lại thu phóng",
+        "rect": [
+          53,
+          116,
+          46,
+          40
+        ]
+      },
+      {
+        "text": "",
+        "aria": "Phóng to",
+        "rect": [
+          100,
+          116,
+          40,
+          40
+        ]
+      },
+      {
+        "text": "",
+        "aria": "Vừa khung",
+        "rect": [
+          147,
+          116,
+          40,
+          40
+        ]
+      },
+      {
+        "text": "",
+        "aria": "Toàn màn hình",
+        "rect": [
+          342,
+          758,
+          40,
+          40
+        ]
+      },
+      {
+        "text": "",
+        "aria": "Đóng chi tiết nhánh",
+        "rect": [
+          340,
+          854,
+          40,
+          40
+        ]
+      },
+      {
+        "text": "",
+        "aria": "Quay lại",
+        "rect": [
+          13,
+          901,
+          28,
+          28
+        ]
+      },
+      {
+        "text": "",
+        "aria": "Đi tiếp",
+        "rect": [
+          45,
+          901,
+          28,
+          28
+        ]
+      },
+      {
+        "text": "",
+        "aria": "Đóng hộp thoại",
+        "rect": [
+          321,
+          149,
+          32,
+          32
+        ]
+      },
+      {
+        "text": "Mẫu dựng sẵn",
+        "aria": null,
+        "rect": [
+          31,
+          222,
+          328,
+          48
+        ]
+      },
+      {
+        "text": "Mặc định",
+        "aria": null,
+        "rect": [
+          45,
+          285,
+          78,
+          36
+        ]
+      },
+      {
+        "text": "Tối giản",
+        "aria": null,
+        "rect": [
+          129,
+          285,
+          70,
+          36
+        ]
+      },
+      {
+        "text": "Học tập",
+        "aria": null,
+        "rect": [
+          205,
+          285,
+          69,
+          36
+        ]
+      },
+      {
+        "text": "Pastel",
+        "aria": null,
+        "rect": [
+          280,
+          285,
+          59,
+          36
+        ]
+      },
+      {
+        "text": "Tương phản cao",
+        "aria": null,
+        "rect": [
+          45,
+          327,
+          118,
+          36
+        ]
+      },
+      {
+        "text": "Màu & kiểu node",
+        "aria": null,
+        "rect": [
+          31,
+          398,
+          328,
+          48
+        ]
+      },
+      {
+        "text": "Đường nối",
+        "aria": null,
+        "rect": [
+          31,
+          467,
+          328,
+          48
+        ]
+      },
+      {
+        "text": "Nền",
+        "aria": null,
+        "rect": [
+          31,
+          536,
+          328,
+          48
+        ]
+      },
+      {
+        "text": "Hoàn tác",
+        "aria": null,
+        "rect": [
+          37,
+          625,
+          75,
+          81
+        ]
+      },
+      {
+        "text": "Đặt lại",
+        "aria": null,
+        "rect": [
+          120,
+          625,
+          61,
+          81
+        ]
+      },
+      {
+        "text": "Hủy",
+        "aria": null,
+        "rect": [
+          206,
+          625,
+          65,
+          81
+        ]
+      },
+      {
+        "text": "Áp dụng",
+        "aria": null,
+        "rect": [
+          279,
+          625,
+          74,
+          81
+        ]
+      }
+    ]
+  },
+  {
+    "file": "codex1-visual-export-studio-1440x900-dark.png",
+    "name": "export-studio",
+    "w": 1440,
+    "h": 900,
+    "theme": "dark",
+    "kind": "export",
+    "url": "/app",
+    "overflowX": 0,
+    "scrollHeight": 900,
+    "dialogs": [
+      {
+        "text": "Xuất sơ đồ\n\nChọn phạm vi, định dạng và cách trình bày\n\nNội dung\nChọn phạm vi xuất\nĐịnh dạng\nChọn loại file\nGiao diện\nTùy chỉnh hiển thị\nKiểm tra\nXem trước và xuất\nNội dung xuất\n\nChọn nhanh một cấu hình hoặc tự thiết lập phạm vi.\n\nXuất nhanh\nTùy chỉnh\nẢnh PNG\nPDF học tập\nẢnh WebP\nPhạm vi xuất\nToàn bộ",
+        "rect": [
+          0,
+          0,
+          1440,
+          900
+        ]
+      }
+    ],
+    "visibleButtons": [
+      {
+        "text": "Trò chuyện",
+        "aria": "Trò chuyện",
+        "rect": [
+          377,
+          8,
+          114,
+          40
+        ]
+      },
+      {
+        "text": "Sơ đồ tư duy",
+        "aria": "Sơ đồ tư duy",
+        "rect": [
+          495,
+          8,
+          123,
+          40
+        ]
+      },
+      {
+        "text": "Tóm tắt",
+        "aria": "Tóm tắt",
+        "rect": [
+          622,
+          8,
+          91,
+          40
+        ]
+      },
+      {
+        "text": "StudyMap",
+        "aria": "Mở công cụ StudyMap",
+        "rect": [
+          952,
+          8,
+          99,
+          40
+        ]
+      },
+      {
+        "text": "",
+        "aria": "Xem phím tắt",
+        "rect": [
+          1059,
+          10,
+          36,
+          36
+        ]
+      },
+      {
+        "text": "",
+        "aria": "Nền sáng",
+        "rect": [
+          1108,
+          14,
+          28,
+          28
+        ]
+      },
+      {
+        "text": "",
+        "aria": "Nền tối",
+        "rect": [
+          1140,
+          14,
+          28,
+          28
+        ]
+      },
+      {
+        "text": "AI 0%",
+        "aria": "Mức sử dụng AI 0%",
+        "rect": [
+          1181,
+          10,
+          89,
+          36
+        ]
+      },
+      {
+        "text": "VA\nVisual Audit",
+        "aria": "Tài khoản: Visual Audit",
+        "rect": [
+          1277,
+          9,
+          143,
+          38
+        ]
+      },
+      {
+        "text": "",
+        "aria": "Thu gọn cột",
+        "rect": [
+          204,
+          76,
+          32,
+          32
+        ]
+      },
+      {
+        "text": "",
+        "aria": "Mở bộ lọc nâng cao",
+        "rect": [
+          200,
+          190,
+          32,
+          32
+        ]
+      },
+      {
+        "text": "",
+        "aria": "Tuỳ chọn",
+        "rect": [
+          200,
+          275,
+          28,
+          28
+        ]
+      },
+      {
+        "text": "",
+        "aria": "Tuỳ chọn",
+        "rect": [
+          200,
+          344,
+          28,
+          28
+        ]
+      },
+      {
+        "text": "E2E mock mindmap 558cbf77\n1 sơ đồ",
+        "aria": "Mở thư viện sơ đồ",
+        "rect": [
+          265,
+          58,
+          638,
+          43
+        ]
+      },
+      {
+        "text": "Tạo lại",
+        "aria": null,
+        "rect": [
+          1056,
+          60,
+          58,
+          40
+        ]
+      },
+      {
+        "text": "Giao diện",
+        "aria": "Giao diện",
+        "rect": [
+          1190,
+          60,
+          104,
+          40
+        ]
+      },
+      {
+        "text": "Xuất",
+        "aria": "Xuất sơ đồ",
+        "rect": [
+          1304,
+          60,
+          74,
+          40
+        ]
+      },
+      {
+        "text": "",
+        "aria": "Thêm tùy chọn",
+        "rect": [
+          1388,
+          60,
+          40,
+          40
+        ]
+      },
+      {
+        "text": "",
+        "aria": "Thu nhỏ",
+        "rect": [
+          270,
+          121,
+          40,
+          40
+        ]
+      },
+      {
+        "text": "100%",
+        "aria": "Đặt lại thu phóng",
+        "rect": [
+          312,
+          121,
+          46,
+          40
+        ]
+      },
+      {
+        "text": "",
+        "aria": "Phóng to",
+        "rect": [
+          360,
+          121,
+          40,
+          40
+        ]
+      },
+      {
+        "text": "",
+        "aria": "Vừa khung",
+        "rect": [
+          409,
+          121,
+          40,
+          40
+        ]
+      },
+      {
+        "text": "",
+        "aria": "Toàn màn hình",
+        "rect": [
+          1388,
+          802,
+          40,
+          40
+        ]
+      },
+      {
+        "text": "",
+        "aria": "Đóng chi tiết nhánh",
+        "rect": [
+          1377,
+          61,
+          40,
+          40
+        ]
+      },
+      {
+        "text": "",
+        "aria": "Quay lại",
+        "rect": [
+          1102,
+          113,
+          28,
+          28
+        ]
+      },
+      {
+        "text": "",
+        "aria": "Đi tiếp",
+        "rect": [
+          1134,
+          113,
+          28,
+          28
+        ]
+      },
+      {
+        "text": "",
+        "aria": "Đóng hộp thoại",
+        "rect": [
+          1207,
+          68,
+          32,
+          32
+        ]
+      },
+      {
+        "text": "Nội dung\nChọn phạm vi xuất",
+        "aria": null,
+        "rect": [
+          197,
+          146,
+          199,
+          62
+        ]
+      },
+      {
+        "text": "Định dạng\nChọn loại file",
+        "aria": null,
+        "rect": [
+          197,
+          213,
+          199,
+          62
+        ]
+      },
+      {
+        "text": "Giao diện\nTùy chỉnh hiển thị",
+        "aria": null,
+        "rect": [
+          197,
+          280,
+          199,
+          62
+        ]
+      },
+      {
+        "text": "Kiểm tra\nXem trước và xuất",
+        "aria": null,
+        "rect": [
+          197,
+          347,
+          199,
+          62
+        ]
+      },
+      {
+        "text": "Ảnh PNG",
+        "aria": null,
+        "rect": [
+          490,
+          257,
+          225,
+          44
+        ]
+      },
+      {
+        "text": "PDF học tập",
+        "aria": null,
+        "rect": [
+          723,
+          257,
+          225,
+          44
+        ]
+      },
+      {
+        "text": "Ảnh WebP",
+        "aria": null,
+        "rect": [
+          957,
+          257,
+          225,
+          44
+        ]
+      },
+      {
+        "text": "Chọn trên canvas\nChọn node trên sơ đồ",
+        "aria": null,
+        "rect": [
+          1014,
+          496,
+          125,
+          36
+        ]
+      },
+      {
+        "text": "Nâng cao",
+        "aria": null,
+        "rect": [
+          491,
+          636,
+          690,
+          44
+        ]
+      },
+      {
+        "text": "Hủy",
+        "aria": null,
+        "rect": [
+          1071,
+          801,
+          65,
+          42
+        ]
+      },
+      {
+        "text": "Tiếp tục",
+        "aria": null,
+        "rect": [
+          1144,
+          801,
+          97,
+          42
+        ]
+      }
+    ]
+  },
+  {
+    "file": "codex1-visual-export-studio-430x932-light.png",
+    "name": "export-studio",
+    "w": 430,
+    "h": 932,
+    "theme": "light",
+    "kind": "export",
+    "url": "/app",
+    "overflowX": 0,
+    "scrollHeight": 932,
+    "dialogs": [
+      {
+        "text": "Xuất sơ đồ\n\nChọn phạm vi, định dạng và cách trình bày\n\nNội dung\nNội dung xuất\n\nChọn nhanh một cấu hình hoặc tự thiết lập phạm vi.\n\nXuất nhanh\nTùy chỉnh\nẢnh PNG\nPDF học tập\nẢnh WebP\nPhạm vi xuất\nToàn bộ sơ đồ\nBao gồm toàn bộ cây, kể cả nhánh đang thu gọn.\nNhánh hiện tại\nChưa chọn node. Chọn một node ",
+        "rect": [
+          0,
+          0,
+          430,
+          932
+        ]
+      }
+    ],
+    "visibleButtons": [
+      {
+        "text": "",
+        "aria": "Trò chuyện",
+        "rect": [
+          111,
+          8,
+          40,
+          40
+        ]
+      },
+      {
+        "text": "",
+        "aria": "Sơ đồ tư duy",
+        "rect": [
+          151,
+          8,
+          40,
+          40
+        ]
+      },
+      {
+        "text": "",
+        "aria": "Tóm tắt",
+        "rect": [
+          191,
+          8,
+          40,
+          40
+        ]
+      },
+      {
+        "text": "",
+        "aria": "Mở công cụ StudyMap",
+        "rect": [
+          294,
+          8,
+          40,
+          40
+        ]
+      },
+      {
+        "text": "",
+        "aria": "Mức sử dụng AI 0%",
+        "rect": [
+          338,
+          8,
+          40,
+          40
+        ]
+      },
+      {
+        "text": "VA",
+        "aria": "Tài khoản: Visual Audit",
+        "rect": [
+          382,
+          8,
+          40,
+          40
+        ]
+      },
+      {
+        "text": "",
+        "aria": "Đóng",
+        "rect": [
+          -49,
+          76,
+          32,
+          32
+        ]
+      },
+      {
+        "text": "",
+        "aria": "Mở bộ lọc nâng cao",
+        "rect": [
+          -53,
+          190,
+          32,
+          32
+        ]
+      },
+      {
+        "text": "",
+        "aria": "Tuỳ chọn",
+        "rect": [
+          -53,
+          275,
+          28,
+          28
+        ]
+      },
+      {
+        "text": "",
+        "aria": "Tuỳ chọn",
+        "rect": [
+          -53,
+          344,
+          28,
+          28
+        ]
+      },
+      {
+        "text": "E2E mock mindmap 558cbf77\n1 sơ đồ",
+        "aria": "Mở thư viện sơ đồ",
+        "rect": [
+          8,
+          58,
+          237,
+          43
+        ]
+      },
+      {
+        "text": "",
+        "aria": "Giao diện",
+        "rect": [
+          292,
+          60,
+          40,
+          40
+        ]
+      },
+      {
+        "text": "",
+        "aria": "Xuất sơ đồ",
+        "rect": [
+          337,
+          60,
+          40,
+          40
+        ]
+      },
+      {
+        "text": "",
+        "aria": "Thêm tùy chọn",
+        "rect": [
+          382,
+          60,
+          40,
+          40
+        ]
+      },
+      {
+        "text": "",
+        "aria": "Thu nhỏ",
+        "rect": [
+          12,
+          116,
+          40,
+          40
+        ]
+      },
+      {
+        "text": "100%",
+        "aria": "Đặt lại thu phóng",
+        "rect": [
+          53,
+          116,
+          46,
+          40
+        ]
+      },
+      {
+        "text": "",
+        "aria": "Phóng to",
+        "rect": [
+          100,
+          116,
+          40,
+          40
+        ]
+      },
+      {
+        "text": "",
+        "aria": "Vừa khung",
+        "rect": [
+          147,
+          116,
+          40,
+          40
+        ]
+      },
+      {
+        "text": "",
+        "aria": "Toàn màn hình",
+        "rect": [
+          382,
+          846,
+          40,
+          40
+        ]
+      },
+      {
+        "text": "",
+        "aria": "Đóng chi tiết nhánh",
+        "rect": [
+          380,
+          942,
+          40,
+          40
+        ]
+      },
+      {
+        "text": "",
+        "aria": "Quay lại",
+        "rect": [
+          13,
+          989,
+          28,
+          28
+        ]
+      },
+      {
+        "text": "",
+        "aria": "Đi tiếp",
+        "rect": [
+          45,
+          989,
+          28,
+          28
+        ]
+      },
+      {
+        "text": "",
+        "aria": "Đóng hộp thoại",
+        "rect": [
+          362,
+          22,
+          32,
+          32
+        ]
+      },
+      {
+        "text": "Nội dung",
+        "aria": null,
+        "rect": [
+          28,
+          86,
+          110,
+          44
+        ]
+      },
+      {
+        "text": "",
+        "aria": null,
+        "rect": [
+          142,
+          86,
+          42,
+          44
+        ]
+      },
+      {
+        "text": "",
+        "aria": null,
+        "rect": [
+          188,
+          86,
+          42,
+          44
+        ]
+      },
+      {
+        "text": "",
+        "aria": null,
+        "rect": [
+          234,
+          86,
+          42,
+          44
+        ]
+      },
+      {
+        "text": "Ảnh PNG",
+        "aria": null,
+        "rect": [
+          30,
+          258,
+          142,
+          44
+        ]
+      },
+      {
+        "text": "PDF học tập",
+        "aria": null,
+        "rect": [
+          180,
+          258,
+          142,
+          44
+        ]
+      },
+      {
+        "text": "Ảnh WebP",
+        "aria": null,
+        "rect": [
+          330,
+          258,
+          142,
+          44
+        ]
+      },
+      {
+        "text": "Chọn trên canvas\nChọn node trên sơ đồ",
+        "aria": null,
+        "rect": [
+          226,
+          586,
+          125,
+          44
+        ]
+      },
+      {
+        "text": "Nâng cao",
+        "aria": null,
+        "rect": [
+          31,
+          749,
+          368,
+          44
+        ]
+      },
+      {
+        "text": "Hủy",
+        "aria": null,
+        "rect": [
+          28,
+          879,
+          183,
+          44
+        ]
+      },
+      {
+        "text": "Tiếp tục",
+        "aria": null,
+        "rect": [
+          219,
+          879,
+          183,
+          44
+        ]
+      }
+    ]
+  },
+  {
+    "file": "codex1-visual-workspace-summary-1440x900-light.png",
+    "name": "workspace-summary",
+    "w": 1440,
+    "h": 900,
+    "theme": "light",
+    "kind": "summary",
+    "url": "/app",
+    "overflowX": 0,
+    "scrollHeight": 900,
+    "dialogs": [],
+    "visibleButtons": [
+      {
+        "text": "Trò chuyện",
+        "aria": "Trò chuyện",
+        "rect": [
+          377,
+          8,
+          114,
+          40
+        ]
+      },
+      {
+        "text": "Sơ đồ tư duy",
+        "aria": "Sơ đồ tư duy",
+        "rect": [
+          495,
+          8,
+          123,
+          40
+        ]
+      },
+      {
+        "text": "Tóm tắt",
+        "aria": "Tóm tắt",
+        "rect": [
+          622,
+          8,
+          91,
+          40
+        ]
+      },
+      {
+        "text": "StudyMap",
+        "aria": "Mở công cụ StudyMap",
+        "rect": [
+          952,
+          8,
+          99,
+          40
+        ]
+      },
+      {
+        "text": "",
+        "aria": "Xem phím tắt",
+        "rect": [
+          1059,
+          10,
+          36,
+          36
+        ]
+      },
+      {
+        "text": "",
+        "aria": "Nền sáng",
+        "rect": [
+          1108,
+          14,
+          28,
+          28
+        ]
+      },
+      {
+        "text": "",
+        "aria": "Nền tối",
+        "rect": [
+          1140,
+          14,
+          28,
+          28
+        ]
+      },
+      {
+        "text": "AI 0%",
+        "aria": "Mức sử dụng AI 0%",
+        "rect": [
+          1181,
+          10,
+          89,
+          36
+        ]
+      },
+      {
+        "text": "VA\nVisual Audit",
+        "aria": "Tài khoản: Visual Audit",
+        "rect": [
+          1277,
+          9,
+          143,
+          38
+        ]
+      },
+      {
+        "text": "",
+        "aria": "Thu gọn cột",
+        "rect": [
+          204,
+          76,
+          32,
+          32
+        ]
+      },
+      {
+        "text": "",
+        "aria": "Mở bộ lọc nâng cao",
+        "rect": [
+          200,
+          190,
+          32,
+          32
+        ]
+      },
+      {
+        "text": "",
+        "aria": "Tuỳ chọn",
+        "rect": [
+          200,
+          275,
+          28,
+          28
+        ]
+      },
+      {
+        "text": "",
+        "aria": "Tuỳ chọn",
+        "rect": [
+          200,
+          344,
+          28,
+          28
+        ]
+      },
+      {
+        "text": "Tạo tóm tắt",
+        "aria": null,
+        "rect": [
+          613,
+          240,
+          105,
+          52
+        ]
+      },
+      {
+        "text": "",
+        "aria": "Thu gọn bộ kiểm tra ngữ cảnh",
+        "rect": [
+          1390,
+          60,
+          40,
+          40
+        ]
+      }
+    ]
+  },
+  {
+    "file": "codex1-visual-workspace-summary-390x844-dark.png",
+    "name": "workspace-summary",
+    "w": 390,
+    "h": 844,
+    "theme": "dark",
+    "kind": "summary",
+    "url": "/app",
+    "overflowX": 0,
+    "scrollHeight": 844,
+    "dialogs": [],
+    "visibleButtons": [
+      {
+        "text": "",
+        "aria": "Trò chuyện",
+        "rect": [
+          91,
+          8,
+          40,
+          40
+        ]
+      },
+      {
+        "text": "",
+        "aria": "Sơ đồ tư duy",
+        "rect": [
+          131,
+          8,
+          40,
+          40
+        ]
+      },
+      {
+        "text": "",
+        "aria": "Tóm tắt",
+        "rect": [
+          171,
+          8,
+          40,
+          40
+        ]
+      },
+      {
+        "text": "",
+        "aria": "Mở công cụ StudyMap",
+        "rect": [
+          254,
+          8,
+          40,
+          40
+        ]
+      },
+      {
+        "text": "",
+        "aria": "Mức sử dụng AI 0%",
+        "rect": [
+          298,
+          8,
+          40,
+          40
+        ]
+      },
+      {
+        "text": "VA",
+        "aria": "Tài khoản: Visual Audit",
+        "rect": [
+          342,
+          8,
+          40,
+          40
+        ]
+      },
+      {
+        "text": "",
+        "aria": "Đóng",
+        "rect": [
+          -49,
+          76,
+          32,
+          32
+        ]
+      },
+      {
+        "text": "",
+        "aria": "Mở bộ lọc nâng cao",
+        "rect": [
+          -53,
+          190,
+          32,
+          32
+        ]
+      },
+      {
+        "text": "",
+        "aria": "Tuỳ chọn",
+        "rect": [
+          -53,
+          275,
+          28,
+          28
+        ]
+      },
+      {
+        "text": "",
+        "aria": "Tuỳ chọn",
+        "rect": [
+          -53,
+          344,
+          28,
+          28
+        ]
+      },
+      {
+        "text": "Tạo tóm tắt",
+        "aria": null,
+        "rect": [
+          142,
+          240,
+          105,
+          52
+        ]
+      },
+      {
+        "text": "",
+        "aria": "Đóng chi tiết nhánh",
+        "rect": [
+          340,
+          854,
+          40,
+          40
+        ]
+      }
+    ]
+  },
+  {
+    "file": "codex1-visual-account-menu-1440x900-light.png",
+    "name": "account-menu",
+    "w": 1440,
+    "h": 900,
+    "theme": "light",
+    "kind": "account",
+    "url": "/app",
+    "overflowX": 0,
+    "scrollHeight": 900,
+    "dialogs": [],
+    "visibleButtons": [
+      {
+        "text": "Trò chuyện",
+        "aria": "Trò chuyện",
+        "rect": [
+          377,
+          8,
+          115,
+          40
+        ]
+      },
+      {
+        "text": "Sơ đồ tư duy",
+        "aria": "Sơ đồ tư duy",
+        "rect": [
+          496,
+          8,
+          123,
+          40
+        ]
+      },
+      {
+        "text": "Tóm tắt",
+        "aria": "Tóm tắt",
+        "rect": [
+          622,
+          8,
+          91,
+          40
+        ]
+      },
+      {
+        "text": "StudyMap",
+        "aria": "Mở công cụ StudyMap",
+        "rect": [
+          952,
+          8,
+          99,
+          40
+        ]
+      },
+      {
+        "text": "",
+        "aria": "Xem phím tắt",
+        "rect": [
+          1059,
+          10,
+          36,
+          36
+        ]
+      },
+      {
+        "text": "",
+        "aria": "Nền sáng",
+        "rect": [
+          1108,
+          14,
+          28,
+          28
+        ]
+      },
+      {
+        "text": "",
+        "aria": "Nền tối",
+        "rect": [
+          1140,
+          14,
+          28,
+          28
+        ]
+      },
+      {
+        "text": "AI 0%",
+        "aria": "Mức sử dụng AI 0%",
+        "rect": [
+          1181,
+          10,
+          89,
+          36
+        ]
+      },
+      {
+        "text": "VA\nVisual Audit",
+        "aria": "Tài khoản: Visual Audit",
+        "rect": [
+          1277,
+          9,
+          143,
+          38
+        ]
+      },
+      {
+        "text": "Hồ sơ tài khoản",
+        "aria": null,
+        "rect": [
+          1193,
+          116,
+          226,
+          36
+        ]
+      },
+      {
+        "text": "Đăng xuất",
+        "aria": null,
+        "rect": [
+          1193,
+          160,
+          226,
+          36
+        ]
+      },
+      {
+        "text": "",
+        "aria": "Thu gọn cột",
+        "rect": [
+          204,
+          76,
+          32,
+          32
+        ]
+      },
+      {
+        "text": "",
+        "aria": "Mở bộ lọc nâng cao",
+        "rect": [
+          200,
+          190,
+          32,
+          32
+        ]
+      },
+      {
+        "text": "",
+        "aria": "Tuỳ chọn",
+        "rect": [
+          200,
+          275,
+          28,
+          28
+        ]
+      },
+      {
+        "text": "",
+        "aria": "Tuỳ chọn",
+        "rect": [
+          200,
+          344,
+          28,
+          28
+        ]
+      },
+      {
+        "text": "",
+        "aria": "Đổi tên cuộc trò chuyện",
+        "rect": [
+          421,
+          66,
+          28,
+          28
+        ]
+      },
+      {
+        "text": "",
+        "aria": "Cuộc trò chuyện mới",
+        "rect": [
+          955,
+          60,
+          40,
+          40
+        ]
+      },
+      {
+        "text": "",
+        "aria": "Tùy chọn cuộc trò chuyện",
+        "rect": [
+          1007,
+          60,
+          40,
+          40
+        ]
+      },
+      {
+        "text": "",
+        "aria": "Đính kèm ảnh",
+        "rect": [
+          336,
+          831,
+          36,
+          36
+        ]
+      },
+      {
+        "text": "",
+        "aria": "Gửi câu hỏi",
+        "rect": [
+          961,
+          831,
+          40,
+          40
+        ]
+      },
+      {
+        "text": "",
+        "aria": "Thu gọn bộ kiểm tra ngữ cảnh",
+        "rect": [
+          1390,
+          60,
+          40,
+          40
+        ]
+      }
+    ]
+  },
+  {
+    "file": "codex1-visual-account-menu-390x844-dark.png",
+    "name": "account-menu",
+    "w": 390,
+    "h": 844,
+    "theme": "dark",
+    "kind": "account",
+    "url": "/app",
+    "overflowX": 0,
+    "scrollHeight": 844,
+    "dialogs": [],
+    "visibleButtons": [
+      {
+        "text": "",
+        "aria": "Trò chuyện",
+        "rect": [
+          91,
+          8,
+          40,
+          40
+        ]
+      },
+      {
+        "text": "",
+        "aria": "Sơ đồ tư duy",
+        "rect": [
+          131,
+          8,
+          40,
+          40
+        ]
+      },
+      {
+        "text": "",
+        "aria": "Tóm tắt",
+        "rect": [
+          171,
+          8,
+          40,
+          40
+        ]
+      },
+      {
+        "text": "",
+        "aria": "Mở công cụ StudyMap",
+        "rect": [
+          254,
+          8,
+          40,
+          40
+        ]
+      },
+      {
+        "text": "",
+        "aria": "Mức sử dụng AI 0%",
+        "rect": [
+          298,
+          8,
+          40,
+          40
+        ]
+      },
+      {
+        "text": "VA",
+        "aria": "Tài khoản: Visual Audit",
+        "rect": [
+          342,
+          8,
+          40,
+          40
+        ]
+      },
+      {
+        "text": "Hồ sơ tài khoản",
+        "aria": null,
+        "rect": [
+          155,
+          118,
+          226,
+          36
+        ]
+      },
+      {
+        "text": "Đăng xuất",
+        "aria": null,
+        "rect": [
+          155,
+          162,
+          226,
+          36
+        ]
+      },
+      {
+        "text": "",
+        "aria": "Đóng",
+        "rect": [
+          -49,
+          76,
+          32,
+          32
+        ]
+      },
+      {
+        "text": "",
+        "aria": "Mở bộ lọc nâng cao",
+        "rect": [
+          -53,
+          190,
+          32,
+          32
+        ]
+      },
+      {
+        "text": "",
+        "aria": "Tuỳ chọn",
+        "rect": [
+          -53,
+          275,
+          28,
+          28
+        ]
+      },
+      {
+        "text": "",
+        "aria": "Tuỳ chọn",
+        "rect": [
+          -53,
+          344,
+          28,
+          28
+        ]
+      },
+      {
+        "text": "",
+        "aria": "Đổi tên cuộc trò chuyện",
+        "rect": [
+          34,
+          66,
+          28,
+          28
+        ]
+      },
+      {
+        "text": "",
+        "aria": "Mở thư mục nguồn",
+        "rect": [
+          226,
+          60,
+          40,
+          40
+        ]
+      },
+      {
+        "text": "",
+        "aria": "Cuộc trò chuyện mới",
+        "rect": [
+          278,
+          60,
+          40,
+          40
+        ]
+      },
+      {
+        "text": "",
+        "aria": "Tùy chọn cuộc trò chuyện",
+        "rect": [
+          330,
+          60,
+          40,
+          40
+        ]
+      },
+      {
+        "text": "",
+        "aria": "Đính kèm ảnh",
+        "rect": [
+          30,
+          781,
+          36,
+          36
+        ]
+      },
+      {
+        "text": "",
+        "aria": "Gửi câu hỏi",
+        "rect": [
+          325,
+          781,
+          40,
+          40
+        ]
+      },
+      {
+        "text": "",
+        "aria": "Đóng chi tiết nhánh",
+        "rect": [
+          340,
+          854,
+          40,
+          40
+        ]
+      }
+    ]
+  },
+  {
+    "file": "codex1-visual-command-palette-1024x768-dark.png",
+    "name": "command-palette",
+    "w": 1024,
+    "h": 768,
+    "theme": "dark",
+    "kind": "command",
+    "url": "/app",
+    "overflowX": 0,
+    "scrollHeight": 768,
+    "dialogs": [
+      {
+        "text": "Esc\nTìm nâng cao\n↑↓ chọn\n↵ mở\nEsc đóng\nCtrl+K",
+        "rect": [
+          0,
+          0,
+          1024,
+          768
+        ]
+      }
+    ],
+    "visibleButtons": [
+      {
+        "text": "Trò chuyện",
+        "aria": "Trò chuyện",
+        "rect": [
+          169,
+          8,
+          115,
+          40
+        ]
+      },
+      {
+        "text": "Sơ đồ tư duy",
+        "aria": "Sơ đồ tư duy",
+        "rect": [
+          288,
+          8,
+          123,
+          40
+        ]
+      },
+      {
+        "text": "Tóm tắt",
+        "aria": "Tóm tắt",
+        "rect": [
+          414,
+          8,
+          91,
+          40
+        ]
+      },
+      {
+        "text": "StudyMap",
+        "aria": "Mở công cụ StudyMap",
+        "rect": [
+          536,
+          8,
+          99,
+          40
+        ]
+      },
+      {
+        "text": "",
+        "aria": "Xem phím tắt",
+        "rect": [
+          643,
+          10,
+          36,
+          36
+        ]
+      },
+      {
+        "text": "",
+        "aria": "Nền sáng",
+        "rect": [
+          692,
+          14,
+          28,
+          28
+        ]
+      },
+      {
+        "text": "",
+        "aria": "Nền tối",
+        "rect": [
+          724,
+          14,
+          28,
+          28
+        ]
+      },
+      {
+        "text": "AI 0%",
+        "aria": "Mức sử dụng AI 0%",
+        "rect": [
+          765,
+          10,
+          89,
+          36
+        ]
+      },
+      {
+        "text": "VA\nVisual Audit",
+        "aria": "Tài khoản: Visual Audit",
+        "rect": [
+          861,
+          9,
+          143,
+          38
+        ]
+      },
+      {
+        "text": "",
+        "aria": "Thu gọn cột",
+        "rect": [
+          204,
+          76,
+          32,
+          32
+        ]
+      },
+      {
+        "text": "",
+        "aria": "Mở bộ lọc nâng cao",
+        "rect": [
+          200,
+          190,
+          32,
+          32
+        ]
+      },
+      {
+        "text": "",
+        "aria": "Tuỳ chọn",
+        "rect": [
+          200,
+          275,
+          28,
+          28
+        ]
+      },
+      {
+        "text": "",
+        "aria": "Tuỳ chọn",
+        "rect": [
+          200,
+          344,
+          28,
+          28
+        ]
+      },
+      {
+        "text": "",
+        "aria": "Đổi tên cuộc trò chuyện",
+        "rect": [
+          347,
+          66,
+          28,
+          28
+        ]
+      },
+      {
+        "text": "",
+        "aria": "Cuộc trò chuyện mới",
+        "rect": [
+          539,
+          60,
+          40,
+          40
+        ]
+      },
+      {
+        "text": "",
+        "aria": "Tùy chọn cuộc trò chuyện",
+        "rect": [
+          591,
+          60,
+          40,
+          40
+        ]
+      },
+      {
+        "text": "",
+        "aria": "Đính kèm ảnh",
+        "rect": [
+          307,
+          699,
+          36,
+          36
+        ]
+      },
+      {
+        "text": "",
+        "aria": "Gửi câu hỏi",
+        "rect": [
+          574,
+          699,
+          40,
+          40
+        ]
+      },
+      {
+        "text": "",
+        "aria": "Thu gọn bộ kiểm tra ngữ cảnh",
+        "rect": [
+          974,
+          60,
+          40,
+          40
+        ]
+      },
+      {
+        "text": "",
+        "aria": "Đóng hộp thoại",
+        "rect": [
+          779,
+          304,
+          32,
+          32
+        ]
+      },
+      {
+        "text": "Tìm nâng cao",
+        "aria": null,
+        "rect": [
+          193,
+          399,
+          638,
+          33
+        ]
+      }
+    ]
+  },
+  {
+    "file": "codex1-visual-command-palette-430x932-light.png",
+    "name": "command-palette",
+    "w": 430,
+    "h": 932,
+    "theme": "light",
+    "kind": "command",
+    "url": "/app",
+    "overflowX": 0,
+    "scrollHeight": 932,
+    "dialogs": [
+      {
+        "text": "Esc\nTìm nâng cao\n↑↓ chọn\n↵ mở\nEsc đóng\nCtrl+K",
+        "rect": [
+          0,
+          0,
+          430,
+          932
+        ]
+      }
+    ],
+    "visibleButtons": [
+      {
+        "text": "",
+        "aria": "Trò chuyện",
+        "rect": [
+          111,
+          8,
+          40,
+          40
+        ]
+      },
+      {
+        "text": "",
+        "aria": "Sơ đồ tư duy",
+        "rect": [
+          151,
+          8,
+          40,
+          40
+        ]
+      },
+      {
+        "text": "",
+        "aria": "Tóm tắt",
+        "rect": [
+          191,
+          8,
+          40,
+          40
+        ]
+      },
+      {
+        "text": "",
+        "aria": "Mở công cụ StudyMap",
+        "rect": [
+          294,
+          8,
+          40,
+          40
+        ]
+      },
+      {
+        "text": "",
+        "aria": "Mức sử dụng AI 0%",
+        "rect": [
+          338,
+          8,
+          40,
+          40
+        ]
+      },
+      {
+        "text": "VA",
+        "aria": "Tài khoản: Visual Audit",
+        "rect": [
+          382,
+          8,
+          40,
+          40
+        ]
+      },
+      {
+        "text": "",
+        "aria": "Đóng",
+        "rect": [
+          -49,
+          76,
+          32,
+          32
+        ]
+      },
+      {
+        "text": "",
+        "aria": "Mở bộ lọc nâng cao",
+        "rect": [
+          -53,
+          190,
+          32,
+          32
+        ]
+      },
+      {
+        "text": "",
+        "aria": "Tuỳ chọn",
+        "rect": [
+          -53,
+          275,
+          28,
+          28
+        ]
+      },
+      {
+        "text": "",
+        "aria": "Tuỳ chọn",
+        "rect": [
+          -53,
+          344,
+          28,
+          28
+        ]
+      },
+      {
+        "text": "",
+        "aria": "Đổi tên cuộc trò chuyện",
+        "rect": [
+          74,
+          66,
+          28,
+          28
+        ]
+      },
+      {
+        "text": "",
+        "aria": "Mở thư mục nguồn",
+        "rect": [
+          266,
+          60,
+          40,
+          40
+        ]
+      },
+      {
+        "text": "",
+        "aria": "Cuộc trò chuyện mới",
+        "rect": [
+          318,
+          60,
+          40,
+          40
+        ]
+      },
+      {
+        "text": "",
+        "aria": "Tùy chọn cuộc trò chuyện",
+        "rect": [
+          370,
+          60,
+          40,
+          40
+        ]
+      },
+      {
+        "text": "",
+        "aria": "Đính kèm ảnh",
+        "rect": [
+          30,
+          869,
+          36,
+          36
+        ]
+      },
+      {
+        "text": "",
+        "aria": "Gửi câu hỏi",
+        "rect": [
+          365,
+          869,
+          40,
+          40
+        ]
+      },
+      {
+        "text": "",
+        "aria": "Đóng chi tiết nhánh",
+        "rect": [
+          380,
+          942,
+          40,
+          40
+        ]
+      },
+      {
+        "text": "",
+        "aria": "Đóng hộp thoại",
+        "rect": [
+          361,
+          386,
+          32,
+          32
+        ]
+      },
+      {
+        "text": "Tìm nâng cao",
+        "aria": null,
+        "rect": [
+          17,
+          481,
+          396,
+          33
+        ]
+      }
+    ]
+  },
+  {
+    "file": "codex1-visual-source-filter-820x1180-light.png",
+    "name": "source-filter",
+    "w": 820,
+    "h": 1180,
+    "theme": "light",
+    "kind": "filter",
+    "url": "/app",
+    "overflowX": 0,
+    "scrollHeight": 1180,
+    "dialogs": [
+      {
+        "text": "Bộ lọc nâng cao\nLoại tài liệu\nTất cả loại\nPDF\nDOCX\nMarkdown\nTXT\nTrạng thái\nTất cả trạng thái\nSẵn sàng\nĐang xử lý\nLỗi\nNgày tải lên\nMọi thời điểm\n7 ngày qua\n30 ngày qua\nCũ hơn\nXóa lọc\nÁp dụng",
+        "rect": [
+          12,
+          174,
+          228,
+          307
+        ]
+      }
+    ],
+    "visibleButtons": [
+      {
+        "text": "",
+        "aria": "Trò chuyện",
+        "rect": [
+          306,
+          8,
+          40,
+          40
+        ]
+      },
+      {
+        "text": "",
+        "aria": "Sơ đồ tư duy",
+        "rect": [
+          346,
+          8,
+          40,
+          40
+        ]
+      },
+      {
+        "text": "",
+        "aria": "Tóm tắt",
+        "rect": [
+          386,
+          8,
+          40,
+          40
+        ]
+      },
+      {
+        "text": "",
+        "aria": "Mở công cụ StudyMap",
+        "rect": [
+          684,
+          8,
+          40,
+          40
+        ]
+      },
+      {
+        "text": "",
+        "aria": "Mức sử dụng AI 0%",
+        "rect": [
+          728,
+          8,
+          40,
+          40
+        ]
+      },
+      {
+        "text": "VA",
+        "aria": "Tài khoản: Visual Audit",
+        "rect": [
+          772,
+          8,
+          40,
+          40
+        ]
+      },
+      {
+        "text": "",
+        "aria": "Thu gọn cột",
+        "rect": [
+          204,
+          76,
+          32,
+          32
+        ]
+      },
+      {
+        "text": "",
+        "aria": "Mở bộ lọc nâng cao",
+        "rect": [
+          200,
+          190,
+          32,
+          32
+        ]
+      },
+      {
+        "text": "",
+        "aria": "Đóng bộ lọc",
+        "rect": [
+          195,
+          187,
+          32,
+          32
+        ]
+      },
+      {
+        "text": "Xóa lọc",
+        "aria": null,
+        "rect": [
+          25,
+          442,
+          46,
+          20
+        ]
+      },
+      {
+        "text": "Áp dụng",
+        "aria": null,
+        "rect": [
+          148,
+          435,
+          79,
+          34
+        ]
+      },
+      {
+        "text": "",
+        "aria": "Tuỳ chọn",
+        "rect": [
+          200,
+          275,
+          28,
+          28
+        ]
+      },
+      {
+        "text": "",
+        "aria": "Tuỳ chọn",
+        "rect": [
+          200,
+          344,
+          28,
+          28
+        ]
+      },
+      {
+        "text": "",
+        "aria": "Đổi tên cuộc trò chuyện",
+        "rect": [
+          289,
+          66,
+          28,
+          28
+        ]
+      },
+      {
+        "text": "",
+        "aria": "Cuộc trò chuyện mới",
+        "rect": [
+          449,
+          60,
+          40,
+          40
+        ]
+      },
+      {
+        "text": "",
+        "aria": "Tùy chọn cuộc trò chuyện",
+        "rect": [
+          501,
+          60,
+          40,
+          40
+        ]
+      },
+      {
+        "text": "",
+        "aria": "Đính kèm ảnh",
+        "rect": [
+          307,
+          1111,
+          36,
+          36
+        ]
+      },
+      {
+        "text": "",
+        "aria": "Gửi câu hỏi",
+        "rect": [
+          402,
+          1111,
+          40,
+          40
+        ]
+      },
+      {
+        "text": "",
+        "aria": "Thu gọn bộ kiểm tra ngữ cảnh",
+        "rect": [
+          770,
+          60,
+          40,
+          40
+        ]
+      }
+    ]
+  }
+]

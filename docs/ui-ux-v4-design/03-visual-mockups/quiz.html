@@ -1,0 +1,58 @@
+<!doctype html>
+<html lang="vi" data-theme="light" data-screen="taking">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>MemVidX — Quiz states</title>
+  <link rel="stylesheet" href="workspace.css">
+  <link rel="stylesheet" href="quiz.css">
+</head>
+<body>
+  <svg class="symbol-defs" aria-hidden="true">
+    <symbol id="i-clock" viewBox="0 0 24 24"><circle cx="12" cy="12" r="9"/><path d="M12 7v5l3 2"/></symbol>
+    <symbol id="i-flag" viewBox="0 0 24 24"><path d="M6 21V4M6 5h11l-2 4 2 4H6"/></symbol>
+    <symbol id="i-check" viewBox="0 0 24 24"><path d="m5 12 4 4 10-10"/></symbol>
+    <symbol id="i-close" viewBox="0 0 24 24"><path d="m6 6 12 12M18 6 6 18"/></symbol>
+    <symbol id="i-book" viewBox="0 0 24 24"><path d="M4 5.5c3-1 5-.5 8 1.5v12c-3-2-5-2.5-8-1.5zM20 5.5c-3-1-5-.5-8 1.5v12c3-2 5-2.5 8-1.5z"/></symbol>
+    <symbol id="i-target" viewBox="0 0 24 24"><circle cx="12" cy="12" r="9"/><circle cx="12" cy="12" r="5"/><circle cx="12" cy="12" r="1"/></symbol>
+    <symbol id="i-map" viewBox="0 0 24 24"><circle cx="6" cy="12" r="2"/><circle cx="18" cy="6" r="2"/><circle cx="18" cy="18" r="2"/><path d="m8 11 8-4M8 13l8 4"/></symbol>
+    <symbol id="i-light" viewBox="0 0 24 24"><path d="M9 18h6M10 21h4M8.5 14.5A7 7 0 1 1 15.5 14.5c-1 .7-1.5 1.5-1.5 2.5h-4c0-1-.5-1.8-1.5-2.5Z"/></symbol>
+  </svg>
+
+  <header class="quiz-header">
+    <button class="quiz-back">← <span id="back-label">Thư viện</span></button>
+    <div class="quiz-title"><small id="quiz-kicker">Bài quiz</small><h1 id="quiz-heading">Hệ điều hành hiện đại</h1></div>
+    <div class="quiz-header-meta"><span class="timer"><svg><use href="#i-clock"/></svg>12:48</span><span class="saved"><i></i>Đã lưu</span></div>
+  </header>
+
+  <main class="taking-screen screen-taking">
+    <aside class="question-rail"><div class="rail-head"><b>10 câu hỏi</b><span>4 đã trả lời</span></div><div class="question-grid"><button class="answered">1</button><button class="answered">2</button><button class="answered">3</button><button class="answered">4</button><button class="current">5</button><button>6</button><button>7</button><button>8</button><button>9</button><button>10</button></div><div class="rail-legend"><span><i class="done"></i>Đã trả lời</span><span><i class="now"></i>Đang làm</span><span><i></i>Chưa làm</span></div><button class="finish-early">Nộp bài sớm</button></aside>
+    <section class="question-stage"><div class="mobile-progress"><div><span>Câu 5 / 10</span><span>4 đã trả lời</span></div><i><b style="width:40%"></b></i></div><article class="question-card"><header><span>Câu 5</span><button><svg><use href="#i-flag"/></svg>Đánh dấu</button></header><h2>Thuật toán thay thế trang nào ưu tiên loại bỏ trang đã lâu không được truy cập?</h2><p class="question-note">Chọn một đáp án đúng.</p><div class="answers"><label><input type="radio" name="q5"><span class="answer-letter">A</span><span>FIFO</span></label><label class="selected"><input type="radio" name="q5" checked><span class="answer-letter">B</span><span>LRU</span></label><label><input type="radio" name="q5"><span class="answer-letter">C</span><span>Round Robin</span></label><label><input type="radio" name="q5"><span class="answer-letter">D</span><span>Shortest Job First</span></label></div></article><footer class="question-nav"><button>← Câu trước</button><span>Tự động lưu câu trả lời</span><button class="primary">Câu tiếp theo →</button></footer></section>
+    <aside class="quiz-context"><section><span class="context-icon"><svg><use href="#i-target"/></svg></span><h2>Tiến độ</h2><b class="big-progress">40%</b><div class="progress-line"><i style="width:40%"></i></div><p>4 trong 10 câu đã trả lời.</p></section><section><h3>Nội dung</h3><div class="topic-row"><span>Bộ nhớ ảo</span><b>3 câu</b></div><div class="topic-row"><span>Tiến trình</span><b>4 câu</b></div><div class="topic-row"><span>Hệ thống tệp</span><b>3 câu</b></div></section><p class="context-help">Bạn có thể quay lại câu trước trước khi nộp bài.</p></aside>
+  </main>
+
+  <main class="results-screen screen-results">
+    <section class="score-hero"><div class="score-ring"><svg viewBox="0 0 120 120"><circle cx="60" cy="60" r="48"/><circle class="score" cx="60" cy="60" r="48"/></svg><div><b>80</b><span>/ 100</span></div></div><div><span class="result-label">Hoàn thành tốt</span><h2>Bạn đã nắm phần lớn nội dung.</h2><p>8/10 câu đúng · Hoàn thành trong 13 phút 24 giây</p><div class="result-actions"><button class="primary">Xem lại 2 câu sai</button><button>Làm lại quiz</button></div></div></section>
+    <section class="result-grid"><article class="result-overview"><header><h2>Kết quả theo chủ đề</h2><span>So với lần trước +10</span></header><div class="topic-score"><div><b>Bộ nhớ ảo</b><span>3 / 3</span></div><i><b style="width:100%"></b></i><small>Vững</small></div><div class="topic-score"><div><b>Quản lý tiến trình</b><span>3 / 4</span></div><i><b style="width:75%"></b></i><small>Cần xem lại chuyển ngữ cảnh</small></div><div class="topic-score"><div><b>Hệ thống tệp</b><span>2 / 3</span></div><i><b style="width:66%"></b></i><small>Cần xem lại quyền truy cập</small></div></article><aside class="next-study"><span><svg><use href="#i-light"/></svg></span><h2>Tiếp tục học</h2><p>Ôn hai khái niệm còn yếu trước khi làm quiz mới.</p><button><svg><use href="#i-map"/></svg>Mở trên sơ đồ</button><button><svg><use href="#i-book"/></svg>Xem kế hoạch ôn tập</button></aside></section>
+    <section class="answer-summary"><header><h2>Tổng quan câu trả lời</h2><span>10 câu</span></header><div class="summary-strip"><button class="correct">1</button><button class="correct">2</button><button class="correct">3</button><button class="wrong">4</button><button class="correct">5</button><button class="correct">6</button><button class="correct">7</button><button class="correct">8</button><button class="wrong">9</button><button class="correct">10</button></div></section>
+  </main>
+
+  <main class="review-screen screen-review">
+    <aside class="review-rail"><header><b>Ôn lại bài làm</b><span>2 câu cần xem</span></header><button class="wrong active"><span>4</span><div><b>Quản lý tiến trình</b><small>Trả lời chưa đúng</small></div></button><button class="wrong"><span>9</span><div><b>Hệ thống tệp</b><small>Trả lời chưa đúng</small></div></button><div class="review-correct"><b>8 câu đã đúng</b><p>Có thể mở lại bất kỳ lúc nào.</p></div></aside>
+    <section class="review-content"><div class="review-progress"><span>Câu 4 / 10</span><div><button>←</button><button>→</button></div></div><article class="review-question"><span class="wrong-tag">Chưa đúng</span><h2>Khi một tiến trình chuyển từ Running sang Waiting, nguyên nhân phổ biến nhất là gì?</h2><div class="review-answer wrong"><span>A</span><div><small>Bạn đã chọn</small><b>Tiến trình hết quantum CPU</b></div><svg><use href="#i-close"/></svg></div><div class="review-answer correct"><span>C</span><div><small>Đáp án đúng</small><b>Tiến trình chờ hoàn tất thao tác I/O</b></div><svg><use href="#i-check"/></svg></div></article><article class="explanation"><header><span><svg><use href="#i-light"/></svg></span><h3>Vì sao?</h3></header><p>Khi yêu cầu I/O chưa hoàn tất, tiến trình không thể tiếp tục thực thi nên hệ điều hành chuyển nó sang trạng thái <b>Waiting</b>. Hết quantum thường đưa tiến trình về <b>Ready</b>, không phải Waiting.</p><blockquote>“A process enters the waiting state when it must wait for an event such as I/O completion.”<button>Nguồn 1 · trang 42</button></blockquote></article></section>
+    <aside class="review-plan"><span><svg><use href="#i-target"/></svg></span><h2>Điểm cần nhớ</h2><p><b>Waiting</b> là chờ sự kiện. <b>Ready</b> là chờ CPU.</p><button class="primary">Thêm vào kế hoạch ôn</button><button>Hỏi Gia sư AI</button></aside>
+  </main>
+
+  <div class="prototype-badge"><span>Option B</span><b id="quiz-label">Quiz · taking</b></div>
+  <script>
+    const state = decodeURIComponent(location.search);
+    const screen = state.includes('screen=results') ? 'results' : state.includes('screen=review') ? 'review' : 'taking';
+    const theme = state.includes('theme=dark') ? 'dark' : 'light';
+    document.documentElement.dataset.screen = screen;
+    document.documentElement.dataset.theme = theme;
+    const labels = {taking:['Bài quiz','Hệ điều hành hiện đại','Thư viện'],results:['Kết quả','Kết quả bài làm','Thư viện'],review:['Hướng dẫn ôn tập','Ôn lại bài làm','Kết quả']};
+    document.querySelector('#quiz-kicker').textContent = labels[screen][0]; document.querySelector('#quiz-heading').textContent = labels[screen][1]; document.querySelector('#back-label').textContent = labels[screen][2];
+    document.querySelector('#quiz-label').textContent = `Quiz · ${screen}`;
+  </script>
+</body>
+</html>

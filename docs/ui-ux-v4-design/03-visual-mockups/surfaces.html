@@ -1,0 +1,100 @@
+<!doctype html>
+<html lang="vi" data-theme="light" data-screen="export">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>MemVidX — Product surfaces</title>
+  <link rel="stylesheet" href="workspace.css">
+  <link rel="stylesheet" href="surfaces.css">
+</head>
+<body>
+  <svg class="symbol-defs" aria-hidden="true">
+    <symbol id="i-chat" viewBox="0 0 24 24"><path d="M5 5.5h14v10H9l-4 3v-13Z"/><path d="M8 9h8M8 12h5"/></symbol>
+    <symbol id="i-map" viewBox="0 0 24 24"><circle cx="6" cy="12" r="2.2"/><circle cx="18" cy="6" r="2.2"/><circle cx="18" cy="18" r="2.2"/><path d="m8 11 7.7-4M8 13l7.7 4"/></symbol>
+    <symbol id="i-note" viewBox="0 0 24 24"><path d="M6 4h9l3 3v13H6z"/><path d="M15 4v4h3M9 12h6M9 16h5"/></symbol>
+    <symbol id="i-book" viewBox="0 0 24 24"><path d="M4 5.5c3-1 5-.5 8 1.5v12c-3-2-5-2.5-8-1.5zM20 5.5c-3-1-5-.5-8 1.5v12c3-2 5-2.5 8-1.5z"/></symbol>
+    <symbol id="i-sun" viewBox="0 0 24 24"><circle cx="12" cy="12" r="4"/><path d="M12 2v2M12 20v2M2 12h2M20 12h2M5 5l1.5 1.5M17.5 17.5 19 19M19 5l-1.5 1.5M6.5 17.5 5 19"/></symbol>
+    <symbol id="i-export" viewBox="0 0 24 24"><path d="M12 3v12M7 8l5-5 5 5M5 14v6h14v-6"/></symbol>
+    <symbol id="i-file" viewBox="0 0 24 24"><path d="M7 3h7l4 4v14H7zM14 3v5h4"/></symbol>
+    <symbol id="i-image" viewBox="0 0 24 24"><rect x="3" y="4" width="18" height="16" rx="2"/><circle cx="9" cy="9" r="2"/><path d="m4 17 5-5 4 4 2-2 5 4"/></symbol>
+    <symbol id="i-check" viewBox="0 0 24 24"><path d="m5 12 4 4 10-10"/></symbol>
+    <symbol id="i-user" viewBox="0 0 24 24"><circle cx="12" cy="8" r="4"/><path d="M4.5 21a7.5 7.5 0 0 1 15 0"/></symbol>
+    <symbol id="i-shield" viewBox="0 0 24 24"><path d="M12 3 4.5 6v5c0 5 3.2 8.2 7.5 10 4.3-1.8 7.5-5 7.5-10V6z"/><path d="m9 12 2 2 4-4"/></symbol>
+    <symbol id="i-bell" viewBox="0 0 24 24"><path d="M6 16V9a6 6 0 0 1 12 0v7l2 2H4zM10 21h4"/></symbol>
+    <symbol id="i-close" viewBox="0 0 24 24"><path d="m6 6 12 12M18 6 6 18"/></symbol>
+    <symbol id="i-trash" viewBox="0 0 24 24"><path d="M4 7h16M9 7V4h6v3M7 7l1 14h8l1-14M10 11v6M14 11v6"/></symbol>
+    <symbol id="i-plus" viewBox="0 0 24 24"><path d="M12 5v14M5 12h14"/></symbol>
+    <symbol id="i-help" viewBox="0 0 24 24"><circle cx="12" cy="12" r="9"/><path d="M9.7 9a2.5 2.5 0 1 1 3.7 2.2c-.9.5-1.4 1-1.4 2.3M12 17h.01"/></symbol>
+  </svg>
+
+  <header class="global-header surfaces-header">
+    <a class="brand"><span class="brand-mark">M</span><span class="brand-name">MemVidX</span></a>
+    <nav class="mode-switch"><button class="mode"><svg><use href="#i-chat"/></svg><span>Trò chuyện</span></button><button class="mode is-active"><svg><use href="#i-map"/></svg><span>Sơ đồ tư duy</span></button><button class="mode"><svg><use href="#i-note"/></svg><span>Tóm tắt</span></button></nav>
+    <nav class="global-actions"><button class="quiet library"><svg><use href="#i-book"/></svg><span>Thư viện học tập</span></button><button class="icon-button"><svg><use href="#i-sun"/></svg></button><button class="avatar">VA</button></nav>
+  </header>
+
+  <div class="map-underlay" aria-hidden="true"><span class="under-node root">Hệ điều hành</span><span class="under-node n1">Tiến trình</span><span class="under-node n2">Bộ nhớ ảo</span><span class="under-node n3">Hệ thống tệp</span><i class="under-line l1"></i><i class="under-line l2"></i><i class="under-line l3"></i></div>
+
+  <main class="export-surface screen-export">
+    <section class="export-dialog" role="dialog" aria-label="Export Studio">
+      <header class="export-head"><div><span class="export-mark"><svg><use href="#i-export"/></svg></span><div><h1>Export Studio</h1><p>Xuất một bản đồ rõ ràng, đúng phạm vi.</p></div></div><button><svg><use href="#i-close"/></svg></button></header>
+      <nav class="export-steps" aria-label="Các bước xuất">
+        <button class="done"><span><svg><use href="#i-check"/></svg></span><b>Nội dung</b><small>Nhánh hiện tại</small></button>
+        <button class="is-current"><span>2</span><b>Trình bày</b><small>Định dạng và giao diện</small></button>
+        <button><span>3</span><b>Kiểm tra</b><small>Xác nhận trước khi xuất</small></button>
+      </nav>
+      <section class="export-preview">
+        <div class="preview-top"><div><b>Xem trước</b><span>Cập nhật theo lựa chọn</span></div><div><button>−</button><span>78%</span><button>+</button></div></div>
+        <div class="paper-preview">
+          <div class="preview-caption"><b>Hệ điều hành hiện đại</b><span>Nhánh: Bộ nhớ ảo</span></div>
+          <svg viewBox="0 0 520 330" role="img" aria-label="Xem trước nhánh Bộ nhớ ảo"><path d="M255 165C200 165 190 90 125 90M255 165C200 165 190 240 125 240M265 165C320 165 330 90 395 90M265 165C320 165 330 240 395 240"/><g><rect x="205" y="140" width="110" height="50" rx="8"/><text x="260" y="170">BỘ NHỚ ẢO</text></g><g><rect x="65" y="70" width="120" height="40" rx="6"/><text x="125" y="95">Phân trang</text></g><g><rect x="65" y="220" width="120" height="40" rx="6"/><text x="125" y="245">Lỗi trang</text></g><g><rect x="335" y="70" width="120" height="40" rx="6"/><text x="395" y="95">Thay thế trang</text></g><g><rect x="335" y="220" width="120" height="40" rx="6"/><text x="395" y="245">TLB</text></g></svg>
+          <footer>MemVidX · Hệ điều hành hiện đại · 25/10/2026</footer>
+        </div>
+        <div class="preview-stats"><span><b>5</b> nút</span><span><b>4</b> kết nối</span><span><b>1</b> trang</span></div>
+      </section>
+      <section class="export-settings">
+        <div class="settings-head"><div><h2>Trình bày</h2><p>Định dạng và giao diện của tệp.</p></div><span>2 / 3</span></div>
+        <fieldset><legend>Định dạng</legend><div class="format-grid"><button class="selected"><svg><use href="#i-image"/></svg><b>PNG</b><small>Ảnh sắc nét</small></button><button><svg><use href="#i-file"/></svg><b>PDF</b><small>Để in và học</small></button><button><svg><use href="#i-image"/></svg><b>SVG</b><small>Có thể phóng lớn</small></button></div></fieldset>
+        <fieldset><legend>Kích thước</legend><div class="segmented"><button>Gọn</button><button class="selected">Cân bằng</button><button>Chi tiết</button></div><p class="setting-help">Cân bằng giữ chữ dễ đọc trên màn hình và khi chia sẻ.</p></fieldset>
+        <fieldset><legend>Giao diện</legend><label class="theme-choice"><span class="theme-swatch"></span><span><b>Theo bản đồ hiện tại</b><small>Nền sáng · Learning blue</small></span><input type="radio" checked></label></fieldset>
+        <label class="toggle-row"><span><b>Nền trong suốt</b><small>Chỉ áp dụng cho PNG và SVG</small></span><input type="checkbox"></label>
+      </section>
+      <footer class="export-foot"><button class="back">Quay lại</button><div><span>PNG · 1600 × 1000 px</span><button class="primary-action">Kiểm tra bản xuất <b>→</b></button></div></footer>
+    </section>
+  </main>
+
+  <main class="export-guided screen-export-guided">
+    <section class="guided-dialog"><header><div><h1>Xuất sơ đồ</h1><p>Một quyết định mỗi bước.</p></div><button><svg><use href="#i-close"/></svg></button></header><div class="guided-progress"><span class="on"></span><span></span><span></span><b>Bước 1 / 3</b></div><div class="guided-body"><div><h2>Bạn muốn xuất phần nào?</h2><p>Chọn phạm vi trước, sau đó định dạng và giao diện.</p></div><label class="choice-card selected"><span class="choice-icon">◎</span><span><b>Nhánh hiện tại</b><small>Bộ nhớ ảo · 5 nút</small></span><input type="radio" checked></label><label class="choice-card"><span class="choice-icon">⌘</span><span><b>Toàn bộ sơ đồ</b><small>12 nút, kể cả phần đang thu gọn</small></span><input type="radio"></label><label class="choice-card"><span class="choice-icon">✣</span><span><b>Tự chọn trên canvas</b><small>Chọn chính xác các nút cần xuất</small></span><input type="radio"></label></div><footer><button>Hủy</button><button class="primary-action">Tiếp tục</button></footer></section>
+  </main>
+
+  <main class="account-screen screen-account">
+    <section class="account-canvas"><div><span class="welcome-mark">M</span><h1>Không gian học tập của bạn</h1><p>Menu tài khoản là một điểm chuyển nhỏ, không phải một bảng điều khiển thứ hai.</p></div></section>
+    <aside class="account-menu"><header><span class="account-avatar">VA</span><div><b>Vũ Anh</b><small>vu.anh@example.test</small></div></header><nav><button><svg><use href="#i-user"/></svg><span><b>Hồ sơ tài khoản</b><small>Tên, email và vai trò</small></span><i>›</i></button><button><svg><use href="#i-sun"/></svg><span><b>Giao diện</b><small id="theme-copy">Sáng</small></span><i>›</i></button><button><svg><use href="#i-help"/></svg><span><b>Phím tắt và trợ giúp</b><small>Làm việc nhanh hơn</small></span><i>›</i></button></nav><footer><button>Đăng xuất</button></footer></aside>
+  </main>
+
+  <main class="profile-screen screen-profile">
+    <header class="profile-head"><button>← Không gian học tập</button><div><h1>Hồ sơ và cài đặt</h1><p>Quản lý thông tin cá nhân và tùy chọn học tập.</p></div></header>
+    <div class="profile-layout"><nav><button class="active"><svg><use href="#i-user"/></svg>Hồ sơ</button><button><svg><use href="#i-shield"/></svg>Bảo mật</button><button><svg><use href="#i-bell"/></svg>Thông báo</button><button><svg><use href="#i-sun"/></svg>Giao diện</button></nav><section class="profile-form"><div class="profile-intro"><span>VA</span><div><h2>Thông tin cá nhân</h2><p>Thông tin dùng để nhận diện bạn trong MemVidX.</p></div><button>Đổi ảnh</button></div><div class="form-grid"><label><span>Tên hiển thị</span><input value="Vũ Anh"></label><label><span>Email</span><input value="vu.anh@example.test" disabled><small>Liên hệ quản trị viên để đổi email.</small></label><label><span>Vai trò</span><input value="Học viên" disabled></label><label><span>Ngôn ngữ</span><select><option>Tiếng Việt</option></select></label></div><div class="form-actions"><span>Thay đổi chưa được lưu.</span><button class="primary-action">Lưu thay đổi</button></div><section class="danger-zone"><div><h3>Xóa tài khoản</h3><p>Xóa tài khoản và dữ liệu học tập liên quan.</p></div><button><svg><use href="#i-trash"/></svg>Xem tùy chọn</button></section></section></div>
+  </main>
+
+  <main class="dialog-screen screen-dialog-generate">
+    <section class="shared-dialog generate-dialog"><header><div><span><svg><use href="#i-map"/></svg></span><div><h1>Tạo sơ đồ tư duy</h1><p>Hai nguồn đã chọn sẽ được dùng để dựng sơ đồ.</p></div></div><button><svg><use href="#i-close"/></svg></button></header><div class="dialog-body"><div class="source-summary"><b>Nguồn đang dùng</b><span>2 tài liệu · 35 đoạn</span><div><i>HĐ</i>Hệ điều hành hiện đại</div><div><i>TT</i>Ghi chú tiến trình</div></div><label><span>Yêu cầu riêng <small>Tùy chọn</small></span><textarea placeholder="Ví dụ: Tập trung vào quản lý bộ nhớ và tiến trình…"></textarea></label><fieldset><legend>Mục đích</legend><div class="choice-pills"><button class="selected">Tổng quan</button><button>Khái niệm chính</button><button>Quy trình</button><button>So sánh</button><button>Ôn tập</button></div></fieldset><fieldset><legend>Độ chi tiết</legend><div class="segmented"><button>Gọn</button><button class="selected">Cân bằng</button><button>Chi tiết</button></div></fieldset></div><footer><button>Hủy</button><button class="primary-action">Tạo sơ đồ</button></footer></section>
+  </main>
+
+  <main class="dialog-screen screen-dialog-delete">
+    <section class="shared-dialog delete-dialog"><header><div><span class="danger-icon"><svg><use href="#i-trash"/></svg></span><div><h1>Xóa tài liệu?</h1><p>Hành động này không thể hoàn tác.</p></div></div><button><svg><use href="#i-close"/></svg></button></header><div class="dialog-body"><p>Tài liệu <b>Hệ điều hành hiện đại.pdf</b> cùng các kết quả học tập liên quan sẽ bị xóa:</p><ul><li>1 sơ đồ kiến thức</li><li>2 bài quiz và lịch sử làm bài</li><li>Ghi chú gắn với tài liệu</li></ul><label class="confirm-check"><input type="checkbox"><span>Tôi hiểu dữ liệu này sẽ bị xóa vĩnh viễn.</span></label></div><footer><button>Giữ tài liệu</button><button class="danger-action" disabled>Xóa vĩnh viễn</button></footer></section>
+  </main>
+
+  <div class="prototype-badge"><span>Option B</span><b id="surface-label">Export Studio</b></div>
+  <script>
+    const state = decodeURIComponent(location.search);
+    const screens = ['export-guided','dialog-generate','dialog-delete','account','profile','export'];
+    const screen = screens.find(item => state.includes(`screen=${item}`)) || 'export';
+    const theme = state.includes('theme=dark') ? 'dark' : 'light';
+    document.documentElement.dataset.screen = screen;
+    document.documentElement.dataset.theme = theme;
+    document.querySelector('#surface-label').textContent = ({export:'Export Studio · preview bench', 'export-guided':'Export Studio · guided alternative', account:'Account menu', profile:'Profile', 'dialog-generate':'Shared dialog · generate', 'dialog-delete':'Shared dialog · destructive'})[screen];
+    document.querySelector('#theme-copy').textContent = theme === 'dark' ? 'Tối' : 'Sáng';
+  </script>
+</body>
+</html>

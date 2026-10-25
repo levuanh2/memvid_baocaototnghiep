@@ -1,0 +1,149 @@
+<!doctype html>
+<html lang="vi" data-theme="light" data-screen="mindmap">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>MemVidX — Shared map grammar</title>
+  <link rel="stylesheet" href="workspace.css">
+  <link rel="stylesheet" href="maps.css">
+</head>
+<body>
+  <svg class="symbol-defs" aria-hidden="true">
+    <symbol id="i-chat" viewBox="0 0 24 24"><path d="M5 5.5h14v10H9l-4 3v-13Z"/><path d="M8 9h8M8 12h5"/></symbol>
+    <symbol id="i-map" viewBox="0 0 24 24"><circle cx="6" cy="12" r="2.2"/><circle cx="18" cy="6" r="2.2"/><circle cx="18" cy="18" r="2.2"/><path d="m8 11 7.7-4M8 13l7.7 4"/></symbol>
+    <symbol id="i-note" viewBox="0 0 24 24"><path d="M6 4h9l3 3v13H6z"/><path d="M15 4v4h3M9 12h6M9 16h5"/></symbol>
+    <symbol id="i-book" viewBox="0 0 24 24"><path d="M4 5.5c3-1 5-.5 8 1.5v12c-3-2-5-2.5-8-1.5zM20 5.5c-3-1-5-.5-8 1.5v12c3-2 5-2.5 8-1.5z"/></symbol>
+    <symbol id="i-search" viewBox="0 0 24 24"><circle cx="10.5" cy="10.5" r="5.5"/><path d="m15 15 4.5 4.5"/></symbol>
+    <symbol id="i-sun" viewBox="0 0 24 24"><circle cx="12" cy="12" r="4"/><path d="M12 2v2M12 20v2M2 12h2M20 12h2M5 5l1.5 1.5M17.5 17.5 19 19M19 5l-1.5 1.5M6.5 17.5 5 19"/></symbol>
+    <symbol id="i-plus" viewBox="0 0 24 24"><path d="M12 5v14M5 12h14"/></symbol>
+    <symbol id="i-file" viewBox="0 0 24 24"><path d="M7 3h7l4 4v14H7zM14 3v5h4"/></symbol>
+    <symbol id="i-dots" viewBox="0 0 24 24"><circle cx="5" cy="12" r="1" fill="currentColor"/><circle cx="12" cy="12" r="1" fill="currentColor"/><circle cx="19" cy="12" r="1" fill="currentColor"/></symbol>
+    <symbol id="i-export" viewBox="0 0 24 24"><path d="M12 3v12M7 8l5-5 5 5M5 14v6h14v-6"/></symbol>
+    <symbol id="i-palette" viewBox="0 0 24 24"><path d="M12 3a9 9 0 1 0 0 18h1.5a2 2 0 0 0 0-4H12a2 2 0 0 1 0-4h3a6 6 0 0 0 6-6c0-2.2-4-4-9-4Z"/><circle cx="7.5" cy="9" r=".8" fill="currentColor"/><circle cx="10" cy="6.5" r=".8" fill="currentColor"/><circle cx="15" cy="7" r=".8" fill="currentColor"/></symbol>
+    <symbol id="i-fit" viewBox="0 0 24 24"><path d="M8 3H3v5M16 3h5v5M8 21H3v-5M16 21h5v-5"/></symbol>
+    <symbol id="i-zoom-in" viewBox="0 0 24 24"><circle cx="10" cy="10" r="6"/><path d="m15 15 5 5M10 7v6M7 10h6"/></symbol>
+    <symbol id="i-zoom-out" viewBox="0 0 24 24"><circle cx="10" cy="10" r="6"/><path d="m15 15 5 5M7 10h6"/></symbol>
+    <symbol id="i-close" viewBox="0 0 24 24"><path d="m6 6 12 12M18 6 6 18"/></symbol>
+    <symbol id="i-layout" viewBox="0 0 24 24"><path d="M5 4h14v5H5zM5 14h6v6H5zM15 14h4v6h-4z"/></symbol>
+    <symbol id="i-reset" viewBox="0 0 24 24"><path d="M5 8V4M5 4h4M5 4a9 9 0 1 1-2 9"/></symbol>
+  </svg>
+
+  <header class="global-header map-global">
+    <a class="brand" href="#" aria-label="MemVidX"><span class="brand-mark">M</span><span class="brand-name">MemVidX</span></a>
+    <nav class="mode-switch" aria-label="Không gian làm việc">
+      <button class="mode"><svg><use href="#i-chat"/></svg><span>Trò chuyện</span></button>
+      <button class="mode is-active"><svg><use href="#i-map"/></svg><span>Sơ đồ tư duy</span></button>
+      <button class="mode"><svg><use href="#i-note"/></svg><span>Tóm tắt</span></button>
+    </nav>
+    <nav class="global-actions"><button class="quiet library"><svg><use href="#i-book"/></svg><span>Thư viện học tập</span></button><button class="icon-button"><svg><use href="#i-sun"/></svg></button><button class="avatar">VA</button></nav>
+  </header>
+
+  <main class="map-workspace">
+    <aside class="map-sources" aria-label="Nguồn học tập">
+      <div class="map-panel-title"><div><b>Nguồn của sơ đồ</b><small>2 tài liệu</small></div><button>×</button></div>
+      <button class="map-add-source"><svg><use href="#i-plus"/></svg>Thêm nguồn</button>
+      <label class="map-search"><svg><use href="#i-search"/></svg><input placeholder="Tìm nguồn…"></label>
+      <button class="map-source is-on"><span><svg><use href="#i-file"/></svg></span><span><b>Hệ điều hành hiện đại</b><small>24 đoạn đã lập chỉ mục</small></span><i>✓</i></button>
+      <button class="map-source is-on"><span><svg><use href="#i-file"/></svg></span><span><b>Ghi chú tiến trình</b><small>11 đoạn đã lập chỉ mục</small></span><i>✓</i></button>
+    </aside>
+    <aside class="map-source-rail"><button><svg><use href="#i-book"/></svg><b>2</b></button><span></span><button class="rail-doc">HĐ</button><button class="rail-doc">TT</button></aside>
+
+    <section class="mindmap-stage">
+      <header class="artifact-toolbar">
+        <button class="map-picker"><svg><use href="#i-map"/></svg><span><b>Hệ điều hành hiện đại</b><small>12 nút · vừa lưu</small></span><span>⌄</span></button>
+        <div class="artifact-status"><span>Đã đồng bộ</span></div>
+        <div class="artifact-actions"><button><svg><use href="#i-palette"/></svg><span>Giao diện</span></button><button><svg><use href="#i-export"/></svg><span>Xuất</span></button><button aria-label="Thêm"><svg><use href="#i-dots"/></svg></button></div>
+      </header>
+      <div class="canvas-shell">
+        <div class="zoom-cluster"><button><svg><use href="#i-zoom-out"/></svg></button><span>86%</span><button><svg><use href="#i-zoom-in"/></svg></button><button><svg><use href="#i-fit"/></svg></button></div>
+        <div class="canvas-note"><span>12 nút</span><b>Chọn một nút để xem nguồn và ghi chú</b></div>
+        <svg class="knowledge-map" viewBox="0 0 920 650" role="img" aria-label="Sơ đồ tư duy Hệ điều hành hiện đại">
+          <g class="desktop-tree">
+            <path class="branch b1" d="M456 318 C375 318 350 170 272 170"/><path class="branch b1 thin" d="M272 170 C212 170 204 100 138 100"/><path class="branch b1 thin" d="M272 170 C210 170 204 236 138 236"/>
+            <path class="branch b2" d="M456 318 C375 318 350 468 272 468"/><path class="branch b2 thin" d="M272 468 C212 468 204 402 138 402"/><path class="branch b2 thin" d="M272 468 C210 468 204 532 138 532"/>
+            <path class="branch b3" d="M464 318 C545 318 570 170 648 170"/><path class="branch b3 thin" d="M648 170 C708 170 716 100 782 100"/><path class="branch b3 thin" d="M648 170 C710 170 716 236 782 236"/>
+            <path class="branch b4" d="M464 318 C545 318 570 468 648 468"/><path class="branch b4 thin" d="M648 468 C708 468 716 402 782 402"/><path class="branch b4 thin" d="M648 468 C710 468 716 532 782 532"/>
+            <g class="node root" transform="translate(370 282)"><rect width="180" height="72" rx="12"/><text x="90" y="29">HỆ ĐIỀU HÀNH</text><text x="90" y="51">HIỆN ĐẠI</text></g>
+            <g class="node section" transform="translate(190 140)"><rect width="164" height="60" rx="9"/><text x="82" y="26">Quản lý</text><text x="82" y="45">tiến trình</text></g>
+            <g class="node section selected" transform="translate(566 140)"><rect width="164" height="60" rx="9"/><text x="82" y="26">Bộ nhớ</text><text x="82" y="45">ảo</text></g>
+            <g class="node section" transform="translate(190 438)"><rect width="164" height="60" rx="9"/><text x="82" y="36">Hệ thống tệp</text></g>
+            <g class="node section" transform="translate(566 438)"><rect width="164" height="60" rx="9"/><text x="82" y="36">Đồng thời</text></g>
+            <g class="node concept" transform="translate(54 80)"><rect width="168" height="42" rx="7"/><text x="84" y="26">PCB &amp; trạng thái</text></g>
+            <g class="node concept" transform="translate(54 215)"><rect width="168" height="42" rx="7"/><text x="84" y="26">Lập lịch CPU</text></g>
+            <g class="node concept" transform="translate(698 80)"><rect width="168" height="42" rx="7"/><text x="84" y="26">Phân trang</text></g>
+            <g class="node concept" transform="translate(698 215)"><rect width="168" height="42" rx="7"/><text x="84" y="26">Bộ nhớ đệm</text></g>
+            <g class="node concept" transform="translate(54 381)"><rect width="168" height="42" rx="7"/><text x="84" y="26">Cấu trúc thư mục</text></g>
+            <g class="node concept" transform="translate(54 511)"><rect width="168" height="42" rx="7"/><text x="84" y="26">Quyền truy cập</text></g>
+            <g class="node concept" transform="translate(698 381)"><rect width="168" height="42" rx="7"/><text x="84" y="26">Khóa tương hỗ</text></g>
+            <g class="node concept" transform="translate(698 511)"><rect width="168" height="42" rx="7"/><text x="84" y="26">Bế tắc</text></g>
+          </g>
+          <g class="mobile-tree">
+            <path class="branch b1" d="M460 112 C460 156 280 142 280 194"/><path class="branch b3" d="M460 112 C460 156 640 142 640 194"/><path class="branch b2" d="M280 244 C280 286 280 300 280 336"/><path class="branch b4" d="M640 244 C640 286 640 300 640 336"/>
+            <g class="node root" transform="translate(350 54)"><rect width="220" height="62" rx="12"/><text x="110" y="27">HỆ ĐIỀU HÀNH</text><text x="110" y="48">HIỆN ĐẠI</text></g>
+            <g class="node section" transform="translate(170 190)"><rect width="220" height="58" rx="9"/><text x="110" y="35">Quản lý tiến trình</text></g>
+            <g class="node section selected" transform="translate(530 190)"><rect width="220" height="58" rx="9"/><text x="110" y="35">Bộ nhớ ảo</text></g>
+            <g class="node concept" transform="translate(170 332)"><rect width="220" height="48" rx="7"/><text x="110" y="29">Lập lịch CPU</text></g>
+            <g class="node concept" transform="translate(530 332)"><rect width="220" height="48" rx="7"/><text x="110" y="29">Phân trang</text></g>
+          </g>
+        </svg>
+        <div class="map-legend"><span><i class="root-dot"></i>Chủ đề</span><span><i></i>Mục</span><span><i class="selected-dot"></i>Đang chọn</span></div>
+      </div>
+    </section>
+
+    <aside class="node-inspector">
+      <div class="inspector-title"><div><small>Nút đang chọn</small><h2>Bộ nhớ ảo</h2></div><button><svg><use href="#i-close"/></svg></button></div>
+      <div class="inspector-path">Hệ điều hành hiện đại <span>/</span> Bộ nhớ ảo</div>
+      <section><h3>Tóm tắt</h3><p>Bộ nhớ ảo tách không gian địa chỉ logic khỏi bộ nhớ vật lý, cho phép tiến trình sử dụng không gian lớn hơn RAM.</p></section>
+      <section class="source-proof"><h3>Nguồn liên quan</h3><blockquote>“Mỗi tiến trình hoạt động trong một không gian địa chỉ ảo riêng…”</blockquote><button>Hệ điều hành hiện đại · tr. 84</button></section>
+      <section><h3>Ghi chú của bạn</h3><textarea placeholder="Thêm ghi chú cho nút này…"></textarea></section>
+      <div class="inspector-footer"><button>Thêm nhánh</button><button class="primary">Hỏi về nút này</button></div>
+    </aside>
+  </main>
+
+  <main class="study-map-page">
+    <header class="study-header"><div class="study-heading"><button>← Thư viện</button><span></span><div><small>Sơ đồ kiến thức</small><h1>Hệ điều hành hiện đại</h1></div></div><div><button>Về tài liệu</button><button><svg><use href="#i-reset"/></svg> Dựng lại</button></div></header>
+    <section class="study-map-tools"><div class="map-counts"><span><i></i>1 tài liệu</span><span><i></i>4 chương</span><span><i></i>12 khái niệm</span></div><div class="study-actions"><label><svg><use href="#i-search"/></svg><input placeholder="Tìm khái niệm…"></label><button><svg><use href="#i-layout"/></svg><span>Cây ngang</span></button><button><svg><use href="#i-export"/></svg><span>PNG</span></button><button aria-label="Trình chiếu"><svg><use href="#i-fit"/></svg></button></div></section>
+    <section class="study-map-body">
+      <div class="study-canvas">
+        <div class="study-hint">Chọn một khái niệm để lần theo nhánh và đọc tóm tắt.</div>
+        <svg class="knowledge-map study-tree" viewBox="0 0 920 650" role="img" aria-label="Sơ đồ kiến thức Hệ điều hành hiện đại">
+          <g class="desktop-tree">
+            <path class="study-link trunk" d="M132 324 C210 324 226 130 318 130"/><path class="study-link" d="M318 130 C404 130 415 78 500 78"/><path class="study-link" d="M318 130 C404 130 415 186 500 186"/>
+            <path class="study-link trunk" d="M132 324 C210 324 226 320 318 320"/><path class="study-link" d="M318 320 C404 320 415 270 500 270"/><path class="study-link" d="M318 320 C404 320 415 370 500 370"/>
+            <path class="study-link trunk" d="M132 324 C210 324 226 510 318 510"/><path class="study-link" d="M318 510 C404 510 415 462 500 462"/><path class="study-link" d="M318 510 C404 510 415 562 500 562"/>
+            <g class="study-node root-anchor" transform="translate(92 324)"><circle r="12"/><text x="22" y="5">Hệ điều hành hiện đại</text></g>
+            <g class="study-node section-anchor" transform="translate(318 130)"><circle r="9"/><text x="20" y="5">Quản lý tiến trình</text></g>
+            <g class="study-node section-anchor selected" transform="translate(318 320)"><circle r="9"/><text x="20" y="5">Bộ nhớ ảo</text></g>
+            <g class="study-node section-anchor" transform="translate(318 510)"><circle r="9"/><text x="20" y="5">Hệ thống tệp</text></g>
+            <g class="study-node concept-anchor" transform="translate(500 78)"><circle r="6"/><text x="16" y="5">PCB và trạng thái tiến trình</text></g>
+            <g class="study-node concept-anchor" transform="translate(500 186)"><circle r="6"/><text x="16" y="5">Lập lịch CPU và chuyển ngữ cảnh</text></g>
+            <g class="study-node concept-anchor" transform="translate(500 270)"><circle r="6"/><text x="16" y="5">Phân trang theo yêu cầu</text></g>
+            <g class="study-node concept-anchor" transform="translate(500 370)"><circle r="6"/><text x="16" y="5">Thay thế trang và lỗi trang</text></g>
+            <g class="study-node concept-anchor" transform="translate(500 462)"><circle r="6"/><text x="16" y="5">Cấu trúc thư mục phân cấp</text></g>
+            <g class="study-node concept-anchor" transform="translate(500 562)"><circle r="6"/><text x="16" y="5">Quyền truy cập tệp</text></g>
+          </g>
+          <g class="mobile-tree">
+            <path class="study-link trunk" d="M460 95 C460 150 300 145 300 205"/><path class="study-link trunk" d="M460 95 C460 150 620 145 620 205"/><path class="study-link" d="M300 224 C300 290 300 300 300 360"/><path class="study-link" d="M620 224 C620 290 620 300 620 360"/>
+            <g class="study-node root-anchor" transform="translate(460 92)"><circle r="15"/><text x="0" y="-28">Hệ điều hành hiện đại</text></g>
+            <g class="study-node section-anchor" transform="translate(300 220)"><circle r="11"/><text x="0" y="-23">Tiến trình</text></g>
+            <g class="study-node section-anchor selected" transform="translate(620 220)"><circle r="11"/><text x="0" y="-23">Bộ nhớ ảo</text></g>
+            <g class="study-node concept-anchor" transform="translate(300 365)"><circle r="8"/><text x="0" y="-20">Lập lịch CPU</text></g>
+            <g class="study-node concept-anchor" transform="translate(620 365)"><circle r="8"/><text x="0" y="-20">Phân trang</text></g>
+          </g>
+        </svg>
+      </div>
+      <aside class="study-detail"><div class="detail-head"><span>Khái niệm đang chọn</span><button>×</button></div><h2>Bộ nhớ ảo</h2><p>Bộ nhớ ảo tạo một lớp ánh xạ giữa địa chỉ mà tiến trình nhìn thấy và khung trang vật lý.</p><div class="study-facts"><span>3 khái niệm con</span><span>2 đoạn nguồn</span></div><blockquote>“Không gian địa chỉ ảo cho phép mỗi tiến trình hoạt động như thể có một vùng nhớ liên tục…”</blockquote><button class="study-primary">Ôn tập khái niệm này</button></aside>
+    </section>
+  </main>
+
+  <div class="prototype-badge"><span>Option B</span><b id="screen-label">MindMap · shared grammar</b></div>
+  <script>
+    const state = decodeURIComponent(location.search);
+    const theme = state.includes('theme=dark') ? 'dark' : 'light';
+    const screen = state.includes('screen=studymap') ? 'studymap' : 'mindmap';
+    document.documentElement.dataset.theme = theme;
+    document.documentElement.dataset.screen = screen;
+    document.querySelector('#screen-label').textContent = screen === 'studymap' ? 'StudyMap · shared grammar' : 'MindMap · shared grammar';
+  </script>
+</body>
+</html>
