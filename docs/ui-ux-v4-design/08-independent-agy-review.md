@@ -4,7 +4,7 @@
 **Baseline**: `main` @ `fb0c2f4dec90b6bb8aea62e71e1aa9a63db2a1c3`
 **Target Branch**: `docs/ui-ux-v4-design`
 **Reviewed Artifacts**:
-- Codex 1: [`03-visual-mockups/README.md`](./03-visual-mockups/README.md) (commits `647ac08`, `61056bb`, `957fbd5`, `c2e008d`), prototypes `workspace.html`, `maps.html`, `surfaces.html`, `quiz.html`, corresponding CSS files, automated verification suites (`verify-mockups.mjs`, `verify-maps.mjs`, `verify-surfaces.mjs`, `verify-quiz.mjs`), and 88 rendered screenshots in `screenshots/`.
+- Codex 1: [`03-visual-mockups/README.md`](./03-visual-mockups/README.md) (commits `647ac08`, `61056bb`, `957fbd5`, `c2e008d`, `cc52f25`), prototypes `workspace.html`, `maps.html`, `surfaces.html`, `quiz.html`, `library-integration.html`, corresponding CSS files, automated verification suites (`verify-mockups.mjs`, `verify-maps.mjs`, `verify-surfaces.mjs`, `verify-quiz.mjs`, `verify-library-integration.mjs`), and 95 rendered screenshots in `screenshots/`.
 - Codex 2: [`04-document-library-redesign/alternative-a-canonical-learning-queue.md`](./04-document-library-redesign/alternative-a-canonical-learning-queue.md) (commit `82ea744`), [`04-document-library-redesign/alternative-b-learning-action-matrix.md`](./04-document-library-redesign/alternative-b-learning-action-matrix.md) (commit `5d9876a`), prototypes `prototype-alternative-a.html` and `prototype-alternative-b.html`, measurement scripts (`capture_current_state.py`, `capture_prototype.py`, `capture_prototype_b.py`), and evidence in `evidence/`.
 
 ---
