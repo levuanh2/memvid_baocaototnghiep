@@ -1,0 +1,163 @@
+{
+  "capturedAtEpoch": 1792944282,
+  "baseUrl": "http://localhost:5191",
+  "backend": "http://127.0.0.1:8091",
+  "account": {
+    "kind": "fresh disposable",
+    "email": "ux-library-1792944271@example.test"
+  },
+  "upload": {
+    "path": "E:\\memvid_NCKH\\MemVid_BaoCaoTotNghiep\\.worktrees\\ui-ux-v4-design\\FE\\e2e\\fixtures\\sample-doc.txt",
+    "throughRealUI": true
+  },
+  "desktop": {
+    "viewport": {
+      "width": 1440,
+      "height": 900
+    },
+    "document": {
+      "scrollWidth": 1440,
+      "scrollHeight": 41651
+    },
+    "visibleInteractiveControls": 1755,
+    "renderedStudyCards": 216,
+    "uniqueDocumentNames": [
+      "ux-audit-secondary.txt",
+      "sample-doc (35).txt",
+      "sample-doc (34).txt",
+      "sample-doc (33).txt",
+      "sample-doc (32).txt",
+      "sample-doc (31).txt",
+      "sample-doc (30).txt",
+      "sample-doc (29).txt",
+      "sample-doc (28).txt",
+      "sample-doc (27).txt",
+      "sample-doc (26).txt",
+      "sample-doc (25).txt",
+      "sample-doc (24).txt",
+      "sample-doc (23).txt",
+      "sample-doc (22).txt",
+      "sample-doc (21).txt",
+      "sample-doc (20).txt",
+      "second-doc.txt",
+      "sample-doc (19).txt",
+      "GiaoTrinh_KienThuc_1792879732160.txt",
+      "GiaoTrinh_KienThuc_1792879121064.txt",
+      "GiaoTrinh_KienThuc_1792878969688.txt",
+      "GiaoTrinh_KienThuc_1792878479085.txt",
+      "sample-doc (18).txt",
+      "ux-audit-primary.txt",
+      "sample-doc (17).txt",
+      "sample-doc (16).txt",
+      "sample-doc (15).txt",
+      "sample-doc (14).txt",
+      "sample-doc (13).txt",
+      "sample-doc (12).txt",
+      "sample-doc (11).txt",
+      "sample-doc (10).txt",
+      "sample-doc (9).txt",
+      "sample-doc (8).txt",
+      "sample-doc (7).txt",
+      "sample-doc (6).txt",
+      "sample-doc (5).txt",
+      "sample-doc (4).txt",
+      "sample-doc (3).txt",
+      "sample-doc (2).txt",
+      "sample-doc.txt"
+    ],
+    "uniqueDocumentCount": 42,
+    "duplicateCardInstances": 174,
+    "cardsPerUniqueDocument": 5.142857142857143,
+    "controlsPerCard": {
+      "min": 8,
+      "max": 9,
+      "total": 1733
+    },
+    "headings": [
+      "Thư viện học tập",
+      "Tiếp tục học",
+      "Hôm nay (1)",
+      "Tải lên gần đây (6)",
+      "Chưa mở bao giờ (41)",
+      "Cần tóm tắt (42)",
+      "Cần sơ đồ (41)",
+      "Cần quiz (42)",
+      "Tất cả tài liệu (42)"
+    ]
+  },
+  "mobile": {
+    "viewport": {
+      "width": 390,
+      "height": 844
+    },
+    "document": {
+      "scrollWidth": 390,
+      "scrollHeight": 56922
+    },
+    "visibleInteractiveControls": 1750,
+    "renderedStudyCards": 216,
+    "uniqueDocumentNames": [
+      "ux-audit-secondary.txt",
+      "sample-doc (35).txt",
+      "sample-doc (34).txt",
+      "sample-doc (33).txt",
+      "sample-doc (32).txt",
+      "sample-doc (31).txt",
+      "sample-doc (30).txt",
+      "sample-doc (29).txt",
+      "sample-doc (28).txt",
+      "sample-doc (27).txt",
+      "sample-doc (26).txt",
+      "sample-doc (25).txt",
+      "sample-doc (24).txt",
+      "sample-doc (23).txt",
+      "sample-doc (22).txt",
+      "sample-doc (21).txt",
+      "sample-doc (20).txt",
+      "second-doc.txt",
+      "sample-doc (19).txt",
+      "GiaoTrinh_KienThuc_1792879732160.txt",
+      "GiaoTrinh_KienThuc_1792879121064.txt",
+      "GiaoTrinh_KienThuc_1792878969688.txt",
+      "GiaoTrinh_KienThuc_1792878479085.txt",
+      "sample-doc (18).txt",
+      "ux-audit-primary.txt",
+      "sample-doc (17).txt",
+      "sample-doc (16).txt",
+      "sample-doc (15).txt",
+      "sample-doc (14).txt",
+      "sample-doc (13).txt",
+      "sample-doc (12).txt",
+      "sample-doc (11).txt",
+      "sample-doc (10).txt",
+      "sample-doc (9).txt",
+      "sample-doc (8).txt",
+      "sample-doc (7).txt",
+      "sample-doc (6).txt",
+      "sample-doc (5).txt",
+      "sample-doc (4).txt",
+      "sample-doc (3).txt",
+      "sample-doc (2).txt",
+      "sample-doc.txt"
+    ],
+    "uniqueDocumentCount": 42,
+    "duplicateCardInstances": 174,
+    "cardsPerUniqueDocument": 5.142857142857143,
+    "controlsPerCard": {
+      "min": 8,
+      "max": 9,
+      "total": 1733
+    },
+    "headings": [
+      "Thư viện học tập",
+      "Tiếp tục học",
+      "Hôm nay (1)",
+      "Tải lên gần đây (6)",
+      "Chưa mở bao giờ (41)",
+      "Cần tóm tắt (42)",
+      "Cần sơ đồ (41)",
+      "Cần quiz (42)",
+      "Tất cả tài liệu (42)"
+    ]
+  }
+}
