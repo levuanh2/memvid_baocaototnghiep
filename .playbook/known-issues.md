@@ -48,10 +48,27 @@ Root math (measured, not estimated): at 768px, left rail 252px + divider, row
 content box after the Inspector's `padding-right: 364px` reservation ≈ 134px.
 Four compacted 40px targets (map selector, Appearance, Export, Overflow) plus
 three 10px gaps need ≈ 190px — a genuine ≈56px shortfall, not a sizing/gap
-rounding bug. Freed it by narrowing `.mindmap-tools-overlay` itself from 340px
-to 280px, and the toolbar's reservation from 364px to 304px to match, **only**
-in a `(min-width: 768px) and (max-width: 800px)` band — outside that band the
-Inspector keeps its full 340px.
+rounding bug.
+
+First attempt freed the whole ≈56px from the Inspector alone (340px → 280px).
+A side-agent review correctly flagged that this was never visually checked
+against real Inspector content, and it turned out there was a concrete reason
+to worry: `ContextInspector` (the same component that renders inside this
+overlay) has an established `min: 320px` elsewhere in the app
+(`PANELS.right` in `hooks/panelLayout.js`) — 280px is 40px below its own
+designed floor. Final split: Inspector only goes to 320px (that floor, +20px
+freed) and the rest comes from tightening the row's own `gap` (10px → 4px,
++18px across 3 gaps) instead of the Inspector or any individual target's
+size — measured directly against the real toolbar DOM at 777px width: the
+rightmost target's right edge (436px) clears the Inspector's left edge
+(445px) with ~9px to spare. Confirmed both by a manual DOM/hit-test probe
+(register + seed via `fetch()` against a real backend, then read
+`getBoundingClientRect()`/`elementFromPoint()` live in-browser — no Playwright
+round-trip needed per hypothesis) and by the existing
+`e2e-fixture/mindmap-toolbar-occlusion.spec.js` (no backend required, runs
+against `FixtureHarnessApp` directly), both green. This all applies **only**
+in a `(min-width: 768px) and (max-width: 800px)` band — outside it the
+Inspector keeps its full 340px and the row keeps its full 10px gap.
 
 Also added `.mm-map-selector__trigger` to `mindmap-toolbar-occlusion.spec.js`'s
 `CONTROLS` hit-test list, a real click-opens-the-listbox assertion, and a

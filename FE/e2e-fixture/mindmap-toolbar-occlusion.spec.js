@@ -12,7 +12,7 @@ const VIEWPORTS = [
   { name: "tablet-edge", width: 768, height: 1024 },
   { name: "mobile", width: 390, height: 844 },
 ];
-const CONTROLS = [".mm-appearance-trigger", ".mm-export-trigger", ".mm-overflow-trigger"];
+const CONTROLS = [".mm-map-selector__trigger", ".mm-appearance-trigger", ".mm-export-trigger", ".mm-overflow-trigger"];
 
 async function hitTestToolbar(page) {
   return page.evaluate((selectors) => Object.fromEntries(selectors.map((selector) => {

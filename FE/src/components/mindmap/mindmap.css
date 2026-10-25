@@ -461,14 +461,25 @@ html.dark .me-container { --mm-relation: #7e90c4; }
      made (measured directly: FE/qa-artifacts/mindmap-toolbar-occlusion/
      after-element-from-point.json showed Overflow's hit-test landing inside
      .mindmap-tools-overlay itself, not on a neighboring button — genuine
-     overflow into the reserved footprint, not a sizing/gap bug). Narrow the
-     Inspector itself in just this band instead of continuing to shrink
-     toolbar targets — 280px frees enough room (304px reservation) and still
-     comfortably fits the Inspector's own content at this width. */
+     overflow into the reserved footprint, not a sizing/gap bug). Split the
+     ~56px shortfall between the Inspector and the toolbar targets instead of
+     taking it all from one side: the Inspector only goes to 320px here, its
+     own established floor elsewhere in the app (PANELS.right.min in
+     hooks/panelLayout.js — ContextInspector is not designed to render below
+     that), freeing 20px; the remaining room comes from tightening the row's
+     own gap (10px -> 4px, saving 18px across 3 gaps) rather than from the
+     Inspector or the targets' individual sizes. Measured directly against
+     the real toolbar DOM at 777px: with both changes, the rightmost target
+     (.mm-toolbar-menu-wrap, right edge 436) clears the Inspector's left edge
+     (444.8) with ~9px to spare — no further shrinking needed. */
   @media (max-width: 800px) {
-    .mindmap-tools-overlay { width: 280px; }
+    /* Element+class, not just class, to outrank the Tailwind w-[340px]
+       utility on the same element — equal-specificity class selectors lose
+       to source order, and Tailwind's generated sheet wins that tie. */
+    aside.mindmap-tools-overlay { width: 320px; }
     .artifact-toolbar.mm-context-row[data-inspector-open="true"] {
-      padding-right: 304px;
+      padding-right: 344px;
+      gap: 4px;
     }
   }
 
