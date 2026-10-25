@@ -262,3 +262,44 @@ and the same serif-for-content/sans-for-controls type hierarchy used across the
 other Option B surfaces. `render-quiz.mjs` creates 21 screenshots;
 `verify-quiz.mjs` checks 24 light/dark responsive states, including 320px, for
 exact viewport, horizontal overflow, state isolation, and usable controls.
+
+## Batch 5 — Document Library visual-language integration
+
+`library-integration.html` applies this package's global header, canonical
+tokens, typography, density, and light/dark behavior to Codex 2's selected
+**Alternative B — Learning Action Matrix**. It does not redefine the Library
+information architecture or its identity/routing contract; those remain owned
+by `04-document-library-redesign/alternative-b-learning-action-matrix.md`.
+
+### BEFORE and ownership evidence
+
+- `docs/ui-ux-v4-design/04-document-library-redesign/evidence/before-desktop-1440x900.png`
+- `docs/ui-ux-v4-design/04-document-library-redesign/evidence/before-mobile-390x844.png`
+- `docs/ui-ux-audit-v4/screenshots/codex1-visual-study-library-1440x900-light.png`
+- `docs/ui-ux-audit-v4/screenshots/codex1-visual-study-library-390x844-dark.png`
+
+The integration preserves one canonical row per document, the adaptive primary
+CTA, direct Summary and Map actions, labelled More access, UUID-backed selection,
+and mobile card transformation. The only decisions added here are visual:
+Option B's blue selection/focus language, the shared serif/sans hierarchy,
+surface density, and dark-mode parity with Workspace, maps, Export, and Quiz.
+
+`render-library-integration.mjs` creates seven screenshots at 1440×900,
+820×1180, 390×844, and a 320px stress width. The verification script checks
+eight light/dark combinations for exact viewport, horizontal overflow, one row
+per represented document, and exactly one primary action per row.
+
+## Coverage index
+
+| Required group | Inspectable prototype | Key responsive coverage |
+|---|---|---|
+| Global nav + Workspace Chat/sidebar/Inspector | `workspace.html` | 1440, 820, 390, 320 |
+| MindMap canvas + toolbar | `maps.html?screen=mindmap` | 1440, 820, 390, 320 |
+| StudyMap page | `maps.html?screen=studymap` | 1440, 820, 390, 320 |
+| Export Studio | `surfaces.html?screen=export` | 1440, 820, 390, 320 |
+| Account/profile + shared dialogs | `surfaces.html` account/profile/dialog states | 1440, 820 where layout-critical, 390, 320 |
+| Quiz taking/results/review | `quiz.html` | 1440, 820, 390, 320 |
+| Document Library visual integration | `library-integration.html` | 1440, 820, 390, 320 |
+
+All principal surfaces have paired light/dark captures at 1440, 820, and 390;
+320px is a stress check rather than a third theme matrix.
