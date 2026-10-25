@@ -1,5 +1,33 @@
 # Lessons Learned
 
+## A "compact at narrow width" rule for one toolbar must enumerate every interactive control it hides, not just the ones the current fix cares about (2026-10-25)
+
+`:not(.a):not(.b):not(.c) { display: none }` silently hides everything else in
+that row, including controls the original fix's own test suite never exercised
+(here, the map-selector/library button). A new CSS rule that hides elements by
+exclusion-list needs its exclusion list audited against *every* interactive
+descendant of the row, not just the ones the PR's own new test asserts on — a
+pre-existing, unrelated test elsewhere in the suite (`critical-flows.spec.js`,
+not this round's own spec) was what actually caught it, 45 seconds into a CI
+run, as a hang rather than a clear assertion failure. When adding a responsive
+list-of-exemptions pattern, grep the row's JSX for every `<button>`/interactive
+child first and decide each one's fate explicitly.
+
+Also: a toolbar test's own `VIEWPORTS` list should include whatever viewport
+the rest of the suite actually runs at by default (Playwright's
+`devices["Desktop Chrome"]` default is 1280x720), not just the breakpoints the
+feature's own spec cares about — a bug that only reproduces at the *default*
+viewport will ship clean if every one of a new spec's explicit viewports
+happens to avoid it.
+
+Separately: toggling a child's own `display` from *inside* the same
+`@container` block that measures the parent's width can feed back into that
+measurement (the child's rendered width/presence changes the parent's own
+content-driven size), making the breakpoint fire inconsistently depending on
+prior layout state in the same page session. Prefer relying on a control's
+existing `flex-shrink` + text-ellipsis behavior over adding a new
+display-toggle in the same container query that's doing the measuring.
+
 ## Floating contextual panels must participate in adjacent chrome geometry (2026-10-25)
 
 A fixed overlay can leave controls visually present while making them physically

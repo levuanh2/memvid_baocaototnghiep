@@ -1,5 +1,50 @@
 # Known Issues
 
+## Toolbar compact-at-rail-edge fix hid the map-selector entirely, breaking a pre-existing test (fixed 2026-10-25)
+
+**Symptom:** CI's `E2E Critical Flows (Playwright)` required check failed on
+`critical-flows.spec.js:208` ("C1 node detail: Guided close restores the open
+node detail") — unrelated to this round's own `mindmap-toolbar-occlusion.spec.js`,
+which passed every run. The failure was a 45s `Test timeout exceeded` inside
+`openGuidedDialogFromHeader` waiting on `getByRole("button", { name: "Tạo sơ đồ
+tư duy" })`, eventually surfacing as "Target page, context or browser has been
+closed" — a side effect of the timeout teardown, not the real cause.
+
+**Root cause:** The toolbar compact-at-rail-edge fix (previous entry below) added
+`@container (max-width: 700px) { ... > :not(.mm-appearance-trigger):not(.mm-export-trigger):not(.mm-toolbar-menu-wrap) { display: none; } }`.
+That selector also matched `.mm-map-selector` — the "Mở thư viện sơ đồ" button
+that owns `openGuidedDialogFromHeader`'s only way to reach the map library. At
+1280x720 (Playwright's "Desktop Chrome" default — `critical-flows.spec.js` never
+calls `setViewportSize`, so it runs here for its whole duration) the toolbar's
+own measured inline-size falls under the 700px container threshold once a node
+is selected, so the rule fired and the button vanished. The CI run's own
+captured accessibility-tree snapshot proved it: only Giao diện / Xuất sơ đồ /
+Thêm tùy chọn remained, `.mm-map-selector` was gone. `openGuidedDialogFromHeader`'s
+5s visibility wait on that button then failed, it fell through to the
+empty-state `Tạo sơ đồ tư duy` click path, but a map already existed (seeded
+earlier in the same `describe.serial` block), so that button never existed
+either — hence the 45s hang.
+
+**Fix:** Exempted `.mm-map-selector` from the `display: none` rule. It already
+has its own `flex: 1 1 260px` plus `overflow:hidden/text-overflow:ellipsis` on
+its label — letting it shrink naturally was enough; no extra compacting CSS was
+added for it (an earlier attempt that also hid `.mm-map-selector__label` via
+the same container query fed back into the container's own measured width and
+made the breakpoint fire inconsistently run-to-run — reverted). Added a
+`.mm-map-selector__trigger` to `mindmap-toolbar-occlusion.spec.js`'s `CONTROLS`
+hit-test list, a real click-opens-the-listbox assertion, and a `ci-default`
+(1280x720) entry to its `VIEWPORTS` — none of the 4 named viewports it already
+had matched the width `critical-flows.spec.js` actually runs at, which is how
+this one shipped without the new spec ever catching it.
+
+**Local-vs-CI note:** A separate, pre-existing hit-test mismatch at the
+`tablet-edge` (768px) viewport — `.mm-appearance-trigger` or `.mm-overflow-trigger`
+(varies run to run) resolving to a plain `<svg>` instead of itself or its own
+button — reproduces locally on Windows Chromium but not in the actual GitHub
+Actions CI runner, which passed this exact assertion 3/3 times on the
+pre-this-fix code. Treated as a local rendering quirk, not re-investigated here;
+flag it if it ever reproduces in real CI.
+
 ## Selected-node Knowledge Inspector occluded Mind Map toolbar actions (fixed 2026-10-25)
 
 **Symptom:** At desktop and tablet widths, selecting a Mind Map node opened the

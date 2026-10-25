@@ -460,8 +460,15 @@ html.dark .me-container { --mm-relation: #7e90c4; }
      from the toolbar's real inline size (also covers a user-widened rail),
      rather than guessing from the viewport width. */
   @container (max-width: 700px) {
+    /* .mm-map-selector stays reachable here — it is the only way to open
+       the map library / create a new map (openGuidedDialogFromHeader's
+       "Mở thư viện sơ đồ" path), not a cosmetic label. It already has its
+       own flex-shrink + text-ellipsis rules (see .mm-map-selector above),
+       so it degrades on its own; do not also toggle its own display here —
+       that fed back into this same container's measured width and made the
+       breakpoint fire inconsistently depending on prior layout state. */
     .artifact-toolbar.mm-context-row[data-inspector-open="true"]
-      > :not(.mm-appearance-trigger):not(.mm-export-trigger):not(.mm-toolbar-menu-wrap) {
+      > :not(.mm-map-selector):not(.mm-appearance-trigger):not(.mm-export-trigger):not(.mm-toolbar-menu-wrap) {
       display: none;
     }
     .artifact-toolbar.mm-context-row[data-inspector-open="true"]

@@ -15,11 +15,15 @@ const PHASE = process.env.TOOLBAR_OCCLUSION_PHASE === "before" ? "before" : "aft
 const OUT = path.resolve(HERE, "..", "qa-artifacts", "mindmap-toolbar-occlusion");
 const VIEWPORTS = [
   { name: "desktop", width: 1440, height: 900 },
+  // 1280x720 is Playwright's "Desktop Chrome" default — critical-flows.spec.js
+  // never calls setViewportSize, so its C1 regression test runs here. UX-ADJ-002's
+  // fix must not re-break "Mở thư viện sơ đồ" at exactly this width.
+  { name: "ci-default", width: 1280, height: 720 },
   { name: "tablet", width: 1024, height: 768 },
   { name: "tablet-edge", width: 768, height: 1024 },
   { name: "mobile", width: 390, height: 844 },
 ];
-const CONTROLS = [".mm-appearance-trigger", ".mm-export-trigger", ".mm-overflow-trigger"];
+const CONTROLS = [".mm-map-selector__trigger", ".mm-appearance-trigger", ".mm-export-trigger", ".mm-overflow-trigger"];
 
 async function apiSession(page) {
   const token = await page.evaluate(() => localStorage.getItem("memvid-token"));
@@ -138,6 +142,10 @@ test("selected-node inspector never occludes Appearance, Export, or Overflow", a
   // its own surface while the selected-node Inspector remains mounted.
   for (const viewport of VIEWPORTS) {
     await page.setViewportSize({ width: viewport.width, height: viewport.height });
+
+    await page.locator(".mm-map-selector__trigger").click();
+    await expect(page.getByRole("listbox", { name: "Chọn sơ đồ" }), `${viewport.name}: map library opens`).toBeVisible();
+    await page.locator(".mm-map-selector__trigger").click();
 
     await page.locator(".mm-appearance-trigger").click();
     const appearanceDialog = page.getByRole("dialog", { name: "Giao diện" });
