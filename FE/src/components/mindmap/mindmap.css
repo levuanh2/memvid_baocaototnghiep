@@ -449,7 +449,7 @@ html.dark .me-container { --mm-relation: #7e90c4; }
    the toolbar keeps its full width. This is deliberately presentation-only:
    selection and export state remain owned by the existing controller. */
 @media (min-width: 768px) {
-  .artifact-toolbar.mm-context-row--inspector-open {
+  .artifact-toolbar.mm-context-row[data-inspector-open="true"] {
     padding-right: 364px;
   }
 }

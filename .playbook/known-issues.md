@@ -14,7 +14,7 @@ while the selected-node Inspector was independently fixed at `top: 56px`,
 `right: 12px`, width `340px`, and `z-index: 40`. Opening the contextual overlay
 did not reserve its horizontal footprint in the toolbar layout.
 
-**Fix:** `MindElixirView` adds a presentation-only class to its context toolbar
+**Fix:** `MindElixirView` adds a presentation-only state attribute to its toolbar
 while the existing controller has a selected node. At widths where the
 Inspector is right-anchored (>=768px), CSS reserves its exact 340px width,
 12px right inset, and 12px gutter. Mobile is unchanged because the Inspector is
