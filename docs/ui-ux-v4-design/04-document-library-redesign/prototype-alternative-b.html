@@ -187,6 +187,13 @@
     }
     .document-row:last-child { border-bottom: 0; }
     .document-row[data-selected="true"] { background: var(--accent-subtle); }
+    .empty-state {
+      padding: 44px 24px 48px;
+      color: var(--text-secondary);
+      text-align: center;
+    }
+    .empty-state strong { display: block; color: var(--text-primary); font-size: 16px; }
+    .empty-state span { display: block; margin-top: 7px; font-size: 13px; }
     .check-target {
       width: 34px;
       height: 44px;
@@ -364,23 +371,23 @@
       <aside class="sidebar" aria-label="Bộ lọc thư viện">
         <section>
           <div class="sidebar-head"><span class="micro-label">Bộ sưu tập</span><button type="button" class="quiet">Tạo</button></div>
-          <button type="button" class="side-filter" aria-pressed="true"><span>Tất cả tài liệu</span><span>42</span></button>
-          <button type="button" class="side-filter" aria-pressed="false"><span>Chưa phân loại</span><span>42</span></button>
+          <button type="button" class="side-filter" data-collection="all" aria-pressed="true"><span>Tất cả tài liệu</span><span data-collection-count>42</span></button>
+          <button type="button" class="side-filter" data-collection="unfiled" aria-pressed="false"><span>Chưa phân loại</span><span data-collection-count>31</span></button>
         </section>
         <section>
           <div class="sidebar-head"><span class="micro-label">Lối tắt</span></div>
-          <button type="button" class="side-filter" aria-pressed="false"><span>Yêu thích</span><span>3</span></button>
-          <button type="button" class="side-filter" aria-pressed="false"><span>Đã ghim</span><span>2</span></button>
-          <button type="button" class="side-filter" aria-pressed="false"><span>Đã lưu trữ</span><span>0</span></button>
+          <button type="button" class="side-filter" data-collection="favorite" aria-pressed="false"><span>Yêu thích</span><span data-collection-count>3</span></button>
+          <button type="button" class="side-filter" data-collection="pinned" aria-pressed="false"><span>Đã ghim</span><span data-collection-count>2</span></button>
+          <button type="button" class="side-filter" data-collection="archived" aria-pressed="false"><span>Đã lưu trữ</span><span data-collection-count>0</span></button>
         </section>
       </aside>
 
       <section aria-label="Ma trận hành động tài liệu">
         <div class="task-strip" aria-label="Góc nhìn theo mục tiêu">
-          <button type="button" class="task-view" data-view="all" aria-pressed="true"><strong>Tất cả</strong><span>42 tài liệu</span></button>
-          <button type="button" class="task-view" data-view="continue" aria-pressed="false"><strong>Tiếp tục học</strong><span>1 đang dở</span></button>
-          <button type="button" class="task-view" data-view="quiz" aria-pressed="false"><strong>Cần quiz</strong><span>42 tài liệu</span></button>
-          <button type="button" class="task-view" data-view="summary" aria-pressed="false"><strong>Cần tóm tắt</strong><span>42 tài liệu</span></button>
+          <button type="button" class="task-view" data-view="all" aria-pressed="true"><strong>Tất cả</strong><span data-view-count>42 tài liệu</span></button>
+          <button type="button" class="task-view" data-view="continue" aria-pressed="false"><strong>Tiếp tục học</strong><span data-view-count>1 đang dở</span></button>
+          <button type="button" class="task-view" data-view="quiz" aria-pressed="false"><strong>Cần quiz</strong><span data-view-count>35 tài liệu</span></button>
+          <button type="button" class="task-view" data-view="summary" aria-pressed="false"><strong>Cần tóm tắt</strong><span data-view-count>36 tài liệu</span></button>
         </div>
 
         <div class="toolbar">
@@ -427,10 +434,17 @@
     const docs = names.map((name, index) => ({
       id: `doc-${index + 1}`,
       name,
+      order: index,
       continuing: index === 0,
       resume: index === 0 ? "Tiếp tục · Ôn tập" : "Bắt đầu · Tóm tắt",
+      summaryState: index % 7 === 0 ? "ready" : "missing",
+      quizState: index % 6 === 0 ? "ready" : "missing",
+      collectionId: index % 4 === 0 ? "research" : null,
+      favorite: index % 14 === 0,
+      pinned: index === 1 || index === 8,
+      archived: false,
       summary: index % 7 === 0 ? "Tóm tắt đã sẵn sàng" : "Chưa có tóm tắt",
-      progress: index === 0 ? "4/5 công cụ sẵn sàng · Quiz 78% · mở 19 giờ trước" : "1/5 công cụ sẵn sàng · chưa bắt đầu quiz"
+      progress: index === 0 ? "4/5 công cụ sẵn sàng · Quiz 78% · mở 19 giờ trước" : `${index % 6 === 0 ? "2" : "1"}/5 công cụ sẵn sàng · ${index % 6 === 0 ? "quiz đã sẵn sàng" : "chưa bắt đầu quiz"}`
     }));
     const matrix = document.querySelector("#matrix");
     const header = matrix.querySelector(".matrix-header");
@@ -444,9 +458,11 @@
     const main = document.querySelector("#main-content");
     const appHeader = document.querySelector(".app-header");
     let view = "all";
+    let collection = "all";
     let selected = new Set();
     let openDoc = null;
     let lastTriggerId = null;
+    let rovingDocId = docs[0].id;
 
     function announce(message) {
       status.textContent = message;
@@ -455,16 +471,49 @@
     }
     function isMobile() { return matchMedia("(max-width: 760px)").matches; }
     function primaryLabel(doc) {
-      if (view === "quiz") return "Tạo quiz";
-      if (view === "summary") return "Tạo tóm tắt";
+      if (view === "quiz") return doc.quizState === "missing" ? "Tạo quiz" : "Làm lại quiz";
+      if (view === "summary") return doc.summaryState === "missing" ? "Tạo tóm tắt" : "Mở tóm tắt";
       return doc.resume;
     }
+    function matchesCollection(doc, collectionId = collection) {
+      if (collectionId === "unfiled") return doc.collectionId === null;
+      if (collectionId === "favorite") return doc.favorite;
+      if (collectionId === "pinned") return doc.pinned;
+      if (collectionId === "archived") return doc.archived;
+      return true;
+    }
+    function matchesView(doc, targetView = view) {
+      if (targetView === "continue") return doc.continuing;
+      if (targetView === "quiz") return doc.quizState === "missing";
+      if (targetView === "summary") return doc.summaryState === "missing";
+      return true;
+    }
+    function baseFilteredDocs() {
+      const query = search.value.trim().toLocaleLowerCase("vi");
+      return docs
+        .filter((doc) => doc.name.toLocaleLowerCase("vi").includes(query))
+        .filter((doc) => matchesCollection(doc));
+    }
     function visibleDocs() {
-      let result = docs.filter((doc) => doc.name.toLocaleLowerCase("vi").includes(search.value.trim().toLocaleLowerCase("vi")));
-      if (view === "continue") result = result.filter((doc) => doc.continuing);
-      if (sort.value === "az") result = [...result].sort((a, b) => a.name.localeCompare(b.name, "vi"));
-      if (sort.value === "recent") result = [...result].sort((a, b) => Number(b.continuing) - Number(a.continuing));
+      let result = baseFilteredDocs().filter((doc) => matchesView(doc));
+      if (sort.value === "az") result = [...result].sort((a, b) => a.name.localeCompare(b.name, "vi") || a.order - b.order);
+      if (sort.value === "recent") result = [...result].sort((a, b) => Number(b.continuing) - Number(a.continuing) || a.order - b.order);
       return result;
+    }
+    function updateCounts(base) {
+      document.querySelectorAll(".task-view").forEach((button) => {
+        const count = base.filter((doc) => matchesView(doc, button.dataset.view)).length;
+        button.querySelector("[data-view-count]").textContent = button.dataset.view === "continue"
+          ? `${count} đang dở`
+          : `${count} tài liệu`;
+      });
+      document.querySelectorAll("[data-collection]").forEach((button) => {
+        button.querySelector("[data-collection-count]").textContent = docs.filter((doc) => matchesCollection(doc, button.dataset.collection)).length;
+      });
+    }
+    function pruneSelection(visible) {
+      const visibleIds = new Set(visible.map((doc) => doc.id));
+      selected = new Set([...selected].filter((id) => visibleIds.has(id)));
     }
     function closeTools({ restore = true } = {}) {
       openDoc = null;
@@ -486,15 +535,45 @@
       return button;
     }
     function render() {
+      const focusedPrimaryId = document.activeElement?.classList.contains("primary-action")
+        ? document.activeElement.closest(".document-row")?.dataset.documentId
+        : null;
+      if (focusedPrimaryId) rovingDocId = focusedPrimaryId;
+      document.querySelectorAll("body > .tool-panel").forEach((panel) => panel.remove());
       const visible = visibleDocs();
+      const base = baseFilteredDocs();
+      pruneSelection(visible);
+      updateCounts(base);
+      if (!visible.some((doc) => doc.id === rovingDocId)) rovingDocId = visible[0]?.id ?? null;
+      if (openDoc && !visible.some((doc) => doc.id === openDoc)) {
+        openDoc = null;
+        backdrop.dataset.open = "false";
+        main.inert = false;
+        appHeader.inert = false;
+      }
       matrix.replaceChildren(header);
       visibleCount.textContent = visible.length;
       selectedCount.textContent = `${selected.size} đã chọn`;
       selectAll.checked = visible.length > 0 && visible.every((doc) => selected.has(doc.id));
       selectAll.indeterminate = selected.size > 0 && !selectAll.checked;
+      selectAll.disabled = visible.length === 0;
       matrix.setAttribute("aria-label", `${visible.length} tài liệu — mỗi tài liệu xuất hiện một lần`);
 
-      visible.forEach((doc, index) => {
+      if (visible.length === 0) {
+        const empty = document.createElement("div");
+        empty.className = "empty-state";
+        empty.setAttribute("role", "listitem");
+        empty.setAttribute("aria-live", "polite");
+        const heading = document.createElement("strong");
+        heading.textContent = "Không có tài liệu phù hợp";
+        const guidance = document.createElement("span");
+        guidance.textContent = "Thử đổi góc nhìn, bộ sưu tập hoặc từ khóa tìm kiếm.";
+        empty.append(heading, guidance);
+        matrix.append(empty);
+        return;
+      }
+
+      visible.forEach((doc) => {
         const row = document.createElement("article");
         row.className = "document-row";
         row.dataset.documentId = doc.id;
@@ -534,8 +613,9 @@
         primary.type = "button";
         primary.className = "primary primary-action";
         primary.textContent = primaryLabel(doc);
-        primary.tabIndex = index === 0 ? 0 : -1;
+        primary.tabIndex = doc.id === rovingDocId ? 0 : -1;
         primary.dataset.rovingPrimary = "true";
+        primary.addEventListener("focus", () => { rovingDocId = doc.id; });
         primary.addEventListener("click", () => announce(`${primaryLabel(doc)}: ${doc.name}`));
         primary.addEventListener("keydown", (event) => {
           if (event.key !== "ArrowDown" && event.key !== "ArrowUp") return;
@@ -543,6 +623,7 @@
           const actions = [...matrix.querySelectorAll('[data-roving-primary="true"]')];
           const current = actions.indexOf(primary);
           const next = event.key === "ArrowDown" ? Math.min(actions.length - 1, current + 1) : Math.max(0, current - 1);
+          rovingDocId = actions[next].closest(".document-row").dataset.documentId;
           actions.forEach((item, actionIndex) => item.tabIndex = actionIndex === next ? 0 : -1);
           actions[next].focus();
         });
@@ -620,6 +701,12 @@
     document.querySelectorAll(".task-view").forEach((button) => button.addEventListener("click", () => {
       view = button.dataset.view;
       document.querySelectorAll(".task-view").forEach((item) => item.setAttribute("aria-pressed", String(item === button)));
+      openDoc = null;
+      render();
+    }));
+    document.querySelectorAll("[data-collection]").forEach((button) => button.addEventListener("click", () => {
+      collection = button.dataset.collection;
+      document.querySelectorAll("[data-collection]").forEach((item) => item.setAttribute("aria-pressed", String(item === button)));
       openDoc = null;
       render();
     }));

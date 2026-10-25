@@ -43,6 +43,33 @@ Alternative B treats the library as an **action matrix**, not a feed of cards:
 
 Runnable prototype: [prototype-alternative-b.html](prototype-alternative-b.html).
 
+### 2.1 Source-of-truth document state
+
+Task views are predicates over document state, not labels applied to an unchanged list. The canonical document projection must expose these fields before rendering:
+
+| State | Allowed values | Eligible task-view predicate | Primary action inside that view |
+|---|---|---|---|
+| `summaryState` | `missing`, `ready`, `unknown` | `needs_summary` includes only `missing` | `Tạo tóm tắt` |
+| `quizState` | `missing`, `ready`, `unknown` | `needs_quiz` includes only `missing` | `Tạo quiz` |
+| `continuing` | boolean derived by the existing resume model | `continue` includes only `true` | Existing `tiepTucHoc(doc)` label and destination, unchanged |
+
+`summaryState=ready` means the document has a usable, addressable summary artifact; no such artifact means `missing`. `quizState=ready` means an existing quiz definition/latest-quiz destination is addressable for the document; no quiz means `missing`. While either dependency is unresolved or errored, its state is `unknown`. `continuing` remains the existing resume decision based on persisted learning progress/last workspace and is not recomputed from summary or quiz state.
+
+`ready` records are deliberately excluded from the corresponding “needs” queue. Regeneration or retaking remains available through the direct Summary/Quiz shortcut and the complete tool menu; it is not disguised as unmet work. `unknown` is not treated as `missing`: the implementation must expose loading/error feedback until eligibility is known.
+
+The prototype fixture encodes six ready summaries and seven ready quizzes among 42 UUID-backed records. Therefore its unfiltered queues are exactly 36 `needs_summary` records and 35 `needs_quiz` records. `doc-1` is ready for both and must never appear in either needs queue; `doc-2` is missing both and must appear in both.
+
+### 2.2 One deterministic projection pipeline
+
+Every render derives one array in this order:
+
+1. normalize and apply the search query;
+2. apply exactly one collection predicate;
+3. apply the active task-view eligibility predicate;
+4. apply a stable sort, using canonical source order as the tie-breaker.
+
+Task-tab badges are recomputed from the same search-and-collection base and each tab's own eligibility predicate. The active badge must equal the rendered row count; sorting can change order, never membership. After every projection change, synchronously replace `selectedIds` with its intersection with the visible UUID set **before** any BulkBar action can read it. Hidden UUIDs therefore cannot be deleted, archived, or moved by a later bulk command.
+
 ## 3. AFTER desktop mockups
 
 ![Alternative B desktop at 1440×900](evidence/after-b-desktop-1440x900.png)
@@ -53,7 +80,11 @@ The desktop column grammar makes the interaction hierarchy explicit: document/pr
 
 ![Alternative B Needs Summary view](evidence/after-b-desktop-summary-view.png)
 
-When `Cần tóm tắt` is active, every visible primary action becomes `Tạo tóm tắt`; when `Cần quiz` is active, it becomes `Tạo quiz`. `Tất cả` and `Tiếp tục học` fall back to the existing `tiepTucHoc(doc)` resume decision. This fixes the mismatch where a user deliberately enters a summary queue but sees a Quiz-oriented primary CTA.
+When `Cần tóm tắt` is active, only `summaryState=missing` records render and every visible primary action is `Tạo tóm tắt`; completed summaries are excluded. `Cần quiz` follows the same contract for `quizState=missing`. `Tất cả` and `Tiếp tục học` continue to use the existing `tiepTucHoc(doc)` resume decision unchanged. This aligns task intent, row membership, count, label, and destination instead of merely relabelling all 42 records.
+
+![Alternative B empty Needs Summary view after composed filters](evidence/after-b-desktop-empty-state.png)
+
+When the composed projection has no members, the matrix renders an explicit “Không có tài liệu phù hợp” state, disables Select All, and suggests changing the task view, collection, or query. It does not render a blank card frame or a misleading zero-row bulk scope.
 
 ### Complete document tool set
 
@@ -76,7 +107,8 @@ Mobile keeps one primary action and two 44px quick actions on each canonical doc
 ```mermaid
 flowchart TD
     A[Open /app/study] --> B[Restore view, query, sort, collection and scroll]
-    B --> C[Canonical matrix: one row per document_id]
+    B --> B1[Search → collection → task eligibility → stable sort]
+    B1 --> C[Canonical matrix: one row per document_id]
     C --> D{Choose intent}
 
     D -->|All / Continue| E[Primary CTA from tiepTucHoc doc]
@@ -104,28 +136,29 @@ flowchart TD
     P --> C
 
     D -->|Bulk manage| Q[UUID checkbox set]
-    Q --> R[BulkBar acts on visible selection only]
+    Q --> Q1[Intersect selected UUIDs with visible UUIDs]
+    Q1 --> R[BulkBar acts on visible selection only]
     R --> C
 ```
 
 ### Keyboard/focus contract
 
 - Row containers remain unfocusable; the measured count is zero focusable `.document-row` elements.
-- Roving `tabIndex` belongs only to primary action buttons. `ArrowUp` / `ArrowDown` moves between those peer controls; the prototype verified `doc-1 → doc-2`.
+- Roving `tabIndex` belongs only to currently rendered primary action buttons. A projection change preserves the active UUID only if it remains visible; otherwise the first result becomes the sole `tabIndex=0` target. `ArrowUp` / `ArrowDown` never traverses hidden records. Chromium verified both the 42-row `doc-1 → doc-2` path and the composed two-row `doc-9 → doc-2 → doc-9` path.
 - Checkboxes and quick-action buttons keep native semantics and ordinary Tab behavior.
 - Two-line titles use the full title as a `title` fallback; the accessible name is never truncated.
 - The desktop tool popover moves focus to its first action and restores the trigger on close.
 - The mobile sheet is a modal focus scope: portalled outside inert background content, Tab-wrapped, Escape-dismissable, and focus-restoring.
-- Filtering clamps the roving primary target to the first remaining row; an empty result moves focus to search and announces the result count.
+- Filter controls retain focus while the result set updates. An empty projection exposes a status message, disables Select All, and has no stale roving target.
 
 ## 6. Component ownership map
 
 | Concern | Canonical owner | Alternative B responsibility | Must not own |
 |---|---|---|---|
 | Fetch, mutations and projection | `DocumentList.jsx` | Continue current fetch/upload/optimistic behavior. Produce exactly one filtered/sorted `visibleDocuments` array and one active task-view intent. | Route strings or Workspace source scope. |
-| Goal-oriented view strip | New presentational `LibraryTaskViews` | Own `all`, `continue`, `needs_quiz`, `needs_summary` intent and counts. Each intent provides both a predicate and an optional primary-action override. | A second record collection or independent fetch. |
+| Goal-oriented view strip | New presentational `LibraryTaskViews` | Own `all`, `continue`, `needs_quiz`, `needs_summary` intent and counts. Each intent provides an eligibility predicate; labels are resolved from both intent and record state. | A second record collection, independent fetch, or label-only filtering. |
 | Canonical document row | `StudyCard.jsx` logic extracted into `StudyDocumentActionRow`, or a row variant | Render one UUID-keyed identity, two-line title, compact status, checkbox, one primary action, two quick actions, and labelled other-tools trigger. | Reimplementing `tiepTucHoc`, `duongDi`, job/cache logic, or document identity. |
-| Primary-action resolver | Existing `tiepTucHoc(doc)` plus a small pure `primaryActionFor(view, doc)` adapter | Neutral views delegate unchanged; task views override only the intended surface/label (`summary` or `quiz`). | Persisting a new `last_workspace` meaning or constructing URLs. |
+| Primary-action resolver | Existing `tiepTucHoc(doc)` plus a small pure `primaryActionFor(view, doc)` adapter | Neutral views delegate unchanged. Task views require matching missing-state eligibility before returning the create label/surface; ready-state regeneration remains a distinct contextual action. | Persisting a new `last_workspace` meaning, constructing URLs, or returning “Create” for a ready artifact. |
 | Quick action cluster | New presentational `DocumentQuickActions` | Expose Summary and Mind Map as direct calls to the same `onMo(doc, surface)` callback. | Duplicated navigation/fetch code. |
 | Complete tool surface | Desktop popover + mobile `DocumentToolsSheet` | Present Summary, Mind Map, Quiz, Review, Ask AI, and Details for exactly one active UUID; own focus containment/restoration only. | Document mutations or a second selected-document store. |
 | Collections/tags | `CollectionSidebar.jsx` | Preserve desktop filters; expose the identical model through labelled mobile collections control. | Workspace source selection. |
@@ -140,10 +173,10 @@ Alternative B does not unify identity. It makes every action carry the canonical
 
 | Transition | Library identity | Destination identity | Required contract | Prohibited implementation |
 |---|---|---|---|---|
-| Render, select, bulk-manage | UUID `document_id` | UUID remains list key and management selection key | One row keyed by `doc.document_id`; selected IDs are pruned to `visibleDocuments` | Keying by title, filename, array index, or stem. |
+| Render, select, bulk-manage | UUID `document_id` | UUID remains list key and management selection key | One row keyed by `doc.document_id`; synchronously intersect selected IDs with `visibleDocuments` after every query/collection/task change and before BulkBar reads them | Keying by title, filename, array index, or stem; retaining hidden destructive targets. |
 | Neutral primary Resume | Whole document record | Determined by current `last_workspace` | Resolve label/surface through `tiepTucHoc(doc)`, then call `useOpenSurface(doc, surface)` | A new resume router or copied `last_workspace` switch. |
-| `Cần tóm tắt` adaptive primary | Whole document record | `/app` expects STEM | Task view supplies surface=`summary`; `useOpenSurface` delegates to `duongDi`, which emits `?source=<source_stem>` | Passing UUID as Workspace `selectedDocument`; hand-building `/app` URL. |
-| `Cần quiz` adaptive primary | Whole document record | Study Quiz uses UUID/latest quiz ID | Task view supplies surface=`quiz`; existing helper chooses new/latest Quiz route | Passing source stem as `document` query ID. |
+| `Cần tóm tắt` adaptive primary | Whole record with `summaryState=missing` | `/app` expects STEM | Eligibility excludes `ready`/`unknown`; task view supplies surface=`summary`; `useOpenSurface` delegates to `duongDi`, which emits `?source=<source_stem>` | Passing UUID as Workspace `selectedDocument`; hand-building `/app` URL; relabelling ready records as missing. |
+| `Cần quiz` adaptive primary | Whole record with `quizState=missing` | Study Quiz uses UUID/latest quiz ID | Eligibility excludes `ready`/`unknown`; task view supplies surface=`quiz`; existing helper chooses new/latest Quiz route | Passing source stem as `document` query ID; showing an existing quiz as unmet work. |
 | Direct Summary / Mind Map / Ask AI | Whole document record | `/app` consumes STEM | Always call the shared open callback; `duongDi` selects `source_stem` | Quick-button-specific navigation logic. |
 | Study Map | Whole document record | `/app/study/map/:documentId` consumes UUID | Existing `duongDi(doc, "studymap")` | Converting UUID to stem before routing. |
 | Review / Practice | UUID-backed record + optional attempt ID | Attempt route, or UUID Study Map fallback | Existing `duongDi(doc, "review")` | Guessing an attempt or deriving identity from title. |
@@ -188,8 +221,15 @@ The mobile page remains taller than Alternative A because two direct quick actio
 
 - 42 canonical rows / 42 unique IDs / zero duplicate instances.
 - 42 primary actions, 84 direct quick actions, and 42 complete-tool triggers.
-- `Cần tóm tắt` made all 42 primary labels `Tạo tóm tắt`.
+- `Tiếp tục học` retained its existing one-record membership and `Tiếp tục · Ôn tập` resume action unchanged.
+- `Cần tóm tắt` rendered 36 missing-summary records, made all 36 primary labels `Tạo tóm tắt`, excluded ready-summary `doc-1`, and included missing-summary `doc-2`.
+- `Cần quiz` rendered 35 missing-quiz records, made all 35 primary labels `Tạo quiz`, excluded ready-quiz `doc-1`, and included missing-quiz `doc-2`.
+- Every task badge matched that tab's rendered membership under the composed pinned + searched + A–Z projection; unfiltered queues also matched at 36 summaries and 35 quizzes, and the favorite + searched missing-summary queue matched at zero.
+- Search `sample-doc` + collection `pinned` + task `needs_summary` + A–Z sort deterministically rendered `[doc-9, doc-2]`.
+- Selecting `[doc-1, doc-2]` in All and entering Needs Summary synchronously pruned hidden ready-summary `doc-1`; returning to All proved it was no longer selected.
+- The zero-result projection rendered explicit guidance and disabled Select All.
 - ArrowDown moved primary focus from `doc-1` to `doc-2`.
+- In the two-row composed projection, ArrowDown/ArrowUp moved `doc-9 → doc-2 → doc-9`, with exactly one roving `tabIndex=0` target.
 - Zero row containers were focusable.
 - Every mobile checkbox, primary action, quick action, and complete-tool trigger measured at least 44 by 44 px.
 - Mobile sheet: backdrop visible, background inert, focus entered, six actions present, Escape restored trigger focus.
@@ -198,20 +238,21 @@ The mobile page remains taller than Alternative A because two direct quick actio
 
 | Risk | Failure mode | Mitigation / acceptance gate |
 |---|---|---|
+| Eligibility drift | A task tab changes labels but not membership, or its badge comes from a different projection. | Define `summaryState`/`quizState` centrally; derive membership, active count, and primary action from the same predicate. Assert ready and missing records by UUID, not count alone. |
 | Task-intent override | `Cần tóm tắt` changes a resume destination permanently or corrupts `last_workspace`. | Make `primaryActionFor(view, doc)` pure and ephemeral. Only successful destination opening may update existing open history through `markOpened`; task view itself never mutates the document. |
 | Shortcut divergence | Primary, quick, and complete-tool actions route differently. | All tiers receive the same `(doc, surface) => moBeMat` callback. Contract-test each surface from each tier and compare destinations/context. |
 | Control density | 227 controls may remain heavy for very large libraries. | Add virtualization only after canonicalization; preserve screen-reader result counts and focus restoration. Measure 20/100/300 documents before rollout. |
 | Keyboard duplication | Checkbox, primary, quick actions, and `Thêm` create many Tab stops. | Roving applies to peer primary buttons; add optional grid-cell navigation only if assistive-technology testing shows direct Tab cost remains high. Never make row containers focusable. |
 | Mobile modal containment | Bottom sheet traps focus incorrectly or trigger disappears after filtering. | Use the app's shared modal/portal primitive, set background `inert`, close on Escape, and restore by stable UUID; if row no longer exists, restore to task strip or search. |
 | Title growth | Two-line titles increase row height and list length. | Clamp exactly two lines with full accessible text and tooltip; test Vietnamese chapter-title fixtures at 320–1440px. |
-| Bulk scope | Task view hides selected UUIDs but BulkBar still mutates them. | Reuse `locTheoHienThi` against the single `visibleDocuments` array after every view/query/filter transition. |
+| Bulk scope | Task view hides selected UUIDs but BulkBar still mutates them. | At the projection boundary, synchronously intersect `selectedIds` with the visible UUID set before publishing either value. Regression-test select-ready + select-missing → enter Needs Summary → only the missing UUID remains actionable. |
 | Analytics migration | Existing section impression/scroll anchors depend on repeated cards. | Map legacy sections to task-view selection events and stable `view=<intent>` anchors; do not count each canonical row multiple times. |
 | Return-state loss | Back from Workspace/Quiz resets the user's task queue or scroll. | Persist task view/query/sort/collection/scroll in route history; test each six-surface round trip on desktop/mobile. |
 | Identity leak | UUID is written into Workspace context or STEM into Study route. | Add destination-shape assertions for every action; keep `duongDi()` as sole router and prohibit UI-local URLs in review. |
 
 ### Staged rollout
 
-1. **Pure model first:** add `primaryActionFor(view, doc)` tests and one canonical `visibleDocuments` projection without changing rendering.
+1. **Pure model first:** add tests for eligibility predicates, `primaryActionFor(view, doc)`, stable filter composition, tab counts, and selection intersection around one canonical `visibleDocuments` projection before changing rendering.
 2. **Flagged matrix renderer:** ship Alternative B behind `library_action_matrix`; keep current API, mutations, StudyContext, and route helpers unchanged.
 3. **Desktop contract gate:** verify 42 unique fixture documents render 42 rows, each with one primary, two quick actions, and one complete-tool trigger; exercise every route.
 4. **Mobile accessibility gate:** test bottom-sheet focus containment/restoration with NVDA/Narrator plus Playwright, including filter-removes-trigger recovery.
