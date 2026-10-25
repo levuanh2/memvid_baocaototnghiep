@@ -5,7 +5,7 @@
 **Target Branch**: `docs/ui-ux-v4-design`
 **Reviewed Artifacts**:
 - Codex 1: [`03-visual-mockups/README.md`](./03-visual-mockups/README.md) (commits `647ac08`, `61056bb`, `957fbd5`, `c2e008d`, `cc52f25`), prototypes `workspace.html`, `maps.html`, `surfaces.html`, `quiz.html`, `library-integration.html`, corresponding CSS files, automated verification suites (`verify-mockups.mjs`, `verify-maps.mjs`, `verify-surfaces.mjs`, `verify-quiz.mjs`, `verify-library-integration.mjs`), and 95 rendered screenshots in `screenshots/`.
-- Codex 2: [`04-document-library-redesign/alternative-a-canonical-learning-queue.md`](./04-document-library-redesign/alternative-a-canonical-learning-queue.md) (commit `82ea744`), [`04-document-library-redesign/alternative-b-learning-action-matrix.md`](./04-document-library-redesign/alternative-b-learning-action-matrix.md) (commit `5d9876a`), prototypes `prototype-alternative-a.html` and `prototype-alternative-b.html`, measurement scripts (`capture_current_state.py`, `capture_prototype.py`, `capture_prototype_b.py`), and evidence in `evidence/`.
+- Codex 2: [`04-document-library-redesign/alternative-a-canonical-learning-queue.md`](./04-document-library-redesign/alternative-a-canonical-learning-queue.md) (commit `82ea744`), [`04-document-library-redesign/alternative-b-learning-action-matrix.md`](./04-document-library-redesign/alternative-b-learning-action-matrix.md) (commits `5d9876a`, `f63a385`), prototypes `prototype-alternative-a.html` and `prototype-alternative-b.html`, measurement scripts (`capture_current_state.py`, `capture_prototype.py`, `capture_prototype_b.py`), and evidence in `evidence/`.
 
 ---
 
@@ -176,9 +176,17 @@ In commit `c2e008d`, Codex 1 delivered `quiz.html`, `quiz.css`, `verify-quiz.mjs
 - **The Issue**: In `maps.html`, StudyMap renders concept labels as single-line SVG `<text>`. In real Vietnamese academic texts, LLM-generated concept titles often reach 15–25 words. Unwrapped SVG `<text>` will span 300px+, colliding with adjacent branches.
 - **Directive for Implementation Planning**: In `StudyMapView.jsx`, implement multi-line `<tspan>` wrapping or truncate labels at 32 characters with SVG `<title>` tooltip fallback.
 
-#### Risk 3: Live Preview vs Headless Export Isolation
-- **The Issue**: In `surfaces.html`, the `.paper-preview` uses modern CSS (`color-mix()`, CSS gradients, SVG filter drop-shadows).
-- **The Guardrail**: As established in [`05-shared-map-visual-grammar/engine-boundaries-and-export-guardrails.md`](./05-shared-map-visual-grammar/engine-boundaries-and-export-guardrails.md), `html2canvas` and `pdf_serializer.py` fail on `color-mix()` and SVG filter drop-shadows. The live preview UI must remain strictly decoupled from the offscreen export rendering sandbox.
+#### Risk 3: Live Preview vs Headless Export Pipeline Isolation
+- **The Finding**: In `surfaces.html`, the `.paper-preview` illustrates the live exported layout using modern CSS features (`color-mix()`, CSS gradients, SVG filter drop-shadows).
+- **The Factual Correction**: An earlier draft of this review mistakenly referred to `html2canvas`. A direct audit of `FE/src/utils/mindmapImageExport.js` confirms that `html2canvas` is **not installed or used anywhere in the codebase**. The actual client-side rasterization engine is **`@zumer/snapdom`** (`import { snapdom as realSnapdom } from "@zumer/snapdom"`).
+- **The True Architectural Guardrail**:
+  - `@zumer/snapdom` captures DOM by inlining styles via `getComputedStyle()`, converting `box-shadow` into SVG `drop-shadow()` filters, wrapping the cloned tree in an SVG `<foreignObject>`, and rasterizing via an HTML5 `<canvas>`.
+  - While SnapDOM supports `color-mix()` (because modern browsers resolve it into standard `rgb()`/`rgba()` during computed style calculation), SVG `<foreignObject>` rasterization has its own strict constraints:
+    1. **Canvas Size Ceiling**: HTML5 `<canvas>` has a browser limit (16,384px); guarded by `MAX_CAPTURE_DIMENSION_PX = 12000` and `MAX_CAPTURE_PIXELS = 40_000_000` on both client and backend `image_guard.py`.
+    2. **External Resource Isolation**: SVGs loaded as images cannot fetch external network resources. Fonts must be base64-inlined (`embedFonts: true`) and pre-warmed via `warmUpExportFonts()`.
+    3. **Detached CSS Variables**: Custom properties declared on `:root` outside the captured container are not inherited if the clone is detached. Appearance styling must inject resolved static values (`resolveExportAppearance()`).
+- **Architectural Directive for Implementation Planning**:
+  - Live preview UI styling and offscreen export rendering must remain strictly separated. The offscreen export container (`.mm-export-offscreen`) must continue consuming resolved static hex colors, explicit stroke widths, and pre-warmed webfonts. Detailed specifications are documented in [`05-shared-map-visual-grammar/engine-boundaries-and-export-guardrails.md`](./05-shared-map-visual-grammar/engine-boundaries-and-export-guardrails.md).
 
 ---
 
@@ -233,6 +241,30 @@ However, rigorous interaction analysis demonstrates that **Alternative B is the 
 #### Hazard 3: Unified Dispatcher Invariant
 - **The Risk**: Having three action tiers on each row (Primary CTA, Quick Actions `Tóm tắt`/`Sơ đồ`, and More popover/sheet) creates a risk of routing logic drift if individual components construct their own URLs.
 - **Architectural Directive for Implementation Planning**: All three action tiers **must** dispatch through the single existing helper `useOpenSurface(doc, surface)` and `duongDi()`. No component may hardcode `navigate('/app?source=...')`.
+
+---
+
+### 5.4 Verification of Task-View Semantics & Selection Pruning Fix (Commit `f63a385`)
+
+In commit `f63a385`, Codex 2 addressed a real filtering defect in `prototype-alternative-b.html` where `visibleDocs()` previously relabeled action buttons without actually filtering result-set membership (turning Hazard 1 into an active bug).
+
+An independent Playwright verification suite was executed against the corrected prototype, confirming 100% adherence to real task-view semantics:
+
+1. **True Result-Set Membership**:
+   - `all`: Renders all 42 documents (`data-view-count: "42 tài liệu"`).
+   - `needs_summary`: Renders exactly **36 documents** (`data-view-count: "36 tài liệu"`). Document `doc-1` (which already has a completed summary) is verified **excluded**; document `doc-2` (missing summary) is verified **included**. All 36 primary CTAs read *"Tạo tóm tắt"*.
+   - `needs_quiz`: Renders exactly **35 documents** (`data-view-count: "35 tài liệu"`). Document `doc-1` (quiz ready) is verified **excluded**; document `doc-2` (missing quiz) is verified **included**. All 35 primary CTAs read *"Tạo quiz"*.
+   - `continue`: Renders exactly **1 document** (`doc-1`, `data-view-count: "1 đang dở"`), preserving the primary CTA *"Tiếp tục · Ôn tập"*.
+2. **Hazard 1 Remediated: Live Selection Pruning Verified**:
+   - In `all` view, selecting `doc-1` and `doc-2` sets selection to 2.
+   - Upon switching to `needs_summary` (which hides `doc-1`), `pruneSelection(visible)` synchronously executes:
+     - `doc-1` is pruned from the internal `selected` set.
+     - `#selected-count` updates to `"1 đã chọn"`.
+     - Only `doc-2` remains checked in the DOM.
+     - Hidden documents can **never** be inadvertently bulk-mutated.
+3. **Empty State & Focus Resilience**:
+   - Zero-result search queries render a structured `.empty-state` container (`role="listitem"` and `aria-live="polite"`), announce guidance to the learner, and disable `#select-all`.
+   - When the currently focused roving button is filtered out by a view switch, roving tabindex automatically clamps to the first remaining visible document (`rovingDocId = visible[0].id`).
 
 ---
 
