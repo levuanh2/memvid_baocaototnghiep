@@ -1,10 +1,12 @@
 # 11 — Phase C Implementation Plan (Claude — UX Lead / Integration)
 
-**No FE/src has been modified by this plan. No merge, no deploy, no round has started.** This sequences Phase B's approved-design-pending-sign-off artifacts (`01-10`) into executable PRs. It supersedes `docs/ui-ux-audit-v4/10-prioritized-backlog.md`'s Round 2/4/5 scope descriptions, which predate Phase B's actual built proposals — Round numbering below intentionally reuses that document's Round 0/1 (already shipped) framing so the two documents read as one continuous plan, not a competing one.
+**No FE/src has been modified by this plan. No merge, no deploy, no round has started.** This is the **canonical Phase C plan**, sequencing Phase B's now-design-approved artifacts (`01-11`) into executable PRs. It supersedes `docs/ui-ux-audit-v4/10-prioritized-backlog.md`'s Round 2/4/5 scope descriptions — that document is retained as historical Phase A audit context only, not as an active plan.
 
 ## Status gate
 
-Round 0 (toolbar/Inspector occlusion, nav link) is merged and live. **Nothing below may start until the user has made the two open decisions in `10-design-approval-package.md` §4** (Document Library A vs B, Export Studio Preview Bench vs Guided Steps) **and explicitly approved an implementation direction.** This document assumes Alternative B and Preview Bench — the team's stated recommendations — purely so the plan has concrete shape; if the user picks differently, only Rounds 5 and 4 need re-scoping, nothing else.
+Round 0 (toolbar/Inspector occlusion, nav link) is merged and live. The user approved both open design decisions on 2026-10-25 (`10-design-approval-package.md` §4): **Document Library → Alternative B**, **Export Studio → Preview Bench**. PR #89 (this documentation package) has since merged to `main` at `8a56db7` — design-only, zero `FE/src`/`BE` changes.
+
+**Design approval is not implementation authorization — these are two separate gates.** Nothing below may start until: (1) the user separately and explicitly authorizes beginning Phase C implementation, and (2) the shared-file sequencing in Cross-cutting rule #1 is reconciled before any round touches `Modal.jsx`, `StudyShell.jsx`, `BulkBar.jsx`, or `CollectionSidebar.jsx` — multiple rounds below consume these files and must not edit them concurrently.
 
 ## Architecture invariants every round must preserve (verified present in Phase B's own deliverables, not re-asserted blindly)
 
@@ -65,7 +67,7 @@ Round 0 (toolbar/Inspector occlusion, nav link) is merged and live. **Nothing be
 - **Rollback**: straightforward, presentation-only revert.
 - **PR dependencies**: Round 2 (tokens) must merge first. Independent of Round 3.
 
-### Round 5 — Export Studio visual redesign (Preview Bench, pending sign-off)
+### Round 5 — Export Studio visual redesign (Preview Bench — DESIGN APPROVED, IMPLEMENTATION NOT YET AUTHORIZED)
 
 - **User-visible before/after**: persistent live paper preview alongside scope/format/appearance settings (desktop); full-screen tool with sticky action row (mobile) — replacing the current step-by-step flow's density issues named in Phase A.
 - **Exact source components**: `FE/src/components/mindmap/ExportStudioDialog.jsx` and `FE/src/components/mindmap/exportStudio.css`. `FE/src/components/ui/Modal.jsx` remains a consumed dependency, not an owned file in this round; any shared Modal redesign is deferred to Round 7. **Explicitly NOT touched**: `FE/src/utils/mindmapImageExport.js`'s capture/rasterization logic and `pdf_serializer.py` — this round changes the UI composition around an unchanged export pipeline.
@@ -78,9 +80,9 @@ Round 0 (toolbar/Inspector occlusion, nav link) is merged and live. **Nothing be
 - **Responsive breakpoints**: 1440/820/390/320. Phase B rendered Export Studio at all four widths; 820 is a real stacked-layout parity gate, not lower priority.
 - **Regression blast radius**: medium — real user data (exported files) is the actual product of this dialog; a presentation bug here is higher-stakes than elsewhere even at "visual-only" scope.
 - **Rollback**: revert the dialog shell; since export logic is untouched, this is safe at any point.
-- **PR dependencies**: Round 2 (tokens). Independent of Rounds 3/4. **Blocked on user's Preview Bench vs Guided Steps decision.**
+- **PR dependencies**: Round 2 (tokens). Independent of Rounds 3/4. Design decision resolved (Preview Bench approved) — **blocked only on the separate overall implementation-authorization gate** (see Status gate above), not on this choice.
 
-### Round 6 — Document Library consolidation (Alternative B, pending sign-off, behind controlled rollout)
+### Round 6 — Document Library consolidation (Alternative B — DESIGN APPROVED, IMPLEMENTATION NOT YET AUTHORIZED, behind controlled rollout)
 
 - **User-visible before/after**: 1,755 → ~227 desktop controls, 174 → 0 duplicate card instances, one canonical row per document with adaptive primary CTA, quick actions, and a More sheet — the single highest-leverage AND highest-risk round.
 - **Exact source components**: `FE/src/pages/study/DocumentList.jsx` (actual page/state owner), `FE/src/components/study/StudyCard.jsx` or a new `StudyDocumentActionRow.jsx`, `FE/src/components/study/CollectionSidebar.jsx`, `FE/src/components/study/BulkBar.jsx`, `FE/src/utils/thuVienTaiLieu.js`, `FE/src/utils/chonNhieu.js`, and any new presentational `LibraryTaskViews`, `DocumentQuickActions`, and `DocumentToolsSheet` modules. `FE/src/study/useOpenSurface.js` and `FE/src/utils/tiepTucHoc.js` are guarded routing/resume dependencies: prefer consuming them unchanged, and add tests before modifying either. `StudyBreadcrumb.jsx` is not an implementation owner for the matrix and should remain untouched unless a separately demonstrated breadcrumb defect appears.
@@ -93,7 +95,7 @@ Round 0 (toolbar/Inspector occlusion, nav link) is merged and live. **Nothing be
 - **Responsive breakpoints**: 1440, 820, 390, and 320. The selected IA prototype measured 1440/390, while the approved visual-language integration already rendered 820 and 320; these are pre-merge gates, not rollout follow-ups.
 - **Regression blast radius**: HIGH — changes real DOM structure, selection state, and bulk-action semantics on the one surface most users touch most often.
 - **Rollback strategy** (unchanged from the original audit's Round 5 recommendation, still the right call): land behind a feature flag if tooling supports it; keep the current `DocumentList.jsx` render path available in version control for one full release cycle before deleting it.
-- **PR dependencies**: Round 2 (tokens). Independent of Rounds 3/4/5 at the code level, but should land after them in practice so reviewer attention isn't split across the highest-risk round and everything else simultaneously. **Blocked on user's Alternative A vs B decision**, and should be the LAST visual round implemented, not the first, despite having the most dramatic numbers — exactly per `09-risk-and-migration-plan.md` §2's existing recommendation.
+- **PR dependencies**: Round 2 (tokens). Independent of Rounds 3/4/5 at the code level, but should land after them in practice so reviewer attention isn't split across the highest-risk round and everything else simultaneously. Design decision resolved (Alternative B approved) — **blocked only on the separate overall implementation-authorization gate** (see Status gate above), not on this choice. Should still be the LAST visual round implemented, not the first, despite having the most dramatic numbers — exactly per `09-risk-and-migration-plan.md` §2's existing recommendation.
 
 ### Round 7 — Quiz, Results, Review, and remaining shared surfaces
 
@@ -131,6 +133,6 @@ Round 0 (toolbar/Inspector occlusion, nav link) is merged and live. **Nothing be
 4. **Every round's PR description must link back to the specific Phase B artifact it implements** (mockup file, design-token entry, prototype commit) so a reviewer can diff the implementation against the already-approved-pending-signoff design, not re-litigate the design in code review.
 5. **No round merges or deploys without the explicit per-round and overall gates in this document being green** — matching the existing project's standing practice (confirmed throughout this session: Round 0's own three-iteration toolbar fix only shipped once real CI was green, not once a mockup looked right).
 
-## What this plan does not decide
+## What this plan still does not decide
 
-The two items in `10-design-approval-package.md` §4 remain the user's decision, not pre-committed by this plan's Round 5/6 framing. If the user picks Alternative A over B, or Guided Steps over Preview Bench, only those two rounds' "exact source components" and "screenshot parity gates" sections need updating — the rest of this plan, the ordering, and the cross-cutting rules are unaffected.
+The two design choices in `10-design-approval-package.md` §4 are now resolved (Alternative B, Preview Bench) — that is no longer an open question this plan defers. What remains genuinely undecided: **whether and when to authorize Phase C implementation at all.** Design approval and implementation authorization are deliberately kept as two separate gates throughout this document (Status gate, and each round's "PR dependencies" line) precisely so merging the design documentation never gets silently read as a green light to start writing application code.

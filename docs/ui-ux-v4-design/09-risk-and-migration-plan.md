@@ -1,6 +1,6 @@
 # 09 — Risk & Migration Plan (Phase B, Claude — UX Lead)
 
-This is a design-readiness risk assessment, not an implementation plan — Round 1-7 of `docs/ui-ux-audit-v4/10-prioritized-backlog.md` remains the execution sequencing. This document says what in Phase B's deliverables is low-risk to implement as-is, what needs a spike before implementation starts, and what must not be touched regardless of how good the mockup looks.
+This is a design-readiness risk assessment, not an implementation plan — `11-phase-c-implementation-plan.md` is the canonical execution sequencing (`docs/ui-ux-audit-v4/10-prioritized-backlog.md` is retained as historical Phase A audit context only). This document says what in Phase B's deliverables is low-risk to implement as-is, what needs a spike before implementation starts, and what must not be touched regardless of how good the mockup looks.
 
 ## 1. Guardrails that stayed intact (verified, not assumed)
 
@@ -35,12 +35,15 @@ This is the one Phase B deliverable that changes actual DOM structure and intera
 - **Document Library's modal bottom sheet on mobile**: verify the inert/focus-trap behavior against the existing `ContextPanelCloseButton` dual-mode pattern so Phase B doesn't introduce a THIRD close-button behavior alongside Chat-mode and MindMap-mode.
 - **Export Studio's "preview bench" mobile layout** (full-screen tool, sticky action row): verify it doesn't collide with the same mobile-drawer backdrop/z-index stack that Round 0's toolbar occlusion fix just hardened (`.mindmap-tools-overlay`, `.context-inspector-shell`, the z-30 backdrop) — same class of bug, different surface, worth a deliberate check rather than assuming independence.
 
-## 4. Unresolved design decisions (flagged, not silently picked)
+## 4. Design decisions — resolved; implementation authorization — still open
 
-- Export Studio has two real, built alternatives (preview bench, chosen; guided steps, retained). The brief's own mandate — "present at least two meaningful alternatives for high-impact UI architecture decisions, end with one recommendation" — is satisfied; final sign-off on which ships is the user's, not implicit in this document.
-- Document Library likewise has two real alternatives (A: Canonical Learning Queue, B: Learning Action Matrix, selected) with Codex 2's own written rationale; same status.
-- The guided-steps Export Studio alternative was explicitly "retained... not selected as the default" — worth deciding explicitly whether it's dropped or kept as a documented future first-run mode, not left ambiguous.
+Both design decisions flagged here were resolved by explicit user approval on 2026-10-25 (`10-design-approval-package.md` §4):
 
-## 5. What Round 1-7 sequencing from the Phase A audit still needs updating
+- **Export Studio: Preview Bench — APPROVED** over Guided Steps. Guided Steps remains documented as a possible future first-run mode, not an approved implementation target.
+- **Document Library: Alternative B (Learning Action Matrix) — APPROVED** over Alternative A, with Codex 2's own written rationale.
 
-`docs/ui-ux-audit-v4/10-prioritized-backlog.md`'s Round 2 (tokens), Round 4 (map parity), and Round 5 (library consolidation) descriptions predate this Phase B work and were written as open scope, not as "here is the exact built proposal." Once a direction is approved, Round 2/4/5's "Scope" fields should be updated to point at the specific Phase B artifacts (§06 tokens, `05-shared-map-visual-grammar/`, `04-document-library-redesign/alternative-b-...md`) rather than the general description they currently carry — a small bookkeeping pass, not a re-plan.
+What remains genuinely open is a separate question: **whether and when to authorize Phase C implementation itself.** Design approval is not implementation authorization — see `11-phase-c-implementation-plan.md`'s Status gate.
+
+## 5. Phase A backlog superseded by the Phase C plan
+
+`docs/ui-ux-audit-v4/10-prioritized-backlog.md`'s Round 2 (tokens), Round 4 (map parity), and Round 5 (library consolidation) descriptions predated Phase B's actual built proposals and were written as open scope. That bookkeeping pass is done: `11-phase-c-implementation-plan.md`'s Round 2/4/5/6 sections now point at the specific Phase B artifacts (§06 tokens, `05-shared-map-visual-grammar/`, `04-document-library-redesign/alternative-b-learning-action-matrix.md`) directly. The Phase A document is retained as historical audit context, not as the active plan.
