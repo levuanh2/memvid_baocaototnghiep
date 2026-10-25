@@ -125,4 +125,3 @@ The source and evidence close actions remain mode-aware presentation controls.
 
 `render.ps1` regenerates the full set with Playwright at exact CSS viewports;
 this avoids Windows headless-Chrome's misleading sub-500px viewport clamp.
-

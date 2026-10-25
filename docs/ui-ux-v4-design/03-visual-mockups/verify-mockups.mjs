@@ -37,4 +37,3 @@ for (const [width, height, theme, layout] of cases) {
 }
 await browser.close();
 console.log(`Verified ${cases.length} mockup states: exact viewport, no horizontal overflow, correct theme/layout and mobile dock.`);
-

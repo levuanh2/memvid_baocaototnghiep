@@ -49,4 +49,3 @@ await page.waitForTimeout(250);
 await page.screenshot({ path: path.join(output, "before-live-workspace-390x844-light.png") });
 
 await browser.close();
-

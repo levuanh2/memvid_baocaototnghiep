@@ -22,4 +22,3 @@ foreach ($capture in $captures) {
   & npx.cmd --yes --package=playwright@1.64.1 playwright screenshot --browser chromium --viewport-size "$($capture.Width), $($capture.Height)" --wait-for-timeout 150 $url $target
   if (-not (Test-Path -LiteralPath $target)) { throw "Capture was not created: $target" }
 }
-
