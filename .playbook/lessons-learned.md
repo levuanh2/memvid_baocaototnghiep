@@ -3344,3 +3344,15 @@ Zero-job failed runs are validation evidence, not provider connectivity
 results. Preserve separate statuses for disabled, missing configuration,
 unimplemented probes, successful probes and non-blocking failures so a green
 workflow conclusion cannot be mistaken for a provider PASS.
+## Visible navigation needs its own regression, not a comment or shortcut (2026-10-25)
+
+A code comment and `Alt+S` both claimed the Study library had a header owner,
+but the actual link had been removed. Navigation ownership is user-observable:
+assert the rendered link, keyboard order, destination, browser-Back behavior,
+and narrow-width reachability in a real browser.
+
+Cross-route links and contextual tool menus serve different jobs. Keep the
+library destination separate from Tutor/Timeline/Knowledge, and preserve the
+Workspace's simultaneous-mount mode architecture. If returning from a route
+must restore a client-side pane, store only a remount seed in the current
+history entry; do not turn the panes themselves into routes.
