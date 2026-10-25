@@ -113,7 +113,9 @@ export default function FixtureHarnessApp() {
   return (
     <div style={{ height: "100vh", width: "100vw", paddingTop: TOOLBAR_OVERLAY_PROOF ? 56 : 0 }} data-testid="fixture-harness-root"
       data-selected-node={controller.selected?.id || ""} data-save-log={JSON.stringify(saveLog)}>
-      <MindElixirView data={data} onRegenerate={() => {}} regenerating={false} controller={controller} />
+      <div className={TOOLBAR_OVERLAY_PROOF ? "h-full md:ml-[252px] md:w-[calc(100%-252px)]" : "h-full w-full"}>
+        <MindElixirView data={data} onRegenerate={() => {}} regenerating={false} controller={controller} />
+      </div>
       {TOOLBAR_OVERLAY_PROOF && controller.selected?.id && (
         <>
           <div className="fixed inset-0 bg-black/40 z-30 backdrop-blur-sm hidden max-[767px]:block" data-testid="toolbar-occlusion-proof-backdrop" />

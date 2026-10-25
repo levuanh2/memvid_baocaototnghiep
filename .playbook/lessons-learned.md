@@ -15,6 +15,11 @@ intentionally modal or place the non-overlapping controls above that backdrop.
 Responsive tests must assert the presentation class on each side of the exact
 breakpoint; waiting only for a desktop class after resizing can misdiagnose a
 correct overlay-to-sheet transition as an unmount or timing race.
+Viewport width is not the same as workspace width: at a breakpoint where side
+rails remain docked, reserve-space math must include those rails. If persistent
+actions are the priority, compact ancillary toolbar content using a container
+query on the toolbar's actual inline size; another viewport breakpoint will
+miss resizable-rail cases.
 
 ## A CSS opacity rule can silently undo a correctly-set custom color (2026-10-24)
 

@@ -15,14 +15,19 @@ while the selected-node Inspector was independently fixed at `top: 56px`,
 did not reserve its horizontal footprint in the toolbar layout. Below 768px the
 Inspector legitimately changes to `.context-inspector-shell`, but MainLayout's
 z-30 drawer backdrop still sat above the visible z-12 toolbar and intercepted it.
+At exactly 768px drawer mode is still false, so the 252px left rail plus the
+364px reservation left only about 140px for toolbar content; identity/status
+items overflowed that space and pushed Appearance back under SidebarRight.
 
 **Fix:** `MindElixirView` adds a presentation-only state attribute to its toolbar
 while the existing controller has a selected node. At widths where the
 Inspector is right-anchored (>=768px), CSS reserves its exact 340px width,
 12px right inset, and 12px gutter. On mobile the bottom sheet remains unchanged,
 while the selected toolbar's non-overlapping top strip moves to z-41 so it stays
-above the drawer backdrop. No node data, selection handling, Inspector lifecycle,
-or export code changed.
+above the drawer backdrop. At narrow desktop workspace widths, a container query
+compacts the selected toolbar to its three 40px action targets; it keys off the
+toolbar's real width so a resized left rail is handled too. No node data,
+selection handling, Inspector lifecycle, or export code changed.
 
 **Regression:** `e2e-fixture/mindmap-toolbar-occlusion.spec.js` reproduces the
 real shell/overlay geometry and asserts with `elementFromPoint()` that the

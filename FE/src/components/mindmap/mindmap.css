@@ -440,6 +440,7 @@ html.dark .me-container { --mm-relation: #7e90c4; }
   z-index: 12;
   height: 48px;
   min-height: 48px;
+  container-type: inline-size;
 }
 /* The desktop/tablet Knowledge Inspector is a fixed 340px overlay anchored
    12px from the right viewport edge. When node selection opens it, reserve
@@ -451,6 +452,33 @@ html.dark .me-container { --mm-relation: #7e90c4; }
 @media (min-width: 768px) {
   .artifact-toolbar.mm-context-row[data-inspector-open="true"] {
     padding-right: 364px;
+  }
+
+  /* At the exact 768px drawer boundary MainLayout still owns a 252px left
+     rail, leaving this toolbar roughly 516px wide. After reserving the
+     Inspector footprint, only the three 40px action targets fit. Compact
+     from the toolbar's real inline size (also covers a user-widened rail),
+     rather than guessing from the viewport width. */
+  @container (max-width: 700px) {
+    .artifact-toolbar.mm-context-row[data-inspector-open="true"]
+      > :not(.mm-appearance-trigger):not(.mm-export-trigger):not(.mm-toolbar-menu-wrap) {
+      display: none;
+    }
+    .artifact-toolbar.mm-context-row[data-inspector-open="true"]
+      .mm-appearance-trigger,
+    .artifact-toolbar.mm-context-row[data-inspector-open="true"]
+      .mm-export-trigger {
+      width: 40px;
+      padding: 0;
+      justify-content: center;
+      border-radius: 50%;
+    }
+    .artifact-toolbar.mm-context-row[data-inspector-open="true"]
+      .mm-appearance-trigger span,
+    .artifact-toolbar.mm-context-row[data-inspector-open="true"]
+      .mm-export-trigger span {
+      display: none;
+    }
   }
 }
 /* MainLayout intentionally turns the Inspector into a modal bottom sheet
