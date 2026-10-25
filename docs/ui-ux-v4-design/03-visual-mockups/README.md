@@ -181,3 +181,51 @@ re-run live/export node, connector, selection, and rendered-page parity gates.
 
 `verify-maps.mjs` checks 14 states for exact viewport, horizontal overflow,
 selected-node visibility, and a usable canvas width.
+
+## Batch 3 — Export Studio, account, profile, and shared dialogs
+
+Open `surfaces.html` with `screen=export`, `export-guided`, `account`,
+`profile`, `dialog-generate`, or `dialog-delete`, plus `theme=light|dark`.
+
+### BEFORE evidence used
+
+- `docs/ui-ux-audit-v4/screenshots/codex1-visual-export-studio-1440x900-dark.png`
+- `docs/ui-ux-audit-v4/screenshots/codex1-visual-export-studio-430x932-light.png`
+- `docs/ui-ux-audit-v4/screenshots/ux-35-export-appearance.png`
+- `docs/ui-ux-audit-v4/screenshots/ux-35-export-format.png`
+- `docs/ui-ux-audit-v4/screenshots/ux-35-export-review.png`
+- `docs/ui-ux-audit-v4/screenshots/codex1-visual-account-menu-1440x900-light.png`
+- `docs/ui-ux-audit-v4/screenshots/codex1-visual-account-menu-390x844-dark.png`
+- `docs/ui-ux-audit-v4/screenshots/codex1-visual-profile-1440x900-light.png`
+- `docs/ui-ux-audit-v4/screenshots/codex1-visual-profile-390x844-dark.png`
+- `docs/ui-ux-audit-v4/screenshots/ux-12-generate-map-dialog.png`
+
+### Export Studio alternatives and decision
+
+Two real alternatives are implemented:
+
+1. **Preview bench — chosen.** Desktop keeps scope steps, a large persistent
+   artifact preview, and settings visible together. Mobile becomes a full-screen
+   tool with a compact preview, horizontal progress, scrollable settings, and a
+   sticky action row. No format card or footer action is clipped at 390/320px.
+2. **Guided steps — retained alternative.** One decision per screen reduces
+   initial density, but repeatedly hides the output preview and makes appearance
+   comparison slower. It remains useful for a first-run mode, not the default.
+
+The preview bench was selected because export is a visual verification task:
+the learner should see the consequence of format, size, background, and scope
+changes before reaching the irreversible action. The memorable visual element
+is the paper preview itself; the surrounding controls stay restrained.
+
+### Shared surface grammar
+
+Account, profile, generate, and destructive-confirmation surfaces use the same
+canonical tokens, 8–14px radii by hierarchy, blue focus/selection, and separate
+error colour. Account navigation stays compact; Profile is a full page; shared
+dialogs use one header/body/footer and mobile full-screen contract. Destructive
+confirmation requires an explicit acknowledgement before its red action can be
+enabled.
+
+`render-surfaces.mjs` creates 26 screenshots. `verify-surfaces.mjs` checks 30
+light/dark responsive states for exact viewport, horizontal overflow, selected
+screen/theme, and reachable controls.
