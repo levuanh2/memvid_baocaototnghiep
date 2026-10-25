@@ -98,7 +98,10 @@ test("selected-node inspector never occludes Appearance, Export, or Overflow", a
   const listbox = await openMapLibrary(page);
   await listbox.getByRole("option", { selected: true }).click();
   await expect(page.locator("me-tpc")).not.toHaveCount(0);
-  await page.locator("me-tpc").nth(1).click();
+  // The deterministic backend is allowed to return a root-only map. Any
+  // topic selection opens the same Knowledge Inspector, so select the first
+  // real topic instead of assuming a child exists.
+  await page.locator("me-tpc").first().click();
   await expect(page.locator("aside.mindmap-tools-overlay")).toBeVisible();
 
   const measurements = {};
