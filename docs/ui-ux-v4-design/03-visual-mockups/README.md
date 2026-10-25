@@ -125,3 +125,59 @@ The source and evidence close actions remain mode-aware presentation controls.
 
 `render.ps1` regenerates the full set with Playwright at exact CSS viewports;
 this avoids Windows headless-Chrome's misleading sub-500px viewport clamp.
+
+### Agy review changes applied
+
+The independent review in `08-independent-agy-review.md` identified three
+issues in the first checkpoint. This working prototype now:
+
+- preserves the Inspector's established **320px floor** at tablet widths;
+- moves mobile source/evidence access into the conversation header instead of
+  a persistent bottom dock that would collide with the software keyboard;
+- uses the canonical token names (`--bg-base`, `--bg-card`, `--text-primary`,
+  `--accent-subtle`, `--border-color`) shared with the map grammar.
+
+## Batch 2 — MindMap + StudyMap visual parity
+
+Open `maps.html` with `?screen=mindmap&theme=light` or
+`?screen=studymap&theme=dark`. `render-maps.ps1` produces both engines at
+1440×900, 820×1180, 390×844, and a 320px stress width.
+
+### BEFORE evidence used
+
+- `docs/ui-ux-audit-v4/screenshots/codex1-visual-workspace-mindmap-1280x800-light.png`
+- `docs/ui-ux-audit-v4/screenshots/codex1-visual-workspace-mindmap-768x1024-dark.png`
+- `docs/ui-ux-audit-v4/screenshots/codex1-visual-workspace-mindmap-390x844-light.png`
+- `docs/ui-ux-audit-v4/screenshots/codex1-visual-study-map-1440x900-light.png`
+- `docs/ui-ux-audit-v4/screenshots/codex1-visual-study-map-820x1180-dark.png`
+- `docs/ui-ux-audit-v4/screenshots/codex1-visual-study-map-390x844-light.png`
+
+### Shared visual contract
+
+Both prototypes implement Agy's normative grammar in
+`05-shared-map-visual-grammar/`: blue root, bordered section nodes, compact
+concept nodes, calibrated connectors, sans-serif graph labels, dot-lattice
+canvas, and the same blue selection halo. The example dataset is identical so
+visual parity can be judged directly.
+
+The engines remain intentionally distinct:
+
+- **MindMap** keeps editable card nodes, branch-coloured curves, source scope,
+  artifact toolbar, Appearance, Export Studio, and a node Inspector.
+- **StudyMap** keeps its read-only SVG lineage, search, layout switch, quick
+  image export, presentation affordance, and concept study action.
+
+On mobile, both switch to a readable depth-one tree rather than scaling the
+desktop graph until its labels become illegible. Context becomes a bottom
+sheet, but the canvas retains enough height to explain the current position.
+
+### Export-fidelity guardrail
+
+The MindMap mockup changes the proposed *live* node grammar only. It does not
+propose changing node identity, connector topology, export selection markers,
+offscreen capture, or Exact-node Export V3 geometry. Any implementation must
+apply the shared tokens through the existing export-aware appearance path and
+re-run live/export node, connector, selection, and rendered-page parity gates.
+
+`verify-maps.mjs` checks 14 states for exact viewport, horizontal overflow,
+selected-node visibility, and a usable canvas width.

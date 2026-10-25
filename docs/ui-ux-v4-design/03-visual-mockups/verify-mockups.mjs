@@ -25,15 +25,15 @@ for (const [width, height, theme, layout] of cases) {
     scrollWidth: document.documentElement.scrollWidth,
     theme: document.documentElement.dataset.theme,
     layout: document.documentElement.dataset.layout,
-    visibleDock: getComputedStyle(document.querySelector(".mobile-dock")).display !== "none",
+    visibleMobileContext: getComputedStyle(document.querySelector(".mobile-context")).display !== "none",
   }));
   if (result.viewport !== width || result.scrollWidth > width || result.theme !== theme || result.layout !== layout) {
     throw new Error(`Invalid ${width}×${height} ${theme}/${layout}: ${JSON.stringify(result)}`);
   }
-  if ((width < 768) !== result.visibleDock) {
-    throw new Error(`Mobile dock breakpoint mismatch at ${width}px`);
+  if ((width < 768) !== result.visibleMobileContext) {
+    throw new Error(`Mobile context-actions breakpoint mismatch at ${width}px`);
   }
   await page.close();
 }
 await browser.close();
-console.log(`Verified ${cases.length} mockup states: exact viewport, no horizontal overflow, correct theme/layout and mobile dock.`);
+console.log(`Verified ${cases.length} mockup states: exact viewport, no horizontal overflow, correct theme/layout and mobile context actions.`);
