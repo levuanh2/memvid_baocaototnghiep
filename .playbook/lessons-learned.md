@@ -20,13 +20,34 @@ feature's own spec cares about — a bug that only reproduces at the *default*
 viewport will ship clean if every one of a new spec's explicit viewports
 happens to avoid it.
 
-Separately: toggling a child's own `display` from *inside* the same
-`@container` block that measures the parent's width can feed back into that
-measurement (the child's rendered width/presence changes the parent's own
-content-driven size), making the breakpoint fire inconsistently depending on
-prior layout state in the same page session. Prefer relying on a control's
-existing `flex-shrink` + text-ellipsis behavior over adding a new
-display-toggle in the same container query that's doing the measuring.
+Correction to an earlier version of this note: an apparent "measurement
+feedback loop" was initially blamed for an intermittent pass/fail on this same
+fix. It wasn't one — `.artifact-toolbar`'s width is `width: 100%` of its flex
+parent, not intrinsic/content-driven, so toggling a child's `display` cannot
+change the container query's own measured size. The real cause, found by
+reading the spec's own `after-element-from-point.json` hit-test dump instead
+of re-guessing from screenshots: a genuine space-budget shortfall. When a
+fixed-width overlay (the Inspector, 340px) and a row of compacted fixed-width
+targets both have to fit in what's left after a narrow rail eats part of the
+viewport, add up the real numbers (target width × count + gap × (count-1) vs.
+container width − reserved overlay footprint) before trying another CSS
+tweak — a few more failed attempts at resizing/hiding individual targets will
+not fix a hard arithmetic shortfall, only freeing room elsewhere will. The
+`qa-artifacts/*/after-element-from-point.json` a spec writes on every run
+(rect + hit + `interceptedByInspector`/`ownsCenter` per control, every
+viewport) is more diagnostic than its screenshots or error message alone —
+read it first on a layout-looking failure, and reproduce the suspect state
+directly in a browser (register + seed via `fetch()` against the real test
+backend, then read `getBoundingClientRect()`/computed styles live) rather than
+only round-tripping through the full ~20s build+E2E cycle per hypothesis.
+
+Also: a failure that looks identical 2–4 times in a row but names a
+*different* sibling element each time (here: Appearance, then Export, then
+Overflow) is a signal the elements themselves aren't colliding with each
+other — something else is intercepting all of them, and the "random" one that
+fails is just whichever one the layout happens to push furthest into it.
+Don't chase the varying element; chase what's actually catching the hit
+(`interceptedByInspector` in this case, visible in the same JSON dump).
 
 ## Floating contextual panels must participate in adjacent chrome geometry (2026-10-25)
 

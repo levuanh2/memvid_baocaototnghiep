@@ -25,25 +25,46 @@ empty-state `Tạo sơ đồ tư duy` click path, but a map already existed (see
 earlier in the same `describe.serial` block), so that button never existed
 either — hence the 45s hang.
 
-**Fix:** Exempted `.mm-map-selector` from the `display: none` rule. It already
-has its own `flex: 1 1 260px` plus `overflow:hidden/text-overflow:ellipsis` on
-its label — letting it shrink naturally was enough; no extra compacting CSS was
-added for it (an earlier attempt that also hid `.mm-map-selector__label` via
-the same container query fed back into the container's own measured width and
-made the breakpoint fire inconsistently run-to-run — reverted). Added a
-`.mm-map-selector__trigger` to `mindmap-toolbar-occlusion.spec.js`'s `CONTROLS`
-hit-test list, a real click-opens-the-listbox assertion, and a `ci-default`
-(1280x720) entry to its `VIEWPORTS` — none of the 4 named viewports it already
-had matched the width `critical-flows.spec.js` actually runs at, which is how
-this one shipped without the new spec ever catching it.
+**Fix (final):** Exempted `.mm-map-selector` from the `display: none` rule and
+compacted it to a 40px icon-only button (hide its label, drop the trailing
+chevron) unconditionally whenever the Inspector is open at `>= 768px` — not
+only past the narrower `@container (max-width: 700px)` threshold. Two earlier,
+narrower attempts were tried and reverted first:
+1. Letting `.mm-map-selector` shrink only via its existing `flex-shrink` +
+   text-ellipsis, un-compacted. This re-broke the *original* Round 0 occlusion
+   fix: at exactly 768px with the 252px left rail present, keeping the button
+   at its full/shrinking flex-basis (rather than a fixed 40px) ate enough of
+   the row's ~134px of real remaining room that `.mm-overflow-trigger`'s
+   hit-test center landed inside `.mindmap-tools-overlay` itself —
+   `interceptedByInspector: true` in the spec's own measurement dump
+   (`FE/qa-artifacts/mindmap-toolbar-occlusion/after-element-from-point.json`).
+   Confirmed in real CI (run 40181802505 / 40187758572), not just locally.
+2. Compacting it only inside the `@container` block (gating its own
+   `display:none` toggle on the same container it was shrinking). Measurement
+   showed this didn't actually fix the above overlap either — the real
+   constraint is a hard room shortfall, not which rule toggles what.
 
-**Local-vs-CI note:** A separate, pre-existing hit-test mismatch at the
-`tablet-edge` (768px) viewport — `.mm-appearance-trigger` or `.mm-overflow-trigger`
-(varies run to run) resolving to a plain `<svg>` instead of itself or its own
-button — reproduces locally on Windows Chromium but not in the actual GitHub
-Actions CI runner, which passed this exact assertion 3/3 times on the
-pre-this-fix code. Treated as a local rendering quirk, not re-investigated here;
-flag it if it ever reproduces in real CI.
+Root math (measured, not estimated): at 768px, left rail 252px + divider, row
+content box after the Inspector's `padding-right: 364px` reservation ≈ 134px.
+Four compacted 40px targets (map selector, Appearance, Export, Overflow) plus
+three 10px gaps need ≈ 190px — a genuine ≈56px shortfall, not a sizing/gap
+rounding bug. Freed it by narrowing `.mindmap-tools-overlay` itself from 340px
+to 280px, and the toolbar's reservation from 364px to 304px to match, **only**
+in a `(min-width: 768px) and (max-width: 800px)` band — outside that band the
+Inspector keeps its full 340px.
+
+Also added `.mm-map-selector__trigger` to `mindmap-toolbar-occlusion.spec.js`'s
+`CONTROLS` hit-test list, a real click-opens-the-listbox assertion, and a
+`ci-default` (1280x720) entry to its `VIEWPORTS` — none of the 4 named
+viewports it already had matched the width `critical-flows.spec.js` actually
+runs at (Playwright's "Desktop Chrome" default, which that spec never resizes
+away from), which is how the original regression shipped without this round's
+own new spec ever catching it.
+
+**Verification:** 2/2 clean local runs against the real local backend after
+this final fix (a 3rd confirmatory run and a fresh stash-based RED re-proof
+were interrupted when the shared local test Postgres container was torn down
+externally mid-session) — real CI on push is the authoritative final gate.
 
 ## Selected-node Knowledge Inspector occluded Mind Map toolbar actions (fixed 2026-10-25)
 

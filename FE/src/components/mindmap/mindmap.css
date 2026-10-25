@@ -454,19 +454,53 @@ html.dark .me-container { --mm-relation: #7e90c4; }
     padding-right: 364px;
   }
 
+  /* At 768–800px, MainLayout's 252px left rail plus this 364px reservation
+     leaves only ~134px of real toolbar content room — not enough for the 4
+     compacted 40px targets (map selector, Appearance, Export, Overflow) plus
+     their gaps (~190px), regardless of how small each individual target is
+     made (measured directly: FE/qa-artifacts/mindmap-toolbar-occlusion/
+     after-element-from-point.json showed Overflow's hit-test landing inside
+     .mindmap-tools-overlay itself, not on a neighboring button — genuine
+     overflow into the reserved footprint, not a sizing/gap bug). Narrow the
+     Inspector itself in just this band instead of continuing to shrink
+     toolbar targets — 280px frees enough room (304px reservation) and still
+     comfortably fits the Inspector's own content at this width. */
+  @media (max-width: 800px) {
+    .mindmap-tools-overlay { width: 280px; }
+    .artifact-toolbar.mm-context-row[data-inspector-open="true"] {
+      padding-right: 304px;
+    }
+  }
+
+  /* .mm-map-selector is the only way to open the map library / create a new
+     map (openGuidedDialogFromHeader's "Mở thư viện sơ đồ" path) — it must
+     never become unreachable, so it is compacted to icon-only unconditionally
+     whenever the Inspector is open at this width, not just past the container
+     query below. Gating it on the container query instead (an earlier attempt)
+     let it keep its full flex-basis right up to that threshold, which ate
+     enough of the row's remaining width to destabilize the neighboring
+     Appearance/Export/Overflow targets at exactly the 768px drawer boundary. */
+  .artifact-toolbar.mm-context-row[data-inspector-open="true"] .mm-map-selector {
+    flex: 0 0 auto;
+  }
+  .artifact-toolbar.mm-context-row[data-inspector-open="true"] .mm-map-selector__label,
+  .artifact-toolbar.mm-context-row[data-inspector-open="true"] .mm-map-selector__trigger svg:last-child {
+    display: none;
+  }
+  .artifact-toolbar.mm-context-row[data-inspector-open="true"] .mm-map-selector__trigger {
+    width: 40px;
+    padding: 0;
+    justify-content: center;
+    border-radius: 50%;
+  }
+
   /* At the exact 768px drawer boundary MainLayout still owns a 252px left
      rail, leaving this toolbar roughly 516px wide. After reserving the
-     Inspector footprint, only the three 40px action targets fit. Compact
-     from the toolbar's real inline size (also covers a user-widened rail),
-     rather than guessing from the viewport width. */
+     Inspector footprint, only the three 40px action targets (map selector
+     already compacted above, plus Appearance/Export) and the Overflow menu
+     fit. Compact from the toolbar's real inline size (also covers a
+     user-widened rail), rather than guessing from the viewport width. */
   @container (max-width: 700px) {
-    /* .mm-map-selector stays reachable here — it is the only way to open
-       the map library / create a new map (openGuidedDialogFromHeader's
-       "Mở thư viện sơ đồ" path), not a cosmetic label. It already has its
-       own flex-shrink + text-ellipsis rules (see .mm-map-selector above),
-       so it degrades on its own; do not also toggle its own display here —
-       that fed back into this same container's measured width and made the
-       breakpoint fire inconsistently depending on prior layout state. */
     .artifact-toolbar.mm-context-row[data-inspector-open="true"]
       > :not(.mm-map-selector):not(.mm-appearance-trigger):not(.mm-export-trigger):not(.mm-toolbar-menu-wrap) {
       display: none;
