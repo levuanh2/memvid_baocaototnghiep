@@ -45,12 +45,16 @@ Three independent workstreams, each with real measured evidence, converged on on
 | Single-line title truncation unreadable for long academic titles | Codex 2 Alternative A | 2-line clamp with accessible tooltip | `5d9876a` |
 | Mobile popover menu collided with adjacent cards | Codex 2 Alternative A | Portalled modal bottom sheet, inert background, focus trap | `5d9876a` |
 
+**Correction (post-review, self-flagged):** the "Primary CTA text mismatched the active filter's intent" fix above was verified for *label text* (confirmed 100% of rows relabel correctly) but not for *result-set membership* — a direct code read after this review found `visibleDocs()` never actually filtered the `needs_summary`/`needs_quiz` task views; they showed all 42 documents regardless of eligibility, only the button label changed. This is the exact mistake the brief warns against: an independent review passing doesn't make every prototype behavior correct. Fix in progress, tracked in a later commit on this branch — see the updated `10-design-approval-package.md` revision history or `04-document-library-redesign/alternative-b-learning-action-matrix.md` for the corrected state model once it lands.
+
 This full round-trip (built → independently challenged with evidence → fixed → re-verified) happened entirely inside this Phase B session, on real prototypes, before reaching this approval package.
 
-## 4. Two decisions that need your sign-off (both have a built alternative and a stated recommendation — neither is implicit)
+## 4. Two decisions awaiting your explicit sign-off — recommended defaults, NOT approved by anyone on this team
 
-- **Document Library**: Alternative B (Learning Action Matrix) is selected and recommended over Alternative A (Canonical Learning Queue). B has 83 more visible controls (227 vs 144) but Agy's analysis (§5.2 of `08-independent-agy-review.md`) argues this is the right trade — A's lower count came from burying the app's core multi-modal actions (Mind Map, Summary) in a menu, creating real click penalty; B's density (5.4 controls/document) matches established patterns (Linear, Notion, GitHub PR lists) while still cutting production's 1,755 controls by 87%.
-- **Export Studio**: Preview Bench (persistent live paper preview alongside settings) is selected and recommended over Guided Steps (one decision per screen). Guided Steps is retained as a possible future first-run mode, not discarded — worth an explicit decision on whether to keep it documented or drop it.
+Agy's and Codex's recommendations below are the team's best judgment, not a stand-in for the user's own decision. Nothing in this package should be read as these having already been approved.
+
+- **Document Library — recommended: Alternative B (Learning Action Matrix)** over Alternative A (Canonical Learning Queue). B has 83 more visible controls (227 vs 144) but Agy's analysis (§5.2 of `08-independent-agy-review.md`) argues this is the right trade — A's lower count came from burying the app's core multi-modal actions (Mind Map, Summary) in a menu, creating real click penalty; B's density (5.4 controls/document) matches established patterns (Linear, Notion, GitHub PR lists) while still cutting production's 1,755 controls by 87%. **Not yet chosen by the user.**
+- **Export Studio — recommended: Preview Bench** (persistent live paper preview alongside settings) over Guided Steps (one decision per screen). Guided Steps is retained as a possible future first-run mode, not discarded — worth an explicit decision on whether to keep it documented or drop it. **Not yet chosen by the user.**
 
 ## 5. Accessibility, carried forward not re-derived
 
@@ -70,7 +74,7 @@ Not blockers — explicitly scoped for Phase C implementation planning, from Agy
 
 - Mobile MindMap/StudyMap Inspector needs a "minimized peek" affordance when dismissed, rather than fully closing (avoids accidental re-pan/zoom on re-open).
 - StudyMap SVG labels need multi-line wrapping or a defined truncation length for long (15-25 word) LLM-generated concept titles.
-- The Export Studio live preview's modern CSS (`color-mix()`, SVG filter drop-shadows) must stay strictly decoupled from the headless export rendering sandbox (`html2canvas`/`pdf_serializer.py`), which doesn't support those features — already named as a guardrail, needs enforcement at implementation time.
+- The Export Studio live preview's modern CSS (`color-mix()`, SVG filter drop-shadows) must stay strictly decoupled from the headless export rendering sandbox. **Correction:** an earlier version of this note and `08-independent-agy-review.md` incorrectly named `html2canvas` as the rendering library — the real pipeline (`FE/src/utils/mindmapImageExport.js`) uses `@zumer/snapdom`, confirmed by direct code read (zero `html2canvas` references exist anywhere in the codebase). Agy's Task 2 audit is verifying snapdom's actual feature support against the preview CSS and will replace this with a verified capability list rather than an assumption carried over from a different library.
 - Document Library bulk-selection must be pruned against visible documents on every filter/search change, not left to silently act on hidden selections.
 - Document Library return-navigation (task view, filter, scroll position) must survive a browser Back from `/app` or `/app/study`.
 - All three of Document Library's action tiers (primary CTA, quick actions, More menu) must route through the existing single navigation helper — no component may construct its own URL.
