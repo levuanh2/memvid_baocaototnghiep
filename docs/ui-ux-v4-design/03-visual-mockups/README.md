@@ -229,3 +229,36 @@ enabled.
 `render-surfaces.mjs` creates 26 screenshots. `verify-surfaces.mjs` checks 30
 light/dark responsive states for exact viewport, horizontal overflow, selected
 screen/theme, and reachable controls.
+
+## Batch 4 — populated Quiz journey
+
+Open `quiz.html` with `screen=taking`, `results`, or `review`, plus
+`theme=light|dark`. The mockup deliberately covers the populated learning
+journey rather than repeating the error-only audit state.
+
+### BEFORE evidence used
+
+- `docs/ui-ux-audit-v4/screenshots/codex1-visual-quiz-taking-error-390x844-dark.png`
+- `docs/ui-ux-audit-v4/screenshots/codex1-visual-quiz-result-error-1024x768-light.png`
+- `docs/ui-ux-audit-v4/screenshots/codex1-visual-review-error-390x844-light.png`
+- `docs/ui-ux-audit-v4/screenshots/codex1-visual-practice-error-820x1180-dark.png`
+- `docs/ui-ux-audit-v4/screenshots/ux-19-quiz-generated-or-progress.png`
+
+### State decisions
+
+- **Taking:** desktop keeps question navigation, the active question, and
+  progress context visible as three quiet columns. Tablet removes the tertiary
+  context panel. Mobile replaces both side rails with a progress strip and
+  keeps only previous/next in a keyboard-safe sticky footer.
+- **Results:** score, topic diagnosis, answer correctness, and the next useful
+  study actions appear in that order. The page does not treat the numeric score
+  as a dead end.
+- **Review:** the selected/correct answer pair and sourced explanation are the
+  primary reading flow. Desktop adds a wrong-question rail and study-plan card;
+  mobile removes those secondary rails so the explanation remains readable.
+
+The three states use one blue identity, semantic green/red only for correctness,
+and the same serif-for-content/sans-for-controls type hierarchy used across the
+other Option B surfaces. `render-quiz.mjs` creates 21 screenshots;
+`verify-quiz.mjs` checks 24 light/dark responsive states, including 320px, for
+exact viewport, horizontal overflow, state isolation, and usable controls.
