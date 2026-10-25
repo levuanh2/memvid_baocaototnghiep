@@ -21,6 +21,7 @@ import { FIXTURE_MAP_A, FIXTURE_MAP_B, FIXTURE_SCOPE_A, FIXTURE_SCOPE_B, FIXTURE
 const MAPS = [FIXTURE_MAP_A, FIXTURE_MAP_B, FIXTURE_SCOPE_A, FIXTURE_SCOPE_B, FIXTURE_EXPORT_V3, FIXTURE_DEPTH, FIXTURE_SHALLOW3, FIXTURE_POST_PR77, FIXTURE_EXACT_V3];
 const COLLAPSED_BY_MAP = { ...FIXTURE_COLLAPSED_NODE_IDS, ...FIXTURE_EXPORT_V3_COLLAPSED };
 const SEARCH = new URLSearchParams(typeof window !== "undefined" ? window.location.search : "");
+const TOOLBAR_OVERLAY_PROOF = SEARCH.get("toolbarOverlay") === "1";
 const INITIAL_MAP_ID = SEARCH.get("map") === "export-v3" ? FIXTURE_EXPORT_V3.id
   : SEARCH.get("map") === "post-pr77" ? FIXTURE_POST_PR77.id
   : SEARCH.get("map") === "exact-v3" ? FIXTURE_EXACT_V3.id
@@ -110,9 +111,26 @@ export default function FixtureHarnessApp() {
   }), [activeRecord, activeMapId]);
 
   return (
-    <div style={{ height: "100vh", width: "100vw" }} data-testid="fixture-harness-root"
+    <div style={{ height: "100vh", width: "100vw", paddingTop: TOOLBAR_OVERLAY_PROOF ? 56 : 0 }} data-testid="fixture-harness-root"
       data-selected-node={controller.selected?.id || ""} data-save-log={JSON.stringify(saveLog)}>
-      <MindElixirView data={data} onRegenerate={() => {}} regenerating={false} controller={controller} />
+      <div className={TOOLBAR_OVERLAY_PROOF ? "h-full md:ml-[252px] md:w-[calc(100%-252px)]" : "h-full w-full"}>
+        <MindElixirView data={data} onRegenerate={() => {}} regenerating={false} controller={controller} />
+      </div>
+      {TOOLBAR_OVERLAY_PROOF && controller.selected?.id && (
+        <>
+          <div className="fixed inset-0 bg-black/40 z-30 backdrop-blur-sm hidden max-[767px]:block" data-testid="toolbar-occlusion-proof-backdrop" />
+          <aside className="mindmap-tools-overlay fixed top-[56px] right-3 bottom-3 z-40 w-[340px] bg-surface-sidebar border border-border rounded-[12px] shadow-card-hover overflow-hidden max-[767px]:hidden">
+            <div className="study-surface-header h-full" data-testid="toolbar-occlusion-proof-overlay">
+              Knowledge Inspector fixture
+            </div>
+          </aside>
+          <aside className="context-inspector-shell fixed inset-x-0 bottom-0 max-h-[82vh] z-40 bg-surface-sidebar border-t border-border rounded-t-2xl shadow-card-hover hidden max-[767px]:block">
+            <div className="study-surface-header h-full" data-testid="toolbar-occlusion-proof-sheet">
+              Knowledge Inspector fixture
+            </div>
+          </aside>
+        </>
+      )}
     </div>
   );
 }

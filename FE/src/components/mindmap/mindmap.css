@@ -440,6 +440,109 @@ html.dark .me-container { --mm-relation: #7e90c4; }
   z-index: 12;
   height: 48px;
   min-height: 48px;
+  container-type: inline-size;
+}
+/* The desktop/tablet Knowledge Inspector is a fixed 340px overlay anchored
+   12px from the right viewport edge. When node selection opens it, reserve
+   that exact footprint plus a 12px gutter in the toolbar's border box so its
+   trailing actions remain beside the Inspector instead of underneath its
+   z-index-40 hit-test layer. On mobile the Inspector is a bottom sheet, so
+   the toolbar keeps its full width. This is deliberately presentation-only:
+   selection and export state remain owned by the existing controller. */
+@media (min-width: 768px) {
+  .artifact-toolbar.mm-context-row[data-inspector-open="true"] {
+    padding-right: 364px;
+  }
+
+  /* At 768–800px, MainLayout's 252px left rail plus this 364px reservation
+     leaves only ~134px of real toolbar content room — not enough for the 4
+     compacted 40px targets (map selector, Appearance, Export, Overflow) plus
+     their gaps (~190px), regardless of how small each individual target is
+     made (measured directly: FE/qa-artifacts/mindmap-toolbar-occlusion/
+     after-element-from-point.json showed Overflow's hit-test landing inside
+     .mindmap-tools-overlay itself, not on a neighboring button — genuine
+     overflow into the reserved footprint, not a sizing/gap bug). Split the
+     ~56px shortfall between the Inspector and the toolbar targets instead of
+     taking it all from one side: the Inspector only goes to 320px here, its
+     own established floor elsewhere in the app (PANELS.right.min in
+     hooks/panelLayout.js — ContextInspector is not designed to render below
+     that), freeing 20px; the remaining room comes from tightening the row's
+     own gap (10px -> 4px, saving 18px across 3 gaps) rather than from the
+     Inspector or the targets' individual sizes. Measured directly against
+     the real toolbar DOM at 777px: with both changes, the rightmost target
+     (.mm-toolbar-menu-wrap, right edge 436) clears the Inspector's left edge
+     (444.8) with ~9px to spare — no further shrinking needed. */
+  @media (max-width: 800px) {
+    /* Element+class, not just class, to outrank the Tailwind w-[340px]
+       utility on the same element — equal-specificity class selectors lose
+       to source order, and Tailwind's generated sheet wins that tie. */
+    aside.mindmap-tools-overlay { width: 320px; }
+    .artifact-toolbar.mm-context-row[data-inspector-open="true"] {
+      padding-right: 344px;
+      gap: 4px;
+    }
+  }
+
+  /* .mm-map-selector is the only way to open the map library / create a new
+     map (openGuidedDialogFromHeader's "Mở thư viện sơ đồ" path) — it must
+     never become unreachable, so it is compacted to icon-only unconditionally
+     whenever the Inspector is open at this width, not just past the container
+     query below. Gating it on the container query instead (an earlier attempt)
+     let it keep its full flex-basis right up to that threshold, which ate
+     enough of the row's remaining width to destabilize the neighboring
+     Appearance/Export/Overflow targets at exactly the 768px drawer boundary. */
+  .artifact-toolbar.mm-context-row[data-inspector-open="true"] .mm-map-selector {
+    flex: 0 0 auto;
+  }
+  .artifact-toolbar.mm-context-row[data-inspector-open="true"] .mm-map-selector__label,
+  .artifact-toolbar.mm-context-row[data-inspector-open="true"] .mm-map-selector__trigger svg:last-child {
+    display: none;
+  }
+  .artifact-toolbar.mm-context-row[data-inspector-open="true"] .mm-map-selector__trigger {
+    width: 40px;
+    padding: 0;
+    justify-content: center;
+    border-radius: 50%;
+  }
+
+  /* At the exact 768px drawer boundary MainLayout still owns a 252px left
+     rail, leaving this toolbar roughly 516px wide. After reserving the
+     Inspector footprint, only the three 40px action targets (map selector
+     already compacted above, plus Appearance/Export) and the Overflow menu
+     fit. Compact from the toolbar's real inline size (also covers a
+     user-widened rail), rather than guessing from the viewport width. */
+  @container (max-width: 700px) {
+    .artifact-toolbar.mm-context-row[data-inspector-open="true"]
+      > :not(.mm-map-selector):not(.mm-appearance-trigger):not(.mm-export-trigger):not(.mm-toolbar-menu-wrap) {
+      display: none;
+    }
+    .artifact-toolbar.mm-context-row[data-inspector-open="true"]
+      .mm-appearance-trigger,
+    .artifact-toolbar.mm-context-row[data-inspector-open="true"]
+      .mm-export-trigger {
+      width: 40px;
+      padding: 0;
+      justify-content: center;
+      border-radius: 50%;
+    }
+    .artifact-toolbar.mm-context-row[data-inspector-open="true"]
+      .mm-appearance-trigger span,
+    .artifact-toolbar.mm-context-row[data-inspector-open="true"]
+      .mm-export-trigger span {
+      display: none;
+    }
+  }
+}
+/* MainLayout intentionally turns the Inspector into a modal bottom sheet
+   below 768px and adds a z-30 backdrop. The toolbar occupies a separate,
+   non-overlapping strip above that sheet, so keep only that strip above the
+   backdrop while a node is selected; otherwise the visible actions are
+   dimmed and elementFromPoint resolves to the backdrop instead of the
+   buttons. The sheet itself stays z-40 and its lifecycle is unchanged. */
+@media (max-width: 767px) {
+  .artifact-toolbar.mm-context-row[data-inspector-open="true"] {
+    z-index: 41;
+  }
 }
 .mm-map-selector { position: relative; min-width: 0; flex: 1 1 260px; }
 .mm-map-selector__trigger {

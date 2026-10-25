@@ -1,5 +1,75 @@
 # Lessons Learned
 
+## A "compact at narrow width" rule for one toolbar must enumerate every interactive control it hides, not just the ones the current fix cares about (2026-10-25)
+
+`:not(.a):not(.b):not(.c) { display: none }` silently hides everything else in
+that row, including controls the original fix's own test suite never exercised
+(here, the map-selector/library button). A new CSS rule that hides elements by
+exclusion-list needs its exclusion list audited against *every* interactive
+descendant of the row, not just the ones the PR's own new test asserts on — a
+pre-existing, unrelated test elsewhere in the suite (`critical-flows.spec.js`,
+not this round's own spec) was what actually caught it, 45 seconds into a CI
+run, as a hang rather than a clear assertion failure. When adding a responsive
+list-of-exemptions pattern, grep the row's JSX for every `<button>`/interactive
+child first and decide each one's fate explicitly.
+
+Also: a toolbar test's own `VIEWPORTS` list should include whatever viewport
+the rest of the suite actually runs at by default (Playwright's
+`devices["Desktop Chrome"]` default is 1280x720), not just the breakpoints the
+feature's own spec cares about — a bug that only reproduces at the *default*
+viewport will ship clean if every one of a new spec's explicit viewports
+happens to avoid it.
+
+Correction to an earlier version of this note: an apparent "measurement
+feedback loop" was initially blamed for an intermittent pass/fail on this same
+fix. It wasn't one — `.artifact-toolbar`'s width is `width: 100%` of its flex
+parent, not intrinsic/content-driven, so toggling a child's `display` cannot
+change the container query's own measured size. The real cause, found by
+reading the spec's own `after-element-from-point.json` hit-test dump instead
+of re-guessing from screenshots: a genuine space-budget shortfall. When a
+fixed-width overlay (the Inspector, 340px) and a row of compacted fixed-width
+targets both have to fit in what's left after a narrow rail eats part of the
+viewport, add up the real numbers (target width × count + gap × (count-1) vs.
+container width − reserved overlay footprint) before trying another CSS
+tweak — a few more failed attempts at resizing/hiding individual targets will
+not fix a hard arithmetic shortfall, only freeing room elsewhere will. The
+`qa-artifacts/*/after-element-from-point.json` a spec writes on every run
+(rect + hit + `interceptedByInspector`/`ownsCenter` per control, every
+viewport) is more diagnostic than its screenshots or error message alone —
+read it first on a layout-looking failure, and reproduce the suspect state
+directly in a browser (register + seed via `fetch()` against the real test
+backend, then read `getBoundingClientRect()`/computed styles live) rather than
+only round-tripping through the full ~20s build+E2E cycle per hypothesis.
+
+Also: a failure that looks identical 2–4 times in a row but names a
+*different* sibling element each time (here: Appearance, then Export, then
+Overflow) is a signal the elements themselves aren't colliding with each
+other — something else is intercepting all of them, and the "random" one that
+fails is just whichever one the layout happens to push furthest into it.
+Don't chase the varying element; chase what's actually catching the hit
+(`interceptedByInspector` in this case, visible in the same JSON dump).
+
+## Floating contextual panels must participate in adjacent chrome geometry (2026-10-25)
+
+A fixed overlay can leave controls visually present while making them physically
+unusable. Visibility assertions and screenshots alone do not prove clickability:
+probe each action's centre with `document.elementFromPoint()` and require the hit
+to be the control or its descendant. When an overlay intentionally begins on the
+same horizontal band as persistent chrome, reserve the overlay's complete
+anchored footprint in that chrome while it is open. Match the responsive model:
+desktop/tablet side overlays need horizontal reservation, while mobile bottom
+sheets do not. However, a mobile sheet's separate full-screen backdrop is also
+a hit-test layer: model it in fixtures and either make persistent chrome
+intentionally modal or place the non-overlapping controls above that backdrop.
+Responsive tests must assert the presentation class on each side of the exact
+breakpoint; waiting only for a desktop class after resizing can misdiagnose a
+correct overlay-to-sheet transition as an unmount or timing race.
+Viewport width is not the same as workspace width: at a breakpoint where side
+rails remain docked, reserve-space math must include those rails. If persistent
+actions are the priority, compact ancillary toolbar content using a container
+query on the toolbar's actual inline size; another viewport breakpoint will
+miss resizable-rail cases.
+
 ## A CSS opacity rule can silently undo a correctly-set custom color (2026-10-24)
 
 - Setting `stroke: <color> !important` on an element does not guarantee that color is what gets rendered — a separate `opacity` rule on the same element (or an ancestor) still alpha-composites that exact color against whatever is behind it, producing a different final pixel. "The attribute is correct" and "the rendered pixel is correct" are not the same claim; verify both with real pixel sampling, not just a DOM/CSSOM read of the stroke value.

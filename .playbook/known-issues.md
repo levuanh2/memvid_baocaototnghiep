@@ -1,5 +1,126 @@
 # Known Issues
 
+## Toolbar compact-at-rail-edge fix hid the map-selector entirely, breaking a pre-existing test (fixed 2026-10-25)
+
+**Symptom:** CI's `E2E Critical Flows (Playwright)` required check failed on
+`critical-flows.spec.js:208` ("C1 node detail: Guided close restores the open
+node detail") — unrelated to this round's own `mindmap-toolbar-occlusion.spec.js`,
+which passed every run. The failure was a 45s `Test timeout exceeded` inside
+`openGuidedDialogFromHeader` waiting on `getByRole("button", { name: "Tạo sơ đồ
+tư duy" })`, eventually surfacing as "Target page, context or browser has been
+closed" — a side effect of the timeout teardown, not the real cause.
+
+**Root cause:** The toolbar compact-at-rail-edge fix (previous entry below) added
+`@container (max-width: 700px) { ... > :not(.mm-appearance-trigger):not(.mm-export-trigger):not(.mm-toolbar-menu-wrap) { display: none; } }`.
+That selector also matched `.mm-map-selector` — the "Mở thư viện sơ đồ" button
+that owns `openGuidedDialogFromHeader`'s only way to reach the map library. At
+1280x720 (Playwright's "Desktop Chrome" default — `critical-flows.spec.js` never
+calls `setViewportSize`, so it runs here for its whole duration) the toolbar's
+own measured inline-size falls under the 700px container threshold once a node
+is selected, so the rule fired and the button vanished. The CI run's own
+captured accessibility-tree snapshot proved it: only Giao diện / Xuất sơ đồ /
+Thêm tùy chọn remained, `.mm-map-selector` was gone. `openGuidedDialogFromHeader`'s
+5s visibility wait on that button then failed, it fell through to the
+empty-state `Tạo sơ đồ tư duy` click path, but a map already existed (seeded
+earlier in the same `describe.serial` block), so that button never existed
+either — hence the 45s hang.
+
+**Fix (final):** Exempted `.mm-map-selector` from the `display: none` rule and
+compacted it to a 40px icon-only button (hide its label, drop the trailing
+chevron) unconditionally whenever the Inspector is open at `>= 768px` — not
+only past the narrower `@container (max-width: 700px)` threshold. Two earlier,
+narrower attempts were tried and reverted first:
+1. Letting `.mm-map-selector` shrink only via its existing `flex-shrink` +
+   text-ellipsis, un-compacted. This re-broke the *original* Round 0 occlusion
+   fix: at exactly 768px with the 252px left rail present, keeping the button
+   at its full/shrinking flex-basis (rather than a fixed 40px) ate enough of
+   the row's ~134px of real remaining room that `.mm-overflow-trigger`'s
+   hit-test center landed inside `.mindmap-tools-overlay` itself —
+   `interceptedByInspector: true` in the spec's own measurement dump
+   (`FE/qa-artifacts/mindmap-toolbar-occlusion/after-element-from-point.json`).
+   Confirmed in real CI (run 40181802505 / 40187758572), not just locally.
+2. Compacting it only inside the `@container` block (gating its own
+   `display:none` toggle on the same container it was shrinking). Measurement
+   showed this didn't actually fix the above overlap either — the real
+   constraint is a hard room shortfall, not which rule toggles what.
+
+Root math (measured, not estimated): at 768px, left rail 252px + divider, row
+content box after the Inspector's `padding-right: 364px` reservation ≈ 134px.
+Four compacted 40px targets (map selector, Appearance, Export, Overflow) plus
+three 10px gaps need ≈ 190px — a genuine ≈56px shortfall, not a sizing/gap
+rounding bug.
+
+First attempt freed the whole ≈56px from the Inspector alone (340px → 280px).
+A side-agent review correctly flagged that this was never visually checked
+against real Inspector content, and it turned out there was a concrete reason
+to worry: `ContextInspector` (the same component that renders inside this
+overlay) has an established `min: 320px` elsewhere in the app
+(`PANELS.right` in `hooks/panelLayout.js`) — 280px is 40px below its own
+designed floor. Final split: Inspector only goes to 320px (that floor, +20px
+freed) and the rest comes from tightening the row's own `gap` (10px → 4px,
++18px across 3 gaps) instead of the Inspector or any individual target's
+size — measured directly against the real toolbar DOM at 777px width: the
+rightmost target's right edge (436px) clears the Inspector's left edge
+(445px) with ~9px to spare. Confirmed both by a manual DOM/hit-test probe
+(register + seed via `fetch()` against a real backend, then read
+`getBoundingClientRect()`/`elementFromPoint()` live in-browser — no Playwright
+round-trip needed per hypothesis) and by the existing
+`e2e-fixture/mindmap-toolbar-occlusion.spec.js` (no backend required, runs
+against `FixtureHarnessApp` directly), both green. This all applies **only**
+in a `(min-width: 768px) and (max-width: 800px)` band — outside it the
+Inspector keeps its full 340px and the row keeps its full 10px gap.
+
+Also added `.mm-map-selector__trigger` to `mindmap-toolbar-occlusion.spec.js`'s
+`CONTROLS` hit-test list, a real click-opens-the-listbox assertion, and a
+`ci-default` (1280x720) entry to its `VIEWPORTS` — none of the 4 named
+viewports it already had matched the width `critical-flows.spec.js` actually
+runs at (Playwright's "Desktop Chrome" default, which that spec never resizes
+away from), which is how the original regression shipped without this round's
+own new spec ever catching it.
+
+**Verification:** 2/2 clean local runs against the real local backend after
+this final fix (a 3rd confirmatory run and a fresh stash-based RED re-proof
+were interrupted when the shared local test Postgres container was torn down
+externally mid-session) — real CI on push is the authoritative final gate.
+
+## Selected-node Knowledge Inspector occluded Mind Map toolbar actions (fixed 2026-10-25)
+
+**Symptom:** At desktop and tablet widths, selecting a Mind Map node opened the
+fixed 340px Knowledge Inspector over the right end of the 48px context toolbar.
+Appearance, Export, and Overflow remained visible underneath but their centre
+points resolved to `.study-surface-header` in `document.elementFromPoint()`, so
+pointer clicks were intercepted. At 1440x900 the Export centre was measured at
+`(1340.95, 79.5)`, matching the independent UX audit reproduction.
+
+**Root cause:** The toolbar occupied the full viewport width at `z-index: 12`,
+while the selected-node Inspector was independently fixed at `top: 56px`,
+`right: 12px`, width `340px`, and `z-index: 40`. Opening the contextual overlay
+did not reserve its horizontal footprint in the toolbar layout. Below 768px the
+Inspector legitimately changes to `.context-inspector-shell`, but MainLayout's
+z-30 drawer backdrop still sat above the visible z-12 toolbar and intercepted it.
+At exactly 768px drawer mode is still false, so the 252px left rail plus the
+364px reservation left only about 140px for toolbar content; identity/status
+items overflowed that space and pushed Appearance back under SidebarRight.
+
+**Fix:** `MindElixirView` adds a presentation-only state attribute to its toolbar
+while the existing controller has a selected node. At widths where the
+Inspector is right-anchored (>=768px), CSS reserves its exact 340px width,
+12px right inset, and 12px gutter. On mobile the bottom sheet remains unchanged,
+while the selected toolbar's non-overlapping top strip moves to z-41 so it stays
+above the drawer backdrop. At narrow desktop workspace widths, a container query
+compacts the selected toolbar to its three 40px action targets; it keys off the
+toolbar's real width so a resized left rail is handled too. No node data,
+selection handling, Inspector lifecycle, or export code changed.
+
+**Regression:** `e2e-fixture/mindmap-toolbar-occlusion.spec.js` reproduces the
+real shell/overlay geometry and asserts with `elementFromPoint()` that the
+Appearance, Export, and Overflow centres belong to their controls at desktop,
+tablet, and mobile widths, then performs real clicks on all three at every tested
+viewport. It also asserts the desktop overlay at widths >=768px and the mobile
+bottom sheet below 768px. The real-stack
+counterpart in `e2e/mindmap-toolbar-occlusion.spec.js` covers the same contract
+against the production app shell and backend-generated map.
+
 ## Custom connector color lost configured contrast on sub-branch connectors (fixed 2026-10-24)
 
 **Symptom:** With a custom connector color set via appearance (e.g. a saved preset or Export Studio override), the ROOT→first-branch connector rendered the exact configured color/contrast, but every deeper connector (branch→child and below) rendered visibly faded/low-contrast — on a screenshot this reads as the connector line being missing, even though node boxes and geometry were correct. Confirmed on `current_branch` export scope via a real Flask/Postgres/UI test with a fixed `#2563EB` connector color on `#FFF7ED` canvas (configured contrast 4.87): the three deeper connectors measured actual rendered contrast 2.49, with zero exact-color pixels and thousands of diluted composite-color pixels.
