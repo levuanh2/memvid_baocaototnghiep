@@ -9,7 +9,12 @@ to be the control or its descendant. When an overlay intentionally begins on the
 same horizontal band as persistent chrome, reserve the overlay's complete
 anchored footprint in that chrome while it is open. Match the responsive model:
 desktop/tablet side overlays need horizontal reservation, while mobile bottom
-sheets do not.
+sheets do not. However, a mobile sheet's separate full-screen backdrop is also
+a hit-test layer: model it in fixtures and either make persistent chrome
+intentionally modal or place the non-overlapping controls above that backdrop.
+Responsive tests must assert the presentation class on each side of the exact
+breakpoint; waiting only for a desktop class after resizing can misdiagnose a
+correct overlay-to-sheet transition as an unmount or timing race.
 
 ## A CSS opacity rule can silently undo a correctly-set custom color (2026-10-24)
 

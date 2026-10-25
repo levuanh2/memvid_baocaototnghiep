@@ -12,18 +12,24 @@ pointer clicks were intercepted. At 1440x900 the Export centre was measured at
 **Root cause:** The toolbar occupied the full viewport width at `z-index: 12`,
 while the selected-node Inspector was independently fixed at `top: 56px`,
 `right: 12px`, width `340px`, and `z-index: 40`. Opening the contextual overlay
-did not reserve its horizontal footprint in the toolbar layout.
+did not reserve its horizontal footprint in the toolbar layout. Below 768px the
+Inspector legitimately changes to `.context-inspector-shell`, but MainLayout's
+z-30 drawer backdrop still sat above the visible z-12 toolbar and intercepted it.
 
 **Fix:** `MindElixirView` adds a presentation-only state attribute to its toolbar
 while the existing controller has a selected node. At widths where the
 Inspector is right-anchored (>=768px), CSS reserves its exact 340px width,
-12px right inset, and 12px gutter. Mobile is unchanged because the Inspector is
-a bottom sheet there. No node data, selection handling, or export code changed.
+12px right inset, and 12px gutter. On mobile the bottom sheet remains unchanged,
+while the selected toolbar's non-overlapping top strip moves to z-41 so it stays
+above the drawer backdrop. No node data, selection handling, Inspector lifecycle,
+or export code changed.
 
 **Regression:** `e2e-fixture/mindmap-toolbar-occlusion.spec.js` reproduces the
 real shell/overlay geometry and asserts with `elementFromPoint()` that the
 Appearance, Export, and Overflow centres belong to their controls at desktop,
-tablet, and mobile widths, then performs real clicks on all three. The real-stack
+tablet, and mobile widths, then performs real clicks on all three at every tested
+viewport. It also asserts the desktop overlay at widths >=768px and the mobile
+bottom sheet below 768px. The real-stack
 counterpart in `e2e/mindmap-toolbar-occlusion.spec.js` covers the same contract
 against the production app shell and backend-generated map.
 

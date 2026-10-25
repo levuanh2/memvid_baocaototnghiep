@@ -26,7 +26,7 @@ async function hitTestToolbar(page) {
       rect: { top: rect.top, right: rect.right, bottom: rect.bottom, left: rect.left },
       ownsCenter: Boolean(hit && (hit === control || control.contains(hit))),
       hit: hit ? `${hit.tagName}.${String(hit.className || "").trim().split(/\s+/).join(".")}` : null,
-      interceptedByOverlay: Boolean(hit?.closest(".mindmap-tools-overlay")),
+      interceptedByInspector: Boolean(hit?.closest(".mindmap-tools-overlay, .context-inspector-shell")),
     }];
   })), CONTROLS);
 }
@@ -42,6 +42,14 @@ test("selected-node Inspector does not intercept toolbar control centers", async
   const measurements = {};
   for (const viewport of VIEWPORTS) {
     await page.setViewportSize({ width: viewport.width, height: viewport.height });
+    const expectedInspector = viewport.width < 768
+      ? page.locator("aside.context-inspector-shell")
+      : page.locator("aside.mindmap-tools-overlay");
+    const unexpectedInspector = viewport.width < 768
+      ? page.locator("aside.mindmap-tools-overlay")
+      : page.locator("aside.context-inspector-shell");
+    await expect(expectedInspector).toBeVisible();
+    await expect(unexpectedInspector).not.toBeVisible();
     measurements[viewport.name] = await hitTestToolbar(page);
     await page.screenshot({
       path: path.join(OUT, `${PHASE}-${viewport.name}-${viewport.width}x${viewport.height}.png`),
@@ -53,19 +61,25 @@ test("selected-node Inspector does not intercept toolbar control centers", async
   for (const [viewport, controls] of Object.entries(measurements)) {
     for (const [selector, proof] of Object.entries(controls)) {
       expect(proof.ownsCenter, `${viewport} ${selector}: center hit ${proof.hit}`).toBe(true);
-      expect(proof.interceptedByOverlay, `${viewport} ${selector}: overlay intercepted center`).toBe(false);
+      expect(proof.interceptedByInspector, `${viewport} ${selector}: Inspector intercepted center`).toBe(false);
     }
   }
 
-  await page.setViewportSize({ width: 1440, height: 900 });
-  await page.locator(".mm-appearance-trigger").click();
-  await expect(page.getByRole("dialog")).toBeVisible();
-  await page.keyboard.press("Escape");
+  for (const viewport of VIEWPORTS) {
+    await page.setViewportSize({ width: viewport.width, height: viewport.height });
 
-  await page.locator(".mm-export-trigger").click();
-  await expect(page.getByRole("dialog")).toBeVisible();
-  await page.keyboard.press("Escape");
+    await page.locator(".mm-appearance-trigger").click();
+    const appearanceDialog = page.getByRole("dialog", { name: "Giao diện" });
+    await expect(appearanceDialog, `${viewport.name}: Appearance opens`).toBeVisible();
+    await appearanceDialog.getByRole("button", { name: "Đóng hộp thoại" }).click();
 
-  await page.locator(".mm-overflow-trigger").click();
-  await expect(page.locator(".mm-toolbar-menu")).toBeVisible();
+    await page.locator(".mm-export-trigger").click();
+    const exportDialog = page.getByRole("dialog", { name: "Xuất sơ đồ" });
+    await expect(exportDialog, `${viewport.name}: Export opens`).toBeVisible();
+    await exportDialog.getByRole("button", { name: "Đóng hộp thoại" }).click();
+
+    await page.locator(".mm-overflow-trigger").click();
+    await expect(page.locator(".mm-toolbar-menu"), `${viewport.name}: Overflow opens`).toBeVisible();
+    await page.locator(".mm-overflow-trigger").click();
+  }
 });

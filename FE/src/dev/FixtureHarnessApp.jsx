@@ -115,11 +115,19 @@ export default function FixtureHarnessApp() {
       data-selected-node={controller.selected?.id || ""} data-save-log={JSON.stringify(saveLog)}>
       <MindElixirView data={data} onRegenerate={() => {}} regenerating={false} controller={controller} />
       {TOOLBAR_OVERLAY_PROOF && controller.selected?.id && (
-        <aside className="mindmap-tools-overlay fixed top-[56px] right-3 bottom-3 z-40 w-[340px] bg-surface-sidebar border border-border rounded-[12px] shadow-card-hover overflow-hidden">
-          <div className="study-surface-header h-full" data-testid="toolbar-occlusion-proof-overlay">
-            Knowledge Inspector fixture
-          </div>
-        </aside>
+        <>
+          <div className="fixed inset-0 bg-black/40 z-30 backdrop-blur-sm hidden max-[767px]:block" data-testid="toolbar-occlusion-proof-backdrop" />
+          <aside className="mindmap-tools-overlay fixed top-[56px] right-3 bottom-3 z-40 w-[340px] bg-surface-sidebar border border-border rounded-[12px] shadow-card-hover overflow-hidden max-[767px]:hidden">
+            <div className="study-surface-header h-full" data-testid="toolbar-occlusion-proof-overlay">
+              Knowledge Inspector fixture
+            </div>
+          </aside>
+          <aside className="context-inspector-shell fixed inset-x-0 bottom-0 max-h-[82vh] z-40 bg-surface-sidebar border-t border-border rounded-t-2xl shadow-card-hover hidden max-[767px]:block">
+            <div className="study-surface-header h-full" data-testid="toolbar-occlusion-proof-sheet">
+              Knowledge Inspector fixture
+            </div>
+          </aside>
+        </>
       )}
     </div>
   );

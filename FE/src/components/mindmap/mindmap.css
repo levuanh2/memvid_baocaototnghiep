@@ -453,6 +453,17 @@ html.dark .me-container { --mm-relation: #7e90c4; }
     padding-right: 364px;
   }
 }
+/* MainLayout intentionally turns the Inspector into a modal bottom sheet
+   below 768px and adds a z-30 backdrop. The toolbar occupies a separate,
+   non-overlapping strip above that sheet, so keep only that strip above the
+   backdrop while a node is selected; otherwise the visible actions are
+   dimmed and elementFromPoint resolves to the backdrop instead of the
+   buttons. The sheet itself stays z-40 and its lifecycle is unchanged. */
+@media (max-width: 767px) {
+  .artifact-toolbar.mm-context-row[data-inspector-open="true"] {
+    z-index: 41;
+  }
+}
 .mm-map-selector { position: relative; min-width: 0; flex: 1 1 260px; }
 .mm-map-selector__trigger {
   width: 100%; min-width: 0; display: flex; align-items: center; gap: 9px;
