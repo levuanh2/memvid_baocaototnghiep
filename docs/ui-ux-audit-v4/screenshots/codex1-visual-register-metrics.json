@@ -1,0 +1,50 @@
+[
+  {
+    "file": "codex1-visual-register-error-1280x800-light.png",
+    "name": "register-error",
+    "route": "/register",
+    "theme": "light",
+    "w": 1280,
+    "h": 800,
+    "scrollWidth": 1280,
+    "clientWidth": 1280,
+    "scrollHeight": 800,
+    "errors": []
+  },
+  {
+    "file": "codex1-visual-register-error-1280x800-dark.png",
+    "name": "register-error",
+    "route": "/register",
+    "theme": "dark",
+    "w": 1280,
+    "h": 800,
+    "scrollWidth": 1280,
+    "clientWidth": 1280,
+    "scrollHeight": 800,
+    "errors": []
+  },
+  {
+    "file": "codex1-visual-register-error-375x812-light.png",
+    "name": "register-error",
+    "route": "/register",
+    "theme": "light",
+    "w": 375,
+    "h": 812,
+    "scrollWidth": 375,
+    "clientWidth": 375,
+    "scrollHeight": 812,
+    "errors": []
+  },
+  {
+    "file": "codex1-visual-register-error-375x812-dark.png",
+    "name": "register-error",
+    "route": "/register",
+    "theme": "dark",
+    "w": 375,
+    "h": 812,
+    "scrollWidth": 375,
+    "clientWidth": 375,
+    "scrollHeight": 812,
+    "errors": []
+  }
+]
