@@ -7246,3 +7246,31 @@ provider check occurred.
 required backend contract suite asserts that schedule/manual triggers and both
 inputs remain present, no `if` references `secrets`, and all honest skip states
 remain encoded in the workflow.
+## Workspace header claimed a Study library link that did not exist (fixed 2026-10-25)
+
+**Symptom:** Authenticated users had no visible route from the main Workspace to
+`/app/study`. The header exposed Chat/Mind Map/Summary and the separate
+`StudyToolsMenu` (Tutor/Timeline/Knowledge), while a stale comment claimed the
+wordmark cluster already contained a real Study library link. `Alt+S` worked,
+but undiscoverable keyboard shortcuts are not visible navigation.
+
+**Root cause:** A previous header relocation removed the actual `<Link>` but
+left its explanatory comment and shortcut branch behind. Review/tests verified
+the three mode tabs and tool menu ownership, but never asserted that the
+cross-route library destination remained rendered at desktop and narrow widths.
+
+**Fix:** Added a distinct, responsive `Thư viện học tập` link in
+`MainLayout.jsx`, adjacent to the wordmark and separate from `StudyToolsMenu`.
+Desktop shows its text; tablet/mobile retain a named 40×40 BookOpen link. The
+active client-side workspace mode is mirrored into the existing `?tab=` remount
+seed so browser Back returns to the same pane without routing or unmounting the
+three `WorkspaceContainer` panes during normal mode switches.
+
+**Regression:** `FE/e2e/study-library-navigation.spec.js` registers through the
+real UI, verifies the desktop label, keyboard order, real click to the library,
+browser Back with mode restoration, exactly three mode tabs, and a visible,
+in-viewport mobile entry point.
+
+**Prevention:** When comments or shortcuts claim a visible navigation owner
+exists, include a browser assertion for the rendered link and its destination.
+Keep cross-route destinations separate from contextual tool menus.

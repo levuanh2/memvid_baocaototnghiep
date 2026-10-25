@@ -70,6 +70,23 @@ export default function MainLayout({
   const [mindmapData, setMindmapData] = useState(null);   // { data, onRegenerate, regenerating } | null
   const [summaryData, setSummaryData] = useState(null);   // summary record | null
   const [summaryContext, setSummaryContext] = useState(null);
+  // Keep the active client-side pane in this history entry so a round trip to
+  // the Study library returns to the same pane. This does not route between
+  // Chat/Mind Map/Summary: WorkspaceContainer still owns all three panes and
+  // keeps them simultaneously mounted; the query value is only a remount seed.
+  useEffect(() => {
+    if (window.location.pathname !== "/app") return;
+    const params = new URLSearchParams(window.location.search);
+    const current = params.get("tab") || "chat";
+    if (current === workspaceMode) return;
+    if (workspaceMode === "chat") params.delete("tab");
+    else params.set("tab", workspaceMode);
+    const search = params.toString();
+    navigate(
+      { pathname: window.location.pathname, search: search ? `?${search}` : "", hash: window.location.hash },
+      { replace: true, state: window.history.state?.usr },
+    );
+  }, [navigate, workspaceMode]);
   // Auto-switch to a newly-populated tab ONCE (null → non-null), not on every
   // later update (Save/regenerate) — those must not yank the user off Chat.
   const hadMindmapRef = useRef(false);
@@ -500,11 +517,8 @@ export default function MainLayout({
             regardless of what --accent's general action/selection color is
             (forest, then blue); every other component only REFERENCES this
             motif, never duplicates its exact treatment.
-            Round 11 (mockup parity) — "StudyMap" moved here, right next to
-            the wordmark, matching the approved reference image's brand
-            cluster; it's still the SAME real `<Link to="/app/study">`
-            (Alt+S, quiz/practice mode) that used to sit in the right-side
-            icon cluster, just relocated — not duplicated there anymore. */}
+            The Study library destination is a separate sibling link below;
+            StudyToolsMenu remains the owner of contextual learning tools. */}
         <Link to="/app" aria-label="MemVidX — trang chủ"
           className="flex items-center justify-center lg:justify-start gap-2.5 w-10 h-10 lg:w-auto lg:h-10 flex-shrink-0 select-none">
           <span
@@ -517,6 +531,12 @@ export default function MainLayout({
           <span className="font-display font-semibold text-title tracking-tight text-text-primary hidden lg:block">
             MemVid<span className="text-seal">X</span>
           </span>
+        </Link>
+
+        <Link to="/app/study" aria-label="Thư viện học tập" title="Thư viện học tập"
+          className="study-library-link flex items-center justify-center gap-1.5 w-10 h-10 lg:w-auto lg:px-3 rounded-[8px] border border-border text-small font-medium text-text-secondary hover:text-text-primary hover:bg-surface-elevated flex-shrink-0 transition-colors">
+          <Icon name="BookOpen" size={16} />
+          <span className="hidden lg:inline">Thư viện học tập</span>
         </Link>
 
         {/* Mode switch — Round 11 (mockup parity, explicit user decision):
