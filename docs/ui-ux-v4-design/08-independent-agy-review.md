@@ -4,8 +4,8 @@
 **Baseline**: `main` @ `fb0c2f4dec90b6bb8aea62e71e1aa9a63db2a1c3`
 **Target Branch**: `docs/ui-ux-v4-design`
 **Reviewed Artifacts**:
-- Codex 1: [`03-visual-mockups/README.md`](./03-visual-mockups/README.md) (commits `647ac08`, `61056bb`), `workspace.html`, `workspace.css`, `maps.html`, `maps.css`, `verify-maps.mjs`, rendered screenshots in `screenshots/`.
-- Codex 2: [`04-document-library-redesign/alternative-a-canonical-learning-queue.md`](./04-document-library-redesign/alternative-a-canonical-learning-queue.md) (commit `82ea744`), [`04-document-library-redesign/alternative-b-learning-action-matrix.md`](./04-document-library-redesign/alternative-b-learning-action-matrix.md) (commit `5d9876a`), prototypes `prototype-alternative-a.html` and `prototype-alternative-b.html`, measurement scripts, and evidence in `evidence/`.
+- Codex 1: [`03-visual-mockups/README.md`](./03-visual-mockups/README.md) (commits `647ac08`, `61056bb`, `957fbd5`, `c2e008d`), prototypes `workspace.html`, `maps.html`, `surfaces.html`, `quiz.html`, corresponding CSS files, automated verification suites (`verify-mockups.mjs`, `verify-maps.mjs`, `verify-surfaces.mjs`, `verify-quiz.mjs`), and 88 rendered screenshots in `screenshots/`.
+- Codex 2: [`04-document-library-redesign/alternative-a-canonical-learning-queue.md`](./04-document-library-redesign/alternative-a-canonical-learning-queue.md) (commit `82ea744`), [`04-document-library-redesign/alternative-b-learning-action-matrix.md`](./04-document-library-redesign/alternative-b-learning-action-matrix.md) (commit `5d9876a`), prototypes `prototype-alternative-a.html` and `prototype-alternative-b.html`, measurement scripts (`capture_current_state.py`, `capture_prototype.py`, `capture_prototype_b.py`), and evidence in `evidence/`.
 
 ---
 
@@ -19,7 +19,7 @@ In accordance with Option B principles ([`01-option-b-design-principles.md`](./0
 
 ---
 
-## 2. Review of Codex 1: Workspace Chat & Global Navigation (Commit `647ac08`)
+## 2. Review of Codex 1 Checkpoint 1: Workspace Chat & Global Navigation (Commit `647ac08`)
 
 ### 2.1 Verified Strengths & Architectural Fidelity
 Codex 1's "Learning Desk" proposal demonstrates high architectural discipline and solves the core tablet bottleneck identified in Phase A:
@@ -59,7 +59,7 @@ Codex 1's "Learning Desk" proposal demonstrates high architectural discipline an
 
 ---
 
-## 3. Review of Codex 2: Document Library Redesign (Commit `82ea744`)
+## 3. Review of Codex 2 Checkpoint 1: Document Library Alternative A (Commit `82ea744`)
 
 ### 3.1 Verified Strengths & Measurable Triumphs
 Codex 2's Alternative A (*Canonical Learning Queue*) represented an exceptional technical achievement in data modeling and structural consolidation:
@@ -97,13 +97,13 @@ Codex 2's Alternative A (*Canonical Learning Queue*) represented an exceptional 
 
 ---
 
-## 4. Review of Codex 1 Checkpoint 2: Shared Map Visual Mockups & Parity (Commit `61056bb`)
+## 4. Review of Codex 1 Checkpoints 2, 3 & 4: Shared Maps, Export Studio, Dialogs & Quiz Journey
 
-### 4.1 Verified Strengths & Architectural Alignment
+### 4.1 Shared Map Visual Mockups & Parity (Commit `61056bb`)
 In commit `61056bb`, Codex 1 delivered `maps.html`, `maps.css`, `verify-maps.mjs`, and 14 rendered screenshots across MindMap and StudyMap at 1440px, 820px, 390px, and 320px viewports. The deliverable achieves strict visual convergence with Agy's [`05-shared-map-visual-grammar/visual-grammar-spec.md`](./05-shared-map-visual-grammar/visual-grammar-spec.md):
 
 1. **Faithful Visual Token & Lattice Adoption**:
-   - The canvas texture strictly adopts the **24px dot lattice**:
+   - Canvas texture strictly adopts the **24px dot lattice**:
      ```css
      background-color: var(--bg-base);
      background-image: radial-gradient(var(--dot) .8px, transparent .8px);
@@ -134,37 +134,51 @@ In commit `61056bb`, Codex 1 delivered `maps.html`, `maps.css`, `verify-maps.mjs
 
 ---
 
-### 4.2 Critical Challenges & Open Architectural Risks in Codex 1 Checkpoint 2
+### 4.2 Export Studio, Shared Dialogs & Profile Surfaces (Commit `957fbd5`)
+In commit `957fbd5`, Codex 1 delivered `surfaces.html`, `surfaces.css`, `verify-surfaces.mjs`, and 26 rendered screenshots covering Export Studio, Shared Dialogs, Account, and Profile:
 
-#### Challenge 1: Mobile Inspector Dismissal & Re-entry Affordance
-- **The Evidence**:
-  - In `maps.html` line 94, the mobile `.node-inspector` renders as a fixed bottom drawer (`height: 240px; position: fixed; bottom: 0;`).
-  - It includes a close button `<button><svg><use href="#i-close"/></svg></button>`.
-- **The Defect**:
-  - The prototype does not define the post-dismissal state. When the user dismisses the 240px bottom drawer to inspect the canvas, does the selected node deselect entirely, or does the inspector minimize into a compact "peek chip" (e.g. `[Bộ nhớ ảo ⌄]`) at the bottom of the canvas?
-  - If closing deselects the node, the user loses their place and must re-tap the node on canvas. If it leaves the node selected without any visible UI affordance, the user has no direct touch target to re-open the node details without re-triggering canvas selection.
-- **Architectural Directive for Implementation Planning**:
-  - Adopt a **Minimized Peek Chip** pattern: Dismissing the mobile drawer collapses it to a floating 36px bottom pill (`Bộ nhớ ảo · Chi tiết ⌃`). Tapping the pill restores the 240px drawer. Tapping empty canvas deselects the node and removes the peek chip.
+1. **Export Studio Direction (Preview Bench vs Guided Steps)**:
+   - Codex 1 implemented two alternatives and correctly selected the **Preview Bench** (`screen=export`).
+   - In an active study desk, export is fundamentally a visual verification task. Keeping the live paper preview (`.paper-preview`) persistent alongside format (PNG/PDF/SVG), sizing, and appearance options allows the learner to immediately evaluate the effect of changes before exporting.
+   - Mobile becomes a full-screen tool with compact preview, horizontal progress indicator, scrollable options, and sticky export CTA, preventing format card clipping.
+2. **Shared Dialogs & Confirmation Gates**:
+   - The Generate Map dialog (`screen=dialog-generate`) clearly summarizes active source segments.
+   - The Destructive Delete dialog (`screen=dialog-delete`) introduces an **explicit confirmation checkbox gate** (`"Tôi hiểu dữ liệu này sẽ bị xóa vĩnh viễn"`) that must be checked before the danger action is enabled.
+3. **Account & Profile Surfaces**:
+   - The Account popover (`screen=account`) remains a compact launcher, while Profile (`screen=profile`) is expanded into a full-page settings layout with distinct identity, security, and notification tabs.
 
-#### Challenge 2: SVG Text Wrapping in StudyMap with Real Academic Curricula
-- **The Evidence**:
-  - In `maps.html` line 118, StudyMap renders concept labels as single-line SVG `<text>`:
-    `<text x="16" y="5">PCB và trạng thái tiến trình</text>`.
-- **The Defect**:
-  - SVG `<text>` elements do not wrap lines natively. In mockups with 3-5 word concept labels, horizontal layout works well.
-  - However, in real university exam documents (e.g. *Hệ điều hành*, *Triết học Mác - Lênin*), concept nodes generated by LLMs frequently have titles of 15–25 words (e.g. *"Nguyên lý bổ sung giữa quy luật giá trị và quy luật cung cầu trong nền kinh tế thị trường"*).
-  - Without an explicit multi-line `<tspan>` layout or truncation threshold, unwrapped SVG text will extend 300px+ horizontally, overlapping adjacent branches and breaking the canvas viewport.
-- **Architectural Directive for Implementation Planning**:
-  - In `StudyMapView.jsx`, implement a calibrated text-wrapping helper (or character threshold `lineClamp` to 32 characters across max 2 `<tspan>` lines) with SVG `<title>` tooltip fallback.
+---
 
-#### Challenge 3: Export Studio Modal Mockup & Headless Export Isolation
-- **The Evidence**:
-  - Codex 1 includes the Export Studio button (`#i-export`) in `.artifact-toolbar`, but does not mockup the Export Studio dialog itself.
-- **The Guardrail**:
-  - As established in [`05-shared-map-visual-grammar/engine-boundaries-and-export-guardrails.md`](./05-shared-map-visual-grammar/engine-boundaries-and-export-guardrails.md), MindMap V3 export relies on offscreen headless capture via `html2canvas` and `pdf_serializer.py`.
-  - The visual mockups in `maps.html` use modern CSS features (`color-mix()`, `radial-gradient()`, `paint-order`). While these render beautifully in evergreen browsers, `html2canvas` has known rendering bugs with `color-mix()` and SVG filter drop-shadows.
-- **Architectural Directive for Implementation Planning**:
-  - Live canvas styling and headless export rendering must remain strictly separated. The export rendering container must continue consuming resolved hex colors and raster-safe CSS tokens.
+### 4.3 Populated Quiz Journey: Taking, Results & Review (Commit `c2e008d`)
+In commit `c2e008d`, Codex 1 delivered `quiz.html`, `quiz.css`, `verify-quiz.mjs`, and 21 rendered screenshots covering the complete Quiz learning lifecycle:
+
+1. **Quiz Taking Ergonomics (`screen=taking`)**:
+   - Desktop presents three quiet columns: Question Rail (`.question-rail`, 10 numbered buttons with state indicators), Question Stage (`.question-card` with single-choice radio options and sticky prev/next controls), and Progress Context (`.quiz-context` with 40% progress bar and topic breakdown).
+   - Radio options use standard semantic `<label><input type="radio">` markup, ensuring standard WAI-ARIA arrow key navigation across options.
+   - On mobile, side rails collapse into a top progress strip (`.mobile-progress`), and touch targets expand to `>= 48px` height.
+2. **Quiz Results & Non-Terminal Study Loops (`screen=results`)**:
+   - The results screen avoids treating the numeric score (80/100) as a dead end.
+   - It breaks down proficiency by topic (`Bộ nhớ ảo: 3/3 Vững`, `Quản lý tiến trình: 3/4 Cần xem lại`) and provides explicit forward study actions: `"Mở trên sơ đồ"` (linking to StudyMap) and `"Xem kế hoạch ôn tập"`.
+3. **Quiz Review & Sourced Explanations (`screen=review`)**:
+   - Side-by-side comparison of user's answer vs correct answer with distinct iconography.
+   - Sourced explanation block includes exact quote and page citation (`Nguồn 1 · trang 42`), directly linking back to the verified document provenance.
+   - Actionable takeaway card provides immediate remediation hooks: `"Thêm vào kế hoạch ôn"` and `"Hỏi Gia sư AI"`.
+
+---
+
+### 4.4 Remaining Open Risks in Codex 1 Mockups
+
+#### Risk 1: Mobile Inspector Dismissal & Peek Affordance
+- **The Issue**: In `maps.html`, the mobile `.node-inspector` (240px bottom drawer) has a close button `×`. Dismissing it completely hides the inspector. If the user wants to re-open details for the currently active node, they must tap on the node again, which can trigger accidental pans or zoom shifts on touch screens.
+- **Directive for Implementation Planning**: Implement a **Minimized Peek Chip** pattern: dismissing the mobile drawer collapses it into a floating 36px bottom pill (`[Bộ nhớ ảo · Chi tiết ⌃]`). Tapping empty canvas clears the selection and removes the pill.
+
+#### Risk 2: StudyMap SVG Label Wrapping with Long Academic Titles
+- **The Issue**: In `maps.html`, StudyMap renders concept labels as single-line SVG `<text>`. In real Vietnamese academic texts, LLM-generated concept titles often reach 15–25 words. Unwrapped SVG `<text>` will span 300px+, colliding with adjacent branches.
+- **Directive for Implementation Planning**: In `StudyMapView.jsx`, implement multi-line `<tspan>` wrapping or truncate labels at 32 characters with SVG `<title>` tooltip fallback.
+
+#### Risk 3: Live Preview vs Headless Export Isolation
+- **The Issue**: In `surfaces.html`, the `.paper-preview` uses modern CSS (`color-mix()`, CSS gradients, SVG filter drop-shadows).
+- **The Guardrail**: As established in [`05-shared-map-visual-grammar/engine-boundaries-and-export-guardrails.md`](./05-shared-map-visual-grammar/engine-boundaries-and-export-guardrails.md), `html2canvas` and `pdf_serializer.py` fail on `color-mix()` and SVG filter drop-shadows. The live preview UI must remain strictly decoupled from the offscreen export rendering sandbox.
 
 ---
 
@@ -209,25 +223,16 @@ However, rigorous interaction analysis demonstrates that **Alternative B is the 
 ### 5.3 Critical Implementation Hazards for Alternative B
 
 #### Hazard 1: Bulk Selection Pruning on Filter Transition
-- **The Risk**:
-  - In `prototype-alternative-b.html`, a user can select 3 documents in `Tất cả` view.
-  - If the user then switches to `Cần tóm tắt` (which filters the list down to 8 documents, hiding 2 of the previously selected 3), what happens to the selected UUID set?
-  - If the `selectedIds` state retains hidden IDs, and the user clicks a BulkBar action (e.g. *"Xóa 3 tài liệu"*), they will inadvertently mutate documents that are not visible in their current view.
-- **Architectural Directive for Implementation Planning**:
-  - The bulk selection store must implement synchronous pruning: switching task views or entering a search query must immediately intersect `selectedIds` with `visibleDocuments` (`selectedIds = new Set([...selectedIds].filter(id => visibleMap.has(id)))`), or explicitly notify the user via BulkBar (`"Đang chọn 1 tài liệu trong chế độ này (2 tài liệu khác bị ẩn)"`).
+- **The Risk**: In `prototype-alternative-b.html`, a user can select 3 documents in `Tất cả` view. If they switch to `Cần tóm tắt` (filtering down to 8 documents, hiding 2 selected documents), executing a BulkBar delete would mutate invisible items.
+- **Architectural Directive for Implementation Planning**: The bulk selection store must implement synchronous pruning: switching task views or entering a search query must immediately intersect `selectedIds` with `visibleDocuments` (`selectedIds = new Set([...selectedIds].filter(id => visibleMap.has(id)))`), or explicitly display a safety indicator in BulkBar.
 
 #### Hazard 2: Return Navigation State Preservation (Browser Back)
-- **The Risk**:
-  - A user navigates: `Library (task_view="needs_summary", page=2, scroll=1200px)` → clicks `"Tạo tóm tắt"` → enters `/app?source=stem` → clicks Browser Back.
-  - If `/app/study` re-mounts with default state, the user lands back on `Tất cả` at `scroll=0px`. In large libraries, this creates severe disorienting "lost context" friction.
-- **Architectural Directive for Implementation Planning**:
-  - Task view (`all`, `continue`, `needs_quiz`, `needs_summary`), search query, collection filter, and scroll offset must be synchronized with URL query params or sessionStorage (`library_view_state`).
+- **The Risk**: A user navigates: `Library (task_view="needs_summary", page=2, scroll=1200px)` → clicks `"Tạo tóm tắt"` → enters `/app?source=stem` → clicks Browser Back. If `/app/study` re-mounts with default state, context is lost.
+- **Architectural Directive for Implementation Planning**: Task view (`all`, `continue`, `needs_quiz`, `needs_summary`), search query, collection filter, and scroll offset must be preserved in URL query parameters or sessionStorage.
 
 #### Hazard 3: Unified Dispatcher Invariant
-- **The Risk**:
-  - Having three action tiers on each row (Primary CTA, Quick Actions `Tóm tắt`/`Sơ đồ`, and Complete Tool popover/sheet) creates a risk of routing logic drift if individual components construct their own URLs.
-- **Architectural Directive for Implementation Planning**:
-  - All three action tiers **must** dispatch through the single existing helper `useOpenSurface(doc, surface)` and `duongDi()`. No component may hardcode `navigate('/app?source=...')`.
+- **The Risk**: Having three action tiers on each row (Primary CTA, Quick Actions `Tóm tắt`/`Sơ đồ`, and More popover/sheet) creates a risk of routing logic drift if individual components construct their own URLs.
+- **Architectural Directive for Implementation Planning**: All three action tiers **must** dispatch through the single existing helper `useOpenSurface(doc, surface)` and `duongDi()`. No component may hardcode `navigate('/app?source=...')`.
 
 ---
 
@@ -235,23 +240,24 @@ However, rigorous interaction analysis demonstrates that **Alternative B is the 
 
 ### 6.1 Unified Architectural Matrix Across Deliverables
 
-| Dimension | Workspace Chat & Global Nav (Codex 1) | Shared Maps: MindMap & StudyMap (Codex 1 & Agy) | Document Library Alternative B (Codex 2) | Status |
-| :--- | :--- | :--- | :--- | :--- |
-| **Token Scheme** | `--bg-base`, `--bg-card`, `--text-primary`, `--accent-subtle`, `--border-color` | Identical token set + 24px dot lattice texture + 4-branch palette | Identical token set + `--radius-surface` (12px), `--radius-control` (8px) | **UNIFIED** |
-| **Desktop Layout** | 248px source shelf / minmax(440px, 1fr) / 320px evidence | 248px source shelf / minmax(500px, 1fr) / 320px inspector | 190px sidebar / minmax(0, 1fr) action matrix (5 columns) | **UNIFIED** |
-| **Tablet Layout (820px)**| 56px source rail / minmax(360px, 1fr) / **320px floor** | 56px source rail / minmax(360px, 1fr) / **320px floor** | Sidebar hidden; sticky 2×2 task strip; full-width matrix | **UNIFIED** |
-| **Mobile Layout (<768px)**| Single column; dock eliminated; header context chips | Depth-1 vertical tree; bottom drawer inspector; 238px canvas pad | Single-column cards; 44px touch targets; portalled modal sheet | **UNIFIED** |
-| **Identity Contract** | Consumes STEM in `/app` via `selectedDocument` | Consumes STEM in MindMap (`/app`), UUID in StudyMap (`/app/study/map/:id`) | Renders UUID; bridges to STEM for `/app` and UUID for `/app/study` | **FORMALIZED** |
-| **A11y & Focus** | Focus ring: 3px accent outline; natural DOM tab order | SVG text halo for contrast; keyboard navigation anchors | 0 focusable rows; roving tabindex on primary buttons; sheet focus trap | **VERIFIED** |
-| **Export Safety** | Non-interfering UI | Live DOM grammar separated from headless rasterization engine | N/A | **GUARDED** |
+| Dimension | Workspace Chat & Global Nav (Codex 1) | Shared Maps: MindMap & StudyMap (Codex 1 & Agy) | Document Library Alternative B (Codex 2) | Export Studio & Shared Dialogs (Codex 1) | Quiz Journey (Codex 1) | Status |
+| :--- | :--- | :--- | :--- | :--- | :--- | :--- |
+| **Token Scheme** | Canonical `--bg-*`, `--text-*`, `--accent-*` | Identical token set + 24px dot lattice + 4-branch palette | Identical token set + `--radius-surface` (12px), `--radius-control` (8px) | Identical token set + preview bench tokens | Identical token set + semantic status colors | **UNIFIED** |
+| **Desktop Layout** | 248px source shelf / minmax(440px, 1fr) / 320px evidence | 248px source shelf / minmax(500px, 1fr) / 320px inspector | 190px sidebar / minmax(0, 1fr) action matrix (5 columns) | Centered modal (920px); persistent paper preview | 3 columns: Question rail (240px) / Card (680px) / Context (260px) | **UNIFIED** |
+| **Tablet Layout (820px)**| 56px source rail / minmax(360px, 1fr) / **320px floor** | 56px source rail / minmax(360px, 1fr) / **320px floor** | Sidebar hidden; sticky 2×2 task strip; full-width matrix | Centered modal; vertical preview/options stack | Context rail hidden; Question rail + Card remain spacious | **UNIFIED** |
+| **Mobile Layout (<768px)**| Single column; dock eliminated; header context chips | Depth-1 vertical tree; bottom drawer inspector; 238px canvas pad | Single-column cards; 44px touch targets; portalled modal sheet | Full-screen modal; sticky export action footer | Single column; top progress bar; sticky prev/next controls | **UNIFIED** |
+| **Identity Contract** | Consumes STEM in `/app` via `selectedDocument` | Consumes STEM in MindMap (`/app`), UUID in StudyMap (`/app/study/map/:id`) | Renders UUID; bridges to STEM for `/app` and UUID for `/app/study` | Preserves active map STEM or StudyMap UUID | Consumes UUID route `/app/study/quiz/:id` or attempt ID | **FORMALIZED** |
+| **A11y & Focus** | Focus ring: 3px accent outline; natural DOM tab order | SVG text halo for contrast; keyboard navigation anchors | 0 focusable rows; roving tabindex on primary buttons; sheet focus trap | Modal focus trap; Escape dismiss; labelled controls | WAI-ARIA Radio Group for options; keyboard-navigable question rail | **VERIFIED** |
+| **Export Safety** | Non-interfering UI | Live DOM grammar separated from headless rasterization engine | N/A | Preview bench decoupled from headless rasterization sandbox | N/A | **GUARDED** |
 
 ---
 
 ### 6.2 Implementation Readiness Verdict
 
-The collaborative Option B design phase has achieved complete architectural convergence:
-1. **Bloat Elimination**: Structural repetition has been eliminated with mathematical proof (−87.1% library controls, 100% duplicate card removal, 196px tablet room reclaimed).
+The collaborative Option B design phase has achieved complete architectural and ergonomic convergence across the entire MemVidX product surface:
+1. **Clutter Elimination**: Structural repetition has been eliminated with mathematical proof (−87.1% library controls, 100% duplicate card removal, 196px tablet room reclaimed).
 2. **Ergonomic Integrity**: The click penalty has been averted through Alternative B's Quick Action Cluster, and keyboard collision on mobile chat has been resolved by relocating actions to the header.
-3. **System Boundaries**: All three agents respect the separation of concerns: Workspace live-mounting invariant is intact, the 320px inspector floor is enforced across all modes, STEM-vs-UUID routing boundaries are codified, and MindMap V3 export fidelity is safeguarded.
+3. **Product Surface Completeness**: All 4 critical screen groups (Workspace, Shared Maps, Document Library, and Quiz Journey) plus secondary surfaces (Export Studio, Account, Profile, Shared Dialogs) are fully mocked up, verified responsive down to 320px, and confirmed in both light and dark themes.
+4. **System Boundaries**: All three agents respect the separation of concerns: Workspace live-mounting invariant is intact, the 320px inspector floor is enforced across all modes, STEM-vs-UUID routing boundaries are codified, and MindMap V3 export fidelity is safeguarded.
 
-**Verdict**: The proposals in `03-visual-mockups/`, `04-document-library-redesign/`, and `05-shared-map-visual-grammar/` are **APPROVED** for Phase C implementation planning.
+**Final Phase B Verdict**: The designs, visual tokens, and state transition contracts across `03-visual-mockups/`, `04-document-library-redesign/`, and `05-shared-map-visual-grammar/` are **APPROVED WITHOUT BLOCKERS** for Phase C implementation planning.
