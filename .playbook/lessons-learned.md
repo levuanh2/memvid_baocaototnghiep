@@ -1,5 +1,16 @@
 # Lessons Learned
 
+## Floating contextual panels must participate in adjacent chrome geometry (2026-10-25)
+
+A fixed overlay can leave controls visually present while making them physically
+unusable. Visibility assertions and screenshots alone do not prove clickability:
+probe each action's centre with `document.elementFromPoint()` and require the hit
+to be the control or its descendant. When an overlay intentionally begins on the
+same horizontal band as persistent chrome, reserve the overlay's complete
+anchored footprint in that chrome while it is open. Match the responsive model:
+desktop/tablet side overlays need horizontal reservation, while mobile bottom
+sheets do not.
+
 ## A CSS opacity rule can silently undo a correctly-set custom color (2026-10-24)
 
 - Setting `stroke: <color> !important` on an element does not guarantee that color is what gets rendered — a separate `opacity` rule on the same element (or an ancestor) still alpha-composites that exact color against whatever is behind it, producing a different final pixel. "The attribute is correct" and "the rendered pixel is correct" are not the same claim; verify both with real pixel sampling, not just a DOM/CSSOM read of the stroke value.

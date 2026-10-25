@@ -441,6 +441,18 @@ html.dark .me-container { --mm-relation: #7e90c4; }
   height: 48px;
   min-height: 48px;
 }
+/* The desktop/tablet Knowledge Inspector is a fixed 340px overlay anchored
+   12px from the right viewport edge. When node selection opens it, reserve
+   that exact footprint plus a 12px gutter in the toolbar's border box so its
+   trailing actions remain beside the Inspector instead of underneath its
+   z-index-40 hit-test layer. On mobile the Inspector is a bottom sheet, so
+   the toolbar keeps its full width. This is deliberately presentation-only:
+   selection and export state remain owned by the existing controller. */
+@media (min-width: 768px) {
+  .artifact-toolbar.mm-context-row--inspector-open {
+    padding-right: 364px;
+  }
+}
 .mm-map-selector { position: relative; min-width: 0; flex: 1 1 260px; }
 .mm-map-selector__trigger {
   width: 100%; min-width: 0; display: flex; align-items: center; gap: 9px;

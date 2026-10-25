@@ -1113,7 +1113,7 @@ export default function MindElixirView({ data, onRegenerate, regenerating, contr
           </button>
         </div>
       )}
-      <div className="artifact-toolbar mm-context-row">
+      <div className={`artifact-toolbar mm-context-row ${controller.selected?.id ? "mm-context-row--inspector-open" : ""}`}>
         <div className="mm-map-selector">
           <button type="button" className="mm-map-selector__trigger" aria-haspopup="listbox"
             aria-expanded={mapSelectorOpen} aria-label="Mở thư viện sơ đồ"

@@ -1,5 +1,32 @@
 # Known Issues
 
+## Selected-node Knowledge Inspector occluded Mind Map toolbar actions (fixed 2026-10-25)
+
+**Symptom:** At desktop and tablet widths, selecting a Mind Map node opened the
+fixed 340px Knowledge Inspector over the right end of the 48px context toolbar.
+Appearance, Export, and Overflow remained visible underneath but their centre
+points resolved to `.study-surface-header` in `document.elementFromPoint()`, so
+pointer clicks were intercepted. At 1440x900 the Export centre was measured at
+`(1340.95, 79.5)`, matching the independent UX audit reproduction.
+
+**Root cause:** The toolbar occupied the full viewport width at `z-index: 12`,
+while the selected-node Inspector was independently fixed at `top: 56px`,
+`right: 12px`, width `340px`, and `z-index: 40`. Opening the contextual overlay
+did not reserve its horizontal footprint in the toolbar layout.
+
+**Fix:** `MindElixirView` adds a presentation-only class to its context toolbar
+while the existing controller has a selected node. At widths where the
+Inspector is right-anchored (>=768px), CSS reserves its exact 340px width,
+12px right inset, and 12px gutter. Mobile is unchanged because the Inspector is
+a bottom sheet there. No node data, selection handling, or export code changed.
+
+**Regression:** `e2e-fixture/mindmap-toolbar-occlusion.spec.js` reproduces the
+real shell/overlay geometry and asserts with `elementFromPoint()` that the
+Appearance, Export, and Overflow centres belong to their controls at desktop,
+tablet, and mobile widths, then performs real clicks on all three. The real-stack
+counterpart in `e2e/mindmap-toolbar-occlusion.spec.js` covers the same contract
+against the production app shell and backend-generated map.
+
 ## Custom connector color lost configured contrast on sub-branch connectors (fixed 2026-10-24)
 
 **Symptom:** With a custom connector color set via appearance (e.g. a saved preset or Export Studio override), the ROOT→first-branch connector rendered the exact configured color/contrast, but every deeper connector (branch→child and below) rendered visibly faded/low-contrast — on a screenshot this reads as the connector line being missing, even though node boxes and geometry were correct. Confirmed on `current_branch` export scope via a real Flask/Postgres/UI test with a fixed `#2563EB` connector color on `#FFF7ED` canvas (configured contrast 4.87): the three deeper connectors measured actual rendered contrast 2.49, with zero exact-color pixels and thousands of diluted composite-color pixels.
