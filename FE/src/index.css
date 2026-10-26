@@ -26,7 +26,14 @@
     /* Text — ink (unchanged; already navy-charcoal, matches the reset) */
     --text-primary:   #102A5D;
     --text-secondary: #5B7096;
-    --text-muted:     #8294B1;
+    /* Phase C Round 2 (UX-VIS-002, docs/ui-ux-audit-v4/03-visual-design-audit.md):
+       was #8294B1 — measured 2.89:1 on --bg-base / 3.08:1 on --bg-card, both
+       below the 4.5:1 normal-text floor. Canonical value from doc 06 §1 /
+       visual-grammar-spec.md §1, re-verified here against THIS app's actual
+       surfaces (WCAG relative-luminance formula): 4.73:1 on --bg-base, 5.05:1
+       on --bg-card. Only this token changes — --text-secondary already passes
+       (4.69:1) and is left untouched per the measured-defect-only scope. */
+    --text-muted:     #587095;
     --text-inverse:   #F4F8FC;
 
     /* Rules — hairline ink */
@@ -45,9 +52,34 @@
     --accent:        #126CF2;   /* approved primary accent */
     --accent-hover:  #0059D6;   /* primary hover/pressed */
     --accent-subtle: #EAF3FF;   /* primary soft surface (selection wash, badges) */
+    /* Phase C Round 2 (UX-VIS-001): dedicated solid-fill role for white-text
+       buttons (.btn-primary/.btn-seal), separate from --accent itself.
+       --accent also serves as a TEXT/icon color elsewhere (links, pill-tabs,
+       focus rings) where a lighter value reads better against dark
+       surfaces — the two needs pull in opposite directions, which is exactly
+       why a single shared variable can't satisfy both (see the dark-mode
+       value below). Light mode has no such conflict (white text already
+       passes against --accent at 4.72:1), so this simply aliases it. */
+    --accent-cta:       var(--accent);
+    --accent-cta-hover: var(--accent-hover);
     --brand-rgb:     241 51 58;   /* mock seal/citation red */
     --ink-rgb:       27 42 65;
     --slate:         #5C6B7A;
+
+    /* Phase C Round 2 (doc 06 §2): were referenced (FE/src/index.css's own
+       .artifact-toolbar__identity rules, mindmap.css's hidden-count badge)
+       but never declared — `font: ... var(--font-display)` silently dropped
+       the whole shorthand, `font-family: var(--font-mono, monospace)`
+       degraded to a generic monospace. Same, theme-independent in both light
+       and dark — typography doesn't flip with the color scheme. Values
+       match tailwind.config.js's existing `display`/`mono` fontFamily
+       entries exactly, so every `className="font-display"`/`"font-mono"`
+       Tailwind-utility consumer (governed by tailwind.config.js, not this
+       file) is visually unchanged — this only fixes the two real var()
+       consumers above. No new font package: both families are already
+       loaded by this file's own @import. */
+    --font-display: 'Spectral', Georgia, serif;
+    --font-mono:    'IBM Plex Mono', ui-monospace, monospace;
 
     /* Seal — provenance ONLY (wordmark stamp, citations, evidence, the
        seal-meter mastery visualization). Same value as `--accent` today by
@@ -118,7 +150,10 @@
 
     --text-primary:   #ECE7DB;
     --text-secondary: #A9B4C2;
-    --text-muted:     #6B7689;
+    /* Phase C Round 2 (UX-VIS-002): was #6B7689 — measured 3.43:1 on
+       --bg-base / 3.15:1 on --bg-card. New value re-verified against this
+       app's actual dark surfaces: 8.61:1 on --bg-base, 7.91:1 on --bg-card. */
+    --text-muted:     #AFC1DD;
     --text-inverse:   #15233B;
 
     --border-color:  rgba(236, 231, 219, 0.10);
@@ -133,6 +168,20 @@
     --accent:        #5B9DF5;
     --accent-hover:  #82B8F8;
     --accent-subtle: #1B2F4D;
+    /* Phase C Round 2 (UX-VIS-001, docs/ui-ux-audit-v4/03-visual-design-audit.md):
+       --accent itself (#5B9DF5) stays — it's deliberately light so accent-as-
+       TEXT-color (links, pill-tabs, icon-btn hover) still reads at 5.22:1
+       against --bg-card. That SAME lightness is exactly why white text on an
+       --accent-filled button measured 2.77:1 and failed. A dedicated,
+       darker, button-only fill breaks the conflict without touching every
+       other --accent consumer. Verified (WCAG relative-luminance formula,
+       white #FFFFFF foreground): #2563EB → 5.17:1 against --bg-base
+       (#15233B); hover #1D4ED8 → 6.70:1. The default fill also clears the
+       3:1 non-text floor against --bg-base on its own (3.04:1) — the focus
+       outline itself is unaffected by this change, it still reads from the
+       unchanged --accent (5.68:1 against --bg-base). */
+    --accent-cta:       #2563EB;
+    --accent-cta-hover: #1D4ED8;
     --brand-rgb:     216 106 83;
     --ink-rgb:       236 231 219;
     --slate:         #8FA0B3;
@@ -256,11 +305,14 @@
      grep of its usages before this change, not assumed. */
   .btn-primary {
     @apply font-semibold rounded-[7px] px-4 py-2 transition-all duration-200;
-    background: var(--accent);
+    /* Phase C Round 2 (UX-VIS-001): fill reads from --accent-cta, not
+       --accent directly — see that token's own comment for why the two
+       diverge in dark mode. */
+    background: var(--accent-cta);
     color: #FFFFFF;
-    border: 1px solid var(--accent);
+    border: 1px solid var(--accent-cta);
   }
-  .btn-primary:hover { background: var(--accent-hover); border-color: var(--accent-hover); box-shadow: var(--shadow-card-hover); transform: translateY(-1px); }
+  .btn-primary:hover { background: var(--accent-cta-hover); border-color: var(--accent-cta-hover); box-shadow: var(--shadow-card-hover); transform: translateY(-1px); }
   .btn-primary:active { transform: translateY(0) scale(0.99); }
 
   /* Primary action = forest (Signature Contract §1). Class name kept as
@@ -270,11 +322,20 @@
      cite-block), never in the generic primary-action button. */
   .btn-seal {
     @apply font-semibold rounded-control px-4 py-2 transition-all duration-200;
-    background: var(--accent);
-    color: #F5F1E8;
-    border: 1px solid var(--accent);
+    /* Phase C Round 2 (UX-VIS-001): same --accent-cta fill as .btn-primary.
+       Text color also changed #F5F1E8 → #FFFFFF — the off-white was itself
+       a second, unticketed contrast defect found while verifying this rule
+       directly (measured 4.19:1 against light-mode --accent, below 4.5:1;
+       pure white measures 4.72:1 and passes). .btn-seal is functionally
+       identical to .btn-primary today (both generic primary actions on
+       --accent; the seal motif itself lives only in --seal-rooted
+       components), so unifying the text color removes the defect with no
+       visual-identity loss. */
+    background: var(--accent-cta);
+    color: #FFFFFF;
+    border: 1px solid var(--accent-cta);
   }
-  .btn-seal:hover { filter: brightness(1.05); box-shadow: var(--shadow-card-hover); transform: translateY(-1px); }
+  .btn-seal:hover { background: var(--accent-cta-hover); border-color: var(--accent-cta-hover); box-shadow: var(--shadow-card-hover); transform: translateY(-1px); }
   .btn-seal:active { transform: translateY(0) scale(0.99); }
 
   /* Secondary / ghost — outlined paper */

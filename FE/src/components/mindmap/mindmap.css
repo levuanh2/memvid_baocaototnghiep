@@ -212,7 +212,10 @@ html.dark .me-container { --mm-relation: #7e90c4; }
    where most nodes in a dense graph actually live) had zero hover feedback.
    Widened to a plain descendant selector so every non-root depth gets it. */
 .me-container me-main me-tpc:hover {
-  border-color: color-mix(in srgb, var(--forest) 45%, transparent) !important;
+  /* Phase C Round 2: hover is interactive feedback, not a status signal —
+     moved off forest (reserved for success/ready/progress) onto accent,
+     matching the selection-ring fix below. */
+  border-color: color-mix(in srgb, var(--accent) 45%, transparent) !important;
 }
 @media (prefers-reduced-motion: no-preference) {
   .me-container me-main me-tpc {
@@ -669,7 +672,10 @@ html.dark .me-container { --mm-relation: #7e90c4; }
 }
 .map-container me-epd.mm-epd:focus-visible {
   opacity: 1;
-  outline: 2px solid var(--forest, var(--accent));
+  /* Phase C Round 2: keyboard focus is interactive, not a status signal —
+     accent only (was forest, with a dead accent fallback since --forest is
+     always declared). */
+  outline: 2px solid var(--accent);
   outline-offset: 2px;
   border-radius: 4px;
 }
