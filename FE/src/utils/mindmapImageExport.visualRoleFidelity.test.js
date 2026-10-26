@@ -23,8 +23,21 @@
 // with — not merely that attributes exist — across every scope the defect
 // could reach, plus a membership check and an appearance-preset
 // backward-compatibility check.
+import fs from "node:fs";
+import path from "node:path";
+import { fileURLToPath } from "node:url";
 import { describe, it, expect, vi } from "vitest";
 import { exportMindmapImage } from "./mindmapImageExport";
+
+// `new URL(relative, import.meta.url)` resolves against jsdom's OWN URL
+// polyfill once the jsdom test environment (this file's pragma, above) is
+// active, not Node's native URL — and jsdom's rejects a `file://` base for
+// that two-arg form. Resolve via `path` instead, which is unaffected by the
+// jsdom environment.
+const mindmapCss = fs.readFileSync(
+  path.join(path.dirname(fileURLToPath(import.meta.url)), "../components/mindmap/mindmap.css"),
+  "utf8",
+);
 
 function fakeSnapdom(targets) {
   return vi.fn(async (target) => {
@@ -168,5 +181,20 @@ describe("export visual-role fidelity (Round 4.1)", () => {
     // as before) regardless of its NEW 4-tier "detail" visualTier — the
     // appearance override must still apply to it via that unchanged field.
     expect(instance.findEle("A1a").style.background).toBe(probe.style.background);
+  });
+
+  it("the three export role-override rules declare line-height, matching their live-counterpart values exactly", () => {
+    // jsdom has no real CSS cascade (confirmed the hard way — see the
+    // "background" fix above, caught only via a real browser), so this is a
+    // static source-text check, not a computed-style assertion: it can't
+    // catch a cascade bug, but it DOES lock in "the property is declared at
+    // all" as a regression gate after Codex 2's independent review caught
+    // this fix shipping without line-height, which a real multiline node
+    // (long Vietnamese titles wrap to 2-3 lines) needs for correct row
+    // height/connector-endpoint geometry in the exported image.
+    const ruleFor = (role) => mindmapCss.match(new RegExp(`\\[data-export-source-role="${role}"\\]\\s*\\{([^}]*)\\}`))?.[1] || "";
+    expect(ruleFor("section")).toContain("line-height: 1.3;");
+    expect(ruleFor("concept")).toContain("line-height: 1.3;");
+    expect(ruleFor("detail")).toContain("line-height: 1.35;");
   });
 });

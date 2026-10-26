@@ -7456,13 +7456,14 @@ visual-grammar policy call, not a mechanical fix.
 ## Round 4 four-tier grammar does not survive branch/selection-scoped exports (fixed in Round 4.1, 2026-10-27)
 
 **Symptom:** found by independent Round 4 technical review (Codex 2), verified
-directly against source. In `current_branch`, `selected_branches`, and
-`visible` export scopes (every `ExportStudioDialog` scope except the default
-`full`), level-2 concept nodes render in the exported image as 12px,
-transparent, borderless "leaf" nodes — the old pre-Round-4 look — instead of
-the live canvas's 13px bordered card. Depth-1 branch nodes promoted to the
-export root also keep the old `4px` uniform `--topic-padding` instead of the
-new `6px 12px` section padding.
+directly against source. In `current_branch` and `selected_branches` export
+scopes (the two non-"full" `ExportStudioDialog` scopes that build an
+offscreen record projection — see the Round 4.1 scope correction below for
+why `visible` was never actually affected), level-2 concept nodes render in
+the exported image as 12px, transparent, borderless "leaf" nodes — the old
+pre-Round-4 look — instead of the live canvas's 13px bordered card. Depth-1
+branch nodes promoted to the export root also keep the old `4px` uniform
+`--topic-padding` instead of the new `6px 12px` section padding.
 
 **Root cause:** `FE/src/utils/mindmapImageExport.js:291` computes a
 THREE-bucket `sourceRoles` map (`depth === 0 ? "root" : depth === 1 ?
