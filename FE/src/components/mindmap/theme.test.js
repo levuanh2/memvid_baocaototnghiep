@@ -18,4 +18,13 @@ describe("THEME PhongDoc", () => {
       expect(THEME.cssVar[v], `thiếu ${v}`).toBeTruthy();
     }
   });
+
+  // Phase C Round 2 (UX-ADJ / doc 06 §1): selection must read the approved
+  // blue --accent role, not the deprecated --forest. A presence-only check
+  // (above) would still pass if someone reverted these two lines back to
+  // --forest, since --forest is truthy too — pin the actual value.
+  it("points selection at --accent, not the deprecated --forest", () => {
+    expect(THEME.cssVar["--selected"]).toBe("var(--accent)");
+    expect(THEME.cssVar["--accent-color"]).toBe("var(--accent)");
+  });
 });

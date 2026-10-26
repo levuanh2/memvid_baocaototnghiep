@@ -49,12 +49,17 @@ export const THEME = {
     // idea/detail = chữ trần trên nền
     "--color": "var(--text-secondary)",
     "--bgcolor": "transparent",
-    // Sprint F: selection is an action/state signal, not provenance — forest
-    // ring (Paper & Graphite Signature Contract §1), not seal red. Citation
-    // tags (mindmap.css's `.tags span`) stay on `--seal` deliberately; this
-    // is the one place in the map that should NOT read as "a citation."
-    "--selected": "var(--forest)",
-    "--accent-color": "var(--forest)",
+    // Phase C Round 2 (UX-ADJ / doc 06 §1 unfinished-migration item): selection
+    // is an action/state signal, so it reads blue (--accent) — the same role
+    // StudyMap's selection ring already uses and the one Agy's visual-grammar
+    // spec (05-shared-map-visual-grammar/visual-grammar-spec.md §5.3) names as
+    // the approved treatment. Forest is reserved for success/ready/progress
+    // only (`.mm-quality-status`/`.mm-saved-status` in mindmap.css), never
+    // selection. Citation tags (mindmap.css's `.tags span`) stay on `--seal`
+    // deliberately; this is the one place in the map that should NOT read as
+    // "a citation."
+    "--selected": "var(--accent)",
+    "--accent-color": "var(--accent)",
     // context-menu panel
     "--panel-color": "var(--text-primary)",
     "--panel-bgcolor": "var(--bg-card)",
