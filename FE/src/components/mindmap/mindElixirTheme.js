@@ -39,8 +39,8 @@ export const THEME = {
     // Root identity: blue action surface with white type. These values stay
     // explicit because Mind Elixir has no fallback for missing cssVar entries.
     "--root-color": "#FFFFFF",
-    "--root-bgcolor": "var(--accent)",
-    "--root-border-color": "var(--accent)",
+    "--root-bgcolor": "var(--accent-cta)",
+    "--root-border-color": "var(--accent-cta)",
     // section = thẻ giấy nổi, viền đậm
     "--main-color": "var(--text-primary)",
     "--main-bgcolor": "var(--bg-card)",

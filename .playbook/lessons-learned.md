@@ -3442,3 +3442,33 @@ hidden checkbox is not a safe deletion target. Regression coverage must assert
 known ready and missing record identities—not counts or labels alone—plus active
 badge equality, empty results, composed filters, and roving focus after the
 result set changes.
+
+## A zoom engine minimum is not a mobile reading minimum (2026-10-26)
+
+An interaction scale extent answers how far a user may deliberately zoom out;
+it does not guarantee readable first paint. Compute the narrow-screen initial
+zoom separately and clamp it to the product's legibility floor. Test the actual
+320px arithmetic, the initial expansion depth, and effective smallest-tier text
+together; any one of those assertions alone can leave the map unreadable.
+
+## A `useEffect` reading a ref can look correct and still never run with the ref populated (2026-10-26)
+
+Correct arithmetic inside an effect body is not the same claim as "this effect
+runs with the data it needs." An effect that reads `someRef.current` and bails
+out when it's `null` will silently never recover if the element behind that
+ref is conditionally unmounted by a PARENT component (a loading-gated shell,
+a collapsed panel, a closed modal) during the exact render where the effect's
+OTHER dependencies (the data it's reacting to) first change — by the time the
+element mounts on a later render, those other dependencies are already
+stable, the dependency array looks unchanged, and React never re-fires it.
+Static review of the effect's own code cannot catch this: the bug lives in
+the TIMING relationship between a sibling/parent's conditional rendering and
+this effect's dependency list, not in the effect's logic. It only surfaces by
+watching the actual DOM/state live across a real load sequence (or by
+instrumenting the effect with a log and checking `hasEl`/`hasData` on every
+fire) — a static arithmetic check or a jsdom-only unit test (where
+`getBoundingClientRect` is typically stubbed and loading states are often
+driven synchronously) can both pass while the feature is completely inert in
+production. When an effect depends on a ref and a flag that gates whether
+that ref's element is mounted, that flag belongs in the dependency array even
+if nothing inside the effect body reads it directly.

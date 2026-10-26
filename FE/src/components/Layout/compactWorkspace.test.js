@@ -13,10 +13,12 @@ describe("compact StudyMap workspace contract", () => {
     expect(css).toMatch(/\.mode-library-menu\s*\{[^}]*width:\s*min\(400px/);
   });
 
-  it("keeps mindmap typography within the compact reading scale", () => {
+  it("keeps the normative four-tier mindmap reading scale", () => {
     const css = read("src/components/mindmap/mindmap.css");
-    expect(css).toMatch(/\.me-container me-root me-tpc[^{]*\{[^}]*font-size:\s*20px/);
-    expect(css).toMatch(/\.me-container me-tpc\s*\{\s*font-size:\s*13px/);
+    expect(css).toMatch(/\.me-container me-root me-tpc[^{]*\{[^}]*font-size:\s*16px/);
+    expect(css).toMatch(/me-main > me-wrapper > me-parent > me-tpc\s*\{[^}]*font-size:\s*14px/);
+    expect(css).toMatch(/me-wrapper me-wrapper > me-parent > me-tpc\s*\{[^}]*font-size:\s*13px/);
+    expect(css).toMatch(/me-wrapper me-wrapper me-wrapper > me-parent > me-tpc\s*\{[^}]*font-size:\s*12px/);
   });
 
   it("has one collapse affordance per source and inspector surface", () => {
