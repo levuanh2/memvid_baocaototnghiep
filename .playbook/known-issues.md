@@ -7395,3 +7395,139 @@ in-viewport mobile entry point.
 **Prevention:** When comments or shortcuts claim a visible navigation owner
 exists, include a browser assertion for the rendered link and its destination.
 Keep cross-route destinations separate from contextual tool menus.
+
+## StudyMap proportional mobile zoom fell below its own legibility floor (fixed 2026-10-26)
+
+**Symptom:** At a 320px canvas the existing `(width / 500) * 0.8` rule produced
+`0.512` zoom, making the 12px detail tier render near 6px even though the map
+opened only to depth one.
+
+**Root cause:** The narrow-canvas calculation was clamped to the engine-wide
+interaction minimum (`0.25`) instead of the visual grammar's mobile reading
+minimum (`0.65`). Those limits serve different purposes.
+
+**Fix and prevention:** StudyMap now clamps its initial narrow-canvas zoom to a
+dedicated `MOBILE_SCALE_MIN = 0.65`. The Round 4 visual-grammar regression pins
+that value together with `initialDepth={1}` and the 44px touch target. Keep
+interaction limits and readable initial-layout limits as separate constants.
+
+**Follow-up — the clamp above never actually ran (found and fixed same day):**
+live-browser verification (`fixture-harness`-style mount of `StudyMapView`
+against a mocked `getDocument`/`listStudyMaps`/`getStudyMap`/`listChunks`)
+showed the SVG `transform` staying at the hardcoded default
+(`translate(120,300) scale(0.8)`) at both 390px and 320px, never reaching
+`0.65` — the fix above was correct in isolation but dead code at runtime.
+**Root cause:** the narrow-canvas effect (`useEffect` keyed on
+`[map, rd3tProps.orientation, trinhChieu]`, pre-existing "Sprint I fix", not
+introduced this round) reads `canvasRef.current`, but `StudyShell` unmounts
+that canvas while `loading` is `true`. `setMap(body)` (inside `openMap`,
+called from `load()`) commits a render where `map` is already populated but
+`loading` is still `true` (the chained `listChunks` await, then `load()`'s
+own remaining statements, delay `setLoading(false)` to a *later*, separate
+commit) — so the effect's first run after `map` changes finds `el === null`
+and bails out. By the next commit, when the canvas actually mounts and
+`el` exists, `map`/`orientation`/`trinhChieu` haven't changed again, so the
+effect's dependency array looks unchanged and React never re-fires it — zoom
+and the orientation-based `translate` silently keep their initial defaults
+forever, on every load, independent of canvas width. Confirmed via instrumented
+console logging in a live browser session, not inferred.
+**Fix:** added `loading` to the effect's dependency array so it re-evaluates
+once the canvas actually mounts. Verified live: SVG transform now reads
+`translate(63.07,315) scale(0.65)` at 390px and clamps identically at 320px.
+Re-ran `npx vitest run` (182 files / 1673 tests, unchanged), `npm run build`,
+`npm run lint:ratchet` (56 ≤ baseline 67, unchanged) after the fix — no
+regressions. This also fixes the orientation-based `translate` centering for
+*every* screen size, not just the mobile zoom floor — it was equally dead
+code before, just less noticeable since the hardcoded default translate
+`{x:120,y:300}` happens to look tolerable on common desktop widths.
+**Residual, disclosed, not fixed this round:** even with the zoom clamp now
+actually applying, the smallest ("example"/detail) tier's `12px` font-size at
+the `0.65` floor renders at an effective `~7.8px` font-size (measured glyph
+bounding-box height ≈ 10.2px, using the same font's own box-to-em ratio
+measured on the root node). This is a large improvement over the pre-fix
+`~6.1px` effective size, but does not clearly clear a strict "never below an
+effective rendered size of 11px" reading of the visual-grammar spec,
+depending on whether "effective rendered size" means CSS font-size or visual
+glyph height. Flagging as a measured, disclosed shortfall rather than
+resolving it unilaterally — a further bump to `MOBILE_SCALE_MIN` or a
+larger minimum font-size for the deepest tier would close the gap but is a
+visual-grammar policy call, not a mechanical fix.
+
+## Round 4 four-tier grammar does not survive branch/selection-scoped exports (BLOCKING, NOT fixed this round — requires a forbidden file)
+
+**Symptom:** found by independent Round 4 technical review (Codex 2), verified
+directly against source. In `current_branch`, `selected_branches`, and
+`visible` export scopes (every `ExportStudioDialog` scope except the default
+`full`), level-2 concept nodes render in the exported image as 12px,
+transparent, borderless "leaf" nodes — the old pre-Round-4 look — instead of
+the live canvas's 13px bordered card. Depth-1 branch nodes promoted to the
+export root also keep the old `4px` uniform `--topic-padding` instead of the
+new `6px 12px` section padding.
+
+**Root cause:** `FE/src/utils/mindmapImageExport.js:291` computes a
+THREE-bucket `sourceRoles` map (`depth === 0 ? "root" : depth === 1 ?
+"branch" : "leaf"`) for every non-"full" export scope, to preserve each
+node's ORIGINAL semantic role after pruning/re-rooting changes its DOM depth
+in the offscreen render (`FE/src/utils/mindElixirAdapter.js:111-115` reads
+this into a `data-export-source-role` attribute). `mindmap.css:162`'s
+`.mm-export-offscreen me-tpc[data-export-source-role="leaf"]` rule is
+*not* scoped to the promoted root (unlike the sibling `branch` rule at
+`mindmap.css:149`, which correctly only matches `me-root me-tpc[...]`) — it
+matches every leaf-role node anywhere in the exported tree. Its specificity
+(`.mm-export-offscreen` class + `[attr]` + `me-tpc` type ≈ (0,2,1)) beats the
+new depth-selector four-tier rules at `mindmap.css:109-139` (e.g.
+`.me-container me-main me-wrapper me-wrapper > me-parent > me-tpc` ≈
+(0,1,5) — more type selectors, but one fewer class/attribute selector wins
+first). Before Round 4 this was invisible: the old CSS only had one visual
+treatment for "anything past branch depth," so the pre-existing `leaf` role
+override and the old depth-based CSS looked identical. Round 4 splits that
+single old tier into two visually distinct ones (concept/example), which is
+exactly what *exposes* the latent over-broad selector as a real regression —
+the underlying bug (the rule's missing `me-root` scope) predates this round.
+
+**Why not fixed this round:** a real fix needs the offscreen DOM to carry the
+node's true four-tier role (root/section/concept/example), not the existing
+three-bucket one — that requires editing `sourceRoles` in
+`mindmapImageExport.js:291`, which is an explicitly forbidden file for Round
+4 ("all export-pipeline files"). No CSS-only change can recover the missing
+distinction: the attribute itself does not carry it. Scoping the `leaf` rule
+to `me-root` alone (mirroring the `branch` rule) is NOT sufficient either —
+non-root nodes below a promoted root still need their ORIGINAL depth-derived
+role preserved precisely because pruning changes their DOM depth, which is
+the whole reason this attribute-based override exists.
+
+**Status:** disclosed as a BLOCKING, confirmed, Round-4-relevant defect in the
+PR description and final report, scoped to the `current_branch`/
+`selected_branches`/`visible` export options (the default `full` scope is
+unaffected — `recordScopedForExport` returns the record unchanged for
+`scopeType === "full"`, so `exportSourceRole` is never set and the normal
+depth-based four-tier CSS governs). Recommended as a required fast-follow
+before Round 4's export-fidelity claim can be considered complete, requiring
+explicit authorization to touch `mindmapImageExport.js`.
+
+## MindElixir cannot structurally distinguish a third connector tier (known limitation, not fixed)
+
+**Symptom:** found by Agy's Round 4 visual-grammar checklist pass. StudyMap's
+connectors have three visually distinct tiers (trunk/branch/leaf, 2px/1.5px/
+1.2px). MindElixir's connectors only have two (`.lines` at 2px, `.subLines`
+at 1.5px).
+
+**Root cause:** verified against `mindmap.css:216-217`'s own documented
+rationale and confirmed independently — mind-elixir's renderer groups only
+root-level edges into one `.lines` SVG; it flattens *every* deeper edge
+(branch→child and everything below) into one per-branch `.subLines` SVG
+covering its whole subtree. There is no third DOM/SVG grouping to hang a
+third CSS tier off of without patching the library's own rendering internals,
+which prior rounds have established as out of scope (no library patches).
+
+**Also checked and ruled out:** Agy also flagged a missing explicit
+`fill: none` on MindElixir's connector paths. Verified false — mind-elixir's
+own `MindElixir.js` sets `fill="none"` as an inline SVG attribute on every
+connector path at construction time (`setAttribute("fill", "none")`), so no
+CSS declaration is needed or would add anything; StudyMap needs the explicit
+CSS version because its own `react-d3-tree`-rendered paths don't set that
+attribute inline.
+
+**Status:** disclosed as a known, pre-existing, structural MindElixir
+limitation — not a Round 4 regression and not fixable within this round's
+authorized files without patching library internals.

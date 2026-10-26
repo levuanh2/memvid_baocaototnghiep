@@ -32,6 +32,7 @@ import {
 const ZOOM_MAC_DINH = 0.8;
 const SCALE_MIN = 0.25;
 const SCALE_MAX = 2;
+const MOBILE_SCALE_MIN = 0.65;
 
 // Bốn loại node là phân tầng THẬT của tài liệu (tài liệu > chương mục > khái
 // niệm > ví dụ), nên nét vẽ mã hoá đúng tầng đó chứ không tô cho đẹp: càng gần
@@ -41,13 +42,56 @@ const SCALE_MAX = 2;
 // trị dưới đây gõ tay, nhưng KHÔNG còn là số tuỳ ý: chúng là px thật của
 // title/body/small/caption trong tailwind.config.js (Sprint G), để cây SVG này
 // dùng đúng thang chữ với phần còn lại của app, không phải thang riêng của nó.
-const MARK = {
-  root:    { r: 9, fill: "var(--accent)",       stroke: "var(--accent)",        text: 17,   weight: 600 }, // = text-title
-  section: { r: 7, fill: "var(--bg-card)",     stroke: "var(--accent)",        text: 14,   weight: 600 }, // = text-body
-  concept: { r: 5, fill: "var(--bg-card)",     stroke: "var(--text-muted)",   text: 13,   weight: 500 }, // = text-small
-  example: { r: 3, fill: "var(--bg-base)",     stroke: "var(--border-color)", text: 11.5, weight: 400 }, // = text-caption
+// eslint-disable-next-line react-refresh/only-export-components
+export const STUDY_MAP_MARKS = {
+  root:    { r: 9,   fill: "var(--accent)",   stroke: "var(--accent)",        strokeWidth: 2.2, text: 16, weight: 600, maxChars: 30 },
+  section: { r: 7,   fill: "var(--bg-card)", stroke: "var(--accent)",        strokeWidth: 2,   text: 14, weight: 600, maxChars: 32 },
+  concept: { r: 5,   fill: "var(--bg-card)", stroke: "var(--text-muted)",   strokeWidth: 1.5, text: 13, weight: 500, maxChars: 34 },
+  example: { r: 3.5, fill: "var(--bg-base)", stroke: "var(--border-color)", strokeWidth: 1.2, text: 12, weight: 400, maxChars: 36 },
 };
-const markOf = (t) => MARK[t] || MARK.concept;
+const markOf = (t) => STUDY_MAP_MARKS[t] || STUDY_MAP_MARKS.concept;
+
+const graphemes = (value) => {
+  const text = String(value ?? "");
+  if (typeof Intl?.Segmenter === "function") {
+    return [...new Intl.Segmenter("vi", { granularity: "grapheme" }).segment(text)]
+      .map(({ segment }) => segment);
+  }
+  return Array.from(text.normalize("NFC"));
+};
+
+// eslint-disable-next-line react-refresh/only-export-components
+export function wrapStudyMapLabel(value, { maxChars = 32, maxLines = 3 } = {}) {
+  const words = String(value ?? "").trim().split(/\s+/u).filter(Boolean);
+  if (!words.length) return [""];
+  const lines = [];
+  let current = "";
+  let truncated = false;
+  for (const word of words) {
+    const candidate = current ? `${current} ${word}` : word;
+    if (graphemes(candidate).length <= maxChars) { current = candidate; continue; }
+    if (current) lines.push(current);
+    current = word;
+    if (lines.length >= maxLines) { truncated = true; break; }
+  }
+  if (!truncated && current) lines.push(current);
+  if (lines.length > maxLines) { lines.length = maxLines; truncated = true; }
+  if (truncated) {
+    const last = graphemes(lines[maxLines - 1] || current);
+    lines[maxLines - 1] = `${last.slice(0, Math.max(1, maxChars - 1)).join("").trimEnd()}…`;
+  }
+  return lines;
+}
+
+export const STUDY_MAP_LIVE_CSS = `
+  .study-map-canvas .study-map__link { fill: none !important; transition: stroke 150ms ease, stroke-width 150ms ease; }
+  .study-map-canvas .study-map__link--trunk { stroke: var(--accent); stroke-width: 2px; }
+  .study-map-canvas .study-map__link--branch { stroke: var(--border-strong); stroke-width: 1.5px; }
+  .study-map-canvas .study-map__link--leaf { stroke: var(--border-strong); stroke-width: 1.2px; }
+  .study-map-canvas g[data-map-role]:not([data-map-role="root"]):hover .study-map__anchor { fill: var(--bg-hover); }
+  .study-map-canvas .study-map__touch-target { display: none; }
+  @media (max-width: 767px) { .study-map-canvas .study-map__touch-target { display: block; } }
+`;
 
 export default function StudyMapView() {
   const { documentId } = useParams();
@@ -272,9 +316,20 @@ export default function StudyMapView() {
     // the zoom proportionally on small containers only; desktop/tablet
     // (>=500px) keep the exact existing default, untouched.
     if (width < 500) {
-      setZoom(Math.max(SCALE_MIN, (width / 500) * ZOOM_MAC_DINH));
+      setZoom(Math.max(MOBILE_SCALE_MIN, (width / 500) * ZOOM_MAC_DINH));
     }
-  }, [map, rd3tProps.orientation, trinhChieu]);
+    // Round 4: `loading` IS a needed dep, not an oversight — `StudyShell` unmounts
+    // this canvas (hence `canvasRef.current === null`) for every render where
+    // `loading` is still true. `map` is set a render (sometimes more) BEFORE
+    // `loading` flips to false (separate `setState` calls inside `load()`'s async
+    // body — `openMap`'s own await splits the commit), so the very first commit
+    // where `el` exists has nothing left to change in `map`/`orientation`/
+    // `trinhChieu`, and without `loading` here the effect never fires again —
+    // zoom/translate silently keep their initial defaults forever. Verified via
+    // live browser repro (fixture harness): identical code minus this dep never
+    // applied the narrow-canvas zoom at 390px, confirmed by watching the actual
+    // SVG `transform` attribute stay at the default the whole time.
+  }, [map, rd3tProps.orientation, trinhChieu, loading]);
 
   // Trả con lăn về cho TRANG. d3-zoom (do react-d3-tree gắn lên <svg> con) nghe `wheel`
   // rồi preventDefault, mà canvas cao 70vh nên con trỏ gần như luôn nằm trên nó — kết
@@ -371,6 +426,10 @@ export default function StudyMapView() {
       // một trường BE mới (cấm). Không có ánh xạ thật thì không bịa — đúng yêu cầu
       // "if mappings do not exist, say so. Do NOT invent mappings."
       const hasBranch = Boolean(nodeDatum.children?.length || nodeDatum._children?.length);
+      const hiddenChildCount = nodeDatum.__rd3t?.collapsed
+        ? (nodeDatum.children?.length || nodeDatum._children?.length || 0)
+        : 0;
+      const labelLines = wrapStudyMapLabel(nodeDatum.name, { maxChars: m.maxChars, maxLines: 3 });
       // Product Experience Redesign, StudyMap "Start Here" — Spark Effect: an inert
       // map on load has nothing inviting the first click, so nothing sparks
       // exploration. A soft pulsing ring on the (real, always-present) root node
@@ -386,12 +445,21 @@ export default function StudyMapView() {
         if (hasBranch) toggleNode();
       };
       return (
-        <g onClick={onPick} style={{ cursor: "pointer", opacity: daMo ? 1 : 0.22 }}>
+        <g onClick={onPick} data-map-role={attrs.node_type || "concept"}
+           data-selected={isSel ? "true" : undefined}
+           data-search-match={isMatch ? (isActiveMatch ? "active" : "match") : undefined}
+           style={{ cursor: "pointer", opacity: daMo ? 1 : 0.22 }}>
+          <circle r={22} fill="transparent" stroke="none" className="study-map__touch-target" />
+          {isSel && (
+            <circle r={m.r + 4} fill="none" stroke="var(--accent-subtle)" strokeWidth={3}
+                    className="study-map__selection-aura" />
+          )}
           <circle
             r={m.r}
-            fill={isSel ? "var(--accent)" : m.fill}
+            fill={m.fill}
             stroke={isActiveMatch ? "var(--accent)" : isSel ? "var(--accent)" : m.stroke}
-            strokeWidth={isActiveMatch ? 3.5 : isSel ? 3 : 1.6}
+            strokeWidth={isActiveMatch ? 3.5 : isSel ? 2.5 : m.strokeWidth}
+            className="study-map__anchor"
           />
           {/* Khớp tìm kiếm (không phải kết quả đang chọn): vòng ngoài mảnh, để phân
               biệt "có khớp" khỏi "đang xem" (viền accent đậm ở trên). */}
@@ -410,7 +478,14 @@ export default function StudyMapView() {
           {/* Nhánh đang thu: chấm đặc bên trong = "còn nội dung bên dưới".
               Không có dấu này thì lá và nhánh đã thu trông y hệt nhau. */}
           {nodeDatum.__rd3t?.collapsed && (
-            <circle r={Math.max(1.5, m.r - 3)} fill={m.stroke} opacity="0.55" />
+            <>
+              <circle r={Math.max(2, m.r - 3)} fill="var(--accent)" opacity="0.8"
+                      className="study-map__collapse-dot" />
+              {hiddenChildCount > 0 && (
+                <text x={m.r + 5} y={m.r + 10} fontSize="9" fontWeight="600"
+                      fill="var(--text-muted)" aria-hidden="true">+{hiddenChildCount}</text>
+              )}
+            </>
           )}
           <text
             x={m.r + 7}
@@ -421,15 +496,18 @@ export default function StudyMapView() {
               fontSize: m.text,
               fontWeight: m.weight,
               fill: "var(--text-primary)",
-              fontFamily: "Spectral, Georgia, serif", // matches tailwind.config.js's font-display stack directly — `--font-display` was never a declared CSS var
               // Viền cùng màu nền vẽ TRƯỚC chữ = quầng che nét link cắt ngang.
+              fontFamily: 'Aptos, -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif',
               paintOrder: "stroke",
               stroke: "var(--bg-card)",
               strokeWidth: 3.5,
               strokeLinejoin: "round",
             }}
           >
-            {String(nodeDatum.name).slice(0, 46)}
+            {labelLines.map((line, index) => (
+              <tspan key={`${line}-${index}`} x={m.r + 7}
+                     dy={index === 0 ? 0 : m.text * 1.25}>{line}</tspan>
+            ))}
           </text>
         </g>
       );
@@ -665,10 +743,14 @@ export default function StudyMapView() {
           <div className={`flex gap-4 items-start ${trinhChieu ? "" : "flex-col lg:flex-row"}`}>
             <div
               ref={canvasRef}
-              className="surface-card !p-0 overflow-hidden w-full relative"
+              className="surface-card study-map-canvas !p-0 overflow-hidden w-full relative"
               style={{ height: trinhChieu ? "calc(100vh - 120px)" : "min(70vh, 640px)",
-                       flex: trinhChieu ? "1 1 auto" : undefined }}
+                       flex: trinhChieu ? "1 1 auto" : undefined,
+                       backgroundColor: "var(--bg-base)",
+                       backgroundImage: "radial-gradient(circle, color-mix(in srgb, var(--border-strong), transparent 68%) 1px, transparent 1px)",
+                       backgroundSize: "24px 24px" }}
             >
+              <style>{STUDY_MAP_LIVE_CSS}</style>
               {tree && (
                 <Tree
                   data={tree}
@@ -686,7 +768,11 @@ export default function StudyMapView() {
                   initialDepth={1}
                   pathFunc={rd3tProps.pathFunc}
                   renderCustomNodeElement={renderNode}
-                  pathClassFunc={() => "study-map__link"}
+                  pathClassFunc={({ target }) => {
+                    const depth = target?.depth ?? target?.__rd3t?.depth ?? 1;
+                    const tier = depth <= 1 ? "trunk" : depth === 2 ? "branch" : "leaf";
+                    return `study-map__link study-map__link--${tier}`;
+                  }}
                 />
               )}
               {/* Luật mới phải nói ra: không ai đoán được "Ctrl + lăn". Chỉ hiện ở khổ

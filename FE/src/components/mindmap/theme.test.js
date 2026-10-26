@@ -27,4 +27,9 @@ describe("THEME PhongDoc", () => {
     expect(THEME.cssVar["--selected"]).toBe("var(--accent)");
     expect(THEME.cssVar["--accent-color"]).toBe("var(--accent)");
   });
+
+  it("uses the white-text-safe CTA token for the solid root fill", () => {
+    expect(THEME.cssVar["--root-bgcolor"]).toBe("var(--accent-cta)");
+    expect(THEME.cssVar["--root-border-color"]).toBe("var(--accent-cta)");
+  });
 });
