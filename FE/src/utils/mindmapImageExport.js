@@ -263,12 +263,27 @@ export async function captureMapImageWithGeometry(opts) {
  * selection is re-rooted at its real lowest common ancestor; legacy subtree
  * and current-branch modes retain their existing true-root projection.
  */
+// Round 4.1 export-fidelity fix — `sourceRoles` (root/branch/leaf, below) is
+// a PRE-EXISTING, SEPARATE contract: `mindElixirAdapter.js` forwards it as
+// `node.exportSourceRole`, and `mindMapAppearanceLiveApply.js` reads that
+// field to resolve a node's entry in `resolved.node`, which is a USER-FACING
+// 3-role appearance-preset object (`{root, branch, leaf}` — see
+// `mindMapAppearanceV2.js`'s own `roleForDepth`/preset shapes). Widening
+// `sourceRoles` itself to 4 values would silently break that unrelated,
+// pre-existing, deliberately-3-tier customization feature (`resolved.node["concept"]`
+// is `undefined` — not a slot that preset exists for). So Round 4's four-tier
+// VISUAL GRAMMAR gets its own, separate, additive map (`visualTiers`,
+// root/section/concept/detail) computed from the exact same `sourceDepth`
+// data `sourceRoles` already derives from (original pre-pruning depth, never
+// projected DOM depth — that invariant is unchanged). `exportSourceRole`/
+// `sourceRoles` are left completely untouched for every existing consumer.
 function sourceProjection(record, renderSet, presentationRootId, presentationRootIds) {
   const nodes = record?.nodes || [];
   const parentOf = new Map(nodes.map((node) => [node.id, node.parent ?? null]));
   const trueRoot = nodes.find((node) => node.parent == null || node.kind === "root");
   const layout = assignBranchDirections(nodes);
   const sourceRoles = {};
+  const visualTiers = {};
   const sourceDepth = new Map();
   const topBranchOf = new Map();
 
@@ -289,6 +304,7 @@ function sourceProjection(record, renderSet, presentationRootId, presentationRoo
   renderSet.forEach((id) => {
     const depth = sourceDepth.get(id) || 0;
     sourceRoles[id] = depth === 0 ? "root" : depth === 1 ? "branch" : "leaf";
+    visualTiers[id] = depth === 0 ? "root" : depth === 1 ? "section" : depth === 2 ? "concept" : "detail";
   });
 
   const directions = {};
@@ -305,7 +321,7 @@ function sourceProjection(record, renderSet, presentationRootId, presentationRoo
     if (direction != null) directions[node.id] = direction;
     if (branchColor) branchColors[node.id] = branchColor;
   });
-  return { sourceRoles, directions, branchColors, presentationRootIds };
+  return { sourceRoles, visualTiers, directions, branchColors, presentationRootIds };
 }
 
 function recordScopedForExport(record, {
@@ -372,10 +388,20 @@ function assertOffscreenMembership(instance, expectedIds) {
   }
 }
 
-function markSourceVisualRoles(instance) {
+// `visualTiers` is read directly from the scoped record's own
+// `exportProjection` (computed in sourceProjection, above) by node id — NOT
+// from `node.exportSourceRole` on `instance.nodeData` (the adapter-produced
+// mind-elixir tree). `markSourceVisualRoles` only uses `instance.nodeData`
+// to walk and locate each node's rendered `me-tpc` element; the TIER VALUE
+// itself comes from `visualTiers`, a map this function owns end-to-end, so
+// no change to mindElixirAdapter.js's existing `exportSourceRole` forwarding
+// (used by the separate, pre-existing appearance-preset system) is needed.
+function markSourceVisualRoles(instance, visualTiers) {
+  if (!visualTiers) return;
   const walk = (node) => {
     const topic = instance.findEle?.(node.id);
-    if (topic && node.exportSourceRole) topic.dataset.exportSourceRole = node.exportSourceRole;
+    const tier = visualTiers[node.id];
+    if (topic && tier) topic.dataset.exportSourceRole = tier;
     (node.children || []).forEach(walk);
   };
   if (instance?.nodeData) walk(instance.nodeData);
@@ -472,6 +498,7 @@ async function exportCanonicalFullMap({
     exportProjection: {
       ...record.exportProjection,
       sourceRoles: { ...record.exportProjection.sourceRoles, __studymap_export_anchor__: "root" },
+      visualTiers: { ...record.exportProjection.visualTiers, __studymap_export_anchor__: "root" },
     },
   } : record;
   const { mindData } = recordToMindElixir(renderRecord, { fullTitles: true });
@@ -504,7 +531,7 @@ async function exportCanonicalFullMap({
     await waitForRenderResources(instance.map);
     instance.layout?.();
     instance.linkDiv?.();
-    markSourceVisualRoles(instance);
+    markSourceVisualRoles(instance, renderRecord.exportProjection?.visualTiers);
     if (usesSyntheticAnchor) {
       instance.findEle?.("__studymap_export_anchor__")?.remove();
       instance.map.querySelector?.(".lines")?.remove();

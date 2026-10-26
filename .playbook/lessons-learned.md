@@ -3472,3 +3472,45 @@ driven synchronously) can both pass while the feature is completely inert in
 production. When an effect depends on a ref and a flag that gates whether
 that ref's element is mounted, that flag belongs in the dependency array even
 if nothing inside the effect body reads it directly.
+
+## Widening a shared data attribute's value domain can break a second, unrelated consumer you never meant to touch (2026-10-27)
+
+Before adding a new value to an existing field (a role string, a status enum,
+anything read by more than one place), grep every consumer first — not just
+the one whose bug you're fixing. `mindmapImageExport.js`'s `sourceRoles`
+(root/branch/leaf) looked like a single-purpose CSS hook for the export
+override rules, but `mindMapAppearanceLiveApply.js` independently read the
+exact same `node.exportSourceRole` field to key into a DIFFERENT, pre-
+existing, deliberately-3-role appearance-preset object
+(`resolved.node[role]`). Widening the field's value domain to 4 roles to fix
+the CSS problem would have silently broken that unrelated consumer —
+`resolved.node["concept"]` is `undefined`, not a slot that preset has. The
+fix was to add a SEPARATE, additive map (`visualTiers`) for the new
+consumer, computed from the same underlying depth data, and leave the
+original field completely untouched for its existing consumer. A one-line
+`grep -rn fieldName src/` before widening a shared value domain is cheaper
+than finding out in review, or worse, in production, that a second feature
+silently depended on the old enum being exactly 3 values.
+
+## jsdom unit tests cannot catch a library's own base-CSS-cascade leaking through a new override rule (2026-10-27)
+
+A CSS override rule that sets every property you THINK matters (font-size,
+padding, border, radius) can still render wrong if it omits a property a
+DIFFERENT, more specific or differently-scoped rule from the same library
+sets unconditionally — and that gap is invisible to any test harness that
+fakes DOM elements without loading the real stylesheet cascade (this
+project's own `FakeOffscreenMind` jsdom test pattern, used across several
+export test files, constructs plain `<me-tpc>` elements with no CSS applied
+at all). Here: a promoted-root CSS override set font/padding/border/radius
+correctly but not `background` — which happened to look right everywhere
+the node WASN'T sitting at the DOM root (the library's own non-root default
+already resolved to the right color), and was silently wrong the one place
+it WAS promoted to root (the library's own root-specific default, a totally
+different rule, filled in a color nothing in the new override contested).
+Real-browser verification — loading the actual stylesheet, constructing a
+real offscreen scene, and reading `getComputedStyle` on the real DOM —
+caught this in minutes; the jsdom unit test suite, passing 100%, never
+would have. When a fix touches CSS that interacts with a third-party
+library's own base stylesheet, budget time for at least one real-browser
+capture of the specific scenario the fix changes, not just a jsdom
+attribute-presence check.
