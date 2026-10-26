@@ -26,6 +26,8 @@ import WorkspaceContainer from "./WorkspaceContainer";
 
 let mountCount = 0;
 let unmountCount = 0;
+let mindmapMountCount = 0;
+let summaryMountCount = 0;
 
 vi.mock("./ChatArea", () => ({
   default: function ChatAreaStub() {
@@ -36,8 +38,18 @@ vi.mock("./ChatArea", () => ({
     return <div data-testid="chat-area-stub">chat</div>;
   },
 }));
-vi.mock("../mindmap/MindElixirView", () => ({ default: () => <div>mindmap</div> }));
-vi.mock("./SummaryPane", () => ({ default: () => <div>summary</div> }));
+vi.mock("../mindmap/MindElixirView", () => ({
+  default: function MindmapStub() {
+    useEffect(() => { mindmapMountCount += 1; }, []);
+    return <div>mindmap</div>;
+  },
+}));
+vi.mock("./SummaryPane", () => ({
+  default: function SummaryStub() {
+    useEffect(() => { summaryMountCount += 1; }, []);
+    return <div>summary</div>;
+  },
+}));
 
 let container;
 
@@ -48,6 +60,8 @@ afterEach(() => {
   }
   mountCount = 0;
   unmountCount = 0;
+  mindmapMountCount = 0;
+  summaryMountCount = 0;
   vi.restoreAllMocks();
 });
 
@@ -91,5 +105,34 @@ describe("WorkspaceContainer keeps ChatArea mounted across mode switches", () =>
     await render("chat");
     expect(chatStub.parentElement.className).not.toContain("hidden");
     expect(mountCount).toBe(1);
+  });
+
+  it("keeps Chat, Mind Map, and Summary mounted together across shell rerenders", async () => {
+    container = document.createElement("div");
+    document.body.appendChild(container);
+    const root = createRoot(container);
+    const render = (mode) => act(async () => {
+      root.render(
+        <WorkspaceContainer
+          mode={mode}
+          chatProps={{ selectedSources: ["source-a"] }}
+          mindmapData={{ data: { id: "map-a", nodes: [] } }}
+          summaryData={{ id: "summary-a" }}
+          controller={{}}
+          onMindmapAction={() => {}}
+          onSummaryAction={() => {}}
+        />
+      );
+    });
+
+    await render("chat");
+    await render("mindmap");
+    await render("summary");
+    await render("chat");
+
+    expect(mountCount).toBe(1);
+    expect(mindmapMountCount).toBe(1);
+    expect(summaryMountCount).toBe(1);
+    expect(unmountCount).toBe(0);
   });
 });

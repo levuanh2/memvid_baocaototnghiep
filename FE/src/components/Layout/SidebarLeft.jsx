@@ -39,7 +39,7 @@ const getStatusConfig = (status, substatus, canQuery) => {
 
 const formatFileName = (name = "") => name.replace(/\.(mp4|avi|mov|mkv|webm|mp3|wav|pdf|txt|docx)$/i, "");
 
-export default function SidebarLeft({ selectedSources, setSelectedSources, onSourcesChange, onClose, collapsible = false, onTransientSurfaceOpen }) {
+export default function SidebarLeft({ selectedSources, setSelectedSources, onSourcesChange, onClose, collapsible = false, onTransientSurfaceOpen, railMode = false }) {
   const [sources, setSources] = useState([]);
   // Round 9 fix: mirrors `sources` for `fetchSourcesFromBackend` below to read
   // as "the previous sources" WITHOUT depending on execution-order between
@@ -320,6 +320,44 @@ export default function SidebarLeft({ selectedSources, setSelectedSources, onSou
     setAppliedFilters(empty);
     setFilterOpen(false);
   };
+
+  if (railMode) {
+    return (
+      <div className="source-rail" data-testid="tablet-source-rail">
+        <button type="button" className="source-rail__toggle" onClick={() => onClose?.()}
+          aria-label="Mở rộng thư mục nguồn" title="Mở rộng thư mục nguồn">
+          <Icon name="Library" size={17} />
+          <span aria-label={`${sources.length} tài liệu`}>{sources.length}</span>
+        </button>
+        <div className="source-rail__divider" aria-hidden />
+        <div className="source-rail__files" aria-label="Nguồn tài liệu">
+          {sources.map((src, idx) => {
+            const key = src.video_stem || src.video;
+            const displayName = src.filename || formatFileName(src.video || "") || `Tài liệu ${idx + 1}`;
+            const selected = selectedSources.includes(key);
+            const selectable = src?.can_query === true;
+            return (
+              <button type="button" key={src.source_id || key || idx}
+                className={`source-rail__file${selected ? " is-selected" : ""}`}
+                onClick={() => selectable && toggleSelect(src)} disabled={!selectable}
+                aria-pressed={selectable ? selected : undefined}
+                aria-label={`${selected ? "Bỏ chọn" : "Chọn"} nguồn ${displayName}`}
+                title={displayName}>
+                {displayName.trim().charAt(0).toUpperCase() || "•"}
+              </button>
+            );
+          })}
+        </div>
+        <button type="button" className={`source-rail__add${uploading ? " is-busy" : ""}`}
+          onClick={() => fileInputRef.current?.click()} disabled={uploading}
+          aria-label={uploading ? "Đang tải tài liệu" : "Thêm tài liệu"}
+          title={uploading ? "Đang tải tài liệu" : "Thêm tài liệu"}>
+          {uploading ? <Spinner size={16} /> : <Icon name="Plus" size={17} />}
+        </button>
+        <input ref={fileInputRef} type="file" multiple className="hidden" onChange={handleAddFiles} disabled={uploading} />
+      </div>
+    );
+  }
 
   // ── Render ─────────────────────────────────────────
   return (

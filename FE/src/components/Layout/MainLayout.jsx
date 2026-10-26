@@ -46,8 +46,17 @@ export default function MainLayout({
   const [sources, setSources] = useState([]);
   const [leftOpen, setLeftOpen] = useState(false);   // chỉ dùng ở chế độ ngăn kéo (<768px)
   const [rightOpen, setRightOpen] = useState(false);
+  const [viewportWidth, setViewportWidth] = useState(() => (
+    typeof window === "undefined" ? 1440 : window.innerWidth
+  ));
   // Từ 768px trở lên hai cột nới được và thu về gáy sách được; trạng thái nhớ qua phiên.
   const panel = usePanelLayout();
+  useEffect(() => {
+    const onResize = () => setViewportWidth(window.innerWidth);
+    window.addEventListener("resize", onResize);
+    return () => window.removeEventListener("resize", onResize);
+  }, []);
+  const tabletSourceRail = !panel.drawer && viewportWidth < 1280;
   const { isDark, setLight, setDark, toggleTheme } = useTheme();
   const { user, logout } = useAuth();
   // `selectedDocument` (Study Context's single-document pointer) used to
@@ -655,7 +664,38 @@ export default function MainLayout({
         )}
 
         {/* ── KỆ TRÁI — Thư mục nguồn ── */}
-        {!panel.drawer && panel.collapsed.left ? (
+        {tabletSourceRail ? (
+          <>
+            <aside
+              className="workspace-source-rail-shell shrink-0 bg-surface-sidebar overflow-hidden"
+              style={{ width: panel.collapsed.left ? 56 : panel.width.left }}
+              data-source-layout={panel.collapsed.left ? "rail" : "shelf"}
+            >
+              <SidebarLeft
+                selectedSources={selectedSources}
+                setSelectedSources={setSelectedSources}
+                onSourcesChange={setSources}
+                onClose={() => panel.setCollapsedFor("left", !panel.collapsed.left)}
+                onTransientSurfaceOpen={closeHeaderSurface}
+                collapsible
+                railMode={panel.collapsed.left}
+              />
+            </aside>
+            {!panel.collapsed.left && (
+              <PanelDivider
+                side="left"
+                label={PANELS.left.label}
+                width={panel.width.left}
+                min={PANELS.left.min}
+                max={PANELS.left.max}
+                active={panel.dragging === "left"}
+                onDrag={(e) => panel.startDrag("left", e)}
+                onNudge={(d) => panel.nudgeWidth("left", d)}
+                onReset={() => panel.resetWidth("left")}
+              />
+            )}
+          </>
+        ) : !panel.drawer && panel.collapsed.left ? (
           <PanelSpine
             side="left"
             label={PANELS.left.label}
@@ -711,7 +751,13 @@ export default function MainLayout({
             chatProps={{
               selectedSources, sources, onEvidence: setEvidence, highlight, onHighlight,
               onOpenLeft: () => (panel.drawer ? setLeftOpen(true) : panel.setCollapsedFor("left", false)),
-              isLeftVisible: !panel.drawer && !panel.collapsed.left,
+              onOpenEvidence: () => {
+                setRightView("evidence");
+                if (panel.drawer) setRightOpen(true);
+                else panel.setCollapsedFor("right", false);
+              },
+              evidenceCount: evidence?.sources?.length || 0,
+              isLeftVisible: tabletSourceRail || (!panel.drawer && !panel.collapsed.left),
               askAboutDraft,
               hasSummary: Boolean(summaryData), onOpenSummary: onSwitchToSummary,
             }}
@@ -806,7 +852,7 @@ export default function MainLayout({
                   : !panel.drawer
                   ? (panel.collapsed.right
                       ? { width: 0, minWidth: 0, padding: 0, border: "none", pointerEvents: "none" }
-                      : { width: panel.width.right })
+                      : { width: panel.width.right, minWidth: PANELS.right.min })
                   : undefined
               }
             >
