@@ -1047,6 +1047,14 @@
    into a functional 56px rail. Selection and upload therefore keep using the
    same SidebarLeft state and handlers as the full shelf. */
 .workspace-source-rail-shell { transition: width 160ms ease; }
+/* Round 3 QA closure: resize handle for the expanded tablet overlay.
+   `.workspace-source-rail-overlay` is `position: fixed`, which already
+   establishes the containing block this needs — no extra positioning
+   context required on the parent. Spans the overlay's full height,
+   straddles its right edge (same technique PanelDivider's own CSS already
+   uses within a flex row), sits above the backdrop (z-30) and below the
+   overlay's own content. */
+.tablet-shelf-resize-handle { position: absolute; top: 0; right: 0; height: 100%; z-index: 41; }
 .source-rail { display: flex; width: 56px; height: 100%; flex-direction: column; align-items: center; gap: 10px; padding: 10px 0 12px; border-right: 1px solid var(--border-color); background: var(--bg-sidebar); }
 .source-rail__toggle, .source-rail__file, .source-rail__add { position: relative; display: grid; width: 40px; height: 40px; flex: 0 0 40px; place-items: center; border: 1px solid var(--border-color); border-radius: 9px; color: var(--text-muted); background: var(--bg-card); cursor: pointer; }
 .source-rail__toggle:hover, .source-rail__file:hover, .source-rail__add:hover { border-color: var(--accent); color: var(--accent); }

@@ -14,6 +14,10 @@ boundary only (no backend was available this session).
 | `768px-dual-panel-stress-after-fix-light.jpg` | The exact stress case this closure pass fixed — both panels forced open at 768px. Measured center width: 407px (was 26px before the fix) |
 | `390px-mobile-context-light.jpg` | Mobile header context chips (Sources/Evidence), 44×44px after the touch-target fix |
 | `820px-rail-toggle-keyboard-focus-ring.png` | Zoomed crop proving the rail toggle's keyboard focus ring is now visible (was `outline: none` with no replacement before this closure pass) |
+| `1024px-no-unintended-overlay-after-fix.jpg` | **The CI-blocking regression fix.** Fresh load at 1024px: 56px rail only, no unintended shelf overlay. Reproduces the exact CI scenario (register at 1440px desktop, where the panel defaults open, then `setViewportSize` to 1024px with no reload) — before this fix the shelf stayed open and covered the MindMap toolbar; `.mm-map-selector__trigger` failed its center hit-test in `e2e/mindmap-toolbar-occlusion.spec.js`. |
+| `1024px-shelf-open-explicit-click-focus-handle.jpg` | Shelf opened via explicit rail-toggle click (the only way it opens now), resize handle focused (visible blue grip highlight, the `panel-divider__grip` focus treatment, not a generic outline) |
+| `1024px-shelf-expanded-max-width-420px.jpg` | Shelf resized to its max width (420px) via the restored keyboard resize (`End` key) |
+| `768px-dual-panel-stress-restate-check.jpg` | Re-verified after the state-ownership fix: both panels forced open at 768px, center still 407px (unchanged from the original squeeze fix — confirms this pass didn't regress it) |
 
 ## Reproducible capture method
 

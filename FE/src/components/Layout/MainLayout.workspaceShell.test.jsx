@@ -124,7 +124,14 @@ describe("MainLayout Learning Desk responsive shell", () => {
   it.each([768, 769, 780, 800, 820, 1024])(
     "expanding the tablet shelf floats it (zero row width) so the center pane keeps >=320px even with the Inspector maxed, at %ipx",
     async (width) => {
-      await renderLayout(width, { left: false, right: false });
+      // Round 3 CI-fix: the tablet shelf no longer opens from stored desktop
+      // `collapsed.left` state (that was the regression -- a landing-page
+      // desktop session carries straight into the tablet band on resize,
+      // covering the MindMap toolbar with no user action at all). It opens
+      // ONLY on an explicit click of the rail toggle, same as a real user.
+      await renderLayout(width, { left: true, right: false });
+      expect(container.querySelector('[data-source-layout="shelf"]')).toBeNull();
+      await act(async () => { container.querySelector('[data-testid="sidebar-left-stub"]').click(); });
       const shelf = container.querySelector('[data-source-layout="shelf"]');
       expect(shelf).toBeTruthy();
       expect(shelf.className).toMatch(/\bfixed\b/);
@@ -142,13 +149,38 @@ describe("MainLayout Learning Desk responsive shell", () => {
   );
 
   it("Escape closes the expanded tablet shelf and backdrop click closes it too", async () => {
-    await renderLayout(800, { left: false, right: true });
+    await renderLayout(800, { left: true, right: true });
+    expect(container.querySelector('[data-source-layout="shelf"]')).toBeNull();
+    await act(async () => { container.querySelector('[data-testid="sidebar-left-stub"]').click(); });
     expect(container.querySelector('[data-source-layout="shelf"]')).toBeTruthy();
 
     await act(async () => {
       window.dispatchEvent(new KeyboardEvent("keydown", { key: "Escape", bubbles: true }));
     });
     expect(container.querySelector('[data-source-layout="rail"]')).toBeTruthy();
+    expect(container.querySelector('[data-source-layout="shelf"]')).toBeNull();
+  });
+
+  it("a fresh desktop-open session (collapsed.left=false) does NOT auto-open the tablet overlay on resize into the tablet band", async () => {
+    // This is the exact CI regression: register/land at 1440px (desktop
+    // default collapsed=false), then resize down into the tablet band.
+    // The overlay must stay closed until an explicit click.
+    await renderLayout(1440);
+    await act(async () => {
+      setViewport(1024);
+      window.dispatchEvent(new Event("resize"));
+    });
+    expect(container.querySelector('[data-source-layout="shelf"]')).toBeNull();
+    expect(container.querySelector('[data-source-layout="rail"]')).toBeTruthy();
+  });
+
+  it("switching workspace mode while the tablet overlay is open closes it", async () => {
+    await renderLayout(820, { left: true, right: false });
+    await act(async () => { container.querySelector('[data-testid="sidebar-left-stub"]').click(); });
+    expect(container.querySelector('[data-source-layout="shelf"]')).toBeTruthy();
+
+    const mindmapTab = Array.from(container.querySelectorAll('[role="tab"]')).find((el) => el.textContent.includes("Sơ đồ"));
+    await act(async () => { mindmapTab.click(); });
     expect(container.querySelector('[data-source-layout="shelf"]')).toBeNull();
   });
 });
