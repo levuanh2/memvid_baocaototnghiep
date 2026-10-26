@@ -46,8 +46,17 @@ export default function MainLayout({
   const [sources, setSources] = useState([]);
   const [leftOpen, setLeftOpen] = useState(false);   // chỉ dùng ở chế độ ngăn kéo (<768px)
   const [rightOpen, setRightOpen] = useState(false);
+  const [viewportWidth, setViewportWidth] = useState(() => (
+    typeof window === "undefined" ? 1440 : window.innerWidth
+  ));
   // Từ 768px trở lên hai cột nới được và thu về gáy sách được; trạng thái nhớ qua phiên.
   const panel = usePanelLayout();
+  useEffect(() => {
+    const onResize = () => setViewportWidth(window.innerWidth);
+    window.addEventListener("resize", onResize);
+    return () => window.removeEventListener("resize", onResize);
+  }, []);
+  const tabletSourceRail = !panel.drawer && viewportWidth < 1280;
   const { isDark, setLight, setDark, toggleTheme } = useTheme();
   const { user, logout } = useAuth();
   // `selectedDocument` (Study Context's single-document pointer) used to
@@ -67,6 +76,25 @@ export default function MainLayout({
   // here via `onMindmapDataChange`/`onSummaryDataChange` instead of portaling
   // a modal — see SidebarRight.jsx's two small forwarding effects.
   const [workspaceMode, setWorkspaceMode] = useState(initialWorkspaceMode);
+  // Round 3 CI-blocking regression fix: this used to reuse the DESKTOP
+  // persisted `panel.collapsed.left` preference to decide whether the
+  // tablet overlay was open. Desktop defaults to collapsed=false (open) at
+  // >=1280px (COMFORT_MIN) — a user who registers/lands at 1440px (or
+  // simply never closed the panel) carries that same "open" value straight
+  // into the tablet band on resize, with no explicit tablet action at all.
+  // The overlay then floats over the MindMap toolbar uninvited — exactly
+  // what broke e2e/mindmap-toolbar-occlusion.spec.js at 1024px in CI. Fully
+  // separate, transient, local state: the tablet overlay is closed by
+  // default and opens ONLY on an explicit click of the rail toggle. Width
+  // still reads/writes the shared `panel.width.left` (desktop's own
+  // collapse/open preference is never touched by any tablet interaction).
+  const [tabletShelfOpen, setTabletShelfOpen] = useState(false);
+  useEffect(() => {
+    // Any transition INTO the tablet band, or any workspace-mode switch
+    // while already in it, closes a left-open overlay — "switching modes
+    // must not leave an unintended shelf overlay covering controls."
+    setTabletShelfOpen(false);
+  }, [tabletSourceRail, workspaceMode]);
   const [mindmapData, setMindmapData] = useState(null);   // { data, onRegenerate, regenerating } | null
   const [summaryData, setSummaryData] = useState(null);   // summary record | null
   const [summaryContext, setSummaryContext] = useState(null);
@@ -433,17 +461,24 @@ export default function MainLayout({
   // khác đang mở (modal tóm tắt/sơ đồ — `[aria-modal]`/`.me-container`) để
   // không tranh phím Escape với overlay đó, giống guard đã có ở
   // `chatFocus.js::shouldFocusOnSlash`.
+  //
+  // Round 3 QA closure — extended to the tablet rail's expanded-shelf
+  // overlay (same floating/backdrop treatment as the drawer, so it earns
+  // the same Escape contract). `tabletShelfOpen` itself is the local,
+  // transient state declared above (not derived from desktop's persisted
+  // panel.collapsed.left — see that declaration's own comment for why).
   useEffect(() => {
     const onKey = (e) => {
-      if (e.key !== "Escape" || !panel.drawer || !rightOpen) return;
+      if (e.key !== "Escape" || !((panelDrawer && rightOpen) || tabletShelfOpen)) return;
       // Defer to real modal dialogs only. `.me-container` is the Mind Map canvas
       // itself, present for the whole MindMap mode, so it must not block Escape.
       if (document.querySelector('[aria-modal="true"]')) return;
-      closeRightPanel();
+      if (tabletShelfOpen) setTabletShelfOpen(false);
+      else closeRightPanel();
     };
     window.addEventListener("keydown", onKey);
     return () => window.removeEventListener("keydown", onKey);
-  }, [panel.drawer, rightOpen, closeRightPanel]);
+  }, [panelDrawer, rightOpen, closeRightPanel, tabletShelfOpen]);
 
   const rightSurfaceVisible = true;
   // 2026-09-21: Mind Map's node-detail surface must be a closed-by-default
@@ -654,8 +689,74 @@ export default function MainLayout({
           />
         )}
 
+        {/* Round 3 QA closure: expanding the tablet rail's full shelf used to
+            push real grid width (panel.width.left, up to 420px) alongside
+            whatever the right Inspector also had open (up to effectiveMax),
+            squeezing the center chat column to as little as 26px at 768px
+            (measured, Codex2). Fix: in the tablet band the expanded shelf is
+            a floating overlay (position:fixed, same drawer treatment already
+            proven for <768px), so it never contributes to the flex row's
+            width math — center-pane width in this band is now simply
+            viewport minus the 56px rail minus whatever the Inspector takes,
+            never minus BOTH side panels' full expanded widths at once. Same
+            backdrop/click-outside-to-close pattern as the existing mobile
+            drawer below, extended to cover this state too. */}
+        {tabletShelfOpen && (
+          <div
+            className="fixed inset-0 bg-black/40 z-30 backdrop-blur-sm"
+            onClick={() => setTabletShelfOpen(false)}
+          />
+        )}
+
         {/* ── KỆ TRÁI — Thư mục nguồn ── */}
-        {!panel.drawer && panel.collapsed.left ? (
+        {tabletSourceRail ? (
+          <aside
+            className={
+              !tabletShelfOpen
+                ? "workspace-source-rail-shell shrink-0 bg-surface-sidebar overflow-hidden"
+                // No overflow-hidden here: the resize handle below straddles
+                // this aside's right edge (same negative-margin technique
+                // PanelDivider already uses on desktop) and would otherwise
+                // be clipped.
+                : `workspace-source-rail-overlay fixed top-[56px] left-0 h-[calc(100vh-56px)] z-40
+                   bg-surface-sidebar border-r border-border shadow-card-hover`
+            }
+            style={{ width: !tabletShelfOpen ? 56 : panel.width.left }}
+            data-source-layout={!tabletShelfOpen ? "rail" : "shelf"}
+          >
+            <SidebarLeft
+              selectedSources={selectedSources}
+              setSelectedSources={setSelectedSources}
+              onSourcesChange={setSources}
+              onClose={() => setTabletShelfOpen((open) => !open)}
+              onTransientSurfaceOpen={closeHeaderSurface}
+              collapsible
+              railMode={!tabletShelfOpen}
+            />
+            {/* Resize handle for the expanded overlay only — reuses the same
+                PanelDivider/usePanelLayout drag+keyboard contract as the
+                desktop case below (startDrag/nudgeWidth/resetWidth,
+                panel.width.left, PANELS.left.min/max), just repositioned:
+                absolutely positioned against this `fixed` aside's own edge
+                instead of sitting in the flex row, so it resizes ONLY the
+                overlay and never touches the row's width calculation. */}
+            {tabletShelfOpen && (
+              <div className="tablet-shelf-resize-handle">
+                <PanelDivider
+                  side="left"
+                  label={PANELS.left.label}
+                  width={panel.width.left}
+                  min={PANELS.left.min}
+                  max={PANELS.left.max}
+                  active={panel.dragging === "left"}
+                  onDrag={(e) => panel.startDrag("left", e)}
+                  onNudge={(d) => panel.nudgeWidth("left", d)}
+                  onReset={() => panel.resetWidth("left")}
+                />
+              </div>
+            )}
+          </aside>
+        ) : !panel.drawer && panel.collapsed.left ? (
           <PanelSpine
             side="left"
             label={PANELS.left.label}
@@ -711,7 +812,13 @@ export default function MainLayout({
             chatProps={{
               selectedSources, sources, onEvidence: setEvidence, highlight, onHighlight,
               onOpenLeft: () => (panel.drawer ? setLeftOpen(true) : panel.setCollapsedFor("left", false)),
-              isLeftVisible: !panel.drawer && !panel.collapsed.left,
+              onOpenEvidence: () => {
+                setRightView("evidence");
+                if (panel.drawer) setRightOpen(true);
+                else panel.setCollapsedFor("right", false);
+              },
+              evidenceCount: evidence?.sources?.length || 0,
+              isLeftVisible: tabletSourceRail || (!panel.drawer && !panel.collapsed.left),
               askAboutDraft,
               hasSummary: Boolean(summaryData), onOpenSummary: onSwitchToSummary,
             }}
@@ -806,7 +913,7 @@ export default function MainLayout({
                   : !panel.drawer
                   ? (panel.collapsed.right
                       ? { width: 0, minWidth: 0, padding: 0, border: "none", pointerEvents: "none" }
-                      : { width: panel.width.right })
+                      : { width: panel.width.right, minWidth: PANELS.right.min })
                   : undefined
               }
             >

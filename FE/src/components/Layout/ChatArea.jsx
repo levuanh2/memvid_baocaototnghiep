@@ -106,7 +106,7 @@ function AnswerProse({ content, mdComponents, dropCap = false }) {
 }
 
 export default function ChatArea({
-  selectedSources, sources = [], onEvidence, highlight, onHighlight, onOpenLeft, askAboutDraft,
+  selectedSources, sources = [], onEvidence, highlight, onHighlight, onOpenLeft, onOpenEvidence, evidenceCount = 0, askAboutDraft,
   // Feature Pack B (Cross Navigation) — Chat -> Summary. `hasSummary` gates a
   // real link, never a dead one; `onOpenSummary` reuses MainLayout's existing
   // workspaceMode switch (same shape as the pre-existing `onSwitchToChat`).
@@ -739,7 +739,7 @@ export default function ChatArea({
           exists in the empty Chat state, matching that image exactly.
           Target height 44-48px (h-12 = 48px); every button here is a real
           40x40px+ target on desktop. */}
-      <div className="flex items-center gap-3 px-5 sm:px-8 h-12 border-b flex-shrink-0 transition-theme"
+      <div className="conversation-context-row flex items-center gap-3 px-5 sm:px-8 h-12 border-b flex-shrink-0 transition-theme"
         style={{ borderColor: "var(--border-color)", background: "var(--bg-sidebar)" }}>
         <div className="flex items-center gap-1 min-w-0 flex-shrink">
           {titleEditing ? (
@@ -767,18 +767,29 @@ export default function ChatArea({
           </button>
         </div>
 
-        <div className="flex items-center gap-1.5 text-small text-text-muted flex-shrink-0">
+        <div className="conversation-source-summary flex items-center gap-1.5 text-small text-text-muted flex-shrink-0">
           <Icon name="Library" size={13} />
           {selectedSources?.length > 0 ? `${selectedSources.length} nguồn đã chọn` : "Chưa chọn nguồn"}
         </div>
 
         <div className="flex-1" />
 
+        <div className="mobile-context" aria-label="Ngữ cảnh Workspace">
+          <button type="button" onClick={onOpenLeft} aria-label={`Mở thư mục nguồn, ${selectedSources?.length || 0} đang chọn`}>
+            <Icon name="Library" size={16} />
+            <b aria-hidden>{selectedSources?.length || 0}</b>
+          </button>
+          <button type="button" onClick={onOpenEvidence} aria-label={`Mở bằng chứng, ${evidenceCount} nguồn`}>
+            <Icon name="PanelRight" size={16} />
+            <b aria-hidden>{evidenceCount}</b>
+          </button>
+        </div>
+
         {/* On tablet/mobile, use one compact source icon to open the existing drawer — no duplicate modal */}
         <button
           type="button"
           onClick={onOpenLeft}
-          className={`icon-btn w-10 h-10 flex-shrink-0 ${isLeftVisible ? "md:hidden" : ""}`}
+          className={`conversation-source-trigger icon-btn w-10 h-10 flex-shrink-0 ${isLeftVisible ? "hidden" : "hidden md:inline-flex"}`}
           aria-label="Mở thư mục nguồn"
           title="Mở thư mục nguồn"
         >

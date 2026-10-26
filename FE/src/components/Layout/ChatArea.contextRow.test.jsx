@@ -95,6 +95,30 @@ describe("ChatArea compact context row", () => {
     expect(container.textContent).not.toContain("Chưa chọn nguồn");
   });
 
+  it("provides mobile Sources and Evidence header context without a bottom dock", async () => {
+    const onOpenLeft = vi.fn();
+    const onOpenEvidence = vi.fn();
+    await renderChatArea({
+      selectedSources: ["a", "b"],
+      sources: [{ video_stem: "a" }, { video_stem: "b" }],
+      evidenceCount: 3,
+      onOpenLeft,
+      onOpenEvidence,
+    });
+
+    const context = container.querySelector(".mobile-context");
+    expect(context).toBeTruthy();
+    const buttons = context.querySelectorAll("button");
+    expect(buttons).toHaveLength(2);
+    expect(buttons[0].getAttribute("aria-label")).toContain("2 đang chọn");
+    expect(buttons[1].getAttribute("aria-label")).toContain("3 nguồn");
+    expect(container.querySelector(".mobile-dock")).toBeNull();
+
+    await act(async () => { buttons[0].click(); buttons[1].click(); });
+    expect(onOpenLeft).toHaveBeenCalledTimes(1);
+    expect(onOpenEvidence).toHaveBeenCalledTimes(1);
+  });
+
   it("the conversation title is really editable via its rename icon", async () => {
     await renderChatArea();
     expect(container.textContent).toContain("Cuộc trò chuyện mới");
