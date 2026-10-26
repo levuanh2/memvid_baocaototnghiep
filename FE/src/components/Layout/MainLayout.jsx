@@ -442,17 +442,23 @@ export default function MainLayout({
   // khác đang mở (modal tóm tắt/sơ đồ — `[aria-modal]`/`.me-container`) để
   // không tranh phím Escape với overlay đó, giống guard đã có ở
   // `chatFocus.js::shouldFocusOnSlash`.
+  //
+  // Round 3 QA closure — extended to the tablet rail's expanded-shelf
+  // overlay (same floating/backdrop treatment as the drawer, so it earns
+  // the same Escape contract).
+  const tabletShelfOpen = tabletSourceRail && !panel.collapsed.left;
   useEffect(() => {
     const onKey = (e) => {
-      if (e.key !== "Escape" || !panel.drawer || !rightOpen) return;
+      if (e.key !== "Escape" || !((panelDrawer && rightOpen) || tabletShelfOpen)) return;
       // Defer to real modal dialogs only. `.me-container` is the Mind Map canvas
       // itself, present for the whole MindMap mode, so it must not block Escape.
       if (document.querySelector('[aria-modal="true"]')) return;
-      closeRightPanel();
+      if (tabletShelfOpen) setPanelCollapsed("left", true);
+      else closeRightPanel();
     };
     window.addEventListener("keydown", onKey);
     return () => window.removeEventListener("keydown", onKey);
-  }, [panel.drawer, rightOpen, closeRightPanel]);
+  }, [panelDrawer, setPanelCollapsed, rightOpen, closeRightPanel, tabletShelfOpen]);
 
   const rightSurfaceVisible = true;
   // 2026-09-21: Mind Map's node-detail surface must be a closed-by-default
@@ -663,11 +669,35 @@ export default function MainLayout({
           />
         )}
 
+        {/* Round 3 QA closure: expanding the tablet rail's full shelf used to
+            push real grid width (panel.width.left, up to 420px) alongside
+            whatever the right Inspector also had open (up to effectiveMax),
+            squeezing the center chat column to as little as 26px at 768px
+            (measured, Codex2). Fix: in the tablet band the expanded shelf is
+            a floating overlay (position:fixed, same drawer treatment already
+            proven for <768px), so it never contributes to the flex row's
+            width math — center-pane width in this band is now simply
+            viewport minus the 56px rail minus whatever the Inspector takes,
+            never minus BOTH side panels' full expanded widths at once. Same
+            backdrop/click-outside-to-close pattern as the existing mobile
+            drawer below, extended to cover this state too. */}
+        {tabletShelfOpen && (
+          <div
+            className="fixed inset-0 bg-black/40 z-30 backdrop-blur-sm"
+            onClick={() => panel.setCollapsedFor("left", true)}
+          />
+        )}
+
         {/* ── KỆ TRÁI — Thư mục nguồn ── */}
         {tabletSourceRail ? (
           <>
             <aside
-              className="workspace-source-rail-shell shrink-0 bg-surface-sidebar overflow-hidden"
+              className={
+                panel.collapsed.left
+                  ? "workspace-source-rail-shell shrink-0 bg-surface-sidebar overflow-hidden"
+                  : `workspace-source-rail-overlay fixed top-[56px] left-0 h-[calc(100vh-56px)] z-40
+                     bg-surface-sidebar border-r border-border shadow-card-hover overflow-hidden`
+              }
               style={{ width: panel.collapsed.left ? 56 : panel.width.left }}
               data-source-layout={panel.collapsed.left ? "rail" : "shelf"}
             >
@@ -681,19 +711,9 @@ export default function MainLayout({
                 railMode={panel.collapsed.left}
               />
             </aside>
-            {!panel.collapsed.left && (
-              <PanelDivider
-                side="left"
-                label={PANELS.left.label}
-                width={panel.width.left}
-                min={PANELS.left.min}
-                max={PANELS.left.max}
-                active={panel.dragging === "left"}
-                onDrag={(e) => panel.startDrag("left", e)}
-                onNudge={(d) => panel.nudgeWidth("left", d)}
-                onReset={() => panel.resetWidth("left")}
-              />
-            )}
+            {/* No PanelDivider in this band: the expanded shelf is a fixed
+                overlay now (see above), not a row-width participant, so
+                drag-resizing it against the row no longer applies here. */}
           </>
         ) : !panel.drawer && panel.collapsed.left ? (
           <PanelSpine

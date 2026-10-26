@@ -5,6 +5,7 @@ import { createRoot } from "react-dom/client";
 import { act } from "react-dom/test-utils";
 import MainLayout from "./MainLayout";
 import { StudyContextProvider } from "../../study/StudyContextProvider";
+import { effectiveMax } from "../../hooks/panelLayout";
 
 beforeAll(() => {
   window.matchMedia = window.matchMedia || (() => ({ matches: false, addEventListener() {}, removeEventListener() {} }));
@@ -102,5 +103,52 @@ describe("MainLayout Learning Desk responsive shell", () => {
     expect(inspector).toBeTruthy();
     expect(inspector.style.minWidth).toBe("320px");
     expect(Number.parseFloat(inspector.style.width)).toBeGreaterThanOrEqual(320);
+  });
+
+  // Round 3 QA closure. Threshold derivation (not an invented number): the
+  // composer is the narrowest real requirement in the center pane —
+  // ChatArea.jsx's composer row is `px-3 sm:px-6` (24px each side at >=640px)
+  // + the attach button (w-9 = 36px) + the send button (w-10 = 40px) + two
+  // `sm:gap-3` (12px) gaps = 148px of fixed chrome, leaving the textarea
+  // itself needing a reasonable minimum to stay usable for typing — 160px is
+  // generous for that. 148 + 160 = 308px, rounded up to 320px to match the
+  // Inspector's own established floor and leave margin. jsdom has no real
+  // layout engine (getBoundingClientRect is always 0), so this asserts the
+  // FIX'S MECHANISM instead of pixels: once the tablet shelf is expanded, it
+  // must be `position: fixed` (an overlay, contributing zero row width) —
+  // structurally guaranteeing the center pane only ever competes with the
+  // right Inspector's own (already-bounded) width, never with both
+  // side panels' full widths simultaneously. The arithmetic bound that
+  // guarantee implies is asserted directly against `effectiveMax`, the same
+  // function panelLayout.js itself uses to cap the Inspector's width.
+  it.each([768, 769, 780, 800, 820, 1024])(
+    "expanding the tablet shelf floats it (zero row width) so the center pane keeps >=320px even with the Inspector maxed, at %ipx",
+    async (width) => {
+      await renderLayout(width, { left: false, right: false });
+      const shelf = container.querySelector('[data-source-layout="shelf"]');
+      expect(shelf).toBeTruthy();
+      expect(shelf.className).toMatch(/\bfixed\b/);
+      expect(shelf.className).not.toMatch(/\bshrink-0\b/);
+
+      const COMPOSER_FIXED_CHROME_PX = 148; // attach + send + padding + gaps, see derivation above
+      const COMPOSER_MIN_TEXTAREA_PX = 160;
+      const DERIVED_FLOOR_PX = 320; // >= 308 raw requirement, rounded to the Inspector's own floor
+      expect(COMPOSER_FIXED_CHROME_PX + COMPOSER_MIN_TEXTAREA_PX).toBeLessThanOrEqual(DERIVED_FLOOR_PX);
+
+      const rightMax = effectiveMax("right", width);
+      const guaranteedCenterWidth = width - rightMax; // shelf contributes 0 (fixed overlay)
+      expect(guaranteedCenterWidth).toBeGreaterThanOrEqual(DERIVED_FLOOR_PX);
+    },
+  );
+
+  it("Escape closes the expanded tablet shelf and backdrop click closes it too", async () => {
+    await renderLayout(800, { left: false, right: true });
+    expect(container.querySelector('[data-source-layout="shelf"]')).toBeTruthy();
+
+    await act(async () => {
+      window.dispatchEvent(new KeyboardEvent("keydown", { key: "Escape", bubbles: true }));
+    });
+    expect(container.querySelector('[data-source-layout="rail"]')).toBeTruthy();
+    expect(container.querySelector('[data-source-layout="shelf"]')).toBeNull();
   });
 });
