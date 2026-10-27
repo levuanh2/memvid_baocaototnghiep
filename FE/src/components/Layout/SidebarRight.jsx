@@ -15,6 +15,7 @@ import { saveActiveSummaryJob, loadActiveSummaryJob, clearActiveSummaryJob } fro
 import { confirmRegenerateIfDirty, stallBannerVisible, canRetry } from "../../utils/jobRecovery";
 import { toast } from "../ui/Toaster";
 import { Icon } from "../ui/Icon";
+import DestructiveConfirmDialog from "../ui/DestructiveConfirmDialog";
 import ContextPanelCloseButton from "./ContextPanelCloseButton";
 import Disclosure from "../ui/Disclosure";
 import Spinner from "../ui/Spinner";
@@ -179,6 +180,9 @@ export default function SidebarRight({
   const [loiTaiMindmap, setLoiTaiMindmap] = useState(null);
   const [loiTaiSummary, setLoiTaiSummary] = useState(null);
   const [summaries, setSummaries]         = useState([]);
+  // Round 7 — xoá sơ đồ/tóm tắt giờ đi qua hộp xác nhận dùng chung thay vì
+  // window.confirm. { kind: "map"|"summary", id, name } hoặc null khi đóng.
+  const [confirmDelete, setConfirmDelete] = useState(null);
   // `mindmapGenerating` now only drives the viewer's in-overlay "generating"
   // banner during a "Tạo lại" (regenerate) run — plain "Tạo sơ đồ" no longer
   // opens the overlay while the job runs, so it stays false for that path.
@@ -614,14 +618,19 @@ export default function SidebarRight({
     setShowModalMap((prev) => (prev ? { ...prev, ...saved } : prev));
   }, []);
 
-  const handleDeleteMap = async (id) => {
-    if (!window.confirm("Xóa sơ đồ này?")) return;
+  const handleDeleteMap = (id, name) => setConfirmDelete({ kind: "map", id, name });
+
+  // Hàm XOÁ THẬT — chỉ `DestructiveConfirmDialog` gọi, sau khi đã tích xác nhận.
+  const xoaMapThat = async (id) => {
     try {
       const res = await apiFetch(`/mindmaps/${id}`, { method: "DELETE" });
       if (!res.ok) throw new Error(`HTTP ${res.status}`);
-      setMindMaps((prev) => prev.filter((m) => m.id !== id));
-      await fetchMindMaps();
-    } catch (err) { console.error("Mind Map delete error:", err); alert("Không xóa được sơ đồ!"); }
+    } catch (err) {
+      console.error("Mind Map delete error:", err);
+      throw new Error("Không xóa được sơ đồ!");
+    }
+    setMindMaps((prev) => prev.filter((m) => m.id !== id));
+    await fetchMindMaps();
   };
 
   // ── Summary v2 job flow (mirror mindmap: poller + resume + cancel thật) ──
@@ -746,14 +755,21 @@ export default function SidebarRight({
     cancelSummary(jobId).catch((err) => console.error("[Summary] cancel request failed:", err));
   };
 
-  const handleDeleteSummary = async (id) => {
+  const handleDeleteSummary = (id, name) => {
     if (!id) { alert("Không xác định được ID tóm tắt"); return; }
-    if (!window.confirm("Xóa tóm tắt này?")) return;
+    setConfirmDelete({ kind: "summary", id, name });
+  };
+
+  // Hàm XOÁ THẬT — chỉ `DestructiveConfirmDialog` gọi, sau khi đã tích xác nhận.
+  const xoaSummaryThat = async (id) => {
     try {
       const res = await apiFetch(`/summaries/${id}`, { method: "DELETE" });
       if (!res.ok && res.status !== 404) throw new Error(`HTTP ${res.status}`);
-      await fetchSummaries();
-    } catch (err) { console.error("Delete summary error:", err); alert("Không xóa được tóm tắt!"); }
+    } catch (err) {
+      console.error("Delete summary error:", err);
+      throw new Error("Không xóa được tóm tắt!");
+    }
+    await fetchSummaries();
   };
 
   // ── Derived ───────────────────────────────────────
@@ -1196,7 +1212,7 @@ export default function SidebarRight({
                 {mindMaps.map((map) => (
                   <ListCard key={map.id} icon="Network" title={map.title}
                     meta={`${map.sources?.length || 0} tài liệu · ${formatTimeAgo(map.createdAt || map.created_at)}`}
-                    onOpen={() => setShowModalMap(map)} onDelete={() => handleDeleteMap(map.id)} deleteLabel="Xóa sơ đồ" />
+                    onOpen={() => setShowModalMap(map)} onDelete={() => handleDeleteMap(map.id, map.title)} deleteLabel="Xóa sơ đồ" />
                 ))}
               </div>
             )
@@ -1215,7 +1231,7 @@ export default function SidebarRight({
                 {summaries.map((item) => (
                   <ListCard key={item.id} icon="ScrollText" title={item.title || "Tóm tắt"}
                     meta={formatTimeAgo(item.created_at || item.createdAt)}
-                    onOpen={() => setShowSummaryModal(item)} onDelete={() => handleDeleteSummary(item.id)} deleteLabel="Xóa tóm tắt" />
+                    onOpen={() => setShowSummaryModal(item)} onDelete={() => handleDeleteSummary(item.id, item.title || "Tóm tắt")} deleteLabel="Xóa tóm tắt" />
                 ))}
               </div>
             )
@@ -1235,6 +1251,22 @@ export default function SidebarRight({
           error={guidedError}
         />
       )}
+
+      <DestructiveConfirmDialog
+        open={!!confirmDelete}
+        title={confirmDelete?.kind === "summary" ? "Xóa tóm tắt?" : "Xóa sơ đồ?"}
+        targetName={confirmDelete?.name}
+        consequenceText={confirmDelete?.kind === "summary"
+          ? "Bản tóm tắt này sẽ bị xóa vĩnh viễn. Không thể hoàn tác."
+          : "Sơ đồ này và toàn bộ nội dung liên quan sẽ bị xóa vĩnh viễn. Không thể hoàn tác."}
+        confirmLabel={confirmDelete?.kind === "summary" ? "Xóa tóm tắt" : "Xóa sơ đồ"}
+        onCancel={() => setConfirmDelete(null)}
+        onConfirm={async () => {
+          if (confirmDelete.kind === "summary") await xoaSummaryThat(confirmDelete.id);
+          else await xoaMapThat(confirmDelete.id);
+          setConfirmDelete(null);
+        }}
+      />
 
       <style>{`@media (min-width: 768px) { .md\\:hidden { display: none !important; } }`}</style>
     </div>

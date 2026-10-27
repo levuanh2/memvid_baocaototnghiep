@@ -12,6 +12,7 @@ import OperationUsage from "./OperationUsage";
 import { createPreviewThrottle } from "../../utils/streamPreview";
 import { shouldFocusComposer, shouldRefocusComposer, shouldFocusOnSlash } from "../../utils/chatFocus";
 import { Icon } from "../ui/Icon";
+import DestructiveConfirmDialog from "../ui/DestructiveConfirmDialog";
 import { PROSE } from "../ui/Markdown";
 import { useStudyContext } from "../../study/useStudyContext";
 import { nodeLabel, processCitations, parseCiteHref, normStem, citeKey } from "../../utils/evidence";
@@ -124,6 +125,8 @@ export default function ChatArea({
   // Conversation controls: kebab menu, a transient notice, and whether the AI is
   // currently using prior turns as context (hidden right after Clear context).
   const [menuOpen, setMenuOpen] = useState(false);
+  // Round 7 — xác nhận xoá lịch sử giờ đi qua hộp chung thay vì window.confirm.
+  const [xacNhanXoaLichSu, setXacNhanXoaLichSu] = useState(false);
   const [notice, setNotice] = useState("");
   const [contextCleared, setContextCleared] = useState(false);
   // Round 12 (compact context row) — conversation title lives only on this
@@ -407,21 +410,26 @@ export default function ChatArea({
     }
   };
 
-  const handleDeleteHistory = async () => {
+  const handleDeleteHistory = () => {
     if (loading || pendingReview) return;
     setMenuOpen(false);
-    if (!window.confirm("Xóa toàn bộ lịch sử chat của cuộc trò chuyện này? Hành động này không thể hoàn tác.")) return;
+    setXacNhanXoaLichSu(true);
+  };
+
+  // Hàm XOÁ THẬT — chỉ `DestructiveConfirmDialog` gọi, sau khi người dùng đã tích
+  // xác nhận. Ném lỗi trở lại cho hộp hiện ra, KHÔNG dọn khung chat ở đây — y hệt
+  // hành vi cũ: xoá hỏng mà vẫn dọn sạch khung chat là tệ nhất, người dùng tin đã
+  // xoá còn máy chủ vẫn giữ nguyên lịch sử và vẫn đưa nó vào ngữ cảnh lượt sau.
+  const xoaLichSuThat = async () => {
     try {
       await deleteConversation(sessionId);
     } catch {
-      // Xoá hỏng mà vẫn dọn sạch khung chat là tệ nhất: người dùng tin đã xoá, còn máy
-      // chủ vẫn giữ nguyên lịch sử và vẫn đưa nó vào ngữ cảnh lượt sau.
-      showNotice("Không xóa được lịch sử chat trên máy chủ. Lịch sử vẫn còn, hãy thử lại.");
-      return;
+      throw new Error("Không xóa được lịch sử chat trên máy chủ. Lịch sử vẫn còn, hãy thử lại.");
     }
     setMessages([]);
     setContextCleared(false);
     onEvidence?.(null); onHighlight?.(null);
+    setXacNhanXoaLichSu(false);
     showNotice("Đã xóa lịch sử chat.");
     refocusComposer();
   };
@@ -1121,6 +1129,16 @@ export default function ChatArea({
         </div>
       </div>
       </div>
+
+      <DestructiveConfirmDialog
+        open={xacNhanXoaLichSu}
+        title="Xóa lịch sử chat?"
+        targetName={title}
+        consequenceText="Toàn bộ tin nhắn của cuộc trò chuyện này sẽ bị xóa vĩnh viễn khỏi máy chủ. Không thể hoàn tác."
+        confirmLabel="Xóa lịch sử chat"
+        onCancel={() => setXacNhanXoaLichSu(false)}
+        onConfirm={xoaLichSuThat}
+      />
 
       <style>{`
         .scrollbar-none::-webkit-scrollbar { display: none; }
