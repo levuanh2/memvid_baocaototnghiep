@@ -34,6 +34,28 @@ const mind = {
   container: document.createElement("div"),
 };
 
+// Two sibling sub-branches, each two levels deep, used to build a
+// multi-branch selection with suppressed auto-context — the exact shape
+// where "node count - 1" is NOT a valid connector count (the render set can
+// be two disjoint components once the connecting ancestor is suppressed).
+const multiBranchMind = {
+  nodeData: {
+    id: "root", topic: "Gốc", expanded: true,
+    children: [
+      {
+        id: "sectionA", topic: "Nhánh A", expanded: true,
+        children: [{ id: "leafA", topic: "Lá A", expanded: true, children: [] }],
+      },
+      {
+        id: "sectionB", topic: "Nhánh B", expanded: true,
+        children: [{ id: "leafB", topic: "Lá B", expanded: true, children: [] }],
+      },
+    ],
+  },
+  map: document.createElement("div"),
+  container: document.createElement("div"),
+};
+
 let host;
 let root;
 
@@ -58,6 +80,25 @@ async function renderDialog() {
 
 async function click(element) {
   await act(async () => element.click());
+}
+
+async function renderMultiBranchDialog() {
+  host = document.createElement("div");
+  document.body.appendChild(host);
+  root = createRoot(host);
+  await act(async () => root.render(
+    <ExportStudioDialog
+      open
+      onClose={vi.fn()}
+      mind={multiBranchMind}
+      mapId="map-1"
+      title="Gốc"
+      selectedNodeId={null}
+      selectedBranchIds={new Set(["leafA", "leafB"])}
+      onRequestBranchSelection={vi.fn()}
+    />,
+  ));
+  return document.body.querySelector('[role="dialog"]');
 }
 
 afterEach(() => {
@@ -110,6 +151,34 @@ describe("Export Studio Preview Bench", () => {
     expect(exportImage).not.toHaveBeenCalled();
     expect(captureBase64).not.toHaveBeenCalled();
     expect(captureGeometry).not.toHaveBeenCalled();
+  });
+
+  it("never renders an invented connector count, including for a multi-branch selection with a suppressed auto-context ancestor", async () => {
+    const dialog = await renderMultiBranchDialog();
+    const preview = dialog.querySelector('[data-testid="export-persistent-preview"]');
+
+    // Two leaves from separate sub-branches, exact-selection mode (the only
+    // mode this dialog's "selected_branches" scope offers): the render set
+    // is leafA + leafB + their minimal connecting ancestors (sectionA,
+    // sectionB, root). "kết nối" must never appear — the fix removes the
+    // metric unconditionally, not only when it would be wrong, since no
+    // already-resolved authoritative connector count exists.
+    expect(preview.textContent).toContain("node");
+    expect(preview.textContent).not.toContain("kết nối");
+    const nodeCountBefore = Number(preview.querySelector(".export-preview__stats b").textContent);
+    expect(nodeCountBefore).toBeGreaterThan(0);
+
+    // Suppress one auto-added context ancestor — this can disconnect the
+    // render set into separate components (exactly the case "node count -
+    // 1", the old formula, would silently get wrong). The fix must still
+    // show no connector stat after the render set changes shape.
+    const suppressButton = dialog.querySelector(".export-context-list button");
+    expect(suppressButton).toBeTruthy();
+    await click(suppressButton);
+
+    const nodeCountAfter = Number(preview.querySelector(".export-preview__stats b").textContent);
+    expect(nodeCountAfter).toBeLessThan(nodeCountBefore);
+    expect(preview.textContent).not.toContain("kết nối");
   });
 
   it("keeps the export action outside the only scrollable settings region", async () => {
