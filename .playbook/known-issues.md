@@ -7580,3 +7580,16 @@ attribute inline.
 **Status:** disclosed as a known, pre-existing, structural MindElixir
 limitation — not a Round 4 regression and not fixable within this round's
 authorized files without patching library internals.
+# (ĐÃ SỬA 2026-10-27) Kết quả quiz đang chấm vẫn lộ điểm tạm như đã chấm xong
+
+**Triệu chứng:** Attempt ở trạng thái `submitted` vẫn vẽ `score`, phần trăm và số câu
+đúng/sai nếu payload trung gian có các trường đó, khiến điểm tạm trông như kết quả cuối.
+
+**Nguyên nhân:** `QuizResult` có banner "Đang chấm" nhưng `ScoreBoard` vẫn đọc trực tiếp
+các trường điểm cho mọi trạng thái. Presentation không khóa dữ liệu theo trạng thái chấm.
+
+**Fix + phòng ngừa:** Khi `status === "submitted"`, chỉ hiện trạng thái đang chấm và dấu
+`—`; chỉ attempt `graded` mới có điểm, thống kê, mastery và đường xem câu sai. Regression
+`QuizResult.round7.test.jsx` cố ý đưa điểm giả vào payload `submitted` và khẳng định nó
+không xuất hiện.
+

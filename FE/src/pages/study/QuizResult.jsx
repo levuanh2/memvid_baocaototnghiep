@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { Link, useParams } from "react-router-dom";
 import StudyShell from "../../components/study/StudyShell";
 import SealMeter from "../../components/study/SealMeter";
@@ -15,6 +15,7 @@ import {
   moTaLoi,
 } from "../../utils/studyApi";
 import { MAX_CONSECUTIVE_FETCH_FAILURES } from "../../utils/jobPoller";
+import "./quizJourney.css";
 
 const KEYS = ["A", "B", "C", "D", "E", "F"];
 const REGRADE_POLL_MS = 3000;
@@ -34,6 +35,8 @@ export default function QuizResult() {
   const [loiNen, setLoiNen] = useState(null);
   const [nhip, setNhip] = useState(0);
   const [ketChamBai, setKetChamBai] = useState(false);
+  const [reviewingWrong, setReviewingWrong] = useState(false);
+  const [reviewIndex, setReviewIndex] = useState(0);
   const truotRef = useRef(0);
   const batDauChoRef = useRef(null);
   const timerRef = useRef(null);
@@ -83,6 +86,11 @@ export default function QuizResult() {
   }, [result, nhip, load]);
 
   const grading = result?.status === "submitted";
+  const wrongQuestions = useMemo(
+    () => (result?.status === "graded" ? (result.questions || []).filter((question) => question.verdict && question.verdict !== "correct") : []),
+    [result],
+  );
+  const openWrongReview = () => { setReviewIndex(0); setReviewingWrong(true); };
 
   return (
     <StudyShell
@@ -92,11 +100,11 @@ export default function QuizResult() {
       loading={loading}
       error={error && !result ? error : null}
       onRetry={load}
-      width="max-w-[860px]"
+      width={reviewingWrong ? "max-w-[1120px]" : "max-w-[1050px]"}
       actions={
         result?.status === "graded" && (
-          <Link to={`/app/study/review/${attemptId}`} className="btn-seal text-small inline-flex items-center gap-2">
-            <Icon name="BookOpen" size={14} /> Xem phần cần ôn
+          <Link to={`/app/study/review/${attemptId}`} className="btn-secondary text-small inline-flex items-center gap-2">
+            <Icon name="BookOpen" size={14} /> Kế hoạch ôn tập
           </Link>
         )
       }
@@ -122,7 +130,11 @@ export default function QuizResult() {
               </button>
             </div>
           )}
-          <ScoreBoard result={result} grading={grading} />
+          {reviewingWrong ? (
+            <WrongAnswerReview questions={wrongQuestions} index={reviewIndex} onIndex={setReviewIndex}
+              onClose={() => setReviewingWrong(false)} reviewPlanTo={`/app/study/review/${attemptId}`} />
+          ) : <>
+          <ScoreBoard result={result} grading={grading} wrongCount={wrongQuestions.length} onReviewWrong={openWrongReview} />
 
           {grading && (
             <div className="surface-card !p-3.5 flex items-center gap-2.5 mb-6">
@@ -162,6 +174,7 @@ export default function QuizResult() {
               ))}
             </div>
           </section>
+          </>}
         </>
       )}
     </StudyShell>
@@ -176,20 +189,20 @@ function SectionTitle({ children }) {
   );
 }
 
-function ScoreBoard({ result, grading }) {
+function ScoreBoard({ result, grading, wrongCount, onReviewWrong }) {
   const percent = result.percentage;
   return (
-    <section className="surface-card mb-6 flex flex-wrap items-center gap-6">
+    <section className="quiz-score-hero">
       <div className="flex items-center gap-4">
         <SealMeter
-          score={percent == null ? 0 : percent / 100}
+          score={grading || percent == null ? 0 : percent / 100}
           status={percent != null && percent >= 80 ? "mastered" : undefined}
           size={64}
-          label={percent == null ? "Chưa có điểm" : `Đạt ${percent} phần trăm`}
+          label={grading || percent == null ? "Chưa có điểm" : `Đạt ${percent} phần trăm`}
         />
         <div>
           <div className="font-display text-h2 font-semibold text-text-primary leading-none">
-            {formatScore(result.score, result.max_score)}
+            {grading ? "Đang chấm" : formatScore(result.score, result.max_score)}
           </div>
           <div className="font-mono text-caption text-text-muted mt-1.5">
             {grading ? "đang chấm" : percent == null ? "chưa chấm" : `${percent}% · điểm thô`}
@@ -198,12 +211,31 @@ function ScoreBoard({ result, grading }) {
       </div>
 
       <div className="flex flex-wrap gap-x-7 gap-y-2 text-small">
-        <Stat label="Đúng" value={result.correct_count ?? "—"} />
-        <Stat label="Sai" value={result.incorrect_count ?? "—"} />
+        <Stat label="Đúng" value={grading ? "—" : result.correct_count ?? "—"} />
+        <Stat label="Sai" value={grading ? "—" : result.incorrect_count ?? "—"} />
         <Stat label="Số câu" value={result.total_questions} />
         <Stat label="Thời gian" value={formatDuration(result.duration_seconds)} />
       </div>
+      {!grading && wrongCount > 0 && <button type="button" className="btn-primary quiz-review-wrong" onClick={onReviewWrong}>Xem lại {wrongCount} câu cần ôn</button>}
     </section>
+  );
+}
+
+function WrongAnswerReview({ questions, index, onIndex, onClose, reviewPlanTo }) {
+  const current = questions[index];
+  if (!current) return <section className="surface-card text-center"><h2 className="font-display text-title text-text-primary">Không có câu sai cần xem lại</h2><button type="button" className="btn-secondary mt-4" onClick={onClose}>Về kết quả</button></section>;
+  return (
+    <div className="quiz-wrong-review">
+      <aside className="quiz-wrong-review__rail" aria-label="Câu cần xem lại">
+        <header><strong>Ôn lại bài làm</strong><span>{questions.length} câu cần xem</span></header>
+        {questions.map((question, itemIndex) => <button type="button" key={question.question_id} className={itemIndex === index ? "is-active" : ""} aria-current={itemIndex === index ? "true" : undefined} onClick={() => onIndex(itemIndex)}><span>{itemIndex + 1}</span><div><strong>Câu {itemIndex + 1}</strong><small>{VERDICT_LABEL[question.verdict] || "Cần xem lại"}</small></div></button>)}
+      </aside>
+      <section className="quiz-wrong-review__content">
+        <div className="quiz-wrong-review__nav"><button type="button" className="btn-secondary" onClick={onClose}><Icon name="ArrowLeft" size={14} /> Kết quả</button><span>Câu cần ôn {index + 1} / {questions.length}</span><div><button type="button" aria-label="Câu cần ôn trước" disabled={index === 0} onClick={() => onIndex(index - 1)}>←</button><button type="button" aria-label="Câu cần ôn tiếp theo" disabled={index === questions.length - 1} onClick={() => onIndex(index + 1)}>→</button></div></div>
+        <ReviewedQuestion question={current} order={index + 1} />
+      </section>
+      <aside className="quiz-wrong-review__next"><Icon name="Target" size={20} /><h2>Tiếp tục học</h2><p>Đây là phần xem lại câu trả lời. Kế hoạch ôn tập riêng vẫn được tạo và quản lý ở bước tiếp theo.</p><Link className="btn-primary" to={reviewPlanTo}>Mở kế hoạch ôn tập</Link></aside>
+    </div>
   );
 }
 

@@ -3514,3 +3514,10 @@ would have. When a fix touches CSS that interacts with a third-party
 library's own base stylesheet, budget time for at least one real-browser
 capture of the specific scenario the fix changes, not just a jsdom
 attribute-presence check.
+# Trạng thái nghiệp vụ phải khóa cả dữ liệu trình bày, không chỉ thêm banner (2026-10-27)
+
+Một banner "đang chấm" không đủ nếu cùng màn hình vẫn render điểm tạm từ payload. Với
+quiz, `submitted` và `graded` là ranh giới nghiệp vụ: mọi số liệu mang nghĩa kết quả cuối
+phải được gate bằng `graded`, kể cả khi backend tình cờ trả trường score sớm. Test trạng
+thái chờ nên dùng payload có score giả để chứng minh UI không rò dữ liệu tạm.
+
