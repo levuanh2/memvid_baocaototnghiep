@@ -196,7 +196,7 @@ function ScoreBoard({ result, grading, wrongCount, onReviewWrong }) {
       <div className="flex items-center gap-4">
         <SealMeter
           score={grading || percent == null ? 0 : percent / 100}
-          status={percent != null && percent >= 80 ? "mastered" : undefined}
+          status={!grading && percent != null && percent >= 80 ? "mastered" : undefined}
           size={64}
           label={grading || percent == null ? "Chưa có điểm" : `Đạt ${percent} phần trăm`}
         />

@@ -38,6 +38,12 @@ export default function DestructiveConfirmDialog({
     setDaTick(false);
     setDangXoa(false);
     setLoi("");
+    // Khoá gửi-trùng chỉ tự tắt khi THẤT BẠI (xem catch bên dưới) — thành công thì
+    // không có chỗ nào khác đặt nó về false, vì nơi gọi tự đóng hộp (họ còn phải
+    // cập nhật state của họ trước) thay vì unmount ngay. Hộp lại được DÙNG LẠI cho
+    // lần xoá sau (`open` bật lại, không mount mới), nên phải dọn ở đây — thiếu
+    // dòng này thì sau MỘT lần xoá thành công, mọi lần xoá sau lặng lẽ không gửi gì.
+    dangGuiRef.current = false;
   }, [open, targetName]);
 
   if (!open) return null;

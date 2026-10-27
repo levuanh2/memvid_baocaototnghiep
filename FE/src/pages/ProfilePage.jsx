@@ -28,13 +28,16 @@ export default function ProfilePage() {
   // Hồ sơ NKS trả về sau khi lưu/đổi ảnh KHÔNG đi qua `/auth/me` (endpoint đó
   // không mang phone/avatar — xem AuthContext), nên đẩy thẳng các trường này
   // vào `user` dùng chung để AccountMenu và mọi nơi khác đọc `user` thấy ngay.
+  // Truyền kèm id của người đang đăng nhập LÚC NÀY (lúc tạo callback này, tức
+  // lúc lưu bắt đầu) — nếu lượt lưu về chậm sau khi người khác đã đăng nhập
+  // trên cùng tab, `updateUserFields` tự bỏ qua thay vì ghi đè nhầm người.
   const onHoSoMoi = useCallback((moi) => {
     updateUserFields({
       display_name: moi.display_name ?? user?.display_name,
       email: moi.email ?? user?.email,
       phone: moi.phone ?? user?.phone,
       avatar: moi.avatar ?? user?.avatar,
-    });
+    }, user?.id);
   }, [updateUserFields, user]);
 
   const hoSo = dungHoSo(user);

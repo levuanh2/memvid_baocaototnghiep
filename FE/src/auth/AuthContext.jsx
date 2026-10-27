@@ -159,8 +159,19 @@ export function AuthProvider({ children }) {
   // về hồ sơ mới sau khi lưu, nơi gọi (trang Hồ sơ) đẩy thẳng các trường đó vào đây để
   // AccountMenu và mọi nơi khác đọc `user` đều thấy ngay, không cần một bản sao state
   // song song như trước (Round 7 — trước đó bản sao này chỉ sống trong AccountMenu).
-  const updateUserFields = useCallback((partial) => {
-    setUser((u) => (u ? { ...u, ...partial } : u));
+  //
+  // `expectUserId`: id của người đang đăng nhập TẠI THỜI ĐIỂM lưu hồ sơ bắt đầu. Một
+  // lần lưu chậm có thể về sau khi người dùng đã đăng xuất rồi người KHÁC đăng nhập
+  // trên cùng tab — không kiểm danh tính thì dữ liệu của người cũ ghi đè lên `user`
+  // của người mới. Khớp đúng danh tính mới merge; lệch thì bỏ qua lặng lẽ, coi như
+  // một lần lưu đã quá hạn sử dụng (độc giả tiếp theo không có gì để mất ở đây — hồ
+  // sơ của HỌ không hề bị đụng tới trên máy chủ, chỉ là giao diện không cập nhật).
+  const updateUserFields = useCallback((partial, expectUserId) => {
+    setUser((u) => {
+      if (!u) return u;
+      if (expectUserId != null && u.id !== expectUserId) return u;
+      return { ...u, ...partial };
+    });
   }, []);
 
   const value = { user, loading, error, setError, login, register, logout, refreshUser, updateUserFields };

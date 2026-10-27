@@ -83,4 +83,39 @@ describe("DestructiveConfirmDialog", () => {
     expect(checkbox(dialog).checked).toBe(false);
     expect(confirmBtn(dialog).disabled).toBe(true);
   });
+
+  // Real callers (SidebarRight.jsx) mount the dialog ONCE and toggle its `open`
+  // prop between deletions — they never unmount/remount it. The reset-on-reopen
+  // test above unmounts, which would mask a stale-ref bug that only shows up on a
+  // same-instance reopen.
+  it("can delete again after a successful delete, on the SAME mounted instance", async () => {
+    let currentOpen = true;
+    const onConfirmFirst = vi.fn().mockResolvedValue(undefined);
+    const onConfirmSecond = vi.fn().mockResolvedValue(undefined);
+
+    container = document.createElement("div"); document.body.appendChild(container);
+    root = createRoot(container);
+    const renderWith = (onConfirm, targetName) => act(async () => root.render(
+      <DestructiveConfirmDialog open={currentOpen} title="Delete map?" targetName={targetName} onConfirm={onConfirm} onCancel={vi.fn()} />,
+    ));
+
+    await renderWith(onConfirmFirst, "Map A");
+    let dialog = document.body.querySelector('[role="dialog"]');
+    await act(async () => { checkbox(dialog).click(); });
+    await act(async () => { confirmBtn(dialog).click(); });
+    expect(onConfirmFirst).toHaveBeenCalledTimes(1);
+
+    // Caller's own onConfirm resolved -> caller clears its "confirmDelete" state,
+    // which flips `open` to false, then true again for the next target.
+    currentOpen = false;
+    await renderWith(onConfirmFirst, null);
+    currentOpen = true;
+    await renderWith(onConfirmSecond, "Map B");
+
+    dialog = document.body.querySelector('[role="dialog"]');
+    await act(async () => { checkbox(dialog).click(); });
+    expect(confirmBtn(dialog).disabled).toBe(false);
+    await act(async () => { confirmBtn(dialog).click(); });
+    expect(onConfirmSecond).toHaveBeenCalledTimes(1);
+  });
 });

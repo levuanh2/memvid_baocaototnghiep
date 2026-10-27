@@ -37,6 +37,12 @@ describe("Round 7 quiz result", () => {
     expect(container.textContent).not.toContain("Xem lại 2 câu");
   });
 
+  it("does not render the mastered seal style while grading is pending, even if the payload carries an early high percentage", async () => {
+    getResult.mockResolvedValue({ status: "submitted", quiz_title: "Quiz", score: 9, max_score: 10, percentage: 90, total_questions: 10, questions: [] });
+    await renderReady();
+    expect(container.querySelector(".seal-meter--mastered")).toBeNull();
+  });
+
   it("opens wrong-answer review without replacing the review-plan route", async () => {
     getResult.mockResolvedValue({ status: "graded", quiz_title: "Quiz", score: 8, max_score: 10, percentage: 80, correct_count: 8, incorrect_count: 2, total_questions: 10, duration_seconds: 60, questions: QUESTIONS });
     await renderReady();
