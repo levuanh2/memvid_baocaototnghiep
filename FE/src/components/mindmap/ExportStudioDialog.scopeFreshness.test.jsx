@@ -80,7 +80,7 @@ describe("Export Studio scope freshness contract", () => {
     let dialog = await renderDialog({ mapId: "map-b", canvasReadyId: "map-a" });
     expect(dialog.querySelector('[role="status"]')?.textContent).toContain("Đang đồng bộ phạm vi");
     expect(summary(dialog)).not.toMatch(/11 node|57 node/);
-    expect([...dialog.querySelectorAll("button")].find((button) => button.textContent === "Tiếp tục").disabled).toBe(true);
+    expect([...dialog.querySelectorAll("button")].find((button) => button.textContent.includes("Xuất PNG")).disabled).toBe(true);
 
     mind.nodeData = nodeData(57);
     dialog = await renderDialog({ mapId: "map-b", canvasReadyId: "map-b" });
@@ -91,10 +91,6 @@ describe("Export Studio scope freshness contract", () => {
     exportMindmapImageMock.mockResolvedValue({ filename: "map-b.png" });
     const dialog = await renderDialog();
     expect(summary(dialog)).toContain("11 node");
-    await clickText(dialog, "Tiếp tục");
-    await clickText(dialog, "Tiếp tục");
-    await clickText(dialog, "Tiếp tục");
-
     // Simulate an in-place Mind Elixir mutation while the dialog stays open.
     // Object identity, map id, scope and selection all remain unchanged.
     mind.nodeData = nodeData(57);
@@ -110,10 +106,6 @@ describe("Export Studio scope freshness contract", () => {
   it("revalidates same-id content mutations before exporting with a stale geometry preview", async () => {
     exportMindmapImageMock.mockResolvedValue({ filename: "map-b.png" });
     const dialog = await renderDialog();
-    await clickText(dialog, "Tiếp tục");
-    await clickText(dialog, "Tiếp tục");
-    await clickText(dialog, "Tiếp tục");
-
     // Editing a topic can change rendered geometry without changing any
     // included id or the displayed node count.
     mind.nodeData = nodeData(11, "A much longer root topic");
@@ -125,17 +117,11 @@ describe("Export Studio scope freshness contract", () => {
 
   it("refreshes the estimated dimensions on the same readiness boundary as the scope count", async () => {
     let dialog = await renderDialog({ record: { id: "map-a", title: "Map A" }, mapId: "map-a", canvasReadyId: "map-a", title: "Map A" });
-    await clickText(dialog, "Tiếp tục");
-    await clickText(dialog, "Tiếp tục");
-    await clickText(dialog, "Tiếp tục");
     expect(dialog.textContent).toContain("≈110×800px");
 
     await renderDialog({ open: false, mapId: "map-b", canvasReadyId: "map-a" });
     mind.nodeData = nodeData(57);
     dialog = await renderDialog({ record: { id: "map-b", title: "Map B" }, mapId: "map-b", canvasReadyId: "map-b", title: "Map B" });
-    await clickText(dialog, "Tiếp tục");
-    await clickText(dialog, "Tiếp tục");
-    await clickText(dialog, "Tiếp tục");
     expect(dialog.textContent).toContain("≈570×800px");
     expect(estimateExportDimensionsMock).toHaveBeenCalled();
   });
@@ -165,10 +151,7 @@ describe("Export Studio scope freshness contract", () => {
     expect(summary(dialog)).toContain("2 node đã chọn · 1 node cha tự thêm · 3 node được xuất");
     expect(dialog.querySelector(".export-count").textContent).toMatch(/^2\s/);
 
-    for (let index = 0; index < 3; index += 1) {
-      await act(async () => dialog.querySelector(".export-footer .btn-primary").click());
-    }
-    const reviewValues = [...dialog.querySelectorAll(".export-review dd")].map((node) => node.textContent);
-    expect(reviewValues.some((value) => value.includes("3 node thực tế") && value.includes("2 node đã tick"))).toBe(true);
+    expect(summary(dialog)).toContain("2 node đã chọn · 1 node cha tự thêm · 3 node được xuất");
+    expect(dialog.querySelector('[data-testid="export-persistent-preview"]').textContent).toContain("3 node");
   });
 });

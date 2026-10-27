@@ -56,7 +56,6 @@ async function render(controller) {
 async function openToFormatStep() {
   await act(async () => { container.querySelector('[aria-label="Xuất sơ đồ"]').click(); });
   const dialog = document.body.querySelector('[role="dialog"]');
-  await act(async () => { [...dialog.querySelectorAll("button")].find((b) => b.textContent === "Tiếp tục").click(); });
   return dialog;
 }
 
@@ -74,7 +73,6 @@ describe("Export Studio — document formats", () => {
     await render(makeController());
     const dialog = await openToFormatStep();
     await act(async () => { dialog.querySelector('input[value="pdf"]').click(); });
-    await act(async () => { [...dialog.querySelectorAll("button")].find((b) => b.textContent === "Tiếp tục").click(); });
     const panel = dialog.querySelector('[data-testid="doc-appearance"]');
     expect(panel).toBeTruthy();
     expect(panel.textContent).toContain("Khổ giấy");
@@ -95,7 +93,6 @@ describe("Export Studio — document formats", () => {
     await render(makeController());
     const dialog = await openToFormatStep();
     await act(async () => { dialog.querySelector('input[value="pdf"]').click(); });
-    await act(async () => { [...dialog.querySelectorAll("button")].find((b) => b.textContent === "Tiếp tục").click(); });
 
     const panel = dialog.querySelector('[data-testid="doc-appearance"]');
     const a4 = [...panel.querySelectorAll("button")].find((b) => b.textContent === "A4 — In tài liệu");
@@ -109,7 +106,6 @@ describe("Export Studio — document formats", () => {
     await act(async () => { contentFit.click(); });
     expect(contentFit.getAttribute("aria-pressed")).toBe("true");
 
-    await act(async () => { [...dialog.querySelectorAll("button")].find((b) => b.textContent === "Tiếp tục").click(); });
     await act(async () => { [...dialog.querySelectorAll("button")].find((b) => b.textContent.includes("Tạo PDF")).click(); });
 
     expect(docExport.createMindmapExport).toHaveBeenCalledWith("m1", expect.objectContaining({
@@ -124,7 +120,6 @@ describe("Export Studio — document formats", () => {
     await render(makeController());
     const dialog = await openToFormatStep();
     await act(async () => { dialog.querySelector('input[value="pdf"]').click(); });
-    await act(async () => { [...dialog.querySelectorAll("button")].find((b) => b.textContent === "Tiếp tục").click(); });
     const panel = dialog.querySelector('[data-testid="doc-appearance"]');
     const button = (label) => [...panel.querySelectorAll("button")].find((b) => b.textContent === label);
 
@@ -135,7 +130,6 @@ describe("Export Studio — document formats", () => {
     expect(button("Vừa nội dung — Xem trên màn hình").disabled).toBe(true);
     expect(button("A4 — In tài liệu").getAttribute("aria-pressed")).toBe("true");
 
-    await act(async () => { [...dialog.querySelectorAll("button")].find((b) => b.textContent === "Tiếp tục").click(); });
     await act(async () => { [...dialog.querySelectorAll("button")].find((b) => b.textContent.includes("Tạo PDF")).click(); });
     expect(docExport.createMindmapExport).toHaveBeenCalledWith("m1", expect.objectContaining({
       options: expect.objectContaining({ mode: "outline", pageSize: "A4" }),
@@ -155,8 +149,6 @@ describe("Export Studio — document formats", () => {
     await render(makeController());
     const dialog = await openToFormatStep();
     await act(async () => { dialog.querySelector('input[value="pdf"]').click(); });
-    await act(async () => { [...dialog.querySelectorAll("button")].find((b) => b.textContent === "Tiếp tục").click(); }); // -> appearance
-    await act(async () => { [...dialog.querySelectorAll("button")].find((b) => b.textContent === "Tiếp tục").click(); }); // -> preview
 
     const exportBtn = [...dialog.querySelectorAll("button")].find((b) => b.textContent.includes("Tạo PDF"));
     await act(async () => { exportBtn.click(); });
@@ -173,8 +165,6 @@ describe("Export Studio — document formats", () => {
     await render(makeController());
     const dialog = await openToFormatStep();
     await act(async () => { dialog.querySelector('input[value="pdf"]').click(); });
-    await act(async () => { [...dialog.querySelectorAll("button")].find((b) => b.textContent === "Tiếp tục").click(); });
-    await act(async () => { [...dialog.querySelectorAll("button")].find((b) => b.textContent === "Tiếp tục").click(); });
 
     const exportBtn = [...dialog.querySelectorAll("button")].find((b) => b.textContent.includes("Tạo PDF"));
     await act(async () => { exportBtn.click(); });
@@ -203,8 +193,6 @@ describe("Export Studio — document formats", () => {
     await render(makeController());
     const dialog = await openToFormatStep();
     await act(async () => { dialog.querySelector('input[value="pdf"]').click(); });
-    await act(async () => { [...dialog.querySelectorAll("button")].find((b) => b.textContent === "Tiếp tục").click(); });
-    await act(async () => { [...dialog.querySelectorAll("button")].find((b) => b.textContent === "Tiếp tục").click(); });
 
     const exportBtn = [...dialog.querySelectorAll("button")].find((b) => b.textContent.includes("Tạo PDF"));
     await act(async () => { exportBtn.click(); });
@@ -231,8 +219,6 @@ describe("Export Studio — document formats", () => {
     await render(controller);
     const dialog = await openToFormatStep();
     await act(async () => { dialog.querySelector('input[value="pdf"]').click(); });
-    await act(async () => { [...dialog.querySelectorAll("button")].find((b) => b.textContent === "Tiếp tục").click(); });
-    await act(async () => { [...dialog.querySelectorAll("button")].find((b) => b.textContent === "Tiếp tục").click(); });
     act(() => { [...dialog.querySelectorAll("button")].find((b) => b.textContent.includes("Tạo PDF")).click(); });
     await act(async () => { await Promise.resolve(); });
 
@@ -270,8 +256,6 @@ describe("Export Studio — document formats", () => {
     await render(makeController());
     const dialog = await openToFormatStep();
     await act(async () => { dialog.querySelector('input[value="pdf"]').click(); });
-    await act(async () => { [...dialog.querySelectorAll("button")].find((b) => b.textContent === "Tiếp tục").click(); });
-    await act(async () => { [...dialog.querySelectorAll("button")].find((b) => b.textContent === "Tiếp tục").click(); });
     act(() => { [...dialog.querySelectorAll("button")].find((b) => b.textContent.includes("Tạo PDF")).click(); });
     await act(async () => { await Promise.resolve(); });
     await act(async () => { [...dialog.querySelectorAll("button")].find((b) => b.textContent === "Hủy xuất").click(); });
@@ -302,8 +286,6 @@ describe("Export Studio — document formats", () => {
     await render(makeController());
     const dialog = await openToFormatStep();
     await act(async () => { dialog.querySelector('input[value="pdf"]').click(); });
-    await act(async () => { [...dialog.querySelectorAll("button")].find((b) => b.textContent === "Tiếp tục").click(); });
-    await act(async () => { [...dialog.querySelectorAll("button")].find((b) => b.textContent === "Tiếp tục").click(); });
     act(() => { [...dialog.querySelectorAll("button")].find((b) => b.textContent.includes("Tạo PDF")).click(); });
     await act(async () => { await Promise.resolve(); });
     await act(async () => { [...dialog.querySelectorAll("button")].find((b) => b.textContent === "Hủy xuất").click(); });
@@ -312,9 +294,6 @@ describe("Export Studio — document formats", () => {
     await act(async () => { container.querySelector('[aria-label="Xuất sơ đồ"]').click(); });
     const reopened = document.body.querySelector('[role="dialog"]');
     expect(reopened.textContent).not.toContain("Đã hủy");
-    await act(async () => { [...reopened.querySelectorAll("button")].find((b) => b.textContent === "Tiếp tục").click(); });
-    await act(async () => { [...reopened.querySelectorAll("button")].find((b) => b.textContent === "Tiếp tục").click(); });
-    await act(async () => { [...reopened.querySelectorAll("button")].find((b) => b.textContent === "Tiếp tục").click(); });
     await act(async () => { [...reopened.querySelectorAll("button")].find((b) => b.textContent.includes("Tạo PDF")).click(); });
 
     expect(docExport.createMindmapExport).toHaveBeenCalledTimes(2);
@@ -331,9 +310,7 @@ describe("Export Studio — document formats", () => {
     await render(makeController());
     const dialog = await openToFormatStep();
     await act(async () => { dialog.querySelector('input[value="pdf"]').click(); });
-    await act(async () => { [...dialog.querySelectorAll("button")].find((b) => b.textContent === "Tiếp tục").click(); });
     await act(async () => { [...dialog.querySelectorAll("button")].find((b) => b.textContent === "Chỉ sơ đồ").click(); });
-    await act(async () => { [...dialog.querySelectorAll("button")].find((b) => b.textContent === "Tiếp tục").click(); });
 
     act(() => { [...dialog.querySelectorAll("button")].find((b) => b.textContent.includes("Tạo PDF")).click(); });
     await act(async () => {});
@@ -369,9 +346,7 @@ describe("Export Studio — document formats", () => {
     await render(makeController());
     const dialog = await openToFormatStep();
     await act(async () => { dialog.querySelector('input[value="pdf"]').click(); });
-    await act(async () => { [...dialog.querySelectorAll("button")].find((b) => b.textContent === "Tiếp tục").click(); });
     await act(async () => { [...dialog.querySelectorAll("button")].find((b) => b.textContent === "Chỉ sơ đồ").click(); });
-    await act(async () => { [...dialog.querySelectorAll("button")].find((b) => b.textContent === "Tiếp tục").click(); });
 
     act(() => { [...dialog.querySelectorAll("button")].find((b) => b.textContent.includes("Tạo PDF")).click(); });
     await act(async () => {});
@@ -399,9 +374,7 @@ describe("Export Studio — document formats", () => {
     await render(controller);
     const dialog = await openToFormatStep();
     await act(async () => { dialog.querySelector('input[value="pdf"]').click(); });
-    await act(async () => { [...dialog.querySelectorAll("button")].find((b) => b.textContent === "Tiếp tục").click(); });
     await act(async () => { [...dialog.querySelectorAll("button")].find((b) => b.textContent === "Chỉ sơ đồ").click(); });
-    await act(async () => { [...dialog.querySelectorAll("button")].find((b) => b.textContent === "Tiếp tục").click(); });
     act(() => { [...dialog.querySelectorAll("button")].find((b) => b.textContent.includes("Tạo PDF")).click(); });
     await act(async () => {});
 
@@ -428,9 +401,7 @@ describe("Export Studio — document formats", () => {
     await render(makeController());
     const dialog = await openToFormatStep();
     await act(async () => { dialog.querySelector('input[value="pdf"]').click(); });
-    await act(async () => { [...dialog.querySelectorAll("button")].find((b) => b.textContent === "Tiếp tục").click(); });
     await act(async () => { [...dialog.querySelectorAll("button")].find((b) => b.textContent === "Chỉ sơ đồ").click(); });
-    await act(async () => { [...dialog.querySelectorAll("button")].find((b) => b.textContent === "Tiếp tục").click(); });
     act(() => { [...dialog.querySelectorAll("button")].find((b) => b.textContent.includes("Tạo PDF")).click(); });
     await act(async () => { await Promise.resolve(); });
 
@@ -458,10 +429,7 @@ describe("Export Studio — document formats", () => {
     await act(async () => { container.querySelector('[aria-label="Xuất sơ đồ"]').click(); });
     const dialog = document.body.querySelector('[role="dialog"]');
     await act(async () => { dialog.querySelector('input[name="mm-export-scope"][value="visible"]').click(); });
-    await act(async () => { [...dialog.querySelectorAll("button")].find((b) => b.textContent === "Tiếp tục").click(); }); // -> format
     await act(async () => { dialog.querySelector('input[value="pdf"]').click(); });
-    await act(async () => { [...dialog.querySelectorAll("button")].find((b) => b.textContent === "Tiếp tục").click(); }); // -> appearance
-    await act(async () => { [...dialog.querySelectorAll("button")].find((b) => b.textContent === "Tiếp tục").click(); }); // -> preview
 
     const exportBtn = [...dialog.querySelectorAll("button")].find((b) => b.textContent.includes("Tạo PDF"));
     await act(async () => { exportBtn.click(); });
@@ -482,8 +450,6 @@ describe("Export Studio — document formats", () => {
     await render(controller);
     const dialog1 = await openToFormatStep();
     await act(async () => { dialog1.querySelector('input[value="pdf"]').click(); });
-    await act(async () => { [...dialog1.querySelectorAll("button")].find((b) => b.textContent === "Tiếp tục").click(); });
-    await act(async () => { [...dialog1.querySelectorAll("button")].find((b) => b.textContent === "Tiếp tục").click(); });
     const exportBtn1 = [...dialog1.querySelectorAll("button")].find((b) => b.textContent.includes("Tạo PDF"));
     await act(async () => { exportBtn1.click(); });
     expect(dialog1.textContent).toContain("Đã xuất");

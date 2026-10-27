@@ -53,9 +53,7 @@ async function render(controller) {
 async function openPdfAppearance() {
   await act(async () => { container.querySelector('[aria-label="Xuất sơ đồ"]').click(); });
   const dialog = document.body.querySelector('[role="dialog"]');
-  await act(async () => { [...dialog.querySelectorAll("button")].find((b) => b.textContent === "Tiếp tục").click(); });
   await act(async () => { dialog.querySelector('input[name="mm-export-format"][value="pdf"]').click(); });
-  await act(async () => { [...dialog.querySelectorAll("button")].find((b) => b.textContent === "Tiếp tục").click(); });
   return dialog;
 }
 
@@ -65,7 +63,6 @@ function clickPill(panel, label) {
 }
 
 async function runExport(dialog) {
-  await act(async () => { [...dialog.querySelectorAll("button")].find((b) => b.textContent === "Tiếp tục").click(); }); // -> review
   const exportBtn = [...dialog.querySelectorAll("button")].find((b) => b.textContent.includes("Tạo PDF"));
   await act(async () => { exportBtn.click(); });
 }

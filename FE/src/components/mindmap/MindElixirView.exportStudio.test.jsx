@@ -140,11 +140,7 @@ describe("MindElixirView Export Studio", () => {
     const continueBtn = [...container.querySelectorAll(".mm-selection-bar button")].find((b) => b.textContent === "Tiếp tục");
     await act(async () => { continueBtn.click(); });
 
-    // Navigate to the preview step.
-    for (let i = 0; i < 3; i++) {
-      const nextBtn = [...document.body.querySelectorAll("button")].find((b) => b.textContent === "Tiếp tục");
-      await act(async () => { nextBtn.click(); });
-    }
+    // The Preview Bench stays mounted alongside all settings.
     const dialog = document.body.querySelector('[role="dialog"]');
     expect(dialog.textContent).not.toContain("chưa được hỗ trợ");
     const exportBtn = [...dialog.querySelectorAll("button")].find((b) => b.textContent.includes("Xuất"));
@@ -158,9 +154,6 @@ describe("MindElixirView Export Studio", () => {
     await render(controller);
     await act(async () => { container.querySelector('[aria-label="Xuất sơ đồ"]').click(); });
     const dialog = document.body.querySelector('[role="dialog"]');
-    for (let index = 0; index < 3; index += 1) {
-      await act(async () => { [...dialog.querySelectorAll("button")].find((b) => b.textContent === "Tiếp tục").click(); });
-    }
     act(() => { [...dialog.querySelectorAll("button")].find((b) => b.textContent.includes("Xuất PNG")).click(); });
     await act(async () => {
       root.render(<MindElixirView data={dataFor("m2")} onRegenerate={vi.fn()} regenerating={false} controller={controller} />);

@@ -206,10 +206,7 @@ describe("ExportStudioDialog — the DEFAULT (never manually touched) scope reac
       const btn = [...dialog().querySelectorAll("button")].find((b) => b.textContent.trim() === text);
       await act(async () => btn.click());
     };
-    await clickText("Tiếp tục"); // -> format
     await act(async () => dialog().querySelector('input[name="mm-export-format"][value="pdf"]').click());
-    await clickText("Tiếp tục"); // -> appearance
-    await clickText("Tiếp tục"); // -> review
     await clickText("Thử lại").catch(() => {}); // no-op if not present
     const exportBtn = [...dialog().querySelectorAll("button")].find((b) => /Tạo PDF/.test(b.textContent));
     await act(async () => exportBtn.click());

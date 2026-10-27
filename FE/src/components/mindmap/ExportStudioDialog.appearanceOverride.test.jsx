@@ -51,8 +51,6 @@ function setInputValue(input, value) {
   input.dispatchEvent(new Event("change", { bubbles: true }));
 }
 async function goToAppearanceStep(dialog) {
-  await click([...dialog.querySelectorAll("button")].find((b) => b.textContent === "Tiếp tục")); // format
-  await click([...dialog.querySelectorAll("button")].find((b) => b.textContent === "Tiếp tục")); // appearance
 }
 
 afterEach(() => {
@@ -92,7 +90,6 @@ describe("Export Studio appearance override — export never persists it on its 
     await click(customRadio);
     const colorInput = dialog.querySelector('input[type="color"]');
     await act(async () => { setInputValue(colorInput, "#112233"); });
-    await click([...dialog.querySelectorAll("button")].find((b) => b.textContent === "Tiếp tục")); // -> preview
     const exportBtn = [...dialog.querySelectorAll("button")].find((b) => /^(Xuất|Tạo)/.test(b.textContent));
     await click(exportBtn);
     expect(patchSpy).not.toHaveBeenCalled();
@@ -105,7 +102,6 @@ describe("Export Studio appearance override — export never persists it on its 
     const savedAppearance = { version: 2, preset: "pastel", overrides: {} };
     const dialog = await renderDialog({ savedAppearance });
     await goToAppearanceStep(dialog);
-    await click([...dialog.querySelectorAll("button")].find((b) => b.textContent === "Tiếp tục"));
     const exportBtn = [...dialog.querySelectorAll("button")].find((b) => /^(Xuất|Tạo)/.test(b.textContent));
     await click(exportBtn);
     expect(imageExport.exportMindmapImage).toHaveBeenCalledWith(expect.objectContaining({ exportStyleOverride: null, canvasAppearance: savedAppearance }));
@@ -143,7 +139,6 @@ describe("Export Studio appearance override — lifecycle resets", () => {
     await goToAppearanceStep(dialog);
     const customRadio = [...dialog.querySelectorAll('input[name="mm-appearance-mode"]')].find((i) => !i.checked);
     await click(customRadio);
-    await click([...dialog.querySelectorAll("button")].find((b) => b.textContent === "Tiếp tục"));
     const exportBtn = [...dialog.querySelectorAll("button")].find((b) => /^(Xuất|Tạo)/.test(b.textContent));
     await click(exportBtn);
     const startNewBtn = [...dialog.querySelectorAll("button")].find((b) => b.textContent === "Tạo bản xuất mới");
