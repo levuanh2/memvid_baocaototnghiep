@@ -93,7 +93,7 @@ html.dark .me-container { --mm-relation: #7e90c4; }
    `.selected`'s own 2px outline (mind-elixir's own class, THEME.cssVar's
    `--selected`) draws independently of this box's fill/border and is
    unaffected either way. */
-.me-container me-root me-tpc:not([data-export-source-role="branch"]):not([data-export-source-role="leaf"]) {
+.me-container me-root me-tpc:not([data-export-source-role="section"]):not([data-export-source-role="concept"]):not([data-export-source-role="detail"]) {
   font-family: Aptos, -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
   font-weight: 600;
   font-size: 16px;
@@ -143,33 +143,74 @@ html.dark .me-container { --mm-relation: #7e90c4; }
   overflow-wrap: anywhere;
 }
 
-/* Export projections may promote a source branch/leaf to the renderer's
-   structural root. Keep the source visual role instead of restyling that
-   node as the map's global root merely because ancestors were pruned. */
-.mm-export-offscreen me-root me-tpc[data-export-source-role="branch"] {
+/* Round 4.1 (export-fidelity closure) — export projections may promote any
+   source node to the renderer's structural root, or otherwise place a node
+   at a DOM depth that no longer matches its ORIGINAL semantic tier (pruning
+   removed its real ancestors). `data-export-source-role` carries each
+   node's true pre-pruning tier (root/section/concept/detail, computed in
+   mindmapImageExport.js's sourceProjection() from the FULL unpruned tree,
+   never from projected DOM position) — these rules reproduce the exact
+   live four-tier look (mirroring the depth-selector rules above) regardless
+   of where the projection placed the node, including a promoted root.
+   Deliberately NOT scoped to `me-root`: a promoted node's own non-root
+   descendants have the identical DOM-vs-original-depth mismatch (pruning
+   shifts every descendant's depth, not just the directly-promoted node), so
+   every tier-carrying node needs this override, not only the root position.
+   The `:not([data-export-source-role=...])` guard above (on the genuine-root
+   rule) is what stops a promoted section/concept/detail node from ALSO
+   getting the big blue global-root treatment merely by sitting at the DOM
+   root position. "root" tier intentionally has no rule here: a node whose
+   ORIGINAL depth is really 0 is already excluded by that same guard and
+   correctly falls through to the genuine-root rule above. */
+/* `background`/`color` are explicit here (the live, non-promoted section
+   rule at line ~109 needs neither — it inherits mind-elixir's own non-root
+   "branch"-level library default, which already resolves to the right
+   look). But mind-elixir's LIBRARY-level base CSS also unconditionally
+   backgrounds `me-root me-tpc` with `--root-bgcolor` (verified live: a
+   promoted section at the me-root DOM slot measured a real rgb(18,108,242)
+   background — the root's blue — despite every property this rule DOES set
+   measuring correctly) — a mismatch only `me-root` demos surface, which is
+   exactly why this fix was verified against a REAL offscreen export scene,
+   not only jsdom. `color` is set alongside it for the same at-root-position
+   safety net, matching `--main-color` (section's actual live text color). */
+.mm-export-offscreen me-tpc[data-export-source-role="section"] {
   font-family: Aptos, -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
   font-weight: 600;
   font-size: 14px;
+  line-height: 1.3;
   letter-spacing: normal;
+  padding: 6px 12px !important;
+  border: 1px solid var(--border-strong) !important;
+  border-radius: 6px !important;
   background: var(--main-bgcolor) !important;
   color: var(--main-color) !important;
-  border: var(--main-border) !important;
-  border-radius: var(--main-radius) !important;
-  padding: var(--topic-padding) !important;
-  max-width: none;
 }
 
-.mm-export-offscreen me-tpc[data-export-source-role="leaf"] {
+.mm-export-offscreen me-tpc[data-export-source-role="concept"] {
+  font-family: Aptos, -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
+  font-weight: 500;
+  font-size: 13px;
+  line-height: 1.3;
+  letter-spacing: normal;
+  padding: 4px 8px !important;
+  border: 1px solid var(--border-color) !important;
+  border-radius: 4px !important;
+  background: var(--bg-card) !important;
+  color: var(--text-primary) !important;
+}
+
+.mm-export-offscreen me-tpc[data-export-source-role="detail"] {
   font-family: Aptos, -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
   font-weight: 400;
   font-size: 12px;
+  line-height: 1.35;
   letter-spacing: normal;
-  background: var(--bgcolor) !important;
-  color: var(--color) !important;
+  padding: 2px 6px !important;
   border: 0 !important;
+  border-bottom: 1px solid currentColor !important;
   border-radius: 0 !important;
-  padding: var(--topic-padding) !important;
-  max-width: none;
+  background: transparent !important;
+  color: var(--text-secondary) !important;
 }
 
 /* Tag ※N (số trích đoạn nguồn trên node) — mono + seal outline: đây là provenance,

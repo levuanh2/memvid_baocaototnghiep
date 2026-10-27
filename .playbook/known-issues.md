@@ -7453,16 +7453,17 @@ resolving it unilaterally — a further bump to `MOBILE_SCALE_MIN` or a
 larger minimum font-size for the deepest tier would close the gap but is a
 visual-grammar policy call, not a mechanical fix.
 
-## Round 4 four-tier grammar does not survive branch/selection-scoped exports (BLOCKING, NOT fixed this round — requires a forbidden file)
+## Round 4 four-tier grammar does not survive branch/selection-scoped exports (fixed in Round 4.1, 2026-10-27)
 
 **Symptom:** found by independent Round 4 technical review (Codex 2), verified
-directly against source. In `current_branch`, `selected_branches`, and
-`visible` export scopes (every `ExportStudioDialog` scope except the default
-`full`), level-2 concept nodes render in the exported image as 12px,
-transparent, borderless "leaf" nodes — the old pre-Round-4 look — instead of
-the live canvas's 13px bordered card. Depth-1 branch nodes promoted to the
-export root also keep the old `4px` uniform `--topic-padding` instead of the
-new `6px 12px` section padding.
+directly against source. In `current_branch` and `selected_branches` export
+scopes (the two non-"full" `ExportStudioDialog` scopes that build an
+offscreen record projection — see the Round 4.1 scope correction below for
+why `visible` was never actually affected), level-2 concept nodes render in
+the exported image as 12px, transparent, borderless "leaf" nodes — the old
+pre-Round-4 look — instead of the live canvas's 13px bordered card. Depth-1
+branch nodes promoted to the export root also keep the old `4px` uniform
+`--topic-padding` instead of the new `6px 12px` section padding.
 
 **Root cause:** `FE/src/utils/mindmapImageExport.js:291` computes a
 THREE-bucket `sourceRoles` map (`depth === 0 ? "root" : depth === 1 ?
@@ -7485,25 +7486,73 @@ single old tier into two visually distinct ones (concept/example), which is
 exactly what *exposes* the latent over-broad selector as a real regression —
 the underlying bug (the rule's missing `me-root` scope) predates this round.
 
-**Why not fixed this round:** a real fix needs the offscreen DOM to carry the
-node's true four-tier role (root/section/concept/example), not the existing
-three-bucket one — that requires editing `sourceRoles` in
-`mindmapImageExport.js:291`, which is an explicitly forbidden file for Round
-4 ("all export-pipeline files"). No CSS-only change can recover the missing
-distinction: the attribute itself does not carry it. Scoping the `leaf` rule
-to `me-root` alone (mirroring the `branch` rule) is NOT sufficient either —
-non-root nodes below a promoted root still need their ORIGINAL depth-derived
-role preserved precisely because pruning changes their DOM depth, which is
-the whole reason this attribute-based override exists.
+**Why Round 4 couldn't fix it in scope:** a real fix needs the offscreen DOM
+to carry the node's true four-tier role (root/section/concept/detail), not
+the existing three-bucket one — that requires editing `sourceRoles` in
+`mindmapImageExport.js:291`, which was an explicitly forbidden file for
+Round 4 ("all export-pipeline files"). No CSS-only change could recover the
+missing distinction: the attribute itself didn't carry it.
 
-**Status:** disclosed as a BLOCKING, confirmed, Round-4-relevant defect in the
-PR description and final report, scoped to the `current_branch`/
-`selected_branches`/`visible` export options (the default `full` scope is
-unaffected — `recordScopedForExport` returns the record unchanged for
-`scopeType === "full"`, so `exportSourceRole` is never set and the normal
-depth-based four-tier CSS governs). Recommended as a required fast-follow
-before Round 4's export-fidelity claim can be considered complete, requiring
-explicit authorization to touch `mindmapImageExport.js`.
+**Scope correction:** Round 4's own report over-stated the blast radius as
+`current_branch`/`selected_branches`/`visible`. Re-verified while fixing
+this: `exportMindmapImage`'s top-level dispatch only routes `"full"`,
+`"current_branch"` and `"selected_branches"` through the record-based
+`sourceRoles`/`exportSourceRole` projection at all (`scopeType ===
+"visible"` is excluded from that condition). `"visible"` scope captures
+`mind.map` — the REAL live DOM — directly via `snapdom`, with no offscreen
+clone, no projection, and no `data-export-source-role` attribute ever set;
+it was never affected by this bug and needed no fix. Confirmed by the "full"
+and "visible" tests in `mindmapImageExport.visualRoleFidelity.test.js`.
+
+**Fix (Round 4.1):** added a SEPARATE, additive `visualTiers` map
+(root/section/concept/detail) to `sourceProjection()`'s return, computed
+from the exact same original-depth data `sourceRoles` already derives from
+— `sourceRoles`/`exportSourceRole` are left completely untouched, since a
+separate, pre-existing, deliberately-3-tier appearance-preset system
+(`mindMapAppearanceLiveApply.js`'s `resolved.node[node.exportSourceRole ||
+roleForDepth(depth)]`, keyed only on `{root, branch, leaf}`) reads that
+exact field and would break on an unrecognized 4th role value.
+`markSourceVisualRoles()` now reads `visualTiers` directly from the scoped
+record's own `exportProjection` (by node id), not from
+`instance.nodeData`'s adapter-attached `exportSourceRole` — so no change to
+`mindElixirAdapter.js` was needed at all. `mindmap.css`'s two role-override
+rules became three (section/concept/detail), deliberately NOT scoped to
+`me-root` (pruning shifts every descendant's depth under a promoted root,
+not only the promoted node itself, so every tier-carrying node needs the
+override). The genuine-root rule's `:not(...)` guard was widened to the
+same three values, so a promoted section/concept/detail node never gets the
+big blue global-root treatment merely by sitting at the DOM root position.
+
+**A second, real defect found via real-browser verification (not caught by
+unit tests):** the first implementation of the "section" role override set
+font/padding/border/radius correctly but no explicit `background`/`color` —
+which happened to look correct off-root (mind-elixir's own non-root
+"branch"-level library default already resolves to the right white/ink
+look) but was WRONG when a section was genuinely promoted to the `me-root`
+DOM slot: mind-elixir's library-level base CSS unconditionally backgrounds
+`me-root me-tpc` with `--root-bgcolor` (blue), and nothing in the new rule
+countered it. A live capture of `selected_branches` exact mode (`A1`+`A2`
+selected, promoting their shared parent section `A` to the structural root)
+measured a real `rgb(18,108,242)` background on the promoted section —
+confirmed via `getComputedStyle` on the actual offscreen DOM scene, not
+simulated. Fixed by adding explicit `background: var(--main-bgcolor)
+!important; color: var(--main-color) !important;` to the section-role rule,
+mirroring what the concept/detail roles already had. This is exactly why
+the fix was verified against a REAL exported PNG/SVG and a REAL offscreen
+DOM (jsdom's `FakeOffscreenMind` test harness has no real stylesheet
+cascade, so it structurally cannot catch a library-default-leaking-through
+bug like this one).
+
+**Status:** FIXED. Verified via: 6 new unit tests in
+`mindmapImageExport.visualRoleFidelity.test.js` (including a genuine
+root-promotion case and a membership negative case), validated red→green
+against the pre-fix code; real-browser captures of `full`/`current_branch`
+(concept-rooted and section-rooted)/`selected_branches` (exact mode,
+single- and multi-node promotion) scopes, in both PNG and SVG format, light
+and dark theme, and with a non-default ("pastel") appearance preset layered
+on top — all measured via `getComputedStyle` on the real offscreen export
+scene and screenshotted from the real decoded output image. Evidence in
+`docs/ui-ux-v4-design/round4-qa-evidence/export-fidelity/`.
 
 ## MindElixir cannot structurally distinguish a third connector tier (known limitation, not fixed)
 
