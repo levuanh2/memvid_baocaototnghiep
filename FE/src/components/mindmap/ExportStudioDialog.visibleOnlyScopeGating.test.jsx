@@ -65,8 +65,7 @@ function openAdvanced() { return act(async () => dialog().querySelector('.export
 function visibleOnlyCheckbox() { return dialog().querySelector('input[name="mm-export-visible-only"]'); }
 async function checkVisibleOnly() { await act(async () => visibleOnlyCheckbox().click()); }
 function nodeCount() {
-  const dd = [...dialog().querySelectorAll("dt")].find((d) => d.textContent === "Số node/nhánh")?.nextElementSibling;
-  return dd?.textContent || "";
+  return dialog().querySelector('[aria-label="Thông tin bản xuất"] span')?.textContent || "";
 }
 async function clickScope(value) {
   await act(async () => dialog().querySelector(`input[name="mm-export-scope"][value="${value}"]`).click());
@@ -76,10 +75,7 @@ async function goToReview() {
     const btn = [...dialog().querySelectorAll("button")].find((b) => b.textContent.trim() === text);
     await act(async () => btn.click());
   };
-  await clickText("Tiếp tục"); // content -> format
   await act(async () => dialog().querySelector('input[name="mm-export-format"][value="pdf"]').click());
-  await clickText("Tiếp tục"); // format -> appearance
-  await clickText("Tiếp tục"); // appearance -> review
 }
 
 describe("Export Studio — visibleOnly only ever filters the 'full' scope (H3A / A6)", () => {

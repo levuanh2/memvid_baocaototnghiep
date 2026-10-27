@@ -58,14 +58,12 @@ afterEach(() => {
 describe("PR C1: export format picker is exactly PNG/JPEG/SVG/WebP/PDF", () => {
   it("the format grid has exactly 5 radios, matching the new public format set", async () => {
     const dialog = await renderDialog();
-    await click([...dialog.querySelectorAll("button")].find((b) => b.textContent === "Tiếp tục")); // -> format step
     const values = [...dialog.querySelectorAll('input[name="mm-export-format"]')].map((i) => i.value);
     expect(new Set(values)).toEqual(new Set(["png", "jpeg", "svg", "webp", "pdf"]));
   });
 
   it("DOCX and XLSX never appear as selectable format values", async () => {
     const dialog = await renderDialog();
-    await click([...dialog.querySelectorAll("button")].find((b) => b.textContent === "Tiếp tục"));
     const values = [...dialog.querySelectorAll('input[name="mm-export-format"]')].map((i) => i.value);
     expect(values).not.toContain("docx");
     expect(values).not.toContain("xlsx");
@@ -73,7 +71,6 @@ describe("PR C1: export format picker is exactly PNG/JPEG/SVG/WebP/PDF", () => {
 
   it("WebP is selectable and routes through the image (not document) capability set", async () => {
     const dialog = await renderDialog();
-    await click([...dialog.querySelectorAll("button")].find((b) => b.textContent === "Tiếp tục"));
     const webp = dialog.querySelector('input[name="mm-export-format"][value="webp"]');
     expect(webp).toBeTruthy();
     await click(webp);

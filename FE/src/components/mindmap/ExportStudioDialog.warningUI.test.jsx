@@ -58,10 +58,7 @@ describe("Export Studio — ceiling-exceeded warning surfaces to the user (H2)",
     await render(makeController());
     await act(async () => { container.querySelector('[aria-label="Xuất sơ đồ"]').click(); });
     const dialog = document.body.querySelector('[role="dialog"]');
-    await act(async () => { [...dialog.querySelectorAll("button")].find((b) => b.textContent === "Tiếp tục").click(); });
     await act(async () => { dialog.querySelector('input[name="mm-export-format"][value="pdf"]').click(); });
-    await act(async () => { [...dialog.querySelectorAll("button")].find((b) => b.textContent === "Tiếp tục").click(); });
-    await act(async () => { [...dialog.querySelectorAll("button")].find((b) => b.textContent === "Tiếp tục").click(); });
     const exportBtn = [...dialog.querySelectorAll("button")].find((b) => b.textContent.includes("Tạo PDF"));
     await act(async () => { exportBtn.click(); });
 
@@ -81,10 +78,7 @@ describe("Export Studio — ceiling-exceeded warning surfaces to the user (H2)",
     await render(makeController());
     await act(async () => { container.querySelector('[aria-label="Xuất sơ đồ"]').click(); });
     const dialog = document.body.querySelector('[role="dialog"]');
-    await act(async () => { [...dialog.querySelectorAll("button")].find((b) => b.textContent === "Tiếp tục").click(); });
     await act(async () => { dialog.querySelector('input[name="mm-export-format"][value="pdf"]').click(); });
-    await act(async () => { [...dialog.querySelectorAll("button")].find((b) => b.textContent === "Tiếp tục").click(); });
-    await act(async () => { [...dialog.querySelectorAll("button")].find((b) => b.textContent === "Tiếp tục").click(); });
     const exportBtn = [...dialog.querySelectorAll("button")].find((b) => b.textContent.includes("Tạo PDF"));
     await act(async () => { exportBtn.click(); });
 

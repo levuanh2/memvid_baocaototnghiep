@@ -58,9 +58,7 @@ async function render(controller) {
 async function openPdfAppearance() {
   await act(async () => { container.querySelector('[aria-label="Xuất sơ đồ"]').click(); });
   const dialog = document.body.querySelector('[role="dialog"]');
-  await act(async () => { [...dialog.querySelectorAll("button")].find((b) => b.textContent === "Tiếp tục").click(); }); // content -> format
   await act(async () => { dialog.querySelector('input[name="mm-export-format"][value="pdf"]').click(); });
-  await act(async () => { [...dialog.querySelectorAll("button")].find((b) => b.textContent === "Tiếp tục").click(); }); // format -> appearance
   return dialog;
 }
 
@@ -129,7 +127,6 @@ describe("Export Studio — PDF orientation control reflects the real auto-orien
     await render(makeController());
     const dialog = await openPdfAppearance();
     await act(async () => { clickPill(dialog, "Chỉ sơ đồ"); }); // mode -> map (UI hides the toggle)
-    await act(async () => { [...dialog.querySelectorAll("button")].find((b) => b.textContent === "Tiếp tục").click(); }); // -> review
 
     const exportBtn = [...dialog.querySelectorAll("button")].find((b) => b.textContent.includes("Tạo PDF"));
     await act(async () => { exportBtn.click(); });
