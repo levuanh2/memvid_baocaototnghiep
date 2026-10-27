@@ -11,6 +11,7 @@
 import { afterEach } from "vitest";
 import { act } from "react";
 import { createRoot } from "react-dom/client";
+import { MemoryRouter } from "react-router-dom";
 import { describe, expect, it } from "vitest";
 import AccountMenu from "./AccountMenu";
 
@@ -27,7 +28,11 @@ describe("AccountMenu trigger border", () => {
     document.body.appendChild(host);
     root = createRoot(host);
     await act(async () => {
-      root.render(<AccountMenu user={{ email: "ban@vidu.com" }} onLogout={() => {}} />);
+      root.render(
+        <MemoryRouter>
+          <AccountMenu user={{ email: "ban@vidu.com" }} onLogout={() => {}} />
+        </MemoryRouter>,
+      );
     });
     const button = host.querySelector("button[aria-haspopup='menu']");
     expect(button).toBeTruthy();

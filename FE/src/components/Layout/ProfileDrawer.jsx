@@ -25,7 +25,7 @@ import { capNhatHoSoNks, doiAnhDaiDienNks, layHoSoNks, taoGrantNks } from "../..
  * Chứng từ hết hạn giữa chừng ⇒ máy chủ trả `grant_required` ⇒ mở lại hộp xác minh
  * và GIỮ NGUYÊN những gì đang gõ dở. Không bao giờ im lặng vứt phần đã sửa.
  */
-export default function ProfileDrawer({ open, hoSo, onClose, onHoSoMoi }) {
+export default function ProfileDrawer({ open, hoSo, onClose, onHoSoMoi, variant = "modal" }) {
   const [dangSua, setDangSua] = useState(false);
   const [form, setForm] = useState(null);
   const [goc, setGoc] = useState(null);
@@ -197,6 +197,7 @@ export default function ProfileDrawer({ open, hoSo, onClose, onHoSoMoi }) {
         dangTai={dangTai}
         onSua={batDauSua}
         rongHon={dangSua}
+        variant={variant}
         khoiAnh={laNks ? (
           <AvatarPicker
             avatar={hoSo.avatar}

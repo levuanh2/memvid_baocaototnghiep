@@ -155,6 +155,14 @@ export function AuthProvider({ children }) {
     }
   }, []);
 
-  const value = { user, loading, error, setError, login, register, logout, refreshUser };
+  // `/auth/me` (refreshUser) không mang phone/avatar — xem ProfileDrawer. Khi NKS trả
+  // về hồ sơ mới sau khi lưu, nơi gọi (trang Hồ sơ) đẩy thẳng các trường đó vào đây để
+  // AccountMenu và mọi nơi khác đọc `user` đều thấy ngay, không cần một bản sao state
+  // song song như trước (Round 7 — trước đó bản sao này chỉ sống trong AccountMenu).
+  const updateUserFields = useCallback((partial) => {
+    setUser((u) => (u ? { ...u, ...partial } : u));
+  }, []);
+
+  const value = { user, loading, error, setError, login, register, logout, refreshUser, updateUserFields };
   return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>;
 }
