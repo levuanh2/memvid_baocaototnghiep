@@ -1,0 +1,273 @@
+{
+  "generatedAt": "2026-10-27T14:32:35.521Z",
+  "targets": {
+    "profile-edit": [
+      {
+        "x": 239,
+        "y": 203.609375,
+        "width": 40,
+        "height": 28
+      }
+    ],
+    "profile-form-actions": [
+      {
+        "x": 105.296875,
+        "y": 1303.8125,
+        "width": 57.765625,
+        "height": 33.5
+      },
+      {
+        "x": 171.0625,
+        "y": 1303.8125,
+        "width": 107.9375,
+        "height": 33.5
+      }
+    ],
+    "wrong-review-arrows": [
+      {
+        "x": 212,
+        "y": 111.578125,
+        "width": 44,
+        "height": 40
+      },
+      {
+        "x": 256,
+        "y": 111.578125,
+        "width": 44,
+        "height": 40
+      }
+    ],
+    "review-actions": [
+      {
+        "x": 103,
+        "y": 496.703125,
+        "width": 173.203125,
+        "height": 37.5
+      },
+      {
+        "x": 103,
+        "y": 546.203125,
+        "width": 114.359375,
+        "height": 37.5
+      }
+    ],
+    "question-builder-pills": [
+      {
+        "x": 37,
+        "y": 262.46875,
+        "width": 63.015625,
+        "height": 34
+      },
+      {
+        "x": 108.015625,
+        "y": 262.46875,
+        "width": 69.59375,
+        "height": 34
+      },
+      {
+        "x": 185.609375,
+        "y": 262.46875,
+        "width": 68.9375,
+        "height": 34
+      },
+      {
+        "x": 37,
+        "y": 304.46875,
+        "width": 72.40625,
+        "height": 34
+      },
+      {
+        "x": 117.40625,
+        "y": 304.46875,
+        "width": 146.078125,
+        "height": 34
+      },
+      {
+        "x": 37,
+        "y": 381.15625,
+        "width": 57.109375,
+        "height": 34
+      },
+      {
+        "x": 102.109375,
+        "y": 381.15625,
+        "width": 44.390625,
+        "height": 34
+      },
+      {
+        "x": 154.5,
+        "y": 381.15625,
+        "width": 98.96875,
+        "height": 34
+      },
+      {
+        "x": 37,
+        "y": 423.15625,
+        "width": 52.953125,
+        "height": 34
+      },
+      {
+        "x": 37,
+        "y": 499.84375,
+        "width": 110.171875,
+        "height": 34
+      },
+      {
+        "x": 155.171875,
+        "y": 499.84375,
+        "width": 95.59375,
+        "height": 34
+      },
+      {
+        "x": 37,
+        "y": 541.84375,
+        "width": 104.859375,
+        "height": 34
+      }
+    ],
+    "practice-modal-actions": [
+      {
+        "x": 50.953125,
+        "y": 489.09375,
+        "width": 59.3125,
+        "height": 37.5
+      },
+      {
+        "x": 118.265625,
+        "y": 489.09375,
+        "width": 164.734375,
+        "height": 37.5
+      }
+    ],
+    "submit-modal-actions": [
+      {
+        "x": 37,
+        "y": 328.1875,
+        "width": 119,
+        "height": 57
+      },
+      {
+        "x": 164,
+        "y": 328.1875,
+        "width": 119,
+        "height": 57
+      }
+    ]
+  },
+  "contrast": {
+    "light": {
+      "verdicts": [
+        {
+          "ratio": 2.0777194444574314,
+          "color": "rgb(22, 179, 106)",
+          "backgroundColor": "color(srgb 0.0862745 0.701961 0.415686 / 0.12)",
+          "opacity": "1"
+        },
+        {
+          "ratio": 2.0777194444574314,
+          "color": "rgb(22, 179, 106)",
+          "backgroundColor": "color(srgb 0.0862745 0.701961 0.415686 / 0.12)",
+          "opacity": "1"
+        },
+        {
+          "ratio": 2.0777194444574314,
+          "color": "rgb(22, 179, 106)",
+          "backgroundColor": "color(srgb 0.0862745 0.701961 0.415686 / 0.12)",
+          "opacity": "1"
+        }
+      ],
+      "railTag": {
+        "ratio": 3.557060634097526,
+        "color": "rgb(241, 51, 58)",
+        "backgroundColor": "rgba(0, 0, 0, 0)",
+        "opacity": "1"
+      },
+      "processing": {
+        "ratio": 1.6911724738937448,
+        "color": "rgb(243, 154, 27)",
+        "backgroundColor": "color(srgb 0.952941 0.603922 0.105882 / 0.12)",
+        "opacity": "1"
+      },
+      "completedQuestion": {
+        "ratio": 3.253146946450937,
+        "color": "rgb(18, 108, 242)",
+        "backgroundColor": "color(srgb 0.0705882 0.423529 0.94902 / 0.16)",
+        "opacity": "1"
+      }
+    },
+    "dark": {
+      "verdicts": [
+        {
+          "ratio": 5.429906442301612,
+          "color": "rgb(91, 168, 136)",
+          "backgroundColor": "color(srgb 0.356863 0.658824 0.533333 / 0.12)",
+          "opacity": "1"
+        },
+        {
+          "ratio": 5.429906442301612,
+          "color": "rgb(91, 168, 136)",
+          "backgroundColor": "color(srgb 0.356863 0.658824 0.533333 / 0.12)",
+          "opacity": "1"
+        },
+        {
+          "ratio": 5.429906442301612,
+          "color": "rgb(91, 168, 136)",
+          "backgroundColor": "color(srgb 0.356863 0.658824 0.533333 / 0.12)",
+          "opacity": "1"
+        }
+      ],
+      "railTag": {
+        "ratio": 3.9133637391641196,
+        "color": "rgb(216, 106, 83)",
+        "backgroundColor": "rgba(0, 0, 0, 0)",
+        "opacity": "1"
+      },
+      "processing": {
+        "ratio": 6.8461451575966,
+        "color": "rgb(214, 165, 71)",
+        "backgroundColor": "color(srgb 0.839216 0.647059 0.278431 / 0.12)",
+        "opacity": "1"
+      },
+      "completedQuestion": {
+        "ratio": 5.680787883174447,
+        "color": "rgb(91, 157, 245)",
+        "backgroundColor": "color(srgb 0.356863 0.615686 0.960784 / 0.16)",
+        "opacity": "1"
+      }
+    }
+  },
+  "layouts": {
+    "profileHeader": {
+      "backBox": {
+        "x": 20,
+        "y": 14.71875,
+        "width": 66.546875,
+        "height": 19.5
+      },
+      "headingBox": {
+        "x": 102.546875,
+        "y": 12,
+        "width": 160.53125,
+        "height": 24.953125
+      }
+    },
+    "questionCardOverflow": 0,
+    "review820": {
+      "overflow": 0,
+      "actions": [
+        {
+          "left": 103,
+          "right": 276.203125,
+          "top": 363.015625,
+          "bottom": 400.515625
+        },
+        {
+          "left": 103,
+          "right": 217.359375,
+          "top": 412.515625,
+          "bottom": 450.015625
+        }
+      ]
+    }
+  }
+}

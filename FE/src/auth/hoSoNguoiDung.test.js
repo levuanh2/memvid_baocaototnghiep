@@ -209,14 +209,16 @@ describe("9. mở ngăn hồ sơ không sinh request nào", () => {
     }
   });
 
-  it("ProfileDrawer có gọi mạng, nhưng KHÔNG có useEffect nên mở ngăn không tự bắn gì", () => {
-    // Đây mới là điều cần khoá. `ProfileDrawer` PHẢI import `utils/api` (chế độ sửa
-    // cần nó), nên cấm import là cấm nhầm chỗ. Thứ bảo đảm "mở ngăn = 0 request" là
-    // mọi lời gọi đều nằm trong handler do người dùng bấm — tức là không có effect
-    // nào chạy lúc mount.
+  it("ProfileDrawer chỉ dùng effect mount cho cleanup tài nguyên, không gọi API", () => {
+    // ProfileDrawer PHẢI import API cho các handler chỉnh sửa. Blob preview cũng
+    // PHẢI có lifecycle cleanup khi route unmount, nên cấm toàn bộ useEffect sẽ
+    // nhầm cleanup an toàn với side effect mạng. Khoá đúng invariant: effect duy
+    // nhất là cleanup-only và không chứa lời gọi API.
     const drawer = doc("components/Layout/ProfileDrawer.jsx");
     expect(drawer).toMatch(/utils\/api/);
-    expect(drawer).not.toMatch(/useEffect/);
+    const effect = drawer.slice(drawer.indexOf("useEffect("), drawer.indexOf("}, []);", drawer.indexOf("useEffect(")) + 7);
+    expect(effect).toMatch(/URL\.revokeObjectURL/);
+    expect(effect).not.toMatch(/layHoSoNks|capNhatHoSoNks|doiAnhDaiDienNks|taoGrantNks|fetch\s*\(/);
   });
 
   it("dựng hồ sơ là phép thuần: gọi hai lần cho kết quả bằng nhau", () => {

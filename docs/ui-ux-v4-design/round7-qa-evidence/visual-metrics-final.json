@@ -1,0 +1,701 @@
+{
+  "generatedAt": "2026-10-27T14:56:49.250Z",
+  "rails": [
+    {
+      "width": 768,
+      "rail": {
+        "left": 20,
+        "right": 196,
+        "width": 176
+      },
+      "content": {
+        "left": 35,
+        "right": 181
+      },
+      "buttons": [
+        {
+          "left": 35,
+          "right": 79.65625,
+          "width": 44.65625,
+          "height": 44.65625
+        },
+        {
+          "left": 85.65625,
+          "right": 130.328125,
+          "width": 44.671875,
+          "height": 44.671875
+        },
+        {
+          "left": 136.328125,
+          "right": 181,
+          "width": 44.671875,
+          "height": 44.671875
+        },
+        {
+          "left": 35,
+          "right": 79.65625,
+          "width": 44.65625,
+          "height": 44.65625
+        },
+        {
+          "left": 85.65625,
+          "right": 130.328125,
+          "width": 44.671875,
+          "height": 44.671875
+        },
+        {
+          "left": 136.328125,
+          "right": 181,
+          "width": 44.671875,
+          "height": 44.671875
+        },
+        {
+          "left": 35,
+          "right": 79.65625,
+          "width": 44.65625,
+          "height": 44.65625
+        },
+        {
+          "left": 85.65625,
+          "right": 130.328125,
+          "width": 44.671875,
+          "height": 44.671875
+        },
+        {
+          "left": 136.328125,
+          "right": 181,
+          "width": 44.671875,
+          "height": 44.671875
+        },
+        {
+          "left": 35,
+          "right": 79.65625,
+          "width": 44.65625,
+          "height": 44.65625
+        }
+      ],
+      "contained": true,
+      "minimumTarget": 44.65625,
+      "pageOverflow": 0
+    },
+    {
+      "width": 780,
+      "rail": {
+        "left": 20,
+        "right": 196,
+        "width": 176
+      },
+      "content": {
+        "left": 35,
+        "right": 181
+      },
+      "buttons": [
+        {
+          "left": 35,
+          "right": 79.65625,
+          "width": 44.65625,
+          "height": 44.65625
+        },
+        {
+          "left": 85.65625,
+          "right": 130.328125,
+          "width": 44.671875,
+          "height": 44.671875
+        },
+        {
+          "left": 136.328125,
+          "right": 181,
+          "width": 44.671875,
+          "height": 44.671875
+        },
+        {
+          "left": 35,
+          "right": 79.65625,
+          "width": 44.65625,
+          "height": 44.65625
+        },
+        {
+          "left": 85.65625,
+          "right": 130.328125,
+          "width": 44.671875,
+          "height": 44.671875
+        },
+        {
+          "left": 136.328125,
+          "right": 181,
+          "width": 44.671875,
+          "height": 44.671875
+        },
+        {
+          "left": 35,
+          "right": 79.65625,
+          "width": 44.65625,
+          "height": 44.65625
+        },
+        {
+          "left": 85.65625,
+          "right": 130.328125,
+          "width": 44.671875,
+          "height": 44.671875
+        },
+        {
+          "left": 136.328125,
+          "right": 181,
+          "width": 44.671875,
+          "height": 44.671875
+        },
+        {
+          "left": 35,
+          "right": 79.65625,
+          "width": 44.65625,
+          "height": 44.65625
+        }
+      ],
+      "contained": true,
+      "minimumTarget": 44.65625,
+      "pageOverflow": 0
+    },
+    {
+      "width": 800,
+      "rail": {
+        "left": 20,
+        "right": 196,
+        "width": 176
+      },
+      "content": {
+        "left": 35,
+        "right": 181
+      },
+      "buttons": [
+        {
+          "left": 35,
+          "right": 79.65625,
+          "width": 44.65625,
+          "height": 44.65625
+        },
+        {
+          "left": 85.65625,
+          "right": 130.328125,
+          "width": 44.671875,
+          "height": 44.671875
+        },
+        {
+          "left": 136.328125,
+          "right": 181,
+          "width": 44.671875,
+          "height": 44.671875
+        },
+        {
+          "left": 35,
+          "right": 79.65625,
+          "width": 44.65625,
+          "height": 44.65625
+        },
+        {
+          "left": 85.65625,
+          "right": 130.328125,
+          "width": 44.671875,
+          "height": 44.671875
+        },
+        {
+          "left": 136.328125,
+          "right": 181,
+          "width": 44.671875,
+          "height": 44.671875
+        },
+        {
+          "left": 35,
+          "right": 79.65625,
+          "width": 44.65625,
+          "height": 44.65625
+        },
+        {
+          "left": 85.65625,
+          "right": 130.328125,
+          "width": 44.671875,
+          "height": 44.671875
+        },
+        {
+          "left": 136.328125,
+          "right": 181,
+          "width": 44.671875,
+          "height": 44.671875
+        },
+        {
+          "left": 35,
+          "right": 79.65625,
+          "width": 44.65625,
+          "height": 44.65625
+        }
+      ],
+      "contained": true,
+      "minimumTarget": 44.65625,
+      "pageOverflow": 0
+    },
+    {
+      "width": 820,
+      "rail": {
+        "left": 20,
+        "right": 196,
+        "width": 176
+      },
+      "content": {
+        "left": 35,
+        "right": 181
+      },
+      "buttons": [
+        {
+          "left": 35,
+          "right": 79.65625,
+          "width": 44.65625,
+          "height": 44.65625
+        },
+        {
+          "left": 85.65625,
+          "right": 130.328125,
+          "width": 44.671875,
+          "height": 44.671875
+        },
+        {
+          "left": 136.328125,
+          "right": 181,
+          "width": 44.671875,
+          "height": 44.671875
+        },
+        {
+          "left": 35,
+          "right": 79.65625,
+          "width": 44.65625,
+          "height": 44.65625
+        },
+        {
+          "left": 85.65625,
+          "right": 130.328125,
+          "width": 44.671875,
+          "height": 44.671875
+        },
+        {
+          "left": 136.328125,
+          "right": 181,
+          "width": 44.671875,
+          "height": 44.671875
+        },
+        {
+          "left": 35,
+          "right": 79.65625,
+          "width": 44.65625,
+          "height": 44.65625
+        },
+        {
+          "left": 85.65625,
+          "right": 130.328125,
+          "width": 44.671875,
+          "height": 44.671875
+        },
+        {
+          "left": 136.328125,
+          "right": 181,
+          "width": 44.671875,
+          "height": 44.671875
+        },
+        {
+          "left": 35,
+          "right": 79.65625,
+          "width": 44.65625,
+          "height": 44.65625
+        }
+      ],
+      "contained": true,
+      "minimumTarget": 44.65625,
+      "pageOverflow": 0
+    },
+    {
+      "width": 1001,
+      "rail": {
+        "left": 20,
+        "right": 230,
+        "width": 210
+      },
+      "content": {
+        "left": 35,
+        "right": 215
+      },
+      "buttons": [
+        {
+          "left": 35,
+          "right": 91,
+          "width": 56,
+          "height": 56
+        },
+        {
+          "left": 97,
+          "right": 153,
+          "width": 56,
+          "height": 56
+        },
+        {
+          "left": 159,
+          "right": 215,
+          "width": 56,
+          "height": 56
+        },
+        {
+          "left": 35,
+          "right": 91,
+          "width": 56,
+          "height": 56
+        },
+        {
+          "left": 97,
+          "right": 153,
+          "width": 56,
+          "height": 56
+        },
+        {
+          "left": 159,
+          "right": 215,
+          "width": 56,
+          "height": 56
+        },
+        {
+          "left": 35,
+          "right": 91,
+          "width": 56,
+          "height": 56
+        },
+        {
+          "left": 97,
+          "right": 153,
+          "width": 56,
+          "height": 56
+        },
+        {
+          "left": 159,
+          "right": 215,
+          "width": 56,
+          "height": 56
+        },
+        {
+          "left": 35,
+          "right": 91,
+          "width": 56,
+          "height": 56
+        }
+      ],
+      "contained": true,
+      "minimumTarget": 56,
+      "pageOverflow": 0
+    },
+    {
+      "width": 1010,
+      "rail": {
+        "left": 20,
+        "right": 230,
+        "width": 210
+      },
+      "content": {
+        "left": 35,
+        "right": 215
+      },
+      "buttons": [
+        {
+          "left": 35,
+          "right": 91,
+          "width": 56,
+          "height": 56
+        },
+        {
+          "left": 97,
+          "right": 153,
+          "width": 56,
+          "height": 56
+        },
+        {
+          "left": 159,
+          "right": 215,
+          "width": 56,
+          "height": 56
+        },
+        {
+          "left": 35,
+          "right": 91,
+          "width": 56,
+          "height": 56
+        },
+        {
+          "left": 97,
+          "right": 153,
+          "width": 56,
+          "height": 56
+        },
+        {
+          "left": 159,
+          "right": 215,
+          "width": 56,
+          "height": 56
+        },
+        {
+          "left": 35,
+          "right": 91,
+          "width": 56,
+          "height": 56
+        },
+        {
+          "left": 97,
+          "right": 153,
+          "width": 56,
+          "height": 56
+        },
+        {
+          "left": 159,
+          "right": 215,
+          "width": 56,
+          "height": 56
+        },
+        {
+          "left": 35,
+          "right": 91,
+          "width": 56,
+          "height": 56
+        }
+      ],
+      "contained": true,
+      "minimumTarget": 56,
+      "pageOverflow": 0
+    },
+    {
+      "width": 1024,
+      "rail": {
+        "left": 20,
+        "right": 230,
+        "width": 210
+      },
+      "content": {
+        "left": 35,
+        "right": 215
+      },
+      "buttons": [
+        {
+          "left": 35,
+          "right": 91,
+          "width": 56,
+          "height": 56
+        },
+        {
+          "left": 97,
+          "right": 153,
+          "width": 56,
+          "height": 56
+        },
+        {
+          "left": 159,
+          "right": 215,
+          "width": 56,
+          "height": 56
+        },
+        {
+          "left": 35,
+          "right": 91,
+          "width": 56,
+          "height": 56
+        },
+        {
+          "left": 97,
+          "right": 153,
+          "width": 56,
+          "height": 56
+        },
+        {
+          "left": 159,
+          "right": 215,
+          "width": 56,
+          "height": 56
+        },
+        {
+          "left": 35,
+          "right": 91,
+          "width": 56,
+          "height": 56
+        },
+        {
+          "left": 97,
+          "right": 153,
+          "width": 56,
+          "height": 56
+        },
+        {
+          "left": 159,
+          "right": 215,
+          "width": 56,
+          "height": 56
+        },
+        {
+          "left": 35,
+          "right": 91,
+          "width": 56,
+          "height": 56
+        }
+      ],
+      "contained": true,
+      "minimumTarget": 56,
+      "pageOverflow": 0
+    },
+    {
+      "width": 1279,
+      "rail": {
+        "left": 49.5,
+        "right": 259.5,
+        "width": 210
+      },
+      "content": {
+        "left": 64.5,
+        "right": 244.5
+      },
+      "buttons": [
+        {
+          "left": 64.5,
+          "right": 120.5,
+          "width": 56,
+          "height": 56
+        },
+        {
+          "left": 126.5,
+          "right": 182.5,
+          "width": 56,
+          "height": 56
+        },
+        {
+          "left": 188.5,
+          "right": 244.5,
+          "width": 56,
+          "height": 56
+        },
+        {
+          "left": 64.5,
+          "right": 120.5,
+          "width": 56,
+          "height": 56
+        },
+        {
+          "left": 126.5,
+          "right": 182.5,
+          "width": 56,
+          "height": 56
+        },
+        {
+          "left": 188.5,
+          "right": 244.5,
+          "width": 56,
+          "height": 56
+        },
+        {
+          "left": 64.5,
+          "right": 120.5,
+          "width": 56,
+          "height": 56
+        },
+        {
+          "left": 126.5,
+          "right": 182.5,
+          "width": 56,
+          "height": 56
+        },
+        {
+          "left": 188.5,
+          "right": 244.5,
+          "width": 56,
+          "height": 56
+        },
+        {
+          "left": 64.5,
+          "right": 120.5,
+          "width": 56,
+          "height": 56
+        }
+      ],
+      "contained": true,
+      "minimumTarget": 56,
+      "pageOverflow": 0
+    }
+  ],
+  "destructive": [
+    {
+      "theme": "light",
+      "disabled": {
+        "ratio": 4.635792305603201,
+        "color": "rgb(88, 112, 149)",
+        "backgroundColor": "rgb(241, 246, 251)",
+        "opacity": "1"
+      },
+      "enabled": {
+        "ratio": 6.5328859500799705,
+        "color": "rgb(255, 255, 255)",
+        "backgroundColor": "rgb(180, 35, 42)",
+        "opacity": "1"
+      },
+      "hover": {
+        "ratio": 8.535194617743057,
+        "color": "rgb(255, 255, 255)",
+        "backgroundColor": "rgb(148, 29, 36)",
+        "opacity": "1"
+      },
+      "box": {
+        "x": 256.890625,
+        "y": 513.34375,
+        "width": 96.109375,
+        "height": 44
+      },
+      "cancelBox": {
+        "x": 189.578125,
+        "y": 514.34375,
+        "width": 59.3125,
+        "height": 44
+      },
+      "acknowledgementBox": {
+        "x": 37,
+        "y": 437.34375,
+        "width": 316,
+        "height": 44
+      }
+    },
+    {
+      "theme": "dark",
+      "disabled": {
+        "ratio": 9.435509344911157,
+        "color": "rgb(175, 193, 221)",
+        "backgroundColor": "rgb(16, 27, 46)",
+        "opacity": "1"
+      },
+      "enabled": {
+        "ratio": 6.389901907044602,
+        "color": "rgb(255, 255, 255)",
+        "backgroundColor": "rgb(166, 59, 46)",
+        "opacity": "1"
+      },
+      "hover": {
+        "ratio": 8.460042690869644,
+        "color": "rgb(255, 255, 255)",
+        "backgroundColor": "rgb(135, 48, 39)",
+        "opacity": "1"
+      },
+      "box": {
+        "x": 256.890625,
+        "y": 513.34375,
+        "width": 96.109375,
+        "height": 44
+      },
+      "cancelBox": {
+        "x": 189.578125,
+        "y": 514.34375,
+        "width": 59.3125,
+        "height": 44
+      },
+      "acknowledgementBox": {
+        "x": 37,
+        "y": 437.34375,
+        "width": 316,
+        "height": 44
+      }
+    }
+  ]
+}

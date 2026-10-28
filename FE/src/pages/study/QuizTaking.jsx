@@ -13,6 +13,7 @@ import {
   moTaLoi,
 } from "../../utils/studyApi";
 import { taoSoNhap } from "../../utils/soNhap";
+import "./quizJourney.css";
 
 const KEYS = ["A", "B", "C", "D", "E", "F"];
 
@@ -73,6 +74,15 @@ export default function QuizTaking() {
     () => questions.filter((q) => !String(answers[q.question_id] ?? "").trim()),
     [questions, answers],
   );
+  const answeredCount = questions.length - unanswered.length;
+  const topicCounts = useMemo(() => {
+    const counts = new Map();
+    questions.forEach((question) => {
+      const topic = question.concept_tags?.[0];
+      if (topic) counts.set(topic, (counts.get(topic) || 0) + 1);
+    });
+    return [...counts.entries()].slice(0, 4);
+  }, [questions]);
 
   // Lưu nháp gộp lô: mỗi lần bấm đáp án mà gọi API ngay thì bấm nhanh 10 câu là
   // 10 request chồng nhau, và request về trễ có thể ghi đè lựa chọn mới hơn.
@@ -144,7 +154,7 @@ export default function QuizTaking() {
       loading={loading}
       error={error && !quiz ? error : null}
       onRetry={load}
-      width="max-w-[820px]"
+      width="max-w-[1220px]"
       actions={
         // Phase 6, Step 2: đếm câu đã trả lời/đang lưu đổi liên tục trong lúc
         // làm bài — không có aria-live thì chỉ ai NHÌN thấy mới biết trạng thái
@@ -170,14 +180,28 @@ export default function QuizTaking() {
       )}
       {!current ? null : (
         <>
-          <ProgressStrip
-            questions={questions}
-            answers={answers}
-            index={index}
-            onJump={setIndex}
-          />
+          <div className="quiz-taking-layout">
+            <aside className="quiz-question-rail" aria-label="Danh sách câu hỏi">
+              <div className="quiz-question-rail__head">
+                <strong>{questions.length} câu hỏi</strong>
+                <span>{answeredCount} đã trả lời</span>
+              </div>
+              <ProgressStrip questions={questions} answers={answers} index={index} onJump={setIndex} />
+              <div className="quiz-question-rail__legend" aria-hidden="true">
+                <span><i className="is-answered" />Đã trả lời</span>
+                <span><i className="is-current" />Đang làm</span>
+              </div>
+              <button type="button" className="quiz-submit-early" disabled={submitting} onClick={() => setConfirming(true)}>
+                Nộp bài sớm
+              </button>
+            </aside>
 
-          <article className="surface-card mt-5 mb-5">
+            <section className="quiz-question-stage">
+              <div className="quiz-mobile-progress" aria-label={`Đã trả lời ${answeredCount} trên ${questions.length} câu`}>
+                <span>Câu {index + 1} / {questions.length}</span><span>{answeredCount} đã trả lời</span>
+                <i><b style={{ width: `${questions.length ? (answeredCount / questions.length) * 100 : 0}%` }} /></i>
+              </div>
+          <article className="surface-card quiz-question-card">
             <div className="flex items-center gap-2 mb-3">
               <span className="badge-processing">{QUESTION_TYPE_LABEL[current.question_type]}</span>
               {current.concept_tags?.slice(0, 2).map((t) => (
@@ -197,20 +221,25 @@ export default function QuizTaking() {
                 onChange={(e) => choose(current.question_id, e.target.value)}
               />
             ) : (
-              <div className="flex flex-col gap-2">
+              <div className="quiz-answer-list" role="radiogroup" aria-label={`Đáp án câu ${index + 1}`}>
                 {(current.options || []).map((opt, i) => {
                   const selected = answers[current.question_id] === opt;
                   return (
-                    <button
+                    <label
                       key={opt}
-                      type="button"
-                      aria-pressed={selected}
                       className={`answer-option ${selected ? "answer-option--selected" : ""}`}
-                      onClick={() => choose(current.question_id, opt)}
                     >
+                      <input
+                        className="sr-only"
+                        type="radio"
+                        name={`question-${current.question_id}`}
+                        value={opt}
+                        checked={selected}
+                        onChange={() => choose(current.question_id, opt)}
+                      />
                       <span className="answer-option__key">{KEYS[i] || i + 1}</span>
                       <span className="text-body">{optionLabel(opt)}</span>
-                    </button>
+                    </label>
                   );
                 })}
               </div>
@@ -226,8 +255,7 @@ export default function QuizTaking() {
           {/* Dính đáy: câu hỏi dài (nhất là trả lời ngắn) đẩy cụm nút xuống dưới màn hình,
               nên người làm bài phải cuộn mới bấm được "Câu sau" — mỗi câu một lần cuộn
               thừa. Nền đặc + đường kẻ trên để chữ phía sau không lộ qua khi cuộn. */}
-          <div className="sticky bottom-0 z-10 -mx-5 px-5 py-3 border-t flex items-center gap-2"
-            style={{ background: "var(--bg-base)", borderColor: "var(--border-color)" }}>
+          <div className="quiz-question-nav">
             <button type="button" className="btn-secondary text-small inline-flex items-center gap-1.5"
               disabled={index === 0} onClick={() => setIndex((i) => Math.max(0, i - 1))}>
               <Icon name="ArrowLeft" size={14} /> Câu trước
@@ -242,6 +270,20 @@ export default function QuizTaking() {
               disabled={submitting} onClick={() => setConfirming(true)}>
               {submitting ? <><Spinner size={13} /> Đang nộp…</> : "Nộp bài"}
             </button>
+          </div>
+            </section>
+
+            <aside className="quiz-context-panel" aria-label="Tiến độ bài làm">
+              <section>
+                <Icon name="Target" size={18} />
+                <h2>Tiến độ</h2>
+                <strong className="quiz-context-panel__percent">{questions.length ? Math.round((answeredCount / questions.length) * 100) : 0}%</strong>
+                <div className="quiz-context-panel__bar"><i style={{ width: `${questions.length ? (answeredCount / questions.length) * 100 : 0}%` }} /></div>
+                <p>{answeredCount} trong {questions.length} câu đã trả lời.</p>
+              </section>
+              {topicCounts.length > 0 && <section><h2>Nội dung</h2>{topicCounts.map(([topic, count]) => <div className="quiz-topic-row" key={topic}><span>{topic}</span><strong>{count} câu</strong></div>)}</section>}
+              <p className="quiz-context-panel__help">Bạn có thể quay lại mọi câu trước khi nộp bài.</p>
+            </aside>
           </div>
 
           {confirming && (
@@ -262,7 +304,7 @@ export default function QuizTaking() {
 /** Dải câu hỏi — ô đã trả lời được tô mực, ô đang xem có viền. */
 function ProgressStrip({ questions, answers, index, onJump }) {
   return (
-    <div className="flex flex-wrap gap-1.5">
+    <div className="quiz-question-grid">
       {questions.map((q, i) => {
         const done = String(answers[q.question_id] ?? "").trim().length > 0;
         const active = i === index;
@@ -273,11 +315,11 @@ function ProgressStrip({ questions, answers, index, onJump }) {
             onClick={() => onJump(i)}
             aria-label={`Câu ${i + 1}${done ? " đã trả lời" : " chưa trả lời"}`}
             aria-current={active ? "true" : undefined}
-            className="w-8 h-8 rounded-[5px] font-mono text-caption font-semibold transition-all"
+            className="quiz-question-index"
             style={{
               background: done ? "color-mix(in srgb, var(--accent) 16%, transparent)" : "var(--bg-elevated)",
               border: `1px solid ${active ? "var(--accent)" : done ? "color-mix(in srgb, var(--accent) 35%, transparent)" : "var(--border-color)"}`,
-              color: done ? "var(--accent)" : "var(--text-muted)",
+              color: done ? "var(--quiz-question-complete-fg)" : "var(--text-muted)",
               boxShadow: active ? "0 0 0 2px color-mix(in srgb, var(--accent) 22%, transparent)" : "none",
             }}
           >
@@ -297,7 +339,7 @@ function ConfirmSubmit({ unanswered, total, onCancel, onConfirm, submitting }) {
   return (
     <Modal open title="Nộp bài?" onClose={onCancel} maxWidth={420}
       footer={
-        <div className="flex gap-2">
+        <div className="quiz-submit-confirm__actions flex gap-2">
           <button type="button" className="btn-secondary text-small flex-1" onClick={onCancel}>
             Quay lại làm tiếp
           </button>

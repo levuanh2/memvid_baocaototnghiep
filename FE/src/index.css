@@ -127,6 +127,16 @@
                                         own rgb so the badge background actually matches the badge text. */
     --warn: #F39A1B;   /* mock warning/technology orange */
     --err:  #F1333A;   /* error (also the seal) */
+    /* Round 7.1: component-scoped semantic roles. The global status palette
+       remains unchanged; these foregrounds are tuned against the actual
+       translucent Quiz badges and the destructive button's solid fill. */
+    --quiz-status-correct: #06663A;
+    --quiz-status-partial: #854700;
+    --quiz-status-incorrect: #B4232A;
+    --quiz-status-processing: #854700;
+    --quiz-question-complete-fg: #064EAF;
+    --danger-cta: #B4232A;
+    --danger-cta-hover: #941D24;
 
     /* Shadows — soft, paper-on-paper */
     --shadow-card:       0 1px 2px rgba(29,67,117,0.06), 0 1px 1px rgba(29,67,117,0.04);
@@ -196,6 +206,13 @@
     --ok-bg: rgba(91,168,136,0.14);
     --warn: #D6A547;
     --err:  #D86A53;
+    --quiz-status-correct: #70C49E;
+    --quiz-status-partial: #F1C56A;
+    --quiz-status-incorrect: #FF9A86;
+    --quiz-status-processing: #F1C56A;
+    --quiz-question-complete-fg: #B7D5FF;
+    --danger-cta: #A63B2E;
+    --danger-cta-hover: #873027;
 
     --shadow-card:       0 1px 3px rgba(0,0,0,0.35), 0 1px 2px rgba(0,0,0,0.25);
     --shadow-card-hover: 0 6px 20px rgba(0,0,0,0.45), 0 2px 8px rgba(0,0,0,0.30);
@@ -549,6 +566,31 @@
        than trying to "cancel" each hover rule's own properties by hand. */
     pointer-events: none;
   }
+
+  /* Permanent-delete CTA only: do not repurpose the shared error token. */
+  .destructive-confirm__footer > button { min-height: 44px; }
+  .destructive-confirm__ack { min-height: 44px; }
+  .destructive-confirm__action {
+    background: var(--danger-cta);
+    border-color: var(--danger-cta);
+    color: #FFFFFF;
+  }
+  .destructive-confirm__action:hover {
+    background: var(--danger-cta-hover);
+    border-color: var(--danger-cta-hover);
+  }
+  .destructive-confirm__action:disabled {
+    opacity: 1;
+    background: var(--bg-elevated);
+    border-color: var(--border-strong);
+    color: var(--text-muted);
+    box-shadow: none;
+    transform: none;
+  }
+
+  .profile-edit-action,
+  .profile-form-action,
+  .profile-avatar-action { min-height: 44px; }
 
   /* Wave 8 cleanup: `.sidebar-tab`/`.sidebar-tab-active` removed — grep-
      confirmed zero JSX consumers (superseded by WorkspaceTabs.jsx). */

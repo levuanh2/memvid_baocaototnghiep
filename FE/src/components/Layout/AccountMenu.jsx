@@ -1,7 +1,7 @@
 import { useEffect, useRef, useState } from "react";
+import { useNavigate } from "react-router-dom";
 import { Icon } from "../ui/Icon";
 import Avatar from "../ui/Avatar";
-import ProfileDrawer from "./ProfileDrawer";
 import ChangePasswordDialog from "./ChangePasswordDialog";
 import { dungHoSo } from "../../auth/hoSoNguoiDung";
 
@@ -9,15 +9,18 @@ import { dungHoSo } from "../../auth/hoSoNguoiDung";
  * Khối tài khoản trên thanh đầu: ảnh + tên + menu.
  *
  * `user` đi vào từ `AuthContext` qua props — chỗ này KHÔNG được có bản sao thứ hai
- * của trạng thái đăng nhập, nếu không hai bản sẽ lệch nhau đúng lúc phiên chết. Mở
- * ngăn hồ sơ chỉ là bật một cờ trong bộ nhớ; mạng chỉ được gọi khi người dùng bấm
- * "Chỉnh sửa" bên trong ngăn đó.
+ * của trạng thái đăng nhập, nếu không hai bản sẽ lệch nhau đúng lúc phiên chết.
+ *
+ * Round 7: "Hồ sơ tài khoản" giờ điều hướng sang trang `/app/profile` thay vì mở
+ * ngăn kéo tại chỗ (approved design là trang riêng). Việc sửa hồ sơ NKS chỉ còn
+ * xảy ra ở đó; trang ấy đẩy dữ liệu mới thẳng vào `AuthContext.user` qua
+ * `updateUserFields`, nên khối này không cần giữ một bản sao `hoSoMoi` cục bộ như
+ * bản ngăn kéo cũ nữa — `user` truyền vào đây tự cập nhật theo.
  */
 export default function AccountMenu({ user, onLogout }) {
+  const navigate = useNavigate();
   const [moDoiMatKhau, setMoDoiMatKhau] = useState(false);
   const [moMenu, setMoMenu] = useState(false);
-  const [moHoSo, setMoHoSo] = useState(false);
-  const [hoSoMoi, setHoSoMoi] = useState(null);
   const boc = useRef(null);
 
   // Bấm ra ngoài / Escape thì đóng menu — cùng cách `Modal` xử lý, ở quy mô nhỏ hơn.
@@ -33,20 +36,7 @@ export default function AccountMenu({ user, onLogout }) {
     };
   }, [moMenu]);
 
-  // Hồ sơ mới đọc lại từ provider sau khi lưu. Phủ lên `user` của AuthContext —
-  // `/auth/me` không mang `phone`/`avatar`, nên chờ nó thì header không bao giờ đổi.
-  // Ưu tiên giá trị của provider, giữ nguyên những khoá nó không nói tới.
-  const dayDu = hoSoMoi
-    ? {
-        ...user,
-        display_name: hoSoMoi.display_name ?? user.display_name,
-        email: hoSoMoi.email ?? user.email,
-        phone: hoSoMoi.phone ?? user.phone,
-        avatar: hoSoMoi.avatar ?? user.avatar,
-      }
-    : user;
-
-  const hoSo = dungHoSo(dayDu);
+  const hoSo = dungHoSo(user);
   if (!hoSo) return null;
 
   const muc = "w-full flex items-center gap-2.5 px-3 py-2 text-small text-left transition-theme";
@@ -80,7 +70,7 @@ export default function AccountMenu({ user, onLogout }) {
           <button
             role="menuitem"
             className={`${muc} text-text-secondary hover:text-accent`}
-            onClick={() => { setMoMenu(false); setMoHoSo(true); }}
+            onClick={() => { setMoMenu(false); navigate("/app/profile"); }}
           >
             <Icon name="UserRound" size={15} /> Hồ sơ tài khoản
           </button>
@@ -105,13 +95,6 @@ export default function AccountMenu({ user, onLogout }) {
           </button>
         </div>
       )}
-
-      <ProfileDrawer
-        open={moHoSo}
-        hoSo={hoSo}
-        onClose={() => setMoHoSo(false)}
-        onHoSoMoi={setHoSoMoi}
-      />
 
       <ChangePasswordDialog
         open={moDoiMatKhau}

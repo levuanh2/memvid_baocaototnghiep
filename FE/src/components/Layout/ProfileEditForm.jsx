@@ -65,11 +65,11 @@ export default function ProfileEditForm({ form, loi, dangLuu, onDoi, onLuu, onHu
 
       <div className="flex flex-wrap gap-2 justify-end mt-5">
         <button type="button" onClick={onHuy} disabled={dangLuu}
-          className="btn-secondary !py-1.5 !text-small">
+          className="btn-secondary profile-form-action !text-small">
           Huỷ
         </button>
         <button type="submit" disabled={dangLuu || !coThayDoi}
-          className="btn-seal !py-1.5 !text-small inline-flex items-center gap-1.5">
+          className="btn-seal profile-form-action !text-small inline-flex items-center gap-1.5">
           {dangLuu && <Icon name="Clock" size={14} />}
           {dangLuu ? "Đang lưu…" : "Lưu thay đổi"}
         </button>

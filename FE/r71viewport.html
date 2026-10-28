@@ -1,0 +1,29 @@
+<!doctype html>
+<html>
+<head><meta charset="UTF-8" /><style>
+  html,body{margin:0;background:#333;overflow:auto;}
+  #wrap{transform-origin: top left;}
+  iframe{border:0;display:block;background:#fff;}
+</style></head>
+<body>
+<div id="wrap"><iframe id="f"></iframe></div>
+<script>
+  const qs = new URLSearchParams(location.search);
+  const w = parseInt(qs.get("w") || "390", 10);
+  const h = parseInt(qs.get("h") || "844", 10);
+  const src = qs.get("src") || "/r71qa.html?view=taking";
+  const scale = Math.min(1240 / w, 700 / h, 1);
+  const f = document.getElementById("f");
+  const wrap = document.getElementById("wrap");
+  f.width = w; f.height = h;
+  wrap.style.transform = `scale(${scale})`;
+  f.src = src + (src.includes("?") ? "&" : "?") + "r=" + Date.now();
+  window.setViewport = (nw, nh, nsrc) => {
+    const s = Math.min(1240 / nw, 700 / nh, 1);
+    f.width = nw; f.height = nh;
+    wrap.style.transform = `scale(${s})`;
+    f.src = (nsrc || src) + (((nsrc || src).includes("?")) ? "&" : "?") + "r=" + Date.now();
+  };
+</script>
+</body>
+</html>
