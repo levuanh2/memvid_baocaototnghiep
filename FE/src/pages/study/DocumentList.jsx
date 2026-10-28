@@ -7,6 +7,10 @@ import LearningDashboard from "../../components/study/LearningDashboard";
 import Disclosure from "../../components/ui/Disclosure";
 import CollectionSidebar from "../../components/study/CollectionSidebar";
 import BulkBar from "../../components/study/BulkBar";
+import LibraryTaskViews from "../../components/study/LibraryTaskViews";
+import StudyDocumentActionRow from "../../components/study/StudyDocumentActionRow";
+import DocumentKnowledgeDetails from "../../components/study/DocumentKnowledgeDetails";
+import DestructiveConfirmDialog from "../../components/ui/DestructiveConfirmDialog";
 import SealMeter from "../../components/study/SealMeter";
 import { Icon } from "../../components/ui/Icon";
 import Spinner from "../../components/ui/Spinner";
@@ -28,6 +32,16 @@ import {
   thanRequest, thayDoiLacQuan, xoaChon,
 } from "../../utils/chonNhieu";
 import { trangThaiRong, nguCanhTuBoLoc } from "../../utils/trangThaiRong";
+import {
+  TASK_VIEW, effectiveBulkRequest, moveRovingDocumentId, projectLibrary, pruneSelection,
+  resolveRovingDocumentId, sameSelection,
+} from "../../utils/libraryActionMatrix";
+import { isLibraryActionMatrixEnabled } from "../../utils/libraryActionMatrixFlag";
+import {
+  DEFAULT_LIBRARY_STATE, libraryStateStorageKey, parseLibraryState, serializeLibraryState,
+} from "../../utils/libraryActionMatrixState";
+import { useAuth } from "../../auth/useAuth";
+import "../../components/study/libraryActionMatrix.css";
 
 // Thư viện học tập — mọi mục, bộ lọc và chế độ sắp đều là PHÉP CHIẾU của một
 // payload `/api/library` duy nhất. Không có endpoint `/sections`, không có tìm
@@ -59,6 +73,13 @@ const NHAN_LOC = new Map(NHOM_LOC.flatMap(([, mucLoc]) => mucLoc));
 // `memvidx.inspector.collapsed.v1` (knowledgeParts.jsx) — try/catch, fails silent.
 const KHOA_TQHT_MO = "memvidx.library.dashboardOpen.v1";
 const KHOA_MAT_DO = "memvidx.library.density.v1";
+const LIBRARY_ACTION_MATRIX = isLibraryActionMatrixEnabled();
+
+function docMatrixState(storageKey) {
+  if (!LIBRARY_ACTION_MATRIX || !storageKey) return DEFAULT_LIBRARY_STATE;
+  try { return parseLibraryState(sessionStorage.getItem(storageKey)); }
+  catch { return DEFAULT_LIBRARY_STATE; }
+}
 
 function docBool(khoa, macDinh) {
   try {
@@ -94,8 +115,14 @@ function SectionTitle({ children, dem }) {
 }
 
 export default function DocumentList() {
+  const { user } = useAuth();
   const moTheoDoi = useOpenSurface();
   const fileRef = useRef(null);
+  const matrixStorageKey = libraryStateStorageKey(user?.id);
+  const matrixInitial = useRef(docMatrixState(matrixStorageKey)).current;
+  const matrixPrimaryRefs = useRef(new Map());
+  const matrixFallbackRef = useRef(null);
+  const matrixListRef = useRef(null);
 
   const [documents, setDocuments] = useState([]);
   const [overview, setOverview] = useState(null);
@@ -107,10 +134,11 @@ export default function DocumentList() {
   const [tenDangTai, setTenDangTai] = useState("");
   const [idVuaTai, setIdVuaTai] = useState(null);
 
-  const [truyVan, setTruyVan] = useState("");
-  const [cheDoSap, setCheDoSap] = useState("newest");
-  const [boLoc, setBoLoc] = useState([]);
-  const [hienLuuTru, setHienLuuTru] = useState(false);
+  const [truyVan, setTruyVan] = useState(matrixInitial.query);
+  const [cheDoSap, setCheDoSap] = useState(matrixInitial.sort);
+  const [boLoc, setBoLoc] = useState(matrixInitial.filterKeys);
+  const [hienLuuTru, setHienLuuTru] = useState(matrixInitial.includeArchived);
+  const [taskView, setTaskView] = useState(matrixInitial.view || TASK_VIEW.ALL);
   const [moBangLoc, setMoBangLoc] = useState(false);
   // Frontend V2, Library wave — density is a per-browser display preference
   // (Find-Open-Study-Review artifact, Phase B: "Denser cards? Yes, default
@@ -135,11 +163,14 @@ export default function DocumentList() {
   // Phase 1B. `collections` là nguồn DUY NHẤT của tên/màu bộ sưu tập — tài liệu chỉ
   // mang `collection_id`, nên không có bản sao nào để lệch.
   const [collections, setCollections] = useState([]);
-  const [chonBoSuuTap, setChonBoSuuTap] = useState(null);
-  const [chonThe, setChonThe] = useState([]);
+  const [chonBoSuuTap, setChonBoSuuTap] = useState(matrixInitial.collectionId);
+  const [chonThe, setChonThe] = useState(matrixInitial.tags);
   const [daChon, setDaChon] = useState(() => new Set());
   const [dangChayBulk, setDangChayBulk] = useState(false);
   const [chiSoFocus, setChiSoFocus] = useState(-1);
+  const [matrixFocusId, setMatrixFocusId] = useState(null);
+  const [boSuuTapCanXoa, setBoSuuTapCanXoa] = useState(null);
+  const [chiTietDoc, setChiTietDoc] = useState(null);
 
   const load = useCallback(async () => {
     setLoading(true);
@@ -238,6 +269,60 @@ export default function DocumentList() {
     return vaTaiLieu(doc, thayDoi, hienThi);
   }, [vaTaiLieu]);
 
+  // Both renderers consume the same fetch/state owner. The rollout flag changes
+  // only projection and presentation; it never starts a second library request.
+  const chiMucBst = useMemo(() => chiMucBoSuuTap(collections), [collections]);
+  const mucHienThi = useMemo(() => {
+    const daLoc = loc(tim(documents, truyVan, chiMucBst), boLoc,
+                      { hienLuuTru, collectionId: chonBoSuuTap, tags: chonThe });
+    return chiaMuc(sapXep(daLoc, cheDoSap), { hienLuuTru });
+  }, [documents, truyVan, chiMucBst, boLoc, hienLuuTru, chonBoSuuTap, chonThe, cheDoSap]);
+  const matrixProjection = useMemo(() => projectLibrary(documents, {
+    query: truyVan,
+    collectionIndex: chiMucBst,
+    collectionId: chonBoSuuTap,
+    tags: chonThe,
+    filterKeys: boLoc,
+    includeArchived: hienLuuTru,
+    view: taskView,
+    sort: cheDoSap,
+  }), [documents, truyVan, chiMucBst, chonBoSuuTap, chonThe, boLoc,
+    hienLuuTru, taskView, cheDoSap]);
+  const documentsDangHien = LIBRARY_ACTION_MATRIX ? matrixProjection.rows : mucHienThi.tatCa;
+  const daChonHieuLuc = useMemo(
+    () => pruneSelection(daChon, documentsDangHien),
+    [daChon, documentsDangHien],
+  );
+
+  useEffect(() => {
+    if (!LIBRARY_ACTION_MATRIX) return;
+    setDaChon((prev) => {
+      const next = pruneSelection(prev, matrixProjection.rows);
+      return sameSelection(prev, next) ? prev : next;
+    });
+  }, [matrixProjection.rows]);
+
+  useEffect(() => {
+    if (!LIBRARY_ACTION_MATRIX) return;
+    const save = () => { try {
+      if (!matrixStorageKey) return;
+      sessionStorage.setItem(matrixStorageKey, serializeLibraryState({
+        view: taskView, query: truyVan, sort: cheDoSap, collectionId: chonBoSuuTap,
+        tags: chonThe, filterKeys: boLoc, includeArchived: hienLuuTru,
+        scrollY: window.scrollY,
+      }));
+    } catch { /* storage unavailable */ } };
+    save();
+    window.addEventListener("scroll", save, { passive: true });
+    return () => { save(); window.removeEventListener("scroll", save); };
+  }, [matrixStorageKey, taskView, truyVan, cheDoSap, chonBoSuuTap, chonThe, boLoc, hienLuuTru]);
+
+  useEffect(() => {
+    if (!LIBRARY_ACTION_MATRIX || loading || !matrixInitial.scrollY || !matrixListRef.current) return undefined;
+    const frame = requestAnimationFrame(() => window.scrollTo({ top: matrixInitial.scrollY }));
+    return () => cancelAnimationFrame(frame);
+  }, [loading, matrixInitial.scrollY, matrixProjection.rows.length]);
+
   // ── Bộ sưu tập ────────────────────────────────────────────────────────────
   const taiLaiBoSuuTap = useCallback(async (ham, thongBaoLoi) => {
     setLoiThaoTac(null);
@@ -265,24 +350,27 @@ export default function DocumentList() {
   }, [taiLaiBoSuuTap]);
 
   const xoaBoSuuTap = useCallback(async (c) => {
-    if (!window.confirm(
-      `Xoá bộ sưu tập "${c.name}"? Tài liệu bên trong KHÔNG bị xoá, chúng trở về "chưa phân loại".`)) {
-      return;
+    try {
+      await deleteCollection(c.collection_id);
+    } catch (err) {
+      const message = moTaLoi(err, "Không xoá được bộ sưu tập.");
+      setLoiThaoTac(message);
+      throw new Error(message);
     }
-    const ok = await taiLaiBoSuuTap(() => deleteCollection(c.collection_id),
-                                    "Không xoá được bộ sưu tập.");
-    if (!ok) return;
     setCollections((prev) => prev.filter((x) => x.collection_id !== c.collection_id));
     // Tài liệu rơi về "chưa phân loại" — phản chiếu ngay `ON DELETE SET NULL` của
     // máy chủ để màn hình không hiện một bộ sưu tập vừa biến mất.
     setDocuments((prev) => prev.map((d) =>
       d.collection_id === c.collection_id ? { ...d, collection_id: null } : d));
     if (chonBoSuuTap === c.collection_id) setChonBoSuuTap(null);
-  }, [taiLaiBoSuuTap, chonBoSuuTap]);
+    setBoSuuTapCanXoa(null);
+  }, [chonBoSuuTap]);
 
   // ── Hàng loạt ─────────────────────────────────────────────────────────────
   const chayBulk = useCallback(async (hanhDong, kem) => {
-    const than = thanRequest(hanhDong, [...daChon], kem);
+    const than = LIBRARY_ACTION_MATRIX
+      ? effectiveBulkRequest(hanhDong, daChon, matrixProjection.rows, kem)
+      : thanRequest(hanhDong, [...daChonHieuLuc], kem);
     if (!than) return;
     setDangChayBulk(true);
     setLoiThaoTac(null);
@@ -306,7 +394,7 @@ export default function DocumentList() {
     } finally {
       setDangChayBulk(false);
     }
-  }, [daChon, load]);
+  }, [daChon, daChonHieuLuc, matrixProjection.rows, load]);
 
   const luuTen = useCallback(async (doc, ten) => {
     setDangLuu(true);
@@ -316,14 +404,6 @@ export default function DocumentList() {
   }, [vaTaiLieu]);
 
   // ── Phép chiếu ────────────────────────────────────────────────────────────
-  const chiMucBst = useMemo(() => chiMucBoSuuTap(collections), [collections]);
-
-  const mucHienThi = useMemo(() => {
-    const daLoc = loc(tim(documents, truyVan, chiMucBst), boLoc,
-                      { hienLuuTru, collectionId: chonBoSuuTap, tags: chonThe });
-    return chiaMuc(sapXep(daLoc, cheDoSap), { hienLuuTru });
-  }, [documents, truyVan, chiMucBst, boLoc, hienLuuTru, chonBoSuuTap, chonThe, cheDoSap]);
-
   // Demo Mode (Phase 6, Step 4) — tài liệu THẬT tốt nhất để xem thử ngay, từ
   // TOÀN BỘ thư viện (không qua bộ lọc/tìm kiếm đang bật — "Xem thử" phải luôn
   // hoạt động bất kể người dùng đang lọc gì). `null` → ẩn nút, không demo rỗng.
@@ -338,6 +418,7 @@ export default function DocumentList() {
   // Lựa chọn phải theo kịp bộ lọc: một tài liệu đã lọc đi mà còn trong lựa chọn thì
   // "Xoá 3 tài liệu" xoá một thứ người dùng không nhìn thấy.
   useEffect(() => {
+    if (LIBRARY_ACTION_MATRIX) return;
     setDaChon((prev) => (prev.size ? locTheoHienThi(prev, mucHienThi.tatCa) : prev));
   }, [mucHienThi.tatCa]);
 
@@ -357,6 +438,20 @@ export default function DocumentList() {
     else if (kq.loai === "mo") moBeMat(doc, doc.last_workspace || "studymap");
     else if (kq.loai === "xoa_chon") setDaChon(xoaChon());
   };
+
+  const matrixFocusHieuLuc = resolveRovingDocumentId(matrixProjection.rows, matrixFocusId);
+  const xuLyPhimMatrix = (e, docId) => {
+    if (!["ArrowDown", "ArrowUp", "Home", "End"].includes(e.key)) return;
+    e.preventDefault();
+    const nextId = moveRovingDocumentId(matrixProjection.rows, docId, e.key);
+    setMatrixFocusId(nextId);
+    matrixPrimaryRefs.current.get(nextId)?.focus();
+  };
+
+  useEffect(() => {
+    if (!LIBRARY_ACTION_MATRIX) return;
+    setMatrixFocusId((current) => resolveRovingDocumentId(matrixProjection.rows, current));
+  }, [matrixProjection.rows]);
 
   const veThe = (doc, chiSo = null) => (
     <StudyCard
@@ -443,7 +538,7 @@ export default function DocumentList() {
         }}
         onTao={taoBoSuuTap}
         onSua={suaBoSuuTap}
-        onXoa={xoaBoSuuTap}
+        onXoa={setBoSuuTapCanXoa}
         hienLuuTru={hienLuuTru}
         onHienLuuTru={setHienLuuTru}
       />
@@ -471,7 +566,7 @@ export default function DocumentList() {
       {overview && <Overview overview={overview} />}
 
       <BulkBar
-        so={daChon.size}
+        so={daChonHieuLuc.size}
         boSuuTap={thanhBen.boSuuTap}
         dangChay={dangChayBulk}
         onHanhDong={chayBulk}
@@ -567,19 +662,19 @@ export default function DocumentList() {
           <span className="text-small text-text-secondary">Hiện đã lưu trữ</span>
         </label>
 
-        {mucHienThi.tatCa.length > 0 && (
+        {documentsDangHien.length > 0 && (
           <label className="flex items-center gap-2 cursor-pointer px-1">
             <input
               type="checkbox"
-              checked={daChonHet(daChon, mucHienThi.tatCa)}
+              checked={daChonHet(daChonHieuLuc, documentsDangHien)}
               onChange={(e) => setDaChon(e.target.checked
-                ? chonTatCa(mucHienThi.tatCa) : xoaChon())}
+                ? chonTatCa(documentsDangHien) : xoaChon())}
               className="w-3.5 h-3.5 accent-accent rounded"
             />
             {/* Nói rõ phạm vi: "tất cả" ở đây là những gì ĐANG hiện, không phải cả
                 thư viện — chọn 300 tài liệu đang ẩn rồi xoá là mất dữ liệu. */}
             <span className="text-small text-text-secondary">
-              Chọn {mucHienThi.tatCa.length} đang hiện
+              Chọn {documentsDangHien.length} đang hiện
             </span>
           </label>
         )}
@@ -635,8 +730,62 @@ export default function DocumentList() {
         </section>
       )}
 
+      {LIBRARY_ACTION_MATRIX && (
+        <section ref={matrixListRef} className="mb-7" aria-label="Ma trận hành động học tập">
+          <div ref={matrixFallbackRef} tabIndex={-1} data-matrix-focus-fallback>
+            <LibraryTaskViews value={taskView} counts={matrixProjection.counts} onChange={setTaskView} />
+          </div>
+          <p className="text-small text-text-muted mb-3" aria-live="polite">
+            {matrixProjection.rows.length} tài liệu phù hợp
+          </p>
+          {matrixProjection.rows.length === 0 ? (
+            <EmptyState
+              icon="SearchX"
+              title="Không có tài liệu phù hợp"
+              hint="Hãy đổi mục tiêu học tập, bộ sưu tập, bộ lọc hoặc từ khoá tìm kiếm."
+              action={(
+                <button type="button" className="pill-action mt-1" onClick={() => {
+                  setTaskView(TASK_VIEW.ALL);
+                  setTruyVan(""); setBoLoc([]); setChonBoSuuTap(null); setChonThe([]);
+                }}>Xem tất cả tài liệu</button>
+              )}
+            />
+          ) : (
+            <div className="study-document-matrix" aria-label="Danh sách tài liệu">
+              {matrixProjection.rows.map((doc, index) => (
+                <div key={doc.document_id}>
+                  <StudyDocumentActionRow
+                    doc={doc}
+                    view={taskView}
+                    onOpen={moBeMat}
+                    onDetails={() => setChiTietDoc((current) => current === doc.document_id ? null : doc.document_id)}
+                    onRename={setDangDoiTen}
+                    onPatch={batTat}
+                    renaming={dangDoiTen === doc.document_id}
+                    saving={dangLuu}
+                    onSaveRename={(name) => luuTen(doc, name)}
+                    onCancelRename={() => setDangDoiTen(null)}
+                    selected={daChonHieuLuc.has(doc.document_id)}
+                    onSelect={(id) => setDaChon((prev) => batTatChon(prev, id))}
+                    primaryTabIndex={doc.document_id === matrixFocusHieuLuc ? 0 : -1}
+                    primaryRef={(node) => {
+                      if (node) matrixPrimaryRefs.current.set(doc.document_id, node);
+                      else matrixPrimaryRefs.current.delete(doc.document_id);
+                    }}
+                    onPrimaryKeyDown={(event) => xuLyPhimMatrix(event, doc.document_id)}
+                    fallbackFocusRef={matrixFallbackRef}
+                  />
+                  <DocumentKnowledgeDetails open={chiTietDoc === doc.document_id} doc={doc}
+                    documents={documents} chiMucBst={chiMucBst} jobs={jobs} onOpen={moBeMat} />
+                </div>
+              ))}
+            </div>
+          )}
+        </section>
+      )}
+
       {/* Tiếp tục học */}
-      {mucHienThi.tiepTucHoc && (
+      {!LIBRARY_ACTION_MATRIX && mucHienThi.tiepTucHoc && (
         <section className="mb-7">
           <SectionTitle>Tiếp tục học</SectionTitle>
           {veThe(mucHienThi.tiepTucHoc)}
@@ -665,14 +814,14 @@ export default function DocumentList() {
         </section>
       )}
 
-      {muc.map(([ten, ds]) => (
+      {!LIBRARY_ACTION_MATRIX && muc.map(([ten, ds]) => (
         <section key={ten} className="mb-7">
           <SectionTitle dem={ds.length}>{ten}</SectionTitle>
           <div className="flex flex-col gap-2.5">{ds.map(veThe)}</div>
         </section>
       ))}
 
-      <section className="mb-7">
+      {!LIBRARY_ACTION_MATRIX && <section className="mb-7">
         <SectionTitle dem={mucHienThi.tatCa.length}>Tất cả tài liệu</SectionTitle>
         {mucHienThi.tatCa.length === 0 ? (
           // "Chưa có gì", "không khớp bộ lọc" và "mục này trống" là BA màn hình khác
@@ -723,9 +872,9 @@ export default function DocumentList() {
             {mucHienThi.tatCa.map((d, i) => veThe(d, i))}
           </div>
         )}
-      </section>
+      </section>}
 
-      {mucHienThi.daLuuTru.length > 0 && hienLuuTru && (
+      {!LIBRARY_ACTION_MATRIX && mucHienThi.daLuuTru.length > 0 && hienLuuTru && (
         <section className="mb-7">
           <SectionTitle dem={mucHienThi.daLuuTru.length}>Đã lưu trữ</SectionTitle>
           <div className="flex flex-col gap-2.5">{mucHienThi.daLuuTru.map(veThe)}</div>
@@ -759,6 +908,15 @@ export default function DocumentList() {
           </div>
         </section>
       )}
+      <DestructiveConfirmDialog
+        open={Boolean(boSuuTapCanXoa)}
+        title="Xoá bộ sưu tập"
+        targetName={boSuuTapCanXoa?.name}
+        consequenceText="Bộ sưu tập sẽ bị xoá vĩnh viễn. Tài liệu bên trong không bị xoá; chúng sẽ trở về mục Chưa phân loại."
+        confirmLabel="Xoá bộ sưu tập"
+        onCancel={() => setBoSuuTapCanXoa(null)}
+        onConfirm={() => xoaBoSuuTap(boSuuTapCanXoa)}
+      />
       </div>
       </div>
     </StudyShell>
