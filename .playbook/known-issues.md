@@ -1,5 +1,21 @@
 # Known Issues
 
+## Library matrix controls lost visible focus in dark mode (fixed 2026-10-28)
+
+**Symptom:** Agy's browser audit measured the task tabs, row quick actions, and
+More trigger using only Chromium's 1px dark user-agent outline against a navy
+surface. The first desktop menu item was focused programmatically but had no
+visible outline or background state.
+
+**Root cause:** new matrix controls did not inherit the established button
+classes that own the tokenized focus ring, and the menu styled only
+`:focus-visible` although its first item is reached through `.focus()`.
+
+**Fix and prevention:** the matrix controls now declare the shared 2px accent
+focus ring; menu items style `:focus` with an inset accent outline and hover
+surface. Chromium asserts both keyboard task-tab focus and programmatic menu
+focus in dark mode. Long titles also permit emergency wrapping at tablet width.
+
 ## Library mobile tools sheet trapped focus but did not inert its page root (fixed 2026-10-28)
 
 **Symptom:** keyboard Tab stayed inside the portalled sheet, but background

@@ -147,3 +147,27 @@ test("320px tools sheet is contained, scrollable, and uses 44px targets", async 
   expect(metrics.scrollable).toBe(true);
   await page.screenshot({ path: path.join(evidenceDir, "library-mobile-320-tools-dark.png"), fullPage: false });
 });
+
+test("dark-mode keyboard and programmatic focus remain visibly tokenized", async ({ page }) => {
+  await page.setViewportSize({ width: 1440, height: 900 });
+  await page.goto("/round6-library-qa.html?theme=dark");
+  await page.locator('input[aria-label="Tìm trong thư viện QA"]').focus();
+  await page.keyboard.press("Tab");
+  const taskFocus = await page.locator('[data-task-view="all"]').evaluate((node) => {
+    const style = getComputedStyle(node);
+    return [style.outlineStyle, style.outlineWidth];
+  });
+  expect(taskFocus).toEqual(["solid", "2px"]);
+
+  const trigger = page.locator("[data-document-row]").first().locator("[data-tools-trigger]");
+  await trigger.click();
+  const firstMenuItem = page.locator(".document-tools--desktop [data-learning-tool]").first();
+  await expect(firstMenuItem).toBeFocused();
+  const menuFocus = await firstMenuItem.evaluate((node) => {
+    const style = getComputedStyle(node);
+    return [style.outlineStyle, style.outlineWidth, style.backgroundColor];
+  });
+  expect(menuFocus[0]).toBe("solid");
+  expect(menuFocus[1]).toBe("2px");
+  expect(menuFocus[2]).not.toBe("rgba(0, 0, 0, 0)");
+});

@@ -15,9 +15,10 @@ dispatcher, persistence, deletion, and exact bulk request bodies.
 - `doc-1` is excluded from both missing queues; `doc-2` is included in both.
 - Desktop density: 215 visible interactive controls, 210 inside rows, five per
   row, first-row height 82px. See `matrix-density-metrics.json`.
-- Browser result: 18/18 Playwright cases passed after correcting the sheet close
-  target from 32px to 44px. Every listed viewport/theme measured zero document
-  overflow, zero row overflow, zero clipped controls, and mobile targets >=44px.
+- Browser result: 19/19 Playwright cases passed after correcting the sheet close
+  target from 32px to 44px and tokenizing dark-mode focus. Every listed
+  viewport/theme measured zero document overflow, zero row overflow, zero
+  clipped controls, and mobile targets >=44px.
 - Runtime: local Chromium supplied by Playwright; Vite fixture server; no backend
   and no external network requests.
 

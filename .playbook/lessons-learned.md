@@ -1,5 +1,13 @@
 # Lessons Learned
 
+## Programmatic focus needs a visible style independent of input modality (2026-10-28)
+
+`:focus-visible` is ideal for ordinary keyboard navigation, but a menu that
+calls `.focus()` on open cannot assume the browser will classify that focus as
+keyboard-originated. Assert computed focus styling in a real browser and give
+programmatically focused menu items an explicit `:focus` treatment; otherwise a
+correct focus handoff can remain visually invisible.
+
 ## A focus trap does not make the background inert (2026-10-28)
 
 Portal placement, a scrim, `aria-modal`, and cycling Tab focus each cover a
