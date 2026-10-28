@@ -740,7 +740,7 @@ export default function DocumentList() {
           </p>
           {matrixProjection.rows.length === 0 ? (
             <EmptyState
-              icon="SearchX"
+              icon="Search"
               title="Không có tài liệu phù hợp"
               hint="Hãy đổi mục tiêu học tập, bộ sưu tập, bộ lọc hoặc từ khoá tìm kiếm."
               action={(
@@ -752,7 +752,7 @@ export default function DocumentList() {
             />
           ) : (
             <div className="study-document-matrix" aria-label="Danh sách tài liệu">
-              {matrixProjection.rows.map((doc, index) => (
+              {matrixProjection.rows.map((doc) => (
                 <div key={doc.document_id}>
                   <StudyDocumentActionRow
                     doc={doc}

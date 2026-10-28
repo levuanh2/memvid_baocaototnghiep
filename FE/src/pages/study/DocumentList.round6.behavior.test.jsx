@@ -156,6 +156,16 @@ describe("DocumentList Round 6 mounted integration", () => {
     expect(window.scrollTo).toHaveBeenCalledWith({ top: 240 });
   });
 
+  it("does not inherit account A context when account B mounts in the same browser", async () => {
+    sessionStorage.setItem("memvidx.library.actionMatrix.v1:user-a", JSON.stringify({ query: "Beta", view: "all", sort: "az" }));
+    await renderDocumentList();
+    expect([...host.querySelectorAll("[data-document-row]")].map((node) => node.dataset.documentId)).toEqual(["doc-2"]);
+    act(() => root.unmount()); root = null; host.remove(); host = null;
+    currentUser = { id: "user-b" };
+    await renderDocumentList();
+    expect([...host.querySelectorAll("[data-document-row]")].map((node) => node.dataset.documentId)).toEqual(["doc-2", "doc-1"]);
+  });
+
   it("passes the exact collection ID, supports cancel, and leaves a failed dialog retryable", async () => {
     await renderDocumentList();
     act(() => host.querySelector("[data-delete-collection]").click());

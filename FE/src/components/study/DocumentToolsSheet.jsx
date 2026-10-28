@@ -84,8 +84,10 @@ export function DesktopDocumentTools({ open, doc, onChoose, onManage, onClose, t
 export default function DocumentToolsSheet({ open, doc, onChoose, onManage, onClose, triggerRef, fallbackFocusRef }) {
   useEffect(() => {
     if (!open) return undefined;
+    const trigger = triggerRef?.current;
+    const fallback = fallbackFocusRef?.current;
     return () => queueMicrotask(() => {
-      if (!document.contains(triggerRef?.current)) fallbackFocusRef?.current?.focus();
+      if (!document.contains(trigger)) fallback?.focus();
     });
   }, [open, triggerRef, fallbackFocusRef]);
   return (

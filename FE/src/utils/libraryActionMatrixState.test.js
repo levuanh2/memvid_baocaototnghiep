@@ -21,4 +21,14 @@ describe("Library Action Matrix return state", () => {
     expect(libraryStateStorageKey("user-a")).not.toBe(libraryStateStorageKey("user-b"));
     expect(libraryStateStorageKey(null)).toBeNull();
   });
+
+  it("never serializes selection or destructive targets", () => {
+    const parsed = JSON.parse(serializeLibraryState({
+      ...DEFAULT_LIBRARY_STATE,
+      selectedIds: ["doc-1"],
+      deleteTarget: "course-a",
+    }));
+    expect(parsed).not.toHaveProperty("selectedIds");
+    expect(parsed).not.toHaveProperty("deleteTarget");
+  });
 });
