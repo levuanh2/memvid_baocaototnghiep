@@ -154,6 +154,8 @@ describe("DocumentList Round 6 mounted integration", () => {
     await renderDocumentList();
     expect([...host.querySelectorAll("[data-document-row]")].map((node) => node.dataset.documentId)).toEqual(["doc-2"]);
     expect(window.scrollTo).toHaveBeenCalledWith({ top: 240 });
+    act(() => host.querySelector('[data-task-view="needs_summary"]').click());
+    expect(window.scrollTo).toHaveBeenCalledTimes(1);
   });
 
   it("does not inherit account A context when account B mounts in the same browser", async () => {

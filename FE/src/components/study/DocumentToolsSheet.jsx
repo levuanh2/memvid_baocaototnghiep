@@ -84,6 +84,18 @@ export function DesktopDocumentTools({ open, doc, onChoose, onManage, onClose, t
 export default function DocumentToolsSheet({ open, doc, onChoose, onManage, onClose, triggerRef, fallbackFocusRef }) {
   useEffect(() => {
     if (!open) return undefined;
+    const appRoot = document.getElementById("root");
+    const rootWasInert = appRoot?.hasAttribute("inert");
+    const previousOverflow = document.body.style.overflow;
+    if (!rootWasInert) appRoot?.setAttribute("inert", "");
+    document.body.style.overflow = "hidden";
+    return () => {
+      if (!rootWasInert) appRoot?.removeAttribute("inert");
+      document.body.style.overflow = previousOverflow;
+    };
+  }, [open]);
+  useEffect(() => {
+    if (!open) return undefined;
     const trigger = triggerRef?.current;
     const fallback = fallbackFocusRef?.current;
     return () => queueMicrotask(() => {

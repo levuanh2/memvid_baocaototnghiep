@@ -1,5 +1,49 @@
 # Known Issues
 
+## Library mobile tools sheet trapped focus but did not inert its page root (fixed 2026-10-28)
+
+**Symptom:** keyboard Tab stayed inside the portalled sheet, but background
+controls remained programmatically interactive and the page could still scroll
+behind the scrim.
+
+**Root cause:** the shared modal supplied a portal, scrim, Escape handling, and
+focus trap, while the Library adapter assumed those behaviors also isolated the
+application root. It never applied `inert` or a scroll lock.
+
+**Fix and prevention:** the Library sheet now marks `#root` inert and locks body
+scroll only for its open lifetime, restoring both previous states on cleanup.
+The component regression asserts isolation and restoration together with focus
+return, without changing the shared `Modal` contract.
+
+## Library mobile tools-sheet close control was only 32px (fixed 2026-10-28)
+
+**Symptom:** Chromium geometry QA at 320×568 measured one tools-sheet control
+below the 44×44px touch-target floor even though every learning and management
+action met it.
+
+**Root cause:** the sheet reused `Modal`'s shared 32×32px close button. The
+Round 6 styles enlarged only buttons inside the tool groups and omitted the
+header close control.
+
+**Fix and prevention:** a sheet-scoped rule enlarges the inherited close button
+to 44×44px without changing the shared `Modal` contract. The 320px browser gate
+measures every button in the portalled dialog and fails on the smallest target.
+
+## Library scroll restoration replayed after changing a task view (fixed 2026-10-28)
+
+**Symptom:** after Browser Back restored the saved Library scroll offset, changing
+the active task view could scroll the page back to that old offset instead of
+leaving the user's current position intact.
+
+**Root cause:** the restoration effect depended on the projected row count, so a
+task-view membership change scheduled the same saved `scrollY` again. The saved
+value was correct, but the effect had no one-shot lifecycle guard.
+
+**Fix and prevention:** a mount-scoped ref now consumes scroll restoration only
+once, after rows first render. The mounted integration regression restores a
+saved offset, changes task view, and asserts that `window.scrollTo` was called
+exactly once.
+
 ## Toolbar compact-at-rail-edge fix hid the map-selector entirely, breaking a pre-existing test (fixed 2026-10-25)
 
 **Symptom:** CI's `E2E Critical Flows (Playwright)` required check failed on

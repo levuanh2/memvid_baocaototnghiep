@@ -123,6 +123,7 @@ export default function DocumentList() {
   const matrixPrimaryRefs = useRef(new Map());
   const matrixFallbackRef = useRef(null);
   const matrixListRef = useRef(null);
+  const matrixScrollRestoredRef = useRef(false);
 
   const [documents, setDocuments] = useState([]);
   const [overview, setOverview] = useState(null);
@@ -318,7 +319,9 @@ export default function DocumentList() {
   }, [matrixStorageKey, taskView, truyVan, cheDoSap, chonBoSuuTap, chonThe, boLoc, hienLuuTru]);
 
   useEffect(() => {
-    if (!LIBRARY_ACTION_MATRIX || loading || !matrixInitial.scrollY || !matrixListRef.current) return undefined;
+    if (!LIBRARY_ACTION_MATRIX || loading || matrixScrollRestoredRef.current
+        || !matrixInitial.scrollY || !matrixListRef.current) return undefined;
+    matrixScrollRestoredRef.current = true;
     const frame = requestAnimationFrame(() => window.scrollTo({ top: matrixInitial.scrollY }));
     return () => cancelAnimationFrame(frame);
   }, [loading, matrixInitial.scrollY, matrixProjection.rows.length]);

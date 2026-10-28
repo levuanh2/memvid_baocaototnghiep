@@ -1,10 +1,15 @@
 import { createRoot } from "react-dom/client";
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import "./index.css";
 import "./components/study/libraryActionMatrix.css";
 import LibraryTaskViews from "./components/study/LibraryTaskViews";
 import StudyDocumentActionRow from "./components/study/StudyDocumentActionRow";
+import { EmptyState } from "./components/study/StudyShell";
 import { TASK_VIEW, projectLibrary } from "./utils/libraryActionMatrix";
+
+const params = new URLSearchParams(window.location.search);
+const initialView = Object.values(TASK_VIEW).includes(params.get("view")) ? params.get("view") : TASK_VIEW.ALL;
+document.documentElement.classList.toggle("dark", params.get("theme") === "dark");
 
 const fixture = Array.from({ length: 42 }, (_, offset) => {
   const index = offset + 1;
@@ -27,9 +32,14 @@ const fixture = Array.from({ length: 42 }, (_, offset) => {
 });
 
 export function Round6LibraryQa() {
-  const [view, setView] = useState(TASK_VIEW.ALL);
-  const [query, setQuery] = useState("");
+  const [view, setView] = useState(initialView);
+  const [query, setQuery] = useState(params.get("query") || "");
+  const [selected, setSelected] = useState(() => new Set());
   const projection = useMemo(() => projectLibrary(fixture, { view, query, sort: "az" }), [view, query]);
+  useEffect(() => {
+    const visibleIds = new Set(projection.rows.map((doc) => doc.document_id));
+    setSelected((current) => new Set([...current].filter((id) => visibleIds.has(id))));
+  }, [projection.rows]);
   return (
     <main data-testid="round6-library-qa" className="mx-auto max-w-[1180px] px-4 py-6">
       <header className="mb-5">
@@ -41,13 +51,24 @@ export function Round6LibraryQa() {
       </div>
       <LibraryTaskViews value={view} counts={projection.counts} onChange={setView} />
       <p data-testid="result-count" className="mb-3 text-small text-text-muted">{projection.rows.length} tài liệu phù hợp</p>
-      <section className="study-document-matrix" aria-label="Danh sách tài liệu QA">
-        {projection.rows.map((doc, index) => <StudyDocumentActionRow key={doc.document_id}
-          doc={doc} view={view} primaryTabIndex={index === 0 ? 0 : -1}
-          onOpen={(item, surface) => { window.__round6LastOpen = [item.document_id, surface]; }}
-          onDetails={() => {}} onRename={() => {}} onPatch={() => {}}
-          selected={false} onSelect={() => {}} />)}
-      </section>
+      {projection.rows.length === 0 ? (
+        <EmptyState icon="Search" title="Không có tài liệu phù hợp"
+          hint="Hãy đổi mục tiêu học tập, bộ sưu tập, bộ lọc hoặc từ khoá tìm kiếm."
+          action={<button type="button" className="pill-action mt-1" onClick={() => { setView(TASK_VIEW.ALL); setQuery(""); }}>Xem tất cả tài liệu</button>} />
+      ) : (
+        <section className="study-document-matrix" aria-label="Danh sách tài liệu QA">
+          {projection.rows.map((doc, index) => <StudyDocumentActionRow key={doc.document_id}
+            doc={doc} view={view} primaryTabIndex={index === 0 ? 0 : -1}
+            onOpen={(item, surface) => { window.__round6LastOpen = [item.document_id, surface]; }}
+            onDetails={() => {}} onRename={() => {}} onPatch={() => {}}
+            selected={selected.has(doc.document_id)}
+            onSelect={(id) => setSelected((current) => {
+              const next = new Set(current);
+              if (next.has(id)) next.delete(id); else next.add(id);
+              return next;
+            })} />)}
+        </section>
+      )}
     </main>
   );
 }

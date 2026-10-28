@@ -1,5 +1,29 @@
 # Lessons Learned
 
+## A focus trap does not make the background inert (2026-10-28)
+
+Portal placement, a scrim, `aria-modal`, and cycling Tab focus each cover a
+different part of modal behavior. None prevents background scripts, assistive
+technology, or scrolling from reaching the application tree. A bottom-sheet
+adapter must explicitly isolate the app root and restore its prior state when
+the sheet closes, including Escape and unmount paths.
+
+## Touch-target audits must include inherited modal chrome (2026-10-28)
+
+Measuring only a feature's own action list can miss the shared close button,
+back button, or other frame control that remains part of the same mobile task.
+For portalled sheets, measure every interactive descendant of the dialog at the
+smallest supported viewport, including controls owned by the shared shell.
+
+## Restored navigation state is a consumable event, not a standing effect input (2026-10-28)
+
+A persisted scroll offset describes one return-navigation handoff. If an effect
+keeps treating that value as live configuration, unrelated projection changes
+can replay the restoration and move the user after they have resumed working.
+Guard the handoff with mount-scoped consumption state, and regress both halves:
+the first eligible render restores once, while subsequent search/filter/task
+changes do not restore again.
+
 ## A "compact at narrow width" rule for one toolbar must enumerate every interactive control it hides, not just the ones the current fix cares about (2026-10-25)
 
 `:not(.a):not(.b):not(.c) { display: none }` silently hides everything else in

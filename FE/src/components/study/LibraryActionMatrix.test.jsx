@@ -20,6 +20,7 @@ afterEach(() => {
 
 function render(element) {
   container = document.createElement("div");
+  container.id = "root";
   document.body.appendChild(container);
   root = createRoot(container);
   act(() => root.render(element));
@@ -109,8 +110,12 @@ describe("StudyDocumentActionRow", () => {
     trigger.focus();
     act(() => trigger.click());
     expect(document.body.querySelector('[role="dialog"]')).not.toBeNull();
+    expect(container.hasAttribute("inert")).toBe(true);
+    expect(document.body.style.overflow).toBe("hidden");
     act(() => window.dispatchEvent(new KeyboardEvent("keydown", { key: "Escape" })));
     expect(document.body.querySelector('[role="dialog"]')).toBeNull();
+    expect(container.hasAttribute("inert")).toBe(false);
+    expect(document.body.style.overflow).toBe("");
     expect(document.activeElement).toBe(trigger);
   });
 
