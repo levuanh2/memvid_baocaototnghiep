@@ -73,7 +73,7 @@ export default function AvatarPicker({
               type="button"
               onClick={moChonAnh}
               disabled={dangLuu}
-              className="pill-action"
+              className="pill-action profile-avatar-action"
             >
               <Icon name="ImagePlus" size={14} /> Đổi ảnh
             </button>
@@ -83,7 +83,7 @@ export default function AvatarPicker({
                 type="button"
                 onClick={onLuu}
                 disabled={dangLuu}
-                className="btn-seal !py-1.5 !text-small inline-flex items-center gap-1.5"
+                className="btn-seal profile-avatar-action !text-small inline-flex items-center gap-1.5"
               >
                 {dangLuu && <Icon name="Clock" size={14} />}
                 {dangLuu ? "Đang tải lên…" : "Lưu ảnh"}
@@ -92,7 +92,7 @@ export default function AvatarPicker({
                 type="button"
                 onClick={onHuy}
                 disabled={dangLuu}
-                className="btn-secondary !py-1.5 !text-small"
+                className="btn-secondary profile-avatar-action !text-small"
               >
                 Huỷ
               </button>

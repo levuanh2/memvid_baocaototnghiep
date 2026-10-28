@@ -319,7 +319,7 @@ function ProgressStrip({ questions, answers, index, onJump }) {
             style={{
               background: done ? "color-mix(in srgb, var(--accent) 16%, transparent)" : "var(--bg-elevated)",
               border: `1px solid ${active ? "var(--accent)" : done ? "color-mix(in srgb, var(--accent) 35%, transparent)" : "var(--border-color)"}`,
-              color: done ? "var(--accent)" : "var(--text-muted)",
+              color: done ? "var(--quiz-question-complete-fg)" : "var(--text-muted)",
               boxShadow: active ? "0 0 0 2px color-mix(in srgb, var(--accent) 22%, transparent)" : "none",
             }}
           >
@@ -339,7 +339,7 @@ function ConfirmSubmit({ unanswered, total, onCancel, onConfirm, submitting }) {
   return (
     <Modal open title="Nộp bài?" onClose={onCancel} maxWidth={420}
       footer={
-        <div className="flex gap-2">
+        <div className="quiz-submit-confirm__actions flex gap-2">
           <button type="button" className="btn-secondary text-small flex-1" onClick={onCancel}>
             Quay lại làm tiếp
           </button>

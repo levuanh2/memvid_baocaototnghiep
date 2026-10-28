@@ -258,7 +258,7 @@ function PracticeCustomizeDialog({ item, submitting, onClose, onSubmit }) {
   return (
     <Modal open title="Tùy chỉnh luyện tập" subtitle={item.topic} onClose={submitting ? undefined : onClose}
       footer={
-        <div className="flex justify-end gap-2">
+        <div className="practice-customize-dialog__actions flex justify-end gap-2">
           <button type="button" className="btn-secondary text-small" disabled={submitting} onClick={onClose}>Huỷ</button>
           <button type="button" className="btn-seal text-small inline-flex items-center gap-1.5"
             disabled={submitting} onClick={submit}>
@@ -267,7 +267,7 @@ function PracticeCustomizeDialog({ item, submitting, onClose, onSubmit }) {
         </div>
       }
     >
-      <div className="flex flex-col gap-5 p-5">
+      <div className="practice-customize-dialog flex flex-col gap-5 p-5">
         <div className="surface-card !p-3 flex items-center gap-2 font-mono text-caption text-text-muted">
           <Icon name="Quote" size={12} />
           Nguồn: {item.chunk_ids?.length || 0} đoạn từ chủ đề "{item.topic}" — cố định, không đổi được ở đây.

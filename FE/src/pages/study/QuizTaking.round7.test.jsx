@@ -78,4 +78,34 @@ describe("Round 7 populated quiz taking", () => {
     expect(saveAnswers).toHaveBeenCalledWith("attempt-1", { "q-1": "A" });
     expect(submitAttempt).toHaveBeenCalledTimes(1);
   });
+
+  it("does not submit when the flush-before-submit save rejects, then submits exactly once after a successful retry", async () => {
+    await renderReady();
+    await act(async () => container.querySelectorAll('input[type="radio"]')[0].click());
+
+    saveAnswers.mockRejectedValueOnce(new Error("save failed"));
+    const submit = [...container.querySelectorAll("button")].find((button) => button.textContent === "Nộp bài");
+    await act(async () => submit.click());
+    let confirm = [...document.body.querySelector('[role="dialog"]').querySelectorAll("button")].find((button) => button.textContent === "Nộp bài");
+    await act(async () => confirm.click());
+
+    // The rejected flush must block submission entirely -- no unsafe submit.
+    expect(submitAttempt).not.toHaveBeenCalled();
+    expect(container.textContent).toContain("save failed");
+    // The rejected batch goes back into the pending queue, not silently dropped.
+    expect(container.textContent).toContain("1 câu chưa lưu được");
+
+    // Retry: this time the flush succeeds, and submit goes through exactly once.
+    saveAnswers.mockResolvedValueOnce({});
+    const retrySubmit = [...container.querySelectorAll("button")].find((button) => button.textContent === "Nộp bài");
+    await act(async () => retrySubmit.click());
+    confirm = [...document.body.querySelector('[role="dialog"]').querySelectorAll("button")].find((button) => button.textContent === "Nộp bài");
+    await act(async () => confirm.click());
+
+    expect(saveAnswers).toHaveBeenCalledTimes(2);
+    expect(saveAnswers).toHaveBeenLastCalledWith("attempt-1", { "q-1": "A" });
+    expect(submitAttempt).toHaveBeenCalledTimes(1);
+    expect(saveAnswers.mock.invocationCallOrder.at(-1)).toBeLessThan(submitAttempt.mock.invocationCallOrder[0]);
+    expect(navigate).toHaveBeenCalledWith("/app/study/result/attempt-1", { replace: true });
+  });
 });

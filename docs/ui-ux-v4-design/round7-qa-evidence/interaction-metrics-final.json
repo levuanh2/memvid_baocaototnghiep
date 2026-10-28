@@ -1,0 +1,287 @@
+{
+  "generatedAt": "2026-10-27T14:56:53.291Z",
+  "targets": {
+    "profile-edit": [
+      {
+        "x": 174.734375,
+        "y": 225.34375,
+        "width": 104.265625,
+        "height": 44
+      }
+    ],
+    "profile-form-actions": [
+      {
+        "x": 105.296875,
+        "y": 1333.359375,
+        "width": 57.765625,
+        "height": 44
+      },
+      {
+        "x": 171.0625,
+        "y": 1333.359375,
+        "width": 107.9375,
+        "height": 44
+      }
+    ],
+    "wrong-review-arrows": [
+      {
+        "x": 212,
+        "y": 109.578125,
+        "width": 44,
+        "height": 44
+      },
+      {
+        "x": 256,
+        "y": 109.578125,
+        "width": 44,
+        "height": 44
+      }
+    ],
+    "review-actions": [
+      {
+        "x": 41,
+        "y": 537.015625,
+        "width": 173.203125,
+        "height": 44
+      },
+      {
+        "x": 41,
+        "y": 593.015625,
+        "width": 114.359375,
+        "height": 44
+      }
+    ],
+    "question-builder-pills": [
+      {
+        "x": 37,
+        "y": 262.46875,
+        "width": 63.015625,
+        "height": 44
+      },
+      {
+        "x": 108.015625,
+        "y": 262.46875,
+        "width": 69.59375,
+        "height": 44
+      },
+      {
+        "x": 185.609375,
+        "y": 262.46875,
+        "width": 68.9375,
+        "height": 44
+      },
+      {
+        "x": 37,
+        "y": 314.46875,
+        "width": 72.40625,
+        "height": 44
+      },
+      {
+        "x": 117.40625,
+        "y": 314.46875,
+        "width": 146.078125,
+        "height": 44
+      },
+      {
+        "x": 37,
+        "y": 401.15625,
+        "width": 57.109375,
+        "height": 44
+      },
+      {
+        "x": 102.109375,
+        "y": 401.15625,
+        "width": 44.390625,
+        "height": 44
+      },
+      {
+        "x": 154.5,
+        "y": 401.15625,
+        "width": 98.96875,
+        "height": 44
+      },
+      {
+        "x": 37,
+        "y": 453.15625,
+        "width": 52.953125,
+        "height": 44
+      },
+      {
+        "x": 37,
+        "y": 539.84375,
+        "width": 110.171875,
+        "height": 44
+      },
+      {
+        "x": 155.171875,
+        "y": 539.84375,
+        "width": 95.59375,
+        "height": 44
+      },
+      {
+        "x": 37,
+        "y": 591.84375,
+        "width": 104.859375,
+        "height": 44
+      }
+    ],
+    "practice-modal-actions": [
+      {
+        "x": 50.953125,
+        "y": 482.59375,
+        "width": 59.3125,
+        "height": 44
+      },
+      {
+        "x": 118.265625,
+        "y": 482.59375,
+        "width": 164.734375,
+        "height": 44
+      }
+    ],
+    "submit-modal-actions": [
+      {
+        "x": 37,
+        "y": 328.1875,
+        "width": 119,
+        "height": 57
+      },
+      {
+        "x": 164,
+        "y": 328.1875,
+        "width": 119,
+        "height": 57
+      }
+    ]
+  },
+  "contrast": {
+    "light": {
+      "verdicts": [
+        {
+          "ratio": 5.871701181681089,
+          "color": "rgb(6, 102, 58)",
+          "backgroundColor": "color(srgb 0.0235294 0.4 0.227451 / 0.12)",
+          "opacity": "1"
+        },
+        {
+          "ratio": 6.018373766502406,
+          "color": "rgb(133, 71, 0)",
+          "backgroundColor": "color(srgb 0.521569 0.278431 0 / 0.12)",
+          "opacity": "1"
+        },
+        {
+          "ratio": 5.356474910095869,
+          "color": "rgb(180, 35, 42)",
+          "backgroundColor": "color(srgb 0.705882 0.137255 0.164706 / 0.12)",
+          "opacity": "1"
+        }
+      ],
+      "railTag": {
+        "ratio": 5.836891524463267,
+        "color": "rgb(180, 35, 42)",
+        "backgroundColor": "rgba(0, 0, 0, 0)",
+        "opacity": "1"
+      },
+      "railNumber": {
+        "ratio": 4.969001986652062,
+        "color": "rgb(180, 35, 42)",
+        "backgroundColor": "color(srgb 0.705882 0.137255 0.164706 / 0.1)",
+        "opacity": "1"
+      },
+      "processing": {
+        "ratio": 6.018373766502406,
+        "color": "rgb(133, 71, 0)",
+        "backgroundColor": "color(srgb 0.521569 0.278431 0 / 0.12)",
+        "opacity": "1"
+      },
+      "completedQuestion": {
+        "ratio": 6.204361360869876,
+        "color": "rgb(6, 78, 175)",
+        "backgroundColor": "color(srgb 0.0705882 0.423529 0.94902 / 0.16)",
+        "opacity": "1"
+      }
+    },
+    "dark": {
+      "verdicts": [
+        {
+          "ratio": 5.4755638494666945,
+          "color": "rgb(112, 196, 158)",
+          "backgroundColor": "color(srgb 0.439216 0.768627 0.619608 / 0.12)",
+          "opacity": "1"
+        },
+        {
+          "ratio": 6.818998197612971,
+          "color": "rgb(241, 197, 106)",
+          "backgroundColor": "color(srgb 0.945098 0.772549 0.415686 / 0.12)",
+          "opacity": "1"
+        },
+        {
+          "ratio": 5.643454589218191,
+          "color": "rgb(255, 154, 134)",
+          "backgroundColor": "color(srgb 1 0.603922 0.52549 / 0.12)",
+          "opacity": "1"
+        }
+      ],
+      "railTag": {
+        "ratio": 6.548746992197378,
+        "color": "rgb(255, 154, 134)",
+        "backgroundColor": "rgba(0, 0, 0, 0)",
+        "opacity": "1"
+      },
+      "railNumber": {
+        "ratio": 5.500377054895639,
+        "color": "rgb(255, 154, 134)",
+        "backgroundColor": "color(srgb 1 0.603922 0.52549 / 0.1)",
+        "opacity": "1"
+      },
+      "processing": {
+        "ratio": 6.818998197612971,
+        "color": "rgb(241, 197, 106)",
+        "backgroundColor": "color(srgb 0.945098 0.772549 0.415686 / 0.12)",
+        "opacity": "1"
+      },
+      "completedQuestion": {
+        "ratio": 7.3738802527305705,
+        "color": "rgb(183, 213, 255)",
+        "backgroundColor": "color(srgb 0.356863 0.615686 0.960784 / 0.16)",
+        "opacity": "1"
+      }
+    }
+  },
+  "layouts": {
+    "profileHeader": {
+      "backBox": {
+        "x": 20,
+        "y": 12,
+        "width": 66.546875,
+        "height": 44
+      },
+      "headingBox": {
+        "x": 102.546875,
+        "y": 21.515625,
+        "width": 160.53125,
+        "height": 24.953125
+      }
+    },
+    "questionCardOverflow": 0,
+    "review820": {
+      "overflow": 0,
+      "actions": [
+        {
+          "left": 103,
+          "right": 276.203125,
+          "top": 363.015625,
+          "bottom": 407.015625
+        },
+        {
+          "left": 103,
+          "right": 217.359375,
+          "top": 419.015625,
+          "bottom": 463.015625
+        }
+      ],
+      "contained": true,
+      "overlap": false
+    }
+  }
+}

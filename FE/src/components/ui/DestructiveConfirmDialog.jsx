@@ -71,14 +71,13 @@ export default function DestructiveConfirmDialog({
       onClose={dangXoa ? undefined : onCancel}
       maxWidth={440}
       footer={
-        <div className="flex gap-2 justify-end">
-          <button type="button" className="btn-secondary !py-1.5 !text-small" disabled={dangXoa} onClick={onCancel}>
+        <div className="destructive-confirm__footer flex gap-2 justify-end">
+          <button type="button" className="btn-secondary !text-small" disabled={dangXoa} onClick={onCancel}>
             {cancelLabel}
           </button>
           <button
             type="button"
-            className="btn-seal !py-1.5 !text-small inline-flex items-center gap-1.5"
-            style={{ background: "var(--err)", borderColor: "var(--err)" }}
+            className="btn-seal destructive-confirm__action !text-small inline-flex items-center gap-1.5"
             disabled={!daTick || dangXoa}
             onClick={xacNhan}
           >
@@ -99,7 +98,7 @@ export default function DestructiveConfirmDialog({
           </div>
         </div>
 
-        <label className="mt-4 flex items-start gap-2.5 text-small text-text-secondary cursor-pointer">
+        <label className="destructive-confirm__ack mt-4 flex items-start gap-2.5 text-small text-text-secondary cursor-pointer">
           <input
             type="checkbox"
             className="mt-0.5"

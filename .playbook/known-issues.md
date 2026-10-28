@@ -7593,3 +7593,54 @@ các trường điểm cho mọi trạng thái. Presentation không khóa dữ l
 `QuizResult.round7.test.jsx` cố ý đưa điểm giả vào payload `submitted` và khẳng định nó
 không xuất hiện.
 
+# Full-page Profile route could leak an unsaved avatar preview on route unmount (fixed 2026-10-27)
+
+**Symptom:** selecting an NKS avatar created a blob URL for the local preview.
+Cancel, replace, and save paths revoked it, but leaving the new full-page
+`/app/profile` route through Browser Back unmounted `ProfileDrawer` without
+calling its close handler, leaving the object URL alive for the rest of the tab.
+
+**Root cause:** resource cleanup was coupled to user actions (`boAnhCho` /
+`dongHet`) rather than the owning component lifecycle. The older modal-only
+surface normally exited through those actions; making Profile a route added an
+independent unmount path.
+
+**Fix and prevention:** keep the active preview in a ref and revoke it from an
+unmount-only effect. Any browser resource owned by a routable component (blob
+URL, observer, timer, subscription) needs teardown coverage that unmounts the
+component directly rather than clicking its own close control.
+
+# Pending Quiz Result exposed provisional per-question grading data (fixed 2026-10-27)
+
+**Symptom:** the pending result hero correctly hid numeric score fields, but the
+"Từng câu" section still rendered any early `questions` supplied by the server,
+including verdict, correct answer, feedback, and explanation.
+
+**Root cause:** the business-state gate (`status === "graded"`) covered summary
+metrics and wrong-answer review, but not the ordinary per-question result list.
+The prior pending fixture used `questions: []`, so it could not prove the gate.
+
+**Fix and prevention:** render all answer-key/result detail only after grading is
+complete. Pending tests must use a hostile payload containing provisional score,
+counts, questions, verdicts, answers, and explanations, then assert none of the
+final-result data leaks.
+
+# Quiz tablet rail and semantic controls failed local geometry/contrast checks (fixed 2026-10-27)
+
+**Symptom:** at 768–820px the five-column question grid needed 184px inside a
+140px rail content box, so its last button escaped the rail even though the page
+itself had no horizontal scrollbar. The destructive CTA, several light Quiz
+status labels, and multiple mobile actions also missed their 4.5:1 or 44px
+acceptance thresholds.
+
+**Root cause:** responsive QA checked only document-level overflow and visual
+screenshots. It did not compare every child rectangle to its immediate content
+box, composite translucent badge backgrounds, or measure actual hit rectangles.
+
+**Fix and prevention:** the rail now uses three columns and a 176px tablet track,
+giving 44.66px contained targets at 768–820px and 56px targets above 1000px.
+Scoped Quiz semantic foreground roles and a dedicated destructive CTA role meet
+contrast without changing global status tokens. Chromium evidence records local
+containment, composed contrast, and hitboxes; future responsive acceptance must
+keep those local measurements alongside global overflow checks.
+

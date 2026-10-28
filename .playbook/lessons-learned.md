@@ -3521,3 +3521,27 @@ quiz, `submitted` và `graded` là ranh giới nghiệp vụ: mọi số liệu 
 phải được gate bằng `graded`, kể cả khi backend tình cờ trả trường score sớm. Test trạng
 thái chờ nên dùng payload có score giả để chứng minh UI không rò dữ liệu tạm.
 
+# Route unmount is a resource-release path, not a close-button alias (2026-10-27)
+
+When a modal controller is reused as a full page, Browser Back and route
+replacement can unmount it without invoking its close callback. Cleanup for
+object URLs and similar browser resources must therefore live at the component
+lifecycle boundary as well as explicit cancel/save flows. Test the unmount
+directly with an unsaved resource still active.
+
+# Pending-state tests need hostile payloads at every presentation boundary (2026-10-27)
+
+Hiding one score widget is not enough when the same response can carry final-like
+data through other sections. Build pending fixtures with every premature field
+populated and assert the whole final-result surface stays absent until the
+authoritative business state changes to graded.
+
+# A page-level overflow pass does not prove a responsive sub-grid fits (2026-10-27)
+
+Overflow can remain clipped inside a card or rail while
+`document.scrollWidth === clientWidth`. For narrow fixed panels, measure each
+interactive child's left/right edges against the parent's padding-adjusted
+content rectangle. Pair that with computed hitbox dimensions and composed
+foreground/background contrast; screenshots and token names alone cannot prove
+containment, touch size, or WCAG contrast.
+

@@ -86,7 +86,7 @@ export default function Modal({
               {subtitle && <p className="text-small text-text-muted truncate mt-0.5">{subtitle}</p>}
             </div>
             {onClose && (
-              <button onClick={onClose} className="icon-btn w-8 h-8 flex-shrink-0" aria-label="Đóng hộp thoại">
+              <button type="button" onClick={onClose} className="icon-btn w-8 h-8 flex-shrink-0" aria-label="Đóng hộp thoại">
                 <Icon name="X" size={16} />
               </button>
             )}

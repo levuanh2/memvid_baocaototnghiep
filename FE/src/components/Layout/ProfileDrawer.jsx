@@ -1,4 +1,4 @@
-import { useCallback, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import { toast } from "../ui/Toaster";
 import ProfileView from "./ProfileView";
 import NksVerifyDialog from "./NksVerifyDialog";
@@ -43,6 +43,10 @@ export default function ProfileDrawer({ open, hoSo, onClose, onHoSoMoi, variant 
   // Ảnh đang chờ lưu. `blob` là ảnh đã thu nhỏ; `url` là object URL để xem trước.
   // Cả hai chỉ sống trong bộ nhớ trang — ảnh chưa lưu không rời khỏi máy người dùng.
   const [anhCho, setAnhCho] = useState(null);
+  // Keep the active preview outside React state as well so route-driven
+  // unmounts (for example Browser Back from the full-page Profile) can return
+  // its object URL without trying to set state during teardown.
+  const anhChoRef = useRef(null);
   const [dangTaiAnh, setDangTaiAnh] = useState(false);
   const [loiAnh, setLoiAnh] = useState("");
 
@@ -52,9 +56,15 @@ export default function ProfileDrawer({ open, hoSo, onClose, onHoSoMoi, variant 
   const boAnhCho = useCallback(() => {
     setAnhCho((cu) => {
       if (cu?.url) URL.revokeObjectURL(cu.url);
+      anhChoRef.current = null;
       return null;
     });
     setLoiAnh("");
+  }, []);
+
+  useEffect(() => () => {
+    if (anhChoRef.current?.url) URL.revokeObjectURL(anhChoRef.current.url);
+    anhChoRef.current = null;
   }, []);
 
   const dongHet = useCallback(() => {
@@ -73,7 +83,9 @@ export default function ProfileDrawer({ open, hoSo, onClose, onHoSoMoi, variant 
       const blob = await thuNhoAnh(file);
       setAnhCho((cu) => {
         if (cu?.url) URL.revokeObjectURL(cu.url);
-        return { blob, url: URL.createObjectURL(blob) };
+        const moi = { blob, url: URL.createObjectURL(blob) };
+        anhChoRef.current = moi;
+        return moi;
       });
     } catch (err) {
       setLoiAnh(err instanceof AnhKhongHopLe ? err.message : "Không xử lý được ảnh.");

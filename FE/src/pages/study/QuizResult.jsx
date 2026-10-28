@@ -85,10 +85,23 @@ export default function QuizResult() {
     return () => clearTimeout(timerRef.current);
   }, [result, nhip, load]);
 
-  const grading = result?.status === "submitted";
+  const graded = result?.status === "graded";
+  // Fail closed for any current or future non-final status: completed-result
+  // presentation is authorized only by the explicit graded state.
+  const grading = Boolean(result) && !graded;
+  // `.filter()` alone loses the question's position in the original ten-question
+  // quiz — the wrong-answer review must label question 4 and 9 as "Câu 4"/"Câu 9",
+  // not "Câu 1"/"Câu 2" (their position inside the filtered subset). Stamp the
+  // real ordinal in BEFORE filtering, while every question still sits at its real
+  // index. Never derived from question_id — nothing guarantees that's numeric or
+  // ordered.
   const wrongQuestions = useMemo(
-    () => (result?.status === "graded" ? (result.questions || []).filter((question) => question.verdict && question.verdict !== "correct") : []),
-    [result],
+    () => (graded
+      ? (result.questions || [])
+          .map((question, i) => ({ ...question, _originalOrder: i + 1 }))
+          .filter((question) => question.verdict && question.verdict !== "correct")
+      : []),
+    [graded, result],
   );
   const openWrongReview = () => { setReviewIndex(0); setReviewingWrong(true); };
 
@@ -145,7 +158,7 @@ export default function QuizResult() {
             </div>
           )}
 
-          {masteries.length > 0 && (
+          {graded && masteries.length > 0 && (
             <section className="mb-7">
               <SectionTitle>Mức nắm theo chủ đề</SectionTitle>
               <div className="grid gap-2.5 sm:grid-cols-2">
@@ -166,14 +179,14 @@ export default function QuizResult() {
             </section>
           )}
 
-          <section>
+          {graded && <section>
             <SectionTitle>Từng câu</SectionTitle>
             <div className="flex flex-col gap-3">
               {(result.questions || []).map((q, i) => (
                 <ReviewedQuestion key={q.question_id} question={q} order={i + 1} />
               ))}
             </div>
-          </section>
+          </section>}
           </>}
         </>
       )}
@@ -228,11 +241,12 @@ function WrongAnswerReview({ questions, index, onIndex, onClose, reviewPlanTo })
     <div className="quiz-wrong-review">
       <aside className="quiz-wrong-review__rail" aria-label="Câu cần xem lại">
         <header><strong>Ôn lại bài làm</strong><span>{questions.length} câu cần xem</span></header>
-        {questions.map((question, itemIndex) => <button type="button" key={question.question_id} className={itemIndex === index ? "is-active" : ""} aria-current={itemIndex === index ? "true" : undefined} onClick={() => onIndex(itemIndex)}><span>{itemIndex + 1}</span><div><strong>Câu {itemIndex + 1}</strong><small>{VERDICT_LABEL[question.verdict] || "Cần xem lại"}</small></div></button>)}
+        {questions.map((question, itemIndex) => <button type="button" key={question.question_id} className={itemIndex === index ? "is-active" : ""} aria-current={itemIndex === index ? "true" : undefined} onClick={() => onIndex(itemIndex)}><span>{question._originalOrder}</span><div><strong>Câu {question._originalOrder}</strong><small>{VERDICT_LABEL[question.verdict] || "Cần xem lại"}</small></div></button>)}
       </aside>
       <section className="quiz-wrong-review__content">
         <div className="quiz-wrong-review__nav"><button type="button" className="btn-secondary" onClick={onClose}><Icon name="ArrowLeft" size={14} /> Kết quả</button><span>Câu cần ôn {index + 1} / {questions.length}</span><div><button type="button" aria-label="Câu cần ôn trước" disabled={index === 0} onClick={() => onIndex(index - 1)}>←</button><button type="button" aria-label="Câu cần ôn tiếp theo" disabled={index === questions.length - 1} onClick={() => onIndex(index + 1)}>→</button></div></div>
-        <ReviewedQuestion question={current} order={index + 1} />
+        <ReviewedQuestion question={current} order={current._originalOrder} />
+        <Link className="btn-secondary quiz-wrong-review__compact-review-link" to={reviewPlanTo}>Mở kế hoạch ôn tập</Link>
       </section>
       <aside className="quiz-wrong-review__next"><Icon name="Target" size={20} /><h2>Tiếp tục học</h2><p>Đây là phần xem lại câu trả lời. Kế hoạch ôn tập riêng vẫn được tạo và quản lý ở bước tiếp theo.</p><Link className="btn-primary" to={reviewPlanTo}>Mở kế hoạch ôn tập</Link></aside>
     </div>
@@ -251,7 +265,7 @@ function Stat({ label, value }) {
 function ReviewedQuestion({ question, order }) {
   const { verdict } = question;
   const tone =
-    verdict === "correct" ? "var(--ok)" : verdict === "partial" ? "var(--warn)" : "var(--err)";
+    verdict === "correct" ? "var(--quiz-status-correct)" : verdict === "partial" ? "var(--quiz-status-partial)" : "var(--quiz-status-incorrect)";
   return (
     <article className="surface-card">
       <div className="flex items-start gap-3 mb-3">
@@ -259,7 +273,8 @@ function ReviewedQuestion({ question, order }) {
         <h3 className="font-display text-body-lg text-text-primary flex-1">
           {question.question_text}
         </h3>
-        <span className="rounded-[4px] text-metadata px-2 py-[2px] font-semibold uppercase font-mono shrink-0"
+        <span className="quiz-verdict-badge rounded-[4px] text-metadata px-2 py-[2px] font-semibold uppercase font-mono shrink-0"
+          data-verdict={verdict}
           style={{ color: tone, border: `1px solid ${tone}`, background: `color-mix(in srgb, ${tone} 12%, transparent)` }}>
           {VERDICT_LABEL[verdict] || "Chưa chấm"}
         </span>

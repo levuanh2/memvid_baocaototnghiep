@@ -48,11 +48,13 @@ export default function ProfileView({
           <button
             onClick={onSua}
             disabled={dangTai}
-            className="pill-action flex-shrink-0"
+            type="button"
+            aria-label="Chỉnh sửa hồ sơ tại NKS"
+            className="pill-action profile-edit-action flex-shrink-0"
             title="Chỉnh sửa hồ sơ tại NKS"
           >
             <Icon name={dangTai ? "Clock" : "Pencil"} size={14} />
-            <span className="hidden sm:inline">{dangTai ? "Đang mở…" : "Chỉnh sửa"}</span>
+            <span>{dangTai ? "Đang mở…" : "Chỉnh sửa"}</span>
           </button>
         )}
       </div>
@@ -114,7 +116,7 @@ function ProfilePageShell({ onBack, children }) {
         style={{ background: "var(--bg-sidebar)", borderColor: "var(--border-color)" }}>
         <div className="max-w-[720px] mx-auto px-5 py-3 flex items-center gap-4">
           <button type="button" onClick={onBack} disabled={!onBack}
-            className="inline-flex items-center gap-1.5 text-small text-text-muted hover:text-accent transition-theme shrink-0 disabled:opacity-50 disabled:pointer-events-none">
+            className="inline-flex min-h-[44px] items-center gap-1.5 text-small text-text-muted hover:text-accent transition-theme shrink-0 disabled:opacity-50 disabled:pointer-events-none">
             <Icon name="ArrowLeft" size={14} /> Quay lại
           </button>
           <h1 ref={tieuDeRef} tabIndex={-1} className="font-display text-h3 font-semibold text-text-primary outline-none">
