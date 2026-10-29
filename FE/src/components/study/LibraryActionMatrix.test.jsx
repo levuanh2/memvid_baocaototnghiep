@@ -126,7 +126,9 @@ describe("StudyDocumentActionRow", () => {
     });
     render(<StudyDocumentActionRow doc={deriveLearningState(rawDoc)} view={TASK_VIEW.ALL} onOpen={() => {}} primaryTabIndex={0} />);
     act(() => container.querySelector("[data-tools-trigger]").click());
-    expect(container.querySelector('[role="menu"]').classList.contains("is-above")).toBe(true);
+    const menu = container.querySelector('[role="menu"]');
+    expect(menu.classList.contains("is-above")).toBe(true);
+    expect(menu.style.maxHeight).toBe("692px");
     Object.defineProperty(window, "innerHeight", { configurable: true, value: originalHeight });
   });
 

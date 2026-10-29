@@ -61,7 +61,7 @@ function ToolButtons({ doc, onChoose, onManage, menu = false }) {
 
 export function DesktopDocumentTools({ open, doc, onChoose, onManage, onClose, triggerRef }) {
   const menuRef = useRef(null);
-  const [placement, setPlacement] = useState("below");
+  const [position, setPosition] = useState({ placement: "below", maxHeight: null });
   useEffect(() => {
     if (open) menuRef.current?.querySelector("button")?.focus();
   }, [open]);
@@ -86,7 +86,13 @@ export function DesktopDocumentTools({ open, doc, onChoose, onManage, onClose, t
       const triggerRect = trigger.getBoundingClientRect();
       const availableBelow = window.innerHeight - triggerRect.bottom - 8;
       const availableAbove = triggerRect.top - 8;
-      setPlacement(menuRect.height > availableBelow && availableAbove > availableBelow ? "above" : "below");
+      const placement = menuRect.height > availableBelow && availableAbove > availableBelow ? "above" : "below";
+      const maxHeight = Math.max(120, placement === "above" ? availableAbove : availableBelow);
+      setPosition((current) => (
+        current.placement === placement && current.maxHeight === maxHeight
+          ? current
+          : { placement, maxHeight }
+      ));
     };
     place();
     window.addEventListener("resize", place);
@@ -104,7 +110,8 @@ export function DesktopDocumentTools({ open, doc, onChoose, onManage, onClose, t
   return (
     <>
       <button className="document-tools__dismiss" aria-label="Đóng công cụ tài liệu" onClick={closeAndRestore} />
-      <div ref={menuRef} className={`document-tools document-tools--desktop is-${placement}`} role="menu">
+      <div ref={menuRef} className={`document-tools document-tools--desktop is-${position.placement}`}
+        style={position.maxHeight ? { maxHeight: `${position.maxHeight}px` } : undefined} role="menu">
         <ToolButtons doc={doc} menu onChoose={onChoose} onManage={onManage} />
       </div>
     </>
