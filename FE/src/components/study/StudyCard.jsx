@@ -1,13 +1,13 @@
-import { useCallback, useEffect, useRef, useState } from "react";
+import { useCallback, useState } from "react";
 import { Icon } from "../ui/Icon";
 import { chipHienThi, READY, GENERATING } from "../../utils/trangThaiAi";
 import { tenHienThi, thoiGianDoc, nhanThoiGianDoc } from "../../utils/thuVienTaiLieu";
 import { tiepTucHoc } from "../../utils/tiepTucHoc";
-import { kiemTraTen } from "../../utils/doiTen";
 import { hexMau } from "../../utils/boSuuTap";
 import { nhanOChon } from "../../utils/chonNhieu";
 import { getQuestions, moTaLoi } from "../../utils/studyApi";
 import KnowledgePanel from "./KnowledgePanel";
+import InlineDocumentNameEditor from "./InlineDocumentNameEditor";
 
 /**
  * Thẻ tài liệu của Thư viện học tập.
@@ -45,60 +45,6 @@ function ChipAi({ chip }) {
       {dangChay && <Icon name="Clock" size={11} />}
       {chip.nhan}{chip.soLuong ? ` (${chip.soLuong})` : ""}
     </span>
-  );
-}
-
-/** Đổi tên tại chỗ: Enter lưu, Esc huỷ, bấm ra ngoài huỷ. */
-function DoiTenTaiCho({ giaTriDau, dangLuu, onLuu, onHuy }) {
-  const [nhap, setNhap] = useState(giaTriDau ?? "");
-  const [loi, setLoi] = useState(null);
-  const oRef = useRef(null);
-  const boxRef = useRef(null);
-
-  useEffect(() => {
-    oRef.current?.focus();
-    oRef.current?.select();
-  }, []);
-
-  // Bấm ra ngoài = HUỶ, không phải lưu. Lưu ngầm một giá trị người dùng chưa xác
-  // nhận là đổi dữ liệu sau lưng họ.
-  useEffect(() => {
-    const ngoai = (e) => {
-      if (boxRef.current && !boxRef.current.contains(e.target)) onHuy();
-    };
-    document.addEventListener("mousedown", ngoai);
-    return () => document.removeEventListener("mousedown", ngoai);
-  }, [onHuy]);
-
-  const guiDi = () => {
-    const kq = kiemTraTen(nhap, giaTriDau);
-    if (kq.khongDoi) return onHuy();
-    if (!kq.hopLe) return setLoi(kq.loi);
-    onLuu(kq.giaTri);
-  };
-
-  return (
-    <div ref={boxRef} className="min-w-0 flex-1">
-      <input
-        ref={oRef}
-        value={nhap}
-        disabled={dangLuu}
-        onChange={(e) => { setNhap(e.target.value); setLoi(null); }}
-        onKeyDown={(e) => {
-          if (e.key === "Enter") { e.preventDefault(); guiDi(); }
-          if (e.key === "Escape") { e.preventDefault(); onHuy(); }
-        }}
-        aria-label="Tên hiển thị của tài liệu"
-        className="w-full rounded-control px-2 py-1 text-body-lg font-semibold outline-none"
-        style={{ background: "var(--bg-card)", color: "var(--text-primary)",
-                 border: "1px solid var(--accent)" }}
-      />
-      <p className="mt-1 text-caption text-text-muted">
-        {loi
-          ? <span style={{ color: "var(--err)" }} role="alert">{loi}</span>
-          : "Enter để lưu · Esc để huỷ · để trống để dùng lại tên tệp"}
-      </p>
-    </div>
   );
 }
 
@@ -212,8 +158,8 @@ export default function StudyCard({
         )}
 
         {dangDoiTen ? (
-          <DoiTenTaiCho giaTriDau={doc.display_name || doc.title}
-                        dangLuu={dangLuu} onLuu={onLuuTen} onHuy={onHuyDoiTen} />
+          <InlineDocumentNameEditor initialValue={doc.display_name || doc.title}
+                                    saving={dangLuu} onSave={onLuuTen} onCancel={onHuyDoiTen} />
         ) : (
           <div className="min-w-0 flex-1">
             <div className="flex items-center gap-1.5 min-w-0">
