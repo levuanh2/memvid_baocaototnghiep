@@ -274,8 +274,16 @@ export default function ExportStudioDialog({
 
   const exportAppearanceParams = { canvasAppearance: savedAppearance, exportStyleOverride: useMapAppearance ? null : styleOverride };
   const runImage = async (attemptKey) => {
-    const result = await exportMindmapImage({ mind, record, scopeType: effectiveScope, targetNodeId: selectedNodeId, branchRootIds: selectedBranchSnapshot, includeDescendants: includeDescendantsFor(effectiveScope), visibleOnly: effectiveVisibleOnly, contextMode, suppressedContextIds: suppressedAutoContextIds, format, backgroundColor: backgroundColor(background, customColor), scale, title: filename, appearance, ...exportAppearanceParams });
-    if (attemptKeyRef.current === attemptKey) setDone(result);
+    const artifact = await exportMindmapImage({ mind, record, scopeType: effectiveScope, targetNodeId: selectedNodeId, branchRootIds: selectedBranchSnapshot, includeDescendants: includeDescendantsFor(effectiveScope), visibleOnly: effectiveVisibleOnly, contextMode, suppressedContextIds: suppressedAutoContextIds, format, backgroundColor: backgroundColor(background, customColor), scale, title: filename, appearance, outputMode: "prepared", ...exportAppearanceParams });
+    try {
+      if (attemptKeyRef.current !== attemptKey) return;
+      // Older injected test doubles returned an already-downloaded result;
+      // production prepared artifacts expose the explicit commit boundary.
+      if (artifact.commitDownload) await artifact.commitDownload();
+      if (attemptKeyRef.current === attemptKey) setDone({ filename: artifact.filename });
+    } finally {
+      artifact.dispose?.();
+    }
   };
   const runDocument = async (attemptKey, controller) => {
     const { signal } = controller;
