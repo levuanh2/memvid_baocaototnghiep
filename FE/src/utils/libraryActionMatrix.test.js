@@ -3,6 +3,7 @@ import {
   ARTIFACT_STATE,
   TASK_VIEW,
   deriveLearningState,
+  learningActionReadiness,
   projectLibrary,
   primaryActionFor,
   pruneSelection,
@@ -32,6 +33,25 @@ const doc = (index, overrides = {}) => ({
 });
 
 const fixture42 = Array.from({ length: 42 }, (_, i) => doc(i + 1));
+
+describe("Complete-tools readiness", () => {
+  it.each([
+    ["ready index", { ai: { index: "ready" } }, "chat", true],
+    ["processing existing summary", { ai: { index: "processing", summary: { state: "ready" } } }, "summary", true],
+    ["processing missing summary", { ai: { index: "processing", summary: { state: "not_generated" } } }, "summary", false],
+    ["error existing mind map", { ai: { index: "error", mindmap: { state: "ready" } } }, "mindmap", true],
+    ["error missing mind map", { ai: { index: "error", mindmap: { state: "not_generated" } } }, "mindmap", false],
+    ["missing index existing study map", { ai: { studymap: { state: "ready" } } }, "studymap", true],
+    ["missing index existing quiz", { ai: { quiz: { latest_quiz_id: "quiz-1" } } }, "quiz", true],
+    ["missing index existing review", { ai: { review: { latest_attempt_id: "attempt-1" } } }, "review", true],
+    ["missing index no artifact", { ai: { summary: { state: "not_generated" } } }, "quiz", false],
+    ["details without index", { ai: {} }, "details", true],
+  ])("classifies %s", (_label, value, surface, expected) => {
+    const result = learningActionReadiness(value, surface);
+    expect(result.ready).toBe(expected);
+    expect(Boolean(result.reason)).toBe(!expected);
+  });
+});
 
 describe("Library Action Matrix model", () => {
   it("maps production summary/quiz payloads to explicit ready, missing and unknown states", () => {

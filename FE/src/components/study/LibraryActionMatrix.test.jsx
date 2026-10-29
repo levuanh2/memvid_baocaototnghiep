@@ -84,6 +84,52 @@ describe("StudyDocumentActionRow", () => {
     expect(onOpen).toHaveBeenCalledWith(expect.objectContaining({ document_id: "doc-2" }), "chat");
   });
 
+  it.each([
+    ["processing", "processing"],
+    ["index error", "error"],
+    ["missing index", undefined],
+  ])("gates incompatible complete tools for %s while preserving artifacts and management", (_label, index) => {
+    window.matchMedia = vi.fn(() => ({ matches: false, addEventListener() {}, removeEventListener() {} }));
+    const doc = deriveLearningState({
+      ...rawDoc,
+      ai: {
+        index,
+        summary: { state: "ready" },
+        mindmap: { state: "not_generated" },
+        studymap: { state: "ready" },
+        quiz: { ready: true, latest_quiz_id: "quiz-existing" },
+        review: { latest_attempt_id: "attempt-existing" },
+      },
+    });
+    render(<StudyDocumentActionRow doc={doc} view={TASK_VIEW.ALL} onOpen={() => {}} primaryTabIndex={0} />);
+    act(() => container.querySelector("[data-tools-trigger]").click());
+    const menu = container.querySelector('[role="menu"]');
+    expect(menu.querySelector('[data-surface="summary"]').disabled).toBe(false);
+    expect(menu.querySelector('[data-surface="studymap"]').disabled).toBe(false);
+    expect(menu.querySelector('[data-surface="quiz"]').disabled).toBe(false);
+    expect(menu.querySelector('[data-surface="review"]').disabled).toBe(false);
+    expect(menu.querySelector('[data-surface="mindmap"]').disabled).toBe(true);
+    expect(menu.querySelector('[data-surface="chat"]').disabled).toBe(true);
+    expect(menu.querySelector('[data-surface="details"]').disabled).toBe(false);
+    expect(menu.querySelector('[data-management-action]').disabled).toBe(false);
+    expect(menu.querySelector('[data-surface="mindmap"]').getAttribute("aria-label")).toMatch(/lập chỉ mục/i);
+  });
+
+  it("places the desktop menu above a bottom-edge trigger", () => {
+    window.matchMedia = vi.fn(() => ({ matches: false, addEventListener() {}, removeEventListener() {} }));
+    const originalHeight = window.innerHeight;
+    Object.defineProperty(window, "innerHeight", { configurable: true, value: 768 });
+    vi.spyOn(HTMLElement.prototype, "getBoundingClientRect").mockImplementation(function rect() {
+      if (this.matches?.("[data-tools-trigger]")) return { top: 700, bottom: 744, left: 0, right: 44, width: 44, height: 44, x: 0, y: 700, toJSON() {} };
+      if (this.matches?.('[role="menu"]')) return { top: 750, bottom: 1230, left: 0, right: 240, width: 240, height: 480, x: 0, y: 750, toJSON() {} };
+      return { top: 0, bottom: 0, left: 0, right: 0, width: 0, height: 0, x: 0, y: 0, toJSON() {} };
+    });
+    render(<StudyDocumentActionRow doc={deriveLearningState(rawDoc)} view={TASK_VIEW.ALL} onOpen={() => {}} primaryTabIndex={0} />);
+    act(() => container.querySelector("[data-tools-trigger]").click());
+    expect(container.querySelector('[role="menu"]').classList.contains("is-above")).toBe(true);
+    Object.defineProperty(window, "innerHeight", { configurable: true, value: originalHeight });
+  });
+
   it("closes the desktop menu with Escape and restores focus to its trigger", () => {
     window.matchMedia = vi.fn(() => ({ matches: false, addEventListener() {}, removeEventListener() {} }));
     render(<StudyDocumentActionRow doc={deriveLearningState(rawDoc)} view={TASK_VIEW.ALL} onOpen={() => {}} primaryTabIndex={0} />);

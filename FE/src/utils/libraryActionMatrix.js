@@ -49,6 +49,37 @@ export function deriveLearningState(doc) {
   };
 }
 
+const READY_ARTIFACT = "ready";
+
+/**
+ * Complete-tools readiness is destination-aware. Existing artifacts remain
+ * reachable while re-indexing, but actions that would create/query learning
+ * data require a usable index. Details and document management are handled
+ * outside this policy and are always available.
+ */
+export function learningActionReadiness(doc, surface) {
+  const ai = doc?.ai || {};
+  const indexed = ai.index === "ready";
+  let ready = indexed;
+
+  if (surface === "details") return { ready: true, reason: null };
+  if (surface === "summary") ready ||= ai.summary?.state === READY_ARTIFACT;
+  else if (surface === "mindmap") ready ||= ai.mindmap?.state === READY_ARTIFACT;
+  else if (surface === "studymap") ready ||= ai.studymap?.state === READY_ARTIFACT;
+  else if (surface === "quiz") ready ||= Boolean(ai.quiz?.latest_quiz_id);
+  else if (surface === "review") {
+    ready ||= Boolean(ai.review?.latest_attempt_id) || ai.studymap?.state === READY_ARTIFACT;
+  } else if (surface === "chat") ready ||= ai.chat_ready === true;
+
+  if (ready) return { ready: true, reason: null };
+  const reason = ai.index === "error"
+    ? "Không thể dùng công cụ này vì lập chỉ mục đã lỗi."
+    : ai.index === "processing"
+      ? "Công cụ sẽ sẵn sàng sau khi lập chỉ mục hoàn tất."
+      : "Công cụ cần tài liệu được lập chỉ mục trước."
+  return { ready: false, reason };
+}
+
 export function matchesTaskView(doc, view) {
   if (view === TASK_VIEW.CONTINUE) return doc.continuing;
   if (view === TASK_VIEW.NEEDS_QUIZ) return doc.quizState === ARTIFACT_STATE.MISSING;
