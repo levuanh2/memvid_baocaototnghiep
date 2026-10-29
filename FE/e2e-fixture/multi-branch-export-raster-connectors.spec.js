@@ -56,11 +56,19 @@ async function capture(page, record, suppressedContextIds) {
       import("/src/utils/mindElixirAdapter.js"),
     ]);
     const moduleUrl = performance.getEntriesByType("resource").map((entry) => entry.name).find((name) => name.includes("mind-elixir"));
-    const { default: MindElixir } = await import(moduleUrl);
+    const mindElixirModule = await import(moduleUrl);
+    const MindElixir = mindElixirModule.default;
+    const sideDirection = mindElixirModule.SIDE ?? MindElixir.SIDE;
+    if (sideDirection == null) throw new Error("MindElixir SIDE direction is unavailable in the fixture module");
+    // The production capture path constructs additional offscreen instances
+    // from the constructor and reads its static SIDE value. Optimized browser
+    // modules may expose constants only as named exports, so make the real
+    // constructor contract explicit before exercising that path.
+    MindElixir.SIDE = sideDirection;
     const host = document.createElement("div");
     host.style.cssText = "position:fixed;left:-99999px;top:0;width:2400px;height:1600px";
     document.body.appendChild(host);
-    const mind = new MindElixir({ el: host, direction: MindElixir.SIDE, editable: false });
+    const mind = new MindElixir({ el: host, direction: sideDirection, editable: false });
     mind.init(recordToMindElixir(captureRecord, { fullTitles: true }).mindData);
     try {
       return await captureMapImageWithGeometry({

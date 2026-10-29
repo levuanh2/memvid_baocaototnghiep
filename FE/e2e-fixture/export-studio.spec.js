@@ -46,12 +46,16 @@ async function chooseFormat(page, value) {
 }
 
 async function clickNext(page) {
-  await page.getByRole("button", { name: "Tiếp tục" }).click();
+  // Preview Bench is persistent: there is no wizard step to advance. Keep
+  // this historical checkpoint helper at older call sites, but assert the
+  // current production contract instead of targeting the obsolete wizard
+  // button (which also collided with selection-mode's own Continue button).
+  await expect(page.getByTestId("export-persistent-preview")).toBeVisible();
 }
 
-/** From step 0 (scope), advances all the way to step 3 (preview) — 3 clicks. */
+/** Confirms the persistent Preview Bench after option changes. */
 async function advanceToPreview(page) {
-  for (let i = 0; i < 3; i++) await clickNext(page);
+  await clickNext(page);
 }
 
 async function exportAndSave(page, filenameHint) {
@@ -163,11 +167,9 @@ test.describe("Export Studio — fixture harness, real files", () => {
   test("JPEG: full-scope export is a valid decodable JPEG whose background is actually opaque white, not left transparent/black", async ({ page }) => {
     await openExportStudio(page);
     await chooseScope(page, "full");
-    await page.getByRole("button", { name: "Tiếp tục" }).click(); // -> format step
     await chooseFormat(page, "jpeg");
-    await page.getByRole("button", { name: "Tiếp tục" }).click(); // -> appearance step
     await page.locator('.pill-tab', { hasText: "Trắng" }).click(); // explicit white background
-    await page.getByRole("button", { name: "Tiếp tục" }).click(); // -> preview step
+    await advanceToPreview(page);
     const filePath = await exportAndSave(page, "full-jpeg");
 
     const buf = fs.readFileSync(filePath);
@@ -277,7 +279,7 @@ test.describe("Export Studio — fixture harness, real files", () => {
     await clickNext(page); // -> format step
     await chooseFormat(page, "svg");
     await clickNext(page); // -> appearance step
-    await page.getByRole("button", { name: "Trình bày" }).click(); // presentation preset
+    await page.getByTestId("image-appearance").getByRole("button", { name: "Trình bày", exact: true }).click(); // presentation preset, not the Preview Bench rail
     await clickNext(page); // -> preview step
     const filePath = await exportAndSave(page, "preset-presentation-svg");
 
@@ -386,7 +388,7 @@ test.describe("Export Studio — fixture harness, real files", () => {
     await chooseFormat(page, "svg");
     await clickNext(page);
     await clickNext(page);
-    await expect(page.locator(".export-review")).toContainText("2 node đã tick · 3 node thực tế");
+    await expect(page.getByTestId("export-persistent-preview").getByRole("definition").filter({ hasText: "3 node" })).toBeVisible();
 
     const filePath = await exportAndSave(page, "same-parent-selected-branches-svg");
     const svgText = fs.readFileSync(filePath, "utf8");
