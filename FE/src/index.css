@@ -1153,14 +1153,40 @@
 }
 .mindmap-tools-overlay { isolation: isolate; }
 
-/* Compact global header below 1024px (lg). The full desktop header needs 956px of
-   content (measured, header-width-audit.spec.js), so 768-1023 use the compact header:
-   fixed-width 40px icon tabs, never scrolled or shrunk, and one tools trigger. */
-@media (max-width: 1023px) {
+/* Compact global header through 1100px. The previous lg/Tailwind boundary
+   expanded every label at exactly 1024px and produced 1089px of content.
+   Keep every essential control at its 40px floor and move contextual actions
+   into the existing StudyMap menu until the full header genuinely fits. */
+.study-tools-menu__extra { display: none; }
+@media (max-width: 1100px) {
+  .workspace-global-header { gap: 6px !important; padding-inline: 8px !important; }
+  .workspace-home-link { width: 40px !important; height: 40px !important; justify-content: center !important; }
+  .workspace-wordmark,
+  .study-library-link__label,
+  .workspace-mode-label,
+  .workspace-shortcuts-trigger,
+  .workspace-global-header .theme-toggle,
+  .usage-chip__label,
+  .account-menu__label,
+  .account-menu__chevron { display: none !important; }
+  .study-library-link,
+  .usage-chip__trigger,
+  .usage-chip__placeholder,
+  .usage-chip__retry,
+  .account-menu__trigger { width: 40px !important; min-width: 40px; height: 40px !important; padding: 0 !important; justify-content: center !important; }
+  .usage-chip__status { display: block !important; }
+  .workspace-header-actions { gap: 4px !important; }
   .workspace-mode-switch { flex: 0 0 auto; overflow: visible; }
-  .workspace-mode-switch > button { flex: 0 0 auto; }
+  .workspace-mode-switch > button { width: 40px !important; height: 40px !important; flex: 0 0 auto; padding: 0 !important; }
   .study-tools-trigger { width: 40px; padding: 0; justify-content: center; }
   .study-tools-trigger span { display: none; }
+  .study-tools-menu__extra { display: block; }
+}
+
+@media (max-width: 340px) {
+  .workspace-global-header { gap: 0 !important; padding-inline: 0 !important; }
+  .workspace-global-header > .study-library-link { display: none !important; }
+  .workspace-header-actions { gap: 0 !important; }
 }
 
 @media (max-width: 767px) {

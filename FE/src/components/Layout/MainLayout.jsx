@@ -543,7 +543,7 @@ export default function MainLayout({
 
       {/* ── TOP HEADER ── */}
       <header
-        className="flex items-center gap-1.5 lg:gap-4 px-2 lg:px-5 h-[56px] border-b border-border flex-shrink-0 transition-theme"
+        className="workspace-global-header flex items-center gap-1.5 lg:gap-4 px-2 lg:px-5 h-[56px] border-b border-border flex-shrink-0 transition-theme"
         style={{ background: "var(--bg-sidebar)" }}
       >
 
@@ -555,7 +555,7 @@ export default function MainLayout({
             The Study library destination is a separate sibling link below;
             StudyToolsMenu remains the owner of contextual learning tools. */}
         <Link to="/app" aria-label="MemVidX — trang chủ"
-          className="flex items-center justify-center lg:justify-start gap-2.5 w-10 h-10 lg:w-auto lg:h-10 flex-shrink-0 select-none">
+          className="workspace-home-link flex items-center justify-center lg:justify-start gap-2.5 w-10 h-10 lg:w-auto lg:h-10 flex-shrink-0 select-none">
           <span
             className="w-[30px] h-[30px] rounded-[6px] inline-flex items-center justify-center font-display text-body-lg font-semibold flex-shrink-0"
             style={{ color: "var(--seal)", border: "1.5px solid var(--seal)", transform: "rotate(-4deg)" }}
@@ -563,7 +563,7 @@ export default function MainLayout({
           >
             M
           </span>
-          <span className="font-display font-semibold text-title tracking-tight text-text-primary hidden lg:block">
+          <span className="workspace-wordmark font-display font-semibold text-title tracking-tight text-text-primary hidden lg:block">
             MemVid<span className="text-seal">X</span>
           </span>
         </Link>
@@ -571,7 +571,7 @@ export default function MainLayout({
         <Link to="/app/study" aria-label="Thư viện học tập" title="Thư viện học tập"
           className="study-library-link flex items-center justify-center gap-1.5 w-10 h-10 lg:w-auto lg:px-3 rounded-[8px] border border-border text-small font-medium text-text-secondary hover:text-text-primary hover:bg-surface-elevated flex-shrink-0 transition-colors">
           <Icon name="BookOpen" size={16} />
-          <span className="hidden lg:inline">Thư viện học tập</span>
+          <span className="study-library-link__label hidden lg:inline">Thư viện học tập</span>
         </Link>
 
         {/* Mode switch — Round 11 (mockup parity, explicit user decision):
@@ -603,14 +603,14 @@ export default function MainLayout({
                   fontWeight: active ? 600 : 500,
                 }}>
                 <Icon name={t.icon} size={14} />
-                <span className="hidden lg:inline">{t.label}</span>
+                <span className="workspace-mode-label hidden lg:inline">{t.label}</span>
               </button>
             );
           })}
         </nav>
 
         {/* Right actions */}
-        <div className="flex items-center gap-1 lg:gap-2 flex-shrink-0">
+        <div className="workspace-header-actions flex items-center gap-1 lg:gap-2 flex-shrink-0">
           {/* Mobile: one workspace-tools owner. Its menu also carries the actions
               that used to be separate phone buttons (source library, inspector). */}
           <div className="relative">
@@ -622,6 +622,7 @@ export default function MainLayout({
             <StudyToolsMenu open={headerSurface === "study-tools"} onClose={closeHeaderSurface} onSelect={openStudyTool}
               triggerRef={studyToolsTriggerRef}
               extraActions={[
+                ...(viewportWidth <= 340 ? [{ key: "library", label: "Thư viện học tập", icon: "BookOpen", onSelect: () => navigate("/app/study") }] : []),
                 { key: "sources", label: "Mở thư mục nguồn", icon: "Menu", onSelect: () => setLeftOpen(true) },
                 { key: "inspector", label: "Mở công cụ", icon: "PanelRight", onSelect: () => setRightOpen(true) },
                 {
@@ -651,7 +652,7 @@ export default function MainLayout({
               as Ctrl+K (Issue 2 doesn't ask for a second search engine, just
               a visible entry point reachable from here). */}
           {/* Feature Pack C — Discoverability (mục 7). */}
-          <button onClick={() => setShortcutsOpen(true)} className="hidden lg:inline-flex icon-btn w-9 h-9"
+          <button onClick={() => setShortcutsOpen(true)} className="workspace-shortcuts-trigger hidden lg:inline-flex icon-btn w-9 h-9"
                   title="Phím tắt (?)" aria-label="Xem phím tắt">
             <Icon name="Keyboard" size={16} />
           </button>

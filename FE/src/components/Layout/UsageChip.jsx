@@ -35,9 +35,9 @@ export default function UsageChip() {
   }, [open]);
 
   // Phones get 40x40 boxes (the header has no room for text); desktop keeps the text forms.
-  if (loading && !usage) return <span className="w-10 h-10 lg:w-auto lg:h-auto inline-flex items-center justify-center text-caption text-text-muted" aria-label="Đang tải mức sử dụng">…</span>;
+  if (loading && !usage) return <span className="usage-chip__placeholder w-10 h-10 lg:w-auto lg:h-auto inline-flex items-center justify-center text-caption text-text-muted" aria-label="Đang tải mức sử dụng">…</span>;
   if (error && !usage) return (
-    <button type="button" className="w-10 h-10 lg:w-auto lg:h-auto inline-flex items-center justify-center text-caption text-[var(--warn)]" aria-label="Thử lại mức sử dụng AI" title="Thử lại mức sử dụng AI" onClick={load}>
+    <button type="button" className="usage-chip__retry w-10 h-10 lg:w-auto lg:h-auto inline-flex items-center justify-center text-caption text-[var(--warn)]" aria-label="Thử lại mức sử dụng AI" title="Thử lại mức sử dụng AI" onClick={load}>
       <span className="lg:hidden" aria-hidden="true">↻</span>
       <span className="hidden lg:inline">Usage ↻</span>
     </button>
@@ -49,12 +49,12 @@ export default function UsageChip() {
     <div ref={rootRef} className="relative z-[60]">
       {/* Phones: a 40x40 icon with a status dot (ok / warning / exhausted); the numbers
           stay in the popover. Desktop keeps the "AI n%" text. Name carries the percentage. */}
-      <button type="button" className="icon-btn relative w-10 h-10 lg:w-auto lg:h-9 lg:px-2.5 gap-1.5 inline-flex items-center justify-center"
+      <button type="button" className="usage-chip__trigger icon-btn relative w-10 h-10 lg:w-auto lg:h-9 lg:px-2.5 gap-1.5 inline-flex items-center justify-center"
         aria-expanded={open} aria-haspopup="dialog" aria-label={`Mức sử dụng AI ${Math.round(usage.percentage)}%`} title="Mức sử dụng AI"
         onClick={() => setOpen((value) => !value)}>
         <Icon name="Activity" size={15} />
-        <span aria-hidden="true" className={`lg:hidden absolute right-1 top-1 w-2.5 h-2.5 rounded-full ${exhausted ? "bg-[var(--err)]" : warning ? "bg-[var(--warn)]" : "bg-accent"}`} />
-        <span className={`hidden lg:inline ${exhausted ? "text-[var(--err)]" : warning ? "text-[var(--warn)]" : ""}`}>AI {Math.round(usage.percentage)}%</span>
+        <span aria-hidden="true" className={`usage-chip__status lg:hidden absolute right-1 top-1 w-2.5 h-2.5 rounded-full ${exhausted ? "bg-[var(--err)]" : warning ? "bg-[var(--warn)]" : "bg-accent"}`} />
+        <span className={`usage-chip__label hidden lg:inline ${exhausted ? "text-[var(--err)]" : warning ? "text-[var(--warn)]" : ""}`}>AI {Math.round(usage.percentage)}%</span>
       </button>
       {/* Phones: pinned to the viewport (the chip sits near the right edge, so an anchored
           popover would run off a 320px screen). Desktop keeps the anchored placement. */}
