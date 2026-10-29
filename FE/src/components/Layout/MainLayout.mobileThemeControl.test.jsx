@@ -114,16 +114,15 @@ describe("MainLayout — mobile/tablet theme control reachability", () => {
     expect(matches).toHaveLength(1);
   });
 
-  it("at 1024/1440 the mobile action stays inside the lg:hidden wrapper, never a second always-visible control", async () => {
+  it("at 1440 the compact theme action remains in the CSS-hidden extra-actions group", async () => {
     await render({ width: 1440 });
     await openOverflowMenu();
     const item = themeMenuItem();
     expect(item).toBeTruthy();
-    // Phase 4 proves this is actually hidden by the real CSS cascade at
-    // >=1024px -- here we only guard that it still lives inside the exact
-    // wrapper that is already `lg:hidden` (never pulled out into a
-    // top-level, always-visible header control).
-    expect(item.closest(".lg\\:hidden")).toBeTruthy();
+    // The Round 8.1 header extends compact mode beyond Tailwind's lg
+    // boundary. The extra group is hidden by default and enabled only by
+    // the measured <=1100px media contract in index.css.
+    expect(item.closest(".study-tools-menu__extra")).toBeTruthy();
   });
 
   it("the desktop toggle is untouched: two buttons, hidden lg:flex, still functional", async () => {

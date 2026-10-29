@@ -8,8 +8,10 @@ describe("compact StudyMap workspace contract", () => {
   it("uses compact header and library dimensions", () => {
     const layout = read("src/components/Layout/MainLayout.jsx");
     const css = read("src/index.css");
-    // Compact one row below 1024px (8px side padding, 6px gaps); full header from lg.
-    expect(layout).toContain('className="flex items-center gap-1.5 lg:gap-4 px-2 lg:px-5 h-[56px]');
+    // Compact one row through 1100px (8px side padding, 6px gaps); the
+    // workspace class owns that measured responsive override.
+    expect(layout).toContain('className="workspace-global-header flex items-center gap-1.5 lg:gap-4 px-2 lg:px-5 h-[56px]');
+    expect(css).toMatch(/@media \(max-width:\s*1100px\)[\s\S]*?\.workspace-global-header\s*\{[^}]*gap:\s*6px[^}]*padding-inline:\s*8px/);
     expect(css).toMatch(/\.mode-library-menu\s*\{[^}]*width:\s*min\(400px/);
   });
 
