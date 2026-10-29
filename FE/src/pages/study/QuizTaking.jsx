@@ -36,6 +36,12 @@ export default function QuizTaking() {
   const soNhapRef = useRef(null);
   if (soNhapRef.current === null) soNhapRef.current = taoSoNhap();
   const flushRef = useRef(null);
+  const saveTailRef = useRef(Promise.resolve());
+  const saveErrorRef = useRef(null);
+  const attemptRef = useRef(null);
+  const attemptGenerationRef = useRef(0);
+  const mountedRef = useRef(true);
+  const submittingRef = useRef(false);
   // Số câu đã chọn nhưng CHƯA lên được server. Bộ đếm "N/M đã trả lời" đọc state
   // trong máy, nên nếu không nói riêng ra thì nó báo đã lưu cho cả những câu server
   // chưa hề nhận.
@@ -84,6 +90,57 @@ export default function QuizTaking() {
     return [...counts.entries()].slice(0, 4);
   }, [questions]);
 
+  const flushPending = useCallback(({ forSubmit = false, expectedAttemptId = attemptId } = {}) => {
+    const generation = attemptGenerationRef.current;
+    const so = soNhapRef.current;
+    const operation = saveTailRef.current.then(async () => {
+      const isCurrentAttempt = () => (
+        mountedRef.current
+        && attemptGenerationRef.current === generation
+        && attemptRef.current === expectedAttemptId
+      );
+      if (!expectedAttemptId || !isCurrentAttempt()) {
+        throw new DOMException("Attempt changed", "AbortError");
+      }
+      // A failed autosave is a failed submission barrier. Keep its batch in
+      // the draft and require an explicit retry instead of silently grading.
+      if (forSubmit && saveErrorRef.current) {
+        const previousError = saveErrorRef.current;
+        saveErrorRef.current = null;
+        throw previousError;
+      }
+
+      setSaving(true);
+      try {
+        // Submission owns this serialized section until every newer local
+        // answer version has also been acknowledged by the server.
+        do {
+          const batch = so.layDeGui();
+          if (!Object.keys(batch).length) break;
+          try {
+            await saveAnswers(expectedAttemptId, batch);
+          } catch (saveError) {
+            if (isCurrentAttempt()) {
+              so.traLai(batch);
+              saveErrorRef.current = saveError;
+              setChoLuu(so.demCho());
+              setError(moTaLoi(saveError, "Không lưu được câu trả lời."));
+            }
+            throw saveError;
+          }
+        } while (forSubmit && isCurrentAttempt() && so.coGi());
+        if (!isCurrentAttempt()) throw new DOMException("Attempt changed", "AbortError");
+        saveErrorRef.current = null;
+        setChoLuu(so.demCho());
+      } finally {
+        if (isCurrentAttempt()) setSaving(false);
+      }
+    });
+    // A rejected write must reject its caller but must not poison the queue.
+    saveTailRef.current = operation.catch(() => undefined);
+    return operation;
+  }, [attemptId]);
+
   // Lưu nháp gộp lô: mỗi lần bấm đáp án mà gọi API ngay thì bấm nhanh 10 câu là
   // 10 request chồng nhau, và request về trễ có thể ghi đè lựa chọn mới hơn.
   const queueSave = useCallback((questionId, value) => {
@@ -91,26 +148,28 @@ export default function QuizTaking() {
     so.dat(questionId, value);
     setChoLuu(so.demCho());
     if (flushRef.current) clearTimeout(flushRef.current);
-    flushRef.current = setTimeout(async () => {
+    const scheduledAttemptId = attemptId;
+    flushRef.current = setTimeout(() => {
       if (!attemptId || !so.coGi()) return;
-      const batch = so.layDeGui();
-      setSaving(true);
-      try {
-        await saveAnswers(attemptId, batch);
-        setChoLuu(so.demCho());
-      } catch (e) {
-        // Gửi hỏng thì trả lô về sổ: mất nó là mất câu trả lời của người học trong
-        // khi ô vẫn tô mực. Lần gửi sau, hoặc lúc bấm Nộp bài, sẽ mang nó đi lại.
-        so.traLai(batch);
-        setChoLuu(so.demCho());
-        setError(moTaLoi(e, "Không lưu được câu trả lời."));
-      } finally {
-        setSaving(false);
-      }
+      void flushPending({ expectedAttemptId: scheduledAttemptId }).catch(() => undefined);
     }, 600);
+  }, [attemptId, flushPending]);
+
+  useEffect(() => {
+    attemptRef.current = attemptId;
+    attemptGenerationRef.current += 1;
+    saveErrorRef.current = null;
+    submittingRef.current = false;
+    if (flushRef.current) clearTimeout(flushRef.current);
+    soNhapRef.current = taoSoNhap();
+    setChoLuu(0);
   }, [attemptId]);
 
-  useEffect(() => () => { if (flushRef.current) clearTimeout(flushRef.current); }, []);
+  useEffect(() => () => {
+    mountedRef.current = false;
+    attemptGenerationRef.current += 1;
+    if (flushRef.current) clearTimeout(flushRef.current);
+  }, []);
 
   const choose = (questionId, value) => {
     setAnswers((prev) => ({ ...prev, [questionId]: value }));
@@ -118,31 +177,31 @@ export default function QuizTaking() {
   };
 
   const onSubmit = async () => {
+    if (submittingRef.current) return;
+    submittingRef.current = true;
     setSubmitting(true);
     setError(null);
+    const submittingAttemptId = attemptId;
+    const submittingGeneration = attemptGenerationRef.current;
     try {
       // Gửi nốt nháp còn treo trước khi nộp — nếu không, câu vừa chọn sẽ mất. Gồm cả
       // lô của một lần lưu đã hỏng trước đó: nộp mà thiếu nó thì mấy câu ấy bị chấm
       // như chưa trả lời, và trang kết quả hiện ra y như một lần nộp bình thường.
       if (flushRef.current) clearTimeout(flushRef.current);
-      const so = soNhapRef.current;
-      const batch = so.layDeGui();
-      if (Object.keys(batch).length) {
-        try {
-          await saveAnswers(attemptId, batch);
-          setChoLuu(0);
-        } catch (e) {
-          so.traLai(batch);
-          setChoLuu(so.demCho());
-          throw e;   // KHÔNG nộp khi chưa chắc server đã có đủ đáp án
-        }
+      await flushPending({ forSubmit: true, expectedAttemptId: submittingAttemptId });
+      if (!mountedRef.current || attemptGenerationRef.current !== submittingGeneration || attemptRef.current !== submittingAttemptId) {
+        throw new DOMException("Attempt changed", "AbortError");
       }
-      await submitAttempt(attemptId);
-      navigate(`/app/study/result/${attemptId}`, { replace: true });
+      await submitAttempt(submittingAttemptId);
+      if (!mountedRef.current || attemptGenerationRef.current !== submittingGeneration || attemptRef.current !== submittingAttemptId) return;
+      navigate(`/app/study/result/${submittingAttemptId}`, { replace: true });
     } catch (e) {
+      if (e?.name === "AbortError") return;
+      saveErrorRef.current = null;
       setError(moTaLoi(e, "Nộp bài thất bại."));
       setSubmitting(false);
       setConfirming(false);
+      submittingRef.current = false;
     }
   };
 
@@ -218,6 +277,7 @@ export default function QuizTaking() {
                 className="input-surface w-full text-body min-h-[120px] resize-y"
                 placeholder="Viết câu trả lời ngắn của bạn…"
                 value={answers[current.question_id] ?? ""}
+                disabled={submitting}
                 onChange={(e) => choose(current.question_id, e.target.value)}
               />
             ) : (
@@ -235,6 +295,7 @@ export default function QuizTaking() {
                         name={`question-${current.question_id}`}
                         value={opt}
                         checked={selected}
+                        disabled={submitting}
                         onChange={() => choose(current.question_id, opt)}
                       />
                       <span className="answer-option__key">{KEYS[i] || i + 1}</span>
