@@ -1,0 +1,1083 @@
+{
+  "gitHead": "ab6e90c",
+  "auditDate": "2026-11-01T14:04:44.956Z",
+  "engine": "Headless Chromium (@playwright/test)",
+  "description": "Compact Account trigger target measurement (R8-001 follow-up) across compact widths",
+  "viewports": {
+    "320": {
+      "viewport": {
+        "width": 320,
+        "height": 720
+      },
+      "theme": "light",
+      "rect": {
+        "left": 280,
+        "top": 7.5,
+        "right": 320,
+        "bottom": 47.5,
+        "width": 40,
+        "height": 40
+      },
+      "center": {
+        "x": 300,
+        "y": 27.5
+      },
+      "effectiveHitArea": {
+        "horizontalSpan": {
+          "minX": 280,
+          "maxX": 319,
+          "width": 39
+        },
+        "verticalSpan": {
+          "minY": 7,
+          "maxY": 47,
+          "height": 40
+        },
+        "envelope": {
+          "width": 39,
+          "height": 40
+        }
+      },
+      "nearestNeighbour": {
+        "tag": "button",
+        "ariaLabel": "Mức sử dụng AI 12%",
+        "className": "usage-chip__trigger icon-btn relative w-10 h-10 lg",
+        "rect": {
+          "left": 240,
+          "right": 280,
+          "width": 40,
+          "height": 40
+        },
+        "gap": 0
+      },
+      "rightMarginToViewport": 0,
+      "box44": {
+        "left": 278,
+        "right": 322,
+        "top": 5.5,
+        "bottom": 49.5
+      },
+      "cardinalExtrema": {
+        "topCenter": {
+          "point": [
+            300,
+            5.5
+          ],
+          "resolvesToAccount": false,
+          "resolvedElement": "header.workspace-global-header flex items-cente"
+        },
+        "bottomCenter": {
+          "point": [
+            300,
+            49.5
+          ],
+          "resolvesToAccount": false,
+          "resolvedElement": "header.workspace-global-header flex items-cente"
+        },
+        "leftCenter": {
+          "point": [
+            278,
+            27.5
+          ],
+          "resolvesToAccount": false,
+          "resolvedElement": "button.usage-chip__trigger icon-btn relative w-"
+        },
+        "rightCenter": {
+          "point": [
+            322,
+            27.5
+          ],
+          "resolvesToAccount": false,
+          "resolvedElement": null
+        }
+      },
+      "corners": {
+        "topLeft": {
+          "point": [
+            278,
+            5.5
+          ],
+          "resolvesToAccount": false,
+          "resolvedElement": "header.workspace-global-header flex items-cente"
+        },
+        "topRight": {
+          "point": [
+            322,
+            5.5
+          ],
+          "resolvesToAccount": false,
+          "resolvedElement": null
+        },
+        "bottomLeft": {
+          "point": [
+            278,
+            49.5
+          ],
+          "resolvesToAccount": false,
+          "resolvedElement": "header.workspace-global-header flex items-cente"
+        },
+        "bottomRight": {
+          "point": [
+            322,
+            49.5
+          ],
+          "resolvesToAccount": false,
+          "resolvedElement": null
+        }
+      },
+      "perimeterTest": {
+        "totalPoints": 176,
+        "resolvingPoints": 0,
+        "percentResolving": 0,
+        "failedSamplesPreview": [
+          {
+            "point": [
+              278,
+              5.5
+            ],
+            "resolvesToAccount": false,
+            "resolvedElement": "header.workspace-global-header flex items-cente"
+          },
+          {
+            "point": [
+              278,
+              49.5
+            ],
+            "resolvesToAccount": false,
+            "resolvedElement": "header.workspace-global-header flex items-cente"
+          },
+          {
+            "point": [
+              279,
+              5.5
+            ],
+            "resolvesToAccount": false,
+            "resolvedElement": "header.workspace-global-header flex items-cente"
+          },
+          {
+            "point": [
+              279,
+              49.5
+            ],
+            "resolvesToAccount": false,
+            "resolvedElement": "header.workspace-global-header flex items-cente"
+          },
+          {
+            "point": [
+              280,
+              5.5
+            ],
+            "resolvesToAccount": false,
+            "resolvedElement": "header.workspace-global-header flex items-cente"
+          },
+          {
+            "point": [
+              280,
+              49.5
+            ],
+            "resolvesToAccount": false,
+            "resolvedElement": "header.workspace-global-header flex items-cente"
+          },
+          {
+            "point": [
+              281,
+              5.5
+            ],
+            "resolvesToAccount": false,
+            "resolvedElement": "header.workspace-global-header flex items-cente"
+          },
+          {
+            "point": [
+              281,
+              49.5
+            ],
+            "resolvesToAccount": false,
+            "resolvedElement": "header.workspace-global-header flex items-cente"
+          },
+          {
+            "point": [
+              282,
+              5.5
+            ],
+            "resolvesToAccount": false,
+            "resolvedElement": "header.workspace-global-header flex items-cente"
+          },
+          {
+            "point": [
+              282,
+              49.5
+            ],
+            "resolvesToAccount": false,
+            "resolvedElement": "header.workspace-global-header flex items-cente"
+          }
+        ]
+      },
+      "gridTest": {
+        "totalPoints": 2025,
+        "resolvingPoints": 1322,
+        "percentResolving": 65.3
+      },
+      "is44pxTargetMet": false
+    },
+    "375": {
+      "viewport": {
+        "width": 375,
+        "height": 812
+      },
+      "theme": "light",
+      "rect": {
+        "left": 327,
+        "top": 7.5,
+        "right": 367,
+        "bottom": 47.5,
+        "width": 40,
+        "height": 40
+      },
+      "center": {
+        "x": 347,
+        "y": 27.5
+      },
+      "effectiveHitArea": {
+        "horizontalSpan": {
+          "minX": 326.5,
+          "maxX": 366.5,
+          "width": 40
+        },
+        "verticalSpan": {
+          "minY": 7,
+          "maxY": 47,
+          "height": 40
+        },
+        "envelope": {
+          "width": 40,
+          "height": 40
+        }
+      },
+      "nearestNeighbour": {
+        "tag": "button",
+        "ariaLabel": "Mức sử dụng AI 12%",
+        "className": "usage-chip__trigger icon-btn relative w-10 h-10 lg",
+        "rect": {
+          "left": 283,
+          "right": 323,
+          "width": 40,
+          "height": 40
+        },
+        "gap": 4
+      },
+      "rightMarginToViewport": 8,
+      "box44": {
+        "left": 325,
+        "right": 369,
+        "top": 5.5,
+        "bottom": 49.5
+      },
+      "cardinalExtrema": {
+        "topCenter": {
+          "point": [
+            347,
+            5.5
+          ],
+          "resolvesToAccount": false,
+          "resolvedElement": "header.workspace-global-header flex items-cente"
+        },
+        "bottomCenter": {
+          "point": [
+            347,
+            49.5
+          ],
+          "resolvesToAccount": false,
+          "resolvedElement": "header.workspace-global-header flex items-cente"
+        },
+        "leftCenter": {
+          "point": [
+            325,
+            27.5
+          ],
+          "resolvesToAccount": false,
+          "resolvedElement": "div.workspace-header-actions flex items-cent"
+        },
+        "rightCenter": {
+          "point": [
+            369,
+            27.5
+          ],
+          "resolvesToAccount": false,
+          "resolvedElement": "header.workspace-global-header flex items-cente"
+        }
+      },
+      "corners": {
+        "topLeft": {
+          "point": [
+            325,
+            5.5
+          ],
+          "resolvesToAccount": false,
+          "resolvedElement": "header.workspace-global-header flex items-cente"
+        },
+        "topRight": {
+          "point": [
+            369,
+            5.5
+          ],
+          "resolvesToAccount": false,
+          "resolvedElement": "header.workspace-global-header flex items-cente"
+        },
+        "bottomLeft": {
+          "point": [
+            325,
+            49.5
+          ],
+          "resolvesToAccount": false,
+          "resolvedElement": "header.workspace-global-header flex items-cente"
+        },
+        "bottomRight": {
+          "point": [
+            369,
+            49.5
+          ],
+          "resolvesToAccount": false,
+          "resolvedElement": "header.workspace-global-header flex items-cente"
+        }
+      },
+      "perimeterTest": {
+        "totalPoints": 176,
+        "resolvingPoints": 0,
+        "percentResolving": 0,
+        "failedSamplesPreview": [
+          {
+            "point": [
+              325,
+              5.5
+            ],
+            "resolvesToAccount": false,
+            "resolvedElement": "header.workspace-global-header flex items-cente"
+          },
+          {
+            "point": [
+              325,
+              49.5
+            ],
+            "resolvesToAccount": false,
+            "resolvedElement": "header.workspace-global-header flex items-cente"
+          },
+          {
+            "point": [
+              326,
+              5.5
+            ],
+            "resolvesToAccount": false,
+            "resolvedElement": "header.workspace-global-header flex items-cente"
+          },
+          {
+            "point": [
+              326,
+              49.5
+            ],
+            "resolvesToAccount": false,
+            "resolvedElement": "header.workspace-global-header flex items-cente"
+          },
+          {
+            "point": [
+              327,
+              5.5
+            ],
+            "resolvesToAccount": false,
+            "resolvedElement": "header.workspace-global-header flex items-cente"
+          },
+          {
+            "point": [
+              327,
+              49.5
+            ],
+            "resolvesToAccount": false,
+            "resolvedElement": "header.workspace-global-header flex items-cente"
+          },
+          {
+            "point": [
+              328,
+              5.5
+            ],
+            "resolvesToAccount": false,
+            "resolvedElement": "header.workspace-global-header flex items-cente"
+          },
+          {
+            "point": [
+              328,
+              49.5
+            ],
+            "resolvesToAccount": false,
+            "resolvedElement": "header.workspace-global-header flex items-cente"
+          },
+          {
+            "point": [
+              329,
+              5.5
+            ],
+            "resolvesToAccount": false,
+            "resolvedElement": "header.workspace-global-header flex items-cente"
+          },
+          {
+            "point": [
+              329,
+              49.5
+            ],
+            "resolvesToAccount": false,
+            "resolvedElement": "header.workspace-global-header flex items-cente"
+          }
+        ]
+      },
+      "gridTest": {
+        "totalPoints": 2025,
+        "resolvingPoints": 1322,
+        "percentResolving": 65.3
+      },
+      "is44pxTargetMet": false
+    },
+    "390": {
+      "viewport": {
+        "width": 390,
+        "height": 844
+      },
+      "theme": "light",
+      "rect": {
+        "left": 342,
+        "top": 7.5,
+        "right": 382,
+        "bottom": 47.5,
+        "width": 40,
+        "height": 40
+      },
+      "center": {
+        "x": 362,
+        "y": 27.5
+      },
+      "effectiveHitArea": {
+        "horizontalSpan": {
+          "minX": 341.5,
+          "maxX": 381.5,
+          "width": 40
+        },
+        "verticalSpan": {
+          "minY": 7,
+          "maxY": 47,
+          "height": 40
+        },
+        "envelope": {
+          "width": 40,
+          "height": 40
+        }
+      },
+      "nearestNeighbour": {
+        "tag": "button",
+        "ariaLabel": "Mức sử dụng AI 12%",
+        "className": "usage-chip__trigger icon-btn relative w-10 h-10 lg",
+        "rect": {
+          "left": 298,
+          "right": 338,
+          "width": 40,
+          "height": 40
+        },
+        "gap": 4
+      },
+      "rightMarginToViewport": 8,
+      "box44": {
+        "left": 340,
+        "right": 384,
+        "top": 5.5,
+        "bottom": 49.5
+      },
+      "cardinalExtrema": {
+        "topCenter": {
+          "point": [
+            362,
+            5.5
+          ],
+          "resolvesToAccount": false,
+          "resolvedElement": "header.workspace-global-header flex items-cente"
+        },
+        "bottomCenter": {
+          "point": [
+            362,
+            49.5
+          ],
+          "resolvesToAccount": false,
+          "resolvedElement": "header.workspace-global-header flex items-cente"
+        },
+        "leftCenter": {
+          "point": [
+            340,
+            27.5
+          ],
+          "resolvesToAccount": false,
+          "resolvedElement": "div.workspace-header-actions flex items-cent"
+        },
+        "rightCenter": {
+          "point": [
+            384,
+            27.5
+          ],
+          "resolvesToAccount": false,
+          "resolvedElement": "header.workspace-global-header flex items-cente"
+        }
+      },
+      "corners": {
+        "topLeft": {
+          "point": [
+            340,
+            5.5
+          ],
+          "resolvesToAccount": false,
+          "resolvedElement": "header.workspace-global-header flex items-cente"
+        },
+        "topRight": {
+          "point": [
+            384,
+            5.5
+          ],
+          "resolvesToAccount": false,
+          "resolvedElement": "header.workspace-global-header flex items-cente"
+        },
+        "bottomLeft": {
+          "point": [
+            340,
+            49.5
+          ],
+          "resolvesToAccount": false,
+          "resolvedElement": "header.workspace-global-header flex items-cente"
+        },
+        "bottomRight": {
+          "point": [
+            384,
+            49.5
+          ],
+          "resolvesToAccount": false,
+          "resolvedElement": "header.workspace-global-header flex items-cente"
+        }
+      },
+      "perimeterTest": {
+        "totalPoints": 176,
+        "resolvingPoints": 0,
+        "percentResolving": 0,
+        "failedSamplesPreview": [
+          {
+            "point": [
+              340,
+              5.5
+            ],
+            "resolvesToAccount": false,
+            "resolvedElement": "header.workspace-global-header flex items-cente"
+          },
+          {
+            "point": [
+              340,
+              49.5
+            ],
+            "resolvesToAccount": false,
+            "resolvedElement": "header.workspace-global-header flex items-cente"
+          },
+          {
+            "point": [
+              341,
+              5.5
+            ],
+            "resolvesToAccount": false,
+            "resolvedElement": "header.workspace-global-header flex items-cente"
+          },
+          {
+            "point": [
+              341,
+              49.5
+            ],
+            "resolvesToAccount": false,
+            "resolvedElement": "header.workspace-global-header flex items-cente"
+          },
+          {
+            "point": [
+              342,
+              5.5
+            ],
+            "resolvesToAccount": false,
+            "resolvedElement": "header.workspace-global-header flex items-cente"
+          },
+          {
+            "point": [
+              342,
+              49.5
+            ],
+            "resolvesToAccount": false,
+            "resolvedElement": "header.workspace-global-header flex items-cente"
+          },
+          {
+            "point": [
+              343,
+              5.5
+            ],
+            "resolvesToAccount": false,
+            "resolvedElement": "header.workspace-global-header flex items-cente"
+          },
+          {
+            "point": [
+              343,
+              49.5
+            ],
+            "resolvesToAccount": false,
+            "resolvedElement": "header.workspace-global-header flex items-cente"
+          },
+          {
+            "point": [
+              344,
+              5.5
+            ],
+            "resolvesToAccount": false,
+            "resolvedElement": "header.workspace-global-header flex items-cente"
+          },
+          {
+            "point": [
+              344,
+              49.5
+            ],
+            "resolvesToAccount": false,
+            "resolvedElement": "header.workspace-global-header flex items-cente"
+          }
+        ]
+      },
+      "gridTest": {
+        "totalPoints": 2025,
+        "resolvingPoints": 1322,
+        "percentResolving": 65.3
+      },
+      "is44pxTargetMet": false
+    },
+    "768": {
+      "viewport": {
+        "width": 768,
+        "height": 1024
+      },
+      "theme": "light",
+      "rect": {
+        "left": 720,
+        "top": 7.5,
+        "right": 760,
+        "bottom": 47.5,
+        "width": 40,
+        "height": 40
+      },
+      "center": {
+        "x": 740,
+        "y": 27.5
+      },
+      "effectiveHitArea": {
+        "horizontalSpan": {
+          "minX": 719.5,
+          "maxX": 759.5,
+          "width": 40
+        },
+        "verticalSpan": {
+          "minY": 7,
+          "maxY": 47,
+          "height": 40
+        },
+        "envelope": {
+          "width": 40,
+          "height": 40
+        }
+      },
+      "nearestNeighbour": {
+        "tag": "button",
+        "ariaLabel": "Mức sử dụng AI 12%",
+        "className": "usage-chip__trigger icon-btn relative w-10 h-10 lg",
+        "rect": {
+          "left": 676,
+          "right": 716,
+          "width": 40,
+          "height": 40
+        },
+        "gap": 4
+      },
+      "rightMarginToViewport": 8,
+      "box44": {
+        "left": 718,
+        "right": 762,
+        "top": 5.5,
+        "bottom": 49.5
+      },
+      "cardinalExtrema": {
+        "topCenter": {
+          "point": [
+            740,
+            5.5
+          ],
+          "resolvesToAccount": false,
+          "resolvedElement": "header.workspace-global-header flex items-cente"
+        },
+        "bottomCenter": {
+          "point": [
+            740,
+            49.5
+          ],
+          "resolvesToAccount": false,
+          "resolvedElement": "header.workspace-global-header flex items-cente"
+        },
+        "leftCenter": {
+          "point": [
+            718,
+            27.5
+          ],
+          "resolvesToAccount": false,
+          "resolvedElement": "div.workspace-header-actions flex items-cent"
+        },
+        "rightCenter": {
+          "point": [
+            762,
+            27.5
+          ],
+          "resolvesToAccount": false,
+          "resolvedElement": "header.workspace-global-header flex items-cente"
+        }
+      },
+      "corners": {
+        "topLeft": {
+          "point": [
+            718,
+            5.5
+          ],
+          "resolvesToAccount": false,
+          "resolvedElement": "header.workspace-global-header flex items-cente"
+        },
+        "topRight": {
+          "point": [
+            762,
+            5.5
+          ],
+          "resolvesToAccount": false,
+          "resolvedElement": "header.workspace-global-header flex items-cente"
+        },
+        "bottomLeft": {
+          "point": [
+            718,
+            49.5
+          ],
+          "resolvesToAccount": false,
+          "resolvedElement": "header.workspace-global-header flex items-cente"
+        },
+        "bottomRight": {
+          "point": [
+            762,
+            49.5
+          ],
+          "resolvesToAccount": false,
+          "resolvedElement": "header.workspace-global-header flex items-cente"
+        }
+      },
+      "perimeterTest": {
+        "totalPoints": 176,
+        "resolvingPoints": 0,
+        "percentResolving": 0,
+        "failedSamplesPreview": [
+          {
+            "point": [
+              718,
+              5.5
+            ],
+            "resolvesToAccount": false,
+            "resolvedElement": "header.workspace-global-header flex items-cente"
+          },
+          {
+            "point": [
+              718,
+              49.5
+            ],
+            "resolvesToAccount": false,
+            "resolvedElement": "header.workspace-global-header flex items-cente"
+          },
+          {
+            "point": [
+              719,
+              5.5
+            ],
+            "resolvesToAccount": false,
+            "resolvedElement": "header.workspace-global-header flex items-cente"
+          },
+          {
+            "point": [
+              719,
+              49.5
+            ],
+            "resolvesToAccount": false,
+            "resolvedElement": "header.workspace-global-header flex items-cente"
+          },
+          {
+            "point": [
+              720,
+              5.5
+            ],
+            "resolvesToAccount": false,
+            "resolvedElement": "header.workspace-global-header flex items-cente"
+          },
+          {
+            "point": [
+              720,
+              49.5
+            ],
+            "resolvesToAccount": false,
+            "resolvedElement": "header.workspace-global-header flex items-cente"
+          },
+          {
+            "point": [
+              721,
+              5.5
+            ],
+            "resolvesToAccount": false,
+            "resolvedElement": "header.workspace-global-header flex items-cente"
+          },
+          {
+            "point": [
+              721,
+              49.5
+            ],
+            "resolvesToAccount": false,
+            "resolvedElement": "header.workspace-global-header flex items-cente"
+          },
+          {
+            "point": [
+              722,
+              5.5
+            ],
+            "resolvesToAccount": false,
+            "resolvedElement": "header.workspace-global-header flex items-cente"
+          },
+          {
+            "point": [
+              722,
+              49.5
+            ],
+            "resolvesToAccount": false,
+            "resolvedElement": "header.workspace-global-header flex items-cente"
+          }
+        ]
+      },
+      "gridTest": {
+        "totalPoints": 2025,
+        "resolvingPoints": 1322,
+        "percentResolving": 65.3
+      },
+      "is44pxTargetMet": false
+    },
+    "1024": {
+      "viewport": {
+        "width": 1024,
+        "height": 768
+      },
+      "theme": "light",
+      "rect": {
+        "left": 976,
+        "top": 7.5,
+        "right": 1016,
+        "bottom": 47.5,
+        "width": 40,
+        "height": 40
+      },
+      "center": {
+        "x": 996,
+        "y": 27.5
+      },
+      "effectiveHitArea": {
+        "horizontalSpan": {
+          "minX": 975.5,
+          "maxX": 1015.5,
+          "width": 40
+        },
+        "verticalSpan": {
+          "minY": 7,
+          "maxY": 47,
+          "height": 40
+        },
+        "envelope": {
+          "width": 40,
+          "height": 40
+        }
+      },
+      "nearestNeighbour": {
+        "tag": "button",
+        "ariaLabel": "Mức sử dụng AI 12%",
+        "className": "usage-chip__trigger icon-btn relative w-10 h-10 lg",
+        "rect": {
+          "left": 932,
+          "right": 972,
+          "width": 40,
+          "height": 40
+        },
+        "gap": 4
+      },
+      "rightMarginToViewport": 8,
+      "box44": {
+        "left": 974,
+        "right": 1018,
+        "top": 5.5,
+        "bottom": 49.5
+      },
+      "cardinalExtrema": {
+        "topCenter": {
+          "point": [
+            996,
+            5.5
+          ],
+          "resolvesToAccount": false,
+          "resolvedElement": "header.workspace-global-header flex items-cente"
+        },
+        "bottomCenter": {
+          "point": [
+            996,
+            49.5
+          ],
+          "resolvesToAccount": false,
+          "resolvedElement": "header.workspace-global-header flex items-cente"
+        },
+        "leftCenter": {
+          "point": [
+            974,
+            27.5
+          ],
+          "resolvesToAccount": false,
+          "resolvedElement": "div.workspace-header-actions flex items-cent"
+        },
+        "rightCenter": {
+          "point": [
+            1018,
+            27.5
+          ],
+          "resolvesToAccount": false,
+          "resolvedElement": "header.workspace-global-header flex items-cente"
+        }
+      },
+      "corners": {
+        "topLeft": {
+          "point": [
+            974,
+            5.5
+          ],
+          "resolvesToAccount": false,
+          "resolvedElement": "header.workspace-global-header flex items-cente"
+        },
+        "topRight": {
+          "point": [
+            1018,
+            5.5
+          ],
+          "resolvesToAccount": false,
+          "resolvedElement": "header.workspace-global-header flex items-cente"
+        },
+        "bottomLeft": {
+          "point": [
+            974,
+            49.5
+          ],
+          "resolvesToAccount": false,
+          "resolvedElement": "header.workspace-global-header flex items-cente"
+        },
+        "bottomRight": {
+          "point": [
+            1018,
+            49.5
+          ],
+          "resolvesToAccount": false,
+          "resolvedElement": "header.workspace-global-header flex items-cente"
+        }
+      },
+      "perimeterTest": {
+        "totalPoints": 176,
+        "resolvingPoints": 0,
+        "percentResolving": 0,
+        "failedSamplesPreview": [
+          {
+            "point": [
+              974,
+              5.5
+            ],
+            "resolvesToAccount": false,
+            "resolvedElement": "header.workspace-global-header flex items-cente"
+          },
+          {
+            "point": [
+              974,
+              49.5
+            ],
+            "resolvesToAccount": false,
+            "resolvedElement": "header.workspace-global-header flex items-cente"
+          },
+          {
+            "point": [
+              975,
+              5.5
+            ],
+            "resolvesToAccount": false,
+            "resolvedElement": "header.workspace-global-header flex items-cente"
+          },
+          {
+            "point": [
+              975,
+              49.5
+            ],
+            "resolvesToAccount": false,
+            "resolvedElement": "header.workspace-global-header flex items-cente"
+          },
+          {
+            "point": [
+              976,
+              5.5
+            ],
+            "resolvesToAccount": false,
+            "resolvedElement": "header.workspace-global-header flex items-cente"
+          },
+          {
+            "point": [
+              976,
+              49.5
+            ],
+            "resolvesToAccount": false,
+            "resolvedElement": "header.workspace-global-header flex items-cente"
+          },
+          {
+            "point": [
+              977,
+              5.5
+            ],
+            "resolvesToAccount": false,
+            "resolvedElement": "header.workspace-global-header flex items-cente"
+          },
+          {
+            "point": [
+              977,
+              49.5
+            ],
+            "resolvesToAccount": false,
+            "resolvedElement": "header.workspace-global-header flex items-cente"
+          },
+          {
+            "point": [
+              978,
+              5.5
+            ],
+            "resolvesToAccount": false,
+            "resolvedElement": "header.workspace-global-header flex items-cente"
+          },
+          {
+            "point": [
+              978,
+              49.5
+            ],
+            "resolvesToAccount": false,
+            "resolvedElement": "header.workspace-global-header flex items-cente"
+          }
+        ]
+      },
+      "gridTest": {
+        "totalPoints": 2025,
+        "resolvingPoints": 1322,
+        "percentResolving": 65.3
+      },
+      "is44pxTargetMet": false
+    }
+  }
+}

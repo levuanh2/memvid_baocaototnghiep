@@ -1,6 +1,7 @@
-import { useEffect, useRef } from "react";
+import { useEffect, useLayoutEffect, useRef, useState } from "react";
 import Modal from "../ui/Modal";
 import { Icon } from "../ui/Icon";
+import { learningActionReadiness } from "../../utils/libraryActionMatrix";
 
 const LEARNING_TOOLS = [
   ["summary", "Tóm tắt", "ScrollText"],
@@ -20,15 +21,23 @@ const MANAGEMENT_ACTIONS = [
 ];
 
 function ToolButtons({ doc, onChoose, onManage, menu = false }) {
+  const tools = LEARNING_TOOLS.map(([surface, label, icon]) => ({
+    surface, label, icon, ...learningActionReadiness(doc, surface),
+  }));
+  const hasUnavailableTools = tools.some((tool) => !tool.ready);
   return (
     <>
       <div className="document-tools__group" aria-label="Công cụ học">
-        {LEARNING_TOOLS.map(([surface, label, icon]) => (
+        {tools.map(({ surface, label, icon, ready, reason }) => (
           <button key={surface} type="button" role={menu ? "menuitem" : undefined}
-            data-learning-tool data-surface={surface} onClick={() => onChoose(surface)}>
+            data-learning-tool data-surface={surface} disabled={!ready} title={reason || undefined}
+            aria-label={ready ? label : `${label}. ${reason}`} onClick={() => ready && onChoose(surface)}>
             <Icon name={icon} size={15} /> {label}
           </button>
         ))}
+        {hasUnavailableTools && (
+          <p className="document-tools__readiness-note">Công cụ bị mờ cần lập chỉ mục hoặc một kết quả đã có.</p>
+        )}
       </div>
       <div className="document-tools__group document-tools__group--manage" aria-label="Quản lý tài liệu">
         {MANAGEMENT_ACTIONS.map(([action, fallback, icon]) => {
@@ -52,6 +61,7 @@ function ToolButtons({ doc, onChoose, onManage, menu = false }) {
 
 export function DesktopDocumentTools({ open, doc, onChoose, onManage, onClose, triggerRef }) {
   const menuRef = useRef(null);
+  const [position, setPosition] = useState({ placement: "below", maxHeight: null });
   useEffect(() => {
     if (open) menuRef.current?.querySelector("button")?.focus();
   }, [open]);
@@ -66,6 +76,32 @@ export function DesktopDocumentTools({ open, doc, onChoose, onManage, onClose, t
     window.addEventListener("keydown", closeOnEscape);
     return () => window.removeEventListener("keydown", closeOnEscape);
   }, [open, onClose, triggerRef]);
+  useLayoutEffect(() => {
+    if (!open) return undefined;
+    const place = () => {
+      const menu = menuRef.current;
+      const trigger = triggerRef?.current;
+      if (!menu || !trigger) return;
+      const menuRect = menu.getBoundingClientRect();
+      const triggerRect = trigger.getBoundingClientRect();
+      const availableBelow = window.innerHeight - triggerRect.bottom - 8;
+      const availableAbove = triggerRect.top - 8;
+      const placement = menuRect.height > availableBelow && availableAbove > availableBelow ? "above" : "below";
+      const maxHeight = Math.max(120, placement === "above" ? availableAbove : availableBelow);
+      setPosition((current) => (
+        current.placement === placement && current.maxHeight === maxHeight
+          ? current
+          : { placement, maxHeight }
+      ));
+    };
+    place();
+    window.addEventListener("resize", place);
+    window.addEventListener("scroll", place, true);
+    return () => {
+      window.removeEventListener("resize", place);
+      window.removeEventListener("scroll", place, true);
+    };
+  }, [open, triggerRef]);
   if (!open) return null;
   const closeAndRestore = () => {
     onClose();
@@ -74,7 +110,8 @@ export function DesktopDocumentTools({ open, doc, onChoose, onManage, onClose, t
   return (
     <>
       <button className="document-tools__dismiss" aria-label="Đóng công cụ tài liệu" onClick={closeAndRestore} />
-      <div ref={menuRef} className="document-tools document-tools--desktop" role="menu">
+      <div ref={menuRef} className={`document-tools document-tools--desktop is-${position.placement}`}
+        style={position.maxHeight ? { maxHeight: `${position.maxHeight}px` } : undefined} role="menu">
         <ToolButtons doc={doc} menu onChoose={onChoose} onManage={onManage} />
       </div>
     </>

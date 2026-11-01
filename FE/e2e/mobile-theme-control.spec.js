@@ -12,13 +12,17 @@ const LIGHT_LABEL = "Chuyển sang nền tối";
 const DARK_LABEL = "Chuyển sang nền sáng";
 const MIN_TARGET = 40;
 
+// Round 8.1 (R8-001): the header stays compact through 1100px (index.css
+// `@media (max-width: 1100px)`), so 1024 and 1100 are compact widths and the
+// desktop toggle first appears at 1101.
 const MOBILE_TABLET = [
   { name: "390x844", width: 390, height: 844 },
   { name: "768x1024", width: 768, height: 1024 },
-  { name: "1023x768", width: 1023, height: 768 },
+  { name: "1024x768", width: 1024, height: 768 },
+  { name: "1100x768", width: 1100, height: 768 },
 ];
 const DESKTOP = [
-  { name: "1024x768", width: 1024, height: 768 },
+  { name: "1101x768", width: 1101, height: 768 },
   { name: "1440x1024", width: 1440, height: 1024 },
 ];
 
@@ -37,8 +41,8 @@ test.describe("mobile/tablet: exactly one reachable theme action", () => {
       await page.setViewportSize({ width: vp.width, height: vp.height });
       await registerAndEnterApp(page);
 
-      // Desktop toggle must be the one carrying `hidden lg:flex` -- real CSS
-      // cascade hides it below 1024px.
+      // Desktop toggle carries `hidden lg:flex`, and the compact header rule
+      // hides it through 1100px -- real CSS cascade, not a JS branch.
       const desktopToggle = page.locator('[role="group"][aria-label="Chế độ sáng/tối"]');
       await expect(desktopToggle).toBeHidden();
 
@@ -145,7 +149,7 @@ test.describe("mobile: real Light<->Dark via the real control", () => {
     expect(overflow.scrollWidth).toBeLessThanOrEqual(overflow.clientWidth + 1);
   });
 
-  test("resizing across the 1023<->1024 breakpoint keeps theme state and exactly one trigger at each step", async ({ page }) => {
+  test("resizing across the 1100<->1101 breakpoint keeps theme state and exactly one trigger at each step", async ({ page }) => {
     await page.setViewportSize({ width: 390, height: 844 });
     await registerAndEnterApp(page);
 
@@ -154,11 +158,11 @@ test.describe("mobile: real Light<->Dark via the real control", () => {
     const html = page.locator("html");
     await expect(html).toHaveClass(/dark/);
 
-    await page.setViewportSize({ width: 1024, height: 768 });
+    await page.setViewportSize({ width: 1101, height: 768 });
     await expect(html).toHaveClass(/dark/);
     await expect(page.locator('[role="group"][aria-label="Chế độ sáng/tối"]')).toBeVisible();
 
-    await page.setViewportSize({ width: 1023, height: 768 });
+    await page.setViewportSize({ width: 1100, height: 768 });
     await expect(html).toHaveClass(/dark/);
     await expect(page.locator('[role="group"][aria-label="Chế độ sáng/tối"]')).toBeHidden();
   });

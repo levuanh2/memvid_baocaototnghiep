@@ -2,7 +2,7 @@ import { useEffect, useRef, useState } from "react";
 import { Icon } from "../ui/Icon";
 import { nhanOChon } from "../../utils/chonNhieu";
 import { nhanThoiGianDoc, tenHienThi, thoiGianDoc } from "../../utils/thuVienTaiLieu";
-import { primaryActionFor } from "../../utils/libraryActionMatrix";
+import { learningActionReadiness, primaryActionFor } from "../../utils/libraryActionMatrix";
 import DocumentToolsSheet, { DesktopDocumentTools } from "./DocumentToolsSheet";
 import InlineDocumentNameEditor from "./InlineDocumentNameEditor";
 
@@ -33,7 +33,11 @@ export default function StudyDocumentActionRow({
   const triggerRef = useRef(null);
   const title = tenHienThi(doc);
   const primary = primaryActionFor(view, doc);
-  const indexed = doc.ai?.index === "ready";
+  const primaryReadiness = primary
+    ? learningActionReadiness(doc, primary.surface)
+    : { ready: false, reason: "Chưa có hành động phù hợp." };
+  const summaryReadiness = learningActionReadiness(doc, "summary");
+  const mindmapReadiness = learningActionReadiness(doc, "mindmap");
 
   const closeTools = () => setToolsOpen(false);
   const choose = (surface) => {
@@ -70,15 +74,18 @@ export default function StudyDocumentActionRow({
       </div>
       <button ref={(node) => { primaryRef?.(node); }} type="button" data-primary-action
         tabIndex={primaryTabIndex} className="btn-seal study-document-row__primary"
-        disabled={!indexed || !primary} onKeyDown={onPrimaryKeyDown}
+        disabled={!primaryReadiness.ready || !primary} title={primaryReadiness.reason || undefined}
+        onKeyDown={onPrimaryKeyDown}
         onClick={() => primary && onOpen(doc, primary.surface)}>
         <Icon name="ArrowRight" size={14} /> {primary?.label || "Chưa sẵn sàng"}
       </button>
       <div className="study-document-row__quick" aria-label={`Mở nhanh ${title}`}>
         <button type="button" data-quick-action aria-label={`Tóm tắt · ${title}`}
-          disabled={!indexed} onClick={() => onOpen(doc, "summary")}><Icon name="ScrollText" size={15} /></button>
+          disabled={!summaryReadiness.ready} title={summaryReadiness.reason || undefined}
+          onClick={() => onOpen(doc, "summary")}><Icon name="ScrollText" size={15} /></button>
         <button type="button" data-quick-action aria-label={`Sơ đồ tư duy · ${title}`}
-          disabled={!indexed} onClick={() => onOpen(doc, "mindmap")}><Icon name="Network" size={15} /></button>
+          disabled={!mindmapReadiness.ready} title={mindmapReadiness.reason || undefined}
+          onClick={() => onOpen(doc, "mindmap")}><Icon name="Network" size={15} /></button>
       </div>
       <div className="study-document-row__tools">
         <button ref={triggerRef} type="button" data-tools-trigger aria-haspopup={mobile ? "dialog" : "menu"}

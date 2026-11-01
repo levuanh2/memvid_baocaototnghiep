@@ -7704,3 +7704,25 @@ contrast without changing global status tokens. Chromium evidence records local
 containment, composed contrast, and hitboxes; future responsive acceptance must
 keep those local measurements alongside global overflow checks.
 
+# Round 8 release blockers: async commit boundaries and responsive composition (fixed 2026-10-29)
+
+**Symptoms:** Quiz submission could overtake an in-flight answer PATCH; an image
+capture could download after its map/dialog session was invalidated; the global
+header overflowed at 320px and 1024px; and Library complete-tools bypassed index
+readiness while tablet menu rows measured only 40px.
+
+**Root causes:** queue emptiness was mistaken for server acknowledgement; the
+capture utility owned the irreversible browser download; header expansion was
+tied to Tailwind's 1024px breakpoint instead of measured content width; and
+Library readiness existed only on the primary/quick entry points, not as a
+shared destination policy.
+
+**Fix and prevention:** Quiz now serializes saves and awaits the active tail plus
+newer local versions before one guarded submit. Image export returns a prepared,
+disposable artifact and the dialog commits its download only after attempt
+validation. The header stays compact through 1100px without reducing 40px
+header controls, with the 320px Library fallback in the StudyMap menu. Library
+tools use one artifact-aware readiness policy, keep Details/management and
+existing artifacts reachable, and use 44px menu rows with bottom-edge flipping.
+Deferred-promise and real-Chromium regression coverage pins each boundary.
+

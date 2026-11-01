@@ -60,7 +60,7 @@ export default function StudyToolsMenu({ open, onClose, onSelect, extraActions =
         </button>
       ))}
       {extraActions.length > 0 && (
-        <div className="lg:hidden border-t border-border mt-1 pt-1">
+        <div className="study-tools-menu__extra border-t border-border mt-1 pt-1">
           {extraActions.map((action) => (
             <button key={action.key} type="button" role="menuitem" className="study-tools-menu__item"
               onClick={() => { action.onSelect?.(); close(); }}>

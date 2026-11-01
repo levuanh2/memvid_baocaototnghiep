@@ -1,4 +1,4 @@
-// Global header: compact one-row header below 1024px, full desktop header at 1024px and up.
+// Global header: compact one-row header through 1100px, full desktop header above it.
 // Runs the REAL workspace (MainLayout) on the Vite dev server with the API mocked at the
 // network layer, so it needs no backend, no provider, and no production data.
 import { test, expect } from "@playwright/test";
@@ -86,16 +86,18 @@ const CONTROLS = [
   'header button[aria-haspopup="menu"][aria-label^="Tài khoản"]',
 ];
 
-// Compact header widths: everything below 1024px, including the tablet widths.
+// Round 8.1 release-gate widths: every constrained boundary uses the compact
+// composition; 1280/1440 retain the full desktop header.
 const COMPACT = [
   { width: 320, height: 720 },
-  { width: 360, height: 800 },
+  { width: 375, height: 812 },
   { width: 390, height: 844 },
-  { width: 720, height: 900 },
   { width: 768, height: 1024 },
+  { width: 780, height: 1024 },
+  { width: 800, height: 1024 },
   { width: 820, height: 1180 },
-  { width: 912, height: 1368 },
   { width: 1023, height: 768 },
+  { width: 1024, height: 768 },
 ];
 
 for (const vp of COMPACT) {
@@ -172,8 +174,8 @@ for (const vp of COMPACT) {
   }
 }
 
-test.describe("full desktop header at 1024px and up", () => {
-  for (const vp of [{ width: 1024, height: 768 }, { width: 1280, height: 800 }, { width: 1440, height: 1024 }]) {
+test.describe("full desktop header above the compact danger zone", () => {
+  for (const vp of [{ width: 1280, height: 800 }, { width: 1440, height: 1024 }]) {
     test(`${vp.width}x${vp.height}: one 56px row, labels visible, shortcut and theme toggle present, no overflow`, async ({ page }) => {
       await openApp(page, vp);
       const h = await page.evaluate(() => {
@@ -286,6 +288,16 @@ test.describe("compact usage control states", () => {
 });
 
 test.describe("menu dismissal", () => {
+  test("320px keeps the hidden standalone Library destination in the tools menu", async ({ page }) => {
+    await openApp(page, { width: 320, height: 720 });
+    await expect(page.locator("header .study-library-link")).toBeHidden();
+    await page.locator('header button[aria-label="Mở công cụ StudyMap"]').click();
+    const library = page.getByRole("menuitem", { name: "Thư viện học tập" });
+    await expect(library).toBeVisible();
+    await library.click();
+    await expect(page).toHaveURL(/\/app\/study$/);
+  });
+
   test("tools menu: Escape and outside click close it; a click inside keeps it open", async ({ page }) => {
     await openApp(page, { width: 390, height: 844 });
     const trigger = page.locator('header button[aria-label="Mở công cụ StudyMap"]');

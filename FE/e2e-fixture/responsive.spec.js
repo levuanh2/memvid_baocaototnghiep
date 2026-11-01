@@ -62,11 +62,12 @@ async function shot(page, viewportName, stateName) {
   fs.appendFileSync(INDEX_PATH, `${viewportName} | ${stateName} | ${file}\n`);
 }
 
-async function goToAppearanceStep(page, format) {
+async function openPreviewBench(page, format) {
   await page.locator('[aria-label="Xuất sơ đồ"]').click();
-  await page.getByRole("button", { name: "Tiếp tục" }).click(); // -> format
-  if (format) await page.locator(`input[name="mm-export-format"][value="${format}"]`).click();
-  await page.getByRole("button", { name: "Tiếp tục" }).click(); // -> appearance
+  const dialog = page.getByRole("dialog");
+  await expect(dialog.getByTestId("export-persistent-preview")).toBeVisible();
+  if (format) await dialog.locator(`input[name="mm-export-format"][value="${format}"]`).click();
+  return dialog;
 }
 
 /** Intercepts the document-export job API with a scripted status sequence — real fetch calls, scripted responses, everything else in the flow (dialog, polling, download attempt) real. */
@@ -149,28 +150,36 @@ test.describe("Export Studio — responsive QA", () => {
 
       test("state 7: format selection step lists image and document groups without overflow", async ({ page }) => {
         await gotoFixture(page, vp);
-        await page.locator('[aria-label="Xuất sơ đồ"]').click();
-        await page.getByRole("button", { name: "Tiếp tục" }).click();
-        const dialog = page.getByRole("dialog");
-        await expect(dialog.locator('input[name="mm-export-format"]')).toHaveCount(5); // PR C1: png/jpeg/svg/webp/pdf
+        const dialog = await openPreviewBench(page);
+        // The retired format wizard step is now the always-rendered
+        // Presentation section of Preview Bench.
+        const presentation = dialog.locator("#export-bench-presentation");
+        await expect(presentation).toBeVisible();
+        await expect(presentation.locator('input[name="mm-export-format"]')).toHaveCount(5); // PR C1: png/jpeg/svg/webp/pdf
         await assertNoHorizontalOverflow(page);
         await shot(page, vp.name, "07-format-step");
       });
 
       test("state 8: appearance controls for IMAGE format render without overflow or duplicate controls", async ({ page }) => {
         await gotoFixture(page, vp);
-        await goToAppearanceStep(page, "png");
-        const dialog = page.getByRole("dialog");
-        await expect(dialog.getByRole("button", { name: "Tối giản" })).toHaveCount(1);
+        const dialog = await openPreviewBench(page, "png");
+        const panel = dialog.getByTestId("image-appearance");
+        await expect(panel).toBeVisible();
+        await expect(dialog.getByTestId("doc-appearance")).toHaveCount(0);
+        await expect(panel.getByRole("button", { name: "Tối giản", exact: true })).toHaveCount(1);
         await assertNoHorizontalOverflow(page);
         await shot(page, vp.name, "08-appearance-image");
       });
 
       test("state 9: appearance controls for PDF render its own control set without overflow", async ({ page }) => {
         await gotoFixture(page, vp);
-        await goToAppearanceStep(page, "pdf");
-        const panel = page.locator('[data-testid="doc-appearance"]');
+        const dialog = await openPreviewBench(page, "pdf");
+        const panel = dialog.getByTestId("doc-appearance");
         await expect(panel).toBeVisible();
+        await expect(dialog.getByTestId("image-appearance")).toHaveCount(0);
+        // Selecting a document format intentionally opens its layout
+        // accordion; clicking it again would collapse the controls.
+        await expect(panel.getByRole("button", { name: "Bố cục", exact: true })).toHaveAttribute("aria-expanded", "true");
         await expect(panel).toContainText("Khổ giấy");
         await assertNoHorizontalOverflow(page);
         await shot(page, vp.name, "09-appearance-pdf");
@@ -178,21 +187,23 @@ test.describe("Export Studio — responsive QA", () => {
 
       test("state 10 (PR C1): appearance controls for WEBP render the image control set, not a doc panel, without overflow", async ({ page }) => {
         await gotoFixture(page, vp);
-        await goToAppearanceStep(page, "webp");
-        const dialog = page.getByRole("dialog");
-        await expect(dialog.locator('[data-testid="image-appearance"]')).toBeVisible();
-        await expect(dialog.locator('[data-testid="doc-appearance"]')).toHaveCount(0);
+        const dialog = await openPreviewBench(page, "webp");
+        await expect(dialog.getByTestId("image-appearance")).toBeVisible();
+        await expect(dialog.getByTestId("doc-appearance")).toHaveCount(0);
         await assertNoHorizontalOverflow(page);
         await shot(page, vp.name, "10-appearance-webp");
       });
 
       test("state 12: preview step summary renders without overflow", async ({ page }) => {
         await gotoFixture(page, vp);
-        await page.locator('[aria-label="Xuất sơ đồ"]').click();
-        await page.getByRole("button", { name: "Tiếp tục" }).click();
-        await page.getByRole("button", { name: "Tiếp tục" }).click();
-        await page.getByRole("button", { name: "Tiếp tục" }).click(); // -> preview
-        await expect(page.getByRole("dialog")).toContainText("Toàn bộ sơ đồ");
+        const dialog = await openPreviewBench(page);
+        // The old terminal preview step no longer exists. Its real successor
+        // is the persistent preview plus the footer summary, both visible
+        // throughout configuration.
+        const preview = dialog.getByTestId("export-persistent-preview");
+        await expect(preview).toContainText("Toàn bộ sơ đồ");
+        await expect(preview).toContainText("PNG");
+        await expect(dialog.locator(".export-footer__summary")).toContainText("Toàn bộ sơ đồ · PNG");
         await assertNoHorizontalOverflow(page);
         await shot(page, vp.name, "12-preview");
       });
@@ -200,23 +211,22 @@ test.describe("Export Studio — responsive QA", () => {
       test("state 13: export queued/running renders progress without overflow", async ({ page }) => {
         await mockExportApi(page, { statuses: [{ status: "queued" }, { status: "running", progress: 40 }, { status: "running", progress: 40 }] });
         await gotoFixture(page, vp);
-        await goToAppearanceStep(page, "pdf");
-        await page.getByRole("button", { name: "Tiếp tục" }).click(); // -> preview
-        await page.getByRole("button", { name: /^(Xuất|Tạo) (PNG|JPEG|SVG|WEBP|PDF|DOCX|XLSX)$/ }).click();
-        await expect(page.getByRole("dialog")).toContainText("Đang x", { timeout: 5000 });
+        const dialog = await openPreviewBench(page, "pdf");
+        await dialog.getByRole("button", { name: "Tạo PDF", exact: true }).click();
+        await expect(dialog).toContainText("Đang xếp hàng", { timeout: 5000 });
+        await expect(dialog).toContainText("Đang xử lý (40%)", { timeout: 5000 });
         await assertNoHorizontalOverflow(page);
         await shot(page, vp.name, "13-export-running");
-        await page.getByRole("button", { name: "Hủy xuất" }).click().catch(() => {}); // stop the poll before the test ends
+        await dialog.getByRole("button", { name: "Hủy xuất" }).click(); // stop the poll before the test ends
       });
 
       test("state 14: export failed shows a retry control without overflow", async ({ page }) => {
         await mockExportApi(page, { statuses: [{ status: "error", error: "Lỗi máy chủ (mô phỏng)" }] });
         await gotoFixture(page, vp);
-        await goToAppearanceStep(page, "pdf");
-        await page.getByRole("button", { name: "Tiếp tục" }).click();
-        await page.getByRole("button", { name: /^(Xuất|Tạo) (PNG|JPEG|SVG|WEBP|PDF|DOCX|XLSX)$/ }).click();
-        await expect(page.getByRole("dialog")).toContainText("Lỗi máy chủ", { timeout: 5000 });
-        await expect(page.getByRole("button", { name: "Thử lại" })).toBeVisible();
+        const dialog = await openPreviewBench(page, "pdf");
+        await dialog.getByRole("button", { name: "Tạo PDF", exact: true }).click();
+        await expect(dialog).toContainText("Lỗi máy chủ", { timeout: 5000 });
+        await expect(dialog.getByRole("button", { name: "Thử lại", exact: true })).toBeVisible();
         await assertNoHorizontalOverflow(page);
         await shot(page, vp.name, "14-export-failed");
       });
@@ -224,10 +234,10 @@ test.describe("Export Studio — responsive QA", () => {
       test("state 15: export completed shows the done state without overflow", async ({ page }) => {
         await mockExportApi(page, { statuses: [{ status: "done", progress: 100 }] });
         await gotoFixture(page, vp);
-        await goToAppearanceStep(page, "pdf");
-        await page.getByRole("button", { name: "Tiếp tục" }).click();
-        await page.getByRole("button", { name: /^(Xuất|Tạo) (PNG|JPEG|SVG|WEBP|PDF|DOCX|XLSX)$/ }).click();
-        await expect(page.getByRole("dialog")).toContainText("Đã xuất", { timeout: 5000 });
+        const dialog = await openPreviewBench(page, "pdf");
+        await dialog.getByRole("button", { name: "Tạo PDF", exact: true }).click();
+        await expect(dialog.getByTestId("export-persistent-preview")).toContainText("Đã xuất", { timeout: 5000 });
+        await expect(dialog.getByRole("button", { name: "Xuất lại", exact: true })).toBeVisible();
         await assertNoHorizontalOverflow(page);
         await shot(page, vp.name, "15-export-completed");
       });

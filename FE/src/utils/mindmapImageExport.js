@@ -160,6 +160,25 @@ async function _finishCapture(result, { outputMode, format, filename, quality, b
   if (outputMode === "base64") {
     return { base64: await blobToBase64(blob), geometryManifest };
   }
+  if (outputMode === "prepared") {
+    let active = true;
+    return {
+      filename,
+      geometryManifest,
+      async commitDownload() {
+        if (!active) throw new DOMException("Export artifact is no longer active", "AbortError");
+        active = false;
+        await result.download({ format, filename, quality });
+      },
+      dispose() {
+        active = false;
+        // snapdom currently creates no object URL until download(). Keep the
+        // boundary future-safe for result implementations that own resources.
+        result.dispose?.();
+        result.revoke?.();
+      },
+    };
+  }
   await result.download({ format, filename, quality });
   return { filename };
 }
