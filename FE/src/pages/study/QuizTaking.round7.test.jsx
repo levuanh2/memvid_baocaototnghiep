@@ -1,5 +1,5 @@
 // @vitest-environment jsdom
-import { act } from "react";
+import { act, StrictMode } from "react";
 import { createRoot } from "react-dom/client";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import QuizTaking from "./QuizTaking";
@@ -54,10 +54,10 @@ afterEach(() => {
   vi.clearAllMocks(); vi.useRealTimers();
 });
 
-async function renderReady() {
+async function renderReady({ strict = false } = {}) {
   container = document.createElement("div"); document.body.appendChild(container);
   root = createRoot(container);
-  await act(async () => root.render(<QuizTaking />));
+  await act(async () => root.render(strict ? <StrictMode><QuizTaking /></StrictMode> : <QuizTaking />));
   await act(async () => { await Promise.resolve(); await Promise.resolve(); });
 }
 
@@ -86,6 +86,18 @@ async function startDebouncedSave() {
 }
 
 describe("Round 7 populated quiz taking", () => {
+  it("autosaves and submits once when mounted through React StrictMode", async () => {
+    await renderReady({ strict: true });
+    await chooseFirstAnswer();
+    await startDebouncedSave();
+
+    expect(saveAnswers).toHaveBeenCalledWith("attempt-1", { "q-1": "A" });
+
+    await openAndConfirmSubmit();
+    expect(submitAttempt).toHaveBeenCalledTimes(1);
+    expect(navigate).toHaveBeenCalledWith("/app/study/result/attempt-1", { replace: true });
+  });
+
   it("renders a 10-question fixture with rail, context, and real radio semantics", async () => {
     await renderReady();
     expect(container.querySelectorAll(".quiz-question-index")).toHaveLength(10);
@@ -234,5 +246,15 @@ describe("Round 7 populated quiz taking", () => {
 
     expect(submitAttempt).not.toHaveBeenCalledWith("attempt-1");
     expect(navigate).not.toHaveBeenCalledWith("/app/study/result/attempt-1", { replace: true });
+    expect(container.querySelectorAll('input[type="radio"]')[0].disabled).toBe(false);
+    expect(document.body.querySelector('[role="dialog"]')).toBeNull();
+
+    await chooseFirstAnswer();
+    await openAndConfirmSubmit();
+
+    expect(saveAnswers).toHaveBeenLastCalledWith("attempt-2", { "q-1": "A" });
+    expect(submitAttempt).toHaveBeenCalledTimes(1);
+    expect(submitAttempt).toHaveBeenCalledWith("attempt-2");
+    expect(navigate).toHaveBeenCalledWith("/app/study/result/attempt-2", { replace: true });
   });
 });

@@ -160,15 +160,21 @@ export default function QuizTaking() {
     attemptGenerationRef.current += 1;
     saveErrorRef.current = null;
     submittingRef.current = false;
+    setSubmitting(false);
+    setConfirming(false);
+    setSaving(false);
     if (flushRef.current) clearTimeout(flushRef.current);
     soNhapRef.current = taoSoNhap();
     setChoLuu(0);
   }, [attemptId]);
 
-  useEffect(() => () => {
-    mountedRef.current = false;
-    attemptGenerationRef.current += 1;
-    if (flushRef.current) clearTimeout(flushRef.current);
+  useEffect(() => {
+    mountedRef.current = true;
+    return () => {
+      mountedRef.current = false;
+      attemptGenerationRef.current += 1;
+      if (flushRef.current) clearTimeout(flushRef.current);
+    };
   }, []);
 
   const choose = (questionId, value) => {
