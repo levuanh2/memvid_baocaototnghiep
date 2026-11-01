@@ -136,4 +136,36 @@ describe("Export Studio image capture-to-download commit boundary", () => {
     expect(second.commitDownload).not.toHaveBeenCalled();
     expect(dialog.textContent).not.toContain("second.png");
   });
+
+  it("captures and downloads once when Export is clicked twice rapidly", async () => {
+    const capture = deferred();
+    const only = artifact();
+    exportMindmapImageMock.mockReturnValueOnce(capture.promise);
+    const dialog = await renderDialog();
+    const button = [...dialog.querySelectorAll("button")].find((candidate) => candidate.textContent.trim() === "Xuất PNG");
+    await act(async () => { button.click(); button.click(); });
+    await act(async () => { capture.resolve(only); await capture.promise; await Promise.resolve(); });
+
+    expect(exportMindmapImageMock).toHaveBeenCalledTimes(1);
+    expect(only.commitDownload).toHaveBeenCalledTimes(1);
+  });
+
+  it("drops a stale Map A capture that resolves after a newer Map B attempt began", async () => {
+    const captureA = deferred();
+    const captureB = deferred();
+    const staleA = artifact("map-a.png");
+    const freshB = artifact("map-b.png");
+    exportMindmapImageMock.mockReturnValueOnce(captureA.promise).mockReturnValueOnce(captureB.promise);
+    await clickExport(await renderDialog());
+    const dialogB = await renderDialog({ mapId: "map-b" });
+    await clickExport(dialogB);
+
+    await act(async () => { captureA.resolve(staleA); await captureA.promise; await Promise.resolve(); });
+    expect(staleA.commitDownload).not.toHaveBeenCalled();
+    expect(staleA.dispose).toHaveBeenCalledTimes(1);
+
+    await act(async () => { captureB.resolve(freshB); await captureB.promise; await Promise.resolve(); });
+    expect(freshB.commitDownload).toHaveBeenCalledTimes(1);
+    expect(exportMindmapImageMock).toHaveBeenCalledTimes(2);
+  });
 });

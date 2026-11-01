@@ -129,6 +129,19 @@ describe("exportMindmapImage", () => {
     await expect(artifact.commitDownload()).rejects.toMatchObject({ name: "AbortError" });
   });
 
+  it.each([["png", "png"], ["jpeg", "jpg"], ["svg", "svg"], ["webp", "webp"]])(
+    "prepared %s artifact commits the same format and .%s filename as direct download",
+    async (format, ext) => {
+      mind = makeMind();
+      const result = fakeResult();
+      const snapdom = vi.fn().mockResolvedValue(result);
+      const artifact = await exportMindmapImage({ mind, scopeType: "visible", format, title: "T", outputMode: "prepared", snapdom, settleMs: 0 });
+      expect(artifact.filename).toMatch(new RegExp(`^T-\\d{8}\\.${ext}$`));
+      await artifact.commitDownload();
+      expect(result.download).toHaveBeenCalledWith(expect.objectContaining({ format, filename: artifact.filename }));
+    },
+  );
+
   it("PR C1: webp downloads with a .webp filename and an unmapped 'webp' blob type (no jpeg-style remap)", async () => {
     mind = makeMind();
     const result = fakeResult();
