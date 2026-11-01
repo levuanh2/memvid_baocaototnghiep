@@ -80,6 +80,27 @@ Agy's dev server served that tree at the time. By timestamp only
 independent cause, and it was rerun clean after `e009d38`. Every other spec,
 including `export-studio.spec.js`, finished before the mutation.
 
+## GitHub CI
+
+CI runs only the real-backend `FE/playwright.config.js` suite
+(`ci.yml`: `npx playwright test`). The 448-test fixture suite above is not part
+of CI, which is why `main` stays green despite the 12 pre-existing fixture
+failures.
+
+| Run | Head | Result |
+|---|---|---|
+| [41317746515](https://github.com/levuanh2/memvid_baocaototnghiep/actions/runs/41317746515) | `a490df5` | FAIL: E2E Critical Flows 37 passed / 4 failed, all in `e2e/mobile-theme-control.spec.js`. Frontend tests, build and static checks passed. |
+
+The 4 failures were a stale R8-001 contract, not a product fault. The spec
+still expected the desktop theme toggle at 1024px and a 1023↔1024 boundary.
+`4b56a91` keeps the header compact through 1100px, hides `.theme-toggle` there
+and shows the theme action in the StudyMap menu, so exactly one theme control
+remains reachable at every width. `76c1a32` updated the Vitest and fixture
+contracts but missed this real-backend spec, which cannot run locally. The
+follow-up commit moves its boundary to 1100↔1101 and adds 1100px to the compact
+set; no assertion was removed. The final CI result for the new head is reported
+on the pull request.
+
 ## Not run
 
 | Gate | Status | Reason |
