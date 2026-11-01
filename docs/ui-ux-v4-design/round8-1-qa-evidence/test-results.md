@@ -89,17 +89,19 @@ failures.
 
 | Run | Head | Result |
 |---|---|---|
-| [41317746515](https://github.com/levuanh2/memvid_baocaototnghiep/actions/runs/41317746515) | `a490df5` | FAIL: E2E Critical Flows 37 passed / 4 failed, all in `e2e/mobile-theme-control.spec.js`. Frontend tests, build and static checks passed. |
+| [41317746515](https://github.com/levuanh2/memvid_baocaototnghiep/actions/runs/41317746515) | `a490df5` | FAIL: E2E Critical Flows 37 passed / 2 failed (each failed again on its CI retry), both in `e2e/mobile-theme-control.spec.js`. Frontend tests, build and static checks passed. |
+| [41318410722](https://github.com/levuanh2/memvid_baocaototnghiep/actions/runs/41318410722) | `3dd1ce0` | PASS: E2E Critical Flows 40 passed / 0 failed; Frontend Tests 1,798 passed (201 files); build, static checks and `CI / required` green. Backend and Docker jobs skipped by path filter. |
 
-The 4 failures were a stale R8-001 contract, not a product fault. The spec
+The 2 failures were a stale R8-001 contract, not a product fault. The spec
 still expected the desktop theme toggle at 1024px and a 1023↔1024 boundary.
 `4b56a91` keeps the header compact through 1100px, hides `.theme-toggle` there
 and shows the theme action in the StudyMap menu, so exactly one theme control
 remains reachable at every width. `76c1a32` updated the Vitest and fixture
 contracts but missed this real-backend spec, which cannot run locally. The
 follow-up commit moves its boundary to 1100↔1101 and adds 1100px to the compact
-set; no assertion was removed. The final CI result for the new head is reported
-on the pull request.
+set; no assertion was removed. This documentation-only correction leaves
+production and test code identical to `3dd1ce0`; the CI result for its own
+head is reported on the pull request.
 
 ## Not run
 
