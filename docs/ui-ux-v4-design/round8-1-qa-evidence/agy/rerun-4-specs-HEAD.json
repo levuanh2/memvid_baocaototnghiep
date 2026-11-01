@@ -1,0 +1,1820 @@
+{
+  "config": {
+    "argv": [
+      "C:\\Program Files\\nodejs\\node.exe",
+      "E:\\memvid_NCKH\\MemVid_BaoCaoTotNghiep\\.worktrees\\phase-c-round8-1-p1-closure\\FE\\node_modules\\@playwright\\test\\cli.js",
+      "test",
+      "-c",
+      "playwright.fixture.config.js",
+      "e2e-fixture/branch-export-visual.spec.js",
+      "e2e-fixture/exact-node-export-v3.spec.js",
+      "e2e-fixture/mindmap-depth-presets.spec.js",
+      "e2e-fixture/post-pr77-exact-selection.spec.js",
+      "--reporter=list,json"
+    ],
+    "configFile": "E:\\memvid_NCKH\\MemVid_BaoCaoTotNghiep\\.worktrees\\phase-c-round8-1-p1-closure\\FE\\playwright.fixture.config.js",
+    "rootDir": "E:/memvid_NCKH/MemVid_BaoCaoTotNghiep/.worktrees/phase-c-round8-1-p1-closure/FE/e2e-fixture",
+    "failOnFlakyTests": false,
+    "forbidOnly": false,
+    "fullyParallel": false,
+    "globalSetup": null,
+    "globalTeardown": null,
+    "globalTimeout": 0,
+    "grep": {},
+    "grepInvert": null,
+    "maxFailures": 0,
+    "metadata": {
+      "actualWorkers": 1
+    },
+    "preserveOutput": "always",
+    "projects": [
+      {
+        "outputDir": "E:/memvid_NCKH/MemVid_BaoCaoTotNghiep/.worktrees/phase-c-round8-1-p1-closure/FE/test-results",
+        "repeatEach": 1,
+        "retries": 0,
+        "metadata": {
+          "actualWorkers": 1
+        },
+        "id": "chromium",
+        "name": "chromium",
+        "testDir": "E:/memvid_NCKH/MemVid_BaoCaoTotNghiep/.worktrees/phase-c-round8-1-p1-closure/FE/e2e-fixture",
+        "testIgnore": [],
+        "testMatch": [
+          "**/*.@(spec|test).?(c|m)[jt]s?(x)"
+        ],
+        "timeout": 45000
+      }
+    ],
+    "quiet": false,
+    "reporter": [
+      [
+        "list"
+      ],
+      [
+        "json"
+      ]
+    ],
+    "reportSlowTests": {
+      "max": 5,
+      "threshold": 300000
+    },
+    "shard": null,
+    "tags": [],
+    "updateSnapshots": "missing",
+    "updateSourceMethod": "patch",
+    "version": "1.63.0",
+    "workers": 1,
+    "webServer": {
+      "command": "npx vite --port 5199 --strictPort",
+      "url": "http://localhost:5199/fixture-harness.html",
+      "timeout": 30000,
+      "reuseExistingServer": true
+    }
+  },
+  "suites": [
+    {
+      "title": "branch-export-visual.spec.js",
+      "file": "branch-export-visual.spec.js",
+      "column": 0,
+      "line": 0,
+      "specs": [
+        {
+          "title": "visual 1440x1024-light",
+          "ok": true,
+          "tags": [],
+          "tests": [
+            {
+              "timeout": 45000,
+              "annotations": [],
+              "expectedStatus": "passed",
+              "projectId": "chromium",
+              "projectName": "chromium",
+              "results": [
+                {
+                  "workerIndex": 0,
+                  "parallelIndex": 0,
+                  "status": "passed",
+                  "duration": 13822,
+                  "errors": [],
+                  "stdout": [],
+                  "stderr": [],
+                  "retry": 0,
+                  "startTime": "2026-11-01T14:33:21.490Z",
+                  "annotations": [],
+                  "attachments": []
+                }
+              ],
+              "status": "expected"
+            }
+          ],
+          "id": "50f26b89e2de8c4e6f97-c5e028dcc5aadff06622",
+          "file": "branch-export-visual.spec.js",
+          "line": 55,
+          "column": 5
+        },
+        {
+          "title": "visual 1440x1024-dark",
+          "ok": true,
+          "tags": [],
+          "tests": [
+            {
+              "timeout": 45000,
+              "annotations": [],
+              "expectedStatus": "passed",
+              "projectId": "chromium",
+              "projectName": "chromium",
+              "results": [
+                {
+                  "workerIndex": 0,
+                  "parallelIndex": 0,
+                  "status": "passed",
+                  "duration": 6176,
+                  "errors": [],
+                  "stdout": [],
+                  "stderr": [],
+                  "retry": 0,
+                  "startTime": "2026-11-01T14:33:35.459Z",
+                  "annotations": [],
+                  "attachments": []
+                }
+              ],
+              "status": "expected"
+            }
+          ],
+          "id": "50f26b89e2de8c4e6f97-62caabab4c7419634d74",
+          "file": "branch-export-visual.spec.js",
+          "line": 55,
+          "column": 5
+        },
+        {
+          "title": "visual 1024x768-light",
+          "ok": true,
+          "tags": [],
+          "tests": [
+            {
+              "timeout": 45000,
+              "annotations": [],
+              "expectedStatus": "passed",
+              "projectId": "chromium",
+              "projectName": "chromium",
+              "results": [
+                {
+                  "workerIndex": 0,
+                  "parallelIndex": 0,
+                  "status": "passed",
+                  "duration": 6861,
+                  "errors": [],
+                  "stdout": [],
+                  "stderr": [],
+                  "retry": 0,
+                  "startTime": "2026-11-01T14:33:41.650Z",
+                  "annotations": [],
+                  "attachments": []
+                }
+              ],
+              "status": "expected"
+            }
+          ],
+          "id": "50f26b89e2de8c4e6f97-b4b45c82e193a7d65108",
+          "file": "branch-export-visual.spec.js",
+          "line": 55,
+          "column": 5
+        },
+        {
+          "title": "visual 1024x768-dark",
+          "ok": true,
+          "tags": [],
+          "tests": [
+            {
+              "timeout": 45000,
+              "annotations": [],
+              "expectedStatus": "passed",
+              "projectId": "chromium",
+              "projectName": "chromium",
+              "results": [
+                {
+                  "workerIndex": 0,
+                  "parallelIndex": 0,
+                  "status": "passed",
+                  "duration": 5808,
+                  "errors": [],
+                  "stdout": [],
+                  "stderr": [],
+                  "retry": 0,
+                  "startTime": "2026-11-01T14:33:48.524Z",
+                  "annotations": [],
+                  "attachments": []
+                }
+              ],
+              "status": "expected"
+            }
+          ],
+          "id": "50f26b89e2de8c4e6f97-5bfafef34dc5da398d47",
+          "file": "branch-export-visual.spec.js",
+          "line": 55,
+          "column": 5
+        },
+        {
+          "title": "visual 390x844-light",
+          "ok": false,
+          "tags": [],
+          "tests": [
+            {
+              "timeout": 45000,
+              "annotations": [],
+              "expectedStatus": "passed",
+              "projectId": "chromium",
+              "projectName": "chromium",
+              "results": [
+                {
+                  "workerIndex": 0,
+                  "parallelIndex": 0,
+                  "status": "failed",
+                  "duration": 14351,
+                  "error": {
+                    "message": "Error: \u001b[2mexpect(\u001b[22m\u001b[31mlocator\u001b[39m\u001b[2m).\u001b[22mtoContainText\u001b[2m(\u001b[22m\u001b[32mexpected\u001b[39m\u001b[2m)\u001b[22m failed\n\nLocator: locator('.mm-selection-bar')\nExpected substring: \u001b[32m\"\u001b[7m2\u001b[27m node đã tick\"\u001b[39m\nReceived string:    \u001b[31m\"\u001b[7m1\u001b[27m node đã tick\u001b[7mXóa chọnTiếp tụcBỏ chọn và quay lại\u001b[27m\"\u001b[39m\nTimeout: 10000ms\n\nCall log:\n\u001b[2m  - Expect \"toContainText\" locator('.mm-selection-bar') with timeout 10000ms\u001b[22m\n\u001b[2m  - waiting for locator('.mm-selection-bar')\u001b[22m\n\u001b[2m    23 × locator resolved to <div role=\"group\" class=\"mm-selection-bar\" aria-label=\"Chọn node để xuất\">…</div>\u001b[22m\n\u001b[2m       - unexpected value \"1 node đã tickXóa chọnTiếp tụcBỏ chọn và quay lại\"\u001b[22m\n",
+                    "stack": "Error: \u001b[2mexpect(\u001b[22m\u001b[31mlocator\u001b[39m\u001b[2m).\u001b[22mtoContainText\u001b[2m(\u001b[22m\u001b[32mexpected\u001b[39m\u001b[2m)\u001b[22m failed\n\nLocator: locator('.mm-selection-bar')\nExpected substring: \u001b[32m\"\u001b[7m2\u001b[27m node đã tick\"\u001b[39m\nReceived string:    \u001b[31m\"\u001b[7m1\u001b[27m node đã tick\u001b[7mXóa chọnTiếp tụcBỏ chọn và quay lại\u001b[27m\"\u001b[39m\nTimeout: 10000ms\n\nCall log:\n\u001b[2m  - Expect \"toContainText\" locator('.mm-selection-bar') with timeout 10000ms\u001b[22m\n\u001b[2m  - waiting for locator('.mm-selection-bar')\u001b[22m\n\u001b[2m    23 × locator resolved to <div role=\"group\" class=\"mm-selection-bar\" aria-label=\"Chọn node để xuất\">…</div>\u001b[22m\n\u001b[2m       - unexpected value \"1 node đã tickXóa chọnTiếp tụcBỏ chọn và quay lại\"\u001b[22m\n\n    at E:\\memvid_NCKH\\MemVid_BaoCaoTotNghiep\\.worktrees\\phase-c-round8-1-p1-closure\\FE\\e2e-fixture\\branch-export-visual.spec.js:106:55",
+                    "location": {
+                      "file": "E:\\memvid_NCKH\\MemVid_BaoCaoTotNghiep\\.worktrees\\phase-c-round8-1-p1-closure\\FE\\e2e-fixture\\branch-export-visual.spec.js",
+                      "column": 55,
+                      "line": 106
+                    },
+                    "snippet": "\u001b[0m \u001b[90m 104 |\u001b[39m         \u001b[36mawait\u001b[39m page\u001b[33m.\u001b[39mwaitForTimeout(\u001b[35m250\u001b[39m)\u001b[33m;\u001b[39m\n \u001b[90m 105 |\u001b[39m       }\n\u001b[31m\u001b[1m>\u001b[22m\u001b[39m\u001b[90m 106 |\u001b[39m       \u001b[36mawait\u001b[39m expect(page\u001b[33m.\u001b[39mlocator(\u001b[32m\".mm-selection-bar\"\u001b[39m))\u001b[33m.\u001b[39mtoContainText(\u001b[32m\"2 node đã tick\"\u001b[39m)\u001b[33m;\u001b[39m\n \u001b[90m     |\u001b[39m                                                       \u001b[31m\u001b[1m^\u001b[22m\u001b[39m\n \u001b[90m 107 |\u001b[39m       \u001b[36mawait\u001b[39m page\u001b[33m.\u001b[39mscreenshot({ path\u001b[33m:\u001b[39m path\u001b[33m.\u001b[39mjoin(\u001b[33mOUT\u001b[39m\u001b[33m,\u001b[39m \u001b[32m`${tag}-5-selection-2.png`\u001b[39m) })\u001b[33m;\u001b[39m\n \u001b[90m 108 |\u001b[39m       rec\u001b[33m.\u001b[39mselection2 \u001b[33m=\u001b[39m \u001b[36mawait\u001b[39m measure(page)\u001b[33m;\u001b[39m\n \u001b[90m 109 |\u001b[39m       \u001b[90m// 6. after pan (real drag on empty background)\u001b[39m\u001b[0m"
+                  },
+                  "errors": [
+                    {
+                      "location": {
+                        "file": "E:\\memvid_NCKH\\MemVid_BaoCaoTotNghiep\\.worktrees\\phase-c-round8-1-p1-closure\\FE\\e2e-fixture\\branch-export-visual.spec.js",
+                        "column": 55,
+                        "line": 106
+                      },
+                      "message": "Error: \u001b[2mexpect(\u001b[22m\u001b[31mlocator\u001b[39m\u001b[2m).\u001b[22mtoContainText\u001b[2m(\u001b[22m\u001b[32mexpected\u001b[39m\u001b[2m)\u001b[22m failed\n\nLocator: locator('.mm-selection-bar')\nExpected substring: \u001b[32m\"\u001b[7m2\u001b[27m node đã tick\"\u001b[39m\nReceived string:    \u001b[31m\"\u001b[7m1\u001b[27m node đã tick\u001b[7mXóa chọnTiếp tụcBỏ chọn và quay lại\u001b[27m\"\u001b[39m\nTimeout: 10000ms\n\nCall log:\n\u001b[2m  - Expect \"toContainText\" locator('.mm-selection-bar') with timeout 10000ms\u001b[22m\n\u001b[2m  - waiting for locator('.mm-selection-bar')\u001b[22m\n\u001b[2m    23 × locator resolved to <div role=\"group\" class=\"mm-selection-bar\" aria-label=\"Chọn node để xuất\">…</div>\u001b[22m\n\u001b[2m       - unexpected value \"1 node đã tickXóa chọnTiếp tụcBỏ chọn và quay lại\"\u001b[22m\n\n\n  104 |         await page.waitForTimeout(250);\n  105 |       }\n> 106 |       await expect(page.locator(\".mm-selection-bar\")).toContainText(\"2 node đã tick\");\n      |                                                       ^\n  107 |       await page.screenshot({ path: path.join(OUT, `${tag}-5-selection-2.png`) });\n  108 |       rec.selection2 = await measure(page);\n  109 |       // 6. after pan (real drag on empty background)\n    at E:\\memvid_NCKH\\MemVid_BaoCaoTotNghiep\\.worktrees\\phase-c-round8-1-p1-closure\\FE\\e2e-fixture\\branch-export-visual.spec.js:106:55"
+                    }
+                  ],
+                  "stdout": [],
+                  "stderr": [],
+                  "retry": 0,
+                  "startTime": "2026-11-01T14:33:54.348Z",
+                  "annotations": [],
+                  "attachments": [
+                    {
+                      "name": "screenshot",
+                      "contentType": "image/png",
+                      "path": "E:\\memvid_NCKH\\MemVid_BaoCaoTotNghiep\\.worktrees\\phase-c-round8-1-p1-closure\\FE\\test-results\\branch-export-visual-visual-390x844-light-chromium\\test-failed-1.png"
+                    },
+                    {
+                      "name": "error-context",
+                      "contentType": "text/markdown",
+                      "path": "E:\\memvid_NCKH\\MemVid_BaoCaoTotNghiep\\.worktrees\\phase-c-round8-1-p1-closure\\FE\\test-results\\branch-export-visual-visual-390x844-light-chromium\\error-context.md"
+                    },
+                    {
+                      "name": "trace",
+                      "contentType": "application/zip",
+                      "path": "E:\\memvid_NCKH\\MemVid_BaoCaoTotNghiep\\.worktrees\\phase-c-round8-1-p1-closure\\FE\\test-results\\branch-export-visual-visual-390x844-light-chromium\\trace.zip"
+                    }
+                  ],
+                  "errorLocation": {
+                    "file": "E:\\memvid_NCKH\\MemVid_BaoCaoTotNghiep\\.worktrees\\phase-c-round8-1-p1-closure\\FE\\e2e-fixture\\branch-export-visual.spec.js",
+                    "column": 55,
+                    "line": 106
+                  }
+                }
+              ],
+              "status": "unexpected"
+            }
+          ],
+          "id": "50f26b89e2de8c4e6f97-f6a9da0366015cb2fec4",
+          "file": "branch-export-visual.spec.js",
+          "line": 55,
+          "column": 5
+        },
+        {
+          "title": "visual 390x844-dark",
+          "ok": false,
+          "tags": [],
+          "tests": [
+            {
+              "timeout": 45000,
+              "annotations": [],
+              "expectedStatus": "passed",
+              "projectId": "chromium",
+              "projectName": "chromium",
+              "results": [
+                {
+                  "workerIndex": 1,
+                  "parallelIndex": 0,
+                  "status": "failed",
+                  "duration": 14029,
+                  "error": {
+                    "message": "Error: \u001b[2mexpect(\u001b[22m\u001b[31mlocator\u001b[39m\u001b[2m).\u001b[22mtoContainText\u001b[2m(\u001b[22m\u001b[32mexpected\u001b[39m\u001b[2m)\u001b[22m failed\n\nLocator: locator('.mm-selection-bar')\nExpected substring: \u001b[32m\"\u001b[7m2\u001b[27m node đã tick\"\u001b[39m\nReceived string:    \u001b[31m\"\u001b[7m1\u001b[27m node đã tick\u001b[7mXóa chọnTiếp tụcBỏ chọn và quay lại\u001b[27m\"\u001b[39m\nTimeout: 10000ms\n\nCall log:\n\u001b[2m  - Expect \"toContainText\" locator('.mm-selection-bar') with timeout 10000ms\u001b[22m\n\u001b[2m  - waiting for locator('.mm-selection-bar')\u001b[22m\n\u001b[2m    23 × locator resolved to <div role=\"group\" class=\"mm-selection-bar\" aria-label=\"Chọn node để xuất\">…</div>\u001b[22m\n\u001b[2m       - unexpected value \"1 node đã tickXóa chọnTiếp tụcBỏ chọn và quay lại\"\u001b[22m\n",
+                    "stack": "Error: \u001b[2mexpect(\u001b[22m\u001b[31mlocator\u001b[39m\u001b[2m).\u001b[22mtoContainText\u001b[2m(\u001b[22m\u001b[32mexpected\u001b[39m\u001b[2m)\u001b[22m failed\n\nLocator: locator('.mm-selection-bar')\nExpected substring: \u001b[32m\"\u001b[7m2\u001b[27m node đã tick\"\u001b[39m\nReceived string:    \u001b[31m\"\u001b[7m1\u001b[27m node đã tick\u001b[7mXóa chọnTiếp tụcBỏ chọn và quay lại\u001b[27m\"\u001b[39m\nTimeout: 10000ms\n\nCall log:\n\u001b[2m  - Expect \"toContainText\" locator('.mm-selection-bar') with timeout 10000ms\u001b[22m\n\u001b[2m  - waiting for locator('.mm-selection-bar')\u001b[22m\n\u001b[2m    23 × locator resolved to <div role=\"group\" class=\"mm-selection-bar\" aria-label=\"Chọn node để xuất\">…</div>\u001b[22m\n\u001b[2m       - unexpected value \"1 node đã tickXóa chọnTiếp tụcBỏ chọn và quay lại\"\u001b[22m\n\n    at E:\\memvid_NCKH\\MemVid_BaoCaoTotNghiep\\.worktrees\\phase-c-round8-1-p1-closure\\FE\\e2e-fixture\\branch-export-visual.spec.js:106:55",
+                    "location": {
+                      "file": "E:\\memvid_NCKH\\MemVid_BaoCaoTotNghiep\\.worktrees\\phase-c-round8-1-p1-closure\\FE\\e2e-fixture\\branch-export-visual.spec.js",
+                      "column": 55,
+                      "line": 106
+                    },
+                    "snippet": "\u001b[0m \u001b[90m 104 |\u001b[39m         \u001b[36mawait\u001b[39m page\u001b[33m.\u001b[39mwaitForTimeout(\u001b[35m250\u001b[39m)\u001b[33m;\u001b[39m\n \u001b[90m 105 |\u001b[39m       }\n\u001b[31m\u001b[1m>\u001b[22m\u001b[39m\u001b[90m 106 |\u001b[39m       \u001b[36mawait\u001b[39m expect(page\u001b[33m.\u001b[39mlocator(\u001b[32m\".mm-selection-bar\"\u001b[39m))\u001b[33m.\u001b[39mtoContainText(\u001b[32m\"2 node đã tick\"\u001b[39m)\u001b[33m;\u001b[39m\n \u001b[90m     |\u001b[39m                                                       \u001b[31m\u001b[1m^\u001b[22m\u001b[39m\n \u001b[90m 107 |\u001b[39m       \u001b[36mawait\u001b[39m page\u001b[33m.\u001b[39mscreenshot({ path\u001b[33m:\u001b[39m path\u001b[33m.\u001b[39mjoin(\u001b[33mOUT\u001b[39m\u001b[33m,\u001b[39m \u001b[32m`${tag}-5-selection-2.png`\u001b[39m) })\u001b[33m;\u001b[39m\n \u001b[90m 108 |\u001b[39m       rec\u001b[33m.\u001b[39mselection2 \u001b[33m=\u001b[39m \u001b[36mawait\u001b[39m measure(page)\u001b[33m;\u001b[39m\n \u001b[90m 109 |\u001b[39m       \u001b[90m// 6. after pan (real drag on empty background)\u001b[39m\u001b[0m"
+                  },
+                  "errors": [
+                    {
+                      "location": {
+                        "file": "E:\\memvid_NCKH\\MemVid_BaoCaoTotNghiep\\.worktrees\\phase-c-round8-1-p1-closure\\FE\\e2e-fixture\\branch-export-visual.spec.js",
+                        "column": 55,
+                        "line": 106
+                      },
+                      "message": "Error: \u001b[2mexpect(\u001b[22m\u001b[31mlocator\u001b[39m\u001b[2m).\u001b[22mtoContainText\u001b[2m(\u001b[22m\u001b[32mexpected\u001b[39m\u001b[2m)\u001b[22m failed\n\nLocator: locator('.mm-selection-bar')\nExpected substring: \u001b[32m\"\u001b[7m2\u001b[27m node đã tick\"\u001b[39m\nReceived string:    \u001b[31m\"\u001b[7m1\u001b[27m node đã tick\u001b[7mXóa chọnTiếp tụcBỏ chọn và quay lại\u001b[27m\"\u001b[39m\nTimeout: 10000ms\n\nCall log:\n\u001b[2m  - Expect \"toContainText\" locator('.mm-selection-bar') with timeout 10000ms\u001b[22m\n\u001b[2m  - waiting for locator('.mm-selection-bar')\u001b[22m\n\u001b[2m    23 × locator resolved to <div role=\"group\" class=\"mm-selection-bar\" aria-label=\"Chọn node để xuất\">…</div>\u001b[22m\n\u001b[2m       - unexpected value \"1 node đã tickXóa chọnTiếp tụcBỏ chọn và quay lại\"\u001b[22m\n\n\n  104 |         await page.waitForTimeout(250);\n  105 |       }\n> 106 |       await expect(page.locator(\".mm-selection-bar\")).toContainText(\"2 node đã tick\");\n      |                                                       ^\n  107 |       await page.screenshot({ path: path.join(OUT, `${tag}-5-selection-2.png`) });\n  108 |       rec.selection2 = await measure(page);\n  109 |       // 6. after pan (real drag on empty background)\n    at E:\\memvid_NCKH\\MemVid_BaoCaoTotNghiep\\.worktrees\\phase-c-round8-1-p1-closure\\FE\\e2e-fixture\\branch-export-visual.spec.js:106:55"
+                    }
+                  ],
+                  "stdout": [],
+                  "stderr": [],
+                  "retry": 0,
+                  "startTime": "2026-11-01T14:34:09.791Z",
+                  "annotations": [],
+                  "attachments": [
+                    {
+                      "name": "screenshot",
+                      "contentType": "image/png",
+                      "path": "E:\\memvid_NCKH\\MemVid_BaoCaoTotNghiep\\.worktrees\\phase-c-round8-1-p1-closure\\FE\\test-results\\branch-export-visual-visual-390x844-dark-chromium\\test-failed-1.png"
+                    },
+                    {
+                      "name": "error-context",
+                      "contentType": "text/markdown",
+                      "path": "E:\\memvid_NCKH\\MemVid_BaoCaoTotNghiep\\.worktrees\\phase-c-round8-1-p1-closure\\FE\\test-results\\branch-export-visual-visual-390x844-dark-chromium\\error-context.md"
+                    },
+                    {
+                      "name": "trace",
+                      "contentType": "application/zip",
+                      "path": "E:\\memvid_NCKH\\MemVid_BaoCaoTotNghiep\\.worktrees\\phase-c-round8-1-p1-closure\\FE\\test-results\\branch-export-visual-visual-390x844-dark-chromium\\trace.zip"
+                    }
+                  ],
+                  "errorLocation": {
+                    "file": "E:\\memvid_NCKH\\MemVid_BaoCaoTotNghiep\\.worktrees\\phase-c-round8-1-p1-closure\\FE\\e2e-fixture\\branch-export-visual.spec.js",
+                    "column": 55,
+                    "line": 106
+                  }
+                }
+              ],
+              "status": "unexpected"
+            }
+          ],
+          "id": "50f26b89e2de8c4e6f97-01d13e3a1ed8ad651bc7",
+          "file": "branch-export-visual.spec.js",
+          "line": 55,
+          "column": 5
+        }
+      ]
+    },
+    {
+      "title": "exact-node-export-v3.spec.js",
+      "file": "exact-node-export-v3.spec.js",
+      "column": 0,
+      "line": 0,
+      "specs": [
+        {
+          "title": "selected left-side siblings keep their source direction, order and parent visual role",
+          "ok": true,
+          "tags": [],
+          "tests": [
+            {
+              "timeout": 45000,
+              "annotations": [],
+              "expectedStatus": "passed",
+              "projectId": "chromium",
+              "projectName": "chromium",
+              "results": [
+                {
+                  "workerIndex": 2,
+                  "parallelIndex": 0,
+                  "status": "passed",
+                  "duration": 4511,
+                  "errors": [],
+                  "stdout": [],
+                  "stderr": [],
+                  "retry": 0,
+                  "startTime": "2026-11-01T14:34:25.172Z",
+                  "annotations": [],
+                  "attachments": []
+                }
+              ],
+              "status": "expected"
+            }
+          ],
+          "id": "626711e1ee6db2cc9e7f-3e4bff92eb1065a0bf34",
+          "file": "exact-node-export-v3.spec.js",
+          "line": 100,
+          "column": 1
+        },
+        {
+          "title": "turning automatic parent inclusion off exports disconnected explicit nodes without a visible anchor",
+          "ok": true,
+          "tags": [],
+          "tests": [
+            {
+              "timeout": 45000,
+              "annotations": [],
+              "expectedStatus": "passed",
+              "projectId": "chromium",
+              "projectName": "chromium",
+              "results": [
+                {
+                  "workerIndex": 2,
+                  "parallelIndex": 0,
+                  "status": "passed",
+                  "duration": 4393,
+                  "errors": [],
+                  "stdout": [],
+                  "stderr": [],
+                  "retry": 0,
+                  "startTime": "2026-11-01T14:34:29.834Z",
+                  "annotations": [],
+                  "attachments": []
+                }
+              ],
+              "status": "expected"
+            }
+          ],
+          "id": "626711e1ee6db2cc9e7f-9ff7ccbbbf84f6b6309c",
+          "file": "exact-node-export-v3.spec.js",
+          "line": 153,
+          "column": 1
+        },
+        {
+          "title": "an auto-added parent can be suppressed and restored without changing explicit checks",
+          "ok": true,
+          "tags": [],
+          "tests": [
+            {
+              "timeout": 45000,
+              "annotations": [],
+              "expectedStatus": "passed",
+              "projectId": "chromium",
+              "projectName": "chromium",
+              "results": [
+                {
+                  "workerIndex": 2,
+                  "parallelIndex": 0,
+                  "status": "passed",
+                  "duration": 1635,
+                  "errors": [],
+                  "stdout": [],
+                  "stderr": [],
+                  "retry": 0,
+                  "startTime": "2026-11-01T14:34:34.241Z",
+                  "annotations": [],
+                  "attachments": []
+                }
+              ],
+              "status": "expected"
+            }
+          ],
+          "id": "626711e1ee6db2cc9e7f-3f64b47b3b68c7bda371",
+          "file": "exact-node-export-v3.spec.js",
+          "line": 191,
+          "column": 1
+        },
+        {
+          "title": "manual suppression survives review navigation and selection changes in the same map session",
+          "ok": false,
+          "tags": [],
+          "tests": [
+            {
+              "timeout": 45000,
+              "annotations": [],
+              "expectedStatus": "passed",
+              "projectId": "chromium",
+              "projectName": "chromium",
+              "results": [
+                {
+                  "workerIndex": 2,
+                  "parallelIndex": 0,
+                  "status": "timedOut",
+                  "duration": 45392,
+                  "error": {
+                    "message": "\u001b[31mTest timeout of 45000ms exceeded.\u001b[39m",
+                    "stack": "\u001b[31mTest timeout of 45000ms exceeded.\u001b[39m"
+                  },
+                  "errors": [
+                    {
+                      "message": "\u001b[31mTest timeout of 45000ms exceeded.\u001b[39m"
+                    },
+                    {
+                      "location": {
+                        "file": "E:\\memvid_NCKH\\MemVid_BaoCaoTotNghiep\\.worktrees\\phase-c-round8-1-p1-closure\\FE\\e2e-fixture\\exact-node-export-v3.spec.js",
+                        "column": 56,
+                        "line": 217
+                      },
+                      "message": "Error: locator.click: Test timeout of 45000ms exceeded.\nCall log:\n\u001b[2m  - waiting for getByRole('button', { name: 'Quay lại' })\u001b[22m\n\n\n  215 |   await page.getByRole(\"button\", { name: /Không thêm node cha.*E — Nhánh trái/ }).click();\n  216 |   await page.getByRole(\"button\", { name: \"Tiếp tục\" }).click();\n> 217 |   await page.getByRole(\"button\", { name: \"Quay lại\" }).click();\n      |                                                        ^\n  218 |   await expect(page.locator(\".export-footer__summary\")).toContainText(\"2 node đã chọn · 0 node cha tự thêm · 2 node được xuất\");\n  219 |\n  220 |   await page.locator(\".export-inline-action\").click();\n    at E:\\memvid_NCKH\\MemVid_BaoCaoTotNghiep\\.worktrees\\phase-c-round8-1-p1-closure\\FE\\e2e-fixture\\exact-node-export-v3.spec.js:217:56"
+                    }
+                  ],
+                  "stdout": [],
+                  "stderr": [],
+                  "retry": 0,
+                  "startTime": "2026-11-01T14:34:35.889Z",
+                  "annotations": [],
+                  "attachments": [
+                    {
+                      "name": "screenshot",
+                      "contentType": "image/png",
+                      "path": "E:\\memvid_NCKH\\MemVid_BaoCaoTotNghiep\\.worktrees\\phase-c-round8-1-p1-closure\\FE\\test-results\\exact-node-export-v3-manua-5afc4-ges-in-the-same-map-session-chromium\\test-failed-1.png"
+                    },
+                    {
+                      "name": "error-context",
+                      "contentType": "text/markdown",
+                      "path": "E:\\memvid_NCKH\\MemVid_BaoCaoTotNghiep\\.worktrees\\phase-c-round8-1-p1-closure\\FE\\test-results\\exact-node-export-v3-manua-5afc4-ges-in-the-same-map-session-chromium\\error-context.md"
+                    },
+                    {
+                      "name": "trace",
+                      "contentType": "application/zip",
+                      "path": "E:\\memvid_NCKH\\MemVid_BaoCaoTotNghiep\\.worktrees\\phase-c-round8-1-p1-closure\\FE\\test-results\\exact-node-export-v3-manua-5afc4-ges-in-the-same-map-session-chromium\\trace.zip"
+                    }
+                  ]
+                }
+              ],
+              "status": "unexpected"
+            }
+          ],
+          "id": "626711e1ee6db2cc9e7f-18b0c930a0e01e478435",
+          "file": "exact-node-export-v3.spec.js",
+          "line": 210,
+          "column": 1
+        },
+        {
+          "title": "a single selected leaf keeps its source visual role at 86 percent zoom",
+          "ok": true,
+          "tags": [],
+          "tests": [
+            {
+              "timeout": 45000,
+              "annotations": [],
+              "expectedStatus": "passed",
+              "projectId": "chromium",
+              "projectName": "chromium",
+              "results": [
+                {
+                  "workerIndex": 3,
+                  "parallelIndex": 0,
+                  "status": "passed",
+                  "duration": 4259,
+                  "errors": [],
+                  "stdout": [],
+                  "stderr": [],
+                  "retry": 0,
+                  "startTime": "2026-11-01T14:35:22.573Z",
+                  "annotations": [],
+                  "attachments": []
+                }
+              ],
+              "status": "expected"
+            }
+          ],
+          "id": "626711e1ee6db2cc9e7f-0a3b97701f5e78f80de7",
+          "file": "exact-node-export-v3.spec.js",
+          "line": 240,
+          "column": 1
+        },
+        {
+          "title": "saved appearance and an export-only leaf override preserve the source role without mutating canvas",
+          "ok": true,
+          "tags": [],
+          "tests": [
+            {
+              "timeout": 45000,
+              "annotations": [],
+              "expectedStatus": "passed",
+              "projectId": "chromium",
+              "projectName": "chromium",
+              "results": [
+                {
+                  "workerIndex": 3,
+                  "parallelIndex": 0,
+                  "status": "passed",
+                  "duration": 6323,
+                  "errors": [],
+                  "stdout": [],
+                  "stderr": [],
+                  "retry": 0,
+                  "startTime": "2026-11-01T14:35:26.966Z",
+                  "annotations": [],
+                  "attachments": []
+                }
+              ],
+              "status": "expected"
+            }
+          ],
+          "id": "626711e1ee6db2cc9e7f-f65a322dcbfa1b586872",
+          "file": "exact-node-export-v3.spec.js",
+          "line": 253,
+          "column": 1
+        },
+        {
+          "title": "right-side siblings and mixed branches retain source direction and order",
+          "ok": true,
+          "tags": [],
+          "tests": [
+            {
+              "timeout": 45000,
+              "annotations": [],
+              "expectedStatus": "passed",
+              "projectId": "chromium",
+              "projectName": "chromium",
+              "results": [
+                {
+                  "workerIndex": 3,
+                  "parallelIndex": 0,
+                  "status": "passed",
+                  "duration": 7561,
+                  "errors": [],
+                  "stdout": [],
+                  "stderr": [],
+                  "retry": 0,
+                  "startTime": "2026-11-01T14:35:33.309Z",
+                  "annotations": [],
+                  "attachments": []
+                }
+              ],
+              "status": "expected"
+            }
+          ],
+          "id": "626711e1ee6db2cc9e7f-bd9ae3a36d32320cda64",
+          "file": "exact-node-export-v3.spec.js",
+          "line": 281,
+          "column": 1
+        },
+        {
+          "title": "all hierarchical auto-parent contract cases produce exact connected SVG identities",
+          "ok": true,
+          "tags": [],
+          "tests": [
+            {
+              "timeout": 45000,
+              "annotations": [],
+              "expectedStatus": "passed",
+              "projectId": "chromium",
+              "projectName": "chromium",
+              "results": [
+                {
+                  "workerIndex": 3,
+                  "parallelIndex": 0,
+                  "status": "passed",
+                  "duration": 30288,
+                  "errors": [],
+                  "stdout": [],
+                  "stderr": [],
+                  "retry": 0,
+                  "startTime": "2026-11-01T14:35:40.885Z",
+                  "annotations": [],
+                  "attachments": []
+                }
+              ],
+              "status": "expected"
+            }
+          ],
+          "id": "626711e1ee6db2cc9e7f-7e1ceeb8d09cbd8e43df",
+          "file": "exact-node-export-v3.spec.js",
+          "line": 302,
+          "column": 1
+        },
+        {
+          "title": "PNG JPEG and WebP real rasters are nonblank, tightly bounded and zoom independent",
+          "ok": true,
+          "tags": [],
+          "tests": [
+            {
+              "timeout": 45000,
+              "annotations": [],
+              "expectedStatus": "passed",
+              "projectId": "chromium",
+              "projectName": "chromium",
+              "results": [
+                {
+                  "workerIndex": 3,
+                  "parallelIndex": 0,
+                  "status": "passed",
+                  "duration": 10406,
+                  "errors": [],
+                  "stdout": [],
+                  "stderr": [],
+                  "retry": 0,
+                  "startTime": "2026-11-01T14:36:11.187Z",
+                  "annotations": [],
+                  "attachments": []
+                }
+              ],
+              "status": "expected"
+            }
+          ],
+          "id": "626711e1ee6db2cc9e7f-d51b98e1175827fcccc2",
+          "file": "exact-node-export-v3.spec.js",
+          "line": 325,
+          "column": 1
+        }
+      ]
+    },
+    {
+      "title": "mindmap-depth-presets.spec.js",
+      "file": "mindmap-depth-presets.spec.js",
+      "column": 0,
+      "line": 0,
+      "specs": [
+        {
+          "title": "1440x1024-light: all 5 depth presets -- exact DOM counts, same instance, scale/root-center held, no bad paths",
+          "ok": false,
+          "tags": [],
+          "tests": [
+            {
+              "timeout": 45000,
+              "annotations": [],
+              "expectedStatus": "passed",
+              "projectId": "chromium",
+              "projectName": "chromium",
+              "results": [
+                {
+                  "workerIndex": 3,
+                  "parallelIndex": 0,
+                  "status": "failed",
+                  "duration": 2530,
+                  "error": {
+                    "message": "Error: \u001b[2mexpect(\u001b[22m\u001b[31mreceived\u001b[39m\u001b[2m).\u001b[22mtoBeLessThanOrEqual\u001b[2m(\u001b[22m\u001b[32mexpected\u001b[39m\u001b[2m)\u001b[22m\n\nExpected: <= \u001b[32m1\u001b[39m\nReceived:    \u001b[31m1.7220458984375\u001b[39m",
+                    "stack": "Error: \u001b[2mexpect(\u001b[22m\u001b[31mreceived\u001b[39m\u001b[2m).\u001b[22mtoBeLessThanOrEqual\u001b[2m(\u001b[22m\u001b[32mexpected\u001b[39m\u001b[2m)\u001b[22m\n\nExpected: <= \u001b[32m1\u001b[39m\nReceived:    \u001b[31m1.7220458984375\u001b[39m\n    at E:\\memvid_NCKH\\MemVid_BaoCaoTotNghiep\\.worktrees\\phase-c-round8-1-p1-closure\\FE\\e2e-fixture\\mindmap-depth-presets.spec.js:158:58",
+                    "location": {
+                      "file": "E:\\memvid_NCKH\\MemVid_BaoCaoTotNghiep\\.worktrees\\phase-c-round8-1-p1-closure\\FE\\e2e-fixture\\mindmap-depth-presets.spec.js",
+                      "column": 58,
+                      "line": 158
+                    },
+                    "snippet": "\u001b[0m \u001b[90m 156 |\u001b[39m         \u001b[36mconst\u001b[39m rootBox \u001b[33m=\u001b[39m \u001b[36mawait\u001b[39m settledRootBox(page)\u001b[33m;\u001b[39m\n \u001b[90m 157 |\u001b[39m         \u001b[36mconst\u001b[39m center \u001b[33m=\u001b[39m centerOf(rootBox)\u001b[33m;\u001b[39m\n\u001b[31m\u001b[1m>\u001b[22m\u001b[39m\u001b[90m 158 |\u001b[39m         expect(\u001b[33mMath\u001b[39m\u001b[33m.\u001b[39mabs(center\u001b[33m.\u001b[39mx \u001b[33m-\u001b[39m initialRootCenter\u001b[33m.\u001b[39mx))\u001b[33m.\u001b[39mtoBeLessThanOrEqual(\u001b[35m1\u001b[39m)\u001b[33m;\u001b[39m\n \u001b[90m     |\u001b[39m                                                          \u001b[31m\u001b[1m^\u001b[22m\u001b[39m\n \u001b[90m 159 |\u001b[39m         expect(\u001b[33mMath\u001b[39m\u001b[33m.\u001b[39mabs(center\u001b[33m.\u001b[39my \u001b[33m-\u001b[39m initialRootCenter\u001b[33m.\u001b[39my))\u001b[33m.\u001b[39mtoBeLessThanOrEqual(\u001b[35m1\u001b[39m)\u001b[33m;\u001b[39m\n \u001b[90m 160 |\u001b[39m\n \u001b[90m 161 |\u001b[39m         expect(\u001b[36mawait\u001b[39m badPathCount(page))\u001b[33m.\u001b[39mtoBe(\u001b[35m0\u001b[39m)\u001b[33m;\u001b[39m\u001b[0m"
+                  },
+                  "errors": [
+                    {
+                      "location": {
+                        "file": "E:\\memvid_NCKH\\MemVid_BaoCaoTotNghiep\\.worktrees\\phase-c-round8-1-p1-closure\\FE\\e2e-fixture\\mindmap-depth-presets.spec.js",
+                        "column": 58,
+                        "line": 158
+                      },
+                      "message": "Error: \u001b[2mexpect(\u001b[22m\u001b[31mreceived\u001b[39m\u001b[2m).\u001b[22mtoBeLessThanOrEqual\u001b[2m(\u001b[22m\u001b[32mexpected\u001b[39m\u001b[2m)\u001b[22m\n\nExpected: <= \u001b[32m1\u001b[39m\nReceived:    \u001b[31m1.7220458984375\u001b[39m\n\n  156 |         const rootBox = await settledRootBox(page);\n  157 |         const center = centerOf(rootBox);\n> 158 |         expect(Math.abs(center.x - initialRootCenter.x)).toBeLessThanOrEqual(1);\n      |                                                          ^\n  159 |         expect(Math.abs(center.y - initialRootCenter.y)).toBeLessThanOrEqual(1);\n  160 |\n  161 |         expect(await badPathCount(page)).toBe(0);\n    at E:\\memvid_NCKH\\MemVid_BaoCaoTotNghiep\\.worktrees\\phase-c-round8-1-p1-closure\\FE\\e2e-fixture\\mindmap-depth-presets.spec.js:158:58"
+                    }
+                  ],
+                  "stdout": [],
+                  "stderr": [],
+                  "retry": 0,
+                  "startTime": "2026-11-01T14:36:21.652Z",
+                  "annotations": [],
+                  "attachments": [
+                    {
+                      "name": "screenshot",
+                      "contentType": "image/png",
+                      "path": "E:\\memvid_NCKH\\MemVid_BaoCaoTotNghiep\\.worktrees\\phase-c-round8-1-p1-closure\\FE\\test-results\\mindmap-depth-presets-1440-ce250-ot-center-held-no-bad-paths-chromium\\test-failed-1.png"
+                    },
+                    {
+                      "name": "error-context",
+                      "contentType": "text/markdown",
+                      "path": "E:\\memvid_NCKH\\MemVid_BaoCaoTotNghiep\\.worktrees\\phase-c-round8-1-p1-closure\\FE\\test-results\\mindmap-depth-presets-1440-ce250-ot-center-held-no-bad-paths-chromium\\error-context.md"
+                    },
+                    {
+                      "name": "trace",
+                      "contentType": "application/zip",
+                      "path": "E:\\memvid_NCKH\\MemVid_BaoCaoTotNghiep\\.worktrees\\phase-c-round8-1-p1-closure\\FE\\test-results\\mindmap-depth-presets-1440-ce250-ot-center-held-no-bad-paths-chromium\\trace.zip"
+                    }
+                  ],
+                  "errorLocation": {
+                    "file": "E:\\memvid_NCKH\\MemVid_BaoCaoTotNghiep\\.worktrees\\phase-c-round8-1-p1-closure\\FE\\e2e-fixture\\mindmap-depth-presets.spec.js",
+                    "column": 58,
+                    "line": 158
+                  }
+                }
+              ],
+              "status": "unexpected"
+            }
+          ],
+          "id": "efe4e9561abefeca0773-c630df3df247102acd87",
+          "file": "mindmap-depth-presets.spec.js",
+          "line": 120,
+          "column": 5
+        },
+        {
+          "title": "1440x1024-dark: all 5 depth presets -- exact DOM counts, same instance, scale/root-center held, no bad paths",
+          "ok": false,
+          "tags": [],
+          "tests": [
+            {
+              "timeout": 45000,
+              "annotations": [],
+              "expectedStatus": "passed",
+              "projectId": "chromium",
+              "projectName": "chromium",
+              "results": [
+                {
+                  "workerIndex": 4,
+                  "parallelIndex": 0,
+                  "status": "failed",
+                  "duration": 2600,
+                  "error": {
+                    "message": "Error: \u001b[2mexpect(\u001b[22m\u001b[31mreceived\u001b[39m\u001b[2m).\u001b[22mtoBeLessThanOrEqual\u001b[2m(\u001b[22m\u001b[32mexpected\u001b[39m\u001b[2m)\u001b[22m\n\nExpected: <= \u001b[32m1\u001b[39m\nReceived:    \u001b[31m1.7220458984375\u001b[39m",
+                    "stack": "Error: \u001b[2mexpect(\u001b[22m\u001b[31mreceived\u001b[39m\u001b[2m).\u001b[22mtoBeLessThanOrEqual\u001b[2m(\u001b[22m\u001b[32mexpected\u001b[39m\u001b[2m)\u001b[22m\n\nExpected: <= \u001b[32m1\u001b[39m\nReceived:    \u001b[31m1.7220458984375\u001b[39m\n    at E:\\memvid_NCKH\\MemVid_BaoCaoTotNghiep\\.worktrees\\phase-c-round8-1-p1-closure\\FE\\e2e-fixture\\mindmap-depth-presets.spec.js:158:58",
+                    "location": {
+                      "file": "E:\\memvid_NCKH\\MemVid_BaoCaoTotNghiep\\.worktrees\\phase-c-round8-1-p1-closure\\FE\\e2e-fixture\\mindmap-depth-presets.spec.js",
+                      "column": 58,
+                      "line": 158
+                    },
+                    "snippet": "\u001b[0m \u001b[90m 156 |\u001b[39m         \u001b[36mconst\u001b[39m rootBox \u001b[33m=\u001b[39m \u001b[36mawait\u001b[39m settledRootBox(page)\u001b[33m;\u001b[39m\n \u001b[90m 157 |\u001b[39m         \u001b[36mconst\u001b[39m center \u001b[33m=\u001b[39m centerOf(rootBox)\u001b[33m;\u001b[39m\n\u001b[31m\u001b[1m>\u001b[22m\u001b[39m\u001b[90m 158 |\u001b[39m         expect(\u001b[33mMath\u001b[39m\u001b[33m.\u001b[39mabs(center\u001b[33m.\u001b[39mx \u001b[33m-\u001b[39m initialRootCenter\u001b[33m.\u001b[39mx))\u001b[33m.\u001b[39mtoBeLessThanOrEqual(\u001b[35m1\u001b[39m)\u001b[33m;\u001b[39m\n \u001b[90m     |\u001b[39m                                                          \u001b[31m\u001b[1m^\u001b[22m\u001b[39m\n \u001b[90m 159 |\u001b[39m         expect(\u001b[33mMath\u001b[39m\u001b[33m.\u001b[39mabs(center\u001b[33m.\u001b[39my \u001b[33m-\u001b[39m initialRootCenter\u001b[33m.\u001b[39my))\u001b[33m.\u001b[39mtoBeLessThanOrEqual(\u001b[35m1\u001b[39m)\u001b[33m;\u001b[39m\n \u001b[90m 160 |\u001b[39m\n \u001b[90m 161 |\u001b[39m         expect(\u001b[36mawait\u001b[39m badPathCount(page))\u001b[33m.\u001b[39mtoBe(\u001b[35m0\u001b[39m)\u001b[33m;\u001b[39m\u001b[0m"
+                  },
+                  "errors": [
+                    {
+                      "location": {
+                        "file": "E:\\memvid_NCKH\\MemVid_BaoCaoTotNghiep\\.worktrees\\phase-c-round8-1-p1-closure\\FE\\e2e-fixture\\mindmap-depth-presets.spec.js",
+                        "column": 58,
+                        "line": 158
+                      },
+                      "message": "Error: \u001b[2mexpect(\u001b[22m\u001b[31mreceived\u001b[39m\u001b[2m).\u001b[22mtoBeLessThanOrEqual\u001b[2m(\u001b[22m\u001b[32mexpected\u001b[39m\u001b[2m)\u001b[22m\n\nExpected: <= \u001b[32m1\u001b[39m\nReceived:    \u001b[31m1.7220458984375\u001b[39m\n\n  156 |         const rootBox = await settledRootBox(page);\n  157 |         const center = centerOf(rootBox);\n> 158 |         expect(Math.abs(center.x - initialRootCenter.x)).toBeLessThanOrEqual(1);\n      |                                                          ^\n  159 |         expect(Math.abs(center.y - initialRootCenter.y)).toBeLessThanOrEqual(1);\n  160 |\n  161 |         expect(await badPathCount(page)).toBe(0);\n    at E:\\memvid_NCKH\\MemVid_BaoCaoTotNghiep\\.worktrees\\phase-c-round8-1-p1-closure\\FE\\e2e-fixture\\mindmap-depth-presets.spec.js:158:58"
+                    }
+                  ],
+                  "stdout": [],
+                  "stderr": [],
+                  "retry": 0,
+                  "startTime": "2026-11-01T14:36:26.549Z",
+                  "annotations": [],
+                  "attachments": [
+                    {
+                      "name": "screenshot",
+                      "contentType": "image/png",
+                      "path": "E:\\memvid_NCKH\\MemVid_BaoCaoTotNghiep\\.worktrees\\phase-c-round8-1-p1-closure\\FE\\test-results\\mindmap-depth-presets-1440-9e8b6-ot-center-held-no-bad-paths-chromium\\test-failed-1.png"
+                    },
+                    {
+                      "name": "error-context",
+                      "contentType": "text/markdown",
+                      "path": "E:\\memvid_NCKH\\MemVid_BaoCaoTotNghiep\\.worktrees\\phase-c-round8-1-p1-closure\\FE\\test-results\\mindmap-depth-presets-1440-9e8b6-ot-center-held-no-bad-paths-chromium\\error-context.md"
+                    },
+                    {
+                      "name": "trace",
+                      "contentType": "application/zip",
+                      "path": "E:\\memvid_NCKH\\MemVid_BaoCaoTotNghiep\\.worktrees\\phase-c-round8-1-p1-closure\\FE\\test-results\\mindmap-depth-presets-1440-9e8b6-ot-center-held-no-bad-paths-chromium\\trace.zip"
+                    }
+                  ],
+                  "errorLocation": {
+                    "file": "E:\\memvid_NCKH\\MemVid_BaoCaoTotNghiep\\.worktrees\\phase-c-round8-1-p1-closure\\FE\\e2e-fixture\\mindmap-depth-presets.spec.js",
+                    "column": 58,
+                    "line": 158
+                  }
+                }
+              ],
+              "status": "unexpected"
+            }
+          ],
+          "id": "efe4e9561abefeca0773-c2006d7373e1b8734385",
+          "file": "mindmap-depth-presets.spec.js",
+          "line": 120,
+          "column": 5
+        },
+        {
+          "title": "1024x768-light: all 5 depth presets -- exact DOM counts, same instance, scale/root-center held, no bad paths",
+          "ok": false,
+          "tags": [],
+          "tests": [
+            {
+              "timeout": 45000,
+              "annotations": [],
+              "expectedStatus": "passed",
+              "projectId": "chromium",
+              "projectName": "chromium",
+              "results": [
+                {
+                  "workerIndex": 5,
+                  "parallelIndex": 0,
+                  "status": "failed",
+                  "duration": 3080,
+                  "error": {
+                    "message": "Error: \u001b[2mexpect(\u001b[22m\u001b[31mreceived\u001b[39m\u001b[2m).\u001b[22mtoBeLessThanOrEqual\u001b[2m(\u001b[22m\u001b[32mexpected\u001b[39m\u001b[2m)\u001b[22m\n\nExpected: <= \u001b[32m1\u001b[39m\nReceived:    \u001b[31m1.7220458984375\u001b[39m",
+                    "stack": "Error: \u001b[2mexpect(\u001b[22m\u001b[31mreceived\u001b[39m\u001b[2m).\u001b[22mtoBeLessThanOrEqual\u001b[2m(\u001b[22m\u001b[32mexpected\u001b[39m\u001b[2m)\u001b[22m\n\nExpected: <= \u001b[32m1\u001b[39m\nReceived:    \u001b[31m1.7220458984375\u001b[39m\n    at E:\\memvid_NCKH\\MemVid_BaoCaoTotNghiep\\.worktrees\\phase-c-round8-1-p1-closure\\FE\\e2e-fixture\\mindmap-depth-presets.spec.js:158:58",
+                    "location": {
+                      "file": "E:\\memvid_NCKH\\MemVid_BaoCaoTotNghiep\\.worktrees\\phase-c-round8-1-p1-closure\\FE\\e2e-fixture\\mindmap-depth-presets.spec.js",
+                      "column": 58,
+                      "line": 158
+                    },
+                    "snippet": "\u001b[0m \u001b[90m 156 |\u001b[39m         \u001b[36mconst\u001b[39m rootBox \u001b[33m=\u001b[39m \u001b[36mawait\u001b[39m settledRootBox(page)\u001b[33m;\u001b[39m\n \u001b[90m 157 |\u001b[39m         \u001b[36mconst\u001b[39m center \u001b[33m=\u001b[39m centerOf(rootBox)\u001b[33m;\u001b[39m\n\u001b[31m\u001b[1m>\u001b[22m\u001b[39m\u001b[90m 158 |\u001b[39m         expect(\u001b[33mMath\u001b[39m\u001b[33m.\u001b[39mabs(center\u001b[33m.\u001b[39mx \u001b[33m-\u001b[39m initialRootCenter\u001b[33m.\u001b[39mx))\u001b[33m.\u001b[39mtoBeLessThanOrEqual(\u001b[35m1\u001b[39m)\u001b[33m;\u001b[39m\n \u001b[90m     |\u001b[39m                                                          \u001b[31m\u001b[1m^\u001b[22m\u001b[39m\n \u001b[90m 159 |\u001b[39m         expect(\u001b[33mMath\u001b[39m\u001b[33m.\u001b[39mabs(center\u001b[33m.\u001b[39my \u001b[33m-\u001b[39m initialRootCenter\u001b[33m.\u001b[39my))\u001b[33m.\u001b[39mtoBeLessThanOrEqual(\u001b[35m1\u001b[39m)\u001b[33m;\u001b[39m\n \u001b[90m 160 |\u001b[39m\n \u001b[90m 161 |\u001b[39m         expect(\u001b[36mawait\u001b[39m badPathCount(page))\u001b[33m.\u001b[39mtoBe(\u001b[35m0\u001b[39m)\u001b[33m;\u001b[39m\u001b[0m"
+                  },
+                  "errors": [
+                    {
+                      "location": {
+                        "file": "E:\\memvid_NCKH\\MemVid_BaoCaoTotNghiep\\.worktrees\\phase-c-round8-1-p1-closure\\FE\\e2e-fixture\\mindmap-depth-presets.spec.js",
+                        "column": 58,
+                        "line": 158
+                      },
+                      "message": "Error: \u001b[2mexpect(\u001b[22m\u001b[31mreceived\u001b[39m\u001b[2m).\u001b[22mtoBeLessThanOrEqual\u001b[2m(\u001b[22m\u001b[32mexpected\u001b[39m\u001b[2m)\u001b[22m\n\nExpected: <= \u001b[32m1\u001b[39m\nReceived:    \u001b[31m1.7220458984375\u001b[39m\n\n  156 |         const rootBox = await settledRootBox(page);\n  157 |         const center = centerOf(rootBox);\n> 158 |         expect(Math.abs(center.x - initialRootCenter.x)).toBeLessThanOrEqual(1);\n      |                                                          ^\n  159 |         expect(Math.abs(center.y - initialRootCenter.y)).toBeLessThanOrEqual(1);\n  160 |\n  161 |         expect(await badPathCount(page)).toBe(0);\n    at E:\\memvid_NCKH\\MemVid_BaoCaoTotNghiep\\.worktrees\\phase-c-round8-1-p1-closure\\FE\\e2e-fixture\\mindmap-depth-presets.spec.js:158:58"
+                    }
+                  ],
+                  "stdout": [],
+                  "stderr": [],
+                  "retry": 0,
+                  "startTime": "2026-11-01T14:36:30.764Z",
+                  "annotations": [],
+                  "attachments": [
+                    {
+                      "name": "screenshot",
+                      "contentType": "image/png",
+                      "path": "E:\\memvid_NCKH\\MemVid_BaoCaoTotNghiep\\.worktrees\\phase-c-round8-1-p1-closure\\FE\\test-results\\mindmap-depth-presets-1024-77484-ot-center-held-no-bad-paths-chromium\\test-failed-1.png"
+                    },
+                    {
+                      "name": "error-context",
+                      "contentType": "text/markdown",
+                      "path": "E:\\memvid_NCKH\\MemVid_BaoCaoTotNghiep\\.worktrees\\phase-c-round8-1-p1-closure\\FE\\test-results\\mindmap-depth-presets-1024-77484-ot-center-held-no-bad-paths-chromium\\error-context.md"
+                    },
+                    {
+                      "name": "trace",
+                      "contentType": "application/zip",
+                      "path": "E:\\memvid_NCKH\\MemVid_BaoCaoTotNghiep\\.worktrees\\phase-c-round8-1-p1-closure\\FE\\test-results\\mindmap-depth-presets-1024-77484-ot-center-held-no-bad-paths-chromium\\trace.zip"
+                    }
+                  ],
+                  "errorLocation": {
+                    "file": "E:\\memvid_NCKH\\MemVid_BaoCaoTotNghiep\\.worktrees\\phase-c-round8-1-p1-closure\\FE\\e2e-fixture\\mindmap-depth-presets.spec.js",
+                    "column": 58,
+                    "line": 158
+                  }
+                }
+              ],
+              "status": "unexpected"
+            }
+          ],
+          "id": "efe4e9561abefeca0773-49406582a7ca77086c30",
+          "file": "mindmap-depth-presets.spec.js",
+          "line": 120,
+          "column": 5
+        },
+        {
+          "title": "1024x768-dark: all 5 depth presets -- exact DOM counts, same instance, scale/root-center held, no bad paths",
+          "ok": false,
+          "tags": [],
+          "tests": [
+            {
+              "timeout": 45000,
+              "annotations": [],
+              "expectedStatus": "passed",
+              "projectId": "chromium",
+              "projectName": "chromium",
+              "results": [
+                {
+                  "workerIndex": 6,
+                  "parallelIndex": 0,
+                  "status": "failed",
+                  "duration": 2742,
+                  "error": {
+                    "message": "Error: \u001b[2mexpect(\u001b[22m\u001b[31mreceived\u001b[39m\u001b[2m).\u001b[22mtoBeLessThanOrEqual\u001b[2m(\u001b[22m\u001b[32mexpected\u001b[39m\u001b[2m)\u001b[22m\n\nExpected: <= \u001b[32m1\u001b[39m\nReceived:    \u001b[31m1.7220458984375\u001b[39m",
+                    "stack": "Error: \u001b[2mexpect(\u001b[22m\u001b[31mreceived\u001b[39m\u001b[2m).\u001b[22mtoBeLessThanOrEqual\u001b[2m(\u001b[22m\u001b[32mexpected\u001b[39m\u001b[2m)\u001b[22m\n\nExpected: <= \u001b[32m1\u001b[39m\nReceived:    \u001b[31m1.7220458984375\u001b[39m\n    at E:\\memvid_NCKH\\MemVid_BaoCaoTotNghiep\\.worktrees\\phase-c-round8-1-p1-closure\\FE\\e2e-fixture\\mindmap-depth-presets.spec.js:158:58",
+                    "location": {
+                      "file": "E:\\memvid_NCKH\\MemVid_BaoCaoTotNghiep\\.worktrees\\phase-c-round8-1-p1-closure\\FE\\e2e-fixture\\mindmap-depth-presets.spec.js",
+                      "column": 58,
+                      "line": 158
+                    },
+                    "snippet": "\u001b[0m \u001b[90m 156 |\u001b[39m         \u001b[36mconst\u001b[39m rootBox \u001b[33m=\u001b[39m \u001b[36mawait\u001b[39m settledRootBox(page)\u001b[33m;\u001b[39m\n \u001b[90m 157 |\u001b[39m         \u001b[36mconst\u001b[39m center \u001b[33m=\u001b[39m centerOf(rootBox)\u001b[33m;\u001b[39m\n\u001b[31m\u001b[1m>\u001b[22m\u001b[39m\u001b[90m 158 |\u001b[39m         expect(\u001b[33mMath\u001b[39m\u001b[33m.\u001b[39mabs(center\u001b[33m.\u001b[39mx \u001b[33m-\u001b[39m initialRootCenter\u001b[33m.\u001b[39mx))\u001b[33m.\u001b[39mtoBeLessThanOrEqual(\u001b[35m1\u001b[39m)\u001b[33m;\u001b[39m\n \u001b[90m     |\u001b[39m                                                          \u001b[31m\u001b[1m^\u001b[22m\u001b[39m\n \u001b[90m 159 |\u001b[39m         expect(\u001b[33mMath\u001b[39m\u001b[33m.\u001b[39mabs(center\u001b[33m.\u001b[39my \u001b[33m-\u001b[39m initialRootCenter\u001b[33m.\u001b[39my))\u001b[33m.\u001b[39mtoBeLessThanOrEqual(\u001b[35m1\u001b[39m)\u001b[33m;\u001b[39m\n \u001b[90m 160 |\u001b[39m\n \u001b[90m 161 |\u001b[39m         expect(\u001b[36mawait\u001b[39m badPathCount(page))\u001b[33m.\u001b[39mtoBe(\u001b[35m0\u001b[39m)\u001b[33m;\u001b[39m\u001b[0m"
+                  },
+                  "errors": [
+                    {
+                      "location": {
+                        "file": "E:\\memvid_NCKH\\MemVid_BaoCaoTotNghiep\\.worktrees\\phase-c-round8-1-p1-closure\\FE\\e2e-fixture\\mindmap-depth-presets.spec.js",
+                        "column": 58,
+                        "line": 158
+                      },
+                      "message": "Error: \u001b[2mexpect(\u001b[22m\u001b[31mreceived\u001b[39m\u001b[2m).\u001b[22mtoBeLessThanOrEqual\u001b[2m(\u001b[22m\u001b[32mexpected\u001b[39m\u001b[2m)\u001b[22m\n\nExpected: <= \u001b[32m1\u001b[39m\nReceived:    \u001b[31m1.7220458984375\u001b[39m\n\n  156 |         const rootBox = await settledRootBox(page);\n  157 |         const center = centerOf(rootBox);\n> 158 |         expect(Math.abs(center.x - initialRootCenter.x)).toBeLessThanOrEqual(1);\n      |                                                          ^\n  159 |         expect(Math.abs(center.y - initialRootCenter.y)).toBeLessThanOrEqual(1);\n  160 |\n  161 |         expect(await badPathCount(page)).toBe(0);\n    at E:\\memvid_NCKH\\MemVid_BaoCaoTotNghiep\\.worktrees\\phase-c-round8-1-p1-closure\\FE\\e2e-fixture\\mindmap-depth-presets.spec.js:158:58"
+                    }
+                  ],
+                  "stdout": [],
+                  "stderr": [],
+                  "retry": 0,
+                  "startTime": "2026-11-01T14:36:35.600Z",
+                  "annotations": [],
+                  "attachments": [
+                    {
+                      "name": "screenshot",
+                      "contentType": "image/png",
+                      "path": "E:\\memvid_NCKH\\MemVid_BaoCaoTotNghiep\\.worktrees\\phase-c-round8-1-p1-closure\\FE\\test-results\\mindmap-depth-presets-1024-4a2b8-ot-center-held-no-bad-paths-chromium\\test-failed-1.png"
+                    },
+                    {
+                      "name": "error-context",
+                      "contentType": "text/markdown",
+                      "path": "E:\\memvid_NCKH\\MemVid_BaoCaoTotNghiep\\.worktrees\\phase-c-round8-1-p1-closure\\FE\\test-results\\mindmap-depth-presets-1024-4a2b8-ot-center-held-no-bad-paths-chromium\\error-context.md"
+                    },
+                    {
+                      "name": "trace",
+                      "contentType": "application/zip",
+                      "path": "E:\\memvid_NCKH\\MemVid_BaoCaoTotNghiep\\.worktrees\\phase-c-round8-1-p1-closure\\FE\\test-results\\mindmap-depth-presets-1024-4a2b8-ot-center-held-no-bad-paths-chromium\\trace.zip"
+                    }
+                  ],
+                  "errorLocation": {
+                    "file": "E:\\memvid_NCKH\\MemVid_BaoCaoTotNghiep\\.worktrees\\phase-c-round8-1-p1-closure\\FE\\e2e-fixture\\mindmap-depth-presets.spec.js",
+                    "column": 58,
+                    "line": 158
+                  }
+                }
+              ],
+              "status": "unexpected"
+            }
+          ],
+          "id": "efe4e9561abefeca0773-fcbfdb7b88b76d60c94b",
+          "file": "mindmap-depth-presets.spec.js",
+          "line": 120,
+          "column": 5
+        },
+        {
+          "title": "390x844-light: all 5 depth presets -- exact DOM counts, same instance, scale/root-center held, no bad paths",
+          "ok": false,
+          "tags": [],
+          "tests": [
+            {
+              "timeout": 45000,
+              "annotations": [],
+              "expectedStatus": "passed",
+              "projectId": "chromium",
+              "projectName": "chromium",
+              "results": [
+                {
+                  "workerIndex": 7,
+                  "parallelIndex": 0,
+                  "status": "failed",
+                  "duration": 2909,
+                  "error": {
+                    "message": "Error: \u001b[2mexpect(\u001b[22m\u001b[31mreceived\u001b[39m\u001b[2m).\u001b[22mtoBeLessThanOrEqual\u001b[2m(\u001b[22m\u001b[32mexpected\u001b[39m\u001b[2m)\u001b[22m\n\nExpected: <= \u001b[32m1\u001b[39m\nReceived:    \u001b[31m1.291534423828125\u001b[39m",
+                    "stack": "Error: \u001b[2mexpect(\u001b[22m\u001b[31mreceived\u001b[39m\u001b[2m).\u001b[22mtoBeLessThanOrEqual\u001b[2m(\u001b[22m\u001b[32mexpected\u001b[39m\u001b[2m)\u001b[22m\n\nExpected: <= \u001b[32m1\u001b[39m\nReceived:    \u001b[31m1.291534423828125\u001b[39m\n    at E:\\memvid_NCKH\\MemVid_BaoCaoTotNghiep\\.worktrees\\phase-c-round8-1-p1-closure\\FE\\e2e-fixture\\mindmap-depth-presets.spec.js:158:58",
+                    "location": {
+                      "file": "E:\\memvid_NCKH\\MemVid_BaoCaoTotNghiep\\.worktrees\\phase-c-round8-1-p1-closure\\FE\\e2e-fixture\\mindmap-depth-presets.spec.js",
+                      "column": 58,
+                      "line": 158
+                    },
+                    "snippet": "\u001b[0m \u001b[90m 156 |\u001b[39m         \u001b[36mconst\u001b[39m rootBox \u001b[33m=\u001b[39m \u001b[36mawait\u001b[39m settledRootBox(page)\u001b[33m;\u001b[39m\n \u001b[90m 157 |\u001b[39m         \u001b[36mconst\u001b[39m center \u001b[33m=\u001b[39m centerOf(rootBox)\u001b[33m;\u001b[39m\n\u001b[31m\u001b[1m>\u001b[22m\u001b[39m\u001b[90m 158 |\u001b[39m         expect(\u001b[33mMath\u001b[39m\u001b[33m.\u001b[39mabs(center\u001b[33m.\u001b[39mx \u001b[33m-\u001b[39m initialRootCenter\u001b[33m.\u001b[39mx))\u001b[33m.\u001b[39mtoBeLessThanOrEqual(\u001b[35m1\u001b[39m)\u001b[33m;\u001b[39m\n \u001b[90m     |\u001b[39m                                                          \u001b[31m\u001b[1m^\u001b[22m\u001b[39m\n \u001b[90m 159 |\u001b[39m         expect(\u001b[33mMath\u001b[39m\u001b[33m.\u001b[39mabs(center\u001b[33m.\u001b[39my \u001b[33m-\u001b[39m initialRootCenter\u001b[33m.\u001b[39my))\u001b[33m.\u001b[39mtoBeLessThanOrEqual(\u001b[35m1\u001b[39m)\u001b[33m;\u001b[39m\n \u001b[90m 160 |\u001b[39m\n \u001b[90m 161 |\u001b[39m         expect(\u001b[36mawait\u001b[39m badPathCount(page))\u001b[33m.\u001b[39mtoBe(\u001b[35m0\u001b[39m)\u001b[33m;\u001b[39m\u001b[0m"
+                  },
+                  "errors": [
+                    {
+                      "location": {
+                        "file": "E:\\memvid_NCKH\\MemVid_BaoCaoTotNghiep\\.worktrees\\phase-c-round8-1-p1-closure\\FE\\e2e-fixture\\mindmap-depth-presets.spec.js",
+                        "column": 58,
+                        "line": 158
+                      },
+                      "message": "Error: \u001b[2mexpect(\u001b[22m\u001b[31mreceived\u001b[39m\u001b[2m).\u001b[22mtoBeLessThanOrEqual\u001b[2m(\u001b[22m\u001b[32mexpected\u001b[39m\u001b[2m)\u001b[22m\n\nExpected: <= \u001b[32m1\u001b[39m\nReceived:    \u001b[31m1.291534423828125\u001b[39m\n\n  156 |         const rootBox = await settledRootBox(page);\n  157 |         const center = centerOf(rootBox);\n> 158 |         expect(Math.abs(center.x - initialRootCenter.x)).toBeLessThanOrEqual(1);\n      |                                                          ^\n  159 |         expect(Math.abs(center.y - initialRootCenter.y)).toBeLessThanOrEqual(1);\n  160 |\n  161 |         expect(await badPathCount(page)).toBe(0);\n    at E:\\memvid_NCKH\\MemVid_BaoCaoTotNghiep\\.worktrees\\phase-c-round8-1-p1-closure\\FE\\e2e-fixture\\mindmap-depth-presets.spec.js:158:58"
+                    }
+                  ],
+                  "stdout": [],
+                  "stderr": [],
+                  "retry": 0,
+                  "startTime": "2026-11-01T14:36:39.850Z",
+                  "annotations": [],
+                  "attachments": [
+                    {
+                      "name": "screenshot",
+                      "contentType": "image/png",
+                      "path": "E:\\memvid_NCKH\\MemVid_BaoCaoTotNghiep\\.worktrees\\phase-c-round8-1-p1-closure\\FE\\test-results\\mindmap-depth-presets-390x-cc412-ot-center-held-no-bad-paths-chromium\\test-failed-1.png"
+                    },
+                    {
+                      "name": "error-context",
+                      "contentType": "text/markdown",
+                      "path": "E:\\memvid_NCKH\\MemVid_BaoCaoTotNghiep\\.worktrees\\phase-c-round8-1-p1-closure\\FE\\test-results\\mindmap-depth-presets-390x-cc412-ot-center-held-no-bad-paths-chromium\\error-context.md"
+                    },
+                    {
+                      "name": "trace",
+                      "contentType": "application/zip",
+                      "path": "E:\\memvid_NCKH\\MemVid_BaoCaoTotNghiep\\.worktrees\\phase-c-round8-1-p1-closure\\FE\\test-results\\mindmap-depth-presets-390x-cc412-ot-center-held-no-bad-paths-chromium\\trace.zip"
+                    }
+                  ],
+                  "errorLocation": {
+                    "file": "E:\\memvid_NCKH\\MemVid_BaoCaoTotNghiep\\.worktrees\\phase-c-round8-1-p1-closure\\FE\\e2e-fixture\\mindmap-depth-presets.spec.js",
+                    "column": 58,
+                    "line": 158
+                  }
+                }
+              ],
+              "status": "unexpected"
+            }
+          ],
+          "id": "efe4e9561abefeca0773-735ad8bce3ef836b0317",
+          "file": "mindmap-depth-presets.spec.js",
+          "line": 120,
+          "column": 5
+        },
+        {
+          "title": "390x844-dark: all 5 depth presets -- exact DOM counts, same instance, scale/root-center held, no bad paths",
+          "ok": false,
+          "tags": [],
+          "tests": [
+            {
+              "timeout": 45000,
+              "annotations": [],
+              "expectedStatus": "passed",
+              "projectId": "chromium",
+              "projectName": "chromium",
+              "results": [
+                {
+                  "workerIndex": 8,
+                  "parallelIndex": 0,
+                  "status": "failed",
+                  "duration": 2815,
+                  "error": {
+                    "message": "Error: \u001b[2mexpect(\u001b[22m\u001b[31mreceived\u001b[39m\u001b[2m).\u001b[22mtoBeLessThanOrEqual\u001b[2m(\u001b[22m\u001b[32mexpected\u001b[39m\u001b[2m)\u001b[22m\n\nExpected: <= \u001b[32m1\u001b[39m\nReceived:    \u001b[31m1.291534423828125\u001b[39m",
+                    "stack": "Error: \u001b[2mexpect(\u001b[22m\u001b[31mreceived\u001b[39m\u001b[2m).\u001b[22mtoBeLessThanOrEqual\u001b[2m(\u001b[22m\u001b[32mexpected\u001b[39m\u001b[2m)\u001b[22m\n\nExpected: <= \u001b[32m1\u001b[39m\nReceived:    \u001b[31m1.291534423828125\u001b[39m\n    at E:\\memvid_NCKH\\MemVid_BaoCaoTotNghiep\\.worktrees\\phase-c-round8-1-p1-closure\\FE\\e2e-fixture\\mindmap-depth-presets.spec.js:158:58",
+                    "location": {
+                      "file": "E:\\memvid_NCKH\\MemVid_BaoCaoTotNghiep\\.worktrees\\phase-c-round8-1-p1-closure\\FE\\e2e-fixture\\mindmap-depth-presets.spec.js",
+                      "column": 58,
+                      "line": 158
+                    },
+                    "snippet": "\u001b[0m \u001b[90m 156 |\u001b[39m         \u001b[36mconst\u001b[39m rootBox \u001b[33m=\u001b[39m \u001b[36mawait\u001b[39m settledRootBox(page)\u001b[33m;\u001b[39m\n \u001b[90m 157 |\u001b[39m         \u001b[36mconst\u001b[39m center \u001b[33m=\u001b[39m centerOf(rootBox)\u001b[33m;\u001b[39m\n\u001b[31m\u001b[1m>\u001b[22m\u001b[39m\u001b[90m 158 |\u001b[39m         expect(\u001b[33mMath\u001b[39m\u001b[33m.\u001b[39mabs(center\u001b[33m.\u001b[39mx \u001b[33m-\u001b[39m initialRootCenter\u001b[33m.\u001b[39mx))\u001b[33m.\u001b[39mtoBeLessThanOrEqual(\u001b[35m1\u001b[39m)\u001b[33m;\u001b[39m\n \u001b[90m     |\u001b[39m                                                          \u001b[31m\u001b[1m^\u001b[22m\u001b[39m\n \u001b[90m 159 |\u001b[39m         expect(\u001b[33mMath\u001b[39m\u001b[33m.\u001b[39mabs(center\u001b[33m.\u001b[39my \u001b[33m-\u001b[39m initialRootCenter\u001b[33m.\u001b[39my))\u001b[33m.\u001b[39mtoBeLessThanOrEqual(\u001b[35m1\u001b[39m)\u001b[33m;\u001b[39m\n \u001b[90m 160 |\u001b[39m\n \u001b[90m 161 |\u001b[39m         expect(\u001b[36mawait\u001b[39m badPathCount(page))\u001b[33m.\u001b[39mtoBe(\u001b[35m0\u001b[39m)\u001b[33m;\u001b[39m\u001b[0m"
+                  },
+                  "errors": [
+                    {
+                      "location": {
+                        "file": "E:\\memvid_NCKH\\MemVid_BaoCaoTotNghiep\\.worktrees\\phase-c-round8-1-p1-closure\\FE\\e2e-fixture\\mindmap-depth-presets.spec.js",
+                        "column": 58,
+                        "line": 158
+                      },
+                      "message": "Error: \u001b[2mexpect(\u001b[22m\u001b[31mreceived\u001b[39m\u001b[2m).\u001b[22mtoBeLessThanOrEqual\u001b[2m(\u001b[22m\u001b[32mexpected\u001b[39m\u001b[2m)\u001b[22m\n\nExpected: <= \u001b[32m1\u001b[39m\nReceived:    \u001b[31m1.291534423828125\u001b[39m\n\n  156 |         const rootBox = await settledRootBox(page);\n  157 |         const center = centerOf(rootBox);\n> 158 |         expect(Math.abs(center.x - initialRootCenter.x)).toBeLessThanOrEqual(1);\n      |                                                          ^\n  159 |         expect(Math.abs(center.y - initialRootCenter.y)).toBeLessThanOrEqual(1);\n  160 |\n  161 |         expect(await badPathCount(page)).toBe(0);\n    at E:\\memvid_NCKH\\MemVid_BaoCaoTotNghiep\\.worktrees\\phase-c-round8-1-p1-closure\\FE\\e2e-fixture\\mindmap-depth-presets.spec.js:158:58"
+                    }
+                  ],
+                  "stdout": [],
+                  "stderr": [],
+                  "retry": 0,
+                  "startTime": "2026-11-01T14:36:44.687Z",
+                  "annotations": [],
+                  "attachments": [
+                    {
+                      "name": "screenshot",
+                      "contentType": "image/png",
+                      "path": "E:\\memvid_NCKH\\MemVid_BaoCaoTotNghiep\\.worktrees\\phase-c-round8-1-p1-closure\\FE\\test-results\\mindmap-depth-presets-390x-0b49b-ot-center-held-no-bad-paths-chromium\\test-failed-1.png"
+                    },
+                    {
+                      "name": "error-context",
+                      "contentType": "text/markdown",
+                      "path": "E:\\memvid_NCKH\\MemVid_BaoCaoTotNghiep\\.worktrees\\phase-c-round8-1-p1-closure\\FE\\test-results\\mindmap-depth-presets-390x-0b49b-ot-center-held-no-bad-paths-chromium\\error-context.md"
+                    },
+                    {
+                      "name": "trace",
+                      "contentType": "application/zip",
+                      "path": "E:\\memvid_NCKH\\MemVid_BaoCaoTotNghiep\\.worktrees\\phase-c-round8-1-p1-closure\\FE\\test-results\\mindmap-depth-presets-390x-0b49b-ot-center-held-no-bad-paths-chromium\\trace.zip"
+                    }
+                  ],
+                  "errorLocation": {
+                    "file": "E:\\memvid_NCKH\\MemVid_BaoCaoTotNghiep\\.worktrees\\phase-c-round8-1-p1-closure\\FE\\e2e-fixture\\mindmap-depth-presets.spec.js",
+                    "column": 58,
+                    "line": 158
+                  }
+                }
+              ],
+              "status": "unexpected"
+            }
+          ],
+          "id": "efe4e9561abefeca0773-d166fa038a44a36df62c",
+          "file": "mindmap-depth-presets.spec.js",
+          "line": 120,
+          "column": 5
+        }
+      ],
+      "suites": [
+        {
+          "title": "Manual interaction -> custom state, keyboard, mobile hit targets",
+          "file": "mindmap-depth-presets.spec.js",
+          "line": 197,
+          "column": 6,
+          "specs": [
+            {
+              "title": "manual caret toggle after a preset drops every aria-pressed; re-applying the preset restores the deterministic set",
+              "ok": true,
+              "tags": [],
+              "tests": [
+                {
+                  "timeout": 45000,
+                  "annotations": [],
+                  "expectedStatus": "passed",
+                  "projectId": "chromium",
+                  "projectName": "chromium",
+                  "results": [
+                    {
+                      "workerIndex": 9,
+                      "parallelIndex": 0,
+                      "status": "passed",
+                      "duration": 2078,
+                      "errors": [],
+                      "stdout": [],
+                      "stderr": [],
+                      "retry": 0,
+                      "startTime": "2026-11-01T14:36:48.616Z",
+                      "annotations": [],
+                      "attachments": []
+                    }
+                  ],
+                  "status": "expected"
+                }
+              ],
+              "id": "efe4e9561abefeca0773-4bc1f9587dd279153ccc",
+              "file": "mindmap-depth-presets.spec.js",
+              "line": 198,
+              "column": 3
+            },
+            {
+              "title": "Enter and Space both activate a depth menuitem",
+              "ok": true,
+              "tags": [],
+              "tests": [
+                {
+                  "timeout": 45000,
+                  "annotations": [],
+                  "expectedStatus": "passed",
+                  "projectId": "chromium",
+                  "projectName": "chromium",
+                  "results": [
+                    {
+                      "workerIndex": 9,
+                      "parallelIndex": 0,
+                      "status": "passed",
+                      "duration": 1116,
+                      "errors": [],
+                      "stdout": [],
+                      "stderr": [],
+                      "retry": 0,
+                      "startTime": "2026-11-01T14:36:50.841Z",
+                      "annotations": [],
+                      "attachments": []
+                    }
+                  ],
+                  "status": "expected"
+                }
+              ],
+              "id": "efe4e9561abefeca0773-176dd1928d9f3bcaee47",
+              "file": "mindmap-depth-presets.spec.js",
+              "line": 232,
+              "column": 3
+            },
+            {
+              "title": "390x844: every depth menuitem has a >=40x40 hit target and the menu never overflows or clips",
+              "ok": true,
+              "tags": [],
+              "tests": [
+                {
+                  "timeout": 45000,
+                  "annotations": [],
+                  "expectedStatus": "passed",
+                  "projectId": "chromium",
+                  "projectName": "chromium",
+                  "results": [
+                    {
+                      "workerIndex": 9,
+                      "parallelIndex": 0,
+                      "status": "passed",
+                      "duration": 989,
+                      "errors": [],
+                      "stdout": [],
+                      "stderr": [],
+                      "retry": 0,
+                      "startTime": "2026-11-01T14:36:51.972Z",
+                      "annotations": [],
+                      "attachments": []
+                    }
+                  ],
+                  "status": "expected"
+                }
+              ],
+              "id": "efe4e9561abefeca0773-bd26fc77012045ba701a",
+              "file": "mindmap-depth-presets.spec.js",
+              "line": 245,
+              "column": 3
+            }
+          ]
+        },
+        {
+          "title": "Selection lifecycle across a depth change",
+          "file": "mindmap-depth-presets.spec.js",
+          "line": 263,
+          "column": 6,
+          "specs": [
+            {
+              "title": "selecting a depth-3 node then applying depth<=2 clears selection (node detail proxy) and canvas selection",
+              "ok": true,
+              "tags": [],
+              "tests": [
+                {
+                  "timeout": 45000,
+                  "annotations": [],
+                  "expectedStatus": "passed",
+                  "projectId": "chromium",
+                  "projectName": "chromium",
+                  "results": [
+                    {
+                      "workerIndex": 9,
+                      "parallelIndex": 0,
+                      "status": "passed",
+                      "duration": 1146,
+                      "errors": [],
+                      "stdout": [],
+                      "stderr": [],
+                      "retry": 0,
+                      "startTime": "2026-11-01T14:36:52.975Z",
+                      "annotations": [],
+                      "attachments": []
+                    }
+                  ],
+                  "status": "expected"
+                }
+              ],
+              "id": "efe4e9561abefeca0773-b346f32d5223e497ef0d",
+              "file": "mindmap-depth-presets.spec.js",
+              "line": 264,
+              "column": 3
+            },
+            {
+              "title": "selecting a depth-1 node then applying depth<=2 keeps selection",
+              "ok": true,
+              "tags": [],
+              "tests": [
+                {
+                  "timeout": 45000,
+                  "annotations": [],
+                  "expectedStatus": "passed",
+                  "projectId": "chromium",
+                  "projectName": "chromium",
+                  "results": [
+                    {
+                      "workerIndex": 9,
+                      "parallelIndex": 0,
+                      "status": "passed",
+                      "duration": 1162,
+                      "errors": [],
+                      "stdout": [],
+                      "stderr": [],
+                      "retry": 0,
+                      "startTime": "2026-11-01T14:36:54.134Z",
+                      "annotations": [],
+                      "attachments": []
+                    }
+                  ],
+                  "status": "expected"
+                }
+              ],
+              "id": "efe4e9561abefeca0773-16c97b37335d842eaa3d",
+              "file": "mindmap-depth-presets.spec.js",
+              "line": 273,
+              "column": 3
+            }
+          ]
+        },
+        {
+          "title": "Map lifecycle: no leak across A <-> depth-fixture switches",
+          "file": "mindmap-depth-presets.spec.js",
+          "line": 283,
+          "column": 6,
+          "specs": [
+            {
+              "title": "root-only on the depth fixture does not survive a switch to map A, and does not leak into A's export-studio visible-scope preview",
+              "ok": true,
+              "tags": [],
+              "tests": [
+                {
+                  "timeout": 45000,
+                  "annotations": [],
+                  "expectedStatus": "passed",
+                  "projectId": "chromium",
+                  "projectName": "chromium",
+                  "results": [
+                    {
+                      "workerIndex": 9,
+                      "parallelIndex": 0,
+                      "status": "passed",
+                      "duration": 1952,
+                      "errors": [],
+                      "stdout": [],
+                      "stderr": [],
+                      "retry": 0,
+                      "startTime": "2026-11-01T14:36:55.309Z",
+                      "annotations": [],
+                      "attachments": []
+                    }
+                  ],
+                  "status": "expected"
+                }
+              ],
+              "id": "efe4e9561abefeca0773-842a365ff0552c2b1500",
+              "file": "mindmap-depth-presets.spec.js",
+              "line": 284,
+              "column": 3
+            }
+          ]
+        },
+        {
+          "title": "Appearance V2 and branch-selection/export marker survive a depth change",
+          "file": "mindmap-depth-presets.spec.js",
+          "line": 323,
+          "column": 6,
+          "specs": [
+            {
+              "title": "a cold-loaded saved appearance (PR #64) is still applied after a depth preset change",
+              "ok": true,
+              "tags": [],
+              "tests": [
+                {
+                  "timeout": 45000,
+                  "annotations": [],
+                  "expectedStatus": "passed",
+                  "projectId": "chromium",
+                  "projectName": "chromium",
+                  "results": [
+                    {
+                      "workerIndex": 9,
+                      "parallelIndex": 0,
+                      "status": "passed",
+                      "duration": 1504,
+                      "errors": [],
+                      "stdout": [],
+                      "stderr": [],
+                      "retry": 0,
+                      "startTime": "2026-11-01T14:36:57.275Z",
+                      "annotations": [],
+                      "attachments": []
+                    }
+                  ],
+                  "status": "expected"
+                }
+              ],
+              "id": "efe4e9561abefeca0773-bd75195b3ea33f04aaf5",
+              "file": "mindmap-depth-presets.spec.js",
+              "line": 324,
+              "column": 3
+            },
+            {
+              "title": "selected-branches export scope checkbox remains interactive after a depth preset change",
+              "ok": true,
+              "tags": [],
+              "tests": [
+                {
+                  "timeout": 45000,
+                  "annotations": [],
+                  "expectedStatus": "passed",
+                  "projectId": "chromium",
+                  "projectName": "chromium",
+                  "results": [
+                    {
+                      "workerIndex": 9,
+                      "parallelIndex": 0,
+                      "status": "passed",
+                      "duration": 1225,
+                      "errors": [],
+                      "stdout": [],
+                      "stderr": [],
+                      "retry": 0,
+                      "startTime": "2026-11-01T14:36:58.795Z",
+                      "annotations": [],
+                      "attachments": []
+                    }
+                  ],
+                  "status": "expected"
+                }
+              ],
+              "id": "efe4e9561abefeca0773-be4cc2d6ea370cef2c39",
+              "file": "mindmap-depth-presets.spec.js",
+              "line": 338,
+              "column": 3
+            }
+          ]
+        },
+        {
+          "title": "Image export scope x root-only/depth (live-DOM capture, no production API)",
+          "file": "mindmap-depth-presets.spec.js",
+          "line": 350,
+          "column": 6,
+          "specs": [
+            {
+              "title": "root-only + visible scope resolves to exactly the root in the Export Studio preview count",
+              "ok": true,
+              "tags": [],
+              "tests": [
+                {
+                  "timeout": 45000,
+                  "annotations": [],
+                  "expectedStatus": "passed",
+                  "projectId": "chromium",
+                  "projectName": "chromium",
+                  "results": [
+                    {
+                      "workerIndex": 9,
+                      "parallelIndex": 0,
+                      "status": "passed",
+                      "duration": 1505,
+                      "errors": [],
+                      "stdout": [],
+                      "stderr": [],
+                      "retry": 0,
+                      "startTime": "2026-11-01T14:37:00.036Z",
+                      "annotations": [],
+                      "attachments": []
+                    }
+                  ],
+                  "status": "expected"
+                }
+              ],
+              "id": "efe4e9561abefeca0773-3e179b3b62751beb1b6a",
+              "file": "mindmap-depth-presets.spec.js",
+              "line": 351,
+              "column": 3
+            },
+            {
+              "title": "depth<=2 + visible scope resolves to exactly 6 nodes; full scope always resolves to all 8 regardless of current depth",
+              "ok": false,
+              "tags": [],
+              "tests": [
+                {
+                  "timeout": 45000,
+                  "annotations": [],
+                  "expectedStatus": "passed",
+                  "projectId": "chromium",
+                  "projectName": "chromium",
+                  "results": [
+                    {
+                      "workerIndex": 9,
+                      "parallelIndex": 0,
+                      "status": "timedOut",
+                      "duration": 45173,
+                      "error": {
+                        "message": "\u001b[31mTest timeout of 45000ms exceeded.\u001b[39m",
+                        "stack": "\u001b[31mTest timeout of 45000ms exceeded.\u001b[39m"
+                      },
+                      "errors": [
+                        {
+                          "message": "\u001b[31mTest timeout of 45000ms exceeded.\u001b[39m"
+                        },
+                        {
+                          "message": "Error: apiRequestContext._wrapApiCall: ENOENT: no such file or directory, copyfile 'E:\\memvid_NCKH\\MemVid_BaoCaoTotNghiep\\.worktrees\\phase-c-round8-1-p1-closure\\FE\\test-results\\.playwright-artifacts-9\\traces\\efe4e9561abefeca0773-e2dd35270f2d3d98f350-recording19.network' -> 'E:\\memvid_NCKH\\MemVid_BaoCaoTotNghiep\\.worktrees\\phase-c-round8-1-p1-closure\\FE\\test-results\\.playwright-artifacts-9\\traces\\efe4e9561abefeca0773-e2dd35270f2d3d98f350-recording19-pwnetcopy-1.network'"
+                        },
+                        {
+                          "message": "Error: browserContext._wrapApiCall: ENOENT: no such file or directory, open 'E:\\memvid_NCKH\\MemVid_BaoCaoTotNghiep\\.worktrees\\phase-c-round8-1-p1-closure\\FE\\test-results\\.playwright-artifacts-9\\traces\\efe4e9561abefeca0773-e2dd35270f2d3d98f350-recording18.trace'"
+                        },
+                        {
+                          "location": {
+                            "file": "E:\\memvid_NCKH\\MemVid_BaoCaoTotNghiep\\.worktrees\\phase-c-round8-1-p1-closure\\FE\\e2e-fixture\\mindmap-depth-presets.spec.js",
+                            "column": 88,
+                            "line": 376
+                          },
+                          "message": "Error: locator.click: Test ended.\nCall log:\n\u001b[2m  - waiting for getByRole('dialog').getByRole('button', { name: 'Quay lại' })\u001b[22m\n\n\n  374 |     // The scope radio only lives on the content step (step 0) -- go back,\n  375 |     // switch to \"full\", and walk forward to the review step again.\n> 376 |     for (let i = 0; i < 3; i++) await dialog.getByRole(\"button\", { name: \"Quay lại\" }).click();\n      |                                                                                        ^\n  377 |     await dialog.locator('input[name=\"mm-export-scope\"][value=\"full\"]').check();\n  378 |     await goToReviewStep(dialog);\n  379 |     summary = await dialog.locator(\"dd\").filter({ hasText: \"node\" }).first().textContent();\n    at E:\\memvid_NCKH\\MemVid_BaoCaoTotNghiep\\.worktrees\\phase-c-round8-1-p1-closure\\FE\\e2e-fixture\\mindmap-depth-presets.spec.js:376:88"
+                        },
+                        {
+                          "message": "Error: ENOENT: no such file or directory, open 'E:\\memvid_NCKH\\MemVid_BaoCaoTotNghiep\\.worktrees\\phase-c-round8-1-p1-closure\\FE\\test-results\\.playwright-artifacts-9\\18dc526b9a1251931312ba27a78742ef.zip'"
+                        }
+                      ],
+                      "stdout": [],
+                      "stderr": [],
+                      "retry": 0,
+                      "startTime": "2026-11-01T14:37:01.555Z",
+                      "annotations": [],
+                      "attachments": [
+                        {
+                          "name": "screenshot",
+                          "contentType": "image/png",
+                          "path": "E:\\memvid_NCKH\\MemVid_BaoCaoTotNghiep\\.worktrees\\phase-c-round8-1-p1-closure\\FE\\test-results\\mindmap-depth-presets-Imag-d58d9-regardless-of-current-depth-chromium\\test-failed-1.png"
+                        }
+                      ]
+                    }
+                  ],
+                  "status": "unexpected"
+                }
+              ],
+              "id": "efe4e9561abefeca0773-e2dd35270f2d3d98f350",
+              "file": "mindmap-depth-presets.spec.js",
+              "line": 364,
+              "column": 3
+            }
+          ]
+        },
+        {
+          "title": "Visual QA screenshots (representative states, fake fixture data, not committed as artifacts)",
+          "file": "mindmap-depth-presets.spec.js",
+          "line": 393,
+          "column": 6,
+          "specs": [
+            {
+              "title": "root-only / level-2 / full / manual-custom / selected-then-hidden -- representative captures",
+              "ok": true,
+              "tags": [],
+              "tests": [
+                {
+                  "timeout": 45000,
+                  "annotations": [],
+                  "expectedStatus": "passed",
+                  "projectId": "chromium",
+                  "projectName": "chromium",
+                  "results": [
+                    {
+                      "workerIndex": 10,
+                      "parallelIndex": 0,
+                      "status": "passed",
+                      "duration": 3042,
+                      "errors": [],
+                      "stdout": [],
+                      "stderr": [],
+                      "retry": 0,
+                      "startTime": "2026-11-01T14:37:47.850Z",
+                      "annotations": [],
+                      "attachments": []
+                    }
+                  ],
+                  "status": "expected"
+                }
+              ],
+              "id": "efe4e9561abefeca0773-af9ffc374072ef2e4ce8",
+              "file": "mindmap-depth-presets.spec.js",
+              "line": 394,
+              "column": 3
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "title": "post-pr77-exact-selection.spec.js",
+      "file": "post-pr77-exact-selection.spec.js",
+      "column": 0,
+      "line": 0,
+      "specs": [
+        {
+          "title": "all six two-child pairs stay exact at 69% across mouse, Space, presets, reopen and cache reload",
+          "ok": false,
+          "tags": [],
+          "tests": [
+            {
+              "timeout": 45000,
+              "annotations": [],
+              "expectedStatus": "passed",
+              "projectId": "chromium",
+              "projectName": "chromium",
+              "results": [
+                {
+                  "workerIndex": 10,
+                  "parallelIndex": 0,
+                  "status": "failed",
+                  "duration": 13616,
+                  "error": {
+                    "message": "Error: \u001b[2mexpect(\u001b[22m\u001b[31mlocator\u001b[39m\u001b[2m).\u001b[22mtoContainText\u001b[2m(\u001b[22m\u001b[32mexpected\u001b[39m\u001b[2m)\u001b[22m failed\n\nLocator: locator('[role=\"dialog\"]').locator('[aria-label=\"Tóm tắt cấu hình xuất\"]')\nExpected substring: \u001b[32m\"2 node đã tick · 3 node thực tế\"\u001b[39m\nReceived string:    \u001b[31m\"Phạm viCác node được chọnĐịnh dạngSVGSố node/nhánh3 nodeGiao diệnGiống canvasTên fileAn_ninh_mạng_và_quyền_riêng_tư.svg\"\u001b[39m\nTimeout: 10000ms\n\nCall log:\n\u001b[2m  - Expect \"toContainText\" locator('[role=\"dialog\"]').locator('[aria-label=\"Tóm tắt cấu hình xuất\"]') with timeout 10000ms\u001b[22m\n\u001b[2m  - waiting for locator('[role=\"dialog\"]').locator('[aria-label=\"Tóm tắt cấu hình xuất\"]')\u001b[22m\n\u001b[2m    23 × locator resolved to <dl class=\"sr-only\" aria-label=\"Tóm tắt cấu hình xuất\">…</dl>\u001b[22m\n\u001b[2m       - unexpected value \"Phạm viCác node được chọnĐịnh dạngSVGSố node/nhánh3 nodeGiao diệnGiống canvasTên fileAn_ninh_mạng_và_quyền_riêng_tư.svg\"\u001b[22m\n",
+                    "stack": "Error: \u001b[2mexpect(\u001b[22m\u001b[31mlocator\u001b[39m\u001b[2m).\u001b[22mtoContainText\u001b[2m(\u001b[22m\u001b[32mexpected\u001b[39m\u001b[2m)\u001b[22m failed\n\nLocator: locator('[role=\"dialog\"]').locator('[aria-label=\"Tóm tắt cấu hình xuất\"]')\nExpected substring: \u001b[32m\"2 node đã tick · 3 node thực tế\"\u001b[39m\nReceived string:    \u001b[31m\"Phạm viCác node được chọnĐịnh dạngSVGSố node/nhánh3 nodeGiao diệnGiống canvasTên fileAn_ninh_mạng_và_quyền_riêng_tư.svg\"\u001b[39m\nTimeout: 10000ms\n\nCall log:\n\u001b[2m  - Expect \"toContainText\" locator('[role=\"dialog\"]').locator('[aria-label=\"Tóm tắt cấu hình xuất\"]') with timeout 10000ms\u001b[22m\n\u001b[2m  - waiting for locator('[role=\"dialog\"]').locator('[aria-label=\"Tóm tắt cấu hình xuất\"]')\u001b[22m\n\u001b[2m    23 × locator resolved to <dl class=\"sr-only\" aria-label=\"Tóm tắt cấu hình xuất\">…</dl>\u001b[22m\n\u001b[2m       - unexpected value \"Phạm viCác node được chọnĐịnh dạngSVGSố node/nhánh3 nodeGiao diệnGiống canvasTên fileAn_ninh_mạng_và_quyền_riêng_tư.svg\"\u001b[22m\n\n    at exportSvg (E:\\memvid_NCKH\\MemVid_BaoCaoTotNghiep\\.worktrees\\phase-c-round8-1-p1-closure\\FE\\e2e-fixture\\post-pr77-exact-selection.spec.js:48:72)\n    at E:\\memvid_NCKH\\MemVid_BaoCaoTotNghiep\\.worktrees\\phase-c-round8-1-p1-closure\\FE\\e2e-fixture\\post-pr77-exact-selection.spec.js:73:5",
+                    "location": {
+                      "file": "E:\\memvid_NCKH\\MemVid_BaoCaoTotNghiep\\.worktrees\\phase-c-round8-1-p1-closure\\FE\\e2e-fixture\\post-pr77-exact-selection.spec.js",
+                      "column": 72,
+                      "line": 48
+                    },
+                    "snippet": "\u001b[0m \u001b[90m 46 |\u001b[39m   \u001b[36mawait\u001b[39m page\u001b[33m.\u001b[39mgetByRole(\u001b[32m\"button\"\u001b[39m\u001b[33m,\u001b[39m { name\u001b[33m:\u001b[39m \u001b[32m\"Tiếp tục\"\u001b[39m })\u001b[33m.\u001b[39mclick()\u001b[33m;\u001b[39m\n \u001b[90m 47 |\u001b[39m   \u001b[36mawait\u001b[39m page\u001b[33m.\u001b[39mgetByRole(\u001b[32m\"button\"\u001b[39m\u001b[33m,\u001b[39m { name\u001b[33m:\u001b[39m \u001b[32m\"Tiếp tục\"\u001b[39m })\u001b[33m.\u001b[39mclick()\u001b[33m;\u001b[39m\n\u001b[31m\u001b[1m>\u001b[22m\u001b[39m\u001b[90m 48 |\u001b[39m   \u001b[36mawait\u001b[39m expect(dialog\u001b[33m.\u001b[39mlocator(\u001b[32m'[aria-label=\"Tóm tắt cấu hình xuất\"]'\u001b[39m))\u001b[33m.\u001b[39mtoContainText(\u001b[32m\"2 node đã tick · 3 node thực tế\"\u001b[39m)\u001b[33m;\u001b[39m\n \u001b[90m    |\u001b[39m                                                                        \u001b[31m\u001b[1m^\u001b[22m\u001b[39m\n \u001b[90m 49 |\u001b[39m   \u001b[36mconst\u001b[39m waiting \u001b[33m=\u001b[39m page\u001b[33m.\u001b[39mwaitForEvent(\u001b[32m\"download\"\u001b[39m)\u001b[33m;\u001b[39m\n \u001b[90m 50 |\u001b[39m   \u001b[36mawait\u001b[39m page\u001b[33m.\u001b[39mgetByRole(\u001b[32m\"button\"\u001b[39m\u001b[33m,\u001b[39m { name\u001b[33m:\u001b[39m \u001b[32m\"Xuất SVG\"\u001b[39m })\u001b[33m.\u001b[39mclick()\u001b[33m;\u001b[39m\n \u001b[90m 51 |\u001b[39m   \u001b[36mconst\u001b[39m download \u001b[33m=\u001b[39m \u001b[36mawait\u001b[39m waiting\u001b[33m;\u001b[39m\u001b[0m"
+                  },
+                  "errors": [
+                    {
+                      "location": {
+                        "file": "E:\\memvid_NCKH\\MemVid_BaoCaoTotNghiep\\.worktrees\\phase-c-round8-1-p1-closure\\FE\\e2e-fixture\\post-pr77-exact-selection.spec.js",
+                        "column": 72,
+                        "line": 48
+                      },
+                      "message": "Error: \u001b[2mexpect(\u001b[22m\u001b[31mlocator\u001b[39m\u001b[2m).\u001b[22mtoContainText\u001b[2m(\u001b[22m\u001b[32mexpected\u001b[39m\u001b[2m)\u001b[22m failed\n\nLocator: locator('[role=\"dialog\"]').locator('[aria-label=\"Tóm tắt cấu hình xuất\"]')\nExpected substring: \u001b[32m\"2 node đã tick · 3 node thực tế\"\u001b[39m\nReceived string:    \u001b[31m\"Phạm viCác node được chọnĐịnh dạngSVGSố node/nhánh3 nodeGiao diệnGiống canvasTên fileAn_ninh_mạng_và_quyền_riêng_tư.svg\"\u001b[39m\nTimeout: 10000ms\n\nCall log:\n\u001b[2m  - Expect \"toContainText\" locator('[role=\"dialog\"]').locator('[aria-label=\"Tóm tắt cấu hình xuất\"]') with timeout 10000ms\u001b[22m\n\u001b[2m  - waiting for locator('[role=\"dialog\"]').locator('[aria-label=\"Tóm tắt cấu hình xuất\"]')\u001b[22m\n\u001b[2m    23 × locator resolved to <dl class=\"sr-only\" aria-label=\"Tóm tắt cấu hình xuất\">…</dl>\u001b[22m\n\u001b[2m       - unexpected value \"Phạm viCác node được chọnĐịnh dạngSVGSố node/nhánh3 nodeGiao diệnGiống canvasTên fileAn_ninh_mạng_và_quyền_riêng_tư.svg\"\u001b[22m\n\n\n  46 |   await page.getByRole(\"button\", { name: \"Tiếp tục\" }).click();\n  47 |   await page.getByRole(\"button\", { name: \"Tiếp tục\" }).click();\n> 48 |   await expect(dialog.locator('[aria-label=\"Tóm tắt cấu hình xuất\"]')).toContainText(\"2 node đã tick · 3 node thực tế\");\n     |                                                                        ^\n  49 |   const waiting = page.waitForEvent(\"download\");\n  50 |   await page.getByRole(\"button\", { name: \"Xuất SVG\" }).click();\n  51 |   const download = await waiting;\n    at exportSvg (E:\\memvid_NCKH\\MemVid_BaoCaoTotNghiep\\.worktrees\\phase-c-round8-1-p1-closure\\FE\\e2e-fixture\\post-pr77-exact-selection.spec.js:48:72)\n    at E:\\memvid_NCKH\\MemVid_BaoCaoTotNghiep\\.worktrees\\phase-c-round8-1-p1-closure\\FE\\e2e-fixture\\post-pr77-exact-selection.spec.js:73:5"
+                    }
+                  ],
+                  "stdout": [],
+                  "stderr": [],
+                  "retry": 0,
+                  "startTime": "2026-11-01T14:37:51.093Z",
+                  "annotations": [],
+                  "attachments": [
+                    {
+                      "name": "screenshot",
+                      "contentType": "image/png",
+                      "path": "E:\\memvid_NCKH\\MemVid_BaoCaoTotNghiep\\.worktrees\\phase-c-round8-1-p1-closure\\FE\\test-results\\post-pr77-exact-selection--568fe-ets-reopen-and-cache-reload-chromium\\test-failed-1.png"
+                    },
+                    {
+                      "name": "error-context",
+                      "contentType": "text/markdown",
+                      "path": "E:\\memvid_NCKH\\MemVid_BaoCaoTotNghiep\\.worktrees\\phase-c-round8-1-p1-closure\\FE\\test-results\\post-pr77-exact-selection--568fe-ets-reopen-and-cache-reload-chromium\\error-context.md"
+                    },
+                    {
+                      "name": "trace",
+                      "contentType": "application/zip",
+                      "path": "E:\\memvid_NCKH\\MemVid_BaoCaoTotNghiep\\.worktrees\\phase-c-round8-1-p1-closure\\FE\\test-results\\post-pr77-exact-selection--568fe-ets-reopen-and-cache-reload-chromium\\trace.zip"
+                    }
+                  ],
+                  "errorLocation": {
+                    "file": "E:\\memvid_NCKH\\MemVid_BaoCaoTotNghiep\\.worktrees\\phase-c-round8-1-p1-closure\\FE\\e2e-fixture\\post-pr77-exact-selection.spec.js",
+                    "column": 72,
+                    "line": 48
+                  }
+                }
+              ],
+              "status": "unexpected"
+            }
+          ],
+          "id": "22513b3fffc1fbe39af7-42a7e5fbbdc3989b0fc1",
+          "file": "post-pr77-exact-selection.spec.js",
+          "line": 60,
+          "column": 1
+        },
+        {
+          "title": "checking then unchecking parent never selects descendants",
+          "ok": true,
+          "tags": [],
+          "tests": [
+            {
+              "timeout": 45000,
+              "annotations": [],
+              "expectedStatus": "passed",
+              "projectId": "chromium",
+              "projectName": "chromium",
+              "results": [
+                {
+                  "workerIndex": 11,
+                  "parallelIndex": 0,
+                  "status": "passed",
+                  "duration": 1484,
+                  "errors": [],
+                  "stdout": [],
+                  "stderr": [],
+                  "retry": 0,
+                  "startTime": "2026-11-01T14:38:06.577Z",
+                  "annotations": [],
+                  "attachments": []
+                }
+              ],
+              "status": "expected"
+            }
+          ],
+          "id": "22513b3fffc1fbe39af7-da2839d2bc911072539d",
+          "file": "post-pr77-exact-selection.spec.js",
+          "line": 77,
+          "column": 1
+        },
+        {
+          "title": "real Chromium offscreen Mind Elixir topics expose complete identity",
+          "ok": false,
+          "tags": [],
+          "tests": [
+            {
+              "timeout": 45000,
+              "annotations": [],
+              "expectedStatus": "passed",
+              "projectId": "chromium",
+              "projectName": "chromium",
+              "results": [
+                {
+                  "workerIndex": 11,
+                  "parallelIndex": 0,
+                  "status": "failed",
+                  "duration": 12890,
+                  "error": {
+                    "message": "Error: \u001b[2mexpect(\u001b[22m\u001b[31mlocator\u001b[39m\u001b[2m).\u001b[22mtoContainText\u001b[2m(\u001b[22m\u001b[32mexpected\u001b[39m\u001b[2m)\u001b[22m failed\n\nLocator: locator('[role=\"dialog\"]').locator('[aria-label=\"Tóm tắt cấu hình xuất\"]')\nExpected substring: \u001b[32m\"2 node đã tick · 3 node thực tế\"\u001b[39m\nReceived string:    \u001b[31m\"Phạm viCác node được chọnĐịnh dạngSVGSố node/nhánh3 nodeGiao diệnGiống canvasTên fileAn_ninh_mạng_và_quyền_riêng_tư.svg\"\u001b[39m\nTimeout: 10000ms\n\nCall log:\n\u001b[2m  - Expect \"toContainText\" locator('[role=\"dialog\"]').locator('[aria-label=\"Tóm tắt cấu hình xuất\"]') with timeout 10000ms\u001b[22m\n\u001b[2m  - waiting for locator('[role=\"dialog\"]').locator('[aria-label=\"Tóm tắt cấu hình xuất\"]')\u001b[22m\n\u001b[2m    23 × locator resolved to <dl class=\"sr-only\" aria-label=\"Tóm tắt cấu hình xuất\">…</dl>\u001b[22m\n\u001b[2m       - unexpected value \"Phạm viCác node được chọnĐịnh dạngSVGSố node/nhánh3 nodeGiao diệnGiống canvasTên fileAn_ninh_mạng_và_quyền_riêng_tư.svg\"\u001b[22m\n",
+                    "stack": "Error: \u001b[2mexpect(\u001b[22m\u001b[31mlocator\u001b[39m\u001b[2m).\u001b[22mtoContainText\u001b[2m(\u001b[22m\u001b[32mexpected\u001b[39m\u001b[2m)\u001b[22m failed\n\nLocator: locator('[role=\"dialog\"]').locator('[aria-label=\"Tóm tắt cấu hình xuất\"]')\nExpected substring: \u001b[32m\"2 node đã tick · 3 node thực tế\"\u001b[39m\nReceived string:    \u001b[31m\"Phạm viCác node được chọnĐịnh dạngSVGSố node/nhánh3 nodeGiao diệnGiống canvasTên fileAn_ninh_mạng_và_quyền_riêng_tư.svg\"\u001b[39m\nTimeout: 10000ms\n\nCall log:\n\u001b[2m  - Expect \"toContainText\" locator('[role=\"dialog\"]').locator('[aria-label=\"Tóm tắt cấu hình xuất\"]') with timeout 10000ms\u001b[22m\n\u001b[2m  - waiting for locator('[role=\"dialog\"]').locator('[aria-label=\"Tóm tắt cấu hình xuất\"]')\u001b[22m\n\u001b[2m    23 × locator resolved to <dl class=\"sr-only\" aria-label=\"Tóm tắt cấu hình xuất\">…</dl>\u001b[22m\n\u001b[2m       - unexpected value \"Phạm viCác node được chọnĐịnh dạngSVGSố node/nhánh3 nodeGiao diệnGiống canvasTên fileAn_ninh_mạng_và_quyền_riêng_tư.svg\"\u001b[22m\n\n    at exportSvg (E:\\memvid_NCKH\\MemVid_BaoCaoTotNghiep\\.worktrees\\phase-c-round8-1-p1-closure\\FE\\e2e-fixture\\post-pr77-exact-selection.spec.js:48:72)\n    at E:\\memvid_NCKH\\MemVid_BaoCaoTotNghiep\\.worktrees\\phase-c-round8-1-p1-closure\\FE\\e2e-fixture\\post-pr77-exact-selection.spec.js:103:3",
+                    "location": {
+                      "file": "E:\\memvid_NCKH\\MemVid_BaoCaoTotNghiep\\.worktrees\\phase-c-round8-1-p1-closure\\FE\\e2e-fixture\\post-pr77-exact-selection.spec.js",
+                      "column": 72,
+                      "line": 48
+                    },
+                    "snippet": "\u001b[0m \u001b[90m 46 |\u001b[39m   \u001b[36mawait\u001b[39m page\u001b[33m.\u001b[39mgetByRole(\u001b[32m\"button\"\u001b[39m\u001b[33m,\u001b[39m { name\u001b[33m:\u001b[39m \u001b[32m\"Tiếp tục\"\u001b[39m })\u001b[33m.\u001b[39mclick()\u001b[33m;\u001b[39m\n \u001b[90m 47 |\u001b[39m   \u001b[36mawait\u001b[39m page\u001b[33m.\u001b[39mgetByRole(\u001b[32m\"button\"\u001b[39m\u001b[33m,\u001b[39m { name\u001b[33m:\u001b[39m \u001b[32m\"Tiếp tục\"\u001b[39m })\u001b[33m.\u001b[39mclick()\u001b[33m;\u001b[39m\n\u001b[31m\u001b[1m>\u001b[22m\u001b[39m\u001b[90m 48 |\u001b[39m   \u001b[36mawait\u001b[39m expect(dialog\u001b[33m.\u001b[39mlocator(\u001b[32m'[aria-label=\"Tóm tắt cấu hình xuất\"]'\u001b[39m))\u001b[33m.\u001b[39mtoContainText(\u001b[32m\"2 node đã tick · 3 node thực tế\"\u001b[39m)\u001b[33m;\u001b[39m\n \u001b[90m    |\u001b[39m                                                                        \u001b[31m\u001b[1m^\u001b[22m\u001b[39m\n \u001b[90m 49 |\u001b[39m   \u001b[36mconst\u001b[39m waiting \u001b[33m=\u001b[39m page\u001b[33m.\u001b[39mwaitForEvent(\u001b[32m\"download\"\u001b[39m)\u001b[33m;\u001b[39m\n \u001b[90m 50 |\u001b[39m   \u001b[36mawait\u001b[39m page\u001b[33m.\u001b[39mgetByRole(\u001b[32m\"button\"\u001b[39m\u001b[33m,\u001b[39m { name\u001b[33m:\u001b[39m \u001b[32m\"Xuất SVG\"\u001b[39m })\u001b[33m.\u001b[39mclick()\u001b[33m;\u001b[39m\n \u001b[90m 51 |\u001b[39m   \u001b[36mconst\u001b[39m download \u001b[33m=\u001b[39m \u001b[36mawait\u001b[39m waiting\u001b[33m;\u001b[39m\u001b[0m"
+                  },
+                  "errors": [
+                    {
+                      "location": {
+                        "file": "E:\\memvid_NCKH\\MemVid_BaoCaoTotNghiep\\.worktrees\\phase-c-round8-1-p1-closure\\FE\\e2e-fixture\\post-pr77-exact-selection.spec.js",
+                        "column": 72,
+                        "line": 48
+                      },
+                      "message": "Error: \u001b[2mexpect(\u001b[22m\u001b[31mlocator\u001b[39m\u001b[2m).\u001b[22mtoContainText\u001b[2m(\u001b[22m\u001b[32mexpected\u001b[39m\u001b[2m)\u001b[22m failed\n\nLocator: locator('[role=\"dialog\"]').locator('[aria-label=\"Tóm tắt cấu hình xuất\"]')\nExpected substring: \u001b[32m\"2 node đã tick · 3 node thực tế\"\u001b[39m\nReceived string:    \u001b[31m\"Phạm viCác node được chọnĐịnh dạngSVGSố node/nhánh3 nodeGiao diệnGiống canvasTên fileAn_ninh_mạng_và_quyền_riêng_tư.svg\"\u001b[39m\nTimeout: 10000ms\n\nCall log:\n\u001b[2m  - Expect \"toContainText\" locator('[role=\"dialog\"]').locator('[aria-label=\"Tóm tắt cấu hình xuất\"]') with timeout 10000ms\u001b[22m\n\u001b[2m  - waiting for locator('[role=\"dialog\"]').locator('[aria-label=\"Tóm tắt cấu hình xuất\"]')\u001b[22m\n\u001b[2m    23 × locator resolved to <dl class=\"sr-only\" aria-label=\"Tóm tắt cấu hình xuất\">…</dl>\u001b[22m\n\u001b[2m       - unexpected value \"Phạm viCác node được chọnĐịnh dạngSVGSố node/nhánh3 nodeGiao diệnGiống canvasTên fileAn_ninh_mạng_và_quyền_riêng_tư.svg\"\u001b[22m\n\n\n  46 |   await page.getByRole(\"button\", { name: \"Tiếp tục\" }).click();\n  47 |   await page.getByRole(\"button\", { name: \"Tiếp tục\" }).click();\n> 48 |   await expect(dialog.locator('[aria-label=\"Tóm tắt cấu hình xuất\"]')).toContainText(\"2 node đã tick · 3 node thực tế\");\n     |                                                                        ^\n  49 |   const waiting = page.waitForEvent(\"download\");\n  50 |   await page.getByRole(\"button\", { name: \"Xuất SVG\" }).click();\n  51 |   const download = await waiting;\n    at exportSvg (E:\\memvid_NCKH\\MemVid_BaoCaoTotNghiep\\.worktrees\\phase-c-round8-1-p1-closure\\FE\\e2e-fixture\\post-pr77-exact-selection.spec.js:48:72)\n    at E:\\memvid_NCKH\\MemVid_BaoCaoTotNghiep\\.worktrees\\phase-c-round8-1-p1-closure\\FE\\e2e-fixture\\post-pr77-exact-selection.spec.js:103:3"
+                    }
+                  ],
+                  "stdout": [],
+                  "stderr": [],
+                  "retry": 0,
+                  "startTime": "2026-11-01T14:38:08.207Z",
+                  "annotations": [],
+                  "attachments": [
+                    {
+                      "name": "screenshot",
+                      "contentType": "image/png",
+                      "path": "E:\\memvid_NCKH\\MemVid_BaoCaoTotNghiep\\.worktrees\\phase-c-round8-1-p1-closure\\FE\\test-results\\post-pr77-exact-selection--dce82-cs-expose-complete-identity-chromium\\test-failed-1.png"
+                    },
+                    {
+                      "name": "error-context",
+                      "contentType": "text/markdown",
+                      "path": "E:\\memvid_NCKH\\MemVid_BaoCaoTotNghiep\\.worktrees\\phase-c-round8-1-p1-closure\\FE\\test-results\\post-pr77-exact-selection--dce82-cs-expose-complete-identity-chromium\\error-context.md"
+                    },
+                    {
+                      "name": "trace",
+                      "contentType": "application/zip",
+                      "path": "E:\\memvid_NCKH\\MemVid_BaoCaoTotNghiep\\.worktrees\\phase-c-round8-1-p1-closure\\FE\\test-results\\post-pr77-exact-selection--dce82-cs-expose-complete-identity-chromium\\trace.zip"
+                    }
+                  ],
+                  "errorLocation": {
+                    "file": "E:\\memvid_NCKH\\MemVid_BaoCaoTotNghiep\\.worktrees\\phase-c-round8-1-p1-closure\\FE\\e2e-fixture\\post-pr77-exact-selection.spec.js",
+                    "column": 72,
+                    "line": 48
+                  }
+                }
+              ],
+              "status": "unexpected"
+            }
+          ],
+          "id": "22513b3fffc1fbe39af7-cb3aa345cfe59f435b22",
+          "file": "post-pr77-exact-selection.spec.js",
+          "line": 87,
+          "column": 1
+        }
+      ]
+    }
+  ],
+  "errors": [],
+  "stats": {
+    "startTime": "2026-11-01T14:33:16.040Z",
+    "duration": 306607.87899999996,
+    "expected": 23,
+    "skipped": 0,
+    "unexpected": 12,
+    "flaky": 0
+  }
+}

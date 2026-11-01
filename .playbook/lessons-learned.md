@@ -3577,3 +3577,28 @@ content rectangle. Pair that with computed hitbox dimensions and composed
 foreground/background contrast; screenshots and token names alone cannot prove
 containment, touch size, or WCAG contrast.
 
+# Queue state is not durability state (2026-10-29)
+
+Removing work from a local queue before its request resolves creates a false
+empty state. Any action whose correctness depends on persisted writes needs a
+promise tail (or equivalent acknowledgement ledger), must wait for the current
+request, then drain versions created while waiting. Preserve rejected work for
+retry and bind the barrier to the owning attempt so unmounts or identity changes
+cannot commit into a different session.
+
+# Irreversible browser effects need an explicit commit boundary (2026-10-29)
+
+A caller cannot cancel a stale download after a lower-level capture helper has
+already clicked the download link. Split preparation from commitment: prepare a
+blob/artifact, validate the current session at the orchestration layer, commit
+exactly once, and dispose invalidated artifacts. Testing only the success toast
+does not prove the browser side effect was prevented.
+
+# Responsive breakpoints must follow measured composition width (2026-10-29)
+
+Framework breakpoints describe screen classes, not the width of a particular
+set of controls. Header labels that fit at 1280px may still overflow immediately
+above 1024px. Measure every required control, keep touch floors intact, and move
+secondary actions into an existing contextual menu until the full composition
+actually fits. Pin the boundary with `elementFromPoint` as well as rectangles.
+
