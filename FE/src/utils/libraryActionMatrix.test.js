@@ -45,6 +45,9 @@ describe("Complete-tools readiness", () => {
     ["missing index existing quiz", { ai: { quiz: { latest_quiz_id: "quiz-1" } } }, "quiz", true],
     ["missing index existing review", { ai: { review: { latest_attempt_id: "attempt-1" } } }, "review", true],
     ["missing index no artifact", { ai: { summary: { state: "not_generated" } } }, "quiz", false],
+    ["not_generated index", { ai: { index: "not_generated" } }, "chat", false],
+    ["unknown index value", { ai: { index: "queued_v2" } }, "summary", false],
+    ["no ai payload at all", {}, "mindmap", false],
     ["details without index", { ai: {} }, "details", true],
   ])("classifies %s", (_label, value, surface, expected) => {
     const result = learningActionReadiness(value, surface);
