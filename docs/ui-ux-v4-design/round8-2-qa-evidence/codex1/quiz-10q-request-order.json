@@ -1,0 +1,104 @@
+[
+  {
+    "order": 1,
+    "method": "GET",
+    "path": "/auth/me",
+    "status": 200
+  },
+  {
+    "order": 2,
+    "method": "POST",
+    "path": "/api/quizzes/72940628-d4fa-43ad-8625-35286a4b7ddb/attempts",
+    "status": 201
+  },
+  {
+    "order": 3,
+    "method": "GET",
+    "path": "/auth/me",
+    "status": 200
+  },
+  {
+    "order": 4,
+    "method": "POST",
+    "path": "/api/quizzes/433c4399-44ec-476d-b049-c687ed3f8f6e/attempts",
+    "status": 201
+  },
+  {
+    "order": 5,
+    "method": "GET",
+    "path": "/auth/me",
+    "status": 200
+  },
+  {
+    "order": 6,
+    "method": "POST",
+    "path": "/api/quizzes/72940628-d4fa-43ad-8625-35286a4b7ddb/attempts",
+    "status": 200
+  },
+  {
+    "order": 7,
+    "method": "PATCH",
+    "path": "/api/attempts/70437488-42e9-47f2-bafa-fd6116aeb1c1/answers",
+    "status": 200
+  },
+  {
+    "order": 8,
+    "method": "PATCH",
+    "path": "/api/attempts/70437488-42e9-47f2-bafa-fd6116aeb1c1/answers",
+    "status": 200
+  },
+  {
+    "order": 9,
+    "method": "GET",
+    "path": "/auth/me",
+    "status": 200
+  },
+  {
+    "order": 10,
+    "method": "POST",
+    "path": "/api/quizzes/72940628-d4fa-43ad-8625-35286a4b7ddb/attempts",
+    "status": 200
+  },
+  {
+    "order": 11,
+    "method": "PATCH",
+    "path": "/api/attempts/70437488-42e9-47f2-bafa-fd6116aeb1c1/answers",
+    "status": null
+  },
+  {
+    "order": 12,
+    "method": "PATCH",
+    "path": "/api/attempts/70437488-42e9-47f2-bafa-fd6116aeb1c1/answers",
+    "status": 200
+  },
+  {
+    "order": 13,
+    "method": "POST",
+    "path": "/api/attempts/70437488-42e9-47f2-bafa-fd6116aeb1c1/submit",
+    "status": 200
+  },
+  {
+    "order": 14,
+    "method": "GET",
+    "path": "/api/quizzes/results/70437488-42e9-47f2-bafa-fd6116aeb1c1",
+    "status": 200
+  },
+  {
+    "order": 15,
+    "method": "GET",
+    "path": "/api/attempts/70437488-42e9-47f2-bafa-fd6116aeb1c1/concept-masteries",
+    "status": 200
+  },
+  {
+    "order": 16,
+    "method": "GET",
+    "path": "/api/review-plans/70437488-42e9-47f2-bafa-fd6116aeb1c1",
+    "status": 404
+  },
+  {
+    "order": 17,
+    "method": "POST",
+    "path": "/api/review-plans/generate",
+    "status": 201
+  }
+]

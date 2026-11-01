@@ -1,0 +1,120 @@
+{
+  "status": "PASS",
+  "failures": [],
+  "scenarios": [
+    {
+      "name": "map-a4",
+      "pdf_bytes": 51604,
+      "source_size": [
+        2414,
+        344
+      ],
+      "page_count": 1,
+      "first_page_points": [
+        842.0,
+        595.0
+      ],
+      "embedded_pixel_mean_delta": 0.0,
+      "embedded_pixel_max_delta": 0,
+      "connector_color_hits": [
+        3618,
+        55674,
+        1374,
+        1374
+      ],
+      "nodes": {
+        "ROOT": {
+          "fill_pixels": 69087,
+          "text_pixels": 5466,
+          "escaped_text_pixels": 0,
+          "text_clipping_pass": true,
+          "contrast_ratio": 13.46
+        },
+        "P": {
+          "fill_pixels": 38300,
+          "text_pixels": 2871,
+          "escaped_text_pixels": 0,
+          "text_clipping_pass": true,
+          "contrast_ratio": 9.3
+        }
+      },
+      "unicode_outline_verified": false
+    },
+    {
+      "name": "map-and-outline-content-fit",
+      "pdf_bytes": 456682,
+      "source_size": [
+        2414,
+        344
+      ],
+      "page_count": 2,
+      "first_page_points": [
+        1114.57,
+        227.43
+      ],
+      "embedded_pixel_mean_delta": 0.0,
+      "embedded_pixel_max_delta": 0,
+      "connector_color_hits": [
+        3618,
+        55674,
+        1374,
+        1374
+      ],
+      "nodes": {
+        "ROOT": {
+          "fill_pixels": 69087,
+          "text_pixels": 5466,
+          "escaped_text_pixels": 0,
+          "text_clipping_pass": true,
+          "contrast_ratio": 13.46
+        },
+        "P": {
+          "fill_pixels": 38300,
+          "text_pixels": 2871,
+          "escaped_text_pixels": 0,
+          "text_clipping_pass": true,
+          "contrast_ratio": 9.3
+        }
+      },
+      "unicode_outline_verified": true
+    },
+    {
+      "name": "map-content-fit",
+      "pdf_bytes": 51612,
+      "source_size": [
+        2414,
+        344
+      ],
+      "page_count": 1,
+      "first_page_points": [
+        1114.57,
+        227.43
+      ],
+      "embedded_pixel_mean_delta": 0.0,
+      "embedded_pixel_max_delta": 0,
+      "connector_color_hits": [
+        3618,
+        55674,
+        1374,
+        1374
+      ],
+      "nodes": {
+        "ROOT": {
+          "fill_pixels": 69087,
+          "text_pixels": 5466,
+          "escaped_text_pixels": 0,
+          "text_clipping_pass": true,
+          "contrast_ratio": 13.46
+        },
+        "P": {
+          "fill_pixels": 38300,
+          "text_pixels": 2871,
+          "escaped_text_pixels": 0,
+          "text_clipping_pass": true,
+          "contrast_ratio": 9.3
+        }
+      },
+      "unicode_outline_verified": false
+    }
+  ]
+}

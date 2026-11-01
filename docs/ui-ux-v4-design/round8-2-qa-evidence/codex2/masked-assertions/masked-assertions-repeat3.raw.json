@@ -1,0 +1,734 @@
+{
+  "config": {
+    "argv": [
+      "C:\\Program Files\\nodejs\\node.exe",
+      "E:\\memvid_NCKH\\MemVid_BaoCaoTotNghiep\\.worktrees\\phase-c-round8-2-release-gate\\FE\\node_modules\\@playwright\\test\\cli.js",
+      "test",
+      "-c",
+      "e2e-r82-codex2-migrated/playwright.config.js",
+      "--grep",
+      "visual 390x844-(light|dark)|manual suppression survives|depth<=2 \\+ visible scope|all six two-child pairs|real Chromium offscreen",
+      "--repeat-each=3",
+      "--reporter=json"
+    ],
+    "configFile": "E:\\memvid_NCKH\\MemVid_BaoCaoTotNghiep\\.worktrees\\phase-c-round8-2-release-gate\\FE\\e2e-r82-codex2-migrated\\playwright.config.js",
+    "rootDir": "E:/memvid_NCKH/MemVid_BaoCaoTotNghiep/.worktrees/phase-c-round8-2-release-gate/FE/e2e-r82-codex2-migrated",
+    "failOnFlakyTests": false,
+    "forbidOnly": false,
+    "fullyParallel": false,
+    "globalSetup": null,
+    "globalTeardown": null,
+    "globalTimeout": 0,
+    "grep": {},
+    "grepInvert": null,
+    "maxFailures": 0,
+    "metadata": {
+      "actualWorkers": 1
+    },
+    "preserveOutput": "always",
+    "projects": [
+      {
+        "outputDir": "E:/memvid_NCKH/MemVid_BaoCaoTotNghiep/.worktrees/phase-c-round8-2-release-gate/FE/test-results",
+        "repeatEach": 3,
+        "retries": 0,
+        "metadata": {
+          "actualWorkers": 1
+        },
+        "id": "chromium",
+        "name": "chromium",
+        "testDir": "E:/memvid_NCKH/MemVid_BaoCaoTotNghiep/.worktrees/phase-c-round8-2-release-gate/FE/e2e-r82-codex2-migrated",
+        "testIgnore": [],
+        "testMatch": [
+          "**/*.@(spec|test).?(c|m)[jt]s?(x)"
+        ],
+        "timeout": 45000
+      }
+    ],
+    "quiet": false,
+    "reporter": [
+      [
+        "json"
+      ]
+    ],
+    "reportSlowTests": {
+      "max": 5,
+      "threshold": 300000
+    },
+    "shard": null,
+    "tags": [],
+    "updateSnapshots": "missing",
+    "updateSourceMethod": "patch",
+    "version": "1.63.0",
+    "workers": 1,
+    "webServer": {
+      "command": "npx vite .. --port 5301 --strictPort",
+      "url": "http://localhost:5301/fixture-harness.html",
+      "timeout": 30000,
+      "reuseExistingServer": true
+    }
+  },
+  "suites": [
+    {
+      "title": "branch-export-visual.spec.js",
+      "file": "branch-export-visual.spec.js",
+      "column": 0,
+      "line": 0,
+      "specs": [
+        {
+          "title": "visual 390x844-light",
+          "ok": true,
+          "tags": [],
+          "tests": [
+            {
+              "timeout": 45000,
+              "annotations": [],
+              "expectedStatus": "passed",
+              "projectId": "chromium",
+              "projectName": "chromium",
+              "results": [
+                {
+                  "workerIndex": 0,
+                  "parallelIndex": 0,
+                  "status": "passed",
+                  "duration": 4288,
+                  "errors": [],
+                  "stdout": [],
+                  "stderr": [],
+                  "retry": 0,
+                  "startTime": "2026-11-01T17:14:44.705Z",
+                  "annotations": [],
+                  "attachments": []
+                }
+              ],
+              "status": "expected"
+            }
+          ],
+          "id": "50f26b89e2de8c4e6f97-f6a9da0366015cb2fec4",
+          "file": "branch-export-visual.spec.js",
+          "line": 55,
+          "column": 5
+        },
+        {
+          "title": "visual 390x844-dark",
+          "ok": true,
+          "tags": [],
+          "tests": [
+            {
+              "timeout": 45000,
+              "annotations": [],
+              "expectedStatus": "passed",
+              "projectId": "chromium",
+              "projectName": "chromium",
+              "results": [
+                {
+                  "workerIndex": 0,
+                  "parallelIndex": 0,
+                  "status": "passed",
+                  "duration": 3870,
+                  "errors": [],
+                  "stdout": [],
+                  "stderr": [],
+                  "retry": 0,
+                  "startTime": "2026-11-01T17:14:49.276Z",
+                  "annotations": [],
+                  "attachments": []
+                }
+              ],
+              "status": "expected"
+            }
+          ],
+          "id": "50f26b89e2de8c4e6f97-01d13e3a1ed8ad651bc7",
+          "file": "branch-export-visual.spec.js",
+          "line": 55,
+          "column": 5
+        },
+        {
+          "title": "visual 390x844-light",
+          "ok": true,
+          "tags": [],
+          "tests": [
+            {
+              "timeout": 45000,
+              "annotations": [],
+              "expectedStatus": "passed",
+              "projectId": "chromium",
+              "projectName": "chromium",
+              "results": [
+                {
+                  "workerIndex": 1,
+                  "parallelIndex": 0,
+                  "status": "passed",
+                  "duration": 3937,
+                  "errors": [],
+                  "stdout": [],
+                  "stderr": [],
+                  "retry": 0,
+                  "startTime": "2026-11-01T17:15:23.438Z",
+                  "annotations": [],
+                  "attachments": []
+                }
+              ],
+              "status": "expected"
+            }
+          ],
+          "id": "50f26b89e2de8c4e6f97-6b6dee5409d44bfe7ad3",
+          "file": "branch-export-visual.spec.js",
+          "line": 55,
+          "column": 5
+        },
+        {
+          "title": "visual 390x844-dark",
+          "ok": true,
+          "tags": [],
+          "tests": [
+            {
+              "timeout": 45000,
+              "annotations": [],
+              "expectedStatus": "passed",
+              "projectId": "chromium",
+              "projectName": "chromium",
+              "results": [
+                {
+                  "workerIndex": 1,
+                  "parallelIndex": 0,
+                  "status": "passed",
+                  "duration": 3855,
+                  "errors": [],
+                  "stdout": [],
+                  "stderr": [],
+                  "retry": 0,
+                  "startTime": "2026-11-01T17:15:27.641Z",
+                  "annotations": [],
+                  "attachments": []
+                }
+              ],
+              "status": "expected"
+            }
+          ],
+          "id": "50f26b89e2de8c4e6f97-f768e58d5a9be7d0f8ce",
+          "file": "branch-export-visual.spec.js",
+          "line": 55,
+          "column": 5
+        },
+        {
+          "title": "visual 390x844-light",
+          "ok": true,
+          "tags": [],
+          "tests": [
+            {
+              "timeout": 45000,
+              "annotations": [],
+              "expectedStatus": "passed",
+              "projectId": "chromium",
+              "projectName": "chromium",
+              "results": [
+                {
+                  "workerIndex": 2,
+                  "parallelIndex": 0,
+                  "status": "passed",
+                  "duration": 4102,
+                  "errors": [],
+                  "stdout": [],
+                  "stderr": [],
+                  "retry": 0,
+                  "startTime": "2026-11-01T17:16:01.758Z",
+                  "annotations": [],
+                  "attachments": []
+                }
+              ],
+              "status": "expected"
+            }
+          ],
+          "id": "50f26b89e2de8c4e6f97-1ee502cc10be7d244d40",
+          "file": "branch-export-visual.spec.js",
+          "line": 55,
+          "column": 5
+        },
+        {
+          "title": "visual 390x844-dark",
+          "ok": true,
+          "tags": [],
+          "tests": [
+            {
+              "timeout": 45000,
+              "annotations": [],
+              "expectedStatus": "passed",
+              "projectId": "chromium",
+              "projectName": "chromium",
+              "results": [
+                {
+                  "workerIndex": 2,
+                  "parallelIndex": 0,
+                  "status": "passed",
+                  "duration": 3987,
+                  "errors": [],
+                  "stdout": [],
+                  "stderr": [],
+                  "retry": 0,
+                  "startTime": "2026-11-01T17:16:06.123Z",
+                  "annotations": [],
+                  "attachments": []
+                }
+              ],
+              "status": "expected"
+            }
+          ],
+          "id": "50f26b89e2de8c4e6f97-d418565f6d83a080048b",
+          "file": "branch-export-visual.spec.js",
+          "line": 55,
+          "column": 5
+        }
+      ]
+    },
+    {
+      "title": "exact-node-export-v3.spec.js",
+      "file": "exact-node-export-v3.spec.js",
+      "column": 0,
+      "line": 0,
+      "specs": [
+        {
+          "title": "manual suppression survives review navigation and selection changes in the same map session",
+          "ok": true,
+          "tags": [],
+          "tests": [
+            {
+              "timeout": 45000,
+              "annotations": [],
+              "expectedStatus": "passed",
+              "projectId": "chromium",
+              "projectName": "chromium",
+              "results": [
+                {
+                  "workerIndex": 0,
+                  "parallelIndex": 0,
+                  "status": "passed",
+                  "duration": 3802,
+                  "errors": [],
+                  "stdout": [],
+                  "stderr": [],
+                  "retry": 0,
+                  "startTime": "2026-11-01T17:14:53.184Z",
+                  "annotations": [],
+                  "attachments": []
+                }
+              ],
+              "status": "expected"
+            }
+          ],
+          "id": "626711e1ee6db2cc9e7f-18b0c930a0e01e478435",
+          "file": "exact-node-export-v3.spec.js",
+          "line": 210,
+          "column": 1
+        },
+        {
+          "title": "manual suppression survives review navigation and selection changes in the same map session",
+          "ok": true,
+          "tags": [],
+          "tests": [
+            {
+              "timeout": 45000,
+              "annotations": [],
+              "expectedStatus": "passed",
+              "projectId": "chromium",
+              "projectName": "chromium",
+              "results": [
+                {
+                  "workerIndex": 1,
+                  "parallelIndex": 0,
+                  "status": "passed",
+                  "duration": 3784,
+                  "errors": [],
+                  "stdout": [],
+                  "stderr": [],
+                  "retry": 0,
+                  "startTime": "2026-11-01T17:15:31.535Z",
+                  "annotations": [],
+                  "attachments": []
+                }
+              ],
+              "status": "expected"
+            }
+          ],
+          "id": "626711e1ee6db2cc9e7f-7bbca82b58b8fe010471",
+          "file": "exact-node-export-v3.spec.js",
+          "line": 210,
+          "column": 1
+        },
+        {
+          "title": "manual suppression survives review navigation and selection changes in the same map session",
+          "ok": true,
+          "tags": [],
+          "tests": [
+            {
+              "timeout": 45000,
+              "annotations": [],
+              "expectedStatus": "passed",
+              "projectId": "chromium",
+              "projectName": "chromium",
+              "results": [
+                {
+                  "workerIndex": 2,
+                  "parallelIndex": 0,
+                  "status": "passed",
+                  "duration": 3798,
+                  "errors": [],
+                  "stdout": [],
+                  "stderr": [],
+                  "retry": 0,
+                  "startTime": "2026-11-01T17:16:10.150Z",
+                  "annotations": [],
+                  "attachments": []
+                }
+              ],
+              "status": "expected"
+            }
+          ],
+          "id": "626711e1ee6db2cc9e7f-16a52bc67517ddb702a3",
+          "file": "exact-node-export-v3.spec.js",
+          "line": 210,
+          "column": 1
+        }
+      ]
+    },
+    {
+      "title": "mindmap-depth-presets.spec.js",
+      "file": "mindmap-depth-presets.spec.js",
+      "column": 0,
+      "line": 0,
+      "specs": [],
+      "suites": [
+        {
+          "title": "Image export scope x root-only/depth (live-DOM capture, no production API)",
+          "file": "mindmap-depth-presets.spec.js",
+          "line": 350,
+          "column": 6,
+          "specs": [
+            {
+              "title": "depth<=2 + visible scope resolves to exactly 6 nodes; full scope always resolves to all 8 regardless of current depth",
+              "ok": true,
+              "tags": [],
+              "tests": [
+                {
+                  "timeout": 45000,
+                  "annotations": [],
+                  "expectedStatus": "passed",
+                  "projectId": "chromium",
+                  "projectName": "chromium",
+                  "results": [
+                    {
+                      "workerIndex": 0,
+                      "parallelIndex": 0,
+                      "status": "passed",
+                      "duration": 3108,
+                      "errors": [],
+                      "stdout": [],
+                      "stderr": [],
+                      "retry": 0,
+                      "startTime": "2026-11-01T17:14:57.012Z",
+                      "annotations": [],
+                      "attachments": []
+                    }
+                  ],
+                  "status": "expected"
+                }
+              ],
+              "id": "efe4e9561abefeca0773-e2dd35270f2d3d98f350",
+              "file": "mindmap-depth-presets.spec.js",
+              "line": 364,
+              "column": 3
+            },
+            {
+              "title": "depth<=2 + visible scope resolves to exactly 6 nodes; full scope always resolves to all 8 regardless of current depth",
+              "ok": true,
+              "tags": [],
+              "tests": [
+                {
+                  "timeout": 45000,
+                  "annotations": [],
+                  "expectedStatus": "passed",
+                  "projectId": "chromium",
+                  "projectName": "chromium",
+                  "results": [
+                    {
+                      "workerIndex": 1,
+                      "parallelIndex": 0,
+                      "status": "passed",
+                      "duration": 3054,
+                      "errors": [],
+                      "stdout": [],
+                      "stderr": [],
+                      "retry": 0,
+                      "startTime": "2026-11-01T17:15:35.344Z",
+                      "annotations": [],
+                      "attachments": []
+                    }
+                  ],
+                  "status": "expected"
+                }
+              ],
+              "id": "efe4e9561abefeca0773-98ff57630fe9cdd7469d",
+              "file": "mindmap-depth-presets.spec.js",
+              "line": 364,
+              "column": 3
+            },
+            {
+              "title": "depth<=2 + visible scope resolves to exactly 6 nodes; full scope always resolves to all 8 regardless of current depth",
+              "ok": true,
+              "tags": [],
+              "tests": [
+                {
+                  "timeout": 45000,
+                  "annotations": [],
+                  "expectedStatus": "passed",
+                  "projectId": "chromium",
+                  "projectName": "chromium",
+                  "results": [
+                    {
+                      "workerIndex": 2,
+                      "parallelIndex": 0,
+                      "status": "passed",
+                      "duration": 4330,
+                      "errors": [],
+                      "stdout": [],
+                      "stderr": [],
+                      "retry": 0,
+                      "startTime": "2026-11-01T17:16:13.980Z",
+                      "annotations": [],
+                      "attachments": []
+                    }
+                  ],
+                  "status": "expected"
+                }
+              ],
+              "id": "efe4e9561abefeca0773-4f490e4792276c243124",
+              "file": "mindmap-depth-presets.spec.js",
+              "line": 364,
+              "column": 3
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "title": "post-pr77-exact-selection.spec.js",
+      "file": "post-pr77-exact-selection.spec.js",
+      "column": 0,
+      "line": 0,
+      "specs": [
+        {
+          "title": "all six two-child pairs stay exact at 69% across mouse, Space, presets, reopen and cache reload",
+          "ok": true,
+          "tags": [],
+          "tests": [
+            {
+              "timeout": 45000,
+              "annotations": [],
+              "expectedStatus": "passed",
+              "projectId": "chromium",
+              "projectName": "chromium",
+              "results": [
+                {
+                  "workerIndex": 0,
+                  "parallelIndex": 0,
+                  "status": "passed",
+                  "duration": 18465,
+                  "errors": [],
+                  "stdout": [],
+                  "stderr": [],
+                  "retry": 0,
+                  "startTime": "2026-11-01T17:15:00.152Z",
+                  "annotations": [],
+                  "attachments": []
+                }
+              ],
+              "status": "expected"
+            }
+          ],
+          "id": "22513b3fffc1fbe39af7-42a7e5fbbdc3989b0fc1",
+          "file": "post-pr77-exact-selection.spec.js",
+          "line": 61,
+          "column": 1
+        },
+        {
+          "title": "real Chromium offscreen Mind Elixir topics expose complete identity",
+          "ok": true,
+          "tags": [],
+          "tests": [
+            {
+              "timeout": 45000,
+              "annotations": [],
+              "expectedStatus": "passed",
+              "projectId": "chromium",
+              "projectName": "chromium",
+              "results": [
+                {
+                  "workerIndex": 0,
+                  "parallelIndex": 0,
+                  "status": "passed",
+                  "duration": 3857,
+                  "errors": [],
+                  "stdout": [],
+                  "stderr": [],
+                  "retry": 0,
+                  "startTime": "2026-11-01T17:15:18.627Z",
+                  "annotations": [],
+                  "attachments": []
+                }
+              ],
+              "status": "expected"
+            }
+          ],
+          "id": "22513b3fffc1fbe39af7-cb3aa345cfe59f435b22",
+          "file": "post-pr77-exact-selection.spec.js",
+          "line": 88,
+          "column": 1
+        },
+        {
+          "title": "all six two-child pairs stay exact at 69% across mouse, Space, presets, reopen and cache reload",
+          "ok": true,
+          "tags": [],
+          "tests": [
+            {
+              "timeout": 45000,
+              "annotations": [],
+              "expectedStatus": "passed",
+              "projectId": "chromium",
+              "projectName": "chromium",
+              "results": [
+                {
+                  "workerIndex": 1,
+                  "parallelIndex": 0,
+                  "status": "passed",
+                  "duration": 18897,
+                  "errors": [],
+                  "stdout": [],
+                  "stderr": [],
+                  "retry": 0,
+                  "startTime": "2026-11-01T17:15:38.429Z",
+                  "annotations": [],
+                  "attachments": []
+                }
+              ],
+              "status": "expected"
+            }
+          ],
+          "id": "22513b3fffc1fbe39af7-a88456aaa4f0bf23691b",
+          "file": "post-pr77-exact-selection.spec.js",
+          "line": 61,
+          "column": 1
+        },
+        {
+          "title": "real Chromium offscreen Mind Elixir topics expose complete identity",
+          "ok": true,
+          "tags": [],
+          "tests": [
+            {
+              "timeout": 45000,
+              "annotations": [],
+              "expectedStatus": "passed",
+              "projectId": "chromium",
+              "projectName": "chromium",
+              "results": [
+                {
+                  "workerIndex": 1,
+                  "parallelIndex": 0,
+                  "status": "passed",
+                  "duration": 3435,
+                  "errors": [],
+                  "stdout": [],
+                  "stderr": [],
+                  "retry": 0,
+                  "startTime": "2026-11-01T17:15:57.339Z",
+                  "annotations": [],
+                  "attachments": []
+                }
+              ],
+              "status": "expected"
+            }
+          ],
+          "id": "22513b3fffc1fbe39af7-4aa14677be5b27d5f1d2",
+          "file": "post-pr77-exact-selection.spec.js",
+          "line": 88,
+          "column": 1
+        },
+        {
+          "title": "all six two-child pairs stay exact at 69% across mouse, Space, presets, reopen and cache reload",
+          "ok": true,
+          "tags": [],
+          "tests": [
+            {
+              "timeout": 45000,
+              "annotations": [],
+              "expectedStatus": "passed",
+              "projectId": "chromium",
+              "projectName": "chromium",
+              "results": [
+                {
+                  "workerIndex": 2,
+                  "parallelIndex": 0,
+                  "status": "passed",
+                  "duration": 18968,
+                  "errors": [],
+                  "stdout": [],
+                  "stderr": [],
+                  "retry": 0,
+                  "startTime": "2026-11-01T17:16:18.334Z",
+                  "annotations": [],
+                  "attachments": []
+                }
+              ],
+              "status": "expected"
+            }
+          ],
+          "id": "22513b3fffc1fbe39af7-12305215646bc1bd0a88",
+          "file": "post-pr77-exact-selection.spec.js",
+          "line": 61,
+          "column": 1
+        },
+        {
+          "title": "real Chromium offscreen Mind Elixir topics expose complete identity",
+          "ok": true,
+          "tags": [],
+          "tests": [
+            {
+              "timeout": 45000,
+              "annotations": [],
+              "expectedStatus": "passed",
+              "projectId": "chromium",
+              "projectName": "chromium",
+              "results": [
+                {
+                  "workerIndex": 2,
+                  "parallelIndex": 0,
+                  "status": "passed",
+                  "duration": 3805,
+                  "errors": [],
+                  "stdout": [],
+                  "stderr": [],
+                  "retry": 0,
+                  "startTime": "2026-11-01T17:16:37.312Z",
+                  "annotations": [],
+                  "attachments": []
+                }
+              ],
+              "status": "expected"
+            }
+          ],
+          "id": "22513b3fffc1fbe39af7-275a73abc11c43432d3e",
+          "file": "post-pr77-exact-selection.spec.js",
+          "line": 88,
+          "column": 1
+        }
+      ]
+    }
+  ],
+  "errors": [],
+  "stats": {
+    "startTime": "2026-11-01T17:14:40.423Z",
+    "duration": 121392.404,
+    "expected": 18,
+    "skipped": 0,
+    "unexpected": 0,
+    "flaky": 0
+  }
+}

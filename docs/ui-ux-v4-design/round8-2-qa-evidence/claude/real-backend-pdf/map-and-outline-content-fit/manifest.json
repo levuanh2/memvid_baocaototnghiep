@@ -1,0 +1,73 @@
+{
+  "version": 1,
+  "image_width_px": 2414,
+  "image_height_px": 344,
+  "nodes": [
+    {
+      "id": "P",
+      "x": 634,
+      "y": 113,
+      "width": 520,
+      "height": 101,
+      "font_size_px": 28
+    },
+    {
+      "id": "A",
+      "x": 64,
+      "y": 64,
+      "width": 520,
+      "height": 88,
+      "font_size_px": 26
+    },
+    {
+      "id": "B",
+      "x": 64,
+      "y": 180,
+      "width": 520,
+      "height": 88,
+      "font_size_px": 26
+    },
+    {
+      "id": "ROOT",
+      "x": 1234,
+      "y": 88,
+      "width": 520,
+      "height": 152,
+      "font_size_px": 32
+    },
+    {
+      "id": "C",
+      "x": 1834,
+      "y": 131,
+      "width": 515,
+      "height": 64,
+      "font_size_px": 28
+    }
+  ],
+  "connectors": [
+    {
+      "x": 64,
+      "y": 164,
+      "width": 600,
+      "height": 0
+    },
+    {
+      "x": 64,
+      "y": 164,
+      "width": 600,
+      "height": 116
+    },
+    {
+      "x": 1154,
+      "y": 164,
+      "width": 223,
+      "height": 0
+    },
+    {
+      "x": 1611,
+      "y": 164,
+      "width": 223,
+      "height": 0
+    }
+  ]
+}

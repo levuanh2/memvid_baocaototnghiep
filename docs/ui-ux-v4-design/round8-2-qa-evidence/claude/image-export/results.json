@@ -1,0 +1,149 @@
+{
+  "config": {
+    "argv": [
+      "C:\\Program Files\\nodejs\\node.exe",
+      "E:\\memvid_NCKH\\MemVid_BaoCaoTotNghiep\\.worktrees\\phase-c-round8-2-release-gate\\FE\\node_modules\\@playwright\\test\\cli.js",
+      "test",
+      "--config",
+      "e2e-r82-claude-img/image-export.config.mjs",
+      "--output",
+      "C:/Users/Vu Anh/AppData/Local/Temp/claude/E--TEC2026/c008c549-70eb-4b2c-8434-e640a21ff6b2/scratchpad/r82-img-out2"
+    ],
+    "configFile": "E:\\memvid_NCKH\\MemVid_BaoCaoTotNghiep\\.worktrees\\phase-c-round8-2-release-gate\\FE\\e2e-r82-claude-img\\image-export.config.mjs",
+    "rootDir": "E:/memvid_NCKH/MemVid_BaoCaoTotNghiep/.worktrees/phase-c-round8-2-release-gate/FE/e2e-r82-claude-img",
+    "failOnFlakyTests": false,
+    "forbidOnly": false,
+    "fullyParallel": false,
+    "globalSetup": null,
+    "globalTeardown": null,
+    "globalTimeout": 0,
+    "grep": {},
+    "grepInvert": null,
+    "maxFailures": 0,
+    "metadata": {
+      "actualWorkers": 1
+    },
+    "preserveOutput": "always",
+    "projects": [
+      {
+        "outputDir": "C:/Users/Vu Anh/AppData/Local/Temp/claude/E--TEC2026/c008c549-70eb-4b2c-8434-e640a21ff6b2/scratchpad/r82-img-out2",
+        "repeatEach": 1,
+        "retries": 0,
+        "metadata": {
+          "actualWorkers": 1
+        },
+        "id": "chromium",
+        "name": "chromium",
+        "testDir": "E:/memvid_NCKH/MemVid_BaoCaoTotNghiep/.worktrees/phase-c-round8-2-release-gate/FE/e2e-r82-claude-img",
+        "testIgnore": [],
+        "testMatch": [
+          "/image-export-real-backend\\.spec\\.js$/"
+        ],
+        "timeout": 60000
+      }
+    ],
+    "quiet": false,
+    "reporter": [
+      [
+        "list",
+        null
+      ],
+      [
+        "json",
+        {
+          "outputFile": "results.json"
+        }
+      ]
+    ],
+    "reportSlowTests": {
+      "max": 5,
+      "threshold": 300000
+    },
+    "shard": null,
+    "tags": [],
+    "updateSnapshots": "missing",
+    "updateSourceMethod": "patch",
+    "version": "1.63.0",
+    "workers": 1,
+    "webServer": null
+  },
+  "suites": [
+    {
+      "title": "image-export-real-backend.spec.js",
+      "file": "image-export-real-backend.spec.js",
+      "column": 0,
+      "line": 0,
+      "specs": [
+        {
+          "title": "valid PNG export downloads exactly once and belongs to the open map; closing mid-capture downloads nothing",
+          "ok": true,
+          "tags": [],
+          "tests": [
+            {
+              "timeout": 180000,
+              "annotations": [
+                {
+                  "type": "valid-download",
+                  "description": "R82_Map_Beta_1793554537578-20261101.png"
+                },
+                {
+                  "type": "real-input-close",
+                  "description": "dialogOpenAfterEscape=true cancelDisabled=true"
+                },
+                {
+                  "type": "synthetic-same-task-race",
+                  "description": "dialogClosed=true downloadsAfterClose=1"
+                }
+              ],
+              "expectedStatus": "passed",
+              "projectId": "chromium",
+              "projectName": "chromium",
+              "results": [
+                {
+                  "workerIndex": 0,
+                  "parallelIndex": 0,
+                  "status": "passed",
+                  "duration": 26053,
+                  "errors": [],
+                  "stdout": [],
+                  "stderr": [],
+                  "retry": 0,
+                  "startTime": "2026-11-01T17:35:32.458Z",
+                  "annotations": [
+                    {
+                      "type": "valid-download",
+                      "description": "R82_Map_Beta_1793554537578-20261101.png"
+                    },
+                    {
+                      "type": "real-input-close",
+                      "description": "dialogOpenAfterEscape=true cancelDisabled=true"
+                    },
+                    {
+                      "type": "synthetic-same-task-race",
+                      "description": "dialogClosed=true downloadsAfterClose=1"
+                    }
+                  ],
+                  "attachments": []
+                }
+              ],
+              "status": "expected"
+            }
+          ],
+          "id": "deb61d1b81172eb9b6f0-bb0094243b0bff209e10",
+          "file": "image-export-real-backend.spec.js",
+          "line": 59,
+          "column": 1
+        }
+      ]
+    }
+  ],
+  "errors": [],
+  "stats": {
+    "startTime": "2026-11-01T17:35:31.626Z",
+    "duration": 27394.594,
+    "expected": 1,
+    "skipped": 0,
+    "unexpected": 0,
+    "flaky": 0
+  }
+}

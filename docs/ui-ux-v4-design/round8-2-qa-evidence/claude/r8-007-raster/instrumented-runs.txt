@@ -1,0 +1,42 @@
+== instrumented run 1
+R82DBG order ["http://localhost:5304/node_modules/.vite/deps/mind-elixir.js?v=9a353a8e","http://localhost:5304/node_modules/mind-elixir/dist/MindElixir.css"]
+R82DBG keys http://localhost:5304/node_modules/.vite/deps/mind-elixir.js?v=9a353a8e ["DARK_THEME","LEFT","RIGHT","SIDE","THEME","default"]
+R82DBG order ["http://localhost:5304/node_modules/.vite/deps/mind-elixir.js?v=9a353a8e","http://localhost:5304/node_modules/mind-elixir/dist/MindElixir.css"]
+R82DBG keys http://localhost:5304/node_modules/.vite/deps/mind-elixir.js?v=9a353a8e ["DARK_THEME","LEFT","RIGHT","SIDE","THEME","default"]
+R82DBG order ["http://localhost:5304/node_modules/.vite/deps/mind-elixir.js?v=9a353a8e","http://localhost:5304/node_modules/mind-elixir/dist/MindElixir.css"]
+R82DBG keys http://localhost:5304/node_modules/.vite/deps/mind-elixir.js?v=9a353a8e ["DARK_THEME","LEFT","RIGHT","SIDE","THEME","default"]
+  1 passed (5.9s)
+== instrumented run 2
+R82DBG order ["http://localhost:5304/node_modules/.vite/deps/mind-elixir.js?v=9a353a8e","http://localhost:5304/node_modules/mind-elixir/dist/MindElixir.css"]
+R82DBG keys http://localhost:5304/node_modules/.vite/deps/mind-elixir.js?v=9a353a8e ["DARK_THEME","LEFT","RIGHT","SIDE","THEME","default"]
+R82DBG order ["http://localhost:5304/node_modules/.vite/deps/mind-elixir.js?v=9a353a8e","http://localhost:5304/node_modules/mind-elixir/dist/MindElixir.css"]
+R82DBG keys http://localhost:5304/node_modules/.vite/deps/mind-elixir.js?v=9a353a8e ["DARK_THEME","LEFT","RIGHT","SIDE","THEME","default"]
+R82DBG order ["http://localhost:5304/node_modules/.vite/deps/mind-elixir.js?v=9a353a8e","http://localhost:5304/node_modules/mind-elixir/dist/MindElixir.css"]
+R82DBG keys http://localhost:5304/node_modules/.vite/deps/mind-elixir.js?v=9a353a8e ["DARK_THEME","LEFT","RIGHT","SIDE","THEME","default"]
+  1 passed (5.6s)
+== instrumented run 3
+R82DBG order ["http://localhost:5304/node_modules/mind-elixir/dist/MindElixir.css","http://localhost:5304/node_modules/.vite/deps/mind-elixir.js?v=9a353a8e"]
+R82DBG keys http://localhost:5304/node_modules/mind-elixir/dist/MindElixir.css []
+    C:\Users\Vu Anh\AppData\Local\Temp\claude\E--TEC2026\c008c549-70eb-4b2c-8434-e640a21ff6b2\scratchpad\r82-raster-dbg3\raster-dbg-deep-mixed-side-b6fef-ls-through-suppress-restore-chromium\test-failed-1.png
+  1 failed
+== instrumented run 4
+R82DBG order ["http://localhost:5304/node_modules/.vite/deps/mind-elixir.js?v=9a353a8e","http://localhost:5304/node_modules/mind-elixir/dist/MindElixir.css"]
+R82DBG keys http://localhost:5304/node_modules/.vite/deps/mind-elixir.js?v=9a353a8e ["DARK_THEME","LEFT","RIGHT","SIDE","THEME","default"]
+R82DBG order ["http://localhost:5304/node_modules/.vite/deps/mind-elixir.js?v=9a353a8e","http://localhost:5304/node_modules/mind-elixir/dist/MindElixir.css"]
+R82DBG keys http://localhost:5304/node_modules/.vite/deps/mind-elixir.js?v=9a353a8e ["DARK_THEME","LEFT","RIGHT","SIDE","THEME","default"]
+R82DBG order ["http://localhost:5304/node_modules/.vite/deps/mind-elixir.js?v=9a353a8e","http://localhost:5304/node_modules/mind-elixir/dist/MindElixir.css"]
+R82DBG keys http://localhost:5304/node_modules/.vite/deps/mind-elixir.js?v=9a353a8e ["DARK_THEME","LEFT","RIGHT","SIDE","THEME","default"]
+  1 passed (6.3s)
+== instrumented run 5
+R82DBG order ["http://localhost:5304/node_modules/mind-elixir/dist/MindElixir.css","http://localhost:5304/node_modules/.vite/deps/mind-elixir.js?v=9a353a8e"]
+R82DBG keys http://localhost:5304/node_modules/mind-elixir/dist/MindElixir.css []
+    C:\Users\Vu Anh\AppData\Local\Temp\claude\E--TEC2026\c008c549-70eb-4b2c-8434-e640a21ff6b2\scratchpad\r82-raster-dbg5\raster-dbg-deep-mixed-side-b6fef-ls-through-suppress-restore-chromium\test-failed-1.png
+  1 failed
+== instrumented run 6
+R82DBG order ["http://localhost:5304/node_modules/.vite/deps/mind-elixir.js?v=9a353a8e","http://localhost:5304/node_modules/mind-elixir/dist/MindElixir.css"]
+R82DBG keys http://localhost:5304/node_modules/.vite/deps/mind-elixir.js?v=9a353a8e ["DARK_THEME","LEFT","RIGHT","SIDE","THEME","default"]
+R82DBG order ["http://localhost:5304/node_modules/.vite/deps/mind-elixir.js?v=9a353a8e","http://localhost:5304/node_modules/mind-elixir/dist/MindElixir.css"]
+R82DBG keys http://localhost:5304/node_modules/.vite/deps/mind-elixir.js?v=9a353a8e ["DARK_THEME","LEFT","RIGHT","SIDE","THEME","default"]
+R82DBG order ["http://localhost:5304/node_modules/.vite/deps/mind-elixir.js?v=9a353a8e","http://localhost:5304/node_modules/mind-elixir/dist/MindElixir.css"]
+R82DBG keys http://localhost:5304/node_modules/.vite/deps/mind-elixir.js?v=9a353a8e ["DARK_THEME","LEFT","RIGHT","SIDE","THEME","default"]
+  1 passed (5.9s)

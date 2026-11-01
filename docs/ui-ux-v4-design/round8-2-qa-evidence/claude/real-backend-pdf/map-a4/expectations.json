@@ -1,0 +1,57 @@
+{
+  "name": "map-a4",
+  "mode": "map",
+  "pageSize": "A4",
+  "titles": {
+    "ROOT": "ROOT — Kiểm chứng PDF tiếng Việt: Trí tuệ nhân tạo và dữ liệu",
+    "P": "Nhánh cha — Kết nối, màu sắc và hình học không bị cắt",
+    "A": "Đồng bộ hóa đa ngôn ngữ: ă â ê ô ơ ư đ Á Ế Ỗ Ờ Ữ",
+    "B": "Dữ liệu nguồn và bằng chứng có thể truy vết",
+    "C": "Hình học ổn định qua mọi khổ trang"
+  },
+  "liveMetrics": {
+    "ROOT": {
+      "overflow": {
+        "left": 0,
+        "top": 0,
+        "right": 0,
+        "bottom": 0
+      },
+      "background": "rgb(17, 24, 39)",
+      "color": "rgb(253, 224, 71)",
+      "box": {
+        "x": 777.9609375,
+        "y": 384.6708679199219,
+        "width": 186.98876953125,
+        "height": 54.65826416015625
+      }
+    },
+    "P": {
+      "overflow": {
+        "left": 0,
+        "top": 0,
+        "right": 0,
+        "bottom": 0
+      },
+      "background": "rgb(254, 243, 199)",
+      "color": "rgb(30, 58, 138)",
+      "box": {
+        "x": 562.20458984375,
+        "y": 393.8854675292969,
+        "width": 186.98883056640625,
+        "height": 36.22906494140625
+      }
+    }
+  },
+  "colors": {
+    "ROOT": {
+      "fill": "#111827",
+      "text": "#FDE047"
+    },
+    "P": {
+      "fill": "#FEF3C7",
+      "text": "#1E3A8A"
+    },
+    "connector": "#E11D48"
+  }
+}
