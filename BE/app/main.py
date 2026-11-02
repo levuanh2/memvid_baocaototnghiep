@@ -862,8 +862,10 @@ def home():
 def _build_revision() -> str:
     """Git commit this process was built from, for release probes.
 
-    Set by scripts/deploy.sh (EC2) or Render's RENDER_GIT_COMMIT. Only a bare
-    hex SHA is ever echoed back, so a mis-set variable cannot leak anything.
+    Set by scripts/deploy.sh (EC2) or Render's RENDER_GIT_COMMIT. Only a value
+    shaped like a hex SHA is echoed (anything else becomes "unknown"); it is a
+    trusted deploy label, not proof of the image's code, and must only ever
+    hold a commit SHA.
     """
     for key in ("APP_BUILD_SHA", "RENDER_GIT_COMMIT"):
         value = (os.environ.get(key) or "").strip().lower()
