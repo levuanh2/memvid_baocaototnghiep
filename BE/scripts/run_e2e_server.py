@@ -70,6 +70,10 @@ data_dir = os.environ.get("DATA_DIR") or tempfile.mkdtemp(prefix="memvid_e2e_")
 os.environ["DATA_DIR"] = data_dir
 
 FORCE_FAIL_MARKER = os.environ.get("E2E_FORCE_FAIL_MARKER", "__E2E_FORCE_FAIL__")
+# E2E_PRACTICE_AI_STUB defaults off. When enabled it replaces only the
+# practice question generator/LLM boundary; routes and persistence remain real.
+# E2E_SHORT_ANSWER_GRADING_STUB behaves the same way for short-answer grading.
+# Answers containing E2E_SHORT_ANSWER_FAIL_MARKER make that LLM call fail.
 
 
 class MockQueryGraph:
@@ -152,6 +156,74 @@ def main() -> None:
 
     be_main.QUERY_GRAPH = MockQueryGraph()
     be_main.MINDMAP_GRAPH = MockMindmapGraph()
+
+    if os.environ.get("E2E_PRACTICE_AI_STUB", "").strip().lower() in {
+        "1", "true", "yes", "on",
+    }:
+        from app.domains.quiz import generator as quiz_generator
+
+        real_generate_questions = quiz_generator.generate_questions
+
+        def _deterministic_practice_questions(context, config, **kwargs):
+            if config.get("quiz_type") != "practice":
+                return real_generate_questions(context, config, **kwargs)
+
+            count = int(config.get("question_count") or 5)
+            allowed = config.get("question_types") or ["multiple_choice"]
+            question_type = "multiple_choice" if "multiple_choice" in allowed else allowed[0]
+            questions = []
+            for index in range(count):
+                number = index + 1
+                question = {
+                    "question_text": f"E2E practice question {number}?",
+                    "question_type": question_type,
+                    "correct_answer": f"Correct {number}",
+                    "explanation": f"Deterministic practice explanation {number}.",
+                    "difficulty": config.get("difficulty") or "easy",
+                    "concept_tags": ["e2e-practice"],
+                    "chunk_refs": ["c0"],
+                }
+                if question_type == "multiple_choice":
+                    question["options"] = [
+                        f"Correct {number}", f"Wrong {number}",
+                        f"Distractor {number}", f"Alternative {number}",
+                    ]
+                elif question_type == "true_false":
+                    question["correct_answer"] = "true"
+                questions.append(question)
+            return questions, None, 1
+
+        quiz_generator.generate_questions = _deterministic_practice_questions
+        print("[run_e2e_server] deterministic practice AI stub enabled", flush=True)
+
+    if os.environ.get("E2E_SHORT_ANSWER_GRADING_STUB", "").strip().lower() in {
+        "1", "true", "yes", "on",
+    }:
+        import json
+        import time
+        from app.domains.attempts import grading as attempt_grading
+
+        real_grade_short_answer = attempt_grading.grade_short_answer
+        delay = float(os.environ.get("E2E_SHORT_ANSWER_GRADING_DELAY_SEC", "5"))
+        fail_marker = os.environ.get(
+            "E2E_SHORT_ANSWER_FAIL_MARKER", "__E2E_GRADE_FAIL__")
+
+        def _deterministic_short_answer_grade(**kwargs):
+            def _ask(_prompt, **_ask_kwargs):
+                time.sleep(delay)
+                if fail_marker in str(kwargs.get("user_answer") or ""):
+                    raise RuntimeError("E2E deterministic short-answer grading failure")
+                return json.dumps({
+                    "verdict": "correct",
+                    "feedback": "E2E deterministic short-answer feedback.",
+                    "missing_points": [],
+                })
+
+            call_kwargs = {**kwargs, "ask": _ask}
+            return real_grade_short_answer(**call_kwargs)
+
+        attempt_grading.grade_short_answer = _deterministic_short_answer_grade
+        print("[run_e2e_server] deterministic short-answer grading stub enabled", flush=True)
 
     def _fast_ingest(source_id: str, file_path: str, filename: str):
         """Deterministic stand-in for the real INGEST_GRAPH.
