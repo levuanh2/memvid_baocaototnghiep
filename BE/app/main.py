@@ -859,6 +859,21 @@ def ready():
 def home():
     return 'MemvidX API is running.'
 
+def _build_revision() -> str:
+    """Git commit this process was built from, for release probes.
+
+    Set by scripts/deploy.sh (EC2) or Render's RENDER_GIT_COMMIT. Only a value
+    shaped like a hex SHA is echoed (anything else becomes "unknown"); it is a
+    trusted deploy label, not proof of the image's code, and must only ever
+    hold a commit SHA.
+    """
+    for key in ("APP_BUILD_SHA", "RENDER_GIT_COMMIT"):
+        value = (os.environ.get(key) or "").strip().lower()
+        if re.fullmatch(r"[0-9a-f]{7,40}", value):
+            return value
+    return "unknown"
+
+
 @app.get('/health')
 def health():
     skip_model_load = os.environ.get("SKIP_MODEL_LOAD") == "1"
@@ -867,6 +882,7 @@ def health():
         "mode": "ci" if skip_model_load else "normal",
         "query_graph_ready": QUERY_GRAPH is not None,
         "ingest_graph_ready": INGEST_GRAPH is not None,
+        "revision": _build_revision(),
     }
     err = globals().get("QUERY_GRAPH_BUILD_ERROR")
     if err:

@@ -83,7 +83,7 @@ for (const vp of VIEWPORTS) {
       await page.screenshot({ path: path.join(OUT, `${tag}-4-selection-0.png`) });
       rec.selection0 = await measure(page);
       // 5. two selected
-      // Real clicks on markers that are inside the viewport (at 390px the canvas may
+      // Keyboard (Space) selection on markers by stable node IDs (at 390px the canvas may
       // start panned, so some markers sit off-screen until the user pans).
       for (const id of [`${MAP_A_ID}-m0-s0-l0`, `${MAP_A_ID}-m1-s0-l0`]) {
         await page.locator(`me-export-check[data-node-id="${id}"]`).press("Space");

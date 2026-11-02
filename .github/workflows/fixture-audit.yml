@@ -1,0 +1,60 @@
+# Full Vite fixture-harness suite (FE/playwright.fixture.config.js, 448 tests,
+# about 17 minutes on one worker). Periodic verification, NOT a merge gate:
+# ci.yml runs the blocking smoke subset (job fixture-smoke).
+#
+# Deliberately not named "CI": deploy.yml triggers on the "CI" workflow, so this
+# can never trigger or gate the EC2 deploy. Render's checksPass sees every check
+# on a commit, so a failed scheduled run on an undeployed main commit could hold
+# the frontend deploy (see round8-4-qa-evidence/fixture-ci-coverage.md).
+
+name: Fixture Audit
+
+on:
+  schedule:
+    - cron: "17 3 * * 1" # Mondays 03:17 UTC
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: fixture-audit
+  cancel-in-progress: true
+
+jobs:
+  fixture-full:
+    name: Fixture Full Suite (Playwright)
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+    defaults:
+      run:
+        working-directory: FE
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+          cache: npm
+          cache-dependency-path: FE/package-lock.json
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Install Playwright browsers
+        run: npx playwright install --with-deps chromium
+
+      - name: Run full fixture suite
+        run: npx playwright test -c playwright.fixture.config.js --workers=1 --fail-on-flaky-tests
+
+      - name: Upload fixture report & traces
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: playwright-fixture-full-report
+          path: |
+            FE/playwright-fixture-report/
+            FE/test-results/
+          retention-days: 14

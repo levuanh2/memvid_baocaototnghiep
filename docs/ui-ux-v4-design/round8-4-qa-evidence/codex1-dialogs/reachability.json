@@ -1,0 +1,25 @@
+{
+  "realStack": "Flask + disposable Postgres; artifact stores are disposable SQLite under DATA_DIR",
+  "userId": "4a800cf9-5d62-4db0-892e-b5df9ac6fd40",
+  "seeded": {
+    "mapId": "e2e-map-19ef5144-fb03-4b5e-85e8-17f975b3082a-1793614662960727500",
+    "mapPresentOnServer": true,
+    "summaryId": "r84-summary-1793614663094",
+    "summaryPresentOnServer": true
+  },
+  "dom": {
+    "contextInspectorVisible": true,
+    "deleteMapButtons": 0,
+    "deleteSummaryButtons": 0,
+    "dialogs": 0
+  },
+  "sourceGuard": {
+    "constant": "const legacyInspectorSurfacesEnabled = false",
+    "guardedBlock": "{legacyInspectorSurfacesEnabled && <div ...> ... saved map/summary ListCard delete buttons ... </div>}"
+  },
+  "network": [
+    "POST /auth/register",
+    "POST /api/documents/upload"
+  ],
+  "summarySeedSql": "CREATE TABLE IF NOT EXISTS summaries (\n  id TEXT PRIMARY KEY, content_hash TEXT, sources_json TEXT,\n  created_at TEXT, record_json TEXT, user_id TEXT\n);\nINSERT OR REPLACE INTO summaries\n  (id, content_hash, sources_json, created_at, record_json, user_id)\nVALUES (?, ?, ?, ?, ?, ?);"
+}

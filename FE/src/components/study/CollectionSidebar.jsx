@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { Icon } from "../ui/Icon";
 import { hexMau, MAU, kiemTraTenBoSuuTap } from "../../utils/boSuuTap";
 import { KHONG_PHAN_LOAI } from "../../utils/thuVienTaiLieu";
@@ -16,11 +16,12 @@ import { KHONG_PHAN_LOAI } from "../../utils/thuVienTaiLieu";
  * đặt phạm vi câu hỏi. Hai nghĩa khác nhau nên hai component khác nhau.
  */
 
-function MucLoc({ nhan, so, dangChon, mau, icon, onClick, onSua }) {
+function MucLoc({ nhan, so, dangChon, mau, icon, onClick, onSua, collectionId }) {
   return (
     <div className="group flex items-center gap-1">
       <button
         type="button"
+        data-collection-id={collectionId}
         onClick={onClick}
         aria-pressed={dangChon}
         className="flex-1 min-w-0 flex items-center gap-2 rounded-control px-2 py-1.5 text-left
@@ -121,6 +122,28 @@ export default function CollectionSidebar({
 }) {
   const [dangTao, setDangTao] = useState(false);
   const [dangSua, setDangSua] = useState(null);
+  const rootRef = useRef(null);
+  const idsTruocRef = useRef([]);
+
+  // The collection being edited vanished from the list: it was deleted, so its
+  // form and "Xoá" button are gone and Modal had nothing to return focus to.
+  // Only then (never while the DELETE is in flight or after a failure, when the
+  // list is unchanged) move focus to the next collection, the previous one, or
+  // the create button — and only if focus was actually lost to <body>.
+  useEffect(() => {
+    const ids = boSuuTap.map((c) => c.collection_id);
+    const truoc = idsTruocRef.current;
+    idsTruocRef.current = ids;
+    if (!dangSua || ids.includes(dangSua)) return;
+    setDangSua(null);
+    if (document.activeElement && document.activeElement !== document.body) return;
+    const i = truoc.indexOf(dangSua);
+    const keTiep = i >= 0 ? (ids[i] ?? ids[i - 1]) : null;
+    const dich = keTiep
+      ? rootRef.current?.querySelector(`[data-collection-id="${keTiep}"]`)
+      : rootRef.current?.querySelector('[aria-label="Tạo bộ sưu tập"]');
+    dich?.focus();
+  }, [boSuuTap, dangSua]);
 
   const dangChon = chon || {};
   const chonBst = (id) => onChon({ ...dangChon, collectionId: dangChon.collectionId === id ? null : id, tags: dangChon.tags });
@@ -133,7 +156,7 @@ export default function CollectionSidebar({
   };
 
   return (
-    <aside className="w-[210px] shrink-0 hidden lg:block" aria-label="Bộ lọc thư viện">
+    <aside ref={rootRef} className="w-[210px] shrink-0 hidden lg:block" aria-label="Bộ lọc thư viện">
       <div className="sticky top-4">
         <Nhom
           tieuDe="Bộ sưu tập"
@@ -164,6 +187,7 @@ export default function CollectionSidebar({
             ) : (
               <MucLoc
                 key={c.collection_id}
+                collectionId={c.collection_id}
                 nhan={c.name}
                 so={c.hien_thi_count}
                 mau={hexMau(c.color)}

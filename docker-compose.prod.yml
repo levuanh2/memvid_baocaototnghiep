@@ -46,6 +46,8 @@ services:
       CONVERSATIONS_DB_PATH: /app/memory/conversations.sqlite
       USERS_DB_PATH: /app/memory/users.sqlite
       PROCESS_ROLE: web
+      # Commit reported by /health; scripts/deploy.sh exports it per deploy.
+      APP_BUILD_SHA: ${APP_BUILD_SHA:-unknown}
     volumes:
       - /opt/memvid/data/index:/app/index
       - /opt/memvid/data/memory:/app/memory
