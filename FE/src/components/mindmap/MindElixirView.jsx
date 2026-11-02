@@ -974,6 +974,10 @@ export default function MindElixirView({ data, onRegenerate, regenerating, contr
   const applyDepthLevel = useCallback((level) => {
     const mind = mindRef.current;
     if (!mind?.nodeData) return;
+    const rootBefore = findTopicSafely(mind, mind.nodeData.id)?.getBoundingClientRect?.();
+    const rootCenterBefore = rootBefore
+      ? { x: rootBefore.left + rootBefore.width / 2, y: rootBefore.top + rootBefore.height / 2 }
+      : null;
     if (level === 0) {
       setRootOnly(mind, true);
     } else {
@@ -997,6 +1001,18 @@ export default function MindElixirView({ data, onRegenerate, regenerating, contr
           if (topic) mind.expandNodeAll?.(topic, false);
         });
       }
+    }
+    // A preset can perform several refreshes. Mind Elixir preserves the
+    // expanded node's top-left corner after each one, but a refreshed root
+    // can have slightly different fractional font/padding metrics. Re-anchor
+    // the root's centre once, after the complete preset, so those sub-pixel
+    // differences do not accumulate into visible viewport drift.
+    const rootAfter = findTopicSafely(mind, mind.nodeData.id)?.getBoundingClientRect?.();
+    if (rootCenterBefore && rootAfter) {
+      mind.move?.(
+        rootCenterBefore.x - (rootAfter.left + rootAfter.width / 2),
+        rootCenterBefore.y - (rootAfter.top + rootAfter.height / 2),
+      );
     }
     // setRootOnly/expandNodeAll each call mind.refresh() internally, which
     // rewrites every topic's DOM wholesale and wipes any inline style
