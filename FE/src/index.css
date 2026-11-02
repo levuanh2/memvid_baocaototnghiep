@@ -1172,8 +1172,9 @@
   .study-library-link,
   .usage-chip__trigger,
   .usage-chip__placeholder,
-  .usage-chip__retry,
-  .account-menu__trigger { width: 40px !important; min-width: 40px; height: 40px !important; padding: 0 !important; justify-content: center !important; }
+  .usage-chip__retry { width: 40px !important; min-width: 40px; height: 40px !important; padding: 0 !important; justify-content: center !important; }
+  /* Account keeps the project 44px mobile target; the row still fits at 320px. */
+  .account-menu__trigger { width: 44px !important; min-width: 44px; height: 44px !important; padding: 0 !important; justify-content: center !important; }
   .usage-chip__status { display: block !important; }
   .workspace-header-actions { gap: 4px !important; }
   .workspace-mode-switch { flex: 0 0 auto; overflow: visible; }
