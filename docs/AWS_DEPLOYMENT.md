@@ -119,11 +119,19 @@ cp /opt/memvid/app/.env.example.aws /opt/memvid/env/.env
 chmod 600 /opt/memvid/env/.env
 ```
 
-Every deploy (first time and every update) — from `/opt/memvid/app`:
+Every normal deploy (first time and every update) — from `/opt/memvid/app`,
+using the exact 40-character `main` commit SHA whose CI run passed:
 
 ```bash
-scripts/deploy.sh
+scripts/deploy.sh <ci-verified-main-sha>
 ```
+
+`deploy.sh` derives the GitHub owner/repository from `origin` and verifies
+through GitHub's public API that the exact SHA has a successful `ci.yml` run
+for a push to `main`; it fails closed if evidence is absent or unreachable.
+Both deploy and rollback also take a non-blocking host lock at
+`${MEMVID_LOCK_FILE:-/opt/memvid/deploy.lock}`, so a competing operation
+fails fast instead of racing the checkout or Compose stack.
 
 `deploy.sh` runs, in this exact order, and stops at the first failure:
 
@@ -131,11 +139,13 @@ scripts/deploy.sh
 2. **Ensure data layout** — creates every bind-mounted directory/file that's
    missing (including `checkpoints.sqlite`, as an empty file, self-healing
    if Docker previously auto-created it as a directory).
-3. **Sync code** — fetches `origin/main` and resets the local clone to match
-   it exactly, regardless of what branch/commit it was previously on (this
-   is what makes rollback safe — see Rollback below). Aborts if the clone
-   has real uncommitted changes; `MEMVID_FORCE_RESET=1 scripts/deploy.sh`
-   overrides that.
+3. **Pin code** — verifies CI evidence, fetches `origin/main`, proves the SHA
+   is on current main, and resets to it. It refuses any modified, untracked or
+   git-ignored file under `BE` or in `docker-compose.prod.yml`
+   (`git status --ignored`), even with `MEMVID_FORCE_RESET=1`, because
+   `BE/Dockerfile` copies the whole `BE` context into the image. Remove such
+   files on the host; `scripts/deploy_preflight.sh` lists them. Main is fetched/rechecked again immediately
+   before migration and immediately before activation.
 4. **Build** the backend image.
 5. **Migrate** — `python -m scripts.run_migrations --moi-truong production`
    runs as part of every deploy, not as a separate manual step. This is the
@@ -150,12 +160,91 @@ scripts/deploy.sh
 
 ## GitHub Actions auto-deploy
 
-`.github/workflows/deploy.yml` runs the manual flow above automatically:
+### Before merging Round 8.4A: run the EC2 preflight (read-only)
+
+The pinned deploy was tested with a mocked server and mocked Docker only. The
+first real run is the first deploy after merge. It stops, and leaves the
+running release untouched, if the host lacks any requirement. A hotfix would
+then not ship either. On the EC2 host, before merging:
+
+```bash
+curl -fsSL https://raw.githubusercontent.com/levuanh2/memvid_baocaototnghiep/fix/studymap-v4-round8-4-deploy-safety/scripts/deploy_preflight.sh \
+  | MEMVID_APP_DIR=/opt/memvid/app bash
+```
+
+It changes nothing. It checks `flock`, `curl`, `python3`, `git`,
+`docker compose`, the env file, write access for `/opt/memvid/deploy.lock` and
+`/opt/memvid/deployments.log`, a clean checkout with no untracked files under
+`BE/`, and that `api.github.com` is reachable. Fix every `FAIL` first, then
+watch the first deploy's log. After merge, run the same check as
+`bash scripts/deploy_preflight.sh`.
+
+`.github/workflows/deploy.yml` runs the pinned flow above automatically:
 triggered by the completion of the `CI` workflow, gated to only fire when
 that CI run passed, was for a push (not a PR), and was on `main`. On a
-green run it SSHes into the EC2 box and runs the exact sequence documented
-under Deployment (fetch, checkout `main`, `git pull --ff-only`, `chmod +x
-scripts/*.sh`, `./scripts/deploy.sh`).
+green run it validates repository/workflow identity, compares the run SHA to
+remote main, and skips successfully if main has advanced. Otherwise it streams
+the verified `scripts/deploy_remote.sh` over SSH and deploys that exact SHA.
+Only explicit supersession branches may return 75; unrelated child status 75
+is normalized to failure 70. A genuine 75 restores the previous checkout.
+
+The two Render Blueprint services use `autoDeployTrigger: checksPass`.
+Render counts GitHub conclusions `success`, `neutral`, and `skipped` as
+passing; any failure or zero detected checks blocks deployment. On PRs, path
+filters can skip **Frontend Tests/Build**, **Backend Unit/Integration**, **E2E
+Critical Flows**, and **Docker Build** (with **Docker Compose Run** cascading);
+all are forced active on `main`. **CI / required** aggregates the active
+required jobs and fails on a failure or cancellation.
+
+Render pins nothing to a workflow-run SHA: it deploys the newest main commit
+whose checks passed. After merge, a human must verify Blueprint sync and that
+**both studymap-web and studymap-api → Settings → Auto-Deploy** show **After CI
+Checks Pass**. Also verify the workspace **Overlapping Deploy Policy**; choose
+**Override** if latest-only activation is required. Render's **Wait** policy
+allows an older running deploy to finish, skips intermediates, then runs the
+newest. See https://render.com/docs/deploys#handling-overlapping-deploys.
+Repository automation cannot verify these live dashboard settings.
+
+### When CI is red: flaky check or emergency hotfix
+
+Operational rules: rollback accepts only exact SHAs already in the deployment
+ledger, which **starts empty**: until the first pinned deploy is recorded, every
+rollback is a break-glass rollback. `MEMVID_BREAK_GLASS=1` together with
+`MEMVID_BREAK_GLASS_REASON="<why>"` is the single human override. Normal pinned
+deploys also require outbound access from EC2 to `api.github.com` to verify
+the SHA's successful CI run. If GitHub is unavailable, deployment stops unless
+an operator explicitly chooses break glass.
+
+Since 8.4A, EC2 deploy requires the whole `CI` workflow to succeed, while
+Render `checksPass` requires every GitHub check on the main commit to pass.
+Track B adds the blocking **Fixture Smoke** job, so one flaky UI test blocks
+both backend and frontend deployment.
+
+Normal remedy: open **GitHub → Actions → the failed CI run → Re-run failed
+jobs**. Per GitHub's `workflow_run` event documentation, `completed` occurs
+again when the re-run attempt completes; once it is green, `deploy.yml` applies
+the same gate and SHA pinning, and Render picks up the commit after all checks
+are green.
+
+Emergency bypass (human operator only; make an explicit, logged decision):
+
+```bash
+# Backend, after SSH to EC2
+cd /opt/memvid/app && git fetch origin main
+MEMVID_BREAK_GLASS=1 MEMVID_BREAK_GLASS_REASON="incident-123 hotfix while CI flaky" \
+  ./scripts/deploy.sh <full-current-main-sha>
+```
+
+The pinned backend path still refuses a SHA other than current `origin/main`.
+The same `MEMVID_BREAK_GLASS=1` flag is the only escape hatch for an unpinned
+deploy, unverifiable pinned CI evidence, or an unledgered rollback. It refuses
+to run without a reason, writes a `break-glass-attempt` line (user, reason)
+BEFORE changing anything, then `break-glass` on success or `break-glass-failed`
+on failure. Only `deploy`, `rollback` and successful `break-glass` lines make a
+SHA eligible for a normal rollback. The ledger is an audit aid, not a security
+boundary against the deploy user, who can edit it and can use break glass.
+For frontend, use **Render → studymap-web → Manual Deploy → latest commit**.
+Both actions bypass CI and must be followed by a normal green CI run.
 
 **Required GitHub Secrets** (Settings → Secrets and variables → Actions):
 
@@ -216,21 +305,28 @@ check permanently true, which defeats the point of it.
 ## Rollback
 
 ```bash
-scripts/rollback.sh <git-ref>
+scripts/rollback.sh <full-ledgered-sha>
 ```
 
-Requires an explicit commit SHA or tag — no automatic "previous commit"
-guessing. Aborts if the clone has uncommitted changes. Checks out the ref
-(**detached HEAD, intentionally** — the script logs this explicitly so it
-reads as expected behavior, not a broken state), rebuilds, restarts, waits
-for `/health`. If health never returns, the script exits non-zero but leaves
-the ref checked out — investigate with `scripts/logs.sh backend`, or roll
-forward again with a known-good ref.
+Requires an exact full commit SHA already recorded in
+`${MEMVID_DEPLOY_LEDGER:-/opt/memvid/deployments.log}`; arbitrary tags and
+branches are refused. Nothing is inherited: a SHA becomes eligible only when
+this ledger recorded it as deployed, so the release running before Round 8.4A
+(and any never-recorded SHA) needs `MEMVID_BREAK_GLASS=1` plus
+`MEMVID_BREAK_GLASS_REASON`. Rollback takes the same host lock as deploy,
+refuses modified, untracked or git-ignored files under `BE/`, resolves
+`<sha>^{commit}`, checks out that
+exact SHA detached, exports `APP_BUILD_SHA`, rebuilds/restarts, health-checks,
+and only then appends `<utc> <sha> <rollback|break-glass>`.
 
-The detached HEAD never lingers into the next deploy: `scripts/deploy.sh`'s
-sync-code step unconditionally resets the local clone to `origin/main`
-before building, regardless of what ref it finds checked out. Running
-`deploy.sh` after a rollback is the normal way back to the latest code.
+The detached HEAD never leaks into the next pinned deploy: `scripts/deploy.sh`
+checks out the requested CI-verified main SHA before building, regardless of
+what ref it finds. Running `deploy.sh <ci-verified-main-sha>` after a rollback
+is the normal way back to the approved code.
+
+Track A exports `APP_BUILD_SHA` during deploy and rollback. Track B consumes
+it in `docker-compose.prod.yml` and exposes it as the `/health` `revision`;
+both PRs are required before runtime provenance is visible.
 
 Rollback only reverts backend code/images. A migration that ran forward
 before the rollback is not automatically reversed — check `alembic history`
