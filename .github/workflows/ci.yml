@@ -34,6 +34,8 @@ jobs:
       backend: ${{ steps.filter.outputs.backend }}
       shared: ${{ steps.filter.outputs.shared }}
     steps:
+      - name: PROBE simulated detect-changes failure (do not merge)
+        run: exit 1
       - name: Checkout
         uses: actions/checkout@v4
 
