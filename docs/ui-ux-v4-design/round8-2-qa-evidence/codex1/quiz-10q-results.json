@@ -1,0 +1,45 @@
+{
+  "git_sha": "c02e2b91ae2207d472756cd34003b5cb6fee1620",
+  "environment": "Docker Postgres 16:55432; protected Flask:8080; production FE:4173",
+  "api_db": "real Flask and Postgres; deterministic DB seed replaces only AI question generation",
+  "timestamp_started": "2026-11-01T16:58:07.791Z",
+  "timestamp_finished": "2026-11-01T16:58:20.019Z",
+  "method": "Playwright Chromium + real HTTP + docker exec psql assertions",
+  "expected": "10Q durable journey, fault barriers, grading/mastery/review ownership",
+  "observed": {
+    "cross_account_statuses": {
+      "get": 404,
+      "patch": 404,
+      "submit": 404
+    },
+    "postgres": {
+      "attempt_rows": 1,
+      "active_attempts": 0,
+      "status": "graded",
+      "score": 8,
+      "answer_rows": 10,
+      "grade_from_persisted_answers": 8,
+      "masteries": [
+        {
+          "concept": "Advanced concepts",
+          "earned": 3,
+          "total": 5,
+          "mastery": 0.6,
+          "status": "light_review"
+        },
+        {
+          "concept": "Core concepts",
+          "earned": 5,
+          "total": 5,
+          "mastery": 1,
+          "status": "mastered"
+        }
+      ],
+      "review_sections_permitted": true,
+      "review_chunks_permitted": true
+    }
+  },
+  "verdict": "PASS",
+  "source_ref_follow": "NOT VERIFIED: source references are non-interactive text; no navigation control exists",
+  "practice_quiz": "NOT VERIFIED: shared deterministic server does not stub quiz/practice AI generation"
+}

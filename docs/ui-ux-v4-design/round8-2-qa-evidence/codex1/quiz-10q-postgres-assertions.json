@@ -1,0 +1,33 @@
+{
+  "mid": {
+    "active_attempts": 1,
+    "question_count": 10,
+    "score": null
+  },
+  "final": {
+    "attempt_rows": 1,
+    "active_attempts": 0,
+    "status": "graded",
+    "score": 8,
+    "answer_rows": 10,
+    "grade_from_persisted_answers": 8,
+    "masteries": [
+      {
+        "concept": "Advanced concepts",
+        "earned": 3,
+        "total": 5,
+        "mastery": 0.6,
+        "status": "light_review"
+      },
+      {
+        "concept": "Core concepts",
+        "earned": 5,
+        "total": 5,
+        "mastery": 1,
+        "status": "mastered"
+      }
+    ],
+    "review_sections_permitted": true,
+    "review_chunks_permitted": true
+  }
+}

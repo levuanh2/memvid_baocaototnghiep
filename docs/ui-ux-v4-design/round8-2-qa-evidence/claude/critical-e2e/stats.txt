@@ -1,0 +1,2 @@
+r82-critical-e2e {"startTime":"2026-11-01T16:22:01.762Z","duration":117867.31899999999,"expected":40,"skipped":0,"unexpected":0,"flaky":0}
+r82-critical-e2e-protected {"startTime":"2026-11-01T16:29:50.112Z","duration":113718.027,"expected":40,"skipped":0,"unexpected":0,"flaky":0}

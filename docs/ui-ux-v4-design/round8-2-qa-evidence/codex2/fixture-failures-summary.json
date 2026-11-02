@@ -1,0 +1,26 @@
+{
+  "git_sha": "c02e2b91ae2207d472756cd34003b5cb6fee1620",
+  "environment": "Windows; local Chromium; Vite fixture server localhost:5301; one worker",
+  "api_db": "mocked fixture data; no real API or database",
+  "timestamp_start": "2026-11-01T16:20:59.125Z",
+  "method": "four named fixture specs, repeat-each=3, JSON reporter",
+  "expected": "12 named prior failures each run three times",
+  "observed": { "executions": 105, "passed": 69, "failed": 36, "skipped": 0, "flaky": 0, "distinct_failed": 12 },
+  "status": "FAIL_TRIAGED",
+  "classifications": { "PRODUCT_DEFECT": 6, "STALE_TEST_CONTRACT": 6 },
+  "product_defect": {
+    "identity_count": 6,
+    "underlying_defects": 1,
+    "severity": "P3",
+    "summary": "Depth preset root horizontal center drifts 1.7220458984375px at 1440/1024 and 1.291534423828125px at 390; contract is <=1px.",
+    "owner": "FE MindMap rendering",
+    "introduced_by": "a3aabed / PR #93"
+  },
+  "stale_contracts": {
+    "identity_count": 6,
+    "severity": "P3",
+    "owners": ["FE MindMap QA", "Export Studio QA"],
+    "approved_changes": ["302548d / PR #84 auto-context three-set semantics", "90a959f / PR #95 Preview Bench"]
+  },
+  "raw_report": "fixture-rerun-repeat3.raw.json"
+}

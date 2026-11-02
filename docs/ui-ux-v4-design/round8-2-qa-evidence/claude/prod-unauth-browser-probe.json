@@ -1,0 +1,71 @@
+{
+  "at": "2026-11-01T16:17:41.879Z",
+  "results": [
+    {
+      "url": "https://studymap.space/",
+      "viewport": "390x844",
+      "status": 200,
+      "finalUrl": "https://studymap.space/",
+      "title": "MemVidX — Đọc · Truy hồi · Dẫn chứng",
+      "overflowX": 0,
+      "consoleErrors": [],
+      "failed": [],
+      "insecure": []
+    },
+    {
+      "url": "https://studymap.space/",
+      "viewport": "1440x900",
+      "status": 200,
+      "finalUrl": "https://studymap.space/",
+      "title": "MemVidX — Đọc · Truy hồi · Dẫn chứng",
+      "overflowX": 0,
+      "consoleErrors": [],
+      "failed": [],
+      "insecure": []
+    },
+    {
+      "url": "https://studymap.space/app",
+      "viewport": "390x844",
+      "status": 200,
+      "finalUrl": "https://studymap.space/login?next=%2Fapp",
+      "title": "MemVidX — Đọc · Truy hồi · Dẫn chứng",
+      "overflowX": 0,
+      "consoleErrors": [],
+      "failed": [],
+      "insecure": []
+    },
+    {
+      "url": "https://studymap.space/app",
+      "viewport": "1440x900",
+      "status": 200,
+      "finalUrl": "https://studymap.space/login?next=%2Fapp",
+      "title": "MemVidX — Đọc · Truy hồi · Dẫn chứng",
+      "overflowX": 0,
+      "consoleErrors": [],
+      "failed": [],
+      "insecure": []
+    },
+    {
+      "url": "https://studymap.space/login",
+      "viewport": "390x844",
+      "status": 200,
+      "finalUrl": "https://studymap.space/login",
+      "title": "MemVidX — Đọc · Truy hồi · Dẫn chứng",
+      "overflowX": 0,
+      "consoleErrors": [],
+      "failed": [],
+      "insecure": []
+    },
+    {
+      "url": "https://studymap.space/login",
+      "viewport": "1440x900",
+      "status": 200,
+      "finalUrl": "https://studymap.space/login",
+      "title": "MemVidX — Đọc · Truy hồi · Dẫn chứng",
+      "overflowX": 0,
+      "consoleErrors": [],
+      "failed": [],
+      "insecure": []
+    }
+  ]
+}

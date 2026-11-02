@@ -1,0 +1,63 @@
+{
+  "scenario1": {
+    "scenario": "map_and_outline",
+    "pdfPath": "E:\\memvid_NCKH\\MemVid_BaoCaoTotNghiep\\.worktrees\\phase-c-round8-2-release-gate\\docs\\ui-ux-v4-design\\round8-2-qa-evidence\\agy\\pdf-artifacts\\scenario-1-map-and-outline\\artifact-map-and-outline.pdf",
+    "headerValid": true,
+    "pageCount": 9,
+    "renderedPages": [
+      "E:\\memvid_NCKH\\MemVid_BaoCaoTotNghiep\\.worktrees\\phase-c-round8-2-release-gate\\docs\\ui-ux-v4-design\\round8-2-qa-evidence\\agy\\pdf-artifacts\\scenario-1-map-and-outline\\rendered-page-1.png",
+      "E:\\memvid_NCKH\\MemVid_BaoCaoTotNghiep\\.worktrees\\phase-c-round8-2-release-gate\\docs\\ui-ux-v4-design\\round8-2-qa-evidence\\agy\\pdf-artifacts\\scenario-1-map-and-outline\\rendered-page-2.png",
+      "E:\\memvid_NCKH\\MemVid_BaoCaoTotNghiep\\.worktrees\\phase-c-round8-2-release-gate\\docs\\ui-ux-v4-design\\round8-2-qa-evidence\\agy\\pdf-artifacts\\scenario-1-map-and-outline\\rendered-page-3.png",
+      "E:\\memvid_NCKH\\MemVid_BaoCaoTotNghiep\\.worktrees\\phase-c-round8-2-release-gate\\docs\\ui-ux-v4-design\\round8-2-qa-evidence\\agy\\pdf-artifacts\\scenario-1-map-and-outline\\rendered-page-4.png",
+      "E:\\memvid_NCKH\\MemVid_BaoCaoTotNghiep\\.worktrees\\phase-c-round8-2-release-gate\\docs\\ui-ux-v4-design\\round8-2-qa-evidence\\agy\\pdf-artifacts\\scenario-1-map-and-outline\\rendered-page-5.png",
+      "E:\\memvid_NCKH\\MemVid_BaoCaoTotNghiep\\.worktrees\\phase-c-round8-2-release-gate\\docs\\ui-ux-v4-design\\round8-2-qa-evidence\\agy\\pdf-artifacts\\scenario-1-map-and-outline\\rendered-page-6.png",
+      "E:\\memvid_NCKH\\MemVid_BaoCaoTotNghiep\\.worktrees\\phase-c-round8-2-release-gate\\docs\\ui-ux-v4-design\\round8-2-qa-evidence\\agy\\pdf-artifacts\\scenario-1-map-and-outline\\rendered-page-7.png",
+      "E:\\memvid_NCKH\\MemVid_BaoCaoTotNghiep\\.worktrees\\phase-c-round8-2-release-gate\\docs\\ui-ux-v4-design\\round8-2-qa-evidence\\agy\\pdf-artifacts\\scenario-1-map-and-outline\\rendered-page-8.png",
+      "E:\\memvid_NCKH\\MemVid_BaoCaoTotNghiep\\.worktrees\\phase-c-round8-2-release-gate\\docs\\ui-ux-v4-design\\round8-2-qa-evidence\\agy\\pdf-artifacts\\scenario-1-map-and-outline\\rendered-page-9.png"
+    ],
+    "outlineTextFound": 11,
+    "outlineTextTotal": 11,
+    "allTitlesPresent": true,
+    "missingTitles": [],
+    "foundTitles": [
+      "Chủ đề chính: Nghiên cứu Khoa học và Chuyển đổi số Nông nghiệp Carbon Thấp TEC2026",
+      "Nhánh 1: Cơ sở lý luận và Khung pháp lý Quốc tế về Tín chỉ Carbon Rừng và Nông nghiệp",
+      "Nhánh 2: Phương pháp luận MRV và Mô hình Đo đạc Phát thải Khí nhà kính Bền vững",
+      "Tiêu chuẩn Verra VM0042 và Phương pháp đo đạc tín chỉ carbon đất nông nghiệp",
+      "Hệ thống chính sách phát thải ròng bằng không Net Zero 2050 tại Việt Nam",
+      "Cảm biến IoT và Công nghệ Viễn thám Giám sát Mực nước Ruột lúa AWD",
+      "Thuật toán Ước lượng Phát thải Mê-tan CH4 và Nitơ Oxit N2O tự động",
+      "Dữ liệu lịch sử canh tác ba năm liên tiếp và đối chiếu tọa độ ranh giới thửa ruộng",
+      "Cơ chế trao đổi hạn ngạch và thị trường tín chỉ carbon trong nước theo Nghị định 06",
+      "Thiết bị đo cảm biến siêu âm truyền dữ liệu qua giao thức LoRaWAN về trạm trung tâm",
+      "Mô hình DNDC và IPCC Tier 2 hiệu chỉnh theo đặc thù khí hậu Đồng bằng Sông Cửu Long"
+    ],
+    "embeddedImage": {
+      "width": 4148,
+      "height": 396,
+      "format": "png",
+      "pixelDeltaAvg": 0.0,
+      "pixelDeltaMax": 0
+    },
+    "colorVerification": {
+      "rootFillPixels": 85422,
+      "connectorPixels": 33701,
+      "colorsPreserved": true
+    },
+    "status": "PASS"
+  },
+  "scenario2": {
+    "scenario": "map_content_fit",
+    "pdfPath": "E:\\memvid_NCKH\\MemVid_BaoCaoTotNghiep\\.worktrees\\phase-c-round8-2-release-gate\\docs\\ui-ux-v4-design\\round8-2-qa-evidence\\agy\\pdf-artifacts\\scenario-2-content-fit\\artifact-content-fit.pdf",
+    "headerValid": true,
+    "pageCount": 1,
+    "renderedPage": "E:\\memvid_NCKH\\MemVid_BaoCaoTotNghiep\\.worktrees\\phase-c-round8-2-release-gate\\docs\\ui-ux-v4-design\\round8-2-qa-evidence\\agy\\pdf-artifacts\\scenario-2-content-fit\\rendered-page-1.png",
+    "embeddedImage": {
+      "width": 4148,
+      "height": 396,
+      "nonWhitePixels": 636479,
+      "notBlank": true
+    },
+    "status": "PASS"
+  }
+}

@@ -1,0 +1,184 @@
+{
+  "config": {
+    "argv": [
+      "C:\\Program Files\\nodejs\\node.exe",
+      "E:\\memvid_NCKH\\MemVid_BaoCaoTotNghiep\\.worktrees\\phase-c-round8-2-release-gate\\FE\\node_modules\\@playwright\\test\\cli.js",
+      "test",
+      "--config",
+      "e2e-r82-claude/library-flag.config.mjs",
+      "--output",
+      "e2e-r82-claude/out"
+    ],
+    "configFile": "E:\\memvid_NCKH\\MemVid_BaoCaoTotNghiep\\.worktrees\\phase-c-round8-2-release-gate\\FE\\e2e-r82-claude\\library-flag.config.mjs",
+    "rootDir": "E:/memvid_NCKH/MemVid_BaoCaoTotNghiep/.worktrees/phase-c-round8-2-release-gate/FE/e2e-r82-claude",
+    "failOnFlakyTests": false,
+    "forbidOnly": false,
+    "fullyParallel": false,
+    "globalSetup": null,
+    "globalTeardown": null,
+    "globalTimeout": 0,
+    "grep": {},
+    "grepInvert": null,
+    "maxFailures": 0,
+    "metadata": {
+      "actualWorkers": 1
+    },
+    "preserveOutput": "always",
+    "projects": [
+      {
+        "outputDir": "E:/memvid_NCKH/MemVid_BaoCaoTotNghiep/.worktrees/phase-c-round8-2-release-gate/FE/e2e-r82-claude/out",
+        "repeatEach": 1,
+        "retries": 0,
+        "metadata": {
+          "actualWorkers": 1
+        },
+        "id": "chromium",
+        "name": "chromium",
+        "testDir": "E:/memvid_NCKH/MemVid_BaoCaoTotNghiep/.worktrees/phase-c-round8-2-release-gate/FE/e2e-r82-claude",
+        "testIgnore": [],
+        "testMatch": [
+          "/library-flag-real-backend\\.spec\\.js$/"
+        ],
+        "timeout": 60000
+      }
+    ],
+    "quiet": false,
+    "reporter": [
+      [
+        "list",
+        null
+      ],
+      [
+        "json",
+        {
+          "outputFile": "results.json"
+        }
+      ]
+    ],
+    "reportSlowTests": {
+      "max": 5,
+      "threshold": 300000
+    },
+    "shard": null,
+    "tags": [],
+    "updateSnapshots": "missing",
+    "updateSourceMethod": "patch",
+    "version": "1.63.0",
+    "workers": 1,
+    "webServer": null
+  },
+  "suites": [
+    {
+      "title": "library-flag-real-backend.spec.js",
+      "file": "library-flag-real-backend.spec.js",
+      "column": 0,
+      "line": 0,
+      "specs": [],
+      "suites": [
+        {
+          "title": "flag OFF",
+          "file": "library-flag-real-backend.spec.js",
+          "line": 24,
+          "column": 6,
+          "specs": [
+            {
+              "title": "OFF build renders the legacy Library, not the matrix",
+              "ok": true,
+              "tags": [],
+              "tests": [
+                {
+                  "timeout": 60000,
+                  "annotations": [],
+                  "expectedStatus": "passed",
+                  "projectId": "chromium",
+                  "projectName": "chromium",
+                  "results": [
+                    {
+                      "workerIndex": 0,
+                      "parallelIndex": 0,
+                      "status": "passed",
+                      "duration": 5782,
+                      "errors": [],
+                      "stdout": [],
+                      "stderr": [],
+                      "retry": 0,
+                      "startTime": "2026-11-01T16:29:25.690Z",
+                      "annotations": [],
+                      "attachments": []
+                    }
+                  ],
+                  "status": "expected"
+                }
+              ],
+              "id": "a00fa0239174c0d5072c-b950ab180a7703ea81b5",
+              "file": "library-flag-real-backend.spec.js",
+              "line": 26,
+              "column": 1
+            }
+          ]
+        },
+        {
+          "title": "flag ON",
+          "file": "library-flag-real-backend.spec.js",
+          "line": 36,
+          "column": 6,
+          "specs": [
+            {
+              "title": "ON build renders the matrix; state is per-account and survives Back",
+              "ok": true,
+              "tags": [],
+              "tests": [
+                {
+                  "timeout": 60000,
+                  "annotations": [
+                    {
+                      "type": "cross-account",
+                      "description": "GET /api/documents/<A> as B -> 404"
+                    }
+                  ],
+                  "expectedStatus": "passed",
+                  "projectId": "chromium",
+                  "projectName": "chromium",
+                  "results": [
+                    {
+                      "workerIndex": 0,
+                      "parallelIndex": 0,
+                      "status": "passed",
+                      "duration": 6694,
+                      "errors": [],
+                      "stdout": [],
+                      "stderr": [],
+                      "retry": 0,
+                      "startTime": "2026-11-01T16:29:31.748Z",
+                      "annotations": [
+                        {
+                          "type": "cross-account",
+                          "description": "GET /api/documents/<A> as B -> 404"
+                        }
+                      ],
+                      "attachments": []
+                    }
+                  ],
+                  "status": "expected"
+                }
+              ],
+              "id": "a00fa0239174c0d5072c-761dfb1e43151c779795",
+              "file": "library-flag-real-backend.spec.js",
+              "line": 39,
+              "column": 1
+            }
+          ]
+        }
+      ]
+    }
+  ],
+  "errors": [],
+  "stats": {
+    "startTime": "2026-11-01T16:29:24.909Z",
+    "duration": 13807.548,
+    "expected": 2,
+    "skipped": 0,
+    "unexpected": 0,
+    "flaky": 0
+  }
+}

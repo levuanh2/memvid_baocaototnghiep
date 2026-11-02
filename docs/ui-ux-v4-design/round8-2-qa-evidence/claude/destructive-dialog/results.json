@@ -1,0 +1,168 @@
+{
+  "config": {
+    "argv": [
+      "C:\\Program Files\\nodejs\\node.exe",
+      "E:\\memvid_NCKH\\MemVid_BaoCaoTotNghiep\\.worktrees\\phase-c-round8-2-release-gate\\FE\\node_modules\\@playwright\\test\\cli.js",
+      "test",
+      "--config",
+      "e2e-r82-claude-dlg/destructive-dialog.config.mjs",
+      "--output",
+      "C:/Users/Vu Anh/AppData/Local/Temp/claude/E--TEC2026/c008c549-70eb-4b2c-8434-e640a21ff6b2/scratchpad/r82-dlg-out3"
+    ],
+    "configFile": "E:\\memvid_NCKH\\MemVid_BaoCaoTotNghiep\\.worktrees\\phase-c-round8-2-release-gate\\FE\\e2e-r82-claude-dlg\\destructive-dialog.config.mjs",
+    "rootDir": "E:/memvid_NCKH/MemVid_BaoCaoTotNghiep/.worktrees/phase-c-round8-2-release-gate/FE/e2e-r82-claude-dlg",
+    "failOnFlakyTests": false,
+    "forbidOnly": false,
+    "fullyParallel": false,
+    "globalSetup": null,
+    "globalTeardown": null,
+    "globalTimeout": 0,
+    "grep": {},
+    "grepInvert": null,
+    "maxFailures": 0,
+    "metadata": {
+      "actualWorkers": 1
+    },
+    "preserveOutput": "always",
+    "projects": [
+      {
+        "outputDir": "C:/Users/Vu Anh/AppData/Local/Temp/claude/E--TEC2026/c008c549-70eb-4b2c-8434-e640a21ff6b2/scratchpad/r82-dlg-out3",
+        "repeatEach": 1,
+        "retries": 0,
+        "metadata": {
+          "actualWorkers": 1
+        },
+        "id": "chromium",
+        "name": "chromium",
+        "testDir": "E:/memvid_NCKH/MemVid_BaoCaoTotNghiep/.worktrees/phase-c-round8-2-release-gate/FE/e2e-r82-claude-dlg",
+        "testIgnore": [],
+        "testMatch": [
+          "/destructive-dialog-real-app\\.spec\\.js$/"
+        ],
+        "timeout": 60000
+      }
+    ],
+    "quiet": false,
+    "reporter": [
+      [
+        "list",
+        null
+      ],
+      [
+        "json",
+        {
+          "outputFile": "results.json"
+        }
+      ]
+    ],
+    "reportSlowTests": {
+      "max": 5,
+      "threshold": 300000
+    },
+    "shard": null,
+    "tags": [],
+    "updateSnapshots": "missing",
+    "updateSourceMethod": "patch",
+    "version": "1.63.0",
+    "workers": 1,
+    "webServer": null
+  },
+  "suites": [
+    {
+      "title": "destructive-dialog-real-app.spec.js",
+      "file": "destructive-dialog-real-app.spec.js",
+      "column": 0,
+      "line": 0,
+      "specs": [
+        {
+          "title": "real collection delete dialog: dark contrast, keyboard open, Escape restores focus, no DELETE",
+          "ok": false,
+          "tags": [],
+          "tests": [
+            {
+              "timeout": 120000,
+              "annotations": [
+                {
+                  "type": "result",
+                  "description": "{\"tabs\":11,\"focusedInside\":\"button \\\"Đóng hộp thoại\\\"\",\"after\":\"body \\\"Phòng đọcStudyMapThư viện học tập Tải tà\\\"\",\"triggerStillMounted\":false,\"restoredToTrigger\":false,\"writes\":[],\"stillThere\":true,\"contrast\":{\"title\":{\"text\":\"Xoá “R82 bộ sưu tập 1793557440032”?\",\"color\":\"rgb(236, 231, 219)\",\"fontSize\":\"14px\",\"composited\":\"rgb(27.0, 42.0, 65.0)\",\"layers\":[\"body. rgb(21, 35, 59)\",\"div.min-h-screen rgb(21, 35, 59)\",\"div.surface-card rgb(27, 42, 65)\",\"div.absolute rgba(0, 0, 0, 0.5)\",\"div.relative rgb(27, 42, 65)\"],\"ratio\":11.7},\"consequence\":{\"text\":\"Bộ sưu tập sẽ bị xoá vĩnh viễn. Tài liệu bên trong không bị \",\"color\":\"rgb(169, 180, 194)\",\"fontSize\":\"13px\",\"composited\":\"rgb(27.0, 42.0, 65.0)\",\"layers\":[\"body. rgb(21, 35, 59)\",\"div.min-h-screen rgb(21, 35, 59)\",\"div.surface-card rgb(27, 42, 65)\",\"div.absolute rgba(0, 0, 0, 0.5)\",\"div.relative rgb(27, 42, 65)\"],\"ratio\":6.87},\"acknowledgement\":{\"text\":\"Tôi hiểu thao tác này không thể hoàn tác.\",\"color\":\"rgb(169, 180, 194)\",\"fontSize\":\"13px\",\"composited\":\"rgb(27.0, 42.0, 65.0)\",\"layers\":[\"body. rgb(21, 35, 59)\",\"div.min-h-screen rgb(21, 35, 59)\",\"div.surface-card rgb(27, 42, 65)\",\"div.absolute rgba(0, 0, 0, 0.5)\",\"div.relative rgb(27, 42, 65)\"],\"ratio\":6.87}}}"
+                }
+              ],
+              "expectedStatus": "passed",
+              "projectId": "chromium",
+              "projectName": "chromium",
+              "results": [
+                {
+                  "workerIndex": 0,
+                  "parallelIndex": 0,
+                  "status": "failed",
+                  "duration": 4237,
+                  "error": {
+                    "message": "Error: focus after Escape: body \"Phòng đọcStudyMapThư viện học tập Tải tà\"\n\n\u001b[2mexpect(\u001b[22m\u001b[31mreceived\u001b[39m\u001b[2m).\u001b[22mtoBe\u001b[2m(\u001b[22m\u001b[32mexpected\u001b[39m\u001b[2m) // Object.is equality\u001b[22m\n\nExpected: \u001b[32mtrue\u001b[39m\nReceived: \u001b[31mfalse\u001b[39m",
+                    "stack": "Error: focus after Escape: body \"Phòng đọcStudyMapThư viện học tập Tải tà\"\n\n\u001b[2mexpect(\u001b[22m\u001b[31mreceived\u001b[39m\u001b[2m).\u001b[22mtoBe\u001b[2m(\u001b[22m\u001b[32mexpected\u001b[39m\u001b[2m) // Object.is equality\u001b[22m\n\nExpected: \u001b[32mtrue\u001b[39m\nReceived: \u001b[31mfalse\u001b[39m\n    at E:\\memvid_NCKH\\MemVid_BaoCaoTotNghiep\\.worktrees\\phase-c-round8-2-release-gate\\FE\\e2e-r82-claude-dlg\\destructive-dialog-real-app.spec.js:88:61",
+                    "location": {
+                      "file": "E:\\memvid_NCKH\\MemVid_BaoCaoTotNghiep\\.worktrees\\phase-c-round8-2-release-gate\\FE\\e2e-r82-claude-dlg\\destructive-dialog-real-app.spec.js",
+                      "column": 61,
+                      "line": 88
+                    },
+                    "snippet": "\u001b[0m \u001b[90m 86 |\u001b[39m   expect(stillThere\u001b[33m,\u001b[39m \u001b[32m\"collection still exists on the server\"\u001b[39m)\u001b[33m.\u001b[39mtoBe(\u001b[36mtrue\u001b[39m)\u001b[33m;\u001b[39m\n \u001b[90m 87 |\u001b[39m   \u001b[36mfor\u001b[39m (\u001b[36mconst\u001b[39m [k\u001b[33m,\u001b[39m v] \u001b[36mof\u001b[39m \u001b[33mObject\u001b[39m\u001b[33m.\u001b[39mentries(contrast)) expect(v\u001b[33m.\u001b[39mratio\u001b[33m,\u001b[39m \u001b[32m`${k} contrast`\u001b[39m)\u001b[33m.\u001b[39mtoBeGreaterThanOrEqual(\u001b[35m4.5\u001b[39m)\u001b[33m;\u001b[39m\n\u001b[31m\u001b[1m>\u001b[22m\u001b[39m\u001b[90m 88 |\u001b[39m   expect(restoredToTrigger\u001b[33m,\u001b[39m \u001b[32m`focus after Escape: ${after}`\u001b[39m)\u001b[33m.\u001b[39mtoBe(\u001b[36mtrue\u001b[39m)\u001b[33m;\u001b[39m\n \u001b[90m    |\u001b[39m                                                             \u001b[31m\u001b[1m^\u001b[22m\u001b[39m\n \u001b[90m 89 |\u001b[39m })\u001b[33m;\u001b[39m\n \u001b[90m 90 |\u001b[39m\u001b[0m"
+                  },
+                  "errors": [
+                    {
+                      "location": {
+                        "file": "E:\\memvid_NCKH\\MemVid_BaoCaoTotNghiep\\.worktrees\\phase-c-round8-2-release-gate\\FE\\e2e-r82-claude-dlg\\destructive-dialog-real-app.spec.js",
+                        "column": 61,
+                        "line": 88
+                      },
+                      "message": "Error: focus after Escape: body \"Phòng đọcStudyMapThư viện học tập Tải tà\"\n\n\u001b[2mexpect(\u001b[22m\u001b[31mreceived\u001b[39m\u001b[2m).\u001b[22mtoBe\u001b[2m(\u001b[22m\u001b[32mexpected\u001b[39m\u001b[2m) // Object.is equality\u001b[22m\n\nExpected: \u001b[32mtrue\u001b[39m\nReceived: \u001b[31mfalse\u001b[39m\n\n  86 |   expect(stillThere, \"collection still exists on the server\").toBe(true);\n  87 |   for (const [k, v] of Object.entries(contrast)) expect(v.ratio, `${k} contrast`).toBeGreaterThanOrEqual(4.5);\n> 88 |   expect(restoredToTrigger, `focus after Escape: ${after}`).toBe(true);\n     |                                                             ^\n  89 | });\n  90 |\n    at E:\\memvid_NCKH\\MemVid_BaoCaoTotNghiep\\.worktrees\\phase-c-round8-2-release-gate\\FE\\e2e-r82-claude-dlg\\destructive-dialog-real-app.spec.js:88:61"
+                    }
+                  ],
+                  "stdout": [],
+                  "stderr": [],
+                  "retry": 0,
+                  "startTime": "2026-11-01T18:24:00.061Z",
+                  "annotations": [
+                    {
+                      "type": "result",
+                      "description": "{\"tabs\":11,\"focusedInside\":\"button \\\"Đóng hộp thoại\\\"\",\"after\":\"body \\\"Phòng đọcStudyMapThư viện học tập Tải tà\\\"\",\"triggerStillMounted\":false,\"restoredToTrigger\":false,\"writes\":[],\"stillThere\":true,\"contrast\":{\"title\":{\"text\":\"Xoá “R82 bộ sưu tập 1793557440032”?\",\"color\":\"rgb(236, 231, 219)\",\"fontSize\":\"14px\",\"composited\":\"rgb(27.0, 42.0, 65.0)\",\"layers\":[\"body. rgb(21, 35, 59)\",\"div.min-h-screen rgb(21, 35, 59)\",\"div.surface-card rgb(27, 42, 65)\",\"div.absolute rgba(0, 0, 0, 0.5)\",\"div.relative rgb(27, 42, 65)\"],\"ratio\":11.7},\"consequence\":{\"text\":\"Bộ sưu tập sẽ bị xoá vĩnh viễn. Tài liệu bên trong không bị \",\"color\":\"rgb(169, 180, 194)\",\"fontSize\":\"13px\",\"composited\":\"rgb(27.0, 42.0, 65.0)\",\"layers\":[\"body. rgb(21, 35, 59)\",\"div.min-h-screen rgb(21, 35, 59)\",\"div.surface-card rgb(27, 42, 65)\",\"div.absolute rgba(0, 0, 0, 0.5)\",\"div.relative rgb(27, 42, 65)\"],\"ratio\":6.87},\"acknowledgement\":{\"text\":\"Tôi hiểu thao tác này không thể hoàn tác.\",\"color\":\"rgb(169, 180, 194)\",\"fontSize\":\"13px\",\"composited\":\"rgb(27.0, 42.0, 65.0)\",\"layers\":[\"body. rgb(21, 35, 59)\",\"div.min-h-screen rgb(21, 35, 59)\",\"div.surface-card rgb(27, 42, 65)\",\"div.absolute rgba(0, 0, 0, 0.5)\",\"div.relative rgb(27, 42, 65)\"],\"ratio\":6.87}}}"
+                    }
+                  ],
+                  "attachments": [
+                    {
+                      "name": "error-context",
+                      "contentType": "text/markdown",
+                      "path": "C:\\Users\\Vu Anh\\AppData\\Local\\Temp\\claude\\E--TEC2026\\c008c549-70eb-4b2c-8434-e640a21ff6b2\\scratchpad\\r82-dlg-out3\\destructive-dialog-real-ap-52cd3-pe-restores-focus-no-DELETE-chromium\\error-context.md"
+                    },
+                    {
+                      "name": "trace",
+                      "contentType": "application/zip",
+                      "path": "C:\\Users\\Vu Anh\\AppData\\Local\\Temp\\claude\\E--TEC2026\\c008c549-70eb-4b2c-8434-e640a21ff6b2\\scratchpad\\r82-dlg-out3\\destructive-dialog-real-ap-52cd3-pe-restores-focus-no-DELETE-chromium\\trace.zip"
+                    }
+                  ],
+                  "errorLocation": {
+                    "file": "E:\\memvid_NCKH\\MemVid_BaoCaoTotNghiep\\.worktrees\\phase-c-round8-2-release-gate\\FE\\e2e-r82-claude-dlg\\destructive-dialog-real-app.spec.js",
+                    "column": 61,
+                    "line": 88
+                  }
+                }
+              ],
+              "status": "unexpected"
+            }
+          ],
+          "id": "0e1b5d6d122bc11d80be-0a33dac5d936271646f6",
+          "file": "destructive-dialog-real-app.spec.js",
+          "line": 35,
+          "column": 1
+        }
+      ]
+    }
+  ],
+  "errors": [],
+  "stats": {
+    "startTime": "2026-11-01T18:23:59.144Z",
+    "duration": 5797.2880000000005,
+    "expected": 0,
+    "skipped": 0,
+    "unexpected": 1,
+    "flaky": 0
+  }
+}
