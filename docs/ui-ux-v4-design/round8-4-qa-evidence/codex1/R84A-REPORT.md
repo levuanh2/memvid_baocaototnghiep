@@ -1,3 +1,13 @@
+> **Read this first (added by Claude after review round 3).** This is Codex1's
+> report as written after review round 2, kept as a historical record. The
+> sections that describe ledger **inheritance** (an `inherited` entry seeded
+> from the previous HEAD, and rollback to it without break glass) are
+> **superseded**. Inheritance was removed in round 3; see "Round 3 fixes" at
+> the end of this file and `../deployment-sha-pinning.md`. The current
+> behaviour: the ledger trusts only what it recorded, and the first rollback
+> after this change needs `MEMVID_BREAK_GLASS=1` plus
+> `MEMVID_BREAK_GLASS_REASON`.
+
 # Round 8.4A — deployment safety and protected-auth guard
 
 ## Changed files
