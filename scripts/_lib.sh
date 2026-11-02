@@ -107,3 +107,47 @@ ensure_data_layout() {
     fi
   done
 }
+
+# One host lock shared by deploy.sh, rollback.sh and the streamed
+# deploy_remote.sh. The wrapper takes it BEFORE it touches the checkout and
+# hands the open descriptor down as fd 9 with MEMVID_LOCK_INHERITED=1; that is
+# honoured only when fd 9 really is $1, and flock still has to succeed on it.
+acquire_deploy_lock() {
+  local lock="$1"
+  mkdir -p "$(dirname "$lock")"
+  if [ "${MEMVID_LOCK_INHERITED:-}" = "1" ]; then
+    [ "$(readlink -f "/proc/$$/fd/9" 2>/dev/null)" = "$(readlink -f "$lock")" ] \
+      || die "MEMVID_LOCK_INHERITED=1 but fd 9 is not $lock; refusing"
+  else
+    exec 9>"$lock"
+  fi
+  flock -n 9 || die "another deploy or rollback holds $lock; refusing to run concurrently"
+}
+
+# The Docker build context (BE/) and compose file must be exactly the checked-
+# out commit: no modified, untracked OR git-ignored files (an ignored *.so or
+# stale module would otherwise be copied into the image by `COPY . .`).
+refuse_unclean_build_inputs() {
+  local out
+  out="$(git -C "$REPO_ROOT" status --porcelain --untracked-files=all --ignored -- BE docker-compose.prod.yml)" \
+    || die "cannot inspect build inputs in $REPO_ROOT"
+  if [ -n "$out" ]; then
+    printf '%s\n' "$out" >&2
+    die "build inputs under BE/ or docker-compose.prod.yml are not exactly the checked-out commit (modified, untracked or ignored files listed above); remove them and retry"
+  fi
+}
+
+# Break-glass is an audited human decision: it needs a reason, and the attempt
+# is written to the ledger BEFORE anything changes, then its result after.
+# Only `deploy`, `rollback` and `break-glass` (a successful one) make a SHA
+# eligible for rollback; `break-glass-attempt`/`break-glass-failed` never do.
+require_break_glass_reason() {
+  [ -n "${MEMVID_BREAK_GLASS_REASON:-}" ] \
+    || die "MEMVID_BREAK_GLASS=1 also requires MEMVID_BREAK_GLASS_REASON=\"<why>\" for the audit record"
+}
+ledger_record() { # ledger_record <ledger-file> <sha> <action>
+  local reason
+  reason="$(printf '%s' "${MEMVID_BREAK_GLASS_REASON:-}" | tr -c 'A-Za-z0-9._:/-' '_' | cut -c1-200)"
+  mkdir -p "$(dirname "$1")"
+  printf '%s %s %s user=%s reason=%s\n' "$(date -u '+%Y-%m-%dT%H:%M:%SZ')" "$2" "$3" "$(whoami)" "${reason:--}" >>"$1"
+}
