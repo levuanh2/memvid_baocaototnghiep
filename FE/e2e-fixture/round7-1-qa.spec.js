@@ -200,6 +200,10 @@ test.describe("Round 7.1 destructive confirmation", () => {
     dialog = page.getByRole("dialog");
     await expect(dialog).toContainText("Tóm tắt Gamma");
     await expect(dialog).toContainText("Bản tóm tắt này sẽ bị xóa vĩnh viễn");
+    // The dialog stays mounted and resets in an effect, so its first frame can
+    // still show Beta's ticked box. check() on a ticked box is a no-op, and the
+    // reset then unticks it (Fixture Audit run 41530010357). Wait for the reset.
+    await expect(dialog.getByRole("checkbox")).not.toBeChecked();
     await dialog.getByRole("checkbox").check();
     await dialog.getByRole("button", { name: "Xóa tóm tắt" }).click();
     await expect(dialog.getByRole("alert")).toContainText("Không xóa được tóm tắt");
