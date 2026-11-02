@@ -157,7 +157,9 @@ export default function CollectionSidebar({
                 ban_dau={c}
                 onLuu={(v) => { setDangSua(null); onSua(c, v); }}
                 onHuy={() => setDangSua(null)}
-                onXoa={() => { setDangSua(null); onXoa(c); }}
+                // Keep the form (and its delete button) mounted while the confirm dialog is
+                // open, so cancelling returns focus to the button instead of <body>.
+                onXoa={() => onXoa(c)}
               />
             ) : (
               <MucLoc

@@ -371,11 +371,11 @@ test.describe("Image export scope x root-only/depth (live-DOM capture, no produc
     let summary = await dialog.locator("dd").filter({ hasText: "node" }).first().textContent();
     expect(summary).toContain("6 node");
 
-    // The scope radio only lives on the content step (step 0) -- go back,
-    // switch to "full", and walk forward to the review step again.
-    for (let i = 0; i < 3; i++) await dialog.getByRole("button", { name: "Quay lại" }).click();
+    // Preview Bench keeps the scope controls mounted; use its rail instead of
+    // the retired wizard's Back navigation.
+    await dialog.locator(".export-rail").getByRole("button", { name: /^Nội dung/ }).click();
     await dialog.locator('input[name="mm-export-scope"][value="full"]').check();
-    await goToReviewStep(dialog);
+    await dialog.locator(".export-rail").getByRole("button", { name: /^Kiểm tra/ }).click();
     summary = await dialog.locator("dd").filter({ hasText: "node" }).first().textContent();
     expect(summary).toContain("8 node");
     await dialog.getByRole("button", { name: "Hủy" }).click();

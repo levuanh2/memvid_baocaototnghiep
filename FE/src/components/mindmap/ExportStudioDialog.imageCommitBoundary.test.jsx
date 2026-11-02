@@ -168,4 +168,17 @@ describe("Export Studio image capture-to-download commit boundary", () => {
     expect(freshB.commitDownload).toHaveBeenCalledTimes(1);
     expect(exportMindmapImageMock).toHaveBeenCalledTimes(2);
   });
+  it("refuses a close dispatched in the same task as the export click (R82-P3-02)", async () => {
+    const capture = deferred();
+    const onClose = vi.fn();
+    exportMindmapImageMock.mockReturnValueOnce(capture.promise);
+    const dialog = await renderDialog({ onClose });
+    const find = (label) => [...dialog.querySelectorAll("button")].find((candidate) => candidate.textContent.trim() === label);
+    const exportButton = find("Xuất PNG");
+    const closeButton = find("Hủy");
+    await act(async () => { exportButton.click(); closeButton.click(); });
+
+    expect(onClose).not.toHaveBeenCalled();
+    expect(exportMindmapImageMock).toHaveBeenCalledTimes(1);
+  });
 });

@@ -55,7 +55,8 @@ async function capture(page, record, suppressedContextIds) {
       import("/src/utils/mindmapImageExport.js"),
       import("/src/utils/mindElixirAdapter.js"),
     ]);
-    const moduleUrl = performance.getEntriesByType("resource").map((entry) => entry.name).find((name) => name.includes("mind-elixir"));
+    // The CSS (node_modules/mind-elixir/dist/MindElixir.css) is also a resource and can load first (R82-T01).
+    const moduleUrl = performance.getEntriesByType("resource").map((entry) => entry.name).find((name) => /\/mind-elixir\.js(\?|$)/.test(name));
     const mindElixirModule = await import(moduleUrl);
     const MindElixir = mindElixirModule.default;
     const sideDirection = mindElixirModule.SIDE ?? MindElixir.SIDE;

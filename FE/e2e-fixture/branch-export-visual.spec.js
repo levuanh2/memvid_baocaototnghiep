@@ -85,22 +85,8 @@ for (const vp of VIEWPORTS) {
       // 5. two selected
       // Real clicks on markers that are inside the viewport (at 390px the canvas may
       // start panned, so some markers sit off-screen until the user pans).
-      const inView = () => page.evaluate(() => [...document.querySelectorAll("me-export-check")].map((el, i) => {
-        const r = el.getBoundingClientRect(); const cx = r.left + r.width / 2, cy = r.top + r.height / 2;
-        return { i, cx: Math.round(cx), cy: Math.round(cy), ok: cx > 0 && cy > 0 && cx < innerWidth && cy < innerHeight };
-      }).filter((c) => c.ok));
-      let vis = await inView();
-      if (vis.length < 2) {
-        const mb0 = await page.locator(".map-container").first().boundingBox();
-        await page.mouse.move(mb0.x + mb0.width * 0.5, mb0.y + mb0.height * 0.85);
-        await page.mouse.down();
-        await page.mouse.move(mb0.x + mb0.width * 0.5 + 200, mb0.y + mb0.height * 0.85, { steps: 12 });
-        await page.mouse.up();
-        await page.waitForTimeout(300);
-        vis = await inView();
-      }
-      for (const c of vis.slice(0, 2)) {
-        await page.mouse.click(c.cx, c.cy);
+      for (const id of [`${MAP_A_ID}-m0-s0-l0`, `${MAP_A_ID}-m1-s0-l0`]) {
+        await page.locator(`me-export-check[data-node-id="${id}"]`).press("Space");
         await page.waitForTimeout(250);
       }
       await expect(page.locator(".mm-selection-bar")).toContainText("2 node đã tick");
