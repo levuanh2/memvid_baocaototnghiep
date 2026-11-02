@@ -354,7 +354,7 @@ jobs:
   e2e-critical:
     name: E2E Critical Flows (Playwright)
     runs-on: ubuntu-latest
-    timeout-minutes: 15
+    timeout-minutes: 25
     # needs is intentionally just detect-changes (for its outputs, used
     # below) -- NOT frontend-build/backend-integration-and-smoke. This job
     # is fully self-contained (its own checkout/pip install/npm build/
@@ -453,6 +453,15 @@ jobs:
 
       - name: Run Playwright critical-flow suite
         working-directory: FE
+        run: npx playwright test
+
+      # run_e2e_server.py defaults to open auth, where every account shares
+      # one anonymous owner, so the pass above cannot see a cross-account
+      # leak. Production enforces auth; repeat the suite the way prod runs.
+      - name: Run Playwright critical-flow suite (protected auth)
+        working-directory: FE
+        env:
+          AUTH_PROTECT_APP_APIS: "true"
         run: npx playwright test
 
       - name: Upload Playwright report & traces on failure
