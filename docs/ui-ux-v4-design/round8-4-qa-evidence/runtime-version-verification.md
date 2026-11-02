@@ -19,8 +19,10 @@ probe which commit was actually running.
 - `BE/app/main.py` `_build_revision()` returns the first of `APP_BUILD_SHA`
   and `RENDER_GIT_COMMIT` that matches `^[0-9a-f]{7,40}$` after trimming and
   lowercasing. Otherwise it returns `"unknown"`.
-- Only a bare hex SHA is echoed. A mis-set variable, such as a path, a URL with
-  a password or arbitrary text, can never leak through `/health`.
+- Only a value matching the hex pattern is echoed, and only from the two
+  revision variables. A mis-set path, URL with a password, or free text becomes
+  `unknown`. A *hex-shaped* secret wrongly put into `APP_BUILD_SHA` would still
+  be shown, so only put commit SHAs there (Codex2 round-1 review, LOW).
 - `/health` keeps every existing field and its 200 status. `revision` is
   additive, so the Docker healthcheck and `scripts/health.sh` are unaffected.
 - On EC2, `docker-compose.prod.yml` passes
@@ -66,6 +68,17 @@ git rev-parse origin/main
 All three should print the same SHA. If they differ, Render has not caught up
 (it is waiting for checks) or a deploy was skipped. Do not guess from bundle
 hashes.
+
+## What `revision` proves, and what it does not (Codex2 review, MEDIUM)
+
+`revision` is a **trusted deployment label**, injected at deploy time. It is
+not a fingerprint of the code inside the image. With the Round 8.4A pinned
+deploy, the label is the SHA that `deploy.sh` checked out, built and
+activated. That is what makes it reliable in the normal path. Someone starting
+an old image by hand with a newer `APP_BUILD_SHA` would make `/health` lie. To
+make it tamper-evident, bake the SHA into the image at build time (a build
+argument written into the image) and read that value. That is a follow-up,
+not part of this round.
 
 ## Caveat
 

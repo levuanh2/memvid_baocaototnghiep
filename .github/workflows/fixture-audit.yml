@@ -2,8 +2,10 @@
 # about 17 minutes on one worker). Periodic verification, NOT a merge gate:
 # ci.yml runs the blocking smoke subset (job fixture-smoke).
 #
-# Deliberately not named "CI": deploy.yml triggers on the "CI" workflow, so a
-# failure here never blocks or triggers a production deploy.
+# Deliberately not named "CI": deploy.yml triggers on the "CI" workflow, so this
+# can never trigger or gate the EC2 deploy. Render's checksPass sees every check
+# on a commit, so a failed scheduled run on an undeployed main commit could hold
+# the frontend deploy (see round8-4-qa-evidence/fixture-ci-coverage.md).
 
 name: Fixture Audit
 

@@ -35,8 +35,10 @@ the effect does nothing.
 | Delete the only collection | Focus on "Tạo bộ sưu tập" | As expected | PASS |
 | In flight | Exactly 1 call; dialog open; focus not moved to the sidebar | As expected | PASS |
 | Failure | Dialog open; error text shown; trigger and list unchanged; focus not moved to the sidebar; Escape afterwards returns focus to "Xoá" | As expected | PASS |
-| Without the fix (`git show HEAD:` copy) | The new tests fail | 3 of 4 tests fail | Confirms the tests bite |
-| Real Chromium (real Flask and Postgres) | Same behaviour in the real app | See `destructive-dialog-matrix.md`, Library collection row | Pending Agy's run |
+| Focus is on another live control when the delete completes (added after Codex2's review) | Focus is not stolen | As expected. With the `<body>` guard removed this test **fails** | PASS |
+| Escape while the delete is in flight (added after Codex2's review) | Dialog stays; exactly 1 request; no focus move | As expected | PASS |
+| Without the fix (`git show HEAD:` copy, original 4 tests) | The new tests fail | 3 of 4 tests fail | Confirms the tests bite |
+| Real Chromium (real Flask and Postgres; Agy) | Same behaviour in the real app | Cancel returns to "Xoá"; success moves focus to the next collection's filter button (`isFocusOnNext: true`); exactly 1 DELETE; a 500 keeps the dialog open | **PASS** (`destructive-dialog-matrix.md`) |
 
 **Separate observation, not changed.** While a delete is in flight,
 `DestructiveConfirmDialog` disables its buttons and removes the close button,

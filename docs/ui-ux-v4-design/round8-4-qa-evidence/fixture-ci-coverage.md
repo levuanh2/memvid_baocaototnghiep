@@ -42,8 +42,14 @@ History of flakiness:
 | **Full fixture suite** (448 tests) | `fixture-audit.yml` (workflow name "Fixture Audit") | **No**, periodic verification | Mondays 03:17 UTC, plus manual `workflow_dispatch` |
 
 The full suite lives in its own workflow on purpose. `deploy.yml` triggers on
-the workflow named "CI", so a failure in Fixture Audit can never block or
-trigger a production deploy.
+the workflow named "CI", so Fixture Audit can never trigger or gate the
+**EC2** deploy.
+
+**Render coupling (Codex2 review, LOW).** Render's `checksPass` (Round 8.4A)
+looks at every GitHub check on a commit. A scheduled audit that runs on, and
+fails on, a `main` commit Render has not deployed yet could hold that frontend
+deploy. To remove that coupling, decide whether to accept it or run the audit
+on a non-`main` ref.
 
 ### Smoke set, mapped to the Round 8.4 requirements
 
@@ -71,7 +77,9 @@ report and traces are uploaded (`playwright-fixture-report`, 10 days).
 
 | Run | Command | Expected | Observed | Result |
 |---|---|---|---|---|
-| Smoke ×3 (9 specs) | `npx playwright test -c playwright.fixture.config.js --workers=1 --repeat-each=3 --fail-on-flaky-tests <9 specs>` | 0 failures, 0 flaky | **570 passed, 0 failed, 0 skipped, 0 flaky** in 23.5 min (2026-11-02, 08:29Z start) | PASS |
+| Smoke ×3, **the 9 specs before the touch spec existed** | `npx playwright test -c playwright.fixture.config.js --workers=1 --repeat-each=3 --fail-on-flaky-tests <9 specs>` | 0 failures, 0 flaky | **570 passed, 0 failed, 0 skipped, 0 flaky** in 23.5 min (2026-11-02, 08:29Z start) | PASS |
+| Touch spec alone ×5 (`mobile-touch-selection.spec.js`) | `--repeat-each=5 --fail-on-flaky-tests` | 0 failures | 5 passed; the negative control fails as expected | PASS |
+| **The final 10-spec blocking job on GitHub** | CI run 41426653589, job "Fixture Smoke (Playwright)", PR #102 | Pass | **191 passed** in 4.6 min | PASS |
 
 One pass of the smoke set therefore takes about 7.8 minutes locally, inside
 the 20-minute job limit.
@@ -86,7 +94,5 @@ Rounds 8.3 and 8.4 did so every time.
 
 ## Not yet verified
 
-- The first GitHub-hosted run of `fixture-smoke`. Its result is recorded in
-  `README.md` once the Draft PR's CI finishes.
-- Fixture Audit has not run on GitHub yet: it starts on the next Monday
-  schedule, or on a manual dispatch by the repository owner.
+- Fixture Audit (the full 448) has not run on GitHub yet. It starts on the
+  next Monday schedule, or on a manual dispatch by the repository owner.

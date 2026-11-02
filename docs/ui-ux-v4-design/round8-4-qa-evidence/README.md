@@ -37,4 +37,12 @@ not an independent review.
 | Claude | Coordination; collection focus fix; fixture CI; runtime revision; touch-spec integration and R84-TOUCH-01 investigation; investigations for Part C; Track A round-3 fixes (not independent) |
 | Codex1 | Track A implementation, rounds 1–2 (ran out of usage) |
 | Codex2 | Practice Quiz and asynchronous grading E2E with E2E-only stubs; **independent reviewer of Track A** (not an author) |
-| Agy | First mobile touch spec and negative control; real-app destructive dialogs |
+| Agy | First mobile touch spec and negative control; real-app collection and chat-history dialogs |
+| Codex1 (after its usage reset) | Real-app map and summary dialogs (found them unreachable) |
+
+## Independent reviews
+
+| Track | Reviewer (not the author) | Result |
+|---|---|---|
+| A | Codex2 | Round 1 BLOCK (11), round 2 BLOCK (3 HIGH), **round 3 APPROVE** |
+| B | Codex2 (its own `run_e2e_server.py` stubs excluded) | **REQUEST CHANGES**: 1 MEDIUM, 4 LOW (`track-b-independent-review.md`). All five addressed in this PR: the wording on the revision label and the leak claim, two more focus tests, the 9-vs-10-spec attribution and the GitHub 191-pass run, and the Render coupling note. Re-review pending |

@@ -10,8 +10,8 @@ Classification: PASS, FAIL, BLOCKED, NOT VERIFIED or NOT APPLICABLE.
 "Decision" marks a choice that belongs to the release owner, not to an
 engineer.
 
-DRAFT: final statuses are filled in by Claude after all Round 8.4 runs and
-both Draft PR CI runs. See `README.md` for the final table.
+Final statuses as of 2026-11-02 ~17:30 +07:00, after all Round 8.4 runs, the
+independent reviews and the Draft PR CI runs.
 
 ## Product findings that need a decision
 
@@ -49,17 +49,21 @@ If deploy availability matters more, remove `fixture-smoke` from
 
 | Gate | Status | Evidence | Owner and next action |
 |---|---|---|---|
-| Deploy pins the CI-verified SHA (EC2) | Pending the review-fix round | `deployment-sha-pinning.md`, `track-a-independent-review-round1.md` (Codex2: BLOCK, 11 findings) | Codex1 fixes; Codex2 re-reviews |
+| Deploy pins the CI-verified SHA (EC2) | **PASS** (harness 13/13 + 22/22 mutations; Codex2 round 3: **APPROVE**). Never run on the real EC2 host | Track A PR #101: `deployment-sha-pinning.md`, `track-a-independent-review-round*.md` | Human: run `deploy_preflight.sh` on EC2 before merging; watch the first deploy |
 | Render deploys only after checks pass | NOT VERIFIED (config only) | `render.yaml` `autoDeployTrigger: checksPass` | Human: confirm the Blueprint sync, "After CI Checks Pass" on both services, and the overlapping-deploy policy |
-| Protected-auth CI guard | Pending the review-fix round | `protected-auth-ci.md` | Codex1 (`E2E_EXPECT_PROTECTED_AUTH`) |
-| Collection focus after a successful delete | PASS (unit) / real Chromium pending | `focus-and-touch-regressions.md` | Claude |
-| Mobile touch selection at 390 px | Pending | `focus-and-touch-regressions.md` | Agy |
-| Fixture smoke in CI | PASS locally (570/570 ×3); GitHub run pending | `fixture-ci-coverage.md` | Draft PR CI |
-| Runtime revision (backend and frontend) | PASS locally; production NOT VERIFIED | `runtime-version-verification.md` | Read-only probe after the next release |
-| Practice Quiz | PASS for supported scenarios; start-attempt, draft persistence, per-answer review and retake are NOT SUPPORTED by design | `practice-quiz-e2e.md` | — |
-| Asynchronous grading | APPLICABLE and PASS for the current contract; see the decision above | `practice-quiz-e2e.md` | Release owner |
+| Protected-auth CI guard | **PASS** (open 200/200, protected 401/200 locally; Codex2 round 2: FIXED) | Track A `protected-auth-ci.md` | Final GitHub run on PR #101 |
+| Collection focus after a successful delete | **PASS** (Vitest 6/6; real Chromium) | `focus-and-touch-regressions.md`, `destructive-dialog-matrix.md` | — |
+| Mobile touch selection at 390 px (emulated) | **PASS** (5/5; part of the GitHub Fixture Smoke) | `focus-and-touch-regressions.md` | — |
+| R84-TOUCH-01: first tap after a fast flick | **NOT VERIFIED** on a real device (reproduces only in emulation) | `focus-and-touch-regressions.md` §3 | Human tester on a phone |
+| Fixture smoke in CI | **PASS**: GitHub run, 10 specs, 191 passed | `fixture-ci-coverage.md` | — |
+| Full fixture suite (448) | NOT VERIFIED on GitHub (weekly / manual) | `fixture-audit.yml` | Repository owner: one manual dispatch |
+| Runtime revision (backend and frontend) | PASS locally (it is a deploy label, not an image proof); production NOT VERIFIED | `runtime-version-verification.md` | Read-only probe after the next release |
+| Practice Quiz | **PASS** for supported scenarios; start-attempt, draft persistence, per-answer review and retake are NOT SUPPORTED by design | `practice-quiz-e2e.md` | — |
+| Asynchronous grading | APPLICABLE; **PASS** for the current contract; see the decision above | `practice-quiz-e2e.md` | Release owner |
 | Citation navigation | NOT IMPLEMENTED; recommendation below | this file | Release owner approval needed before any build |
-| Destructive dialogs (map, summary, chat history) | Pending | `destructive-dialog-matrix.md` | Agy |
+| Delete collection dialog | **PASS** (7/7, real app) | `destructive-dialog-matrix.md` | — |
+| Clear chat history dialog | **FAIL**: R84-A11Y-02 (P2), focus falls to `<body>` on cancel; the other 6 checks PASS | `destructive-dialog-matrix.md` | Frontend Chat: correction PR |
+| Delete map / Delete summary dialogs | **NOT APPLICABLE**: no reachable trigger (`legacyInspectorSurfacesEnabled = false`) | `destructive-dialog-matrix.md` | Product: there is no UI to delete a saved map or summary (decision) |
 | Screen readers | NOT VERIFIED | `accessibility-manual-checklist.md` | Human tester |
 
 ## Citation navigation: investigation and recommendation
