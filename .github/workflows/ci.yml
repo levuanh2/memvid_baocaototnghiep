@@ -630,6 +630,9 @@ jobs:
     runs-on: ubuntu-latest
     if: always()
     needs:
+      # detect-changes gates every test job. If it fails they all skip, and a
+      # skip counts as success below, so it must be checked here directly.
+      - detect-changes
       - security-and-static
       - frontend-tests
       - frontend-build
