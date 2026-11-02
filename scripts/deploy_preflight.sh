@@ -7,7 +7,8 @@
 #
 # Usage (on EC2), from the checkout:  bash scripts/deploy_preflight.sh
 # Before 8.4A is merged the file is not on the server yet; stream it instead:
-#   curl -fsSL https://raw.githubusercontent.com/levuanh2/memvid_baocaototnghiep/<branch-or-sha>/scripts/deploy_preflight.sh #     | MEMVID_APP_DIR=/opt/memvid/app bash
+#   curl -fsSL https://raw.githubusercontent.com/levuanh2/memvid_baocaototnghiep/<branch-or-sha>/scripts/deploy_preflight.sh \
+#     | MEMVID_APP_DIR=/opt/memvid/app bash
 set -uo pipefail
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]:-.}")" && pwd)"
 REPO_ROOT="${MEMVID_APP_DIR:-$(cd "$SCRIPT_DIR/.." && pwd)}"
