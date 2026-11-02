@@ -3602,3 +3602,21 @@ above 1024px. Measure every required control, keep touch floors intact, and move
 secondary actions into an existing contextual menu until the full composition
 actually fits. Pin the boundary with `elementFromPoint` as well as rectangles.
 
+# 2026-11-02 — A green workflow identifies a commit, not a moving branch
+
+Deployment authorization must carry the CI-verified immutable SHA through
+every boundary. Re-reading `main` at workflow or server time creates a TOCTOU
+window even when the trigger itself was green. Validate event/repository/path
+provenance, skip superseded runs before expensive work, re-check immediately
+before activation, and make the revision observable in runtime health.
+
+The server entry point must verify the CI evidence independently; a SHA supplied
+by a caller is not an attestation. Reserve skip statuses so child failures
+cannot collide with them, re-fetch main before migration and activation, lock
+deploy/rollback together, reject untracked build inputs, and keep a successful
+deployment ledger for rollback authorization.
+
+Environment-labelled test passes need an observable assertion for the label.
+An authenticated-only suite can pass identically with auth protection on or
+off; pair it with an unauthenticated request whose status changes across modes.
+

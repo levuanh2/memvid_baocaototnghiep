@@ -45,7 +45,7 @@ export default defineConfig({
       url: `http://127.0.0.1:${BE_PORT}/health`,
       timeout: 60_000,
       reuseExistingServer: !CI,
-      env: { PORT: String(BE_PORT) },
+      env: { ...process.env, PORT: String(BE_PORT) },
     },
     {
       // Real production build (FE/dist, built by the CI step right before

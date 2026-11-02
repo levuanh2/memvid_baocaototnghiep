@@ -1,5 +1,37 @@
 # Known Issues
 
+## Successful CI workflow could deploy a different, newer main commit (fixed 2026-11-02)
+
+**Symptom:** the `workflow_run` deploy job checked out/pulled current `main` on
+the server, so an older successful CI run could deploy a newer commit whose CI
+was still running. Render Blueprint services also deployed every main push
+without waiting for checks.
+
+**Root cause:** the deploy boundary used branch position instead of
+`workflow_run.head_sha`; both the SSH wrapper and `deploy.sh` independently
+re-resolved `origin/main`. Render used the deprecated unconditional
+`autoDeploy: true` setting.
+
+**Fix and prevention:** a pure provenance gate validates the run identity and
+requires its SHA to equal remote main; the server receives and re-verifies that
+exact SHA before build and activation, with exit 75 for superseded runs. Shell
+tests cover ordering, rollback and fail-closed inputs. Render now waits for
+linked checks through `autoDeployTrigger: checksPass`.
+
+## Protected-auth browser pass could silently run with open auth (fixed 2026-11-02)
+
+**Symptom:** CI ran the Playwright suite with `AUTH_PROTECT_APP_APIS=true`, but
+no browser test asserted an unauthenticated protected route returned 401, so an
+environment propagation regression could leave the supposedly protected pass
+running in open mode while still green.
+
+**Root cause:** existing flows registered before all app API calls; successful
+authenticated behavior cannot distinguish protected and open server posture.
+
+**Fix and prevention:** a critical browser guard asserts `/api/documents` is
+401 without a token in protected mode and 200 with a freshly registered real
+token, while separately pinning the documented open-mode 200 contract.
+
 ## Library matrix controls lost visible focus in dark mode (fixed 2026-10-28)
 
 **Symptom:** Agy's browser audit measured the task tabs, row quick actions, and

@@ -520,6 +520,7 @@ jobs:
         working-directory: FE
         env:
           AUTH_PROTECT_APP_APIS: "true"
+          E2E_EXPECT_PROTECTED_AUTH: "true"
         run: npx playwright test
 
       - name: Upload Playwright report & traces on failure
@@ -531,6 +532,28 @@ jobs:
             FE/playwright-report/
             FE/test-results/
           retention-days: 10
+
+  deploy-script-tests:
+    name: Deploy script tests
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Run deploy pinning scenarios
+        run: bash scripts/tests/test_deploy_pinning.sh
+
+      - name: Prove deployment guards are covered
+        run: bash scripts/tests/test_deploy_guard_mutations.sh
+
+      - name: ShellCheck deploy scripts when available
+        run: |
+          if command -v shellcheck >/dev/null 2>&1; then
+            shellcheck -x -S warning scripts/deploy_gate.sh scripts/deploy.sh scripts/deploy_remote.sh scripts/deploy_preflight.sh scripts/rollback.sh scripts/tests/test_deploy_pinning.sh scripts/tests/test_deploy_guard_mutations.sh
+          else
+            echo "::notice::shellcheck is not installed on this runner"
+          fi
 
   # ---------------------------------------------------------------------------
   # Stage 4: Docker & Compose Validation (Main or Shared Infra PRs)
@@ -613,6 +636,7 @@ jobs:
       - backend-contracts-and-unit
       - backend-integration-and-smoke
       - e2e-critical
+      - deploy-script-tests
       - docker-build-test
       - docker-compose-run-test
       - fixture-smoke
