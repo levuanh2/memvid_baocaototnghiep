@@ -421,8 +421,9 @@ export default function ChatArea({
   // R84-A11Y-02: the "Xóa lịch sử chat" item unmounts with the menu before the
   // dialog opens, so on Cancel/Escape Modal has nothing to return focus to and it
   // falls to <body>. After a CANCEL only (a successful delete already focuses the
-  // composer), if focus was lost, put it back on the menu button that led here,
-  // or on the composer when that button is disabled.
+  // composer), if focus was lost, put it back on the menu button that led here.
+  // The composer fallback is defensive only: the dialog opens only when not
+  // loading, and refocusComposer() itself skips a disabled composer or touch.
   const huyXoaLichSu = () => {
     traFocusSauHuyXoaRef.current = true;
     setXacNhanXoaLichSu(false);
