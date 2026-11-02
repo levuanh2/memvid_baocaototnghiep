@@ -127,6 +127,8 @@ export default function ChatArea({
   const [menuOpen, setMenuOpen] = useState(false);
   // Round 7 — xác nhận xoá lịch sử giờ đi qua hộp chung thay vì window.confirm.
   const [xacNhanXoaLichSu, setXacNhanXoaLichSu] = useState(false);
+  const menuTriggerRef = useRef(null);
+  const traFocusSauHuyXoaRef = useRef(false);
   const [notice, setNotice] = useState("");
   const [contextCleared, setContextCleared] = useState(false);
   // Round 12 (compact context row) — conversation title lives only on this
@@ -415,6 +417,26 @@ export default function ChatArea({
     setMenuOpen(false);
     setXacNhanXoaLichSu(true);
   };
+
+  // R84-A11Y-02: the "Xóa lịch sử chat" item unmounts with the menu before the
+  // dialog opens, so on Cancel/Escape Modal has nothing to return focus to and it
+  // falls to <body>. After a CANCEL only (a successful delete already focuses the
+  // composer), if focus was lost, put it back on the menu button that led here,
+  // or on the composer when that button is disabled.
+  const huyXoaLichSu = () => {
+    traFocusSauHuyXoaRef.current = true;
+    setXacNhanXoaLichSu(false);
+  };
+  useEffect(() => {
+    if (xacNhanXoaLichSu || !traFocusSauHuyXoaRef.current) return;
+    traFocusSauHuyXoaRef.current = false;
+    if (document.activeElement && document.activeElement !== document.body) return;
+    const trigger = menuTriggerRef.current;
+    if (trigger && !trigger.disabled) trigger.focus();
+    else refocusComposer();
+    // refocusComposer only reads refs; re-running on every render is not wanted.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [xacNhanXoaLichSu]);
 
   // Hàm XOÁ THẬT — chỉ `DestructiveConfirmDialog` gọi, sau khi người dùng đã tích
   // xác nhận. Ném lỗi trở lại cho hộp hiện ra, KHÔNG dọn khung chat ở đây — y hệt
@@ -812,6 +834,7 @@ export default function ChatArea({
 
         <div className="relative flex-shrink-0">
           <button
+            ref={menuTriggerRef}
             onClick={() => setMenuOpen((v) => !v)} disabled={loading || Boolean(pendingReview)}
             className="icon-btn w-10 h-10 disabled:opacity-40"
             aria-label="Tùy chọn cuộc trò chuyện" title="Tùy chọn cuộc trò chuyện" aria-expanded={menuOpen}>
@@ -1136,7 +1159,7 @@ export default function ChatArea({
         targetName={title}
         consequenceText="Toàn bộ tin nhắn của cuộc trò chuyện này sẽ bị xóa vĩnh viễn khỏi máy chủ. Không thể hoàn tác."
         confirmLabel="Xóa lịch sử chat"
-        onCancel={() => setXacNhanXoaLichSu(false)}
+        onCancel={huyXoaLichSu}
         onConfirm={xoaLichSuThat}
       />
 
