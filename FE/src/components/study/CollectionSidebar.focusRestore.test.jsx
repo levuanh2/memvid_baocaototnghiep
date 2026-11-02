@@ -119,3 +119,34 @@ it("does not move focus to the sidebar while the delete is in flight or after it
   expect(dialog()).toBeNull();
   expect(document.activeElement).toBe(trigger);
 });
+
+it("does not steal focus from another live control when the delete completes", async () => {
+  let resolve;
+  const deleteRequest = vi.fn(() => new Promise((res) => { resolve = res; }));
+  await openDeleteDialog({ initial: [ALPHA, BETA], deleteRequest });
+  await confirmDelete();
+  const elsewhere = document.createElement("button");
+  elsewhere.textContent = "elsewhere";
+  document.body.appendChild(elsewhere);
+
+  await act(async () => { elsewhere.focus(); resolve(); await Promise.resolve(); });
+
+  expect(dialog()).toBeNull();
+  expect(document.activeElement).toBe(elsewhere);
+  elsewhere.remove();
+});
+
+it("ignores Escape while the delete is in flight: no cancel, no second request, no focus move", async () => {
+  let resolve;
+  const deleteRequest = vi.fn(() => new Promise((res) => { resolve = res; }));
+  await openDeleteDialog({ initial: [ALPHA, BETA], deleteRequest });
+  await confirmDelete();
+  const sidebar = document.body.querySelector('[aria-label="Bộ lọc thư viện"]');
+
+  await act(async () => window.dispatchEvent(new KeyboardEvent("keydown", { key: "Escape" })));
+
+  expect(dialog()).not.toBeNull();
+  expect(deleteRequest).toHaveBeenCalledTimes(1);
+  expect(sidebar.contains(document.activeElement)).toBe(false);
+  await act(async () => { resolve(); await Promise.resolve(); });
+});
