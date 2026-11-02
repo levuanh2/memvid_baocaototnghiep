@@ -15,7 +15,7 @@ import SealMeter from "../../components/study/SealMeter";
 import { Icon } from "../../components/ui/Icon";
 import Spinner from "../../components/ui/Spinner";
 import {
-  MASTERY_LABEL, bulkDocuments, createCollection, deleteCollection, formatScore,
+  MASTERY_LABEL, attemptScoreLabel, bulkDocuments, createCollection, deleteCollection,
   getLibrary, getProgressAttempts, getProgressConcepts, getProgressOverview,
   patchCollection, patchDocument, uploadDocument, moTaLoi,
 } from "../../utils/studyApi";
@@ -904,11 +904,7 @@ export default function DocumentList() {
                   </div>
                 </div>
                 <span className="font-mono text-small text-text-secondary shrink-0">
-                  {a.grading_complete === false
-                    ? Number(a.max_score || 0) === 0
-                      ? "chưa chấm được"
-                      : `tạm thời · ${formatScore(a.score, a.max_score)}`
-                    : formatScore(a.score, a.max_score)}
+                  {attemptScoreLabel(a)}
                 </span>
               </Link>
             ))}

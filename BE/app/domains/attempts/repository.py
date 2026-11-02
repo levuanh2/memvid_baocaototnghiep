@@ -6,10 +6,21 @@ import uuid
 from datetime import datetime, timezone
 from typing import Any, Dict, List, Optional
 
-from sqlalchemy import select
+from sqlalchemy import Integer, func, select
 
 from app.db import session_scope
 from app.db.models import Quiz, QuizAnswer, QuizAttempt, QuizQuestion
+
+
+def grading_complete_clause():
+    """SQL predicate: no answer of the attempt is left ungraded.
+
+    Rows written before `metadata_json.ungraded_count` existed count as complete.
+    Shared by every consumer that must not treat a provisional (AI-outage)
+    attempt as finished: progress average, completion rate, Library counts."""
+    return func.coalesce(
+        QuizAttempt.metadata_json["ungraded_count"].astext.cast(Integer), 0
+    ) == 0
 
 
 def _now() -> datetime:

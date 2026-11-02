@@ -226,6 +226,15 @@ export const formatScore = (score, maxScore) => {
   return `${trim(score)} / ${trim(maxScore)}`;
 };
 
+/** History label for an attempt row. "tạm thời" ONLY for a graded attempt that
+ *  still has ungraded answers (AI grading outage); in-progress/submitted rows
+ *  keep their normal score text, never a provisional label. */
+export const attemptScoreLabel = (a) => {
+  const provisional = a?.status === "graded" && Number(a?.ungraded_count || 0) > 0;
+  if (!provisional) return formatScore(a?.score, a?.max_score);
+  return Number(a?.max_score || 0) === 0 ? "chưa chấm được" : `tạm thời · ${formatScore(a.score, a.max_score)}`;
+};
+
 export const formatDuration = (seconds) => {
   // `Number(null)` là 0 — chưa nộp bài mà hiện "0 giây" là bịa số liệu.
   if (seconds == null || seconds === "") return "—";

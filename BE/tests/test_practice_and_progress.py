@@ -488,3 +488,30 @@ def test_che_do_mo_khong_thay_du_lieu_cua_user_dang_nhap(
     sau = client.get("/api/progress/overview").get_json()
     assert sau == truoc, "người gọi ẩn danh không được thấy số liệu của user khác"
     assert all(a["attempt_id"] for a in client.get("/api/progress/attempts").get_json()["attempts"])
+
+
+def test_provisional_attempt_is_neither_completed_progress_nor_library_graded(be, client, monkeypatch, owner):
+    """R85 P2 review: an attempt left with ungraded answers (AI grading outage)
+    must not raise completion_rate, the average, or the Library's graded count."""
+    from app.db import session_scope
+    from app.db.models import QuizAttempt
+    from app.domains.documents import repository as docs_repo
+
+    _protect(be, monkeypatch, owner)
+    _run_inline(monkeypatch)
+    doc_id, attempt_id, _item, _chunks = _seed_and_fail_a_quiz(client, owner, monkeypatch)
+
+    over = client.get("/api/progress/overview").get_json()
+    assert over["completion_rate"] == 1.0 and over["average_percentage"] is not None
+    assert docs_repo.ai_counts(owner)["quizzes"][doc_id]["graded_attempts"] == 1
+
+    with session_scope() as s:
+        row = s.get(QuizAttempt, attempt_id)
+        row.metadata_json = {**(row.metadata_json or {}), "ungraded_count": 1}
+    docs_repo.invalidate_cache()
+
+    over = client.get("/api/progress/overview").get_json()
+    assert over["attempt_count"] == 1
+    assert over["completion_rate"] == 0.0
+    assert over["average_percentage"] is None
+    assert docs_repo.ai_counts(owner)["quizzes"][doc_id]["graded_attempts"] == 0

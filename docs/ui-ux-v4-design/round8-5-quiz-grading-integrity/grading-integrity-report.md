@@ -63,7 +63,7 @@ cd BE
 python -m pytest tests/test_quiz_attempt.py::test_totals_exclude_questions_that_could_not_be_graded tests/test_quiz_attempt.py::test_totals_with_no_successfully_graded_question_have_no_percentage -vv
 ```
 
-Expected: new integrity tests fail on main.  
+Expected: new integrity tests fail on main.
 Observed: **FAIL as expected, 2/2**. Base returned `max_score=4` instead of 2 and returned `max_score=2, percentage=0.0` for zero graded questions.
 
 Command:
@@ -73,7 +73,7 @@ cd FE
 npm test -- --run src/pages/study/QuizResult.round7.test.jsx
 ```
 
-Expected: new provisional UI tests fail on main.  
+Expected: new provisional UI tests fail on main.
 Observed: **FAIL as expected, 2 new failures**. Base rendered `100% · điểm thô` and `0 / 0`, with no provisional/incomplete label.
 
 ### Passing focused tests after fix
