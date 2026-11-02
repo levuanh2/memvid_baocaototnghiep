@@ -214,7 +214,7 @@ test("manual suppression survives review navigation and selection changes in the
   await page.locator(".mm-selection-bar").getByRole("button", { name: "Tiếp tục" }).click();
   await page.getByRole("button", { name: /Không thêm node cha.*E — Nhánh trái/ }).click();
   await page.getByRole("button", { name: "Tiếp tục" }).click();
-  await page.getByRole("button", { name: "Quay lại" }).click();
+  await page.locator(".export-rail").getByRole("button", { name: /^Nội dung/ }).click();
   await expect(page.locator(".export-footer__summary")).toContainText("2 node đã chọn · 0 node cha tự thêm · 2 node được xuất");
 
   await page.locator(".export-inline-action").click();
