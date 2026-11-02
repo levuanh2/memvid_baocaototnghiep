@@ -194,8 +194,6 @@ def save_grades(attempt_id: str, graded: List[Dict[str, Any]], totals: Dict[str,
         # `percentage` thì ở lại DB vĩnh viễn và chảy vào `progress.overview`. Người
         # học thấy 66.7% và không còn cách nào biết một câu chưa được chấm.
         #
-        # Phần TOÁN là cố ý và không đổi: câu chưa chấm vẫn nằm ở mẫu số
-        # (`test_quiz_attempt.py:311` khoá điều đó). Chỗ hỏng là BÁO CÁO.
         meta = dict(a.metadata_json or {})
         meta["ungraded_count"] = int(ungraded_count)
         a.metadata_json = meta
@@ -247,6 +245,11 @@ def list_by_quiz(quiz_id: str, *, user_id: Optional[str] = None) -> List[Dict[st
             "score": _f(a.score),
             "max_score": _f(a.max_score),
             "percentage": _f(a.percentage),
+            "ungraded_count": int((a.metadata_json or {}).get("ungraded_count") or 0),
+            "grading_complete": (
+                a.status == "graded"
+                and int((a.metadata_json or {}).get("ungraded_count") or 0) == 0
+            ),
             "started_at": a.started_at.isoformat() if a.started_at else None,
             "submitted_at": a.submitted_at.isoformat() if a.submitted_at else None,
         } for a in s.execute(q).scalars().all()]

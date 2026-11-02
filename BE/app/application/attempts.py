@@ -90,6 +90,9 @@ def attempt_public(attempt: dict) -> dict:
         out["ungraded_count"] = int(meta.get("ungraded_count") or 0)
     except (TypeError, ValueError):
         out["ungraded_count"] = 0
+    out["grading_complete"] = (
+        out.get("status") == "graded" and out["ungraded_count"] == 0
+    )
     return out
 
 

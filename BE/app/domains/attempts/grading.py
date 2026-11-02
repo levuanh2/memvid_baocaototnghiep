@@ -117,19 +117,28 @@ def grade_short_answer(
 
 
 def totals(graded: List[Dict[str, Any]], total_questions: int) -> Dict[str, Any]:
-    """Điểm attempt theo công thức đặc tả 4.8.
+    """Điểm attempt chỉ trên những câu đã có kết quả chấm đáng tin cậy.
 
-    `max_score` tính trên TỔNG số câu của quiz, không phải số câu đã chấm — bỏ trống 3
-    câu mà vẫn hiện 100% thì con số đó vô nghĩa.
+    Câu bỏ trống vẫn có verdict incorrect nên vẫn nằm trong mẫu số. Chỉ câu mà
+    hạ tầng chấm AI không trả được verdict/score mới bị loại; tính nó như 0 sẽ biến
+    lỗi hạ tầng thành câu trả lời sai của người học.
+
+    total_questions được giữ trong chữ ký để tương thích caller cũ. Tổng số câu
+    đầy đủ vẫn được lưu riêng trên attempt và dùng để báo số câu chưa chấm.
     """
-    score = sum(float(g.get("score") or 0.0) for g in graded)
-    max_score = float(total_questions) * 1.0
-    correct = sum(1 for g in graded if g.get("verdict") == "correct")
-    incorrect = sum(1 for g in graded if g.get("verdict") in ("incorrect", "partial"))
+    del total_questions
+    scored = [
+        g for g in graded
+        if g.get("verdict") in SCORE_BY_VERDICT and g.get("score") is not None
+    ]
+    score = sum(float(g["score"]) for g in scored)
+    max_score = float(len(scored))
+    correct = sum(1 for g in scored if g.get("verdict") == "correct")
+    incorrect = sum(1 for g in scored if g.get("verdict") in ("incorrect", "partial"))
     return {
         "score": round(score, 2),
         "max_score": round(max_score, 2),
-        "percentage": round(score / max_score * 100, 2) if max_score else 0.0,
+        "percentage": round(score / max_score * 100, 2) if max_score else None,
         "correct_count": correct,
         "incorrect_count": incorrect,
     }
@@ -164,7 +173,7 @@ def demo() -> None:
     t = totals([{"verdict": "correct", "score": 1.0},
                 {"verdict": "partial", "score": 0.5},
                 {"verdict": "incorrect", "score": 0.0}], total_questions=4)
-    assert t == {"score": 1.5, "max_score": 4.0, "percentage": 37.5,
+    assert t == {"score": 1.5, "max_score": 3.0, "percentage": 50.0,
                  "correct_count": 1, "incorrect_count": 2}, t
     assert t["score"] <= t["max_score"]
     print("grading demo OK")

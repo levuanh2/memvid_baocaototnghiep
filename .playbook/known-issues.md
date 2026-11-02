@@ -7726,3 +7726,22 @@ tools use one artifact-aware readiness policy, keep Details/management and
 existing artifacts reachable, and use 44px menu rows with bottom-edge flipping.
 Deferred-promise and real-Chromium regression coverage pins each boundary.
 
+# AI grader outage reduced learner score and looked final (fixed 2026-11-02)
+
+**Symptom:** when short-answer AI grading returned no trustworthy verdict, the
+answer remained null but still counted in the attempt maximum. One correct
+objective answer plus one unavailable AI grade displayed 1/2 = 50%, while an
+all-outage quiz displayed 0%.
+
+**Root cause:** the grading service correctly omitted infrastructure failures
+from its graded-answer list, but totals independently rebuilt the maximum from
+the quiz's full question count. Consumers also treated status `graded` as proof
+that every question had been graded despite durable `ungraded_count`.
+
+**Fix and prevention:** totals now derive earned and maximum score from the same
+valid-verdict set; zero graded questions have a null percentage. Payloads expose
+additive `grading_complete`, provisional attempts are excluded from attempt-level
+progress averages/comparisons, and UI explicitly labels incomplete results.
+Real Flask/Postgres/browser coverage pins outage, reload, response preservation
+and account isolation.
+

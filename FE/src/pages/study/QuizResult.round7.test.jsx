@@ -69,6 +69,36 @@ describe("Round 7 quiz result", () => {
     expect(container.querySelector(".seal-meter--mastered")).toBeNull();
   });
 
+  it("labels a graded attempt with ungraded answers as provisional", async () => {
+    getResult.mockResolvedValue({
+      status: "graded", grading_complete: false, ungraded_count: 1,
+      quiz_title: "Quiz", score: 1, max_score: 1, percentage: 100,
+      correct_count: 1, incorrect_count: 0, total_questions: 2, duration_seconds: 60,
+      questions: [
+        { question_id: "q1", question_type: "multiple_choice", question_text: "Objective", options: ["A"], user_answer: "A", correct_answer: "A", verdict: "correct" },
+        { question_id: "q2", question_type: "short_answer", question_text: "AI failed", user_answer: "original", correct_answer: "reference", verdict: null },
+      ],
+    });
+    await renderReady();
+    expect(container.textContent).toContain("Kết quả tạm thời");
+    expect(container.textContent).toContain("1 câu chưa chấm được");
+    expect(container.textContent).toContain("100% tạm tính trên 1 câu đã chấm");
+    expect(container.textContent).not.toContain("100% · điểm thô");
+    expect(container.querySelector(".seal-meter--mastered")).toBeNull();
+  });
+
+  it("shows no percentage when every answer is still ungraded", async () => {
+    getResult.mockResolvedValue({
+      status: "graded", grading_complete: false, ungraded_count: 2,
+      quiz_title: "Quiz", score: 0, max_score: 0, percentage: null,
+      correct_count: 0, incorrect_count: 0, total_questions: 2, duration_seconds: 60,
+      questions: [],
+    });
+    await renderReady();
+    expect(container.textContent).toContain("Chưa chấm được");
+    expect(container.textContent).not.toContain("0%");
+  });
+
   it("opens wrong-answer review without replacing the review-plan route", async () => {
     getResult.mockResolvedValue({ status: "graded", quiz_title: "Quiz", score: 8, max_score: 10, percentage: 80, correct_count: 8, incorrect_count: 2, total_questions: 10, duration_seconds: 60, questions: QUESTIONS });
     await renderReady();

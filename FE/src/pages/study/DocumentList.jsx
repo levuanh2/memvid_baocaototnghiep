@@ -904,7 +904,11 @@ export default function DocumentList() {
                   </div>
                 </div>
                 <span className="font-mono text-small text-text-secondary shrink-0">
-                  {formatScore(a.score, a.max_score)}
+                  {a.grading_complete === false
+                    ? Number(a.max_score || 0) === 0
+                      ? "chưa chấm được"
+                      : `tạm thời · ${formatScore(a.score, a.max_score)}`
+                    : formatScore(a.score, a.max_score)}
                 </span>
               </Link>
             ))}

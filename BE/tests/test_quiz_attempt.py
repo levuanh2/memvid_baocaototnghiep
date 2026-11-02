@@ -22,14 +22,23 @@ def test_objective_grading_ignores_case_and_accents():
     assert grade_objective("multiple_choice", None, "2x") == ("incorrect", 0.0)
 
 
-def test_totals_follow_the_spec_formula():
+def test_totals_exclude_questions_that_could_not_be_graded():
     t = totals([{"verdict": "correct", "score": 1.0},
                 {"verdict": "partial", "score": 0.5}], total_questions=4)
-    # max_score tính trên TỔNG số câu, không phải số câu đã chấm
-    assert t["max_score"] == 4.0 and t["score"] == 1.5
-    assert t["percentage"] == 37.5 == round(t["score"] / t["max_score"] * 100, 2)
+    assert t["max_score"] == 2.0 and t["score"] == 1.5
+    assert t["percentage"] == 75.0 == round(t["score"] / t["max_score"] * 100, 2)
     assert t["score"] <= t["max_score"]
     assert t["correct_count"] == 1 and t["incorrect_count"] == 1
+
+
+def test_totals_with_no_successfully_graded_question_have_no_percentage():
+    assert totals([], total_questions=2) == {
+        "score": 0.0,
+        "max_score": 0.0,
+        "percentage": None,
+        "correct_count": 0,
+        "incorrect_count": 0,
+    }
 
 
 # ── phần chạy trên DB thật ──────────────────────────────────────────────────
@@ -69,7 +78,7 @@ def _protect(main, monkeypatch, uid):
     monkeypatch.setattr(main, "_current_user_id", lambda: uid)
 
 
-def _seed_quiz(client, owner, *, with_short_answer=False):
+def _seed_quiz(client, owner, *, with_short_answer=False, only_short_answer=False):
     """Tạo document + chunk + quiz ready. Trả (quiz_id, [question_id...])."""
     from app.domains.documents import repository as docs_repo
     from app.domains.documents.sections import build_sections
@@ -89,7 +98,7 @@ def _seed_quiz(client, owner, *, with_short_answer=False):
     ])
     chunks = docs_repo.list_chunks(doc_id)
 
-    questions = [
+    questions = [] if only_short_answer else [
         {"question_text": "Dao ham cua x^2?", "question_type": "multiple_choice",
          "options": ["2x", "x", "1"], "correct_answer": "2x",
          "explanation": "Quy tac luy thua.", "difficulty": "easy",
@@ -101,7 +110,7 @@ def _seed_quiz(client, owner, *, with_short_answer=False):
          "concept_tags": ["dao ham"], "section_id": chunks[1]["section_id"],
          "chunk_ids": [chunks[1]["chunk_id"]]},
     ]
-    if with_short_answer:
+    if with_short_answer or only_short_answer:
         questions.append({
             "question_text": "Neu quy tac dao ham hop.", "question_type": "short_answer",
             "options": [], "correct_answer": "Dao ham ngoai nhan dao ham trong.",
@@ -309,9 +318,38 @@ def test_unreliable_llm_leaves_question_ungraded_instead_of_zero(be, client, mon
     assert client.get(f"/api/attempts/jobs/{job_id}").get_json()["result"]["ungraded_count"] == 1
     body = client.get(f"/api/quizzes/results/{attempt_id}").get_json()
     assert body["status"] == "graded" and body["score"] == 2.0
-    assert body["max_score"] == 3.0, "câu chưa chấm vẫn tính vào mẫu số"
+    assert body["max_score"] == 2.0 and body["percentage"] == 100.0
+    assert body["grading_complete"] is False and body["ungraded_count"] == 1
     short = next(q for q in body["questions"] if q["question_id"] == qids[2])
     assert short["verdict"] is None and short["score"] is None
+    assert short["user_answer"] == "gi do", "keep the original response for future regrading"
+
+    masteries = client.get(
+        f"/api/attempts/{attempt_id}/concept-masteries").get_json()["concept_masteries"]
+    assert {m["concept_name"] for m in masteries} == {"dao ham"}
+    assert client.get("/api/progress/overview").get_json()["average_percentage"] is None
+
+
+def test_all_failed_short_answer_gradings_have_no_zero_percent(be, client, monkeypatch, owner):
+    import app.jobs.queue as queue_mod
+    from app.domains.attempts import grading as grading_mod
+
+    _protect(be, monkeypatch, owner)
+    monkeypatch.setattr(queue_mod, "enqueue_job",
+                        lambda fn, args=(), **kw: (fn(*args), {"mode": "sync"})[1])
+    monkeypatch.setattr(grading_mod, "grade_short_answer", lambda **kw: None)
+
+    quiz_id, qids = _seed_quiz(client, owner, only_short_answer=True)
+    attempt_id = _open(client, quiz_id)["attempt_id"]
+    client.patch(f"/api/attempts/{attempt_id}/answers",
+                 json={"answers": {qids[0]: "learner original answer"}})
+    client.post(f"/api/attempts/{attempt_id}/submit")
+
+    body = client.get(f"/api/quizzes/results/{attempt_id}").get_json()
+    assert body["score"] == 0.0 and body["max_score"] == 0.0
+    assert body["percentage"] is None
+    assert body["grading_complete"] is False and body["ungraded_count"] == 1
+    assert body["questions"][0]["user_answer"] == "learner original answer"
 
 
 def test_attempt_of_other_user_is_404(be, client, monkeypatch, owner):
