@@ -1,8 +1,29 @@
+import { execSync } from 'node:child_process'
+import process from 'node:process'
 import { defineConfig } from 'vite'
 import react from '@vitejs/plugin-react'
 
+// Commit this bundle was built from, published as
+// <meta name="studymap-build" content="<sha>"> so release probes can compare
+// the frontend with /health's `revision` instead of guessing from bundle
+// hashes. Render and GitHub Actions provide the SHA; local builds ask git.
+// Anything that is not a bare hex SHA becomes "unknown".
+function buildRevision() {
+  let value = process.env.VITE_BUILD_SHA || process.env.RENDER_GIT_COMMIT || process.env.GITHUB_SHA
+  if (!value) {
+    try { value = execSync('git rev-parse HEAD', { stdio: ['ignore', 'pipe', 'ignore'] }).toString() } catch { value = '' }
+  }
+  value = value.trim().toLowerCase()
+  return /^[0-9a-f]{7,40}$/.test(value) ? value : 'unknown'
+}
+
+const buildRevisionMeta = () => ({
+  name: 'studymap-build-revision',
+  transformIndexHtml: () => [{ tag: 'meta', attrs: { name: 'studymap-build', content: buildRevision() }, injectTo: 'head' }],
+})
+
 export default defineConfig({
-  plugins: [react()],
+  plugins: [react(), buildRevisionMeta()],
   test: {
     testTimeout: 15000,
     // FE/e2e/**/*.spec.js and FE/e2e-fixture/**/*.spec.js are Playwright
