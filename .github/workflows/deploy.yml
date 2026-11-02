@@ -45,43 +45,111 @@ jobs:
       github.event.workflow_run.head_branch == 'main' &&
       github.event.workflow_run.event == 'push'
     steps:
+      - name: Checkout verified deploy scripts
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event.workflow_run.head_sha }}
+          sparse-checkout: scripts
+          persist-credentials: false
+
+      - name: Resolve verified SHA
+        id: gate
+        env:
+          RUN_SHA: ${{ github.event.workflow_run.head_sha }}
+          RUN_CONCLUSION: ${{ github.event.workflow_run.conclusion }}
+          RUN_EVENT: ${{ github.event.workflow_run.event }}
+          RUN_BRANCH: ${{ github.event.workflow_run.head_branch }}
+          RUN_REPO: ${{ github.event.workflow_run.repository.full_name }}
+          RUN_HEAD_REPO: ${{ github.event.workflow_run.head_repository.full_name }}
+          RUN_WORKFLOW_PATH: ${{ github.event.workflow_run.path }}
+          EXPECTED_REPO: ${{ github.repository }}
+        run: |
+          set -euo pipefail
+          remote_line="$(git ls-remote "https://github.com/${EXPECTED_REPO}.git" refs/heads/main || true)"
+          read -r remote_main_sha _ <<< "$remote_line"
+          set +e
+          gate_output="$(REMOTE_MAIN_SHA="${remote_main_sha:-}" bash scripts/deploy_gate.sh)"
+          gate_status=$?
+          set -e
+          printf '%s\n' "$gate_output"
+          case "$gate_status:$gate_output" in
+            0:decision=deploy\ *)
+              echo "decision=deploy" >> "$GITHUB_OUTPUT"
+              echo "sha=$RUN_SHA" >> "$GITHUB_OUTPUT"
+              echo "verified_sha=$RUN_SHA remote_main_sha=$remote_main_sha"
+              ;;
+            10:decision=skip\ *)
+              echo "decision=skip" >> "$GITHUB_OUTPUT"
+              echo "sha=$RUN_SHA" >> "$GITHUB_OUTPUT"
+              echo "verified_sha=$RUN_SHA remote_main_sha=$remote_main_sha"
+              echo "::notice::Deployment skipped because main advanced; the newer commit's CI run owns deployment."
+              ;;
+            *)
+              echo "::error::Deployment gate rejected the workflow_run ($gate_output)."
+              exit 1
+              ;;
+          esac
+
       - name: Write pinned EC2 host key to known_hosts
+        if: steps.gate.outputs.decision == 'deploy'
+        env:
+          EC2_KNOWN_HOSTS: ${{ secrets.EC2_KNOWN_HOSTS }}
         run: |
           set -euo pipefail
           mkdir -p ~/.ssh
           chmod 700 ~/.ssh
-          printf '%s\n' "${{ secrets.EC2_KNOWN_HOSTS }}" > ~/.ssh/known_hosts
+          printf '%s\n' "$EC2_KNOWN_HOSTS" > ~/.ssh/known_hosts
           chmod 644 ~/.ssh/known_hosts
 
       - name: Install deploy SSH key
+        if: steps.gate.outputs.decision == 'deploy'
+        env:
+          EC2_SSH_KEY: ${{ secrets.EC2_SSH_KEY }}
         run: |
           set -euo pipefail
           install -m 600 -D /dev/null ~/.ssh/deploy_key
-          printf '%s\n' "${{ secrets.EC2_SSH_KEY }}" > ~/.ssh/deploy_key
+          printf '%s\n' "$EC2_SSH_KEY" > ~/.ssh/deploy_key
           chmod 600 ~/.ssh/deploy_key
 
       - name: Deploy over SSH
+        id: remote_deploy
+        if: steps.gate.outputs.decision == 'deploy'
+        env:
+          DEPLOY_SHA: ${{ steps.gate.outputs.sha }}
+          EC2_USER: ${{ secrets.EC2_USER }}
+          EC2_HOST: ${{ secrets.EC2_HOST }}
         run: |
           set -euo pipefail
+          set +e
           ssh -i ~/.ssh/deploy_key \
               -o StrictHostKeyChecking=yes \
               -o BatchMode=yes \
               -o ConnectTimeout=15 \
-              "${{ secrets.EC2_USER }}@${{ secrets.EC2_HOST }}" '
-            set -euo pipefail
-            cd /opt/memvid/app
-            git fetch origin
-            git checkout main
-            git pull --ff-only origin main
-            chmod +x scripts/*.sh
-            ./scripts/deploy.sh
-          '
+              "${EC2_USER}@${EC2_HOST}" "bash -s -- $DEPLOY_SHA" < scripts/deploy_remote.sh
+          deploy_status=$?
+          set -e
+          if [ "$deploy_status" -eq 75 ]; then
+            echo "outcome=superseded" >> "$GITHUB_OUTPUT"
+            echo "::notice::Deployment skipped because main advanced on the server before migration or activation."
+            exit 0
+          fi
+          if [ "$deploy_status" -ne 0 ]; then
+            echo "::error::Pinned deployment failed with exit $deploy_status."
+            exit "$deploy_status"
+          fi
+          echo "outcome=deployed" >> "$GITHUB_OUTPUT"
 
       - name: Report deployment result
         if: always()
+        env:
+          GATE_DECISION: ${{ steps.gate.outputs.decision }}
+          REMOTE_OUTCOME: ${{ steps.remote_deploy.outputs.outcome }}
+          JOB_STATUS: ${{ job.status }}
         run: |
-          if [ "${{ job.status }}" = "success" ]; then
-            echo "Deployment to EC2 (${{ secrets.EC2_HOST }}) succeeded."
+          if [ "$GATE_DECISION" = "skip" ] || [ "$REMOTE_OUTCOME" = "superseded" ]; then
+            echo "Deployment skipped safely because the verified SHA was superseded."
+          elif [ "$JOB_STATUS" = "success" ]; then
+            echo "Pinned deployment succeeded."
           else
-            echo "Deployment to EC2 (${{ secrets.EC2_HOST }}) FAILED — see the 'Deploy over SSH' step above for the exact error." >&2
+            echo "Pinned deployment FAILED — see the preceding gate/SSH step for the exact error." >&2
           fi

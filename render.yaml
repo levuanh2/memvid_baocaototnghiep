@@ -35,7 +35,8 @@ services:
     # Render region, which keeps DB round-trips off the critical path.
     region: singapore
     branch: main
-    autoDeploy: true
+    # Never publish a main commit until all linked GitHub CI checks pass.
+    autoDeployTrigger: checksPass
     rootDir: BE
     healthCheckPath: /health
 
@@ -278,7 +279,8 @@ services:
     name: studymap-web
     runtime: static
     branch: main
-    autoDeploy: true
+    # Never publish a main commit until all linked GitHub CI checks pass.
+    autoDeployTrigger: checksPass
     rootDir: FE
     buildCommand: npm ci && npm run build
     staticPublishPath: ./dist
