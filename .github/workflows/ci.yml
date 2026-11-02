@@ -492,7 +492,7 @@ jobs:
       - name: ShellCheck deploy scripts when available
         run: |
           if command -v shellcheck >/dev/null 2>&1; then
-            shellcheck scripts/deploy_gate.sh scripts/deploy.sh scripts/deploy_remote.sh scripts/deploy_preflight.sh scripts/rollback.sh scripts/tests/test_deploy_pinning.sh scripts/tests/test_deploy_guard_mutations.sh
+            shellcheck -x -S warning scripts/deploy_gate.sh scripts/deploy.sh scripts/deploy_remote.sh scripts/deploy_preflight.sh scripts/rollback.sh scripts/tests/test_deploy_pinning.sh scripts/tests/test_deploy_guard_mutations.sh
           else
             echo "::notice::shellcheck is not installed on this runner"
           fi

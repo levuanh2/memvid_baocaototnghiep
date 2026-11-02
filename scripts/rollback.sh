@@ -44,13 +44,14 @@ CURRENT="$(git -C "$REPO_ROOT" rev-parse --short HEAD)"
 log "rolling back from $CURRENT to $SHA"
 git -C "$REPO_ROOT" checkout --detach "$SHA"
 refuse_unclean_build_inputs
-export APP_BUILD_SHA="$(git -C "$REPO_ROOT" rev-parse HEAD)"
+APP_BUILD_SHA="$(git -C "$REPO_ROOT" rev-parse HEAD)"
+export APP_BUILD_SHA
 log "repo is now intentionally detached at $APP_BUILD_SHA"
 
 compose build
 compose up -d
 
-for i in $(seq 1 30); do
+for _ in $(seq 1 30); do
   if compose exec -T backend curl -fsS http://localhost:8080/health >/dev/null 2>&1; then
     action=rollback
     [ "$BREAK_GLASS" = "1" ] && action=break-glass

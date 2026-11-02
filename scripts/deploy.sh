@@ -127,7 +127,8 @@ if [ -d "$REPO_ROOT/.git" ]; then
     git -C "$REPO_ROOT" checkout -B main "$DEPLOY_SHA"
     git -C "$REPO_ROOT" reset --hard "$DEPLOY_SHA"
     refuse_unclean_build_inputs
-    export APP_BUILD_SHA="$(git -C "$REPO_ROOT" rev-parse HEAD)"
+    APP_BUILD_SHA="$(git -C "$REPO_ROOT" rev-parse HEAD)"
+    export APP_BUILD_SHA
     log "pinned to $APP_BUILD_SHA (was $CURRENT_REF)"
   else
     warn_break_glass
@@ -136,7 +137,8 @@ if [ -d "$REPO_ROOT/.git" ]; then
     git -C "$REPO_ROOT" checkout -B main origin/main
     git -C "$REPO_ROOT" reset --hard origin/main
     refuse_unclean_build_inputs
-    export APP_BUILD_SHA="$(git -C "$REPO_ROOT" rev-parse HEAD)"
+    APP_BUILD_SHA="$(git -C "$REPO_ROOT" rev-parse HEAD)"
+    export APP_BUILD_SHA
     log "unpinned break-glass deploy at $APP_BUILD_SHA (was $CURRENT_REF)"
   fi
 else
