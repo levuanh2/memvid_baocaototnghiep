@@ -225,7 +225,9 @@ export default function ExportStudioDialog({
   const newAttemptKey = () => { attemptKeyRef.current = crypto.randomUUID?.() || `${Date.now()}-${Math.random()}`; return attemptKeyRef.current; };
   const inFlightRef = useRef(false);
   const canAdvance = scopeResult?.ok, canExport = canAdvance && !(isDoc && !mapId), effectiveScope = effectiveVisibleOnly ? "visible" : scopeType;
-  const close = () => { if (!exporting) { abortRef.current?.abort(); onClose?.(); } };
+  // The ref, not `exporting`: a close in the same task as the export click
+  // still sees the stale state and would let the download commit after closing.
+  const close = () => { if (!inFlightRef.current) { abortRef.current?.abort(); onClose?.(); } };
   useEffect(() => () => { attemptKeyRef.current = null; abortRef.current?.abort(); }, []);
   useEffect(() => { attemptKeyRef.current = null; abortRef.current?.abort(); inFlightRef.current = false; setExporting(false); setError(null); setDone(null); setJobStatus(null); setJobProgress(0); setJobId(null); setSelectedBranchSnapshot([]); setAutoParentContext(true); setSuppressedAutoContextIds([]); }, [mapId, setAutoParentContext, setSuppressedAutoContextIds]);
   // Clears everything tied to one attempt (artifact, job, error, in-flight guard). Configuration is kept.
