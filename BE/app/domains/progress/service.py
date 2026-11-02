@@ -7,10 +7,14 @@ from __future__ import annotations
 
 from typing import Any, Dict, List, Optional, Sequence
 
-from sqlalchemy import func, select
+from sqlalchemy import Integer, func, select
 
 from app.db import session_scope
 from app.db.models import ConceptMastery, Document, Quiz, QuizAttempt, ReviewPlan
+from app.domains.attempts.repository import grading_complete_clause
+
+
+_grading_complete_clause = grading_complete_clause
 
 
 def _chu_so_huu(user_id: Optional[str]) -> str:
@@ -106,10 +110,17 @@ def overview(user_id: Optional[str]) -> Dict[str, Any]:
             .group_by(QuizAttempt.status)
         ).all()
         attempts = {t: int(n) for t, n in attempt_rows}
+        graded_complete = int(s.execute(
+            select(func.count()).select_from(QuizAttempt)
+            .where(QuizAttempt.user_id == uid,
+                   QuizAttempt.status == "graded",
+                   _grading_complete_clause())
+        ).scalar() or 0)
         avg_percentage = s.execute(
             select(func.avg(QuizAttempt.percentage))
             .where(QuizAttempt.user_id == uid,
-                   QuizAttempt.status == "graded")
+                   QuizAttempt.status == "graded",
+                   _grading_complete_clause())
         ).scalar()
         review_plans = int(s.execute(
             select(func.count()).select_from(ReviewPlan)
@@ -117,7 +128,6 @@ def overview(user_id: Optional[str]) -> Dict[str, Any]:
         ).scalar() or 0)
 
     total_attempts = sum(attempts.values())
-    graded = attempts.get("graded", 0)
     concepts = concept_progress(user_id)
     return {
         "document_count": documents,
@@ -125,8 +135,9 @@ def overview(user_id: Optional[str]) -> Dict[str, Any]:
         "quiz_count_by_type": quizzes,
         "attempt_count": total_attempts,
         "attempt_count_by_status": attempts,
-        # Tỷ lệ hoàn thành = đã chấm / đã mở. Mở bài rồi bỏ dở cũng là dữ liệu thật.
-        "completion_rate": round(graded / total_attempts, 2) if total_attempts else 0.0,
+        # Tỷ lệ hoàn thành = đã chấm XONG / đã mở. Bài tạm thời (AI chấm lỗi, còn câu
+        # chưa chấm) chưa hoàn thành; mở bài rồi bỏ dở cũng là dữ liệu thật.
+        "completion_rate": round(graded_complete / total_attempts, 2) if total_attempts else 0.0,
         "average_percentage": round(float(avg_percentage), 2) if avg_percentage is not None else None,
         "review_plan_count": review_plans,
         "weak_concept_count": sum(1 for c in concepts if c["status"] != "mastered"),
@@ -207,6 +218,11 @@ def attempt_history(user_id: Optional[str], *, limit: int = 50) -> List[Dict[str
             "score": float(a.score) if a.score is not None else None,
             "max_score": float(a.max_score),
             "percentage": float(a.percentage) if a.percentage is not None else None,
+            "ungraded_count": int((a.metadata_json or {}).get("ungraded_count") or 0),
+            "grading_complete": (
+                a.status == "graded"
+                and int((a.metadata_json or {}).get("ungraded_count") or 0) == 0
+            ),
             "correct_count": a.correct_count,
             "incorrect_count": a.incorrect_count,
             "duration_seconds": a.duration_seconds,
@@ -222,7 +238,8 @@ def latest_graded_attempt(quiz_id: str, user_id: Optional[str]) -> Optional[str]
             select(QuizAttempt.id)
             .where(QuizAttempt.quiz_id == str(quiz_id),
                    QuizAttempt.user_id == uid,
-                   QuizAttempt.status == "graded")
+                   QuizAttempt.status == "graded",
+                   _grading_complete_clause())
             .order_by(QuizAttempt.started_at.desc()).limit(1)
         ).scalar()
 

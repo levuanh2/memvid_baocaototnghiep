@@ -89,6 +89,10 @@ export default function QuizResult() {
   // Fail closed for any current or future non-final status: completed-result
   // presentation is authorized only by the explicit graded state.
   const grading = Boolean(result) && !graded;
+  const ungradedCount = Number(result?.ungraded_count || 0);
+  const provisional = graded && (
+    result?.grading_complete === false || ungradedCount > 0
+  );
   // `.filter()` alone loses the question's position in the original ten-question
   // quiz — the wrong-answer review must label question 4 and 9 as "Câu 4"/"Câu 9",
   // not "Câu 1"/"Câu 2" (their position inside the filtered subset). Stamp the
@@ -147,13 +151,28 @@ export default function QuizResult() {
             <WrongAnswerReview questions={wrongQuestions} index={reviewIndex} onIndex={setReviewIndex}
               onClose={() => setReviewingWrong(false)} reviewPlanTo={`/app/study/review/${attemptId}`} />
           ) : <>
-          <ScoreBoard result={result} grading={grading} wrongCount={wrongQuestions.length} onReviewWrong={openWrongReview} />
+          <ScoreBoard result={result} grading={grading} provisional={provisional}
+            ungradedCount={ungradedCount} wrongCount={wrongQuestions.length}
+            onReviewWrong={openWrongReview} />
 
           {grading && (
             <div className="surface-card !p-3.5 flex items-center gap-2.5 mb-6">
               <Spinner size={14} />
               <span className="text-body text-text-secondary">
                 Đang chấm các câu trả lời ngắn. Điểm trắc nghiệm sẽ hiện ngay khi chấm xong.
+              </span>
+            </div>
+          )}
+
+          {provisional && (
+            <div className="surface-card !p-3.5 flex items-start gap-2.5 mb-6"
+              role="status" style={{ borderColor: "var(--warn)" }}>
+              <Icon name="AlertCircle" size={16} className="shrink-0 mt-0.5" />
+              <span className="text-body text-text-secondary">
+                <strong className="text-text-primary">Kết quả tạm thời.</strong>{" "}
+                {ungradedCount} câu chưa chấm được do bộ chấm AI không khả dụng.
+                Các câu này không bị tính là sai và không nằm trong điểm, mức nắm
+                hay phân tích lỗ hổng hiện tại.
               </span>
             </div>
           )}
@@ -202,23 +221,43 @@ function SectionTitle({ children }) {
   );
 }
 
-function ScoreBoard({ result, grading, wrongCount, onReviewWrong }) {
+function ScoreBoard({ result, grading, provisional, ungradedCount, wrongCount, onReviewWrong }) {
   const percent = result.percentage;
+  const noGradedQuestions = provisional && Number(result.max_score || 0) === 0;
+  const gradedCount = Number(result.correct_count || 0) + Number(result.incorrect_count || 0);
+  const headline = grading
+    ? "Đang chấm"
+    : noGradedQuestions
+      ? "Chưa chấm được"
+      : provisional
+        ? "Kết quả tạm thời"
+        : formatScore(result.score, result.max_score);
+  const scoreCaption = grading
+    ? "đang chấm"
+    : noGradedQuestions
+      ? `${ungradedCount} câu chưa chấm được`
+      : provisional
+        ? `${percent}% tạm tính trên ${gradedCount} câu đã chấm`
+        : percent == null ? "chưa chấm" : `${percent}% · điểm thô`;
   return (
     <section className="quiz-score-hero">
       <div className="flex items-center gap-4">
         <SealMeter
           score={grading || percent == null ? 0 : percent / 100}
-          status={!grading && percent != null && percent >= 80 ? "mastered" : undefined}
+          status={!grading && !provisional && percent != null && percent >= 80 ? "mastered" : undefined}
           size={64}
-          label={grading || percent == null ? "Chưa có điểm" : `Đạt ${percent} phần trăm`}
+          label={grading || noGradedQuestions
+            ? "Chưa có điểm"
+            : provisional
+              ? `Kết quả tạm thời ${percent} phần trăm trên các câu đã chấm`
+              : percent == null ? "Chưa có điểm" : `Đạt ${percent} phần trăm`}
         />
         <div>
           <div className="font-display text-h2 font-semibold text-text-primary leading-none">
-            {grading ? "Đang chấm" : formatScore(result.score, result.max_score)}
+            {headline}
           </div>
           <div className="font-mono text-caption text-text-muted mt-1.5">
-            {grading ? "đang chấm" : percent == null ? "chưa chấm" : `${percent}% · điểm thô`}
+            {scoreCaption}
           </div>
         </div>
       </div>
@@ -226,6 +265,7 @@ function ScoreBoard({ result, grading, wrongCount, onReviewWrong }) {
       <div className="flex flex-wrap gap-x-7 gap-y-2 text-small">
         <Stat label="Đúng" value={grading ? "—" : result.correct_count ?? "—"} />
         <Stat label="Sai" value={grading ? "—" : result.incorrect_count ?? "—"} />
+        {provisional && <Stat label="Chưa chấm" value={ungradedCount} />}
         <Stat label="Số câu" value={result.total_questions} />
         <Stat label="Thời gian" value={formatDuration(result.duration_seconds)} />
       </div>

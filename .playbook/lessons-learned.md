@@ -3602,6 +3602,19 @@ above 1024px. Measure every required control, keep touch floors intact, and move
 secondary actions into an existing contextual menu until the full composition
 actually fits. Pin the boundary with `elementFromPoint` as well as rectangles.
 
+## 2026-11-02 — A missing grade is neither zero nor a completed result
+
+When a scorer omits an item because infrastructure failed, every aggregate must
+derive numerator and denominator from the same trusted item set. Keeping the
+full quiz size as denominator silently converts absence into an incorrect
+learner answer.
+
+Operational status and grading completeness are separate contracts. A legacy
+`graded` status may remain for compatibility and access to the valid subset,
+but presentation, averages and comparisons need a durable completeness signal.
+Test the zero-trusted-item case separately: it must produce a null percentage
+and “not graded”, never 0%.
+
 # 2026-11-02 — A green workflow identifies a commit, not a moving branch
 
 Deployment authorization must carry the CI-verified immutable SHA through

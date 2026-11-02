@@ -27,6 +27,7 @@ from sqlalchemy import select
 
 from app.db import session_scope
 from app.db.models import Document, DocumentChunk, Section, User
+from app.domains.attempts.repository import grading_complete_clause
 from app.domains.documents import provenance as _provenance
 from shared.source_id import canonical_source_stem
 
@@ -671,7 +672,8 @@ def ai_counts(user_id: Optional[str]) -> Dict[str, Dict[str, Any]]:
                     _moi_nhat(Quiz.id, Quiz.created_at))
              .select_from(Quiz)
              .outerjoin(QuizAttempt,
-                        (QuizAttempt.quiz_id == Quiz.id) & (QuizAttempt.status == "graded"))
+                        (QuizAttempt.quiz_id == Quiz.id) & (QuizAttempt.status == "graded")
+                        & grading_complete_clause())
              .group_by(Quiz.document_id))
         if user_id is not None:
             q = q.where(Quiz.user_id == user_id)

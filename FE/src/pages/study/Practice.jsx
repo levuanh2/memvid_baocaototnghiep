@@ -77,6 +77,11 @@ export default function Practice() {
   };
 
   const done = Boolean(graded || comparison);
+  const ungradedCount = Number(graded?.ungraded_count || 0);
+  const provisional = Boolean(graded) && (
+    graded?.grading_complete === false || ungradedCount > 0
+  );
+  const noGradedQuestions = provisional && Number(graded?.max_score || 0) === 0;
 
   return (
     <StudyShell
@@ -104,15 +109,21 @@ export default function Practice() {
               <div className="flex items-center gap-4">
                 <SealMeter
                   score={(graded.percentage ?? 0) / 100}
-                  status={(graded.percentage ?? 0) >= 80 ? "mastered" : undefined}
+                  status={!provisional && (graded.percentage ?? 0) >= 80 ? "mastered" : undefined}
                   size={58}
                 />
                 <div>
                   <div className="font-display text-h2 font-semibold text-text-primary leading-none">
-                    {formatScore(graded.score, graded.max_score)}
+                    {noGradedQuestions
+                      ? "Chưa chấm được"
+                      : provisional ? "Kết quả tạm thời" : formatScore(graded.score, graded.max_score)}
                   </div>
                   <div className="font-mono text-caption text-text-muted mt-1.5">
-                    đúng {graded.correct_count}/{graded.total_questions}
+                    {provisional
+                      ? noGradedQuestions
+                        ? `${ungradedCount} câu chưa chấm được`
+                        : `${graded.percentage}% tạm tính trên ${graded.max_score} câu đã chấm · ${ungradedCount} câu chưa chấm được`
+                      : `đúng ${graded.correct_count}/${graded.total_questions}`}
                   </div>
                 </div>
               </div>
