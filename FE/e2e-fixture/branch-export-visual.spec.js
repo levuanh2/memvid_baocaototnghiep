@@ -95,17 +95,26 @@ for (const vp of VIEWPORTS) {
       // 6. after pan (real drag on empty background)
       // Pick a start point on empty canvas: the selection bar and legend sit over the bottom of the map at 1024px.
       const mb = await page.locator(".map-container").first().boundingBox();
-      const panY = await page.evaluate(({ x, top, h }) => {
-        for (const f of [0.3, 0.4, 0.5, 0.6, 0.2]) {
-          const e = document.elementFromPoint(x, top + h * f);
-          if (e && !e.closest(".mm-selection-bar, .mm-legend, me-tpc, me-export-check, me-epd, me-wrapper, me-parent, .mm-canvas-toolbar, button, a, input")) return top + h * f;
+      // At 390px, Space-selecting a marker scrolls the branch into the middle
+      // column, so the centre line can be all nodes (Fixture Audit run
+      // 41526017640). Also try columns either side of the centre.
+      const panAt = await page.evaluate(({ left, w, top, h }) => {
+        for (const fx of [0.5, 0.9, 0.1, 0.75, 0.25]) {
+          for (const f of [0.3, 0.4, 0.5, 0.6, 0.2]) {
+            const x = left + w * fx;
+            const y = top + h * f;
+            const e = document.elementFromPoint(x, y);
+            if (e && !e.closest(".mm-selection-bar, .mm-legend, me-tpc, me-export-check, me-epd, me-wrapper, me-parent, .mm-canvas-toolbar, button, a, input")) return { x, y };
+          }
         }
         return null;
-      }, { x: mb.x + mb.width * 0.5, top: mb.y, h: mb.height });
-      expect(panY).not.toBeNull();
-      await page.mouse.move(mb.x + mb.width * 0.5, panY);
+      }, { left: mb.x, w: mb.width, top: mb.y, h: mb.height });
+      expect(panAt).not.toBeNull();
+      const { x: panX, y: panY } = panAt;
+      const panDx = panX > mb.x + mb.width * 0.5 ? -60 : 60;
+      await page.mouse.move(panX, panY);
       await page.mouse.down();
-      await page.mouse.move(mb.x + mb.width * 0.5 + 60, panY, { steps: 8 });
+      await page.mouse.move(panX + panDx, panY, { steps: 8 });
       await page.mouse.up();
       await page.waitForTimeout(300);
       await page.screenshot({ path: path.join(OUT, `${tag}-6-after-pan.png`) });

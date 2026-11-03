@@ -19,6 +19,10 @@ import fs from "node:fs";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 
+// Exported SVGs embed fonts as base64 data URIs, which can contain "NaN" by
+// chance (Fixture Audit run 41526017640). Geometry checks look at the markup only.
+const markupOnly = (svg) => svg.replace(/data:[^)"']*/g, "");
+
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const ARTIFACT_DIR = path.join(__dirname, "..", "qa-artifacts");
 fs.mkdirSync(ARTIFACT_DIR, { recursive: true });
@@ -197,7 +201,7 @@ test.describe("Export Studio — fixture harness, real files", () => {
 
     const svgText = fs.readFileSync(filePath, "utf8");
     expect(svgText).toMatch(/<svg[^>]*>/);
-    expect(svgText).not.toMatch(/NaN|undefined|Infinity/);
+    expect(markupOnly(svgText)).not.toMatch(/NaN|undefined|Infinity/);
     const viewBoxMatch = svgText.match(/viewBox="([\d.\s-]+)"/);
     expect(viewBoxMatch).toBeTruthy();
     const [, , vbw, vbh] = viewBoxMatch[1].trim().split(/\s+/).map(Number);
@@ -284,7 +288,7 @@ test.describe("Export Studio — fixture harness, real files", () => {
     const filePath = await exportAndSave(page, "preset-presentation-svg");
 
     const svgText = fs.readFileSync(filePath, "utf8");
-    expect(svgText).not.toMatch(/NaN|undefined|Infinity/);
+    expect(markupOnly(svgText)).not.toMatch(/NaN|undefined|Infinity/);
     // Branding overlay text, real output of applyTargetAppearance's overlay.
     expect(svgText).toContain("StudyMap");
     // Legend overlay lists each top-level branch's own topic text.
@@ -304,7 +308,7 @@ test.describe("Export Studio — fixture harness, real files", () => {
     const filePath = await exportAndSave(page, "appearance-font-spacing-svg");
 
     const svgText = fs.readFileSync(filePath, "utf8");
-    expect(svgText).not.toMatch(/NaN|undefined|Infinity/);
+    expect(markupOnly(svgText)).not.toMatch(/NaN|undefined|Infinity/);
     const viewBoxMatch = svgText.match(/viewBox="([\d.\s-]+)"/);
     expect(viewBoxMatch).toBeTruthy();
     const [, , vbw, vbh] = viewBoxMatch[1].trim().split(/\s+/).map(Number);
@@ -361,7 +365,7 @@ test.describe("Export Studio — fixture harness, real files", () => {
     const filePath = await exportAndSave(page, "multi-branch-svg");
 
     const svgText = fs.readFileSync(filePath, "utf8");
-    expect(svgText).not.toMatch(/NaN|undefined|Infinity/);
+    expect(markupOnly(svgText)).not.toMatch(/NaN|undefined|Infinity/);
     expect(svgText).toContain("Kiến trúc hệ thống");
     expect(svgText).toContain("Bảo mật &amp; xác thực"); // XML-escaped ampersand
     expect(svgText).not.toContain("Hiệu năng &amp; mở rộng");
@@ -536,7 +540,7 @@ test.describe("Export Studio — fixture harness, real files", () => {
     const filePath = await exportAndSaveExact(page, "multi-branch.svg");
     const svgText = fs.readFileSync(filePath, "utf8");
     expect(svgText).toMatch(/<svg[^>]*>/);
-    expect(svgText).not.toMatch(/NaN|undefined|Infinity/);
+    expect(markupOnly(svgText)).not.toMatch(/NaN|undefined|Infinity/);
     const viewBoxMatch = svgText.match(/viewBox="([\d.\s-]+)"/);
     expect(viewBoxMatch).toBeTruthy();
   });
@@ -636,7 +640,7 @@ test.describe("Export Selection Mode — checkbox pointer regression (hotfix)", 
     const filePath = await exportAndSave(page, "checkbox-parent-child-dedupe-svg");
 
     const svgText = fs.readFileSync(filePath, "utf8");
-    expect(svgText).not.toMatch(/NaN|undefined|Infinity/);
+    expect(markupOnly(svgText)).not.toMatch(/NaN|undefined|Infinity/);
     // Both explicit identities survive, with no duplicate rendering.
     const childNodeOccurrences = svgText.split(`data-nodeid="me${MAP_A_ID}-m0-s0"`).length - 1;
     expect(childNodeOccurrences).toBe(1);
