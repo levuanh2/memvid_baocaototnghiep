@@ -42,6 +42,8 @@ export default function MainLayout({
   // load already can (WorkspaceContainer only mounts the MindMap pane once
   // `hasMindmap` is true) — a pre-existing rough edge, not a new one.
   initialWorkspaceMode = "chat", initialRightView = "evidence",
+  // Current `?tab=` (Workspace.jsx). Undefined in tests that mount MainLayout alone.
+  requestedWorkspaceMode,
 }) {
   const [sources, setSources] = useState([]);
   const [leftOpen, setLeftOpen] = useState(false);   // chỉ dùng ở chế độ ngăn kéo (<768px)
@@ -76,6 +78,13 @@ export default function MainLayout({
   // here via `onMindmapDataChange`/`onSummaryDataChange` instead of portaling
   // a modal — see SidebarRight.jsx's two small forwarding effects.
   const [workspaceMode, setWorkspaceMode] = useState(initialWorkspaceMode);
+  // A navigation that stays on /app (Command Palette "Tóm tắt", Continue) keeps
+  // this component mounted, so the initial value alone misses a new `?tab=`.
+  // The effect below that writes the mode into the URL keeps both equal, so
+  // this never fights a click.
+  useEffect(() => {
+    if (requestedWorkspaceMode) setWorkspaceMode(requestedWorkspaceMode);
+  }, [requestedWorkspaceMode]);
   // Round 3 CI-blocking regression fix: this used to reuse the DESKTOP
   // persisted `panel.collapsed.left` preference to decide whether the
   // tablet overlay was open. Desktop defaults to collapsed=false (open) at
