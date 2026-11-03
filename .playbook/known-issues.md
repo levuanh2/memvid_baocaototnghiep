@@ -1,5 +1,18 @@
 # Known Issues
 
+## Library card overflow menu leaked keys to card navigation (fixed 2026-11-04)
+
+`StudyCard` rendered its overflow popup without menu semantics, focus transfer,
+arrow navigation, or Escape focus restoration. Because the card owns a
+roving-tabindex key handler, menu keystrokes also bubbled into document navigation.
+
+The trigger now exposes `aria-haspopup="menu"` and live `aria-expanded`; the popup
+and items expose `menu`/`menuitem` roles. Opening focuses the first item,
+ArrowUp/ArrowDown wrap through items, and Escape closes and returns focus to the
+trigger. Menu key events stop before the unchanged card-level roving handler.
+Regression coverage lives in `FE/src/components/study/StudyCard.menu.test.jsx`
+and `FE/e2e-fixture/library-mode-navigation.spec.js`.
+
 ## Successful CI workflow could deploy a different, newer main commit (fixed 2026-11-02)
 
 **Symptom:** the `workflow_run` deploy job checked out/pulled current `main` on
