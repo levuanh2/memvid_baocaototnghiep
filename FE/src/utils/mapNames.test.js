@@ -3,6 +3,7 @@
 // structure page (/app/study/map/:id). Older names must not come back.
 import { describe, expect, it } from "vitest";
 import { BE_MAT } from "./tiepTucHoc";
+import { SHORTCUT_REGISTRY } from "./keyboardShortcuts";
 
 const sources = import.meta.glob(["../**/*.{js,jsx}", "!../**/*.test.*", "!../dev/**", "!../r71qa.jsx", "!../round6LibraryQa.jsx"], {
   query: "?raw", import: "default", eager: true,
@@ -19,5 +20,9 @@ describe("map names", () => {
   it("surface labels use the two approved names", () => {
     expect(BE_MAT.mindmap).toBe("Sơ đồ tư duy");
     expect(BE_MAT.studymap).toBe("Bản đồ kiến thức");
+  });
+
+  it("Alt+S is labelled by what it does (opens the Library, D15)", () => {
+    expect(SHORTCUT_REGISTRY.find((s) => s.id === "nav-studymap").label).toBe("Mở Thư viện học tập");
   });
 });

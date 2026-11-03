@@ -26,7 +26,7 @@ export const SHORTCUT_REGISTRY = [
   { id: "help", keys: "?", label: "Xem toàn bộ phím tắt (bảng này)", category: "Toàn cục", isNew: true },
   { id: "nav-chat", keys: "Alt + C", label: "Chuyển sang Trò chuyện", category: "Điều hướng Workspace", isNew: true },
   { id: "nav-mindmap", keys: "Alt + M", label: "Chuyển sang Sơ đồ tư duy", category: "Điều hướng Workspace", isNew: true },
-  { id: "nav-studymap", keys: "Alt + S", label: "Sang Bản đồ kiến thức", category: "Điều hướng Workspace", isNew: true },
+  { id: "nav-studymap", keys: "Alt + S", label: "Mở Thư viện học tập", category: "Điều hướng Workspace", isNew: true },
   { id: "nav-timeline", keys: "Alt + T", label: "Mở Dòng thời gian nghiên cứu", category: "Điều hướng Workspace", isNew: true },
   { id: "history-back", keys: "Alt + [", label: "Lùi về mục nghiên cứu trước", category: "Điều hướng Workspace", isNew: true },
   { id: "history-forward", keys: "Alt + ]", label: "Tới mục nghiên cứu tiếp theo", category: "Điều hướng Workspace", isNew: true },
