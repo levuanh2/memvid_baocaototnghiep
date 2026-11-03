@@ -1,0 +1,198 @@
+{
+ "url": "/app",
+ "controls": [
+  {
+   "tag": "a",
+   "role": "",
+   "name": "MemVidX — trang chủ",
+   "region": "header",
+   "unlabeled": false,
+   "inViewport": true
+  },
+  {
+   "tag": "a",
+   "role": "",
+   "name": "Thư viện học tập",
+   "region": "header",
+   "unlabeled": false,
+   "inViewport": true
+  },
+  {
+   "tag": "button",
+   "role": "tab",
+   "name": "Trò chuyện",
+   "region": "header",
+   "unlabeled": false,
+   "inViewport": true
+  },
+  {
+   "tag": "button",
+   "role": "tab",
+   "name": "Sơ đồ tư duy",
+   "region": "header",
+   "unlabeled": false,
+   "inViewport": true
+  },
+  {
+   "tag": "button",
+   "role": "tab",
+   "name": "Tóm tắt",
+   "region": "header",
+   "unlabeled": false,
+   "inViewport": true
+  },
+  {
+   "tag": "button",
+   "role": "",
+   "name": "Mở công cụ StudyMap",
+   "region": "header",
+   "unlabeled": false,
+   "inViewport": true
+  },
+  {
+   "tag": "button",
+   "role": "",
+   "name": "Xem phím tắt",
+   "region": "header",
+   "unlabeled": false,
+   "inViewport": true
+  },
+  {
+   "tag": "button",
+   "role": "",
+   "name": "Nền sáng",
+   "region": "header",
+   "unlabeled": false,
+   "inViewport": true
+  },
+  {
+   "tag": "button",
+   "role": "",
+   "name": "Nền tối",
+   "region": "header",
+   "unlabeled": false,
+   "inViewport": true
+  },
+  {
+   "tag": "button",
+   "role": "",
+   "name": "Mức sử dụng AI 12%",
+   "region": "header",
+   "unlabeled": false,
+   "inViewport": true
+  },
+  {
+   "tag": "button",
+   "role": "",
+   "name": "Tài khoản: QA Tester",
+   "region": "header",
+   "unlabeled": false,
+   "inViewport": true
+  },
+  {
+   "tag": "button",
+   "role": "",
+   "name": "Thu gọn cột",
+   "region": "aside",
+   "unlabeled": false,
+   "inViewport": true
+  },
+  {
+   "tag": "input",
+   "role": "",
+   "name": "Tìm trong tài liệu",
+   "region": "aside",
+   "unlabeled": false,
+   "inViewport": true
+  },
+  {
+   "tag": "button",
+   "role": "",
+   "name": "Mở bộ lọc nâng cao",
+   "region": "aside",
+   "unlabeled": false,
+   "inViewport": true
+  },
+  {
+   "tag": "button",
+   "role": "",
+   "name": "Đổi tên cuộc trò chuyện",
+   "region": "main",
+   "unlabeled": false,
+   "inViewport": true
+  },
+  {
+   "tag": "button",
+   "role": "",
+   "name": "Cuộc trò chuyện mới",
+   "region": "main",
+   "unlabeled": false,
+   "inViewport": true
+  },
+  {
+   "tag": "button",
+   "role": "",
+   "name": "Tùy chọn cuộc trò chuyện",
+   "region": "main",
+   "unlabeled": false,
+   "inViewport": true
+  },
+  {
+   "tag": "textarea",
+   "role": "",
+   "name": "Đặt câu hỏi về tài liệu đã chọn…",
+   "region": "main",
+   "unlabeled": false,
+   "inViewport": true
+  },
+  {
+   "tag": "button",
+   "role": "",
+   "name": "Gửi câu hỏi",
+   "region": "main",
+   "unlabeled": false,
+   "inViewport": true
+  },
+  {
+   "tag": "button",
+   "role": "",
+   "name": "Thu gọn bộ kiểm tra ngữ cảnh",
+   "region": "aside",
+   "unlabeled": false,
+   "inViewport": true
+  }
+ ],
+ "overflowX": 0,
+ "headings": [
+  "H1: Hỏi tài liệu của bạn — kèm dẫn chứng.",
+  "H2: Chưa có sơ đồ tư duy",
+  "H2: Chưa có tóm tắt"
+ ],
+ "tab": [
+  "textarea \"\"",
+  "div[separator] \"Đổi bề rộng Lề bằng chứng\"",
+  "button \"Thu gọn bộ kiểm tra ngữ cảnh\"",
+  "(body)",
+  "a \"MemVidX — trang chủ\"",
+  "a \"Thư viện học tập\"",
+  "button[tab] \"Trò chuyện\"",
+  "button[tab] \"Sơ đồ tư duy\"",
+  "button[tab] \"Tóm tắt\"",
+  "button \"Mở công cụ StudyMap\"",
+  "button \"Xem phím tắt\"",
+  "button \"Nền sáng\"",
+  "button \"Nền tối\"",
+  "button \"Mức sử dụng AI 12%\"",
+  "button \"Tài khoản: QA Tester\"",
+  "button \"Thu gọn cột\"",
+  "input \"Tìm trong tài liệu\"",
+  "button \"Mở bộ lọc nâng cao\"",
+  "div[separator] \"Đổi bề rộng Thư mục nguồn\"",
+  "button \"Đổi tên cuộc trò chuyện\"",
+  "button \"Cuộc trò chuyện mới\"",
+  "button \"Tùy chọn cuộc trò chuyện\"",
+  "textarea \"\"",
+  "div[separator] \"Đổi bề rộng Lề bằng chứng\"",
+  "button \"Thu gọn bộ kiểm tra ngữ cảnh\""
+ ]
+}

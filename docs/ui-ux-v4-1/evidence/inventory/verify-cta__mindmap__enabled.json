@@ -1,0 +1,13 @@
+{
+ "cta": "Tạo sơ đồ tư duy",
+ "capability": "enabled",
+ "selectedLabel": "1 đang chọn",
+ "buttonEnabled": true,
+ "nonGetCalls": [
+  "POST /mindmaps/suggest-topics",
+  "POST /mindmaps/suggest-topics"
+ ],
+ "dialogs": [
+  "Tạo sơ đồ tư duy\n\nĐịnh hướng nội dung trước khi tạo từ 1 tài"
+ ]
+}

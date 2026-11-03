@@ -1,0 +1,140 @@
+{
+ "url": "/app/study/practice/pq-1",
+ "controls": [
+  {
+   "tag": "a",
+   "role": "",
+   "name": "Tài liệu",
+   "region": "header",
+   "unlabeled": false,
+   "inViewport": true
+  },
+  {
+   "tag": "button",
+   "role": "",
+   "name": "A Phương án A",
+   "region": "main",
+   "unlabeled": false,
+   "inViewport": true
+  },
+  {
+   "tag": "button",
+   "role": "",
+   "name": "B Phương án B",
+   "region": "main",
+   "unlabeled": false,
+   "inViewport": true
+  },
+  {
+   "tag": "button",
+   "role": "",
+   "name": "C Phương án C",
+   "region": "main",
+   "unlabeled": false,
+   "inViewport": true
+  },
+  {
+   "tag": "button",
+   "role": "",
+   "name": "D Phương án D",
+   "region": "main",
+   "unlabeled": false,
+   "inViewport": true
+  },
+  {
+   "tag": "button",
+   "role": "",
+   "name": "A Phương án A",
+   "region": "main",
+   "unlabeled": false,
+   "inViewport": true
+  },
+  {
+   "tag": "button",
+   "role": "",
+   "name": "B Phương án B",
+   "region": "main",
+   "unlabeled": false,
+   "inViewport": true
+  },
+  {
+   "tag": "button",
+   "role": "",
+   "name": "C Phương án C",
+   "region": "main",
+   "unlabeled": false,
+   "inViewport": true
+  },
+  {
+   "tag": "button",
+   "role": "",
+   "name": "D Phương án D",
+   "region": "main",
+   "unlabeled": false,
+   "inViewport": true
+  },
+  {
+   "tag": "button",
+   "role": "",
+   "name": "A Phương án A",
+   "region": "main",
+   "unlabeled": false,
+   "inViewport": true
+  },
+  {
+   "tag": "button",
+   "role": "",
+   "name": "B Phương án B",
+   "region": "main",
+   "unlabeled": false,
+   "inViewport": false
+  },
+  {
+   "tag": "button",
+   "role": "",
+   "name": "C Phương án C",
+   "region": "main",
+   "unlabeled": false,
+   "inViewport": false
+  },
+  {
+   "tag": "button",
+   "role": "",
+   "name": "D Phương án D",
+   "region": "main",
+   "unlabeled": false,
+   "inViewport": false
+  }
+ ],
+ "overflowX": 0,
+ "headings": [
+  "H1: Luyện tập: Tiến trình"
+ ],
+ "tab": [
+  "a \"Tài liệu\"",
+  "(body)",
+  "a \"Tài liệu\"",
+  "(body)",
+  "a \"Tài liệu\"",
+  "(body)",
+  "a \"Tài liệu\"",
+  "(body)",
+  "a \"Tài liệu\"",
+  "(body)",
+  "a \"Tài liệu\"",
+  "(body)",
+  "a \"Tài liệu\"",
+  "(body)",
+  "a \"Tài liệu\"",
+  "(body)",
+  "a \"Tài liệu\"",
+  "(body)",
+  "a \"Tài liệu\"",
+  "(body)",
+  "a \"Tài liệu\"",
+  "(body)",
+  "a \"Tài liệu\"",
+  "(body)",
+  "a \"Tài liệu\""
+ ]
+}

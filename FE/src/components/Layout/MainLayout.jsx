@@ -340,9 +340,21 @@ export default function MainLayout({
   const onMindmapAction = useCallback(() => {
     if (mindmapData?.data) setWorkspaceMode("mindmap"); else openArtifact("mindmap", { create: true });
   }, [mindmapData, openArtifact]);
+  const summaryCreate = libraries.summaryActions?.create;
   const onSummaryAction = useCallback(() => {
-    if (summaryData) setWorkspaceMode("summary"); else openArtifact("summary");
-  }, [summaryData, openArtifact]);
+    if (summaryData) setWorkspaceMode("summary");
+    // SidebarRight's generator (summaryActions.create). openArtifact alone never
+    // starts a summary: nothing mounted consumes it since 99258df.
+    else if (summaryCreate) summaryCreate();
+    else openArtifact("summary");
+  }, [summaryData, summaryCreate, openArtifact]);
+  const summaryLibrary = useMemo(() => (libraries.summaryActions ? {
+    items: libraries.summaries,
+    select: libraries.summaryActions.select,
+    create: libraries.summaryActions.create,
+    creating: Boolean(libraries.summaryActions.creating),
+    jobLabel: libraries.summaryActions.jobLabel,
+  } : null), [libraries.summaries, libraries.summaryActions]);
 
   // Feature Pack B (Cross Navigation) — real dead end found: while on the
   // MindMap tab WITH a map loaded, the right column shows ONLY
@@ -835,6 +847,7 @@ export default function MainLayout({
             mindmapJobError={libraries.mindMapActions?.jobError}
             onRetryMindmap={libraries.mindMapActions?.onRetry}
             summaryData={summaryData}
+            summaryLibrary={summaryLibrary}
             onSummaryContextChange={setSummaryContext}
             controller={mindMapController}
           />

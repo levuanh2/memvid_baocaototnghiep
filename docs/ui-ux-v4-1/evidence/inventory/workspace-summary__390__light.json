@@ -1,0 +1,235 @@
+{
+ "url": "/app?tab=summary",
+ "controls": [
+  {
+   "tag": "a",
+   "role": "",
+   "name": "MemVidX — trang chủ",
+   "region": "header",
+   "unlabeled": false,
+   "inViewport": true
+  },
+  {
+   "tag": "a",
+   "role": "",
+   "name": "Thư viện học tập",
+   "region": "header",
+   "unlabeled": false,
+   "inViewport": true
+  },
+  {
+   "tag": "button",
+   "role": "tab",
+   "name": "Trò chuyện",
+   "region": "header",
+   "unlabeled": false,
+   "inViewport": true
+  },
+  {
+   "tag": "button",
+   "role": "tab",
+   "name": "Sơ đồ tư duy",
+   "region": "header",
+   "unlabeled": false,
+   "inViewport": true
+  },
+  {
+   "tag": "button",
+   "role": "tab",
+   "name": "Tóm tắt",
+   "region": "header",
+   "unlabeled": false,
+   "inViewport": true
+  },
+  {
+   "tag": "button",
+   "role": "",
+   "name": "Mở công cụ StudyMap",
+   "region": "header",
+   "unlabeled": false,
+   "inViewport": true
+  },
+  {
+   "tag": "button",
+   "role": "",
+   "name": "Mức sử dụng AI 12%",
+   "region": "header",
+   "unlabeled": false,
+   "inViewport": true
+  },
+  {
+   "tag": "button",
+   "role": "",
+   "name": "Tài khoản: QA Tester",
+   "region": "header",
+   "unlabeled": false,
+   "inViewport": true
+  },
+  {
+   "tag": "button",
+   "role": "",
+   "name": "Đóng",
+   "region": "aside",
+   "unlabeled": false,
+   "inViewport": true
+  },
+  {
+   "tag": "input",
+   "role": "",
+   "name": "Tìm trong tài liệu",
+   "region": "aside",
+   "unlabeled": false,
+   "inViewport": true
+  },
+  {
+   "tag": "button",
+   "role": "",
+   "name": "Mở bộ lọc nâng cao",
+   "region": "aside",
+   "unlabeled": false,
+   "inViewport": true
+  },
+  {
+   "tag": "input",
+   "role": "",
+   "name": "",
+   "region": "aside",
+   "unlabeled": true,
+   "inViewport": true
+  },
+  {
+   "tag": "input",
+   "role": "",
+   "name": "",
+   "region": "aside",
+   "unlabeled": true,
+   "inViewport": true
+  },
+  {
+   "tag": "button",
+   "role": "",
+   "name": "Tuỳ chọn",
+   "region": "aside",
+   "unlabeled": false,
+   "inViewport": true
+  },
+  {
+   "tag": "input",
+   "role": "",
+   "name": "",
+   "region": "aside",
+   "unlabeled": true,
+   "inViewport": true
+  },
+  {
+   "tag": "button",
+   "role": "",
+   "name": "Tuỳ chọn",
+   "region": "aside",
+   "unlabeled": false,
+   "inViewport": true
+  },
+  {
+   "tag": "input",
+   "role": "",
+   "name": "",
+   "region": "aside",
+   "unlabeled": true,
+   "inViewport": true
+  },
+  {
+   "tag": "button",
+   "role": "",
+   "name": "Tuỳ chọn",
+   "region": "aside",
+   "unlabeled": false,
+   "inViewport": true
+  },
+  {
+   "tag": "input",
+   "role": "",
+   "name": "",
+   "region": "aside",
+   "unlabeled": true,
+   "inViewport": true
+  },
+  {
+   "tag": "button",
+   "role": "",
+   "name": "Tuỳ chọn",
+   "region": "aside",
+   "unlabeled": false,
+   "inViewport": true
+  },
+  {
+   "tag": "input",
+   "role": "",
+   "name": "",
+   "region": "aside",
+   "unlabeled": true,
+   "inViewport": true
+  },
+  {
+   "tag": "button",
+   "role": "",
+   "name": "Tuỳ chọn",
+   "region": "aside",
+   "unlabeled": false,
+   "inViewport": true
+  },
+  {
+   "tag": "input",
+   "role": "",
+   "name": "",
+   "region": "aside",
+   "unlabeled": true,
+   "inViewport": true
+  },
+  {
+   "tag": "button",
+   "role": "",
+   "name": "Tuỳ chọn",
+   "region": "aside",
+   "unlabeled": false,
+   "inViewport": true
+  },
+  {
+   "tag": "button",
+   "role": "",
+   "name": "Tạo tóm tắt",
+   "region": "main",
+   "unlabeled": false,
+   "inViewport": true
+  },
+  {
+   "tag": "button",
+   "role": "",
+   "name": "Đóng chi tiết nhánh",
+   "region": "aside",
+   "unlabeled": false,
+   "inViewport": false
+  }
+ ],
+ "overflowX": 0,
+ "headings": [
+  "H1: Hỏi tài liệu của bạn — kèm dẫn chứng.",
+  "H2: Chưa có tóm tắt"
+ ],
+ "tab": [
+  "button \"Mở công cụ StudyMap\"",
+  "button \"Mức sử dụng AI 12%\"",
+  "button \"Tài khoản: QA Tester\"",
+  "button \"Đóng\"",
+  "input \"Tìm trong tài liệu\"",
+  "button \"Mở bộ lọc nâng cao\"",
+  "input \"\"",
+  "input \"\"",
+  "button \"Tuỳ chọn\"",
+  "input \"\"",
+  "button \"Tuỳ chọn\"",
+  "input \"\"",
+  "button \"Tuỳ chọn\"",
+  "input \"\"",
+  "button \"Tuỳ chọn\""
+ ]
+}

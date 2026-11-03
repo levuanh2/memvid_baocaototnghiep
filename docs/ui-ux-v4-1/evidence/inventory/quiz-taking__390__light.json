@@ -1,0 +1,93 @@
+{
+ "url": "/app/study/quiz/quiz-1",
+ "controls": [
+  {
+   "tag": "a",
+   "role": "",
+   "name": "Tài liệu",
+   "region": "header",
+   "unlabeled": false,
+   "inViewport": true
+  },
+  {
+   "tag": "input",
+   "role": "",
+   "name": "",
+   "region": "main",
+   "unlabeled": true,
+   "inViewport": true
+  },
+  {
+   "tag": "input",
+   "role": "",
+   "name": "",
+   "region": "main",
+   "unlabeled": true,
+   "inViewport": true
+  },
+  {
+   "tag": "input",
+   "role": "",
+   "name": "",
+   "region": "main",
+   "unlabeled": true,
+   "inViewport": true
+  },
+  {
+   "tag": "input",
+   "role": "",
+   "name": "",
+   "region": "main",
+   "unlabeled": true,
+   "inViewport": true
+  },
+  {
+   "tag": "button",
+   "role": "",
+   "name": "Câu trước",
+   "region": "main",
+   "unlabeled": false,
+   "inViewport": true
+  },
+  {
+   "tag": "button",
+   "role": "",
+   "name": "Câu sau",
+   "region": "main",
+   "unlabeled": false,
+   "inViewport": true
+  },
+  {
+   "tag": "button",
+   "role": "",
+   "name": "Nộp bài",
+   "region": "main",
+   "unlabeled": false,
+   "inViewport": true
+  }
+ ],
+ "overflowX": 0,
+ "headings": [
+  "H1: Hệ điều hành",
+  "H2: Câu hỏi 1: tiến trình và luồng khác nhau thế nào?",
+  "H2: Tiến độ",
+  "H2: Nội dung"
+ ],
+ "tab": [
+  "a \"Tài liệu\"",
+  "input \"\"",
+  "button \"Câu sau\"",
+  "button \"Nộp bài\"",
+  "(body)",
+  "a \"Tài liệu\"",
+  "input \"\"",
+  "button \"Câu sau\"",
+  "button \"Nộp bài\"",
+  "(body)",
+  "a \"Tài liệu\"",
+  "input \"\"",
+  "button \"Câu sau\"",
+  "button \"Nộp bài\"",
+  "(body)"
+ ]
+}

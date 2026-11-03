@@ -251,6 +251,7 @@ export default function SidebarRight({
   // ── Summary job refs (mirror mindmap — poller riêng, không chia sẻ ref) ──
   const summaryPollerRef = useRef(null);
   const currentSummaryJobIdRef = useRef(null);
+  const summaryStartingRef = useRef(false);
   const summaryCancelRequestedRef = useRef(false);
   // Fix Round 1 (Fix 3): guards the "Đã huỷ tạo sơ đồ" notice so it fires exactly
   // once per generation regardless of which path notices the cancel first — the
@@ -720,6 +721,10 @@ export default function SidebarRight({
   // "Thử lại" dùng đúng params của lần chạy hỏng (không lệ thuộc selection đã đổi).
   const runSummaryGeneration = async (sourceList, { lengthMode, mode }) => {
     if (!sourceList?.length) { toast("Vui lòng chọn ít nhất một tài liệu để tóm tắt!", { type: "error" }); return; }
+    // One request per intent: a double click (or a click while a job runs)
+    // must not start a second job. State is too late for this; refs are not.
+    if (summaryStartingRef.current || currentSummaryJobIdRef.current) return;
+    summaryStartingRef.current = true;
     lastSummaryRunRef.current = { sources: sourceList, lengthMode, mode };
     setSummaryRetry(null);
     setSummaryLoading(true);
@@ -743,6 +748,7 @@ export default function SidebarRight({
     } catch (err) {
       handleSummaryError(err);
     } finally {
+      summaryStartingRef.current = false;
       setSummaryLoading(false);
     }
   };
@@ -909,9 +915,10 @@ export default function SidebarRight({
         select: setShowSummaryModal,
         create: createSummaryFromLibrary,
         creating: summaryLoading || summaryJobUi.running,
+        jobLabel: summaryJobUi.label,
       },
     });
-  }, [summaries, summaryLoading, summaryJobUi.running, createSummaryFromLibrary, onSummaryLibraryChange]);
+  }, [summaries, summaryLoading, summaryJobUi.running, summaryJobUi.label, createSummaryFromLibrary, onSummaryLibraryChange]);
 
   // ── Render ────────────────────────────────────────
   return (
