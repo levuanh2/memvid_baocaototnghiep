@@ -14,7 +14,7 @@ Scripts (in `capture/`; they are not part of any CI suite):
 
 | Script | What it does |
 |---|---|
-| `audit-capture.spec.js` | 20 screen states × 5 widths × light/dark; writes `screens/*.jpg` and, at 390 and 1440 light, `inventory/*.json` (visible controls, region, accessible name, first Tab stops, horizontal overflow, headings) |
+| `audit-capture.spec.js` | 20 screen states (one later dropped) × 5 widths × light/dark; writes `screens/*.jpg` and, at 390 and 1440 light, `inventory/*.json` (visible controls, region, accessible name, first Tab stops, horizontal overflow, headings) |
 | `verify-cta.spec.js` | Clicks "Tạo tóm tắt" and "Tạo sơ đồ tư duy" with a source selected, Guided capability on and off; records non-GET requests and dialogs |
 | `verify-summary-open.spec.js` | Existing summary + selected source in Summary mode; Library card "Tóm tắt" destination |
 
@@ -27,14 +27,30 @@ To re-run: copy a script to `FE/e2e-audit-tmp/`, create a config that extends
 
 `screens/<screen>__<width>__<theme>[__flagon].jpg`, for example
 `library__390__dark.jpg`. Screens: `landing`, `login`,
-`workspace-chat-empty`, `workspace-chat`, `workspace-chat-active`,
+`workspace-chat-empty`, `workspace-chat`,
 `workspace-map`, `workspace-summary`, `workspace-tools-menu`,
 `workspace-account-menu`, `workspace-map-export`, `library`,
 `library-empty`, `library-doc-menu`, `studymap`, `quiz-setup`,
 `quiz-taking`, `quiz-result`, `review-guide`, `practice`, `profile`.
 `verify-*` files are the click-through checks.
 
-Limits: `library-doc-menu` did not open the card menu (selector did not
-match), so it equals `library`; `workspace-chat-active` fills the box but
-does not send. Data shapes are fixtures; any finding that depends on real
-server data is marked NOT VERIFIED in `03-ux-audit.md`.
+## State verification
+
+Every screen state reached by a click (mode tab, menu, dialog) has an
+`expect` selector in `audit-capture.spec.js`; if the state is not visible
+within 5 s the test fails and **no screenshot is written**. The first capture
+run did not have this check; all such files were deleted and re-captured
+with it (2026-11-03): 60/60 flag-OFF states passed (`workspace-map`,
+`workspace-summary`, `workspace-tools-menu`, `workspace-account-menu`,
+`workspace-map-export`, `library-doc-menu`, each at 5 widths × 2 themes).
+
+Not captured, so not used as evidence:
+
+- `library-doc-menu` with the flag ON: the row opens `DocumentToolsSheet`,
+  not the card menu, so the check fails (10 tests); no files kept.
+- `workspace-chat-active` (typed question): dropped, its state could not be
+  checked reliably and no finding cites it.
+
+Route-only screens (no click) show whatever the route renders with the fixture
+data. Data shapes are fixtures; any finding that depends on real server data
+is marked NOT VERIFIED in `03-ux-audit.md`.

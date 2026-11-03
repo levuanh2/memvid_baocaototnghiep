@@ -2,8 +2,8 @@
 
 How the evidence was made (`evidence/README.md`): the real app ran on the
 Vite dev server with the API mocked at the network layer; no production
-account, data or API call. 15 screens and 5 open-menu states × 5 widths
-(320, 390, 768, 1024, 1440) × light and dark = 200 screenshots, plus the
+account, data or API call. 15 screens and 5 open states × 5 widths
+(320, 390, 768, 1024, 1440) × light and dark = 200 screenshots (one state later dropped, every clicked state re-captured with a strict visibility check, see `evidence/README.md`), plus the
 Library with the flag ON (30, local test build only), plus 8 targeted
 click-through checks. Production itself was not logged into (no authorised
 test account was provided), so anything that depends on production data or
@@ -159,6 +159,7 @@ acceptance gate.
 - The Workspace "Chọn tất cả tài liệu sẵn sàng" checkbox has no programmatic
   name (visible text is not a `<label>`); the chat box relies on its
   placeholder (`evidence/capture/` unlabeled dump).
+- The Library card's "Tuỳ chọn tài liệu" (⋮) opens a popup with no `role="menu"`, and the button has no `aria-expanded` or `aria-haspopup` (`StudyCard.jsx:197-215`); a screen reader is not told a menu opened (`library-doc-menu__390__light.jpg`). The popup also has no Delete item; deletion lives elsewhere.
 - Icon-only header controls below 1024 px depend on `aria-label` only; the
   "StudyMap" menu trigger becomes a chevron with the name "Mở công cụ
   StudyMap" (fine for screen readers, unclear visually).

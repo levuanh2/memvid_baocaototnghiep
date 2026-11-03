@@ -156,6 +156,38 @@
   {
    "tag": "button",
    "role": "",
+   "name": "Đổi tên",
+   "region": "main",
+   "unlabeled": false,
+   "inViewport": true
+  },
+  {
+   "tag": "button",
+   "role": "",
+   "name": "Yêu thích",
+   "region": "main",
+   "unlabeled": false,
+   "inViewport": true
+  },
+  {
+   "tag": "button",
+   "role": "",
+   "name": "Ghim",
+   "region": "main",
+   "unlabeled": false,
+   "inViewport": true
+  },
+  {
+   "tag": "button",
+   "role": "",
+   "name": "Lưu trữ",
+   "region": "main",
+   "unlabeled": false,
+   "inViewport": true
+  },
+  {
+   "tag": "button",
+   "role": "",
    "name": "Tiếp tục · Hỏi AI",
    "region": "main",
    "unlabeled": false,
@@ -1864,23 +1896,18 @@
   "H2: BÀI ĐÃ LÀM GẦN ĐÂY"
  ],
  "tab": [
-  "a \"Phòng đọc\"",
-  "button \"Tải tài liệu\"",
-  "button \"Xem thử\"",
-  "button \"Tạo bộ sưu tập\"",
-  "button \"Học kỳ 1 3\"",
-  "button \"Sửa Học kỳ 1\"",
-  "button \"Chưa phân loại 3\"",
+  "button \"Đổi tên\"",
   "button \"Yêu thích\"",
-  "button \"Đã ghim\"",
-  "input \"\"",
-  "input \"Tìm trong thư viện\"",
-  "select \"Mới nhất Cũ nhất A-Z Z-A Thời gian đọc Mở gần đây Tải lên gầ\"",
-  "button \"Lọc\"",
-  "button \"Đủ\"",
-  "input \"\"",
-  "input \"\"",
-  "button \"TỔNG QUAN HỌC TẬP\"",
+  "button \"Ghim\"",
+  "button \"Lưu trữ\"",
+  "button \"Tiếp tục · Hỏi AI\"",
+  "button \"Tóm tắt\"",
+  "button \"Sơ đồ\"",
+  "button \"Quiz\"",
+  "button \"Ôn tập\"",
+  "button \"Hỏi AI\"",
+  "button \"Chi tiết\"",
+  "div \"Hệ điều hành.pdf Học kỳ 1 Chưa có tóm tắt cho tài liệu này. \"",
   "input \"Chọn Hệ điều hành.pdf\"",
   "button \"Tuỳ chọn tài liệu\"",
   "button \"Tiếp tục · Hỏi AI\"",
@@ -1888,6 +1915,11 @@
   "button \"Sơ đồ\"",
   "button \"Quiz\"",
   "button \"Ôn tập\"",
-  "button \"Hỏi AI\""
+  "button \"Hỏi AI\"",
+  "button \"Chi tiết\"",
+  "div \"Kinh tế vi mô.pptx Đã lập chỉ mục Tóm tắt Sơ đồ tư duy Bản đ\"",
+  "input \"Chọn Kinh tế vi mô.pptx\"",
+  "button \"Tuỳ chọn tài liệu\"",
+  "button \"Tóm tắt\""
  ]
 }

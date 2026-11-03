@@ -116,8 +116,8 @@ const SCREENS = [
   { id: "login", path: "/login", auth: false },
   { id: "workspace-chat-empty", path: "/app", empty: true },
   { id: "workspace-chat", path: "/app" },
-  { id: "workspace-map", path: "/app", mode: "Sơ đồ tư duy" },
-  { id: "workspace-summary", path: "/app", mode: "Tóm tắt" },
+  { id: "workspace-map", path: "/app", mode: "Sơ đồ tư duy", expect: '[role="tab"][title="Sơ đồ tư duy"][aria-selected="true"]' },
+  { id: "workspace-summary", path: "/app", mode: "Tóm tắt", expect: '[role="tab"][title="Tóm tắt"][aria-selected="true"]' },
   { id: "library", path: "/app/study" },
   { id: "library-empty", path: "/app/study", empty: true },
   { id: "studymap", path: "/app/study/map/d1" },
@@ -128,11 +128,10 @@ const SCREENS = [
   { id: "practice", path: "/app/study/practice/pq-1" },
   { id: "profile", path: "/app/profile" },
   // Interaction states (open menus / panels), captured at every viewport too.
-  { id: "workspace-tools-menu", path: "/app", act: [["css", 'header button[aria-label="Mở công cụ StudyMap"]']] },
-  { id: "workspace-account-menu", path: "/app", act: [["css", 'header button[aria-haspopup="menu"][aria-label^="Tài khoản"]']] },
-  { id: "workspace-map-export", path: "/app", mode: "Sơ đồ tư duy", act: [["text", "Xuất sơ đồ"]] },
-  { id: "workspace-chat-active", path: "/app", act: [["css", 'aside input[type="checkbox"]'], ["fill", "textarea, input[placeholder^='Đặt câu hỏi']", "Tiến trình là gì?"]] },
-  { id: "library-doc-menu", path: "/app/study", act: [["css", 'main [aria-haspopup="menu"]']] },
+  { id: "workspace-tools-menu", path: "/app", act: [["css", 'header button[aria-label="Mở công cụ StudyMap"]']], expect: '[role="menu"][aria-label="Công cụ học"]' },
+  { id: "workspace-account-menu", path: "/app", act: [["css", 'header button[aria-haspopup="menu"][aria-label^="Tài khoản"]']], expect: '[role="menu"]:has-text("Đăng xuất")' },
+  { id: "workspace-map-export", path: "/app", mode: "Sơ đồ tư duy", act: [["text", "Xuất sơ đồ"]], expect: '[role="dialog"]:has-text("Phạm vi xuất")' },
+  { id: "library-doc-menu", path: "/app/study", act: [["css", 'button[aria-label="Tuỳ chọn tài liệu"]']], expect: 'main button:has-text("Đổi tên")' },
 ];
 const ONLY = process.env.AUDIT_ONLY ? process.env.AUDIT_ONLY.split(",") : null;
 
@@ -194,6 +193,8 @@ for (const s of SCREENS) {
           else await loc.click({ timeout: 4000 }).catch(() => {});
           await page.waitForTimeout(600);
         }
+        // Strict: a state that was not reached fails the test and writes no screenshot.
+        if (s.expect) await page.locator(s.expect).first().waitFor({ state: "visible", timeout: 5000 });
         await page.waitForTimeout(700);
         const base = `${s.id}__${w}__${theme}${FLAG === "flagon" ? "__flagon" : ""}`;
         mkdirSync(`${OUT}/screens`, { recursive: true });
