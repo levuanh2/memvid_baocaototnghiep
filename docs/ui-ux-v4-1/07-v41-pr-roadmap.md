@@ -11,13 +11,18 @@ removals limited to D16, D25 and (after W4-3) D06.
 
 Draft from AGY: `_work/v41-roadmap-draft-agy.md` (raw; corrected here).
 
-## P0 hotfixes (done as Draft PRs, not merged)
+## P0 hotfixes
 
 | PR | Fix | Merge order |
 |---|---|---|
-| #118 | P0-1 Summary mode create/open (`SummaryPicker`, `summaryActions`, double-start guard) | first (or with #117) |
-| #117 | P0-3 Library / Palette open the named Workspace mode (`?tab=`, also in-app) | after or with #118 |
-| #119 | P0-2 Mind-map empty-state create never dead-ends | independent; rebase if second |
+| #118 | P0-1 Summary mode create/open (`SummaryPicker`, `summaryActions`, double-start guard) | **merged** 2026-11-03T11:54:00Z as `e3823df` |
+| #117 | P0-3 Library / Palette open the named Workspace mode (`?tab=`, also in-app) | open, ready; branch updated with `e3823df` |
+| #119 | P0-2 Mind-map empty-state create never dead-ends | open (Draft); branch updated with `e3823df` |
+
+Frontend deploy-order gate (Round 8.6 gate 6), first observation, merge of
+#118 (`e3823df`): `CI / required` success 12:01:10Z; Render deploy created
+12:01:14.7Z for `e3823df` (trigger `new_commit`), live 12:02:07Z; no older SHA
+deployed afterwards; `studymap-build` and `/health` both `e3823df`. PASS.
 
 After the three merge: Full Fixture Audit on the resulting `main` SHA, and the
 frontend deploy-order observation (Round 8.6 gate 6) for each FE merge.
