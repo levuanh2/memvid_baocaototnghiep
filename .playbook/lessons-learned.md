@@ -1,5 +1,16 @@
 # Lessons Learned
 
+## A flexible title can hide a header overflow bug instead of causing scroll (2026-11-04)
+
+- In a non-wrapping header, fixed-width actions can shrink a `min-w-0` title to
+  zero while the document still reports no horizontal scrollbar. Test the title's
+  own visibility and `scrollWidth <= clientWidth`, not only page overflow.
+- Dense page-specific actions should opt into a mobile composition rather than
+  globally changing a shared shell. Restore the exact desktop flex contract at
+  the named breakpoint and measure both sides.
+- For unequal-height buttons in an `items-center` row, compare vertical centers;
+  equal top coordinates are not the layout contract.
+
 ## Programmatic focus needs a visible style independent of input modality (2026-10-28)
 
 `:focus-visible` is ideal for ordinary keyboard navigation, but a menu that

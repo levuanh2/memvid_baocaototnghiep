@@ -1,5 +1,24 @@
 # Known Issues
 
+## Library header actions erased its title on phones (fixed 2026-11-04)
+
+**Symptom:** at 320px and 390px the Library header kept its back link, title,
+upload action, and demo action on one non-wrapping row. The fixed-width actions
+consumed the row, collapsing the flexible title to zero and clipping the demo
+action beyond the viewport.
+
+**Root cause:** `StudyShell` had one desktop flex contract for every width and no
+page-scoped way to stack a dense action set. `min-w-0` allowed the title to absorb
+the entire space deficit, so document-level overflow alone did not explain the
+missing heading.
+
+**Fix and prevention:** Library opts into a mobile-only stacked action layout:
+the back link and title retain the first row, while upload and demo actions each
+receive a full-width row below. The original single-row layout resumes at 768px.
+`FE/e2e-fixture/library-header-responsive.spec.js` measures title and button
+containment, title truncation, action rows, and horizontal scroll at 320, 390,
+768, and 1440 pixels.
+
 ## Successful CI workflow could deploy a different, newer main commit (fixed 2026-11-02)
 
 **Symptom:** the `workflow_run` deploy job checked out/pulled current `main` on

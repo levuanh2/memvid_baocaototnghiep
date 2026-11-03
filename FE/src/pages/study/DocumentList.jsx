@@ -506,6 +506,7 @@ export default function DocumentList() {
       error={error}
       onRetry={load}
       skeleton={<DocumentSkeleton />}
+      stackActionsOnMobile
       actions={
         <>
           {/* Danh sách này phải khớp formats.accept_attribute() của backend —
