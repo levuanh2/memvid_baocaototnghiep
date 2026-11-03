@@ -432,4 +432,31 @@ test.describe.serial("critical flows", () => {
     // có sơ đồ'" — SidebarRight surfaces `guidedError`, not an empty-state).
     await expect(page.getByText(/lỗi|thất bại|fail(?:ed|ure)/i).first()).toBeVisible({ timeout: 20_000 });
   });
+
+  // P0-1: "Tạo tóm tắt" in Summary mode used to send nothing. Against the real
+  // Flask app + test Postgres: one click (even a double click) must send exactly
+  // one POST that the backend accepts, and the UI must reach a visible outcome
+  // (the summary, or an error), never stay silent. The E2E server does not mock
+  // SUMMARY_GRAPH, so completion itself is covered by the fixture suite only.
+  test("Summary mode 'Tạo tóm tắt' sends one accepted request and reaches a visible outcome", async () => {
+    await selectAllSources(page);
+    const posts = [];
+    const onResponse = (res) => {
+      if (res.request().method() === "POST" && res.url().includes("/generate-summary")) posts.push(res.status());
+    };
+    page.on("response", onResponse);
+    await page.getByRole("tab", { name: "Tóm tắt" }).click();
+    await page.getByRole("button", { name: /^Tạo tóm tắt/ }).first().dblclick();
+    await expect.poll(() => posts.length, { timeout: 15_000 }).toBe(1);
+    await page.waitForTimeout(1500);
+    expect(posts).toHaveLength(1);
+    expect(posts[0]).toBeLessThan(300);
+    // Terminal outcome: the opened summary (its picker appears in the summary
+    // toolbar) or the existing error toast. Either proves the CTA is live.
+    const opened = page.getByRole("combobox", { name: "Chọn tóm tắt" });
+    const failed = page.getByText(/Không tạo được tóm tắt/);
+    await expect(opened.or(failed).first()).toBeVisible({ timeout: 60_000 });
+    test.info().annotations.push({ type: "summary-outcome", description: (await opened.count()) ? "opened" : "error shown" });
+    page.off("response", onResponse);
+  });
 });

@@ -13,6 +13,7 @@
 import ChatArea from "./ChatArea";
 import MindElixirView from "../mindmap/MindElixirView";
 import SummaryPane from "./SummaryPane";
+import SummaryPicker from "./SummaryPicker";
 import WorkspaceEmptyState from "./WorkspaceEmptyState";
 
 const paneClass = (active) => (active ? "flex-1 min-h-0" : "hidden");
@@ -31,6 +32,8 @@ export default function WorkspaceContainer({
   mode,
   chatProps, mindmapData, mindmapInitialLoading, mindmapLoadError, summaryData, controller,
   onMindmapAction, onSummaryAction, onSummaryContextChange,
+  // { items, select, create, creating } from SidebarRight via MainLayout.
+  summaryLibrary = null,
   // P2 fix: generation-in-progress/failed status for the no-map-yet case —
   // WorkspaceEmptyState has no other way to know a job is running.
   mindmapCreating, mindmapJobLabel, mindmapJobProgress, mindmapJobError, onRetryMindmap,
@@ -71,9 +74,22 @@ export default function WorkspaceContainer({
 
       <div className={paneClass(mode === "summary")}>
         {hasSummary ? (
-          <SummaryPane data={summaryData} onContextChange={onSummaryContextChange} />
+          <SummaryPane data={summaryData} onContextChange={onSummaryContextChange}
+            toolbarExtra={summaryLibrary && (
+              <SummaryPicker items={summaryLibrary.items} selectedId={summaryData?.id ?? null}
+                onSelect={summaryLibrary.select} onCreate={summaryLibrary.create}
+                creating={summaryLibrary.creating} canCreate={selectedSources.length > 0} />
+            )} />
         ) : (
-          <WorkspaceEmptyState kind="summary" selectedCount={selectedSources.length} onCreate={onSummaryAction} />
+          <WorkspaceEmptyState kind="summary" selectedCount={selectedSources.length} onCreate={onSummaryAction}
+            creating={summaryLibrary?.creating} jobLabel={summaryLibrary?.jobLabel}>
+            {summaryLibrary?.items?.length > 0 && (
+              <div className="mt-2 flex flex-col items-center gap-1.5">
+                <p className="text-caption text-text-muted">Hoặc mở tóm tắt đã có</p>
+                <SummaryPicker items={summaryLibrary.items} onSelect={summaryLibrary.select} />
+              </div>
+            )}
+          </WorkspaceEmptyState>
         )}
       </div>
     </div>

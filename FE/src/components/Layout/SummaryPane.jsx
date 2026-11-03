@@ -28,7 +28,7 @@ function StudyList({ title, items }) {
   );
 }
 
-export default function SummaryPane({ data, onContextChange }) {
+export default function SummaryPane({ data, onContextChange, toolbarExtra = null }) {
   // Study Context (Phase 4A.2) — cùng khoá STEM mà StudyMapView dùng. `rec.sources`
   // là mảng vì API hỗ trợ tóm tắt nhiều nguồn, nhưng luồng dùng thật của app luôn
   // đúng một tài liệu mỗi lượt mở — lấy phần tử đầu là đủ.
@@ -74,6 +74,7 @@ export default function SummaryPane({ data, onContextChange }) {
           )}
         </div>
         <OperationUsage usage={rec.usage} className="artifact-toolbar__usage" />
+        {toolbarExtra}
       </div>
 
       <div className="p-5 max-w-[840px] mx-auto">
