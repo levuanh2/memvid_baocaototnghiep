@@ -1,0 +1,51 @@
+{
+ "url": "/app/study/result/attempt-1",
+ "controls": [
+  {
+   "tag": "a",
+   "role": "",
+   "name": "Tài liệu",
+   "region": "header",
+   "unlabeled": false,
+   "inViewport": true
+  },
+  {
+   "tag": "a",
+   "role": "",
+   "name": "Kế hoạch ôn tập",
+   "region": "header",
+   "unlabeled": false,
+   "inViewport": true
+  },
+  {
+   "tag": "button",
+   "role": "",
+   "name": "Xem lại 2 câu cần ôn",
+   "region": "main",
+   "unlabeled": false,
+   "inViewport": true
+  }
+ ],
+ "overflowX": 0,
+ "headings": [
+  "H1: Hệ điều hành",
+  "H2: TỪNG CÂU"
+ ],
+ "tab": [
+  "a \"Tài liệu\"",
+  "a \"Kế hoạch ôn tập\"",
+  "button \"Xem lại 2 câu cần ôn\"",
+  "(body)",
+  "a \"Tài liệu\"",
+  "a \"Kế hoạch ôn tập\"",
+  "button \"Xem lại 2 câu cần ôn\"",
+  "(body)",
+  "a \"Tài liệu\"",
+  "a \"Kế hoạch ôn tập\"",
+  "button \"Xem lại 2 câu cần ôn\"",
+  "(body)",
+  "a \"Tài liệu\"",
+  "a \"Kế hoạch ôn tập\"",
+  "button \"Xem lại 2 câu cần ôn\""
+ ]
+}

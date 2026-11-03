@@ -1,0 +1,550 @@
+{
+ "url": "/app/study",
+ "controls": [
+  {
+   "tag": "a",
+   "role": "",
+   "name": "Phòng đọc",
+   "region": "header",
+   "unlabeled": false,
+   "inViewport": true
+  },
+  {
+   "tag": "button",
+   "role": "",
+   "name": "Tải tài liệu",
+   "region": "header",
+   "unlabeled": false,
+   "inViewport": true
+  },
+  {
+   "tag": "button",
+   "role": "",
+   "name": "Xem thử",
+   "region": "header",
+   "unlabeled": false,
+   "inViewport": true
+  },
+  {
+   "tag": "button",
+   "role": "",
+   "name": "Tạo bộ sưu tập",
+   "region": "aside",
+   "unlabeled": false,
+   "inViewport": true
+  },
+  {
+   "tag": "button",
+   "role": "",
+   "name": "Học kỳ 1 3",
+   "region": "aside",
+   "unlabeled": false,
+   "inViewport": true
+  },
+  {
+   "tag": "button",
+   "role": "",
+   "name": "Sửa Học kỳ 1",
+   "region": "aside",
+   "unlabeled": false,
+   "inViewport": true
+  },
+  {
+   "tag": "button",
+   "role": "",
+   "name": "Chưa phân loại 3",
+   "region": "aside",
+   "unlabeled": false,
+   "inViewport": true
+  },
+  {
+   "tag": "button",
+   "role": "",
+   "name": "Yêu thích",
+   "region": "aside",
+   "unlabeled": false,
+   "inViewport": true
+  },
+  {
+   "tag": "button",
+   "role": "",
+   "name": "Đã ghim",
+   "region": "aside",
+   "unlabeled": false,
+   "inViewport": true
+  },
+  {
+   "tag": "input",
+   "role": "",
+   "name": "",
+   "region": "aside",
+   "unlabeled": true,
+   "inViewport": true
+  },
+  {
+   "tag": "input",
+   "role": "",
+   "name": "Tìm trong thư viện",
+   "region": "main",
+   "unlabeled": false,
+   "inViewport": true
+  },
+  {
+   "tag": "select",
+   "role": "",
+   "name": "Mới nhất Cũ nhất A-Z Z-A Thời gian đọc Mở gần đây Tải lên gần đây",
+   "region": "main",
+   "unlabeled": false,
+   "inViewport": true
+  },
+  {
+   "tag": "button",
+   "role": "",
+   "name": "Lọc",
+   "region": "main",
+   "unlabeled": false,
+   "inViewport": true
+  },
+  {
+   "tag": "button",
+   "role": "",
+   "name": "Đủ",
+   "region": "main",
+   "unlabeled": false,
+   "inViewport": true
+  },
+  {
+   "tag": "input",
+   "role": "",
+   "name": "",
+   "region": "main",
+   "unlabeled": true,
+   "inViewport": true
+  },
+  {
+   "tag": "input",
+   "role": "",
+   "name": "",
+   "region": "main",
+   "unlabeled": true,
+   "inViewport": true
+  },
+  {
+   "tag": "button",
+   "role": "",
+   "name": "TỔNG QUAN HỌC TẬP",
+   "region": "main",
+   "unlabeled": false,
+   "inViewport": true
+  },
+  {
+   "tag": "button",
+   "role": "",
+   "name": "Tất cả 6",
+   "region": "main",
+   "unlabeled": false,
+   "inViewport": true
+  },
+  {
+   "tag": "button",
+   "role": "",
+   "name": "Tiếp tục học 1",
+   "region": "main",
+   "unlabeled": false,
+   "inViewport": true
+  },
+  {
+   "tag": "button",
+   "role": "",
+   "name": "Cần quiz 4",
+   "region": "main",
+   "unlabeled": false,
+   "inViewport": true
+  },
+  {
+   "tag": "button",
+   "role": "",
+   "name": "Cần tóm tắt 3",
+   "region": "main",
+   "unlabeled": false,
+   "inViewport": true
+  },
+  {
+   "tag": "input",
+   "role": "",
+   "name": "Chọn Kinh tế vi mô.pptx",
+   "region": "main",
+   "unlabeled": false,
+   "inViewport": true
+  },
+  {
+   "tag": "button",
+   "role": "",
+   "name": "Bắt đầu · Tóm tắt",
+   "region": "main",
+   "unlabeled": false,
+   "inViewport": true
+  },
+  {
+   "tag": "button",
+   "role": "",
+   "name": "Tóm tắt · Kinh tế vi mô.pptx",
+   "region": "main",
+   "unlabeled": false,
+   "inViewport": true
+  },
+  {
+   "tag": "button",
+   "role": "",
+   "name": "Sơ đồ tư duy · Kinh tế vi mô.pptx",
+   "region": "main",
+   "unlabeled": false,
+   "inViewport": true
+  },
+  {
+   "tag": "button",
+   "role": "",
+   "name": "Thêm",
+   "region": "main",
+   "unlabeled": false,
+   "inViewport": true
+  },
+  {
+   "tag": "button",
+   "role": "",
+   "name": "Đóng công cụ tài liệu",
+   "region": "main",
+   "unlabeled": false,
+   "inViewport": true
+  },
+  {
+   "tag": "button",
+   "role": "menuitem",
+   "name": "Tóm tắt",
+   "region": "main",
+   "unlabeled": false,
+   "inViewport": true
+  },
+  {
+   "tag": "button",
+   "role": "menuitem",
+   "name": "Sơ đồ tư duy",
+   "region": "main",
+   "unlabeled": false,
+   "inViewport": true
+  },
+  {
+   "tag": "button",
+   "role": "menuitem",
+   "name": "Bản đồ học tập",
+   "region": "main",
+   "unlabeled": false,
+   "inViewport": true
+  },
+  {
+   "tag": "button",
+   "role": "menuitem",
+   "name": "Quiz",
+   "region": "main",
+   "unlabeled": false,
+   "inViewport": true
+  },
+  {
+   "tag": "button",
+   "role": "menuitem",
+   "name": "Ôn tập",
+   "region": "main",
+   "unlabeled": false,
+   "inViewport": true
+  },
+  {
+   "tag": "button",
+   "role": "menuitem",
+   "name": "Hỏi AI",
+   "region": "main",
+   "unlabeled": false,
+   "inViewport": true
+  },
+  {
+   "tag": "button",
+   "role": "menuitem",
+   "name": "Chi tiết",
+   "region": "main",
+   "unlabeled": false,
+   "inViewport": true
+  },
+  {
+   "tag": "button",
+   "role": "menuitem",
+   "name": "Đổi tên",
+   "region": "main",
+   "unlabeled": false,
+   "inViewport": true
+  },
+  {
+   "tag": "button",
+   "role": "menuitem",
+   "name": "Yêu thích",
+   "region": "main",
+   "unlabeled": false,
+   "inViewport": true
+  },
+  {
+   "tag": "button",
+   "role": "menuitem",
+   "name": "Ghim",
+   "region": "main",
+   "unlabeled": false,
+   "inViewport": true
+  },
+  {
+   "tag": "button",
+   "role": "menuitem",
+   "name": "Lưu trữ",
+   "region": "main",
+   "unlabeled": false,
+   "inViewport": true
+  },
+  {
+   "tag": "input",
+   "role": "",
+   "name": "Chọn Lịch sử Đảng.pdf",
+   "region": "main",
+   "unlabeled": false,
+   "inViewport": true
+  },
+  {
+   "tag": "button",
+   "role": "",
+   "name": "Bắt đầu · Tóm tắt",
+   "region": "main",
+   "unlabeled": false,
+   "inViewport": true
+  },
+  {
+   "tag": "button",
+   "role": "",
+   "name": "Tóm tắt · Lịch sử Đảng.pdf",
+   "region": "main",
+   "unlabeled": false,
+   "inViewport": true
+  },
+  {
+   "tag": "button",
+   "role": "",
+   "name": "Sơ đồ tư duy · Lịch sử Đảng.pdf",
+   "region": "main",
+   "unlabeled": false,
+   "inViewport": true
+  },
+  {
+   "tag": "button",
+   "role": "",
+   "name": "Thêm",
+   "region": "main",
+   "unlabeled": false,
+   "inViewport": true
+  },
+  {
+   "tag": "input",
+   "role": "",
+   "name": "Chọn Giải tích 1.pdf",
+   "region": "main",
+   "unlabeled": false,
+   "inViewport": true
+  },
+  {
+   "tag": "button",
+   "role": "",
+   "name": "Bắt đầu · Tóm tắt",
+   "region": "main",
+   "unlabeled": false,
+   "inViewport": true
+  },
+  {
+   "tag": "button",
+   "role": "",
+   "name": "Tóm tắt · Giải tích 1.pdf",
+   "region": "main",
+   "unlabeled": false,
+   "inViewport": true
+  },
+  {
+   "tag": "button",
+   "role": "",
+   "name": "Sơ đồ tư duy · Giải tích 1.pdf",
+   "region": "main",
+   "unlabeled": false,
+   "inViewport": true
+  },
+  {
+   "tag": "button",
+   "role": "",
+   "name": "Thêm",
+   "region": "main",
+   "unlabeled": false,
+   "inViewport": true
+  },
+  {
+   "tag": "input",
+   "role": "",
+   "name": "Chọn Cấu trúc dữ liệu.docx",
+   "region": "main",
+   "unlabeled": false,
+   "inViewport": true
+  },
+  {
+   "tag": "button",
+   "role": "",
+   "name": "Bắt đầu · Tóm tắt",
+   "region": "main",
+   "unlabeled": false,
+   "inViewport": true
+  },
+  {
+   "tag": "button",
+   "role": "",
+   "name": "Tóm tắt · Cấu trúc dữ liệu.docx",
+   "region": "main",
+   "unlabeled": false,
+   "inViewport": true
+  },
+  {
+   "tag": "button",
+   "role": "",
+   "name": "Sơ đồ tư duy · Cấu trúc dữ liệu.docx",
+   "region": "main",
+   "unlabeled": false,
+   "inViewport": true
+  },
+  {
+   "tag": "button",
+   "role": "",
+   "name": "Thêm",
+   "region": "main",
+   "unlabeled": false,
+   "inViewport": true
+  },
+  {
+   "tag": "input",
+   "role": "",
+   "name": "Chọn Mạng máy tính.pdf",
+   "region": "main",
+   "unlabeled": false,
+   "inViewport": true
+  },
+  {
+   "tag": "button",
+   "role": "",
+   "name": "Bắt đầu · Tóm tắt",
+   "region": "main",
+   "unlabeled": false,
+   "inViewport": true
+  },
+  {
+   "tag": "button",
+   "role": "",
+   "name": "Tóm tắt · Mạng máy tính.pdf",
+   "region": "main",
+   "unlabeled": false,
+   "inViewport": true
+  },
+  {
+   "tag": "button",
+   "role": "",
+   "name": "Sơ đồ tư duy · Mạng máy tính.pdf",
+   "region": "main",
+   "unlabeled": false,
+   "inViewport": true
+  },
+  {
+   "tag": "button",
+   "role": "",
+   "name": "Thêm",
+   "region": "main",
+   "unlabeled": false,
+   "inViewport": true
+  },
+  {
+   "tag": "input",
+   "role": "",
+   "name": "Chọn Hệ điều hành.pdf",
+   "region": "main",
+   "unlabeled": false,
+   "inViewport": false
+  },
+  {
+   "tag": "button",
+   "role": "",
+   "name": "Tiếp tục · Hỏi AI",
+   "region": "main",
+   "unlabeled": false,
+   "inViewport": false
+  },
+  {
+   "tag": "button",
+   "role": "",
+   "name": "Tóm tắt · Hệ điều hành.pdf",
+   "region": "main",
+   "unlabeled": false,
+   "inViewport": false
+  },
+  {
+   "tag": "button",
+   "role": "",
+   "name": "Sơ đồ tư duy · Hệ điều hành.pdf",
+   "region": "main",
+   "unlabeled": false,
+   "inViewport": false
+  },
+  {
+   "tag": "button",
+   "role": "",
+   "name": "Thêm",
+   "region": "main",
+   "unlabeled": false,
+   "inViewport": false
+  },
+  {
+   "tag": "a",
+   "role": "",
+   "name": "Hệ điều hành chẩn đoán · 2/11/2026 —",
+   "region": "main",
+   "unlabeled": false,
+   "inViewport": false
+  }
+ ],
+ "overflowX": 0,
+ "headings": [
+  "H1: Thư viện học tập",
+  "H2: ĐANG YẾU Ở",
+  "H2: BÀI ĐÃ LÀM GẦN ĐÂY"
+ ],
+ "tab": [
+  "button[menuitem] \"Sơ đồ tư duy\"",
+  "button[menuitem] \"Bản đồ học tập\"",
+  "button[menuitem] \"Quiz\"",
+  "button[menuitem] \"Ôn tập\"",
+  "button[menuitem] \"Hỏi AI\"",
+  "button[menuitem] \"Chi tiết\"",
+  "button[menuitem] \"Đổi tên\"",
+  "button[menuitem] \"Yêu thích\"",
+  "button[menuitem] \"Ghim\"",
+  "button[menuitem] \"Lưu trữ\"",
+  "input \"Chọn Lịch sử Đảng.pdf\"",
+  "button \"Tóm tắt · Lịch sử Đảng.pdf\"",
+  "button \"Sơ đồ tư duy · Lịch sử Đảng.pdf\"",
+  "button \"Thêm\"",
+  "input \"Chọn Giải tích 1.pdf\"",
+  "button \"Tóm tắt · Giải tích 1.pdf\"",
+  "button \"Sơ đồ tư duy · Giải tích 1.pdf\"",
+  "button \"Thêm\"",
+  "input \"Chọn Cấu trúc dữ liệu.docx\"",
+  "button \"Tóm tắt · Cấu trúc dữ liệu.docx\"",
+  "button \"Sơ đồ tư duy · Cấu trúc dữ liệu.docx\"",
+  "button \"Thêm\"",
+  "input \"Chọn Mạng máy tính.pdf\"",
+  "button \"Tóm tắt · Mạng máy tính.pdf\"",
+  "button \"Sơ đồ tư duy · Mạng máy tính.pdf\""
+ ]
+}

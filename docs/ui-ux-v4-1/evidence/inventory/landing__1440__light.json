@@ -1,0 +1,122 @@
+{
+ "url": "/",
+ "controls": [
+  {
+   "tag": "button",
+   "role": "",
+   "name": "Tính năng",
+   "region": "header",
+   "unlabeled": false,
+   "inViewport": true
+  },
+  {
+   "tag": "button",
+   "role": "",
+   "name": "Quy trình",
+   "region": "header",
+   "unlabeled": false,
+   "inViewport": true
+  },
+  {
+   "tag": "button",
+   "role": "",
+   "name": "Demo",
+   "region": "header",
+   "unlabeled": false,
+   "inViewport": true
+  },
+  {
+   "tag": "button",
+   "role": "",
+   "name": "Đổi giao diện sáng/tối",
+   "region": "header",
+   "unlabeled": false,
+   "inViewport": true
+  },
+  {
+   "tag": "a",
+   "role": "",
+   "name": "Đăng nhập",
+   "region": "header",
+   "unlabeled": false,
+   "inViewport": true
+  },
+  {
+   "tag": "a",
+   "role": "",
+   "name": "Bắt đầu",
+   "region": "header",
+   "unlabeled": false,
+   "inViewport": true
+  },
+  {
+   "tag": "a",
+   "role": "",
+   "name": "Bắt đầu miễn phí",
+   "region": "other",
+   "unlabeled": false,
+   "inViewport": true
+  },
+  {
+   "tag": "button",
+   "role": "",
+   "name": "Xem demo",
+   "region": "other",
+   "unlabeled": false,
+   "inViewport": true
+  },
+  {
+   "tag": "a",
+   "role": "",
+   "name": "Bắt đầu miễn phí",
+   "region": "other",
+   "unlabeled": false,
+   "inViewport": false
+  },
+  {
+   "tag": "a",
+   "role": "",
+   "name": "Đăng nhập",
+   "region": "other",
+   "unlabeled": false,
+   "inViewport": false
+  }
+ ],
+ "overflowX": 0,
+ "headings": [
+  "H1: Hỏi tài liệu của bạn — kèm dẫn chứng.",
+  "H2: Đọc tài liệu dài không nên khó đến vậy",
+  "H2: MemVidX làm gì cho bạn",
+  "H2: Bốn bước, từ tài liệu tới hiểu bài",
+  "H2: Tính năng chính",
+  "H2: Hỏi nối tiếp, không mất mạch",
+  "H2: Bắt đầu học với tài liệu của bạn"
+ ],
+ "tab": [
+  "button \"Tính năng\"",
+  "button \"Quy trình\"",
+  "button \"Demo\"",
+  "button \"Đổi giao diện sáng/tối\"",
+  "a \"Đăng nhập\"",
+  "a \"Bắt đầu\"",
+  "a \"Bắt đầu miễn phí\"",
+  "button \"Xem demo\"",
+  "a \"Bắt đầu miễn phí\"",
+  "a \"Đăng nhập\"",
+  "(body)",
+  "button \"Tính năng\"",
+  "button \"Quy trình\"",
+  "button \"Demo\"",
+  "button \"Đổi giao diện sáng/tối\"",
+  "a \"Đăng nhập\"",
+  "a \"Bắt đầu\"",
+  "a \"Bắt đầu miễn phí\"",
+  "button \"Xem demo\"",
+  "a \"Bắt đầu miễn phí\"",
+  "a \"Đăng nhập\"",
+  "(body)",
+  "button \"Tính năng\"",
+  "button \"Quy trình\"",
+  "button \"Demo\""
+ ]
+}
