@@ -158,12 +158,23 @@ export default function SidebarRight({
   const [createWaiting, setCreateWaiting] = useState(false); // loading UI only
   const [guidedError, setGuidedError] = useState(null);
   const [showSummaryModal, setShowSummaryModal] = useState(null);
+  const handledCreateNonceRef = useRef(null);
   useEffect(() => {
     if (artifactRequest?.tab) {
       setArtifactTab(artifactRequest.tab);
-      // Artifact-driven Guided open only when capability is already confirmed on.
-      // While loading it is dropped (no intent parked); disabled never mounts Guided.
-      if (artifactRequest.tab === "mindmap" && !mindMaps.length && selectedSources?.length && guidedCapRef.current === "enabled") setGuidedOpen(true);
+      if (artifactRequest.tab !== "mindmap" || mindMaps.length || !selectedSources?.length) return;
+      if (artifactRequest.create) {
+        // Empty-state "Tạo sơ đồ tư duy": the toolbar's create route
+        // (handleGenerateMindMap): Guided ON opens Guided, OFF or capability
+        // error starts the legacy job, loading parks one intent. Once per
+        // request, so a later selection change cannot start a second job.
+        if (handledCreateNonceRef.current === artifactRequest.nonce) return;
+        handledCreateNonceRef.current = artifactRequest.nonce;
+        createMindmapRef.current?.();
+      } else if (guidedCapRef.current === "enabled") {
+        // View links (Tutor "Xem sơ đồ"): open Guided only when already enabled.
+        setGuidedOpen(true);
+      }
     }
   }, [artifactRequest, mindMaps.length, selectedSources]);
   // Task 4 — background generation: chip state driven by the Task 1 poller
@@ -236,6 +247,7 @@ export default function SidebarRight({
   // ── Mindmap job refs ───────────────────────────────
   const pollerRef = useRef(null); // fresh createMindmapPoller() instance per run
   const currentMindmapJobIdRef = useRef(null);
+  const mindmapStartingRef = useRef(false);
   // ── Summary job refs (mirror mindmap — poller riêng, không chia sẻ ref) ──
   const summaryPollerRef = useRef(null);
   const currentSummaryJobIdRef = useRef(null);
@@ -462,6 +474,9 @@ export default function SidebarRight({
   // mindmap viewer's degraded-banner "Tạo lại" (force=true, bypasses cache).
   const runMindmapGeneration = async (sourceList, { force = false, ...guidedOptions } = {}) => {
     if (!sourceList?.length) { toast("Vui lòng chọn ít nhất một tài liệu để tạo Sơ đồ!", { type: "error" }); return; }
+    // One job per intent: ignore a second start while one is starting or running.
+    if (mindmapStartingRef.current || currentMindmapJobIdRef.current) return;
+    mindmapStartingRef.current = true;
     // PR#8: chạy job mới = hết trạng thái lỗi cũ; nhớ params cho retry lần sau.
     lastMindmapRunRef.current = { sources: sourceList, force };
     setMindmapRetry(null);
@@ -516,6 +531,7 @@ export default function SidebarRight({
       if (force) setMindmapGenerating(false);
     }
     finally {
+      mindmapStartingRef.current = false;
       setLoading(false);
     }
   };
