@@ -79,3 +79,20 @@ test("with a summary open, 'Tạo tóm tắt mới' and the picker stay availabl
   await expect(page.getByText("Nội dung vừa tạo.").first()).toBeVisible();
   expect(posts).toHaveLength(1);
 });
+
+for (const width of [320, 390]) {
+  test(`summary toolbar keeps the picker on one row at ${width}px`, async ({ page }) => {
+    await openWorkspace(page, { summaries: [SAVED, { ...FRESH, title: "Một tiêu đề tóm tắt rất dài để thử co giãn" }] });
+    await page.setViewportSize({ width, height: 800 });
+    await page.getByRole("combobox", { name: "Chọn tóm tắt" }).first().selectOption({ label: SAVED.title });
+    const toolbar = page.locator(".artifact-toolbar").filter({ has: page.getByRole("combobox", { name: "Chọn tóm tắt" }) }).first();
+    const box = await toolbar.boundingBox();
+    expect(box.height).toBeLessThanOrEqual(48);
+    for (const control of [toolbar.getByRole("combobox", { name: "Chọn tóm tắt" }), toolbar.getByRole("button", { name: "Tạo tóm tắt mới" })]) {
+      const b = await control.boundingBox();
+      expect(b.y).toBeGreaterThanOrEqual(box.y - 1);
+      expect(b.y + b.height).toBeLessThanOrEqual(box.y + box.height + 1);
+      expect(b.x + b.width).toBeLessThanOrEqual(width + 1);
+    }
+  });
+}

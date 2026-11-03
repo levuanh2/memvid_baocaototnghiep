@@ -78,7 +78,7 @@ export default function WorkspaceContainer({
             toolbarExtra={summaryLibrary && (
               <SummaryPicker items={summaryLibrary.items} selectedId={summaryData?.id ?? null}
                 onSelect={summaryLibrary.select} onCreate={summaryLibrary.create}
-                creating={summaryLibrary.creating} canCreate={selectedSources.length > 0} />
+                creating={summaryLibrary.creating} canCreate={selectedSources.length > 0} compact />
             )} />
         ) : (
           <WorkspaceEmptyState kind="summary" selectedCount={selectedSources.length} onCreate={onSummaryAction}
