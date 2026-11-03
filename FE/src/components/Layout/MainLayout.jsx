@@ -311,12 +311,15 @@ export default function MainLayout({
   // closing the Guided dialog can put back exactly what was there (node detail,
   // another Inspector tab, or a collapsed panel) instead of blanking it.
   const panelBeforeArtifactRef = useRef(null);
-  const openArtifact = useCallback((tab) => {
+  // `create`: the request comes from a "create" button (Mind Map empty state),
+  // not from a "view" link (Tutor "Xem sơ đồ"); SidebarRight then runs the same
+  // create route as the toolbar's "Tạo sơ đồ mới".
+  const openArtifact = useCallback((tab, { create = false } = {}) => {
     if (!panelBeforeArtifactRef.current) {
       panelBeforeArtifactRef.current = { rightOpen, rightView, collapsed: panel.collapsed.right };
     }
     setRightView("evidence");
-    setArtifactRequest({ tab, nonce: Date.now() });
+    setArtifactRequest({ tab, nonce: Date.now(), create });
     setRightOpen(true);
     if (!panel.drawer) panel.setCollapsedFor("right", false);
   }, [panel, rightOpen, rightView]);
@@ -335,7 +338,7 @@ export default function MainLayout({
   // via the SAME openArtifact mechanism Tutor's "Xem sơ đồ"/"Xem tóm tắt"
   // links already use just above — no new generation logic, no mock.
   const onMindmapAction = useCallback(() => {
-    if (mindmapData?.data) setWorkspaceMode("mindmap"); else openArtifact("mindmap");
+    if (mindmapData?.data) setWorkspaceMode("mindmap"); else openArtifact("mindmap", { create: true });
   }, [mindmapData, openArtifact]);
   const onSummaryAction = useCallback(() => {
     if (summaryData) setWorkspaceMode("summary"); else openArtifact("summary");
@@ -826,8 +829,8 @@ export default function MainLayout({
             mindmapData={mindmapData}
             mindmapInitialLoading={libraries.mindMapInitialLoading}
             mindmapLoadError={libraries.mindMapLoadError}
-            mindmapCreating={libraries.mindMapActions?.creating}
-            mindmapJobLabel={libraries.mindMapActions?.jobLabel}
+            mindmapCreating={libraries.mindMapActions?.creating || libraries.mindMapActions?.createPending}
+            mindmapJobLabel={libraries.mindMapActions?.createPending ? "Đang kiểm tra tính năng…" : libraries.mindMapActions?.jobLabel}
             mindmapJobProgress={libraries.mindMapActions?.jobProgress}
             mindmapJobError={libraries.mindMapActions?.jobError}
             onRetryMindmap={libraries.mindMapActions?.onRetry}
