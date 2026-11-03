@@ -42,7 +42,7 @@ Status: PASS, FAIL, BLOCKED, NOT VERIFIED, NOT APPLICABLE.
 | 1 | GitHub branch protection | PASS | `main` | Required check `CI / required` (app 15368), strict, PR required, admins included, conversation resolution, no force push, no deletion (`README.md` §1.3) | Claude | None |
 | 2 | Required CI | PASS | `4ed8f47` | CI 41595145979 (push, `main`): all 13 check runs success, `CI / required` 07:23:38Z | Claude | None |
 | 3 | EC2 deployment and SHA pinning | PASS | `4ed8f47` | Deploy 41596023594: created 07:23:41Z (3 s after CI), `RUN_EVENT=push`, `RUN_BRANCH=main`, `RUN_CONCLUSION=success`, repository, head repository and workflow path match; `decision=deploy reason=verified_sha_is_current_main`; pinned and activation SHA verified; ledger recorded 07:24:43Z; no break-glass | Claude | None |
-| 3a | #114: PR CI no longer starts Deploy | NOT VERIFIED | `4ed8f47` | No PR CI has run since the merge. The last Deploy runs started by PR CI (41589178442, 41590477842, 41594099084, all `skipped`) predate #114 | Claude | Read-only check on the next PR's CI, see §4 |
+| 3a | #114: PR CI no longer starts Deploy | PASS | `4ed8f47` | PR #115 (this PR) CI 41604776192 (`pull_request`) completed success 08:39:27Z; at 08:41:01Z no Deploy run newer than 41596023594 and `main` HEAD still has 13 check runs, its only `Deploy backend to EC2` from 07:24:45Z. Before #114, PR CI started a `skipped` Deploy within a minute (41589178442, 41590477842, 41594099084) | Claude | None |
 | 3b | #114: main push CI still starts Deploy | PASS | `4ed8f47` | Deploy 41596023594 above | Claude | None |
 | 3c | Cancelled main CI does not deploy | PASS | job `if:` unchanged by #114 | Cancelled CI 41575134914 (`f109484`) gave Deploy 41575169717 `skipped`; cancelled CI 41575164152 (`e83f1f3`) gave Deploy 41575185869 `skipped`; no ledger entry for either | Claude | None |
 | 3d | Failed main CI does not deploy | NOT VERIFIED | job `if:` | No failed main CI since the gate existed. Same `conclusion == 'success'` condition as 3c. Not induced on purpose | Claude | Observe if it ever happens; no test on `main` |
@@ -54,7 +54,7 @@ Status: PASS, FAIL, BLOCKED, NOT VERIFIED, NOT APPLICABLE.
 | 9 | Full Fixture Audit | PASS | `2d283aa` | Run 41586296321: 449 collected, 449 passed, 0 failed, 0 flaky, 0 skipped. #112, #113, #114 changed no `FE/` or fixture file, so no rerun | Claude | None |
 | 10 | Screen reader acceptance (S1 NVDA/Chrome, S2 Narrator/Edge) | NOT VERIFIED | FE `2d283aa` | No filled sheet. An agent cannot produce this result | Human tester | Run S1 and S2 (`human-acceptance-sheets.md`) |
 | 11 | Real-device touch (S3 Android/Chrome, S4 iPhone/Safari) | NOT VERIFIED | FE `2d283aa` | No filled sheet | Human tester | Run S3 and S4 |
-| 12 | Final production readiness | CONDITIONAL | `4ed8f47` / `2d283aa` | Gates 1, 2, 3, 7, 8, 9 PASS; 4, 5, 6, 10, 11 open | Owner | §5 and §6 |
+| 12 | Final production readiness | CONDITIONAL | `4ed8f47` / `2d283aa` | Gates 1, 2, 3 (3d not observed), 7, 8, 9 PASS; 4, 5, 6, 10, 11 open | Owner | §5 and §6 |
 
 ## 3. Human sheets S1–S4
 
@@ -69,12 +69,6 @@ fix is to also toggle selection on `pointerup` for `pointerType === "touch"`,
 de-duplicated against the click; no GREEN until fixed and re-run.
 
 ## 4. Pending observations (read-only, by Claude)
-
-On the next PR to `main`, after its CI completes:
-
-- No Deploy run is created for that CI run (`gh run list -w Deploy` shows no
-  run created within a minute of the PR CI's completion), and no new
-  `Deploy backend to EC2` check run appears on `main` HEAD.
 
 On the next merge that changes `FE/`, if Render auto-deploy is back on
 `checksPass` (D1 = B below):
@@ -157,7 +151,6 @@ priority:
 3. **Gates 4 and 5**: Blueprint Manual Sync, then `studymap-api` Auto-Deploy
    Off.
 4. **Gate 6**: first `FE/` merge check, or the signed acceptance in §6.
-5. **Gate 3a**: next PR's CI (no action needed, it happens with any PR).
 
 The Library Action Matrix stays OFF. Its rollout is a separate decision after
 V4 is accepted.
