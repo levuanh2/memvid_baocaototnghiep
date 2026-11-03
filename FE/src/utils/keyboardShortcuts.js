@@ -26,7 +26,7 @@ export const SHORTCUT_REGISTRY = [
   { id: "help", keys: "?", label: "Xem toàn bộ phím tắt (bảng này)", category: "Toàn cục", isNew: true },
   { id: "nav-chat", keys: "Alt + C", label: "Chuyển sang Trò chuyện", category: "Điều hướng Workspace", isNew: true },
   { id: "nav-mindmap", keys: "Alt + M", label: "Chuyển sang Sơ đồ tư duy", category: "Điều hướng Workspace", isNew: true },
-  { id: "nav-studymap", keys: "Alt + S", label: "Sang Bản đồ học tập (StudyMap)", category: "Điều hướng Workspace", isNew: true },
+  { id: "nav-studymap", keys: "Alt + S", label: "Sang Bản đồ kiến thức", category: "Điều hướng Workspace", isNew: true },
   { id: "nav-timeline", keys: "Alt + T", label: "Mở Dòng thời gian nghiên cứu", category: "Điều hướng Workspace", isNew: true },
   { id: "history-back", keys: "Alt + [", label: "Lùi về mục nghiên cứu trước", category: "Điều hướng Workspace", isNew: true },
   { id: "history-forward", keys: "Alt + ]", label: "Tới mục nghiên cứu tiếp theo", category: "Điều hướng Workspace", isNew: true },
@@ -37,7 +37,7 @@ export const SHORTCUT_REGISTRY = [
   { id: "mm-next-sibling", keys: "]", label: "Nhánh cùng cấp tiếp theo", category: "Sơ đồ tư duy (khi tab này đang mở)", isNew: true },
   { id: "cp-move", keys: "↑ ↓ · Tab", label: "Di chuyển giữa kết quả", category: "Command Palette", isNew: false },
   { id: "cp-open", keys: "Enter", label: "Mở mục đang chọn", category: "Command Palette", isNew: false },
-  { id: "mm-zoom", keys: "+ · - · 0 · F", label: "Phóng to · thu nhỏ · về 100% · vừa khung", category: "Sơ đồ tư duy & StudyMap", isNew: false },
+  { id: "mm-zoom", keys: "+ · - · 0 · F", label: "Phóng to · thu nhỏ · về 100% · vừa khung", category: "Sơ đồ tư duy & Bản đồ kiến thức", isNew: false },
 ];
 
 const EDITABLE_TAGS = new Set(["INPUT", "TEXTAREA", "SELECT"]);
