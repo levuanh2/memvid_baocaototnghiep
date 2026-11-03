@@ -929,12 +929,14 @@ export default function ChatArea({
               </>
             ) : (
               <>
-                {/* W1-4: below `md` there is no left column at all, so "bên
-                    trái" points at nothing a phone user can see. Two copies,
-                    CSS-only (no JS viewport check) -- desktop text is
-                    byte-for-byte unchanged; the mobile copy drops "bên trái"
-                    and the button right below it is the actual way to act on
-                    "Chọn tài liệu" on that breakpoint, reusing the exact same
+                {/* W1-4: below `md` there is no left column OR right margin,
+                    so neither "bên trái" nor "ở lề phải" points at anything a
+                    phone user can see. Two copies, CSS-only (no JS viewport
+                    check) -- desktop text is byte-for-byte unchanged; the
+                    mobile copy drops both spatial references (review fix:
+                    "kèm nguồn dẫn chứng" replaces "ở lề phải" too) and the
+                    button right below it is the actual way to act on "Chọn
+                    tài liệu" on that breakpoint, reusing the exact same
                     `onOpenLeft` the header's `.mobile-context` icon button
                     already calls (no new drawer state). This looks like
                     Round 12's removed duplicate fallback button, but it
@@ -945,7 +947,7 @@ export default function ChatArea({
                     entry point right where the (now corrected) copy
                     points. */}
                 <p className="font-display text-body-lg text-text-secondary mb-6 md:hidden">
-                  Mỗi câu trả lời được truy hồi từ tài liệu đã chọn và gắn nguồn ở lề phải. Chọn tài liệu, rồi đặt câu hỏi.
+                  Mỗi câu trả lời được truy hồi từ tài liệu đã chọn, kèm nguồn dẫn chứng. Chọn tài liệu, rồi đặt câu hỏi.
                 </p>
                 <p className="font-display text-body-lg text-text-secondary mb-6 hidden md:block">
                   Mỗi câu trả lời được truy hồi từ tài liệu đã chọn và gắn nguồn ở lề phải. Chọn tài liệu bên trái, rồi đặt câu hỏi.

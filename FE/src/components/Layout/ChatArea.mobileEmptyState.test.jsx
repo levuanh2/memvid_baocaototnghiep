@@ -52,7 +52,7 @@ describe("ChatArea empty-state, mobile hint + drawer button (W1-4)", () => {
   // documents at all" upload CTA, covered by ChatArea.noDocumentsEmptyState.test.jsx).
   const SOURCES = [{ video_stem: "a", filename: "A.pdf" }];
 
-  it("renders a mobile-only hint without 'bên trái', and a desktop-only hint that keeps it, both with the same lede", async () => {
+  it("renders a mobile-only hint without 'bên trái' or 'ở lề phải' (no left column or right margin on a phone), and a desktop-only hint that keeps both", async () => {
     await renderChatArea({ sources: SOURCES });
     const paragraphs = [...container.querySelectorAll("p.font-display.text-body-lg")];
     const mobile = paragraphs.find((p) => p.className.includes("md:hidden"));
@@ -60,7 +60,10 @@ describe("ChatArea empty-state, mobile hint + drawer button (W1-4)", () => {
     expect(mobile).toBeTruthy();
     expect(desktop).toBeTruthy();
     expect(mobile.textContent).not.toContain("bên trái");
-    expect(mobile.textContent).toContain("Mỗi câu trả lời được truy hồi từ tài liệu đã chọn và gắn nguồn ở lề phải.");
+    expect(mobile.textContent).not.toContain("ở lề phải");
+    expect(mobile.textContent).toBe(
+      "Mỗi câu trả lời được truy hồi từ tài liệu đã chọn, kèm nguồn dẫn chứng. Chọn tài liệu, rồi đặt câu hỏi.",
+    );
     // Desktop copy is byte-for-byte unchanged.
     expect(desktop.textContent).toBe(
       "Mỗi câu trả lời được truy hồi từ tài liệu đã chọn và gắn nguồn ở lề phải. Chọn tài liệu bên trái, rồi đặt câu hỏi.",
