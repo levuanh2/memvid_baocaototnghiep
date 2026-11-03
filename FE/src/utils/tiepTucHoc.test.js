@@ -12,12 +12,22 @@ const doc = (over = {}) => ({
 const GIO = Date.parse("2026-09-09T12:00:00Z");
 
 describe("duongDi — mọi bề mặt được hỗ trợ", () => {
-  it("tóm tắt, sơ đồ tư duy và hỏi đáp đều về Workspace kèm nguồn chọn sẵn", () => {
-    // Cả ba là modal của `/app`, không phải route riêng. `?source=` chọn sẵn nguồn
-    // để câu hỏi kế tiếp đã đúng phạm vi.
-    for (const bm of ["summary", "mindmap", "chat"]) {
-      expect(duongDi(doc(), bm)).toBe("/app?source=bai_giang_pdf");
-    }
+  it("tóm tắt, sơ đồ tư duy và hỏi đáp đều về Workspace kèm nguồn chọn sẵn, đúng chế độ", () => {
+    // Cả ba là chế độ của `/app`, không phải route riêng. `?source=` chọn sẵn nguồn;
+    // `?tab=` mở đúng chế độ (chat là mặc định nên không cần).
+    expect(duongDi(doc(), "summary")).toBe("/app?source=bai_giang_pdf&tab=summary");
+    expect(duongDi(doc(), "mindmap")).toBe("/app?source=bai_giang_pdf&tab=mindmap");
+    expect(duongDi(doc(), "chat")).toBe("/app?source=bai_giang_pdf");
+  });
+
+  it("tab đi cùng prompt và vẫn đúng khi thiếu stem", () => {
+    expect(duongDi(doc({ source_stem: null }), "summary")).toBe("/app?tab=summary");
+    expect(duongDi(doc(), "mindmap", { prompt: "CPU" }))
+      .toBe("/app?source=bai_giang_pdf&tab=mindmap&prompt=CPU");
+  });
+
+  it("Bản đồ kiến thức giữ route riêng theo document_id, không qua Workspace", () => {
+    expect(duongDi(doc(), "studymap")).toBe("/app/study/map/doc-1");
   });
 
   it("thiếu stem thì về /app trần, không dựng URL hỏng", () => {
@@ -91,7 +101,7 @@ describe("tiepTucHoc", () => {
     const t = tiepTucHoc(doc(), { now: GIO });
     expect(t.beMat).toBe("mindmap");
     expect(t.nhanBeMat).toBe("Sơ đồ tư duy");
-    expect(t.duongDi).toBe("/app?source=bai_giang_pdf");
+    expect(t.duongDi).toBe("/app?source=bai_giang_pdf&tab=mindmap");
     expect(t.nhanThoiGian).toBe("1 giờ trước");
   });
 
