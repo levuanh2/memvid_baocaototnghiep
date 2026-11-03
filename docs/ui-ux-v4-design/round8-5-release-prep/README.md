@@ -1,5 +1,11 @@
 # Round 8.5 preparation: release integration and next corrections
 
+> **Superseded status (2026-11-03):** #101–#107 and #110–#111 are merged and
+> `main` is protected. The current release matrix, verdict and remaining operator
+> actions are in `../round8-6-release-gate-closure/README.md`. The forms below
+> stay valid; E3 and E4 have short run sheets in
+> `../round8-6-release-gate-closure/human-acceptance-sheets.md`.
+
 | Item | Value |
 |---|---|
 | Base | `origin/main` `2479a32` (unchanged) |
