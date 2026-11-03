@@ -32,7 +32,7 @@ import { matchDocumentsToStems } from "../../utils/multiDocument";
  */
 
 const DANH_SACH_LENH = [
-  { id: "tai-len", nhan: "Tải tài liệu", icon: "Upload", moTa: "Mở Thư viện học tập để tải lên" },
+  { id: "tai-len", nhan: "Tải tài liệu lên", icon: "Upload", moTa: "Mở Thư viện học tập để tải lên" },
   { id: "tao-bo-suu-tap", nhan: "Tạo bộ sưu tập", icon: "FolderOpen", moTa: "Mở Thư viện học tập để tạo" },
   { id: "tiep-tuc-hoc", nhan: "Tiếp tục học", icon: "ArrowRight", moTa: "Về đúng chỗ tài liệu gần nhất đang dở" },
   { id: "mo-gia-su", nhan: "Mở Gia sư AI", icon: "Sparkles", moTa: "Vào Workspace — Ctrl+/ mở Gia sư AI ở đó" },
