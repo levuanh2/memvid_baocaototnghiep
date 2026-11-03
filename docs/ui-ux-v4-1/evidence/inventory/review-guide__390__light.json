@@ -1,0 +1,74 @@
+{
+ "url": "/app/study/review/attempt-1",
+ "controls": [
+  {
+   "tag": "a",
+   "role": "",
+   "name": "Kết quả",
+   "region": "header",
+   "unlabeled": false,
+   "inViewport": true
+  },
+  {
+   "tag": "button",
+   "role": "",
+   "name": "Viết lại",
+   "region": "header",
+   "unlabeled": false,
+   "inViewport": true
+  },
+  {
+   "tag": "button",
+   "role": "",
+   "name": "Luyện ngay (5 câu)",
+   "region": "main",
+   "unlabeled": false,
+   "inViewport": true
+  },
+  {
+   "tag": "button",
+   "role": "",
+   "name": "Tùy chỉnh",
+   "region": "main",
+   "unlabeled": false,
+   "inViewport": true
+  },
+  {
+   "tag": "button",
+   "role": "",
+   "name": "Luyện ngay (5 câu)",
+   "region": "main",
+   "unlabeled": false,
+   "inViewport": true
+  },
+  {
+   "tag": "button",
+   "role": "",
+   "name": "Tùy chỉnh",
+   "region": "main",
+   "unlabeled": false,
+   "inViewport": true
+  }
+ ],
+ "overflowX": 0,
+ "headings": [
+  "H1: Phần cần ôn lại"
+ ],
+ "tab": [
+  "a \"Kết quả\"",
+  "button \"Viết lại\"",
+  "button \"Luyện ngay (5 câu)\"",
+  "button \"Tùy chỉnh\"",
+  "button \"Luyện ngay (5 câu)\"",
+  "button \"Tùy chỉnh\"",
+  "(body)",
+  "a \"Kết quả\"",
+  "button \"Viết lại\"",
+  "button \"Luyện ngay (5 câu)\"",
+  "button \"Tùy chỉnh\"",
+  "button \"Luyện ngay (5 câu)\"",
+  "button \"Tùy chỉnh\"",
+  "(body)",
+  "a \"Kết quả\""
+ ]
+}

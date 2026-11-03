@@ -1,0 +1,164 @@
+{
+ "url": "/app/study",
+ "controls": [
+  {
+   "tag": "a",
+   "role": "",
+   "name": "Phòng đọc",
+   "region": "header",
+   "unlabeled": false,
+   "inViewport": true
+  },
+  {
+   "tag": "button",
+   "role": "",
+   "name": "Tải tài liệu",
+   "region": "header",
+   "unlabeled": false,
+   "inViewport": true
+  },
+  {
+   "tag": "button",
+   "role": "",
+   "name": "Tạo bộ sưu tập",
+   "region": "aside",
+   "unlabeled": false,
+   "inViewport": true
+  },
+  {
+   "tag": "button",
+   "role": "",
+   "name": "Yêu thích",
+   "region": "aside",
+   "unlabeled": false,
+   "inViewport": true
+  },
+  {
+   "tag": "button",
+   "role": "",
+   "name": "Đã ghim",
+   "region": "aside",
+   "unlabeled": false,
+   "inViewport": true
+  },
+  {
+   "tag": "input",
+   "role": "",
+   "name": "",
+   "region": "aside",
+   "unlabeled": true,
+   "inViewport": true
+  },
+  {
+   "tag": "input",
+   "role": "",
+   "name": "Tìm trong thư viện",
+   "region": "main",
+   "unlabeled": false,
+   "inViewport": true
+  },
+  {
+   "tag": "select",
+   "role": "",
+   "name": "Mới nhất Cũ nhất A-Z Z-A Thời gian đọc Mở gần đây Tải lên gần đây",
+   "region": "main",
+   "unlabeled": false,
+   "inViewport": true
+  },
+  {
+   "tag": "button",
+   "role": "",
+   "name": "Lọc",
+   "region": "main",
+   "unlabeled": false,
+   "inViewport": true
+  },
+  {
+   "tag": "button",
+   "role": "",
+   "name": "Đủ",
+   "region": "main",
+   "unlabeled": false,
+   "inViewport": true
+  },
+  {
+   "tag": "input",
+   "role": "",
+   "name": "",
+   "region": "main",
+   "unlabeled": true,
+   "inViewport": true
+  },
+  {
+   "tag": "button",
+   "role": "",
+   "name": "Tất cả 0",
+   "region": "main",
+   "unlabeled": false,
+   "inViewport": true
+  },
+  {
+   "tag": "button",
+   "role": "",
+   "name": "Tiếp tục học 0",
+   "region": "main",
+   "unlabeled": false,
+   "inViewport": true
+  },
+  {
+   "tag": "button",
+   "role": "",
+   "name": "Cần quiz 0",
+   "region": "main",
+   "unlabeled": false,
+   "inViewport": true
+  },
+  {
+   "tag": "button",
+   "role": "",
+   "name": "Cần tóm tắt 0",
+   "region": "main",
+   "unlabeled": false,
+   "inViewport": true
+  },
+  {
+   "tag": "button",
+   "role": "",
+   "name": "Xem tất cả tài liệu",
+   "region": "main",
+   "unlabeled": false,
+   "inViewport": true
+  }
+ ],
+ "overflowX": 0,
+ "headings": [
+  "H1: Thư viện học tập"
+ ],
+ "tab": [
+  "a \"Phòng đọc\"",
+  "button \"Tải tài liệu\"",
+  "button \"Tạo bộ sưu tập\"",
+  "button \"Yêu thích\"",
+  "button \"Đã ghim\"",
+  "input \"\"",
+  "input \"Tìm trong thư viện\"",
+  "select \"Mới nhất Cũ nhất A-Z Z-A Thời gian đọc Mở gần đây Tải lên gầ\"",
+  "button \"Lọc\"",
+  "button \"Đủ\"",
+  "input \"\"",
+  "button \"Tất cả 0\"",
+  "button \"Tiếp tục học 0\"",
+  "button \"Cần quiz 0\"",
+  "button \"Cần tóm tắt 0\"",
+  "button \"Xem tất cả tài liệu\"",
+  "(body)",
+  "a \"Phòng đọc\"",
+  "button \"Tải tài liệu\"",
+  "button \"Tạo bộ sưu tập\"",
+  "button \"Yêu thích\"",
+  "button \"Đã ghim\"",
+  "input \"\"",
+  "input \"Tìm trong thư viện\"",
+  "select \"Mới nhất Cũ nhất A-Z Z-A Thời gian đọc Mở gần đây Tải lên gầ\""
+ ]
+}

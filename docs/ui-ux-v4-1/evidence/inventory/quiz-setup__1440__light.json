@@ -1,0 +1,164 @@
+{
+ "url": "/app/study/quiz/new?document=d1",
+ "controls": [
+  {
+   "tag": "a",
+   "role": "",
+   "name": "Tài liệu",
+   "region": "header",
+   "unlabeled": false,
+   "inViewport": true
+  },
+  {
+   "tag": "button",
+   "role": "",
+   "name": "5 câu",
+   "region": "main",
+   "unlabeled": false,
+   "inViewport": true
+  },
+  {
+   "tag": "button",
+   "role": "",
+   "name": "10 câu",
+   "region": "main",
+   "unlabeled": false,
+   "inViewport": true
+  },
+  {
+   "tag": "button",
+   "role": "",
+   "name": "15 câu",
+   "region": "main",
+   "unlabeled": false,
+   "inViewport": true
+  },
+  {
+   "tag": "button",
+   "role": "",
+   "name": "20 câu",
+   "region": "main",
+   "unlabeled": false,
+   "inViewport": true
+  },
+  {
+   "tag": "input",
+   "role": "",
+   "name": "10",
+   "region": "main",
+   "unlabeled": false,
+   "inViewport": true
+  },
+  {
+   "tag": "button",
+   "role": "",
+   "name": "Trộn",
+   "region": "main",
+   "unlabeled": false,
+   "inViewport": true
+  },
+  {
+   "tag": "button",
+   "role": "",
+   "name": "Dễ",
+   "region": "main",
+   "unlabeled": false,
+   "inViewport": true
+  },
+  {
+   "tag": "button",
+   "role": "",
+   "name": "Trung bình",
+   "region": "main",
+   "unlabeled": false,
+   "inViewport": true
+  },
+  {
+   "tag": "button",
+   "role": "",
+   "name": "Khó",
+   "region": "main",
+   "unlabeled": false,
+   "inViewport": true
+  },
+  {
+   "tag": "button",
+   "role": "",
+   "name": "Trắc nghiệm",
+   "region": "main",
+   "unlabeled": false,
+   "inViewport": true
+  },
+  {
+   "tag": "button",
+   "role": "",
+   "name": "Đúng / Sai",
+   "region": "main",
+   "unlabeled": false,
+   "inViewport": true
+  },
+  {
+   "tag": "button",
+   "role": "",
+   "name": "Trả lời ngắn",
+   "region": "main",
+   "unlabeled": false,
+   "inViewport": true
+  },
+  {
+   "tag": "button",
+   "role": "",
+   "name": "1. Tiến trình",
+   "region": "main",
+   "unlabeled": false,
+   "inViewport": true
+  },
+  {
+   "tag": "button",
+   "role": "",
+   "name": "2. Bộ nhớ",
+   "region": "main",
+   "unlabeled": false,
+   "inViewport": true
+  },
+  {
+   "tag": "button",
+   "role": "",
+   "name": "Tạo quiz",
+   "region": "main",
+   "unlabeled": false,
+   "inViewport": true
+  }
+ ],
+ "overflowX": 0,
+ "headings": [
+  "H1: Hệ điều hành.pdf"
+ ],
+ "tab": [
+  "a \"Tài liệu\"",
+  "button \"5 câu\"",
+  "button \"10 câu\"",
+  "button \"15 câu\"",
+  "button \"20 câu\"",
+  "input \"\"",
+  "button \"Trộn\"",
+  "button \"Dễ\"",
+  "button \"Trung bình\"",
+  "button \"Khó\"",
+  "button \"Trắc nghiệm\"",
+  "button \"Đúng / Sai\"",
+  "button \"Trả lời ngắn\"",
+  "button \"1. Tiến trình\"",
+  "button \"2. Bộ nhớ\"",
+  "button \"Tạo quiz\"",
+  "(body)",
+  "a \"Tài liệu\"",
+  "button \"5 câu\"",
+  "button \"10 câu\"",
+  "button \"15 câu\"",
+  "button \"20 câu\"",
+  "input \"\"",
+  "button \"Trộn\"",
+  "button \"Dễ\""
+ ]
+}

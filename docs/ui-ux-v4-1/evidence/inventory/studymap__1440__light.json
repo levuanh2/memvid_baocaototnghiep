@@ -1,0 +1,132 @@
+{
+ "url": "/app/study/map/d1",
+ "controls": [
+  {
+   "tag": "a",
+   "role": "",
+   "name": "Tài liệu",
+   "region": "header",
+   "unlabeled": false,
+   "inViewport": true
+  },
+  {
+   "tag": "a",
+   "role": "",
+   "name": "Về nguồn",
+   "region": "header",
+   "unlabeled": false,
+   "inViewport": true
+  },
+  {
+   "tag": "button",
+   "role": "",
+   "name": "Dựng lại",
+   "region": "header",
+   "unlabeled": false,
+   "inViewport": true
+  },
+  {
+   "tag": "button",
+   "role": "",
+   "name": "Thu nhỏ",
+   "region": "main",
+   "unlabeled": false,
+   "inViewport": true
+  },
+  {
+   "tag": "button",
+   "role": "",
+   "name": "Đặt lại thu phóng",
+   "region": "main",
+   "unlabeled": false,
+   "inViewport": true
+  },
+  {
+   "tag": "button",
+   "role": "",
+   "name": "Phóng to",
+   "region": "main",
+   "unlabeled": false,
+   "inViewport": true
+  },
+  {
+   "tag": "input",
+   "role": "",
+   "name": "Tìm trong sơ đồ kiến thức",
+   "region": "main",
+   "unlabeled": false,
+   "inViewport": true
+  },
+  {
+   "tag": "select",
+   "role": "",
+   "name": "Bố cục sơ đồ",
+   "region": "main",
+   "unlabeled": false,
+   "inViewport": true
+  },
+  {
+   "tag": "button",
+   "role": "",
+   "name": "PNG",
+   "region": "main",
+   "unlabeled": false,
+   "inViewport": true
+  },
+  {
+   "tag": "button",
+   "role": "",
+   "name": "PNG trong suốt",
+   "region": "main",
+   "unlabeled": false,
+   "inViewport": true
+  },
+  {
+   "tag": "button",
+   "role": "",
+   "name": "SVG",
+   "region": "main",
+   "unlabeled": false,
+   "inViewport": true
+  },
+  {
+   "tag": "button",
+   "role": "",
+   "name": "Trình chiếu",
+   "region": "main",
+   "unlabeled": false,
+   "inViewport": true
+  }
+ ],
+ "overflowX": 0,
+ "headings": [
+  "H1: Hệ điều hành.pdf"
+ ],
+ "tab": [
+  "a \"Tài liệu\"",
+  "a \"Về nguồn\"",
+  "button \"Dựng lại\"",
+  "button \"Thu nhỏ\"",
+  "button \"Đặt lại thu phóng\"",
+  "button \"Phóng to\"",
+  "input \"Tìm trong sơ đồ kiến thức\"",
+  "select \"Bố cục sơ đồ\"",
+  "button \"PNG\"",
+  "button \"PNG trong suốt\"",
+  "button \"SVG\"",
+  "button \"Trình chiếu\"",
+  "(body)",
+  "a \"Tài liệu\"",
+  "a \"Về nguồn\"",
+  "button \"Dựng lại\"",
+  "button \"Thu nhỏ\"",
+  "button \"Đặt lại thu phóng\"",
+  "button \"Phóng to\"",
+  "input \"Tìm trong sơ đồ kiến thức\"",
+  "select \"Bố cục sơ đồ\"",
+  "button \"PNG\"",
+  "button \"PNG trong suốt\"",
+  "button \"SVG\"",
+  "button \"Trình chiếu\""
+ ]
+}
