@@ -456,7 +456,17 @@ test.describe.serial("critical flows", () => {
     const opened = page.getByRole("combobox", { name: "Chọn tóm tắt" });
     const failed = page.getByText(/Không tạo được tóm tắt/);
     await expect(opened.or(failed).first()).toBeVisible({ timeout: 60_000 });
-    test.info().annotations.push({ type: "summary-outcome", description: (await opened.count()) ? "opened" : "error shown" });
+    const wasOpened = (await opened.count()) > 0;
+    test.info().annotations.push({ type: "summary-outcome", description: wasOpened ? "opened" : "error shown" });
     page.off("response", onResponse);
+    if (!wasOpened) return;
+    // Persisted in the real DB: after a reload the saved summary is listed and
+    // opens again without a new POST.
+    const title = await page.locator(".artifact-toolbar__identity strong").first().innerText();
+    await page.reload();
+    await page.getByRole("tab", { name: "Tóm tắt" }).click();
+    await page.getByRole("combobox", { name: "Chọn tóm tắt" }).first().selectOption({ label: title });
+    await expect(page.locator(".artifact-toolbar__identity strong").first()).toHaveText(title);
+    expect(posts).toHaveLength(1);
   });
 });
