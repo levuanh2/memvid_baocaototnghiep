@@ -5,11 +5,13 @@
 | Checked | 2026-11-03, by Claude; GitHub and Render reads only, plus one Fixture Audit dispatch |
 | Baseline | `main` `2d283aa384f2cef1e88f2209032bbeefbe4f3e67` (merges #106 `741ed48`, #107 `f109484`, #110 `e83f1f3`, #111 `2d283aa`) |
 | Update | #112 merged by the owner at 06:21:17Z as `d1cb795bd04a72ddfa07e69530c28fb6ca064296` (now `main`); post-merge checks in §1.6 |
+| Final acceptance | After #113 and #114 (`main` `4ed8f47`): `final-acceptance.md` holds the current 12-gate matrix and verdict and supersedes §3 below |
 | Authority | Claude made no merge, deploy, flag change or Render setting change |
 | History | Round 8.2–8.5 evidence is unchanged. This folder only adds the closure state |
 
 | File | Content |
 |---|---|
+| `final-acceptance.md` | Final acceptance on `4ed8f47`: 12-gate matrix, `studymap-web` Auto-Deploy finding, owner actions, risk-acceptance statement, verdict |
 | `render-deploy-gate.md` | Event timeline of the Render deploy-before-CI incident, review of #112, residual risk, option B design, recommendation |
 | `human-acceptance-sheets.md` | Run sheets for NVDA/Chrome, Narrator/Edge, Android/Chrome and iPhone/Safari (E3/E4 criteria unchanged) |
 | `independent-review-codex1.md` | Codex1 review of the deploy gate and #112: REQUEST CHANGES; all four findings addressed in `render-deploy-gate.md` (see its §5) |
@@ -129,6 +131,8 @@ Cloudflare to the Render origin (`rndr-id` present) and return the current
 build. Check it if Render later fails to renew the origin certificate.
 
 ## 3. Verdict
+
+Superseded by `final-acceptance.md` §7 (still CONDITIONAL). Kept as recorded on `d1cb795`.
 
 **CONDITIONAL.**
 
