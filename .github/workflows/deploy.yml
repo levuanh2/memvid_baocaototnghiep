@@ -2,10 +2,15 @@
 #
 # Triggered by the completion of the "CI" workflow (.github/workflows/ci.yml),
 # not by `push` directly — this is how deploy stays wired to "all CI jobs
-# passed" without duplicating or modifying ci.yml's job list. `workflow_run`
-# fires for every CI run regardless of branch (main pushes AND PR branches),
-# so the branch/event filter below is what actually enforces "main only,
-# never feature branches" — ci.yml itself needs no changes.
+# passed" without duplicating or modifying ci.yml's job list.
+#
+# `branches: [main]` drops CI runs from PR branches at the trigger, so they
+# never start this workflow. Without it every PR CI completion started a run
+# whose skipped job left a check run on main's HEAD, and Render's checksPass
+# counts a lone skipped check as passing (2026-11-03: PR #113's CI put one on
+# d1cb795). The trigger filter only matches the branch NAME; the job-level
+# `if:` and scripts/deploy_gate.sh below remain the real gate (success, push
+# event, main, repository, workflow path, current-main SHA).
 #
 # SSH host key is PINNED, not fetched at runtime: EC2_KNOWN_HOSTS holds the
 # exact output of a one-time `ssh-keyscan -H <host>` run by a human, written
@@ -19,6 +24,7 @@ on:
   workflow_run:
     workflows: ["CI"]
     types: [completed]
+    branches: [main]
 
 concurrency:
   group: production-deployment
@@ -33,6 +39,9 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 15
     environment: production
+    # Kept although the trigger already filters on main: the trigger matches
+    # only the branch name (a fork PR from a branch called "main" would pass
+    # it), so these checks stay authoritative.
     # Both conditions matter: `head_branch == 'main'` scopes to main (a PR's
     # CI run has head_branch == the PR's source branch, never "main", unless
     # the PR itself is main -> main which GitHub doesn't allow); `event ==
