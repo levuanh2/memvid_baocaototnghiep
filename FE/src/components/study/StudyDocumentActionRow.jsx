@@ -79,7 +79,7 @@ export default function StudyDocumentActionRow({
         onClick={() => primary && onOpen(doc, primary.surface)}>
         <Icon name="ArrowRight" size={14} /> {primary?.label || "Chưa sẵn sàng"}
       </button>
-      <div className="study-document-row__quick" aria-label={`Mở nhanh ${title}`}>
+      <div className="study-document-row__quick" role="group" aria-label={`Mở nhanh ${title}`}>
         <button type="button" data-quick-action aria-label={`Tóm tắt · ${title}`}
           disabled={!summaryReadiness.ready} title={summaryReadiness.reason || undefined}
           onClick={() => onOpen(doc, "summary")}><Icon name="ScrollText" size={15} /></button>
@@ -89,7 +89,7 @@ export default function StudyDocumentActionRow({
       </div>
       <div className="study-document-row__tools">
         <button ref={triggerRef} type="button" data-tools-trigger aria-haspopup={mobile ? "dialog" : "menu"}
-          aria-expanded={toolsOpen} onClick={() => setToolsOpen((open) => !open)}>
+          aria-expanded={toolsOpen} aria-label={`Thêm thao tác · ${title}`} onClick={() => setToolsOpen((open) => !open)}>
           <Icon name="MoreVertical" size={16} /> <span>Thêm</span>
         </button>
         {!mobile && <DesktopDocumentTools open={toolsOpen} doc={doc} onChoose={choose} onManage={manage}
