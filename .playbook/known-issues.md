@@ -8,14 +8,18 @@ before seeing the map's main structure.
 
 **Root cause:** the initial lifecycle fitted the whole tree, then immediately
 overrode that transform on narrow canvases by forcing a 0.75 scale and centring
-only the root. The same initial fit also ran on desktop even though the mobile
-placement correction was the only intended behavior.
+only the root.
 
 **Fix and prevention:** after connector geometry validates, a new map id gets
-one `scaleFit()` only when the browser viewport is below 768px. Same-id
-rerenders, desktop, branch/depth actions, and export never refit. Real-browser
-coverage asserts the root and every first-level fixture node stay inside the
-390px canvas; lifecycle tests pin one mobile fit and zero desktop fits.
+one initial placement. Below a 768px viewport it frames the root and its
+first-level children (scale clamped to [0.5, 1], centred on that group);
+desktop keeps the plain whole-tree `scaleFit()`. Same-id rerenders,
+branch/depth actions and export never refit. Real-browser coverage asserts the
+root and every first-level fixture node stay inside the 390px canvas at a scale
+of at least 0.5. Plain `scaleFit()` alone is not a fix: it shrinks a wide tree
+to about 0.27 at 390px (unreadable). At 0.5, fixed-size touch markers of
+stacked leaves overlap, so the touch-selection test zooms in first, as a user
+would.
 
 ## Successful CI workflow could deploy a different, newer main commit (fixed 2026-11-02)
 

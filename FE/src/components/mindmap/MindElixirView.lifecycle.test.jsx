@@ -3,8 +3,8 @@
 // Mind Elixir lifecycle invariant (V2, preserved through this redesign):
 // one instance per viewer, and switching to a different saved map refreshes
 // that SAME instance (`refresh()` + `clearHistory()`) rather than
-// destroying and reconstructing it, with exactly one mobile `scaleFit()` call
-// per switch and none on desktop — not one-per-render. This has no dedicated test in the
+// destroying and reconstructing it, with exactly one `scaleFit()` call per
+// switch — not one-per-render, not zero. This has no dedicated test in the
 // suite; the other MindElixirView test files cover controls/ownership, not
 // this lifecycle contract, so a regression here (e.g. a second `new
 // MindElixir()` on map switch, or scaleFit firing on every rerender) would
@@ -31,14 +31,12 @@ function dataFor(id) {
 
 let container;
 let root;
-const originalInnerWidth = window.innerWidth;
 
 afterEach(() => {
   if (root) { act(() => root.unmount()); root = null; }
   if (container) { document.body.removeChild(container); container = null; }
   vi.restoreAllMocks();
   vi.useRealTimers();
-  Object.defineProperty(window, "innerWidth", { value: originalInnerWidth, configurable: true });
 });
 
 describe("MindElixirView mind-elixir lifecycle", () => {
@@ -73,7 +71,7 @@ describe("MindElixirView mind-elixir lifecycle", () => {
     expect(clearHistorySpy).toHaveBeenCalledTimes(1);
   });
 
-  it("calls scaleFit exactly once per mobile map switch, not on every rerender", async () => {
+  it("calls scaleFit exactly once per map switch, not on every rerender", async () => {
     // Real-timer version of this test raced against MindElixirView's own
     // 16ms setTimeout-based fit poll (a legitimate, intentional part of the
     // connector-repair fix -- see `startFitPoll`'s comment in the source):
@@ -83,7 +81,6 @@ describe("MindElixirView mind-elixir lifecycle", () => {
     // called yet" assertion flaky rather than wrong. Fake timers make the
     // poll's own 16ms cadence deterministic instead.
     vi.useFakeTimers();
-    Object.defineProperty(window, "innerWidth", { value: 390, configurable: true });
     container = document.createElement("div");
     document.body.appendChild(container);
     root = createRoot(container);
@@ -128,29 +125,5 @@ describe("MindElixirView mind-elixir lifecycle", () => {
     });
     await act(async () => { await vi.advanceTimersByTimeAsync(20); });
     expect(fitSpy).toHaveBeenCalledTimes(1);
-  });
-
-  it("does not call scaleFit on desktop", async () => {
-    vi.useFakeTimers();
-    Object.defineProperty(window, "innerWidth", { value: 1440, configurable: true });
-    container = document.createElement("div");
-    document.body.appendChild(container);
-    root = createRoot(container);
-    let mind = null;
-    const controller = {
-      registerMindInstance: vi.fn((m) => { mind = m; }),
-      onNodeSelected: vi.fn(), selected: null, sidecarRef: { current: new Map() },
-    };
-
-    await act(async () => {
-      root.render(<MindElixirView data={dataFor("desktop-map")} onRegenerate={vi.fn()} regenerating={false} controller={controller} />);
-    });
-    const refEl = container.querySelector(".me-container");
-    Object.defineProperty(refEl, "clientWidth", { value: 900, configurable: true });
-    Object.defineProperty(refEl, "clientHeight", { value: 600, configurable: true });
-    const fitSpy = vi.spyOn(mind, "scaleFit");
-
-    await act(async () => { await vi.advanceTimersByTimeAsync(20); });
-    expect(fitSpy).not.toHaveBeenCalled();
   });
 });

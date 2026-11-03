@@ -121,6 +121,8 @@ test.describe("mobile initial fit", () => {
       });
     }, [ROOT_A, ...FIRST_LEVEL_A]);
     expect(outside, "root and first-level nodes outside the visible canvas").toEqual([]);
+    // Legible: never below the mobile floor (plain scaleFit reached ~0.27).
+    expect(await scaleOf(page), "initial scale").toBeGreaterThanOrEqual(0.5);
   });
 
   test("selecting a node does not refit or rescale the mobile map", async ({ page }) => {
