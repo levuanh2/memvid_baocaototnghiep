@@ -111,6 +111,8 @@ for (const [width, height] of responsiveMatrixViewports) {
     await page.locator(".study-document-matrix").evaluate((node, targetWidth) => {
       node.style.width = `${targetWidth}px`;
     }, matrixWidth);
+    await expect(page.locator('[data-document-id="doc-2"] [data-primary-action]'))
+      .toContainText("Tiếp tục · Hướng dẫn ôn tập");
 
     const geometry = await page.locator("[data-document-row]").evaluateAll((rows) => rows.map((row) => {
       const rowRect = row.getBoundingClientRect();
@@ -120,17 +122,23 @@ for (const [width, height] of responsiveMatrixViewports) {
         return rect.left < rowRect.left - 1 || rect.right > rowRect.right + 1
           || rect.top < rowRect.top - 1 || rect.bottom > rowRect.bottom + 1;
       });
-      const primary = row.querySelector("[data-primary-action]").getBoundingClientRect();
+      const primaryNode = row.querySelector("[data-primary-action]");
+      const primary = primaryNode.getBoundingClientRect();
       return {
         id: row.dataset.documentId,
         outside: outside.map((control) => control.getAttribute("data-tools-trigger") !== null
           ? "tools" : control.getAttribute("data-primary-action") !== null ? "primary" : control.tagName.toLowerCase()),
         primaryHeight: primary.height,
+        primaryClientWidth: primaryNode.clientWidth,
+        primaryScrollWidth: primaryNode.scrollWidth,
       };
     }));
 
     expect(geometry.filter(({ outside }) => outside.length > 0)).toEqual([]);
     expect(Math.max(...geometry.map(({ primaryHeight }) => primaryHeight))).toBeLessThanOrEqual(46);
+    expect(geometry.filter(({ primaryClientWidth, primaryScrollWidth }) => (
+      primaryScrollWidth > primaryClientWidth + 1
+    ))).toEqual([]);
   });
 }
 

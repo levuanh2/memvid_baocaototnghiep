@@ -15,8 +15,8 @@ so its horizontal-overflow check never exercised the production composition.
 tracks shrink, budgets explicit widths for primary/quick/tools controls, and
 keeps the primary action in a single inline-flex row. Chromium tests reproduce
 the real 706px desktop column and the 320/390/768/1024/1440 viewport widths;
-they assert every control remains inside its row and the primary action stays
-at one-line height.
+they assert every control remains inside its row, the primary action stays at
+one-line height, and its longest real label does not overflow its content box.
 
 ## Successful CI workflow could deploy a different, newer main commit (fixed 2026-11-02)
 
