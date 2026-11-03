@@ -15,12 +15,14 @@ const COPY = {
     title: "Chưa có sơ đồ tư duy",
     body: "Sơ đồ tư duy tổng hợp cấu trúc và mối quan hệ giữa các ý chính trong tài liệu đã chọn.",
     cta: "Tạo sơ đồ tư duy",
+    creating: "Đang tạo sơ đồ…",
   },
   summary: {
     icon: "ScrollText",
     title: "Chưa có tóm tắt",
     body: "Tóm tắt rút gọn nội dung tài liệu đã chọn thành các ý chính, kèm trích dẫn.",
     cta: "Tạo tóm tắt",
+    creating: "Đang tóm tắt…",
   },
 };
 
@@ -30,6 +32,8 @@ export default function WorkspaceEmptyState({
   // zero visible surface between dialog-close and the eventual toast --
   // this screen just sat there showing the same static CTA the whole time.
   creating, jobLabel, jobProgress, jobError, onRetry,
+  // Extra content under the CTA (Summary: picker for saved summaries).
+  children,
 }) {
   const copy = COPY[kind];
   const hasSelection = selectedCount > 0;
@@ -54,12 +58,12 @@ export default function WorkspaceEmptyState({
       </div>
     );
   }
-  if (kind === "mindmap" && creating) {
+  if (creating) {
     return (
       <div className="flex-1 flex flex-col items-center justify-center text-center px-6 gap-3" style={{ background: "var(--bg-base)" }}>
         <Spinner size={22} />
         <p className="text-small text-text-secondary">
-          {jobLabel || "Đang tạo sơ đồ…"}{typeof jobProgress === "number" ? ` (${jobProgress}%)` : ""}
+          {jobLabel || copy.creating}{typeof jobProgress === "number" ? ` (${jobProgress}%)` : ""}
         </p>
       </div>
     );
@@ -98,6 +102,7 @@ export default function WorkspaceEmptyState({
       {!hasSelection && (
         <p className="text-caption text-text-muted">Chọn tài liệu bên trái trước.</p>
       )}
+      {children}
     </div>
   );
 }

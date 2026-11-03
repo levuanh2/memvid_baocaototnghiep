@@ -64,8 +64,9 @@ describe("WorkspaceEmptyState — Guided generation status (no map open yet)", (
     expect(container.textContent).toContain("Tạo sơ đồ tư duy");
   });
 
-  it("never shows the generation UI for the summary empty-state kind (scoped to mindmap only)", async () => {
-    await render({ kind: "summary", creating: true, jobLabel: "should not leak" });
-    expect(container.textContent).not.toContain("should not leak");
+  it("summary shows its own job status while a summary is being created (P0-1)", async () => {
+    await render({ kind: "summary", creating: true });
+    expect(container.textContent).toContain("Đang tóm tắt…");
+    expect(container.textContent).not.toContain("Đang tạo sơ đồ");
   });
 });
