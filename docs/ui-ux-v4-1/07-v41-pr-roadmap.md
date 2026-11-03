@@ -16,15 +16,19 @@ Draft from AGY: `_work/v41-roadmap-draft-agy.md` (raw; corrected here).
 | PR | Fix | Merge order |
 |---|---|---|
 | #118 | P0-1 Summary mode create/open (`SummaryPicker`, `summaryActions`, double-start guard) | **merged** 2026-11-03T11:54:00Z as `e3823df` |
-| #117 | P0-3 Library / Palette open the named Workspace mode (`?tab=`, also in-app) | open, ready; branch updated with `e3823df` |
-| #119 | P0-2 Mind-map empty-state create never dead-ends | open (Draft); branch updated with `e3823df` |
+| #117 | P0-3 Library / Palette open the named Workspace mode (`?tab=`, also in-app) | **merged** 15:20:07Z as `37af6b0` |
+| #119 | P0-2 Mind-map empty-state create never dead-ends | **merged** 15:35:02Z as `973fd2c` |
 
 Frontend deploy-order gate (Round 8.6 gate 6), first observation, merge of
 #118 (`e3823df`): `CI / required` success 12:01:10Z; Render deploy created
 12:01:14.7Z for `e3823df` (trigger `new_commit`), live 12:02:07Z; no older SHA
 deployed afterwards; `studymap-build` and `/health` both `e3823df`. PASS.
 
-After the three merge: Full Fixture Audit on the resulting `main` SHA, and the
+Observations on #117 (`37af6b0`, +4.8 s) and #119 (`973fd2c`, +5.9 s): PASS
+too; details in `../ui-ux-v4-design/round8-6-release-gate-closure/final-acceptance.md` §8.
+Full Fixture Audit 41667282891 on `973fd2c`: 466/466 passed (done).
+
+Originally planned: after the three merge, Full Fixture Audit on the resulting `main` SHA, and the
 frontend deploy-order observation (Round 8.6 gate 6) for each FE merge.
 
 ## Rules for every V4.1 PR
