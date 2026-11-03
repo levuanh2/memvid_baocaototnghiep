@@ -49,6 +49,7 @@ export default function Workspace() {
       setSelectedSources={setSelectedSources}
       initialAskAbout={initialAskAbout}
       initialWorkspaceMode={initialWorkspaceMode}
+      requestedWorkspaceMode={resolveInitialTab(searchParams.get("tab"))}
       initialRightView={initialRightView}
     />
   );

@@ -56,3 +56,20 @@ test("Library knowledge-map action keeps its own document route", async ({ page 
   await page.getByRole("button", { name: /^Sơ đồ$/ }).first().click();
   await expect(page).toHaveURL(/\/app\/study\/map\/d1$/);
 });
+
+// Review finding on #117: the same URL navigated from inside /app (Command
+// Palette) keeps the Workspace mounted, so `tab` must also apply after mount.
+test("Command Palette 'Tóm tắt' while already on /app switches to Summary mode", async ({ page }) => {
+  await openLibrary(page);
+  await page.goto("/app");
+  await expect(activeMode(page)).toHaveAttribute("title", "Trò chuyện");
+  await page.keyboard.press("Control+k");
+  await page.getByRole("combobox", { name: "Tìm kiếm toàn cục" }).or(page.getByLabel("Tìm kiếm toàn cục")).first().fill("Hệ điều hành");
+  await page.getByRole("button", { name: /^Tóm tắt$/ }).first().click();
+  await expect(page).toHaveURL(/tab=summary/);
+  await expect(activeMode(page)).toHaveAttribute("title", "Tóm tắt");
+  // Clicking another mode still works and is reflected in the URL.
+  await page.locator('nav[aria-label="Chế độ Workspace"] [role="tab"][title="Trò chuyện"]').click();
+  await expect(activeMode(page)).toHaveAttribute("title", "Trò chuyện");
+  await expect(page).not.toHaveURL(/tab=/);
+});
