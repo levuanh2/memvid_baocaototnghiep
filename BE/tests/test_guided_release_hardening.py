@@ -82,8 +82,13 @@ def test_rollout_flag_global_on_and_open_dev_compatibility(monkeypatch):
     assert main._guided_v3_enabled(None) is True
 
 
-def test_tracked_production_cors_is_exact_studymap_origin():
+def test_render_blueprint_has_no_backend_and_no_loose_cors():
+    # Production CORS lives in the EC2 host env, not in git. The Render
+    # Blueprint is frontend-only: a backend there would be a second path that
+    # runs production migrations.
     render = (Path(__file__).parents[2] / "render.yaml").read_text(encoding="utf-8")
-    assert "value: https://studymap.space" in render
+    assert "name: studymap-api" not in render
+    assert "run_migrations" not in render
+    assert "runtime: python" not in render
     assert "value: *" not in render
     assert "value: http://localhost" not in render

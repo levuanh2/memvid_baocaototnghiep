@@ -1,279 +1,32 @@
 # ============================================================
-# StudyMap AI — Render Blueprint (FREE tier)
+# StudyMap AI — Render Blueprint (frontend only)
 # ============================================================
-# Render Dashboard > New > Blueprint > pick this repo. Render reads this
-# file, creates the services, and redeploys on every push to `main`.
+# Render Dashboard > Blueprints reads this file and keeps the services below in
+# sync with `main`.
 #
-# Target: Render Free Web Service (~0.5 CPU / 512 MB RAM, ephemeral disk,
-# spins down after ~15 min idle). Everything below is shaped by those three
-# limits. The paid configuration this file used to hold is written down in
-# docs/deployment/render-free.md ("Upgrading to paid") — nothing was lost,
-# it moved.
+# Production topology:
+#   studymap.space       -> studymap-web (this file, Render static site)
+#   api.studymap.space   -> AWS EC2 + Docker Compose (docker-compose.prod.yml,
+#                           deployed by .github/workflows/deploy.yml, pinned to
+#                           the CI-verified SHA). NOT a Render service.
 #
-# Render prompts for every `sync: false` value when you create the blueprint:
-#   DATABASE_URL         Supabase > Settings > Database > Connection string.
-#                        Use the SESSION pooler (port 5432). The transaction
-#                        pooler (6543) cannot run alembic's multi-statement DDL.
-#                        Percent-encode the password: '#' -> '%23'.
-#   SUPABASE_URL         https://<project_ref>.supabase.co
-#   SUPABASE_SECRET_KEY  Supabase > Settings > API keys > secret key
-#   GEMINI_API_KEY       Google AI Studio. Render cannot run Ollama, so this
-#                        is the only LLM provider on this deployment.
-#   VITE_API_BASE        (on studymap-web) the studymap-api URL once it exists,
-#                        e.g. https://studymap-api.onrender.com
+# The old Render backend `studymap-api` was removed from this Blueprint on
+# purpose. It was suspended and not serving production, but while it stayed
+# here its buildCommand ran production Alembic migrations, so resuming it would
+# have migrated the production database from a second deploy path.
+#
+# Removing a service from a Blueprint does NOT delete it on Render: it becomes
+# an unmanaged service with its settings and secrets intact. Deleting it is a
+# separate, manual decision. Its old definition (free-tier env, migration
+# fence) is in git history and in docs/deployment/render-free.md.
+#
+# Render prompts for every `sync: false` value:
+#   VITE_API_BASE   the production API origin, https://api.studymap.space
 #
 # NEVER put a real secret in this file — it is committed to git.
 # ============================================================
 
 services:
-  # ---------- Backend: Flask + Gunicorn ----------
-  - type: web
-    name: studymap-api
-    runtime: python
-    plan: free
-    # Supabase project sits in ap-northeast-2 (Seoul); singapore is the nearest
-    # Render region, which keeps DB round-trips off the critical path.
-    region: singapore
-    branch: main
-    # Never publish a main commit until all linked GitHub CI checks pass.
-    autoDeployTrigger: checksPass
-    rootDir: BE
-    healthCheckPath: /health
-
-    # `preDeployCommand` is a paid-plan feature, so migrations run here instead.
-    # Build-time is the right place on free: a failed migration fails the build
-    # and Render keeps the previous deploy serving. Putting it in startCommand
-    # would re-run it on every cold start and take the service down on failure.
-    # `alembic upgrade head` trần KHÔNG còn chạy được, và đó là chủ ý: từ 2026-09-05
-    # `alembic/env.py` mặc định TỪ CHỐI mọi đích không phải database test. Chạm
-    # production phải là một hành động được KHAI BÁO, không phải mặc định.
-    #
-    # `run_migrations` khai lớp môi trường (`--moi-truong production`), rồi chốt đối
-    # chiếu đích thật với ALEMBIC_PRODUCTION_HOST/DB bên dưới VÀ với
-    # `SELECT current_database()` trên kết nối sống. Sai một trong ba thì build dừng,
-    # bản deploy cũ vẫn phục vụ.
-    #
-    # Không có credential ở đây: chỉ TÊN host và TÊN database. Mật khẩu đi riêng
-    # trong `DATABASE_URL` do Render tiêm vào (`sync: false`).
-    buildCommand: >-
-      pip install --upgrade pip &&
-      pip install -r requirements.txt &&
-      python scripts/build_proto.py &&
-      ALEMBIC_ALLOW_PRODUCTION=1
-      ALEMBIC_PRODUCTION_HOST=$ALEMBIC_PRODUCTION_HOST
-      ALEMBIC_PRODUCTION_DB=$ALEMBIC_PRODUCTION_DB
-      python -m scripts.run_migrations --moi-truong production
-
-    # Production WSGI server, never `flask run`. One worker: HITL keeps resume
-    # metadata in-process, so pause and resume must land in the same process —
-    # and 512 MB does not fit a second worker anyway.
-    startCommand: >-
-      gunicorn -w ${WEB_CONCURRENCY:-1} -b 0.0.0.0:${PORT:-8080}
-      --timeout ${GUNICORN_TIMEOUT:-120} app.main:app
-
-    envVars:
-      - key: PYTHON_VERSION
-        value: "3.11"
-
-      # --- secrets: Render asks for these at blueprint creation ---
-      - key: DATABASE_URL
-        sync: false
-      - key: SUPABASE_URL
-        sync: false
-      - key: SUPABASE_SECRET_KEY
-        sync: false
-      - key: GEMINI_API_KEY
-        sync: false
-      # --- đích migration được KHAI BÁO tường minh ---
-      # KHÔNG phải bí mật (chỉ là tên host + tên database), nhưng vẫn `sync: false`:
-      # giá trị của hàng rào này nằm ở chỗ một CON NGƯỜI phải gõ ra đích production
-      # là gì. Chép sẵn vào git thì nó thành mặc định, và mặc định thì không ai đọc.
-      # Bỏ trống ⇒ build DỪNG (fail closed), không phải chạy nhầm.
-      - key: ALEMBIC_PRODUCTION_HOST
-        sync: false
-      - key: ALEMBIC_PRODUCTION_DB
-        sync: false
-
-      # Token signing key: generated once by Render, never shown, never in git.
-      - key: AUTH_SECRET
-        generateValue: true
-
-      # --- THE free-tier switch -------------------------------------------
-      # No local model weights, ever. get_embeddings() returns FakeEmbeddings
-      # instead of pulling a sentence-transformers checkpoint, so boot needs no
-      # download and no ~470 MB+ of resident model on a 512 MB box.
-      #
-      # The cost is real and is NOT hidden: embedding-backed retrieval (RAG chat
-      # citations, semantic search, ingest indexing) does not produce meaningful
-      # results on this deployment. Gemini-backed generation does work. See the
-      # "What does not work on Free" section of docs/deployment/render-free.md.
-      - key: SKIP_MODEL_LOAD
-        value: "1"
-
-      # --- state: ephemeral on free, so keep it off the local disk ----------
-      # No Persistent Disk exists on free. DATA_DIR points at the container's
-      # own filesystem and is wiped on every deploy, restart and spin-down.
-      # Business data lives in Postgres (Supabase); uploads live in Supabase
-      # Storage. FAISS index files and the sqlite job/log ledgers do not survive.
-      # HF_HOME and USERS_DB_PATH are deliberately absent: no code reads
-      # USERS_DB_PATH (accounts live in Postgres), and SKIP_MODEL_LOAD=1 means
-      # nothing ever populates a HuggingFace cache. Setting either would be
-      # config that looks load-bearing and is not.
-      - key: DATA_DIR
-        value: /tmp/studymap
-      - key: JOBS_DB_PATH
-        value: /tmp/studymap/jobs.sqlite
-      - key: LOG_DB_PATH
-        value: /tmp/studymap/logs.sqlite
-      - key: CONVERSATIONS_DB_PATH
-        value: /tmp/studymap/conversations.sqlite
-
-      # --- LLM: Gemini only, no Ollama -------------------------------------
-      # An EMPTY OLLAMA_HOST is required, not cosmetic: llm_factory only drops
-      # "ollama" from PROVIDERS when this is blank. Leave it at its default and
-      # every LLM call tries Ollama first, waits for the timeout, then falls
-      # through to Gemini.
-      - key: OLLAMA_HOST
-        value: ""
-      - key: OLLAMA_WARMUP
-        value: "0"
-      - key: GEMINI_CHAT_MODEL
-        value: gemini-2.5-flash
-      - key: LLM_MAX_TOKENS
-        value: "8192"
-      # Free spins down and has one slow CPU; generous per-call ceilings, but
-      # below the gunicorn worker timeout so a hung call dies as a request error
-      # rather than as a killed worker.
-      - key: AI_TIMEOUT_SEC
-        value: "110"
-      - key: SUMMARY_LLM_TIMEOUT_SEC
-        value: "110"
-      - key: MINDMAP_LLM_TIMEOUT_SEC
-        value: "110"
-      - key: QUIZ_LLM_TIMEOUT_SEC
-        value: "110"
-
-      # --- retrieval: every LOCAL-model feature off -------------------------
-      # The rule here is "no model weights in this process", not "no reranking".
-      # NLI (~0.4 GB) still lazy-loads on first query, so leaving it on would OOM
-      # mid-request rather than at boot — the worst place to find out. FPT has no
-      # NLI/zero-shot model, so it stays off.
-      - key: NLI_ENABLED
-        value: "0"
-      # Reranking is back ON because it no longer loads anything. The local
-      # cross-encoder (bge-reranker-v2-m3, ~2.3 GB) was the reason this was "0";
-      # the FPT backend calls the SAME model over HTTP and allocates nothing here.
-      - key: RERANK_ENABLED
-        value: "1"
-      - key: RERANK_BACKEND
-        value: fpt
-      # Marketplace uses the bare model name; RERANK_MODEL carries the HuggingFace
-      # name ("BAAI/bge-reranker-v2-m3"). Same model, two naming conventions —
-      # passing the wrong one gets a 404 from FPT.
-      - key: FPT_AI_RERANK_MODEL
-        value: bge-reranker-v2-m3
-      # Embedding runs on FPT over HTTP, so it allocates nothing in this process and
-      # `get_embeddings()` checks it BEFORE SKIP_MODEL_LOAD. Setting this turns real
-      # embedding on for documents ingested from here on — it does NOT touch anything
-      # already in the database, and it does NOT rebuild an index. The existing 189
-      # chunks stay unembedded because nothing walks them: rebuild is a manual script,
-      # and every document currently in the corpus is blocked by the allowlist.
-      - key: FPT_AI_EMBEDDING_MODEL
-        value: Vietnamese_Embedding
-      # Late chunking needs a long-context encoder; nothing is loaded here.
-      - key: LATE_CHUNKING
-        value: "0"
-
-      # --- retrieval index: restore from Supabase at boot --------------------
-      # Free tier wipes /tmp on every restart, so an index built here dies with the
-      # instance. With this on, boot pulls the published index for the CURRENT
-      # embedding identity from Supabase Storage (index/<provider>__<model>__
-      # <strategy>/current.json -> manifest -> artifacts, sha256-checked).
-      #
-      # This restores; it never rebuilds. Rebuilding stays a manual script
-      # (scripts/dung_lai_index_tu_postgres.py) so no boot can silently spend money
-      # on embedding, and so an index only ever contains allowlisted documents.
-      - key: INDEX_PERSISTENCE_ENABLED
-        value: "1"
-
-      # --- provenance: which process ingested a document ---------------------
-      # Written by the server into documents.metadata_json at row creation, never
-      # taken from a request. It is the third condition for index eligibility, next
-      # to the two human decisions in production_index_allowlist.json — see
-      # app/domains/documents/provenance.py. Absent or misspelled means "not
-      # production", and pytest overrides it regardless of what is set here.
-      - key: INGEST_ORIGIN
-        value: production
-      - key: EMBEDDING_WARMUP_ENABLED
-        value: "0"
-      - key: HYBRID_TOP_K
-        value: "6"
-      - key: CRAG_ENABLED
-        value: "0"
-      # Answers go straight out; no human-approval pause.
-      - key: HITL_ENABLED
-        value: "0"
-
-      # --- server ----------------------------------------------------------
-      - key: WEB_CONCURRENCY
-        value: "1"
-      # Must stay under Render's own request ceiling and above the LLM timeouts.
-      - key: GUNICORN_TIMEOUT
-        value: "120"
-      # Exact production frontend origin. Do not use wildcard/localhost here.
-      - key: CORS_ORIGINS
-        value: https://studymap.space
-
-      # Guided V3 is never process-local in production. The web process only
-      # writes the Postgres ledger and returns 202; the background worker below
-      # claims and executes jobs.
-      - key: PROCESS_ROLE
-        value: web
-      - key: GUIDED_JOB_STORE_BACKEND
-        value: postgres
-      - key: GUIDED_WORKER_HEARTBEAT_TTL_SEC
-        value: "90"
-      - key: GUIDED_JOB_MAX_ATTEMPTS
-        value: "3"
-
-      # Guided Mind Map V3 rollout is server-authoritative and defaults OFF.
-      # QA can be enabled by setting GUIDED_MINDMAP_V3_QA_USER_IDS out of band.
-      - key: GUIDED_MINDMAP_V3_ENABLED
-        value: "false"
-      - key: GUIDED_MINDMAP_V3_QA_USER_IDS
-        sync: false
-      - key: GUIDED_JOB_RECOVERY_ENABLED
-        value: "true"
-
-      # --- auth: production posture ---------------------------------------
-      - key: AUTH_REQUIRE_SECRET
-        value: "true"
-      - key: AUTH_PROTECT_APP_APIS
-        value: "true"
-      - key: AUTH_TOKEN_TTL_SEC
-        value: "604800"
-
-      # --- no Redis on free: queue and cache fail open ---------------------
-      # QUEUE_ENABLED=false runs jobs in in-process daemon threads instead of
-      # RQ workers. Same code path, same dotted callables — but a job dies with
-      # the instance when free spins down. No Redis service is created here.
-      - key: REDIS_URL
-        value: ""
-      - key: QUEUE_ENABLED
-        value: "false"
-      - key: CONVERSATION_CONTEXT_ENABLED
-        value: "true"
-      - key: SUPABASE_STORAGE_BUCKET
-        value: documents
-
-  # NOTE: a Render "worker" service for the Guided Mind Map background job was
-  # deliberately NOT added here. render.yaml's studymap-api blueprint is not
-  # the real production backend (that's AWS EC2 + Docker Compose, see
-  # docker-compose.prod.yml and docs/AWS_DEPLOYMENT.md) and a Render worker
-  # would be a new paid resource with no purpose — the real worker runs as a
-  # second container on the existing EC2 host instead (see
-  # docker-compose.prod.yml's mindmap-worker service).
-
   # ---------- Frontend: static site (free, no instance hours) ----------
   - type: web
     name: studymap-web
