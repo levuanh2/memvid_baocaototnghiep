@@ -8,6 +8,9 @@ const summaryIds = Array.from({ length: 42 }, (_, index) => `doc-${index + 1}`)
 const viewports = [
   [1440, 900], [1024, 768], [820, 1180], [800, 900], [768, 1024], [390, 844], [320, 568],
 ];
+const responsiveMatrixViewports = [
+  [1440, 900], [1024, 768], [768, 1024], [390, 844], [320, 568],
+];
 
 test.beforeAll(async () => mkdir(evidenceDir, { recursive: true }));
 
@@ -95,6 +98,40 @@ for (const [width, height] of viewports) {
       await page.screenshot({ path: path.join(evidenceDir, `library-${width}x${height}-${theme}.png`), fullPage: false });
     });
   }
+}
+
+for (const [width, height] of responsiveMatrixViewports) {
+  test(`${width}px action rows contain every control and keep the primary action on one line`, async ({ page }) => {
+    await page.setViewportSize({ width, height });
+    await page.goto("/round6-library-qa.html");
+    // The production Library uses StudyShell's 980px frame. At lg and above,
+    // CollectionSidebar consumes 210px plus the 24px gap, leaving 706px for
+    // the matrix; below lg the shell keeps 20px padding on each side.
+    const matrixWidth = width >= 1024 ? 706 : width - 40;
+    await page.locator(".study-document-matrix").evaluate((node, targetWidth) => {
+      node.style.width = `${targetWidth}px`;
+    }, matrixWidth);
+
+    const geometry = await page.locator("[data-document-row]").evaluateAll((rows) => rows.map((row) => {
+      const rowRect = row.getBoundingClientRect();
+      const controls = [...row.querySelectorAll("button,input")];
+      const outside = controls.filter((control) => {
+        const rect = control.getBoundingClientRect();
+        return rect.left < rowRect.left - 1 || rect.right > rowRect.right + 1
+          || rect.top < rowRect.top - 1 || rect.bottom > rowRect.bottom + 1;
+      });
+      const primary = row.querySelector("[data-primary-action]").getBoundingClientRect();
+      return {
+        id: row.dataset.documentId,
+        outside: outside.map((control) => control.getAttribute("data-tools-trigger") !== null
+          ? "tools" : control.getAttribute("data-primary-action") !== null ? "primary" : control.tagName.toLowerCase()),
+        primaryHeight: primary.height,
+      };
+    }));
+
+    expect(geometry.filter(({ outside }) => outside.length > 0)).toEqual([]);
+    expect(Math.max(...geometry.map(({ primaryHeight }) => primaryHeight))).toBeLessThanOrEqual(46);
+  });
 }
 
 test("captures four task views, empty state, desktop menu, and bulk scope change", async ({ page }) => {
