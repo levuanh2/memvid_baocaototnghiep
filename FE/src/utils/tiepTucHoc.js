@@ -40,11 +40,17 @@ export function duongDi(doc, beMat, context) {
   if (!doc?.document_id) return null;
   const id = q(doc.document_id);
   const stem = String(doc.source_stem || "").trim();
-  const toiWorkspace = stem ? `/app?source=${q(stem)}` : "/app";
+  // `tab` mở đúng chế độ của Workspace (`resolveInitialTab`, workspaceInit.js).
+  // Chat là mặc định nên không cần tham số; thiếu `tab` cho summary/mindmap từng
+  // làm nút "Tóm tắt"/"Sơ đồ tư duy" của Thư viện rơi vào Trò chuyện.
+  const thamSo = [
+    stem ? `source=${q(stem)}` : null,
+    beMat === "summary" || beMat === "mindmap" ? `tab=${beMat}` : null,
+  ];
   const prompt = String(context?.prompt || "").trim();
-  const toiWorkspaceKemPrompt = prompt
-    ? `${toiWorkspace}${toiWorkspace.includes("?") ? "&" : "?"}prompt=${q(prompt)}`
-    : toiWorkspace;
+  if (prompt) thamSo.push(`prompt=${q(prompt)}`);
+  const chuoi = thamSo.filter(Boolean).join("&");
+  const toiWorkspaceKemPrompt = chuoi ? `/app?${chuoi}` : "/app";
 
   switch (beMat) {
     case "summary":
