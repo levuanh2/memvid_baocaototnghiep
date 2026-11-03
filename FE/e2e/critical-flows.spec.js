@@ -432,4 +432,37 @@ test.describe.serial("critical flows", () => {
     // có sơ đồ'" — SidebarRight surfaces `guidedError`, not an empty-state).
     await expect(page.getByText(/lỗi|thất bại|fail(?:ed|ure)/i).first()).toBeVisible({ timeout: 20_000 });
   });
+
+  // P0-1: "Tạo tóm tắt" in Summary mode used to send nothing. Against the real
+  // Flask app + test Postgres: one click (even a double click) must send exactly
+  // one POST that the backend accepts, and the UI must reach a visible outcome
+  // (the opened summary), never stay silent.
+  // Then the saved summary must reopen after a reload, with no new POST.
+  test("Summary mode 'Tạo tóm tắt' sends one accepted request, opens the summary, and reopens it after reload", async () => {
+    await selectAllSources(page);
+    const posts = [];
+    const onResponse = (res) => {
+      if (res.request().method() === "POST" && res.url().includes("/generate-summary")) posts.push(res.status());
+    };
+    page.on("response", onResponse);
+    await page.getByRole("tab", { name: "Tóm tắt" }).click();
+    await page.getByRole("button", { name: /^Tạo tóm tắt/ }).first().dblclick();
+    await expect.poll(() => posts.length, { timeout: 15_000 }).toBe(1);
+    await page.waitForTimeout(1500);
+    expect(posts).toHaveLength(1);
+    expect(posts[0]).toBeLessThan(300);
+    // The E2E server completes summary jobs (CI log: POST 202, status polls,
+    // then the /summaries refresh that only the success path makes), so the
+    // summary must open here; an error is a failure, not an alternative.
+    await expect(page.getByRole("combobox", { name: "Chọn tóm tắt" }).first()).toBeVisible({ timeout: 60_000 });
+    // Persisted in the real DB: after a reload the saved summary is listed and
+    // opens again without a new POST.
+    const title = await page.locator(".artifact-toolbar__identity strong").first().innerText();
+    await page.reload();
+    await page.getByRole("tab", { name: "Tóm tắt" }).click();
+    await page.getByRole("combobox", { name: "Chọn tóm tắt" }).first().selectOption({ label: title });
+    await expect(page.locator(".artifact-toolbar__identity strong").first()).toHaveText(title);
+    expect(posts).toHaveLength(1);
+    page.off("response", onResponse);
+  });
 });
