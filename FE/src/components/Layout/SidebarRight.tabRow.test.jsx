@@ -66,10 +66,9 @@ describe("SidebarRight — right panel tab row (W3-4)", () => {
     expect(tablist()).toBeTruthy();
     expect(tablist().getAttribute("aria-hidden")).toBeNull();
     const t = tabs();
-    // Icon-only (panel.width.right, 320-480px, can't fit four full labels
-    // at any width -- see SidebarRight.jsx's own comment) -- the label is
-    // still discoverable via aria-label/title, not visible text.
-    expect(t.map((b) => b.getAttribute("aria-label"))).toEqual(["Bằng chứng", "Gia sư AI", "Dòng thời gian", "Kiến thức"]);
+    // Review fix: stacked icon-over-VISIBLE-label (not icon-only/aria-label
+    // -only) -- O4's own goal is discoverable from the panel itself.
+    expect(t.map((b) => b.textContent.trim())).toEqual(["Bằng chứng", "Gia sư AI", "Dòng thời gian", "Kiến thức"]);
     expect(t[0].getAttribute("aria-selected")).toBe("true");
     expect(t.slice(1).every((b) => b.getAttribute("aria-selected") === "false")).toBe(true);
     // Roving tabindex: only the selected tab is in the normal tab order.
@@ -80,7 +79,7 @@ describe("SidebarRight — right panel tab row (W3-4)", () => {
   it("clicking a tab calls onRightViewChange with that tab's key", async () => {
     const onRightViewChange = vi.fn();
     await render({ mode: "chat", rightView: "evidence", onRightViewChange });
-    const tutorTab = tabs().find((b) => b.getAttribute("aria-label") === "Gia sư AI");
+    const tutorTab = tabs().find((b) => b.textContent.trim() === "Gia sư AI");
     await act(async () => { tutorTab.click(); });
     expect(onRightViewChange).toHaveBeenCalledTimes(1);
     expect(onRightViewChange).toHaveBeenCalledWith("tutor");

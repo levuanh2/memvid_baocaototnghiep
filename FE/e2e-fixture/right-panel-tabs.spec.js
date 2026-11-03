@@ -15,8 +15,20 @@ const DOC = {
 const EVIDENCE_DIR = "../docs/ui-ux-v4-1/evidence/w3-4";
 test.beforeAll(async () => { await mkdir(new URL(EVIDENCE_DIR, import.meta.url), { recursive: true }); });
 
-async function openChatWithSource(page) {
-  await page.addInitScript(() => localStorage.setItem("memvid-token", "fixture-token"));
+async function openChatWithSource(page, { panelRightWidth } = {}) {
+  await page.addInitScript((rightWidth) => {
+    localStorage.setItem("memvid-token", "fixture-token");
+    // Seeds the exact shape panelLayout.js's readStored()/writeStored()
+    // use (key "memvidx.panels.v1") so the right panel opens at a specific
+    // user-resized width (320-480px) instead of the 360px default -- the
+    // review fix's own fit constraint is this width, not the viewport.
+    if (rightWidth) {
+      localStorage.setItem("memvidx.panels.v1", JSON.stringify({
+        width: { left: 252, right: rightWidth },
+        collapsed: { left: false, right: false },
+      }));
+    }
+  }, panelRightWidth);
   await page.route(/localhost:8080\//, (route) => {
     const p = new URL(route.request().url()).pathname;
     if (p === "/auth/me") return route.fulfill(json({ user: { id: "u1", email: "qa@example.test", display_name: "QA", provider: "local" } }));
@@ -44,9 +56,6 @@ test("1440px: tab row visible by default, switching tabs updates content and the
   await expect(tabs.nth(0)).toHaveAttribute("aria-selected", "true");
   await page.screenshot({ path: `${EVIDENCE_DIR}/1440-before-evidence.png` });
 
-  // Icon-only tabs (panel.width.right can't fit four full labels at any
-  // width -- see SidebarRight.jsx's own comment); accessible name
-  // (aria-label/title) is how each tab is identified, not visible text.
   await tablist(page).getByRole("tab", { name: "Gia sư AI" }).click();
   await expect(panelTitle(page)).toHaveText("Gia sư AI");
   await expect(tablist(page).getByRole("tab", { name: "Gia sư AI" })).toHaveAttribute("aria-selected", "true");
@@ -62,8 +71,38 @@ test("1440px: tab row visible by default, switching tabs updates content and the
   await expect(page.getByText("Tạo từ tài liệu")).toHaveCount(0);
 });
 
+// Review fix: stacked icon+label tabs, grid of 4 equal-width cells, must
+// fit without clipping or truncation at BOTH ends of the user-resizable
+// right panel (320-480px), independent of the desktop viewport itself.
+for (const panelRightWidth of [320, 480]) {
+  test(`panel width ${panelRightWidth}px: every tab label fully visible (no clip/scroll), each tab >= 40x40`, async ({ page }) => {
+    await page.setViewportSize({ width: 1440, height: 900 });
+    await openChatWithSource(page, { panelRightWidth });
+
+    await expect(tablist(page)).toBeVisible();
+    const tabs = tablist(page).getByRole("tab");
+    await expect(tabs).toHaveCount(4);
+
+    for (let i = 0; i < 4; i += 1) {
+      const tab = tabs.nth(i);
+      const box = await tab.boundingBox();
+      expect(box.width).toBeGreaterThanOrEqual(40);
+      expect(box.height).toBeGreaterThanOrEqual(40);
+      // "Fully visible, not clipped": neither the tab button itself nor its
+      // label text overflows its own box (the label WRAPS to a second line
+      // instead -- "Dòng thời gian" is the one that can need it at 320px --
+      // never a hard one-line truncation/clip).
+      const tabOverflow = await tab.evaluate((el) => ({ scrollWidth: el.scrollWidth, clientWidth: el.clientWidth }));
+      expect(tabOverflow.scrollWidth).toBeLessThanOrEqual(tabOverflow.clientWidth + 1);
+      const labelOverflow = await tab.locator("span").evaluate((el) => ({ scrollWidth: el.scrollWidth, clientWidth: el.clientWidth }));
+      expect(labelOverflow.scrollWidth).toBeLessThanOrEqual(labelOverflow.clientWidth + 1);
+    }
+    await page.screenshot({ path: `${EVIDENCE_DIR}/panel-${panelRightWidth}px.png` });
+  });
+}
+
 for (const width of [320, 390]) {
-  test(`${width}px: tab row opens in the drawer, fits without clipping (icon-only), switching tabs works`, async ({ page }) => {
+  test(`${width}px: tab row opens in the drawer, fits without clipping (stacked icon+label), switching tabs works`, async ({ page }) => {
     await page.setViewportSize({ width, height: 844 });
     await openChatWithSource(page);
 

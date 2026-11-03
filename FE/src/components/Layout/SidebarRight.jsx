@@ -985,17 +985,15 @@ export default function SidebarRight({
         </div>
         <ContextPanelCloseButton collapsible={collapsible} onClose={onClose} />
       </div>
-      {rightPanelTabsEnabled && mode !== "mindmap" && mode !== "summary" && <div className="px-4 pt-4 pb-3 border-b border-border flex items-center justify-between flex-shrink-0 gap-2">
-        {/* Icon-only, not responsive-to-viewport: this column's rendered
-            width (`panel.width.right`, 320-480px, user-resizable) never
-            tracks the viewport breakpoint -- four FULL labels genuinely
-            don't fit even at the 360px desktop default (measured: overflows
-            to a scrolled, visually-cut third tab), so a `sm:` viewport
-            breakpoint that shows labels at desktop widths was wrong
-            regardless of phone-width clipping. `title`/`aria-label` keep
-            every label discoverable (hover tooltip, screen reader); the
-            exact same four names StudyToolsMenu already uses. */}
-        <div role="tablist" aria-label="Chế độ cột phải" className="flex gap-1 min-w-0 overflow-x-auto" onKeyDown={onRightTabsKeyDown}>
+      {rightPanelTabsEnabled && mode !== "mindmap" && mode !== "summary" && <div className="px-4 pt-4 pb-3 border-b border-border flex-shrink-0">
+        {/* Review fix (O4's own goal: discoverable from the panel itself) --
+            icon-only failed that and the targets were ~20px, under the
+            40x40 floor. Stacked icon-over-label in an equal-width 4-col
+            grid: `panel.width.right` is 320-480px, and 4 x ~80px fits the
+            320px minimum with room to spare. Labels wrap, never truncate
+            ("Dòng thời gian" is the one that can need two lines at 320px) --
+            see `.inspector-tab--stacked` in index.css for the sizing. */}
+        <div role="tablist" aria-label="Chế độ cột phải" className="grid grid-cols-4 gap-1 w-full" onKeyDown={onRightTabsKeyDown}>
           {RIGHT_TABS.map((t) => (
             <button
               key={t.key}
@@ -1004,20 +1002,22 @@ export default function SidebarRight({
               role="tab"
               id={`right-tab-${t.key}`}
               aria-selected={rightView === t.key}
-              aria-label={t.label}
-              title={t.label}
               tabIndex={rightView === t.key ? 0 : -1}
               onClick={() => onRightViewChange?.(t.key)}
-              className={`inspector-tab flex-shrink-0 !px-2.5 ${rightView === t.key ? "pill-tab-active" : ""}`}
+              className={`inspector-tab inspector-tab--stacked ${rightView === t.key ? "pill-tab-active" : ""}`}
             >
-              <Icon name={t.icon} size={15} />
+              <Icon name={t.icon} size={16} />
+              <span>{t.label}</span>
             </button>
           ))}
         </div>
-        <div className="flex items-center gap-1 flex-shrink-0">
-          {/* Ghim/Tách nổi — chỉ có ý nghĩa trên màn rộng, nơi cột này có chỗ
-              để "nổi" lên trên nội dung thay vì nằm phẳng trong hàng cột. */}
-          {rightView === "tutor" && (
+        {/* Ghim/Tách nổi — chỉ có ý nghĩa trên màn rộng, nơi cột này có chỗ
+            để "nổi" lên trên nội dung thay vì nằm phẳng trong hàng cột. Own
+            row below the grid now (review fix): sharing a row with it would
+            shrink the grid's available width below what 4 labelled tabs
+            need at the 320px panel floor. */}
+        {rightView === "tutor" && (
+          <div className="flex justify-end mt-1.5">
             <button type="button" onClick={() => setTutorFloating((v) => !v)}
                     className={`icon-btn w-8 h-8 hidden md:inline-flex ${tutorFloating ? "text-accent" : ""}`}
                     aria-pressed={tutorFloating}
@@ -1025,8 +1025,8 @@ export default function SidebarRight({
                     aria-label={tutorFloating ? "Ghim Gia sư AI vào cột" : "Tách Gia sư AI nổi lên"}>
               <Icon name="Pin" size={15} />
             </button>
-          )}
-        </div>
+          </div>
+        )}
       </div>}
 
       {mode === "mindmap" ? (
