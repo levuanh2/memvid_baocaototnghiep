@@ -1,0 +1,159 @@
+{
+ "url": "/app/study/quiz/quiz-1",
+ "controls": [
+  {
+   "tag": "a",
+   "role": "",
+   "name": "Tài liệu",
+   "region": "header",
+   "unlabeled": false,
+   "inViewport": true
+  },
+  {
+   "tag": "button",
+   "role": "",
+   "name": "Câu 1 chưa trả lời",
+   "region": "aside",
+   "unlabeled": false,
+   "inViewport": true
+  },
+  {
+   "tag": "button",
+   "role": "",
+   "name": "Câu 2 chưa trả lời",
+   "region": "aside",
+   "unlabeled": false,
+   "inViewport": true
+  },
+  {
+   "tag": "button",
+   "role": "",
+   "name": "Câu 3 chưa trả lời",
+   "region": "aside",
+   "unlabeled": false,
+   "inViewport": true
+  },
+  {
+   "tag": "button",
+   "role": "",
+   "name": "Câu 4 chưa trả lời",
+   "region": "aside",
+   "unlabeled": false,
+   "inViewport": true
+  },
+  {
+   "tag": "button",
+   "role": "",
+   "name": "Câu 5 chưa trả lời",
+   "region": "aside",
+   "unlabeled": false,
+   "inViewport": true
+  },
+  {
+   "tag": "button",
+   "role": "",
+   "name": "Câu 6 chưa trả lời",
+   "region": "aside",
+   "unlabeled": false,
+   "inViewport": true
+  },
+  {
+   "tag": "button",
+   "role": "",
+   "name": "Nộp bài sớm",
+   "region": "aside",
+   "unlabeled": false,
+   "inViewport": true
+  },
+  {
+   "tag": "input",
+   "role": "",
+   "name": "",
+   "region": "main",
+   "unlabeled": true,
+   "inViewport": true
+  },
+  {
+   "tag": "input",
+   "role": "",
+   "name": "",
+   "region": "main",
+   "unlabeled": true,
+   "inViewport": true
+  },
+  {
+   "tag": "input",
+   "role": "",
+   "name": "",
+   "region": "main",
+   "unlabeled": true,
+   "inViewport": true
+  },
+  {
+   "tag": "input",
+   "role": "",
+   "name": "",
+   "region": "main",
+   "unlabeled": true,
+   "inViewport": true
+  },
+  {
+   "tag": "button",
+   "role": "",
+   "name": "Câu trước",
+   "region": "main",
+   "unlabeled": false,
+   "inViewport": true
+  },
+  {
+   "tag": "button",
+   "role": "",
+   "name": "Câu sau",
+   "region": "main",
+   "unlabeled": false,
+   "inViewport": true
+  },
+  {
+   "tag": "button",
+   "role": "",
+   "name": "Nộp bài",
+   "region": "main",
+   "unlabeled": false,
+   "inViewport": true
+  }
+ ],
+ "overflowX": 0,
+ "headings": [
+  "H1: Hệ điều hành",
+  "H2: Câu hỏi 1: tiến trình và luồng khác nhau thế nào?",
+  "H2: Tiến độ",
+  "H2: Nội dung"
+ ],
+ "tab": [
+  "a \"Tài liệu\"",
+  "button \"Câu 1 chưa trả lời\"",
+  "button \"Câu 2 chưa trả lời\"",
+  "button \"Câu 3 chưa trả lời\"",
+  "button \"Câu 4 chưa trả lời\"",
+  "button \"Câu 5 chưa trả lời\"",
+  "button \"Câu 6 chưa trả lời\"",
+  "button \"Nộp bài sớm\"",
+  "input \"\"",
+  "button \"Câu sau\"",
+  "button \"Nộp bài\"",
+  "(body)",
+  "a \"Tài liệu\"",
+  "button \"Câu 1 chưa trả lời\"",
+  "button \"Câu 2 chưa trả lời\"",
+  "button \"Câu 3 chưa trả lời\"",
+  "button \"Câu 4 chưa trả lời\"",
+  "button \"Câu 5 chưa trả lời\"",
+  "button \"Câu 6 chưa trả lời\"",
+  "button \"Nộp bài sớm\"",
+  "input \"\"",
+  "button \"Câu sau\"",
+  "button \"Nộp bài\"",
+  "(body)",
+  "a \"Tài liệu\""
+ ]
+}

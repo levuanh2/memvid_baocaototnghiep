@@ -1,0 +1,92 @@
+{
+ "url": "/login",
+ "controls": [
+  {
+   "tag": "a",
+   "role": "",
+   "name": "Về trang chủ",
+   "region": "other",
+   "unlabeled": false,
+   "inViewport": true
+  },
+  {
+   "tag": "button",
+   "role": "radio",
+   "name": "Tài khoản StudyMap",
+   "region": "other",
+   "unlabeled": false,
+   "inViewport": true
+  },
+  {
+   "tag": "button",
+   "role": "radio",
+   "name": "Tài khoản NKS",
+   "region": "other",
+   "unlabeled": false,
+   "inViewport": true
+  },
+  {
+   "tag": "input",
+   "role": "",
+   "name": "ban@vidu.com",
+   "region": "other",
+   "unlabeled": false,
+   "inViewport": true
+  },
+  {
+   "tag": "input",
+   "role": "",
+   "name": "••••••••",
+   "region": "other",
+   "unlabeled": false,
+   "inViewport": true
+  },
+  {
+   "tag": "button",
+   "role": "",
+   "name": "Đăng nhập",
+   "region": "other",
+   "unlabeled": false,
+   "inViewport": true
+  },
+  {
+   "tag": "a",
+   "role": "",
+   "name": "Tạo tài khoản",
+   "region": "other",
+   "unlabeled": false,
+   "inViewport": true
+  }
+ ],
+ "overflowX": 0,
+ "headings": [
+  "H1: Đăng nhập"
+ ],
+ "tab": [
+  "a \"Về trang chủ\"",
+  "button[radio] \"Tài khoản StudyMap\"",
+  "button[radio] \"Tài khoản NKS\"",
+  "input \"\"",
+  "input \"\"",
+  "button \"Đăng nhập\"",
+  "a \"Tạo tài khoản\"",
+  "(body)",
+  "a \"Về trang chủ\"",
+  "button[radio] \"Tài khoản StudyMap\"",
+  "button[radio] \"Tài khoản NKS\"",
+  "input \"\"",
+  "input \"\"",
+  "button \"Đăng nhập\"",
+  "a \"Tạo tài khoản\"",
+  "(body)",
+  "a \"Về trang chủ\"",
+  "button[radio] \"Tài khoản StudyMap\"",
+  "button[radio] \"Tài khoản NKS\"",
+  "input \"\"",
+  "input \"\"",
+  "button \"Đăng nhập\"",
+  "a \"Tạo tài khoản\"",
+  "(body)",
+  "a \"Về trang chủ\""
+ ]
+}

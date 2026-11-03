@@ -1,0 +1,700 @@
+{
+ "url": "/app?tab=mindmap",
+ "controls": [
+  {
+   "tag": "a",
+   "role": "",
+   "name": "MemVidX — trang chủ",
+   "region": "header",
+   "unlabeled": false,
+   "inViewport": true
+  },
+  {
+   "tag": "a",
+   "role": "",
+   "name": "Thư viện học tập",
+   "region": "header",
+   "unlabeled": false,
+   "inViewport": true
+  },
+  {
+   "tag": "button",
+   "role": "tab",
+   "name": "Trò chuyện",
+   "region": "header",
+   "unlabeled": false,
+   "inViewport": true
+  },
+  {
+   "tag": "button",
+   "role": "tab",
+   "name": "Sơ đồ tư duy",
+   "region": "header",
+   "unlabeled": false,
+   "inViewport": true
+  },
+  {
+   "tag": "button",
+   "role": "tab",
+   "name": "Tóm tắt",
+   "region": "header",
+   "unlabeled": false,
+   "inViewport": true
+  },
+  {
+   "tag": "button",
+   "role": "",
+   "name": "Mở công cụ StudyMap",
+   "region": "header",
+   "unlabeled": false,
+   "inViewport": true
+  },
+  {
+   "tag": "button",
+   "role": "",
+   "name": "Mức sử dụng AI 12%",
+   "region": "header",
+   "unlabeled": false,
+   "inViewport": true
+  },
+  {
+   "tag": "button",
+   "role": "",
+   "name": "Tài khoản: QA Tester",
+   "region": "header",
+   "unlabeled": false,
+   "inViewport": true
+  },
+  {
+   "tag": "button",
+   "role": "",
+   "name": "Đóng",
+   "region": "aside",
+   "unlabeled": false,
+   "inViewport": true
+  },
+  {
+   "tag": "input",
+   "role": "",
+   "name": "Tìm trong tài liệu",
+   "region": "aside",
+   "unlabeled": false,
+   "inViewport": true
+  },
+  {
+   "tag": "button",
+   "role": "",
+   "name": "Mở bộ lọc nâng cao",
+   "region": "aside",
+   "unlabeled": false,
+   "inViewport": true
+  },
+  {
+   "tag": "input",
+   "role": "",
+   "name": "",
+   "region": "aside",
+   "unlabeled": true,
+   "inViewport": true
+  },
+  {
+   "tag": "input",
+   "role": "",
+   "name": "",
+   "region": "aside",
+   "unlabeled": true,
+   "inViewport": true
+  },
+  {
+   "tag": "button",
+   "role": "",
+   "name": "Tuỳ chọn",
+   "region": "aside",
+   "unlabeled": false,
+   "inViewport": true
+  },
+  {
+   "tag": "input",
+   "role": "",
+   "name": "",
+   "region": "aside",
+   "unlabeled": true,
+   "inViewport": true
+  },
+  {
+   "tag": "button",
+   "role": "",
+   "name": "Tuỳ chọn",
+   "region": "aside",
+   "unlabeled": false,
+   "inViewport": true
+  },
+  {
+   "tag": "input",
+   "role": "",
+   "name": "",
+   "region": "aside",
+   "unlabeled": true,
+   "inViewport": true
+  },
+  {
+   "tag": "button",
+   "role": "",
+   "name": "Tuỳ chọn",
+   "region": "aside",
+   "unlabeled": false,
+   "inViewport": true
+  },
+  {
+   "tag": "input",
+   "role": "",
+   "name": "",
+   "region": "aside",
+   "unlabeled": true,
+   "inViewport": true
+  },
+  {
+   "tag": "button",
+   "role": "",
+   "name": "Tuỳ chọn",
+   "region": "aside",
+   "unlabeled": false,
+   "inViewport": true
+  },
+  {
+   "tag": "input",
+   "role": "",
+   "name": "",
+   "region": "aside",
+   "unlabeled": true,
+   "inViewport": true
+  },
+  {
+   "tag": "button",
+   "role": "",
+   "name": "Tuỳ chọn",
+   "region": "aside",
+   "unlabeled": false,
+   "inViewport": true
+  },
+  {
+   "tag": "input",
+   "role": "",
+   "name": "",
+   "region": "aside",
+   "unlabeled": true,
+   "inViewport": true
+  },
+  {
+   "tag": "button",
+   "role": "",
+   "name": "Tuỳ chọn",
+   "region": "aside",
+   "unlabeled": false,
+   "inViewport": true
+  },
+  {
+   "tag": "button",
+   "role": "",
+   "name": "Mở thư viện sơ đồ",
+   "region": "main",
+   "unlabeled": false,
+   "inViewport": true
+  },
+  {
+   "tag": "button",
+   "role": "",
+   "name": "Giao diện",
+   "region": "main",
+   "unlabeled": false,
+   "inViewport": true
+  },
+  {
+   "tag": "button",
+   "role": "",
+   "name": "Xuất sơ đồ",
+   "region": "main",
+   "unlabeled": false,
+   "inViewport": true
+  },
+  {
+   "tag": "button",
+   "role": "",
+   "name": "Thêm tùy chọn",
+   "region": "main",
+   "unlabeled": false,
+   "inViewport": true
+  },
+  {
+   "tag": "me-epd",
+   "role": "button",
+   "name": "Thu nhánh: Tiến trình",
+   "region": "main",
+   "unlabeled": false,
+   "inViewport": true
+  },
+  {
+   "tag": "me-epd",
+   "role": "button",
+   "name": "Thu nhánh: Hệ thống tệp",
+   "region": "main",
+   "unlabeled": false,
+   "inViewport": true
+  },
+  {
+   "tag": "me-epd",
+   "role": "button",
+   "name": "Thu nhánh: Bộ nhớ",
+   "region": "main",
+   "unlabeled": false,
+   "inViewport": true
+  },
+  {
+   "tag": "me-epd",
+   "role": "button",
+   "name": "Thu nhánh: Đồng bộ hoá",
+   "region": "main",
+   "unlabeled": false,
+   "inViewport": true
+  },
+  {
+   "tag": "button",
+   "role": "",
+   "name": "Thu nhỏ",
+   "region": "main",
+   "unlabeled": false,
+   "inViewport": true
+  },
+  {
+   "tag": "button",
+   "role": "",
+   "name": "Đặt lại thu phóng",
+   "region": "main",
+   "unlabeled": false,
+   "inViewport": true
+  },
+  {
+   "tag": "button",
+   "role": "",
+   "name": "Phóng to",
+   "region": "main",
+   "unlabeled": false,
+   "inViewport": true
+  },
+  {
+   "tag": "button",
+   "role": "",
+   "name": "Vừa khung",
+   "region": "main",
+   "unlabeled": false,
+   "inViewport": true
+  },
+  {
+   "tag": "button",
+   "role": "",
+   "name": "Toàn màn hình",
+   "region": "main",
+   "unlabeled": false,
+   "inViewport": true
+  },
+  {
+   "tag": "button",
+   "role": "",
+   "name": "Đóng chi tiết nhánh",
+   "region": "aside",
+   "unlabeled": false,
+   "inViewport": false
+  },
+  {
+   "tag": "button",
+   "role": "",
+   "name": "Quay lại",
+   "region": "aside",
+   "unlabeled": false,
+   "inViewport": false
+  },
+  {
+   "tag": "button",
+   "role": "",
+   "name": "Đi tiếp",
+   "region": "aside",
+   "unlabeled": false,
+   "inViewport": false
+  },
+  {
+   "tag": "button",
+   "role": "",
+   "name": "Đóng hộp thoại",
+   "region": "dialog",
+   "unlabeled": false,
+   "inViewport": true
+  },
+  {
+   "tag": "button",
+   "role": "",
+   "name": "Nội dung",
+   "region": "dialog",
+   "unlabeled": false,
+   "inViewport": true
+  },
+  {
+   "tag": "button",
+   "role": "",
+   "name": "Trình bày",
+   "region": "dialog",
+   "unlabeled": false,
+   "inViewport": true
+  },
+  {
+   "tag": "button",
+   "role": "",
+   "name": "Kiểm tra",
+   "region": "dialog",
+   "unlabeled": false,
+   "inViewport": true
+  },
+  {
+   "tag": "button",
+   "role": "",
+   "name": "Ảnh PNG",
+   "region": "dialog",
+   "unlabeled": false,
+   "inViewport": true
+  },
+  {
+   "tag": "button",
+   "role": "",
+   "name": "PDF học tập",
+   "region": "dialog",
+   "unlabeled": false,
+   "inViewport": true
+  },
+  {
+   "tag": "button",
+   "role": "",
+   "name": "Ảnh WebP",
+   "region": "dialog",
+   "unlabeled": false,
+   "inViewport": true
+  },
+  {
+   "tag": "input",
+   "role": "",
+   "name": "",
+   "region": "dialog",
+   "unlabeled": true,
+   "inViewport": true
+  },
+  {
+   "tag": "input",
+   "role": "",
+   "name": "",
+   "region": "dialog",
+   "unlabeled": true,
+   "inViewport": true
+  },
+  {
+   "tag": "button",
+   "role": "",
+   "name": "Chọn trên canvas Chọn node trên sơ đồ",
+   "region": "dialog",
+   "unlabeled": false,
+   "inViewport": true
+  },
+  {
+   "tag": "input",
+   "role": "",
+   "name": "",
+   "region": "dialog",
+   "unlabeled": true,
+   "inViewport": true
+  },
+  {
+   "tag": "input",
+   "role": "",
+   "name": "",
+   "region": "dialog",
+   "unlabeled": true,
+   "inViewport": true
+  },
+  {
+   "tag": "button",
+   "role": "",
+   "name": "Nâng cao",
+   "region": "dialog",
+   "unlabeled": false,
+   "inViewport": true
+  },
+  {
+   "tag": "input",
+   "role": "",
+   "name": "",
+   "region": "dialog",
+   "unlabeled": true,
+   "inViewport": false
+  },
+  {
+   "tag": "input",
+   "role": "",
+   "name": "",
+   "region": "dialog",
+   "unlabeled": true,
+   "inViewport": false
+  },
+  {
+   "tag": "input",
+   "role": "",
+   "name": "",
+   "region": "dialog",
+   "unlabeled": true,
+   "inViewport": false
+  },
+  {
+   "tag": "input",
+   "role": "",
+   "name": "",
+   "region": "dialog",
+   "unlabeled": true,
+   "inViewport": false
+  },
+  {
+   "tag": "input",
+   "role": "",
+   "name": "",
+   "region": "dialog",
+   "unlabeled": true,
+   "inViewport": false
+  },
+  {
+   "tag": "input",
+   "role": "",
+   "name": "",
+   "region": "dialog",
+   "unlabeled": true,
+   "inViewport": false
+  },
+  {
+   "tag": "input",
+   "role": "",
+   "name": "",
+   "region": "dialog",
+   "unlabeled": true,
+   "inViewport": false
+  },
+  {
+   "tag": "button",
+   "role": "",
+   "name": "Giống canvas",
+   "region": "dialog",
+   "unlabeled": false,
+   "inViewport": false
+  },
+  {
+   "tag": "button",
+   "role": "",
+   "name": "Tài liệu học tập",
+   "region": "dialog",
+   "unlabeled": false,
+   "inViewport": false
+  },
+  {
+   "tag": "button",
+   "role": "",
+   "name": "Tối giản",
+   "region": "dialog",
+   "unlabeled": false,
+   "inViewport": false
+  },
+  {
+   "tag": "button",
+   "role": "",
+   "name": "Trình bày",
+   "region": "dialog",
+   "unlabeled": false,
+   "inViewport": false
+  },
+  {
+   "tag": "button",
+   "role": "",
+   "name": "Màu và kiểu chữ",
+   "region": "dialog",
+   "unlabeled": false,
+   "inViewport": false
+  },
+  {
+   "tag": "button",
+   "role": "",
+   "name": "Giống canvas",
+   "region": "dialog",
+   "unlabeled": false,
+   "inViewport": false
+  },
+  {
+   "tag": "button",
+   "role": "",
+   "name": "Trắng",
+   "region": "dialog",
+   "unlabeled": false,
+   "inViewport": false
+  },
+  {
+   "tag": "button",
+   "role": "",
+   "name": "Tối",
+   "region": "dialog",
+   "unlabeled": false,
+   "inViewport": false
+  },
+  {
+   "tag": "button",
+   "role": "",
+   "name": "Trong suốt",
+   "region": "dialog",
+   "unlabeled": false,
+   "inViewport": false
+  },
+  {
+   "tag": "button",
+   "role": "",
+   "name": "Tùy chỉnh",
+   "region": "dialog",
+   "unlabeled": false,
+   "inViewport": false
+  },
+  {
+   "tag": "button",
+   "role": "",
+   "name": "Giống canvas",
+   "region": "dialog",
+   "unlabeled": false,
+   "inViewport": false
+  },
+  {
+   "tag": "button",
+   "role": "",
+   "name": "Sans (Inter)",
+   "region": "dialog",
+   "unlabeled": false,
+   "inViewport": false
+  },
+  {
+   "tag": "button",
+   "role": "",
+   "name": "Serif (Spectral)",
+   "region": "dialog",
+   "unlabeled": false,
+   "inViewport": false
+  },
+  {
+   "tag": "button",
+   "role": "",
+   "name": "Giữ nguyên",
+   "region": "dialog",
+   "unlabeled": false,
+   "inViewport": false
+  },
+  {
+   "tag": "button",
+   "role": "",
+   "name": "Đơn sắc",
+   "region": "dialog",
+   "unlabeled": false,
+   "inViewport": false
+  },
+  {
+   "tag": "button",
+   "role": "",
+   "name": "Bảng màu riêng",
+   "region": "dialog",
+   "unlabeled": false,
+   "inViewport": false
+  },
+  {
+   "tag": "button",
+   "role": "",
+   "name": "Mảnh",
+   "region": "dialog",
+   "unlabeled": false,
+   "inViewport": false
+  },
+  {
+   "tag": "button",
+   "role": "",
+   "name": "Vừa",
+   "region": "dialog",
+   "unlabeled": false,
+   "inViewport": false
+  },
+  {
+   "tag": "button",
+   "role": "",
+   "name": "Đậm",
+   "region": "dialog",
+   "unlabeled": false,
+   "inViewport": false
+  },
+  {
+   "tag": "button",
+   "role": "",
+   "name": "Bố cục",
+   "region": "dialog",
+   "unlabeled": false,
+   "inViewport": false
+  },
+  {
+   "tag": "button",
+   "role": "",
+   "name": "Nội dung kèm theo",
+   "region": "dialog",
+   "unlabeled": false,
+   "inViewport": false
+  },
+  {
+   "tag": "button",
+   "role": "",
+   "name": "Tên file",
+   "region": "dialog",
+   "unlabeled": false,
+   "inViewport": false
+  },
+  {
+   "tag": "button",
+   "role": "",
+   "name": "Hủy",
+   "region": "dialog",
+   "unlabeled": false,
+   "inViewport": true
+  },
+  {
+   "tag": "button",
+   "role": "",
+   "name": "Xuất PNG",
+   "region": "dialog",
+   "unlabeled": false,
+   "inViewport": true
+  }
+ ],
+ "overflowX": 0,
+ "headings": [
+  "H1: Hỏi tài liệu của bạn — kèm dẫn chứng.",
+  "H2: Chưa có tóm tắt",
+  "H2: Xuất sơ đồ"
+ ],
+ "tab": [
+  "button \"Nội dung\"",
+  "button \"Trình bày\"",
+  "button \"Kiểm tra\"",
+  "button \"Ảnh PNG\"",
+  "button \"PDF học tập\"",
+  "button \"Ảnh WebP\"",
+  "input \"\"",
+  "button \"Chọn trên canvas Chọn node trên sơ đồ\"",
+  "button \"Nâng cao\"",
+  "input \"\"",
+  "input \"\"",
+  "button \"Giống canvas\"",
+  "button \"Tài liệu học tập\"",
+  "button \"Tối giản\"",
+  "button \"Trình bày\""
+ ]
+}
