@@ -88,9 +88,15 @@ exist on the commit at the moment it evaluates:
 1. Push `N` lands. GitHub creates CI(N)'s first check run about 1–3 s later
    (`741ed48`: push 03:56:00, suite 03:56:01, first job 03:56:04).
 2. If in those seconds a *completed* check run lands on `N` from another
-   workflow, Render can see "all checks passed". The only realistic source is
-   `Deploy` (it attaches to the default-branch HEAD) triggered by CI(N-1)
-   finishing in the same seconds.
+   workflow, Render can see "all checks passed". The realistic source is
+   `Deploy` (it attaches to the default-branch HEAD), which runs after
+   **every** CI completion, including pull-request CI: PR #113's CI finished
+   at 06:19:41 and Deploy run 41589178442 put a `skipped` check run on the
+   then-HEAD `2d283aa` at 06:19:43. So any CI run (main or PR) finishing in
+   those seconds opens the window, not only CI(N-1). Small follow-up that
+   removes the PR source (not implemented, needs approval): add
+   `branches: [main]` under `on.workflow_run` in `deploy.yml`, so PR CI runs
+   no longer start Deploy at all. The job-level `if:` stays as the real gate.
 3. Before that check appears, Render sees zero checks and, per its docs, does
    not deploy. So the remaining window is seconds and requires a coincidence.
 

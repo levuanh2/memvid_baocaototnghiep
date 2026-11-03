@@ -17,10 +17,12 @@ is **NOT VERIFIED**.
 
 1. Use a disposable QA account. Never a real user's account or data.
 2. Record the build: open `https://studymap.space/`, view source, and copy
-   `<meta name="studymap-build" content="…">`. It must equal the `/health`
-   `revision` at `https://api.studymap.space/health`. Expected today:
-   `2d283aa384f2cef1e88f2209032bbeefbe4f3e67`, or a later `main` SHA if one
-   has been released since.
+   `<meta name="studymap-build" content="…">`, and the `revision` from
+   `https://api.studymap.space/health`. Record both. They differ when the
+   newest `main` commit did not change `FE/` (Render only rebuilds on `FE/`
+   changes). Expected on 2026-11-03: frontend `2d283aa384f2…`, backend
+   `d1cb795bd04a…`, or later `main` SHAs if released since. The UI under test
+   is the frontend SHA.
 3. Create disposable test data first: one collection, one map with a
    summary, one chat with a few messages, one finished quiz (including one
    short-answer question).
@@ -48,7 +50,7 @@ Write what was **spoken**, not what you expected.
 |---|---|
 | Tester / date (UTC) | |
 | Windows / NVDA / Chrome versions | |
-| Build SHA (meta = `/health`) | |
+| Frontend SHA (meta) / backend SHA (`/health`) | |
 | Row 4.6 test build SHA / URL (flag ON) | |
 | Filled checklist copy attached (link or file) | |
 | Rows PASS / N/A / FAIL (checklist 1.1–6.4 + C1 = 29) | __ / __ / __ |
@@ -70,7 +72,7 @@ Same rows as S1 (checklist 1.1–6.4 + C1).
 |---|---|
 | Tester / date (UTC) | |
 | Windows build / Edge version | |
-| Build SHA (meta = `/health`) | |
+| Frontend SHA (meta) / backend SHA (`/health`) | |
 | Row 4.6 test build SHA / URL (flag ON) | |
 | Filled checklist copy attached (link or file) | |
 | Rows PASS / N/A / FAIL (29) | __ / __ / __ |
