@@ -436,9 +436,9 @@ test.describe.serial("critical flows", () => {
   // P0-1: "Tạo tóm tắt" in Summary mode used to send nothing. Against the real
   // Flask app + test Postgres: one click (even a double click) must send exactly
   // one POST that the backend accepts, and the UI must reach a visible outcome
-  // (the summary, or an error), never stay silent. The E2E server does not mock
-  // SUMMARY_GRAPH, so completion itself is covered by the fixture suite only.
-  test("Summary mode 'Tạo tóm tắt' sends one accepted request and reaches a visible outcome", async () => {
+  // (the opened summary), never stay silent.
+  // Then the saved summary must reopen after a reload, with no new POST.
+  test("Summary mode 'Tạo tóm tắt' sends one accepted request, opens the summary, and reopens it after reload", async () => {
     await selectAllSources(page);
     const posts = [];
     const onResponse = (res) => {
@@ -451,15 +451,10 @@ test.describe.serial("critical flows", () => {
     await page.waitForTimeout(1500);
     expect(posts).toHaveLength(1);
     expect(posts[0]).toBeLessThan(300);
-    // Terminal outcome: the opened summary (its picker appears in the summary
-    // toolbar) or the existing error toast. Either proves the CTA is live.
-    const opened = page.getByRole("combobox", { name: "Chọn tóm tắt" });
-    const failed = page.getByText(/Không tạo được tóm tắt/);
-    await expect(opened.or(failed).first()).toBeVisible({ timeout: 60_000 });
-    const wasOpened = (await opened.count()) > 0;
-    test.info().annotations.push({ type: "summary-outcome", description: wasOpened ? "opened" : "error shown" });
-    page.off("response", onResponse);
-    if (!wasOpened) return;
+    // The E2E server completes summary jobs (CI log: POST 202, status polls,
+    // then the /summaries refresh that only the success path makes), so the
+    // summary must open here; an error is a failure, not an alternative.
+    await expect(page.getByRole("combobox", { name: "Chọn tóm tắt" }).first()).toBeVisible({ timeout: 60_000 });
     // Persisted in the real DB: after a reload the saved summary is listed and
     // opens again without a new POST.
     const title = await page.locator(".artifact-toolbar__identity strong").first().innerText();
@@ -468,5 +463,6 @@ test.describe.serial("critical flows", () => {
     await page.getByRole("combobox", { name: "Chọn tóm tắt" }).first().selectOption({ label: title });
     await expect(page.locator(".artifact-toolbar__identity strong").first()).toHaveText(title);
     expect(posts).toHaveLength(1);
+    page.off("response", onResponse);
   });
 });
