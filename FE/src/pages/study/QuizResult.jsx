@@ -108,6 +108,11 @@ export default function QuizResult() {
     [graded, result],
   );
   const openWrongReview = () => { setReviewIndex(0); setReviewingWrong(true); };
+  // O5: "weak topic" = anything not fully mastered yet — the set the review
+  // plan actually exists to cover. `masteries` only populates once graded
+  // (see `load()` above), so an empty array here means "not computed yet",
+  // and the header action below falls back to the count-less label for it.
+  const weakTopicCount = masteries.filter((m) => m.status !== "mastered").length;
 
   return (
     <StudyShell
@@ -119,10 +124,17 @@ export default function QuizResult() {
       onRetry={load}
       width={reviewingWrong ? "max-w-[1120px]" : "max-w-[1050px]"}
       actions={
-        result?.status === "graded" && (
-          <Link to={`/app/study/review/${attemptId}`} className="btn-secondary text-small inline-flex items-center gap-2">
-            <Icon name="BookOpen" size={14} /> Kế hoạch ôn tập
-          </Link>
+        graded && (
+          wrongQuestions.length > 0 ? (
+            <Link to={`/app/study/review/${attemptId}`} className="btn-primary text-small inline-flex items-center gap-2">
+              <Icon name="BookOpen" size={14} />
+              {weakTopicCount > 0 ? `Kế hoạch ôn tập (${weakTopicCount} chủ đề)` : "Kế hoạch ôn tập"}
+            </Link>
+          ) : (
+            <Link to="/app/study" className="btn-primary text-small inline-flex items-center gap-2">
+              <Icon name="ArrowLeft" size={14} /> Về Thư viện
+            </Link>
+          )
         )
       }
     >
@@ -269,7 +281,7 @@ function ScoreBoard({ result, grading, provisional, ungradedCount, wrongCount, o
         <Stat label="Số câu" value={result.total_questions} />
         <Stat label="Thời gian" value={formatDuration(result.duration_seconds)} />
       </div>
-      {!grading && wrongCount > 0 && <button type="button" className="btn-primary quiz-review-wrong" onClick={onReviewWrong}>Xem lại {wrongCount} câu cần ôn</button>}
+      {!grading && wrongCount > 0 && <button type="button" className="btn-secondary quiz-review-wrong" onClick={onReviewWrong}>Xem lại câu sai</button>}
     </section>
   );
 }
