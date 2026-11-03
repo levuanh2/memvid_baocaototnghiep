@@ -33,6 +33,14 @@ Consequences:
 
 The owner has to say which was meant (§5, decision D1).
 
+**Resolved (D1 = B).** The owner chose option A with Render auto-deploy
+after CI checks, not manual frontend releases, and restored it. Render event
+`2026-11-03T08:44:56Z`: `auto_deploy_enabled`, `newTrigger: checksPass`.
+Read back at 08:45:28Z: `studymap-web` `autoDeploy=yes`, `checksPass`,
+rootDir `FE`, `VITE_API_BASE=https://api.studymap.space`, live deploy still
+`2d283aa`, no deploy during the 38 minutes it was off. `render.yaml` stays
+`checksPass`, so the service matches the Blueprint again.
+
 ## 2. Release gate matrix
 
 Status: PASS, FAIL, BLOCKED, NOT VERIFIED, NOT APPLICABLE.
@@ -46,9 +54,9 @@ Status: PASS, FAIL, BLOCKED, NOT VERIFIED, NOT APPLICABLE.
 | 3b | #114: main push CI still starts Deploy | PASS | `4ed8f47` | Deploy 41596023594 above | Claude | None |
 | 3c | Cancelled main CI does not deploy | PASS | job `if:` unchanged by #114 | Cancelled CI 41575134914 (`f109484`) gave Deploy 41575169717 `skipped`; cancelled CI 41575164152 (`e83f1f3`) gave Deploy 41575185869 `skipped`; no ledger entry for either | Claude | None |
 | 3d | Failed main CI does not deploy | NOT VERIFIED | job `if:` | No failed main CI since the gate existed. Same `conclusion == 'success'` condition as 3c. Not induced on purpose | Claude | Observe if it ever happens; no test on `main` |
-| 4 | Render Blueprint | NOT VERIFIED | last sync `1f4d4d7` | `membaocaototnghiep` (`exs-dacf7q2fngtc73d8q5jg`) `in_sync`, Auto Sync on, last sync 2026-11-02T17:11:20Z for `1f4d4d7`; resources still `studymap-api` and `studymap-web`; no sync for `741ed48` (#106) or later | Owner | Decision D1, then Manual Sync (§5) |
+| 4 | Render Blueprint | NOT VERIFIED | last sync `1f4d4d7` | `membaocaototnghiep` (`exs-dacf7q2fngtc73d8q5jg`) `in_sync`, Auto Sync on, last sync 2026-11-02T17:11:20Z for `1f4d4d7`; resources still `studymap-api` and `studymap-web`; no sync for `741ed48` (#106) or later (read again 08:45:28Z) | Owner | Manual Sync (§5) |
 | 5 | Legacy Render API (`studymap-api`) | NOT VERIFIED | last deploy `fdc1c9d` | Suspended by a user since 2026-09-15T18:25:52Z (PASS part); `autoDeploy=yes`, `checksPass` (open part); no deploy since 2026-09-15 | Owner | Auto-Deploy Off (§5) |
-| 6 | Frontend deployment safety | NOT VERIFIED | FE `2d283aa` | Option A merged (#112, #114). No merge has changed `FE/` since #111. Render Auto-Deploy for `studymap-web` is now off (§1) | Owner, then Claude | Decision D1; then the check in §4 on the next `FE/` merge, or owner risk acceptance (§6) |
+| 6 | Frontend deployment safety | NOT VERIFIED | FE `2d283aa` | Option A merged (#112, #114). No merge has changed `FE/` since #111. `studymap-web` Auto-Deploy back on `checksPass` since 08:44:56Z (D1, §1) | Owner, then Claude | The check in §4 on the next `FE/` merge, or owner risk acceptance (§6) |
 | 7 | Auth and CORS | PASS | BE `4ed8f47` | `GET /api/documents` without `Authorization`: 401. `OPTIONS` from `https://studymap.space` returns its origin in `Access-Control-Allow-Origin`; from an unknown origin, no `Access-Control-Allow-Origin` | Claude | None |
 | 8 | Library feature flag | PASS (OFF) | FE `2d283aa` | Production bundle env has no `VITE_LIBRARY_ACTION_MATRIX`; the flag reader returns false | Claude | Rollout is a separate decision after V4 acceptance |
 | 9 | Full Fixture Audit | PASS | `2d283aa` | Run 41586296321: 449 collected, 449 passed, 0 failed, 0 flaky, 0 skipped. #112, #113, #114 changed no `FE/` or fixture file, so no rerun | Claude | None |
@@ -89,7 +97,8 @@ Any of these false: gate 6 FAIL, Library rollout not recommended, and option B
 Do these in order. Claude re-reads after each step; nothing here resumes or
 deletes a service or touches secrets.
 
-**D1. Decide what `studymap-web` Auto-Deploy should be.**
+**D1. Decide what `studymap-web` Auto-Deploy should be.** Decided B and done
+(§1); kept here for the record.
 
 - A. Keep it **Off** (manual frontend releases): the next `FE/` merge is
   deployed by hand, only after its `CI / required` is green. Then
@@ -145,12 +154,10 @@ only still requires the written acceptance described in
 **CONDITIONAL.** No FAIL and no product defect is open. Remaining, by
 priority:
 
-1. **D1**: `studymap-web` Auto-Deploy changed at 08:06:40Z; owner decision
-   (§5).
-2. **Gates 10 and 11**: S1–S4 by a human tester.
-3. **Gates 4 and 5**: Blueprint Manual Sync, then `studymap-api` Auto-Deploy
+1. **Gates 10 and 11**: S1–S4 by a human tester.
+2. **Gates 4 and 5**: Blueprint Manual Sync, then `studymap-api` Auto-Deploy
    Off.
-4. **Gate 6**: first `FE/` merge check, or the signed acceptance in §6.
+3. **Gate 6**: first `FE/` merge check, or the signed acceptance in §6.
 
 The Library Action Matrix stays OFF. Its rollout is a separate decision after
 V4 is accepted.
