@@ -43,21 +43,12 @@ export { THEME };
 // previous map or a currently collapsed branch. Render-time derived UI must
 // treat that transient condition as "not selected", especially during A↔B
 // switches before the controller's id-keyed effect clears React selection.
-// Initial placement on narrow canvases. scaleFit alone shrinks a wide tree to
-// ~27% (390px wide canvas: node labels unreadable, the map floats in empty space).
-// The fit stays the single initial operation; the scale is then floored at a
-// readable size and the root is centred. Horizontal panning covers the rest.
-const MOBILE_FIT_MAX_WIDTH = 640;
+// Initial placement is a one-shot operation for phone viewports only. Using
+// the viewport (not this canvas's width) prevents a narrow desktop workspace
+// beside the inspector/sidebar from being mistaken for a phone.
+const MOBILE_FIT_BREAKPOINT = 768;
 // Connector repair budget. Counted only while the container has real size; see startFitPoll.
 const VISIBLE_REPAIR_TIMEOUT_MS = 10000;
-const MOBILE_READABLE_MIN_SCALE = 0.75;
-
-function applyReadableFloor(mind, el) {
-  if (!mind || !el || el.clientWidth > MOBILE_FIT_MAX_WIDTH) return;
-  if ((mind.scaleVal ?? 1) >= MOBILE_READABLE_MIN_SCALE) return;
-  mind.scale(MOBILE_READABLE_MIN_SCALE);
-  mind.toCenter?.();
-}
 
 function findTopicSafely(mind, id) {
   if (!mind || !id) return null;
@@ -315,8 +306,9 @@ export default function MindElixirView({ data, onRegenerate, regenerating, contr
     if (!validation.ok) return false;
     if (pendingFitRef.current) {
       pendingFitRef.current = false;
-      mind.scaleFit?.();
-      applyReadableFloor(mind, el);
+      if (typeof window !== "undefined" && window.innerWidth < MOBILE_FIT_BREAKPOINT) {
+        mind.scaleFit?.();
+      }
     }
     setRenderError(null);
     setRenderState("ready");
@@ -557,16 +549,11 @@ export default function MindElixirView({ data, onRegenerate, regenerating, contr
     const mind = mindRef.current;
     if (!mind || canvasReadyId !== data?.id) return undefined;
     // Real-browser-only race, found via Playwright against the fixture
-    // harness at mobile width (390px): `applyReadableFloor` (just above —
-    // runs once `fitIfReady` validates, narrow canvases only, ≤
-    // MOBILE_FIT_MAX_WIDTH) calls `mind.scale()`/`mind.toCenter()`, and
-    // mind-elixir's own scale pass rewrites each topic element's inline
-    // `style` wholesale as part of recomputing its scaled layout — wiping
-    // an appearance applied before that pass even though nothing in THIS
-    // component's own React tree ever reran or cleaned up (confirmed with
-    // an instrumented trace: apply fires once, no cleanup logs, yet the
-    // style is gone after the viewport's ≤640px scale pass runs). jsdom
-    // never catches this because it doesn't lay anything out for real.
+    // harness at mobile width (390px): the one-shot mobile `scaleFit()` can
+    // rewrite topic inline styles while computing its final transform,
+    // wiping an appearance applied before that pass even though nothing in
+    // THIS component's React tree reran or cleaned up. jsdom never catches
+    // this because it doesn't lay anything out for real.
     // Gating on `renderState === "ready"` — the SAME settled signal
     // `fitIfReady` itself defines, already proven for exactly this class of
     // "mind-elixir hasn't finished its own internal layout yet" problem —

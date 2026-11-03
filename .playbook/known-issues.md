@@ -1,5 +1,22 @@
 # Known Issues
 
+## Phone mind maps opened with first-level branches off-screen (fixed 2026-11-04)
+
+**Symptom:** on the first open at 320px and 390px, the root was visible but
+every first-level branch started outside the canvas, so the learner had to pan
+before seeing the map's main structure.
+
+**Root cause:** the initial lifecycle fitted the whole tree, then immediately
+overrode that transform on narrow canvases by forcing a 0.75 scale and centring
+only the root. The same initial fit also ran on desktop even though the mobile
+placement correction was the only intended behavior.
+
+**Fix and prevention:** after connector geometry validates, a new map id gets
+one `scaleFit()` only when the browser viewport is below 768px. Same-id
+rerenders, desktop, branch/depth actions, and export never refit. Real-browser
+coverage asserts the root and every first-level fixture node stay inside the
+390px canvas; lifecycle tests pin one mobile fit and zero desktop fits.
+
 ## Successful CI workflow could deploy a different, newer main commit (fixed 2026-11-02)
 
 **Symptom:** the `workflow_run` deploy job checked out/pulled current `main` on

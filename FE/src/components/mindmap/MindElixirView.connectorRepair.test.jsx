@@ -63,6 +63,7 @@ const DATA = {
 const CONTROLLER = { registerMindInstance: vi.fn(), onNodeSelected: vi.fn(), selected: null, sidecarRef: { current: new Map() } };
 let container;
 let root;
+const originalInnerWidth = window.innerWidth;
 
 afterEach(async () => {
   // Unmount properly (not just detach the DOM node) so each test's rAF
@@ -73,6 +74,7 @@ afterEach(async () => {
   if (root) { await act(async () => { root.unmount(); }); root = null; }
   if (container) { document.body.removeChild(container); container = null; }
   vi.restoreAllMocks();
+  Object.defineProperty(window, "innerWidth", { value: originalInnerWidth, configurable: true });
 });
 
 // jsdom has no real layout engine -- mind-elixir's REAL linkDiv() will
@@ -100,6 +102,9 @@ function mockLinkDivFixedFromCall(fixFromCallNumber) {
 }
 
 async function renderMounted({ fixFromCallNumber = 1, startVisible = true } = {}) {
+  // The fit assertions in this repair suite exercise the phone-only initial
+  // fit; connector layout/link repair itself remains viewport-independent.
+  Object.defineProperty(window, "innerWidth", { value: 390, configurable: true });
   const layoutSpy = vi.spyOn(MindElixir.prototype, "layout");
   const linkDivSpy = mockLinkDivFixedFromCall(fixFromCallNumber);
   const scaleFitSpy = vi.spyOn(MindElixir.prototype, "scaleFit");
