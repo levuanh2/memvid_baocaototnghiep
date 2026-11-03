@@ -1,5 +1,5 @@
 // @vitest-environment jsdom
-import { act } from "react";
+import { act, useLayoutEffect } from "react";
 import { createRoot } from "react-dom/client";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import DestructiveConfirmDialog from "./DestructiveConfirmDialog";
@@ -117,5 +117,44 @@ describe("DestructiveConfirmDialog", () => {
     expect(confirmBtn(dialog).disabled).toBe(false);
     await act(async () => { confirmBtn(dialog).click(); });
     expect(onConfirmSecond).toHaveBeenCalledTimes(1);
+  });
+});
+
+describe("DestructiveConfirmDialog reopen (stays mounted)", () => {
+  // Layout effects run after the DOM commit but before passive effects, so this
+  // sees exactly what the first painted frame of a reopened dialog shows.
+  function FrameProbe({ frames }) {
+    useLayoutEffect(() => {
+      const box = document.body.querySelector('[role="dialog"] input[type="checkbox"]');
+      if (!box) return;
+      const action = document.body.querySelector(".destructive-confirm__action");
+      frames.push({ checked: box.checked, label: action.textContent.trim() });
+    });
+    return null;
+  }
+
+  it("never shows the previous target's ticked box or 'Đang xoá…' in the first frame", async () => {
+    const frames = [];
+    const onConfirm = vi.fn(async () => {});
+    const view = (open, targetName) => (
+      <>
+        <DestructiveConfirmDialog open={open} title="Xoá?" targetName={targetName} confirmLabel="Xoá" onConfirm={onConfirm} onCancel={vi.fn()} />
+        <FrameProbe frames={frames} />
+      </>
+    );
+    container = document.createElement("div"); document.body.appendChild(container);
+    root = createRoot(container);
+    await act(async () => root.render(view(true, "Map A")));
+    const dialog = document.body.querySelector('[role="dialog"]');
+    await act(async () => { checkbox(dialog).click(); });
+    await act(async () => { confirmBtn(dialog).click(); });
+    expect(onConfirm).toHaveBeenCalledTimes(1);
+    // Success: the caller closes the dialog, the component stays mounted.
+    await act(async () => root.render(view(false, "Map A")));
+
+    frames.length = 0;
+    await act(async () => root.render(view(true, "Map B")));
+    expect(frames[0]).toEqual({ checked: false, label: "Xoá" });
+    expect(frames.every((f) => !f.checked && f.label === "Xoá")).toBe(true);
   });
 });

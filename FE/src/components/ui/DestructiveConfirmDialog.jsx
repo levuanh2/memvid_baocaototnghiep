@@ -33,11 +33,21 @@ export default function DestructiveConfirmDialog({
   const [loi, setLoi] = useState("");
   const dangGuiRef = useRef(false); // chặn gửi trùng ngay cả khi 2 sự kiện click lọt qua disabled
 
-  useEffect(() => {
-    if (!open) return;
+  // Đặt lại ô tích / trạng thái xoá / lỗi NGAY TRONG LÚC RENDER khi hộp mở cho một
+  // mục (hoặc đóng). Làm trong useEffect thì khung hình ĐẦU TIÊN sau khi mở lại vẫn
+  // vẽ trạng thái của lần trước (ô đã tích, "Đang xoá…"), và trình đọc màn hình có
+  // thể đọc "đã chọn" cho mục mới (Fixture Audit run 41530010357).
+  const khoaMo = open ? targetName ?? "" : null;
+  const [khoaMoTruoc, setKhoaMoTruoc] = useState(khoaMo);
+  if (khoaMoTruoc !== khoaMo) {
+    setKhoaMoTruoc(khoaMo);
     setDaTick(false);
     setDangXoa(false);
     setLoi("");
+  }
+
+  useEffect(() => {
+    if (!open) return;
     // Khoá gửi-trùng chỉ tự tắt khi THẤT BẠI (xem catch bên dưới) — thành công thì
     // không có chỗ nào khác đặt nó về false, vì nơi gọi tự đóng hộp (họ còn phải
     // cập nhật state của họ trước) thay vì unmount ngay. Hộp lại được DÙNG LẠI cho
