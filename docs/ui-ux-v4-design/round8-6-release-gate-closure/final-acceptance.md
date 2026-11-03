@@ -56,13 +56,13 @@ Status: PASS, FAIL, BLOCKED, NOT VERIFIED, NOT APPLICABLE.
 | 3d | Failed main CI does not deploy | NOT VERIFIED | job `if:` | No failed main CI since the gate existed. Same `conclusion == 'success'` condition as 3c. Not induced on purpose | Claude | Observe if it ever happens; no test on `main` |
 | 4 | Render Blueprint | NOT VERIFIED | last sync `1f4d4d7` | `membaocaototnghiep` (`exs-dacf7q2fngtc73d8q5jg`) `in_sync`, Auto Sync on, last sync 2026-11-02T17:11:20Z for `1f4d4d7`; resources still `studymap-api` and `studymap-web`; no sync for `741ed48` (#106) or later (read again 08:45:28Z) | Owner | Manual Sync (§5) |
 | 5 | Legacy Render API (`studymap-api`) | NOT VERIFIED | last deploy `fdc1c9d` | Suspended by a user since 2026-09-15T18:25:52Z (PASS part); `autoDeploy=yes`, `checksPass` (open part); no deploy since 2026-09-15 | Owner | Auto-Deploy Off (§5) |
-| 6 | Frontend deployment safety | NOT VERIFIED | FE `2d283aa` | Option A merged (#112, #114). No merge has changed `FE/` since #111. `studymap-web` Auto-Deploy back on `checksPass` since 08:44:56Z (D1, §1) | Owner, then Claude | The check in §4 on the next `FE/` merge, or owner risk acceptance (§6) |
+| 6 | Frontend deployment safety | PASS (3/3 observations) | `e3823df`, `37af6b0`, `973fd2c` | §8: each Render deploy created 4.6–5.9 s after that SHA's `CI / required` success, same SHA, no older SHA afterwards, `studymap-build` = `/health` | Claude | Residual seconds-wide race (option A) accepted; it was not exercised (pushes were minutes apart) |
 | 7 | Auth and CORS | PASS | BE `4ed8f47` | `GET /api/documents` without `Authorization`: 401. `OPTIONS` from `https://studymap.space` returns its origin in `Access-Control-Allow-Origin`; from an unknown origin, no `Access-Control-Allow-Origin` | Claude | None |
 | 8 | Library feature flag | PASS (OFF) | FE `2d283aa` | Production bundle env has no `VITE_LIBRARY_ACTION_MATRIX`; the flag reader returns false | Claude | Rollout is a separate decision after V4 acceptance |
-| 9 | Full Fixture Audit | PASS | `2d283aa` | Run 41586296321: 449 collected, 449 passed, 0 failed, 0 flaky, 0 skipped. #112, #113, #114 changed no `FE/` or fixture file, so no rerun | Claude | None |
+| 9 | Full Fixture Audit | PASS | `973fd2c` | Run 41667282891 (`workflow_dispatch`, `main`): 466 passed (449 + 17 new hotfix tests), 0 failed, 0 flaky, 15.5 min. Earlier run 41586296321 on `2d283aa`: 449/449 | Claude | None |
 | 10 | Screen reader acceptance (S1 NVDA/Chrome, S2 Narrator/Edge) | NOT VERIFIED | FE `2d283aa` | No filled sheet. An agent cannot produce this result | Human tester | Run S1 and S2 (`human-acceptance-sheets.md`) |
 | 11 | Real-device touch (S3 Android/Chrome, S4 iPhone/Safari) | NOT VERIFIED | FE `2d283aa` | No filled sheet | Human tester | Run S3 and S4 |
-| 12 | Final production readiness | CONDITIONAL | `4ed8f47` / `2d283aa` | Gates 1, 2, 3 (3d not observed), 7, 8, 9 PASS; 4, 5, 6, 10, 11 open | Owner | §5 and §6 |
+| 12 | Final production readiness | CONDITIONAL | `973fd2c` | Gates 1, 2, 3 (3d not observed), 6, 7, 8, 9 PASS; 4, 5, 10, 11 open | Owner | §5 |
 
 ## 3. Human sheets S1–S4
 
@@ -151,13 +151,36 @@ only still requires the written acceptance described in
 
 ## 7. Verdict
 
-**CONDITIONAL.** No FAIL and no product defect is open. Remaining, by
-priority:
+**CONDITIONAL.** No FAIL is open. Three product defects found by the V4.1
+audit (#116) were fixed and released as #118, #117 and #119 (§8). Remaining,
+by priority:
 
-1. **Gates 10 and 11**: S1–S4 by a human tester.
+1. **Gates 10 and 11**: S1–S4 by a human tester (now on `973fd2c`).
 2. **Gates 4 and 5**: Blueprint Manual Sync, then `studymap-api` Auto-Deploy
-   Off.
-3. **Gate 6**: first `FE/` merge check, or the signed acceptance in §6.
+   Off. Three frontend deploys did not trigger a Blueprint sync, so the sync
+   will not happen on its own.
 
 The Library Action Matrix stays OFF. Its rollout is a separate decision after
 V4 is accepted.
+
+## 8. Update after the V4 hotfixes (2026-11-03 16:05 UTC)
+
+| Merge | PR | `CI / required` success | Render deploy created | Live | EC2 deploy | `studymap-build` / `/health` |
+|---|---|---|---|---|---|---|
+| `e3823df` | #118 P0-1 Summary mode | 12:01:10Z | 12:01:14.7Z (+4.6 s) | 12:02:07Z | 12:02:15Z | `e3823df` / `e3823df` (at the time) |
+| `37af6b0` | #117 P0-3 Library → Workspace mode | 15:27:00Z | 15:27:04.8Z (+4.8 s) | 15:27:36Z | 15:28:05Z | superseded by the next merge |
+| `973fd2c` | #119 P0-2 Mind-map create fallback | 15:43:08Z | 15:43:14.0Z (+5.9 s) | 15:43:44Z | 15:44:13Z | `973fd2c` / `973fd2c` |
+
+All Render deploys have trigger `new_commit`, target exactly the merged SHA,
+and the deploy list shows no older SHA after a newer one. Production bundle on
+`e3823df` contains the summary picker; the Library flag is still absent from
+the production env object (OFF).
+
+Full Fixture Audit 41667282891 on `973fd2c`: 466 passed, 0 failed, 0 flaky.
+
+Render read 16:05Z: Blueprint last sync still `1f4d4d7` (resources
+`studymap-api`, `studymap-web`); `studymap-api` suspended, Auto-Deploy on.
+
+Not verified in production: using the three fixes with a real account (no
+authorised test account); the Guided capability value.
+

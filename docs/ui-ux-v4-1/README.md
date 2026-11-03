@@ -19,6 +19,7 @@
 | `05-before-after-proposals.md` | B1–B10 with evidence, sketch, risk and scope |
 | `06-implementation-roadmap.md` | P0/P1/P2 PR plan with effort, risk, tests and acceptance criteria |
 | `evidence/` | 216 screenshots, control inventories, the capture and verification scripts (`evidence/README.md`) |
+| `07-v41-pr-roadmap.md` | Owner-approved V4.1 plan: P0 hotfix PRs #117–#119 (merge order) and Waves 1–5 as small PRs |
 | `_work/inv-*.md` | Raw line-level inventories from the agents (A1+A5 Codex, A3 AGY, A4 Codex); A2 Library was done by Claude in `01`–`03`. Where they disagree with `01`–`03`, the numbered files win (for example A3 lists `SidebarRight` "+ Tạo sơ đồ" as live; it is behind `legacyInspectorSurfacesEnabled = false`) |
 
 ## Executive summary
