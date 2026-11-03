@@ -39,7 +39,7 @@ const getStatusConfig = (status, substatus, canQuery) => {
 
 const formatFileName = (name = "") => name.replace(/\.(mp4|avi|mov|mkv|webm|mp3|wav|pdf|txt|docx)$/i, "");
 
-export default function SidebarLeft({ selectedSources, setSelectedSources, onSourcesChange, onClose, collapsible = false, onTransientSurfaceOpen, railMode = false }) {
+export default function SidebarLeft({ selectedSources, setSelectedSources, onSourcesChange, onClose, collapsible = false, onTransientSurfaceOpen, railMode = false, onUploadReady }) {
   const [sources, setSources] = useState([]);
   // Round 9 fix: mirrors `sources` for `fetchSourcesFromBackend` below to read
   // as "the previous sources" WITHOUT depending on execution-order between
@@ -80,6 +80,12 @@ export default function SidebarLeft({ selectedSources, setSelectedSources, onSou
   const [appliedFilters, setAppliedFilters] = useState({ type: "", status: "", date: "" });
   const fileInputRef = useRef(null);
   const pollersRef = useRef({});
+  // W1-4: lets a CENTRE empty state (ChatArea/WorkspaceEmptyState, which own
+  // no file input of their own) trigger this exact same hidden input instead
+  // of duplicating the upload POST flow below. Registers a closure that reads
+  // `fileInputRef.current` at CALL time, not at registration time, so it
+  // stays correct across renders without needing to re-register.
+  useEffect(() => { onUploadReady?.(() => fileInputRef.current?.click()); }, [onUploadReady]);
 
   // ── Polling ────────────────────────────────────────
   // Một cú 502 của gateway KHÔNG phải là ingest hỏng: logic chịu-lỗi nằm trong

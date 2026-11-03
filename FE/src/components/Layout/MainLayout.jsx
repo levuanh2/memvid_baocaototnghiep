@@ -46,6 +46,15 @@ export default function MainLayout({
   requestedWorkspaceMode,
 }) {
   const [sources, setSources] = useState([]);
+  // W1-4: the centre empty states (Chat/Mind Map/Summary) have no file input
+  // or upload POST logic of their own, by design -- reuse SidebarLeft's,
+  // reached here via the registration callback it calls back with (see its
+  // own `onUploadReady` comment). A ref, not state: this is a function
+  // reference, never rendered, and SidebarLeft re-registers it on every one
+  // of its own renders anyway (cheap, since it's just storing a closure).
+  const uploadTriggerRef = useRef(null);
+  const registerUploadTrigger = useCallback((fn) => { uploadTriggerRef.current = fn; }, []);
+  const triggerUpload = useCallback(() => uploadTriggerRef.current?.(), []);
   const [leftOpen, setLeftOpen] = useState(false);   // chỉ dùng ở chế độ ngăn kéo (<768px)
   const [rightOpen, setRightOpen] = useState(false);
   const [viewportWidth, setViewportWidth] = useState(() => (
@@ -757,6 +766,7 @@ export default function MainLayout({
               onTransientSurfaceOpen={closeHeaderSurface}
               collapsible
               railMode={!tabletShelfOpen}
+              onUploadReady={registerUploadTrigger}
             />
             {/* Resize handle for the expanded overlay only — reuses the same
                 PanelDivider/usePanelLayout drag+keyboard contract as the
@@ -810,6 +820,7 @@ export default function MainLayout({
                 onClose={() => (panel.drawer ? setLeftOpen(false) : panel.setCollapsedFor("left", true))}
                 onTransientSurfaceOpen={closeHeaderSurface}
                 collapsible={!panel.drawer}
+                onUploadReady={registerUploadTrigger}
               />
             </aside>
             {!panel.drawer && (
@@ -846,7 +857,16 @@ export default function MainLayout({
               isLeftVisible: tabletSourceRail || (!panel.drawer && !panel.collapsed.left),
               askAboutDraft,
               hasSummary: Boolean(summaryData), onOpenSummary: onSwitchToSummary,
+              onUploadDocument: triggerUpload,
             }}
+            // `sources` (MainLayout's own state, populated only once SidebarLeft
+            // reports its fetch via `onSourcesChange`) can briefly/artificially lag
+            // behind `selectedSources` (e.g. a test that drives selection directly,
+            // or a `?source=` deep link resolving before the library fetch lands)
+            // -- a real selection is itself proof the library isn't empty, so
+            // either signal being non-empty is enough.
+            hasAnyDocuments={sources.length > 0 || selectedSources.length > 0}
+            onUploadDocument={triggerUpload}
             mindmapData={mindmapData}
             mindmapInitialLoading={libraries.mindMapInitialLoading}
             mindmapLoadError={libraries.mindMapLoadError}

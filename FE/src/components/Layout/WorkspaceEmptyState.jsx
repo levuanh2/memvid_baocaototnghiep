@@ -32,6 +32,11 @@ export default function WorkspaceEmptyState({
   // zero visible surface between dialog-close and the eventual toast --
   // this screen just sat there showing the same static CTA the whole time.
   creating, jobLabel, jobProgress, jobError, onRetry,
+  // W1-4: true total-library count (default true so every pre-existing
+  // caller/test that never passes it keeps the exact old "chọn tài liệu"
+  // behavior) and the upload trigger (reused from SidebarLeft, see
+  // MainLayout's `uploadTriggerRef`) for the genuinely-empty-library case.
+  hasAnyDocuments = true, onUpload,
   // Extra content under the CTA (Summary: picker for saved summaries).
   children,
 }) {
@@ -93,14 +98,34 @@ export default function WorkspaceEmptyState({
       </div>
       <h2 className="font-display text-[19px] font-semibold text-text-primary">{copy.title}</h2>
       <p className="text-small text-text-secondary max-w-[380px]">{copy.body}</p>
-      <p className="text-caption font-mono text-text-muted uppercase">
-        {hasSelection ? `${selectedCount} tài liệu đã chọn` : "Chưa chọn tài liệu nào"}
-      </p>
-      <button type="button" onClick={onCreate} disabled={!hasSelection} className="btn-primary !text-small mt-1 disabled:opacity-40 disabled:cursor-not-allowed">
-        <Icon name={copy.icon} size={14} /> {copy.cta}
-      </button>
-      {!hasSelection && (
-        <p className="text-caption text-text-muted">Chọn tài liệu bên trái trước.</p>
+      {hasAnyDocuments ? (
+        <>
+          <p className="text-caption font-mono text-text-muted uppercase">
+            {hasSelection ? `${selectedCount} tài liệu đã chọn` : "Chưa chọn tài liệu nào"}
+          </p>
+          <button type="button" onClick={onCreate} disabled={!hasSelection} className="btn-primary !text-small mt-1 disabled:opacity-40 disabled:cursor-not-allowed">
+            <Icon name={copy.icon} size={14} /> {copy.cta}
+          </button>
+          {!hasSelection && (
+            // W1-4 (same fix as ChatArea's empty-Chat hint): below `md` there
+            // is no left column, so "bên trái" points at nothing there either.
+            <>
+              <p className="text-caption text-text-muted md:hidden">Chọn tài liệu trước.</p>
+              <p className="text-caption text-text-muted hidden md:block">Chọn tài liệu bên trái trước.</p>
+            </>
+          )}
+        </>
+      ) : (
+        // W1-4: no documents at all -- "chọn tài liệu" (select one) has
+        // nothing to select. One primary action: upload, reusing the exact
+        // same handler/input SidebarLeft's own "Thêm tài liệu" calls (no
+        // duplicate upload POST logic here).
+        <>
+          <p className="text-caption font-mono text-text-muted uppercase">Chưa có tài liệu nào</p>
+          <button type="button" onClick={onUpload} className="btn-primary !text-small mt-1">
+            <Icon name="Plus" size={14} /> Tải tài liệu lên
+          </button>
+        </>
       )}
       {children}
     </div>
