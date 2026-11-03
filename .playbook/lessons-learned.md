@@ -3633,3 +3633,17 @@ Environment-labelled test passes need an observable assertion for the label.
 An authenticated-only suite can pass identically with auth protection on or
 off; pair it with an unauthenticated request whose status changes across modes.
 
+# Persistent settings surfaces should have one navigation authority (2026-11-04)
+
+When all configuration sections stay mounted and a semantic rail already moves
+between them, a second footer-forward action creates competing navigation
+models rather than additional capability. Keep navigation in the rail and
+commit/cancel actions in the footer; verify every rail destination with both
+pointer and native keyboard activation before removing the duplicate control.
+
+Stable action labels can cover lifecycle states without multiplying buttons.
+Reuse `Xuất <ĐỊNH DẠNG>` for initial export, retry, and re-export while changing
+only progress feedback and iconography. UI-only export work still needs real
+artifact gates: a clean screenshot or mocked call does not prove output bytes,
+scope identity, or connector geometry stayed unchanged.
+

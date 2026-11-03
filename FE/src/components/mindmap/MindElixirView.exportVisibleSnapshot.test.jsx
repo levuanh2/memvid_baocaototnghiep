@@ -70,15 +70,12 @@ async function openExportToVisiblePreview() {
   await act(async () => { container.querySelector('[aria-label="Xuất sơ đồ"]').click(); });
   const dialog = document.body.querySelector('[role="dialog"]');
   await act(async () => { dialog.querySelector('input[name="mm-export-scope"][value="visible"]').click(); });
-  await act(async () => { [...dialog.querySelectorAll("button")].find((b) => b.textContent === "Tiếp tục").click(); }); // -> format
   await act(async () => { dialog.querySelector('input[value="pdf"]').click(); });
-  await act(async () => { [...dialog.querySelectorAll("button")].find((b) => b.textContent === "Tiếp tục").click(); }); // -> appearance
-  await act(async () => { [...dialog.querySelectorAll("button")].find((b) => b.textContent === "Tiếp tục").click(); }); // -> preview
   return dialog;
 }
 
 async function clickExport(dialog) {
-  const btn = [...dialog.querySelectorAll("button")].find((b) => b.textContent.includes("Tạo PDF") || b.textContent.includes("Thử lại"));
+  const btn = [...dialog.querySelectorAll("button")].find((b) => b.textContent.includes("Xuất PDF"));
   await act(async () => { btn.click(); });
 }
 
@@ -179,10 +176,7 @@ describe("Document visible-export snapshot (Section 4, red against origin/main)"
     await act(async () => { container.querySelector('[aria-label="Xuất sơ đồ"]').click(); });
     const dialog = document.body.querySelector('[role="dialog"]');
     await act(async () => { dialog.querySelector('input[name="mm-export-scope"][value="full"]').click(); });
-    await act(async () => { [...dialog.querySelectorAll("button")].find((b) => b.textContent === "Tiếp tục").click(); });
     await act(async () => { dialog.querySelector('input[value="pdf"]').click(); });
-    await act(async () => { [...dialog.querySelectorAll("button")].find((b) => b.textContent === "Tiếp tục").click(); });
-    await act(async () => { [...dialog.querySelectorAll("button")].find((b) => b.textContent === "Tiếp tục").click(); });
     await clickExport(dialog);
     const call = docExport.createMindmapExport.mock.calls.at(-1);
     expect(call[1].scope).not.toHaveProperty("visible_node_ids");
@@ -200,7 +194,7 @@ describe("Document visible-export snapshot (Section 4, red against origin/main)"
     expect(scopeStr).not.toMatch(/Root|Section|Idea|\bA\b|\bB\b|\bC\b|\bE\b|\bF\b/);
   });
 
-  it("'Tạo bản xuất mới' after a completed export generates a NEW idempotency key, not a reused one", async () => {
+  it("a repeated format-specific export generates a NEW idempotency key", async () => {
     mockHappyExport();
     await render(makeController());
     const dialog = await openExportToVisiblePreview();
@@ -208,12 +202,7 @@ describe("Document visible-export snapshot (Section 4, red against origin/main)"
     const firstKey = docExport.createMindmapExport.mock.calls.at(-1)[1].idempotencyKey;
     expect(firstKey).toBeTruthy();
 
-    const newExportBtn = [...dialog.querySelectorAll("button")].find((b) => b.textContent.includes("Tạo bản xuất mới"));
-    await act(async () => { newExportBtn.click(); });
-    const dialog2 = document.body.querySelector('[role="dialog"]');
-    await act(async () => { dialog2.querySelector('input[name="mm-export-scope"][value="visible"]')?.click(); });
-    const dlg3 = await openExportToVisiblePreview();
-    await clickExport(dlg3);
+    await clickExport(dialog);
     const secondKey = docExport.createMindmapExport.mock.calls.at(-1)[1].idempotencyKey;
     expect(secondKey).not.toBe(firstKey);
   });

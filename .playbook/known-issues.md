@@ -7777,3 +7777,23 @@ progress averages/comparisons, and UI explicitly labels incomplete results.
 Real Flask/Postgres/browser coverage pins outage, reload, response preservation
 and account isolation.
 
+# Export Studio duplicated navigation and export lifecycle actions (fixed 2026-11-04)
+
+**Symptom:** the desktop footer exposed `Tiếp tục`, `Hủy`, and the format action
+even though the persistent step rail already navigated every mounted settings
+section. After completion it expanded to three lifecycle actions, while the
+appearance persistence action used the ambiguous label `Áp dụng cho sơ đồ`.
+
+**Root cause:** the persistent Preview Bench retained controls from its earlier
+wizard lifecycle. Responsive CSS hid `Tiếp tục` on phones, masking the duplicate
+desktop path, and completed/error states replaced rather than reused the stable
+format action.
+
+**Fix and prevention:** the footer now always owns exactly two actions: `Hủy`
+and `Xuất <ĐỊNH DẠNG>`. The same export action handles first attempts, retries,
+and re-exports; the rail remains the sole section navigator and is pinned for
+mouse, Enter, and Space activation. Appearance persistence stays beside its
+controls as `Lưu giao diện cho sơ đồ`, with the existing PATCH payload and
+disabled rules unchanged. Real-download artifact gates verify the UI cleanup
+does not alter exported files.
+

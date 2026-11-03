@@ -122,6 +122,26 @@ test.describe("Export Studio — fixture harness, real files", () => {
     await expect(page.locator(nodeSelector(`${MAP_A_ID}-root`))).toBeVisible();
   });
 
+  test("footer has only cancel/export actions and every section remains reachable by mouse and keyboard", async ({ page }) => {
+    await openExportStudio(page);
+
+    const footer = page.locator(".export-footer");
+    await expect(footer.getByRole("button")).toHaveCount(2);
+    await expect(footer.getByRole("button").nth(0)).toHaveText("Hủy");
+    await expect(footer.getByRole("button").nth(1)).toHaveText("Xuất PNG");
+
+    const rail = page.locator(".export-rail");
+    const sections = rail.getByRole("button");
+    await sections.nth(1).click();
+    await expect(sections.nth(1)).toHaveAttribute("aria-current", "page");
+    await sections.nth(2).focus();
+    await sections.nth(2).press("Enter");
+    await expect(sections.nth(2)).toHaveAttribute("aria-current", "page");
+    await sections.nth(0).focus();
+    await sections.nth(0).press("Space");
+    await expect(sections.nth(0)).toHaveAttribute("aria-current", "page");
+  });
+
   test("H3B.1: reused Mind Elixir instance reports A(11) → B(57) → A(11) and exports B's real content", async ({ page }) => {
     await page.goto("/fixture-harness.html?map=scope-a");
     await expect(page.locator(nodeSelector(`${SCOPE_MAP_A_ID}-root`))).toBeVisible();
@@ -145,7 +165,7 @@ test.describe("Export Studio — fixture harness, real files", () => {
     expect(svg).toContain("H3B.1 Map B");
     expect(svg).toContain("node 56");
 
-    await page.getByRole("button", { name: "Đóng", exact: true }).click();
+    await page.getByRole("button", { name: "Hủy", exact: true }).click();
     await page.getByRole("button", { name: "Mở thư viện sơ đồ" }).click();
     await page.getByRole("option", { name: /H3B\.1 Map A/ }).click();
     await expect(page.locator(nodeSelector(`${SCOPE_MAP_A_ID}-root`))).toBeVisible();

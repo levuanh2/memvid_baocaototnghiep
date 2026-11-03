@@ -106,7 +106,7 @@ describe("Export Studio — document formats", () => {
     await act(async () => { contentFit.click(); });
     expect(contentFit.getAttribute("aria-pressed")).toBe("true");
 
-    await act(async () => { [...dialog.querySelectorAll("button")].find((b) => b.textContent.includes("Tạo PDF")).click(); });
+    await act(async () => { [...dialog.querySelectorAll("button")].find((b) => b.textContent.includes("Xuất PDF")).click(); });
 
     expect(docExport.createMindmapExport).toHaveBeenCalledWith("m1", expect.objectContaining({
       options: expect.objectContaining({ pageSize: "content_fit" }),
@@ -130,7 +130,7 @@ describe("Export Studio — document formats", () => {
     expect(button("Vừa nội dung — Xem trên màn hình").disabled).toBe(true);
     expect(button("A4 — In tài liệu").getAttribute("aria-pressed")).toBe("true");
 
-    await act(async () => { [...dialog.querySelectorAll("button")].find((b) => b.textContent.includes("Tạo PDF")).click(); });
+    await act(async () => { [...dialog.querySelectorAll("button")].find((b) => b.textContent.includes("Xuất PDF")).click(); });
     expect(docExport.createMindmapExport).toHaveBeenCalledWith("m1", expect.objectContaining({
       options: expect.objectContaining({ mode: "outline", pageSize: "A4" }),
     }));
@@ -150,7 +150,7 @@ describe("Export Studio — document formats", () => {
     const dialog = await openToFormatStep();
     await act(async () => { dialog.querySelector('input[value="pdf"]').click(); });
 
-    const exportBtn = [...dialog.querySelectorAll("button")].find((b) => b.textContent.includes("Tạo PDF"));
+    const exportBtn = [...dialog.querySelectorAll("button")].find((b) => b.textContent.includes("Xuất PDF"));
     await act(async () => { exportBtn.click(); });
 
     expect(docExport.createMindmapExport).toHaveBeenCalledWith("m1", expect.objectContaining({ format: "pdf" }));
@@ -166,11 +166,11 @@ describe("Export Studio — document formats", () => {
     const dialog = await openToFormatStep();
     await act(async () => { dialog.querySelector('input[value="pdf"]').click(); });
 
-    const exportBtn = [...dialog.querySelectorAll("button")].find((b) => b.textContent.includes("Tạo PDF"));
+    const exportBtn = [...dialog.querySelectorAll("button")].find((b) => b.textContent.includes("Xuất PDF"));
     await act(async () => { exportBtn.click(); });
 
     expect(dialog.textContent).toContain("Lỗi máy chủ");
-    const retryBtn = [...dialog.querySelectorAll("button")].find((b) => b.textContent.includes("Thử lại"));
+    const retryBtn = [...dialog.querySelectorAll("button")].find((b) => b.textContent.includes("Xuất PDF"));
     expect(retryBtn).toBeTruthy();
 
     docExport.createMindmapExport.mockClear();
@@ -194,10 +194,10 @@ describe("Export Studio — document formats", () => {
     const dialog = await openToFormatStep();
     await act(async () => { dialog.querySelector('input[value="pdf"]').click(); });
 
-    const exportBtn = [...dialog.querySelectorAll("button")].find((b) => b.textContent.includes("Tạo PDF"));
+    const exportBtn = [...dialog.querySelectorAll("button")].find((b) => b.textContent.includes("Xuất PDF"));
     await act(async () => { exportBtn.click(); });
 
-    const cancelBtn = [...dialog.querySelectorAll("button")].find((b) => b.textContent === "Hủy xuất");
+    const cancelBtn = [...dialog.querySelectorAll("button")].find((b) => b.textContent === "Hủy");
     expect(cancelBtn).toBeTruthy();
     await act(async () => { cancelBtn.click(); });
     expect(cancelSpy).toHaveBeenCalledWith("j1");
@@ -219,10 +219,10 @@ describe("Export Studio — document formats", () => {
     await render(controller);
     const dialog = await openToFormatStep();
     await act(async () => { dialog.querySelector('input[value="pdf"]').click(); });
-    act(() => { [...dialog.querySelectorAll("button")].find((b) => b.textContent.includes("Tạo PDF")).click(); });
+    act(() => { [...dialog.querySelectorAll("button")].find((b) => b.textContent.includes("Xuất PDF")).click(); });
     await act(async () => { await Promise.resolve(); });
 
-    act(() => { [...dialog.querySelectorAll("button")].find((b) => b.textContent === "Hủy xuất").click(); });
+    act(() => { [...dialog.querySelectorAll("button")].find((b) => b.textContent === "Hủy").click(); });
     await act(async () => {
       root.render(<MindElixirView data={dataFor("m2")} onRegenerate={vi.fn()} regenerating={false} controller={controller} />);
       await Promise.resolve();
@@ -256,12 +256,12 @@ describe("Export Studio — document formats", () => {
     await render(makeController());
     const dialog = await openToFormatStep();
     await act(async () => { dialog.querySelector('input[value="pdf"]').click(); });
-    act(() => { [...dialog.querySelectorAll("button")].find((b) => b.textContent.includes("Tạo PDF")).click(); });
+    act(() => { [...dialog.querySelectorAll("button")].find((b) => b.textContent.includes("Xuất PDF")).click(); });
     await act(async () => { await Promise.resolve(); });
-    await act(async () => { [...dialog.querySelectorAll("button")].find((b) => b.textContent === "Hủy xuất").click(); });
+    await act(async () => { [...dialog.querySelectorAll("button")].find((b) => b.textContent === "Hủy").click(); });
     expect(dialog.textContent).toContain("Đã hủy");
 
-    await act(async () => { [...dialog.querySelectorAll("button")].find((b) => b.textContent.includes("Tạo PDF")).click(); });
+    await act(async () => { [...dialog.querySelectorAll("button")].find((b) => b.textContent.includes("Xuất PDF")).click(); });
 
     expect(docExport.createMindmapExport).toHaveBeenCalledTimes(2);
     expect(downloadSpy).toHaveBeenCalledWith("/job-b");
@@ -286,15 +286,15 @@ describe("Export Studio — document formats", () => {
     await render(makeController());
     const dialog = await openToFormatStep();
     await act(async () => { dialog.querySelector('input[value="pdf"]').click(); });
-    act(() => { [...dialog.querySelectorAll("button")].find((b) => b.textContent.includes("Tạo PDF")).click(); });
+    act(() => { [...dialog.querySelectorAll("button")].find((b) => b.textContent.includes("Xuất PDF")).click(); });
     await act(async () => { await Promise.resolve(); });
-    await act(async () => { [...dialog.querySelectorAll("button")].find((b) => b.textContent === "Hủy xuất").click(); });
+    await act(async () => { [...dialog.querySelectorAll("button")].find((b) => b.textContent === "Hủy").click(); });
     await act(async () => { [...dialog.querySelectorAll("button")].find((b) => b.textContent === "Hủy").click(); });
 
     await act(async () => { container.querySelector('[aria-label="Xuất sơ đồ"]').click(); });
     const reopened = document.body.querySelector('[role="dialog"]');
     expect(reopened.textContent).not.toContain("Đã hủy");
-    await act(async () => { [...reopened.querySelectorAll("button")].find((b) => b.textContent.includes("Tạo PDF")).click(); });
+    await act(async () => { [...reopened.querySelectorAll("button")].find((b) => b.textContent.includes("Xuất PDF")).click(); });
 
     expect(docExport.createMindmapExport).toHaveBeenCalledTimes(2);
     expect(downloadSpy).toHaveBeenCalledWith("/job-b");
@@ -312,9 +312,9 @@ describe("Export Studio — document formats", () => {
     await act(async () => { dialog.querySelector('input[value="pdf"]').click(); });
     await act(async () => { [...dialog.querySelectorAll("button")].find((b) => b.textContent === "Chỉ sơ đồ").click(); });
 
-    act(() => { [...dialog.querySelectorAll("button")].find((b) => b.textContent.includes("Tạo PDF")).click(); });
+    act(() => { [...dialog.querySelectorAll("button")].find((b) => b.textContent.includes("Xuất PDF")).click(); });
     await act(async () => {});
-    const cancelBtn = [...dialog.querySelectorAll("button")].find((b) => b.textContent === "Hủy xuất");
+    const cancelBtn = [...dialog.querySelectorAll("button")].find((b) => b.textContent === "Hủy");
     expect(cancelBtn).toBeTruthy();
     await act(async () => { cancelBtn.click(); });
     await act(async () => {
@@ -348,10 +348,10 @@ describe("Export Studio — document formats", () => {
     await act(async () => { dialog.querySelector('input[value="pdf"]').click(); });
     await act(async () => { [...dialog.querySelectorAll("button")].find((b) => b.textContent === "Chỉ sơ đồ").click(); });
 
-    act(() => { [...dialog.querySelectorAll("button")].find((b) => b.textContent.includes("Tạo PDF")).click(); });
+    act(() => { [...dialog.querySelectorAll("button")].find((b) => b.textContent.includes("Xuất PDF")).click(); });
     await act(async () => {});
-    await act(async () => { [...dialog.querySelectorAll("button")].find((b) => b.textContent === "Hủy xuất").click(); });
-    act(() => { [...dialog.querySelectorAll("button")].find((b) => b.textContent.includes("Tạo PDF")).click(); });
+    await act(async () => { [...dialog.querySelectorAll("button")].find((b) => b.textContent === "Hủy").click(); });
+    act(() => { [...dialog.querySelectorAll("button")].find((b) => b.textContent.includes("Xuất PDF")).click(); });
     await act(async () => { await Promise.resolve(); });
     expect(dialog.textContent).toContain("Đang xử lý (40%)");
 
@@ -375,7 +375,7 @@ describe("Export Studio — document formats", () => {
     const dialog = await openToFormatStep();
     await act(async () => { dialog.querySelector('input[value="pdf"]').click(); });
     await act(async () => { [...dialog.querySelectorAll("button")].find((b) => b.textContent === "Chỉ sơ đồ").click(); });
-    act(() => { [...dialog.querySelectorAll("button")].find((b) => b.textContent.includes("Tạo PDF")).click(); });
+    act(() => { [...dialog.querySelectorAll("button")].find((b) => b.textContent.includes("Xuất PDF")).click(); });
     await act(async () => {});
 
     await act(async () => {
@@ -402,10 +402,10 @@ describe("Export Studio — document formats", () => {
     const dialog = await openToFormatStep();
     await act(async () => { dialog.querySelector('input[value="pdf"]').click(); });
     await act(async () => { [...dialog.querySelectorAll("button")].find((b) => b.textContent === "Chỉ sơ đồ").click(); });
-    act(() => { [...dialog.querySelectorAll("button")].find((b) => b.textContent.includes("Tạo PDF")).click(); });
+    act(() => { [...dialog.querySelectorAll("button")].find((b) => b.textContent.includes("Xuất PDF")).click(); });
     await act(async () => { await Promise.resolve(); });
 
-    await act(async () => { [...dialog.querySelectorAll("button")].find((b) => b.textContent === "Hủy xuất").click(); });
+    await act(async () => { [...dialog.querySelectorAll("button")].find((b) => b.textContent === "Hủy").click(); });
     await act(async () => { resolveCreate({ job_id: "late-job", status: "queued" }); await Promise.resolve(); });
 
     expect(cancelSpy).toHaveBeenCalledWith("late-job");
@@ -431,7 +431,7 @@ describe("Export Studio — document formats", () => {
     await act(async () => { dialog.querySelector('input[name="mm-export-scope"][value="visible"]').click(); });
     await act(async () => { dialog.querySelector('input[value="pdf"]').click(); });
 
-    const exportBtn = [...dialog.querySelectorAll("button")].find((b) => b.textContent.includes("Tạo PDF"));
+    const exportBtn = [...dialog.querySelectorAll("button")].find((b) => b.textContent.includes("Xuất PDF"));
     await act(async () => { exportBtn.click(); });
 
     expect(docExport.createMindmapExport).toHaveBeenCalledWith("m1", expect.objectContaining({
@@ -450,14 +450,14 @@ describe("Export Studio — document formats", () => {
     await render(controller);
     const dialog1 = await openToFormatStep();
     await act(async () => { dialog1.querySelector('input[value="pdf"]').click(); });
-    const exportBtn1 = [...dialog1.querySelectorAll("button")].find((b) => b.textContent.includes("Tạo PDF"));
+    const exportBtn1 = [...dialog1.querySelectorAll("button")].find((b) => b.textContent.includes("Xuất PDF"));
     await act(async () => { exportBtn1.click(); });
     expect(dialog1.textContent).toContain("Đã xuất");
 
     // Close, then re-render the SAME root with a DIFFERENT map — real
     // WorkspaceContainer.jsx renders MindElixirView with no `key` prop, so
     // this is the actual update path a map switch takes, not a remount.
-    const closeBtn = [...document.body.querySelectorAll("button")].find((b) => b.textContent === "Đóng");
+    const closeBtn = [...document.body.querySelectorAll("button")].find((b) => b.textContent === "Hủy");
     await act(async () => { closeBtn.click(); });
     await act(async () => {
       root.render(<MindElixirView data={dataFor("m2")} onRegenerate={vi.fn()} regenerating={false} controller={controller} />);
