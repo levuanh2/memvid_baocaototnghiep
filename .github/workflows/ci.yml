@@ -8,9 +8,14 @@ on:
 
 # Concurrency control:
 # - PRs: cancel outdated in-progress runs when a new commit is pushed.
-# - main branch: cancel-in-progress is FALSE to ensure deploy is never disrupted midway.
+# - main: one group PER COMMIT, so a main run never waits as "pending" and is
+#   never cancelled. A pending run has no check runs yet; Render's
+#   autoDeployTrigger checksPass then saw a commit with no checks and deployed
+#   the frontend before CI ran (2026-11-03: 2d283aa and e83f1f3, merged within
+#   a minute). EC2 deploys stay serialized by deploy.yml's own concurrency and
+#   deploy_gate (only the current main SHA deploys).
 concurrency:
-  group: ${{ github.workflow }}-${{ github.ref }}
+  group: ${{ github.workflow }}-${{ github.ref == 'refs/heads/main' && github.sha || github.ref }}
   cancel-in-progress: ${{ github.ref != 'refs/heads/main' }}
 
 permissions:
