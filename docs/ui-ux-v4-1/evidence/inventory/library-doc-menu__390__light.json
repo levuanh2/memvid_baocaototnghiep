@@ -1,0 +1,1859 @@
+{
+ "url": "/app/study",
+ "controls": [
+  {
+   "tag": "a",
+   "role": "",
+   "name": "Phòng đọc",
+   "region": "header",
+   "unlabeled": false,
+   "inViewport": true
+  },
+  {
+   "tag": "button",
+   "role": "",
+   "name": "Tải tài liệu",
+   "region": "header",
+   "unlabeled": false,
+   "inViewport": true
+  },
+  {
+   "tag": "button",
+   "role": "",
+   "name": "Xem thử",
+   "region": "header",
+   "unlabeled": false,
+   "inViewport": true
+  },
+  {
+   "tag": "input",
+   "role": "",
+   "name": "Tìm trong thư viện",
+   "region": "main",
+   "unlabeled": false,
+   "inViewport": true
+  },
+  {
+   "tag": "select",
+   "role": "",
+   "name": "Mới nhất Cũ nhất A-Z Z-A Thời gian đọc Mở gần đây Tải lên gần đây",
+   "region": "main",
+   "unlabeled": false,
+   "inViewport": true
+  },
+  {
+   "tag": "button",
+   "role": "",
+   "name": "Lọc",
+   "region": "main",
+   "unlabeled": false,
+   "inViewport": true
+  },
+  {
+   "tag": "button",
+   "role": "",
+   "name": "Đủ",
+   "region": "main",
+   "unlabeled": false,
+   "inViewport": true
+  },
+  {
+   "tag": "input",
+   "role": "",
+   "name": "",
+   "region": "main",
+   "unlabeled": true,
+   "inViewport": true
+  },
+  {
+   "tag": "input",
+   "role": "",
+   "name": "",
+   "region": "main",
+   "unlabeled": true,
+   "inViewport": true
+  },
+  {
+   "tag": "button",
+   "role": "",
+   "name": "TỔNG QUAN HỌC TẬP",
+   "region": "main",
+   "unlabeled": false,
+   "inViewport": true
+  },
+  {
+   "tag": "input",
+   "role": "",
+   "name": "Chọn Hệ điều hành.pdf",
+   "region": "main",
+   "unlabeled": false,
+   "inViewport": true
+  },
+  {
+   "tag": "button",
+   "role": "",
+   "name": "Tuỳ chọn tài liệu",
+   "region": "main",
+   "unlabeled": false,
+   "inViewport": true
+  },
+  {
+   "tag": "button",
+   "role": "",
+   "name": "Đổi tên",
+   "region": "main",
+   "unlabeled": false,
+   "inViewport": true
+  },
+  {
+   "tag": "button",
+   "role": "",
+   "name": "Yêu thích",
+   "region": "main",
+   "unlabeled": false,
+   "inViewport": true
+  },
+  {
+   "tag": "button",
+   "role": "",
+   "name": "Ghim",
+   "region": "main",
+   "unlabeled": false,
+   "inViewport": true
+  },
+  {
+   "tag": "button",
+   "role": "",
+   "name": "Lưu trữ",
+   "region": "main",
+   "unlabeled": false,
+   "inViewport": true
+  },
+  {
+   "tag": "button",
+   "role": "",
+   "name": "Tiếp tục · Hỏi AI",
+   "region": "main",
+   "unlabeled": false,
+   "inViewport": true
+  },
+  {
+   "tag": "button",
+   "role": "",
+   "name": "Tóm tắt",
+   "region": "main",
+   "unlabeled": false,
+   "inViewport": true
+  },
+  {
+   "tag": "button",
+   "role": "",
+   "name": "Sơ đồ",
+   "region": "main",
+   "unlabeled": false,
+   "inViewport": true
+  },
+  {
+   "tag": "button",
+   "role": "",
+   "name": "Quiz",
+   "region": "main",
+   "unlabeled": false,
+   "inViewport": true
+  },
+  {
+   "tag": "button",
+   "role": "",
+   "name": "Ôn tập",
+   "region": "main",
+   "unlabeled": false,
+   "inViewport": true
+  },
+  {
+   "tag": "button",
+   "role": "",
+   "name": "Hỏi AI",
+   "region": "main",
+   "unlabeled": false,
+   "inViewport": true
+  },
+  {
+   "tag": "button",
+   "role": "",
+   "name": "Chi tiết",
+   "region": "main",
+   "unlabeled": false,
+   "inViewport": true
+  },
+  {
+   "tag": "input",
+   "role": "",
+   "name": "Chọn Hệ điều hành.pdf",
+   "region": "main",
+   "unlabeled": false,
+   "inViewport": false
+  },
+  {
+   "tag": "button",
+   "role": "",
+   "name": "Tuỳ chọn tài liệu",
+   "region": "main",
+   "unlabeled": false,
+   "inViewport": false
+  },
+  {
+   "tag": "button",
+   "role": "",
+   "name": "Tiếp tục · Hỏi AI",
+   "region": "main",
+   "unlabeled": false,
+   "inViewport": false
+  },
+  {
+   "tag": "button",
+   "role": "",
+   "name": "Tóm tắt",
+   "region": "main",
+   "unlabeled": false,
+   "inViewport": false
+  },
+  {
+   "tag": "button",
+   "role": "",
+   "name": "Sơ đồ",
+   "region": "main",
+   "unlabeled": false,
+   "inViewport": false
+  },
+  {
+   "tag": "button",
+   "role": "",
+   "name": "Quiz",
+   "region": "main",
+   "unlabeled": false,
+   "inViewport": false
+  },
+  {
+   "tag": "button",
+   "role": "",
+   "name": "Ôn tập",
+   "region": "main",
+   "unlabeled": false,
+   "inViewport": false
+  },
+  {
+   "tag": "button",
+   "role": "",
+   "name": "Hỏi AI",
+   "region": "main",
+   "unlabeled": false,
+   "inViewport": false
+  },
+  {
+   "tag": "button",
+   "role": "",
+   "name": "Chi tiết",
+   "region": "main",
+   "unlabeled": false,
+   "inViewport": false
+  },
+  {
+   "tag": "input",
+   "role": "",
+   "name": "Chọn Kinh tế vi mô.pptx",
+   "region": "main",
+   "unlabeled": false,
+   "inViewport": false
+  },
+  {
+   "tag": "button",
+   "role": "",
+   "name": "Tuỳ chọn tài liệu",
+   "region": "main",
+   "unlabeled": false,
+   "inViewport": false
+  },
+  {
+   "tag": "button",
+   "role": "",
+   "name": "Tóm tắt",
+   "region": "main",
+   "unlabeled": false,
+   "inViewport": false
+  },
+  {
+   "tag": "button",
+   "role": "",
+   "name": "Sơ đồ",
+   "region": "main",
+   "unlabeled": false,
+   "inViewport": false
+  },
+  {
+   "tag": "button",
+   "role": "",
+   "name": "Quiz",
+   "region": "main",
+   "unlabeled": false,
+   "inViewport": false
+  },
+  {
+   "tag": "button",
+   "role": "",
+   "name": "Ôn tập",
+   "region": "main",
+   "unlabeled": false,
+   "inViewport": false
+  },
+  {
+   "tag": "button",
+   "role": "",
+   "name": "Hỏi AI",
+   "region": "main",
+   "unlabeled": false,
+   "inViewport": false
+  },
+  {
+   "tag": "button",
+   "role": "",
+   "name": "Chi tiết",
+   "region": "main",
+   "unlabeled": false,
+   "inViewport": false
+  },
+  {
+   "tag": "input",
+   "role": "",
+   "name": "Chọn Lịch sử Đảng.pdf",
+   "region": "main",
+   "unlabeled": false,
+   "inViewport": false
+  },
+  {
+   "tag": "button",
+   "role": "",
+   "name": "Tuỳ chọn tài liệu",
+   "region": "main",
+   "unlabeled": false,
+   "inViewport": false
+  },
+  {
+   "tag": "button",
+   "role": "",
+   "name": "Tóm tắt",
+   "region": "main",
+   "unlabeled": false,
+   "inViewport": false
+  },
+  {
+   "tag": "button",
+   "role": "",
+   "name": "Sơ đồ",
+   "region": "main",
+   "unlabeled": false,
+   "inViewport": false
+  },
+  {
+   "tag": "button",
+   "role": "",
+   "name": "Quiz",
+   "region": "main",
+   "unlabeled": false,
+   "inViewport": false
+  },
+  {
+   "tag": "button",
+   "role": "",
+   "name": "Ôn tập",
+   "region": "main",
+   "unlabeled": false,
+   "inViewport": false
+  },
+  {
+   "tag": "button",
+   "role": "",
+   "name": "Hỏi AI",
+   "region": "main",
+   "unlabeled": false,
+   "inViewport": false
+  },
+  {
+   "tag": "button",
+   "role": "",
+   "name": "Chi tiết",
+   "region": "main",
+   "unlabeled": false,
+   "inViewport": false
+  },
+  {
+   "tag": "input",
+   "role": "",
+   "name": "Chọn Giải tích 1.pdf",
+   "region": "main",
+   "unlabeled": false,
+   "inViewport": false
+  },
+  {
+   "tag": "button",
+   "role": "",
+   "name": "Tuỳ chọn tài liệu",
+   "region": "main",
+   "unlabeled": false,
+   "inViewport": false
+  },
+  {
+   "tag": "button",
+   "role": "",
+   "name": "Tóm tắt",
+   "region": "main",
+   "unlabeled": false,
+   "inViewport": false
+  },
+  {
+   "tag": "button",
+   "role": "",
+   "name": "Sơ đồ",
+   "region": "main",
+   "unlabeled": false,
+   "inViewport": false
+  },
+  {
+   "tag": "button",
+   "role": "",
+   "name": "Quiz",
+   "region": "main",
+   "unlabeled": false,
+   "inViewport": false
+  },
+  {
+   "tag": "button",
+   "role": "",
+   "name": "Ôn tập",
+   "region": "main",
+   "unlabeled": false,
+   "inViewport": false
+  },
+  {
+   "tag": "button",
+   "role": "",
+   "name": "Hỏi AI",
+   "region": "main",
+   "unlabeled": false,
+   "inViewport": false
+  },
+  {
+   "tag": "button",
+   "role": "",
+   "name": "Chi tiết",
+   "region": "main",
+   "unlabeled": false,
+   "inViewport": false
+  },
+  {
+   "tag": "input",
+   "role": "",
+   "name": "Chọn Cấu trúc dữ liệu.docx",
+   "region": "main",
+   "unlabeled": false,
+   "inViewport": false
+  },
+  {
+   "tag": "button",
+   "role": "",
+   "name": "Tuỳ chọn tài liệu",
+   "region": "main",
+   "unlabeled": false,
+   "inViewport": false
+  },
+  {
+   "tag": "button",
+   "role": "",
+   "name": "Tóm tắt",
+   "region": "main",
+   "unlabeled": false,
+   "inViewport": false
+  },
+  {
+   "tag": "button",
+   "role": "",
+   "name": "Sơ đồ",
+   "region": "main",
+   "unlabeled": false,
+   "inViewport": false
+  },
+  {
+   "tag": "button",
+   "role": "",
+   "name": "Quiz",
+   "region": "main",
+   "unlabeled": false,
+   "inViewport": false
+  },
+  {
+   "tag": "button",
+   "role": "",
+   "name": "Ôn tập",
+   "region": "main",
+   "unlabeled": false,
+   "inViewport": false
+  },
+  {
+   "tag": "button",
+   "role": "",
+   "name": "Hỏi AI",
+   "region": "main",
+   "unlabeled": false,
+   "inViewport": false
+  },
+  {
+   "tag": "button",
+   "role": "",
+   "name": "Chi tiết",
+   "region": "main",
+   "unlabeled": false,
+   "inViewport": false
+  },
+  {
+   "tag": "input",
+   "role": "",
+   "name": "Chọn Mạng máy tính.pdf",
+   "region": "main",
+   "unlabeled": false,
+   "inViewport": false
+  },
+  {
+   "tag": "button",
+   "role": "",
+   "name": "Tuỳ chọn tài liệu",
+   "region": "main",
+   "unlabeled": false,
+   "inViewport": false
+  },
+  {
+   "tag": "button",
+   "role": "",
+   "name": "Tóm tắt",
+   "region": "main",
+   "unlabeled": false,
+   "inViewport": false
+  },
+  {
+   "tag": "button",
+   "role": "",
+   "name": "Sơ đồ",
+   "region": "main",
+   "unlabeled": false,
+   "inViewport": false
+  },
+  {
+   "tag": "button",
+   "role": "",
+   "name": "Quiz",
+   "region": "main",
+   "unlabeled": false,
+   "inViewport": false
+  },
+  {
+   "tag": "button",
+   "role": "",
+   "name": "Ôn tập",
+   "region": "main",
+   "unlabeled": false,
+   "inViewport": false
+  },
+  {
+   "tag": "button",
+   "role": "",
+   "name": "Hỏi AI",
+   "region": "main",
+   "unlabeled": false,
+   "inViewport": false
+  },
+  {
+   "tag": "button",
+   "role": "",
+   "name": "Chi tiết",
+   "region": "main",
+   "unlabeled": false,
+   "inViewport": false
+  },
+  {
+   "tag": "input",
+   "role": "",
+   "name": "Chọn Hệ điều hành.pdf",
+   "region": "main",
+   "unlabeled": false,
+   "inViewport": false
+  },
+  {
+   "tag": "button",
+   "role": "",
+   "name": "Tuỳ chọn tài liệu",
+   "region": "main",
+   "unlabeled": false,
+   "inViewport": false
+  },
+  {
+   "tag": "button",
+   "role": "",
+   "name": "Tiếp tục · Hỏi AI",
+   "region": "main",
+   "unlabeled": false,
+   "inViewport": false
+  },
+  {
+   "tag": "button",
+   "role": "",
+   "name": "Tóm tắt",
+   "region": "main",
+   "unlabeled": false,
+   "inViewport": false
+  },
+  {
+   "tag": "button",
+   "role": "",
+   "name": "Sơ đồ",
+   "region": "main",
+   "unlabeled": false,
+   "inViewport": false
+  },
+  {
+   "tag": "button",
+   "role": "",
+   "name": "Quiz",
+   "region": "main",
+   "unlabeled": false,
+   "inViewport": false
+  },
+  {
+   "tag": "button",
+   "role": "",
+   "name": "Ôn tập",
+   "region": "main",
+   "unlabeled": false,
+   "inViewport": false
+  },
+  {
+   "tag": "button",
+   "role": "",
+   "name": "Hỏi AI",
+   "region": "main",
+   "unlabeled": false,
+   "inViewport": false
+  },
+  {
+   "tag": "button",
+   "role": "",
+   "name": "Chi tiết",
+   "region": "main",
+   "unlabeled": false,
+   "inViewport": false
+  },
+  {
+   "tag": "input",
+   "role": "",
+   "name": "Chọn Kinh tế vi mô.pptx",
+   "region": "main",
+   "unlabeled": false,
+   "inViewport": false
+  },
+  {
+   "tag": "button",
+   "role": "",
+   "name": "Tuỳ chọn tài liệu",
+   "region": "main",
+   "unlabeled": false,
+   "inViewport": false
+  },
+  {
+   "tag": "button",
+   "role": "",
+   "name": "Tóm tắt",
+   "region": "main",
+   "unlabeled": false,
+   "inViewport": false
+  },
+  {
+   "tag": "button",
+   "role": "",
+   "name": "Sơ đồ",
+   "region": "main",
+   "unlabeled": false,
+   "inViewport": false
+  },
+  {
+   "tag": "button",
+   "role": "",
+   "name": "Quiz",
+   "region": "main",
+   "unlabeled": false,
+   "inViewport": false
+  },
+  {
+   "tag": "button",
+   "role": "",
+   "name": "Ôn tập",
+   "region": "main",
+   "unlabeled": false,
+   "inViewport": false
+  },
+  {
+   "tag": "button",
+   "role": "",
+   "name": "Hỏi AI",
+   "region": "main",
+   "unlabeled": false,
+   "inViewport": false
+  },
+  {
+   "tag": "button",
+   "role": "",
+   "name": "Chi tiết",
+   "region": "main",
+   "unlabeled": false,
+   "inViewport": false
+  },
+  {
+   "tag": "input",
+   "role": "",
+   "name": "Chọn Lịch sử Đảng.pdf",
+   "region": "main",
+   "unlabeled": false,
+   "inViewport": false
+  },
+  {
+   "tag": "button",
+   "role": "",
+   "name": "Tuỳ chọn tài liệu",
+   "region": "main",
+   "unlabeled": false,
+   "inViewport": false
+  },
+  {
+   "tag": "button",
+   "role": "",
+   "name": "Tóm tắt",
+   "region": "main",
+   "unlabeled": false,
+   "inViewport": false
+  },
+  {
+   "tag": "button",
+   "role": "",
+   "name": "Sơ đồ",
+   "region": "main",
+   "unlabeled": false,
+   "inViewport": false
+  },
+  {
+   "tag": "button",
+   "role": "",
+   "name": "Quiz",
+   "region": "main",
+   "unlabeled": false,
+   "inViewport": false
+  },
+  {
+   "tag": "button",
+   "role": "",
+   "name": "Ôn tập",
+   "region": "main",
+   "unlabeled": false,
+   "inViewport": false
+  },
+  {
+   "tag": "button",
+   "role": "",
+   "name": "Hỏi AI",
+   "region": "main",
+   "unlabeled": false,
+   "inViewport": false
+  },
+  {
+   "tag": "button",
+   "role": "",
+   "name": "Chi tiết",
+   "region": "main",
+   "unlabeled": false,
+   "inViewport": false
+  },
+  {
+   "tag": "input",
+   "role": "",
+   "name": "Chọn Giải tích 1.pdf",
+   "region": "main",
+   "unlabeled": false,
+   "inViewport": false
+  },
+  {
+   "tag": "button",
+   "role": "",
+   "name": "Tuỳ chọn tài liệu",
+   "region": "main",
+   "unlabeled": false,
+   "inViewport": false
+  },
+  {
+   "tag": "button",
+   "role": "",
+   "name": "Tóm tắt",
+   "region": "main",
+   "unlabeled": false,
+   "inViewport": false
+  },
+  {
+   "tag": "button",
+   "role": "",
+   "name": "Sơ đồ",
+   "region": "main",
+   "unlabeled": false,
+   "inViewport": false
+  },
+  {
+   "tag": "button",
+   "role": "",
+   "name": "Quiz",
+   "region": "main",
+   "unlabeled": false,
+   "inViewport": false
+  },
+  {
+   "tag": "button",
+   "role": "",
+   "name": "Ôn tập",
+   "region": "main",
+   "unlabeled": false,
+   "inViewport": false
+  },
+  {
+   "tag": "button",
+   "role": "",
+   "name": "Hỏi AI",
+   "region": "main",
+   "unlabeled": false,
+   "inViewport": false
+  },
+  {
+   "tag": "button",
+   "role": "",
+   "name": "Chi tiết",
+   "region": "main",
+   "unlabeled": false,
+   "inViewport": false
+  },
+  {
+   "tag": "input",
+   "role": "",
+   "name": "Chọn Cấu trúc dữ liệu.docx",
+   "region": "main",
+   "unlabeled": false,
+   "inViewport": false
+  },
+  {
+   "tag": "button",
+   "role": "",
+   "name": "Tuỳ chọn tài liệu",
+   "region": "main",
+   "unlabeled": false,
+   "inViewport": false
+  },
+  {
+   "tag": "button",
+   "role": "",
+   "name": "Tóm tắt",
+   "region": "main",
+   "unlabeled": false,
+   "inViewport": false
+  },
+  {
+   "tag": "button",
+   "role": "",
+   "name": "Sơ đồ",
+   "region": "main",
+   "unlabeled": false,
+   "inViewport": false
+  },
+  {
+   "tag": "button",
+   "role": "",
+   "name": "Quiz",
+   "region": "main",
+   "unlabeled": false,
+   "inViewport": false
+  },
+  {
+   "tag": "button",
+   "role": "",
+   "name": "Ôn tập",
+   "region": "main",
+   "unlabeled": false,
+   "inViewport": false
+  },
+  {
+   "tag": "button",
+   "role": "",
+   "name": "Hỏi AI",
+   "region": "main",
+   "unlabeled": false,
+   "inViewport": false
+  },
+  {
+   "tag": "button",
+   "role": "",
+   "name": "Chi tiết",
+   "region": "main",
+   "unlabeled": false,
+   "inViewport": false
+  },
+  {
+   "tag": "input",
+   "role": "",
+   "name": "Chọn Mạng máy tính.pdf",
+   "region": "main",
+   "unlabeled": false,
+   "inViewport": false
+  },
+  {
+   "tag": "button",
+   "role": "",
+   "name": "Tuỳ chọn tài liệu",
+   "region": "main",
+   "unlabeled": false,
+   "inViewport": false
+  },
+  {
+   "tag": "button",
+   "role": "",
+   "name": "Tóm tắt",
+   "region": "main",
+   "unlabeled": false,
+   "inViewport": false
+  },
+  {
+   "tag": "button",
+   "role": "",
+   "name": "Sơ đồ",
+   "region": "main",
+   "unlabeled": false,
+   "inViewport": false
+  },
+  {
+   "tag": "button",
+   "role": "",
+   "name": "Quiz",
+   "region": "main",
+   "unlabeled": false,
+   "inViewport": false
+  },
+  {
+   "tag": "button",
+   "role": "",
+   "name": "Ôn tập",
+   "region": "main",
+   "unlabeled": false,
+   "inViewport": false
+  },
+  {
+   "tag": "button",
+   "role": "",
+   "name": "Hỏi AI",
+   "region": "main",
+   "unlabeled": false,
+   "inViewport": false
+  },
+  {
+   "tag": "button",
+   "role": "",
+   "name": "Chi tiết",
+   "region": "main",
+   "unlabeled": false,
+   "inViewport": false
+  },
+  {
+   "tag": "input",
+   "role": "",
+   "name": "Chọn Lịch sử Đảng.pdf",
+   "region": "main",
+   "unlabeled": false,
+   "inViewport": false
+  },
+  {
+   "tag": "button",
+   "role": "",
+   "name": "Tuỳ chọn tài liệu",
+   "region": "main",
+   "unlabeled": false,
+   "inViewport": false
+  },
+  {
+   "tag": "button",
+   "role": "",
+   "name": "Tóm tắt",
+   "region": "main",
+   "unlabeled": false,
+   "inViewport": false
+  },
+  {
+   "tag": "button",
+   "role": "",
+   "name": "Sơ đồ",
+   "region": "main",
+   "unlabeled": false,
+   "inViewport": false
+  },
+  {
+   "tag": "button",
+   "role": "",
+   "name": "Quiz",
+   "region": "main",
+   "unlabeled": false,
+   "inViewport": false
+  },
+  {
+   "tag": "button",
+   "role": "",
+   "name": "Ôn tập",
+   "region": "main",
+   "unlabeled": false,
+   "inViewport": false
+  },
+  {
+   "tag": "button",
+   "role": "",
+   "name": "Hỏi AI",
+   "region": "main",
+   "unlabeled": false,
+   "inViewport": false
+  },
+  {
+   "tag": "button",
+   "role": "",
+   "name": "Chi tiết",
+   "region": "main",
+   "unlabeled": false,
+   "inViewport": false
+  },
+  {
+   "tag": "input",
+   "role": "",
+   "name": "Chọn Cấu trúc dữ liệu.docx",
+   "region": "main",
+   "unlabeled": false,
+   "inViewport": false
+  },
+  {
+   "tag": "button",
+   "role": "",
+   "name": "Tuỳ chọn tài liệu",
+   "region": "main",
+   "unlabeled": false,
+   "inViewport": false
+  },
+  {
+   "tag": "button",
+   "role": "",
+   "name": "Tóm tắt",
+   "region": "main",
+   "unlabeled": false,
+   "inViewport": false
+  },
+  {
+   "tag": "button",
+   "role": "",
+   "name": "Sơ đồ",
+   "region": "main",
+   "unlabeled": false,
+   "inViewport": false
+  },
+  {
+   "tag": "button",
+   "role": "",
+   "name": "Quiz",
+   "region": "main",
+   "unlabeled": false,
+   "inViewport": false
+  },
+  {
+   "tag": "button",
+   "role": "",
+   "name": "Ôn tập",
+   "region": "main",
+   "unlabeled": false,
+   "inViewport": false
+  },
+  {
+   "tag": "button",
+   "role": "",
+   "name": "Hỏi AI",
+   "region": "main",
+   "unlabeled": false,
+   "inViewport": false
+  },
+  {
+   "tag": "button",
+   "role": "",
+   "name": "Chi tiết",
+   "region": "main",
+   "unlabeled": false,
+   "inViewport": false
+  },
+  {
+   "tag": "input",
+   "role": "",
+   "name": "Chọn Hệ điều hành.pdf",
+   "region": "main",
+   "unlabeled": false,
+   "inViewport": false
+  },
+  {
+   "tag": "button",
+   "role": "",
+   "name": "Tuỳ chọn tài liệu",
+   "region": "main",
+   "unlabeled": false,
+   "inViewport": false
+  },
+  {
+   "tag": "button",
+   "role": "",
+   "name": "Tiếp tục · Hỏi AI",
+   "region": "main",
+   "unlabeled": false,
+   "inViewport": false
+  },
+  {
+   "tag": "button",
+   "role": "",
+   "name": "Tóm tắt",
+   "region": "main",
+   "unlabeled": false,
+   "inViewport": false
+  },
+  {
+   "tag": "button",
+   "role": "",
+   "name": "Sơ đồ",
+   "region": "main",
+   "unlabeled": false,
+   "inViewport": false
+  },
+  {
+   "tag": "button",
+   "role": "",
+   "name": "Quiz",
+   "region": "main",
+   "unlabeled": false,
+   "inViewport": false
+  },
+  {
+   "tag": "button",
+   "role": "",
+   "name": "Ôn tập",
+   "region": "main",
+   "unlabeled": false,
+   "inViewport": false
+  },
+  {
+   "tag": "button",
+   "role": "",
+   "name": "Hỏi AI",
+   "region": "main",
+   "unlabeled": false,
+   "inViewport": false
+  },
+  {
+   "tag": "button",
+   "role": "",
+   "name": "Chi tiết",
+   "region": "main",
+   "unlabeled": false,
+   "inViewport": false
+  },
+  {
+   "tag": "input",
+   "role": "",
+   "name": "Chọn Kinh tế vi mô.pptx",
+   "region": "main",
+   "unlabeled": false,
+   "inViewport": false
+  },
+  {
+   "tag": "button",
+   "role": "",
+   "name": "Tuỳ chọn tài liệu",
+   "region": "main",
+   "unlabeled": false,
+   "inViewport": false
+  },
+  {
+   "tag": "button",
+   "role": "",
+   "name": "Tóm tắt",
+   "region": "main",
+   "unlabeled": false,
+   "inViewport": false
+  },
+  {
+   "tag": "button",
+   "role": "",
+   "name": "Sơ đồ",
+   "region": "main",
+   "unlabeled": false,
+   "inViewport": false
+  },
+  {
+   "tag": "button",
+   "role": "",
+   "name": "Quiz",
+   "region": "main",
+   "unlabeled": false,
+   "inViewport": false
+  },
+  {
+   "tag": "button",
+   "role": "",
+   "name": "Ôn tập",
+   "region": "main",
+   "unlabeled": false,
+   "inViewport": false
+  },
+  {
+   "tag": "button",
+   "role": "",
+   "name": "Hỏi AI",
+   "region": "main",
+   "unlabeled": false,
+   "inViewport": false
+  },
+  {
+   "tag": "button",
+   "role": "",
+   "name": "Chi tiết",
+   "region": "main",
+   "unlabeled": false,
+   "inViewport": false
+  },
+  {
+   "tag": "input",
+   "role": "",
+   "name": "Chọn Lịch sử Đảng.pdf",
+   "region": "main",
+   "unlabeled": false,
+   "inViewport": false
+  },
+  {
+   "tag": "button",
+   "role": "",
+   "name": "Tuỳ chọn tài liệu",
+   "region": "main",
+   "unlabeled": false,
+   "inViewport": false
+  },
+  {
+   "tag": "button",
+   "role": "",
+   "name": "Tóm tắt",
+   "region": "main",
+   "unlabeled": false,
+   "inViewport": false
+  },
+  {
+   "tag": "button",
+   "role": "",
+   "name": "Sơ đồ",
+   "region": "main",
+   "unlabeled": false,
+   "inViewport": false
+  },
+  {
+   "tag": "button",
+   "role": "",
+   "name": "Quiz",
+   "region": "main",
+   "unlabeled": false,
+   "inViewport": false
+  },
+  {
+   "tag": "button",
+   "role": "",
+   "name": "Ôn tập",
+   "region": "main",
+   "unlabeled": false,
+   "inViewport": false
+  },
+  {
+   "tag": "button",
+   "role": "",
+   "name": "Hỏi AI",
+   "region": "main",
+   "unlabeled": false,
+   "inViewport": false
+  },
+  {
+   "tag": "button",
+   "role": "",
+   "name": "Chi tiết",
+   "region": "main",
+   "unlabeled": false,
+   "inViewport": false
+  },
+  {
+   "tag": "input",
+   "role": "",
+   "name": "Chọn Giải tích 1.pdf",
+   "region": "main",
+   "unlabeled": false,
+   "inViewport": false
+  },
+  {
+   "tag": "button",
+   "role": "",
+   "name": "Tuỳ chọn tài liệu",
+   "region": "main",
+   "unlabeled": false,
+   "inViewport": false
+  },
+  {
+   "tag": "button",
+   "role": "",
+   "name": "Tóm tắt",
+   "region": "main",
+   "unlabeled": false,
+   "inViewport": false
+  },
+  {
+   "tag": "button",
+   "role": "",
+   "name": "Sơ đồ",
+   "region": "main",
+   "unlabeled": false,
+   "inViewport": false
+  },
+  {
+   "tag": "button",
+   "role": "",
+   "name": "Quiz",
+   "region": "main",
+   "unlabeled": false,
+   "inViewport": false
+  },
+  {
+   "tag": "button",
+   "role": "",
+   "name": "Ôn tập",
+   "region": "main",
+   "unlabeled": false,
+   "inViewport": false
+  },
+  {
+   "tag": "button",
+   "role": "",
+   "name": "Hỏi AI",
+   "region": "main",
+   "unlabeled": false,
+   "inViewport": false
+  },
+  {
+   "tag": "button",
+   "role": "",
+   "name": "Chi tiết",
+   "region": "main",
+   "unlabeled": false,
+   "inViewport": false
+  },
+  {
+   "tag": "input",
+   "role": "",
+   "name": "Chọn Cấu trúc dữ liệu.docx",
+   "region": "main",
+   "unlabeled": false,
+   "inViewport": false
+  },
+  {
+   "tag": "button",
+   "role": "",
+   "name": "Tuỳ chọn tài liệu",
+   "region": "main",
+   "unlabeled": false,
+   "inViewport": false
+  },
+  {
+   "tag": "button",
+   "role": "",
+   "name": "Tóm tắt",
+   "region": "main",
+   "unlabeled": false,
+   "inViewport": false
+  },
+  {
+   "tag": "button",
+   "role": "",
+   "name": "Sơ đồ",
+   "region": "main",
+   "unlabeled": false,
+   "inViewport": false
+  },
+  {
+   "tag": "button",
+   "role": "",
+   "name": "Quiz",
+   "region": "main",
+   "unlabeled": false,
+   "inViewport": false
+  },
+  {
+   "tag": "button",
+   "role": "",
+   "name": "Ôn tập",
+   "region": "main",
+   "unlabeled": false,
+   "inViewport": false
+  },
+  {
+   "tag": "button",
+   "role": "",
+   "name": "Hỏi AI",
+   "region": "main",
+   "unlabeled": false,
+   "inViewport": false
+  },
+  {
+   "tag": "button",
+   "role": "",
+   "name": "Chi tiết",
+   "region": "main",
+   "unlabeled": false,
+   "inViewport": false
+  },
+  {
+   "tag": "input",
+   "role": "",
+   "name": "Chọn Kinh tế vi mô.pptx",
+   "region": "main",
+   "unlabeled": false,
+   "inViewport": false
+  },
+  {
+   "tag": "button",
+   "role": "",
+   "name": "Tuỳ chọn tài liệu",
+   "region": "main",
+   "unlabeled": false,
+   "inViewport": false
+  },
+  {
+   "tag": "button",
+   "role": "",
+   "name": "Tóm tắt",
+   "region": "main",
+   "unlabeled": false,
+   "inViewport": false
+  },
+  {
+   "tag": "button",
+   "role": "",
+   "name": "Sơ đồ",
+   "region": "main",
+   "unlabeled": false,
+   "inViewport": false
+  },
+  {
+   "tag": "button",
+   "role": "",
+   "name": "Quiz",
+   "region": "main",
+   "unlabeled": false,
+   "inViewport": false
+  },
+  {
+   "tag": "button",
+   "role": "",
+   "name": "Ôn tập",
+   "region": "main",
+   "unlabeled": false,
+   "inViewport": false
+  },
+  {
+   "tag": "button",
+   "role": "",
+   "name": "Hỏi AI",
+   "region": "main",
+   "unlabeled": false,
+   "inViewport": false
+  },
+  {
+   "tag": "button",
+   "role": "",
+   "name": "Chi tiết",
+   "region": "main",
+   "unlabeled": false,
+   "inViewport": false
+  },
+  {
+   "tag": "input",
+   "role": "",
+   "name": "Chọn Lịch sử Đảng.pdf",
+   "region": "main",
+   "unlabeled": false,
+   "inViewport": false
+  },
+  {
+   "tag": "button",
+   "role": "",
+   "name": "Tuỳ chọn tài liệu",
+   "region": "main",
+   "unlabeled": false,
+   "inViewport": false
+  },
+  {
+   "tag": "button",
+   "role": "",
+   "name": "Tóm tắt",
+   "region": "main",
+   "unlabeled": false,
+   "inViewport": false
+  },
+  {
+   "tag": "button",
+   "role": "",
+   "name": "Sơ đồ",
+   "region": "main",
+   "unlabeled": false,
+   "inViewport": false
+  },
+  {
+   "tag": "button",
+   "role": "",
+   "name": "Quiz",
+   "region": "main",
+   "unlabeled": false,
+   "inViewport": false
+  },
+  {
+   "tag": "button",
+   "role": "",
+   "name": "Ôn tập",
+   "region": "main",
+   "unlabeled": false,
+   "inViewport": false
+  },
+  {
+   "tag": "button",
+   "role": "",
+   "name": "Hỏi AI",
+   "region": "main",
+   "unlabeled": false,
+   "inViewport": false
+  },
+  {
+   "tag": "button",
+   "role": "",
+   "name": "Chi tiết",
+   "region": "main",
+   "unlabeled": false,
+   "inViewport": false
+  },
+  {
+   "tag": "input",
+   "role": "",
+   "name": "Chọn Giải tích 1.pdf",
+   "region": "main",
+   "unlabeled": false,
+   "inViewport": false
+  },
+  {
+   "tag": "button",
+   "role": "",
+   "name": "Tuỳ chọn tài liệu",
+   "region": "main",
+   "unlabeled": false,
+   "inViewport": false
+  },
+  {
+   "tag": "button",
+   "role": "",
+   "name": "Tóm tắt",
+   "region": "main",
+   "unlabeled": false,
+   "inViewport": false
+  },
+  {
+   "tag": "button",
+   "role": "",
+   "name": "Sơ đồ",
+   "region": "main",
+   "unlabeled": false,
+   "inViewport": false
+  },
+  {
+   "tag": "button",
+   "role": "",
+   "name": "Quiz",
+   "region": "main",
+   "unlabeled": false,
+   "inViewport": false
+  },
+  {
+   "tag": "button",
+   "role": "",
+   "name": "Ôn tập",
+   "region": "main",
+   "unlabeled": false,
+   "inViewport": false
+  },
+  {
+   "tag": "button",
+   "role": "",
+   "name": "Hỏi AI",
+   "region": "main",
+   "unlabeled": false,
+   "inViewport": false
+  },
+  {
+   "tag": "button",
+   "role": "",
+   "name": "Chi tiết",
+   "region": "main",
+   "unlabeled": false,
+   "inViewport": false
+  },
+  {
+   "tag": "input",
+   "role": "",
+   "name": "Chọn Cấu trúc dữ liệu.docx",
+   "region": "main",
+   "unlabeled": false,
+   "inViewport": false
+  },
+  {
+   "tag": "button",
+   "role": "",
+   "name": "Tuỳ chọn tài liệu",
+   "region": "main",
+   "unlabeled": false,
+   "inViewport": false
+  },
+  {
+   "tag": "button",
+   "role": "",
+   "name": "Tóm tắt",
+   "region": "main",
+   "unlabeled": false,
+   "inViewport": false
+  },
+  {
+   "tag": "button",
+   "role": "",
+   "name": "Sơ đồ",
+   "region": "main",
+   "unlabeled": false,
+   "inViewport": false
+  },
+  {
+   "tag": "button",
+   "role": "",
+   "name": "Quiz",
+   "region": "main",
+   "unlabeled": false,
+   "inViewport": false
+  },
+  {
+   "tag": "button",
+   "role": "",
+   "name": "Ôn tập",
+   "region": "main",
+   "unlabeled": false,
+   "inViewport": false
+  },
+  {
+   "tag": "button",
+   "role": "",
+   "name": "Hỏi AI",
+   "region": "main",
+   "unlabeled": false,
+   "inViewport": false
+  },
+  {
+   "tag": "button",
+   "role": "",
+   "name": "Chi tiết",
+   "region": "main",
+   "unlabeled": false,
+   "inViewport": false
+  },
+  {
+   "tag": "input",
+   "role": "",
+   "name": "Chọn Mạng máy tính.pdf",
+   "region": "main",
+   "unlabeled": false,
+   "inViewport": false
+  },
+  {
+   "tag": "button",
+   "role": "",
+   "name": "Tuỳ chọn tài liệu",
+   "region": "main",
+   "unlabeled": false,
+   "inViewport": false
+  },
+  {
+   "tag": "button",
+   "role": "",
+   "name": "Tóm tắt",
+   "region": "main",
+   "unlabeled": false,
+   "inViewport": false
+  },
+  {
+   "tag": "button",
+   "role": "",
+   "name": "Sơ đồ",
+   "region": "main",
+   "unlabeled": false,
+   "inViewport": false
+  },
+  {
+   "tag": "button",
+   "role": "",
+   "name": "Quiz",
+   "region": "main",
+   "unlabeled": false,
+   "inViewport": false
+  },
+  {
+   "tag": "button",
+   "role": "",
+   "name": "Ôn tập",
+   "region": "main",
+   "unlabeled": false,
+   "inViewport": false
+  },
+  {
+   "tag": "button",
+   "role": "",
+   "name": "Hỏi AI",
+   "region": "main",
+   "unlabeled": false,
+   "inViewport": false
+  },
+  {
+   "tag": "button",
+   "role": "",
+   "name": "Chi tiết",
+   "region": "main",
+   "unlabeled": false,
+   "inViewport": false
+  },
+  {
+   "tag": "input",
+   "role": "",
+   "name": "Chọn Hệ điều hành.pdf",
+   "region": "main",
+   "unlabeled": false,
+   "inViewport": false
+  },
+  {
+   "tag": "button",
+   "role": "",
+   "name": "Tuỳ chọn tài liệu",
+   "region": "main",
+   "unlabeled": false,
+   "inViewport": false
+  },
+  {
+   "tag": "button",
+   "role": "",
+   "name": "Tiếp tục · Hỏi AI",
+   "region": "main",
+   "unlabeled": false,
+   "inViewport": false
+  },
+  {
+   "tag": "button",
+   "role": "",
+   "name": "Tóm tắt",
+   "region": "main",
+   "unlabeled": false,
+   "inViewport": false
+  },
+  {
+   "tag": "button",
+   "role": "",
+   "name": "Sơ đồ",
+   "region": "main",
+   "unlabeled": false,
+   "inViewport": false
+  },
+  {
+   "tag": "button",
+   "role": "",
+   "name": "Quiz",
+   "region": "main",
+   "unlabeled": false,
+   "inViewport": false
+  },
+  {
+   "tag": "button",
+   "role": "",
+   "name": "Ôn tập",
+   "region": "main",
+   "unlabeled": false,
+   "inViewport": false
+  },
+  {
+   "tag": "button",
+   "role": "",
+   "name": "Hỏi AI",
+   "region": "main",
+   "unlabeled": false,
+   "inViewport": false
+  },
+  {
+   "tag": "button",
+   "role": "",
+   "name": "Chi tiết",
+   "region": "main",
+   "unlabeled": false,
+   "inViewport": false
+  },
+  {
+   "tag": "a",
+   "role": "",
+   "name": "Hệ điều hành chẩn đoán · 2/11/2026 —",
+   "region": "main",
+   "unlabeled": false,
+   "inViewport": false
+  }
+ ],
+ "overflowX": 0,
+ "headings": [
+  "H1: Thư viện học tập",
+  "H2: TIẾP TỤC HỌC",
+  "H2: ĐANG YẾU Ở",
+  "H2: HÔM QUA (1)",
+  "H2: TẢI LÊN GẦN ĐÂY (6)",
+  "H2: CHƯA MỞ BAO GIỜ (5)",
+  "H2: CẦN TÓM TẮT (3)",
+  "H2: CẦN QUIZ (4)",
+  "H2: TẤT CẢ TÀI LIỆU (6)",
+  "H2: BÀI ĐÃ LÀM GẦN ĐÂY"
+ ],
+ "tab": [
+  "button \"Đổi tên\"",
+  "button \"Yêu thích\"",
+  "button \"Ghim\"",
+  "button \"Lưu trữ\"",
+  "button \"Tiếp tục · Hỏi AI\"",
+  "button \"Tóm tắt\"",
+  "button \"Sơ đồ\"",
+  "button \"Quiz\"",
+  "button \"Ôn tập\"",
+  "button \"Hỏi AI\"",
+  "button \"Chi tiết\"",
+  "div \"Hệ điều hành.pdf Học kỳ 1 Chưa có tóm tắt cho tài liệu này. \"",
+  "input \"Chọn Hệ điều hành.pdf\"",
+  "button \"Tuỳ chọn tài liệu\"",
+  "button \"Tiếp tục · Hỏi AI\""
+ ]
+}

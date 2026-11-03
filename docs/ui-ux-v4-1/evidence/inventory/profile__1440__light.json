@@ -1,0 +1,44 @@
+{
+ "url": "/app/profile",
+ "controls": [
+  {
+   "tag": "button",
+   "role": "",
+   "name": "Quay lại",
+   "region": "header",
+   "unlabeled": false,
+   "inViewport": true
+  }
+ ],
+ "overflowX": 0,
+ "headings": [
+  "H1: Hồ sơ tài khoản"
+ ],
+ "tab": [
+  "button \"Quay lại\"",
+  "(body)",
+  "button \"Quay lại\"",
+  "(body)",
+  "button \"Quay lại\"",
+  "(body)",
+  "button \"Quay lại\"",
+  "(body)",
+  "button \"Quay lại\"",
+  "(body)",
+  "button \"Quay lại\"",
+  "(body)",
+  "button \"Quay lại\"",
+  "(body)",
+  "button \"Quay lại\"",
+  "(body)",
+  "button \"Quay lại\"",
+  "(body)",
+  "button \"Quay lại\"",
+  "(body)",
+  "button \"Quay lại\"",
+  "(body)",
+  "button \"Quay lại\"",
+  "(body)",
+  "button \"Quay lại\""
+ ]
+}

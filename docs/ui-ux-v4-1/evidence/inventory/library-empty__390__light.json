@@ -1,0 +1,91 @@
+{
+ "url": "/app/study",
+ "controls": [
+  {
+   "tag": "a",
+   "role": "",
+   "name": "Phòng đọc",
+   "region": "header",
+   "unlabeled": false,
+   "inViewport": true
+  },
+  {
+   "tag": "button",
+   "role": "",
+   "name": "Tải tài liệu",
+   "region": "header",
+   "unlabeled": false,
+   "inViewport": true
+  },
+  {
+   "tag": "input",
+   "role": "",
+   "name": "Tìm trong thư viện",
+   "region": "main",
+   "unlabeled": false,
+   "inViewport": true
+  },
+  {
+   "tag": "select",
+   "role": "",
+   "name": "Mới nhất Cũ nhất A-Z Z-A Thời gian đọc Mở gần đây Tải lên gần đây",
+   "region": "main",
+   "unlabeled": false,
+   "inViewport": true
+  },
+  {
+   "tag": "button",
+   "role": "",
+   "name": "Lọc",
+   "region": "main",
+   "unlabeled": false,
+   "inViewport": true
+  },
+  {
+   "tag": "button",
+   "role": "",
+   "name": "Đủ",
+   "region": "main",
+   "unlabeled": false,
+   "inViewport": true
+  },
+  {
+   "tag": "input",
+   "role": "",
+   "name": "",
+   "region": "main",
+   "unlabeled": true,
+   "inViewport": true
+  },
+  {
+   "tag": "button",
+   "role": "",
+   "name": "Tải tài liệu",
+   "region": "main",
+   "unlabeled": false,
+   "inViewport": true
+  }
+ ],
+ "overflowX": 0,
+ "headings": [
+  "H1: Thư viện học tập",
+  "H2: TẤT CẢ TÀI LIỆU (0)"
+ ],
+ "tab": [
+  "a \"Phòng đọc\"",
+  "button \"Tải tài liệu\"",
+  "input \"Tìm trong thư viện\"",
+  "select \"Mới nhất Cũ nhất A-Z Z-A Thời gian đọc Mở gần đây Tải lên gầ\"",
+  "button \"Lọc\"",
+  "button \"Đủ\"",
+  "input \"\"",
+  "button \"Tải tài liệu\"",
+  "(body)",
+  "a \"Phòng đọc\"",
+  "button \"Tải tài liệu\"",
+  "input \"Tìm trong thư viện\"",
+  "select \"Mới nhất Cũ nhất A-Z Z-A Thời gian đọc Mở gần đây Tải lên gầ\"",
+  "button \"Lọc\"",
+  "button \"Đủ\""
+ ]
+}
