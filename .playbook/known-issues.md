@@ -1,5 +1,24 @@
 # Known Issues
 
+## SVG paths swallowed branch-marker clicks at phone zoom (fixed 2026-11-04)
+
+**Symptom:** at 390px, clicking the visible marker for a first-level branch
+could leave the selection unchanged. `elementFromPoint()` at the marker centre
+returned a connector or semantic-relation `<path>` instead of the marker.
+
+**Root cause:** the existing nearest-visible-dot resolver runs from the HTML
+marker's click listener. A crossing SVG path could win the browser hit test at
+low zoom, so the event never reached that listener and there was nothing for
+the resolver to correct. Marker `z-index` alone cannot order an HTML child
+against every independently painted SVG layer.
+
+**Fix and prevention:** only while `.mm-selection-active` is present, the live
+map's SVG drawing layers use `pointer-events: none`; connectors and relations
+remain visible, while clicks fall through to HTML markers and empty-space drags
+fall through to the canvas. Normal map mode is unchanged. Keep the real-pointer
+`marker-click-resolution.spec.js` coverage at desktop, tablet, and phone widths:
+DOM-dispatched marker clicks cannot detect a painted SVG path stealing the hit.
+
 ## Phone mind maps opened with first-level branches off-screen (fixed 2026-11-04)
 
 **Symptom:** on the first open at 320px and 390px, the root was visible but
