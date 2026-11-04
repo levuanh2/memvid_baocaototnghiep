@@ -14,9 +14,10 @@
 // Split out of fixtureHarness.jsx (which just mounts this) to mirror
 // main.jsx/App.jsx's own split — a root entry file with no component
 // definitions of its own keeps Vite's react-refresh plugin happy.
-import { useCallback, useMemo, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import MindElixirView from "../components/mindmap/MindElixirView";
 import { FIXTURE_MAP_A, FIXTURE_MAP_B, FIXTURE_SCOPE_A, FIXTURE_SCOPE_B, FIXTURE_COLLAPSED_NODE_IDS, FIXTURE_EXPORT_V3, FIXTURE_EXPORT_V3_COLLAPSED, FIXTURE_DEPTH, FIXTURE_SHALLOW3, FIXTURE_POST_PR77, FIXTURE_EXACT_V3 } from "./mindmapFixtures";
+import "./trialViewportReadout.css";
 
 const MAPS = [FIXTURE_MAP_A, FIXTURE_MAP_B, FIXTURE_SCOPE_A, FIXTURE_SCOPE_B, FIXTURE_EXPORT_V3, FIXTURE_DEPTH, FIXTURE_SHALLOW3, FIXTURE_POST_PR77, FIXTURE_EXACT_V3];
 const COLLAPSED_BY_MAP = { ...FIXTURE_COLLAPSED_NODE_IDS, ...FIXTURE_EXPORT_V3_COLLAPSED };
@@ -24,6 +25,10 @@ const SEARCH = new URLSearchParams(typeof window !== "undefined" ? window.locati
 const TOOLBAR_OVERLAY_PROOF = SEARCH.get("toolbarOverlay") === "1";
 const REQUESTED_FIT = SEARCH.get("fit");
 const FIXTURE_FIT_OPTION = ["a", "b"].includes(REQUESTED_FIT) ? REQUESTED_FIT : "main";
+const TRIAL_READOUT_ENABLED = SEARCH.has("fit");
+const TRIAL_READOUT_SKIPPED = SEARCH.get("readout") === "skip";
+const TRIAL_BUILD_SHA = import.meta.env.VITE_TRIAL_BUILD_SHA || "unknown";
+const TRIAL_OPTION_LABEL = FIXTURE_FIT_OPTION === "a" ? "A" : FIXTURE_FIT_OPTION === "b" ? "B" : "main";
 const INITIAL_MAP_ID = SEARCH.get("map") === "export-v3" ? FIXTURE_EXPORT_V3.id
   : SEARCH.get("map") === "post-pr77" ? FIXTURE_POST_PR77.id
   : SEARCH.get("map") === "exact-v3" ? FIXTURE_EXACT_V3.id
@@ -41,6 +46,26 @@ const INITIAL_APPEARANCE_PRESET = SEARCH.get("initialAppearance");
 const INITIAL_APPEARANCE = INITIAL_APPEARANCE_PRESET
   ? { version: 2, preset: INITIAL_APPEARANCE_PRESET, overrides: { canvas: {}, connector: {}, node: { root: {}, branch: {}, leaf: {} } } }
   : undefined;
+const STABILIZED_TRIAL_INSTANCES = new WeakSet();
+
+function stabilizeTrialInitialPan(mind) {
+  if (!TRIAL_READOUT_ENABLED || !mind || STABILIZED_TRIAL_INSTANCES.has(mind)) return;
+  STABILIZED_TRIAL_INSTANCES.add(mind);
+  let attempts = 120;
+  const poll = () => {
+    const transform = mind?.map?.style?.transform || "";
+    const match = transform.match(/translate3d\((-?[\d.]+)px, (-?[\d.]+)px, 0px\) scale\(([\d.]+)\)/);
+    if (match && Number(match[3]) === 0.75) {
+      const y = Number(match[2]);
+      const stableY = Math.round(y / 8) * 8;
+      if (stableY !== y) mind.move?.(0, stableY - y);
+      return;
+    }
+    attempts -= 1;
+    if (attempts > 0) setTimeout(poll, 16);
+  };
+  setTimeout(poll, 16);
+}
 
 function useFixtureController() {
   const mindRef = useRef(null);
@@ -55,6 +80,7 @@ function useFixtureController() {
     // be inferred reliably from a CSS transform or a rounded toolbar label.
     // This module is never imported by the production entry point.
     window.__STUDYMAP_FIXTURE__ = { mind, sidecar };
+    stabilizeTrialInitialPan(mind);
     // Collapse the fixture's designated branches once, right after this
     // specific mind-elixir instance/sidecar pair is (re)registered (covers
     // both first mount and a later map switch/refresh) -- matches the
@@ -93,6 +119,27 @@ export default function FixtureHarnessApp() {
   const controller = useFixtureController();
   const [activeMapId, setActiveMapId] = useState(INITIAL_MAP_ID);
   const [saveLog, setSaveLog] = useState([]);
+  const [showTrialReadout, setShowTrialReadout] = useState(TRIAL_READOUT_ENABLED && !TRIAL_READOUT_SKIPPED);
+  const [viewport, setViewport] = useState(() => ({
+    width: window.innerWidth,
+    height: window.innerHeight,
+    dpr: window.devicePixelRatio,
+  }));
+
+  useEffect(() => {
+    if (!showTrialReadout) return undefined;
+    const updateViewport = () => setViewport({
+      width: window.innerWidth,
+      height: window.innerHeight,
+      dpr: window.devicePixelRatio,
+    });
+    window.addEventListener("resize", updateViewport);
+    window.addEventListener("orientationchange", updateViewport);
+    return () => {
+      window.removeEventListener("resize", updateViewport);
+      window.removeEventListener("orientationchange", updateViewport);
+    };
+  }, [showTrialReadout]);
 
   const activeRecord = useMemo(() => MAPS.find((m) => m.id === activeMapId), [activeMapId]);
 
@@ -115,10 +162,36 @@ export default function FixtureHarnessApp() {
   return (
     <div style={{ height: "100vh", width: "100vw", paddingTop: TOOLBAR_OVERLAY_PROOF ? 56 : 0 }} data-testid="fixture-harness-root"
       data-selected-node={controller.selected?.id || ""} data-save-log={JSON.stringify(saveLog)} data-fit-option={FIXTURE_FIT_OPTION}>
-      <div className={TOOLBAR_OVERLAY_PROOF ? "h-full md:ml-[252px] md:w-[calc(100%-252px)]" : "h-full w-full"}>
-        <MindElixirView data={data} onRegenerate={() => {}} regenerating={false} controller={controller}
-          fixtureFitOption={FIXTURE_FIT_OPTION} />
-      </div>
+      {!showTrialReadout && (
+        <div className={TOOLBAR_OVERLAY_PROOF ? "h-full md:ml-[252px] md:w-[calc(100%-252px)]" : "h-full w-full"}>
+          <MindElixirView data={data} onRegenerate={() => {}} regenerating={false} controller={controller}
+            fixtureFitOption={FIXTURE_FIT_OPTION} />
+        </div>
+      )}
+      {showTrialReadout && (
+        <section className="trial-viewport-readout" role="dialog" aria-modal="true" aria-labelledby="trial-viewport-title"
+          data-testid="trial-viewport-readout">
+          <div className="trial-viewport-readout__card">
+            <h1 id="trial-viewport-title">Kiểm tra màn hình trước khi thử</h1>
+            <dl>
+              <div><dt>Chiều rộng</dt><dd data-testid="trial-inner-width">{viewport.width} CSS px</dd></div>
+              <div><dt>Chiều cao</dt><dd data-testid="trial-inner-height">{viewport.height} CSS px</dd></div>
+              <div><dt>Tỷ lệ điểm ảnh</dt><dd data-testid="trial-device-pixel-ratio">{viewport.dpr}</dd></div>
+              <div><dt>Phương án</dt><dd data-testid="trial-option-name">{TRIAL_OPTION_LABEL}</dd></div>
+              <div><dt>Bản dựng</dt><dd data-testid="trial-build-sha">{TRIAL_BUILD_SHA}</dd></div>
+            </dl>
+            <button type="button" data-testid="trial-start-button"
+              onPointerDown={(event) => { event.preventDefault(); event.stopPropagation(); }}
+              onClick={(event) => {
+                event.stopPropagation();
+                event.currentTarget.blur();
+                setShowTrialReadout(false);
+              }}>
+              Bắt đầu thử
+            </button>
+          </div>
+        </section>
+      )}
       {TOOLBAR_OVERLAY_PROOF && controller.selected?.id && (
         <>
           <div className="fixed inset-0 bg-black/40 z-30 backdrop-blur-sm hidden max-[767px]:block" data-testid="toolbar-occlusion-proof-backdrop" />

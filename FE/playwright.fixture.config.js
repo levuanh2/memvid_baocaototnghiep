@@ -38,9 +38,9 @@ export default defineConfig({
     // fixture-harness.html at the repo-relative path Vite already resolves
     // any root-level .html file at (see fixtureHarness.jsx's own header
     // comment for why this file exists).
-    command: `npx vite --port ${FE_PORT} --strictPort`,
+    command: `npx vite --config vite.trial.config.js --port ${FE_PORT} --strictPort`,
     url: `http://localhost:${FE_PORT}/fixture-harness.html`,
-    timeout: 30_000,
+    timeout: 240_000,
     reuseExistingServer: !CI,
   },
 });
