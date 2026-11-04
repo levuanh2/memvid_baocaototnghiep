@@ -119,7 +119,7 @@ async function exportImage(page, format) {
   const download = await waiting;
   const target = path.join(OUT, `current-branch.${format}`);
   await download.saveAs(target);
-  await page.getByRole("button", { name: "Hủy", exact: true }).click();
+  await page.getByRole("button", { name: "Đóng", exact: true }).click();
   return target;
 }
 
@@ -149,7 +149,7 @@ async function exportPdf(page) {
   fs.writeFileSync(path.join(OUT, "manifest.json"), JSON.stringify(body.map_geometry_manifest, null, 2));
   fs.writeFileSync(path.join(OUT, "pdf-request.json"), JSON.stringify({ ...body, map_image_base64: "<saved as pdf-source.png>" }, null, 2));
   await download.saveAs(path.join(OUT, "current-branch.pdf"));
-  await page.getByRole("button", { name: "Hủy", exact: true }).click();
+  await page.getByRole("button", { name: "Đóng", exact: true }).click();
 }
 
 async function inspectSvg(page, svg) {

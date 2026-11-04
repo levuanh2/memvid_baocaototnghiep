@@ -133,7 +133,7 @@ describe("Export Studio appearance override — 'Lưu giao diện cho sơ đồ'
 });
 
 describe("Export Studio appearance override — lifecycle resets", () => {
-  it("keeps the two-action footer after an export without duplicating lifecycle controls", async () => {
+  it("'Tạo bản xuất mới' returns to 'Dùng giao diện của sơ đồ' even after a custom override was used", async () => {
     vi.spyOn(api, "patchMindmapAppearance").mockResolvedValue({ appearance: {}, updated_at: "now" });
     const dialog = await renderDialog();
     await goToAppearanceStep(dialog);
@@ -141,8 +141,10 @@ describe("Export Studio appearance override — lifecycle resets", () => {
     await click(customRadio);
     const exportBtn = [...dialog.querySelectorAll("button")].find((b) => /^(Xuất|Tạo)/.test(b.textContent));
     await click(exportBtn);
-    const footerButtons = [...dialog.querySelectorAll(".export-footer button")];
-    expect(footerButtons.map((button) => button.textContent.trim())).toEqual(["Hủy", "Xuất PNG"]);
-    expect(customRadio.checked).toBe(true);
+    const startNewBtn = [...dialog.querySelectorAll("button")].find((b) => b.textContent === "Tạo bản xuất mới");
+    await click(startNewBtn);
+    await goToAppearanceStep(dialog);
+    const useMapRadio = [...dialog.querySelectorAll('input[name="mm-appearance-mode"]')].find((i) => i.checked);
+    expect(useMapRadio.closest("label").textContent).toContain("Dùng giao diện của sơ đồ");
   });
 });

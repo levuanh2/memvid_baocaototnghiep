@@ -127,7 +127,7 @@ describe("Export Studio image capture-to-download commit boundary", () => {
     exportMindmapImageMock.mockResolvedValueOnce(first).mockReturnValueOnce(secondCapture.promise);
     let dialog = await renderDialog();
     await clickExport(dialog);
-    await clickExport(dialog, "Xuất PNG");
+    await clickExport(dialog, "Xuất lại");
 
     dialog = await renderDialog({ mapId: "map-b" });
     await act(async () => { secondCapture.resolve(second); await secondCapture.promise; await Promise.resolve(); });

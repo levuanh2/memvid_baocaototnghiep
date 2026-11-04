@@ -179,7 +179,7 @@ async function exportPdf(page, scenario, liveMetrics) {
     },
   }, null, 2));
   await download.saveAs(path.join(scenarioDir, "artifact.pdf"));
-  await page.getByRole("button", { name: "Hủy", exact: true }).click();
+  await page.getByRole("button", { name: "Đóng", exact: true }).click();
 }
 
 test("real Flask/Postgres PDF exports preserve text, colors, Unicode and geometry", async ({ page, request }) => {

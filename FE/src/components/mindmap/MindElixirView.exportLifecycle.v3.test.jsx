@@ -47,8 +47,16 @@ async function render(controller) {
 async function openToPreview(format) {
   await act(async () => { container.querySelector('[aria-label="Xuất sơ đồ"]').click(); });
   const dialog = document.body.querySelector('[role="dialog"]');
+  const next = () => [...dialog.querySelectorAll("button")].find((b) => b.textContent === "Tiếp tục");
+  // Reopened dialogs can resume at a later step; only walk forward while "Tiếp tục" is still offered.
+  if (!dialog.querySelector(`input[value="${format}"]`)) {
+    await act(async () => { next()?.click(); });
+  }
   if (dialog.querySelector(`input[value="${format}"]`)) {
     await act(async () => { dialog.querySelector(`input[value="${format}"]`).click(); });
+  }
+  for (let i = 0; i < 3 && next(); i++) {
+    await act(async () => { next().click(); });
   }
   return dialog;
 }
@@ -60,14 +68,14 @@ const clickByText = async (dialog, text) => {
 };
 
 describe("Export lifecycle — attempts and idempotency", () => {
-  it("'Xuất PDF' after a finished export sends a second request with a NEW idempotency key", async () => {
+  it("'Xuất lại' after a finished export sends a second request with a NEW idempotency key", async () => {
     vi.spyOn(docExport, "createMindmapExport").mockResolvedValue({ job_id: "j1", status: "queued" });
     vi.spyOn(docExport, "pollMindmapExportUntilDone").mockResolvedValue({ status: "done", download_url: "/x?token=a" });
     vi.spyOn(docExport, "triggerMindmapExportDownload").mockImplementation(() => {});
     await render(makeController());
     const dialog = await openToPreview("pdf");
     await clickByText(dialog, "Xuất PDF");
-    await clickByText(dialog, "Xuất PDF");
+    await clickByText(dialog, "Xuất lại");
     const calls = docExport.createMindmapExport.mock.calls;
     expect(calls.length).toBe(2);
     expect(calls[0][1].idempotencyKey ?? calls[0][1].idempotency_key).toBeTruthy();
@@ -76,13 +84,13 @@ describe("Export lifecycle — attempts and idempotency", () => {
     expect(k2).not.toBe(k1);
   });
 
-  it("a failed export retried with 'Xuất PDF' uses a new attempt key", async () => {
+  it("a failed export retried with 'Thử lại' uses a new attempt key", async () => {
     vi.spyOn(docExport, "createMindmapExport").mockResolvedValue({ job_id: "j1", status: "queued" });
     vi.spyOn(docExport, "pollMindmapExportUntilDone").mockResolvedValue({ status: "error", error: "Lỗi máy chủ" });
     await render(makeController());
     const dialog = await openToPreview("pdf");
     await clickByText(dialog, "Xuất PDF");
-    await clickByText(dialog, "Xuất PDF");
+    await clickByText(dialog, "Thử lại");
     const calls = docExport.createMindmapExport.mock.calls;
     expect(calls.length).toBe(2);
     const k1 = calls[0][1].idempotencyKey ?? calls[0][1].idempotency_key;
@@ -103,15 +111,17 @@ describe("Export lifecycle — attempts and idempotency", () => {
     resolvePoll?.({ status: "done", download_url: "/x" });
   });
 
-  it("keeps exactly cancel and the format-specific export action after completion", async () => {
+  it("'Tạo bản xuất mới' resets transient state and returns to configuration", async () => {
     vi.spyOn(docExport, "createMindmapExport").mockResolvedValue({ job_id: "j1", status: "queued" });
     vi.spyOn(docExport, "pollMindmapExportUntilDone").mockResolvedValue({ status: "done", download_url: "/x" });
     vi.spyOn(docExport, "triggerMindmapExportDownload").mockImplementation(() => {});
     await render(makeController());
     const dialog = await openToPreview("pdf");
     await clickByText(dialog, "Xuất PDF");
-    const footerButtons = [...dialog.querySelectorAll(".export-footer button")];
-    expect(footerButtons.map((button) => button.textContent.trim())).toEqual(["Hủy", "Xuất PDF"]);
+    await clickByText(dialog, "Tạo bản xuất mới");
+    expect(dialog.textContent).not.toContain("Đã xuất");
+    // Back at the configuration step (scope), with the previous format kept as a default.
+    expect(dialog.querySelector('input[name="mm-export-scope"]')).toBeTruthy();
     expect(dialog.querySelector('input[value="pdf"]').checked).toBe(true);
   });
 
@@ -122,7 +132,7 @@ describe("Export lifecycle — attempts and idempotency", () => {
     await render(makeController());
     const dialog = await openToPreview("pdf");
     await clickByText(dialog, "Xuất PDF");
-    await clickByText(dialog, "Hủy");
+    await clickByText(dialog, "Đóng");
     const reopened = await openToPreview("pdf");
     await clickByText(reopened, "Xuất PDF");
     expect(docExport.createMindmapExport).toHaveBeenCalledTimes(2);
@@ -137,7 +147,7 @@ describe("Export lifecycle — attempts and idempotency", () => {
     await render(makeController());
     const dialog = await openToPreview("pdf");
     await clickByText(dialog, "Xuất PDF");
-    await clickByText(dialog, "Xuất PDF");
+    await clickByText(dialog, "Xuất lại");
     expect(pollSpy.mock.calls.map((c) => c[0])).toEqual(["j-done", "j-new"]);
     expect(createSpy).toHaveBeenCalledTimes(2);
   });

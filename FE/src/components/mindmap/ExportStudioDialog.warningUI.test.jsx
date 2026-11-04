@@ -65,8 +65,8 @@ describe("Export Studio — ceiling-exceeded warning surfaces to the user (H2)",
     expect(dialog.textContent).toContain("Sơ đồ quá lớn để tạo trang chi tiết đọc được trong giới hạn hệ thống");
     // job lifecycle must stay fully usable despite the warning (Section 12 pin):
     expect(dialog.textContent).toContain("Đã xuất");
-    const reExportBtn = [...dialog.querySelectorAll("button")].find((b) => b.textContent.includes("Xuất PDF"));
-    expect(reExportBtn, '"Xuất PDF" must not be locked by a warning state').toBeTruthy();
+    const reExportBtn = [...dialog.querySelectorAll("button")].find((b) => b.textContent.includes("Xuất lại"));
+    expect(reExportBtn, '"Xuất lại" must not be locked by a warning state').toBeTruthy();
     expect(reExportBtn.disabled).toBe(false);
   });
 

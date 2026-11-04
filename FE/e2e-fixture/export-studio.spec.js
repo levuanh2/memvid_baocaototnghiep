@@ -165,7 +165,7 @@ test.describe("Export Studio — fixture harness, real files", () => {
     expect(svg).toContain("H3B.1 Map B");
     expect(svg).toContain("node 56");
 
-    await page.getByRole("button", { name: "Hủy", exact: true }).click();
+    await page.getByRole("button", { name: "Đóng", exact: true }).click();
     await page.getByRole("button", { name: "Mở thư viện sơ đồ" }).click();
     await page.getByRole("option", { name: /H3B\.1 Map A/ }).click();
     await expect(page.locator(nodeSelector(`${SCOPE_MAP_A_ID}-root`))).toBeVisible();

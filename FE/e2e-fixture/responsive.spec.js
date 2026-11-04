@@ -217,7 +217,7 @@ test.describe("Export Studio — responsive QA", () => {
         await expect(dialog).toContainText("Đang xử lý (40%)", { timeout: 5000 });
         await assertNoHorizontalOverflow(page);
         await shot(page, vp.name, "13-export-running");
-        await dialog.getByRole("button", { name: "Hủy" }).click(); // stop the poll before the test ends
+        await dialog.getByRole("button", { name: "Hủy xuất" }).click(); // stop the poll before the test ends
       });
 
       test("state 14: export failed shows a retry control without overflow", async ({ page }) => {
@@ -226,7 +226,7 @@ test.describe("Export Studio — responsive QA", () => {
         const dialog = await openPreviewBench(page, "pdf");
         await dialog.getByRole("button", { name: "Xuất PDF", exact: true }).click();
         await expect(dialog).toContainText("Lỗi máy chủ", { timeout: 5000 });
-        await expect(dialog.getByRole("button", { name: "Xuất PDF", exact: true })).toBeVisible();
+        await expect(dialog.getByRole("button", { name: "Thử lại", exact: true })).toBeVisible();
         await assertNoHorizontalOverflow(page);
         await shot(page, vp.name, "14-export-failed");
       });
@@ -237,7 +237,7 @@ test.describe("Export Studio — responsive QA", () => {
         const dialog = await openPreviewBench(page, "pdf");
         await dialog.getByRole("button", { name: "Xuất PDF", exact: true }).click();
         await expect(dialog.getByTestId("export-persistent-preview")).toContainText("Đã xuất", { timeout: 5000 });
-        await expect(dialog.getByRole("button", { name: "Xuất PDF", exact: true })).toBeVisible();
+        await expect(dialog.getByRole("button", { name: "Xuất lại", exact: true })).toBeVisible();
         await assertNoHorizontalOverflow(page);
         await shot(page, vp.name, "15-export-completed");
       });
