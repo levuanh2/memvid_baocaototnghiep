@@ -30,10 +30,10 @@ Trước khi mở bất kỳ bảng kiểm nào (S1, S2, S3, S4), kiểm thử v
 
 ### 2.1. Tài khoản kiểm thử (Test Account)
 
-- **Tuyệt đối KHÔNG dùng tài khoản thật hoặc dữ liệu cá nhân trên môi trường production**: Việc kiểm thử bao gồm các thao tác xóa vĩnh viễn dữ liệu (destructive actions). Nếu dùng tài khoản thật, bạn có thể vô tình làm mất dữ liệu học tập quan trọng.
-- **Sử dụng tài khoản QA dùng một lần (disposable QA account)**:
-  - Hãy liên hệ Release Owner (người phụ trách phát hành) để được cung cấp tài khoản kiểm thử chuyên dụng.
-  - Sau khi đăng nhập vào tài khoản kiểm thử, chuẩn bị sẵn bộ dữ liệu mẫu dùng một lần gồm:
+- **Tuyệt đối KHÔNG tự tạo tài khoản production, dùng tài khoản người dùng thật hoặc dữ liệu cá nhân**: Việc kiểm thử bao gồm các thao tác xóa vĩnh viễn dữ liệu (destructive actions).
+- **Chỉ sử dụng tài khoản QA dùng một lần do Release Owner cấp**:
+  - Release Owner chịu trách nhiệm cấp tài khoản và chuẩn bị trước bộ dữ liệu mẫu dùng một lần. Kiểm thử viên không tự đăng ký tài khoản và không dùng dữ liệu của mình.
+  - Trước mỗi lượt S1–S4, kiểm thử viên xác nhận tài khoản có sẵn:
     1. Một bộ sưu tập (Collection) mẫu.
     2. Một sơ đồ tư duy (Mind Map) có chứa nội dung tóm tắt (Summary).
     3. Một phiên trò chuyện (Chat) có vài tin nhắn trao đổi.
@@ -67,7 +67,7 @@ Ghi nhận cả hai mã SHA này vào phần thông tin chung của bảng kiể
 
 - **Mục tiêu**: Kiểm tra trải nghiệm đọc màn hình bằng công cụ NVDA trên trình duyệt Chrome.
 - **Chuẩn bị phần cứng và phần mềm**:
-  - Máy tính chạy hệ điều hành Windows 10 hoặc Windows 11.
+  - Máy tính chạy hệ điều hành Windows 11, đúng với môi trường trong bảng kiểm gốc.
   - Cài đặt trình duyệt Google Chrome bản mới nhất.
   - Tải và cài đặt phần mềm đọc màn hình miễn phí **NVDA** từ trang web chính thức của tổ chức phi lợi nhuận NV Access: [nvaccess.org](https://www.nvaccess.org/).
 - **Cách khởi động và thao tác**:
@@ -95,7 +95,7 @@ Ghi nhận cả hai mã SHA này vào phần thông tin chung của bảng kiể
 
 - **Mục tiêu**: Kiểm tra khả năng tương thích với trình đọc màn hình mặc định Windows Narrator trên trình duyệt Edge.
 - **Chuẩn bị phần cứng và phần mềm**:
-  - Máy tính chạy Windows 10/11 có sẵn công cụ Windows Narrator.
+  - Máy tính chạy Windows 11 có sẵn công cụ Windows Narrator.
   - Trình duyệt Microsoft Edge.
 - **Cách khởi động và thao tác**:
   - Mở Microsoft Edge và truy cập StudyMap.
@@ -105,7 +105,8 @@ Ghi nhận cả hai mã SHA này vào phần thông tin chung của bảng kiể
   - Chạy cùng bộ 29 hàng kiểm thử giống như Sheet S1 (§1 đến §6 và hàng C1).
   - Hàng 4.6 cũng thực hiện trên bản dựng kiểm thử Flag-ON riêng giống như S1.
 - **Tiêu chuẩn hoàn thành Cổng E4**:
-  - Cổng E4 chỉ được đánh giá là ĐẠT (PASS) khi **cả S1 (NVDA) và S2 (Narrator) đều đạt tất cả các hàng** (hoặc nếu có hàng FAIL thì lỗi đó phải được Release Owner ký duyệt chấp nhận rủi ro bằng văn bản).
+  - Cổng E4 chỉ được đánh giá là ĐẠT (PASS) khi **cả S1 (NVDA) và S2 (Narrator) đều đạt tất cả các hàng**, hoặc từng hàng không PASS có ngoại lệ được theo dõi và Release Owner chấp nhận bằng văn bản.
+  - Nếu mới chạy một trình đọc màn hình, kết quả của trình đọc còn lại vẫn là **NOT VERIFIED**. Chỉ Release Owner mới có thể quyết định phát hành có điều kiện và phải chấp nhận rủi ro đó bằng văn bản; kiểm thử viên không tự đổi thành PASS.
 
 ---
 
@@ -187,7 +188,7 @@ Bằng chứng kiểm thử là yếu tố quyết định để nghiệm thu ph
 3. **Đánh dấu kết quả cho từng hàng**:
    - `PASS`: Trình đọc màn hình phát âm đúng vai trò (role), trạng thái (state), nhãn (label) và nội dung theo yêu cầu; tiêu điểm bàn phím di chuyển chính xác.
    - `FAIL`: Trình đọc bị im lặng, đọc sai nhãn, đọc nhầm vai trò (ví dụ: văn bản thường bị đọc thành liên kết), mất tiêu điểm (focus bị văng về đầu trang).
-   - `N/A`: Thành phần không áp dụng cho nền tảng đang kiểm thử.
+   - `N/A`: Chỉ dùng khi thành phần thật sự không áp dụng cho nền tảng đang kiểm thử; ghi rõ lý do. `N/A` không tự động được tính là PASS và cần Release Owner theo dõi/chấp nhận ngoại lệ nếu dùng để quyết định phát hành.
 4. **Điền thông tin vào bảng tổng hợp**:
    - Sau khi hoàn thành bản kiểm tra chi tiết, điền số lượng tổng kết `PASS / N/A / FAIL` vào bảng Sheet S1 hoặc S2 trong tệp [human-acceptance-sheets.md](human-acceptance-sheets.md) và đính kèm đường dẫn tới tệp checklist chi tiết vừa điền.
 
