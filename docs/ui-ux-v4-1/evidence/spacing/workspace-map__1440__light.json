@@ -1,0 +1,93 @@
+{
+ "viewport": {
+  "width": 1440,
+  "height": 900
+ },
+ "distinctSpacingValues": [
+  2,
+  3,
+  4,
+  5,
+  6,
+  7,
+  8,
+  9,
+  10,
+  12,
+  15,
+  16,
+  20,
+  30,
+  45,
+  60
+ ],
+ "spacingFrequency": [
+  {
+   "value": 2,
+   "count": 26
+  },
+  {
+   "value": 3,
+   "count": 1
+  },
+  {
+   "value": 4,
+   "count": 46
+  },
+  {
+   "value": 5,
+   "count": 8
+  },
+  {
+   "value": 6,
+   "count": 79
+  },
+  {
+   "value": 7,
+   "count": 3
+  },
+  {
+   "value": 8,
+   "count": 47
+  },
+  {
+   "value": 9,
+   "count": 4
+  },
+  {
+   "value": 10,
+   "count": 49
+  },
+  {
+   "value": 12,
+   "count": 44
+  },
+  {
+   "value": 15,
+   "count": 16
+  },
+  {
+   "value": 16,
+   "count": 9
+  },
+  {
+   "value": 20,
+   "count": 2
+  },
+  {
+   "value": 30,
+   "count": 8
+  },
+  {
+   "value": 45,
+   "count": 2
+  },
+  {
+   "value": 60,
+   "count": 2
+  }
+ ],
+ "headings": [],
+ "boxes": [],
+ "verticalGaps": []
+}
