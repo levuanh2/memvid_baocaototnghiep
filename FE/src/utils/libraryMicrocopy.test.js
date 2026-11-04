@@ -6,7 +6,7 @@ import reviewGuide from "../pages/study/ReviewGuide.jsx?raw";
 describe("Library and review-guide microcopy", () => {
   it("density toggle has one constant name; demo button says what it opens", () => {
     expect(documentList).toContain('aria-pressed={matDo === "compact"}');
-    expect(documentList).toMatch(/\n\s*Xem gọn\n/);
+    expect(documentList).toMatch(/\n\s*Xem gọn\r?\n/);
     expect(documentList).not.toMatch(/"Gọn" : "Đủ"/);
     expect(documentList).toContain("/> Mở một tài liệu");
     expect(documentList).toContain("Tự động chọn tài liệu đã sẵn sàng nhất của bạn");
