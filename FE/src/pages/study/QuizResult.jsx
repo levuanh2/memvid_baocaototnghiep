@@ -18,6 +18,13 @@ import { MAX_CONSECUTIVE_FETCH_FAILURES } from "../../utils/jobPoller";
 import "./quizJourney.css";
 
 const KEYS = ["A", "B", "C", "D", "E", "F"];
+// O5/A3 (owner revision): the review-plan CTA's "(N chủ đề)" count must
+// mirror BE's own definition of "weak" exactly -- BE/app/domains/
+// gap_analysis/service.py's `WEAK_STATUSES = ("light_review",
+// "review_needed", "critical_gap")`. Not "anything not mastered": pending/
+// ungraded/unknown/missing statuses are excluded by construction (not in
+// this allow-list), same as `mastered`.
+const WEAK_MASTERY_STATUSES = new Set(["light_review", "review_needed", "critical_gap"]);
 const REGRADE_POLL_MS = 3000;
 // Job chấm tự luận chết ở BE thì attempt kẹt `submitted` VĨNH VIỄN — poll thành công
 // mọi lần, chỉ là trạng thái không bao giờ đổi, nên trần đếm-lỗi không cứu được.
@@ -112,7 +119,17 @@ export default function QuizResult() {
   // plan actually exists to cover. `masteries` only populates once graded
   // (see `load()` above), so an empty array here means "not computed yet",
   // and the header action below falls back to the count-less label for it.
-  const weakTopicCount = masteries.filter((m) => m.status !== "mastered").length;
+  // Dedup by `concept_mastery_id` (the row's own BE id -- ConceptMastery.id,
+  // see gap_analysis/service.py's `list_for_attempt`) when present; falls
+  // back to the normalized (trimmed, lower-cased) concept name if a row is
+  // ever missing it. The BE's own unique constraint already prevents
+  // duplicate (attempt_id, concept_name) rows, so this is a defensive
+  // floor, not the expected path.
+  const weakTopicCount = new Set(
+    masteries
+      .filter((m) => WEAK_MASTERY_STATUSES.has(m?.status))
+      .map((m) => m.concept_mastery_id ?? `name:${String(m.concept_name || "").trim().toLowerCase()}`),
+  ).size;
 
   return (
     <StudyShell
