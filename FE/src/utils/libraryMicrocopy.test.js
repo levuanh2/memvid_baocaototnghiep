@@ -8,7 +8,8 @@ describe("Library and review-guide microcopy", () => {
     expect(documentList).toContain('aria-pressed={matDo === "compact"}');
     expect(documentList).toMatch(/\n\s*Xem gọn\n/);
     expect(documentList).not.toMatch(/"Gọn" : "Đủ"/);
-    expect(documentList).toContain("/> Mở thử tài liệu");
+    expect(documentList).toContain("/> Mở một tài liệu");
+    expect(documentList).toContain("Tự động chọn tài liệu đã sẵn sàng nhất của bạn");
   });
   it("review guide regenerate button names the plan", () => {
     expect(reviewGuide).toContain("} Tạo lại kế hoạch");

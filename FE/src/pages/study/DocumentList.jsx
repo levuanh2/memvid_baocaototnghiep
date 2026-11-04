@@ -520,9 +520,10 @@ export default function DocumentList() {
               không vẽ nút, không hứa một bản xem thử không tồn tại. */}
           {taiLieuDemo && (
             <button type="button" className="pill-action text-small inline-flex items-center gap-1.5"
-              title="Mở ngay một tài liệu đã sẵn sàng để xem thử Tóm tắt/Sơ đồ/Gia sư AI"
+              // V4.1 W5-1 (owner A7): say that the document is picked automatically.
+              title={`Tự động chọn tài liệu đã sẵn sàng nhất của bạn (${taiLieuDemo.display_name || taiLieuDemo.title || "không tên"}) và mở để xem Tóm tắt, Sơ đồ tư duy, Gia sư AI`}
               onClick={() => moBeMat(taiLieuDemo, beMatDemoDauTien(taiLieuDemo))}>
-              <Icon name="Sparkles" size={13} /> Mở thử tài liệu
+              <Icon name="Sparkles" size={13} /> Mở một tài liệu
             </button>
           )}
         </>
