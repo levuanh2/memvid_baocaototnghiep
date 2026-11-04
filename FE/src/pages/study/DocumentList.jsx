@@ -522,7 +522,7 @@ export default function DocumentList() {
             <button type="button" className="pill-action text-small inline-flex items-center gap-1.5"
               title="Mở ngay một tài liệu đã sẵn sàng để xem thử Tóm tắt/Sơ đồ/Gia sư AI"
               onClick={() => moBeMat(taiLieuDemo, beMatDemoDauTien(taiLieuDemo))}>
-              <Icon name="Sparkles" size={13} /> Xem thử
+              <Icon name="Sparkles" size={13} /> Mở thử tài liệu
             </button>
           )}
         </>
@@ -653,9 +653,10 @@ export default function DocumentList() {
             own `matDo` prop: no new data, no new fetch. */}
         <button type="button" onClick={doiMatDo} className="pill-action !py-2"
                 aria-pressed={matDo === "compact"}
-                title={matDo === "compact" ? "Đang xem gọn — bấm để xem đủ" : "Đang xem đủ — bấm để xem gọn"}>
+                title={matDo === "compact" ? "Đang xem gọn — bấm để xem đầy đủ" : "Đang xem đầy đủ — bấm để xem gọn"}>
           <Icon name={matDo === "compact" ? "AlignJustify" : "Rows3"} size={13} />
-          {matDo === "compact" ? "Gọn" : "Đủ"}
+          {/* V4.1 W5-1: one constant name for a toggle button; aria-pressed carries the state. */}
+          Xem gọn
         </button>
 
         <label className="flex items-center gap-2 cursor-pointer px-1">
