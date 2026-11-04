@@ -15,7 +15,9 @@ against every independently painted SVG layer.
 **Fix and prevention:** only while `.mm-selection-active` is present, the live
 map's SVG drawing layers use `pointer-events: none`; connectors and relations
 remain visible, while clicks fall through to HTML markers and empty-space drags
-fall through to the canvas. Normal map mode is unchanged. Keep the real-pointer
+fall through to the canvas. Apply that rule to SVG descendants too: Mind Elixir
+restores `pointer-events: stroke` on relation groups. Normal map mode is
+unchanged. Keep the real-pointer
 `marker-click-resolution.spec.js` coverage at desktop, tablet, and phone widths:
 DOM-dispatched marker clicks cannot detect a painted SVG path stealing the hit.
 
