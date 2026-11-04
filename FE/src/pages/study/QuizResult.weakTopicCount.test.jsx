@@ -4,8 +4,9 @@
 // critical_gap -- the exact same WEAK_STATUSES BE/app/domains/
 // gap_analysis/service.py already uses. Excludes mastered AND any other
 // status (pending/ungraded/unknown/missing) by construction (allow-list,
-// not a "not mastered" denylist). Dedups by `concept_mastery_id` (the BE
-// row id) with a normalized-concept-name fallback.
+// not a "not mastered" denylist). Dedups by the normalized (trimmed,
+// lower-cased) concept name FIRST, falling back to `concept_mastery_id`
+// only when a row has no name; a row with neither is not counted at all.
 import { act } from "react";
 import { createRoot } from "react-dom/client";
 import { afterEach, describe, expect, it, vi } from "vitest";
@@ -92,6 +93,22 @@ describe("QuizResult weak-topic count (owner decision A3)", () => {
       mastery({ id: "m3", concept_name: "Phân trang", status: "light_review" }), // genuinely different concept
     ]);
     expect(primaryLink()?.textContent).toContain("Kế hoạch ôn tập (2 chủ đề)");
+  });
+
+  it("same concept, different case, different ids -- name wins over id, counted once", async () => {
+    await renderWith([
+      mastery({ id: "m1", concept_name: "Điều Phối Tiến Trình", status: "review_needed" }),
+      mastery({ id: "m2", concept_name: "điều phối tiến trình", status: "critical_gap" }), // different id, same concept by name
+    ]);
+    expect(primaryLink()?.textContent).toContain("Kế hoạch ôn tập (1 chủ đề)");
+  });
+
+  it("row with neither concept_name nor concept_mastery_id is not counted", async () => {
+    await renderWith([
+      mastery({ concept_mastery_id: null, concept_name: "", status: "review_needed" }),
+      mastery({ id: "m2", concept_name: "Phân trang", status: "light_review" }), // the one real, identifiable weak row
+    ]);
+    expect(primaryLink()?.textContent).toContain("Kế hoạch ôn tập (1 chủ đề)");
   });
 
   it("all correct (no wrong answers): the count is never shown at all (primary goes to Library instead)", async () => {
