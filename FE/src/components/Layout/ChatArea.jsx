@@ -917,7 +917,7 @@ export default function ChatArea({
             {sources.length === 0 && !selectedSources?.length ? (
               // W1-4: nothing uploaded yet -- "chọn tài liệu" has nothing to
               // select, so the one primary action is to upload, reusing the
-              // exact same handler/input SidebarLeft's own "Thêm tài liệu"
+              // exact same handler/input SidebarLeft's own "Tải tài liệu lên"
               // calls (no duplicate upload POST logic here).
               <>
                 <p className="font-display text-body-lg text-text-secondary mb-6">

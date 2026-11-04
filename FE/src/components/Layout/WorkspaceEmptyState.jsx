@@ -118,7 +118,7 @@ export default function WorkspaceEmptyState({
       ) : (
         // W1-4: no documents at all -- "chọn tài liệu" (select one) has
         // nothing to select. One primary action: upload, reusing the exact
-        // same handler/input SidebarLeft's own "Thêm tài liệu" calls (no
+        // same handler/input SidebarLeft's own "Tải tài liệu lên" calls (no
         // duplicate upload POST logic here).
         <>
           <p className="text-caption font-mono text-text-muted uppercase">Chưa có tài liệu nào</p>
