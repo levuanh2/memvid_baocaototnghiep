@@ -6,6 +6,8 @@ Mục tiêu là so sánh **Option B trước, sau đó Option A**, trên đúng 
 
 Nguồn: `DONE-R5-trial.md`, branch `trial/map-fit-options`, HEAD `0144888`. Branch này chỉ dùng để thử nghiệm; không merge hoặc deploy.
 
+Các lựa chọn `fit=main|a|b` chỉ tồn tại trong `fixture-harness.html`; route production không nhận tùy chọn trial. Tester phải dùng đúng URL bên dưới, không thử bật Option A/B trên production.
+
 Release Owner khởi chạy trên máy chứa worktree:
 
 ```powershell
