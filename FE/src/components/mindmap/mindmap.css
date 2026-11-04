@@ -826,6 +826,15 @@ html.dark .me-container { --mm-relation: #7e90c4; }
    factor, not by transform, so no stacking context forms around the host and the
    dot's z-index can lift it above sibling hosts (40px hosts overlap when topics
    stack closer than 40 screen px, which happens below ~0.96 zoom). */
+/* Connector and semantic-relation SVGs are visual-only while branch selection
+   is active. At low zoom their paths can cross a marker dot and win the
+   browser hit test, bypassing the marker's nearest-visible-dot resolver.
+   Include descendants because Mind Elixir restores pointer-events: stroke on
+   relation groups. Normal map mode keeps its existing SVG hit testing. */
+.mm-selection-active .map-container .map-canvas svg,
+.mm-selection-active .map-container .map-canvas svg * {
+  pointer-events: none;
+}
 .map-container me-export-check {
   position: absolute;
   top: calc(-20px * var(--mm-marker-inv, 1));
