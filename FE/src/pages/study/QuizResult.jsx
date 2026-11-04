@@ -115,20 +115,22 @@ export default function QuizResult() {
     [graded, result],
   );
   const openWrongReview = () => { setReviewIndex(0); setReviewingWrong(true); };
-  // O5: "weak topic" = anything not fully mastered yet — the set the review
-  // plan actually exists to cover. `masteries` only populates once graded
-  // (see `load()` above), so an empty array here means "not computed yet",
-  // and the header action below falls back to the count-less label for it.
-  // Dedup by `concept_mastery_id` (the row's own BE id -- ConceptMastery.id,
-  // see gap_analysis/service.py's `list_for_attempt`) when present; falls
-  // back to the normalized (trimmed, lower-cased) concept name if a row is
-  // ever missing it. The BE's own unique constraint already prevents
-  // duplicate (attempt_id, concept_name) rows, so this is a defensive
-  // floor, not the expected path.
+  // `masteries` only populates once graded (see `load()` above), so an empty
+  // array here means "not computed yet", and the header action below falls
+  // back to the count-less label for it.
+  // A3 (owner correction): dedup by the normalized (trimmed, lower-cased)
+  // concept name FIRST, falling back to `concept_mastery_id` only when a row
+  // has no name. A row with neither is not counted at all (not fabricated as
+  // its own topic) -- two rows for the same concept must never inflate the
+  // count just because they disagree on casing or one is missing its id.
   const weakTopicCount = new Set(
     masteries
       .filter((m) => WEAK_MASTERY_STATUSES.has(m?.status))
-      .map((m) => m.concept_mastery_id ?? `name:${String(m.concept_name || "").trim().toLowerCase()}`),
+      .map((m) => {
+        const name = String(m?.concept_name || "").trim().toLowerCase();
+        return name ? `name:${name}` : m?.concept_mastery_id != null ? `id:${m.concept_mastery_id}` : null;
+      })
+      .filter(Boolean),
   ).size;
 
   return (
