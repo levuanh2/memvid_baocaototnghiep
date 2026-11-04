@@ -115,7 +115,7 @@ test("Enter and Space activate a depth-preset menuitem the same way a click does
     await page.keyboard.press("Tab");
   }
   await page.keyboard.press("Enter");
-  expect(await pressedLabels(page)).toEqual(["Chỉ chủ đề chính"]);
+  expect(await pressedLabels(page)).toEqual(["Chỉ nút gốc"]);
 
   await openOverflow(page);
   await page.keyboard.press("Tab");
@@ -129,7 +129,7 @@ test("Enter and Space activate a depth-preset menuitem the same way a click does
   }
   await page.keyboard.press("Tab"); // move to the 2nd item in the group
   await page.keyboard.press("Space");
-  expect(await pressedLabels(page)).toEqual(["Hiện 1 tầng nhánh"]);
+  expect(await pressedLabels(page)).toEqual(["Chủ đề chính"]);
 });
 
 test("switching to a deep map and back does not leak the shallow map's explicit preset", async ({ page }) => {

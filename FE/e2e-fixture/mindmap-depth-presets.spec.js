@@ -31,8 +31,8 @@ const MAP_A_ID = "fixture-map-a";
 const ROOT = `${MAP_ID}-root`;
 
 const PRESETS = [
-  ["Chỉ chủ đề chính", 1, 0],
-  ["Hiện 1 tầng nhánh", 4, 3],
+  ["Chỉ nút gốc", 1, 0],
+  ["Chủ đề chính", 4, 3],
   ["Hiện 2 tầng nhánh", 6, 5],
   ["Hiện 3 tầng nhánh", 7, 6],
   ["Mở toàn bộ", 8, 7],
@@ -197,14 +197,14 @@ for (const viewport of VIEWPORTS) {
 test.describe("Manual interaction -> custom state, keyboard, mobile hit targets", () => {
   test("manual caret toggle after a preset drops every aria-pressed; re-applying the preset restores the deterministic set", async ({ page }) => {
     await openFixture(page);
-    await applyLevel(page, "Hiện 1 tầng nhánh");
+    await applyLevel(page, "Chủ đề chính");
     await expect(topics(page)).toHaveCount(4);
     // applyLevel's click closes the overflow menu (its own onClick calls
     // setContextOverflowOpen(false)) -- menuitem buttons unmount with it,
     // so aria-pressed must be checked after reopening, not on the stale
     // (now-detached) element from before the click.
     await openOverflow(page);
-    await expect(page.getByRole("menuitem", { name: "Hiện 1 tầng nhánh" })).toHaveAttribute("aria-pressed", "true");
+    await expect(page.getByRole("menuitem", { name: "Chủ đề chính" })).toHaveAttribute("aria-pressed", "true");
     await page.keyboard.press("Escape").catch(() => {});
 
     // Manually collapse "a" (depth 1, visible, currently expanded) via its
@@ -221,11 +221,11 @@ test.describe("Manual interaction -> custom state, keyboard, mobile hit targets"
     }
     await page.keyboard.press("Escape").catch(() => {});
 
-    await applyLevel(page, "Hiện 1 tầng nhánh");
+    await applyLevel(page, "Chủ đề chính");
     await expect(topics(page)).toHaveCount(4);
     await expect(connectors(page)).toHaveCount(3);
     await openOverflow(page);
-    await expect(page.getByRole("menuitem", { name: "Hiện 1 tầng nhánh" })).toHaveAttribute("aria-pressed", "true");
+    await expect(page.getByRole("menuitem", { name: "Chủ đề chính" })).toHaveAttribute("aria-pressed", "true");
     await page.keyboard.press("Escape").catch(() => {});
   });
 
@@ -283,7 +283,7 @@ test.describe("Selection lifecycle across a depth change", () => {
 test.describe("Map lifecycle: no leak across A <-> depth-fixture switches", () => {
   test("root-only on the depth fixture does not survive a switch to map A, and does not leak into A's export-studio visible-scope preview", async ({ page }) => {
     await openFixture(page);
-    await applyLevel(page, "Chỉ chủ đề chính");
+    await applyLevel(page, "Chỉ nút gốc");
     await expect(topics(page)).toHaveCount(1);
 
     await page.locator('[aria-label="Mở thư viện sơ đồ"]').click();
@@ -312,9 +312,9 @@ test.describe("Map lifecycle: no leak across A <-> depth-fixture switches", () =
     // from before the switch to map A.
     await expect(topics(page)).toHaveCount(8);
     await openOverflow(page);
-    await expect(page.getByRole("menuitem", { name: "Chỉ chủ đề chính" })).toHaveAttribute("aria-pressed", "false");
+    await expect(page.getByRole("menuitem", { name: "Chỉ nút gốc" })).toHaveAttribute("aria-pressed", "false");
     await expect(page.getByRole("menuitem", { name: "Mở toàn bộ" })).toHaveAttribute("aria-pressed", "true");
-    for (const label of ["Hiện 1 tầng nhánh", "Hiện 2 tầng nhánh", "Hiện 3 tầng nhánh"]) {
+    for (const label of ["Chủ đề chính", "Hiện 2 tầng nhánh", "Hiện 3 tầng nhánh"]) {
       await expect(page.getByRole("menuitem", { name: label })).toHaveAttribute("aria-pressed", "false");
     }
   });
@@ -327,7 +327,7 @@ test.describe("Appearance V2 and branch-selection/export marker survive a depth 
     const rootA = page.locator(nodeSelector(`${MAP_A_ID}-root`));
     await expect.poll(() => rootA.evaluate((el) => el.style.borderRadius)).toBe("10px");
 
-    await applyLevel(page, "Chỉ chủ đề chính");
+    await applyLevel(page, "Chỉ nút gốc");
     await expect(topics(page)).toHaveCount(1);
     await expect.poll(() => rootA.evaluate((el) => el.style.borderRadius)).toBe("10px");
 
@@ -350,7 +350,7 @@ test.describe("Appearance V2 and branch-selection/export marker survive a depth 
 test.describe("Image export scope x root-only/depth (live-DOM capture, no production API)", () => {
   test("root-only + visible scope resolves to exactly the root in the Export Studio preview count", async ({ page }) => {
     await openFixture(page);
-    await applyLevel(page, "Chỉ chủ đề chính");
+    await applyLevel(page, "Chỉ nút gốc");
     await page.getByRole("button", { name: "Xuất sơ đồ" }).click();
     const dialog = page.getByRole("dialog");
     await dialog.locator('input[name="mm-export-scope"][value="visible"]').check();
@@ -394,7 +394,7 @@ test.describe("Visual QA screenshots (representative states, fake fixture data, 
   test("root-only / level-2 / full / manual-custom / selected-then-hidden -- representative captures", async ({ page }) => {
     await openFixture(page);
 
-    await applyLevel(page, "Chỉ chủ đề chính");
+    await applyLevel(page, "Chỉ nút gốc");
     await page.screenshot({ path: path.join(ARTIFACT_DIR, "state-root-only.png") });
 
     await applyLevel(page, "Hiện 2 tầng nhánh");
@@ -403,7 +403,7 @@ test.describe("Visual QA screenshots (representative states, fake fixture data, 
     await applyLevel(page, "Mở toàn bộ");
     await page.screenshot({ path: path.join(ARTIFACT_DIR, "state-full.png") });
 
-    await applyLevel(page, "Hiện 1 tầng nhánh");
+    await applyLevel(page, "Chủ đề chính");
     const tpcA = page.locator(nodeSelector(`${MAP_ID}-a`));
     await tpcA.locator("xpath=..").locator("me-epd").click();
     await page.screenshot({ path: path.join(ARTIFACT_DIR, "state-manual-custom.png") });
@@ -411,7 +411,7 @@ test.describe("Visual QA screenshots (representative states, fake fixture data, 
     await applyLevel(page, "Mở toàn bộ");
     await page.locator(nodeSelector(`${MAP_ID}-c`)).click();
     await expect(page.getByTestId("fixture-harness-root")).toHaveAttribute("data-selected-node", `${MAP_ID}-c`);
-    await applyLevel(page, "Hiện 1 tầng nhánh");
+    await applyLevel(page, "Chủ đề chính");
     await expect(page.getByTestId("fixture-harness-root")).toHaveAttribute("data-selected-node", "");
     await page.screenshot({ path: path.join(ARTIFACT_DIR, "state-selected-then-hidden.png") });
   });

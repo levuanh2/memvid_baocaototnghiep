@@ -58,7 +58,7 @@ test("root-only collapse leaves one topic and zero tree connectors, then 'Mở t
   expect(initialNodes).toBeGreaterThan(1);
   expect(initialConnectors).toBeGreaterThan(0);
   await openOverflow(page);
-  await page.getByRole("menuitem", { name: "Chỉ chủ đề chính" }).click();
+  await page.getByRole("menuitem", { name: "Chỉ nút gốc" }).click();
   await expect(topics(page)).toHaveCount(1);
   await expect(treeConnectors(page)).toHaveCount(0);
   expect(await transform(page)).toBe(initialTransform);
