@@ -59,6 +59,57 @@ function applyReadableFloor(mind, el) {
   mind.toCenter?.();
 }
 
+// R5 trial only. These alternatives are unreachable from the production app:
+// the prop that selects them is supplied solely by dev/FixtureHarnessApp.
+// Both retain main's readable 0.75 scale. Option A adds only a pan cue; Option
+// B moves the one-shot initial viewport toward as many source-order first-level
+// branches as can fit without sacrificing that scale.
+const TRIAL_FIT_PADDING = 24;
+
+function unionBounds(rects) {
+  if (!rects.length) return null;
+  const left = Math.min(...rects.map((rect) => rect.left));
+  const top = Math.min(...rects.map((rect) => rect.top));
+  const right = Math.max(...rects.map((rect) => rect.right));
+  const bottom = Math.max(...rects.map((rect) => rect.bottom));
+  return { left, top, right, bottom, width: right - left, height: bottom - top };
+}
+
+function applyPriorityBranchTrial(mind, el) {
+  applyReadableFloor(mind, el);
+  if (!mind?.nodeData || !el || el.clientWidth > MOBILE_FIT_MAX_WIDTH) return;
+
+  const viewport = el.getBoundingClientRect?.();
+  const rootRect = findTopicSafely(mind, mind.nodeData.id)?.getBoundingClientRect?.();
+  const branches = (mind.nodeData.children || [])
+    .map((node) => findTopicSafely(mind, node.id)?.getBoundingClientRect?.())
+    .filter((rect) => rect && rect.width > 0 && rect.height > 0);
+  if (!viewport?.width || !viewport?.height || !rootRect || !branches.length) return;
+
+  const availableWidth = viewport.width - TRIAL_FIT_PADDING * 2;
+  const availableHeight = viewport.height - TRIAL_FIT_PADDING * 2;
+  const framed = [rootRect];
+  for (const branchRect of branches) {
+    const candidate = unionBounds([...framed, branchRect]);
+    if (candidate.width > availableWidth || candidate.height > availableHeight) break;
+    framed.push(branchRect);
+  }
+
+  const target = unionBounds(framed.length > 1 ? framed : [rootRect, branches[0]]);
+  let dx = viewport.left + viewport.width / 2 - (target.left + target.width / 2);
+  let dy = viewport.top + viewport.height / 2 - (target.top + target.height / 2);
+
+  // When a complete root+branch pair cannot fit, preview the first branch but
+  // never move the root beyond the safe edge. This is the 320px Option B case.
+  if (framed.length === 1) {
+    dx = Math.max(viewport.left + TRIAL_FIT_PADDING - rootRect.left,
+      Math.min(dx, viewport.right - TRIAL_FIT_PADDING - rootRect.right));
+    dy = Math.max(viewport.top + TRIAL_FIT_PADDING - rootRect.top,
+      Math.min(dy, viewport.bottom - TRIAL_FIT_PADDING - rootRect.bottom));
+  }
+  mind.move?.(dx, dy);
+}
+
 function findTopicSafely(mind, id) {
   if (!mind || !id) return null;
   try { return mind.findEle?.(id) || null; }
@@ -95,7 +146,7 @@ function matchDepthPreset(mind) {
 // shape from before this refactor, just no longer wrapped in a portal.
 // `controller`: the ONE `useMindMapController()` instance, owned by whoever
 // renders both this component and KnowledgeInspector (WorkspaceContainer).
-export default function MindElixirView({ data, onRegenerate, regenerating, controller }) {
+export default function MindElixirView({ data, onRegenerate, regenerating, controller, fixtureFitOption = "main" }) {
   const containerRef = useRef(null);
   const mindRef = useRef(null);
   const canvasWrapRef = useRef(null);
@@ -316,12 +367,13 @@ export default function MindElixirView({ data, onRegenerate, regenerating, contr
     if (pendingFitRef.current) {
       pendingFitRef.current = false;
       mind.scaleFit?.();
-      applyReadableFloor(mind, el);
+      if (fixtureFitOption === "b") applyPriorityBranchTrial(mind, el);
+      else applyReadableFloor(mind, el);
     }
     setRenderError(null);
     setRenderState("ready");
     return true;
-  }, []);
+  }, [fixtureFitOption]);
 
   // 2026-09-24: starts a single polling loop that keeps calling
   // fitIfReady() -- cheap when not ready (an early-return on clientWidth)
@@ -1286,6 +1338,9 @@ export default function MindElixirView({ data, onRegenerate, regenerating, contr
             beats class) and collapses the container to content height, breaking scaleFit
             and leaving dead pan area. w/h-full fills the sized wrapper instead. */}
         <div ref={containerRef} className={`h-full w-full min-h-0 me-container${showRelations ? "" : " me-hide-arrows"}`} />
+        {fixtureFitOption === "a" && (
+          <div className="mm-fit-trial-pan-hint" data-testid="fit-trial-pan-hint">Kéo để xem các nhánh</div>
+        )}
         <div className="mm-legend" aria-hidden="true">
           <span><span className="swatch" style={{ background: "var(--text-primary)" }} />chủ đề</span>
           <span><span className="swatch" style={{ background: "var(--bg-card)", border: "1px solid var(--border-strong)" }} />mục</span>

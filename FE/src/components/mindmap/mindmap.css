@@ -826,6 +826,13 @@ html.dark .me-container { --mm-relation: #7e90c4; }
    factor, not by transform, so no stacking context forms around the host and the
    dot's z-index can lift it above sibling hosts (40px hosts overlap when topics
    stack closer than 40 screen px, which happens below ~0.96 zoom). */
+/* Included from Draft PR #146 so the real-phone fit comparison is not polluted
+   by connector paths intercepting selection-marker taps. This remains scoped
+   to selection mode and does not alter ordinary map SVG hit testing. */
+.mm-selection-active .map-container .map-canvas svg,
+.mm-selection-active .map-container .map-canvas svg * {
+  pointer-events: none;
+}
 .map-container me-export-check {
   position: absolute;
   top: calc(-20px * var(--mm-marker-inv, 1));
@@ -840,6 +847,26 @@ html.dark .me-container { --mm-relation: #7e90c4; }
   /* See the pointer-events note on mind-elixir canvas wrapper: this element
      must opt back in or it inherits none from .map-canvas. */
   pointer-events: auto;
+}
+
+/* R5 trial-only Option A cue. The only renderer is gated by the fixture-only
+   `fixtureFitOption` prop; production routes never emit this element. */
+.mm-fit-trial-pan-hint {
+  position: absolute;
+  left: 50%;
+  bottom: 72px;
+  z-index: 6;
+  transform: translateX(-50%);
+  padding: 7px 11px;
+  border: 1px solid var(--border-color);
+  border-radius: 999px;
+  color: var(--text-secondary);
+  background: color-mix(in srgb, var(--bg-card) 94%, transparent);
+  box-shadow: var(--shadow-card);
+  font-size: 12px;
+  line-height: 1.2;
+  white-space: nowrap;
+  pointer-events: none;
 }
 .map-container me-export-check .mm-export-check__dot {
   position: absolute;

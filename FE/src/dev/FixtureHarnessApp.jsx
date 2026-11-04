@@ -22,6 +22,8 @@ const MAPS = [FIXTURE_MAP_A, FIXTURE_MAP_B, FIXTURE_SCOPE_A, FIXTURE_SCOPE_B, FI
 const COLLAPSED_BY_MAP = { ...FIXTURE_COLLAPSED_NODE_IDS, ...FIXTURE_EXPORT_V3_COLLAPSED };
 const SEARCH = new URLSearchParams(typeof window !== "undefined" ? window.location.search : "");
 const TOOLBAR_OVERLAY_PROOF = SEARCH.get("toolbarOverlay") === "1";
+const REQUESTED_FIT = SEARCH.get("fit");
+const FIXTURE_FIT_OPTION = ["a", "b"].includes(REQUESTED_FIT) ? REQUESTED_FIT : "main";
 const INITIAL_MAP_ID = SEARCH.get("map") === "export-v3" ? FIXTURE_EXPORT_V3.id
   : SEARCH.get("map") === "post-pr77" ? FIXTURE_POST_PR77.id
   : SEARCH.get("map") === "exact-v3" ? FIXTURE_EXACT_V3.id
@@ -112,9 +114,10 @@ export default function FixtureHarnessApp() {
 
   return (
     <div style={{ height: "100vh", width: "100vw", paddingTop: TOOLBAR_OVERLAY_PROOF ? 56 : 0 }} data-testid="fixture-harness-root"
-      data-selected-node={controller.selected?.id || ""} data-save-log={JSON.stringify(saveLog)}>
+      data-selected-node={controller.selected?.id || ""} data-save-log={JSON.stringify(saveLog)} data-fit-option={FIXTURE_FIT_OPTION}>
       <div className={TOOLBAR_OVERLAY_PROOF ? "h-full md:ml-[252px] md:w-[calc(100%-252px)]" : "h-full w-full"}>
-        <MindElixirView data={data} onRegenerate={() => {}} regenerating={false} controller={controller} />
+        <MindElixirView data={data} onRegenerate={() => {}} regenerating={false} controller={controller}
+          fixtureFitOption={FIXTURE_FIT_OPTION} />
       </div>
       {TOOLBAR_OVERLAY_PROOF && controller.selected?.id && (
         <>
