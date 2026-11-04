@@ -1,164 +1,208 @@
 # 10. V4.1 integration plan (2026-11-04)
 
-Status: draft, compiled by an independent reviewing agent (Claude pD) from the
-current state of every open V4.1 PR, this cycle's owner decisions, and the
-human-acceptance sheets on `origin/main` (`927cf88`). Facts only; anything not
-directly verified is marked **NOT VERIFIED**. Supersedes nothing in
-`07-v41-pr-roadmap.md`; this is a snapshot for merge planning, not a new plan.
+Status: plan for the owner. Nothing here is merged or deployed, and the Library
+flag stays OFF. Merging waits for explicit owner authorization, PR by PR or
+wave by wave. Anything not directly verified is marked **NOT VERIFIED**.
 
-## 1. Updated decisions matrix (A1–A8 + C)
+`origin/main` at the time of writing: `927cf88`.
 
-Compiled from brief files and PR/commit titles under
-`.worktrees/v41-briefs/` and `git log --all`. Where a letter's source could
-not be found in any file this agent could read, it is marked NOT FOUND rather
-than guessed.
+## 1. Decisions matrix
 
-| Decision | Subject | PR | Status |
+| ID | Owner decision | PR | State |
 |---|---|---|---|
-| A1 | NOT FOUND — no brief, PR title, or commit message matching "owner A1"/"decision A1" located in this repo's `.worktrees/v41-briefs/` or `git log --all` | — | NOT VERIFIED |
-| A2 | Mobile header "Công cụ học" discoverability — move Usage into the tools menu (Option A recommended) | #142 | Reviewed, APPROVE (content) — see `R3-review-result.md`. CI not yet run on HEAD `09dd0f1` |
-| A3 | Quiz Result weak-topic count: dedupe by `concept_mastery_id` first, `concept_name` fallback (original A3) | #121 | Implemented, CI green at HEAD `3f4bf9f`. **A further owner correction to A3's dedup priority (name-first, trim+lowercase, id only as fallback; neither-present rows count 0) is queued and not yet implemented as of this doc.** |
-| A4 | Export Studio footer (#136): keep cancellation/retry/completed contracts and exact-node/branch/multibranch semantics unchanged | #136 | Reviewed, APPROVE — see `R3-review-result.md`. CI green at HEAD `8dcf063` |
-| A5 | PR #135 before/after evidence must come from a genuine `origin/main` baseline, not a same-branch pre/post-interaction pair | #135 | Implemented, CI green at HEAD `113f0e3` |
-| A6 | Mobile mind-map touch targets / first-tap reliability (W5-3 framing + marker-click-under-path fix) | #130 | In progress on branch `v41/w5-map-fit-mobile`, HEAD `838c9fe` (includes R3-130's marker-click fix). CI status: NOT VERIFIED by this doc — TODO below |
-| A7 | "Mở một tài liệu" tooltip names the auto-picked document | #138 | HEAD `05ca35c`. CI status: NOT VERIFIED by this doc — TODO below |
-| A8 | Mind-map depth-preset labels + viewport-button tooltips must match actual `fitView`/`resetView`/`toCenter` behavior | #139 | HEAD `bcc8878`. CI status: NOT VERIFIED by this doc — TODO below |
-| C | W5-5 spacing/layout: evidence-based, bounded proposal, not an open-ended redesign | #141 | Reviewed, APPROVE — see `R3-review-result.md`. CI green at HEAD `90b4ce9` |
+| A1 | Run S1–S4 on production before the merge train; record frontend and backend revisions separately | none | **NOT VERIFIED**: no filled sheet exists (§7) |
+| A2 | Accept "Công cụ học" and "Tải tài liệu lên"; icon-only on phones is interim; separate proposal for a visible label at 320/390 | #126, #142 | #126 unchanged. Proposal #142 recommends moving Usage into the tools menu. Owner picks an option; any product change is a separate PR |
+| A3 | Weak-topic count: only `light_review`, `review_needed`, `critical_gap`; no duplicate concepts; no fabricated number | #121 | Done, `c51b07c`. Matches the backend `WEAK_STATUSES`. Dedup by normalized concept name, row id as fallback, a row with neither is not counted |
+| A4 | Export footer direction approved; keep cancel, retry and completed contracts | #136 | Done, `8dcf063`. Only the idle footer changes; lifecycle states match `main`. Independent review: APPROVE. Audit 467/467 |
+| A5 | Four right-panel tabs; real before screenshots; legacy block stays off | #135 | Evidence re-captured from `main`, `113f0e3`. **Owner review of screenshots pending** |
+| A6 | Before/after at 320/390; fit, readability, first level, touch targets, no refit; audit | #130 | Evidence ready, `c2d695f`, audit 466/466. **Owner visual acceptance pending, see the trade-offs below** |
+| A7 | "Xem gọn", "Mở một tài liệu", "Tạo lại kế hoạch"; tooltip explains automatic selection | #138 | Done, `c4e4167` |
+| A8 | Depth labels as specified; tooltips must match the code | #139 | Done, `bcc8878`, audit 466/466. `toCenter()` centres the root, so the tooltip now says "đưa nút gốc vào giữa khung, giữ mức thu phóng" |
+| C | "Sơ đồ tư duy" percentage unit | none yet | After #122 and #137 merge |
+| C | W5-5 as an evidence-based proposal | #141 | Done. Independent review: APPROVE |
+| C | Library production flag OFF; rollout needs separate written approval | #123, #133 | Flag untouched |
 
-## 2. PRs modified and current HEADs
+### A6 trade-offs for the owner (#130)
 
-All PRs below are **draft**, **open**, **not merged**, confirmed via
-`gh pr list --search "head:v41/" --state all` at the time this doc was
-written. P0 hotfixes #117/#118/#119 are already merged into `main` (see
-`07-v41-pr-roadmap.md`) and are not repeated here.
+Measured in the fixture harness, map with 5 first-level branches. Not read on a
+real phone (**NOT VERIFIED**).
 
-| PR | Branch | HEAD | Title |
+| Width | Version | Scale | First-level inside the canvas | Rendered label size |
+|---|---|---|---|---|
+| 320 | `main` | 0.75 | 0 / 5 | 10.5 px |
+| 320 | #130 | 0.5 | 1 / 5; the others are cut at the edge | 7 px |
+| 390 | `main` | 0.75 | 0 / 5 | 10.5 px |
+| 390 | #130 | 0.5 | 5 / 5 | 7 px |
+
+- The 0.5 floor and the 7 px "legible" figure were chosen during this work.
+  They are not an owner or accessibility standard.
+- At 0.5 the fixed-size selection markers of stacked leaves overlap, so
+  `mobile-touch-selection.spec.js` now zooms in to at least 75% before picking
+  leaves. A real click still resolves to the nearest marker
+  (`marker-click-resolution.spec.js`).
+- The audit found a real defect on the way: a connector path could swallow a
+  marker click. Fixed in `c2d695f`; SVG layers ignore pointers only while branch
+  selection is active.
+
+Screenshots: `docs/ui-ux-v4-1/evidence/w5-3/`.
+
+## 2. PRs changed after the owner decisions
+
+| PR | Old HEAD | New HEAD | Change |
 |---|---|---|---|
-| #121 | `v41/w2-result-next-step` | `3f4bf9f` | fix(quiz-result): next-step action matches O5 |
-| #122 | `v41/w1-map-names` | `4707cf3` | feat(ui): two map names, Sơ đồ tư duy and Bản đồ kiến thức (W1-1) |
-| #123 | `v41/w4-matrix-responsive` | `7fabfab` | fix(library): contain action matrix controls |
-| #124 | `v41/w3-remove-duplicates` | `19734ef` | refactor(ui): remove duplicate Lưu and Hỏi AI về khái niệm này (W3-2) |
-| #125 | `v41/w3-card-menu-a11y` | `896fe72` | fix(library): make card menu keyboard accessible |
-| #126 | `v41/w1-tools-upload-labels` | `9d1bccb` | feat(ui): Công cụ học menu and one upload label (W1-2) |
-| #127 | `v41/w2-queue-labels` | `a89fcc7` | feat(study): Ôn ngay / Ôn sớm / Ôn sau (W2-3) |
-| #128 | `v41/w1-library-header-mobile` | `489c1f9` | fix(library): stack mobile header actions |
-| #129 | `v41/w1-mobile-empty-states` | `92edfc0` | fix(workspace): mobile-aware empty states (W1-4) |
-| #130 | `v41/w5-map-fit-mobile` | `838c9fe` | fix(mindmap): frame root + first level on phones (W5-3) + R3-130 marker-click fix |
-| #131 | `v41/w3-palette-actions` | `af6d4cd` | fix(palette): Mở Gia sư AI opens the tutor (W3-1) |
-| #132 | `v41/w5-a11y-labels` | `c7c0b4c` | fix(a11y): name source checkboxes and chat box (W5-4) |
-| #133 | `v41/w4-matrix-a11y` | `a6fc65f` | fix(a11y): announce Library selection, name matrix row controls (W4-2) |
-| #134 | `v41/w1-branding` | `4ee9338` | feat(branding): StudyMap as the single product name (W1-3) |
-| #135 | `v41/w3-right-panel-tabs` | `113f0e3` | feat(workspace): restore the right panel's own tab row (W3-4) |
-| #136 | `v41/w3-export-footer` | `8dcf063` | refactor(export): two-button idle footer, rail-only navigation (W3-3) |
-| #137 | `v41/w2-percent-units` | `c742936` | fix(study): percentages name their unit |
-| #138 | `v41/w5-library-microcopy` | `05ca35c` | feat(ui): Library and review-guide labels say what they do (W5-1) |
-| #139 | `v41/w5-map-microcopy` | `bcc8878` | feat(mindmap): viewport button titles and depth preset microcopy (W5-1a) |
-| #140 | `v41/w5-knowledge-map-header` | `355c08f` | fix(study): knowledge map header — two named exits (W5-2) |
-| #141 | `v41/w55-spacing-proposal` | `90b4ce9` | docs(v4.1): propose spacing normalization |
-| #142 | `v41/mobile-header-proposal` | `09dd0f1` | docs: mobile header proposal for Công cụ học (A2) |
+| #121 | `93a33ca` | `c51b07c` | A3 count and dedup |
+| #129 | `92edfc0` | `f3c789e` | Comments use the approved upload label; found by the #126 source scan in the train simulation |
+| #130 | `cbebd95` | `c2d695f` | Evidence (A6); marker click under a path |
+| #135 | `b6b1e61` | `113f0e3` | Real before/after evidence (A5) |
+| #136 | `9d3292e` | `8dcf063` | Lifecycle states back to `main`'s contracts (A4), tests restored |
+| #137 | `3bc27b9` | `6233d50` | Merge-forward of #121 |
+| #138 | `103daa9` | `c4e4167` | A7 copy and tooltip; CRLF-tolerant test |
+| #139 | `79124c1` | `bcc8878` | A8 labels and tooltips |
+| #142 | `09dd0f1` | `5e173c9` | Base changed from the #126 branch to `main`, because CI never ran; merge after #126 |
 
-Known inter-PR dependency pairs stated in their own PR bodies/briefs:
-`#137` depends on `#121`; `#140` depends on `#122`; `#121` (A3) is queued for
-one more owner-requested revision (dedup-priority correction) not yet pushed
-as of this doc.
+New in this round: #141 (W5-5 proposal), #142 (mobile header proposal), #143
+(this plan).
 
-## 3. Before/after evidence paths
+## 3. Evidence
 
-| PR | Evidence location |
+| PR | Path |
 |---|---|
-| #129 (W1-4) | fixture specs `FE/e2e-fixture/chat-mobile-empty-state.spec.js`, `FE/e2e-fixture/no-documents-empty-state.spec.js` |
-| #130 (W5-3/A6) | `docs/ui-ux-v4-1/evidence/w5-3/` (per `R3-130.md`/`DONE-W5-3.md` — not independently re-read by this doc) |
-| #135 (W3-4/A5) | `docs/ui-ux-v4-1/evidence/w3-4/` — `before-main-{1440,390,panel-320}.png`, `after-{1440,390,panel-320}.png`, 3 before-interaction shots, captured from a genuine `origin/main` throwaway worktree baseline per A5 |
-| #136 (W3-3/A4) | `docs/ui-ux-v4-1/evidence/w3-3/` (per `DONE-W3-3.md`) |
-| #140 (W5-2) | screenshots referenced in `DONE-W5-2.md` |
-| #141 (C) | `docs/ui-ux-v4-1/evidence/spacing/` (12 computed-style JSON files, 390/1440 × 6 screens) + pre-existing `docs/ui-ux-v4-1/evidence/screens/*.jpg` |
-| #142 (A2) | `docs/ui-ux-v4-1/evidence/mobile-header-proposal/` (9 PNGs, 3 options × 320/375/390) |
+| #121 | `docs/ui-ux-v4-1/evidence/w2-1/` |
+| #130 | `docs/ui-ux-v4-1/evidence/w5-3/` |
+| #135 | `docs/ui-ux-v4-1/evidence/w3-4/`: `before-main-*`, `after-*` at 1440, 390 and 320 px panel |
+| #136 | `docs/ui-ux-v4-1/evidence/w3-3/`: idle state at 1440 and 390. Busy, error and completed states are covered by tests, not screenshots |
+| #140 | `docs/ui-ux-v4-1/evidence/w5-2/` |
+| #141 | `docs/ui-ux-v4-1/evidence/spacing/` |
+| #142 | `docs/ui-ux-v4-1/evidence/mobile-header-proposal/` |
 
-## 4. Human acceptance status (S1–S4)
+`right-panel-tabs.spec.js` rewrites the tracked `w3-4/after-*.png` on each run,
+and the round 6/7 specs rewrite their own evidence. Restore those files before
+committing unrelated work.
 
-Source: `docs/ui-ux-v4-design/round8-6-release-gate-closure/human-acceptance-sheets.md`
-on `origin/main`. Read in full for this doc. Every sheet's Tester/date field
-is blank in that file as committed — **no sheet has been filled in by a named
-person**.
+## 4. Dependencies and conflicts
 
-| Sheet | Covers | Status |
+Measured by merging the final HEADs in order on a local detached worktree
+(`5b3474b`, never pushed). After all 20 merges: unit 1879/1879; fixture 160/160
+(mobile-header, library-mode-navigation, right-panel-tabs, export-studio,
+palette-actions, a11y-names, marker-click-resolution, mobile-touch-selection,
+mindmap-responsive-interactions). The Full Fixture Audit and real-backend E2E
+were not run on this combined result.
+
+Hard dependencies: #137 after #121 (contains it); #140 after #122 (contains it);
+#142 after #126 (contains it).
+
+| PR | HEAD | Merge in this order | Resolution when it lands |
+|---|---|---|---|
+| #122 | `4707cf3` | clean | |
+| #126 | `9d1bccb` | clean | |
+| #134 | `4ee9338` | clean | |
+| #129 | `f3c789e` | clean | |
+| #128 | `489c1f9` | clean | |
+| #121 | `c51b07c` | clean | |
+| #137 | `6233d50` | `LearningDashboard.jsx` | Keep "Sơ đồ tư duy" and the "% đã có" unit |
+| #127 | `a89fcc7` | clean | |
+| #131 | `af6d4cd` | clean | |
+| #125 | `896fe72` | `.playbook/known-issues.md`, `.playbook/lessons-learned.md` | Keep all entries |
+| #124 | `19734ef` | clean | |
+| #136 | `8dcf063` | clean | |
+| #135 | `113f0e3` | clean | |
+| #123 | `7fabfab` | `.playbook/known-issues.md` | Keep all entries |
+| #133 | `a6fc65f` | clean | |
+| #140 | `355c08f` | `StudyShell.jsx` | Keep `stackActionsOnMobile` and `breadcrumbDocumentLabel` |
+| #138 | `c4e4167` | clean | |
+| #139 | `bcc8878` | `MindElixirView.branchToggle.test.jsx` | Keep both new tests |
+| #130 | `c2d695f` | `.playbook/known-issues.md` | Keep all entries |
+| #132 | `c7c0b4c` | clean | |
+
+Files touched by the most PRs: `MindElixirView.jsx` (#122, #124, #130, #139,
+#140), `DocumentList.jsx` (#122, #126, #128, #138, #140), `MainLayout.jsx`
+(#126, #129, #131, #134), `CommandPalette.jsx` (#122, #126, #131, #140),
+`LearningDashboard.jsx` (#122, #127, #137, #140).
+
+## 5. Recommended merge sequence
+
+The owner's order holds; the simulation found no better one.
+
+1. Wave 1: #122 → #126 → #134 → #129 → #128. Then the docs: #142, #141, #143 can
+   go in at any point after #126.
+2. Wave 2: #121 → #137 → #127. Then the follow-up PR for the "Sơ đồ tư duy" unit.
+3. Wave 3: #131 → #125 → #124 → #136 → #135.
+4. Wave 4 (flag stays OFF): #123 → #133.
+5. Wave 5: #140 → #138 → #139 → #130 → #132.
+
+After each merge:
+
+1. Merge the latest `main` into the remaining PR branches that overlap (no
+   rebase, no force-push). Resolve conflicts without reverting earlier fixes.
+2. Rerun the relevant tests and wait for `CI / required` on the new HEAD.
+3. For #123, #124, #130, #136, #139 and anything else that materially changes
+   map, export or Library behavior: rerun the Full Fixture Audit on the updated
+   HEAD. The workflow cancels a running audit when a new one starts, so run them
+   one at a time.
+4. After `CI / required` on `main`, verify the Render deploy order and SHA. The
+   frontend meta shows the frontend SHA, `/health` the backend SHA; they differ
+   after a docs-only merge, so compare each with what was actually deployed.
+5. Smoke-test the affected flows with an authorized account. **No such account is
+   available to the agents, so this step needs the owner or a provided test
+   account.**
+6. Stop on any regression before the next merge.
+
+## 6. Current CI and audit status (final HEADs)
+
+`CI / required` is SUCCESS on all of #121–#143 at the HEADs above. Each result
+applies to that PR against `927cf88`, and goes stale once the branch is updated.
+
+| PR | Full Fixture Audit | Run |
 |---|---|---|
-| S1 — NVDA / Windows / Chrome | Checklist rows 1.1–6.4 + C1 (29 rows), E4 gate | **NOT VERIFIED** — template blank, no tester/date recorded |
-| S2 — Narrator / Windows / Edge | Same 29 rows, E4 gate | **NOT VERIFIED** — template blank |
-| S3 — Android phone / Chrome, fast-flick | E3 gate (first-tap-after-flick reliability) | **NOT VERIFIED** — template blank |
-| S4 — iPhone / Safari, fast-flick | E3 gate | **NOT VERIFIED** — template blank |
+| #123 `7fabfab` | success, 471 passed | 41767637092 |
+| #124 `19734ef` | success, 466 passed | 41769633491 |
+| #130 `c2d695f` | success, 466 passed | 41788263951 |
+| #136 `8dcf063` | success, 467 passed | 41784265833 |
+| #139 `bcc8878` | success, 466 passed | 41786364063 |
 
-Frontend/backend revision fields: each sheet has its own "Frontend SHA
-(meta) / backend SHA (`/health`)" row to be filled at test time; none is
-filled yet, so no revision pair is recorded. Row 4.6 (Library Action Matrix,
-flag ON) explicitly requires a separate test-build SHA/URL, per the sheet's
-own instructions — also not yet recorded.
+## 7. Human acceptance
 
-**No V4.1 PR in section 2 can close E3/E4 on the strength of this doc.** Any
-claim elsewhere of S1–S4 passing must point to a filled copy of this file plus
-the attached per-row checklist (per the sheet's own rule: "a total such as
-`29/29` without the filled checklist is not evidence").
+| Sheet | Setup | Status |
+|---|---|---|
+| S1 | NVDA + Chrome | **NOT VERIFIED** |
+| S2 | Narrator + Edge | **NOT VERIFIED** |
+| S3 | Real Android + Chrome | **NOT VERIFIED** |
+| S4 | Real iPhone + Safari | **NOT VERIFIED** |
 
-## 5. Remaining V4 and V4.1 blockers
+Sheets: `docs/ui-ux-v4-design/round8-6-release-gate-closure/human-acceptance-sheets.md`.
+No filled copy exists. Simulated tests do not count.
 
-- **W4-3 (Library Action Matrix flag ON)**: per `07-v41-pr-roadmap.md`, this
-  requires W4-1 (#123) and W4-2 (#133) merged, row 4.6 run by a person in both
-  S1 and S2, and separate written owner approval. Flag must stay OFF in
-  production until then. **Blocked on S1/S2 (section 4) and owner sign-off —
-  neither exists yet.**
-- **A3 follow-up correction** (section 1): PR #121's dedup-priority fix
-  (name-first, trim+lowercase, id-fallback, neither-present counts 0) is
-  queued per the owner's own instruction but not yet implemented, tested, or
-  pushed as of this doc. `#137` merge-forward will need to repeat once #121
-  moves again.
-- **Merge order / conflict matrix**: TODO, see section 7 — `R3-train-result.md`
-  does not exist yet in `.worktrees/v41-briefs/` as of this doc.
-- **PR #142 CI**: zero check-runs on HEAD `09dd0f1` (see `R3-review-result.md`
-  §2) — must be triggered and confirmed green before merge.
-- **E3/E4 human gates** (section 4): fully open, blocking anything that
-  depends on them (W4-3 row 4.6, and the general release gate per
-  `round8-6-release-gate-closure`).
-- This doc did not re-verify CI status for #123–#134, #138, #139 individually
-  (see TODO in section 7) or the Full Fixture Audit result on any current
-  HEAD — both are explicitly left for the lead per the brief for this task.
+Record on each sheet, read on the day of testing. On 2026-11-04:
 
-## 6. Post-merge checklist (for whoever merges this wave)
+- Frontend (`studymap-build`): `973fd2c`
+- Backend (`/health` revision): `927cf88`
 
-1. Update each feature branch against the latest `main` after every merge in
-   the batch (merge-forward, never rebase/force-push — same rule as this
-   cycle's A3/A5 merge-forwards).
-2. Rerun the full FE unit suite (`npx vitest run`) and the relevant fixture
-   specs on the merged branch before pushing again.
-3. Wait for `CI / required` green on the actual merge commit, not just the
-   feature branch tip.
-4. Verify Render deploy order and SHA after each `FE/`-touching merge to
-   `main`: `CI / required` success timestamp, Render deploy `trigger` and
-   creation time for that SHA, confirm no older SHA deploys afterward, and
-   that `studymap-build` meta + `/health` `revision` both match — same method
-   already used for #118/#117/#119 in `07-v41-pr-roadmap.md`.
-5. Smoke test with an authorized/disposable QA account only — never
-   production user data.
-6. Stop and do not continue the merge train on any regression; file it the
-   same way `.playbook/known-issues.md` records prior fixes (symptom, root
-   cause, fix, prevention) before resuming.
+Row 4.6 still needs a test build with the Library flag ON, never production.
+After V4.1 merges, repeat the affected flows; the riskiest for a screen reader
+are #125, #132, #133 and #135.
 
-## 7. TODO — left for the lead
+## 8. Remaining blockers
 
-- **Dependency/conflict matrix and merge order** — from `R3-train-result.md`.
-  That file does not exist in `.worktrees/v41-briefs/` as of this doc (only
-  the brief `R3-train.md` does); the lead's prior informal estimate
-  (7 conflicts: `.playbook` on #125/#123/#130; `LearningDashboard` on #137;
-  `StudyShell` on #140; `branchToggle` test on #139) is recorded in
-  `R3-train.md` itself but has not been confirmed or corrected by an actual
-  merge-train simulation yet.
-- **Current CI status per final HEAD** — this doc verified CI directly only
-  for the three PRs this agent independently reviewed (#136 green, #141
-  green, #142 no checks run — see `R3-review-result.md`) plus #121/#135/#137
-  from this agent's own earlier implementation work (all green at the HEADs
-  listed in section 2). CI has not been (re)checked here for #122–#134,
-  #138, #139.
-- **Full Fixture Audit results** — the only Full Fixture Audit referenced in
-  files available to this agent is run `41771126563` on `v41/w5-map-fit-mobile`
-  (failed `marker-click-resolution.spec.js` at 390px, prompting the R3-130
-  fix now at HEAD `838c9fe`); whether a fresh Full Fixture Audit has been run
-  against that fixed HEAD is NOT VERIFIED by this doc.
+**V4 (still CONDITIONAL):**
+
+- Gates 10/11: S1–S4 by a person.
+- Gates 4/5: owner Manual Sync of Blueprint `membaocaototnghiep`, then Auto-Deploy
+  Off on `studymap-api`. Read on 2026-11-04: last sync still
+  `2026-11-02T17:11:20Z`, `studymap-api` suspended with Auto-Deploy on.
+- Production use with a real account and the Guided capability value: **NOT
+  VERIFIED**.
+
+**V4.1, before the train starts:**
+
+- Owner merge authorization.
+- A1 result, or an owner decision to go on without it.
+- Owner review: #135 screenshots; #130 trade-offs (§1).
+- Owner choice among the #142 options; a later product PR implements it.
+
+**V4.1, during or after the train:**
+
+- Audits and E2E on updated HEADs, including the combined result.
+- Production smoke tests with an authorized account.
+- "Sơ đồ tư duy" percentage unit follow-up.
+- W5-5 implementation, only if the owner accepts #141.
+- W4-3 Library flag: separate written approval, after #123, #133 and row 4.6.
