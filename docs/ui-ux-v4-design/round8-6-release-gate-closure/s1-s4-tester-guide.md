@@ -19,7 +19,7 @@ Tài liệu được biên soạn bằng tiếng Việt với ngôn từ trực 
 4. **Không sao chép lại toàn bộ bảng kiểm, không tự tạo thêm hàng kiểm thử**:
    - Hãy tham khảo và liên kết trực tiếp tới các bảng kiểm gốc:
      - [human-acceptance-sheets.md](human-acceptance-sheets.md) (Bảng tổng hợp S1–S4)
-     - [accessibility-manual-checklist.md](../round8-4-qa-evidence/accessibility-manual-checklist.md) (Bảng kiểm chi tiết trợ năng 29 hàng)
+     - [accessibility-manual-checklist.md](../round8-4-qa-evidence/accessibility-manual-checklist.md) (Bảng kiểm chi tiết trợ năng gồm 28 hàng 1.1–6.4; hàng C1 riêng trong [human-acceptance-sheets.md](human-acceptance-sheets.md) nâng tổng lên 29 hàng)
    - Không tự ý thêm bớt các hàng kiểm thử hoặc tự tạo kết quả giả định.
 
 ---
@@ -180,7 +180,7 @@ Ghi nhận cả hai mã SHA này vào phần thông tin chung của bảng kiể
 Bằng chứng kiểm thử là yếu tố quyết định để nghiệm thu phát hành. Kiểm thử viên cần tuân thủ cách ghi chép sau:
 
 1. **Tạo bản sao danh mục kiểm tra**:
-   - Sao chép tệp `docs/ui-ux-v4-design/round8-4-qa-evidence/accessibility-manual-checklist.md` thành một tệp báo cáo mới (ví dụ: `accessibility-manual-checklist-run-YYYYMMDD.md`).
+   - Sao chép tệp `docs/ui-ux-v4-design/round8-4-qa-evidence/accessibility-manual-checklist.md` (28 hàng 1.1–6.4) thành một tệp báo cáo mới (ví dụ: `accessibility-manual-checklist-run-YYYYMMDD.md`), sau đó sao chép và nối thêm hàng C1 từ [human-acceptance-sheets.md](human-acceptance-sheets.md) để báo cáo có đủ 29 hàng.
 2. **Ghi lại chính xác âm thanh phát ra**:
    - Tại mỗi ô kiểm tra (cột Narrator hoặc cột NVDA), ghi lại từng từ ngữ thực tế phát ra.
    - *Ví dụ chuẩn*: `PASS - Đã đọc: "Nút, Nộp bài, 8 trên 10 câu đã trả lời"`.
@@ -225,5 +225,5 @@ Nếu trong quá trình kiểm thử, bạn phát hiện bất kỳ lỗi nào t
 ## 7. Tài liệu liên kết tham chiếu
 
 - [human-acceptance-sheets.md](human-acceptance-sheets.md): Bảng biểu điền kết quả tổng hợp dành cho S1, S2, S3, S4.
-- [accessibility-manual-checklist.md](../round8-4-qa-evidence/accessibility-manual-checklist.md): Danh mục 29 hàng kiểm tra chi tiết tính năng trợ năng trên StudyMap V4.
+- [accessibility-manual-checklist.md](../round8-4-qa-evidence/accessibility-manual-checklist.md): Danh mục 28 hàng kiểm tra chi tiết từ 1.1 đến 6.4; hàng C1 nằm riêng trong [human-acceptance-sheets.md](human-acceptance-sheets.md), nâng tổng báo cáo lên 29 hàng.
 - [final-acceptance.md](final-acceptance.md): Ma trận 12 cổng phát hành và điều kiện nghiệm thu phiên bản StudyMap V4.
