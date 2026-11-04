@@ -4,16 +4,26 @@ Mục tiêu là so sánh **Option B trước, sau đó Option A**, trên đúng 
 
 ## 1. Đầu vào chạy thử
 
-> **PLACEHOLDER — NOT VERIFIED:** Chưa có `DONE-R5-trial.md`. Khi báo cáo đó xuất hiện, Release Owner chép nguyên văn URL, lệnh khởi chạy và SHA của Option B/Option A vào bảng dưới; không tự đoán lệnh hoặc URL.
+Nguồn: `DONE-R5-trial.md`, branch `trial/map-fit-options`, HEAD `0144888`. Branch này chỉ dùng để thử nghiệm; không merge hoặc deploy.
+
+Release Owner khởi chạy trên máy chứa worktree:
+
+```powershell
+cd E:\memvid_NCKH\MemVid_BaoCaoTotNghiep\.worktrees\v41-map-fit-trial\FE
+npx vite --config vite.trial.config.js --host --port 5250 --strictPort
+```
 
 | Đầu vào | Option B | Option A |
 |---|---|---|
-| URL | CHỜ `DONE-R5-trial.md` | CHỜ `DONE-R5-trial.md` |
-| Lệnh khởi chạy | CHỜ `DONE-R5-trial.md` | CHỜ `DONE-R5-trial.md` |
-| FE SHA / nhãn build | NOT VERIFIED | NOT VERIFIED |
+| URL local | `http://localhost:5250/fixture-harness.html?fit=b` | `http://localhost:5250/fixture-harness.html?fit=a` |
+| URL LAN đã được host kiểm tra HTTP 200 | `http://10.10.10.249:5250/fixture-harness.html?fit=b` | `http://10.10.10.249:5250/fixture-harness.html?fit=a` |
+| Lệnh khởi chạy | Lệnh Vite phía trên | Lệnh Vite phía trên |
+| FE SHA / nhãn build | `0144888` / Option B | `0144888` / Option A |
 | Dữ liệu map dùng chung |  |  |
 
-Không có URL/build thật thì không chạy và không ghi PASS. Nếu trial build chỉ truy cập được trong mạng nội bộ, Release Owner hướng dẫn cách kết nối; tester không tự deploy và không thay đổi production.
+URL đối chứng main là `http://localhost:5250/fixture-harness.html?fit=main` hoặc `http://10.10.10.249:5250/fixture-harness.html?fit=main`. Địa chỉ LAN trên là địa chỉ được máy host xác minh tại thời điểm lập báo cáo; trước khi giao điện thoại, Release Owner phải xác nhận điện thoại cùng mạng và URL còn truy cập được. Không truy cập được thì ghi NOT VERIFIED, không tự deploy và không thay đổi production.
+
+Các số đo fixture ở 320/390 và 7 Playwright tests trong báo cáo trial chỉ giúp chuẩn bị build, **không phải kết quả thiết bị thật**.
 
 ## 2. Quy trình chung
 
