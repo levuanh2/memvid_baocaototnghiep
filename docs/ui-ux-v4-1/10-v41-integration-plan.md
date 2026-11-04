@@ -6,6 +6,26 @@ wave by wave. Anything not directly verified is marked **NOT VERIFIED**.
 
 `origin/main` at the time of writing: `927cf88`.
 
+## Final owner decision (2026-11-04)
+
+- **#130: request changes.** Do not present it as approved or merge-ready.
+- **#135: design approved**, but it still waits for S1/S2 human acceptance and
+  final CI on the HEAD that would merge.
+- **#142: Option A selected.** Move Usage into the visibly labelled
+  **Công cụ học** menu, keep Home/Chat/Map/Summary/Account, and make Library
+  easy to find there. #142 remains docs-only and must not land before #126.
+- **S1–S4 must be completed before any V4.1 frontend merge.** Automated and
+  simulated browser tests do not substitute for those human sheets.
+- **Wave 1 is preparation only.** No V4.1 frontend PR is authorized to merge by
+  this decision or by this plan.
+- **#141 and #143 may be sent to the owner** after `CI / required` is green on
+  their current HEAD and the diff is confirmed docs-only. That is review
+  permission, not automatic merge permission.
+- **Waves 2–5 require separate owner approval.** Approval of one wave does not
+  authorize the next.
+- **Library stays OFF.** Do not enable its production flag or production data
+  path without separate written authorization.
+
 ## 1. Decisions matrix
 
 | ID | Owner decision | PR | State |
