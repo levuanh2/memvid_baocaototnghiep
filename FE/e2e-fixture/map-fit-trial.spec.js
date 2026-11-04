@@ -12,8 +12,12 @@ const EXPECTED_INSIDE = {
   320: { main: 0, a: 0, b: 0 },
   390: { main: 0, a: 0, b: 2 },
 };
+const HAS_RELEVANT_DIRTY_FILES = execSync("git status --porcelain", { encoding: "utf8" })
+  .split(/\r?\n/)
+  .filter(Boolean)
+  .some((line) => !/^(?:.. )?(?:\.tmp\/|FE\/test-results(?:-|\/)|FE\/playwright-report\/)/.test(line));
 const EXPECTED_TRIAL_SHA = `${execSync("git rev-parse --short=12 HEAD", { encoding: "utf8" }).trim()}${
-  execSync("git status --porcelain", { encoding: "utf8" }).trim() ? "-dirty" : ""
+  HAS_RELEVANT_DIRTY_FILES ? "-dirty" : ""
 }`;
 
 async function settleGeometry(page) {

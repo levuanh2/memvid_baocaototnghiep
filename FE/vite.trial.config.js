@@ -7,7 +7,10 @@ import baseConfig from "./vite.config.js";
 function trialBuildSha() {
   try {
     const sha = execSync("git rev-parse --short=12 HEAD", { encoding: "utf8" }).trim();
-    const dirty = execSync("git status --porcelain", { encoding: "utf8" }).trim();
+    const dirty = execSync("git status --porcelain", { encoding: "utf8" })
+      .split(/\r?\n/)
+      .filter(Boolean)
+      .some((line) => !/^(?:.. )?(?:\.tmp\/|FE\/test-results(?:-|\/)|FE\/playwright-report\/)/.test(line));
     return dirty ? `${sha}-dirty` : sha;
   } catch {
     return "unknown";
