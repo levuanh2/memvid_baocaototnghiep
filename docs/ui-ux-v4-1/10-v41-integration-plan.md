@@ -14,6 +14,10 @@ CI results may be out of date.
 
 - **Docs merges:** the owner authorized #141 and #143 separately. #141 merged as
   `8dab917`. No other PR is authorized to merge.
+- **Release acceptance freeze:** after the lead merges #145, follow
+  [`release-acceptance-freeze.md`](../ui-ux-v4-design/round8-6-release-gate-closure/release-acceptance-freeze.md).
+  Its baseline is the #145 merge commit; no PR, including docs, merges during
+  acceptance.
 - **Sequence note in §5:** docs do not wait for #126, except #142, which still
   must not land before #126.
 - **S1–S4:** still required before any V4.1 frontend merge, and still **NOT
@@ -25,6 +29,9 @@ CI results may be out of date.
   window is proposed after the S1–S4 baseline. Not authorized to merge.
 - **Wave 1:** order unchanged (#122 → #126 → #134 → #129 → #128); locked until
   S1–S4 are complete and the owner unlocks frontend merges.
+- **#126 responsive correction:** its **Công cụ học** trigger remains icon-only
+  through 1100 px, not only through 768 px. The source rule is
+  `@media (max-width: 1100px)` in `FE/src/index.css`.
 - **Revisions:** a docs-only merge can change the backend revision in `/health`
   without changing the frontend `studymap-build`. Read both on the test day.
 - Library flag OFF.
