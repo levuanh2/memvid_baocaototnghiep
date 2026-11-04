@@ -6,6 +6,29 @@ wave by wave. Anything not directly verified is marked **NOT VERIFIED**.
 
 `origin/main` at the time of writing: `927cf88`.
 
+## Latest status (2026-11-04, when this plan was merged)
+
+This block overrides older statements below where they differ. The sections
+below are kept as the record at the time they were written, so their HEADs and
+CI results may be out of date.
+
+- **Docs merges:** the owner authorized #141 and #143 separately. #141 merged as
+  `8dab917`. No other PR is authorized to merge.
+- **Sequence note in §5:** docs do not wait for #126, except #142, which still
+  must not land before #126.
+- **S1–S4:** still required before any V4.1 frontend merge, and still **NOT
+  VERIFIED**. The tester guide is in Draft PR #145, not on `main` yet.
+- **Mobile map fit:** the owner chose to try Option B from #147 first, compared
+  with Option A on the same data on real phones. #130 is not approved and is not
+  changed on fixture screenshots alone. Real-device result: **NOT VERIFIED**.
+- **Marker click:** #146 stays independent of the initial fit; a separate merge
+  window is proposed after the S1–S4 baseline. Not authorized to merge.
+- **Wave 1:** order unchanged (#122 → #126 → #134 → #129 → #128); locked until
+  S1–S4 are complete and the owner unlocks frontend merges.
+- **Revisions:** a docs-only merge can change the backend revision in `/health`
+  without changing the frontend `studymap-build`. Read both on the test day.
+- Library flag OFF.
+
 ## Final owner decision (2026-11-04)
 
 - **#130: request changes.** Do not present it as approved or merge-ready.
