@@ -4,7 +4,7 @@ Mục tiêu là so sánh **Option B trước, sau đó Option A**, trên đúng 
 
 ## 1. Đầu vào chạy thử
 
-Nguồn: `DONE-R5-trial.md`, branch `trial/map-fit-options`, HEAD đã publish `0144888adabd85a4df895626fa3ec683ae366117`. Branch này chỉ dùng để thử nghiệm; không merge hoặc deploy.
+Nguồn: branch `trial/map-fit-options`, HEAD cuối đã push `106eb17a0dfb8315671c45c07207fe9d064d8a7a`. Branch này chỉ dùng để thử nghiệm; không merge hoặc deploy.
 
 Các lựa chọn `fit=main|a|b` chỉ tồn tại trong `fixture-harness.html`; route production không nhận tùy chọn trial. Tester phải dùng đúng URL bên dưới, không thử bật Option A/B trên production.
 
@@ -19,7 +19,7 @@ Sau khi Vite chạy, người vận hành làm đúng các bước sau:
 
 1. Chạy `ipconfig` trên máy host. Tìm adapter **Wireless LAN adapter Wi-Fi** đang hoạt động và chép đúng dòng **IPv4 Address**. Không lấy địa chỉ của adapter đang ngắt, VPN, WSL, Docker hoặc một lần thử cũ.
 2. Xác nhận điện thoại và máy host đang ở **cùng mạng Wi-Fi**. Ghi tên mạng theo cách không lộ mật khẩu; không đoán chỉ từ việc hai địa chỉ trông giống nhau.
-3. Thay `<IP-LAN-CUA-MAY-HOST>` trong ba URL `fit=main|b|a` bên dưới bằng IPv4 vừa đọc, ví dụ dạng `192.168.x.x` hoặc `10.x.x.x`.
+3. Thay `<active-ip>` trong ba URL `fit=main|b|a` bên dưới bằng IPv4 vừa đọc, ví dụ dạng `192.168.x.x` hoặc `10.x.x.x`.
 4. Kiểm tra từng URL trả HTTP 200, rồi mở trên điện thoại và xác nhận trang thật sự tải được, có canvas/map và đúng nhãn build. HTTP 200 một mình chưa đủ nếu điện thoại chỉ hiện trang trắng hoặc lỗi tải tài nguyên.
 5. Nếu điện thoại không truy cập được, ghi **BLOCKED** kèm IPv4, thời điểm, URL và hiện tượng; kết quả thiết bị vẫn **NOT VERIFIED**. Không mở port ra Internet, không đổi DNS và không tự deploy để né lỗi LAN.
 
@@ -28,9 +28,9 @@ Sau khi Vite chạy, người vận hành làm đúng các bước sau:
 | Đầu vào | Option B | Option A |
 |---|---|---|
 | URL local | `http://localhost:5250/fixture-harness.html?fit=b` | `http://localhost:5250/fixture-harness.html?fit=a` |
-| URL LAN cho điện thoại thật | `http://<IP-LAN-CUA-MAY-HOST>:5250/fixture-harness.html?fit=b` | `http://<IP-LAN-CUA-MAY-HOST>:5250/fixture-harness.html?fit=a` |
+| URL LAN cho điện thoại thật | `http://<active-ip>:5250/fixture-harness.html?fit=b` | `http://<active-ip>:5250/fixture-harness.html?fit=a` |
 | Lệnh khởi chạy | Lệnh Vite phía trên | Lệnh Vite phía trên |
-| FE SHA / nhãn build | `0144888` / Option B | `0144888` / Option A |
+| FE SHA / nhãn build | `106eb17a0dfb` / Option B | `106eb17a0dfb` / Option A |
 | Dữ liệu map dùng chung |  |  |
 
 | Kiểm tra kết nối trong ngày chạy | Giá trị |
@@ -42,17 +42,17 @@ Sau khi Vite chạy, người vận hành làm đúng các bước sau:
 | `fit=a` — HTTP 200 / tải được trên điện thoại | NOT VERIFIED / NOT VERIFIED |
 | Blocker nếu không truy cập được |  |
 
-URL đối chứng main là `http://localhost:5250/fixture-harness.html?fit=main` trên máy host hoặc `http://<IP-LAN-CUA-MAY-HOST>:5250/fixture-harness.html?fit=main` trên điện thoại. Báo cáo trial chỉ xác minh một địa chỉ LAN của máy host tại thời điểm chạy; địa chỉ đó có thể thay đổi nên không được hardcode vào hướng dẫn. Không truy cập được thì ghi NOT VERIFIED, không tự deploy và không thay đổi production.
+URL đối chứng main là `http://localhost:5250/fixture-harness.html?fit=main` trên máy host hoặc `http://<active-ip>:5250/fixture-harness.html?fit=main` trên điện thoại. Báo cáo trial chỉ xác minh một địa chỉ LAN của máy host tại thời điểm chạy; địa chỉ đó có thể thay đổi nên không được hardcode vào hướng dẫn. Không truy cập được thì ghi NOT VERIFIED, không tự deploy và không thay đổi production.
 
-Các số đo fixture ở 320/390 và 7 Playwright tests trong báo cáo trial chỉ giúp chuẩn bị build, **không phải kết quả thiết bị thật**. Không có điện thoại thật thì giữ **NOT VERIFIED**. Không được thay đổi hoặc merge #130 chỉ từ kết quả mô phỏng.
+Các số đo fixture ở 320/390 và kết quả Playwright 13/13 PASS chỉ giúp xác minh build, **không phải kết quả thiết bị thật**. Không có điện thoại thật thì giữ **NOT VERIFIED**. Không được thay đổi hoặc merge #130 chỉ từ kết quả mô phỏng.
 
-### Trạng thái panel viewport — BLOCKED
+### Trạng thái panel viewport — đã push và qua cổng tự động
 
-Panel mới đã được kiểm tra cục bộ nhưng **chưa commit và chưa push**, nên HEAD đã publish `0144888adabd…` chưa phải build sẵn sàng giao tester. Bản cục bộ hiển thị ngay trên màn hình: `innerWidth`, `innerHeight`, DPR, Option A/B và trial SHA; kích thước cập nhật khi viewport đổi. Nút **Bắt đầu thử** cao ít nhất 48 px, xóa panel khỏi DOM và không truyền cú click xuống canvas. Tester chỉ đọc panel này, không mở DevTools và không chạy JavaScript.
+Panel ở HEAD sạch `106eb17a0dfb8315671c45c07207fe9d064d8a7a` hiển thị ngay trên màn hình: chiều rộng CSS, chiều cao CSS, DPR, Option A/B và SHA `106eb17a0dfb`. Tải lại trang làm panel xuất hiện lại. Nút **Bắt đầu thử** xóa panel khỏi DOM và cú chạm không truyền xuống canvas. Tester chỉ đọc panel này, không mở DevTools và không chạy JavaScript.
 
-Trong lần kiểm tra chưa commit, nhãn build đúng là `0144888adabd-dirty`. Đây chỉ là dấu vết bản nháp, **không phải trial SHA mới để nghiệm thu**. Suite chạy 12 trường hợp: 8 PASS, 4 trường hợp so sánh hình học 320/390 × A/B FAIL sau khi đóng panel. Vì vậy chưa được giao bản panel này cho tester.
+Các cổng hình học chính xác tại 320 px và 390 px cho cả Option A và Option B đều xanh; các số đo #147 không thay đổi. Toàn bộ Playwright `map-fit-trial.spec.js` PASS **13/13**. RED proof xác nhận regression có ý nghĩa: khi bỏ panel khỏi source, test panel thất bại.
 
-Kế hoạch gỡ blocker: chỉ mount map sau khi đóng panel, chờ `document.fonts.ready`, so sánh canvas/transform/toàn bộ node với đối chứng `?readout=skip`, rồi chạy lại đủ 12 trường hợp. Chỉ khi 12/12 PASS mới chạy toàn bộ Vitest và lint/ratchet, commit/push không force, khởi động lại từ cây sạch và ghi clean HEAD mới vào tài liệu này.
+Kết quả Playwright trên chỉ xác minh build và hình học tự động; không thay thế thử nghiệm người thật trên điện thoại thật. Các biểu mẫu Android/iPhone bên dưới vẫn **NOT VERIFIED** cho đến khi có người và thiết bị thật.
 
 ## 2. Quy trình chung
 
@@ -64,7 +64,7 @@ Kế hoạch gỡ blocker: chỉ mount map sau khi đóng panel, chờ `document
 6. Thử pan một ngón tay, pinch zoom, từng nút zoom/fit, một lần chạm đơn, chọn node và chọn marker. Ghi connector có nuốt chạm hay marker có che chữ/node khác không.
 7. Nếu chính sách và người tham gia cho phép, quay một video ngắn đủ để nhận biết build B/A, thao tác tay và phản hồi. Nếu không được phép quay, ghi lý do và loại bằng chứng thay thế; không dùng ảnh tự động làm kết luận.
 
-Panel viewport và SHA của trial build mới: **BLOCKED — chưa có clean HEAD mới; HEAD publish vẫn là `0144888adabd…`, còn bản panel cục bộ là `0144888adabd-dirty` và không được dùng để nghiệm thu**.
+Panel viewport và SHA của trial build: **READY FOR REAL-DEVICE TRIAL — HEAD `106eb17a0dfb8315671c45c07207fe9d064d8a7a`, nhãn sạch `106eb17a0dfb`; mở `fit=b` trước rồi `fit=a` trên cùng thiết bị**.
 
 ## 3. Biểu mẫu Android thật
 
