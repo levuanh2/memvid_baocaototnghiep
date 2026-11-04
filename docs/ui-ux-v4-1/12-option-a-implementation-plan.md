@@ -8,8 +8,8 @@ Owner decision date: 2026-11-04. Base read for this plan: `origin/main`
 
 ## 1. Product contract
 
-At phone widths, move AI usage from the global header into the existing
-**Công cụ học** menu.
+At phone widths through 767 px, move AI usage from the global header into the
+existing **Công cụ học** menu.
 
 The persistent header must retain:
 
@@ -18,13 +18,33 @@ The persistent header must retain:
 - a visibly labelled **Công cụ học** trigger; and
 - Account.
 
-Library must be an easy-to-find, first-class row in **Công cụ học** at 320,
-375 and 390 px. It must not disappear merely because the viewport is wider
-than the current 340 px cutoff. Desktop behavior remains unchanged.
+Library must be an easy-to-find, first-class row in **Công cụ học** throughout
+320–767 px. It must not disappear merely because the viewport is wider than
+the current 340 px cutoff. The 768 px and wider behavior remains unchanged
+except for tests that pin the real 1100 px compact boundary.
 
 The header remains 56 px high. Every visible control and menu action has a
 minimum 40 × 40 px hit target, owns its geometric centre, and stays inside the
 viewport without document-level horizontal overflow.
+
+### Responsive ranges and the 1100 px correction
+
+The current baseline from #126 is not “icon-only through 768 px.”
+`FE/src/index.css` places `.study-tools-trigger span { display: none; }` inside
+`@media (max-width: 1100px)`, so the trigger is icon-only at every width up to
+and including 1100 px. The product PR deliberately overrides that baseline
+only for phone widths; it does not silently expand the tablet/compact-desktop
+scope.
+
+| CSS viewport range | #126 baseline | Option A target | Required verification |
+|---|---|---|---|
+| 320–390 px | Icon-only trigger; accessible name remains the only text label | Show the full visible text **Công cụ học**; Usage moves into the menu; Library is a visible text row | Run 320, 375 and 390 px in light/dark. Assert visible label bounds, 56 px header, 40 px centres, no overflow, Library/Usage menu rows, one `/usage/me` request and keyboard/touch activation. |
+| 391–767 px | Icon-only trigger because the same `max-width: 1100px` rule still applies | Show the full visible text **Công cụ học**; keep Usage and Library in the menu exactly as in the narrower phone range | Run the exact 391 and 767 px boundaries plus one representative width. Assert the label does not disappear after 390 px, menu placement stays on-screen, request count stays one and focus/Escape contracts pass. |
+| 768–1100 px | Icon-only trigger | Keep the trigger icon-only; the accessible name must say **Công cụ học**. Keep existing compact-header Usage presentation; do not duplicate it in the menu | Run 768, 1024 and 1100 px. Assert the visible span is hidden, the accessible name is present, the menu opens, the existing Usage owner remains single and every control centre is hittable without overflow. |
+| Above 1100 px | Full visible trigger text | Keep the full visible **Công cụ học** text and the existing desktop Usage presentation | Run 1101 and a representative desktop width (1280 or 1440). Assert the label becomes visible exactly after the boundary, desktop menu positioning works, no duplicate Usage request exists and header geometry stays stable. |
+
+Boundary tests must set CSS viewport width directly. Device names, Tailwind
+labels and screenshots without measured rectangles do not prove the range.
 
 ## 2. Existing ownership and the single-fetch rule
 
@@ -46,15 +66,15 @@ Implementation shape:
    controller hook (for example `useUsageSummary`) without changing the API or
    retry semantics.
 2. Instantiate that controller exactly once in `MainLayout`.
-3. Pass the same controller to the desktop UsageChip presentation and the
-   phone menu usage row/details presentation. Only one presentation is active
-   for a given responsive composition; neither child fetches.
+3. Pass the same controller to the 768 px-and-wider UsageChip presentation and
+   the 320–767 px menu usage row/details presentation. Only one presentation
+   is active for a given responsive composition; neither child fetches.
 4. Add a fixture assertion that counts `/usage/me` and fails if opening or
    closing **Công cụ học** creates another request.
 
 This is a presentation relocation, not a backend or quota-accounting change.
 
-## 3. Header composition and typography at 320 px
+## 3. Header composition and typography at 320–767 px
 
 The proposal measured an 11 px label, but **11 px is not accepted as the final
 type size by default**. Implement and capture these candidates in order:
@@ -65,7 +85,7 @@ type size by default**. Implement and capture these candidates in order:
 | B | `Công cụ học` | 11.5 px / 600, normal Vietnamese diacritics and no artificial tracking | Accept if A fails geometry but B remains clearly readable in screenshots and browser zoom. |
 | C | `Công cụ học` | 11 px / 600, the measured prototype floor | Last resort only, requiring explicit owner acceptance of the 320 px screenshot. |
 
-Judge each candidate at 320, 375 and 390 px using all of these gates:
+Judge each candidate at 320, 375, 390, 391 and 767 px using all of these gates:
 
 - the visible text bounding box is fully inside the trigger;
 - Home, all three mode controls, tools and Account are at least 40 × 40 px;
@@ -79,10 +99,10 @@ label, or shrinking a touch target.
 
 ## 4. Công cụ học menu composition
 
-Phone order:
+Phone order (320–767 px):
 
 1. Gia sư AI, Dòng thời gian, Kiến thức (existing tools);
-2. **Thư viện học tập** with `BookOpen`, visible at 320/375/390;
+2. **Thư viện học tập** with `BookOpen`, visible throughout 320–767 px;
 3. **Mức sử dụng AI** with percentage and textual state;
 4. existing phone-only source, inspector and theme actions.
 
@@ -132,7 +152,8 @@ Implementation files:
   presentation without changing `/usage/me` semantics.
 - `FE/src/components/Layout/StudyToolsMenu.jsx` — Library and usage rows,
   keyboard/focus behavior.
-- `FE/src/index.css` — measured 320/375/390 composition and candidate type.
+- `FE/src/index.css` — measured range overrides for 320–767 px while preserving
+  the existing icon-only 768–1100 px rule and full label above 1100 px.
 
 Tests/evidence:
 
@@ -155,10 +176,13 @@ Unit tests must prove:
 
 - exactly one `/usage/me` request owner and no extra request on menu toggles;
 - loading, retry, normal, near-quota and exhausted states;
-- Library is present at the three phone widths' composition contract;
+- Library is present throughout the 320–767 px phone composition contract;
+- trigger visibility and accessible naming match all four responsive ranges;
 - menu order, accessible names, arrow keys, Escape and focus restoration.
 
-Real Chromium fixtures at 320, 375 and 390 px, light and dark, must prove:
+Real Chromium fixtures at 320, 375, 390, 391, 767, 768, 1024, 1100 and 1101 px
+must prove the four-range matrix above. At 320, 375 and 390 px, light and dark
+must prove:
 
 - 56 px header, no header/document overflow and full visible tools label;
 - Home, three modes, tools and Account remain present and centre-hittable;
@@ -171,6 +195,9 @@ Real Chromium fixtures at 320, 375 and 390 px, light and dark, must prove:
 Capture closed-header and open-menu screenshots at **320, 375 and 390 px**.
 Also capture near-quota and exhausted menu states at 320 px. The evidence must
 record the chosen font size; screenshots alone do not approve candidate C.
+For 391, 767, 768, 1024, 1100 and 1101 px, geometry and accessibility
+assertions are required; capture boundary screenshots at 767, 768, 1100 and
+1101 px so review can see both visibility transitions.
 
 Before handoff: targeted Vitest, targeted fixture specs, whole `npx vitest run`,
 `npm run lint`, production build, Full Fixture Audit, and `CI / required` on the
@@ -183,7 +210,8 @@ final HEAD.
 | Duplicate or stale usage requests | One controller in `MainLayout`; request-count regression. |
 | Responsive remount loses loading/detail state | Keep controller above the two presentations; do not key it by viewport. |
 | 320 px label becomes unreadable | Candidate ladder and explicit owner acceptance; 11 px is not presumed final. |
-| Library remains hidden at 375/390 | Replace the current `<= 340` composition rule with the measured phone contract and assert all three widths. |
+| Library remains hidden above 390 | Replace the current `<= 340` composition rule with the 320–767 px phone contract and assert both range boundaries. |
+| Product PR accidentally expands #126's compact desktop trigger | Pin icon-only at 768, 1024 and 1100 px, then visible text at 1101 px. |
 | Menu grows beyond short screens | Bounded scroll region while header and Close remain reachable. |
 | Escape/focus regression from nested usage details | Explicit focus-return owner and real-browser keyboard tests. |
 | Warning conveyed only by color | Visible and accessible status text for near/exhausted states. |
