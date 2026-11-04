@@ -75,16 +75,16 @@ function menuItem(label) {
 }
 
 describe("Mind Map depth menu — target UX: exactly 5 items (RED against current main)", () => {
-  it("has 'Chỉ nút gốc' (root-only)", async () => {
+  it("has 'Chỉ chủ đề trung tâm' (root-only)", async () => {
     await render(makeController(null));
     await openMenu();
-    expect(menuItemLabels().some((t) => t.includes("Chỉ nút gốc"))).toBe(true);
+    expect(menuItemLabels().some((t) => t.includes("Chỉ chủ đề trung tâm"))).toBe(true);
   });
 
-  it("has 'Chủ đề chính'", async () => {
+  it("has 'Hiện 1 tầng nhánh'", async () => {
     await render(makeController(null));
     await openMenu();
-    expect(menuItemLabels().some((t) => t.includes("Chủ đề chính"))).toBe(true);
+    expect(menuItemLabels().some((t) => t.includes("Hiện 1 tầng nhánh"))).toBe(true);
   });
 
   it("has 'Hiện 2 tầng nhánh'", async () => {
@@ -193,8 +193,8 @@ describe("Mind Map depth menu — exact node/connector counts per level (real DO
   // per parent-child edge regardless of its (jsdom-unreliable) `d` geometry —
   // see mindmapRenderLifecycle.js's own ".lines path, .subLines path" selector.
   const EXPECTED = [
-    ["Chỉ nút gốc", 1, 0],
-    ["Chủ đề chính", 4, 3],
+    ["Chỉ chủ đề trung tâm", 1, 0],
+    ["Hiện 1 tầng nhánh", 4, 3],
     ["Hiện 2 tầng nhánh", 6, 5],
     ["Hiện 3 tầng nhánh", 7, 6],
     ["Mở toàn bộ", 8, 7],

@@ -91,8 +91,8 @@ describe("MindElixirView branch toggle (Round 8 redesign)", () => {
     await render(makeController(null));
     await act(async () => { container.querySelector(".mm-overflow-trigger").click(); });
     const items = [...container.querySelectorAll('[role="menuitem"]')].map((b) => b.textContent);
-    expect(items.some((t) => t.includes("Chỉ nút gốc"))).toBe(true);
-    expect(items.some((t) => t.includes("Chủ đề chính"))).toBe(true);
+    expect(items.some((t) => t.includes("Chỉ chủ đề trung tâm"))).toBe(true);
+    expect(items.some((t) => t.includes("Hiện 1 tầng nhánh"))).toBe(true);
     expect(items.some((t) => t.includes("Hiện 2 tầng nhánh"))).toBe(true);
     expect(items.some((t) => t.includes("Hiện 3 tầng nhánh"))).toBe(true);
     expect(items.some((t) => t.includes("Mở toàn bộ"))).toBe(true);
@@ -108,7 +108,7 @@ describe("MindElixirView branch toggle (Round 8 redesign)", () => {
     expect(resetBtn?.getAttribute("title")).toBe("Đặt lại khung nhìn: về 100% và căn giữa");
 
     const centerBtn = [...container.querySelectorAll('[role="menuitem"]')].find((b) => b.textContent.includes("Căn giữa"));
-    expect(centerBtn?.getAttribute("title")).toBe("Căn giữa: đưa nhánh đang chọn vào giữa, giữ mức thu phóng");
+    expect(centerBtn?.getAttribute("title")).toBe("Căn giữa: đưa nút gốc vào giữa khung, giữ mức thu phóng");
   });
 
   it("'Mở toàn bộ' targets the map root regardless of the current selection, and does not call scaleFit", async () => {
