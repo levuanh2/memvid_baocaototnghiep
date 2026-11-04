@@ -15,15 +15,22 @@ cd E:\memvid_NCKH\MemVid_BaoCaoTotNghiep\.worktrees\v41-map-fit-trial\FE
 npx vite --config vite.trial.config.js --host --port 5250 --strictPort
 ```
 
+Sau khi Vite chạy:
+
+1. Trong cửa sổ lệnh, tìm dòng **Network** và chép địa chỉ IPv4 hiện tại của máy host. Nếu Vite hiện nhiều địa chỉ, chạy `ipconfig` trên máy host và chọn **IPv4 Address** của Wi-Fi/Ethernet đang nối cùng mạng với điện thoại.
+2. Thay `<IP-LAN-CUA-MAY-HOST>` trong các URL bên dưới bằng địa chỉ đó, ví dụ dạng `192.168.x.x` hoặc `10.x.x.x`. Không chép IP từ một ngày kiểm thử cũ.
+3. Mở URL LAN trên điện thoại thật. `localhost` chỉ dùng được ngay trên máy host, không dùng được trên điện thoại.
+4. Nếu điện thoại không mở được trang, xác nhận hai thiết bị cùng Wi-Fi và nhờ Release Owner kiểm tra quyền truy cập mạng riêng của Vite/Node. Giữ kết quả **NOT VERIFIED** cho đến khi trang thật sự tải được.
+
 | Đầu vào | Option B | Option A |
 |---|---|---|
 | URL local | `http://localhost:5250/fixture-harness.html?fit=b` | `http://localhost:5250/fixture-harness.html?fit=a` |
-| URL LAN đã được host kiểm tra HTTP 200 | `http://10.10.10.249:5250/fixture-harness.html?fit=b` | `http://10.10.10.249:5250/fixture-harness.html?fit=a` |
+| URL LAN cho điện thoại thật | `http://<IP-LAN-CUA-MAY-HOST>:5250/fixture-harness.html?fit=b` | `http://<IP-LAN-CUA-MAY-HOST>:5250/fixture-harness.html?fit=a` |
 | Lệnh khởi chạy | Lệnh Vite phía trên | Lệnh Vite phía trên |
 | FE SHA / nhãn build | `0144888` / Option B | `0144888` / Option A |
 | Dữ liệu map dùng chung |  |  |
 
-URL đối chứng main là `http://localhost:5250/fixture-harness.html?fit=main` hoặc `http://10.10.10.249:5250/fixture-harness.html?fit=main`. Địa chỉ LAN trên là địa chỉ được máy host xác minh tại thời điểm lập báo cáo; trước khi giao điện thoại, Release Owner phải xác nhận điện thoại cùng mạng và URL còn truy cập được. Không truy cập được thì ghi NOT VERIFIED, không tự deploy và không thay đổi production.
+URL đối chứng main là `http://localhost:5250/fixture-harness.html?fit=main` trên máy host hoặc `http://<IP-LAN-CUA-MAY-HOST>:5250/fixture-harness.html?fit=main` trên điện thoại. Báo cáo trial chỉ xác minh một địa chỉ LAN của máy host tại thời điểm chạy; địa chỉ đó có thể thay đổi nên không được hardcode vào hướng dẫn. Không truy cập được thì ghi NOT VERIFIED, không tự deploy và không thay đổi production.
 
 Các số đo fixture ở 320/390 và 7 Playwright tests trong báo cáo trial chỉ giúp chuẩn bị build, **không phải kết quả thiết bị thật**.
 
