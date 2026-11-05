@@ -97,7 +97,7 @@ describe("Document visible-export snapshot (Section 4, red against origin/main)"
   it("root-only: sends exactly one root id in visible_node_ids", async () => {
     mockHappyExport();
     await render(makeController());
-    await applyLevel("Chỉ chủ đề chính");
+    await applyLevel("Chỉ chủ đề trung tâm");
     const dialog = await openExportToVisiblePreview();
     await clickExport(dialog);
     expect(lastSentVisibleIds()).toEqual(["root"]); // FAILS today: field doesn't exist (undefined)
@@ -142,7 +142,7 @@ describe("Document visible-export snapshot (Section 4, red against origin/main)"
   it("state changed between opening the preview and clicking export: payload reflects the tree AT CLICK TIME, not at preview-open time", async () => {
     mockHappyExport();
     await render(makeController());
-    await applyLevel("Chỉ chủ đề chính");
+    await applyLevel("Chỉ chủ đề trung tâm");
     const dialog = await openExportToVisiblePreview();
     // Close the dialog, expand further on the live canvas, reopen, export.
     await act(async () => { [...dialog.querySelectorAll("button")].find((b) => b.textContent === "Hủy").click(); });
@@ -157,7 +157,7 @@ describe("Document visible-export snapshot (Section 4, red against origin/main)"
     mockHappyExport();
     const controller = makeController();
     await render(controller, dataFor("mapA"));
-    await applyLevel("Chỉ chủ đề chính");
+    await applyLevel("Chỉ chủ đề trung tâm");
 
     await act(async () => {
       root.render(<MindElixirView data={dataFor("mapB")} onRegenerate={vi.fn()} regenerating={false} controller={controller} />);

@@ -1191,13 +1191,13 @@ export default function MindElixirView({ data, onRegenerate, regenerating, contr
             <div className="mm-toolbar-menu" role="menu">
               <div className="mm-toolbar-menu__group" role="group" aria-label="Hiển thị">
                 <div className="mm-toolbar-menu__heading">Hiển thị</div>
-                <button role="menuitem" onClick={() => { setContextOverflowOpen(false); resetView(); }}><Icon name="RotateCcw" size={14} /> Đặt lại khung nhìn</button>
-                <button role="menuitem" onClick={() => { setContextOverflowOpen(false); mindRef.current?.toCenter(); }}><Icon name="Maximize" size={14} /> Căn giữa</button>
+                <button role="menuitem" title="Đặt lại khung nhìn: về 100% và căn giữa" onClick={() => { setContextOverflowOpen(false); resetView(); }}><Icon name="RotateCcw" size={14} /> Đặt lại khung nhìn</button>
+                <button role="menuitem" title="Căn giữa: đưa nút gốc vào giữa khung, giữ mức thu phóng" onClick={() => { setContextOverflowOpen(false); mindRef.current?.toCenter(); }}><Icon name="Maximize" size={14} /> Căn giữa</button>
                 <button role="menuitem" onClick={() => { setContextOverflowOpen(false); setShowRelations((v) => !v); }} aria-pressed={showRelations}><Icon name="Spline" size={14} /> {showRelations ? "Ẩn quan hệ" : "Hiện quan hệ"}</button>
               </div>
               <div className="mm-toolbar-menu__group" role="group" aria-label="Cấu trúc">
                 <div className="mm-toolbar-menu__heading">Cấu trúc</div>
-                <button role="menuitem" aria-pressed={activeDepthPreset === 0} onClick={() => { setContextOverflowOpen(false); applyDepthLevel(0); }}><Icon name="ChevronsDownUp" size={14} /> Chỉ chủ đề chính</button>
+                <button role="menuitem" aria-pressed={activeDepthPreset === 0} onClick={() => { setContextOverflowOpen(false); applyDepthLevel(0); }}><Icon name="ChevronsDownUp" size={14} /> Chỉ chủ đề trung tâm</button>
                 <button role="menuitem" aria-pressed={activeDepthPreset === 1} onClick={() => { setContextOverflowOpen(false); applyDepthLevel(1); }}><Icon name="Rows3" size={14} /> Hiện 1 tầng nhánh</button>
                 <button role="menuitem" aria-pressed={activeDepthPreset === 2} onClick={() => { setContextOverflowOpen(false); applyDepthLevel(2); }}><Icon name="Rows3" size={14} /> Hiện 2 tầng nhánh</button>
                 <button role="menuitem" aria-pressed={activeDepthPreset === 3} onClick={() => { setContextOverflowOpen(false); applyDepthLevel(3); }}><Icon name="Rows3" size={14} /> Hiện 3 tầng nhánh</button>
@@ -1319,7 +1319,7 @@ export default function MindElixirView({ data, onRegenerate, regenerating, contr
             <Icon name="ZoomIn" size={15} />
           </button>
           <div className="mm-floating-toolbar__sep" aria-hidden="true" />
-          <button onClick={fitView} aria-label="Vừa khung" title="Vừa khung (F)" className="icon-btn w-8 h-8">
+          <button onClick={fitView} aria-label="Vừa khung" title="Vừa khung: thu/phóng để thấy toàn bộ sơ đồ (F)" className="icon-btn w-8 h-8">
             <Icon name="Scan" size={14} />
           </button>
           {/* Round 8 REDESIGN — one contextual branch toggle, shown only

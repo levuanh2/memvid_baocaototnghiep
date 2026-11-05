@@ -31,7 +31,7 @@ const MAP_A_ID = "fixture-map-a";
 const ROOT = `${MAP_ID}-root`;
 
 const PRESETS = [
-  ["Chỉ chủ đề chính", 1, 0],
+  ["Chỉ chủ đề trung tâm", 1, 0],
   ["Hiện 1 tầng nhánh", 4, 3],
   ["Hiện 2 tầng nhánh", 6, 5],
   ["Hiện 3 tầng nhánh", 7, 6],
@@ -283,7 +283,7 @@ test.describe("Selection lifecycle across a depth change", () => {
 test.describe("Map lifecycle: no leak across A <-> depth-fixture switches", () => {
   test("root-only on the depth fixture does not survive a switch to map A, and does not leak into A's export-studio visible-scope preview", async ({ page }) => {
     await openFixture(page);
-    await applyLevel(page, "Chỉ chủ đề chính");
+    await applyLevel(page, "Chỉ chủ đề trung tâm");
     await expect(topics(page)).toHaveCount(1);
 
     await page.locator('[aria-label="Mở thư viện sơ đồ"]').click();
@@ -312,7 +312,7 @@ test.describe("Map lifecycle: no leak across A <-> depth-fixture switches", () =
     // from before the switch to map A.
     await expect(topics(page)).toHaveCount(8);
     await openOverflow(page);
-    await expect(page.getByRole("menuitem", { name: "Chỉ chủ đề chính" })).toHaveAttribute("aria-pressed", "false");
+    await expect(page.getByRole("menuitem", { name: "Chỉ chủ đề trung tâm" })).toHaveAttribute("aria-pressed", "false");
     await expect(page.getByRole("menuitem", { name: "Mở toàn bộ" })).toHaveAttribute("aria-pressed", "true");
     for (const label of ["Hiện 1 tầng nhánh", "Hiện 2 tầng nhánh", "Hiện 3 tầng nhánh"]) {
       await expect(page.getByRole("menuitem", { name: label })).toHaveAttribute("aria-pressed", "false");
@@ -327,7 +327,7 @@ test.describe("Appearance V2 and branch-selection/export marker survive a depth 
     const rootA = page.locator(nodeSelector(`${MAP_A_ID}-root`));
     await expect.poll(() => rootA.evaluate((el) => el.style.borderRadius)).toBe("10px");
 
-    await applyLevel(page, "Chỉ chủ đề chính");
+    await applyLevel(page, "Chỉ chủ đề trung tâm");
     await expect(topics(page)).toHaveCount(1);
     await expect.poll(() => rootA.evaluate((el) => el.style.borderRadius)).toBe("10px");
 
@@ -350,7 +350,7 @@ test.describe("Appearance V2 and branch-selection/export marker survive a depth 
 test.describe("Image export scope x root-only/depth (live-DOM capture, no production API)", () => {
   test("root-only + visible scope resolves to exactly the root in the Export Studio preview count", async ({ page }) => {
     await openFixture(page);
-    await applyLevel(page, "Chỉ chủ đề chính");
+    await applyLevel(page, "Chỉ chủ đề trung tâm");
     await page.getByRole("button", { name: "Xuất sơ đồ" }).click();
     const dialog = page.getByRole("dialog");
     await dialog.locator('input[name="mm-export-scope"][value="visible"]').check();
@@ -394,7 +394,7 @@ test.describe("Visual QA screenshots (representative states, fake fixture data, 
   test("root-only / level-2 / full / manual-custom / selected-then-hidden -- representative captures", async ({ page }) => {
     await openFixture(page);
 
-    await applyLevel(page, "Chỉ chủ đề chính");
+    await applyLevel(page, "Chỉ chủ đề trung tâm");
     await page.screenshot({ path: path.join(ARTIFACT_DIR, "state-root-only.png") });
 
     await applyLevel(page, "Hiện 2 tầng nhánh");
