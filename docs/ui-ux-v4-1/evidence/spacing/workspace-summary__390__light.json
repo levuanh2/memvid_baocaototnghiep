@@ -1,0 +1,84 @@
+{
+ "viewport": {
+  "width": 390,
+  "height": 844
+ },
+ "distinctSpacingValues": [
+  2,
+  4,
+  5,
+  6,
+  7,
+  8,
+  10,
+  11,
+  12,
+  14,
+  16,
+  24
+ ],
+ "spacingFrequency": [
+  {
+   "value": 2,
+   "count": 14
+  },
+  {
+   "value": 4,
+   "count": 9
+  },
+  {
+   "value": 5,
+   "count": 2
+  },
+  {
+   "value": 6,
+   "count": 36
+  },
+  {
+   "value": 7,
+   "count": 3
+  },
+  {
+   "value": 8,
+   "count": 34
+  },
+  {
+   "value": 10,
+   "count": 28
+  },
+  {
+   "value": 11,
+   "count": 2
+  },
+  {
+   "value": 12,
+   "count": 21
+  },
+  {
+   "value": 14,
+   "count": 2
+  },
+  {
+   "value": 16,
+   "count": 9
+  },
+  {
+   "value": 24,
+   "count": 6
+  }
+ ],
+ "headings": [
+  {
+   "level": "H2",
+   "label": "Chưa có tóm tắt",
+   "fontSize": "19px",
+   "lineHeight": "28.5px",
+   "margin": [
+    "0px",
+    "0px"
+   ]
+  }
+ ],
+ "boxes": [],
+ "verticalGaps": []
+}
