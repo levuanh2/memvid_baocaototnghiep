@@ -16,7 +16,7 @@ Tài liệu được biên soạn bằng tiếng Việt với ngôn từ trực 
 3. **Ghi lại trung thực những gì thực tế nghe thấy hoặc nhìn thấy**:
    - Khi chạy trình đọc màn hình, hãy ghi lại **chính xác từng từ ngữ mà giọng đọc phát ra** (spoken text) hoặc những gì thực tế hiển thị trên màn hình.
    - Không ghi nhận những gì bạn "nghĩ rằng hệ thống nên đọc" hoặc "kỳ vọng sẽ đọc".
-4. **Không sao chép lại toàn bộ bảng kiểm, không tự tạo thêm hàng kiểm thử**:
+4. **Không chép lặp các hàng kiểm thử vào chính hướng dẫn này, không tự tạo thêm hàng kiểm thử**:
    - Hãy tham khảo và liên kết trực tiếp tới các bảng kiểm gốc:
      - [human-acceptance-sheets.md](human-acceptance-sheets.md) (Bảng tổng hợp S1–S4)
      - [accessibility-manual-checklist.md](../round8-4-qa-evidence/accessibility-manual-checklist.md) (Bảng kiểm chi tiết trợ năng gồm 28 hàng 1.1–6.4; hàng C1 riêng trong [human-acceptance-sheets.md](human-acceptance-sheets.md) nâng tổng lên 29 hàng)
