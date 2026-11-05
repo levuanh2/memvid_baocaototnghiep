@@ -826,6 +826,15 @@ html.dark .me-container { --mm-relation: #7e90c4; }
    factor, not by transform, so no stacking context forms around the host and the
    dot's z-index can lift it above sibling hosts (40px hosts overlap when topics
    stack closer than 40 screen px, which happens below ~0.96 zoom). */
+/* Connector and semantic-relation SVGs are visual-only while branch selection
+   is active. At phone zoom their paths can cross a marker dot and win the
+   browser hit test despite the dot's z-index, bypassing the marker's existing
+   nearest-visible-dot resolver. Let the pointer fall through to the HTML
+   marker (or the canvas for panning); normal map mode keeps SVG hit testing. */
+.mm-selection-active .map-container .map-canvas svg,
+.mm-selection-active .map-container .map-canvas svg * {
+  pointer-events: none;
+}
 .map-container me-export-check {
   position: absolute;
   top: calc(-20px * var(--mm-marker-inv, 1));

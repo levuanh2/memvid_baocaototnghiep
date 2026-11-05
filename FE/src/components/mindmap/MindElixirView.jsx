@@ -43,21 +43,60 @@ export { THEME };
 // previous map or a currently collapsed branch. Render-time derived UI must
 // treat that transient condition as "not selected", especially during A↔B
 // switches before the controller's id-keyed effect clears React selection.
-// Initial placement on narrow canvases. scaleFit alone shrinks a wide tree to
-// ~27% (390px wide canvas: node labels unreadable, the map floats in empty space).
-// The fit stays the single initial operation; the scale is then floored at a
-// readable size and the root is centred. Horizontal panning covers the rest.
-const MOBILE_FIT_MAX_WIDTH = 640;
+// Initial placement is one shot per map id. Phones (viewport, not canvas
+// width, so a narrow desktop pane is not mistaken for a phone) frame the root
+// and first level; desktop keeps the whole-tree scaleFit.
+const MOBILE_FIT_BREAKPOINT = 768;
+const MOBILE_FIT_PADDING = 24;
+// Below this a 390px canvas shows unreadable labels (plain scaleFit reached
+// ~0.27 on the fixture); first-level nodes may then need a pan.
+const MOBILE_MIN_SCALE = 0.5;
+
+function getTopicBounds(mind, ids) {
+  const rects = ids
+    .map((id) => findTopicSafely(mind, id)?.getBoundingClientRect?.())
+    .filter((rect) => rect && rect.width > 0 && rect.height > 0);
+  if (!rects.length) return null;
+  const left = Math.min(...rects.map((rect) => rect.left));
+  const top = Math.min(...rects.map((rect) => rect.top));
+  const right = Math.max(...rects.map((rect) => rect.right));
+  const bottom = Math.max(...rects.map((rect) => rect.bottom));
+  return { left, top, right, bottom, width: right - left, height: bottom - top };
+}
+
+function fitMobileFirstLevel(mind, el) {
+  mind.scaleFit?.();
+  const root = mind.nodeData;
+  const ids = [root?.id, ...(root?.children || []).map((child) => child.id)].filter(Boolean);
+  let bounds = getTopicBounds(mind, ids);
+  const viewport = mind.container?.getBoundingClientRect?.() || el.getBoundingClientRect?.();
+  if (!bounds || !viewport?.width || !viewport?.height) return;
+
+  // scaleFit frames the entire deep tree and can make touch controls overlap.
+  // Zoom back to the largest scale that still contains the requested first
+  // two levels, anchored on that group's centre rather than on the full tree.
+  const currentScale = mind.scaleVal || 1;
+  const availableWidth = Math.max(1, viewport.width - MOBILE_FIT_PADDING * 2);
+  const availableHeight = Math.max(1, viewport.height - MOBILE_FIT_PADDING * 2);
+  const nextScale = Math.max(MOBILE_MIN_SCALE, Math.min(
+    1,
+    currentScale * Math.min(availableWidth / bounds.width, availableHeight / bounds.height)
+  ));
+  if (nextScale > currentScale) {
+    mind.scale?.(nextScale, {
+      x: bounds.left + bounds.width / 2,
+      y: bounds.top + bounds.height / 2,
+    });
+    bounds = getTopicBounds(mind, ids) || bounds;
+  }
+
+  mind.move?.(
+    viewport.left + viewport.width / 2 - (bounds.left + bounds.width / 2),
+    viewport.top + viewport.height / 2 - (bounds.top + bounds.height / 2)
+  );
+}
 // Connector repair budget. Counted only while the container has real size; see startFitPoll.
 const VISIBLE_REPAIR_TIMEOUT_MS = 10000;
-const MOBILE_READABLE_MIN_SCALE = 0.75;
-
-function applyReadableFloor(mind, el) {
-  if (!mind || !el || el.clientWidth > MOBILE_FIT_MAX_WIDTH) return;
-  if ((mind.scaleVal ?? 1) >= MOBILE_READABLE_MIN_SCALE) return;
-  mind.scale(MOBILE_READABLE_MIN_SCALE);
-  mind.toCenter?.();
-}
 
 function findTopicSafely(mind, id) {
   if (!mind || !id) return null;
@@ -315,8 +354,9 @@ export default function MindElixirView({ data, onRegenerate, regenerating, contr
     if (!validation.ok) return false;
     if (pendingFitRef.current) {
       pendingFitRef.current = false;
-      mind.scaleFit?.();
-      applyReadableFloor(mind, el);
+      // Desktop keeps the plain whole-tree fit (unchanged from before W5-3).
+      if (typeof window !== "undefined" && window.innerWidth < MOBILE_FIT_BREAKPOINT) fitMobileFirstLevel(mind, el);
+      else mind.scaleFit?.();
     }
     setRenderError(null);
     setRenderState("ready");
@@ -557,16 +597,11 @@ export default function MindElixirView({ data, onRegenerate, regenerating, contr
     const mind = mindRef.current;
     if (!mind || canvasReadyId !== data?.id) return undefined;
     // Real-browser-only race, found via Playwright against the fixture
-    // harness at mobile width (390px): `applyReadableFloor` (just above —
-    // runs once `fitIfReady` validates, narrow canvases only, ≤
-    // MOBILE_FIT_MAX_WIDTH) calls `mind.scale()`/`mind.toCenter()`, and
-    // mind-elixir's own scale pass rewrites each topic element's inline
-    // `style` wholesale as part of recomputing its scaled layout — wiping
-    // an appearance applied before that pass even though nothing in THIS
-    // component's own React tree ever reran or cleaned up (confirmed with
-    // an instrumented trace: apply fires once, no cleanup logs, yet the
-    // style is gone after the viewport's ≤640px scale pass runs). jsdom
-    // never catches this because it doesn't lay anything out for real.
+    // harness at mobile width (390px): the one-shot mobile `scaleFit()` can
+    // rewrite topic inline styles while computing its final transform,
+    // wiping an appearance applied before that pass even though nothing in
+    // THIS component's React tree reran or cleaned up. jsdom never catches
+    // this because it doesn't lay anything out for real.
     // Gating on `renderState === "ready"` — the SAME settled signal
     // `fitIfReady` itself defines, already proven for exactly this class of
     // "mind-elixir hasn't finished its own internal layout yet" problem —
