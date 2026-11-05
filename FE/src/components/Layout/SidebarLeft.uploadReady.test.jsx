@@ -36,7 +36,7 @@ async function render(onUploadReady) {
 }
 
 describe("SidebarLeft upload-trigger registration", () => {
-  it("registers a function that clicks its own hidden file input", async () => {
+  it("registers a function that opens its own hidden file input exactly once until settlement", async () => {
     const onUploadReady = vi.fn();
     await render(onUploadReady);
     expect(onUploadReady).toHaveBeenCalledTimes(1);
@@ -46,6 +46,19 @@ describe("SidebarLeft upload-trigger registration", () => {
     const input = container.querySelector('input[type="file"]');
     const clickSpy = vi.spyOn(input, "click");
     trigger();
+    trigger();
     expect(clickSpy).toHaveBeenCalledTimes(1);
+
+    input.dispatchEvent(new Event("cancel", { bubbles: true }));
+    trigger();
+    expect(clickSpy).toHaveBeenCalledTimes(2);
+  });
+
+  it("clears the registered trigger before its file input unmounts", async () => {
+    const onUploadReady = vi.fn();
+    await render(onUploadReady);
+    await act(async () => { root.unmount(); });
+    root = null;
+    expect(onUploadReady).toHaveBeenLastCalledWith(null);
   });
 });
