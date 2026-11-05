@@ -1120,6 +1120,7 @@ export default function ChatArea({
             <textarea
               ref={textareaRef}
               rows={1}
+              aria-label="Câu hỏi cho tài liệu đã chọn"
               placeholder={pendingReview ? "Hãy hoàn tất bước duyệt câu trả lời…" : transcribing ? "Đang đọc ảnh…" : loading ? "Đang chờ phản hồi…" : visionReady && roomy ? "Đặt câu hỏi, hoặc dán ảnh đề bài vào đây…"
               : !roomy ? "Đặt câu hỏi…" : "Đặt câu hỏi về tài liệu đã chọn…"}
               value={input}

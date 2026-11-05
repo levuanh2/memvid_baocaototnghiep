@@ -533,6 +533,7 @@ export default function SidebarLeft({ selectedSources, setSelectedSources, onSou
                   onClick={(e) => e.stopPropagation()}
                   onChange={(e) => { e.stopPropagation(); toggleSelect(src); }}
                   disabled={!checkboxEnabled}
+                  aria-label={`Chọn ${displayName}`}
                   className="mt-0.5 w-3.5 h-3.5 accent-accent flex-shrink-0 cursor-pointer"
                 />
                 <Icon name="FileText" size={14} className={`flex-shrink-0 mt-0.5 ${isSelected ? "text-accent" : "text-text-muted"}`} />
