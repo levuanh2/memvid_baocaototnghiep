@@ -44,6 +44,8 @@ export default function MainLayout({
   initialWorkspaceMode = "chat", initialRightView = "evidence",
   // Current `?tab=` (Workspace.jsx). Undefined in tests that mount MainLayout alone.
   requestedWorkspaceMode,
+  // Nonce from Command Palette "Mở Gia sư AI" (router state), V4.1 W3-1.
+  tutorRequest,
 }) {
   const [sources, setSources] = useState([]);
   const [leftOpen, setLeftOpen] = useState(false);   // chỉ dùng ở chế độ ngăn kéo (<768px)
@@ -316,6 +318,12 @@ export default function MainLayout({
     setRightView("tutor");
     if (panel.drawer) setRightOpen(true); else panel.setCollapsedFor("right", false);
   }, [panel]);
+  const handledTutorRequestRef = useRef(null);
+  useEffect(() => {
+    if (!tutorRequest || handledTutorRequestRef.current === tutorRequest) return;
+    handledTutorRequestRef.current = tutorRequest;
+    openTutor();
+  }, [tutorRequest, openTutor]);
   // Snapshot of the right panel before an artifact request takes it over, so
   // closing the Guided dialog can put back exactly what was there (node detail,
   // another Inspector tab, or a collapsed panel) instead of blanking it.
