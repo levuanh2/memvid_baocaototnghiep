@@ -1,5 +1,19 @@
 # Known Issues
 
+## (2026-11-06) Upload CTA lost its only file-input owner after the source panel unmounted
+
+The workspace empty-state CTA reused `SidebarLeft`'s hidden file input through
+a registered callback. On desktop, collapsing the source panel replaces
+`SidebarLeft` with `PanelSpine`; the old callback remained registered but its
+ref now resolved to `null`, so the CTA silently did nothing. The fix clears
+callback ownership in a layout-effect cleanup, records at most one pending
+intent while the owner is absent, and consumes it when the new owner mounts.
+The owner also guards an open chooser until `change` or `cancel`, preventing
+rapid activation from opening or submitting twice. Prevention: callbacks to
+DOM owned by conditionally mounted components must unregister on unmount, and
+their integration tests must cross the exact responsive mount boundaries and
+persisted collapsed state.
+
 ## Successful CI workflow could deploy a different, newer main commit (fixed 2026-11-02)
 
 **Symptom:** the `workflow_run` deploy job checked out/pulled current `main` on
