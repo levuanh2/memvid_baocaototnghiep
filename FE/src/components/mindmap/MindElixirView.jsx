@@ -1105,15 +1105,8 @@ export default function MindElixirView({ data, onRegenerate, regenerating, contr
           </div>
         </div>
         {dirty && <span className="text-caption px-1.5 rounded" style={{ color: "var(--warn)" }}>● chưa lưu</span>}
-        <div className="flex-1" />
-        {/* Nút Lưu — chỉ hiện khi record đã có id thật trong sqlite (không phải
-            "preview" transient) và không đang generating, tránh PUT 404. */}
-        {data?.id && data.id !== "preview" && !data.generating && (
-          <button onClick={handleSave} disabled={!dirty || saving} aria-label="Lưu sơ đồ"
-            className="btn-primary text-small disabled:opacity-40">
-            {saving ? "Đang lưu…" : "Lưu"}
-          </button>
-        )}
+        {/* V4.1 W3-2 (D16): this row is display:none; its "Lưu" copy was removed.
+            Save lives in the toolbar overflow "Lưu sơ đồ". */}
       </div>
       {/* Error banner — Lưu/Xuất PNG hỏng. role="alert" để screen reader đọc ngay, không
           phải chờ user mò tới. Đứng trên banner generating/degraded vì đây là thứ user
