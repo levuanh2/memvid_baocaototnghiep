@@ -111,6 +111,7 @@ export default function Practice() {
                   score={(graded.percentage ?? 0) / 100}
                   status={!provisional && (graded.percentage ?? 0) >= 80 ? "mastered" : undefined}
                   size={58}
+                  label={`Đạt ${graded.percentage ?? 0} phần trăm câu đúng`}
                 />
                 <div>
                   <div className="font-display text-h2 font-semibold text-text-primary leading-none">
@@ -122,7 +123,7 @@ export default function Practice() {
                     {provisional
                       ? noGradedQuestions
                         ? `${ungradedCount} câu chưa chấm được`
-                        : `${graded.percentage}% tạm tính trên ${graded.max_score} câu đã chấm · ${ungradedCount} câu chưa chấm được`
+                        : `${graded.percentage}% câu đúng tạm tính trên ${graded.max_score} câu đã chấm · ${ungradedCount} câu chưa chấm được`
                       : `đúng ${graded.correct_count}/${graded.total_questions}`}
                   </div>
                 </div>
