@@ -138,9 +138,7 @@ async function assertLiveTextInsideNodes(page) {
 
 async function exportPdf(page, scenario, liveMetrics) {
   await page.getByRole("button", { name: "Xuất sơ đồ" }).click();
-  await page.getByRole("button", { name: "Tiếp tục" }).click();
   await page.locator('input[name="mm-export-format"][value="pdf"]').check();
-  await page.getByRole("button", { name: "Tiếp tục" }).click();
 
   await page.getByRole("button", {
     name: scenario.mode === "map" ? "Chỉ sơ đồ" : "Sơ đồ + dàn ý",
@@ -148,13 +146,12 @@ async function exportPdf(page, scenario, liveMetrics) {
   if (scenario.pageSize === "content_fit") {
     await page.getByRole("button", { name: "Vừa nội dung — Xem trên màn hình" }).click();
   }
-  await page.getByRole("button", { name: "Tiếp tục" }).click();
 
   const requestPromise = page.waitForRequest((request) => (
     request.method() === "POST" && /\/mindmaps\/[^/]+\/exports$/.test(new URL(request.url()).pathname)
   ));
   const downloadPromise = page.waitForEvent("download", { timeout: 120_000 });
-  await page.getByRole("button", { name: "Tạo PDF" }).click();
+  await page.getByRole("button", { name: "Xuất PDF" }).click();
   const exportRequest = await requestPromise;
   const body = exportRequest.postDataJSON();
   const download = await downloadPromise;

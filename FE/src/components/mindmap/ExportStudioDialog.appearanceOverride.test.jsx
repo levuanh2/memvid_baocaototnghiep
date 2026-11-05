@@ -1,6 +1,6 @@
 // @vitest-environment jsdom
 // PR C2 — Export Studio's appearance override: "Dùng giao diện của sơ đồ" is
-// the default, an override never persists on its own, "Áp dụng cho sơ đồ"
+// the default, an override never persists on its own, "Lưu giao diện cho sơ đồ"
 // persists ONLY the LIVE_SAFE subset (never typography/content/format), and
 // typography/density/format controls are untouched by any of this.
 import { afterEach, beforeAll, describe, expect, it, vi } from "vitest";
@@ -68,15 +68,15 @@ describe("Export Studio appearance override — default and switching", () => {
     await goToAppearanceStep(dialog);
     const useMapRadio = dialog.querySelector('input[name="mm-appearance-mode"][checked]') || [...dialog.querySelectorAll('input[name="mm-appearance-mode"]')].find((i) => i.checked);
     expect(useMapRadio).toBeTruthy();
-    expect(dialog.textContent).not.toContain("Áp dụng cho sơ đồ");
+    expect(dialog.textContent).not.toContain("Lưu giao diện cho sơ đồ");
   });
 
-  it("switching to custom reveals the node-role editor and the 'Áp dụng cho sơ đồ' action", async () => {
+  it("switching to custom reveals the node-role editor and the 'Lưu giao diện cho sơ đồ' action", async () => {
     const dialog = await renderDialog();
     await goToAppearanceStep(dialog);
     const customRadio = [...dialog.querySelectorAll('input[name="mm-appearance-mode"]')].find((i) => !i.checked);
     await click(customRadio);
-    expect(dialog.textContent).toContain("Áp dụng cho sơ đồ");
+    expect(dialog.textContent).toContain("Lưu giao diện cho sơ đồ");
     expect(dialog.querySelector('input[type="color"]')).toBeTruthy();
   });
 });
@@ -108,7 +108,7 @@ describe("Export Studio appearance override — export never persists it on its 
   });
 });
 
-describe("Export Studio appearance override — 'Áp dụng cho sơ đồ' persists ONLY the LIVE_SAFE subset", () => {
+describe("Export Studio appearance override — 'Lưu giao diện cho sơ đồ' persists ONLY the LIVE_SAFE subset", () => {
   it("PATCHes {version, preset, overrides} shaped exactly like the canvas contract — never typography/content/format fields", async () => {
     const patchSpy = vi.spyOn(api, "patchMindmapAppearance").mockResolvedValue({ appearance: { version: 2, preset: "default", overrides: {} }, updated_at: "now" });
     const onAppearanceSaved = vi.fn();
@@ -118,7 +118,7 @@ describe("Export Studio appearance override — 'Áp dụng cho sơ đồ' persi
     await click(customRadio);
     const colorInput = dialog.querySelector('input[type="color"]');
     await act(async () => { setInputValue(colorInput, "#AABBCC"); });
-    const applyBtn = [...dialog.querySelectorAll("button")].find((b) => b.textContent.includes("Áp dụng cho sơ đồ"));
+    const applyBtn = [...dialog.querySelectorAll("button")].find((b) => b.textContent.includes("Lưu giao diện cho sơ đồ"));
     await click(applyBtn);
     expect(patchSpy).toHaveBeenCalledTimes(1);
     const [calledMapId, calledPayload] = patchSpy.mock.calls[0];

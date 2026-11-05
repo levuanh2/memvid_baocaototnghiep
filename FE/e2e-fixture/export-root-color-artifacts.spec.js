@@ -17,13 +17,10 @@ async function sourceRootColor(page) {
 
 async function toFormat(page, format) {
   await page.getByRole("button", { name: "Xuất sơ đồ" }).click();
-  await page.getByRole("button", { name: "Tiếp tục" }).click();
   await page.locator(`input[name="mm-export-format"][value="${format}"]`).check();
-  await page.getByRole("button", { name: "Tiếp tục" }).click();
 }
 
 async function downloadImage(page, format) {
-  await page.getByRole("button", { name: "Tiếp tục" }).click();
   const pending = page.waitForEvent("download");
   await page.getByRole("button", { name: `Xuất ${format.toUpperCase()}` }).click();
   const download = await pending;
@@ -151,8 +148,7 @@ async function capturePdfRequest(page, { mode, pageSize, name }) {
   await toFormat(page, "pdf");
   await page.getByRole("button", { name: mode === "map" ? "Chỉ sơ đồ" : "Sơ đồ + dàn ý" }).click();
   if (pageSize === "content_fit") await page.getByRole("button", { name: "Vừa nội dung — Xem trên màn hình" }).click();
-  await page.getByRole("button", { name: "Tiếp tục" }).click();
-  await page.getByRole("button", { name: "Tạo PDF" }).click();
+  await page.getByRole("button", { name: "Xuất PDF" }).click();
   await expect.poll(() => Boolean(body), { timeout: 30_000 }).toBe(true);
 
   expect(body.options.mode).toBe(mode);
