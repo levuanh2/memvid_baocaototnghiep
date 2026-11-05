@@ -503,6 +503,12 @@
     border: 1px solid transparent;
     color: var(--text-secondary);
   }
+  /* V4.1 W5-1: toggle pills show their pressed state visually, not only to screen readers. */
+  .pill-action[aria-pressed="true"] {
+    background: var(--bg-card);
+    border-color: var(--accent);
+    color: var(--accent);
+  }
   .pill-action:hover {
     background: var(--bg-card);
     border-color: color-mix(in srgb, var(--accent) 35%, transparent);
