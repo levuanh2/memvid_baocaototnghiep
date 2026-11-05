@@ -578,7 +578,7 @@ export default function MainLayout({
             motif, never duplicates its exact treatment.
             The Study library destination is a separate sibling link below;
             StudyToolsMenu remains the owner of contextual learning tools. */}
-        <Link to="/app" aria-label="MemVidX — trang chủ"
+        <Link to="/app" aria-label="StudyMap — trang chủ"
           className="workspace-home-link flex items-center justify-center lg:justify-start gap-2.5 w-10 h-10 lg:w-auto lg:h-10 flex-shrink-0 select-none">
           <span
             className="w-[30px] h-[30px] rounded-[6px] inline-flex items-center justify-center font-display text-body-lg font-semibold flex-shrink-0"
@@ -588,7 +588,7 @@ export default function MainLayout({
             M
           </span>
           <span className="workspace-wordmark font-display font-semibold text-title tracking-tight text-text-primary hidden lg:block">
-            MemVid<span className="text-seal">X</span>
+            Study<span className="text-seal">Map</span>
           </span>
         </Link>
 

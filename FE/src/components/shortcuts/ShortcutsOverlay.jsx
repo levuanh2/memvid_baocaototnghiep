@@ -18,7 +18,7 @@ export default function ShortcutsOverlay({ open, onClose }) {
   }, []);
 
   return (
-    <Modal open={open} onClose={onClose} title="Phím tắt" subtitle="Toàn bộ phím tắt hiện có trong MemVidX" maxWidth={560}>
+    <Modal open={open} onClose={onClose} title="Phím tắt" subtitle="Toàn bộ phím tắt hiện có trong StudyMap" maxWidth={560}>
       <div className="px-5 py-4 flex flex-col gap-5">
         {groups.map(([category, items]) => (
           <div key={category}>

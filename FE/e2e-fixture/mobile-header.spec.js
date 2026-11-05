@@ -77,7 +77,7 @@ const hitOwnership = (page, selector) => page.evaluate((sel) => {
 }, selector);
 
 const CONTROLS = [
-  'header a[aria-label^="MemVidX"]',
+  'header a[aria-label^="StudyMap"]',
   'nav[role="tablist"] [role="tab"][title="Trò chuyện"]',
   'nav[role="tablist"] [role="tab"][title="Sơ đồ tư duy"]',
   'nav[role="tablist"] [role="tab"][title="Tóm tắt"]',
@@ -192,7 +192,7 @@ test.describe("full desktop header above the compact danger zone", () => {
       await expect(page.getByRole("tab", { name: "Sơ đồ tư duy" })).toBeVisible();
       await expect(page.locator('nav[role="tablist"] [role="tab"][title="Sơ đồ tư duy"] span').first()).toBeVisible();
       await expect(page.locator('header button[aria-label="Xem phím tắt"]')).toBeVisible();
-      const home = await hitOwnership(page, 'header a[aria-label^="MemVidX"]');
+      const home = await hitOwnership(page, 'header a[aria-label^="StudyMap"]');
       expect(home.h, "home link height at full header").toBeGreaterThanOrEqual(MIN);
       expect(home.ok, `home centre hit at ${home.at}`).toBe(true);
       await expect(page.getByRole("group", { name: "Chế độ sáng/tối" })).toBeVisible();

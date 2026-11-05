@@ -45,7 +45,7 @@ const measure = (page) => page.evaluate(() => {
   const header = document.querySelector("header");
   const nav = document.querySelector('nav[role="tablist"]');
   const sel = {
-    home: 'header a[aria-label^="MemVidX"]',
+    home: 'header a[aria-label^="StudyMap"]',
     tabChat: 'nav[role="tablist"] [role="tab"][title="Trò chuyện"]',
     tabMindmap: 'nav[role="tablist"] [role="tab"][title="Sơ đồ tư duy"]',
     tabSummary: 'nav[role="tablist"] [role="tab"][title="Tóm tắt"]',
