@@ -30,6 +30,30 @@ import { useStudyContext } from "../../study/useStudyContext";
 
 const IDLE_JOB_UI = { running: false, label: "", progress: null, stalled: false };
 const legacyInspectorSurfacesEnabled = false;
+// W3-4 (owner decision O4): the tab row and the legacy artifact block
+// (below, still gated on `legacyInspectorSurfacesEnabled`) used to share
+// ONE flag, so turning off the dead artifact generator also hid this real
+// navigation by accident. Split: the tab row drives the exact same
+// `rightView` state MainLayout's header "Công cụ học" menu already uses
+// (`openStudyTool` -> `setRightView`) -- no second state anywhere.
+const rightPanelTabsEnabled = true;
+// Chat mode only: mindmap/summary modes always show their own fixed
+// content (KnowledgeInspector / SummaryEvidenceContent) regardless of
+// `rightView` (see the render switch below), so a tab row there would
+// click without ever changing what's visible -- worse than no tab row.
+const RIGHT_TABS = [
+  { key: "evidence", label: "Bằng chứng", icon: "Quote" },
+  { key: "tutor", label: "Gia sư AI", icon: "Sparkles" },
+  { key: "timeline", label: "Dòng thời gian", icon: "Clock" },
+  { key: "insights", label: "Kiến thức", icon: "Network" },
+];
+const RIGHT_TAB_KEYS = RIGHT_TABS.map((t) => t.key);
+const RIGHT_VIEW_TITLE = {
+  evidence: "Bằng chứng câu trả lời",
+  tutor: "Gia sư AI",
+  timeline: "Dòng thời gian",
+  insights: "Kiến thức",
+};
 
 function SummaryEvidenceContent({ data, context, onOpenSource }) {
   const rec = normalizeSummaryRecord(data);
@@ -920,6 +944,23 @@ export default function SidebarRight({
     });
   }, [summaries, summaryLoading, summaryJobUi.running, summaryJobUi.label, createSummaryFromLibrary, onSummaryLibraryChange]);
 
+  // W3-4: roving-tabindex arrow keys for the right-panel tab row (standard
+  // ARIA tabs pattern) -- automatic activation, same as clicking.
+  const rightTabButtonRefs = useRef({});
+  const onRightTabsKeyDown = useCallback((e) => {
+    const idx = RIGHT_TAB_KEYS.indexOf(rightView);
+    if (idx === -1) return;
+    let next = null;
+    if (e.key === "ArrowRight") next = RIGHT_TAB_KEYS[(idx + 1) % RIGHT_TAB_KEYS.length];
+    else if (e.key === "ArrowLeft") next = RIGHT_TAB_KEYS[(idx - 1 + RIGHT_TAB_KEYS.length) % RIGHT_TAB_KEYS.length];
+    else if (e.key === "Home") next = RIGHT_TAB_KEYS[0];
+    else if (e.key === "End") next = RIGHT_TAB_KEYS[RIGHT_TAB_KEYS.length - 1];
+    if (!next) return;
+    e.preventDefault();
+    onRightViewChange?.(next);
+    rightTabButtonRefs.current[next]?.focus();
+  }, [rightView, onRightViewChange]);
+
   // ── Render ────────────────────────────────────────
   return (
     <div id="context-inspector" role="region" aria-label="Bộ kiểm tra ngữ cảnh" className="sidebar-right flex flex-col h-full overflow-hidden transition-theme" style={{ background: "var(--bg-sidebar)" }}>
@@ -934,42 +975,49 @@ export default function SidebarRight({
       <div className="study-surface-header">
         <div className="flex items-center gap-2 min-w-0">
           <Icon name={rightView === "tutor" ? "Sparkles" : rightView === "timeline" ? "Clock" : rightView === "insights" ? "Network" : "Quote"} size={15} />
-          <strong className="truncate">{mode === "mindmap" ? "Chi tiết sơ đồ" : mode === "summary" ? "Nguồn bản tóm tắt" : "Bằng chứng câu trả lời"}</strong>
+          {/* W3-4 fix: this used to say "Bằng chứng câu trả lời" even while
+              the tab row (or the header's own "Công cụ học" menu) had
+              switched `rightView` to Tutor/Timeline/Insights -- the title
+              named the wrong view. Still fixed per mode for mindmap/summary
+              (that pane never switches `rightView`, see the content switch
+              further below). */}
+          <strong className="truncate">{mode === "mindmap" ? "Chi tiết sơ đồ" : mode === "summary" ? "Nguồn bản tóm tắt" : (RIGHT_VIEW_TITLE[rightView] || RIGHT_VIEW_TITLE.evidence)}</strong>
         </div>
         <ContextPanelCloseButton collapsible={collapsible} onClose={onClose} />
       </div>
-      {legacyInspectorSurfacesEnabled && <div className="px-4 pt-4 pb-3 border-b border-border flex items-center justify-between flex-shrink-0 gap-2" aria-hidden="true">
-        <div className="flex gap-1 min-w-0">
-          <button type="button" onClick={() => onRightViewChange?.("evidence")}
-                  className={`inspector-tab ${rightView === "evidence" ? "pill-tab-active" : ""}`}
-                  aria-pressed={rightView === "evidence"}>
-            <Icon name="Quote" size={13} /> Bằng chứng
-          </button>
-          <button type="button" onClick={() => onRightViewChange?.("tutor")}
-                  className={`inspector-tab ${rightView === "tutor" ? "pill-tab-active" : ""}`}
-                  aria-pressed={rightView === "tutor"}>
-            <Icon name="Sparkles" size={13} /> Gia sư AI
-          </button>
-          {/* Feature Pack A — peer of the two tabs above, same inspector-tab
-              weight and aria-pressed semantics (this is a top-level view
-              switch, not a sub-section — unlike the demoted pill-tab--sub
-              artifact tabs inside the Evidence view below). */}
-          <button type="button" onClick={() => onRightViewChange?.("timeline")}
-                  className={`inspector-tab ${rightView === "timeline" ? "pill-tab-active" : ""}`}
-                  aria-pressed={rightView === "timeline"}>
-            <Icon name="Clock" size={13} /> Dòng thời gian
-          </button>
-          {/* Feature Pack D — same peer weight as Timeline above. */}
-          <button type="button" onClick={() => onRightViewChange?.("insights")}
-                  className={`inspector-tab ${rightView === "insights" ? "pill-tab-active" : ""}`}
-                  aria-pressed={rightView === "insights"}>
-            <Icon name="Network" size={13} /> Kiến thức
-          </button>
+      {rightPanelTabsEnabled && mode !== "mindmap" && mode !== "summary" && <div className="px-4 pt-4 pb-3 border-b border-border flex-shrink-0">
+        {/* Review fix (O4's own goal: discoverable from the panel itself) --
+            icon-only failed that and the targets were ~20px, under the
+            40x40 floor. Stacked icon-over-label in an equal-width 4-col
+            grid: `panel.width.right` is 320-480px, and 4 x ~80px fits the
+            320px minimum with room to spare. Labels wrap, never truncate
+            ("Dòng thời gian" is the one that can need two lines at 320px) --
+            see `.inspector-tab--stacked` in index.css for the sizing. */}
+        <div role="tablist" aria-label="Chế độ cột phải" className="grid grid-cols-4 gap-1 w-full" onKeyDown={onRightTabsKeyDown}>
+          {RIGHT_TABS.map((t) => (
+            <button
+              key={t.key}
+              ref={(el) => { rightTabButtonRefs.current[t.key] = el; }}
+              type="button"
+              role="tab"
+              id={`right-tab-${t.key}`}
+              aria-selected={rightView === t.key}
+              tabIndex={rightView === t.key ? 0 : -1}
+              onClick={() => onRightViewChange?.(t.key)}
+              className={`inspector-tab inspector-tab--stacked ${rightView === t.key ? "pill-tab-active" : ""}`}
+            >
+              <Icon name={t.icon} size={16} />
+              <span>{t.label}</span>
+            </button>
+          ))}
         </div>
-        <div className="flex items-center gap-1 flex-shrink-0">
-          {/* Ghim/Tách nổi — chỉ có ý nghĩa trên màn rộng, nơi cột này có chỗ
-              để "nổi" lên trên nội dung thay vì nằm phẳng trong hàng cột. */}
-          {rightView === "tutor" && (
+        {/* Ghim/Tách nổi — chỉ có ý nghĩa trên màn rộng, nơi cột này có chỗ
+            để "nổi" lên trên nội dung thay vì nằm phẳng trong hàng cột. Own
+            row below the grid now (review fix): sharing a row with it would
+            shrink the grid's available width below what 4 labelled tabs
+            need at the 320px panel floor. */}
+        {rightView === "tutor" && (
+          <div className="flex justify-end mt-1.5">
             <button type="button" onClick={() => setTutorFloating((v) => !v)}
                     className={`icon-btn w-8 h-8 hidden md:inline-flex ${tutorFloating ? "text-accent" : ""}`}
                     aria-pressed={tutorFloating}
@@ -977,8 +1025,8 @@ export default function SidebarRight({
                     aria-label={tutorFloating ? "Ghim Gia sư AI vào cột" : "Tách Gia sư AI nổi lên"}>
               <Icon name="Pin" size={15} />
             </button>
-          )}
-        </div>
+          </div>
+        )}
       </div>}
 
       {mode === "mindmap" ? (
