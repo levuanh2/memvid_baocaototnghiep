@@ -24,17 +24,24 @@ const transform = (page) => page.evaluate(() => document.querySelector(".map-can
 // Drag the canvas horizontally from an empty point (not the bar, legend, nodes or markers).
 async function pan(page, dx, dy = 0) {
   const mb = await page.locator(".map-container").first().boundingBox();
-  const y = await page.evaluate(({ x, top, h }) => {
-    for (const f of [0.3, 0.4, 0.5, 0.6, 0.2]) {
-      const e = document.elementFromPoint(x, top + h * f);
-      if (e && !e.closest(".mm-selection-bar, .mm-legend, me-tpc, me-export-check, me-epd, me-wrapper, me-parent, button, a, input")) return top + h * f;
+  const point = await page.evaluate(({ left, top, w, h }) => {
+    // A dense/narrow map can occupy the exact horizontal centre. Search a
+    // bounded grid so the pan still starts on real canvas background in the
+    // Linux full-suite viewport as well as on local Chromium.
+    for (const xf of [0.5, 0.35, 0.65, 0.2, 0.8]) {
+      for (const yf of [0.3, 0.4, 0.5, 0.6, 0.2, 0.7]) {
+        const x = left + w * xf;
+        const y = top + h * yf;
+        const e = document.elementFromPoint(x, y);
+        if (e && !e.closest(".mm-selection-bar, .mm-legend, me-tpc, me-export-check, me-epd, me-wrapper, me-parent, button, a, input")) return { x, y };
+      }
     }
     return null;
-  }, { x: mb.x + mb.width * 0.5, top: mb.y, h: mb.height });
-  expect(y).not.toBeNull();
-  await page.mouse.move(mb.x + mb.width * 0.5, y);
+  }, { left: mb.x, top: mb.y, w: mb.width, h: mb.height });
+  expect(point).not.toBeNull();
+  await page.mouse.move(point.x, point.y);
   await page.mouse.down();
-  await page.mouse.move(mb.x + mb.width * 0.5 + dx, y + dy, { steps: 10 });
+  await page.mouse.move(point.x + dx, point.y + dy, { steps: 10 });
   await page.mouse.up();
   await page.waitForTimeout(250);
 }

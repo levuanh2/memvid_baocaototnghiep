@@ -20,6 +20,22 @@ rendering are unchanged. The real-pointer regression uses the real zoom-out
 control to reproduce the overlapping relation/marker geometry; DOM-dispatched
 clicks cannot detect this class of painted-layer interception.
 
+## Geometry tests must search for canvas background in two dimensions (fixed 2026-11-06)
+
+**Symptom:** the Linux Full Fixture Audit failed the 390 px marker-click case
+before exercising a pointer action, while local Chromium passed. Its pan helper
+could not find an empty point on the exact horizontal centre line.
+
+**Root cause:** the responsive map can occupy every sampled vertical position
+on one x coordinate. The test encoded a browser/layout-specific assumption
+instead of searching the available canvas.
+
+**Fix and prevention:** responsive canvas pan helpers search a bounded
+two-dimensional grid and reject nodes, markers, overlays, and controls before
+pressing the pointer. This preserves a real background-pan gesture without
+depending on one browser's topic placement. The regression is a five-repeat
+run of `marker-click-resolution.spec.js` across 1440, 1024, and 390 px.
+
 ## Successful CI workflow could deploy a different, newer main commit (fixed 2026-11-02)
 
 **Symptom:** the `workflow_run` deploy job checked out/pulled current `main` on
