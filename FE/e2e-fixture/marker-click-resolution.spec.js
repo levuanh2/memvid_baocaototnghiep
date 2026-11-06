@@ -24,17 +24,24 @@ const transform = (page) => page.evaluate(() => document.querySelector(".map-can
 // Drag the canvas horizontally from an empty point (not the bar, legend, nodes or markers).
 async function pan(page, dx, dy = 0) {
   const mb = await page.locator(".map-container").first().boundingBox();
-  const y = await page.evaluate(({ x, top, h }) => {
-    for (const f of [0.3, 0.4, 0.5, 0.6, 0.2]) {
-      const e = document.elementFromPoint(x, top + h * f);
-      if (e && !e.closest(".mm-selection-bar, .mm-legend, me-tpc, me-export-check, me-epd, me-wrapper, me-parent, button, a, input")) return top + h * f;
+  const point = await page.evaluate(({ left, top, w, h }) => {
+    // A dense/narrow map can occupy the exact horizontal centre. Search a
+    // bounded grid so the pan still starts on real canvas background in the
+    // Linux full-suite viewport as well as on local Chromium.
+    for (const xf of [0.5, 0.35, 0.65, 0.2, 0.8]) {
+      for (const yf of [0.3, 0.4, 0.5, 0.6, 0.2, 0.7]) {
+        const x = left + w * xf;
+        const y = top + h * yf;
+        const e = document.elementFromPoint(x, y);
+        if (e && !e.closest(".mm-selection-bar, .mm-legend, me-tpc, me-export-check, me-epd, me-wrapper, me-parent, button, a, input")) return { x, y };
+      }
     }
     return null;
-  }, { x: mb.x + mb.width * 0.5, top: mb.y, h: mb.height });
-  expect(y).not.toBeNull();
-  await page.mouse.move(mb.x + mb.width * 0.5, y);
+  }, { left: mb.x, top: mb.y, w: mb.width, h: mb.height });
+  expect(point).not.toBeNull();
+  await page.mouse.move(point.x, point.y);
   await page.mouse.down();
-  await page.mouse.move(mb.x + mb.width * 0.5 + dx, y + dy, { steps: 10 });
+  await page.mouse.move(point.x + dx, point.y + dy, { steps: 10 });
   await page.mouse.up();
   await page.waitForTimeout(250);
 }
@@ -52,6 +59,55 @@ async function visibleDots(page) {
     return { i, x: cx, y: cy, inside, onMap, coveredByNeighbour: !own, nodeId: el.dataset.nodeId, topAt, label: el.getAttribute("aria-label") };
   }).filter((t) => t.inside && t.onMap));
 }
+
+async function visibleTargetDot(page, nodeId) {
+  return page.evaluate((targetId) => {
+    const all = [...document.querySelectorAll("me-export-check")];
+    const el = all.find((candidate) => candidate.dataset.nodeId === targetId);
+    const dot = el?.querySelector(".mm-export-check__dot");
+    const rect = dot?.getBoundingClientRect();
+    if (!el || !rect) return null;
+    const x = rect.left + rect.width / 2;
+    const y = rect.top + rect.height / 2;
+    const top = document.elementFromPoint(x, y);
+    const inside = rect.left >= 0 && rect.top >= 0 && rect.right <= innerWidth && rect.bottom <= innerHeight;
+    if (!inside || !top?.closest(".map-container")) return null;
+    return { i: all.indexOf(el), x, y, nodeId: targetId, topAt: top.tagName.toLowerCase() };
+  }, nodeId);
+}
+
+test("a semantic-relation path cannot swallow a marker click after real toolbar zoom-out", async ({ page }) => {
+  await page.setViewportSize({ width: 390, height: 844 });
+  await page.goto("/fixture-harness.html");
+  await expect(page.getByTestId("fixture-harness-root")).toBeVisible();
+  await openSelection(page);
+  await page.waitForTimeout(400);
+
+  const zoomOut = page.getByRole("button", { name: "Thu nhỏ", exact: true });
+  // Main opens phones at 0.75. Two real toolbar steps reach 0.35, where the
+  // fixture's wide semantic-relation hit stroke crosses this marker centre.
+  await zoomOut.click();
+  await zoomOut.click();
+  await page.waitForTimeout(250);
+
+  let target = null;
+  const pans = [[0, 0], [-250, 0], [-250, 0], [-250, 0], [-250, 0], [0, -200], [250, 0], [250, 0], [250, 0], [250, 0], [0, -200], [-250, 0], [-250, 0], [0, 200], [0, 200]];
+  for (const [dx, dy] of pans) {
+    if (dx || dy) await pan(page, dx, dy);
+    target = await visibleTargetDot(page, "fixture-map-a-m0-s0");
+    if (target) break;
+  }
+  expect(target, "covered fixture marker must be brought into the visible canvas").not.toBeNull();
+
+  const before = await states(page);
+  const beforeTransform = await transform(page);
+  await page.mouse.click(target.x, target.y);
+  await page.waitForTimeout(120);
+  const after = await states(page);
+  const changed = after.map((value, i) => value !== before[i] ? i : -1).filter((i) => i >= 0);
+  expect(changed, `covered marker ${target.nodeId} must own the click`).toEqual([target.i]);
+  expect(await transform(page), "marker click must not move the canvas").toBe(beforeTransform);
+});
 
 for (const [w, h] of [[1440, 1024], [1024, 768], [390, 844]]) {
   test(`real click on each visible dot toggles only that branch at ${w}px`, async ({ page }) => {

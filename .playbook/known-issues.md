@@ -1,5 +1,41 @@
 # Known Issues
 
+## SVG paths swallowed branch-marker clicks at low zoom (fixed 2026-11-04)
+
+**Symptom:** after zooming a phone map out, clicking the visible marker for a
+first-level branch could leave the selection unchanged. The browser's top
+element at the marker centre was a semantic-relation `<path>`.
+
+**Root cause:** the nearest-visible-dot resolver runs from the HTML marker's
+click listener. A crossing SVG path could win the browser hit test, so the
+event never reached that listener. Mind Elixir also restores
+`pointer-events: stroke` on relation groups, so disabling only the parent SVG
+does not suppress descendant hit testing.
+
+**Fix and prevention:** only while `.mm-selection-active` is present, the live
+map's SVG drawing layers and descendants use `pointer-events: none`.
+Connectors and relations remain visible; marker clicks and empty-space canvas
+drags continue through their existing HTML handlers. Normal map mode and export
+rendering are unchanged. The real-pointer regression uses the real zoom-out
+control to reproduce the overlapping relation/marker geometry; DOM-dispatched
+clicks cannot detect this class of painted-layer interception.
+
+## Geometry tests must search for canvas background in two dimensions (fixed 2026-11-06)
+
+**Symptom:** the Linux Full Fixture Audit failed the 390 px marker-click case
+before exercising a pointer action, while local Chromium passed. Its pan helper
+could not find an empty point on the exact horizontal centre line.
+
+**Root cause:** the responsive map can occupy every sampled vertical position
+on one x coordinate. The test encoded a browser/layout-specific assumption
+instead of searching the available canvas.
+
+**Fix and prevention:** responsive canvas pan helpers search a bounded
+two-dimensional grid and reject nodes, markers, overlays, and controls before
+pressing the pointer. This preserves a real background-pan gesture without
+depending on one browser's topic placement. The regression is a five-repeat
+run of `marker-click-resolution.spec.js` across 1440, 1024, and 390 px.
+
 ## Successful CI workflow could deploy a different, newer main commit (fixed 2026-11-02)
 
 **Symptom:** the `workflow_run` deploy job checked out/pulled current `main` on
