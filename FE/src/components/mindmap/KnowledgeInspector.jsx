@@ -36,8 +36,8 @@ const ACTIONS = [
     build: (t) => `Hãy đặt vài câu hỏi kiểm tra kiến thức về "${t}" để tôi tự trả lời.` },
   { key: "examples", label: "Thêm ví dụ", icon: "Quote",
     build: (t) => `Hãy cho thêm ví dụ minh hoạ cho "${t}".` },
-  { key: "ask", label: "Hỏi AI về khái niệm này", icon: "MessageCircleQuestion",
-    build: (t) => `Về "${t}": ` },
+  // V4.1 W3-2 (D25): "Hỏi AI về khái niệm này" removed; same prompt as the
+  // "Hỏi về nhánh này" CTA above the grid.
 ];
 
 const RelatedPill = ({ item, onNavigate, icon }) => !item ? null : (

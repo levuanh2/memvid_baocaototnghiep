@@ -12,7 +12,7 @@ test.describe("workspace study-library navigation", () => {
     // Desktop has a visible, named destination — separate from Công cụ học.
     await expect(library).toBeVisible();
     await expect(library).toContainText("Thư viện học tập");
-    await expect(page.getByRole("button", { name: "Mở công cụ StudyMap" })).toBeVisible();
+    await expect(page.getByRole("button", { name: "Mở công cụ học" })).toBeVisible();
 
     // The destination follows the wordmark in the keyboard order.
     await home.focus();

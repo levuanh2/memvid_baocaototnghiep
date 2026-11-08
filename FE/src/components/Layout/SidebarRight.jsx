@@ -122,7 +122,7 @@ const ListCard = ({ title, meta, icon, onOpen, onDelete, deleteLabel = "Xóa" })
 
 // ── Artifact selector chips ───────────────────────────
 const ARTIFACTS = [
-  { key: "mindmap", label: "Sơ đồ", icon: "Network" },
+  { key: "mindmap", label: "Sơ đồ tư duy", icon: "Network" },
   { key: "summary", label: "Tóm tắt", icon: "ScrollText" },
 ];
 
@@ -370,9 +370,9 @@ export default function SidebarRight({
     if (resumed) {
       // The tab that started this job is gone — don't yank the user into a
       // full-screen overlay for a job they may not even remember starting.
-      toast("Sơ đồ đã xong trong lúc bạn vắng mặt — mở từ danh sách", { type: "info" });
+      toast("Sơ đồ tư duy đã xong trong lúc bạn vắng mặt — mở từ danh sách", { type: "info" });
     } else {
-      toast("Sơ đồ sẵn sàng", { type: "success" });
+      toast("Sơ đồ tư duy sẵn sàng", { type: "success" });
       setShowModalMap(record);
     }
   }, [fetchMindMaps]);
@@ -497,7 +497,7 @@ export default function SidebarRight({
   // Shared by "Tạo sơ đồ" (force=false, uses BE content-hash cache) and the
   // mindmap viewer's degraded-banner "Tạo lại" (force=true, bypasses cache).
   const runMindmapGeneration = async (sourceList, { force = false, ...guidedOptions } = {}) => {
-    if (!sourceList?.length) { toast("Vui lòng chọn ít nhất một tài liệu để tạo Sơ đồ!", { type: "error" }); return; }
+    if (!sourceList?.length) { toast("Vui lòng chọn ít nhất một tài liệu để tạo sơ đồ tư duy!", { type: "error" }); return; }
     // One job per intent: ignore a second start while one is starting or running.
     if (mindmapStartingRef.current || currentMindmapJobIdRef.current) return;
     mindmapStartingRef.current = true;
