@@ -373,9 +373,9 @@ export default function SidebarLeft({ selectedSources, setSelectedSources, onSou
           })}
         </div>
         <button type="button" className={`source-rail__add${uploading ? " is-busy" : ""}`}
-          onClick={openFileChooser} disabled={uploading}
-          aria-label={uploading ? "Đang tải tài liệu" : "Thêm tài liệu"}
-          title={uploading ? "Đang tải tài liệu" : "Thêm tài liệu"}>
+          onClick={() => fileInputRef.current?.click()} disabled={uploading}
+          aria-label={uploading ? "Đang tải tài liệu" : "Tải tài liệu lên"}
+          title={uploading ? "Đang tải tài liệu" : "Tải tài liệu lên"}>
           {uploading ? <Spinner size={16} /> : <Icon name="Plus" size={17} />}
         </button>
         <input ref={registerFileInput} type="file" multiple className="hidden" onChange={handleAddFiles} disabled={uploading} />

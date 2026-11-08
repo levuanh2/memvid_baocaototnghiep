@@ -1,18 +1,22 @@
 # Known Issues
 
-## (2026-11-06) Upload CTA lost its only file-input owner after the source panel unmounted
+## Library action rows overflowed their real content column (fixed 2026-11-04)
 
-The workspace empty-state CTA reused `SidebarLeft`'s hidden file input through
-a registered callback. On desktop, collapsing the source panel replaces
-`SidebarLeft` with `PanelSpine`; the old callback remained registered but its
-ref now resolved to `null`, so the CTA silently did nothing. The fix clears
-callback ownership in a layout-effect cleanup, records at most one pending
-intent while the owner is absent, and consumes it when the new owner mounts.
-The owner also guards an open chooser until `change` or `cancel`, preventing
-rapid activation from opening or submitting twice. Prevention: callbacks to
-DOM owned by conditionally mounted components must unregister on unmount, and
-their integration tests must cross the exact responsive mount boundaries and
-persisted collapsed state.
+**Symptom:** with the Action Matrix flag enabled, the 1440px Library page put
+the “Thêm” control beyond the document-row border, while the primary action’s
+arrow and label wrapped onto separate lines.
+
+**Root cause:** the row grid reserved an 800px minimum footprint, but the real
+StudyShell composition leaves 706px after the 210px collection sidebar and
+24px gap. The fixture previously gave the matrix the full 1180px harness width,
+so its horizontal-overflow check never exercised the production composition.
+
+**Fix and prevention:** the desktop/tablet grid now lets identity and progress
+tracks shrink, budgets explicit widths for primary/quick/tools controls, and
+keeps the primary action in a single inline-flex row. Chromium tests reproduce
+the real 706px desktop column and the 320/390/768/1024/1440 viewport widths;
+they assert every control remains inside its row, the primary action stays at
+one-line height, and its longest real label does not overflow its content box.
 
 ## Successful CI workflow could deploy a different, newer main commit (fixed 2026-11-02)
 

@@ -523,8 +523,8 @@ export default function StudyMapView() {
 
   return (
     <StudyShell
-      eyebrow="Sơ đồ kiến thức"
-      title={doc?.title || doc?.filename || "Sơ đồ kiến thức"}
+      eyebrow="Bản đồ kiến thức"
+      title={doc?.title || doc?.filename || "Bản đồ kiến thức"}
       subtitle={map ? null : "Hệ thống đọc tài liệu và dựng cây khái niệm để bạn thấy được cấu trúc."}
       backTo="/app/study"
       loading={loading}
@@ -591,7 +591,7 @@ export default function StudyMapView() {
       {!map && !job.running && dangDung ? (
         <EmptyState
           icon="Clock"
-          title="Sơ đồ đang được dựng"
+          title="Bản đồ kiến thức đang được dựng"
           hint="Một tiến trình dựng sơ đồ cho tài liệu này đang chạy (có thể từ tab khác). Bấm dựng thêm sẽ tạo job thứ hai tranh cùng một chỗ xử lý."
           action={
             <button type="button" className="btn-secondary text-small mt-1" onClick={load}>
@@ -603,7 +603,7 @@ export default function StudyMapView() {
         <EmptyState
           icon="Network"
           title="Chưa dựng sơ đồ cho tài liệu này"
-          hint="Sơ đồ tách tài liệu thành cây khái niệm, mỗi khái niệm neo về đúng đoạn văn sinh ra nó."
+          hint="Bản đồ kiến thức tách tài liệu thành cây khái niệm, mỗi khái niệm neo về đúng đoạn văn sinh ra nó."
           action={
             <button
               type="button"
