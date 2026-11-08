@@ -10,7 +10,7 @@
 export const BE_MAT = {
   summary: "Tóm tắt",
   mindmap: "Sơ đồ tư duy",
-  studymap: "Bản đồ học tập",
+  studymap: "Bản đồ kiến thức",
   quiz: "Quiz",
   review: "Hướng dẫn ôn tập",
   chat: "Hỏi AI",
@@ -25,7 +25,7 @@ const q = (v) => encodeURIComponent(String(v ?? ""));
  * — chúng là modal của màn hình ấy, không phải route riêng. `?source=<stem>` chọn
  * sẵn nguồn để câu hỏi kế tiếp đã đúng phạm vi.
  *
- * Bản đồ học tập (`knowledge_maps`) thì CÓ route riêng và khoá theo `document_id`.
+ * Bản đồ kiến thức (`knowledge_maps`) thì CÓ route riêng và khoá theo `document_id`.
  *
  * Bề mặt lạ hoặc thiếu dữ liệu → về chính tài liệu ấy, KHÔNG BAO GIỜ trả một route
  * hỏng: một nút "Tiếp tục" dẫn tới trang trắng còn tệ hơn không có nút.

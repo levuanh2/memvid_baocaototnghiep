@@ -1,46 +1,22 @@
 # Known Issues
 
-## SVG paths swallowed branch-marker clicks at phone zoom (fixed 2026-11-04)
+## Library action rows overflowed their real content column (fixed 2026-11-04)
 
-**Symptom:** at 390px, clicking the visible marker for a first-level branch
-could leave the selection unchanged. `elementFromPoint()` at the marker centre
-returned a connector or semantic-relation `<path>` instead of the marker.
+**Symptom:** with the Action Matrix flag enabled, the 1440px Library page put
+the “Thêm” control beyond the document-row border, while the primary action’s
+arrow and label wrapped onto separate lines.
 
-**Root cause:** the existing nearest-visible-dot resolver runs from the HTML
-marker's click listener. A crossing SVG path could win the browser hit test at
-low zoom, so the event never reached that listener and there was nothing for
-the resolver to correct. Marker `z-index` alone cannot order an HTML child
-against every independently painted SVG layer.
+**Root cause:** the row grid reserved an 800px minimum footprint, but the real
+StudyShell composition leaves 706px after the 210px collection sidebar and
+24px gap. The fixture previously gave the matrix the full 1180px harness width,
+so its horizontal-overflow check never exercised the production composition.
 
-**Fix and prevention:** only while `.mm-selection-active` is present, the live
-map's SVG drawing layers use `pointer-events: none`; connectors and relations
-remain visible, while clicks fall through to HTML markers and empty-space drags
-fall through to the canvas. Apply that rule to SVG descendants too: Mind Elixir
-restores `pointer-events: stroke` on relation groups. Normal map mode is
-unchanged. Keep the real-pointer
-`marker-click-resolution.spec.js` coverage at desktop, tablet, and phone widths:
-DOM-dispatched marker clicks cannot detect a painted SVG path stealing the hit.
-
-## Phone mind maps opened with first-level branches off-screen (fixed 2026-11-04)
-
-**Symptom:** on the first open at 320px and 390px, the root was visible but
-every first-level branch started outside the canvas, so the learner had to pan
-before seeing the map's main structure.
-
-**Root cause:** the initial lifecycle fitted the whole tree, then immediately
-overrode that transform on narrow canvases by forcing a 0.75 scale and centring
-only the root.
-
-**Fix and prevention:** after connector geometry validates, a new map id gets
-one initial placement. Below a 768px viewport it frames the root and its
-first-level children (scale clamped to [0.5, 1], centred on that group);
-desktop keeps the plain whole-tree `scaleFit()`. Same-id rerenders,
-branch/depth actions and export never refit. Real-browser coverage asserts the
-root and every first-level fixture node stay inside the 390px canvas at a scale
-of at least 0.5. Plain `scaleFit()` alone is not a fix: it shrinks a wide tree
-to about 0.27 at 390px (unreadable). At 0.5, fixed-size touch markers of
-stacked leaves overlap, so the touch-selection test zooms in first, as a user
-would.
+**Fix and prevention:** the desktop/tablet grid now lets identity and progress
+tracks shrink, budgets explicit widths for primary/quick/tools controls, and
+keeps the primary action in a single inline-flex row. Chromium tests reproduce
+the real 706px desktop column and the 320/390/768/1024/1440 viewport widths;
+they assert every control remains inside its row, the primary action stays at
+one-line height, and its longest real label does not overflow its content box.
 
 ## Successful CI workflow could deploy a different, newer main commit (fixed 2026-11-02)
 
