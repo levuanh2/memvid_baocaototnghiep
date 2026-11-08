@@ -113,6 +113,10 @@ export default function ChatArea({
   // workspaceMode switch (same shape as the pre-existing `onSwitchToChat`).
   hasSummary = false, onOpenSummary,
   isLeftVisible = true,
+  // W1-4: upload trigger for the "no documents at all" empty state, reused
+  // from SidebarLeft via MainLayout's `uploadTriggerRef` (no duplicate
+  // upload POST logic here).
+  onUploadDocument,
 }) {
   // Feature Pack A (Research Timeline) — ChatArea never touched Study Context
   // before this; it's the one surface where the user's two most-timeline-
@@ -910,20 +914,59 @@ export default function ChatArea({
             <h1 className="font-display text-[26px] sm:text-[30px] leading-[1.2] font-semibold text-text-primary mb-3">
               Hỏi tài liệu của bạn — <span className="text-seal">kèm dẫn chứng</span>.
             </h1>
-            <p className="font-display text-body-lg text-text-secondary mb-6">
-              Mỗi câu trả lời được truy hồi từ tài liệu đã chọn và gắn nguồn ở lề phải. Chọn tài liệu bên trái, rồi đặt câu hỏi.
-            </p>
-            {/* Round 12 — the old mobile-only "Mở thư mục nguồn" fallback
-                button here called the exact same `onOpenLeft` as the
-                compact row's "Chọn nguồn" button above, which is visible at
-                every breakpoint now (not `md:hidden`) — removed as a
-                duplicate, keeping exactly one "Chọn nguồn" action. */}
-            {selectedSources?.length > 0 && (
-              <div className="flex flex-wrap gap-2 justify-center">
-                {suggestions.map((q) => (
-                  <button key={q} onClick={() => fillSuggestion(q)} className="pill-action">{q}</button>
-                ))}
-              </div>
+            {sources.length === 0 && !selectedSources?.length ? (
+              // W1-4: nothing uploaded yet -- "chọn tài liệu" has nothing to
+              // select, so the one primary action is to upload, reusing the
+              // exact same handler/input SidebarLeft's own "Tải tài liệu lên"
+              // calls (no duplicate upload POST logic here).
+              <>
+                <p className="font-display text-body-lg text-text-secondary mb-6">
+                  Tải tài liệu đầu tiên lên để bắt đầu đặt câu hỏi.
+                </p>
+                <button type="button" onClick={onUploadDocument} className="btn-primary !text-small inline-flex items-center gap-2">
+                  <Icon name="Plus" size={14} /> Tải tài liệu lên
+                </button>
+              </>
+            ) : (
+              <>
+                {/* W1-4: below `md` there is no left column OR right margin,
+                    so neither "bên trái" nor "ở lề phải" points at anything a
+                    phone user can see. Two copies, CSS-only (no JS viewport
+                    check) -- desktop text is byte-for-byte unchanged; the
+                    mobile copy drops both spatial references (review fix:
+                    "kèm nguồn dẫn chứng" replaces "ở lề phải" too) and the
+                    button right below it is the actual way to act on "Chọn
+                    tài liệu" on that breakpoint, reusing the exact same
+                    `onOpenLeft` the header's `.mobile-context` icon button
+                    already calls (no new drawer state). This looks like
+                    Round 12's removed duplicate fallback button, but it
+                    isn't one: Round 12 removed it because the header icon
+                    ALONE was then considered sufficient; this round's audit
+                    (390px screenshot) found that icon-only control too easy
+                    to miss on a first-time empty chat, hence a labelled
+                    entry point right where the (now corrected) copy
+                    points. */}
+                <p className="font-display text-body-lg text-text-secondary mb-6 md:hidden">
+                  Mỗi câu trả lời được truy hồi từ tài liệu đã chọn, kèm nguồn dẫn chứng. Chọn tài liệu, rồi đặt câu hỏi.
+                </p>
+                <p className="font-display text-body-lg text-text-secondary mb-6 hidden md:block">
+                  Mỗi câu trả lời được truy hồi từ tài liệu đã chọn và gắn nguồn ở lề phải. Chọn tài liệu bên trái, rồi đặt câu hỏi.
+                </p>
+                <button
+                  type="button"
+                  onClick={onOpenLeft}
+                  className="btn-secondary !text-small inline-flex items-center gap-2 mb-6 md:hidden"
+                >
+                  <Icon name="FolderOpen" size={14} /> Mở thư mục nguồn
+                </button>
+                {selectedSources?.length > 0 && (
+                  <div className="flex flex-wrap gap-2 justify-center">
+                    {suggestions.map((q) => (
+                      <button key={q} onClick={() => fillSuggestion(q)} className="pill-action">{q}</button>
+                    ))}
+                  </div>
+                )}
+              </>
             )}
           </div>
         )}
@@ -1120,6 +1163,7 @@ export default function ChatArea({
             <textarea
               ref={textareaRef}
               rows={1}
+              aria-label="Câu hỏi cho tài liệu đã chọn"
               placeholder={pendingReview ? "Hãy hoàn tất bước duyệt câu trả lời…" : transcribing ? "Đang đọc ảnh…" : loading ? "Đang chờ phản hồi…" : visionReady && roomy ? "Đặt câu hỏi, hoặc dán ảnh đề bài vào đây…"
               : !roomy ? "Đặt câu hỏi…" : "Đặt câu hỏi về tài liệu đã chọn…"}
               value={input}

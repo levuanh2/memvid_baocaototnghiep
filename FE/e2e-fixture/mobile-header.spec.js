@@ -81,7 +81,7 @@ const CONTROLS = [
   'nav[role="tablist"] [role="tab"][title="Trò chuyện"]',
   'nav[role="tablist"] [role="tab"][title="Sơ đồ tư duy"]',
   'nav[role="tablist"] [role="tab"][title="Tóm tắt"]',
-  'header button[aria-label="Mở công cụ StudyMap"]',
+  'header button[aria-label="Mở công cụ học"]',
   'header button[aria-label^="Mức sử dụng AI"]',
   'header button[aria-haspopup="menu"][aria-label^="Tài khoản"]',
 ];
@@ -157,10 +157,10 @@ for (const vp of COMPACT) {
 
       test("exactly one workspace-tools owner; source library and inspector live inside its menu", async ({ page }) => {
         await openApp(page, { ...vp, dark });
-        await expect(page.locator('header button[aria-label="Mở công cụ StudyMap"]')).toHaveCount(1);
+        await expect(page.locator('header button[aria-label="Mở công cụ học"]')).toHaveCount(1);
         await expect(page.locator('header button[aria-label="Mở công cụ"]')).toHaveCount(0);
         await expect(page.locator('header button[aria-label="Mở thư mục nguồn"]')).toHaveCount(0);
-        await page.locator('header button[aria-label="Mở công cụ StudyMap"]').click();
+        await page.locator('header button[aria-label="Mở công cụ học"]').click();
         const menu = page.getByRole("menu", { name: "Công cụ học" });
         await expect(menu).toBeVisible();
         const box = await menu.boundingBox();
@@ -291,7 +291,7 @@ test.describe("menu dismissal", () => {
   test("320px keeps the hidden standalone Library destination in the tools menu", async ({ page }) => {
     await openApp(page, { width: 320, height: 720 });
     await expect(page.locator("header .study-library-link")).toBeHidden();
-    await page.locator('header button[aria-label="Mở công cụ StudyMap"]').click();
+    await page.locator('header button[aria-label="Mở công cụ học"]').click();
     const library = page.getByRole("menuitem", { name: "Thư viện học tập" });
     await expect(library).toBeVisible();
     await library.click();
@@ -300,7 +300,7 @@ test.describe("menu dismissal", () => {
 
   test("tools menu: Escape and outside click close it; a click inside keeps it open", async ({ page }) => {
     await openApp(page, { width: 390, height: 844 });
-    const trigger = page.locator('header button[aria-label="Mở công cụ StudyMap"]');
+    const trigger = page.locator('header button[aria-label="Mở công cụ học"]');
     const menu = page.getByRole("menu", { name: "Công cụ học" });
     await trigger.click();
     await expect(menu).toBeVisible();
@@ -316,12 +316,12 @@ test.describe("menu dismissal", () => {
   test("opening usage or account while tools is open closes the tools menu", async ({ page }) => {
     await openApp(page, { width: 390, height: 844 });
     const menu = page.getByRole("menu", { name: "Công cụ học" });
-    await page.locator('header button[aria-label="Mở công cụ StudyMap"]').click();
+    await page.locator('header button[aria-label="Mở công cụ học"]').click();
     await expect(menu).toBeVisible();
     await page.locator('header button[aria-label^="Mức sử dụng AI"]').click();
     await expect(menu).toHaveCount(0);
     await page.keyboard.press("Escape");
-    await page.locator('header button[aria-label="Mở công cụ StudyMap"]').click();
+    await page.locator('header button[aria-label="Mở công cụ học"]').click();
     await expect(menu).toBeVisible();
     await page.locator('header button[aria-haspopup="menu"][aria-label^="Tài khoản"]').click();
     await expect(menu).toHaveCount(0);
@@ -330,7 +330,7 @@ test.describe("menu dismissal", () => {
   test("a source-library action from the tools menu runs and the menu closes", async ({ page }) => {
     await openApp(page, { width: 390, height: 844 });
     const menu = page.getByRole("menu", { name: "Công cụ học" });
-    await page.locator('header button[aria-label="Mở công cụ StudyMap"]').click();
+    await page.locator('header button[aria-label="Mở công cụ học"]').click();
     await menu.getByRole("menuitem", { name: /Mở thư mục nguồn/ }).click();
     await expect(menu).toHaveCount(0);
   });

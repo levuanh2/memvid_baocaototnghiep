@@ -87,7 +87,7 @@ export const CHIP = [
   { khoa: "index", nhan: "Đã lập chỉ mục", nhanDangChay: "Đang lập chỉ mục…" },
   { khoa: "summary", nhan: "Tóm tắt", nhanDangChay: "Đang tóm tắt…" },
   { khoa: "mindmap", nhan: "Sơ đồ tư duy", nhanDangChay: "Đang dựng sơ đồ…" },
-  { khoa: "studymap", nhan: "Bản đồ học tập", nhanDangChay: "Đang dựng bản đồ…" },
+  { khoa: "studymap", nhan: "Bản đồ kiến thức", nhanDangChay: "Đang dựng bản đồ…" },
   { khoa: "quiz", nhan: "Quiz", nhanDangChay: null },
   { khoa: "review", nhan: "Ôn tập", nhanDangChay: null },
 ];
