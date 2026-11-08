@@ -105,7 +105,7 @@ export const uploadDocument = async (file) => {
   return apiFetch("/api/documents/upload", { method: "POST", body: form }).then(_json);
 };
 
-// ── Sơ đồ kiến thức (FR-04) ─────────────────────────────────────────────────
+// ── Bản đồ kiến thức (FR-04) ─────────────────────────────────────────────────
 export const generateStudyMap = (documentId, { force = false } = {}) =>
   _send("/api/study-maps/generate", "POST", { document_id: documentId, force });
 
@@ -308,5 +308,5 @@ export function buildMapTree(nodes) {
   }
 
   if (roots.length === 1) return roots[0];
-  return { name: "Sơ đồ", attributes: { node_type: "root" }, children: roots };
+  return { name: "Bản đồ kiến thức", attributes: { node_type: "root" }, children: roots };
 }

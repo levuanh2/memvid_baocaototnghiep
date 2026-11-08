@@ -60,7 +60,7 @@ const NHOM_LOC = [
   ["Định dạng", [["pdf", "PDF"], ["docx", "DOCX"], ["txt", "TXT"], ["image", "Ảnh"]]],
   ["Xử lý", [["completed", "Hoàn tất"], ["processing", "Đang xử lý"], ["failed", "Lỗi"]]],
   ["Đã có AI", [["summary_ready", "Tóm tắt"], ["mindmap_ready", "Sơ đồ tư duy"],
-                ["studymap_ready", "Bản đồ học tập"], ["quiz_ready", "Quiz"],
+                ["studymap_ready", "Bản đồ kiến thức"], ["quiz_ready", "Quiz"],
                 ["review_ready", "Ôn tập"]]],
 ];
 

@@ -1,4 +1,4 @@
-// Layout của Sơ đồ kiến thức (StudyMap) — id RENDERER-ĐỘC-LẬP.
+// Layout của Bản đồ kiến thức (StudyMap) — id RENDERER-ĐỘC-LẬP.
 //
 // `LAYOUT_IDS` không bao giờ được đọc thành "orientation"/"pathFunc" ở bất cứ đâu
 // ngoài `thongSoReactD3Tree` bên dưới. localStorage, URL, hay một API tương lai chỉ
