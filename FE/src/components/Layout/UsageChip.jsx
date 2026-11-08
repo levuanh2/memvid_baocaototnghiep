@@ -46,7 +46,9 @@ export default function UsageChip() {
   const warning = usage.percentage >= 80 && usage.remaining > 0;
   const exhausted = usage.remaining <= 0;
   return (
-    <div ref={rootRef} className="relative z-[60]">
+    // V4.1 W5-4: lift above the header only while the popover is open; a fixed
+    // z-[60] put the closed chip over every modal (z-50), e.g. Export Studio.
+    <div ref={rootRef} className={`relative ${open ? "z-[60]" : ""}`}>
       {/* Phones: a 40x40 icon with a status dot (ok / warning / exhausted); the numbers
           stay in the popover. Desktop keeps the "AI n%" text. Name carries the percentage. */}
       <button type="button" className="usage-chip__trigger icon-btn relative w-10 h-10 lg:w-auto lg:h-9 lg:px-2.5 gap-1.5 inline-flex items-center justify-center"
