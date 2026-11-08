@@ -32,7 +32,7 @@ import { matchDocumentsToStems } from "../../utils/multiDocument";
  */
 
 const DANH_SACH_LENH = [
-  { id: "tai-len", nhan: "Tải tài liệu", icon: "Upload", moTa: "Mở Thư viện học tập để tải lên" },
+  { id: "tai-len", nhan: "Tải tài liệu lên", icon: "Upload", moTa: "Mở Thư viện học tập để tải lên" },
   { id: "tao-bo-suu-tap", nhan: "Tạo bộ sưu tập", icon: "FolderOpen", moTa: "Mở Thư viện học tập để tạo" },
   { id: "tiep-tuc-hoc", nhan: "Tiếp tục học", icon: "ArrowRight", moTa: "Về đúng chỗ tài liệu gần nhất đang dở" },
   { id: "mo-gia-su", nhan: "Mở Gia sư AI", icon: "Sparkles", moTa: "Mở Workspace với Gia sư AI (Ctrl+/)" },
@@ -49,7 +49,7 @@ const DANH_SACH_LENH = [
 const BE_MAT_NHANH = [
   { khoa: "summary", nhan: "Tóm tắt", icon: "ScrollText" },
   { khoa: "mindmap", nhan: "Sơ đồ tư duy", icon: "Network" },
-  { khoa: "studymap", nhan: "Bản đồ học tập", icon: "Spline" },
+  { khoa: "studymap", nhan: "Bản đồ kiến thức", icon: "Spline" },
   { khoa: "quiz", nhan: "Quiz", icon: "BadgeCheck" },
   { khoa: "review", nhan: "Ôn tập", icon: "BookOpen" },
 ];

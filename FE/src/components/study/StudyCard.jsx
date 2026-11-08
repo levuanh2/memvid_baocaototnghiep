@@ -1,4 +1,4 @@
-import { useCallback, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import { Icon } from "../ui/Icon";
 import { chipHienThi, READY, GENERATING } from "../../utils/trangThaiAi";
 import { tenHienThi, thoiGianDoc, nhanThoiGianDoc } from "../../utils/thuVienTaiLieu";
@@ -58,6 +58,8 @@ export default function StudyCard({
   // Không đổi thứ bậc thị giác đã có (tên → AI Overview → …), chỉ rút gọn nó.
   const gon = matDo === "compact";
   const [menuMo, setMenuMo] = useState(false);
+  const nutMenuRef = useRef(null);
+  const menuRef = useRef(null);
   const ten = tenHienThi(doc);
   const chips = chipHienThi(doc, jobs);
   const ai = doc.ai || {};
@@ -101,6 +103,34 @@ export default function StudyCard({
     }
   };
 
+  useEffect(() => {
+    if (menuMo) menuRef.current?.querySelector('[role="menuitem"]')?.focus();
+  }, [menuMo]);
+
+  const dongMenuVaTraFocus = () => {
+    setMenuMo(false);
+    requestAnimationFrame(() => nutMenuRef.current?.focus());
+  };
+
+  const xuLyPhimMenu = (e) => {
+    // Không để phím của menu nổi bọt lên roving-tabindex của thẻ tài liệu.
+    e.stopPropagation();
+    const items = [...(menuRef.current?.querySelectorAll('[role="menuitem"]') || [])];
+    if (e.key === "Escape") {
+      e.preventDefault();
+      dongMenuVaTraFocus();
+      return;
+    }
+    if (!items.length || !["ArrowDown", "ArrowUp"].includes(e.key)) return;
+    e.preventDefault();
+    const hienTai = items.indexOf(document.activeElement);
+    const buoc = e.key === "ArrowDown" ? 1 : -1;
+    const keTiep = hienTai < 0
+      ? (buoc > 0 ? 0 : items.length - 1)
+      : (hienTai + buoc + items.length) % items.length;
+    items[keTiep].focus();
+  };
+
   // Hoạt động gần đây nằm CHUNG hàng siêu dữ liệu, không phải một khối riêng —
   // "mở 2 giờ trước · Sơ đồ tư duy" nói đủ chuyện mà không tốn thêm một dòng.
   const hoatDong = tiepTuc
@@ -118,7 +148,7 @@ export default function StudyCard({
 
   const hanhDong = [
     { khoa: "summary", nhan: "Tóm tắt", icon: "ScrollText" },
-    { khoa: "studymap", nhan: "Sơ đồ", icon: "Network" },
+    { khoa: "studymap", nhan: "Bản đồ kiến thức", icon: "Network" },
     { khoa: "quiz", nhan: "Quiz", icon: "BadgeCheck" },
     { khoa: "review", nhan: "Ôn tập", icon: "BookOpen" },
     { khoa: "chat", nhan: "Hỏi AI", icon: "MessageSquare" },
@@ -195,15 +225,19 @@ export default function StudyCard({
         )}
 
         <div className="relative shrink-0">
-          <button type="button" className="icon-btn w-7 h-7"
+          <button ref={nutMenuRef} type="button" className="icon-btn w-7 h-7"
                   aria-label="Tuỳ chọn tài liệu"
+                  aria-haspopup="menu"
+                  aria-expanded={menuMo}
+                  onKeyDown={(e) => e.stopPropagation()}
                   onClick={() => setMenuMo((v) => !v)}>
             <Icon name="MoreVertical" size={15} />
           </button>
           {menuMo && (
             <>
               <div className="fixed inset-0 z-10" onClick={() => setMenuMo(false)} />
-              <div className="absolute right-0 top-8 z-20 min-w-[170px] rounded-[8px] py-1 shadow-card-hover"
+              <div ref={menuRef} role="menu" onKeyDown={xuLyPhimMenu}
+                   className="absolute right-0 top-8 z-20 min-w-[170px] rounded-[8px] py-1 shadow-card-hover"
                    style={{ background: "var(--bg-card)", border: "1px solid var(--border-color)" }}>
                 {[
                   ["Đổi tên", "Pencil", () => onDoiTen(doc.document_id)],
@@ -215,7 +249,7 @@ export default function StudyCard({
                     doc.archived_at ? "ArchiveRestore" : "Archive",
                     () => onBatTat(doc, { archived: !doc.archived_at })],
                 ].map(([nhan, icon, ham]) => (
-                  <button key={nhan} type="button"
+                  <button key={nhan} type="button" role="menuitem"
                           onClick={() => { setMenuMo(false); ham(); }}
                           className="w-full px-3 py-1.5 text-left text-small text-text-primary
                                      hover:bg-surface-elevated inline-flex items-center gap-2">

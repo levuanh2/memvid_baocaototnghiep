@@ -646,10 +646,10 @@ export default function MainLayout({
           {/* Mobile: one workspace-tools owner. Its menu also carries the actions
               that used to be separate phone buttons (source library, inspector). */}
           <div className="relative">
-            <button type="button" ref={studyToolsTriggerRef} className="study-tools-trigger" aria-label="Mở công cụ StudyMap"
+            <button type="button" ref={studyToolsTriggerRef} className="study-tools-trigger" aria-label="Mở công cụ học"
               onClick={() => setHeaderSurface((current) => current === "study-tools" ? null : "study-tools")}
               aria-haspopup="menu" aria-expanded={headerSurface === "study-tools"}>
-              <span>StudyMap</span><Icon name="ChevronDown" size={14} />
+              <span>Công cụ học</span><Icon name="ChevronDown" size={14} />
             </button>
             <StudyToolsMenu open={headerSurface === "study-tools"} onClose={closeHeaderSurface} onSelect={openStudyTool}
               triggerRef={studyToolsTriggerRef}

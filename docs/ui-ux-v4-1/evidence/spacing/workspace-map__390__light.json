@@ -1,0 +1,119 @@
+{
+ "viewport": {
+  "width": 390,
+  "height": 844
+ },
+ "distinctSpacingValues": [
+  1,
+  2,
+  3,
+  4,
+  5,
+  6,
+  7,
+  8,
+  9,
+  10,
+  11,
+  12,
+  14,
+  15,
+  16,
+  24,
+  30,
+  45,
+  60
+ ],
+ "spacingFrequency": [
+  {
+   "value": 1,
+   "count": 2
+  },
+  {
+   "value": 2,
+   "count": 24
+  },
+  {
+   "value": 3,
+   "count": 5
+  },
+  {
+   "value": 4,
+   "count": 30
+  },
+  {
+   "value": 5,
+   "count": 6
+  },
+  {
+   "value": 6,
+   "count": 72
+  },
+  {
+   "value": 7,
+   "count": 3
+  },
+  {
+   "value": 8,
+   "count": 55
+  },
+  {
+   "value": 9,
+   "count": 2
+  },
+  {
+   "value": 10,
+   "count": 47
+  },
+  {
+   "value": 11,
+   "count": 2
+  },
+  {
+   "value": 12,
+   "count": 32
+  },
+  {
+   "value": 14,
+   "count": 2
+  },
+  {
+   "value": 15,
+   "count": 16
+  },
+  {
+   "value": 16,
+   "count": 7
+  },
+  {
+   "value": 24,
+   "count": 2
+  },
+  {
+   "value": 30,
+   "count": 8
+  },
+  {
+   "value": 45,
+   "count": 2
+  },
+  {
+   "value": 60,
+   "count": 2
+  }
+ ],
+ "headings": [
+  {
+   "level": "H3",
+   "label": "Chi tiết sơ đồ",
+   "fontSize": "16px",
+   "lineHeight": "27.2px",
+   "margin": [
+    "0px",
+    "4px"
+   ]
+  }
+ ],
+ "boxes": [],
+ "verticalGaps": []
+}
