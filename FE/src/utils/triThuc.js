@@ -13,7 +13,7 @@ const NHAN_TRANG_THAI = {
 const NHAN_ARTIFACT = {
   summary: "Tóm tắt",
   mindmap: "Sơ đồ tư duy",
-  studymap: "Bản đồ học tập",
+  studymap: "Bản đồ kiến thức",
   quiz: "Quiz",
   review: "Ôn tập",
   index: "Lập chỉ mục",

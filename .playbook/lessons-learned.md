@@ -1,5 +1,13 @@
 # Lessons Learned
 
+## Nested keyboard widgets must contain parent-owned key events (2026-11-04)
+
+- ARIA roles alone do not make a popup keyboard-operable: opening must move focus
+  into it, arrow keys must move between items, and Escape must restore the trigger.
+- When a popup sits inside a parent with its own keyboard contract, contain its key
+  events at the popup/trigger boundary so one key cannot perform both actions.
+- Protect both layers with a focused unit test and a real-browser keyboard fixture.
+
 ## Programmatic focus needs a visible style independent of input modality (2026-10-28)
 
 `:focus-visible` is ideal for ordinary keyboard navigation, but a menu that
