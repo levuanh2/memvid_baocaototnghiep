@@ -49,7 +49,7 @@ const DANH_SACH_LENH = [
 const BE_MAT_NHANH = [
   { khoa: "summary", nhan: "Tóm tắt", icon: "ScrollText" },
   { khoa: "mindmap", nhan: "Sơ đồ tư duy", icon: "Network" },
-  { khoa: "studymap", nhan: "Bản đồ học tập", icon: "Spline" },
+  { khoa: "studymap", nhan: "Bản đồ kiến thức", icon: "Spline" },
   { khoa: "quiz", nhan: "Quiz", icon: "BadgeCheck" },
   { khoa: "review", nhan: "Ôn tập", icon: "BookOpen" },
 ];

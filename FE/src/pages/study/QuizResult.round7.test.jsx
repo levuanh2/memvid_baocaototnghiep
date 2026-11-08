@@ -58,7 +58,7 @@ describe("Round 7 quiz result", () => {
     await renderReady();
     expect(container.textContent).toContain("Đang chấm");
     expect(container.textContent).not.toContain("8 / 10");
-    expect(container.textContent).not.toContain("Xem lại 2 câu");
+    expect(container.textContent).not.toContain("Xem lại câu sai");
     expect(container.textContent).not.toContain("Nội dung tạm chưa được lộ");
     expect(container.textContent).not.toContain("Giải thích tạm chưa được lộ");
   });
@@ -102,7 +102,7 @@ describe("Round 7 quiz result", () => {
   it("opens wrong-answer review without replacing the review-plan route", async () => {
     getResult.mockResolvedValue({ status: "graded", quiz_title: "Quiz", score: 8, max_score: 10, percentage: 80, correct_count: 8, incorrect_count: 2, total_questions: 10, duration_seconds: 60, questions: QUESTIONS });
     await renderReady();
-    const open = [...container.querySelectorAll("button")].find((button) => button.textContent.includes("Xem lại 2 câu"));
+    const open = [...container.querySelectorAll("button")].find((button) => button.textContent.includes("Xem lại câu sai"));
     await act(async () => open.click());
     expect(container.textContent).toContain("Giải thích 1");
     expect(container.querySelector('a[href="/app/study/review/attempt-1"]')).toBeTruthy();
@@ -117,7 +117,7 @@ describe("Round 7 quiz result", () => {
       questions: QUESTIONS_NONCONSECUTIVE,
     });
     await renderReady();
-    const open = [...container.querySelectorAll("button")].find((button) => button.textContent.includes("Xem lại 2 câu"));
+    const open = [...container.querySelectorAll("button")].find((button) => button.textContent.includes("Xem lại câu sai"));
     await act(async () => open.click());
 
     // Rail: exact real ordinals, neither collapsed to 1/2.

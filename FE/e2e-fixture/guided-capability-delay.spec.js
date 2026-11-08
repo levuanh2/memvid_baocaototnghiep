@@ -20,7 +20,7 @@ const MAP = {
   ],
   generator: { pipeline: "fixture", model: "fixture", elapsed_sec: 0, degraded: false, missing: [] },
 };
-const VALIDATION = "Vui lòng chọn ít nhất một tài liệu để tạo Sơ đồ!";
+const VALIDATION = "Vui lòng chọn ít nhất một tài liệu để tạo sơ đồ tư duy!";
 
 const WIDTHS = [
   { w: 390, h: 844 }, { w: 1023, h: 768 }, { w: 1024, h: 768 }, { w: 1025, h: 768 }, { w: 1440, h: 1024 },

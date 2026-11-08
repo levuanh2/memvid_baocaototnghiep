@@ -3,7 +3,7 @@ import { useStudyContext } from "../../study/useStudyContext";
 // Nhãn bề mặt (Phase 4B) — chỉ ba giá trị có thể là "vừa xem tài liệu qua đâu"
 // (mindmap/summary/knowledge); "question"/"continue_learning" là hành động
 // CHỌN câu hỏi, không phải một GIAN học riêng nên không có nhãn chặng ở đây.
-const NHAN_NGUON = { mindmap: "Sơ đồ", summary: "Tóm tắt", knowledge: "Tri thức" };
+const NHAN_NGUON = { mindmap: "Sơ đồ tư duy", summary: "Tóm tắt", knowledge: "Tri thức" };
 
 const rutGon = (s, n) => (s && s.length > n ? `${s.slice(0, n)}…` : s);
 

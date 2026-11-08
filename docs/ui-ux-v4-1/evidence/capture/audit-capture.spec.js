@@ -11,6 +11,7 @@ import { resolve } from "node:path";
 
 const OUT = resolve(process.cwd(), "../docs/ui-ux-v4-1/evidence");
 const FLAG = process.env.AUDIT_FLAG === "on" ? "flagon" : "flagoff";
+const SPACING_ONLY = process.env.AUDIT_SPACING === "1";
 const API = /localhost:8080\//;
 const json = (body, status = 200) => ({ status, contentType: "application/json", body: JSON.stringify(body) });
 
@@ -110,7 +111,9 @@ function handler({ empty }) {
   };
 }
 
-const VIEWPORTS = [[320, 720], [390, 844], [768, 1024], [1024, 768], [1440, 900]];
+const VIEWPORTS = SPACING_ONLY
+  ? [[390, 844], [1440, 900]]
+  : [[320, 720], [390, 844], [768, 1024], [1024, 768], [1440, 900]];
 const SCREENS = [
   { id: "landing", path: "/", auth: false },
   { id: "login", path: "/login", auth: false },
@@ -153,6 +156,74 @@ async function inventory(page) {
   });
 }
 
+async function spacingInventory(page) {
+  return page.evaluate(() => {
+    const visible = (el) => {
+      const rect = el.getBoundingClientRect();
+      const style = getComputedStyle(el);
+      return rect.width > 0 && rect.height > 0 && style.display !== "none" && style.visibility !== "hidden";
+    };
+    const px = (value) => Number.parseFloat(value) || 0;
+    const label = (el) => {
+      const heading = el.matches("h1,h2,h3") ? el : el.querySelector(":scope > h1, :scope > h2, :scope > h3");
+      return String(el.getAttribute("aria-label") || heading?.textContent || el.textContent || el.className || el.tagName)
+        .replace(/\s+/g, " ").trim().slice(0, 72);
+    };
+    const spacingProps = [
+      "paddingTop", "paddingRight", "paddingBottom", "paddingLeft",
+      "marginTop", "marginRight", "marginBottom", "marginLeft",
+      "rowGap", "columnGap",
+    ];
+    const all = [...document.querySelectorAll("body *")].filter(visible);
+    const counts = new Map();
+    for (const el of all) {
+      const style = getComputedStyle(el);
+      for (const prop of spacingProps) {
+        const value = px(style[prop]);
+        if (value > 0 && value <= 96) counts.set(value, (counts.get(value) || 0) + 1);
+      }
+    }
+    const candidates = [...document.querySelectorAll([
+      "main section", "main article", "main [class*='card']", "main [class*='panel']",
+      "main [class*='result']", "main [class*='review']", "main [class*='guide']",
+      "[role='main'] section", "[role='main'] article",
+    ].join(","))].filter(visible);
+    const uniqueCandidates = [...new Set(candidates)].slice(0, 80);
+    const boxes = uniqueCandidates.map((el) => {
+      const style = getComputedStyle(el);
+      const rect = el.getBoundingClientRect();
+      return {
+        element: `${el.tagName.toLowerCase()}.${String(el.className).trim().replace(/\s+/g, ".").slice(0, 100)}`,
+        label: label(el),
+        x: Math.round(rect.x), y: Math.round(rect.y), width: Math.round(rect.width), height: Math.round(rect.height),
+        padding: [style.paddingTop, style.paddingRight, style.paddingBottom, style.paddingLeft],
+        margin: [style.marginTop, style.marginRight, style.marginBottom, style.marginLeft],
+        gap: [style.rowGap, style.columnGap],
+      };
+    });
+    const headings = [...document.querySelectorAll("h1,h2,h3")].filter(visible).map((el) => {
+      const style = getComputedStyle(el);
+      return { level: el.tagName, label: label(el), fontSize: style.fontSize, lineHeight: style.lineHeight, margin: [style.marginTop, style.marginBottom] };
+    });
+    const verticalGaps = [];
+    for (const parent of [...document.querySelectorAll("main, main > *, [role='main'], [role='main'] > *")].filter(visible)) {
+      const children = [...parent.children].filter(visible).map((el) => ({ el, rect: el.getBoundingClientRect() })).sort((a, b) => a.rect.top - b.rect.top);
+      for (let i = 1; i < children.length; i += 1) {
+        const gap = Math.round((children[i].rect.top - children[i - 1].rect.bottom) * 10) / 10;
+        if (gap > 0 && gap <= 96) verticalGaps.push({ parent: label(parent), from: label(children[i - 1].el), to: label(children[i].el), gap });
+      }
+    }
+    return {
+      viewport: { width: innerWidth, height: innerHeight },
+      distinctSpacingValues: [...counts.keys()].sort((a, b) => a - b),
+      spacingFrequency: [...counts.entries()].sort((a, b) => a[0] - b[0]).map(([value, count]) => ({ value, count })),
+      headings,
+      boxes,
+      verticalGaps: verticalGaps.slice(0, 80),
+    };
+  });
+}
+
 async function tabOrder(page, n) {
   const out = [];
   await page.evaluate(() => document.activeElement?.blur());
@@ -172,7 +243,7 @@ async function tabOrder(page, n) {
 for (const s of SCREENS) {
   if (ONLY && !ONLY.includes(s.id)) continue;
   for (const [w, h] of VIEWPORTS) {
-    for (const theme of ["light", "dark"]) {
+    for (const theme of SPACING_ONLY ? ["light"] : ["light", "dark"]) {
       test(`${FLAG} ${s.id} ${w} ${theme}`, async ({ page }) => {
         test.setTimeout(60_000);
         await page.setViewportSize({ width: w, height: h });
@@ -197,6 +268,12 @@ for (const s of SCREENS) {
         if (s.expect) await page.locator(s.expect).first().waitFor({ state: "visible", timeout: 5000 });
         await page.waitForTimeout(700);
         const base = `${s.id}__${w}__${theme}${FLAG === "flagon" ? "__flagon" : ""}`;
+        if (SPACING_ONLY) {
+          const measured = await spacingInventory(page);
+          mkdirSync(`${OUT}/spacing`, { recursive: true });
+          writeFileSync(`${OUT}/spacing/${base}.json`, JSON.stringify(measured, null, 1));
+          return;
+        }
         mkdirSync(`${OUT}/screens`, { recursive: true });
         await page.screenshot({ path: `${OUT}/screens/${base}.jpg`, type: "jpeg", quality: 55 });
         if (theme === "light" && (w === 390 || w === 1440)) {
