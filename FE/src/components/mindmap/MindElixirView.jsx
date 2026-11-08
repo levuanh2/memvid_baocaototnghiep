@@ -1255,7 +1255,7 @@ export default function MindElixirView({ data, onRegenerate, regenerating, contr
       {degraded && (
         <div className="hidden px-3 py-1.5 text-small flex items-center gap-2 border-b"
           style={{ color: "var(--warn)", borderColor: "var(--border-color)", background: "var(--bg-elevated)" }}>
-          <span>Bản đồ chưa đầy đủ{missing.length ? ` (thiếu: ${missing.join(", ")})` : ""}.</span>
+          <span>Sơ đồ tư duy chưa đầy đủ{missing.length ? ` (thiếu: ${missing.join(", ")})` : ""}.</span>
           {!generating && (
             <button onClick={onRegenerate} disabled={regenerating} className="underline">
               {regenerating ? "Đang tạo lại…" : "Tạo lại"}

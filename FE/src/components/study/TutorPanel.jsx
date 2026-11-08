@@ -28,7 +28,7 @@ function DongNguCanh({ icon, nhan, giaTri }) {
  * - `askDirect(text)`: gửi một câu hỏi THẲNG vào ô chat đang mở — CHÍNH LÀ
  *   `setAskAboutDraft` của MainLayout, bộ phát DUY NHẤT mà Câu hỏi gợi ý/"Hỏi
  *   về đoạn này" đã dùng từ Phase 4A.3 (Step 6: một bộ phát, không tạo thêm).
- * - `openArtifact(tab)`: chuyển tab "Sơ đồ"/"Tóm tắt" ở cột Lề bằng chứng —
+ * - `openArtifact(tab)`: chuyển tab "Sơ đồ tư duy"/"Tóm tắt" ở cột Lề bằng chứng —
  *   tái dùng đúng cơ chế tạo/xem đã có, không thêm route (xem tutorActions.js).
  */
 export default function TutorPanel({ askDirect, openArtifact, memory }) {
