@@ -4,7 +4,7 @@ import { hangDoiOnTap, taiLieuDaOnXong } from "./reviewQueue";
 const doc = (id, mastery) => ({ document_id: id, knowledge: { readiness: { mastery } } });
 
 describe("hangDoiOnTap", () => {
-  it("mastery thấp → Hôm nay, trung bình → Ngày mai, cao → Sau", () => {
+  it("mastery thấp → Ôn ngay, trung bình → Ôn sớm, cao → Ôn sau", () => {
     const q = hangDoiOnTap([doc("a", 10), doc("b", 55), doc("c", 90)]);
     expect(q.homNay.map((d) => d.document_id)).toEqual(["a"]);
     expect(q.ngayMai.map((d) => d.document_id)).toEqual(["b"]);
@@ -16,7 +16,7 @@ describe("hangDoiOnTap", () => {
     expect(q.homNay.map((d) => d.document_id)).toEqual(["b", "a"]);
   });
 
-  it("thiếu mastery → coi như 0 (Hôm nay), không lỗi", () => {
+  it("thiếu mastery → coi như 0 (Ôn ngay), không lỗi", () => {
     const q = hangDoiOnTap([{ document_id: "x", knowledge: {} }]);
     expect(q.homNay.map((d) => d.document_id)).toEqual(["x"]);
   });

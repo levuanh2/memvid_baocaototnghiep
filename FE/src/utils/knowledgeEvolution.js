@@ -26,7 +26,7 @@ export const KIND_META = {
   topic: { icon: "Tag", label: "Chủ đề" },
   entity: { icon: "BookOpen", label: "Thực thể" },
   summary: { icon: "ScrollText", label: "Tóm tắt" },
-  node: { icon: "Network", label: "Sơ đồ" },
+  node: { icon: "Network", label: "Sơ đồ tư duy" },
   question: { icon: "MessageCircleQuestion", label: "Câu hỏi" },
   evidence: { icon: "Quote", label: "Bằng chứng" },
 };
@@ -100,7 +100,7 @@ export function canJumpEntry(entry, { canJumpNode } = {}) {
   if (entry.kind === "node") {
     return canJumpNode?.(entry.id)
       ? { kha_thi: true }
-      : { kha_thi: false, ly_do: "Không còn trong sơ đồ đang mở (đã đổi tài liệu, sơ đồ đã dựng lại, hoặc mục này đến từ StudyMap — StudyMap không có trong khung Trò chuyện)" };
+      : { kha_thi: false, ly_do: "Không còn trong sơ đồ đang mở (đã đổi tài liệu, sơ đồ đã dựng lại, hoặc mục này đến từ Bản đồ kiến thức — Bản đồ kiến thức không có trong khung Trò chuyện)" };
   }
   return { kha_thi: false, ly_do: "Chưa có điểm để nhảy tới cho loại mục này" };
 }

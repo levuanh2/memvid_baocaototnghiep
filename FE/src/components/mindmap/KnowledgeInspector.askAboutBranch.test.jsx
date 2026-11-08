@@ -55,5 +55,8 @@ describe("KnowledgeInspector 'Hỏi về nhánh này' CTA (round 10)", () => {
     await act(async () => { cta.dispatchEvent(new MouseEvent("click", { bubbles: true, cancelable: true })); });
     expect(onAskAI).toHaveBeenCalledTimes(1);
     expect(onAskAI.mock.calls[0][0]).toContain("Truy hồi có dẫn chứng");
+
+    // V4.1 W3-2 (D25): the CTA is the only "ask about this node" control.
+    expect(Array.from(container.querySelectorAll("button")).some((b) => b.textContent.includes("Hỏi AI về khái niệm này"))).toBe(false);
   });
 });

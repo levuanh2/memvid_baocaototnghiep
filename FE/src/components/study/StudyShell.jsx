@@ -23,14 +23,22 @@ export default function StudyShell({
   children,
   width = "max-w-[980px]",
   skeleton = null,
+  stackActionsOnMobile = false,
 }) {
+  const headerLayout = stackActionsOnMobile
+    ? "flex flex-wrap items-center gap-x-4 gap-y-3 md:flex-nowrap md:gap-4"
+    : "flex items-center gap-4";
+  const actionsLayout = stackActionsOnMobile
+    ? "flex w-full flex-col items-stretch gap-2 md:w-auto md:flex-row md:items-center"
+    : "flex items-center gap-2";
+
   return (
     <div className="min-h-screen overflow-y-auto" style={{ background: "var(--bg-base)" }}>
       <header
         className="sticky top-0 z-20 border-b transition-theme"
         style={{ background: "var(--bg-sidebar)", borderColor: "var(--border-color)" }}
       >
-        <div className={`${width} mx-auto px-5 py-3 flex items-center gap-4`}>
+        <div className={`${width} mx-auto px-5 py-3 ${headerLayout}`}>
           {backTo && (
             <Link
               to={backTo}
@@ -47,7 +55,7 @@ export default function StudyShell({
               {title}
             </h1>
           </div>
-          <div className="flex items-center gap-2 shrink-0">{actions}</div>
+          <div className={`${actionsLayout} shrink-0`}>{actions}</div>
         </div>
         {/* Phase 4B #8: chỉ hiện khi Study Context thật sự có lựa chọn — trang
             KHÔNG liên quan (chưa từng qua moBeMat) không tự vẽ ra một chặng giả. */}
