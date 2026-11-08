@@ -1,0 +1,134 @@
+{
+ "viewport": {
+  "width": 390,
+  "height": 844
+ },
+ "distinctSpacingValues": [
+  1,
+  2,
+  4,
+  5,
+  6,
+  7,
+  8,
+  10,
+  11,
+  12,
+  14,
+  16,
+  20,
+  24,
+  28,
+  48,
+  64
+ ],
+ "spacingFrequency": [
+  {
+   "value": 1,
+   "count": 2
+  },
+  {
+   "value": 2,
+   "count": 20
+  },
+  {
+   "value": 4,
+   "count": 12
+  },
+  {
+   "value": 5,
+   "count": 2
+  },
+  {
+   "value": 6,
+   "count": 36
+  },
+  {
+   "value": 7,
+   "count": 3
+  },
+  {
+   "value": 8,
+   "count": 32
+  },
+  {
+   "value": 10,
+   "count": 34
+  },
+  {
+   "value": 11,
+   "count": 2
+  },
+  {
+   "value": 12,
+   "count": 32
+  },
+  {
+   "value": 14,
+   "count": 2
+  },
+  {
+   "value": 16,
+   "count": 6
+  },
+  {
+   "value": 20,
+   "count": 4
+  },
+  {
+   "value": 24,
+   "count": 3
+  },
+  {
+   "value": 28,
+   "count": 2
+  },
+  {
+   "value": 48,
+   "count": 1
+  },
+  {
+   "value": 64,
+   "count": 1
+  }
+ ],
+ "headings": [
+  {
+   "level": "H1",
+   "label": "Hỏi tài liệu của bạn — kèm dẫn chứng.",
+   "fontSize": "26px",
+   "lineHeight": "31.2px",
+   "margin": [
+    "0px",
+    "12px"
+   ]
+  }
+ ],
+ "boxes": [
+  {
+   "element": "svg.[object.SVGAnimatedString]",
+   "label": "[object SVGAnimatedString]",
+   "x": 258,
+   "y": 72,
+   "width": 16,
+   "height": 16,
+   "padding": [
+    "0px",
+    "0px",
+    "0px",
+    "0px"
+   ],
+   "margin": [
+    "0px",
+    "0px",
+    "0px",
+    "0px"
+   ],
+   "gap": [
+    "normal",
+    "normal"
+   ]
+  }
+ ],
+ "verticalGaps": []
+}
