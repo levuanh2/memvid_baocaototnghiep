@@ -60,7 +60,7 @@ const NHOM_LOC = [
   ["Định dạng", [["pdf", "PDF"], ["docx", "DOCX"], ["txt", "TXT"], ["image", "Ảnh"]]],
   ["Xử lý", [["completed", "Hoàn tất"], ["processing", "Đang xử lý"], ["failed", "Lỗi"]]],
   ["Đã có AI", [["summary_ready", "Tóm tắt"], ["mindmap_ready", "Sơ đồ tư duy"],
-                ["studymap_ready", "Bản đồ học tập"], ["quiz_ready", "Quiz"],
+                ["studymap_ready", "Bản đồ kiến thức"], ["quiz_ready", "Quiz"],
                 ["review_ready", "Ôn tập"]]],
 ];
 
@@ -515,7 +515,7 @@ export default function DocumentList() {
             accept=".bmp,.csv,.doc,.docx,.epub,.fb2,.gif,.htm,.html,.jpeg,.jpg,.json,.md,.mobi,.odp,.odt,.pdf,.png,.pptx,.rtf,.txt,.xlsx,.xps" />
           <button type="button" className="btn-seal text-small inline-flex items-center gap-2"
             disabled={uploading} onClick={() => fileRef.current?.click()}>
-            {uploading ? <><Spinner size={13} /> Đang tải lên…</> : <><Icon name="Upload" size={14} /> Tải tài liệu</>}
+            {uploading ? <><Spinner size={13} /> Đang tải lên…</> : <><Icon name="Upload" size={14} /> Tải tài liệu lên</>}
           </button>
           {/* Demo Mode — chỉ hiện khi có tài liệu THẬT đủ sẵn sàng; không có thì
               không vẽ nút, không hứa một bản xem thử không tồn tại. */}

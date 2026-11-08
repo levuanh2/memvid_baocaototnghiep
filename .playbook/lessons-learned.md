@@ -1,15 +1,12 @@
 # Lessons Learned
 
-## A flexible title can hide a header overflow bug instead of causing scroll (2026-11-04)
+## Nested keyboard widgets must contain parent-owned key events (2026-11-04)
 
-- In a non-wrapping header, fixed-width actions can shrink a `min-w-0` title to
-  zero while the document still reports no horizontal scrollbar. Test the title's
-  own visibility and `scrollWidth <= clientWidth`, not only page overflow.
-- Dense page-specific actions should opt into a mobile composition rather than
-  globally changing a shared shell. Restore the exact desktop flex contract at
-  the named breakpoint and measure both sides.
-- For unequal-height buttons in an `items-center` row, compare vertical centers;
-  equal top coordinates are not the layout contract.
+- ARIA roles alone do not make a popup keyboard-operable: opening must move focus
+  into it, arrow keys must move between items, and Escape must restore the trigger.
+- When a popup sits inside a parent with its own keyboard contract, contain its key
+  events at the popup/trigger boundary so one key cannot perform both actions.
+- Protect both layers with a focused unit test and a real-browser keyboard fixture.
 
 ## Programmatic focus needs a visible style independent of input modality (2026-10-28)
 

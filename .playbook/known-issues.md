@@ -1,23 +1,22 @@
 # Known Issues
 
-## Library header actions erased its title on phones (fixed 2026-11-04)
+## Library action rows overflowed their real content column (fixed 2026-11-04)
 
-**Symptom:** at 320px and 390px the Library header kept its back link, title,
-upload action, and demo action on one non-wrapping row. The fixed-width actions
-consumed the row, collapsing the flexible title to zero and clipping the demo
-action beyond the viewport.
+**Symptom:** with the Action Matrix flag enabled, the 1440px Library page put
+the “Thêm” control beyond the document-row border, while the primary action’s
+arrow and label wrapped onto separate lines.
 
-**Root cause:** `StudyShell` had one desktop flex contract for every width and no
-page-scoped way to stack a dense action set. `min-w-0` allowed the title to absorb
-the entire space deficit, so document-level overflow alone did not explain the
-missing heading.
+**Root cause:** the row grid reserved an 800px minimum footprint, but the real
+StudyShell composition leaves 706px after the 210px collection sidebar and
+24px gap. The fixture previously gave the matrix the full 1180px harness width,
+so its horizontal-overflow check never exercised the production composition.
 
-**Fix and prevention:** Library opts into a mobile-only stacked action layout:
-the back link and title retain the first row, while upload and demo actions each
-receive a full-width row below. The original single-row layout resumes at 768px.
-`FE/e2e-fixture/library-header-responsive.spec.js` measures title and button
-containment, title truncation, action rows, and horizontal scroll at 320, 390,
-768, and 1440 pixels.
+**Fix and prevention:** the desktop/tablet grid now lets identity and progress
+tracks shrink, budgets explicit widths for primary/quick/tools controls, and
+keeps the primary action in a single inline-flex row. Chromium tests reproduce
+the real 706px desktop column and the 320/390/768/1024/1440 viewport widths;
+they assert every control remains inside its row, the primary action stays at
+one-line height, and its longest real label does not overflow its content box.
 
 ## Successful CI workflow could deploy a different, newer main commit (fixed 2026-11-02)
 
