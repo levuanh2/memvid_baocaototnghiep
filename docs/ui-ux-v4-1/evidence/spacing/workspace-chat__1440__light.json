@@ -1,0 +1,114 @@
+{
+ "viewport": {
+  "width": 1440,
+  "height": 900
+ },
+ "distinctSpacingValues": [
+  2,
+  4,
+  5,
+  6,
+  7,
+  8,
+  9,
+  10,
+  12,
+  14,
+  16,
+  20,
+  24,
+  28,
+  29,
+  32,
+  48,
+  64
+ ],
+ "spacingFrequency": [
+  {
+   "value": 2,
+   "count": 16
+  },
+  {
+   "value": 4,
+   "count": 26
+  },
+  {
+   "value": 5,
+   "count": 2
+  },
+  {
+   "value": 6,
+   "count": 41
+  },
+  {
+   "value": 7,
+   "count": 3
+  },
+  {
+   "value": 8,
+   "count": 30
+  },
+  {
+   "value": 9,
+   "count": 2
+  },
+  {
+   "value": 10,
+   "count": 32
+  },
+  {
+   "value": 12,
+   "count": 41
+  },
+  {
+   "value": 14,
+   "count": 1
+  },
+  {
+   "value": 16,
+   "count": 9
+  },
+  {
+   "value": 20,
+   "count": 4
+  },
+  {
+   "value": 24,
+   "count": 7
+  },
+  {
+   "value": 28,
+   "count": 2
+  },
+  {
+   "value": 29,
+   "count": 2
+  },
+  {
+   "value": 32,
+   "count": 4
+  },
+  {
+   "value": 48,
+   "count": 1
+  },
+  {
+   "value": 64,
+   "count": 1
+  }
+ ],
+ "headings": [
+  {
+   "level": "H1",
+   "label": "Hỏi tài liệu của bạn — kèm dẫn chứng.",
+   "fontSize": "30px",
+   "lineHeight": "36px",
+   "margin": [
+    "0px",
+    "12px"
+   ]
+  }
+ ],
+ "boxes": [],
+ "verticalGaps": []
+}

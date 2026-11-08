@@ -98,6 +98,14 @@ describe("MindElixirView branch toggle (Round 8 redesign)", () => {
     expect(items.some((t) => t.includes("Mở toàn bộ"))).toBe(true);
   });
 
+  it("V4.1 W3-2 (D16): save has exactly one control, the overflow 'Lưu sơ đồ'", async () => {
+    await render(makeController(null));
+    await act(async () => { container.querySelector(".mm-overflow-trigger").click(); });
+    const saves = [...container.querySelectorAll("button")].filter((b) => /^(Lưu|Đang lưu…)$/.test(b.textContent.trim()) || b.getAttribute("aria-label") === "Lưu sơ đồ" || b.textContent.includes("Lưu sơ đồ"));
+    expect(saves).toHaveLength(1);
+    expect(saves[0].getAttribute("role")).toBe("menuitem");
+  });
+
   it("'Mở toàn bộ' targets the map root regardless of the current selection, and does not call scaleFit", async () => {
     let mind = null;
     await render(makeController({ id: "i1" }, (m) => { mind = m; }));

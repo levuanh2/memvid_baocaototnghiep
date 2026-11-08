@@ -46,6 +46,21 @@ export default function MainLayout({
   requestedWorkspaceMode,
 }) {
   const [sources, setSources] = useState([]);
+  // W1-4: the centre empty states (Chat/Mind Map/Summary) have no file input
+  // or upload POST logic of their own, by design -- reuse SidebarLeft's,
+  // reached here via the registration callback it calls back with (see its
+  // own `onUploadReady` comment). A ref, not state: this is a function
+  // reference, never rendered. A pending intent bridges the desktop-collapsed
+  // state where SidebarLeft is intentionally unmounted in favor of PanelSpine.
+  const uploadTriggerRef = useRef(null);
+  const pendingUploadIntentRef = useRef(false);
+  const registerUploadTrigger = useCallback((fn) => {
+    uploadTriggerRef.current = fn;
+    if (fn && pendingUploadIntentRef.current) {
+      pendingUploadIntentRef.current = false;
+      fn();
+    }
+  }, []);
   const [leftOpen, setLeftOpen] = useState(false);   // chỉ dùng ở chế độ ngăn kéo (<768px)
   const [rightOpen, setRightOpen] = useState(false);
   const [viewportWidth, setViewportWidth] = useState(() => (
@@ -53,12 +68,13 @@ export default function MainLayout({
   ));
   // Từ 768px trở lên hai cột nới được và thu về gáy sách được; trạng thái nhớ qua phiên.
   const panel = usePanelLayout();
+  const { drawer: panelDrawer, setCollapsedFor: setPanelCollapsed } = panel;
   useEffect(() => {
     const onResize = () => setViewportWidth(window.innerWidth);
     window.addEventListener("resize", onResize);
     return () => window.removeEventListener("resize", onResize);
   }, []);
-  const tabletSourceRail = !panel.drawer && viewportWidth < 1280;
+  const tabletSourceRail = !panelDrawer && viewportWidth < 1280;
   const { isDark, setLight, setDark, toggleTheme } = useTheme();
   const { user, logout } = useAuth();
   // `selectedDocument` (Study Context's single-document pointer) used to
@@ -104,6 +120,16 @@ export default function MainLayout({
     // must not leave an unintended shelf overlay covering controls."
     setTabletShelfOpen(false);
   }, [tabletSourceRail, workspaceMode]);
+  const triggerUpload = useCallback(() => {
+    if (uploadTriggerRef.current) {
+      uploadTriggerRef.current();
+      return;
+    }
+    pendingUploadIntentRef.current = true;
+    if (panelDrawer) setLeftOpen(true);
+    else if (tabletSourceRail) setTabletShelfOpen(true);
+    else setPanelCollapsed("left", false);
+  }, [panelDrawer, setPanelCollapsed, tabletSourceRail]);
   const [mindmapData, setMindmapData] = useState(null);   // { data, onRegenerate, regenerating } | null
   const [summaryData, setSummaryData] = useState(null);   // summary record | null
   const [summaryContext, setSummaryContext] = useState(null);
@@ -173,8 +199,6 @@ export default function MainLayout({
       .catch((error) => { if (error.name !== "AbortError") setMindMapBackendContext(null); });
     return () => controller.abort();
   }, [mindmapData?.data?.id, mmSelected?.id]);
-  const { drawer: panelDrawer, setCollapsedFor: setPanelCollapsed } = panel;
-
   // The one close path for the right panel (X, backdrop, Escape). Closing the
   // Mind Map node detail -- desktop overlay or mobile bottom sheet -- also clears
   // the contextual selection, so the same node can be tapped again and the closed
@@ -638,10 +662,10 @@ export default function MainLayout({
           {/* Mobile: one workspace-tools owner. Its menu also carries the actions
               that used to be separate phone buttons (source library, inspector). */}
           <div className="relative">
-            <button type="button" ref={studyToolsTriggerRef} className="study-tools-trigger" aria-label="Mở công cụ StudyMap"
+            <button type="button" ref={studyToolsTriggerRef} className="study-tools-trigger" aria-label="Mở công cụ học"
               onClick={() => setHeaderSurface((current) => current === "study-tools" ? null : "study-tools")}
               aria-haspopup="menu" aria-expanded={headerSurface === "study-tools"}>
-              <span>StudyMap</span><Icon name="ChevronDown" size={14} />
+              <span>Công cụ học</span><Icon name="ChevronDown" size={14} />
             </button>
             <StudyToolsMenu open={headerSurface === "study-tools"} onClose={closeHeaderSurface} onSelect={openStudyTool}
               triggerRef={studyToolsTriggerRef}
@@ -757,6 +781,7 @@ export default function MainLayout({
               onTransientSurfaceOpen={closeHeaderSurface}
               collapsible
               railMode={!tabletShelfOpen}
+              onUploadReady={registerUploadTrigger}
             />
             {/* Resize handle for the expanded overlay only — reuses the same
                 PanelDivider/usePanelLayout drag+keyboard contract as the
@@ -810,6 +835,7 @@ export default function MainLayout({
                 onClose={() => (panel.drawer ? setLeftOpen(false) : panel.setCollapsedFor("left", true))}
                 onTransientSurfaceOpen={closeHeaderSurface}
                 collapsible={!panel.drawer}
+                onUploadReady={registerUploadTrigger}
               />
             </aside>
             {!panel.drawer && (
@@ -846,7 +872,16 @@ export default function MainLayout({
               isLeftVisible: tabletSourceRail || (!panel.drawer && !panel.collapsed.left),
               askAboutDraft,
               hasSummary: Boolean(summaryData), onOpenSummary: onSwitchToSummary,
+              onUploadDocument: triggerUpload,
             }}
+            // `sources` (MainLayout's own state, populated only once SidebarLeft
+            // reports its fetch via `onSourcesChange`) can briefly/artificially lag
+            // behind `selectedSources` (e.g. a test that drives selection directly,
+            // or a `?source=` deep link resolving before the library fetch lands)
+            // -- a real selection is itself proof the library isn't empty, so
+            // either signal being non-empty is enough.
+            hasAnyDocuments={sources.length > 0 || selectedSources.length > 0}
+            onUploadDocument={triggerUpload}
             mindmapData={mindmapData}
             mindmapInitialLoading={libraries.mindMapInitialLoading}
             mindmapLoadError={libraries.mindMapLoadError}
