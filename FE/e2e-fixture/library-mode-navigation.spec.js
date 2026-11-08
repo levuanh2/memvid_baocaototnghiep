@@ -53,7 +53,7 @@ test("Library 'Hỏi AI' stays in Chat", async ({ page }) => {
 
 test("Library knowledge-map action keeps its own document route", async ({ page }) => {
   await openLibrary(page);
-  await page.getByRole("button", { name: /^Sơ đồ$/ }).first().click();
+  await page.getByRole("button", { name: /^Bản đồ kiến thức$/ }).first().click();
   await expect(page).toHaveURL(/\/app\/study\/map\/d1$/);
 });
 

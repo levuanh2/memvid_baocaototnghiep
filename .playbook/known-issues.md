@@ -1,17 +1,22 @@
 # Known Issues
 
-## Library card overflow menu leaked keys to card navigation (fixed 2026-11-04)
+## Library action rows overflowed their real content column (fixed 2026-11-04)
 
-`StudyCard` rendered its overflow popup without menu semantics, focus transfer,
-arrow navigation, or Escape focus restoration. Because the card owns a
-roving-tabindex key handler, menu keystrokes also bubbled into document navigation.
+**Symptom:** with the Action Matrix flag enabled, the 1440px Library page put
+the “Thêm” control beyond the document-row border, while the primary action’s
+arrow and label wrapped onto separate lines.
 
-The trigger now exposes `aria-haspopup="menu"` and live `aria-expanded`; the popup
-and items expose `menu`/`menuitem` roles. Opening focuses the first item,
-ArrowUp/ArrowDown wrap through items, and Escape closes and returns focus to the
-trigger. Menu key events stop before the unchanged card-level roving handler.
-Regression coverage lives in `FE/src/components/study/StudyCard.menu.test.jsx`
-and `FE/e2e-fixture/library-mode-navigation.spec.js`.
+**Root cause:** the row grid reserved an 800px minimum footprint, but the real
+StudyShell composition leaves 706px after the 210px collection sidebar and
+24px gap. The fixture previously gave the matrix the full 1180px harness width,
+so its horizontal-overflow check never exercised the production composition.
+
+**Fix and prevention:** the desktop/tablet grid now lets identity and progress
+tracks shrink, budgets explicit widths for primary/quick/tools controls, and
+keeps the primary action in a single inline-flex row. Chromium tests reproduce
+the real 706px desktop column and the 320/390/768/1024/1440 viewport widths;
+they assert every control remains inside its row, the primary action stays at
+one-line height, and its longest real label does not overflow its content box.
 
 ## Successful CI workflow could deploy a different, newer main commit (fixed 2026-11-02)
 

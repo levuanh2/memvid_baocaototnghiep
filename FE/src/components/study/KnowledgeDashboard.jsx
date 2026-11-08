@@ -349,7 +349,7 @@ export default function KnowledgeDashboard({
           {/* Knowledge Graph Overlay + Heatmap — mục 2 + 4. Chỉ có ý nghĩa khi
               một sơ đồ tư duy đang mở — không sơ đồ thì không có "toàn bộ node"
               để so, nói rõ thay vì hiện rỗng khó hiểu. */}
-          <Section title="Sơ đồ tri thức" count={hasMindmap ? allNodes.length : null}>
+          <Section title="Sơ đồ tư duy" count={hasMindmap ? allNodes.length : null}>
             {!hasMindmap ? (
               <p className="text-small text-text-muted italic py-1">
                 Chưa có sơ đồ tư duy nào để đối chiếu — mở "Sơ đồ tư duy" trước.
@@ -437,7 +437,7 @@ export default function KnowledgeDashboard({
                   <div className="text-caption text-text-muted mb-1">Chưa từng mở ({heatmap.never.length})</div>
                   {heatmap.never.length === 0 ? EMPTY : (
                     <p className="text-caption text-text-muted">
-                      Xem danh sách ở mục "Sơ đồ tri thức" phía trên.
+                      Xem danh sách ở mục "Sơ đồ tư duy" phía trên.
                     </p>
                   )}
                 </div>

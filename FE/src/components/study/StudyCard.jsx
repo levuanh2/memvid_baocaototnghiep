@@ -148,7 +148,7 @@ export default function StudyCard({
 
   const hanhDong = [
     { khoa: "summary", nhan: "Tóm tắt", icon: "ScrollText" },
-    { khoa: "studymap", nhan: "Sơ đồ", icon: "Network" },
+    { khoa: "studymap", nhan: "Bản đồ kiến thức", icon: "Network" },
     { khoa: "quiz", nhan: "Quiz", icon: "BadgeCheck" },
     { khoa: "review", nhan: "Ôn tập", icon: "BookOpen" },
     { khoa: "chat", nhan: "Hỏi AI", icon: "MessageSquare" },
