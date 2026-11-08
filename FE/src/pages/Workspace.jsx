@@ -1,5 +1,5 @@
 import { useEffect, useState } from "react";
-import { useSearchParams } from "react-router-dom";
+import { useLocation, useSearchParams } from "react-router-dom";
 import MainLayout from "../components/Layout/MainLayout";
 import { resolveInitialTab, resolveInitialRightView } from "../utils/workspaceInit";
 import { setWorkspaceSources } from "../utils/workspaceSourcesBus";
@@ -15,6 +15,8 @@ import { setWorkspaceSources } from "../utils/workspaceSourcesBus";
 // Không có tham số → [] , đúng hành vi cũ.
 export default function Workspace() {
   const [searchParams] = useSearchParams();
+  const location = useLocation();
+  const sourceParam = (searchParams.get("source") || "").trim();
   const [selectedSources, setSelectedSources] = useState(() => {
     const stem = (searchParams.get("source") || "").trim();
     return stem ? [stem] : [];
@@ -39,6 +41,13 @@ export default function Workspace() {
   // "workspace" search scope (see utils/workspaceSourcesBus.js for why a plain
   // module mirror, not a StudyContext lift). Cleared on unmount so a stale
   // selection never leaks into a later session (e.g. after logout/back to `/`).
+  // V4.1 W3-1: a palette/Library action that stays on /app keeps this mounted,
+  // so a NEW `?source=` must still select its document. Runs only when the
+  // param value changes (user clicks never touch the URL, so no fight).
+  // ponytail: same stem twice in a row is a no-op; add a nonce if that matters.
+  useEffect(() => {
+    if (sourceParam) setSelectedSources([sourceParam]);
+  }, [sourceParam]);
   useEffect(() => {
     setWorkspaceSources(selectedSources);
     return () => setWorkspaceSources([]);
@@ -51,6 +60,7 @@ export default function Workspace() {
       initialWorkspaceMode={initialWorkspaceMode}
       requestedWorkspaceMode={resolveInitialTab(searchParams.get("tab"))}
       initialRightView={initialRightView}
+      tutorRequest={location.state?.openTutor}
     />
   );
 }

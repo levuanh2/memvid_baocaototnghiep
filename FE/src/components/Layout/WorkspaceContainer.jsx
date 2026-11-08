@@ -37,6 +37,10 @@ export default function WorkspaceContainer({
   // P2 fix: generation-in-progress/failed status for the no-map-yet case —
   // WorkspaceEmptyState has no other way to know a job is running.
   mindmapCreating, mindmapJobLabel, mindmapJobProgress, mindmapJobError, onRetryMindmap,
+  // W1-4: whether the library has ANY document at all (not just whether one
+  // is selected) and the upload trigger, both computed/owned by MainLayout
+  // — see its own comment on `uploadTriggerRef` and `hasAnyDocuments`.
+  hasAnyDocuments = true, onUploadDocument,
 }) {
   const hasMindmap = Boolean(mindmapData?.data);
   const hasSummary = Boolean(summaryData);
@@ -60,6 +64,8 @@ export default function WorkspaceContainer({
           <WorkspaceEmptyState
             kind="mindmap"
             selectedCount={selectedSources.length}
+            hasAnyDocuments={hasAnyDocuments}
+            onUpload={onUploadDocument}
             onCreate={onMindmapAction}
             loading={mindmapInitialLoading}
             error={mindmapLoadError}
@@ -81,7 +87,8 @@ export default function WorkspaceContainer({
                 creating={summaryLibrary.creating} canCreate={selectedSources.length > 0} compact />
             )} />
         ) : (
-          <WorkspaceEmptyState kind="summary" selectedCount={selectedSources.length} onCreate={onSummaryAction}
+          <WorkspaceEmptyState kind="summary" selectedCount={selectedSources.length}
+            hasAnyDocuments={hasAnyDocuments} onUpload={onUploadDocument} onCreate={onSummaryAction}
             creating={summaryLibrary?.creating} jobLabel={summaryLibrary?.jobLabel}>
             {summaryLibrary?.items?.length > 0 && (
               <div className="mt-2 flex flex-col items-center gap-1.5">
