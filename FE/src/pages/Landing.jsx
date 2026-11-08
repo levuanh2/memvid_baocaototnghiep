@@ -102,7 +102,7 @@ export default function Landing() {
             {/* Same wordmark seal as MainLayout.jsx — stays --seal (Signature Contract §7). */}
             <span className="w-[30px] h-[30px] rounded-[6px] inline-flex items-center justify-center font-display text-body-lg font-semibold"
               style={{ color: "var(--seal)", border: "1.5px solid var(--seal)", transform: "rotate(-4deg)" }} aria-hidden>M</span>
-            <span className="font-display font-semibold text-title tracking-tight text-text-primary">MemVid<span className="text-seal">X</span></span>
+            <span className="font-display font-semibold text-title tracking-tight text-text-primary">Study<span className="text-seal">Map</span></span>
           </div>
           <div className="flex-1" />
           <button onClick={() => scrollTo("tinhnang")} className="hidden md:inline text-body text-text-secondary hover:text-accent transition-theme">Tính năng</button>
@@ -170,7 +170,7 @@ export default function Landing() {
 
       {/* ── SOLUTION ── */}
       <section className="max-w-[1080px] mx-auto px-5 sm:px-8 py-14">
-        <h2 className="font-display text-h1 font-semibold text-text-primary mb-2">MemVidX làm gì cho bạn</h2>
+        <h2 className="font-display text-h1 font-semibold text-text-primary mb-2">StudyMap làm gì cho bạn</h2>
         <p className="text-body text-text-secondary mb-8 max-w-[560px]">Một chỗ để đọc, hỏi, tóm tắt và ghi nhớ tài liệu — luôn bám nguồn.</p>
         <div className="grid sm:grid-cols-2 lg:grid-cols-5 gap-x-6 gap-y-10">
           {SOLUTIONS.map((s) => (
@@ -286,7 +286,7 @@ export default function Landing() {
       {/* ── FOOTER ── */}
       <footer className="border-t border-border" style={{ background: "var(--bg-sidebar)" }}>
         <div className="max-w-[1080px] mx-auto px-5 sm:px-8 py-8 flex flex-col sm:flex-row items-center justify-between gap-3">
-          <div className="font-display font-semibold text-body-lg text-text-primary">MemVid<span className="text-seal">X</span></div>
+          <div className="font-display font-semibold text-body-lg text-text-primary">Study<span className="text-seal">Map</span></div>
           <div className="text-small text-text-muted font-mono">Đọc · Truy hồi · Dẫn chứng</div>
         </div>
       </footer>
