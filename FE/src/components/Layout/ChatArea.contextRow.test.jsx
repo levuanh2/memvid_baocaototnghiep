@@ -2,8 +2,13 @@
 //
 // Round 12 (compact Chat context row, Part A). Regressions covered:
 // - exactly one visible "Chọn nguồn" action in the empty Chat state (the old
-//   blue goal banner + its own "Chọn tài liệu"/"Sửa" button, and the mobile
-//   "Mở thư mục nguồn" fallback that called the same onOpenLeft, are gone);
+//   blue goal banner + its own "Chọn tài liệu"/"Sửa" button are gone).
+//   W1-4 (audit 03) brought back a mobile-only "Mở thư mục nguồn" button
+//   inside the empty state, reusing the same `onOpenLeft` -- the header
+//   icon alone (asserted below) proved too easy to miss on a first-time
+//   empty phone screen. Not a regression of this round's own claim: that
+//   claim was about "Chọn nguồn" text + the old banner, not this button's
+//   text ("Mở thư mục nguồn"), which this file never searched for;
 // - the new compact context row's layout contract (h-12 = 48px, inside the
 //   44-48px target the spec names, every real control >=40x40px);
 // - the conversation title is a real, locally-editable label (not static
