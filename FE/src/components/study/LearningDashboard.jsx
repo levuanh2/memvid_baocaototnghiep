@@ -96,9 +96,9 @@ export default function LearningDashboard({ documents, overview, weak, attempts,
             <div>
               <TieuDeNho>Hàng đợi ôn tập</TieuDeNho>
               <div className="grid gap-2.5 sm:grid-cols-3">
-                <CotOnTap nhan="Hôm nay" docs={hangDoi.homNay} onMo={onMo} nhan_mau="var(--err)" />
-                <CotOnTap nhan="Ngày mai" docs={hangDoi.ngayMai} onMo={onMo} nhan_mau="var(--warn)" />
-                <CotOnTap nhan="Sau" docs={hangDoi.sau} onMo={onMo} nhan_mau="var(--text-muted)" />
+                <CotOnTap nhan="Ôn ngay" docs={hangDoi.homNay} onMo={onMo} nhan_mau="var(--err)" />
+                <CotOnTap nhan="Ôn sớm" docs={hangDoi.ngayMai} onMo={onMo} nhan_mau="var(--warn)" />
+                <CotOnTap nhan="Ôn sau" docs={hangDoi.sau} onMo={onMo} nhan_mau="var(--text-muted)" />
               </div>
             </div>
           )}
