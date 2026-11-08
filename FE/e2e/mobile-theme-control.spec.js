@@ -27,7 +27,7 @@ const DESKTOP = [
 ];
 
 async function openOverflow(page) {
-  await page.getByRole("button", { name: "Mở công cụ StudyMap" }).click();
+  await page.getByRole("button", { name: "Mở công cụ học" }).click();
   await expect(page.locator(".study-tools-menu")).toHaveCount(1);
 }
 

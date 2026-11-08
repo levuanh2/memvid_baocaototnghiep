@@ -30,7 +30,7 @@ const NOI_DUNG = {
     tieuDe: "Chưa có tài liệu nào",
     goiY: "Tải lên PDF, Word, PowerPoint, Excel, Markdown, EPUB hoặc ảnh chụp trang sách. "
       + "Mỗi tài liệu sẽ được lập chỉ mục để hỏi đáp, tóm tắt và tạo quiz.",
-    hanhDong: "Tải tài liệu",
+    hanhDong: "Tải tài liệu lên",
     khoaHanhDong: "tai_len",
   },
   [NGU_CANH.BO_LOC]: {
