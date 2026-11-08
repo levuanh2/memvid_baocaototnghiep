@@ -64,6 +64,9 @@ describe("StudyDocumentActionRow", () => {
     expect(container.querySelectorAll("[data-primary-action]")).toHaveLength(1);
     expect(container.querySelectorAll("[data-quick-action]")).toHaveLength(2);
     expect(container.querySelectorAll("[data-tools-trigger]")).toHaveLength(1);
+    // V4.1 W4-2: names a screen reader can tell apart per row.
+    expect(container.querySelector("[data-tools-trigger]").getAttribute("aria-label")).toMatch(/^Thêm thao tác · .+/);
+    expect(container.querySelector(".study-document-row__quick").getAttribute("role")).toBe("group");
     expect(container.querySelector("[data-primary-action]").textContent).toContain("Tạo tóm tắt");
     act(() => container.querySelector("[data-primary-action]").click());
     expect(onOpen).toHaveBeenCalledWith(expect.objectContaining({ document_id: "doc-2" }), "summary");
