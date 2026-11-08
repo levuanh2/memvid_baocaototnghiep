@@ -1,4 +1,4 @@
-import { useState, useEffect, useRef } from "react";
+import { useState, useEffect, useLayoutEffect, useRef, useCallback } from "react";
 import { apiFetch, _appError, isUnauthorizedError, isNotFoundOrForbiddenError, getUserFriendlyApiError } from "../../utils/api";
 import { Icon } from "../ui/Icon";
 import Badge from "../ui/Badge";
@@ -39,7 +39,7 @@ const getStatusConfig = (status, substatus, canQuery) => {
 
 const formatFileName = (name = "") => name.replace(/\.(mp4|avi|mov|mkv|webm|mp3|wav|pdf|txt|docx)$/i, "");
 
-export default function SidebarLeft({ selectedSources, setSelectedSources, onSourcesChange, onClose, collapsible = false, onTransientSurfaceOpen, railMode = false }) {
+export default function SidebarLeft({ selectedSources, setSelectedSources, onSourcesChange, onClose, collapsible = false, onTransientSurfaceOpen, railMode = false, onUploadReady }) {
   const [sources, setSources] = useState([]);
   // Round 9 fix: mirrors `sources` for `fetchSourcesFromBackend` below to read
   // as "the previous sources" WITHOUT depending on execution-order between
@@ -79,7 +79,30 @@ export default function SidebarLeft({ selectedSources, setSelectedSources, onSou
   const [draftFilters, setDraftFilters] = useState({ type: "", status: "", date: "" });
   const [appliedFilters, setAppliedFilters] = useState({ type: "", status: "", date: "" });
   const fileInputRef = useRef(null);
+  const fileChooserOpenRef = useRef(false);
   const pollersRef = useRef({});
+  const settleFileChooser = useCallback(() => {
+    fileChooserOpenRef.current = false;
+  }, []);
+  const registerFileInput = useCallback((node) => {
+    fileInputRef.current?.removeEventListener("cancel", settleFileChooser);
+    fileInputRef.current = node;
+    node?.addEventListener("cancel", settleFileChooser);
+  }, [settleFileChooser]);
+  const openFileChooser = useCallback(() => {
+    const input = fileInputRef.current;
+    if (!input || fileChooserOpenRef.current) return false;
+    fileChooserOpenRef.current = true;
+    input.click();
+    return true;
+  }, []);
+  // W1-4: lets a CENTRE empty state trigger this exact same hidden input.
+  // Layout cleanup clears the owner before an unmounted input can receive a
+  // click; registration can then consume one pending intent in MainLayout.
+  useLayoutEffect(() => {
+    onUploadReady?.(openFileChooser);
+    return () => onUploadReady?.(null);
+  }, [onUploadReady, openFileChooser]);
 
   // ── Polling ────────────────────────────────────────
   // Một cú 502 của gateway KHÔNG phải là ingest hỏng: logic chịu-lỗi nằm trong
@@ -217,6 +240,7 @@ export default function SidebarLeft({ selectedSources, setSelectedSources, onSou
 
   // ── Upload logic (unchanged) ───────────────────────
   const handleAddFiles = async (e) => {
+    settleFileChooser();
     const files = Array.from(e.target.files || []);
     if (!files.length) return;
     setUploading(true);
@@ -354,7 +378,7 @@ export default function SidebarLeft({ selectedSources, setSelectedSources, onSou
           title={uploading ? "Đang tải tài liệu" : "Tải tài liệu lên"}>
           {uploading ? <Spinner size={16} /> : <Icon name="Plus" size={17} />}
         </button>
-        <input ref={fileInputRef} type="file" multiple className="hidden" onChange={handleAddFiles} disabled={uploading} />
+        <input ref={registerFileInput} type="file" multiple className="hidden" onChange={handleAddFiles} disabled={uploading} />
       </div>
     );
   }
@@ -388,13 +412,13 @@ export default function SidebarLeft({ selectedSources, setSelectedSources, onSou
             earns its weight when the shelf is empty (it's the one thing to
             do); once there are sources, "add another" is a routine action
             that doesn't need to out-shout the shelf itself every visit. */}
-        <label className={["select-none w-full inline-flex items-center justify-center gap-2",
+        <button type="button" onClick={openFileChooser} disabled={uploading} className={["select-none w-full inline-flex items-center justify-center gap-2",
           uploading ? "btn-secondary cursor-not-allowed opacity-70"
             : sources.length > 0 ? "btn-secondary cursor-pointer"
             : "btn-primary cursor-pointer"].join(" ")}>
           {uploading ? (<><Spinner size={15} /> Đang tải lên…</>) : (<><Icon name="Plus" size={16} strokeWidth={2} /> Thêm tài liệu</>)}
-          <input ref={fileInputRef} type="file" multiple className="hidden" onChange={handleAddFiles} disabled={uploading} />
-        </label>
+        </button>
+        <input ref={registerFileInput} type="file" multiple className="hidden" onChange={handleAddFiles} disabled={uploading} />
 
         <div className="source-search-row">
           <Icon name="Search" size={14} className="text-text-muted flex-shrink-0" />
