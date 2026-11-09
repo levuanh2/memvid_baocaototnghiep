@@ -252,8 +252,34 @@ function SectionTitle({ children }) {
   );
 }
 
+// Owner decision after PR #137: count "Đúng / Đúng một phần / Sai" separately. The
+// backend puts a partial answer inside `incorrect_count` (grading.py `totals`), so
+// showing that number as "Sai" next to "75% điểm" told a learner with one correct and
+// one partial answer "Sai 1". The split is taken from the per-question verdicts the
+// result already carries, and only when they reproduce the backend's own totals;
+// otherwise it returns null and the caller shows a combined "Chưa đúng" (incorrect or
+// partial) counter rather than misclassifying anyone. Ungraded questions (no verdict)
+// stay out of all three and keep their own "Chưa chấm" counter.
+// eslint-disable-next-line react-refresh/only-export-components
+export function verdictBreakdown(result) {
+  const questions = Array.isArray(result?.questions) ? result.questions : null;
+  if (!questions || questions.length !== Number(result.total_questions)) return null;
+  const counts = { correct: 0, partial: 0, incorrect: 0 };
+  for (const question of questions) {
+    const verdict = question?.verdict;
+    if (verdict == null) continue;                  // not graded
+    if (!(verdict in counts)) return null;          // unknown value: do not guess
+    counts[verdict] += 1;
+  }
+  const consistent = counts.correct === Number(result.correct_count || 0)
+    && counts.partial + counts.incorrect === Number(result.incorrect_count || 0);
+  return consistent ? counts : null;
+}
+
 function ScoreBoard({ result, grading, provisional, ungradedCount, wrongCount, onReviewWrong }) {
   const percent = result.percentage;
+  const breakdown = verdictBreakdown(result);
+  const shown = (value) => (grading ? "—" : value ?? "—");
   const noGradedQuestions = provisional && Number(result.max_score || 0) === 0;
   const gradedCount = Number(result.correct_count || 0) + Number(result.incorrect_count || 0);
   const headline = grading
@@ -294,8 +320,18 @@ function ScoreBoard({ result, grading, provisional, ungradedCount, wrongCount, o
       </div>
 
       <div className="flex flex-wrap gap-x-7 gap-y-2 text-small">
-        <Stat label="Đúng" value={grading ? "—" : result.correct_count ?? "—"} />
-        <Stat label="Sai" value={grading ? "—" : result.incorrect_count ?? "—"} />
+        {breakdown ? (
+          <>
+            <Stat label="Đúng" value={shown(breakdown.correct)} />
+            {breakdown.partial > 0 && <Stat label="Đúng một phần" value={shown(breakdown.partial)} />}
+            <Stat label="Sai" value={shown(breakdown.incorrect)} />
+          </>
+        ) : (
+          <>
+            <Stat label="Đúng" value={shown(result.correct_count)} />
+            <Stat label="Chưa đúng" value={shown(result.incorrect_count)} />
+          </>
+        )}
         {provisional && <Stat label="Chưa chấm" value={ungradedCount} />}
         <Stat label="Số câu" value={result.total_questions} />
         <Stat label="Thời gian" value={formatDuration(result.duration_seconds)} />
@@ -326,9 +362,9 @@ function WrongAnswerReview({ questions, index, onIndex, onClose, reviewPlanTo })
 
 function Stat({ label, value }) {
   return (
-    <div>
-      <div className="font-mono text-metadata uppercase text-text-muted">{label}</div>
-      <div className="text-body-lg font-semibold text-text-primary mt-0.5">{value}</div>
+    <div data-score-stat>
+      <div className="font-mono text-metadata uppercase text-text-muted" data-score-stat-label>{label}</div>
+      <div className="text-body-lg font-semibold text-text-primary mt-0.5" data-score-stat-value>{value}</div>
     </div>
   );
 }

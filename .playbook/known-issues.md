@@ -7849,3 +7849,30 @@ dashboard average; each fails if its bug is reintroduced.
 **Open copy decision (owner):** the result page's "Đúng / Sai" counters come from
 `correct_count` / `incorrect_count`, and the backend counts a partial answer as
 incorrect, so a learner can see "Đúng 1 · Sai 1" next to "75% điểm".
+
+# Quiz Result showed a partial answer as "Sai" next to "% điểm" (fixed 2026-11-09, owner follow-up to PR #137)
+
+**Symptom:** with one correct and one partial answer the result page read
+"Đúng 1 · Sai 1 · 75% điểm". The percentage is right; the counter is not.
+
+**Root cause:** `ScoreBoard` displayed the backend's `incorrect_count` as "Sai", and
+`grading.py` `totals()` counts `partial` inside `incorrect_count` (only `correct` is
+counted separately). The page already received every question's `verdict` but did not
+use it for the counters.
+
+**Fix:** `verdictBreakdown(result)` counts `correct` / `partial` / `incorrect` from
+`questions[].verdict` and is used only when it reproduces the backend's own totals
+(`correct == correct_count`, `partial + incorrect == incorrect_count`), the list covers
+every question and no verdict is unknown. The board then shows "Đúng", "Đúng một phần"
+(only when > 0) and "Sai". Otherwise it shows "Đúng" + a combined "Chưa đúng"
+(= `incorrect_count`) instead of a wrong "Sai". Ungraded questions keep "Chưa chấm".
+No backend, API, score or percentage change; "Xem lại câu sai" still lists partial
+answers (unchanged).
+
+**Regression:** `FE/src/pages/study/QuizResult.partialCounter.test.jsx` (14 cases:
+all correct, all incorrect / 0%, correct + partial = 75%, partial + incorrect, all
+partial, provisional, all ungraded, grading, four missing/inconsistent/unknown-verdict
+fallbacks, labels + wrapping row) and `FE/e2e-fixture/quiz-result-partial-counter.spec.js`
+(1440 / 390 / 320 px, counters on screen, no horizontal overflow). Behavioural mutations
+(double-counting the partial, dropping the partial counter, labelling the fallback "Sai",
+skipping the consistency check, ignoring an unknown verdict) each fail at least one test.
