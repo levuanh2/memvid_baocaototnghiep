@@ -203,6 +203,25 @@ describe("QuizResult — Đúng / Đúng một phần / Sai are counted separate
     }
   });
 
+  it("re-review: impossible or null server totals are not used at all — counters read '—', nothing is derived", async () => {
+    const SHOWN = ["Đúng", "Đúng một phần", "Sai", "Chưa đúng", "Chưa chấm"];
+    const broken = [
+      resultFor(["correct", "partial"], { correct_count: 2, incorrect_count: 1 }),        // over-count: 3 > 2
+      resultFor(["correct"], { correct_count: null }),                                    // nullable column
+      resultFor(["correct", "partial"], { incorrect_count: -1 }),                         // negative
+      resultFor(["correct", "partial"], { correct_count: 1.5 }),                          // non-integer
+    ];
+    for (const r of broken) {
+      await render(r);
+      const c = counters();
+      expect(c["Đúng"], JSON.stringify(c)).toBe("—");
+      expect(c["Chưa đúng"], JSON.stringify(c)).toBe("—");
+      expect(c).not.toHaveProperty("Chưa chấm");
+      expect(SHOWN.filter((l) => /\d/.test(c[l] ?? "")), JSON.stringify(c)).toEqual([]);
+      act(() => root.unmount()); root = null; document.body.removeChild(container); container = null;
+    }
+  });
+
   it("9. while grading, every counter reads '—'", async () => {
     await render(resultFor(["correct", "partial"], { status: "submitted" }));
     const c = counters();

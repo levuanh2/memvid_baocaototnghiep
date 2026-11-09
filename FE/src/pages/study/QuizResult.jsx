@@ -286,15 +286,20 @@ function ScoreBoard({ result, grading, provisional, ungradedCount, wrongCount, o
   // While grading, verdicts are still null: keep the familiar labels with "—" rather
   // than flip to the "Chưa đúng" fallback for a few seconds.
   const breakdown = grading ? { correct: null, partial: 0, incorrect: null } : verdictBreakdown(result);
-  // Re-review: every question must land in exactly one visible counter. In the combined
-  // fallback the server's own numbers decide: a question counted neither correct nor
-  // "chưa đúng" is, by definition, not scored, so "Chưa chấm" is the remainder of the
-  // server totals (not ungraded_count, which is what disagreed), and the counters always
-  // add up to "Số câu". (Score, headline and next step still follow the backend's
-  // grading_complete / ungraded_count; this only stops a question vanishing or doubling.)
+  // Combined fallback (review): show the server totals only when they are themselves a
+  // valid partition -- whole numbers >= 0 with correct + incorrect <= total. Then a
+  // question counted neither correct nor "chưa đúng" is unscored, "Chưa chấm" is the
+  // remainder, and the visible counters add up to "Số câu". If the totals are null or
+  // impossible, nothing is derived from them: every counter reads "—" (unavailable)
+  // rather than a number that would double-count or mislabel a question.
+  // ponytail: scope cap -- a corrupt payload gets "—", not a repair; score, headline and
+  // next step keep following the backend's own fields.
+  const whole = (v) => Number.isInteger(v) && v >= 0;
+  const totalsValid = whole(result.total_questions) && whole(result.correct_count) && whole(result.incorrect_count)
+    && result.correct_count + result.incorrect_count <= result.total_questions;
   const unscored = breakdown || grading
     ? (provisional ? ungradedCount : 0)
-    : Math.max(0, Number(result.total_questions || 0) - Number(result.correct_count || 0) - Number(result.incorrect_count || 0));
+    : totalsValid ? result.total_questions - result.correct_count - result.incorrect_count : null;
   const shown = (value) => (grading ? "—" : value ?? "—");
   const noGradedQuestions = provisional && Number(result.max_score || 0) === 0;
   const gradedCount = Number(result.correct_count || 0) + Number(result.incorrect_count || 0);
@@ -344,11 +349,11 @@ function ScoreBoard({ result, grading, provisional, ungradedCount, wrongCount, o
           </>
         ) : (
           <>
-            <Stat label="Đúng" value={shown(result.correct_count)} />
-            <Stat label="Chưa đúng" value={shown(result.incorrect_count)} />
+            <Stat label="Đúng" value={shown(totalsValid ? result.correct_count : null)} />
+            <Stat label="Chưa đúng" value={shown(totalsValid ? result.incorrect_count : null)} />
           </>
         )}
-        {(provisional || unscored > 0) && <Stat label="Chưa chấm" value={unscored} />}
+        {unscored != null && (provisional || unscored > 0) && <Stat label="Chưa chấm" value={unscored} />}
         <Stat label="Số câu" value={result.total_questions} />
         <Stat label="Thời gian" value={formatDuration(result.duration_seconds)} />
       </div>
