@@ -131,22 +131,18 @@ test.describe("Export Studio — appearance override (single viewport)", () => {
     const rootTopic = page.locator(nodeSelector(`${MAP_A_ID}-root`));
     const liveBaseline = await rootTopic.evaluate((el) => el.style.cssText);
     await openExportStudio(page);
-    await page.getByRole("button", { name: "Tiếp tục" }).click(); // -> format
-    await page.getByRole("button", { name: "Tiếp tục" }).click(); // -> appearance
     const useMapRadio = page.locator('input[name="mm-appearance-mode"]').first();
     await expect(useMapRadio).toBeChecked();
     const customRadio = page.locator('input[name="mm-appearance-mode"]').nth(1);
     await customRadio.check();
-    await expect(page.getByText("Áp dụng cho sơ đồ")).toBeVisible();
+    await expect(page.getByText("Lưu giao diện cho sơ đồ")).toBeVisible();
     // Live canvas must be completely unaffected by an Export Studio override.
     expect(await rootTopic.evaluate((el) => el.style.cssText)).toBe(liveBaseline);
   });
 
   test("SVG export with a custom override reflects the custom fill in the real downloaded markup", async ({ page }) => {
     await openExportStudio(page);
-    await page.getByRole("button", { name: "Tiếp tục" }).click(); // -> format
     await page.locator('input[name="mm-export-format"][value="svg"]').check();
-    await page.getByRole("button", { name: "Tiếp tục" }).click(); // -> appearance
     const customRadio = page.locator('input[name="mm-appearance-mode"]').nth(1);
     await customRadio.check();
     const fillInput = page.locator('[data-testid="appearance-mode-section"] input[type="color"]').first();
@@ -157,7 +153,6 @@ test.describe("Export Studio — appearance override (single viewport)", () => {
     // this problem (same reasoning as the unit-test-side fix for this
     // exact gotcha — see ExportStudioDialog.appearanceOverride.test.jsx).
     await fillInput.fill("#A1B2C3");
-    await page.getByRole("button", { name: "Tiếp tục" }).click(); // -> preview
     const downloadPromise = page.waitForEvent("download");
     await page.getByRole("button", { name: /^(Xuất|Tạo) SVG$/ }).click();
     const download = await downloadPromise;

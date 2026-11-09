@@ -1,0 +1,199 @@
+{
+ "viewport": {
+  "width": 390,
+  "height": 844
+ },
+ "distinctSpacingValues": [
+  4,
+  6,
+  8,
+  12,
+  14,
+  16,
+  20,
+  24,
+  28
+ ],
+ "spacingFrequency": [
+  {
+   "value": 4,
+   "count": 3
+  },
+  {
+   "value": 6,
+   "count": 20
+  },
+  {
+   "value": 8,
+   "count": 18
+  },
+  {
+   "value": 12,
+   "count": 7
+  },
+  {
+   "value": 14,
+   "count": 2
+  },
+  {
+   "value": 16,
+   "count": 18
+  },
+  {
+   "value": 20,
+   "count": 12
+  },
+  {
+   "value": 24,
+   "count": 1
+  },
+  {
+   "value": 28,
+   "count": 2
+  }
+ ],
+ "headings": [
+  {
+   "level": "H1",
+   "label": "Phần cần ôn lại",
+   "fontSize": "19.2px",
+   "lineHeight": "24.96px",
+   "margin": [
+    "0px",
+    "0px"
+   ]
+  },
+  {
+   "level": "H3",
+   "label": "Tiến trình",
+   "fontSize": "17px",
+   "lineHeight": "22.95px",
+   "margin": [
+    "0px",
+    "0px"
+   ]
+  },
+  {
+   "level": "H3",
+   "label": "Bộ nhớ",
+   "fontSize": "17px",
+   "lineHeight": "22.95px",
+   "margin": [
+    "0px",
+    "0px"
+   ]
+  }
+ ],
+ "boxes": [
+  {
+   "element": "p.font-display.text-title.text-text-primary.mb-6.quiz-review-summary",
+   "label": "2 chủ đề cần ôn",
+   "x": 20,
+   "y": 93,
+   "width": 350,
+   "height": 26,
+   "padding": [
+    "0px",
+    "0px",
+    "0px",
+    "0px"
+   ],
+   "margin": [
+    "0px",
+    "0px",
+    "24px",
+    "0px"
+   ],
+   "gap": [
+    "normal",
+    "normal"
+   ]
+  },
+  {
+   "element": "ol.quiz-review-plan-list",
+   "label": "40Ưu tiên 1·Cần ôn lạiTiến trìnhSai 2/3 câuĐọc lại mục 2.11 đoạn cần đọc",
+   "x": 20,
+   "y": 143,
+   "width": 350,
+   "height": 576,
+   "padding": [
+    "0px",
+    "0px",
+    "0px",
+    "0px"
+   ],
+   "margin": [
+    "0px",
+    "0px",
+    "0px",
+    "0px"
+   ],
+   "gap": [
+    "14px",
+    "14px"
+   ]
+  },
+  {
+   "element": "li.surface-card.quiz-review-plan-item",
+   "label": "40Ưu tiên 1·Cần ôn lạiTiến trìnhSai 2/3 câuĐọc lại mục 2.11 đoạn cần đọc",
+   "x": 20,
+   "y": 143,
+   "width": 350,
+   "height": 298,
+   "padding": [
+    "20px",
+    "20px",
+    "20px",
+    "20px"
+   ],
+   "margin": [
+    "0px",
+    "0px",
+    "0px",
+    "0px"
+   ],
+   "gap": [
+    "normal",
+    "normal"
+   ]
+  },
+  {
+   "element": "li.surface-card.quiz-review-plan-item",
+   "label": "67Ưu tiên 2·Cần ôn nhẹBộ nhớSai 1/3 câu1 đoạn cần đọc lại Luyện ngay (5 ",
+   "x": 20,
+   "y": 455,
+   "width": 350,
+   "height": 264,
+   "padding": [
+    "20px",
+    "20px",
+    "20px",
+    "20px"
+   ],
+   "margin": [
+    "0px",
+    "0px",
+    "0px",
+    "0px"
+   ],
+   "gap": [
+    "normal",
+    "normal"
+   ]
+  }
+ ],
+ "verticalGaps": [
+  {
+   "parent": "2 chủ đề cần ôn40Ưu tiên 1·Cần ôn lạiTiến trìnhSai 2/3 câuĐọc lại mục 2.",
+   "from": "2 chủ đề cần ôn",
+   "to": "40Ưu tiên 1·Cần ôn lạiTiến trìnhSai 2/3 câuĐọc lại mục 2.11 đoạn cần đọc",
+   "gap": 24
+  },
+  {
+   "parent": "40Ưu tiên 1·Cần ôn lạiTiến trìnhSai 2/3 câuĐọc lại mục 2.11 đoạn cần đọc",
+   "from": "40Ưu tiên 1·Cần ôn lạiTiến trìnhSai 2/3 câuĐọc lại mục 2.11 đoạn cần đọc",
+   "to": "67Ưu tiên 2·Cần ôn nhẹBộ nhớSai 1/3 câu1 đoạn cần đọc lại Luyện ngay (5 ",
+   "gap": 14
+  }
+ ]
+}

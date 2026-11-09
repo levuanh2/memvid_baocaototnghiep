@@ -212,7 +212,7 @@ test.describe("Export Studio — responsive QA", () => {
         await mockExportApi(page, { statuses: [{ status: "queued" }, { status: "running", progress: 40 }, { status: "running", progress: 40 }] });
         await gotoFixture(page, vp);
         const dialog = await openPreviewBench(page, "pdf");
-        await dialog.getByRole("button", { name: "Tạo PDF", exact: true }).click();
+        await dialog.getByRole("button", { name: "Xuất PDF", exact: true }).click();
         await expect(dialog).toContainText("Đang xếp hàng", { timeout: 5000 });
         await expect(dialog).toContainText("Đang xử lý (40%)", { timeout: 5000 });
         await assertNoHorizontalOverflow(page);
@@ -224,7 +224,7 @@ test.describe("Export Studio — responsive QA", () => {
         await mockExportApi(page, { statuses: [{ status: "error", error: "Lỗi máy chủ (mô phỏng)" }] });
         await gotoFixture(page, vp);
         const dialog = await openPreviewBench(page, "pdf");
-        await dialog.getByRole("button", { name: "Tạo PDF", exact: true }).click();
+        await dialog.getByRole("button", { name: "Xuất PDF", exact: true }).click();
         await expect(dialog).toContainText("Lỗi máy chủ", { timeout: 5000 });
         await expect(dialog.getByRole("button", { name: "Thử lại", exact: true })).toBeVisible();
         await assertNoHorizontalOverflow(page);
@@ -235,7 +235,7 @@ test.describe("Export Studio — responsive QA", () => {
         await mockExportApi(page, { statuses: [{ status: "done", progress: 100 }] });
         await gotoFixture(page, vp);
         const dialog = await openPreviewBench(page, "pdf");
-        await dialog.getByRole("button", { name: "Tạo PDF", exact: true }).click();
+        await dialog.getByRole("button", { name: "Xuất PDF", exact: true }).click();
         await expect(dialog.getByTestId("export-persistent-preview")).toContainText("Đã xuất", { timeout: 5000 });
         await expect(dialog.getByRole("button", { name: "Xuất lại", exact: true })).toBeVisible();
         await assertNoHorizontalOverflow(page);

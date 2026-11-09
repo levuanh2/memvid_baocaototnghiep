@@ -51,13 +51,10 @@ async function computedTopicStyle(page, id) {
 }
 
 async function advanceToSvgAppearance(page) {
-  await page.getByRole("button", { name: "Tiếp tục" }).click();
   await page.locator('input[name="mm-export-format"][value="svg"]').check();
-  await page.getByRole("button", { name: "Tiếp tục" }).click();
 }
 
 async function downloadSvgFromAppearance(page, filename) {
-  await page.getByRole("button", { name: "Tiếp tục" }).click();
   const pending = page.waitForEvent("download");
   await page.getByRole("button", { name: "Xuất SVG" }).click();
   const download = await pending;

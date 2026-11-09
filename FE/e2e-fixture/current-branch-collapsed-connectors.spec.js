@@ -14,10 +14,7 @@ async function exportCurrentBranchSvg(page, target = TARGET, filename = "current
   await page.locator('[aria-label="Xuất sơ đồ"]').click();
   await expect(page.getByRole("dialog")).toBeVisible();
   await page.locator('input[name="mm-export-scope"][value="current_branch"]').check();
-  await page.getByRole("button", { name: "Tiếp tục" }).click();
   await page.locator('input[name="mm-export-format"][value="svg"]').check();
-  await page.getByRole("button", { name: "Tiếp tục" }).click();
-  await page.getByRole("button", { name: "Tiếp tục" }).click();
 
   const waiting = page.waitForEvent("download");
   await page.getByRole("button", { name: "Xuất SVG" }).click();

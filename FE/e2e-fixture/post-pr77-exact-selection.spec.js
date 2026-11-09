@@ -41,10 +41,7 @@ async function exportSvg(page, pair, index) {
   await expect(dialog).toContainText("2 node đã tick");
   await expect(dialog).toContainText("2 node đã chọn · 1 node cha tự thêm · 3 node được xuất");
   if (index % 2 === 0) await page.getByRole("button", { name: "Ảnh PNG" }).click();
-  await page.getByRole("button", { name: "Tiếp tục" }).click();
   await page.locator('input[name="mm-export-format"][value="svg"]').check();
-  await page.getByRole("button", { name: "Tiếp tục" }).click();
-  await page.getByRole("button", { name: "Tiếp tục" }).click();
   await expect(dialog.locator(".export-footer__summary")).toContainText("2 node đã chọn · 1 node cha tự thêm · 3 node được xuất");
   await expect(dialog.locator('[aria-label="Tóm tắt cấu hình xuất"]')).toContainText("3 node");
   const waiting = page.waitForEvent("download");

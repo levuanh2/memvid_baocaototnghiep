@@ -97,18 +97,33 @@ test("real touch selection on mobile 390px MindMap", async ({ page }) => {
   await expect(page.locator(".mm-selection-bar")).toBeVisible();
   await shot(page, "01-selection-mode.png");
 
-  // 4. Pan canvas using touch-realistic drag on empty background to bring target branches into unoccluded view
-  // Target branches: fixture-map-a-m0-s0-l0 and fixture-map-a-m0-s0-l1
-  const t0 = await page.evaluate(() => document.querySelector(".map-canvas").style.transform);
-  await panCanvas(page, 550, 100);
-  const t1 = await page.evaluate(() => document.querySelector(".map-canvas").style.transform);
-  expect(t1).not.toBe(t0);
-  await shot(page, "02-after-pan.png");
+  // The first-open phone fit frames root + first level (scale may be 0.5),
+  // where fixed-size touch markers of stacked leaves overlap. Like a user,
+  // zoom in before picking leaves.
+  const scaleNow = () => page.locator(".map-canvas").evaluate((el) => new DOMMatrixReadOnly(getComputedStyle(el).transform).a);
+  for (let i = 0; i < 6 && (await scaleNow()) < 0.75; i++) await page.getByRole("button", { name: "Phóng to" }).click();
+  expect(await scaleNow()).toBeGreaterThanOrEqual(0.75);
 
+  // 4. Pan canvas using a touch-realistic drag on empty background to bring
+  // the target branches into view. Derive the delta from live geometry: the
+  // first-open mobile fit intentionally changes the old fixed-scale layout.
+  // Target branches: fixture-map-a-m0-s0-l0 and fixture-map-a-m0-s0-l1.
   const targetId1 = `${MAP_A_ID}-m0-s0-l0`;
   const targetId2 = `${MAP_A_ID}-m0-s0-l1`;
   const marker1 = page.locator(markerSelector(targetId1));
   const marker2 = page.locator(markerSelector(targetId2));
+  const panDelta = await marker1.evaluate((el) => {
+    const rect = el.getBoundingClientRect();
+    return {
+      x: window.innerWidth * 0.5 - (rect.left + rect.width / 2),
+      y: window.innerHeight * 0.5 - (rect.top + rect.height / 2),
+    };
+  });
+  const t0 = await page.evaluate(() => document.querySelector(".map-canvas").style.transform);
+  await panCanvas(page, panDelta.x, panDelta.y);
+  const t1 = await page.evaluate(() => document.querySelector(".map-canvas").style.transform);
+  expect(t1).not.toBe(t0);
+  await shot(page, "02-after-pan.png");
 
   // 5. Assert no toolbar occlusion of target markers (elementFromPoint at center hits the marker)
   const occ1 = await checkMarkerUnoccluded(page, markerSelector(targetId1));

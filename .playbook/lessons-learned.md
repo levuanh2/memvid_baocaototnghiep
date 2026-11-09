@@ -1,5 +1,13 @@
 # Lessons Learned
 
+## Nested keyboard widgets must contain parent-owned key events (2026-11-04)
+
+- ARIA roles alone do not make a popup keyboard-operable: opening must move focus
+  into it, arrow keys must move between items, and Escape must restore the trigger.
+- When a popup sits inside a parent with its own keyboard contract, contain its key
+  events at the popup/trigger boundary so one key cannot perform both actions.
+- Protect both layers with a focused unit test and a real-browser keyboard fixture.
+
 ## Programmatic focus needs a visible style independent of input modality (2026-10-28)
 
 `:focus-visible` is ideal for ordinary keyboard navigation, but a menu that
@@ -3632,4 +3640,18 @@ deployment ledger for rollback authorization.
 Environment-labelled test passes need an observable assertion for the label.
 An authenticated-only suite can pass identically with auth protection on or
 off; pair it with an unauthenticated request whose status changes across modes.
+
+# Persistent settings surfaces should have one navigation authority (2026-11-04)
+
+When all configuration sections stay mounted and a semantic rail already moves
+between them, a second footer-forward action creates competing navigation
+models rather than additional capability. Keep navigation in the rail and
+commit/cancel actions in the footer; verify every rail destination with both
+pointer and native keyboard activation before removing the duplicate control.
+
+A footer simplification must not quietly change lifecycle contracts: cancel,
+retry and completed states are behaviour, not decoration, and need their own
+owner approval. UI-only export work still needs real
+artifact gates: a clean screenshot or mocked call does not prove output bytes,
+scope identity, or connector geometry stayed unchanged.
 
