@@ -3674,3 +3674,7 @@ derived value only if it reproduces the server totals, and fall back to a label 
 true for the server's number ("Chưa đúng") instead of the familiar but wrong one ("Sai").
 A silent skip of an unknown value can still "match" the totals, so reject unknown values
 explicitly and test that case on its own.
+`Number(x || 0)` is not validation: it turns "unknown" into a real 0 that can match.
+Compare raw values with `===`. And `key in obj` / `obj[key]` on a plain object is true
+for `"toString"` / `"__proto__"`; use a whitelist array (or `Object.hasOwn`) for any
+value that comes from the server (PR #148: `__proto__` as a verdict crashed the page).

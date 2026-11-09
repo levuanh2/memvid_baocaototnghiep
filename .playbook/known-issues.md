@@ -7886,3 +7886,22 @@ fallbacks, labels + wrapping row) and `FE/e2e-fixture/quiz-result-partial-counte
 (1440 / 390 / 320 px, counters on screen, no horizontal overflow). Behavioural mutations
 (double-counting the partial, dropping the partial counter, labelling the fallback "Sai",
 skipping the consistency check, ignoring an unknown verdict) each fail at least one test.
+
+**PR #148 hardening (2026-11-10).** Two holes in `verdictBreakdown()` at `272c0d1`:
+(1) the totals were compared as `Number(result.correct_count || 0)`, so a **null**
+`correct_count` / `incorrect_count` matched a derived 0 and the split was shown
+(e.g. one incorrect answer, `correct_count: null` showed "Đúng 0 · Sai 1"); a string
+`total_questions` ("2") passed the `Number()` length check the same way.
+(2) `verdict in counts` accepted inherited keys, so `"toString"`, `"constructor"`,
+`"hasOwnProperty"`, `"__proto__"` were "known" and the question vanished from the split;
+and `VERDICT_LABEL["__proto__"]` returned `Object.prototype`, which **crashed the page**
+("Objects are not valid as a React child").
+Root cause: coercion and `in` on server data. Fix: strict `===` against the raw totals
+(only `ungraded_count` may be absent = 0, the backend contract), and an explicit
+`VERDICTS` whitelist for both counting and the label lookup (`verdictLabel()`).
+Regression: 12 cases in the "PR #148 hardening" block (null correct/incorrect, invalid
+total_questions string/null/negative/fractional, zero-count boundary, five bogus
+verdicts, bogus verdict + invalid totals, whitelisted verdicts). Mutations M7–M11
+(coercion back, `Number()` length, `in`, label lookup without whitelist) each fail.
+Prevention: never coerce a server count with `|| 0` before comparing it, and never test
+membership of untrusted strings with `in` / bracket lookup on a plain object.

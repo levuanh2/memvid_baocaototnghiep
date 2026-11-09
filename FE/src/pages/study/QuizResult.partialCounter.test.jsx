@@ -222,6 +222,72 @@ describe("QuizResult — Đúng / Đúng một phần / Sai are counted separate
     }
   });
 
+  describe("PR #148 hardening: server totals are checked before the split, verdicts are whitelisted", () => {
+    const SHOWN = ["Đúng", "Đúng một phần", "Sai", "Chưa đúng", "Chưa chấm"];
+    const expectUnavailable = (c) => {
+      expect(c["Đúng"], JSON.stringify(c)).toBe("—");
+      expect(c["Chưa đúng"], JSON.stringify(c)).toBe("—");
+      expect(c).not.toHaveProperty("Sai");
+      expect(c).not.toHaveProperty("Đúng một phần");
+      expect(c).not.toHaveProperty("Chưa chấm");
+      expect(SHOWN.filter((l) => /\d/.test(c[l] ?? "")), JSON.stringify(c)).toEqual([]);
+    };
+    const unmount = () => { act(() => root.unmount()); root = null; document.body.removeChild(container); container = null; };
+
+    it("a null correct_count is never read as 0, even when no question is correct", async () => {
+      await render(resultFor(["incorrect"], { correct_count: null }));
+      expectUnavailable(counters());
+    });
+    it("a null incorrect_count is never read as 0, even when every question is correct", async () => {
+      await render(resultFor(["correct"], { incorrect_count: null }));
+      expectUnavailable(counters());
+    });
+    it("an invalid total_questions blocks the split (string, null, negative, fractional)", async () => {
+      for (const total of ["2", null, -2, 2.5]) {
+        await render(resultFor(["correct", "partial"], { total_questions: total }));
+        expectUnavailable(counters());
+        unmount();
+      }
+    });
+    it("zero-count boundary: a real 0 total still gives the split, the same payload with null does not", async () => {
+      await render(resultFor(["incorrect", "incorrect"]));       // correct_count: 0
+      expect([counters()["Đúng"], counters()["Sai"]]).toEqual(["0", "2"]);
+      unmount();
+      await render(resultFor(["correct", "correct"]));           // incorrect_count: 0
+      expect([counters()["Đúng"], counters()["Sai"]]).toEqual(["2", "0"]);
+      unmount();
+      await render(resultFor(["incorrect", "incorrect"], { correct_count: null }));
+      expectUnavailable(counters());
+    });
+
+    for (const bogus of ["toString", "constructor", "__proto__", "hasOwnProperty", "half"]) {
+      it(`verdict "${bogus}" is not counted: the question stays visible in the fallback`, async () => {
+        await render(resultFor(["correct"], {
+          total_questions: 2, questions: [q("correct", 0), { ...q("partial", 1), verdict: bogus }],
+        }));
+        const c = counters();
+        expect(c["Đúng"]).toBe("1");
+        expect(c["Chưa đúng"]).toBe("0");
+        expect(c["Chưa chấm"]).toBe("1");
+        expect(c).not.toHaveProperty("Sai");
+        expect(c).not.toHaveProperty("Đúng một phần");
+        expect(sumOf(c, SHOWN)).toBe(Number(c["Số câu"]));
+      });
+    }
+    it("an unknown verdict with invalid server totals reads '—' (unavailable), not a guess", async () => {
+      await render(resultFor(["correct"], {
+        total_questions: 2, correct_count: null, questions: [q("correct", 0), { ...q("partial", 1), verdict: "toString" }],
+      }));
+      expectUnavailable(counters());
+    });
+    it("the whitelisted verdicts correct / partial / incorrect / null still give the split", async () => {
+      await render(resultFor(["correct", "partial", "incorrect", null]));
+      const c = counters();
+      expect([c["Đúng"], c["Đúng một phần"], c["Sai"], c["Chưa chấm"]]).toEqual(["1", "1", "1", "1"]);
+      expect(container.textContent).toContain("% điểm");
+    });
+  });
+
   it("9. while grading, every counter reads '—'", async () => {
     await render(resultFor(["correct", "partial"], { status: "submitted" }));
     const c = counters();
