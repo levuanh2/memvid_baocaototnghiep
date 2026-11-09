@@ -265,20 +265,27 @@ export function verdictBreakdown(result) {
   const questions = Array.isArray(result?.questions) ? result.questions : null;
   if (!questions || questions.length !== Number(result.total_questions)) return null;
   const counts = { correct: 0, partial: 0, incorrect: 0 };
+  let ungraded = 0;
   for (const question of questions) {
     const verdict = question?.verdict;
-    if (verdict == null) continue;                  // not graded
-    if (!(verdict in counts)) return null;          // unknown value: do not guess
+    if (verdict == null) { ungraded += 1; continue; }   // not graded
+    if (!(verdict in counts)) return null;              // unknown value: do not guess
     counts[verdict] += 1;
   }
+  // Every question must land in exactly one bucket the page shows: a null verdict is
+  // only acceptable when the backend also reports it as ungraded (review finding: a
+  // stale ungraded_count would otherwise make that question vanish from all counters).
   const consistent = counts.correct === Number(result.correct_count || 0)
-    && counts.partial + counts.incorrect === Number(result.incorrect_count || 0);
+    && counts.partial + counts.incorrect === Number(result.incorrect_count || 0)
+    && ungraded === Number(result.ungraded_count || 0);
   return consistent ? counts : null;
 }
 
 function ScoreBoard({ result, grading, provisional, ungradedCount, wrongCount, onReviewWrong }) {
   const percent = result.percentage;
-  const breakdown = verdictBreakdown(result);
+  // While grading, verdicts are still null: keep the familiar labels with "—" rather
+  // than flip to the "Chưa đúng" fallback for a few seconds.
+  const breakdown = grading ? { correct: null, partial: 0, incorrect: null } : verdictBreakdown(result);
   const shown = (value) => (grading ? "—" : value ?? "—");
   const noGradedQuestions = provisional && Number(result.max_score || 0) === 0;
   const gradedCount = Number(result.correct_count || 0) + Number(result.incorrect_count || 0);
@@ -336,14 +343,14 @@ function ScoreBoard({ result, grading, provisional, ungradedCount, wrongCount, o
         <Stat label="Số câu" value={result.total_questions} />
         <Stat label="Thời gian" value={formatDuration(result.duration_seconds)} />
       </div>
-      {!grading && wrongCount > 0 && <button type="button" className="btn-secondary quiz-review-wrong" onClick={onReviewWrong}>Xem lại câu sai</button>}
+      {!grading && wrongCount > 0 && <button type="button" className="btn-secondary quiz-review-wrong" onClick={onReviewWrong}>Xem lại câu chưa đúng</button>}
     </section>
   );
 }
 
 function WrongAnswerReview({ questions, index, onIndex, onClose, reviewPlanTo }) {
   const current = questions[index];
-  if (!current) return <section className="surface-card text-center"><h2 className="font-display text-title text-text-primary">Không có câu sai cần xem lại</h2><button type="button" className="btn-secondary mt-4" onClick={onClose}>Về kết quả</button></section>;
+  if (!current) return <section className="surface-card text-center"><h2 className="font-display text-title text-text-primary">Không có câu chưa đúng cần xem lại</h2><button type="button" className="btn-secondary mt-4" onClick={onClose}>Về kết quả</button></section>;
   return (
     <div className="quiz-wrong-review">
       <aside className="quiz-wrong-review__rail" aria-label="Câu cần xem lại">

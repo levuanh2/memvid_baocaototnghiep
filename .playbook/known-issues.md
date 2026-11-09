@@ -7863,11 +7863,16 @@ use it for the counters.
 **Fix:** `verdictBreakdown(result)` counts `correct` / `partial` / `incorrect` from
 `questions[].verdict` and is used only when it reproduces the backend's own totals
 (`correct == correct_count`, `partial + incorrect == incorrect_count`), the list covers
-every question and no verdict is unknown. The board then shows "Đúng", "Đúng một phần"
+every question, no verdict is unknown and the null verdicts equal `ungraded_count`
+(review: otherwise a question with a stale ungraded count vanished from every counter).
+The board then shows "Đúng", "Đúng một phần"
 (only when > 0) and "Sai". Otherwise it shows "Đúng" + a combined "Chưa đúng"
 (= `incorrect_count`) instead of a wrong "Sai". Ungraded questions keep "Chưa chấm".
-No backend, API, score or percentage change; "Xem lại câu sai" still lists partial
-answers (unchanged).
+While grading, the labels stay "Đúng" / "Sai" with "—". The review action, which lists
+partial and incorrect answers (membership unchanged), is renamed "Xem lại câu chưa đúng"
+(owner decision), so it no longer contradicts "Sai 0"; its empty state says "Không có câu
+chưa đúng cần xem lại". "Chưa đúng" for the fallback is also an owner decision. No
+backend, API, score or percentage change.
 
 **Regression:** `FE/src/pages/study/QuizResult.partialCounter.test.jsx` (14 cases:
 all correct, all incorrect / 0%, correct + partial = 75%, partial + incorrect, all

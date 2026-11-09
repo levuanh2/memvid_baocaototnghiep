@@ -101,6 +101,13 @@ describe("QuizResult — Đúng / Đúng một phần / Sai are counted separate
     expect(c["Sai"]).toBe("0");
     expect(sumOf(c, ["Đúng", "Đúng một phần", "Sai"])).toBe(2);   // never double-counted
     expect(container.textContent).toContain("75% điểm");
+    // Owner decision: with "Sai 0" on screen the review action must not call the partial
+    // answer "câu sai"; it still opens it (same membership as before).
+    const buttons = [...container.querySelectorAll("button")].map((b) => b.textContent);
+    expect(buttons).toContain("Xem lại câu chưa đúng");
+    expect(buttons.some((t) => t.includes("câu sai"))).toBe(false);
+    await act(async () => { [...container.querySelectorAll("button")].find((b) => b.textContent === "Xem lại câu chưa đúng").click(); });
+    expect(container.querySelector('aside[aria-label="Câu cần xem lại"]')?.textContent).toContain("Câu 2");
   });
 
   it("4. partial + incorrect: Đúng 0, Đúng một phần 1, Sai 1", async () => {
@@ -157,6 +164,14 @@ describe("QuizResult — Đúng / Đúng một phần / Sai are counted separate
       await render(resultFor(["correct", "partial"], { questions: [q("correct", 0), { ...q("partial", 1), verdict: "half" }] }));
       expectFallback(counters(), 1, 1);
     });
+    it("review: a null verdict the backend does not report as ungraded (stale ungraded_count) cannot vanish", async () => {
+      await render(resultFor(["correct", null], { ungraded_count: 0, grading_complete: true }));
+      expectFallback(counters(), 1, 0);
+    });
+    it("review: ungraded_count larger than the null verdicts also falls back", async () => {
+      await render(resultFor(["correct", "partial"], { ungraded_count: 1 }));
+      expectFallback(counters(), 1, 1);
+    });
     it("an unknown verdict value even when the remaining verdicts happen to match the totals (it must not just vanish)", async () => {
       await render(resultFor(["correct"], {
         total_questions: 2, questions: [q("correct", 0), { ...q("partial", 1), verdict: "half" }],
@@ -170,6 +185,14 @@ describe("QuizResult — Đúng / Đúng một phần / Sai are counted separate
     const c = counters();
     expect(c["Đúng"]).toBe("—");
     expect(c["Sai"]).toBe("—");
+  });
+
+  it("9b. while grading with verdicts still null, the labels stay 'Đúng' / 'Sai' (no flip to the fallback)", async () => {
+    await render(resultFor([null, null], { status: "submitted", ungraded_count: 0 }));
+    const c = counters();
+    expect(c["Đúng"]).toBe("—");
+    expect(c["Sai"]).toBe("—");
+    expect(c).not.toHaveProperty("Chưa đúng");
   });
 
   it("10. each counter is a visible text label + number (no colour-only cue), in a wrapping row for small screens", async () => {
