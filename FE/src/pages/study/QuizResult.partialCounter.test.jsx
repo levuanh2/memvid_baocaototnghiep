@@ -280,6 +280,34 @@ describe("QuizResult — Đúng / Đúng một phần / Sai are counted separate
       }));
       expectUnavailable(counters());
     });
+    it("review 5: a mastery status that is an inherited key does not crash the page", async () => {
+      for (const status of ["__proto__", "constructor", "toString"]) {
+        const r = resultFor(["correct", "incorrect"]);
+        getResult.mockResolvedValue(r);
+        getConceptMasteries.mockResolvedValue([{ concept_mastery_id: `m-${status}`, concept_name: "Chủ đề A",
+          status, mastery_score: 0.5, correct_count: 1, total_count: 2 }]);
+        container = document.createElement("div");
+        document.body.appendChild(container);
+        root = createRoot(container);
+        await act(async () => { root.render(<QuizResult />); });
+        await act(async () => { await Promise.resolve(); await Promise.resolve(); });
+        expect(container.textContent).toContain("Mức nắm theo chủ đề");
+        expect(container.textContent).toContain("Chủ đề A");
+        expect(container.textContent).toContain("đúng 1/2");
+        unmount();
+      }
+    });
+    it("review 5: a known mastery status keeps its Vietnamese label", async () => {
+      getResult.mockResolvedValue(resultFor(["correct", "incorrect"]));
+      getConceptMasteries.mockResolvedValue([{ concept_mastery_id: "m1", concept_name: "Chủ đề B",
+        status: "review_needed", mastery_score: 0.3, correct_count: 0, total_count: 1 }]);
+      container = document.createElement("div");
+      document.body.appendChild(container);
+      root = createRoot(container);
+      await act(async () => { root.render(<QuizResult />); });
+      await act(async () => { await Promise.resolve(); await Promise.resolve(); });
+      expect(container.textContent).toContain("Cần ôn lại · đúng 0/1");
+    });
     it("the whitelisted verdicts correct / partial / incorrect / null still give the split", async () => {
       await render(resultFor(["correct", "partial", "incorrect", null]));
       const c = counters();

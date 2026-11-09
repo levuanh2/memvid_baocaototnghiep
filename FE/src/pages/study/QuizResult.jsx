@@ -220,7 +220,7 @@ export default function QuizResult() {
                         {m.concept_name}
                       </div>
                       <div className="text-small text-text-secondary">
-                        {MASTERY_LABEL[m.status] || m.status} · đúng {m.correct_count}/{m.total_count}
+                        {(Object.hasOwn(MASTERY_LABEL, m.status) ? MASTERY_LABEL[m.status] : String(m.status ?? "")) || "—"} · đúng {m.correct_count}/{m.total_count}
                       </div>
                     </div>
                   </div>

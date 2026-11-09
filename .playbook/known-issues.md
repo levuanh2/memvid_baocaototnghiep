@@ -7905,3 +7905,8 @@ verdicts, bogus verdict + invalid totals, whitelisted verdicts). Mutations M7–
 (coercion back, `Number()` length, `in`, label lookup without whitelist) each fail.
 Prevention: never coerce a server count with `|| 0` before comparing it, and never test
 membership of untrusted strings with `in` / bracket lookup on a plain object.
+Codex review 5 found the same crash on the topic-mastery list (pre-existing on main):
+`MASTERY_LABEL[m.status]` with `status: "__proto__"` rendered `Object.prototype`. Fixed with
+`Object.hasOwn(MASTERY_LABEL, m.status)` (unknown statuses still show the raw string);
+regression "review 5: a mastery status that is an inherited key does not crash the page"
+(`__proto__`, `constructor`, `toString`) plus a known-status label check; mutation M12.
