@@ -6,7 +6,7 @@ import { learningActionReadiness } from "../../utils/libraryActionMatrix";
 const LEARNING_TOOLS = [
   ["summary", "Tóm tắt", "ScrollText"],
   ["mindmap", "Sơ đồ tư duy", "Network"],
-  ["studymap", "Bản đồ học tập", "GitBranch"],
+  ["studymap", "Bản đồ kiến thức", "GitBranch"],
   ["quiz", "Quiz", "BadgeCheck"],
   ["review", "Ôn tập", "BookOpen"],
   ["chat", "Hỏi AI", "MessageSquare"],
