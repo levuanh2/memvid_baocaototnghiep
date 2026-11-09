@@ -6,7 +6,7 @@ test.describe("workspace study-library navigation", () => {
     await page.setViewportSize({ width: 1440, height: 900 });
     await registerAndEnterApp(page);
 
-    const home = page.getByRole("link", { name: "MemVidX — trang chủ" });
+    const home = page.getByRole("link", { name: "StudyMap — trang chủ" });
     const library = page.getByRole("link", { name: "Thư viện học tập" });
 
     // Desktop has a visible, named destination — separate from Công cụ học.
