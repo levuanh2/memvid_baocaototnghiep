@@ -940,7 +940,8 @@ function Overview({ overview }) {
   const items = [
     ["Quiz đã tạo", overview.quiz_count ?? 0],
     ["Bài đã làm", overview.attempt_count ?? 0],
-    ["Điểm trung bình", overview.average_percentage == null ? "—" : `${overview.average_percentage}%`],
+    // PR #137: a score-derived percentage says "điểm" everywhere (see QuizResult).
+    ["Điểm trung bình", overview.average_percentage == null ? "—" : `${overview.average_percentage}% điểm`],
   ];
   return (
     <section className="mb-7 pb-5 border-b border-border flex flex-wrap items-baseline gap-x-2.5 gap-y-1.5">

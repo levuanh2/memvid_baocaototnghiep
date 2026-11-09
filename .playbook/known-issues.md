@@ -7834,7 +7834,9 @@ graded question" into a score of 0, unlike QuizResult's three-state guard.
 
 **Fix:** score percentages say "% điểm" (visible and `aria-label`: "Đạt N phần
 trăm điểm", provisional "Kết quả tạm thời N phần trăm điểm trên các câu đã chấm");
-coverage keeps "đã có", readiness keeps "sẵn sàng". The summary-coverage suffix is
+coverage keeps "đã có", readiness keeps "sẵn sàng". The Library overview
+(`DocumentList.jsx` "Điểm trung bình") shows the same `average_percentage`, so it says
+"% điểm" too (found by the independent review). The summary-coverage suffix is
 restored. Practice's seal says "Chưa có điểm" when nothing could be graded, and a
 genuine graded 0% is still announced as "Đạt 0 phần trăm điểm". No API, grading or
 calculation change.
