@@ -91,6 +91,13 @@ afterEach(() => {
 });
 
 describe("DocumentList Round 6 mounted integration", () => {
+  it("PR #137: the Library overview names the quiz average as '% điểm' (score / max_score, partial = 0.5)", async () => {
+    getProgressOverview.mockResolvedValue({ document_count: 3, quiz_count: 2, attempt_count: 3, average_percentage: 75 });
+    await renderDocumentList({ flag: false });
+    expect(host.textContent).toContain("75% điểm");
+    expect(host.textContent).not.toContain("câu đúng");
+  });
+
   it("switches deterministically between legacy and matrix renderers without a duplicate fetch", async () => {
     await renderDocumentList({ flag: false });
     expect(host.querySelectorAll("[data-document-row]")).toHaveLength(0);
