@@ -63,7 +63,7 @@ function clickPill(panel, label) {
 }
 
 async function runExport(dialog) {
-  const exportBtn = [...dialog.querySelectorAll("button")].find((b) => b.textContent.includes("Tạo PDF"));
+  const exportBtn = [...dialog.querySelectorAll("button")].find((b) => b.textContent.includes("Xuất PDF"));
   await act(async () => { exportBtn.click(); });
 }
 

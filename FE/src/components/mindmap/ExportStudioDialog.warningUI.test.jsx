@@ -59,7 +59,7 @@ describe("Export Studio — ceiling-exceeded warning surfaces to the user (H2)",
     await act(async () => { container.querySelector('[aria-label="Xuất sơ đồ"]').click(); });
     const dialog = document.body.querySelector('[role="dialog"]');
     await act(async () => { dialog.querySelector('input[name="mm-export-format"][value="pdf"]').click(); });
-    const exportBtn = [...dialog.querySelectorAll("button")].find((b) => b.textContent.includes("Tạo PDF"));
+    const exportBtn = [...dialog.querySelectorAll("button")].find((b) => b.textContent.includes("Xuất PDF"));
     await act(async () => { exportBtn.click(); });
 
     expect(dialog.textContent).toContain("Sơ đồ quá lớn để tạo trang chi tiết đọc được trong giới hạn hệ thống");
@@ -79,7 +79,7 @@ describe("Export Studio — ceiling-exceeded warning surfaces to the user (H2)",
     await act(async () => { container.querySelector('[aria-label="Xuất sơ đồ"]').click(); });
     const dialog = document.body.querySelector('[role="dialog"]');
     await act(async () => { dialog.querySelector('input[name="mm-export-format"][value="pdf"]').click(); });
-    const exportBtn = [...dialog.querySelectorAll("button")].find((b) => b.textContent.includes("Tạo PDF"));
+    const exportBtn = [...dialog.querySelectorAll("button")].find((b) => b.textContent.includes("Xuất PDF"));
     await act(async () => { exportBtn.click(); });
 
     expect(dialog.textContent).not.toContain("Sơ đồ quá lớn");

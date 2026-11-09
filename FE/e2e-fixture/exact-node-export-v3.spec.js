@@ -20,10 +20,7 @@ async function openSelection(page, { map = "exact-v3", zoom = 0.69, initialAppea
 async function selectAndDownloadSvg(page, ids, filename) {
   for (const id of ids) await page.locator(marker(id)).press("Space");
   await page.locator(".mm-selection-bar").getByRole("button", { name: "Tiếp tục" }).click();
-  await page.getByRole("button", { name: "Tiếp tục" }).click();
   await page.locator('input[name="mm-export-format"][value="svg"]').check();
-  await page.getByRole("button", { name: "Tiếp tục" }).click();
-  await page.getByRole("button", { name: "Tiếp tục" }).click();
   const waiting = page.waitForEvent("download");
   await page.getByRole("button", { name: "Xuất SVG" }).click();
   const download = await waiting;
@@ -35,10 +32,7 @@ async function selectAndDownloadSvg(page, ids, filename) {
 async function selectAndDownloadRaster(page, ids, format, filename) {
   for (const id of ids) await page.locator(marker(id)).press("Space");
   await page.locator(".mm-selection-bar").getByRole("button", { name: "Tiếp tục" }).click();
-  await page.getByRole("button", { name: "Tiếp tục" }).click();
   await page.locator(`input[name="mm-export-format"][value="${format}"]`).check();
-  await page.getByRole("button", { name: "Tiếp tục" }).click();
-  await page.getByRole("button", { name: "Tiếp tục" }).click();
   const waiting = page.waitForEvent("download");
   await page.getByRole("button", { name: `Xuất ${format.toUpperCase()}` }).click();
   const download = await waiting;
@@ -114,10 +108,7 @@ test("selected left-side siblings keep their source direction, order and parent 
   await page.locator(marker("A")).press("Space");
   await page.locator(marker("B")).press("Space");
   await page.locator(".mm-selection-bar").getByRole("button", { name: "Tiếp tục" }).click();
-  await page.getByRole("button", { name: "Tiếp tục" }).click();
   await page.locator('input[name="mm-export-format"][value="svg"]').check();
-  await page.getByRole("button", { name: "Tiếp tục" }).click();
-  await page.getByRole("button", { name: "Tiếp tục" }).click();
 
   const waiting = page.waitForEvent("download");
   await page.getByRole("button", { name: "Xuất SVG" }).click();
@@ -166,10 +157,7 @@ test("turning automatic parent inclusion off exports disconnected explicit nodes
   await autoParents.uncheck();
   await expect(page.locator(".export-footer__summary")).toContainText("2 node đã chọn · 0 node cha tự thêm · 2 node được xuất");
 
-  await page.getByRole("button", { name: "Tiếp tục" }).click();
   await page.locator('input[name="mm-export-format"][value="svg"]').check();
-  await page.getByRole("button", { name: "Tiếp tục" }).click();
-  await page.getByRole("button", { name: "Tiếp tục" }).click();
   const waiting = page.waitForEvent("download");
   await page.getByRole("button", { name: "Xuất SVG" }).click();
   const download = await waiting;
@@ -213,7 +201,6 @@ test("manual suppression survives review navigation and selection changes in the
   await page.locator(marker("B")).press("Space");
   await page.locator(".mm-selection-bar").getByRole("button", { name: "Tiếp tục" }).click();
   await page.getByRole("button", { name: /Không thêm node cha.*E — Nhánh trái/ }).click();
-  await page.getByRole("button", { name: "Tiếp tục" }).click();
   await page.locator(".export-rail").getByRole("button", { name: /^Nội dung/ }).click();
   await expect(page.locator(".export-footer__summary")).toContainText("2 node đã chọn · 0 node cha tự thêm · 2 node được xuất");
 
@@ -256,9 +243,7 @@ test("saved appearance and an export-only leaf override preserve the source role
   const sourceBefore = await nodeGeometry(page, ["A"]);
   await page.locator(marker("A")).press("Space");
   await page.locator(".mm-selection-bar").getByRole("button", { name: "Tiếp tục" }).click();
-  await page.getByRole("button", { name: "Tiếp tục" }).click();
   await page.locator('input[name="mm-export-format"][value="svg"]').check();
-  await page.getByRole("button", { name: "Tiếp tục" }).click();
   await page.locator('input[name="mm-appearance-mode"]').nth(1).check();
   await page.getByRole("button", { name: "Lá", exact: true }).click();
   await page.getByRole("button", { name: "Chữ nhật tròn góc", exact: true }).click();
@@ -267,7 +252,6 @@ test("saved appearance and an export-only leaf override preserve the source role
   await expect(leafFill).toHaveValue("#a1b2c3");
   const sourceDuringOverride = await nodeGeometry(page, ["A"]);
   expect(sourceDuringOverride.A).toEqual(sourceBefore.A);
-  await page.getByRole("button", { name: "Tiếp tục" }).click();
   const waiting = page.waitForEvent("download");
   await page.getByRole("button", { name: "Xuất SVG" }).click();
   const download = await waiting;
