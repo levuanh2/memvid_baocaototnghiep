@@ -7865,6 +7865,9 @@ use it for the counters.
 (`correct == correct_count`, `partial + incorrect == incorrect_count`), the list covers
 every question, no verdict is unknown and the null verdicts equal `ungraded_count`
 (review: otherwise a question with a stale ungraded count vanished from every counter).
+In the combined fallback "Chưa chấm" is the remainder of the server totals
+(`total_questions − correct_count − incorrect_count`), so the visible counters always add
+up to "Số câu" (pinned by an invariant test over every scenario).
 The board then shows "Đúng", "Đúng một phần"
 (only when > 0) and "Sai". Otherwise it shows "Đúng" + a combined "Chưa đúng"
 (= `incorrect_count`) instead of a wrong "Sai". Ungraded questions keep "Chưa chấm".

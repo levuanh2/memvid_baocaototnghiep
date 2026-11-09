@@ -286,6 +286,15 @@ function ScoreBoard({ result, grading, provisional, ungradedCount, wrongCount, o
   // While grading, verdicts are still null: keep the familiar labels with "—" rather
   // than flip to the "Chưa đúng" fallback for a few seconds.
   const breakdown = grading ? { correct: null, partial: 0, incorrect: null } : verdictBreakdown(result);
+  // Re-review: every question must land in exactly one visible counter. In the combined
+  // fallback the server's own numbers decide: a question counted neither correct nor
+  // "chưa đúng" is, by definition, not scored, so "Chưa chấm" is the remainder of the
+  // server totals (not ungraded_count, which is what disagreed), and the counters always
+  // add up to "Số câu". (Score, headline and next step still follow the backend's
+  // grading_complete / ungraded_count; this only stops a question vanishing or doubling.)
+  const unscored = breakdown || grading
+    ? (provisional ? ungradedCount : 0)
+    : Math.max(0, Number(result.total_questions || 0) - Number(result.correct_count || 0) - Number(result.incorrect_count || 0));
   const shown = (value) => (grading ? "—" : value ?? "—");
   const noGradedQuestions = provisional && Number(result.max_score || 0) === 0;
   const gradedCount = Number(result.correct_count || 0) + Number(result.incorrect_count || 0);
@@ -339,7 +348,7 @@ function ScoreBoard({ result, grading, provisional, ungradedCount, wrongCount, o
             <Stat label="Chưa đúng" value={shown(result.incorrect_count)} />
           </>
         )}
-        {provisional && <Stat label="Chưa chấm" value={ungradedCount} />}
+        {(provisional || unscored > 0) && <Stat label="Chưa chấm" value={unscored} />}
         <Stat label="Số câu" value={result.total_questions} />
         <Stat label="Thời gian" value={formatDuration(result.duration_seconds)} />
       </div>

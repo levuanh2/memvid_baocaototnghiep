@@ -166,7 +166,10 @@ describe("QuizResult — Đúng / Đúng một phần / Sai are counted separate
     });
     it("review: a null verdict the backend does not report as ungraded (stale ungraded_count) cannot vanish", async () => {
       await render(resultFor(["correct", null], { ungraded_count: 0, grading_complete: true }));
-      expectFallback(counters(), 1, 0);
+      const c = counters();
+      expectFallback(c, 1, 0);
+      expect(c["Chưa chấm"]).toBe("1");   // the null-verdict question is still on screen
+      expect(sumOf(c, ["Đúng", "Chưa đúng", "Chưa chấm"])).toBe(Number(c["Số câu"]));
     });
     it("review: ungraded_count larger than the null verdicts also falls back", async () => {
       await render(resultFor(["correct", "partial"], { ungraded_count: 1 }));
@@ -178,6 +181,26 @@ describe("QuizResult — Đúng / Đúng một phần / Sai are counted separate
       }));
       expectFallback(counters(), 1, 0);
     });
+  });
+
+  it("invariant: in every scenario each question is in exactly one visible counter (sum = Số câu)", async () => {
+    const SHOWN = ["Đúng", "Đúng một phần", "Sai", "Chưa đúng", "Chưa chấm"];
+    const scenarios = [
+      resultFor(["correct", "correct", "correct"]), resultFor(["incorrect", "incorrect"]),
+      resultFor(["correct", "partial"]), resultFor(["partial", "incorrect"]), resultFor(["partial", "partial"]),
+      resultFor(["correct", "partial", null]), resultFor([null, null]),
+      (() => { const r = resultFor(["correct", "partial"]); delete r.questions; return r; })(),
+      resultFor(["correct", "partial"], { total_questions: 3, questions: [q("correct", 0)] }),
+      resultFor(["correct", "partial"], { correct_count: 2, incorrect_count: 0 }),
+      resultFor(["correct", null], { ungraded_count: 0, grading_complete: true }),
+      resultFor(["correct", "partial"], { ungraded_count: 1 }),
+    ];
+    for (const r of scenarios) {
+      await render(r);
+      const c = counters();
+      expect(sumOf(c, SHOWN), JSON.stringify(c)).toBe(Number(c["Số câu"]));
+      act(() => root.unmount()); root = null; document.body.removeChild(container); container = null;
+    }
   });
 
   it("9. while grading, every counter reads '—'", async () => {
