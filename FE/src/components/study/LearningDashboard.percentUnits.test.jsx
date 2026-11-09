@@ -59,9 +59,10 @@ async function render(props = {}) {
 }
 
 describe("LearningDashboard — percentages name their unit (W2-2)", () => {
-  it("quiz average score names 'câu đúng'", async () => {
+  it("quiz average score names 'điểm' (it is an average of score percentages, not of correct answers)", async () => {
     await render();
-    expect(container.textContent).toContain("85% câu đúng");
+    expect(container.textContent).toContain("85% điểm");
+    expect(container.textContent).not.toContain("câu đúng");
   });
 
   it("document readiness in the 'Học dở dang' list names 'sẵn sàng'", async () => {

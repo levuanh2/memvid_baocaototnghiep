@@ -83,10 +83,10 @@ describe("Round 7 quiz result", () => {
     expect(container.textContent).toContain("Kết quả tạm thời");
     expect(container.textContent).toContain("1 câu chưa chấm được");
     // Exact caption text (not a substring check): the provisional format
-    // must be the WHOLE caption, not the non-provisional "100% câu đúng"
+    // must be the WHOLE caption, not the non-provisional "100% điểm"
     // format with the provisional qualifier merely appended somewhere else.
     const caption = container.querySelector(".font-mono.text-caption.text-text-muted.mt-1\\.5");
-    expect(caption?.textContent).toBe("100% câu đúng tạm tính trên 1 câu đã chấm");
+    expect(caption?.textContent).toBe("100% điểm tạm tính trên 1 câu đã chấm");
     expect(container.querySelector(".seal-meter--mastered")).toBeNull();
   });
 

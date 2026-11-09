@@ -49,7 +49,7 @@ export default function LearningDashboard({ documents, overview, weak, attempts,
             </div>
             {overview?.average_percentage != null && (
               <p className="text-small text-text-muted mt-2">
-                Điểm quiz trung bình: <span className="text-text-secondary font-medium">{overview.average_percentage}% câu đúng</span>
+                Điểm quiz trung bình: <span className="text-text-secondary font-medium">{overview.average_percentage}% điểm</span>
                 {" · "}Thời lượng đọc ước tính đã mở: <span className="text-text-secondary font-medium">{phutDoc} phút</span>
               </p>
             )}
@@ -123,7 +123,7 @@ export default function LearningDashboard({ documents, overview, weak, attempts,
               {insight.taiLieuHoatDongNhat && <li>Tài liệu hoạt động nhất: <b className="text-text-primary">{tenHienThi(insight.taiLieuHoatDongNhat)}</b></li>}
               <li>Lượt quiz đã chấm: <b className="text-text-primary">{insight.luotQuizDaCham}</b></li>
               <li>Sơ đồ tư duy đã tạo: <b className="text-text-primary">{insight.soMindmapDaXem}</b></li>
-              <li>Bao phủ tóm tắt: <b className="text-text-primary">{insight.baoPhuTomTat}%</b></li>
+              <li>Bao phủ tóm tắt: <b className="text-text-primary">{insight.baoPhuTomTat}% đã có</b></li>
             </ul>
           </div>
 

@@ -268,8 +268,8 @@ function ScoreBoard({ result, grading, provisional, ungradedCount, wrongCount, o
     : noGradedQuestions
       ? `${ungradedCount} câu chưa chấm được`
       : provisional
-        ? `${percent}% câu đúng tạm tính trên ${gradedCount} câu đã chấm`
-        : percent == null ? "chưa chấm" : `${percent}% câu đúng`;
+        ? `${percent}% điểm tạm tính trên ${gradedCount} câu đã chấm`
+        : percent == null ? "chưa chấm" : `${percent}% điểm`;
   return (
     <section className="quiz-score-hero">
       <div className="flex items-center gap-4">
@@ -280,8 +280,8 @@ function ScoreBoard({ result, grading, provisional, ungradedCount, wrongCount, o
           label={grading || noGradedQuestions
             ? "Chưa có điểm"
             : provisional
-              ? `Kết quả tạm thời ${percent} phần trăm câu đúng trên các câu đã chấm`
-              : percent == null ? "Chưa có điểm" : `Đạt ${percent} phần trăm câu đúng`}
+              ? `Kết quả tạm thời ${percent} phần trăm điểm trên các câu đã chấm`
+              : percent == null ? "Chưa có điểm" : `Đạt ${percent} phần trăm điểm`}
         />
         <div>
           <div className="font-display text-h2 font-semibold text-text-primary leading-none">

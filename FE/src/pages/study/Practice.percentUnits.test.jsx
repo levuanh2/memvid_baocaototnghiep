@@ -1,7 +1,8 @@
 // @vitest-environment jsdom
-// W2-2: Practice's graded score % must name "câu đúng" too, same as
-// QuizResult's -- the audit finding is about these percentages appearing
-// without a unit, not about any one screen specifically.
+// W2-2: Practice's graded score % must name its unit too, same as QuizResult's.
+// PR #137 review: the unit is "điểm" (percentage = score / max_score * 100 with
+// partial = 0.5 points), and with NO graded question there is no score at all,
+// so the seal must not announce a fabricated 0%.
 import { act } from "react";
 import { createRoot } from "react-dom/client";
 import { afterEach, describe, expect, it, vi } from "vitest";
@@ -47,20 +48,55 @@ async function renderReady() {
   await act(async () => { await Promise.resolve(); await Promise.resolve(); await Promise.resolve(); });
 }
 
+async function submitWith(result) {
+  await renderReady();
+  submitPractice.mockResolvedValue(result);
+  getPracticeComparison.mockResolvedValue({ concepts: [] });
+  const submitButton = [...container.querySelectorAll("button")].find((b) => b.textContent.includes("Nộp bài luyện tập"));
+  await act(async () => { submitButton.click(); });
+  await act(async () => { await Promise.resolve(); await Promise.resolve(); });
+}
+const seal = () => container.querySelector('[role="img"]')?.getAttribute("aria-label");
+
 describe("Practice — percentages name their unit (W2-2)", () => {
-  it("graded score % names 'câu đúng' (provisional case)", async () => {
-    await renderReady();
-    submitPractice.mockResolvedValue({
-      percentage: 60, score: 3, max_score: 5, correct_count: 3, total_questions: 5,
+  it("provisional: '% điểm tạm tính' and a provisional seal label", async () => {
+    await submitWith({
+      percentage: 60, score: 3, max_score: 5, correct_count: 3, total_questions: 6,
       grading_complete: false, ungraded_count: 1,
     });
-    getPracticeComparison.mockResolvedValue({ concepts: [] });
-    const submitButton = [...container.querySelectorAll("button")].find((b) => b.textContent.includes("Nộp bài luyện tập"));
-    await act(async () => { submitButton.click(); });
-    await act(async () => { await Promise.resolve(); await Promise.resolve(); });
+    expect(container.textContent).toContain("60% điểm tạm tính trên 5 câu đã chấm");
+    expect(seal()).toBe("Kết quả tạm thời 60 phần trăm điểm trên các câu đã chấm");
+  });
 
-    expect(container.textContent).toContain("60% câu đúng tạm tính trên 5 câu đã chấm");
-    const seal = container.querySelector('[role="img"]');
-    expect(seal?.getAttribute("aria-label")).toBe("Đạt 60 phần trăm câu đúng");
+  it("fully graded, one correct + one partial: the seal says 75 phần trăm điểm while the caption counts 1/2 fully right", async () => {
+    await submitWith({
+      percentage: 75, score: 1.5, max_score: 2, correct_count: 1, total_questions: 2,
+      grading_complete: true, ungraded_count: 0,
+    });
+    expect(seal()).toBe("Đạt 75 phần trăm điểm");
+    expect(container.textContent).toContain("đúng 1/2");
+    expect(container.textContent).not.toContain("câu đúng");
+  });
+
+  it("a genuine graded 0% is still announced as a score", async () => {
+    await submitWith({
+      percentage: 0, score: 0, max_score: 2, correct_count: 0, total_questions: 2,
+      grading_complete: true, ungraded_count: 0,
+    });
+    expect(seal()).toBe("Đạt 0 phần trăm điểm");
+  });
+
+  it("nothing could be graded: visible 'Chưa chấm được' and the seal says there is no score, not 0%", async () => {
+    await submitWith({
+      percentage: null, score: 0, max_score: 0, correct_count: 0, total_questions: 2,
+      grading_complete: false, ungraded_count: 2,
+    });
+    expect(container.textContent).toContain("Chưa chấm được");
+    expect(container.textContent).toContain("2 câu chưa chấm được");
+    const label = seal();
+    expect(label).toBe("Chưa có điểm");
+    expect(label).not.toMatch(/\d/);
+    // Still exposed to assistive technology, just with the true state.
+    expect(container.querySelector('[role="img"]').getAttribute("aria-hidden")).not.toBe("true");
   });
 });

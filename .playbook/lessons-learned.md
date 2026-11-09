@@ -3655,3 +3655,13 @@ owner approval. UI-only export work still needs real
 artifact gates: a clean screenshot or mocked call does not prove output bytes,
 scope identity, or connector geometry stayed unchanged.
 
+
+## 2026-11-09 — Name a percentage by what its formula divides, and re-run the PR's own tests after a merge
+
+A unit word is a claim about the formula. Read the formula (`score / max_score`,
+partial = 0.5) before choosing "câu đúng"; a fixture where partial credit makes the
+two readings disagree (1 correct + 1 partial = 75%) is the test that tells them
+apart. When a merge from main conflicts in a file the branch just changed, re-run the
+branch's new tests before pushing: a conflict resolved "to main" can revert the change
+while its test survives. A missing value is not zero in an accessible name either:
+mirror the visible "no score" state instead of `?? 0`.
