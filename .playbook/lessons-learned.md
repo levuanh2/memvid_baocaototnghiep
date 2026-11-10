@@ -3696,3 +3696,10 @@ A geometry test that only checks containment can pass on a layout that has colla
 `grid-template-columns` (e.g. `fit-content()` inside `minmax()`) is dropped silently and every
 cell stacks. Assert the computed structure too (column count, row height), and validate new CSS
 grammar in a browser, not by eye.
+
+## 2026-11-10 — Unifying a label can break tests and expose bugs far away
+
+Giving two controls the same accessible name (one upload label) silently changed what every
+`getByRole(name).first()` resolves to, and made a spec cover a control it had never touched (the
+tablet rail "+"), exposing a real focus loss. After a terminology change, grep all e2e and fixture
+specs, and run the full Fixture Audit, not just Fixture Smoke.

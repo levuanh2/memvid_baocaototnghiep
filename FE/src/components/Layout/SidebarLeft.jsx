@@ -1,4 +1,5 @@
-import { useState, useEffect, useLayoutEffect, useRef, useCallback } from "react";
+import { useState, useEffect, useLayoutEffect, useRef, useCallback, useMemo } from "react";
+import { uploadFocusHandoffRef } from "../../utils/uploadFocusHandoff";
 import { apiFetch, _appError, isUnauthorizedError, isNotFoundOrForbiddenError, getUserFriendlyApiError } from "../../utils/api";
 import { Icon } from "../ui/Icon";
 import Badge from "../ui/Badge";
@@ -79,6 +80,10 @@ export default function SidebarLeft({ selectedSources, setSelectedSources, onSou
   const [draftFilters, setDraftFilters] = useState({ type: "", status: "", date: "" });
   const [appliedFilters, setAppliedFilters] = useState({ type: "", status: "", date: "" });
   const fileInputRef = useRef(null);
+  // Rail "+" and panel "Thêm tài liệu" unmount when the layout crosses 768px / 1280px;
+  // a focused one hands focus to the upload control of the new layout (not <body>).
+  const railUploadFocusRef = useMemo(uploadFocusHandoffRef, []);
+  const panelUploadFocusRef = useMemo(uploadFocusHandoffRef, []);
   const fileChooserOpenRef = useRef(false);
   const pollersRef = useRef({});
   const settleFileChooser = useCallback(() => {
@@ -372,7 +377,7 @@ export default function SidebarLeft({ selectedSources, setSelectedSources, onSou
             );
           })}
         </div>
-        <button type="button" className={`source-rail__add${uploading ? " is-busy" : ""}`}
+        <button type="button" ref={railUploadFocusRef} data-upload-cta className={`source-rail__add${uploading ? " is-busy" : ""}`}
           onClick={() => fileInputRef.current?.click()} disabled={uploading}
           aria-label={uploading ? "Đang tải tài liệu" : "Tải tài liệu lên"}
           title={uploading ? "Đang tải tài liệu" : "Tải tài liệu lên"}>
@@ -412,7 +417,7 @@ export default function SidebarLeft({ selectedSources, setSelectedSources, onSou
             earns its weight when the shelf is empty (it's the one thing to
             do); once there are sources, "add another" is a routine action
             that doesn't need to out-shout the shelf itself every visit. */}
-        <button type="button" onClick={openFileChooser} disabled={uploading} className={["select-none w-full inline-flex items-center justify-center gap-2",
+        <button type="button" ref={panelUploadFocusRef} data-upload-cta onClick={openFileChooser} disabled={uploading} className={["select-none w-full inline-flex items-center justify-center gap-2",
           uploading ? "btn-secondary cursor-not-allowed opacity-70"
             : sources.length > 0 ? "btn-secondary cursor-pointer"
             : "btn-primary cursor-pointer"].join(" ")}>

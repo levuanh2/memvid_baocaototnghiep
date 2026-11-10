@@ -100,7 +100,8 @@ test("mobile: chooser works with the drawer closed and open", async ({ page }) =
   await openEmptyLibraryApp(page);
   const upload = page.getByRole("button", { name: "Tải tài liệu lên" }).first();
   await (await expectOneChooser(page, () => upload.click())).setFiles([]);
-  await page.getByRole("button", { name: /Mở công cụ StudyMap/ }).click();
+  // PR #126 (W1-2) renamed the header trigger "Mở công cụ StudyMap" -> "Mở công cụ học".
+  await page.getByRole("button", { name: "Mở công cụ học", exact: true }).click();
   await page.getByRole("menuitem", { name: /Mở thư mục nguồn/ }).click();
   await expect(page.getByText("Thêm tài liệu", { exact: true })).toBeInViewport();
   await (await expectOneChooser(page, () => page.getByText("Thêm tài liệu", { exact: true }).click())).setFiles([]);
@@ -173,12 +174,22 @@ for (const transition of [
     const upload = page.getByRole("button", { name: "Tải tài liệu lên" }).first();
     await upload.focus();
     await expect(upload).toBeFocused();
+    const original = await upload.elementHandle();
 
     await page.setViewportSize({ width: transition.to, height: 900 });
-    await expect(upload).toBeFocused();
+    // Several controls share the name "Tải tài liệu lên" (rail "+", empty-state CTA), so a
+    // re-resolved `.first()` can point at a different node after the resize. Track the node that
+    // actually had focus: if it survived the resize it must still have focus; if the new layout
+    // removed it, focus must move to that layout's upload control, never fall to <body>.
+    await expect.poll(() => original.evaluate((node) => (node.isConnected
+      ? node === document.activeElement
+      : document.activeElement?.hasAttribute("data-upload-cta") === true))).toBe(true);
     await expectNoHorizontalOverflow(page);
-    const chooser = await expectOneChooser(page, () => upload.click());
+    const focused = page.locator("[data-upload-cta]:focus");
+    await expect(focused).toHaveCount(1);
+    const target = await focused.elementHandle();
+    const chooser = await expectOneChooser(page, () => focused.click());
     await chooser.setFiles([]);
-    await expect(upload).toBeFocused();
+    await expect.poll(() => target.evaluate((node) => node === document.activeElement)).toBe(true);
   });
 }

@@ -8015,3 +8015,38 @@ arrow, and at <= 359px 14px text + 8px padding. The spec now also asserts the ar
 Local emulation (DejaVu Sans + letter-spacing to the CI width): old CSS arrow 10.3px / 0px,
 new CSS 14px everywhere with no overflow. Windows' fallback (Segoe UI) is narrower, so this
 only showed on Linux: never treat one OS's fallback font as "the" fallback.
+
+### Fixture Audit red since #121/#126: stale labels, a retargeting locator, and a real focus loss (2026-11-10)
+
+Baseline on main d912419 (Linux run 42849418300): 526 tests, 514 passed, 12 failed. Three causes:
+
+1. **`round7-1-qa` (3 tests): stale label.** #121/#148 renamed the result review action
+   "Xem lại N câu cần ôn" -> "Xem lại câu chưa đúng"; the fixture was never updated
+   ("Xem lại 2 câu cần ôn" x4, "Xem lại 3 câu cần ôn" in the `tones` view). The old label carried
+   the count, so the spec now asserts "Câu cần ôn 1 / 2" (1 / 3 in `tones`) on the position line
+   instead, plus the existing Câu 4 / Câu 9 ordinals.
+2. **`upload-cta-lifecycle` mobile drawer: stale selector.** #126 (W1-2) renamed the header trigger
+   "Mở công cụ StudyMap" -> "Mở công cụ học" and updated mobile-header specs but not this one.
+3. **`upload-cta-lifecycle` live resize (8/8): real focus loss + retargeting locator.** #126 also
+   renamed the tablet rail "+" from "Thêm tài liệu" to "Tải tài liệu lên", so several buttons share
+   that name. (a) The spec's `.first()` re-resolved to a different node after a resize even when focus
+   was intact (767->768, 1280->1279 collapsed). (b) Real defect: at 768-1279px the focused control is
+   the rail "+", which unmounts at 767px and 1280px, dropping keyboard focus to <body>. Bisect: the spec
+   passed 23/23 at 5d56371 (rail still "Thêm tài liệu") and first reached main already failing at
+   79f2fb3 (#129, after main with #126 was merged into that branch).
+
+**Fix:** `utils/uploadFocusHandoff.js`: a ref callback on the rail "+" and the panel "Thêm tài liệu"
+(React detaches refs before removing the node) moves focus, on the next frame and only if focus fell
+to <body>, to the first usable `[data-upload-cta]` (in the viewport, `checkVisibility()`, not inside
+`inert` / `aria-hidden`; the closed mobile drawer is only translated off-screen). The spec tracks the
+node that had focus: if it survived it must keep focus, otherwise focus must be on an upload control.
+
+**Regression:** red-before with the handoff removed: exactly the 4 unmount cases fail (768->767,
+1279->1280, both states); after: upload spec 23/23, round7 6/6.
+
+**Prevention:** when renaming a control, grep every spec (e2e-fixture is not in Fixture Smoke, so CI
+does not catch it); never assert focus through a role+name `.first()` when several controls can share
+the name; a control that a breakpoint unmounts must hand focus on, not drop it.
+
+**Separate finding (not fixed here):** the closed mobile source drawer is only `-translate-x-full`,
+so its controls stay in the Tab order while invisible (keyboard a11y defect; needs `inert` when closed).

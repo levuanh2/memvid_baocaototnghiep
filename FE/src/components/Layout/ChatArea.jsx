@@ -923,7 +923,7 @@ export default function ChatArea({
                 <p className="font-display text-body-lg text-text-secondary mb-6">
                   Tải tài liệu đầu tiên lên để bắt đầu đặt câu hỏi.
                 </p>
-                <button type="button" onClick={onUploadDocument} className="btn-primary !text-small inline-flex items-center gap-2">
+                <button type="button" data-upload-cta onClick={onUploadDocument} className="btn-primary !text-small inline-flex items-center gap-2">
                   <Icon name="Plus" size={14} /> Tải tài liệu lên
                 </button>
               </>
