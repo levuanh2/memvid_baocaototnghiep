@@ -115,7 +115,7 @@ test("Enter and Space activate a depth-preset menuitem the same way a click does
     await page.keyboard.press("Tab");
   }
   await page.keyboard.press("Enter");
-  expect(await pressedLabels(page)).toEqual(["Chỉ chủ đề chính"]);
+  expect(await pressedLabels(page)).toEqual(["Chỉ chủ đề trung tâm"]);
 
   await openOverflow(page);
   await page.keyboard.press("Tab");
