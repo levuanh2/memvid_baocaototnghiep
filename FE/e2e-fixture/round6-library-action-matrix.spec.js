@@ -193,6 +193,8 @@ for (const [width, height] of responsiveMatrixViewports) for (const fonts of ["w
         primaryClientWidth: primaryNode.clientWidth,
         primaryScrollWidth: primaryNode.scrollWidth,
         primaryContentOverflow: Math.round(Math.max(0, boxLeft - content.left, content.right - boxRight) * 10) / 10,
+        // flex used to shrink the 14px arrow to absorb an overflowing label (CI, DejaVu fallback)
+        primaryIconWidth: Math.round(primaryNode.querySelector("svg").getBoundingClientRect().width * 10) / 10,
       };
     }));
 
@@ -204,6 +206,9 @@ for (const [width, height] of responsiveMatrixViewports) for (const fonts of ["w
     // Icon and label sit inside the padding box (0.5px for sub-pixel text rounding).
     expect(geometry.filter(({ primaryContentOverflow }) => primaryContentOverflow > 0.5)
       .map(({ id, primaryContentOverflow }) => ({ id, primaryContentOverflow }))).toEqual([]);
+    // The arrow keeps its 14px: a squeezed icon hides overflow from the measurement above.
+    expect(geometry.filter(({ primaryIconWidth }) => Math.abs(primaryIconWidth - 14) > 0.5)
+      .map(({ id, primaryIconWidth }) => ({ id, primaryIconWidth }))).toEqual([]);
   });
 }
 

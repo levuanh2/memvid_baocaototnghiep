@@ -7944,3 +7944,13 @@ deterministic, not flaky; green after; sweep 767-1440 both fonts: no overflow an
 **Prevention:** never prove "fits" with `scrollWidth` on a centred or padded flex box; measure
 the content range against the padding box (lessons-learned 2026-10-27), and measure text only
 after `document.fonts.ready`, with a fallback-font run for anything with a fixed width.
+
+**Found by the PR #150 CI on Linux (run 42782884155), fixed before merge:** with Google Fonts
+blocked, Chromium on ubuntu-latest falls back to DejaVu Sans Bold, where the label is ~257px:
+the 280px cap clipped it by 1.6px a side and the 320px full-width button (232px content box) by
+12.6px. Worse, those numbers were AFTER flex had shrunk the 14px arrow (10px at >= 768px, 0px at
+320px), so the content-box measure under-reported. Fix: `max-width:300px`, `flex-shrink:0` on the
+arrow, and at <= 359px 14px text + 8px padding. The spec now also asserts the arrow stays 14px.
+Local emulation (DejaVu Sans + letter-spacing to the CI width): old CSS arrow 10.3px / 0px,
+new CSS 14px everywhere with no overflow. Windows' fallback (Segoe UI) is narrower, so this
+only showed on Linux: never treat one OS's fallback font as "the" fallback.
