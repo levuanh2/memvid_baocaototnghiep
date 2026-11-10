@@ -60,7 +60,7 @@ const NHOM_LOC = [
   ["Định dạng", [["pdf", "PDF"], ["docx", "DOCX"], ["txt", "TXT"], ["image", "Ảnh"]]],
   ["Xử lý", [["completed", "Hoàn tất"], ["processing", "Đang xử lý"], ["failed", "Lỗi"]]],
   ["Đã có AI", [["summary_ready", "Tóm tắt"], ["mindmap_ready", "Sơ đồ tư duy"],
-                ["studymap_ready", "Bản đồ học tập"], ["quiz_ready", "Quiz"],
+                ["studymap_ready", "Bản đồ kiến thức"], ["quiz_ready", "Quiz"],
                 ["review_ready", "Ôn tập"]]],
 ];
 
@@ -506,6 +506,7 @@ export default function DocumentList() {
       error={error}
       onRetry={load}
       skeleton={<DocumentSkeleton />}
+      stackActionsOnMobile
       actions={
         <>
           {/* Danh sách này phải khớp formats.accept_attribute() của backend —
@@ -514,7 +515,7 @@ export default function DocumentList() {
             accept=".bmp,.csv,.doc,.docx,.epub,.fb2,.gif,.htm,.html,.jpeg,.jpg,.json,.md,.mobi,.odp,.odt,.pdf,.png,.pptx,.rtf,.txt,.xlsx,.xps" />
           <button type="button" className="btn-seal text-small inline-flex items-center gap-2"
             disabled={uploading} onClick={() => fileRef.current?.click()}>
-            {uploading ? <><Spinner size={13} /> Đang tải lên…</> : <><Icon name="Upload" size={14} /> Tải tài liệu</>}
+            {uploading ? <><Spinner size={13} /> Đang tải lên…</> : <><Icon name="Upload" size={14} /> Tải tài liệu lên</>}
           </button>
           {/* Demo Mode — chỉ hiện khi có tài liệu THẬT đủ sẵn sàng; không có thì
               không vẽ nút, không hứa một bản xem thử không tồn tại. */}
@@ -941,7 +942,8 @@ function Overview({ overview }) {
   const items = [
     ["Quiz đã tạo", overview.quiz_count ?? 0],
     ["Bài đã làm", overview.attempt_count ?? 0],
-    ["Điểm trung bình", overview.average_percentage == null ? "—" : `${overview.average_percentage}%`],
+    // PR #137: a score-derived percentage says "điểm" everywhere (see QuizResult).
+    ["Điểm trung bình", overview.average_percentage == null ? "—" : `${overview.average_percentage}% điểm`],
   ];
   return (
     <section className="mb-7 pb-5 border-b border-border flex flex-wrap items-baseline gap-x-2.5 gap-y-1.5">

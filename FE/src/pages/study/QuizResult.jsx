@@ -18,6 +18,13 @@ import { MAX_CONSECUTIVE_FETCH_FAILURES } from "../../utils/jobPoller";
 import "./quizJourney.css";
 
 const KEYS = ["A", "B", "C", "D", "E", "F"];
+// O5/A3 (owner revision): the review-plan CTA's "(N chủ đề)" count must
+// mirror BE's own definition of "weak" exactly -- BE/app/domains/
+// gap_analysis/service.py's `WEAK_STATUSES = ("light_review",
+// "review_needed", "critical_gap")`. Not "anything not mastered": pending/
+// ungraded/unknown/missing statuses are excluded by construction (not in
+// this allow-list), same as `mastered`.
+const WEAK_MASTERY_STATUSES = new Set(["light_review", "review_needed", "critical_gap"]);
 const REGRADE_POLL_MS = 3000;
 // Job chấm tự luận chết ở BE thì attempt kẹt `submitted` VĨNH VIỄN — poll thành công
 // mọi lần, chỉ là trạng thái không bao giờ đổi, nên trần đếm-lỗi không cứu được.
@@ -108,6 +115,23 @@ export default function QuizResult() {
     [graded, result],
   );
   const openWrongReview = () => { setReviewIndex(0); setReviewingWrong(true); };
+  // `masteries` only populates once graded (see `load()` above), so an empty
+  // array here means "not computed yet", and the header action below falls
+  // back to the count-less label for it.
+  // A3 (owner correction): dedup by the normalized (trimmed, lower-cased)
+  // concept name FIRST, falling back to `concept_mastery_id` only when a row
+  // has no name. A row with neither is not counted at all (not fabricated as
+  // its own topic) -- two rows for the same concept must never inflate the
+  // count just because they disagree on casing or one is missing its id.
+  const weakTopicCount = new Set(
+    masteries
+      .filter((m) => WEAK_MASTERY_STATUSES.has(m?.status))
+      .map((m) => {
+        const name = String(m?.concept_name || "").trim().toLowerCase();
+        return name ? `name:${name}` : m?.concept_mastery_id != null ? `id:${m.concept_mastery_id}` : null;
+      })
+      .filter(Boolean),
+  ).size;
 
   return (
     <StudyShell
@@ -119,10 +143,17 @@ export default function QuizResult() {
       onRetry={load}
       width={reviewingWrong ? "max-w-[1120px]" : "max-w-[1050px]"}
       actions={
-        result?.status === "graded" && (
-          <Link to={`/app/study/review/${attemptId}`} className="btn-secondary text-small inline-flex items-center gap-2">
-            <Icon name="BookOpen" size={14} /> Kế hoạch ôn tập
-          </Link>
+        graded && (
+          wrongQuestions.length > 0 ? (
+            <Link to={`/app/study/review/${attemptId}`} className="btn-primary text-small inline-flex items-center gap-2">
+              <Icon name="BookOpen" size={14} />
+              {weakTopicCount > 0 ? `Kế hoạch ôn tập (${weakTopicCount} chủ đề)` : "Kế hoạch ôn tập"}
+            </Link>
+          ) : (
+            <Link to="/app/study" className="btn-primary text-small inline-flex items-center gap-2">
+              <Icon name="ArrowLeft" size={14} /> Về Thư viện
+            </Link>
+          )
         )
       }
     >
@@ -237,8 +268,8 @@ function ScoreBoard({ result, grading, provisional, ungradedCount, wrongCount, o
     : noGradedQuestions
       ? `${ungradedCount} câu chưa chấm được`
       : provisional
-        ? `${percent}% tạm tính trên ${gradedCount} câu đã chấm`
-        : percent == null ? "chưa chấm" : `${percent}% · điểm thô`;
+        ? `${percent}% điểm tạm tính trên ${gradedCount} câu đã chấm`
+        : percent == null ? "chưa chấm" : `${percent}% điểm`;
   return (
     <section className="quiz-score-hero">
       <div className="flex items-center gap-4">
@@ -249,8 +280,8 @@ function ScoreBoard({ result, grading, provisional, ungradedCount, wrongCount, o
           label={grading || noGradedQuestions
             ? "Chưa có điểm"
             : provisional
-              ? `Kết quả tạm thời ${percent} phần trăm trên các câu đã chấm`
-              : percent == null ? "Chưa có điểm" : `Đạt ${percent} phần trăm`}
+              ? `Kết quả tạm thời ${percent} phần trăm điểm trên các câu đã chấm`
+              : percent == null ? "Chưa có điểm" : `Đạt ${percent} phần trăm điểm`}
         />
         <div>
           <div className="font-display text-h2 font-semibold text-text-primary leading-none">
@@ -269,7 +300,7 @@ function ScoreBoard({ result, grading, provisional, ungradedCount, wrongCount, o
         <Stat label="Số câu" value={result.total_questions} />
         <Stat label="Thời gian" value={formatDuration(result.duration_seconds)} />
       </div>
-      {!grading && wrongCount > 0 && <button type="button" className="btn-primary quiz-review-wrong" onClick={onReviewWrong}>Xem lại {wrongCount} câu cần ôn</button>}
+      {!grading && wrongCount > 0 && <button type="button" className="btn-secondary quiz-review-wrong" onClick={onReviewWrong}>Xem lại câu sai</button>}
     </section>
   );
 }

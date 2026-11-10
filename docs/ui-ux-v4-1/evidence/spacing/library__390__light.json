@@ -1,0 +1,1191 @@
+{
+ "viewport": {
+  "width": 390,
+  "height": 844
+ },
+ "distinctSpacingValues": [
+  2,
+  3,
+  4,
+  6,
+  7.2,
+  8,
+  10,
+  11.2,
+  12,
+  14,
+  16,
+  20,
+  24,
+  28,
+  46.9844
+ ],
+ "spacingFrequency": [
+  {
+   "value": 2,
+   "count": 53
+  },
+  {
+   "value": 3,
+   "count": 312
+  },
+  {
+   "value": 4,
+   "count": 355
+  },
+  {
+   "value": 6,
+   "count": 837
+  },
+  {
+   "value": 7.2,
+   "count": 2
+  },
+  {
+   "value": 8,
+   "count": 363
+  },
+  {
+   "value": 10,
+   "count": 21
+  },
+  {
+   "value": 11.2,
+   "count": 2
+  },
+  {
+   "value": 12,
+   "count": 441
+  },
+  {
+   "value": 14,
+   "count": 12
+  },
+  {
+   "value": 16,
+   "count": 120
+  },
+  {
+   "value": 20,
+   "count": 5
+  },
+  {
+   "value": 24,
+   "count": 4
+  },
+  {
+   "value": 28,
+   "count": 12
+  },
+  {
+   "value": 46.9844,
+   "count": 21
+  }
+ ],
+ "headings": [
+  {
+   "level": "H1",
+   "label": "Thư viện học tập",
+   "fontSize": "19.2px",
+   "lineHeight": "24.96px",
+   "margin": [
+    "0px",
+    "0px"
+   ]
+  },
+  {
+   "level": "H3",
+   "label": "Tổng quan học tập",
+   "fontSize": "16px",
+   "lineHeight": "24px",
+   "margin": [
+    "0px",
+    "0px"
+   ]
+  },
+  {
+   "level": "H2",
+   "label": "Tiếp tục học",
+   "fontSize": "10.5px",
+   "lineHeight": "14.7px",
+   "margin": [
+    "0px",
+    "12px"
+   ]
+  },
+  {
+   "level": "H2",
+   "label": "Đang yếu ở",
+   "fontSize": "10.5px",
+   "lineHeight": "14.7px",
+   "margin": [
+    "0px",
+    "12px"
+   ]
+  },
+  {
+   "level": "H2",
+   "label": "Tuần này (1)",
+   "fontSize": "10.5px",
+   "lineHeight": "14.7px",
+   "margin": [
+    "0px",
+    "12px"
+   ]
+  },
+  {
+   "level": "H2",
+   "label": "Tải lên gần đây (6)",
+   "fontSize": "10.5px",
+   "lineHeight": "14.7px",
+   "margin": [
+    "0px",
+    "12px"
+   ]
+  },
+  {
+   "level": "H2",
+   "label": "Chưa mở bao giờ (5)",
+   "fontSize": "10.5px",
+   "lineHeight": "14.7px",
+   "margin": [
+    "0px",
+    "12px"
+   ]
+  },
+  {
+   "level": "H2",
+   "label": "Cần tóm tắt (3)",
+   "fontSize": "10.5px",
+   "lineHeight": "14.7px",
+   "margin": [
+    "0px",
+    "12px"
+   ]
+  },
+  {
+   "level": "H2",
+   "label": "Cần quiz (4)",
+   "fontSize": "10.5px",
+   "lineHeight": "14.7px",
+   "margin": [
+    "0px",
+    "12px"
+   ]
+  },
+  {
+   "level": "H2",
+   "label": "Tất cả tài liệu (6)",
+   "fontSize": "10.5px",
+   "lineHeight": "14.7px",
+   "margin": [
+    "0px",
+    "12px"
+   ]
+  },
+  {
+   "level": "H2",
+   "label": "Bài đã làm gần đây",
+   "fontSize": "10.5px",
+   "lineHeight": "14.7px",
+   "margin": [
+    "0px",
+    "12px"
+   ]
+  }
+ ],
+ "boxes": [
+  {
+   "element": "section.mb-7.pb-5.border-b.border-border.flex.flex-wrap.items-baseline.gap-x-2.5.gap-y-1.5",
+   "label": "6tài liệuQuiz đã tạo 2·Bài đã làm 3·Điểm trung bình 67%",
+   "x": 20,
+   "y": 182,
+   "width": 350,
+   "height": 89,
+   "padding": [
+    "0px",
+    "0px",
+    "20px",
+    "0px"
+   ],
+   "margin": [
+    "0px",
+    "0px",
+    "28px",
+    "0px"
+   ],
+   "gap": [
+    "6px",
+    "10px"
+   ]
+  },
+  {
+   "element": "section.surface-card.!p-0.mb-7",
+   "label": "Tổng quan học tập",
+   "x": 20,
+   "y": 433,
+   "width": 350,
+   "height": 41,
+   "padding": [
+    "0px",
+    "0px",
+    "0px",
+    "0px"
+   ],
+   "margin": [
+    "0px",
+    "0px",
+    "28px",
+    "0px"
+   ],
+   "gap": [
+    "normal",
+    "normal"
+   ]
+  },
+  {
+   "element": "section.disclosure",
+   "label": "Tổng quan học tập",
+   "x": 21,
+   "y": 434,
+   "width": 348,
+   "height": 39,
+   "padding": [
+    "0px",
+    "0px",
+    "0px",
+    "0px"
+   ],
+   "margin": [
+    "0px",
+    "0px",
+    "0px",
+    "0px"
+   ],
+   "gap": [
+    "normal",
+    "normal"
+   ]
+  },
+  {
+   "element": "section.mb-7",
+   "label": "Tiếp tục học",
+   "x": 20,
+   "y": 502,
+   "width": 350,
+   "height": 364,
+   "padding": [
+    "0px",
+    "0px",
+    "0px",
+    "0px"
+   ],
+   "margin": [
+    "0px",
+    "0px",
+    "28px",
+    "0px"
+   ],
+   "gap": [
+    "normal",
+    "normal"
+   ]
+  },
+  {
+   "element": "div.surface-card.flex.flex-col.outline-none.focus-visible:ring-2.focus-visible:ring-offset-2.!p-4.gap-3",
+   "label": "Hệ điều hành.pdfHọc kỳ 1Chưa có tóm tắt cho tài liệu này.Đã lập chỉ mụcT",
+   "x": 20,
+   "y": 528,
+   "width": 350,
+   "height": 338,
+   "padding": [
+    "16px",
+    "16px",
+    "16px",
+    "16px"
+   ],
+   "margin": [
+    "0px",
+    "0px",
+    "0px",
+    "0px"
+   ],
+   "gap": [
+    "12px",
+    "12px"
+   ]
+  },
+  {
+   "element": "section.mb-7",
+   "label": "Đang yếu ở",
+   "x": 20,
+   "y": 894,
+   "width": 350,
+   "height": 177,
+   "padding": [
+    "0px",
+    "0px",
+    "0px",
+    "0px"
+   ],
+   "margin": [
+    "0px",
+    "0px",
+    "28px",
+    "0px"
+   ],
+   "gap": [
+    "normal",
+    "normal"
+   ]
+  },
+  {
+   "element": "div.surface-card.!p-3.5.flex.items-center.gap-3",
+   "label": "40Cần ôn lại",
+   "x": 20,
+   "y": 921,
+   "width": 350,
+   "height": 70,
+   "padding": [
+    "14px",
+    "14px",
+    "14px",
+    "14px"
+   ],
+   "margin": [
+    "0px",
+    "0px",
+    "0px",
+    "0px"
+   ],
+   "gap": [
+    "12px",
+    "12px"
+   ]
+  },
+  {
+   "element": "div.surface-card.!p-3.5.flex.items-center.gap-3",
+   "label": "67Cần ôn nhẹ",
+   "x": 20,
+   "y": 1001,
+   "width": 350,
+   "height": 70,
+   "padding": [
+    "14px",
+    "14px",
+    "14px",
+    "14px"
+   ],
+   "margin": [
+    "0px",
+    "0px",
+    "0px",
+    "0px"
+   ],
+   "gap": [
+    "12px",
+    "12px"
+   ]
+  },
+  {
+   "element": "section.mb-7",
+   "label": "Tuần này (1)",
+   "x": 20,
+   "y": 1099,
+   "width": 350,
+   "height": 364,
+   "padding": [
+    "0px",
+    "0px",
+    "0px",
+    "0px"
+   ],
+   "margin": [
+    "0px",
+    "0px",
+    "28px",
+    "0px"
+   ],
+   "gap": [
+    "normal",
+    "normal"
+   ]
+  },
+  {
+   "element": "div.surface-card.flex.flex-col.outline-none.focus-visible:ring-2.focus-visible:ring-offset-2.!p-4.gap-3",
+   "label": "Hệ điều hành.pdfHọc kỳ 1Chưa có tóm tắt cho tài liệu này.Đã lập chỉ mụcT",
+   "x": 20,
+   "y": 1125,
+   "width": 350,
+   "height": 338,
+   "padding": [
+    "16px",
+    "16px",
+    "16px",
+    "16px"
+   ],
+   "margin": [
+    "0px",
+    "0px",
+    "0px",
+    "0px"
+   ],
+   "gap": [
+    "12px",
+    "12px"
+   ]
+  },
+  {
+   "element": "section.mb-7",
+   "label": "Tải lên gần đây (6)",
+   "x": 20,
+   "y": 1491,
+   "width": 350,
+   "height": 1746,
+   "padding": [
+    "0px",
+    "0px",
+    "0px",
+    "0px"
+   ],
+   "margin": [
+    "0px",
+    "0px",
+    "28px",
+    "0px"
+   ],
+   "gap": [
+    "normal",
+    "normal"
+   ]
+  },
+  {
+   "element": "div.surface-card.flex.flex-col.outline-none.focus-visible:ring-2.focus-visible:ring-offset-2.!p-4.gap-3",
+   "label": "Kinh tế vi mô.pptxĐã lập chỉ mụcTóm tắtSơ đồ tư duyBản đồ học tậpQuizÔn ",
+   "x": 20,
+   "y": 1518,
+   "width": 350,
+   "height": 245,
+   "padding": [
+    "16px",
+    "16px",
+    "16px",
+    "16px"
+   ],
+   "margin": [
+    "0px",
+    "0px",
+    "0px",
+    "0px"
+   ],
+   "gap": [
+    "12px",
+    "12px"
+   ]
+  },
+  {
+   "element": "div.surface-card.flex.flex-col.outline-none.focus-visible:ring-2.focus-visible:ring-offset-2.!p-4.gap-3",
+   "label": "Lịch sử Đảng.pdfChưa có tóm tắt cho tài liệu này.Đã lập chỉ mụcTóm tắtSơ",
+   "x": 20,
+   "y": 1773,
+   "width": 350,
+   "height": 277,
+   "padding": [
+    "16px",
+    "16px",
+    "16px",
+    "16px"
+   ],
+   "margin": [
+    "0px",
+    "0px",
+    "0px",
+    "0px"
+   ],
+   "gap": [
+    "12px",
+    "12px"
+   ]
+  },
+  {
+   "element": "div.surface-card.flex.flex-col.outline-none.focus-visible:ring-2.focus-visible:ring-offset-2.!p-4.gap-3",
+   "label": "Giải tích 1.pdfĐã lập chỉ mụcTóm tắtSơ đồ tư duyBản đồ học tậpQuizÔn tập",
+   "x": 20,
+   "y": 2059,
+   "width": 350,
+   "height": 245,
+   "padding": [
+    "16px",
+    "16px",
+    "16px",
+    "16px"
+   ],
+   "margin": [
+    "0px",
+    "0px",
+    "0px",
+    "0px"
+   ],
+   "gap": [
+    "12px",
+    "12px"
+   ]
+  },
+  {
+   "element": "div.surface-card.flex.flex-col.outline-none.focus-visible:ring-2.focus-visible:ring-offset-2.!p-4.gap-3",
+   "label": "Cấu trúc dữ liệu.docxHọc kỳ 1Chưa có tóm tắt cho tài liệu này.Đã lập chỉ",
+   "x": 20,
+   "y": 2314,
+   "width": 350,
+   "height": 298,
+   "padding": [
+    "16px",
+    "16px",
+    "16px",
+    "16px"
+   ],
+   "margin": [
+    "0px",
+    "0px",
+    "0px",
+    "0px"
+   ],
+   "gap": [
+    "12px",
+    "12px"
+   ]
+  },
+  {
+   "element": "div.surface-card.flex.flex-col.outline-none.focus-visible:ring-2.focus-visible:ring-offset-2.!p-4.gap-3",
+   "label": "Mạng máy tính.pdfHọc kỳ 1Đã lập chỉ mụcTóm tắtSơ đồ tư duyBản đồ học tập",
+   "x": 20,
+   "y": 2622,
+   "width": 350,
+   "height": 267,
+   "padding": [
+    "16px",
+    "16px",
+    "16px",
+    "16px"
+   ],
+   "margin": [
+    "0px",
+    "0px",
+    "0px",
+    "0px"
+   ],
+   "gap": [
+    "12px",
+    "12px"
+   ]
+  },
+  {
+   "element": "div.surface-card.flex.flex-col.outline-none.focus-visible:ring-2.focus-visible:ring-offset-2.!p-4.gap-3",
+   "label": "Hệ điều hành.pdfHọc kỳ 1Chưa có tóm tắt cho tài liệu này.Đã lập chỉ mụcT",
+   "x": 20,
+   "y": 2899,
+   "width": 350,
+   "height": 338,
+   "padding": [
+    "16px",
+    "16px",
+    "16px",
+    "16px"
+   ],
+   "margin": [
+    "0px",
+    "0px",
+    "0px",
+    "0px"
+   ],
+   "gap": [
+    "12px",
+    "12px"
+   ]
+  },
+  {
+   "element": "section.mb-7",
+   "label": "Chưa mở bao giờ (5)",
+   "x": 20,
+   "y": 3265,
+   "width": 350,
+   "height": 1398,
+   "padding": [
+    "0px",
+    "0px",
+    "0px",
+    "0px"
+   ],
+   "margin": [
+    "0px",
+    "0px",
+    "28px",
+    "0px"
+   ],
+   "gap": [
+    "normal",
+    "normal"
+   ]
+  },
+  {
+   "element": "div.surface-card.flex.flex-col.outline-none.focus-visible:ring-2.focus-visible:ring-offset-2.!p-4.gap-3",
+   "label": "Kinh tế vi mô.pptxĐã lập chỉ mụcTóm tắtSơ đồ tư duyBản đồ học tậpQuizÔn ",
+   "x": 20,
+   "y": 3291,
+   "width": 350,
+   "height": 245,
+   "padding": [
+    "16px",
+    "16px",
+    "16px",
+    "16px"
+   ],
+   "margin": [
+    "0px",
+    "0px",
+    "0px",
+    "0px"
+   ],
+   "gap": [
+    "12px",
+    "12px"
+   ]
+  },
+  {
+   "element": "div.surface-card.flex.flex-col.outline-none.focus-visible:ring-2.focus-visible:ring-offset-2.!p-4.gap-3",
+   "label": "Lịch sử Đảng.pdfChưa có tóm tắt cho tài liệu này.Đã lập chỉ mụcTóm tắtSơ",
+   "x": 20,
+   "y": 3546,
+   "width": 350,
+   "height": 277,
+   "padding": [
+    "16px",
+    "16px",
+    "16px",
+    "16px"
+   ],
+   "margin": [
+    "0px",
+    "0px",
+    "0px",
+    "0px"
+   ],
+   "gap": [
+    "12px",
+    "12px"
+   ]
+  },
+  {
+   "element": "div.surface-card.flex.flex-col.outline-none.focus-visible:ring-2.focus-visible:ring-offset-2.!p-4.gap-3",
+   "label": "Giải tích 1.pdfĐã lập chỉ mụcTóm tắtSơ đồ tư duyBản đồ học tậpQuizÔn tập",
+   "x": 20,
+   "y": 3833,
+   "width": 350,
+   "height": 245,
+   "padding": [
+    "16px",
+    "16px",
+    "16px",
+    "16px"
+   ],
+   "margin": [
+    "0px",
+    "0px",
+    "0px",
+    "0px"
+   ],
+   "gap": [
+    "12px",
+    "12px"
+   ]
+  },
+  {
+   "element": "div.surface-card.flex.flex-col.outline-none.focus-visible:ring-2.focus-visible:ring-offset-2.!p-4.gap-3",
+   "label": "Cấu trúc dữ liệu.docxHọc kỳ 1Chưa có tóm tắt cho tài liệu này.Đã lập chỉ",
+   "x": 20,
+   "y": 4088,
+   "width": 350,
+   "height": 298,
+   "padding": [
+    "16px",
+    "16px",
+    "16px",
+    "16px"
+   ],
+   "margin": [
+    "0px",
+    "0px",
+    "0px",
+    "0px"
+   ],
+   "gap": [
+    "12px",
+    "12px"
+   ]
+  },
+  {
+   "element": "div.surface-card.flex.flex-col.outline-none.focus-visible:ring-2.focus-visible:ring-offset-2.!p-4.gap-3",
+   "label": "Mạng máy tính.pdfHọc kỳ 1Đã lập chỉ mụcTóm tắtSơ đồ tư duyBản đồ học tập",
+   "x": 20,
+   "y": 4396,
+   "width": 350,
+   "height": 267,
+   "padding": [
+    "16px",
+    "16px",
+    "16px",
+    "16px"
+   ],
+   "margin": [
+    "0px",
+    "0px",
+    "0px",
+    "0px"
+   ],
+   "gap": [
+    "12px",
+    "12px"
+   ]
+  },
+  {
+   "element": "section.mb-7",
+   "label": "Cần tóm tắt (3)",
+   "x": 20,
+   "y": 4691,
+   "width": 350,
+   "height": 959,
+   "padding": [
+    "0px",
+    "0px",
+    "0px",
+    "0px"
+   ],
+   "margin": [
+    "0px",
+    "0px",
+    "28px",
+    "0px"
+   ],
+   "gap": [
+    "normal",
+    "normal"
+   ]
+  },
+  {
+   "element": "div.surface-card.flex.flex-col.outline-none.focus-visible:ring-2.focus-visible:ring-offset-2.!p-4.gap-3",
+   "label": "Lịch sử Đảng.pdfChưa có tóm tắt cho tài liệu này.Đã lập chỉ mụcTóm tắtSơ",
+   "x": 20,
+   "y": 4717,
+   "width": 350,
+   "height": 277,
+   "padding": [
+    "16px",
+    "16px",
+    "16px",
+    "16px"
+   ],
+   "margin": [
+    "0px",
+    "0px",
+    "0px",
+    "0px"
+   ],
+   "gap": [
+    "12px",
+    "12px"
+   ]
+  },
+  {
+   "element": "div.surface-card.flex.flex-col.outline-none.focus-visible:ring-2.focus-visible:ring-offset-2.!p-4.gap-3",
+   "label": "Cấu trúc dữ liệu.docxHọc kỳ 1Chưa có tóm tắt cho tài liệu này.Đã lập chỉ",
+   "x": 20,
+   "y": 5004,
+   "width": 350,
+   "height": 298,
+   "padding": [
+    "16px",
+    "16px",
+    "16px",
+    "16px"
+   ],
+   "margin": [
+    "0px",
+    "0px",
+    "0px",
+    "0px"
+   ],
+   "gap": [
+    "12px",
+    "12px"
+   ]
+  },
+  {
+   "element": "div.surface-card.flex.flex-col.outline-none.focus-visible:ring-2.focus-visible:ring-offset-2.!p-4.gap-3",
+   "label": "Hệ điều hành.pdfHọc kỳ 1Chưa có tóm tắt cho tài liệu này.Đã lập chỉ mụcT",
+   "x": 20,
+   "y": 5312,
+   "width": 350,
+   "height": 338,
+   "padding": [
+    "16px",
+    "16px",
+    "16px",
+    "16px"
+   ],
+   "margin": [
+    "0px",
+    "0px",
+    "0px",
+    "0px"
+   ],
+   "gap": [
+    "12px",
+    "12px"
+   ]
+  },
+  {
+   "element": "section.mb-7",
+   "label": "Cần quiz (4)",
+   "x": 20,
+   "y": 5678,
+   "width": 350,
+   "height": 1121,
+   "padding": [
+    "0px",
+    "0px",
+    "0px",
+    "0px"
+   ],
+   "margin": [
+    "0px",
+    "0px",
+    "28px",
+    "0px"
+   ],
+   "gap": [
+    "normal",
+    "normal"
+   ]
+  },
+  {
+   "element": "div.surface-card.flex.flex-col.outline-none.focus-visible:ring-2.focus-visible:ring-offset-2.!p-4.gap-3",
+   "label": "Kinh tế vi mô.pptxĐã lập chỉ mụcTóm tắtSơ đồ tư duyBản đồ học tậpQuizÔn ",
+   "x": 20,
+   "y": 5704,
+   "width": 350,
+   "height": 245,
+   "padding": [
+    "16px",
+    "16px",
+    "16px",
+    "16px"
+   ],
+   "margin": [
+    "0px",
+    "0px",
+    "0px",
+    "0px"
+   ],
+   "gap": [
+    "12px",
+    "12px"
+   ]
+  },
+  {
+   "element": "div.surface-card.flex.flex-col.outline-none.focus-visible:ring-2.focus-visible:ring-offset-2.!p-4.gap-3",
+   "label": "Lịch sử Đảng.pdfChưa có tóm tắt cho tài liệu này.Đã lập chỉ mụcTóm tắtSơ",
+   "x": 20,
+   "y": 5959,
+   "width": 350,
+   "height": 277,
+   "padding": [
+    "16px",
+    "16px",
+    "16px",
+    "16px"
+   ],
+   "margin": [
+    "0px",
+    "0px",
+    "0px",
+    "0px"
+   ],
+   "gap": [
+    "12px",
+    "12px"
+   ]
+  },
+  {
+   "element": "div.surface-card.flex.flex-col.outline-none.focus-visible:ring-2.focus-visible:ring-offset-2.!p-4.gap-3",
+   "label": "Giải tích 1.pdfĐã lập chỉ mụcTóm tắtSơ đồ tư duyBản đồ học tậpQuizÔn tập",
+   "x": 20,
+   "y": 6246,
+   "width": 350,
+   "height": 245,
+   "padding": [
+    "16px",
+    "16px",
+    "16px",
+    "16px"
+   ],
+   "margin": [
+    "0px",
+    "0px",
+    "0px",
+    "0px"
+   ],
+   "gap": [
+    "12px",
+    "12px"
+   ]
+  },
+  {
+   "element": "div.surface-card.flex.flex-col.outline-none.focus-visible:ring-2.focus-visible:ring-offset-2.!p-4.gap-3",
+   "label": "Cấu trúc dữ liệu.docxHọc kỳ 1Chưa có tóm tắt cho tài liệu này.Đã lập chỉ",
+   "x": 20,
+   "y": 6501,
+   "width": 350,
+   "height": 298,
+   "padding": [
+    "16px",
+    "16px",
+    "16px",
+    "16px"
+   ],
+   "margin": [
+    "0px",
+    "0px",
+    "0px",
+    "0px"
+   ],
+   "gap": [
+    "12px",
+    "12px"
+   ]
+  },
+  {
+   "element": "section.mb-7",
+   "label": "Tất cả tài liệu (6)",
+   "x": 20,
+   "y": 6827,
+   "width": 350,
+   "height": 1746,
+   "padding": [
+    "0px",
+    "0px",
+    "0px",
+    "0px"
+   ],
+   "margin": [
+    "0px",
+    "0px",
+    "28px",
+    "0px"
+   ],
+   "gap": [
+    "normal",
+    "normal"
+   ]
+  },
+  {
+   "element": "div.surface-card.flex.flex-col.outline-none.focus-visible:ring-2.focus-visible:ring-offset-2.!p-4.gap-3",
+   "label": "Kinh tế vi mô.pptxĐã lập chỉ mụcTóm tắtSơ đồ tư duyBản đồ học tậpQuizÔn ",
+   "x": 20,
+   "y": 6854,
+   "width": 350,
+   "height": 245,
+   "padding": [
+    "16px",
+    "16px",
+    "16px",
+    "16px"
+   ],
+   "margin": [
+    "0px",
+    "0px",
+    "0px",
+    "0px"
+   ],
+   "gap": [
+    "12px",
+    "12px"
+   ]
+  },
+  {
+   "element": "div.surface-card.flex.flex-col.outline-none.focus-visible:ring-2.focus-visible:ring-offset-2.!p-4.gap-3",
+   "label": "Lịch sử Đảng.pdfChưa có tóm tắt cho tài liệu này.Đã lập chỉ mụcTóm tắtSơ",
+   "x": 20,
+   "y": 7109,
+   "width": 350,
+   "height": 277,
+   "padding": [
+    "16px",
+    "16px",
+    "16px",
+    "16px"
+   ],
+   "margin": [
+    "0px",
+    "0px",
+    "0px",
+    "0px"
+   ],
+   "gap": [
+    "12px",
+    "12px"
+   ]
+  },
+  {
+   "element": "div.surface-card.flex.flex-col.outline-none.focus-visible:ring-2.focus-visible:ring-offset-2.!p-4.gap-3",
+   "label": "Giải tích 1.pdfĐã lập chỉ mụcTóm tắtSơ đồ tư duyBản đồ học tậpQuizÔn tập",
+   "x": 20,
+   "y": 7395,
+   "width": 350,
+   "height": 245,
+   "padding": [
+    "16px",
+    "16px",
+    "16px",
+    "16px"
+   ],
+   "margin": [
+    "0px",
+    "0px",
+    "0px",
+    "0px"
+   ],
+   "gap": [
+    "12px",
+    "12px"
+   ]
+  },
+  {
+   "element": "div.surface-card.flex.flex-col.outline-none.focus-visible:ring-2.focus-visible:ring-offset-2.!p-4.gap-3",
+   "label": "Cấu trúc dữ liệu.docxHọc kỳ 1Chưa có tóm tắt cho tài liệu này.Đã lập chỉ",
+   "x": 20,
+   "y": 7650,
+   "width": 350,
+   "height": 298,
+   "padding": [
+    "16px",
+    "16px",
+    "16px",
+    "16px"
+   ],
+   "margin": [
+    "0px",
+    "0px",
+    "0px",
+    "0px"
+   ],
+   "gap": [
+    "12px",
+    "12px"
+   ]
+  },
+  {
+   "element": "div.surface-card.flex.flex-col.outline-none.focus-visible:ring-2.focus-visible:ring-offset-2.!p-4.gap-3",
+   "label": "Mạng máy tính.pdfHọc kỳ 1Đã lập chỉ mụcTóm tắtSơ đồ tư duyBản đồ học tập",
+   "x": 20,
+   "y": 7958,
+   "width": 350,
+   "height": 267,
+   "padding": [
+    "16px",
+    "16px",
+    "16px",
+    "16px"
+   ],
+   "margin": [
+    "0px",
+    "0px",
+    "0px",
+    "0px"
+   ],
+   "gap": [
+    "12px",
+    "12px"
+   ]
+  },
+  {
+   "element": "div.surface-card.flex.flex-col.outline-none.focus-visible:ring-2.focus-visible:ring-offset-2.!p-4.gap-3",
+   "label": "Hệ điều hành.pdfHọc kỳ 1Chưa có tóm tắt cho tài liệu này.Đã lập chỉ mụcT",
+   "x": 20,
+   "y": 8235,
+   "width": 350,
+   "height": 338,
+   "padding": [
+    "16px",
+    "16px",
+    "16px",
+    "16px"
+   ],
+   "margin": [
+    "0px",
+    "0px",
+    "0px",
+    "0px"
+   ],
+   "gap": [
+    "12px",
+    "12px"
+   ]
+  },
+  {
+   "element": "section.",
+   "label": "Bài đã làm gần đây",
+   "x": 20,
+   "y": 8601,
+   "width": 350,
+   "height": 97,
+   "padding": [
+    "0px",
+    "0px",
+    "0px",
+    "0px"
+   ],
+   "margin": [
+    "0px",
+    "0px",
+    "0px",
+    "0px"
+   ],
+   "gap": [
+    "normal",
+    "normal"
+   ]
+  },
+  {
+   "element": "a.surface-card.!p-3.5.flex.items-center.gap-3.hover:no-underline",
+   "label": "Hệ điều hànhchẩn đoán · 2/11/2026—",
+   "x": 20,
+   "y": 8627,
+   "width": 350,
+   "height": 70,
+   "padding": [
+    "14px",
+    "14px",
+    "14px",
+    "14px"
+   ],
+   "margin": [
+    "0px",
+    "0px",
+    "0px",
+    "0px"
+   ],
+   "gap": [
+    "12px",
+    "12px"
+   ]
+  }
+ ],
+ "verticalGaps": [
+  {
+   "parent": "Mỗi tài liệu đã tải lên là một tài sản học tập — tóm tắt, sơ đồ, quiz và",
+   "from": "Mỗi tài liệu đã tải lên là một tài sản học tập — tóm tắt, sơ đồ, quiz và",
+   "to": "Bộ sưu tậpHọc kỳ 13Chưa phân loại3Lối tắtYêu thíchĐã ghimHiện đã lưu trữ",
+   "gap": 24
+  }
+ ]
+}

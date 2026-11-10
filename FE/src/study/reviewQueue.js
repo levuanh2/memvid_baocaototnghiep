@@ -4,7 +4,7 @@
 // hoạch ôn tập) — KHÔNG viết lại predicate đó, chỉ nhận nó làm đầu vào, cộng
 // một lớp xếp hạng theo mức nắm cho "khi nào nên ôn trước".
 //
-// KHÔNG có mốc "lần ôn tiếp theo" nào lưu ở đâu — Hôm nay/Ngày mai/Sau chỉ là
+// KHÔNG có mốc "lần ôn tiếp theo" nào lưu ở đâu — Ôn ngay/Ôn sớm/Ôn sau chỉ là
 // một cách ĐẶT TÊN cho thứ tự ưu tiên suy từ mastery đã có (`knowledge.readiness
 // .mastery`), không phải một lịch hẹn thật. Không giả vờ có ngày giờ chính xác.
 const mang = (v) => (Array.isArray(v) ? v : []);

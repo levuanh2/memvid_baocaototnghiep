@@ -1,5 +1,23 @@
 # Known Issues
 
+## Library action rows overflowed their real content column (fixed 2026-11-04)
+
+**Symptom:** with the Action Matrix flag enabled, the 1440px Library page put
+the “Thêm” control beyond the document-row border, while the primary action’s
+arrow and label wrapped onto separate lines.
+
+**Root cause:** the row grid reserved an 800px minimum footprint, but the real
+StudyShell composition leaves 706px after the 210px collection sidebar and
+24px gap. The fixture previously gave the matrix the full 1180px harness width,
+so its horizontal-overflow check never exercised the production composition.
+
+**Fix and prevention:** the desktop/tablet grid now lets identity and progress
+tracks shrink, budgets explicit widths for primary/quick/tools controls, and
+keeps the primary action in a single inline-flex row. Chromium tests reproduce
+the real 706px desktop column and the 320/390/768/1024/1440 viewport widths;
+they assert every control remains inside its row, the primary action stays at
+one-line height, and its longest real label does not overflow its content box.
+
 ## Successful CI workflow could deploy a different, newer main commit (fixed 2026-11-02)
 
 **Symptom:** the `workflow_run` deploy job checked out/pulled current `main` on
@@ -7777,3 +7795,57 @@ progress averages/comparisons, and UI explicitly labels incomplete results.
 Real Flask/Postgres/browser coverage pins outage, reload, response preservation
 and account isolation.
 
+# Export Studio footer duplicated the step rail (fixed 2026-11-04)
+
+**Symptom:** the desktop footer exposed `Tiếp tục`, `Hủy`, and the format action
+even though the persistent step rail already navigated every mounted settings
+section; the appearance persistence action used the ambiguous label
+`Áp dụng cho sơ đồ`.
+
+**Root cause:** the persistent Preview Bench retained the forward button from
+its earlier wizard lifecycle. Responsive CSS hid `Tiếp tục` on phones, masking
+the duplicate desktop path.
+
+**Fix and prevention:** the idle footer has exactly two actions, `Hủy` and
+`Xuất <ĐỊNH DẠNG>`; the rail is the only section navigator (mouse, Enter,
+Space). The lifecycle states keep their existing contracts unchanged (owner
+decision A4): `Hủy xuất` while a server job runs, `Thử lại` after an error,
+`Đóng` + `Xuất lại` + `Tạo bản xuất mới` after completion. Appearance
+persistence is `Lưu giao diện cho sơ đồ` with the same PATCH and disabled
+rules. Real-download artifact gates verify the UI cleanup does not alter
+exported files.
+
+
+# Percentage units named the wrong quantity, and a merge dropped one (fixed 2026-11-09, PR #137)
+
+**Symptom:** PR #137 (W2-2) labelled every score percentage "câu đúng"
+("75% câu đúng"), its own new test `summary coverage insight names 'đã có'` failed
+in CI, and Practice's score seal announced "Đạt 0 phần trăm câu đúng" while the
+page itself said "Chưa chấm được".
+
+**Root cause:** (1) `percentage` is `score / max_score * 100` with `partial` = 0.5
+point (`BE/app/domains/attempts/grading.py`), so one correct + one partial answer
+is 75% while `correct_count` is 1: it measures points, not correct answers.
+(2) The merge of main into the branch (`dd7ee0d`) resolved the
+`LearningDashboard.jsx` conflict back to main's bare `{baoPhuTomTat}%`, silently
+dropping the `% đã có` that `3bc27b9` added; the test came through untouched.
+(3) The new Practice `label` interpolated `graded.percentage ?? 0`, turning "no
+graded question" into a score of 0, unlike QuizResult's three-state guard.
+
+**Fix:** score percentages say "% điểm" (visible and `aria-label`: "Đạt N phần
+trăm điểm", provisional "Kết quả tạm thời N phần trăm điểm trên các câu đã chấm");
+coverage keeps "đã có", readiness keeps "sẵn sàng". The Library overview
+(`DocumentList.jsx` "Điểm trung bình") shows the same `average_percentage`, so it says
+"% điểm" too (found by the independent review). The summary-coverage suffix is
+restored. Practice's seal says "Chưa có điểm" when nothing could be graded, and a
+genuine graded 0% is still announced as "Đạt 0 phần trăm điểm". No API, grading or
+calculation change.
+
+**Regression:** `QuizResult.percentUnits.test.jsx`, `Practice.percentUnits.test.jsx`
+and `LearningDashboard.percentUnits.test.jsx` pin all-correct, correct + partial =
+75% điểm (while "Đúng 1"), genuine 0%, provisional and all-ungraded states, and the
+dashboard average; each fails if its bug is reintroduced.
+
+**Open copy decision (owner):** the result page's "Đúng / Sai" counters come from
+`correct_count` / `incorrect_count`, and the backend counts a partial answer as
+incorrect, so a learner can see "Đúng 1 · Sai 1" next to "75% điểm".

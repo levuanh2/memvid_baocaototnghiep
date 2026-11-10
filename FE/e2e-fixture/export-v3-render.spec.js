@@ -26,9 +26,7 @@ async function exportFullPng(page, label) {
   await expect(dialog).toBeVisible();
   if (await page.locator('input[name="mm-export-scope"][value="full"]').count()) {
     await page.locator('input[name="mm-export-scope"][value="full"]').check();
-    await page.getByRole("button", { name: "Tiếp tục" }).click();
     await page.locator('input[name="mm-export-format"][value="png"]').check();
-    for (let i = 0; i < 2; i++) await page.getByRole("button", { name: "Tiếp tục" }).click();
   }
   const downloadPromise = page.waitForEvent("download");
   await page.getByRole("button", { name: /^(Xuất|Tạo) PNG$/ }).click();

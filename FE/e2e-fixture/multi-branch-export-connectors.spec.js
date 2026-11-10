@@ -83,10 +83,7 @@ async function exportMixedBranchSvg(page, ids) {
     await expect(page.locator(marker(id))).toHaveAttribute("aria-checked", "true");
   }
   await page.locator(".mm-selection-bar").getByRole("button", { name: "Tiếp tục" }).click();
-  await page.getByRole("button", { name: "Tiếp tục" }).click();
   await page.locator('input[name="mm-export-format"][value="svg"]').check();
-  await page.getByRole("button", { name: "Tiếp tục" }).click();
-  await page.getByRole("button", { name: "Tiếp tục" }).click();
   const waiting = page.waitForEvent("download");
   await page.getByRole("button", { name: "Xuất SVG" }).click();
   const download = await waiting;
