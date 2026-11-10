@@ -2,7 +2,9 @@ import { test, expect } from "@playwright/test";
 
 const json = (body) => ({ status: 200, contentType: "application/json", body: JSON.stringify(body) });
 
-async function openEmptyLibraryApp(page, { collapsedLeft = false, onUpload } = {}) {
+const INDEXED_SOURCE = { video: "tai-lieu-1", video_stem: "tai-lieu-1", filename: "Tài liệu 1.pdf", status: "index_ready" };
+
+async function openEmptyLibraryApp(page, { collapsedLeft = false, onUpload, sources = [] } = {}) {
   await page.addInitScript(({ collapsed }) => {
     const nativeInputClick = HTMLInputElement.prototype.click;
     window.__uploadFileInputClicks = 0;
@@ -22,7 +24,7 @@ async function openEmptyLibraryApp(page, { collapsedLeft = false, onUpload } = {
     const request = route.request();
     const pathname = new URL(request.url()).pathname;
     if (pathname === "/auth/me") return route.fulfill(json({ user: { id: "u1", email: "qa@example.test", display_name: "QA", provider: "local" } }));
-    if (pathname === "/list-indexed") return route.fulfill(json({ sources: [] }));
+    if (pathname === "/list-indexed") return route.fulfill(json({ sources }));
     if (pathname === "/api/documents" || pathname === "/api/library") return route.fulfill(json({ documents: [], collections: [] }));
     if (pathname === "/mindmaps") return route.fulfill(json({ mindmaps: [] }));
     if (pathname === "/summaries") return route.fulfill(json({ summaries: [] }));
@@ -34,7 +36,21 @@ async function openEmptyLibraryApp(page, { collapsedLeft = false, onUpload } = {
     return route.fulfill(json({}));
   });
   await page.goto("/app");
-  await expect(page.getByText("Hỏi tài liệu của bạn")).toBeVisible();
+  if (sources.length) await expect(page.locator("[data-upload-cta], [data-source-entry]").first()).toBeAttached();
+  else await expect(page.getByText("Hỏi tài liệu của bạn")).toBeVisible();
+}
+
+// Focus after a layout change must land on a control the user can see and press: an upload
+// control, or (when the new layout has none) the control that opens the source panel/drawer.
+async function expectFocusOnUsableUploadEntry(page) {
+  await expect.poll(() => page.evaluate(() => {
+    const el = document.activeElement;
+    if (!el || el === document.body) return "body";
+    if (!el.matches("[data-upload-cta], [data-source-entry]")) return `other:${el.outerHTML.slice(0, 80)}`;
+    const r = el.getBoundingClientRect();
+    const hit = document.elementFromPoint(r.left + r.width / 2, r.top + r.height / 2);
+    return hit && (el === hit || el.contains(hit)) ? "ok" : "occluded";
+  })).toBe("ok");
 }
 
 async function expectOneChooser(page, activate) {
@@ -193,3 +209,39 @@ for (const transition of [
     await expect.poll(() => target.evaluate((node) => node === document.activeElement)).toBe(true);
   });
 }
+
+// Codex review P2: with documents in the library there is no empty-state CTA, so when the
+// focused upload control unmounts the handoff must fall back to the source-panel entry.
+for (const transition of [
+  { from: 768, to: 767, collapsedLeft: false },
+  { from: 1279, to: 1280, collapsedLeft: true },
+]) {
+  test(`non-empty library: live resize ${transition.from} -> ${transition.to} hands focus to a usable upload entry (${transition.collapsedLeft ? "collapsed" : "expanded"})`, async ({ page }) => {
+    await page.setViewportSize({ width: transition.from, height: 900 });
+    await openEmptyLibraryApp(page, { collapsedLeft: transition.collapsedLeft, sources: [INDEXED_SOURCE] });
+    const rail = page.locator('[data-source-layout="rail"] [data-upload-cta]');
+    await expect(rail).toBeVisible();
+    await rail.focus();
+    await expect(rail).toBeFocused();
+    await page.setViewportSize({ width: transition.to, height: 900 });
+    await expect(rail).toHaveCount(0);
+    await expectFocusOnUsableUploadEntry(page);
+  });
+}
+
+// Codex review P2: an open tablet shelf is closed (backdrop removed) by an effect after the
+// 1280px layout mounts; focus must not land on a control still covered by that backdrop.
+test("shelf open: live resize 1279 -> 1280 hands focus to an uncovered upload control", async ({ page }) => {
+  await page.setViewportSize({ width: 1279, height: 900 });
+  await openEmptyLibraryApp(page);
+  await page.getByRole("button", { name: "Mở rộng thư mục nguồn" }).click();
+  const shelf = page.locator('[data-source-layout="shelf"]');
+  await expect(shelf).toBeVisible();
+  const shelfUpload = shelf.locator("[data-upload-cta]");
+  await shelfUpload.focus();
+  await expect(shelfUpload).toBeFocused();
+  const original = await shelfUpload.elementHandle();
+  await page.setViewportSize({ width: 1280, height: 900 });
+  await expect.poll(() => original.evaluate((node) => node.isConnected)).toBe(false);
+  await expectFocusOnUsableUploadEntry(page);
+});

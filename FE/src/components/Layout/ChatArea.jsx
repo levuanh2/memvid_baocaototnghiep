@@ -810,7 +810,7 @@ export default function ChatArea({
         <div className="flex-1" />
 
         <div className="mobile-context" aria-label="Ngữ cảnh Workspace">
-          <button type="button" onClick={onOpenLeft} aria-label={`Mở thư mục nguồn, ${selectedSources?.length || 0} đang chọn`}>
+          <button type="button" data-source-entry onClick={onOpenLeft} aria-label={`Mở thư mục nguồn, ${selectedSources?.length || 0} đang chọn`}>
             <Icon name="Library" size={16} />
             <b aria-hidden>{selectedSources?.length || 0}</b>
           </button>
@@ -823,6 +823,7 @@ export default function ChatArea({
         {/* On tablet/mobile, use one compact source icon to open the existing drawer — no duplicate modal */}
         <button
           type="button"
+          data-source-entry
           onClick={onOpenLeft}
           className={`conversation-source-trigger icon-btn w-10 h-10 flex-shrink-0 ${isLeftVisible ? "hidden" : "hidden md:inline-flex"}`}
           aria-label="Mở thư mục nguồn"

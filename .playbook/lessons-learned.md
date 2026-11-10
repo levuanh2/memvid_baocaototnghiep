@@ -3703,3 +3703,8 @@ Giving two controls the same accessible name (one upload label) silently changed
 `getByRole(name).first()` resolves to, and made a spec cover a control it had never touched (the
 tablet rail "+"), exposing a real focus loss. After a terminology change, grep all e2e and fixture
 specs, and run the full Fixture Audit, not just Fixture Smoke.
+
+A focus-handoff test must also use a library that is NOT empty: an empty-state CTA is an easy target
+that hides "no target at all". And when a handoff lands on a control that vanishes a frame later,
+look for state that a remount resets (here a child reporting its initial `[]` upward) before adding
+more frames of delay.

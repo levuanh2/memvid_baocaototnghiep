@@ -8050,3 +8050,20 @@ the name; a control that a breakpoint unmounts must hand focus on, not drop it.
 
 **Separate finding (not fixed here):** the closed mobile source drawer is only `-translate-x-full`,
 so its controls stay in the Tab order while invisible (keyboard a11y defect; needs `inert` when closed).
+
+**Review follow-up (Codex P2 x2, 2026-11-11):**
+
+- *Non-empty library had no handoff target.* With documents there is no empty-state CTA; at 768->767
+  (drawer closed) and 1279->1280 (left collapsed -> `PanelSpine`) no `[data-upload-cta]` is usable.
+  Fallback: the first usable `[data-source-entry]` (header `.mobile-context` source button,
+  `conversation-source-trigger`, left `PanelSpine`). Red-before with the fallback removed: both new
+  non-empty cases fail.
+- *Root cause found while testing it: a fresh `SidebarLeft` reported `sources = []`.* Every
+  breakpoint crossing remounts `SidebarLeft`; its mount effect called `onSourcesChange([])` before
+  `/list-indexed` answered, wiping MainLayout's list, so the chat flashed its "no documents" empty
+  state (with its upload CTA) for ~50ms. The handoff focused that transient CTA, which then unmounted
+  and dropped focus to <body>. Fix: report only after the fetch succeeded or when in-progress
+  uploads exist (`daTaiDanhSach`). A failed fetch now leaves MainLayout's last list instead of [].
+- *Shelf backdrop occlusion (1279->1280 with the shelf open): not reproducible.* A test covers it,
+  but it passes 5/5 even with an `elementFromPoint` occlusion check and a double rAF removed, so
+  neither guard was added. The test helper still asserts the focused control is not covered.

@@ -42,6 +42,7 @@ const formatFileName = (name = "") => name.replace(/\.(mp4|avi|mov|mkv|webm|mp3|
 
 export default function SidebarLeft({ selectedSources, setSelectedSources, onSourcesChange, onClose, collapsible = false, onTransientSurfaceOpen, railMode = false, onUploadReady }) {
   const [sources, setSources] = useState([]);
+  const [daTaiDanhSach, setDaTaiDanhSach] = useState(false);
   // Round 9 fix: mirrors `sources` for `fetchSourcesFromBackend` below to read
   // as "the previous sources" WITHOUT depending on execution-order between
   // two separate `setState` calls (see that function's own comment for the
@@ -80,7 +81,7 @@ export default function SidebarLeft({ selectedSources, setSelectedSources, onSou
   const [draftFilters, setDraftFilters] = useState({ type: "", status: "", date: "" });
   const [appliedFilters, setAppliedFilters] = useState({ type: "", status: "", date: "" });
   const fileInputRef = useRef(null);
-  // Rail "+" and panel "Thêm tài liệu" unmount when the layout crosses 768px / 1280px;
+  // Rail "+" and desktop panel upload button unmount when the layout crosses 768px / 1280px;
   // a focused one hands focus to the upload control of the new layout (not <body>).
   const railUploadFocusRef = useMemo(uploadFocusHandoffRef, []);
   const panelUploadFocusRef = useMemo(uploadFocusHandoffRef, []);
@@ -193,6 +194,7 @@ export default function SidebarLeft({ selectedSources, setSelectedSources, onSou
         const prevSnapshot = sourcesRef.current;
         setSources((prev) => mergeSources(prev, backendSources, formatFileName));
         setSelectedSources((prevSel) => reconcileSelectedSources(prevSnapshot, backendSources, prevSel));
+        setDaTaiDanhSach(true);
         setLoiTai(null);
       })
       .catch((err) => {
@@ -225,7 +227,14 @@ export default function SidebarLeft({ selectedSources, setSelectedSources, onSou
     Object.values(pollersRef.current).forEach((bo) => bo.stop());
     pollersRef.current = {};
   }, []);
-  useEffect(() => { if (onSourcesChange) onSourcesChange(sources); }, [sources, onSourcesChange]);
+  // This component remounts whenever the layout crosses 768px / 1280px (rail, shelf, drawer and
+  // panel are different mounts). A fresh mount starts with `sources = []`; reporting that before
+  // `/list-indexed` answers wiped MainLayout's list, so the chat flashed its "no documents" state
+  // (and its upload CTA) on every breakpoint crossing. Report only real data: the fetched list, or
+  // in-progress uploads rebuilt from local storage.
+  useEffect(() => {
+    if (onSourcesChange && (daTaiDanhSach || sources.length > 0)) onSourcesChange(sources);
+  }, [sources, daTaiDanhSach, onSourcesChange]);
 
   useEffect(() => {
     if (!filterOpen) return undefined;

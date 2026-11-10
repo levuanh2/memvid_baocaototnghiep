@@ -1,12 +1,16 @@
 // Upload controls live in layout-specific places: the tablet source rail ("+"), the desktop
-// source panel ("Thêm tài liệu") and the workspace empty state ("Tải tài liệu lên"). Crossing a
+// source panel upload button and the workspace empty state ("Tải tài liệu lên"). Crossing a
 // responsive boundary (768px, 1280px) unmounts the rail or the panel. If the control being
 // unmounted held keyboard focus, focus fell to <body> and a keyboard user lost their place.
 //
 // React detaches a ref (calls it with null) BEFORE it removes the DOM node, so the ref callback
 // can still tell that the node was focused. On the next frame, once the new layout is mounted,
-// focus moves to the first visible upload control, unless something else has taken focus.
+// focus moves to the first usable upload control. With documents already in the library there
+// may be no upload control on screen (no empty-state CTA, drawer closed, panel collapsed): then
+// focus goes to the control that opens the source panel/drawer, where uploading continues.
+// Nothing happens if something else has taken focus meanwhile.
 export const UPLOAD_CTA_ATTR = "data-upload-cta";
+export const SOURCE_ENTRY_ATTR = "data-source-entry";
 
 export function uploadFocusHandoffRef() {
   let last = null;
@@ -21,7 +25,8 @@ export function uploadFocusHandoffRef() {
     requestAnimationFrame(() => {
       const active = document.activeElement;
       if (active && active !== document.body && active.isConnected) return;
-      const next = [...document.querySelectorAll(`[${UPLOAD_CTA_ATTR}]`)].find(isUsable);
+      const next = [...document.querySelectorAll(`[${UPLOAD_CTA_ATTR}]`)].find(isUsable)
+        || [...document.querySelectorAll(`[${SOURCE_ENTRY_ATTR}]`)].find(isUsable);
       next?.focus();
     });
   };
