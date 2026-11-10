@@ -7879,6 +7879,12 @@ unknown, unmodelled job) plus a drift check that ci.yml's `if:`s, `needs:` and t
 ci-success wiring match the model. A/B against the old bash gate: old wrong in 16/28,
 new 0/28. Drift/model mutations D1–D8 each fail the suite.
 
+Codex review 2: the drift parser first matched job ids as `[a-z0-9-]+`, so a failing
+`new_job:` left out of `ci-success.needs` was invisible and the suite still passed (red
+confirmed on the first commit). It now uses GitHub's id grammar `[A-Za-z_][A-Za-z0-9_-]*`
+and raises on any job-level line it cannot parse (mutation D10: `new_job`, `NewJob`,
+quoted id, malformed header).
+
 **Prevention:** an aggregate gate must check that required jobs RAN, not only that nothing
 failed. Adding a job or changing an `if:` now fails the drift test until the gate model is
 updated.

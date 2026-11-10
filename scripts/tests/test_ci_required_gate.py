@@ -109,10 +109,22 @@ class Matrix(unittest.TestCase):
         self.assertEqual(run.returncode, 1)
 
 
+# GitHub job ids: start with a letter or "_", then letters, digits, "-" or "_" (Codex review:
+# the first version only matched [a-z0-9-], so a `new_job:` was invisible to the drift check).
+JOB_ID = r"[A-Za-z_][A-Za-z0-9_-]*"
+JOB_HEADER = rf"^  ({JOB_ID}):[ \t]*(?:#.*)?$"
+
+
 def jobs_of(text):
-    """Top-level jobs of ci.yml -> {job: block text}. Stdlib only (the workflow is regular)."""
+    """Top-level jobs of ci.yml -> {job: block text}. Stdlib only (the workflow is regular).
+
+    Fails closed: a line at the job indent that is not a recognised job header raises, so
+    an id this parser cannot read never silently drops out of the drift check."""
     body = text.split("\njobs:\n", 1)[1]
-    parts = re.split(r"^  ([a-z0-9-]+):\n", body, flags=re.M)
+    for line in body.splitlines():
+        if re.match(r"^  [^ #]", line) and not re.match(JOB_HEADER, line):
+            raise AssertionError(f"unparsed job-level line in ci.yml: {line!r}")
+    parts = re.split(JOB_HEADER + r"\n", body, flags=re.M)
     return dict(zip(parts[1::2], parts[2::2]))
 
 
@@ -128,7 +140,7 @@ def needs_of(block):
     inline = m.group(1).strip()
     if inline:
         return [n.strip() for n in inline.strip("[]").split(",") if n.strip()]
-    return re.findall(r"^      - ([a-z0-9-]+)", m.group(2), flags=re.M)
+    return re.findall(rf"^      - ({JOB_ID})", m.group(2), flags=re.M)
 
 
 class WorkflowDrift(unittest.TestCase):
