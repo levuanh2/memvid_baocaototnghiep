@@ -7849,3 +7849,36 @@ dashboard average; each fails if its bug is reintroduced.
 **Open copy decision (owner):** the result page's "Đúng / Sai" counters come from
 `correct_count` / `incorrect_count`, and the backend counts a partial answer as
 incorrect, so a learner can see "Đúng 1 · Sai 1" next to "75% điểm".
+
+### `CI / required` went green while `detect-changes` was `abandoned` (PR #148, 2026-11-10)
+
+PR #148 run 42673104752 attempt 2, during the GitHub incident "Incident with Actions and
+Checks API": `detect-changes` came back `abandoned`, so every test job was skipped, and
+`CI / required` (the **only** check branch protection requires) printed "All active CI
+checks succeeded" on `abandoned success skipped skipped …`. E2E Critical Flows never ran.
+Deploy was not at risk (deploy.yml requires `workflow_run.conclusion == 'success'`, and the
+run concluded failure), but a merge would have been allowed.
+
+**Root cause:** the inline gate only rejected `failure` / `cancelled`. Every other result
+(`abandoned`, unknown values, a missing job) and every `skipped` counted as a pass, with no
+notion of which jobs the path filter made required. Same class as the PR #39 entry above
+(a skip counted as a pass).
+
+**Fix:** `scripts/ci_required_gate.py` (stdlib) evaluates `toJSON(needs)` + `github.ref`:
+`detect-changes` must be `success` with outputs exactly 'true'/'false`; the always-on jobs
+(security, deploy-script-tests) must succeed; each conditional job is required on main or
+when one of its path outputs is 'true' (model mirrors each job's `if:`), and then must be
+`success`. Optional jobs may be `skipped` or `success`. Missing, unknown, `abandoned`,
+`failure` or `cancelled` fail. `ci-success` keeps `if: always()`; a checkout failure fails it.
+
+**Regression:** `scripts/tests/test_ci_required_gate.py`, run inside `ci-success` on every
+CI run: 28-scenario matrix (FE-only / BE-only / shared / docs-only PRs, main push, real
+attempt-2 and attempt-3 log lines, detect-changes abandoned / skipped / bad outputs,
+unexpected skips of FE / BE / E2E / docker jobs, missing, cancelled, failure, abandoned,
+unknown, unmodelled job) plus a drift check that ci.yml's `if:`s, `needs:` and the
+ci-success wiring match the model. A/B against the old bash gate: old wrong in 16/28,
+new 0/28. Drift/model mutations D1–D8 each fail the suite.
+
+**Prevention:** an aggregate gate must check that required jobs RAN, not only that nothing
+failed. Adding a job or changing an `if:` now fails the drift test until the gate model is
+updated.

@@ -3665,3 +3665,10 @@ apart. When a merge from main conflicts in a file the branch just changed, re-ru
 branch's new tests before pushing: a conflict resolved "to main" can revert the change
 while its test survives. A missing value is not zero in an accessible name either:
 mirror the visible "no score" state instead of `?? 0`.
+
+## 2026-11-10 — "Nothing failed" is not "everything required ran"
+
+A green aggregate check that only rejects failure/cancelled turns any skip, outage
+(`abandoned`) or missing job into a pass. Model which jobs must run for this event and
+these paths, require `success` for exactly those, and keep the model drift-tested against
+the workflow. Before trusting a green `CI / required`, read its "Pipeline job results" line.
