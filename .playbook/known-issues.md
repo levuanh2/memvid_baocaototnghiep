@@ -7911,12 +7911,16 @@ is not scrollable and the right half hides inside `padding-right`, so it saw 0-1
 It also measured right after the Google Fonts swap (trace: last Inter subset arrived ~15ms
 before the measurement), so the visible part depended on font metrics/timing -> flaky.
 
-**Fix:** primary column `minmax(220px, max-content)` (both the >= 1024 and the 768-1023 grids);
-the identity column absorbs the difference. The spec now awaits `document.fonts.ready`, runs
+**Fix:** primary column `minmax(220px, fit-content(280px))` (both the >= 1024 and the 768-1023
+grids): it grows with the label, the identity column absorbs the difference, and the 280px cap
+(Codex review) keeps a future longer label from squeezing the title column; the spec fails if a
+label ever exceeds it. Rows are separate grids, so only long-label rows get the wider column. The spec now awaits `document.fonts.ready`, runs
 each width with the webfont AND with Google Fonts blocked (fallback font), and asserts the
-icon + label range lies inside the padding box (<= 0.5px) in addition to the old checks.
+icon + label range lies inside the padding box (<= 0.5px) in addition to the old checks. The
+webfont run also asserts Inter 600 really loaded (`fonts.ready` resolves on failure too), and
+the matrix includes the 1023/767 breakpoint edges (agy audit).
 
-**Regression:** red-before 6/10 (1440/1024/768 x both fonts, doc-2 overflow 12.7 / 8.3px),
+**Regression:** red-before 8/14 (1440/1024/1023/768 x both fonts, doc-2 overflow 12.7 / 8.3px),
 deterministic, not flaky; green after; sweep 767-1440 both fonts: no overflow anywhere.
 
 **Prevention:** never prove "fits" with `scrollWidth` on a centred or padded flex box; measure

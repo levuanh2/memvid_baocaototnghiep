@@ -9,7 +9,8 @@ const viewports = [
   [1440, 900], [1024, 768], [820, 1180], [800, 900], [768, 1024], [390, 844], [320, 568],
 ];
 const responsiveMatrixViewports = [
-  [1440, 900], [1024, 768], [768, 1024], [390, 844], [320, 568],
+  // 1023/767 are the edges of the 1024 and 768 grid breakpoints (agy audit).
+  [1440, 900], [1024, 768], [1023, 900], [768, 1024], [767, 1024], [390, 844], [320, 568],
 ];
 
 test.beforeAll(async () => mkdir(evidenceDir, { recursive: true }));
@@ -120,6 +121,15 @@ for (const [width, height] of responsiveMatrixViewports) for (const fonts of ["w
       .toContainText("Tiếp tục · Hướng dẫn ôn tập");
     // Measure settled text: never against a font that is about to be swapped.
     await page.evaluate(() => document.fonts.ready);
+    if (fonts === "webfont") {
+      // fonts.ready also resolves when a font FAILS to load; prove Inter 600 is really in use,
+      // otherwise this "webfont" run would silently measure the fallback (Codex review).
+      const interLoaded = await page.evaluate(async () => {
+        await document.fonts.load("600 16px Inter", "Tiếp tục · Hướng dẫn ôn tập");
+        return document.fonts.check("600 16px Inter", "Tiếp tục · Hướng dẫn ôn tập");
+      });
+      expect(interLoaded, "Inter 600 did not load: this run cannot prove the webfont layout").toBe(true);
+    }
 
     const geometry = await page.locator("[data-document-row]").evaluateAll((rows) => rows.map((row) => {
       const rowRect = row.getBoundingClientRect();
