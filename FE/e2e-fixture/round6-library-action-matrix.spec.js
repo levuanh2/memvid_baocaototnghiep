@@ -128,8 +128,23 @@ for (const [width, height] of responsiveMatrixViewports) for (const fonts of ["w
         await document.fonts.load("600 16px Inter", "Tiếp tục · Hướng dẫn ôn tập");
         return document.fonts.check("600 16px Inter", "Tiếp tục · Hướng dẫn ôn tập");
       });
-      expect(interLoaded, "Inter 600 did not load: this run cannot prove the webfont layout").toBe(true);
+      // Inter comes from Google Fonts. If it cannot load, say so and skip instead of failing the
+      // required gate on a third-party outage (Codex review 2); the fallback-font run of this
+      // width always runs and needs no network.
+      test.skip(!interLoaded, "Inter 600 could not load from Google Fonts; the fallback-font run covers this width");
     }
+    // The intended grid must actually apply: an invalid grid-template-columns is dropped by the
+    // browser and every row silently stacks into one column (Codex review 2, P1).
+    const tracks = await page.locator("[data-document-row]").evaluateAll((rows) => rows.map((row) => ({
+      id: row.dataset.documentId,
+      columns: getComputedStyle(row).gridTemplateColumns.split(" ").length,
+      height: Math.round(row.getBoundingClientRect().height),
+    })));
+    const expectedColumns = width >= 1024 ? 6 : width >= 768 ? 5 : 3;
+    expect(tracks.filter(({ columns }) => columns !== expectedColumns)).toEqual([]);
+    // A stacked row is 171-336px; a laid-out row is 78-101px (the "Tiếp tục" row at >= 1024px
+    // wraps its progress text to make room for the wider primary action).
+    if (width >= 768) expect(Math.max(...tracks.map(({ height }) => height))).toBeLessThanOrEqual(120);
 
     const geometry = await page.locator("[data-document-row]").evaluateAll((rows) => rows.map((row) => {
       const rowRect = row.getBoundingClientRect();

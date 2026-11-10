@@ -3679,3 +3679,7 @@ The 768px Library flake was not timing alone: the label was clipped on every run
 test's `scrollWidth` measure only noticed it when font metrics pushed the overflow past the
 padding. Before "stabilising" a flaky geometry test (waits, retries), measure the real content
 box once with the font loaded and once with the fallback; fix the layout if either overflows.
+A geometry test that only checks containment can pass on a layout that has collapsed: an invalid
+`grid-template-columns` (e.g. `fit-content()` inside `minmax()`) is dropped silently and every
+cell stacks. Assert the computed structure too (column count, row height), and validate new CSS
+grammar in a browser, not by eye.
