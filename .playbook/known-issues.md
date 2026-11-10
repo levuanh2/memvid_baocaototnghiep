@@ -7929,7 +7929,12 @@ webfont run checks that a loaded Inter 600 FontFace exists (`fonts.ready` resolv
 too; `fonts.check()` is TRUE for a family with no registered face, i.e. when the Google
 stylesheet is blocked; `fonts.load()` rejects when the font files fail; so: bounded 5s
 `fonts.load`, rejection caught, a loaded face required) and is SKIPPED with a reason if Google
-Fonts is unreachable (simulated outage: 7 skipped, 7 fallback passed), so a third-party outage cannot block the
+Fonts is unreachable (simulated outage: 7 skipped, 7 fallback passed). Every wait is bounded so
+a request that never settles cannot time the required test out before it skips (Codex review 4):
+`goto` waits for `domcontentloaded` (a stalled `@import` stylesheet holds `load`), and
+`document.fonts.ready` is raced against 8s (the fallback run, with every Google request aborted,
+must settle). Simulated never-settling stylesheet: 7 skipped / 7 passed in 24s; never-settling
+font files: 7 / 7 in 1.9 min, so a third-party outage cannot block the
 required gate (the fallback-font run needs no network and always runs). The matrix includes the
 1023/767 breakpoint edges (agy audit).
 

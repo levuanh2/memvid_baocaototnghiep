@@ -109,7 +109,9 @@ for (const [width, height] of responsiveMatrixViewports) for (const fonts of ["w
   test(`${width}px action rows contain every control and keep the primary action on one line (${fonts})`, async ({ page }) => {
     if (fonts === "fallback font") await page.route(/fonts\.(googleapis|gstatic)\.com/, (route) => route.abort());
     await page.setViewportSize({ width, height });
-    await page.goto("/round6-library-qa.html");
+    // domcontentloaded: a stalled Google Fonts request must not hold the "load" event and time
+    // the test out before the webfont run can skip (Codex review 4).
+    await page.goto("/round6-library-qa.html", { waitUntil: "domcontentloaded" });
     // The production Library uses StudyShell's 980px frame. At lg and above,
     // CollectionSidebar consumes 210px plus the 24px gap, leaving 706px for
     // the matrix; below lg the shell keeps 20px padding on each side.
@@ -119,9 +121,16 @@ for (const [width, height] of responsiveMatrixViewports) for (const fonts of ["w
     }, matrixWidth);
     await expect(page.locator('[data-document-id="doc-2"] [data-primary-action]'))
       .toContainText("Tiếp tục · Hướng dẫn ôn tập");
-    // Measure settled text: never against a font that is about to be swapped.
-    await page.evaluate(() => document.fonts.ready);
+    // Measure settled text: never against a font that is about to be swapped. Bounded, so a
+    // request that never settles cannot hang the required gate (Codex review 4).
+    const fontsSettled = await page.evaluate(() => Promise.race([
+      document.fonts.ready.then(() => true),
+      new Promise((resolve) => setTimeout(() => resolve(false), 8000)),
+    ]));
+    // With every Google request aborted nothing can be pending, so this must settle.
+    if (fonts === "fallback font") expect(fontsSettled, "fonts did not settle with Google Fonts blocked").toBe(true);
     if (fonts === "webfont") {
+      test.skip(!fontsSettled, "Google Fonts did not settle within 8s; the fallback-font run covers this width");
       // fonts.ready also resolves when a font FAILS to load; prove Inter 600 is really in use,
       // otherwise this "webfont" run would silently measure the fallback (Codex review).
       // fonts.check() is true for a family with no registered face (stylesheet blocked) and
