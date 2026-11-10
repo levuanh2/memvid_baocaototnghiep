@@ -16,7 +16,7 @@ import ci_required_gate as gate  # noqa: E402
 
 CI_YML = os.path.join(ROOT, ".github", "workflows", "ci.yml")
 MAIN, PR = "refs/heads/main", "refs/pull/148/merge"
-# Order of ci-success.needs in ci.yml (used to replay a real "Pipeline job results" line).
+# Order of ci-success.needs at PR #148 time: only for replaying those real "Pipeline job results" lines.
 NEEDS_ORDER = ["detect-changes", "security-and-static", "frontend-tests", "frontend-build",
                "backend-contracts-and-unit", "backend-integration-and-smoke", "e2e-critical",
                "deploy-script-tests", "docker-build-test", "docker-compose-run-test", "fixture-smoke"]
@@ -27,7 +27,7 @@ def healthy(ref, frontend=False, backend=False, shared=False, **override):
     out = {"frontend": str(frontend).lower(), "backend": str(backend).lower(), "shared": str(shared).lower()}
     changed = {k for k, v in out.items() if v == "true"}
     needs = {}
-    for job in NEEDS_ORDER:
+    for job in list(gate.ALWAYS) + list(gate.REQUIRED_WHEN):
         runs = job in gate.ALWAYS or ref == MAIN or bool(changed & set(gate.REQUIRED_WHEN[job]))
         needs[job] = {"result": "success" if runs else "skipped", "outputs": {}}
     needs["detect-changes"]["outputs"] = out
@@ -44,6 +44,11 @@ def replay(results_line, outputs):
     """Rebuild `needs` from a real `Pipeline job results:` log line (same order as NEEDS_ORDER)."""
     needs = {job: {"result": r, "outputs": {}} for job, r in zip(NEEDS_ORDER, results_line.split())}
     needs["detect-changes"]["outputs"] = outputs
+    # A job added to the workflow after that run did not exist then: give it the result a
+    # healthy run would, so old log lines keep testing exactly the jobs they recorded.
+    flags = {k: v == "true" for k, v in outputs.items()}
+    for job, entry in healthy(PR, **flags).items():
+        needs.setdefault(job, entry)
     return needs
 
 
@@ -143,6 +148,10 @@ def needs_of(block):
     return re.findall(rf"^      - ({JOB_ID})", m.group(2), flags=re.M)
 
 
+FIX = ("ci.yml and the gate model disagree: update ALWAYS / REQUIRED_WHEN in "
+       "scripts/ci_required_gate.py in the same PR (docs/ci/CI_ARCHITECTURE.md section 8)")
+
+
 class WorkflowDrift(unittest.TestCase):
     """The gate's model must match ci.yml; adding a job or changing an `if:` fails here first."""
 
@@ -154,22 +163,22 @@ class WorkflowDrift(unittest.TestCase):
 
     def test_ci_success_needs_every_other_job_and_matches_model(self):
         needs = needs_of(self.jobs["ci-success"])
-        self.assertEqual(needs, NEEDS_ORDER)
-        self.assertEqual(set(needs), set(self.jobs) - {"ci-success"})
-        self.assertEqual(set(needs), set(gate.ALWAYS) | set(gate.REQUIRED_WHEN))
+        self.assertEqual(len(needs), len(set(needs)), "duplicate entry in ci-success.needs")
+        self.assertEqual(set(needs), set(self.jobs) - {"ci-success"}, FIX)
+        self.assertEqual(set(needs), set(gate.ALWAYS) | set(gate.REQUIRED_WHEN), FIX)
 
     def test_ci_success_always_runs_and_feeds_the_script(self):
         block = self.jobs["ci-success"]
-        self.assertEqual((if_expr(block) or "").strip(), "always()")
-        self.assertIn("NEEDS_JSON: ${{ toJSON(needs) }}", block)
-        self.assertIn("GATE_REF: ${{ github.ref }}", block)
-        self.assertIn("python3 scripts/ci_required_gate.py", block)
+        self.assertEqual((if_expr(block) or "").strip(), "always()", FIX)
+        self.assertIn("NEEDS_JSON: ${{ toJSON(needs) }}", block, FIX)
+        self.assertIn("GATE_REF: ${{ github.ref }}", block, FIX)
+        self.assertIn("python3 scripts/ci_required_gate.py", block, FIX)
 
     def test_always_jobs_have_no_condition_and_no_needs(self):
         for job in gate.ALWAYS:
             with self.subTest(job):
-                self.assertIsNone(if_expr(self.jobs[job]))
-                self.assertEqual(needs_of(self.jobs[job]), [])
+                self.assertIsNone(if_expr(self.jobs[job]), FIX)
+                self.assertEqual(needs_of(self.jobs[job]), [], FIX)
 
     def test_conditional_jobs_match_their_if(self):
         for job, outputs in gate.REQUIRED_WHEN.items():
@@ -178,11 +187,11 @@ class WorkflowDrift(unittest.TestCase):
                 if expr is None:  # e.g. docker-compose-run-test: runs when its one parent ran
                     parents = needs_of(self.jobs[job])
                     self.assertEqual(len(parents), 1, f"{job}: no if: and not exactly one parent")
-                    self.assertEqual(outputs, gate.REQUIRED_WHEN[parents[0]])
+                    self.assertEqual(outputs, gate.REQUIRED_WHEN[parents[0]], FIX)
                     continue
-                self.assertIn("github.ref == 'refs/heads/main'", expr)
+                self.assertIn("github.ref == 'refs/heads/main'", expr, FIX)
                 found = set(re.findall(r"needs\.detect-changes\.outputs\.(\w+) == 'true'", expr))
-                self.assertEqual(found, set(outputs))
+                self.assertEqual(found, set(outputs), FIX)
                 self.assertNotRegex(expr, r"&&|!|success\(|failure\(|always\(")
 
     def test_no_needs_cascade_skips_a_required_job(self):

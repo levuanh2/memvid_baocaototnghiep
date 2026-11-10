@@ -230,54 +230,39 @@ CI / required
 ```
 Provided by the `ci-success` job (`name: CI / required` in `ci.yml`).
 
-### Exact skip/fail semantics (traced against the real YAML, not assumed)
+### Gate semantics (`scripts/ci_required_gate.py`, since 2026-11-10)
 
-`ci-success` has `if: always()` — it runs even if every one of its `needs`
-was skipped or failed, which is what lets it act as a single stable branch
-protection target regardless of which jobs a given PR's path filter
-actually ran. Its body reads `needs.*.result` and fails only on the literal
-strings `"failure"` or `"cancelled"`:
+`ci-success` keeps `if: always()`, so it reports even when a dependency failed, was
+cancelled or was skipped. (`!cancelled()` would let a cancelled run skip the gate, and a
+skipped required check counts as passing.) It checks out `scripts/` + `.github/`, runs
+`scripts/tests/test_ci_required_gate.py`, then evaluates `toJSON(needs)` + `github.ref`:
 
-```yaml
-for res in $results; do
-  if [ "$res" = "failure" ] || [ "$res" = "cancelled" ]; then exit 1; fi
-done
-```
+| Job | Must be `success` when | Otherwise allowed |
+|---|---|---|
+| `detect-changes`, `security-and-static`, `deploy-script-tests` | always | — |
+| `frontend-tests`, `frontend-build`, `fixture-smoke` | push to main, or `frontend`/`shared` changed | `skipped` / `success` |
+| `backend-contracts-and-unit`, `backend-integration-and-smoke` | push to main, or `backend`/`shared` changed | `skipped` / `success` |
+| `e2e-critical` | push to main, or `frontend`/`backend`/`shared` changed | `skipped` / `success` |
+| `docker-build-test`, `docker-compose-run-test` | push to main, or `shared` changed | `skipped` / `success` |
 
-`"skipped"` is a distinct GitHub Actions result value and is NOT in that
-list — a job skipped by its own `if:` (e.g. `backend-contracts-and-unit` on
-a frontend-only PR) reports `result: "skipped"` to `ci-success`, which
-passes it through as fine. This is the correct behavior (a path-irrelevant
-job being skipped must not fail the gate) and was verified correct BEFORE
-this pass — the risk case B6 warns about ("a job with `needs:` on a skipped
-job is itself skipped by default unless `if: always()`") does not apply
-here because `ci-success` itself always runs; it's only `ci-success`'s
-*needs* that may be skipped, and skip ≠ failure in its own check.
+`detect-changes` must also emit exactly `'true'`/`'false'` outputs. A missing job, an
+unknown result (e.g. `abandoned`, seen during the 2026-11-10 GitHub outage), `failure`,
+`cancelled`, or a required job that was skipped fails the gate. A docs-only PR passes with
+only the three always-on jobs; a FE-only PR passes with backend/docker skipped.
 
-**Three scenarios, traced:**
+The old inline check only rejected `failure`/`cancelled`. On PR #148 run 42673104752
+attempt 2, `detect-changes` came back `abandoned`, every test job was skipped and the gate
+still passed. See `.playbook/known-issues.md`.
 
-- **(A) PASS** — every required job that ran succeeded → every result is
-  `"success"` or `"skipped"` → no `res` matches `"failure"`/`"cancelled"` →
-  exit 0 → `ci-success` passes.
-- **(B) FAIL** — one required job that ran failed → its result is
-  `"failure"` → the loop matches it → exit 1 → `ci-success` fails, even
-  though `if: always()` let it run at all.
-- **(C) SKIP** — a path-irrelevant job (e.g. `e2e-critical` on a
-  docs-only PR, once `.github/**`/`*.yml` stop matching that specific PR's
-  diff) is skipped by its own `if:` → its result is `"skipped"` → the loop
-  does not match it → `ci-success` still passes, exactly as it should.
+### Rule: a PR that changes `ci.yml` jobs must update the gate model
 
-This pass added `e2e-critical` to `ci-success`'s `needs:` list — the same
-`if: always()` + string-match logic covers it with no other change required.
-Proof from a real run (not local simulation): see the CI section of this
-task's final report for the PR number, run ID, and each job's actual
-`result` string from the GitHub Actions API/UI for this specific change.
-Editing `.github/workflows/ci.yml` itself makes the `shared` path filter
-match on every commit in this PR, so a live SKIP-scenario run could not be
-observed inside THIS PR (every job ran) — the semantics above are verified
-by tracing the actual YAML logic (not asserted from nothing), and a live
-SKIP observation is deferred to the next PR that touches only `docs/**` or
-similar, i.e. does not modify `.github/**`.
+`REQUIRED_WHEN` / `ALWAYS` in `scripts/ci_required_gate.py` mirror each job's `if:`. The
+self-test compares them with `ci.yml` (every job listed in `ci-success.needs`, each
+`if:`'s path outputs, no `needs:` on a narrower job). Adding, renaming or re-conditioning a
+job without updating the script turns `CI / required` red **in that PR** (`.github/**` is
+`shared`, so the full CI runs), and the failing test names what to change. This is
+intentional: the gate must never silently ignore a new job. Run
+`python3 scripts/tests/test_ci_required_gate.py` locally before pushing a `ci.yml` change.
 
 ---
 
