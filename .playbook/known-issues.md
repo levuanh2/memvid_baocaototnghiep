@@ -7850,6 +7850,67 @@ dashboard average; each fails if its bug is reintroduced.
 `correct_count` / `incorrect_count`, and the backend counts a partial answer as
 incorrect, so a learner can see "Đúng 1 · Sai 1" next to "75% điểm".
 
+# Quiz Result showed a partial answer as "Sai" next to "% điểm" (fixed 2026-11-09, owner follow-up to PR #137)
+
+**Symptom:** with one correct and one partial answer the result page read
+"Đúng 1 · Sai 1 · 75% điểm". The percentage is right; the counter is not.
+
+**Root cause:** `ScoreBoard` displayed the backend's `incorrect_count` as "Sai", and
+`grading.py` `totals()` counts `partial` inside `incorrect_count` (only `correct` is
+counted separately). The page already received every question's `verdict` but did not
+use it for the counters.
+
+**Fix:** `verdictBreakdown(result)` counts `correct` / `partial` / `incorrect` from
+`questions[].verdict` and is used only when it reproduces the backend's own totals
+(`correct == correct_count`, `partial + incorrect == incorrect_count`), the list covers
+every question, no verdict is unknown and the null verdicts equal `ungraded_count`
+(review: otherwise a question with a stale ungraded count vanished from every counter).
+In the combined fallback the server totals are used only when they form a valid
+partition (whole numbers ≥ 0, `correct_count + incorrect_count ≤ total_questions`); then
+"Chưa chấm" is the remainder and the visible counters add up to "Số câu" (invariant test).
+Null, negative, non-integer or over-counted totals are not repaired: the counters read "—"
+and nothing is derived (scope cap after three review rounds).
+The board then shows "Đúng", "Đúng một phần"
+(only when > 0) and "Sai". Otherwise it shows "Đúng" + a combined "Chưa đúng"
+(= `incorrect_count`) instead of a wrong "Sai". Ungraded questions keep "Chưa chấm".
+While grading, the labels stay "Đúng" / "Sai" with "—". The review action, which lists
+partial and incorrect answers (membership unchanged), is renamed "Xem lại câu chưa đúng"
+(owner decision), so it no longer contradicts "Sai 0"; its empty state says "Không có câu
+chưa đúng cần xem lại". "Chưa đúng" for the fallback is also an owner decision. No
+backend, API, score or percentage change.
+
+**Regression:** `FE/src/pages/study/QuizResult.partialCounter.test.jsx` (14 cases:
+all correct, all incorrect / 0%, correct + partial = 75%, partial + incorrect, all
+partial, provisional, all ungraded, grading, four missing/inconsistent/unknown-verdict
+fallbacks, labels + wrapping row) and `FE/e2e-fixture/quiz-result-partial-counter.spec.js`
+(1440 / 390 / 320 px, counters on screen, no horizontal overflow). Behavioural mutations
+(double-counting the partial, dropping the partial counter, labelling the fallback "Sai",
+skipping the consistency check, ignoring an unknown verdict) each fail at least one test.
+
+**PR #148 hardening (2026-11-10).** Two holes in `verdictBreakdown()` at `272c0d1`:
+(1) the totals were compared as `Number(result.correct_count || 0)`, so a **null**
+`correct_count` / `incorrect_count` matched a derived 0 and the split was shown
+(e.g. one incorrect answer, `correct_count: null` showed "Đúng 0 · Sai 1"); a string
+`total_questions` ("2") passed the `Number()` length check the same way.
+(2) `verdict in counts` accepted inherited keys, so `"toString"`, `"constructor"`,
+`"hasOwnProperty"`, `"__proto__"` were "known" and the question vanished from the split;
+and `VERDICT_LABEL["__proto__"]` returned `Object.prototype`, which **crashed the page**
+("Objects are not valid as a React child").
+Root cause: coercion and `in` on server data. Fix: strict `===` against the raw totals
+(only `ungraded_count` may be absent = 0, the backend contract), and an explicit
+`VERDICTS` whitelist for both counting and the label lookup (`verdictLabel()`).
+Regression: 12 cases in the "PR #148 hardening" block (null correct/incorrect, invalid
+total_questions string/null/negative/fractional, zero-count boundary, five bogus
+verdicts, bogus verdict + invalid totals, whitelisted verdicts). Mutations M7–M11
+(coercion back, `Number()` length, `in`, label lookup without whitelist) each fail.
+Prevention: never coerce a server count with `|| 0` before comparing it, and never test
+membership of untrusted strings with `in` / bracket lookup on a plain object.
+Codex review 5 found the same crash on the topic-mastery list (pre-existing on main):
+`MASTERY_LABEL[m.status]` with `status: "__proto__"` rendered `Object.prototype`. Fixed with
+`Object.hasOwn(MASTERY_LABEL, m.status)` (unknown statuses still show the raw string);
+regression "review 5: a mastery status that is an inherited key does not crash the page"
+(`__proto__`, `constructor`, `toString`) plus a known-status label check; mutation M12.
+
 ### `CI / required` went green while `detect-changes` was `abandoned` (PR #148, 2026-11-10)
 
 PR #148 run 42673104752 attempt 2, during the GitHub incident "Incident with Actions and
