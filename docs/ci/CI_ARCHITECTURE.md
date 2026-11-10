@@ -257,8 +257,12 @@ still passed. See `.playbook/known-issues.md`.
 ### Rule: a PR that changes `ci.yml` jobs must update the gate model
 
 `REQUIRED_WHEN` / `ALWAYS` in `scripts/ci_required_gate.py` mirror each job's `if:`. The
-self-test compares them with `ci.yml` (every job listed in `ci-success.needs`, each
-`if:`'s path outputs, no `needs:` on a narrower job). Adding, renaming or re-conditioning a
+self-test compares them with `ci.yml`: every job is listed in `ci-success.needs`; each
+conditional job's `if:` is **exactly** `github.ref == 'refs/heads/main' || <one
+needs.detect-changes.outputs.X == 'true' per modelled output>` (any other operand, such as
+`|| true`, `|| github.actor == …` or an `&&`, fails); always-on jobs have no `if:`/`needs:`;
+no job `needs:` a job with a narrower condition. A job whose condition cannot be written in
+that form needs a gate-model change first. Adding, renaming or re-conditioning a
 job without updating the script turns `CI / required` red **in that PR** (`.github/**` is
 `shared`, so the full CI runs), and the failing test names what to change. This is
 intentional: the gate must never silently ignore a new job. Run

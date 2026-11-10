@@ -53,7 +53,17 @@ def replay(results_line, outputs):
 
 
 FE_ONLY = {"frontend": "true", "backend": "false", "shared": "false"}
-# (name, ref, needs, expected_ok). Shared with the A/B harness that replays the old gate.
+# (name, ref, needs, expected): True = the gate passes; a string = the gate fails AND reports
+# exactly that problem (so a broken fixture cannot fail for the wrong reason and still pass).
+# Shared with the A/B harness that replays the old gate.
+ABANDONED_LINE = "abandoned success skipped skipped skipped skipped skipped success skipped skipped skipped"
+NOT_TF = "detect-changes: outputs not 'true'/'false'"
+
+
+def detect_outputs(outputs):
+    return {**healthy(PR), "detect-changes": {"result": "success", "outputs": outputs}}
+
+
 SCENARIOS = [
     ("all required jobs successful (push to main)", MAIN, healthy(MAIN), True),
     ("FE-only PR, intentional backend/docker skips", PR, healthy(PR, frontend=True), True),
@@ -65,33 +75,59 @@ SCENARIOS = [
      healthy(PR, frontend=True, docker_build_test="success"), True),
     ("replay PR #148 attempt 3 (real log line)", PR, replay(
         "success success success success skipped skipped success success skipped skipped success", FE_ONLY), True),
-    # --- must fail
-    ("replay PR #148 attempt 2: detect-changes abandoned (real log line)", PR, replay(
-        "abandoned success skipped skipped skipped skipped skipped success skipped skipped skipped", {}), False),
-    ("detect-changes skipped", PR, healthy(PR, frontend=True, detect_changes="skipped"), False),
-    ("detect-changes success but outputs missing", PR,
-     {**healthy(PR, frontend=True), "detect-changes": {"result": "success", "outputs": {}}}, False),
-    ("detect-changes output not true/false", PR,
-     {**healthy(PR), "detect-changes": {"result": "success",
-                                        "outputs": {"frontend": "", "backend": "false", "shared": "false"}}}, False),
-    ("push to main with docker unexpectedly skipped", MAIN, healthy(MAIN, docker_build_test="skipped",
-                                                                    docker_compose_run_test="skipped"), False),
-    ("FE PR, fixture-smoke unexpectedly skipped", PR, healthy(PR, frontend=True, fixture_smoke="skipped"), False),
-    ("FE PR, frontend-build skipped by cascade", PR, healthy(PR, frontend=True, frontend_build="skipped"), False),
+    # --- must fail, with the reason the gate has to report
+    ("replay PR #148 attempt 2: detect-changes abandoned (real log line)", PR, replay(ABANDONED_LINE, {}),
+     "detect-changes: abandoned (must be success)"),
+    ("detect-changes skipped", PR, healthy(PR, frontend=True, detect_changes="skipped"),
+     "detect-changes: skipped (must be success)"),
+    ("detect-changes failure", PR, healthy(PR, frontend=True, detect_changes="failure"),
+     "detect-changes: failure (must be success)"),
+    ("detect-changes cancelled", PR, healthy(PR, frontend=True, detect_changes="cancelled"),
+     "detect-changes: cancelled (must be success)"),
+    ("detect-changes success but outputs missing", PR, detect_outputs({}), NOT_TF),
+    ("detect-changes output empty string", PR,
+     detect_outputs({"frontend": "", "backend": "false", "shared": "false"}), NOT_TF),
+    ("detect-changes outputs as JSON booleans", PR,
+     detect_outputs({"frontend": True, "backend": False, "shared": False}), NOT_TF),
+    ("detect-changes output 'True' (wrong case)", PR,
+     detect_outputs({"frontend": "True", "backend": "false", "shared": "false"}), NOT_TF),
+    ("push to main with docker unexpectedly skipped", MAIN,
+     healthy(MAIN, docker_build_test="skipped", docker_compose_run_test="skipped"),
+     "docker-build-test: required but skipped"),
+    ("FE PR, fixture-smoke unexpectedly skipped", PR, healthy(PR, frontend=True, fixture_smoke="skipped"),
+     "fixture-smoke: required but skipped"),
+    ("FE PR, frontend-build skipped by cascade", PR, healthy(PR, frontend=True, frontend_build="skipped"),
+     "frontend-build: required but skipped"),
     ("BE PR, backend-integration unexpectedly skipped", PR,
-     healthy(PR, backend=True, backend_integration_and_smoke="skipped"), False),
-    ("FE PR, e2e-critical skipped (the PR #39 cascade)", PR, healthy(PR, frontend=True, e2e_critical="skipped"), False),
-    ("shared PR, docker-compose-run-test skipped", PR, healthy(PR, shared=True, docker_compose_run_test="skipped"), False),
-    ("docs PR, security check skipped", PR, healthy(PR, security_and_static="skipped"), False),
-    ("docs PR, deploy-script-tests failure", PR, healthy(PR, deploy_script_tests="failure"), False),
-    ("missing result (job absent from needs)", PR, healthy(PR, frontend=True, fixture_smoke=None), False),
-    ("required job cancelled", PR, healthy(PR, frontend=True, frontend_tests="cancelled"), False),
-    ("required job failure", PR, healthy(PR, backend=True, backend_contracts_and_unit="failure"), False),
-    ("required job abandoned", PR, healthy(PR, frontend=True, e2e_critical="abandoned"), False),
-    ("optional job with unknown status", PR, healthy(PR, frontend=True, docker_build_test="neutral"), False),
-    ("optional job failure", PR, healthy(PR, frontend=True, docker_build_test="failure"), False),
-    ("job in needs that the gate does not model", PR, {**healthy(PR), "new-job": {"result": "success"}}, False),
-    ("needs context is not an object", PR, None, False),
+     healthy(PR, backend=True, backend_integration_and_smoke="skipped"),
+     "backend-integration-and-smoke: required but skipped"),
+    ("FE PR, e2e-critical skipped (the PR #39 cascade)", PR, healthy(PR, frontend=True, e2e_critical="skipped"),
+     "e2e-critical: required but skipped"),
+    ("shared PR, docker-compose-run-test skipped", PR,
+     healthy(PR, shared=True, docker_compose_run_test="skipped"),
+     "docker-compose-run-test: required but skipped"),
+    ("docs PR, security check skipped", PR, healthy(PR, security_and_static="skipped"),
+     "security-and-static: required but skipped"),
+    ("docs PR, deploy-script-tests failure", PR, healthy(PR, deploy_script_tests="failure"),
+     "deploy-script-tests: failure"),
+    ("missing result (job absent from needs)", PR, healthy(PR, frontend=True, fixture_smoke=None),
+     "fixture-smoke: missing"),
+    ("empty needs object", PR, {}, "detect-changes: missing"),
+    ("required job cancelled", PR, healthy(PR, frontend=True, frontend_tests="cancelled"),
+     "frontend-tests: cancelled"),
+    ("required job failure", PR, healthy(PR, backend=True, backend_contracts_and_unit="failure"),
+     "backend-contracts-and-unit: failure"),
+    ("required job abandoned", PR, healthy(PR, frontend=True, e2e_critical="abandoned"),
+     "e2e-critical: unknown result 'abandoned'"),
+    ("optional job with unknown status", PR, healthy(PR, frontend=True, docker_build_test="neutral"),
+     "docker-build-test: unknown result 'neutral'"),
+    ("optional job failure", PR, healthy(PR, frontend=True, docker_build_test="failure"),
+     "docker-build-test: failure"),
+    ("optional job cancelled", PR, healthy(PR, frontend=True, docker_build_test="cancelled"),
+     "docker-build-test: cancelled"),
+    ("job in needs that the gate does not model", PR, {**healthy(PR), "new-job": {"result": "success"}},
+     "new-job: listed in needs but not modelled"),
+    ("needs context is not an object", PR, None, "needs context is not an object"),
 ]
 
 
@@ -100,7 +136,11 @@ class Matrix(unittest.TestCase):
         for name, ref, needs, expected in SCENARIOS:
             with self.subTest(name):
                 ok, lines = gate.evaluate(needs, ref)
-                self.assertEqual(ok, expected, "\n".join(lines))
+                report = "\n".join(lines)
+                self.assertEqual(ok, expected is True, report)
+                if expected is not True:
+                    self.assertTrue(any(l.startswith(f"FAIL {expected}") for l in lines),
+                                    f"expected problem {expected!r} not reported:\n{report}")
 
     def test_cli_reads_env_and_sets_exit_code(self):
         script = os.path.join(ROOT, "scripts", "ci_required_gate.py")
@@ -109,9 +149,16 @@ class Matrix(unittest.TestCase):
             env = {**os.environ, "NEEDS_JSON": json.dumps(needs), "GATE_REF": PR}
             run = subprocess.run([sys.executable, script], env=env, capture_output=True, text=True)
             self.assertEqual(run.returncode, code, run.stdout + run.stderr)
-        run = subprocess.run([sys.executable, script], env={**os.environ, "NEEDS_JSON": "{not json"},
-                             capture_output=True, text=True)
-        self.assertEqual(run.returncode, 1)
+        env = {**os.environ, "NEEDS_JSON": json.dumps(healthy(MAIN)), "GATE_REF": MAIN}
+        run = subprocess.run([sys.executable, script], env=env, capture_output=True, text=True)
+        self.assertEqual(run.returncode, 0, run.stdout)
+        env = {**os.environ, "NEEDS_JSON": json.dumps(replay(ABANDONED_LINE, {})), "GATE_REF": PR}
+        run = subprocess.run([sys.executable, script], env=env, capture_output=True, text=True)
+        self.assertIn("::error::FAIL detect-changes: abandoned", run.stdout)  # annotation on the run page
+        for bad in ({"NEEDS_JSON": "{not json"}, {}):  # invalid JSON, variable unset
+            env = {k: v for k, v in os.environ.items() if k != "NEEDS_JSON"} | bad
+            run = subprocess.run([sys.executable, script], env=env, capture_output=True, text=True)
+            self.assertEqual(run.returncode, 1, run.stdout)
 
 
 # GitHub job ids: start with a letter or "_", then letters, digits, "-" or "_" (Codex review:
@@ -189,10 +236,12 @@ class WorkflowDrift(unittest.TestCase):
                     self.assertEqual(len(parents), 1, f"{job}: no if: and not exactly one parent")
                     self.assertEqual(outputs, gate.REQUIRED_WHEN[parents[0]], FIX)
                     continue
-                self.assertIn("github.ref == 'refs/heads/main'", expr, FIX)
-                found = set(re.findall(r"needs\.detect-changes\.outputs\.(\w+) == 'true'", expr))
-                self.assertEqual(found, set(outputs), FIX)
-                self.assertNotRegex(expr, r"&&|!|success\(|failure\(|always\(")
+                # Exact set of `||` operands (agy audit: a blacklist let an extra
+                # `|| github.actor == ...` through, so the job ran where the model says optional).
+                clauses = {re.sub(r"\s+", " ", c).strip() for c in expr.split("||")}
+                want = {"github.ref == 'refs/heads/main'"} | {
+                    f"needs.detect-changes.outputs.{o} == 'true'" for o in outputs}
+                self.assertEqual(clauses, want, FIX)
 
     def test_no_needs_cascade_skips_a_required_job(self):
         # PR #39: a job must not `needs:` a job whose own condition is narrower.

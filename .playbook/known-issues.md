@@ -7885,6 +7885,12 @@ confirmed on the first commit). It now uses GitHub's id grammar `[A-Za-z_][A-Za-
 and raises on any job-level line it cannot parse (mutation D10: `new_job`, `NewJob`,
 quoted id, malformed header).
 
+agy audit + Codex review 4: the drift check compared only the set of path outputs in each
+`if:` and blacklisted `&&`/`!`, so an extra operand (`|| true`, `|| github.actor == ...`)
+made a job run where the model says optional (red confirmed on 6391c42). It now requires the
+exact set of `||` operands (mutations D14-D16). Every expected-failure scenario also asserts
+the reported reason, not only `ok is False`.
+
 **Prevention:** an aggregate gate must check that required jobs RAN, not only that nothing
 failed. Adding a job or changing an `if:` now fails the drift test until the gate model is
 updated.
