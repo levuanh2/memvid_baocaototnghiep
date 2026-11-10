@@ -247,7 +247,10 @@ class WorkflowDrift(unittest.TestCase):
         # PR #39: a job must not `needs:` a job whose own condition is narrower.
         for job, outputs in gate.REQUIRED_WHEN.items():
             for parent in needs_of(self.jobs[job]):
-                if parent == "detect-changes":
+                # An always-on parent has no `if:` (test_always_jobs_have_no_condition_...), so it
+                # never cascade-skips its dependants (Codex review 5: only detect-changes was exempt,
+                # a false FAIL for e.g. `needs: [detect-changes, security-and-static]`).
+                if parent in gate.ALWAYS:
                     continue
                 with self.subTest(f"{job} needs {parent}"):
                     self.assertTrue(set(outputs) <= set(gate.REQUIRED_WHEN.get(parent, ())),
