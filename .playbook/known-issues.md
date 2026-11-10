@@ -7925,8 +7925,11 @@ checked the grid itself. The spec now asserts the computed column count (6 / 5 /
 height <= 120px; it fails 8/14 on that CSS. The spec now awaits `document.fonts.ready`, runs
 each width with the webfont AND with Google Fonts blocked (fallback font), and asserts the
 icon + label range lies inside the padding box (<= 0.5px) in addition to the old checks. The
-webfont run checks that Inter 600 really loaded (`fonts.ready` resolves on failure too) and is
-SKIPPED with a reason if Google Fonts is unreachable, so a third-party outage cannot block the
+webfont run checks that a loaded Inter 600 FontFace exists (`fonts.ready` resolves on failure
+too; `fonts.check()` is TRUE for a family with no registered face, i.e. when the Google
+stylesheet is blocked; `fonts.load()` rejects when the font files fail; so: bounded 5s
+`fonts.load`, rejection caught, a loaded face required) and is SKIPPED with a reason if Google
+Fonts is unreachable (simulated outage: 7 skipped, 7 fallback passed), so a third-party outage cannot block the
 required gate (the fallback-font run needs no network and always runs). The matrix includes the
 1023/767 breakpoint edges (agy audit).
 

@@ -124,9 +124,20 @@ for (const [width, height] of responsiveMatrixViewports) for (const fonts of ["w
     if (fonts === "webfont") {
       // fonts.ready also resolves when a font FAILS to load; prove Inter 600 is really in use,
       // otherwise this "webfont" run would silently measure the fallback (Codex review).
+      // fonts.check() is true for a family with no registered face (stylesheet blocked) and
+      // fonts.load() rejects when the font files fail, so require a loaded Inter FontFace,
+      // catch the rejection and bound the wait (Codex review 3).
       const interLoaded = await page.evaluate(async () => {
-        await document.fonts.load("600 16px Inter", "Tiếp tục · Hướng dẫn ôn tập");
-        return document.fonts.check("600 16px Inter", "Tiếp tục · Hướng dẫn ôn tập");
+        try {
+          const faces = await Promise.race([
+            document.fonts.load("600 16px Inter", "Tiếp tục · Hướng dẫn ôn tập"),
+            new Promise((resolve) => setTimeout(() => resolve(null), 5000)),
+          ]);
+          return Array.isArray(faces)
+            && faces.some((face) => face.family.replace(/["']/g, "") === "Inter" && face.status === "loaded");
+        } catch {
+          return false;
+        }
       });
       // Inter comes from Google Fonts. If it cannot load, say so and skip instead of failing the
       // required gate on a third-party outage (Codex review 2); the fallback-font run of this
