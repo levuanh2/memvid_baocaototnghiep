@@ -3672,3 +3672,10 @@ A green aggregate check that only rejects failure/cancelled turns any skip, outa
 (`abandoned`) or missing job into a pass. Model which jobs must run for this event and
 these paths, require `success` for exactly those, and keep the model drift-tested against
 the workflow. Before trusting a green `CI / required`, read its "Pipeline job results" line.
+
+## 2026-11-10 — A flaky layout test can be hiding a permanent layout bug
+
+The 768px Library flake was not timing alone: the label was clipped on every run, and the
+test's `scrollWidth` measure only noticed it when font metrics pushed the overflow past the
+padding. Before "stabilising" a flaky geometry test (waits, retries), measure the real content
+box once with the font loaded and once with the fallback; fix the layout if either overflows.

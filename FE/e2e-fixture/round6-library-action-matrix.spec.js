@@ -100,8 +100,13 @@ for (const [width, height] of viewports) {
   }
 }
 
-for (const [width, height] of responsiveMatrixViewports) {
-  test(`${width}px action rows contain every control and keep the primary action on one line`, async ({ page }) => {
+// The primary label is measured with the webfont (Inter, after document.fonts.ready) AND
+// with Google Fonts blocked (the system fallback a user sees while Inter loads or when it
+// cannot load). Post-merge #149 Fixture Smoke failed at 768px on doc-2 because the check
+// ran before the font swap and only looked at scrollWidth.
+for (const [width, height] of responsiveMatrixViewports) for (const fonts of ["webfont", "fallback font"]) {
+  test(`${width}px action rows contain every control and keep the primary action on one line (${fonts})`, async ({ page }) => {
+    if (fonts === "fallback font") await page.route(/fonts\.(googleapis|gstatic)\.com/, (route) => route.abort());
     await page.setViewportSize({ width, height });
     await page.goto("/round6-library-qa.html");
     // The production Library uses StudyShell's 980px frame. At lg and above,
@@ -113,6 +118,8 @@ for (const [width, height] of responsiveMatrixViewports) {
     }, matrixWidth);
     await expect(page.locator('[data-document-id="doc-2"] [data-primary-action]'))
       .toContainText("Tiếp tục · Hướng dẫn ôn tập");
+    // Measure settled text: never against a font that is about to be swapped.
+    await page.evaluate(() => document.fonts.ready);
 
     const geometry = await page.locator("[data-document-row]").evaluateAll((rows) => rows.map((row) => {
       const rowRect = row.getBoundingClientRect();
@@ -124,6 +131,15 @@ for (const [width, height] of responsiveMatrixViewports) {
       });
       const primaryNode = row.querySelector("[data-primary-action]");
       const primary = primaryNode.getBoundingClientRect();
+      // scrollWidth misses centred overflow: the left half is not scrollable and the right
+      // half hides in padding-right. Compare the icon + label box with the padding box
+      // (.playbook lessons-learned 2026-10-27).
+      const style = getComputedStyle(primaryNode);
+      const boxLeft = primary.left + parseFloat(style.borderLeftWidth) + parseFloat(style.paddingLeft);
+      const boxRight = primary.right - parseFloat(style.borderRightWidth) - parseFloat(style.paddingRight);
+      const range = document.createRange();
+      range.selectNodeContents(primaryNode);
+      const content = range.getBoundingClientRect();
       return {
         id: row.dataset.documentId,
         outside: outside.map((control) => control.getAttribute("data-tools-trigger") !== null
@@ -131,6 +147,7 @@ for (const [width, height] of responsiveMatrixViewports) {
         primaryHeight: primary.height,
         primaryClientWidth: primaryNode.clientWidth,
         primaryScrollWidth: primaryNode.scrollWidth,
+        primaryContentOverflow: Math.round(Math.max(0, boxLeft - content.left, content.right - boxRight) * 10) / 10,
       };
     }));
 
@@ -139,6 +156,9 @@ for (const [width, height] of responsiveMatrixViewports) {
     expect(geometry.filter(({ primaryClientWidth, primaryScrollWidth }) => (
       primaryScrollWidth > primaryClientWidth + 1
     ))).toEqual([]);
+    // Icon and label sit inside the padding box (0.5px for sub-pixel text rounding).
+    expect(geometry.filter(({ primaryContentOverflow }) => primaryContentOverflow > 0.5)
+      .map(({ id, primaryContentOverflow }) => ({ id, primaryContentOverflow }))).toEqual([]);
   });
 }
 

@@ -7894,3 +7894,31 @@ the reported reason, not only `ok is False`.
 **Prevention:** an aggregate gate must check that required jobs RAN, not only that nothing
 failed. Adding a job or changing an `if:` now fails the drift test until the gate model is
 updated.
+
+### Library primary action clipped at every width >= 768px; Fixture Smoke flaky on doc-2 (post-merge #149, 2026-11-10)
+
+Main 9cbd4fe, run 42769235493: `round6-library-action-matrix` "768px ... primary action on
+one line" failed (doc-2 `scrollWidth 237 > clientWidth 218`) and passed on retry, so
+`--fail-on-flaky-tests` turned Fixture Smoke and `CI / required` red (deploy skipped, as
+designed).
+
+**Root cause (real UI overflow, hidden by a weak measure):** `.study-document-row` gave the
+primary action a fixed `220px` column at >= 768px. "Tiếp tục · Hướng dẫn ôn tập" (icon + label)
+is 213px of content in Inter 600 against 194px available, so the arrow and both ends of the
+label were clipped on every run, also locally and also at 1024/1440. The test only compared
+`scrollWidth` with `clientWidth`: with `justify-content:center` the left half of the overflow
+is not scrollable and the right half hides inside `padding-right`, so it saw 0-1px and passed.
+It also measured right after the Google Fonts swap (trace: last Inter subset arrived ~15ms
+before the measurement), so the visible part depended on font metrics/timing -> flaky.
+
+**Fix:** primary column `minmax(220px, max-content)` (both the >= 1024 and the 768-1023 grids);
+the identity column absorbs the difference. The spec now awaits `document.fonts.ready`, runs
+each width with the webfont AND with Google Fonts blocked (fallback font), and asserts the
+icon + label range lies inside the padding box (<= 0.5px) in addition to the old checks.
+
+**Regression:** red-before 6/10 (1440/1024/768 x both fonts, doc-2 overflow 12.7 / 8.3px),
+deterministic, not flaky; green after; sweep 767-1440 both fonts: no overflow anywhere.
+
+**Prevention:** never prove "fits" with `scrollWidth` on a centred or padded flex box; measure
+the content range against the padding box (lessons-learned 2026-10-27), and measure text only
+after `document.fonts.ready`, with a fallback-font run for anything with a fixed width.
