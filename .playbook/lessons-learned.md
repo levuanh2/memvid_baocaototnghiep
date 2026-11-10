@@ -3678,3 +3678,21 @@ explicitly and test that case on its own.
 Compare raw values with `===`. And `key in obj` / `obj[key]` on a plain object is true
 for `"toString"` / `"__proto__"`; use a whitelist array (or `Object.hasOwn`) for any
 value that comes from the server (PR #148: `__proto__` as a verdict crashed the page).
+
+## 2026-11-10 — "Nothing failed" is not "everything required ran"
+
+A green aggregate check that only rejects failure/cancelled turns any skip, outage
+(`abandoned`) or missing job into a pass. Model which jobs must run for this event and
+these paths, require `success` for exactly those, and keep the model drift-tested against
+the workflow. Before trusting a green `CI / required`, read its "Pipeline job results" line.
+
+## 2026-11-10 — A flaky layout test can be hiding a permanent layout bug
+
+The 768px Library flake was not timing alone: the label was clipped on every run, and the
+test's `scrollWidth` measure only noticed it when font metrics pushed the overflow past the
+padding. Before "stabilising" a flaky geometry test (waits, retries), measure the real content
+box once with the font loaded and once with the fallback; fix the layout if either overflows.
+A geometry test that only checks containment can pass on a layout that has collapsed: an invalid
+`grid-template-columns` (e.g. `fit-content()` inside `minmax()`) is dropped silently and every
+cell stacks. Assert the computed structure too (column count, row height), and validate new CSS
+grammar in a browser, not by eye.
