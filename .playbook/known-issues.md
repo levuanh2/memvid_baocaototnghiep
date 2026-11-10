@@ -8086,3 +8086,12 @@ so its controls stay in the Tab order while invisible (keyboard a11y defect; nee
   drops it. This was already true before the gate (the old code also started from []). Fix
   separately by seeding the child from MainLayout's list or lifting the fetch above the breakpoint
   mounts.
+
+**Flaky target size found by repeat-10 (2026-11-11):** `round7-1-qa` "visual metrics" failed 1-2
+runs in 10 with `question-builder-pills width` 43.484375 < 44 (20/20 when run alone). Root cause:
+`.practice-customize-dialog .pill-tab` had `min-height: 44px` but no `min-width`; the narrowest
+pill "Dễ" is 44.39px with Inter and 43.48px with the fallback font, so the target met 44px only
+if the webfont had loaded. Fix: `min-width: 44px; justify-content: center`. Regression: "practice
+builder pills keep a 44px target with the fallback font" aborts font requests (red-before
+43.484375). Prevention: a 44px target needs both min-height and min-width; never let text width
+decide whether a short label meets it, and measure targets with the fallback font.

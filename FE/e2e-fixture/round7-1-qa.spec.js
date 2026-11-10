@@ -510,3 +510,18 @@ test("visual metrics: mobile targets, local overflow and Quiz semantic contrast"
   const label = process.env.R71_METRICS_LABEL || "final";
   writeFileSync(resolve(outputDir, `interaction-metrics-${label}.json`), `${JSON.stringify(report, null, 2)}\n`);
 });
+
+// The visual-metrics test above measured "Dễ" at 43.48px whenever it ran before the Inter webfont
+// loaded (1-2 runs in 10). The fallback font is the worst case, so measure with it on purpose.
+test("practice builder pills keep a 44px target with the fallback font", async ({ page }) => {
+  await page.route(/\.(woff2?|ttf|otf)(\?|$)|fonts\.(googleapis|gstatic)/, (route) => route.abort());
+  await page.setViewportSize({ width: 320, height: 568 });
+  await page.goto("/r71qa.html?view=review");
+  await page.getByRole("button", { name: "Tùy chỉnh" }).click();
+  const pills = page.getByRole("dialog", { name: "Tùy chỉnh luyện tập" }).locator(".pill-tab");
+  await expect(pills.first()).toBeVisible();
+  for (const box of await pills.evaluateAll((els) => els.map((el) => el.getBoundingClientRect().toJSON()))) {
+    expect.soft(box.width).toBeGreaterThanOrEqual(44);
+    expect.soft(box.height).toBeGreaterThanOrEqual(44);
+  }
+});
