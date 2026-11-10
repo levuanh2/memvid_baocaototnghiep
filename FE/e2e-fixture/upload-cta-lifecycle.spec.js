@@ -36,8 +36,9 @@ async function openEmptyLibraryApp(page, { collapsedLeft = false, onUpload, sour
     return route.fulfill(json({}));
   });
   await page.goto("/app");
-  if (sources.length) await expect(page.locator("[data-upload-cta], [data-source-entry]").first()).toBeAttached();
-  else await expect(page.getByText("Hỏi tài liệu của bạn")).toBeVisible();
+  await expect(page.getByText("Hỏi tài liệu của bạn")).toBeVisible();
+  // With documents, wait until the list has reached the chat: its no-documents upload CTA is gone.
+  if (sources.length) await expect(page.locator("main [data-upload-cta]")).toHaveCount(0);
 }
 
 // Focus after a layout change must land on a control the user can see and press: an upload
@@ -216,7 +217,7 @@ for (const transition of [
   { from: 768, to: 767, collapsedLeft: false },
   { from: 1279, to: 1280, collapsedLeft: true },
 ]) {
-  test(`non-empty library: live resize ${transition.from} -> ${transition.to} hands focus to a usable upload entry (${transition.collapsedLeft ? "collapsed" : "expanded"})`, async ({ page }) => {
+  test(`non-empty library: live resize ${transition.from} -> ${transition.to} hands focus to the source entry (${transition.collapsedLeft ? "collapsed" : "expanded"})`, async ({ page }) => {
     await page.setViewportSize({ width: transition.from, height: 900 });
     await openEmptyLibraryApp(page, { collapsedLeft: transition.collapsedLeft, sources: [INDEXED_SOURCE] });
     const rail = page.locator('[data-source-layout="rail"] [data-upload-cta]');
@@ -226,11 +227,17 @@ for (const transition of [
     await page.setViewportSize({ width: transition.to, height: 900 });
     await expect(rail).toHaveCount(0);
     await expectFocusOnUsableUploadEntry(page);
+    const focused = page.locator("[data-source-entry]:focus");
+    await expect(focused).toHaveCount(1);
+    await expect(page.locator("main [data-upload-cta]")).toHaveCount(0);
+    await page.keyboard.press("Enter");
+    await expect(page.getByText("Thêm tài liệu", { exact: true })).toBeInViewport();
   });
 }
 
-// Codex review P2: an open tablet shelf is closed (backdrop removed) by an effect after the
-// 1280px layout mounts; focus must not land on a control still covered by that backdrop.
+// Codex review P2: an open tablet shelf must not leave its backdrop over the desktop layout.
+// MainLayout closes the shelf whenever `tabletSourceRail` changes (leaving the tablet band too);
+// focus must land on a control that is not covered.
 test("shelf open: live resize 1279 -> 1280 hands focus to an uncovered upload control", async ({ page }) => {
   await page.setViewportSize({ width: 1279, height: 900 });
   await openEmptyLibraryApp(page);
@@ -243,5 +250,6 @@ test("shelf open: live resize 1279 -> 1280 hands focus to an uncovered upload co
   const original = await shelfUpload.elementHandle();
   await page.setViewportSize({ width: 1280, height: 900 });
   await expect.poll(() => original.evaluate((node) => node.isConnected)).toBe(false);
+  await expect(page.locator("div.fixed.inset-0.z-30")).toHaveCount(0);
   await expectFocusOnUsableUploadEntry(page);
 });

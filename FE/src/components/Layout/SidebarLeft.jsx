@@ -231,9 +231,13 @@ export default function SidebarLeft({ selectedSources, setSelectedSources, onSou
   // panel are different mounts). A fresh mount starts with `sources = []`; reporting that before
   // `/list-indexed` answers wiped MainLayout's list, so the chat flashed its "no documents" state
   // (and its upload CTA) on every breakpoint crossing. Report only real data: the fetched list, or
-  // in-progress uploads rebuilt from local storage.
+  // in-progress uploads rebuilt from local storage. Once this mount has reported a list, later
+  // changes (including back to []) are reported too, even if the fetch failed.
+  const daBaoDanhSachRef = useRef(false);
   useEffect(() => {
-    if (onSourcesChange && (daTaiDanhSach || sources.length > 0)) onSourcesChange(sources);
+    if (!onSourcesChange || !(daTaiDanhSach || sources.length > 0 || daBaoDanhSachRef.current)) return;
+    daBaoDanhSachRef.current = true;
+    onSourcesChange(sources);
   }, [sources, daTaiDanhSach, onSourcesChange]);
 
   useEffect(() => {

@@ -8064,6 +8064,25 @@ so its controls stay in the Tab order while invisible (keyboard a11y defect; nee
   state (with its upload CTA) for ~50ms. The handoff focused that transient CTA, which then unmounted
   and dropped focus to <body>. Fix: report only after the fetch succeeded or when in-progress
   uploads exist (`daTaiDanhSach`). A failed fetch now leaves MainLayout's last list instead of [].
-- *Shelf backdrop occlusion (1279->1280 with the shelf open): not reproducible.* A test covers it,
-  but it passes 5/5 even with an `elementFromPoint` occlusion check and a double rAF removed, so
-  neither guard was added. The test helper still asserts the focused control is not covered.
+- *Shelf backdrop occlusion (1279->1280 with the shelf open): not reproducible.* MainLayout's effect
+  on `[tabletSourceRail, workspaceMode]` closes the shelf when leaving the tablet band too (its
+  comment said "INTO" only; corrected, after it misled a reviewer). A test covers the case and
+  asserts the backdrop is gone; it passes 5/5 even with an `elementFromPoint` occlusion check and a
+  double rAF removed, so neither guard was added.
+
+**Re-review follow-up (Codex, 2026-11-11):**
+
+- *Gate forgot it had reported.* `/list-indexed` fails, a restored in-progress upload is reported,
+  the user deletes it: `sources = []` with `daTaiDanhSach` false was never reported, so MainLayout
+  kept the deleted card. `daBaoDanhSachRef` keeps reporting once this mount has reported.
+  Regression: `SidebarLeft.sourcesReport.test.jsx` (pending fetch reports nothing; empty success
+  reports []; failed fetch + restored upload + delete reports []). Red-before: the third case fails.
+- *Non-empty spec could pass on the transient CTA.* It now waits until the chat's no-documents CTA
+  is gone before resizing, requires focus on `[data-source-entry]`, and presses Enter to check the
+  drawer/panel opens. Red-before: eager `[]` report fails 768->767 (1279->1280 collapsed unmounts
+  SidebarLeft instead of remounting it, so only Vitest guards it there); no fallback fails both.
+- *Not fixed, pre-existing:* a remounted SidebarLeft starts with `sourcesRef = []`, so a backend
+  rename (same filename, new stem) arriving in its first fetch cannot migrate the selection and
+  drops it. This was already true before the gate (the old code also started from []). Fix
+  separately by seeding the child from MainLayout's list or lifting the fetch above the breakpoint
+  mounts.
