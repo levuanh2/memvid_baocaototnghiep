@@ -8096,25 +8096,27 @@ builder pills keep a 44px target with the fallback font" aborts font requests (r
 43.484375). Prevention: a 44px target needs both min-height and min-width; never let text width
 decide whether a short label meets it, and measure targets with the fallback font.
 
-### A breakpoint crossing could drop the selected document after a backend rename (2026-11-11)
+### Hidden side panels stayed in the Tab order; the desktop panel kept the old upload label (2026-11-11)
 
-**Symptom:** a selected document lost its selection when the layout crossed 768px / 1280px (or
-the left column was collapsed and reopened) and `/list-indexed` then returned the same file under
-a new stem.
+**Symptoms:** (1) On mobile, Tab moved focus into the closed source drawer (and the closed
+inspector sheet): focus disappeared and Enter operated off-screen controls. (2) The desktop source
+panel button still said "Thêm tài liệu" after W1-2 unified uploads as "Tải tài liệu lên".
 
-**Root cause:** `SidebarLeft` unmounts and remounts on those transitions. A fresh mount started
-with `sources = []` and `sourcesRef = []`, so `reconcileSelectedSources` had no old entry whose
-filename it could match to the new stem (`sourceReconciliation.js`), and filtered the selection
-out. MainLayout already kept the last list but never handed it back.
+**Root cause:** (1) The closed drawers are only translated off-screen (`-translate-x-full`,
+`translate-y-full`); the collapsed desktop inspector is `width: 0` + `pointer-events: none` +
+`aria-hidden`. None of these removes descendants from the Tab order. (2) `toolsUploadLabels.test.js`
+searched for the quoted string `"Thêm tài liệu"`, so JSX text and typographic quotes passed.
 
-**Fix:** MainLayout passes `initialSources={sources}`; `SidebarLeft` reads it once at mount for
-both its state and `sourcesRef`. It is deliberately not synced in an effect (the layout's copy
-lags uploads and deletes). Side effect: after a remount the rows stay on screen while the fetch
-is pending, and a failed fetch keeps them instead of showing an empty library.
+**Fix:** `MainLayout.jsx`: `leftSurfaceHidden` / `rightSurfaceHidden` set `inert` + `aria-hidden` on
+the hidden aside. A layout effect hands focus to the header tools trigger (or the column's spine)
+when a surface turns inert while holding focus. The panel button and its empty-state hint now say
+"Tải tài liệu lên"; the label test rejects the bare old string.
 
-**Regression:** `SidebarLeft.remountReconciliation.test.jsx` (real unmount/remount: rename follows
-to the new stem; failed fetch keeps rows and selection; a really deleted document is dropped).
-Red-before without the seed: the first two fail.
+**Regression:** `upload-cta-lifecycle.spec.js` "closed source drawer is out of the Tab order"
+(40 Tab presses never enter an aside; closing from the keyboard returns focus to the trigger).
+Red-before without `inert`: that test plus two mobile chooser tests fail, because the renamed
+off-screen button then matches the same role+name as the visible CTA.
 
-**Prevention:** state that a child rebuilds from the network must survive the child's remount if
-other logic compares "before" and "after"; test the lifecycle, not only the pure function.
+**Prevention:** hiding by transform, width, opacity or pointer-events is visual only; anything
+that stays mounted while hidden needs `inert`. Label tests should match the bare text, not one
+quoting style.

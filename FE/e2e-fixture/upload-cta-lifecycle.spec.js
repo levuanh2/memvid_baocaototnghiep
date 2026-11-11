@@ -1,5 +1,8 @@
 import { test, expect } from "@playwright/test";
 
+// The source panel's own upload button (drawer, shelf or desktop panel), not the rail "+".
+const PANEL_UPLOAD = 'aside [data-upload-cta]:not(.source-rail__add)';
+
 const json = (body) => ({ status: 200, contentType: "application/json", body: JSON.stringify(body) });
 
 const INDEXED_SOURCE = { video: "tai-lieu-1", video_stem: "tai-lieu-1", filename: "Tài liệu 1.pdf", status: "index_ready" };
@@ -106,7 +109,7 @@ test("tablet: chooser works across rail, shelf, and collapsed-rail transitions",
   await (await expectOneChooser(page, () => upload.click())).setFiles([]);
   await page.getByRole("button", { name: "Mở rộng thư mục nguồn" }).click();
   await expect(page.locator('[data-source-layout="shelf"]')).toBeVisible();
-  await (await expectOneChooser(page, () => page.getByText("Thêm tài liệu", { exact: true }).click())).setFiles([]);
+  await (await expectOneChooser(page, () => page.locator(PANEL_UPLOAD).click())).setFiles([]);
   await page.getByRole("button", { name: "Thu gọn cột" }).first().click();
   await expect(page.locator('[data-source-layout="rail"]')).toBeVisible();
   await (await expectOneChooser(page, () => upload.click())).setFiles([]);
@@ -120,8 +123,8 @@ test("mobile: chooser works with the drawer closed and open", async ({ page }) =
   // PR #126 (W1-2) renamed the header trigger "Mở công cụ StudyMap" -> "Mở công cụ học".
   await page.getByRole("button", { name: "Mở công cụ học", exact: true }).click();
   await page.getByRole("menuitem", { name: /Mở thư mục nguồn/ }).click();
-  await expect(page.getByText("Thêm tài liệu", { exact: true })).toBeInViewport();
-  await (await expectOneChooser(page, () => page.getByText("Thêm tài liệu", { exact: true }).click())).setFiles([]);
+  await expect(page.locator(PANEL_UPLOAD)).toBeInViewport();
+  await (await expectOneChooser(page, () => page.locator(PANEL_UPLOAD).click())).setFiles([]);
   await page.getByRole("button", { name: "Đóng" }).first().click();
   await (await expectOneChooser(page, () => upload.click())).setFiles([]);
 });
@@ -141,7 +144,7 @@ test("cancel does not upload; selecting one PDF sends one upload request", async
 test("keyboard activation opens one chooser and keeps focus on the CTA after cancel", async ({ page }) => {
   await page.setViewportSize({ width: 1440, height: 900 });
   await openEmptyLibraryApp(page, { collapsedLeft: true });
-  const upload = page.getByRole("button", { name: "Tải tài liệu lên" }).first();
+  const upload = page.getByRole("main").getByRole("button", { name: "Tải tài liệu lên" });
   await upload.focus();
   const chooser = await expectOneChooser(page, () => page.keyboard.press("Enter"));
   await chooser.setFiles([]);
@@ -231,7 +234,7 @@ for (const transition of [
     await expect(focused).toHaveCount(1);
     await expect(page.locator("main [data-upload-cta]")).toHaveCount(0);
     await page.keyboard.press("Enter");
-    await expect(page.getByText("Thêm tài liệu", { exact: true })).toBeInViewport();
+    await expect(page.locator(PANEL_UPLOAD)).toBeInViewport();
   });
 }
 
@@ -252,4 +255,27 @@ test("shelf open: live resize 1279 -> 1280 hands focus to an uncovered upload co
   await expect.poll(() => original.evaluate((node) => node.isConnected)).toBe(false);
   await expect(page.locator("div.fixed.inset-0.z-30")).toHaveCount(0);
   await expectFocusOnUsableUploadEntry(page);
+});
+
+// A closed mobile drawer is only translated off-screen. It must be inert: no Tab stop inside it,
+// and closing it from the keyboard returns focus to the control that opened it.
+test("mobile: the closed source drawer is out of the Tab order; closing it returns focus to the tools trigger", async ({ page }) => {
+  await page.setViewportSize({ width: 390, height: 844 });
+  await openEmptyLibraryApp(page, { sources: [INDEXED_SOURCE] });
+  const drawer = page.locator("aside:has([data-upload-cta])");
+  await expect(drawer).toHaveAttribute("inert", "");
+  for (let i = 0; i < 40; i += 1) {
+    await page.keyboard.press("Tab");
+    expect(await page.evaluate(() => Boolean(document.activeElement?.closest("aside")))).toBe(false);
+  }
+  const trigger = page.getByRole("button", { name: "Mở công cụ học", exact: true });
+  await trigger.click();
+  await page.getByRole("menuitem", { name: /Mở thư mục nguồn/ }).click();
+  await expect(drawer).not.toHaveAttribute("inert", "");
+  await expect(page.locator(PANEL_UPLOAD)).toBeInViewport();
+  const close = drawer.getByRole("button", { name: "Đóng" }).first();
+  await close.focus();
+  await page.keyboard.press("Enter");
+  await expect(drawer).toHaveAttribute("inert", "");
+  await expect(trigger).toBeFocused();
 });

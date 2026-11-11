@@ -2,7 +2,7 @@
 // W1-4: SidebarLeft registers a trigger for its own hidden upload input via
 // `onUploadReady`, so a centre empty state (ChatArea/WorkspaceEmptyState,
 // neither of which owns a file input) can open the SAME input SidebarLeft's
-// own "Thêm tài liệu" uses, instead of a duplicate upload POST elsewhere.
+// own upload button uses, instead of a duplicate upload POST elsewhere.
 import { describe, it, expect, vi, afterEach } from "vitest";
 import { createRoot } from "react-dom/client";
 import { act } from "react-dom/test-utils";

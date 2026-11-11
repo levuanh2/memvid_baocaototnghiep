@@ -438,7 +438,7 @@ export default function SidebarLeft({ selectedSources, setSelectedSources, onSou
           uploading ? "btn-secondary cursor-not-allowed opacity-70"
             : sources.length > 0 ? "btn-secondary cursor-pointer"
             : "btn-primary cursor-pointer"].join(" ")}>
-          {uploading ? (<><Spinner size={15} /> Đang tải lên…</>) : (<><Icon name="Plus" size={16} strokeWidth={2} /> Thêm tài liệu</>)}
+          {uploading ? (<><Spinner size={15} /> Đang tải lên…</>) : (<><Icon name="Plus" size={16} strokeWidth={2} /> Tải tài liệu lên</>)}
         </button>
         <input ref={registerFileInput} type="file" multiple className="hidden" onChange={handleAddFiles} disabled={uploading} />
 
@@ -533,7 +533,7 @@ export default function SidebarLeft({ selectedSources, setSelectedSources, onSou
           <div className="text-center py-12 px-4">
             <Icon name="FolderOpen" size={30} className="mx-auto mb-3 text-text-muted opacity-60" />
             <p className="text-small font-semibold text-text-secondary">Chưa có tài liệu nào.</p>
-            <p className="text-small text-text-muted mt-1">Nhấn “Thêm tài liệu” để bắt đầu.</p>
+            <p className="text-small text-text-muted mt-1">Nhấn “Tải tài liệu lên” để bắt đầu.</p>
           </div>
         )}
         {sources.length > 0 && visibleSources.length === 0 && (

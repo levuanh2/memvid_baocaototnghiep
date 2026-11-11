@@ -24,6 +24,11 @@ export default function StudyShell({
   width = "max-w-[980px]",
   skeleton = null,
   stackActionsOnMobile = false,
+  // W5-2: thin pass-through so a page that knows the document's real title
+  // (StudyMapView — Study Context only has the stem) can fix the breadcrumb's
+  // first segment. Undefined for every other caller keeps StudyBreadcrumb's
+  // existing stem-based default exactly as it was.
+  breadcrumbDocumentLabel,
 }) {
   const headerLayout = stackActionsOnMobile
     ? "flex flex-wrap items-center gap-x-4 gap-y-3 md:flex-nowrap md:gap-4"
@@ -59,7 +64,7 @@ export default function StudyShell({
         </div>
         {/* Phase 4B #8: chỉ hiện khi Study Context thật sự có lựa chọn — trang
             KHÔNG liên quan (chưa từng qua moBeMat) không tự vẽ ra một chặng giả. */}
-        <StudyBreadcrumb className={`${width} mx-auto px-5 pb-2.5`} />
+        <StudyBreadcrumb className={`${width} mx-auto px-5 pb-2.5`} documentLabel={breadcrumbDocumentLabel} />
       </header>
 
       <main className={`${width} mx-auto px-5 py-7`}>

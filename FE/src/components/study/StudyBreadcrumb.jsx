@@ -15,14 +15,20 @@ const rutGon = (s, n) => (s && s.length > n ? `${s.slice(0, n)}…` : s);
  *
  * `showChat`: chỉ true ở Workspace (MainLayout) — nơi DUY NHẤT "Chat" là chặng
  * kế tiếp thật sự; ở các trang StudyShell (Thư viện/StudyMap) không có ý nghĩa.
+ *
+ * `documentLabel` (W5-2): Study Context chỉ giữ STEM tài liệu (khoá nối giữa
+ * Summary/MindMap, xem StudyMapView.jsx) — chặng đầu vì vậy từng in ra stem
+ * thô thay vì tiêu đề thật. Trang nào có sẵn tiêu đề thì truyền xuống để thay
+ * segment đầu; không truyền thì giữ đúng hành vi cũ (dùng stem), không trang
+ * nào khác bị đổi.
  */
-export default function StudyBreadcrumb({ showChat = false, className = "" }) {
+export default function StudyBreadcrumb({ showChat = false, className = "", documentLabel }) {
   const { selectedDocument, selectedTopic, selectedEntity, selectedQuestion, selectionSource } =
     useStudyContext();
 
   if (!selectedDocument) return null;
 
-  const segments = [rutGon(selectedDocument, 20)];
+  const segments = [rutGon(documentLabel || selectedDocument, 20)];
   if (NHAN_NGUON[selectionSource]) segments.push(NHAN_NGUON[selectionSource]);
   if (selectedTopic || selectedEntity) segments.push(rutGon(selectedTopic || selectedEntity, 24));
   if (selectedQuestion) segments.push("Câu hỏi");
