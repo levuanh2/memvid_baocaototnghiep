@@ -69,14 +69,8 @@ async function openExportDialog() {
 }
 
 async function goToPdfPreviewAndExport(dialog) {
-  // content step -> format step
-  await act(async () => { [...dialog.querySelectorAll("button")].find((b) => b.textContent === "Tiếp tục").click(); });
   await act(async () => { dialog.querySelector('input[value="pdf"]').click(); });
-  // format step -> appearance step
-  await act(async () => { [...dialog.querySelectorAll("button")].find((b) => b.textContent === "Tiếp tục").click(); });
-  // appearance step -> review step
-  await act(async () => { [...dialog.querySelectorAll("button")].find((b) => b.textContent === "Tiếp tục").click(); });
-  const btn = [...dialog.querySelectorAll("button")].find((b) => b.textContent.includes("Tạo PDF") || b.textContent.includes("Thử lại"));
+  const btn = [...dialog.querySelectorAll("button")].find((b) => b.textContent.includes("Xuất PDF"));
   await act(async () => { btn.click(); });
 }
 

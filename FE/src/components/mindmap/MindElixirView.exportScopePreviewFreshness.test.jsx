@@ -120,13 +120,6 @@ describe("Export Studio scope preview goes stale after switching maps (H3B.1)", 
 
     await render(controller, MAP_B);
     dialog = await openExportDialog();
-    const clickText = async (text) => {
-      const btn = [...dialog.querySelectorAll("button")].find((b) => b.textContent.trim() === text);
-      await act(async () => btn.click());
-    };
-    await clickText("Tiếp tục"); // content -> format
-    await clickText("Tiếp tục"); // format -> appearance
-    await clickText("Tiếp tục"); // appearance -> review
     const dd = [...dialog.querySelectorAll("dt")].find((d) => d.textContent === "Số node/nhánh")?.nextElementSibling;
     expect(dd?.textContent).toContain("57 node");
   });

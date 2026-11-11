@@ -17,7 +17,11 @@ export default function BulkBar({ so, boSuuTap, onHanhDong, onXoaChon, dangChay 
   const [moThe, setMoThe] = useState(null);     // "add_tags" | "remove_tags"
   const [nhapThe, setNhapThe] = useState("");
 
-  if (!so) return null;
+  // V4.1 W4-2 (checklist 4.6): the live region must already exist before the
+  // first selection, or "Đã chọn 1 tài liệu" is never announced. It stays
+  // mounted (visually hidden); the bar itself still appears only when so > 0.
+  const thongBao = <span aria-live="polite" className="sr-only">{thongBaoDaChon(so)}</span>;
+  if (!so) return thongBao;
 
   const chay = (khoa, kem) => {
     if (CAN_XAC_NHAN.has(khoa)
@@ -49,9 +53,11 @@ export default function BulkBar({ so, boSuuTap, onHanhDong, onXoaChon, dangChay 
   };
 
   return (
+    <>
+    {thongBao}
     <div className="sticky top-2 z-30 mb-4 surface-card !p-3 flex flex-wrap items-center gap-2"
          style={{ borderColor: "var(--accent)" }}>
-      <span aria-live="polite" className="text-small font-semibold text-text-primary">
+      <span aria-hidden="true" className="text-small font-semibold text-text-primary">
         {thongBaoDaChon(so)}
       </span>
 
@@ -142,5 +148,6 @@ export default function BulkBar({ so, boSuuTap, onHanhDong, onXoaChon, dangChay 
         Bỏ chọn
       </button>
     </div>
+    </>
   );
 }

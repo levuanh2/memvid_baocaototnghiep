@@ -633,10 +633,12 @@ jobs:
   ci-success:
     name: CI / required
     runs-on: ubuntu-latest
+    # always(): this job must report even when a dependency failed, was
+    # cancelled or was skipped; scripts/ci_required_gate.py decides. Every job
+    # below needs a matching entry in that script's model (drift-checked by
+    # scripts/tests/test_ci_required_gate.py).
     if: always()
     needs:
-      # detect-changes gates every test job. If it fails they all skip, and a
-      # skip counts as success below, so it must be checked here directly.
       - detect-changes
       - security-and-static
       - frontend-tests
@@ -648,19 +650,26 @@ jobs:
       - docker-build-test
       - docker-compose-run-test
       - fixture-smoke
+    # Fails unless every job the path filter makes required RAN and succeeded.
+    # The old inline check only rejected failure/cancelled, so an `abandoned`
+    # detect-changes (GitHub outage, PR #148 run 42673104752 attempt 2) skipped
+    # every test job and this gate still went green. A checkout failure here
+    # fails the gate (fail closed).
     steps:
-      - name: Evaluate Aggregate CI Results
+      - name: Checkout gate script
+        uses: actions/checkout@v4
+        with:
+          sparse-checkout: |
+            scripts
+            .github
+
+      - name: Self-test the gate against this workflow
+        run: python3 scripts/tests/test_ci_required_gate.py
+
+      - name: Evaluate required jobs
+        env:
+          NEEDS_JSON: ${{ toJSON(needs) }}
+          GATE_REF: ${{ github.ref }}
         run: |
-          results="${{ join(needs.*.result, ' ') }}"
-          echo "Pipeline job results: $results"
-
-          # If any executed job failed or was cancelled, fail the aggregate gate
-          for res in $results; do
-            if [ "$res" = "failure" ] || [ "$res" = "cancelled" ]; then
-              echo "::error::One or more required CI jobs did not succeed."
-              exit 1
-            fi
-          done
-
-          echo "All active CI checks succeeded."
-          exit 0
+          echo "Pipeline job results: ${{ join(needs.*.result, ' ') }}"
+          python3 scripts/ci_required_gate.py

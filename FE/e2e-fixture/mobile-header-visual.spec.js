@@ -45,11 +45,11 @@ const measure = (page) => page.evaluate(() => {
   const header = document.querySelector("header");
   const nav = document.querySelector('nav[role="tablist"]');
   const sel = {
-    home: 'header a[aria-label^="MemVidX"]',
+    home: 'header a[aria-label^="StudyMap"]',
     tabChat: 'nav[role="tablist"] [role="tab"][title="Trò chuyện"]',
     tabMindmap: 'nav[role="tablist"] [role="tab"][title="Sơ đồ tư duy"]',
     tabSummary: 'nav[role="tablist"] [role="tab"][title="Tóm tắt"]',
-    tools: 'header button[aria-label="Mở công cụ StudyMap"]',
+    tools: 'header button[aria-label="Mở công cụ học"]',
     usage: 'header button[aria-label^="Mức sử dụng AI"]',
     account: 'header button[aria-haspopup="menu"][aria-label^="Tài khoản"]',
   };
@@ -103,7 +103,7 @@ for (const vp of MATRIX) {
     await page.screenshot({ path: path.join(OUT, `${tag}-focus-tab-header.png`), clip });
 
     await page.getByRole("tab", { name: "Sơ đồ tư duy" }).click();
-    await page.locator('header button[aria-label="Mở công cụ StudyMap"]').click();
+    await page.locator('header button[aria-label="Mở công cụ học"]').click();
     const tools = page.getByRole("menu", { name: "Công cụ học" });
     await expect(tools).toBeVisible();
     RESULTS[tag].toolsMenu = await tools.boundingBox();

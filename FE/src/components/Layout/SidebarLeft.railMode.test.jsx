@@ -56,7 +56,7 @@ describe("SidebarLeft tablet rail mode", () => {
     expect(rail.querySelectorAll(".source-rail__file")).toHaveLength(2);
     expect(rail.querySelector('[aria-label="2 tài liệu"]')).toBeTruthy();
     expect(rail.querySelector(".source-rail__file.is-selected").getAttribute("aria-pressed")).toBe("true");
-    expect(rail.querySelector('button[aria-label="Thêm tài liệu"]')).toBeTruthy();
+    expect(rail.querySelector('button[aria-label="Tải tài liệu lên"]')).toBeTruthy();
     expect(rail.querySelector('input[type="file"][multiple]')).toBeTruthy();
 
     await act(async () => { rail.querySelectorAll(".source-rail__file")[1].click(); });

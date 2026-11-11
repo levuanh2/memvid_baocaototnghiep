@@ -79,6 +79,9 @@
 .practice-customize-dialog .pill-tab,
 .practice-customize-dialog__actions button,
 .quiz-submit-confirm__actions button { min-height: 44px; }
+/* "Dễ" is the narrowest pill: it reached 44px wide only once the Inter webfont had loaded
+   (43.48px with the fallback font), so the target size depended on font timing. */
+.practice-customize-dialog .pill-tab { min-width: 44px; justify-content: center; }
 .quiz-question-card .badge-processing { color: var(--quiz-status-processing); background: color-mix(in srgb, var(--quiz-status-processing) 12%, transparent); }
 
 @media (max-width: 1000px) and (min-width: 768px) {

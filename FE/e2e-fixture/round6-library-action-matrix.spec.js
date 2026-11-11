@@ -8,6 +8,10 @@ const summaryIds = Array.from({ length: 42 }, (_, index) => `doc-${index + 1}`)
 const viewports = [
   [1440, 900], [1024, 768], [820, 1180], [800, 900], [768, 1024], [390, 844], [320, 568],
 ];
+const responsiveMatrixViewports = [
+  // 1023/767 are the edges of the 1024 and 768 grid breakpoints (agy audit).
+  [1440, 900], [1024, 768], [1023, 900], [768, 1024], [767, 1024], [390, 844], [320, 568],
+];
 
 test.beforeAll(async () => mkdir(evidenceDir, { recursive: true }));
 
@@ -95,6 +99,117 @@ for (const [width, height] of viewports) {
       await page.screenshot({ path: path.join(evidenceDir, `library-${width}x${height}-${theme}.png`), fullPage: false });
     });
   }
+}
+
+// The primary label is measured with the webfont (Inter, after document.fonts.ready) AND
+// with Google Fonts blocked (the system fallback a user sees while Inter loads or when it
+// cannot load). Post-merge #149 Fixture Smoke failed at 768px on doc-2 because the check
+// ran before the font swap and only looked at scrollWidth.
+for (const [width, height] of responsiveMatrixViewports) for (const fonts of ["webfont", "fallback font"]) {
+  test(`${width}px action rows contain every control and keep the primary action on one line (${fonts})`, async ({ page }) => {
+    if (fonts === "fallback font") await page.route(/fonts\.(googleapis|gstatic)\.com/, (route) => route.abort());
+    await page.setViewportSize({ width, height });
+    // domcontentloaded: a stalled Google Fonts request must not hold the "load" event and time
+    // the test out before the webfont run can skip (Codex review 4).
+    await page.goto("/round6-library-qa.html", { waitUntil: "domcontentloaded" });
+    // The production Library uses StudyShell's 980px frame. At lg and above,
+    // CollectionSidebar consumes 210px plus the 24px gap, leaving 706px for
+    // the matrix; below lg the shell keeps 20px padding on each side.
+    const matrixWidth = width >= 1024 ? 706 : width - 40;
+    await page.locator(".study-document-matrix").evaluate((node, targetWidth) => {
+      node.style.width = `${targetWidth}px`;
+    }, matrixWidth);
+    await expect(page.locator('[data-document-id="doc-2"] [data-primary-action]'))
+      .toContainText("Tiếp tục · Hướng dẫn ôn tập");
+    // Measure settled text: never against a font that is about to be swapped. Bounded, so a
+    // request that never settles cannot hang the required gate (Codex review 4).
+    const fontsSettled = await page.evaluate(() => Promise.race([
+      document.fonts.ready.then(() => true),
+      new Promise((resolve) => setTimeout(() => resolve(false), 8000)),
+    ]));
+    // With every Google request aborted nothing can be pending, so this must settle.
+    if (fonts === "fallback font") expect(fontsSettled, "fonts did not settle with Google Fonts blocked").toBe(true);
+    if (fonts === "webfont") {
+      test.skip(!fontsSettled, "Google Fonts did not settle within 8s; the fallback-font run covers this width");
+      // fonts.ready also resolves when a font FAILS to load; prove Inter 600 is really in use,
+      // otherwise this "webfont" run would silently measure the fallback (Codex review).
+      // fonts.check() is true for a family with no registered face (stylesheet blocked) and
+      // fonts.load() rejects when the font files fail, so require a loaded Inter FontFace,
+      // catch the rejection and bound the wait (Codex review 3).
+      const interLoaded = await page.evaluate(async () => {
+        try {
+          const faces = await Promise.race([
+            document.fonts.load("600 16px Inter", "Tiếp tục · Hướng dẫn ôn tập"),
+            new Promise((resolve) => setTimeout(() => resolve(null), 5000)),
+          ]);
+          return Array.isArray(faces)
+            && faces.some((face) => face.family.replace(/["']/g, "") === "Inter" && face.status === "loaded");
+        } catch {
+          return false;
+        }
+      });
+      // Inter comes from Google Fonts. If it cannot load, say so and skip instead of failing the
+      // required gate on a third-party outage (Codex review 2); the fallback-font run of this
+      // width always runs and needs no network.
+      test.skip(!interLoaded, "Inter 600 could not load from Google Fonts; the fallback-font run covers this width");
+    }
+    // The intended grid must actually apply: an invalid grid-template-columns is dropped by the
+    // browser and every row silently stacks into one column (Codex review 2, P1).
+    const tracks = await page.locator("[data-document-row]").evaluateAll((rows) => rows.map((row) => ({
+      id: row.dataset.documentId,
+      columns: getComputedStyle(row).gridTemplateColumns.split(" ").length,
+      height: Math.round(row.getBoundingClientRect().height),
+    })));
+    const expectedColumns = width >= 1024 ? 6 : width >= 768 ? 5 : 3;
+    expect(tracks.filter(({ columns }) => columns !== expectedColumns)).toEqual([]);
+    // A stacked row is 171-336px; a laid-out row is 78-101px (the "Tiếp tục" row at >= 1024px
+    // wraps its progress text to make room for the wider primary action).
+    if (width >= 768) expect(Math.max(...tracks.map(({ height }) => height))).toBeLessThanOrEqual(120);
+
+    const geometry = await page.locator("[data-document-row]").evaluateAll((rows) => rows.map((row) => {
+      const rowRect = row.getBoundingClientRect();
+      const controls = [...row.querySelectorAll("button,input")];
+      const outside = controls.filter((control) => {
+        const rect = control.getBoundingClientRect();
+        return rect.left < rowRect.left - 1 || rect.right > rowRect.right + 1
+          || rect.top < rowRect.top - 1 || rect.bottom > rowRect.bottom + 1;
+      });
+      const primaryNode = row.querySelector("[data-primary-action]");
+      const primary = primaryNode.getBoundingClientRect();
+      // scrollWidth misses centred overflow: the left half is not scrollable and the right
+      // half hides in padding-right. Compare the icon + label box with the padding box
+      // (.playbook lessons-learned 2026-10-27).
+      const style = getComputedStyle(primaryNode);
+      const boxLeft = primary.left + parseFloat(style.borderLeftWidth) + parseFloat(style.paddingLeft);
+      const boxRight = primary.right - parseFloat(style.borderRightWidth) - parseFloat(style.paddingRight);
+      const range = document.createRange();
+      range.selectNodeContents(primaryNode);
+      const content = range.getBoundingClientRect();
+      return {
+        id: row.dataset.documentId,
+        outside: outside.map((control) => control.getAttribute("data-tools-trigger") !== null
+          ? "tools" : control.getAttribute("data-primary-action") !== null ? "primary" : control.tagName.toLowerCase()),
+        primaryHeight: primary.height,
+        primaryClientWidth: primaryNode.clientWidth,
+        primaryScrollWidth: primaryNode.scrollWidth,
+        primaryContentOverflow: Math.round(Math.max(0, boxLeft - content.left, content.right - boxRight) * 10) / 10,
+        // flex used to shrink the 14px arrow to absorb an overflowing label (CI, DejaVu fallback)
+        primaryIconWidth: Math.round(primaryNode.querySelector("svg").getBoundingClientRect().width * 10) / 10,
+      };
+    }));
+
+    expect(geometry.filter(({ outside }) => outside.length > 0)).toEqual([]);
+    expect(Math.max(...geometry.map(({ primaryHeight }) => primaryHeight))).toBeLessThanOrEqual(46);
+    expect(geometry.filter(({ primaryClientWidth, primaryScrollWidth }) => (
+      primaryScrollWidth > primaryClientWidth + 1
+    ))).toEqual([]);
+    // Icon and label sit inside the padding box (0.5px for sub-pixel text rounding).
+    expect(geometry.filter(({ primaryContentOverflow }) => primaryContentOverflow > 0.5)
+      .map(({ id, primaryContentOverflow }) => ({ id, primaryContentOverflow }))).toEqual([]);
+    // The arrow keeps its 14px: a squeezed icon hides overflow from the measurement above.
+    expect(geometry.filter(({ primaryIconWidth }) => Math.abs(primaryIconWidth - 14) > 0.5)
+      .map(({ id, primaryIconWidth }) => ({ id, primaryIconWidth }))).toEqual([]);
+  });
 }
 
 test("captures four task views, empty state, desktop menu, and bulk scope change", async ({ page }) => {
