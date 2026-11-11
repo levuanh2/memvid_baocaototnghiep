@@ -55,6 +55,8 @@ export default function MainLayout({
   // `sources` means "no documents" only when this is "ready".
   const [sourcesState, setSourcesState] = useState("loading");
   const onSourcesSettled = useCallback((ok) => setSourcesState(ok ? "ready" : "error"), []);
+  // Chat start screen: add one document to the selection (same list the source panel edits).
+  const pickSource = useCallback((key) => setSelectedSources((prev) => (prev.includes(key) ? prev : [...prev, key])), [setSelectedSources]);
   // W1-4: the centre empty states (Chat/Mind Map/Summary) have no file input
   // or upload POST logic of their own, by design -- reuse SidebarLeft's,
   // reached here via the registration callback it calls back with (see its
@@ -925,6 +927,7 @@ export default function MainLayout({
               askAboutDraft,
               hasSummary: Boolean(summaryData), onOpenSummary: onSwitchToSummary,
               onUploadDocument: triggerUpload,
+              onPickSource: pickSource,
             }}
             // `sources` (MainLayout's own state, populated only once SidebarLeft
             // reports its fetch via `onSourcesChange`) can briefly/artificially lag
