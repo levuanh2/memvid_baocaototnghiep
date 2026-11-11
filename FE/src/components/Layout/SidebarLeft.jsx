@@ -40,8 +40,12 @@ const getStatusConfig = (status, substatus, canQuery) => {
 
 const formatFileName = (name = "") => name.replace(/\.(mp4|avi|mov|mkv|webm|mp3|wav|pdf|txt|docx)$/i, "");
 
-export default function SidebarLeft({ selectedSources, setSelectedSources, onSourcesChange, onClose, collapsible = false, onTransientSurfaceOpen, railMode = false, onUploadReady }) {
-  const [sources, setSources] = useState([]);
+export default function SidebarLeft({ selectedSources, setSelectedSources, onSourcesChange, onClose, collapsible = false, onTransientSurfaceOpen, railMode = false, onUploadReady, initialSources }) {
+  // This component remounts on every 768px / 1280px crossing. `initialSources` is the layout's
+  // last known list, read ONCE at mount: it keeps the rows on screen until `/list-indexed`
+  // answers, and gives selection reconciliation the old filename it needs to follow a rename
+  // (same file, new stem). Never sync it in an effect: the layout's copy lags uploads and deletes.
+  const [sources, setSources] = useState(() => (Array.isArray(initialSources) ? initialSources : []));
   const [daTaiDanhSach, setDaTaiDanhSach] = useState(false);
   // Round 9 fix: mirrors `sources` for `fetchSourcesFromBackend` below to read
   // as "the previous sources" WITHOUT depending on execution-order between
@@ -52,7 +56,7 @@ export default function SidebarLeft({ selectedSources, setSelectedSources, onSou
   // so reading the plain `sources` closure variable directly would silently
   // go stale; a ref stays current as of the latest commit regardless of
   // which render's closure eventually reads it.
-  const sourcesRef = useRef([]);
+  const sourcesRef = useRef(sources);
   useEffect(() => { sourcesRef.current = sources; }, [sources]);
   const [menuOpen, setMenuOpen] = useState(null);
   // Sprint H: "..." menu had no dismiss path except its own Xóa button or

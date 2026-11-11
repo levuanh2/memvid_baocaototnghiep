@@ -8095,3 +8095,26 @@ if the webfont had loaded. Fix: `min-width: 44px; justify-content: center`. Regr
 builder pills keep a 44px target with the fallback font" aborts font requests (red-before
 43.484375). Prevention: a 44px target needs both min-height and min-width; never let text width
 decide whether a short label meets it, and measure targets with the fallback font.
+
+### A breakpoint crossing could drop the selected document after a backend rename (2026-11-11)
+
+**Symptom:** a selected document lost its selection when the layout crossed 768px / 1280px (or
+the left column was collapsed and reopened) and `/list-indexed` then returned the same file under
+a new stem.
+
+**Root cause:** `SidebarLeft` unmounts and remounts on those transitions. A fresh mount started
+with `sources = []` and `sourcesRef = []`, so `reconcileSelectedSources` had no old entry whose
+filename it could match to the new stem (`sourceReconciliation.js`), and filtered the selection
+out. MainLayout already kept the last list but never handed it back.
+
+**Fix:** MainLayout passes `initialSources={sources}`; `SidebarLeft` reads it once at mount for
+both its state and `sourcesRef`. It is deliberately not synced in an effect (the layout's copy
+lags uploads and deletes). Side effect: after a remount the rows stay on screen while the fetch
+is pending, and a failed fetch keeps them instead of showing an empty library.
+
+**Regression:** `SidebarLeft.remountReconciliation.test.jsx` (real unmount/remount: rename follows
+to the new stem; failed fetch keeps rows and selection; a really deleted document is dropped).
+Red-before without the seed: the first two fail.
+
+**Prevention:** state that a child rebuilds from the network must survive the child's remount if
+other logic compares "before" and "after"; test the lifecycle, not only the pure function.
