@@ -7,7 +7,7 @@ import Spinner from "../ui/Spinner";
 import OperationUsage from "./OperationUsage";
 import { nguonConDangXuLy, nhoNguon, quenNguon } from "../../utils/nguonDangXuLy";
 import { taoBoTheoDoiNguon } from "../../utils/theoDoiNguon";
-import { mergeSources, reconcileSelectedSources } from "../../utils/sourceReconciliation";
+import { mergeSources, reconcileSelectedSources, formatFileName } from "../../utils/sourceReconciliation";
 
 /** Phase sau FAISS: memory tree. memory_tree_ready = đã xong — không hiện « đang tối ưu ». */
 const SUBSTATUS_OPTIMIZING = new Set(["faiss_ready", "building_memory_tree"]);
@@ -38,9 +38,8 @@ const getStatusConfig = (status, substatus, canQuery) => {
   }
 };
 
-const formatFileName = (name = "") => name.replace(/\.(mp4|avi|mov|mkv|webm|mp3|wav|pdf|txt|docx)$/i, "");
 
-export default function SidebarLeft({ selectedSources, setSelectedSources, onSourcesChange, onClose, collapsible = false, onTransientSurfaceOpen, railMode = false, onUploadReady, initialSources }) {
+export default function SidebarLeft({ selectedSources, setSelectedSources, onSourcesChange, onClose, collapsible = false, onTransientSurfaceOpen, railMode = false, onUploadReady, initialSources, onSourcesSettled }) {
   // This component remounts on every 768px / 1280px crossing. `initialSources` is the layout's
   // last known list, read ONCE at mount: it keeps the rows on screen until `/list-indexed`
   // answers, and gives selection reconciliation the old filename it needs to follow a rename
@@ -79,6 +78,8 @@ export default function SidebarLeft({ selectedSources, setSelectedSources, onSou
   const [uploading, setUploading] = useState(false);
   const [deletingFile, setDeletingFile] = useState(null);
   const [loiTai, setLoiTai] = useState(null);
+  // First load of this mount with nothing to show yet: neither rows nor an error.
+  const dangTaiLanDau = !daTaiDanhSach && !loiTai && sources.length === 0;
   const [loiUpload, setLoiUpload] = useState(null);
   const [query, setQuery] = useState("");
   const [filterOpen, setFilterOpen] = useState(false);
@@ -200,10 +201,12 @@ export default function SidebarLeft({ selectedSources, setSelectedSources, onSou
         setSelectedSources((prevSel) => reconcileSelectedSources(prevSnapshot, backendSources, prevSel));
         setDaTaiDanhSach(true);
         setLoiTai(null);
+        onSourcesSettled?.(true);
       })
       .catch((err) => {
         console.error("Error fetching sources:", err);
         setLoiTai(getUserFriendlyApiError(err));
+        onSourcesSettled?.(false);
       });
   };
 
@@ -416,7 +419,7 @@ export default function SidebarLeft({ selectedSources, setSelectedSources, onSou
             <Icon name="Library" size={14} className="text-accent" /> Thư mục nguồn
           </div>
           <div className="text-caption text-text-muted mt-1 font-mono">
-            {sources.length} tài liệu · <span className="text-accent">{selectedSources.length} đang chọn</span>
+            {dangTaiLanDau ? "Đang tải…" : <>{sources.length} tài liệu · <span className="text-accent">{selectedSources.length} đang chọn</span></>}
           </div>
         </div>
         {/* Khổ hẹp: đóng ngăn kéo. Khổ rộng: thu cột về gáy sách. */}
@@ -528,6 +531,13 @@ export default function SidebarLeft({ selectedSources, setSelectedSources, onSou
               onClick={fetchSourcesFromBackend}>
               Thử lại
             </button>
+          </div>
+        ) : dangTaiLanDau ? (
+          // Not "empty": the list has not answered yet. Saying "Chưa có tài liệu nào" here told
+          // people with a full library that it was empty for as long as the request took.
+          <div className="py-10 px-4 flex flex-col items-center" role="status">
+            <Spinner size={16} />
+            <p className="text-small text-text-muted mt-3">Đang tải danh sách tài liệu…</p>
           </div>
         ) : sources.length === 0 && (
           <div className="text-center py-12 px-4">
