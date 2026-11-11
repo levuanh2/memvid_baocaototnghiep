@@ -37,7 +37,11 @@ export default function ReviewGuide() {
 
   const job = useStudyJob({
     onDone: (result) => {
-      if (result?.quiz_id) navigate(`/app/study/practice/${result.quiz_id}`);
+      if (result?.quiz_id) { navigate(`/app/study/practice/${result.quiz_id}`); return; }
+      // Finished without a quiz: there is nowhere to go. Say so and unlock, or `practiceFor`
+      // keeps every practice button disabled until a reload.
+      setError("Bài luyện tập đã tạo xong nhưng máy chủ không trả về mã bài. Thử lại.");
+      setPracticeFor(null);
     },
   });
 

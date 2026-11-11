@@ -8131,4 +8131,6 @@ quoting style.
 
 **Regression:** double-click tests in `Practice.percentUnits.test.jsx`, `ReviewGuide.practiceCustomize.test.jsx`, `AppearanceEditorDrawer.test.jsx` (each fails without its guard). The two `StudyMapView` guards have no test of their own.
 
+**Also fixed (review):** a practice job that finished without a `quiz_id` left `practiceFor` set, so every practice button stayed disabled until a reload. `onDone` now reports the error and unlocks (`ReviewGuide.practiceJobWithoutQuiz.test.jsx`).
+
 **Not changed:** the backend still accepts duplicate requests; these mutations are not idempotent server-side.
