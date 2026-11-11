@@ -24,6 +24,7 @@ import UsageChip from "./UsageChip";
 import BrandMark from "../ui/BrandMark";
 import { apiFetch, _appError } from "../../utils/api";
 import { mergeSources, formatFileName } from "../../utils/sourceReconciliation";
+import { nguonConDangXuLy } from "../../utils/nguonDangXuLy";
 
 // Round 11 (mockup parity, explicit user decision) — the Chat/Mind Map/
 // Summary mode switch, moved here from the now-deleted LessonHeader.jsx
@@ -97,7 +98,13 @@ export default function MainLayout({
       .then(async (res) => { if (!res.ok) throw await _appError(res); return res.json(); })
       .then((data) => {
         if (cancelled) return;
-        setSources((prev) => (prev.length ? prev : mergeSources([], data.sources || [], formatFileName)));
+        // Uploads still being processed are not in `/list-indexed`; without them a library whose
+        // only document is mid-processing would read as empty here.
+        const dangXuLy = nguonConDangXuLy().map((n) => ({
+          source_id: n.sourceId, filename: n.filename || "Tài liệu đang xử lý",
+          video_stem: null, status: "processing", progress: 0, can_query: false,
+        }));
+        setSources((prev) => (prev.length ? prev : [...dangXuLy, ...mergeSources([], data.sources || [], formatFileName)]));
         setSourcesState("ready");
       })
       .catch(() => { if (!cancelled) setSourcesState("error"); });
