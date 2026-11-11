@@ -190,6 +190,24 @@ export default function ChatArea({
   const queryableSources = useMemo(() => sources.filter((s) => s?.can_query === true), [sources]);
   const pickableSources = queryableSources.slice(0, 4);
   const moreSourcesCount = queryableSources.length - pickableSources.length;
+  // A selection counts only when at least one selected key is a document that can be asked.
+  // A `?source=` deep link (or a stale stored key) is not proof: until the list confirms it, the
+  // start screen must not say "answers come from the selected document" and offer questions.
+  const hasAskableSelection = useMemo(() => {
+    const keys = new Set(queryableSources.map((s) => s.video_stem || s.video));
+    return (Array.isArray(selectedSources) ? selectedSources : []).some((k) => keys.has(typeof k === "string" ? k : k?.name || k?.id));
+  }, [queryableSources, selectedSources]);
+  const hasUnconfirmedSelection = (selectedSources?.length || 0) > 0 && !hasAskableSelection;
+  // Picking a document replaces the list it was picked from; move focus to the first question
+  // so a keyboard or screen-reader user is not dropped on <body>.
+  const chatStartRef = useRef(null);
+  const focusQuestionsRef = useRef(false);
+  const pickFromStart = (key) => { focusQuestionsRef.current = true; onPickSource?.(key); };
+  useEffect(() => {
+    if (!focusQuestionsRef.current || !hasAskableSelection) return;
+    focusQuestionsRef.current = false;
+    chatStartRef.current?.querySelector(".chat-start__row")?.focus();
+  }, [hasAskableSelection]);
   // Structural refactor (Learning Canvas goal banner) — real readiness count,
   // same can_query/status data SidebarLeft's own badges already read, not an
   // invented multi-step "goal" flow. Shared, tested pure fn — see
@@ -917,11 +935,11 @@ export default function ChatArea({
             first question). The earlier version described the layout ("bên trái", "ở lề phải")
             and left the picking to the side panel. */}
         {messages.length === 0 && !loading && (
-          <div className="chat-start flex-1 flex flex-col justify-center pb-16 animate-fadeUp w-full max-w-[560px] mx-auto" data-chat-start>
+          <div className="chat-start flex-1 flex flex-col justify-center pb-16 animate-fadeUp w-full max-w-[560px] mx-auto" data-chat-start ref={chatStartRef}>
             <h1 className="font-display text-[26px] sm:text-[30px] leading-[1.2] font-semibold text-text-primary mb-3">
               Hỏi tài liệu của bạn, kèm dẫn chứng.
             </h1>
-            {sources.length === 0 && !selectedSources?.length && sourcesState !== "ready" ? (
+            {((sources.length === 0 && !selectedSources?.length) || hasUnconfirmedSelection) && sourcesState !== "ready" ? (
               // The list has not answered (or failed): the library is not known to be empty, so
               // neither "upload your first document" nor "choose a document" is true yet.
               <p className="font-display text-body-lg text-text-secondary mb-6" role="status">
@@ -938,13 +956,12 @@ export default function ChatArea({
                 <p className="font-display text-body-lg text-text-secondary mb-6">
                   Tải tài liệu đầu tiên lên để bắt đầu đặt câu hỏi.
                 </p>
-                <div>
-                  <button type="button" data-upload-cta onClick={onUploadDocument} className="btn-primary !text-small inline-flex items-center gap-2">
-                    <Icon name="Plus" size={14} /> Tải tài liệu lên
-                  </button>
-                </div>
+                {/* `self-start`: the column is a flex container, and a stretched button would span it. */}
+                <button type="button" data-upload-cta onClick={onUploadDocument} className="btn-primary !text-small inline-flex items-center gap-2 self-start">
+                  <Icon name="Plus" size={14} /> Tải tài liệu lên
+                </button>
               </>
-            ) : selectedSources?.length > 0 ? (
+            ) : hasAskableSelection ? (
               <>
                 <p className="font-display text-body-lg text-text-secondary mb-5">
                   Câu trả lời lấy từ tài liệu đã chọn và đánh số trích dẫn tới đúng đoạn nguồn.
@@ -977,7 +994,7 @@ export default function ChatArea({
                     <ul className="chat-start__rows" aria-labelledby="chat-start-documents">
                       {pickableSources.map((src) => (
                         <li key={src.video_stem || src.video}>
-                          <button type="button" onClick={() => onPickSource(src.video_stem || src.video)} className="chat-start__row">
+                          <button type="button" onClick={() => pickFromStart(src.video_stem || src.video)} className="chat-start__row">
                             <Icon name="FileText" size={15} className="chat-start__icon" />
                             <span className="min-w-0 truncate">{src.filename || src.video_stem || src.video}</span>
                           </button>

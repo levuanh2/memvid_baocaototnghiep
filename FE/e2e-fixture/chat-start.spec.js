@@ -9,7 +9,7 @@ const json = (body) => ({ status: 200, contentType: "application/json", body: JS
 const DOCS = ["Kinh tế vi mô - Chương 2.pdf", "Triết học Mác-Lênin - Đề cương.docx", "Xác suất thống kê - Bài giảng 5.pptx", "Tội phạm mạng và máy tính.docx", "Ứng dụng công nghệ.docx"]
   .map((filename, i) => ({ video: `doc${i}`, video_stem: `doc${i}`, filename, num_chunks: 10 + i, status: "ready" }));
 
-async function openChat(page, { width, height = 900, dark = false, blockFonts = false }) {
+async function openChat(page, { width, height = 900, dark = false, blockFonts = false, url = "/app" }) {
   await page.setViewportSize({ width, height });
   await page.addInitScript((d) => {
     localStorage.setItem("memvid-token", "fixture-token");
@@ -24,7 +24,7 @@ async function openChat(page, { width, height = 900, dark = false, blockFonts = 
     if (p === "/summaries") return route.fulfill(json({ summaries: [] }));
     return route.fulfill(json({}));
   });
-  await page.goto("/app");
+  await page.goto(url);
   await expect(page.locator("[data-chat-start] .chat-start__row").first()).toBeVisible();
 }
 
@@ -74,13 +74,38 @@ test("picking in the centre checks the same document in the source panel", async
   await expect(page.locator("aside").getByText("1 đang chọn")).toBeVisible();
 });
 
-test("keyboard: rows are reachable in order and Enter picks", async ({ page }) => {
+test("keyboard: rows are reachable by Tab, Enter picks, and focus lands on the first question", async ({ page }) => {
   await openChat(page, { width: 1440 });
-  await rows(page).first().focus();
+  // Tab from the conversation header until focus enters the start list (no direct .focus()).
+  await page.getByRole("button", { name: "Đổi tên cuộc trò chuyện" }).focus().catch(() => {});
+  let reached = false;
+  for (let i = 0; i < 12 && !reached; i += 1) {
+    await page.keyboard.press("Tab");
+    reached = await rows(page).first().evaluate((el) => el === document.activeElement);
+  }
+  expect(reached).toBe(true);
   await page.keyboard.press("Tab");
   await expect(rows(page).nth(1)).toBeFocused();
   await page.keyboard.press("Enter");
   await expect(start(page).getByText("Bắt đầu bằng một câu hỏi")).toBeVisible();
+  // The picked row is gone; focus must not fall to <body>.
+  await expect(rows(page).first()).toBeFocused();
+  await expect(rows(page).first()).toHaveText("Tóm tắt Triết học Mác-Lênin - Đề cương.docx.");
+});
+
+test("semantics: one h1, and both lists are named", async ({ page }) => {
+  await openChat(page, { width: 1440 });
+  await expect(start(page).getByRole("heading", { level: 1 })).toHaveText("Hỏi tài liệu của bạn, kèm dẫn chứng.");
+  await expect(start(page).getByRole("list", { name: "Chọn tài liệu để hỏi" })).toBeVisible();
+  await rows(page).first().click();
+  await expect(start(page).getByRole("list", { name: "Bắt đầu bằng một câu hỏi" })).toBeVisible();
+});
+
+test("a deep link to a document that does not exist offers the pick list, not questions", async ({ page }) => {
+  await openChat(page, { width: 1440, url: "/app?source=does-not-exist" });
+  await expect(start(page).getByText("Bắt đầu bằng một câu hỏi")).toHaveCount(0);
+  await expect(rows(page)).toHaveCount(4);
+  await expect(rows(page).first()).toHaveText("Kinh tế vi mô - Chương 2.pdf");
 });
 
 test("320px with Google Fonts blocked: long names truncate inside the column", async ({ page }) => {

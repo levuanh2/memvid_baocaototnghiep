@@ -107,4 +107,19 @@ describe("ChatArea empty-state, mobile hint + drawer button (W1-4)", () => {
     await act(async () => { button.click(); });
     expect(onOpenLeft).toHaveBeenCalledTimes(1);
   });
+
+  // Review of #161: a selection the list has not confirmed is not a reason to offer questions.
+  it("a selected key that is not a queryable document shows the pick list, not questions", async () => {
+    await renderChatArea({ sources: [{ video_stem: "a", filename: "A.pdf", can_query: true }], selectedSources: ["missing"], onPickSource: vi.fn() });
+    const start = container.querySelector("[data-chat-start]");
+    expect(start.textContent).not.toContain("Bắt đầu bằng một câu hỏi");
+    expect([...start.querySelectorAll(".chat-start__row")].map((r) => r.textContent.trim())).toEqual(["A.pdf"]);
+  });
+
+  it("while the list is still loading, an unconfirmed selection shows the loading line", async () => {
+    await renderChatArea({ sources: [], selectedSources: ["from-deep-link"], sourcesState: "loading", onPickSource: vi.fn() });
+    const start = container.querySelector("[data-chat-start]");
+    expect(start.textContent).toContain("Đang tải danh sách tài liệu");
+    expect(start.querySelectorAll(".chat-start__row").length).toBe(0);
+  });
 });
