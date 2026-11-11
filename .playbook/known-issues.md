@@ -8120,3 +8120,15 @@ off-screen button then matches the same role+name as the visible CTA.
 **Prevention:** hiding by transform, width, opacity or pointer-events is visual only; anything
 that stays mounted while hidden needs `inert`. Label tests should match the bare text, not one
 quoting style.
+
+### A cancelled chat question could publish into the next one (V6 bug hunt #1; fixed 2026-11-12)
+
+**Repro:** send question A, press "Huỷ", send question B at once. When A's request, stream or poll finished afterwards, A could append an error bubble or its answer to the conversation and set `loading = false` while B was still running. A's cancel tail also replaced "the last message" (`prev.slice(0, -1)`), which by then was B's question.
+
+**Root cause:** one shared `cancelledRef`. Cancelling A set it to `true`; starting B set it back to `false`; every later check in A then read "not cancelled".
+
+**Fix:** `attemptRef` in `ChatArea.jsx`. Each send takes a number; cancel, unmount and every new send bump it. Every publication after an `await` in `handleSend` (result, error, `finally`, status updates, the stream tick, the fallback poll) checks that its own number is still current. The cancel tail replaces the "Đang dừng truy vấn…" placeholder by identity. If the POST returns a job id after the cancel, that job is cancelled instead of left running.
+
+**Regression:** `ChatArea.attemptIdentity.test.jsx` (both cases fail on the old code).
+
+**Not changed:** the review-resume polling path (bug hunt #11) still has no cancellation.
