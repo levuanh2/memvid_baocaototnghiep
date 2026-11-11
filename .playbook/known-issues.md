@@ -8120,3 +8120,17 @@ off-screen button then matches the same role+name as the visible CTA.
 **Prevention:** hiding by transform, width, opacity or pointer-events is visual only; anything
 that stays mounted while hidden needs `inert`. Label tests should match the bare text, not one
 quoting style.
+
+### Five actions could run twice from one double click (V6 bug hunt #5, #6, #8, #9, #10; fixed 2026-11-11)
+
+**Where:** "Luyện ngay" (`ReviewGuide.jsx`), "Nộp bài luyện tập" (`Practice.jsx`), "Dựng sơ đồ kiến thức" and image export (`StudyMapView.jsx`), "Áp dụng" (`AppearanceEditorDrawer.jsx`).
+
+**Root cause:** each handler was guarded only by React state (`disabled={submitting}`, `if (practiceFor) return`). State commits after the event, so two activations in the same tick both saw the old value and both called the API: two practice jobs for one LLM slot, a practice graded twice, two generation jobs, two downloads, two competing PATCH requests.
+
+**Fix:** a ref set before the first `await` and cleared in `finally`, the pattern `QuizTaking` and `QuizSetup` already use.
+
+**Regression:** double-click tests in `Practice.percentUnits.test.jsx`, `ReviewGuide.practiceCustomize.test.jsx`, `AppearanceEditorDrawer.test.jsx` (each fails without its guard). The two `StudyMapView` guards have no test of their own.
+
+**Also fixed (review):** a practice job that finished without a `quiz_id` left `practiceFor` set, so every practice button stayed disabled until a reload. `onDone` now reports the error and unlocks (`ReviewGuide.practiceJobWithoutQuiz.test.jsx`).
+
+**Not changed:** the backend still accepts duplicate requests; these mutations are not idempotent server-side.
