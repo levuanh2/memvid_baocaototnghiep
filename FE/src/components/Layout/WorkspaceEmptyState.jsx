@@ -122,7 +122,7 @@ export default function WorkspaceEmptyState({
         // duplicate upload POST logic here).
         <>
           <p className="text-caption font-mono text-text-muted uppercase">Chưa có tài liệu nào</p>
-          <button type="button" onClick={onUpload} className="btn-primary !text-small mt-1">
+          <button type="button" data-upload-cta onClick={onUpload} className="btn-primary !text-small mt-1">
             <Icon name="Plus" size={14} /> Tải tài liệu lên
           </button>
         </>
