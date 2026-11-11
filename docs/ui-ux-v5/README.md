@@ -6,7 +6,7 @@ Evidence-first, delivered as small Draft PRs. Nothing here is merged or deployed
 |---|---|
 | [01-branding-diagnosis.md](01-branding-diagnosis.md) | Why the live site still looked like MemVidX: the favicon and the "M" seal, not deploy or cache |
 | [02-design-foundation.md](02-design-foundation.md) | The brand mark, the tokens adopted from main, and the rules every V5 workstream follows |
-| `legacy-pr-integration.md` | V4.1 backlog (#138–#147) integration matrix. Added by the legacy-integration PR. |
+| `legacy-pr-integration.md` | V4.1 backlog (#138–#147) integration matrix. |
 
 ## Workstreams
 
