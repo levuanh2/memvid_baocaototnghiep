@@ -798,6 +798,7 @@ export default function MainLayout({
               selectedSources={selectedSources}
               setSelectedSources={setSelectedSources}
               onSourcesChange={setSources}
+              initialSources={sources}
               onClose={() => setTabletShelfOpen((open) => !open)}
               onTransientSurfaceOpen={closeHeaderSurface}
               collapsible
@@ -858,6 +859,7 @@ export default function MainLayout({
                 selectedSources={selectedSources}
                 setSelectedSources={setSelectedSources}
                 onSourcesChange={setSources}
+                initialSources={sources}
                 onClose={() => (panel.drawer ? setLeftOpen(false) : panel.setCollapsedFor("left", true))}
                 onTransientSurfaceOpen={closeHeaderSurface}
                 collapsible={!panel.drawer}
