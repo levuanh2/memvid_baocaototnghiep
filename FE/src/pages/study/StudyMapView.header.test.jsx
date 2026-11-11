@@ -9,6 +9,8 @@ import { MemoryRouter, Route, Routes } from "react-router-dom";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import StudyMapView from "./StudyMapView";
 import { fourTierMapFixture } from "../../test/fixtures/fourTierMapFixture";
+import viewSource from "./StudyMapView.jsx?raw";
+import shellSource from "../../components/study/StudyShell.jsx?raw";
 
 const stableStudyContext = { selectDocument: () => {}, selectNode: () => {} };
 vi.mock("../../study/useStudyContext", () => ({ useStudyContext: () => stableStudyContext }));
@@ -79,13 +81,14 @@ describe("StudyMapView header (W5-2)", () => {
     expect(container.textContent).not.toContain("Về nguồn");
   });
 
-  it("breadcrumb's first segment names the document title, not the stem (StudyShell pass-through)", async () => {
+  it("page heading shows the document title, and the title is wired through to the breadcrumb", async () => {
     await renderReady();
-    // This test's useStudyContext stub has no `selectedDocument`, so the
-    // breadcrumb itself renders nothing -- this asserts the prop reaches
-    // StudyShell correctly (the actual title text, not the undefined stem)
-    // by checking the title heading instead, which draws from the same `doc`.
     expect(container.querySelector("h1")?.textContent).toBe("Giáo trình Hệ điều hành");
+    // The useStudyContext stub has no `selectedDocument`, so the breadcrumb renders nothing here;
+    // StudyBreadcrumb.documentLabel.test.jsx covers the leaf. Guard the prop chain itself, so
+    // dropping either hop fails: StudyMapView -> StudyShell -> StudyBreadcrumb.
+    expect(viewSource).toContain("breadcrumbDocumentLabel={doc?.title || doc?.filename}");
+    expect(shellSource).toMatch(/documentLabel=\{breadcrumbDocumentLabel\}/);
   });
 
   it("one 'Xuất' menu replaces the three separate export buttons; opens with all three formats, Escape closes it and returns focus", async () => {
