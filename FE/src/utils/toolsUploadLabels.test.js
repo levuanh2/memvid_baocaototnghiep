@@ -8,7 +8,10 @@ const sources = import.meta.glob(["../**/*.{js,jsx}", "!../**/*.test.*", "!../de
 
 describe("tools and upload labels", () => {
   it("source has no retired labels", () => {
-    const retired = ["Mở công cụ StudyMap", '"Thêm tài liệu"', 'nhan: "Tải tài liệu",', 'hanhDong: "Tải tài liệu",', "/> Tải tài liệu</>", "<span>StudyMap</span>"];
+    const retired = ["Mở công cụ StudyMap", '"Thêm tài liệu"', 'nhan: "Tải tài liệu",', 'hanhDong: "Tải tài liệu",', "/> Tải tài liệu</>", "<span>StudyMap</span>",
+      // The quoted form above missed JSX text and typographic quotes; the desktop panel button
+      // kept the old label that way.
+      "Thêm tài liệu"];
     const hits = Object.entries(sources).flatMap(([file, text]) =>
       retired.filter((old) => text.includes(old)).map((old) => `${file}: ${old}`));
     expect(hits).toEqual([]);

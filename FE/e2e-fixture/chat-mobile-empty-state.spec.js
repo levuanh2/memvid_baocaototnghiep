@@ -44,10 +44,10 @@ for (const width of [320, 390]) {
     await expect(button).toBeVisible();
 
     // The real drawer SidebarLeft slides in from off-screen on click -- check
-    // its own "Thêm tài liệu" control actually lands inside the viewport,
-    // not just that its node exists in the DOM. It's a <label> wrapping a
-    // file input, not a <button>, so a text locator (not role=button).
-    const addButton = page.getByText("Thêm tài liệu", { exact: true });
+    // its own upload control actually lands inside the viewport,
+    // not just that its node exists in the DOM. Several controls are named
+    // "Tải tài liệu lên", so target the panel's own button, not a name.
+    const addButton = page.locator('aside [data-upload-cta]:not(.source-rail__add)');
     const before = await addButton.boundingBox();
     expect(before === null || before.x < 0).toBe(true);
     await button.click();
