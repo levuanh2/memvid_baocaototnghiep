@@ -165,7 +165,17 @@ export default function SidebarLeft({ selectedSources, setSelectedSources, onSou
     if (bo) { bo.stop(); delete pollersRef.current[sourceId]; }
   };
 
+  // Only the latest request of a mounted panel may publish. Without this, a response that lands
+  // after the panel unmounted (collapsed, or a breakpoint crossing) still told the layout "the list
+  // has loaded" and reconciled the selection against rows that were never committed; and an older
+  // request (mount) finishing after a newer one ("Thử lại") overwrote its result.
+  const conSongRef = useRef(false);
+  const luotTaiRef = useRef(0);
+  useEffect(() => { conSongRef.current = true; return () => { conSongRef.current = false; }; }, []);
+
   const fetchSourcesFromBackend = () => {
+    const luot = ++luotTaiRef.current;
+    const conHieuLuc = () => conSongRef.current && luot === luotTaiRef.current;
     apiFetch(`/list-indexed`)
       .then(async (res) => {
         // `.json()` trên một 500/401 vẫn "thành công" (body lỗi cũng là JSON), rồi
@@ -196,6 +206,7 @@ export default function SidebarLeft({ selectedSources, setSelectedSources, onSou
         // CAN race — e.g. the mount effect and a manual "Thử lại" retry — and
         // the functional form is what keeps a second merge from clobbering
         // the first instead of building on it).
+        if (!conHieuLuc()) return;
         const prevSnapshot = sourcesRef.current;
         setSources((prev) => mergeSources(prev, backendSources, formatFileName));
         setSelectedSources((prevSel) => reconcileSelectedSources(prevSnapshot, backendSources, prevSel));
@@ -204,6 +215,7 @@ export default function SidebarLeft({ selectedSources, setSelectedSources, onSou
         onSourcesSettled?.(true);
       })
       .catch((err) => {
+        if (!conHieuLuc()) return;
         console.error("Error fetching sources:", err);
         setLoiTai(getUserFriendlyApiError(err));
         onSourcesSettled?.(false);
@@ -528,7 +540,9 @@ export default function SidebarLeft({ selectedSources, setSelectedSources, onSou
             <Icon name="AlertCircle" size={30} className="mx-auto mb-3" style={{ color: "var(--err)" }} />
             <p className="text-small font-semibold text-text-secondary">{loiTai}</p>
             <button type="button" className="text-small underline text-text-muted mt-2"
-              onClick={fetchSourcesFromBackend}>
+              // Clearing the error puts the panel back in its loading state, so the retry is
+              // visibly pending and cannot be pressed twice.
+              onClick={() => { setLoiTai(null); fetchSourcesFromBackend(); }}>
               Thử lại
             </button>
           </div>

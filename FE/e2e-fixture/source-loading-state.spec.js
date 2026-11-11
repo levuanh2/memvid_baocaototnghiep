@@ -8,8 +8,8 @@ import { test, expect } from "@playwright/test";
 const json = (body) => ({ status: 200, contentType: "application/json", body: JSON.stringify(body) });
 const DOC = { video: "kinh_te_vi_mo.pdf", video_stem: "kinh_te_vi_mo", filename: "kinh_te_vi_mo.pdf", num_chunks: 12, status: "ready" };
 
-async function openApp(page, { listDelayMs = 0, sources = [DOC], listStatus = 200, collapsedLeft = false } = {}) {
-  await page.setViewportSize({ width: 1440, height: 900 });
+async function openApp(page, { listDelayMs = 0, sources = [DOC], listStatus = 200, collapsedLeft = false, width = 1440 } = {}) {
+  await page.setViewportSize({ width, height: 900 });
   await page.addInitScript((collapsed) => {
     localStorage.setItem("memvid-token", "fixture-token");
     if (collapsed) {
@@ -82,4 +82,45 @@ test("a failed list load shows the error, not an empty library", async ({ page }
   await expect(page.getByRole("button", { name: "Thử lại" })).toBeVisible();
   await expect(page.getByText("Chưa có tài liệu nào.")).toHaveCount(0);
   await expect(page.getByText("Tải tài liệu đầu tiên lên")).toHaveCount(0);
+});
+
+// Phone (drawer) and tablet (rail): the panel is mounted but not showing its list, so only the
+// chat can be checked. It must wait for the list on every layout.
+for (const width of [390, 900]) {
+  test(`at ${width}px the chat waits for the list instead of offering a first upload`, async ({ page }) => {
+    await openApp(page, { listDelayMs: 2000, width });
+    await expect(page.getByText("Tải tài liệu đầu tiên lên")).toHaveCount(0);
+    await expect(page.getByRole("main").getByText("Đang tải danh sách tài liệu").first()).toBeVisible();
+    await expect(page.getByRole("main").getByText("Đang tải danh sách tài liệu")).toHaveCount(0, { timeout: 8000 });
+    await expect(page.getByText("Tải tài liệu đầu tiên lên")).toHaveCount(0);
+  });
+}
+
+test("collapsing the panel while the list is loading still ends with the real list", async ({ page }) => {
+  await openApp(page, { listDelayMs: 2000 });
+  await page.getByRole("button", { name: "Thu gọn cột" }).first().click();
+  const spine = page.locator(".panel-spine--left");
+  await expect(spine).toBeVisible();
+  // The panel's own request was abandoned with the unmount; the layout asks again.
+  await expect(spine.locator(".panel-spine__count")).toHaveText("1", { timeout: 8000 });
+  await expect(page.getByText("Tải tài liệu đầu tiên lên")).toHaveCount(0);
+});
+
+test("a failed load can be retried from the panel, and the chat follows", async ({ page }) => {
+  let fail = true;
+  await openApp(page, { listStatus: 200 });
+  await page.unroute(/localhost:8080\//);
+  await page.route(/localhost:8080\//, (route) => {
+    const p = new URL(route.request().url()).pathname;
+    if (p === "/auth/me") return route.fulfill(json({ user: { id: "u1", email: "qa@example.test", display_name: "QA", provider: "local" } }));
+    if (p === "/list-indexed") return fail ? route.fulfill({ status: 500, contentType: "application/json", body: "{}" }) : route.fulfill(json({ sources: [DOC] }));
+    return route.fulfill(json({}));
+  });
+  await page.reload();
+  await expect(page.getByRole("button", { name: "Thử lại" })).toBeVisible();
+  await expect(page.getByText("Chưa tải được danh sách tài liệu")).toBeVisible();
+  fail = false;
+  await page.getByRole("button", { name: "Thử lại" }).click();
+  await expect(page.getByText("kinh_te_vi_mo").first()).toBeVisible();
+  await expect(page.getByText("Chưa tải được danh sách tài liệu")).toHaveCount(0);
 });
