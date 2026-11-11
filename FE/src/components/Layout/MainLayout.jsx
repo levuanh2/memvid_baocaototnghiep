@@ -1,4 +1,4 @@
-import { useState, useCallback, useEffect, useRef, useMemo } from "react";
+import { useState, useCallback, useEffect, useRef, useMemo, useLayoutEffect } from "react";
 import { Link, useNavigate } from "react-router-dom";
 import SidebarLeft from "./SidebarLeft";
 import ContextInspector from "./ContextInspector";
@@ -552,6 +552,19 @@ export default function MainLayout({
   // through its own JSX but left it hardcoded `false` -- turning it on here
   // is what this branch's whole redesign is built around.)
   const mindmapToolOverlay = workspaceMode === "mindmap" && !panel.drawer;
+  const rightSurfaceHidden = (mindmapToolOverlay || panel.drawer) ? !rightOpen : panel.collapsed.right;
+  const leftSurfaceHidden = panel.drawer && !leftOpen;
+  // A surface that turns inert while it holds focus would drop focus to <body>. Hand it to the
+  // control that reopens the surface: the header tools trigger (mobile) or the column's spine.
+  const leftAsideRef = useRef(null);
+  const rightAsideRef = useRef(null);
+  useLayoutEffect(() => {
+    for (const [hidden, ref, spine] of [[leftSurfaceHidden, leftAsideRef, ".panel-spine--left"], [rightSurfaceHidden, rightAsideRef, ".panel-spine--right"]]) {
+      if (!hidden || !ref.current?.contains(document.activeElement)) continue;
+      const trigger = studyToolsTriggerRef.current;
+      (trigger?.offsetParent ? trigger : document.querySelector(spine))?.focus();
+    }
+  }, [leftSurfaceHidden, rightSurfaceHidden]);
 
   // Auto-open the overlay exactly when there's a node to show evidence for
   // (contextual, per section 4's ownership table); auto-close when the
@@ -782,6 +795,7 @@ export default function MainLayout({
               selectedSources={selectedSources}
               setSelectedSources={setSelectedSources}
               onSourcesChange={setSources}
+              initialSources={sources}
               onClose={() => setTabletShelfOpen((open) => !open)}
               onTransientSurfaceOpen={closeHeaderSurface}
               collapsible
@@ -821,6 +835,11 @@ export default function MainLayout({
         ) : (
           <>
             <aside
+              // A closed mobile drawer is only translated off-screen: without `inert` its
+              // controls stay in the Tab order and in the accessibility tree while invisible.
+              ref={leftAsideRef}
+              aria-hidden={leftSurfaceHidden ? true : undefined}
+              inert={leftSurfaceHidden ? true : undefined}
               className={
                 panel.drawer
                   ? `fixed top-[56px] left-0 h-[calc(100vh-56px)] z-40 w-[252px] shrink-0
@@ -837,6 +856,7 @@ export default function MainLayout({
                 selectedSources={selectedSources}
                 setSelectedSources={setSelectedSources}
                 onSourcesChange={setSources}
+                initialSources={sources}
                 onClose={() => (panel.drawer ? setLeftOpen(false) : panel.setCollapsedFor("left", true))}
                 onTransientSurfaceOpen={closeHeaderSurface}
                 collapsible={!panel.drawer}
@@ -955,11 +975,11 @@ export default function MainLayout({
               />
             )}
             <aside
-              aria-hidden={
-                (mindmapToolOverlay && !rightOpen)
-                || (!mindmapToolOverlay && !panel.drawer && panel.collapsed.right)
-                  ? true : undefined
-              }
+              // Hidden states (closed overlay, closed mobile sheet, collapsed desktop column) keep
+              // this subtree mounted. `pointer-events` and `aria-hidden` do not stop Tab; `inert` does.
+              ref={rightAsideRef}
+              aria-hidden={rightSurfaceHidden ? true : undefined}
+              inert={rightSurfaceHidden ? true : undefined}
               className={
                 mindmapToolOverlay
                   ? "mindmap-tools-overlay fixed top-[56px] right-3 bottom-3 z-40 w-[340px] bg-surface-sidebar border border-border rounded-[12px] shadow-card-hover overflow-hidden transition-opacity duration-150"
