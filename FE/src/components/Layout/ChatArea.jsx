@@ -107,7 +107,7 @@ function AnswerProse({ content, mdComponents, dropCap = false }) {
 }
 
 export default function ChatArea({
-  selectedSources, sources = [], onEvidence, highlight, onHighlight, onOpenLeft, onOpenEvidence, evidenceCount = 0, askAboutDraft,
+  selectedSources, sources = [], sourcesState = "ready", onPickSource, onEvidence, highlight, onHighlight, onOpenLeft, onOpenEvidence, evidenceCount = 0, askAboutDraft,
   // Feature Pack B (Cross Navigation) — Chat -> Summary. `hasSummary` gates a
   // real link, never a dead one; `onOpenSummary` reuses MainLayout's existing
   // workspaceMode switch (same shape as the pre-existing `onSwitchToChat`).
@@ -186,6 +186,28 @@ export default function ChatArea({
     [highlight, onHighlight, handleEvidenceOpen],
   );
   const suggestions = useMemo(() => buildSuggestions(selectedSources, sources), [selectedSources, sources]);
+  // Start screen: documents that can be asked right now, offered as direct picks (first four).
+  const queryableSources = useMemo(() => sources.filter((s) => s?.can_query === true), [sources]);
+  const pickableSources = queryableSources.slice(0, 4);
+  const moreSourcesCount = queryableSources.length - pickableSources.length;
+  // A selection counts only when at least one selected key is a document that can be asked.
+  // A `?source=` deep link (or a stale stored key) is not proof: until the list confirms it, the
+  // start screen must not say "answers come from the selected document" and offer questions.
+  const hasAskableSelection = useMemo(() => {
+    const keys = new Set(queryableSources.map((s) => s.video_stem || s.video));
+    return (Array.isArray(selectedSources) ? selectedSources : []).some((k) => keys.has(typeof k === "string" ? k : k?.name || k?.id));
+  }, [queryableSources, selectedSources]);
+  const hasUnconfirmedSelection = (selectedSources?.length || 0) > 0 && !hasAskableSelection;
+  // Picking a document replaces the list it was picked from; move focus to the first question
+  // so a keyboard or screen-reader user is not dropped on <body>.
+  const chatStartRef = useRef(null);
+  const focusQuestionsRef = useRef(false);
+  const pickFromStart = (key) => { focusQuestionsRef.current = true; onPickSource?.(key); };
+  useEffect(() => {
+    if (!focusQuestionsRef.current || !hasAskableSelection) return;
+    focusQuestionsRef.current = false;
+    chatStartRef.current?.querySelector(".chat-start__row")?.focus();
+  }, [hasAskableSelection]);
   // Structural refactor (Learning Canvas goal banner) — real readiness count,
   // same can_query/status data SidebarLeft's own badges already read, not an
   // invented multi-step "goal" flow. Shared, tested pure fn — see
@@ -908,14 +930,24 @@ export default function ChatArea({
           )}
         </div>
 
-        {/* Empty state — the reading-room thesis */}
+        {/* Start of a conversation (V6). One column, left-aligned: a heading, one sentence, then
+            the next step as rows the learner can act on directly (pick a document, or pick a
+            first question). The earlier version described the layout ("bên trái", "ở lề phải")
+            and left the picking to the side panel. */}
         {messages.length === 0 && !loading && (
-          <div className="flex-1 flex flex-col items-center justify-center text-center pb-16 animate-fadeUp max-w-[440px] mx-auto">
-            <div className="font-mono text-metadata uppercase text-text-muted mb-4">Phòng đọc</div>
+          <div className="chat-start flex-1 flex flex-col justify-center pb-16 animate-fadeUp w-full max-w-[560px] mx-auto" data-chat-start ref={chatStartRef}>
             <h1 className="font-display text-[26px] sm:text-[30px] leading-[1.2] font-semibold text-text-primary mb-3">
-              Hỏi tài liệu của bạn — <span className="text-seal">kèm dẫn chứng</span>.
+              Hỏi tài liệu của bạn, kèm dẫn chứng.
             </h1>
-            {sources.length === 0 && !selectedSources?.length ? (
+            {((sources.length === 0 && !selectedSources?.length) || hasUnconfirmedSelection) && sourcesState !== "ready" ? (
+              // The list has not answered (or failed): the library is not known to be empty, so
+              // neither "upload your first document" nor "choose a document" is true yet.
+              <p className="font-display text-body-lg text-text-secondary mb-6" role="status">
+                {sourcesState === "error"
+                  ? "Chưa tải được danh sách tài liệu. Thử lại ở thư mục nguồn."
+                  : "Đang tải danh sách tài liệu…"}
+              </p>
+            ) : sources.length === 0 && !selectedSources?.length ? (
               // W1-4: nothing uploaded yet -- "chọn tài liệu" has nothing to
               // select, so the one primary action is to upload, reusing the
               // exact same handler/input SidebarLeft's own "Tải tài liệu lên"
@@ -924,49 +956,67 @@ export default function ChatArea({
                 <p className="font-display text-body-lg text-text-secondary mb-6">
                   Tải tài liệu đầu tiên lên để bắt đầu đặt câu hỏi.
                 </p>
-                <button type="button" data-upload-cta onClick={onUploadDocument} className="btn-primary !text-small inline-flex items-center gap-2">
+                {/* `self-start`: the column is a flex container, and a stretched button would span it. */}
+                <button type="button" data-upload-cta onClick={onUploadDocument} className="btn-primary !text-small inline-flex items-center gap-2 self-start">
                   <Icon name="Plus" size={14} /> Tải tài liệu lên
                 </button>
               </>
+            ) : hasAskableSelection ? (
+              <>
+                <p className="font-display text-body-lg text-text-secondary mb-5">
+                  Câu trả lời lấy từ tài liệu đã chọn và đánh số trích dẫn tới đúng đoạn nguồn.
+                </p>
+                <div className="chat-start__label" id="chat-start-questions">Bắt đầu bằng một câu hỏi</div>
+                <ul className="chat-start__rows" aria-labelledby="chat-start-questions">
+                  {suggestions.map((q) => (
+                    <li key={q}>
+                      <button type="button" onClick={() => fillSuggestion(q)} className="chat-start__row">
+                        <Icon name="MessageSquareText" size={15} className="chat-start__icon" />
+                        <span className="min-w-0">{q}</span>
+                      </button>
+                    </li>
+                  ))}
+                </ul>
+              </>
             ) : (
               <>
-                {/* W1-4: below `md` there is no left column OR right margin,
-                    so neither "bên trái" nor "ở lề phải" points at anything a
-                    phone user can see. Two copies, CSS-only (no JS viewport
-                    check) -- desktop text is byte-for-byte unchanged; the
-                    mobile copy drops both spatial references (review fix:
-                    "kèm nguồn dẫn chứng" replaces "ở lề phải" too) and the
-                    button right below it is the actual way to act on "Chọn
-                    tài liệu" on that breakpoint, reusing the exact same
-                    `onOpenLeft` the header's `.mobile-context` icon button
-                    already calls (no new drawer state). This looks like
-                    Round 12's removed duplicate fallback button, but it
-                    isn't one: Round 12 removed it because the header icon
-                    ALONE was then considered sufficient; this round's audit
-                    (390px screenshot) found that icon-only control too easy
-                    to miss on a first-time empty chat, hence a labelled
-                    entry point right where the (now corrected) copy
-                    points. */}
-                <p className="font-display text-body-lg text-text-secondary mb-6 md:hidden">
-                  Mỗi câu trả lời được truy hồi từ tài liệu đã chọn, kèm nguồn dẫn chứng. Chọn tài liệu, rồi đặt câu hỏi.
+                {/* Two copies, CSS-only: below `md` there is no left column, so the mobile copy
+                    names no position and the button under the list opens the source drawer. */}
+                <p className="font-display text-body-lg text-text-secondary mb-5 md:hidden">
+                  Chọn tài liệu, rồi đặt câu hỏi. Câu trả lời sẽ kèm nguồn dẫn chứng.
                 </p>
-                <p className="font-display text-body-lg text-text-secondary mb-6 hidden md:block">
-                  Mỗi câu trả lời được truy hồi từ tài liệu đã chọn và gắn nguồn ở lề phải. Chọn tài liệu bên trái, rồi đặt câu hỏi.
+                <p className="font-display text-body-lg text-text-secondary mb-5 hidden md:block">
+                  Chọn tài liệu ở đây hoặc trong thư mục nguồn bên trái, rồi đặt câu hỏi. Câu trả lời sẽ kèm nguồn dẫn chứng.
                 </p>
-                <button
-                  type="button"
-                  onClick={onOpenLeft}
-                  className="btn-secondary !text-small inline-flex items-center gap-2 mb-6 md:hidden"
-                >
-                  <Icon name="FolderOpen" size={14} /> Mở thư mục nguồn
-                </button>
-                {selectedSources?.length > 0 && (
-                  <div className="flex flex-wrap gap-2 justify-center">
-                    {suggestions.map((q) => (
-                      <button key={q} onClick={() => fillSuggestion(q)} className="pill-action">{q}</button>
-                    ))}
-                  </div>
+                {pickableSources.length > 0 && onPickSource && (
+                  <>
+                    <div className="chat-start__label" id="chat-start-documents">Chọn tài liệu để hỏi</div>
+                    <ul className="chat-start__rows" aria-labelledby="chat-start-documents">
+                      {pickableSources.map((src) => (
+                        <li key={src.video_stem || src.video}>
+                          <button type="button" onClick={() => pickFromStart(src.video_stem || src.video)} className="chat-start__row">
+                            <Icon name="FileText" size={15} className="chat-start__icon" />
+                            <span className="min-w-0 truncate">{src.filename || src.video_stem || src.video}</span>
+                          </button>
+                        </li>
+                      ))}
+                    </ul>
+                    {moreSourcesCount > 0 && (
+                      <p className="text-small text-text-muted mt-2 hidden md:block">
+                        Còn {moreSourcesCount} tài liệu khác trong thư mục nguồn.
+                      </p>
+                    )}
+                  </>
                 )}
+                <div className="md:hidden mt-4">
+                  <button
+                    type="button"
+                    onClick={onOpenLeft}
+                    className="btn-secondary !text-small inline-flex items-center gap-2 md:hidden"
+                  >
+                    <Icon name="FolderOpen" size={14} /> Mở thư mục nguồn
+                  </button>
+                </div>
               </>
             )}
           </div>

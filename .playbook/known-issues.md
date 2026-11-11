@@ -8120,3 +8120,15 @@ off-screen button then matches the same role+name as the visible CTA.
 **Prevention:** hiding by transform, width, opacity or pointer-events is visual only; anything
 that stays mounted while hidden needs `inert`. Label tests should match the bare text, not one
 quoting style.
+
+### The app said "no documents" before it knew, and for as long as the source panel was collapsed (V6, 2026-11-11)
+
+**Seen on the live site:** an account with 4 documents opened `/app` and got "0 tài liệu", "Chưa có tài liệu nào" and the chat's "Tải tài liệu đầu tiên lên" call to action until `/list-indexed` answered (several seconds).
+
+**Root cause:** two states were drawn as one. `sources.length === 0` meant both "the list answered and is empty" and "the list has not answered". Separately, only `SidebarLeft` fetched `/list-indexed`, and a collapsed desktop panel renders `PanelSpine` instead of `SidebarLeft`, so with a collapsed panel nothing fetched at all: the spine had no count and the chat kept offering a first upload.
+
+**Fix:** `MainLayout` keeps `sourcesState` ("loading" / "ready" / "error"), set by `SidebarLeft` through `onSourcesSettled`. The panel shows "Đang tải danh sách tài liệu…" until the first answer; the chat shows the same line (or the load error) and offers the first-upload action only when the state is "ready" and the list is empty. While the panel is collapsed and the list is still unknown, `MainLayout` fetches `/list-indexed` once.
+
+**Regression:** `FE/e2e-fixture/source-loading-state.spec.js` (slow list, empty list, collapsed panel, failed list). Red before the fix: 3 of 4.
+
+**Not changed:** `SidebarLeft` still owns the list after it mounts; a failed load still keeps the previous rows.

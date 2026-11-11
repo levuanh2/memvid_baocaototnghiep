@@ -52,7 +52,7 @@ describe("ChatArea empty-state, mobile hint + drawer button (W1-4)", () => {
   // documents at all" upload CTA, covered by ChatArea.noDocumentsEmptyState.test.jsx).
   const SOURCES = [{ video_stem: "a", filename: "A.pdf" }];
 
-  it("renders a mobile-only hint without 'bên trái' or 'ở lề phải' (no left column or right margin on a phone), and a desktop-only hint that keeps both", async () => {
+  it("renders a mobile-only hint that names no position (no left column on a phone), and a desktop-only hint that points to the source panel", async () => {
     await renderChatArea({ sources: SOURCES });
     const paragraphs = [...container.querySelectorAll("p.font-display.text-body-lg")];
     const mobile = paragraphs.find((p) => p.className.includes("md:hidden"));
@@ -61,13 +61,37 @@ describe("ChatArea empty-state, mobile hint + drawer button (W1-4)", () => {
     expect(desktop).toBeTruthy();
     expect(mobile.textContent).not.toContain("bên trái");
     expect(mobile.textContent).not.toContain("ở lề phải");
-    expect(mobile.textContent).toBe(
-      "Mỗi câu trả lời được truy hồi từ tài liệu đã chọn, kèm nguồn dẫn chứng. Chọn tài liệu, rồi đặt câu hỏi.",
-    );
-    // Desktop copy is byte-for-byte unchanged.
+    expect(mobile.textContent).toBe("Chọn tài liệu, rồi đặt câu hỏi. Câu trả lời sẽ kèm nguồn dẫn chứng.");
+    // V6: the desktop copy changed on purpose. It now points to the pick list first and no
+    // longer describes where citations appear ("ở lề phải").
     expect(desktop.textContent).toBe(
-      "Mỗi câu trả lời được truy hồi từ tài liệu đã chọn và gắn nguồn ở lề phải. Chọn tài liệu bên trái, rồi đặt câu hỏi.",
+      "Chọn tài liệu ở đây hoặc trong thư mục nguồn bên trái, rồi đặt câu hỏi. Câu trả lời sẽ kèm nguồn dẫn chứng.",
     );
+  });
+
+  // V6: the start screen offers the next step directly instead of only describing it.
+  it("lists up to four documents that can be asked, and picking one reports its key", async () => {
+    const onPickSource = vi.fn();
+    const many = ["a", "b", "c", "d", "e"].map((k) => ({ video_stem: k, filename: `${k.toUpperCase()}.pdf`, can_query: true }));
+    await renderChatArea({ sources: [...many, { video_stem: "p", filename: "P.pdf", status: "processing", can_query: false }], onPickSource });
+    const rows = [...container.querySelectorAll("[data-chat-start] .chat-start__row")];
+    expect(rows.map((r) => r.textContent.trim())).toEqual(["A.pdf", "B.pdf", "C.pdf", "D.pdf"]);
+    expect(container.querySelector("[data-chat-start]").textContent).toContain("Còn 1 tài liệu khác trong thư mục nguồn.");
+    await act(async () => { rows[1].click(); });
+    expect(onPickSource).toHaveBeenCalledWith("b");
+  });
+
+  it("without a pick handler, or with nothing ready to ask, the pick list is not rendered", async () => {
+    await renderChatArea({ sources: [{ video_stem: "a", filename: "A.pdf", can_query: true }] });
+    expect(container.querySelectorAll(".chat-start__row").length).toBe(0);
+  });
+
+  it("with a document selected, starter questions are rows that fill the composer", async () => {
+    await renderChatArea({ sources: [{ video_stem: "a", filename: "A.pdf", can_query: true }], selectedSources: ["a"], onPickSource: vi.fn() });
+    const rows = [...container.querySelectorAll("[data-chat-start] .chat-start__row")];
+    expect(rows.map((r) => r.textContent.trim())).toEqual(["Tóm tắt A.pdf.", "Ý chính của A.pdf là gì?", "Khái niệm nào trong A.pdf khó hiểu nhất?"]);
+    await act(async () => { rows[1].click(); });
+    expect(container.querySelector("textarea").value).toBe("Ý chính của A.pdf là gì?");
   });
 
   it("the mobile 'Mở thư mục nguồn' button is md:hidden and opens the sources drawer via the same onOpenLeft", async () => {
@@ -82,5 +106,20 @@ describe("ChatArea empty-state, mobile hint + drawer button (W1-4)", () => {
     expect(button.className).toMatch(/(^|\s)md:hidden(\s|$)/);
     await act(async () => { button.click(); });
     expect(onOpenLeft).toHaveBeenCalledTimes(1);
+  });
+
+  // Review of #161: a selection the list has not confirmed is not a reason to offer questions.
+  it("a selected key that is not a queryable document shows the pick list, not questions", async () => {
+    await renderChatArea({ sources: [{ video_stem: "a", filename: "A.pdf", can_query: true }], selectedSources: ["missing"], onPickSource: vi.fn() });
+    const start = container.querySelector("[data-chat-start]");
+    expect(start.textContent).not.toContain("Bắt đầu bằng một câu hỏi");
+    expect([...start.querySelectorAll(".chat-start__row")].map((r) => r.textContent.trim())).toEqual(["A.pdf"]);
+  });
+
+  it("while the list is still loading, an unconfirmed selection shows the loading line", async () => {
+    await renderChatArea({ sources: [], selectedSources: ["from-deep-link"], sourcesState: "loading", onPickSource: vi.fn() });
+    const start = container.querySelector("[data-chat-start]");
+    expect(start.textContent).toContain("Đang tải danh sách tài liệu");
+    expect(start.querySelectorAll(".chat-start__row").length).toBe(0);
   });
 });
