@@ -71,11 +71,9 @@ async function applyLevel(page, label) {
 
 // The "Số node/nhánh" summary line lives on the Export Studio's REVIEW step
 // (step 3 of content -> format -> appearance -> review), not the content
-// step where the scope radios live -- advancing needs 3 "Tiếp tục" clicks.
+// The persistent Preview Bench keeps its summary mounted throughout configuration.
 async function goToReviewStep(dialog) {
-  for (let i = 0; i < 3; i++) {
-    await dialog.getByRole("button", { name: "Tiếp tục" }).click();
-  }
+  await expect(dialog.getByTestId("export-persistent-preview")).toBeVisible();
 }
 
 function badPathCount(page) {

@@ -98,17 +98,12 @@ describe("MindElixirView branch toggle (Round 8 redesign)", () => {
     expect(items.some((t) => t.includes("Mở toàn bộ"))).toBe(true);
   });
 
-  it("D23 viewport buttons have informative zoom-effect titles", async () => {
+  it("V4.1 W3-2 (D16): save has exactly one control, the overflow 'Lưu sơ đồ'", async () => {
     await render(makeController(null));
-    const fitBtn = container.querySelector('[aria-label="Vừa khung"]');
-    expect(fitBtn?.getAttribute("title")).toBe("Vừa khung: thu/phóng để thấy toàn bộ sơ đồ (F)");
-
     await act(async () => { container.querySelector(".mm-overflow-trigger").click(); });
-    const resetBtn = [...container.querySelectorAll('[role="menuitem"]')].find((b) => b.textContent.includes("Đặt lại khung nhìn"));
-    expect(resetBtn?.getAttribute("title")).toBe("Đặt lại khung nhìn: về 100% và căn giữa");
-
-    const centerBtn = [...container.querySelectorAll('[role="menuitem"]')].find((b) => b.textContent.includes("Căn giữa"));
-    expect(centerBtn?.getAttribute("title")).toBe("Căn giữa: đưa nút gốc vào giữa khung, giữ mức thu phóng");
+    const saves = [...container.querySelectorAll("button")].filter((b) => /^(Lưu|Đang lưu…)$/.test(b.textContent.trim()) || b.getAttribute("aria-label") === "Lưu sơ đồ" || b.textContent.includes("Lưu sơ đồ"));
+    expect(saves).toHaveLength(1);
+    expect(saves[0].getAttribute("role")).toBe("menuitem");
   });
 
   it("'Mở toàn bộ' targets the map root regardless of the current selection, and does not call scaleFit", async () => {

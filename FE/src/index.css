@@ -488,6 +488,21 @@
     outline-offset: 2px;
     transition: none;
   }
+  /* W3-4 review fix: icon-only tabs failed O4's own goal (discoverable
+     from the panel itself) and were well under the 40x40 touch-target
+     floor. Stacked icon-over-label, sized by the parent `grid-cols-4` row
+     (equal-width cells, see SidebarRight.jsx) -- `min-height` is the only
+     explicit sizing here, width comes from the grid track. Wraps instead
+     of truncating ("Dòng thời gian" is the one label that can need two
+     lines at a 320px-wide panel); never a hard one-line clip. */
+  .inspector-tab.inspector-tab--stacked {
+    @apply flex-col justify-center gap-0.5 px-1 py-1.5 text-center;
+    min-height: 40px;
+    font-size: 11px;
+    line-height: 1.2;
+    white-space: normal;
+    overflow-wrap: break-word;
+  }
 
   /* Command chips at the bottom of the reading session.
      Sprint K (art direction — "buttons disappear until needed"): was a
@@ -502,6 +517,12 @@
     background: transparent;
     border: 1px solid transparent;
     color: var(--text-secondary);
+  }
+  /* V4.1 W5-1: toggle pills show their pressed state visually, not only to screen readers. */
+  .pill-action[aria-pressed="true"] {
+    background: var(--bg-card);
+    border-color: var(--accent);
+    color: var(--accent);
   }
   .pill-action:hover {
     background: var(--bg-card);

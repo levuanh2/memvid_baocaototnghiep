@@ -17,7 +17,7 @@ import { generateMindmap, getMindmapCapability } from "../../utils/api";
 import { toast } from "../ui/Toaster";
 
 const noop = () => {};
-const VALIDATION = "Vui lòng chọn ít nhất một tài liệu để tạo Sơ đồ!";
+const VALIDATION = "Vui lòng chọn ít nhất một tài liệu để tạo sơ đồ tư duy!";
 
 function Harness({ selectedSources, onMindmapLibraryChange }) {
   return (

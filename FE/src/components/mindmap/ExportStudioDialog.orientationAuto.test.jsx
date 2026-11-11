@@ -128,7 +128,7 @@ describe("Export Studio — PDF orientation control reflects the real auto-orien
     const dialog = await openPdfAppearance();
     await act(async () => { clickPill(dialog, "Chỉ sơ đồ"); }); // mode -> map (UI hides the toggle)
 
-    const exportBtn = [...dialog.querySelectorAll("button")].find((b) => b.textContent.includes("Tạo PDF"));
+    const exportBtn = [...dialog.querySelectorAll("button")].find((b) => b.textContent.includes("Xuất PDF"));
     await act(async () => { exportBtn.click(); });
 
     expect(docExport.createMindmapExport).toHaveBeenCalledWith("m1", expect.objectContaining({

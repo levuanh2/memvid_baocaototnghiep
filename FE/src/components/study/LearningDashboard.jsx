@@ -39,17 +39,17 @@ export default function LearningDashboard({ documents, overview, weak, attempts,
           <div>
             <TieuDeNho>Tiến độ</TieuDeNho>
             <div className="grid grid-cols-2 sm:grid-cols-4 gap-2.5">
-              <ThanhTienDo nhan="Hoàn thành" phanTram={hoanThanh} />
-              <ThanhTienDo nhan="Tóm tắt" phanTram={coverage.summary.phanTram}
+              <ThanhTienDo nhan="Hoàn thành" phanTram={hoanThanh} donVi="đã có" />
+              <ThanhTienDo nhan="Tóm tắt" phanTram={coverage.summary.phanTram} donVi="đã có"
                            phu={`${coverage.summary.co}/${coverage.summary.tong}`} />
-              <ThanhTienDo nhan="Sơ đồ" phanTram={coverage.mindmap.phanTram}
+              <ThanhTienDo nhan="Sơ đồ tư duy" phanTram={coverage.mindmap.phanTram}
                            phu={`${coverage.mindmap.co}/${coverage.mindmap.tong}`} />
-              <ThanhTienDo nhan="Quiz" phanTram={coverage.quiz.phanTram}
+              <ThanhTienDo nhan="Quiz" phanTram={coverage.quiz.phanTram} donVi="đã có"
                            phu={`${coverage.quiz.co}/${coverage.quiz.tong}`} />
             </div>
             {overview?.average_percentage != null && (
               <p className="text-small text-text-muted mt-2">
-                Điểm quiz trung bình: <span className="text-text-secondary font-medium">{overview.average_percentage}%</span>
+                Điểm quiz trung bình: <span className="text-text-secondary font-medium">{overview.average_percentage}% điểm</span>
                 {" · "}Thời lượng đọc ước tính đã mở: <span className="text-text-secondary font-medium">{phutDoc} phút</span>
               </p>
             )}
@@ -75,7 +75,7 @@ export default function LearningDashboard({ documents, overview, weak, attempts,
                     {chuaXong.map((d) => (
                       <button key={d.document_id} type="button" className="mini-item"
                               onClick={() => onMo(d, d.last_workspace || "studymap")}>
-                        {tenHienThi(d)} · {Math.round(d.knowledge.readiness.total)}%
+                        {tenHienThi(d)} · {Math.round(d.knowledge.readiness.total)}% sẵn sàng
                       </button>
                     ))}
                   </MiniDanhSach>
@@ -96,9 +96,9 @@ export default function LearningDashboard({ documents, overview, weak, attempts,
             <div>
               <TieuDeNho>Hàng đợi ôn tập</TieuDeNho>
               <div className="grid gap-2.5 sm:grid-cols-3">
-                <CotOnTap nhan="Hôm nay" docs={hangDoi.homNay} onMo={onMo} nhan_mau="var(--err)" />
-                <CotOnTap nhan="Ngày mai" docs={hangDoi.ngayMai} onMo={onMo} nhan_mau="var(--warn)" />
-                <CotOnTap nhan="Sau" docs={hangDoi.sau} onMo={onMo} nhan_mau="var(--text-muted)" />
+                <CotOnTap nhan="Ôn ngay" docs={hangDoi.homNay} onMo={onMo} nhan_mau="var(--err)" />
+                <CotOnTap nhan="Ôn sớm" docs={hangDoi.ngayMai} onMo={onMo} nhan_mau="var(--warn)" />
+                <CotOnTap nhan="Ôn sau" docs={hangDoi.sau} onMo={onMo} nhan_mau="var(--text-muted)" />
               </div>
             </div>
           )}
@@ -122,8 +122,8 @@ export default function LearningDashboard({ documents, overview, weak, attempts,
               {insight.taiLieuLonNhat && <li>Tài liệu lớn nhất: <b className="text-text-primary">{tenHienThi(insight.taiLieuLonNhat)}</b></li>}
               {insight.taiLieuHoatDongNhat && <li>Tài liệu hoạt động nhất: <b className="text-text-primary">{tenHienThi(insight.taiLieuHoatDongNhat)}</b></li>}
               <li>Lượt quiz đã chấm: <b className="text-text-primary">{insight.luotQuizDaCham}</b></li>
-              <li>Sơ đồ đã tạo: <b className="text-text-primary">{insight.soMindmapDaXem}</b></li>
-              <li>Bao phủ tóm tắt: <b className="text-text-primary">{insight.baoPhuTomTat}%</b></li>
+              <li>Sơ đồ tư duy đã tạo: <b className="text-text-primary">{insight.soMindmapDaXem}</b></li>
+              <li>Bao phủ tóm tắt: <b className="text-text-primary">{insight.baoPhuTomTat}% đã có</b></li>
             </ul>
           </div>
 
@@ -173,12 +173,19 @@ function TieuDeNho({ children }) {
 
 /** Thanh tiến độ — ARIA đầy đủ (Step 9), con số luôn in ra bằng chữ, không chỉ
  * bằng độ dài thanh (màu/độ dài không bao giờ là kênh thông tin duy nhất). */
-function ThanhTienDo({ nhan, phanTram, phu }) {
+// W2-2: `donVi` names what the percentage measures ("đã có" = coverage of
+// generated artifacts) so it doesn't read as the same bare number as a
+// different metric's % elsewhere on this dashboard (quiz score, readiness).
+// Optional and defaults to nothing rendered -- an existing caller that
+// doesn't pass it keeps its exact prior output untouched.
+function ThanhTienDo({ nhan, phanTram, phu, donVi }) {
   return (
     <div className="rounded-[7px] p-2.5" style={{ background: "var(--bg-card)", border: "1px solid var(--border-color)" }}>
       <div className="flex items-baseline justify-between mb-1.5">
         <span className="text-caption text-text-muted">{nhan}</span>
-        <span className="font-display text-body-lg font-semibold text-text-primary">{phanTram}%</span>
+        <span className="font-display text-body-lg font-semibold text-text-primary">
+          {phanTram}%{donVi ? ` ${donVi}` : ""}
+        </span>
       </div>
       <div
         role="progressbar" aria-label={nhan} aria-valuenow={phanTram} aria-valuemin={0} aria-valuemax={100}

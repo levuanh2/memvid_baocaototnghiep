@@ -8,8 +8,8 @@ import { test, expect } from "@playwright/test";
 
 const MAP_A = "fixture-map-a";
 const ROOT_A = `me${MAP_A}-root`;
+const FIRST_LEVEL_A = [0, 1, 2, 3].map((index) => `me${MAP_A}-m${index}`).concat(`me${MAP_A}-vn-gate`);
 const MIN_TARGET = 40;
-const MOBILE_MIN_SCALE = 0.75;
 
 const VIEWPORTS = [
   { name: "1440x1024", width: 1440, height: 1024 },
@@ -110,16 +110,19 @@ test.describe("contextual toolbar touch targets", () => {
 });
 
 test.describe("mobile initial fit", () => {
-  test("at 390px the initial scale is readable and the root sits inside the canvas", async ({ page }) => {
+  test("at 390px the initial fit keeps the root and every first-level node inside the canvas", async ({ page }) => {
     await openFixture(page, VIEWPORTS[2]);
-    const scale = await scaleOf(page);
-    expect(scale, "initial scale").toBeGreaterThanOrEqual(MOBILE_MIN_SCALE);
-    const inside = await page.evaluate((rootSel) => {
-      const r = document.querySelector(rootSel)?.getBoundingClientRect();
+    const outside = await page.evaluate((nodeIds) => {
       const c = document.querySelector(".map-container, .me-container")?.getBoundingClientRect();
-      return !!r && !!c && r.left >= c.left && r.right <= c.right && r.top >= c.top && r.bottom <= c.bottom;
-    }, `[data-nodeid="${ROOT_A}"]`);
-    expect(inside, "root inside the visible canvas").toBe(true);
+      if (!c) return ["missing-canvas"];
+      return nodeIds.filter((nodeId) => {
+        const r = document.querySelector(`[data-nodeid="${nodeId}"]`)?.getBoundingClientRect();
+        return !r || r.left < c.left - 1 || r.right > c.right + 1 || r.top < c.top - 1 || r.bottom > c.bottom + 1;
+      });
+    }, [ROOT_A, ...FIRST_LEVEL_A]);
+    expect(outside, "root and first-level nodes outside the visible canvas").toEqual([]);
+    // Legible: never below the mobile floor (plain scaleFit reached ~0.27).
+    expect(await scaleOf(page), "initial scale").toBeGreaterThanOrEqual(0.5);
   });
 
   test("selecting a node does not refit or rescale the mobile map", async ({ page }) => {

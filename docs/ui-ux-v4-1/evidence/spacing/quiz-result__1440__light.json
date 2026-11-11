@@ -1,0 +1,368 @@
+{
+ "viewport": {
+  "width": 1440,
+  "height": 900
+ },
+ "distinctSpacingValues": [
+  2,
+  4,
+  6,
+  8,
+  12,
+  16,
+  20,
+  24,
+  28,
+  30
+ ],
+ "spacingFrequency": [
+  {
+   "value": 2,
+   "count": 16
+  },
+  {
+   "value": 4,
+   "count": 8
+  },
+  {
+   "value": 6,
+   "count": 15
+  },
+  {
+   "value": 8,
+   "count": 33
+  },
+  {
+   "value": 12,
+   "count": 113
+  },
+  {
+   "value": 16,
+   "count": 44
+  },
+  {
+   "value": 20,
+   "count": 28
+  },
+  {
+   "value": 24,
+   "count": 4
+  },
+  {
+   "value": 28,
+   "count": 3
+  },
+  {
+   "value": 30,
+   "count": 2
+  }
+ ],
+ "headings": [
+  {
+   "level": "H1",
+   "label": "Hệ điều hành",
+   "fontSize": "19.2px",
+   "lineHeight": "24.96px",
+   "margin": [
+    "0px",
+    "0px"
+   ]
+  },
+  {
+   "level": "H2",
+   "label": "Từng câu",
+   "fontSize": "10.5px",
+   "lineHeight": "14.7px",
+   "margin": [
+    "0px",
+    "12px"
+   ]
+  },
+  {
+   "level": "H3",
+   "label": "Câu hỏi 1: tiến trình và luồng khác nhau thế nào?",
+   "fontSize": "16px",
+   "lineHeight": "27.2px",
+   "margin": [
+    "0px",
+    "0px"
+   ]
+  },
+  {
+   "level": "H3",
+   "label": "Câu hỏi 2: tiến trình và luồng khác nhau thế nào?",
+   "fontSize": "16px",
+   "lineHeight": "27.2px",
+   "margin": [
+    "0px",
+    "0px"
+   ]
+  },
+  {
+   "level": "H3",
+   "label": "Câu hỏi 3: tiến trình và luồng khác nhau thế nào?",
+   "fontSize": "16px",
+   "lineHeight": "27.2px",
+   "margin": [
+    "0px",
+    "0px"
+   ]
+  },
+  {
+   "level": "H3",
+   "label": "Câu hỏi 4: tiến trình và luồng khác nhau thế nào?",
+   "fontSize": "16px",
+   "lineHeight": "27.2px",
+   "margin": [
+    "0px",
+    "0px"
+   ]
+  },
+  {
+   "level": "H3",
+   "label": "Câu hỏi 5: tiến trình và luồng khác nhau thế nào?",
+   "fontSize": "16px",
+   "lineHeight": "27.2px",
+   "margin": [
+    "0px",
+    "0px"
+   ]
+  },
+  {
+   "level": "H3",
+   "label": "Câu hỏi 6: tiến trình và luồng khác nhau thế nào?",
+   "fontSize": "16px",
+   "lineHeight": "27.2px",
+   "margin": [
+    "0px",
+    "0px"
+   ]
+  }
+ ],
+ "boxes": [
+  {
+   "element": "section.quiz-score-hero",
+   "label": "674 / 667% · điểm thôĐúng4Sai2Số câu6Thời gian7 phút 0 giâyXem lại 2 câu",
+   "x": 215,
+   "y": 93,
+   "width": 1010,
+   "height": 220,
+   "padding": [
+    "24px",
+    "24px",
+    "24px",
+    "24px"
+   ],
+   "margin": [
+    "0px",
+    "0px",
+    "0px",
+    "0px"
+   ],
+   "gap": [
+    "30px",
+    "30px"
+   ]
+  },
+  {
+   "element": "button.btn-primary.quiz-review-wrong",
+   "label": "Xem lại 2 câu cần ôn",
+   "x": 883,
+   "y": 180,
+   "width": 193,
+   "height": 44,
+   "padding": [
+    "8px",
+    "16px",
+    "8px",
+    "16px"
+   ],
+   "margin": [
+    "0px",
+    "0px",
+    "0px",
+    "0px"
+   ],
+   "gap": [
+    "normal",
+    "normal"
+   ]
+  },
+  {
+   "element": "section.",
+   "label": "Từng câu",
+   "x": 215,
+   "y": 313,
+   "width": 1010,
+   "height": 2005,
+   "padding": [
+    "0px",
+    "0px",
+    "0px",
+    "0px"
+   ],
+   "margin": [
+    "0px",
+    "0px",
+    "0px",
+    "0px"
+   ],
+   "gap": [
+    "normal",
+    "normal"
+   ]
+  },
+  {
+   "element": "article.surface-card",
+   "label": "01Câu hỏi 1: tiến trình và luồng khác nhau thế nào?SaiAPhương án Abạn ch",
+   "x": 215,
+   "y": 339,
+   "width": 1010,
+   "height": 360,
+   "padding": [
+    "20px",
+    "20px",
+    "20px",
+    "20px"
+   ],
+   "margin": [
+    "0px",
+    "0px",
+    "0px",
+    "0px"
+   ],
+   "gap": [
+    "normal",
+    "normal"
+   ]
+  },
+  {
+   "element": "article.surface-card",
+   "label": "02Câu hỏi 2: tiến trình và luồng khác nhau thế nào?SaiAPhương án Abạn ch",
+   "x": 215,
+   "y": 711,
+   "width": 1010,
+   "height": 360,
+   "padding": [
+    "20px",
+    "20px",
+    "20px",
+    "20px"
+   ],
+   "margin": [
+    "0px",
+    "0px",
+    "0px",
+    "0px"
+   ],
+   "gap": [
+    "normal",
+    "normal"
+   ]
+  },
+  {
+   "element": "article.surface-card",
+   "label": "03Câu hỏi 3: tiến trình và luồng khác nhau thế nào?ĐúngAPhương án ABPhươ",
+   "x": 215,
+   "y": 1082,
+   "width": 1010,
+   "height": 360,
+   "padding": [
+    "20px",
+    "20px",
+    "20px",
+    "20px"
+   ],
+   "margin": [
+    "0px",
+    "0px",
+    "0px",
+    "0px"
+   ],
+   "gap": [
+    "normal",
+    "normal"
+   ]
+  },
+  {
+   "element": "article.surface-card",
+   "label": "04Câu hỏi 4: tiến trình và luồng khác nhau thế nào?ĐúngAPhương án ABPhươ",
+   "x": 215,
+   "y": 1454,
+   "width": 1010,
+   "height": 360,
+   "padding": [
+    "20px",
+    "20px",
+    "20px",
+    "20px"
+   ],
+   "margin": [
+    "0px",
+    "0px",
+    "0px",
+    "0px"
+   ],
+   "gap": [
+    "normal",
+    "normal"
+   ]
+  },
+  {
+   "element": "article.surface-card",
+   "label": "05Câu hỏi 5: tiến trình và luồng khác nhau thế nào?ĐúngAĐúngBSaiGiải thí",
+   "x": 215,
+   "y": 1826,
+   "width": 1010,
+   "height": 248,
+   "padding": [
+    "20px",
+    "20px",
+    "20px",
+    "20px"
+   ],
+   "margin": [
+    "0px",
+    "0px",
+    "0px",
+    "0px"
+   ],
+   "gap": [
+    "normal",
+    "normal"
+   ]
+  },
+  {
+   "element": "article.surface-card",
+   "label": "06Câu hỏi 6: tiến trình và luồng khác nhau thế nào?ĐúngBạn trả lờiPhương",
+   "x": 215,
+   "y": 2085,
+   "width": 1010,
+   "height": 232,
+   "padding": [
+    "20px",
+    "20px",
+    "20px",
+    "20px"
+   ],
+   "margin": [
+    "0px",
+    "0px",
+    "0px",
+    "0px"
+   ],
+   "gap": [
+    "normal",
+    "normal"
+   ]
+  }
+ ],
+ "verticalGaps": [
+  {
+   "parent": "Từng câu",
+   "from": "Từng câu",
+   "to": "01Câu hỏi 1: tiến trình và luồng khác nhau thế nào?SaiAPhương án Abạn ch",
+   "gap": 12
+  }
+ ]
+}

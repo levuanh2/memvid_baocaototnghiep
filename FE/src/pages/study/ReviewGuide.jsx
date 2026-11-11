@@ -111,7 +111,7 @@ export default function ReviewGuide() {
         plan && (
           <button type="button" className="btn-secondary text-small inline-flex items-center gap-1.5"
             disabled={busy} onClick={() => build({ force: true })}>
-            {busy ? <Spinner size={13} /> : <Icon name="RotateCcw" size={14} />} Viết lại
+            {busy ? <Spinner size={13} /> : <Icon name="RotateCcw" size={14} />} Tạo lại kế hoạch
           </button>
         )
       }

@@ -53,8 +53,24 @@ test("Library 'Hỏi AI' stays in Chat", async ({ page }) => {
 
 test("Library knowledge-map action keeps its own document route", async ({ page }) => {
   await openLibrary(page);
-  await page.getByRole("button", { name: /^Sơ đồ$/ }).first().click();
+  await page.getByRole("button", { name: /^Bản đồ kiến thức$/ }).first().click();
   await expect(page).toHaveURL(/\/app\/study\/map\/d1$/);
+});
+
+test("Library document menu opens and closes from the keyboard", async ({ page }) => {
+  await openLibrary(page);
+  const trigger = page.locator('[aria-haspopup="menu"]').first();
+  await trigger.focus();
+  await page.keyboard.press("Enter");
+
+  const menu = page.getByRole("menu");
+  await expect(trigger).toHaveAttribute("aria-expanded", "true");
+  await expect(menu.getByRole("menuitem").first()).toBeFocused();
+
+  await page.keyboard.press("Escape");
+  await expect(menu).toBeHidden();
+  await expect(trigger).toHaveAttribute("aria-expanded", "false");
+  await expect(trigger).toBeFocused();
 });
 
 // Review finding on #117: the same URL navigated from inside /app (Command

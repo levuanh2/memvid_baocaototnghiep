@@ -82,10 +82,7 @@ async function continueFromSelection(page) {
 }
 
 async function chooseFormatAndPreview(page, format) {
-  await page.getByRole("button", { name: "Tiếp tục" }).click();
   await page.locator(`input[name="mm-export-format"][value="${format}"]`).check();
-  await page.getByRole("button", { name: "Tiếp tục" }).click();
-  await page.getByRole("button", { name: "Tiếp tục" }).click();
 }
 
 async function download(page, exactName) {
@@ -176,9 +173,7 @@ async function capturePdfRequest(page, mode, pageSize = "A4") {
   }
   await expect(page.locator(".mm-selection-bar")).toContainText("3 node đã tick");
   await continueFromSelection(page);
-  await page.getByRole("button", { name: "Tiếp tục" }).click();
   await page.locator('input[name="mm-export-format"][value="pdf"]').check();
-  await page.getByRole("button", { name: "Tiếp tục" }).click();
   const modeButton = page.locator("[data-testid=doc-appearance] .export-control").filter({ hasText: "Chế độ" })
     .locator("button", { hasText: mode === "map" ? "Chỉ sơ đồ" : "Sơ đồ + dàn ý" });
   await modeButton.click();
@@ -189,8 +184,7 @@ async function capturePdfRequest(page, mode, pageSize = "A4") {
     await expect(page.getByRole("button", { name: "A4 — In tài liệu" })).toHaveAttribute("aria-pressed", "false");
     await page.screenshot({ path: path.join(ARTIFACT_DIR, "h4-content-fit-option.png"), fullPage: true });
   }
-  await page.getByRole("button", { name: "Tiếp tục" }).click();
-  await page.getByRole("button", { name: "Tạo PDF" }).click();
+  await page.getByRole("button", { name: "Xuất PDF" }).click();
   await expect.poll(() => Boolean(requestBody), { timeout: 30_000 }).toBe(true);
 
   expect({ ...requestBody.scope, selected_branch_root_ids: [...requestBody.scope.selected_branch_root_ids].sort() }).toEqual({
@@ -238,9 +232,7 @@ test("H4 UX: outline explains its intentional A4 fallback and cannot retain cont
   await page.goto("/fixture-harness.html");
   await expect(page.getByTestId("fixture-harness-root")).toBeVisible();
   await page.getByLabel("Xuất sơ đồ").click();
-  await page.getByRole("button", { name: "Tiếp tục" }).click();
   await page.locator('input[name="mm-export-format"][value="pdf"]').check();
-  await page.getByRole("button", { name: "Tiếp tục" }).click();
 
   const contentFit = page.getByRole("button", { name: "Vừa nội dung — Xem trên màn hình" });
   const a4 = page.getByRole("button", { name: "A4 — In tài liệu" });

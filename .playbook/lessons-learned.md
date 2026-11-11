@@ -1,5 +1,13 @@
 # Lessons Learned
 
+## Nested keyboard widgets must contain parent-owned key events (2026-11-04)
+
+- ARIA roles alone do not make a popup keyboard-operable: opening must move focus
+  into it, arrow keys must move between items, and Escape must restore the trigger.
+- When a popup sits inside a parent with its own keyboard contract, contain its key
+  events at the popup/trigger boundary so one key cannot perform both actions.
+- Protect both layers with a focused unit test and a real-browser keyboard fixture.
+
 ## Programmatic focus needs a visible style independent of input modality (2026-10-28)
 
 `:focus-visible` is ideal for ordinary keyboard navigation, but a menu that
@@ -3633,3 +3641,70 @@ Environment-labelled test passes need an observable assertion for the label.
 An authenticated-only suite can pass identically with auth protection on or
 off; pair it with an unauthenticated request whose status changes across modes.
 
+# Persistent settings surfaces should have one navigation authority (2026-11-04)
+
+When all configuration sections stay mounted and a semantic rail already moves
+between them, a second footer-forward action creates competing navigation
+models rather than additional capability. Keep navigation in the rail and
+commit/cancel actions in the footer; verify every rail destination with both
+pointer and native keyboard activation before removing the duplicate control.
+
+A footer simplification must not quietly change lifecycle contracts: cancel,
+retry and completed states are behaviour, not decoration, and need their own
+owner approval. UI-only export work still needs real
+artifact gates: a clean screenshot or mocked call does not prove output bytes,
+scope identity, or connector geometry stayed unchanged.
+
+
+## 2026-11-09 — Name a percentage by what its formula divides, and re-run the PR's own tests after a merge
+
+A unit word is a claim about the formula. Read the formula (`score / max_score`,
+partial = 0.5) before choosing "câu đúng"; a fixture where partial credit makes the
+two readings disagree (1 correct + 1 partial = 75%) is the test that tells them
+apart. When a merge from main conflicts in a file the branch just changed, re-run the
+branch's new tests before pushing: a conflict resolved "to main" can revert the change
+while its test survives. A missing value is not zero in an accessible name either:
+mirror the visible "no score" state instead of `?? 0`.
+
+## 2026-11-09 — A count derived on the client must prove it matches the server's count
+
+When the UI re-derives a number the backend also reports (here: correct / partial /
+incorrect from per-question verdicts vs `correct_count` / `incorrect_count`), use the
+derived value only if it reproduces the server totals, and fall back to a label that is
+true for the server's number ("Chưa đúng") instead of the familiar but wrong one ("Sai").
+A silent skip of an unknown value can still "match" the totals, so reject unknown values
+explicitly and test that case on its own.
+`Number(x || 0)` is not validation: it turns "unknown" into a real 0 that can match.
+Compare raw values with `===`. And `key in obj` / `obj[key]` on a plain object is true
+for `"toString"` / `"__proto__"`; use a whitelist array (or `Object.hasOwn`) for any
+value that comes from the server (PR #148: `__proto__` as a verdict crashed the page).
+
+## 2026-11-10 — "Nothing failed" is not "everything required ran"
+
+A green aggregate check that only rejects failure/cancelled turns any skip, outage
+(`abandoned`) or missing job into a pass. Model which jobs must run for this event and
+these paths, require `success` for exactly those, and keep the model drift-tested against
+the workflow. Before trusting a green `CI / required`, read its "Pipeline job results" line.
+
+## 2026-11-10 — A flaky layout test can be hiding a permanent layout bug
+
+The 768px Library flake was not timing alone: the label was clipped on every run, and the
+test's `scrollWidth` measure only noticed it when font metrics pushed the overflow past the
+padding. Before "stabilising" a flaky geometry test (waits, retries), measure the real content
+box once with the font loaded and once with the fallback; fix the layout if either overflows.
+A geometry test that only checks containment can pass on a layout that has collapsed: an invalid
+`grid-template-columns` (e.g. `fit-content()` inside `minmax()`) is dropped silently and every
+cell stacks. Assert the computed structure too (column count, row height), and validate new CSS
+grammar in a browser, not by eye.
+
+## 2026-11-10 — Unifying a label can break tests and expose bugs far away
+
+Giving two controls the same accessible name (one upload label) silently changed what every
+`getByRole(name).first()` resolves to, and made a spec cover a control it had never touched (the
+tablet rail "+"), exposing a real focus loss. After a terminology change, grep all e2e and fixture
+specs, and run the full Fixture Audit, not just Fixture Smoke.
+
+A focus-handoff test must also use a library that is NOT empty: an empty-state CTA is an easy target
+that hides "no target at all". And when a handoff lands on a control that vanishes a frame later,
+look for state that a remount resets (here a child reporting its initial `[]` upward) before adding
+more frames of delay.

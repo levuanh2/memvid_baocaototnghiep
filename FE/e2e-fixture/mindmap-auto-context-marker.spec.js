@@ -59,10 +59,7 @@ test("the live canvas suppression carries into the export (P excluded, A+B still
 
   await page.locator(".mm-selection-bar").getByRole("button", { name: "Tiếp tục" }).click();
   await expect(page.locator(".export-footer__summary")).toContainText("2 node đã chọn · 0 node cha tự thêm · 2 node được xuất");
-  await page.getByRole("button", { name: "Tiếp tục" }).click();
   await page.locator('input[name="mm-export-format"][value="svg"]').check();
-  await page.getByRole("button", { name: "Tiếp tục" }).click();
-  await page.getByRole("button", { name: "Tiếp tục" }).click();
   const waiting = page.waitForEvent("download");
   await page.getByRole("button", { name: "Xuất SVG" }).click();
   const download = await waiting;
