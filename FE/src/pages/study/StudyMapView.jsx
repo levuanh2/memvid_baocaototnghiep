@@ -228,9 +228,13 @@ export default function StudyMapView() {
   // vì react-d3-tree vẽ trọn SVG trong container đó, không có lớp con cần nhắm riêng
   // như `mind.map` của mind-elixir.
   const [dangXuat, setDangXuat] = useState(false);
+  const dangXuatRef = useRef(false);
   const [loiXuat, setLoiXuat] = useState(null);
   const xuatAnh = useCallback(async (format, { transparent = false } = {}) => {
-    if (!canvasRef.current || dangXuat) return;
+    // The ref, not `dangXuat` (state), stops a second activation in the same tick from
+    // capturing and downloading the image twice.
+    if (!canvasRef.current || dangXuatRef.current) return;
+    dangXuatRef.current = true;
     setDangXuat(true);
     setLoiXuat(null);
     try {
@@ -242,9 +246,10 @@ export default function StudyMapView() {
     } catch (err) {
       setLoiXuat(moTaLoi(err, "Không xuất được ảnh."));
     } finally {
+      dangXuatRef.current = false;
       setDangXuat(false);
     }
-  }, [doc, dangXuat]);
+  }, [doc]);
 
   // W5-2: one "Xuất" menu instead of three separate buttons (PNG/PNG trong
   // suốt/SVG) — same `xuatAnh` handlers, same formats, just grouped. Same
@@ -408,7 +413,11 @@ export default function StudyMapView() {
     [map],
   );
 
+  // Synchronous lock: `starting` is state, so a double click would enqueue two generation jobs.
+  const buildStartingRef = useRef(false);
   const build = async ({ force = false } = {}) => {
+    if (buildStartingRef.current) return;
+    buildStartingRef.current = true;
     setStarting(true);
     setError(null);
     try {
@@ -421,6 +430,7 @@ export default function StudyMapView() {
     } catch (e) {
       setError(moTaLoi(e, "Không tạo được sơ đồ kiến thức."));
     } finally {
+      buildStartingRef.current = false;
       setStarting(false);
     }
   };
