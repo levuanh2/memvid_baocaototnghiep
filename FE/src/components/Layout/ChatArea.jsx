@@ -259,6 +259,9 @@ export default function ChatArea({
       const es = { close: () => ctrl.abort() };
       eventSourceRef.current = es;
 
+      // The buffer and the preview are shared by all attempts; only the current one may clear them.
+      const clearShared = () => { if (!isStale()) { streamAccRef.current = ""; setStreamingPreview(""); } };
+
       const tick = setInterval(() => {
         if (cancelledRef.current || isStale()) { clearInterval(tick); try { es.close(); } catch { /* already closed */ } reject(new Error("CANCELLED")); }
         if (Date.now() - start > timeoutMs) {
@@ -269,6 +272,9 @@ export default function ChatArea({
 
       const onMessage = (raw) => {
         try {
+          // A frame from a stream that is no longer the current attempt must not touch the
+          // shared buffer, preview, progress or node trace: they belong to the newer attempt.
+          if (isStale()) return;
           const d = JSON.parse(raw);
           if (d.type === "token" && d.content) { streamAccRef.current += d.content; throttle.schedule(); }
           const isStatus = d.type === "status" || d.type == null;
@@ -286,12 +292,12 @@ export default function ChatArea({
             } else if (d.status === "interrupted" && d?.result?.payload?.review?.type === "review") {
               clearInterval(tick); try { es.close(); } catch { /* already closed */ }
               throttle.cancel();
-              streamAccRef.current = ""; setStreamingPreview("");
+              clearShared();
               resolve({ result: d.result, streamed: "", interrupted: true });
             } else if (d.status === "error") {
               clearInterval(tick); try { es.close(); } catch { /* already closed */ }
               throttle.cancel();
-              streamAccRef.current = ""; setStreamingPreview("");
+              clearShared();
               const HARD = "Loi query SSE (status=error). Xem log server.";
               let msg = HARD;
               try { msg = ensureErrMsg(sseErrorToMessage(d.error), HARD); } catch { msg = HARD; }
@@ -312,7 +318,7 @@ export default function ChatArea({
           // handleSend còn dùng lại đường polling, đúng như hành vi onerror cũ.
           clearInterval(tick);
           throttle.cancel();
-          streamAccRef.current = ""; setStreamingPreview("");
+          clearShared();
           const e = new Error("Luồng realtime kết thúc sớm. Vui lòng thử lại.");
           e.sseConnectionLost = true;
           reject(e);
@@ -320,8 +326,8 @@ export default function ChatArea({
         .catch((err) => {
           clearInterval(tick);
           throttle.cancel();
-          streamAccRef.current = ""; setStreamingPreview("");
-          if (cancelledRef.current || err?.name === "AbortError") {
+          clearShared();
+          if (isStale() || cancelledRef.current || err?.name === "AbortError") {
             reject(new Error("CANCELLED"));
             return;
           }
@@ -615,6 +621,9 @@ export default function ChatArea({
     cancelledRef.current = false;
     const attempt = ++attemptRef.current;
     const stale = () => attempt !== attemptRef.current;
+    // No job yet for this attempt. Without this, "Huỷ" pressed before the POST answers would
+    // send a cancel for the PREVIOUS question's job id.
+    jobIdRef.current = null;
     abortControllerRef.current = new AbortController();
     if (textareaRef.current) textareaRef.current.style.height = "44px";
     try {

@@ -28,6 +28,15 @@ vi.mock("../../utils/api", () => ({
   _appError: vi.fn(async () => new Error("HTTP 500")), isNotFoundOrForbiddenError: vi.fn(() => false), isUnauthorizedError: vi.fn(() => false),
   getUserFriendlyApiError: vi.fn((e) => String(e)),
 }));
+// Every stream stays open; the test pushes frames into it by job id.
+const streams = {};
+vi.mock("../../utils/sseStream", () => ({
+  streamSse: vi.fn((url, { onEvent, signal }) => new Promise((resolve, reject) => {
+    const jobId = decodeURIComponent(String(url).split("/").pop());
+    streams[jobId] = { emit: (frame) => onEvent(JSON.stringify(frame)) };
+    signal?.addEventListener("abort", () => reject(Object.assign(new Error("aborted"), { name: "AbortError" })));
+  })),
+}));
 const cancelJob = vi.fn(async () => ({}));
 vi.mock("../../utils/studyApi", async () => ({
   ...(await vi.importActual("../../utils/studyApi")),
@@ -41,6 +50,7 @@ afterEach(() => {
   container?.remove();
   container = null; root = null;
   queries.length = 0;
+  for (const k of Object.keys(streams)) delete streams[k];
   vi.clearAllMocks();
 });
 
@@ -107,5 +117,45 @@ describe("ChatArea: a cancelled attempt cannot publish into the next one", () =>
     expect(cancelJob).toHaveBeenCalledWith("job-A");
     expect(container.textContent).toContain("Câu hỏi B");
     expect(button("Huỷ truy vấn")).toBeTruthy();
+  });
+
+  it("a late frame from A's stream does not touch B's streamed text or progress", async () => {
+    await mount();
+    await ask("Câu hỏi A");
+    await act(async () => { queries[0].resolve({ ok: true, json: async () => ({ job_id: "job-A" }) }); });
+    await flush();
+    expect(streams["job-A"]).toBeTruthy();
+
+    await act(async () => { button("Huỷ truy vấn").click(); });
+    await flush();
+    await ask("Câu hỏi B");
+    await act(async () => { queries[1].resolve({ ok: true, json: async () => ({ job_id: "job-B" }) }); });
+    await flush();
+    expect(streams["job-B"]).toBeTruthy();
+
+    await act(async () => { streams["job-B"].emit({ type: "token", content: "Phần đầu của B. " }); });
+    await act(async () => { streams["job-A"].emit({ type: "token", content: "RÁC CỦA A" }); });
+    await act(async () => { streams["job-A"].emit({ type: "status", status: "error", error: "A hỏng muộn" }); });
+    await act(async () => { await new Promise((resolve) => setTimeout(resolve, 150)); });
+
+    expect(container.textContent).toContain("Phần đầu của B.");
+    expect(container.textContent).not.toContain("RÁC CỦA A");
+    expect(container.textContent).not.toContain("A hỏng muộn");
+    expect(button("Huỷ truy vấn")).toBeTruthy();
+  });
+
+  it("cancelling B before its POST answers does not cancel the previous question's job", async () => {
+    await mount();
+    await ask("Câu hỏi A");
+    await act(async () => { queries[0].resolve({ ok: true, json: async () => ({ job_id: "job-A" }) }); });
+    await flush();
+    await act(async () => { streams["job-A"].emit({ type: "status", status: "done", result: { answer: "Trả lời A", sources: [] } }); });
+    await flush();
+    expect(button("Gửi câu hỏi")).toBeTruthy();   // A finished
+
+    await ask("Câu hỏi B");
+    await act(async () => { button("Huỷ truy vấn").click(); });
+    await flush();
+    expect(cancelJob).not.toHaveBeenCalledWith("job-A");
   });
 });
