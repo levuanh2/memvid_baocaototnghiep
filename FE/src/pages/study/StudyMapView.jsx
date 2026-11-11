@@ -11,6 +11,7 @@ import { docPrefs, writeDocPref } from "../../utils/studyMapPreference";
 import { lienQuanCuaNode } from "../../utils/studyMapGraph";
 import { diChuyenKetQua, phimTimKiemStudyMap, timStudyMap } from "../../utils/studyMapSearch";
 import { exportImage } from "../../utils/studyMapExport";
+import { duongDi } from "../../utils/tiepTucHoc";
 // Toán zoom + phím tắt THUẦN, không riêng cho mind-elixir (mindmapViewport.js không
 // import thư viện nào) — dùng lại nguyên, không viết lại phép kẹp/scale lần hai.
 import { formatZoom, nextScale, viewportKeyAction, ZOOM_STEP } from "../../utils/mindmapViewport";
@@ -102,19 +103,13 @@ export default function StudyMapView() {
   // (đã fetch qua `getDocument`) mang cả hai, `source_stem` là cầu nối chung.
   const { selectDocument, selectNode } = useStudyContext();
   const [doc, setDoc] = useState(null);
-  // Feature Pack B (Cross Navigation) — `doc.source_stem` is the SAME bridge
-  // value this component already sends into StudyContext on load (see
-  // `selectDocument(d?.source_stem, ...)` below); Workspace.jsx already
-  // supports `?source=` as an initializer (Library's own "Hỏi AI" button
-  // uses it). `tab=mindmap&right=timeline` reuses the same one-param-per-
-  // initial-value convention, extended by this pass, so "back to source"
-  // actually lands where the user asked for, not just on the default Chat
-  // pane with the right document merely selected in the background.
-  const linkVeNguon = useMemo(() => {
-    if (!doc?.source_stem) return null;
-    const qs = new URLSearchParams({ source: doc.source_stem, tab: "mindmap", right: "timeline" });
-    return `/app?${qs.toString()}`;
-  }, [doc?.source_stem]);
+  // W5-2: "Hỏi tài liệu này" — opens the Workspace chat with this document
+  // selected. Reuses `duongDi(doc, "chat")` (the one real "open this surface
+  // for this doc" function, see utils/tiepTucHoc.js) instead of hand-building
+  // the URL -- plain `/app?source=<stem>`, Chat is the default pane so no
+  // extra params are needed. `null` (doc missing `document_id`, e.g. still
+  // loading) hides the exit instead of ever offering a broken link.
+  const linkHoiTaiLieu = useMemo(() => duongDi(doc, "chat"), [doc]);
   const [map, setMap] = useState(null);
   const [chunks, setChunks] = useState(new Map());
   const [selected, setSelected] = useState(null);
@@ -250,6 +245,34 @@ export default function StudyMapView() {
       setDangXuat(false);
     }
   }, [doc, dangXuat]);
+
+  // W5-2: one "Xuất" menu instead of three separate buttons (PNG/PNG trong
+  // suốt/SVG) — same `xuatAnh` handlers, same formats, just grouped. Same
+  // outside-click/Escape/focus-restore contract as StudyToolsMenu.jsx's menu
+  // (not reused directly: that component owns its own fixed `TOOLS` list and
+  // mobile-only rendering, unrelated to this toolbar).
+  const [xuatOpen, setXuatOpen] = useState(false);
+  const xuatTriggerRef = useRef(null);
+  const xuatMenuRef = useRef(null);
+  useEffect(() => {
+    if (!xuatOpen) return undefined;
+    const onPointerDown = (e) => {
+      if (xuatMenuRef.current?.contains(e.target) || xuatTriggerRef.current?.contains(e.target)) return;
+      setXuatOpen(false);
+    };
+    const onKeyDown = (e) => {
+      if (e.key !== "Escape") return;
+      e.stopPropagation(); // don't also trigger the page's own Esc handler (thoát trình chiếu/focus) below
+      setXuatOpen(false);
+      xuatTriggerRef.current?.focus();
+    };
+    document.addEventListener("mousedown", onPointerDown);
+    document.addEventListener("keydown", onKeyDown, { capture: true });
+    return () => {
+      document.removeEventListener("mousedown", onPointerDown);
+      document.removeEventListener("keydown", onKeyDown, { capture: true });
+    };
+  }, [xuatOpen]);
 
   const openMap = useCallback(async (mapId, documentIdForChunks) => {
     const body = await getStudyMap(mapId);
@@ -527,16 +550,25 @@ export default function StudyMapView() {
       title={doc?.title || doc?.filename || "Bản đồ kiến thức"}
       subtitle={map ? null : "Hệ thống đọc tài liệu và dựng cây khái niệm để bạn thấy được cấu trúc."}
       backTo="/app/study"
+      backLabel="Về Thư viện"
+      breadcrumbDocumentLabel={doc?.title || doc?.filename}
       loading={loading}
       error={error && !map ? error : null}
       onRetry={load}
       width="max-w-[1400px]"
       actions={
         <>
-          {linkVeNguon && (
-            <Link to={linkVeNguon} className="btn-secondary text-small inline-flex items-center gap-1.5"
-                  title="Quay lại tài liệu trong Phòng đọc — mở sẵn sơ đồ tư duy và dòng thời gian">
-              <Icon name="ArrowLeft" size={14} /> Về nguồn
+          {/* W5-2: found live at 390px -- "Hỏi tài liệu này" (longer than the
+              old "Về nguồn") plus "Dựng lại", both `shrink-0` next to the
+              back link, squeezed the title column to near-zero width (it
+              wrapped letter-by-letter instead of truncating). Icon-only
+              below `sm`, same as this app's other compact header controls
+              (e.g. MainLayout's `.mobile-context`) -- `aria-label` keeps the
+              accessible name regardless of the visually-hidden span. */}
+          {linkHoiTaiLieu && (
+            <Link to={linkHoiTaiLieu} className="btn-secondary text-small inline-flex items-center gap-1.5"
+                  aria-label="Hỏi tài liệu này" title="Mở tài liệu này trong Phòng đọc để hỏi AI">
+              <Icon name="MessageSquare" size={14} /> <span className="hidden sm:inline">Hỏi tài liệu này</span>
             </Link>
           )}
           {map && (
@@ -544,9 +576,10 @@ export default function StudyMapView() {
               type="button"
               className="btn-secondary text-small inline-flex items-center gap-1.5"
               disabled={starting || job.running}
+              aria-label="Dựng lại"
               onClick={() => build({ force: true })}
             >
-              {starting || job.running ? <Spinner size={13} /> : <Icon name="RotateCcw" size={14} />} Dựng lại
+              {starting || job.running ? <Spinner size={13} /> : <Icon name="RotateCcw" size={14} />} <span className="hidden sm:inline">Dựng lại</span>
             </button>
           )}
         </>
@@ -713,24 +746,38 @@ export default function StudyMapView() {
                     ))}
                   </select>
                 </label>
-                <button type="button" onClick={() => xuatAnh("png")}
-                        disabled={dangXuat}
-                        title="Xuất PNG (nền theo giao diện hiện tại, x2 độ phân giải)"
-                        className="pill-action !py-1 !text-caption inline-flex items-center gap-1 disabled:opacity-50">
-                  {dangXuat ? <Spinner size={11} /> : <Icon name="Download" size={12} />} PNG
-                </button>
-                <button type="button" onClick={() => xuatAnh("png", { transparent: true })}
-                        disabled={dangXuat}
-                        title="Xuất PNG nền trong suốt"
-                        className="pill-action !py-1 !text-caption disabled:opacity-50">
-                  PNG trong suốt
-                </button>
-                <button type="button" onClick={() => xuatAnh("svg")}
-                        disabled={dangXuat}
-                        title="Xuất SVG"
-                        className="pill-action !py-1 !text-caption disabled:opacity-50">
-                  SVG
-                </button>
+                <div className="relative">
+                  <button type="button" ref={xuatTriggerRef}
+                          onClick={() => setXuatOpen((v) => !v)}
+                          disabled={dangXuat}
+                          aria-haspopup="menu" aria-expanded={xuatOpen} aria-controls="study-map-export-menu"
+                          title="Xuất sơ đồ"
+                          className="pill-action !py-1 !text-caption inline-flex items-center gap-1 disabled:opacity-50">
+                    {dangXuat ? <Spinner size={11} /> : <Icon name="Download" size={12} />} Xuất
+                    <Icon name="ChevronDown" size={12} />
+                  </button>
+                  {xuatOpen && (
+                    <div ref={xuatMenuRef} id="study-map-export-menu" role="menu" aria-label="Xuất sơ đồ"
+                         className="absolute right-0 top-full mt-1 z-20 min-w-[200px] rounded-[8px] border py-1 shadow-card-hover"
+                         style={{ borderColor: "var(--border-color)", background: "var(--bg-elevated)" }}>
+                      <button type="button" role="menuitem"
+                              className="w-full text-left px-3 py-1.5 text-small text-text-primary hover:bg-[var(--bg-hover)] flex items-center gap-2"
+                              onClick={() => { setXuatOpen(false); xuatAnh("png"); }}>
+                        <Icon name="Download" size={13} /> PNG
+                      </button>
+                      <button type="button" role="menuitem"
+                              className="w-full text-left px-3 py-1.5 text-small text-text-primary hover:bg-[var(--bg-hover)] flex items-center gap-2"
+                              onClick={() => { setXuatOpen(false); xuatAnh("png", { transparent: true }); }}>
+                        <Icon name="Download" size={13} /> PNG nền trong suốt
+                      </button>
+                      <button type="button" role="menuitem"
+                              className="w-full text-left px-3 py-1.5 text-small text-text-primary hover:bg-[var(--bg-hover)] flex items-center gap-2"
+                              onClick={() => { setXuatOpen(false); xuatAnh("svg"); }}>
+                        <Icon name="Download" size={13} /> SVG
+                      </button>
+                    </div>
+                  )}
+                </div>
                 <button type="button" onClick={() => doiTrinhChieu(true)}
                         title="Chế độ trình chiếu (Esc để thoát)"
                         className="pill-action !py-1 !text-caption inline-flex items-center gap-1">
