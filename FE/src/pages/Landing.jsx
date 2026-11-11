@@ -2,6 +2,7 @@ import { Link, useNavigate } from "react-router-dom";
 import { Icon } from "../components/ui/Icon";
 import { useTheme } from "../hooks/useTheme";
 import { useAuth } from "../auth/useAuth";
+import BrandMark from "../components/ui/BrandMark";
 
 // Landing — public marketing page (route "/").
 // Built entirely from the existing "Phòng đọc" design system (giấy dó paper +
@@ -99,9 +100,8 @@ export default function Landing() {
         style={{ background: "color-mix(in srgb, var(--bg-sidebar) 92%, transparent)", backdropFilter: "blur(8px)" }}>
         <nav className="max-w-[1080px] mx-auto px-5 sm:px-8 h-[60px] flex items-center gap-4">
           <div className="flex items-center gap-2.5 select-none">
-            {/* Same wordmark seal as MainLayout.jsx — stays --seal (Signature Contract §7). */}
-            <span className="w-[30px] h-[30px] rounded-[6px] inline-flex items-center justify-center font-display text-body-lg font-semibold"
-              style={{ color: "var(--seal)", border: "1.5px solid var(--seal)", transform: "rotate(-4deg)" }} aria-hidden>M</span>
+            {/* V5-A: the StudyMap mark replaces the retired "M" seal (same mark as MainLayout.jsx and the favicon). */}
+            <BrandMark size={30} />
             <span className="font-display font-semibold text-title tracking-tight text-text-primary">Study<span className="text-seal">Map</span></span>
           </div>
           <div className="flex-1" />

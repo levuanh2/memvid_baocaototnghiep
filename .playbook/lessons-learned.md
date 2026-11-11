@@ -3708,3 +3708,14 @@ A focus-handoff test must also use a library that is NOT empty: an empty-state C
 that hides "no target at all". And when a handoff lands on a control that vanishes a frame later,
 look for state that a remount resets (here a child reporting its initial `[]` upward) before adding
 more frames of delay.
+
+## 2026-11-11 — "The old brand is still showing" was artwork, not text or cache
+
+Production served the current build (no stale cache, no service worker) and no page printed the
+old name. What users still saw was artwork: the favicon ("M" + "X" badge) and the "M" seal beside
+the wordmark; below `lg` the app shell shows only that mark. Text sweeps (`branding.test.js`)
+cannot see artwork. V5-A replaced both with the StudyMap mark (`BrandMark`, `studymap-mark.svg`).
+Rules: check icons and logos when a rename is reported incomplete; serve a changed favicon from a
+new URL (browsers cache favicons per URL); a static SVG cannot read CSS variables, so pin its
+colour to the token value and test that they stay equal; comments quoting the retired name trip
+the branding test, so describe it without naming it.

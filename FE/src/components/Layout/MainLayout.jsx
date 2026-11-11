@@ -21,6 +21,7 @@ import ShortcutsOverlay from "../shortcuts/ShortcutsOverlay";
 import StudyToolsMenu from "./StudyToolsMenu";
 import { fetchMindmapNodeContext } from "../../utils/mindmapNodeContext";
 import UsageChip from "./UsageChip";
+import BrandMark from "../ui/BrandMark";
 
 // Round 11 (mockup parity, explicit user decision) — the Chat/Mind Map/
 // Summary mode switch, moved here from the now-deleted LessonHeader.jsx
@@ -625,13 +626,9 @@ export default function MainLayout({
             StudyToolsMenu remains the owner of contextual learning tools. */}
         <Link to="/app" aria-label="StudyMap — trang chủ"
           className="workspace-home-link flex items-center justify-center lg:justify-start gap-2.5 w-10 h-10 lg:w-auto lg:h-10 flex-shrink-0 select-none">
-          <span
-            className="w-[30px] h-[30px] rounded-[6px] inline-flex items-center justify-center font-display text-body-lg font-semibold flex-shrink-0"
-            style={{ color: "var(--seal)", border: "1.5px solid var(--seal)", transform: "rotate(-4deg)" }}
-            aria-hidden
-          >
-            M
-          </span>
+          {/* V5-A: StudyMap mark (replaces the retired "M" seal). Below lg the
+              wordmark is hidden, so this mark alone must read as StudyMap. */}
+          <BrandMark size={30} />
           <span className="workspace-wordmark font-display font-semibold text-title tracking-tight text-text-primary hidden lg:block">
             Study<span className="text-seal">Map</span>
           </span>
