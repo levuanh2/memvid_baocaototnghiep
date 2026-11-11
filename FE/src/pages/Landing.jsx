@@ -14,8 +14,8 @@ import "./landing.css";
 // A real sequence: each step needs the one before it, so it is drawn as a route with stops
 // (the brand mark's path), not as decorative numbering.
 const ROUTE = [
-  { title: "Tải tài liệu lên", desc: "PDF, Word, PowerPoint, ảnh chụp bài giảng và nhiều định dạng khác." },
-  { title: "Hỏi, và đọc cả nguồn", desc: "Mỗi câu trả lời đánh số trích dẫn. Bấm vào số để xem đúng đoạn trong tài liệu." },
+  { title: "Tải tài liệu lên", desc: "PDF, Word, PowerPoint (.pptx), ảnh chụp bài giảng và nhiều định dạng khác." },
+  { title: "Hỏi, và đọc cả nguồn", desc: "Câu trả lời đánh số trích dẫn tới đoạn nguồn. Bấm vào số để xem đúng đoạn trong tài liệu." },
   { title: "Nhìn toàn cảnh bằng sơ đồ", desc: "Sơ đồ tư duy và bản đồ kiến thức cho thấy các ý nối với nhau thế nào." },
   { title: "Tự kiểm tra bằng quiz", desc: "Làm bài, xem lại câu chưa đúng và ôn đúng phần còn yếu." },
 ];
@@ -29,9 +29,9 @@ const ALSO = [
 
 const MAP_BRANCHES = [
   { label: "Quy luật cầu", sub: "Giá tăng, lượng cầu giảm", color: "var(--accent)" },
-  { label: "Quy luật cung", sub: "Giá tăng, lượng cung tăng", color: "var(--forest)" },
-  { label: "Cân bằng thị trường", sub: "Giá và lượng cân bằng", color: "var(--bronze)" },
-  { label: "Độ co giãn", sub: "Mức phản ứng với giá", color: "var(--seal)" },
+  { label: "Quy luật cung", sub: "Giá tăng, lượng cung tăng", color: "var(--bronze)" },
+  { label: "Cân bằng thị trường", sub: "Giá và lượng cân bằng", color: "var(--slate)" },
+  { label: "Độ co giãn", sub: "Mức phản ứng với giá", color: "var(--text-secondary)" },
 ];
 
 // Illustration: one answer and the passage it cites. Static sample content, labelled as such.
@@ -79,7 +79,13 @@ export default function Landing() {
   const { isDark, toggleTheme } = useTheme();
   const { user, logout } = useAuth();
   const navigate = useNavigate();
-  const scrollTo = (id) => document.getElementById(id)?.scrollIntoView({ behavior: "smooth", block: "start" });
+  // Section links are real anchors (`href="#id"`); this only adds the scroll inside the page's own
+  // scroll container, without animation for people who asked for reduced motion.
+  const scrollTo = (id, event) => {
+    event?.preventDefault();
+    const reduce = window.matchMedia?.("(prefers-reduced-motion: reduce)").matches;
+    document.getElementById(id)?.scrollIntoView({ behavior: reduce ? "auto" : "smooth", block: "start" });
+  };
   const onLogout = async () => { await logout(); navigate("/"); };
 
   return (
@@ -88,16 +94,16 @@ export default function Landing() {
       {/* ── NAV ── */}
       <header className="sticky top-0 z-20 border-b border-border transition-theme"
         style={{ background: "color-mix(in srgb, var(--bg-sidebar) 92%, transparent)", backdropFilter: "blur(8px)" }}>
-        <nav className="lp-wrap h-[60px] flex items-center gap-4" aria-label="Điều hướng trang">
+        <nav className="lp-wrap lp-nav h-[60px] flex items-center gap-3 sm:gap-4" aria-label="Điều hướng trang">
           <div className="flex items-center gap-2.5 select-none">
             {/* V5-A: the StudyMap mark replaces the retired "M" seal (same mark as MainLayout.jsx and the favicon). */}
             <BrandMark size={30} />
-            <span className="font-display font-semibold text-title tracking-tight text-text-primary">Study<span className="text-seal">Map</span></span>
+            <span className="lp-wordmark font-display font-semibold text-title tracking-tight text-text-primary">Study<span className="text-seal">Map</span></span>
           </div>
           <div className="flex-1" />
-          <button onClick={() => scrollTo("quytrinh")} className="hidden md:inline text-body text-text-secondary hover:text-accent transition-theme">Cách hoạt động</button>
-          <button onClick={() => scrollTo("tinhnang")} className="hidden md:inline text-body text-text-secondary hover:text-accent transition-theme">Công cụ</button>
-          <button onClick={() => scrollTo("demo")} className="hidden md:inline text-body text-text-secondary hover:text-accent transition-theme">Ví dụ</button>
+          <a href="#quytrinh" onClick={(e) => scrollTo("quytrinh", e)} className="hidden md:inline text-body text-text-secondary hover:text-accent transition-theme">Cách hoạt động</a>
+          <a href="#tinhnang" onClick={(e) => scrollTo("tinhnang", e)} className="hidden md:inline text-body text-text-secondary hover:text-accent transition-theme">Công cụ</a>
+          <a href="#demo" onClick={(e) => scrollTo("demo", e)} className="hidden md:inline text-body text-text-secondary hover:text-accent transition-theme">Ví dụ</a>
           <button onClick={toggleTheme} className="icon-btn w-8 h-8" aria-label="Đổi giao diện sáng/tối" title="Sáng/tối">
             <Icon name={isDark ? "Sun" : "Moon"} size={15} />
           </button>
@@ -130,7 +136,7 @@ export default function Landing() {
             ) : (
               <Link to="/register" className="btn-seal inline-flex items-center gap-2">Bắt đầu miễn phí</Link>
             )}
-            <button onClick={() => scrollTo("quytrinh")} className="btn-secondary">Xem cách hoạt động</button>
+            <a href="#quytrinh" onClick={(e) => scrollTo("quytrinh", e)} className="btn-secondary">Xem cách hoạt động</a>
           </div>
         </div>
         <AnswerSpecimen />
@@ -156,14 +162,14 @@ export default function Landing() {
         <h2 className="lp-h2">Mỗi công cụ trả lời một câu hỏi lúc học</h2>
 
         <div className="lp-row">
-          <div>
+          <div className="lp-copy">
             <h3>Chương này gồm những gì?</h3>
             <p>
               Sơ đồ tư duy dựng từ nội dung tài liệu. Mở, thu gọn từng nhánh, và từ mỗi nhánh quay
               lại đúng đoạn nguồn của nó.
             </p>
           </div>
-          <div className="lp-panel" aria-hidden="true">
+          <figure className="lp-panel">
             <div className="lp-map">
               <div className="lp-map__root">Cung và cầu</div>
               <div className="lp-map__stem" />
@@ -176,27 +182,29 @@ export default function Landing() {
                 ))}
               </ul>
             </div>
-          </div>
+            <figcaption className="lp-note mt-4">Ví dụ minh hoạ một sơ đồ tư duy.</figcaption>
+          </figure>
         </div>
 
         <div className="lp-row lp-row--flip">
-          <div>
+          <div className="lp-copy">
             <h3>Mình đã hiểu thật chưa?</h3>
             <p>
               Quiz tạo từ tài liệu của bạn. Chấm xong, StudyMap chỉ ra câu chưa đúng và dẫn lại phần
               cần ôn, để bạn không phải đọc lại từ đầu.
             </p>
           </div>
-          <div className="lp-panel" aria-hidden="true">
+          <figure className="lp-panel">
             <p className="lp-quiz__q">Giá cà phê tăng, các yếu tố khác không đổi. Điều gì xảy ra?</p>
-            <div className="lp-quiz__opt"><span className="lp-quiz__dot" />Đường cầu dịch sang phải</div>
+            <div className="lp-quiz__opt"><span className="lp-quiz__dot" aria-hidden="true" />Đường cầu dịch sang phải</div>
             <div className="lp-quiz__opt lp-quiz__opt--right">
-              <span className="lp-quiz__dot"><Icon name="Check" size={11} strokeWidth={3} /></span>
-              Lượng cầu giảm, trượt dọc theo đường cầu
+              <span className="lp-quiz__dot" aria-hidden="true"><Icon name="Check" size={11} strokeWidth={3} /></span>
+              <span><span className="sr-only">Đáp án đúng: </span>Lượng cầu giảm, trượt dọc theo đường cầu</span>
             </div>
-            <div className="lp-quiz__opt"><span className="lp-quiz__dot" />Lượng cung giảm</div>
+            <div className="lp-quiz__opt"><span className="lp-quiz__dot" aria-hidden="true" />Lượng cung giảm</div>
             <p className="lp-quiz__why">Đúng. Giá thay đổi làm lượng cầu di chuyển trên đường cầu, không làm đường cầu dịch chuyển.</p>
-          </div>
+            <figcaption className="lp-note mt-3">Ví dụ minh hoạ một câu quiz đã chấm.</figcaption>
+          </figure>
         </div>
       </section>
 
@@ -223,7 +231,7 @@ export default function Landing() {
               mạch trò chuyện trước đó.
             </p>
             <ul className="lp-facts">
-              <li><Icon name="Check" size={15} strokeWidth={2.5} />Câu trả lời chỉ dựa trên những tài liệu bạn đang chọn.</li>
+              <li><Icon name="Check" size={15} strokeWidth={2.5} />Khi bạn chọn tài liệu, câu trả lời chỉ dựa trên các tài liệu đó.</li>
               <li><Icon name="Check" size={15} strokeWidth={2.5} />Xoá ngữ cảnh bất cứ lúc nào để bắt đầu chủ đề mới.</li>
               <li><Icon name="Check" size={15} strokeWidth={2.5} />Tóm tắt và sơ đồ được tạo ở nền, bạn vẫn hỏi tiếp được.</li>
             </ul>

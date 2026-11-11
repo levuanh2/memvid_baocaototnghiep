@@ -69,7 +69,23 @@ The app shell keeps the Tailwind scale in `tailwind.config.js`; this table appli
 
 Captures: `evidence/before/` and `evidence/after/` at 390 and 1440px, light and dark, plus 1024px light.
 
-Guard: `FE/e2e-fixture/landing-v6.spec.js` (no horizontal overflow at 320–1440 in both themes and with Google Fonts blocked, one primary action in the hero, anchors, keyboard order, copy rules).
+Guard: `FE/e2e-fixture/landing-v6.spec.js`. The matrix it actually runs:
+
+| Check | Widths | Themes | Auth | Fonts |
+|---|---|---|---|---|
+| No overflow (viewport and clipped panels), one hero primary action, specimen visible | 320, 390, 768, 1024, 1440 | light, dark | signed out | loaded |
+| 44px targets in header and hero | 320, 390 | light, dark | signed out | loaded |
+| No overflow, 44px targets, header action inside the viewport | 320 | light, dark | signed out, signed in | blocked |
+| Copy rules, figures readable and captioned, specimen type sizes, anchors, reduced motion, keyboard order | 1280 | light | signed out | loaded |
+
+Not covered: dark theme and signed-in state for the 1280px semantic checks; widths above 1440px.
+
+### Review notes (Codex, PR #159)
+
+Eleven of twelve findings were fixed in the PR. One is recorded here instead:
+
+- **Wordmark contrast.** "Map" in `--seal` measures 3.95:1 (light header) and 4.20:1 (dark header) at 17px semibold. WCAG 1.4.3 exempts text that is part of a logo or brand name, and the wordmark colours are a V5 brand rule, so V6 does not change them. If the owner wants the wordmark to pass 4.5:1 anyway, it needs a darker brand-text token; that is a brand decision, not a landing fix.
+- Specimen map branches no longer borrow `--forest` or `--seal`; they use `--accent`, `--bronze`, `--slate` and `--text-secondary`, which keeps §2's colour roles true.
 
 ## 5. Still to design (not in this wave)
 

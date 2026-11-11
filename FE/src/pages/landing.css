@@ -4,6 +4,16 @@
 .lp-wrap { max-width: 1120px; margin: 0 auto; padding: 0 20px; }
 @media (min-width: 640px) { .lp-wrap { padding: 0 32px; } }
 
+/* Header on phones: every control is a 44px target, and the wordmark text gives way to the mark
+   alone below 380px so the signed-in header ("Vào workspace") still fits at 320px. */
+@media (max-width: 767px) {
+  /* Only the two controls shown on phones. No `display` on a bare `.lp-nav a`: it would outrank
+     the `hidden` utility on the links that are meant to stay hidden here. */
+  .lp-nav .btn-seal, .lp-nav .icon-btn { min-height: 44px; min-width: 44px; display: inline-flex; align-items: center; justify-content: center; }
+  .lp-hero .btn-seal, .lp-hero .btn-secondary { min-height: 44px; display: inline-flex; align-items: center; }
+}
+@media (max-width: 379px) { .lp-wordmark { display: none; } }
+
 .lp-band { border-top: 1px solid var(--border-color); background: var(--bg-sidebar); }
 
 .lp-h1 {
@@ -102,9 +112,10 @@
   .lp-row { grid-template-columns: minmax(0, 5fr) minmax(0, 6fr); gap: 64px; padding: 64px 0; }
   .lp-row--flip > :first-child { order: 2; }
 }
-.lp-row h3 { font-family: var(--font-display); font-weight: 600; font-size: 1.5rem; line-height: 1.25; color: var(--text-primary); margin-bottom: 10px; }
-.lp-row p { font-size: 1rem; line-height: 1.65; color: var(--text-secondary); max-width: 30rem; }
-.lp-panel { background: var(--bg-card); border: 1px solid var(--border-color); border-radius: 12px; padding: 20px; overflow: hidden; }
+.lp-copy h3 { font-family: var(--font-display); font-weight: 600; font-size: 1.5rem; line-height: 1.25; color: var(--text-primary); margin-bottom: 10px; }
+/* Scoped to the copy column: a bare `.lp-row p` would outrank the specimen classes below. */
+.lp-copy p { font-size: 1rem; line-height: 1.65; color: var(--text-secondary); max-width: 30rem; }
+.lp-panel { margin: 0; background: var(--bg-card); border: 1px solid var(--border-color); border-radius: 12px; padding: 20px; overflow: hidden; }
 @media (min-width: 640px) { .lp-panel { padding: 28px; } }
 
 /* Mind map specimen: root pill, then branches hanging off one trunk line. */

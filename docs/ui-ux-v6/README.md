@@ -18,13 +18,14 @@ V6 is **not complete**. This file is the single status page: it says which waves
 | B | Navigation and information architecture: header, sidebars, action deduplication | Not started. Needs the action inventory (agy, in progress) |
 | C | Learning experience: Library, Chat, Summary, Quiz, learning dashboard | Not started |
 | D | Knowledge visualisation: Mind map, Knowledge map, toolbars, export | Not started |
-| E | Frontend reliability: the bugs in `01-audit.md` §3 | Not started. 6 P1 findings are the next PRs |
+| E | Frontend reliability: the bugs in `01-audit.md` §2 and §3 | **Started.** W1 is Draft PR #160. The 15 code-review findings (6 P1) are not fixed yet |
 
 ## Status
 
 | Track | Branch | Draft PR | Local validation |
 |---|---|---|---|
-| V6-A landing + spec | `design/v6-foundation` | see PR | Vitest 1933/1933; `landing-v6.spec.js` 14/14; lint ratchet 63 (baseline 67); build pass |
+| V6-A landing + spec | `design/v6-foundation` | #159 | Vitest 1933/1933; `landing-v6.spec.js` 19/19; lint ratchet 63 (baseline 67); build pass; Codex review: 11 of 12 findings fixed, 1 recorded |
+| V6-E1 false "empty library" while loading | `fix/v6-source-loading-state` | #160 | `source-loading-state.spec.js` 4/4 (red before: 3 of 4); related fixtures 32/32; Vitest 1933/1933 |
 
 ## Skills and tools used
 
@@ -49,4 +50,5 @@ Not used: `ui-ux-pro-max`, `web-interface-guidelines`, `design-system` are insta
 
 1. Landing headline and sample content (economics examples) are proposals.
 2. The landing no longer colours part of the headline red. Red is kept for citations and the wordmark, as V5 rule §1 says.
-3. Order of Wave E fixes: the proposal is findings 1, 2, 3 (chat cancel race, orphan pollers) before the double-submit group (5, 6, 8, 9, 10).
+3. Wordmark contrast (see `02-design-spec.md`, review notes): keep the brand red under the logo exemption, or add a darker brand-text token.
+4. Order of Wave E fixes: the proposal is findings 1, 2, 3 (chat cancel race, orphan pollers) before the double-submit group (5, 6, 8, 9, 10).
