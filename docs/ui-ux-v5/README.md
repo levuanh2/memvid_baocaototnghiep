@@ -26,5 +26,5 @@ Single table, updated per milestone. SHAs are exact at the time of writing.
 | Track | Branch | Head | Draft PR | CI | Review | Blocker |
 |---|---|---|---|---|---|---|
 | Fixture Audit restore | `fix/fixture-audit-baseline` | `e94c493` | Draft PR #151 | pass (Linux Fixture Audit 530/530) | Codex approve, agy pass | awaiting owner review |
-| V5-A branding / foundation | `design/v5-foundation` | local | pending | pending | Codex: 1 medium + 3 low, addressed | Draft PR next |
-| V4.1 legacy integration | (fresh branch from main) | — | — | — | Codex/agy audits done | — |
+| V5-A branding / foundation | `design/v5-foundation` | `2a9be7e` + docs | Draft PR #152 | pass | Codex approve (after 1 medium + 3 low fixed) | awaiting owner review |
+| V4.1 legacy integration | four `integ/v41-*` branches | see `legacy-pr-integration.md` | Draft PRs #153–#156 | pass (all four) | Codex approve, agy pre-check pass | awaiting owner review; originals #138/#139/#140/#146 PROPOSED SUPERSEDED |
