@@ -1,7 +1,7 @@
 // @vitest-environment jsdom
 // W2-1 (owner decision O5): the result screen's next-step action. Wrong
 // answers -> primary "Kế hoạch ôn tập (N chủ đề)" (N = weak topics already
-// computed on the page), secondary "Xem lại câu sai". All correct -> primary
+// computed on the page), secondary "Xem lại câu chưa đúng". All correct -> primary
 // "Về Thư viện", no secondary.
 import { act } from "react";
 import { createRoot } from "react-dom/client";
@@ -38,7 +38,7 @@ async function renderReady() {
 }
 
 describe("O5 — result next-step action", () => {
-  it("wrong answers: primary review-plan link (with weak-topic count) comes before the secondary 'Xem lại câu sai' button", async () => {
+  it("wrong answers: primary review-plan link (with weak-topic count) comes before the secondary 'Xem lại câu chưa đúng' button", async () => {
     getResult.mockResolvedValue({
       status: "graded", quiz_title: "Quiz", score: 8, max_score: 10, percentage: 80,
       correct_count: 8, incorrect_count: 2, total_questions: 10, duration_seconds: 60,
@@ -53,7 +53,7 @@ describe("O5 — result next-step action", () => {
 
     const primary = container.querySelector('a[href="/app/study/review/attempt-1"]');
     expect(primary?.textContent).toContain("Kế hoạch ôn tập (2 chủ đề)");
-    const secondary = [...container.querySelectorAll("button")].find((b) => b.textContent === "Xem lại câu sai");
+    const secondary = [...container.querySelectorAll("button")].find((b) => b.textContent === "Xem lại câu chưa đúng");
     expect(secondary).toBeTruthy();
 
     // Order: the primary action (StudyShell header slot) is earlier in the
@@ -90,6 +90,6 @@ describe("O5 — result next-step action", () => {
     const library = container.querySelector('a[href="/app/study"]');
     expect(library?.textContent).toContain("Về Thư viện");
     expect(container.querySelector('a[href="/app/study/review/attempt-1"]')).toBeNull();
-    expect([...container.querySelectorAll("button")].some((b) => b.textContent === "Xem lại câu sai")).toBe(false);
+    expect([...container.querySelectorAll("button")].some((b) => b.textContent === "Xem lại câu chưa đúng")).toBe(false);
   });
 });

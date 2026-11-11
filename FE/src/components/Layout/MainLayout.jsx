@@ -117,7 +117,7 @@ export default function MainLayout({
   // collapse/open preference is never touched by any tablet interaction).
   const [tabletShelfOpen, setTabletShelfOpen] = useState(false);
   useEffect(() => {
-    // Any transition INTO the tablet band, or any workspace-mode switch
+    // Any transition into OR out of the tablet band, or any workspace-mode switch
     // while already in it, closes a left-open overlay — "switching modes
     // must not leave an unintended shelf overlay covering controls."
     setTabletShelfOpen(false);

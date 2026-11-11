@@ -1,5 +1,5 @@
 // W2-1 (owner decision O5): Quiz Result's next-step action. Wrong answers ->
-// primary "Kế hoạch ôn tập (N chủ đề)" + secondary "Xem lại câu sai". All
+// primary "Kế hoạch ôn tập (N chủ đề)" + secondary "Xem lại câu chưa đúng". All
 // correct -> primary "Về Thư viện", no secondary. Real app on the Vite dev
 // server, API mocked at the network layer (pattern copied from
 // FE/e2e-fixture/library-mode-navigation.spec.js).
@@ -29,7 +29,7 @@ async function mockAttempt(page, { result, masteries }) {
 
 test.beforeAll(async () => { await mkdir(new URL(EVIDENCE_DIR, import.meta.url), { recursive: true }); });
 
-test("wrong answers: primary is the review plan with weak-topic count, secondary is 'Xem lại câu sai'", async ({ page }) => {
+test("wrong answers: primary is the review plan with weak-topic count, secondary is 'Xem lại câu chưa đúng'", async ({ page }) => {
   await mockAttempt(page, {
     result: {
       status: "graded", quiz_title: "Quiz", score: 8, max_score: 10, percentage: 80,
@@ -47,7 +47,7 @@ test("wrong answers: primary is the review plan with weak-topic count, secondary
   await page.goto("/app/study/result/attempt-1");
   const primary = page.getByRole("link", { name: /Kế hoạch ôn tập \(2 chủ đề\)/ });
   await expect(primary).toBeVisible();
-  await expect(page.getByRole("button", { name: "Xem lại câu sai" })).toBeVisible();
+  await expect(page.getByRole("button", { name: "Xem lại câu chưa đúng" })).toBeVisible();
   await page.screenshot({ path: `${EVIDENCE_DIR}/wrong-answers-1440.png`, fullPage: true });
 
   await page.setViewportSize({ width: 390, height: 844 });
@@ -69,7 +69,7 @@ test("all correct: primary goes back to the Library, no secondary action", async
   await page.goto("/app/study/result/attempt-1");
   const library = page.getByRole("link", { name: "Về Thư viện" });
   await expect(library).toBeVisible();
-  await expect(page.getByRole("button", { name: "Xem lại câu sai" })).toHaveCount(0);
+  await expect(page.getByRole("button", { name: "Xem lại câu chưa đúng" })).toHaveCount(0);
   await page.screenshot({ path: `${EVIDENCE_DIR}/all-correct-1440.png`, fullPage: true });
 
   await page.setViewportSize({ width: 390, height: 844 });

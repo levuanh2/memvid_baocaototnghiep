@@ -3665,3 +3665,46 @@ apart. When a merge from main conflicts in a file the branch just changed, re-ru
 branch's new tests before pushing: a conflict resolved "to main" can revert the change
 while its test survives. A missing value is not zero in an accessible name either:
 mirror the visible "no score" state instead of `?? 0`.
+
+## 2026-11-09 — A count derived on the client must prove it matches the server's count
+
+When the UI re-derives a number the backend also reports (here: correct / partial /
+incorrect from per-question verdicts vs `correct_count` / `incorrect_count`), use the
+derived value only if it reproduces the server totals, and fall back to a label that is
+true for the server's number ("Chưa đúng") instead of the familiar but wrong one ("Sai").
+A silent skip of an unknown value can still "match" the totals, so reject unknown values
+explicitly and test that case on its own.
+`Number(x || 0)` is not validation: it turns "unknown" into a real 0 that can match.
+Compare raw values with `===`. And `key in obj` / `obj[key]` on a plain object is true
+for `"toString"` / `"__proto__"`; use a whitelist array (or `Object.hasOwn`) for any
+value that comes from the server (PR #148: `__proto__` as a verdict crashed the page).
+
+## 2026-11-10 — "Nothing failed" is not "everything required ran"
+
+A green aggregate check that only rejects failure/cancelled turns any skip, outage
+(`abandoned`) or missing job into a pass. Model which jobs must run for this event and
+these paths, require `success` for exactly those, and keep the model drift-tested against
+the workflow. Before trusting a green `CI / required`, read its "Pipeline job results" line.
+
+## 2026-11-10 — A flaky layout test can be hiding a permanent layout bug
+
+The 768px Library flake was not timing alone: the label was clipped on every run, and the
+test's `scrollWidth` measure only noticed it when font metrics pushed the overflow past the
+padding. Before "stabilising" a flaky geometry test (waits, retries), measure the real content
+box once with the font loaded and once with the fallback; fix the layout if either overflows.
+A geometry test that only checks containment can pass on a layout that has collapsed: an invalid
+`grid-template-columns` (e.g. `fit-content()` inside `minmax()`) is dropped silently and every
+cell stacks. Assert the computed structure too (column count, row height), and validate new CSS
+grammar in a browser, not by eye.
+
+## 2026-11-10 — Unifying a label can break tests and expose bugs far away
+
+Giving two controls the same accessible name (one upload label) silently changed what every
+`getByRole(name).first()` resolves to, and made a spec cover a control it had never touched (the
+tablet rail "+"), exposing a real focus loss. After a terminology change, grep all e2e and fixture
+specs, and run the full Fixture Audit, not just Fixture Smoke.
+
+A focus-handoff test must also use a library that is NOT empty: an empty-state CTA is an easy target
+that hides "no target at all". And when a handoff lands on a control that vanishes a frame later,
+look for state that a remount resets (here a child reporting its initial `[]` upward) before adding
+more frames of delay.

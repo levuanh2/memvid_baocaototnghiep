@@ -7849,3 +7849,249 @@ dashboard average; each fails if its bug is reintroduced.
 **Open copy decision (owner):** the result page's "Đúng / Sai" counters come from
 `correct_count` / `incorrect_count`, and the backend counts a partial answer as
 incorrect, so a learner can see "Đúng 1 · Sai 1" next to "75% điểm".
+
+# Quiz Result showed a partial answer as "Sai" next to "% điểm" (fixed 2026-11-09, owner follow-up to PR #137)
+
+**Symptom:** with one correct and one partial answer the result page read
+"Đúng 1 · Sai 1 · 75% điểm". The percentage is right; the counter is not.
+
+**Root cause:** `ScoreBoard` displayed the backend's `incorrect_count` as "Sai", and
+`grading.py` `totals()` counts `partial` inside `incorrect_count` (only `correct` is
+counted separately). The page already received every question's `verdict` but did not
+use it for the counters.
+
+**Fix:** `verdictBreakdown(result)` counts `correct` / `partial` / `incorrect` from
+`questions[].verdict` and is used only when it reproduces the backend's own totals
+(`correct == correct_count`, `partial + incorrect == incorrect_count`), the list covers
+every question, no verdict is unknown and the null verdicts equal `ungraded_count`
+(review: otherwise a question with a stale ungraded count vanished from every counter).
+In the combined fallback the server totals are used only when they form a valid
+partition (whole numbers ≥ 0, `correct_count + incorrect_count ≤ total_questions`); then
+"Chưa chấm" is the remainder and the visible counters add up to "Số câu" (invariant test).
+Null, negative, non-integer or over-counted totals are not repaired: the counters read "—"
+and nothing is derived (scope cap after three review rounds).
+The board then shows "Đúng", "Đúng một phần"
+(only when > 0) and "Sai". Otherwise it shows "Đúng" + a combined "Chưa đúng"
+(= `incorrect_count`) instead of a wrong "Sai". Ungraded questions keep "Chưa chấm".
+While grading, the labels stay "Đúng" / "Sai" with "—". The review action, which lists
+partial and incorrect answers (membership unchanged), is renamed "Xem lại câu chưa đúng"
+(owner decision), so it no longer contradicts "Sai 0"; its empty state says "Không có câu
+chưa đúng cần xem lại". "Chưa đúng" for the fallback is also an owner decision. No
+backend, API, score or percentage change.
+
+**Regression:** `FE/src/pages/study/QuizResult.partialCounter.test.jsx` (14 cases:
+all correct, all incorrect / 0%, correct + partial = 75%, partial + incorrect, all
+partial, provisional, all ungraded, grading, four missing/inconsistent/unknown-verdict
+fallbacks, labels + wrapping row) and `FE/e2e-fixture/quiz-result-partial-counter.spec.js`
+(1440 / 390 / 320 px, counters on screen, no horizontal overflow). Behavioural mutations
+(double-counting the partial, dropping the partial counter, labelling the fallback "Sai",
+skipping the consistency check, ignoring an unknown verdict) each fail at least one test.
+
+**PR #148 hardening (2026-11-10).** Two holes in `verdictBreakdown()` at `272c0d1`:
+(1) the totals were compared as `Number(result.correct_count || 0)`, so a **null**
+`correct_count` / `incorrect_count` matched a derived 0 and the split was shown
+(e.g. one incorrect answer, `correct_count: null` showed "Đúng 0 · Sai 1"); a string
+`total_questions` ("2") passed the `Number()` length check the same way.
+(2) `verdict in counts` accepted inherited keys, so `"toString"`, `"constructor"`,
+`"hasOwnProperty"`, `"__proto__"` were "known" and the question vanished from the split;
+and `VERDICT_LABEL["__proto__"]` returned `Object.prototype`, which **crashed the page**
+("Objects are not valid as a React child").
+Root cause: coercion and `in` on server data. Fix: strict `===` against the raw totals
+(only `ungraded_count` may be absent = 0, the backend contract), and an explicit
+`VERDICTS` whitelist for both counting and the label lookup (`verdictLabel()`).
+Regression: 12 cases in the "PR #148 hardening" block (null correct/incorrect, invalid
+total_questions string/null/negative/fractional, zero-count boundary, five bogus
+verdicts, bogus verdict + invalid totals, whitelisted verdicts). Mutations M7–M11
+(coercion back, `Number()` length, `in`, label lookup without whitelist) each fail.
+Prevention: never coerce a server count with `|| 0` before comparing it, and never test
+membership of untrusted strings with `in` / bracket lookup on a plain object.
+Codex review 5 found the same crash on the topic-mastery list (pre-existing on main):
+`MASTERY_LABEL[m.status]` with `status: "__proto__"` rendered `Object.prototype`. Fixed with
+`Object.hasOwn(MASTERY_LABEL, m.status)` (unknown statuses still show the raw string);
+regression "review 5: a mastery status that is an inherited key does not crash the page"
+(`__proto__`, `constructor`, `toString`) plus a known-status label check; mutation M12.
+
+### `CI / required` went green while `detect-changes` was `abandoned` (PR #148, 2026-11-10)
+
+PR #148 run 42673104752 attempt 2, during the GitHub incident "Incident with Actions and
+Checks API": `detect-changes` came back `abandoned`, so every test job was skipped, and
+`CI / required` (the **only** check branch protection requires) printed "All active CI
+checks succeeded" on `abandoned success skipped skipped …`. E2E Critical Flows never ran.
+Deploy was not at risk (deploy.yml requires `workflow_run.conclusion == 'success'`, and the
+run concluded failure), but a merge would have been allowed.
+
+**Root cause:** the inline gate only rejected `failure` / `cancelled`. Every other result
+(`abandoned`, unknown values, a missing job) and every `skipped` counted as a pass, with no
+notion of which jobs the path filter made required. Same class as the PR #39 entry above
+(a skip counted as a pass).
+
+**Fix:** `scripts/ci_required_gate.py` (stdlib) evaluates `toJSON(needs)` + `github.ref`:
+`detect-changes` must be `success` with outputs exactly 'true'/'false`; the always-on jobs
+(security, deploy-script-tests) must succeed; each conditional job is required on main or
+when one of its path outputs is 'true' (model mirrors each job's `if:`), and then must be
+`success`. Optional jobs may be `skipped` or `success`. Missing, unknown, `abandoned`,
+`failure` or `cancelled` fail. `ci-success` keeps `if: always()`; a checkout failure fails it.
+
+**Regression:** `scripts/tests/test_ci_required_gate.py`, run inside `ci-success` on every
+CI run: 28-scenario matrix (FE-only / BE-only / shared / docs-only PRs, main push, real
+attempt-2 and attempt-3 log lines, detect-changes abandoned / skipped / bad outputs,
+unexpected skips of FE / BE / E2E / docker jobs, missing, cancelled, failure, abandoned,
+unknown, unmodelled job) plus a drift check that ci.yml's `if:`s, `needs:` and the
+ci-success wiring match the model. A/B against the old bash gate: old wrong in 16/28,
+new 0/28. Drift/model mutations D1–D8 each fail the suite.
+
+Codex review 2: the drift parser first matched job ids as `[a-z0-9-]+`, so a failing
+`new_job:` left out of `ci-success.needs` was invisible and the suite still passed (red
+confirmed on the first commit). It now uses GitHub's id grammar `[A-Za-z_][A-Za-z0-9_-]*`
+and raises on any job-level line it cannot parse (mutation D10: `new_job`, `NewJob`,
+quoted id, malformed header).
+
+agy audit + Codex review 4: the drift check compared only the set of path outputs in each
+`if:` and blacklisted `&&`/`!`, so an extra operand (`|| true`, `|| github.actor == ...`)
+made a job run where the model says optional (red confirmed on 6391c42). It now requires the
+exact set of `||` operands (mutations D14-D16). Every expected-failure scenario also asserts
+the reported reason, not only `ok is False`.
+
+**Prevention:** an aggregate gate must check that required jobs RAN, not only that nothing
+failed. Adding a job or changing an `if:` now fails the drift test until the gate model is
+updated.
+
+### Library primary action clipped at every width >= 768px; Fixture Smoke flaky on doc-2 (post-merge #149, 2026-11-10)
+
+Main 9cbd4fe, run 42769235493: `round6-library-action-matrix` "768px ... primary action on
+one line" failed (doc-2 `scrollWidth 237 > clientWidth 218`) and passed on retry, so
+`--fail-on-flaky-tests` turned Fixture Smoke and `CI / required` red (deploy skipped, as
+designed).
+
+**Root cause (real UI overflow, hidden by a weak measure):** `.study-document-row` gave the
+primary action a fixed `220px` column at >= 768px. "Tiếp tục · Hướng dẫn ôn tập" (icon + label)
+is 213px of content in Inter 600 against 194px available, so the arrow and both ends of the
+label were clipped on every run, also locally and also at 1024/1440. The test only compared
+`scrollWidth` with `clientWidth`: with `justify-content:center` the left half of the overflow
+is not scrollable and the right half hides inside `padding-right`, so it saw 0-1px and passed.
+It also measured right after the Google Fonts swap (trace: last Inter subset arrived ~15ms
+before the measurement), so the visible part depended on font metrics/timing -> flaky.
+
+**Fix:** primary column `minmax(220px, max-content)` (both the >= 1024 and the 768-1023 grids)
+plus `max-width:280px` on the button (an item's max-content contribution is clamped by its
+max-width), reset to `none` on mobile. It grows with the label, the identity/progress columns
+absorb the difference (at >= 1024px only the "Tiếp tục" row grows 83 -> 101px because its progress
+text wraps), and the cap keeps a future longer label from squeezing the title column.
+
+**Regression introduced and caught in review (do not repeat):** a first cap used
+`minmax(220px, fit-content(280px))`. `fit-content()` is a whole track size and is not allowed
+inside `minmax()`, so the browser dropped the entire `grid-template-columns`: every row stacked
+into ONE column (336px tall) at >= 768px while all 33 geometry tests stayed green, because none
+checked the grid itself. The spec now asserts the computed column count (6 / 5 / 3) and a row
+height <= 120px; it fails 8/14 on that CSS. The spec now awaits `document.fonts.ready`, runs
+each width with the webfont AND with Google Fonts blocked (fallback font), and asserts the
+icon + label range lies inside the padding box (<= 0.5px) in addition to the old checks. The
+webfont run checks that a loaded Inter 600 FontFace exists (`fonts.ready` resolves on failure
+too; `fonts.check()` is TRUE for a family with no registered face, i.e. when the Google
+stylesheet is blocked; `fonts.load()` rejects when the font files fail; so: bounded 5s
+`fonts.load`, rejection caught, a loaded face required) and is SKIPPED with a reason if Google
+Fonts is unreachable (simulated outage: 7 skipped, 7 fallback passed). Every wait is bounded so
+a request that never settles cannot time the required test out before it skips (Codex review 4):
+`goto` waits for `domcontentloaded` (a stalled `@import` stylesheet holds `load`), and
+`document.fonts.ready` is raced against 8s (the fallback run, with every Google request aborted,
+must settle). Simulated never-settling stylesheet: 7 skipped / 7 passed in 24s; never-settling
+font files: 7 / 7 in 1.9 min, so a third-party outage cannot block the
+required gate (the fallback-font run needs no network and always runs). The matrix includes the
+1023/767 breakpoint edges (agy audit).
+
+**Regression:** red-before 8/14 on the original CSS (1440/1024/1023/768 x both fonts, doc-2 overflow 12.7 / 8.3px) and 8/14 on the invalid-grid CSS,
+deterministic, not flaky; green after; sweep 767-1440 both fonts: no overflow anywhere.
+
+**Prevention:** never prove "fits" with `scrollWidth` on a centred or padded flex box; measure
+the content range against the padding box (lessons-learned 2026-10-27), and measure text only
+after `document.fonts.ready`, with a fallback-font run for anything with a fixed width.
+
+**Found by the PR #150 CI on Linux (run 42782884155), fixed before merge:** with Google Fonts
+blocked, Chromium on ubuntu-latest falls back to DejaVu Sans Bold, where the label is ~257px:
+the 280px cap clipped it by 1.6px a side and the 320px full-width button (232px content box) by
+12.6px. Worse, those numbers were AFTER flex had shrunk the 14px arrow (10px at >= 768px, 0px at
+320px), so the content-box measure under-reported. Fix: `max-width:300px`, `flex-shrink:0` on the
+arrow, and at <= 359px 14px text + 8px padding. The spec now also asserts the arrow stays 14px.
+Local emulation (DejaVu Sans + letter-spacing to the CI width): old CSS arrow 10.3px / 0px,
+new CSS 14px everywhere with no overflow. Windows' fallback (Segoe UI) is narrower, so this
+only showed on Linux: never treat one OS's fallback font as "the" fallback.
+
+### Fixture Audit red since #121/#126: stale labels, a retargeting locator, and a real focus loss (2026-11-10)
+
+Baseline on main d912419 (Linux run 42849418300): 526 tests, 514 passed, 12 failed. Three causes:
+
+1. **`round7-1-qa` (3 tests): stale label.** #121/#148 renamed the result review action
+   "Xem lại N câu cần ôn" -> "Xem lại câu chưa đúng"; the fixture was never updated
+   ("Xem lại 2 câu cần ôn" x4, "Xem lại 3 câu cần ôn" in the `tones` view). The old label carried
+   the count, so the spec now asserts "Câu cần ôn 1 / 2" (1 / 3 in `tones`) on the position line
+   instead, plus the existing Câu 4 / Câu 9 ordinals.
+2. **`upload-cta-lifecycle` mobile drawer: stale selector.** #126 (W1-2) renamed the header trigger
+   "Mở công cụ StudyMap" -> "Mở công cụ học" and updated mobile-header specs but not this one.
+3. **`upload-cta-lifecycle` live resize (8/8): real focus loss + retargeting locator.** #126 also
+   renamed the tablet rail "+" from "Thêm tài liệu" to "Tải tài liệu lên", so several buttons share
+   that name. (a) The spec's `.first()` re-resolved to a different node after a resize even when focus
+   was intact (767->768, 1280->1279 collapsed). (b) Real defect: at 768-1279px the focused control is
+   the rail "+", which unmounts at 767px and 1280px, dropping keyboard focus to <body>. Bisect: the spec
+   passed 23/23 at 5d56371 (rail still "Thêm tài liệu") and first reached main already failing at
+   79f2fb3 (#129, after main with #126 was merged into that branch).
+
+**Fix:** `utils/uploadFocusHandoff.js`: a ref callback on the rail "+" and the panel "Thêm tài liệu"
+(React detaches refs before removing the node) moves focus, on the next frame and only if focus fell
+to <body>, to the first usable `[data-upload-cta]` (in the viewport, `checkVisibility()`, not inside
+`inert` / `aria-hidden`; the closed mobile drawer is only translated off-screen). The spec tracks the
+node that had focus: if it survived it must keep focus, otherwise focus must be on an upload control.
+
+**Regression:** red-before with the handoff removed: exactly the 4 unmount cases fail (768->767,
+1279->1280, both states); after: upload spec 23/23, round7 6/6.
+
+**Prevention:** when renaming a control, grep every spec (e2e-fixture is not in Fixture Smoke, so CI
+does not catch it); never assert focus through a role+name `.first()` when several controls can share
+the name; a control that a breakpoint unmounts must hand focus on, not drop it.
+
+**Separate finding (not fixed here):** the closed mobile source drawer is only `-translate-x-full`,
+so its controls stay in the Tab order while invisible (keyboard a11y defect; needs `inert` when closed).
+
+**Review follow-up (Codex P2 x2, 2026-11-11):**
+
+- *Non-empty library had no handoff target.* With documents there is no empty-state CTA; at 768->767
+  (drawer closed) and 1279->1280 (left collapsed -> `PanelSpine`) no `[data-upload-cta]` is usable.
+  Fallback: the first usable `[data-source-entry]` (header `.mobile-context` source button,
+  `conversation-source-trigger`, left `PanelSpine`). Red-before with the fallback removed: both new
+  non-empty cases fail.
+- *Root cause found while testing it: a fresh `SidebarLeft` reported `sources = []`.* Every
+  breakpoint crossing remounts `SidebarLeft`; its mount effect called `onSourcesChange([])` before
+  `/list-indexed` answered, wiping MainLayout's list, so the chat flashed its "no documents" empty
+  state (with its upload CTA) for ~50ms. The handoff focused that transient CTA, which then unmounted
+  and dropped focus to <body>. Fix: report only after the fetch succeeded or when in-progress
+  uploads exist (`daTaiDanhSach`). A failed fetch now leaves MainLayout's last list instead of [].
+- *Shelf backdrop occlusion (1279->1280 with the shelf open): not reproducible.* MainLayout's effect
+  on `[tabletSourceRail, workspaceMode]` closes the shelf when leaving the tablet band too (its
+  comment said "INTO" only; corrected, after it misled a reviewer). A test covers the case and
+  asserts the backdrop is gone; it passes 5/5 even with an `elementFromPoint` occlusion check and a
+  double rAF removed, so neither guard was added.
+
+**Re-review follow-up (Codex, 2026-11-11):**
+
+- *Gate forgot it had reported.* `/list-indexed` fails, a restored in-progress upload is reported,
+  the user deletes it: `sources = []` with `daTaiDanhSach` false was never reported, so MainLayout
+  kept the deleted card. `daBaoDanhSachRef` keeps reporting once this mount has reported.
+  Regression: `SidebarLeft.sourcesReport.test.jsx` (pending fetch reports nothing; empty success
+  reports []; failed fetch + restored upload + delete reports []). Red-before: the third case fails.
+- *Non-empty spec could pass on the transient CTA.* It now waits until the chat's no-documents CTA
+  is gone before resizing, requires focus on `[data-source-entry]`, and presses Enter to check the
+  drawer/panel opens. Red-before: eager `[]` report fails 768->767 (1279->1280 collapsed unmounts
+  SidebarLeft instead of remounting it, so only Vitest guards it there); no fallback fails both.
+- *Not fixed, pre-existing:* a remounted SidebarLeft starts with `sourcesRef = []`, so a backend
+  rename (same filename, new stem) arriving in its first fetch cannot migrate the selection and
+  drops it. This was already true before the gate (the old code also started from []). Fix
+  separately by seeding the child from MainLayout's list or lifting the fetch above the breakpoint
+  mounts.
+
+**Flaky target size found by repeat-10 (2026-11-11):** `round7-1-qa` "visual metrics" failed 1-2
+runs in 10 with `question-builder-pills width` 43.484375 < 44 (20/20 when run alone). Root cause:
+`.practice-customize-dialog .pill-tab` had `min-height: 44px` but no `min-width`; the narrowest
+pill "Dễ" is 44.39px with Inter and 43.48px with the fallback font, so the target met 44px only
+if the webfont had loaded. Fix: `min-width: 44px; justify-content: center`. Regression: "practice
+builder pills keep a 44px target with the fallback font" aborts font requests (red-before
+43.484375). Prevention: a 44px target needs both min-height and min-width; never let text width
+decide whether a short label meets it, and measure targets with the fallback font.

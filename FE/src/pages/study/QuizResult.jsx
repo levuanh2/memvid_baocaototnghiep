@@ -220,7 +220,7 @@ export default function QuizResult() {
                         {m.concept_name}
                       </div>
                       <div className="text-small text-text-secondary">
-                        {MASTERY_LABEL[m.status] || m.status} · đúng {m.correct_count}/{m.total_count}
+                        {(Object.hasOwn(MASTERY_LABEL, m.status) ? MASTERY_LABEL[m.status] : String(m.status ?? "")) || "—"} · đúng {m.correct_count}/{m.total_count}
                       </div>
                     </div>
                   </div>
@@ -252,8 +252,64 @@ function SectionTitle({ children }) {
   );
 }
 
+// Owner decision after PR #137: count "Đúng / Đúng một phần / Sai" separately. The
+// backend puts a partial answer inside `incorrect_count` (grading.py `totals`), so
+// showing that number as "Sai" next to "75% điểm" told a learner with one correct and
+// one partial answer "Sai 1". The split is taken from the per-question verdicts the
+// result already carries, and only when they reproduce the backend's own totals;
+// otherwise it returns null and the caller shows a combined "Chưa đúng" (incorrect or
+// partial) counter rather than misclassifying anyone. Ungraded questions (no verdict)
+// stay out of all three and keep their own "Chưa chấm" counter.
+// A server count is usable only as a whole number >= 0: null is "unknown", never 0.
+const isCount = (v) => Number.isInteger(v) && v >= 0;
+const VERDICTS = ["correct", "partial", "incorrect"];
+// Label lookup by whitelist too: VERDICT_LABEL["__proto__"] is an object and crashes React.
+const verdictLabel = (verdict) => (VERDICTS.includes(verdict) ? VERDICT_LABEL[verdict] : null);
+// eslint-disable-next-line react-refresh/only-export-components
+export function verdictBreakdown(result) {
+  const questions = Array.isArray(result?.questions) ? result.questions : null;
+  // Strict === against the raw server totals, never `Number(x || 0)`: a null, string,
+  // negative or fractional total can then never match a real count (PR #148 review).
+  // ungraded_count alone may be absent: the backend treats that as 0 (application/attempts.py).
+  const ungradedTotal = result?.ungraded_count ?? 0;
+  if (!questions || questions.length !== result.total_questions) return null;
+  const counts = { correct: 0, partial: 0, incorrect: 0 };
+  let ungraded = 0;
+  for (const question of questions) {
+    const verdict = question?.verdict;
+    if (verdict == null) { ungraded += 1; continue; }   // not graded
+    // Whitelist, not `in`: "toString" / "constructor" / "__proto__" are inherited keys.
+    if (!VERDICTS.includes(verdict)) return null;       // unknown value: do not guess
+    counts[verdict] += 1;
+  }
+  // Every question must land in exactly one bucket the page shows: a null verdict is
+  // only acceptable when the backend also reports it as ungraded (review finding: a
+  // stale ungraded_count would otherwise make that question vanish from all counters).
+  const consistent = counts.correct === result.correct_count
+    && counts.partial + counts.incorrect === result.incorrect_count
+    && ungraded === ungradedTotal;
+  return consistent ? counts : null;
+}
+
 function ScoreBoard({ result, grading, provisional, ungradedCount, wrongCount, onReviewWrong }) {
   const percent = result.percentage;
+  // While grading, verdicts are still null: keep the familiar labels with "—" rather
+  // than flip to the "Chưa đúng" fallback for a few seconds.
+  const breakdown = grading ? { correct: null, partial: 0, incorrect: null } : verdictBreakdown(result);
+  // Combined fallback (review): show the server totals only when they are themselves a
+  // valid partition -- whole numbers >= 0 with correct + incorrect <= total. Then a
+  // question counted neither correct nor "chưa đúng" is unscored, "Chưa chấm" is the
+  // remainder, and the visible counters add up to "Số câu". If the totals are null or
+  // impossible, nothing is derived from them: every counter reads "—" (unavailable)
+  // rather than a number that would double-count or mislabel a question.
+  // ponytail: scope cap -- a corrupt payload gets "—", not a repair; score, headline and
+  // next step keep following the backend's own fields.
+  const totalsValid = isCount(result.total_questions) && isCount(result.correct_count) && isCount(result.incorrect_count)
+    && result.correct_count + result.incorrect_count <= result.total_questions;
+  const unscored = breakdown || grading
+    ? (provisional ? ungradedCount : 0)
+    : totalsValid ? result.total_questions - result.correct_count - result.incorrect_count : null;
+  const shown = (value) => (grading ? "—" : value ?? "—");
   const noGradedQuestions = provisional && Number(result.max_score || 0) === 0;
   const gradedCount = Number(result.correct_count || 0) + Number(result.incorrect_count || 0);
   const headline = grading
@@ -294,25 +350,35 @@ function ScoreBoard({ result, grading, provisional, ungradedCount, wrongCount, o
       </div>
 
       <div className="flex flex-wrap gap-x-7 gap-y-2 text-small">
-        <Stat label="Đúng" value={grading ? "—" : result.correct_count ?? "—"} />
-        <Stat label="Sai" value={grading ? "—" : result.incorrect_count ?? "—"} />
-        {provisional && <Stat label="Chưa chấm" value={ungradedCount} />}
+        {breakdown ? (
+          <>
+            <Stat label="Đúng" value={shown(breakdown.correct)} />
+            {breakdown.partial > 0 && <Stat label="Đúng một phần" value={shown(breakdown.partial)} />}
+            <Stat label="Sai" value={shown(breakdown.incorrect)} />
+          </>
+        ) : (
+          <>
+            <Stat label="Đúng" value={shown(totalsValid ? result.correct_count : null)} />
+            <Stat label="Chưa đúng" value={shown(totalsValid ? result.incorrect_count : null)} />
+          </>
+        )}
+        {unscored != null && (provisional || unscored > 0) && <Stat label="Chưa chấm" value={unscored} />}
         <Stat label="Số câu" value={result.total_questions} />
         <Stat label="Thời gian" value={formatDuration(result.duration_seconds)} />
       </div>
-      {!grading && wrongCount > 0 && <button type="button" className="btn-secondary quiz-review-wrong" onClick={onReviewWrong}>Xem lại câu sai</button>}
+      {!grading && wrongCount > 0 && <button type="button" className="btn-secondary quiz-review-wrong" onClick={onReviewWrong}>Xem lại câu chưa đúng</button>}
     </section>
   );
 }
 
 function WrongAnswerReview({ questions, index, onIndex, onClose, reviewPlanTo }) {
   const current = questions[index];
-  if (!current) return <section className="surface-card text-center"><h2 className="font-display text-title text-text-primary">Không có câu sai cần xem lại</h2><button type="button" className="btn-secondary mt-4" onClick={onClose}>Về kết quả</button></section>;
+  if (!current) return <section className="surface-card text-center"><h2 className="font-display text-title text-text-primary">Không có câu chưa đúng cần xem lại</h2><button type="button" className="btn-secondary mt-4" onClick={onClose}>Về kết quả</button></section>;
   return (
     <div className="quiz-wrong-review">
       <aside className="quiz-wrong-review__rail" aria-label="Câu cần xem lại">
         <header><strong>Ôn lại bài làm</strong><span>{questions.length} câu cần xem</span></header>
-        {questions.map((question, itemIndex) => <button type="button" key={question.question_id} className={itemIndex === index ? "is-active" : ""} aria-current={itemIndex === index ? "true" : undefined} onClick={() => onIndex(itemIndex)}><span>{question._originalOrder}</span><div><strong>Câu {question._originalOrder}</strong><small>{VERDICT_LABEL[question.verdict] || "Cần xem lại"}</small></div></button>)}
+        {questions.map((question, itemIndex) => <button type="button" key={question.question_id} className={itemIndex === index ? "is-active" : ""} aria-current={itemIndex === index ? "true" : undefined} onClick={() => onIndex(itemIndex)}><span>{question._originalOrder}</span><div><strong>Câu {question._originalOrder}</strong><small>{verdictLabel(question.verdict) || "Cần xem lại"}</small></div></button>)}
       </aside>
       <section className="quiz-wrong-review__content">
         <div className="quiz-wrong-review__nav"><button type="button" className="btn-secondary" onClick={onClose}><Icon name="ArrowLeft" size={14} /> Kết quả</button><span>Câu cần ôn {index + 1} / {questions.length}</span><div><button type="button" aria-label="Câu cần ôn trước" disabled={index === 0} onClick={() => onIndex(index - 1)}>←</button><button type="button" aria-label="Câu cần ôn tiếp theo" disabled={index === questions.length - 1} onClick={() => onIndex(index + 1)}>→</button></div></div>
@@ -326,9 +392,9 @@ function WrongAnswerReview({ questions, index, onIndex, onClose, reviewPlanTo })
 
 function Stat({ label, value }) {
   return (
-    <div>
-      <div className="font-mono text-metadata uppercase text-text-muted">{label}</div>
-      <div className="text-body-lg font-semibold text-text-primary mt-0.5">{value}</div>
+    <div data-score-stat>
+      <div className="font-mono text-metadata uppercase text-text-muted" data-score-stat-label>{label}</div>
+      <div className="text-body-lg font-semibold text-text-primary mt-0.5" data-score-stat-value>{value}</div>
     </div>
   );
 }
@@ -347,7 +413,7 @@ function ReviewedQuestion({ question, order }) {
         <span className="quiz-verdict-badge rounded-[4px] text-metadata px-2 py-[2px] font-semibold uppercase font-mono shrink-0"
           data-verdict={verdict}
           style={{ color: tone, border: `1px solid ${tone}`, background: `color-mix(in srgb, ${tone} 12%, transparent)` }}>
-          {VERDICT_LABEL[verdict] || "Chưa chấm"}
+          {verdictLabel(verdict) || "Chưa chấm"}
         </span>
       </div>
 
