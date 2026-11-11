@@ -3696,3 +3696,14 @@ A geometry test that only checks containment can pass on a layout that has colla
 `grid-template-columns` (e.g. `fit-content()` inside `minmax()`) is dropped silently and every
 cell stacks. Assert the computed structure too (column count, row height), and validate new CSS
 grammar in a browser, not by eye.
+
+## 2026-11-11 — "The old brand is still showing" was artwork, not text or cache
+
+Production served the current build (no stale cache, no service worker) and no page printed the
+old name. What users still saw was artwork: the favicon ("M" + "X" badge) and the "M" seal beside
+the wordmark; below `lg` the app shell shows only that mark. Text sweeps (`branding.test.js`)
+cannot see artwork. V5-A replaced both with the StudyMap mark (`BrandMark`, `studymap-mark.svg`).
+Rules: check icons and logos when a rename is reported incomplete; serve a changed favicon from a
+new URL (browsers cache favicons per URL); a static SVG cannot read CSS variables, so pin its
+colour to the token value and test that they stay equal; comments quoting the retired name trip
+the branding test, so describe it without naming it.
