@@ -1,4 +1,14 @@
 import { test, expect } from "@playwright/test";
+
+// PR #121/#148 renamed the result-page review action "Xem lại 2 câu cần ôn" ->
+// "Xem lại câu chưa đúng" (owner-approved; a partial answer is "chưa đúng", not "sai").
+// The old label carried the count; the review rail still has to say how many questions it
+// holds, so `expectTwoInReview` keeps that "2" contract after the rename.
+const REVIEW_WRONG = "Xem lại câu chưa đúng";
+async function expectTwoInReview(page) {
+  // The position line is shown at every width (the rail is hidden on phones).
+  await expect(page.locator(".quiz-wrong-review__nav")).toContainText("Câu cần ôn 1 / 2");
+}
 import { mkdirSync, writeFileSync } from "node:fs";
 import { resolve } from "node:path";
 
@@ -112,9 +122,10 @@ test.describe("Round 7.1 populated Quiz browser evidence", () => {
     await page.screenshot({ path: evidence("quiz-result-pending-1440-light"), fullPage: true });
 
     await page.evaluate(() => window.__qa.grade());
-    await expect(page.getByRole("button", { name: "Xem lại 2 câu cần ôn" })).toBeVisible({ timeout: 10_000 });
+    await expect(page.getByRole("button", { name: REVIEW_WRONG, exact: true })).toBeVisible({ timeout: 10_000 });
     await page.screenshot({ path: evidence("quiz-result-graded-1440-light"), fullPage: true });
-    await page.getByRole("button", { name: "Xem lại 2 câu cần ôn" }).click();
+    await page.getByRole("button", { name: REVIEW_WRONG, exact: true }).click();
+    await expectTwoInReview(page);
     await expect(page.getByRole("complementary", { name: "Câu cần xem lại" })).toContainText("Câu 4");
     await expect(page.getByRole("complementary", { name: "Câu cần xem lại" })).toContainText("Câu 9");
     await expect(page.locator(".quiz-wrong-review__content .font-mono").first()).toHaveText("04");
@@ -258,7 +269,7 @@ test("responsive light/dark matrix: no overflow, reachable controls, distinct pe
       await noHorizontalOverflow(page);
 
       await page.goto(`/r71qa.html?view=graded&theme=${theme}`);
-      const review = page.getByRole("button", { name: "Xem lại 2 câu cần ôn" });
+      const review = page.getByRole("button", { name: REVIEW_WRONG, exact: true });
       await expect(review).toBeVisible();
       await review.click();
       await expect(page.locator("body")).toContainText("Câu 4");
@@ -293,7 +304,8 @@ test("responsive light/dark matrix: no overflow, reachable controls, distinct pe
   await page.goto("/r71qa.html?view=taking&theme=light");
   await page.screenshot({ path: evidence("quiz-rail-820-light"), fullPage: true });
   await page.goto("/r71qa.html?view=graded&theme=dark");
-  await page.getByRole("button", { name: "Xem lại 2 câu cần ôn" }).click();
+  await page.getByRole("button", { name: REVIEW_WRONG, exact: true }).click();
+  await expectTwoInReview(page);
   await page.screenshot({ path: evidence("wrong-review-contextual-820-dark"), fullPage: true });
 
   await page.setViewportSize({ width: 390, height: 844 });
@@ -412,7 +424,8 @@ test("visual metrics: mobile targets, local overflow and Quiz semantic contrast"
   ]);
 
   await page.goto("/r71qa.html?view=graded");
-  await page.getByRole("button", { name: "Xem lại 2 câu cần ôn" }).click();
+  await page.getByRole("button", { name: REVIEW_WRONG, exact: true }).click();
+  await expectTwoInReview(page);
   await recordTargets("wrong-review-arrows", [
     page.getByRole("button", { name: "Câu cần ôn trước" }),
     page.getByRole("button", { name: "Câu cần ôn tiếp theo" }),
@@ -457,7 +470,9 @@ test("visual metrics: mobile targets, local overflow and Quiz semantic contrast"
     for (const metric of report.contrast[theme].verdicts) {
       expect.soft(metric.ratio, `${theme} verdict contrast`).toBeGreaterThanOrEqual(4.5);
     }
-    await page.getByRole("button", { name: "Xem lại 3 câu cần ôn" }).click();
+    // "tones" view: 2 incorrect + 1 partial -> 3 "chưa đúng" questions in the review.
+    await page.getByRole("button", { name: REVIEW_WRONG, exact: true }).click();
+    await expect(page.locator(".quiz-wrong-review__nav")).toContainText("Câu cần ôn 1 / 3");
     const railTag = page.locator(".quiz-wrong-review__rail small").first();
     const railNumber = page.locator(".quiz-wrong-review__rail > button > span").first();
     report.contrast[theme].railTag = await contrastOf(railTag);
@@ -494,4 +509,19 @@ test("visual metrics: mobile targets, local overflow and Quiz semantic contrast"
   mkdirSync(outputDir, { recursive: true });
   const label = process.env.R71_METRICS_LABEL || "final";
   writeFileSync(resolve(outputDir, `interaction-metrics-${label}.json`), `${JSON.stringify(report, null, 2)}\n`);
+});
+
+// The visual-metrics test above measured "Dễ" at 43.48px whenever it ran before the Inter webfont
+// loaded (1-2 runs in 10). The fallback font is the worst case, so measure with it on purpose.
+test("practice builder pills keep a 44px target with the fallback font", async ({ page }) => {
+  await page.route(/\.(woff2?|ttf|otf)(\?|$)|fonts\.(googleapis|gstatic)/, (route) => route.abort());
+  await page.setViewportSize({ width: 320, height: 568 });
+  await page.goto("/r71qa.html?view=review");
+  await page.getByRole("button", { name: "Tùy chỉnh" }).click();
+  const pills = page.getByRole("dialog", { name: "Tùy chỉnh luyện tập" }).locator(".pill-tab");
+  await expect(pills.first()).toBeVisible();
+  for (const box of await pills.evaluateAll((els) => els.map((el) => el.getBoundingClientRect().toJSON()))) {
+    expect.soft(box.width).toBeGreaterThanOrEqual(44);
+    expect.soft(box.height).toBeGreaterThanOrEqual(44);
+  }
 });

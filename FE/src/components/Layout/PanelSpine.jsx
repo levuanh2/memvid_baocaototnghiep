@@ -13,6 +13,7 @@ export default function PanelSpine({ side, label, count, onExpand }) {
     <button
       type="button"
       onClick={onExpand}
+      data-source-entry={side === "left" ? "" : undefined}
       className={`panel-spine ${side === "left" ? "panel-spine--left" : "panel-spine--right"}`}
       aria-label={`Mở ${label}`}
       title={`Mở ${label}`}

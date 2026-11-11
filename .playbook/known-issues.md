@@ -8015,3 +8015,83 @@ arrow, and at <= 359px 14px text + 8px padding. The spec now also asserts the ar
 Local emulation (DejaVu Sans + letter-spacing to the CI width): old CSS arrow 10.3px / 0px,
 new CSS 14px everywhere with no overflow. Windows' fallback (Segoe UI) is narrower, so this
 only showed on Linux: never treat one OS's fallback font as "the" fallback.
+
+### Fixture Audit red since #121/#126: stale labels, a retargeting locator, and a real focus loss (2026-11-10)
+
+Baseline on main d912419 (Linux run 42849418300): 526 tests, 514 passed, 12 failed. Three causes:
+
+1. **`round7-1-qa` (3 tests): stale label.** #121/#148 renamed the result review action
+   "Xem lại N câu cần ôn" -> "Xem lại câu chưa đúng"; the fixture was never updated
+   ("Xem lại 2 câu cần ôn" x4, "Xem lại 3 câu cần ôn" in the `tones` view). The old label carried
+   the count, so the spec now asserts "Câu cần ôn 1 / 2" (1 / 3 in `tones`) on the position line
+   instead, plus the existing Câu 4 / Câu 9 ordinals.
+2. **`upload-cta-lifecycle` mobile drawer: stale selector.** #126 (W1-2) renamed the header trigger
+   "Mở công cụ StudyMap" -> "Mở công cụ học" and updated mobile-header specs but not this one.
+3. **`upload-cta-lifecycle` live resize (8/8): real focus loss + retargeting locator.** #126 also
+   renamed the tablet rail "+" from "Thêm tài liệu" to "Tải tài liệu lên", so several buttons share
+   that name. (a) The spec's `.first()` re-resolved to a different node after a resize even when focus
+   was intact (767->768, 1280->1279 collapsed). (b) Real defect: at 768-1279px the focused control is
+   the rail "+", which unmounts at 767px and 1280px, dropping keyboard focus to <body>. Bisect: the spec
+   passed 23/23 at 5d56371 (rail still "Thêm tài liệu") and first reached main already failing at
+   79f2fb3 (#129, after main with #126 was merged into that branch).
+
+**Fix:** `utils/uploadFocusHandoff.js`: a ref callback on the rail "+" and the panel "Thêm tài liệu"
+(React detaches refs before removing the node) moves focus, on the next frame and only if focus fell
+to <body>, to the first usable `[data-upload-cta]` (in the viewport, `checkVisibility()`, not inside
+`inert` / `aria-hidden`; the closed mobile drawer is only translated off-screen). The spec tracks the
+node that had focus: if it survived it must keep focus, otherwise focus must be on an upload control.
+
+**Regression:** red-before with the handoff removed: exactly the 4 unmount cases fail (768->767,
+1279->1280, both states); after: upload spec 23/23, round7 6/6.
+
+**Prevention:** when renaming a control, grep every spec (e2e-fixture is not in Fixture Smoke, so CI
+does not catch it); never assert focus through a role+name `.first()` when several controls can share
+the name; a control that a breakpoint unmounts must hand focus on, not drop it.
+
+**Separate finding (not fixed here):** the closed mobile source drawer is only `-translate-x-full`,
+so its controls stay in the Tab order while invisible (keyboard a11y defect; needs `inert` when closed).
+
+**Review follow-up (Codex P2 x2, 2026-11-11):**
+
+- *Non-empty library had no handoff target.* With documents there is no empty-state CTA; at 768->767
+  (drawer closed) and 1279->1280 (left collapsed -> `PanelSpine`) no `[data-upload-cta]` is usable.
+  Fallback: the first usable `[data-source-entry]` (header `.mobile-context` source button,
+  `conversation-source-trigger`, left `PanelSpine`). Red-before with the fallback removed: both new
+  non-empty cases fail.
+- *Root cause found while testing it: a fresh `SidebarLeft` reported `sources = []`.* Every
+  breakpoint crossing remounts `SidebarLeft`; its mount effect called `onSourcesChange([])` before
+  `/list-indexed` answered, wiping MainLayout's list, so the chat flashed its "no documents" empty
+  state (with its upload CTA) for ~50ms. The handoff focused that transient CTA, which then unmounted
+  and dropped focus to <body>. Fix: report only after the fetch succeeded or when in-progress
+  uploads exist (`daTaiDanhSach`). A failed fetch now leaves MainLayout's last list instead of [].
+- *Shelf backdrop occlusion (1279->1280 with the shelf open): not reproducible.* MainLayout's effect
+  on `[tabletSourceRail, workspaceMode]` closes the shelf when leaving the tablet band too (its
+  comment said "INTO" only; corrected, after it misled a reviewer). A test covers the case and
+  asserts the backdrop is gone; it passes 5/5 even with an `elementFromPoint` occlusion check and a
+  double rAF removed, so neither guard was added.
+
+**Re-review follow-up (Codex, 2026-11-11):**
+
+- *Gate forgot it had reported.* `/list-indexed` fails, a restored in-progress upload is reported,
+  the user deletes it: `sources = []` with `daTaiDanhSach` false was never reported, so MainLayout
+  kept the deleted card. `daBaoDanhSachRef` keeps reporting once this mount has reported.
+  Regression: `SidebarLeft.sourcesReport.test.jsx` (pending fetch reports nothing; empty success
+  reports []; failed fetch + restored upload + delete reports []). Red-before: the third case fails.
+- *Non-empty spec could pass on the transient CTA.* It now waits until the chat's no-documents CTA
+  is gone before resizing, requires focus on `[data-source-entry]`, and presses Enter to check the
+  drawer/panel opens. Red-before: eager `[]` report fails 768->767 (1279->1280 collapsed unmounts
+  SidebarLeft instead of remounting it, so only Vitest guards it there); no fallback fails both.
+- *Not fixed, pre-existing:* a remounted SidebarLeft starts with `sourcesRef = []`, so a backend
+  rename (same filename, new stem) arriving in its first fetch cannot migrate the selection and
+  drops it. This was already true before the gate (the old code also started from []). Fix
+  separately by seeding the child from MainLayout's list or lifting the fetch above the breakpoint
+  mounts.
+
+**Flaky target size found by repeat-10 (2026-11-11):** `round7-1-qa` "visual metrics" failed 1-2
+runs in 10 with `question-builder-pills width` 43.484375 < 44 (20/20 when run alone). Root cause:
+`.practice-customize-dialog .pill-tab` had `min-height: 44px` but no `min-width`; the narrowest
+pill "Dễ" is 44.39px with Inter and 43.48px with the fallback font, so the target met 44px only
+if the webfont had loaded. Fix: `min-width: 44px; justify-content: center`. Regression: "practice
+builder pills keep a 44px target with the fallback font" aborts font requests (red-before
+43.484375). Prevention: a 44px target needs both min-height and min-width; never let text width
+decide whether a short label meets it, and measure targets with the fallback font.

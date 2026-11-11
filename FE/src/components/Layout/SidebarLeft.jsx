@@ -1,4 +1,5 @@
-import { useState, useEffect, useLayoutEffect, useRef, useCallback } from "react";
+import { useState, useEffect, useLayoutEffect, useRef, useCallback, useMemo } from "react";
+import { uploadFocusHandoffRef } from "../../utils/uploadFocusHandoff";
 import { apiFetch, _appError, isUnauthorizedError, isNotFoundOrForbiddenError, getUserFriendlyApiError } from "../../utils/api";
 import { Icon } from "../ui/Icon";
 import Badge from "../ui/Badge";
@@ -41,6 +42,7 @@ const formatFileName = (name = "") => name.replace(/\.(mp4|avi|mov|mkv|webm|mp3|
 
 export default function SidebarLeft({ selectedSources, setSelectedSources, onSourcesChange, onClose, collapsible = false, onTransientSurfaceOpen, railMode = false, onUploadReady }) {
   const [sources, setSources] = useState([]);
+  const [daTaiDanhSach, setDaTaiDanhSach] = useState(false);
   // Round 9 fix: mirrors `sources` for `fetchSourcesFromBackend` below to read
   // as "the previous sources" WITHOUT depending on execution-order between
   // two separate `setState` calls (see that function's own comment for the
@@ -79,6 +81,10 @@ export default function SidebarLeft({ selectedSources, setSelectedSources, onSou
   const [draftFilters, setDraftFilters] = useState({ type: "", status: "", date: "" });
   const [appliedFilters, setAppliedFilters] = useState({ type: "", status: "", date: "" });
   const fileInputRef = useRef(null);
+  // Rail "+" and desktop panel upload button unmount when the layout crosses 768px / 1280px;
+  // a focused one hands focus to the upload control of the new layout (not <body>).
+  const railUploadFocusRef = useMemo(uploadFocusHandoffRef, []);
+  const panelUploadFocusRef = useMemo(uploadFocusHandoffRef, []);
   const fileChooserOpenRef = useRef(false);
   const pollersRef = useRef({});
   const settleFileChooser = useCallback(() => {
@@ -188,6 +194,7 @@ export default function SidebarLeft({ selectedSources, setSelectedSources, onSou
         const prevSnapshot = sourcesRef.current;
         setSources((prev) => mergeSources(prev, backendSources, formatFileName));
         setSelectedSources((prevSel) => reconcileSelectedSources(prevSnapshot, backendSources, prevSel));
+        setDaTaiDanhSach(true);
         setLoiTai(null);
       })
       .catch((err) => {
@@ -220,7 +227,18 @@ export default function SidebarLeft({ selectedSources, setSelectedSources, onSou
     Object.values(pollersRef.current).forEach((bo) => bo.stop());
     pollersRef.current = {};
   }, []);
-  useEffect(() => { if (onSourcesChange) onSourcesChange(sources); }, [sources, onSourcesChange]);
+  // This component remounts whenever the layout crosses 768px / 1280px (rail, shelf, drawer and
+  // panel are different mounts). A fresh mount starts with `sources = []`; reporting that before
+  // `/list-indexed` answers wiped MainLayout's list, so the chat flashed its "no documents" state
+  // (and its upload CTA) on every breakpoint crossing. Report only real data: the fetched list, or
+  // in-progress uploads rebuilt from local storage. Once this mount has reported a list, later
+  // changes (including back to []) are reported too, even if the fetch failed.
+  const daBaoDanhSachRef = useRef(false);
+  useEffect(() => {
+    if (!onSourcesChange || !(daTaiDanhSach || sources.length > 0 || daBaoDanhSachRef.current)) return;
+    daBaoDanhSachRef.current = true;
+    onSourcesChange(sources);
+  }, [sources, daTaiDanhSach, onSourcesChange]);
 
   useEffect(() => {
     if (!filterOpen) return undefined;
@@ -372,7 +390,7 @@ export default function SidebarLeft({ selectedSources, setSelectedSources, onSou
             );
           })}
         </div>
-        <button type="button" className={`source-rail__add${uploading ? " is-busy" : ""}`}
+        <button type="button" ref={railUploadFocusRef} data-upload-cta className={`source-rail__add${uploading ? " is-busy" : ""}`}
           onClick={() => fileInputRef.current?.click()} disabled={uploading}
           aria-label={uploading ? "Đang tải tài liệu" : "Tải tài liệu lên"}
           title={uploading ? "Đang tải tài liệu" : "Tải tài liệu lên"}>
@@ -412,7 +430,7 @@ export default function SidebarLeft({ selectedSources, setSelectedSources, onSou
             earns its weight when the shelf is empty (it's the one thing to
             do); once there are sources, "add another" is a routine action
             that doesn't need to out-shout the shelf itself every visit. */}
-        <button type="button" onClick={openFileChooser} disabled={uploading} className={["select-none w-full inline-flex items-center justify-center gap-2",
+        <button type="button" ref={panelUploadFocusRef} data-upload-cta onClick={openFileChooser} disabled={uploading} className={["select-none w-full inline-flex items-center justify-center gap-2",
           uploading ? "btn-secondary cursor-not-allowed opacity-70"
             : sources.length > 0 ? "btn-secondary cursor-pointer"
             : "btn-primary cursor-pointer"].join(" ")}>
