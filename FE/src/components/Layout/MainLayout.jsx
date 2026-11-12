@@ -334,7 +334,13 @@ export default function MainLayout({
     mindMapInitialLoading: Boolean(value.initialLoading),
     mindMapLoadError: value.loadError || null,
   })), []);
-  const updateSummaryLibrary = useCallback((value) => setLibraries((prev) => ({ ...prev, summaries: value.summaries || [], summaryActions: value.actions || null })), []);
+  const updateSummaryLibrary = useCallback((value) => setLibraries((prev) => ({
+    ...prev,
+    summaries: value.summaries || [],
+    summaryActions: value.actions || null,
+    summaryInitialLoading: Boolean(value.initialLoading),
+    summaryLoadError: value.loadError || null,
+  })), []);
   // Lệnh một-lần (nonce) để "Xem sơ đồ"/"Xem tóm tắt" ở Tutor chuyển đúng tab
   // Artifacts trong SidebarRight — KHÔNG điều hướng, KHÔNG route mới (tutorActions.js
   // giải thích lý do: Workspace không có `document_id` để gọi `duongDi`).
@@ -396,7 +402,10 @@ export default function MainLayout({
     create: libraries.summaryActions.create,
     creating: Boolean(libraries.summaryActions.creating),
     jobLabel: libraries.summaryActions.jobLabel,
-  } : null), [libraries.summaries, libraries.summaryActions]);
+    loading: Boolean(libraries.summaryInitialLoading),
+    loadError: libraries.summaryLoadError || null,
+    retryLoad: libraries.summaryActions.retryLoad,
+  } : null), [libraries.summaries, libraries.summaryActions, libraries.summaryInitialLoading, libraries.summaryLoadError]);
 
   // Feature Pack B (Cross Navigation) — real dead end found: while on the
   // MindMap tab WITH a map loaded, the right column shows ONLY

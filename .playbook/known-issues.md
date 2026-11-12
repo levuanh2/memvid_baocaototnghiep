@@ -8120,3 +8120,27 @@ off-screen button then matches the same role+name as the visible CTA.
 **Prevention:** hiding by transform, width, opacity or pointer-events is visual only; anything
 that stays mounted while hidden needs `inert`. Label tests should match the bare text, not one
 quoting style.
+
+### Summary screen said "Chưa có tóm tắt" while the list was loading or had failed (V6, 2026-11-12)
+
+**Symptom.** `/app?tab=summary` for an account with saved summaries: until `/summaries` answered,
+and for good if it failed, the centre screen showed "Chưa có tóm tắt" and the "Tạo tóm tắt"
+button. A learner could pay for a summary they already had.
+
+**Root cause.** `SidebarRight` holds `dangTaiSummary` / `loiTaiSummary` and used them only in its
+own list. `onSummaryLibraryChange` published neither, so `WorkspaceContainer` gave the summary
+`WorkspaceEmptyState` no `loading` / `error`. The mind-map side got both signals earlier (the
+"intermittent no map" fix); the summary side was left out.
+
+**Fix.** The two signals and a `retryLoad` go up through `updateSummaryLibrary` ->
+`summaryLibrary` -> `WorkspaceEmptyState` (`loading`, `error`, new `onRetryLoad`: "Tải lại danh
+sách"). The error is shown only when there are no summaries to offer.
+
+**Regression test.** `e2e-fixture/summary-loading-state.spec.js` (3 cases; the loading and the
+failed-load case fail on the old code). Not in Fixture Smoke.
+
+**Not covered.** The mind-map load error still has no reload button. Before `SidebarRight`
+publishes for the first time the empty screen can show for one frame.
+
+**Prevention.** Found by a read-only audit comparing the props the two `WorkspaceEmptyState`
+call sites pass: when a state is fixed for one of two sibling screens, check the other.

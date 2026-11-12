@@ -935,14 +935,19 @@ export default function SidebarRight({
   useEffect(() => {
     onSummaryLibraryChange?.({
       summaries,
+      // Same two signals the mind map publishes: without them the Summary screen cannot tell
+      // "still loading" or "failed to load" from "this account has no summaries".
+      initialLoading: dangTaiSummary,
+      loadError: loiTaiSummary,
       actions: {
+        retryLoad: fetchSummaries,
         select: setShowSummaryModal,
         create: createSummaryFromLibrary,
         creating: summaryLoading || summaryJobUi.running,
         jobLabel: summaryJobUi.label,
       },
     });
-  }, [summaries, summaryLoading, summaryJobUi.running, summaryJobUi.label, createSummaryFromLibrary, onSummaryLibraryChange]);
+  }, [summaries, summaryLoading, summaryJobUi.running, summaryJobUi.label, createSummaryFromLibrary, onSummaryLibraryChange, dangTaiSummary, loiTaiSummary, fetchSummaries]);
 
   // W3-4: roving-tabindex arrow keys for the right-panel tab row (standard
   // ARIA tabs pattern) -- automatic activation, same as clicking.

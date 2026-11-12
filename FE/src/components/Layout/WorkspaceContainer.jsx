@@ -89,6 +89,9 @@ export default function WorkspaceContainer({
         ) : (
           <WorkspaceEmptyState kind="summary" selectedCount={selectedSources.length}
             hasAnyDocuments={hasAnyDocuments} onUpload={onUploadDocument} onCreate={onSummaryAction}
+            loading={summaryLibrary?.loading}
+            error={summaryLibrary?.items?.length ? null : summaryLibrary?.loadError}
+            onRetryLoad={summaryLibrary?.retryLoad}
             creating={summaryLibrary?.creating} jobLabel={summaryLibrary?.jobLabel}>
             {summaryLibrary?.items?.length > 0 && (
               <div className="mt-2 flex flex-col items-center gap-1.5">
