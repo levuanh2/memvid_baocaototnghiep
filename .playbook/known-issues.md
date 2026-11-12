@@ -8132,3 +8132,27 @@ quoting style.
 **Regression:** `ChatArea.attemptIdentity.test.jsx` (both cases fail on the old code).
 
 **Not changed:** the review-resume polling path (bug hunt #11) still has no cancellation.
+
+### Answer-review polling could not be cancelled and outlived the chat (V6 bug hunt #11, 2026-11-12)
+
+**Symptom.** After "Duyệt" / "Sửa" on a held answer, `ChatArea` polled the job with
+`isCancelled: () => false`. Leaving the page left the poll running against a dead component; a
+second review action started a second poll, and the older one could publish its progress,
+result, error notice and `loading = false` after the newer one owned the screen.
+
+**Root cause.** `handleReview` was the one async path in `ChatArea` that did not take part in
+the attempt identity introduced for send/cancel (`attemptRef`, `stale()`).
+
+**Fix.** Each review continuation takes a fresh attempt id; `stale` is the poll's
+`isCancelled`, and guards the continuation after `resumeQuery`, the progress callback, the
+final result, the error notice and `finally`. New chat, clear context and delete history bump
+the same id. Written by Codex in a shared worktree, reviewed before commit.
+
+**Regression test.** `ChatArea.reviewResumeCancel.test.jsx`: unmount cancels the poll; a
+continuation replaced in the same tick never starts polling. Both failed before the fix.
+
+**Not covered.** Two review clicks in the same tick still send `resumeQuery` twice (only one
+continuation proceeds). The poll is stopped by predicate; the in-flight request is not aborted.
+
+**Prevention.** When a component gets an "attempt identity", list every async path in it, not
+only the one that was reported.

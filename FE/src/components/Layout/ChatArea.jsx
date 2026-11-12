@@ -413,6 +413,7 @@ export default function ChatArea({
 
   const handleNewChat = () => {
     if (loading || pendingReview) return;
+    attemptRef.current += 1;
     setMenuOpen(false);
     setSessionId(newConversationId());   // fresh thread, empty context (keeps selected sources)
     setMessages([]);
@@ -424,6 +425,7 @@ export default function ChatArea({
 
   const handleClearContext = async () => {
     if (loading || pendingReview) return;
+    attemptRef.current += 1;
     setMenuOpen(false);
     setContextCleared(true);            // messages stay visible; AI stops using old turns
     refocusComposer();                  // trước await: nút vừa bấm đã biến mất cùng menu
@@ -475,6 +477,7 @@ export default function ChatArea({
     } catch {
       throw new Error("Không xóa được lịch sử chat trên máy chủ. Lịch sử vẫn còn, hãy thử lại.");
     }
+    attemptRef.current += 1;
     setMessages([]);
     setContextCleared(false);
     onEvidence?.(null); onHighlight?.(null);
@@ -503,27 +506,35 @@ export default function ChatArea({
   const handleReview = async (action) => {
     if (!pendingReview || reviewSubmitting) return;
     if (action === "edit" && !String(pendingReview.answer || "").trim()) return;
+    const attempt = ++attemptRef.current;
+    const stale = () => attempt !== attemptRef.current;
     setReviewSubmitting(true);
     setLoading(true);
     try {
       await resumeQuery(pendingReview.jobId, { action, answer: pendingReview.answer });
+      if (stale()) return;
       const result = await pollQueryStatus(pendingReview.jobId, {
         apiFetch,
-        isCancelled: () => false,
+        isCancelled: stale,
         onStatus: (d) => {
+          if (stale()) return;
           if (typeof d?.progress === "number") setJobProgress(Math.max(0, Math.min(100, d.progress)));
         },
       });
+      if (stale()) return;
       applyFinalQueryResult(result);
       setPendingReview(null);
     } catch (err) {
+      if (stale() || err?.message === "CANCELLED") return;
       const content = (isUnauthorizedError(err) || isNotFoundOrForbiddenError(err))
         ? getUserFriendlyApiError(err)
         : ensureErrMsg(err?.message, "Không thể tiếp tục quy trình duyệt. Vui lòng thử lại.");
       showNotice(content);
     } finally {
-      setReviewSubmitting(false);
-      setLoading(false);
+      if (!stale()) {
+        setReviewSubmitting(false);
+        setLoading(false);
+      }
     }
   };
 
