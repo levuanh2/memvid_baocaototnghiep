@@ -90,6 +90,9 @@ export const STUDY_MAP_LIVE_CSS = `
   .study-map-canvas .study-map__link--branch { stroke: var(--border-strong); stroke-width: 1.5px; }
   .study-map-canvas .study-map__link--leaf { stroke: var(--border-strong); stroke-width: 1.2px; }
   .study-map-canvas g[data-map-role]:not([data-map-role="root"]):hover .study-map__anchor { fill: var(--bg-hover); }
+  .study-map-canvas g[data-map-role]:focus { outline: none; }
+  .study-map-canvas g[data-map-role]:focus-visible .study-map__anchor { stroke: var(--accent); stroke-width: 3.5px; }
+  .study-map-canvas g[data-map-role]:focus-visible text { text-decoration: underline; }
   .study-map-canvas .study-map__touch-target { display: none; }
   @media (max-width: 767px) { .study-map-canvas .study-map__touch-target { display: block; } }
 `;
@@ -481,7 +484,17 @@ export default function StudyMapView() {
         if (hasBranch) toggleNode();
       };
       return (
+        // Keyboard: the node is the page's main content, so it takes focus and Enter/Space do
+        // what a click does. Without this the map could only be read with a pointer.
         <g onClick={onPick} data-map-role={attrs.node_type || "concept"}
+           tabIndex={0} role="button" aria-label={nodeDatum.name}
+           aria-pressed={isSel ? "true" : "false"}
+           aria-expanded={hasBranch ? (nodeDatum.__rd3t?.collapsed ? "false" : "true") : undefined}
+           onKeyDown={(e) => {
+             if (e.key !== "Enter" && e.key !== " ") return;
+             e.preventDefault();
+             onPick();
+           }}
            data-selected={isSel ? "true" : undefined}
            data-search-match={isMatch ? (isActiveMatch ? "active" : "match") : undefined}
            style={{ cursor: "pointer", opacity: daMo ? 1 : 0.22 }}>

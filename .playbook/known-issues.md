@@ -8142,3 +8142,24 @@ its own id and stops after every `await`, in `catch` and in `finally` when the t
 
 **Not covered.** The requests are not aborted, only ignored. `SidebarLeft` upload poller (#2)
 waits for #160, which touches the same lines.
+
+### Knowledge-map nodes could only be used with a pointer (V6 bug hunt #7, 2026-11-12)
+
+**Symptom.** On `/app/study/map/:id` Tab skipped every node; a keyboard user could not select a
+node, read its detail or open a branch.
+
+**Root cause.** `renderNode` in `StudyMapView.jsx` returns an SVG `<g onClick>` with no
+`tabIndex`, role, name or key handler.
+
+**Fix.** The `<g>` is `role="button"`, `tabIndex=0`, named by the node title, with
+`aria-pressed` (selected) and `aria-expanded` (branch), Enter/Space run the click action, and a
+`:focus-visible` style on the node's circle and label.
+
+**Regression test.** `e2e-fixture/knowledge-map-keyboard.spec.js` (real react-d3-tree: Enter
+selects and opens the branch and focus stays on the node; Tab reaches the root).
+
+**Not covered.** No arrow-key movement between nodes; Tab order is DOM order. Not tried with a
+screen reader.
+
+**Prevention.** A custom SVG/canvas element with `onClick` needs the same three things a button
+has: focus, a name, and Enter/Space.
