@@ -544,8 +544,6 @@ export default function DocumentList() {
         onTao={taoBoSuuTap}
         onSua={suaBoSuuTap}
         onXoa={setBoSuuTapCanXoa}
-        hienLuuTru={hienLuuTru}
-        onHienLuuTru={setHienLuuTru}
       />
 
       <div className="min-w-0 flex-1">

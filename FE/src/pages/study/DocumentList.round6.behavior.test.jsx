@@ -23,10 +23,9 @@ vi.mock("../../components/study/StudyShell", () => ({
   default: ({ loading, error, actions, children }) => <div>{actions}{loading ? <div data-loading /> : error ? <div role="alert">{error}</div> : children}</div>,
   EmptyState: ({ title, action }) => <div data-empty>{title}{action}</div>,
 }));
-vi.mock("../../components/study/CollectionSidebar", () => ({ default: ({ boSuuTap, onChon, onXoa, onHienLuuTru }) => <aside>
+vi.mock("../../components/study/CollectionSidebar", () => ({ default: ({ boSuuTap, onChon, onXoa }) => <aside>
   <button type="button" data-collection-filter onClick={() => onChon({ collectionId: "course-a" })}>Course A</button>
   <button type="button" data-tag-filter onClick={() => onChon({ tags: ["Exam"] })}>Exam</button>
-  <button type="button" data-archive-toggle onClick={() => onHienLuuTru((value) => !value)}>Archive</button>
   {boSuuTap[0] && <button type="button" data-delete-collection onClick={() => onXoa(boSuuTap[0])}>Delete collection</button>}
 </aside> }));
 vi.mock("../../components/study/BulkBar", () => ({ default: ({ so, onHanhDong }) => so
@@ -125,12 +124,16 @@ describe("DocumentList Round 6 mounted integration", () => {
     expect(bulkDocuments).toHaveBeenCalledWith({ action: "pin", document_ids: expectedIds });
   });
 
+  // The one "Hiện đã lưu trữ" control: the toolbar checkbox (the sidebar copy was removed).
+  const archiveToggle = () => [...host.querySelectorAll('input[type="checkbox"]')]
+    .find((input) => input.parentElement?.textContent.includes("Hiện đã lưu trữ"));
+
   it("excludes immediately hidden archived UUIDs from the actual bulk request", async () => {
     await renderDocumentList();
-    act(() => host.querySelector("[data-archive-toggle]").click());
+    act(() => archiveToggle().click());
     const selectAll = [...host.querySelectorAll('input[type="checkbox"]')].find((input) => input.parentElement?.textContent.includes("đang hiện"));
     act(() => selectAll.click());
-    act(() => host.querySelector("[data-archive-toggle]").click());
+    act(() => archiveToggle().click());
     act(() => host.querySelector("[data-bulk-pin]").click());
     await flush();
     expect(bulkDocuments).toHaveBeenCalledWith({ action: "pin", document_ids: ["doc-2", "doc-1"] });

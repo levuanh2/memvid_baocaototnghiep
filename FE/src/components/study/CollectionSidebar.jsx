@@ -118,7 +118,6 @@ function FormBoSuuTap({ ban_dau, onLuu, onHuy, onXoa }) {
 
 export default function CollectionSidebar({
   boSuuTap, chuaPhanLoai, the, chon, onChon, onTao, onSua, onXoa,
-  hienLuuTru, onHienLuuTru,
 }) {
   const [dangTao, setDangTao] = useState(false);
   const [dangSua, setDangSua] = useState(null);
@@ -230,12 +229,9 @@ export default function CollectionSidebar({
           <MucLoc nhan="Đã ghim" icon="Pin"
                   dangChon={(dangChon.khoa || []).includes("pinned")}
                   onClick={() => onChon({ ...dangChon, khoa: ["pinned"] })} />
-          <label className="flex items-center gap-2 px-2 py-1.5 cursor-pointer">
-            <input type="checkbox" checked={hienLuuTru}
-                   onChange={(e) => onHienLuuTru(e.target.checked)}
-                   className="w-3.5 h-3.5 accent-accent rounded" />
-            <span className="text-small text-text-primary">Hiện đã lưu trữ</span>
-          </label>
+          {/* "Hiện đã lưu trữ" lives in the toolbar only: this sidebar is hidden below `lg`, so
+              the toolbar copy is the one every width has, and two checkboxes for one setting
+              sat 300px apart on desktop. */}
         </Nhom>
       </div>
     </aside>

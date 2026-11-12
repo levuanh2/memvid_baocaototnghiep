@@ -24,7 +24,7 @@ function Harness({ initial = [ALPHA], deleteRequest }) {
   return (
     <>
       <CollectionSidebar boSuuTap={list} chuaPhanLoai={0} the={[]} chon={{}} onChon={vi.fn()}
-        onTao={vi.fn()} onSua={vi.fn()} onXoa={setTarget} hienLuuTru={false} onHienLuuTru={vi.fn()} />
+        onTao={vi.fn()} onSua={vi.fn()} onXoa={setTarget} />
       <DestructiveConfirmDialog open={Boolean(target)} title="Xoá bộ sưu tập" targetName={target?.name}
         confirmLabel="Xoá bộ sưu tập" onCancel={() => setTarget(null)} onConfirm={confirm} />
     </>
@@ -149,4 +149,13 @@ it("ignores Escape while the delete is in flight: no cancel, no second request, 
   expect(deleteRequest).toHaveBeenCalledTimes(1);
   expect(sidebar.contains(document.activeElement)).toBe(false);
   await act(async () => { resolve(); await Promise.resolve(); });
+});
+
+it("has no 'Hiện đã lưu trữ' checkbox of its own: the Library toolbar owns that setting (V6)", async () => {
+  host = document.createElement("div"); document.body.appendChild(host);
+  root = createRoot(host);
+  await act(async () => root.render(<Harness deleteRequest={vi.fn()} />));
+  expect(host.textContent).toContain("Yêu thích");
+  expect(host.textContent).not.toContain("Hiện đã lưu trữ");
+  expect(host.querySelectorAll('input[type="checkbox"]').length).toBe(0);
 });
