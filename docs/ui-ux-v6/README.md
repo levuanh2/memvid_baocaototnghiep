@@ -17,9 +17,9 @@ V6 is **not complete**. This file is the single status page: it says which waves
 |---|---|---|
 | A | Design foundation: direction, rules, landing as the first surface built to them | **Draft PR** (this branch): spec + Landing. Tokens for the app shell are not changed yet |
 | B | Navigation and information architecture: header, sidebars, action hierarchy | Not started. The inventory is in: 1 true duplicate left, so this wave is about grouping, not removal |
-| C | Learning experience: Library, Chat, Summary, Quiz, learning dashboard | **Started.** Chat start screen is Draft PR #161. Library, Summary, Quiz, dashboard not started |
+| C | Learning experience: Library, Chat, Summary, Quiz, learning dashboard | **Started.** Chat start screen is Draft PR #161. Library, Summary, Quiz, dashboard not redesigned; agy's control inventory for header, Library, Summary and Profile is in (not independently verified except the Summary item fixed in #165) |
 | D | Knowledge visualisation: Mind map, Knowledge map, toolbars, export | Not started |
-| E | Frontend reliability: the bugs in `01-audit.md` §2 and §3 | **Started.** W1 is Draft PR #160; findings 5, 6, 8, 9, 10 are Draft PR #162. Findings 1–4, 7, 11–15 are not fixed |
+| E | Frontend reliability: the bugs in `01-audit.md` §2 and §3 | **Started.** W1 is Draft PR #160; findings 5, 6, 8, 9, 10 are #162; finding 1 is #163; findings 3, 4, 7, 14 are #164; the Summary false-empty screen is #165. Findings 2, 11, 13, 15 are not fixed (2 waits for #160: same lines); 12 is partly covered by #160 |
 
 ## Status
 
@@ -29,6 +29,11 @@ V6 is **not complete**. This file is the single status page: it says which waves
 | V6-E1 false "empty library" while loading | `fix/v6-source-loading-state` | #160 | `source-loading-state.spec.js` 8/8; Layout unit tests 170/170; Codex review: race fixed, 1 item left open (stale `?source=` with a collapsed panel) |
 | V6-C1 chat start screen (stacked on #160) | `design/v6-chat-start` | #161 | Vitest 1938/1938; `chat-start.spec.js` + `chat-mobile-empty-state.spec.js` 16/16; build pass |
 | V6-E2 double-submit guards | `fix/v6-double-submit-guards` | #162 | Vitest 1938/1938; three double-click tests red before the fix; `StudyMapView` guards untested |
+| V6-E3 cancelled chat attempt cannot publish into the next | `fix/v6-chat-attempt-identity` | #163 | Vitest 1937/1937; four tests red before their fixes; review-resume polling still has no cancellation |
+| V6-E4 stale loads (quiz, study map), orphan pollers, keyboard map nodes | `fix/v6-stale-owner-guards` | #164 | Vitest 1942/1942; 8 of 9 new unit tests red before the fix; `knowledge-map-keyboard.spec.js` 2/2; build pass. `SidebarRight` guards written by Codex |
+| V6-E5 Summary screen false "Chưa có tóm tắt" | `fix/v6-summary-loading-state` | #165 | Vitest 1933/1933; `summary-loading-state.spec.js` 3/3 (2 red before the fix); build pass |
+
+Merge notes: #161 is stacked on #160 (merge #160 first). #160, #162, #163, #164 and #165 each append to the end of the two `.playbook` files, so after one merges the others need their notes rebased; no code conflict is expected.
 
 ## Skills and tools used
 
@@ -37,8 +42,8 @@ V6 is **not complete**. This file is the single status page: it says which waves
 | `frontend-design` (read and applied) | Landing: design plan, review against generic defaults, copy rules |
 | Claude in Chrome | Live audit of studymap.space with the QA browser account (read-only: no upload, no generation, no deletion) |
 | Playwright (fixture config, local Vite) | Before/after captures and the landing regression spec |
-| Codex (Herdr pane) | Read-only frontend bug hunt (`01-audit.md` §3) and reviews of #159, #160 and #162 |
-| agy (Herdr pane) | Read-only route and action inventory, journey-to-test map (`03-actions-and-journeys.md`) |
+| Codex (Herdr pane) | Read-only frontend bug hunt (`01-audit.md` §3); reviews of #159–#163; wrote the `SidebarRight` guards and tests in #164 |
+| agy (Herdr pane) | Read-only route and action inventory, journey-to-test map (`03-actions-and-journeys.md`); control inventory for header, Library, Summary, Profile |
 
 Not used: `ui-ux-pro-max`, `web-interface-guidelines`, `design-system` are installed but were not read for this wave.
 
