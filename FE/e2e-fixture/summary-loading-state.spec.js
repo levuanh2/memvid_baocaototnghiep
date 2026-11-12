@@ -26,19 +26,21 @@ async function openWorkspace(page, summariesHandler) {
 }
 
 const summaryPane = (page) => page.locator("main");
+// The mind-map pane (hidden in Summary mode) can show the same line while /mindmaps loads.
+const loadingLine = (page) => page.locator("main p:visible", { hasText: "Đang tải…" });
 
 test("while the list is loading the screen says so and does not claim there are no summaries", async ({ page }) => {
   let release;
   const gate = new Promise((r) => { release = r; });
   await openWorkspace(page, async (route) => { await gate; return route.fulfill(json({ summaries: [SAVED] })); });
 
-  await expect(summaryPane(page).getByText("Đang tải…")).toBeVisible();
+  await expect(loadingLine(page)).toBeVisible();
   await expect(summaryPane(page).getByText("Chưa có tóm tắt", { exact: true })).toHaveCount(0);
   await expect(summaryPane(page).getByRole("button", { name: "Tạo tóm tắt" })).toHaveCount(0);
 
   release();
   await expect(summaryPane(page).getByRole("combobox", { name: "Chọn tóm tắt" })).toBeVisible();
-  await expect(summaryPane(page).getByText("Đang tải…")).toHaveCount(0);
+  await expect(loadingLine(page)).toHaveCount(0);
 });
 
 test("a failed load says so, and 'Tải lại danh sách' recovers the saved summaries", async ({ page }) => {
@@ -49,7 +51,15 @@ test("a failed load says so, and 'Tải lại danh sách' recovers the saved sum
   await expect(summaryPane(page).getByText("Chưa có tóm tắt", { exact: true })).toHaveCount(0);
 
   fail = false;
+  let release;
+  const gate = new Promise((r) => { release = r; });
+  await page.route(/localhost:8080\/summaries/, async (route) => { await gate; return route.fulfill(json({ summaries: [SAVED] })); });
   await summaryPane(page).getByRole("button", { name: "Tải lại danh sách" }).click();
+  // While the reload runs: loading, no stale error, no second reload button to press.
+  await expect(loadingLine(page)).toBeVisible();
+  await expect(summaryPane(page).getByText("Chưa tải được danh sách tóm tắt.")).toHaveCount(0);
+  await expect(summaryPane(page).getByRole("button", { name: "Tải lại danh sách" })).toHaveCount(0);
+  release();
   await expect(summaryPane(page).getByRole("combobox", { name: "Chọn tóm tắt" })).toBeVisible();
   await expect(summaryPane(page).getByText("Chưa tải được danh sách tóm tắt.")).toHaveCount(0);
 });

@@ -309,21 +309,35 @@ export default function SidebarRight({
     finally { setInitialLoading(false); }
   }, []);
 
+  // Only the newest /summaries request may publish: an older one answering last used to put
+  // its error (or its older list) back over the newer result.
+  const luotTaiSummaryRef = useRef(0);
   const fetchSummaries = useCallback(async () => {
+    const luot = ++luotTaiSummaryRef.current;
+    const cu = () => luot !== luotTaiSummaryRef.current;
     try {
       const res = await apiFetch(`/summaries`);
       if (!res.ok) throw new Error(`HTTP ${res.status}`);
       const data = await res.json();
+      if (cu()) return;
       setSummaries(Array.isArray(data?.summaries) ? data.summaries : []);
       setLoiTaiSummary(null);
     } catch (err) {
+      if (cu()) return;
       console.error("Summary fetch error:", err);
       setLoiTaiSummary("Chưa tải được danh sách tóm tắt.");
     }
     // Tab Tóm tắt trước đây KHÔNG có cờ tải nào, nên nó hiện "Chưa có tóm tắt nào"
     // ngay trong lúc đang tải lần đầu.
-    finally { setDangTaiSummary(false); }
+    finally { if (!cu()) setDangTaiSummary(false); }
   }, []);
+  // "Tải lại danh sách": show the loading state again instead of leaving the old error and an
+  // enabled button on screen while the request runs.
+  const taiLaiSummaries = useCallback(() => {
+    setLoiTaiSummary(null);
+    setDangTaiSummary(true);
+    return fetchSummaries();
+  }, [fetchSummaries]);
 
   useEffect(() => { fetchMindMaps(); fetchSummaries(); }, [fetchMindMaps, fetchSummaries]);
 
@@ -940,14 +954,14 @@ export default function SidebarRight({
       initialLoading: dangTaiSummary,
       loadError: loiTaiSummary,
       actions: {
-        retryLoad: fetchSummaries,
+        retryLoad: taiLaiSummaries,
         select: setShowSummaryModal,
         create: createSummaryFromLibrary,
         creating: summaryLoading || summaryJobUi.running,
         jobLabel: summaryJobUi.label,
       },
     });
-  }, [summaries, summaryLoading, summaryJobUi.running, summaryJobUi.label, createSummaryFromLibrary, onSummaryLibraryChange, dangTaiSummary, loiTaiSummary, fetchSummaries]);
+  }, [summaries, summaryLoading, summaryJobUi.running, summaryJobUi.label, createSummaryFromLibrary, onSummaryLibraryChange, dangTaiSummary, loiTaiSummary, taiLaiSummaries]);
 
   // W3-4: roving-tabindex arrow keys for the right-panel tab row (standard
   // ARIA tabs pattern) -- automatic activation, same as clicking.
