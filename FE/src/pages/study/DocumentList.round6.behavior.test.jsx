@@ -2,7 +2,7 @@
 import { act } from "react";
 import { createRoot } from "react-dom/client";
 import { MemoryRouter } from "react-router-dom";
-import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
+import { afterEach, beforeAll, beforeEach, describe, expect, it, vi } from "vitest";
 import { StudyContextProvider } from "../../study/StudyContextProvider";
 import {
   bulkDocuments, deleteCollection, getLibrary, getProgressAttempts, getProgressConcepts,
@@ -23,10 +23,9 @@ vi.mock("../../components/study/StudyShell", () => ({
   default: ({ loading, error, actions, children }) => <div>{actions}{loading ? <div data-loading /> : error ? <div role="alert">{error}</div> : children}</div>,
   EmptyState: ({ title, action }) => <div data-empty>{title}{action}</div>,
 }));
-vi.mock("../../components/study/CollectionSidebar", () => ({ default: ({ boSuuTap, onChon, onXoa, onHienLuuTru }) => <aside>
-  <button type="button" data-collection-filter onClick={() => onChon({ collectionId: "course-a" })}>Course A</button>
+vi.mock("../../components/study/CollectionSidebar", () => ({ default: ({ boSuuTap, chon, onChon, onXoa }) => <aside>
+  <button type="button" data-collection-filter onClick={() => onChon({ ...chon, collectionId: "course-a" })}>Course A</button>
   <button type="button" data-tag-filter onClick={() => onChon({ tags: ["Exam"] })}>Exam</button>
-  <button type="button" data-archive-toggle onClick={() => onHienLuuTru((value) => !value)}>Archive</button>
   {boSuuTap[0] && <button type="button" data-delete-collection onClick={() => onXoa(boSuuTap[0])}>Delete collection</button>}
 </aside> }));
 vi.mock("../../components/study/BulkBar", () => ({ default: ({ so, onHanhDong }) => so
@@ -54,10 +53,25 @@ const setInput = (input, value) => act(() => {
   input.dispatchEvent(new Event("input", { bubbles: true }));
 });
 
+// `LIBRARY_ACTION_MATRIX` is read once when DocumentList.jsx is evaluated, so each renderer
+// needs its own evaluation of the module. Those two cold imports used to run INSIDE every test,
+// on the test's 15 s clock: once, under load, the first test timed out there, Vitest moved on
+// while its async `act` was still open, and the eleven tests after it failed on the shared
+// root/host (investigation: V6-12). They are loaded here once, with their own budget; a failure
+// here stops the file before any `act` is open.
+const documentListByFlag = new Map();
+beforeAll(async () => {
+  for (const flag of [false, true]) {
+    vi.stubEnv("VITE_LIBRARY_ACTION_MATRIX", flag ? "true" : "false");
+    vi.resetModules();
+    const { default: DocumentList } = await import("./DocumentList");
+    documentListByFlag.set(flag, DocumentList);
+  }
+  vi.unstubAllEnvs();
+}, 60_000);
+
 async function renderDocumentList({ flag = true } = {}) {
-  vi.stubEnv("VITE_LIBRARY_ACTION_MATRIX", flag ? "true" : "false");
-  vi.resetModules();
-  const { default: DocumentList } = await import("./DocumentList");
+  const DocumentList = documentListByFlag.get(flag);
   host = document.createElement("div");
   document.body.appendChild(host);
   root = createRoot(host);
@@ -125,12 +139,35 @@ describe("DocumentList Round 6 mounted integration", () => {
     expect(bulkDocuments).toHaveBeenCalledWith({ action: "pin", document_ids: expectedIds });
   });
 
+  // The one "Hiện đã lưu trữ" control: the toolbar checkbox (the sidebar copy was removed).
+  const archiveToggle = () => [...host.querySelectorAll('input[type="checkbox"]')]
+    .find((input) => input.parentElement?.textContent.includes("Hiện đã lưu trữ"));
+
+  // V6: the sidebar used to echo the active state filters back on every click and the parent
+  // read an identical echo as "toggle off", so picking a collection cleared "Yêu thích".
+  it("picking a collection keeps an active state filter from the 'Lọc' popover", async () => {
+    await renderDocumentList();
+    const filterToggle = [...host.querySelectorAll("button")].find((b) => b.textContent.trim().startsWith("Lọc"));
+    act(() => filterToggle.click());
+    const favorite = [...host.querySelectorAll('input[type="checkbox"]')]
+      .find((input) => input.parentElement?.textContent.includes("Yêu thích"));
+    act(() => favorite.click());
+    expect(favorite.checked).toBe(true);
+
+    act(() => host.querySelector("[data-collection-filter]").click());
+
+    const favoriteAfter = [...host.querySelectorAll('input[type="checkbox"]')]
+      .find((input) => input.parentElement?.textContent.includes("Yêu thích"));
+    expect(favoriteAfter.checked).toBe(true);
+    expect([...host.querySelectorAll("button")].some((b) => b.textContent.trim().startsWith("Lọc (1)"))).toBe(true);
+  });
+
   it("excludes immediately hidden archived UUIDs from the actual bulk request", async () => {
     await renderDocumentList();
-    act(() => host.querySelector("[data-archive-toggle]").click());
+    act(() => archiveToggle().click());
     const selectAll = [...host.querySelectorAll('input[type="checkbox"]')].find((input) => input.parentElement?.textContent.includes("đang hiện"));
     act(() => selectAll.click());
-    act(() => host.querySelector("[data-archive-toggle]").click());
+    act(() => archiveToggle().click());
     act(() => host.querySelector("[data-bulk-pin]").click());
     await flush();
     expect(bulkDocuments).toHaveBeenCalledWith({ action: "pin", document_ids: ["doc-2", "doc-1"] });
