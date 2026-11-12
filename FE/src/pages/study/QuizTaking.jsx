@@ -54,6 +54,11 @@ export default function QuizTaking() {
 
   const load = useCallback(async () => {
     const stale = () => !mountedRef.current || quizIdRef.current !== quizId;
+    // Drop what the previous quiz left behind: if this open fails, the old questions and
+    // attempt would otherwise stay on screen under the new URL and hide the error.
+    setQuiz(null);
+    setAttemptId(null);
+    setAnswers({});
     setLoading(true);
     setError(null);
     try {

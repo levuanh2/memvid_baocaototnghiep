@@ -305,6 +305,11 @@ export default function StudyMapView() {
     },
   });
 
+  // A job still polling belongs to the document it was started for. `useStudyJob` calls the
+  // newest `onDone`, so without this A's finished map was opened on document B.
+  const resetJob = job.reset;
+  useEffect(() => { resetJob(); }, [documentId, resetJob]);
+
   const load = useCallback(async () => {
     const stale = () => docIdRef.current !== documentId;
     setLoading(true);
@@ -429,6 +434,8 @@ export default function StudyMapView() {
     setError(null);
     try {
       const body = await generateStudyMap(documentId, { force });
+      // Asked for another document meanwhile: its job must not be tracked on this one.
+      if (docIdRef.current !== documentId) return;
       if (body?.job_id) job.start(body.job_id);
       else if (body?.map_id) await openMap(body.map_id, documentId);
       // FE#18: không có nhánh này thì response thiếu cả hai khoá = nút hết quay và

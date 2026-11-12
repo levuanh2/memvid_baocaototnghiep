@@ -70,6 +70,22 @@ describe("QuizTaking: a slow open for the previous quiz cannot land on the new o
     expect(container.textContent).toBe("loading");
   });
 
+  it("B failing after A had loaded shows B's error, not A's questions", async () => {
+    container = document.createElement("div"); document.body.appendChild(container);
+    root = createRoot(container);
+    await act(async () => root.render(<QuizTaking />));
+    await act(async () => { pending["quiz-A"].resolve(body("A")); });
+    await flush();
+    expect(container.textContent).toContain("Câu của A");
+
+    currentQuizId = "quiz-B";
+    await act(async () => root.render(<QuizTaking />));
+    await act(async () => { pending["quiz-B"].reject(new Error("B không mở được")); });
+    await flush();
+    expect(container.textContent).not.toContain("Câu của A");
+    expect(container.textContent).toContain("B không mở được");
+  });
+
   it("A, already finished, does not redirect B to A's result", async () => {
     await goFromAToB();
     await act(async () => { pending["quiz-A"].resolve({ ...body("A"), status: "submitted" }); });

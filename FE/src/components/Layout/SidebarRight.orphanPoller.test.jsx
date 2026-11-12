@@ -8,7 +8,7 @@ import { apiFetch, generateMindmap, generateSummary } from "../../utils/api";
 import { createMindmapPoller } from "../../utils/mindmapJob";
 import { createSummaryPoller } from "../../utils/summaryJob";
 import { toast } from "../ui/Toaster";
-import { loadActiveMindmapJob } from "../../utils/activeMindmapJob";
+import { loadActiveMindmapJob, saveActiveMindmapJob } from "../../utils/activeMindmapJob";
 import { loadActiveSummaryJob } from "../../utils/activeSummaryJob";
 
 const pollerSpies = vi.hoisted(() => ({
@@ -124,6 +124,19 @@ describe("SidebarRight generation ownership", () => {
     expect(pollerSpies.mindmapStart).not.toHaveBeenCalled();
     // The server queued it, so the next visit must still be able to resume it.
     expect(loadActiveMindmapJob()?.jobId).toBe("map-job");
+  });
+
+  it("a late start response does not replace a job a newer panel has stored", async () => {
+    const request = deferred();
+    generateMindmap.mockReturnValue(request.promise);
+    await mountSidebar();
+    await act(async () => { mindmapLibrary.actions.create(); });
+    await act(async () => root.unmount());
+    root = null;
+    saveActiveMindmapJob({ jobId: "newer-job", sources: ["a"], startedAt: Date.now() });
+    request.resolve({ status: "queued", job_id: "map-job" });
+    await flush();
+    expect(loadActiveMindmapJob()?.jobId).toBe("newer-job");
   });
 
   it("does not run mind-map cache-hit completion after unmount", async () => {

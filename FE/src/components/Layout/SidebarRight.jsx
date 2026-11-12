@@ -521,7 +521,8 @@ export default function SidebarRight({
       if (!mountedRef.current) {
         // Left before the answer came. The server did queue the job, so keep it for the next
         // visit to resume; start no poller and touch no state from this dead panel.
-        if (startData?.job_id && startData.status !== "done") {
+        // Never over a job a newer panel has stored since: its record is the one being tracked.
+        if (startData?.job_id && startData.status !== "done" && !loadActiveMindmapJob()?.jobId) {
           saveActiveMindmapJob({ jobId: startData.job_id, sources: sourceList, startedAt: Date.now() });
         }
         return;
@@ -774,7 +775,7 @@ export default function SidebarRight({
       const startData = await generateSummary(sourceList, { lengthMode, mode });
       if (!mountedRef.current) {
         // Same as the mind map: keep the queued job for the next visit, start nothing here.
-        if (startData?.job_id && startData.status !== "done") {
+        if (startData?.job_id && startData.status !== "done" && !loadActiveSummaryJob()?.jobId) {
           saveActiveSummaryJob({ jobId: startData.job_id, sources: sourceList, startedAt: Date.now(), extra: { lengthMode, mode } });
         }
         return;
