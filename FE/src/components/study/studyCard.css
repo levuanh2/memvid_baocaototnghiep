@@ -1,0 +1,88 @@
+/* V6 document card (Library).
+   Reading order: what the document is -> whether it can be studied yet -> what the AI prepared
+   -> facts -> one primary action and the study tools. Tokens only; light and dark share rules. */
+
+.study-card { position: relative; display: flex; flex-direction: column; gap: 12px; padding: 16px 16px 14px; outline: none; }
+.study-card:focus-visible { box-shadow: 0 0 0 2px var(--bg-card), 0 0 0 4px var(--accent); }
+.study-card[data-selected="true"] { border-color: var(--accent); }
+.study-card[data-density="compact"] { gap: 8px; padding: 10px 12px; }
+
+/* Head: select box, title block, menu */
+.study-card__head { display: grid; grid-template-columns: auto minmax(0, 1fr) auto; column-gap: 10px; align-items: start; }
+.study-card__select { display: grid; place-items: center; width: 24px; height: 24px; margin-top: 1px; cursor: pointer; }
+.study-card__select input { width: 16px; height: 16px; cursor: pointer; accent-color: var(--accent); }
+.study-card__title {
+  font-family: var(--font-display, inherit); font-size: 17px; font-weight: 600; line-height: 1.35;
+  color: var(--text-primary); overflow-wrap: anywhere; text-wrap: balance;
+  display: -webkit-box; -webkit-box-orient: vertical; -webkit-line-clamp: 2; overflow: hidden;
+}
+.study-card[data-density="compact"] .study-card__title { -webkit-line-clamp: 1; font-size: 15px; }
+.study-card[data-archived="true"] .study-card__title { color: var(--text-secondary); }
+.study-card__badges { display: flex; flex-wrap: wrap; align-items: center; gap: 6px; margin-top: 6px; }
+.study-card__badge {
+  display: inline-flex; align-items: center; gap: 5px; max-width: 100%; padding: 2px 8px;
+  border: 1px solid var(--border-color); border-radius: 999px; background: var(--bg-sidebar);
+  color: var(--text-secondary); font-size: 12px; line-height: 1.5;
+}
+.study-card__badge > span { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.study-card__badge--flag { border-color: transparent; background: var(--accent-subtle); color: var(--text-primary); }
+.study-card__badge--flag svg { color: var(--accent); }
+.study-card__file { margin-top: 4px; color: var(--text-muted); font-size: 12px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.study-card__menu-trigger { width: 32px; height: 32px; }
+
+/* State line: shown instead of the tools when the document cannot be studied yet */
+.study-card__state {
+  display: flex; align-items: flex-start; gap: 8px; padding: 10px 12px; border-radius: 8px;
+  background: var(--bg-elevated); color: var(--text-primary); font-size: 14px; line-height: 1.45;
+}
+.study-card__state svg { flex: none; margin-top: 2px; color: var(--text-secondary); }
+.study-card__state[data-state="failed"] svg { color: var(--err); }
+.study-card__state small { display: block; margin-top: 2px; color: var(--text-secondary); font-size: 13px; }
+
+/* What the AI prepared */
+.study-card__overview { display: grid; gap: 4px; }
+.study-card__overview li { display: grid; grid-template-columns: 14px minmax(0, 1fr); column-gap: 8px; color: var(--text-primary); font-size: 15px; line-height: 1.5; }
+.study-card__overview svg { margin-top: 5px; color: var(--accent); }
+.study-card__preview {
+  color: var(--text-secondary); font-size: 14px; line-height: 1.5;
+  display: -webkit-box; -webkit-box-orient: vertical; -webkit-line-clamp: 2; overflow: hidden;
+}
+.study-card__hint { color: var(--text-secondary); font-size: 14px; }
+
+/* Facts and tags */
+.study-card__facts { display: flex; flex-wrap: wrap; gap: 4px 16px; color: var(--text-secondary); font-size: 13px; font-variant-numeric: tabular-nums; }
+.study-card__facts li { display: inline-flex; align-items: center; gap: 5px; }
+.study-card__facts svg { color: var(--text-muted); }
+.study-card__tags { display: flex; flex-wrap: wrap; gap: 6px; }
+
+/* Foot: one primary action, then the study tools as one group, then the details disclosure */
+.study-card__foot { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; padding-top: 12px; border-top: 1px solid var(--border-color); }
+.study-card[data-density="compact"] .study-card__foot { padding-top: 8px; }
+.study-card__resume { min-height: 40px; }
+.study-card__tools { display: flex; flex-wrap: wrap; min-width: 0; border: 1px solid var(--border-color); border-radius: 8px; overflow: hidden; }
+.study-card__tool {
+  display: inline-flex; align-items: center; gap: 6px; min-height: 40px; padding: 0 12px;
+  color: var(--text-secondary); font-size: 13px; font-weight: 500; white-space: nowrap;
+  border-left: 1px solid var(--border-color); margin-left: -1px;
+  transition: background-color 150ms ease, color 150ms ease;
+}
+.study-card__tool:hover { background: var(--bg-hover); color: var(--text-primary); }
+.study-card__tool:focus-visible { outline: 2px solid var(--accent); outline-offset: -2px; }
+.study-card__tool[data-ready="true"] { color: var(--text-primary); }
+.study-card__tool-mark { display: inline-flex; align-items: center; color: var(--ok); }
+.study-card__tool-note { color: var(--text-muted); font-weight: 400; }
+.study-card__details { margin-left: auto; min-height: 40px; }
+
+@media (max-width: 767px) {
+  .study-card { padding: 14px 12px 12px; }
+  .study-card__menu-trigger { width: 44px; height: 44px; margin: -6px -8px 0 0; }
+  .study-card__select { width: 32px; height: 32px; margin: -3px 0 0 -4px; }
+  .study-card__resume { width: 100%; min-height: 44px; justify-content: center; }
+  .study-card__tools { width: 100%; display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); }
+  .study-card__tool { min-height: 44px; justify-content: flex-start; border-top: 1px solid var(--border-color); margin-top: -1px; }
+  .study-card__details { width: 100%; min-height: 44px; margin-left: 0; justify-content: center; }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .study-card__tool { transition: none; }
+}
