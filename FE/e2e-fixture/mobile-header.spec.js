@@ -191,12 +191,26 @@ test.describe("full desktop header above the compact danger zone", () => {
       expect(h.docScroll).toBeLessThanOrEqual(h.docClient);
       await expect(page.getByRole("tab", { name: "Sơ đồ tư duy" })).toBeVisible();
       await expect(page.locator('nav[role="tablist"] [role="tab"][title="Sơ đồ tư duy"] span').first()).toBeVisible();
-      await expect(page.locator('header button[aria-label="Xem phím tắt"]')).toBeVisible();
+      // V6 header: shortcut help lives in the account menu, not in its own header button.
+      await expect(page.locator('header button[aria-label="Xem phím tắt"]')).toHaveCount(0);
       const home = await hitOwnership(page, 'header a[aria-label^="StudyMap"]');
       expect(home.h, "home link height at full header").toBeGreaterThanOrEqual(MIN);
       expect(home.ok, `home centre hit at ${home.at}`).toBe(true);
-      await expect(page.getByRole("group", { name: "Chế độ sáng/tối" })).toBeVisible();
+      // V6 header: one theme control instead of the two-button group.
+      await expect(page.locator("header .workspace-theme-toggle")).toBeVisible();
+      await expect(page.getByRole("group", { name: "Chế độ sáng/tối" })).toHaveCount(0);
       await expect(page.locator('header button[aria-label^="Mức sử dụng AI"] span').last()).toBeVisible();
+
+      // The shortcut help is still one menu away, and the theme button names its next action.
+      await page.locator('header button[aria-haspopup="menu"][aria-label^="Tài khoản"]').click();
+      await page.getByRole("menuitem", { name: /Phím tắt/ }).click();
+      await expect(page.getByRole("dialog", { name: "Phím tắt" })).toBeVisible();
+      await page.keyboard.press("Escape");
+      await expect(page.getByRole("dialog", { name: "Phím tắt" })).toHaveCount(0);
+      const theme = page.locator("header .workspace-theme-toggle");
+      const before = await theme.getAttribute("aria-label");
+      await theme.click();
+      await expect(theme).not.toHaveAttribute("aria-label", before);
     });
   }
 });

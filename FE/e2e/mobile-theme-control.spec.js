@@ -182,16 +182,23 @@ test.describe("mobile: real Light<->Dark via the real control", () => {
 });
 
 test.describe("desktop: toggle unaffected", () => {
-  test("1440x1024: desktop toggle still works, two buttons, aria-pressed flips", async ({ page }) => {
+  // V6 header (owner decision): one theme button in place of the two-button group.
+  test("1440x1024: one desktop theme button, named by its next action, switches and persists", async ({ page }) => {
     await page.setViewportSize({ width: 1440, height: 1024 });
     await registerAndEnterApp(page);
 
-    const group = page.locator('[role="group"][aria-label="Chế độ sáng/tối"]');
-    await expect(group).toBeVisible();
-    const buttons = group.locator("button");
-    await expect(buttons).toHaveCount(2);
+    await expect(page.locator('[role="group"][aria-label="Chế độ sáng/tối"]')).toHaveCount(0);
+    const toggle = page.locator("header .workspace-theme-toggle");
+    await expect(toggle).toHaveCount(1);
+    await expect(toggle).toBeVisible();
+    await expect(toggle).toHaveAttribute("aria-label", LIGHT_LABEL);
 
-    await group.getByLabel("Nền tối").click();
+    await toggle.click();
     await expect(page.locator("html")).toHaveClass(/dark/);
+    await expect(toggle).toHaveAttribute("aria-label", DARK_LABEL);
+
+    await page.reload();
+    await expect(page.locator("html")).toHaveClass(/dark/);
+    await expect(page.locator("header .workspace-theme-toggle")).toHaveAttribute("aria-label", DARK_LABEL);
   });
 });

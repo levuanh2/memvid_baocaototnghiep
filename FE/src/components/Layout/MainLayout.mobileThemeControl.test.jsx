@@ -125,14 +125,27 @@ describe("MainLayout — mobile/tablet theme control reachability", () => {
     expect(item.closest(".study-tools-menu__extra")).toBeTruthy();
   });
 
-  it("the desktop toggle is untouched: two buttons, hidden lg:flex, still functional", async () => {
+  // V6 header (owner decision): the desktop header has ONE theme control, named like the
+  // phone menu item (the next action), in place of the two-button "Nền sáng / Nền tối" group.
+  it("the desktop header has one theme button, named by its next action, and it switches the theme", async () => {
     await render({ width: 1440 });
-    const group = container.querySelector('[role="group"][aria-label="Chế độ sáng/tối"]');
-    expect(group).toBeTruthy();
-    expect(group.className).toMatch(/hidden/);
-    expect(group.className).toMatch(/lg:flex/);
-    const buttons = group.querySelectorAll("button");
-    expect(buttons).toHaveLength(2);
+    expect(container.querySelector('[role="group"][aria-label="Chế độ sáng/tối"]')).toBeNull();
+    const buttons = container.querySelectorAll("header .workspace-theme-toggle");
+    expect(buttons).toHaveLength(1);
+    const button = buttons[0];
+    expect(button.className).toMatch(/hidden/);
+    expect(button.className).toMatch(/lg:inline-flex/);
+    expect(button.getAttribute("aria-label")).toBe(LIGHT_LABEL);
+
+    await act(async () => { button.click(); });
+    expect(document.documentElement.classList.contains("dark")).toBe(true);
+    expect(localStorage.getItem(STORAGE_KEY)).toBe("dark");
+    expect(container.querySelector("header .workspace-theme-toggle").getAttribute("aria-label")).toBe(DARK_LABEL);
+  });
+
+  it("the header no longer has its own keyboard-shortcut button", async () => {
+    await render({ width: 1440 });
+    expect(container.querySelector('header button[aria-label="Xem phím tắt"]')).toBeNull();
   });
 });
 
