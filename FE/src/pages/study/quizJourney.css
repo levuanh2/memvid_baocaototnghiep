@@ -1,12 +1,13 @@
 .quiz-taking-layout {
   display: grid;
-  grid-template-columns: 210px minmax(480px, 1fr) 240px;
-  gap: 18px;
+  /* V6: two columns. The third one repeated the progress count and held the topic list,
+     which now lives in the rail; the question gets a reading measure instead of stretching. */
+  grid-template-columns: 232px minmax(0, 760px);
+  gap: 24px;
   align-items: start;
 }
 
 .quiz-question-rail,
-.quiz-context-panel > section,
 .quiz-result-panel,
 .quiz-review-panel {
   border: 1px solid var(--border-color);
@@ -26,7 +27,10 @@
 .quiz-question-rail__legend i { width: 10px; height: 10px; border: 1px solid var(--border-strong); border-radius: 3px; }
 .quiz-question-rail__legend .is-answered { border-color: var(--accent); background: color-mix(in srgb, var(--accent) 22%, transparent); }
 .quiz-question-rail__legend .is-current { border: 2px solid var(--accent); background: var(--accent-subtle); }
-.quiz-submit-early { width: 100%; min-height: 44px; margin-top: 6px; border: 1px solid var(--border-color); border-radius: 8px; color: var(--text-secondary); background: var(--bg-card); }
+.quiz-question-rail__topics { padding-top: 12px; border-top: 1px solid var(--border-color); }
+.quiz-question-rail__topics h2 { margin-bottom: 4px; color: var(--text-primary); font-size: 13px; font-weight: 700; }
+.quiz-question-rail__topics .quiz-topic-row:first-of-type { border-top: 0; }
+.quiz-question-rail__help { margin-top: 12px; padding-top: 12px; border-top: 1px solid var(--border-color); color: var(--text-muted); font-size: 11px; line-height: 1.5; }
 .quiz-question-stage { min-width: 0; }
 .quiz-question-card { margin: 0 0 12px; padding: 24px; }
 .quiz-question-card h2 { font-size: clamp(20px, 2vw, 23px); line-height: 1.42; }
@@ -36,18 +40,9 @@
 .quiz-question-nav { display: flex; align-items: center; gap: 10px; min-height: 68px; }
 .quiz-question-nav > button { min-height: 44px; }
 .quiz-mobile-progress { display: none; }
-.quiz-context-panel { display: grid; gap: 12px; }
-.quiz-context-panel > section { padding: 15px; }
-.quiz-context-panel > section > svg { color: var(--accent); }
-.quiz-context-panel h2 { margin: 10px 0 5px; color: var(--text-primary); font-size: 13px; font-weight: 700; }
-.quiz-context-panel__percent { color: var(--text-primary); font-size: 27px; }
-.quiz-context-panel__bar { height: 5px; margin: 8px 0; overflow: hidden; border-radius: 4px; background: var(--border-color); }
-.quiz-context-panel__bar i { display: block; height: 100%; background: var(--accent); }
-.quiz-context-panel p { color: var(--text-muted); font-size: 11px; }
 .quiz-topic-row { display: flex; justify-content: space-between; gap: 8px; padding: 8px 0; border-top: 1px solid var(--border-color); color: var(--text-muted); font-size: 11px; }
 .quiz-topic-row span { min-width: 0; overflow-wrap: anywhere; }
 .quiz-topic-row strong { flex: none; color: var(--text-primary); }
-.quiz-context-panel__help { padding: 0 5px; line-height: 1.5; }
 
 .quiz-score-hero { min-height: 220px; display: flex; flex-wrap: wrap; align-items: center; justify-content: center; gap: 30px; padding: 24px; border-bottom: 1px solid var(--border-color); }
 .quiz-review-wrong { min-height: 44px; }
@@ -85,8 +80,7 @@
 .quiz-question-card .badge-processing { color: var(--quiz-status-processing); background: color-mix(in srgb, var(--quiz-status-processing) 12%, transparent); }
 
 @media (max-width: 1000px) and (min-width: 768px) {
-  .quiz-taking-layout { grid-template-columns: 176px minmax(0, 1fr); }
-  .quiz-context-panel { display: none; }
+  .quiz-taking-layout { grid-template-columns: 176px minmax(0, 1fr); gap: 18px; }
   .quiz-wrong-review { grid-template-columns: 190px minmax(0, 1fr); }
   .quiz-wrong-review__next { display: none; }
   .quiz-wrong-review__compact-review-link { display: inline-flex; min-height: 44px; align-items: center; margin-top: 14px; }
@@ -94,7 +88,7 @@
 
 @media (max-width: 767px) {
   .quiz-taking-layout { display: block; }
-  .quiz-question-rail, .quiz-context-panel { display: none; }
+  .quiz-question-rail { display: none; }
   .quiz-mobile-progress { display: grid; grid-template-columns: 1fr auto; gap: 8px; padding: 2px 2px 12px; color: var(--text-muted); font-size: 11px; }
   .quiz-mobile-progress > i { grid-column: 1 / -1; height: 4px; overflow: hidden; border-radius: 3px; background: var(--border-color); }
   .quiz-mobile-progress > i b { display: block; height: 100%; background: var(--accent); }
