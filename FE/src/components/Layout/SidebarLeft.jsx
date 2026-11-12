@@ -58,6 +58,7 @@ export default function SidebarLeft({ selectedSources, setSelectedSources, onSou
   const sourcesRef = useRef(sources);
   useEffect(() => { sourcesRef.current = sources; }, [sources]);
   const [menuOpen, setMenuOpen] = useState(null);
+  const menuTriggerRefs = useRef({});
   // Sprint H: "..." menu had no dismiss path except its own Xóa button or
   // re-clicking the toggle — click elsewhere / Escape left it floating open
   // indefinitely. Same outside-click shape as `DoiTenTaiCho` below.
@@ -67,7 +68,12 @@ export default function SidebarLeft({ selectedSources, setSelectedSources, onSou
     // check containment mới tránh được vòng lặp đóng-rồi-mở lại ngay do
     // mousedown chạy trước click và React re-render xen giữa hai sự kiện đó.
     const ngoai = (e) => { if (!e.target.closest(".sidebar-source-menu")) setMenuOpen(null); };
-    const phimEsc = (e) => { if (e.key === "Escape") setMenuOpen(null); };
+    const phimEsc = (e) => {
+      if (e.key !== "Escape") return;
+      const trigger = menuTriggerRefs.current[menuOpen];
+      setMenuOpen(null);
+      trigger?.focus();
+    };
     document.addEventListener("mousedown", ngoai);
     document.addEventListener("keydown", phimEsc);
     return () => {
@@ -86,12 +92,14 @@ export default function SidebarLeft({ selectedSources, setSelectedSources, onSou
   const [draftFilters, setDraftFilters] = useState({ type: "", status: "", date: "" });
   const [appliedFilters, setAppliedFilters] = useState({ type: "", status: "", date: "" });
   const fileInputRef = useRef(null);
+  const filterTriggerRef = useRef(null);
   // Rail "+" and desktop panel upload button unmount when the layout crosses 768px / 1280px;
   // a focused one hands focus to the upload control of the new layout (not <body>).
   const railUploadFocusRef = useMemo(uploadFocusHandoffRef, []);
   const panelUploadFocusRef = useMemo(uploadFocusHandoffRef, []);
   const fileChooserOpenRef = useRef(false);
   const pollersRef = useRef({});
+  const completionRefreshTimerRef = useRef(null);
   const settleFileChooser = useCallback(() => {
     fileChooserOpenRef.current = false;
   }, []);
@@ -125,7 +133,7 @@ export default function SidebarLeft({ selectedSources, setSelectedSources, onSou
   };
 
   const pollSourceStatus = (sourceId) => {
-    if (pollersRef.current[sourceId]) return;   // đang theo dõi rồi, đừng dựng bộ thứ hai
+    if (!conSongRef.current || pollersRef.current[sourceId]) return;   // đang theo dõi rồi, đừng dựng bộ thứ hai
     const bo = taoBoTheoDoiNguon({
       layTrangThai,
       onTrangThai: (data) => {
@@ -134,7 +142,13 @@ export default function SidebarLeft({ selectedSources, setSelectedSources, onSou
       onKetThuc: (data) => {
         stopPolling(sourceId);
         quenNguon(sourceId);
-        if (data.status === "ready") setTimeout(() => fetchSourcesFromBackend(), 500);
+        if (data.status === "ready") {
+          clearTimeout(completionRefreshTimerRef.current);
+          completionRefreshTimerRef.current = setTimeout(() => {
+            completionRefreshTimerRef.current = null;
+            if (conSongRef.current) fetchSourcesFromBackend();
+          }, 500);
+        }
       },
       // Vẫn đang thử lại — thẻ giữ nguyên trạng thái xử lý, chỉ thêm một dòng nhỏ.
       onTrucTrac: () => {
@@ -245,6 +259,8 @@ export default function SidebarLeft({ selectedSources, setSelectedSources, onSou
   useEffect(() => () => {
     Object.values(pollersRef.current).forEach((bo) => bo.stop());
     pollersRef.current = {};
+    clearTimeout(completionRefreshTimerRef.current);
+    completionRefreshTimerRef.current = null;
   }, []);
   // This component remounts whenever the layout crosses 768px / 1280px (rail, shelf, drawer and
   // panel are different mounts). A fresh mount starts with `sources = []`; reporting that before
@@ -262,7 +278,9 @@ export default function SidebarLeft({ selectedSources, setSelectedSources, onSou
   useEffect(() => {
     if (!filterOpen) return undefined;
     const onKeyDown = (event) => {
-      if (event.key === "Escape") setFilterOpen(false);
+      if (event.key !== "Escape") return;
+      setFilterOpen(false);
+      filterTriggerRef.current?.focus();
     };
     const onPointerDown = (event) => {
       if (!event.target.closest?.(".source-filter-popover, .source-filter-trigger")) setFilterOpen(false);
@@ -288,7 +306,11 @@ export default function SidebarLeft({ selectedSources, setSelectedSources, onSou
         fd.append("file", file);
         const res = await apiFetch("/upload", { method: "POST", body: fd });
         if (!res.ok) {
+          // Panel gone (collapsed, breakpoint crossed): nothing to show the error on. Keep
+          // going, so the rest of a multi-file batch is still uploaded.
+          if (!conSongRef.current) continue;
           const err = await _appError(res);
+          if (!conSongRef.current) continue;
           console.error("Upload failed:", err.code);
           // Trước đây chỉ 401/403/404 mới báo; 413 (file quá lớn), 415 (định dạng
           // không đọc được) và 500 thì `continue` trong im lặng — nút hết quay, danh
@@ -298,6 +320,13 @@ export default function SidebarLeft({ selectedSources, setSelectedSources, onSou
           continue;
         }
         const data = await res.json();
+        if (!conSongRef.current) {
+          // The server accepted the file after this panel was gone. REMEMBER it, so the
+          // next mount shows and follows it (`/list-indexed` only lists finished documents);
+          // start no poller and touch no state from here.
+          if (data.source_id) nhoNguon({ sourceId: data.source_id, filename: formatFileName(file.name) });
+          continue;
+        }
         const newSource = { source_id: data.source_id, filename: formatFileName(file.name), video_stem: data.video_stem, status: data.status || "processing", progress: 0, can_query: false };
         setSources((prev) => [newSource, ...prev]);
         if (data.source_id) {
@@ -309,8 +338,10 @@ export default function SidebarLeft({ selectedSources, setSelectedSources, onSou
         }
       }
     } finally {
-      setUploading(false);
-      if (fileInputRef.current) fileInputRef.current.value = "";
+      if (conSongRef.current) {
+        setUploading(false);
+        if (fileInputRef.current) fileInputRef.current.value = "";
+      }
     }
   };
 
@@ -472,7 +503,7 @@ export default function SidebarLeft({ selectedSources, setSelectedSources, onSou
               <Icon name="X" size={13} />
             </button>
           )}
-          <button type="button" className={"source-filter-trigger" + (activeFilterCount ? " is-active" : "")}
+          <button type="button" ref={filterTriggerRef} className={"source-filter-trigger" + (activeFilterCount ? " is-active" : "")}
             onClick={() => { onTransientSurfaceOpen?.(); setFilterOpen((value) => !value); }}
             aria-expanded={filterOpen} aria-haspopup="dialog"
             aria-label={activeFilterCount ? "Bộ lọc, " + activeFilterCount + " đang áp dụng" : "Mở bộ lọc nâng cao"}
@@ -671,7 +702,7 @@ export default function SidebarLeft({ selectedSources, setSelectedSources, onSou
                     <Spinner size={16} className="text-text-muted" />
                   ) : (
                     <>
-                      <button onClick={() => setMenuOpen(menuOpen === idx ? null : idx)} className="w-7 h-7 rounded-control inline-flex items-center justify-center text-text-muted hover:text-text-primary hover:bg-surface-elevated transition-colors" aria-label="Tuỳ chọn" aria-haspopup="true" aria-expanded={menuOpen === idx}>
+                      <button ref={(node) => { menuTriggerRefs.current[idx] = node; }} onClick={() => setMenuOpen(menuOpen === idx ? null : idx)} className="w-7 h-7 rounded-control inline-flex items-center justify-center text-text-muted hover:text-text-primary hover:bg-surface-elevated transition-colors" aria-label="Tuỳ chọn" aria-haspopup="true" aria-expanded={menuOpen === idx}>
                         <Icon name="MoreVertical" size={14} />
                       </button>
                       {menuOpen === idx && (
