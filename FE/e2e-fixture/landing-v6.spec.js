@@ -52,8 +52,11 @@ async function expectTouchTargets(page) {
     if (!(await el.isVisible())) continue;
     const b = await el.boundingBox();
     const label = (await el.textContent())?.trim() || (await el.getAttribute("aria-label"));
-    expect(b.height, `${label} height`).toBeGreaterThanOrEqual(44);
-    expect(b.width, `${label} width`).toBeGreaterThanOrEqual(44);
+    // Rounded to 1/100 px: a 44px box at a fractional offset is reported as 43.99997
+    // (seen once in a full Fixture Audit run). The threshold itself stays 44.
+    const px = (value) => Math.round(value * 100) / 100;
+    expect(px(b.height), `${label} height`).toBeGreaterThanOrEqual(44);
+    expect(px(b.width), `${label} width`).toBeGreaterThanOrEqual(44);
     checked += 1;
   }
   expect(checked).toBeGreaterThanOrEqual(4);
