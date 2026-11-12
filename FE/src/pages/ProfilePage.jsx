@@ -1,6 +1,7 @@
 import { useCallback } from "react";
 import { useLocation, useNavigate } from "react-router-dom";
 import ProfileDrawer from "../components/Layout/ProfileDrawer";
+import ProfileSections from "../components/Layout/ProfileSections";
 import { useAuth } from "../auth/useAuth";
 import { dungHoSo } from "../auth/hoSoNguoiDung";
 
@@ -16,7 +17,7 @@ import { dungHoSo } from "../auth/hoSoNguoiDung";
  * StudyMap luôn, ra ngoài ứng dụng).
  */
 export default function ProfilePage() {
-  const { user, updateUserFields } = useAuth();
+  const { user, updateUserFields, logout } = useAuth();
   const navigate = useNavigate();
   const location = useLocation();
 
@@ -40,6 +41,15 @@ export default function ProfilePage() {
     }, user?.id);
   }, [updateUserFields, user]);
 
+  // Same exits as the header's account menu: plain sign-out goes to the landing page, a
+  // sign-out forced by a password change goes to the login page with its notice.
+  const dangXuat = useCallback(async (tuyChon) => {
+    await logout();
+    const ma = tuyChon?.lyDo;
+    if (ma) navigate(`/login?tb=${encodeURIComponent(ma)}`, { replace: true });
+    else navigate("/");
+  }, [logout, navigate]);
+
   const hoSo = dungHoSo(user);
   if (!hoSo) return null;
 
@@ -50,6 +60,7 @@ export default function ProfilePage() {
       hoSo={hoSo}
       onClose={quayLai}
       onHoSoMoi={onHoSoMoi}
+      phanThem={<ProfileSections laNks={hoSo.nhaCungCap === "NKS"} email={hoSo.email} onLogout={dangXuat} />}
     />
   );
 }
