@@ -33,7 +33,7 @@ V6 is **not complete**. This file is the single status page: it says which waves
 | V6-E4 stale loads (quiz, study map), orphan pollers, keyboard map nodes | `fix/v6-stale-owner-guards` | #164 | Vitest 1942/1942; 8 of 9 new unit tests red before the fix; `knowledge-map-keyboard.spec.js` 2/2; build pass. `SidebarRight` guards written by Codex |
 | V6-E5 Summary screen false "Chưa có tóm tắt" | `fix/v6-summary-loading-state` | #165 | Vitest 1933/1933; `summary-loading-state.spec.js` 3/3 (2 red before the fix); build pass |
 
-Merge notes: #161 is stacked on #160 (merge #160 first). #160, #162, #163, #164 and #165 each append to the end of the two `.playbook` files, so after one merges the others need their notes rebased; no code conflict is expected.
+Merge notes: #161 is stacked on #160 (merge #160 first). #160, #162, #163, #164 and #165 each append to the end of the two `.playbook` files, so after one merges the others need their notes rebased. One code conflict is confirmed by a trial merge: #164 and #165 both change `fetchSummaries` in `SidebarRight.jsx` (#164 adds the mounted check, #165 the newest-request check); whichever merges second must be updated to keep both checks and re-tested. Trial merges of #164 with #162, and of #161 with #163 and #165, conflict only in `.playbook`.
 
 ## Skills and tools used
 
