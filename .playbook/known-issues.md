@@ -8120,3 +8120,31 @@ off-screen button then matches the same role+name as the visible CTA.
 **Prevention:** hiding by transform, width, opacity or pointer-events is visual only; anything
 that stays mounted while hidden needs `inert`. Label tests should match the bare text, not one
 quoting style.
+
+### One timed-out test made eleven more fail in `DocumentList.round6.behavior.test.jsx` (2026-11-12)
+
+**Symptom.** One full `npx vitest run` had 12 failures, all in this file: the first test
+"timed out in 15000ms", then `Cannot read properties of null (reading 'click')`,
+`expected [] to deeply equal ['doc-2']` and React's "overlapping act() calls". A rerun was green.
+
+**Root cause (confirmed).** Every test called `vi.resetModules()` and `await import("./DocumentList")`
+inside its own body, so a cold import of the whole Library graph ran on the test's 15 s clock.
+When that plus the render exceeded 15 s, Vitest failed the test but could not cancel its open
+async `act`; `afterEach` then unmounted and nulled the module-level `root` / `host`, the next
+test opened another `act`, and every later test queried an empty document. Reproduced exactly
+(same 12 failures, same order) by running the file with `--testTimeout=500`.
+
+**Not confirmed.** Why the first test was that slow in that run. CPU contention is the likely
+cause (the run reported transform 91 s, import 170 s, environment 823 s) but four loaded full
+runs did not reproduce it.
+
+**Fix.** The two flag-specific imports happen once in `beforeAll` with a 60 s budget; tests
+render the cached components. First test: about 1.4 s -> 55 ms. With `--testTimeout=500` the
+file now passes 13/13 where it used to fail 12/12.
+
+**Not done.** `root` / `host` are still module-level; a different timeout inside a test body
+would cascade the same way. A shuffled concurrent run also showed
+`SidebarRight.guidedDialogClose.test.jsx` failing; not investigated.
+
+**Prevention.** Do not conclude "flaky" from a green rerun: find what the first failure was
+waiting for. Keep cold imports and other one-off setup out of the test body's timeout.
