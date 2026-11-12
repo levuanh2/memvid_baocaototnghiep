@@ -28,6 +28,10 @@ export default function StudyCard({
   doc, documents, chiMucBst, jobs, boSuuTap, dangDoiTen, dangLuu, onDoiTen, onLuuTen,
   onHuyDoiTen, onBatTat, onMo, daChon, onChon, tabIndex, onKeyDown, refThe,
   matDo = "comfortable",
+  // "primary" = filled (the card stands alone). "secondary" = outlined: the page already has
+  // its one filled action in the learning home above the list, so a card's "Tiếp tục" is the
+  // card's main action without competing with it.
+  nutTiepTuc = "primary",
 }) {
   // Frontend V2, Library wave — density is a display variant only: same doc,
   // same props, same actions, just fewer of them rendered/visible at once.
@@ -281,7 +285,9 @@ export default function StudyCard({
       <div className="study-card__foot">
         {/* One filled button at most: it exists only when there is somewhere to continue. */}
         {tiepTuc && daIndex && (
-          <button type="button" className="btn-seal !text-small inline-flex items-center gap-1.5 study-card__resume"
+          <button type="button"
+                  className={`${nutTiepTuc === "secondary" ? "btn-secondary" : "btn-seal"} !text-small inline-flex items-center gap-1.5 study-card__resume`}
+                  data-emphasis={nutTiepTuc}
                   onClick={() => onMo(doc, tiepTuc.beMat || "studymap")}>
             <Icon name="ArrowRight" size={13} aria-hidden="true" /> Tiếp tục · {tiepTuc.nhanBeMat}
           </button>

@@ -82,6 +82,17 @@ describe("StudyCard (V6)", () => {
     expect(onMo).toHaveBeenCalledWith(doc, "quiz");
   });
 
+  it("on a page whose learning home holds the filled action, the card's 'Tiếp tục' is outlined", async () => {
+    const doc = { ...READY, last_opened_at: new Date(Date.now() - 3600e3).toISOString(), last_workspace: "quiz" };
+    const onMo = await render(doc, { nutTiepTuc: "secondary" });
+    expect(container.querySelectorAll(".btn-seal")).toHaveLength(0);
+    const resume = container.querySelector(".study-card__resume");
+    expect(resume.className).toContain("btn-secondary");
+    expect(resume.getAttribute("data-emphasis")).toBe("secondary");
+    await act(async () => resume.click());
+    expect(onMo).toHaveBeenCalledWith(doc, "quiz");
+  });
+
   it("without a place to continue there is no filled button at all", async () => {
     await render(READY);
     expect(container.querySelectorAll(".btn-seal")).toHaveLength(0);

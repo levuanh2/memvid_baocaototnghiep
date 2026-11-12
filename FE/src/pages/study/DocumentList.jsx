@@ -477,6 +477,8 @@ export default function DocumentList() {
       tabIndex={chiSo == null ? undefined : (chiSo === Math.max(0, chiSoFocus) ? 0 : -1)}
       onKeyDown={chiSo == null ? undefined : (e) => xuLyPhim(e, doc, chiSo)}
       matDo={matDo}
+      // The learning home above the list holds the page's filled "Tiếp tục".
+      nutTiepTuc="secondary"
     />
   );
 
@@ -734,8 +736,6 @@ export default function DocumentList() {
             <LearningDashboard
               documents={documents}
               overview={overview}
-              weak={weak}
-              attempts={attempts}
               mucHienThi={mucHienThi}
               onMo={moBeMat}
             />
