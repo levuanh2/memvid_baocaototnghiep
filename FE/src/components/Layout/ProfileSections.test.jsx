@@ -63,6 +63,24 @@ describe("ProfileSections", () => {
     expect(bar.getAttribute("aria-valuenow")).toBe("15");
   });
 
+  it("near the limit, the state is said in words and no text is coloured with the warning orange", async () => {
+    usageResponse = ok({ ...USAGE, used: 8500, remaining: 1500, percentage: 85 });
+    await render();
+    expect(host.textContent).toContain("Sắp hết hạn mức tháng này.");
+    const coloured = [...host.querySelectorAll("p, span, dd, dt")].filter((el) => /--warn|--err/.test(el.getAttribute("style") || ""));
+    expect(coloured).toEqual([]);
+  });
+
+  it("the usage figures and a failed load are announced", async () => {
+    await render();
+    expect(host.querySelector('[role="status"]').textContent).toContain("15%");
+    act(() => root.unmount());
+    host.remove();
+    usageResponse = () => Promise.resolve({ ok: false, status: 500, json: async () => ({}) });
+    await render();
+    expect(host.querySelector('[role="alert"]').textContent).toContain("Chưa tải được mức sử dụng.");
+  });
+
   it("a failed usage load says so and can be reloaded", async () => {
     usageResponse = () => Promise.resolve({ ok: false, status: 500, json: async () => ({}) });
     await render();

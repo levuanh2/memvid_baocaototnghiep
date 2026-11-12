@@ -39,11 +39,11 @@ function UsageSection() {
 
   let body;
   if (loading && !usage) {
-    body = <p className="flex items-center gap-2 text-small text-text-muted"><Spinner size={13} /> Đang tải mức sử dụng…</p>;
+    body = <p role="status" className="flex items-center gap-2 text-small text-text-muted"><Spinner size={13} /> Đang tải mức sử dụng…</p>;
   } else if (error && !usage) {
     body = (
       <div className="flex flex-wrap items-center gap-3">
-        <p className="text-small text-text-secondary">Chưa tải được mức sử dụng.</p>
+        <p role="alert" className="text-small text-text-secondary">Chưa tải được mức sử dụng.</p>
         <button type="button" onClick={load} className="pill-action"><Icon name="RotateCcw" size={13} /> Tải lại</button>
       </div>
     );
@@ -59,8 +59,8 @@ function UsageSection() {
     return (
       <Section id="profile-usage" title="Mức sử dụng AI">
         <div className="flex flex-wrap items-baseline justify-between gap-x-4 gap-y-1">
-          <p className="text-body text-text-primary">
-            <span className="font-display text-h3 font-semibold" style={{ color: mau }}>{Math.round(usage.percentage)}%</span>
+          <p role="status" className="text-body text-text-primary">
+            <span className="font-display text-h3 font-semibold text-text-primary">{Math.round(usage.percentage)}%</span>
             {" "}hạn mức tháng này
           </p>
           <p className="text-small text-text-muted">Gói {usage.plan}</p>
@@ -72,10 +72,21 @@ function UsageSection() {
         </div>
         <dl className="mt-3 grid grid-cols-2 gap-x-5 gap-y-2 sm:grid-cols-3">
           <div><dt className="text-caption text-text-muted">Đã dùng</dt><dd className="text-small text-text-primary">{formatTokens(usage.used)} token</dd></div>
-          <div><dt className="text-caption text-text-muted">Còn lại</dt><dd className="text-small" style={{ color: het ? "var(--err)" : "var(--text-primary)" }}>{formatTokens(usage.remaining)} token</dd></div>
+          <div><dt className="text-caption text-text-muted">Còn lại</dt><dd className="text-small text-text-primary">{formatTokens(usage.remaining)} token</dd></div>
           <div><dt className="text-caption text-text-muted">Đặt lại</dt><dd className="text-small text-text-primary">{new Date(usage.reset_at).toLocaleDateString("vi-VN")}</dd></div>
         </dl>
-        {het && <p className="mt-3 text-small" style={{ color: "var(--err)" }}>Đã hết hạn mức tháng này. Các việc dùng AI sẽ chạy lại sau ngày đặt lại.</p>}
+        {het && (
+          <p className="mt-3 flex items-start gap-2 text-small text-text-primary">
+            <Icon name="TriangleAlert" size={15} className="mt-0.5 shrink-0" style={{ color: "var(--err)" }} />
+            Đã hết hạn mức tháng này. Các việc dùng AI sẽ chạy lại sau ngày đặt lại.
+          </p>
+        )}
+        {sapHet && (
+          <p className="mt-3 flex items-start gap-2 text-small text-text-primary">
+            <Icon name="TriangleAlert" size={15} className="mt-0.5 shrink-0" style={{ color: "var(--warn)" }} />
+            Sắp hết hạn mức tháng này.
+          </p>
+        )}
         {theoViec.length > 0 && (
           <div className="mt-5">
             <h3 className="text-small font-medium text-text-secondary">Dùng vào việc gì</h3>
