@@ -8120,3 +8120,134 @@ off-screen button then matches the same role+name as the visible CTA.
 **Prevention:** hiding by transform, width, opacity or pointer-events is visual only; anything
 that stays mounted while hidden needs `inert`. Label tests should match the bare text, not one
 quoting style.
+
+### Summary screen said "Chưa có tóm tắt" while the list was loading or had failed (V6, 2026-11-12)
+
+**Symptom.** `/app?tab=summary` for an account with saved summaries: until `/summaries` answered,
+and for good if it failed, the centre screen showed "Chưa có tóm tắt" and the "Tạo tóm tắt"
+button. A learner could pay for a summary they already had.
+
+**Root cause.** `SidebarRight` holds `dangTaiSummary` / `loiTaiSummary` and used them only in its
+own list. `onSummaryLibraryChange` published neither, so `WorkspaceContainer` gave the summary
+`WorkspaceEmptyState` no `loading` / `error`. The mind-map side got both signals earlier (the
+"intermittent no map" fix); the summary side was left out.
+
+**Fix.** The two signals and a `retryLoad` go up through `updateSummaryLibrary` ->
+`summaryLibrary` -> `WorkspaceEmptyState` (`loading`, `error`, new `onRetryLoad`: "Tải lại danh
+sách"). The error is shown only when there are no summaries to offer.
+
+**Regression test.** `e2e-fixture/summary-loading-state.spec.js` (3 cases; the loading and the
+failed-load case fail on the old code). Not in Fixture Smoke.
+
+**Not covered.** The mind-map load error still has no reload button. Before `SidebarRight`
+publishes for the first time the empty screen can show for one frame.
+
+**Prevention.** Found by a read-only audit comparing the props the two `WorkspaceEmptyState`
+call sites pass: when a state is fixed for one of two sibling screens, check the other.
+
+### A slow load for the previous route id landed on the new one: quiz and study map (V6 bug hunt #4, #14, 2026-11-12)
+
+**Symptom.** `/app/study/quiz/A` -> `/quiz/B` (or study map of document A -> B) without a full
+reload, while A's request is slow. If A answers after B, the page shows A's questions/map under
+B's URL. For the quiz this is worse than cosmetic: `attempt_id` becomes A's, so autosave and
+submit write to A's attempt. A finished A also redirected B to A's result page.
+
+**Root cause.** `load()` in `QuizTaking.jsx` and `load()`/`openMap()` in `StudyMapView.jsx` are
+`useCallback`s keyed by the route id, re-run by an effect. React Router keeps the component
+mounted when only the param changes, so two loads are in flight and neither checked which id the
+page shows when its `await` returned. `finally { setLoading(false) }` also ended B's loading.
+
+**Fix.** A ref holding the id the page shows now (`quizIdRef`, `docIdRef`); each load captures
+its own id and stops after every `await`, in `catch` and in `finally` when the two differ.
+`docIdRef` is also set inside its effect because StrictMode runs the cleanup without a render.
+
+**Regression tests.** `QuizTaking.staleOpen.test.jsx` (3 cases) and
+`StudyMapView.staleDocument.test.jsx`; four of the five cases fail on the old code.
+
+**Not covered.** The requests are not aborted, only ignored. `SidebarLeft` upload poller (#2)
+waits for #160, which touches the same lines.
+
+### Knowledge-map nodes could only be used with a pointer (V6 bug hunt #7, 2026-11-12)
+
+**Symptom.** On `/app/study/map/:id` Tab skipped every node; a keyboard user could not select a
+node, read its detail or open a branch.
+
+**Root cause.** `renderNode` in `StudyMapView.jsx` returns an SVG `<g onClick>` with no
+`tabIndex`, role, name or key handler.
+
+**Fix.** The `<g>` is `role="button"`, `tabIndex=0`, named by the node title, with
+`aria-pressed` (selected) and `aria-expanded` (branch), Enter/Space run the click action, and a
+`:focus-visible` style on the node's circle and label.
+
+**Regression test.** `e2e-fixture/knowledge-map-keyboard.spec.js` (real react-d3-tree: Enter
+selects and opens the branch and focus stays on the node; Tab reaches the root).
+
+**Not covered.** No arrow-key movement between nodes; Tab order is DOM order. Not tried with a
+screen reader.
+
+**Prevention.** A custom SVG/canvas element with `onClick` needs the same three things a button
+has: focus, a name, and Enter/Space.
+
+### Mind-map/summary start answered after the panel was gone and started an orphan poller (V6 bug hunt #3, 2026-11-12)
+
+**Symptom.** Start a mind map or summary, leave `/app` (or let the right panel unmount) before
+`POST` answers. The late 202 started a poller nothing owned: requests and state callbacks on a
+dead panel until the job ended. A late cache hit ran the completion handler (list refresh, toast).
+
+**Root cause.** The unmount cleanup in `SidebarRight.jsx` stops pollers that exist at that
+moment; `handleGenerateMindMap` / `handleGenerateSummary` created theirs after the await without
+asking whether the panel was still mounted.
+
+**Fix.** The existing `mountedRef` is checked after each await in both start handlers, in the
+list fetches and in the completion handlers. A job the server queued is still saved with
+`saveActive*Job`, so the next visit resumes it; only the poller and state updates are skipped.
+
+**Regression tests.** `SidebarRight.orphanPoller.test.jsx`, four cases (queued and cache hit,
+mind map and summary); all four fail without the guards.
+
+**Not covered.** The start request is not aborted. Out-of-order list refreshes (#13) are a
+separate problem and are not fixed here.
+
+**Prevention.** Cleanup can only stop what exists when it runs; anything created after an await
+needs its own "am I still the owner?" check.
+
+### Two fixes to the same list fetch had to be combined, not chosen between (#164 + #165, 2026-11-12)
+
+**Symptom.** #164 and #165 each passed CI and were each MERGEABLE, but both rewrote
+`fetchSummaries` in `SidebarRight.jsx`: #164 so an unmounted panel publishes nothing, #165 so
+only the newest request publishes. A trial merge conflicted; taking either side dropped the
+other rule.
+
+**Fix.** One predicate, `cu = () => !mountedRef.current || luot !== luotTai...Ref.current`,
+checked after every await, in `catch` and in `finally`. The same rule now covers `fetchMindMaps`
+(bug hunt #13: a slow mount-time list answered after a refresh and hid the new map).
+#165's branch contains #164's branch from here on (merge commit, no force-push).
+
+**Regression tests.** `SidebarRight.summaryListOwnership.test.jsx`, six cases. Removing the
+mounted half fails case 2; removing the newest-request half fails cases 1, 3, 4 and the
+mind-map case.
+
+**Prevention.** MERGEABLE is per PR against `main`; it says nothing about two open PRs against
+each other. Trial-merge open branches pairwise (`git merge-tree --write-tree A B`) before
+reporting them as independent.
+
+### Summary and mind-map screens drew "empty" for one commit before "loading" (V6, 2026-11-12)
+
+**Symptom.** Opening `/app?tab=summary` or `?tab=mindmap`: "Chưa có tóm tắt" / "Chưa có sơ đồ
+tư duy" with its create button for the first commit, then "Đang tải…".
+
+**Root cause.** `MainLayout`'s `libraries` state started with no loading flags. The right panel
+owns both fetches and reports them from an effect, which runs after the first commit, so the
+first commit read "not loading" and rendered the empty screen.
+
+**Fix.** The state starts as loading for both lists (the right panel is always mounted, so a
+report always follows); the Summary screen reads that flag until `summaryLibrary` exists. No
+delay, no CSS hiding.
+
+**Regression tests.** Two cases in `e2e-fixture/summary-loading-state.spec.js` that record every
+text the page ever rendered (a settled-DOM assertion cannot see a one-commit flash); both
+failed before the fix. Two `MainLayout` unit tests stubbed the right panel with a component
+that never reports; the stubs now report once, as the real panel does.
+
+**Prevention.** State that a child reports from an effect needs an initial value that means
+"not known yet", never the value that means "known to be empty".

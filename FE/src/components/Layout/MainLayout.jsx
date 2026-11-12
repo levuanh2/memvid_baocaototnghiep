@@ -326,7 +326,13 @@ export default function MainLayout({
   const [rightView, setRightView] = useState(initialRightView);   // "evidence" | "tutor" | "timeline"
   const [headerSurface, setHeaderSurface] = useState(null); // study-tools
   const studyToolsTriggerRef = useRef(null);
-  const [libraries, setLibraries] = useState({ mindMaps: [], summaries: [], mindMapActions: null, summaryActions: null });
+  // Both lists start as "loading", not "empty": the right panel owns the two fetches and is
+  // always mounted (`rightSurfaceVisible`), but it can only report from an effect, i.e. after
+  // the first commit. Starting from "not loading" drew the empty screen for that one commit.
+  const [libraries, setLibraries] = useState({
+    mindMaps: [], summaries: [], mindMapActions: null, summaryActions: null,
+    mindMapInitialLoading: true, summaryInitialLoading: true,
+  });
   const updateMindmapLibrary = useCallback((value) => setLibraries((prev) => ({
     ...prev,
     mindMaps: value.mindMaps || [],
@@ -334,7 +340,13 @@ export default function MainLayout({
     mindMapInitialLoading: Boolean(value.initialLoading),
     mindMapLoadError: value.loadError || null,
   })), []);
-  const updateSummaryLibrary = useCallback((value) => setLibraries((prev) => ({ ...prev, summaries: value.summaries || [], summaryActions: value.actions || null })), []);
+  const updateSummaryLibrary = useCallback((value) => setLibraries((prev) => ({
+    ...prev,
+    summaries: value.summaries || [],
+    summaryActions: value.actions || null,
+    summaryInitialLoading: Boolean(value.initialLoading),
+    summaryLoadError: value.loadError || null,
+  })), []);
   // Lệnh một-lần (nonce) để "Xem sơ đồ"/"Xem tóm tắt" ở Tutor chuyển đúng tab
   // Artifacts trong SidebarRight — KHÔNG điều hướng, KHÔNG route mới (tutorActions.js
   // giải thích lý do: Workspace không có `document_id` để gọi `duongDi`).
@@ -396,7 +408,10 @@ export default function MainLayout({
     create: libraries.summaryActions.create,
     creating: Boolean(libraries.summaryActions.creating),
     jobLabel: libraries.summaryActions.jobLabel,
-  } : null), [libraries.summaries, libraries.summaryActions]);
+    loading: Boolean(libraries.summaryInitialLoading),
+    loadError: libraries.summaryLoadError || null,
+    retryLoad: libraries.summaryActions.retryLoad,
+  } : null), [libraries.summaries, libraries.summaryActions, libraries.summaryInitialLoading, libraries.summaryLoadError]);
 
   // Feature Pack B (Cross Navigation) — real dead end found: while on the
   // MindMap tab WITH a map loaded, the right column shows ONLY
@@ -917,6 +932,7 @@ export default function MainLayout({
             onRetryMindmap={libraries.mindMapActions?.onRetry}
             summaryData={summaryData}
             summaryLibrary={summaryLibrary}
+            summaryListLoading={libraries.summaryInitialLoading}
             onSummaryContextChange={setSummaryContext}
             controller={mindMapController}
           />

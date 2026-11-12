@@ -33,7 +33,19 @@ vi.mock("../../auth/useAuth", () => ({
   useAuth: () => ({ user: { name: "Test User" }, logout: vi.fn() }),
 }));
 vi.mock("./SidebarLeft", () => ({ default: () => <div data-testid="sidebar-left-stub" /> }));
-vi.mock("./SidebarRight", () => ({ default: () => <div data-testid="sidebar-right-stub" /> }));
+// The real panel always reports its two lists once mounted; until it does, MainLayout treats
+// them as still loading. A stub that never reports would leave the centre on "Đang tải…".
+vi.mock("./SidebarRight", async () => {
+  const { useEffect: useEffectInStub } = await import("react");
+  function SidebarRightStub({ onMindmapLibraryChange, onSummaryLibraryChange }) {
+      useEffectInStub(() => {
+        onMindmapLibraryChange?.({ mindMaps: [], initialLoading: false });
+        onSummaryLibraryChange?.({ summaries: [], initialLoading: false });
+      }, [onMindmapLibraryChange, onSummaryLibraryChange]);
+      return <div data-testid="sidebar-right-stub" />;
+  }
+  return { default: SidebarRightStub };
+});
 vi.mock("../mindmap/KnowledgeInspector", () => ({ default: () => <div data-testid="inspector-stub" /> }));
 vi.mock("../study/ResearchTimeline", () => ({ default: () => <div data-testid="timeline-stub" /> }));
 vi.mock("./AccountMenu", () => ({ default: () => <div data-testid="account-menu-stub" /> }));

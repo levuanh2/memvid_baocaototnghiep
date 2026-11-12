@@ -32,6 +32,8 @@ export default function WorkspaceEmptyState({
   // zero visible surface between dialog-close and the eventual toast --
   // this screen just sat there showing the same static CTA the whole time.
   creating, jobLabel, jobProgress, jobError, onRetry,
+  // Reloads the list after `error` (a failed load, not a failed generation -- that is `onRetry`).
+  onRetryLoad,
   // W1-4: true total-library count (default true so every pre-existing
   // caller/test that never passes it keeps the exact old "chọn tài liệu"
   // behavior) and the upload trigger (reused from SidebarLeft, see
@@ -60,6 +62,11 @@ export default function WorkspaceEmptyState({
       <div className="flex-1 flex flex-col items-center justify-center text-center px-6 gap-3" style={{ background: "var(--bg-base)" }}>
         <Icon name="TriangleAlert" size={22} className="text-danger" />
         <p className="text-small text-text-secondary max-w-[380px]">{error}</p>
+        {typeof onRetryLoad === "function" && (
+          <button type="button" onClick={onRetryLoad} className="btn-secondary !text-small mt-1">
+            <Icon name="RotateCcw" size={14} /> Tải lại danh sách
+          </button>
+        )}
       </div>
     );
   }

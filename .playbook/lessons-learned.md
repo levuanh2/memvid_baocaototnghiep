@@ -3719,3 +3719,11 @@ Rules: check icons and logos when a rename is reported incomplete; serve a chang
 new URL (browsers cache favicons per URL); a static SVG cannot read CSS variables, so pin its
 colour to the token value and test that they stay equal; comments quoting the retired name trip
 the branding test, so describe it without naming it.
+
+## 2026-11-12 — A param change is not a remount: tie every async load to the id it was started for
+
+Root cause of V6 bug hunt #4 and #14: a route component stays mounted when only `:id` changes,
+so a `load()` keyed by that id can have an older run still in flight. Prevention: in any page
+whose effect loads by a route param, capture the id at the start and compare it with a ref of
+the current id after every `await`, including in `catch` and `finally`; a "mounted" flag alone
+does not catch this. Test it by resolving the old request after the new one.
