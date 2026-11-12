@@ -41,9 +41,9 @@ test.describe("mobile/tablet: exactly one reachable theme action", () => {
       await page.setViewportSize({ width: vp.width, height: vp.height });
       await registerAndEnterApp(page);
 
-      // Desktop toggle carries `hidden lg:flex`, and the compact header rule
+      // The desktop theme button carries `hidden lg:inline-flex`, and the compact header rule
       // hides it through 1100px -- real CSS cascade, not a JS branch.
-      const desktopToggle = page.locator('[role="group"][aria-label="Chế độ sáng/tối"]');
+      const desktopToggle = page.locator("header .workspace-theme-toggle");
       await expect(desktopToggle).toBeHidden();
 
       await openOverflow(page);
@@ -57,7 +57,7 @@ test.describe("mobile/tablet: exactly one reachable theme action", () => {
       await page.setViewportSize({ width: vp.width, height: vp.height });
       await registerAndEnterApp(page);
 
-      const desktopToggle = page.locator('[role="group"][aria-label="Chế độ sáng/tối"]');
+      const desktopToggle = page.locator("header .workspace-theme-toggle");
       await expect(desktopToggle).toBeVisible();
 
       // The overflow trigger itself is phone/tablet-only chrome; at these
@@ -160,11 +160,11 @@ test.describe("mobile: real Light<->Dark via the real control", () => {
 
     await page.setViewportSize({ width: 1101, height: 768 });
     await expect(html).toHaveClass(/dark/);
-    await expect(page.locator('[role="group"][aria-label="Chế độ sáng/tối"]')).toBeVisible();
+    await expect(page.locator("header .workspace-theme-toggle")).toBeVisible();
 
     await page.setViewportSize({ width: 1100, height: 768 });
     await expect(html).toHaveClass(/dark/);
-    await expect(page.locator('[role="group"][aria-label="Chế độ sáng/tối"]')).toBeHidden();
+    await expect(page.locator("header .workspace-theme-toggle")).toBeHidden();
   });
 
   test("does not remount the workspace shell (tab state survives the click)", async ({ page }) => {

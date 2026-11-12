@@ -1170,7 +1170,6 @@
   .study-library-link__label,
   .workspace-mode-label,
   .workspace-theme-toggle,
-  .account-menu__shortcuts,
   .usage-chip__label,
   .account-menu__label,
   .account-menu__chevron { display: none !important; }
@@ -1234,4 +1233,10 @@
 @media (max-width: 700px) {
   .artifact-toolbar { gap: 6px; padding-inline: 8px; }
   .artifact-toolbar__identity small, .artifact-toolbar__usage { display: none; }
+}
+
+/* V6 header: the account menu's "Phím tắt" item is the only visible way to the shortcut help,
+   so it stays at every width where a keyboard is likely. Phones omit it. */
+@media (max-width: 767px) {
+  .account-menu__shortcuts { display: none !important; }
 }
