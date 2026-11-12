@@ -8120,3 +8120,69 @@ off-screen button then matches the same role+name as the visible CTA.
 **Prevention:** hiding by transform, width, opacity or pointer-events is visual only; anything
 that stays mounted while hidden needs `inert`. Label tests should match the bare text, not one
 quoting style.
+
+### A slow load for the previous route id landed on the new one: quiz and study map (V6 bug hunt #4, #14, 2026-11-12)
+
+**Symptom.** `/app/study/quiz/A` -> `/quiz/B` (or study map of document A -> B) without a full
+reload, while A's request is slow. If A answers after B, the page shows A's questions/map under
+B's URL. For the quiz this is worse than cosmetic: `attempt_id` becomes A's, so autosave and
+submit write to A's attempt. A finished A also redirected B to A's result page.
+
+**Root cause.** `load()` in `QuizTaking.jsx` and `load()`/`openMap()` in `StudyMapView.jsx` are
+`useCallback`s keyed by the route id, re-run by an effect. React Router keeps the component
+mounted when only the param changes, so two loads are in flight and neither checked which id the
+page shows when its `await` returned. `finally { setLoading(false) }` also ended B's loading.
+
+**Fix.** A ref holding the id the page shows now (`quizIdRef`, `docIdRef`); each load captures
+its own id and stops after every `await`, in `catch` and in `finally` when the two differ.
+`docIdRef` is also set inside its effect because StrictMode runs the cleanup without a render.
+
+**Regression tests.** `QuizTaking.staleOpen.test.jsx` (3 cases) and
+`StudyMapView.staleDocument.test.jsx`; four of the five cases fail on the old code.
+
+**Not covered.** The requests are not aborted, only ignored. `SidebarLeft` upload poller (#2)
+waits for #160, which touches the same lines.
+
+### Knowledge-map nodes could only be used with a pointer (V6 bug hunt #7, 2026-11-12)
+
+**Symptom.** On `/app/study/map/:id` Tab skipped every node; a keyboard user could not select a
+node, read its detail or open a branch.
+
+**Root cause.** `renderNode` in `StudyMapView.jsx` returns an SVG `<g onClick>` with no
+`tabIndex`, role, name or key handler.
+
+**Fix.** The `<g>` is `role="button"`, `tabIndex=0`, named by the node title, with
+`aria-pressed` (selected) and `aria-expanded` (branch), Enter/Space run the click action, and a
+`:focus-visible` style on the node's circle and label.
+
+**Regression test.** `e2e-fixture/knowledge-map-keyboard.spec.js` (real react-d3-tree: Enter
+selects and opens the branch and focus stays on the node; Tab reaches the root).
+
+**Not covered.** No arrow-key movement between nodes; Tab order is DOM order. Not tried with a
+screen reader.
+
+**Prevention.** A custom SVG/canvas element with `onClick` needs the same three things a button
+has: focus, a name, and Enter/Space.
+
+### Mind-map/summary start answered after the panel was gone and started an orphan poller (V6 bug hunt #3, 2026-11-12)
+
+**Symptom.** Start a mind map or summary, leave `/app` (or let the right panel unmount) before
+`POST` answers. The late 202 started a poller nothing owned: requests and state callbacks on a
+dead panel until the job ended. A late cache hit ran the completion handler (list refresh, toast).
+
+**Root cause.** The unmount cleanup in `SidebarRight.jsx` stops pollers that exist at that
+moment; `handleGenerateMindMap` / `handleGenerateSummary` created theirs after the await without
+asking whether the panel was still mounted.
+
+**Fix.** The existing `mountedRef` is checked after each await in both start handlers, in the
+list fetches and in the completion handlers. A job the server queued is still saved with
+`saveActive*Job`, so the next visit resumes it; only the poller and state updates are skipped.
+
+**Regression tests.** `SidebarRight.orphanPoller.test.jsx`, four cases (queued and cache hit,
+mind map and summary); all four fail without the guards.
+
+**Not covered.** The start request is not aborted. Out-of-order list refreshes (#13) are a
+separate problem and are not fixed here.
+
+**Prevention.** Cleanup can only stop what exists when it runs; anything created after an await
+needs its own "am I still the owner?" check.
