@@ -22,6 +22,9 @@ import StudyToolsMenu from "./StudyToolsMenu";
 import { fetchMindmapNodeContext } from "../../utils/mindmapNodeContext";
 import UsageChip from "./UsageChip";
 import BrandMark from "../ui/BrandMark";
+import { apiFetch, _appError } from "../../utils/api";
+import { mergeSources, formatFileName } from "../../utils/sourceReconciliation";
+import { nguonConDangXuLy } from "../../utils/nguonDangXuLy";
 
 // Round 11 (mockup parity, explicit user decision) — the Chat/Mind Map/
 // Summary mode switch, moved here from the now-deleted LessonHeader.jsx
@@ -49,6 +52,10 @@ export default function MainLayout({
   tutorRequest,
 }) {
   const [sources, setSources] = useState([]);
+  // "loading" until `/list-indexed` has answered once, then "ready" or "error". An empty
+  // `sources` means "no documents" only when this is "ready".
+  const [sourcesState, setSourcesState] = useState("loading");
+  const onSourcesSettled = useCallback((ok) => setSourcesState(ok ? "ready" : "error"), []);
   // W1-4: the centre empty states (Chat/Mind Map/Summary) have no file input
   // or upload POST logic of their own, by design -- reuse SidebarLeft's,
   // reached here via the registration callback it calls back with (see its
@@ -78,6 +85,31 @@ export default function MainLayout({
     return () => window.removeEventListener("resize", onResize);
   }, []);
   const tabletSourceRail = !panelDrawer && viewportWidth < 1280;
+
+  // SidebarLeft owns the `/list-indexed` fetch, but a collapsed desktop panel renders only its
+  // spine, so nothing fetched: the spine showed no count and the chat offered "upload your first
+  // document" to people with a full library. While the list is still unknown and the panel is
+  // not mounted, ask once here. Expanding the panel mounts SidebarLeft, which fetches for itself.
+  const leftPanelUnmounted = !tabletSourceRail && !panelDrawer && panel.collapsed.left;
+  useEffect(() => {
+    if (!leftPanelUnmounted || sourcesState !== "loading") return undefined;
+    let cancelled = false;
+    apiFetch("/list-indexed")
+      .then(async (res) => { if (!res.ok) throw await _appError(res); return res.json(); })
+      .then((data) => {
+        if (cancelled) return;
+        // Uploads still being processed are not in `/list-indexed`; without them a library whose
+        // only document is mid-processing would read as empty here.
+        const dangXuLy = nguonConDangXuLy().map((n) => ({
+          source_id: n.sourceId, filename: n.filename || "Tài liệu đang xử lý",
+          video_stem: null, status: "processing", progress: 0, can_query: false,
+        }));
+        setSources((prev) => (prev.length ? prev : [...dangXuLy, ...mergeSources([], data.sources || [], formatFileName)]));
+        setSourcesState("ready");
+      })
+      .catch(() => { if (!cancelled) setSourcesState("error"); });
+    return () => { cancelled = true; };
+  }, [leftPanelUnmounted, sourcesState]);
   const { isDark, setLight, setDark, toggleTheme } = useTheme();
   const { user, logout } = useAuth();
   // `selectedDocument` (Study Context's single-document pointer) used to
@@ -795,6 +827,7 @@ export default function MainLayout({
               selectedSources={selectedSources}
               setSelectedSources={setSelectedSources}
               onSourcesChange={setSources}
+              onSourcesSettled={onSourcesSettled}
               initialSources={sources}
               onClose={() => setTabletShelfOpen((open) => !open)}
               onTransientSurfaceOpen={closeHeaderSurface}
@@ -856,6 +889,7 @@ export default function MainLayout({
                 selectedSources={selectedSources}
                 setSelectedSources={setSelectedSources}
                 onSourcesChange={setSources}
+                onSourcesSettled={onSourcesSettled}
                 initialSources={sources}
                 onClose={() => (panel.drawer ? setLeftOpen(false) : panel.setCollapsedFor("left", true))}
                 onTransientSurfaceOpen={closeHeaderSurface}
@@ -886,7 +920,7 @@ export default function MainLayout({
             onMindmapAction={onMindmapAction}
             onSummaryAction={onSummaryAction}
             chatProps={{
-              selectedSources, sources, onEvidence: setEvidence, highlight, onHighlight,
+              selectedSources, sources, sourcesState, onEvidence: setEvidence, highlight, onHighlight,
               onOpenLeft: () => (panel.drawer ? setLeftOpen(true) : panel.setCollapsedFor("left", false)),
               onOpenEvidence: () => {
                 setRightView("evidence");
@@ -905,7 +939,7 @@ export default function MainLayout({
             // or a `?source=` deep link resolving before the library fetch lands)
             // -- a real selection is itself proof the library isn't empty, so
             // either signal being non-empty is enough.
-            hasAnyDocuments={sources.length > 0 || selectedSources.length > 0}
+            hasAnyDocuments={sourcesState !== "ready" || sources.length > 0 || selectedSources.length > 0}
             onUploadDocument={triggerUpload}
             mindmapData={mindmapData}
             mindmapInitialLoading={libraries.mindMapInitialLoading}
