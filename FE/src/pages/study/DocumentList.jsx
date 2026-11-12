@@ -4,6 +4,7 @@ import StudyShell, { EmptyState } from "../../components/study/StudyShell";
 import StudyCard from "../../components/study/StudyCard";
 import AiInsightCard from "../../components/study/AiInsightCard";
 import LearningDashboard from "../../components/study/LearningDashboard";
+import LearningHome from "../../components/study/LearningHome";
 import Disclosure from "../../components/ui/Disclosure";
 import CollectionSidebar from "../../components/study/CollectionSidebar";
 import BulkBar from "../../components/study/BulkBar";
@@ -719,6 +720,12 @@ export default function DocumentList() {
           Frontend V2 wave: default-collapsed is now a REMEMBERED preference, not
           just a fixed behavior — closes the exact gap flagged in
           docs/FINAL_VISUAL_REVIEW.md's "acceptance criterion not met" note. */}
+      {/* V6 learning home: where to pick up, recent documents, library progress. It replaces
+          the separate "Tiếp tục học" section (one full card for the same document) below. */}
+      {documents.length > 0 && (
+        <LearningHome documents={documents} mucHienThi={mucHienThi} overview={overview} onMo={moBeMat} />
+      )}
+
       {documents.length > 0 && (
         <section className="surface-card !p-0 mb-7">
           <Disclosure title="Tổng quan học tập" dense
@@ -787,14 +794,6 @@ export default function DocumentList() {
               ))}
             </div>
           )}
-        </section>
-      )}
-
-      {/* Tiếp tục học */}
-      {!LIBRARY_ACTION_MATRIX && mucHienThi.tiepTucHoc && (
-        <section className="mb-7">
-          <SectionTitle>Tiếp tục học</SectionTitle>
-          {veThe(mucHienThi.tiepTucHoc)}
         </section>
       )}
 
