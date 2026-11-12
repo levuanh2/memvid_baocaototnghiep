@@ -8,6 +8,7 @@ import { createRoot } from "react-dom/client";
 import SidebarRight from "./SidebarRight";
 import { StudyContextProvider } from "../../study/StudyContextProvider";
 import { apiFetch, generateMindmap } from "../../utils/api";
+import { createMindmapPoller } from "../../utils/mindmapJob";
 
 const pollerSpies = vi.hoisted(() => ({
   mindmapStart: vi.fn(),
@@ -73,7 +74,7 @@ afterEach(() => {
   localStorage.clear();
 });
 
-async function mountSidebar() {
+async function mountSidebar(extraProps = {}) {
   container = document.createElement("div");
   document.body.appendChild(container);
   root = createRoot(container);
@@ -88,6 +89,7 @@ async function mountSidebar() {
           onSwitchToChat={vi.fn()}
           onMindmapLibraryChange={(value) => { mindmapLibrary = value; }}
           onSummaryLibraryChange={(value) => { summaryLibrary = value; }}
+          {...extraProps}
         />
       </StudyContextProvider>,
     );
@@ -185,6 +187,38 @@ describe("SidebarRight: who may publish the summary list", () => {
     await act(async () => { mindmapRequests[0].resolve({ ok: true, json: async () => ({ mindmaps: [] }) }); });
     await flush();
     expect((mindmapLibrary.mindMaps || []).map((m) => m.id)).toContain("new-map");
+  });
+
+  it("two finished mind maps with overlapping list refreshes: the older completion does not reopen its map over the newer one", async () => {
+    const mindmapRequests = [];
+    apiFetch.mockImplementation((path) => {
+      if (path === "/mindmaps") return new Promise((resolve) => { mindmapRequests.push({ resolve }); });
+      return Promise.resolve({ ok: true, json: async () => ({ summaries: [] }) });
+    });
+    const opened = [];
+    await mountSidebar({ onMindmapDataChange: (value) => { if (value?.data?.id) opened.push(value.data.id); } });
+    await act(async () => { mindmapRequests[0].resolve({ ok: true, json: async () => ({ mindmaps: [] }) }); });
+    await flush();
+
+    // Two queued jobs; each finishes through its poller, which is where completions can overlap.
+    const finish = async (jobId, mapId) => {
+      generateMindmap.mockResolvedValueOnce({ status: "queued", job_id: jobId });
+      await act(async () => { mindmapLibrary.actions.create(); });
+      await flush();
+      const poller = createMindmapPoller.mock.calls[createMindmapPoller.mock.calls.length - 1][0];
+      await act(async () => { poller.onDone({ id: mapId, title: mapId, nodes: [{ id: "root", title: "Root" }] }); });
+      await flush();
+    };
+    await finish("job-1", "map-1");                         // completion 1 waits on refresh [1]
+    await finish("job-2", "map-2");                         // completion 2 waits on refresh [2]
+    expect(mindmapRequests).toHaveLength(3);
+
+    const list = { ok: true, json: async () => ({ mindmaps: [{ id: "map-2", title: "map-2" }, { id: "map-1", title: "map-1" }] }) };
+    await act(async () => { mindmapRequests[2].resolve(list); });
+    await flush();
+    await act(async () => { mindmapRequests[1].resolve(list); });
+    await flush();
+    expect(opened[opened.length - 1]).toBe("map-2");
   });
 
   // 5. "a generation job answers after the panel closes" is covered by

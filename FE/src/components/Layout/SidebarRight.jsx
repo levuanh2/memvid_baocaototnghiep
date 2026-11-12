@@ -366,6 +366,7 @@ export default function SidebarRight({
   // the one case where `mindmapGenerating` was turned on (viewer overlay
   // stays open showing the old map with a banner), so it's the one case that
   // needs it turned back off on completion.
+  const lanXongMindmapRef = useRef(0);
   const handleMindmapDone = useCallback(async (data, sourceList, { resumed = false, isRegenerate = false } = {}) => {
     clearActiveMindmapJob();
     if (isRegenerate) setMindmapGenerating(false);
@@ -391,8 +392,11 @@ export default function SidebarRight({
       initialLayoutType: "napkin",
     };
     setMindMaps((prev) => [record, ...prev.filter((item) => item.id !== record.id)]);
+    // The list refresh is awaited, so two finished jobs can overlap here. Only the newest
+    // completion may open its map: an older one resuming late used to replace it.
+    const lan = ++lanXongMindmapRef.current;
     await fetchMindMaps();
-    if (!mountedRef.current) return;
+    if (!mountedRef.current || lan !== lanXongMindmapRef.current) return;
     if (resumed) {
       // The tab that started this job is gone — don't yank the user into a
       // full-screen overlay for a job they may not even remember starting.
@@ -711,10 +715,12 @@ export default function SidebarRight({
   };
 
   // ── Summary v2 job flow (mirror mindmap: poller + resume + cancel thật) ──
+  const lanXongSummaryRef = useRef(0);
   const handleSummaryDone = useCallback(async (record, { resumed = false } = {}) => {
     clearActiveSummaryJob();
+    const lan = ++lanXongSummaryRef.current;   // same rule as handleMindmapDone
     await fetchSummaries(); // BE đã tự persist record — chỉ cần refresh danh sách
-    if (!mountedRef.current) return;
+    if (!mountedRef.current || lan !== lanXongSummaryRef.current) return;
     if (resumed) {
       toast("Tóm tắt đã xong trong lúc bạn vắng mặt — mở từ danh sách", { type: "info" });
     } else {
