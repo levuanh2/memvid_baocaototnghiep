@@ -274,12 +274,22 @@ export default function StudyMapView() {
     };
   }, [xuatOpen]);
 
+  // The document this page shows NOW. Every load is tied to the document it was started for:
+  // going A -> B while A is slow used to let A's answer land last and draw A's map under B's URL.
+  const docIdRef = useRef(documentId);
+  docIdRef.current = documentId;
+  // Set again inside the effect: StrictMode runs the cleanup once without a new render.
+  useEffect(() => { docIdRef.current = documentId; return () => { docIdRef.current = null; }; }, [documentId]);
+
   const openMap = useCallback(async (mapId, documentIdForChunks) => {
+    const stale = () => docIdRef.current !== documentIdForChunks;
     const body = await getStudyMap(mapId);
+    if (stale()) return;
     setMap(body);
     // Đoạn nguồn lấy một lần cho cả sơ đồ; node chỉ giữ chunk_id.
     try {
       const list = await listChunks(documentIdForChunks);
+      if (stale()) return;
       setChunks(new Map(list.map((c) => [c.chunk_id, c])));
     } catch {
       // Không có đoạn nguồn thì sơ đồ vẫn xem được — chỉ mất phần trích dẫn.
@@ -293,23 +303,26 @@ export default function StudyMapView() {
   });
 
   const load = useCallback(async () => {
+    const stale = () => docIdRef.current !== documentId;
     setLoading(true);
     setError(null);
     try {
       const [d, maps] = await Promise.all([getDocument(documentId), listStudyMaps(documentId)]);
+      if (stale()) return;
       setDoc(d);
       selectDocument(d?.source_stem || null, { source: "mindmap" });
       const newest = maps.find((m) => m.status === "completed") || null;
       if (newest) await openMap(newest.map_id, documentId);
       else setMap(null);
+      if (stale()) return;
       // Có job đang dựng (tab khác, hoặc vừa F5) mà trang hiện "Chưa dựng sơ đồ cho
       // tài liệu này" kèm nút mời dựng thì người dùng bấm, và job thứ hai tranh slot
       // LLM với job thứ nhất.
       setDangDung(Boolean(maps.find((m) => m.status === "processing" || m.status === "pending")));
     } catch (e) {
-      setError(moTaLoi(e, "Không tải được sơ đồ kiến thức."));
+      if (!stale()) setError(moTaLoi(e, "Không tải được sơ đồ kiến thức."));
     } finally {
-      setLoading(false);
+      if (!stale()) setLoading(false);
     }
   }, [documentId, openMap, selectDocument]);
 

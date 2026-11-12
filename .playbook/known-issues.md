@@ -8120,3 +8120,25 @@ off-screen button then matches the same role+name as the visible CTA.
 **Prevention:** hiding by transform, width, opacity or pointer-events is visual only; anything
 that stays mounted while hidden needs `inert`. Label tests should match the bare text, not one
 quoting style.
+
+### A slow load for the previous route id landed on the new one: quiz and study map (V6 bug hunt #4, #14, 2026-11-12)
+
+**Symptom.** `/app/study/quiz/A` -> `/quiz/B` (or study map of document A -> B) without a full
+reload, while A's request is slow. If A answers after B, the page shows A's questions/map under
+B's URL. For the quiz this is worse than cosmetic: `attempt_id` becomes A's, so autosave and
+submit write to A's attempt. A finished A also redirected B to A's result page.
+
+**Root cause.** `load()` in `QuizTaking.jsx` and `load()`/`openMap()` in `StudyMapView.jsx` are
+`useCallback`s keyed by the route id, re-run by an effect. React Router keeps the component
+mounted when only the param changes, so two loads are in flight and neither checked which id the
+page shows when its `await` returned. `finally { setLoading(false) }` also ended B's loading.
+
+**Fix.** A ref holding the id the page shows now (`quizIdRef`, `docIdRef`); each load captures
+its own id and stops after every `await`, in `catch` and in `finally` when the two differ.
+`docIdRef` is also set inside its effect because StrictMode runs the cleanup without a render.
+
+**Regression tests.** `QuizTaking.staleOpen.test.jsx` (3 cases) and
+`StudyMapView.staleDocument.test.jsx`; four of the five cases fail on the old code.
+
+**Not covered.** The requests are not aborted, only ignored. `SidebarLeft` upload poller (#2)
+waits for #160, which touches the same lines.
