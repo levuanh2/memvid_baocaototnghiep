@@ -73,22 +73,18 @@ describe("ProfileSections", () => {
     expect(host.textContent).toContain("15%");
   });
 
-  it("the theme choice shows the current state and writes the same setting the header uses", async () => {
-    await render();
-    const [light, dark] = host.querySelectorAll('[role="radio"]');
-    expect(light.getAttribute("aria-checked")).toBe("true");
-    await act(async () => { dark.click(); });
-    expect(dark.getAttribute("aria-checked")).toBe("true");
-    expect(document.documentElement.classList.contains("dark")).toBe(true);
-    expect(localStorage.getItem("memvid-theme")).toBe("dark");
+  it("adds no second theme control and no second sign-out (owner decision: one of each, in the header)", async () => {
+    await render({ laNks: true });
+    expect(host.querySelector('[role="radio"]')).toBeNull();
+    expect(host.textContent).not.toContain("Nền sáng");
+    expect(host.textContent).not.toContain("Nền tối");
+    expect(button("Đăng xuất")).toBeUndefined();
   });
 
-  it("a local account gets sign-out but no password change", async () => {
-    const onLogout = vi.fn();
-    await render({ laNks: false, onLogout });
+  it("a local account has no password section at all", async () => {
+    await render({ laNks: false });
     expect(button("Đổi mật khẩu")).toBeUndefined();
-    await act(async () => { button("Đăng xuất").click(); });
-    expect(onLogout).toHaveBeenCalledWith();
+    expect(host.textContent).not.toContain("Mật khẩu");
   });
 
   it("an NKS account can change its password here; finishing signs out with the password-change reason", async () => {

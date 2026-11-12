@@ -635,16 +635,6 @@
     .profile-section { grid-template-columns: 168px minmax(0, 1fr); gap: 28px; }
   }
   .profile-sections .pill-action { min-height: 44px; }
-  .profile-theme-option {
-    display: inline-flex; align-items: center; gap: 6px;
-    min-height: 40px; padding: 0 12px; border-radius: 6px;
-    font-size: 14px; color: var(--text-secondary);
-    transition: background-color 150ms ease, color 150ms ease;
-  }
-  .profile-theme-option:hover { color: var(--text-primary); }
-  .profile-theme-option[data-active="true"] {
-    background: var(--bg-elevated); color: var(--accent); font-weight: 500;
-  }
 
   /* Wave 8 cleanup: `.sidebar-tab`/`.sidebar-tab-active` removed — grep-
      confirmed zero JSX consumers (superseded by WorkspaceTabs.jsx). */

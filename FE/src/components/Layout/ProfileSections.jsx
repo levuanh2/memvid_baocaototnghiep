@@ -2,24 +2,25 @@ import { useState } from "react";
 import { Icon } from "../ui/Icon";
 import Spinner from "../ui/Spinner";
 import ChangePasswordDialog from "./ChangePasswordDialog";
-import { useTheme } from "../../hooks/useTheme";
 import { formatTokens, usageByActivity, useAiUsage } from "../../hooks/useAiUsage";
 
 /**
  * V6 — the rest of the account page, under the personal details: what the account has used
- * this month, how the app looks, and sign-in security.
+ * this month and, for NKS accounts, the password.
  *
  * Laid out as one record sheet: the section name sits in a left column from `md` up (stacked
- * below it), with a rule between sections. Nothing here is new data: usage is the same
- * `/usage/me` the header chip reads, the theme is the same `memvid-theme` setting, and
- * password change / sign-out are the same actions the account menu offers.
+ * below it), with a rule between sections. Usage is the same `/usage/me` the header chip
+ * reads, shown here in full (by activity).
+ *
+ * Deliberately NOT here: a theme control (owner decision: one theme control, in the header
+ * and the phone menu) and sign-out (the account menu, visible at every width, has it).
  */
 export default function ProfileSections({ laNks, email, onLogout }) {
   return (
     <div className="profile-sections">
       <UsageSection />
-      <AppearanceSection />
-      <SecuritySection laNks={laNks} email={email} onLogout={onLogout} />
+      {/* Only NKS accounts have an NKS password; for a local account the section does not exist. */}
+      {laNks && <SecuritySection email={email} onLogout={onLogout} />}
     </div>
   );
 }
@@ -97,53 +98,20 @@ function UsageSection() {
   return <Section id="profile-usage" title="Mức sử dụng AI">{body}</Section>;
 }
 
-function AppearanceSection() {
-  const { isDark, setLight, setDark } = useTheme();
-  const nut = "profile-theme-option";
-  return (
-    <Section id="profile-appearance" title="Giao diện">
-      {/* A settings page shows the state, so this is a two-option choice (the header button is
-          the quick switch). Same `memvid-theme` setting either way. */}
-      <div role="radiogroup" aria-label="Nền" className="inline-flex rounded-[8px] border p-1 gap-1" style={{ borderColor: "var(--border-color)" }}>
-        <button type="button" role="radio" aria-checked={!isDark} onClick={setLight} className={nut} data-active={!isDark ? "true" : undefined}>
-          <Icon name="Sun" size={14} /> Nền sáng
-        </button>
-        <button type="button" role="radio" aria-checked={isDark} onClick={setDark} className={nut} data-active={isDark ? "true" : undefined}>
-          <Icon name="Moon" size={14} /> Nền tối
-        </button>
-      </div>
-      <p className="mt-2 text-caption text-text-muted">Lựa chọn được nhớ trên trình duyệt này.</p>
-    </Section>
-  );
-}
-
-function SecuritySection({ laNks, email, onLogout }) {
+function SecuritySection({ email, onLogout }) {
   const [moDoiMatKhau, setMoDoiMatKhau] = useState(false);
   return (
-    <Section id="profile-security" title="Đăng nhập và bảo mật">
-      <div className="flex flex-wrap gap-2">
-        {/* Only NKS accounts have an NKS password to change; for a local account the action
-            does not exist, exactly as in the account menu. */}
-        {laNks && (
-          <button type="button" className="pill-action" onClick={() => setMoDoiMatKhau(true)}>
-            <Icon name="KeyRound" size={14} /> Đổi mật khẩu
-          </button>
-        )}
-        <button type="button" className="pill-action" onClick={() => onLogout?.()}>
-          <Icon name="LogOut" size={14} /> Đăng xuất
-        </button>
-      </div>
-      {laNks && (
-        <p className="mt-2 text-caption text-text-muted">Đổi mật khẩu xong, StudyMap đăng xuất mọi thiết bị và mời bạn đăng nhập lại.</p>
-      )}
-      {laNks && (
-        <ChangePasswordDialog
-          open={moDoiMatKhau}
-          email={email}
-          onClose={() => setMoDoiMatKhau(false)}
-          onDoiXong={() => { setMoDoiMatKhau(false); onLogout?.({ lyDo: "doi-mat-khau" }); }}
-        />
-      )}
+    <Section id="profile-security" title="Mật khẩu">
+      <button type="button" className="pill-action" onClick={() => setMoDoiMatKhau(true)}>
+        <Icon name="KeyRound" size={14} /> Đổi mật khẩu
+      </button>
+      <p className="mt-2 text-caption text-text-muted">Đổi mật khẩu xong, StudyMap đăng xuất mọi thiết bị và mời bạn đăng nhập lại.</p>
+      <ChangePasswordDialog
+        open={moDoiMatKhau}
+        email={email}
+        onClose={() => setMoDoiMatKhau(false)}
+        onDoiXong={() => { setMoDoiMatKhau(false); onLogout?.({ lyDo: "doi-mat-khau" }); }}
+      />
     </Section>
   );
 }
