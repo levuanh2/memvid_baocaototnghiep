@@ -8163,3 +8163,26 @@ screen reader.
 
 **Prevention.** A custom SVG/canvas element with `onClick` needs the same three things a button
 has: focus, a name, and Enter/Space.
+
+### Mind-map/summary start answered after the panel was gone and started an orphan poller (V6 bug hunt #3, 2026-11-12)
+
+**Symptom.** Start a mind map or summary, leave `/app` (or let the right panel unmount) before
+`POST` answers. The late 202 started a poller nothing owned: requests and state callbacks on a
+dead panel until the job ended. A late cache hit ran the completion handler (list refresh, toast).
+
+**Root cause.** The unmount cleanup in `SidebarRight.jsx` stops pollers that exist at that
+moment; `handleGenerateMindMap` / `handleGenerateSummary` created theirs after the await without
+asking whether the panel was still mounted.
+
+**Fix.** The existing `mountedRef` is checked after each await in both start handlers, in the
+list fetches and in the completion handlers. A job the server queued is still saved with
+`saveActive*Job`, so the next visit resumes it; only the poller and state updates are skipped.
+
+**Regression tests.** `SidebarRight.orphanPoller.test.jsx`, four cases (queued and cache hit,
+mind map and summary); all four fail without the guards.
+
+**Not covered.** The start request is not aborted. Out-of-order list refreshes (#13) are a
+separate problem and are not fixed here.
+
+**Prevention.** Cleanup can only stop what exists when it runs; anything created after an await
+needs its own "am I still the owner?" check.

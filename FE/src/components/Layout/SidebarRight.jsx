@@ -298,31 +298,37 @@ export default function SidebarRight({
   const fetchMindMaps = useCallback(async () => {
     try {
       const res = await apiFetch(`/mindmaps`);
+      if (!mountedRef.current) return;
       if (!res.ok) throw new Error(`HTTP ${res.status}`);
       const data = await res.json();
+      if (!mountedRef.current) return;
       setMindMaps(Array.isArray(data?.mindmaps) ? data.mindmaps : []);
       setLoiTaiMindmap(null);
     } catch (err) {
+      if (!mountedRef.current) return;
       console.error("Mind map fetch error:", err);
       setLoiTaiMindmap("Chưa tải được danh sách sơ đồ.");
     }
-    finally { setInitialLoading(false); }
+    finally { if (mountedRef.current) setInitialLoading(false); }
   }, []);
 
   const fetchSummaries = useCallback(async () => {
     try {
       const res = await apiFetch(`/summaries`);
+      if (!mountedRef.current) return;
       if (!res.ok) throw new Error(`HTTP ${res.status}`);
       const data = await res.json();
+      if (!mountedRef.current) return;
       setSummaries(Array.isArray(data?.summaries) ? data.summaries : []);
       setLoiTaiSummary(null);
     } catch (err) {
+      if (!mountedRef.current) return;
       console.error("Summary fetch error:", err);
       setLoiTaiSummary("Chưa tải được danh sách tóm tắt.");
     }
     // Tab Tóm tắt trước đây KHÔNG có cờ tải nào, nên nó hiện "Chưa có tóm tắt nào"
     // ngay trong lúc đang tải lần đầu.
-    finally { setDangTaiSummary(false); }
+    finally { if (mountedRef.current) setDangTaiSummary(false); }
   }, []);
 
   useEffect(() => { fetchMindMaps(); fetchSummaries(); }, [fetchMindMaps, fetchSummaries]);
@@ -367,6 +373,7 @@ export default function SidebarRight({
     };
     setMindMaps((prev) => [record, ...prev.filter((item) => item.id !== record.id)]);
     await fetchMindMaps();
+    if (!mountedRef.current) return;
     if (resumed) {
       // The tab that started this job is gone — don't yank the user into a
       // full-screen overlay for a job they may not even remember starting.
@@ -511,6 +518,14 @@ export default function SidebarRight({
     if (force) setMindmapGenerating(true); // keep the open viewer's banner up during "Tạo lại"
     try {
       const startData = await generateMindmap(sourceList, { force, ...guidedOptions });
+      if (!mountedRef.current) {
+        // Left before the answer came. The server did queue the job, so keep it for the next
+        // visit to resume; start no poller and touch no state from this dead panel.
+        if (startData?.job_id && startData.status !== "done") {
+          saveActiveMindmapJob({ jobId: startData.job_id, sources: sourceList, startedAt: Date.now() });
+        }
+        return;
+      }
       if (startData.error) throw new Error(startData.error);
 
       if (startData.status === "done" && startData.result) {
@@ -542,6 +557,7 @@ export default function SidebarRight({
       if (Object.keys(guidedOptions).length) setGuidedOpen(false);
       startMindmapPoller(startData.job_id, sourceList, { resumed: false, isRegenerate: force });
     } catch (err) {
+      if (!mountedRef.current) return;
       console.error("Mind Map Error:", err);
       toast(_errText(err, "Không tạo được sơ đồ", "Không tạo được sơ đồ, kiểm tra console!"), { type: "error" });
       if (Object.keys(guidedOptions).length) {
@@ -556,7 +572,7 @@ export default function SidebarRight({
     }
     finally {
       mindmapStartingRef.current = false;
-      setLoading(false);
+      if (mountedRef.current) setLoading(false);
     }
   };
 
@@ -678,6 +694,7 @@ export default function SidebarRight({
   const handleSummaryDone = useCallback(async (record, { resumed = false } = {}) => {
     clearActiveSummaryJob();
     await fetchSummaries(); // BE đã tự persist record — chỉ cần refresh danh sách
+    if (!mountedRef.current) return;
     if (resumed) {
       toast("Tóm tắt đã xong trong lúc bạn vắng mặt — mở từ danh sách", { type: "info" });
     } else {
@@ -755,6 +772,13 @@ export default function SidebarRight({
     setSummaryCancelNotice(false);
     try {
       const startData = await generateSummary(sourceList, { lengthMode, mode });
+      if (!mountedRef.current) {
+        // Same as the mind map: keep the queued job for the next visit, start nothing here.
+        if (startData?.job_id && startData.status !== "done") {
+          saveActiveSummaryJob({ jobId: startData.job_id, sources: sourceList, startedAt: Date.now(), extra: { lengthMode, mode } });
+        }
+        return;
+      }
       if (startData.error) throw new Error(startData.error);
 
       if (startData.status === "done" && startData.result) {
@@ -770,10 +794,11 @@ export default function SidebarRight({
       saveActiveSummaryJob({ jobId: startData.job_id, sources: sourceList, startedAt: Date.now(), extra: { lengthMode, mode } });
       startSummaryPoller(startData.job_id, { resumed: false });
     } catch (err) {
+      if (!mountedRef.current) return;
       handleSummaryError(err);
     } finally {
       summaryStartingRef.current = false;
-      setSummaryLoading(false);
+      if (mountedRef.current) setSummaryLoading(false);
     }
   };
 
