@@ -54,8 +54,3 @@ test("Mind Map empty state (no documents): shows the upload CTA, not the disable
   ]);
   expect(chooser).toBeTruthy();
 });
-
-// TEMPORARY (gate proof, reverted in the next commit): a deliberately failing test in a gated spec.
-test("TEMPORARY gate proof: this test fails on purpose", async () => {
-  expect("gate").toBe("green");
-});
