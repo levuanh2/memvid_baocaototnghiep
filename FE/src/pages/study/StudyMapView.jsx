@@ -90,6 +90,9 @@ export const STUDY_MAP_LIVE_CSS = `
   .study-map-canvas .study-map__link--branch { stroke: var(--border-strong); stroke-width: 1.5px; }
   .study-map-canvas .study-map__link--leaf { stroke: var(--border-strong); stroke-width: 1.2px; }
   .study-map-canvas g[data-map-role]:not([data-map-role="root"]):hover .study-map__anchor { fill: var(--bg-hover); }
+  .study-map-canvas g[data-map-role]:focus { outline: none; }
+  .study-map-canvas g[data-map-role]:focus-visible .study-map__anchor { stroke: var(--accent); stroke-width: 3.5px; }
+  .study-map-canvas g[data-map-role]:focus-visible text { text-decoration: underline; }
   .study-map-canvas .study-map__touch-target { display: none; }
   @media (max-width: 767px) { .study-map-canvas .study-map__touch-target { display: block; } }
 `;
@@ -274,12 +277,22 @@ export default function StudyMapView() {
     };
   }, [xuatOpen]);
 
+  // The document this page shows NOW. Every load is tied to the document it was started for:
+  // going A -> B while A is slow used to let A's answer land last and draw A's map under B's URL.
+  const docIdRef = useRef(documentId);
+  docIdRef.current = documentId;
+  // Set again inside the effect: StrictMode runs the cleanup once without a new render.
+  useEffect(() => { docIdRef.current = documentId; return () => { docIdRef.current = null; }; }, [documentId]);
+
   const openMap = useCallback(async (mapId, documentIdForChunks) => {
+    const stale = () => docIdRef.current !== documentIdForChunks;
     const body = await getStudyMap(mapId);
+    if (stale()) return;
     setMap(body);
     // Đoạn nguồn lấy một lần cho cả sơ đồ; node chỉ giữ chunk_id.
     try {
       const list = await listChunks(documentIdForChunks);
+      if (stale()) return;
       setChunks(new Map(list.map((c) => [c.chunk_id, c])));
     } catch {
       // Không có đoạn nguồn thì sơ đồ vẫn xem được — chỉ mất phần trích dẫn.
@@ -292,24 +305,32 @@ export default function StudyMapView() {
     },
   });
 
+  // A job still polling belongs to the document it was started for. `useStudyJob` calls the
+  // newest `onDone`, so without this A's finished map was opened on document B.
+  const resetJob = job.reset;
+  useEffect(() => { resetJob(); }, [documentId, resetJob]);
+
   const load = useCallback(async () => {
+    const stale = () => docIdRef.current !== documentId;
     setLoading(true);
     setError(null);
     try {
       const [d, maps] = await Promise.all([getDocument(documentId), listStudyMaps(documentId)]);
+      if (stale()) return;
       setDoc(d);
       selectDocument(d?.source_stem || null, { source: "mindmap" });
       const newest = maps.find((m) => m.status === "completed") || null;
       if (newest) await openMap(newest.map_id, documentId);
       else setMap(null);
+      if (stale()) return;
       // Có job đang dựng (tab khác, hoặc vừa F5) mà trang hiện "Chưa dựng sơ đồ cho
       // tài liệu này" kèm nút mời dựng thì người dùng bấm, và job thứ hai tranh slot
       // LLM với job thứ nhất.
       setDangDung(Boolean(maps.find((m) => m.status === "processing" || m.status === "pending")));
     } catch (e) {
-      setError(moTaLoi(e, "Không tải được sơ đồ kiến thức."));
+      if (!stale()) setError(moTaLoi(e, "Không tải được sơ đồ kiến thức."));
     } finally {
-      setLoading(false);
+      if (!stale()) setLoading(false);
     }
   }, [documentId, openMap, selectDocument]);
 
@@ -413,6 +434,8 @@ export default function StudyMapView() {
     setError(null);
     try {
       const body = await generateStudyMap(documentId, { force });
+      // Asked for another document meanwhile: its job must not be tracked on this one.
+      if (docIdRef.current !== documentId) return;
       if (body?.job_id) job.start(body.job_id);
       else if (body?.map_id) await openMap(body.map_id, documentId);
       // FE#18: không có nhánh này thì response thiếu cả hai khoá = nút hết quay và
@@ -468,7 +491,17 @@ export default function StudyMapView() {
         if (hasBranch) toggleNode();
       };
       return (
+        // Keyboard: the node is the page's main content, so it takes focus and Enter/Space do
+        // what a click does. Without this the map could only be read with a pointer.
         <g onClick={onPick} data-map-role={attrs.node_type || "concept"}
+           tabIndex={0} role="button" aria-label={nodeDatum.name}
+           aria-pressed={isSel ? "true" : "false"}
+           aria-expanded={hasBranch ? (nodeDatum.__rd3t?.collapsed ? "false" : "true") : undefined}
+           onKeyDown={(e) => {
+             if (e.key !== "Enter" && e.key !== " ") return;
+             e.preventDefault();
+             onPick();
+           }}
            data-selected={isSel ? "true" : undefined}
            data-search-match={isMatch ? (isActiveMatch ? "active" : "match") : undefined}
            style={{ cursor: "pointer", opacity: daMo ? 1 : 0.22 }}>

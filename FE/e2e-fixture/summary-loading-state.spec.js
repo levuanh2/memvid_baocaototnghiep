@@ -69,3 +69,50 @@ test("an account with no summaries still gets the create screen", async ({ page 
   await expect(summaryPane(page).getByText("Chưa có tóm tắt", { exact: true })).toBeVisible();
   await expect(summaryPane(page).getByRole("button", { name: "Tạo tóm tắt" })).toBeEnabled();
 });
+
+// First frame: before the right panel (owner of both lists) has published anything, the centre
+// screen must already be "loading", not "empty". A settled-DOM assertion cannot see a one-commit
+// flash, so the page records every text it ever rendered.
+async function recordEverSeen(page, phrases) {
+  await page.addInitScript((list) => {
+    window.__everSeen = [];
+    const check = () => {
+      const text = document.body ? document.body.innerText : "";
+      for (const phrase of list) if (text.includes(phrase) && !window.__everSeen.includes(phrase)) window.__everSeen.push(phrase);
+    };
+    new MutationObserver(check).observe(document, { childList: true, subtree: true, characterData: true });
+  }, phrases);
+}
+
+test("the Summary screen never shows 'Chưa có tóm tắt' while its list is still loading", async ({ page }) => {
+  await recordEverSeen(page, ["Chưa có tóm tắt"]);
+  let release;
+  const gate = new Promise((r) => { release = r; });
+  await openWorkspace(page, async (route) => { await gate; return route.fulfill(json({ summaries: [] })); });
+  await expect(loadingLine(page)).toBeVisible();
+  expect(await page.evaluate(() => window.__everSeen)).toEqual([]);
+  release();
+  await expect(summaryPane(page).getByText("Chưa có tóm tắt", { exact: true })).toBeVisible();
+});
+
+test("the Mind map screen never shows 'Chưa có sơ đồ tư duy' while its list is still loading", async ({ page }) => {
+  await recordEverSeen(page, ["Chưa có sơ đồ tư duy"]);
+  let release;
+  const gate = new Promise((r) => { release = r; });
+  await page.setViewportSize({ width: 1280, height: 900 });
+  await page.addInitScript(() => localStorage.setItem("memvid-token", "fixture-token"));
+  await page.route(/localhost:8080\//, async (route) => {
+    const p = new URL(route.request().url()).pathname;
+    if (p === "/auth/me") return route.fulfill(json({ user: { id: "u1", email: "qa@example.test", display_name: "QA", provider: "local" } }));
+    if (p === "/list-indexed") return route.fulfill(json({ sources: [{ video: "tai-lieu-1", video_stem: "tai-lieu-1", filename: "Hệ điều hành.pdf", status: "index_ready" }] }));
+    if (p === "/mindmaps") { await gate; return route.fulfill(json({ mindmaps: [] })); }
+    return route.fulfill(json({ summaries: [] }));
+  });
+  await page.goto("/app?source=tai-lieu-1&tab=mindmap");
+  await expect(page.locator('[role="tab"][title="Sơ đồ tư duy"][aria-selected="true"]')).toBeVisible();
+  await expect(loadingLine(page)).toBeVisible();
+  expect(await page.evaluate(() => window.__everSeen)).toEqual([]);
+  release();
+  // Really empty: now, and only now, the create screen.
+  await expect(page.locator("main").getByText("Chưa có sơ đồ tư duy").first()).toBeVisible();
+});

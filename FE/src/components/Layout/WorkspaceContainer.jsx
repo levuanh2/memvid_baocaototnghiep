@@ -34,6 +34,9 @@ export default function WorkspaceContainer({
   onMindmapAction, onSummaryAction, onSummaryContextChange,
   // { items, select, create, creating } from SidebarRight via MainLayout.
   summaryLibrary = null,
+  // True until the right panel has reported the summary list for the first time; used only
+  // while `summaryLibrary` is still null (nothing reported yet).
+  summaryListLoading = false,
   // P2 fix: generation-in-progress/failed status for the no-map-yet case —
   // WorkspaceEmptyState has no other way to know a job is running.
   mindmapCreating, mindmapJobLabel, mindmapJobProgress, mindmapJobError, onRetryMindmap,
@@ -89,7 +92,7 @@ export default function WorkspaceContainer({
         ) : (
           <WorkspaceEmptyState kind="summary" selectedCount={selectedSources.length}
             hasAnyDocuments={hasAnyDocuments} onUpload={onUploadDocument} onCreate={onSummaryAction}
-            loading={summaryLibrary?.loading}
+            loading={summaryLibrary ? summaryLibrary.loading : summaryListLoading}
             error={summaryLibrary?.items?.length ? null : summaryLibrary?.loadError}
             onRetryLoad={summaryLibrary?.retryLoad}
             creating={summaryLibrary?.creating} jobLabel={summaryLibrary?.jobLabel}>

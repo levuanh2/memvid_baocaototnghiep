@@ -326,7 +326,13 @@ export default function MainLayout({
   const [rightView, setRightView] = useState(initialRightView);   // "evidence" | "tutor" | "timeline"
   const [headerSurface, setHeaderSurface] = useState(null); // study-tools
   const studyToolsTriggerRef = useRef(null);
-  const [libraries, setLibraries] = useState({ mindMaps: [], summaries: [], mindMapActions: null, summaryActions: null });
+  // Both lists start as "loading", not "empty": the right panel owns the two fetches and is
+  // always mounted (`rightSurfaceVisible`), but it can only report from an effect, i.e. after
+  // the first commit. Starting from "not loading" drew the empty screen for that one commit.
+  const [libraries, setLibraries] = useState({
+    mindMaps: [], summaries: [], mindMapActions: null, summaryActions: null,
+    mindMapInitialLoading: true, summaryInitialLoading: true,
+  });
   const updateMindmapLibrary = useCallback((value) => setLibraries((prev) => ({
     ...prev,
     mindMaps: value.mindMaps || [],
@@ -926,6 +932,7 @@ export default function MainLayout({
             onRetryMindmap={libraries.mindMapActions?.onRetry}
             summaryData={summaryData}
             summaryLibrary={summaryLibrary}
+            summaryListLoading={libraries.summaryInitialLoading}
             onSummaryContextChange={setSummaryContext}
             controller={mindMapController}
           />
