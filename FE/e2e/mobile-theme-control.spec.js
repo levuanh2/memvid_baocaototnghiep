@@ -41,9 +41,9 @@ test.describe("mobile/tablet: exactly one reachable theme action", () => {
       await page.setViewportSize({ width: vp.width, height: vp.height });
       await registerAndEnterApp(page);
 
-      // Desktop toggle carries `hidden lg:flex`, and the compact header rule
+      // The desktop theme button carries `hidden lg:inline-flex`, and the compact header rule
       // hides it through 1100px -- real CSS cascade, not a JS branch.
-      const desktopToggle = page.locator('[role="group"][aria-label="Chế độ sáng/tối"]');
+      const desktopToggle = page.locator("header .workspace-theme-toggle");
       await expect(desktopToggle).toBeHidden();
 
       await openOverflow(page);
@@ -57,7 +57,7 @@ test.describe("mobile/tablet: exactly one reachable theme action", () => {
       await page.setViewportSize({ width: vp.width, height: vp.height });
       await registerAndEnterApp(page);
 
-      const desktopToggle = page.locator('[role="group"][aria-label="Chế độ sáng/tối"]');
+      const desktopToggle = page.locator("header .workspace-theme-toggle");
       await expect(desktopToggle).toBeVisible();
 
       // The overflow trigger itself is phone/tablet-only chrome; at these
@@ -160,11 +160,11 @@ test.describe("mobile: real Light<->Dark via the real control", () => {
 
     await page.setViewportSize({ width: 1101, height: 768 });
     await expect(html).toHaveClass(/dark/);
-    await expect(page.locator('[role="group"][aria-label="Chế độ sáng/tối"]')).toBeVisible();
+    await expect(page.locator("header .workspace-theme-toggle")).toBeVisible();
 
     await page.setViewportSize({ width: 1100, height: 768 });
     await expect(html).toHaveClass(/dark/);
-    await expect(page.locator('[role="group"][aria-label="Chế độ sáng/tối"]')).toBeHidden();
+    await expect(page.locator("header .workspace-theme-toggle")).toBeHidden();
   });
 
   test("does not remount the workspace shell (tab state survives the click)", async ({ page }) => {
@@ -182,16 +182,23 @@ test.describe("mobile: real Light<->Dark via the real control", () => {
 });
 
 test.describe("desktop: toggle unaffected", () => {
-  test("1440x1024: desktop toggle still works, two buttons, aria-pressed flips", async ({ page }) => {
+  // V6 header (owner decision): one theme button in place of the two-button group.
+  test("1440x1024: one desktop theme button, named by its next action, switches and persists", async ({ page }) => {
     await page.setViewportSize({ width: 1440, height: 1024 });
     await registerAndEnterApp(page);
 
-    const group = page.locator('[role="group"][aria-label="Chế độ sáng/tối"]');
-    await expect(group).toBeVisible();
-    const buttons = group.locator("button");
-    await expect(buttons).toHaveCount(2);
+    await expect(page.locator('[role="group"][aria-label="Chế độ sáng/tối"]')).toHaveCount(0);
+    const toggle = page.locator("header .workspace-theme-toggle");
+    await expect(toggle).toHaveCount(1);
+    await expect(toggle).toBeVisible();
+    await expect(toggle).toHaveAttribute("aria-label", LIGHT_LABEL);
 
-    await group.getByLabel("Nền tối").click();
+    await toggle.click();
     await expect(page.locator("html")).toHaveClass(/dark/);
+    await expect(toggle).toHaveAttribute("aria-label", DARK_LABEL);
+
+    await page.reload();
+    await expect(page.locator("html")).toHaveClass(/dark/);
+    await expect(page.locator("header .workspace-theme-toggle")).toHaveAttribute("aria-label", DARK_LABEL);
   });
 });

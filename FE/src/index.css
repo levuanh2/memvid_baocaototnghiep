@@ -710,22 +710,6 @@
      retrieval-steps indicator; the connecting rail between dots was styled
      but never actually rendered anywhere). */
 
-  /* Theme toggle */
-  .theme-toggle {
-    @apply flex items-center gap-1 rounded-[7px] p-1 transition-all duration-200;
-    background: var(--bg-elevated);
-    border: 1px solid var(--border-color);
-  }
-  .theme-toggle-btn {
-    @apply w-7 h-7 rounded-[5px] flex items-center justify-center transition-all duration-200;
-    color: var(--text-muted);
-  }
-  .theme-toggle-btn:hover { color: var(--text-primary); }
-  .theme-toggle-btn-active {
-    background: var(--bg-card);
-    color: var(--accent);
-    box-shadow: var(--shadow-card);
-  }
 }
 
 /* Wave 2 cleanup: `.mindmap-flow` (ReactFlow-era styling) removed — the
@@ -1185,8 +1169,7 @@
   .workspace-wordmark,
   .study-library-link__label,
   .workspace-mode-label,
-  .workspace-shortcuts-trigger,
-  .workspace-global-header .theme-toggle,
+  .workspace-theme-toggle,
   .usage-chip__label,
   .account-menu__label,
   .account-menu__chevron { display: none !important; }
@@ -1250,4 +1233,10 @@
 @media (max-width: 700px) {
   .artifact-toolbar { gap: 6px; padding-inline: 8px; }
   .artifact-toolbar__identity small, .artifact-toolbar__usage { display: none; }
+}
+
+/* V6 header: the account menu's "Phím tắt" item is the only visible way to the shortcut help,
+   so it stays at every width where a keyboard is likely. Phones omit it. */
+@media (max-width: 767px) {
+  .account-menu__shortcuts { display: none !important; }
 }
