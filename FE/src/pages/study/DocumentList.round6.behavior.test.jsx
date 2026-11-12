@@ -23,8 +23,8 @@ vi.mock("../../components/study/StudyShell", () => ({
   default: ({ loading, error, actions, children }) => <div>{actions}{loading ? <div data-loading /> : error ? <div role="alert">{error}</div> : children}</div>,
   EmptyState: ({ title, action }) => <div data-empty>{title}{action}</div>,
 }));
-vi.mock("../../components/study/CollectionSidebar", () => ({ default: ({ boSuuTap, onChon, onXoa }) => <aside>
-  <button type="button" data-collection-filter onClick={() => onChon({ collectionId: "course-a" })}>Course A</button>
+vi.mock("../../components/study/CollectionSidebar", () => ({ default: ({ boSuuTap, chon, onChon, onXoa }) => <aside>
+  <button type="button" data-collection-filter onClick={() => onChon({ ...chon, collectionId: "course-a" })}>Course A</button>
   <button type="button" data-tag-filter onClick={() => onChon({ tags: ["Exam"] })}>Exam</button>
   {boSuuTap[0] && <button type="button" data-delete-collection onClick={() => onXoa(boSuuTap[0])}>Delete collection</button>}
 </aside> }));
@@ -127,6 +127,25 @@ describe("DocumentList Round 6 mounted integration", () => {
   // The one "Hiện đã lưu trữ" control: the toolbar checkbox (the sidebar copy was removed).
   const archiveToggle = () => [...host.querySelectorAll('input[type="checkbox"]')]
     .find((input) => input.parentElement?.textContent.includes("Hiện đã lưu trữ"));
+
+  // V6: the sidebar used to echo the active state filters back on every click and the parent
+  // read an identical echo as "toggle off", so picking a collection cleared "Yêu thích".
+  it("picking a collection keeps an active state filter from the 'Lọc' popover", async () => {
+    await renderDocumentList();
+    const filterToggle = [...host.querySelectorAll("button")].find((b) => b.textContent.trim().startsWith("Lọc"));
+    act(() => filterToggle.click());
+    const favorite = [...host.querySelectorAll('input[type="checkbox"]')]
+      .find((input) => input.parentElement?.textContent.includes("Yêu thích"));
+    act(() => favorite.click());
+    expect(favorite.checked).toBe(true);
+
+    act(() => host.querySelector("[data-collection-filter]").click());
+
+    const favoriteAfter = [...host.querySelectorAll('input[type="checkbox"]')]
+      .find((input) => input.parentElement?.textContent.includes("Yêu thích"));
+    expect(favoriteAfter.checked).toBe(true);
+    expect([...host.querySelectorAll("button")].some((b) => b.textContent.trim().startsWith("Lọc (1)"))).toBe(true);
+  });
 
   it("excludes immediately hidden archived UUIDs from the actual bulk request", async () => {
     await renderDocumentList();
