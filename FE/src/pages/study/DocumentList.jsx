@@ -535,11 +535,13 @@ export default function DocumentList() {
         boSuuTap={thanhBen.boSuuTap}
         chuaPhanLoai={thanhBen.chuaPhanLoai}
         the={theThanhBen}
-        chon={{ collectionId: chonBoSuuTap, tags: chonThe, khoa: boLoc }}
+        chon={{ collectionId: chonBoSuuTap, tags: chonThe }}
         onChon={(v) => {
+          // Collection and tags only. The sidebar used to carry the state filters too and
+          // echoed them back on every click, so picking a collection cleared an active
+          // "Yêu thích" / "Đã ghim" filter.
           setChonBoSuuTap(v.collectionId ?? null);
           setChonThe(v.tags || []);
-          if (v.khoa) setBoLoc((prev) => (prev.join() === v.khoa.join() ? [] : v.khoa));
         }}
         onTao={taoBoSuuTap}
         onSua={suaBoSuuTap}

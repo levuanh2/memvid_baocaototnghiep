@@ -151,11 +151,13 @@ it("ignores Escape while the delete is in flight: no cancel, no second request, 
   await act(async () => { resolve(); await Promise.resolve(); });
 });
 
-it("has no 'Hiện đã lưu trữ' checkbox of its own: the Library toolbar owns that setting (V6)", async () => {
+it("has no state filters of its own: 'Yêu thích', 'Đã ghim' and 'Hiện đã lưu trữ' belong to the toolbar (V6)", async () => {
   host = document.createElement("div"); document.body.appendChild(host);
   root = createRoot(host);
   await act(async () => root.render(<Harness deleteRequest={vi.fn()} />));
-  expect(host.textContent).toContain("Yêu thích");
-  expect(host.textContent).not.toContain("Hiện đã lưu trữ");
+  expect(host.textContent).toContain("Alpha");                 // collections are still here
+  for (const label of ["Lối tắt", "Yêu thích", "Đã ghim", "Hiện đã lưu trữ"]) {
+    expect(host.textContent).not.toContain(label);
+  }
   expect(host.querySelectorAll('input[type="checkbox"]').length).toBe(0);
 });

@@ -222,17 +222,10 @@ export default function CollectionSidebar({
           </Nhom>
         )}
 
-        <Nhom tieuDe="Lối tắt">
-          <MucLoc nhan="Yêu thích" icon="Star"
-                  dangChon={(dangChon.khoa || []).includes("favorite")}
-                  onClick={() => onChon({ ...dangChon, khoa: ["favorite"] })} />
-          <MucLoc nhan="Đã ghim" icon="Pin"
-                  dangChon={(dangChon.khoa || []).includes("pinned")}
-                  onClick={() => onChon({ ...dangChon, khoa: ["pinned"] })} />
-          {/* "Hiện đã lưu trữ" lives in the toolbar only: this sidebar is hidden below `lg`, so
-              the toolbar copy is the one every width has, and two checkboxes for one setting
-              sat 300px apart on desktop. */}
-        </Nhom>
+        {/* V6 (owner decision): this sidebar is for WHERE a document lives (collection, tag).
+            The state filters "Yêu thích" / "Đã ghim" are in the toolbar's "Lọc" popover only,
+            and "Hiện đã lưu trữ" in the toolbar only: the sidebar is hidden below `lg`, so
+            those are the copies every width has. The old "Lối tắt" group duplicated all three. */}
       </div>
     </aside>
   );
