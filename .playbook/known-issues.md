@@ -8120,3 +8120,39 @@ off-screen button then matches the same role+name as the visible CTA.
 **Prevention:** hiding by transform, width, opacity or pointer-events is visual only; anything
 that stays mounted while hidden needs `inert`. Label tests should match the bare text, not one
 quoting style.
+
+### A cancelled chat question could publish into the next one (V6 bug hunt #1; fixed 2026-11-12)
+
+**Repro:** send question A, press "Huỷ", send question B at once. When A's request, stream or poll finished afterwards, A could append an error bubble or its answer to the conversation and set `loading = false` while B was still running. A's cancel tail also replaced "the last message" (`prev.slice(0, -1)`), which by then was B's question.
+
+**Root cause:** one shared `cancelledRef`. Cancelling A set it to `true`; starting B set it back to `false`; every later check in A then read "not cancelled".
+
+**Fix:** `attemptRef` in `ChatArea.jsx`. Each send takes a number; cancel, unmount and every new send bump it. Every publication after an `await` in `handleSend` (result, error, `finally`, status updates, the stream tick, the fallback poll) checks that its own number is still current. The cancel tail replaces the "Đang dừng truy vấn…" placeholder by identity. If the POST returns a job id after the cancel, that job is cancelled instead of left running.
+
+**Regression:** `ChatArea.attemptIdentity.test.jsx` (both cases fail on the old code).
+
+**Not changed:** the review-resume polling path (bug hunt #11) still has no cancellation.
+
+### Answer-review polling could not be cancelled and outlived the chat (V6 bug hunt #11, 2026-11-12)
+
+**Symptom.** After "Duyệt" / "Sửa" on a held answer, `ChatArea` polled the job with
+`isCancelled: () => false`. Leaving the page left the poll running against a dead component; a
+second review action started a second poll, and the older one could publish its progress,
+result, error notice and `loading = false` after the newer one owned the screen.
+
+**Root cause.** `handleReview` was the one async path in `ChatArea` that did not take part in
+the attempt identity introduced for send/cancel (`attemptRef`, `stale()`).
+
+**Fix.** Each review continuation takes a fresh attempt id; `stale` is the poll's
+`isCancelled`, and guards the continuation after `resumeQuery`, the progress callback, the
+final result, the error notice and `finally`. New chat, clear context and delete history bump
+the same id. Written by Codex in a shared worktree, reviewed before commit.
+
+**Regression test.** `ChatArea.reviewResumeCancel.test.jsx`: unmount cancels the poll; a
+continuation replaced in the same tick never starts polling. Both failed before the fix.
+
+**Not covered.** Two review clicks in the same tick still send `resumeQuery` twice (only one
+continuation proceeds). The poll is stopped by predicate; the in-flight request is not aborted.
+
+**Prevention.** When a component gets an "attempt identity", list every async path in it, not
+only the one that was reported.

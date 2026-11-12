@@ -3719,3 +3719,7 @@ Rules: check icons and logos when a rename is reported incomplete; serve a chang
 new URL (browsers cache favicons per URL); a static SVG cannot read CSS variables, so pin its
 colour to the token value and test that they stay equal; comments quoting the retired name trip
 the branding test, so describe it without naming it.
+
+## 2026-11-12 — A cancel flag that the next attempt resets is not a cancel
+
+One boolean cannot represent "attempt A is cancelled" once attempt B exists: B must clear the flag to run, and that un-cancels A. Give each attempt its own identity (a counter captured in the closure) and compare identities after every `await`. The same applies to "replace the last message": after an `await`, "last" may belong to someone else, so address the item you created.
