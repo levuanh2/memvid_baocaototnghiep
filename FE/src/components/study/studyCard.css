@@ -79,7 +79,10 @@
   .study-card__select { width: 32px; height: 32px; margin: -3px 0 0 -4px; }
   .study-card__resume { width: 100%; min-height: 44px; justify-content: center; }
   .study-card__tools { width: 100%; display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); }
-  .study-card__tool { min-height: 44px; justify-content: flex-start; border-top: 1px solid var(--border-color); margin-top: -1px; }
+  /* Half a 320px card is about 130px: "Bản đồ kiến thức" with its icon and check does not fit
+     on one line there, and the group clips overflow. Let the label wrap instead of being cut. */
+  .study-card__tool { min-height: 44px; padding-block: 6px; justify-content: flex-start; white-space: normal; text-align: left; line-height: 1.3; border-top: 1px solid var(--border-color); margin-top: -1px; }
+  .study-card__tool svg { flex: none; }
   .study-card__details { width: 100%; min-height: 44px; margin-left: 0; justify-content: center; }
 }
 

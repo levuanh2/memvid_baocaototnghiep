@@ -436,7 +436,12 @@ export default function DocumentList() {
     const kq = phimDanhSach(e, { chiSo, tong: mucHienThi.tatCa.length });
     if (!kq) return;
     e.preventDefault();
-    if (kq.loai === "focus") setChiSoFocus(kq.chiSo);
+    if (kq.loai === "focus") {
+      setChiSoFocus(kq.chiSo);
+      // Move the real focus too. Only the tabindex used to change, so the arrow keys left
+      // focus on the card that had just become untabbable.
+      theRefs.current.get(kq.chiSo)?.focus();
+    }
     else if (kq.loai === "chon") setDaChon((prev) => batTatChon(prev, doc.document_id));
     else if (kq.loai === "mo") moBeMat(doc, doc.last_workspace || "studymap");
     else if (kq.loai === "xoa_chon") setDaChon(xoaChon());
@@ -456,9 +461,21 @@ export default function DocumentList() {
     setMatrixFocusId((current) => resolveRovingDocumentId(matrixProjection.rows, current));
   }, [matrixProjection.rows]);
 
+  // Cards of the "Tất cả" list by index, for the arrow keys above.
+  const theRefs = useRef(new Map());
+  // A filter can shorten the list under the remembered index; without this no card had
+  // tabindex 0 and Tab skipped the whole list.
+  const soThe = mucHienThi.tatCa.length;
+  useEffect(() => {
+    setChiSoFocus((hienTai) => (hienTai >= soThe ? Math.max(-1, soThe - 1) : hienTai));
+  }, [soThe]);
+
   const veThe = (doc, chiSo = null) => (
     <StudyCard
       key={doc.document_id}
+      refThe={chiSo == null ? undefined : (node) => {
+        if (node) theRefs.current.set(chiSo, node); else theRefs.current.delete(chiSo);
+      }}
       doc={doc}
       documents={documents}
       chiMucBst={chiMucBst}

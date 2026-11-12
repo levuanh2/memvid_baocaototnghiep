@@ -134,6 +134,37 @@ describe("StudyCard (V6)", () => {
     expect(container.querySelector(".study-card__file").textContent).toBe("KTVM_C3.pdf");
   });
 
+  it("keys pressed on a control inside the card do not reach the list's key handler", async () => {
+    const onKeyDown = vi.fn();
+    await render(READY, { onKeyDown });
+    const press = (target, key) => act(() => { target.dispatchEvent(new KeyboardEvent("keydown", { key, bubbles: true })); });
+    await press(tool("Tóm tắt"), "Enter");
+    await press(tool("Quiz"), " ");
+    await press(container.querySelector('input[type="checkbox"]'), " ");
+    await press(container.querySelector(".study-card__details"), "Enter");
+    expect(onKeyDown).not.toHaveBeenCalled();
+    // On the card itself they still do.
+    await press(container.querySelector(".study-card"), "ArrowDown");
+    expect(onKeyDown).toHaveBeenCalledTimes(1);
+  });
+
+  it("two cards for the same document on one page do not share any id", async () => {
+    container = document.createElement("div");
+    document.body.appendChild(container);
+    root = createRoot(container);
+    const props = { doc: READY, documents: [READY], chiMucBst: new Map(), jobs: NO_JOBS, onDoiTen: vi.fn(), onLuuTen: vi.fn(), onHuyDoiTen: vi.fn(), onBatTat: vi.fn(), onMo: vi.fn() };
+    await act(async () => root.render(<><StudyCard {...props} /><StudyCard {...props} /></>));
+    const ids = [...container.querySelectorAll("[id]")].map((el) => el.id);
+    expect(ids.length).toBeGreaterThan(2);
+    expect(new Set(ids).size).toBe(ids.length);
+    // Every reference resolves inside its own card.
+    for (const card of container.querySelectorAll(".study-card")) {
+      for (const el of card.querySelectorAll("[aria-describedby]")) {
+        expect(card.querySelector(`[id="${el.getAttribute("aria-describedby")}"]`)).toBeTruthy();
+      }
+    }
+  });
+
   it("compact density keeps the title, first overview line and the tools; drops preview, facts and file name", async () => {
     await render(READY, { matDo: "compact" });
     expect(container.querySelector(".study-card").getAttribute("data-density")).toBe("compact");
