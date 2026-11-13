@@ -115,6 +115,15 @@ export default function QuizResult() {
     [graded, result],
   );
   const openWrongReview = () => { setReviewIndex(0); setReviewingWrong(true); };
+  // The strip in the score header jumps to a question of the list below: focus moves with
+  // the view, so keyboard and screen-reader users land where sighted users look.
+  const jumpToQuestion = (order) => {
+    const el = document.getElementById(`cau-${order}`);
+    if (!el) return;
+    const reduce = window.matchMedia?.("(prefers-reduced-motion: reduce)")?.matches;
+    el.scrollIntoView?.({ block: "start", behavior: reduce ? "auto" : "smooth" });
+    el.focus({ preventScroll: true });
+  };
   // `masteries` only populates once graded (see `load()` above), so an empty
   // array here means "not computed yet", and the header action below falls
   // back to the count-less label for it.
@@ -182,7 +191,7 @@ export default function QuizResult() {
             <WrongAnswerReview questions={wrongQuestions} index={reviewIndex} onIndex={setReviewIndex}
               onClose={() => setReviewingWrong(false)} reviewPlanTo={`/app/study/review/${attemptId}`} />
           ) : <>
-          <ScoreBoard result={result} grading={grading} provisional={provisional}
+          <ScoreBoard result={result} grading={grading} provisional={provisional} onJump={jumpToQuestion}
             ungradedCount={ungradedCount} wrongCount={wrongQuestions.length}
             onReviewWrong={openWrongReview} />
 
@@ -291,7 +300,7 @@ export function verdictBreakdown(result) {
   return consistent ? counts : null;
 }
 
-function ScoreBoard({ result, grading, provisional, ungradedCount, wrongCount, onReviewWrong }) {
+function ScoreBoard({ result, grading, provisional, ungradedCount, wrongCount, onReviewWrong, onJump }) {
   const percent = result.percentage;
   // While grading, verdicts are still null: keep the familiar labels with "—" rather
   // than flip to the "Chưa đúng" fallback for a few seconds.
@@ -328,7 +337,7 @@ function ScoreBoard({ result, grading, provisional, ungradedCount, wrongCount, o
         : percent == null ? "chưa chấm" : `${percent}% điểm`;
   return (
     <section className="quiz-score-hero">
-      <div className="flex items-center gap-4">
+      <div className="quiz-score-hero__head">
         <SealMeter
           score={grading || percent == null ? 0 : percent / 100}
           status={!grading && !provisional && percent != null && percent >= 80 ? "mastered" : undefined}
@@ -349,12 +358,14 @@ function ScoreBoard({ result, grading, provisional, ungradedCount, wrongCount, o
         </div>
       </div>
 
+      <div className="quiz-score-hero__body">
+      {!grading && <VerdictStrip questions={result.questions} onJump={onJump} />}
       <div className="flex flex-wrap gap-x-7 gap-y-2 text-small">
         {breakdown ? (
           <>
-            <Stat label="Đúng" value={shown(breakdown.correct)} />
-            {breakdown.partial > 0 && <Stat label="Đúng một phần" value={shown(breakdown.partial)} />}
-            <Stat label="Sai" value={shown(breakdown.incorrect)} />
+            <Stat label="Đúng" value={shown(breakdown.correct)} swatch="correct" />
+            {breakdown.partial > 0 && <Stat label="Đúng một phần" value={shown(breakdown.partial)} swatch="partial" />}
+            <Stat label="Sai" value={shown(breakdown.incorrect)} swatch="incorrect" />
           </>
         ) : (
           <>
@@ -367,7 +378,32 @@ function ScoreBoard({ result, grading, provisional, ungradedCount, wrongCount, o
         <Stat label="Thời gian" value={formatDuration(result.duration_seconds)} />
       </div>
       {!grading && wrongCount > 0 && <button type="button" className="btn-secondary quiz-review-wrong" onClick={onReviewWrong}>Xem lại câu chưa đúng</button>}
+      </div>
     </section>
+  );
+}
+
+// The attempt in quiz order, one cell per question. Shape carries the verdict as well as
+// colour (filled = đúng, tinted = đúng một phần, outline = sai, dashed = chưa chấm), so it
+// reads without colour vision. Each cell jumps to that question in the list below.
+function VerdictStrip({ questions, onJump }) {
+  if (!Array.isArray(questions) || questions.length === 0) return null;
+  return (
+    <ol className="quiz-verdict-strip" role="list" aria-label="Bài làm theo thứ tự câu">
+      {questions.map((q, i) => {
+        const known = VERDICTS.includes(q?.verdict) ? q.verdict : "ungraded";
+        const label = verdictLabel(q?.verdict) || "Chưa chấm";
+        return (
+          <li key={q?.question_id ?? i}>
+            <button type="button" className="quiz-verdict-strip__cell" data-verdict={known}
+                    aria-label={`Câu ${i + 1}: ${label}`} title={`Câu ${i + 1}: ${label}`}
+                    onClick={() => onJump?.(i + 1)}>
+              <span aria-hidden="true">{i + 1}</span>
+            </button>
+          </li>
+        );
+      })}
+    </ol>
   );
 }
 
@@ -390,10 +426,12 @@ function WrongAnswerReview({ questions, index, onIndex, onClose, reviewPlanTo })
   );
 }
 
-function Stat({ label, value }) {
+function Stat({ label, value, swatch }) {
   return (
     <div data-score-stat>
-      <div className="font-mono text-metadata uppercase text-text-muted" data-score-stat-label>{label}</div>
+      <div className="font-mono text-metadata uppercase text-text-muted" data-score-stat-label>
+        {swatch && <span className="quiz-verdict-swatch" data-verdict={swatch} aria-hidden="true" />}{label}
+      </div>
       <div className="text-body-lg font-semibold text-text-primary mt-0.5" data-score-stat-value>{value}</div>
     </div>
   );
@@ -410,7 +448,7 @@ function ReviewedQuestion({ question, order, gonKhiDung = false }) {
   if (gonKhiDung && verdict === "correct") {
     const giaiThich = question.feedback || question.explanation;
     return (
-      <article className="surface-card quiz-reviewed--compact" data-verdict="correct">
+      <article id={`cau-${order}`} tabIndex={-1} className="surface-card quiz-reviewed--compact" data-verdict="correct">
         <div className="flex items-start gap-3">
           <span className="font-mono text-small text-text-muted mt-0.5">{String(order).padStart(2, "0")}</span>
           <div className="min-w-0 flex-1">
@@ -435,7 +473,7 @@ function ReviewedQuestion({ question, order, gonKhiDung = false }) {
     );
   }
   return (
-    <article className="surface-card">
+    <article id={gonKhiDung ? `cau-${order}` : undefined} tabIndex={gonKhiDung ? -1 : undefined} className="surface-card">
       <div className="flex items-start gap-3 mb-3">
         <span className="font-mono text-small text-text-muted mt-1">{String(order).padStart(2, "0")}</span>
         <h3 className="font-display text-body-lg text-text-primary flex-1">
