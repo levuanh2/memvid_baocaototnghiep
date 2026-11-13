@@ -16,6 +16,7 @@ main (db005ab)
 │    │         └─ #177 fix/v6-chat-review-single-flight
 │    │              └─ #178 design/v6-chat-composer
 │    │                   └─ #180 design/v6-chat-evidence
+│    │                        └─ #184 design/v6-mobile-viewport
 │    └─ #167 design/v6-header .......... one-line conflict with #160 in MainLayout.jsx
 │
 ├─ #164 fix/v6-stale-owner-guards
@@ -31,12 +32,14 @@ main (db005ab)
 ├─ #169 design/v6-quiz
 │    └─ #175 design/v6-quiz-result ... stacked: contains #169
 │         └─ #179 design/v6-quiz-setup
+│              └─ #182 design/v6-quiz-review
 ├─ #181 fix/test-guided-dialog-unmount (test only, from main)
+├─ #183 fix/practice-submit-atomic (backend only, from main; owner approval before deploy)
 └─ #159 design/v6-foundation (landing + these documents)
 ```
 
 Real dependencies: #161 needs #160, #165 needs #164, #173 needs #166 + #171 + #172, #174 needs
-#161 + #163, #175 needs #169, #176 needs #173, #177 -> #178 -> #180 stack on #174, #179 needs #175, and #167 has to
+#161 + #163, #175 needs #169, #176 needs #173, #177 -> #178 -> #180 stack on #174, #179 needs #175, #182 needs #179, #184 needs #180, and #167 has to
 be reconciled with #160. Everything else is independent in code.
 
 ## Order
@@ -49,8 +52,9 @@ be reconciled with #160. Everything else is independent in code.
 4. **#167** (after #160): in `MainLayout.jsx` keep the block #160 adds and this branch's line
    `const { isDark, toggleTheme } = useTheme();`.
 5. **#166, #171, #172**, then **#173** (it contains all three; #171 and #172 both change `DocumentList.jsx`, in different places), then **#176**.
-6. **#162, #163, #168, #169, #159, #181** in any order; then **#174** (after #161 and #163)
-   -> **#177** -> **#178** -> **#180**, and **#175** (after #169) -> **#179**.
+6. **#162, #163, #168, #169, #159, #181, #183** in any order (#183 changes the backend: merge only
+   with the owner's approval of its replay rule); then **#174** (after #161 and #163)
+   -> **#177** -> **#178** -> **#180** -> **#184**, and **#175** (after #169) -> **#179** -> **#182**.
    When #174 meets #167 in `FE/src/index.css` (both append at the end), keep both blocks and the
    closing `}` of #167's `@media (max-width: 767px)` block; trial 4 lost it once ("Unclosed block").
 7. After #159, #160, #161, #164, #165 are on `main`: move their five specs from `WHEN_PRESENT`
@@ -82,8 +86,9 @@ be reconciled with #160. Everything else is independent in code.
 ## Evidence (local trial integration, never pushed)
 
 See "Trial integration" in `README.md` for the heads, test counts and the full Fixture Audit
-result. Trial 4 merged #159-#179 in the order above; the conflicts were the playbook files, the
-one line in `MainLayout.jsx`, and the end of `index.css` (see step 6).
+result. Trial 5 merged #159-#184 in the order above (26 branches); the conflicts were the
+playbook files, the one line in `MainLayout.jsx`, and the end of `index.css` (see step 6), and the
+`index.css` brace was lost again by the union and restored by hand.
 
 ## Not covered by this checklist
 
