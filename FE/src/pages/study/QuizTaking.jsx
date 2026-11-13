@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
-import { useLocation, useNavigate, useParams } from "react-router-dom";
+import { Link, useLocation, useNavigate, useParams } from "react-router-dom";
 import StudyShell from "../../components/study/StudyShell";
 import Modal from "../../components/ui/Modal";
 import { Icon } from "../../components/ui/Icon";
@@ -81,6 +81,8 @@ export default function QuizTaking() {
     [questions, answers],
   );
   const answeredCount = questions.length - unanswered.length;
+  // Handing in is the main action on the last question, or once nothing is left unanswered.
+  const nenNop = index >= questions.length - 1 || unanswered.length === 0;
   const topicCounts = useMemo(() => {
     const counts = new Map();
     questions.forEach((question) => {
@@ -243,7 +245,18 @@ export default function QuizTaking() {
           </span>
         </div>
       )}
-      {!current ? null : (
+      {!current ? (
+        // A quiz that opened with no questions used to leave the page blank under its title.
+        quiz && !loading ? (
+          <div className="surface-card max-w-[560px]" role="status">
+            <p className="text-body text-text-primary">Quiz này không có câu hỏi nào.</p>
+            <p className="mt-1 text-small text-text-secondary">Về Thư viện để tạo một quiz khác từ tài liệu.</p>
+            <Link to="/app/study" className="btn-secondary text-small inline-flex items-center gap-1.5 mt-4 min-h-[44px]">
+              <Icon name="ArrowLeft" size={14} /> Về Thư viện
+            </Link>
+          </div>
+        ) : null
+      ) : (
         <>
           <div className="quiz-taking-layout">
             <aside className="quiz-question-rail" aria-label="Danh sách câu hỏi">
@@ -256,9 +269,18 @@ export default function QuizTaking() {
                 <span><i className="is-answered" />Đã trả lời</span>
                 <span><i className="is-current" />Đang làm</span>
               </div>
-              <button type="button" className="quiz-submit-early" disabled={submitting} onClick={() => setConfirming(true)}>
-                Nộp bài sớm
-              </button>
+              {/* V6: what the questions are about, moved here from a third column that otherwise
+                  only repeated the progress count. The rail no longer has its own submit
+                  button: "Nộp bài" under the question is the one way to hand in. */}
+              {topicCounts.length > 0 && (
+                <div className="quiz-question-rail__topics">
+                  <h2>Nội dung</h2>
+                  {topicCounts.map(([topic, count]) => (
+                    <div className="quiz-topic-row" key={topic}><span>{topic}</span><strong>{count} câu</strong></div>
+                  ))}
+                </div>
+              )}
+              <p className="quiz-question-rail__help">Bạn có thể quay lại mọi câu trước khi nộp bài.</p>
             </aside>
 
             <section className="quiz-question-stage">
@@ -270,7 +292,7 @@ export default function QuizTaking() {
             <div className="flex items-center gap-2 mb-3">
               <span className="badge-processing">{QUESTION_TYPE_LABEL[current.question_type]}</span>
               {current.concept_tags?.slice(0, 2).map((t) => (
-                <span key={t} className="font-mono text-caption text-text-muted">#{t}</span>
+                <span key={t} className="text-caption text-text-muted">{t}</span>
               ))}
             </div>
 
@@ -327,30 +349,22 @@ export default function QuizTaking() {
               disabled={index === 0} onClick={() => setIndex((i) => Math.max(0, i - 1))}>
               <Icon name="ArrowLeft" size={14} /> Câu trước
             </button>
-            <button type="button" className="btn-secondary text-small inline-flex items-center gap-1.5"
+            {/* V6: one primary action at a time. While there is a next question to go to and
+                something is still unanswered, "Câu sau" is the step; on the last question, or
+                once everything is answered, handing in is. */}
+            <button type="button" className={`${nenNop ? "btn-secondary" : "btn-primary"} text-small inline-flex items-center gap-1.5`}
               disabled={index >= questions.length - 1}
               onClick={() => setIndex((i) => Math.min(questions.length - 1, i + 1))}>
               Câu sau <Icon name="ArrowRight" size={14} />
             </button>
             <div className="flex-1" />
-            <button type="button" className="btn-seal text-small inline-flex items-center gap-2"
+            <button type="button" className={`${nenNop ? "btn-seal" : "btn-secondary"} text-small inline-flex items-center gap-2`}
+              data-primary={nenNop ? "true" : undefined}
               disabled={submitting} onClick={() => setConfirming(true)}>
               {submitting ? <><Spinner size={13} /> Đang nộp…</> : "Nộp bài"}
             </button>
           </div>
             </section>
-
-            <aside className="quiz-context-panel" aria-label="Tiến độ bài làm">
-              <section>
-                <Icon name="Target" size={18} />
-                <h2>Tiến độ</h2>
-                <strong className="quiz-context-panel__percent">{questions.length ? Math.round((answeredCount / questions.length) * 100) : 0}%</strong>
-                <div className="quiz-context-panel__bar"><i style={{ width: `${questions.length ? (answeredCount / questions.length) * 100 : 0}%` }} /></div>
-                <p>{answeredCount} trong {questions.length} câu đã trả lời.</p>
-              </section>
-              {topicCounts.length > 0 && <section><h2>Nội dung</h2>{topicCounts.map(([topic, count]) => <div className="quiz-topic-row" key={topic}><span>{topic}</span><strong>{count} câu</strong></div>)}</section>}
-              <p className="quiz-context-panel__help">Bạn có thể quay lại mọi câu trước khi nộp bài.</p>
-            </aside>
           </div>
 
           {confirming && (
