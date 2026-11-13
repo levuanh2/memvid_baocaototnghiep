@@ -42,9 +42,12 @@ vi.mock("../../utils/api", () => ({
   getUserFriendlyApiError: vi.fn((e) => String(e)),
 }));
 
-let container;
+// The dialog portals onto document.body, so removing `container` alone leaves the
+// previous test's dialog mounted (the failure test keeps it open). Unmount the root.
+let container, root;
 
 afterEach(() => {
+  if (root) { act(() => root.unmount()); root = null; }
   if (container) { document.body.removeChild(container); container = null; }
   localStorage.clear();
   vi.restoreAllMocks();
@@ -53,7 +56,7 @@ afterEach(() => {
 async function openDialogAndSubmit() {
   container = document.createElement("div");
   document.body.appendChild(container);
-  const root = createRoot(container);
+  root = createRoot(container);
   let libraryActions;
 
   await act(async () => {
