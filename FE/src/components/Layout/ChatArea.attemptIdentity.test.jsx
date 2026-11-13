@@ -80,6 +80,24 @@ async function mount() {
 }
 
 describe("ChatArea: a cancelled attempt cannot publish into the next one", () => {
+  it("submits a question only once for two synchronous send clicks", async () => {
+    await mount();
+    const textarea = container.querySelector("textarea");
+    const setValue = Object.getOwnPropertyDescriptor(HTMLTextAreaElement.prototype, "value").set;
+    await act(async () => {
+      setValue.call(textarea, "Một câu hỏi");
+      textarea.dispatchEvent(new Event("input", { bubbles: true }));
+    });
+    const send = button("Gửi câu hỏi");
+
+    await act(async () => {
+      send.click();
+      send.click();
+    });
+
+    expect(queries).toHaveLength(1);
+  });
+
   it("A's late failure adds no error bubble, keeps B loading and keeps B's question", async () => {
     vi.spyOn(console, "error").mockImplementation(() => {});
     await mount();

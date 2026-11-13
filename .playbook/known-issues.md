@@ -8168,3 +8168,20 @@ continuation proceeds). The poll is stopped by predicate; the in-flight request 
 
 **Prevention.** When a component gets an "attempt identity", list every async path in it, not
 only the one that was reported.
+
+### Review and send actions accepted two synchronous submissions (V6 task 14, 2026-11-13)
+
+**Symptom.** Two clicks in one React turn called `resumeQuery` twice for approve, edit, or
+reject. The same race submitted `/query` twice from the composer. A second review click after
+the resume request resolved was also accepted while result polling continued.
+
+**Root cause.** Both handlers treated React state (`reviewSubmitting` / `loading`) as a
+synchronous mutex. Event handlers in the same turn retain the previous render's values, so
+both calls passed their guards. The backend does not re-run the continuation: the first
+request changes `interrupted` to `running` under `query_jobs_lock`, and the second gets 409.
+
+**Fix and regression.** `ChatArea` now acquires ref-backed locks before either handler's first
+asynchronous boundary. The review lock covers resume plus polling, releases in `finally`, and
+is reset when a new review interrupt is surfaced. The send lock participates in cancellation
+and only releases from the current attempt. `ChatArea.reviewResumeCancel.test.jsx` covers all
+three decisions and polling; `ChatArea.attemptIdentity.test.jsx` covers same-turn send clicks.

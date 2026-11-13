@@ -3729,3 +3729,12 @@ Also check who fetches. If the only component that loads a list can be unmounted
 ## 2026-11-12 — A cancel flag that the next attempt resets is not a cancel
 
 One boolean cannot represent "attempt A is cancelled" once attempt B exists: B must clear the flag to run, and that un-cancels A. Give each attempt its own identity (a counter captured in the closure) and compare identities after every `await`. The same applies to "replace the last message": after an `await`, "last" may belong to someone else, so address the item you created.
+
+## 2026-11-13 — React state is not a same-turn submission lock
+
+Disabling a button from state protects later renders, not two event calls that run before the
+render commits. For an async action that must be single-flight, acquire a ref synchronously
+before the first `await`, hold it for the whole operation (including polling), and release it
+in `finally`. If cancellation can permit a replacement attempt while the old promise settles,
+combine the lock with attempt identity so the old `finally` cannot unlock the replacement.
+Regression tests must invoke the handler twice synchronously in one `act()`.

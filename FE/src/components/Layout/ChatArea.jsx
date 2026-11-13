@@ -170,6 +170,8 @@ export default function ChatArea({
   // "not cancelled" and published into B (an error bubble, or `loading = false` while B ran).
   // Cancel, unmount and every new send bump this, so an older attempt can never become current.
   const attemptRef = useRef(0);
+  const sendSubmittingRef = useRef(false);
+  const reviewSubmittingRef = useRef(false);
   const eventSourceRef = useRef(null);
   const streamAccRef = useRef("");
   // Token gom trong streamAccRef; state chỉ flush qua throttle (tránh ReactMarkdown
@@ -388,6 +390,7 @@ export default function ChatArea({
     if (pendingReview) return;
     cancelledRef.current = true;
     attemptRef.current += 1;
+    sendSubmittingRef.current = false;
     abortControllerRef.current?.abort();
     try { eventSourceRef.current?.close(); } catch { /* already closed */ }
     resetJobState(); setLoading(false);
@@ -527,8 +530,9 @@ export default function ChatArea({
   };
 
   const handleReview = async (action) => {
-    if (!pendingReview || reviewSubmitting) return;
+    if (!pendingReview || reviewSubmittingRef.current) return;
     if (action === "edit" && !String(pendingReview.answer || "").trim()) return;
+    reviewSubmittingRef.current = true;
     const attempt = ++attemptRef.current;
     const stale = () => attempt !== attemptRef.current;
     setReviewSubmitting(true);
@@ -554,6 +558,7 @@ export default function ChatArea({
         : ensureErrMsg(err?.message, "Không thể tiếp tục quy trình duyệt. Vui lòng thử lại.");
       showNotice(content);
     } finally {
+      reviewSubmittingRef.current = false;
       if (!stale()) {
         setReviewSubmitting(false);
         setLoading(false);
@@ -615,7 +620,8 @@ export default function ChatArea({
 
   const handleSend = async () => {
     // Có ảnh thì cho gửi dù chưa gõ chữ — ảnh đã là câu hỏi.
-    if ((!input.trim() && !attachedImage) || loading || pendingReview || transcribing) return;
+    if ((!input.trim() && !attachedImage) || sendSubmittingRef.current || pendingReview || transcribing) return;
+    sendSubmittingRef.current = true;
     setContextCleared(false);          // a new question resumes using conversation context
 
     // Đọc ảnh TRƯỚC khi vào luồng hỏi: /query vẫn chỉ nhận chữ, đúng như cũ.
@@ -629,6 +635,7 @@ export default function ChatArea({
         imageText = String(read?.text || "").trim();
         imageName = attachedImage.file?.name || "ảnh dán";
       } catch (err) {
+        sendSubmittingRef.current = false;
         setTranscribing(false);
         setMessages((prev) => [...prev, { role: "ai", content: getUserFriendlyApiError(err) }]);
         return;   // giữ nguyên ảnh và câu đang gõ để người dùng thử lại
@@ -718,6 +725,8 @@ export default function ChatArea({
       const streamedText = jobOutcome?.streamed ?? "";
       const review = jobResult?.payload?.review;
       if (review?.type === "review") {
+        // A later interrupt is a new review even when LangGraph reuses the same job id.
+        reviewSubmittingRef.current = false;
         setPendingReview({ jobId, answer: String(review.answer || "") });
         setJobProgress((p) => Math.max(p, 90));
         return;
@@ -733,7 +742,10 @@ export default function ChatArea({
         : ensureErrMsg(err?.message, "Loi khi goi AI. Vui long thu lai.");
       setMessages((prev) => [...prev, { role: "ai", content, evidence: null }]);
     } finally {
-      if (!stale()) setLoading(false);
+      if (!stale()) {
+        sendSubmittingRef.current = false;
+        setLoading(false);
+      }
     }
   };
 

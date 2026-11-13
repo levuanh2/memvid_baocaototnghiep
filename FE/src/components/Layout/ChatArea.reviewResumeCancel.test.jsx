@@ -113,21 +113,37 @@ describe("ChatArea review-resume attempt cancellation", () => {
     expect(options.isCancelled()).toBe(true);
   });
 
-  it("does not start polling for a review continuation replaced in the same tick", async () => {
+  it.each([
+    ["approve", "Phê duyệt"],
+    ["edit", "Lưu bản chỉnh sửa"],
+    ["reject", "Từ chối"],
+  ])("submits %s only once for two synchronous clicks", async (action, label) => {
     await enterReview();
-    const buttons = [...container.querySelectorAll("button")];
-    const approve = buttons.find((button) => button.textContent === "Phê duyệt");
-    const reject = buttons.find((button) => button.textContent === "Từ chối");
+    const submit = [...container.querySelectorAll("button")]
+      .find((button) => button.textContent === label);
+
+    await act(async () => {
+      submit.click();
+      submit.click();
+    });
+
+    expect(resumeQuery).toHaveBeenCalledTimes(1);
+    expect(resumeQuery).toHaveBeenCalledWith("review-job", expect.objectContaining({ action }));
+  });
+
+  it("ignores another click after resume finishes while status polling is still running", async () => {
+    await enterReview();
+    const approve = [...container.querySelectorAll("button")]
+      .find((button) => button.textContent === "Phê duyệt");
 
     await act(async () => {
       approve.click();
-      reject.click();
       await Promise.resolve();
       await Promise.resolve();
+      approve.click();
     });
 
-    expect(resumeQuery).toHaveBeenCalledTimes(2);
+    expect(resumeQuery).toHaveBeenCalledTimes(1);
     expect(pollQueryStatus).toHaveBeenCalledTimes(1);
-    expect(pollQueryStatus.mock.calls[0][1].isCancelled()).toBe(false);
   });
 });
