@@ -1,5 +1,5 @@
 import { Icon } from "../ui/Icon";
-import { tenHienThi } from "../../utils/thuVienTaiLieu";
+import { tenHienThi, coTheTiepTuc } from "../../utils/thuVienTaiLieu";
 import { tiepTucHoc } from "../../utils/tiepTucHoc";
 import { baoPhuArtifact } from "../../study/learningAnalytics";
 import { hangDoiOnTap, taiLieuDaOnXong } from "../../study/reviewQueue";
@@ -18,7 +18,7 @@ import "./learningHome.css";
 export default function LearningHome({ documents, mucHienThi, overview, onMo }) {
   const dangHoc = mucHienThi?.tiepTucHoc || null;
   const tiepTuc = dangHoc ? tiepTucHoc(dangHoc) : null;
-  const coTheHoc = dangHoc?.ai?.index === "ready";
+  const coTheHoc = coTheTiepTuc(dangHoc);
   // Same two reasons the document card gives: processing failed, or not indexed yet.
   const hong = dangHoc?.ingest_status === "error" || dangHoc?.status === "failed";
 

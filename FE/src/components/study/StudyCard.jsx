@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useId, useRef, useState } from "react";
 import { Icon } from "../ui/Icon";
 import { chipHienThi, READY, GENERATING } from "../../utils/trangThaiAi";
-import { tenHienThi, thoiGianDoc, nhanThoiGianDoc } from "../../utils/thuVienTaiLieu";
+import { tenHienThi, thoiGianDoc, nhanThoiGianDoc, coTheTiepTuc } from "../../utils/thuVienTaiLieu";
 import { tiepTucHoc } from "../../utils/tiepTucHoc";
 import { hexMau } from "../../utils/boSuuTap";
 import { nhanOChon } from "../../utils/chonNhieu";
@@ -292,7 +292,7 @@ export default function StudyCard({
 
       <div className="study-card__foot">
         {/* One filled button at most: it exists only when there is somewhere to continue. */}
-        {tiepTuc && daIndex && (
+        {tiepTuc && coTheTiepTuc(doc) && (
           <button type="button"
                   className={`${nutTiepTuc === "secondary" ? "btn-secondary" : "btn-seal"} !text-small inline-flex items-center gap-1.5 study-card__resume`}
                   data-emphasis={nutTiepTuc}

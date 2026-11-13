@@ -8198,3 +8198,25 @@ cards overwrote them.
 branch): exactly one card is the tab stop, and ArrowDown moves focus to another card.
 
 **Prevention.** Never pass a function with optional positional parameters straight to `map`.
+
+
+### "Tiếp tục" was offered for an indexed document whose processing later failed (2026-11-14)
+
+**Symptoms:** the Library card and the learning home offered "Tiếp tục" for a document with
+`ingest_status: "error"` (or `status: "failed"`) whose index was already `ready`; the Command
+Palette's "Tiếp tục học" opened the most recently opened document even when it had failed.
+
+**Root cause:** each place tested only `ai.index === "ready"`. Indexed-then-failed is a real
+state (a later pipeline step can fail after the index is written), and the owner decision is
+that "Tiếp tục" is never offered for a failed, unindexed or not-ready document.
+
+**Fix:** one predicate, `coTheTiepTuc(d) = daLapChiMuc(d) && !xuLyLoi(d)` in
+`utils/thuVienTaiLieu.js`, used by `StudyCard`, `LearningHome`, and (through
+`ganNhatCoTheTiepTuc`) the palette, which skips a failed document because it has no place to
+say why.
+
+**Regression:** `StudyCard.v6.test.jsx` and `LearningHome.test.jsx` "indexed document whose
+processing then failed" (red before), `thuVienTaiLieu.test.js` `ganNhatCoTheTiepTuc`.
+
+**Prevention:** a rule the owner states about one action ("never offer X for Y") gets one
+named predicate, and every entry point to that action calls it.

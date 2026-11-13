@@ -303,6 +303,15 @@ export const laNhomThuVien = (khoa) => KHOA_NHOM.has(khoa);
 /** Processing failed on the server: the learner has to act (upload again or remove it). */
 export const xuLyLoi = (d) => d?.ingest_status === "error" || d?.status === "failed";
 
+/** "Tiếp tục" is offered only for a document that is indexed AND whose processing did not
+ *  fail (owner decision, V6). Indexed-then-failed exists: a later pipeline step can fail. */
+export const coTheTiepTuc = (d) => daLapChiMuc(d) && !xuLyLoi(d);
+
+/** The most recently opened document that can be continued (Command Palette "Tiếp tục học":
+ *  it has no place to say why a failed document cannot be opened, so it skips it). */
+export const ganNhatCoTheTiepTuc = (documents) =>
+  sapXep((documents || []).filter((d) => d?.last_opened_at && coTheTiepTuc(d)), "recently_opened")[0] || null;
+
 /**
  * Something on this document needs the learner: processing failed (upload it again or remove
  * it), or a quiz has been graded and its review guide has not been made yet.

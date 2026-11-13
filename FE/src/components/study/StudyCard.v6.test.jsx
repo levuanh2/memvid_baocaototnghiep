@@ -93,6 +93,13 @@ describe("StudyCard (V6)", () => {
     expect(onMo).toHaveBeenCalledWith(doc, "quiz");
   });
 
+  it("an indexed document whose processing then failed is not offered 'Tiếp tục' (owner decision)", async () => {
+    const doc = { ...READY, ingest_status: "error", status: "failed",
+      last_opened_at: new Date(Date.now() - 3600e3).toISOString(), last_workspace: "quiz" };
+    await render(doc);
+    expect(container.querySelector(".study-card__resume")).toBeNull();
+  });
+
   it("without a place to continue there is no filled button at all", async () => {
     await render(READY);
     expect(container.querySelectorAll(".btn-seal")).toHaveLength(0);
