@@ -4,6 +4,7 @@ import StudyShell, { EmptyState } from "../../components/study/StudyShell";
 import StudyCard from "../../components/study/StudyCard";
 import AiInsightCard from "../../components/study/AiInsightCard";
 import LearningDashboard from "../../components/study/LearningDashboard";
+import LearningHome from "../../components/study/LearningHome";
 import Disclosure from "../../components/ui/Disclosure";
 import CollectionSidebar from "../../components/study/CollectionSidebar";
 import BulkBar from "../../components/study/BulkBar";
@@ -436,7 +437,12 @@ export default function DocumentList() {
     const kq = phimDanhSach(e, { chiSo, tong: mucHienThi.tatCa.length });
     if (!kq) return;
     e.preventDefault();
-    if (kq.loai === "focus") setChiSoFocus(kq.chiSo);
+    if (kq.loai === "focus") {
+      setChiSoFocus(kq.chiSo);
+      // Move the real focus too. Only the tabindex used to change, so the arrow keys left
+      // focus on the card that had just become untabbable.
+      theRefs.current.get(kq.chiSo)?.focus();
+    }
     else if (kq.loai === "chon") setDaChon((prev) => batTatChon(prev, doc.document_id));
     else if (kq.loai === "mo") moBeMat(doc, doc.last_workspace || "studymap");
     else if (kq.loai === "xoa_chon") setDaChon(xoaChon());
@@ -456,9 +462,21 @@ export default function DocumentList() {
     setMatrixFocusId((current) => resolveRovingDocumentId(matrixProjection.rows, current));
   }, [matrixProjection.rows]);
 
+  // Cards of the "Tất cả" list by index, for the arrow keys above.
+  const theRefs = useRef(new Map());
+  // A filter can shorten the list under the remembered index; without this no card had
+  // tabindex 0 and Tab skipped the whole list.
+  const soThe = mucHienThi.tatCa.length;
+  useEffect(() => {
+    setChiSoFocus((hienTai) => (hienTai >= soThe ? Math.max(-1, soThe - 1) : hienTai));
+  }, [soThe]);
+
   const veThe = (doc, chiSo = null) => (
     <StudyCard
       key={doc.document_id}
+      refThe={chiSo == null ? undefined : (node) => {
+        if (node) theRefs.current.set(chiSo, node); else theRefs.current.delete(chiSo);
+      }}
       doc={doc}
       documents={documents}
       chiMucBst={chiMucBst}
@@ -476,6 +494,8 @@ export default function DocumentList() {
       tabIndex={chiSo == null ? undefined : (chiSo === Math.max(0, chiSoFocus) ? 0 : -1)}
       onKeyDown={chiSo == null ? undefined : (e) => xuLyPhim(e, doc, chiSo)}
       matDo={matDo}
+      // The learning home above the list holds the page's filled "Tiếp tục".
+      nutTiepTuc="secondary"
     />
   );
 
@@ -535,17 +555,17 @@ export default function DocumentList() {
         boSuuTap={thanhBen.boSuuTap}
         chuaPhanLoai={thanhBen.chuaPhanLoai}
         the={theThanhBen}
-        chon={{ collectionId: chonBoSuuTap, tags: chonThe, khoa: boLoc }}
+        chon={{ collectionId: chonBoSuuTap, tags: chonThe }}
         onChon={(v) => {
+          // Collection and tags only. The sidebar used to carry the state filters too and
+          // echoed them back on every click, so picking a collection cleared an active
+          // "Yêu thích" / "Đã ghim" filter.
           setChonBoSuuTap(v.collectionId ?? null);
           setChonThe(v.tags || []);
-          if (v.khoa) setBoLoc((prev) => (prev.join() === v.khoa.join() ? [] : v.khoa));
         }}
         onTao={taoBoSuuTap}
         onSua={suaBoSuuTap}
         onXoa={setBoSuuTapCanXoa}
-        hienLuuTru={hienLuuTru}
-        onHienLuuTru={setHienLuuTru}
       />
 
       <div className="min-w-0 flex-1">
@@ -719,6 +739,12 @@ export default function DocumentList() {
           Frontend V2 wave: default-collapsed is now a REMEMBERED preference, not
           just a fixed behavior — closes the exact gap flagged in
           docs/FINAL_VISUAL_REVIEW.md's "acceptance criterion not met" note. */}
+      {/* V6 learning home: where to pick up, recent documents, library progress. It replaces
+          the separate "Tiếp tục học" section (one full card for the same document) below. */}
+      {documents.length > 0 && (
+        <LearningHome documents={documents} mucHienThi={mucHienThi} overview={overview} onMo={moBeMat} />
+      )}
+
       {documents.length > 0 && (
         <section className="surface-card !p-0 mb-7">
           <Disclosure title="Tổng quan học tập" dense
@@ -727,8 +753,6 @@ export default function DocumentList() {
             <LearningDashboard
               documents={documents}
               overview={overview}
-              weak={weak}
-              attempts={attempts}
               mucHienThi={mucHienThi}
               onMo={moBeMat}
             />
@@ -790,14 +814,6 @@ export default function DocumentList() {
         </section>
       )}
 
-      {/* Tiếp tục học */}
-      {!LIBRARY_ACTION_MATRIX && mucHienThi.tiepTucHoc && (
-        <section className="mb-7">
-          <SectionTitle>Tiếp tục học</SectionTitle>
-          {veThe(mucHienThi.tiepTucHoc)}
-        </section>
-      )}
-
       {weak.length > 0 && (
         <section className="mb-7">
           <SectionTitle>Đang yếu ở</SectionTitle>
@@ -823,7 +839,11 @@ export default function DocumentList() {
       {!LIBRARY_ACTION_MATRIX && muc.map(([ten, ds]) => (
         <section key={ten} className="mb-7">
           <SectionTitle dem={ds.length}>{ten}</SectionTitle>
-          <div className="flex flex-col gap-2.5">{ds.map(veThe)}</div>
+          {/* `(d) => veThe(d)`, not `ds.map(veThe)`: Array.map passes the index as the second
+              argument, which made every section card a roving-list item with an index into a
+              DIFFERENT list ("Tất cả"): one tab stop per section, and arrows that moved the
+              wrong list. Only the "Tất cả" list below is the roving list. */}
+          <div className="flex flex-col gap-2.5">{ds.map((d) => veThe(d))}</div>
         </section>
       ))}
 
@@ -883,7 +903,7 @@ export default function DocumentList() {
       {!LIBRARY_ACTION_MATRIX && mucHienThi.daLuuTru.length > 0 && hienLuuTru && (
         <section className="mb-7">
           <SectionTitle dem={mucHienThi.daLuuTru.length}>Đã lưu trữ</SectionTitle>
-          <div className="flex flex-col gap-2.5">{mucHienThi.daLuuTru.map(veThe)}</div>
+          <div className="flex flex-col gap-2.5">{mucHienThi.daLuuTru.map((d) => veThe(d))}</div>
         </section>
       )}
 

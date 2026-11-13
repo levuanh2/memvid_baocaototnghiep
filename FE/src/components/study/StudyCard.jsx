@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useId, useRef, useState } from "react";
 import { Icon } from "../ui/Icon";
 import { chipHienThi, READY, GENERATING } from "../../utils/trangThaiAi";
 import { tenHienThi, thoiGianDoc, nhanThoiGianDoc } from "../../utils/thuVienTaiLieu";
@@ -8,14 +8,14 @@ import { nhanOChon } from "../../utils/chonNhieu";
 import { getQuestions, moTaLoi } from "../../utils/studyApi";
 import KnowledgePanel from "./KnowledgePanel";
 import InlineDocumentNameEditor from "./InlineDocumentNameEditor";
+import "./studyCard.css";
 
 /**
  * Thẻ tài liệu của Thư viện học tập.
  *
- * Thứ bậc thị giác CỐ Ý: tên hiển thị → tên tệp (mờ, nhỏ) → **AI Overview là khối
- * chữ lớn nhất** → tóm tắt xem trước → chip trạng thái → siêu dữ liệu → hành động.
- * Thứ AI đã chuẩn bị đứng trên thứ người dùng đã tải lên; tên tệp không bao giờ
- * lấn át nội dung được sinh ra.
+ * Thứ bậc (V6): tên tài liệu → có học được chưa → điều AI đã chuẩn bị (AI Overview,
+ * tóm tắt xem trước) → dữ kiện → MỘT nút chính "Tiếp tục" và nhóm công cụ học. Trạng thái
+ * "đã có / đang tạo" nằm ngay trên từng công cụ thay cho hàng chip lặp lại tên chúng.
  *
  * Không có: ảnh thu nhỏ sơ đồ, và không có hành động "Mở tệp".
  *
@@ -24,39 +24,23 @@ import InlineDocumentNameEditor from "./InlineDocumentNameEditor";
  * mang bảy thông tin; thêm một khối nữa là biến nó thành bảng biểu.
  */
 
-const MAU_CHIP = {
-  [READY]: { bg: "var(--ok-bg)", fg: "var(--ok)" },
-  [GENERATING]: { bg: "rgba(120,120,120,0.14)", fg: "var(--text-secondary)" },
-};
-
-function ChipAi({ chip }) {
-  const dangChay = chip.trangThai === GENERATING;
-  const sanSang = chip.trangThai === READY;
-  const mau = MAU_CHIP[chip.trangThai];
-  return (
-    <span
-      className="inline-flex items-center gap-1 rounded-full px-2 py-[3px] text-caption font-medium"
-      style={mau
-        ? { background: mau.bg, color: mau.fg }
-        : { background: "transparent", color: "var(--text-muted)",
-            border: "1px solid var(--border-color)" }}
-    >
-      {sanSang && <Icon name="Check" size={11} strokeWidth={2.5} />}
-      {dangChay && <Icon name="Clock" size={11} />}
-      {chip.nhan}{chip.soLuong ? ` (${chip.soLuong})` : ""}
-    </span>
-  );
-}
-
 export default function StudyCard({
   doc, documents, chiMucBst, jobs, boSuuTap, dangDoiTen, dangLuu, onDoiTen, onLuuTen,
   onHuyDoiTen, onBatTat, onMo, daChon, onChon, tabIndex, onKeyDown, refThe,
   matDo = "comfortable",
+  // "primary" = filled (the card stands alone). "secondary" = outlined: the page already has
+  // its one filled action in the learning home above the list, so a card's "Tiếp tục" is the
+  // card's main action without competing with it.
+  nutTiepTuc = "primary",
 }) {
   // Frontend V2, Library wave — density is a display variant only: same doc,
   // same props, same actions, just fewer of them rendered/visible at once.
   // Không đổi thứ bậc thị giác đã có (tên → AI Overview → …), chỉ rút gọn nó.
   const gon = matDo === "compact";
+  // The same document is drawn in several sections of the Library ("Đã ghim", "Hôm nay",
+  // "Tất cả"…), so an id built from `document_id` alone repeats in one page and
+  // `aria-controls` / `aria-describedby` stop pointing at one element. Unique per instance.
+  const uid = useId();
   const [menuMo, setMenuMo] = useState(false);
   const nutMenuRef = useRef(null);
   const menuRef = useRef(null);
@@ -131,28 +115,31 @@ export default function StudyCard({
     items[keTiep].focus();
   };
 
-  // Hoạt động gần đây nằm CHUNG hàng siêu dữ liệu, không phải một khối riêng —
-  // "mở 2 giờ trước · Sơ đồ tư duy" nói đủ chuyện mà không tốn thêm một dòng.
-  const hoatDong = tiepTuc
-    ? `mở ${tiepTuc.nhanThoiGian}${tiepTuc.beMat ? ` · ${tiepTuc.nhanBeMat}` : ""}`
-    : null;
-
-  const sieuDuLieu = [
-    nhanThoiGianDoc(phut),
-    doc.page_count ? `${doc.page_count} trang` : null,
-    doc.chunk_count ? `${doc.chunk_count} đoạn` : null,
-    doc.language || null,
-    hoatDong,
-    doc.open_count > 1 ? `${doc.open_count} lần mở` : null,
+  // Facts a learner uses to decide what to open: how long it is, and when they last had it
+  // open. The chunk count and the open counter are internal bookkeeping and stay off the card.
+  const suKien = [
+    phut != null ? ["Clock", nhanThoiGianDoc(phut)] : null,
+    doc.page_count ? ["FileText", `${doc.page_count} trang`] : null,
+    tiepTuc?.nhanThoiGian ? ["RotateCcw", `Mở ${tiepTuc.nhanThoiGian}`] : null,
   ].filter(Boolean);
 
-  const hanhDong = [
+  // The study tools. Each carries its own "prepared" state, which used to be a separate row of
+  // chips repeating the same five names.
+  const trangThaiCua = Object.fromEntries(chips.map((c) => [c.khoa, c]));
+  const congCu = [
     { khoa: "summary", nhan: "Tóm tắt", icon: "ScrollText" },
     { khoa: "studymap", nhan: "Bản đồ kiến thức", icon: "Network" },
     { khoa: "quiz", nhan: "Quiz", icon: "BadgeCheck" },
     { khoa: "review", nhan: "Ôn tập", icon: "BookOpen" },
     { khoa: "chat", nhan: "Hỏi AI", icon: "MessageSquare" },
-  ];
+  ]
+    // "Tiếp tục · Quiz" already goes to Quiz: the same destination is not offered twice.
+    .filter(({ khoa }) => !(tiepTuc?.beMat && tiepTuc.beMat === khoa));
+  const coSoDoTuDuy = trangThaiCua.mindmap?.trangThai === READY;
+  const dangDungSoDo = trangThaiCua.mindmap?.trangThai === GENERATING;
+
+  // Why the tools are not offered, in words. `hong` = the server marked processing as failed.
+  const hong = doc.ingest_status === "error" || doc.status === "failed";
 
   return (
     <div
@@ -161,83 +148,73 @@ export default function StudyCard({
       // mũi tên đi giữa các thẻ. Cho mọi thẻ `tabIndex=0` thì người dùng bàn phím
       // phải Tab qua 300 lần để tới thanh dưới.
       tabIndex={tabIndex}
-      onKeyDown={onKeyDown}
+      // The list's keys (arrows, Space = select, Enter = open) belong to the CARD. A key
+      // pressed on a button, the checkbox or a menu item inside it is that control's own: it
+      // used to bubble here too, so Enter on "Tóm tắt" also opened the card's last workspace
+      // and Space on a tool selected the card.
+      onKeyDown={onKeyDown ? (e) => { if (e.target === e.currentTarget) onKeyDown(e); } : undefined}
       aria-selected={onChon ? Boolean(daChon) : undefined}
-      className={`surface-card flex flex-col outline-none
-                 focus-visible:ring-2 focus-visible:ring-offset-2
-                 ${gon ? "!p-2.5 gap-1.5" : "!p-4 gap-3"}`}
-      style={{
-        ...(doc.archived_at ? { opacity: 0.62 } : null),
-        ...(daChon ? { borderColor: "var(--accent)" } : null),
-        "--tw-ring-color": "var(--accent)", "--tw-ring-offset-color": "var(--bg-card)",
-      }}
+      className="surface-card study-card"
+      data-density={gon ? "compact" : "comfortable"}
+      data-selected={daChon ? "true" : undefined}
+      data-archived={doc.archived_at ? "true" : undefined}
     >
-
-      {/* Tên + cờ + menu */}
-      <div className="flex items-start gap-3">
+      <div className="study-card__head">
         {onChon ? (
-          <input
-            type="checkbox"
-            checked={Boolean(daChon)}
-            onChange={() => onChon(doc.document_id)}
-            aria-label={nhanOChon(ten, Boolean(daChon))}
-            className="w-[15px] h-[15px] mt-[4px] accent-accent rounded cursor-pointer shrink-0"
-          />
+          <label className="study-card__select">
+            <input
+              type="checkbox"
+              checked={Boolean(daChon)}
+              onChange={() => onChon(doc.document_id)}
+              aria-label={nhanOChon(ten, Boolean(daChon))}
+            />
+          </label>
         ) : (
-          <Icon name="FileText" size={18} className="text-text-muted shrink-0 mt-[3px]" />
+          <Icon name="FileText" size={18} className="text-text-muted shrink-0 mt-[3px]" aria-hidden="true" />
         )}
 
         {dangDoiTen ? (
           <InlineDocumentNameEditor initialValue={doc.display_name || doc.title}
                                     saving={dangLuu} onSave={onLuuTen} onCancel={onHuyDoiTen} />
         ) : (
-          <div className="min-w-0 flex-1">
-            <div className="flex items-center gap-1.5 min-w-0">
-              <span className="font-display text-title font-semibold text-text-primary truncate">
-                {ten}
-              </span>
-              {doc.pinned && <Icon name="Pin" size={13} className="shrink-0 text-accent" />}
-              {doc.favorite && <Icon name="Star" size={13} className="shrink-0 text-accent" />}
-              {doc.archived_at && (
-                <span className="shrink-0 text-caption text-text-muted">· đã lưu trữ</span>
-              )}
-            </div>
-            {/* Huy hiệu bộ sưu tập: TÊN lấy từ danh sách chung, không từ tài liệu —
-                tài liệu chỉ mang `collection_id`, nên đổi tên là một lượt ghi. */}
-            {boSuuTap && (
-              <span className="mt-1 inline-flex items-center gap-1.5 rounded-full px-2 py-[2px]
-                               text-caption max-w-full"
-                    style={{ background: "var(--bg-sidebar)", color: "var(--text-secondary)",
-                             border: "1px solid var(--border-color)" }}>
-                <span aria-hidden className="w-2 h-2 rounded-full shrink-0"
-                      style={{ background: hexMau(boSuuTap.color) }} />
-                <span className="truncate">{boSuuTap.name}</span>
-              </span>
-            )}
-            {/* Tên tệp gốc: giữ lại vì người dùng nhận ra nó, nhưng mờ và nhỏ —
-                nó không phải thứ quan trọng nhất trên thẻ này. */}
-            {doc.display_name && (
-              <div className="font-mono text-caption text-text-muted truncate mt-0.5">
-                {doc.title}
+          <div className="min-w-0">
+            <h3 className="study-card__title" title={ten}>{ten}</h3>
+            {(boSuuTap || doc.pinned || doc.favorite || doc.archived_at) && (
+              <div className="study-card__badges">
+                {/* Flags are words, not bare icons: an unlabelled star says nothing to a
+                    screen reader and little to anyone else. */}
+                {doc.pinned && <span className="study-card__badge study-card__badge--flag"><Icon name="Pin" size={11} aria-hidden="true" /> Đã ghim</span>}
+                {doc.favorite && <span className="study-card__badge study-card__badge--flag"><Icon name="Star" size={11} aria-hidden="true" /> Yêu thích</span>}
+                {doc.archived_at && <span className="study-card__badge"><Icon name="Archive" size={11} aria-hidden="true" /> Đã lưu trữ</span>}
+                {/* Huy hiệu bộ sưu tập: TÊN lấy từ danh sách chung, không từ tài liệu —
+                    tài liệu chỉ mang `collection_id`, nên đổi tên là một lượt ghi. */}
+                {boSuuTap && (
+                  <span className="study-card__badge">
+                    <i aria-hidden className="w-2 h-2 rounded-full shrink-0" style={{ background: hexMau(boSuuTap.color) }} />
+                    <span>{boSuuTap.name}</span>
+                  </span>
+                )}
               </div>
             )}
+            {/* Tên tệp gốc: giữ lại vì người dùng nhận ra nó, nhưng mờ và nhỏ. */}
+            {doc.display_name && !gon && <div className="study-card__file" title={doc.title}>{doc.title}</div>}
           </div>
         )}
 
-        <div className="relative shrink-0">
-          <button ref={nutMenuRef} type="button" className="icon-btn w-7 h-7"
+        <div className="relative">
+          <button ref={nutMenuRef} type="button" className="icon-btn study-card__menu-trigger"
                   aria-label="Tuỳ chọn tài liệu"
                   aria-haspopup="menu"
                   aria-expanded={menuMo}
                   onKeyDown={(e) => e.stopPropagation()}
                   onClick={() => setMenuMo((v) => !v)}>
-            <Icon name="MoreVertical" size={15} />
+            <Icon name="MoreVertical" size={15} aria-hidden="true" />
           </button>
           {menuMo && (
             <>
               <div className="fixed inset-0 z-10" onClick={() => setMenuMo(false)} />
               <div ref={menuRef} role="menu" onKeyDown={xuLyPhimMenu}
-                   className="absolute right-0 top-8 z-20 min-w-[170px] rounded-[8px] py-1 shadow-card-hover"
+                   className="absolute right-0 top-9 z-20 min-w-[180px] rounded-[8px] py-1 shadow-card-hover"
                    style={{ background: "var(--bg-card)", border: "1px solid var(--border-color)" }}>
                 {[
                   ["Đổi tên", "Pencil", () => onDoiTen(doc.document_id)],
@@ -251,9 +228,9 @@ export default function StudyCard({
                 ].map(([nhan, icon, ham]) => (
                   <button key={nhan} type="button" role="menuitem"
                           onClick={() => { setMenuMo(false); ham(); }}
-                          className="w-full px-3 py-1.5 text-left text-small text-text-primary
+                          className="w-full min-h-[40px] px-3 py-1.5 text-left text-small text-text-primary
                                      hover:bg-surface-elevated inline-flex items-center gap-2">
-                    <Icon name={icon} size={13} /> {nhan}
+                    <Icon name={icon} size={13} aria-hidden="true" /> {nhan}
                   </button>
                 ))}
               </div>
@@ -262,81 +239,108 @@ export default function StudyCard({
         </div>
       </div>
 
+      {/* Cannot be studied yet: say why, once, instead of five greyed-out buttons. */}
+      {!daIndex && (
+        <p className="study-card__state" data-state={hong ? "failed" : "waiting"}>
+          <Icon name={hong ? "TriangleAlert" : "Clock"} size={15} aria-hidden="true" />
+          <span>
+            {hong ? "Xử lý tài liệu này bị lỗi." : "Tài liệu chưa được lập chỉ mục."}
+            <small>{hong
+              ? "Chưa mở được tóm tắt, quiz hay hỏi đáp với tài liệu này."
+              : "Tóm tắt, quiz và hỏi đáp mở được khi lập chỉ mục xong."}</small>
+          </span>
+        </p>
+      )}
+
       {/* AI Overview — khối chữ LỚN NHẤT trên thẻ. Chỉ hiện khi có tóm tắt thật.
-          Gọn: chỉ dòng đầu — vẫn là điều AI chuẩn bị, chỉ ít dòng hơn, không đổi
-          nội dung. */}
+          Gọn: chỉ dòng đầu. */}
       {yChinh.length > 0 && (
-        <ul className="flex flex-col gap-1 pl-0.5">
+        <ul className="study-card__overview">
           {(gon ? yChinh.slice(0, 1) : yChinh).map((y, i) => (
-            <li key={i} className="flex gap-2 text-body text-text-primary">
-              <Icon name="Sparkles" size={12} className="mt-[4px] shrink-0 text-accent" />
-              <span>{y}</span>
-            </li>
+            <li key={i}><Icon name="Sparkles" size={12} aria-hidden="true" /><span>{y}</span></li>
           ))}
         </ul>
       )}
 
-      {/* Tóm tắt xem trước — kẹp 2 dòng. Ẩn ở chế độ gọn: AI Overview một dòng
-          đã đủ định vị thẻ, xem trước đầy đủ có ở "Chi tiết". */}
-      {!gon && ai.summary?.preview && (
-        <p className="text-small text-text-secondary"
-           style={{ display: "-webkit-box", WebkitLineClamp: 2, WebkitBoxOrient: "vertical",
-                    overflow: "hidden" }}>
-          {ai.summary.preview}
-        </p>
+      {!gon && ai.summary?.preview && <p className="study-card__preview">{ai.summary.preview}</p>}
+
+      {/* Chưa có tóm tắt: nói đúng là chưa có. Không bao giờ hiện "đang tạo…" khi
+          không có job nào đang chạy. */}
+      {ai.summary?.state === "not_generated" && daIndex && yChinh.length === 0
+        && trangThaiCua.summary?.trangThai !== GENERATING && (
+        <p className="study-card__hint">Chưa có tóm tắt cho tài liệu này.</p>
       )}
 
-      {/* Chưa có tóm tắt: nói đúng là chưa có, kèm một hành động THẬT. Không bao giờ
-          hiện "đang tạo…" khi không có job nào đang chạy. */}
-      {ai.summary?.state === "not_generated" && daIndex && yChinh.length === 0 && (
-        <p className="text-small text-text-muted">
-          Chưa có tóm tắt cho tài liệu này.
-        </p>
-      )}
-
-      <div className="flex flex-wrap gap-1.5">
-        {chips.map((c) => <ChipAi key={c.khoa} chip={c} />)}
-      </div>
-
-      {!gon && sieuDuLieu.length > 0 && (
-        <div className="font-mono text-caption text-text-muted">{sieuDuLieu.join(" · ")}</div>
+      {!gon && (suKien.length > 0 || coSoDoTuDuy || dangDungSoDo) && (
+        <ul className="study-card__facts">
+          {suKien.map(([icon, nhan]) => (
+            <li key={nhan}><Icon name={icon} size={12} aria-hidden="true" />{nhan}</li>
+          ))}
+          {/* The mind map has no tool button on the card, so its state is a fact. */}
+          {coSoDoTuDuy && <li><Icon name="GitBranch" size={12} aria-hidden="true" />Có sơ đồ tư duy</li>}
+          {dangDungSoDo && <li><Icon name="Clock" size={12} aria-hidden="true" />{trangThaiCua.mindmap.nhan}</li>}
+        </ul>
       )}
 
       {!gon && Array.isArray(doc.tags) && doc.tags.length > 0 && (
-        <div className="flex flex-wrap gap-1.5">
+        <div className="study-card__tags">
           {doc.tags.map((t) => (
-            <span key={t}
-                  className="inline-flex items-center gap-1 rounded-full px-2 py-[2px] text-caption"
-                  style={{ background: "var(--bg-sidebar)", color: "var(--text-secondary)",
-                           border: "1px solid var(--border-color)" }}>
-              <Icon name="Tag" size={10} /> {t}
-            </span>
+            <span key={t} className="study-card__badge"><Icon name="Tag" size={10} aria-hidden="true" /><span>{t}</span></span>
           ))}
         </div>
       )}
 
-      <div className="flex flex-wrap items-center gap-1.5 pt-0.5">
-        {/* Nút Tiếp tục chỉ xuất hiện khi thật sự có chỗ để tiếp tục. */}
-        {tiepTuc && (
-          <button type="button" className="btn-seal !py-1.5 !text-small inline-flex items-center gap-1.5"
+      <div className="study-card__foot">
+        {/* One filled button at most: it exists only when there is somewhere to continue. */}
+        {tiepTuc && daIndex && (
+          <button type="button"
+                  className={`${nutTiepTuc === "secondary" ? "btn-secondary" : "btn-seal"} !text-small inline-flex items-center gap-1.5 study-card__resume`}
+                  data-emphasis={nutTiepTuc}
                   onClick={() => onMo(doc, tiepTuc.beMat || "studymap")}>
-            <Icon name="ArrowRight" size={13} /> Tiếp tục · {tiepTuc.nhanBeMat}
+            <Icon name="ArrowRight" size={13} aria-hidden="true" /> Tiếp tục · {tiepTuc.nhanBeMat}
           </button>
         )}
-        {hanhDong.map(({ khoa, nhan, icon }) => (
-          <button key={khoa} type="button"
-                  className="pill-action disabled:opacity-45 disabled:cursor-not-allowed"
-                  disabled={!daIndex}
-                  title={daIndex ? undefined : "Tài liệu chưa được lập chỉ mục"}
-                  onClick={() => onMo(doc, khoa)}>
-            <Icon name={icon} size={13} /> {nhan}
-          </button>
-        ))}
-        <button type="button" className="pill-action ml-auto"
+        {daIndex && (
+          <div className="study-card__tools" role="group" aria-label={`Học với ${ten}`}>
+            {congCu.map(({ khoa, nhan, icon }) => {
+              const tt = trangThaiCua[khoa];
+              const sanSang = tt?.trangThai === READY;
+              const dangTao = tt?.trangThai === GENERATING;
+              // The button's NAME stays the tool's name ("Tóm tắt"), so it is what people say
+              // and what tests look for. The state is its DESCRIPTION: the marks are hidden
+              // from assistive technology and the words live in a described-by element.
+              const moTa = [
+                sanSang ? (tt?.soLuong ? `đã có ${tt.soLuong}` : "đã có") : null,
+                dangTao ? "đang tạo" : null,
+              ].filter(Boolean).join(", ");
+              const idMoTa = `cong-cu-${khoa}-${uid}`;
+              return (
+                <button key={khoa} type="button" className="study-card__tool"
+                        data-ready={sanSang ? "true" : undefined}
+                        aria-describedby={moTa ? idMoTa : undefined}
+                        onClick={() => onMo(doc, khoa)}>
+                  <Icon name={icon} size={13} aria-hidden="true" />
+                  {nhan}
+                  {tt?.soLuong ? <span aria-hidden="true">({tt.soLuong})</span> : null}
+                  {sanSang && (
+                    <span className="study-card__tool-mark" aria-hidden="true">
+                      <Icon name="Check" size={12} strokeWidth={2.5} />
+                    </span>
+                  )}
+                  {dangTao && <span className="study-card__tool-note" aria-hidden="true">đang tạo…</span>}
+                  {/* `hidden`: referenced by aria-describedby, never read on its own. A <span>
+                      inside the button would have become part of its name. */}
+                  {moTa && <span id={idMoTa} hidden data-tool-description>{moTa}</span>}
+                </button>
+              );
+            })}
+          </div>
+        )}
+        <button type="button" className="pill-action study-card__details"
                 aria-expanded={moTriThuc}
-                aria-controls={`tri-thuc-${doc.document_id}`}
+                aria-controls={`tri-thuc-${uid}`}
                 onClick={batTatTriThuc}>
-          <Icon name="ChevronDown" size={13}
+          <Icon name="ChevronDown" size={13} aria-hidden="true"
                 style={{ transform: moTriThuc ? "rotate(180deg)" : undefined,
                          transition: "transform 180ms ease" }} />
           Chi tiết
@@ -344,7 +348,7 @@ export default function StudyCard({
       </div>
 
       {daTungMo && (
-        <div id={`tri-thuc-${doc.document_id}`}
+        <div id={`tri-thuc-${uid}`}
              className={`knowledge-panel${moTriThuc ? " knowledge-panel--open" : ""}`}
              aria-hidden={!moTriThuc} inert={!moTriThuc ? "" : undefined}
              // Chặn nảy bọt: bàn phím ở đây là của các nút BÊN TRONG panel (mở câu
