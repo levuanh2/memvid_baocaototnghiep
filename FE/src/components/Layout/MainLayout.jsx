@@ -1043,6 +1043,7 @@ export default function MainLayout({
               <div className="h-full">
                 <ContextInspector
                   mode={workspaceMode}
+                  sources={sources}
                   selectedSources={selectedSources}
                   evidence={evidence}
                   highlight={highlight}
