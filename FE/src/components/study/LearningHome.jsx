@@ -19,6 +19,8 @@ export default function LearningHome({ documents, mucHienThi, overview, onMo }) 
   const dangHoc = mucHienThi?.tiepTucHoc || null;
   const tiepTuc = dangHoc ? tiepTucHoc(dangHoc) : null;
   const coTheHoc = dangHoc?.ai?.index === "ready";
+  // Same two reasons the document card gives: processing failed, or not indexed yet.
+  const hong = dangHoc?.ingest_status === "error" || dangHoc?.status === "failed";
 
   const ganDay = (mucHienThi?.hocGanDay || [])
     .filter((d) => d.document_id !== dangHoc?.document_id)
@@ -47,7 +49,11 @@ export default function LearningHome({ documents, mucHienThi, overview, onMo }) 
                 <Icon name="ArrowRight" size={14} aria-hidden="true" /> Tiếp tục · {tiepTuc.nhanBeMat}
               </button>
             ) : (
-              <p className="learning-home__meta">Tài liệu này chưa lập chỉ mục xong nên chưa mở tiếp được.</p>
+              <p className="learning-home__meta">
+                {hong
+                  ? "Xử lý tài liệu này bị lỗi nên chưa mở tiếp được."
+                  : "Tài liệu này chưa lập chỉ mục xong nên chưa mở tiếp được."}
+              </p>
             )}
           </>
         ) : (
