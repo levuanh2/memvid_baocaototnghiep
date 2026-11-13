@@ -17,7 +17,7 @@ V6 is **not complete**. This file is the single status page: it says which waves
 |---|---|---|
 | A | Design foundation: direction, rules, landing as the first surface built to them | **Draft PR** (this branch): spec + Landing. Tokens for the app shell are not changed yet |
 | B | Navigation and information architecture: header, sidebars, action hierarchy | **Started.** Header #167; Library sidebar #166. Workspace sidebars, "Công cụ học" and the usage chip are unchanged |
-| C | Learning experience: Library, Chat, Summary, Quiz, learning dashboard | **Started.** Chat start screen #161; account page #168; quiz-taking #169; Library card #171; learning home #172; Library page integration #173. Not started: chat workspace, quiz setup / results / review, the detailed dashboard panel |
+| C | Learning experience: Library, Chat, Summary, Quiz, learning dashboard | **Started.** Chat start screen #161; chat conversation #174; account page #168; quiz-taking #169; quiz results #175; Library card #171; learning home #172; Library page integration #173. Not started: chat composer, history and inspector; quiz setup and review guide; the detailed dashboard panel |
 | D | Knowledge visualisation: Mind map, Knowledge map, toolbars, export | Not started |
 | E | Frontend reliability: the bugs in `01-audit.md` §2 and §3 | Bug-hunt findings 1-15 each have a fix in a Draft PR: 1 and 11 in #163; 2, 12 and 15 in #160; 3, 4, 7, 14 in #164; 13 in #165; 5, 6, 8, 9, 10 in #162. Also #160 (false empty library) and #165 (false empty Summary / mind-map screen, first-commit flash). Left open: requests are ignored when stale, not aborted; two review clicks in one tick still send two requests |
 
@@ -55,7 +55,9 @@ Six different things are kept apart below. Do not read one as another.
 | #170 | `ci/v6-fixture-smoke` | `5253f86` | pass | list unit test 5/5; six added specs 21/21; gate failure proven on CI | same | merge first |
 | #171 | `design/v6-library-card` | `1ee999e` | running | Vitest 1943 before the review fixes; card tests after them | `9496170` (older) | — |
 | #172 | `design/v6-learning-home` | `61feebc` | pass | Vitest 1940 before the last fix | `ba13c06` (older) | — |
-| #173 | `design/v6-library-integration` | `4cd342e` | running | Vitest 1956; `library-learning-home.spec.js` 18/18; five Library specs 46/46 | not in trial 3 | #166, #171, #172 (stacked) |
+| #173 | `design/v6-library-integration` | `4cd342e` | see PR | Vitest 1956; `library-learning-home.spec.js` 18/18; five Library specs 46/46 | not in trial 3 | #166, #171, #172 (stacked) |
+| #174 | `design/v6-chat-workspace` | `99a29ee` | see PR | Vitest 1951; chat, evidence and header fixture specs 141/141 | not in trial 3 | #160, #161, #163 (stacked) |
+| #175 | `design/v6-quiz-result` | `99c78f2` | see PR | Vitest 1941; quiz-result fixture specs 12/12 | not in trial 3 | #169 (stacked) |
 
 ### Local integrations (never pushed)
 
@@ -112,8 +114,8 @@ Open:
 
 ## Backlog, in order
 
-1. AI chat workspace: message layout, composer, citations and evidence, history, right inspector, phone layout. Only the start screen is done (#161).
-2. Quiz setup, generation progress, results, explanations and review. Only quiz-taking is done (#169).
+1. AI chat workspace: composer (its suggestion row is clipped at the right edge), conversation history, the evidence panel (it lists "nguồn · đoạn 12" without the document name or the quoted text), the right inspector. Done: start screen (#161), conversation and citations (#174).
+2. Quiz setup, generation progress, the score header and the review guide. Done: quiz-taking (#169), the per-question result list (#175).
 3. Workspace panels: left and right sidebars, mind-map controls, summary pane, knowledge-map evidence, toolbars, dialogs.
 4. Library: decision 2 above; the detailed "Tổng quan học tập" panel; the "Đang yếu ở" section.
 5. Reliability: stale requests are ignored, not aborted; two review clicks in one tick still send two requests; `SidebarRight.guidedDialogClose.test.jsx` failed in a shuffled concurrent run and was not investigated; the Library page's `root`/`host` test globals.

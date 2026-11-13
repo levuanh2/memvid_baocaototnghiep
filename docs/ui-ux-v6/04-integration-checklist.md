@@ -12,6 +12,7 @@ main (db005ab)
 │
 ├─ #160 fix/v6-source-loading-state
 │    ├─ #161 design/v6-chat-start ...... stacked: contains #160
+│    │    └─ #174 design/v6-chat-workspace  stacked: contains #161 and #163
 │    └─ #167 design/v6-header .......... one-line conflict with #160 in MainLayout.jsx
 │
 ├─ #164 fix/v6-stale-owner-guards
@@ -24,10 +25,12 @@ main (db005ab)
 ├─ #172 design/v6-learning-home ───┘
 ├─ #168 design/v6-profile
 ├─ #169 design/v6-quiz
+│    └─ #175 design/v6-quiz-result ... stacked: contains #169
 └─ #159 design/v6-foundation (landing + these documents)
 ```
 
-Real dependencies: #161 needs #160, #165 needs #164, #173 needs #166 + #171 + #172, and #167 has to
+Real dependencies: #161 needs #160, #165 needs #164, #173 needs #166 + #171 + #172, #174 needs
+#161 + #163, #175 needs #169, and #167 has to
 be reconciled with #160. Everything else is independent in code.
 
 ## Order
@@ -40,7 +43,8 @@ be reconciled with #160. Everything else is independent in code.
 4. **#167** (after #160): in `MainLayout.jsx` keep the block #160 adds and this branch's line
    `const { isDark, toggleTheme } = useTheme();`.
 5. **#166, #171, #172**, then **#173** (it contains all three; #171 and #172 both change `DocumentList.jsx`, in different places).
-6. **#162, #163, #168, #169, #159** in any order.
+6. **#162, #163, #168, #169, #159** in any order; then **#174** (after #161 and #163) and
+   **#175** (after #169).
 7. After #159, #160, #161, #164, #165 are on `main`: move their five specs from `WHEN_PRESENT`
    to `REQUIRED` in `FE/scripts/fixture-smoke-specs.mjs`. Until then, deleting or renaming one of
    those spec files would not fail CI.
