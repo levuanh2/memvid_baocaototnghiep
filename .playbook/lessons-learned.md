@@ -3719,3 +3719,12 @@ Rules: check icons and logos when a rename is reported incomplete; serve a chang
 new URL (browsers cache favicons per URL); a static SVG cannot read CSS variables, so pin its
 colour to the token value and test that they stay equal; comments quoting the retired name trip
 the branding test, so describe it without naming it.
+
+
+## 2026-11-14 — A frontend double-submit lock is not idempotency
+
+A ref lock stops one tab from sending twice. It does nothing for a second tab, a retried
+request or a proxy replay, and the server then graded twice because its status check was a
+plain read followed by a write. Guard the transition where the data lives (row lock or
+conditional update), and prove it with a test that parks both threads between the read and
+the write; without that barrier the race test passes on the broken code.

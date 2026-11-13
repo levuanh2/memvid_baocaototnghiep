@@ -160,7 +160,12 @@ def test_practice_submit_dung_lai_ham_chuan_hoa_cua_attempts():
 
 
 def test_practice_submit_giu_dung_trinh_tu_tac_dung_phu(client, monkeypatch):
-    """`mở -> ghi nháp -> nộp -> chấm` trong cùng một request. Đảo thứ tự là mất bài."""
+    """`mở -> ghi nháp -> nộp` (một transaction, `submit_practice`) rồi mới `chấm`.
+
+    Ba bước đầu gộp lại từ 2026-11-14 (known-issues: nộp luyện tập hai lần cùng lúc):
+    gọi riêng thì hai request cùng mở hai attempt và cùng chấm. Chấm trước khi bài đã
+    nộp vẫn là mất bài.
+    """
     from app.application import practice as practice_uc
     from app.domains.attempts import repository as attempts_repo
     from app.domains.attempts import service as grading_svc
@@ -171,19 +176,15 @@ def test_practice_submit_giu_dung_trinh_tu_tac_dung_phu(client, monkeypatch):
                         lambda qid: {"quiz_type": "practice", "status": "ready",
                                      "user_id": "u1"})
     monkeypatch.setattr(attempts_repo, "question_ids_of_quiz", lambda qid: ["q1"])
-    monkeypatch.setattr(attempts_repo, "open_attempt",
-                        lambda qid, uid: (goi.append("open"), {"attempt_id": "at1"})[1])
-    monkeypatch.setattr(attempts_repo, "save_draft_answers",
-                        lambda aid, ans: goi.append("save"))
-    monkeypatch.setattr(attempts_repo, "submit",
-                        lambda aid: (goi.append("submit"), {"attempt_id": aid})[1])
+    monkeypatch.setattr(attempts_repo, "submit_practice",
+                        lambda qid, uid, ans: (goi.append(("submit_practice", ans)), "at1")[1])
     monkeypatch.setattr(attempts_repo, "get_attempt", lambda aid: {"attempt_id": aid})
     monkeypatch.setattr(grading_svc, "grade_attempt",
-                        lambda aid: (goi.append("grade"), {"score": 1.0})[1])
+                        lambda aid: (goi.append(("grade", aid)), {"score": 1.0})[1])
 
     out = practice_uc.submit("pq1", "u1", {"q1": "A"}, bat_buoc_chu_so_huu=True)
 
-    assert goi == ["open", "save", "submit", "grade"], f"trình tự đổi: {goi}"
+    assert goi == [("submit_practice", {"q1": "A"}), ("grade", "at1")], f"trình tự đổi: {goi}"
     assert out["grading"] == "done" and out["score"] == 1.0
 
 

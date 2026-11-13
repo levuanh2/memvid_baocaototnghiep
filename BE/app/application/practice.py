@@ -84,9 +84,10 @@ def submit(practice_quiz_id: str, user_id: Optional[str], raw: Any, *,
     if unknown:
         raise attempts_uc.CauHoiLac(f"question_id không thuộc quiz: {unknown}")
 
-    attempt_id = _attempts.open_attempt(practice_quiz_id, user_id)["attempt_id"]
-    _attempts.save_draft_answers(attempt_id, {str(k): v for k, v in raw.items()})
-    if _attempts.submit(attempt_id) is None:
+    # One transaction under a row lock on the quiz (known-issues 2026-11-14): two
+    # identical requests used to open two attempts and grade both.
+    attempt_id = _attempts.submit_practice(practice_quiz_id, user_id, raw)
+    if attempt_id is None:
         raise attempts_uc.AttemptKhongConDangLam()
     result = _grading_service.grade_attempt(attempt_id)
     return {**attempts_uc.attempt_public(_attempts.get_attempt(attempt_id)),

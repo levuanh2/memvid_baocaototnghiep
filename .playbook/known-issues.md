@@ -8120,3 +8120,34 @@ off-screen button then matches the same role+name as the visible CTA.
 **Prevention:** hiding by transform, width, opacity or pointer-events is visual only; anything
 that stays mounted while hidden needs `inert`. Label tests should match the bare text, not one
 quoting style.
+
+
+### Two submits of one quiz at the same moment were both graded (2026-11-14)
+
+**Symptoms:** two requests that submit the same attempt (diagnostic) or the same practice
+quiz at almost the same time both returned 200 and both were graded: two grading runs, two
+mastery snapshots, and for practice two graded attempts. Two opens of one quiz created two
+`in_progress` attempts. Sending the same practice answers again right after the first
+response also created and graded a second attempt.
+
+**Root cause:** every step was read-then-write with no lock. `repository.submit` read
+`status == "in_progress"` with a plain `s.get` and then wrote `submitted`; `open_attempt`
+looked for an `in_progress` attempt and inserted one if none was found (no unique
+constraint); `practice.submit` always opened a fresh attempt, so even a sequential duplicate
+was a new attempt. The frontend ref locks (#162) only cover one tab and one click burst.
+
+**Fix:** `repository.submit` reads the attempt `FOR UPDATE`; `open_attempt` locks the quiz
+row before its lookup; `practice.submit` calls `repository.submit_practice`, which opens,
+fills and submits in one transaction under the quiz row lock and returns None (409, the
+existing "no longer in progress" error) when the same answers were submitted for that quiz
+by that learner in the last `PRACTICE_REPLAY_WINDOW_S` (30) seconds. No route, payload or
+status code changed.
+
+**Regression:** `BE/tests/test_attempt_submit_concurrency.py` (PostgreSQL only). The tests
+make two threads meet inside `repository._now()` (after the status read, before the
+write), so the race is forced, not hoped for. Red on `main`: all four fail (two 200s, two
+attempts, a second graded practice attempt). Green after, five repeated runs.
+
+**Prevention:** a status transition is a conditional write or a locked read, never a plain
+read followed by a write. A test for it must force the interleaving (a barrier between the
+read and the write); two threads started together usually run one after the other and pass.
