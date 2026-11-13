@@ -13,6 +13,9 @@ main (db005ab)
 ├─ #160 fix/v6-source-loading-state
 │    ├─ #161 design/v6-chat-start ...... stacked: contains #160
 │    │    └─ #174 design/v6-chat-workspace  stacked: contains #161 and #163
+│    │         └─ #177 fix/v6-chat-review-single-flight
+│    │              └─ #178 design/v6-chat-composer
+│    │                   └─ #180 design/v6-chat-evidence
 │    └─ #167 design/v6-header .......... one-line conflict with #160 in MainLayout.jsx
 │
 ├─ #164 fix/v6-stale-owner-guards
@@ -22,15 +25,18 @@ main (db005ab)
 ├─ #163 fix/v6-chat-attempt-identity
 ├─ #166 design/v6-library-actions ─┐
 ├─ #171 design/v6-library-card ────┼─ #173 design/v6-library-integration (stacked: contains all three)
+│                                  │    └─ #176 design/v6-library-one-list
 ├─ #172 design/v6-learning-home ───┘
 ├─ #168 design/v6-profile
 ├─ #169 design/v6-quiz
 │    └─ #175 design/v6-quiz-result ... stacked: contains #169
+│         └─ #179 design/v6-quiz-setup
+├─ #181 fix/test-guided-dialog-unmount (test only, from main)
 └─ #159 design/v6-foundation (landing + these documents)
 ```
 
 Real dependencies: #161 needs #160, #165 needs #164, #173 needs #166 + #171 + #172, #174 needs
-#161 + #163, #175 needs #169, and #167 has to
+#161 + #163, #175 needs #169, #176 needs #173, #177 -> #178 -> #180 stack on #174, #179 needs #175, and #167 has to
 be reconciled with #160. Everything else is independent in code.
 
 ## Order
@@ -42,9 +48,11 @@ be reconciled with #160. Everything else is independent in code.
 3. **#164**, then **#165**.
 4. **#167** (after #160): in `MainLayout.jsx` keep the block #160 adds and this branch's line
    `const { isDark, toggleTheme } = useTheme();`.
-5. **#166, #171, #172**, then **#173** (it contains all three; #171 and #172 both change `DocumentList.jsx`, in different places).
-6. **#162, #163, #168, #169, #159** in any order; then **#174** (after #161 and #163) and
-   **#175** (after #169).
+5. **#166, #171, #172**, then **#173** (it contains all three; #171 and #172 both change `DocumentList.jsx`, in different places), then **#176**.
+6. **#162, #163, #168, #169, #159, #181** in any order; then **#174** (after #161 and #163)
+   -> **#177** -> **#178** -> **#180**, and **#175** (after #169) -> **#179**.
+   When #174 meets #167 in `FE/src/index.css` (both append at the end), keep both blocks and the
+   closing `}` of #167's `@media (max-width: 767px)` block; trial 4 lost it once ("Unclosed block").
 7. After #159, #160, #161, #164, #165 are on `main`: move their five specs from `WHEN_PRESENT`
    to `REQUIRED` in `FE/scripts/fixture-smoke-specs.mjs`. Until then, deleting or renaming one of
    those spec files would not fail CI.
@@ -74,8 +82,8 @@ be reconciled with #160. Everything else is independent in code.
 ## Evidence (local trial integration, never pushed)
 
 See "Trial integration" in `README.md` for the heads, test counts and the full Fixture Audit
-result. The trial merged the branches in the order above; the only conflicts were the playbook
-files and the one line in `MainLayout.jsx`.
+result. Trial 4 merged #159-#179 in the order above; the conflicts were the playbook files, the
+one line in `MainLayout.jsx`, and the end of `index.css` (see step 6).
 
 ## Not covered by this checklist
 
