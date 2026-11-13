@@ -72,10 +72,11 @@ function makeMdComponents({ highlight, onHighlight, onEvidenceOpen }) {
         const active = highlight && normStem(highlight.stem) === normStem(cite.stem) && String(highlight.chunkId) === String(cite.chunkId);
         const open = () => { onHighlight?.(cite); onEvidenceOpen?.(cite); };
         return (
-          <sup
-            className={`cite-chip ${active ? "cite-chip--active" : ""}`}
+          <span
+            className={`cite-chip chat-cite ${active ? "cite-chip--active" : ""}`}
             role="button"
             tabIndex={0}
+            aria-label={`Nguồn ${String(children)}: mở đoạn trích`}
             title={`Nguồn: ${cite.stem} · đoạn ${cite.chunkId}`}
             onMouseEnter={() => onHighlight?.(cite)}
             onMouseLeave={() => onHighlight?.(null)}
@@ -83,7 +84,7 @@ function makeMdComponents({ highlight, onHighlight, onEvidenceOpen }) {
             onKeyDown={(e) => { if (e.key === "Enter" || e.key === " ") { e.preventDefault(); open(); } }}
           >
             {children}
-          </sup>
+          </span>
         );
       }
       return <a href={href} target="_blank" rel="noreferrer" className="text-accent underline underline-offset-2" {...props}>{children}</a>;
@@ -1075,11 +1076,12 @@ export default function ChatArea({
               <Icon name="Ban" size={13} /> {msg.content}
             </div>
           ) : msg.role === "user" ? (
-            <div key={idx} className="self-end max-w-[78%]">
-              <div className="px-4 py-2.5 text-body leading-relaxed rounded-[10px] rounded-br-[3px] border transition-theme"
-                style={{ background: "var(--bg-elevated)", borderColor: "var(--border-color)", color: "var(--text-primary)" }}>
-                {msg.content}
-              </div>
+            // V6: a study transcript, not chat bubbles. The question is set as the heading of
+            // its turn, on the same left edge and measure as the answer it starts.
+            <div key={idx} className="chat-turn__question">
+              <p className="chat-turn__question-text">
+                <span className="sr-only">Bạn hỏi: </span>{msg.content}
+              </p>
               {msg.imageText ? (
                 /* Người học phải xem được máy đọc ra gì: đọc sai là kiểu hỏng số một,
                    và không thấy phần này thì câu trả lời lệch trông như model dốt. */
@@ -1094,13 +1096,8 @@ export default function ChatArea({
               ) : null}
             </div>
           ) : (
-            <div key={idx} className="self-start w-full max-w-[760px] flex flex-col gap-2 animate-fadeUp">
-              <div className="flex items-center gap-2 text-metadata font-mono uppercase text-text-muted">
-                <Icon name="BookOpen" size={13} className="text-accent" /> Trả lời
-                {msg.evidence?.sources?.length ? (
-                  <span className="text-text-muted">· {sourcesLabel(msg.evidence.sources)}</span>
-                ) : null}
-              </div>
+            <div key={idx} className="chat-turn__answer animate-fadeUp">
+              <span className="sr-only">Trả lời: </span>
               <div className="text-text-primary">
                 <AnswerProse content={msg.content} mdComponents={mdComponents} dropCap={idx === firstAssistantIdx} />
               </div>
@@ -1113,13 +1110,20 @@ export default function ChatArea({
                   the answer drew from more than one document: `evidence.sources` is
                   the SAME real, backend-returned array `onEvidence` already forwards
                   to the Evidence panel, not a new signal. */}
-              {idx === messages.length - 1 && !loading && msg.evidence?.sources?.length > 0 && (
-                <div className="flex items-center gap-1.5 text-caption font-mono text-text-muted pt-0.5">
-                  {/* Success/settled marker (accent flip carve-out: forest
-                      stays for success/ready/progress, not interactive). */}
-                  <Icon name="BadgeCheck" size={12} className="text-forest" />
-                  Đã trả lời với {sourcesLabel(msg.evidence.sources)} — xem chi tiết ở lề phải
-                </div>
+              {/* V6: every answer names what it drew on, as a control. The old line was text
+                  only, appeared on the last answer alone, and said "xem chi tiết ở lề phải"
+                  on phones, where there is no right margin. The button shows THIS answer's
+                  evidence in the panel (drawer on phones). */}
+              {msg.evidence?.sources?.length > 0 && (
+                <button type="button" className="chat-turn__sources"
+                        onClick={() => { onEvidence?.(msg.evidence); onOpenEvidence?.(); }}>
+                  <Icon name="Quote" size={13} aria-hidden="true" />
+                  <span className="chat-turn__sources-count">
+                    {msg.evidence.chunks?.length > 0 ? `${msg.evidence.chunks.length} đoạn trích` : "Nguồn"}
+                  </span>
+                  <span className="chat-turn__sources-names">từ {sourcesLabel(msg.evidence.sources)}</span>
+                  <Icon name="ArrowRight" size={13} aria-hidden="true" />
+                </button>
               )}
             </div>
           )
