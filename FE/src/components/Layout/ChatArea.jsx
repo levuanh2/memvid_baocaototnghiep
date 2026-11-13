@@ -164,6 +164,11 @@ export default function ChatArea({
   const textareaRef = useRef(null);
   const abortControllerRef = useRef(null);
   const cancelledRef = useRef(false);
+  // Identity of the current send. `cancelledRef` alone is one shared flag: cancelling attempt A
+  // set it, starting attempt B cleared it, and A's late stream/poll/catch/finally then read
+  // "not cancelled" and published into B (an error bubble, or `loading = false` while B ran).
+  // Cancel, unmount and every new send bump this, so an older attempt can never become current.
+  const attemptRef = useRef(0);
   const eventSourceRef = useRef(null);
   const streamAccRef = useRef("");
   // Token gom trong streamAccRef; state chỉ flush qua throttle (tránh ReactMarkdown
@@ -246,6 +251,7 @@ export default function ChatArea({
   // (cancelledRef is what pollQueryStatus checks each iteration).
   useEffect(() => () => {
     cancelledRef.current = true;
+    attemptRef.current += 1;
     try { eventSourceRef.current?.close(); } catch { /* already closed */ }
   }, []);
 
@@ -257,7 +263,7 @@ export default function ChatArea({
   })();
 
   // ── SSE streaming (logic unchanged; + node trace) ───
-  const streamQueryJob = (jobId, { timeoutMs = QUERY_TIMEOUT_MS } = {}) =>
+  const streamQueryJob = (jobId, { timeoutMs = QUERY_TIMEOUT_MS, isStale = () => false } = {}) =>
     new Promise((resolve, reject) => {
       const start = Date.now();
       streamAccRef.current = "";
@@ -275,8 +281,11 @@ export default function ChatArea({
       const es = { close: () => ctrl.abort() };
       eventSourceRef.current = es;
 
+      // The buffer and the preview are shared by all attempts; only the current one may clear them.
+      const clearShared = () => { if (!isStale()) { streamAccRef.current = ""; setStreamingPreview(""); } };
+
       const tick = setInterval(() => {
-        if (cancelledRef.current) { clearInterval(tick); try { es.close(); } catch { /* already closed */ } reject(new Error("CANCELLED")); }
+        if (cancelledRef.current || isStale()) { clearInterval(tick); try { es.close(); } catch { /* already closed */ } reject(new Error("CANCELLED")); }
         if (Date.now() - start > timeoutMs) {
           clearInterval(tick); try { es.close(); } catch { /* already closed */ }
           reject(new Error(`Quá thời gian chờ phản hồi (~${Math.round(timeoutMs / 1000)}s). Vui lòng thử lại.`));
@@ -285,6 +294,9 @@ export default function ChatArea({
 
       const onMessage = (raw) => {
         try {
+          // A frame from a stream that is no longer the current attempt must not touch the
+          // shared buffer, preview, progress or node trace: they belong to the newer attempt.
+          if (isStale()) return;
           const d = JSON.parse(raw);
           if (d.type === "token" && d.content) { streamAccRef.current += d.content; throttle.schedule(); }
           const isStatus = d.type === "status" || d.type == null;
@@ -302,12 +314,12 @@ export default function ChatArea({
             } else if (d.status === "interrupted" && d?.result?.payload?.review?.type === "review") {
               clearInterval(tick); try { es.close(); } catch { /* already closed */ }
               throttle.cancel();
-              streamAccRef.current = ""; setStreamingPreview("");
+              clearShared();
               resolve({ result: d.result, streamed: "", interrupted: true });
             } else if (d.status === "error") {
               clearInterval(tick); try { es.close(); } catch { /* already closed */ }
               throttle.cancel();
-              streamAccRef.current = ""; setStreamingPreview("");
+              clearShared();
               const HARD = "Loi query SSE (status=error). Xem log server.";
               let msg = HARD;
               try { msg = ensureErrMsg(sseErrorToMessage(d.error), HARD); } catch { msg = HARD; }
@@ -328,7 +340,7 @@ export default function ChatArea({
           // handleSend còn dùng lại đường polling, đúng như hành vi onerror cũ.
           clearInterval(tick);
           throttle.cancel();
-          streamAccRef.current = ""; setStreamingPreview("");
+          clearShared();
           const e = new Error("Luồng realtime kết thúc sớm. Vui lòng thử lại.");
           e.sseConnectionLost = true;
           reject(e);
@@ -336,8 +348,8 @@ export default function ChatArea({
         .catch((err) => {
           clearInterval(tick);
           throttle.cancel();
-          streamAccRef.current = ""; setStreamingPreview("");
-          if (cancelledRef.current || err?.name === "AbortError") {
+          clearShared();
+          if (isStale() || cancelledRef.current || err?.name === "AbortError") {
             reject(new Error("CANCELLED"));
             return;
           }
@@ -374,6 +386,7 @@ export default function ChatArea({
   const handleCancel = async () => {
     if (pendingReview) return;
     cancelledRef.current = true;
+    attemptRef.current += 1;
     abortControllerRef.current?.abort();
     try { eventSourceRef.current?.close(); } catch { /* already closed */ }
     resetJobState(); setLoading(false);
@@ -383,8 +396,17 @@ export default function ChatArea({
     // `slice(0, -1)` ở đây AN TOÀN: nó xoá đúng dòng "Đang dừng truy vấn…" mà chính hàm
     // này vừa thêm. Bản trước vòng 8 slice khi chưa thêm gì nên xoá mất câu hỏi của
     // người dùng.
+    // Replace THE placeholder, not "the last message": by the time the cancel call returns, the
+    // learner may already have sent the next question, and `slice(0, -1)` would delete it.
     const thay = (noiDung) =>
-      setMessages((prev) => [...prev.slice(0, -1), { role: "cancelled", content: noiDung }]);
+      setMessages((prev) => {
+        let i = prev.length - 1;
+        while (i >= 0 && !(prev[i].role === "cancelled" && prev[i].content === "Đang dừng truy vấn…")) i -= 1;
+        if (i < 0) return prev;
+        const next = [...prev];
+        next[i] = { role: "cancelled", content: noiDung };
+        return next;
+      });
     if (!jid) {
       thay("Đã ngừng chờ câu trả lời.");
       return;
@@ -413,6 +435,7 @@ export default function ChatArea({
 
   const handleNewChat = () => {
     if (loading || pendingReview) return;
+    attemptRef.current += 1;
     setMenuOpen(false);
     setSessionId(newConversationId());   // fresh thread, empty context (keeps selected sources)
     setMessages([]);
@@ -424,6 +447,7 @@ export default function ChatArea({
 
   const handleClearContext = async () => {
     if (loading || pendingReview) return;
+    attemptRef.current += 1;
     setMenuOpen(false);
     setContextCleared(true);            // messages stay visible; AI stops using old turns
     refocusComposer();                  // trước await: nút vừa bấm đã biến mất cùng menu
@@ -475,6 +499,7 @@ export default function ChatArea({
     } catch {
       throw new Error("Không xóa được lịch sử chat trên máy chủ. Lịch sử vẫn còn, hãy thử lại.");
     }
+    attemptRef.current += 1;
     setMessages([]);
     setContextCleared(false);
     onEvidence?.(null); onHighlight?.(null);
@@ -503,27 +528,35 @@ export default function ChatArea({
   const handleReview = async (action) => {
     if (!pendingReview || reviewSubmitting) return;
     if (action === "edit" && !String(pendingReview.answer || "").trim()) return;
+    const attempt = ++attemptRef.current;
+    const stale = () => attempt !== attemptRef.current;
     setReviewSubmitting(true);
     setLoading(true);
     try {
       await resumeQuery(pendingReview.jobId, { action, answer: pendingReview.answer });
+      if (stale()) return;
       const result = await pollQueryStatus(pendingReview.jobId, {
         apiFetch,
-        isCancelled: () => false,
+        isCancelled: stale,
         onStatus: (d) => {
+          if (stale()) return;
           if (typeof d?.progress === "number") setJobProgress(Math.max(0, Math.min(100, d.progress)));
         },
       });
+      if (stale()) return;
       applyFinalQueryResult(result);
       setPendingReview(null);
     } catch (err) {
+      if (stale() || err?.message === "CANCELLED") return;
       const content = (isUnauthorizedError(err) || isNotFoundOrForbiddenError(err))
         ? getUserFriendlyApiError(err)
         : ensureErrMsg(err?.message, "Không thể tiếp tục quy trình duyệt. Vui lòng thử lại.");
       showNotice(content);
     } finally {
-      setReviewSubmitting(false);
-      setLoading(false);
+      if (!stale()) {
+        setReviewSubmitting(false);
+        setLoading(false);
+      }
     }
   };
 
@@ -619,6 +652,11 @@ export default function ChatArea({
     setLoading(true); resetJobState(); setSeenNodes(["Queued"]);
     onHighlight?.(null);
     cancelledRef.current = false;
+    const attempt = ++attemptRef.current;
+    const stale = () => attempt !== attemptRef.current;
+    // No job yet for this attempt. Without this, "Huỷ" pressed before the POST answers would
+    // send a cancel for the PREVIOUS question's job id.
+    jobIdRef.current = null;
     abortControllerRef.current = new AbortController();
     if (textareaRef.current) textareaRef.current.style.height = "44px";
     try {
@@ -643,20 +681,28 @@ export default function ChatArea({
       const startData = await res.json();
       if (!startData.job_id) throw new Error("Không nhận được job_id từ server.");
       const jobId = startData.job_id;
+      if (stale()) {
+        // Cancelled while the POST was in flight. "Huỷ" had no job id to cancel then, so the job
+        // would run to the end unseen; stop it now.
+        cancelJob(jobId).catch(() => {});
+        return;
+      }
       jobIdRef.current = jobId;   // để nút Huỷ gọi được route huỷ thật
       let jobOutcome;
       try {
-        jobOutcome = await streamQueryJob(jobId);
+        if (stale()) return;
+        jobOutcome = await streamQueryJob(jobId, { isStale: stale });
       } catch (streamErr) {
         // Phase F.1: EventSource can't send Bearer, so under protected mode the stream
         // 401s. Fall back to polling /query-status (apiFetch → authed). Real job
         // errors / timeouts / cancels propagate unchanged (no pointless polling).
-        if (!shouldPollFallback(streamErr, { cancelled: cancelledRef.current })) throw streamErr;
+        if (!shouldPollFallback(streamErr, { cancelled: stale() })) throw streamErr;
         console.warn("SSE stream lost; falling back to /query-status polling");
         const result = await pollQueryStatus(jobId, {
           apiFetch,
-          isCancelled: () => cancelledRef.current,
+          isCancelled: stale,
           onStatus: (d) => {
+            if (stale()) return;
             if (typeof d?.progress === "number") setJobProgress(Math.max(0, Math.min(100, d.progress)));
             if (d?.current_node) {
               const k = String(d.current_node);
@@ -666,7 +712,7 @@ export default function ChatArea({
         });
         jobOutcome = { result, streamed: "" };
       }
-      if (cancelledRef.current) return;
+      if (stale()) return;
       const jobResult = jobOutcome?.result ?? jobOutcome;
       const streamedText = jobOutcome?.streamed ?? "";
       const review = jobResult?.payload?.review;
@@ -677,7 +723,7 @@ export default function ChatArea({
       }
       applyFinalQueryResult(jobResult, streamedText);
     } catch (err) {
-      if (cancelledRef.current || err.name === "AbortError" || err.message === "CANCELLED") return;
+      if (stale() || err.name === "AbortError" || err.message === "CANCELLED") return;
       console.error("Query error:", err);
       // 401 also triggers a global redirect (apiFetch fired auth:unauthorized); show a
       // permission-safe line meanwhile. 403/404 map to friendly text (no raw JSON/id).
@@ -686,7 +732,7 @@ export default function ChatArea({
         : ensureErrMsg(err?.message, "Loi khi goi AI. Vui long thu lai.");
       setMessages((prev) => [...prev, { role: "ai", content, evidence: null }]);
     } finally {
-      if (!cancelledRef.current) setLoading(false);
+      if (!stale()) setLoading(false);
     }
   };
 
