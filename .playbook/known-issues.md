@@ -8204,3 +8204,29 @@ the composer at 320/390/768/1440, light and dark; 44px chips on phones; keyboard
 
 **Prevention.** Hiding a scrollbar hides the only sign that content continues. Wrap, or show the
 overflow.
+
+
+### The on-screen keyboard covered the chat composer on phones (2026-11-14)
+
+**Symptoms:** on a phone, focusing the chat input left the composer and its send button
+behind the keyboard; the workspace shell kept its full height. (Reproduced with a simulated
+iOS keyboard in Chromium; no real device was used.)
+
+**Root cause:** the workspace shell was `h-screen` (`100vh`), and the left drawers
+`calc(100vh - 56px)`. `100vh` is the largest viewport: it ignores browser toolbars, and iOS
+Safari also keeps it when the keyboard opens, shrinking only `window.visualViewport`. The shell
+never scrolls itself, so its bottom (the composer) stayed below the visible area. The viewport
+meta did not ask Android Chrome to resize content for the keyboard either.
+
+**Fix:** `useAppHeight` (in `MainLayout`) keeps `--app-height` equal to
+`visualViewport.height`; the shell uses `.app-shell-height` (`100vh`, then `100dvh`, then
+`var(--app-height, 100dvh)`), the drawers `calc(var(--app-height,100dvh) - 56px)`; the
+viewport meta adds `interactive-widget=resizes-content`.
+
+**Regression:** `e2e-fixture/mobile-viewport.spec.js` (simulated `visualViewport` at
+390x844, 320x640, 768x1024; red before: composer bottom 820 with 508 visible) and
+`src/hooks/useAppHeight.test.jsx`.
+
+**Prevention:** a full-screen container that does not scroll itself sizes to the visible
+viewport, never `100vh`. Headless tests cannot open a keyboard: drive `visualViewport`
+directly and say that it is a simulation.

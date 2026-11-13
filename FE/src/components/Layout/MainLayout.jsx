@@ -25,6 +25,7 @@ import BrandMark from "../ui/BrandMark";
 import { apiFetch, _appError } from "../../utils/api";
 import { mergeSources, formatFileName } from "../../utils/sourceReconciliation";
 import { nguonConDangXuLy } from "../../utils/nguonDangXuLy";
+import { useAppHeight } from "../../hooks/useAppHeight";
 
 // Round 11 (mockup parity, explicit user decision) — the Chat/Mind Map/
 // Summary mode switch, moved here from the now-deleted LessonHeader.jsx
@@ -51,6 +52,7 @@ export default function MainLayout({
   // Nonce from Command Palette "Mở Gia sư AI" (router state), V4.1 W3-1.
   tutorRequest,
 }) {
+  useAppHeight();
   const [sources, setSources] = useState([]);
   // "loading" until `/list-indexed` has answered once, then "ready" or "error". An empty
   // `sources` means "no documents" only when this is "ready".
@@ -643,7 +645,7 @@ export default function MainLayout({
   }, [workspaceMode, mmClearSelectedNode]);
 
   return (
-    <div className="flex flex-col h-screen overflow-hidden font-body transition-theme" style={{ background: "var(--bg-base)", color: "var(--text-primary)" }}>
+    <div className="app-shell-height flex flex-col overflow-hidden font-body transition-theme" style={{ background: "var(--bg-base)", color: "var(--text-primary)" }}>
 
       {/* ── TOP HEADER ── */}
       <header
@@ -819,7 +821,7 @@ export default function MainLayout({
                 // this aside's right edge (same negative-margin technique
                 // PanelDivider already uses on desktop) and would otherwise
                 // be clipped.
-                : `workspace-source-rail-overlay fixed top-[56px] left-0 h-[calc(100vh-56px)] z-40
+                : `workspace-source-rail-overlay fixed top-[56px] left-0 h-[calc(var(--app-height,100dvh)-56px)] z-40
                    bg-surface-sidebar border-r border-border shadow-card-hover`
             }
             style={{ width: !tabletShelfOpen ? 56 : panel.width.left }}
@@ -877,7 +879,7 @@ export default function MainLayout({
               inert={leftSurfaceHidden ? true : undefined}
               className={
                 panel.drawer
-                  ? `fixed top-[56px] left-0 h-[calc(100vh-56px)] z-40 w-[252px] shrink-0
+                  ? `fixed top-[56px] left-0 h-[calc(var(--app-height,100dvh)-56px)] z-40 w-[252px] shrink-0
                      bg-surface-sidebar border-r border-border
                      transition-transform duration-200 ease-in-out
                      ${leftOpen ? "translate-x-0" : "-translate-x-full"}`

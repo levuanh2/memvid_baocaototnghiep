@@ -253,6 +253,9 @@
 
 /* ─── Utilities ─────────────────────────────── */
 @layer utilities {
+  /* Workspace shell height = the viewport the learner can see (useAppHeight). Mid-file on
+     purpose: several V6 branches append to the end of this file. */
+  .app-shell-height { height: 100vh; height: 100dvh; height: var(--app-height, 100dvh); }
   /* Wave 1: `.font-reading` was a duplicate alias of `.font-display` (same
      Spectral/Georgia/serif voice, slightly different fallback chain) —
      collapsed to one role per the Signature Contract; every call site now
