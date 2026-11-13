@@ -126,19 +126,41 @@ export default function QuizSetup() {
     return (
       <StudyShell title="Tạo quiz chẩn đoán" subtitle="Chọn tài liệu để ra đề."
         loading={loading} error={error} onRetry={load}>
-        <div className="flex flex-col gap-2.5">
-          {documents.map((d) => (
-            <button key={d.document_id} type="button"
-              className="surface-card !p-4 text-left flex items-center gap-3"
-              onClick={() => navigate(`/app/study/quiz/new?document=${encodeURIComponent(d.document_id)}`)}>
-              <Icon name="FileText" size={17} className="text-text-muted" />
-              <span className="font-display text-body-lg font-semibold text-text-primary flex-1 truncate">
-                {d.title}
-              </span>
-              <Icon name="ArrowRight" size={15} className="text-text-muted" />
+        {documents.length === 0 ? (
+          // An empty list used to render nothing at all under the subtitle.
+          <div className="surface-card max-w-[560px]" role="status">
+            <p className="text-body text-text-primary">Chưa có tài liệu nào để ra đề.</p>
+            <p className="mt-1 text-small text-text-secondary">Tải một tài liệu lên ở Thư viện; khi xử lý xong, nó sẽ có ở đây.</p>
+            <button type="button" className="btn-secondary text-small inline-flex items-center gap-1.5 mt-4 min-h-[44px]"
+              onClick={() => navigate("/app/study")}>
+              <Icon name="ArrowLeft" size={14} aria-hidden="true" /> Về Thư viện
             </button>
-          ))}
-        </div>
+          </div>
+        ) : (
+          <div className="flex flex-col gap-2.5">
+            {documents.map((d) => {
+              // A document still being processed, or whose processing failed, has no passages to
+              // write questions from; it used to be offered like any other and failed later.
+              const ly_do = trangThaiChonDe(d);
+              return (
+                <button key={d.document_id} type="button"
+                  className="surface-card !p-4 text-left flex items-center gap-3 disabled:cursor-not-allowed"
+                  disabled={Boolean(ly_do)}
+                  aria-describedby={ly_do ? `quiz-doc-${d.document_id}` : undefined}
+                  onClick={() => navigate(`/app/study/quiz/new?document=${encodeURIComponent(d.document_id)}`)}>
+                  <Icon name="FileText" size={17} className="text-text-muted" aria-hidden="true" />
+                  <span className="min-w-0 flex-1">
+                    <span className={`block font-display text-body-lg font-semibold truncate ${ly_do ? "text-text-secondary" : "text-text-primary"}`}>
+                      {d.title}
+                    </span>
+                    {ly_do && <span id={`quiz-doc-${d.document_id}`} className="block text-small text-text-secondary mt-0.5">{ly_do}</span>}
+                  </span>
+                  {!ly_do && <Icon name="ArrowRight" size={15} className="text-text-muted" aria-hidden="true" />}
+                </button>
+              );
+            })}
+          </div>
+        )}
       </StudyShell>
     );
   }
@@ -227,6 +249,31 @@ function Field({ label, hint, children }) {
   );
 }
 
+// The quiz job reports its internal step names ("BuildContext", "BuSoCauThieu"…), which the
+// page used to show as they are. Learners see what is happening instead; an unknown step is
+// never shown raw.
+const BUOC_RA_DE = {
+  Queued: "Đang chờ đến lượt",
+  BuildContext: "Đang đọc tài liệu",
+  GenerateQuestions: "Đang viết câu hỏi",
+  Validate: "Đang kiểm tra câu hỏi",
+  BuSoCauThieu: "Đang viết thêm câu cho đủ số câu",
+  Persist: "Đang lưu quiz",
+  Cancelled: "Đã huỷ",
+};
+// eslint-disable-next-line react-refresh/only-export-components
+export const nhanBuocRaDe = (node) => (Object.hasOwn(BUOC_RA_DE, node || "") ? BUOC_RA_DE[node] : "Đang chuẩn bị");
+
+/** Why a document cannot be used for a quiz yet, or null when it can. */
+// eslint-disable-next-line react-refresh/only-export-components
+export function trangThaiChonDe(d) {
+  if (d?.status === "failed" || d?.ingest_status === "error") return "Xử lý tài liệu bị lỗi nên chưa ra đề được.";
+  if (d?.status === "processing" || d?.status === "uploaded" || d?.ingest_status === "processing") {
+    return "Đang xử lý tài liệu; ra đề được khi xử lý xong.";
+  }
+  return null;
+}
+
 function JobProgress({ job }) {
   const progress = job.status?.progress ?? 0;
   return (
@@ -241,8 +288,8 @@ function JobProgress({ job }) {
           <div className="text-body font-semibold text-text-primary">
             {job.error ? "Tạo quiz thất bại" : "Đang ra đề từ tài liệu"}
           </div>
-          <div className="font-mono text-caption text-text-muted mt-0.5">
-            {job.error || job.status?.current_node || "Đang chuẩn bị"}
+          <div className="text-small text-text-secondary mt-0.5" aria-live="polite">
+            {job.error || nhanBuocRaDe(job.status?.current_node)}
           </div>
         </div>
         <span className="font-mono text-small text-text-secondary">{progress}%</span>
