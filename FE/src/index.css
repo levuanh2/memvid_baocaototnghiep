@@ -86,6 +86,7 @@
        construction (they haven't diverged yet); kept as its OWN named var so
        provenance consumers stay correct once `--accent` flips to forest. */
     --seal: #F1333A;
+    --brand-text: #EA1018;
 
     /* Wave 1 (additive) — forest/bronze from the Signature Contract. */
     --forest-rgb: 31 64 51;     /* #1F4033 */
@@ -196,6 +197,7 @@
     --ink-rgb:       236 231 219;
     --slate:         #8FA0B3;
     --seal: #D86A53;
+    --brand-text: #DA725D;
 
     --forest-rgb: 111 169 138;   /* #6FA98A — brightened, not an inversion */
     --bronze-rgb: 201 154 108;   /* #C99A6C */
