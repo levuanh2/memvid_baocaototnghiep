@@ -24,7 +24,7 @@ pytestmark = pytest.mark.skipif(
 
 # How long a thread waits inside `_now()` for the other one. Long enough for the other
 # thread to arrive when nothing blocks it; short enough that a blocked run stays quick.
-MEET_TIMEOUT_S = 2.0
+MEET_TIMEOUT_S = 5.0
 
 
 @pytest.fixture()
@@ -115,6 +115,7 @@ def _run_together(fn, n=2):
         t.start()
     for t in threads:
         t.join(30)
+    assert not any(t.is_alive() for t in threads), "a submit thread is stuck"
     return results
 
 
@@ -217,3 +218,26 @@ def test_resending_the_same_practice_answers_right_after_does_not_grade_again(ow
                                bat_buoc_chu_so_huu=True)
     assert again["attempt_id"] != first["attempt_id"]
     assert len(_attempts_of(quiz_id, owner)) == 2
+
+    # A retried FIRST answer set after a different one is still a replay (review of #183):
+    # every submit in the window counts, not only the newest.
+    with pytest.raises(attempts_uc.AttemptKhongConDangLam):
+        practice_uc.submit(quiz_id, owner, answers, bat_buoc_chu_so_huu=True)
+    assert len(_attempts_of(quiz_id, owner)) == 2
+
+
+def test_open_mode_does_not_apply_the_replay_rule_across_clients(owner, monkeypatch):
+    """Open mode shares one anonymous owner: two clients' identical answers are two
+    submissions, not a replay (review of #183)."""
+    from app.application import practice as practice_uc
+    from app.domains.documents.repository import ensure_anonymous_user
+
+    quiz_id, qids = _quiz(owner)
+    monkeypatch.setattr(practice_uc, "_load_owned_practice",
+                        lambda *a, **k: {"status": "ready"})
+    answers = {qids[0]: "dung", qids[1]: "dung"}
+
+    first = practice_uc.submit(quiz_id, None, answers, bat_buoc_chu_so_huu=False)
+    second = practice_uc.submit(quiz_id, None, answers, bat_buoc_chu_so_huu=False)
+    assert first["attempt_id"] != second["attempt_id"]
+    assert len(_attempts_of(quiz_id, ensure_anonymous_user())) == 2

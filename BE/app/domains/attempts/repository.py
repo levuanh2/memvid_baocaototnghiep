@@ -207,21 +207,28 @@ def submit_practice(quiz_id: str, user_id: Optional[str],
     with session_scope() as s:
         total = int(_lock_quiz(s, quiz_id) or 0)
         now = _now()
-        last = s.execute(
-            select(QuizAttempt).where(
+        # Open mode (no signed-in user) shares ONE anonymous owner between every client:
+        # there the replay rule would let one person's submit block another's, so it only
+        # applies to a real learner. The quiz row lock still serialises open mode.
+        recent_ids = [] if not user_id else s.execute(
+            select(QuizAttempt.id).where(
                 QuizAttempt.quiz_id == str(quiz_id),
                 QuizAttempt.user_id == owner,
                 QuizAttempt.status.in_(("submitted", "graded")),
                 QuizAttempt.submitted_at >= now - timedelta(seconds=PRACTICE_REPLAY_WINDOW_S),
-            ).order_by(QuizAttempt.submitted_at.desc()).limit(1)
-        ).scalar_one_or_none()
-        if last is not None:
-            # Grading adds a row (answer None) for every unanswered question; compare
-            # only what the learner actually answered.
-            before = {r.question_id: r.user_answer for r in s.execute(
-                select(QuizAnswer).where(QuizAnswer.attempt_id == last.id)).scalars()
-                if r.user_answer is not None}
-            if before == {k: v for k, v in given.items() if v is not None}:
+            )
+        ).scalars().all()
+        if recent_ids:
+            # Every submit in the window, not only the newest: A, then B, then a retried A
+            # is still a replay of A. Grading adds a row (answer None) for each unanswered
+            # question; compare only what the learner actually answered.
+            wanted = {k: v for k, v in given.items() if v is not None}
+            earlier: Dict[str, Dict[str, str]] = {}
+            for r in s.execute(select(QuizAnswer).where(
+                    QuizAnswer.attempt_id.in_(recent_ids))).scalars():
+                if r.user_answer is not None:
+                    earlier.setdefault(r.attempt_id, {})[r.question_id] = r.user_answer
+            if any(earlier.get(a, {}) == wanted for a in recent_ids):
                 return None
 
         a = s.execute(
