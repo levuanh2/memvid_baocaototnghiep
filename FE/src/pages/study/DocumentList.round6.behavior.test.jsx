@@ -112,6 +112,15 @@ describe("DocumentList Round 6 mounted integration", () => {
     expect(host.textContent).not.toContain("câu đúng");
   });
 
+  // V6: an empty library in the matrix renderer used to say "Không có tài liệu phù hợp" and
+  // ask the learner to change filters they had never set.
+  it("matrix renderer: a library with no documents offers upload, not 'change your filters'", async () => {
+    getLibrary.mockResolvedValue({ documents: [], collections: [] });
+    await renderDocumentList({ flag: true });
+    expect(host.textContent).toContain("Chưa có tài liệu nào");
+    expect(host.textContent).not.toContain("Không có tài liệu phù hợp");
+  });
+
   it("switches deterministically between legacy and matrix renderers without a duplicate fetch", async () => {
     await renderDocumentList({ flag: false });
     expect(host.querySelectorAll("[data-document-row]")).toHaveLength(0);

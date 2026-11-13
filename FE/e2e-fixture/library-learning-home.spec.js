@@ -51,7 +51,7 @@ async function openLibrary(page, { width = 1440, dark = false, library = () => j
     const p = new URL(route.request().url()).pathname;
     if (p === "/auth/me") return route.fulfill(json({ user: { id: "u1", email: "qa@example.test", display_name: "QA", provider: "local" } }));
     if (p === "/api/documents" || p === "/api/library") return route.fulfill(await library());
-    if (p === "/api/progress/overview") return route.fulfill(json({ average_percentage: 72 }));
+    if (p === "/api/progress/overview") return route.fulfill(json({ document_count: 4, quiz_count: 1, attempt_count: 2, average_percentage: 72 }));
     if (p === "/api/progress/concepts") return route.fulfill(json({ concepts: [] }));
     if (p === "/api/progress/attempts") return route.fulfill(json({ attempts: [] }));
     if (p === "/list-indexed") return route.fulfill(json({ sources: [] }));
