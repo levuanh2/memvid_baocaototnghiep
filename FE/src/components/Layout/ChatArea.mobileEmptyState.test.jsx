@@ -89,9 +89,9 @@ describe("ChatArea empty-state, mobile hint + drawer button (W1-4)", () => {
   it("with a document selected, starter questions are rows that fill the composer", async () => {
     await renderChatArea({ sources: [{ video_stem: "a", filename: "A.pdf", can_query: true }], selectedSources: ["a"], onPickSource: vi.fn() });
     const rows = [...container.querySelectorAll("[data-chat-start] .chat-start__row")];
-    expect(rows.map((r) => r.textContent.trim())).toEqual(["Tóm tắt A.pdf.", "Ý chính của A.pdf là gì?", "Khái niệm nào trong A.pdf khó hiểu nhất?"]);
+    expect(rows.map((r) => r.textContent.trim())).toEqual(["Tóm tắt A.", "Ý chính của A là gì?", "Khái niệm nào trong A khó hiểu nhất?"]);
     await act(async () => { rows[1].click(); });
-    expect(container.querySelector("textarea").value).toBe("Ý chính của A.pdf là gì?");
+    expect(container.querySelector("textarea").value).toBe("Ý chính của A là gì?");
   });
 
   it("the mobile 'Mở thư mục nguồn' button is md:hidden and opens the sources drawer via the same onOpenLeft", async () => {

@@ -36,7 +36,10 @@ function buildSuggestions(selectedSources, sources) {
   if (!stems.length) return SUGGESTIONS_GENERIC;
   const names = stems
     .map((stem) => sources.find((s) => (s.video_stem || s.video) === stem)?.filename)
-    .filter(Boolean);
+    .filter(Boolean)
+    // "Tóm tắt Kinh tế vi mô.pdf." read as a file operation and made every chip longer than
+    // the composer; the learner names a document by its title, not its extension.
+    .map((name) => String(name).replace(/\.(pdf|docx?|pptx?|xlsx?|odt|odp|rtf|txt|md|epub|mobi|fb2|xps|html?|csv|json|png|jpe?g|gif|bmp)$/i, ""));
   if (!names.length) return SUGGESTIONS_GENERIC;
   const label = names.length > 1 ? `${names.length} tài liệu đã chọn` : names[0];
   return [
@@ -1224,9 +1227,12 @@ export default function ChatArea({
         style={{ borderColor: "var(--border-color)", background: "var(--bg-sidebar)", boxShadow: "var(--shadow-card)" }}>
         {/* Follow-up suggestions */}
         {messages.length > 0 && !loading && !pendingReview && (
-          <div className="px-4 sm:px-6 pt-3 pb-1 flex gap-2 overflow-x-auto scrollbar-none">
+          // V6: the row used to be one line that scrolled sideways with its scrollbar hidden, so
+          // the third suggestion was cut at the composer's edge and could not be reached with a
+          // mouse. Now the suggestions wrap and each one may take two lines.
+          <div className="chat-suggestions" role="group" aria-label="Câu hỏi gợi ý">
             {suggestions.map((q) => (
-              <button key={q} onClick={() => fillSuggestion(q)} className="pill-action flex-shrink-0">{q}</button>
+              <button key={q} type="button" onClick={() => fillSuggestion(q)} className="chat-suggestions__item">{q}</button>
             ))}
           </div>
         )}
@@ -1290,15 +1296,19 @@ export default function ChatArea({
           </div>
 
           {loading && !pendingReview ? (
+            // Stopping must not look like sending: a worded button, not a second square icon in
+            // the send button's place.
             <button
+              type="button"
               onClick={handleCancel}
-              className="btn-danger w-10 h-10 !p-0 rounded-[9px] inline-flex items-center justify-center flex-shrink-0"
-              aria-label="Huỷ truy vấn" title="Huỷ"
+              className="chat-stop btn-danger h-10 rounded-[9px] inline-flex items-center justify-center gap-1.5 flex-shrink-0"
+              aria-label="Huỷ truy vấn"
             >
-              <Icon name="Square" size={15} />
+              <Icon name="Square" size={13} aria-hidden="true" /> <span>Huỷ</span>
             </button>
           ) : (
             <button
+              type="button"
               onClick={handleSend}
               disabled={(!input.trim() && !attachedImage) || Boolean(pendingReview) || transcribing}
               className="btn-primary w-10 h-10 !p-0 rounded-[9px] inline-flex items-center justify-center flex-shrink-0"

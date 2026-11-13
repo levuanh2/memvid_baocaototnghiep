@@ -54,13 +54,13 @@ for (const [width, height] of [[320, 720], [390, 844], [768, 1024], [1024, 768],
       await rows(page).nth(1).click();
       await expect(start(page).getByText("Bắt đầu bằng một câu hỏi")).toBeVisible();
       await expect(rows(page)).toHaveCount(3);
-      await expect(rows(page).nth(1)).toHaveText("Ý chính của Triết học Mác-Lênin - Đề cương.docx là gì?");
+      await expect(rows(page).nth(1)).toHaveText("Ý chính của Triết học Mác-Lênin - Đề cương là gì?");
       if (OUT) await page.screenshot({ path: path.join(OUT, `chat-start-selected-${tag}.png`) });
 
       // A question fills the composer and moves focus there; nothing is sent.
       await rows(page).nth(1).click();
       const composer = page.locator("textarea").first();
-      await expect(composer).toHaveValue("Ý chính của Triết học Mác-Lênin - Đề cương.docx là gì?");
+      await expect(composer).toHaveValue("Ý chính của Triết học Mác-Lênin - Đề cương là gì?");
       await expect(composer).toBeFocused();
       await expect(start(page)).toBeVisible();
     });
@@ -90,7 +90,7 @@ test("keyboard: rows are reachable by Tab, Enter picks, and focus lands on the f
   await expect(start(page).getByText("Bắt đầu bằng một câu hỏi")).toBeVisible();
   // The picked row is gone; focus must not fall to <body>.
   await expect(rows(page).first()).toBeFocused();
-  await expect(rows(page).first()).toHaveText("Tóm tắt Triết học Mác-Lênin - Đề cương.docx.");
+  await expect(rows(page).first()).toHaveText("Tóm tắt Triết học Mác-Lênin - Đề cương.");
 });
 
 test("semantics: one h1, and both lists are named", async ({ page }) => {

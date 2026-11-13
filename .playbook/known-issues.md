@@ -8185,3 +8185,22 @@ asynchronous boundary. The review lock covers resume plus polling, releases in `
 is reset when a new review interrupt is surfaced. The send lock participates in cancellation
 and only releases from the current attempt. `ChatArea.reviewResumeCancel.test.jsx` covers all
 three decisions and polling; `ChatArea.attemptIdentity.test.jsx` covers same-turn send clicks.
+
+### Chat follow-up suggestions were cut at the composer's right edge (V6, 2026-11-13)
+
+**Symptom.** After an answer, the third suggestion ("Khái niệm nào trong <tên tệp>.pdf khó hiểu
+nhất?") ended mid-word at the composer's edge at every width, including 1440px.
+
+**Root cause.** The row was `flex overflow-x-auto scrollbar-none` with `flex-shrink-0` chips: one
+line that scrolled sideways with its scrollbar hidden. Nothing showed there was more, and a mouse
+user could not scroll it. Every chip also carried the full file name with its extension.
+
+**Fix.** The suggestions are a labelled group that wraps; a chip may take two lines; file
+extensions are dropped from the document name. The stop control has the word "Huỷ" next to its
+icon so it does not read as the send button.
+
+**Regression test.** `e2e-fixture/chat-composer.spec.js`: every suggestion and the input inside
+the composer at 320/390/768/1440, light and dark; 44px chips on phones; keyboard; the stop control.
+
+**Prevention.** Hiding a scrollbar hides the only sign that content continues. Wrap, or show the
+overflow.
