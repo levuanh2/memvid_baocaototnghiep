@@ -72,10 +72,11 @@ function makeMdComponents({ highlight, onHighlight, onEvidenceOpen }) {
         const active = highlight && normStem(highlight.stem) === normStem(cite.stem) && String(highlight.chunkId) === String(cite.chunkId);
         const open = () => { onHighlight?.(cite); onEvidenceOpen?.(cite); };
         return (
-          <sup
-            className={`cite-chip ${active ? "cite-chip--active" : ""}`}
+          <span
+            className={`cite-chip chat-cite ${active ? "cite-chip--active" : ""}`}
             role="button"
             tabIndex={0}
+            aria-label={`Nguồn ${String(children)}: mở đoạn trích`}
             title={`Nguồn: ${cite.stem} · đoạn ${cite.chunkId}`}
             onMouseEnter={() => onHighlight?.(cite)}
             onMouseLeave={() => onHighlight?.(null)}
@@ -83,7 +84,7 @@ function makeMdComponents({ highlight, onHighlight, onEvidenceOpen }) {
             onKeyDown={(e) => { if (e.key === "Enter" || e.key === " ") { e.preventDefault(); open(); } }}
           >
             {children}
-          </sup>
+          </span>
         );
       }
       return <a href={href} target="_blank" rel="noreferrer" className="text-accent underline underline-offset-2" {...props}>{children}</a>;
@@ -107,7 +108,7 @@ function AnswerProse({ content, mdComponents, dropCap = false }) {
 }
 
 export default function ChatArea({
-  selectedSources, sources = [], onEvidence, highlight, onHighlight, onOpenLeft, onOpenEvidence, evidenceCount = 0, askAboutDraft,
+  selectedSources, sources = [], sourcesState = "ready", onPickSource, onEvidence, highlight, onHighlight, onOpenLeft, onOpenEvidence, evidenceCount = 0, askAboutDraft,
   // Feature Pack B (Cross Navigation) — Chat -> Summary. `hasSummary` gates a
   // real link, never a dead one; `onOpenSummary` reuses MainLayout's existing
   // workspaceMode switch (same shape as the pre-existing `onSwitchToChat`).
@@ -164,6 +165,11 @@ export default function ChatArea({
   const textareaRef = useRef(null);
   const abortControllerRef = useRef(null);
   const cancelledRef = useRef(false);
+  // Identity of the current send. `cancelledRef` alone is one shared flag: cancelling attempt A
+  // set it, starting attempt B cleared it, and A's late stream/poll/catch/finally then read
+  // "not cancelled" and published into B (an error bubble, or `loading = false` while B ran).
+  // Cancel, unmount and every new send bump this, so an older attempt can never become current.
+  const attemptRef = useRef(0);
   const eventSourceRef = useRef(null);
   const streamAccRef = useRef("");
   // Token gom trong streamAccRef; state chỉ flush qua throttle (tránh ReactMarkdown
@@ -186,6 +192,28 @@ export default function ChatArea({
     [highlight, onHighlight, handleEvidenceOpen],
   );
   const suggestions = useMemo(() => buildSuggestions(selectedSources, sources), [selectedSources, sources]);
+  // Start screen: documents that can be asked right now, offered as direct picks (first four).
+  const queryableSources = useMemo(() => sources.filter((s) => s?.can_query === true), [sources]);
+  const pickableSources = queryableSources.slice(0, 4);
+  const moreSourcesCount = queryableSources.length - pickableSources.length;
+  // A selection counts only when at least one selected key is a document that can be asked.
+  // A `?source=` deep link (or a stale stored key) is not proof: until the list confirms it, the
+  // start screen must not say "answers come from the selected document" and offer questions.
+  const hasAskableSelection = useMemo(() => {
+    const keys = new Set(queryableSources.map((s) => s.video_stem || s.video));
+    return (Array.isArray(selectedSources) ? selectedSources : []).some((k) => keys.has(typeof k === "string" ? k : k?.name || k?.id));
+  }, [queryableSources, selectedSources]);
+  const hasUnconfirmedSelection = (selectedSources?.length || 0) > 0 && !hasAskableSelection;
+  // Picking a document replaces the list it was picked from; move focus to the first question
+  // so a keyboard or screen-reader user is not dropped on <body>.
+  const chatStartRef = useRef(null);
+  const focusQuestionsRef = useRef(false);
+  const pickFromStart = (key) => { focusQuestionsRef.current = true; onPickSource?.(key); };
+  useEffect(() => {
+    if (!focusQuestionsRef.current || !hasAskableSelection) return;
+    focusQuestionsRef.current = false;
+    chatStartRef.current?.querySelector(".chat-start__row")?.focus();
+  }, [hasAskableSelection]);
   // Structural refactor (Learning Canvas goal banner) — real readiness count,
   // same can_query/status data SidebarLeft's own badges already read, not an
   // invented multi-step "goal" flow. Shared, tested pure fn — see
@@ -224,6 +252,7 @@ export default function ChatArea({
   // (cancelledRef is what pollQueryStatus checks each iteration).
   useEffect(() => () => {
     cancelledRef.current = true;
+    attemptRef.current += 1;
     try { eventSourceRef.current?.close(); } catch { /* already closed */ }
   }, []);
 
@@ -235,7 +264,7 @@ export default function ChatArea({
   })();
 
   // ── SSE streaming (logic unchanged; + node trace) ───
-  const streamQueryJob = (jobId, { timeoutMs = QUERY_TIMEOUT_MS } = {}) =>
+  const streamQueryJob = (jobId, { timeoutMs = QUERY_TIMEOUT_MS, isStale = () => false } = {}) =>
     new Promise((resolve, reject) => {
       const start = Date.now();
       streamAccRef.current = "";
@@ -253,8 +282,11 @@ export default function ChatArea({
       const es = { close: () => ctrl.abort() };
       eventSourceRef.current = es;
 
+      // The buffer and the preview are shared by all attempts; only the current one may clear them.
+      const clearShared = () => { if (!isStale()) { streamAccRef.current = ""; setStreamingPreview(""); } };
+
       const tick = setInterval(() => {
-        if (cancelledRef.current) { clearInterval(tick); try { es.close(); } catch { /* already closed */ } reject(new Error("CANCELLED")); }
+        if (cancelledRef.current || isStale()) { clearInterval(tick); try { es.close(); } catch { /* already closed */ } reject(new Error("CANCELLED")); }
         if (Date.now() - start > timeoutMs) {
           clearInterval(tick); try { es.close(); } catch { /* already closed */ }
           reject(new Error(`Quá thời gian chờ phản hồi (~${Math.round(timeoutMs / 1000)}s). Vui lòng thử lại.`));
@@ -263,6 +295,9 @@ export default function ChatArea({
 
       const onMessage = (raw) => {
         try {
+          // A frame from a stream that is no longer the current attempt must not touch the
+          // shared buffer, preview, progress or node trace: they belong to the newer attempt.
+          if (isStale()) return;
           const d = JSON.parse(raw);
           if (d.type === "token" && d.content) { streamAccRef.current += d.content; throttle.schedule(); }
           const isStatus = d.type === "status" || d.type == null;
@@ -280,12 +315,12 @@ export default function ChatArea({
             } else if (d.status === "interrupted" && d?.result?.payload?.review?.type === "review") {
               clearInterval(tick); try { es.close(); } catch { /* already closed */ }
               throttle.cancel();
-              streamAccRef.current = ""; setStreamingPreview("");
+              clearShared();
               resolve({ result: d.result, streamed: "", interrupted: true });
             } else if (d.status === "error") {
               clearInterval(tick); try { es.close(); } catch { /* already closed */ }
               throttle.cancel();
-              streamAccRef.current = ""; setStreamingPreview("");
+              clearShared();
               const HARD = "Loi query SSE (status=error). Xem log server.";
               let msg = HARD;
               try { msg = ensureErrMsg(sseErrorToMessage(d.error), HARD); } catch { msg = HARD; }
@@ -306,7 +341,7 @@ export default function ChatArea({
           // handleSend còn dùng lại đường polling, đúng như hành vi onerror cũ.
           clearInterval(tick);
           throttle.cancel();
-          streamAccRef.current = ""; setStreamingPreview("");
+          clearShared();
           const e = new Error("Luồng realtime kết thúc sớm. Vui lòng thử lại.");
           e.sseConnectionLost = true;
           reject(e);
@@ -314,8 +349,8 @@ export default function ChatArea({
         .catch((err) => {
           clearInterval(tick);
           throttle.cancel();
-          streamAccRef.current = ""; setStreamingPreview("");
-          if (cancelledRef.current || err?.name === "AbortError") {
+          clearShared();
+          if (isStale() || cancelledRef.current || err?.name === "AbortError") {
             reject(new Error("CANCELLED"));
             return;
           }
@@ -352,6 +387,7 @@ export default function ChatArea({
   const handleCancel = async () => {
     if (pendingReview) return;
     cancelledRef.current = true;
+    attemptRef.current += 1;
     abortControllerRef.current?.abort();
     try { eventSourceRef.current?.close(); } catch { /* already closed */ }
     resetJobState(); setLoading(false);
@@ -361,8 +397,17 @@ export default function ChatArea({
     // `slice(0, -1)` ở đây AN TOÀN: nó xoá đúng dòng "Đang dừng truy vấn…" mà chính hàm
     // này vừa thêm. Bản trước vòng 8 slice khi chưa thêm gì nên xoá mất câu hỏi của
     // người dùng.
+    // Replace THE placeholder, not "the last message": by the time the cancel call returns, the
+    // learner may already have sent the next question, and `slice(0, -1)` would delete it.
     const thay = (noiDung) =>
-      setMessages((prev) => [...prev.slice(0, -1), { role: "cancelled", content: noiDung }]);
+      setMessages((prev) => {
+        let i = prev.length - 1;
+        while (i >= 0 && !(prev[i].role === "cancelled" && prev[i].content === "Đang dừng truy vấn…")) i -= 1;
+        if (i < 0) return prev;
+        const next = [...prev];
+        next[i] = { role: "cancelled", content: noiDung };
+        return next;
+      });
     if (!jid) {
       thay("Đã ngừng chờ câu trả lời.");
       return;
@@ -391,6 +436,7 @@ export default function ChatArea({
 
   const handleNewChat = () => {
     if (loading || pendingReview) return;
+    attemptRef.current += 1;
     setMenuOpen(false);
     setSessionId(newConversationId());   // fresh thread, empty context (keeps selected sources)
     setMessages([]);
@@ -402,6 +448,7 @@ export default function ChatArea({
 
   const handleClearContext = async () => {
     if (loading || pendingReview) return;
+    attemptRef.current += 1;
     setMenuOpen(false);
     setContextCleared(true);            // messages stay visible; AI stops using old turns
     refocusComposer();                  // trước await: nút vừa bấm đã biến mất cùng menu
@@ -453,6 +500,7 @@ export default function ChatArea({
     } catch {
       throw new Error("Không xóa được lịch sử chat trên máy chủ. Lịch sử vẫn còn, hãy thử lại.");
     }
+    attemptRef.current += 1;
     setMessages([]);
     setContextCleared(false);
     onEvidence?.(null); onHighlight?.(null);
@@ -481,27 +529,35 @@ export default function ChatArea({
   const handleReview = async (action) => {
     if (!pendingReview || reviewSubmitting) return;
     if (action === "edit" && !String(pendingReview.answer || "").trim()) return;
+    const attempt = ++attemptRef.current;
+    const stale = () => attempt !== attemptRef.current;
     setReviewSubmitting(true);
     setLoading(true);
     try {
       await resumeQuery(pendingReview.jobId, { action, answer: pendingReview.answer });
+      if (stale()) return;
       const result = await pollQueryStatus(pendingReview.jobId, {
         apiFetch,
-        isCancelled: () => false,
+        isCancelled: stale,
         onStatus: (d) => {
+          if (stale()) return;
           if (typeof d?.progress === "number") setJobProgress(Math.max(0, Math.min(100, d.progress)));
         },
       });
+      if (stale()) return;
       applyFinalQueryResult(result);
       setPendingReview(null);
     } catch (err) {
+      if (stale() || err?.message === "CANCELLED") return;
       const content = (isUnauthorizedError(err) || isNotFoundOrForbiddenError(err))
         ? getUserFriendlyApiError(err)
         : ensureErrMsg(err?.message, "Không thể tiếp tục quy trình duyệt. Vui lòng thử lại.");
       showNotice(content);
     } finally {
-      setReviewSubmitting(false);
-      setLoading(false);
+      if (!stale()) {
+        setReviewSubmitting(false);
+        setLoading(false);
+      }
     }
   };
 
@@ -597,6 +653,11 @@ export default function ChatArea({
     setLoading(true); resetJobState(); setSeenNodes(["Queued"]);
     onHighlight?.(null);
     cancelledRef.current = false;
+    const attempt = ++attemptRef.current;
+    const stale = () => attempt !== attemptRef.current;
+    // No job yet for this attempt. Without this, "Huỷ" pressed before the POST answers would
+    // send a cancel for the PREVIOUS question's job id.
+    jobIdRef.current = null;
     abortControllerRef.current = new AbortController();
     if (textareaRef.current) textareaRef.current.style.height = "44px";
     try {
@@ -621,20 +682,28 @@ export default function ChatArea({
       const startData = await res.json();
       if (!startData.job_id) throw new Error("Không nhận được job_id từ server.");
       const jobId = startData.job_id;
+      if (stale()) {
+        // Cancelled while the POST was in flight. "Huỷ" had no job id to cancel then, so the job
+        // would run to the end unseen; stop it now.
+        cancelJob(jobId).catch(() => {});
+        return;
+      }
       jobIdRef.current = jobId;   // để nút Huỷ gọi được route huỷ thật
       let jobOutcome;
       try {
-        jobOutcome = await streamQueryJob(jobId);
+        if (stale()) return;
+        jobOutcome = await streamQueryJob(jobId, { isStale: stale });
       } catch (streamErr) {
         // Phase F.1: EventSource can't send Bearer, so under protected mode the stream
         // 401s. Fall back to polling /query-status (apiFetch → authed). Real job
         // errors / timeouts / cancels propagate unchanged (no pointless polling).
-        if (!shouldPollFallback(streamErr, { cancelled: cancelledRef.current })) throw streamErr;
+        if (!shouldPollFallback(streamErr, { cancelled: stale() })) throw streamErr;
         console.warn("SSE stream lost; falling back to /query-status polling");
         const result = await pollQueryStatus(jobId, {
           apiFetch,
-          isCancelled: () => cancelledRef.current,
+          isCancelled: stale,
           onStatus: (d) => {
+            if (stale()) return;
             if (typeof d?.progress === "number") setJobProgress(Math.max(0, Math.min(100, d.progress)));
             if (d?.current_node) {
               const k = String(d.current_node);
@@ -644,7 +713,7 @@ export default function ChatArea({
         });
         jobOutcome = { result, streamed: "" };
       }
-      if (cancelledRef.current) return;
+      if (stale()) return;
       const jobResult = jobOutcome?.result ?? jobOutcome;
       const streamedText = jobOutcome?.streamed ?? "";
       const review = jobResult?.payload?.review;
@@ -655,7 +724,7 @@ export default function ChatArea({
       }
       applyFinalQueryResult(jobResult, streamedText);
     } catch (err) {
-      if (cancelledRef.current || err.name === "AbortError" || err.message === "CANCELLED") return;
+      if (stale() || err.name === "AbortError" || err.message === "CANCELLED") return;
       console.error("Query error:", err);
       // 401 also triggers a global redirect (apiFetch fired auth:unauthorized); show a
       // permission-safe line meanwhile. 403/404 map to friendly text (no raw JSON/id).
@@ -664,7 +733,7 @@ export default function ChatArea({
         : ensureErrMsg(err?.message, "Loi khi goi AI. Vui long thu lai.");
       setMessages((prev) => [...prev, { role: "ai", content, evidence: null }]);
     } finally {
-      if (!cancelledRef.current) setLoading(false);
+      if (!stale()) setLoading(false);
     }
   };
 
@@ -908,14 +977,24 @@ export default function ChatArea({
           )}
         </div>
 
-        {/* Empty state — the reading-room thesis */}
+        {/* Start of a conversation (V6). One column, left-aligned: a heading, one sentence, then
+            the next step as rows the learner can act on directly (pick a document, or pick a
+            first question). The earlier version described the layout ("bên trái", "ở lề phải")
+            and left the picking to the side panel. */}
         {messages.length === 0 && !loading && (
-          <div className="flex-1 flex flex-col items-center justify-center text-center pb-16 animate-fadeUp max-w-[440px] mx-auto">
-            <div className="font-mono text-metadata uppercase text-text-muted mb-4">Phòng đọc</div>
+          <div className="chat-start flex-1 flex flex-col justify-center pb-16 animate-fadeUp w-full max-w-[560px] mx-auto" data-chat-start ref={chatStartRef}>
             <h1 className="font-display text-[26px] sm:text-[30px] leading-[1.2] font-semibold text-text-primary mb-3">
-              Hỏi tài liệu của bạn — <span className="text-seal">kèm dẫn chứng</span>.
+              Hỏi tài liệu của bạn, kèm dẫn chứng.
             </h1>
-            {sources.length === 0 && !selectedSources?.length ? (
+            {((sources.length === 0 && !selectedSources?.length) || hasUnconfirmedSelection) && sourcesState !== "ready" ? (
+              // The list has not answered (or failed): the library is not known to be empty, so
+              // neither "upload your first document" nor "choose a document" is true yet.
+              <p className="font-display text-body-lg text-text-secondary mb-6" role="status">
+                {sourcesState === "error"
+                  ? "Chưa tải được danh sách tài liệu. Thử lại ở thư mục nguồn."
+                  : "Đang tải danh sách tài liệu…"}
+              </p>
+            ) : sources.length === 0 && !selectedSources?.length ? (
               // W1-4: nothing uploaded yet -- "chọn tài liệu" has nothing to
               // select, so the one primary action is to upload, reusing the
               // exact same handler/input SidebarLeft's own "Tải tài liệu lên"
@@ -924,49 +1003,67 @@ export default function ChatArea({
                 <p className="font-display text-body-lg text-text-secondary mb-6">
                   Tải tài liệu đầu tiên lên để bắt đầu đặt câu hỏi.
                 </p>
-                <button type="button" data-upload-cta onClick={onUploadDocument} className="btn-primary !text-small inline-flex items-center gap-2">
+                {/* `self-start`: the column is a flex container, and a stretched button would span it. */}
+                <button type="button" data-upload-cta onClick={onUploadDocument} className="btn-primary !text-small inline-flex items-center gap-2 self-start">
                   <Icon name="Plus" size={14} /> Tải tài liệu lên
                 </button>
               </>
+            ) : hasAskableSelection ? (
+              <>
+                <p className="font-display text-body-lg text-text-secondary mb-5">
+                  Câu trả lời lấy từ tài liệu đã chọn và đánh số trích dẫn tới đúng đoạn nguồn.
+                </p>
+                <div className="chat-start__label" id="chat-start-questions">Bắt đầu bằng một câu hỏi</div>
+                <ul className="chat-start__rows" aria-labelledby="chat-start-questions">
+                  {suggestions.map((q) => (
+                    <li key={q}>
+                      <button type="button" onClick={() => fillSuggestion(q)} className="chat-start__row">
+                        <Icon name="MessageSquareText" size={15} className="chat-start__icon" />
+                        <span className="min-w-0">{q}</span>
+                      </button>
+                    </li>
+                  ))}
+                </ul>
+              </>
             ) : (
               <>
-                {/* W1-4: below `md` there is no left column OR right margin,
-                    so neither "bên trái" nor "ở lề phải" points at anything a
-                    phone user can see. Two copies, CSS-only (no JS viewport
-                    check) -- desktop text is byte-for-byte unchanged; the
-                    mobile copy drops both spatial references (review fix:
-                    "kèm nguồn dẫn chứng" replaces "ở lề phải" too) and the
-                    button right below it is the actual way to act on "Chọn
-                    tài liệu" on that breakpoint, reusing the exact same
-                    `onOpenLeft` the header's `.mobile-context` icon button
-                    already calls (no new drawer state). This looks like
-                    Round 12's removed duplicate fallback button, but it
-                    isn't one: Round 12 removed it because the header icon
-                    ALONE was then considered sufficient; this round's audit
-                    (390px screenshot) found that icon-only control too easy
-                    to miss on a first-time empty chat, hence a labelled
-                    entry point right where the (now corrected) copy
-                    points. */}
-                <p className="font-display text-body-lg text-text-secondary mb-6 md:hidden">
-                  Mỗi câu trả lời được truy hồi từ tài liệu đã chọn, kèm nguồn dẫn chứng. Chọn tài liệu, rồi đặt câu hỏi.
+                {/* Two copies, CSS-only: below `md` there is no left column, so the mobile copy
+                    names no position and the button under the list opens the source drawer. */}
+                <p className="font-display text-body-lg text-text-secondary mb-5 md:hidden">
+                  Chọn tài liệu, rồi đặt câu hỏi. Câu trả lời sẽ kèm nguồn dẫn chứng.
                 </p>
-                <p className="font-display text-body-lg text-text-secondary mb-6 hidden md:block">
-                  Mỗi câu trả lời được truy hồi từ tài liệu đã chọn và gắn nguồn ở lề phải. Chọn tài liệu bên trái, rồi đặt câu hỏi.
+                <p className="font-display text-body-lg text-text-secondary mb-5 hidden md:block">
+                  Chọn tài liệu ở đây hoặc trong thư mục nguồn bên trái, rồi đặt câu hỏi. Câu trả lời sẽ kèm nguồn dẫn chứng.
                 </p>
-                <button
-                  type="button"
-                  onClick={onOpenLeft}
-                  className="btn-secondary !text-small inline-flex items-center gap-2 mb-6 md:hidden"
-                >
-                  <Icon name="FolderOpen" size={14} /> Mở thư mục nguồn
-                </button>
-                {selectedSources?.length > 0 && (
-                  <div className="flex flex-wrap gap-2 justify-center">
-                    {suggestions.map((q) => (
-                      <button key={q} onClick={() => fillSuggestion(q)} className="pill-action">{q}</button>
-                    ))}
-                  </div>
+                {pickableSources.length > 0 && onPickSource && (
+                  <>
+                    <div className="chat-start__label" id="chat-start-documents">Chọn tài liệu để hỏi</div>
+                    <ul className="chat-start__rows" aria-labelledby="chat-start-documents">
+                      {pickableSources.map((src) => (
+                        <li key={src.video_stem || src.video}>
+                          <button type="button" onClick={() => pickFromStart(src.video_stem || src.video)} className="chat-start__row">
+                            <Icon name="FileText" size={15} className="chat-start__icon" />
+                            <span className="min-w-0 truncate">{src.filename || src.video_stem || src.video}</span>
+                          </button>
+                        </li>
+                      ))}
+                    </ul>
+                    {moreSourcesCount > 0 && (
+                      <p className="text-small text-text-muted mt-2 hidden md:block">
+                        Còn {moreSourcesCount} tài liệu khác trong thư mục nguồn.
+                      </p>
+                    )}
+                  </>
                 )}
+                <div className="md:hidden mt-4">
+                  <button
+                    type="button"
+                    onClick={onOpenLeft}
+                    className="btn-secondary !text-small inline-flex items-center gap-2 md:hidden"
+                  >
+                    <Icon name="FolderOpen" size={14} /> Mở thư mục nguồn
+                  </button>
+                </div>
               </>
             )}
           </div>
@@ -979,11 +1076,12 @@ export default function ChatArea({
               <Icon name="Ban" size={13} /> {msg.content}
             </div>
           ) : msg.role === "user" ? (
-            <div key={idx} className="self-end max-w-[78%]">
-              <div className="px-4 py-2.5 text-body leading-relaxed rounded-[10px] rounded-br-[3px] border transition-theme"
-                style={{ background: "var(--bg-elevated)", borderColor: "var(--border-color)", color: "var(--text-primary)" }}>
-                {msg.content}
-              </div>
+            // V6: a study transcript, not chat bubbles. The question is set as the heading of
+            // its turn, on the same left edge and measure as the answer it starts.
+            <div key={idx} className="chat-turn__question">
+              <p className="chat-turn__question-text">
+                <span className="sr-only">Bạn hỏi: </span>{msg.content}
+              </p>
               {msg.imageText ? (
                 /* Người học phải xem được máy đọc ra gì: đọc sai là kiểu hỏng số một,
                    và không thấy phần này thì câu trả lời lệch trông như model dốt. */
@@ -998,13 +1096,8 @@ export default function ChatArea({
               ) : null}
             </div>
           ) : (
-            <div key={idx} className="self-start w-full max-w-[760px] flex flex-col gap-2 animate-fadeUp">
-              <div className="flex items-center gap-2 text-metadata font-mono uppercase text-text-muted">
-                <Icon name="BookOpen" size={13} className="text-accent" /> Trả lời
-                {msg.evidence?.sources?.length ? (
-                  <span className="text-text-muted">· {sourcesLabel(msg.evidence.sources)}</span>
-                ) : null}
-              </div>
+            <div key={idx} className="chat-turn__answer animate-fadeUp">
+              <span className="sr-only">Trả lời: </span>
               <div className="text-text-primary">
                 <AnswerProse content={msg.content} mdComponents={mdComponents} dropCap={idx === firstAssistantIdx} />
               </div>
@@ -1017,13 +1110,20 @@ export default function ChatArea({
                   the answer drew from more than one document: `evidence.sources` is
                   the SAME real, backend-returned array `onEvidence` already forwards
                   to the Evidence panel, not a new signal. */}
-              {idx === messages.length - 1 && !loading && msg.evidence?.sources?.length > 0 && (
-                <div className="flex items-center gap-1.5 text-caption font-mono text-text-muted pt-0.5">
-                  {/* Success/settled marker (accent flip carve-out: forest
-                      stays for success/ready/progress, not interactive). */}
-                  <Icon name="BadgeCheck" size={12} className="text-forest" />
-                  Đã trả lời với {sourcesLabel(msg.evidence.sources)} — xem chi tiết ở lề phải
-                </div>
+              {/* V6: every answer names what it drew on, as a control. The old line was text
+                  only, appeared on the last answer alone, and said "xem chi tiết ở lề phải"
+                  on phones, where there is no right margin. The button shows THIS answer's
+                  evidence in the panel (drawer on phones). */}
+              {msg.evidence?.sources?.length > 0 && (
+                <button type="button" className="chat-turn__sources"
+                        onClick={() => { onEvidence?.(msg.evidence); onOpenEvidence?.(); }}>
+                  <Icon name="Quote" size={13} aria-hidden="true" />
+                  <span className="chat-turn__sources-count">
+                    {msg.evidence.chunks?.length > 0 ? `${msg.evidence.chunks.length} đoạn trích` : "Nguồn"}
+                  </span>
+                  <span className="chat-turn__sources-names">từ {sourcesLabel(msg.evidence.sources)}</span>
+                  <Icon name="ArrowRight" size={13} aria-hidden="true" />
+                </button>
               )}
             </div>
           )
