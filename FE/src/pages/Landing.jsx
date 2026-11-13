@@ -125,7 +125,7 @@ export default function Landing() {
       {/* ── HERO ── */}
       <section className="lp-wrap lp-hero">
         <div className="animate-fadeUp">
-          <h1 className="lp-h1">Học từ chính tài liệu của bạn, và luôn biết câu trả lời đến từ đâu.</h1>
+          <h1 className="lp-h1">Hỏi chính tài liệu của bạn, rồi xem câu trả lời dựa trên đoạn nào.</h1>
           <p className="lp-lede mt-6">
             Tải bài giảng, giáo trình hay đề cương lên. StudyMap trả lời kèm trích dẫn, vẽ sơ đồ tư duy
             và tạo quiz để bạn tự kiểm tra.

@@ -13,6 +13,7 @@
   .lp-hero .btn-seal, .lp-hero .btn-secondary { min-height: 44px; display: inline-flex; align-items: center; }
 }
 @media (max-width: 379px) { .lp-wordmark { display: none; } }
+.lp-wordmark .text-seal { color: var(--brand-text); }
 
 .lp-band { border-top: 1px solid var(--border-color); background: var(--bg-sidebar); }
 
