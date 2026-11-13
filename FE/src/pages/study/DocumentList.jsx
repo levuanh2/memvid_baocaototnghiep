@@ -839,7 +839,11 @@ export default function DocumentList() {
       {!LIBRARY_ACTION_MATRIX && muc.map(([ten, ds]) => (
         <section key={ten} className="mb-7">
           <SectionTitle dem={ds.length}>{ten}</SectionTitle>
-          <div className="flex flex-col gap-2.5">{ds.map(veThe)}</div>
+          {/* `(d) => veThe(d)`, not `ds.map(veThe)`: Array.map passes the index as the second
+              argument, which made every section card a roving-list item with an index into a
+              DIFFERENT list ("Tất cả"): one tab stop per section, and arrows that moved the
+              wrong list. Only the "Tất cả" list below is the roving list. */}
+          <div className="flex flex-col gap-2.5">{ds.map((d) => veThe(d))}</div>
         </section>
       ))}
 
@@ -899,7 +903,7 @@ export default function DocumentList() {
       {!LIBRARY_ACTION_MATRIX && mucHienThi.daLuuTru.length > 0 && hienLuuTru && (
         <section className="mb-7">
           <SectionTitle dem={mucHienThi.daLuuTru.length}>Đã lưu trữ</SectionTitle>
-          <div className="flex flex-col gap-2.5">{mucHienThi.daLuuTru.map(veThe)}</div>
+          <div className="flex flex-col gap-2.5">{mucHienThi.daLuuTru.map((d) => veThe(d))}</div>
         </section>
       )}
 

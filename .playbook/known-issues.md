@@ -8180,3 +8180,21 @@ The matrix renderer has its own roving code and was not changed.
 
 **Prevention.** A roving-tabindex container must act only on its own keydowns, must move focus
 when it moves the tab stop, and must not build ids from a key that can render twice.
+
+### Library sections: `ds.map(veThe)` turned every section card into a roving-list item (2026-11-13)
+
+**Symptom.** With one resume document and five documents, eight cards had `tabindex="0"`
+instead of one. Arrow keys on a section card changed the focus index of the "Tất cả" list.
+
+**Root cause.** `veThe(doc, chiSo = null)` treats its second argument as the card's index in
+the roving "Tất cả" list. The sections rendered with `ds.map(veThe)`, and `Array.prototype.map`
+passes `(item, index)`, so each section card received its index within its own section.
+
+**Fix.** `ds.map((d) => veThe(d))` for the sections and the archived list. Found while adding
+the focus-movement test: the first version of that fix stored refs by index and the section
+cards overwrote them.
+
+**Regression test.** `e2e-fixture/library-learning-home.spec.js` (on the Library integration
+branch): exactly one card is the tab stop, and ArrowDown moves focus to another card.
+
+**Prevention.** Never pass a function with optional positional parameters straight to `map`.
