@@ -253,6 +253,9 @@
 
 /* ─── Utilities ─────────────────────────────── */
 @layer utilities {
+  /* Workspace shell height = the viewport the learner can see (useAppHeight). Mid-file on
+     purpose: several V6 branches append to the end of this file. */
+  .app-shell-height { height: 100vh; height: 100dvh; height: var(--app-height, 100dvh); }
   /* Wave 1: `.font-reading` was a duplicate alias of `.font-display` (same
      Spectral/Georgia/serif voice, slightly different fallback chain) —
      collapsed to one role per the Signature Contract; every call site now
@@ -512,6 +515,21 @@
      on `:hover`/`:focus-visible` — kept as `1px solid transparent` at rest
      (not `border: none`) so the box size never shifts and nothing reflows
      when the border becomes visible. */
+  /* Chat start screen (V6): the next step as a short list of rows. Rows, not pills: document
+     names and Vietnamese questions are long, and a wrapped pill is hard to scan. */
+  .chat-start__label { font-size: 0.8125rem; font-weight: 600; color: var(--text-secondary); margin-bottom: 8px; }
+  .chat-start__rows { list-style: none; margin: 0; padding: 0; border-top: 1px solid var(--border-color); }
+  .chat-start__rows li { border-bottom: 1px solid var(--border-color); }
+  .chat-start__row {
+    display: flex; align-items: center; gap: 12px; width: 100%; min-height: 48px; padding: 10px 8px;
+    text-align: left; font-size: 0.9375rem; line-height: 1.4; color: var(--text-primary);
+    border-radius: 6px; transition: background-color 0.15s ease, color 0.15s ease;
+  }
+  .chat-start__row:hover { background: var(--bg-hover); color: var(--accent); }
+  .chat-start__row:focus-visible { outline: 2px solid var(--accent); outline-offset: -2px; }
+  .chat-start__icon { flex: none; color: var(--text-muted); }
+  .chat-start__row:hover .chat-start__icon { color: var(--accent); }
+
   .pill-action {
     @apply inline-flex items-center gap-1.5 px-3 py-1.5 rounded-control text-[13px] font-medium transition-all duration-150 cursor-pointer whitespace-nowrap;
     background: transparent;
@@ -1251,3 +1269,53 @@
   .artifact-toolbar { gap: 6px; padding-inline: 8px; }
   .artifact-toolbar__identity small, .artifact-toolbar__usage { display: none; }
 }
+
+/* ── V6 chat: a study transcript ─────────────────────────────────────────────
+   A turn is a question and the answer under it, on one left edge and one measure, like notes:
+   the question is the turn's heading, the answer is the reading text, and the line under the
+   answer says what it drew on and opens it. No chat bubbles. */
+.chat-turn__question { align-self: flex-start; width: 100%; max-width: 760px; margin-top: 10px; padding-left: 14px; border-left: 3px solid var(--accent); }
+.chat-turn__question:first-of-type { margin-top: 0; }
+.chat-turn__question-text { color: var(--text-primary); font-size: 16px; font-weight: 600; line-height: 1.5; overflow-wrap: anywhere; white-space: pre-wrap; }
+.chat-turn__answer { align-self: flex-start; display: flex; flex-direction: column; gap: 10px; width: 100%; max-width: 760px; padding-left: 17px; }
+
+/* Citation number inside the answer: sits on the line, not above it, and is big enough to hit. */
+.cite-chip.chat-cite { vertical-align: 0.32em; min-width: 20px; min-height: 20px; justify-content: center; margin: 0 2px; padding: 0 5px; border-color: color-mix(in srgb, var(--seal) 38%, transparent); font-size: 0.68em; font-weight: 600; }
+.cite-chip.chat-cite:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+
+/* What the answer drew on: one control per answer. */
+.chat-turn__sources {
+  align-self: flex-start; display: inline-flex; align-items: center; gap: 8px; max-width: 100%; min-height: 40px;
+  padding: 6px 12px; border: 1px solid var(--border-color); border-radius: 8px; background: var(--bg-card);
+  color: var(--text-secondary); font-size: 13px; text-align: left;
+  transition: border-color 150ms ease, color 150ms ease;
+}
+.chat-turn__sources:hover { border-color: var(--accent); color: var(--text-primary); }
+.chat-turn__sources:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+.chat-turn__sources svg { flex: none; color: var(--seal); }
+.chat-turn__sources svg:last-child { color: var(--text-muted); }
+.chat-turn__sources-count { flex: none; color: var(--text-primary); font-weight: 600; }
+.chat-turn__sources-names { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+@media (max-width: 767px) {
+  .chat-turn__answer { padding-left: 0; }
+  .chat-turn__sources { min-height: 44px; width: 100%; }
+  .chat-turn__sources-names { flex: 1; }
+  .cite-chip.chat-cite { min-width: 24px; min-height: 24px; }
+}
+@media (prefers-reduced-motion: reduce) {
+  .chat-turn__sources { transition: none; }
+}
+
+/* V6 chat composer: follow-up suggestions wrap instead of scrolling out of sight. */
+.chat-suggestions { display: flex; flex-wrap: wrap; gap: 6px; padding: 12px 16px 2px; }
+.chat-suggestions__item {
+  max-width: 100%; min-height: 32px; padding: 5px 12px; border: 1px solid var(--border-color); border-radius: 16px;
+  background: var(--bg-card); color: var(--text-secondary); font-size: 13px; line-height: 1.35; text-align: left;
+  overflow-wrap: anywhere; transition: border-color 150ms ease, color 150ms ease;
+}
+.chat-suggestions__item:hover { border-color: var(--accent); color: var(--text-primary); }
+.chat-suggestions__item:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+.chat-stop { padding: 0 12px; font-size: 13px; font-weight: 600; }
+@media (min-width: 640px) { .chat-suggestions { padding: 12px 24px 2px; } }
+@media (max-width: 767px) { .chat-suggestions__item { min-height: 44px; } .chat-stop { min-width: 44px; } }
+@media (prefers-reduced-motion: reduce) { .chat-suggestions__item { transition: none; } }

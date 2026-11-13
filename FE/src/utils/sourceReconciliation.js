@@ -18,6 +18,10 @@
 // reconcileSelectedSources migrates a selection to a same-filename entry
 // instead of silently dropping it, rather than assuming the fragility can
 // never manifest.
+// Display name for a source row (extension dropped). Lives here so the panel and the layout's
+// collapsed-panel bootstrap build rows the same way.
+export const formatFileName = (name = "") => name.replace(/\.(mp4|avi|mov|mkv|webm|mp3|wav|pdf|txt|docx)$/i, "");
+
 export function keyOfSource(s) {
   return s?.video_stem || s?.video;
 }
