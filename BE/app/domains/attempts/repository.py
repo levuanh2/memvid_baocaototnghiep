@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 import uuid
-from datetime import datetime, timezone
+from datetime import datetime, timedelta, timezone
 from typing import Any, Dict, List, Optional
 
 from sqlalchemy import Integer, func, select
@@ -31,6 +31,45 @@ def _f(value) -> Optional[float]:
     return None if value is None else float(value)
 
 
+def _lock_quiz(s, quiz_id: str):
+    """Row lock on the quiz until this transaction ends; returns `question_count`.
+
+    Serialises "look for an attempt, then create or submit one" per quiz. Without it two
+    requests both see no `in_progress` attempt and both insert one, or both see nothing
+    submitted yet and both grade (known-issues 2026-11-14).
+    """
+    return s.execute(
+        select(Quiz.question_count).where(Quiz.id == str(quiz_id)).with_for_update()
+    ).scalar()
+
+
+def _upsert_answers(s, attempt_id: str, answers: Dict[str, Optional[str]]) -> None:
+    rows = {r.question_id: r for r in s.execute(
+        select(QuizAnswer).where(
+            QuizAnswer.attempt_id == str(attempt_id),
+            QuizAnswer.question_id.in_([str(q) for q in answers]),
+        )
+    ).scalars().all()}
+    for question_id, value in answers.items():
+        text = None if value is None else str(value)
+        row = rows.get(str(question_id))
+        if row is None:
+            s.add(QuizAnswer(id=str(uuid.uuid4()), attempt_id=str(attempt_id),
+                             question_id=str(question_id), user_answer=text))
+        else:
+            row.user_answer = text
+
+
+def _mark_submitted(a: QuizAttempt, now: datetime) -> None:
+    a.status = "submitted"
+    a.submitted_at = now
+    started = a.started_at
+    if started is not None:
+        if started.tzinfo is None:
+            started = started.replace(tzinfo=timezone.utc)
+        a.duration_seconds = max(0, int((now - started).total_seconds()))
+
+
 def open_attempt(quiz_id: str, user_id: Optional[str]) -> Dict[str, Any]:
     """Tạo attempt lúc MỞ quiz (FR-07.10), không đợi nộp.
 
@@ -46,6 +85,7 @@ def open_attempt(quiz_id: str, user_id: Optional[str]) -> Dict[str, Any]:
 
     owner = str(user_id) if user_id else ensure_anonymous_user()
     with session_scope() as s:
+        total = int(_lock_quiz(s, quiz_id) or 0)
         existing = s.execute(
             select(QuizAttempt).where(
                 QuizAttempt.quiz_id == str(quiz_id),
@@ -56,9 +96,6 @@ def open_attempt(quiz_id: str, user_id: Optional[str]) -> Dict[str, Any]:
         if existing is not None:
             return {"attempt_id": existing.id, "created": False}
 
-        total = int(s.execute(
-            select(Quiz.question_count).where(Quiz.id == str(quiz_id))
-        ).scalar() or 0)
         attempt_id = str(uuid.uuid4())
         s.add(QuizAttempt(
             id=attempt_id, quiz_id=str(quiz_id), user_id=owner,
@@ -126,20 +163,7 @@ def save_draft_answers(attempt_id: str, answers: Dict[str, Optional[str]]) -> in
     if not answers:
         return 0
     with session_scope() as s:
-        rows = {r.question_id: r for r in s.execute(
-            select(QuizAnswer).where(
-                QuizAnswer.attempt_id == str(attempt_id),
-                QuizAnswer.question_id.in_([str(q) for q in answers]),
-            )
-        ).scalars().all()}
-        for question_id, value in answers.items():
-            text = None if value is None else str(value)
-            row = rows.get(str(question_id))
-            if row is None:
-                s.add(QuizAnswer(id=str(uuid.uuid4()), attempt_id=str(attempt_id),
-                                 question_id=str(question_id), user_answer=text))
-            else:
-                row.user_answer = text
+        _upsert_answers(s, attempt_id, answers)
     return len(answers)
 
 
@@ -148,21 +172,81 @@ def submit(attempt_id: str) -> Optional[Dict[str, Any]]:
 
     Trả None khi attempt không còn `in_progress` — route đổi thành 409. Nộp hai lần
     không được phép ghi đè `submitted_at`, nếu không thời lượng làm bài sai.
+
+    `FOR UPDATE`: hai request cùng lúc trước đây cùng đọc `in_progress` rồi cùng chấm.
+    Có khoá hàng, request thứ hai chờ tới khi request đầu commit rồi đọc `submitted`.
     """
     with session_scope() as s:
-        a = s.get(QuizAttempt, str(attempt_id))
+        a = s.get(QuizAttempt, str(attempt_id), with_for_update=True)
         if a is None or a.status != "in_progress":
             return None
-        now = _now()
-        a.status = "submitted"
-        a.submitted_at = now
-        started = a.started_at
-        if started is not None:
-            if started.tzinfo is None:
-                started = started.replace(tzinfo=timezone.utc)
-            a.duration_seconds = max(0, int((now - started).total_seconds()))
+        _mark_submitted(a, _now())
         return {"attempt_id": a.id, "quiz_id": a.quiz_id, "status": a.status,
                 "duration_seconds": a.duration_seconds}
+
+
+# ponytail: a replay is "same answers, same quiz, same learner, within this window".
+# A retake with identical answers inside it gets 409; a client idempotency key would
+# remove the guess (proposal in the PR; it is an API change the owner has not approved).
+PRACTICE_REPLAY_WINDOW_S = 30
+
+
+def submit_practice(quiz_id: str, user_id: Optional[str],
+                    answers: Dict[str, Optional[str]]) -> Optional[str]:
+    """Open, fill and submit a practice attempt in ONE transaction; returns attempt_id.
+
+    None = the same answers were submitted moments ago (a double click, a retried
+    request): the caller answers 409 instead of grading a second attempt. Practice is
+    one call that always opens a fresh attempt, so without this a second identical
+    request produced a second graded result.
+    """
+    from app.domains.documents.repository import ensure_anonymous_user
+
+    owner = str(user_id) if user_id else ensure_anonymous_user()
+    given = {str(k): (None if v is None else str(v)) for k, v in answers.items()}
+    with session_scope() as s:
+        total = int(_lock_quiz(s, quiz_id) or 0)
+        now = _now()
+        # Open mode (no signed-in user) shares ONE anonymous owner between every client:
+        # there the replay rule would let one person's submit block another's, so it only
+        # applies to a real learner. The quiz row lock still serialises open mode.
+        recent_ids = [] if not user_id else s.execute(
+            select(QuizAttempt.id).where(
+                QuizAttempt.quiz_id == str(quiz_id),
+                QuizAttempt.user_id == owner,
+                QuizAttempt.status.in_(("submitted", "graded")),
+                QuizAttempt.submitted_at >= now - timedelta(seconds=PRACTICE_REPLAY_WINDOW_S),
+            )
+        ).scalars().all()
+        if recent_ids:
+            # Every submit in the window, not only the newest: A, then B, then a retried A
+            # is still a replay of A. Grading adds a row (answer None) for each unanswered
+            # question; compare only what the learner actually answered.
+            wanted = {k: v for k, v in given.items() if v is not None}
+            earlier: Dict[str, Dict[str, str]] = {}
+            for r in s.execute(select(QuizAnswer).where(
+                    QuizAnswer.attempt_id.in_(recent_ids))).scalars():
+                if r.user_answer is not None:
+                    earlier.setdefault(r.attempt_id, {})[r.question_id] = r.user_answer
+            if any(earlier.get(a, {}) == wanted for a in recent_ids):
+                return None
+
+        a = s.execute(
+            select(QuizAttempt).where(
+                QuizAttempt.quiz_id == str(quiz_id),
+                QuizAttempt.user_id == owner,
+                QuizAttempt.status == "in_progress",
+            ).order_by(QuizAttempt.started_at.desc()).limit(1)
+        ).scalar_one_or_none()
+        if a is None:
+            a = QuizAttempt(id=str(uuid.uuid4()), quiz_id=str(quiz_id), user_id=owner,
+                            total_questions=total, max_score=float(total),
+                            status="in_progress", started_at=now)
+            s.add(a)
+            s.flush()
+        _upsert_answers(s, a.id, given)
+        _mark_submitted(a, now)
+        return a.id
 
 
 def save_grades(attempt_id: str, graded: List[Dict[str, Any]], totals: Dict[str, Any],
