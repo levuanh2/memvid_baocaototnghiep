@@ -282,3 +282,63 @@ export function chiaMuc(danhSach, { hienLuuTru = false, now = Date.now() } = {})
     tatCa: hien,
   };
 }
+
+// ── V6: one list, views instead of repeated sections ──────────────────────────────────────
+// The Library used to draw the same document under up to eight headings at once ("Đã ghim",
+// "Hôm nay", "Học gần đây", "Tải lên gần đây", "Cần …", "Tất cả"…). Now there is one list and a
+// view chooses which documents it holds. Every view is a subset of `tatCa` (search, filters and
+// sort already applied), so a document appears at most once whatever view is chosen.
+//
+// No "Đã ghim" view: pinned and favourite stay filters in the "Lọc" popover (owner decision,
+// PR #166). Pinned documents come first in "Tất cả" instead, so pinning still changes the list.
+export const NHOM_THU_VIEN = Object.freeze([
+  ["tat_ca", "Tất cả"],
+  ["hoc_gan_day", "Học gần đây"],
+  ["tai_len_gan_day", "Tải lên gần đây"],
+  ["can_xu_ly", "Cần xử lý"],
+]);
+const KHOA_NHOM = new Set(NHOM_THU_VIEN.map(([khoa]) => khoa));
+export const laNhomThuVien = (khoa) => KHOA_NHOM.has(khoa);
+
+/** Processing failed on the server: the learner has to act (upload again or remove it). */
+export const xuLyLoi = (d) => d?.ingest_status === "error" || d?.status === "failed";
+
+/** "Tiếp tục" is offered only for a document that is indexed AND whose processing did not
+ *  fail (owner decision, V6). Indexed-then-failed exists: a later pipeline step can fail. */
+export const coTheTiepTuc = (d) => daLapChiMuc(d) && !xuLyLoi(d);
+
+/** The most recently opened document that can be continued (Command Palette "Tiếp tục học":
+ *  it has no place to say why a failed document cannot be opened, so it skips it). */
+export const ganNhatCoTheTiepTuc = (documents) =>
+  sapXep((documents || []).filter((d) => d?.last_opened_at && coTheTiepTuc(d)), "recently_opened")[0] || null;
+
+/**
+ * Something on this document needs the learner: processing failed (upload it again or remove
+ * it), or a quiz has been graded and its review guide has not been made yet.
+ *
+ * Deliberately NOT "no summary / no quiz / no map yet": most documents lack at least one of
+ * those, so the view would hold nearly the whole library and say nothing about what to do first.
+ * Those are shown on each card's tools instead.
+ */
+export function canXuLy(d) {
+  if (xuLyLoi(d)) return true;
+  if (!daLapChiMuc(d)) return false;
+  const ai = d.ai || {};
+  return (ai.quiz?.graded_attempts || 0) > 0 && !ai.review?.ready;
+}
+
+/** The documents of one view, each at most once, in the order the view means. */
+export function taiLieuTheoNhom(tatCa, nhom) {
+  const ds = Array.isArray(tatCa) ? tatCa : [];
+  switch (nhom) {
+    case "hoc_gan_day": return sapXep(ds.filter((d) => d.last_opened_at), "recently_studied");
+    case "tai_len_gan_day": return sapXep(ds, "recently_uploaded").slice(0, TOI_DA_GAN_DAY);
+    case "can_xu_ly": return ds.filter(canXuLy);
+    default: return [...ds.filter((d) => d.pinned), ...ds.filter((d) => !d.pinned)];
+  }
+}
+
+/** {khoa: count} for the view switcher. */
+export function demTheoNhom(tatCa) {
+  return Object.fromEntries(NHOM_THU_VIEN.map(([khoa]) => [khoa, taiLieuTheoNhom(tatCa, khoa).length]));
+}

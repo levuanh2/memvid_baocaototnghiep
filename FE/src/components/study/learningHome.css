@@ -1,0 +1,62 @@
+/* V6 learning home: the top of the Library. Left: where to pick up (the one filled button on
+   the page above the list). Right: recent documents and library progress. Tokens only. */
+
+.learning-home { display: grid; grid-template-columns: minmax(0, 1fr); gap: 0; padding: 0; margin-bottom: 28px; overflow: hidden; }
+.learning-home__resume { padding: 22px 24px 24px; min-width: 0; }
+.learning-home__side { display: grid; gap: 20px; align-content: start; padding: 22px 24px 24px; min-width: 0; border-top: 1px solid var(--border-color); background: var(--bg-sidebar); }
+
+.learning-home__label { margin-bottom: 8px; color: var(--text-secondary); font-size: 13px; font-weight: 600; line-height: 1.4; }
+.learning-home__title {
+  font-family: var(--font-display, inherit); font-size: clamp(20px, 2.2vw, 26px); font-weight: 600; line-height: 1.25;
+  color: var(--text-primary); overflow-wrap: anywhere; text-wrap: balance;
+  display: -webkit-box; -webkit-box-orient: vertical; -webkit-line-clamp: 3; overflow: hidden;
+}
+.learning-home__meta { margin-top: 8px; max-width: 56ch; color: var(--text-secondary); font-size: 14px; line-height: 1.5; }
+.learning-home__meta strong { color: var(--text-primary); font-weight: 600; }
+.learning-home__cta { display: inline-flex; align-items: center; gap: 8px; min-height: 44px; margin-top: 18px; }
+
+/* Journey: a ruled sequence of stages; done stages carry a check and the primary text colour. */
+.learning-home__journey { display: flex; flex-wrap: wrap; gap: 6px 16px; margin-top: 16px; font-size: 13px; }
+.learning-home__journey li { display: inline-flex; align-items: center; gap: 5px; color: var(--text-muted); }
+.learning-home__journey li[data-done="true"] { color: var(--text-primary); }
+.learning-home__journey li[data-done="true"] svg { color: var(--ok); }
+
+.learning-home__recent { display: grid; }
+.learning-home__recent li + li { border-top: 1px solid var(--border-color); }
+.learning-home__recent button { display: grid; width: 100%; min-height: 44px; padding: 8px 0; gap: 1px; text-align: left; }
+.learning-home__recent button:disabled { cursor: not-allowed; }
+.learning-home__recent button:disabled .learning-home__recent-name { color: var(--text-muted); }
+.learning-home__recent button:not(:disabled):hover .learning-home__recent-name { color: var(--accent); text-decoration: underline; }
+.learning-home__recent button:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; border-radius: 4px; }
+.learning-home__recent-name { color: var(--text-primary); font-size: 14px; font-weight: 500; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.learning-home__recent-meta { color: var(--text-secondary); font-size: 12px; }
+
+.learning-home__progress { display: grid; grid-template-columns: repeat(auto-fit, minmax(120px, 1fr)); gap: 12px 20px; }
+.learning-home__progress dt { color: var(--text-secondary); font-size: 12px; }
+.learning-home__progress dd { color: var(--text-primary); font-family: var(--font-display, inherit); font-size: 20px; font-weight: 600; line-height: 1.3; font-variant-numeric: tabular-nums; }
+.learning-home__progress dd span { color: var(--text-secondary); font-family: inherit; font-size: 12px; font-weight: 400; }
+
+.learning-home__review {
+  display: grid; grid-template-columns: auto minmax(0, 1fr) auto; align-items: center; gap: 10px;
+  width: 100%; min-height: 48px; margin-top: 14px; padding: 8px 12px; text-align: left;
+  border: 1px solid var(--border-strong); border-radius: 8px; background: var(--bg-card); color: var(--text-primary);
+  transition: border-color 150ms ease;
+}
+.learning-home__review:hover { border-color: var(--accent); }
+.learning-home__review:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+.learning-home__review > span { display: grid; min-width: 0; }
+.learning-home__review strong { font-size: 14px; font-weight: 600; }
+.learning-home__review > span > span { color: var(--text-secondary); font-size: 12px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.learning-home__review svg { color: var(--text-secondary); }
+
+@media (min-width: 768px) {
+  .learning-home { grid-template-columns: minmax(0, 1.25fr) minmax(0, 1fr); }
+  .learning-home__side { border-top: 0; border-left: 1px solid var(--border-color); }
+}
+@media (max-width: 767px) {
+  .learning-home__resume, .learning-home__side { padding: 18px 16px 20px; }
+  .learning-home__cta { width: 100%; justify-content: center; }
+}
+@media (prefers-reduced-motion: reduce) {
+  .learning-home__review { transition: none; }
+}
