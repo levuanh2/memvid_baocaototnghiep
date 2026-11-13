@@ -8120,3 +8120,53 @@ off-screen button then matches the same role+name as the visible CTA.
 **Prevention:** hiding by transform, width, opacity or pointer-events is visual only; anything
 that stays mounted while hidden needs `inert`. Label tests should match the bare text, not one
 quoting style.
+
+### Library card: keys on inner controls reached the list handler; arrows did not move focus; ids repeated (2026-11-13)
+
+Found by a read-only review of the V6 Library on a local merge of all V6 branches.
+
+**Symptoms.**
+1. In the "Tất cả" list, Enter on a tool button ("Tóm tắt") also ran the card's own Enter
+   (open the last workspace), and Space on a tool or on the checkbox selected the card.
+2. Arrow / Home / End changed which card had `tabindex=0` but left focus on the old card,
+   which had just become untabbable. After a filter shortened the list, the remembered index
+   could be out of range: no card had `tabindex=0` and Tab skipped the list.
+3. The same document is drawn in several sections, so `id="tri-thuc-<document_id>"` (and the
+   new tool descriptions) repeated in one page; `aria-controls` / `aria-describedby` no longer
+   pointed at one element.
+
+**Root causes.** (1) The card root's `onKeyDown` received every bubbling keydown; only the menu
+and the knowledge panel stopped propagation. (2) `xuLyPhim` only called `setChiSoFocus`; no ref
+was passed to the cards and the index was never clamped. (3) Ids were built from
+`document_id`, which is unique per document, not per rendered card.
+
+**Fix.** The card forwards a keydown to the list only when the card itself is the target.
+`DocumentList` keeps refs to the "Tất cả" cards, focuses the target card on arrow keys, and
+clamps the index when the list shrinks. Ids use `useId()`.
+
+**Regression tests.** `StudyCard.v6.test.jsx`: keys on inner controls do not reach the list
+handler; two cards for one document share no id and every reference resolves inside its card.
+
+**Not covered.** The focus move and the clamp have no test (the page test mocks the card).
+The matrix renderer has its own roving code and was not changed.
+
+**Prevention.** A roving-tabindex container must act only on its own keydowns, must move focus
+when it moves the tab stop, and must not build ids from a key that can render twice.
+
+### Library sections: `ds.map(veThe)` turned every section card into a roving-list item (2026-11-13)
+
+**Symptom.** With one resume document and five documents, eight cards had `tabindex="0"`
+instead of one. Arrow keys on a section card changed the focus index of the "Tất cả" list.
+
+**Root cause.** `veThe(doc, chiSo = null)` treats its second argument as the card's index in
+the roving "Tất cả" list. The sections rendered with `ds.map(veThe)`, and `Array.prototype.map`
+passes `(item, index)`, so each section card received its index within its own section.
+
+**Fix.** `ds.map((d) => veThe(d))` for the sections and the archived list. Found while adding
+the focus-movement test: the first version of that fix stored refs by index and the section
+cards overwrote them.
+
+**Regression test.** `e2e-fixture/library-learning-home.spec.js` (on the Library integration
+branch): exactly one card is the tab stop, and ArrowDown moves focus to another card.
+
+**Prevention.** Never pass a function with optional positional parameters straight to `map`.

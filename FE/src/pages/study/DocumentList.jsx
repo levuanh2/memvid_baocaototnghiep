@@ -436,7 +436,12 @@ export default function DocumentList() {
     const kq = phimDanhSach(e, { chiSo, tong: mucHienThi.tatCa.length });
     if (!kq) return;
     e.preventDefault();
-    if (kq.loai === "focus") setChiSoFocus(kq.chiSo);
+    if (kq.loai === "focus") {
+      setChiSoFocus(kq.chiSo);
+      // Move the real focus too. Only the tabindex used to change, so the arrow keys left
+      // focus on the card that had just become untabbable.
+      theRefs.current.get(kq.chiSo)?.focus();
+    }
     else if (kq.loai === "chon") setDaChon((prev) => batTatChon(prev, doc.document_id));
     else if (kq.loai === "mo") moBeMat(doc, doc.last_workspace || "studymap");
     else if (kq.loai === "xoa_chon") setDaChon(xoaChon());
@@ -456,9 +461,21 @@ export default function DocumentList() {
     setMatrixFocusId((current) => resolveRovingDocumentId(matrixProjection.rows, current));
   }, [matrixProjection.rows]);
 
+  // Cards of the "Tất cả" list by index, for the arrow keys above.
+  const theRefs = useRef(new Map());
+  // A filter can shorten the list under the remembered index; without this no card had
+  // tabindex 0 and Tab skipped the whole list.
+  const soThe = mucHienThi.tatCa.length;
+  useEffect(() => {
+    setChiSoFocus((hienTai) => (hienTai >= soThe ? Math.max(-1, soThe - 1) : hienTai));
+  }, [soThe]);
+
   const veThe = (doc, chiSo = null) => (
     <StudyCard
       key={doc.document_id}
+      refThe={chiSo == null ? undefined : (node) => {
+        if (node) theRefs.current.set(chiSo, node); else theRefs.current.delete(chiSo);
+      }}
       doc={doc}
       documents={documents}
       chiMucBst={chiMucBst}
@@ -823,7 +840,11 @@ export default function DocumentList() {
       {!LIBRARY_ACTION_MATRIX && muc.map(([ten, ds]) => (
         <section key={ten} className="mb-7">
           <SectionTitle dem={ds.length}>{ten}</SectionTitle>
-          <div className="flex flex-col gap-2.5">{ds.map(veThe)}</div>
+          {/* `(d) => veThe(d)`, not `ds.map(veThe)`: Array.map passes the index as the second
+              argument, which made every section card a roving-list item with an index into a
+              DIFFERENT list ("Tất cả"): one tab stop per section, and arrows that moved the
+              wrong list. Only the "Tất cả" list below is the roving list. */}
+          <div className="flex flex-col gap-2.5">{ds.map((d) => veThe(d))}</div>
         </section>
       ))}
 
@@ -883,7 +904,7 @@ export default function DocumentList() {
       {!LIBRARY_ACTION_MATRIX && mucHienThi.daLuuTru.length > 0 && hienLuuTru && (
         <section className="mb-7">
           <SectionTitle dem={mucHienThi.daLuuTru.length}>Đã lưu trữ</SectionTitle>
-          <div className="flex flex-col gap-2.5">{mucHienThi.daLuuTru.map(veThe)}</div>
+          <div className="flex flex-col gap-2.5">{mucHienThi.daLuuTru.map((d) => veThe(d))}</div>
         </section>
       )}
 
