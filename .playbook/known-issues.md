@@ -8120,3 +8120,87 @@ off-screen button then matches the same role+name as the visible CTA.
 **Prevention:** hiding by transform, width, opacity or pointer-events is visual only; anything
 that stays mounted while hidden needs `inert`. Label tests should match the bare text, not one
 quoting style.
+
+### The app said "no documents" before it knew, and for as long as the source panel was collapsed (V6, 2026-11-11)
+
+**Seen on the live site:** an account with 4 documents opened `/app` and got "0 tài liệu", "Chưa có tài liệu nào" and the chat's "Tải tài liệu đầu tiên lên" call to action until `/list-indexed` answered (several seconds).
+
+**Root cause:** two states were drawn as one. `sources.length === 0` meant both "the list answered and is empty" and "the list has not answered". Separately, only `SidebarLeft` fetched `/list-indexed`, and a collapsed desktop panel renders `PanelSpine` instead of `SidebarLeft`, so with a collapsed panel nothing fetched at all: the spine had no count and the chat kept offering a first upload.
+
+**Fix:** `MainLayout` keeps `sourcesState` ("loading" / "ready" / "error"), set by `SidebarLeft` through `onSourcesSettled`. The panel shows "Đang tải danh sách tài liệu…" until the first answer; the chat shows the same line (or the load error) and offers the first-upload action only when the state is "ready" and the list is empty. While the panel is collapsed and the list is still unknown, `MainLayout` fetches `/list-indexed` once.
+
+**Regression:** `FE/e2e-fixture/source-loading-state.spec.js` (slow list, empty list, collapsed panel, failed list). Red before the fix: 3 of 4.
+
+**Not changed:** `SidebarLeft` still owns the list after it mounts; a failed load still keeps the previous rows.
+
+### A cancelled chat question could publish into the next one (V6 bug hunt #1; fixed 2026-11-12)
+
+**Repro:** send question A, press "Huỷ", send question B at once. When A's request, stream or poll finished afterwards, A could append an error bubble or its answer to the conversation and set `loading = false` while B was still running. A's cancel tail also replaced "the last message" (`prev.slice(0, -1)`), which by then was B's question.
+
+**Root cause:** one shared `cancelledRef`. Cancelling A set it to `true`; starting B set it back to `false`; every later check in A then read "not cancelled".
+
+**Fix:** `attemptRef` in `ChatArea.jsx`. Each send takes a number; cancel, unmount and every new send bump it. Every publication after an `await` in `handleSend` (result, error, `finally`, status updates, the stream tick, the fallback poll) checks that its own number is still current. The cancel tail replaces the "Đang dừng truy vấn…" placeholder by identity. If the POST returns a job id after the cancel, that job is cancelled instead of left running.
+
+**Regression:** `ChatArea.attemptIdentity.test.jsx` (both cases fail on the old code).
+
+**Not changed:** the review-resume polling path (bug hunt #11) still has no cancellation.
+
+### Answer-review polling could not be cancelled and outlived the chat (V6 bug hunt #11, 2026-11-12)
+
+**Symptom.** After "Duyệt" / "Sửa" on a held answer, `ChatArea` polled the job with
+`isCancelled: () => false`. Leaving the page left the poll running against a dead component; a
+second review action started a second poll, and the older one could publish its progress,
+result, error notice and `loading = false` after the newer one owned the screen.
+
+**Root cause.** `handleReview` was the one async path in `ChatArea` that did not take part in
+the attempt identity introduced for send/cancel (`attemptRef`, `stale()`).
+
+**Fix.** Each review continuation takes a fresh attempt id; `stale` is the poll's
+`isCancelled`, and guards the continuation after `resumeQuery`, the progress callback, the
+final result, the error notice and `finally`. New chat, clear context and delete history bump
+the same id. Written by Codex in a shared worktree, reviewed before commit.
+
+**Regression test.** `ChatArea.reviewResumeCancel.test.jsx`: unmount cancels the poll; a
+continuation replaced in the same tick never starts polling. Both failed before the fix.
+
+**Not covered.** Two review clicks in the same tick still send `resumeQuery` twice (only one
+continuation proceeds). The poll is stopped by predicate; the in-flight request is not aborted.
+
+**Prevention.** When a component gets an "attempt identity", list every async path in it, not
+only the one that was reported.
+
+### Review and send actions accepted two synchronous submissions (V6 task 14, 2026-11-13)
+
+**Symptom.** Two clicks in one React turn called `resumeQuery` twice for approve, edit, or
+reject. The same race submitted `/query` twice from the composer. A second review click after
+the resume request resolved was also accepted while result polling continued.
+
+**Root cause.** Both handlers treated React state (`reviewSubmitting` / `loading`) as a
+synchronous mutex. Event handlers in the same turn retain the previous render's values, so
+both calls passed their guards. The backend does not re-run the continuation: the first
+request changes `interrupted` to `running` under `query_jobs_lock`, and the second gets 409.
+
+**Fix and regression.** `ChatArea` now acquires ref-backed locks before either handler's first
+asynchronous boundary. The review lock covers resume plus polling, releases in `finally`, and
+is reset when a new review interrupt is surfaced. The send lock participates in cancellation
+and only releases from the current attempt. `ChatArea.reviewResumeCancel.test.jsx` covers all
+three decisions and polling; `ChatArea.attemptIdentity.test.jsx` covers same-turn send clicks.
+
+### Chat follow-up suggestions were cut at the composer's right edge (V6, 2026-11-13)
+
+**Symptom.** After an answer, the third suggestion ("Khái niệm nào trong <tên tệp>.pdf khó hiểu
+nhất?") ended mid-word at the composer's edge at every width, including 1440px.
+
+**Root cause.** The row was `flex overflow-x-auto scrollbar-none` with `flex-shrink-0` chips: one
+line that scrolled sideways with its scrollbar hidden. Nothing showed there was more, and a mouse
+user could not scroll it. Every chip also carried the full file name with its extension.
+
+**Fix.** The suggestions are a labelled group that wraps; a chip may take two lines; file
+extensions are dropped from the document name. The stop control has the word "Huỷ" next to its
+icon so it does not read as the send button.
+
+**Regression test.** `e2e-fixture/chat-composer.spec.js`: every suggestion and the input inside
+the composer at 320/390/768/1440, light and dark; 44px chips on phones; keyboard; the stop control.
+
+**Prevention.** Hiding a scrollbar hides the only sign that content continues. Wrap, or show the
+overflow.

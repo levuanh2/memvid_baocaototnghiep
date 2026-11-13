@@ -3719,3 +3719,22 @@ Rules: check icons and logos when a rename is reported incomplete; serve a chang
 new URL (browsers cache favicons per URL); a static SVG cannot read CSS variables, so pin its
 colour to the token value and test that they stay equal; comments quoting the retired name trip
 the branding test, so describe it without naming it.
+
+## 2026-11-11 — "Empty" is a result, not a default
+
+An empty array is what a list looks like before it loads, after it fails, and when it is truly empty. Any screen that draws an empty state from `list.length === 0` alone is making a claim about the user's data that it cannot back. Keep the load state next to the list ("loading" / "ready" / "error") and let only "ready and empty" say "you have nothing".
+
+Also check who fetches. If the only component that loads a list can be unmounted by a layout choice (a collapsed panel, a breakpoint), every consumer of that list silently sees "empty" in that layout. Test the collapsed and narrow layouts with a non-empty backend.
+
+## 2026-11-12 — A cancel flag that the next attempt resets is not a cancel
+
+One boolean cannot represent "attempt A is cancelled" once attempt B exists: B must clear the flag to run, and that un-cancels A. Give each attempt its own identity (a counter captured in the closure) and compare identities after every `await`. The same applies to "replace the last message": after an `await`, "last" may belong to someone else, so address the item you created.
+
+## 2026-11-13 — React state is not a same-turn submission lock
+
+Disabling a button from state protects later renders, not two event calls that run before the
+render commits. For an async action that must be single-flight, acquire a ref synchronously
+before the first `await`, hold it for the whole operation (including polling), and release it
+in `finally`. If cancellation can permit a replacement attempt while the old promise settles,
+combine the lock with attempt identity so the old `finally` cannot unlock the replacement.
+Regression tests must invoke the handler twice synchronously in one `act()`.

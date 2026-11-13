@@ -37,7 +37,7 @@ for (const width of [320, 390]) {
     // unrelated "bên trái" caption, and a bare substring locator would hit
     // those too.
     await expect(page.getByText(
-      "Mỗi câu trả lời được truy hồi từ tài liệu đã chọn và gắn nguồn ở lề phải. Chọn tài liệu bên trái, rồi đặt câu hỏi.",
+      "Chọn tài liệu ở đây hoặc trong thư mục nguồn bên trái, rồi đặt câu hỏi. Câu trả lời sẽ kèm nguồn dẫn chứng.",
       { exact: true },
     )).toBeHidden();
     const button = page.getByRole("button", { name: "Mở thư mục nguồn" }).first();
@@ -66,7 +66,7 @@ test("at 1440px: desktop hint keeps 'bên trái' and the mobile drawer button is
   await openEmptyChat(page);
 
   await expect(page.getByText(
-    "Mỗi câu trả lời được truy hồi từ tài liệu đã chọn và gắn nguồn ở lề phải. Chọn tài liệu bên trái, rồi đặt câu hỏi.",
+    "Chọn tài liệu ở đây hoặc trong thư mục nguồn bên trái, rồi đặt câu hỏi. Câu trả lời sẽ kèm nguồn dẫn chứng.",
     { exact: true },
   )).toBeVisible();
   // The button still exists in the DOM (md:hidden, not removed) but must not
