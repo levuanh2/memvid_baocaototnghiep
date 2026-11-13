@@ -1,0 +1,79 @@
+# V6 integration checklist
+
+For the owner. Nothing here has been merged; every pull request below is a Draft. Heads are the
+commits the trial integration used (see "Evidence").
+
+## Dependency graph
+
+```
+main (db005ab)
+│
+├─ #170 ci/v6-fixture-smoke ............ merge FIRST (see step 1)
+│
+├─ #160 fix/v6-source-loading-state
+│    ├─ #161 design/v6-chat-start ...... stacked: contains #160
+│    └─ #167 design/v6-header .......... one-line conflict with #160 in MainLayout.jsx
+│
+├─ #164 fix/v6-stale-owner-guards
+│    └─ #165 fix/v6-summary-loading-state  stacked: contains #164 (both rules kept)
+│
+├─ #162 fix/v6-double-submit-guards
+├─ #163 fix/v6-chat-attempt-identity
+├─ #166 design/v6-library-actions ─┐
+├─ #171 design/v6-library-card ────┼─ #173 design/v6-library-integration (stacked: contains all three)
+├─ #172 design/v6-learning-home ───┘
+├─ #168 design/v6-profile
+├─ #169 design/v6-quiz
+└─ #159 design/v6-foundation (landing + these documents)
+```
+
+Real dependencies: #161 needs #160, #165 needs #164, #173 needs #166 + #171 + #172, and #167 has to
+be reconciled with #160. Everything else is independent in code.
+
+## Order
+
+1. **#170 first.** Then update every other V6 branch onto `main`. Reason: the V6 branches were
+   cut before #170, so their CI does not yet run their own new spec in the gate. Merged in the
+   other order, a V6 spec would run for the first time after it is already on `main`.
+2. **#160**, then **#161**.
+3. **#164**, then **#165**.
+4. **#167** (after #160): in `MainLayout.jsx` keep the block #160 adds and this branch's line
+   `const { isDark, toggleTheme } = useTheme();`.
+5. **#166, #171, #172**, then **#173** (it contains all three; #171 and #172 both change `DocumentList.jsx`, in different places).
+6. **#162, #163, #168, #169, #159** in any order.
+7. After #159, #160, #161, #164, #165 are on `main`: move their five specs from `WHEN_PRESENT`
+   to `REQUIRED` in `FE/scripts/fixture-smoke-specs.mjs`. Until then, deleting or renaming one of
+   those spec files would not fail CI.
+
+## At every step
+
+- [ ] The pull request's required check is green **on its current head**, after it was updated
+      onto the new `main`.
+- [ ] `.playbook/known-issues.md` and `.playbook/lessons-learned.md`: #160, #162, #163, #164,
+      #165, #166 and #171 each append entries at the end of the file. After one merges, the next
+      conflicts there. Resolution: keep **both** sets of entries (no entry is replaced).
+- [ ] No regression fix is lost. Check these by name after resolving a conflict:
+  - `SidebarRight.jsx` `fetchSummaries` / `fetchMindMaps`: the predicate must test **both**
+    "still mounted" and "newest request" (#164 + #165). Tests:
+    `SidebarRight.summaryListOwnership.test.jsx`, `SidebarRight.orphanPoller.test.jsx`.
+  - `SidebarLeft.jsx`: a late upload starts no poller **and** is still remembered (#160).
+    Tests: `SidebarLeft.orphanUploadPoller.test.jsx`, `SidebarLeft.staleListResponse.test.jsx`.
+  - `ChatArea.jsx`: every async path checks the attempt (#163), and the start screen from #161
+    is intact. Tests: `ChatArea.attemptIdentity.test.jsx`, `ChatArea.reviewResumeCancel.test.jsx`.
+  - `MainLayout.jsx`: lists start as "loading" (#165), the collapsed-panel fetch (#160), one
+    theme button (#167).
+  - `DocumentList.jsx`: the sidebar no longer carries state filters (#166) and the learning
+    home is mounted (#172).
+- [ ] Full Vitest and the production build on the result.
+- [ ] Do not close, force-push or re-base a pull request you are not about to merge.
+
+## Evidence (local trial integration, never pushed)
+
+See "Trial integration" in `README.md` for the heads, test counts and the full Fixture Audit
+result. The trial merged the branches in the order above; the only conflicts were the playbook
+files and the one line in `MainLayout.jsx`.
+
+## Not covered by this checklist
+
+- Deploy. Merging to `main` triggers the deploy workflow; that decision is the owner's.
+- Firefox, WebKit, real devices and screen readers: not tested on any V6 branch.

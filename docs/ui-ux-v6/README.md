@@ -16,41 +16,64 @@ V6 is **not complete**. This file is the single status page: it says which waves
 | Wave | Scope | Status |
 |---|---|---|
 | A | Design foundation: direction, rules, landing as the first surface built to them | **Draft PR** (this branch): spec + Landing. Tokens for the app shell are not changed yet |
-| B | Navigation and information architecture: header, sidebars, action hierarchy | **Started.** Header (one theme control, shortcut help in the account menu) is Draft PR #167; Library sidebar no longer duplicates the state filters is #166. Sidebars of the workspace, "Công cụ học" and the usage chip are unchanged |
-| C | Learning experience: Library, Chat, Summary, Quiz, learning dashboard | **Started.** Chat start screen #161; account page #168; quiz-taking screen #169. Not started: learning dashboard, Library document card, quiz setup / result / review, chat workspace and side panels |
+| B | Navigation and information architecture: header, sidebars, action hierarchy | **Started.** Header #167; Library sidebar #166. Workspace sidebars, "Công cụ học" and the usage chip are unchanged |
+| C | Learning experience: Library, Chat, Summary, Quiz, learning dashboard | **Started.** Chat start screen #161; account page #168; quiz-taking #169; Library card #171; learning home #172; Library page integration #173. Not started: chat workspace, quiz setup / results / review, the detailed dashboard panel |
 | D | Knowledge visualisation: Mind map, Knowledge map, toolbars, export | Not started |
 | E | Frontend reliability: the bugs in `01-audit.md` §2 and §3 | Bug-hunt findings 1-15 each have a fix in a Draft PR: 1 and 11 in #163; 2, 12 and 15 in #160; 3, 4, 7, 14 in #164; 13 in #165; 5, 6, 8, 9, 10 in #162. Also #160 (false empty library) and #165 (false empty Summary / mind-map screen, first-commit flash). Left open: requests are ignored when stale, not aborted; two review clicks in one tick still send two requests |
 
 ## Status
 
-| Track | Branch | Draft PR | Local validation |
-|---|---|---|---|
-| V6-A landing + spec | `design/v6-foundation` | #159 | Vitest 1933/1933; `landing-v6.spec.js` 19/19; lint ratchet 63 (baseline 67); build pass; Codex review: 11 of 12 findings fixed, 1 recorded |
-| V6-E1 false "empty library" while loading | `fix/v6-source-loading-state` | #160 | `source-loading-state.spec.js` 8/8; Layout unit tests 170/170; Codex review: race fixed, 1 item left open (stale `?source=` with a collapsed panel) |
-| V6-C1 chat start screen (stacked on #160) | `design/v6-chat-start` | #161 | Vitest 1938/1938; `chat-start.spec.js` + `chat-mobile-empty-state.spec.js` 16/16; build pass |
-| V6-E2 double-submit guards | `fix/v6-double-submit-guards` | #162 | Vitest 1938/1938; three double-click tests red before the fix; `StudyMapView` guards untested |
-| V6-E3 cancelled chat attempt cannot publish into the next | `fix/v6-chat-attempt-identity` | #163 | Vitest 1937/1937; four tests red before their fixes; review-resume polling still has no cancellation |
-| V6-E4 stale loads (quiz, study map), orphan pollers, keyboard map nodes | `fix/v6-stale-owner-guards` | #164 | Vitest 1942/1942; 8 of 9 new unit tests red before the fix; `knowledge-map-keyboard.spec.js` 2/2; build pass. `SidebarRight` guards written by Codex |
-| V6-E5 Summary / mind-map lists: no false empty screen, one publishing rule (stacked on #164) | `fix/v6-summary-loading-state` | #165 | Vitest 1951/1951 at the merge; `SidebarRight.summaryListOwnership.test.jsx` 7 cases, mutation-checked; `summary-loading-state.spec.js` 5/5 |
-| V6-B1 Library sidebar without duplicate state filters | `design/v6-library-actions` | #166 | Vitest 1934/1934; three Library fixture specs 42/42; regression test red before the fix |
-| V6-B2 header: one theme control, shortcut help in the account menu | `design/v6-header` | #167 | Vitest 1936/1936; `mobile-header.spec.js` 115/115; CI ran the changed `e2e/mobile-theme-control.spec.js` green |
-| V6-C2 account page: usage by activity, password section | `design/v6-profile` | #168 | Vitest 1942/1942; no fixture spec for this page |
-| V6-C3 quiz-taking screen: one hand-in control, one primary action | `design/v6-quiz` | #169 | Vitest 1939/1939; two quiz fixture specs 9/9 |
+Six different things are kept apart below. Do not read one as another.
 
-### Trial integration (local, never pushed)
+| Column | Meaning |
+|---|---|
+| Draft PR | The change exists on a Draft pull request. Nothing more. |
+| Tested alone | Local runs on that branch by itself (counts in the PR). CI on the PR's head is separate and is named as CI. |
+| Local integration | The branch was part of a local merge of V6 branches that was tested as a whole. Never pushed. |
+| Merged to `main` | **None of the V6 pull requests is merged.** `main` is `db005ab`. |
+| Deployed | **Nothing from V6 is deployed.** studymap.space runs `main`. |
+| Not verified | Listed under "Not verified". |
 
-All eleven open V6 branches (#159-#169) merged into one local branch at these heads: #159 `0e32513`, #160 `22aa5b5`, #161 `32bb6c1`, #162 `4e42f9d`, #163 `abc25d7`, #164 `7a39e12`, #165 `d24d6aa`, #166 `63fcf9f`, #167 `0279d07`, #168 `c9d329e`, #169 `ceea584`.
+### Pull requests
 
-- Vitest 1994/1994, lint ratchet 63 (baseline 67), production build pass.
-- **Full Fixture Audit** (`npx playwright test -c playwright.fixture.config.js --workers=1 --fail-on-flaky-tests`): **608/608 passed**, 24.8 minutes, Chromium only. An earlier run on the first eight branches was 603/604; the one failure was a 43.99997px measurement in `landing-v6.spec.js`, fixed in `0e32513`.
-- Not covered: Firefox and WebKit (the fixture config has a Chromium project only; Firefox is not installed here), real devices, screen readers.
-- CI runs only Fixture Smoke (10 of the fixture spec files). Of the specs added in V6, only the additions to `mobile-header.spec.js` run in CI; `source-loading-state`, `chat-start`, `knowledge-map-keyboard`, `summary-loading-state` and `landing-v6` run only in the Fixture Audit workflow (weekly or on demand).
+`CI` = the required check on the head named here, read from GitHub on 2026-11-13.
+`Trial 3` = the head that was in the third local integration (next section); a different head means the branch changed afterwards.
+
+| PR | Branch | Head | CI | Tested alone | Trial 3 head | Depends on |
+|---|---|---|---|---|---|---|
+| #159 | `design/v6-foundation` | this branch | pass on `1495fe8` | Vitest 1933; `landing-v6.spec.js` 38/38 over two repeats | `1495fe8` | — |
+| #160 | `fix/v6-source-loading-state` | `22aa5b5` | pass | Layout 174; `source-loading-state.spec.js` 8/8 | same | — |
+| #161 | `design/v6-chat-start` | `32bb6c1` | pass | Vitest 1940; five chat fixture specs 55/55 | same | #160 (stacked) |
+| #162 | `fix/v6-double-submit-guards` | `4e42f9d` | pass | Vitest 1938 | same | — |
+| #163 | `fix/v6-chat-attempt-identity` | `abc25d7` | pass | Layout 174 | same | — |
+| #164 | `fix/v6-stale-owner-guards` | `7a39e12` | pass | Vitest 1945; `knowledge-map-*.spec` 4/4 | same | — |
+| #165 | `fix/v6-summary-loading-state` | `d24d6aa` | pass | Vitest 1951 at the merge; `summary-loading-state.spec.js` 5/5 | same | #164 (stacked) |
+| #166 | `design/v6-library-actions` | `43ff246` | pass | Vitest 1934; Library fixture specs 42/42 | same | — |
+| #167 | `design/v6-header` | `0279d07` | pass | Vitest 1936; `mobile-header.spec.js` 115/115 | same | reconcile with #160 |
+| #168 | `design/v6-profile` | `c9d329e` | pass | Vitest 1942 | same | — |
+| #169 | `design/v6-quiz` | `ceea584` | pass | Vitest 1939; quiz fixture specs 9/9 | same | — |
+| #170 | `ci/v6-fixture-smoke` | `5253f86` | pass | list unit test 5/5; six added specs 21/21; gate failure proven on CI | same | merge first |
+| #171 | `design/v6-library-card` | `1ee999e` | running | Vitest 1943 before the review fixes; card tests after them | `9496170` (older) | — |
+| #172 | `design/v6-learning-home` | `61feebc` | pass | Vitest 1940 before the last fix | `ba13c06` (older) | — |
+| #173 | `design/v6-library-integration` | `4cd342e` | running | Vitest 1956; `library-learning-home.spec.js` 18/18; five Library specs 46/46 | not in trial 3 | #166, #171, #172 (stacked) |
+
+### Local integrations (never pushed)
+
+| Trial | Branches | Commit / tree | Vitest | Build | Lint | Full Fixture Audit |
+|---|---|---|---|---|---|---|
+| 1 | #159-#166 (8) | discarded | 1968/1968 | pass | 63 | 603/604; the failure was a 43.99997px measurement in `landing-v6.spec.js`, fixed in #159 |
+| 2 | #159-#169 (11) | `ce5dd9c` | 1994/1994 | pass | 63 | 608/608, 24.8 min |
+| 3 | #159-#172 (14) | `aba1494c89ef` / tree `e3217ca2dab2` | 2016/2016 (246 files) | pass | 63 (baseline 67) | **608 collected, 608 passed, 0 failed, 0 skipped, 0 flaky**, 22.0 min |
+
+Trial 3 details:
+- Command: `npx playwright test -c playwright.fixture.config.js --workers=1 --fail-on-flaky-tests`, Chromium only (the config has one project). Logs kept outside the repository: `studymap-qa-execution/v6/results/integration-14/`.
+- Heads merged: the "Trial 3 head" column above. Conflicts: the two `.playbook` files (kept both sides) and one line of `MainLayout.jsx` between #160 and #167.
+- The fixture count is 608 in trials 2 and 3 because #170, #171 and #172 add no fixture spec (they add unit tests and a CI script). The smoke-list script found 21 spec files on the merged tree, so the five V6 specs join the gate once their branches carry #170.
+- **Not covered by trial 3:** the commits made after it (#171 `5ff7dc2`, `1ee999e`; #172 `61feebc`) and all of #173. Those were tested on their own branches only.
 
 ### Merge order and conflicts
 
-- #160 before #161 (stacked). #164 before #165 (stacked since the conflict in `fetchSummaries` was resolved by merging #164 into #165 with both rules kept).
-- #167 conflicts with #160 in one line of `MainLayout.jsx` (the `useTheme()` line directly under the block #160 adds): keep #160's block and #167's line.
-- #160, #162, #163, #164, #165 each append to the end of the two `.playbook` files: after one merges, the others need their notes rebased. No other code conflict was found in the trial merge.
+See `04-integration-checklist.md` for the dependency graph, the order, and what to check at each step.
 
 ## Skills and tools used
 
@@ -73,7 +96,26 @@ Not used: `ui-ux-pro-max`, `web-interface-guidelines`, `design-system` are insta
 
 ## Owner decisions
 
-1. Landing headline and sample content (economics examples) are proposals.
-2. The landing no longer colours part of the headline red. Red is kept for citations and the wordmark, as V5 rule §1 says.
-3. Wordmark contrast (see `02-design-spec.md`, review notes): keep the brand red under the logo exemption, or add a darker brand-text token.
-4. Order of Wave E fixes: the proposal is findings 1, 2, 3 (chat cancel race, orphan pollers) before the double-submit group (5, 6, 8, 9, 10).
+Decided:
+1. Library: "Yêu thích" and "Đã ghim" are filters in the "Lọc" popover only (#166).
+2. Header: one theme control; shortcut help in the account menu (#167).
+3. Account page keeps "Đổi mật khẩu" as well as the account menu; both open the same dialog (#168).
+4. Regression specs may be added to Fixture Smoke through a separate pull request (#170).
+5. The card renderer is the Library design for V6. The matrix renderer and its flag stay in the code, unchanged.
+
+Open:
+1. Landing headline and sample content are proposals (#159). Wordmark contrast: keep the brand red under the logo exemption, or add a darker brand-text token.
+2. The Library lists the same document under many headings (about 7,000px for five documents). Proposal: one list, with the matrix renderer's task views ("Tất cả", "Tiếp tục học", "Cần quiz", "Cần tóm tắt") as filters in place of the repeated sections (#171, #173).
+3. The Library header's "Tải tài liệu lên" is a filled button next to the learning home's filled "Tiếp tục" (#173).
+4. "Tiếp tục" is no longer offered for a document that is not indexed or whose processing failed (#171).
+5. Whether practice submit should be idempotent on the server (#162).
+
+## Backlog, in order
+
+1. AI chat workspace: message layout, composer, citations and evidence, history, right inspector, phone layout. Only the start screen is done (#161).
+2. Quiz setup, generation progress, results, explanations and review. Only quiz-taking is done (#169).
+3. Workspace panels: left and right sidebars, mind-map controls, summary pane, knowledge-map evidence, toolbars, dialogs.
+4. Library: decision 2 above; the detailed "Tổng quan học tập" panel; the "Đang yếu ở" section.
+5. Reliability: stale requests are ignored, not aborted; two review clicks in one tick still send two requests; `SidebarRight.guidedDialogClose.test.jsx` failed in a shuffled concurrent run and was not investigated; the Library page's `root`/`host` test globals.
+6. Coverage: Firefox, WebKit, real devices, screen readers. Move the five V6 specs to `REQUIRED` in the smoke list after their pull requests merge.
+7. Matrix renderer: its empty-library state uses the filtered-empty message. A later pull request should fold its useful parts into the card renderer (task views, remembered search and scroll, the phone tools sheet, the mind-map shortcut) and remove the second renderer.
