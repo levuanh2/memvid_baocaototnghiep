@@ -3719,3 +3719,10 @@ Rules: check icons and logos when a rename is reported incomplete; serve a chang
 new URL (browsers cache favicons per URL); a static SVG cannot read CSS variables, so pin its
 colour to the token value and test that they stay equal; comments quoting the retired name trip
 the branding test, so describe it without naming it.
+
+## 2026-11-13 — Removing the container does not clean up a portal
+
+A test that only detaches its container leaves every portal (dialogs, toasts, menus) mounted in
+`document.body`, and a later test's `document.body.querySelector` finds the leftover. It hides
+while tests run in file order and shows up only under `--sequence.shuffle`. Always unmount the
+React root in `afterEach`; to check a file for order dependence, run it with a few shuffle seeds.
