@@ -81,6 +81,14 @@ describe("LearningHome", () => {
     expect(container.textContent).toContain("chưa lập chỉ mục xong");
   });
 
+  it("says a failed document failed, not that it is still being indexed", async () => {
+    const failed = { ...A, status: "failed", ingest_status: "error", ai: { index: "not_generated" } };
+    await render({ mucHienThi: { tiepTucHoc: failed, hocGanDay: [], canOnTap: [] } });
+    expect(container.querySelectorAll(".btn-seal")).toHaveLength(0);
+    expect(container.textContent).toContain("Xử lý tài liệu này bị lỗi");
+    expect(container.textContent).not.toContain("chưa lập chỉ mục xong");
+  });
+
   it("offers the review queue only when something is due, starting with the first due document", async () => {
     await render();
     expect(button("cần ôn ngay")).toBeUndefined();
