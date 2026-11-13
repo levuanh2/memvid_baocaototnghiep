@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useId, useRef, useState } from "react";
 import { Icon } from "../ui/Icon";
 import { chipHienThi, READY, GENERATING } from "../../utils/trangThaiAi";
 import { tenHienThi, thoiGianDoc, nhanThoiGianDoc } from "../../utils/thuVienTaiLieu";
@@ -37,6 +37,10 @@ export default function StudyCard({
   // same props, same actions, just fewer of them rendered/visible at once.
   // Không đổi thứ bậc thị giác đã có (tên → AI Overview → …), chỉ rút gọn nó.
   const gon = matDo === "compact";
+  // The same document is drawn in several sections of the Library ("Đã ghim", "Hôm nay",
+  // "Tất cả"…), so an id built from `document_id` alone repeats in one page and
+  // `aria-controls` / `aria-describedby` stop pointing at one element. Unique per instance.
+  const uid = useId();
   const [menuMo, setMenuMo] = useState(false);
   const nutMenuRef = useRef(null);
   const menuRef = useRef(null);
@@ -144,7 +148,11 @@ export default function StudyCard({
       // mũi tên đi giữa các thẻ. Cho mọi thẻ `tabIndex=0` thì người dùng bàn phím
       // phải Tab qua 300 lần để tới thanh dưới.
       tabIndex={tabIndex}
-      onKeyDown={onKeyDown}
+      // The list's keys (arrows, Space = select, Enter = open) belong to the CARD. A key
+      // pressed on a button, the checkbox or a menu item inside it is that control's own: it
+      // used to bubble here too, so Enter on "Tóm tắt" also opened the card's last workspace
+      // and Space on a tool selected the card.
+      onKeyDown={onKeyDown ? (e) => { if (e.target === e.currentTarget) onKeyDown(e); } : undefined}
       aria-selected={onChon ? Boolean(daChon) : undefined}
       className="surface-card study-card"
       data-density={gon ? "compact" : "comfortable"}
@@ -305,7 +313,7 @@ export default function StudyCard({
                 sanSang ? (tt?.soLuong ? `đã có ${tt.soLuong}` : "đã có") : null,
                 dangTao ? "đang tạo" : null,
               ].filter(Boolean).join(", ");
-              const idMoTa = `cong-cu-${khoa}-${doc.document_id}`;
+              const idMoTa = `cong-cu-${khoa}-${uid}`;
               return (
                 <button key={khoa} type="button" className="study-card__tool"
                         data-ready={sanSang ? "true" : undefined}
@@ -330,7 +338,7 @@ export default function StudyCard({
         )}
         <button type="button" className="pill-action study-card__details"
                 aria-expanded={moTriThuc}
-                aria-controls={`tri-thuc-${doc.document_id}`}
+                aria-controls={`tri-thuc-${uid}`}
                 onClick={batTatTriThuc}>
           <Icon name="ChevronDown" size={13} aria-hidden="true"
                 style={{ transform: moTriThuc ? "rotate(180deg)" : undefined,
@@ -340,7 +348,7 @@ export default function StudyCard({
       </div>
 
       {daTungMo && (
-        <div id={`tri-thuc-${doc.document_id}`}
+        <div id={`tri-thuc-${uid}`}
              className={`knowledge-panel${moTriThuc ? " knowledge-panel--open" : ""}`}
              aria-hidden={!moTriThuc} inert={!moTriThuc ? "" : undefined}
              // Chặn nảy bọt: bàn phím ở đây là của các nút BÊN TRONG panel (mở câu
