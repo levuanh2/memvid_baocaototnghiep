@@ -233,7 +233,7 @@ export default function QuizResult() {
             <SectionTitle>Từng câu</SectionTitle>
             <div className="flex flex-col gap-3">
               {(result.questions || []).map((q, i) => (
-                <ReviewedQuestion key={q.question_id} question={q} order={i + 1} />
+                <ReviewedQuestion key={q.question_id} question={q} order={i + 1} gonKhiDung />
               ))}
             </div>
           </section>}
@@ -385,7 +385,7 @@ function WrongAnswerReview({ questions, index, onIndex, onClose, reviewPlanTo })
         <ReviewedQuestion question={current} order={current._originalOrder} />
         <Link className="btn-secondary quiz-wrong-review__compact-review-link" to={reviewPlanTo}>Mở kế hoạch ôn tập</Link>
       </section>
-      <aside className="quiz-wrong-review__next"><Icon name="Target" size={20} /><h2>Tiếp tục học</h2><p>Đây là phần xem lại câu trả lời. Kế hoạch ôn tập riêng vẫn được tạo và quản lý ở bước tiếp theo.</p><Link className="btn-primary" to={reviewPlanTo}>Mở kế hoạch ôn tập</Link></aside>
+      <aside className="quiz-wrong-review__next"><Icon name="Target" size={20} /><h2>Tiếp tục học</h2><p>Đây là phần xem lại câu trả lời. Kế hoạch ôn tập riêng vẫn được tạo và quản lý ở bước tiếp theo.</p><Link className="btn-secondary" to={reviewPlanTo}>Mở kế hoạch ôn tập</Link></aside>
     </div>
   );
 }
@@ -399,10 +399,41 @@ function Stat({ label, value }) {
   );
 }
 
-function ReviewedQuestion({ question, order }) {
+// `gonKhiDung`: in the full result list, a question answered correctly is one compact row
+// (the question, what you chose, the check) with its explanation behind a disclosure. The
+// learner's attention goes to what was wrong; before, every correct question also listed all
+// four options and its explanation, which made a 10-question result about 10 screens long.
+function ReviewedQuestion({ question, order, gonKhiDung = false }) {
   const { verdict } = question;
   const tone =
     verdict === "correct" ? "var(--quiz-status-correct)" : verdict === "partial" ? "var(--quiz-status-partial)" : "var(--quiz-status-incorrect)";
+  if (gonKhiDung && verdict === "correct") {
+    const giaiThich = question.feedback || question.explanation;
+    return (
+      <article className="surface-card quiz-reviewed--compact" data-verdict="correct">
+        <div className="flex items-start gap-3">
+          <span className="font-mono text-small text-text-muted mt-0.5">{String(order).padStart(2, "0")}</span>
+          <div className="min-w-0 flex-1">
+            <h3 className="font-display text-body-lg text-text-primary">{question.question_text}</h3>
+            <p className="mt-1 text-small text-text-secondary">
+              Bạn trả lời: <span className="text-text-primary">{optionLabel(question.user_answer) || "—"}</span>
+            </p>
+            {giaiThich && (
+              <details className="quiz-reviewed__why mt-2">
+                <summary>Xem giải thích</summary>
+                <p className="mt-1.5 text-body text-text-secondary">{giaiThich}</p>
+              </details>
+            )}
+          </div>
+          <span className="quiz-verdict-badge rounded-[4px] text-metadata px-2 py-[2px] font-semibold uppercase font-mono shrink-0"
+            data-verdict={verdict}
+            style={{ color: tone, border: `1px solid ${tone}`, background: `color-mix(in srgb, ${tone} 12%, transparent)` }}>
+            {verdictLabel(verdict)}
+          </span>
+        </div>
+      </article>
+    );
+  }
   return (
     <article className="surface-card">
       <div className="flex items-start gap-3 mb-3">
