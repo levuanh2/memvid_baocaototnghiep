@@ -171,3 +171,23 @@ for (const width of [320, 390, 768, 1024, 1440]) {
     });
   }
 }
+
+test("arrow keys move focus between the cards of the list, and keys on a tool stay with the tool", async ({ page }) => {
+  await openLibrary(page);
+  const tabStop = page.locator('.study-card[tabindex="0"]');
+  await expect(tabStop).toHaveCount(1);
+  await tabStop.focus();
+  const first = await tabStop.locator("h3").textContent();
+  await page.keyboard.press("ArrowDown");
+  // Focus moved with the tab stop (it used to stay on the card that had just become untabbable).
+  const focused = page.locator(".study-card:focus");
+  await expect(focused).toHaveCount(1);
+  await expect(focused).toHaveAttribute("tabindex", "0");
+  expect(await focused.locator("h3").textContent()).not.toBe(first);
+
+  // Space on a tool inside a card activates the tool; it does not select the card.
+  const ready = cardOf(page, RESUME.display_name);
+  await ready.getByRole("button", { name: "Tóm tắt", exact: true }).focus();
+  await page.keyboard.press("Space");
+  await expect(page).toHaveURL(/tab=summary/);
+});
