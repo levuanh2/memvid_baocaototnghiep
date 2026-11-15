@@ -36,12 +36,12 @@ Six different things are kept apart below. Do not read one as another.
 
 ### Pull requests
 
-`CI` = the required check on the head named here, read from GitHub on 2026-11-14.
-`Trial 5` = the head that was in the fifth local integration (next section). All current heads were in it.
+`CI` = the required check on the head named here, read from GitHub on 2026-11-15.
+`Trial 6` = the head in the sixth local integration (fully tested). Trial 7 merged every current head but its test run was stopped (next section).
 
-| PR | Branch | Head | CI | Tested alone | Trial 5 head | Depends on |
+| PR | Branch | Head | CI | Tested alone | Trial 6 head | Depends on |
 |---|---|---|---|---|---|---|
-| #159 | `design/v6-foundation` | this branch | pass on `a210312` | Vitest 1933; landing specs 23/23; copy and wordmark-contrast tests | `a210312` | — |
+| #159 | `design/v6-foundation` | this branch | pass on `3a0991d` | wordmark AA in landing header, footer and app header (4.72-4.91:1); scope probe test; conversation-history design `05-…` | `012e34b` | — |
 | #160 | `fix/v6-source-loading-state` | `22aa5b5` | pass | Layout 174; `source-loading-state.spec.js` 8/8 | same | — |
 | #161 | `design/v6-chat-start` | `32bb6c1` | pass | Vitest 1940; five chat fixture specs 55/55 | same | #160 (stacked) |
 | #162 | `fix/v6-double-submit-guards` | `4e42f9d` | pass | Vitest 1938 | same | — |
@@ -49,10 +49,10 @@ Six different things are kept apart below. Do not read one as another.
 | #164 | `fix/v6-stale-owner-guards` | `7a39e12` | pass | Vitest 1945; `knowledge-map-*.spec` 4/4 | same | — |
 | #165 | `fix/v6-summary-loading-state` | `d24d6aa` | pass | Vitest 1951 at the merge; `summary-loading-state.spec.js` 5/5 | same | #164 (stacked) |
 | #166 | `design/v6-library-actions` | `43ff246` | pass | Vitest 1934; Library fixture specs 42/42 | same | — |
-| #167 | `design/v6-header` | `0279d07` | pass | Vitest 1936; `mobile-header.spec.js` 115/115 | same | reconcile with #160 |
+| #167 | `design/v6-header` | `6372346` | pass | Vitest 1936; `mobile-header.spec.js` 115/115; `@media` rule on one line (trials 4-6 lost its brace) | same | reconcile with #160 |
 | #168 | `design/v6-profile` | `c9d329e` | pass | Vitest 1942 | same | — |
 | #169 | `design/v6-quiz` | `ceea584` | pass | Vitest 1939; quiz fixture specs 9/9 | same | — |
-| #170 | `ci/v6-fixture-smoke` | `5253f86` | pass | list unit test 5/5; six added specs 21/21; gate failure proven on CI | same | merge first |
+| #170 | `ci/v6-fixture-smoke` | `9cd8765` | pass | list unit test 7/7; 7 V6 specs added to `WHEN_PRESENT` (28 files on the integration) | `a8bc56c` | merge first |
 | #171 | `design/v6-library-card` | `1ee999e` | pass | Vitest 1943 before the review fixes; card tests after them | same | — |
 | #172 | `design/v6-learning-home` | `61feebc` | pass | Vitest 1940 before the last fix | same | — |
 | #173 | `design/v6-library-integration` | `4cd342e` | pass | Vitest 1956; `library-learning-home.spec.js` 18/18; five Library specs 46/46 | same | #166, #171, #172 (stacked) |
@@ -64,9 +64,11 @@ Six different things are kept apart below. Do not read one as another.
 | #179 | `design/v6-quiz-setup` | `f8792b1` | pass | Vitest 1945; `quiz-setup-v6.spec.js` 6/6 | same | #175 (stacked) |
 | #180 | `design/v6-chat-evidence` | `7a7fa3e` | pass | Vitest 1957; build pass | same | #178 (stacked) |
 | #181 | `fix/test-guided-dialog-unmount` | `78935e1` | pass | shuffled full Vitest 1933/1933 | same | — (test only) |
-| #182 | `design/v6-quiz-review` | `85c43bc` | pass | Vitest 1955; `quiz-review-v6.spec.js` 5/5 | same | #179 (stacked) |
-| #183 | `fix/practice-submit-atomic` | `1d787f8` | pass (backend suite on PostgreSQL) | concurrency tests 5/5 (red 4/4 on `main`); backend suite 2962 passed, 6 failed also on `main` | same | — (backend only) |
-| #184 | `design/v6-mobile-viewport` | `337cae4` | pass | Vitest 1960; mobile/chat specs 160/160 | same | #180 (stacked) |
+| #182 | `design/v6-quiz-review` | `bb4916e` | pass | Vitest 1955; `quiz-review-v6.spec.js` 5/5; title no longer cut to "K…" (red before) | `85c43bc` | #179 (stacked) |
+| #183 | `fix/practice-submit-atomic` | `1d787f8` | pass (backend suite on PostgreSQL) | concurrency tests 5/5 (red 4/4 on `main`); backend suite 2962 passed, 6 failed also on `main` | same | — (backend only); superseded in part by #185 |
+| #184 | `design/v6-mobile-viewport` | `0b7d58a` | pass | `useAppHeight` 7 (5 red before: pan, zoom, rotation, cleanup, dedupe); viewport spec +4; drawer focus spec (red before) | `96336fa` | #180 (stacked) |
+| #185 | `fix/practice-idempotency-key` | `06a65f8` | pass on `88824f8` (incl. backend integration on PostgreSQL 16); `06a65f8` pending | 24 PostgreSQL tests + 2 race tests; FE 8; two independent reviews, all BUG findings fixed | `88824f8` | #183 (stacked) |
+| #186 | `design/v6-learning-progress` | `3c6859f` | pass | helpers 10; `learning-progress.spec.js` 6/6; Vitest 1976 | same | #176 (stacked) |
 
 ### Local integrations (never pushed)
 
@@ -77,6 +79,10 @@ Six different things are kept apart below. Do not read one as another.
 | 3 | #159-#172 (14) | `aba1494c89ef` / tree `e3217ca2dab2` | 2016/2016 (246 files) | pass | 63 (baseline 67) | 608 collected, 608 passed, 0 failed, 0 skipped, 0 flaky, 22.0 min |
 | 4 | #159-#179 (21) | `1df5748` / tree `effeb5af95b4` | 2042/2042 (250 files) | pass | 63 (baseline 67) | 660 collected, 660 passed, 0 failed, 0 skipped, 0 flaky, 27.8 min |
 | 5 | #159-#184 (26) | `e3ff458` / tree `76afcfbce69f` | 2071/2071 (256 files); shuffled (seed 61201) 2071/2071 | pass | 63 (baseline 67) | **675 collected, 673 passed, 0 failed, 0 flaky, 2 skipped** (the two screenshot-capture tests, which run only with `V6_SHOT_OUT`), 25.1 min |
+| 6 | #159-#186 (28) | `ee010e6` / tree `72cc0cb0ac62` | 2093/2093 (258 files); shuffled seeds 61201, 7, 4242: 2093/2093 each | pass | 63 (baseline 67) | **689 collected, 683 passed, 1 failed, 0 flaky, 5 skipped**, 32.6 min. Fixture Smoke (26 files): 325 passed, 1 failed, 4 skipped. The one failure, both runs: the new wordmark-scope test of #159 found no seal text to compare on the integrated chat start (#161 removed it); test rewritten with probes in `3a0991d` |
+| 7 | #159-#186 (28), every current head | `3487bcc` / tree `b41fa85ad513` | not run | not run | not run | **not run**: merge clean, CSS parses, 83 commits without duplicate patch or subject, smoke list 28 files; the test run was stopped by Claude Code because the machine ran low on memory, and was not restarted |
+
+Trial 6 details: backend suite on the tree (disposable PostgreSQL 16): 2985 passed, 9 skipped, 6 failed, the same 6 that fail on `main` (`test_index_khoa_that.py` x5, `test_fpt_rerank.py` x1). No CSS repair was needed: #167 now writes its `@media` rule on one line. One real conflict, `Practice.jsx` imports (#162 vs #185), removed by aligning the import order in #185 (`88824f8`). Logs: `studymap-qa-execution/v6/results/integration-28/`.
 
 Trial 5 details:
 - Command: `npx playwright test -c playwright.fixture.config.js --workers=1 --fail-on-flaky-tests`, Chromium only (the config has one project). Logs outside the repository: `studymap-qa-execution/v6/results/integration-26/`.
@@ -122,21 +128,28 @@ Decided:
 8. Practice submission: server-side protection prepared as a Draft (#183); no deploy and no public API change without approval.
 9. Conversation history: no new backend route; API design only (below).
 
+Decided 2026-11-15:
+10. Practice submission: `Idempotency-Key` (#185), not the 30 s window as a lasting rule.
+11. `--brand-text` for every wordmark (#159: landing header, footer, app header).
+12. Headline approved: "Hỏi chính tài liệu của bạn, rồi xem câu trả lời dựa trên đoạn nào."
+13. Conversation history: design only, now in `05-conversation-history-api.md`.
+14. lean-ctx: no global change; cause found (below), fix needs approval.
+
 Open:
-1. #183's replay rule (same answers within 30 s get 409) is a heuristic; an `Idempotency-Key` header would be exact but is an API change (proposal in #183). Choose the window, or approve the key.
-2. Wordmark in the landing footer and the app header still measures 3.95:1 (light) / 4.20:1 (dark); #159 changed only the landing header.
-3. The new headline "Hỏi chính tài liệu của bạn, rồi xem câu trả lời dựa trên đoạn nào." is a proposal.
-4. lean-ctx PreToolUse hook: quoting it would block `herdr`/`docker` for every session; proposal in `studymap-qa-execution/v6/results/hook-rewrite-enforce-2026-11-14.md`.
+1. Diagnostic grading has no grading claim (a duplicated grading job can grade twice) and a diagnostic attempt can still be stranded `submitted`; needs a sweeper or a regrade route.
+2. Open mode: one anonymous owner for every client; the practice key is then a bearer token, and the diagnostic flow shares one in-progress attempt between anonymous clients.
+3. Conversation history retention: 24 h today (SQLite TTL); choose 24 h, 30 days or until deleted, and SQLite vs PostgreSQL.
+4. lean-ctx: its MCP server rewrites `~/.claude/settings.json` with an unquoted path on every session start; two fixes verified in isolation (`manage_hooks = false`, or `LEAN_CTX_HOOK_BINARY` = 8.3 path). Either one turns `rewrite-enforce` on, which blocks `herdr`/`docker`; see `studymap-qa-execution/v6/results/hook-overwrite-root-cause-2026-11-15.md`.
 
 ### Conversation history: API design only (not implemented)
-`GET /api/conversations?limit=20&before=<iso>` for the signed-in user: `{ conversations: [{ id, title, document_stems, last_message_at, message_count }], next_before }`, newest first, owner-scoped like `/conversations/<id>/messages`, no message bodies in the list. The frontend would list them under the chat header and reload one through the existing `GET /conversations/<id>/messages`.
+Full proposal: `05-conversation-history-api.md` (contracts, keyset pagination, data model, ownership review, retention options, migration paths, frontend plan).
 
 ## Backlog, in order
 
-1. AI chat workspace: conversation history (API design above; route not approved), the right inspector, iOS `visualViewport.offsetTop` while focused. Done: start screen (#161), conversation and citations (#174), composer (#178), evidence panel names (#180), phone keyboard (#184).
-2. Quiz: per-topic practice history on the review guide (the API has none). Done: quiz-taking (#169), the per-question result list (#175), setup and progress (#179), score header and review guide (#182). Open: at 390px the `StudyShell` title is cut to one letter when the header action is long.
+1. AI chat workspace: conversation history (design only), the right inspector, modals portaled to `body` during an iOS pan. Done: start screen (#161), conversation and citations (#174), composer (#178), evidence panel names (#180), phone keyboard and iOS pan (#184), drawer focus and Escape (#184).
+2. Quiz: per-topic practice history on the review guide (the API has none). Done: quiz-taking (#169), the per-question result list (#175), setup and progress (#179), score header and review guide (#182). Done: the `StudyShell` title no longer collapses at 390px (#182).
 3. Workspace panels: left and right sidebars, mind-map controls, summary pane, knowledge-map evidence, toolbars, dialogs.
-4. Library: the detailed "Tổng quan học tập" panel; the "Đang yếu ở" section; the phone tools sheet and mind-map shortcut of the matrix renderer (not moved in #176).
+4. Library: done, the detailed progress page (#186); open: the "Đang yếu ở" section; the phone tools sheet and mind-map shortcut of the matrix renderer (not moved in #176).
 5. Reliability: a stale `POST /query` is ignored, not aborted, and the backend has no cancel for `query` jobs. Done: `SidebarRight.guidedDialogClose.test.jsx` order dependence (#181: the test never unmounted its root, so the portaled dialog leaked into the next test; CI does not shuffle) and the Library page's test globals (#166).
-6. Coverage: Firefox, WebKit, real devices, screen readers. Move the V6 specs to `REQUIRED` in the smoke list after their pull requests merge, and add `quiz-review-v6`, `mobile-viewport`, `landing-wordmark-contrast`.
+6. Coverage: Firefox, WebKit, real devices, screen readers. Move the V6 specs to `REQUIRED` in the smoke list after their pull requests merge (seven more joined `WHEN_PRESENT` in #170).
 7. Matrix renderer: its empty-library state is fixed in #176. A later pull request should fold its useful parts into the card renderer (task views, remembered search and scroll, the phone tools sheet, the mind-map shortcut) and remove the second renderer.

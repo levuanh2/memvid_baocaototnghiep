@@ -27,6 +27,7 @@ main (db005ab)
 ├─ #166 design/v6-library-actions ─┐
 ├─ #171 design/v6-library-card ────┼─ #173 design/v6-library-integration (stacked: contains all three)
 │                                  │    └─ #176 design/v6-library-one-list
+│                                  │         └─ #186 design/v6-learning-progress
 ├─ #172 design/v6-learning-home ───┘
 ├─ #168 design/v6-profile
 ├─ #169 design/v6-quiz
@@ -34,12 +35,13 @@ main (db005ab)
 │         └─ #179 design/v6-quiz-setup
 │              └─ #182 design/v6-quiz-review
 ├─ #181 fix/test-guided-dialog-unmount (test only, from main)
-├─ #183 fix/practice-submit-atomic (backend only, from main; owner approval before deploy)
+├─ #183 fix/practice-submit-atomic (backend only, from main)
+│    └─ #185 fix/practice-idempotency-key (backend + Practice page; migration 20261115)
 └─ #159 design/v6-foundation (landing + these documents)
 ```
 
 Real dependencies: #161 needs #160, #165 needs #164, #173 needs #166 + #171 + #172, #174 needs
-#161 + #163, #175 needs #169, #176 needs #173, #177 -> #178 -> #180 stack on #174, #179 needs #175, #182 needs #179, #184 needs #180, and #167 has to
+#161 + #163, #175 needs #169, #176 needs #173, #177 -> #178 -> #180 stack on #174, #179 needs #175, #182 needs #179, #184 needs #180, #185 needs #183, #186 needs #176, and #167 has to
 be reconciled with #160. Everything else is independent in code.
 
 ## Order
@@ -55,8 +57,14 @@ be reconciled with #160. Everything else is independent in code.
 6. **#162, #163, #168, #169, #159, #181, #183** in any order (#183 changes the backend: merge only
    with the owner's approval of its replay rule); then **#174** (after #161 and #163)
    -> **#177** -> **#178** -> **#180** -> **#184**, and **#175** (after #169) -> **#179** -> **#182**.
-   When #174 meets #167 in `FE/src/index.css` (both append at the end), keep both blocks and the
-   closing `}` of #167's `@media (max-width: 767px)` block; trial 4 lost it once ("Unclosed block").
+   #167 now writes its `@media (max-width: 767px)` rule on one line (`6372346`), so the
+   union with #174 at the end of `FE/src/index.css` can no longer drop its brace (trials 4-6
+   did). Still parse the file after resolving.
+   **#183 -> #185** together, and only after the deploy order is planned: the migration
+   `20261115_attempt_submit_key` must run before the new backend starts (the model selects the
+   new columns); `scripts/deploy.sh` runs migrations (step 5) before `compose up` (step 6). The
+   web part sends the key in the body, so web-before-backend is safe. #185 merges cleanly with
+   #162 (`Practice.jsx` imports aligned in `88824f8`). **#186** after #176.
 7. After #159, #160, #161, #164, #165 are on `main`: move their five specs from `WHEN_PRESENT`
    to `REQUIRED` in `FE/scripts/fixture-smoke-specs.mjs`. Until then, deleting or renaming one of
    those spec files would not fail CI.
@@ -86,7 +94,7 @@ be reconciled with #160. Everything else is independent in code.
 ## Evidence (local trial integration, never pushed)
 
 See "Trial integration" in `README.md` for the heads, test counts and the full Fixture Audit
-result. Trial 5 merged #159-#184 in the order above (26 branches); the conflicts were the
+result. Trial 6 merged #159-#186 in the order above (28 branches) and was fully tested; trial 7 merged every current head cleanly but its test run was stopped for lack of memory. Trial 5 merged #159-#184 (26 branches); the conflicts were the
 playbook files, the one line in `MainLayout.jsx`, and the end of `index.css` (see step 6), and the
 `index.css` brace was lost again by the union and restored by hand.
 
