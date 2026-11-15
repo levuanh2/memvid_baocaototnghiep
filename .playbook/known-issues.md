@@ -8253,3 +8253,18 @@ style write when nothing changed.
 
 **Prevention:** on iOS the visible area is `offsetTop .. offsetTop + height`, both of which
 change; test both. Still simulation: no iPhone, Safari or WebKit run.
+
+
+### Phone source drawer: no Escape, focus left behind it (2026-11-15)
+
+**Symptoms:** at phone width, opening "Mở thư mục nguồn" left keyboard focus on the header
+behind the drawer, and Escape did nothing (only the X and the backdrop closed it).
+
+**Root cause:** the Escape effect covered the right drawer and the tablet shelf only, and
+nothing moved focus into the left drawer when it opened (the reverse hand-off, focus out of a
+closing surface, already existed).
+
+**Fix:** Escape also closes the left drawer (still deferring to an open `aria-modal` dialog);
+opening it focuses its first control.
+
+**Regression:** `e2e-fixture/workspace-drawer-focus.spec.js` (red before: focus not inside).

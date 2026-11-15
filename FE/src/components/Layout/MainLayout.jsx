@@ -562,16 +562,18 @@ export default function MainLayout({
   // panel.collapsed.left — see that declaration's own comment for why).
   useEffect(() => {
     const onKey = (e) => {
-      if (e.key !== "Escape" || !((panelDrawer && rightOpen) || tabletShelfOpen)) return;
+      if (e.key !== "Escape" || !((panelDrawer && (rightOpen || leftOpen)) || tabletShelfOpen)) return;
       // Defer to real modal dialogs only. `.me-container` is the Mind Map canvas
       // itself, present for the whole MindMap mode, so it must not block Escape.
       if (document.querySelector('[aria-modal="true"]')) return;
       if (tabletShelfOpen) setTabletShelfOpen(false);
+      // V6: the phone source drawer had no keyboard way out (only its X and the backdrop).
+      else if (panelDrawer && leftOpen) setLeftOpen(false);
       else closeRightPanel();
     };
     window.addEventListener("keydown", onKey);
     return () => window.removeEventListener("keydown", onKey);
-  }, [panelDrawer, rightOpen, closeRightPanel, tabletShelfOpen]);
+  }, [panelDrawer, rightOpen, leftOpen, closeRightPanel, tabletShelfOpen]);
 
   const rightSurfaceVisible = true;
   // 2026-09-21: Mind Map's node-detail surface must be a closed-by-default
@@ -594,6 +596,14 @@ export default function MainLayout({
   // control that reopens the surface: the header tools trigger (mobile) or the column's spine.
   const leftAsideRef = useRef(null);
   const rightAsideRef = useRef(null);
+  // The reverse hand-off: opening the phone drawer from the header puts focus inside it, so
+  // a keyboard or screen-reader user lands where the drawer's content is, not behind it.
+  useEffect(() => {
+    if (!panel.drawer || !leftOpen) return;
+    leftAsideRef.current
+      ?.querySelector('button:not([disabled]), [href], input:not([disabled]), [tabindex]:not([tabindex="-1"])')
+      ?.focus();
+  }, [panel.drawer, leftOpen]);
   useLayoutEffect(() => {
     for (const [hidden, ref, spine] of [[leftSurfaceHidden, leftAsideRef, ".panel-spine--left"], [rightSurfaceHidden, rightAsideRef, ".panel-spine--right"]]) {
       if (!hidden || !ref.current?.contains(document.activeElement)) continue;
