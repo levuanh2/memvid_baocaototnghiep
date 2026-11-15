@@ -18,6 +18,7 @@ Ba điểm dễ làm hỏng khi đọc lướt:
 
 from __future__ import annotations
 
+import re
 from typing import Any, Dict, Optional
 
 from app.application import attempts as attempts_uc
@@ -34,6 +35,25 @@ class PracticeChuaSanSang(attempts_uc.AttemptError):
 
 class ChuaCoLanChamNao(attempts_uc.AttemptError):
     loi = "Chưa có lần làm nào đã chấm cho practice quiz này"
+
+
+class KhoaNopBaiKhongHopLe(attempts_uc.AttemptError):
+    loi = "Idempotency-Key không hợp lệ (16–128 ký tự A-Z a-z 0-9 _ -)"
+
+
+class KhoaNopBaiDaDung(attempts_uc.AttemptError):
+    """Cùng key, khác quiz hoặc khác đáp án: không phải retry của cùng một lần nộp."""
+    loi = "Idempotency-Key đã dùng cho một lần nộp khác"
+
+
+class NopBaiDangCham(attempts_uc.AttemptError):
+    """Retry trong khi request đầu tiên vẫn đang chấm. Thử lại với CÙNG key."""
+    loi = "Bài nộp này đang được chấm, thử lại sau ít giây"
+
+
+# A client key is a random token (the FE sends `crypto.randomUUID()`); in open mode it is
+# the only thing that tells two anonymous clients apart, so short guessable keys are refused.
+_KHOA_HOP_LE = re.compile(r"[A-Za-z0-9_-]{16,128}")
 
 
 def _load_owned_practice(quiz_id: str, user_id: Optional[str], *,
@@ -64,15 +84,22 @@ def get(practice_quiz_id: str, user_id: Optional[str], *,
 
 
 def submit(practice_quiz_id: str, user_id: Optional[str], raw: Any, *,
-           bat_buoc_chu_so_huu: bool) -> Dict[str, Any]:
+           bat_buoc_chu_so_huu: bool, submit_key: Optional[str] = None) -> Dict[str, Any]:
     """Nộp bài luyện tập trong MỘT lần gọi (FR-11.6, FR-11.7).
 
     Thứ tự tác dụng phụ là hợp đồng, không phải chi tiết: mở attempt -> ghi nháp ->
     nộp -> chấm, tất cả trong cùng một request. Không hàng đợi, không job nền.
+
+    `submit_key` (Idempotency-Key, tuỳ chọn): một lần nộp logic = một key. Gửi lại cùng
+    key + cùng đáp án trả lại ĐÚNG kết quả đã chấm, không chấm lại, không cập nhật
+    mastery lần hai; lần làm mới phải có key mới dù đáp án y hệt.
     """
     from app.domains.attempts import repository as _attempts
     from app.domains.attempts import service as _grading_service
 
+    if submit_key is not None and not (isinstance(submit_key, str)
+                                       and _KHOA_HOP_LE.fullmatch(submit_key)):
+        raise KhoaNopBaiKhongHopLe()
     meta = _load_owned_practice(practice_quiz_id, user_id,
                                 bat_buoc_chu_so_huu=bat_buoc_chu_so_huu)
     if meta.get("status") != "ready":
@@ -86,12 +113,28 @@ def submit(practice_quiz_id: str, user_id: Optional[str], raw: Any, *,
 
     # One transaction under a row lock on the quiz (known-issues 2026-11-14): two
     # identical requests used to open two attempts and grade both.
-    attempt_id = _attempts.submit_practice(practice_quiz_id, user_id, raw)
-    if attempt_id is None:
+    try:
+        attempt_id, outcome = _attempts.submit_practice(
+            practice_quiz_id, user_id, raw, submit_key=submit_key)
+    except _attempts.SubmitKeyMismatch:
+        raise KhoaNopBaiDaDung() from None
+    if outcome == "replay":
         raise attempts_uc.AttemptKhongConDangLam()
-    result = _grading_service.grade_attempt(attempt_id)
+    if outcome == "pending":
+        raise NopBaiDangCham()
+    if outcome == "grade":
+        try:
+            _grading_service.grade_attempt(attempt_id, once=True)
+        except Exception:
+            # The attempt stays `submitted`; free the claim so a retry with the same key
+            # grades it now instead of after the lease.
+            _attempts.release_grading_claim(attempt_id)
+            raise
+    # Built from the stored attempt, never from this request's grading, so a retry gets
+    # the same fields and values the first success returned. The totals `grade_attempt`
+    # returns are exactly the attempt's stored score/counts/ungraded_count.
     return {**attempts_uc.attempt_public(_attempts.get_attempt(attempt_id)),
-            "grading": "done", **(result or {})}
+            "grading": "done"}
 
 
 def comparison(practice_quiz_id: str, user_id: Optional[str], *,

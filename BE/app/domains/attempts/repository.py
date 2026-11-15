@@ -2,11 +2,14 @@
 
 from __future__ import annotations
 
+import hashlib
+import json
 import uuid
 from datetime import datetime, timedelta, timezone
-from typing import Any, Dict, List, Optional
+from typing import Any, Dict, List, Optional, Tuple
 
 from sqlalchemy import Integer, func, select
+from sqlalchemy.exc import IntegrityError
 
 from app.db import session_scope
 from app.db.models import Quiz, QuizAnswer, QuizAttempt, QuizQuestion
@@ -185,51 +188,126 @@ def submit(attempt_id: str) -> Optional[Dict[str, Any]]:
                 "duration_seconds": a.duration_seconds}
 
 
-# ponytail: a replay is "same answers, same quiz, same learner, within this window".
-# A retake with identical answers inside it gets 409; a client idempotency key would
-# remove the guess (proposal in the PR; it is an API change the owner has not approved).
+# Keyless requests only (clients older than the Idempotency-Key change): a replay is
+# "same answers, same quiz, same learner, within this window". It guesses; the key does
+# not. ponytail: delete with the keyless path once no deployed client omits the key.
 PRACTICE_REPLAY_WINDOW_S = 30
+
+# A grader that died (process killed, deploy) leaves `grading_claimed_at` set and the
+# attempt `submitted`. After this lease a retry with the same key may grade it.
+# ponytail: a fixed lease; if grading can legitimately run longer, the second grader still
+# cannot write twice (`save_grades(once=True)`), it only spends a second LLM pass.
+GRADING_LEASE_S = 300
+
+
+class SubmitKeyMismatch(Exception):
+    """The key was already used for a different quiz or different answers."""
+
+
+def submit_fingerprint(quiz_id: str, answers: Dict[str, Optional[str]]) -> str:
+    body = json.dumps({"quiz_id": str(quiz_id),
+                       "answers": {str(k): (None if v is None else str(v))
+                                   for k, v in answers.items()}},
+                      sort_keys=True, ensure_ascii=False)
+    return hashlib.sha256(body.encode("utf-8")).hexdigest()
+
+
+def _claim_grading(a: QuizAttempt, now: datetime) -> bool:
+    claimed = a.grading_claimed_at
+    if claimed is not None and claimed.tzinfo is None:
+        claimed = claimed.replace(tzinfo=timezone.utc)
+    if claimed is not None and now - claimed < timedelta(seconds=GRADING_LEASE_S):
+        return False
+    a.grading_claimed_at = now
+    return True
+
+
+def release_grading_claim(attempt_id: str) -> None:
+    """Grading failed in THIS process: let the next retry grade at once."""
+    with session_scope() as s:
+        a = s.get(QuizAttempt, str(attempt_id), with_for_update=True)
+        if a is not None and a.status == "submitted":
+            a.grading_claimed_at = None
 
 
 def submit_practice(quiz_id: str, user_id: Optional[str],
-                    answers: Dict[str, Optional[str]]) -> Optional[str]:
-    """Open, fill and submit a practice attempt in ONE transaction; returns attempt_id.
+                    answers: Dict[str, Optional[str]], *,
+                    submit_key: Optional[str] = None) -> Tuple[Optional[str], str]:
+    """Open, fill and submit a practice attempt in ONE transaction.
 
-    None = the same answers were submitted moments ago (a double click, a retried
-    request): the caller answers 409 instead of grading a second attempt. Practice is
-    one call that always opens a fresh attempt, so without this a second identical
-    request produced a second graded result.
+    Returns `(attempt_id, outcome)`:
+    - `"grade"`: this caller holds the grading claim and must grade `attempt_id`
+      (a new submission, or a retry of one whose grader died or failed);
+    - `"done"`: the key's attempt is already graded: answer with it, grade nothing;
+    - `"pending"`: the key's attempt is being graded by another request right now;
+    - `"replay"` (keyless only): same answers moments ago, `attempt_id` is None.
+    Raises `SubmitKeyMismatch` when the key was used for another quiz or answer set.
+
+    The key is scoped to the owner, so another account's key never finds this row. In
+    open mode every client shares one anonymous owner: there the key itself (a random
+    UUID) is what tells clients apart, so different keys never meet.
     """
+    try:
+        return _submit_practice(quiz_id, user_id, answers, submit_key)
+    except IntegrityError:
+        # Two first submits with one key for DIFFERENT quizzes: the quiz locks do not
+        # serialise them, the unique index does. The loser re-reads the winner's row.
+        if not submit_key:
+            raise
+        return _submit_practice(quiz_id, user_id, answers, submit_key)
+
+
+def _submit_practice(quiz_id, user_id, answers, submit_key):
     from app.domains.documents.repository import ensure_anonymous_user
 
     owner = str(user_id) if user_id else ensure_anonymous_user()
     given = {str(k): (None if v is None else str(v)) for k, v in answers.items()}
+    fingerprint = submit_fingerprint(quiz_id, given)
     with session_scope() as s:
         total = int(_lock_quiz(s, quiz_id) or 0)
         now = _now()
-        # Open mode (no signed-in user) shares ONE anonymous owner between every client:
-        # there the replay rule would let one person's submit block another's, so it only
-        # applies to a real learner. The quiz row lock still serialises open mode.
-        recent_ids = [] if not user_id else s.execute(
-            select(QuizAttempt.id).where(
-                QuizAttempt.quiz_id == str(quiz_id),
-                QuizAttempt.user_id == owner,
-                QuizAttempt.status.in_(("submitted", "graded")),
-                QuizAttempt.submitted_at >= now - timedelta(seconds=PRACTICE_REPLAY_WINDOW_S),
-            )
-        ).scalars().all()
-        if recent_ids:
-            # Every submit in the window, not only the newest: A, then B, then a retried A
-            # is still a replay of A. Grading adds a row (answer None) for each unanswered
-            # question; compare only what the learner actually answered.
-            wanted = {k: v for k, v in given.items() if v is not None}
-            earlier: Dict[str, Dict[str, str]] = {}
-            for r in s.execute(select(QuizAnswer).where(
-                    QuizAnswer.attempt_id.in_(recent_ids))).scalars():
-                if r.user_answer is not None:
-                    earlier.setdefault(r.attempt_id, {})[r.question_id] = r.user_answer
-            if any(earlier.get(a, {}) == wanted for a in recent_ids):
-                return None
+        if submit_key:
+            seen = s.execute(
+                select(QuizAttempt).where(QuizAttempt.user_id == owner,
+                                          QuizAttempt.submit_key == submit_key)
+                .with_for_update()
+            ).scalar_one_or_none()
+            if seen is not None:
+                if seen.submit_fingerprint != fingerprint:
+                    raise SubmitKeyMismatch()
+                if seen.status != "submitted":
+                    return seen.id, "done"
+                return seen.id, ("grade" if _claim_grading(seen, now) else "pending")
+        elif user_id:
+            # Open mode (no signed-in user) shares ONE anonymous owner between every
+            # client: there this guess would let one person's submit block another's.
+            recent_ids = s.execute(
+                select(QuizAttempt.id).where(
+                    QuizAttempt.quiz_id == str(quiz_id),
+                    QuizAttempt.user_id == owner,
+                    QuizAttempt.status.in_(("submitted", "graded")),
+                    QuizAttempt.submitted_at >= now - timedelta(seconds=PRACTICE_REPLAY_WINDOW_S),
+                )
+            ).scalars().all()
+            if recent_ids:
+                # Every submit in the window, not only the newest. Grading adds a row
+                # (answer None) per unanswered question; compare only real answers.
+                wanted = {k: v for k, v in given.items() if v is not None}
+                earlier: Dict[str, Dict[str, str]] = {}
+                for r in s.execute(select(QuizAnswer).where(
+                        QuizAnswer.attempt_id.in_(recent_ids))).scalars():
+                    if r.user_answer is not None:
+                        earlier.setdefault(r.attempt_id, {})[r.question_id] = r.user_answer
+                same = [a for a in recent_ids if earlier.get(a, {}) == wanted]
+                if same:
+                    # A replay of an attempt whose grading failed or died must grade it,
+                    # not answer 409 forever (it stayed `submitted` on #183).
+                    stuck = s.execute(select(QuizAttempt).where(
+                        QuizAttempt.id.in_(same), QuizAttempt.status == "submitted")
+                        .with_for_update()).scalars().first()
+                    if stuck is not None and _claim_grading(stuck, now):
+                        return stuck.id, "grade"
+                    return None, "replay"
 
         a = s.execute(
             select(QuizAttempt).where(
@@ -246,11 +324,16 @@ def submit_practice(quiz_id: str, user_id: Optional[str],
             s.flush()
         _upsert_answers(s, a.id, given)
         _mark_submitted(a, now)
-        return a.id
+        a.submit_key = submit_key or None
+        a.submit_fingerprint = fingerprint if submit_key else None
+        a.grading_claimed_at = now
+        s.flush()
+        return a.id, "grade"
 
 
 def save_grades(attempt_id: str, graded: List[Dict[str, Any]], totals: Dict[str, Any],
-                *, status: str = "graded", ungraded_count: int = 0) -> bool:
+                *, status: str = "graded", ungraded_count: int = 0,
+                once: bool = False) -> bool:
     """Ghi điểm từng câu + tổng kết attempt trong MỘT transaction.
 
     Bài học known-issues (cache hit trả rỗng): trạng thái terminal phải ghi cùng lúc với
@@ -259,8 +342,10 @@ def save_grades(attempt_id: str, graded: List[Dict[str, Any]], totals: Dict[str,
     """
     now = _now()
     with session_scope() as s:
-        a = s.get(QuizAttempt, str(attempt_id))
-        if a is None:
+        # `once`: a second grader of the same attempt (a retry that reclaimed a lease the
+        # first grader outlived) must not overwrite the result or redo gap analysis.
+        a = s.get(QuizAttempt, str(attempt_id), with_for_update=once)
+        if a is None or (once and a.status != "submitted"):
             return False
         rows = {r.question_id: r for r in s.execute(
             select(QuizAnswer).where(QuizAnswer.attempt_id == a.id)

@@ -161,7 +161,9 @@ CORS(
     # mindmap đã sửa (PUT /mindmaps/<id>).
     methods=["GET", "POST", "PUT", "PATCH", "DELETE", "OPTIONS"],
     # "Authorization" for Bearer-token auth (no cookie credentials in this phase).
-    allow_headers=["Content-Type", "Authorization"],
+    # "Idempotency-Key": optional on POST /api/practice/<id>/submit. Missing here, a
+    # cross-origin client sending it would fail the preflight (see PATCH above).
+    allow_headers=["Content-Type", "Authorization", "Idempotency-Key"],
 )
 
 
@@ -4073,6 +4075,9 @@ _ATTEMPT_ERR_HTTP = {
     practice_uc.PracticeKhongTonTai: 404,
     practice_uc.PracticeChuaSanSang: 409,
     practice_uc.ChuaCoLanChamNao: 409,
+    practice_uc.KhoaNopBaiKhongHopLe: 400,
+    practice_uc.KhoaNopBaiDaDung: 422,
+    practice_uc.NopBaiDangCham: 409,
     # Phase 2D
     jobs_uc.JobKhongTonTai: 404,
     jobs_uc.JobKhongHoTroHuy: 409,
@@ -4329,18 +4334,18 @@ def api_practice_get(practice_quiz_id: str):
 
 @app.post('/api/practice/<practice_quiz_id>/submit')
 def api_practice_submit(practice_quiz_id: str):
-    """Nộp bài luyện tập trong MỘT lần gọi (FR-11.6, FR-11.7).
-
-    Luồng chẩn đoán tách mở/nháp/nộp vì người học làm dài và cần lưu nháp; bài luyện tập
-    ngắn nên gộp lại — vẫn đi qua đúng repository attempt để lịch sử thống nhất.
-    """
+    """Nộp bài luyện tập trong MỘT lần gọi (FR-11.6, FR-11.7). Chẩn đoán tách mở/nháp/nộp vì
+    bài dài cần lưu nháp; luyện tập ngắn nên gộp, vẫn qua đúng repository attempt."""
     uid, err = _require_app_user()
     if err:
         return err
     try:
+        body = request.json or {}
+        # Idempotency key, optional, header or body field (FE uses the body: no preflight).
         return jsonify(practice_uc.submit(
-            practice_quiz_id, uid, (request.json or {}).get("answers"),
-            bat_buoc_chu_so_huu=_auth_protect_enabled()))
+            practice_quiz_id, uid, body.get("answers"),
+            bat_buoc_chu_so_huu=_auth_protect_enabled(),
+            submit_key=request.headers.get("Idempotency-Key") or body.get("idempotency_key")))
     except attempts_uc.AttemptError as exc:
         return _attempt_err(exc)
 

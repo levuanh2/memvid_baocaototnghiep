@@ -8151,3 +8151,34 @@ attempts, a second graded practice attempt). Green after, five repeated runs.
 **Prevention:** a status transition is a conditional write or a locked read, never a plain
 read followed by a write. A test for it must force the interleaving (a barrier between the
 read and the write); two threads started together usually run one after the other and pass.
+
+
+### Practice submit: a 30 s guess instead of idempotency, and attempts stuck `submitted` (2026-11-15)
+
+**Symptoms:** (1) #183 recognised a retried practice submit only by "same answers within
+30 s": a deliberate retake with identical answers got 409, and a retry after 30 s graded a
+second attempt. (2) When grading raised after the submit transaction had committed (LLM
+outage, bug, killed process) the attempt stayed `submitted` forever: the retry was a 409
+replay and no route graded it again (reproduced on `1d787f8`).
+
+**Root cause:** the server had no identity for "one logical submit", so it guessed from
+content and time; and grading ran outside the submit transaction with nothing recording
+who was grading or letting anyone take over.
+
+**Fix:** optional `idempotency_key` (body) / `Idempotency-Key` (header) on
+`POST /api/practice/<id>/submit`. The attempt row stores `submit_key` +
+`submit_fingerprint` (sha256 of quiz + answers) under a partial unique index
+`(user_id, submit_key)`, so the record lives exactly as long as the attempt and cannot
+expire into a regrade. Same key + same payload: the stored result (200, same body), never a
+second grading; same key + other payload: 422; still grading: 409 "Bài nộp này đang được
+chấm..." and the FE asks again with the same key. `grading_claimed_at` is the grading claim:
+released on an exception, taken over after `GRADING_LEASE_S`; `save_grades(once=True)` keeps
+a second grader from writing or re-running gap analysis. Keyless requests keep the #183
+window, but a replay of a stuck `submitted` attempt now grades it.
+
+**Regression:** `BE/tests/test_practice_idempotency.py` (PostgreSQL, barriers/events, no
+sleeps), `FE/src/pages/study/Practice.idempotency.test.jsx` (5 red on the old page).
+
+**Prevention:** an operation that may be retried needs a client-chosen identity stored
+with its result; time windows only guess. Any work done after the commit that marks a
+state needs a claim that a retry can see and, after a lease, take over.

@@ -3728,3 +3728,11 @@ request or a proxy replay, and the server then graded twice because its status c
 plain read followed by a write. Guard the transition where the data lives (row lock or
 conditional update), and prove it with a test that parks both threads between the read and
 the write; without that barrier the race test passes on the broken code.
+
+
+## 2026-11-15 — Store the idempotency key on the row it created
+
+A separate idempotency table needs its own expiry, and an expired record turns the next
+retry into a fresh operation. Putting the key on the attempt itself ties its lifetime to the
+result and lets one partial unique index do the deduplication. Send it in the body when web
+and API are on different origins: a new header needs the CORS allowlist deployed first.
