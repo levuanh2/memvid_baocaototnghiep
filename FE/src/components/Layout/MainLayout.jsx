@@ -78,7 +78,7 @@ export default function MainLayout({
     return () => window.removeEventListener("resize", onResize);
   }, []);
   const tabletSourceRail = !panelDrawer && viewportWidth < 1280;
-  const { isDark, setLight, setDark, toggleTheme } = useTheme();
+  const { isDark, toggleTheme } = useTheme();
   const { user, logout } = useAuth();
   // `selectedDocument` (Study Context's single-document pointer) used to
   // feed the header's center eyebrow/breadcrumb and the LessonHeader title
@@ -717,25 +717,21 @@ export default function MainLayout({
               Workspace now, not buried in Library. Same global CommandPalette
               as Ctrl+K (Issue 2 doesn't ask for a second search engine, just
               a visible entry point reachable from here). */}
-          {/* Feature Pack C — Discoverability (mục 7). */}
-          <button onClick={() => setShortcutsOpen(true)} className="workspace-shortcuts-trigger hidden lg:inline-flex icon-btn w-9 h-9"
-                  title="Phím tắt (?)" aria-label="Xem phím tắt">
-            <Icon name="Keyboard" size={16} />
+          {/* V6 header (owner decision): ONE theme control. It carries the same name as the
+              phone menu item ("Chuyển sang nền …"): the action, not the current state, so the
+              two places read as one control. The keyboard-shortcut help moved into the
+              account menu; the `?` key still opens it. */}
+          <button type="button" onClick={toggleTheme}
+                  className="workspace-theme-toggle hidden lg:inline-flex icon-btn w-9 h-9"
+                  title={isDark ? "Chuyển sang nền sáng" : "Chuyển sang nền tối"}
+                  aria-label={isDark ? "Chuyển sang nền sáng" : "Chuyển sang nền tối"}>
+            <Icon name={isDark ? "Sun" : "Moon"} size={16} />
           </button>
-          {/* Theme toggle */}
-          <div className="hidden lg:flex theme-toggle" role="group" aria-label="Chế độ sáng/tối">
-            <button onClick={setLight} title="Nền sáng" aria-pressed={!isDark} className={`theme-toggle-btn ${!isDark ? "theme-toggle-btn-active" : ""}`} aria-label="Nền sáng">
-              <Icon name="Sun" size={15} />
-            </button>
-            <button onClick={setDark} title="Nền tối" aria-pressed={isDark} className={`theme-toggle-btn ${isDark ? "theme-toggle-btn-active" : ""}`} aria-label="Nền tối">
-              <Icon name="Moon" size={15} />
-            </button>
-          </div>
 
           <UsageChip />
 
-          {/* Account: ảnh + tên + menu (hồ sơ · đổi mật khẩu · đăng xuất) */}
-          {user && <AccountMenu user={user} onLogout={handleLogout} />}
+          {/* Account: ảnh + tên + menu (hồ sơ · đổi mật khẩu · phím tắt · đăng xuất) */}
+          {user && <AccountMenu user={user} onLogout={handleLogout} onShowShortcuts={() => setShortcutsOpen(true)} />}
         </div>
       </header>
 
