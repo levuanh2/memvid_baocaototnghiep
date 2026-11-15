@@ -137,6 +137,8 @@ function createActionFor(capability) {
 }
 
 export default function SidebarRight({
+  // `sources`: the document list (stem -> file name), only to name a citation's document.
+  sources = [],
   selectedSources, evidence, highlight, onHighlight, onClose, onGuidedClose, onAskAbout, onOpenSource, collapsible = true,
   mode = "chat", mindMapContext, summaryData,
   // Phase 4C — Gia sư AI sống trong CÙNG cột này, không phải một cột thứ ba
@@ -820,6 +822,13 @@ export default function SidebarRight({
 
   // ── Derived ───────────────────────────────────────
   const chunks = Array.isArray(evidence?.chunks) ? evidence.chunks : [];
+  // A citation used to be labelled with its internal stem ("kinh_te_vi_mo_20261101_120000 ·
+  // đoạn 12"). Learners know the document by its name; the stem stays in the tooltip.
+  const tenTaiLieu = (stem) => {
+    const s = normStem(stem);
+    const found = (sources || []).find((x) => normStem(x.video_stem || x.video) === s);
+    return found?.filename ? String(found.filename).replace(/\.[a-z0-9]{2,5}$/i, "") : (stem || "Tài liệu");
+  };
   const sourceStems = Array.isArray(evidence?.sources) ? evidence.sources : [];
   // `mindmapJobUi.running` is included so the button stays disabled for the
   // whole background run, not just the initial POST round-trip — otherwise a
@@ -1106,8 +1115,9 @@ export default function SidebarRight({
                         style={{ color: "var(--seal)", border: "1px solid color-mix(in srgb, var(--seal) 35%, transparent)" }}>
                         {i + 1}
                       </span>
-                      <span className="coord truncate flex-1" title={stem}>
-                        {stem || "nguồn"}{chunkId !== "" ? ` · đoạn ${chunkId}` : ""}
+                      <span className="min-w-0 flex-1 text-small text-text-primary truncate" title={stem}>
+                        {tenTaiLieu(stem)}
+                        {chunkId !== "" && <span className="text-text-muted">{`, đoạn ${chunkId}`}</span>}
                       </span>
                       {mindMapNodeId && (
                         <button
@@ -1139,7 +1149,7 @@ export default function SidebarRight({
               {sourceStems.map((s, i) => (
                 <div key={`${s}-${i}`} className="evidence-frame p-2.5 flex items-center gap-2">
                   <Icon name="FileText" size={13} className="text-slate flex-shrink-0" />
-                  <span className="coord truncate" title={s}>{s}</span>
+                  <span className="text-small text-text-primary truncate" title={s}>{tenTaiLieu(s)}</span>
                 </div>
               ))}
             </div>
