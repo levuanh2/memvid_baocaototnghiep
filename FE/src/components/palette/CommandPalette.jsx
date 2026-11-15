@@ -8,7 +8,7 @@ import { useOpenSurface } from "../../study/useOpenSurface";
 import AdvancedSearchPanel from "./AdvancedSearchPanel";
 import { getLibrary } from "../../utils/studyApi";
 import { OPEN_EVENT } from "../../utils/commandPaletteBus";
-import { tenHienThi, sapXep } from "../../utils/thuVienTaiLieu";
+import { tenHienThi, ganNhatCoTheTiepTuc } from "../../utils/thuVienTaiLieu";
 import { tiepTucHoc } from "../../utils/tiepTucHoc";
 import { timKiemToanCuc } from "../../utils/paletteSearch";
 import { phimBang } from "../../utils/paletteKeyboard";
@@ -293,7 +293,7 @@ export default function CommandPalette() {
         navigate("/app", { state: { openTutor: Date.now() } });
         break;
       case "tiep-tuc-hoc": {
-        const gioiHan = sapXep(documents.filter((d) => d.last_opened_at), "recently_opened")[0];
+        const gioiHan = ganNhatCoTheTiepTuc(documents);
         if (!gioiHan) { navigate("/app/study"); break; }
         const resume = tiepTucHoc(gioiHan);
         moTheoDoi(gioiHan, resume?.beMat || gioiHan.last_workspace || "studymap");
