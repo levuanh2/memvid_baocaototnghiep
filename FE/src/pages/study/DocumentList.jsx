@@ -789,6 +789,12 @@ export default function DocumentList() {
               onMo={moBeMat}
             />
           </Disclosure>
+          {/* Learning Home says what to do next; this page says what is known and weak. */}
+          <div className="px-4 pb-3">
+            <Link to="/app/study/progress" className="text-small font-semibold text-text-primary underline underline-offset-4">
+              Xem mức nắm từng khái niệm và các bài đã làm
+            </Link>
+          </div>
         </section>
       )}
 
