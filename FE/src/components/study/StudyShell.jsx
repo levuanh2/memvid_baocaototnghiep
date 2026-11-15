@@ -32,7 +32,10 @@ export default function StudyShell({
 }) {
   const headerLayout = stackActionsOnMobile
     ? "flex flex-wrap items-center gap-x-4 gap-y-3 md:flex-nowrap md:gap-4"
-    : "flex items-center gap-4";
+    // Wraps instead of squeezing: with several actions at 390px the title used to shrink
+    // to one letter and an ellipsis ("K…"). The title keeps a readable minimum width and
+    // the actions move to a second row when both do not fit.
+    : "flex flex-wrap items-center gap-x-4 gap-y-2";
   const actionsLayout = stackActionsOnMobile
     ? "flex w-full flex-col items-stretch gap-2 md:w-auto md:flex-row md:items-center"
     : "flex items-center gap-2";
@@ -52,7 +55,7 @@ export default function StudyShell({
               <Icon name="ArrowLeft" size={14} /> {backLabel}
             </Link>
           )}
-          <div className="flex-1 min-w-0">
+          <div className="flex-1 min-w-[min(100%,13rem)]">
             <div className="font-mono text-metadata uppercase text-text-muted">
               {eyebrow}
             </div>

@@ -87,6 +87,12 @@ for (const width of [320, 390, 1440]) {
     await expect(page.locator("#cau-7")).toBeFocused();
     await expect(page.locator("#cau-7")).toBeInViewport();
     expect(await noOverflow(page)).toBeLessThanOrEqual(0);
+    // The page title stays readable: at 390px it used to shrink to "K…" beside the actions.
+    const title = page.locator("header h1").first();
+    const { width: titleWidth, clipped } = await title.evaluate((el) => ({
+      width: el.getBoundingClientRect().width, clipped: el.scrollWidth > el.clientWidth + 1 }));
+    expect(titleWidth).toBeGreaterThanOrEqual(Math.min(200, width - 120));
+    if (width >= 1440) expect(clipped).toBe(false);
   });
 }
 
