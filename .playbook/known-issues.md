@@ -8230,3 +8230,26 @@ viewport meta adds `interactive-widget=resizes-content`.
 **Prevention:** a full-screen container that does not scroll itself sizes to the visible
 viewport, never `100vh`. Headless tests cannot open a keyboard: drive `visualViewport`
 directly and say that it is a simulation.
+
+
+### iOS pans the visual viewport: header hidden, half the screen blank (2026-11-15, follow-up)
+
+**Symptoms (simulated):** with the keyboard open, Safari pans the visual viewport to the
+focused input (`visualViewport.offsetTop` 336 at 390x844). The #184 shell, sized to
+`visualViewport.height` but still at the top of the layout, then showed only its lower part:
+the header above the visible area, and blank space below the composer.
+
+**Root cause:** `useAppHeight` read `height` only and listened to `resize` only; a pan is a
+`scroll` event on `visualViewport` and changes `offsetTop`, not `height`. Pinch zoom also
+shrinks `height` (by `scale`) and would have reflowed the shell.
+
+**Fix:** `--app-offset-top` + `html.vv-panned .app-shell-height { transform: translateY(...) }`
+(the class only while panned, because a transform makes the shell the containing block of
+its fixed drawers), `scroll` and `orientationchange` listeners, `height * scale`, and no
+style write when nothing changed.
+
+**Regression:** `useAppHeight.test.jsx` (5 red on the old hook) and
+`e2e-fixture/mobile-viewport.spec.js` pan + open-drawer cases (2 red on the old hook).
+
+**Prevention:** on iOS the visible area is `offsetTop .. offsetTop + height`, both of which
+change; test both. Still simulation: no iPhone, Safari or WebKit run.
