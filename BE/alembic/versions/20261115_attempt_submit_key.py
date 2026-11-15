@@ -18,14 +18,18 @@ def upgrade() -> None:
         "ALTER TABLE quiz_attempts ADD COLUMN IF NOT EXISTS grading_claimed_at TIMESTAMPTZ"
     )
     # One key per owner. Partial: the many keyless rows must not collide on NULL.
-    op.execute(
-        "CREATE UNIQUE INDEX IF NOT EXISTS uq_quiz_attempts_user_submit_key "
-        "ON quiz_attempts (user_id, submit_key) WHERE submit_key IS NOT NULL"
-    )
+    # CONCURRENTLY: no write lock on a live quiz_attempts while it builds (it cannot run in
+    # a transaction, hence the autocommit block). Every existing row has a NULL key.
+    with op.get_context().autocommit_block():
+        op.execute(
+            "CREATE UNIQUE INDEX CONCURRENTLY IF NOT EXISTS uq_quiz_attempts_user_submit_key "
+            "ON quiz_attempts (user_id, submit_key) WHERE submit_key IS NOT NULL"
+        )
 
 
 def downgrade() -> None:
-    op.execute("DROP INDEX IF EXISTS uq_quiz_attempts_user_submit_key")
+    with op.get_context().autocommit_block():
+        op.execute("DROP INDEX CONCURRENTLY IF EXISTS uq_quiz_attempts_user_submit_key")
     op.execute("ALTER TABLE quiz_attempts DROP COLUMN IF EXISTS grading_claimed_at")
     op.execute("ALTER TABLE quiz_attempts DROP COLUMN IF EXISTS submit_fingerprint")
     op.execute("ALTER TABLE quiz_attempts DROP COLUMN IF EXISTS submit_key")

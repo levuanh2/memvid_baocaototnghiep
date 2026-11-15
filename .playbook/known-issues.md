@@ -8202,3 +8202,24 @@ takes) and writes only while `in_progress`; otherwise the use case raises `Attem
 
 **Prevention:** a status check and the write it guards belong in one transaction under the
 row lock (same lesson as 2026-11-14).
+
+
+### #185 review: keyless dead grader, lost mastery, foreign release, stale FE keys (2026-11-15)
+
+Independent review (`task20-codex-185-review.md`) of the first #185 head. Fixed:
+- **Keyless dead grader never recovered:** the keyless retry looked only 30 s back, the claim
+  lasts 300 s. Now a `submitted` attempt with the same answers and an expired (or no) claim is
+  reclaimed at any age.
+- **Mastery lost between the score commit and gap analysis:** a same-key retry said `done`
+  forever with no mastery rows. A `done` retry and the practice comparison now repair it
+  (fail-open, as the generic concept-mastery route does).
+- **An old grader released a newer claim:** release now clears only the claim timestamp this
+  request set (`submit_practice` returns it).
+- **FE kept a spent key:** a 422 and a graded attempt found on reload now forget the key.
+- **Index build blocked writes:** `CREATE UNIQUE INDEX CONCURRENTLY` in an autocommit block.
+
+**Regression:** three PostgreSQL tests in `test_practice_idempotency.py`, two FE tests in
+`Practice.idempotency.test.jsx` (red on the previous head).
+
+Not fixed here (reported): diagnostic grading has no claim; anonymous keys are bearer
+tokens; generic attempt routes accept a practice quiz.

@@ -8,7 +8,7 @@ import uuid
 from datetime import datetime, timedelta, timezone
 from typing import Any, Dict, List, Optional, Tuple
 
-from sqlalchemy import Integer, func, select
+from sqlalchemy import Integer, and_, func, or_, select
 from sqlalchemy.exc import IntegrityError
 
 from app.db import session_scope
@@ -218,30 +218,39 @@ def submit_fingerprint(quiz_id: str, answers: Dict[str, Optional[str]]) -> str:
     return hashlib.sha256(body.encode("utf-8")).hexdigest()
 
 
+def _aware(ts: Optional[datetime]) -> Optional[datetime]:
+    return ts.replace(tzinfo=timezone.utc) if ts is not None and ts.tzinfo is None else ts
+
+
 def _claim_grading(a: QuizAttempt, now: datetime) -> bool:
-    claimed = a.grading_claimed_at
-    if claimed is not None and claimed.tzinfo is None:
-        claimed = claimed.replace(tzinfo=timezone.utc)
+    claimed = _aware(a.grading_claimed_at)
     if claimed is not None and now - claimed < timedelta(seconds=GRADING_LEASE_S):
         return False
     a.grading_claimed_at = now
     return True
 
 
-def release_grading_claim(attempt_id: str) -> None:
-    """Grading failed in THIS process: let the next retry grade at once."""
+def release_grading_claim(attempt_id: str, claimed_at: Optional[datetime]) -> None:
+    """Grading failed in THIS process: let the next retry grade at once.
+
+    Only our own claim: if the lease ran out and another request reclaimed the attempt,
+    its newer `grading_claimed_at` must stay (Codex review of #185).
+    """
     with session_scope() as s:
         a = s.get(QuizAttempt, str(attempt_id), with_for_update=True)
-        if a is not None and a.status == "submitted":
+        if (a is not None and a.status == "submitted" and claimed_at is not None
+                and _aware(a.grading_claimed_at) == _aware(claimed_at)):
             a.grading_claimed_at = None
 
 
 def submit_practice(quiz_id: str, user_id: Optional[str],
                     answers: Dict[str, Optional[str]], *,
-                    submit_key: Optional[str] = None) -> Tuple[Optional[str], str]:
+                    submit_key: Optional[str] = None
+                    ) -> Tuple[Optional[str], str, Optional[datetime]]:
     """Open, fill and submit a practice attempt in ONE transaction.
 
-    Returns `(attempt_id, outcome)`:
+    Returns `(attempt_id, outcome, claimed_at)`; `claimed_at` is this caller's grading claim
+    (only for `"grade"`), to release exactly that claim if grading fails. Outcomes:
     - `"grade"`: this caller holds the grading claim and must grade `attempt_id`
       (a new submission, or a retry of one whose grader died or failed);
     - `"done"`: the key's attempt is already graded: answer with it, grade nothing;
@@ -282,17 +291,28 @@ def _submit_practice(quiz_id, user_id, answers, submit_key):
                 if seen.submit_fingerprint != fingerprint:
                     raise SubmitKeyMismatch()
                 if seen.status != "submitted":
-                    return seen.id, "done"
-                return seen.id, ("grade" if _claim_grading(seen, now) else "pending")
+                    return seen.id, "done", None
+                if _claim_grading(seen, now):
+                    return seen.id, "grade", now
+                return seen.id, "pending", None
         elif user_id:
             # Open mode (no signed-in user) shares ONE anonymous owner between every
             # client: there this guess would let one person's submit block another's.
+            lease_cutoff = now - timedelta(seconds=GRADING_LEASE_S)
             recent_ids = s.execute(
                 select(QuizAttempt.id).where(
                     QuizAttempt.quiz_id == str(quiz_id),
                     QuizAttempt.user_id == owner,
-                    QuizAttempt.status.in_(("submitted", "graded")),
-                    QuizAttempt.submitted_at >= now - timedelta(seconds=PRACTICE_REPLAY_WINDOW_S),
+                    or_(
+                        and_(QuizAttempt.status.in_(("submitted", "graded")),
+                             QuizAttempt.submitted_at >= now - timedelta(seconds=PRACTICE_REPLAY_WINDOW_S)),
+                        # A grader that died leaves the attempt `submitted` with a claim that
+                        # outlives the 30 s window; once its lease is over, the same answers
+                        # must reclaim it instead of opening a new attempt (Codex review).
+                        and_(QuizAttempt.status == "submitted",
+                             or_(QuizAttempt.grading_claimed_at.is_(None),
+                                 QuizAttempt.grading_claimed_at < lease_cutoff)),
+                    ),
                 )
             ).scalars().all()
             if recent_ids:
@@ -312,8 +332,8 @@ def _submit_practice(quiz_id, user_id, answers, submit_key):
                         QuizAttempt.id.in_(same), QuizAttempt.status == "submitted")
                         .with_for_update()).scalars().first()
                     if stuck is not None and _claim_grading(stuck, now):
-                        return stuck.id, "grade"
-                    return None, "replay"
+                        return stuck.id, "grade", now
+                    return None, "replay", None
 
         a = s.execute(
             select(QuizAttempt).where(
@@ -334,7 +354,7 @@ def _submit_practice(quiz_id, user_id, answers, submit_key):
         a.submit_fingerprint = fingerprint if submit_key else None
         a.grading_claimed_at = now
         s.flush()
-        return a.id, "grade"
+        return a.id, "grade", now
 
 
 def save_grades(attempt_id: str, graded: List[Dict[str, Any]], totals: Dict[str, Any],

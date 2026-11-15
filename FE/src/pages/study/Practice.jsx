@@ -42,6 +42,9 @@ export default function Practice() {
       // Đã làm rồi thì vào thẳng phần so sánh, không bắt làm lại từ đầu.
       try {
         setComparison(await getPracticeComparison(quizId));
+        // A graded attempt exists (perhaps the one whose response was lost): its key is
+        // spent, the next attempt needs a new one.
+        forgetSubmitKey(quizId, submitKeyMemo);
       } catch (e) {
         if (e?.status !== 409) throw e;
       }
@@ -88,6 +91,9 @@ export default function Practice() {
         setComparison(null);
       }
     } catch (e) {
+      // 422: the stored key belongs to another answer set; keeping it would repeat the
+      // same refusal on every retry.
+      if (e?.status === 422) forgetSubmitKey(quizId, submitKeyMemo);
       setError(moTaLoi(e, "Nộp bài luyện tập thất bại."));
     } finally {
       setSubmitting(false);

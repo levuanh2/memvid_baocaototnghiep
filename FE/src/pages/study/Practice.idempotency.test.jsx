@@ -34,7 +34,7 @@ afterEach(() => {
   if (root) { act(() => root.unmount()); root = null; }
   if (container) { document.body.removeChild(container); container = null; }
   vi.useRealTimers();
-  vi.clearAllMocks();
+  vi.resetAllMocks();
 });
 
 async function render() {
@@ -134,6 +134,30 @@ describe("Practice submit idempotency key", () => {
     expect(keyOf(submitPractice.mock.calls[1])).toBe(keyOf(submitPractice.mock.calls[0]));
     expect(container.textContent).not.toContain(DANG_CHAM);
     expect(container.querySelector('[role="img"]')?.getAttribute("aria-label")).toBe("Đạt 100 phần trăm điểm");
+  });
+
+  it("a 422 (key used for other answers) drops the stored key, so the next try is not refused again", async () => {
+    await render();
+    await act(async () => { button("A").click(); });
+    submitPractice.mockRejectedValueOnce(err(422, "Idempotency-Key đã dùng cho một lần nộp khác")).mockResolvedValueOnce(GRADED);
+    await act(async () => { button("Nộp bài luyện tập").click(); });
+    await flush();
+    expect(sessionStorage.getItem("studymap:practice-submit:quiz-1")).toBeNull();
+    await act(async () => { button("Nộp bài luyện tập").click(); });
+    await flush();
+    expect(keyOf(submitPractice.mock.calls[1])).not.toBe(keyOf(submitPractice.mock.calls[0]));
+  });
+
+  it("a reload that finds a graded attempt (lost response) forgets the spent key", async () => {
+    sessionStorage.setItem("studymap:practice-submit:quiz-1", JSON.stringify({ key: "k".repeat(20), fp: "[]" }));
+    getPractice.mockResolvedValue(QUIZ);
+    getPracticeComparison.mockResolvedValue({ concepts: [] });
+    container = document.createElement("div");
+    document.body.appendChild(container);
+    root = createRoot(container);
+    await act(async () => { root.render(<Practice />); });
+    await flush();
+    expect(sessionStorage.getItem("studymap:practice-submit:quiz-1")).toBeNull();
   });
 
   it("any other 409 is shown, not retried", async () => {

@@ -114,7 +114,7 @@ def submit(practice_quiz_id: str, user_id: Optional[str], raw: Any, *,
     # One transaction under a row lock on the quiz (known-issues 2026-11-14): two
     # identical requests used to open two attempts and grade both.
     try:
-        attempt_id, outcome = _attempts.submit_practice(
+        attempt_id, outcome, claimed_at = _attempts.submit_practice(
             practice_quiz_id, user_id, raw, submit_key=submit_key)
     except _attempts.SubmitKeyMismatch:
         raise KhoaNopBaiDaDung() from None
@@ -128,13 +128,33 @@ def submit(practice_quiz_id: str, user_id: Optional[str], raw: Any, *,
         except Exception:
             # The attempt stays `submitted`; free the claim so a retry with the same key
             # grades it now instead of after the lease.
-            _attempts.release_grading_claim(attempt_id)
+            _attempts.release_grading_claim(attempt_id, claimed_at)
             raise
+    elif outcome == "done":
+        # Scores commit before gap analysis runs; a process that died in between (or an
+        # analysis error, which is swallowed) left a graded attempt with no mastery rows,
+        # and the practice comparison never repairs it. Repair here, as the generic
+        # concept-mastery route does.
+        _repair_mastery(attempt_id)
     # Built from the stored attempt, never from this request's grading, so a retry gets
     # the same fields and values the first success returned. The totals `grade_attempt`
     # returns are exactly the attempt's stored score/counts/ungraded_count.
     return {**attempts_uc.attempt_public(_attempts.get_attempt(attempt_id)),
             "grading": "done"}
+
+
+def _repair_mastery(attempt_id: Optional[str]) -> None:
+    from app.domains.attempts import repository as _attempts
+    from app.domains.gap_analysis import service as _gap
+
+    if not attempt_id or _gap.list_for_attempt(attempt_id):
+        return
+    if (_attempts.get_attempt(attempt_id) or {}).get("status") != "graded":
+        return
+    try:
+        _gap.analyze_attempt(attempt_id)
+    except Exception as exc:  # fail-open, as at grading time: the score stands
+        print(f"[practice] mastery repair failed: {exc}", flush=True)
 
 
 def comparison(practice_quiz_id: str, user_id: Optional[str], *,
@@ -155,6 +175,7 @@ def comparison(practice_quiz_id: str, user_id: Optional[str], *,
     after_attempt = _progress.latest_graded_attempt(practice_quiz_id, user_id)
     if not after_attempt:
         raise ChuaCoLanChamNao()
+    _repair_mastery(after_attempt)
 
     source_attempt = meta.get("source_attempt_id")
     item = _review.get_item(meta.get("source_review_item_id") or "")

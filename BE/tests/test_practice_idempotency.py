@@ -239,7 +239,7 @@ def test_a_grader_that_died_is_taken_over_only_after_the_lease(owner, practice, 
     quiz_id, qids = practice
     answers = {qids[0]: "dung", qids[1]: "dung"}
     key = _key()
-    attempt_id, outcome = repository.submit_practice(quiz_id, owner, answers, submit_key=key)
+    attempt_id, outcome, _ = repository.submit_practice(quiz_id, owner, answers, submit_key=key)
     assert outcome == "grade"   # ...and this "process" dies here without grading.
 
     with pytest.raises(practice_uc.NopBaiDangCham):
@@ -260,7 +260,7 @@ def test_a_second_grader_of_one_attempt_writes_nothing(owner, practice, counts):
     from app.domains.attempts import repository, service
 
     quiz_id, qids = practice
-    attempt_id, _ = repository.submit_practice(
+    attempt_id, _, _ = repository.submit_practice(
         quiz_id, owner, {qids[0]: "dung", qids[1]: "sai"}, submit_key=_key())
 
     assert service.grade_attempt(attempt_id, once=True) is not None
@@ -387,3 +387,74 @@ def test_the_web_app_recognises_the_still_grading_message():
 
     fe = Path(__file__).resolve().parents[2] / "FE" / "src" / "utils" / "practiceSubmitKey.js"
     assert f'"{practice_uc.NopBaiDangCham.loi}"' in fe.read_text(encoding="utf-8")
+
+
+def test_keyless_retry_reclaims_an_attempt_whose_grader_died_after_the_window(owner, practice,
+                                                                            counts):
+    """A keyless client's grader died (no exception handler ran): the claim stays set for
+    the lease, longer than the 30 s replay window. Afterwards the same answers must grade
+    that attempt, not open a second one (Codex review of #185, finding 1)."""
+    from app.db import session_scope
+    from app.db.models import QuizAttempt
+    from app.domains.attempts import repository
+
+    quiz_id, qids = practice
+    answers = {qids[0]: "dung", qids[1]: "dung"}
+    attempt_id, outcome, _ = repository.submit_practice(quiz_id, owner, answers)
+    assert outcome == "grade"     # ...and the process dies here.
+    old = timedelta(seconds=repository.GRADING_LEASE_S + 1)
+    with session_scope() as s:
+        a = s.get(QuizAttempt, attempt_id)
+        a.submitted_at = a.submitted_at - old
+        a.grading_claimed_at = a.grading_claimed_at - old
+
+    result = _submit(quiz_id, owner, answers, None)
+    assert result["attempt_id"] == attempt_id and result["status"] == "graded"
+    assert len(_attempts_of(quiz_id, owner)) == 1
+
+
+def test_a_failed_grader_does_not_release_a_newer_claim(owner, practice):
+    """The lease ran out, another request reclaimed the attempt, then the first grader
+    fails: its release must not clear the newer claim (Codex review, finding 3)."""
+    from app.db import session_scope
+    from app.db.models import QuizAttempt
+    from app.domains.attempts import repository
+
+    quiz_id, qids = practice
+    attempt_id, _, first_claim = repository.submit_practice(
+        quiz_id, owner, {qids[0]: "dung"}, submit_key=_key())
+    newer = first_claim + timedelta(seconds=repository.GRADING_LEASE_S + 1)
+    with session_scope() as s:
+        s.get(QuizAttempt, attempt_id).grading_claimed_at = newer
+
+    repository.release_grading_claim(attempt_id, first_claim)
+    with session_scope() as s:
+        assert s.get(QuizAttempt, attempt_id).grading_claimed_at == newer
+    repository.release_grading_claim(attempt_id, newer)
+    with session_scope() as s:
+        assert s.get(QuizAttempt, attempt_id).grading_claimed_at is None
+
+
+def test_a_retry_repairs_mastery_lost_between_the_score_commit_and_gap_analysis(
+        owner, practice, counts):
+    """Scores commit before gap analysis; a death in between left no mastery rows and the
+    retry said `done` forever (Codex review, finding 2)."""
+    from sqlalchemy import delete
+
+    from app.db import session_scope
+    from app.db.models import ConceptMastery
+    from app.domains.gap_analysis import service as gap
+
+    quiz_id, qids = practice
+    answers = {qids[0]: "dung", qids[1]: "sai"}
+    key = _key()
+    first = _submit(quiz_id, owner, answers, key)
+    assert gap.list_for_attempt(first["attempt_id"])
+    with session_scope() as s:
+        s.execute(delete(ConceptMastery).where(ConceptMastery.attempt_id == first["attempt_id"]))
+
+    again = _submit(quiz_id, owner, answers, key)
+    assert again == first
+    assert counts["grade"] == [first["attempt_id"]]          # no second grading
+    assert counts["gap"] == [first["attempt_id"]] * 2        # analysis repaired once
+    assert gap.list_for_attempt(first["attempt_id"])
