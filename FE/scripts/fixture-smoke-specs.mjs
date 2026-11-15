@@ -47,6 +47,8 @@ export const WHEN_PRESENT = [
   "e2e-fixture/mobile-viewport.spec.js",         // #184: keyboard and iOS pan never hide the composer
   "e2e-fixture/library-one-list.spec.js",        // #176: no "Tiếp tục" for a failed or unindexed document
   "e2e-fixture/quiz-review-v6.spec.js",          // #182: per-question verdict strip, one primary review action
+  "e2e-fixture/workspace-drawer-focus.spec.js",  // #184: phone source drawer takes focus, closes with Escape
+  "e2e-fixture/learning-progress.spec.js",       // #186: progress page shows only server numbers
 ];
 
 /** { specs, missingRequired, pending } for the FE directory `root`. */
