@@ -138,24 +138,27 @@ for (const dark of [false, true]) {
 }
 
 test("only the wordmark text changes colour: every other seal-coloured element keeps --seal", async ({ page }) => {
-  let checked = 0;
+  // Probes instead of whatever seal text a page happens to have: the start screens change
+  // between V6 branches (trial 6 lost the one this used to read), the CSS scope does not.
   for (const [dark, open] of [[false, openLanding], [true, openLanding], [false, openWorkspace], [true, openWorkspace]]) {
     await open(page, dark);
     const result = await page.evaluate(() => {
-      const probe = document.createElement("span");
-      probe.style.color = "var(--seal)";
-      document.body.appendChild(probe);
-      const seal = getComputedStyle(probe).color;
-      probe.remove();
-      const wordmark = ".lp-wordmark, .lp-footer-wordmark, .workspace-wordmark";
-      const others = [...document.querySelectorAll(".text-seal")].filter((el) => !el.closest(wordmark));
-      return { seal, others: others.map((el) => getComputedStyle(el).color) };
+      const make = (html) => { const d = document.createElement("div"); d.innerHTML = html; document.body.appendChild(d); return d; };
+      const color = (css) => { const p = make(`<span style="color:${css}">x</span>`); const c = getComputedStyle(p.firstChild).color; p.remove(); return c; };
+      const outside = make('<span class="text-seal">Map</span><button class="text-seal">x</button>');
+      const inside = make('<span class="workspace-wordmark"><span class="text-seal">Map</span></span>');
+      const out = [...outside.querySelectorAll(".text-seal")].map((el) => getComputedStyle(el).color);
+      const ins = getComputedStyle(inside.querySelector(".text-seal")).color;
+      outside.remove(); inside.remove();
+      const real = [...document.querySelectorAll(".text-seal")]
+        .filter((el) => !el.closest(".lp-wordmark, .lp-footer-wordmark, .workspace-wordmark"))
+        .map((el) => getComputedStyle(el).color);
+      return { seal: color("var(--seal)"), brand: color("var(--brand-text)"), out, ins, real };
     });
-    for (const color of result.others) expect(color).toBe(result.seal);
-    checked += result.others.length;
+    for (const c of [...result.out, ...result.real]) expect(c).toBe(result.seal);
+    expect(result.ins).toBe(result.brand);
+    expect(result.brand).not.toBe(result.seal);
   }
-  // Not vacuous: the workspace start screen has seal-coloured text outside the wordmark.
-  expect(checked).toBeGreaterThan(0);
 });
 
 test("capture: footer and app header wordmarks, light and dark", async ({ page }) => {
