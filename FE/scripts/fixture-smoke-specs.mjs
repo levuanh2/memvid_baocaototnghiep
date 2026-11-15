@@ -42,6 +42,11 @@ export const WHEN_PRESENT = [
   "e2e-fixture/knowledge-map-keyboard.spec.js",  // #164: map nodes usable from the keyboard
   "e2e-fixture/summary-loading-state.spec.js",   // #165: false "Chưa có tóm tắt", first-commit flash
   "e2e-fixture/landing-v6.spec.js",              // #159: landing overflow, touch targets, copy
+  "e2e-fixture/landing-wordmark-contrast.spec.js", // #159: brand wordmark text >= 4.5:1, light and dark
+  "e2e-fixture/chat-composer.spec.js",           // #178: composer send/stop, no double send
+  "e2e-fixture/mobile-viewport.spec.js",         // #184: keyboard and iOS pan never hide the composer
+  "e2e-fixture/library-one-list.spec.js",        // #176: no "Tiếp tục" for a failed or unindexed document
+  "e2e-fixture/quiz-review-v6.spec.js",          // #182: per-question verdict strip, one primary review action
 ];
 
 /** { specs, missingRequired, pending } for the FE directory `root`. */
