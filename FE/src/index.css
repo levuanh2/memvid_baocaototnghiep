@@ -1237,6 +1237,6 @@
 
 /* V6 header: the account menu's "Phím tắt" item is the only visible way to the shortcut help,
    so it stays at every width where a keyboard is likely. Phones omit it. */
-@media (max-width: 767px) {
-  .account-menu__shortcuts { display: none !important; }
-}
+/* One line on purpose: V6 branches append to the end of this file, and a closing brace on a
+   line of its own was merged away twice (integration trials 4 and 5: "Unclosed block"). */
+@media (max-width: 767px) { .account-menu__shortcuts { display: none !important; } }
