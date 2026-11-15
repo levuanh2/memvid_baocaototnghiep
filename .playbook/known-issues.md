@@ -8182,3 +8182,23 @@ sleeps), `FE/src/pages/study/Practice.idempotency.test.jsx` (5 red on the old pa
 **Prevention:** an operation that may be retried needs a client-chosen identity stored
 with its result; time windows only guess. Any work done after the commit that marks a
 state needs a claim that a retry can see and, after a lease, take over.
+
+
+### Draft answers could change a graded attempt (2026-11-15)
+
+**Symptoms:** a draft save (`PATCH /api/attempts/<id>/answers`) arriving while the same
+attempt was being submitted could overwrite answers after submit and grading had committed;
+the score no longer matched the stored answers.
+
+**Root cause:** `attempts.save_answers` checked `status == "in_progress"` in one transaction
+and `save_draft_answers` wrote in another, without a lock or re-check.
+
+**Fix:** `save_draft_answers` takes the attempt row lock (`FOR UPDATE`, the one `submit`
+takes) and writes only while `in_progress`; otherwise the use case raises `AttemptDaNop`
+(409, as for a draft on a submitted attempt).
+
+**Regression:** `test_attempt_submit_concurrency.py::test_a_draft_save_that_loses_the_race_to_submit_changes_nothing`
+(red before: the late write landed).
+
+**Prevention:** a status check and the write it guards belong in one transaction under the
+row lock (same lesson as 2026-11-14).

@@ -241,3 +241,31 @@ def test_open_mode_does_not_apply_the_replay_rule_across_clients(owner, monkeypa
     second = practice_uc.submit(quiz_id, None, answers, bat_buoc_chu_so_huu=False)
     assert first["attempt_id"] != second["attempt_id"]
     assert len(_attempts_of(quiz_id, ensure_anonymous_user())) == 2
+
+
+def test_a_draft_save_that_loses_the_race_to_submit_changes_nothing(owner, monkeypatch):
+    """The draft route checks `in_progress`, then writes in a second transaction. A submit
+    (and its grading) committing in between used to let the late write change a graded
+    attempt's answers without regrading it (Codex review of #183)."""
+    from app.application import attempts as attempts_uc
+    from app.domains.attempts import repository
+
+    quiz_id, qids = _quiz(owner)
+    attempt_id = repository.open_attempt(quiz_id, owner)["attempt_id"]
+    repository.save_draft_answers(attempt_id, {qids[0]: "dung", qids[1]: "dung"})
+    known = repository.question_ids_of_quiz
+
+    def _submit_in_between(qid):
+        # Runs after the use case has seen `in_progress` and before it writes.
+        attempts_uc.submit_attempt(attempt_id, owner, bat_buoc_chu_so_huu=True,
+                                   dispatch_grading=lambda *a: pytest.fail("inline"))
+        return known(qid)
+
+    monkeypatch.setattr(repository, "question_ids_of_quiz", _submit_in_between)
+    with pytest.raises(attempts_uc.AttemptDaNop):
+        attempts_uc.save_answers(attempt_id, owner, {qids[0]: "sai"}, bat_buoc_chu_so_huu=True)
+
+    stored = {a["question_id"]: a["user_answer"]
+              for a in repository.get_attempt(attempt_id)["answers"]}
+    assert stored[qids[0]] == "dung"
+    assert repository.get_attempt(attempt_id)["status"] == "graded"

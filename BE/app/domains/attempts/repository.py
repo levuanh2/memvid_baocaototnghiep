@@ -157,7 +157,7 @@ def question_ids_of_quiz(quiz_id: str) -> List[str]:
         ).scalars().all())
 
 
-def save_draft_answers(attempt_id: str, answers: Dict[str, Optional[str]]) -> int:
+def save_draft_answers(attempt_id: str, answers: Dict[str, Optional[str]]) -> Optional[int]:
     """Lưu nháp (FR-07.11). Gọi lại cho cùng câu thì GHI ĐÈ, không tạo dòng thứ hai.
 
     UNIQUE `(attempt_id, question_id)` là thứ chặn double-answer, nên ở đây phải
@@ -166,6 +166,12 @@ def save_draft_answers(attempt_id: str, answers: Dict[str, Optional[str]]) -> in
     if not answers:
         return 0
     with session_scope() as s:
+        # Re-check under the row lock `submit` takes: the caller's `in_progress` check ran
+        # in an earlier transaction, and a submit (and grading) may have committed since.
+        # Writing anyway changed a graded attempt's answers without regrading it.
+        a = s.get(QuizAttempt, str(attempt_id), with_for_update=True)
+        if a is None or a.status != "in_progress":
+            return None
         _upsert_answers(s, attempt_id, answers)
     return len(answers)
 
