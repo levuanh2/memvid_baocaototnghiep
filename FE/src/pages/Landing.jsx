@@ -271,7 +271,7 @@ export default function Landing() {
       {/* ── FOOTER ── */}
       <footer className="border-t border-border" style={{ background: "var(--bg-sidebar)" }}>
         <div className="lp-wrap py-8 flex flex-col sm:flex-row sm:items-center justify-between gap-2">
-          <div className="font-display font-semibold text-body-lg text-text-primary">Study<span className="text-seal">Map</span></div>
+          <div className="lp-footer-wordmark font-display font-semibold text-body-lg text-text-primary">Study<span className="text-seal">Map</span></div>
           <div className="text-small text-text-muted">Đọc, hỏi và ôn tập từ tài liệu của bạn.</div>
         </div>
       </footer>

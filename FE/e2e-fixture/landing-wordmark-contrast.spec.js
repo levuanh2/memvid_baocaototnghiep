@@ -103,7 +103,7 @@ for (const dark of [false, true]) {
     expect(result.mapRatio).toBeGreaterThanOrEqual(4.5);
   });
 
-  test(`records other wordmark contrast in ${theme}`, async ({ page }) => {
+  test(`landing footer and app header wordmarks are AA in ${theme} (owner decision 2026-11-15)`, async ({ page }) => {
     await openLanding(page, dark);
     const footer = await page.locator("footer").evaluate((element) => {
       const wordmark = element.querySelector(".font-display");
@@ -130,6 +130,43 @@ for (const dark of [false, true]) {
         studyRatio: Number(contrast(rgbChannels(colors.study), rgbChannels(colors.background)).toFixed(2)),
         mapRatio: Number(contrast(rgbChannels(colors.map), rgbChannels(colors.background)).toFixed(2)),
       })}`);
+      // Both backgrounds are opaque (checked: no alpha), so the ratio is against what is painted.
+      expect(colors.background, `${place} background must be opaque to measure it`).not.toMatch(/\/|rgba/);
+      expect(contrast(rgbChannels(colors.map), rgbChannels(colors.background)), place).toBeGreaterThanOrEqual(4.5);
     }
   });
 }
+
+test("only the wordmark text changes colour: every other seal-coloured element keeps --seal", async ({ page }) => {
+  let checked = 0;
+  for (const [dark, open] of [[false, openLanding], [true, openLanding], [false, openWorkspace], [true, openWorkspace]]) {
+    await open(page, dark);
+    const result = await page.evaluate(() => {
+      const probe = document.createElement("span");
+      probe.style.color = "var(--seal)";
+      document.body.appendChild(probe);
+      const seal = getComputedStyle(probe).color;
+      probe.remove();
+      const wordmark = ".lp-wordmark, .lp-footer-wordmark, .workspace-wordmark";
+      const others = [...document.querySelectorAll(".text-seal")].filter((el) => !el.closest(wordmark));
+      return { seal, others: others.map((el) => getComputedStyle(el).color) };
+    });
+    for (const color of result.others) expect(color).toBe(result.seal);
+    checked += result.others.length;
+  }
+  // Not vacuous: the workspace start screen has seal-coloured text outside the wordmark.
+  expect(checked).toBeGreaterThan(0);
+});
+
+test("capture: footer and app header wordmarks, light and dark", async ({ page }) => {
+  const out = process.env.V6_SHOT_OUT;
+  test.skip(!out, "set V6_SHOT_OUT to capture");
+  const tag = process.env.V6_SHOT_TAG || "after";
+  for (const dark of [false, true]) {
+    const theme = dark ? "dark" : "light";
+    await openLanding(page, dark);
+    await page.locator("footer").first().screenshot({ path: `${out}/wordmark-footer-${theme}-${tag}.png` });
+    await openWorkspace(page, dark);
+    await page.locator(".workspace-home-link").screenshot({ path: `${out}/wordmark-app-header-${theme}-${tag}.png` });
+  }
+});
