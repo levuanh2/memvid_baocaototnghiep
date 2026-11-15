@@ -134,6 +134,16 @@ export default function ReviewGuide() {
             {plan.summary}
           </p>
 
+          {plan.items.length > 0 && (() => {
+            const chunkCount = new Set(plan.items.flatMap((item) => item.chunk_ids || [])).size;
+            return (
+              <p className="quiz-review-overview">
+                {plan.items.length} chủ đề cần ôn, chủ đề nắm yếu nhất đứng đầu.
+                {chunkCount > 0 ? ` ${chunkCount} đoạn tài liệu cần đọc lại.` : ""}
+              </p>
+            );
+          })()}
+
           {job.jobId && (
             <div className="surface-card !p-3.5 mb-5 flex items-center gap-2.5">
               {job.error
@@ -158,10 +168,11 @@ export default function ReviewGuide() {
             />
           ) : (
             <ol className="quiz-review-plan-list">
-              {plan.items.map((item) => (
+              {plan.items.map((item, index) => (
                 <ReviewItem
                   key={item.review_item_id}
                   item={item}
+                  primary={index === 0}
                   busy={practiceFor === item.review_item_id}
                   disabled={Boolean(practiceFor) || job.running}
                   onPractise={() => practise(item)}
@@ -185,7 +196,7 @@ export default function ReviewGuide() {
   );
 }
 
-function ReviewItem({ item, busy, disabled, onPractise, onCustomize }) {
+function ReviewItem({ item, primary, busy, disabled, onPractise, onCustomize }) {
   return (
     <li className="surface-card quiz-review-plan-item">
       <div className="flex items-start gap-4">
@@ -224,7 +235,8 @@ function ReviewItem({ item, busy, disabled, onPractise, onCustomize }) {
                 {item.chunk_ids.length} đoạn cần đọc lại
               </span>
             )}
-            <button type="button" className="btn-seal text-small inline-flex items-center gap-1.5"
+            <button type="button" className={`${primary ? "btn-seal" : "btn-secondary"} text-small inline-flex items-center gap-1.5`}
+              data-emphasis={primary ? "primary" : "secondary"}
               disabled={disabled} onClick={onPractise}>
               {busy ? <><Spinner size={12} /> Đang soạn…</> : <><Icon name="Zap" size={13} /> Luyện ngay (5 câu)</>}
             </button>
