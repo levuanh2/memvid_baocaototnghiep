@@ -36,39 +36,39 @@ Six different things are kept apart below. Do not read one as another.
 
 ### Pull requests
 
-`CI` = the required check on the head named here, read from GitHub on 2026-11-15.
-`Trial 6` = the head in the sixth local integration (fully tested). Trial 7 merged every current head but its test run was stopped (next section).
+`CI` = the required check (`CI / required`) on the head named here, read from GitHub on 2026-11-16: green on all 28.
+`Trial 8` = whether that exact head is in the eighth local integration, the one fully tested on 2026-11-16 (next section). #159's head is the only exception: it adds this README update after the trial, documentation only.
 
-| PR | Branch | Head | CI | Tested alone | Trial 6 head | Depends on |
+| PR | Branch | Head | CI | Tested alone | In trial 8 | Depends on |
 |---|---|---|---|---|---|---|
-| #159 | `design/v6-foundation` | this branch | pass on `3a0991d` | wordmark AA in landing header, footer and app header (4.72-4.91:1); scope probe test; conversation-history design `05-…` | `012e34b` | — |
-| #160 | `fix/v6-source-loading-state` | `22aa5b5` | pass | Layout 174; `source-loading-state.spec.js` 8/8 | same | — |
-| #161 | `design/v6-chat-start` | `32bb6c1` | pass | Vitest 1940; five chat fixture specs 55/55 | same | #160 (stacked) |
-| #162 | `fix/v6-double-submit-guards` | `4e42f9d` | pass | Vitest 1938 | same | — |
-| #163 | `fix/v6-chat-attempt-identity` | `abc25d7` | pass | Layout 174 | same | — |
-| #164 | `fix/v6-stale-owner-guards` | `7a39e12` | pass | Vitest 1945; `knowledge-map-*.spec` 4/4 | same | — |
-| #165 | `fix/v6-summary-loading-state` | `d24d6aa` | pass | Vitest 1951 at the merge; `summary-loading-state.spec.js` 5/5 | same | #164 (stacked) |
-| #166 | `design/v6-library-actions` | `43ff246` | pass | Vitest 1934; Library fixture specs 42/42 | same | — |
-| #167 | `design/v6-header` | `6372346` | pass | Vitest 1936; `mobile-header.spec.js` 115/115; `@media` rule on one line (trials 4-6 lost its brace) | same | reconcile with #160 |
-| #168 | `design/v6-profile` | `c9d329e` | pass | Vitest 1942 | same | — |
-| #169 | `design/v6-quiz` | `ceea584` | pass | Vitest 1939; quiz fixture specs 9/9 | same | — |
-| #170 | `ci/v6-fixture-smoke` | `9cd8765` | pass | list unit test 7/7; 7 V6 specs added to `WHEN_PRESENT` (28 files on the integration) | `a8bc56c` | merge first |
-| #171 | `design/v6-library-card` | `1ee999e` | pass | Vitest 1943 before the review fixes; card tests after them | same | — |
-| #172 | `design/v6-learning-home` | `61feebc` | pass | Vitest 1940 before the last fix | same | — |
-| #173 | `design/v6-library-integration` | `4cd342e` | pass | Vitest 1956; `library-learning-home.spec.js` 18/18; five Library specs 46/46 | same | #166, #171, #172 (stacked) |
-| #174 | `design/v6-chat-workspace` | `99a29ee` | pass | Vitest 1951; chat, evidence and header fixture specs 141/141 | same | #160, #161, #163 (stacked) |
-| #175 | `design/v6-quiz-result` | `99c78f2` | pass | Vitest 1941; quiz-result fixture specs 12/12 | same | #169 (stacked) |
-| #176 | `design/v6-library-one-list` | `953b142` | pass | Vitest 1966; Library specs 36/36 | same | #173 (stacked) |
-| #177 | `fix/v6-chat-review-single-flight` | `02a2310` | pass | ChatArea tests | same | #174 (stacked) |
-| #178 | `design/v6-chat-composer` | `c04fdd1` | pass | `chat-composer.spec.js` 10/10; chat-start specs updated | same | #177 (stacked) |
-| #179 | `design/v6-quiz-setup` | `f8792b1` | pass | Vitest 1945; `quiz-setup-v6.spec.js` 6/6 | same | #175 (stacked) |
-| #180 | `design/v6-chat-evidence` | `7a7fa3e` | pass | Vitest 1957; build pass | same | #178 (stacked) |
-| #181 | `fix/test-guided-dialog-unmount` | `78935e1` | pass | shuffled full Vitest 1933/1933 | same | — (test only) |
-| #182 | `design/v6-quiz-review` | `bb4916e` | pass | Vitest 1955; `quiz-review-v6.spec.js` 5/5; title no longer cut to "K…" (red before) | `85c43bc` | #179 (stacked) |
-| #183 | `fix/practice-submit-atomic` | `1d787f8` | pass (backend suite on PostgreSQL) | concurrency tests 5/5 (red 4/4 on `main`); backend suite 2962 passed, 6 failed also on `main` | same | — (backend only); superseded in part by #185 |
-| #184 | `design/v6-mobile-viewport` | `0b7d58a` | pass | `useAppHeight` 7 (5 red before: pan, zoom, rotation, cleanup, dedupe); viewport spec +4; drawer focus spec (red before) | `96336fa` | #180 (stacked) |
-| #185 | `fix/practice-idempotency-key` | `06a65f8` | pass on `88824f8` (incl. backend integration on PostgreSQL 16); `06a65f8` pending | 24 PostgreSQL tests + 2 race tests; FE 8; two independent reviews, all BUG findings fixed | `88824f8` | #183 (stacked) |
-| #186 | `design/v6-learning-progress` | `3c6859f` | pass | helpers 10; `learning-progress.spec.js` 6/6; Vitest 1976 | same | #176 (stacked) |
+| #159 | `design/v6-foundation` | `4f1c656` + this docs update | pass | wordmark AA in landing header, footer and app header (4.72-4.91:1); scope probe test; conversation-history design `05-…` | `4f1c656` (code identical) | — |
+| #160 | `fix/v6-source-loading-state` | `22aa5b5` | pass | Layout 174; `source-loading-state.spec.js` 8/8 | yes | — |
+| #161 | `design/v6-chat-start` | `32bb6c1` | pass | Vitest 1940; five chat fixture specs 55/55 | yes | #160 (stacked) |
+| #162 | `fix/v6-double-submit-guards` | `4e42f9d` | pass | Vitest 1938 | yes | — |
+| #163 | `fix/v6-chat-attempt-identity` | `abc25d7` | pass | Layout 174 | yes | — |
+| #164 | `fix/v6-stale-owner-guards` | `7a39e12` | pass | Vitest 1945; `knowledge-map-*.spec` 4/4 | yes | — |
+| #165 | `fix/v6-summary-loading-state` | `d24d6aa` | pass | Vitest 1951 at the merge; `summary-loading-state.spec.js` 5/5 | yes | #164 (stacked) |
+| #166 | `design/v6-library-actions` | `43ff246` | pass | Vitest 1934; Library fixture specs 42/42 | yes | — |
+| #167 | `design/v6-header` | `6372346` | pass | Vitest 1936; `mobile-header.spec.js` 115/115; `@media` rule on one line (trials 4-6 lost its brace) | yes | reconcile with #160 |
+| #168 | `design/v6-profile` | `c9d329e` | pass | Vitest 1942 | yes | — |
+| #169 | `design/v6-quiz` | `ceea584` | pass | Vitest 1939; quiz fixture specs 9/9 | yes | — |
+| #170 | `ci/v6-fixture-smoke` | `9cd8765` | pass | list unit test 7/7; 7 V6 specs added to `WHEN_PRESENT` (28 files on the integration) | yes | merge first |
+| #171 | `design/v6-library-card` | `1ee999e` | pass | Vitest 1943 before the review fixes; card tests after them | yes | — |
+| #172 | `design/v6-learning-home` | `61feebc` | pass | Vitest 1940 before the last fix | yes | — |
+| #173 | `design/v6-library-integration` | `4cd342e` | pass | Vitest 1956; `library-learning-home.spec.js` 18/18; five Library specs 46/46 | yes | #166, #171, #172 (stacked) |
+| #174 | `design/v6-chat-workspace` | `99a29ee` | pass | Vitest 1951; chat, evidence and header fixture specs 141/141 | yes | #160, #161, #163 (stacked) |
+| #175 | `design/v6-quiz-result` | `99c78f2` | pass | Vitest 1941; quiz-result fixture specs 12/12 | yes | #169 (stacked) |
+| #176 | `design/v6-library-one-list` | `953b142` | pass | Vitest 1966; Library specs 36/36 | yes | #173 (stacked) |
+| #177 | `fix/v6-chat-review-single-flight` | `02a2310` | pass | ChatArea tests | yes | #174 (stacked) |
+| #178 | `design/v6-chat-composer` | `c04fdd1` | pass | `chat-composer.spec.js` 10/10; chat-start specs updated | yes | #177 (stacked) |
+| #179 | `design/v6-quiz-setup` | `f8792b1` | pass | Vitest 1945; `quiz-setup-v6.spec.js` 6/6 | yes | #175 (stacked) |
+| #180 | `design/v6-chat-evidence` | `7a7fa3e` | pass | Vitest 1957; build pass | yes | #178 (stacked) |
+| #181 | `fix/test-guided-dialog-unmount` | `78935e1` | pass | shuffled full Vitest 1933/1933 | yes | — (test only) |
+| #182 | `design/v6-quiz-review` | `bb4916e` | pass | Vitest 1955; `quiz-review-v6.spec.js` 5/5; title no longer cut to "K…" (red before) | yes | #179 (stacked) |
+| #183 | `fix/practice-submit-atomic` | `1d787f8` | pass (backend suite on PostgreSQL) | concurrency tests 5/5 (red 4/4 on `main`); backend suite 2962 passed, 6 failed also on `main` | yes | — (backend only); superseded in part by #185 |
+| #184 | `design/v6-mobile-viewport` | `0b7d58a` | pass | `useAppHeight` 7 (5 red before: pan, zoom, rotation, cleanup, dedupe); viewport spec +4; drawer focus spec (red before) | yes | #180 (stacked) |
+| #185 | `fix/practice-idempotency-key` | `06a65f8` | pass (incl. backend integration on PostgreSQL 16) | 24 PostgreSQL tests + 2 race tests; FE 8; two independent reviews, all BUG findings fixed | yes | #183 (stacked) |
+| #186 | `design/v6-learning-progress` | `3c6859f` | pass | helpers 10; `learning-progress.spec.js` 6/6; Vitest 1976 | yes | #176 (stacked) |
 
 ### Local integrations (never pushed)
 
@@ -80,7 +80,19 @@ Six different things are kept apart below. Do not read one as another.
 | 4 | #159-#179 (21) | `1df5748` / tree `effeb5af95b4` | 2042/2042 (250 files) | pass | 63 (baseline 67) | 660 collected, 660 passed, 0 failed, 0 skipped, 0 flaky, 27.8 min |
 | 5 | #159-#184 (26) | `e3ff458` / tree `76afcfbce69f` | 2071/2071 (256 files); shuffled (seed 61201) 2071/2071 | pass | 63 (baseline 67) | **675 collected, 673 passed, 0 failed, 0 flaky, 2 skipped** (the two screenshot-capture tests, which run only with `V6_SHOT_OUT`), 25.1 min |
 | 6 | #159-#186 (28) | `ee010e6` / tree `72cc0cb0ac62` | 2093/2093 (258 files); shuffled seeds 61201, 7, 4242: 2093/2093 each | pass | 63 (baseline 67) | **689 collected, 683 passed, 1 failed, 0 flaky, 5 skipped**, 32.6 min. Fixture Smoke (26 files): 325 passed, 1 failed, 4 skipped. The one failure, both runs: the new wordmark-scope test of #159 found no seal text to compare on the integrated chat start (#161 removed it); test rewritten with probes in `3a0991d` |
-| 7 | #159-#186 (28), every current head | `3487bcc` / tree `b41fa85ad513` | not run | not run | not run | **not run**: merge clean, CSS parses, 83 commits without duplicate patch or subject, smoke list 28 files; the test run was stopped by Claude Code because the machine ran low on memory, and was not restarted |
+| 7 | #159-#186 (28) | `3487bcc` / tree `b41fa85ad513` | not run | not run | not run | **not run**: merge clean, but the test run was stopped by Claude Code because the machine ran low on memory. Superseded by trial 8 (it lacked #159's `4f1c656`) |
+| 8 | #159-#186 (28), every head of 2026-11-16 | `d1ed4a3` / tree `8ca03e042ccf` | 2095/2095 (258 files), 241 s; shuffled (seed 61201) 2095/2095 | pass, 10 s | 63 (baseline 67, unchanged) | **691 collected, 686 passed, 0 failed, 0 flaky, 5 skipped**, 25.8 min. Fixture Smoke (28 files): **339 collected, 333 passed, 0 failed, 0 flaky, 6 skipped**, 19.6 min. Backend: **3008 passed, 6 failed (the same 6 on `main`), 9 skipped** |
+
+Trial 8 details (2026-11-16, run one stage at a time, never two heavy suites together):
+- Merge: 28 heads, 84 non-merge commits, no duplicate subject or patch-id; conflicts only in the two `.playbook` files (both sides kept), one line of `MainLayout.jsx` (#160/#167) and the end of `index.css` (#167/#174). `index.css` parses (19 `@media` blocks) and #167's one-line rule is intact; no hand repair. Every file a pull request adds is present in the tree.
+- Limits: Vitest `--maxWorkers=2`; Playwright `--workers=1 --retries=1 --fail-on-flaky-tests` (as CI), Chromium only, port 5299; backend alone. Free RAM stayed between 9.5 and 13.1 GB of 28 GB across the stages.
+- Skipped: in both Playwright runs, five capture tests that only run with `V6_SHOT_OUT` (wordmark, learning progress, two mobile viewport, quiz review). Fixture Smoke skipped one more: the 320px webfont check in `round6-library-action-matrix`, because Google Fonts did not load within 8 s (its fallback-font twin passed; in the full audit the webfont check ran and passed).
+- Backend: disposable PostgreSQL 16 (`--rm`, removed after the run). `alembic upgrade head` reaches the single head `20261115_attempt_submit_key`; `downgrade -1` then `upgrade head` both run and the unique partial index is valid. The 70 practice, idempotency and concurrency tests pass (dead grader after the lease, keyless reclaim, a failed grader not releasing a newer claim, mastery repair, mismatch, anonymous keys, draft-vs-submit race). The first run stopped at collection because `shared/proto/gen` was missing locally; the stubs were generated with `scripts/build_proto.py` as CI does, which also collects the four gRPC modules trial 6 skipped (hence 3008, not 2985). The 6 failures (`test_index_khoa_that.py` x5, `test_fpt_rerank.py` x1) fail the same way on `main` `db005ab`.
+- Logs and a stage checkpoint: `studymap-qa-execution/v6/results/integration-28-trial8/`.
+
+**Verdict: READY FOR OWNER REVIEW** as a set, in the order of `04-integration-checklist.md`. Not release-ready: nothing is verified on real devices, Firefox, WebKit or a screen reader, and the backend owner decisions below are open. Blockers before merging particular pull requests:
+- #183 + #185: owner approval of the deploy order (migration, then backend, then web) and of the open items 1-2 below (diagnostic grading claim, open-mode client identity). They are not regressions from these pull requests, but #185's guarantees hold only for the practice route.
+- Pre-existing, not caused by V6: the 6 backend failures above (they also fail on `main` on this machine).
 
 Trial 6 details: backend suite on the tree (disposable PostgreSQL 16): 2985 passed, 9 skipped, 6 failed, the same 6 that fail on `main` (`test_index_khoa_that.py` x5, `test_fpt_rerank.py` x1). No CSS repair was needed: #167 now writes its `@media` rule on one line. One real conflict, `Practice.jsx` imports (#162 vs #185), removed by aligning the import order in #185 (`88824f8`). Logs: `studymap-qa-execution/v6/results/integration-28/`.
 
@@ -151,5 +163,5 @@ Full proposal: `05-conversation-history-api.md` (contracts, keyset pagination, d
 3. Workspace panels: left and right sidebars, mind-map controls, summary pane, knowledge-map evidence, toolbars, dialogs.
 4. Library: done, the detailed progress page (#186); open: the "Đang yếu ở" section; the phone tools sheet and mind-map shortcut of the matrix renderer (not moved in #176).
 5. Reliability: a stale `POST /query` is ignored, not aborted, and the backend has no cancel for `query` jobs. Done: `SidebarRight.guidedDialogClose.test.jsx` order dependence (#181: the test never unmounted its root, so the portaled dialog leaked into the next test; CI does not shuffle) and the Library page's test globals (#166).
-6. Coverage: Firefox, WebKit, real devices, screen readers. Move the V6 specs to `REQUIRED` in the smoke list after their pull requests merge (seven more joined `WHEN_PRESENT` in #170).
+6. Coverage: Firefox, WebKit, real devices, screen readers. Move the V6 specs to `REQUIRED` in the smoke list after their pull requests merge (seven more joined `WHEN_PRESENT` in #170). `quiz-setup-v6`, `quiz-result-next-step` and `quiz-result-partial-counter` run only in the full audit; add them to `WHEN_PRESENT` too.
 7. Matrix renderer: its empty-library state is fixed in #176. A later pull request should fold its useful parts into the card renderer (task views, remembered search and scroll, the phone tools sheet, the mind-map shortcut) and remove the second renderer.

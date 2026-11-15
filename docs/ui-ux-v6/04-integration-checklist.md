@@ -68,6 +68,10 @@ be reconciled with #160. Everything else is independent in code.
 7. After #159, #160, #161, #164, #165 are on `main`: move their five specs from `WHEN_PRESENT`
    to `REQUIRED` in `FE/scripts/fixture-smoke-specs.mjs`. Until then, deleting or renaming one of
    those spec files would not fail CI.
+8. On GitHub every V6 pull request targets `main`, including the stacked ones, so a stacked pull
+   request (#161, #165, #173, #174, #175, #176, #177, #178, #179, #180, #182, #184, #185, #186) also carries its base's commits. Merge
+   the base first; then the stacked one's diff shrinks to its own commits. Merging it first would
+   merge the base unreviewed.
 
 ## At every step
 
@@ -94,7 +98,7 @@ be reconciled with #160. Everything else is independent in code.
 ## Evidence (local trial integration, never pushed)
 
 See "Trial integration" in `README.md` for the heads, test counts and the full Fixture Audit
-result. Trial 6 merged #159-#186 in the order above (28 branches) and was fully tested; trial 7 merged every current head cleanly but its test run was stopped for lack of memory. Trial 5 merged #159-#184 (26 branches); the conflicts were the
+result. Trial 8 (`d1ed4a3`, tree `8ca03e042ccf`, 2026-11-16) merged every current head of #159-#186 in the order above and passed every stage: Vitest 2095/2095, build, lint 63/67, Fixture Smoke 333 passed of 339 (6 skipped), full audit 686 passed of 691 (5 skipped), 0 failed and 0 flaky in both, backend 3008 passed with only the 6 failures `main` also has. Trial 6 merged #159-#186 in the order above (28 branches) and was fully tested; trial 7 merged every current head cleanly but its test run was stopped for lack of memory. Trial 5 merged #159-#184 (26 branches); the conflicts were the
 playbook files, the one line in `MainLayout.jsx`, and the end of `index.css` (see step 6), and the
 `index.css` brace was lost again by the union and restored by hand.
 
