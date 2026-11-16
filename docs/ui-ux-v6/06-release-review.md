@@ -1,10 +1,11 @@
 # V6 release review (2026-11-16) — for the owner, not a release approval
 
 Status: **READY FOR OWNER REVIEW** for the 28 Draft pull requests #159-#186, once every head
-named here has a green required check (section 7). Production: **NO-GO** until the three
-blocking items of section 9 (production reviewer, Render manual deploy, database backup
-restored once) are GO with the evidence that section asks for; each is an owner action in a
-production setting (section 11). Nothing is merged, deployed or marked Ready. `main` is
+named here has a green required check (section 7). Production: **NO-GO** until all seven
+blocking items of section 9 are GO with the evidence that section asks for: production
+reviewer, Render manual deploy, PostgreSQL backup restored, Storage and EC2 data backup
+restored, dev/test isolated from production, migration port, index-repair approver. Each is
+an owner action in a production setting (section 11). Nothing is merged, deployed or marked Ready. `main` is
 `db005ab`.
 
 ## 1. #185 migration safety (changed after trial 8)
@@ -307,6 +308,62 @@ Two facts to check while doing this (not verified here):
 - Whether the Supabase plan has daily backups or PITR. A dashboard restore replaces the whole
   project, so it is a last resort, not a substitute for the 4c restore test.
 
+## 4e. Dev/test isolation from production (read-only audit 2026-11-16, Draft PR #187)
+
+Why: the developer machine's `BE/.env` and root `.env` point the database **and** Storage at
+one Supabase project (read locally, ref not written here). Whether EC2 production uses the
+same project is not known yet (item 14). Until it is, treat every connection from a dev or
+test run to that project as a connection to production.
+
+How configuration is loaded: `shared/env_loader.load_project_env()` fills variables in this
+order: process environment, then `BE/.env`, then the root `.env`. A variable already present
+wins, even when it is empty; `SKIP_DOTENV=1` turns the files off. `os.environ.pop` does
+**not** keep a value out, because the next `load_dotenv` refills it from the file.
+
+| Entry point | How it picks a target | Guard before #187 | After #187 |
+|---|---|---|---|
+| pytest, `app.db.database_url()` | `TEST_DATABASE_URL` only | refused only the same (host, db) as `DATABASE_URL`: a hosted database under another host name (direct host vs pooler), or with `DATABASE_URL` absent, **passed** | same rule as migrations: loopback/CI host, name ends in `_test`, not the `DATABASE_URL` target |
+| pytest, guided job store (`guided_store.dsn()`) | `JOBS_DATABASE_URL`, else **`DATABASE_URL`** | none; active when `AUTH_PROTECT_APP_APIS=true` (set in the dev root `.env`) or `GUIDED_JOB_STORE_BACKEND=postgres` | `JOBS_DATABASE_URL` only, same rule; empty fails closed |
+| pytest, Storage | `SUPABASE_URL` + `SUPABASE_SECRET_KEY` | none: values from `BE/.env` reached tests; an upload through the `client` fixture wrote to the **real bucket** | blanked at session start in `conftest.py`; storage tests set fake values and mock HTTP |
+| Local Playwright backend (`scripts/run_e2e_server.py`) | `DATABASE_URL` (default local `studymap_test`), bucket keys from `BE/.env` | any `DATABASE_URL` from the shell accepted; bucket keys kept; provider keys "removed" with `pop` and refilled | provider and bucket keys set to `""`; a non-disposable `DATABASE_URL` exits 2 before the app is imported |
+| `alembic`, `scripts.setup_test_db`, `scripts.run_migrations` (test) | `TEST_DATABASE_URL` | already fail closed: loopback/CI host, `_test`, not `DATABASE_URL`, live `current_database()` check | unchanged |
+| `scripts.run_migrations` / `verify_db_schema --moi-truong production` | `DATABASE_URL` | needs `ALEMBIC_ALLOW_PRODUCTION=1` **and** declared `ALEMBIC_PRODUCTION_HOST`/`_DB` matching | unchanged; an explicit production action |
+| Operator scripts (`audit_production_corpus`, `dem_tai_lieu_loi`, `don_input_docs`, `verify_supabase_storage`) | `DATABASE_URL`, bucket keys | read-only, or write only with an explicit flag (`--xoa` deletes local files after checking Storage; `--ensure-bucket`; the storage probe writes and deletes one probe object) | unchanged; run them only on purpose |
+| Backend started by hand (`python -m app.main`, local gunicorn) | `DATABASE_URL` from `BE/.env` | none | **unchanged**: this is the developer's chosen target. It is safe only once item 14 shows the dev project is not production |
+| Dev frontend (Vite) | `VITE_API_URL` | `FE/.env.local` points at `localhost` and wins over `FE/.env` (which names an old Railway host) | unchanged |
+
+Evidence for #187: `BE/tests/test_devtest_isolation.py` was 10 red on `main` `db005ab`,
+run with a **fake** dev `.env` that only uses `.invalid` hosts, so nothing could connect
+anywhere. Green locally without a database: 111 passed, 12 skipped (those need Postgres).
+CI run 43900900527 on #187 `17d5d45`: `CI / required` success; backend integration on PostgreSQL 16 3000 passed, 0 failed; Playwright E2E 42 passed, normal and protected auth (so the E2E server's new check accepts CI's database). No production code path changes: every check runs only
+under pytest or inside the E2E server. Logs: `studymap-qa-execution/v6/results/devtest-isolation/`.
+
+**Owner procedure: is the dev project the production project?** (prints fingerprints only)
+
+```bash
+# 1. Developer machine, repository root (reads the files in the backend's order)
+python BE/scripts/db_target_fingerprint.py BE/.env .env
+# 2. EC2, in the deploy directory; the script is piped in, so it works before #187 is deployed
+docker compose -f docker-compose.prod.yml exec -T backend python - < BE/scripts/db_target_fingerprint.py
+```
+
+Each line shows a variable, a 12-hex fingerprint, and the port. No URL, host, user,
+password, key or project ref appears. The fingerprint is the same for one project at 5432,
+6543, the direct host and `SUPABASE_URL`. Compare `DATABASE_URL` and `SUPABASE_URL` between
+the two outputs and record **only** "same" or "different" with the date. Do not paste
+either output into a chat or an issue.
+- Different: item 14 is GO.
+- Same: item 14 is NO-GO. Create a separate Supabase project (or use a local PostgreSQL)
+  for development, point `BE/.env` and `.env` at it, rerun step 1 until it differs, and
+  until then do not start the backend or run any migration locally with these files.
+  Rotating the production keys that sit on the developer machine is the owner's decision.
+
+Not in #187 (needs separate approval, because it touches production config): a runtime
+guard that refuses a hand-started backend on the production database. It needs a marker
+that only production sets (for example `STUDYMAP_RUNTIME=production` in
+`docker-compose.prod.yml`). If the marker is missing on EC2, the production backend would
+refuse to start, so it has to be deployed with its own check.
+
 ## 5. Integrations and test results
 
 | Tree | What | Result |
@@ -338,7 +395,7 @@ All 28 are Draft. Heads unchanged since trial 8 except #159 (documentation) and 
 
 | | Risk | Priority | Blocks #183/#185? | Proposal | Tests needed |
 |---|---|---|---|---|---|
-| A | Diagnostic grading has no claim: sync and background callers use `grade_attempt(once=False)`; a duplicated job grades twice and runs mastery twice | P2 | No | pass `once=True`; lease on diagnostic attempts as for practice | two graders behind a barrier: one save, one mastery run |
+| A | Diagnostic grading has no claim: sync and background callers use `grade_attempt(once=False)`; a duplicated job grades twice, the second grader overwrites the first's scores, and gap analysis runs twice (it rewrites the per-attempt snapshot, so no duplicate mastery rows) | P2 | No | pass `once=True`; lease on diagnostic attempts as for practice | two graders behind a barrier: one save, one mastery run |
 | B | A diagnostic attempt stays `submitted` forever after a crash or grading error (a retry gets 409) | P1 | No (pre-existing) | retry path for `submitted` without score; maintenance sweeper re-enqueues stale ones | crash after submit, retry reaches `graded` |
 | C | Open mode (`AUTH_PROTECT_APP_APIS` off) shares one anonymous owner: attempts, keys, progress shared between visitors | P2 with auth on; **P0 if production runs open** | No, but production must run with auth on | per-client anonymous identity, or auth required | two anonymous clients isolated |
 | D | Idempotency covers only `POST /api/practice/<id>/submit`; generic attempt routes accept a practice quiz | P2 | No | `open_attempt` accepts only diagnostic quizzes | practice quiz on the generic route -> 404, no row |
@@ -355,7 +412,11 @@ production).
 
 Severity by real use:
 - A (P2): needs two graders on the same diagnostic attempt (a duplicated job or a retry
-  racing the sync path). Effect: mastery counted twice for one attempt. Not a data loss.
+  racing the sync path). Effect, corrected 2026-11-16: the second grader's verdicts replace
+  the first's (an LLM-graded score can change after the learner saw it), a second LLM pass
+  is paid, and gap analysis runs twice. Mastery rows are **not** doubled:
+  `analyze_attempt` deletes and rewrites the attempt's snapshot under UNIQUE
+  `(attempt_id, concept_name)` (test `..._exactly_the_snapshot_...` green). Not a data loss.
 - B (P1): any crash or grading error between submit and grade leaves the attempt stuck;
   the learner cannot retry it (409). Pre-existing on `main`; V6 does not make it more likely.
 - C (P2 in production, verified above).
@@ -387,8 +448,12 @@ and the review plan for that attempt never appear.
 
 How A happens: both callers use `grade_attempt(..., once=False)`, so `save_grades` neither
 locks the row nor checks the status. Two graders of one attempt (a duplicated or retried job,
-or the request path racing a job) both write the answers and both run gap analysis: mastery
-counted twice.
+or the request path racing a job) both write the answers (the last one wins) and both run
+gap analysis (the snapshot is rewritten, not doubled).
+
+A third case, found while writing the tests: a process that dies after `save_grades` and
+before `analyze_attempt` leaves a `graded` attempt with no mastery rows, forever. Practice
+repairs this on a `done` retry since #185; diagnostic does not.
 
 Plan (one pull request, backend only; practice already has every piece, reuse it):
 1. Claim at submit. In the same `FOR UPDATE` transaction that sets `submitted`, set
@@ -403,21 +468,55 @@ Plan (one pull request, backend only; practice already has every piece, reuse it
 4. Retry instead of 409. Submit on an attempt that is `submitted`, not graded, with no live
    claim (null or older than `GRADING_LEASE_S`) re-claims and grades again (request path or
    a new job). With a live claim: 202 "grading" (and the job id if one runs), not 409.
-   `graded` still answers 409 as today.
-5. Stuck sweep, bounded. In the existing maintenance tick, re-enqueue grading for attempts
-   `submitted` with an expired claim and `submitted_at` older than, for example, 15 minutes,
-   at most N per tick, logged. Covers learners who never come back.
-6. FE (small): a 202 "grading" on submit polls as for a job; no new screen.
+   `graded` still answers 409 as today; a `graded` attempt without mastery rows is repaired
+   by the sweep (step 5), not by a retry.
+5. Recovery sweep, bounded: `attempts_uc.recover_grading(older_than_s, limit)`, called from
+   the existing throttled `_run_jobs_maintenance` (`app/main.py`, `JOB_SWEEP_INTERVAL_SECONDS`,
+   default 300 s). No new process, worker or schedule. It regrades `submitted` attempts whose
+   claim expired and whose `submitted_at` is older than, for example, 15 minutes; it reruns
+   gap analysis for `graded` attempts that have no mastery rows (no regrading). At most N
+   per tick, each logged.
+6. FE (small): `QuizResult` already polls a `submitted` attempt and says "stuck" after 5
+   minutes (`REGRADE_STALL_MS`); add a "Chấm lại" action there that calls submit again. A
+   202 "grading" on submit polls as the job flow already does.
 
-Tests (PostgreSQL, red first on the current code):
-- grading raises after the submit commit: attempt `submitted`; the retry reaches `graded`
-  (today 409);
-- a killed grader (claim older than the lease): retry grades; with a live claim: 202, no
-  second grade;
-- two graders behind a barrier on one attempt: one `save_grades`, one gap-analysis run, the
-  loser's job ends `done`;
-- the sweep re-enqueues only stale `submitted` attempts and never touches `graded` ones;
-- an old grader finishing after a re-claim does not overwrite the newer result.
+Contract and interaction with #183/#185 (checked 2026-11-16 on `5e18271`):
+- `POST /api/attempts/<id>/submit` already answers 202 with `job_id` for background grading
+  and 200 for objective-only quizzes. **New**: on an `in_progress -> submitted` attempt that
+  is stuck it answers 200/202 (graded or grading) where it answers 409 today; with a live
+  claim it answers 202 "grading" instead of 409. Other 409s stay. A client that treats
+  409 as "already submitted, open the result" still works, because the result page shows
+  the same attempt.
+- It uses only pieces #183/#185 added and tested for practice: `grading_claimed_at`
+  (migration `20261115`, so this pull request stacks on #185 and must merge after it),
+  `GRADING_LEASE_S`, `_claim_grading`, `release_grading_claim`, `save_grades(once=True)`.
+  No new migration. The practice route and the Idempotency-Key logic are not touched.
+- Diagnostic retry carries no idempotency key: the attempt id is the key (one attempt, one
+  submit), so the replay window and fingerprint logic of practice do not apply.
+
+Approval needed before a Draft PR (owner):
+1. The API change above (stuck-attempt retry returns 200/202 instead of 409).
+2. The sweep in the maintenance tick (regrades without a learner request; it spends LLM
+   calls for short-answer attempts; N per tick and the age threshold are the knobs).
+3. The FE "Chấm lại" action on the stuck message.
+4. Order: after #185 is merged and deployed; the pull request is backend + one FE change.
+
+Tests, written and run red (local branch `fix/diagnostic-grading-recovery` `f85d5ff` on
+#185 `5e18271`, **not pushed**, waiting for the approval above;
+`BE/tests/test_diagnostic_grading_recovery.py`, disposable PostgreSQL 16, log
+`studymap-qa-execution/v6/results/diagnostic-grading/red-5e18271.log`): 5 red, 1 green.
+- grading raises after the submit commit, retry reaches `graded`: **red** (409
+  `AttemptKhongConDangLam`);
+- killed grader, claim older than the lease, retry grades: **red** (409);
+- live claim, retry does not grade again and answers "grading": **red** (409);
+- two grading jobs forced to overlap: **red**, gap analysis ran 2 times (expected 1; the
+  loser's job must end `done`);
+- sweep regrades only the stale `submitted` attempt, leaves the live and graded ones, and
+  rebuilds missing mastery without regrading: **red** (`recover_grading` does not exist);
+- mastery rows are exactly the snapshot of the stored grades: green (today's behaviour,
+  kept as a guard).
+Still to add with the implementation: an old grader finishing after a re-claim does not
+overwrite the newer result.
 
 Existing data: attempts already stuck can be counted read-only by the owner
 (`select count(*) from quiz_attempts where status = 'submitted' and submitted_at < now() - interval '1 hour'`);
@@ -428,22 +527,21 @@ open mode (C); both stay as in the table above.
 
 ## 9. GO/NO-GO checklist for the owner
 
-Blocking (production stays NO-GO until all three are GO with the evidence named):
+Blocking: production stays **NO-GO** until every row is GO with the evidence named. None
+of these can be done by this review; each is an owner action (section 11).
 
 | # | Item | Evidence that makes it GO | State |
 |---|---|---|---|
 | 3 | `production` environment requires a reviewer | `gh api repos/levuanh2/memvid_baocaototnghiep/environments/production` shows a `required_reviewers` rule naming the owner; the admin-bypass decision written down (on as emergency path, or off); one run seen waiting in "Review deployments" (e.g. the first FE-only merge) and approved or rejected by hand | **NO-GO**: `protection_rules: []` (read 2026-11-16); approved in principle |
-| 4 | Render `studymap-web` Auto-Deploy Off for the window | screenshot or dated note of Settings > Build & Deploy showing Auto-Deploy Off; after a merge, no new Render deploy until the owner starts one by SHA | **NO-GO**: dashboard not read; `render.yaml` says `checksPass`; approved in principle |
-| 6 | Database backup taken and restored once | `restore-evidence.txt` of section 4c: `pg_restore exit 0`, counts and revision identical, 0 invalid indexes, dump SHA-256, dump stored encrypted. A restore with any error is not GO | **NO-GO**: not done |
+| 4 | Render `studymap-web` Auto-Deploy controlled | screenshot or dated note of Settings > Build & Deploy showing Auto-Deploy Off; after a merge, no new Render deploy until the owner starts one by SHA | **NO-GO**: dashboard not read; `render.yaml` says `checksPass`; approved in principle |
+| 6 | PostgreSQL 17 production backup taken and restored once | `restore-evidence.txt` of section 4c: `pg_restore exit 0`, counts and revision identical, 0 invalid indexes, dump SHA-256, dump stored encrypted. A restore with any error is not GO | **NO-GO**: not done |
+| 13 | Supabase Storage and EC2 `/opt/memvid/data` backed up and restored once (section 4d) | object count of the bucket copy equals the bucket listing, and one object opened from the copy; a `scripts/backup.sh` archive restored once on a copy with its SQLite files opening | **NO-GO**: not done |
+| 14 | Dev/test cannot write to production | #187 merged (tests, E2E server: disposable database only, no real bucket; section 4e), **and** the fingerprint comparison of section 4e recorded as "different" for `DATABASE_URL` and `SUPABASE_URL`; if "same", the dev project separated first | **NO-GO**: #187 is a Draft; the comparison not done; locally both files point at one project |
+| 7 | Migration connection on EC2 confirmed | owner prints host and port only, inside the backend container: `python -c "import os; from urllib.parse import urlsplit as u; x=u(os.environ['DATABASE_URL']); print(x.hostname, x.port)"`. 5432 (session pooler) or direct is GO; 6543 means switch for the release or accept the risk in writing (section 4a) | **NO-GO**: not read |
+| 8 | A named person approves a manual index repair | a named person who has read `docs/RUNBOOK_SUBMIT_KEY_INDEX.md` and is reachable during the #185 deploy window, recorded with the release | **NO-GO**: not named |
 
-Also required before step 2 of section 4 (they do not block the frontend merges):
-
-| # | Item | Evidence | State |
-|---|---|---|---|
-| 7 | Migration connection on EC2 | owner prints host and port only, inside the backend container: `python -c "import os; from urllib.parse import urlsplit as u; x=u(os.environ['DATABASE_URL']); print(x.hostname, x.port)"`. 5432 (session pooler) or direct is GO; 6543 means switch for the release or accept the risk in writing (section 4a) | open |
-| 8 | Who approves a manual index repair | a named person who has read `docs/RUNBOOK_SUBMIT_KEY_INDEX.md` and is reachable during the #185 deploy window, recorded with the release | open |
-| 14 | Development does not write to the production database | compare the Supabase project ref (the `<ref>` of user `postgres.<ref>`, and of `SUPABASE_URL`) of EC2's `DATABASE_URL` with the developer's `BE/.env` and root `.env`; print the ref only, never the URL. Read locally 2026-11-16: both local files point database **and** Storage at one project. If EC2 uses the same ref, every local backend run (quiz, submit, migration) changes learners' real data: move development to its own project or a local PostgreSQL before step 2, and run local migrations only against it | **open**; production side not read |
-| 13 | Uploaded files and `/opt/memvid/data` backed up (section 4d) | object count of the bucket copy equals the bucket listing; a `scripts/backup.sh` archive restored once on a copy | open; without it the backup is "database only" |
+The merges of section 10 start only after 3, 4 and 6 are GO (as written there); the backend
+deploy of #183/#185 (section 10 step 7) needs all seven.
 
 Already GO, or owner decisions that do not block:
 
