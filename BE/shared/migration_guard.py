@@ -70,9 +70,12 @@ def libpq_target_vars_set(files=None) -> list:
     try:
         from dotenv import dotenv_values
 
+        # Raw values, not interpolated: `load_dotenv` expands `${X}` file by file, so X
+        # may come from an earlier file only at load time (Codex re-check 3). A non-empty
+        # raw value counts as set, even if it would expand to "" (fail closed).
         for path in reversed(list(files)):
             if os.path.exists(path):
-                from_files.update(dotenv_values(path))
+                from_files.update(dotenv_values(path, interpolate=False))
     except ImportError:  # no python-dotenv: nothing will be loaded either
         pass
     out = []

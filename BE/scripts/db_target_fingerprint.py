@@ -52,9 +52,10 @@ def identity(value: str) -> str:
     hosts = [h for k, v in q if k.lower() in ("host", "hostaddr") for h in v.split(",") if h]
     if not hosts:
         hosts = [h for h in p.netloc.rsplit("@", 1)[-1].split(",") if h]
-    # Strip a port from every candidate, query or authority alike (Codex re-check 2).
-    hosts = [h.split("]")[0] + "]" if h.startswith("[") else h.rsplit(":", 1)[0]
-             for h in hosts]
+    # Strip a port from every candidate, query or authority alike (Codex re-check 2), but
+    # never split a bare IPv6 literal (more than one ":", no brackets; re-check 3).
+    hosts = [h.split("]")[0] + "]" if h.startswith("[")
+             else (h.rsplit(":", 1)[0] if h.count(":") == 1 else h) for h in hosts]
     userinfo = p.netloc.rsplit("@", 1)[0] if "@" in p.netloc else ""
     user = unquote(last.get("user") or userinfo.split(":", 1)[0])
     db = unquote(last.get("dbname") or p.path.strip("/"))

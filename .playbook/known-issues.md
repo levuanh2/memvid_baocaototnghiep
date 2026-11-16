@@ -8187,3 +8187,10 @@ app; pytest may build an engine before dotenv runs), so a `PGHOSTADDR` that only
 ports from every candidate host and prints UNRELIABLE for a URL with `?service=`.
 **Regression:** 4 tests, red on `08c4ff1`; manual E2E run with a fake `BE/.env`: exit 124
 (server started) before, exit 2 after.
+
+**Fourth follow-up (Codex re-check 3 of ae9e091):** reading each env file alone with
+`dotenv_values` expanded `${X}` against the current process, but `load_dotenv` loads file by
+file, so `PGHOSTADDR=${X}` in root `.env` with X set in `BE/.env` expanded to "" in the
+guard and to an address at load time. **Fix:** read raw values (`interpolate=False`); a
+non-empty raw value counts as set (fail closed). The fingerprint no longer strips a "port"
+from a bare IPv6 literal. **Regression:** 2 tests, red on `ae9e091`.

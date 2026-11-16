@@ -396,3 +396,26 @@ def test_fingerprint_refuses_a_url_that_names_a_service(tmp_path, capsys, monkey
                         encoding="utf-8")
     assert mod.main([str(env_file)]) == 3
     assert "service" in capsys.readouterr().out
+
+
+# ── Codex re-check 3 of ae9e091: interpolation across env files, IPv6 hosts ──
+def test_libpq_variable_built_by_interpolation_across_files_is_seen(tmp_path, monkeypatch):
+    """`load_dotenv` runs file by file: `${X}` in root `.env` expands with X that `BE/.env`
+    set a moment earlier. Reading each file alone expanded it to "" and missed it; the
+    raw value decides (fail closed: a non-empty raw value counts as set)."""
+    from shared.migration_guard import libpq_target_vars_set
+
+    for v in ("PGHOSTADDR", "X_HOSTADDR"):
+        monkeypatch.delenv(v, raising=False)
+    be, root = tmp_path / "be.env", tmp_path / "root.env"
+    be.write_text("X_HOSTADDR=192.0.2.10\n", encoding="utf-8")
+    root.write_text("PGHOSTADDR=${X_HOSTADDR}\n", encoding="utf-8")
+    assert libpq_target_vars_set(files=[be, root]) == ["PGHOSTADDR"]
+
+
+def test_fingerprint_keeps_unbracketed_ipv6_query_hosts_apart():
+    fp = _fp_module().fingerprint
+    a = "postgresql://u:p@x/postgres?host=2001:db8::1"
+    b = "postgresql://u:p@x/postgres?host=2001:db8::2"
+    assert fp(a) != fp(b)
+    assert fp("postgresql://u:p@x/postgres?host=[2001:db8::1]:5432") == fp(a)
