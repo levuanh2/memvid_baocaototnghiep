@@ -64,7 +64,10 @@ be reconciled with #160. Everything else is independent in code.
    `20261115_attempt_submit_key` must run before the new backend starts (the model selects the
    new columns); `scripts/deploy.sh` runs migrations (step 5) before `compose up` (step 6). The
    web part sends the key in the body, so web-before-backend is safe. #185 merges cleanly with
-   #162 (`Practice.jsx` imports aligned in `88824f8`). **#186** after #176.
+   #162 (`Practice.jsx` imports aligned in `88824f8`). After the migration, check
+   `SELECT indisvalid FROM pg_index WHERE indexrelid = 'uq_quiz_attempts_user_submit_key'::regclass`
+   returns `t` (an interrupted concurrent build leaves an INVALID index; `2bb0c48` rebuilds it
+   and fails the migration otherwise). **#186** after #176.
 7. After #159, #160, #161, #164, #165 are on `main`: move their five specs from `WHEN_PRESENT`
    to `REQUIRED` in `FE/scripts/fixture-smoke-specs.mjs`. Until then, deleting or renaming one of
    those spec files would not fail CI.

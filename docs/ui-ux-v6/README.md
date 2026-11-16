@@ -37,7 +37,7 @@ Six different things are kept apart below. Do not read one as another.
 ### Pull requests
 
 `CI` = the required check (`CI / required`) on the head named here, read from GitHub on 2026-11-16: green on all 28.
-`Trial 8` = whether that exact head is in the eighth local integration, the one fully tested on 2026-11-16 (next section). #159's head is the only exception: it adds this README update after the trial, documentation only.
+`In trial 8` = whether that exact head is in the eighth local integration, the one fully tested on 2026-11-16 (next section). Two exceptions, changed after the trial: #159 (this README, documentation only) and #185 (`2bb0c48`, migration fix; its own CI is green, the integrated tree was not re-run).
 
 | PR | Branch | Head | CI | Tested alone | In trial 8 | Depends on |
 |---|---|---|---|---|---|---|
@@ -67,7 +67,7 @@ Six different things are kept apart below. Do not read one as another.
 | #182 | `design/v6-quiz-review` | `bb4916e` | pass | Vitest 1955; `quiz-review-v6.spec.js` 5/5; title no longer cut to "K…" (red before) | yes | #179 (stacked) |
 | #183 | `fix/practice-submit-atomic` | `1d787f8` | pass (backend suite on PostgreSQL) | concurrency tests 5/5 (red 4/4 on `main`); backend suite 2962 passed, 6 failed also on `main` | yes | — (backend only); superseded in part by #185 |
 | #184 | `design/v6-mobile-viewport` | `0b7d58a` | pass | `useAppHeight` 7 (5 red before: pan, zoom, rotation, cleanup, dedupe); viewport spec +4; drawer focus spec (red before) | yes | #180 (stacked) |
-| #185 | `fix/practice-idempotency-key` | `06a65f8` | pass (incl. backend integration on PostgreSQL 16) | 24 PostgreSQL tests + 2 race tests; FE 8; two independent reviews, all BUG findings fixed | yes | #183 (stacked) |
+| #185 | `fix/practice-idempotency-key` | `2bb0c48` | pass (incl. backend integration on PostgreSQL 16: 3016 passed, the new migration test ran) | 24 PostgreSQL tests + 2 race tests; FE 8; two independent reviews, all BUG findings fixed; `2bb0c48`: an interrupted `CONCURRENTLY` build left an INVALID index that `IF NOT EXISTS` skipped, now rebuilt and checked (`test_attempt_submit_key_migration.py`, real failed build) | **no**: trial 8 has `06a65f8`; `2bb0c48` changes only the migration, a new test and `.playbook` (merge-tree on `d1ed4a3`: code clean, the usual `.playbook` append conflicts) | #183 (stacked) |
 | #186 | `design/v6-learning-progress` | `3c6859f` | pass | helpers 10; `learning-progress.spec.js` 6/6; Vitest 1976 | yes | #176 (stacked) |
 
 ### Local integrations (never pushed)
@@ -91,6 +91,7 @@ Trial 8 details (2026-11-16, run one stage at a time, never two heavy suites tog
 - Logs and a stage checkpoint: `studymap-qa-execution/v6/results/integration-28-trial8/`.
 
 **Verdict: READY FOR OWNER REVIEW** as a set, in the order of `04-integration-checklist.md`. Not release-ready: nothing is verified on real devices, Firefox, WebKit or a screen reader, and the backend owner decisions below are open. Blockers before merging particular pull requests:
+- #185's head `2bb0c48` came after trial 8 (migration hardening). Its CI, including the backend suite on PostgreSQL, is green, but the 28-branch tree was not re-run with it; re-run at least the backend suite on the integrated tree before relying on this verdict for #183/#185.
 - #183 + #185: owner approval of the deploy order (migration, then backend, then web) and of the open items 1-2 below (diagnostic grading claim, open-mode client identity). They are not regressions from these pull requests, but #185's guarantees hold only for the practice route.
 - Pre-existing, not caused by V6: the 6 backend failures above (they also fail on `main` on this machine).
 
