@@ -352,3 +352,47 @@ def test_fingerprint_and_guard_watch_the_same_libpq_variables():
     from shared.migration_guard import LIBPQ_TARGET_VARS
 
     assert _fp_module().LIBPQ_TARGET_VARS == LIBPQ_TARGET_VARS
+
+
+# ── Codex re-check 2 of 08c4ff1: libpq variables that arrive later from .env ──
+def test_libpq_variable_only_in_an_env_file_is_seen(tmp_path, monkeypatch):
+    """`load_dotenv` runs after the E2E guard (and maybe after an engine exists in
+    pytest), so the guard must read what WILL be in effect: process first, then files."""
+    from shared.migration_guard import libpq_target_vars_set
+
+    for v in ("PGHOSTADDR", "PGSERVICE"):
+        monkeypatch.delenv(v, raising=False)
+    be, root = tmp_path / "be.env", tmp_path / "root.env"
+    be.write_text("PGHOSTADDR=192.0.2.10\n", encoding="utf-8")
+    root.write_text("PGSERVICE=prod\n", encoding="utf-8")
+    assert libpq_target_vars_set(files=[be, root]) == ["PGHOSTADDR", "PGSERVICE"]
+    monkeypatch.setenv("PGHOSTADDR", "")   # present in the process: the file cannot fill it
+    assert libpq_target_vars_set(files=[be, root]) == ["PGSERVICE"]
+    monkeypatch.setenv("SKIP_DOTENV", "1")
+    assert libpq_target_vars_set(files=[be, root]) == []
+
+
+def test_the_guard_reads_libpq_variables_from_the_project_env_files():
+    import inspect
+
+    from shared import migration_guard
+
+    assert "libpq_target_vars_set()" in inspect.getsource(migration_guard.kiem_tra_dich)
+
+
+def test_fingerprint_strips_ports_from_query_hosts():
+    fp = _fp_module().fingerprint
+    with_ports = "postgresql://u:p@x/postgres?host=db.aaaa.supabase.co:5432&host=db.bbbb.supabase.co:6543"
+    without = "postgresql://u:p@x/postgres?host=db.aaaa.supabase.co&host=db.bbbb.supabase.co"
+    assert fp(with_ports) == fp(without)
+
+
+def test_fingerprint_refuses_a_url_that_names_a_service(tmp_path, capsys, monkeypatch):
+    mod = _fp_module()
+    for name in mod.NAMES + mod.LIBPQ_TARGET_VARS:
+        monkeypatch.delenv(name, raising=False)
+    env_file = tmp_path / "be.env"
+    env_file.write_text("DATABASE_URL=postgresql://u:p@127.0.0.1/x_test?service=prod\n",
+                        encoding="utf-8")
+    assert mod.main([str(env_file)]) == 3
+    assert "service" in capsys.readouterr().out

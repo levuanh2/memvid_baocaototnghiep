@@ -51,9 +51,10 @@ def identity(value: str) -> str:
     last = {k.lower(): v for k, v in q}
     hosts = [h for k, v in q if k.lower() in ("host", "hostaddr") for h in v.split(",") if h]
     if not hosts:
-        authority = p.netloc.rsplit("@", 1)[-1]
-        hosts = [h.split("]")[0] + "]" if h.startswith("[") else h.rsplit(":", 1)[0]
-                 for h in authority.split(",") if h]
+        hosts = [h for h in p.netloc.rsplit("@", 1)[-1].split(",") if h]
+    # Strip a port from every candidate, query or authority alike (Codex re-check 2).
+    hosts = [h.split("]")[0] + "]" if h.startswith("[") else h.rsplit(":", 1)[0]
+             for h in hosts]
     userinfo = p.netloc.rsplit("@", 1)[0] if "@" in p.netloc else ""
     user = unquote(last.get("user") or userinfo.split(":", 1)[0])
     db = unquote(last.get("dbname") or p.path.strip("/"))
@@ -103,6 +104,12 @@ def main(argv) -> int:
         print(f"UNRELIABLE: libpq variables set {pg}; unset them and run again.")
         return 3
     values = resolve(argv, os.environ)
+    named = [n for n in NAMES if any(k.lower() == "service" for k, _ in
+                                     parse_qsl(urlsplit(values.get(n) or "").query))]
+    if named:
+        # `?service=` pulls host/hostaddr/failover from an external service file.
+        print(f"UNRELIABLE: {named} name a libpq service; use a plain URL and run again.")
+        return 3
     for name in NAMES:
         v = (values.get(name) or "").strip()
         if not v:

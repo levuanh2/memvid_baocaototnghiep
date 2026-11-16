@@ -8177,3 +8177,13 @@ percent-encoded pooler users. **Fix:** test mode refuses while any of `PGHOSTADD
 `os.environ`, names only); both harnesses keep the gRPC addresses only when local; the
 fingerprint covers every host, decodes the user, and prints UNRELIABLE (exit 3) when a
 libpq variable is set. **Regression:** 9 more tests, red on `3c7f0e5`.
+
+**Third follow-up (Codex re-check 2 of 08c4ff1):** the libpq check read only the process
+environment, but `BE/.env` is loaded later (the E2E server checks before importing the
+app; pytest may build an engine before dotenv runs), so a `PGHOSTADDR` that only lived in
+`BE/.env` still moved the target (reproduced: the E2E server started). **Fix:**
+`libpq_target_vars_set()` returns what WILL be in effect: process value if present, else
+`BE/.env`, then root `.env` (dotenv order); `SKIP_DOTENV` respected. The fingerprint strips
+ports from every candidate host and prints UNRELIABLE for a URL with `?service=`.
+**Regression:** 4 tests, red on `08c4ff1`; manual E2E run with a fake `BE/.env`: exit 124
+(server started) before, exit 2 after.

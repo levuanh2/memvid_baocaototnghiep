@@ -51,6 +51,38 @@ ALLOWED_TEST_QUERY_KEYS = frozenset({"sslmode", "connect_timeout", "application_
 LIBPQ_TARGET_VARS = ("PGHOSTADDR", "PGHOST", "PGPORT", "PGDATABASE", "PGSERVICE",
                      "PGSERVICEFILE")
 
+def libpq_target_vars_set(files=None) -> list:
+    """Names in `LIBPQ_TARGET_VARS` that are, or WILL be, non-empty in this process.
+
+    A variable present in the process wins (even empty), else the value `load_dotenv`
+    will add from `BE/.env` then the root `.env` (the `shared.env_loader` order). The E2E
+    server checks before the app loads dotenv, and pytest may build an engine before it
+    does; checking only `os.environ` missed a `PGHOSTADDR` that arrives from `BE/.env`
+    later (Codex re-check 2 of #187). Names only, never values.
+    """
+    if (os.getenv("SKIP_DOTENV") or "").strip() in {"1", "true", "True", "yes", "on"}:
+        files = []
+    elif files is None:
+        from shared.paths import BE_ROOT
+
+        files = [BE_ROOT / ".env", BE_ROOT.parent / ".env"]
+    from_files: dict = {}
+    try:
+        from dotenv import dotenv_values
+
+        for path in reversed(list(files)):
+            if os.path.exists(path):
+                from_files.update(dotenv_values(path))
+    except ImportError:  # no python-dotenv: nothing will be loaded either
+        pass
+    out = []
+    for name in LIBPQ_TARGET_VARS:
+        value = os.environ[name] if name in os.environ else (from_files.get(name) or "")
+        if value.strip():
+            out.append(name)
+    return out
+
+
 #: Hosts a test run may use for side services (Redis, Ollama): loopback plus the CI and
 #: compose service names.
 ALLOWED_LOCAL_SERVICE_HOSTS = ALLOWED_TEST_HOSTS | {"redis", "ollama"}
@@ -182,9 +214,9 @@ def kiem_tra_dich(url: str, che_do: str, *, live_db_name: Optional[str] = None,
             f"URL test có tham số query không cho phép {la}: host/dbname/service trong query "
             f"thay được đích thật. Chỉ cho {sorted(ALLOWED_TEST_QUERY_KEYS)}. Đích: {sanitize(url)}")
 
-    # `os.environ`, not `env`: the driver uses the process environment whatever a caller
-    # passed here (run_e2e_server passes env={}). Names only, never values.
-    pg = [v for v in LIBPQ_TARGET_VARS if (os.environ.get(v) or "").strip()]
+    # The process environment plus what dotenv will add, not `env`: the driver uses the
+    # process environment whatever a caller passed here (run_e2e_server passes env={}).
+    pg = libpq_target_vars_set()
     if pg:
         raise MigrationTargetRejected(
             f"Biến môi trường libpq {pg} đang đặt: chúng có thể đổi đích kết nối dù URL trỏ "
