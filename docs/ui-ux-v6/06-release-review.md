@@ -332,10 +332,31 @@ wins, even when it is empty; `SKIP_DOTENV=1` turns the files off. `os.environ.po
 | Backend started by hand (`python -m app.main`, local gunicorn) | `DATABASE_URL` from `BE/.env` | none | **unchanged**: this is the developer's chosen target. It is safe only once item 14 shows the dev project is not production |
 | Dev frontend (Vite) | `VITE_API_URL` | `FE/.env.local` points at `localhost` and wins over `FE/.env` (which names an old Railway host) | unchanged |
 
-Evidence for #187: `BE/tests/test_devtest_isolation.py` was 10 red on `main` `db005ab`,
-run with a **fake** dev `.env` that only uses `.invalid` hosts, so nothing could connect
-anywhere. Green locally without a database: 111 passed, 12 skipped (those need Postgres).
-CI run 43900900527 on #187 `17d5d45`: `CI / required` success; backend integration on PostgreSQL 16 3000 passed, 0 failed; Playwright E2E 42 passed, normal and protected auth (so the E2E server's new check accepts CI's database). No production code path changes: every check runs only
+Independent review (Codex, read-only, four rounds; `task23-codex-187-review.md`) found
+more ways out, all fixed in #187 with a red test first:
+- URL query parameters (`?host=`, `?dbname=`, `?service=`...) replace the URL's host and
+  database for libpq: `127.0.0.1/x_test?host=<hosted>` passed the first guard. A test URL
+  may now carry only `sslmode`, `connect_timeout`, `application_name`.
+- libpq environment variables (`PGHOSTADDR`, `PGSERVICE`, ...) move the socket even when
+  the URL names the host, including when they only live in `BE/.env` and are loaded after
+  the check, or are built with `${X}` from a variable another env file sets. A test run now
+  refuses while any of them is or will be set (raw file values; fail closed).
+- `REDIS_URL`, Gemini/Groq/Cohere keys, a remote `OLLAMA_HOST`, `LLM_GATEWAY_ADDR`,
+  `MINDMAP_SERVICE_ADDR` reached tests or the E2E server; keys are blank, services kept
+  only when local.
+- The fingerprint now follows the effective target (query hosts, failover lists,
+  percent-encoded users) and prints UNRELIABLE when libpq variables or `?service=` could
+  move it.
+
+Evidence for #187: `BE/tests/test_devtest_isolation.py` (48 tests) was red on each earlier
+head for what that round added, run with a **fake** dev `.env` that only uses `.invalid`
+hosts and TEST-NET addresses, so nothing could connect anywhere. Green locally without a database on the latest head: 232 passed, 12 skipped (those need
+Postgres). An E2E server started with a fake `BE/.env` holding only `PGHOSTADDR`: before,
+it started (exit 124); after, it refuses (exit 2).
+CI on #187 `f48feaf` (run 43912792942): `CI / required` success; backend integration on
+PostgreSQL 16 3033 passed, 0 failed; Playwright E2E 42 passed, normal and protected auth
+(the E2E server's check accepts CI's database). Codex's final ledger after four rounds:
+11 findings fixed, 1 out of scope (hand-started backend, below), 0 open.
 under pytest or inside the E2E server. Logs: `studymap-qa-execution/v6/results/devtest-isolation/`.
 
 **Owner procedure: is the dev project the production project?** (prints fingerprints only)
@@ -494,8 +515,31 @@ Contract and interaction with #183/#185 (checked 2026-11-16 on `5e18271`):
 - Diagnostic retry carries no idempotency key: the attempt id is the key (one attempt, one
   submit), so the replay window and fingerprint logic of practice do not apply.
 
+Independent review of this plan and its tests (agy, read-only,
+`task24-agy-diagnostic-plan-review.md`) adds requirements, accepted here:
+- **Already graded, retried** (P1): an objective quiz grades in milliseconds; if the
+  response is lost, the learner's second submit gets 409 and sees "Nộp bài thất bại" for
+  an attempt that succeeded. Proposal: a `graded` attempt answers 200 with the stored
+  result and `grading: "done"`, as practice does since #185. This changes
+  `test_quiz_attempt.py` (which asserts 409 today) and is part of approval item 1.
+- The job runner must treat `None` from `grade_attempt(once=True)` with a `graded`
+  attempt as done (step 2; without it, fixing A turns every lost race into a failed job).
+- The claim taken at submit is returned to the caller (`repository.submit` returns
+  only status today), so a failure releases exactly that claim (step 3).
+- The sweep never grades short answers on the web request thread: it re-dispatches a
+  background job with the attempt's own `user_id` (otherwise the job is invisible to the
+  learner when auth is on). It claims with one atomic conditional `UPDATE`, so a learner
+  retry and the sweep cannot both grade; it only touches attempts whose `submitted_at` is
+  older than the threshold, so it does not race a learner who just released a claim.
+- A retry on the generic route refuses a practice quiz (risk D); practice keeps its
+  Idempotency-Key route.
+- More tests before the PR: the short-answer retry path; an old grader finishing after a
+  re-claim (no overwrite, no second analysis); retry by another user -> 404 with auth on;
+  sweep and learner retry at once; a released claim (`grading_claimed_at` NULL).
+
 Approval needed before a Draft PR (owner):
-1. The API change above (stuck-attempt retry returns 200/202 instead of 409).
+1. The API change above: a stuck attempt's retry returns 200/202 instead of 409, and a
+   retry of an already graded attempt returns 200 with the stored result instead of 409.
 2. The sweep in the maintenance tick (regrades without a learner request; it spends LLM
    calls for short-answer attempts; N per tick and the age threshold are the knobs).
 3. The FE "Chấm lại" action on the stuck message.
