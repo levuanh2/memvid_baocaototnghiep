@@ -3742,5 +3742,7 @@ and API are on different origins: a new header needs the CORS allowlist deployed
 
 A concurrent index build that fails leaves an INVALID index behind under the right name.
 Any idempotent guard that checks the name only (`IF NOT EXISTS`, `to_regclass`) then treats
-a useless index as done. Check `pg_index.indisvalid`, drop and rebuild an invalid one, and
-fail the migration if the result is still invalid.
+a useless index as done. Check the definition in `pg_index` (valid, ready, unique, columns,
+predicate), fail the migration if it is wrong, and check again at deploy time: once
+`alembic_version` is at head the revision never runs again. Repairing an index on production
+(DROP/REINDEX) is a manual, approved step, not something a migration does on its own.

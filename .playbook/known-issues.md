@@ -8227,17 +8227,25 @@ tokens; generic attempt routes accept a practice quiz.
 ### #185 migration: an interrupted CONCURRENTLY build passed as done (2026-11-16)
 
 **Root cause:** a `CREATE UNIQUE INDEX CONCURRENTLY` that fails half-way (lost connection,
-statement timeout, a duplicate key) leaves the index in the catalog marked INVALID. It
-enforces nothing. The migration used `IF NOT EXISTS`, which checks only the name, so the
-next run skipped it and Alembic stamped the revision: "one key per owner" silently not
-enforced, and a later retry could create a second attempt for one key.
+lock or statement timeout, a duplicate key) leaves the index in the catalog marked INVALID.
+It enforces nothing. The migration used `IF NOT EXISTS`, which checks only the name, so a
+rerun skipped it and Alembic stamped the revision: "one key per owner" silently not
+enforced. The same name check also accepts a hand-made index with the wrong definition, and
+nothing looked again once `alembic_version` was at head. A first fix (`2bb0c48`) dropped and
+rebuilt an invalid index automatically; that is not allowed on production.
 
-**Fix:** `ensure_submit_key_index()` in `20261115_attempt_submit_key.py` drops an invalid
-leftover, builds the index, and raises unless `pg_index.indisvalid` is true; safe to rerun.
+**Fix:** the migration builds the index only when absent, then proves it from `pg_index`
+(`shared/db_schema_checks.py`: schema, table, valid, ready, unique, btree, columns
+`(user_id, submit_key)`, predicate `submit_key IS NOT NULL`) and raises otherwise, so the
+revision is not stamped. It never drops or rebuilds an existing index. `deploy.sh` step 5b
+runs the read-only `python -m scripts.verify_db_schema --moi-truong production` after the
+migration and before `compose up`; on failure the deploy dies and the old backend keeps
+serving. Recovery is manual: `docs/RUNBOOK_SUBMIT_KEY_INDEX.md`.
 
-**Regression:** `tests/test_attempt_submit_key_migration.py` makes a real failed build (a
-duplicate key), shows the old statement leaving it invalid, the new one failing loudly while
-the duplicate exists and producing a valid, enforcing index once the data is fixed.
+**Regression:** `tests/test_attempt_submit_key_migration.py` (real faults: lock_timeout
+interruption, duplicate key, four wrong definitions, index dropped at head; red on
+`2bb0c48`), `scripts/tests/test_deploy_pinning.sh` (order migration, verify, up; a failed
+verify never activates or downgrades), two mutations in `test_deploy_guard_mutations.sh`.
 
-**Prevention / deploy check:** after migrating, `SELECT indisvalid FROM pg_index WHERE
-indexrelid = 'uq_quiz_attempts_user_submit_key'::regclass` must be `t`.
+**Prevention:** check `indisvalid`/definition from the catalogs after any concurrent index
+build, in the migration and again at deploy time.
