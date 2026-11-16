@@ -37,7 +37,7 @@ Six different things are kept apart below. Do not read one as another.
 ### Pull requests
 
 `CI` = the required check (`CI / required`) on the head named here, read from GitHub on 2026-11-16: green on all 28.
-`In trial 8` = whether that exact head is in the eighth local integration, the one fully tested on 2026-11-16 (next section). Two exceptions, changed after the trial: #159 (documentation only) and #185 (`0f5fce0`, migration safety). Release review, deploy gate and GO/NO-GO list: `06-release-review.md`.
+`In trial 8` = whether that exact head is in the eighth local integration, the one fully tested on 2026-11-16 (next section). Two exceptions, changed after the trial: #159 (documentation only) and #185 (`0f5fce0`, migration safety; then `5e18271`, Windows test harness only). Release review, deploy gate and GO/NO-GO list: `06-release-review.md`.
 
 | PR | Branch | Head | CI | Tested alone | In trial 8 | Depends on |
 |---|---|---|---|---|---|---|
@@ -67,7 +67,7 @@ Six different things are kept apart below. Do not read one as another.
 | #182 | `design/v6-quiz-review` | `bb4916e` | pass | Vitest 1955; `quiz-review-v6.spec.js` 5/5; title no longer cut to "K…" (red before) | yes | #179 (stacked) |
 | #183 | `fix/practice-submit-atomic` | `1d787f8` | pass (backend suite on PostgreSQL) | concurrency tests 5/5 (red 4/4 on `main`); backend suite 2962 passed, 6 failed also on `main` | yes | — (backend only); superseded in part by #185 |
 | #184 | `design/v6-mobile-viewport` | `0b7d58a` | pass | `useAppHeight` 7 (5 red before: pan, zoom, rotation, cleanup, dedupe); viewport spec +4; drawer focus spec (red before) | yes | #180 (stacked) |
-| #185 | `fix/practice-idempotency-key` | `0f5fce0` | pass (run 43811959733; backend on PostgreSQL 16: 3025 passed, 0 failed) | 24 PostgreSQL tests + 2 race tests; FE 8; two independent reviews, all BUG findings fixed; migration verified from `pg_index` and fail-closed, read-only `scripts.verify_db_schema` as deploy step 5b, runbook `docs/RUNBOOK_SUBMIT_KEY_INDEX.md`; 10 failure-injection tests red on `ee152c3` (old logic), green on `0f5fce0` | **no**: trial 8 has `06a65f8`; trial 9 (`64e701b`, backend run 2026-11-16) has `0f5fce0`, see `06-release-review.md` | #183 (stacked) |
+| #185 | `fix/practice-idempotency-key` | `5e18271` | pass (run 43837028065; `0f5fce0` run 43811959733: backend on PostgreSQL 16 3025 passed, 0 failed) | 24 PostgreSQL tests + 2 race tests; FE 8; two independent reviews, all BUG findings fixed; migration verified from `pg_index` and fail-closed, read-only `scripts.verify_db_schema` as deploy step 5b, runbook `docs/RUNBOOK_SUBMIT_KEY_INDEX.md`; 10 failure-injection tests red on `ee152c3` (old logic), green on `0f5fce0` | **no**: trial 8 has `06a65f8`; trial 9 (`64e701b`, backend run 2026-11-16) has `0f5fce0`, see `06-release-review.md` | #183 (stacked) |
 | #186 | `design/v6-learning-progress` | `3c6859f` | pass | helpers 10; `learning-progress.spec.js` 6/6; Vitest 1976 | yes | #176 (stacked) |
 
 ### Local integrations (never pushed)
@@ -91,7 +91,7 @@ Trial 8 details (2026-11-16, run one stage at a time, never two heavy suites tog
 - Logs and a stage checkpoint: `studymap-qa-execution/v6/results/integration-28-trial8/`.
 
 **Verdict: READY FOR OWNER REVIEW** as a set, in the order of `04-integration-checklist.md`. Not release-ready: nothing is verified on real devices, Firefox, WebKit or a screen reader, and the backend owner decisions below are open. Blockers before merging particular pull requests:
-- #185's head `0f5fce0` came after trial 8. Trial 9 (`64e701b`, tree `b97da2793ae6`) adds it: `FE/` identical to trial 8, `BE/` and `scripts/` identical to #185's CI-tested head; trial 9's combined backend run on disposable PostgreSQL 16 (2026-11-16): 3018 passed, 9 skipped, 6 failed = the 6 that fail on `main`; migration/idempotency/concurrency files alone 144 passed; `verify_db_schema` exit 0. Merging is also gated by the GO/NO-GO list in `06-release-review.md` (the `production` environment has no required reviewers today).
+- #185's head is now `5e18271` = `0f5fce0` + a test-harness fix (`BE/tests/test_attempt_submit_key_migration.py`, `.playbook/`), CI green; product code as in trial 9. `0f5fce0` came after trial 8. Trial 9 (`64e701b`, tree `b97da2793ae6`) adds it: `FE/` identical to trial 8, `BE/` and `scripts/` identical to #185's CI-tested head; trial 9's combined backend run on disposable PostgreSQL 16 (2026-11-16): 3018 passed, 9 skipped, 6 failed = the 6 that fail on `main`; migration/idempotency/concurrency files alone 144 passed; `verify_db_schema` exit 0. Merging is also gated by the GO/NO-GO list in `06-release-review.md` (the `production` environment has no required reviewers today).
 - #183 + #185: owner approval of the deploy order (migration, then backend, then web) and of the open items 1-2 below (diagnostic grading claim, open-mode client identity). They are not regressions from these pull requests, but #185's guarantees hold only for the practice route.
 - Pre-existing, not caused by V6: the 6 backend failures above (they also fail on `main` on this machine).
 
