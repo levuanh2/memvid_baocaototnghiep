@@ -178,7 +178,9 @@ def save_answers(attempt_id: str, user_id: Optional[str], raw: Any, *,
     if unknown:
         raise CauHoiLac(f"question_id không thuộc quiz: {unknown}")
 
-    _attempts.save_draft_answers(attempt_id, {str(k): v for k, v in raw.items()})
+    if _attempts.save_draft_answers(attempt_id, {str(k): v for k, v in raw.items()}) is None:
+        # Submitted between the check above and the write (review of #183).
+        raise AttemptDaNop(status=(_attempts.get_attempt(attempt_id) or {}).get("status"))
     return attempt_public(_attempts.get_attempt(attempt_id))
 
 

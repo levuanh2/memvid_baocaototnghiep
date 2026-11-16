@@ -167,6 +167,7 @@ args="$*"
 phase=""
 [[ "$args" =~ compose.*build$ ]] && phase=build
 [[ "$args" =~ compose.*run.*scripts.run_migrations ]] && phase=migration
+[[ "$args" =~ compose.*run.*scripts.verify_db_schema ]] && phase=verify
 [[ "$args" =~ compose.*up\ -d$ ]] && phase=up
 
 if [ -n "$phase" ] && [ "$phase" = "${TEST_HOOK_PHASE:-}" ] && [ ! -e "$TEST_HOOK_MARKER" ]; then
@@ -218,7 +219,22 @@ assert_head "$A_SHA"
 assert_called 'compose .* up -d$'
 assert_called "^sha=$A_SHA args=compose .* build$"
 assert_ledger "$A_SHA" deploy
-pass "A current CI-verified commit deploys"
+# Order: migration, then read-only verification, then activation.
+order="$(grep -nE 'scripts.run_migrations|scripts.verify_db_schema|compose .* up -d$' "$DOCKER_LOG" | cut -d: -f1 | tr '
+' ' ')"
+[ "$(grep -cE 'scripts.run_migrations|scripts.verify_db_schema|compose .* up -d$' "$DOCKER_LOG")" -eq 3 ]   && [ "$(printf '%s' "$order" | awk '{print ($1<$2 && $2<$3) ? "ok" : "bad"}')" = ok ]   || { cat "$DOCKER_LOG" >&2; fail "expected migration -> verify_db_schema -> up, got lines $order"; }
+pass "A current CI-verified commit deploys (migration, verification, activation in that order)"
+
+# A failed database verification stops the deploy before the new backend starts.
+reset_controls
+TEST_FAIL_PHASE=verify TEST_FAIL_CODE=3
+run_deploy 1 "$A_SHA"
+assert_called 'scripts.verify_db_schema --moi-truong production'
+assert_not_called 'compose .* up -d$'
+grep -q 'database verification failed after migration' "$OUTPUT"   || { cat "$OUTPUT" >&2; fail "verification failure was not reported"; }
+grep -q 'RUNBOOK_SUBMIT_KEY_INDEX' "$OUTPUT" || fail "verification failure does not name the runbook"
+if grep -Eq 'go-lui|downgrade' "$DOCKER_LOG"; then cat "$DOCKER_LOG" >&2; fail "a failed verification must not downgrade"; fi
+pass "failed DB verification exits non-zero, never activates, never downgrades"
 
 # Advance main to B.
 printf 'B\n' >"$SOURCE/revision.txt"
@@ -299,11 +315,16 @@ for phase in build migration up; do
   TEST_FAIL_PHASE="$phase"
   run_remote 70 "$B_SHA"
 done
+# The verification step reports through `die` (exit 1): a 75 from it is still a failure.
+reset_controls
+TEST_FAIL_PHASE=verify
+run_remote 1 "$B_SHA"
+assert_not_called 'compose .* up -d$'
 reset_controls
 TEST_HOOK_PHASE=build TEST_HOOK_ACTION=health75
 run_remote 1 "$B_SHA"
 git -C "$SERVER" checkout -- scripts/health.sh
-pass "build/migration/up/health exit 75 cannot masquerade as superseded"
+pass "build/migration/verify/up/health exit 75 cannot masquerade as superseded"
 
 # Remote main advancing during build is caught before migration.
 reset_controls

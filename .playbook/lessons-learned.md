@@ -3719,3 +3719,39 @@ Rules: check icons and logos when a rename is reported incomplete; serve a chang
 new URL (browsers cache favicons per URL); a static SVG cannot read CSS variables, so pin its
 colour to the token value and test that they stay equal; comments quoting the retired name trip
 the branding test, so describe it without naming it.
+
+
+## 2026-11-14 — A frontend double-submit lock is not idempotency
+
+A ref lock stops one tab from sending twice. It does nothing for a second tab, a retried
+request or a proxy replay, and the server then graded twice because its status check was a
+plain read followed by a write. Guard the transition where the data lives (row lock or
+conditional update), and prove it with a test that parks both threads between the read and
+the write; without that barrier the race test passes on the broken code.
+
+
+## 2026-11-15 — Store the idempotency key on the row it created
+
+A separate idempotency table needs its own expiry, and an expired record turns the next
+retry into a fresh operation. Putting the key on the attempt itself ties its lifetime to the
+result and lets one partial unique index do the deduplication. Send it in the body when web
+and API are on different origins: a new header needs the CORS allowlist deployed first.
+
+
+## 2026-11-16 — `IF NOT EXISTS` is not "exists and works" for a CONCURRENTLY index
+
+A concurrent index build that fails leaves an INVALID index behind under the right name.
+Any idempotent guard that checks the name only (`IF NOT EXISTS`, `to_regclass`) then treats
+a useless index as done. Check the definition in `pg_index` (valid, ready, unique, columns,
+predicate), fail the migration if it is wrong, and check again at deploy time: once
+`alembic_version` is at head the revision never runs again. Repairing an index on production
+(DROP/REINDEX) is a manual, approved step, not something a migration does on its own.
+
+
+## 2026-11-16 — A test teardown must undo what a failed test can leave behind
+
+Teardown code runs after a failed test, but only works if it does not depend on the test
+having reached its end. A fixture that rebuilds a unique index must first remove the
+duplicates a half-finished test may have left, or one failure turns into errors in other
+files. And any `subprocess.run(text=True)` that reads Vietnamese output needs
+`encoding="utf-8"`: the Windows default is cp1252.

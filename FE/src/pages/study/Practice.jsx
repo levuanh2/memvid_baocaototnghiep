@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useState, useRef } from "react";
 import { Link, useParams } from "react-router-dom";
 import StudyShell from "../../components/study/StudyShell";
 import SealMeter from "../../components/study/SealMeter";
@@ -14,6 +14,11 @@ import {
   submitPractice,
   moTaLoi,
 } from "../../utils/studyApi";
+import { DANG_CHAM, forgetSubmitKey, submitKeyFor } from "../../utils/practiceSubmitKey";
+
+// The first request is still grading (BE 409 DANG_CHAM): ask again with the SAME key.
+const CHO_CHAM_MS = 2000;
+const SO_LAN_HOI_LAI = 5;
 
 const KEYS = ["A", "B", "C", "D", "E", "F"];
 
@@ -26,6 +31,7 @@ export default function Practice() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
   const [submitting, setSubmitting] = useState(false);
+  const submitKeyMemo = useRef(null);
 
   const load = useCallback(async () => {
     setLoading(true);
@@ -36,6 +42,9 @@ export default function Practice() {
       // Đã làm rồi thì vào thẳng phần so sánh, không bắt làm lại từ đầu.
       try {
         setComparison(await getPracticeComparison(quizId));
+        // A graded attempt exists (perhaps the one whose response was lost): its key is
+        // spent, the next attempt needs a new one.
+        forgetSubmitKey(quizId, submitKeyMemo);
       } catch (e) {
         if (e?.status !== 409) throw e;
       }
@@ -60,7 +69,19 @@ export default function Practice() {
     setError(null);
     try {
       // Bài luyện ngắn: nộp trong MỘT lần gọi, không cần lưu nháp từng câu.
-      const result = await submitPractice(quizId, answers);
+      // Same answers = same key: a retry after an error gets the result already graded.
+      const idempotencyKey = submitKeyFor(quizId, answers, submitKeyMemo);
+      let result;
+      for (let lan = 0; ; lan += 1) {
+        try {
+          result = await submitPractice(quizId, answers, { idempotencyKey });
+          break;
+        } catch (e) {
+          if (e?.status !== 409 || e?.message !== DANG_CHAM || lan >= SO_LAN_HOI_LAI) throw e;
+          await new Promise((r) => setTimeout(r, CHO_CHAM_MS));
+        }
+      }
+      forgetSubmitKey(quizId, submitKeyMemo);
       setGraded(result);
       // Nộp XONG rồi. So sánh trước/sau chỉ là phần trang trí thêm — hỏng nó mà báo
       // "Nộp bài luyện tập thất bại" thì dòng đỏ đó nằm ngay trên điểm số vừa hiện.
@@ -70,6 +91,9 @@ export default function Practice() {
         setComparison(null);
       }
     } catch (e) {
+      // 422: the stored key belongs to another answer set; keeping it would repeat the
+      // same refusal on every retry.
+      if (e?.status === 422) forgetSubmitKey(quizId, submitKeyMemo);
       setError(moTaLoi(e, "Nộp bài luyện tập thất bại."));
     } finally {
       setSubmitting(false);

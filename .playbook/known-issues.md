@@ -8120,3 +8120,155 @@ off-screen button then matches the same role+name as the visible CTA.
 **Prevention:** hiding by transform, width, opacity or pointer-events is visual only; anything
 that stays mounted while hidden needs `inert`. Label tests should match the bare text, not one
 quoting style.
+
+
+### Two submits of one quiz at the same moment were both graded (2026-11-14)
+
+**Symptoms:** two requests that submit the same attempt (diagnostic) or the same practice
+quiz at almost the same time both returned 200 and both were graded: two grading runs, two
+mastery snapshots, and for practice two graded attempts. Two opens of one quiz created two
+`in_progress` attempts. Sending the same practice answers again right after the first
+response also created and graded a second attempt.
+
+**Root cause:** every step was read-then-write with no lock. `repository.submit` read
+`status == "in_progress"` with a plain `s.get` and then wrote `submitted`; `open_attempt`
+looked for an `in_progress` attempt and inserted one if none was found (no unique
+constraint); `practice.submit` always opened a fresh attempt, so even a sequential duplicate
+was a new attempt. The frontend ref locks (#162) only cover one tab and one click burst.
+
+**Fix:** `repository.submit` reads the attempt `FOR UPDATE`; `open_attempt` locks the quiz
+row before its lookup; `practice.submit` calls `repository.submit_practice`, which opens,
+fills and submits in one transaction under the quiz row lock and returns None (409, the
+existing "no longer in progress" error) when the same answers were submitted for that quiz
+by that learner in the last `PRACTICE_REPLAY_WINDOW_S` (30) seconds. No route, payload or
+status code changed.
+
+**Regression:** `BE/tests/test_attempt_submit_concurrency.py` (PostgreSQL only). The tests
+make two threads meet inside `repository._now()` (after the status read, before the
+write), so the race is forced, not hoped for. Red on `main`: all four fail (two 200s, two
+attempts, a second graded practice attempt). Green after, five repeated runs.
+
+**Prevention:** a status transition is a conditional write or a locked read, never a plain
+read followed by a write. A test for it must force the interleaving (a barrier between the
+read and the write); two threads started together usually run one after the other and pass.
+
+
+### Practice submit: a 30 s guess instead of idempotency, and attempts stuck `submitted` (2026-11-15)
+
+**Symptoms:** (1) #183 recognised a retried practice submit only by "same answers within
+30 s": a deliberate retake with identical answers got 409, and a retry after 30 s graded a
+second attempt. (2) When grading raised after the submit transaction had committed (LLM
+outage, bug, killed process) the attempt stayed `submitted` forever: the retry was a 409
+replay and no route graded it again (reproduced on `1d787f8`).
+
+**Root cause:** the server had no identity for "one logical submit", so it guessed from
+content and time; and grading ran outside the submit transaction with nothing recording
+who was grading or letting anyone take over.
+
+**Fix:** optional `idempotency_key` (body) / `Idempotency-Key` (header) on
+`POST /api/practice/<id>/submit`. The attempt row stores `submit_key` +
+`submit_fingerprint` (sha256 of quiz + answers) under a partial unique index
+`(user_id, submit_key)`, so the record lives exactly as long as the attempt and cannot
+expire into a regrade. Same key + same payload: the stored result (200, same body), never a
+second grading; same key + other payload: 422; still grading: 409 "Bài nộp này đang được
+chấm..." and the FE asks again with the same key. `grading_claimed_at` is the grading claim:
+released on an exception, taken over after `GRADING_LEASE_S`; `save_grades(once=True)` keeps
+a second grader from writing or re-running gap analysis. Keyless requests keep the #183
+window, but a replay of a stuck `submitted` attempt now grades it.
+
+**Regression:** `BE/tests/test_practice_idempotency.py` (PostgreSQL, barriers/events, no
+sleeps), `FE/src/pages/study/Practice.idempotency.test.jsx` (5 red on the old page).
+
+**Prevention:** an operation that may be retried needs a client-chosen identity stored
+with its result; time windows only guess. Any work done after the commit that marks a
+state needs a claim that a retry can see and, after a lease, take over.
+
+
+### Draft answers could change a graded attempt (2026-11-15)
+
+**Symptoms:** a draft save (`PATCH /api/attempts/<id>/answers`) arriving while the same
+attempt was being submitted could overwrite answers after submit and grading had committed;
+the score no longer matched the stored answers.
+
+**Root cause:** `attempts.save_answers` checked `status == "in_progress"` in one transaction
+and `save_draft_answers` wrote in another, without a lock or re-check.
+
+**Fix:** `save_draft_answers` takes the attempt row lock (`FOR UPDATE`, the one `submit`
+takes) and writes only while `in_progress`; otherwise the use case raises `AttemptDaNop`
+(409, as for a draft on a submitted attempt).
+
+**Regression:** `test_attempt_submit_concurrency.py::test_a_draft_save_that_loses_the_race_to_submit_changes_nothing`
+(red before: the late write landed).
+
+**Prevention:** a status check and the write it guards belong in one transaction under the
+row lock (same lesson as 2026-11-14).
+
+
+### #185 review: keyless dead grader, lost mastery, foreign release, stale FE keys (2026-11-15)
+
+Independent review (`task20-codex-185-review.md`) of the first #185 head. Fixed:
+- **Keyless dead grader never recovered:** the keyless retry looked only 30 s back, the claim
+  lasts 300 s. Now a `submitted` attempt with the same answers and an expired (or no) claim is
+  reclaimed at any age.
+- **Mastery lost between the score commit and gap analysis:** a same-key retry said `done`
+  forever with no mastery rows. A `done` retry and the practice comparison now repair it
+  (fail-open, as the generic concept-mastery route does).
+- **An old grader released a newer claim:** release now clears only the claim timestamp this
+  request set (`submit_practice` returns it).
+- **FE kept a spent key:** a 422 and a graded attempt found on reload now forget the key.
+- **Index build blocked writes:** `CREATE UNIQUE INDEX CONCURRENTLY` in an autocommit block.
+
+**Regression:** three PostgreSQL tests in `test_practice_idempotency.py`, two FE tests in
+`Practice.idempotency.test.jsx` (red on the previous head).
+
+Not fixed here (reported): diagnostic grading has no claim; anonymous keys are bearer
+tokens; generic attempt routes accept a practice quiz.
+
+### #185 migration: an interrupted CONCURRENTLY build passed as done (2026-11-16)
+
+**Root cause:** a `CREATE UNIQUE INDEX CONCURRENTLY` that fails half-way (lost connection,
+lock or statement timeout, a duplicate key) leaves the index in the catalog marked INVALID.
+It enforces nothing. The migration used `IF NOT EXISTS`, which checks only the name, so a
+rerun skipped it and Alembic stamped the revision: "one key per owner" silently not
+enforced. The same name check also accepts a hand-made index with the wrong definition, and
+nothing looked again once `alembic_version` was at head. A first fix (`2bb0c48`) dropped and
+rebuilt an invalid index automatically; that is not allowed on production.
+
+**Fix:** the migration builds the index only when absent, then proves it from `pg_index`
+(`shared/db_schema_checks.py`: schema, table, valid, ready, unique, btree, columns
+`(user_id, submit_key)`, predicate `submit_key IS NOT NULL`) and raises otherwise, so the
+revision is not stamped. It never drops or rebuilds an existing index. `deploy.sh` step 5b
+runs the read-only `python -m scripts.verify_db_schema --moi-truong production` after the
+migration and before `compose up`; on failure the deploy dies and the old backend keeps
+serving. Recovery is manual: `docs/RUNBOOK_SUBMIT_KEY_INDEX.md`.
+
+**Regression:** `tests/test_attempt_submit_key_migration.py` (real faults: lock_timeout
+interruption, duplicate key, four wrong definitions, index dropped at head; red on
+`2bb0c48`), `scripts/tests/test_deploy_pinning.sh` (order migration, verify, up; a failed
+verify never activates or downgrades), two mutations in `test_deploy_guard_mutations.sh`.
+
+**Prevention:** check `indisvalid`/definition from the catalogs after any concurrent index
+build, in the migration and again at deploy time.
+
+### #185 test harness: submit-key migration tests broke on a Windows console (2026-11-16)
+
+**Root cause:** `_run` in `BE/tests/test_attempt_submit_key_migration.py` called
+`subprocess.run(text=True)` with no encoding. On Windows the parent decodes the child's
+output as cp1252; the scripts print Vietnamese, the reader thread dies with
+`UnicodeDecodeError` (byte 0x9d), `stdout` is `None` and `result.stdout + result.stderr`
+raises `TypeError`. Six tests failed that way. The runbook test then stopped before its
+repair steps with duplicate keys still in the table, the `db` fixture teardown could not
+rebuild the unique index (`UniqueViolation`), and the INVALID index it left made two tests in
+other files fail. Product code was never involved; CI (Linux, UTF-8) passed.
+
+**Fix:** `_run` passes `encoding="utf-8", errors="replace"` (the pattern of
+`test_production_migration_contract.py`) and `PYTHONUTF8=1` to the child. The fixture
+teardown resets `lock_timeout` and clears duplicate keys (keeps the first per owner, test
+database only) before rebuilding the index.
+
+**Regression:** on a cp1252 console, no `PYTHONUTF8`: before 6 failed + 1 error in the file,
+after 155 passed across the ten migration/idempotency/concurrency files and
+`test_guided_postgres_store.py`. A copy of the runbook test made to fail right after the
+duplicate keys: old fixture -> teardown ERROR and the practice idempotency test fails; new
+fixture -> no teardown error, the next tests pass, verifier says valid. Logs:
+`studymap-qa-execution/v6/results/185-harness/`.

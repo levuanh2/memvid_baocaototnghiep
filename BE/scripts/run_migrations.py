@@ -43,6 +43,63 @@ def _in(nhan: str, gia_tri: str) -> None:
     print(f"  {nhan:<22}{gia_tri}")
 
 
+class DichBiTuChoi(RuntimeError):
+    """The target is refused; the message is printed after "DỪNG: "."""
+
+
+def xac_dinh_dich(moi_truong: str):
+    """Both layers of target checks; returns `(url, che_do)` or raises DichBiTuChoi.
+
+    Shared by `run_migrations` and `verify_db_schema`, so a verification can never look
+    at a different database than the migration it verifies.
+    """
+    from shared.migration_guard import (
+        ALLOWED_TEST_HOSTS,
+        CHE_DO_PRODUCTION,
+        TEST_DB_SUFFIX,
+        MigrationTargetRejected,
+        chon_dich,
+        danh_tinh,
+        kiem_tra_dich,
+        sanitize,
+    )
+
+    muon_production = moi_truong == MOI_TRUONG_PRODUCTION
+
+    # ── Tầng 1: lớp tuyên bố phải khớp cờ môi trường ─────────────────────────
+    # Kiểm TRƯỚC khi gọi `chon_dich`, để thông điệp nói về ý định của người gọi chứ
+    # không phải về biến môi trường nào đó thiếu.
+    co_bat = (os.getenv("ALEMBIC_ALLOW_PRODUCTION") or "").strip().lower() in (
+        "1", "true", "yes", "on")
+    if muon_production and not co_bat:
+        raise DichBiTuChoi("--moi-truong production nhưng ALEMBIC_ALLOW_PRODUCTION chưa bật.")
+    if not muon_production and co_bat:
+        # Cờ production còn sót trong môi trường mà người gọi lại xin chạy test:
+        # `chon_dich` sẽ chọn production. Chặn ở đây, đừng để nó trôi qua.
+        raise DichBiTuChoi("đang chạy chế độ test nhưng ALEMBIC_ALLOW_PRODUCTION đang bật. "
+              "Gỡ biến đó, hoặc gọi với --moi-truong production nếu thật sự muốn.")
+
+    try:
+        url, che_do = chon_dich()
+        kiem_tra_dich(url, che_do)
+    except MigrationTargetRejected as exc:
+        raise DichBiTuChoi(str(exc)) from exc
+
+    host, db = danh_tinh(url)
+
+    # ── Tầng 2: đích thật phải đúng LỚP mà người gọi tuyên bố ────────────────
+    # Yêu cầu 11: deploy production mà trỏ vào database test là hỏng theo hướng
+    # ngược lại — migration chạy đúng nhưng production không hề được nâng cấp, và
+    # không có gì kêu lên.
+    if muon_production:
+        if host in ALLOWED_TEST_HOSTS or db.endswith(TEST_DB_SUFFIX):
+            raise DichBiTuChoi(f"khai là production nhưng đích trông như database test "
+                  f"({sanitize(url)}).")
+        if che_do != CHE_DO_PRODUCTION:
+            raise DichBiTuChoi("khai là production nhưng chốt phân loại đích là test.")
+    return url, che_do
+
+
 def main() -> int:
     p = argparse.ArgumentParser(
         description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
@@ -58,58 +115,13 @@ def main() -> int:
     from shared.env_loader import load_project_env
     load_project_env()
 
-    from shared.migration_guard import (
-        ALLOWED_TEST_HOSTS,
-        CHE_DO_PRODUCTION,
-        TEST_DB_SUFFIX,
-        MigrationTargetRejected,
-        chon_dich,
-        danh_tinh,
-        kiem_tra_dich,
-        sanitize,
-    )
-
-    muon_production = args.moi_truong == MOI_TRUONG_PRODUCTION
-
-    # ── Tầng 1: lớp tuyên bố phải khớp cờ môi trường ─────────────────────────
-    # Kiểm TRƯỚC khi gọi `chon_dich`, để thông điệp nói về ý định của người gọi chứ
-    # không phải về biến môi trường nào đó thiếu.
-    co_bat = (os.getenv("ALEMBIC_ALLOW_PRODUCTION") or "").strip().lower() in (
-        "1", "true", "yes", "on")
-    if muon_production and not co_bat:
-        print("DỪNG: --moi-truong production nhưng ALEMBIC_ALLOW_PRODUCTION chưa bật.",
-              file=sys.stderr)
-        return 2
-    if not muon_production and co_bat:
-        # Cờ production còn sót trong môi trường mà người gọi lại xin chạy test:
-        # `chon_dich` sẽ chọn production. Chặn ở đây, đừng để nó trôi qua.
-        print("DỪNG: đang chạy chế độ test nhưng ALEMBIC_ALLOW_PRODUCTION đang bật. "
-              "Gỡ biến đó, hoặc gọi với --moi-truong production nếu thật sự muốn.",
-              file=sys.stderr)
-        return 2
-
     try:
-        url, che_do = chon_dich()
-        kiem_tra_dich(url, che_do)
-    except MigrationTargetRejected as exc:
+        url, che_do = xac_dinh_dich(args.moi_truong)
+    except DichBiTuChoi as exc:
         print(f"DỪNG: {exc}", file=sys.stderr)
         return 2
-
+    from shared.migration_guard import danh_tinh
     host, db = danh_tinh(url)
-
-    # ── Tầng 2: đích thật phải đúng LỚP mà người gọi tuyên bố ────────────────
-    # Yêu cầu 11: deploy production mà trỏ vào database test là hỏng theo hướng
-    # ngược lại — migration chạy đúng nhưng production không hề được nâng cấp, và
-    # không có gì kêu lên.
-    if muon_production:
-        if host in ALLOWED_TEST_HOSTS or db.endswith(TEST_DB_SUFFIX):
-            print(f"DỪNG: khai là production nhưng đích trông như database test "
-                  f"({sanitize(url)}).", file=sys.stderr)
-            return 2
-        if che_do != CHE_DO_PRODUCTION:
-            print("DỪNG: khai là production nhưng chốt phân loại đích là test.",
-                  file=sys.stderr)
-            return 2
 
     print(f"[migration] lớp môi trường: {args.moi_truong}")
     _in("chế độ chốt", che_do)
