@@ -38,6 +38,33 @@ TEST_DB_SUFFIX = "_test"
 CHE_DO_TEST = "test"
 CHE_DO_PRODUCTION = "production"
 
+#: Query parameters a TEST url may carry. Allowlist: libpq/psycopg let `host`,
+#: `hostaddr`, `port`, `dbname`, `service`... in the query REPLACE the authority and path,
+#: so a check of `urlsplit(url).hostname` approved `127.0.0.1/x_test?host=<hosted>`
+#: while SQLAlchemy connected to the hosted server (Codex review of #187, 2026-11-16).
+ALLOWED_TEST_QUERY_KEYS = frozenset({"sslmode", "connect_timeout", "application_name"})
+
+#: Hosts a test run may use for side services (Redis, Ollama): loopback plus the CI and
+#: compose service names.
+ALLOWED_LOCAL_SERVICE_HOSTS = ALLOWED_TEST_HOSTS | {"redis", "ollama"}
+
+
+def local_service_or_blank(name: str, env=None, *, fallback: str = "") -> None:
+    """Keep `env[name]` only when it points at a local service; otherwise set `fallback`.
+
+    Set, never deleted: `load_dotenv` fills every ABSENT variable from `BE/.env`, so a
+    deleted value comes back. `fallback` exists for `OLLAMA_HOST`, where "" is not "unset"
+    (`llm_factory` reads it with a default). Used by `tests/conftest.py` and
+    `scripts/run_e2e_server.py`.
+    """
+    env = os.environ if env is None else env
+    value = (env.get(name) or "").strip()
+    if value:
+        host = (urlsplit(value if "://" in value else "http://" + value).hostname or "").lower()
+        if host in ALLOWED_LOCAL_SERVICE_HOSTS:
+            return
+    env[name] = fallback
+
 
 class MigrationTargetRejected(RuntimeError):
     """Đích migration không đạt điều kiện. Thông điệp nói RÕ vì sao, không kèm credential."""
@@ -139,6 +166,15 @@ def kiem_tra_dich(url: str, che_do: str, *, live_db_name: Optional[str] = None,
         return
 
     # ── chế độ TEST ──────────────────────────────────────────────────────────
+    from urllib.parse import parse_qsl
+
+    la = sorted({k.lower() for k, _ in parse_qsl(urlsplit(url).query, keep_blank_values=True)}
+                - ALLOWED_TEST_QUERY_KEYS)
+    if la:
+        raise MigrationTargetRejected(
+            f"URL test có tham số query không cho phép {la}: host/dbname/service trong query "
+            f"thay được đích thật. Chỉ cho {sorted(ALLOWED_TEST_QUERY_KEYS)}. Đích: {sanitize(url)}")
+
     if host not in ALLOWED_TEST_HOSTS:
         raise MigrationTargetRejected(
             f"Host {host!r} không nằm trong danh sách host test cho phép "

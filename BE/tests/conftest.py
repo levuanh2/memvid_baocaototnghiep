@@ -30,10 +30,19 @@ import pytest
 # 2026-11-16, lần thứ tư: `SUPABASE_URL` + `SUPABASE_SECRET_KEY` trong `BE/.env` làm
 # `storage.is_configured()` đúng, và upload qua fixture `client` ghi vào bucket THẬT.
 # Test kho object tự đặt giá trị giả bằng monkeypatch và giả lớp HTTP.
+#
+# Cùng ngày (review của Codex cho #187): khoá Gemini/Groq/Cohere cũng phải rỗng, và
+# Redis/Ollama chỉ được giữ khi trỏ về máy này hoặc service của CI (`redis://localhost`).
 _ENV_PROVIDER_PHAI_SACH = ("FPT_AI_API_KEY", "FPT_AI_EMBEDDING_MODEL", "QUEUE_ENABLED",
-                           "SUPABASE_URL", "SUPABASE_SECRET_KEY")
+                           "SUPABASE_URL", "SUPABASE_SECRET_KEY",
+                           "GEMINI_API_KEY", "GROQ_API_KEY", "COHERE_API_KEY")
 for _ten in _ENV_PROVIDER_PHAI_SACH:
     os.environ[_ten] = ""
+
+from shared.migration_guard import local_service_or_blank  # noqa: E402
+
+local_service_or_blank("REDIS_URL")
+local_service_or_blank("OLLAMA_HOST", fallback="http://localhost:11434")
 
 
 class _MockQueryGraph:
@@ -134,9 +143,10 @@ def client(tmp_path_factory):
     shared_config.reload()
 
     # Ưu tiên provider local (để không yêu cầu GEMINI/GROQ keys trong test)
-    os.environ["OLLAMA_HOST"] = os.environ.get("OLLAMA_HOST") or "http://localhost:11434"
-    os.environ.pop("GEMINI_API_KEY", None)
-    os.environ.pop("GROQ_API_KEY", None)
+    # Rỗng, không `pop`: `llm_factory` nạp lại `.env` ngay khi import (xem đầu file).
+    local_service_or_blank("OLLAMA_HOST", fallback="http://localhost:11434")
+    os.environ["GEMINI_API_KEY"] = ""
+    os.environ["GROQ_API_KEY"] = ""
 
     # Import sau khi set env
     import app.clients.llm_factory as llm_factory  # noqa: F401

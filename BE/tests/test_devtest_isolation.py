@@ -175,3 +175,106 @@ def test_fingerprint_follows_the_env_loader_precedence(tmp_path):
     assert v["DATABASE_URL"] == ""                      # present in the process wins
     assert v["SUPABASE_URL"] == "https://r.supabase.co"  # filled from the later file
     assert "a.invalid" in mod.resolve([str(be), str(root)], {})["DATABASE_URL"]
+
+
+# ── Codex review of #187 (2026-11-16): the effective target, Redis, providers ──
+# libpq/psycopg let URL query parameters (`host`, `dbname`, ...) replace the authority
+# and path, so a check of the raw URL approved a connection that went elsewhere.
+QUERY_HOST = LOCAL_TEST + "?host=db.abcdefgh.invalid"
+QUERY_DB = LOCAL_TEST + "?dbname=postgres"
+
+
+@pytest.mark.parametrize("url", [QUERY_HOST, QUERY_DB, LOCAL_TEST + "?hostaddr=10.0.0.1",
+                                 LOCAL_TEST + "?service=prod"],
+                         ids=["host", "dbname", "hostaddr", "service"])
+def test_query_parameters_cannot_move_the_test_target(monkeypatch, url):
+    from app.domains.jobs import guided_store
+    from shared.migration_guard import CHE_DO_TEST, MigrationTargetRejected, kiem_tra_dich
+
+    with pytest.raises(MigrationTargetRejected):
+        kiem_tra_dich(url, CHE_DO_TEST, env={})
+    monkeypatch.setenv("TEST_DATABASE_URL", url)
+    monkeypatch.delenv("DATABASE_URL", raising=False)
+    with pytest.raises(appdb.DatabaseNotConfigured):
+        appdb.database_url()
+    monkeypatch.setenv("JOBS_DATABASE_URL", url)
+    with pytest.raises(appdb.DatabaseNotConfigured):
+        guided_store.dsn()
+
+
+def test_harmless_query_parameters_still_pass(monkeypatch):
+    monkeypatch.setenv("TEST_DATABASE_URL", LOCAL_TEST + "?sslmode=disable&connect_timeout=5")
+    monkeypatch.delenv("DATABASE_URL", raising=False)
+    assert "studymap_test" in appdb.database_url()
+
+
+def test_effective_target_parsing_matches_sqlalchemy():
+    """The guard and SQLAlchemy must agree on where a URL connects (no socket opened)."""
+    from sqlalchemy.dialects.postgresql.psycopg import PGDialect_psycopg
+    from sqlalchemy.engine import make_url
+
+    _, kw = PGDialect_psycopg().create_connect_args(
+        make_url("postgresql+psycopg://u:p@127.0.0.1/studymap_test?host=db.x.invalid&dbname=postgres"))
+    assert (kw["host"], kw["dbname"]) == ("db.x.invalid", "postgres")
+
+
+def test_e2e_server_refuses_a_query_parameter_target():
+    r = _e2e_server(DATABASE_URL=QUERY_HOST)
+    assert r.returncode == 2, r.stdout + r.stderr
+
+
+def test_fingerprint_follows_the_effective_target():
+    fp = _fp_module().fingerprint
+    direct = "postgresql://postgres:pw@db.abcdefgh.supabase.co:5432/postgres"
+    disguised = "postgresql://u:p@127.0.0.1/studymap_test?host=db.abcdefgh.supabase.co&dbname=postgres"
+    assert fp(disguised) == fp(direct)
+    pooler_user_in_query = ("postgresql://127.0.0.1/studymap_test?host=aws-0-x.pooler.supabase.com"
+                            "&dbname=postgres&user=postgres.abcdefgh")
+    assert fp(pooler_user_in_query) == fp(direct)
+
+
+@pytest.mark.parametrize("name, value, kept", [
+    ("REDIS_URL", "redis://localhost:6379/0", True),        # CI service
+    ("REDIS_URL", "redis://redis:6379/0", True),            # compose service name
+    ("REDIS_URL", "rediss://default:pw@cache.hosted.invalid:6380", False),
+    ("OLLAMA_HOST", "http://127.0.0.1:11434", True),
+    ("OLLAMA_HOST", "gpu-box.invalid:11434", False),        # no scheme, still remote
+    ("OLLAMA_HOST", "https://ollama.hosted.invalid", False),
+])
+def test_only_local_services_survive_in_test_runs(name, value, kept):
+    from shared.migration_guard import local_service_or_blank
+
+    env = {name: value}
+    local_service_or_blank(name, env)
+    assert env[name] == (value if kept else "")
+
+
+def test_an_absent_service_is_set_empty_so_dotenv_cannot_fill_it():
+    from shared.migration_guard import local_service_or_blank
+
+    env = {}
+    local_service_or_blank("REDIS_URL", env)
+    assert env == {"REDIS_URL": ""}
+
+
+def test_remote_services_and_provider_keys_from_a_dev_env_do_not_reach_tests():
+    from shared.env_loader import load_project_env
+    from shared.migration_guard import local_service_or_blank
+
+    load_project_env()
+    for name in ("GEMINI_API_KEY", "GROQ_API_KEY", "COHERE_API_KEY", "FPT_AI_API_KEY"):
+        assert not os.environ.get(name), name
+    for name in ("REDIS_URL", "OLLAMA_HOST"):
+        env = {name: os.environ.get(name, "")}
+        before = env[name]
+        local_service_or_blank(name, env)
+        assert env[name] == before, f"{name} points at a remote service in a test run"
+
+
+def test_conftest_and_e2e_server_never_pop_safety_settings():
+    """`pop` lets the next `load_dotenv` refill the value from `BE/.env`."""
+    for rel in ("tests/conftest.py", "scripts/run_e2e_server.py"):
+        src = (BE_ROOT / rel).read_text(encoding="utf-8")
+        for name in ("GEMINI_API_KEY", "GROQ_API_KEY", "FPT_AI_API_KEY", "COHERE_API_KEY"):
+            assert f'os.environ.pop("{name}"' not in src, (rel, name)
+        assert "local_service_or_blank" in src, rel

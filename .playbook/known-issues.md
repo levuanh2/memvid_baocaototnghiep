@@ -8151,3 +8151,18 @@ fingerprint only.
 
 **Regression:** `tests/test_devtest_isolation.py` (10 red on `main` `db005ab` with a fake
 dev `.env` using `.invalid` hosts); `test_db_isolation.py` hosted `_test` case now refused.
+
+**Follow-up the same day (Codex review of #187):** the raw-URL check could be bypassed:
+libpq/psycopg let query parameters (`host`, `hostaddr`, `dbname`, `service`, ...) replace the
+authority and path, so `127.0.0.1/x_test?host=<hosted>&dbname=postgres` passed the guard
+and SQLAlchemy connected to the hosted server (reproduced offline with
+`PGDialect_psycopg.create_connect_args`, no socket). The fingerprint helper hashed the same
+misleading authority. Also left open: `REDIS_URL` (hosted Redis from `BE/.env`), Gemini /
+Groq / Cohere keys (`conftest` popped Gemini/Groq, which dotenv refills) and a remote
+`OLLAMA_HOST`. **Fix:** test mode allows only `sslmode`, `connect_timeout`,
+`application_name` in the query (`ALLOWED_TEST_QUERY_KEYS`); the fingerprint uses the
+effective host/db/user; `local_service_or_blank` keeps Redis/Ollama only on loopback or a
+CI/compose service name (CI's `redis://localhost` stays); provider keys are set to `""`.
+**Regression:** 15 more tests in `test_devtest_isolation.py`, red on `17d5d45`.
+Still open by design: a backend started by hand with `BE/.env` (needs a production marker;
+owner approval).

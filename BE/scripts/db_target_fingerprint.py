@@ -20,15 +20,19 @@ from __future__ import annotations
 import hashlib
 import os
 import sys
-from urllib.parse import urlsplit
+from urllib.parse import parse_qsl, urlsplit
 
 NAMES = ("DATABASE_URL", "JOBS_DATABASE_URL", "TEST_DATABASE_URL", "SUPABASE_URL")
 
 
 def identity(value: str) -> str:
+    """The EFFECTIVE target: libpq/psycopg let `host`, `hostaddr`, `dbname`, `user` in the
+    query replace the authority and path, so read those first (Codex review of #187)."""
     p = urlsplit(value.strip())
-    host = (p.hostname or "").lower()
-    user = p.username or ""
+    q = {k.lower(): v for k, v in parse_qsl(p.query, keep_blank_values=True)}
+    host = (q.get("host") or q.get("hostaddr") or p.hostname or "").split(",")[0].lower()
+    user = q.get("user") or p.username or ""
+    p = p._replace(path="/" + q["dbname"]) if q.get("dbname") else p
     if user.startswith("postgres.") and host.endswith(".supabase.com"):
         return "supabase:" + user.split(".", 1)[1].lower()
     labels = host.split(".")
