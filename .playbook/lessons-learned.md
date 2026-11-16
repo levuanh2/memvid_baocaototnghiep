@@ -3736,3 +3736,11 @@ A separate idempotency table needs its own expiry, and an expired record turns t
 retry into a fresh operation. Putting the key on the attempt itself ties its lifetime to the
 result and lets one partial unique index do the deduplication. Send it in the body when web
 and API are on different origins: a new header needs the CORS allowlist deployed first.
+
+
+## 2026-11-16 — `IF NOT EXISTS` is not "exists and works" for a CONCURRENTLY index
+
+A concurrent index build that fails leaves an INVALID index behind under the right name.
+Any idempotent guard that checks the name only (`IF NOT EXISTS`, `to_regclass`) then treats
+a useless index as done. Check `pg_index.indisvalid`, drop and rebuild an invalid one, and
+fail the migration if the result is still invalid.

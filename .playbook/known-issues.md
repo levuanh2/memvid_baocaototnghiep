@@ -8223,3 +8223,21 @@ Independent review (`task20-codex-185-review.md`) of the first #185 head. Fixed:
 
 Not fixed here (reported): diagnostic grading has no claim; anonymous keys are bearer
 tokens; generic attempt routes accept a practice quiz.
+
+### #185 migration: an interrupted CONCURRENTLY build passed as done (2026-11-16)
+
+**Root cause:** a `CREATE UNIQUE INDEX CONCURRENTLY` that fails half-way (lost connection,
+statement timeout, a duplicate key) leaves the index in the catalog marked INVALID. It
+enforces nothing. The migration used `IF NOT EXISTS`, which checks only the name, so the
+next run skipped it and Alembic stamped the revision: "one key per owner" silently not
+enforced, and a later retry could create a second attempt for one key.
+
+**Fix:** `ensure_submit_key_index()` in `20261115_attempt_submit_key.py` drops an invalid
+leftover, builds the index, and raises unless `pg_index.indisvalid` is true; safe to rerun.
+
+**Regression:** `tests/test_attempt_submit_key_migration.py` makes a real failed build (a
+duplicate key), shows the old statement leaving it invalid, the new one failing loudly while
+the duplicate exists and producing a valid, enforcing index once the data is fixed.
+
+**Prevention / deploy check:** after migrating, `SELECT indisvalid FROM pg_index WHERE
+indexrelid = 'uq_quiz_attempts_user_submit_key'::regclass` must be `t`.
