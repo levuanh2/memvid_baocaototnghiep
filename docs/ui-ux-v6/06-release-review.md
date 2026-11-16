@@ -442,6 +442,7 @@ Also required before step 2 of section 4 (they do not block the frontend merges)
 |---|---|---|---|
 | 7 | Migration connection on EC2 | owner prints host and port only, inside the backend container: `python -c "import os; from urllib.parse import urlsplit as u; x=u(os.environ['DATABASE_URL']); print(x.hostname, x.port)"`. 5432 (session pooler) or direct is GO; 6543 means switch for the release or accept the risk in writing (section 4a) | open |
 | 8 | Who approves a manual index repair | a named person who has read `docs/RUNBOOK_SUBMIT_KEY_INDEX.md` and is reachable during the #185 deploy window, recorded with the release | open |
+| 14 | Development does not write to the production database | compare the Supabase project ref (the `<ref>` of user `postgres.<ref>`, and of `SUPABASE_URL`) of EC2's `DATABASE_URL` with the developer's `BE/.env` and root `.env`; print the ref only, never the URL. Read locally 2026-11-16: both local files point database **and** Storage at one project. If EC2 uses the same ref, every local backend run (quiz, submit, migration) changes learners' real data: move development to its own project or a local PostgreSQL before step 2, and run local migrations only against it | **open**; production side not read |
 | 13 | Uploaded files and `/opt/memvid/data` backed up (section 4d) | object count of the bucket copy equals the bucket listing; a `scripts/backup.sh` archive restored once on a copy | open; without it the backup is "database only" |
 
 Already GO, or owner decisions that do not block:
