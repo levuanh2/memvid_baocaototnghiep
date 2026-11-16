@@ -43,6 +43,9 @@ from shared.migration_guard import local_service_or_blank  # noqa: E402
 
 local_service_or_blank("REDIS_URL")
 local_service_or_blank("OLLAMA_HOST", fallback="http://localhost:11434")
+# gRPC AI services: `llm_factory` routes generation and embeddings to the gateway first.
+local_service_or_blank("LLM_GATEWAY_ADDR")
+local_service_or_blank("MINDMAP_SERVICE_ADDR")
 
 
 class _MockQueryGraph:

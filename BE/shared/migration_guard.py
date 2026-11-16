@@ -44,6 +44,13 @@ CHE_DO_PRODUCTION = "production"
 #: while SQLAlchemy connected to the hosted server (Codex review of #187, 2026-11-16).
 ALLOWED_TEST_QUERY_KEYS = frozenset({"sslmode", "connect_timeout", "application_name"})
 
+#: libpq environment variables that can supply or move a connection target. psycopg reads
+#: the PROCESS environment: `PGHOSTADDR` (or a `PGSERVICE` entry) picks the socket even
+#: when the URL names `host` and `dbname` (Codex re-check of #187). A test run refuses to
+#: start while any of them is non-empty; the URL alone must say where it connects.
+LIBPQ_TARGET_VARS = ("PGHOSTADDR", "PGHOST", "PGPORT", "PGDATABASE", "PGSERVICE",
+                     "PGSERVICEFILE")
+
 #: Hosts a test run may use for side services (Redis, Ollama): loopback plus the CI and
 #: compose service names.
 ALLOWED_LOCAL_SERVICE_HOSTS = ALLOWED_TEST_HOSTS | {"redis", "ollama"}
@@ -174,6 +181,14 @@ def kiem_tra_dich(url: str, che_do: str, *, live_db_name: Optional[str] = None,
         raise MigrationTargetRejected(
             f"URL test có tham số query không cho phép {la}: host/dbname/service trong query "
             f"thay được đích thật. Chỉ cho {sorted(ALLOWED_TEST_QUERY_KEYS)}. Đích: {sanitize(url)}")
+
+    # `os.environ`, not `env`: the driver uses the process environment whatever a caller
+    # passed here (run_e2e_server passes env={}). Names only, never values.
+    pg = [v for v in LIBPQ_TARGET_VARS if (os.environ.get(v) or "").strip()]
+    if pg:
+        raise MigrationTargetRejected(
+            f"Biến môi trường libpq {pg} đang đặt: chúng có thể đổi đích kết nối dù URL trỏ "
+            "localhost. Gỡ chúng khi chạy test.")
 
     if host not in ALLOWED_TEST_HOSTS:
         raise MigrationTargetRejected(

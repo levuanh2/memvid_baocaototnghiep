@@ -8166,3 +8166,14 @@ CI/compose service name (CI's `redis://localhost` stays); provider keys are set 
 **Regression:** 15 more tests in `test_devtest_isolation.py`, red on `17d5d45`.
 Still open by design: a backend started by hand with `BE/.env` (needs a production marker;
 owner approval).
+
+**Second follow-up (Codex re-check of 3c7f0e5):** libpq also takes the target from the
+process environment: `PGHOSTADDR` (or a `PGSERVICE` entry) picks the socket even when the
+URL names `host` and `dbname`, and `run_e2e_server` passed `env={}` to the guard while
+psycopg still read the real environment. `LLM_GATEWAY_ADDR` / `MINDMAP_SERVICE_ADDR` (gRPC,
+preferred by `llm_factory`) were not filtered. The fingerprint missed failover hosts and
+percent-encoded pooler users. **Fix:** test mode refuses while any of `PGHOSTADDR`,
+`PGHOST`, `PGPORT`, `PGDATABASE`, `PGSERVICE`, `PGSERVICEFILE` is non-empty (read from
+`os.environ`, names only); both harnesses keep the gRPC addresses only when local; the
+fingerprint covers every host, decodes the user, and prints UNRELIABLE (exit 3) when a
+libpq variable is set. **Regression:** 9 more tests, red on `3c7f0e5`.

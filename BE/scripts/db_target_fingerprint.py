@@ -12,33 +12,52 @@ as that one? Run it on both and compare the fingerprints; record only "same" or
 
 Identity = the Supabase project ref when there is one (user `postgres.<ref>` on the
 pooler, host `db.<ref>.supabase.co`, or `https://<ref>.supabase.co`), otherwise host and
-database name. The fingerprint is the first 12 hex of SHA-256 over that identity, so the
-same project gives the same fingerprint at port 5432 or 6543. Standard library only.
+database name, of the EFFECTIVE target (query `host`/`dbname`/`user`, every failover host,
+percent-decoded user). The fingerprint is the first 12 hex of SHA-256 over that identity,
+so the same project gives the same fingerprint at port 5432 or 6543. If a libpq variable
+that can move the target is set (`PGHOSTADDR`, `PGSERVICE`, ...), it prints UNRELIABLE and
+exits 3 instead. Standard library only.
 """
 from __future__ import annotations
 
 import hashlib
 import os
 import sys
-from urllib.parse import parse_qsl, urlsplit
+from urllib.parse import parse_qsl, unquote, urlsplit
 
 NAMES = ("DATABASE_URL", "JOBS_DATABASE_URL", "TEST_DATABASE_URL", "SUPABASE_URL")
+#: Same list as `shared.migration_guard.LIBPQ_TARGET_VARS` (this file is stdlib-only
+#: so it can be piped into a container).
+LIBPQ_TARGET_VARS = ("PGHOSTADDR", "PGHOST", "PGPORT", "PGDATABASE", "PGSERVICE",
+                     "PGSERVICEFILE")
 
 
-def identity(value: str) -> str:
-    """The EFFECTIVE target: libpq/psycopg let `host`, `hostaddr`, `dbname`, `user` in the
-    query replace the authority and path, so read those first (Codex review of #187)."""
-    p = urlsplit(value.strip())
-    q = {k.lower(): v for k, v in parse_qsl(p.query, keep_blank_values=True)}
-    host = (q.get("host") or q.get("hostaddr") or p.hostname or "").split(",")[0].lower()
-    user = q.get("user") or p.username or ""
-    p = p._replace(path="/" + q["dbname"]) if q.get("dbname") else p
+def _one(host: str, user: str, db: str) -> str:
     if user.startswith("postgres.") and host.endswith(".supabase.com"):
         return "supabase:" + user.split(".", 1)[1].lower()
     labels = host.split(".")
     if host.endswith(".supabase.co"):
         return "supabase:" + (labels[1] if labels[0] == "db" and len(labels) > 3 else labels[0])
-    return f"host:{host}/{(p.path or '').strip('/').lower()}"
+    return f"host:{host}/{db.lower()}"
+
+
+def identity(value: str) -> str:
+    """The EFFECTIVE target, as libpq sees it (Codex reviews of #187):
+    - `host`/`hostaddr`/`dbname`/`user` in the query replace the authority and path;
+    - every failover host counts (comma lists, repeated keys), sorted;
+    - the user is percent-decoded (`postgres%2E<ref>` is `postgres.<ref>`)."""
+    p = urlsplit(value.strip())
+    q = parse_qsl(p.query, keep_blank_values=True)
+    last = {k.lower(): v for k, v in q}
+    hosts = [h for k, v in q if k.lower() in ("host", "hostaddr") for h in v.split(",") if h]
+    if not hosts:
+        authority = p.netloc.rsplit("@", 1)[-1]
+        hosts = [h.split("]")[0] + "]" if h.startswith("[") else h.rsplit(":", 1)[0]
+                 for h in authority.split(",") if h]
+    userinfo = p.netloc.rsplit("@", 1)[0] if "@" in p.netloc else ""
+    user = unquote(last.get("user") or userinfo.split(":", 1)[0])
+    db = unquote(last.get("dbname") or p.path.strip("/"))
+    return "|".join(sorted({_one(unquote(h).lower().strip("[]"), user, db) for h in hosts}))
 
 
 def fingerprint(value: str) -> str:
@@ -73,14 +92,27 @@ def resolve(files, environ) -> dict:
 
 
 def main(argv) -> int:
+    files = {}
+    for path in reversed(argv):
+        files.update(read_env_file(path))
+    pg = [n for n in LIBPQ_TARGET_VARS
+          if (os.environ.get(n, files.get(n, "")) or "").strip()]
+    if pg:
+        # They can move the real target away from what the URLs say; a fingerprint of
+        # the URLs would then be false reassurance. Names only, never values.
+        print(f"UNRELIABLE: libpq variables set {pg}; unset them and run again.")
+        return 3
     values = resolve(argv, os.environ)
     for name in NAMES:
         v = (values.get(name) or "").strip()
         if not v:
             print(f"{name:<18} (not set)")
             continue
-        p = urlsplit(v)
-        print(f"{name:<18} {fingerprint(v)}  port={p.port or '-'}")
+        try:
+            port = urlsplit(v).port or "-"
+        except ValueError:
+            port = "several"
+        print(f"{name:<18} {fingerprint(v)}  port={port}")
     return 0
 
 

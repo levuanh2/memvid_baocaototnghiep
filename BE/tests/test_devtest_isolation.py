@@ -278,3 +278,77 @@ def test_conftest_and_e2e_server_never_pop_safety_settings():
         for name in ("GEMINI_API_KEY", "GROQ_API_KEY", "FPT_AI_API_KEY", "COHERE_API_KEY"):
             assert f'os.environ.pop("{name}"' not in src, (rel, name)
         assert "local_service_or_blank" in src, rel
+
+
+# ── Codex re-check of 3c7f0e5: libpq environment, gRPC gateway, fingerprint ──
+# libpq keeps PGHOSTADDR (and whatever a PGSERVICE entry supplies) even when the URL
+# names host and dbname: `hostaddr` picks the socket, `host` only names it. psycopg reads
+# the PROCESS environment, so the guard must too, whatever `env` it was given.
+@pytest.mark.parametrize("var, value", [("PGHOSTADDR", "192.0.2.10"), ("PGSERVICE", "prod"),
+                                        ("PGSERVICEFILE", "/tmp/x.conf")])
+def test_libpq_environment_cannot_move_the_test_target(monkeypatch, var, value):
+    from shared.migration_guard import CHE_DO_TEST, MigrationTargetRejected, kiem_tra_dich
+
+    monkeypatch.setenv(var, value)
+    with pytest.raises(MigrationTargetRejected, match=var):
+        kiem_tra_dich(LOCAL_TEST, CHE_DO_TEST, env={})
+    monkeypatch.setenv("TEST_DATABASE_URL", LOCAL_TEST)
+    monkeypatch.delenv("DATABASE_URL", raising=False)
+    with pytest.raises(appdb.DatabaseNotConfigured):
+        appdb.database_url()
+
+
+def test_an_empty_libpq_variable_is_harmless(monkeypatch):
+    monkeypatch.setenv("PGHOSTADDR", "")
+    monkeypatch.setenv("TEST_DATABASE_URL", LOCAL_TEST)
+    assert "studymap_test" in appdb.database_url()
+
+
+def test_e2e_server_refuses_a_libpq_hostaddr():
+    r = _e2e_server(DATABASE_URL=LOCAL_TEST, PGHOSTADDR="192.0.2.10")
+    assert r.returncode == 2 and "PGHOSTADDR" in r.stderr, r.stdout + r.stderr
+
+
+def test_grpc_ai_services_from_a_dev_env_do_not_reach_tests():
+    from shared.env_loader import load_project_env
+
+    load_project_env()
+    for name in ("LLM_GATEWAY_ADDR", "MINDMAP_SERVICE_ADDR"):
+        value = os.environ.get(name, "")
+        assert not value or value.split(":")[0] in ("localhost", "127.0.0.1"), name
+    src = (BE_ROOT / "scripts" / "run_e2e_server.py").read_text(encoding="utf-8")
+    assert 'local_service_or_blank("LLM_GATEWAY_ADDR")' in src
+    assert 'local_service_or_blank("MINDMAP_SERVICE_ADDR")' in src
+
+
+def test_fingerprint_decodes_an_encoded_pooler_user():
+    fp = _fp_module().fingerprint
+    encoded = "postgresql://postgres%2Eabcdefgh:pw@aws-0-x.pooler.supabase.com:5432/postgres"
+    assert fp(encoded) == fp("https://abcdefgh.supabase.co")
+
+
+def test_fingerprint_covers_every_failover_host():
+    fp = _fp_module().fingerprint
+    one = "postgresql://u:p@db.aaaa.supabase.co/postgres"
+    both_authority = "postgresql://u:p@db.aaaa.supabase.co,db.bbbb.supabase.co/postgres"
+    both_query = "postgresql://u:p@x/postgres?host=db.aaaa.supabase.co&host=db.bbbb.supabase.co"
+    assert fp(both_authority) != fp(one)
+    assert fp(both_authority) == fp(both_query)
+
+
+def test_fingerprint_refuses_when_libpq_variables_can_move_the_target(tmp_path, capsys, monkeypatch):
+    mod = _fp_module()
+    for name in mod.NAMES:
+        monkeypatch.delenv(name, raising=False)
+    monkeypatch.setenv("PGHOSTADDR", "192.0.2.10")
+    env_file = tmp_path / "be.env"
+    env_file.write_text("DATABASE_URL=postgresql://u:p@127.0.0.1/x_test\n", encoding="utf-8")
+    assert mod.main([str(env_file)]) == 3
+    out = capsys.readouterr().out
+    assert "PGHOSTADDR" in out and "192.0.2.10" not in out
+
+
+def test_fingerprint_and_guard_watch_the_same_libpq_variables():
+    from shared.migration_guard import LIBPQ_TARGET_VARS
+
+    assert _fp_module().LIBPQ_TARGET_VARS == LIBPQ_TARGET_VARS

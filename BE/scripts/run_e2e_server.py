@@ -78,6 +78,8 @@ from shared.migration_guard import (  # noqa: E402
 
 local_service_or_blank("REDIS_URL")
 local_service_or_blank("OLLAMA_HOST", fallback="http://127.0.0.1:11434")
+local_service_or_blank("LLM_GATEWAY_ADDR")
+local_service_or_blank("MINDMAP_SERVICE_ADDR")
 
 try:
     kiem_tra_dich(os.environ["DATABASE_URL"], CHE_DO_TEST, env={})
