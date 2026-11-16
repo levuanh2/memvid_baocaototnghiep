@@ -8120,3 +8120,34 @@ off-screen button then matches the same role+name as the visible CTA.
 **Prevention:** hiding by transform, width, opacity or pointer-events is visual only; anything
 that stays mounted while hidden needs `inert`. Label tests should match the bare text, not one
 quoting style.
+
+## Dev and test runs could still reach a hosted database or bucket (fixed 2026-11-16)
+
+**Symptom:** none observed; found by a read-only audit after the owner learned that the
+local `BE/.env` and root `.env` point the database and Storage at one Supabase project
+(whether EC2 production uses the same project is not yet checked).
+
+**Root cause:** four paths kept a way out after the 2026-09-04/05 fixes:
+- pytest compared `TEST_DATABASE_URL` with `DATABASE_URL` only by (host, db), so a hosted
+  database under another host name (direct `db.<ref>` host vs pooler) or with
+  `DATABASE_URL` absent passed. Migrations already required a loopback/CI host and a
+  `_test` name; pytest did not.
+- `guided_store.dsn()` fell back to `DATABASE_URL` with no pytest check. It is used when
+  `AUTH_PROTECT_APP_APIS=true` (set in the root `.env` on the developer machine) or
+  `GUIDED_JOB_STORE_BACKEND=postgres`.
+- `SUPABASE_URL`/`SUPABASE_SECRET_KEY` from `BE/.env` reached the test process, so an
+  upload through the `client` fixture wrote to the real bucket.
+- `scripts/run_e2e_server.py` (local Playwright) popped provider keys, which
+  `load_dotenv` refills from `BE/.env`, kept the bucket keys, and accepted any
+  `DATABASE_URL` from the shell.
+
+**Fix:** `app.db.kiem_dich_test()` applies `migration_guard.kiem_tra_dich` (test mode) to
+`TEST_DATABASE_URL` and, under pytest, to `JOBS_DATABASE_URL`; `guided_store.dsn()` never
+uses `DATABASE_URL` under pytest. `conftest.py` blanks the bucket keys at session start
+(the FPT/QUEUE pattern). `run_e2e_server.py` blanks provider and bucket keys and refuses a
+non-disposable `DATABASE_URL` (exit 2) before importing the app.
+`scripts/db_target_fingerprint.py` lets the owner compare EC2 with a dev machine by
+fingerprint only.
+
+**Regression:** `tests/test_devtest_isolation.py` (10 red on `main` `db005ab` with a fake
+dev `.env` using `.invalid` hosts); `test_db_isolation.py` hosted `_test` case now refused.

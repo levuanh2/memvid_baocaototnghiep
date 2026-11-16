@@ -35,6 +35,15 @@ def use_postgres() -> bool:
 
 
 def dsn() -> str:
+    from app.db import dang_chay_pytest, kiem_dich_test
+
+    if dang_chay_pytest():
+        # Never `DATABASE_URL` in a test run (same rule as `app.db.database_url`); an
+        # empty value makes `_get_engine` fail closed with durable_store_unavailable.
+        value = (os.getenv("JOBS_DATABASE_URL") or "").strip()
+        if value:
+            kiem_dich_test(value, "JOBS_DATABASE_URL")
+        return value
     return (os.getenv("JOBS_DATABASE_URL") or os.getenv("DATABASE_URL") or "").strip()
 
 

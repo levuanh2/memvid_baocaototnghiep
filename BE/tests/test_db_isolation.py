@@ -109,11 +109,14 @@ def test_khac_host_thi_cho_qua(monkeypatch):
     assert "studymap_test" in appdb.database_url()
 
 
-def test_cung_host_khac_ten_database_thi_cho_qua(monkeypatch):
-    """Hai database khác nhau trên cùng một máy chủ là chuyện bình thường."""
+def test_cung_host_khac_ten_database_VAN_bi_chan_vi_la_database_hosted(monkeypatch):
+    """Trước 2026-11-16 ca này được cho qua ("hai database trên cùng máy chủ"). Giờ test
+    chỉ chạy trên database dùng-một-lần cục bộ/CI, cùng luật với migration
+    (`test_devtest_isolation.py`): một database `_test` trên máy chủ hosted vẫn là hosted."""
     monkeypatch.setenv("DATABASE_URL", PROD)
     monkeypatch.setenv("TEST_DATABASE_URL", PROD.replace("/postgres", "/studymap_test"))
-    assert "studymap_test" in appdb.database_url()
+    with pytest.raises(appdb.DatabaseNotConfigured, match="không nằm trong danh sách host"):
+        appdb.database_url()
 
 
 @pytest.mark.parametrize("a,b,giong", [

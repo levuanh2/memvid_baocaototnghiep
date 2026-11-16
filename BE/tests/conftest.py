@@ -26,7 +26,12 @@ import pytest
 # có đòi Redis hay không. Máy nào có `QUEUE_ENABLED=true` mà không có Redis chạy thì 10
 # test ingest đỏ với "Error 10061 connecting to localhost:6379" — trong khi CI xanh.
 # `test_queue.py` và các test hàng đợi tự bật cờ bằng monkeypatch khi cần.
-_ENV_PROVIDER_PHAI_SACH = ("FPT_AI_API_KEY", "FPT_AI_EMBEDDING_MODEL", "QUEUE_ENABLED")
+#
+# 2026-11-16, lần thứ tư: `SUPABASE_URL` + `SUPABASE_SECRET_KEY` trong `BE/.env` làm
+# `storage.is_configured()` đúng, và upload qua fixture `client` ghi vào bucket THẬT.
+# Test kho object tự đặt giá trị giả bằng monkeypatch và giả lớp HTTP.
+_ENV_PROVIDER_PHAI_SACH = ("FPT_AI_API_KEY", "FPT_AI_EMBEDDING_MODEL", "QUEUE_ENABLED",
+                           "SUPABASE_URL", "SUPABASE_SECRET_KEY")
 for _ten in _ENV_PROVIDER_PHAI_SACH:
     os.environ[_ten] = ""
 
