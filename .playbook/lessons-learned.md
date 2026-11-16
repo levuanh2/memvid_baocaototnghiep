@@ -3746,3 +3746,12 @@ a useless index as done. Check the definition in `pg_index` (valid, ready, uniqu
 predicate), fail the migration if it is wrong, and check again at deploy time: once
 `alembic_version` is at head the revision never runs again. Repairing an index on production
 (DROP/REINDEX) is a manual, approved step, not something a migration does on its own.
+
+
+## 2026-11-16 — A test teardown must undo what a failed test can leave behind
+
+Teardown code runs after a failed test, but only works if it does not depend on the test
+having reached its end. A fixture that rebuilds a unique index must first remove the
+duplicates a half-finished test may have left, or one failure turns into errors in other
+files. And any `subprocess.run(text=True)` that reads Vietnamese output needs
+`encoding="utf-8"`: the Windows default is cp1252.

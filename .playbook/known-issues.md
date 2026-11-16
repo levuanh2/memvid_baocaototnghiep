@@ -8249,3 +8249,26 @@ verify never activates or downgrades), two mutations in `test_deploy_guard_mutat
 
 **Prevention:** check `indisvalid`/definition from the catalogs after any concurrent index
 build, in the migration and again at deploy time.
+
+### #185 test harness: submit-key migration tests broke on a Windows console (2026-11-16)
+
+**Root cause:** `_run` in `BE/tests/test_attempt_submit_key_migration.py` called
+`subprocess.run(text=True)` with no encoding. On Windows the parent decodes the child's
+output as cp1252; the scripts print Vietnamese, the reader thread dies with
+`UnicodeDecodeError` (byte 0x9d), `stdout` is `None` and `result.stdout + result.stderr`
+raises `TypeError`. Six tests failed that way. The runbook test then stopped before its
+repair steps with duplicate keys still in the table, the `db` fixture teardown could not
+rebuild the unique index (`UniqueViolation`), and the INVALID index it left made two tests in
+other files fail. Product code was never involved; CI (Linux, UTF-8) passed.
+
+**Fix:** `_run` passes `encoding="utf-8", errors="replace"` (the pattern of
+`test_production_migration_contract.py`) and `PYTHONUTF8=1` to the child. The fixture
+teardown resets `lock_timeout` and clears duplicate keys (keeps the first per owner, test
+database only) before rebuilding the index.
+
+**Regression:** on a cp1252 console, no `PYTHONUTF8`: before 6 failed + 1 error in the file,
+after 155 passed across the ten migration/idempotency/concurrency files and
+`test_guided_postgres_store.py`. A copy of the runbook test made to fail right after the
+duplicate keys: old fixture -> teardown ERROR and the practice idempotency test fails; new
+fixture -> no teardown error, the next tests pass, verifier says valid. Logs:
+`studymap-qa-execution/v6/results/185-harness/`.

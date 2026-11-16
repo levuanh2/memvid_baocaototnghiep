@@ -32,13 +32,21 @@ HEAD = "20261115_attempt_submit_key"
 PREVIOUS = "20261001_job_usage_ctx"
 CREATE = (f"CREATE UNIQUE INDEX CONCURRENTLY {INDEX} "
           "ON quiz_attempts (user_id, submit_key) WHERE submit_key IS NOT NULL")
+CLEAR_DUPLICATE_KEYS = (
+    "UPDATE quiz_attempts SET submit_key = NULL WHERE id IN (SELECT id FROM ("
+    " SELECT id, row_number() OVER (PARTITION BY user_id, submit_key ORDER BY id) AS n"
+    " FROM quiz_attempts WHERE submit_key IS NOT NULL) d WHERE d.n > 1)")
 
 
 def _run(*args):
     env = {k: v for k, v in os.environ.items() if k != "ALEMBIC_ALLOW_PRODUCTION"}
     env["PGOPTIONS"] = "-c lock_timeout=20s"  # never hang the suite behind a stray lock
+    # The scripts print Vietnamese. Without an explicit encoding a Windows parent decodes
+    # with cp1252, the reader thread dies on a byte like 0x9d and `stdout` comes back None.
+    env["PYTHONUTF8"] = "1"
     return subprocess.run([sys.executable, "-m", *args], cwd=BE_ROOT, env=env,
-                          capture_output=True, text=True, timeout=180)
+                          capture_output=True, text=True, encoding="utf-8",
+                          errors="replace", timeout=180)
 
 
 def _migrate():
@@ -61,6 +69,11 @@ def db():
 
     with get_engine().connect().execution_options(isolation_level="AUTOCOMMIT") as conn:
         yield conn
+        # Runs after a failed test too. A test that stops half-way can leave duplicate keys
+        # (the runbook test makes them on purpose); the rebuild below would then fail and
+        # leave an INVALID index for the next test file. Test database only.
+        conn.execute(sa.text("RESET lock_timeout"))
+        conn.execute(sa.text(CLEAR_DUPLICATE_KEYS))
         conn.execute(sa.text(f"DROP INDEX CONCURRENTLY IF EXISTS {INDEX}"))
         conn.execute(sa.text(CREATE))
     _stamp(HEAD)
