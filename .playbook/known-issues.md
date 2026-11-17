@@ -8194,3 +8194,12 @@ file, so `PGHOSTADDR=${X}` in root `.env` with X set in `BE/.env` expanded to ""
 guard and to an address at load time. **Fix:** read raw values (`interpolate=False`); a
 non-empty raw value counts as set (fail closed). The fingerprint no longer strips a "port"
 from a bare IPv6 literal. **Regression:** 2 tests, red on `ae9e091`.
+
+**Hand-started backend (2026-11-17):** `shared/dev_target_guard.py`, called by `app.main`
+right after the env files load, refuses to start when `PROCESS_ROLE` is not `web` /
+`mindmap-worker`, a `BE/.env` or root `.env` exists on disk (a source checkout;
+`BE/.dockerignore` keeps `.env` out of the image) and `DATABASE_URL` / `JOBS_DATABASE_URL`
+/ `SUPABASE_URL` points off this machine. Opt out on purpose with
+`STUDYMAP_ALLOW_REMOTE_TARGETS=1` after the fingerprint check. No new production variable:
+`docker-compose.prod.yml` already sets `PROCESS_ROLE` on both services. Skipped under pytest.
+**Regression:** `tests/test_dev_target_guard.py` (13).
