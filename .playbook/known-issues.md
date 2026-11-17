@@ -8150,4 +8150,13 @@ worker thread keeps running until the HTTP client's own timeout ends it, and the
 may still finish and bill the call. Only the gRPC gateway path has a real client deadline,
 and even there the server keeps working after the client gives up.
 
-**Regression:** `tests/test_llm_deadlines.py` (9; 7 red on `main` `db005ab`).
+**Follow-up (Codex task30 review):** a timed-out call keeps running in its thread, so
+releasing the in-process slot at the deadline let N timeouts become N concurrent model
+calls above `MAX_CONCURRENT_LLM_CALLS` (before the PR the executor's blocking exit had
+kept the slot held). Now the orphan owns its slot until the call really ends (`_Slot`,
+released in a done-callback); a fallback provider takes its own slot, waiting at most
+what is left. A late success is still usage-accounted (`late_after_timeout`). The total
+deadline is re-read after the client is built (building takes time too).
+
+**Regression:** `tests/test_llm_deadlines.py` (15; red on `main` `db005ab` or on the
+previous PR head for the follow-up).

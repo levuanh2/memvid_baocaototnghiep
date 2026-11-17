@@ -108,6 +108,12 @@ class ProviderPool:
                     llm = _lf._groq_chat_llm(feature, options, timeout=budget)
                 else:
                     continue
+                # Building a client takes time too: the call gets what is left NOW.
+                budget = _lf._tighter(timeout, deadline.remaining())
+                if budget is not None and budget <= 0:
+                    last_error = TimeoutError(
+                        f"deadline of {total_timeout:.0f}s spent while building '{provider}'")
+                    break
                 out = _lf._invoke_chat(llm, prompt, system_prompt, timeout=budget)
                 self._last_provider_used = provider
                 return out

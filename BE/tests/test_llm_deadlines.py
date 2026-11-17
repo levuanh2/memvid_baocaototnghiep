@@ -188,9 +188,15 @@ def test_a_plain_timeout_stays_per_provider_but_is_now_real(chain):
     every provider gets its own `timeout`, so a fallback is still tried after the first
     one times out. What changed: each wait really ends at `timeout`."""
     built, _log = chain
+    # Timeout semantics only; orphans holding slots are covered by the slot tests below.
+    chain_gate_off = pytest.MonkeyPatch()
+    chain_gate_off.setenv("LLM_INPROCESS_CAP_ENABLED", "0")
     started = time.monotonic()
-    with pytest.raises(Exception):
-        lf.ask_ai("hi", timeout=0.4)
+    try:
+        with pytest.raises(Exception):
+            lf.ask_ai("hi", timeout=0.4)
+    finally:
+        chain_gate_off.undo()
     elapsed = time.monotonic() - started
     assert [name for name, _t in built] == ["fpt", "ollama", "gemini", "groq"]
     assert all(t == 0.4 for _name, t in built), built
@@ -209,3 +215,100 @@ def test_grading_asks_for_one_deadline_for_the_whole_chain():
     grading.grade_short_answer(question="q", correct_answer="a", user_answer="x",
                                ask=_ask, timeout_sec=42.0)
     assert seen["timeout"] == 42.0 and seen["total_timeout"] == 42.0
+
+
+# ── Codex task30 review of bedecdd ─────────────────────────────────────────
+class _Late:
+    """Answers after `delay` seconds: a provider that succeeds after the deadline."""
+
+    def __init__(self, delay):
+        self.delay = delay
+        self.content = "late answer"
+        self.usage_metadata = {"input_tokens": 3, "output_tokens": 5, "total_tokens": 8}
+        self.response_metadata = {}
+
+    def invoke(self, msgs, stream=False):
+        time.sleep(self.delay)
+        return self
+
+
+@pytest.fixture()
+def gate():
+    lf.configure_inproc_gate(max_calls=1, wait_timeout=0.2)
+    yield
+    lf.configure_inproc_gate(max_calls=2, wait_timeout=30.0)
+
+
+def test_building_the_client_counts_against_the_total_deadline(monkeypatch, chain):
+    built, _log = chain
+
+    def _slow_builder(*a, **k):
+        time.sleep(0.6)
+        built.append(("slow", k.get("timeout")))
+        return _Hanging("slow", [])
+
+    monkeypatch.setattr(lf, "PROVIDERS", ["fpt", "ollama"])
+    monkeypatch.setattr(lf, "_fpt_chat_llm", _slow_builder)
+    started = time.monotonic()
+    with pytest.raises(Exception):
+        lf.ask_ai("hi", timeout=5.0, total_timeout=1.0)
+    assert time.monotonic() - started < 1.4
+
+
+def test_an_orphaned_call_keeps_its_slot_until_it_really_ends(monkeypatch, gate):
+    """After a timeout the provider call still runs; it must keep counting against
+    MAX_CONCURRENT_LLM_CALLS, or N timeouts become N concurrent model calls."""
+    monkeypatch.setattr(lf, "_gateway_addr", lambda: "")
+    monkeypatch.setattr(lf, "PROVIDERS", ["ollama"])
+    stuck = _Hanging("stuck", [])
+    monkeypatch.setattr(lf, "_ollama_chat_llm", lambda *a, **k: stuck)
+    try:
+        with pytest.raises(Exception):
+            lf.ask_ai("hi", timeout=0.3)
+        monkeypatch.setattr(lf, "_ollama_chat_llm", lambda *a, **k: _Answer("x"))
+        with pytest.raises(RuntimeError, match="busy"):
+            lf.ask_ai("hi", timeout=0.3)      # the orphan still holds the only slot
+    finally:
+        stuck.release.set()
+    deadline = time.monotonic() + 5
+    while time.monotonic() < deadline:
+        try:
+            assert lf.ask_ai("hi", timeout=0.3) == "x"
+            break
+        except RuntimeError:
+            time.sleep(0.05)
+    else:
+        pytest.fail("the slot was never given back after the orphan ended")
+
+
+def test_a_fallback_after_a_timeout_takes_its_own_slot(monkeypatch):
+    lf.configure_inproc_gate(max_calls=2, wait_timeout=0.5)
+    monkeypatch.setattr(lf, "_gateway_addr", lambda: "")
+    monkeypatch.setattr(lf, "PROVIDERS", ["fpt", "ollama"])
+    stuck = _Hanging("stuck", [])
+    monkeypatch.setattr(lf, "_fpt_chat_llm", lambda *a, **k: stuck)
+    monkeypatch.setattr(lf, "_ollama_chat_llm", lambda *a, **k: _Answer("fallback"))
+    try:
+        assert lf.ask_ai("hi", timeout=0.3) == "fallback"
+    finally:
+        stuck.release.set()
+        lf.configure_inproc_gate(max_calls=2, wait_timeout=30.0)
+
+
+def test_a_late_success_is_still_usage_accounted(monkeypatch):
+    """The provider may finish and bill after we stopped waiting: record it."""
+    import app.domains.usage.accounting as accounting
+
+    monkeypatch.setattr(lf, "_gateway_addr", lambda: "")
+    monkeypatch.setattr(lf, "PROVIDERS", ["ollama"])
+    monkeypatch.setattr(lf, "_ollama_chat_llm", lambda *a, **k: _Late(0.5))
+    recorded = []
+    monkeypatch.setattr(accounting, "record_provider_response",
+                        lambda ctx, resp, **kw: recorded.append(kw))
+    with pytest.raises(Exception):
+        lf.ask_ai("hi", timeout=0.2, usage_context=object(), usage_attempt_id="a1")
+    end = time.monotonic() + 3
+    while not recorded and time.monotonic() < end:
+        time.sleep(0.05)
+    assert len(recorded) == 1, "a late but successful (billed) call left no usage record"
+    assert recorded[0]["metadata"]["late_after_timeout"] is True

@@ -136,6 +136,37 @@ def _inproc_slot():
         _inproc_semaphore.release()
 
 
+class _Slot:
+    """One in-process generation slot, released exactly once.
+
+    After a timeout the provider call keeps running in its thread (Python cannot stop
+    it); `_invoke_chat` then hands this slot to that orphan, which releases it only when
+    the call really ends. Otherwise N timeouts would become N concurrent model calls
+    above MAX_CONCURRENT_LLM_CALLS (Codex task30)."""
+
+    def __init__(self, sem: Any = None) -> None:
+        self._sem = sem            # the semaphore actually acquired (gate may be rebuilt)
+        self._lock = threading.Lock()
+        self.handed_off = False
+
+    @classmethod
+    def take(cls, wait: float | None = None) -> "_Slot":
+        if not _inproc_enabled():
+            return cls(None)
+        sem = _inproc_semaphore
+        w = _INPROC_WAIT if wait is None else max(0.0, min(_INPROC_WAIT, wait))
+        if not sem.acquire(timeout=w):
+            raise RuntimeError(
+                f"LLM busy (in-process): all {_INPROC_MAX} slots in use, waited {w:.1f}s")
+        return cls(sem)
+
+    def release(self) -> None:
+        with self._lock:
+            sem, self._sem = self._sem, None
+        if sem is not None:
+            sem.release()
+
+
 def _grpc_llm_provider(addr: str):
     p = _GRPC_LLM_CACHE.get(addr)
     if p is None:
@@ -194,6 +225,7 @@ def _invoke_chat(
     usage_attempt_id: str | None = None,
     provider: str | None = None,
     model: str | None = None,
+    slot: "_Slot | None" = None,
 ) -> str:
     import time
     from langchain_core.messages import HumanMessage, SystemMessage
@@ -221,6 +253,30 @@ def _invoke_chat(
         try:
             out = fut.result(timeout=timeout)
         except FuturesTimeout:
+            if slot is not None:
+                slot.handed_off = True   # the orphan owns the slot until it ends
+
+            def _after_orphan(f: Any) -> None:
+                try:
+                    late = f.result() if not f.cancelled() and f.exception() is None else None
+                    if late is not None and usage_context is not None:
+                        # The provider finished (and billed) after we stopped waiting.
+                        from app.domains.usage.accounting import record_provider_response
+                        record_provider_response(
+                            usage_context, late, attempt_id=f"{usage_attempt_id}:late",
+                            provider=provider,
+                            model=model or getattr(llm, "model", None)
+                            or getattr(llm, "model_name", None),
+                            usage_source="estimated" if provider == "ollama" else "provider",
+                            latency_ms=int((time.monotonic() - started) * 1000),
+                            metadata={"late_after_timeout": True})
+                except Exception as exc:  # accounting must never break the orphan
+                    print(f"[llm] late usage record failed: {type(exc).__name__}", flush=True)
+                finally:
+                    if slot is not None:
+                        slot.release()
+
+            fut.add_done_callback(_after_orphan)
             raise TimeoutError(f"LLM call timed out after {timeout:.0f}s") from None
         finally:
             ex.shutdown(wait=False, cancel_futures=True)
@@ -1265,59 +1321,43 @@ def ask_ai(
 
     # PR#4: một slot cho TOÀN BỘ vòng fallback provider (retry không bypass cap,
     # mirror gateway). Quá hạn chờ → RuntimeError → error-path degraded sẵn có.
-    with _inproc_slot():
+    # A timed-out call keeps its slot until it really ends (`_Slot`); the next provider
+    # then takes its own slot, waiting at most what is left of the deadline.
+    builders = {
+        "ollama": lambda b: _ollama_chat_llm(effective_model, feature, options, timeout=b),
+        "fpt": lambda b: _fpt_chat_llm(feature, options, timeout=b),
+        "gemini": lambda b: _gemini_chat_llm(feature, options, timeout=b),
+        "groq": lambda b: _groq_chat_llm(feature, options, timeout=b),
+    }
+    slot = _Slot.take()
+    try:
         deadline = _Deadline(total_timeout)
         for provider in PROVIDERS:
+            if provider not in builders:
+                continue
             left = deadline.remaining()
             if left is not None and left <= 0:
                 errors.append(f"deadline of {total_timeout:.0f}s spent before trying '{provider}'")
                 break
-            budget = _tighter(timeout, left)
             try:
-                if provider == "ollama":
-                    llm = _ollama_chat_llm(effective_model, feature, options, timeout=budget)
-                    return _invoke_chat(
-                        llm, prompt, system_prompt, timeout=budget,
-                        **({
-                            "usage_context": usage_context,
-                            "usage_attempt_id": f"{usage_attempt_id}:{provider}",
-                            "provider": provider,
-                            "model": effective_model,
-                        } if usage_context is not None else {}),
-                    )
-
-                if provider == "fpt":
-                    llm = _fpt_chat_llm(feature, options, timeout=budget)
-                    return _invoke_chat(
-                        llm, prompt, system_prompt, timeout=budget,
-                        **({
-                            "usage_context": usage_context,
-                            "usage_attempt_id": f"{usage_attempt_id}:{provider}",
-                            "provider": provider,
-                        } if usage_context is not None else {}),
-                    )
-
-                if provider == "gemini":
-                    llm = _gemini_chat_llm(feature, options, timeout=budget)
-                    return _invoke_chat(
-                        llm, prompt, system_prompt, timeout=budget,
-                        **({
-                            "usage_context": usage_context,
-                            "usage_attempt_id": f"{usage_attempt_id}:{provider}",
-                            "provider": provider,
-                        } if usage_context is not None else {}),
-                    )
-
-                if provider == "groq":
-                    llm = _groq_chat_llm(feature, options, timeout=budget)
-                    return _invoke_chat(
-                        llm, prompt, system_prompt, timeout=budget,
-                        **({
-                            "usage_context": usage_context,
-                            "usage_attempt_id": f"{usage_attempt_id}:{provider}",
-                            "provider": provider,
-                        } if usage_context is not None else {}),
-                    )
+                if slot.handed_off:
+                    slot = _Slot.take(wait=left)
+                llm = builders[provider](_tighter(timeout, left))
+                # Building a client takes time too: the call gets what is left NOW.
+                budget = _tighter(timeout, deadline.remaining())
+                if budget is not None and budget <= 0:
+                    errors.append(f"deadline of {total_timeout:.0f}s spent while building '{provider}'")
+                    break
+                usage = ({
+                    "usage_context": usage_context,
+                    "usage_attempt_id": f"{usage_attempt_id}:{provider}",
+                    "provider": provider,
+                    **({"model": effective_model} if provider == "ollama" else {}),
+                } if usage_context is not None else {})
+                # The slot is handed over only on the timeout path (an orphan can exist
+                # only there), so a call without a timeout keeps the old signature.
+                return _invoke_chat(llm, prompt, system_prompt, timeout=budget,
+                                    **({"slot": slot} if budget is not None else {}), **usage)
             except Exception as e:
                 # Chỉ giữ `last_error` là nuốt mất lỗi của provider ĐẦU. Khi Ollama
                 # timeout rồi rơi sang Gemini hết hạn key, thông báo cuối là "Gemini
@@ -1328,7 +1368,12 @@ def ask_ai(
                       f"model={effective_model}): {type(e).__name__}: {str(e)[:200]}",
                       flush=True)
                 last_error = e
+                if isinstance(e, RuntimeError) and str(e).startswith("LLM busy"):
+                    raise   # no slot for the next provider: same as before the chain started
                 continue
+    finally:
+        if not slot.handed_off:
+            slot.release()
 
     if not PROVIDERS:
         raise RuntimeError(
