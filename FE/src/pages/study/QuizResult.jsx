@@ -147,7 +147,9 @@ export default function QuizResult() {
   const provisional = graded && (
     result?.grading_complete === false || ungradedCount > 0
   );
-  const planWaitsForRegrade = provisional && result?.regrade_state !== "exhausted";
+  // Only while a regrade runs (it is about to change the result); otherwise a plan from
+  // the graded answers is offered, without spending a regrade first (owner, 2026-11-17).
+  const planWaitsForRegrade = provisional && result?.regrade_state === "running";
   // `.filter()` alone loses the question's position in the original ten-question
   // quiz — the wrong-answer review must label question 4 and 9 as "Câu 4"/"Câu 9",
   // not "Câu 1"/"Câu 2" (their position inside the filtered subset). Stamp the
@@ -192,8 +194,6 @@ export default function QuizResult() {
       width={reviewingWrong ? "max-w-[1120px]" : "max-w-[1050px]"}
       actions={
         graded && (
-          // A provisional result a regrade can still change gets no review plan (the
-          // server refuses one); once retries are used up it is final and gets one.
           wrongQuestions.length > 0 && !planWaitsForRegrade ? (
             <Link to={`/app/study/review/${attemptId}`} className="btn-primary text-small inline-flex items-center gap-2">
               <Icon name="BookOpen" size={14} />

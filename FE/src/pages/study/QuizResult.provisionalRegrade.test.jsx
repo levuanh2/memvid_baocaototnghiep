@@ -108,13 +108,19 @@ describe("Chấm lại câu còn thiếu", () => {
     expect(regradeButton()).toBeDefined();
   });
 
-  it("offers no review plan while the result is provisional, and offers it once complete", async () => {
+  it("offers no review plan only while a regrade is running", async () => {
     const wrong = { ...questions[0], user_answer: "B", verdict: "incorrect", is_correct: false, score: 0 };
-    getResult.mockResolvedValue({ ...provisional("available"), score: 0, correct_count: 0,
+    getResult.mockResolvedValue({ ...provisional("running"), score: 0, correct_count: 0,
       incorrect_count: 1, questions: [wrong, questions[1]] });
     await render();
     const planLinks = () => [...container.querySelectorAll("a")].filter((a) => /Kế hoạch ôn tập|Mở kế hoạch ôn tập/.test(a.textContent));
     expect(planLinks()).toHaveLength(0);
+    // Owner decision 2026-11-17 (second): available is enough, no regrade has to be spent.
+    act(() => root.unmount()); container.remove(); root = null;
+    getResult.mockResolvedValue({ ...provisional("available"), score: 0, correct_count: 0,
+      incorrect_count: 1, questions: [wrong, questions[1]] });
+    await render();
+    expect(planLinks().length).toBeGreaterThan(0);
     act(() => root.unmount()); container.remove(); root = null;
     getResult.mockResolvedValue({ ...complete, score: 1, correct_count: 1, incorrect_count: 1,
       questions: [wrong, complete.questions[1]] });

@@ -63,9 +63,8 @@ def generate(attempt_id: Optional[str], user_id: Optional[str], *, force: bool,
         attempt_id, user_id, bat_buoc_chu_so_huu=bat_buoc_chu_so_huu)
     if attempt["status"] != "graded":
         raise AttemptChuaCham(status=attempt["status"])
-    if _regrade_pending(attempt):
-        # A provisional result that a regrade can still change: a plan built from it
-        # would be cached and outlive the regrade (Codex task34).
+    if _regrade_running(attempt):
+        # A regrade is about to change the result: wait for it.
         raise AttemptChuaCham(status="provisional")
 
     if not force:
@@ -79,17 +78,18 @@ def generate(attempt_id: Optional[str], user_id: Optional[str], *, force: bool,
     return _with_ungraded(_bo_user_id(plan), attempt), True
 
 
-def _regrade_pending(attempt: Dict[str, Any]) -> bool:
-    """Provisional and still regradable (or regrading). Owner decision 2026-11-17: once
-    the learner's retries are used up the provisional result is final, and a plan may
-    be built from its graded answers (`ungraded_count` says which part is missing)."""
+def _regrade_running(attempt: Dict[str, Any]) -> bool:
+    """A regrade of this provisional result is queued or running. Owner decisions
+    2026-11-17: a plan may be built from the graded answers of a provisional result
+    (`ungraded_count` says what is missing) without spending any paid regrade first; a
+    later regrade that changes the result marks the plan `outdated`."""
     from app.domains.attempts import repository as _attempts
 
     if attempts_uc.attempt_public(attempt)["grading_complete"]:
         return False
     return _attempts.regrade_state(
         attempt["attempt_id"], job_active=attempts_uc.job_active,
-        max_retries=attempts_uc.manual_retry_max()) != "exhausted"
+        max_retries=attempts_uc.manual_retry_max()) == "running"
 
 
 def _with_ungraded(plan: Dict[str, Any], attempt: Dict[str, Any]) -> Dict[str, Any]:

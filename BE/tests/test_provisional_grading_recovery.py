@@ -477,19 +477,37 @@ def test_no_regrade_starts_while_the_first_grading_is_still_analysing(owner, fak
     assert accepted and len(after.calls) == 1
 
 
-def test_no_review_plan_while_a_regrade_can_still_change_the_result(owner, fake):
+def test_a_plan_from_a_provisional_result_without_spending_a_regrade(owner, fake):
+    """Owner decision 2026-11-17 (second): a learner must not have to use up paid
+    regrades to get a plan. A plan is built from the graded answers whenever no regrade
+    is running; a later regrade that changes the result marks it outdated."""
     from app.application import review_plans
 
     attempt_id, _ = _provisional(owner, fake)
-    with pytest.raises(review_plans.AttemptChuaCham):
-        review_plans.generate(attempt_id, owner, force=False, bat_buoc_chu_so_huu=True)
+    assert _result(attempt_id, owner)["regrade_state"] == "available"
+    plan, created = review_plans.generate(attempt_id, owner, force=False,
+                                          bat_buoc_chu_so_huu=True)
+    assert created and plan["ungraded_count"] == 1 and plan["outdated"] is False
     rec = _Recorder()
     _regrade(attempt_id, owner, rec)
     _run_job(*rec.calls[0])
+    again = review_plans.by_attempt(attempt_id, owner, bat_buoc_chu_so_huu=True)
+    assert again["outdated"] is True and again["ungraded_count"] == 0
+
+
+def test_no_review_plan_while_a_regrade_is_running(owner, fake):
+    from app.application import review_plans
+
+    attempt_id, _ = _provisional(owner, fake)
+    rec = _Recorder()
+    _regrade(attempt_id, owner, rec)                 # queued: the result is about to change
+    assert _result(attempt_id, owner)["regrade_state"] == "running"
+    with pytest.raises(review_plans.AttemptChuaCham):
+        review_plans.generate(attempt_id, owner, force=False, bat_buoc_chu_so_huu=True)
+    _run_job(*rec.calls[0])
     plan, created = review_plans.generate(attempt_id, owner, force=False,
                                           bat_buoc_chu_so_huu=True)
-    assert created and plan["attempt_id"] == attempt_id
-    assert plan["ungraded_count"] == 0
+    assert created and plan["ungraded_count"] == 0
 
 
 def test_a_review_plan_once_retries_are_used_up_says_it_is_provisional(owner, fake,

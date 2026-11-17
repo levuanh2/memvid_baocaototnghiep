@@ -8338,10 +8338,13 @@ longer end it), `regrade_state` stays "running" through the analysis, and a regr
 cannot start while the first grading still analyses. (3) A review plan built from a
 provisional result was cached and outlived the regrade: `review_plans.generate` refuses
 a provisional attempt while a regrade can still change it (409), and the result page
-offers no plan link then. Owner decision 2026-11-17: once the learner's retries are used
-up (`regrade_state == "exhausted"`) the provisional result is final, so a plan is built
-from its graded answers; plan responses carry `ungraded_count` and the review page says
-the plan covers only the graded answers. Existing plans are left as they are (deleting
+offers no plan link then. Owner decision 2026-11-17, revised the same day: the
+first rule (a plan only once the retries were used up) made a learner spend up to three
+paid regrades, even during an outage, to get a plan, and the page did not say why. Now a
+plan is built from the graded answers whenever no regrade is running (409 only while one
+is queued or running); plan responses carry `ungraded_count`, the review page says the
+plan covers only the graded answers, and a later regrade that changes the result marks it
+`outdated`. Existing plans are left as they are (deleting
 one cascades to practice quizzes).
 Practice attempts are out of scope: their route refuses a regrade (open item, #159).
 
