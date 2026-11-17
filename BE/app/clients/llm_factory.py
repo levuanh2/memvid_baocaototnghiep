@@ -1182,6 +1182,15 @@ def get_embedding_model(model_name: Optional[str] = None) -> Optional[LangChainE
     return _emb_adapter_cache
 
 
+def _tighter(a: float | None, b: float | None) -> float | None:
+    """The smaller of two optional limits (None = no limit)."""
+    if a is None or a <= 0:
+        return b
+    if b is None:
+        return a
+    return min(a, b)
+
+
 class _Deadline:
     """`timeout` seconds from now, or no limit. `remaining()` is None without a limit."""
 
@@ -1206,17 +1215,22 @@ def ask_ai(
     *,
     usage_context: Any = None,
     usage_attempt_id: str | None = None,
+    total_timeout: float | None = None,
 ) -> str:
     """Gọi AI qua Ollama. `feature` xác định model mặc định khi `model` không truyền.
     feature='chat'    -> SLM_MODEL_CHAT (mặc định DEFAULT_LOCAL_MODEL)
     feature='summary' -> SLM_MODEL_SUMMARY (dùng cho summarize_advanced, memory_tree)
     feature='mindmap' -> MINDMAP_MODEL
-    timeout: số giây tối đa cho LLM call (None = không giới hạn). It is ONE deadline for
-      the whole operation, shared by the provider fallback chain: each provider gets
-      what is left, none is started once it is spent, and the caller gets control back
-      at the deadline. Measured from when the in-process slot is held (the queue wait
-      has its own limit, LLM_QUEUE_WAIT_TIMEOUT_SECONDS). A request already sent is not
-      cancelled at the provider (see `_invoke_chat`).
+    timeout: số giây tối đa cho MỖI provider (None = không giới hạn), as before: every
+      provider in the fallback chain gets its own `timeout`. Since 2026-11-17 it is a
+      real limit (the caller gets control back at it, the HTTP client has it) instead of
+      a wait that could block until the provider finished.
+    total_timeout (opt-in): ONE deadline for the whole operation, shared by the fallback
+      chain: each provider gets min(timeout, what is left), none starts once it is
+      spent. Measured from when the in-process slot is held (the queue wait has its own
+      limit, LLM_QUEUE_WAIT_TIMEOUT_SECONDS). Used by grading, whose claim lease must
+      outlast one grading call. Other callers keep per-provider timeouts unchanged.
+    A request already sent is not cancelled at the provider (see `_invoke_chat`).
     """
     # Phase 0 observability: đếm MỘT lần cho mỗi invocation (cả nhánh gateway lẫn
     # in-process; cache hit không đi qua ask_ai). Đếm không bao giờ chặn call.
@@ -1239,7 +1253,8 @@ def ask_ai(
             model=model,
             options=options,
             feature=feature,
-            timeout=timeout,
+            # The gRPC client deadline is real; with a total deadline, use the tighter one.
+            timeout=_tighter(timeout, total_timeout),
         )
 
     last_error: Exception | None = None
@@ -1251,12 +1266,13 @@ def ask_ai(
     # PR#4: một slot cho TOÀN BỘ vòng fallback provider (retry không bypass cap,
     # mirror gateway). Quá hạn chờ → RuntimeError → error-path degraded sẵn có.
     with _inproc_slot():
-        deadline = _Deadline(timeout)
+        deadline = _Deadline(total_timeout)
         for provider in PROVIDERS:
-            budget = deadline.remaining()
-            if budget is not None and budget <= 0:
-                errors.append(f"deadline of {timeout:.0f}s spent before trying '{provider}'")
+            left = deadline.remaining()
+            if left is not None and left <= 0:
+                errors.append(f"deadline of {total_timeout:.0f}s spent before trying '{provider}'")
                 break
+            budget = _tighter(timeout, left)
             try:
                 if provider == "ollama":
                     llm = _ollama_chat_llm(effective_model, feature, options, timeout=budget)

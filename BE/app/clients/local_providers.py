@@ -82,17 +82,21 @@ class ProviderPool:
         options: Optional[dict] = None,
         feature: str = "chat",
         timeout: Optional[float] = None,
+        total_timeout: Optional[float] = None,
     ) -> str:
         effective_model = model or _lf._model_map(feature)
         last_error: Optional[Exception] = None
         self._last_provider_used = None
-        # Same contract as `ask_ai`: one deadline shared by the whole fallback chain.
-        deadline = _lf._Deadline(timeout)
+        # Same contract as `ask_ai`: `timeout` per provider (now a real limit); the
+        # opt-in `total_timeout` is one deadline shared by the whole fallback chain.
+        deadline = _lf._Deadline(total_timeout)
         for provider in self._providers:
-            budget = deadline.remaining()
-            if budget is not None and budget <= 0:
-                last_error = TimeoutError(f"deadline of {timeout:.0f}s spent before '{provider}'")
+            left = deadline.remaining()
+            if left is not None and left <= 0:
+                last_error = TimeoutError(
+                    f"deadline of {total_timeout:.0f}s spent before '{provider}'")
                 break
+            budget = _lf._tighter(timeout, left)
             try:
                 if provider == "fpt":
                     llm = _lf._fpt_chat_llm(feature, options, timeout=budget)

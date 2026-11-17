@@ -91,7 +91,7 @@ def test_the_fallback_chain_shares_one_deadline(chain):
     built, _log = chain
     started = time.monotonic()
     with pytest.raises(Exception):
-        lf.ask_ai("hi", timeout=1.0)
+        lf.ask_ai("hi", timeout=1.0, total_timeout=1.0)
     elapsed = time.monotonic() - started
     assert elapsed < 1.6, f"4 providers took {elapsed:.1f}s for a 1s deadline"
     timeouts = [t for _name, t in built]
@@ -101,7 +101,7 @@ def test_the_fallback_chain_shares_one_deadline(chain):
 def test_no_provider_is_started_after_the_deadline(chain):
     built, log = chain
     with pytest.raises(Exception) as e:
-        lf.ask_ai("hi", timeout=0.5)
+        lf.ask_ai("hi", timeout=0.5, total_timeout=0.5)
     assert len(built) == 1, f"providers started after the deadline: {built}"
     assert "deadline" in str(e.value).lower()
 
@@ -112,7 +112,7 @@ def test_a_fast_fallback_still_answers_within_the_deadline(monkeypatch, chain):
     monkeypatch.setattr(lf, "_fpt_chat_llm", lambda *a, **k: (_ for _ in ()).throw(
         RuntimeError("fpt down at once")))
     monkeypatch.setattr(lf, "_ollama_chat_llm", lambda *a, **k: _Answer("from ollama"))
-    assert lf.ask_ai("hi", timeout=2.0) == "from ollama"
+    assert lf.ask_ai("hi", timeout=2.0, total_timeout=2.0) == "from ollama"
 
 
 def test_without_a_timeout_nothing_changes(monkeypatch):
@@ -179,5 +179,33 @@ def test_the_gateway_pool_shares_one_deadline_too(chain):
     pool = ProviderPool(providers=["fpt", "ollama", "gemini", "groq"])
     started = time.monotonic()
     with pytest.raises(Exception):
-        pool.ask("hi", timeout=1.0)
+        pool.ask("hi", timeout=1.0, total_timeout=1.0)
     assert time.monotonic() - started < 1.6
+
+
+def test_a_plain_timeout_stays_per_provider_but_is_now_real(chain):
+    """Unrelated callers (quiz with 900 s for a slow Ollama, ...) keep their meaning:
+    every provider gets its own `timeout`, so a fallback is still tried after the first
+    one times out. What changed: each wait really ends at `timeout`."""
+    built, _log = chain
+    started = time.monotonic()
+    with pytest.raises(Exception):
+        lf.ask_ai("hi", timeout=0.4)
+    elapsed = time.monotonic() - started
+    assert [name for name, _t in built] == ["fpt", "ollama", "gemini", "groq"]
+    assert all(t == 0.4 for _name, t in built), built
+    assert elapsed < 0.4 * 4 + 0.8, f"{elapsed:.1f}s: a wait outlived its timeout"
+
+
+def test_grading_asks_for_one_deadline_for_the_whole_chain():
+    from app.domains.attempts import grading
+
+    seen = {}
+
+    def _ask(*a, **k):
+        seen.update(k)
+        return '{"verdict": "correct", "feedback": "", "missing_points": []}'
+
+    grading.grade_short_answer(question="q", correct_answer="a", user_answer="x",
+                               ask=_ask, timeout_sec=42.0)
+    assert seen["timeout"] == 42.0 and seen["total_timeout"] == 42.0

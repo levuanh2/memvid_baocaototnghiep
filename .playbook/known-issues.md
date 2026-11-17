@@ -8134,8 +8134,12 @@ quoting style.
   3 attempts with 60 s reads) ran inside the call.
 - Every provider in the fallback chain got a fresh full timeout.
 
-**Fix:** `timeout` is one deadline for the whole `ask_ai` / `ProviderPool.ask` operation
-(`_Deadline`): each provider gets what is left, none starts after it is spent.
+**Fix:** `timeout` keeps its meaning (per provider) but is now a real limit; the opt-in
+`total_timeout` is one deadline for the whole `ask_ai` / `ProviderPool.ask` operation
+(`_Deadline`): each provider gets min(timeout, what is left), none starts after it is
+spent. Only grading uses it (its claim lease must outlast one grading call); applying it
+to every caller would let a slow first provider (quiz: 900 s Ollama) leave no time for
+the fallback, a behaviour change for unrelated callers (owner's side-agent note).
 `_invoke_chat` returns at the deadline (`shutdown(wait=False, cancel_futures=True)`).
 Ollama gets `client_kwargs={"timeout": httpx.Timeout(budget, connect<=10)}`; Gemini
 `timeout` + `max_retries=1`; Groq `timeout` + `max_retries=0`; FPT `(connect<=10, read)`.
