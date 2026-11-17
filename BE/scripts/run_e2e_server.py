@@ -196,6 +196,34 @@ def main() -> None:
         quiz_generator.generate_questions = _deterministic_practice_questions
         print("[run_e2e_server] deterministic practice AI stub enabled", flush=True)
 
+    if os.environ.get("E2E_DIAGNOSTIC_AI_STUB", "").strip().lower() in {
+        "1", "true", "yes", "on",
+    }:
+        # Diagnostic quizzes with one multiple-choice and one short-answer question, no
+        # model: the grading-recovery spec (quiz-grading-recovery.spec.js) needs a quiz
+        # whose grading runs in a background job, deterministically.
+        from app.domains.quiz import generator as quiz_generator
+
+        inner_generate_questions = quiz_generator.generate_questions
+
+        def _deterministic_diagnostic_questions(context, config, **kwargs):
+            if config.get("quiz_type") == "practice":
+                return inner_generate_questions(context, config, **kwargs)
+            base = {"explanation": "E2E diagnostic explanation.",
+                    "difficulty": config.get("difficulty") or "easy",
+                    "concept_tags": ["e2e-diagnostic"], "chunk_refs": ["c0"]}
+            return [
+                {**base, "question_text": "E2E diagnostic choice?",
+                 "question_type": "multiple_choice", "correct_answer": "Correct",
+                 "options": ["Correct", "Wrong", "Distractor", "Alternative"]},
+                {**base, "question_text": "E2E diagnostic short answer?",
+                 "question_type": "short_answer",
+                 "correct_answer": "A deterministic model answer."},
+            ], None, 1
+
+        quiz_generator.generate_questions = _deterministic_diagnostic_questions
+        print("[run_e2e_server] deterministic diagnostic AI stub enabled", flush=True)
+
     if os.environ.get("E2E_SHORT_ANSWER_GRADING_STUB", "").strip().lower() in {
         "1", "true", "yes", "on",
     }:
