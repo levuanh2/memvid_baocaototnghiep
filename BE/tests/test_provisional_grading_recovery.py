@@ -510,3 +510,44 @@ def test_a_review_plan_once_retries_are_used_up_says_it_is_provisional(owner, fa
     assert created and plan["ungraded_count"] == 1
     again = review_plans.by_attempt(attempt_id, owner, bat_buoc_chu_so_huu=True)
     assert again["ungraded_count"] == 1
+
+
+# ── Codex task34 re-check: legacy plans, synchronous claims ────────────────
+
+def test_a_plan_made_before_the_regrade_is_marked_outdated(owner, fake):
+    """Plans built from provisional results before this change exist. After a regrade
+    changes the result they are flagged, not deleted (a delete cascades to practice)."""
+    from app.application import review_plans
+    from app.domains.review import service as review
+
+    attempt_id, _ = _provisional(owner, fake)
+    assert review.generate(attempt_id) is not None        # the legacy plan, no guard
+    assert review_plans.by_attempt(attempt_id, owner, bat_buoc_chu_so_huu=True)["outdated"] is False
+    rec = _Recorder()
+    _regrade(attempt_id, owner, rec)
+    _run_job(*rec.calls[0])
+    assert review_plans.by_attempt(attempt_id, owner, bat_buoc_chu_so_huu=True)["outdated"] is True
+    cached, created = review_plans.generate(attempt_id, owner, force=False,
+                                            bat_buoc_chu_so_huu=True)
+    assert created is False and cached["outdated"] is True
+    fresh, created = review_plans.generate(attempt_id, owner, force=True,
+                                           bat_buoc_chu_so_huu=True)
+    assert created is True and fresh["outdated"] is False
+
+
+def test_a_synchronous_grading_ends_its_claim(owner, fake):
+    """Objective-only grading runs inline, without a job: its result ends the claim."""
+    from app.application import attempts as attempts_uc
+    from app.db import session_scope
+    from app.db.models import QuizAttempt
+    from tests.test_attempt_submit_concurrency import _quiz as objective_quiz
+    from app.domains.attempts import repository
+
+    quiz_id, qids = objective_quiz(owner)
+    attempt_id = repository.open_attempt(quiz_id, owner)["attempt_id"]
+    repository.save_draft_answers(attempt_id, {qids[0]: "dung", qids[1]: "sai"})
+    body, accepted = attempts_uc.submit_attempt(attempt_id, owner, bat_buoc_chu_so_huu=True,
+                                                dispatch_grading=_Recorder())
+    assert accepted is False and body["status"] == "graded"
+    with session_scope() as s:
+        assert s.get(QuizAttempt, attempt_id).grading_claimed_at is None

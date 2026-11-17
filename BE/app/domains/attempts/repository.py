@@ -813,6 +813,11 @@ def save_grades(attempt_id: str, graded: List[Dict[str, Any]], totals: Dict[str,
         meta = dict(a.metadata_json or {})
         meta["ungraded_count"] = int(ungraded_count)
         a.metadata_json = meta
+        if not meta.get("grading_job_running"):
+            # A synchronous grading (objective-only, inline): the result ends its claim.
+            # A grading job keeps it until its gap analysis is written and releases it
+            # itself (`release_job_claim`).
+            a.grading_claimed_at = None
         if status == "graded":
             a.graded_at = now
     return True

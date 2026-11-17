@@ -8345,7 +8345,16 @@ the plan covers only the graded answers. Existing plans are left as they are (de
 one cascades to practice quizzes).
 Practice attempts are out of scope: their route refuses a regrade (open item, #159).
 
-**Regression:** `BE/tests/test_provisional_grading_recovery.py` (21, PostgreSQL),
+**Re-check fixes (Codex task34 re-check):** a plan built before a regrade changed the
+result is returned with `outdated: true` (plan `created_at` < attempt `graded_at`) and
+the review page says its topics may not match the new result; synchronous grading
+(objective-only, inline) ends its claim in `save_grades` again (only a grading job keeps
+it until its analysis). "Tạo lại kế hoạch" already deleted the old plan and, through the
+FK cascade, its practice quizzes and their attempts, without asking: it now asks first
+(`DestructiveConfirmDialog`, owner decision 2026-11-17), and the outdated note does not
+point the learner at it.
+
+**Regression:** `BE/tests/test_provisional_grading_recovery.py` (23, PostgreSQL),
 `FE/src/pages/study/QuizResult.provisionalRegrade.test.jsx` (7, red on the old page),
 `FE/e2e/quiz-provisional-regrade.spec.js` (4, real backend, fake grader that fails once
 then succeeds; both auth modes).

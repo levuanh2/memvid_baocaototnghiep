@@ -94,8 +94,20 @@ def _regrade_pending(attempt: Dict[str, Any]) -> bool:
 
 def _with_ungraded(plan: Dict[str, Any], attempt: Dict[str, Any]) -> Dict[str, Any]:
     """The plan of a provisional result covers only its graded answers: say how many
-    are missing (0 for a complete result)."""
-    return {**plan, "ungraded_count": attempts_uc.attempt_public(attempt)["ungraded_count"]}
+    are missing (0 for a complete result). `outdated`: the attempt was graded again
+    (a regrade changed it) after the plan was built; the page offers "Tạo lại kế
+    hoạch". Not deleted here: deleting a plan cascades to its practice quizzes."""
+    from datetime import datetime
+
+    def _ts(value):
+        try:
+            return datetime.fromisoformat(str(value)) if value else None
+        except ValueError:
+            return None
+
+    built, graded = _ts(plan.get("created_at")), _ts(attempt.get("graded_at"))
+    return {**plan, "ungraded_count": attempts_uc.attempt_public(attempt)["ungraded_count"],
+            "outdated": bool(built and graded and graded > built)}
 
 
 def by_attempt(attempt_id: str, user_id: Optional[str], *,
