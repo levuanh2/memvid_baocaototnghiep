@@ -1,8 +1,9 @@
 # V6 release review (2026-11-16) — for the owner, not a release approval
 
-Status: **READY FOR OWNER REVIEW** for the 28 V6 Draft pull requests #159-#186 and the two
-follow-ups #187 (dev/test isolation) and #188 (diagnostic grading recovery, stacked on
-#185), once every head named here has a green required check (section 7). Production: **NO-GO** until all seven
+Status: **READY FOR OWNER REVIEW** for the 28 V6 Draft pull requests #159-#186 and the three
+follow-ups #187 (dev/test isolation), #188 (diagnostic grading recovery, stacked on #185)
+and #189 (LLM deadlines), once every head named here has a green required check
+(section 7). Trial 10 integrated all 31 heads (section 5). Production: **NO-GO** until all seven
 blocking items of section 9 are GO with the evidence that section asks for: production
 reviewer, Render manual deploy, PostgreSQL backup restored, Storage and EC2 data backup
 restored, dev/test isolated from production, migration port, index-repair approver. Each is
@@ -397,6 +398,7 @@ refuse to start, so it has to be deployed with its own check.
 | Tree | What | Result |
 |---|---|---|
 | Trial 8 `d1ed4a3` / `8ca03e042ccf` | all 28 heads of 2026-11-16 morning (#185 at `06a65f8`) | Vitest 2095/2095 (+ seed 61201), build, lint 63/67, Fixture Smoke 333 passed / 6 skipped of 339, full audit 686 passed / 5 skipped of 691, 0 failed, 0 flaky; backend 3008 passed, 6 failures also on `main`. Chromium only |
+| Trial 10 `c9eb9b2` / `bda16b09842b` (2026-11-17, local, not pushed) | trial 9 + #159 `fc06063`, #185 `5e18271`, #187 `7389d77`, #188 `16932dd`, #189 `2d174d8`: **31/31 heads are ancestors** (checked one by one) | Merge: only `.playbook` append conflicts (both sides kept). `FE/` differs from trial 9 only by `QuizResult.jsx` + its test. Backend targeted (#187/#188/#189 files, no DB): 146 passed, 0 failed, 84 skipped (need PostgreSQL). Full backend suite without a database: 2782 passed, 16 failed = the 6 failures `main` has locally + the 10 tests that need PostgreSQL (the same 10 fail on #185 without a database). Vitest 2106/2106; build ok; lint clean on the changed files; Fixture Smoke 334 passed / 5 skipped of 339, 0 failed, 0 flaky (`--fail-on-flaky-tests`). **Not run: the PostgreSQL stages** (migration, idempotency, concurrency, full integration on the integrated tree): Docker Desktop was stopped and was not started; each PR ran them alone in CI (section 7). Full Fixture Audit not re-run: the only frontend change since trial 8 is `QuizResult` (Vitest + smoke cover it). The run found one real defect, fixed in #187 `7389d77`: two isolation tests depended on the runner's `SKIP_DOTENV`. Logs: `studymap-qa-execution/v6/results/integration-31-trial10/` |
 | Trial 9 `64e701b` / `b97da2793ae6` | trial 8 + #185 `0f5fce0` | Merge: code clean, `.playbook` append conflicts only. `FE/` subtree hash `1c07e765902c` **identical** to trial 8, so the frontend test inputs are byte-identical; they were not re-run. Deploy harness on this tree: 38 PASS incl. mutations. `BE/` (`a6cae7ebff23`) and `scripts/` (`171d3be99334`) are **identical** to #185 `0f5fce0`, whose CI ran the backend suite on PostgreSQL (3025 passed) and the deploy tests. Only `.github` differs from #185 (the smoke list of #170). **Backend on this tree** (disposable PostgreSQL 16.15, 2026-11-16): migration to `20261115_attempt_submit_key` and rerun at head exit 0; `verify_db_schema` exit 0 before and after the suites; full suite 3018 passed, 9 skipped, 6 failed = the 6 that fail on `main`; migration, idempotency and concurrency files run alone: 144 passed, 0 failed (submit-key migration 10/10). A first run on a cp1252 console had 8 more failures, all from one Windows-only test-harness defect (section 4b), none from product code |
 
 After trial 9, #185 moved to `5e18271`: `BE/tests/test_attempt_submit_key_migration.py` and
@@ -417,8 +419,9 @@ All 28 are Draft. Heads unchanged since trial 8 except #159 (documentation) and 
 |---|---|---|
 | #185 | `5e18271` | **success** (run 43837028065: Backend Integration Suite & Migrations, Backend Unit & Contract, Deploy script tests, Fixture Smoke, E2E, Frontend tests and build all success) |
 | #185 (previous) | `0f5fce0` | success (run 43811959733) |
-| #187 | `e5cb643` | **success** (run 44003969309: backend 3046 passed, E2E 42 + 42) |
-| #188 | `7e9ea88` | **success** (run 44008837827: backend 3066 passed / 0 failed, Fixture Smoke 206, E2E 42 + 42, Vitest 1952) |
+| #187 | `7389d77` | **success** (run 44033127356: backend 3046 passed / 0 failed) |
+| #188 | `16932dd` | **success** (run 44032428574: backend 3067 passed / 0 failed) |
+| #189 | `2d174d8` | **success** (run 44035654037: backend 3000 passed / 0 failed) |
 | #159 | this commit | documentation only |
 
 ## 8. Backend risks still open (not fixed by #185; details `task22-agy-backend-risks.md`)
@@ -634,9 +637,9 @@ gets a full timeout of its own. A provider that hangs past the lease lets a retr
 over while the old call is still running. Effect, bounded: the result is still written
 once and the old grader stops before its next model call, so at most one model call is
 paid twice. This is pre-existing and affects every AI feature, not only grading.
-Proposal (separate Draft PR, needs approval): hard timeouts in `llm_factory` (do not wait
-for the thread after a timeout, pass the timeout to Ollama, one budget across the
-provider fallback), with tests.
+Now addressed by Draft #189 (section 8d): grading passes one total deadline, the wait
+really ends at it, and a timed-out call keeps its slot; a request already sent is still
+not cancelled at the provider.
 
 Cost if the owner enables it later (no LLM call is made while it is off, and none in
 tests):
@@ -655,6 +658,68 @@ Evidence: BE `test_diagnostic_grading_recovery.py` 41 tests (5 red on #185, the 
 on intermediate heads after each review round), 8 grading files 163 passed, full backend
 suite only the 6 failures `main` has locally; FE `QuizResult.retryGrading.test.jsx` 11 (8
 red on earlier pages), Vitest 1952/1952; see section 7 for CI.
+
+## 8d. LLM deadlines: Draft PR #189 (owner-approved 2026-11-17)
+
+Branch `fix/llm-timeouts`, head `2d174d8`, from `main`. Audit by Codex (task28),
+caller inventory by agy (task29), review and re-check by Codex (task30).
+
+What was wrong (all reproduced with fake providers, no real model): `_invoke_chat` used
+`with ThreadPoolExecutor`, whose exit waits for the provider thread, so a timeout never
+gave control back early (a 1 s timeout over four hanging providers took 12.1 s); Ollama
+had no HTTP timeout at all (`ChatOllama(timeout=)` is not a field in langchain-ollama
+0.3.10 and was silently ignored); Gemini and Groq got no timeout and retried inside the
+call (6 and 3 attempts); each fallback provider got a fresh full timeout.
+
+Change: `timeout` keeps its meaning (per provider) but is a real limit; the opt-in
+`total_timeout` is one deadline for the whole fallback chain and is used only by
+grading, so #188's claim lease (`grading_lease_s = max(300, GRADE_LLM_TIMEOUT_SEC + queue
+wait + 60)`) now holds for a real grading call. Every provider client gets a transport
+timeout and bounded SDK retries when a deadline is given. A timed-out call keeps its
+in-process slot until it really ends (no extra concurrency above
+`MAX_CONCURRENT_LLM_CALLS`); a fallback takes its own slot with a bounded wait.
+
+Limits, stated plainly: a request already sent is **not** cancelled at the provider (the
+thread runs until the HTTP client's own timeout, and the provider may still bill it);
+late usage accounting is best effort (refused by the ledger if the caller already closed
+its reservation; logged with attempt and provider); a call that never returns can delay
+graceful process exit; summary, mind map and coverage pipelines pass no timeout into
+`ask_ai` (agy task29), and `get_llm`/streaming and `llm_cache`'s judge are unchanged:
+follow-ups per caller.
+
+Evidence: `tests/test_llm_deadlines.py` 15 tests (red on `main` or on the previous PR
+head); LLM-related files 302 passed locally; CI run 44035654037: backend 3000 passed.
+
+## 8e. Proposal: provider budget, real cost limits and usage alerts (for the owner, not implemented)
+
+The recovery sweep of #188 is OFF and must stay OFF in production until this is decided.
+Its limits (batch 5, 5 in flight, 3 recoveries per attempt, about 60 regrades/hour) are
+counts, **not money**: one regrade costs one model call per short-answer question, and
+each call's price depends on prompt + answer tokens (question, model answer, source
+context up to `LLM_CTX_SIZE`, and up to `LLM_MAX_TOKENS` of output) and on the provider
+that answers (FPT and Gemini/Groq bill per token; local Ollama costs CPU time). An
+attempt with 10 short answers costs ten times one with 1, under the same "1 regrade".
+
+Proposal, in order:
+1. **Provider-side hard cap (real money):** a spending limit or quota on each paid
+   provider account (FPT marketplace, Gemini project, Groq). This is the only limit
+   that holds whatever the application does. Owner action in each provider console.
+2. **Application token budget, per day:** read the existing usage ledger
+   (`usage_events`, written through `record_provider_response`) for `feature=grade`.
+   Before claiming, the sweep checks `GRADING_RECOVERY_DAILY_TOKEN_BUDGET` (and stops
+   for the day when spent); learner retries count against the same budget.
+3. **Per-attempt estimate before a regrade:** short-answer count x an average token
+   cost from the ledger; skip attempts above a per-attempt cap and report them.
+4. **Alerts:** grading tokens per hour above a threshold; any `late usage NOT
+   recorded` log line (#189: a billed call the ledger refused); `grading_recovery` runs
+   with `dispatch_failed` or a growing `gave_up`; the 5xx rate of the submit route.
+5. **Rollout:** a week in dry run (`GRADING_RECOVERY_ENABLED=1`, default dry run) reading
+   the `grading_recovery` JSON lines; then batch 1, 1 in flight, a small daily budget;
+   widen only after reviewing the ledger.
+
+Prerequisites: #189 merged (one real deadline per grading call), the usage ledger
+verified in production, and a named owner for the alerts. Needs the owner's separate
+approval; nothing here changes code or configuration today.
 
 ## 9. GO/NO-GO checklist for the owner
 
@@ -682,7 +747,8 @@ Already GO, or owner decisions that do not block:
 | 2 | Trial integration tested on the exact tree to merge | GO: trial 9 `64e701b`; differs from the heads by #159 docs and the #185 test-harness file (section 5) |
 | 5 | Auth on in production | GO: 401 without token on two protected routes (section 8); the env file itself not read |
 | 9 | Real-device, Firefox, WebKit, screen reader checks | not done; accept the risk or run them |
-| 10 | Risks A, B, D: A and B fixed in Draft #188 (section 8c), D's generic-route part too; merge #188 after #185 or accept them | open |
+| 10 | Risks A, B, D: A and B fixed in Draft #188 (section 8c), D's generic-route part too; merge #189 then #188 after #185, or accept them | open |
+| 15 | PostgreSQL stages on the integrated tree (trial 10) | not run locally (Docker stopped); each PR passed them alone in CI. Owner: start Docker Desktop (it also starts other projects' containers) or approve another disposable PostgreSQL, then they run in ~10 min |
 | 11 | 6 pre-existing local backend failures accepted (environment, pass in CI) | open |
 | 12 | Windows test-harness fix | done in #185 `5e18271` (section 4b) |
 
@@ -706,9 +772,11 @@ with item 3 in place, each backend deploy also waits for the owner's approval.
    approve the one for the #185 merge SHA and follow
    section 4 steps 2-5; publish the frontend by hand (section 3 B) only after step 3 passes.
 8. #187 any time (no production runtime change; it is GO/NO-GO item 14's first half).
-9. #188 after #185 is deployed and verified, in its own window (backend + `QuizResult`;
-   no migration). Keep `GRADING_RECOVERY_ENABLED` unset; enabling it is a separate owner
-   decision (section 8c).
+9. #189 before #188 (grading relies on its real deadline); it changes `llm_factory` for
+   every AI feature, so watch errors and latency after its deploy.
+10. #188 after #185 and #189 are deployed and verified, in its own window (backend +
+   `QuizResult`; no migration). Keep `GRADING_RECOVERY_ENABLED` unset; enabling it is a
+   separate owner decision with the budget of section 8e.
 Stacked pull requests carry their bases' commits; merge the base first.
 
 ## 11. Production actions that each need a separate owner go-ahead

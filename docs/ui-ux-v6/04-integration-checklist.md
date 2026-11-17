@@ -39,6 +39,7 @@ main (db005ab)
 │    └─ #185 fix/practice-idempotency-key (backend + Practice page; migration 20261115)
 │         └─ #188 fix/diagnostic-grading-recovery (backend + QuizResult; no migration)
 ├─ #187 fix/devtest-isolation (test harness + dev guard; no runtime change in production)
+├─ #189 fix/llm-timeouts (llm_factory deadlines; merge before #188)
 └─ #159 design/v6-foundation (landing + these documents)
 ```
 
