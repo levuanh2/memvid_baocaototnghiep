@@ -120,6 +120,13 @@ describe("Chấm lại câu còn thiếu", () => {
       questions: [wrong, complete.questions[1]] });
     await render();
     expect(planLinks().length).toBeGreaterThan(0);
+    // Owner decision 2026-11-17: once retries are used up the provisional result is
+    // final, and its plan (graded answers only) is offered.
+    act(() => root.unmount()); container.remove(); root = null;
+    getResult.mockResolvedValue({ ...provisional("exhausted"), score: 0, correct_count: 0,
+      incorrect_count: 1, questions: [wrong, questions[1]] });
+    await render();
+    expect(planLinks().length).toBeGreaterThan(0);
   });
 
   it("ends plainly when retries are used up: no button, the provisional result stays", async () => {

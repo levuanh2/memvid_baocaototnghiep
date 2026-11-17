@@ -142,6 +142,7 @@ export default function QuizResult() {
   const provisional = graded && (
     result?.grading_complete === false || ungradedCount > 0
   );
+  const planWaitsForRegrade = provisional && result?.regrade_state !== "exhausted";
   // `.filter()` alone loses the question's position in the original ten-question
   // quiz — the wrong-answer review must label question 4 and 9 as "Câu 4"/"Câu 9",
   // not "Câu 1"/"Câu 2" (their position inside the filtered subset). Stamp the
@@ -186,9 +187,9 @@ export default function QuizResult() {
       width={reviewingWrong ? "max-w-[1120px]" : "max-w-[1050px]"}
       actions={
         graded && (
-          // A provisional result gets no review plan yet (the server refuses one until
-          // every answer is graded); "Về Thư viện" until the regrade completes.
-          wrongQuestions.length > 0 && !provisional ? (
+          // A provisional result a regrade can still change gets no review plan (the
+          // server refuses one); once retries are used up it is final and gets one.
+          wrongQuestions.length > 0 && !planWaitsForRegrade ? (
             <Link to={`/app/study/review/${attemptId}`} className="btn-primary text-small inline-flex items-center gap-2">
               <Icon name="BookOpen" size={14} />
               {weakTopicCount > 0 ? `Kế hoạch ôn tập (${weakTopicCount} chủ đề)` : "Kế hoạch ôn tập"}
@@ -247,7 +248,7 @@ export default function QuizResult() {
           {reviewingWrong ? (
             <WrongAnswerReview questions={wrongQuestions} index={reviewIndex} onIndex={setReviewIndex}
               onClose={() => setReviewingWrong(false)}
-              reviewPlanTo={provisional ? null : `/app/study/review/${attemptId}`} />
+              reviewPlanTo={planWaitsForRegrade ? null : `/app/study/review/${attemptId}`} />
           ) : <>
           <ScoreBoard result={result} grading={grading} provisional={provisional}
             ungradedCount={ungradedCount} wrongCount={wrongQuestions.length}

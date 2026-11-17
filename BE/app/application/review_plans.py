@@ -63,20 +63,39 @@ def generate(attempt_id: Optional[str], user_id: Optional[str], *, force: bool,
         attempt_id, user_id, bat_buoc_chu_so_huu=bat_buoc_chu_so_huu)
     if attempt["status"] != "graded":
         raise AttemptChuaCham(status=attempt["status"])
-    if not attempts_uc.attempt_public(attempt)["grading_complete"]:
-        # A provisional result (AI grader outage) is not a finished attempt: a plan
-        # built from it would be cached and outlive the regrade (Codex task34).
+    if _regrade_pending(attempt):
+        # A provisional result that a regrade can still change: a plan built from it
+        # would be cached and outlive the regrade (Codex task34).
         raise AttemptChuaCham(status="provisional")
 
     if not force:
         existing = _review.get_by_attempt(attempt_id)
         if existing:
-            return {**_bo_user_id(existing), "cached": True}, False
+            return _with_ungraded({**_bo_user_id(existing), "cached": True}, attempt), False
 
     plan = _review.generate(attempt_id)
     if plan is None:
         raise KhongTaoDuocPlan()
-    return _bo_user_id(plan), True
+    return _with_ungraded(_bo_user_id(plan), attempt), True
+
+
+def _regrade_pending(attempt: Dict[str, Any]) -> bool:
+    """Provisional and still regradable (or regrading). Owner decision 2026-11-17: once
+    the learner's retries are used up the provisional result is final, and a plan may
+    be built from its graded answers (`ungraded_count` says which part is missing)."""
+    from app.domains.attempts import repository as _attempts
+
+    if attempts_uc.attempt_public(attempt)["grading_complete"]:
+        return False
+    return _attempts.regrade_state(
+        attempt["attempt_id"], job_active=attempts_uc.job_active,
+        max_retries=attempts_uc.manual_retry_max()) != "exhausted"
+
+
+def _with_ungraded(plan: Dict[str, Any], attempt: Dict[str, Any]) -> Dict[str, Any]:
+    """The plan of a provisional result covers only its graded answers: say how many
+    are missing (0 for a complete result)."""
+    return {**plan, "ungraded_count": attempts_uc.attempt_public(attempt)["ungraded_count"]}
 
 
 def by_attempt(attempt_id: str, user_id: Optional[str], *,
@@ -84,12 +103,12 @@ def by_attempt(attempt_id: str, user_id: Optional[str], *,
     """Đặc tả 7.7: tra theo `attempt_id`, không phải `review_plan_id`."""
     from app.domains.review import service as _review
 
-    attempts_uc.load_owned_attempt(
+    attempt = attempts_uc.load_owned_attempt(
         attempt_id, user_id, bat_buoc_chu_so_huu=bat_buoc_chu_so_huu)
     plan = _review.get_by_attempt(attempt_id)
     if not plan:
         raise ReviewPlanKhongTonTai()
-    return _bo_user_id(plan)
+    return _with_ungraded(_bo_user_id(plan), attempt)
 
 
 def items(review_plan_id: str, user_id: Optional[str], *,

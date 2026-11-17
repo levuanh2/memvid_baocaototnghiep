@@ -477,7 +477,7 @@ def test_no_regrade_starts_while_the_first_grading_is_still_analysing(owner, fak
     assert accepted and len(after.calls) == 1
 
 
-def test_no_review_plan_from_a_provisional_result(owner, fake):
+def test_no_review_plan_while_a_regrade_can_still_change_the_result(owner, fake):
     from app.application import review_plans
 
     attempt_id, _ = _provisional(owner, fake)
@@ -489,3 +489,24 @@ def test_no_review_plan_from_a_provisional_result(owner, fake):
     plan, created = review_plans.generate(attempt_id, owner, force=False,
                                           bat_buoc_chu_so_huu=True)
     assert created and plan["attempt_id"] == attempt_id
+    assert plan["ungraded_count"] == 0
+
+
+def test_a_review_plan_once_retries_are_used_up_says_it_is_provisional(owner, fake,
+                                                                       monkeypatch):
+    """Owner decision 2026-11-17: when no regrade is left the provisional result is the
+    final one, so a plan may be built from the graded answers, marked as such."""
+    from app.application import review_plans
+
+    monkeypatch.setenv("GRADING_MANUAL_RETRY_MAX", "1")
+    attempt_id, _ = _provisional(owner, fake)
+    rec = _Recorder()
+    _regrade(attempt_id, owner, rec)
+    fake.fail = {SA_FLAKY}
+    _run_job(*rec.calls[0])
+    assert _result(attempt_id, owner)["regrade_state"] == "exhausted"
+    plan, created = review_plans.generate(attempt_id, owner, force=False,
+                                          bat_buoc_chu_so_huu=True)
+    assert created and plan["ungraded_count"] == 1
+    again = review_plans.by_attempt(attempt_id, owner, bat_buoc_chu_so_huu=True)
+    assert again["ungraded_count"] == 1

@@ -133,6 +133,12 @@ export default function ReviewGuide() {
           <p className="font-display text-title text-text-primary mb-6 quiz-review-summary">
             {plan.summary}
           </p>
+          {Number(plan.ungraded_count || 0) > 0 && (
+            <p className="text-body text-text-secondary -mt-4 mb-6">
+              Kế hoạch này chỉ dựa trên các câu đã chấm. {plan.ungraded_count} câu tự luận
+              chưa chấm được nên không nằm trong kế hoạch.
+            </p>
+          )}
 
           {job.jobId && (
             <div className="surface-card !p-3.5 mb-5 flex items-center gap-2.5">

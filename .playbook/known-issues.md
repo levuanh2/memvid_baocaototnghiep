@@ -8337,11 +8337,15 @@ until its analysis is written and releases it last (`save_grades` / `save_regrad
 longer end it), `regrade_state` stays "running" through the analysis, and a regrade
 cannot start while the first grading still analyses. (3) A review plan built from a
 provisional result was cached and outlived the regrade: `review_plans.generate` refuses
-a provisional attempt (409), the result page offers no plan link until it is complete,
-and existing plans are left as they are (deleting one cascades to practice quizzes).
+a provisional attempt while a regrade can still change it (409), and the result page
+offers no plan link then. Owner decision 2026-11-17: once the learner's retries are used
+up (`regrade_state == "exhausted"`) the provisional result is final, so a plan is built
+from its graded answers; plan responses carry `ungraded_count` and the review page says
+the plan covers only the graded answers. Existing plans are left as they are (deleting
+one cascades to practice quizzes).
 Practice attempts are out of scope: their route refuses a regrade (open item, #159).
 
-**Regression:** `BE/tests/test_provisional_grading_recovery.py` (20, PostgreSQL),
+**Regression:** `BE/tests/test_provisional_grading_recovery.py` (21, PostgreSQL),
 `FE/src/pages/study/QuizResult.provisionalRegrade.test.jsx` (7, red on the old page),
 `FE/e2e/quiz-provisional-regrade.spec.js` (4, real backend, fake grader that fails once
 then succeeds; both auth modes).

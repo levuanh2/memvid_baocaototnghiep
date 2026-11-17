@@ -60,6 +60,21 @@ async function renderReady() {
 
 const byText = (txt) => [...document.body.querySelectorAll("button")].find((b) => b.textContent.includes(txt));
 
+describe("ReviewGuide provisional plan", () => {
+  it("says the plan covers only the graded answers when some could not be graded", async () => {
+    getReviewPlan.mockResolvedValue({ ...PLAN, ungraded_count: 2 });
+    await renderReady();
+    expect(container.textContent).toContain(
+      "Kế hoạch này chỉ dựa trên các câu đã chấm. 2 câu tự luận chưa chấm được nên không nằm trong kế hoạch.");
+  });
+
+  it("adds no note to a plan from a complete result", async () => {
+    getReviewPlan.mockResolvedValue({ ...PLAN, ungraded_count: 0 });
+    await renderReady();
+    expect(container.textContent).not.toContain("chỉ dựa trên các câu đã chấm");
+  });
+});
+
 describe("ReviewGuide practice actions", () => {
   it("Luyện ngay sends the exact prior smart-default body (count 5, difficulty easy, no question_types)", async () => {
     generatePractice.mockResolvedValue({ job_id: "job-1" });
