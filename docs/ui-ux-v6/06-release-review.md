@@ -1,7 +1,8 @@
 # V6 release review (2026-11-16) — for the owner, not a release approval
 
-Status: **READY FOR OWNER REVIEW** for the 28 Draft pull requests #159-#186, once every head
-named here has a green required check (section 7). Production: **NO-GO** until all seven
+Status: **READY FOR OWNER REVIEW** for the 28 V6 Draft pull requests #159-#186 and the two
+follow-ups #187 (dev/test isolation) and #188 (diagnostic grading recovery, stacked on
+#185), once every head named here has a green required check (section 7). Production: **NO-GO** until all seven
 blocking items of section 9 are GO with the evidence that section asks for: production
 reviewer, Render manual deploy, PostgreSQL backup restored, Storage and EC2 data backup
 restored, dev/test isolated from production, migration port, index-repair approver. Each is
@@ -379,8 +380,14 @@ either output into a chat or an issue.
   until then do not start the backend or run any migration locally with these files.
   Rotating the production keys that sit on the developer machine is the owner's decision.
 
-Not in #187 (needs separate approval, because it touches production config): a runtime
-guard that refuses a hand-started backend on the production database. It needs a marker
+Added to #187 on 2026-11-17 without any production change: `shared/dev_target_guard.py`
+refuses a hand-started backend when `PROCESS_ROLE` is not `web`/`mindmap-worker`, a
+`BE/.env` or root `.env` exists on disk, and `DATABASE_URL`/`JOBS_DATABASE_URL`/
+`SUPABASE_URL` point off this machine (opt out: `STUDYMAP_ALLOW_REMOTE_TARGETS=1`, only
+after the fingerprint check). Production is not affected: `docker-compose.prod.yml` sets
+`PROCESS_ROLE` on both services and `BE/.dockerignore` keeps `.env` out of the image
+(`tests/test_dev_target_guard.py` checks both). The earlier proposal, kept for the record:
+a runtime guard that refuses a hand-started backend on the production database. It needs a marker
 that only production sets (for example `STUDYMAP_RUNTIME=production` in
 `docker-compose.prod.yml`). If the marker is missing on EC2, the production backend would
 refuse to start, so it has to be deployed with its own check.
@@ -410,6 +417,8 @@ All 28 are Draft. Heads unchanged since trial 8 except #159 (documentation) and 
 |---|---|---|
 | #185 | `5e18271` | **success** (run 43837028065: Backend Integration Suite & Migrations, Backend Unit & Contract, Deploy script tests, Fixture Smoke, E2E, Frontend tests and build all success) |
 | #185 (previous) | `0f5fce0` | success (run 43811959733) |
+| #187 | `e5cb643` | **success** (run 44003969309: backend 3046 passed, E2E 42 + 42) |
+| #188 | `7e9ea88` | **success** (run 44008837827: backend 3066 passed / 0 failed, Fixture Smoke 206, E2E 42 + 42, Vitest 1952) |
 | #159 | this commit | documentation only |
 
 ## 8. Backend risks still open (not fixed by #185; details `task22-agy-backend-risks.md`)
@@ -450,7 +459,7 @@ Severity by real use:
 - Firefox, WebKit, real devices, screen readers: not tested on any V6 branch. Unknown, not
   low: the V6 changes are mostly layout and focus handling, which is where engines differ.
 
-## 8b. Plan for risks B and A (diagnostic grading), P1, not implemented
+## 8b. Plan for risks B and A (diagnostic grading), P1: implemented in #188 (section 8c)
 
 Read from #185 `5e18271` (same product code as `0f5fce0`). Needs the owner's approval as
 its own backend pull request after #183/#185; it adds no migration (`grading_claimed_at`
@@ -569,6 +578,84 @@ after the fix the sweep regrades them. No hand edits of attempts.
 Not in this plan: risk D (generic routes accept a practice quiz) and per-client identity in
 open mode (C); both stay as in the table above.
 
+## 8c. Diagnostic grading recovery: Draft PR #188 (owner-approved 2026-11-17)
+
+Branch `fix/diagnostic-grading-recovery`, head `7e9ea88`, stacked on #185 (`5e18271`;
+uses its claim columns, no new migration). Not merged, not deployed. Reviewed by Codex
+(task25, four rounds) and agy (task24, task26, task27); every accepted finding was fixed
+with a red test first (`studymap-qa-execution/v6/results/task25-*.md`, `task27-*.md`).
+
+`POST /api/attempts/<id>/submit`, before and after:
+
+| Situation | Before (#185) | After |
+|---|---|---|
+| `in_progress`, objective-only | 200 graded | 200 graded (unchanged) |
+| `in_progress`, with short answers | 202 + `job_id` | 202 + `job_id` (unchanged) |
+| already `graded` (e.g. the first response was lost) | 409 | **200** with the STORED result, no regrading; missing mastery rebuilt (no LLM) |
+| `submitted`, a grader holds a live claim or its job is queued/running | 409 | **202** `grading: "pending"` (+ the running `job_id`), no second grader |
+| `submitted`, nobody grading (crash, grading error, lost job) | 409 forever | **200/202**: regraded under a new claim |
+| `submitted`, short-answer quiz, learner retries used up (`GRADING_MANUAL_RETRY_MAX`, 3) | 409 | 409 "Đã hết lượt thử chấm lại cho bài này" |
+| `cancelled` | 409 | 409 |
+| a practice quiz on this generic route | graded without its key rules | **409** (practice has its own route) |
+| another learner's attempt (auth on) | 404 | 404 |
+| `POST /api/practice/<id>/submit` retry of a stuck attempt | unlimited | capped like above (short-answer quizzes only) |
+
+`GET /api/quizzes/results/<id>` adds `grading_state`: `graded` | `grading` (live claim or
+a job reporting within the 300 s lease) | `stalled` (nobody grading: a retry is offered)
+| `failed` (stalled and retries used up). The result page shows "Thử chấm lại" only on
+`stalled`; an older backend without the field shows no button (today's behaviour).
+
+One grader per attempt: the claim is taken at submit; a job may grade only if it is the
+registered one; it renews the claim at every answer (heartbeat); a stale, superseded or
+redelivered job ends before any model call; the final write is still `once=True`. A
+failed enqueue leaves no ghost job and refunds the retry. The lease is
+`max(300 s, GRADE_LLM_TIMEOUT_SEC + LLM_QUEUE_WAIT_TIMEOUT_SECONDS + 60 s)`, so one model
+call always fits inside it whatever the configuration.
+
+Mastery, exactly: before and after, mastery rows are never doubled (the per-attempt
+snapshot is rewritten under UNIQUE `(attempt_id, concept_name)`); what changes is that a
+second grader no longer runs the analysis again. A graded attempt without mastery rows
+(process died between scores and analysis) is rebuilt by a retry, by the existing
+`GET /api/attempts/<id>/concept-masteries`, and by the sweep when it is on; the rebuild
+is deterministic, no LLM. Review plans are generated on request, not during grading, and
+are not touched.
+
+Recovery sweep: implemented, **OFF** (`GRADING_RECOVERY_ENABLED` unset), and a dry run
+even when enabled unless `GRADING_RECOVERY_DRY_RUN=0`. It runs inside the existing
+throttled jobs maintenance (every `JOB_SWEEP_INTERVAL_SECONDS`, 300 s), only enqueues
+background jobs, takes one budget for all web processes (PostgreSQL advisory lock) and
+logs one JSON line per run (`event: grading_recovery`).
+
+Residual risk found in the last Codex round, not fixed in #188 (outside the approved
+scope, owner decision): `app/clients/llm_factory.py` does not enforce a hard wall-clock
+limit. `_invoke_chat` waits for the provider thread on exit of its `ThreadPoolExecutor`,
+the Ollama client is built without the call timeout, and a fallback to the next provider
+gets a full timeout of its own. A provider that hangs past the lease lets a retry take
+over while the old call is still running. Effect, bounded: the result is still written
+once and the old grader stops before its next model call, so at most one model call is
+paid twice. This is pre-existing and affects every AI feature, not only grading.
+Proposal (separate Draft PR, needs approval): hard timeouts in `llm_factory` (do not wait
+for the thread after a timeout, pass the timeout to Ollama, one budget across the
+provider fallback), with tests.
+
+Cost if the owner enables it later (no LLM call is made while it is off, and none in
+tests):
+- objective-only attempt: 0 model calls per regrade; short answers: 1 model call per
+  short-answer question per regrade; mastery rebuild: 0.
+- per run at most `GRADING_RECOVERY_BATCH` (5) attempts, at most
+  `GRADING_RECOVERY_MAX_INFLIGHT` (5) in progress, each attempt at most
+  `GRADING_RECOVERY_MAX_ATTEMPTS` (3) recoveries; only attempts submitted more than
+  `GRADING_RECOVERY_OLDER_THAN_S` (900 s) ago.
+- upper bound: 12 runs/hour x 5 = 60 regrades/hour, and per stuck attempt
+  3 x (short-answer questions) model calls from the sweep, plus at most 3 learner retries.
+- Before enabling: a budget and rate limit on the provider side, a usage dashboard or
+  alert, a dry run reviewed first, and the owner's separate approval.
+
+Evidence: BE `test_diagnostic_grading_recovery.py` 41 tests (5 red on #185, the rest red
+on intermediate heads after each review round), 8 grading files 163 passed, full backend
+suite only the 6 failures `main` has locally; FE `QuizResult.retryGrading.test.jsx` 11 (8
+red on earlier pages), Vitest 1952/1952; see section 7 for CI.
+
 ## 9. GO/NO-GO checklist for the owner
 
 Blocking: production stays **NO-GO** until every row is GO with the evidence named. None
@@ -580,7 +667,7 @@ of these can be done by this review; each is an owner action (section 11).
 | 4 | Render `studymap-web` Auto-Deploy controlled | screenshot or dated note of Settings > Build & Deploy showing Auto-Deploy Off; after a merge, no new Render deploy until the owner starts one by SHA | **NO-GO**: dashboard not read; `render.yaml` says `checksPass`; approved in principle |
 | 6 | PostgreSQL 17 production backup taken and restored once | `restore-evidence.txt` of section 4c: `pg_restore exit 0`, counts and revision identical, 0 invalid indexes, dump SHA-256, dump stored encrypted. A restore with any error is not GO | **NO-GO**: not done |
 | 13 | Supabase Storage and EC2 `/opt/memvid/data` backed up and restored once (section 4d) | object count of the bucket copy equals the bucket listing, and one object opened from the copy; a `scripts/backup.sh` archive restored once on a copy with its SQLite files opening | **NO-GO**: not done |
-| 14 | Dev/test cannot write to production | #187 merged (tests, E2E server: disposable database only, no real bucket; section 4e), **and** the fingerprint comparison of section 4e recorded as "different" for `DATABASE_URL` and `SUPABASE_URL`; if "same", the dev project separated first | **NO-GO**: #187 is a Draft; the comparison not done; locally both files point at one project |
+| 14 | Dev/test cannot write to production | #187 merged (tests, E2E server: disposable database only, no real bucket; a backend started by hand from a checkout with `.env` refuses hosted targets; section 4e), **and** the fingerprint comparison of section 4e recorded as "different" for `DATABASE_URL` and `SUPABASE_URL`; if "same", the dev project separated first | **NO-GO**: #187 is a Draft (`e5cb643`, CI run 44003969309 success); the comparison not done; locally both files point at one project |
 | 7 | Migration connection on EC2 confirmed | owner prints host and port only, inside the backend container: `python -c "import os; from urllib.parse import urlsplit as u; x=u(os.environ['DATABASE_URL']); print(x.hostname, x.port)"`. 5432 (session pooler) or direct is GO; 6543 means switch for the release or accept the risk in writing (section 4a) | **NO-GO**: not read |
 | 8 | A named person approves a manual index repair | a named person who has read `docs/RUNBOOK_SUBMIT_KEY_INDEX.md` and is reachable during the #185 deploy window, recorded with the release | **NO-GO**: not named |
 
@@ -595,7 +682,7 @@ Already GO, or owner decisions that do not block:
 | 2 | Trial integration tested on the exact tree to merge | GO: trial 9 `64e701b`; differs from the heads by #159 docs and the #185 test-harness file (section 5) |
 | 5 | Auth on in production | GO: 401 without token on two protected routes (section 8); the env file itself not read |
 | 9 | Real-device, Firefox, WebKit, screen reader checks | not done; accept the risk or run them |
-| 10 | Risks A, B, D accepted for this release (not regressions; B is P1, plan in 8b) | open |
+| 10 | Risks A, B, D: A and B fixed in Draft #188 (section 8c), D's generic-route part too; merge #188 after #185 or accept them | open |
 | 11 | 6 pre-existing local backend failures accepted (environment, pass in CI) | open |
 | 12 | Windows test-harness fix | done in #185 `5e18271` (section 4b) |
 
@@ -618,6 +705,10 @@ with item 3 in place, each backend deploy also waits for the owner's approval.
 7. Last, in its own window: #183 -> #185. Reject the deploy for the #183-only SHA;
    approve the one for the #185 merge SHA and follow
    section 4 steps 2-5; publish the frontend by hand (section 3 B) only after step 3 passes.
+8. #187 any time (no production runtime change; it is GO/NO-GO item 14's first half).
+9. #188 after #185 is deployed and verified, in its own window (backend + `QuizResult`;
+   no migration). Keep `GRADING_RECOVERY_ENABLED` unset; enabling it is a separate owner
+   decision (section 8c).
 Stacked pull requests carry their bases' commits; merge the base first.
 
 ## 11. Production actions that each need a separate owner go-ahead

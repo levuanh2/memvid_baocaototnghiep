@@ -37,11 +37,13 @@ main (db005ab)
 ├─ #181 fix/test-guided-dialog-unmount (test only, from main)
 ├─ #183 fix/practice-submit-atomic (backend only, from main)
 │    └─ #185 fix/practice-idempotency-key (backend + Practice page; migration 20261115)
+│         └─ #188 fix/diagnostic-grading-recovery (backend + QuizResult; no migration)
+├─ #187 fix/devtest-isolation (test harness + dev guard; no runtime change in production)
 └─ #159 design/v6-foundation (landing + these documents)
 ```
 
 Real dependencies: #161 needs #160, #165 needs #164, #173 needs #166 + #171 + #172, #174 needs
-#161 + #163, #175 needs #169, #176 needs #173, #177 -> #178 -> #180 stack on #174, #179 needs #175, #182 needs #179, #184 needs #180, #185 needs #183, #186 needs #176, and #167 has to
+#161 + #163, #175 needs #169, #176 needs #173, #177 -> #178 -> #180 stack on #174, #179 needs #175, #182 needs #179, #184 needs #180, #185 needs #183, #188 needs #185, #186 needs #176, and #167 has to
 be reconciled with #160. Everything else is independent in code.
 
 ## Order
