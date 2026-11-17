@@ -11,9 +11,14 @@ import {
   getPractice,
   getPracticeComparison,
   optionLabel,
+  regradePractice,
   submitPractice,
   moTaLoi,
 } from "../../utils/studyApi";
+
+// The server's text for HetLuotChamLai (BE/app/application/attempts.py): no regrade is
+// left, so the offer ends. Any other failure (network, "đang được chấm") keeps it.
+const HET_LUOT_CHAM_LAI = "Đã hết lượt thử chấm lại cho bài này";
 import { DANG_CHAM, forgetSubmitKey, submitKeyFor } from "../../utils/practiceSubmitKey";
 
 // The first request is still grading (BE 409 DANG_CHAM): ask again with the SAME key.
@@ -32,6 +37,24 @@ export default function Practice() {
   const [error, setError] = useState(null);
   const [submitting, setSubmitting] = useState(false);
   const submitKeyMemo = useRef(null);
+  // "Chấm lại câu còn thiếu": one request at a time, even on a double click.
+  const chamLaiRef = useRef(false);
+  const [chamLai, setChamLai] = useState({ dangGui: false, loi: null, het: false });
+
+  const chamLaiCauThieu = async () => {
+    if (chamLaiRef.current || !graded?.attempt_id) return;
+    chamLaiRef.current = true;
+    setChamLai((s) => ({ ...s, dangGui: true, loi: null }));
+    try {
+      setGraded(await regradePractice(quizId, graded.attempt_id));
+      setChamLai({ dangGui: false, loi: null, het: false });
+    } catch (e) {
+      const het = e?.status === 409 && e?.code === HET_LUOT_CHAM_LAI;
+      setChamLai({ dangGui: false, loi: het ? null : moTaLoi(e, "Chưa chấm lại được."), het });
+    } finally {
+      chamLaiRef.current = false;
+    }
+  };
 
   const load = useCallback(async () => {
     setLoading(true);
@@ -160,6 +183,24 @@ export default function Practice() {
                   </div>
                 </div>
               </div>
+              {provisional && (
+                <div className="mt-4">
+                  <p role="status" className="text-body text-text-secondary">
+                    {chamLai.het
+                      ? "Đã hết lượt chấm lại cho bài này. Kết quả tạm thời được giữ nguyên."
+                      : "Bộ chấm AI chưa chấm được một số câu tự luận; các câu này không bị tính là sai."}
+                    {chamLai.loi && (
+                      <span className="block text-small mt-1" style={{ color: "var(--err)" }}>{chamLai.loi}</span>
+                    )}
+                  </p>
+                  {!chamLai.het && (
+                    <button type="button" className="btn-secondary text-small mt-2.5"
+                      onClick={chamLaiCauThieu} disabled={chamLai.dangGui} aria-busy={chamLai.dangGui}>
+                      {chamLai.dangGui ? "Đang chấm lại…" : "Chấm lại câu còn thiếu"}
+                    </button>
+                  )}
+                </div>
+              )}
             </section>
           )}
 

@@ -4363,6 +4363,23 @@ def api_practice_get(practice_quiz_id: str):
         return _attempt_err(exc)
 
 
+@app.post('/api/practice/<practice_quiz_id>/regrade')
+def api_practice_regrade(practice_quiz_id: str):
+    """Chấm lại các câu tự luận bộ chấm AI chưa chấm được của một bài luyện tập (kết quả
+    tạm thời). Chấm ngay trong request như khi nộp; 409 khi đang chấm hoặc hết lượt."""
+    uid, err = _require_app_user()
+    if err:
+        return err
+    attempt_id = ((request.json or {}).get("attempt_id") or "").strip()
+    if not attempt_id:
+        return jsonify({"error": "Thiếu attempt_id"}), 400
+    try:
+        return jsonify(practice_uc.regrade(
+            practice_quiz_id, uid, attempt_id, bat_buoc_chu_so_huu=_auth_protect_enabled()))
+    except attempts_uc.AttemptError as exc:
+        return _attempt_err(exc)
+
+
 @app.post('/api/practice/<practice_quiz_id>/submit')
 def api_practice_submit(practice_quiz_id: str):
     """Nộp bài luyện tập trong MỘT lần gọi (FR-11.6, FR-11.7). Chẩn đoán tách mở/nháp/nộp vì

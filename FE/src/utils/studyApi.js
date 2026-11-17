@@ -170,6 +170,12 @@ export const submitPractice = (practiceQuizId, answers, { idempotencyKey } = {})
   _send(`/api/practice/${encodeURIComponent(practiceQuizId)}/submit`, "POST",
     idempotencyKey ? { answers, idempotency_key: idempotencyKey } : { answers });
 
+// A provisional practice result (the AI grader failed on some short answers): grade only
+// those, inside the request. Returns the stored attempt.
+export const regradePractice = (practiceQuizId, attemptId) =>
+  _send(`/api/practice/${encodeURIComponent(practiceQuizId)}/regrade`, "POST",
+    { attempt_id: attemptId });
+
 export const getPracticeComparison = (practiceQuizId) =>
   _get(`/api/practice/${encodeURIComponent(practiceQuizId)}/comparison`);
 

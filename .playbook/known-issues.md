@@ -8385,3 +8385,27 @@ take the oldest stuck attempts of the whole database. On a database reused acros
 stuck attempts left by earlier runs (aged 30 days) fill the batch and three sweep tests
 fail (also on #188 alone). They pass on a fresh database (CI). Scope the sweep tests'
 candidates if this database reuse becomes common.
+
+# A provisional practice result could never be regraded (fixed 2026-11-18, #159 item 17)
+
+**Symptom:** practice grades inside the submit request. When the model failed on a short
+answer the attempt became `graded` with `ungraded_count > 0` ("N câu chưa chấm được"),
+the same Idempotency-Key returned that stored provisional result, and #190's regrade
+route refuses practice attempts: the answer stayed ungraded for good.
+
+**Root cause:** #190 fixed the diagnostic route only; practice has its own route,
+synchronous grading and key rules.
+
+**Fix:** `POST /api/practice/<id>/regrade` (`practice.regrade`), synchronous like the
+submit. It reuses #190's primitives with a per-request token: `reclaim_for_regrade`
+(claim + `manual_retries` cap + token registration in one transaction),
+`start_grading_job` (role "regrade"), `regrade_ungraded` (only `verdict IS NULL`, never
+`user_answer` or a graded answer) and `release_job_claim` after the gap analysis. 200
+with the stored attempt (also when nothing is left), 409 `NopBaiDangCham` while another
+request regrades, 409 `HetLuotChamLai` when retries are used up (no model call), 404 for
+another learner or an attempt of another quiz. The submit's Idempotency-Key contract is
+unchanged (no attempt opened, no answer written). Practice page: "Chấm lại câu còn
+thiếu" under a provisional score. No schema change.
+
+**Regression:** `BE/tests/test_practice_provisional_regrade.py` (11, red first),
+`FE/src/pages/study/Practice.provisionalRegrade.test.jsx` (4, red first).

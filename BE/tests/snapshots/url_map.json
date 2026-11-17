@@ -217,6 +217,13 @@
     "rule": "/api/practice/<practice_quiz_id>/comparison"
   },
   {
+    "endpoint": "api_practice_regrade",
+    "methods": [
+      "POST"
+    ],
+    "rule": "/api/practice/<practice_quiz_id>/regrade"
+  },
+  {
     "endpoint": "api_practice_submit",
     "methods": [
       "POST"

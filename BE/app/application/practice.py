@@ -19,6 +19,7 @@ Ba điểm dễ làm hỏng khi đọc lướt:
 from __future__ import annotations
 
 import re
+import uuid
 from typing import Any, Dict, Optional
 
 from app.application import attempts as attempts_uc
@@ -143,6 +144,51 @@ def submit(practice_quiz_id: str, user_id: Optional[str], raw: Any, *,
     # Built from the stored attempt, never from this request's grading, so a retry gets
     # the same fields and values the first success returned. The totals `grade_attempt`
     # returns are exactly the attempt's stored score/counts/ungraded_count.
+    return {**attempts_uc.attempt_public(_attempts.get_attempt(attempt_id)),
+            "grading": "done"}
+
+
+def regrade(practice_quiz_id: str, user_id: Optional[str], attempt_id: str, *,
+            bat_buoc_chu_so_huu: bool) -> Dict[str, Any]:
+    """Regrade the short answers an AI grader outage left without a verdict (#159 item
+    17), inside the request like a practice submit (no job). Only answers whose verdict
+    is None reach the model; graded answers and every `user_answer` stay as they are.
+
+    #190's rules: the claim and `manual_retries` cap of the attempt, the registered
+    regrade token fencing the write, the claim released after the gap analysis.
+    200 with the stored attempt (also when nothing is left to grade); 409
+    `NopBaiDangCham` while another request regrades it, `HetLuotChamLai` when the
+    retries are used up (no model call), `KhongCoCauChoChamLai` when it is not graded;
+    404 for another learner's attempt or one of another quiz. The Idempotency-Key of
+    the submit is untouched: no attempt is opened and no answer is written here."""
+    from app.domains.attempts import repository as _attempts
+    from app.domains.attempts import service as _grading_service
+
+    _load_owned_practice(practice_quiz_id, user_id, bat_buoc_chu_so_huu=bat_buoc_chu_so_huu)
+    attempt = attempts_uc.load_owned_attempt(attempt_id, user_id,
+                                             bat_buoc_chu_so_huu=bat_buoc_chu_so_huu)
+    if str(attempt["quiz_id"]) != str(practice_quiz_id):
+        raise attempts_uc.AttemptKhongTonTai()
+    token = f"practice-regrade-{uuid.uuid4()}"
+    outcome, _claimed, _registered = _attempts.reclaim_for_regrade(
+        attempt_id, token, job_active=attempts_uc.job_active,
+        max_retries=attempts_uc.manual_retry_max())
+    if outcome == "refused":
+        raise attempts_uc.KhongCoCauChoChamLai(status=attempt["status"])
+    if outcome == "pending":
+        raise NopBaiDangCham()
+    if outcome == "exhausted":
+        raise attempts_uc.HetLuotChamLai(status="graded")
+    if outcome == "grade":
+        role, claimed_at = _attempts.start_grading_job(attempt_id, token)
+        if role == "regrade":
+            try:
+                _grading_service.regrade_ungraded(attempt_id, token)
+            finally:
+                # Ends the claim and retires the token, after the gap analysis.
+                _attempts.release_job_claim(attempt_id, token)
+    else:
+        _repair_mastery(attempt_id)
     return {**attempts_uc.attempt_public(_attempts.get_attempt(attempt_id)),
             "grading": "done"}
 
