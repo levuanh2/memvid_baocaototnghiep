@@ -154,7 +154,8 @@ class MockMindmapGraph:
 # What this process stubbed, and how often the grading stub ran (read by
 # GET /__e2e__/stubs). One process, threads only: a dict is enough.
 E2E_STUBS = {"e2e_server": True, "diagnostic_ai_stub": False,
-             "short_answer_grading_stub": False, "grade_calls": 0}
+             "short_answer_grading_stub": False, "grade_calls": 0,
+             "grading_dispatches": 0}
 
 
 def main() -> None:
@@ -298,6 +299,16 @@ def main() -> None:
             return real_grade_short_answer(**call_kwargs)
 
         attempt_grading.grade_short_answer = _deterministic_short_answer_grade
+
+        # Counted where the submit route hands a job over (synchronous, before its
+        # response), so "nothing regraded" cannot pass while a job is still queued.
+        inner_dispatch_grading = be_main._dispatch_grading
+
+        def _counted_dispatch_grading(*args, **kwargs):
+            E2E_STUBS["grading_dispatches"] += 1
+            return inner_dispatch_grading(*args, **kwargs)
+
+        be_main._dispatch_grading = _counted_dispatch_grading
         E2E_STUBS["short_answer_grading_stub"] = True
         print("[run_e2e_server] deterministic short-answer grading stub enabled", flush=True)
 

@@ -55,6 +55,7 @@ export default defineConfig({
         E2E_SHORT_ANSWER_GRADING_STUB: "1",
         E2E_SHORT_ANSWER_GRADING_DELAY_SEC: "1",
         GRADING_MANUAL_RETRY_MAX: "3",
+        E2E_GRADING_CRASH_MARKER: "__E2E_GRADE_CRASH__",
         PORT: String(BE_PORT),
       },
     },

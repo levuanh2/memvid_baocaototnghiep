@@ -12,7 +12,7 @@
 import { test, expect } from "@playwright/test";
 import { registerAndEnterApp } from "./fixtures.js";
 
-const CRASH_MARKER = "__E2E_GRADE_CRASH__";
+const CRASH_MARKER = "__E2E_GRADE_CRASH__";   // E2E_GRADING_CRASH_MARKER, pinned in the config
 const RETRY_MAX = 3;   // GRADING_MANUAL_RETRY_MAX, pinned in playwright.config.js
 const BASE = `http://127.0.0.1:${process.env.PORT || 8080}`;
 
@@ -26,7 +26,7 @@ async function stubs(request) {
 
 test.beforeAll(async ({ request }) => {
   const s = await stubs(request);
-  expect(s.diagnostic_ai_stub && s.short_answer_grading_stub,
+  expect(s.e2e_server && s.diagnostic_ai_stub && s.short_answer_grading_stub,
     "deterministic quiz and grading stubs are on, so no real model can be called").toBe(true);
 });
 
@@ -107,6 +107,7 @@ test("a stuck attempt offers a retry, each retry is 202, and used-up retries end
   await page.goto(`/app/study/result/${attemptId}`);
   await expect(page.getByText("Việc chấm bài đã dừng giữa chừng")).toBeVisible({ timeout: 30_000 });
 
+  const dispatchesBefore = (await stubs(request)).grading_dispatches;
   const jobIds = new Set();
   for (let i = 1; i <= RETRY_MAX; i += 1) {
     const [res] = await Promise.all([page.waitForResponse(isSubmit), retryButton(page).click()]);
@@ -121,6 +122,8 @@ test("a stuck attempt offers a retry, each retry is 202, and used-up retries end
   page.off("response", count);
   expect(submits, "one submit per retry click, no duplicates").toBe(RETRY_MAX);
   expect(jobIds.size, "each retry is its own grading job").toBe(RETRY_MAX);
+  expect((await stubs(request)).grading_dispatches - dispatchesBefore,
+    "the dispatch counter sees every retry").toBe(RETRY_MAX);
   await expect(retryButton(page)).toHaveCount(0);
 
   const refused = await request.post(`${BASE}/api/attempts/${attemptId}/submit`, { headers: api.headers });
@@ -140,8 +143,9 @@ test("a graded attempt shows its score, and resubmitting it returns the stored r
   await expect(retryButton(page)).toHaveCount(0);
 
   const stored = await (await request.get(`${BASE}/api/quizzes/results/${attemptId}`, { headers: api.headers })).json();
-  const callsBefore = (await stubs(request)).grade_calls;
-  expect(callsBefore, "the grading stub counted the first grading").toBeGreaterThan(0);
+  const before = await stubs(request);
+  expect(before.grade_calls, "the grading stub counted the first grading").toBeGreaterThan(0);
+  expect(before.grading_dispatches, "the first grading was dispatched and counted").toBeGreaterThan(0);
   const again = await request.post(`${BASE}/api/attempts/${attemptId}/submit`, { headers: api.headers });
   expect(again.status(), "a graded attempt resubmitted").toBe(200);
   const body = await again.json();
@@ -149,5 +153,7 @@ test("a graded attempt shows its score, and resubmitting it returns the stored r
   for (const key of ["score", "max_score", "graded_at", "status"]) {
     expect(body[key], `resubmit returns the stored ${key}`).toEqual(stored[key]);
   }
-  expect((await stubs(request)).grade_calls, "nothing was regraded").toBe(callsBefore);
+  const after = await stubs(request);
+  expect(after.grading_dispatches, "no grading job was dispatched").toBe(before.grading_dispatches);
+  expect(after.grade_calls, "nothing was regraded").toBe(before.grade_calls);
 });
