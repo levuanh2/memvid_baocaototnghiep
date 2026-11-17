@@ -360,7 +360,8 @@ def test_libpq_variable_only_in_an_env_file_is_seen(tmp_path, monkeypatch):
     pytest), so the guard must read what WILL be in effect: process first, then files."""
     from shared.migration_guard import libpq_target_vars_set
 
-    for v in ("PGHOSTADDR", "PGSERVICE"):
+    # The runner may set SKIP_DOTENV (the trial-10 run did); this test is about files.
+    for v in ("PGHOSTADDR", "PGSERVICE", "SKIP_DOTENV"):
         monkeypatch.delenv(v, raising=False)
     be, root = tmp_path / "be.env", tmp_path / "root.env"
     be.write_text("PGHOSTADDR=192.0.2.10\n", encoding="utf-8")
@@ -405,7 +406,7 @@ def test_libpq_variable_built_by_interpolation_across_files_is_seen(tmp_path, mo
     raw value decides (fail closed: a non-empty raw value counts as set)."""
     from shared.migration_guard import libpq_target_vars_set
 
-    for v in ("PGHOSTADDR", "X_HOSTADDR"):
+    for v in ("PGHOSTADDR", "X_HOSTADDR", "SKIP_DOTENV"):
         monkeypatch.delenv(v, raising=False)
     be, root = tmp_path / "be.env", tmp_path / "root.env"
     be.write_text("X_HOSTADDR=192.0.2.10\n", encoding="utf-8")
