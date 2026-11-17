@@ -66,8 +66,19 @@ os.environ.pop("FPT_AI_API_KEY", None)
 os.environ.setdefault("QUEUE_ENABLED", "")
 
 import tempfile
-data_dir = os.environ.get("DATA_DIR") or tempfile.mkdtemp(prefix="memvid_e2e_")
+# Every start gets new, empty stores (issue 19, 2026-11-17). A DATA_DIR from the caller
+# is only the PARENT of a fresh directory, never reused as is; every store path is set
+# inside it, overriding the shell and any .env, so a second local run cannot see the
+# first run's maps, and nothing can point this server at real data. Without MEMORY_DIR
+# the map and summary stores fell back to BE/memory/ in the checkout.
+data_dir = tempfile.mkdtemp(prefix="memvid_e2e_", dir=os.environ.get("DATA_DIR") or None)
 os.environ["DATA_DIR"] = data_dir
+for _name, _sub in (("MEMORY_DIR", "memory"), ("INDEX_DIR", "index"),
+                    ("MD_DIR", "cleaned_md"), ("INPUT_DOCS_DIR", "input_docs")):
+    os.environ[_name] = str(Path(data_dir) / _sub)
+for _name in ("MINDMAPS_DB_PATH", "SUMMARIES_DB_PATH", "CONVERSATIONS_DB_PATH",
+              "JOBS_DB_PATH", "LOG_DB_PATH", "USAGE_DB_PATH"):
+    os.environ.pop(_name, None)   # file overrides: each store then derives from the above
 
 FORCE_FAIL_MARKER = os.environ.get("E2E_FORCE_FAIL_MARKER", "__E2E_FORCE_FAIL__")
 # E2E_PRACTICE_AI_STUB defaults off. When enabled it replaces only the

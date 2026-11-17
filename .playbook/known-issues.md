@@ -8120,3 +8120,31 @@ off-screen button then matches the same role+name as the visible CTA.
 **Prevention:** hiding by transform, width, opacity or pointer-events is visual only; anything
 that stays mounted while hidden needs `inert`. Label tests should match the bare text, not one
 quoting style.
+
+# Local E2E runs shared the checkout's map and summary stores (fixed 2026-11-18)
+
+**Symptom:** a second local Playwright run against `BE/scripts/run_e2e_server.py` failed
+`critical-flows` "A1 zero maps": the page showed a map from the previous run (open auth
+shares one anonymous owner). CI never saw it (fresh checkout per run). Found while
+validating integration trial 11 (#159 item 19).
+
+**Root cause:** the server made a temporary `DATA_DIR` but never set `MEMORY_DIR`; the
+mind map and summary SQLite stores (and the export output directory) fall back to
+`BE/memory/` in the checkout, which outlives the server. A `DATA_DIR` given by the caller
+was reused as is, and a `MEMORY_DIR` or `*_DB_PATH` left in the shell or `.env` could
+point the server at real data.
+
+**Fix:** every start creates a new directory (`mkdtemp`, inside the caller's `DATA_DIR`
+when given) and sets `MEMORY_DIR`, `INDEX_DIR`, `MD_DIR`, `INPUT_DOCS_DIR` inside it,
+overriding the environment; the `*_DB_PATH` file overrides are removed so every store
+derives from that directory. No production code changed.
+
+**Regression:** `BE/tests/test_e2e_server_isolation.py` (4 tests, red before the fix):
+stores inside the server's directory and never under `BE/memory`; two starts never share
+a directory; a given `DATA_DIR` is only a parent; shell paths cannot leak in. Two
+consecutive local `critical-flows` runs without any directory set: 20/20 passed both
+times, `BE/memory` never created.
+
+**Prevention:** a test harness that writes durable state must own every path that state
+can land on, and set them explicitly instead of relying on defaults that point into the
+checkout.
