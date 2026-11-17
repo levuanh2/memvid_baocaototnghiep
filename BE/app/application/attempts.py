@@ -331,9 +331,9 @@ def job_active(job_id: Optional[str]) -> bool:
             updated = updated.replace(tzinfo=timezone.utc)
     except (TypeError, ValueError):
         return False
-    from app.domains.attempts.repository import GRADING_LEASE_S
+    from app.domains.attempts.repository import grading_lease_s
 
-    return (datetime.now(timezone.utc) - updated).total_seconds() < GRADING_LEASE_S
+    return (datetime.now(timezone.utc) - updated).total_seconds() < grading_lease_s()
 
 
 def repair_mastery(attempt_id: Optional[str]) -> bool:

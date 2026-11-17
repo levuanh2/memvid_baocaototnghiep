@@ -164,7 +164,8 @@ def _count(monkeypatch, module, name):
 def _lease_s():
     from app.domains.attempts import repository
 
-    return repository.GRADING_LEASE_S
+    lease = getattr(repository, "grading_lease_s", None)
+    return lease() if lease else repository.GRADING_LEASE_S
 
 
 def _state(attempt_id, user_id):
@@ -978,9 +979,29 @@ def test_the_retry_cap_is_decided_inside_the_locked_transaction(owner, monkeypat
     assert repository.reclaim_for_retry(objective, max_retries=0)[0] == "grade"
 
 
-def test_the_lease_outlasts_one_model_call_with_its_queue_wait():
-    """A live grader renews between answers; one call must fit inside the lease."""
-    from app.domains.attempts.repository import GRADING_LEASE_S
+@pytest.mark.parametrize("timeout, wait", [(None, None), ("600", None), ("120", "500")])
+def test_the_lease_outlasts_one_model_call_whatever_the_config(monkeypatch, timeout, wait):
+    """A live grader renews only between answers, so ONE model call plus its queue wait
+    must fit inside the lease, for any GRADE_LLM_TIMEOUT_SEC / LLM_QUEUE_WAIT_TIMEOUT_SECONDS
+    (Codex re-check 3: the earlier test hard-coded the defaults)."""
+    from app.domains.attempts import repository
 
-    ai_timeout_default, queue_wait_default = 180, 30   # AI_TIMEOUT_SEC, LLM_QUEUE_WAIT_...
-    assert GRADING_LEASE_S > ai_timeout_default + queue_wait_default
+    for name, value in (("GRADE_LLM_TIMEOUT_SEC", timeout),
+                        ("LLM_QUEUE_WAIT_TIMEOUT_SECONDS", wait)):
+        if value is None:
+            monkeypatch.delenv(name, raising=False)
+        else:
+            monkeypatch.setenv(name, value)
+    call = float(timeout or 120) + float(wait or 30)
+    assert repository.grading_lease_s() > call
+    assert repository.grading_lease_s() >= repository.GRADING_LEASE_S
+
+
+def test_a_claim_inside_a_long_configured_call_is_still_live(owner, monkeypatch):
+    from app.domains.attempts import repository
+
+    monkeypatch.setenv("GRADE_LLM_TIMEOUT_SEC", "600")
+    attempt_id = _short_answer_attempt(owner)
+    assert repository.submit(attempt_id) is not None
+    _set_claim(attempt_id, 400)  # past the 300 s floor, inside one 600 s call
+    assert repository.reclaim_for_retry(attempt_id)[0] == "pending"

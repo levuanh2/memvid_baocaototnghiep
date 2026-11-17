@@ -212,6 +212,23 @@ PRACTICE_REPLAY_WINDOW_S = 30
 GRADING_LEASE_S = 300
 
 
+def grading_lease_s() -> int:
+    """The lease actually used: at least `GRADING_LEASE_S`, and always longer than ONE
+    model call plus its queue wait plus a margin, whatever the configuration says. A live
+    grader renews its claim only between answers, so a call longer than the lease would
+    let a retry or a redelivery start a second grader (Codex re-check 3 of #188)."""
+    import os
+
+    def _num(name: str, default: float) -> float:
+        try:
+            return float((os.getenv(name) or "").strip() or default)
+        except ValueError:
+            return default
+
+    one_call = _num("GRADE_LLM_TIMEOUT_SEC", 120.0) + _num("LLM_QUEUE_WAIT_TIMEOUT_SECONDS", 30.0)
+    return int(max(GRADING_LEASE_S, one_call + 60))
+
+
 class SubmitKeyMismatch(Exception):
     """The key was already used for a different quiz or different answers."""
 
@@ -230,7 +247,7 @@ def _aware(ts: Optional[datetime]) -> Optional[datetime]:
 
 def _claim_grading(a: QuizAttempt, now: datetime) -> bool:
     claimed = _aware(a.grading_claimed_at)
-    if claimed is not None and now - claimed < timedelta(seconds=GRADING_LEASE_S):
+    if claimed is not None and now - claimed < timedelta(seconds=grading_lease_s()):
         return False
     a.grading_claimed_at = now
     return True
@@ -298,7 +315,7 @@ def _take_retry(s, a: QuizAttempt, now: datetime, max_retries: Optional[int]) ->
     claim clears the old job's running marker: a grader that outlived its lease can no
     longer renew or release the new claim, and stops before its next model call."""
     claimed = _aware(a.grading_claimed_at)
-    if claimed is not None and now - claimed < timedelta(seconds=GRADING_LEASE_S):
+    if claimed is not None and now - claimed < timedelta(seconds=grading_lease_s()):
         return "pending"
     used = int((a.metadata_json or {}).get("manual_retries") or 0)
     if (max_retries is not None and used >= max_retries
@@ -330,7 +347,7 @@ def start_grading_job(attempt_id: str, job_id: str) -> Tuple[str, Optional[datet
             return "superseded", None
         now = _now()
         claimed = _aware(a.grading_claimed_at)
-        live = claimed is not None and now - claimed < timedelta(seconds=GRADING_LEASE_S)
+        live = claimed is not None and now - claimed < timedelta(seconds=grading_lease_s())
         running = meta.get("grading_job_running")
         if live and running:
             return ("duplicate" if running == job_id else "superseded"), None
@@ -409,7 +426,7 @@ def grading_state(attempt_id: str, *, job_active=lambda _job_id: False,
         if a.status != "submitted":
             return a.status
         claimed = _aware(a.grading_claimed_at)
-        live = claimed is not None and _now() - claimed < timedelta(seconds=GRADING_LEASE_S)
+        live = claimed is not None and _now() - claimed < timedelta(seconds=grading_lease_s())
         if live or job_active(_grading_job_id(a)):
             return "grading"
         used = int((a.metadata_json or {}).get("manual_retries") or 0)
@@ -442,7 +459,7 @@ def claim_stuck_for_recovery(*, older_than_s: int, limit: int, max_attempts: int
         # the same time and each spend all of it (Codex task25). Released at commit.
         s.execute(text("SELECT pg_advisory_xact_lock(:k)"), {"k": _RECOVERY_LOCK_KEY})
         now = _now()
-        lease_cutoff = now - timedelta(seconds=GRADING_LEASE_S)
+        lease_cutoff = now - timedelta(seconds=grading_lease_s())
         # In flight = a recovery whose claim is live OR whose job is still queued or
         # running (a claim expires during a long queue wait; the job does not).
         inflight = sum(
@@ -569,7 +586,7 @@ def _submit_practice(quiz_id, user_id, answers, submit_key, max_retries=None):
         elif user_id:
             # Open mode (no signed-in user) shares ONE anonymous owner between every
             # client: there this guess would let one person's submit block another's.
-            lease_cutoff = now - timedelta(seconds=GRADING_LEASE_S)
+            lease_cutoff = now - timedelta(seconds=grading_lease_s())
             recent_ids = s.execute(
                 select(QuizAttempt.id).where(
                     QuizAttempt.quiz_id == str(quiz_id),
