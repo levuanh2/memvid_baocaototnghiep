@@ -146,9 +146,11 @@ def test_two_submits_of_one_diagnostic_attempt_grade_it_once(owner, monkeypatch)
         dispatch_grading=lambda *a: pytest.fail("multiple choice is graded inline")))
 
     ok = [r for kind, r in results if kind == "ok"]
-    errors = [r for kind, r in results if kind == "error"]
-    assert len(ok) == 1, results
-    assert len(errors) == 1 and isinstance(errors[0], attempts_uc.AttemptKhongConDangLam), results
+    # Since the diagnostic recovery (owner decision 2026-11-17) the loser no longer gets
+    # 409: it waits for the row lock, then sees the winner's live claim (202 "pending") or
+    # its stored result (200 "done"). What must not change: ONE grading.
+    assert len(ok) == 2, results
+    assert sorted(r[0]["grading"] for r in ok) in (["done", "done"], ["done", "pending"]), ok
     assert graded == [attempt_id]
     assert _attempts_of(quiz_id, owner) == [(attempt_id, "graded")]
 

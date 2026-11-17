@@ -267,6 +267,18 @@ def _run_jobs_maintenance(force: bool = False) -> None:
             print(f"jobs_maintenance swept={swept} pruned={pruned} logs={logs} export_files_pruned={exported_files_pruned}", flush=True)
     except Exception:
         pass
+    # Diagnostic grading recovery: OFF unless GRADING_RECOVERY_ENABLED=1 (then a dry run
+    # unless GRADING_RECOVERY_DRY_RUN=0). Regrades go to background jobs, never this
+    # request thread; it has its own try so it can never break the sweep above.
+    try:
+        # Both names are defined further down this module; the startup call runs before
+        # them, so look them up at call time and skip until they exist.
+        from app.application import attempts as _attempts_uc
+        _dispatch = globals().get("_dispatch_grading")
+        if _dispatch is not None:
+            _attempts_uc.recover_grading(dispatch_grading=_dispatch)
+    except Exception as exc:
+        print(f"grading_recovery_failed err={type(exc).__name__}", flush=True)
 
 
 def _handle_sigterm(*_args):
@@ -4063,6 +4075,8 @@ _ATTEMPT_ERR_HTTP = {
     attempts_uc.AttemptDaNop: 409,
     attempts_uc.AttemptKhongConDangLam: 409,
     attempts_uc.AttemptChuaNop: 409,
+    attempts_uc.BaiLuyenTapSaiRoute: 409,
+    attempts_uc.HetLuotChamLai: 409,
     attempts_uc.ThieuDapAn: 400,
     attempts_uc.CauHoiLac: 400,
     # Phase 2C

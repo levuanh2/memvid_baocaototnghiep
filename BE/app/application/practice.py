@@ -115,13 +115,17 @@ def submit(practice_quiz_id: str, user_id: Optional[str], raw: Any, *,
     # identical requests used to open two attempts and grade both.
     try:
         attempt_id, outcome, claimed_at = _attempts.submit_practice(
-            practice_quiz_id, user_id, raw, submit_key=submit_key)
+            practice_quiz_id, user_id, raw, submit_key=submit_key,
+            max_retries=attempts_uc.manual_retry_max())
     except _attempts.SubmitKeyMismatch:
         raise KhoaNopBaiDaDung() from None
     if outcome == "replay":
         raise attempts_uc.AttemptKhongConDangLam()
     if outcome == "pending":
         raise NopBaiDangCham()
+    if outcome == "exhausted":
+        # Retries of one stuck attempt are capped like the diagnostic route (Codex task25).
+        raise attempts_uc.HetLuotChamLai(status="submitted")
     if outcome == "grade":
         try:
             _grading_service.grade_attempt(attempt_id, once=True)
@@ -144,17 +148,8 @@ def submit(practice_quiz_id: str, user_id: Optional[str], raw: Any, *,
 
 
 def _repair_mastery(attempt_id: Optional[str]) -> None:
-    from app.domains.attempts import repository as _attempts
-    from app.domains.gap_analysis import service as _gap
-
-    if not attempt_id or _gap.list_for_attempt(attempt_id):
-        return
-    if (_attempts.get_attempt(attempt_id) or {}).get("status") != "graded":
-        return
-    try:
-        _gap.analyze_attempt(attempt_id)
-    except Exception as exc:  # fail-open, as at grading time: the score stands
-        print(f"[practice] mastery repair failed: {exc}", flush=True)
+    # Shared with the diagnostic route since the recovery work (2026-11-17).
+    attempts_uc.repair_mastery(attempt_id)
 
 
 def comparison(practice_quiz_id: str, user_id: Optional[str], *,

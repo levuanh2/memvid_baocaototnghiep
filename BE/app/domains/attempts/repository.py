@@ -8,7 +8,7 @@ import uuid
 from datetime import datetime, timedelta, timezone
 from typing import Any, Dict, List, Optional, Tuple
 
-from sqlalchemy import Integer, and_, func, or_, select
+from sqlalchemy import Integer, and_, func, or_, select, text
 from sqlalchemy.exc import IntegrityError
 
 from app.db import session_scope
@@ -184,14 +184,20 @@ def submit(attempt_id: str) -> Optional[Dict[str, Any]]:
 
     `FOR UPDATE`: hai request cùng lúc trước đây cùng đọc `in_progress` rồi cùng chấm.
     Có khoá hàng, request thứ hai chờ tới khi request đầu commit rồi đọc `submitted`.
+
+    The same transaction takes the grading claim (`grading_claimed_at`), and returns it
+    as `claimed_at` so a failed grader releases exactly its own claim (diagnostic
+    recovery, 2026-11-17; the practice route has done this since #185).
     """
     with session_scope() as s:
         a = s.get(QuizAttempt, str(attempt_id), with_for_update=True)
         if a is None or a.status != "in_progress":
             return None
-        _mark_submitted(a, _now())
+        now = _now()
+        _mark_submitted(a, now)
+        a.grading_claimed_at = now
         return {"attempt_id": a.id, "quiz_id": a.quiz_id, "status": a.status,
-                "duration_seconds": a.duration_seconds}
+                "duration_seconds": a.duration_seconds, "claimed_at": now}
 
 
 # Keyless requests only (clients older than the Idempotency-Key change): a replay is
@@ -243,9 +249,232 @@ def release_grading_claim(attempt_id: str, claimed_at: Optional[datetime]) -> No
             a.grading_claimed_at = None
 
 
+# ── Diagnostic grading recovery (2026-11-17) ──────────────────────────────
+# A diagnostic attempt is `submitted` before it is graded. A crash or a grading error in
+# between used to leave it there for good: a second submit answered 409 and nothing ever
+# looked at it again. These functions reuse the practice claim (`grading_claimed_at`,
+# `GRADING_LEASE_S`, `save_grades(once=True)`): whoever holds a live claim, or whose
+# grading job is still queued or running, is the only grader.
+
+def _grading_job_id(a: QuizAttempt) -> Optional[str]:
+    return (a.metadata_json or {}).get("grading_job_id")
+
+
+def reclaim_for_retry(attempt_id: str, *, job_active=lambda _job_id: False,
+                      max_retries: Optional[int] = None) -> Tuple[str, Optional[datetime]]:
+    """Outcome of a submit on an attempt that is no longer `in_progress`.
+
+    ("graded", None) | ("pending", None): a grader holds a live claim, or its job is still
+    queued/running | ("grade", claimed_at): the claim was free or expired, it is ours now
+    | ("exhausted", None): `max_retries` learner retries already used (each regrade of
+    short answers costs LLM calls) | ("refused", None): cancelled or gone. Row lock: two
+    retries cannot both grade, and the retry counter cannot be raced.
+    """
+    with session_scope() as s:
+        a = s.get(QuizAttempt, str(attempt_id), with_for_update=True)
+        if a is None or a.status not in ("submitted", "graded"):
+            return "refused", None
+        if a.status == "graded":
+            return "graded", None
+        if job_active(_grading_job_id(a)):
+            return "pending", None
+        now = _now()
+        outcome = _take_retry(a, now, max_retries)
+        return outcome, (now if outcome == "grade" else None)
+
+
+def _take_retry(a: QuizAttempt, now: datetime, max_retries: Optional[int]) -> str:
+    """Under the row lock: "grade" (claim taken, one retry counted) | "pending" (a live
+    claim exists) | "exhausted" (`max_retries` already used). Shared by the diagnostic
+    and practice routes: each regrade of short answers costs LLM calls (Codex task25)."""
+    claimed = _aware(a.grading_claimed_at)
+    if claimed is not None and now - claimed < timedelta(seconds=GRADING_LEASE_S):
+        return "pending"
+    used = int((a.metadata_json or {}).get("manual_retries") or 0)
+    if max_retries is not None and used >= max_retries:
+        return "exhausted"
+    a.grading_claimed_at = now
+    a.metadata_json = {**(a.metadata_json or {}), "manual_retries": used + 1}
+    return "grade"
+
+
+def start_grading_job(attempt_id: str, job_id: str) -> Tuple[str, Optional[datetime]]:
+    """A grading job about to grade. The claim must fence the LLM work, not only the
+    final write (Codex task25): a stale or duplicated job used to renew the claim and
+    pay for every model call before `save_grades(once=True)` threw its result away.
+
+    ("run", claimed_at): this job is THE grader, claim renewed | ("superseded", None):
+    another job is registered for the attempt, or another job is running it under a live
+    claim | ("duplicate", None): this same job is already running elsewhere (a queue
+    delivered it twice) | ("done", None): the attempt is no longer `submitted`.
+    """
+    with session_scope() as s:
+        a = s.get(QuizAttempt, str(attempt_id), with_for_update=True)
+        if a is None or a.status != "submitted":
+            return "done", None
+        meta = dict(a.metadata_json or {})
+        registered = meta.get("grading_job_id")
+        if registered and registered != job_id:
+            return "superseded", None
+        now = _now()
+        claimed = _aware(a.grading_claimed_at)
+        live = claimed is not None and now - claimed < timedelta(seconds=GRADING_LEASE_S)
+        running = meta.get("grading_job_running")
+        if live and running:
+            return ("duplicate" if running == job_id else "superseded"), None
+        a.grading_claimed_at = now
+        a.metadata_json = {**meta, "grading_job_running": job_id}
+        return "run", now
+
+
+def set_grading_job(attempt_id: str, job_id: str, claimed_at: Optional[datetime]) -> bool:
+    """Register the job that will grade the attempt, only while the caller still holds
+    the claim it took (`claimed_at`). False: the claim was lost (lease expired and a
+    retry reclaimed it); the caller must not dispatch."""
+    with session_scope() as s:
+        a = s.get(QuizAttempt, str(attempt_id), with_for_update=True)
+        if (a is None or a.status != "submitted" or claimed_at is None
+                or _aware(a.grading_claimed_at) != _aware(claimed_at)):
+            return False
+        meta = {k: v for k, v in (a.metadata_json or {}).items() if k != "grading_job_running"}
+        a.metadata_json = {**meta, "grading_job_id": job_id}
+        return True
+
+
+def abandon_job(attempt_id: str, job_id: str, claimed_at: Optional[datetime], *,
+                refund: Optional[str] = None) -> None:
+    """The queue refused the job: nothing was accepted. Forget the job (no ghost
+    `pending` that turns the next retry into a false 202), release our claim, and give
+    back the retry it counted (`refund` = "manual_retries" | "recovery_attempts")."""
+    with session_scope() as s:
+        a = s.get(QuizAttempt, str(attempt_id), with_for_update=True)
+        if a is None:
+            return
+        meta = dict(a.metadata_json or {})
+        if meta.get("grading_job_id") == job_id:
+            meta.pop("grading_job_id", None)
+        if refund and int(meta.get(refund) or 0) > 0:
+            meta[refund] = int(meta[refund]) - 1
+        a.metadata_json = meta
+        if claimed_at is not None and _aware(a.grading_claimed_at) == _aware(claimed_at):
+            a.grading_claimed_at = None
+
+
+def grading_state(attempt_id: str, *, job_active=lambda _job_id: False,
+                  max_retries: Optional[int] = None) -> Optional[str]:
+    """"graded" | "grading" (live claim or active job) | "stalled" (submitted, nobody
+    grading: a retry may grade it) | "failed" (stalled and the learner's retries are used
+    up) | the raw status otherwise. Read-only."""
+    with session_scope() as s:
+        a = s.get(QuizAttempt, str(attempt_id))
+        if a is None:
+            return None
+        if a.status != "submitted":
+            return a.status
+        claimed = _aware(a.grading_claimed_at)
+        live = claimed is not None and _now() - claimed < timedelta(seconds=GRADING_LEASE_S)
+        if live or job_active(_grading_job_id(a)):
+            return "grading"
+        used = int((a.metadata_json or {}).get("manual_retries") or 0)
+        return "failed" if max_retries is not None and used >= max_retries else "stalled"
+
+
+_RECOVERY_LOCK_KEY = 0x53_4D_47_52  # "SMGR": StudyMap grading recovery
+
+
+def _recovery_attempts():
+    return func.coalesce(
+        QuizAttempt.metadata_json["recovery_attempts"].astext.cast(Integer), 0)
+
+
+def claim_stuck_for_recovery(*, older_than_s: int, limit: int, max_attempts: int,
+                             max_inflight: int, dry_run: bool,
+                             job_active=lambda _job_id: False) -> Dict[str, Any]:
+    """Pick and claim, in ONE transaction, the stuck attempts the sweep may regrade.
+
+    Stuck = `submitted`, submitted more than `older_than_s` ago (never races a learner
+    who just submitted or released a claim), claim free or expired, no active job,
+    fewer than `max_attempts` recoveries so far. `FOR UPDATE SKIP LOCKED`: two sweeps
+    (two web processes) never take the same row. At most `limit`, and never more than
+    `max_inflight` recoveries in progress at once. `dry_run` claims nothing.
+    """
+    with session_scope() as s:
+        # One budget for every process: two web workers used to count `inflight=0` at
+        # the same time and each spend all of it (Codex task25). Released at commit.
+        s.execute(text("SELECT pg_advisory_xact_lock(:k)"), {"k": _RECOVERY_LOCK_KEY})
+        now = _now()
+        lease_cutoff = now - timedelta(seconds=GRADING_LEASE_S)
+        # In flight = a recovery whose claim is live OR whose job is still queued or
+        # running (a claim expires during a long queue wait; the job does not).
+        inflight = sum(
+            1 for a in s.execute(select(QuizAttempt).where(
+                QuizAttempt.status == "submitted",
+                QuizAttempt.metadata_json["recovery_attempts"].isnot(None),
+            )).scalars()
+            if (a.grading_claimed_at is not None and _aware(a.grading_claimed_at) >= lease_cutoff)
+            or job_active(_grading_job_id(a)))
+        gave_up = s.execute(select(func.count()).select_from(QuizAttempt).where(
+            QuizAttempt.status == "submitted", _recovery_attempts() >= max_attempts,
+        )).scalar() or 0
+        room = max(0, min(limit, max_inflight - inflight))
+        rows = [] if room == 0 else s.execute(
+            select(QuizAttempt).where(
+                QuizAttempt.status == "submitted",
+                QuizAttempt.submitted_at < now - timedelta(seconds=older_than_s),
+                or_(QuizAttempt.grading_claimed_at.is_(None),
+                    QuizAttempt.grading_claimed_at < lease_cutoff),
+                _recovery_attempts() < max_attempts,
+            ).order_by(QuizAttempt.submitted_at).limit(room)
+            .with_for_update(skip_locked=True)
+        ).scalars().all()
+        picked, skipped_active = [], 0
+        for a in rows:
+            if job_active(_grading_job_id(a)):
+                skipped_active += 1
+                continue
+            picked.append({"attempt_id": a.id, "quiz_id": a.quiz_id, "user_id": a.user_id,
+                           "recovery_attempts": int((a.metadata_json or {}).get(
+                               "recovery_attempts") or 0) + 1})
+            if not dry_run:
+                a.grading_claimed_at = now
+                a.metadata_json = {**(a.metadata_json or {}),
+                                   "recovery_attempts": picked[-1]["recovery_attempts"]}
+        if dry_run:
+            s.rollback()
+        return {"picked": picked, "claimed_at": None if dry_run else now,
+                "inflight": int(inflight), "gave_up": int(gave_up),
+                "skipped_active_job": skipped_active}
+
+
+def graded_without_mastery(*, limit: int, within_days: int = 7) -> List[str]:
+    """Graded attempts with no concept-mastery rows and not yet checked: scores were
+    saved, then the process died (or analysis failed) before gap analysis."""
+    from app.db.models import ConceptMastery
+
+    since = _now() - timedelta(days=within_days)
+    with session_scope() as s:
+        return list(s.execute(
+            select(QuizAttempt.id).where(
+                QuizAttempt.status == "graded",
+                QuizAttempt.graded_at >= since,
+                QuizAttempt.metadata_json["mastery_checked"].is_(None),
+                ~select(ConceptMastery.id).where(
+                    ConceptMastery.attempt_id == QuizAttempt.id).exists(),
+            ).order_by(QuizAttempt.graded_at).limit(limit)
+        ).scalars().all())
+
+
+def mark_mastery_checked(attempt_id: str) -> None:
+    """A quiz without concept tags legitimately has no mastery rows: check it once."""
+    with session_scope() as s:
+        a = s.get(QuizAttempt, str(attempt_id), with_for_update=True)
+        if a is not None:
+            a.metadata_json = {**(a.metadata_json or {}), "mastery_checked": True}
+
+
 def submit_practice(quiz_id: str, user_id: Optional[str],
                     answers: Dict[str, Optional[str]], *,
-                    submit_key: Optional[str] = None
+                    submit_key: Optional[str] = None, max_retries: Optional[int] = None
                     ) -> Tuple[Optional[str], str, Optional[datetime]]:
     """Open, fill and submit a practice attempt in ONE transaction.
 
@@ -255,7 +484,9 @@ def submit_practice(quiz_id: str, user_id: Optional[str],
       (a new submission, or a retry of one whose grader died or failed);
     - `"done"`: the key's attempt is already graded: answer with it, grade nothing;
     - `"pending"`: the key's attempt is being graded by another request right now;
-    - `"replay"` (keyless only): same answers moments ago, `attempt_id` is None.
+    - `"replay"` (keyless only): same answers moments ago, `attempt_id` is None;
+    - `"exhausted"`: a retry of a stuck attempt after `max_retries` retries (each regrade
+      of short answers costs LLM calls; the first submit is not a retry).
     Raises `SubmitKeyMismatch` when the key was used for another quiz or answer set.
 
     The key is scoped to the owner, so another account's key never finds this row. In
@@ -263,16 +494,16 @@ def submit_practice(quiz_id: str, user_id: Optional[str],
     UUID) is what tells clients apart, so different keys never meet.
     """
     try:
-        return _submit_practice(quiz_id, user_id, answers, submit_key)
+        return _submit_practice(quiz_id, user_id, answers, submit_key, max_retries)
     except IntegrityError:
         # Two first submits with one key for DIFFERENT quizzes: the quiz locks do not
         # serialise them, the unique index does. The loser re-reads the winner's row.
         if not submit_key:
             raise
-        return _submit_practice(quiz_id, user_id, answers, submit_key)
+        return _submit_practice(quiz_id, user_id, answers, submit_key, max_retries)
 
 
-def _submit_practice(quiz_id, user_id, answers, submit_key):
+def _submit_practice(quiz_id, user_id, answers, submit_key, max_retries=None):
     from app.domains.documents.repository import ensure_anonymous_user
 
     owner = str(user_id) if user_id else ensure_anonymous_user()
@@ -292,9 +523,8 @@ def _submit_practice(quiz_id, user_id, answers, submit_key):
                     raise SubmitKeyMismatch()
                 if seen.status != "submitted":
                     return seen.id, "done", None
-                if _claim_grading(seen, now):
-                    return seen.id, "grade", now
-                return seen.id, "pending", None
+                outcome = _take_retry(seen, now, max_retries)
+                return seen.id, outcome, (now if outcome == "grade" else None)
         elif user_id:
             # Open mode (no signed-in user) shares ONE anonymous owner between every
             # client: there this guess would let one person's submit block another's.
@@ -331,8 +561,10 @@ def _submit_practice(quiz_id, user_id, answers, submit_key):
                     stuck = s.execute(select(QuizAttempt).where(
                         QuizAttempt.id.in_(same), QuizAttempt.status == "submitted")
                         .with_for_update()).scalars().first()
-                    if stuck is not None and _claim_grading(stuck, now):
-                        return stuck.id, "grade", now
+                    if stuck is not None:
+                        outcome = _take_retry(stuck, now, max_retries)
+                        if outcome in ("grade", "exhausted"):
+                            return stuck.id, outcome, (now if outcome == "grade" else None)
                     return None, "replay", None
 
         a = s.execute(

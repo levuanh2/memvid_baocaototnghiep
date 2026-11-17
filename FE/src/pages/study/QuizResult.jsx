@@ -13,6 +13,7 @@ import {
   getResult,
   optionLabel,
   moTaLoi,
+  submitAttempt,
 } from "../../utils/studyApi";
 import { MAX_CONSECUTIVE_FETCH_FAILURES } from "../../utils/jobPoller";
 import "./quizJourney.css";
@@ -47,6 +48,9 @@ export default function QuizResult() {
   const truotRef = useRef(0);
   const batDauChoRef = useRef(null);
   const timerRef = useRef(null);
+  // "Thử chấm lại" (diagnostic recovery): one request at a time, even on a double click.
+  const chamLaiRef = useRef(false);
+  const [chamLai, setChamLai] = useState({ dangGui: false, loi: null, daThu: false });
 
   const load = useCallback(async ({ quiet = false } = {}) => {
     if (!quiet) { setLoading(true); setError(null); }
@@ -79,6 +83,12 @@ export default function QuizResult() {
   // không chạy lại, và vòng hỏi chết lặng — trang đứng mãi ở "đang chấm".
   useEffect(() => {
     if (result?.status !== "submitted") { batDauChoRef.current = null; return undefined; }
+    // Nobody is grading (stalled) or retries are used up (failed): asking again changes
+    // nothing until the learner retries, so stop polling instead of spinning.
+    if (result?.grading_state === "stalled" || result?.grading_state === "failed") {
+      batDauChoRef.current = null;
+      return undefined;
+    }
     if (truotRef.current >= MAX_CONSECUTIVE_FETCH_FAILURES) return undefined;
     if (batDauChoRef.current === null) batDauChoRef.current = Date.now();
     if (Date.now() - batDauChoRef.current > REGRADE_STALL_MS) {
@@ -93,6 +103,31 @@ export default function QuizResult() {
   }, [result, nhip, load]);
 
   const graded = result?.status === "graded";
+  // Only the server knows whether a grader still holds the claim; an older backend
+  // sends no `grading_state`, and then no retry is offered (today's behaviour).
+  const stalled = result?.status === "submitted" && result?.grading_state === "stalled";
+  const gradingFailed = result?.status === "submitted" && result?.grading_state === "failed";
+
+  const thuChamLai = async () => {
+    if (chamLaiRef.current) return;
+    chamLaiRef.current = true;
+    setChamLai((s) => ({ ...s, dangGui: true, loi: null }));
+    try {
+      await submitAttempt(attemptId);
+      // 200 (graded now) or 202 (grading in the background): reload, and let the
+      // bounded poll above start a fresh 5-minute window if it is still grading.
+      batDauChoRef.current = null;
+      truotRef.current = 0;
+      setKetChamBai(false);
+      setChamLai({ dangGui: false, loi: null, daThu: true });
+      await load({ quiet: true });
+      setNhip((n) => n + 1);
+    } catch (e) {
+      setChamLai((s) => ({ ...s, dangGui: false, loi: moTaLoi(e, "Chưa thử chấm lại được.") }));
+    } finally {
+      chamLaiRef.current = false;
+    }
+  };
   // Fail closed for any current or future non-final status: completed-result
   // presentation is authorized only by the explicit graded state.
   const grading = Boolean(result) && !graded;
@@ -159,7 +194,29 @@ export default function QuizResult() {
     >
       {!result ? null : (
         <>
-          {ketChamBai && (
+          {(stalled || gradingFailed) && (
+            <div className="surface-card !p-3.5 flex items-start gap-2.5 mb-4" role="status"
+              style={{ borderColor: "var(--err)" }}>
+              <Icon name="AlertCircle" size={15} className="mt-0.5 shrink-0" />
+              <div className="flex-1 text-body text-text-secondary">
+                {gradingFailed
+                  ? "Bài này chưa chấm được sau nhiều lần thử. Hãy quay lại sau; câu trả lời của bạn vẫn được lưu."
+                  : chamLai.daThu
+                    ? "Lần chấm lại vừa rồi chưa thành công. Bạn có thể thử thêm."
+                    : "Việc chấm bài đã dừng giữa chừng. Câu trả lời của bạn vẫn được lưu."}
+                {chamLai.loi && (
+                  <div className="text-small mt-1" style={{ color: "var(--err)" }}>{chamLai.loi}</div>
+                )}
+              </div>
+              {stalled && (
+                <button type="button" className="btn-secondary text-small shrink-0"
+                  onClick={thuChamLai} disabled={chamLai.dangGui} aria-busy={chamLai.dangGui}>
+                  {chamLai.dangGui ? "Đang gửi…" : "Thử chấm lại"}
+                </button>
+              )}
+            </div>
+          )}
+          {ketChamBai && !stalled && !gradingFailed && (
             <div className="text-small flex items-center gap-1.5 mb-3" style={{ color: "var(--err)" }}>
               <Icon name="AlertCircle" size={14} />
               Bài chưa được chấm xong sau 5 phút — có thể việc chấm đã dừng giữa chừng.

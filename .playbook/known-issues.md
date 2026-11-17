@@ -8272,3 +8272,29 @@ after 155 passed across the ten migration/idempotency/concurrency files and
 duplicate keys: old fixture -> teardown ERROR and the practice idempotency test fails; new
 fixture -> no teardown error, the next tests pass, verifier says valid. Logs:
 `studymap-qa-execution/v6/results/185-harness/`.
+
+### Diagnostic attempts stuck in `submitted`; two graders on one attempt (2026-11-17)
+
+**Root cause:** `submit_attempt` committed `submitted` before grading. A crash or a grading
+error in between left the attempt there for good: a second submit answered 409, nothing
+swept attempts, and the result page only said "stuck" after 5 minutes. Both diagnostic
+graders used `grade_attempt(once=False)`, so a duplicated or retried job wrote scores
+twice (last wins) and ran gap analysis twice. Mastery rows were NOT doubled
+(`analyze_attempt` rewrites the per-attempt snapshot). A process dying between the score
+commit and gap analysis left a graded attempt with no mastery.
+
+**Fix (owner-approved scope):** the claim of #185 (`grading_claimed_at`, lease) is taken at
+submit and returned; a retry reclaims a free/expired claim (`reclaim_for_retry`), answers
+202 while a grader holds it or its job is queued, 200 with the STORED result for a graded
+attempt (mastery rebuilt if missing, no LLM). Jobs are fenced (`start_grading_job`): only
+the registered job grades; a stale or duplicated job ends as a no-op BEFORE any model
+call. A failed enqueue forgets the job, releases the claim and refunds the retry. Learner
+retries are capped per attempt (`GRADING_MANUAL_RETRY_MAX`, 3) on the diagnostic AND the
+practice route. The generic route refuses practice quizzes. A recovery sweep exists but
+is OFF (`GRADING_RECOVERY_ENABLED`), dry-run by default, batch/attempts/inflight capped,
+one budget across processes (advisory lock), enqueue-only. `grading_state` in results
+drives the FE "Thử chấm lại".
+
+**Regression:** `tests/test_diagnostic_grading_recovery.py` (29; 5 red on `5e18271`, 8
+more red on the first implementation after Codex's review), FE
+`QuizResult.retryGrading.test.jsx` (9; 6 red on the old page).

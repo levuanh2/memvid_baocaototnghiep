@@ -275,9 +275,13 @@ def test_a_graded_attempt_cannot_be_submitted_again(owner, practice, counts):
 
     quiz_id, qids = practice
     first = _submit(quiz_id, owner, {qids[0]: "dung", qids[1]: "sai"}, _key())
-    with pytest.raises(attempts_uc.AttemptKhongConDangLam):
-        attempts_uc.submit_attempt(first["attempt_id"], owner, bat_buoc_chu_so_huu=True,
-                                   dispatch_grading=lambda *a: pytest.fail("no grading"))
+    # Since the diagnostic recovery (owner decision 2026-11-17) a graded attempt answers
+    # 200 with its STORED result instead of 409. The invariant is unchanged: no regrading.
+    again, background = attempts_uc.submit_attempt(
+        first["attempt_id"], owner, bat_buoc_chu_so_huu=True,
+        dispatch_grading=lambda *a: pytest.fail("no grading"))
+    assert background is False and again["grading"] == "done"
+    assert again["score"] == first["score"]
     assert counts["grade"] == [first["attempt_id"]]
 
 

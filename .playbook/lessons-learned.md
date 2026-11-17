@@ -3755,3 +3755,12 @@ having reached its end. A fixture that rebuilds a unique index must first remove
 duplicates a half-finished test may have left, or one failure turns into errors in other
 files. And any `subprocess.run(text=True)` that reads Vietnamese output needs
 `encoding="utf-8"`: the Windows default is cp1252.
+
+
+## 2026-11-17 — A claim that only fences the final write still pays twice
+
+`save_grades(once=True)` stopped a second grader from writing, but only after it had
+called the model for every answer. Fence the expensive part: decide who the grader is
+before the work starts (register the job under the claim, refuse a stale or duplicated
+job at start), and give back what a failure did not use (claim, retry count) so a retry
+is neither blocked by a ghost job nor charged for work that never ran.
