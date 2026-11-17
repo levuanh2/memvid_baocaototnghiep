@@ -115,7 +115,7 @@ export default function QuizResult() {
   const gradingFailed = result?.status === "submitted" && result?.grading_state === "failed";
 
   // `gui`: submit (a stuck attempt) or regrade (a provisional result's missing answers).
-  const thuChamLai = async (gui = submitAttempt) => {
+  const thuChamLai = async (gui = submitAttempt, { focusBanner = false } = {}) => {
     if (chamLaiRef.current) return;
     chamLaiRef.current = true;
     setChamLai((s) => ({ ...s, dangGui: true, loi: null }));
@@ -138,7 +138,7 @@ export default function QuizResult() {
     chamLaiRef.current = false;
     // A regrade that was accepted (or refused for good) removes its button: keep the
     // keyboard on the banner instead of dropping it to the page (agy task35).
-    if (gui === regradeAttempt) banTamRef.current?.focus();
+    if (focusBanner) banTamRef.current?.focus();
   };
   // Fail closed for any current or future non-final status: completed-result
   // presentation is authorized only by the explicit graded state.
@@ -302,7 +302,7 @@ export default function QuizResult() {
               </p>
               {result?.regrade_state === "available" && (
                 <button type="button" className="btn-secondary text-small mt-2.5"
-                  onClick={() => thuChamLai(regradeAttempt)} disabled={chamLai.dangGui}
+                  onClick={() => thuChamLai(regradeAttempt, { focusBanner: true })} disabled={chamLai.dangGui}
                   aria-busy={chamLai.dangGui}>
                   {chamLai.dangGui ? "Đang gửi…" : "Chấm lại câu còn thiếu"}
                 </button>

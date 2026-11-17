@@ -3789,3 +3789,14 @@ backend) hit three wrong assumptions, and Codex task33 found five weaknesses:
 
 Regression: the spec itself (2 tests, both auth modes); the guard was checked with an
 unrelated healthy server on :8080 (spec refused before any quiz call).
+
+## 2026-11-17 — Vitest "all tests passed" is not a pass: read the exit code
+
+PR #190 CI failed with `Test Files 233 passed` and six `##[error] No "regradeAttempt"
+export is defined on the "../../utils/studyApi" mock`. `QuizResult.thuChamLai` compared
+`gui === regradeAttempt`, which reads the export even on the old "Thử chấm lại" path;
+the older QuizResult test files mock `studyApi` without it. Vitest reports such an access
+as an unhandled error after the tests and exits 1. The local check grepped only the
+"Tests" line, so it looked green. Fix: an explicit `{ focusBanner }` option instead of
+comparing functions. Prevention: judge a run by its exit code (`echo $?`), not by
+grepping the summary line; and do not read a module export on a path that does not use it.
