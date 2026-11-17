@@ -8407,5 +8407,12 @@ another learner or an attempt of another quiz. The submit's Idempotency-Key cont
 unchanged (no attempt opened, no answer written). Practice page: "Chấm lại câu còn
 thiếu" under a provisional score. No schema change.
 
-**Regression:** `BE/tests/test_practice_provisional_regrade.py` (11, red first),
-`FE/src/pages/study/Practice.provisionalRegrade.test.jsx` (4, red first).
+**UX review fixes (agy task38):** the used-up 409 now carries a stable machine field
+`ma: "het_luot_cham_lai"` (additive; the message is unchanged, also on the diagnostic
+route) and `_appError` keeps the response body, so the page no longer matches wording;
+the banner matches #190 (warn border, icon, "Kết quả tạm thời.", the exact count) on its
+own row of the flex-wrap score card; a regrade that grades nothing says so; focus moves
+to the banner text or the score card when the button goes away.
+
+**Regression:** `BE/tests/test_practice_provisional_regrade.py` (12, red first),
+`FE/src/pages/study/Practice.provisionalRegrade.test.jsx` (6, red first).

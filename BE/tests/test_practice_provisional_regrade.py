@@ -231,3 +231,16 @@ def test_http_contract(client, owner, practice, fake):
     res = client.post(f"/api/practice/{quiz_id}/regrade", json={"attempt_id": body["attempt_id"]})
     assert res.status_code == 200 and res.get_json()["grading_complete"] is True
     assert client.post(f"/api/practice/{quiz_id}/regrade", json={}).status_code == 400
+
+
+def test_used_up_retries_carry_a_machine_code(client, owner, practice, fake, monkeypatch):
+    """The page recognises "no retry left" by a stable code, not by the wording (agy
+    task38 F2); the field is additive, the message is unchanged."""
+    monkeypatch.setenv("GRADING_MANUAL_RETRY_MAX", "1")
+    quiz_id, _, _, body = _provisional(owner, practice, fake)
+    fake.fail = {SA_FLAKY}
+    _regrade(quiz_id, owner, body["attempt_id"])
+    res = client.post(f"/api/practice/{quiz_id}/regrade", json={"attempt_id": body["attempt_id"]})
+    assert res.status_code == 409
+    assert res.get_json() == {"error": "Đã hết lượt thử chấm lại cho bài này",
+                              "status": "graded", "ma": "het_luot_cham_lai"}

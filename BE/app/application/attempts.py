@@ -82,6 +82,11 @@ class HetLuotChamLai(AttemptError):
     regrade of short answers costs LLM calls, so retries are capped per attempt."""
     loi = "Đã hết lượt thử chấm lại cho bài này"
 
+    def __init__(self, loi: Optional[str] = None, **kem: Any):
+        # A stable machine code next to the message, so a page can end its retry offer
+        # without matching the wording (agy task38). Additive field of the 409 body.
+        super().__init__(loi, **{"ma": "het_luot_cham_lai", **kem})
+
 
 class KhongCoCauChoChamLai(AttemptError):
     """Regrade asked for an attempt that is not graded (still in progress, waiting for

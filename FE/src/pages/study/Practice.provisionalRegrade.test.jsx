@@ -61,7 +61,7 @@ async function submitWith(result) {
   await flush();
 }
 const regradeButton = () => [...container.querySelectorAll("button")].find((b) => /Chấm lại câu còn thiếu|Đang chấm lại/.test(b.textContent));
-const failure = (status, code) => Object.assign(new Error(code), { status, code });
+const failure = (status, code, body = {}) => Object.assign(new Error(code), { status, code, body: { error: code, ...body } });
 
 describe("Practice — Chấm lại câu còn thiếu", () => {
   it("is offered on a provisional result only", async () => {
@@ -88,12 +88,34 @@ describe("Practice — Chấm lại câu còn thiếu", () => {
 
   it("ends the offer when retries are used up, keeping the provisional result", async () => {
     await submitWith(PROVISIONAL);
-    regradePractice.mockRejectedValue(failure(409, "Đã hết lượt thử chấm lại cho bài này"));
+    // Recognised by the machine code, not by the wording (agy task38 F2).
+    regradePractice.mockRejectedValue(failure(409, "Thông báo đã đổi chữ", { ma: "het_luot_cham_lai" }));
     await act(async () => { regradeButton().click(); });
     await flush();
     expect(regradeButton()).toBeUndefined();
     expect(container.textContent).toContain("Đã hết lượt chấm lại cho bài này. Kết quả tạm thời được giữ nguyên.");
     expect(container.textContent).toContain("điểm tạm tính");
+    expect(document.activeElement?.getAttribute("role"), "focus moves to the banner text").toBe("status");
+  });
+
+  it("says so when a regrade did not grade the missing answers, and names how many", async () => {
+    await submitWith(PROVISIONAL);
+    expect(container.textContent).toContain("1 câu tự luận chưa chấm được do bộ chấm AI không khả dụng");
+    regradePractice.mockResolvedValue(PROVISIONAL);
+    await act(async () => { regradeButton().click(); });
+    await flush();
+    expect(container.textContent).toContain("Lần chấm lại vừa rồi chưa chấm được các câu này. Bạn có thể thử thêm.");
+    expect(regradeButton()).toBeDefined();
+  });
+
+  it("moves focus to the result when the regrade completes and the button goes away", async () => {
+    await submitWith(PROVISIONAL);
+    regradePractice.mockResolvedValue(COMPLETE);
+    regradeButton().focus();
+    await act(async () => { regradeButton().click(); });
+    await flush();
+    expect(regradeButton()).toBeUndefined();
+    expect(document.activeElement).not.toBe(document.body);
   });
 
   it("keeps the offer when the request fails or another one is grading", async () => {

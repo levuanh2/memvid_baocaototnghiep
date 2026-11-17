@@ -16,9 +16,9 @@ import {
   moTaLoi,
 } from "../../utils/studyApi";
 
-// The server's text for HetLuotChamLai (BE/app/application/attempts.py): no regrade is
+// The machine code of HetLuotChamLai (BE/app/application/attempts.py): no regrade is
 // left, so the offer ends. Any other failure (network, "đang được chấm") keeps it.
-const HET_LUOT_CHAM_LAI = "Đã hết lượt thử chấm lại cho bài này";
+const HET_LUOT_CHAM_LAI = "het_luot_cham_lai";
 import { DANG_CHAM, forgetSubmitKey, submitKeyFor } from "../../utils/practiceSubmitKey";
 
 // The first request is still grading (BE 409 DANG_CHAM): ask again with the SAME key.
@@ -39,20 +39,33 @@ export default function Practice() {
   const submitKeyMemo = useRef(null);
   // "Chấm lại câu còn thiếu": one request at a time, even on a double click.
   const chamLaiRef = useRef(false);
-  const [chamLai, setChamLai] = useState({ dangGui: false, loi: null, het: false });
+  const [chamLai, setChamLai] = useState({ dangGui: false, loi: null, het: false, chuaXong: false });
+  // Focus lands here when the button goes away (agy task38): the banner text while the
+  // result stays provisional, the score card once it is complete.
+  const banTamRef = useRef(null);
+  const ketQuaRef = useRef(null);
 
   const chamLaiCauThieu = async () => {
     if (chamLaiRef.current || !graded?.attempt_id) return;
     chamLaiRef.current = true;
     setChamLai((s) => ({ ...s, dangGui: true, loi: null }));
+    let xong = false;
+    let het = false;
     try {
-      setGraded(await regradePractice(quizId, graded.attempt_id));
-      setChamLai({ dangGui: false, loi: null, het: false });
+      const result = await regradePractice(quizId, graded.attempt_id);
+      setGraded(result);
+      xong = result?.grading_complete !== false && Number(result?.ungraded_count || 0) === 0;
+      setChamLai({ dangGui: false, loi: null, het: false, chuaXong: !xong });
     } catch (e) {
-      const het = e?.status === 409 && e?.code === HET_LUOT_CHAM_LAI;
-      setChamLai({ dangGui: false, loi: het ? null : moTaLoi(e, "Chưa chấm lại được."), het });
+      het = e?.status === 409 && e?.body?.ma === HET_LUOT_CHAM_LAI;
+      setChamLai({ dangGui: false, loi: het ? null : moTaLoi(e, "Chưa chấm lại được."),
+                   het, chuaXong: false });
     } finally {
       chamLaiRef.current = false;
+    }
+    if (xong || het) {
+      // The button is gone: keep the keyboard where the news is.
+      setTimeout(() => (xong ? ketQuaRef : banTamRef).current?.focus(), 0);
     }
   };
 
@@ -152,7 +165,8 @@ export default function Practice() {
       {!quiz ? null : (
         <>
           {graded && (
-            <section className="surface-card mb-6 flex flex-wrap items-center gap-6">
+            <section ref={ketQuaRef} tabIndex={-1} aria-label="Kết quả bài luyện tập"
+              className="surface-card mb-6 flex flex-wrap items-center gap-6">
               <div className="flex items-center gap-4">
                 <SealMeter
                   score={(graded.percentage ?? 0) / 100}
@@ -184,21 +198,37 @@ export default function Practice() {
                 </div>
               </div>
               {provisional && (
-                <div className="mt-4">
-                  <p role="status" className="text-body text-text-secondary">
-                    {chamLai.het
-                      ? "Đã hết lượt chấm lại cho bài này. Kết quả tạm thời được giữ nguyên."
-                      : "Bộ chấm AI chưa chấm được một số câu tự luận; các câu này không bị tính là sai."}
-                    {chamLai.loi && (
-                      <span className="block text-small mt-1" style={{ color: "var(--err)" }}>{chamLai.loi}</span>
+                // Same banner as the diagnostic result page (#190), on its own row of the
+                // flex-wrap score card (w-full), the button below the text.
+                <div className="w-full flex items-start gap-2.5 rounded-md border p-3"
+                  style={{ borderColor: "var(--warn)" }}>
+                  <Icon name="AlertCircle" size={16} className="shrink-0 mt-0.5" />
+                  <div className="min-w-0 flex-1">
+                    <p ref={banTamRef} tabIndex={-1} role="status" className="text-body text-text-secondary">
+                      <strong className="text-text-primary">Kết quả tạm thời.</strong>{" "}
+                      {ungradedCount} câu tự luận chưa chấm được do bộ chấm AI không khả dụng.
+                      Các câu này không bị tính là sai.
+                      {chamLai.chuaXong && !chamLai.het && (
+                        <span className="block mt-1.5">
+                          Lần chấm lại vừa rồi chưa chấm được các câu này. Bạn có thể thử thêm.
+                        </span>
+                      )}
+                      {chamLai.het && (
+                        <span className="block mt-1.5">
+                          Đã hết lượt chấm lại cho bài này. Kết quả tạm thời được giữ nguyên.
+                        </span>
+                      )}
+                      {chamLai.loi && (
+                        <span className="block text-small mt-1" style={{ color: "var(--err)" }}>{chamLai.loi}</span>
+                      )}
+                    </p>
+                    {!chamLai.het && (
+                      <button type="button" className="btn-secondary text-small mt-2.5"
+                        onClick={chamLaiCauThieu} disabled={chamLai.dangGui} aria-busy={chamLai.dangGui}>
+                        {chamLai.dangGui ? "Đang chấm lại…" : "Chấm lại câu còn thiếu"}
+                      </button>
                     )}
-                  </p>
-                  {!chamLai.het && (
-                    <button type="button" className="btn-secondary text-small mt-2.5"
-                      onClick={chamLaiCauThieu} disabled={chamLai.dangGui} aria-busy={chamLai.dangGui}>
-                      {chamLai.dangGui ? "Đang chấm lại…" : "Chấm lại câu còn thiếu"}
-                    </button>
-                  )}
+                  </div>
                 </div>
               )}
             </section>
