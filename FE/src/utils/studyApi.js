@@ -159,8 +159,12 @@ export const generatePractice = (payload) => _send("/api/practice/generate", "PO
 export const getPractice = (practiceQuizId) =>
   _get(`/api/practice/${encodeURIComponent(practiceQuizId)}`);
 
-export const submitPractice = (practiceQuizId, answers) =>
-  _send(`/api/practice/${encodeURIComponent(practiceQuizId)}/submit`, "POST", { answers });
+// `idempotencyKey` goes in the BODY, not the `Idempotency-Key` header: a new header on a
+// cross-origin call needs the backend's CORS allowlist first, and the web and the backend
+// deploy separately. An older backend ignores the unknown field.
+export const submitPractice = (practiceQuizId, answers, { idempotencyKey } = {}) =>
+  _send(`/api/practice/${encodeURIComponent(practiceQuizId)}/submit`, "POST",
+    idempotencyKey ? { answers, idempotency_key: idempotencyKey } : { answers });
 
 export const getPracticeComparison = (practiceQuizId) =>
   _get(`/api/practice/${encodeURIComponent(practiceQuizId)}/comparison`);

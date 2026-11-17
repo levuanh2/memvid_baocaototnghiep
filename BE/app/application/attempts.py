@@ -77,6 +77,18 @@ class JobChamKhongTonTai(AttemptError):
     loi = "Job not found"
 
 
+class HetLuotChamLai(AttemptError):
+    """The learner used every retry of a stuck attempt (`GRADING_MANUAL_RETRY_MAX`): each
+    regrade of short answers costs LLM calls, so retries are capped per attempt."""
+    loi = "Đã hết lượt thử chấm lại cho bài này"
+
+
+class BaiLuyenTapSaiRoute(AttemptError):
+    """A practice attempt on the generic route: it would skip the practice route's
+    Idempotency-Key and replay rules (risk D, review of #185)."""
+    loi = "Bài luyện tập nộp qua /api/practice/<id>/submit"
+
+
 # ── Bản công khai ──────────────────────────────────────────────────────────
 def attempt_public(attempt: dict) -> dict:
     out = dict(attempt)
@@ -178,7 +190,9 @@ def save_answers(attempt_id: str, user_id: Optional[str], raw: Any, *,
     if unknown:
         raise CauHoiLac(f"question_id không thuộc quiz: {unknown}")
 
-    _attempts.save_draft_answers(attempt_id, {str(k): v for k, v in raw.items()})
+    if _attempts.save_draft_answers(attempt_id, {str(k): v for k, v in raw.items()}) is None:
+        # Submitted between the check above and the write (review of #183).
+        raise AttemptDaNop(status=(_attempts.get_attempt(attempt_id) or {}).get("status"))
     return attempt_public(_attempts.get_attempt(attempt_id))
 
 
@@ -194,28 +208,154 @@ def submit_attempt(attempt_id: str, user_id: Optional[str], *,
     `app.main.run_short_answer_grading_job`; nếu tầng này import thẳng impl ở
     `app.application.short_answer_grading`, đường dẫn đổi và job cũ chết ở worker — im
     lặng, vì chế độ thread không dùng đường dẫn nên test vẫn xanh.
+
+    Retry contract (diagnostic recovery, owner-approved 2026-11-17), one grader per
+    attempt through the claim `submit` takes:
+      - `in_progress` -> submitted and graded (200) or queued (202), as before;
+      - already `graded` -> 200 with the STORED result, no regrading (a lost response
+        used to turn the learner's second click into 409 "Nộp bài thất bại"); missing
+        mastery rows are rebuilt (no LLM);
+      - `submitted` with a live claim or a queued/running job -> 202 "pending", no grader;
+      - `submitted` and nobody grading (crash, grading error) -> regraded (200/202);
+      - cancelled -> 409, a practice attempt -> 409 (practice has its own route).
     """
     from app.domains.attempts import repository as _attempts
-    from app.domains.attempts import service as _grading_service
 
     attempt = load_owned_attempt(attempt_id, user_id,
                                  bat_buoc_chu_so_huu=bat_buoc_chu_so_huu)
+    _tu_choi_bai_luyen_tap(attempt["quiz_id"])
     submitted = _attempts.submit(attempt_id)
-    if submitted is None:
-        raise AttemptKhongConDangLam(status=attempt["status"])
+    if submitted is not None:
+        return _grade_or_dispatch(attempt_id, attempt["quiz_id"], user_id,
+                                  submitted["claimed_at"], dispatch_grading, refund=None)
 
-    if not _grading_service.has_short_answer(attempt["quiz_id"]):
-        result = _grading_service.grade_attempt(attempt_id)
+    outcome, claimed_at = _attempts.reclaim_for_retry(
+        attempt_id, job_active=job_active, max_retries=manual_retry_max())
+    if outcome == "graded":
+        repair_mastery(attempt_id)
+        return ({**attempt_public(_attempts.get_attempt(attempt_id)),
+                 "grading": "done"}, False)
+    if outcome == "pending":
+        stored = _attempts.get_attempt(attempt_id)
+        return ({**attempt_public(stored), "grading": "pending",
+                 "job_id": (stored.get("metadata") or {}).get("grading_job_id")}, True)
+    if outcome == "grade":
+        return _grade_or_dispatch(attempt_id, attempt["quiz_id"], user_id, claimed_at,
+                                  dispatch_grading, refund="manual_retries")
+    if outcome == "exhausted":
+        raise HetLuotChamLai(status="submitted")
+    raise AttemptKhongConDangLam(status=attempt["status"])
+
+
+def manual_retry_max() -> int:
+    """Learner retries per stuck attempt (`GRADING_MANUAL_RETRY_MAX`, default 3), applied
+    by the repository only to quizzes with short answers (an objective regrade costs no
+    LLM call). The first submit is not a retry; the recovery sweep has its own cap."""
+    return max(0, _env_int("GRADING_MANUAL_RETRY_MAX", 3))
+
+
+def _tu_choi_bai_luyen_tap(quiz_id: str) -> None:
+    from app.domains.quiz import repository as _quiz_repo
+
+    if (_quiz_repo.get_quiz(quiz_id, include_answers=False) or {}).get("quiz_type") == "practice":
+        raise BaiLuyenTapSaiRoute()
+
+
+def _grade_or_dispatch(attempt_id: str, quiz_id: str, user_id: Optional[str],
+                       claimed_at, dispatch_grading, *, refund: Optional[str]
+                       ) -> Tuple[dict, bool]:
+    """Grade under OUR claim: objective-only inline (no LLM), short answers in a job.
+
+    On any failure the claim is released (only ours, by timestamp), so the next retry
+    grades at once instead of after the lease."""
+    from app.domains.attempts import repository as _attempts
+    from app.domains.attempts import service as _grading_service
+
+    if not _grading_service.has_short_answer(quiz_id):
+        try:
+            result = _grading_service.grade_attempt(attempt_id, once=True)
+        except Exception:
+            _attempts.release_grading_claim(attempt_id, claimed_at)
+            raise
+        # None: another grader saved first; its stored result is the answer.
         return ({**attempt_public(_attempts.get_attempt(attempt_id)),
                  "grading": "done", **(result or {})}, False)
 
     job_id = str(uuid.uuid4())
-    from app.domains.jobs.jobs_store import create_job
+    from app.domains.jobs.jobs_store import create_job, update_job
     create_job(job_id, job_type="short_answer_grading", status="pending", progress=0,
                current_node="Queued", user_id=user_id)
-    dispatch_grading(job_id, attempt_id, user_id)
+    if not _attempts.set_grading_job(attempt_id, job_id, claimed_at):
+        # Our claim was lost (lease ran out, another grader took over): that grader
+        # stands, the retry we counted is given back, and the answer is what is stored.
+        update_job(job_id, status="error", error_text="superseded before dispatch")
+        _attempts.abandon_job(attempt_id, job_id, None, refund=refund)
+        stored = _attempts.get_attempt(attempt_id)
+        if stored["status"] == "graded":
+            return ({**attempt_public(stored), "grading": "done"}, False)
+        return ({**attempt_public(stored), "grading": "pending",
+                 "job_id": (stored.get("metadata") or {}).get("grading_job_id")}, True)
+    try:
+        dispatch_grading(job_id, attempt_id, user_id)
+    except Exception:
+        # Nothing was accepted: no ghost pending job, our claim and retry given back.
+        update_job(job_id, status="error", error_text="enqueue failed")
+        _attempts.abandon_job(attempt_id, job_id, claimed_at, refund=refund)
+        raise
     return ({**attempt_public(_attempts.get_attempt(attempt_id)),
              "grading": "pending", "job_id": job_id}, True)
+
+
+def job_active(job_id: Optional[str]) -> bool:
+    """A grading job still queued or running that reported within the grading lease
+    (`GRADING_LEASE_S`). A running job reports at every answer (progress + claim
+    heartbeat); a killed worker or a queue that lost the job goes silent, and after the
+    lease (not the 15-minute stuck-job threshold, agy task27) the attempt can be retried.
+    A late start of such a job is harmless: it is no longer registered, so it ends as a
+    no-op before any model call."""
+    if not job_id:
+        return False
+    from datetime import datetime, timezone
+
+    from app.domains.jobs.jobs_store import get_job
+
+    try:
+        j = get_job(job_id)
+    except Exception:
+        return False
+    if not j or j.get("status") not in ("pending", "running", "processing"):
+        return False
+    try:
+        updated = datetime.fromisoformat(str(j.get("updated_at")))
+        if updated.tzinfo is None:
+            updated = updated.replace(tzinfo=timezone.utc)
+    except (TypeError, ValueError):
+        return False
+    from app.domains.attempts.repository import grading_lease_s
+
+    return (datetime.now(timezone.utc) - updated).total_seconds() < grading_lease_s()
+
+
+def repair_mastery(attempt_id: Optional[str]) -> bool:
+    """Rebuild a graded attempt's concept-mastery snapshot when it is missing (scores
+    were saved, then the process died or analysis failed). Deterministic, no LLM;
+    fail-open like grading-time analysis. Shared with the practice route.
+
+    True when nothing is left to do (rows exist, or analysis ran without error: a quiz
+    without concept tags legitimately has none); False when analysis failed."""
+    from app.domains.attempts import repository as _attempts
+    from app.domains.gap_analysis import service as _gap
+
+    if not attempt_id or _gap.list_for_attempt(attempt_id):
+        return True
+    if (_attempts.get_attempt(attempt_id) or {}).get("status") != "graded":
+        return True
+    try:
+        _gap.analyze_attempt(attempt_id)
+        return True
+    except Exception as exc:
+        print(f"[grading] mastery repair failed: {exc}", flush=True)
+        return False
 
 
 def grading_job(job_id: str, user_id: Optional[str], *,
@@ -264,8 +404,15 @@ def results(attempt_id: str, user_id: Optional[str], *,
             "score": answer.get("score"),
             "feedback": answer.get("feedback"),
         })
+    from app.domains.attempts import repository as _attempts
+
     return {
         **attempt_public(attempt),
+        # "grading" | "stalled" | "graded" | "cancelled". The result page offers
+        # "Thử chấm lại" only on "stalled": nobody holds a live claim and no job is
+        # queued or running, so a retry starts exactly one grader.
+        "grading_state": _attempts.grading_state(attempt_id, job_active=job_active,
+                                                 max_retries=manual_retry_max()),
         "quiz_id": attempt["quiz_id"],
         "quiz_title": quiz.get("title"),
         "questions": questions,
@@ -286,3 +433,97 @@ def concept_masteries(attempt_id: str, user_id: Optional[str], *,
         rows = _gap.list_for_attempt(attempt_id)
     return {"attempt_id": attempt_id, "status": attempt["status"],
             "concept_masteries": rows}
+
+
+# ── Recovery sweep (owner-approved 2026-11-17: implemented, DISABLED by default) ──
+def _env_flag(name: str, default: bool) -> bool:
+    import os
+
+    raw = (os.getenv(name) or "").strip().lower()
+    return default if not raw else raw in ("1", "true", "yes", "on")
+
+
+def _env_int(name: str, default: int) -> int:
+    import os
+
+    try:
+        return int((os.getenv(name) or "").strip() or default)
+    except ValueError:
+        return default
+
+
+def recover_grading(*, dispatch_grading: Callable[[str, str, Optional[str]], Any],
+                    enabled: Optional[bool] = None, dry_run: Optional[bool] = None,
+                    older_than_s: Optional[int] = None, limit: Optional[int] = None,
+                    max_attempts: Optional[int] = None, max_inflight: Optional[int] = None,
+                    ) -> dict:
+    """Regrade stuck `submitted` attempts and rebuild missing mastery. Bounded, logged.
+
+    OFF unless `GRADING_RECOVERY_ENABLED=1`; even then a dry run (picks and logs, changes
+    nothing) unless `GRADING_RECOVERY_DRY_RUN=0`. Each regrade is a background grading
+    job (`dispatch_grading`), never on the calling request thread; an attempt with short
+    answers costs one LLM call per short answer, so the knobs are the budget:
+    GRADING_RECOVERY_OLDER_THAN_S (900), GRADING_RECOVERY_BATCH (5 per call),
+    GRADING_RECOVERY_MAX_ATTEMPTS (3 per attempt), GRADING_RECOVERY_MAX_INFLIGHT (5).
+    Called from the throttled jobs maintenance (`app.main._run_jobs_maintenance`).
+    Mastery repair is deterministic (no LLM).
+    """
+    import json
+
+    from app.domains.attempts import repository as _attempts
+
+    enabled = _env_flag("GRADING_RECOVERY_ENABLED", False) if enabled is None else enabled
+    if not enabled:
+        return {"enabled": False}
+    dry_run = _env_flag("GRADING_RECOVERY_DRY_RUN", True) if dry_run is None else dry_run
+    older_than_s = _env_int("GRADING_RECOVERY_OLDER_THAN_S", 900) if older_than_s is None else older_than_s
+    limit = _env_int("GRADING_RECOVERY_BATCH", 5) if limit is None else limit
+    max_attempts = _env_int("GRADING_RECOVERY_MAX_ATTEMPTS", 3) if max_attempts is None else max_attempts
+    max_inflight = _env_int("GRADING_RECOVERY_MAX_INFLIGHT", 5) if max_inflight is None else max_inflight
+
+    claim = _attempts.claim_stuck_for_recovery(
+        older_than_s=older_than_s, limit=limit, max_attempts=max_attempts,
+        max_inflight=max_inflight, dry_run=dry_run, job_active=job_active)
+    dispatched, failed = [], []
+    if not dry_run:
+        from app.domains.jobs.jobs_store import create_job, update_job
+
+        for c in claim["picked"]:
+            job_id = str(uuid.uuid4())
+            create_job(job_id, job_type="short_answer_grading", status="pending",
+                       progress=0, current_node="Recovery", user_id=c["user_id"])
+            if not _attempts.set_grading_job(c["attempt_id"], job_id, claim["claimed_at"]):
+                update_job(job_id, status="error", error_text="superseded before dispatch")
+                continue
+            try:
+                dispatch_grading(job_id, c["attempt_id"], c["user_id"])
+                dispatched.append(c["attempt_id"])
+            except Exception as exc:
+                update_job(job_id, status="error", error_text="enqueue failed")
+                _attempts.abandon_job(c["attempt_id"], job_id, claim["claimed_at"],
+                                      refund="recovery_attempts")
+                failed.append({"attempt_id": c["attempt_id"], "error": type(exc).__name__})
+
+    mastery = _attempts.graded_without_mastery(limit=limit)
+    repaired = 0
+    if not dry_run:
+        from app.domains.gap_analysis import service as _gap
+
+        for attempt_id in mastery:
+            if not repair_mastery(attempt_id):
+                continue  # analysis failed: try again next sweep (Codex task25)
+            repaired += bool(_gap.list_for_attempt(attempt_id))
+            _attempts.mark_mastery_checked(attempt_id)
+
+    report = {
+        "enabled": True, "dry_run": dry_run,
+        "candidates": [c["attempt_id"] for c in claim["picked"]],
+        "regraded": len(dispatched), "dispatch_failed": failed,
+        "mastery_candidates": len(mastery), "mastery_repaired": repaired,
+        "inflight": claim["inflight"], "gave_up": claim["gave_up"],
+        "skipped_active_job": claim["skipped_active_job"],
+        "limits": {"older_than_s": older_than_s, "batch": limit,
+                   "max_attempts": max_attempts, "max_inflight": max_inflight},
+    }
+    print(json.dumps({"event": "grading_recovery", **report}, ensure_ascii=False), flush=True)
+    return report
