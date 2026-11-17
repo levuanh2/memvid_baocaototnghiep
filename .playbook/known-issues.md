@@ -8120,3 +8120,86 @@ off-screen button then matches the same role+name as the visible CTA.
 **Prevention:** hiding by transform, width, opacity or pointer-events is visual only; anything
 that stays mounted while hidden needs `inert`. Label tests should match the bare text, not one
 quoting style.
+
+## Dev and test runs could still reach a hosted database or bucket (fixed 2026-11-16)
+
+**Symptom:** none observed; found by a read-only audit after the owner learned that the
+local `BE/.env` and root `.env` point the database and Storage at one Supabase project
+(whether EC2 production uses the same project is not yet checked).
+
+**Root cause:** four paths kept a way out after the 2026-09-04/05 fixes:
+- pytest compared `TEST_DATABASE_URL` with `DATABASE_URL` only by (host, db), so a hosted
+  database under another host name (direct `db.<ref>` host vs pooler) or with
+  `DATABASE_URL` absent passed. Migrations already required a loopback/CI host and a
+  `_test` name; pytest did not.
+- `guided_store.dsn()` fell back to `DATABASE_URL` with no pytest check. It is used when
+  `AUTH_PROTECT_APP_APIS=true` (set in the root `.env` on the developer machine) or
+  `GUIDED_JOB_STORE_BACKEND=postgres`.
+- `SUPABASE_URL`/`SUPABASE_SECRET_KEY` from `BE/.env` reached the test process, so an
+  upload through the `client` fixture wrote to the real bucket.
+- `scripts/run_e2e_server.py` (local Playwright) popped provider keys, which
+  `load_dotenv` refills from `BE/.env`, kept the bucket keys, and accepted any
+  `DATABASE_URL` from the shell.
+
+**Fix:** `app.db.kiem_dich_test()` applies `migration_guard.kiem_tra_dich` (test mode) to
+`TEST_DATABASE_URL` and, under pytest, to `JOBS_DATABASE_URL`; `guided_store.dsn()` never
+uses `DATABASE_URL` under pytest. `conftest.py` blanks the bucket keys at session start
+(the FPT/QUEUE pattern). `run_e2e_server.py` blanks provider and bucket keys and refuses a
+non-disposable `DATABASE_URL` (exit 2) before importing the app.
+`scripts/db_target_fingerprint.py` lets the owner compare EC2 with a dev machine by
+fingerprint only.
+
+**Regression:** `tests/test_devtest_isolation.py` (10 red on `main` `db005ab` with a fake
+dev `.env` using `.invalid` hosts); `test_db_isolation.py` hosted `_test` case now refused.
+
+**Follow-up the same day (Codex review of #187):** the raw-URL check could be bypassed:
+libpq/psycopg let query parameters (`host`, `hostaddr`, `dbname`, `service`, ...) replace the
+authority and path, so `127.0.0.1/x_test?host=<hosted>&dbname=postgres` passed the guard
+and SQLAlchemy connected to the hosted server (reproduced offline with
+`PGDialect_psycopg.create_connect_args`, no socket). The fingerprint helper hashed the same
+misleading authority. Also left open: `REDIS_URL` (hosted Redis from `BE/.env`), Gemini /
+Groq / Cohere keys (`conftest` popped Gemini/Groq, which dotenv refills) and a remote
+`OLLAMA_HOST`. **Fix:** test mode allows only `sslmode`, `connect_timeout`,
+`application_name` in the query (`ALLOWED_TEST_QUERY_KEYS`); the fingerprint uses the
+effective host/db/user; `local_service_or_blank` keeps Redis/Ollama only on loopback or a
+CI/compose service name (CI's `redis://localhost` stays); provider keys are set to `""`.
+**Regression:** 15 more tests in `test_devtest_isolation.py`, red on `17d5d45`.
+Still open by design: a backend started by hand with `BE/.env` (needs a production marker;
+owner approval).
+
+**Second follow-up (Codex re-check of 3c7f0e5):** libpq also takes the target from the
+process environment: `PGHOSTADDR` (or a `PGSERVICE` entry) picks the socket even when the
+URL names `host` and `dbname`, and `run_e2e_server` passed `env={}` to the guard while
+psycopg still read the real environment. `LLM_GATEWAY_ADDR` / `MINDMAP_SERVICE_ADDR` (gRPC,
+preferred by `llm_factory`) were not filtered. The fingerprint missed failover hosts and
+percent-encoded pooler users. **Fix:** test mode refuses while any of `PGHOSTADDR`,
+`PGHOST`, `PGPORT`, `PGDATABASE`, `PGSERVICE`, `PGSERVICEFILE` is non-empty (read from
+`os.environ`, names only); both harnesses keep the gRPC addresses only when local; the
+fingerprint covers every host, decodes the user, and prints UNRELIABLE (exit 3) when a
+libpq variable is set. **Regression:** 9 more tests, red on `3c7f0e5`.
+
+**Third follow-up (Codex re-check 2 of 08c4ff1):** the libpq check read only the process
+environment, but `BE/.env` is loaded later (the E2E server checks before importing the
+app; pytest may build an engine before dotenv runs), so a `PGHOSTADDR` that only lived in
+`BE/.env` still moved the target (reproduced: the E2E server started). **Fix:**
+`libpq_target_vars_set()` returns what WILL be in effect: process value if present, else
+`BE/.env`, then root `.env` (dotenv order); `SKIP_DOTENV` respected. The fingerprint strips
+ports from every candidate host and prints UNRELIABLE for a URL with `?service=`.
+**Regression:** 4 tests, red on `08c4ff1`; manual E2E run with a fake `BE/.env`: exit 124
+(server started) before, exit 2 after.
+
+**Fourth follow-up (Codex re-check 3 of ae9e091):** reading each env file alone with
+`dotenv_values` expanded `${X}` against the current process, but `load_dotenv` loads file by
+file, so `PGHOSTADDR=${X}` in root `.env` with X set in `BE/.env` expanded to "" in the
+guard and to an address at load time. **Fix:** read raw values (`interpolate=False`); a
+non-empty raw value counts as set (fail closed). The fingerprint no longer strips a "port"
+from a bare IPv6 literal. **Regression:** 2 tests, red on `ae9e091`.
+
+**Hand-started backend (2026-11-17):** `shared/dev_target_guard.py`, called by `app.main`
+right after the env files load, refuses to start when `PROCESS_ROLE` is not `web` /
+`mindmap-worker`, a `BE/.env` or root `.env` exists on disk (a source checkout;
+`BE/.dockerignore` keeps `.env` out of the image) and `DATABASE_URL` / `JOBS_DATABASE_URL`
+/ `SUPABASE_URL` points off this machine. Opt out on purpose with
+`STUDYMAP_ALLOW_REMOTE_TARGETS=1` after the fingerprint check. No new production variable:
+`docker-compose.prod.yml` already sets `PROCESS_ROLE` on both services. Skipped under pytest.
+**Regression:** `tests/test_dev_target_guard.py` (13).

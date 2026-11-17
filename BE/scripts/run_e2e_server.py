@@ -60,10 +60,33 @@ os.environ.setdefault("GUIDED_MINDMAP_V3_ENABLED", "true")
 os.environ.setdefault("GUIDED_JOB_STORE_BACKEND", "sqlite")
 # Same ephemeral Postgres the rest of CI already uses (backend-integration-and-smoke).
 os.environ.setdefault("DATABASE_URL", "postgresql://postgres:postgres@localhost:5432/studymap_test")
-os.environ.pop("GEMINI_API_KEY", None)
-os.environ.pop("GROQ_API_KEY", None)
-os.environ.pop("FPT_AI_API_KEY", None)
+# Empty, not popped: `load_dotenv` (run when the app is imported) fills every variable
+# that is ABSENT, so a pop let `BE/.env` put the real provider and bucket keys back on a
+# developer's machine. An empty string is present and stays empty (see tests/conftest.py).
+for _name in ("GEMINI_API_KEY", "GROQ_API_KEY", "FPT_AI_API_KEY", "COHERE_API_KEY",
+              "SUPABASE_URL", "SUPABASE_SECRET_KEY"):
+    os.environ[_name] = ""
 os.environ.setdefault("QUEUE_ENABLED", "")
+
+# Only a disposable database: the same test-target rule as migrations (loopback or CI
+# host, name ending in `_test`, no query parameter that moves the target). Checked before
+# the app is imported, so a hosted DATABASE_URL left in the shell never gets a connection.
+# Redis and Ollama: kept only when local (the setdefault above cannot replace a remote
+# OLLAMA_HOST already in the shell).
+from shared.migration_guard import (  # noqa: E402
+    CHE_DO_TEST, MigrationTargetRejected, kiem_tra_dich, local_service_or_blank)
+
+local_service_or_blank("REDIS_URL")
+local_service_or_blank("OLLAMA_HOST", fallback="http://127.0.0.1:11434")
+local_service_or_blank("LLM_GATEWAY_ADDR")
+local_service_or_blank("MINDMAP_SERVICE_ADDR")
+
+try:
+    kiem_tra_dich(os.environ["DATABASE_URL"], CHE_DO_TEST, env={})
+except MigrationTargetRejected as _exc:
+    print(f"DỪNG: run_e2e_server only runs against a disposable database: {_exc}",
+          file=sys.stderr)
+    raise SystemExit(2)
 
 import tempfile
 data_dir = os.environ.get("DATA_DIR") or tempfile.mkdtemp(prefix="memvid_e2e_")

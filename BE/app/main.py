@@ -9,6 +9,12 @@ try:
 except Exception:
     pass
 
+# A backend started by hand from a checkout with `.env` must not reach a hosted database
+# or bucket (dev/test isolation; production containers set PROCESS_ROLE and have no .env
+# file). Outside the try: a refusal must stop the process, not be swallowed.
+from shared import dev_target_guard as _dev_target_guard  # noqa: E402
+_dev_target_guard.enforce()
+
 
 def _jobs_update_dispatch(job_id: str, **kwargs: Any) -> None:
     """Keep Guided progress in Postgres; legacy jobs stay on SQLite."""

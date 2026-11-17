@@ -3719,3 +3719,12 @@ Rules: check icons and logos when a rename is reported incomplete; serve a chang
 new URL (browsers cache favicons per URL); a static SVG cannot read CSS variables, so pin its
 colour to the token value and test that they stay equal; comments quoting the retired name trip
 the branding test, so describe it without naming it.
+
+
+## 2026-11-16 — One isolation rule, applied at every door
+
+The migration guard had the strong rule (loopback or CI host, `_test` name, not the
+production target, live check); pytest, the guided job store and the E2E server each had
+a weaker one or none. Put the rule in one function and call it from every entry point
+that opens a connection in a test or dev run. And `os.environ.pop` does not keep a value
+out: `load_dotenv` fills every absent variable from `.env`; set it to `""` instead.
