@@ -22,6 +22,10 @@ from app.application.shared import _job_error_text
 _TOTALS = ("score", "max_score", "percentage", "correct_count", "incorrect_count")
 
 
+class _ClaimLost(Exception):
+    """Another grader took the attempt over (this job outlived its lease)."""
+
+
 def _stored_result(attempt_id: str) -> Optional[dict]:
     from app.domains.attempts import repository as _attempts
 
@@ -75,12 +79,22 @@ def run_short_answer_grading_job(job_id: str, attempt_id: str,
             def _progress(p, msg):
                 # Người học đang ngồi chờ màn hình điểm. Không có dòng này thì job đứng ở
                 # 20% suốt cả lượt chấm (1 lời gọi LLM mỗi câu tự luận) rồi nhảy 100%.
-                # It is also the heartbeat: job row fresh, claim renewed.
+                # It is also the heartbeat, called before each model call: if the claim
+                # was taken over, stop here instead of paying for another answer.
                 update_job(job_id, progress=p, current_node=msg)
-                _attempts.renew_claim(attempt_id, job_id)
+                if not _attempts.renew_claim(attempt_id, job_id):
+                    raise _ClaimLost()
 
-            result = _grading_service.grade_attempt(attempt_id, once=True,
-                                                    progress_cb=_progress)
+            try:
+                result = _grading_service.grade_attempt(attempt_id, once=True,
+                                                        progress_cb=_progress)
+            except _ClaimLost:
+                update_job(job_id, status="done", progress=100, current_node="Superseded",
+                           result={"attempt_id": attempt_id, "superseded": True})
+                _ledger.close_job(job_id, "done", result_type="quiz_attempt",
+                                  result_id=attempt_id)
+                print(f"grading_job_superseded job_id={job_id} (claim taken over)", flush=True)
+                return
         no_op = result is None
         if no_op:
             # Already graded by someone else (or before this job started): that result

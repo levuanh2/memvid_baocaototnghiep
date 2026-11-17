@@ -230,7 +230,7 @@ def submit_attempt(attempt_id: str, user_id: Optional[str], *,
                                   submitted["claimed_at"], dispatch_grading, refund=None)
 
     outcome, claimed_at = _attempts.reclaim_for_retry(
-        attempt_id, job_active=job_active, max_retries=retry_cap_for(attempt["quiz_id"]))
+        attempt_id, job_active=job_active, max_retries=manual_retry_max())
     if outcome == "graded":
         repair_mastery(attempt_id)
         return ({**attempt_public(_attempts.get_attempt(attempt_id)),
@@ -247,17 +247,10 @@ def submit_attempt(attempt_id: str, user_id: Optional[str], *,
     raise AttemptKhongConDangLam(status=attempt["status"])
 
 
-def retry_cap_for(quiz_id: str) -> Optional[int]:
-    """The per-attempt retry cap protects LLM cost: only a quiz with short answers pays
-    for a regrade. Objective-only attempts are never stranded (Codex re-check)."""
-    from app.domains.attempts import service as _grading_service
-
-    return manual_retry_max() if _grading_service.has_short_answer(quiz_id) else None
-
-
 def manual_retry_max() -> int:
-    """Learner retries per stuck attempt (`GRADING_MANUAL_RETRY_MAX`, default 3). The
-    first submit is not a retry; the recovery sweep has its own cap."""
+    """Learner retries per stuck attempt (`GRADING_MANUAL_RETRY_MAX`, default 3), applied
+    by the repository only to quizzes with short answers (an objective regrade costs no
+    LLM call). The first submit is not a retry; the recovery sweep has its own cap."""
     return max(0, _env_int("GRADING_MANUAL_RETRY_MAX", 3))
 
 
@@ -419,7 +412,7 @@ def results(attempt_id: str, user_id: Optional[str], *,
         # "Thử chấm lại" only on "stalled": nobody holds a live claim and no job is
         # queued or running, so a retry starts exactly one grader.
         "grading_state": _attempts.grading_state(attempt_id, job_active=job_active,
-                                                 max_retries=retry_cap_for(attempt["quiz_id"])),
+                                                 max_retries=manual_retry_max()),
         "quiz_id": attempt["quiz_id"],
         "quiz_title": quiz.get("title"),
         "questions": questions,

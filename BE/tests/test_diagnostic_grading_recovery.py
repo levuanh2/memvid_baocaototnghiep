@@ -885,3 +885,102 @@ def test_a_job_for_an_attempt_already_graded_ends_done_without_running(owner):
     create_job(job, job_type="short_answer_grading", status="pending", user_id=owner)
     _run_job_now(job, attempt_id, owner)
     assert get_job(job)["status"] == "done"
+
+
+# ── Codex re-check 2 of 364f550 ───────────────────────────────────────────
+def _two_short_answer_attempt(owner):
+    from app.domains.attempts import repository
+    from app.domains.documents import repository as docs_repo
+    from app.domains.quiz import repository as quiz_repo
+
+    doc_id = str(uuid.uuid4())
+    docs_repo.create(document_id=doc_id, filename=f"sa2_{doc_id[:6]}.md", file_type="md",
+                     file_path=f"/tmp/sa2_{doc_id[:6]}.md", user_id=owner)
+    quiz_id = quiz_repo.create_quiz(
+        user_id=owner, document_id=doc_id, title="Hai cau tu luan",
+        scope={"type": "full_document", "section_ids": []},
+        question_count=2, difficulty="easy")
+    base = {"explanation": "x", "difficulty": "easy", "concept_tags": ["tu luan"],
+            "chunk_ids": [], "question_type": "short_answer", "options": None,
+            "correct_answer": "mot cau tra loi"}
+    quiz_repo.save_questions(quiz_id, [{**base, "question_text": "Cau 1?"},
+                                       {**base, "question_text": "Cau 2?"}])
+    quiz_repo.finish(quiz_id, "ready", question_count=2)
+    qids = [x["question_id"] for x in quiz_repo.get_quiz(quiz_id)["questions"]]
+    attempt_id = repository.open_attempt(quiz_id, owner)["attempt_id"]
+    repository.save_draft_answers(attempt_id, {qids[0]: "a", qids[1]: "b"})
+    return attempt_id
+
+
+def test_a_grader_that_lost_its_claim_stops_before_the_next_model_call(owner, monkeypatch):
+    """A takeover happens while job A is inside its first model call (it outlived the
+    lease): A must not call the model for the second answer."""
+    from app.domains.attempts import grading, repository
+    from app.domains.jobs.jobs_store import get_job
+
+    attempt_id = _two_short_answer_attempt(owner)
+    first, _ = _submit(attempt_id, owner, dispatch=_Recorder())
+    calls = []
+
+    def _model(**kw):
+        calls.append(kw.get("question"))
+        if len(calls) == 1:  # meanwhile: A looks dead, a retry takes the attempt over
+            _set_claim(attempt_id, _lease_s() + 5)
+            assert repository.reclaim_for_retry(attempt_id)[0] == "grade"
+        return {"verdict": "correct", "score": 1.0, "feedback": "ok", "missing_points": []}
+
+    monkeypatch.setattr(grading, "grade_short_answer", _model)
+    _run_job_now(first["job_id"], attempt_id, owner)
+    assert len(calls) == 1, "A stopped instead of paying for the second answer"
+    assert _row(attempt_id)["status"] == "submitted", "A wrote nothing"
+    assert get_job(first["job_id"])["status"] == "done"
+    assert get_job(first["job_id"])["result"].get("superseded") is True
+
+
+def test_a_takeover_clears_the_old_job_marker(owner):
+    from app.domains.attempts import repository
+
+    attempt_id = _short_answer_attempt(owner)
+    first, _ = _submit(attempt_id, owner, dispatch=_Recorder())
+    assert repository.start_grading_job(attempt_id, first["job_id"])[0] == "run"
+    _set_claim(attempt_id, _lease_s() + 5)
+    assert repository.reclaim_for_retry(attempt_id)[0] == "grade"
+    assert "grading_job_running" not in _row(attempt_id)["meta"]
+    assert repository.renew_claim(attempt_id, first["job_id"]) is False
+
+
+def test_the_retry_cap_is_decided_inside_the_locked_transaction(owner, monkeypatch):
+    """No second database session while the attempt row is locked (pool starvation)."""
+    import app.domains.attempts.repository as repository
+
+    attempt_id = _short_answer_attempt(owner)
+    assert repository.submit(attempt_id) is not None
+    _set_claim(attempt_id, None)
+    opened = []
+    original = repository.session_scope
+
+    def _counting():
+        opened.append(1)
+        return original()
+
+    monkeypatch.setattr(repository, "session_scope", _counting)
+    import app.domains.attempts.service as service
+    monkeypatch.setattr(service, "has_short_answer",
+                        lambda *_a: pytest.fail("a nested query for the cap"))
+    assert repository.reclaim_for_retry(attempt_id, max_retries=3)[0] == "grade"
+    assert opened == [1]
+    # The repository decides "has short answers" itself, in that same session: an
+    # objective-only attempt is never capped, even with a cap of 0.
+    monkeypatch.setattr(repository, "session_scope", original)
+    objective = _answered_attempt(owner)
+    assert repository.submit(objective) is not None
+    _set_claim(objective, None)
+    assert repository.reclaim_for_retry(objective, max_retries=0)[0] == "grade"
+
+
+def test_the_lease_outlasts_one_model_call_with_its_queue_wait():
+    """A live grader renews between answers; one call must fit inside the lease."""
+    from app.domains.attempts.repository import GRADING_LEASE_S
+
+    ai_timeout_default, queue_wait_default = 180, 30   # AI_TIMEOUT_SEC, LLM_QUEUE_WAIT_...
+    assert GRADING_LEASE_S > ai_timeout_default + queue_wait_default

@@ -279,24 +279,34 @@ def reclaim_for_retry(attempt_id: str, *, job_active=lambda _job_id: False,
         if job_active(_grading_job_id(a)):
             return "pending", None
         now = _now()
-        outcome = _take_retry(a, now, max_retries)
+        outcome = _take_retry(s, a, now, max_retries)
         return outcome, (now if outcome == "grade" else None)
 
 
-def _take_retry(a: QuizAttempt, now: datetime, max_retries: Optional[int]) -> str:
+def _has_short_answer(s, quiz_id: str) -> bool:
+    """In the caller's session: no second connection while a row lock is held."""
+    return s.execute(select(QuizQuestion.id).where(
+        QuizQuestion.quiz_id == str(quiz_id),
+        QuizQuestion.question_type == "short_answer").limit(1)).first() is not None
+
+
+def _take_retry(s, a: QuizAttempt, now: datetime, max_retries: Optional[int]) -> str:
     """Under the row lock: "grade" (claim taken, one retry counted) | "pending" (a live
     claim exists) | "exhausted" (`max_retries` already used). Shared by the diagnostic
-    and practice routes: each regrade of short answers costs LLM calls (Codex task25)."""
+    and practice routes. The cap protects LLM cost, so it applies only to a quiz with
+    short answers, decided here in the same session (Codex task25 re-checks). Taking the
+    claim clears the old job's running marker: a grader that outlived its lease can no
+    longer renew or release the new claim, and stops before its next model call."""
     claimed = _aware(a.grading_claimed_at)
     if claimed is not None and now - claimed < timedelta(seconds=GRADING_LEASE_S):
         return "pending"
     used = int((a.metadata_json or {}).get("manual_retries") or 0)
-    # Lazy: the cap reads the quiz, needed only when a retry really happens.
-    cap = max_retries() if callable(max_retries) else max_retries
-    if cap is not None and used >= cap:
+    if (max_retries is not None and used >= max_retries
+            and _has_short_answer(s, a.quiz_id)):
         return "exhausted"
     a.grading_claimed_at = now
-    a.metadata_json = {**(a.metadata_json or {}), "manual_retries": used + 1}
+    meta = {k: v for k, v in (a.metadata_json or {}).items() if k != "grading_job_running"}
+    a.metadata_json = {**meta, "manual_retries": used + 1}
     return "grade"
 
 
@@ -403,7 +413,9 @@ def grading_state(attempt_id: str, *, job_active=lambda _job_id: False,
         if live or job_active(_grading_job_id(a)):
             return "grading"
         used = int((a.metadata_json or {}).get("manual_retries") or 0)
-        return "failed" if max_retries is not None and used >= max_retries else "stalled"
+        capped = (max_retries is not None and used >= max_retries
+                  and _has_short_answer(s, a.quiz_id))
+        return "failed" if capped else "stalled"
 
 
 _RECOVERY_LOCK_KEY = 0x53_4D_47_52  # "SMGR": StudyMap grading recovery
@@ -464,7 +476,9 @@ def claim_stuck_for_recovery(*, older_than_s: int, limit: int, max_attempts: int
                                "recovery_attempts") or 0) + 1})
             if not dry_run:
                 a.grading_claimed_at = now
-                a.metadata_json = {**(a.metadata_json or {}),
+                meta = {k: v for k, v in (a.metadata_json or {}).items()
+                        if k != "grading_job_running"}
+                a.metadata_json = {**meta,
                                    "recovery_attempts": picked[-1]["recovery_attempts"]}
         if dry_run:
             s.rollback()
@@ -550,7 +564,7 @@ def _submit_practice(quiz_id, user_id, answers, submit_key, max_retries=None):
                     raise SubmitKeyMismatch()
                 if seen.status != "submitted":
                     return seen.id, "done", None
-                outcome = _take_retry(seen, now, max_retries)
+                outcome = _take_retry(s, seen, now, max_retries)
                 return seen.id, outcome, (now if outcome == "grade" else None)
         elif user_id:
             # Open mode (no signed-in user) shares ONE anonymous owner between every
@@ -589,7 +603,7 @@ def _submit_practice(quiz_id, user_id, answers, submit_key, max_retries=None):
                         QuizAttempt.id.in_(same), QuizAttempt.status == "submitted")
                         .with_for_update()).scalars().first()
                     if stuck is not None:
-                        outcome = _take_retry(stuck, now, max_retries)
+                        outcome = _take_retry(s, stuck, now, max_retries)
                         if outcome in ("grade", "exhausted"):
                             return stuck.id, outcome, (now if outcome == "grade" else None)
                     return None, "replay", None
