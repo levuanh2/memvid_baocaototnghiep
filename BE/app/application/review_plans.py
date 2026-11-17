@@ -72,7 +72,11 @@ def generate(attempt_id: Optional[str], user_id: Optional[str], *, force: bool,
         if existing:
             return _with_ungraded({**_bo_user_id(existing), "cached": True}, attempt), False
 
-    plan = _review.generate(attempt_id)
+    try:
+        plan = _review.generate(attempt_id)
+    except _review.KetQuaVuaDoi:
+        # A regrade started (or finished) while the plan was being built.
+        raise AttemptChuaCham(status="regrading")
     if plan is None:
         raise KhongTaoDuocPlan()
     return _with_ungraded(_bo_user_id(plan), attempt), True

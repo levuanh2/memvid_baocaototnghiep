@@ -458,6 +458,12 @@ def grading_state(attempt_id: str, *, job_active=lambda _job_id: False,
 # recovery above, without ever leaving `graded`: the provisional result stays readable
 # until the regrade writes a better one.
 
+def claim_is_live(a: QuizAttempt) -> bool:
+    """A grader (first grading or regrade, job or inline) holds the attempt now."""
+    claimed = _aware(a.grading_claimed_at)
+    return claimed is not None and _now() - claimed < timedelta(seconds=grading_lease_s())
+
+
 def _ungraded(a: QuizAttempt) -> int:
     try:
         return int((a.metadata_json or {}).get("ungraded_count") or 0)

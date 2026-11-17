@@ -569,3 +569,56 @@ def test_a_synchronous_grading_ends_its_claim(owner, fake):
     assert accepted is False and body["status"] == "graded"
     with session_scope() as s:
         assert s.get(QuizAttempt, attempt_id).grading_claimed_at is None
+
+
+# ── Codex task34 re-check 3: a regrade that starts while a plan is being built ─
+
+def _regrade_during_plan(monkeypatch, attempt_id, owner, *, finish: bool):
+    """Start (and optionally finish) a regrade in the middle of plan generation: after
+    the plan has read the result, before it is written (the model call sits there)."""
+    from app.domains.review import service as review
+
+    real = review.rank_weak_concepts
+    rec = _Recorder()
+
+    def _rank(masteries):
+        out = real(masteries)
+        if not rec.calls:
+            _regrade(attempt_id, owner, rec)
+            if finish:
+                _run_job(*rec.calls[0])
+        return out
+
+    monkeypatch.setattr(review, "rank_weak_concepts", _rank)
+    return rec
+
+
+def test_a_plan_is_not_written_from_a_result_a_regrade_changed_meanwhile(owner, fake,
+                                                                        monkeypatch):
+    from app.application import review_plans
+    from app.domains.review import service as review
+
+    attempt_id, _ = _provisional(owner, fake)
+    _regrade_during_plan(monkeypatch, attempt_id, owner, finish=True)
+    with pytest.raises(review_plans.AttemptChuaCham):
+        review_plans.generate(attempt_id, owner, force=False, bat_buoc_chu_so_huu=True)
+    assert review.get_by_attempt(attempt_id) is None
+
+
+def test_a_plan_is_not_written_while_a_regrade_started_meanwhile_runs(owner, fake,
+                                                                      monkeypatch):
+    from app.application import review_plans
+    from app.domains.review import service as review
+
+    attempt_id, _ = _provisional(owner, fake)
+    rec = _regrade_during_plan(monkeypatch, attempt_id, owner, finish=False)
+    with pytest.raises(review_plans.AttemptChuaCham):
+        review_plans.generate(attempt_id, owner, force=False, bat_buoc_chu_so_huu=True)
+    assert review.get_by_attempt(attempt_id) is None
+    monkeypatch.undo()
+    from app.domains.attempts import grading
+    monkeypatch.setattr(grading, "grade_short_answer", fake)
+    _run_job(*rec.calls[0])
+    plan, created = review_plans.generate(attempt_id, owner, force=False,
+                                          bat_buoc_chu_so_huu=True)
+    assert created and plan["ungraded_count"] == 0 and plan["outdated"] is False

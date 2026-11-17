@@ -115,6 +115,11 @@ def _write_guide(concepts: List[Dict[str, Any]], *, ask: Optional[Callable[..., 
             {a["topic"]: a for a in accepted}, rejected)
 
 
+class KetQuaVuaDoi(Exception):
+    """The attempt was graded again (or a grader holds it) while this plan was being
+    built: the plan would describe a result that is no longer the stored one."""
+
+
 def generate(attempt_id: str, *, ask: Optional[Callable[..., str]] = None,
              job_id: Optional[str] = None) -> Optional[Dict[str, Any]]:
     """Tạo (hoặc tạo lại) review plan cho attempt. None khi attempt không tồn tại.
@@ -151,7 +156,8 @@ def generate(attempt_id: str, *, ask: Optional[Callable[..., str]] = None,
     if rejected:
         val_store.log_rejections(rejected, job_id=job_id)
 
-    plan_id = _persist(attempt_id, attempt["quiz_id"], weak, guide, summary)
+    plan_id = _persist(attempt_id, attempt["quiz_id"], weak, guide, summary,
+                       graded_at=attempt.get("graded_at"))
     return get_by_attempt(attempt_id) if plan_id else None
 
 
@@ -200,14 +206,23 @@ def _wrong_sources(attempt_id: str, quiz_id: str) -> Dict[str, Dict[str, Any]]:
 
 
 def _persist(attempt_id: str, quiz_id: str, weak: List[Dict[str, Any]],
-             guide: Dict[str, Dict[str, Any]], summary: Optional[str]) -> Optional[str]:
+             guide: Dict[str, Dict[str, Any]], summary: Optional[str], *,
+             graded_at: Optional[str] = None) -> Optional[str]:
     from app.db.models import Quiz
+    from app.domains.attempts import repository as attempts_repo
 
     plan_id = str(uuid.uuid4())
     with session_scope() as s:
-        attempt = s.get(QuizAttempt, str(attempt_id))
+        # Row lock, the same one a regrade takes to write its result: the plan is written
+        # only if the result it was built from is still the stored one and nobody is
+        # grading the attempt (Codex task34 re-check 3). A regrade that changes the
+        # result afterwards moves `graded_at` past this plan's `created_at` (`outdated`).
+        attempt = s.get(QuizAttempt, str(attempt_id), with_for_update=True)
         if attempt is None:
             return None
+        now_graded = attempt.graded_at.isoformat() if attempt.graded_at else None
+        if now_graded != graded_at or attempts_repo.claim_is_live(attempt):
+            raise KetQuaVuaDoi()
         # `s.get(QuizAttempt, ...)` ngay trên CÓ guard None, chỗ này thì không: quiz bị
         # xoá (hoặc tài liệu gỡ) là AttributeError → 500 traceback trống ở trang "Xem
         # phần cần ôn" của một bài làm cũ.

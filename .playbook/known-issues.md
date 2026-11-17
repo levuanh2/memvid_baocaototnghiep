@@ -8344,7 +8344,10 @@ paid regrades, even during an outage, to get a plan, and the page did not say wh
 plan is built from the graded answers whenever no regrade is running (409 only while one
 is queued or running); plan responses carry `ungraded_count`, the review page says the
 plan covers only the graded answers, and a later regrade that changes the result marks it
-`outdated`. Existing plans are left as they are (deleting
+`outdated`. A plan is written only under the attempt's row lock (the lock a regrade takes to
+write its result), and only if `graded_at` is still the one the plan was built from and no
+grader holds the claim; otherwise 409 (Codex task34 re-check 3: a regrade starting during
+the up-to-120 s model call could otherwise leave a stale plan labelled current). Existing plans are left as they are (deleting
 one cascades to practice quizzes).
 Practice attempts are out of scope: their route refuses a regrade (open item, #159).
 
