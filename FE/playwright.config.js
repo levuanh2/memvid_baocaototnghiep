@@ -47,11 +47,14 @@ export default defineConfig({
       reuseExistingServer: !CI,
       // Deterministic quiz generation and short-answer grading (no model) for
       // quiz-grading-recovery.spec.js; no other spec generates or grades quizzes.
+      // Set after `...process.env` so the shell cannot switch them off; the spec
+      // also checks GET /__e2e__/stubs, since a reused server ignores this env.
       env: {
+        ...process.env,
         E2E_DIAGNOSTIC_AI_STUB: "1",
         E2E_SHORT_ANSWER_GRADING_STUB: "1",
         E2E_SHORT_ANSWER_GRADING_DELAY_SEC: "1",
-        ...process.env,
+        GRADING_MANUAL_RETRY_MAX: "3",
         PORT: String(BE_PORT),
       },
     },

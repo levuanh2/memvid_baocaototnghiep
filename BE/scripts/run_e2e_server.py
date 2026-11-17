@@ -151,6 +151,12 @@ class MockMindmapGraph:
         return {"result": record, "status_code": 200}
 
 
+# What this process stubbed, and how often the grading stub ran (read by
+# GET /__e2e__/stubs). One process, threads only: a dict is enough.
+E2E_STUBS = {"e2e_server": True, "diagnostic_ai_stub": False,
+             "short_answer_grading_stub": False, "grade_calls": 0}
+
+
 def main() -> None:
     import app.main as be_main  # noqa: E402  (env must be set first, see above)
 
@@ -196,6 +202,14 @@ def main() -> None:
         quiz_generator.generate_questions = _deterministic_practice_questions
         print("[run_e2e_server] deterministic practice AI stub enabled", flush=True)
 
+    # Test-only identity: a spec that needs the stubs checks this first, so Playwright
+    # reusing some other server on the port (a dev backend with real provider keys)
+    # fails the spec instead of calling a real model.
+    @be_main.app.get("/__e2e__/stubs")
+    def _e2e_stubs():
+        from flask import jsonify
+        return jsonify(E2E_STUBS)
+
     if os.environ.get("E2E_DIAGNOSTIC_AI_STUB", "").strip().lower() in {
         "1", "true", "yes", "on",
     }:
@@ -234,12 +248,18 @@ def main() -> None:
                 return chunks
             from app.db.models import DocumentChunk
             from app.db import session_scope
+            from sqlalchemy.dialects.postgresql import insert
+            # Idempotent under concurrent jobs: the loser of the race inserts nothing
+            # (unique (document_id, chunk_index)); an unknown document still fails (FK).
             with session_scope() as s:
-                s.add(DocumentChunk(document_id=str(document_id), chunk_index=0,
-                                    text="E2E diagnostic source text.", heading="E2E"))
+                s.execute(insert(DocumentChunk).values(
+                    document_id=str(document_id), chunk_index=0,
+                    text="E2E diagnostic source text.", heading="E2E",
+                ).on_conflict_do_nothing(index_elements=["document_id", "chunk_index"]))
             return inner_chunks_for_scope(document_id, section_ids, limit=limit)
 
         quiz_repository.chunks_for_scope = _chunks_with_seed
+        E2E_STUBS["diagnostic_ai_stub"] = True
         print("[run_e2e_server] deterministic diagnostic AI stub enabled", flush=True)
 
     if os.environ.get("E2E_SHORT_ANSWER_GRADING_STUB", "").strip().lower() in {
@@ -257,6 +277,7 @@ def main() -> None:
             "E2E_SHORT_ANSWER_FAIL_MARKER", "__E2E_GRADE_FAIL__")
 
         def _deterministic_short_answer_grade(**kwargs):
+            E2E_STUBS["grade_calls"] += 1
             def _ask(_prompt, **_ask_kwargs):
                 time.sleep(delay)
                 if fail_marker in str(kwargs.get("user_answer") or ""):
@@ -277,6 +298,7 @@ def main() -> None:
             return real_grade_short_answer(**call_kwargs)
 
         attempt_grading.grade_short_answer = _deterministic_short_answer_grade
+        E2E_STUBS["short_answer_grading_stub"] = True
         print("[run_e2e_server] deterministic short-answer grading stub enabled", flush=True)
 
     def _fast_ingest(source_id: str, file_path: str, filename: str):

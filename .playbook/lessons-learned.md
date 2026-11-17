@@ -3764,3 +3764,28 @@ called the model for every answer. Fence the expensive part: decide who the grad
 before the work starts (register the job under the claim, refuse a stale or duplicated
 job at start), and give back what a failure did not use (claim, retry count) so a retry
 is neither blocked by a ghost job nor charged for work that never ran.
+
+## 2026-11-17 — An E2E that needs a stub must prove the stub is there
+
+Writing `FE/e2e/quiz-grading-recovery.spec.js` (QuizResult 202/200/409 against the real
+backend) hit three wrong assumptions, and Codex task33 found five weaknesses:
+
+- **A failing model call does not stall an attempt.** `grade_short_answer` turns a
+  provider error into "ungraded", and the attempt is graded. Only a grading *job* that
+  dies leaves it `submitted` with no live claim ("stalled"). The E2E stub got a separate
+  crash marker that raises outside the model call.
+- **The fake ingest writes FAISS only.** Quizzes read `document_chunks` (PostgreSQL), and
+  the public `status` stays `processing` (`ingest_status` is the pipeline state). The
+  diagnostic stub seeds one chunk with `ON CONFLICT DO NOTHING`; a check-then-insert lost
+  a race on `uq_document_chunks_doc_index` under concurrent jobs.
+- **`reuseExistingServer` ignores `webServer.env`.** Locally, Playwright reuses any healthy
+  process on the port, so a dev backend with provider keys would get the spec's quiz and
+  grading calls. The spec now requires `GET /__e2e__/stubs` (only `run_e2e_server.py`
+  serves it) in `beforeAll`; stub env is set after `...process.env` so the shell cannot
+  turn it off.
+- "200 = nothing regraded" needs a counter, not equal fields (the stub is
+  deterministic); a cumulative response listener can credit a duplicate request to the
+  next click — wait per click and count at the end; a 1 s transient UI state is a race.
+
+Regression: the spec itself (2 tests, both auth modes); the guard was checked with an
+unrelated healthy server on :8080 (spec refused before any quiz call).
