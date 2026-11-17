@@ -129,6 +129,55 @@ describe("Chấm lại câu còn thiếu", () => {
     expect(planLinks().length).toBeGreaterThan(0);
   });
 
+  // agy task35 review.
+  it("keeps the button and says why when the request itself fails (network)", async () => {
+    getResult.mockResolvedValue(provisional("available"));
+    regradeAttempt.mockRejectedValue(new Error("Mất kết nối tới máy chủ."));
+    await render();
+    await act(async () => { regradeButton().click(); });
+    await flush();
+    expect(container.textContent).toContain("Mất kết nối tới máy chủ.");
+    expect(regradeButton()).toBeDefined();
+  });
+
+  it("moves focus to the status text when the button goes away", async () => {
+    getResult.mockResolvedValueOnce(provisional("available")).mockResolvedValue(provisional("running"));
+    regradeAttempt.mockResolvedValue({ grading: "pending", job_id: "j1" });
+    await render();
+    regradeButton().focus();
+    await act(async () => { regradeButton().click(); });
+    await flush();
+    expect(regradeButton()).toBeUndefined();
+    expect(document.activeElement).not.toBe(document.body);
+    expect(document.activeElement?.getAttribute("role")).toBe("status");
+    expect(document.activeElement?.textContent).toContain("Kết quả tạm thời.");
+  });
+
+  it("has one live region in the banner, and the button sits outside it", async () => {
+    getResult.mockResolvedValue(provisional("running"));
+    await render();
+    const live = [...container.querySelectorAll('[role="status"]')]
+      .filter((el) => el.textContent.includes("Kết quả tạm thời."));
+    expect(live).toHaveLength(1);
+    // No second live region a screen reader can reach inside it (aria-hidden ones are not).
+    const nested = [...live[0].querySelectorAll('[role="status"]')].filter((el) => !el.closest('[aria-hidden="true"]'));
+    expect(nested).toHaveLength(0);
+    act(() => root.unmount()); container.remove(); root = null;
+    getResult.mockResolvedValue(provisional("available"));
+    await render();
+    const status = [...container.querySelectorAll('[role="status"]')]
+      .find((el) => el.textContent.includes("Kết quả tạm thời."));
+    expect(status.contains(regradeButton())).toBe(false);
+  });
+
+  it("does not paint an ungraded answer in the incorrect colour", async () => {
+    getResult.mockResolvedValue(provisional("available"));
+    await render();
+    const badge = [...container.querySelectorAll(".quiz-verdict-badge")]
+      .find((b) => b.textContent.includes("Chưa chấm"));
+    expect(badge.getAttribute("style")).not.toContain("--quiz-status-incorrect");
+  });
+
   it("ends plainly when retries are used up: no button, the provisional result stays", async () => {
     getResult.mockResolvedValueOnce(provisional("available")).mockResolvedValue(provisional("exhausted"));
     regradeAttempt.mockRejectedValue(new Error("Đã hết lượt thử chấm lại cho bài này"));
@@ -138,5 +187,7 @@ describe("Chấm lại câu còn thiếu", () => {
     expect(regradeButton()).toBeUndefined();
     expect(container.textContent).toContain("Đã hết lượt chấm lại cho bài này. Kết quả tạm thời được giữ nguyên.");
     expect(container.textContent).toContain("Kết quả tạm thời.");
+    expect(container.textContent, "the 409 message is not stacked on the used-up message")
+      .not.toContain("Đã hết lượt thử chấm lại cho bài này");
   });
 });

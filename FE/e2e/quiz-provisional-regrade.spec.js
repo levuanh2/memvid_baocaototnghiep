@@ -69,6 +69,16 @@ test("a failed AI grading is regraded: only the missing answer, then the full sc
   await expect(page.getByText("Kết quả tạm thời.")).toBeVisible({ timeout: 30_000 });
   await expect(page.getByText("1 câu chưa chấm được")).toBeVisible();
 
+  // At 320px the banner text keeps a readable width and nothing scrolls sideways (agy
+  // task35: a side-by-side button left the text a ~20px column).
+  await page.setViewportSize({ width: 320, height: 720 });
+  const explanation = page.getByText(/câu chưa chấm được do bộ chấm AI/);
+  await expect(regradeButton(page)).toBeVisible();
+  expect((await explanation.boundingBox()).width, "banner text width at 320px").toBeGreaterThan(200);
+  expect(await page.evaluate(() => document.documentElement.scrollWidth),
+    "no horizontal scroll at 320px").toBeLessThanOrEqual(320);
+  await page.setViewportSize({ width: 1280, height: 720 });
+
   const before = await stubs(request);
   const [res] = await Promise.all([page.waitForResponse(isRegrade(attemptId)),
                                    regradeButton(page).click()]);

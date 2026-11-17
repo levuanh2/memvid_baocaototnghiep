@@ -8354,8 +8354,19 @@ FK cascade, its practice quizzes and their attempts, without asking: it now asks
 (`DestructiveConfirmDialog`, owner decision 2026-11-17), and the outdated note does not
 point the learner at it.
 
+**UX fixes (agy task35):** the banner's button sat beside the text with `shrink-0`: at
+320px the explanation was a 41px column (measured in Chromium). It now sits below the
+text; E2E checks the text is wider than 200px at 320px and nothing scrolls sideways (the
+check fails on the old layout). One live region (the text paragraph; the spinner is
+`aria-hidden`), the button outside it, focus moves to the text when the button goes
+away, the 409 message is not stacked on the used-up message, and an ungraded answer's
+badge uses the muted colour instead of the incorrect red. Kept: the name "Chấm lại câu
+còn thiếu" (it regrades missing answers; "Thử chấm lại" retries a stuck grading). Not a
+deadlock (F8): after the 5-minute stall note, "Chờ thêm" asks the server again, which
+reports "available" once the lease of a dead regrade has expired.
+
 **Regression:** `BE/tests/test_provisional_grading_recovery.py` (23, PostgreSQL),
-`FE/src/pages/study/QuizResult.provisionalRegrade.test.jsx` (7, red on the old page),
+`FE/src/pages/study/QuizResult.provisionalRegrade.test.jsx` (11),
 `FE/e2e/quiz-provisional-regrade.spec.js` (4, real backend, fake grader that fails once
 then succeeds; both auth modes).
 

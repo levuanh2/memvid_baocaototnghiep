@@ -51,6 +51,8 @@ export default function QuizResult() {
   const timerRef = useRef(null);
   // "Thử chấm lại" (diagnostic recovery): one request at a time, even on a double click.
   const chamLaiRef = useRef(false);
+  // The provisional banner's status text: focus lands here when its button goes away.
+  const banTamRef = useRef(null);
   const [chamLai, setChamLai] = useState({ dangGui: false, loi: null, daThu: false });
 
   const load = useCallback(async ({ quiet = false } = {}) => {
@@ -134,6 +136,9 @@ export default function QuizResult() {
     setChamLai({ dangGui: false, loi, daThu: loi === null });
     setNhip((n) => n + 1);
     chamLaiRef.current = false;
+    // A regrade that was accepted (or refused for good) removes its button: keep the
+    // keyboard on the banner instead of dropping it to the page (agy task35).
+    if (gui === regradeAttempt) banTamRef.current?.focus();
   };
   // Fail closed for any current or future non-final status: completed-result
   // presentation is authorized only by the explicit graded state.
@@ -264,17 +269,21 @@ export default function QuizResult() {
           )}
 
           {provisional && (
+            // One live region (the text); the button sits below it, never beside it: at
+            // 320px a side button left the text a ~20px column (agy task35).
             <div className="surface-card !p-3.5 flex items-start gap-2.5 mb-6"
-              role="status" style={{ borderColor: "var(--warn)" }}>
+              style={{ borderColor: "var(--warn)" }}>
               <Icon name="AlertCircle" size={16} className="shrink-0 mt-0.5" />
-              <span className="text-body text-text-secondary">
+              <div className="min-w-0 flex-1">
+              <p ref={banTamRef} tabIndex={-1} role="status" className="text-body text-text-secondary">
                 <strong className="text-text-primary">Kết quả tạm thời.</strong>{" "}
                 {ungradedCount} câu chưa chấm được do bộ chấm AI không khả dụng.
                 Các câu này không bị tính là sai và không nằm trong điểm, mức nắm
                 hay phân tích lỗ hổng hiện tại.
                 {result?.regrade_state === "running" && (
                   <span className="flex items-center gap-1.5 mt-1.5">
-                    <Spinner size={12} /> Đang chấm lại {ungradedCount} câu còn thiếu…
+                    <span aria-hidden="true"><Spinner size={12} /></span>
+                    Đang chấm lại {ungradedCount} câu còn thiếu…
                   </span>
                 )}
                 {result?.regrade_state === "available" && chamLai.daThu && (
@@ -287,17 +296,18 @@ export default function QuizResult() {
                     Đã hết lượt chấm lại cho bài này. Kết quả tạm thời được giữ nguyên.
                   </span>
                 )}
-                {chamLai.loi && (
+                {chamLai.loi && result?.regrade_state !== "exhausted" && (
                   <span className="block text-small mt-1" style={{ color: "var(--err)" }}>{chamLai.loi}</span>
                 )}
-              </span>
+              </p>
               {result?.regrade_state === "available" && (
-                <button type="button" className="btn-secondary text-small shrink-0 ml-auto"
+                <button type="button" className="btn-secondary text-small mt-2.5"
                   onClick={() => thuChamLai(regradeAttempt)} disabled={chamLai.dangGui}
                   aria-busy={chamLai.dangGui}>
                   {chamLai.dangGui ? "Đang gửi…" : "Chấm lại câu còn thiếu"}
                 </button>
               )}
+              </div>
             </div>
           )}
 
@@ -495,7 +505,11 @@ function Stat({ label, value }) {
 function ReviewedQuestion({ question, order }) {
   const { verdict } = question;
   const tone =
-    verdict === "correct" ? "var(--quiz-status-correct)" : verdict === "partial" ? "var(--quiz-status-partial)" : "var(--quiz-status-incorrect)";
+    verdict === "correct" ? "var(--quiz-status-correct)"
+      : verdict === "partial" ? "var(--quiz-status-partial)"
+        : verdict === "incorrect" ? "var(--quiz-status-incorrect)"
+          // Not graded (AI grader outage): not wrong, so not the incorrect colour.
+          : "var(--text-muted)";
   return (
     <article className="surface-card">
       <div className="flex items-start gap-3 mb-3">
