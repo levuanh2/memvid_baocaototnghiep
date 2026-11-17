@@ -210,12 +210,20 @@ def _invoke_chat(
 
     started = time.monotonic()
     if timeout is not None and timeout > 0:
-        with ThreadPoolExecutor(max_workers=1) as ex:
-            fut = ex.submit(_call)
-            try:
-                out = fut.result(timeout=timeout)
-            except FuturesTimeout:
-                raise TimeoutError(f"LLM call timed out after {timeout:.0f}s") from None
+        # Not `with ThreadPoolExecutor(...)`: its `__exit__` waits for the worker, so the
+        # caller only got control back when the provider finished (forever for a stalled
+        # Ollama). Give control back AT the deadline. Limit, stated plainly: Python cannot
+        # stop that thread; the request already sent keeps running until the HTTP
+        # client's own timeout (set by each builder) ends it, and the provider may still
+        # finish and bill it.
+        ex = ThreadPoolExecutor(max_workers=1, thread_name_prefix="llm-call")
+        fut = ex.submit(_call)
+        try:
+            out = fut.result(timeout=timeout)
+        except FuturesTimeout:
+            raise TimeoutError(f"LLM call timed out after {timeout:.0f}s") from None
+        finally:
+            ex.shutdown(wait=False, cancel_futures=True)
     else:
         out = _call()
     if usage_context is not None:
@@ -244,6 +252,13 @@ def _ollama_reasoning_param() -> Any:
     return None
 
 
+def _http_timeout(seconds: float) -> Any:
+    """Connect at most 10 s (never more than the budget), read/write/pool = budget."""
+    import httpx
+
+    return httpx.Timeout(seconds, connect=min(10.0, seconds))
+
+
 def _ollama_chat_llm(model: str | None, feature: str, options: dict | None, timeout: float | None = None) -> Any:
     from langchain_ollama import ChatOllama
 
@@ -263,13 +278,13 @@ def _ollama_chat_llm(model: str | None, feature: str, options: dict | None, time
         if "num_ctx" in options:
             kw["num_ctx"] = int(options["num_ctx"])
     
-    # IMPORTANT: Truyền timeout vào ChatOllama để HTTP request có timeout thật.
-    # Nếu không truyền, HTTP request có thể treo vĩnh viễn nếu Ollama không respond.
-    # ThreadPoolExecutor.fut.result(timeout=x) chỉ kill thread sau x giây,
-    # NHƯNG HTTP request bên trong vẫn tiếp tục chạy và chiếm tài nguyên.
+    # The HTTP timeout must reach the httpx client: `ChatOllama(timeout=...)` is NOT a
+    # field in langchain-ollama 0.3.x and was silently ignored (the client kept
+    # `Timeout(None)`: a stalled Ollama hung forever). `client_kwargs` is what the
+    # adapter passes to `ollama.Client` (Codex task28, 2026-11-17).
     if timeout is not None and timeout > 0:
-        kw["timeout"] = timeout
-    
+        kw["client_kwargs"] = {"timeout": _http_timeout(timeout)}
+
     return ChatOllama(**kw)
 
 
@@ -381,7 +396,10 @@ class _FptChatLLM:
                 self._url,
                 headers=self._headers(),
                 json=payload,
-                timeout=self.timeout,
+                # (connect, read): a dead host fails in <= 10 s instead of the whole
+                # budget. `read` is per socket read, not a total: the caller's deadline
+                # is enforced by `_invoke_chat`.
+                timeout=(min(10.0, self.timeout), self.timeout),
             )
         except Exception as exc:
             # `exc` của requests không chứa header, nhưng vẫn chỉ lấy tên lớp + URL
@@ -457,7 +475,7 @@ class _FptChatLLM:
         }
         try:
             r = requests.post(self._url, headers=self._headers(), json=payload,
-                              timeout=self.timeout, stream=True)
+                              timeout=(min(10.0, self.timeout), self.timeout), stream=True)
         except Exception as exc:
             raise RuntimeError(
                 f"FPT stream request failed: {type(exc).__name__}") from None
@@ -525,7 +543,10 @@ def _fpt_chat_llm(feature: str = "chat", options: dict | None = None,
     )
 
 
-def _gemini_chat_llm(feature: str = "chat", options: dict | None = None) -> Any:
+def _gemini_chat_llm(feature: str = "chat", options: dict | None = None, *,
+                     timeout: float | None = None) -> Any:
+    """`timeout` given: the SDK gets it and makes ONE attempt (its default is 6 attempts,
+    each with a 600 s GAPIC deadline, all inside our call). No timeout: SDK defaults."""
     from langchain_google_genai import ChatGoogleGenerativeAI
 
     api_key = (os.getenv("GEMINI_API_KEY") or "").strip()
@@ -534,29 +555,39 @@ def _gemini_chat_llm(feature: str = "chat", options: dict | None = None) -> Any:
     model = os.getenv("GEMINI_CHAT_MODEL", "gemini-2.5-flash")
     max_out = _DEFAULT_LLM_OUT
     temp = _resolve_temperature(feature, options)
+    bounded = ({"timeout": timeout, "max_retries": 1}
+               if timeout is not None and timeout > 0 else {})
     try:
         return ChatGoogleGenerativeAI(
             model=model,
             api_key=api_key,
             temperature=temp,
             max_output_tokens=max_out,
+            **bounded,
         )
     except TypeError:
-        return ChatGoogleGenerativeAI(model=model, api_key=api_key, temperature=temp)
+        return ChatGoogleGenerativeAI(model=model, api_key=api_key, temperature=temp,
+                                      **bounded)
 
 
-def _groq_chat_llm(feature: str = "chat", options: dict | None = None) -> Any:
+def _groq_chat_llm(feature: str = "chat", options: dict | None = None, *,
+                   timeout: float | None = None) -> Any:
+    """`timeout` given: the SDK gets it and does not retry (default: 2 retries, each
+    with a 60 s read timeout, inside our call). No timeout: SDK defaults."""
     from langchain_groq import ChatGroq
 
     api_key = (os.getenv("GROQ_API_KEY") or "").strip()
     if not api_key:
         raise RuntimeError("Missing GROQ_API_KEY for Groq provider.")
     model = os.getenv("GROQ_CHAT_MODEL", "llama-3.3-70b-versatile")
+    bounded = ({"timeout": timeout, "max_retries": 0}
+               if timeout is not None and timeout > 0 else {})
     return ChatGroq(
         model=model,
         api_key=api_key,
         temperature=_resolve_temperature(feature, options),
         max_tokens=_DEFAULT_LLM_OUT,
+        **bounded,
     )
 
 
@@ -1151,6 +1182,20 @@ def get_embedding_model(model_name: Optional[str] = None) -> Optional[LangChainE
     return _emb_adapter_cache
 
 
+class _Deadline:
+    """`timeout` seconds from now, or no limit. `remaining()` is None without a limit."""
+
+    def __init__(self, timeout: float | None) -> None:
+        import time
+
+        self._end = (time.monotonic() + timeout) if timeout is not None and timeout > 0 else None
+
+    def remaining(self) -> float | None:
+        import time
+
+        return None if self._end is None else self._end - time.monotonic()
+
+
 def ask_ai(
     prompt: str,
     system_prompt: str | None = None,
@@ -1166,7 +1211,12 @@ def ask_ai(
     feature='chat'    -> SLM_MODEL_CHAT (mặc định DEFAULT_LOCAL_MODEL)
     feature='summary' -> SLM_MODEL_SUMMARY (dùng cho summarize_advanced, memory_tree)
     feature='mindmap' -> MINDMAP_MODEL
-    timeout: số giây tối đa cho LLM call (None = không giới hạn)
+    timeout: số giây tối đa cho LLM call (None = không giới hạn). It is ONE deadline for
+      the whole operation, shared by the provider fallback chain: each provider gets
+      what is left, none is started once it is spent, and the caller gets control back
+      at the deadline. Measured from when the in-process slot is held (the queue wait
+      has its own limit, LLM_QUEUE_WAIT_TIMEOUT_SECONDS). A request already sent is not
+      cancelled at the provider (see `_invoke_chat`).
     """
     # Phase 0 observability: đếm MỘT lần cho mỗi invocation (cả nhánh gateway lẫn
     # in-process; cache hit không đi qua ask_ai). Đếm không bao giờ chặn call.
@@ -1201,12 +1251,17 @@ def ask_ai(
     # PR#4: một slot cho TOÀN BỘ vòng fallback provider (retry không bypass cap,
     # mirror gateway). Quá hạn chờ → RuntimeError → error-path degraded sẵn có.
     with _inproc_slot():
+        deadline = _Deadline(timeout)
         for provider in PROVIDERS:
+            budget = deadline.remaining()
+            if budget is not None and budget <= 0:
+                errors.append(f"deadline of {timeout:.0f}s spent before trying '{provider}'")
+                break
             try:
                 if provider == "ollama":
-                    llm = _ollama_chat_llm(effective_model, feature, options)
+                    llm = _ollama_chat_llm(effective_model, feature, options, timeout=budget)
                     return _invoke_chat(
-                        llm, prompt, system_prompt, timeout=timeout,
+                        llm, prompt, system_prompt, timeout=budget,
                         **({
                             "usage_context": usage_context,
                             "usage_attempt_id": f"{usage_attempt_id}:{provider}",
@@ -1216,9 +1271,9 @@ def ask_ai(
                     )
 
                 if provider == "fpt":
-                    llm = _fpt_chat_llm(feature, options, timeout=timeout)
+                    llm = _fpt_chat_llm(feature, options, timeout=budget)
                     return _invoke_chat(
-                        llm, prompt, system_prompt, timeout=timeout,
+                        llm, prompt, system_prompt, timeout=budget,
                         **({
                             "usage_context": usage_context,
                             "usage_attempt_id": f"{usage_attempt_id}:{provider}",
@@ -1227,9 +1282,9 @@ def ask_ai(
                     )
 
                 if provider == "gemini":
-                    llm = _gemini_chat_llm(feature, options)
+                    llm = _gemini_chat_llm(feature, options, timeout=budget)
                     return _invoke_chat(
-                        llm, prompt, system_prompt, timeout=timeout,
+                        llm, prompt, system_prompt, timeout=budget,
                         **({
                             "usage_context": usage_context,
                             "usage_attempt_id": f"{usage_attempt_id}:{provider}",
@@ -1238,9 +1293,9 @@ def ask_ai(
                     )
 
                 if provider == "groq":
-                    llm = _groq_chat_llm(feature, options)
+                    llm = _groq_chat_llm(feature, options, timeout=budget)
                     return _invoke_chat(
-                        llm, prompt, system_prompt, timeout=timeout,
+                        llm, prompt, system_prompt, timeout=budget,
                         **({
                             "usage_context": usage_context,
                             "usage_attempt_id": f"{usage_attempt_id}:{provider}",

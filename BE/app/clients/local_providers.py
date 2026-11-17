@@ -86,19 +86,25 @@ class ProviderPool:
         effective_model = model or _lf._model_map(feature)
         last_error: Optional[Exception] = None
         self._last_provider_used = None
+        # Same contract as `ask_ai`: one deadline shared by the whole fallback chain.
+        deadline = _lf._Deadline(timeout)
         for provider in self._providers:
+            budget = deadline.remaining()
+            if budget is not None and budget <= 0:
+                last_error = TimeoutError(f"deadline of {timeout:.0f}s spent before '{provider}'")
+                break
             try:
                 if provider == "fpt":
-                    llm = _lf._fpt_chat_llm(feature, options, timeout=timeout)
+                    llm = _lf._fpt_chat_llm(feature, options, timeout=budget)
                 elif provider == "ollama":
-                    llm = _lf._ollama_chat_llm(effective_model, feature, options)
+                    llm = _lf._ollama_chat_llm(effective_model, feature, options, timeout=budget)
                 elif provider == "gemini":
-                    llm = _lf._gemini_chat_llm(feature, options)
+                    llm = _lf._gemini_chat_llm(feature, options, timeout=budget)
                 elif provider == "groq":
-                    llm = _lf._groq_chat_llm(feature, options)
+                    llm = _lf._groq_chat_llm(feature, options, timeout=budget)
                 else:
                     continue
-                out = _lf._invoke_chat(llm, prompt, system_prompt, timeout=timeout)
+                out = _lf._invoke_chat(llm, prompt, system_prompt, timeout=budget)
                 self._last_provider_used = provider
                 return out
             except Exception as e:  # noqa: BLE001 — giống ask_ai: thử provider kế tiếp

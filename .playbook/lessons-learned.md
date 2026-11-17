@@ -3719,3 +3719,12 @@ Rules: check icons and logos when a rename is reported incomplete; serve a chang
 new URL (browsers cache favicons per URL); a static SVG cannot read CSS variables, so pin its
 colour to the token value and test that they stay equal; comments quoting the retired name trip
 the branding test, so describe it without naming it.
+
+
+## 2026-11-17 — `fut.result(timeout)` inside `with ThreadPoolExecutor` is not a timeout
+
+The context manager's exit waits for the worker, so the caller blocks until the call ends
+anyway. If a timeout matters, shut the executor down without waiting, give every client
+library its own transport timeout (check the field really exists in the installed
+version: an unknown keyword may be silently ignored), share one deadline across retries
+and fallbacks, and never claim the provider stopped working: Python cannot cancel it.

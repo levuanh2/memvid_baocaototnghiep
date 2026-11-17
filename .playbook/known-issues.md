@@ -8120,3 +8120,30 @@ off-screen button then matches the same role+name as the visible CTA.
 **Prevention:** hiding by transform, width, opacity or pointer-events is visual only; anything
 that stays mounted while hidden needs `inert`. Label tests should match the bare text, not one
 quoting style.
+
+## LLM timeouts were not deadlines (fixed 2026-11-17, Draft PR "LLM deadlines")
+
+**Root cause (Codex task28 audit, reproduced with fake providers):**
+- `_invoke_chat` wrapped the call in `with ThreadPoolExecutor(...)`. After
+  `fut.result(timeout)` raised, `__exit__` waited for the worker, so the caller got control
+  back only when the provider finished. A 1 s deadline over four hanging fakes took 12 s.
+- Ollama had no HTTP timeout: `ask_ai` and `ProviderPool.ask` never passed one, and the
+  builder's `ChatOllama(timeout=...)` is not a field in langchain-ollama 0.3.x: silently
+  ignored, the httpx client kept `Timeout(None)`. The code comment claimed otherwise.
+- Gemini and Groq got no timeout; their SDK retries (6 attempts with 600 s GAPIC deadlines,
+  3 attempts with 60 s reads) ran inside the call.
+- Every provider in the fallback chain got a fresh full timeout.
+
+**Fix:** `timeout` is one deadline for the whole `ask_ai` / `ProviderPool.ask` operation
+(`_Deadline`): each provider gets what is left, none starts after it is spent.
+`_invoke_chat` returns at the deadline (`shutdown(wait=False, cancel_futures=True)`).
+Ollama gets `client_kwargs={"timeout": httpx.Timeout(budget, connect<=10)}`; Gemini
+`timeout` + `max_retries=1`; Groq `timeout` + `max_retries=0`; FPT `(connect<=10, read)`.
+No `timeout` = exactly the old behaviour (no executor, SDK defaults).
+
+**Limit, stated plainly:** a request already sent is not cancelled at the provider. The
+worker thread keeps running until the HTTP client's own timeout ends it, and the provider
+may still finish and bill the call. Only the gRPC gateway path has a real client deadline,
+and even there the server keeps working after the client gives up.
+
+**Regression:** `tests/test_llm_deadlines.py` (9; 7 red on `main` `db005ab`).
