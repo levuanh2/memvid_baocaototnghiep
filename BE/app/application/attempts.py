@@ -83,6 +83,12 @@ class HetLuotChamLai(AttemptError):
     loi = "Đã hết lượt thử chấm lại cho bài này"
 
 
+class KhongCoCauChoChamLai(AttemptError):
+    """Regrade asked for an attempt that is not graded (still in progress, waiting for
+    its first grading, cancelled): only a provisional result has answers to regrade."""
+    loi = "Bài này không có câu nào chờ chấm lại"
+
+
 class BaiLuyenTapSaiRoute(AttemptError):
     """A practice attempt on the generic route: it would skip the practice route's
     Idempotency-Key and replay rules (risk D, review of #185)."""
@@ -306,6 +312,45 @@ def _grade_or_dispatch(attempt_id: str, quiz_id: str, user_id: Optional[str],
              "grading": "pending", "job_id": job_id}, True)
 
 
+def regrade_provisional(attempt_id: str, user_id: Optional[str], *,
+                        bat_buoc_chu_so_huu: bool, dispatch_grading) -> Tuple[dict, bool]:
+    """Regrade the short answers a model outage left ungraded (owner-approved
+    2026-11-17). Returns (body, accepted): 202 with the regrade job while one is queued
+    or running (never a second job), 200 with the stored result once nothing is left to
+    grade; 409 `HetLuotChamLai` when the learner's retries are used up (the provisional
+    result stays as it is). Same claim, retry cap and job fencing as a stuck attempt."""
+    from app.domains.attempts import repository as _attempts
+
+    attempt = load_owned_attempt(attempt_id, user_id, bat_buoc_chu_so_huu=bat_buoc_chu_so_huu)
+    _tu_choi_bai_luyen_tap(attempt["quiz_id"])
+    job_id = str(uuid.uuid4())
+    outcome, claimed_at, registered = _attempts.reclaim_for_regrade(
+        attempt_id, job_id, job_active=job_active, max_retries=manual_retry_max())
+    if outcome == "refused":
+        raise KhongCoCauChoChamLai(status=attempt["status"])
+    if outcome == "graded":
+        repair_mastery(attempt_id)
+        return ({**attempt_public(_attempts.get_attempt(attempt_id)), "grading": "done"},
+                False)
+    if outcome == "exhausted":
+        raise HetLuotChamLai(status="graded")
+    if outcome == "pending":
+        return ({**attempt_public(_attempts.get_attempt(attempt_id)), "grading": "pending",
+                 "job_id": registered}, True)
+    from app.domains.jobs.jobs_store import create_job, update_job
+    create_job(job_id, job_type="short_answer_grading", status="pending", progress=0,
+               current_node="Queued", user_id=user_id)
+    try:
+        dispatch_grading(job_id, attempt_id, user_id)
+    except Exception:
+        # Nothing was accepted: no ghost job, our claim and the retry given back.
+        update_job(job_id, status="error", error_text="enqueue failed")
+        _attempts.abandon_job(attempt_id, job_id, claimed_at, refund="manual_retries")
+        raise
+    return ({**attempt_public(_attempts.get_attempt(attempt_id)), "grading": "pending",
+             "job_id": job_id}, True)
+
+
 def job_active(job_id: Optional[str]) -> bool:
     """A grading job still queued or running that reported within the grading lease
     (`GRADING_LEASE_S`). A running job reports at every answer (progress + claim
@@ -412,6 +457,11 @@ def results(attempt_id: str, user_id: Optional[str], *,
         # "Thử chấm lại" only on "stalled": nobody holds a live claim and no job is
         # queued or running, so a retry starts exactly one grader.
         "grading_state": _attempts.grading_state(attempt_id, job_active=job_active,
+                                                 max_retries=manual_retry_max()),
+        # Provisional result (`grading_complete` false): None | "available" |
+        # "running" | "exhausted". The page offers "Chấm lại câu còn thiếu" on
+        # "available" only.
+        "regrade_state": _attempts.regrade_state(attempt_id, job_active=job_active,
                                                  max_retries=manual_retry_max()),
         "quiz_id": attempt["quiz_id"],
         "quiz_title": quiz.get("title"),

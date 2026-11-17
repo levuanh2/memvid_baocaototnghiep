@@ -8298,3 +8298,48 @@ drives the FE "Thử chấm lại".
 **Regression:** `tests/test_diagnostic_grading_recovery.py` (29; 5 red on `5e18271`, 8
 more red on the first implementation after Codex's review), FE
 `QuizResult.retryGrading.test.jsx` (9; 6 red on the old page).
+
+# A provisional result (AI grader outage) could never be regraded (fixed 2026-11-17)
+
+**Symptom:** when the model failed on a short answer, grading still finished: the
+attempt became `graded` with `ungraded_count > 0`, `grading_complete = false`, and the
+page said "Kết quả tạm thời". Nothing could ever grade those answers again: a submit of
+a graded attempt answers 200 with the stored result, and #188's "Thử chấm lại" exists
+only for a `submitted` attempt whose grading job died. The attempt stayed out of
+progress and completion for good. #189 makes a slow provider hit its real deadline, so
+this state can become more frequent.
+
+**Root cause:** recovery was designed around one failure (a dead grading job) and the
+claim/fencing code gated everything on `status == "submitted"`. A second, more common
+failure (the model fails, the job succeeds) ends in a different state that no path
+handled. Also, `save_grades` left `grading_claimed_at` and `grading_job_running` set
+after writing the result, which made any later claim look live for the lease.
+
+**Fix:** `POST /api/attempts/<id>/regrade` (`regrade_provisional`). Under the row lock
+`reclaim_for_regrade` takes the claim, counts one `manual_retries` (same cap as #188) and
+registers `regrade_job_id` in the same transaction, so a concurrent request answers 202
+with that job. Only that job may regrade (`start_grading_job` returns "regrade"; the
+job that produced the provisional result, redelivered, returns "done"). The job grades
+only answers with `verdict IS NULL` and `save_regrade` writes them, the totals and
+`ungraded_count` in one transaction, never touching an answer that has a verdict or any
+`user_answer`; gap analysis reruns (snapshot overwrite). The attempt stays `graded`
+throughout: the provisional result is visible until a better one replaces it. 200 when
+nothing is left, 409 `HetLuotChamLai` when retries are used up (result kept), 404 for
+another learner, 409 `KhongCoCauChoChamLai` when the attempt is not graded. `save_grades`
+now ends the claim. The result page shows "Chấm lại câu còn thiếu" on
+`regrade_state == "available"` and polls while it is "running".
+
+**Regression:** `BE/tests/test_provisional_grading_recovery.py` (15, PostgreSQL),
+`FE/src/pages/study/QuizResult.provisionalRegrade.test.jsx` (6, red on the old page),
+`FE/e2e/quiz-provisional-regrade.spec.js` (4, real backend, fake grader that fails once
+then succeeds; both auth modes).
+
+**Prevention:** when a recovery path is added, list every terminal state a failure can
+end in, not only the one that was reported. A result write must also end the claim that
+fenced it.
+
+**Test isolation note:** the recovery-sweep tests in `test_diagnostic_grading_recovery.py`
+take the oldest stuck attempts of the whole database. On a database reused across runs,
+stuck attempts left by earlier runs (aged 30 days) fill the batch and three sweep tests
+fail (also on #188 alone). They pass on a fresh database (CI). Scope the sweep tests'
+candidates if this database reuse becomes common.

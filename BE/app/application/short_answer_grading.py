@@ -73,7 +73,7 @@ def run_short_answer_grading_job(job_id: str, attempt_id: str,
             print(f"grading_job_superseded job_id={job_id}", flush=True)
             return
         result = None
-        if role == "run":
+        if role in ("run", "regrade"):
             update_job(job_id, status="running", progress=20, current_node="Grading")
 
             def _progress(p, msg):
@@ -86,8 +86,13 @@ def run_short_answer_grading_job(job_id: str, attempt_id: str,
                     raise _ClaimLost()
 
             try:
-                result = _grading_service.grade_attempt(attempt_id, once=True,
-                                                        progress_cb=_progress)
+                if role == "regrade":
+                    # A provisional result: only its ungraded short answers.
+                    result = _grading_service.regrade_ungraded(attempt_id, job_id,
+                                                               progress_cb=_progress)
+                else:
+                    result = _grading_service.grade_attempt(attempt_id, once=True,
+                                                            progress_cb=_progress)
             except _ClaimLost:
                 update_job(job_id, status="done", progress=100, current_node="Superseded",
                            result={"attempt_id": attempt_id, "superseded": True})

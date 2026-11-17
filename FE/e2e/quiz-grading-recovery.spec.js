@@ -11,84 +11,18 @@
 //   409  the learner's retries of a stuck attempt are used up
 import { test, expect } from "@playwright/test";
 import { registerAndEnterApp } from "./fixtures.js";
+import { BASE, apiSession, diagnosticQuiz, readyDocument, requireStubs, stubs,
+         submittedAttempt as answeredAttempt } from "./quizFixtures.js";
 
 const CRASH_MARKER = "__E2E_GRADE_CRASH__";   // E2E_GRADING_CRASH_MARKER, pinned in the config
 const RETRY_MAX = 3;   // GRADING_MANUAL_RETRY_MAX, pinned in playwright.config.js
-const BASE = `http://127.0.0.1:${process.env.PORT || 8080}`;
 
 test.describe.configure({ mode: "serial" });
 
-async function stubs(request) {
-  const res = await request.get(`${BASE}/__e2e__/stubs`);
-  expect(res.status(), "the backend on this port is run_e2e_server.py (not a reused dev server)").toBe(200);
-  return res.json();
-}
+test.beforeAll(async ({ request }) => { await requireStubs(request); });
 
-test.beforeAll(async ({ request }) => {
-  const s = await stubs(request);
-  expect(s.e2e_server && s.diagnostic_ai_stub && s.short_answer_grading_stub,
-    "deterministic quiz and grading stubs are on, so no real model can be called").toBe(true);
-});
-
-async function apiSession(page) {
-  const token = await page.evaluate(() => localStorage.getItem("memvid-token"));
-  expect(token, "auth token stored after register").toBeTruthy();
-  return { headers: { Authorization: `Bearer ${token}` } };
-}
-
-async function readyDocument(request, api) {
-  const res = await request.post(`${BASE}/api/documents/upload`, {
-    headers: api.headers,
-    multipart: { file: { name: "grading-recovery.txt", mimeType: "text/plain",
-                         buffer: Buffer.from("Tài liệu kiểm thử chấm bài.\n\nĐoạn hai.") } },
-  });
-  expect(res.status(), "document upload").toBe(201);
-  const documentId = (await res.json()).document_id;
-  // The fake ingest indexes in the background; a quiz generated before it finishes
-  // fails with "no indexed chunk".
-  await expect.poll(async () => (await (await request.get(`${BASE}/api/documents/${documentId}`,
-    { headers: api.headers })).json()).ingest_status, { timeout: 30_000 }).toBe("index_ready");
-  return documentId;
-}
-
-async function diagnosticQuiz(request, api, documentId) {
-  const res = await request.post(`${BASE}/api/quizzes/generate`, {
-    headers: api.headers,
-    data: { document_id: documentId, question_count: 2,
-            question_types: ["multiple_choice", "short_answer"], difficulty: "easy" },
-  });
-  expect(res.status(), `quiz generation accepted: ${await res.text()}`).toBe(202);
-  const job = await res.json();
-  let quizId = null;
-  await expect.poll(async () => {
-    const st = await (await request.get(`${BASE}/api/quizzes/jobs/${job.job_id}`,
-                                        { headers: api.headers })).json();
-    quizId = st.result?.quiz_id || null;
-    return st.status === "error" ? `error: ${st.error}` : st.status;
-  }, { timeout: 60_000 }).toBe("done");
-  expect(quizId, "quiz id from the generation job").toBeTruthy();
-  return quizId;
-}
-
-async function submittedAttempt(request, api, quizId, shortAnswer) {
-  const opened = await request.post(`${BASE}/api/quizzes/${quizId}/attempts`,
-                                    { headers: api.headers });
-  expect(opened.ok(), `open attempt -> ${opened.status()}`).toBeTruthy();
-  const attempt = await opened.json();
-  const byType = Object.fromEntries(attempt.quiz.questions.map((q) => [q.question_type, q.question_id]));
-  const saved = await request.patch(`${BASE}/api/attempts/${attempt.attempt_id}/answers`, {
-    headers: api.headers,
-    data: { answers: { [byType.multiple_choice]: "Correct", [byType.short_answer]: shortAnswer } },
-  });
-  expect(saved.ok(), `save answers -> ${saved.status()}`).toBeTruthy();
-  const submit = await request.post(`${BASE}/api/attempts/${attempt.attempt_id}/submit`,
-                                    { headers: api.headers });
-  expect(submit.status(), "a short-answer submit is accepted for background grading").toBe(202);
-  const body = await submit.json();
-  expect(body.grading).toBe("pending");
-  expect(body.job_id).toBeTruthy();
-  return attempt.attempt_id;
-}
+const submittedAttempt = (request, api, quizId, shortAnswer) => answeredAttempt(
+  request, api, quizId, (q) => (q.question_type === "multiple_choice" ? "Correct" : shortAnswer));
 
 const retryButton = (page) => page.getByRole("button", { name: /Thử chấm lại|Đang gửi/ });
 

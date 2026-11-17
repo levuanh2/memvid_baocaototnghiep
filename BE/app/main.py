@@ -4077,6 +4077,7 @@ _ATTEMPT_ERR_HTTP = {
     attempts_uc.AttemptChuaNop: 409,
     attempts_uc.BaiLuyenTapSaiRoute: 409,
     attempts_uc.HetLuotChamLai: 409,
+    attempts_uc.KhongCoCauChoChamLai: 409,
     attempts_uc.ThieuDapAn: 400,
     attempts_uc.CauHoiLac: 400,
     # Phase 2C
@@ -4197,6 +4198,22 @@ def api_attempt_submit(attempt_id: str):
         return err
     try:
         data, cham_nen = attempts_uc.submit_attempt(
+            attempt_id, uid, bat_buoc_chu_so_huu=_auth_protect_enabled(),
+            dispatch_grading=_dispatch_grading)
+    except attempts_uc.AttemptError as exc:
+        return _attempt_err(exc)
+    return (jsonify(data), 202) if cham_nen else jsonify(data)
+
+
+@app.post('/api/attempts/<attempt_id>/regrade')
+def api_attempt_regrade(attempt_id: str):
+    """Chấm lại các câu tự luận mà bộ chấm AI chưa chấm được (kết quả tạm thời).
+    202 khi có job chấm lại, 200 khi không còn câu nào chờ, 409 khi hết lượt."""
+    uid, err = _require_app_user()
+    if err:
+        return err
+    try:
+        data, cham_nen = attempts_uc.regrade_provisional(
             attempt_id, uid, bat_buoc_chu_so_huu=_auth_protect_enabled(),
             dispatch_grading=_dispatch_grading)
     except attempts_uc.AttemptError as exc:

@@ -13,6 +13,7 @@ import {
   getResult,
   optionLabel,
   moTaLoi,
+  regradeAttempt,
   submitAttempt,
 } from "../../utils/studyApi";
 import { MAX_CONSECUTIVE_FETCH_FAILURES } from "../../utils/jobPoller";
@@ -82,7 +83,10 @@ export default function QuizResult() {
   // `nhip` phải nằm trong dependency: lần hỏi nền hỏng thì `result` KHÔNG đổi, effect
   // không chạy lại, và vòng hỏi chết lặng — trang đứng mãi ở "đang chấm".
   useEffect(() => {
-    if (result?.status !== "submitted") { batDauChoRef.current = null; return undefined; }
+    // Also while a provisional result's missing answers are being regraded.
+    const waiting = result?.status === "submitted"
+      || (result?.status === "graded" && result?.regrade_state === "running");
+    if (!waiting) { batDauChoRef.current = null; return undefined; }
     // Nobody is grading (stalled) or retries are used up (failed): asking again changes
     // nothing until the learner retries, so stop polling instead of spinning.
     if (result?.grading_state === "stalled" || result?.grading_state === "failed") {
@@ -108,13 +112,14 @@ export default function QuizResult() {
   const stalled = result?.status === "submitted" && result?.grading_state === "stalled";
   const gradingFailed = result?.status === "submitted" && result?.grading_state === "failed";
 
-  const thuChamLai = async () => {
+  // `gui`: submit (a stuck attempt) or regrade (a provisional result's missing answers).
+  const thuChamLai = async (gui = submitAttempt) => {
     if (chamLaiRef.current) return;
     chamLaiRef.current = true;
     setChamLai((s) => ({ ...s, dangGui: true, loi: null }));
     let loi = null;
     try {
-      await submitAttempt(attemptId);
+      await gui(attemptId);
       // 200 (graded now) or 202 (grading in the background): the bounded poll above
       // starts a fresh 5-minute window if it is still grading.
       batDauChoRef.current = null;
@@ -212,7 +217,7 @@ export default function QuizResult() {
               </div>
               {stalled && (
                 <button type="button" className="btn-secondary text-small shrink-0"
-                  onClick={thuChamLai} disabled={chamLai.dangGui} aria-busy={chamLai.dangGui}>
+                  onClick={() => thuChamLai()} disabled={chamLai.dangGui} aria-busy={chamLai.dangGui}>
                   {chamLai.dangGui ? "Đang gửi…" : "Thử chấm lại"}
                 </button>
               )}
@@ -263,7 +268,32 @@ export default function QuizResult() {
                 {ungradedCount} câu chưa chấm được do bộ chấm AI không khả dụng.
                 Các câu này không bị tính là sai và không nằm trong điểm, mức nắm
                 hay phân tích lỗ hổng hiện tại.
+                {result?.regrade_state === "running" && (
+                  <span className="flex items-center gap-1.5 mt-1.5">
+                    <Spinner size={12} /> Đang chấm lại {ungradedCount} câu còn thiếu…
+                  </span>
+                )}
+                {result?.regrade_state === "available" && chamLai.daThu && (
+                  <span className="block mt-1.5">
+                    Lần chấm lại vừa rồi chưa chấm được các câu này. Bạn có thể thử thêm.
+                  </span>
+                )}
+                {result?.regrade_state === "exhausted" && (
+                  <span className="block mt-1.5">
+                    Đã hết lượt chấm lại cho bài này. Kết quả tạm thời được giữ nguyên.
+                  </span>
+                )}
+                {chamLai.loi && (
+                  <span className="block text-small mt-1" style={{ color: "var(--err)" }}>{chamLai.loi}</span>
+                )}
               </span>
+              {result?.regrade_state === "available" && (
+                <button type="button" className="btn-secondary text-small shrink-0 ml-auto"
+                  onClick={() => thuChamLai(regradeAttempt)} disabled={chamLai.dangGui}
+                  aria-busy={chamLai.dangGui}>
+                  {chamLai.dangGui ? "Đang gửi…" : "Chấm lại câu còn thiếu"}
+                </button>
+              )}
             </div>
           )}
 

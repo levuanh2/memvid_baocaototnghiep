@@ -139,6 +139,10 @@ export const saveAnswers = (attemptId, answers) =>
 export const submitAttempt = (attemptId) =>
   _send(`/api/attempts/${encodeURIComponent(attemptId)}/submit`, "POST");
 
+// A provisional result (the AI grader failed on some short answers): grade only those.
+export const regradeAttempt = (attemptId) =>
+  _send(`/api/attempts/${encodeURIComponent(attemptId)}/regrade`, "POST");
+
 export const getResult = (attemptId) =>
   _get(`/api/quizzes/results/${encodeURIComponent(attemptId)}`);
 

@@ -155,7 +155,7 @@ class MockMindmapGraph:
 # GET /__e2e__/stubs). One process, threads only: a dict is enough.
 E2E_STUBS = {"e2e_server": True, "diagnostic_ai_stub": False,
              "short_answer_grading_stub": False, "grade_calls": 0,
-             "grading_dispatches": 0}
+             "grading_dispatches": 0, "graded_questions": []}
 
 
 def main() -> None:
@@ -227,14 +227,21 @@ def main() -> None:
             base = {"explanation": "E2E diagnostic explanation.",
                     "difficulty": config.get("difficulty") or "easy",
                     "concept_tags": ["e2e-diagnostic"], "chunk_refs": ["c0"]}
-            return [
+            questions = [
                 {**base, "question_text": "E2E diagnostic choice?",
                  "question_type": "multiple_choice", "correct_answer": "Correct",
                  "options": ["Correct", "Wrong", "Distractor", "Alternative"]},
                 {**base, "question_text": "E2E diagnostic short answer?",
                  "question_type": "short_answer",
                  "correct_answer": "A deterministic model answer."},
-            ], None, 1
+            ]
+            if int(config.get("question_count") or 2) >= 3:
+                # A second short answer: the provisional-regrade spec proves that only
+                # the answer the model failed on is sent to it again.
+                questions.append({**base, "question_text": "E2E diagnostic short answer 2?",
+                                  "question_type": "short_answer",
+                                  "correct_answer": "A second model answer."})
+            return questions, None, 1
 
         quiz_generator.generate_questions = _deterministic_diagnostic_questions
 
@@ -276,13 +283,23 @@ def main() -> None:
             "E2E_GRADING_CRASH_MARKER", "__E2E_GRADE_CRASH__")
         fail_marker = os.environ.get(
             "E2E_SHORT_ANSWER_FAIL_MARKER", "__E2E_GRADE_FAIL__")
+        # Fails the model call the first time an answer is graded, succeeds after: a
+        # provider outage that ends. Keyed by the answer text, process-local.
+        fail_once_marker = "__E2E_GRADE_FAIL_ONCE__"
+        failed_once = set()
 
         def _deterministic_short_answer_grade(**kwargs):
             E2E_STUBS["grade_calls"] += 1
+            E2E_STUBS["graded_questions"].append(str(kwargs.get("question") or ""))
+            answer = str(kwargs.get("user_answer") or "")
+
             def _ask(_prompt, **_ask_kwargs):
                 time.sleep(delay)
-                if fail_marker in str(kwargs.get("user_answer") or ""):
+                if fail_marker in answer:
                     raise RuntimeError("E2E deterministic short-answer grading failure")
+                if fail_once_marker in answer and answer not in failed_once:
+                    failed_once.add(answer)
+                    raise RuntimeError("E2E short-answer grading failure (first time only)")
                 return json.dumps({
                     "verdict": "correct",
                     "feedback": "E2E deterministic short-answer feedback.",
