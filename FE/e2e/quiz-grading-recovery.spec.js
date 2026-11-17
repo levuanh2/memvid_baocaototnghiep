@@ -1,8 +1,8 @@
 // Diagnostic grading recovery (#188) end to end: the real QuizResult page against the
 // real backend (BE/scripts/run_e2e_server.py), with deterministic quiz generation and
 // short-answer grading (E2E_DIAGNOSTIC_AI_STUB / E2E_SHORT_ANSWER_GRADING_STUB, set in
-// playwright.config.js). No model is called. An answer containing the fail marker makes
-// the grading job fail every time, which is exactly a "stuck" attempt.
+// playwright.config.js). No model is called. An answer containing the crash marker makes
+// the grading job itself fail every time (a dead worker), which is exactly a "stuck" attempt.
 //
 // Contract under test (owner-approved 2026-11-17):
 //   202  grading accepted / still grading
@@ -11,7 +11,7 @@
 import { test, expect } from "@playwright/test";
 import { registerAndEnterApp } from "./fixtures.js";
 
-const FAIL_MARKER = process.env.E2E_SHORT_ANSWER_FAIL_MARKER || "__E2E_GRADE_FAIL__";
+const CRASH_MARKER = process.env.E2E_GRADING_CRASH_MARKER || "__E2E_GRADE_CRASH__";
 const RETRY_MAX = Number(process.env.GRADING_MANUAL_RETRY_MAX || 3);
 
 test.describe.configure({ mode: "serial" });
@@ -30,7 +30,12 @@ async function readyDocument(request, api) {
                          buffer: Buffer.from("Tài liệu kiểm thử chấm bài.\n\nĐoạn hai.") } },
   });
   expect(res.status(), "document upload").toBe(201);
-  return (await res.json()).document_id;
+  const documentId = (await res.json()).document_id;
+  // The fake ingest indexes in the background; a quiz generated before it finishes
+  // fails with "no indexed chunk".
+  await expect.poll(async () => (await (await request.get(`${api.base}/api/documents/${documentId}`,
+    { headers: api.headers })).json()).ingest_status, { timeout: 30_000 }).toBe("index_ready");
+  return documentId;
 }
 
 async function diagnosticQuiz(request, api, documentId) {
@@ -49,8 +54,8 @@ async function diagnosticQuiz(request, api, documentId) {
   await expect.poll(async () => {
     const st = await (await request.get(`${api.base}/api/quizzes/jobs/${job.job_id}`,
                                         { headers: api.headers })).json();
-    quizId = quizId || st.quiz_id || st.result?.quiz_id || null;
-    return st.status;
+    quizId = quizId || st.result?.quiz_id || null;
+    return st.status === "error" ? `error: ${st.error}` : st.status;
   }, { timeout: 60_000 }).toBe("done");
   expect(quizId, "quiz id from the generation job").toBeTruthy();
   return quizId;
@@ -80,7 +85,7 @@ test("a stuck attempt offers a retry, each retry is 202, and used-up retries end
   await registerAndEnterApp(page);
   const api = await apiSession(page);
   const quizId = await diagnosticQuiz(request, api, await readyDocument(request, api));
-  const attemptId = await submittedAttempt(request, api, quizId, `fails ${FAIL_MARKER}`);
+  const attemptId = await submittedAttempt(request, api, quizId, `crashes ${CRASH_MARKER}`);
 
   const submits = [];
   page.on("response", (r) => {

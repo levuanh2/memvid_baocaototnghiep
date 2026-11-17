@@ -222,6 +222,24 @@ def main() -> None:
             ], None, 1
 
         quiz_generator.generate_questions = _deterministic_diagnostic_questions
+
+        # `_fast_ingest` below writes only the FAISS index, not the `document_chunks`
+        # rows a quiz is built from; seed one real row (FKs point at it) on first use.
+        from app.domains.quiz import repository as quiz_repository
+        inner_chunks_for_scope = quiz_repository.chunks_for_scope
+
+        def _chunks_with_seed(document_id, section_ids=None, *, limit=200):
+            chunks = inner_chunks_for_scope(document_id, section_ids, limit=limit)
+            if chunks or section_ids:
+                return chunks
+            from app.db.models import DocumentChunk
+            from app.db import session_scope
+            with session_scope() as s:
+                s.add(DocumentChunk(document_id=str(document_id), chunk_index=0,
+                                    text="E2E diagnostic source text.", heading="E2E"))
+            return inner_chunks_for_scope(document_id, section_ids, limit=limit)
+
+        quiz_repository.chunks_for_scope = _chunks_with_seed
         print("[run_e2e_server] deterministic diagnostic AI stub enabled", flush=True)
 
     if os.environ.get("E2E_SHORT_ANSWER_GRADING_STUB", "").strip().lower() in {
@@ -233,6 +251,8 @@ def main() -> None:
 
         real_grade_short_answer = attempt_grading.grade_short_answer
         delay = float(os.environ.get("E2E_SHORT_ANSWER_GRADING_DELAY_SEC", "5"))
+        crash_marker = os.environ.get(
+            "E2E_GRADING_CRASH_MARKER", "__E2E_GRADE_CRASH__")
         fail_marker = os.environ.get(
             "E2E_SHORT_ANSWER_FAIL_MARKER", "__E2E_GRADE_FAIL__")
 
@@ -247,6 +267,12 @@ def main() -> None:
                     "missing_points": [],
                 })
 
+            # The fail marker only fails the model call, which grading survives (the
+            # answer stays ungraded). The crash marker fails the grading job itself, as a
+            # dead worker would: the attempt is left submitted and ungraded ("stalled").
+            if crash_marker in str(kwargs.get("user_answer") or ""):
+                time.sleep(delay)
+                raise RuntimeError("E2E deterministic grading job crash")
             call_kwargs = {**kwargs, "ask": _ask}
             return real_grade_short_answer(**call_kwargs)
 
