@@ -1,9 +1,10 @@
 # V6 release review (2026-11-16) — for the owner, not a release approval
 
-Status: **READY FOR OWNER REVIEW** for the 28 V6 Draft pull requests #159-#186 and the three
-follow-ups #187 (dev/test isolation), #188 (diagnostic grading recovery, stacked on #185)
-and #189 (LLM deadlines), once every head named here has a green required check
-(section 7). Trial 10 integrated all 31 heads (section 5). Production: **NO-GO** until all seven
+Status: **READY FOR OWNER REVIEW** for the 28 V6 Draft pull requests #159-#186 and the four
+follow-ups #187 (dev/test isolation), #188 (diagnostic grading recovery, stacked on #185),
+#189 (LLM deadlines) and #190 (provisional grading recovery, stacked on #188), once every
+head named here has a green required check (section 7). Trial 11 integrated all 32 heads
+and passed the PostgreSQL, E2E and fixture stages (section 5). Production: **NO-GO** until all seven
 blocking items of section 9 are GO with the evidence that section asks for: production
 reviewer, Render manual deploy, PostgreSQL backup restored, Storage and EC2 data backup
 restored, dev/test isolated from production, migration port, index-repair approver. Each is
@@ -398,6 +399,8 @@ refuse to start, so it has to be deployed with its own check.
 | Tree | What | Result |
 |---|---|---|
 | Trial 8 `d1ed4a3` / `8ca03e042ccf` | all 28 heads of 2026-11-16 morning (#185 at `06a65f8`) | Vitest 2095/2095 (+ seed 61201), build, lint 63/67, Fixture Smoke 333 passed / 6 skipped of 339, full audit 686 passed / 5 skipped of 691, 0 failed, 0 flaky; backend 3008 passed, 6 failures also on `main`. Chromium only |
+| Trial 11 `c30db74` / `f6325bc77a51` (2026-11-17, local, not pushed) | trial 10 `8580ac9` + #190 `b2cf908` (trial 10 already carried #188 `8a16902`): **32/32 heads are ancestors** (#159-#190, checked one by one) | Merge: `.playbook` append conflict, and a `QuizResult.jsx` conflict with the V6 result-page change, first resolved wrongly by the keep-both-sides helper (duplicated aside, split expression), then by hand (`c30db74`; the helper now refuses code files). **PostgreSQL 17.6 (disposable, loopback, fresh database):** migration to head and `verify_db_schema` before and after the suite exit 0; #183/#185 concurrency and idempotency 132 passed; #187 87; #188 64; #189 53; #190 30; full backend suite 3159 passed, 6 failed, 9 skipped: the 6 are the known local failures (`test_index_khoa_that` x5 need a real Redis, `test_fpt_rerank` x1; they pass in CI), the 9 skips need datasets, credentials, Storage, Redis, load or live vision. A first full run stopped at collection (gRPC stubs not generated in the new worktree) and is not counted. Vitest 2122/2122 (exit 0); build ok. **E2E critical** (Chromium, 1 worker, retries 1): open auth 47 passed + 1 skipped (ownership needs protected auth), protected auth 48 passed, 0 failed, 0 flaky. **Full Fixture Audit** (Chromium, `--workers=1 --fail-on-flaky-tests`): 686 passed, 5 skipped of 691, 0 failed, 0 flaky (22.5 min, exit 0). Logs: `studymap-qa-execution/v6/results/integration-32-trial11/` |
+| Trial 10 PostgreSQL stages `3e140b8` (31 exact GitHub heads, #188 `16932dd`) | PostgreSQL 17.6 portable (owner-approved; no Docker) | migration and `verify_db_schema` exit 0 before and after; #183/#185 144 passed (2 contract tests needed the CI role `postgres`, then 12/12); #187 87; #188 64; #189 53; full suite 3136 passed, 6 failed (the same 6 local failures), 9 skipped. `integration-31-trial10/` |
 | Trial 10 `c9eb9b2` / `bda16b09842b` (2026-11-17, local, not pushed) | trial 9 + #159 `fc06063`, #185 `5e18271`, #187 `7389d77`, #188 `16932dd`, #189 `2d174d8`: **31/31 heads are ancestors** (checked one by one) | Merge: only `.playbook` append conflicts (both sides kept). `FE/` differs from trial 9 only by `QuizResult.jsx` + its test. Backend targeted (#187/#188/#189 files, no DB): 146 passed, 0 failed, 84 skipped (need PostgreSQL). Full backend suite without a database: 2782 passed, 16 failed = the 6 failures `main` has locally + the 10 tests that need PostgreSQL (the same 10 fail on #185 without a database). Vitest 2106/2106; build ok; lint clean on the changed files; Fixture Smoke 334 passed / 5 skipped of 339, 0 failed, 0 flaky (`--fail-on-flaky-tests`). **Not run: the PostgreSQL stages** (migration, idempotency, concurrency, full integration on the integrated tree): Docker Desktop was stopped and was not started; each PR ran them alone in CI (section 7). Full Fixture Audit not re-run: the only frontend change since trial 8 is `QuizResult` (Vitest + smoke cover it). The run found one real defect, fixed in #187 `7389d77`: two isolation tests depended on the runner's `SKIP_DOTENV`. Logs: `studymap-qa-execution/v6/results/integration-31-trial10/` |
 | Trial 9 `64e701b` / `b97da2793ae6` | trial 8 + #185 `0f5fce0` | Merge: code clean, `.playbook` append conflicts only. `FE/` subtree hash `1c07e765902c` **identical** to trial 8, so the frontend test inputs are byte-identical; they were not re-run. Deploy harness on this tree: 38 PASS incl. mutations. `BE/` (`a6cae7ebff23`) and `scripts/` (`171d3be99334`) are **identical** to #185 `0f5fce0`, whose CI ran the backend suite on PostgreSQL (3025 passed) and the deploy tests. Only `.github` differs from #185 (the smoke list of #170). **Backend on this tree** (disposable PostgreSQL 16.15, 2026-11-16): migration to `20261115_attempt_submit_key` and rerun at head exit 0; `verify_db_schema` exit 0 before and after the suites; full suite 3018 passed, 9 skipped, 6 failed = the 6 that fail on `main`; migration, idempotency and concurrency files run alone: 144 passed, 0 failed (submit-key migration 10/10). A first run on a cp1252 console had 8 more failures, all from one Windows-only test-harness defect (section 4b), none from product code |
 
@@ -410,8 +413,8 @@ changes the smoke list in `ci.yml`). No pull request is stacked on #185.
 
 ## 6. Pull request heads
 
-All 28 are Draft. Heads unchanged since trial 8 except #159 (documentation) and #185
-(`0f5fce0`, then `5e18271` test harness). The table in `README.md` lists every head.
+All 32 (#159-#190) are Draft, and every head has a green `CI / required` (checked
+2026-11-17, one by one). The table in `README.md` lists every head.
 
 ## 7. CI on the changed heads
 
@@ -420,7 +423,9 @@ All 28 are Draft. Heads unchanged since trial 8 except #159 (documentation) and 
 | #185 | `5e18271` | **success** (run 43837028065: Backend Integration Suite & Migrations, Backend Unit & Contract, Deploy script tests, Fixture Smoke, E2E, Frontend tests and build all success) |
 | #185 (previous) | `0f5fce0` | success (run 43811959733) |
 | #187 | `7389d77` | **success** (run 44033127356: backend 3046 passed / 0 failed) |
-| #188 | `16932dd` | **success** (run 44032428574: backend 3067 passed / 0 failed) |
+| #188 | `8a16902` | **success** (run 44060712513: backend 3067 passed, E2E 44 + 44 with the QuizResult 200/202/409 spec) |
+| #188 (previous) | `16932dd` | success (run 44032428574) |
+| #190 | `b2cf908` | **success** (run 44076625947: backend 3090 passed, E2E 47 + 48, Fixture Smoke 206) |
 | #189 | `2d174d8` | **success** (run 44035654037: backend 3000 passed / 0 failed) |
 | #159 | this commit | documentation only |
 
@@ -721,6 +726,45 @@ Prerequisites: #189 merged (one real deadline per grading call), the usage ledge
 verified in production, and a named owner for the alerts. Needs the owner's separate
 approval; nothing here changes code or configuration today.
 
+## 8f. Provisional grading recovery: Draft PR #190 (owner-approved 2026-11-17)
+
+Branch `fix/provisional-grading-recovery`, head `b2cf908`, stacked on #188 `8a16902`
+(the PR targets `main` like #188, because CI runs only for pull requests into `main`;
+review its own commits only). Reviews: Codex task34 (two re-checks, APPROVED), agy task35
+(re-check, APPROVED).
+
+**The gap it closes.** When the AI grader fails on a short answer (provider error,
+timeout, untrustworthy answer), grading still finishes: the attempt is `graded` with
+`ungraded_count > 0`, the page says "Kết quả tạm thời", and those answers keep no
+verdict. Nothing could ever grade them again: #188's "Thử chấm lại" is only for an
+attempt whose grading job died. #189 makes a slow provider hit its real deadline, so
+this state can become more frequent.
+
+**Change.** `POST /api/attempts/<id>/regrade` regrades only the short answers without a
+verdict, with #188's claim, lease, retry cap (`GRADING_MANUAL_RETRY_MAX`) and job
+fencing. 202 with one job (concurrent clicks share it); 200 with the stored result when
+nothing is left; 409 when retries are used up (no model call, the provisional result
+kept); 404 for another learner. The attempt stays `graded`; progress, statistics and the
+Library keep excluding it until every answer is graded. Answers that have a verdict and
+every `user_answer` are never rewritten. A finished regrade job cannot run again when the
+queue redelivers it. The grading job holds the attempt until its gap analysis is
+written, so the page never shows the new score with old mastery.
+
+**Review plans (owner decisions 2026-11-17).** No plan while a regrade can still change
+the result; once the retries are used up, a plan from the graded answers, marked as
+covering only them. A plan built before a regrade changed the result is flagged
+`outdated` (not deleted). "Tạo lại kế hoạch" deletes the old plan and, through the
+database cascade, the practice quizzes made from it and their attempts; it now asks for
+confirmation and says so.
+
+**Evidence.** 23 PostgreSQL tests (red first); grading and review files 204 passed on a
+fresh database; Vitest 1968/1968 (exit 0); E2E with a fake grader that fails once then
+succeeds, both auth modes, including a 320px layout check that fails on the old banner;
+CI run 44076625947: backend 3090 passed, E2E 47 + 48, Fixture Smoke 206.
+
+**Not covered.** Practice attempts with a provisional result have no regrade (the route
+refuses them); the recovery sweep does not touch provisional attempts and stays OFF.
+
 ## 9. GO/NO-GO checklist for the owner
 
 Blocking: production stays **NO-GO** until every row is GO with the evidence named. None
@@ -743,12 +787,15 @@ Already GO, or owner decisions that do not block:
 
 | # | Item | State |
 |---|---|---|
-| 1 | Every head green on `CI / required` | GO: 28/28 (#185 `5e18271`, section 7; #159 its docs head) |
-| 2 | Trial integration tested on the exact tree to merge | GO: trial 9 `64e701b`; differs from the heads by #159 docs and the #185 test-harness file (section 5) |
+| 1 | Every head green on `CI / required` | GO: 32/32 (#159-#190, section 7) |
+| 2 | Trial integration tested on the exact tree to merge | GO: trial 11 `c30db74` holds all 32 heads; differs from them only by the merge resolutions (section 5) |
 | 5 | Auth on in production | GO: 401 without token on two protected routes (section 8); the env file itself not read |
 | 9 | Real-device, Firefox, WebKit, screen reader checks | not done; accept the risk or run them |
 | 10 | Risks A, B, D: A and B fixed in Draft #188 (section 8c), D's generic-route part too; merge #189 then #188 after #185, or accept them | open |
-| 15 | PostgreSQL stages on the integrated tree (trial 10) | not run locally (Docker stopped); each PR passed them alone in CI. Owner: start Docker Desktop (it also starts other projects' containers) or approve another disposable PostgreSQL, then they run in ~10 min |
+| 16 | Provisional result after an AI grader failure: diagnostic attempts regradable in Draft #190 (section 8f); merge it after #188, or accept that such answers stay ungraded | open |
+| 17 | A practice attempt with a provisional result has no regrade (#190 refuses practice) | open; needs its own change |
+| 18 | "Tạo lại kế hoạch" deletes the practice quizzes made from the old plan (database cascade, existed before V6) | mitigated in #190 by a confirmation that says so; keeping practice history on regeneration needs its own change |
+| 15 | PostgreSQL stages on the integrated tree | done: trial 10 (31 exact heads) and trial 11 (32 heads) on a disposable PostgreSQL 17.6, section 5 |
 | 11 | 6 pre-existing local backend failures accepted (environment, pass in CI) | open |
 | 12 | Windows test-harness fix | done in #185 `5e18271` (section 4b) |
 
@@ -777,6 +824,8 @@ with item 3 in place, each backend deploy also waits for the owner's approval.
 10. #188 after #185 and #189 are deployed and verified, in its own window (backend +
    `QuizResult`; no migration). Keep `GRADING_RECOVERY_ENABLED` unset; enabling it is a
    separate owner decision with the budget of section 8e.
+11. #190 after #188, in the same or the next window (backend + `QuizResult` +
+   `ReviewGuide`; no migration).
 Stacked pull requests carry their bases' commits; merge the base first.
 
 ## 11. Production actions that each need a separate owner go-ahead
