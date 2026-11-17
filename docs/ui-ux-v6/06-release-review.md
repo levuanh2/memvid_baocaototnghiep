@@ -4,7 +4,9 @@ Status: **READY FOR OWNER REVIEW** for the 28 V6 Draft pull requests #159-#186 a
 follow-ups #187 (dev/test isolation), #188 (diagnostic grading recovery, stacked on #185),
 #189 (LLM deadlines) and #190 (provisional grading recovery, stacked on #188), once every
 head named here has a green required check (section 7). Trial 11 integrated all 32 heads
-and passed the PostgreSQL, E2E and fixture stages (section 5). Production: **NO-GO** until all seven
+and passed the PostgreSQL, E2E and fixture stages up to #190 `f514cae`; with #190's last
+commit `b74de27` (backend only) the full backend suite and E2E on the integrated tree are
+**BLOCKED** (stopped for lack of memory, not re-run; section 5). Production: **NO-GO** until all seven
 blocking items of section 9 are GO with the evidence that section asks for: production
 reviewer, Render manual deploy, PostgreSQL backup restored, Storage and EC2 data backup
 restored, dev/test isolated from production, migration port, index-repair approver. Each is
@@ -399,7 +401,7 @@ refuse to start, so it has to be deployed with its own check.
 | Tree | What | Result |
 |---|---|---|
 | Trial 8 `d1ed4a3` / `8ca03e042ccf` | all 28 heads of 2026-11-16 morning (#185 at `06a65f8`) | Vitest 2095/2095 (+ seed 61201), build, lint 63/67, Fixture Smoke 333 passed / 6 skipped of 339, full audit 686 passed / 5 skipped of 691, 0 failed, 0 flaky; backend 3008 passed, 6 failures also on `main`. Chromium only |
-| Trial 11 `c30db74` / `f6325bc77a51` (2026-11-17, local, not pushed) | trial 10 `8580ac9` + #190 `b2cf908` (trial 10 already carried #188 `8a16902`): **32/32 heads are ancestors** (#159-#190, checked one by one) | Merge: `.playbook` append conflict, and a `QuizResult.jsx` conflict with the V6 result-page change, first resolved wrongly by the keep-both-sides helper (duplicated aside, split expression), then by hand (`c30db74`; the helper now refuses code files). **PostgreSQL 17.6 (disposable, loopback, fresh database):** migration to head and `verify_db_schema` before and after the suite exit 0; #183/#185 concurrency and idempotency 132 passed; #187 87; #188 64; #189 53; #190 30; full backend suite 3159 passed, 6 failed, 9 skipped: the 6 are the known local failures (`test_index_khoa_that` x5 need a real Redis, `test_fpt_rerank` x1; they pass in CI), the 9 skips need datasets, credentials, Storage, Redis, load or live vision. A first full run stopped at collection (gRPC stubs not generated in the new worktree) and is not counted. Vitest 2122/2122 (exit 0); build ok. **E2E critical** (Chromium, 1 worker, retries 1): open auth 47 passed + 1 skipped (ownership needs protected auth), protected auth 48 passed, 0 failed, 0 flaky. **Full Fixture Audit** (Chromium, `--workers=1 --fail-on-flaky-tests`): 686 passed, 5 skipped of 691, 0 failed, 0 flaky (22.5 min, exit 0). Logs: `studymap-qa-execution/v6/results/integration-32-trial11/` |
+| Trial 11 (2026-11-17, local, not pushed): `c30db74` / `f6325bc77a51`, then `5e6e304` / `9facee9a326e` (+ #190 `f514cae`), then `6507818` / `86745345c82a` (+ #190 `b74de27`) | all 32 heads, checked one by one at each step | Merge: `.playbook` append conflict; a `QuizResult.jsx` conflict first resolved wrongly by the keep-both-sides helper, then by hand (`c30db74`; the helper now refuses code files). **On `c30db74` and again on `5e6e304`** (disposable PostgreSQL 17.6, loopback, fresh database): migration and `verify_db_schema` before and after exit 0; targeted #183/#185 132, #187 87, #188 64, #189 53, #190 30 passed; full backend suite 3159 / 3160 passed, 6 failed (the known local failures: `test_index_khoa_that` x5 need a real Redis, `test_fpt_rerank` x1; they pass in CI), 9 skipped; Vitest 2122/2122 (exit 0); build ok; E2E critical (Chromium, 1 worker) open auth 47 passed + 1 skipped, protected auth 48 passed, 0 flaky; Full Fixture Audit (`--workers=1 --fail-on-flaky-tests`) 686 passed, 5 skipped of 691, 0 failed, 0 flaky, on both. **On `6507818`: BLOCKED** - its frontend is byte-identical to `5e6e304` (so Vitest, build and the fixture audit apply), but the full backend suite was stopped by the machine running out of memory and was not restarted; E2E critical was not run on it. #190 `b74de27` on its own: 207 grading and review tests on a fresh database, CI green. Not counted: a full run stopped at collection (gRPC stubs not generated in the new worktree), an E2E run on an unmigrated database, and two E2E runs that reused `BE/memory/mindmaps.sqlite` from an earlier run (item 19). Logs: `studymap-qa-execution/v6/results/integration-32-trial11/` (`BLOCKED-6507818.txt`) |
 | Trial 10 PostgreSQL stages `3e140b8` (31 exact GitHub heads, #188 `16932dd`) | PostgreSQL 17.6 portable (owner-approved; no Docker) | migration and `verify_db_schema` exit 0 before and after; #183/#185 144 passed (2 contract tests needed the CI role `postgres`, then 12/12); #187 87; #188 64; #189 53; full suite 3136 passed, 6 failed (the same 6 local failures), 9 skipped. `integration-31-trial10/` |
 | Trial 10 `c9eb9b2` / `bda16b09842b` (2026-11-17, local, not pushed) | trial 9 + #159 `fc06063`, #185 `5e18271`, #187 `7389d77`, #188 `16932dd`, #189 `2d174d8`: **31/31 heads are ancestors** (checked one by one) | Merge: only `.playbook` append conflicts (both sides kept). `FE/` differs from trial 9 only by `QuizResult.jsx` + its test. Backend targeted (#187/#188/#189 files, no DB): 146 passed, 0 failed, 84 skipped (need PostgreSQL). Full backend suite without a database: 2782 passed, 16 failed = the 6 failures `main` has locally + the 10 tests that need PostgreSQL (the same 10 fail on #185 without a database). Vitest 2106/2106; build ok; lint clean on the changed files; Fixture Smoke 334 passed / 5 skipped of 339, 0 failed, 0 flaky (`--fail-on-flaky-tests`). **Not run: the PostgreSQL stages** (migration, idempotency, concurrency, full integration on the integrated tree): Docker Desktop was stopped and was not started; each PR ran them alone in CI (section 7). Full Fixture Audit not re-run: the only frontend change since trial 8 is `QuizResult` (Vitest + smoke cover it). The run found one real defect, fixed in #187 `7389d77`: two isolation tests depended on the runner's `SKIP_DOTENV`. Logs: `studymap-qa-execution/v6/results/integration-31-trial10/` |
 | Trial 9 `64e701b` / `b97da2793ae6` | trial 8 + #185 `0f5fce0` | Merge: code clean, `.playbook` append conflicts only. `FE/` subtree hash `1c07e765902c` **identical** to trial 8, so the frontend test inputs are byte-identical; they were not re-run. Deploy harness on this tree: 38 PASS incl. mutations. `BE/` (`a6cae7ebff23`) and `scripts/` (`171d3be99334`) are **identical** to #185 `0f5fce0`, whose CI ran the backend suite on PostgreSQL (3025 passed) and the deploy tests. Only `.github` differs from #185 (the smoke list of #170). **Backend on this tree** (disposable PostgreSQL 16.15, 2026-11-16): migration to `20261115_attempt_submit_key` and rerun at head exit 0; `verify_db_schema` exit 0 before and after the suites; full suite 3018 passed, 9 skipped, 6 failed = the 6 that fail on `main`; migration, idempotency and concurrency files run alone: 144 passed, 0 failed (submit-key migration 10/10). A first run on a cp1252 console had 8 more failures, all from one Windows-only test-harness defect (section 4b), none from product code |
@@ -425,7 +427,7 @@ All 32 (#159-#190) are Draft, and every head has a green `CI / required` (checke
 | #187 | `7389d77` | **success** (run 44033127356: backend 3046 passed / 0 failed) |
 | #188 | `8a16902` | **success** (run 44060712513: backend 3067 passed, E2E 44 + 44 with the QuizResult 200/202/409 spec) |
 | #188 (previous) | `16932dd` | success (run 44032428574) |
-| #190 | `b2cf908` | **success** (run 44076625947: backend 3090 passed, E2E 47 + 48, Fixture Smoke 206) |
+| #190 | `b74de27` | **success** (run 44119547612: backend 3093 passed, E2E 47 + 48, Fixture Smoke 206) |
 | #189 | `2d174d8` | **success** (run 44035654037: backend 3000 passed / 0 failed) |
 | #159 | this commit | documentation only |
 
@@ -728,10 +730,10 @@ approval; nothing here changes code or configuration today.
 
 ## 8f. Provisional grading recovery: Draft PR #190 (owner-approved 2026-11-17)
 
-Branch `fix/provisional-grading-recovery`, head `b2cf908`, stacked on #188 `8a16902`
+Branch `fix/provisional-grading-recovery`, head `b74de27`, stacked on #188 `8a16902`
 (the PR targets `main` like #188, because CI runs only for pull requests into `main`;
 review its own commits only). Reviews: Codex task34 (two re-checks, APPROVED), agy task35
-(re-check, APPROVED).
+(re-check, APPROVED); Codex re-checks 3 and 4 on the plan rules below (APPROVED).
 
 **The gap it closes.** When the AI grader fails on a short answer (provider error,
 timeout, untrustworthy answer), grading still finishes: the attempt is `graded` with
@@ -750,17 +752,19 @@ every `user_answer` are never rewritten. A finished regrade job cannot run again
 queue redelivers it. The grading job holds the attempt until its gap analysis is
 written, so the page never shows the new score with old mastery.
 
-**Review plans (owner decisions 2026-11-17).** No plan while a regrade can still change
-the result; once the retries are used up, a plan from the graded answers, marked as
-covering only them. A plan built before a regrade changed the result is flagged
-`outdated` (not deleted). "Tạo lại kế hoạch" deletes the old plan and, through the
+**Review plans (owner decisions 2026-11-17, revised the same day).** A plan from the
+graded answers, marked as covering only them, whenever no regrade is running; the first
+rule (only after the retries were used up) made a learner spend up to three paid
+regrades to get one. A plan is written only under the attempt's row lock and only if the
+result it was built from is still the stored one (a regrade can start during the model
+call); a later regrade that changes the result flags the plan `outdated` (not deleted). "Tạo lại kế hoạch" deletes the old plan and, through the
 database cascade, the practice quizzes made from it and their attempts; it now asks for
 confirmation and says so.
 
 **Evidence.** 23 PostgreSQL tests (red first); grading and review files 204 passed on a
 fresh database; Vitest 1968/1968 (exit 0); E2E with a fake grader that fails once then
 succeeds, both auth modes, including a 320px layout check that fails on the old banner;
-CI run 44076625947: backend 3090 passed, E2E 47 + 48, Fixture Smoke 206.
+CI run 44119547612 on `b74de27`: backend 3093 passed, E2E 47 + 48, Fixture Smoke 206.
 
 **Not covered.** Practice attempts with a provisional result have no regrade (the route
 refuses them); the recovery sweep does not touch provisional attempts and stays OFF.
@@ -794,6 +798,7 @@ Already GO, or owner decisions that do not block:
 | 10 | Risks A, B, D: A and B fixed in Draft #188 (section 8c), D's generic-route part too; merge #189 then #188 after #185, or accept them | open |
 | 16 | Provisional result after an AI grader failure: diagnostic attempts regradable in Draft #190 (section 8f); merge it after #188, or accept that such answers stay ungraded | open |
 | 17 | A practice attempt with a provisional result has no regrade (#190 refuses practice) | open; needs its own change |
+| 19 | Local E2E runs share `BE/memory/mindmaps.sqlite` (`run_e2e_server.py` does not set `MEMORY_DIR`): a second local run sees the first run's maps and the "zero maps" spec fails; CI is unaffected (fresh checkout) | open; set `MEMORY_DIR` to the server's temp directory (one line), needs its own change |
 | 18 | "Tạo lại kế hoạch" deletes the practice quizzes made from the old plan (database cascade, existed before V6) | mitigated in #190 by a confirmation that says so; keeping practice history on regeneration needs its own change |
 | 15 | PostgreSQL stages on the integrated tree | done: trial 10 (31 exact heads) and trial 11 (32 heads) on a disposable PostgreSQL 17.6, section 5 |
 | 11 | 6 pre-existing local backend failures accepted (environment, pass in CI) | open |
