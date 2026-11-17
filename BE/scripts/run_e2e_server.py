@@ -151,6 +151,13 @@ class MockMindmapGraph:
         return {"result": record, "status_code": 200}
 
 
+# What this process stubbed, and how often the grading stub ran (read by
+# GET /__e2e__/stubs). One process, threads only: a dict is enough.
+E2E_STUBS = {"e2e_server": True, "diagnostic_ai_stub": False,
+             "short_answer_grading_stub": False, "grade_calls": 0,
+             "grading_dispatches": 0, "graded_questions": []}
+
+
 def main() -> None:
     import app.main as be_main  # noqa: E402  (env must be set first, see above)
 
@@ -196,6 +203,73 @@ def main() -> None:
         quiz_generator.generate_questions = _deterministic_practice_questions
         print("[run_e2e_server] deterministic practice AI stub enabled", flush=True)
 
+    # Test-only identity: a spec that needs the stubs checks this first, so Playwright
+    # reusing some other server on the port (a dev backend with real provider keys)
+    # fails the spec instead of calling a real model.
+    @be_main.app.get("/__e2e__/stubs")
+    def _e2e_stubs():
+        from flask import jsonify
+        return jsonify(E2E_STUBS)
+
+    if os.environ.get("E2E_DIAGNOSTIC_AI_STUB", "").strip().lower() in {
+        "1", "true", "yes", "on",
+    }:
+        # Diagnostic quizzes with one multiple-choice and one short-answer question, no
+        # model: the grading-recovery spec (quiz-grading-recovery.spec.js) needs a quiz
+        # whose grading runs in a background job, deterministically.
+        from app.domains.quiz import generator as quiz_generator
+
+        inner_generate_questions = quiz_generator.generate_questions
+
+        def _deterministic_diagnostic_questions(context, config, **kwargs):
+            if config.get("quiz_type") == "practice":
+                return inner_generate_questions(context, config, **kwargs)
+            base = {"explanation": "E2E diagnostic explanation.",
+                    "difficulty": config.get("difficulty") or "easy",
+                    "concept_tags": ["e2e-diagnostic"], "chunk_refs": ["c0"]}
+            questions = [
+                {**base, "question_text": "E2E diagnostic choice?",
+                 "question_type": "multiple_choice", "correct_answer": "Correct",
+                 "options": ["Correct", "Wrong", "Distractor", "Alternative"]},
+                {**base, "question_text": "E2E diagnostic short answer?",
+                 "question_type": "short_answer",
+                 "correct_answer": "A deterministic model answer."},
+            ]
+            if int(config.get("question_count") or 2) >= 3:
+                # A second short answer: the provisional-regrade spec proves that only
+                # the answer the model failed on is sent to it again.
+                questions.append({**base, "question_text": "E2E diagnostic short answer 2?",
+                                  "question_type": "short_answer",
+                                  "correct_answer": "A second model answer."})
+            return questions, None, 1
+
+        quiz_generator.generate_questions = _deterministic_diagnostic_questions
+
+        # `_fast_ingest` below writes only the FAISS index, not the `document_chunks`
+        # rows a quiz is built from; seed one real row (FKs point at it) on first use.
+        from app.domains.quiz import repository as quiz_repository
+        inner_chunks_for_scope = quiz_repository.chunks_for_scope
+
+        def _chunks_with_seed(document_id, section_ids=None, *, limit=200):
+            chunks = inner_chunks_for_scope(document_id, section_ids, limit=limit)
+            if chunks or section_ids:
+                return chunks
+            from app.db.models import DocumentChunk
+            from app.db import session_scope
+            from sqlalchemy.dialects.postgresql import insert
+            # Idempotent under concurrent jobs: the loser of the race inserts nothing
+            # (unique (document_id, chunk_index)); an unknown document still fails (FK).
+            with session_scope() as s:
+                s.execute(insert(DocumentChunk).values(
+                    document_id=str(document_id), chunk_index=0,
+                    text="E2E diagnostic source text.", heading="E2E",
+                ).on_conflict_do_nothing(index_elements=["document_id", "chunk_index"]))
+            return inner_chunks_for_scope(document_id, section_ids, limit=limit)
+
+        quiz_repository.chunks_for_scope = _chunks_with_seed
+        E2E_STUBS["diagnostic_ai_stub"] = True
+        print("[run_e2e_server] deterministic diagnostic AI stub enabled", flush=True)
+
     if os.environ.get("E2E_SHORT_ANSWER_GRADING_STUB", "").strip().lower() in {
         "1", "true", "yes", "on",
     }:
@@ -205,24 +279,54 @@ def main() -> None:
 
         real_grade_short_answer = attempt_grading.grade_short_answer
         delay = float(os.environ.get("E2E_SHORT_ANSWER_GRADING_DELAY_SEC", "5"))
+        crash_marker = os.environ.get(
+            "E2E_GRADING_CRASH_MARKER", "__E2E_GRADE_CRASH__")
         fail_marker = os.environ.get(
             "E2E_SHORT_ANSWER_FAIL_MARKER", "__E2E_GRADE_FAIL__")
+        # Fails the model call the first time an answer is graded, succeeds after: a
+        # provider outage that ends. Keyed by the answer text, process-local.
+        fail_once_marker = "__E2E_GRADE_FAIL_ONCE__"
+        failed_once = set()
 
         def _deterministic_short_answer_grade(**kwargs):
+            E2E_STUBS["grade_calls"] += 1
+            E2E_STUBS["graded_questions"].append(str(kwargs.get("question") or ""))
+            answer = str(kwargs.get("user_answer") or "")
+
             def _ask(_prompt, **_ask_kwargs):
                 time.sleep(delay)
-                if fail_marker in str(kwargs.get("user_answer") or ""):
+                if fail_marker in answer:
                     raise RuntimeError("E2E deterministic short-answer grading failure")
+                if fail_once_marker in answer and answer not in failed_once:
+                    failed_once.add(answer)
+                    raise RuntimeError("E2E short-answer grading failure (first time only)")
                 return json.dumps({
                     "verdict": "correct",
                     "feedback": "E2E deterministic short-answer feedback.",
                     "missing_points": [],
                 })
 
+            # The fail marker only fails the model call, which grading survives (the
+            # answer stays ungraded). The crash marker fails the grading job itself, as a
+            # dead worker would: the attempt is left submitted and ungraded ("stalled").
+            if crash_marker in str(kwargs.get("user_answer") or ""):
+                time.sleep(delay)
+                raise RuntimeError("E2E deterministic grading job crash")
             call_kwargs = {**kwargs, "ask": _ask}
             return real_grade_short_answer(**call_kwargs)
 
         attempt_grading.grade_short_answer = _deterministic_short_answer_grade
+
+        # Counted where the submit route hands a job over (synchronous, before its
+        # response), so "nothing regraded" cannot pass while a job is still queued.
+        inner_dispatch_grading = be_main._dispatch_grading
+
+        def _counted_dispatch_grading(*args, **kwargs):
+            E2E_STUBS["grading_dispatches"] += 1
+            return inner_dispatch_grading(*args, **kwargs)
+
+        be_main._dispatch_grading = _counted_dispatch_grading
+        E2E_STUBS["short_answer_grading_stub"] = True
         print("[run_e2e_server] deterministic short-answer grading stub enabled", flush=True)
 
     def _fast_ingest(source_id: str, file_path: str, filename: str):

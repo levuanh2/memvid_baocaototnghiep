@@ -63,16 +63,55 @@ def generate(attempt_id: Optional[str], user_id: Optional[str], *, force: bool,
         attempt_id, user_id, bat_buoc_chu_so_huu=bat_buoc_chu_so_huu)
     if attempt["status"] != "graded":
         raise AttemptChuaCham(status=attempt["status"])
+    if _regrade_running(attempt):
+        # A regrade is about to change the result: wait for it.
+        raise AttemptChuaCham(status="provisional")
 
     if not force:
         existing = _review.get_by_attempt(attempt_id)
         if existing:
-            return {**_bo_user_id(existing), "cached": True}, False
+            return _with_ungraded({**_bo_user_id(existing), "cached": True}, attempt), False
 
-    plan = _review.generate(attempt_id)
+    try:
+        plan = _review.generate(attempt_id)
+    except _review.KetQuaVuaDoi:
+        # A regrade started (or finished) while the plan was being built.
+        raise AttemptChuaCham(status="regrading")
     if plan is None:
         raise KhongTaoDuocPlan()
-    return _bo_user_id(plan), True
+    return _with_ungraded(_bo_user_id(plan), attempt), True
+
+
+def _regrade_running(attempt: Dict[str, Any]) -> bool:
+    """A regrade of this provisional result is queued or running. Owner decisions
+    2026-11-17: a plan may be built from the graded answers of a provisional result
+    (`ungraded_count` says what is missing) without spending any paid regrade first; a
+    later regrade that changes the result marks the plan `outdated`."""
+    from app.domains.attempts import repository as _attempts
+
+    if attempts_uc.attempt_public(attempt)["grading_complete"]:
+        return False
+    return _attempts.regrade_state(
+        attempt["attempt_id"], job_active=attempts_uc.job_active,
+        max_retries=attempts_uc.manual_retry_max()) == "running"
+
+
+def _with_ungraded(plan: Dict[str, Any], attempt: Dict[str, Any]) -> Dict[str, Any]:
+    """The plan of a provisional result covers only its graded answers: say how many
+    are missing (0 for a complete result). `outdated`: the attempt was graded again
+    (a regrade changed it) after the plan was built; the page offers "Tạo lại kế
+    hoạch". Not deleted here: deleting a plan cascades to its practice quizzes."""
+    from datetime import datetime
+
+    def _ts(value):
+        try:
+            return datetime.fromisoformat(str(value)) if value else None
+        except ValueError:
+            return None
+
+    built, graded = _ts(plan.get("created_at")), _ts(attempt.get("graded_at"))
+    return {**plan, "ungraded_count": attempts_uc.attempt_public(attempt)["ungraded_count"],
+            "outdated": bool(built and graded and graded > built)}
 
 
 def by_attempt(attempt_id: str, user_id: Optional[str], *,
@@ -80,12 +119,12 @@ def by_attempt(attempt_id: str, user_id: Optional[str], *,
     """Đặc tả 7.7: tra theo `attempt_id`, không phải `review_plan_id`."""
     from app.domains.review import service as _review
 
-    attempts_uc.load_owned_attempt(
+    attempt = attempts_uc.load_owned_attempt(
         attempt_id, user_id, bat_buoc_chu_so_huu=bat_buoc_chu_so_huu)
     plan = _review.get_by_attempt(attempt_id)
     if not plan:
         raise ReviewPlanKhongTonTai()
-    return _bo_user_id(plan)
+    return _with_ungraded(_bo_user_id(plan), attempt)
 
 
 def items(review_plan_id: str, user_id: Optional[str], *,
