@@ -271,7 +271,13 @@ def _invoke_chat(
                             latency_ms=int((time.monotonic() - started) * 1000),
                             metadata={"late_after_timeout": True})
                 except Exception as exc:  # accounting must never break the orphan
-                    print(f"[llm] late usage record failed: {type(exc).__name__}", flush=True)
+                    # Best effort: if the caller already closed its usage reservation, the
+                    # metering ledger refuses the late event. Log enough to reconcile by
+                    # hand (Codex task30 re-check); a guaranteed late record needs a
+                    # metering policy for terminal reservations (not in this PR).
+                    print(f"[llm] late usage NOT recorded attempt={usage_attempt_id} "
+                          f"provider={provider} err={type(exc).__name__}: {str(exc)[:160]}",
+                          flush=True)
                 finally:
                     if slot is not None:
                         slot.release()
