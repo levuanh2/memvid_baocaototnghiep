@@ -186,7 +186,9 @@ export default function QuizResult() {
       width={reviewingWrong ? "max-w-[1120px]" : "max-w-[1050px]"}
       actions={
         graded && (
-          wrongQuestions.length > 0 ? (
+          // A provisional result gets no review plan yet (the server refuses one until
+          // every answer is graded); "Về Thư viện" until the regrade completes.
+          wrongQuestions.length > 0 && !provisional ? (
             <Link to={`/app/study/review/${attemptId}`} className="btn-primary text-small inline-flex items-center gap-2">
               <Icon name="BookOpen" size={14} />
               {weakTopicCount > 0 ? `Kế hoạch ôn tập (${weakTopicCount} chủ đề)` : "Kế hoạch ôn tập"}
@@ -244,7 +246,8 @@ export default function QuizResult() {
           )}
           {reviewingWrong ? (
             <WrongAnswerReview questions={wrongQuestions} index={reviewIndex} onIndex={setReviewIndex}
-              onClose={() => setReviewingWrong(false)} reviewPlanTo={`/app/study/review/${attemptId}`} />
+              onClose={() => setReviewingWrong(false)}
+              reviewPlanTo={provisional ? null : `/app/study/review/${attemptId}`} />
           ) : <>
           <ScoreBoard result={result} grading={grading} provisional={provisional}
             ungradedCount={ungradedCount} wrongCount={wrongQuestions.length}
@@ -472,9 +475,9 @@ function WrongAnswerReview({ questions, index, onIndex, onClose, reviewPlanTo })
       <section className="quiz-wrong-review__content">
         <div className="quiz-wrong-review__nav"><button type="button" className="btn-secondary" onClick={onClose}><Icon name="ArrowLeft" size={14} /> Kết quả</button><span>Câu cần ôn {index + 1} / {questions.length}</span><div><button type="button" aria-label="Câu cần ôn trước" disabled={index === 0} onClick={() => onIndex(index - 1)}>←</button><button type="button" aria-label="Câu cần ôn tiếp theo" disabled={index === questions.length - 1} onClick={() => onIndex(index + 1)}>→</button></div></div>
         <ReviewedQuestion question={current} order={current._originalOrder} />
-        <Link className="btn-secondary quiz-wrong-review__compact-review-link" to={reviewPlanTo}>Mở kế hoạch ôn tập</Link>
+        {reviewPlanTo && <Link className="btn-secondary quiz-wrong-review__compact-review-link" to={reviewPlanTo}>Mở kế hoạch ôn tập</Link>}
       </section>
-      <aside className="quiz-wrong-review__next"><Icon name="Target" size={20} /><h2>Tiếp tục học</h2><p>Đây là phần xem lại câu trả lời. Kế hoạch ôn tập riêng vẫn được tạo và quản lý ở bước tiếp theo.</p><Link className="btn-primary" to={reviewPlanTo}>Mở kế hoạch ôn tập</Link></aside>
+      {reviewPlanTo && <aside className="quiz-wrong-review__next"><Icon name="Target" size={20} /><h2>Tiếp tục học</h2><p>Đây là phần xem lại câu trả lời. Kế hoạch ôn tập riêng vẫn được tạo và quản lý ở bước tiếp theo.</p><Link className="btn-primary" to={reviewPlanTo}>Mở kế hoạch ôn tập</Link></aside>}
     </div>
   );
 }

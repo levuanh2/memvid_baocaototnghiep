@@ -63,6 +63,10 @@ def generate(attempt_id: Optional[str], user_id: Optional[str], *, force: bool,
         attempt_id, user_id, bat_buoc_chu_so_huu=bat_buoc_chu_so_huu)
     if attempt["status"] != "graded":
         raise AttemptChuaCham(status=attempt["status"])
+    if not attempts_uc.attempt_public(attempt)["grading_complete"]:
+        # A provisional result (AI grader outage) is not a finished attempt: a plan
+        # built from it would be cached and outlive the regrade (Codex task34).
+        raise AttemptChuaCham(status="provisional")
 
     if not force:
         existing = _review.get_by_attempt(attempt_id)

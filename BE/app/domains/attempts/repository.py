@@ -367,15 +367,19 @@ def start_grading_job(attempt_id: str, job_id: str) -> Tuple[str, Optional[datet
 
 
 def release_job_claim(attempt_id: str, job_id: str) -> None:
-    """The running job failed: free the attempt for a retry at once. By job, not by
-    timestamp: the heartbeat moved the claim since the job started."""
+    """The running job ended (failed, or finished with its gap analysis written): free
+    the attempt at once. By job, not by timestamp: the heartbeat moved the claim since
+    the job started. A regrade job's registration ends with it, so the queue delivering
+    the same job again cannot regrade a second time without a counted retry (Codex
+    task34)."""
     with session_scope() as s:
         a = s.get(QuizAttempt, str(attempt_id), with_for_update=True)
         if a is None or (a.metadata_json or {}).get("grading_job_running") != job_id:
             return
         a.grading_claimed_at = None
         a.metadata_json = {k: v for k, v in (a.metadata_json or {}).items()
-                           if k != "grading_job_running"}
+                           if k != "grading_job_running"
+                           and not (k == "regrade_job_id" and v == job_id)}
 
 
 def renew_claim(attempt_id: str, job_id: str) -> bool:
@@ -493,13 +497,19 @@ def regrade_state(attempt_id: str, *, job_active=lambda _job_id: False,
     """None (nothing to regrade) | "running" | "exhausted" | "available". Read-only."""
     with session_scope() as s:
         a = s.get(QuizAttempt, str(attempt_id))
-        if a is None or a.status != "graded" or not _ungraded(a):
+        if a is None or a.status != "graded":
             return None
         meta = a.metadata_json or {}
         claimed = _aware(a.grading_claimed_at)
-        if ((claimed is not None and _now() - claimed < timedelta(seconds=grading_lease_s()))
-                or job_active(meta.get("regrade_job_id"))):
+        live = claimed is not None and _now() - claimed < timedelta(seconds=grading_lease_s())
+        # A grader holds the attempt until its gap analysis is written: still "running"
+        # after the scores are saved, so the page keeps polling and then loads the
+        # rebuilt mastery (Codex task34).
+        if ((live or job_active(meta.get("regrade_job_id")))
+                and (_ungraded(a) or meta.get("regrade_job_id"))):
             return "running"
+        if not _ungraded(a):
+            return None
         used = int(meta.get("manual_retries") or 0)
         if max_retries is not None and used >= max_retries:
             return "exhausted"
@@ -509,9 +519,10 @@ def regrade_state(attempt_id: str, *, job_active=lambda _job_id: False,
 def save_regrade(attempt_id: str, job_id: str, regraded: Dict[str, Dict[str, Any]],
                  ) -> Optional[Dict[str, Any]]:
     """Write a regrade in ONE transaction: the answers that still have no verdict, then
-    totals recomputed from every stored verdict, `ungraded_count`, and the end of the
-    claim. Only the job running the regrade may write (else None). An answer that has a
-    verdict is never rewritten, and `user_answer` is never touched."""
+    totals recomputed from every stored verdict and `ungraded_count`. Only the job
+    running the regrade may write (else None). An answer that has a verdict is never
+    rewritten, and `user_answer` is never touched. The claim stays: the job releases it
+    after the gap analysis (`release_job_claim`)."""
     from app.domains.attempts import grading
 
     now = _now()
@@ -538,9 +549,7 @@ def save_regrade(attempt_id: str, job_id: str, regraded: Dict[str, Dict[str, Any
         a.score, a.max_score, a.percentage = t["score"], t["max_score"], t["percentage"]
         a.correct_count, a.incorrect_count = t["correct_count"], t["incorrect_count"]
         meta["ungraded_count"] = sum(1 for r in rows if r.verdict is None)
-        meta.pop("grading_job_running", None)
         a.metadata_json = meta
-        a.grading_claimed_at = None
         if changed:
             a.graded_at = now
         return {**t, "ungraded_count": meta["ungraded_count"], "changed": changed}
@@ -803,11 +812,7 @@ def save_grades(attempt_id: str, graded: List[Dict[str, Any]], totals: Dict[str,
         #
         meta = dict(a.metadata_json or {})
         meta["ungraded_count"] = int(ungraded_count)
-        # The result ends the grader's claim. Left set, a regrade of a provisional
-        # result right after it saw a "live" claim and answered 202 with no job.
-        meta.pop("grading_job_running", None)
         a.metadata_json = meta
-        a.grading_claimed_at = None
         if status == "graded":
             a.graded_at = now
     return True

@@ -372,3 +372,120 @@ def test_mastery_counts_the_regraded_answer(owner, fake):
     after = {m["concept_name"]: m for m in gap.list_for_attempt(attempt_id)}
     assert after["khai niem"]["total_count"] == 3
     assert after["khai niem"]["correct_count"] == 3
+
+
+# ── Codex task34: terminal regrade jobs, derived state, review plans ──────
+
+def _retries(attempt_id):
+    from app.db import session_scope
+    from app.db.models import QuizAttempt
+
+    with session_scope() as s:
+        return int((s.get(QuizAttempt, attempt_id).metadata_json or {}).get("manual_retries") or 0)
+
+
+def test_a_finished_regrade_job_delivered_again_calls_no_model(owner, fake):
+    """At-least-once queues deliver a job again after it ran. A regrade that found
+    nothing (model failed again) must not run a second, uncounted regrade."""
+    attempt_id, _ = _provisional(owner, fake)
+    rec = _Recorder()
+    _regrade(attempt_id, owner, rec)
+    fake.fail = {SA_FLAKY}
+    _run_job(*rec.calls[0])
+    used = _retries(attempt_id)
+    fake.calls.clear()
+    fake.fail = set()
+    _run_job(*rec.calls[0])                        # the same job, delivered again
+    assert fake.calls == []
+    assert _retries(attempt_id) == used
+    assert _result(attempt_id, owner)["ungraded_count"] == 1
+
+
+def test_a_crashed_regrade_job_delivered_again_calls_no_model(owner, fake, monkeypatch):
+    from app.domains.attempts import grading
+
+    attempt_id, _ = _provisional(owner, fake)
+    rec = _Recorder()
+    _regrade(attempt_id, owner, rec)
+
+    def _boom(**_kw):
+        raise RuntimeError("worker died")
+
+    monkeypatch.setattr(grading, "grade_short_answer", _boom)
+    _run_job(*rec.calls[0])
+    monkeypatch.setattr(grading, "grade_short_answer", fake)
+    from app.domains.jobs.jobs_store import update_job
+    update_job(rec.calls[0][0], status="error", error_text="worker died")
+    _run_job(*rec.calls[0])                        # the same job, delivered again
+    assert fake.calls == []
+    assert _result(attempt_id, owner)["ungraded_count"] == 1
+
+
+def test_the_regrade_is_running_until_mastery_is_rebuilt(owner, fake, monkeypatch):
+    """The page stops polling when the regrade is no longer "running"; the mastery it
+    then loads must be the rebuilt one, so "running" lasts through the analysis."""
+    from app.domains.attempts import repository
+    from app.domains.gap_analysis import service as gap
+
+    attempt_id, _ = _provisional(owner, fake)
+    seen = []
+    real = gap.analyze_attempt
+
+    def _watch(aid):
+        seen.append(repository.regrade_state(aid))
+        return real(aid)
+
+    monkeypatch.setattr(gap, "analyze_attempt", _watch)
+    rec = _Recorder()
+    _regrade(attempt_id, owner, rec)
+    _run_job(*rec.calls[0])
+    assert seen == ["running"]
+    assert _result(attempt_id, owner)["regrade_state"] is None
+
+
+def test_no_regrade_starts_while_the_first_grading_is_still_analysing(owner, fake,
+                                                                      monkeypatch):
+    """Two analyses of one attempt must not overlap: the first grader holds the attempt
+    until its own gap analysis is written."""
+    from app.application import attempts as attempts_uc
+    from app.domains.attempts import repository
+    from app.domains.gap_analysis import service as gap
+
+    quiz_id, qids = _quiz(owner)
+    attempt_id = repository.open_attempt(quiz_id, owner)["attempt_id"]
+    repository.save_draft_answers(attempt_id, {qids[0]: "dung", qids[1]: "a", qids[2]: "b"})
+    first = _Recorder()
+    attempts_uc.submit_attempt(attempt_id, owner, bat_buoc_chu_so_huu=True,
+                               dispatch_grading=first)
+    during = _Recorder()
+    outcomes = []
+    real = gap.analyze_attempt
+
+    def _analyse(aid):
+        outcomes.append(_regrade(aid, owner, during))
+        return real(aid)
+
+    monkeypatch.setattr(gap, "analyze_attempt", _analyse)
+    fake.fail = {SA_FLAKY}
+    _run_job(*first.calls[0])
+    assert during.calls == [], "a regrade was dispatched during the first analysis"
+    assert outcomes and outcomes[0][1] is True and outcomes[0][0]["grading"] == "pending"
+    monkeypatch.setattr(gap, "analyze_attempt", real)
+    fake.fail = set()
+    after = _Recorder()
+    _, accepted = _regrade(attempt_id, owner, after)
+    assert accepted and len(after.calls) == 1
+
+
+def test_no_review_plan_from_a_provisional_result(owner, fake):
+    from app.application import review_plans
+
+    attempt_id, _ = _provisional(owner, fake)
+    with pytest.raises(review_plans.AttemptChuaCham):
+        review_plans.generate(attempt_id, owner, force=False, bat_buoc_chu_so_huu=True)
+    rec = _Recorder()
+    _regrade(attempt_id, owner, rec)
+    _run_job(*rec.calls[0])
+    plan, created = review_plans.generate(attempt_id, owner, force=False,
+                                          bat_buoc_chu_so_huu=True)
+    assert created and plan["attempt_id"] == attempt_id

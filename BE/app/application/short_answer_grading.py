@@ -100,6 +100,10 @@ def run_short_answer_grading_job(job_id: str, attempt_id: str,
                                   result_id=attempt_id)
                 print(f"grading_job_superseded job_id={job_id} (claim taken over)", flush=True)
                 return
+        if claimed_at is not None:
+            # Its gap analysis is written: end the claim (and a regrade's registration).
+            # Released earlier, a regrade could start while this analysis still ran.
+            _attempts.release_job_claim(attempt_id, job_id)
         no_op = result is None
         if no_op:
             # Already graded by someone else (or before this job started): that result

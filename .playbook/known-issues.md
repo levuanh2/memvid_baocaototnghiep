@@ -8329,8 +8329,20 @@ another learner, 409 `KhongCoCauChoChamLai` when the attempt is not graded. `sav
 now ends the claim. The result page shows "Chấm lại câu còn thiếu" on
 `regrade_state == "available"` and polls while it is "running".
 
-**Regression:** `BE/tests/test_provisional_grading_recovery.py` (15, PostgreSQL),
-`FE/src/pages/study/QuizResult.provisionalRegrade.test.jsx` (6, red on the old page),
+**Review fixes (Codex task34):** (1) a regrade job that ended (model failed again, or
+it crashed) kept `regrade_job_id`, so the queue delivering the same job again ran a
+second, uncounted regrade: `release_job_claim` now retires the registration with the
+job. (2) Scores were published before the gap analysis ran: the job now holds the claim
+until its analysis is written and releases it last (`save_grades` / `save_regrade` no
+longer end it), `regrade_state` stays "running" through the analysis, and a regrade
+cannot start while the first grading still analyses. (3) A review plan built from a
+provisional result was cached and outlived the regrade: `review_plans.generate` refuses
+a provisional attempt (409), the result page offers no plan link until it is complete,
+and existing plans are left as they are (deleting one cascades to practice quizzes).
+Practice attempts are out of scope: their route refuses a regrade (open item, #159).
+
+**Regression:** `BE/tests/test_provisional_grading_recovery.py` (20, PostgreSQL),
+`FE/src/pages/study/QuizResult.provisionalRegrade.test.jsx` (7, red on the old page),
 `FE/e2e/quiz-provisional-regrade.spec.js` (4, real backend, fake grader that fails once
 then succeeds; both auth modes).
 
