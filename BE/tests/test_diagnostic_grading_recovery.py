@@ -1005,3 +1005,22 @@ def test_a_claim_inside_a_long_configured_call_is_still_live(owner, monkeypatch)
     assert repository.submit(attempt_id) is not None
     _set_claim(attempt_id, 400)  # past the 300 s floor, inside one 600 s call
     assert repository.reclaim_for_retry(attempt_id)[0] == "pending"
+
+
+def test_a_disabled_sweep_touches_nothing_at_all(monkeypatch):
+    """Task 3 (2026-11-17): with the flag off the sweep opens no database session, takes
+    no lock, enqueues nothing and calls no model; it reads one environment variable."""
+    from app.application import attempts as attempts_uc
+    from app.domains.attempts import repository
+
+    monkeypatch.delenv("GRADING_RECOVERY_ENABLED", raising=False)
+    monkeypatch.setattr(repository, "session_scope",
+                        lambda: pytest.fail("a database session while the sweep is off"))
+    monkeypatch.setattr(repository, "claim_stuck_for_recovery",
+                        lambda **_k: pytest.fail("claimed while the sweep is off"))
+    assert attempts_uc.recover_grading(
+        dispatch_grading=lambda *a: pytest.fail("enqueued while the sweep is off")) == {
+        "enabled": False}
+    for off in ("0", "false", "no", "off", ""):
+        monkeypatch.setenv("GRADING_RECOVERY_ENABLED", off)
+        assert attempts_uc.recover_grading(dispatch_grading=lambda *a: None) == {"enabled": False}
