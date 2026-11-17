@@ -116,7 +116,7 @@ def submit(practice_quiz_id: str, user_id: Optional[str], raw: Any, *,
     try:
         attempt_id, outcome, claimed_at = _attempts.submit_practice(
             practice_quiz_id, user_id, raw, submit_key=submit_key,
-            max_retries=attempts_uc.manual_retry_max())
+            max_retries=lambda: attempts_uc.retry_cap_for(practice_quiz_id))
     except _attempts.SubmitKeyMismatch:
         raise KhoaNopBaiDaDung() from None
     if outcome == "replay":

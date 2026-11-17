@@ -46,6 +46,16 @@ def run_short_answer_grading_job(job_id: str, attempt_id: str,
                      input_json={"attempt_id": attempt_id})
     claimed_at = None
     try:
+        from app.application.attempts import job_active as _job_active
+        from app.domains.jobs.jobs_store import get_job as _get_job
+
+        # A redelivery of THIS job while its first delivery is alive (the job row is
+        # `running` and fresh) must not grade, even if a long model call let the claim
+        # expire (Codex re-check of ddafc7b).
+        if ((_get_job(job_id) or {}).get("status") in ("running", "processing")
+                and _job_active(job_id)):
+            print(f"grading_job_duplicate job_id={job_id}", flush=True)
+            return
         role, claimed_at = _attempts.start_grading_job(attempt_id, job_id)
         if role == "duplicate":
             # The queue delivered this job twice; the other delivery is grading.
@@ -58,15 +68,19 @@ def run_short_answer_grading_job(job_id: str, attempt_id: str,
             _ledger.close_job(job_id, "done", result_type="quiz_attempt", result_id=attempt_id)
             print(f"grading_job_superseded job_id={job_id}", flush=True)
             return
-        update_job(job_id, status="running", progress=20, current_node="Grading")
         result = None
         if role == "run":
-            result = _grading_service.grade_attempt(
-                attempt_id, once=True,
+            update_job(job_id, status="running", progress=20, current_node="Grading")
+
+            def _progress(p, msg):
                 # Người học đang ngồi chờ màn hình điểm. Không có dòng này thì job đứng ở
-                # 20% suốt cả lượt chấm (1 lời gọi LLM mỗi câu tự luận) rồi nhảy thẳng 100%.
-                progress_cb=lambda p, msg: update_job(job_id, progress=p, current_node=msg),
-            )
+                # 20% suốt cả lượt chấm (1 lời gọi LLM mỗi câu tự luận) rồi nhảy 100%.
+                # It is also the heartbeat: job row fresh, claim renewed.
+                update_job(job_id, progress=p, current_node=msg)
+                _attempts.renew_claim(attempt_id, job_id)
+
+            result = _grading_service.grade_attempt(attempt_id, once=True,
+                                                    progress_cb=_progress)
         no_op = result is None
         if no_op:
             # Already graded by someone else (or before this job started): that result
@@ -80,7 +94,8 @@ def run_short_answer_grading_job(job_id: str, attempt_id: str,
         print(f"grading_job_done job_id={job_id} attempt_id={attempt_id} "
               f"score={result['score']}/{result['max_score']} no_op={no_op}", flush=True)
     except Exception as e:
-        _attempts.release_grading_claim(attempt_id, claimed_at)
+        if claimed_at is not None:
+            _attempts.release_job_claim(attempt_id, job_id)
         update_job(job_id, status="error", error_text=_job_error_text(e))
         _ledger.close_job(job_id, "error", error_message=str(e))
         print(f"grading_job_failed job_id={job_id} err={str(e)[:80]}", flush=True)

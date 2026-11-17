@@ -68,6 +68,14 @@ def _answered_attempt(owner):
 def _short_answer_attempt(owner):
     """One multiple-choice and one short-answer question: grading goes to a job."""
     from app.domains.attempts import repository
+
+    quiz_id, qids = _short_answer_quiz(owner)
+    attempt_id = repository.open_attempt(quiz_id, owner)["attempt_id"]
+    repository.save_draft_answers(attempt_id, {qids[0]: "dung", qids[1]: "tra loi"})
+    return attempt_id
+
+
+def _short_answer_quiz(owner):
     from app.domains.documents import repository as docs_repo
     from app.domains.quiz import repository as quiz_repo
 
@@ -87,10 +95,7 @@ def _short_answer_attempt(owner):
          "correct_answer": "mot cau tra loi", "question_text": "Cau 2?"},
     ])
     quiz_repo.finish(quiz_id, "ready", question_count=2)
-    qids = [x["question_id"] for x in quiz_repo.get_quiz(quiz_id)["questions"]]
-    attempt_id = repository.open_attempt(quiz_id, owner)["attempt_id"]
-    repository.save_draft_answers(attempt_id, {qids[0]: "dung", qids[1]: "tra loi"})
-    return attempt_id
+    return quiz_id, [x["question_id"] for x in quiz_repo.get_quiz(quiz_id)["questions"]]
 
 
 def _run_job_now(job_id, attempt_id, user_id):
@@ -359,9 +364,9 @@ def test_retry_while_the_grading_job_is_queued_starts_no_second_job(owner):
 def test_a_job_the_queue_lost_is_recovered_by_a_retry(owner, monkeypatch):
     attempt_id = _short_answer_attempt(owner)
     queue = _Recorder()
-    _submit(attempt_id, owner, dispatch=queue)
+    first, _ = _submit(attempt_id, owner, dispatch=queue)
     _set_claim(attempt_id, _lease_s() + 5)
-    monkeypatch.setenv("JOB_STUCK_AFTER_SECONDS", "0")  # the pending job is now stale
+    _age_job(first["job_id"], _lease_s() + 5)  # silent past the lease: lost
     assert _state(attempt_id, owner) == "stalled"
 
     _, background = _submit(attempt_id, owner, dispatch=queue)
@@ -703,7 +708,7 @@ def test_the_practice_route_caps_retries_of_one_attempt_too(owner, monkeypatch):
 
     monkeypatch.setenv("GRADING_MANUAL_RETRY_MAX", "2")
     monkeypatch.setattr(practice_uc, "_load_owned_practice", lambda *a, **k: {"status": "ready"})
-    quiz_id, qids = _quiz(owner)
+    quiz_id, qids = _short_answer_quiz(owner)  # a regrade costs model calls: capped
     passes = []
 
     def _paid_then_fails(attempt_id, **kw):
@@ -739,3 +744,144 @@ def test_a_failed_mastery_repair_is_tried_again_next_sweep(owner, monkeypatch):
     monkeypatch.setattr(gap, "analyze_attempt", original)
     attempts_uc.recover_grading(**kw)
     assert _masteries(attempt_id), "repaired on the next sweep"
+
+
+# ── Codex re-check of ddafc7b and agy task27 ──────────────────────────────
+def _age_job(job_id, seconds):
+    """What a killed worker leaves: the job row stops being updated."""
+    from app.domains.jobs import jobs_store
+
+    old = (datetime.now(timezone.utc) - timedelta(seconds=seconds)).isoformat()
+    conn = jobs_store.get_conn()
+    try:
+        conn.execute("UPDATE jobs SET updated_at=? WHERE job_id=?", (old, job_id))
+        conn.commit()
+    finally:
+        conn.close()
+
+
+def test_a_redelivered_job_does_not_grade_while_the_first_delivery_runs(owner, monkeypatch):
+    """Codex HIGH: the claim expired during a long model call; the queue delivers the
+    same job again. The first delivery is alive (its job row is fresh): no second run."""
+    from app.domains.attempts import grading
+
+    attempt_id = _short_answer_attempt(owner)
+    queue = _Recorder()
+    first, _ = _submit(attempt_id, owner, dispatch=queue)
+    job_id = first["job_id"]
+    inside, release, calls = threading.Event(), threading.Event(), []
+
+    def _slow(**kw):
+        calls.append(kw.get("question"))
+        if len(calls) == 1:
+            inside.set()
+            release.wait(30)
+        return {"verdict": "correct", "score": 1.0, "feedback": "ok", "missing_points": []}
+
+    monkeypatch.setattr(grading, "grade_short_answer", _slow)
+    t = threading.Thread(target=_run_job_now, args=(job_id, attempt_id, owner))
+    t.start()
+    try:
+        assert inside.wait(30)
+        _set_claim(attempt_id, _lease_s() + 5)   # the call outlived the lease
+        _run_job_now(job_id, attempt_id, owner)  # redelivery
+    finally:
+        release.set()
+        t.join(30)
+    assert len(calls) == 1, f"the model was called {len(calls)} times"
+    assert _row(attempt_id)["status"] == "graded"
+
+
+def test_a_running_job_renews_the_claim_between_answers(owner, monkeypatch):
+    from app.domains.attempts import grading
+
+    attempt_id = _short_answer_attempt(owner)
+    first, _ = _submit(attempt_id, owner, dispatch=_Recorder())
+    seen = []
+
+    def _probe(**kw):
+        seen.append(_row(attempt_id)["claimed"])
+        return {"verdict": "correct", "score": 1.0, "feedback": "ok", "missing_points": []}
+
+    _set_claim(attempt_id, _lease_s() - 1)       # about to expire
+    monkeypatch.setattr(grading, "grade_short_answer", _probe)
+    _run_job_now(first["job_id"], attempt_id, owner)
+    age = (datetime.now(timezone.utc) - seen[0]).total_seconds()
+    assert age < 60, "the claim was renewed when grading started"
+
+
+def test_a_job_silent_past_the_lease_counts_as_dead(owner):
+    """agy B1: a killed worker leaves its job 'running'; after the lease (not 15 min)
+    the attempt is stalled and a retry can grade it."""
+    from app.domains.jobs.jobs_store import update_job
+
+    attempt_id = _short_answer_attempt(owner)
+    first, _ = _submit(attempt_id, owner, dispatch=_Recorder())
+    update_job(first["job_id"], status="running")
+    _set_claim(attempt_id, _lease_s() + 5)
+    _age_job(first["job_id"], _lease_s() + 5)
+    assert _state(attempt_id, owner) == "stalled"
+    queue = _Recorder()
+    _submit(attempt_id, owner, dispatch=queue)
+    assert len(queue.calls) == 1
+
+
+def test_a_request_that_lost_its_claim_refunds_and_answers_200_if_graded(owner, monkeypatch):
+    """Codex MEDIUM: the retry counted, then lost the claim before registering its job
+    (B reclaimed and graded meanwhile): give the retry back, answer with the result."""
+    from app.application import attempts as attempts_uc
+    from app.domains.attempts import repository
+
+    attempt_id = _short_answer_attempt(owner)
+    assert repository.submit(attempt_id) is not None
+    _set_claim(attempt_id, _lease_s() + 5)
+    original = repository.set_grading_job
+
+    def _b_wins_first(aid, job_id, claimed_at):
+        # B reclaims and grades between our claim and our registration.
+        _set_claim(aid, _lease_s() + 5)
+        _run_job_now_for(aid)
+        return original(aid, job_id, claimed_at)
+
+    def _run_job_now_for(aid):
+        monkeypatch.setattr(repository, "set_grading_job", original)
+        attempts_uc.submit_attempt(aid, owner, bat_buoc_chu_so_huu=True,
+                                   dispatch_grading=_run_job_now)
+
+    monkeypatch.setattr(repository, "set_grading_job", _b_wins_first)
+    data, background = _submit(attempt_id, owner, dispatch=_Recorder())
+    assert background is False and data["grading"] == "done"
+    assert _row(attempt_id)["meta"].get("manual_retries") == 1, "only B's retry counts"
+
+
+def test_objective_only_attempts_are_never_capped(owner, monkeypatch):
+    """Codex MEDIUM: the cap protects LLM cost; an objective quiz costs none."""
+    from app.domains.attempts import service
+
+    monkeypatch.setenv("GRADING_MANUAL_RETRY_MAX", "1")
+    attempt_id = _answered_attempt(owner)
+    original = service.grade_attempt
+
+    def _boom(*_a, **_k):
+        raise RuntimeError("db hiccup")
+
+    monkeypatch.setattr(service, "grade_attempt", _boom)
+    for _ in range(4):
+        with pytest.raises(RuntimeError):
+            _submit(attempt_id, owner)
+    assert _state(attempt_id, owner) == "stalled"
+    monkeypatch.setattr(service, "grade_attempt", original)
+    data, _ = _submit(attempt_id, owner)
+    assert data["status"] == "graded"
+
+
+def test_a_job_for_an_attempt_already_graded_ends_done_without_running(owner):
+    """agy B3: no 'running' flicker and no error for a job that has nothing to do."""
+    from app.domains.jobs.jobs_store import create_job, get_job
+
+    attempt_id = _answered_attempt(owner)
+    _submit(attempt_id, owner)
+    job = str(uuid.uuid4())
+    create_job(job, job_type="short_answer_grading", status="pending", user_id=owner)
+    _run_job_now(job, attempt_id, owner)
+    assert get_job(job)["status"] == "done"

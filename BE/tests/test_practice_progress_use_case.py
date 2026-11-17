@@ -177,7 +177,7 @@ def test_practice_submit_giu_dung_trinh_tu_tac_dung_phu(client, monkeypatch):
                                      "user_id": "u1"})
     monkeypatch.setattr(attempts_repo, "question_ids_of_quiz", lambda qid: ["q1"])
     monkeypatch.setattr(attempts_repo, "submit_practice",
-                        lambda qid, uid, ans, submit_key=None: (
+                        lambda qid, uid, ans, submit_key=None, max_retries=None: (
                             goi.append(("submit_practice", ans, submit_key)), ("at1", "grade", None))[1])
     # The response is read back from the stored attempt (2026-11-15), so a retry with the
     # same Idempotency-Key gets exactly what the first success returned.

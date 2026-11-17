@@ -230,7 +230,7 @@ def submit_attempt(attempt_id: str, user_id: Optional[str], *,
                                   submitted["claimed_at"], dispatch_grading, refund=None)
 
     outcome, claimed_at = _attempts.reclaim_for_retry(
-        attempt_id, job_active=job_active, max_retries=manual_retry_max())
+        attempt_id, job_active=job_active, max_retries=retry_cap_for(attempt["quiz_id"]))
     if outcome == "graded":
         repair_mastery(attempt_id)
         return ({**attempt_public(_attempts.get_attempt(attempt_id)),
@@ -245,6 +245,14 @@ def submit_attempt(attempt_id: str, user_id: Optional[str], *,
     if outcome == "exhausted":
         raise HetLuotChamLai(status="submitted")
     raise AttemptKhongConDangLam(status=attempt["status"])
+
+
+def retry_cap_for(quiz_id: str) -> Optional[int]:
+    """The per-attempt retry cap protects LLM cost: only a quiz with short answers pays
+    for a regrade. Objective-only attempts are never stranded (Codex re-check)."""
+    from app.domains.attempts import service as _grading_service
+
+    return manual_retry_max() if _grading_service.has_short_answer(quiz_id) else None
 
 
 def manual_retry_max() -> int:
@@ -285,9 +293,13 @@ def _grade_or_dispatch(attempt_id: str, quiz_id: str, user_id: Optional[str],
     create_job(job_id, job_type="short_answer_grading", status="pending", progress=0,
                current_node="Queued", user_id=user_id)
     if not _attempts.set_grading_job(attempt_id, job_id, claimed_at):
-        # Our claim was lost (lease ran out, a retry took over): that grader stands.
+        # Our claim was lost (lease ran out, another grader took over): that grader
+        # stands, the retry we counted is given back, and the answer is what is stored.
         update_job(job_id, status="error", error_text="superseded before dispatch")
+        _attempts.abandon_job(attempt_id, job_id, None, refund=refund)
         stored = _attempts.get_attempt(attempt_id)
+        if stored["status"] == "graded":
+            return ({**attempt_public(stored), "grading": "done"}, False)
         return ({**attempt_public(stored), "grading": "pending",
                  "job_id": (stored.get("metadata") or {}).get("grading_job_id")}, True)
     try:
@@ -302,13 +314,14 @@ def _grade_or_dispatch(attempt_id: str, quiz_id: str, user_id: Optional[str],
 
 
 def job_active(job_id: Optional[str]) -> bool:
-    """A grading job still queued or running, and not silent for longer than the stuck
-    threshold `sweep_stuck_jobs` uses (JOB_STUCK_AFTER_SECONDS, default 900 s). A queue
-    that lost the job leaves it `pending` forever; past the threshold it no longer
-    counts, so the attempt can be recovered."""
+    """A grading job still queued or running that reported within the grading lease
+    (`GRADING_LEASE_S`). A running job reports at every answer (progress + claim
+    heartbeat); a killed worker or a queue that lost the job goes silent, and after the
+    lease (not the 15-minute stuck-job threshold, agy task27) the attempt can be retried.
+    A late start of such a job is harmless: it is no longer registered, so it ends as a
+    no-op before any model call."""
     if not job_id:
         return False
-    import os
     from datetime import datetime, timezone
 
     from app.domains.jobs.jobs_store import get_job
@@ -325,11 +338,9 @@ def job_active(job_id: Optional[str]) -> bool:
             updated = updated.replace(tzinfo=timezone.utc)
     except (TypeError, ValueError):
         return False
-    try:
-        stuck_s = int(os.getenv("JOB_STUCK_AFTER_SECONDS") or 900)
-    except ValueError:
-        stuck_s = 900
-    return (datetime.now(timezone.utc) - updated).total_seconds() < stuck_s
+    from app.domains.attempts.repository import GRADING_LEASE_S
+
+    return (datetime.now(timezone.utc) - updated).total_seconds() < GRADING_LEASE_S
 
 
 def repair_mastery(attempt_id: Optional[str]) -> bool:
@@ -408,7 +419,7 @@ def results(attempt_id: str, user_id: Optional[str], *,
         # "Thử chấm lại" only on "stalled": nobody holds a live claim and no job is
         # queued or running, so a retry starts exactly one grader.
         "grading_state": _attempts.grading_state(attempt_id, job_active=job_active,
-                                                 max_retries=manual_retry_max()),
+                                                 max_retries=retry_cap_for(attempt["quiz_id"])),
         "quiz_id": attempt["quiz_id"],
         "quiz_title": quiz.get("title"),
         "questions": questions,

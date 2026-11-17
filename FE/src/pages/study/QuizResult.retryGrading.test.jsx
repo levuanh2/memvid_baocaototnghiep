@@ -115,6 +115,32 @@ describe("Thử chấm lại", () => {
     expect(container.textContent).toContain("chưa chấm được sau nhiều lần thử");
   });
 
+  it("moves to the used-up state when the server refuses the retry (409)", async () => {
+    // agy task27 F1: the page used to keep the stale "stalled" state and its button.
+    getResult.mockResolvedValueOnce(submitted("stalled")).mockResolvedValue(submitted("failed"));
+    submitAttempt.mockRejectedValueOnce(Object.assign(new Error("Đã hết lượt thử chấm lại cho bài này"), { status: 409 }));
+    await render();
+    await act(async () => { retryButton().click(); });
+    await flush();
+    expect(retryButton()).toBeUndefined();
+    expect(container.textContent).toContain("chưa chấm được sau nhiều lần thử");
+  });
+
+  it("keeps the button busy until the new state has loaded", async () => {
+    // agy task27 F2: the button came back before the reload finished.
+    let releaseReload;
+    getResult.mockResolvedValueOnce(submitted("stalled"))
+      .mockReturnValueOnce(new Promise((resolve) => { releaseReload = resolve; }));
+    submitAttempt.mockResolvedValue({ status: "submitted", grading: "pending" });
+    await render();
+    await act(async () => { retryButton().click(); });
+    await flush();
+    expect(retryButton().disabled).toBe(true);
+    await act(async () => { releaseReload(submitted("grading")); });
+    await flush();
+    expect(retryButton()).toBeUndefined();
+  });
+
   it("stops polling while stalled instead of asking the server forever", async () => {
     vi.useFakeTimers();
     getResult.mockResolvedValue(submitted("stalled"));

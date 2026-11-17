@@ -291,7 +291,9 @@ def _take_retry(a: QuizAttempt, now: datetime, max_retries: Optional[int]) -> st
     if claimed is not None and now - claimed < timedelta(seconds=GRADING_LEASE_S):
         return "pending"
     used = int((a.metadata_json or {}).get("manual_retries") or 0)
-    if max_retries is not None and used >= max_retries:
+    # Lazy: the cap reads the quiz, needed only when a retry really happens.
+    cap = max_retries() if callable(max_retries) else max_retries
+    if cap is not None and used >= cap:
         return "exhausted"
     a.grading_claimed_at = now
     a.metadata_json = {**(a.metadata_json or {}), "manual_retries": used + 1}
@@ -325,6 +327,31 @@ def start_grading_job(attempt_id: str, job_id: str) -> Tuple[str, Optional[datet
         a.grading_claimed_at = now
         a.metadata_json = {**meta, "grading_job_running": job_id}
         return "run", now
+
+
+def release_job_claim(attempt_id: str, job_id: str) -> None:
+    """The running job failed: free the attempt for a retry at once. By job, not by
+    timestamp: the heartbeat moved the claim since the job started."""
+    with session_scope() as s:
+        a = s.get(QuizAttempt, str(attempt_id), with_for_update=True)
+        if a is None or (a.metadata_json or {}).get("grading_job_running") != job_id:
+            return
+        a.grading_claimed_at = None
+        a.metadata_json = {k: v for k, v in (a.metadata_json or {}).items()
+                           if k != "grading_job_running"}
+
+
+def renew_claim(attempt_id: str, job_id: str) -> bool:
+    """Heartbeat of the running grader, between answers: keeps its claim live through a
+    long grading so a retry or a redelivery does not take over. Only the job that is
+    running the attempt may renew (fenced like `start_grading_job`)."""
+    with session_scope() as s:
+        a = s.get(QuizAttempt, str(attempt_id), with_for_update=True)
+        if (a is None or a.status != "submitted"
+                or (a.metadata_json or {}).get("grading_job_running") != job_id):
+            return False
+        a.grading_claimed_at = _now()
+        return True
 
 
 def set_grading_job(attempt_id: str, job_id: str, claimed_at: Optional[datetime]) -> bool:

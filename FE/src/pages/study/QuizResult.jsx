@@ -112,21 +112,23 @@ export default function QuizResult() {
     if (chamLaiRef.current) return;
     chamLaiRef.current = true;
     setChamLai((s) => ({ ...s, dangGui: true, loi: null }));
+    let loi = null;
     try {
       await submitAttempt(attemptId);
-      // 200 (graded now) or 202 (grading in the background): reload, and let the
-      // bounded poll above start a fresh 5-minute window if it is still grading.
+      // 200 (graded now) or 202 (grading in the background): the bounded poll above
+      // starts a fresh 5-minute window if it is still grading.
       batDauChoRef.current = null;
       truotRef.current = 0;
       setKetChamBai(false);
-      setChamLai({ dangGui: false, loi: null, daThu: true });
-      await load({ quiet: true });
-      setNhip((n) => n + 1);
     } catch (e) {
-      setChamLai((s) => ({ ...s, dangGui: false, loi: moTaLoi(e, "Chưa thử chấm lại được.") }));
-    } finally {
-      chamLaiRef.current = false;
+      loi = moTaLoi(e, "Chưa thử chấm lại được.");
     }
+    // Reload either way: after a 409 (retries used up) the server says "failed" and the
+    // button must go (agy task27 F1). The button stays busy until the new state is in (F2).
+    await load({ quiet: true });
+    setChamLai({ dangGui: false, loi, daThu: loi === null });
+    setNhip((n) => n + 1);
+    chamLaiRef.current = false;
   };
   // Fail closed for any current or future non-final status: completed-result
   // presentation is authorized only by the explicit graded state.
