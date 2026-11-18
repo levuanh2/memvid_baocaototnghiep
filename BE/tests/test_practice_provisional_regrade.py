@@ -244,3 +244,75 @@ def test_used_up_retries_carry_a_machine_code(client, owner, practice, fake, mon
     assert res.status_code == 409
     assert res.get_json() == {"error": "Đã hết lượt thử chấm lại cho bài này",
                               "status": "graded", "ma": "het_luot_cham_lai"}
+
+
+def test_a_regrade_that_lost_its_claim_stops_before_the_next_model_call(owner, practice, fake,
+                                                                        monkeypatch):
+    """Inside the request there was no heartbeat between answers: a regrade longer than
+    the lease let a second request reclaim and pay for the same answers again, while the
+    first kept calling the model (task39). The first now renews before each call and
+    stops when its claim was taken over; the second request is the grader."""
+    from app.application import practice as practice_uc
+    from app.db import session_scope
+    from app.db.models import QuizAttempt
+    from app.domains.attempts import grading
+    from tests.test_provisional_grading_recovery import SA_OK
+
+    quiz_id, qids = practice
+    fake.fail = {SA_OK, SA_FLAKY}
+    body = _submit(quiz_id, owner, _answers(qids), _key())
+    assert body["ungraded_count"] == 2
+    fake.calls.clear()
+    fake.fail = set()
+    attempt_id = body["attempt_id"]
+
+    def _taken_over(**kw):
+        # A second request reclaimed after the lease: new token, running marker cleared.
+        with session_scope() as s:
+            a = s.get(QuizAttempt, attempt_id, with_for_update=True)
+            meta = {k: v for k, v in (a.metadata_json or {}).items()
+                    if k != "grading_job_running"}
+            a.metadata_json = {**meta, "regrade_job_id": "practice-regrade-other"}
+        return fake(**kw)
+
+    monkeypatch.setattr(grading, "grade_short_answer", _taken_over)
+    with pytest.raises(practice_uc.NopBaiDangCham):
+        _regrade(quiz_id, owner, attempt_id)
+    assert len(fake.calls) == 1, fake.calls
+    assert _rows(attempt_id)[qids[1]]["verdict"] is None   # the lost request wrote nothing
+
+
+def test_the_result_page_route_regrades_a_practice_attempt_the_practice_way(client, owner,
+                                                                           practice, fake,
+                                                                           monkeypatch):
+    """A provisional practice attempt opened from "Bài đã làm gần đây" lands on the
+    generic result page, which offers "Chấm lại câu còn thiếu" (`regrade_state`
+    "available") and posts to /api/attempts/<id>/regrade. That route refused practice
+    attempts with a developer message, so the offer always failed (task39). It now
+    regrades the practice way: inside the request, same claim and cap, 200."""
+    from app.domains.quiz import repository as quiz_repo
+
+    quiz_id, qids, _, body = _provisional(owner, practice, fake)
+    original = quiz_repo.get_quiz
+    monkeypatch.setattr(quiz_repo, "get_quiz", lambda qid, **kw: {
+        **(original(qid, **kw) or {}), "quiz_type": "practice"} if qid == quiz_id
+        else original(qid, **kw))
+    res = client.post(f"/api/attempts/{body['attempt_id']}/regrade")
+    assert res.status_code == 200, res.get_json()
+    out = res.get_json()
+    assert out["grading"] == "done" and out["grading_complete"] is True
+    assert fake.calls == [SA_FLAKY]
+    assert _rows(body["attempt_id"])[qids[2]]["verdict"] == "correct"
+
+
+def test_the_practice_page_finds_a_provisional_result_again(client, owner, practice, fake):
+    """The comparison counts complete results only (409 while provisional), so after a
+    reload the page showed the empty quiz: the result and its regrade offer were gone
+    (task39). GET /api/practice/<id> names the latest graded attempt, provisional too."""
+    from app.application import practice as practice_uc
+
+    quiz_id, _, _, body = _provisional(owner, practice, fake)
+    got = practice_uc.get(quiz_id, owner, bat_buoc_chu_so_huu=True)
+    assert got["latest_attempt_id"] == body["attempt_id"]
+    with pytest.raises(practice_uc.ChuaCoLanChamNao):
+        practice_uc.comparison(quiz_id, owner, bat_buoc_chu_so_huu=True)

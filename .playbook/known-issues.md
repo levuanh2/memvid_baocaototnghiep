@@ -8416,3 +8416,35 @@ to the banner text or the score card when the button goes away.
 
 **Regression:** `BE/tests/test_practice_provisional_regrade.py` (12, red first),
 `FE/src/pages/study/Practice.provisionalRegrade.test.jsx` (6, red first).
+
+**Review fixes (task39: owner checks of timeout, lease, aborted request, concurrent
+retries, reload after used-up retries, duplicate model calls):**
+- *No heartbeat inside the request.* `practice.regrade` called `regrade_ungraded`
+  without `progress_cb`, so its claim was never renewed between answers. A regrade
+  longer than `grading_lease_s()` (several answers at `GRADE_LLM_TIMEOUT_SEC` + queue
+  wait) let a second request reclaim and pay for the same answers again, while the
+  first kept calling the model (its write was already fenced off). Now it renews before
+  each model call, as the grading job does, and answers 409 `NopBaiDangCham` once its
+  claim was taken over, before the next call.
+- *Reload lost the provisional result.* The comparison counts complete results only
+  (409 while provisional), so a reload showed the empty quiz: no "Kết quả tạm thời", no
+  regrade offer, no word that retries were used up. `GET /api/practice/<id>` now adds
+  `latest_attempt_id` (latest graded attempt, provisional too; additive) and the page
+  reloads that result, its offer, or "Đã hết lượt chấm lại".
+- *Result page dead end.* A provisional practice attempt opened from "Bài đã làm gần
+  đây" lands on the generic result page, which offered "Chấm lại câu còn thiếu" and
+  posted to `/api/attempts/<id>/regrade`; that route refused practice with a developer
+  message, every time. It now hands practice attempts to `practice.regrade` (inside the
+  request, 200).
+- *Not changed, owner risk:* production runs one sync gunicorn worker with
+  `GUNICORN_TIMEOUT=120` while one grading call may take `GRADE_LLM_TIMEOUT_SEC` (120) +
+  queue wait. An inline grading (practice submit, and now practice regrade) can hold
+  the only worker and be aborted; the claim then expires after the lease and the used
+  retry is not refunded. Pre-existing for practice submit.
+
+**Regression:** `test_practice_provisional_regrade.py` +3 (lost claim stops before the
+next model call; result-page route regrades practice; the page finds a provisional
+result again), `Practice.provisionalRegrade.test.jsx` +3 (reload), new E2E
+`FE/e2e/practice-provisional-regrade.spec.js` (3, real Flask + PostgreSQL + browser,
+fake grader; `run_e2e_server.py` now stubs practice question generation too). All red
+first except the E2E, written after the unit reds.

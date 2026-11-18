@@ -16,6 +16,7 @@ const getPractice = vi.fn();
 const getPracticeComparison = vi.fn();
 const submitPractice = vi.fn();
 const regradePractice = vi.fn();
+const getResult = vi.fn();
 vi.mock("../../utils/studyApi", () => ({
   MASTERY_LABEL: { review_needed: "Cần ôn lại" },
   QUESTION_TYPE_LABEL: { multiple_choice: "Trắc nghiệm", short_answer: "Tự luận" },
@@ -26,6 +27,7 @@ vi.mock("../../utils/studyApi", () => ({
   getPracticeComparison: (...args) => getPracticeComparison(...args),
   submitPractice: (...args) => submitPractice(...args),
   regradePractice: (...args) => regradePractice(...args),
+  getResult: (...args) => getResult(...args),
 }));
 
 const QUIZ = {
@@ -125,5 +127,42 @@ describe("Practice — Chấm lại câu còn thiếu", () => {
     await flush();
     expect(container.textContent).toContain("Bài nộp này đang được chấm");
     expect(regradeButton()).toBeDefined();
+  });
+
+  // task39: a reload used to show the comparison only, so the provisional banner and the
+  // regrade offer were gone, and after used-up retries nothing said the score was partial.
+  async function reopenWith(result) {
+    // As the backend answers: the quiz names its latest graded attempt; the comparison
+    // is 409 while that result is provisional.
+    getPractice.mockResolvedValue({ ...QUIZ, latest_attempt_id: "att-1" });
+    if (result.grading_complete === false) getPracticeComparison.mockRejectedValue({ status: 409 });
+    else getPracticeComparison.mockResolvedValue({ practice_attempt_id: "att-1", concepts: [] });
+    getResult.mockResolvedValue(result);
+    container = document.createElement("div");
+    document.body.appendChild(container);
+    root = createRoot(container);
+    await act(async () => { root.render(<Practice />); });
+    await flush();
+  }
+
+  it("keeps the provisional result and the offer after a reload", async () => {
+    await reopenWith({ ...PROVISIONAL, regrade_state: "available" });
+    expect(getResult).toHaveBeenCalledWith("att-1");
+    expect(container.textContent).toContain("Kết quả tạm thời.");
+    expect(regradeButton()).toBeDefined();
+    expect(container.textContent, "the result, not the empty quiz").not.toContain("Nộp bài luyện tập");
+  });
+
+  it("after a reload with retries used up, says so and offers nothing", async () => {
+    await reopenWith({ ...PROVISIONAL, regrade_state: "exhausted" });
+    expect(container.textContent).toContain("Kết quả tạm thời.");
+    expect(container.textContent).toContain("Đã hết lượt chấm lại cho bài này.");
+    expect(regradeButton()).toBeUndefined();
+  });
+
+  it("a complete result after a reload shows no banner", async () => {
+    await reopenWith({ ...COMPLETE, regrade_state: null });
+    expect(container.textContent).not.toContain("Kết quả tạm thời.");
+    expect(regradeButton()).toBeUndefined();
   });
 });

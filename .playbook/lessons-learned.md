@@ -3800,3 +3800,11 @@ as an unhandled error after the tests and exits 1. The local check grepped only 
 "Tests" line, so it looked green. Fix: an explicit `{ focusBanner }` option instead of
 comparing functions. Prevention: judge a run by its exit code (`echo $?`), not by
 grepping the summary line; and do not read a module export on a path that does not use it.
+
+# A claim needs its heartbeat wherever the grader runs (2026-11-18, task39)
+
+The job path renewed its claim before each model call; the in-request path that reused
+the same primitives did not, so the lease silently became the limit of a regrade.
+Reusing a fenced primitive means reusing its heartbeat too. And a page that rebuilds
+its state after a reload must read the same states it shows live (here: provisional),
+not a summary endpoint that filters them out.

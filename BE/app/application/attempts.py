@@ -327,7 +327,14 @@ def regrade_provisional(attempt_id: str, user_id: Optional[str], *,
     from app.domains.attempts import repository as _attempts
 
     attempt = load_owned_attempt(attempt_id, user_id, bat_buoc_chu_so_huu=bat_buoc_chu_so_huu)
-    _tu_choi_bai_luyen_tap(attempt["quiz_id"])
+    try:
+        _tu_choi_bai_luyen_tap(attempt["quiz_id"])
+    except BaiLuyenTapSaiRoute:
+        # The result page reaches practice attempts too (recent attempts list): regrade
+        # them the practice way, inside the request, 200 (task39). No job, no key.
+        from app.application import practice as _practice
+        return (_practice.regrade(attempt["quiz_id"], user_id, attempt_id,
+                                  bat_buoc_chu_so_huu=bat_buoc_chu_so_huu), False)
     job_id = str(uuid.uuid4())
     outcome, claimed_at, registered = _attempts.reclaim_for_regrade(
         attempt_id, job_id, job_active=job_active, max_retries=manual_retry_max())

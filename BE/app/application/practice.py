@@ -79,9 +79,15 @@ def get(practice_quiz_id: str, user_id: Optional[str], *,
     quiz = _quiz_repo.get_quiz(practice_quiz_id, include_answers=False)
     quiz.pop("user_id", None)
     meta = _quiz_repo.get_meta(practice_quiz_id) or {}
+    from app.domains.progress import service as _progress
+
     return {**quiz,
             "source_review_item_id": meta.get("source_review_item_id"),
-            "source_attempt_id": meta.get("source_attempt_id")}
+            "source_attempt_id": meta.get("source_attempt_id"),
+            # The learner's latest graded attempt, provisional or not: after a reload the
+            # page shows a provisional result and its regrade offer again (task39).
+            "latest_attempt_id": _progress.latest_graded_attempt(
+                practice_quiz_id, user_id, complete_only=False)}
 
 
 def submit(practice_quiz_id: str, user_id: Optional[str], raw: Any, *,
@@ -182,10 +188,18 @@ def regrade(practice_quiz_id: str, user_id: Optional[str], attempt_id: str, *,
     if outcome == "grade":
         role, claimed_at = _attempts.start_grading_job(attempt_id, token)
         if role == "regrade":
+            def _heartbeat(_p, _msg):
+                # Before each model call, as the grading job does: keeps the claim live
+                # past the lease, and stops paying for answers once a later request
+                # took the attempt over (task39).
+                if not _attempts.renew_claim(attempt_id, token):
+                    raise NopBaiDangCham()
+
             try:
-                _grading_service.regrade_ungraded(attempt_id, token)
+                _grading_service.regrade_ungraded(attempt_id, token, progress_cb=_heartbeat)
             finally:
-                # Ends the claim and retires the token, after the gap analysis.
+                # Ends the claim and retires the token, after the gap analysis. A no-op
+                # when the claim was taken over: it belongs to the other request.
                 _attempts.release_job_claim(attempt_id, token)
     else:
         _repair_mastery(attempt_id)

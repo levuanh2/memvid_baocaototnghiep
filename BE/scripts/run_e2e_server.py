@@ -222,11 +222,20 @@ def main() -> None:
         inner_generate_questions = quiz_generator.generate_questions
 
         def _deterministic_diagnostic_questions(context, config, **kwargs):
-            if config.get("quiz_type") == "practice":
-                return inner_generate_questions(context, config, **kwargs)
             base = {"explanation": "E2E diagnostic explanation.",
                     "difficulty": config.get("difficulty") or "easy",
                     "concept_tags": ["e2e-diagnostic"], "chunk_refs": ["c0"]}
+            if config.get("quiz_type") == "practice":
+                # Practice on the weak topic: one choice + one short answer, so the
+                # practice-regrade spec grades a short answer inside the submit request.
+                return [
+                    {**base, "question_text": "E2E practice choice?",
+                     "question_type": "multiple_choice", "correct_answer": "Correct",
+                     "options": ["Correct", "Wrong", "Distractor", "Alternative"]},
+                    {**base, "question_text": "E2E practice short answer?",
+                     "question_type": "short_answer",
+                     "correct_answer": "A practice model answer."},
+                ], None, 1
             questions = [
                 {**base, "question_text": "E2E diagnostic choice?",
                  "question_type": "multiple_choice", "correct_answer": "Correct",

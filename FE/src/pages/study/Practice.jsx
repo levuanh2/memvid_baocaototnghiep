@@ -10,6 +10,7 @@ import {
   formatScore,
   getPractice,
   getPracticeComparison,
+  getResult,
   optionLabel,
   regradePractice,
   submitPractice,
@@ -76,13 +77,30 @@ export default function Practice() {
       const body = await getPractice(quizId);
       setQuiz(body);
       // Đã làm rồi thì vào thẳng phần so sánh, không bắt làm lại từ đầu.
+      let cmp = null;
       try {
-        setComparison(await getPracticeComparison(quizId));
+        cmp = await getPracticeComparison(quizId);
+        setComparison(cmp);
         // A graded attempt exists (perhaps the one whose response was lost): its key is
         // spent, the next attempt needs a new one.
         forgetSubmitKey(quizId, submitKeyMemo);
       } catch (e) {
         if (e?.status !== 409) throw e;
+      }
+      // After a reload a provisional result must stay provisional, with its regrade
+      // offer or the news that retries are used up (task39). Best effort: the
+      // comparison above is already on screen if this read fails.
+      // The comparison counts complete results only (409 while provisional): the quiz
+      // names its latest graded attempt, provisional or not.
+      const latest = body?.latest_attempt_id || cmp?.practice_attempt_id;
+      if (latest) {
+        try {
+          const r = await getResult(latest);
+          if (r?.grading_complete === false || Number(r?.ungraded_count || 0) > 0) {
+            setGraded(r);
+            setChamLai((c) => ({ ...c, het: r.regrade_state === "exhausted" }));
+          }
+        } catch { /* the comparison alone, as before */ }
       }
     } catch (e) {
       setError(moTaLoi(e, "Không tải được bài luyện tập."));
