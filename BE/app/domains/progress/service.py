@@ -231,15 +231,18 @@ def attempt_history(user_id: Optional[str], *, limit: int = 50) -> List[Dict[str
         } for a, title, quiz_type, document_id, review_item_id, source_attempt_id in rows]
 
 
-def latest_graded_attempt(quiz_id: str, user_id: Optional[str]) -> Optional[str]:
+def latest_graded_attempt(quiz_id: str, user_id: Optional[str], *,
+                          complete_only: bool = True) -> Optional[str]:
+    """`complete_only=False` also returns a provisional result (task39: the practice
+    page must find it again after a reload; the comparison keeps complete ones only)."""
     uid = _chu_so_huu(user_id)
+    where = [QuizAttempt.quiz_id == str(quiz_id), QuizAttempt.user_id == uid,
+             QuizAttempt.status == "graded"]
+    if complete_only:
+        where.append(_grading_complete_clause())
     with session_scope() as s:
         return s.execute(
-            select(QuizAttempt.id)
-            .where(QuizAttempt.quiz_id == str(quiz_id),
-                   QuizAttempt.user_id == uid,
-                   QuizAttempt.status == "graded",
-                   _grading_complete_clause())
+            select(QuizAttempt.id).where(*where)
             .order_by(QuizAttempt.started_at.desc()).limit(1)
         ).scalar()
 

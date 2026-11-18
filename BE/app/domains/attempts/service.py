@@ -20,8 +20,62 @@ def has_short_answer(quiz_id: str) -> bool:
                for q in repository.questions_for_grading(quiz_id))
 
 
+def _grade_short(q: Dict[str, Any], answer: Optional[str],
+                 ask: Optional[Callable[..., str]]) -> Optional[Dict[str, Any]]:
+    """One short answer through the model. None = the grader could not grade it (the
+    provider failed, or answered something untrustworthy): `verdict` stays None."""
+    result = grading.grade_short_answer(
+        question=q["question_text"], correct_answer=q["correct_answer"],
+        user_answer=answer, source_context=q["source_context"], ask=ask)
+    if result is None:
+        return None
+    feedback = result["feedback"]
+    if result["missing_points"]:
+        feedback = ((feedback or "") + " Còn thiếu: "
+                    + "; ".join(result["missing_points"])).strip()
+    return {"question_id": q["question_id"], "user_answer": answer,
+            "verdict": result["verdict"], "score": result["score"], "feedback": feedback}
+
+
+def regrade_ungraded(attempt_id: str, job_id: str, *,
+                     ask: Optional[Callable[..., str]] = None,
+                     progress_cb: Optional[Callable[[int, str], None]] = None,
+                     ) -> Optional[Dict[str, Any]]:
+    """Regrade a provisional result: only the short answers left with `verdict=None`.
+
+    The model is called once per such answer and never for an answer that has a
+    verdict. None: this job no longer runs the regrade (its write was refused)."""
+    attempt = repository.get_attempt(attempt_id)
+    if attempt is None or attempt["status"] != "graded":
+        return None
+    by_q = {a["question_id"]: a for a in attempt["answers"]}
+    targets = [q for q in repository.questions_for_grading(attempt["quiz_id"])
+               if q["question_type"] not in grading.OBJECTIVE_TYPES
+               and q["question_id"] in by_q and by_q[q["question_id"]].get("verdict") is None]
+    regraded: Dict[str, Dict[str, Any]] = {}
+    for i, q in enumerate(targets, start=1):
+        if progress_cb:
+            progress_cb(int(20 + 75 * (i - 1) / len(targets)),
+                        f"Đang chấm lại câu tự luận {i}/{len(targets)}...")
+        row = _grade_short(q, by_q[q["question_id"]].get("user_answer"), ask)
+        if row is not None:
+            regraded[str(q["question_id"])] = row
+    saved = repository.save_regrade(attempt_id, job_id, regraded)
+    if saved is None:
+        return None
+    if saved.pop("changed"):
+        # Same snapshot rule as the first grading (overwrite per attempt), fail-open.
+        try:
+            from app.domains.gap_analysis import service as gap_service
+            gap_service.analyze_attempt(attempt_id)
+        except Exception as exc:
+            print(f"[grading] phân tích lỗ hổng sau chấm lại thất bại: {exc}", flush=True)
+    return saved
+
+
 def grade_attempt(attempt_id: str, *, ask: Optional[Callable[..., str]] = None,
                   progress_cb: Optional[Callable[[int, str], None]] = None,
+                  once: bool = False,
                   ) -> Optional[Dict[str, Any]]:
     """Chấm toàn bộ attempt rồi ghi một lần. None khi attempt không tồn tại.
 
@@ -69,24 +123,18 @@ def grade_attempt(attempt_id: str, *, ask: Optional[Callable[..., str]] = None,
                 int(20 + 75 * (da_cham_tu_luan - 1) / max(1, tong_tu_luan)),
                 f"Đang chấm câu tự luận {da_cham_tu_luan}/{tong_tu_luan}...",
             )
-        result = grading.grade_short_answer(
-            question=q["question_text"], correct_answer=q["correct_answer"],
-            user_answer=answer, source_context=q["source_context"], ask=ask)
-        if result is None:
+        row = _grade_short(q, answer, ask)
+        if row is None:
             ungraded += 1
             continue
-        feedback = result["feedback"]
-        if result["missing_points"]:
-            feedback = ((feedback or "") + " Còn thiếu: "
-                        + "; ".join(result["missing_points"])).strip()
-        graded.append({
-            "question_id": q["question_id"], "user_answer": answer,
-            "verdict": result["verdict"], "score": result["score"],
-            "feedback": feedback,
-        })
+        graded.append(row)
 
     totals = grading.totals(graded, attempt["total_questions"])
-    repository.save_grades(attempt_id, graded, totals, ungraded_count=ungraded)
+    if not repository.save_grades(attempt_id, graded, totals, ungraded_count=ungraded,
+                                  once=once) and once:
+        # Another grader finished this attempt first: its result stands, and gap
+        # analysis (mastery) must not run a second time for it.
+        return None
 
     # Chấm xong thì phân tích lỗ hổng luôn (FR-09.7) — review plan cần nó, và bắt
     # người dùng bấm thêm một nút để hệ thống tự tính là vô nghĩa. Fail-open: điểm đã

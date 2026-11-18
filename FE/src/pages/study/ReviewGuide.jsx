@@ -8,6 +8,7 @@ import {
   QuestionCountControl,
   QuestionTypeControl,
 } from "../../components/study/QuestionBuilder";
+import DestructiveConfirmDialog from "../../components/ui/DestructiveConfirmDialog";
 import Modal from "../../components/ui/Modal";
 import { Icon } from "../../components/ui/Icon";
 import Spinner from "../../components/ui/Spinner";
@@ -34,6 +35,9 @@ export default function ReviewGuide() {
   const [busy, setBusy] = useState(false);
   const [practiceFor, setPracticeFor] = useState(null);
   const [customizeItem, setCustomizeItem] = useState(null);
+  // "Tạo lại kế hoạch" deletes the old plan, and with it the practice quizzes made from
+  // its items (FK cascade): it asks first (owner decision 2026-11-17, PR #190).
+  const [xacNhanTaoLai, setXacNhanTaoLai] = useState(false);
 
   const job = useStudyJob({
     onDone: (result) => {
@@ -110,7 +114,7 @@ export default function ReviewGuide() {
       actions={
         plan && (
           <button type="button" className="btn-secondary text-small inline-flex items-center gap-1.5"
-            disabled={busy} onClick={() => build({ force: true })}>
+            disabled={busy} onClick={() => setXacNhanTaoLai(true)}>
             {busy ? <Spinner size={13} /> : <Icon name="RotateCcw" size={14} />} Tạo lại kế hoạch
           </button>
         )
@@ -133,6 +137,18 @@ export default function ReviewGuide() {
           <p className="font-display text-title text-text-primary mb-6 quiz-review-summary">
             {plan.summary}
           </p>
+          {plan.outdated && (
+            <p className="text-body text-text-secondary -mt-4 mb-6" role="status">
+              Bài làm đã được chấm lại sau khi tạo kế hoạch này, nên các chủ đề bên dưới có
+              thể chưa khớp với kết quả mới.
+            </p>
+          )}
+          {Number(plan.ungraded_count || 0) > 0 && (
+            <p className="text-body text-text-secondary -mt-4 mb-6">
+              Kế hoạch này chỉ dựa trên các câu đã chấm. {plan.ungraded_count} câu tự luận
+              chưa chấm được nên không nằm trong kế hoạch.
+            </p>
+          )}
 
           {job.jobId && (
             <div className="surface-card !p-3.5 mb-5 flex items-center gap-2.5">
@@ -173,6 +189,19 @@ export default function ReviewGuide() {
         </>
       )}
 
+      <DestructiveConfirmDialog
+        open={xacNhanTaoLai}
+        title="Tạo lại kế hoạch ôn tập?"
+        targetName={plan?.summary || "Kế hoạch ôn tập"}
+        consequenceText="Kế hoạch hiện tại và các bài luyện tập đã tạo từ kế hoạch này, cùng kết quả làm bài của chúng, sẽ bị xoá. Không thể hoàn tác."
+        confirmLabel="Xoá và tạo lại"
+        onCancel={() => setXacNhanTaoLai(false)}
+        onConfirm={async () => {
+          // Errors stay in the dialog (it shows them and keeps itself open).
+          setPlan(await generateReviewPlan(attemptId, { force: true }));
+          setXacNhanTaoLai(false);
+        }}
+      />
       {customizeItem && (
         <PracticeCustomizeDialog
           item={customizeItem}
