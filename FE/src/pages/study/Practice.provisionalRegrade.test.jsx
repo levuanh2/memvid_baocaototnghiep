@@ -278,4 +278,44 @@ describe("Practice — Chấm lại câu còn thiếu", () => {
     expect(container.textContent).toContain("Nộp bài luyện tập");
     expect(container.textContent).not.toContain("2 / 2");
   });
+
+  // Codex task46: a rejected regrade of quiz A, or A's own late load, must not write into
+  // quiz B either (not only the successful poll).
+  it("a regrade of the previous quiz that fails late writes nothing into the next one", async () => {
+    await submitWith(PROVISIONAL);
+    let reject;
+    regradePractice.mockReturnValue(new Promise((_, r) => { reject = r; }));
+    await act(async () => { regradeButton().click(); });
+    // Quiz B has its own provisional result, so a stray error would show in its banner.
+    getPractice.mockResolvedValue({ ...QUIZ, title: "Quiz B", latest_attempt_id: "att-2" });
+    getPracticeComparison.mockRejectedValue({ status: 409 });
+    getResult.mockResolvedValue({ ...PROVISIONAL, attempt_id: "att-2", regrade_state: "available" });
+    params.quizId = "quiz-2";
+    await act(async () => { root.render(<Practice />); });
+    await flush();
+    expect(container.textContent).toContain("Kết quả tạm thời.");
+    await act(async () => { reject(Object.assign(new Error("Máy chủ bận"), { status: 503 })); });
+    await flush();
+    expect(container.textContent).not.toContain("Máy chủ bận");
+    expect(regradeButton()?.disabled, "B's offer is free, not busy with A's request").toBe(false);
+  });
+
+  it("a late load of the previous quiz never replaces the next quiz", async () => {
+    let releaseA;
+    getPractice.mockReturnValueOnce(new Promise((r) => { releaseA = r; }))
+      .mockResolvedValue({ ...QUIZ, title: "Quiz B" });
+    getPracticeComparison.mockRejectedValue({ status: 409 });
+    container = document.createElement("div");
+    document.body.appendChild(container);
+    root = createRoot(container);
+    await act(async () => { root.render(<Practice />); });
+    params.quizId = "quiz-2";
+    await act(async () => { root.render(<Practice />); });
+    await flush();
+    await act(async () => { releaseA({ ...QUIZ, title: "Quiz A", latest_attempt_id: "att-1" }); });
+    await flush();
+    expect(getResult, "A's provisional result is not loaded into B").not.toHaveBeenCalled();
+    expect(container.textContent).not.toContain("Kết quả tạm thời.");
+    expect(container.textContent).toContain("Nộp bài luyện tập");
+  });
 });

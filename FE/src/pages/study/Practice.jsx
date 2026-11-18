@@ -110,12 +110,16 @@ export default function Practice() {
       het = !xong && result?.regrade_state === "exhausted";
       setChamLai({ dangGui: false, loi: null, het, chuaXong: !xong && !het });
     } catch (e) {
+      // A failure of quiz A's request, arriving after the page moved to quiz B, is A's.
+      if (quizRef.current !== cuaQuiz) return;
       het = e?.status === 409 && e?.body?.ma === HET_LUOT_CHAM_LAI;
       setChamLai({ dangGui: false, loi: het ? null : moTaLoi(e, "Chưa chấm lại được."),
                    het, chuaXong: false });
     } finally {
-      chamLaiRef.current = false;
+      // Only this quiz's lock: B may already be regrading when A's request settles.
+      if (quizRef.current === cuaQuiz) chamLaiRef.current = false;
     }
+    if (quizRef.current !== cuaQuiz) return;
     if (xong || het) {
       // The button is gone: keep the keyboard where the news is.
       setTimeout(() => (xong ? ketQuaRef : banTamRef).current?.focus(), 0);
@@ -123,24 +127,32 @@ export default function Practice() {
   };
 
   const load = useCallback(async () => {
+    // Every continuation checks that the page still shows this quiz: a late answer for
+    // the previous quiz id must not replace the next one (Codex task46).
+    const cuaQuiz = quizId;
+    const cu = () => quizRef.current !== cuaQuiz;
     setLoading(true);
     setError(null);
     // A new quiz id starts clean: no result, comparison or regrade state of the last one.
     setGraded(null);
     setComparison(null);
     setChamLai({ dangGui: false, loi: null, het: false, chuaXong: false });
+    chamLaiRef.current = false;
     try {
       const body = await getPractice(quizId);
+      if (cu()) return;
       setQuiz(body);
       // Đã làm rồi thì vào thẳng phần so sánh, không bắt làm lại từ đầu.
       let cmp = null;
       try {
         cmp = await getPracticeComparison(quizId);
+        if (cu()) return;
         setComparison(cmp);
         // A graded attempt exists (perhaps the one whose response was lost): its key is
         // spent, the next attempt needs a new one.
         forgetSubmitKey(quizId, submitKeyMemo);
       } catch (e) {
+        if (cu()) return;
         if (e?.status !== 409) throw e;
       }
       // After a reload a provisional result must stay provisional, with its regrade
@@ -152,6 +164,7 @@ export default function Practice() {
       if (latest) {
         try {
           const r = await getResult(latest);
+          if (cu()) return;
           if (r?.grading_complete === false || Number(r?.ungraded_count || 0) > 0) {
             setGraded(r);
             setChamLai((c) => ({ ...c, het: r.regrade_state === "exhausted" }));
@@ -161,9 +174,9 @@ export default function Practice() {
         } catch { /* the comparison alone, as before */ }
       }
     } catch (e) {
-      setError(moTaLoi(e, "Không tải được bài luyện tập."));
+      if (!cu()) setError(moTaLoi(e, "Không tải được bài luyện tập."));
     } finally {
-      setLoading(false);
+      if (!cu()) setLoading(false);
     }
   }, [quizId]);
 

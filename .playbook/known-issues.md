@@ -8490,3 +8490,10 @@ component when only the quiz id changes, so a wait for quiz A could write A's re
 quiz B; every wait now checks the current quiz id after each await, and loading a quiz
 starts from a clean result/comparison/regrade state. Regression: 2 Vitest tests (StrictMode,
 quiz change), red first.
+
+**Review fixes (Codex task46):** the quiz-id fence covered only the successful poll. A
+regrade request of quiz A that failed after the page moved to quiz B wrote A's error into
+B's banner (and A's lock blocked B's button), and A's own late `load()` could replace B's
+quiz, comparison or result. Every continuation of the regrade (success, failure,
+`finally`) and of `load()` now checks the quiz id it started for; loading a quiz also
+frees the regrade lock. Regression: 2 Vitest tests, red first.
