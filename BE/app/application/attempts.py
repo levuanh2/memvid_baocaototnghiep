@@ -327,17 +327,13 @@ def regrade_provisional(attempt_id: str, user_id: Optional[str], *,
     from app.domains.attempts import repository as _attempts
 
     attempt = load_owned_attempt(attempt_id, user_id, bat_buoc_chu_so_huu=bat_buoc_chu_so_huu)
-    try:
-        _tu_choi_bai_luyen_tap(attempt["quiz_id"])
-    except BaiLuyenTapSaiRoute:
-        # The result page reaches practice attempts too (recent attempts list): regrade
-        # them the practice way, inside the request, 200 (task39). No job, no key.
-        from app.application import practice as _practice
-        return (_practice.regrade(attempt["quiz_id"], user_id, attempt_id,
-                                  bat_buoc_chu_so_huu=bat_buoc_chu_so_huu), False)
+    # Practice attempts too (task A): a regrade opens no attempt and writes no answer, so
+    # the practice Idempotency-Key is not involved, and grading runs in the same job,
+    # never inside the request (one sync worker with a 120 s timeout in production).
     job_id = str(uuid.uuid4())
     outcome, claimed_at, registered = _attempts.reclaim_for_regrade(
-        attempt_id, job_id, job_active=job_active, max_retries=manual_retry_max())
+        attempt_id, job_id, job_active=job_active, job_never_started=job_never_started,
+        max_retries=manual_retry_max())
     if outcome == "refused":
         raise KhongCoCauChoChamLai(status=attempt["status"])
     if outcome == "graded":
@@ -361,6 +357,19 @@ def regrade_provisional(attempt_id: str, user_id: Optional[str], *,
         raise
     return ({**attempt_public(_attempts.get_attempt(attempt_id)), "grading": "pending",
              "job_id": job_id}, True)
+
+
+def job_never_started(job_id: Optional[str]) -> bool:
+    """The job row exists and is still `pending`: no worker ever took it, so it made no
+    model call. A missing row or any other status counts as started (no refund)."""
+    if not job_id:
+        return False
+    from app.domains.jobs.jobs_store import get_job
+
+    try:
+        return (get_job(job_id) or {}).get("status") == "pending"
+    except Exception:
+        return False
 
 
 def job_active(job_id: Optional[str]) -> bool:

@@ -362,7 +362,12 @@ def start_grading_job(attempt_id: str, job_id: str) -> Tuple[str, Optional[datet
         if live and running:
             return ("duplicate" if running == job_id else "superseded"), None
         a.grading_claimed_at = now
-        a.metadata_json = {**meta, "grading_job_running": job_id}
+        extra = {"grading_job_running": job_id}
+        if role == "regrade":
+            # The regrade job reached its model work: from here its retry stays counted,
+            # whatever happens to the worker (task A, 192-3).
+            extra["regrade_started_job"] = job_id
+        a.metadata_json = {**meta, **extra}
         return role, now
 
 
@@ -472,6 +477,7 @@ def _ungraded(a: QuizAttempt) -> int:
 
 
 def reclaim_for_regrade(attempt_id: str, job_id: str, *, job_active=lambda _job_id: False,
+                        job_never_started=lambda _job_id: False,
                         max_retries: Optional[int] = None
                         ) -> Tuple[str, Optional[datetime], Optional[str]]:
     """(outcome, claimed_at, regrade_job_id) under the row lock.
@@ -490,6 +496,21 @@ def reclaim_for_regrade(attempt_id: str, job_id: str, *, job_active=lambda _job_
         registered = (a.metadata_json or {}).get("regrade_job_id")
         if job_active(registered):
             return "pending", None, registered
+        if claim_is_live(a):
+            return "pending", None, registered
+        meta = dict(a.metadata_json or {})
+        if (registered and meta.get("regrade_started_job") != registered
+                and job_never_started(registered)):
+            # The previous counted retry registered a job that never started (the queue
+            # lost it, or the worker died before taking it): no model was called, so its
+            # retry is given back, once, since the registration is replaced below. Both
+            # signs are required: no start marker here AND the job row still `pending`, so
+            # a job registered before the marker existed that did start is not refunded.
+            # A job that started and then died keeps its retry counted: its model call may
+            # have been paid (task A, 192-3).
+            meta["manual_retries"] = max(0, int(meta.get("manual_retries") or 0) - 1)
+            meta.pop("regrade_job_id", None)
+            a.metadata_json = meta
         now = _now()
         outcome = _take_retry(s, a, now, max_retries)
         if outcome != "grade":

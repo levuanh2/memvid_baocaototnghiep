@@ -20,6 +20,12 @@ import {
 // The machine code of HetLuotChamLai (BE/app/application/attempts.py): no regrade is
 // left, so the offer ends. Any other failure (network, "đang được chấm") keeps it.
 const HET_LUOT_CHAM_LAI = "het_luot_cham_lai";
+// The regrade runs in a background job (202, task A): ask for the stored result every
+// few seconds, for at most 5 minutes (the grading lease), then say it is taking long.
+// Same bounds as the diagnostic result page (QuizResult).
+export const REGRADE_POLL_MS = 3000;
+const REGRADE_STALL_MS = 5 * 60 * 1000;
+const REGRADE_POLL_FAILURES = 3;
 import { DANG_CHAM, forgetSubmitKey, submitKeyFor } from "../../utils/practiceSubmitKey";
 
 // The first request is still grading (BE 409 DANG_CHAM): ask again with the SAME key.
@@ -46,17 +52,50 @@ export default function Practice() {
   const banTamRef = useRef(null);
   const ketQuaRef = useRef(null);
 
-  const chamLaiCauThieu = async () => {
+  const mountedRef = useRef(true);
+  useEffect(() => () => { mountedRef.current = false; }, []);
+
+  // The stored result once the job is no longer running; "stalled" past the bound; null
+  // when the page went away. A few failed reads in a row end the wait with that error.
+  const choKetQuaChamLai = async (attemptId) => {
+    const batDau = Date.now();
+    let truot = 0;
+    while (Date.now() - batDau < REGRADE_STALL_MS) {
+      await new Promise((r) => setTimeout(r, REGRADE_POLL_MS));
+      if (!mountedRef.current) return null;
+      try {
+        const r = await getResult(attemptId);
+        truot = 0;
+        if (r?.regrade_state !== "running") return r;
+      } catch (e) {
+        truot += 1;
+        if (truot >= REGRADE_POLL_FAILURES) throw e;
+      }
+    }
+    return "stalled";
+  };
+
+  const chamLaiCauThieu = async ({ dangChay = false } = {}) => {
     if (chamLaiRef.current || !graded?.attempt_id) return;
     chamLaiRef.current = true;
     setChamLai((s) => ({ ...s, dangGui: true, loi: null }));
     let xong = false;
     let het = false;
     try {
-      const result = await regradePractice(quizId, graded.attempt_id);
+      let result = dangChay ? { grading: "pending" } : await regradePractice(quizId, graded.attempt_id);
+      if (result?.grading === "pending") {
+        result = await choKetQuaChamLai(graded.attempt_id);
+        if (result === null) return;
+        if (result === "stalled") {
+          setChamLai({ dangGui: false, het: false, chuaXong: false,
+                       loi: "Việc chấm lại đang lâu hơn bình thường. Tải lại trang sau ít phút để xem kết quả." });
+          return;
+        }
+      }
       setGraded(result);
       xong = result?.grading_complete !== false && Number(result?.ungraded_count || 0) === 0;
-      setChamLai({ dangGui: false, loi: null, het: false, chuaXong: !xong });
+      het = !xong && result?.regrade_state === "exhausted";
+      setChamLai({ dangGui: false, loi: null, het, chuaXong: !xong && !het });
     } catch (e) {
       het = e?.status === 409 && e?.body?.ma === HET_LUOT_CHAM_LAI;
       setChamLai({ dangGui: false, loi: het ? null : moTaLoi(e, "Chưa chấm lại được."),
@@ -99,6 +138,8 @@ export default function Practice() {
           if (r?.grading_complete === false || Number(r?.ungraded_count || 0) > 0) {
             setGraded(r);
             setChamLai((c) => ({ ...c, het: r.regrade_state === "exhausted" }));
+            // A regrade still running (reload during the job): keep waiting for it.
+            if (r.regrade_state === "running") setTiepTucCho(true);
           }
         } catch { /* the comparison alone, as before */ }
       }
@@ -110,6 +151,14 @@ export default function Practice() {
   }, [quizId]);
 
   useEffect(() => { load(); }, [load]);
+
+  const [tiepTucCho, setTiepTucCho] = useState(false);
+  useEffect(() => {
+    if (tiepTucCho && graded?.attempt_id) {
+      setTiepTucCho(false);
+      chamLaiCauThieu({ dangChay: true });
+    }
+  }, [tiepTucCho, graded]); // eslint-disable-line react-hooks/exhaustive-deps
 
   // Mảng mới mỗi lần render sẽ làm useMemo bên dưới tính lại vô ích.
   const questions = useMemo(() => quiz?.questions || [], [quiz]);
@@ -226,6 +275,11 @@ export default function Practice() {
                       <strong className="text-text-primary">Kết quả tạm thời.</strong>{" "}
                       {ungradedCount} câu tự luận chưa chấm được do bộ chấm AI không khả dụng.
                       Các câu này không bị tính là sai.
+                      {chamLai.dangGui && (
+                        <span className="block mt-1.5">
+                          Đang chấm lại các câu còn thiếu. Kết quả sẽ hiện ở đây khi xong.
+                        </span>
+                      )}
                       {chamLai.chuaXong && !chamLai.het && (
                         <span className="block mt-1.5">
                           Lần chấm lại vừa rồi chưa chấm được các câu này. Bạn có thể thử thêm.
@@ -242,7 +296,7 @@ export default function Practice() {
                     </p>
                     {!chamLai.het && (
                       <button type="button" className="btn-secondary text-small mt-2.5"
-                        onClick={chamLaiCauThieu} disabled={chamLai.dangGui} aria-busy={chamLai.dangGui}>
+                        onClick={() => chamLaiCauThieu()} disabled={chamLai.dangGui} aria-busy={chamLai.dangGui}>
                         {chamLai.dangGui ? "Đang chấm lại…" : "Chấm lại câu còn thiếu"}
                       </button>
                     )}

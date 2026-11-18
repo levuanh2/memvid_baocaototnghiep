@@ -1,6 +1,7 @@
-// Practice provisional regrade end to end (#159 item 17, #192; owner task39): a practice
-// short answer the AI grader could not grade leaves "Kết quả tạm thời"; "Chấm lại câu
-// còn thiếu" regrades it inside the request (no job). Real Flask + PostgreSQL + browser;
+// Practice provisional regrade end to end (#159 item 17, #192; owner task39, task A): a
+// practice short answer the AI grader could not grade leaves "Kết quả tạm thời"; "Chấm
+// lại câu còn thiếu" queues ONE background grading job (202, never a model call inside
+// the request) and the page waits for its result. Real Flask + PostgreSQL + browser;
 // the model is the deterministic stub of run_e2e_server.py:
 //   __E2E_GRADE_FAIL_ONCE__  the first model call for that answer fails, later ones pass
 //   __E2E_GRADE_FAIL__       every model call for that answer fails
@@ -65,7 +66,7 @@ const regradeButton = (page) => page.getByRole("button", { name: /Chấm lại c
 const isPracticeRegrade = (practiceId) => (r) => r.request().method() === "POST"
   && r.url().endsWith(`/api/practice/${practiceId}/regrade`);
 
-test("a practice short answer the grader missed is regraded inside the request, once", async ({ page, request }) => {
+test("a practice short answer the grader missed is regraded by one background job", async ({ page, request }) => {
   test.setTimeout(150_000);
   const { practiceId } = await practiceQuiz(page, request);
   await submitInPage(page, practiceId, "__E2E_GRADE_FAIL_ONCE__");
@@ -78,16 +79,17 @@ test("a practice short answer the grader missed is regraded inside the request, 
   const before = await stubs(request);
   const [res] = await Promise.all([page.waitForResponse(isPracticeRegrade(practiceId)),
                                    regradeButton(page).click()]);
-  expect(res.status(), "graded inside the request").toBe(200);
+  expect(res.status(), "queued, not graded inside the request").toBe(202);
   const body = await res.json();
-  expect([body.grading, body.grading_complete, body.ungraded_count]).toEqual(["done", true, 0]);
-  await expect(page.getByText("Kết quả tạm thời.")).toHaveCount(0);
+  expect(body.grading).toBe("pending");
+  expect(body.job_id).toBeTruthy();
+  await expect(page.getByText("Kết quả tạm thời.")).toHaveCount(0, { timeout: 30_000 });
   await expect(regradeButton(page)).toHaveCount(0);
 
   const after = await stubs(request);
   expect(after.graded_questions.slice(before.graded_questions.length),
     "the model is asked about the missing answer only, once").toEqual([SHORT]);
-  expect(after.grading_dispatches, "no background job").toBe(before.grading_dispatches);
+  expect(after.grading_dispatches - before.grading_dispatches, "exactly one job").toBe(1);
 
   await page.reload();
   await expect(page.getByText("Nộp bài luyện tập")).toHaveCount(0);
@@ -102,13 +104,11 @@ test("used-up retries: the page says so, also after a reload, and no model is ca
   for (let i = 1; i <= RETRY_MAX; i += 1) {
     const [res] = await Promise.all([page.waitForResponse(isPracticeRegrade(practiceId)),
                                      regradeButton(page).click()]);
-    expect(res.status(), `regrade ${i}`).toBe(200);
-    await expect(page.getByText("Lần chấm lại vừa rồi chưa chấm được các câu này")).toBeVisible();
+    expect(res.status(), `regrade ${i} is queued`).toBe(202);
+    await expect(page.getByText(i < RETRY_MAX ? "Lần chấm lại vừa rồi chưa chấm được các câu này"
+                                              : "Đã hết lượt chấm lại cho bài này."))
+      .toBeVisible({ timeout: 30_000 });
   }
-  const [last] = await Promise.all([page.waitForResponse(isPracticeRegrade(practiceId)),
-                                    regradeButton(page).click()]);
-  expect(last.status()).toBe(409);
-  await expect(page.getByText("Đã hết lượt chấm lại cho bài này.")).toBeVisible();
   await expect(regradeButton(page)).toHaveCount(0);
 
   await page.reload();
@@ -136,9 +136,9 @@ test("the result page regrades a practice attempt the practice way", async ({ pa
       && r.url().endsWith(`/api/attempts/${submitted.attempt_id}/regrade`)),
     page.getByRole("button", { name: /Chấm lại câu còn thiếu|Đang gửi/ }).click(),
   ]);
-  expect(res.status(), "not the old 409 for practice attempts").toBe(200);
+  expect(res.status(), "the same background job, not the old 409").toBe(202);
   await expect(page.getByText("Kết quả tạm thời.")).toHaveCount(0, { timeout: 30_000 });
   const after = await stubs(request);
   expect(after.graded_questions.slice(before.graded_questions.length)).toEqual([SHORT]);
-  expect(after.grading_dispatches).toBe(before.grading_dispatches);
+  expect(after.grading_dispatches - before.grading_dispatches).toBe(1);
 });

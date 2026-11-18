@@ -19,8 +19,7 @@ Ba điểm dễ làm hỏng khi đọc lướt:
 from __future__ import annotations
 
 import re
-import uuid
-from typing import Any, Dict, Optional
+from typing import Any, Dict, Optional, Tuple
 
 from app.application import attempts as attempts_uc
 
@@ -155,60 +154,23 @@ def submit(practice_quiz_id: str, user_id: Optional[str], raw: Any, *,
 
 
 def regrade(practice_quiz_id: str, user_id: Optional[str], attempt_id: str, *,
-            bat_buoc_chu_so_huu: bool) -> Dict[str, Any]:
+            bat_buoc_chu_so_huu: bool, dispatch_grading) -> Tuple[Dict[str, Any], bool]:
     """Regrade the short answers an AI grader outage left without a verdict (#159 item
-    17), inside the request like a practice submit (no job). Only answers whose verdict
-    is None reach the model; graded answers and every `user_answer` stay as they are.
-
-    #190's rules: the claim and `manual_retries` cap of the attempt, the registered
-    regrade token fencing the write, the claim released after the gap analysis.
-    200 with the stored attempt (also when nothing is left to grade); 409
-    `NopBaiDangCham` while another request regrades it, `HetLuotChamLai` when the
-    retries are used up (no model call), `KhongCoCauChoChamLai` when it is not graded;
-    404 for another learner's attempt or one of another quiz. The Idempotency-Key of
-    the submit is untouched: no attempt is opened and no answer is written here."""
-    from app.domains.attempts import repository as _attempts
-    from app.domains.attempts import service as _grading_service
-
+    17), in the background grading job of #190, never inside the request (task A: one
+    sync gunicorn worker with a 120 s timeout in production). Returns (body, accepted):
+    202 with the job while one is queued or running (never a second job), 200 with the
+    stored result when nothing is left; 409 `HetLuotChamLai` when the retries are used up
+    (no job, no model call), `KhongCoCauChoChamLai` when the attempt is not graded; 404
+    for another learner's attempt or one of another quiz. The submit's Idempotency-Key is
+    untouched: no attempt is opened and no answer is written here."""
     _load_owned_practice(practice_quiz_id, user_id, bat_buoc_chu_so_huu=bat_buoc_chu_so_huu)
     attempt = attempts_uc.load_owned_attempt(attempt_id, user_id,
                                              bat_buoc_chu_so_huu=bat_buoc_chu_so_huu)
     if str(attempt["quiz_id"]) != str(practice_quiz_id):
         raise attempts_uc.AttemptKhongTonTai()
-    token = f"practice-regrade-{uuid.uuid4()}"
-    outcome, _claimed, _registered = _attempts.reclaim_for_regrade(
-        attempt_id, token, job_active=attempts_uc.job_active,
-        max_retries=attempts_uc.manual_retry_max())
-    if outcome == "refused":
-        raise attempts_uc.KhongCoCauChoChamLai(status=attempt["status"])
-    if outcome == "pending":
-        raise NopBaiDangCham()
-    if outcome == "exhausted":
-        raise attempts_uc.HetLuotChamLai(status="graded")
-    if outcome == "grade":
-        role, claimed_at = _attempts.start_grading_job(attempt_id, token)
-        if role == "regrade":
-            def _heartbeat(_p, _msg):
-                # Before each model call, as the grading job does: keeps the claim live
-                # past the lease, and stops paying for answers once a later request
-                # took the attempt over (task39).
-                if not _attempts.renew_claim(attempt_id, token):
-                    raise NopBaiDangCham()
-
-            try:
-                if _grading_service.regrade_ungraded(attempt_id, token,
-                                                     progress_cb=_heartbeat) is None:
-                    # The write was refused: a later request took the attempt over during
-                    # the last model call and is grading it now (agy task40).
-                    raise NopBaiDangCham()
-            finally:
-                # Ends the claim and retires the token, after the gap analysis. A no-op
-                # when the claim was taken over: it belongs to the other request.
-                _attempts.release_job_claim(attempt_id, token)
-    else:
-        _repair_mastery(attempt_id)
-    return {**attempts_uc.attempt_public(_attempts.get_attempt(attempt_id)),
-            "grading": "done"}
+    return attempts_uc.regrade_provisional(attempt_id, user_id,
+                                           bat_buoc_chu_so_huu=bat_buoc_chu_so_huu,
+                                           dispatch_grading=dispatch_grading)
 
 
 def _repair_mastery(attempt_id: Optional[str]) -> None:

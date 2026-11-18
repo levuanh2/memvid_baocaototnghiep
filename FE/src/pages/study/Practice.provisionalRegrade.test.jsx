@@ -45,6 +45,7 @@ afterEach(() => {
   if (root) { act(() => root.unmount()); root = null; }
   if (container) { document.body.removeChild(container); container = null; }
   vi.clearAllMocks();
+  vi.useRealTimers();
 });
 const flush = async () => { await act(async () => { await Promise.resolve(); await Promise.resolve(); await Promise.resolve(); }); };
 // The page moves focus in a setTimeout(0) once the button is gone: wait one macrotask, not
@@ -169,5 +170,66 @@ describe("Practice — Chấm lại câu còn thiếu", () => {
     await reopenWith({ ...COMPLETE, regrade_state: null });
     expect(container.textContent).not.toContain("Kết quả tạm thời.");
     expect(regradeButton()).toBeUndefined();
+  });
+
+  // task A: the regrade runs in a background job; the page waits for the stored result,
+  // bounded, and says so when it takes too long.
+  const PENDING = { ...PROVISIONAL, grading: "pending", job_id: "job-1", regrade_state: "running" };
+  const tick = async (ms) => { await act(async () => { await vi.advanceTimersByTimeAsync(ms); }); };
+
+  it("a queued regrade waits for the job and then shows the complete result", async () => {
+    vi.useFakeTimers();
+    await submitWith(PROVISIONAL);
+    regradePractice.mockResolvedValue(PENDING);
+    getResult.mockResolvedValueOnce({ ...PROVISIONAL, regrade_state: "running" })
+      .mockResolvedValueOnce({ ...COMPLETE, regrade_state: null });
+    await act(async () => { regradeButton().click(); });
+    expect(container.textContent).toContain("Đang chấm lại các câu còn thiếu");
+    expect(regradeButton().disabled).toBe(true);
+    await tick(3000);
+    expect(container.textContent, "still running").toContain("Kết quả tạm thời.");
+    await tick(3000);
+    expect(getResult).toHaveBeenCalledTimes(2);
+    expect(container.textContent).not.toContain("Kết quả tạm thời.");
+    expect(regradeButton()).toBeUndefined();
+    expect(regradePractice, "one request, the rest is reading").toHaveBeenCalledTimes(1);
+  });
+
+  it("a job that ends with retries used up says so", async () => {
+    vi.useFakeTimers();
+    await submitWith(PROVISIONAL);
+    regradePractice.mockResolvedValue(PENDING);
+    getResult.mockResolvedValue({ ...PROVISIONAL, regrade_state: "exhausted" });
+    await act(async () => { regradeButton().click(); });
+    await tick(3000);
+    expect(container.textContent).toContain("Đã hết lượt chấm lại cho bài này.");
+    expect(regradeButton()).toBeUndefined();
+  });
+
+  it("stops waiting after five minutes and says the regrade is taking long", async () => {
+    vi.useFakeTimers();
+    await submitWith(PROVISIONAL);
+    regradePractice.mockResolvedValue(PENDING);
+    getResult.mockResolvedValue({ ...PROVISIONAL, regrade_state: "running" });
+    await act(async () => { regradeButton().click(); });
+    await tick(5 * 60 * 1000 + 3000);
+    expect(container.textContent).toContain("Việc chấm lại đang lâu hơn bình thường.");
+    expect(container.textContent).toContain("Kết quả tạm thời.");
+    const calls = getResult.mock.calls.length;
+    expect(calls).toBeLessThanOrEqual(101);
+    await tick(60_000);
+    expect(getResult.mock.calls.length, "no polling after the bound").toBe(calls);
+    expect(regradeButton().disabled).toBe(false);
+  });
+
+  it("a reload during the job keeps waiting for it", async () => {
+    vi.useFakeTimers();
+    getResult.mockResolvedValueOnce({ ...PROVISIONAL, regrade_state: "running" })
+      .mockResolvedValueOnce({ ...COMPLETE, regrade_state: null });
+    await reopenWith({ ...PROVISIONAL, regrade_state: "running" });
+    expect(container.textContent).toContain("Đang chấm lại các câu còn thiếu");
+    await tick(3000);
+    expect(container.textContent).not.toContain("Kết quả tạm thời.");
+    expect(regradePractice, "no second job from a reload").not.toHaveBeenCalled();
   });
 });

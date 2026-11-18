@@ -8452,3 +8452,33 @@ result again), `Practice.provisionalRegrade.test.jsx` +3 (reload), new E2E
 `FE/e2e/practice-provisional-regrade.spec.js` (3, real Flask + PostgreSQL + browser,
 fake grader; `run_e2e_server.py` now stubs practice question generation too). All red
 first except the E2E, written after the unit reds.
+
+## Practice regrade moved to the background job (task A, 2026-11-18, stacked on #192)
+
+**Problem (Codex task39 192-2/192-3, owner decision):** #192 graded inside the HTTP
+request. Production runs one sync gunicorn worker with `GUNICORN_TIMEOUT=120` (compose
+`environment:` overrides `.env`), and one model call may take 120 s plus queue wait: one
+regrade could hold the only worker and be aborted, and a dead worker kept a counted retry.
+
+**Fix:** `POST /api/practice/<id>/regrade` checks ownership and hands the attempt to
+#190's `regrade_provisional`: 202 + `job_id` (the same job while one is queued or
+running), 200 with the stored result when nothing is left, 409 when retries are used up.
+`/api/attempts/<id>/regrade` takes practice attempts the same way (the inline delegation
+of task39 is gone). The page polls the stored result every 3 s for at most 5 min, then
+says the regrade is taking long; a reload during the job keeps waiting.
+
+**Retry accounting (shared, so the diagnostic route follows it too):** `start_grading_job`
+marks `regrade_started_job` when a regrade job reaches its model work. A later
+`reclaim_for_regrade` gives back the previous retry once only when that job never
+started: no marker AND its job row still `pending` (lost by the queue, worker died
+before taking it). A job that started and died keeps its retry counted, so dead workers
+cannot refund paid model calls without end. Both signs are required so a job registered
+before the marker existed, which did run, is not refunded at deploy time. No schema
+change (`metadata_json`).
+
+**Regression:** `test_practice_provisional_regrade.py` rewritten for the job (22 tests,
+including lost job refunded once, started-and-died counted, legacy job not refunded,
+failed enqueue refunded, duplicate delivery grades once, diagnostic route refund),
+`Practice.provisionalRegrade.test.jsx` +4 (wait, exhausted after the job, 5-minute bound,
+reload during the job), E2E `practice-provisional-regrade.spec.js` now expects 202 and
+exactly one job.
