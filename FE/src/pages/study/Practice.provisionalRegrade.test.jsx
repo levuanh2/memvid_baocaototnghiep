@@ -47,6 +47,9 @@ afterEach(() => {
   vi.clearAllMocks();
 });
 const flush = async () => { await act(async () => { await Promise.resolve(); await Promise.resolve(); await Promise.resolve(); }); };
+// The page moves focus in a setTimeout(0) once the button is gone: wait one macrotask, not
+// only microtasks (CI run 44260869397 caught the race).
+const flushTimers = async () => { await act(async () => { await new Promise((r) => setTimeout(r, 0)); }); };
 
 async function submitWith(result) {
   getPractice.mockResolvedValue(QUIZ);
@@ -97,6 +100,7 @@ describe("Practice — Chấm lại câu còn thiếu", () => {
     expect(regradeButton()).toBeUndefined();
     expect(container.textContent).toContain("Đã hết lượt chấm lại cho bài này. Kết quả tạm thời được giữ nguyên.");
     expect(container.textContent).toContain("điểm tạm tính");
+    await flushTimers();
     expect(document.activeElement?.getAttribute("role"), "focus moves to the banner text").toBe("status");
   });
 
@@ -116,6 +120,7 @@ describe("Practice — Chấm lại câu còn thiếu", () => {
     regradeButton().focus();
     await act(async () => { regradeButton().click(); });
     await flush();
+    await flushTimers();
     expect(regradeButton()).toBeUndefined();
     expect(document.activeElement).not.toBe(document.body);
   });
