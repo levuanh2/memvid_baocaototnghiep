@@ -50,14 +50,20 @@ def _normalise(expr: str) -> str:
 
 def submit_key_index_problems(conn) -> List[str]:
     """Everything wrong with the practice submit-key unique index (empty list = OK)."""
-    row = conn.execute(_SQL, {"name": SUBMIT_KEY_INDEX}).mappings().first()
+    return _unique_index_problems(conn, SUBMIT_KEY_INDEX, SUBMIT_KEY_TABLE,
+                                  SUBMIT_KEY_COLUMNS, SUBMIT_KEY_PREDICATE)
+
+
+def _unique_index_problems(conn, name: str, table: str, columns: List[str],
+                           predicate: str) -> List[str]:
+    row = conn.execute(_SQL, {"name": name}).mappings().first()
     schema = conn.execute(sa.text("SELECT current_schema()")).scalar()
     if row is None:
-        return [f"index {schema}.{SUBMIT_KEY_INDEX} is missing"]
+        return [f"index {schema}.{name} is missing"]
     problems = []
-    if row["table_schema"] != schema or row["table_name"] != SUBMIT_KEY_TABLE:
+    if row["table_schema"] != schema or row["table_name"] != table:
         problems.append(f"index is on {row['table_schema']}.{row['table_name']}, "
-                        f"expected {schema}.{SUBMIT_KEY_TABLE}")
+                        f"expected {schema}.{table}")
     if not row["indisvalid"]:
         problems.append("index is INVALID (pg_index.indisvalid = false): an interrupted "
                         "concurrent build; it enforces nothing")
@@ -67,15 +73,65 @@ def submit_key_index_problems(conn) -> List[str]:
         problems.append("index is not UNIQUE")
     if row["method"] != "btree":
         problems.append(f"index method is {row['method']}, expected btree")
-    if row["has_expressions"] or list(row["columns"]) != SUBMIT_KEY_COLUMNS:
+    if row["has_expressions"] or list(row["columns"]) != columns:
         problems.append(f"index columns are {list(row['columns'])}"
                         f"{' with expressions' if row['has_expressions'] else ''}, "
-                        f"expected {SUBMIT_KEY_COLUMNS}")
-    if _normalise(row["predicate"]) != SUBMIT_KEY_PREDICATE:
+                        f"expected {columns}")
+    if _normalise(row["predicate"]) != predicate:
         problems.append(f"index predicate is {row['predicate']!r}, "
-                        f"expected WHERE {SUBMIT_KEY_PREDICATE}")
+                        f"expected WHERE {predicate}")
     return problems
 
 
 def submit_key_index_exists(conn) -> bool:
     return conn.execute(_SQL, {"name": SUBMIT_KEY_INDEX}).first() is not None
+
+
+# Issue #18 (owner option B, 2026-11-18): regenerating a review plan archives its topics
+# instead of deleting them. Archived and current topics of one plan share priorities, so
+# the priority rule holds for current topics only.
+ARCHIVE_TABLE = "review_plan_items"
+ARCHIVE_INDEX = "uq_review_plan_items_priority_active"
+ARCHIVE_COLUMNS = ["review_plan_id", "priority"]
+ARCHIVE_PREDICATE = "archived_at IS NULL"
+OLD_PRIORITY_CONSTRAINT = "uq_review_plan_items_priority"
+
+_CONSTRAINT_SQL = sa.text(
+    "SELECT 1 FROM pg_constraint c JOIN pg_class t ON t.oid = c.conrelid "
+    "JOIN pg_namespace n ON n.oid = t.relnamespace "
+    "WHERE c.conname = :c AND t.relname = :t AND n.nspname = current_schema()")
+_COLUMN_SQL = sa.text(
+    "SELECT 1 FROM information_schema.columns WHERE table_schema = current_schema() "
+    "AND table_name = :t AND column_name = 'archived_at'")
+
+
+def archive_index_exists(conn) -> bool:
+    return conn.execute(_SQL, {"name": ARCHIVE_INDEX}).first() is not None
+
+
+def archive_index_problems(conn) -> List[str]:
+    """The partial unique index over current topics (empty list = OK)."""
+    return _unique_index_problems(conn, ARCHIVE_INDEX, ARCHIVE_TABLE, ARCHIVE_COLUMNS,
+                                  ARCHIVE_PREDICATE)
+
+
+def old_priority_constraint_exists(conn) -> bool:
+    return conn.execute(_CONSTRAINT_SQL, {"c": OLD_PRIORITY_CONSTRAINT,
+                                          "t": ARCHIVE_TABLE}).first() is not None
+
+
+def archived_at_column_exists(conn) -> bool:
+    return conn.execute(_COLUMN_SQL, {"t": ARCHIVE_TABLE}).first() is not None
+
+
+def review_item_archive_problems(conn) -> List[str]:
+    """Everything the archive migration promised: the column, the partial index, and the
+    old whole-table priority constraint gone (it would refuse a regeneration)."""
+    problems = []
+    if not archived_at_column_exists(conn):
+        problems.append(f"column {ARCHIVE_TABLE}.archived_at is missing")
+    problems += archive_index_problems(conn)
+    if old_priority_constraint_exists(conn):
+        problems.append(f"constraint {OLD_PRIORITY_CONSTRAINT} still exists: a regeneration "
+                        "would fail on archived topics")
+    return problems

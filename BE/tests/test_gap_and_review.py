@@ -329,7 +329,10 @@ def test_plan_is_cached_until_force_and_regeneration_replaces_it(be, client, mon
     forced = client.post("/api/review-plans/generate",
                          json={"attempt_id": attempt_id, "force": True}).get_json()
     assert forced["summary"] == "lan 2"
-    assert forced["review_plan_id"] != first["review_plan_id"]
+    # Issue #18 (owner option B): the plan is kept and its old topics archived, so the
+    # practice made from them survives; the id stays.
+    assert forced["review_plan_id"] == first["review_plan_id"]
+    assert [a["topic"] for a in forced["archived_items"]] == ["quy tac ham hop"]
     # UNIQUE(attempt_id): đúng MỘT plan cho mỗi attempt
     assert client.get(f"/api/review-plans/{attempt_id}").get_json()[
         "review_plan_id"] == forced["review_plan_id"]

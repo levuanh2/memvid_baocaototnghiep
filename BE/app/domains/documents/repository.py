@@ -599,7 +599,9 @@ def tri_thuc_tho(user_id: Optional[str]) -> Dict[str, Dict[str, Any]]:
         # 3) Chu de can on tap + moc tao ke hoach.
         q = (select(ReviewPlan.document_id, ReviewPlanItem.topic, ReviewPlan.created_at)
              .select_from(ReviewPlan)
-             .join(ReviewPlanItem, ReviewPlanItem.review_plan_id == ReviewPlan.id))
+             .join(ReviewPlanItem, ReviewPlanItem.review_plan_id == ReviewPlan.id)
+             # Current topics only: archived ones belong to an older plan (issue #18).
+             .where(ReviewPlanItem.archived_at.is_(None)))
         if user_id is not None:
             q = q.where(ReviewPlan.user_id == user_id)
         for doc_id, topic, tao_luc in s.execute(q).all():

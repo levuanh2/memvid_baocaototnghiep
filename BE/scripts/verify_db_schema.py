@@ -38,7 +38,8 @@ def main(argv=None) -> int:
     from shared.env_loader import load_project_env
     load_project_env()
     from scripts.run_migrations import DichBiTuChoi, xac_dinh_dich
-    from shared.db_schema_checks import RUNBOOK, submit_key_index_problems
+    from shared.db_schema_checks import (RUNBOOK, review_item_archive_problems,
+                                         submit_key_index_problems)
     from shared.migration_guard import sanitize
 
     try:
@@ -55,7 +56,7 @@ def main(argv=None) -> int:
             # Read-only by construction: any write in this session is an error.
             conn.exec_driver_sql("SET TRANSACTION READ ONLY")
             db = conn.execute(sa.text("SELECT current_database()")).scalar()
-            problems = submit_key_index_problems(conn)
+            problems = submit_key_index_problems(conn) + review_item_archive_problems(conn)
     except Exception as exc:  # unreachable DB is a failed verification, never a pass
         print(f"DỪNG: cannot verify {sanitize(url)}: {type(exc).__name__}: {exc}",
               file=sys.stderr)
@@ -70,6 +71,9 @@ def main(argv=None) -> int:
         return EXIT_SCHEMA_INVALID
     print(f"[verify-db] {db}: uq_quiz_attempts_user_submit_key valid, ready, unique, "
           "(user_id, submit_key) WHERE submit_key IS NOT NULL")
+    print(f"[verify-db] {db}: review_plan_items.archived_at present; "
+          "uq_review_plan_items_priority_active valid, unique, (review_plan_id, priority) "
+          "WHERE archived_at IS NULL; old uq_review_plan_items_priority absent")
     return EXIT_OK
 
 

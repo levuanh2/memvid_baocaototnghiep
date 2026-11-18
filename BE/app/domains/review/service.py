@@ -15,7 +15,9 @@ import os
 import uuid
 from typing import Any, Callable, Dict, List, Optional, Sequence, Tuple
 
-from sqlalchemy import select
+from datetime import datetime, timezone
+
+from sqlalchemy import select, update
 
 from app.db import session_scope
 from app.db.models import (
@@ -234,15 +236,29 @@ def _persist(attempt_id: str, quiz_id: str, weak: List[Dict[str, Any]],
         old = s.execute(
             select(ReviewPlan).where(ReviewPlan.attempt_id == str(attempt_id))
         ).scalar_one_or_none()
-        if old is not None:
-            s.delete(old)
-            s.flush()
 
         if not summary:
             summary = (f"Có {len(weak)} chủ đề cần ôn lại sau bài làm này."
                        if weak else "Bài làm không còn chủ đề nào cần ôn thêm.")
-        s.add(ReviewPlan(id=plan_id, attempt_id=str(attempt_id), user_id=attempt.user_id,
-                         document_id=document_id, summary=summary))
+        if old is None:
+            s.add(ReviewPlan(id=plan_id, attempt_id=str(attempt_id), user_id=attempt.user_id,
+                             document_id=document_id, summary=summary))
+        else:
+            # Issue #18 (owner option B): archive, never delete. Deleting the plan cascaded
+            # to every practice quiz made from its topics, their attempts, answers and
+            # mastery. The current topics are archived (read-only history, practice from
+            # them still visible) and the new ones join the same plan. `created_at` is
+            # the plan's generation time: it moves, or #190 would mark the new topics
+            # outdated against a result graded before the regeneration.
+            now = datetime.now(timezone.utc)
+            s.execute(update(ReviewPlanItem)
+                      .where(ReviewPlanItem.review_plan_id == old.id,
+                             ReviewPlanItem.archived_at.is_(None))
+                      .values(archived_at=now))
+            plan_id = old.id
+            old.summary = summary
+            old.document_id = document_id
+            old.created_at = now
         s.flush()
 
         for concept in weak:
@@ -282,10 +298,25 @@ def get_plan(plan_id: str) -> Optional[Dict[str, Any]]:
 
 
 def _plan_dict(s, plan: ReviewPlan) -> Dict[str, Any]:
-    items = s.execute(
+    from app.db.models import Quiz
+
+    rows = s.execute(
         select(ReviewPlanItem).where(ReviewPlanItem.review_plan_id == plan.id)
         .order_by(ReviewPlanItem.priority)
     ).scalars().all()
+    # Current topics only in `items` (the plan's contract). Topics replaced by "Tạo lại
+    # kế hoạch" (issue #18) come in `archived_items`, newest first, read-only, with the
+    # practice quizzes made from them; old clients ignore the field.
+    items = [r for r in rows if r.archived_at is None]
+    archived = sorted((r for r in rows if r.archived_at is not None),
+                      key=lambda r: (-r.archived_at.timestamp(), r.priority))
+    practice_by_item: Dict[str, List[str]] = {}
+    if archived:
+        for quiz_id, item_id in s.execute(
+                select(Quiz.id, Quiz.source_review_item_id)
+                .where(Quiz.source_review_item_id.in_([r.id for r in archived]))
+                .order_by(Quiz.created_at)).all():
+            practice_by_item.setdefault(item_id, []).append(quiz_id)
     chunk_rows = s.execute(
         select(ReviewItemChunk.review_item_id, ReviewItemChunk.chunk_id)
         .join(ReviewPlanItem, ReviewPlanItem.id == ReviewItemChunk.review_item_id)
@@ -314,6 +345,15 @@ def _plan_dict(s, plan: ReviewPlan) -> Dict[str, Any]:
             "concept_mastery_id": r.concept_mastery_id,
             "chunk_ids": by_item.get(r.id, []),
         } for r in items],
+        "archived_items": [{
+            "review_item_id": r.id,
+            "topic": r.topic,
+            "priority": r.priority,
+            "status": r.status,
+            "mastery_score": float(r.mastery_score),
+            "archived_at": r.archived_at.isoformat(),
+            "practice_quiz_ids": practice_by_item.get(r.id, []),
+        } for r in archived],
     }
 
 
@@ -387,4 +427,7 @@ def get_item(review_item_id: str) -> Optional[Dict[str, Any]]:
             "section_id": item.section_id,
             "knowledge_node_id": item.knowledge_node_id,
             "chunk_ids": chunk_ids,
+            # Archived by "Tạo lại kế hoạch" (issue #18): still resolvable for history and
+            # for practice quizzes already made from it; no new practice is generated.
+            "archived_at": item.archived_at.isoformat() if item.archived_at else None,
         }

@@ -8385,3 +8385,36 @@ take the oldest stuck attempts of the whole database. On a database reused acros
 stuck attempts left by earlier runs (aged 30 days) fill the batch and three sweep tests
 fail (also on #188 alone). They pass on a fresh database (CI). Scope the sweep tests'
 candidates if this database reuse becomes common.
+
+## "Tạo lại kế hoạch" archived instead of deleting practice history (issue #18, option B, 2026-11-19)
+
+**Problem:** `review.service._persist` deleted the old plan; the database cascade
+(`review_plan_items` -> `quizzes.source_review_item_id` -> attempts -> answers,
+`concept_masteries`) deleted every practice quiz made from its topics with its results.
+#190 only added a warning dialog.
+
+**Fix (owner option B, migration `20261118_review_item_archive`, disposable PostgreSQL
+only; not applied to any hosted database):**
+- `review_plan_items.archived_at` (nullable). The whole-table `UNIQUE (review_plan_id,
+  priority)` became the partial unique index `uq_review_plan_items_priority_active ...
+  WHERE archived_at IS NULL`: archived and current topics of one plan share priorities.
+  The index is built CONCURRENTLY and verified before the old constraint is dropped; the
+  upgrade is rerun-safe; `verify_db_schema` checks all three facts.
+- Regeneration keeps the plan row (same id), archives its current topics, adds the new
+  ones, and moves `created_at` (the generation time; otherwise #190 marks the new plan
+  outdated). No foreign key changes, nothing deleted.
+- Readers: `items` are current topics only; `archived_items` (additive) lists the old ones
+  with their practice quizzes; the Library lists current topics; `get_item` still
+  resolves archived topics (history, practice pages, comparison).
+- `POST /api/practice/generate` refuses an archived topic (409 "Chủ đề này thuộc kế hoạch
+  cũ..."); a practice quiz already made from it can still be opened, submitted and
+  regraded.
+- The page asks with an honest archive confirmation (plain `Modal`, no "xoá vĩnh viễn"
+  dialog) and shows "Kế hoạch trước" read-only.
+- Downgrade refuses while archived topics exist (owner: roll back code only, keep the
+  column). Old code on the new schema behaves as before while nothing is archived.
+
+**Regression:** `test_review_plan_archive.py` (9), `test_review_item_archive_migration.py`
+(6: verified head, rerun-safe, partial index, downgrade refusal, downgrade/upgrade on a
+fresh database, verifier fails closed), `test_gap_and_review.py` regenerate test updated,
+`ReviewGuide.practiceCustomize.test.jsx` (4 new). Red first on the old application code.

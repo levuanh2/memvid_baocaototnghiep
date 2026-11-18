@@ -608,9 +608,15 @@ class ReviewPlanItem(Base):
     mastery_score = Column(Numeric(4, 2), nullable=False)
     review_tasks_json = Column(JSONB, nullable=False)
     created_at = created_at()
+    # Set when "Tạo lại kế hoạch" replaces the topic (issue #18, migration 20261118): the
+    # topic stays, read-only, with every practice quiz made from it.
+    archived_at = Column(DateTime(timezone=True), nullable=True)
 
     __table_args__ = (
-        UniqueConstraint("review_plan_id", "priority", name="uq_review_plan_items_priority"),
+        # Priorities are unique among the CURRENT topics of a plan only: archived and
+        # current topics of one plan share them.
+        Index("uq_review_plan_items_priority_active", "review_plan_id", "priority",
+              unique=True, postgresql_where=text("archived_at IS NULL")),
         CheckConstraint("priority >= 1", name="ck_review_plan_items_priority"),
         CheckConstraint(
             "status IN ('light_review','review_needed','critical_gap')",

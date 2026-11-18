@@ -4107,6 +4107,7 @@ _ATTEMPT_ERR_HTTP = {
     quiz_uc.TaiLieuChuaIndex: 409,
     quiz_uc.ReviewItemKhongTonTai: 404,
     quiz_uc.ReviewItemKhongCoChunk: 409,
+    quiz_uc.ReviewItemDaLuuTru: 409,
 }
 
 
