@@ -8426,6 +8426,10 @@ retries, reload after used-up retries, duplicate model calls):**
   first kept calling the model (its write was already fenced off). Now it renews before
   each model call, as the grading job does, and answers 409 `NopBaiDangCham` once its
   claim was taken over, before the next call.
+- *Takeover during the last model call* (agy task40): no heartbeat follows it, so the
+  takeover shows only when `save_regrade` refuses the write. The request then answered
+  200 with the unchanged provisional result and "thử thêm" while the other request was
+  still grading. It now answers 409 `NopBaiDangCham` too.
 - *Reload lost the provisional result.* The comparison counts complete results only
   (409 while provisional), so a reload showed the empty quiz: no "Kết quả tạm thời", no
   regrade offer, no word that retries were used up. `GET /api/practice/<id>` now adds

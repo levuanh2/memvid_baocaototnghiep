@@ -196,7 +196,11 @@ def regrade(practice_quiz_id: str, user_id: Optional[str], attempt_id: str, *,
                     raise NopBaiDangCham()
 
             try:
-                _grading_service.regrade_ungraded(attempt_id, token, progress_cb=_heartbeat)
+                if _grading_service.regrade_ungraded(attempt_id, token,
+                                                     progress_cb=_heartbeat) is None:
+                    # The write was refused: a later request took the attempt over during
+                    # the last model call and is grading it now (agy task40).
+                    raise NopBaiDangCham()
             finally:
                 # Ends the claim and retires the token, after the gap analysis. A no-op
                 # when the claim was taken over: it belongs to the other request.

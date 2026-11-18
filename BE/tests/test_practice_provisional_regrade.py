@@ -316,3 +316,34 @@ def test_the_practice_page_finds_a_provisional_result_again(client, owner, pract
     assert got["latest_attempt_id"] == body["attempt_id"]
     with pytest.raises(practice_uc.ChuaCoLanChamNao):
         practice_uc.comparison(quiz_id, owner, bat_buoc_chu_so_huu=True)
+
+
+def test_a_regrade_whose_write_was_fenced_off_says_another_request_is_grading(owner, practice,
+                                                                              fake,
+                                                                              monkeypatch):
+    """One ungraded answer: no heartbeat follows the last model call, so a takeover
+    during it shows only at the write, which is refused. The request answered 200 with
+    the unchanged provisional result ("thử thêm") while the other request was still
+    grading (agy task40). It now answers 409 NopBaiDangCham, like a takeover seen by
+    the heartbeat."""
+    from app.application import practice as practice_uc
+    from app.db import session_scope
+    from app.db.models import QuizAttempt
+    from app.domains.attempts import grading
+
+    quiz_id, qids, _, body = _provisional(owner, practice, fake)
+    attempt_id = body["attempt_id"]
+
+    def _taken_over(**kw):
+        with session_scope() as s:
+            a = s.get(QuizAttempt, attempt_id, with_for_update=True)
+            meta = {k: v for k, v in (a.metadata_json or {}).items()
+                    if k != "grading_job_running"}
+            a.metadata_json = {**meta, "regrade_job_id": "practice-regrade-other"}
+        return fake(**kw)
+
+    monkeypatch.setattr(grading, "grade_short_answer", _taken_over)
+    with pytest.raises(practice_uc.NopBaiDangCham):
+        _regrade(quiz_id, owner, attempt_id)
+    assert fake.calls == [SA_FLAKY]
+    assert _rows(attempt_id)[qids[2]]["verdict"] is None
