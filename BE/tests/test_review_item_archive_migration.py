@@ -36,7 +36,10 @@ def db():
 
     with get_engine().connect().execution_options(isolation_level="AUTOCOMMIT") as conn:
         yield conn
-    r = _migrate()   # whatever a test did, leave the database at head and verified
+    # Whatever a test did (also one that failed half-way and left the index dropped),
+    # rerun the revision: every step checks first, so this restores the full contract.
+    _stamp(PREVIOUS)
+    r = _migrate()
     assert r.returncode == 0, r.stdout + r.stderr
 
 
@@ -143,7 +146,9 @@ def test_the_downgrade_refuses_while_archived_topics_exist(db, owner):
         before = _state(db)
         r = _run("alembic", "downgrade", PREVIOUS)
         assert r.returncode != 0
-        assert "refusing downgrade" in (r.stdout + r.stderr)
+        out = r.stdout + r.stderr
+        assert "refusing downgrade" in out
+        assert "Roll back code only" not in out, "older code would cascade-delete the history"
         assert _version(db) == HEAD and _state(db) == before
     finally:
         db.execute(sa.text("DELETE FROM review_plans WHERE id = :p"), {"p": plan})
@@ -169,6 +174,9 @@ def test_the_verifier_fails_closed_on_the_old_constraint_or_a_missing_index(db):
     db.execute(sa.text(f"DROP INDEX CONCURRENTLY IF EXISTS {INDEX}"))
     r = _verify()
     assert r.returncode != 0 and f"index public.{INDEX} is missing" in r.stderr, r.stderr
+    # Its own recovery procedure, not the submit-key one (Codex task46 P3).
+    assert "docs/RUNBOOK_REVIEW_ITEM_ARCHIVE.md" in r.stderr, r.stderr
+    assert "RUNBOOK_SUBMIT_KEY_INDEX" not in r.stderr, r.stderr
     db.execute(sa.text(
         f"CREATE UNIQUE INDEX CONCURRENTLY {INDEX} ON review_plan_items "
         "(review_plan_id, priority) WHERE archived_at IS NULL"))

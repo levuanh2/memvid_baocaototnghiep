@@ -95,6 +95,7 @@ ARCHIVE_INDEX = "uq_review_plan_items_priority_active"
 ARCHIVE_COLUMNS = ["review_plan_id", "priority"]
 ARCHIVE_PREDICATE = "archived_at IS NULL"
 OLD_PRIORITY_CONSTRAINT = "uq_review_plan_items_priority"
+ARCHIVE_RUNBOOK = "docs/RUNBOOK_REVIEW_ITEM_ARCHIVE.md"
 
 _CONSTRAINT_SQL = sa.text(
     "SELECT 1 FROM pg_constraint c JOIN pg_class t ON t.oid = c.conrelid "

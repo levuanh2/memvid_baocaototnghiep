@@ -8418,3 +8418,17 @@ only; not applied to any hosted database):**
 (6: verified head, rerun-safe, partial index, downgrade refusal, downgrade/upgrade on a
 fresh database, verifier fails closed), `test_gap_and_review.py` regenerate test updated,
 `ReviewGuide.practiceCustomize.test.jsx` (4 new). Red first on the old application code.
+
+**Review fixes (Codex task46):**
+- *Code-only rollback is not safe (P1).* The first text said "roll back code only, keep
+  the column". Code older than this migration deletes the plan on regeneration, and the
+  cascade deletes archived topics with their practice history; `scripts/rollback.sh`
+  accepts any ledgered SHA. The migration docstring, its downgrade message and the new
+  `docs/RUNBOOK_REVIEW_ITEM_ARCHIVE.md` now state the rollback floor: once a topic is
+  archived, roll back only to code containing this revision, or roll forward. A hard
+  guard (a trigger refusing to delete a plan with archived topics, or a schema floor in
+  `rollback.sh`) is proposed for owner approval, not implemented.
+- *Wrong runbook (P3).* `verify_db_schema` printed the submit-key runbook for every
+  failure; each check family now prints its own.
+- The migration test fixture reruns the revision after every test (stamp previous +
+  migrate), so a test that fails half-way cannot leave the index dropped for the next.

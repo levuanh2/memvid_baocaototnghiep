@@ -17,7 +17,11 @@ and the partial index enforces the old rule.
 
 The downgrade refuses while archived topics exist: recreating the old constraint would
 fail on them, and dropping the column would silently merge history into current plans.
-Roll back code only and keep the column (task41 design).
+
+Code rollback is NOT safe below this release once a topic is archived (Codex task46):
+older code deletes the plan on regeneration and the cascade then deletes the archived
+topics with their practice history. Roll back only to code that contains this revision,
+or roll forward. See docs/RUNBOOK_REVIEW_ITEM_ARCHIVE.md.
 """
 from alembic import op
 import sqlalchemy as sa
@@ -68,8 +72,9 @@ def downgrade() -> None:
         raise RuntimeError(
             f"refusing downgrade: {archived} archived review plan topic(s) exist. "
             f"{OLD_PRIORITY_CONSTRAINT} would fail on them and dropping archived_at would "
-            "merge history into current plans. Roll back code only and keep the column, or "
-            "move the archived rows with an owner-approved script first.")
+            "merge history into current plans. Keep this schema and roll forward; code older "
+            "than this revision must not serve either (its regeneration cascade-deletes the "
+            "archived history). See docs/RUNBOOK_REVIEW_ITEM_ARCHIVE.md.")
     if not old_priority_constraint_exists(conn):
         op.execute(f"ALTER TABLE review_plan_items ADD CONSTRAINT {OLD_PRIORITY_CONSTRAINT} "
                    "UNIQUE (review_plan_id, priority)")
