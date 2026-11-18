@@ -3,7 +3,9 @@
 Status: **READY FOR OWNER REVIEW** for the 28 V6 Draft pull requests #159-#186 and the six
 follow-ups #187 (dev/test isolation), #188 (diagnostic grading recovery, stacked on #185),
 #189 (LLM deadlines), #190 (provisional grading recovery, stacked on #188), #191 (E2E
-isolation) and #192 (practice regrade, stacked on #190), once every
+isolation), #192 (practice regrade, stacked on #190), #193 (practice regrade in the
+background job, stacked on #192), #194 (review plan archive with a migration, stacked on
+#190) and #195 (mind map contract test budget), once every
 head named here has a green required check (section 7). Trial 13 integrated all 34 current heads (#159-#192) and passed the
 PostgreSQL and E2E stages; trial 12 passed the full Fixture Audit (sections 5 and 12). Production: **NO-GO** until all seven
 blocking items of section 9 are GO with the evidence that section asks for: production
@@ -432,6 +434,9 @@ All 32 (#159-#190) are Draft, and every head has a green `CI / required` (checke
 | #190 | `b74de27` | **success** (run 44119547612: backend 3093 passed, E2E 47 + 48, Fixture Smoke 206) |
 | #191 | `ac1a411` | **success** (run 44263766276: backend 2991 passed, E2E 42 + 42; based on `main`); earlier `f6092f6` run 44134704901 |
 | #192 | `fd0812f` | **success** (run 44262980102: backend 3109 passed, Vitest 1977, E2E 50 + 51, Fixture Smoke 206); `0aaf594` failed on a focus-test race, fixed in `6828afb` |
+| #193 | `882bb6a` | **success** (run 44350467761) |
+| #194 | `1b095e7` | **success** (run 44354303047) |
+| #195 | `47dc4b1` | **success** (run 44363261244) |
 | #189 | `2d174d8` | **success** (run 44035654037: backend 3000 passed / 0 failed) |
 | #159 | this commit | documentation only |
 
@@ -795,6 +800,16 @@ browser, fake grader; practice question generation stubbed in `run_e2e_server.py
 open auth 3/3, protected auth 9/9 together with both diagnostic regrade specs. Reviews:
 agy APPROVED both (task43); Codex re-check: done (task42): #191 PASS; #192 CONDITIONAL PASS FOR MERGE (192-1, 192-4 and the result-page route closed; 192-2 and 192-3 open for the owner).
 
+## 8h. Owner decisions after task42/43 (2026-11-19): #193, #194, #195
+
+| PR | Task | What | Evidence |
+|---|---|---|---|
+| #193 `fix/practice-regrade-background` `882bb6a` (stacked on #192) | A: 192-2 P1, 192-3 P2 | Practice regrade in #190's background grading job: 202 + `job_id` (one job while queued/running), 200 stored result, 409 used up; no model call in the request. A retry is given back once only when its job never started (no `regrade_started_job` marker **and** job row still `pending`); a started job keeps its retry. Shared `reclaim_for_regrade`, so the diagnostic route follows the same rule. Page polls every 3 s for at most 5 min. No schema change | backend 22 tests (red first), related 183 passed; Vitest +4; E2E open 8 + 1 skip, protected 9; CI run 44350467761 green |
+| #194 `fix/review-plan-archive` `1b095e7` (stacked on #190) | B: issue #18 option B | Migration `20261118_review_item_archive` (expand only, rerun-safe): `archived_at`, partial unique index over current topics replacing `uq_review_plan_items_priority`, verified before the drop; downgrade refuses while archived topics exist. Regeneration keeps the plan, archives topics, moves `created_at`. `archived_items` (additive); 409 for new practice from archived topics; existing practice still works. Honest archive confirmation, read-only "Kế hoạch trước". No FK change | 9 behaviour + 6 migration tests (red first on old code), 47 + 175 related passed; Vitest 4 new; CI run 44354303047 green. **Disposable PostgreSQL only; not applied to any hosted database** |
+| #195 `test/mindmap-export-contract-slow` `47dc4b1` (from `main`) | C | `test.slow()` on the nine-case `exact-node-export-v3` contract test only, phase timings attached also on failure; nothing skipped or split | 40 runs at idle/50/100/150 % CPU: 40/40; at 100 % every run exceeded the old 45 s (max 71.7 s), max at 150 % 86.5 s of 135 s; forced timeout keeps trace + timings; CI **success** (run 44363261244) |
+
+Reviews of #193/#194/#195: pending: requested from Codex (task44) and agy (task45) with an explicit re-check of the diagnostic regrade path; both wait for an owner approval in their panes (agy: a read-only `git show`; Codex: the prompt is in its input box). #194 and #195 reviews to follow.
+
 ## 9. GO/NO-GO checklist for the owner
 
 Blocking: production stays **NO-GO** until every row is GO with the evidence named. None
@@ -825,8 +840,8 @@ Already GO, or owner decisions that do not block:
 | 16 | Provisional result after an AI grader failure: diagnostic attempts regradable in Draft #190 (section 8f); merge it after #188, or accept that such answers stay ungraded | open |
 | 17 | A practice attempt with a provisional result had no regrade | fixed in Draft #192 `fd0812f` (regrade inside the request with heartbeat; reload and result page keep it; 16 backend + 9 FE tests and 3 E2E, red first); open until #192 is merged |
 | 19 | Local E2E runs shared `BE/memory/mindmaps.sqlite` | fixed in Draft #191 `ac1a411` (own empty stores per start, no `.env`, only a local `*_test` database; 6 tests red first); open until #191 is merged |
-| 18 | "Tạo lại kế hoạch" deletes the old plan's practice history (10-step cascade, existed before V6) | owner chose option B (archive, keep history, no new practice from archived topics). Design in `task41-issue18-archived-at-migration-design.md`: `archived_at` column **plus replacing `uq_review_plan_items_priority` by a partial unique index** (the first audit missed it), `created_at` moves on regeneration; nothing run. **Migration approval and a deploy window needed** |
-| 20 | Inline LLM grading (practice submit, practice regrade) on one sync gunicorn worker with a 120 s timeout | owner decision: background job with 202 + polling (recommended), or more/threaded workers and a timeout above the worst serial grading. Not a merge blocker for #192 (Codex task42), but **a production-rollout blocker for inline regrade under the current one-worker / 120 s deployment** unless the owner explicitly accepts the outage/abort risk; the same risk already applies to practice submit. Decide together with 192-3 (a retry stays spent when the worker dies) |
+| 18 | "Tạo lại kế hoạch" deletes the old plan's practice history (10-step cascade, existed before V6) | implemented in Draft #194 (option B, section 8h): migration `20261118_review_item_archive` tested on disposable PostgreSQL only. **Open until the owner approves the migration and its deploy window, and #194 is merged** |
+| 20 | Inline LLM grading of the practice regrade on one sync gunicorn worker with a 120 s timeout | owner chose the background job: implemented in Draft #193 (section 8h); open until #193 is merged. Practice **submit** still grades inline (existed before V6): same risk, not changed |
 | 15 | PostgreSQL stages on the integrated tree | done: trial 10 (31 exact heads) and trial 11 (32 heads) on a disposable PostgreSQL 17.6, section 5 |
 | 11 | 6 pre-existing local backend failures accepted (environment, pass in CI) | open |
 | 12 | Windows test-harness fix | done in #185 `5e18271` (section 4b) |
@@ -838,13 +853,13 @@ Kept apart, as the owner asked:
 | Kind | State |
 |---|---|
 | CI of each pull request | 34/34 heads green on `CI / required` (#159-#192; section 7) |
-| Tests on the integrated tree | trial 13 `e938adf` (all 34 current heads): section 5 |
+| Tests on the integrated tree | trial 13 `e938adf` (34 heads): full stages, section 5. Trial 14 merge check `9140fa8` / `ff5a7f7b2845` (37 heads, local): `verify_db_schema` ok, overlapping backend suites 150 passed, Vitest ReviewGuide/Practice/QuizResult 133 passed; the full trial 14 is proposed once the reviews of #193/#194/#195 are closed |
 | New regressions | none: trial 13 fails only the 6 baseline tests plus 2 caused by the local cluster's role (12/12 with the CI role); skips identical |
 | Known local failures (pass in CI) | 6: `test_index_khoa_that` x5 need a real Redis; `test_fpt_rerank` x1 |
 | Skipped tests | 9: evaluation datasets not in git (3), NKS credentials (2), Supabase Storage (1), real Redis (1), load test (1), live vision (1) |
 | Not accepted (not run) | Firefox, WebKit, real devices, screen reader; any hosted environment; the owner's production backup and restore tests |
 | Code reviews of #191/#192 | done, section 8g: agy APPROVED both (task43); Codex re-check done (task42): #191 PASS; #192 CONDITIONAL PASS FOR MERGE (192-1, 192-4 and the result-page route closed; 192-2 and 192-3 open for the owner). Open for the owner: item 20 (inline grading on one worker) |
-| Fixture Audit trial 12 run 1 | kept as failed (2): triage `integration-34-trial12/triage-mindmap-timeouts.md`: `exact-node-export-v3` contract test is budget-bound (median 20 s of 45 s; split or `test.slow()` proposed); `current-branch ... opposite side` stalled on a download under load, not reproduced in 22 runs, **open** |
+| Fixture Audit trial 12 run 1 | kept as failed (2). `exact-node-export-v3` contract test: addressed by Draft #195 (`test.slow()`, measured under load). `current-branch ... opposite side`: download stall not reproduced, **open** |
 | Production | **NO-GO**: the seven blocking items of section 9 (3, 4, 6, 7, 8, 13, 14) have no evidence yet |
 
 ## 10. Merge order for the owner (`04-integration-checklist.md`, with #183/#185 moved last)
@@ -878,6 +893,11 @@ with item 3 in place, each backend deploy also waits for the owner's approval.
 13. #191 any time (E2E test harness only; no production code). After #187 it conflicts in
     `run_e2e_server.py`: keep #187's guard and emptied keys, add `SKIP_DOTENV=1` (trial 13
     commit `cb13235`).
+14. #193 after #192 (practice regrade in the background job; no migration).
+15. #194 after #190, **in its own approved migration window** (#185 process). Its only
+    code conflict in trial 14 was the `ReviewGuide.jsx` React import line (both sides add
+    `useRef`).
+16. #195 any time (test only).
 Stacked pull requests carry their bases' commits; merge the base first.
 
 ## 11. Production actions that each need a separate owner go-ahead
