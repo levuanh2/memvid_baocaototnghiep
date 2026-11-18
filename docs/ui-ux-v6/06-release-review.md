@@ -434,8 +434,8 @@ All 32 (#159-#190) are Draft, and every head has a green `CI / required` (checke
 | #190 | `b74de27` | **success** (run 44119547612: backend 3093 passed, E2E 47 + 48, Fixture Smoke 206) |
 | #191 | `ac1a411` | **success** (run 44263766276: backend 2991 passed, E2E 42 + 42; based on `main`); earlier `f6092f6` run 44134704901 |
 | #192 | `fd0812f` | **success** (run 44262980102: backend 3109 passed, Vitest 1977, E2E 50 + 51, Fixture Smoke 206); `0aaf594` failed on a focus-test race, fixed in `6828afb` |
-| #193 | `882bb6a` | **success** (run 44350467761) |
-| #194 | `1b095e7` | **success** (run 44354303047) |
+| #193 | `f69d911` | **success** (first head `882bb6a` run 44350467761; review fixes `e49579b`, `f69d911` green) |
+| #194 | `6145d62` | first head `1b095e7` **success** (run 44354303047); review fixes `c1d2641` green; `6145d62` docs only |
 | #195 | `47dc4b1` | **success** (run 44363261244) |
 | #189 | `2d174d8` | **success** (run 44035654037: backend 3000 passed / 0 failed) |
 | #159 | this commit | documentation only |
@@ -808,7 +808,10 @@ agy APPROVED both (task43); Codex re-check: done (task42): #191 PASS; #192 CONDI
 | #194 `fix/review-plan-archive` `1b095e7` (stacked on #190) | B: issue #18 option B | Migration `20261118_review_item_archive` (expand only, rerun-safe): `archived_at`, partial unique index over current topics replacing `uq_review_plan_items_priority`, verified before the drop; downgrade refuses while archived topics exist. Regeneration keeps the plan, archives topics, moves `created_at`. `archived_items` (additive); 409 for new practice from archived topics; existing practice still works. Honest archive confirmation, read-only "Kế hoạch trước". No FK change | 9 behaviour + 6 migration tests (red first on old code), 47 + 175 related passed; Vitest 4 new; CI run 44354303047 green. **Disposable PostgreSQL only; not applied to any hosted database** |
 | #195 `test/mindmap-export-contract-slow` `47dc4b1` (from `main`) | C | `test.slow()` on the nine-case `exact-node-export-v3` contract test only, phase timings attached also on failure; nothing skipped or split | 40 runs at idle/50/100/150 % CPU: 40/40; at 100 % every run exceeded the old 45 s (max 71.7 s), max at 150 % 86.5 s of 135 s; forced timeout keeps trace + timings; CI **success** (run 44363261244) |
 
-Reviews of #193/#194/#195: pending: requested from Codex (task44) and agy (task45) with an explicit re-check of the diagnostic regrade path; both wait for an owner approval in their panes (agy: a read-only `git show`; Codex: the prompt is in its input box). #194 and #195 reviews to follow.
+Reviews of #193/#194/#195 (2026-11-19):
+- **#193** `f69d911`: agy APPROVED (task45). Codex task44 found two FE P2 (poller stopped under StrictMode; a wait for one quiz wrote into the next), fixed in `e49579b`; task46 found stale rejected/`load()` continuations, fixed in `f69d911`; task48 **APPROVE**.
+- **#194** `6145d62`: agy APPROVED (task47). Codex task46/48 **REQUEST CHANGES / NO-GO until an enforced rollback floor**: once a topic is archived, code older than #194 cascade-deletes the archived history on regeneration, and `scripts/rollback.sh` accepts any ledgered pre-#194 SHA. Documented (`c1d2641`: migration docstring, downgrade message, `docs/RUNBOOK_REVIEW_ITEM_ARCHIVE.md`); the runbook's recovery for an already-stamped revision fixed in `6145d62` (re-check task49). **The hard guard (DB trigger refusing to delete a plan with archived topics, or a schema floor in `rollback.sh`) needs an owner decision** before #194 can be approved.
+- **#195** `47dc4b1`: agy APPROVED (task47).
 
 ## 9. GO/NO-GO checklist for the owner
 
@@ -840,7 +843,7 @@ Already GO, or owner decisions that do not block:
 | 16 | Provisional result after an AI grader failure: diagnostic attempts regradable in Draft #190 (section 8f); merge it after #188, or accept that such answers stay ungraded | open |
 | 17 | A practice attempt with a provisional result had no regrade | fixed in Draft #192 `fd0812f` (regrade inside the request with heartbeat; reload and result page keep it; 16 backend + 9 FE tests and 3 E2E, red first); open until #192 is merged |
 | 19 | Local E2E runs shared `BE/memory/mindmaps.sqlite` | fixed in Draft #191 `ac1a411` (own empty stores per start, no `.env`, only a local `*_test` database; 6 tests red first); open until #191 is merged |
-| 18 | "Tạo lại kế hoạch" deletes the old plan's practice history (10-step cascade, existed before V6) | implemented in Draft #194 (option B, section 8h): migration `20261118_review_item_archive` tested on disposable PostgreSQL only. **Open until the owner approves the migration and its deploy window, and #194 is merged** |
+| 18 | "Tạo lại kế hoạch" deletes the old plan's practice history (10-step cascade, existed before V6) | implemented in Draft #194 (option B, section 8h), migration tested on disposable PostgreSQL only. **Open**: (1) owner decision on a hard rollback floor (DB trigger or `rollback.sh` floor), Codex NO-GO without it; (2) migration approval and deploy window; (3) merge |
 | 20 | Inline LLM grading of the practice regrade on one sync gunicorn worker with a 120 s timeout | owner chose the background job: implemented in Draft #193 (section 8h); open until #193 is merged. Practice **submit** still grades inline (existed before V6): same risk, not changed |
 | 15 | PostgreSQL stages on the integrated tree | done: trial 10 (31 exact heads) and trial 11 (32 heads) on a disposable PostgreSQL 17.6, section 5 |
 | 11 | 6 pre-existing local backend failures accepted (environment, pass in CI) | open |
