@@ -60,6 +60,20 @@ os.environ.setdefault("GUIDED_MINDMAP_V3_ENABLED", "true")
 os.environ.setdefault("GUIDED_JOB_STORE_BACKEND", "sqlite")
 # Same ephemeral Postgres the rest of CI already uses (backend-integration-and-smoke).
 os.environ.setdefault("DATABASE_URL", "postgresql://postgres:postgres@localhost:5432/studymap_test")
+# Playwright hands the whole shell environment to this server, so a DATABASE_URL left in
+# the shell wins over the default above. E2E writes accounts, documents and attempts:
+# only a local database named *_test may receive them (Codex task39 191-1). No password
+# is printed.
+from urllib.parse import urlsplit
+_db = urlsplit(os.environ["DATABASE_URL"])
+_db_name = _db.path.lstrip("/")
+if _db.hostname not in {"localhost", "127.0.0.1", "::1"} or not _db_name.endswith("_test"):
+    sys.exit(f"[run_e2e_server] refusing DATABASE_URL (host={_db.hostname}, "
+             f"database={_db_name}): E2E needs a local database whose name ends in _test")
+# No .env: popping a variable below makes it "missing", which is exactly when
+# load_project_env(override=False) in app.main fills it from BE/.env, bringing back a
+# developer's real store paths or provider keys (Codex task39 191-2). CI has no .env.
+os.environ["SKIP_DOTENV"] = "1"
 os.environ.pop("GEMINI_API_KEY", None)
 os.environ.pop("GROQ_API_KEY", None)
 os.environ.pop("FPT_AI_API_KEY", None)
