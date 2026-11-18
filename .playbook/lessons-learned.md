@@ -3808,3 +3808,11 @@ the same primitives did not, so the lease silently became the limit of a regrade
 Reusing a fenced primitive means reusing its heartbeat too. And a page that rebuilds
 its state after a reload must read the same states it shows live (here: provisional),
 not a summary endpoint that filters them out.
+
+# A mounted flag must be set on every effect setup (2026-11-19, Codex task44)
+
+`useEffect(() => () => { ref.current = false }, [])` with `useRef(true)` works in tests
+and production but breaks under StrictMode, which runs setup, cleanup, setup: the flag is
+never set back. Set it in the setup body. And a component reused across route params
+needs an identity check (the param it started for) after every await, not only "still
+mounted".

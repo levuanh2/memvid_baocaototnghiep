@@ -3,14 +3,15 @@
 // thiếu" (POST /api/practice/<id>/regrade, graded inside the request). One request even
 // on a double click; the complete result replaces the provisional one; used-up retries
 // end the offer; a failed request keeps it.
-import { act } from "react";
+import { act, StrictMode } from "react";
 import { createRoot } from "react-dom/client";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import Practice from "./Practice";
 
 globalThis.IS_REACT_ACT_ENVIRONMENT = true;
 
-vi.mock("react-router-dom", () => ({ Link: ({ to, children, ...props }) => <a href={to} {...props}>{children}</a>, useParams: () => ({ quizId: "quiz-1" }) }));
+const params = { quizId: "quiz-1" };
+vi.mock("react-router-dom", () => ({ Link: ({ to, children, ...props }) => <a href={to} {...props}>{children}</a>, useParams: () => params }));
 vi.mock("../../components/study/StudyShell", () => ({ default: ({ loading, children, actions }) => <div>{actions}{loading ? "loading" : children}</div> }));
 const getPractice = vi.fn();
 const getPracticeComparison = vi.fn();
@@ -46,6 +47,7 @@ afterEach(() => {
   if (container) { document.body.removeChild(container); container = null; }
   vi.clearAllMocks();
   vi.useRealTimers();
+  params.quizId = "quiz-1";
 });
 const flush = async () => { await act(async () => { await Promise.resolve(); await Promise.resolve(); await Promise.resolve(); }); };
 // The page moves focus in a setTimeout(0) once the button is gone: wait one macrotask, not
@@ -231,5 +233,49 @@ describe("Practice — Chấm lại câu còn thiếu", () => {
     await tick(3000);
     expect(container.textContent).not.toContain("Kết quả tạm thời.");
     expect(regradePractice, "no second job from a reload").not.toHaveBeenCalled();
+  });
+
+  // Codex task44: the app renders in StrictMode (setup, cleanup, setup): the poller must
+  // survive it, or the button stays "Đang chấm lại…" for ever after a 202.
+  it("waits for the job under StrictMode too", async () => {
+    vi.useFakeTimers();
+    getPractice.mockResolvedValue(QUIZ);
+    getPracticeComparison.mockRejectedValue({ status: 409 });
+    container = document.createElement("div");
+    document.body.appendChild(container);
+    root = createRoot(container);
+    await act(async () => { root.render(<StrictMode><Practice /></StrictMode>); });
+    await flush();
+    submitPractice.mockResolvedValue(PROVISIONAL);
+    getPracticeComparison.mockResolvedValue({ concepts: [] });
+    const submitButton = [...container.querySelectorAll("button")].find((b) => b.textContent.includes("Nộp bài luyện tập"));
+    await act(async () => { submitButton.click(); });
+    await flush();
+    regradePractice.mockResolvedValue(PENDING);
+    getResult.mockResolvedValue({ ...COMPLETE, regrade_state: null });
+    await act(async () => { regradeButton().click(); });
+    await tick(3000);
+    expect(getResult).toHaveBeenCalled();
+    expect(container.textContent).not.toContain("Kết quả tạm thời.");
+    expect(regradeButton()).toBeUndefined();
+  });
+
+  // Codex task44: the route reuses the component when only the quiz id changes; a poll
+  // of the previous quiz must not write its result into the next one.
+  it("a poll of the previous practice quiz never writes into the next one", async () => {
+    vi.useFakeTimers();
+    await submitWith(PROVISIONAL);
+    regradePractice.mockResolvedValue(PENDING);
+    getResult.mockResolvedValue({ ...COMPLETE, regrade_state: null });
+    await act(async () => { regradeButton().click(); });
+    getPractice.mockResolvedValue({ ...QUIZ, title: "Quiz B", latest_attempt_id: null });
+    getPracticeComparison.mockRejectedValue({ status: 409 });
+    params.quizId = "quiz-2";
+    await act(async () => { root.render(<Practice />); });
+    await flush();
+    await tick(6000);
+    expect(getResult, "no read of the previous quiz's attempt").not.toHaveBeenCalled();
+    expect(container.textContent).toContain("Nộp bài luyện tập");
+    expect(container.textContent).not.toContain("2 / 2");
   });
 });

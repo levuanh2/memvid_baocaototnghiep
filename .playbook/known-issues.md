@@ -8482,3 +8482,11 @@ failed enqueue refunded, duplicate delivery grades once, diagnostic route refund
 `Practice.provisionalRegrade.test.jsx` +4 (wait, exhausted after the job, 5-minute bound,
 reload during the job), E2E `practice-provisional-regrade.spec.js` now expects 202 and
 exactly one job.
+
+**Review fixes (Codex task44):** the practice poller was stopped for ever under the app's
+`React.StrictMode` (setup, cleanup, setup left `mountedRef` false, so the button stayed
+"Đang chấm lại…" after a 202); the flag is now set on every setup. The route reuses the
+component when only the quiz id changes, so a wait for quiz A could write A's result into
+quiz B; every wait now checks the current quiz id after each await, and loading a quiz
+starts from a clean result/comparison/regrade state. Regression: 2 Vitest tests (StrictMode,
+quiz change), red first.

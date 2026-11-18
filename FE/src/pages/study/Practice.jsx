@@ -52,19 +52,30 @@ export default function Practice() {
   const banTamRef = useRef(null);
   const ketQuaRef = useRef(null);
 
+  // Set on every setup, not only at creation: StrictMode runs setup, cleanup, setup, and
+  // a flag left false stopped the poller after the 202 (Codex task44).
   const mountedRef = useRef(true);
-  useEffect(() => () => { mountedRef.current = false; }, []);
+  useEffect(() => {
+    mountedRef.current = true;
+    return () => { mountedRef.current = false; };
+  }, []);
+  // The route reuses this component when only the quiz id changes: a wait started for
+  // one quiz must never write into the next (Codex task44).
+  const quizRef = useRef(quizId);
+  quizRef.current = quizId;
 
   // The stored result once the job is no longer running; "stalled" past the bound; null
   // when the page went away. A few failed reads in a row end the wait with that error.
-  const choKetQuaChamLai = async (attemptId) => {
+  const choKetQuaChamLai = async (attemptId, cuaQuiz) => {
+    const conHieuLuc = () => mountedRef.current && quizRef.current === cuaQuiz;
     const batDau = Date.now();
     let truot = 0;
     while (Date.now() - batDau < REGRADE_STALL_MS) {
       await new Promise((r) => setTimeout(r, REGRADE_POLL_MS));
-      if (!mountedRef.current) return null;
+      if (!conHieuLuc()) return null;
       try {
         const r = await getResult(attemptId);
+        if (!conHieuLuc()) return null;
         truot = 0;
         if (r?.regrade_state !== "running") return r;
       } catch (e) {
@@ -81,10 +92,12 @@ export default function Practice() {
     setChamLai((s) => ({ ...s, dangGui: true, loi: null }));
     let xong = false;
     let het = false;
+    const cuaQuiz = quizId;
     try {
       let result = dangChay ? { grading: "pending" } : await regradePractice(quizId, graded.attempt_id);
+      if (quizRef.current !== cuaQuiz) return;
       if (result?.grading === "pending") {
-        result = await choKetQuaChamLai(graded.attempt_id);
+        result = await choKetQuaChamLai(graded.attempt_id, cuaQuiz);
         if (result === null) return;
         if (result === "stalled") {
           setChamLai({ dangGui: false, het: false, chuaXong: false,
@@ -112,6 +125,10 @@ export default function Practice() {
   const load = useCallback(async () => {
     setLoading(true);
     setError(null);
+    // A new quiz id starts clean: no result, comparison or regrade state of the last one.
+    setGraded(null);
+    setComparison(null);
+    setChamLai({ dangGui: false, loi: null, het: false, chuaXong: false });
     try {
       const body = await getPractice(quizId);
       setQuiz(body);
