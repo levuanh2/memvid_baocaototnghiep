@@ -283,8 +283,24 @@ test("right-side siblings and mixed branches retain source direction and order",
   expect(mixed.J.left).toBeGreaterThan(mixed.F.left);
 });
 
-test("all hierarchical auto-parent contract cases produce exact connected SVG identities", async ({ page }) => {
+test("all hierarchical auto-parent contract cases produce exact connected SVG identities", async ({ page }, testInfo) => {
+  // Nine full export cycles in one test (open the panel, select, download, re-render):
+  // median 20 s of the 45 s budget on an idle machine, so a loaded machine timed it out
+  // (trial 12 Fixture Audit run 1). The cases share nothing but the fixture page, and one
+  // failing case names itself (`case N`), so they stay one contract test with a tripled
+  // budget instead of being skipped or split. Each phase is timed and attached, so a
+  // future timeout shows which phase grew.
+  test.slow();
   fs.mkdirSync(OUT, { recursive: true });
+  const phases = [];
+  const timed = async (index, phase, fn) => {
+    const t0 = Date.now();
+    try {
+      return await fn();
+    } finally {
+      phases.push({ case: index + 1, phase, ms: Date.now() - t0 });
+    }
+  };
   const cases = [
     { explicit: ["A"], rendered: ["A"] },
     { explicit: ["A", "B"], rendered: ["A", "B", "E"] },
@@ -296,13 +312,21 @@ test("all hierarchical auto-parent contract cases produce exact connected SVG id
     { explicit: ["E"], rendered: ["E"] },
     { explicit: ["F"], rendered: ["F"] },
   ];
-  for (const [index, scenario] of cases.entries()) {
-    await openSelection(page, { zoom: index % 2 ? 0.69 : 0.86 });
-    const svg = await selectAndDownloadSvg(page, scenario.explicit, `contract-${index + 1}.svg`);
-    const actual = [...svg.matchAll(/data-nodeid="me([^" ]+)"/g)].map((match) => match[1]).sort();
-    expect(actual, `case ${index + 1}`).toEqual([...scenario.rendered].sort());
-    await page.setContent(svg);
-    expect(await page.locator("svg.lines path, svg.subLines path").count(), `connectors in case ${index + 1}`).toBe(scenario.rendered.length - 1);
+  try {
+    for (const [index, scenario] of cases.entries()) {
+      await timed(index, "open", () => openSelection(page, { zoom: index % 2 ? 0.69 : 0.86 }));
+      const svg = await timed(index, "select+download",
+        () => selectAndDownloadSvg(page, scenario.explicit, `contract-${index + 1}.svg`));
+      const actual = [...svg.matchAll(/data-nodeid="me([^" ]+)"/g)].map((match) => match[1]).sort();
+      expect(actual, `case ${index + 1}`).toEqual([...scenario.rendered].sort());
+      await timed(index, "render+check", async () => {
+        await page.setContent(svg);
+        expect(await page.locator("svg.lines path, svg.subLines path").count(), `connectors in case ${index + 1}`).toBe(scenario.rendered.length - 1);
+      });
+    }
+  } finally {
+    await testInfo.attach("phase-timings.json", {
+      body: JSON.stringify(phases, null, 2), contentType: "application/json" });
   }
 });
 
