@@ -161,7 +161,9 @@ CORS(
     # mindmap đã sửa (PUT /mindmaps/<id>).
     methods=["GET", "POST", "PUT", "PATCH", "DELETE", "OPTIONS"],
     # "Authorization" for Bearer-token auth (no cookie credentials in this phase).
-    allow_headers=["Content-Type", "Authorization"],
+    # "Idempotency-Key": optional on POST /api/practice/<id>/submit. Missing here, a
+    # cross-origin client sending it would fail the preflight (see PATCH above).
+    allow_headers=["Content-Type", "Authorization", "Idempotency-Key"],
 )
 
 
@@ -265,6 +267,18 @@ def _run_jobs_maintenance(force: bool = False) -> None:
             print(f"jobs_maintenance swept={swept} pruned={pruned} logs={logs} export_files_pruned={exported_files_pruned}", flush=True)
     except Exception:
         pass
+    # Diagnostic grading recovery: OFF unless GRADING_RECOVERY_ENABLED=1 (then a dry run
+    # unless GRADING_RECOVERY_DRY_RUN=0). Regrades go to background jobs, never this
+    # request thread; it has its own try so it can never break the sweep above.
+    try:
+        # Both names are defined further down this module; the startup call runs before
+        # them, so look them up at call time and skip until they exist.
+        from app.application import attempts as _attempts_uc
+        _dispatch = globals().get("_dispatch_grading")
+        if _dispatch is not None:
+            _attempts_uc.recover_grading(dispatch_grading=_dispatch)
+    except Exception as exc:
+        print(f"grading_recovery_failed err={type(exc).__name__}", flush=True)
 
 
 def _handle_sigterm(*_args):
@@ -4061,6 +4075,9 @@ _ATTEMPT_ERR_HTTP = {
     attempts_uc.AttemptDaNop: 409,
     attempts_uc.AttemptKhongConDangLam: 409,
     attempts_uc.AttemptChuaNop: 409,
+    attempts_uc.BaiLuyenTapSaiRoute: 409,
+    attempts_uc.HetLuotChamLai: 409,
+    attempts_uc.KhongCoCauChoChamLai: 409,
     attempts_uc.ThieuDapAn: 400,
     attempts_uc.CauHoiLac: 400,
     # Phase 2C
@@ -4073,6 +4090,9 @@ _ATTEMPT_ERR_HTTP = {
     practice_uc.PracticeKhongTonTai: 404,
     practice_uc.PracticeChuaSanSang: 409,
     practice_uc.ChuaCoLanChamNao: 409,
+    practice_uc.KhoaNopBaiKhongHopLe: 400,
+    practice_uc.KhoaNopBaiDaDung: 422,
+    practice_uc.NopBaiDangCham: 409,
     # Phase 2D
     jobs_uc.JobKhongTonTai: 404,
     jobs_uc.JobKhongHoTroHuy: 409,
@@ -4178,6 +4198,22 @@ def api_attempt_submit(attempt_id: str):
         return err
     try:
         data, cham_nen = attempts_uc.submit_attempt(
+            attempt_id, uid, bat_buoc_chu_so_huu=_auth_protect_enabled(),
+            dispatch_grading=_dispatch_grading)
+    except attempts_uc.AttemptError as exc:
+        return _attempt_err(exc)
+    return (jsonify(data), 202) if cham_nen else jsonify(data)
+
+
+@app.post('/api/attempts/<attempt_id>/regrade')
+def api_attempt_regrade(attempt_id: str):
+    """Chấm lại các câu tự luận mà bộ chấm AI chưa chấm được (kết quả tạm thời).
+    202 khi có job chấm lại, 200 khi không còn câu nào chờ, 409 khi hết lượt."""
+    uid, err = _require_app_user()
+    if err:
+        return err
+    try:
+        data, cham_nen = attempts_uc.regrade_provisional(
             attempt_id, uid, bat_buoc_chu_so_huu=_auth_protect_enabled(),
             dispatch_grading=_dispatch_grading)
     except attempts_uc.AttemptError as exc:
@@ -4327,20 +4363,37 @@ def api_practice_get(practice_quiz_id: str):
         return _attempt_err(exc)
 
 
+@app.post('/api/practice/<practice_quiz_id>/regrade')
+def api_practice_regrade(practice_quiz_id: str):
+    """Chấm lại các câu tự luận bộ chấm AI chưa chấm được của một bài luyện tập (kết quả
+    tạm thời). Chấm ngay trong request như khi nộp; 409 khi đang chấm hoặc hết lượt."""
+    uid, err = _require_app_user()
+    if err:
+        return err
+    attempt_id = ((request.json or {}).get("attempt_id") or "").strip()
+    if not attempt_id:
+        return jsonify({"error": "Thiếu attempt_id"}), 400
+    try:
+        return jsonify(practice_uc.regrade(
+            practice_quiz_id, uid, attempt_id, bat_buoc_chu_so_huu=_auth_protect_enabled()))
+    except attempts_uc.AttemptError as exc:
+        return _attempt_err(exc)
+
+
 @app.post('/api/practice/<practice_quiz_id>/submit')
 def api_practice_submit(practice_quiz_id: str):
-    """Nộp bài luyện tập trong MỘT lần gọi (FR-11.6, FR-11.7).
-
-    Luồng chẩn đoán tách mở/nháp/nộp vì người học làm dài và cần lưu nháp; bài luyện tập
-    ngắn nên gộp lại — vẫn đi qua đúng repository attempt để lịch sử thống nhất.
-    """
+    """Nộp bài luyện tập trong MỘT lần gọi (FR-11.6, FR-11.7). Chẩn đoán tách mở/nháp/nộp vì
+    bài dài cần lưu nháp; luyện tập ngắn nên gộp, vẫn qua đúng repository attempt."""
     uid, err = _require_app_user()
     if err:
         return err
     try:
+        body = request.json or {}
+        # Idempotency key, optional, header or body field (FE uses the body: no preflight).
         return jsonify(practice_uc.submit(
-            practice_quiz_id, uid, (request.json or {}).get("answers"),
-            bat_buoc_chu_so_huu=_auth_protect_enabled()))
+            practice_quiz_id, uid, body.get("answers"),
+            bat_buoc_chu_so_huu=_auth_protect_enabled(),
+            submit_key=request.headers.get("Idempotency-Key") or body.get("idempotency_key")))
     except attempts_uc.AttemptError as exc:
         return _attempt_err(exc)
 

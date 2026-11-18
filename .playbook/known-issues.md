@@ -8120,3 +8120,335 @@ off-screen button then matches the same role+name as the visible CTA.
 **Prevention:** hiding by transform, width, opacity or pointer-events is visual only; anything
 that stays mounted while hidden needs `inert`. Label tests should match the bare text, not one
 quoting style.
+
+
+### Two submits of one quiz at the same moment were both graded (2026-11-14)
+
+**Symptoms:** two requests that submit the same attempt (diagnostic) or the same practice
+quiz at almost the same time both returned 200 and both were graded: two grading runs, two
+mastery snapshots, and for practice two graded attempts. Two opens of one quiz created two
+`in_progress` attempts. Sending the same practice answers again right after the first
+response also created and graded a second attempt.
+
+**Root cause:** every step was read-then-write with no lock. `repository.submit` read
+`status == "in_progress"` with a plain `s.get` and then wrote `submitted`; `open_attempt`
+looked for an `in_progress` attempt and inserted one if none was found (no unique
+constraint); `practice.submit` always opened a fresh attempt, so even a sequential duplicate
+was a new attempt. The frontend ref locks (#162) only cover one tab and one click burst.
+
+**Fix:** `repository.submit` reads the attempt `FOR UPDATE`; `open_attempt` locks the quiz
+row before its lookup; `practice.submit` calls `repository.submit_practice`, which opens,
+fills and submits in one transaction under the quiz row lock and returns None (409, the
+existing "no longer in progress" error) when the same answers were submitted for that quiz
+by that learner in the last `PRACTICE_REPLAY_WINDOW_S` (30) seconds. No route, payload or
+status code changed.
+
+**Regression:** `BE/tests/test_attempt_submit_concurrency.py` (PostgreSQL only). The tests
+make two threads meet inside `repository._now()` (after the status read, before the
+write), so the race is forced, not hoped for. Red on `main`: all four fail (two 200s, two
+attempts, a second graded practice attempt). Green after, five repeated runs.
+
+**Prevention:** a status transition is a conditional write or a locked read, never a plain
+read followed by a write. A test for it must force the interleaving (a barrier between the
+read and the write); two threads started together usually run one after the other and pass.
+
+
+### Practice submit: a 30 s guess instead of idempotency, and attempts stuck `submitted` (2026-11-15)
+
+**Symptoms:** (1) #183 recognised a retried practice submit only by "same answers within
+30 s": a deliberate retake with identical answers got 409, and a retry after 30 s graded a
+second attempt. (2) When grading raised after the submit transaction had committed (LLM
+outage, bug, killed process) the attempt stayed `submitted` forever: the retry was a 409
+replay and no route graded it again (reproduced on `1d787f8`).
+
+**Root cause:** the server had no identity for "one logical submit", so it guessed from
+content and time; and grading ran outside the submit transaction with nothing recording
+who was grading or letting anyone take over.
+
+**Fix:** optional `idempotency_key` (body) / `Idempotency-Key` (header) on
+`POST /api/practice/<id>/submit`. The attempt row stores `submit_key` +
+`submit_fingerprint` (sha256 of quiz + answers) under a partial unique index
+`(user_id, submit_key)`, so the record lives exactly as long as the attempt and cannot
+expire into a regrade. Same key + same payload: the stored result (200, same body), never a
+second grading; same key + other payload: 422; still grading: 409 "Bài nộp này đang được
+chấm..." and the FE asks again with the same key. `grading_claimed_at` is the grading claim:
+released on an exception, taken over after `GRADING_LEASE_S`; `save_grades(once=True)` keeps
+a second grader from writing or re-running gap analysis. Keyless requests keep the #183
+window, but a replay of a stuck `submitted` attempt now grades it.
+
+**Regression:** `BE/tests/test_practice_idempotency.py` (PostgreSQL, barriers/events, no
+sleeps), `FE/src/pages/study/Practice.idempotency.test.jsx` (5 red on the old page).
+
+**Prevention:** an operation that may be retried needs a client-chosen identity stored
+with its result; time windows only guess. Any work done after the commit that marks a
+state needs a claim that a retry can see and, after a lease, take over.
+
+
+### Draft answers could change a graded attempt (2026-11-15)
+
+**Symptoms:** a draft save (`PATCH /api/attempts/<id>/answers`) arriving while the same
+attempt was being submitted could overwrite answers after submit and grading had committed;
+the score no longer matched the stored answers.
+
+**Root cause:** `attempts.save_answers` checked `status == "in_progress"` in one transaction
+and `save_draft_answers` wrote in another, without a lock or re-check.
+
+**Fix:** `save_draft_answers` takes the attempt row lock (`FOR UPDATE`, the one `submit`
+takes) and writes only while `in_progress`; otherwise the use case raises `AttemptDaNop`
+(409, as for a draft on a submitted attempt).
+
+**Regression:** `test_attempt_submit_concurrency.py::test_a_draft_save_that_loses_the_race_to_submit_changes_nothing`
+(red before: the late write landed).
+
+**Prevention:** a status check and the write it guards belong in one transaction under the
+row lock (same lesson as 2026-11-14).
+
+
+### #185 review: keyless dead grader, lost mastery, foreign release, stale FE keys (2026-11-15)
+
+Independent review (`task20-codex-185-review.md`) of the first #185 head. Fixed:
+- **Keyless dead grader never recovered:** the keyless retry looked only 30 s back, the claim
+  lasts 300 s. Now a `submitted` attempt with the same answers and an expired (or no) claim is
+  reclaimed at any age.
+- **Mastery lost between the score commit and gap analysis:** a same-key retry said `done`
+  forever with no mastery rows. A `done` retry and the practice comparison now repair it
+  (fail-open, as the generic concept-mastery route does).
+- **An old grader released a newer claim:** release now clears only the claim timestamp this
+  request set (`submit_practice` returns it).
+- **FE kept a spent key:** a 422 and a graded attempt found on reload now forget the key.
+- **Index build blocked writes:** `CREATE UNIQUE INDEX CONCURRENTLY` in an autocommit block.
+
+**Regression:** three PostgreSQL tests in `test_practice_idempotency.py`, two FE tests in
+`Practice.idempotency.test.jsx` (red on the previous head).
+
+Not fixed here (reported): diagnostic grading has no claim; anonymous keys are bearer
+tokens; generic attempt routes accept a practice quiz.
+
+### #185 migration: an interrupted CONCURRENTLY build passed as done (2026-11-16)
+
+**Root cause:** a `CREATE UNIQUE INDEX CONCURRENTLY` that fails half-way (lost connection,
+lock or statement timeout, a duplicate key) leaves the index in the catalog marked INVALID.
+It enforces nothing. The migration used `IF NOT EXISTS`, which checks only the name, so a
+rerun skipped it and Alembic stamped the revision: "one key per owner" silently not
+enforced. The same name check also accepts a hand-made index with the wrong definition, and
+nothing looked again once `alembic_version` was at head. A first fix (`2bb0c48`) dropped and
+rebuilt an invalid index automatically; that is not allowed on production.
+
+**Fix:** the migration builds the index only when absent, then proves it from `pg_index`
+(`shared/db_schema_checks.py`: schema, table, valid, ready, unique, btree, columns
+`(user_id, submit_key)`, predicate `submit_key IS NOT NULL`) and raises otherwise, so the
+revision is not stamped. It never drops or rebuilds an existing index. `deploy.sh` step 5b
+runs the read-only `python -m scripts.verify_db_schema --moi-truong production` after the
+migration and before `compose up`; on failure the deploy dies and the old backend keeps
+serving. Recovery is manual: `docs/RUNBOOK_SUBMIT_KEY_INDEX.md`.
+
+**Regression:** `tests/test_attempt_submit_key_migration.py` (real faults: lock_timeout
+interruption, duplicate key, four wrong definitions, index dropped at head; red on
+`2bb0c48`), `scripts/tests/test_deploy_pinning.sh` (order migration, verify, up; a failed
+verify never activates or downgrades), two mutations in `test_deploy_guard_mutations.sh`.
+
+**Prevention:** check `indisvalid`/definition from the catalogs after any concurrent index
+build, in the migration and again at deploy time.
+
+### #185 test harness: submit-key migration tests broke on a Windows console (2026-11-16)
+
+**Root cause:** `_run` in `BE/tests/test_attempt_submit_key_migration.py` called
+`subprocess.run(text=True)` with no encoding. On Windows the parent decodes the child's
+output as cp1252; the scripts print Vietnamese, the reader thread dies with
+`UnicodeDecodeError` (byte 0x9d), `stdout` is `None` and `result.stdout + result.stderr`
+raises `TypeError`. Six tests failed that way. The runbook test then stopped before its
+repair steps with duplicate keys still in the table, the `db` fixture teardown could not
+rebuild the unique index (`UniqueViolation`), and the INVALID index it left made two tests in
+other files fail. Product code was never involved; CI (Linux, UTF-8) passed.
+
+**Fix:** `_run` passes `encoding="utf-8", errors="replace"` (the pattern of
+`test_production_migration_contract.py`) and `PYTHONUTF8=1` to the child. The fixture
+teardown resets `lock_timeout` and clears duplicate keys (keeps the first per owner, test
+database only) before rebuilding the index.
+
+**Regression:** on a cp1252 console, no `PYTHONUTF8`: before 6 failed + 1 error in the file,
+after 155 passed across the ten migration/idempotency/concurrency files and
+`test_guided_postgres_store.py`. A copy of the runbook test made to fail right after the
+duplicate keys: old fixture -> teardown ERROR and the practice idempotency test fails; new
+fixture -> no teardown error, the next tests pass, verifier says valid. Logs:
+`studymap-qa-execution/v6/results/185-harness/`.
+
+### Diagnostic attempts stuck in `submitted`; two graders on one attempt (2026-11-17)
+
+**Root cause:** `submit_attempt` committed `submitted` before grading. A crash or a grading
+error in between left the attempt there for good: a second submit answered 409, nothing
+swept attempts, and the result page only said "stuck" after 5 minutes. Both diagnostic
+graders used `grade_attempt(once=False)`, so a duplicated or retried job wrote scores
+twice (last wins) and ran gap analysis twice. Mastery rows were NOT doubled
+(`analyze_attempt` rewrites the per-attempt snapshot). A process dying between the score
+commit and gap analysis left a graded attempt with no mastery.
+
+**Fix (owner-approved scope):** the claim of #185 (`grading_claimed_at`, lease) is taken at
+submit and returned; a retry reclaims a free/expired claim (`reclaim_for_retry`), answers
+202 while a grader holds it or its job is queued, 200 with the STORED result for a graded
+attempt (mastery rebuilt if missing, no LLM). Jobs are fenced (`start_grading_job`): only
+the registered job grades; a stale or duplicated job ends as a no-op BEFORE any model
+call. A failed enqueue forgets the job, releases the claim and refunds the retry. Learner
+retries are capped per attempt (`GRADING_MANUAL_RETRY_MAX`, 3) on the diagnostic AND the
+practice route. The generic route refuses practice quizzes. A recovery sweep exists but
+is OFF (`GRADING_RECOVERY_ENABLED`), dry-run by default, batch/attempts/inflight capped,
+one budget across processes (advisory lock), enqueue-only. `grading_state` in results
+drives the FE "Thử chấm lại".
+
+**Regression:** `tests/test_diagnostic_grading_recovery.py` (29; 5 red on `5e18271`, 8
+more red on the first implementation after Codex's review), FE
+`QuizResult.retryGrading.test.jsx` (9; 6 red on the old page).
+
+# A provisional result (AI grader outage) could never be regraded (fixed 2026-11-17)
+
+**Symptom:** when the model failed on a short answer, grading still finished: the
+attempt became `graded` with `ungraded_count > 0`, `grading_complete = false`, and the
+page said "Kết quả tạm thời". Nothing could ever grade those answers again: a submit of
+a graded attempt answers 200 with the stored result, and #188's "Thử chấm lại" exists
+only for a `submitted` attempt whose grading job died. The attempt stayed out of
+progress and completion for good. #189 makes a slow provider hit its real deadline, so
+this state can become more frequent.
+
+**Root cause:** recovery was designed around one failure (a dead grading job) and the
+claim/fencing code gated everything on `status == "submitted"`. A second, more common
+failure (the model fails, the job succeeds) ends in a different state that no path
+handled. Also, `save_grades` left `grading_claimed_at` and `grading_job_running` set
+after writing the result, which made any later claim look live for the lease.
+
+**Fix:** `POST /api/attempts/<id>/regrade` (`regrade_provisional`). Under the row lock
+`reclaim_for_regrade` takes the claim, counts one `manual_retries` (same cap as #188) and
+registers `regrade_job_id` in the same transaction, so a concurrent request answers 202
+with that job. Only that job may regrade (`start_grading_job` returns "regrade"; the
+job that produced the provisional result, redelivered, returns "done"). The job grades
+only answers with `verdict IS NULL` and `save_regrade` writes them, the totals and
+`ungraded_count` in one transaction, never touching an answer that has a verdict or any
+`user_answer`; gap analysis reruns (snapshot overwrite). The attempt stays `graded`
+throughout: the provisional result is visible until a better one replaces it. 200 when
+nothing is left, 409 `HetLuotChamLai` when retries are used up (result kept), 404 for
+another learner, 409 `KhongCoCauChoChamLai` when the attempt is not graded. `save_grades`
+now ends the claim. The result page shows "Chấm lại câu còn thiếu" on
+`regrade_state == "available"` and polls while it is "running".
+
+**Review fixes (Codex task34):** (1) a regrade job that ended (model failed again, or
+it crashed) kept `regrade_job_id`, so the queue delivering the same job again ran a
+second, uncounted regrade: `release_job_claim` now retires the registration with the
+job. (2) Scores were published before the gap analysis ran: the job now holds the claim
+until its analysis is written and releases it last (`save_grades` / `save_regrade` no
+longer end it), `regrade_state` stays "running" through the analysis, and a regrade
+cannot start while the first grading still analyses. (3) A review plan built from a
+provisional result was cached and outlived the regrade: `review_plans.generate` refuses
+a provisional attempt while a regrade can still change it (409), and the result page
+offers no plan link then. Owner decision 2026-11-17, revised the same day: the
+first rule (a plan only once the retries were used up) made a learner spend up to three
+paid regrades, even during an outage, to get a plan, and the page did not say why. Now a
+plan is built from the graded answers whenever no regrade is running (409 only while one
+is queued or running); plan responses carry `ungraded_count`, the review page says the
+plan covers only the graded answers, and a later regrade that changes the result marks it
+`outdated`. A plan is written only under the attempt's row lock (the lock a regrade takes to
+write its result), and only if `graded_at` is still the one the plan was built from and no
+grader holds the claim; otherwise 409 (Codex task34 re-check 3: a regrade starting during
+the up-to-120 s model call could otherwise leave a stale plan labelled current). Existing plans are left as they are (deleting
+one cascades to practice quizzes).
+Practice attempts are out of scope: their route refuses a regrade (open item, #159).
+
+**Re-check fixes (Codex task34 re-check):** a plan built before a regrade changed the
+result is returned with `outdated: true` (plan `created_at` < attempt `graded_at`) and
+the review page says its topics may not match the new result; synchronous grading
+(objective-only, inline) ends its claim in `save_grades` again (only a grading job keeps
+it until its analysis). "Tạo lại kế hoạch" already deleted the old plan and, through the
+FK cascade, its practice quizzes and their attempts, without asking: it now asks first
+(`DestructiveConfirmDialog`, owner decision 2026-11-17), and the outdated note does not
+point the learner at it.
+
+**UX fixes (agy task35):** the banner's button sat beside the text with `shrink-0`: at
+320px the explanation was a 41px column (measured in Chromium). It now sits below the
+text; E2E checks the text is wider than 200px at 320px and nothing scrolls sideways (the
+check fails on the old layout). One live region (the text paragraph; the spinner is
+`aria-hidden`), the button outside it, focus moves to the text when the button goes
+away, the 409 message is not stacked on the used-up message, and an ungraded answer's
+badge uses the muted colour instead of the incorrect red. Kept: the name "Chấm lại câu
+còn thiếu" (it regrades missing answers; "Thử chấm lại" retries a stuck grading). Not a
+deadlock (F8): after the 5-minute stall note, "Chờ thêm" asks the server again, which
+reports "available" once the lease of a dead regrade has expired.
+
+**Regression:** `BE/tests/test_provisional_grading_recovery.py` (23, PostgreSQL),
+`FE/src/pages/study/QuizResult.provisionalRegrade.test.jsx` (11),
+`FE/e2e/quiz-provisional-regrade.spec.js` (4, real backend, fake grader that fails once
+then succeeds; both auth modes).
+
+**Prevention:** when a recovery path is added, list every terminal state a failure can
+end in, not only the one that was reported. A result write must also end the claim that
+fenced it.
+
+**Test isolation note:** the recovery-sweep tests in `test_diagnostic_grading_recovery.py`
+take the oldest stuck attempts of the whole database. On a database reused across runs,
+stuck attempts left by earlier runs (aged 30 days) fill the batch and three sweep tests
+fail (also on #188 alone). They pass on a fresh database (CI). Scope the sweep tests'
+candidates if this database reuse becomes common.
+
+# A provisional practice result could never be regraded (fixed 2026-11-18, #159 item 17)
+
+**Symptom:** practice grades inside the submit request. When the model failed on a short
+answer the attempt became `graded` with `ungraded_count > 0` ("N câu chưa chấm được"),
+the same Idempotency-Key returned that stored provisional result, and #190's regrade
+route refuses practice attempts: the answer stayed ungraded for good.
+
+**Root cause:** #190 fixed the diagnostic route only; practice has its own route,
+synchronous grading and key rules.
+
+**Fix:** `POST /api/practice/<id>/regrade` (`practice.regrade`), synchronous like the
+submit. It reuses #190's primitives with a per-request token: `reclaim_for_regrade`
+(claim + `manual_retries` cap + token registration in one transaction),
+`start_grading_job` (role "regrade"), `regrade_ungraded` (only `verdict IS NULL`, never
+`user_answer` or a graded answer) and `release_job_claim` after the gap analysis. 200
+with the stored attempt (also when nothing is left), 409 `NopBaiDangCham` while another
+request regrades, 409 `HetLuotChamLai` when retries are used up (no model call), 404 for
+another learner or an attempt of another quiz. The submit's Idempotency-Key contract is
+unchanged (no attempt opened, no answer written). Practice page: "Chấm lại câu còn
+thiếu" under a provisional score. No schema change.
+
+**UX review fixes (agy task38):** the used-up 409 now carries a stable machine field
+`ma: "het_luot_cham_lai"` (additive; the message is unchanged, also on the diagnostic
+route) and `_appError` keeps the response body, so the page no longer matches wording;
+the banner matches #190 (warn border, icon, "Kết quả tạm thời.", the exact count) on its
+own row of the flex-wrap score card; a regrade that grades nothing says so; focus moves
+to the banner text or the score card when the button goes away.
+
+**Regression:** `BE/tests/test_practice_provisional_regrade.py` (12, red first),
+`FE/src/pages/study/Practice.provisionalRegrade.test.jsx` (6, red first).
+
+**Review fixes (task39: owner checks of timeout, lease, aborted request, concurrent
+retries, reload after used-up retries, duplicate model calls):**
+- *No heartbeat inside the request.* `practice.regrade` called `regrade_ungraded`
+  without `progress_cb`, so its claim was never renewed between answers. A regrade
+  longer than `grading_lease_s()` (several answers at `GRADE_LLM_TIMEOUT_SEC` + queue
+  wait) let a second request reclaim and pay for the same answers again, while the
+  first kept calling the model (its write was already fenced off). Now it renews before
+  each model call, as the grading job does, and answers 409 `NopBaiDangCham` once its
+  claim was taken over, before the next call.
+- *Takeover during the last model call* (agy task40): no heartbeat follows it, so the
+  takeover shows only when `save_regrade` refuses the write. The request then answered
+  200 with the unchanged provisional result and "thử thêm" while the other request was
+  still grading. It now answers 409 `NopBaiDangCham` too.
+- *Reload lost the provisional result.* The comparison counts complete results only
+  (409 while provisional), so a reload showed the empty quiz: no "Kết quả tạm thời", no
+  regrade offer, no word that retries were used up. `GET /api/practice/<id>` now adds
+  `latest_attempt_id` (latest graded attempt, provisional too; additive) and the page
+  reloads that result, its offer, or "Đã hết lượt chấm lại".
+- *Result page dead end.* A provisional practice attempt opened from "Bài đã làm gần
+  đây" lands on the generic result page, which offered "Chấm lại câu còn thiếu" and
+  posted to `/api/attempts/<id>/regrade`; that route refused practice with a developer
+  message, every time. It now hands practice attempts to `practice.regrade` (inside the
+  request, 200).
+- *Not changed, owner risk:* production runs one sync gunicorn worker with
+  `GUNICORN_TIMEOUT=120` while one grading call may take `GRADE_LLM_TIMEOUT_SEC` (120) +
+  queue wait. An inline grading (practice submit, and now practice regrade) can hold
+  the only worker and be aborted; the claim then expires after the lease and the used
+  retry is not refunded. Pre-existing for practice submit.
+
+**Regression:** `test_practice_provisional_regrade.py` +3 (lost claim stops before the
+next model call; result-page route regrades practice; the page finds a provisional
+result again), `Practice.provisionalRegrade.test.jsx` +3 (reload), new E2E
+`FE/e2e/practice-provisional-regrade.spec.js` (3, real Flask + PostgreSQL + browser,
+fake grader; `run_e2e_server.py` now stubs practice question generation too). All red
+first except the E2E, written after the unit reds.

@@ -3719,3 +3719,92 @@ Rules: check icons and logos when a rename is reported incomplete; serve a chang
 new URL (browsers cache favicons per URL); a static SVG cannot read CSS variables, so pin its
 colour to the token value and test that they stay equal; comments quoting the retired name trip
 the branding test, so describe it without naming it.
+
+
+## 2026-11-14 — A frontend double-submit lock is not idempotency
+
+A ref lock stops one tab from sending twice. It does nothing for a second tab, a retried
+request or a proxy replay, and the server then graded twice because its status check was a
+plain read followed by a write. Guard the transition where the data lives (row lock or
+conditional update), and prove it with a test that parks both threads between the read and
+the write; without that barrier the race test passes on the broken code.
+
+
+## 2026-11-15 — Store the idempotency key on the row it created
+
+A separate idempotency table needs its own expiry, and an expired record turns the next
+retry into a fresh operation. Putting the key on the attempt itself ties its lifetime to the
+result and lets one partial unique index do the deduplication. Send it in the body when web
+and API are on different origins: a new header needs the CORS allowlist deployed first.
+
+
+## 2026-11-16 — `IF NOT EXISTS` is not "exists and works" for a CONCURRENTLY index
+
+A concurrent index build that fails leaves an INVALID index behind under the right name.
+Any idempotent guard that checks the name only (`IF NOT EXISTS`, `to_regclass`) then treats
+a useless index as done. Check the definition in `pg_index` (valid, ready, unique, columns,
+predicate), fail the migration if it is wrong, and check again at deploy time: once
+`alembic_version` is at head the revision never runs again. Repairing an index on production
+(DROP/REINDEX) is a manual, approved step, not something a migration does on its own.
+
+
+## 2026-11-16 — A test teardown must undo what a failed test can leave behind
+
+Teardown code runs after a failed test, but only works if it does not depend on the test
+having reached its end. A fixture that rebuilds a unique index must first remove the
+duplicates a half-finished test may have left, or one failure turns into errors in other
+files. And any `subprocess.run(text=True)` that reads Vietnamese output needs
+`encoding="utf-8"`: the Windows default is cp1252.
+
+
+## 2026-11-17 — A claim that only fences the final write still pays twice
+
+`save_grades(once=True)` stopped a second grader from writing, but only after it had
+called the model for every answer. Fence the expensive part: decide who the grader is
+before the work starts (register the job under the claim, refuse a stale or duplicated
+job at start), and give back what a failure did not use (claim, retry count) so a retry
+is neither blocked by a ghost job nor charged for work that never ran.
+
+## 2026-11-17 — An E2E that needs a stub must prove the stub is there
+
+Writing `FE/e2e/quiz-grading-recovery.spec.js` (QuizResult 202/200/409 against the real
+backend) hit three wrong assumptions, and Codex task33 found five weaknesses:
+
+- **A failing model call does not stall an attempt.** `grade_short_answer` turns a
+  provider error into "ungraded", and the attempt is graded. Only a grading *job* that
+  dies leaves it `submitted` with no live claim ("stalled"). The E2E stub got a separate
+  crash marker that raises outside the model call.
+- **The fake ingest writes FAISS only.** Quizzes read `document_chunks` (PostgreSQL), and
+  the public `status` stays `processing` (`ingest_status` is the pipeline state). The
+  diagnostic stub seeds one chunk with `ON CONFLICT DO NOTHING`; a check-then-insert lost
+  a race on `uq_document_chunks_doc_index` under concurrent jobs.
+- **`reuseExistingServer` ignores `webServer.env`.** Locally, Playwright reuses any healthy
+  process on the port, so a dev backend with provider keys would get the spec's quiz and
+  grading calls. The spec now requires `GET /__e2e__/stubs` (only `run_e2e_server.py`
+  serves it) in `beforeAll`; stub env is set after `...process.env` so the shell cannot
+  turn it off.
+- "200 = nothing regraded" needs a counter, not equal fields (the stub is
+  deterministic); a cumulative response listener can credit a duplicate request to the
+  next click — wait per click and count at the end; a 1 s transient UI state is a race.
+
+Regression: the spec itself (2 tests, both auth modes); the guard was checked with an
+unrelated healthy server on :8080 (spec refused before any quiz call).
+
+## 2026-11-17 — Vitest "all tests passed" is not a pass: read the exit code
+
+PR #190 CI failed with `Test Files 233 passed` and six `##[error] No "regradeAttempt"
+export is defined on the "../../utils/studyApi" mock`. `QuizResult.thuChamLai` compared
+`gui === regradeAttempt`, which reads the export even on the old "Thử chấm lại" path;
+the older QuizResult test files mock `studyApi` without it. Vitest reports such an access
+as an unhandled error after the tests and exits 1. The local check grepped only the
+"Tests" line, so it looked green. Fix: an explicit `{ focusBanner }` option instead of
+comparing functions. Prevention: judge a run by its exit code (`echo $?`), not by
+grepping the summary line; and do not read a module export on a path that does not use it.
+
+# A claim needs its heartbeat wherever the grader runs (2026-11-18, task39)
+
+The job path renewed its claim before each model call; the in-request path that reused
+the same primitives did not, so the lease silently became the limit of a regrade.
+Reusing a fenced primitive means reusing its heartbeat too. And a page that rebuilds
+its state after a reload must read the same states it shows live (here: provisional),
+not a summary endpoint that filters them out.

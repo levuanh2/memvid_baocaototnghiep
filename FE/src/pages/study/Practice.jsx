@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useState, useRef } from "react";
 import { Link, useParams } from "react-router-dom";
 import StudyShell from "../../components/study/StudyShell";
 import SealMeter from "../../components/study/SealMeter";
@@ -10,10 +10,21 @@ import {
   formatScore,
   getPractice,
   getPracticeComparison,
+  getResult,
   optionLabel,
+  regradePractice,
   submitPractice,
   moTaLoi,
 } from "../../utils/studyApi";
+
+// The machine code of HetLuotChamLai (BE/app/application/attempts.py): no regrade is
+// left, so the offer ends. Any other failure (network, "đang được chấm") keeps it.
+const HET_LUOT_CHAM_LAI = "het_luot_cham_lai";
+import { DANG_CHAM, forgetSubmitKey, submitKeyFor } from "../../utils/practiceSubmitKey";
+
+// The first request is still grading (BE 409 DANG_CHAM): ask again with the SAME key.
+const CHO_CHAM_MS = 2000;
+const SO_LAN_HOI_LAI = 5;
 
 const KEYS = ["A", "B", "C", "D", "E", "F"];
 
@@ -26,6 +37,38 @@ export default function Practice() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
   const [submitting, setSubmitting] = useState(false);
+  const submitKeyMemo = useRef(null);
+  // "Chấm lại câu còn thiếu": one request at a time, even on a double click.
+  const chamLaiRef = useRef(false);
+  const [chamLai, setChamLai] = useState({ dangGui: false, loi: null, het: false, chuaXong: false });
+  // Focus lands here when the button goes away (agy task38): the banner text while the
+  // result stays provisional, the score card once it is complete.
+  const banTamRef = useRef(null);
+  const ketQuaRef = useRef(null);
+
+  const chamLaiCauThieu = async () => {
+    if (chamLaiRef.current || !graded?.attempt_id) return;
+    chamLaiRef.current = true;
+    setChamLai((s) => ({ ...s, dangGui: true, loi: null }));
+    let xong = false;
+    let het = false;
+    try {
+      const result = await regradePractice(quizId, graded.attempt_id);
+      setGraded(result);
+      xong = result?.grading_complete !== false && Number(result?.ungraded_count || 0) === 0;
+      setChamLai({ dangGui: false, loi: null, het: false, chuaXong: !xong });
+    } catch (e) {
+      het = e?.status === 409 && e?.body?.ma === HET_LUOT_CHAM_LAI;
+      setChamLai({ dangGui: false, loi: het ? null : moTaLoi(e, "Chưa chấm lại được."),
+                   het, chuaXong: false });
+    } finally {
+      chamLaiRef.current = false;
+    }
+    if (xong || het) {
+      // The button is gone: keep the keyboard where the news is.
+      setTimeout(() => (xong ? ketQuaRef : banTamRef).current?.focus(), 0);
+    }
+  };
 
   const load = useCallback(async () => {
     setLoading(true);
@@ -34,10 +77,30 @@ export default function Practice() {
       const body = await getPractice(quizId);
       setQuiz(body);
       // Đã làm rồi thì vào thẳng phần so sánh, không bắt làm lại từ đầu.
+      let cmp = null;
       try {
-        setComparison(await getPracticeComparison(quizId));
+        cmp = await getPracticeComparison(quizId);
+        setComparison(cmp);
+        // A graded attempt exists (perhaps the one whose response was lost): its key is
+        // spent, the next attempt needs a new one.
+        forgetSubmitKey(quizId, submitKeyMemo);
       } catch (e) {
         if (e?.status !== 409) throw e;
+      }
+      // After a reload a provisional result must stay provisional, with its regrade
+      // offer or the news that retries are used up (task39). Best effort: the
+      // comparison above is already on screen if this read fails.
+      // The comparison counts complete results only (409 while provisional): the quiz
+      // names its latest graded attempt, provisional or not.
+      const latest = body?.latest_attempt_id || cmp?.practice_attempt_id;
+      if (latest) {
+        try {
+          const r = await getResult(latest);
+          if (r?.grading_complete === false || Number(r?.ungraded_count || 0) > 0) {
+            setGraded(r);
+            setChamLai((c) => ({ ...c, het: r.regrade_state === "exhausted" }));
+          }
+        } catch { /* the comparison alone, as before */ }
       }
     } catch (e) {
       setError(moTaLoi(e, "Không tải được bài luyện tập."));
@@ -60,7 +123,19 @@ export default function Practice() {
     setError(null);
     try {
       // Bài luyện ngắn: nộp trong MỘT lần gọi, không cần lưu nháp từng câu.
-      const result = await submitPractice(quizId, answers);
+      // Same answers = same key: a retry after an error gets the result already graded.
+      const idempotencyKey = submitKeyFor(quizId, answers, submitKeyMemo);
+      let result;
+      for (let lan = 0; ; lan += 1) {
+        try {
+          result = await submitPractice(quizId, answers, { idempotencyKey });
+          break;
+        } catch (e) {
+          if (e?.status !== 409 || e?.message !== DANG_CHAM || lan >= SO_LAN_HOI_LAI) throw e;
+          await new Promise((r) => setTimeout(r, CHO_CHAM_MS));
+        }
+      }
+      forgetSubmitKey(quizId, submitKeyMemo);
       setGraded(result);
       // Nộp XONG rồi. So sánh trước/sau chỉ là phần trang trí thêm — hỏng nó mà báo
       // "Nộp bài luyện tập thất bại" thì dòng đỏ đó nằm ngay trên điểm số vừa hiện.
@@ -70,6 +145,9 @@ export default function Practice() {
         setComparison(null);
       }
     } catch (e) {
+      // 422: the stored key belongs to another answer set; keeping it would repeat the
+      // same refusal on every retry.
+      if (e?.status === 422) forgetSubmitKey(quizId, submitKeyMemo);
       setError(moTaLoi(e, "Nộp bài luyện tập thất bại."));
     } finally {
       setSubmitting(false);
@@ -105,7 +183,8 @@ export default function Practice() {
       {!quiz ? null : (
         <>
           {graded && (
-            <section className="surface-card mb-6 flex flex-wrap items-center gap-6">
+            <section ref={ketQuaRef} tabIndex={-1} aria-label="Kết quả bài luyện tập"
+              className="surface-card mb-6 flex flex-wrap items-center gap-6">
               <div className="flex items-center gap-4">
                 <SealMeter
                   score={(graded.percentage ?? 0) / 100}
@@ -136,6 +215,40 @@ export default function Practice() {
                   </div>
                 </div>
               </div>
+              {provisional && (
+                // Same banner as the diagnostic result page (#190), on its own row of the
+                // flex-wrap score card (w-full), the button below the text.
+                <div className="w-full flex items-start gap-2.5 rounded-md border p-3"
+                  style={{ borderColor: "var(--warn)" }}>
+                  <Icon name="AlertCircle" size={16} className="shrink-0 mt-0.5" />
+                  <div className="min-w-0 flex-1">
+                    <p ref={banTamRef} tabIndex={-1} role="status" className="text-body text-text-secondary">
+                      <strong className="text-text-primary">Kết quả tạm thời.</strong>{" "}
+                      {ungradedCount} câu tự luận chưa chấm được do bộ chấm AI không khả dụng.
+                      Các câu này không bị tính là sai.
+                      {chamLai.chuaXong && !chamLai.het && (
+                        <span className="block mt-1.5">
+                          Lần chấm lại vừa rồi chưa chấm được các câu này. Bạn có thể thử thêm.
+                        </span>
+                      )}
+                      {chamLai.het && (
+                        <span className="block mt-1.5">
+                          Đã hết lượt chấm lại cho bài này. Kết quả tạm thời được giữ nguyên.
+                        </span>
+                      )}
+                      {chamLai.loi && (
+                        <span className="block text-small mt-1" style={{ color: "var(--err)" }}>{chamLai.loi}</span>
+                      )}
+                    </p>
+                    {!chamLai.het && (
+                      <button type="button" className="btn-secondary text-small mt-2.5"
+                        onClick={chamLaiCauThieu} disabled={chamLai.dangGui} aria-busy={chamLai.dangGui}>
+                        {chamLai.dangGui ? "Đang chấm lại…" : "Chấm lại câu còn thiếu"}
+                      </button>
+                    )}
+                  </div>
+                </div>
+              )}
             </section>
           )}
 
