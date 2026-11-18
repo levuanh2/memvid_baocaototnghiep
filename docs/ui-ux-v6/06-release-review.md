@@ -793,7 +793,7 @@ every finding was verified, then fixed red-first or handed to the owner.
 New E2E: `FE/e2e/practice-provisional-regrade.spec.js` (3 tests, real Flask + PostgreSQL +
 browser, fake grader; practice question generation stubbed in `run_e2e_server.py`): local
 open auth 3/3, protected auth 9/9 together with both diagnostic regrade specs. Reviews:
-agy APPROVED both (task43); Codex re-check: pending: the task42 prompt waits in Codex's pane for the owner (my Enter key press was blocked); its task39 findings are all closed or handed to the owner.
+agy APPROVED both (task43); Codex re-check: done (task42): #191 PASS; #192 CONDITIONAL PASS FOR MERGE (192-1, 192-4 and the result-page route closed; 192-2 and 192-3 open for the owner).
 
 ## 9. GO/NO-GO checklist for the owner
 
@@ -826,7 +826,7 @@ Already GO, or owner decisions that do not block:
 | 17 | A practice attempt with a provisional result had no regrade | fixed in Draft #192 `fd0812f` (regrade inside the request with heartbeat; reload and result page keep it; 16 backend + 9 FE tests and 3 E2E, red first); open until #192 is merged |
 | 19 | Local E2E runs shared `BE/memory/mindmaps.sqlite` | fixed in Draft #191 `ac1a411` (own empty stores per start, no `.env`, only a local `*_test` database; 6 tests red first); open until #191 is merged |
 | 18 | "Tạo lại kế hoạch" deletes the old plan's practice history (10-step cascade, existed before V6) | owner chose option B (archive, keep history, no new practice from archived topics). Design in `task41-issue18-archived-at-migration-design.md`: `archived_at` column **plus replacing `uq_review_plan_items_priority` by a partial unique index** (the first audit missed it), `created_at` moves on regeneration; nothing run. **Migration approval and a deploy window needed** |
-| 20 | Inline LLM grading (practice submit, practice regrade) on one sync gunicorn worker with a 120 s timeout | owner decision: background job with 202 + polling (recommended), or more/threaded workers and a timeout above the worst serial grading; not a merge blocker for #192, which adds a second path to an existing risk |
+| 20 | Inline LLM grading (practice submit, practice regrade) on one sync gunicorn worker with a 120 s timeout | owner decision: background job with 202 + polling (recommended), or more/threaded workers and a timeout above the worst serial grading. Not a merge blocker for #192 (Codex task42), but **a production-rollout blocker for inline regrade under the current one-worker / 120 s deployment** unless the owner explicitly accepts the outage/abort risk; the same risk already applies to practice submit. Decide together with 192-3 (a retry stays spent when the worker dies) |
 | 15 | PostgreSQL stages on the integrated tree | done: trial 10 (31 exact heads) and trial 11 (32 heads) on a disposable PostgreSQL 17.6, section 5 |
 | 11 | 6 pre-existing local backend failures accepted (environment, pass in CI) | open |
 | 12 | Windows test-harness fix | done in #185 `5e18271` (section 4b) |
@@ -843,7 +843,7 @@ Kept apart, as the owner asked:
 | Known local failures (pass in CI) | 6: `test_index_khoa_that` x5 need a real Redis; `test_fpt_rerank` x1 |
 | Skipped tests | 9: evaluation datasets not in git (3), NKS credentials (2), Supabase Storage (1), real Redis (1), load test (1), live vision (1) |
 | Not accepted (not run) | Firefox, WebKit, real devices, screen reader; any hosted environment; the owner's production backup and restore tests |
-| Code reviews of #191/#192 | done, section 8g: agy APPROVED both (task43); Codex re-check pending: the task42 prompt waits in Codex's pane for the owner (my Enter key press was blocked); its task39 findings are all closed or handed to the owner. Open for the owner: item 20 (inline grading on one worker) |
+| Code reviews of #191/#192 | done, section 8g: agy APPROVED both (task43); Codex re-check done (task42): #191 PASS; #192 CONDITIONAL PASS FOR MERGE (192-1, 192-4 and the result-page route closed; 192-2 and 192-3 open for the owner). Open for the owner: item 20 (inline grading on one worker) |
 | Fixture Audit trial 12 run 1 | kept as failed (2): triage `integration-34-trial12/triage-mindmap-timeouts.md`: `exact-node-export-v3` contract test is budget-bound (median 20 s of 45 s; split or `test.slow()` proposed); `current-branch ... opposite side` stalled on a download under load, not reproduced in 22 runs, **open** |
 | Production | **NO-GO**: the seven blocking items of section 9 (3, 4, 6, 7, 8, 13, 14) have no evidence yet |
 
