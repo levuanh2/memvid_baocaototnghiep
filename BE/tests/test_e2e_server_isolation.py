@@ -50,7 +50,8 @@ def _start(tmp_path, **env):
     clean.update({"SKIP_DOTENV": "1", "PYTHONUTF8": "1", "TMPDIR": str(tmp_path),
                   "TEMP": str(tmp_path), "TMP": str(tmp_path), **env})
     out = subprocess.run([sys.executable, "-c", _PROBE], cwd=BE, env=clean,
-                         capture_output=True, text=True, timeout=120)
+                         capture_output=True, text=True, encoding="utf-8",
+                         errors="replace", timeout=120)
     assert out.returncode == 0, out.stderr[-2000:]
     return json.loads(out.stdout.strip().splitlines()[-1])
 
@@ -140,12 +141,13 @@ def test_a_developers_dotenv_cannot_bring_back_real_paths_or_keys(tmp_path):
     clean.update({"PYTHONUTF8": "1", "TMPDIR": str(tmp_path), "TEMP": str(tmp_path),
                   "TMP": str(tmp_path), "PROBE_FAKE_BE_ROOT": str(fake_root)})
     out = subprocess.run([sys.executable, "-c", _DOTENV_PROBE], cwd=BE, env=clean,
-                         capture_output=True, text=True, timeout=120)
+                         capture_output=True, text=True, encoding="utf-8",
+                         errors="replace", timeout=120)
     assert out.returncode == 0, out.stderr[-2000:]
     s = json.loads(out.stdout.strip().splitlines()[-1])
     assert _inside(s["mindmaps"], s["data_dir"]), s["mindmaps"]
     assert s["jobs_env"] is None or _inside(s["jobs_env"], s["data_dir"]), s["jobs_env"]
-    assert s["gemini"] is None, "a provider key came back from .env"
+    assert not s["gemini"], "a provider key came back from .env"   # absent or emptied
 
 
 def test_a_database_url_that_is_not_a_local_test_database_is_refused(tmp_path):
@@ -158,9 +160,12 @@ def test_a_database_url_that_is_not_a_local_test_database_is_refused(tmp_path):
         clean.update({"SKIP_DOTENV": "1", "PYTHONUTF8": "1", "TMPDIR": str(tmp_path),
                       "TEMP": str(tmp_path), "TMP": str(tmp_path), "DATABASE_URL": url})
         out = subprocess.run([sys.executable, "-c", _PROBE], cwd=BE, env=clean,
-                             capture_output=True, text=True, timeout=120)
+                             capture_output=True, text=True, encoding="utf-8",
+                         errors="replace", timeout=120)
+        # Refused before the probe prints its stores; any wording (#187's shared guard
+        # says it in Vietnamese); never the password.
         assert out.returncode != 0, url
-        assert "refusing DATABASE_URL" in out.stderr, out.stderr[-500:]
+        assert '"data_dir"' not in out.stdout, url
         assert "u:p" not in out.stderr, "the password must not be printed"
     ok = _start(tmp_path, DATABASE_URL="postgresql://u:p@127.0.0.1:55432/e2e_run_test")
     assert ok["data_dir"]
