@@ -4,8 +4,8 @@ Status: **READY FOR OWNER REVIEW** for the 28 V6 Draft pull requests #159-#186 a
 follow-ups #187 (dev/test isolation), #188 (diagnostic grading recovery, stacked on #185),
 #189 (LLM deadlines), #190 (provisional grading recovery, stacked on #188), #191 (E2E
 isolation) and #192 (practice regrade, stacked on #190), once every
-head named here has a green required check (section 7). Trial 12 integrated all 34 heads (#159-#192) and passed the
-PostgreSQL, E2E and fixture stages (sections 5 and 12). Production: **NO-GO** until all seven
+head named here has a green required check (section 7). Trial 13 integrated all 34 current heads (#159-#192) and passed the
+PostgreSQL and E2E stages; trial 12 passed the full Fixture Audit (sections 5 and 12). Production: **NO-GO** until all seven
 blocking items of section 9 are GO with the evidence that section asks for: production
 reviewer, Render manual deploy, PostgreSQL backup restored, Storage and EC2 data backup
 restored, dev/test isolated from production, migration port, index-repair approver. Each is
@@ -400,6 +400,7 @@ refuse to start, so it has to be deployed with its own check.
 | Tree | What | Result |
 |---|---|---|
 | Trial 8 `d1ed4a3` / `8ca03e042ccf` | all 28 heads of 2026-11-16 morning (#185 at `06a65f8`) | Vitest 2095/2095 (+ seed 61201), build, lint 63/67, Fixture Smoke 333 passed / 6 skipped of 339, full audit 686 passed / 5 skipped of 691, 0 failed, 0 flaky; backend 3008 passed, 6 failures also on `main`. Chromium only |
+| Trial 13 `e938adf` / `c31032816c03` (2026-11-18, local, not pushed) | trial 12 `f2b8c6a` + #159 `91443f5`, #192 `fd0812f`, #191 `ac1a411`: **34/34 current heads are ancestors**, all Draft | Merge: `.playbook` append conflicts, and one code conflict in `BE/scripts/run_e2e_server.py` between #187 and #191, resolved by hand (kept #187's shared disposable-database guard and emptied keys, added #191's `SKIP_DOTENV=1`, dropped #191's own database check as redundant; commit `cb13235`). Disposable PostgreSQL 17.6, fresh database per stage: `verify_db_schema` before and after exit 0; full backend suite 3182 passed, 8 failed, 9 skipped: the 6 baseline failures, plus 2 in `test_production_migration_contract` caused by the local cluster (the test hard-codes the CI role `postgres:postgres`; with that role added to the disposable cluster the file passes 12/12, `migration-contract-rerun-with-ci-role.log`); the 9 skips identical by name; Vitest 2131/2131; build ok; E2E critical (Chromium, 1 worker, #191 isolating each start): open auth 50 passed + 1 skipped, protected auth 51 passed, 0 flaky (includes the new practice regrade spec); no store under the checkout was written by E2E. Full Fixture Audit not re-run: trial 13 changes only `Practice.jsx`, `Practice.*.test.jsx`, the practice API and the E2E harness against trial 12. Logs: `studymap-qa-execution/v6/results/integration-34-trial13/` |
 | Trial 12 `f2b8c6a` / `b4288c960736` (2026-11-18, local, not pushed) | trial 11 `6507818` + #159 `bc84e77`, #191 `f6092f6`, #192 `f8107c1`: **34/34 heads are ancestors** (#159-#192, checked one by one) | Merge: `.playbook` append conflicts only (the helper now refuses code files); `run_e2e_server.py` merged without conflict and was read back: #191's isolation and #188/#190's stubs both present. Disposable PostgreSQL 17.6 (loopback, fresh database per stage): `verify_db_schema` before and after exit 0; full backend suite 3178 passed, 6 failed, 9 skipped, the 6 failures and 9 skips identical by name to the trial 11 baseline; Vitest 2128/2128 (exit 0); build ok; E2E critical (Chromium, 1 worker, no data directory set in the shell, so #191 isolates each start) open auth 47 passed + 1 skipped, protected auth 48 passed, 0 flaky; Full Fixture Audit: run 1 (31 min, machine under load): 684 passed, 2 failed, 5 skipped - two mind map specs (`current-branch-collapsed-connectors` and `exact-node-export-v3`) timed out on both attempts; rerun alone 13/13 passed; run 2 (23.5 min): 686 passed, 5 skipped of 691, 0 failed, 0 flaky (exit 0). The two specs are recorded as load-sensitive, not as a regression (the trial changes only `Practice.jsx` and `api.js` in the frontend). Logs: `studymap-qa-execution/v6/results/integration-34-trial12/` |
 | Trial 11 `6507818` / `86745345c82a` final run (2026-11-18), supersedes BLOCKED | 31 of 32 current heads exactly; #159 at its previous docs head | `verify_db_schema` before and after exit 0; full backend suite 3162 passed, 6 failed, 9 skipped, identical to the baseline; E2E critical open 47 + 1 skipped, protected 48, each run with its own fresh database, data and SQLite directories and a new backend process. `integration-32-trial11/TASK1-SUMMARY-6507818.md` |
 | Trial 11 (2026-11-17, local, not pushed): `c30db74` / `f6325bc77a51`, then `5e6e304` / `9facee9a326e` (+ #190 `f514cae`), then `6507818` / `86745345c82a` (+ #190 `b74de27`) | all 32 heads, checked one by one at each step | Merge: `.playbook` append conflict; a `QuizResult.jsx` conflict first resolved wrongly by the keep-both-sides helper, then by hand (`c30db74`; the helper now refuses code files). **On `c30db74` and again on `5e6e304`** (disposable PostgreSQL 17.6, loopback, fresh database): migration and `verify_db_schema` before and after exit 0; targeted #183/#185 132, #187 87, #188 64, #189 53, #190 30 passed; full backend suite 3159 / 3160 passed, 6 failed (the known local failures: `test_index_khoa_that` x5 need a real Redis, `test_fpt_rerank` x1; they pass in CI), 9 skipped; Vitest 2122/2122 (exit 0); build ok; E2E critical (Chromium, 1 worker) open auth 47 passed + 1 skipped, protected auth 48 passed, 0 flaky; Full Fixture Audit (`--workers=1 --fail-on-flaky-tests`) 686 passed, 5 skipped of 691, 0 failed, 0 flaky, on both. **On `6507818`: BLOCKED** - its frontend is byte-identical to `5e6e304` (so Vitest, build and the fixture audit apply), but the full backend suite was stopped by the machine running out of memory and was not restarted; E2E critical was not run on it. #190 `b74de27` on its own: 207 grading and review tests on a fresh database, CI green. Not counted: a full run stopped at collection (gRPC stubs not generated in the new worktree), an E2E run on an unmigrated database, and two E2E runs that reused `BE/memory/mindmaps.sqlite` from an earlier run (item 19). Logs: `studymap-qa-execution/v6/results/integration-32-trial11/` (`BLOCKED-6507818.txt`) |
@@ -429,8 +430,8 @@ All 32 (#159-#190) are Draft, and every head has a green `CI / required` (checke
 | #188 | `8a16902` | **success** (run 44060712513: backend 3067 passed, E2E 44 + 44 with the QuizResult 200/202/409 spec) |
 | #188 (previous) | `16932dd` | success (run 44032428574) |
 | #190 | `b74de27` | **success** (run 44119547612: backend 3093 passed, E2E 47 + 48, Fixture Smoke 206) |
-| #191 | `f6092f6` | **success** (run 44134704901: E2E 42 + 42; based on `main`) |
-| #192 | `f8107c1` | **success** (run 44142640293); previous head `0edc89f` run 44136383439: backend 3104 passed, E2E 47 + 48, Fixture Smoke 206 |
+| #191 | `ac1a411` | **success** (run 44263766276: backend 2991 passed, E2E 42 + 42; based on `main`); earlier `f6092f6` run 44134704901 |
+| #192 | `fd0812f` | **success** (run 44262980102: backend 3109 passed, Vitest 1977, E2E 50 + 51, Fixture Smoke 206); `0aaf594` failed on a focus-test race, fixed in `6828afb` |
 | #189 | `2d174d8` | **success** (run 44035654037: backend 3000 passed / 0 failed) |
 | #159 | this commit | documentation only |
 
@@ -772,6 +773,28 @@ CI run 44119547612 on `b74de27`: backend 3093 passed, E2E 47 + 48, Fixture Smoke
 **Not covered.** Practice attempts with a provisional result have no regrade (the route
 refuses them); the recovery sweep does not touch provisional attempts and stays OFF.
 
+## 8g. Review round task39-43 (2026-11-18): #191 and #192
+
+Owner-approved read-only reviews by Codex (task39, re-check task42) and agy (task36-38, 40, 43);
+every finding was verified, then fixed red-first or handed to the owner.
+
+| Finding | PR | Severity | Outcome |
+|---|---|---|---|
+| A `DATABASE_URL` left in the shell won over the E2E default (Playwright passes the whole environment) | #191 | P0 (Codex) | fixed `2001943`: only a local database named `*_test`; on the integrated tree #187's shared guard does the same |
+| Popped `*_DB_PATH` and provider keys came back from `BE/.env` through `load_project_env` | #191 | P1 (Codex) | fixed `2001943`: `SKIP_DOTENV=1`; tests made wording-neutral in `ac1a411` |
+| No heartbeat inside the practice regrade request: after the lease a second request could pay for the same answers | #192 | P2 (Claude, Codex) | fixed `0aaf594`: renew before each model call, 409 on takeover |
+| Takeover during the last model call answered 200 "thử thêm" | #192 | P3 (agy) | fixed `fd0812f`: 409 |
+| A reload lost the provisional result, its offer and the used-up news | #192 | P2 (Claude, Codex) | fixed `0aaf594`: `latest_attempt_id` on GET practice (additive) |
+| The result page offered a regrade that always failed for practice attempts | #192 | P2 (Claude) | fixed `0aaf594`: the generic route hands practice to `practice.regrade` |
+| Focus test raced a `setTimeout(0)` (CI run 44260869397) | #192 | test | fixed `6828afb` |
+| Inline grading on production's single sync worker (`WEB_CONCURRENCY=1`, `GUNICORN_TIMEOUT=120`; compose `environment:` overrides `.env`): one slow model call blocks every request and can be aborted at 120 s | #192 (and practice submit before it) | P1 (Codex), owner risk | **not changed**: owner decision (section 9 item 20) |
+| A worker killed mid-grading keeps a counted retry until the lease ends | #192 | P2 (Codex) | **not changed**: same decision |
+
+New E2E: `FE/e2e/practice-provisional-regrade.spec.js` (3 tests, real Flask + PostgreSQL +
+browser, fake grader; practice question generation stubbed in `run_e2e_server.py`): local
+open auth 3/3, protected auth 9/9 together with both diagnostic regrade specs. Reviews:
+agy APPROVED both (task43); Codex re-check: pending: the task42 prompt waits in Codex's pane for the owner (my Enter key press was blocked); its task39 findings are all closed or handed to the owner.
+
 ## 9. GO/NO-GO checklist for the owner
 
 Blocking: production stays **NO-GO** until every row is GO with the evidence named. None
@@ -800,9 +823,10 @@ Already GO, or owner decisions that do not block:
 | 9 | Real-device, Firefox, WebKit, screen reader checks | not done; accept the risk or run them |
 | 10 | Risks A, B, D: A and B fixed in Draft #188 (section 8c), D's generic-route part too; merge #189 then #188 after #185, or accept them | open |
 | 16 | Provisional result after an AI grader failure: diagnostic attempts regradable in Draft #190 (section 8f); merge it after #188, or accept that such answers stay ungraded | open |
-| 17 | A practice attempt with a provisional result had no regrade | fixed in Draft #192 (practice regrade inside the request, same claim and retry cap, Idempotency-Key unchanged; 12 + 6 tests red first); open until #192 is merged |
-| 19 | Local E2E runs shared `BE/memory/mindmaps.sqlite` | fixed in Draft #191 (every E2E server start gets its own empty stores; 4 tests red first; two consecutive local runs 20/20 each); open until #191 is merged |
-| 18 | "Tạo lại kế hoạch" deletes the old plan's practice quizzes, attempts, answers and practice mastery (10-step cascade, existed before V6) | mitigated by #190's confirmation; audit and proposal (archive items instead of deleting, one nullable column, safe rollback) in `task4-issue18-plan-regeneration-audit.md`; **owner decision and a separate migration approval needed** |
+| 17 | A practice attempt with a provisional result had no regrade | fixed in Draft #192 `fd0812f` (regrade inside the request with heartbeat; reload and result page keep it; 16 backend + 9 FE tests and 3 E2E, red first); open until #192 is merged |
+| 19 | Local E2E runs shared `BE/memory/mindmaps.sqlite` | fixed in Draft #191 `ac1a411` (own empty stores per start, no `.env`, only a local `*_test` database; 6 tests red first); open until #191 is merged |
+| 18 | "Tạo lại kế hoạch" deletes the old plan's practice history (10-step cascade, existed before V6) | owner chose option B (archive, keep history, no new practice from archived topics). Design in `task41-issue18-archived-at-migration-design.md`: `archived_at` column **plus replacing `uq_review_plan_items_priority` by a partial unique index** (the first audit missed it), `created_at` moves on regeneration; nothing run. **Migration approval and a deploy window needed** |
+| 20 | Inline LLM grading (practice submit, practice regrade) on one sync gunicorn worker with a 120 s timeout | owner decision: background job with 202 + polling (recommended), or more/threaded workers and a timeout above the worst serial grading; not a merge blocker for #192, which adds a second path to an existing risk |
 | 15 | PostgreSQL stages on the integrated tree | done: trial 10 (31 exact heads) and trial 11 (32 heads) on a disposable PostgreSQL 17.6, section 5 |
 | 11 | 6 pre-existing local backend failures accepted (environment, pass in CI) | open |
 | 12 | Windows test-harness fix | done in #185 `5e18271` (section 4b) |
@@ -814,12 +838,13 @@ Kept apart, as the owner asked:
 | Kind | State |
 |---|---|
 | CI of each pull request | 34/34 heads green on `CI / required` (#159-#192; section 7) |
-| Tests on the integrated tree | trial 12 `f2b8c6a` (all 34 heads): section 5 |
-| New regressions | none: the failing and skipped tests are the same by name as the baseline |
+| Tests on the integrated tree | trial 13 `e938adf` (all 34 current heads): section 5 |
+| New regressions | none: trial 13 fails only the 6 baseline tests plus 2 caused by the local cluster's role (12/12 with the CI role); skips identical |
 | Known local failures (pass in CI) | 6: `test_index_khoa_that` x5 need a real Redis; `test_fpt_rerank` x1 |
 | Skipped tests | 9: evaluation datasets not in git (3), NKS credentials (2), Supabase Storage (1), real Redis (1), load test (1), live vision (1) |
 | Not accepted (not run) | Firefox, WebKit, real devices, screen reader; any hosted environment; the owner's production backup and restore tests |
-| Code reviews of #191/#192 | pending: Codex hit its usage limit (until 02:28); agy's reviews (task36/37) wait for an owner approval of a read-only git command in its pane. #191 and #192 have red-first tests, green CI and trial 12; #192's UX review (agy task38) is addressed in `f8107c1`, its re-check is pending |
+| Code reviews of #191/#192 | done, section 8g: agy APPROVED both (task43); Codex re-check pending: the task42 prompt waits in Codex's pane for the owner (my Enter key press was blocked); its task39 findings are all closed or handed to the owner. Open for the owner: item 20 (inline grading on one worker) |
+| Fixture Audit trial 12 run 1 | kept as failed (2): triage `integration-34-trial12/triage-mindmap-timeouts.md`: `exact-node-export-v3` contract test is budget-bound (median 20 s of 45 s; split or `test.slow()` proposed); `current-branch ... opposite side` stalled on a download under load, not reproduced in 22 runs, **open** |
 | Production | **NO-GO**: the seven blocking items of section 9 (3, 4, 6, 7, 8, 13, 14) have no evidence yet |
 
 ## 10. Merge order for the owner (`04-integration-checklist.md`, with #183/#185 moved last)
@@ -850,7 +875,9 @@ with item 3 in place, each backend deploy also waits for the owner's approval.
 11. #190 after #188, in the same or the next window (backend + `QuizResult` +
    `ReviewGuide`; no migration).
 12. #192 after #190 (practice regrade; backend + `Practice`; no migration).
-13. #191 any time (E2E test harness only; no production code).
+13. #191 any time (E2E test harness only; no production code). After #187 it conflicts in
+    `run_e2e_server.py`: keep #187's guard and emptied keys, add `SKIP_DOTENV=1` (trial 13
+    commit `cb13235`).
 Stacked pull requests carry their bases' commits; merge the base first.
 
 ## 11. Production actions that each need a separate owner go-ahead
