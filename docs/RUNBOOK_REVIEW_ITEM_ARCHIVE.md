@@ -70,6 +70,10 @@ practice quiz, attempt, answer and mastery row made from them. Two layers stop t
      being set to NULL (FK `ON DELETE SET NULL`): archived topics are read-only;
    - `TRUNCATE` of `review_plans` or `review_plan_items` while any practice history exists.
 
+   - `INSERT` of a practice quiz from an archived topic (or moving one onto it), whatever
+     path inserts it; the check locks the topic row, so a worker racing an archive waits
+     and is refused.
+
    Each guard function pins `search_path = <schema>, pg_temp`, so a session's
    temporary tables cannot shadow the tables it checks.
 
@@ -83,9 +87,12 @@ practice quiz, attempt, answer and mastery row made from them. Two layers stop t
    contract in `BE/shared/db_schema_checks.py`.
 2. **Rollback floor** in `scripts/rollback.sh`, before any checkout or build:
    `scripts.rollback_preflight` prints exactly one line
-   `archive_schema=<0|1> archived_topics=<n> guard=<0|1>` (read-only). Then:
+   `archive_schema=<0|1> history_topics=<n> guard=<0|1>` (read-only; history = a topic
+   that is archived or has a practice quiz). Then:
    - archive schema present and `guard=0`: refused (restore the guard first, section 2);
-   - archived topics and a target that is not archive-aware: refused. Archive-aware means
+   - archive schema present, history topics, and a target that is not archive-aware:
+     refused (code before #194 regenerates by deleting such a plan; the guard refuses
+     that, so the old code would be broken, not merely unsafe). Archive-aware means
      the TARGET tree carries both migrations and `BE/shared/archive_contract.py` with
      `ARCHIVE_CONTRACT_VERSION = 1`, whose behaviour CI enforces (a keyword is not proof);
    - preflight failed, or its stdout is not exactly that one line: only an archive-aware
@@ -99,10 +106,14 @@ practice quiz, attempt, answer and mastery row made from them. Two layers stop t
 
 Rules:
 - **Schema:** `alembic downgrade` refuses below `20261119` and below `20261118` while
-  archived topics exist; both lock `review_plans` and `review_plan_items` against writes
+  any topic holds practice history (archived, or with practice quizzes); both lock
+  `review_plans`, `review_plan_items` and `quizzes` against writes
   before counting and keep the lock until the last DDL (no autocommit step), so no
   archive can commit in between. Do not force it.
-- **Code:** roll back only to a SHA containing both migrations, or roll forward with a fix.
+- **Code:** once #194 is deployed and any practice exists, roll back only to an
+  archive-aware SHA, or roll forward with a fix. During the few seconds of the #194
+  deploy between its migration and the new backend, the old backend's "Tạo lại kế
+  hoạch" on a plan with practice fails (23001) instead of deleting history.
 - **No automatic bypass.** Disabling a guard trigger (`ALTER TABLE ... DISABLE TRIGGER`)
   or skipping the preflight is a manual, owner-approved incident step, recorded in the
   incident log, and the verifier then blocks every deploy until the trigger is enabled

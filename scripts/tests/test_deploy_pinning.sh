@@ -70,7 +70,7 @@ base_env() {
     TEST_HOOK_PHASE="${TEST_HOOK_PHASE:-}" TEST_HOOK_ACTION="${TEST_HOOK_ACTION:-}" \
     TEST_HOOK_MARKER="$HOOK_MARKER" TEST_MOVE_SHA="${TEST_MOVE_SHA:-}" \
     TEST_FAIL_PHASE="${TEST_FAIL_PHASE:-}" TEST_FAIL_CODE="${TEST_FAIL_CODE:-75}" \
-    TEST_PREFLIGHT_OUTPUT="${TEST_PREFLIGHT_OUTPUT-archive_schema=0 archived_topics=0 guard=0}" \
+    TEST_PREFLIGHT_OUTPUT="${TEST_PREFLIGHT_OUTPUT-archive_schema=0 history_topics=0 guard=0}" \
     TEST_PREFLIGHT_CODE="${TEST_PREFLIGHT_CODE:-0}" "$@"
 }
 
@@ -459,13 +459,13 @@ refused_before_checkout() {
   assert_not_called 'compose .* build$'
 }
 reset_controls
-TEST_PREFLIGHT_OUTPUT="archive_schema=1 archived_topics=3 guard=1"
+TEST_PREFLIGHT_OUTPUT="archive_schema=1 history_topics=3 guard=1"
 run_rollback 1 "$A_SHA"
 refused_before_checkout
 assert_called 'compose .*run.*scripts.rollback_preflight'
 grep -q "predates the review-topic archive" "$OUTPUT" || { cat "$OUTPUT" >&2; fail "no archive-floor reason"; }
 reset_controls
-TEST_PREFLIGHT_OUTPUT="archive_schema=1 archived_topics=3 guard=1"
+TEST_PREFLIGHT_OUTPUT="archive_schema=1 history_topics=3 guard=1"
 expect_status 1 base_env env MEMVID_BREAK_GLASS=1 bash "$SERVER/scripts/rollback.sh" "$A_SHA"
 refused_before_checkout
 reset_controls
@@ -478,12 +478,12 @@ TEST_PREFLIGHT_OUTPUT="something unexpected"
 run_rollback 1 "$A_SHA"
 refused_before_checkout
 reset_controls
-TEST_PREFLIGHT_OUTPUT=$'archive_schema=1 archived_topics=3 guard=1
-archive_schema=1 archived_topics=0 guard=1'  # stale or spoofed last line must not open the gate
+TEST_PREFLIGHT_OUTPUT=$'archive_schema=1 history_topics=3 guard=1
+archive_schema=1 history_topics=0 guard=1'  # stale or spoofed last line must not open the gate
 run_rollback 1 "$A_SHA"
 refused_before_checkout
 reset_controls
-TEST_PREFLIGHT_OUTPUT="archive_schema=1 archived_topics=0 guard=0"
+TEST_PREFLIGHT_OUTPUT="archive_schema=1 history_topics=0 guard=0"
 run_rollback 1 "$A_SHA"
 refused_before_checkout
 grep -q "archive guard is missing or disabled" "$OUTPUT" || { cat "$OUTPUT" >&2; fail "no guard reason"; }
@@ -508,17 +508,17 @@ D_SHA="$(git -C "$SOURCE" rev-parse HEAD)"
 git -C "$SOURCE" push origin HEAD:main >/dev/null
 git -C "$SERVER" fetch origin main >/dev/null
 reset_controls
-TEST_PREFLIGHT_OUTPUT="archive_schema=1 archived_topics=3 guard=1"
+TEST_PREFLIGHT_OUTPUT="archive_schema=1 history_topics=3 guard=1"
 expect_status 1 base_env env MEMVID_BREAK_GLASS=1 bash "$SERVER/scripts/rollback.sh" "$E_SHA"
 refused_before_checkout
 reset_controls
-TEST_PREFLIGHT_OUTPUT="archive_schema=1 archived_topics=3 guard=0"
+TEST_PREFLIGHT_OUTPUT="archive_schema=1 history_topics=3 guard=0"
 expect_status 1 base_env env MEMVID_BREAK_GLASS=1 bash "$SERVER/scripts/rollback.sh" "$D_SHA"
 refused_before_checkout
 pass "R a keyword-only target is not archive-aware; a missing guard refuses even an archive-aware target"
 
 reset_controls
-TEST_PREFLIGHT_OUTPUT="archive_schema=1 archived_topics=3 guard=1"
+TEST_PREFLIGHT_OUTPUT="archive_schema=1 history_topics=3 guard=1"
 expect_status 0 base_env env MEMVID_BREAK_GLASS=1 bash "$SERVER/scripts/rollback.sh" "$D_SHA"
 assert_head "$D_SHA"
 # Database down during an incident: an archive-aware target is safe whatever the facts,
@@ -531,7 +531,14 @@ expect_status 0 base_env env MEMVID_BREAK_GLASS=1 bash "$SERVER/scripts/rollback
 assert_head "$D_SHA"
 grep -q "archive facts unreadable; target is archive-aware" "$OUTPUT" || { cat "$OUTPUT" >&2; fail "no unreadable-but-safe warning"; }
 reset_controls
-TEST_PREFLIGHT_OUTPUT="archive_schema=1 archived_topics=0 guard=1"
+TEST_PREFLIGHT_OUTPUT="archive_schema=1 history_topics=0 guard=1"
+run_rollback 0 "$A_SHA"
+assert_head "$A_SHA"
+# Before #194 was ever deployed (no archive schema) practice history is ordinary data:
+# rollbacks between pre-archive SHAs stay allowed.
+git -C "$SERVER" -c advice.detachedHead=false checkout --detach "$B_SHA" >/dev/null
+reset_controls
+TEST_PREFLIGHT_OUTPUT="archive_schema=0 history_topics=5 guard=0"
 run_rollback 0 "$A_SHA"
 assert_head "$A_SHA"
 pass "R an archive-aware target (also with the database unreadable), or no archived topic yet, may be rolled back to"

@@ -17,7 +17,7 @@ from tests.test_review_plan_archive import (  # noqa: F401  (fixtures)
     _need_db, _protect, be, owner, planned)
 
 BE_ROOT = Path(__file__).resolve().parents[1]
-LINE = re.compile(r"^archive_schema=([01]) archived_topics=(\d+) guard=([01])$", re.M)
+LINE = re.compile(r"^archive_schema=([01]) history_topics=(\d+) guard=([01])$", re.M)
 
 
 def _preflight(url=None):
@@ -30,15 +30,17 @@ def _preflight(url=None):
                           text=True, encoding="utf-8", errors="replace", timeout=120)
 
 
-def test_it_reports_the_archive_schema_the_guard_and_the_archived_count(client, planned,
-                                                                       monkeypatch):
-    before = _preflight()
-    assert before.returncode == 0, before.stderr
-    m = LINE.search(before.stdout)
-    assert m and m.group(1) == "1" and m.group(3) == "1", before.stdout
+def test_it_counts_practice_history_even_before_anything_is_archived(client, planned,
+                                                                      monkeypatch):
+    """Codex task53: code before #194 deletes a plan whose topic has practice (the guard
+    refuses that), so practice alone already sets the rollback floor."""
+    r = _preflight()
+    assert r.returncode == 0, r.stderr
+    m = LINE.search(r.stdout)
+    assert m and m.group(1) == "1" and m.group(3) == "1", r.stdout
+    assert int(m.group(2)) >= 1, "the fixture's practice topic is history"
     _archived(client, planned, monkeypatch)
-    after = LINE.search(_preflight().stdout)
-    assert int(after.group(2)) == int(m.group(2)) + 1
+    assert int(LINE.search(_preflight().stdout).group(2)) >= 1
 
 
 def test_an_unreachable_database_fails_closed_without_the_password():

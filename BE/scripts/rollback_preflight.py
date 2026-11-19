@@ -2,11 +2,12 @@
 
 Prints exactly one line on success:
 
-    archive_schema=<0|1> archived_topics=<n> guard=<0|1>
+    archive_schema=<0|1> history_topics=<n> guard=<0|1>
 
-`archive_schema` = `review_plan_items.archived_at` exists; `archived_topics` = rows with
-`archived_at` set; `guard` = the 20261119 guard triggers are present and enabled.
-`rollback.sh` refuses a target SHA that predates the archive while `archived_topics > 0`,
+`archive_schema` = `review_plan_items.archived_at` exists; `history_topics` = topics that
+are archived or have a practice quiz (code before #194 regenerates by deleting such a
+plan; Codex task53); `guard` = the 20261119 guard matches its contract.
+`rollback.sh` refuses a target SHA that predates the archive while `history_topics > 0`,
 and refuses on any non-zero exit or any other output: unknown is never safe.
 
 Read-only by construction (`SET TRANSACTION READ ONLY`). The database URL is never
@@ -34,7 +35,8 @@ def main(argv=None) -> int:
     from shared.env_loader import load_project_env
     load_project_env()
     from scripts.run_migrations import DichBiTuChoi, xac_dinh_dich
-    from shared.db_schema_checks import archive_guard_problems, archived_at_column_exists
+    from shared.db_schema_checks import (archive_guard_problems, archived_at_column_exists,
+                                         history_topics)
     from shared.migration_guard import sanitize
 
     try:
@@ -50,15 +52,13 @@ def main(argv=None) -> int:
         with engine.connect() as conn:
             conn.exec_driver_sql("SET TRANSACTION READ ONLY")
             schema = archived_at_column_exists(conn)
-            archived = (conn.execute(sa.text(
-                "SELECT count(*) FROM review_plan_items WHERE archived_at IS NOT NULL")
-            ).scalar() or 0) if schema else 0
+            history = history_topics(conn)
             guard = bool(schema) and not archive_guard_problems(conn)
     except Exception as exc:  # unreachable or unreadable: the rollback must not proceed
         print(f"STOP: cannot read the archive facts from {sanitize(url)}: "
               f"{type(exc).__name__}", file=sys.stderr)
         return EXIT_UNREACHABLE
-    print(f"archive_schema={int(bool(schema))} archived_topics={int(archived)} "
+    print(f"archive_schema={int(bool(schema))} history_topics={int(history)} "
           f"guard={int(guard)}")
     return EXIT_OK
 

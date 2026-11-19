@@ -22,6 +22,10 @@ runbook; no row data in the message). The function bodies are the contract in
    is not affected.
 3. BEFORE TRUNCATE on both tables: refused while any archived topic or any practice
    quiz made from a topic exists.
+4. BEFORE INSERT OR UPDATE OF source_review_item_id on quizzes: no new practice from an
+   archived topic, whatever path inserts it (Codex task53: the request checked before
+   enqueueing, the worker inserted later). It takes FOR SHARE on the topic row, so it
+   waits for an archiving transaction and then reads the committed archive.
 
 Every guard function pins `search_path = <schema>, pg_temp`: a caller's temporary
 shadow tables cannot answer its EXISTS checks (Codex task52).
@@ -41,6 +45,8 @@ import sqlalchemy as sa
 from shared.db_schema_checks import (
     ARCHIVE_GUARD_FUNCTIONS,
     ARCHIVE_GUARD_TRIGGERS,
+    HISTORY_LOCK_SQL,
+    history_topics,
     archive_guard_function_sql,
     archive_guard_problems,
 )
@@ -65,18 +71,15 @@ def upgrade() -> None:
 
 def downgrade() -> None:
     conn = op.get_bind()
-    # No archive may commit between the count and the drops (Codex task50): SHARE ROW
-    # EXCLUSIVE blocks every INSERT/UPDATE/DELETE on both tables until this transaction
-    # (the whole downgrade step) ends.
-    conn.execute(sa.text(
-        "LOCK TABLE review_plans, review_plan_items IN SHARE ROW EXCLUSIVE MODE"))
-    archived = conn.execute(sa.text(
-        "SELECT count(*) FROM review_plan_items WHERE archived_at IS NOT NULL")).scalar()
-    if archived:
+    # No history may appear between the count and the drops (Codex task50/53): block every
+    # write on the plans, topics and quizzes until this transaction ends.
+    conn.execute(sa.text(HISTORY_LOCK_SQL))
+    history = history_topics(conn)
+    if history:
         raise RuntimeError(
-            f"refusing downgrade: {archived} archived review plan topic(s) exist and the "
-            "guard protects their practice history. Keep this schema and roll forward. "
-            "See docs/RUNBOOK_REVIEW_ITEM_ARCHIVE.md.")
+            f"refusing downgrade: {history} review topic(s) hold practice history (archived, "
+            "or with practice quizzes) and the guard protects it. Keep this schema and roll "
+            "forward. See docs/RUNBOOK_REVIEW_ITEM_ARCHIVE.md.")
     for name, table, _function, _tgtype, _event in ARCHIVE_GUARD_TRIGGERS:
         op.execute(f"DROP TRIGGER IF EXISTS {name} ON {table}")
     for fn in ARCHIVE_GUARD_FUNCTIONS:

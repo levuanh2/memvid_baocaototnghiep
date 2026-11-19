@@ -8500,3 +8500,17 @@ except `test_rollback_preflight.py`, written together with the module it tests.
   verifier requires it.
 - *Overload-ambiguous verifier.* Bodies were read by name; now from the exact
   `pg_trigger.tgfoid` function, which must also be a zero-argument plpgsql trigger.
+
+**Review fixes (Codex task53, BLOCK: two P1, one P2), red first:**
+- *History, not archive only.* With the wider plan guard, code before #194 cannot
+  regenerate a plan whose topic has practice. The rollback preflight now reports
+  `history_topics` (archived or with practice) and `rollback.sh` refuses a non
+  archive-aware target while it is > 0, once the archive schema exists (before #194 was
+  ever deployed, rollbacks between older SHAs stay allowed). Both downgrades count the
+  same history and lock `quizzes` too.
+- *Practice from an archived topic, late.* The request checked before enqueueing and
+  the worker inserted later. A `BEFORE INSERT OR UPDATE OF source_review_item_id` trigger
+  on `quizzes` refuses it in the database. First version judged `archived_at` in the
+  WHERE clause: on the old snapshot the row was filtered out without waiting or
+  re-reading. The row is now locked unconditionally (`FOR SHARE`) and its latest
+  `archived_at` read.

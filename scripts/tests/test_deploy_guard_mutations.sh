@@ -58,7 +58,7 @@ run_mutation break-glass-reason '[ -n "${MEMVID_BREAK_GLASS_REASON:-}" ]' 'true'
 run_mutation break-glass-attempt-record '  ledger_record "$LEDGER_FILE" "${DEPLOY_SHA:-unpinned}" break-glass-attempt' '  :'
 run_mutation break-glass-failure-record '    ledger_record "$LEDGER_FILE" "${APP_BUILD_SHA:-${DEPLOY_SHA:-unpinned}}" break-glass-failed || true' '    :'
 
-run_mutation rollback-archive-floor 'if [ "$ARCHIVED" -gt 0 ] && ! target_supports_archive "$SHA"; then' 'if false; then' rollback.sh
+run_mutation rollback-archive-floor 'if [ "$SCHEMA" = 1 ] && [ "$HISTORY" -gt 0 ] && ! target_supports_archive "$SHA"; then' 'if false; then' rollback.sh
 run_mutation rollback-archive-guard-required 'if [ "$SCHEMA" = 1 ] && [ "$GUARD" != 1 ]; then' 'if false; then' rollback.sh
 run_mutation rollback-archive-exact-line "FACTS_RE='^archive_schema=" "FACTS_RE='archive_schema=" rollback.sh
 run_mutation rollback-archive-unreadable '    || die "rollback refused: the archive preflight' '    || true; : "rollback refused: the archive preflight' rollback.sh

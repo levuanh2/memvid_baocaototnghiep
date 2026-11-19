@@ -3817,3 +3817,10 @@ first), while production locked the plan last; the test passed and the real race
 open (Codex task50). Drive the real use case and pause it inside its transaction (an
 engine `after_cursor_execute` hook), and add a test that pins the SQL order the code
 actually sends. Same for gates: a keyword or a name is not proof of behaviour.
+
+# Row-lock reads: put the condition after the lock, not in the WHERE (2026-11-19)
+
+`SELECT ... WHERE id = $1 AND archived_at IS NOT NULL FOR SHARE` judges `archived_at` on
+the statement snapshot. A row a concurrent transaction is archiving does not match, so it
+is neither locked nor re-read, and the check passes. Lock by key only
+(`WHERE id = $1 FOR SHARE`), then test the value PostgreSQL re-fetched after the wait.

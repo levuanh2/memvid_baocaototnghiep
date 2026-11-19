@@ -199,6 +199,30 @@ BEGIN
   RETURN NEW;
 END
 """,
+    # No new practice from an archived topic, whatever path inserts it (Codex task53: the
+    # request checked before enqueueing, the worker inserted later). FOR SHARE on the topic
+    # row waits for an archiving transaction (its UPDATE holds FOR NO KEY UPDATE), then
+    # reads the committed archive.
+    "studymap_guard_practice_source": f"""
+DECLARE
+  topic_archived_at timestamptz;
+BEGIN
+  IF NEW.source_review_item_id IS NOT NULL
+     AND (TG_OP = 'INSERT'
+          OR NEW.source_review_item_id IS DISTINCT FROM OLD.source_review_item_id) THEN
+    -- Lock the topic row unconditionally: a predicate on archived_at would be judged on
+    -- the old snapshot and skip the row without waiting or re-reading it.
+    SELECT archived_at INTO topic_archived_at FROM review_plan_items
+      WHERE id = NEW.source_review_item_id
+      FOR SHARE;
+    IF topic_archived_at IS NOT NULL THEN
+      RAISE EXCEPTION 'refused: no new practice from an archived review topic'
+        USING ERRCODE = 'restrict_violation', HINT = '{ARCHIVE_GUARD_HINT}';
+    END IF;
+  END IF;
+  RETURN NEW;
+END
+""",
     "studymap_guard_review_truncate": f"""
 BEGIN
   IF EXISTS (SELECT 1 FROM review_plan_items WHERE archived_at IS NOT NULL)
@@ -221,6 +245,8 @@ ARCHIVE_GUARD_TRIGGERS = [
      "BEFORE DELETE OR UPDATE ON review_plan_items FOR EACH ROW"),
     ("trg_guard_review_items_truncate", "review_plan_items", "studymap_guard_review_truncate",
      2 | 32, "BEFORE TRUNCATE ON review_plan_items FOR EACH STATEMENT"),
+    ("trg_guard_practice_source", "quizzes", "studymap_guard_practice_source",
+     1 | 2 | 4 | 16, "BEFORE INSERT OR UPDATE OF source_review_item_id ON quizzes FOR EACH ROW"),
     ("trg_guard_review_plans_truncate", "review_plans", "studymap_guard_review_truncate",
      2 | 32, "BEFORE TRUNCATE ON review_plans FOR EACH STATEMENT"),
 ]
@@ -281,3 +307,22 @@ def archive_guard_problems(conn) -> List[str]:
             problems.append(f"guard function {function} called by {name}: search_path is "
                             f"{list(config or [])}, expected [{want_path!r}]")
     return problems
+
+
+# Review history = a topic that is archived, or that has a practice quiz. Code older than
+# #194 deletes such a plan on regeneration (the guard now refuses that), so both the
+# rollback floor and the downgrades count it, not archived topics only (Codex task53).
+HISTORY_TOPICS_SQL = (
+    "SELECT count(*) FROM review_plan_items i WHERE i.archived_at IS NOT NULL "
+    "OR EXISTS (SELECT 1 FROM quizzes q WHERE q.source_review_item_id = i.id)")
+HISTORY_TOPICS_SQL_NO_ARCHIVE = (
+    "SELECT count(*) FROM review_plan_items i "
+    "WHERE EXISTS (SELECT 1 FROM quizzes q WHERE q.source_review_item_id = i.id)")
+HISTORY_LOCK_SQL = ("LOCK TABLE review_plans, review_plan_items, quizzes "
+                    "IN SHARE ROW EXCLUSIVE MODE")
+
+
+def history_topics(conn) -> int:
+    """Topics holding review history (archived, or with practice)."""
+    sql = HISTORY_TOPICS_SQL if archived_at_column_exists(conn) else HISTORY_TOPICS_SQL_NO_ARCHIVE
+    return int(conn.execute(sa.text(sql)).scalar() or 0)

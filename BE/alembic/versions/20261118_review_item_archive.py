@@ -28,10 +28,11 @@ import sqlalchemy as sa
 
 from shared.db_schema_checks import (
     ARCHIVE_INDEX,
+    HISTORY_LOCK_SQL,
+    history_topics,
     OLD_PRIORITY_CONSTRAINT,
     archive_index_exists,
     archive_index_problems,
-    archived_at_column_exists,
     old_priority_constraint_exists,
 )
 
@@ -67,14 +68,13 @@ def downgrade() -> None:
     conn = op.get_bind()
     # No archive may commit between the count and restoring the old constraint (Codex
     # task50): block writes on both tables for the rest of this transaction.
-    conn.execute(sa.text(
-        "LOCK TABLE review_plans, review_plan_items IN SHARE ROW EXCLUSIVE MODE"))
-    archived = (conn.execute(sa.text(
-        "SELECT count(*) FROM review_plan_items WHERE archived_at IS NOT NULL")).scalar()
-        if archived_at_column_exists(conn) else 0)
+    conn.execute(sa.text(HISTORY_LOCK_SQL))
+    # Practice history counts, not archived topics only (Codex task53): below this
+    # revision, code regenerates by deleting the plan and the cascade takes the practice.
+    archived = history_topics(conn)
     if archived:
         raise RuntimeError(
-            f"refusing downgrade: {archived} archived review plan topic(s) exist. "
+            f"refusing downgrade: {archived} review topic(s) hold practice history. "
             f"{OLD_PRIORITY_CONSTRAINT} would fail on them and dropping archived_at would "
             "merge history into current plans. Keep this schema and roll forward; code older "
             "than this revision must not serve either (its regeneration cascade-deletes the "

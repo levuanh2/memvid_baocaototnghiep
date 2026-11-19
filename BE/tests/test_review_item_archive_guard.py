@@ -351,11 +351,13 @@ def _downgrade_statements(module_file):
 def test_each_downgrade_locks_both_tables_before_it_counts_archived_topics():
     """Codex task50: a count before a lock let an archive commit between the count and
     the drop. The lock must come first and cover both tables."""
-    lock = "LOCK TABLE review_plans, review_plan_items IN SHARE ROW EXCLUSIVE MODE"
+    lock = "LOCK TABLE review_plans, review_plan_items, quizzes IN SHARE ROW EXCLUSIVE MODE"
     for module_file in ("20261119_review_item_guard.py", "20261118_review_item_archive.py"):
         seen = _downgrade_statements(module_file)
         first_count = next(i for i, x in enumerate(seen) if "count(*)" in x)
         assert any(lock in x for x in seen[:first_count]), (module_file, seen[:first_count + 1])
+        # Practice history counts, not archived topics only (Codex task53).
+        assert "quizzes" in seen[first_count], (module_file, seen[first_count])
 
 
 def test_downgrade_20261118_keeps_its_lock_until_the_column_is_dropped():
@@ -440,3 +442,72 @@ def test_the_verifier_requires_the_pinned_search_path():
         c.commit()
     r = _verify_and_restore()
     assert r.returncode != 0 and "search_path" in r.stderr, r.stderr
+
+
+# ── task53: no new practice from an archived topic, whatever path inserts it ──
+
+def _new_practice_quiz(item, owner):
+    from app.domains.quiz import repository as quiz_repo
+
+    return quiz_repo.create_quiz(
+        user_id=owner, document_id=item["document_id"], title="Luyện tập muộn",
+        scope={"type": "review_item", "section_ids": []}, question_count=1,
+        difficulty="easy", quiz_type="practice", source_review_item_id=item["review_item_id"],
+        source_attempt_id=item["attempt_id"])
+
+
+def test_a_late_worker_cannot_insert_practice_from_an_archived_topic(client, planned, owner,
+                                                                     monkeypatch):
+    """Codex task53: the request checks the topic before enqueueing; the worker inserts
+    the quiz later, after a regeneration may have archived the topic."""
+    _archived(client, planned, monkeypatch)
+    with pytest.raises(sa.exc.DBAPIError) as exc_info:
+        _new_practice_quiz(planned["item"], owner)
+    _refused(exc_info)
+
+
+def test_a_worker_racing_the_archive_waits_and_is_refused(client, planned, owner, monkeypatch):
+    from sqlalchemy import event
+
+    from app.application import review_plans as review_uc
+    from app.db import get_engine
+
+    archived, release = threading.Event(), threading.Event()
+
+    def _pause(conn, cursor, statement, *a):
+        if (statement.lstrip().upper().startswith("UPDATE REVIEW_PLAN_ITEMS SET ARCHIVED_AT")
+                and not archived.is_set()):
+            archived.set()
+            release.wait(30)
+
+    _fake_guide(monkeypatch, GUIDE_2)
+    engine = get_engine()
+    event.listen(engine, "after_cursor_execute", _pause)
+    outcome = {}
+
+    def _archiver():
+        review_uc.generate(planned["attempt_id"], owner, force=True, bat_buoc_chu_so_huu=True)
+        outcome["archive"] = "ok"
+
+    def _worker():
+        try:
+            _new_practice_quiz(planned["item"], owner)
+            outcome["practice"] = "inserted"
+        except sa.exc.DBAPIError as exc:
+            outcome["practice"] = getattr(exc.orig, "sqlstate", repr(exc.orig))
+
+    try:
+        arch = threading.Thread(target=_archiver)
+        arch.start()
+        assert archived.wait(30), "the regeneration did not reach its archiving UPDATE"
+        work = threading.Thread(target=_worker)
+        work.start()
+        work.join(2)
+        assert work.is_alive(), "the insert must wait for the archiving transaction"
+        release.set()
+        arch.join(60)
+        work.join(60)
+    finally:
+        release.set()
+        event.remove(engine, "after_cursor_execute", _pause)
+    assert outcome == {"archive": "ok", "practice": "23001"}, outcome
