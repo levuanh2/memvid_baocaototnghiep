@@ -28,6 +28,13 @@
     "rule": "/api/attempts/<attempt_id>/concept-masteries"
   },
   {
+    "endpoint": "api_attempt_regrade",
+    "methods": [
+      "POST"
+    ],
+    "rule": "/api/attempts/<attempt_id>/regrade"
+  },
+  {
     "endpoint": "api_attempt_submit",
     "methods": [
       "POST"
