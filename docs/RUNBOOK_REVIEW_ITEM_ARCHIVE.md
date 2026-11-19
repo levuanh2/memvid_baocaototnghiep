@@ -66,8 +66,9 @@ practice quiz, attempt, answer and mastery row made from them. Two layers stop t
      still exist (old-code regeneration, also before any archive exists; hand delete);
    - `DELETE` of an archived topic, or of a topic with practice quizzes, while its plan
      exists (direct, or children first);
-   - any `UPDATE` or upsert of an archived topic except its three nullable references
-     being set to NULL (FK `ON DELETE SET NULL`): archived topics are read-only;
+   - any `UPDATE` or upsert of a topic with history (archived, or active with practice)
+     except archiving an active one and its three nullable references being set to NULL
+     (FK `ON DELETE SET NULL`): history is read-only;
    - `TRUNCATE` of `review_plans` or `review_plan_items` while any practice history exists.
 
    - `INSERT` of a practice quiz from an archived topic (or moving one onto it), whatever
@@ -84,8 +85,12 @@ practice quiz, attempt, answer and mastery row made from them. Two layers stop t
    Not refused: deleting a document (Library) or an account, or an attempt, still removes
    everything made from it, archived history included, exactly as before #194. The new
    code's archiving and FK `SET NULL` updates are not affected.
-   The new code locks the plan row before archiving, so an old-code delete waits and then
-   sees the committed archive (no deadlock that could sacrifice the archive).
+   Every guard decision first locks the attempt that owns the plan (a regeneration holds
+   it `FOR UPDATE`, a practice insert `FOR KEY SHARE`, the delete guards take it `FOR
+   UPDATE`), then judges history with a fresh snapshot: a delete racing a regeneration or
+   a practice insert waits and is refused. An old-code plan delete racing a regeneration
+   may deadlock instead; PostgreSQL then aborts one of them and no history is lost (the
+   surviving delete is judged under the lock).
    `verify_db_schema` fails while any guard trigger is missing, disabled, on the wrong
    event or calling the wrong function, or a guard function's body differs from the
    contract in `BE/shared/db_schema_checks.py`.

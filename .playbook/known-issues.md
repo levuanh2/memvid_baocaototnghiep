@@ -8537,3 +8537,14 @@ except `test_rollback_preflight.py`, written together with the module it tests.
 - *Practice provenance.* Only `source_review_item_id` was frozen; `quiz_type` and
   `source_attempt_id` could be rewritten (hiding the quiz, breaking the comparison). All
   three are read-only for a practice quiz.
+
+**Review fixes (Codex task56: two P1 races, one P2), red first:**
+- *One serialisation point.* The delete guards judged history on their snapshot, before
+  a racing regeneration or practice insert committed; their cascade then waited and took
+  the new history. Reproduced both (diagnostic quiz delete vs the first archive, plan
+  delete vs a practice insert). Every guard now locks the owning attempt first (`FOR
+  UPDATE` in the plan and quiz delete guards; regeneration already holds it `FOR UPDATE`,
+  a practice insert `FOR KEY SHARE`), then judges with a fresh snapshot.
+- *Active topics with practice* were rewritable, also atomically rewritten and archived.
+  They are now read-only like archived ones, except the archive transition itself and
+  the FK SET NULL of their references.

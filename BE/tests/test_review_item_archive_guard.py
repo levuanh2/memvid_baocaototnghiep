@@ -629,3 +629,134 @@ def test_practice_quiz_provenance_is_read_only(client, planned):
         with _raw() as c, pytest.raises(sa.exc.DBAPIError) as exc_info:
             c.execute(sa.text(sql), {"q": planned["pq"]})
         _refused(exc_info)
+
+
+# ── task56: deletes racing a regeneration or a practice insert; active topics ──
+
+def _plan_without_history(be, client, monkeypatch, owner):
+    """A graded diagnostic attempt and its first plan: no archive, no practice yet."""
+    from tests.test_gap_and_review import _seed_quiz, _take_quiz
+    from tests.test_review_plan_archive import GUIDE_1
+
+    _protect(be, monkeypatch, owner)
+    quiz_id, qids, _ = _seed_quiz(client, owner)
+    attempt_id = _take_quiz(client, quiz_id, qids, ["sai", "sai", "dung"])
+    _fake_guide(monkeypatch, GUIDE_1)
+    return quiz_id, attempt_id, _plan(client, attempt_id)
+
+
+def _race(first_name, first, pause_when, second, outcome):
+    """Run `first` until its statement matching `pause_when` has executed, start
+    `second` (which must wait), then let `first` commit."""
+    from sqlalchemy import event
+
+    from app.db import get_engine
+
+    hit, release = threading.Event(), threading.Event()
+
+    def _pause(conn, cursor, statement, *a):
+        if pause_when(" ".join(statement.split()).upper()) and not hit.is_set() \
+                and threading.current_thread().name == first_name:
+            hit.set()
+            release.wait(30)
+
+    engine = get_engine()
+    event.listen(engine, "after_cursor_execute", _pause)
+    try:
+        t1 = threading.Thread(target=first, name=first_name)
+        t1.start()
+        assert hit.wait(30), f"{first_name} did not reach its pause point"
+        t2 = threading.Thread(target=second)
+        t2.start()
+        t2.join(2)
+        assert t2.is_alive(), "the second transaction must wait for the first"
+        release.set()
+        t1.join(60)
+        t2.join(60)
+    finally:
+        release.set()
+        event.remove(engine, "after_cursor_execute", _pause)
+    return outcome
+
+
+def _sqlstate_of(fn, outcome, key):
+    try:
+        fn()
+        outcome[key] = "done"
+    except sa.exc.DBAPIError as exc:
+        outcome[key] = getattr(exc.orig, "sqlstate", repr(exc.orig))
+    except Exception as exc:
+        outcome[key] = repr(exc)[:200]
+
+
+def test_a_diagnostic_quiz_delete_racing_the_first_archive_is_refused(be, client, owner,
+                                                                     monkeypatch):
+    """Codex task56: the quiz DELETE judged history on its snapshot (none yet), its
+    cascade waited for the regeneration's attempt lock, then deleted the attempt and,
+    with it, the archive just committed."""
+    from app.application import review_plans as review_uc
+    from tests.test_review_plan_archive import GUIDE_2
+
+    quiz_id, attempt_id, first = _plan_without_history(be, client, monkeypatch, owner)
+    _fake_guide(monkeypatch, GUIDE_2)
+    outcome = {}
+
+    def _regenerate():
+        _sqlstate_of(lambda: review_uc.generate(attempt_id, owner, force=True,
+                                                bat_buoc_chu_so_huu=True), outcome, "archive")
+
+    def _delete_quiz():
+        def go():
+            with _raw() as c:
+                c.execute(sa.text("SET lock_timeout = '20s'"))
+                c.execute(sa.text("DELETE FROM quizzes WHERE id = :q"), {"q": quiz_id})
+                c.commit()
+        _sqlstate_of(go, outcome, "delete")
+
+    _race("archiver", _regenerate,
+          lambda st: st.startswith("SELECT") and "FROM QUIZ_ATTEMPTS" in st and "FOR UPDATE" in st,
+          _delete_quiz, outcome)
+    assert outcome == {"archive": "done", "delete": "23001"}, outcome
+    with _raw() as c:
+        assert c.execute(sa.text("SELECT count(*) FROM review_plan_items WHERE "
+                                 "review_plan_id = :p AND archived_at IS NOT NULL"),
+                         {"p": first["review_plan_id"]}).scalar() == 1
+
+
+def test_a_plan_delete_racing_a_practice_insert_is_refused(be, client, owner, monkeypatch):
+    """Codex task56: the plan DELETE judged history before the worker's practice quiz
+    committed; its cascade then took the new practice once the worker committed."""
+    from app.domains.review import service as review_svc
+
+    _, _, first = _plan_without_history(be, client, monkeypatch, owner)
+    item = review_svc.get_item(first["items"][0]["review_item_id"])
+    outcome = {}
+
+    def _insert():
+        _sqlstate_of(lambda: _new_practice_quiz(item, owner), outcome, "practice")
+
+    def _delete_plan():
+        def go():
+            with _raw() as c:
+                c.execute(sa.text("SET lock_timeout = '20s'"))
+                c.execute(sa.text("DELETE FROM review_plans WHERE id = :p"),
+                          {"p": first["review_plan_id"]})
+                c.commit()
+        _sqlstate_of(go, outcome, "delete")
+
+    _race("worker", _insert, lambda st: st.startswith("INSERT INTO QUIZZES"),
+          _delete_plan, outcome)
+    assert outcome == {"practice": "done", "delete": "23001"}, outcome
+
+
+def test_an_active_topic_with_practice_is_read_only_except_archiving(client, planned):
+    """Codex task56: only archived topics were frozen; an active topic with practice
+    could be rewritten, also atomically rewritten and archived."""
+    item = planned["item"]["review_item_id"]
+    for sql in ("UPDATE review_plan_items SET topic = 'forged' WHERE id = :i",
+                "UPDATE review_plan_items SET topic = 'forged', archived_at = now() "
+                "WHERE id = :i",
+                "UPDATE review_plan_items SET reason = 'x', priority = 9 WHERE id = :i"):
+        with _raw() as c, pytest.raises(sa.exc.DBAPIError) as exc_info:
+            c.execute(sa.text(sql), {"i": item})
+        _refused(exc_info)

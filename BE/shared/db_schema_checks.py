@@ -154,6 +154,10 @@ ARCHIVE_GUARD_HINT = ("Review plans with practice history are kept (issue #18). 
 ARCHIVE_GUARD_FUNCTIONS = {
     "studymap_guard_review_plan_delete": f"""
 BEGIN
+  -- Serialise with every writer of this plan's history (Codex task56): a regeneration
+  -- holds the attempt FOR UPDATE, a practice insert FOR KEY SHARE. Wait for them, then
+  -- judge with a fresh snapshot. No row when the attempt itself is being deleted.
+  PERFORM 1 FROM quiz_attempts WHERE id = OLD.attempt_id FOR UPDATE;
   IF (EXISTS (SELECT 1 FROM review_plan_items i
                WHERE i.review_plan_id = OLD.id AND i.archived_at IS NOT NULL)
       OR EXISTS (SELECT 1 FROM review_plan_items i
@@ -182,18 +186,23 @@ BEGIN
     END IF;
     RETURN OLD;
   END IF;
-  IF OLD.archived_at IS NOT NULL AND (
+  -- History is read-only: an archived topic, or an active one with practice (Codex
+  -- task56). Allowed: archiving an active topic (archived_at NULL -> a time) and the FK
+  -- ON DELETE SET NULL of its three references; nothing else, not even together.
+  IF (OLD.archived_at IS NOT NULL
+      OR EXISTS (SELECT 1 FROM quizzes WHERE source_review_item_id = OLD.id)) AND (
        (NEW.id, NEW.review_plan_id, NEW.topic, NEW.priority, NEW.reason, NEW.status,
-        NEW.mastery_score, NEW.review_tasks_json, NEW.created_at, NEW.archived_at)
+        NEW.mastery_score, NEW.review_tasks_json, NEW.created_at)
          IS DISTINCT FROM
        (OLD.id, OLD.review_plan_id, OLD.topic, OLD.priority, OLD.reason, OLD.status,
-        OLD.mastery_score, OLD.review_tasks_json, OLD.created_at, OLD.archived_at)
+        OLD.mastery_score, OLD.review_tasks_json, OLD.created_at)
+       OR (OLD.archived_at IS NOT NULL AND NEW.archived_at IS DISTINCT FROM OLD.archived_at)
        OR (NEW.concept_mastery_id IS DISTINCT FROM OLD.concept_mastery_id
            AND NEW.concept_mastery_id IS NOT NULL)
        OR (NEW.section_id IS DISTINCT FROM OLD.section_id AND NEW.section_id IS NOT NULL)
        OR (NEW.knowledge_node_id IS DISTINCT FROM OLD.knowledge_node_id
            AND NEW.knowledge_node_id IS NOT NULL)) THEN
-    RAISE EXCEPTION 'refused: an archived review topic is read-only'
+    RAISE EXCEPTION 'refused: a review topic with history is read-only'
       USING ERRCODE = 'restrict_violation', HINT = '{ARCHIVE_GUARD_HINT}';
   END IF;
   RETURN NEW;
@@ -209,6 +218,16 @@ DECLARE
   plan_attempt uuid;
 BEGIN
   IF TG_OP = 'DELETE' THEN
+    -- Serialise with regenerations and practice inserts first (Codex task56): lock this
+    -- quiz's own attempts and, for a practice quiz, its plan's attempt, then judge.
+    PERFORM 1 FROM quiz_attempts WHERE quiz_id = OLD.id FOR UPDATE;
+    IF OLD.source_review_item_id IS NOT NULL THEN
+      SELECT p.attempt_id INTO plan_attempt FROM review_plan_items i
+        JOIN review_plans p ON p.id = i.review_plan_id WHERE i.id = OLD.source_review_item_id;
+      IF plan_attempt IS NOT NULL THEN
+        PERFORM 1 FROM quiz_attempts WHERE id = plan_attempt FOR UPDATE;
+      END IF;
+    END IF;
     -- A practice quiz is history: it goes only when its topic, plan, attempt, account or
     -- document goes (those cascades reach it after the parent row is gone).
     IF OLD.source_review_item_id IS NOT NULL AND EXISTS (
