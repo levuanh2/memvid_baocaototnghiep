@@ -47,27 +47,46 @@ docker compose -f docker-compose.prod.yml run --rm -e ALEMBIC_ALLOW_PRODUCTION=1
 | index is missing | nothing; steps 1-3 |
 | index is INVALID / not ready / wrong columns or predicate | `DROP INDEX CONCURRENTLY uq_review_plan_items_priority_active;` (outside a transaction), then steps 1-3. Step 2 refuses to drop the old constraint until the new index verifies |
 | constraint `uq_review_plan_items_priority` still exists | check step-1 facts: with archived topics present the constraint cannot have been re-added; then steps 1-3 |
+| guard trigger or function missing, or trigger disabled | nothing; steps 1-3 (the stamp to `20261115` reruns `20261118` and `20261119`, both rerun-safe); a disabled trigger is re-created enabled |
 
 Until step 3 exits 0, do **not** start the new backend.
 `BE/tests/test_review_item_archive_migration.py::test_the_upgrade_is_rerun_safe` runs
 exactly steps 1-2 against a disposable database.
 
-## 3. Rollback
+## 3. Rollback and the two guards (owner decision 2026-11-19)
 
-- **Schema:** `alembic downgrade 20261115_attempt_submit_key` refuses while archived topics
-  exist. Do not force it.
-- **Code: no rollback below this release once a topic is archived.** Code older than
-  this migration does not know `archived_at`, so it would:
-  - show archived topics as current ones;
-  - allow new practice from them;
-  - on "Tạo lại kế hoạch", delete the plan, and the foreign key cascade would delete the
-    archived topics with every practice quiz, attempt, answer and mastery row made from
-    them.
+Code older than this release does not know `archived_at`. On "Tạo lại kế hoạch" it
+deletes the plan, and the foreign key cascade would take the archived topics with every
+practice quiz, attempt, answer and mastery row made from them. Two layers stop that:
 
-  `scripts/rollback.sh` does not know this floor today. Before any rollback, check
-  `SELECT count(*) FROM review_plan_items WHERE archived_at IS NOT NULL`. If it is not 0,
-  roll back only to a SHA that contains this migration and its readers, or roll forward
-  with a fix.
-- A hard guard (a database trigger refusing to delete a plan that holds archived topics,
-  or a schema floor in `rollback.sh`) is proposed and waits for owner approval; it is not
-  part of this change.
+1. **Database guard** (migration `20261119_review_item_guard`), fail closed with SQLSTATE
+   23001 and a hint naming this runbook (no row data in the message):
+   - `DELETE` of a review plan holding archived topics while its attempt, user and
+     document all still exist (old-code regeneration, hand delete);
+   - `DELETE` of an archived topic while its plan exists (direct, or children first);
+     `UPDATE` that un-archives it or moves it to another plan;
+   - `TRUNCATE` of `review_plans` or `review_plan_items` while archived topics exist.
+
+   Not refused: deleting a document (Library) or an account, or an attempt, still removes
+   everything made from it, archived history included, exactly as before #194. The new
+   code's archiving and FK `SET NULL` updates are not affected.
+   `verify_db_schema` fails while any guard trigger or function is missing or disabled.
+2. **Rollback floor** in `scripts/rollback.sh`, before any checkout or build:
+   `scripts.rollback_preflight` reads `archive_schema`, `archived_topics` and `guard`
+   read-only. With archived topics, a target SHA is accepted only if its tree contains
+   migrations `20261118_review_item_archive` and `20261119_review_item_guard` and its
+   `BE/app/domains/review/service.py` knows `archived_at`. A failed or unreadable
+   preflight refuses. `MEMVID_BREAK_GLASS` does not skip it.
+
+Rules:
+- **Schema:** `alembic downgrade` refuses below `20261119` and below `20261118` while
+  archived topics exist. Do not force it.
+- **Code:** roll back only to a SHA containing both migrations, or roll forward with a fix.
+- **No automatic bypass.** Disabling a guard trigger (`ALTER TABLE ... DISABLE TRIGGER`)
+  or skipping the preflight is a manual, owner-approved incident step, recorded in the
+  incident log, and the verifier then blocks every deploy until the trigger is enabled
+  again. Before doing it, export the archived history (step 1 queries, plus the practice
+  quizzes listed in `archived_items`).
+- Not covered: `pg_restore` of an older backup over the database, or a superuser session
+  with `session_replication_role = replica` (triggers off). Both are owner-only
+  operations covered by the backup/restore runbook, not by this guard.

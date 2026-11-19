@@ -3800,3 +3800,12 @@ as an unhandled error after the tests and exits 1. The local check grepped only 
 "Tests" line, so it looked green. Fix: an explicit `{ focusBanner }` option instead of
 comparing functions. Prevention: judge a run by its exit code (`echo $?`), not by
 grepping the summary line; and do not read a module export on a path that does not use it.
+
+# New code cannot patch old code: guard the data where old code also writes (2026-11-19)
+
+An expand-only migration is "safe to roll back" only if the old code is harmless on the
+new data. Here the old code's regeneration became destructive once rows were archived,
+so the guard had to live in the database (triggers) and in the rollback tool, not in the
+new application. When a guard refuses a delete, first map every legitimate cascade into
+the table (document, account, attempt deletes) and distinguish them, or the guard breaks
+ordinary product actions.

@@ -69,14 +69,17 @@ base_env() {
     TEST_SOURCE="$SOURCE" TEST_SERVER="$SERVER" TEST_ORIGIN="$ORIGIN" \
     TEST_HOOK_PHASE="${TEST_HOOK_PHASE:-}" TEST_HOOK_ACTION="${TEST_HOOK_ACTION:-}" \
     TEST_HOOK_MARKER="$HOOK_MARKER" TEST_MOVE_SHA="${TEST_MOVE_SHA:-}" \
-    TEST_FAIL_PHASE="${TEST_FAIL_PHASE:-}" TEST_FAIL_CODE="${TEST_FAIL_CODE:-75}" "$@"
+    TEST_FAIL_PHASE="${TEST_FAIL_PHASE:-}" TEST_FAIL_CODE="${TEST_FAIL_CODE:-75}" \
+    TEST_PREFLIGHT_OUTPUT="${TEST_PREFLIGHT_OUTPUT-archive_schema=0 archived_topics=0 guard=0}" \
+    TEST_PREFLIGHT_CODE="${TEST_PREFLIGHT_CODE:-0}" "$@"
 }
 
 reset_controls() {
   : >"$DOCKER_LOG"
   rm -f "$HOOK_MARKER"
   : >"$CURL_LOG"
-  unset CI_SUCCESS_SHAS CI_MODE TEST_HOOK_PHASE TEST_HOOK_ACTION TEST_MOVE_SHA TEST_FAIL_PHASE TEST_FAIL_CODE
+  unset CI_SUCCESS_SHAS CI_MODE TEST_HOOK_PHASE TEST_HOOK_ACTION TEST_MOVE_SHA TEST_FAIL_PHASE TEST_FAIL_CODE \
+    TEST_PREFLIGHT_OUTPUT TEST_PREFLIGHT_CODE
 }
 
 run_deploy() {
@@ -190,6 +193,11 @@ if [ -n "$phase" ] && [ "$phase" = "${TEST_HOOK_PHASE:-}" ] && [ ! -e "$TEST_HOO
 fi
 if [ -n "$phase" ] && [ "$phase" = "${TEST_FAIL_PHASE:-}" ]; then
   exit "${TEST_FAIL_CODE:-75}"
+fi
+# The archive preflight of rollback.sh (read-only DB facts), modelled by the harness.
+if [[ "$args" =~ compose.*run.*scripts.rollback_preflight ]]; then
+  printf '%s\n' "${TEST_PREFLIGHT_OUTPUT:-}"
+  exit "${TEST_PREFLIGHT_CODE:-0}"
 fi
 if [ "${1:-}" = inspect ]; then
   printf 'running\t0\thealthy\n'
@@ -439,5 +447,54 @@ reset_controls
 expect_status 0 base_env env MEMVID_BREAK_GLASS=1 bash "$SERVER/scripts/deploy.sh"
 assert_ledger "$B_SHA" break-glass
 pass "break-glass pinned and unpinned paths warn, succeed, and are ledgered"
+
+# R: archive rollback floor (issue #18, owner decision 2026-11-19). Before any checkout
+# or build, rollback.sh reads the archive facts from the database (read-only) and refuses
+# a target SHA that predates the archive while archived topics exist. Unknown = refused.
+git -C "$SERVER" -c advice.detachedHead=false checkout --detach "$B_SHA" >/dev/null
+reset_controls
+TEST_PREFLIGHT_OUTPUT="archive_schema=1 archived_topics=3 guard=1"
+run_rollback 1 "$A_SHA"
+assert_head "$B_SHA"
+assert_called 'compose .*run.*scripts.rollback_preflight'
+assert_not_called 'compose .* build$'
+grep -q "predates the review-topic archive" "$OUTPUT" || { cat "$OUTPUT" >&2; fail "no archive-floor reason"; }
+reset_controls
+TEST_PREFLIGHT_OUTPUT="archive_schema=1 archived_topics=3 guard=1"
+expect_status 1 base_env env MEMVID_BREAK_GLASS=1 bash "$SERVER/scripts/rollback.sh" "$A_SHA"
+assert_head "$B_SHA"
+assert_not_called 'compose .* build$'
+reset_controls
+TEST_PREFLIGHT_CODE=3
+TEST_PREFLIGHT_OUTPUT="STOP: cannot reach the database"
+run_rollback 1 "$A_SHA"
+assert_head "$B_SHA"
+assert_not_called 'compose .* build$'
+reset_controls
+TEST_PREFLIGHT_OUTPUT="something unexpected"
+run_rollback 1 "$A_SHA"
+assert_head "$B_SHA"
+assert_not_called 'compose .* build$'
+pass "R archived topics refuse a pre-archive rollback target before checkout; break glass, a failed or unreadable preflight refuse too"
+
+printf 'archive\n' >"$SOURCE/revision.txt"
+mkdir -p "$SOURCE/BE/alembic/versions" "$SOURCE/BE/app/domains/review"
+printf 'revision = "20261118_review_item_archive"\n' >"$SOURCE/BE/alembic/versions/20261118_review_item_archive.py"
+printf 'revision = "20261119_review_item_guard"\n' >"$SOURCE/BE/alembic/versions/20261119_review_item_guard.py"
+printf 'archived_at = None  # readers filter archived topics\n' >"$SOURCE/BE/app/domains/review/service.py"
+git -C "$SOURCE" add -A
+git -C "$SOURCE" commit -m "archive-aware" >/dev/null
+git -C "$SOURCE" push origin HEAD:main >/dev/null
+git -C "$SERVER" fetch origin main >/dev/null
+D_SHA="$(git -C "$SOURCE" rev-parse HEAD)"
+reset_controls
+TEST_PREFLIGHT_OUTPUT="archive_schema=1 archived_topics=3 guard=1"
+expect_status 0 base_env env MEMVID_BREAK_GLASS=1 bash "$SERVER/scripts/rollback.sh" "$D_SHA"
+assert_head "$D_SHA"
+reset_controls
+TEST_PREFLIGHT_OUTPUT="archive_schema=1 archived_topics=0 guard=1"
+run_rollback 0 "$A_SHA"
+assert_head "$A_SHA"
+pass "R an archive-aware target, or no archived topic yet, may be rolled back to"
 
 printf 'All deploy pinning scenarios passed.\n'

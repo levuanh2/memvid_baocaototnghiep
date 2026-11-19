@@ -24,7 +24,7 @@ from tests.test_attempt_submit_key_migration import _migrate, _run, _stamp, _ver
 
 BE_ROOT = Path(__file__).resolve().parents[1]
 
-HEAD = "20261118_review_item_archive"
+HEAD = "20261119_review_item_guard"
 PREVIOUS = "20261115_attempt_submit_key"
 INDEX = "uq_review_plan_items_priority_active"
 OLD = "uq_review_plan_items_priority"
@@ -137,7 +137,9 @@ def test_the_partial_index_allows_archived_and_current_topics_to_share_a_priorit
                 "status, mastery_score, review_tasks_json) VALUES (gen_random_uuid(), :p, "
                 "'t2', 1, 'r', 'review_needed', 0.5, '[]')"), {"p": plan})
     finally:
-        db.execute(sa.text("DELETE FROM review_plans WHERE id = :p"), {"p": plan})
+        db.execute(sa.text(  # the attempt's delete cascades; the guard refuses a plan delete
+            "DELETE FROM quiz_attempts WHERE id = (SELECT attempt_id FROM review_plans "
+            "WHERE id = :p)"), {"p": plan})
 
 
 def test_the_downgrade_refuses_while_archived_topics_exist(db, owner):
@@ -151,7 +153,9 @@ def test_the_downgrade_refuses_while_archived_topics_exist(db, owner):
         assert "Roll back code only" not in out, "older code would cascade-delete the history"
         assert _version(db) == HEAD and _state(db) == before
     finally:
-        db.execute(sa.text("DELETE FROM review_plans WHERE id = :p"), {"p": plan})
+        db.execute(sa.text(  # the attempt's delete cascades; the guard refuses a plan delete
+            "DELETE FROM quiz_attempts WHERE id = (SELECT attempt_id FROM review_plans "
+            "WHERE id = :p)"), {"p": plan})
 
 
 def test_the_downgrade_restores_the_old_schema_when_nothing_is_archived(db):

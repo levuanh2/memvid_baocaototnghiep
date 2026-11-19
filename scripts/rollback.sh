@@ -35,6 +35,30 @@ if ! awk -v sha="$SHA" '$2 == sha && ($3 == "deploy" || $3 == "rollback" || $3 =
   fi
 fi
 
+# Archive rollback floor (issue #18, migrations 20261118/20261119; owner 2026-11-19).
+# Code older than the review-topic archive deletes a regenerated plan, and the cascade
+# would take archived topics with their practice history (the database guard refuses
+# that too; this is the second layer). Read the facts BEFORE any checkout or build.
+# Fail closed: no break-glass path skips it; a failed or unreadable preflight refuses.
+target_supports_archive() {
+  git -C "$REPO_ROOT" cat-file -e "$1:BE/alembic/versions/20261118_review_item_archive.py" 2>/dev/null \
+    && git -C "$REPO_ROOT" cat-file -e "$1:BE/alembic/versions/20261119_review_item_guard.py" 2>/dev/null \
+    && git -C "$REPO_ROOT" grep -q archived_at "$1" -- BE/app/domains/review/service.py 2>/dev/null
+}
+log "archive preflight: reading archive facts from the database (read-only)"
+if ! PREFLIGHT="$(compose run --rm -T -e ALEMBIC_ALLOW_PRODUCTION=1 backend \
+    python -m scripts.rollback_preflight --moi-truong production 2>&1)"; then
+  printf '%s\n' "$PREFLIGHT" | tail -n 5 >&2
+  die "rollback refused: the archive preflight could not read the database; nothing was checked out (docs/RUNBOOK_REVIEW_ITEM_ARCHIVE.md)"
+fi
+FACTS="$(printf '%s\n' "$PREFLIGHT" | grep -E '^archive_schema=[01] archived_topics=[0-9]+ guard=[01]$' | tail -n 1 || true)"
+[ -n "$FACTS" ] || die "rollback refused: unreadable archive preflight output; nothing was checked out"
+ARCHIVED="$(printf '%s\n' "$FACTS" | sed -E 's/.*archived_topics=([0-9]+).*/\1/')"
+if [ "$ARCHIVED" -gt 0 ] && ! target_supports_archive "$SHA"; then
+  die "rollback refused: $SHA predates the review-topic archive and $ARCHIVED archived topic(s) exist; its regeneration would delete their practice history. Roll back to a SHA containing migrations 20261118 and 20261119, or roll forward (docs/RUNBOOK_REVIEW_ITEM_ARCHIVE.md)"
+fi
+log "archive preflight: $FACTS; target $SHA accepted"
+
 if [ -n "$(git -C "$REPO_ROOT" status --porcelain)" ]; then
   git -C "$REPO_ROOT" status --short >&2
   die "uncommitted changes in $REPO_ROOT — commit/stash them before rolling back"

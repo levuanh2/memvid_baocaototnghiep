@@ -29,7 +29,7 @@ from tests.test_practice_idempotency import _submit, practice  # noqa: F401  (fi
 BE_ROOT = Path(__file__).resolve().parents[1]
 INDEX = "uq_quiz_attempts_user_submit_key"
 # The chain head: later revisions (20261118 review topic archive) rerun safely on top.
-HEAD = "20261118_review_item_archive"
+HEAD = "20261119_review_item_guard"
 PREVIOUS = "20261001_job_usage_ctx"
 CREATE = (f"CREATE UNIQUE INDEX CONCURRENTLY {INDEX} "
           "ON quiz_attempts (user_id, submit_key) WHERE submit_key IS NOT NULL")

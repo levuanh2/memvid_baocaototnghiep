@@ -8432,3 +8432,33 @@ fresh database, verifier fails closed), `test_gap_and_review.py` regenerate test
   failure; each check family now prints its own.
 - The migration test fixture reruns the revision after every test (stamp previous +
   migrate), so a test that fails half-way cannot leave the index dropped for the next.
+
+## Two guards for archived review history (owner decision 2026-11-19, Codex task46/48 P1)
+
+**Problem:** after #194 archives a topic, code older than #194 (a rollback, a hand delete)
+deletes the plan on regeneration and the FK cascade deletes the archived topics with
+their practice quizzes, attempts, answers and mastery. Documentation alone did not stop
+`scripts/rollback.sh`, which accepts any ledgered SHA.
+
+**Fix:**
+1. Migration `20261119_review_item_guard` (PostgreSQL triggers, fail closed, SQLSTATE
+   23001, hint names `docs/RUNBOOK_REVIEW_ITEM_ARCHIVE.md`, no row data): refuse DELETE
+   of a plan holding archived topics while its attempt, user and document all exist;
+   DELETE of an archived topic while its plan exists; UPDATE that un-archives or moves
+   one; TRUNCATE of either table while archived topics exist. Deleting a document, an
+   account or an attempt still removes everything made from it, as before. Race: the new
+   code updates the plan row in its archiving transaction, so an old-code DELETE waits
+   for that lock and its row trigger then sees the committed archive. `verify_db_schema`
+   fails while a guard trigger or function is missing or disabled. Downgrade refuses
+   while archived topics exist. The revision id must fit `alembic_version` (32 chars).
+2. `scripts/rollback.sh` runs `scripts.rollback_preflight` (read-only) before any
+   checkout or build: with archived topics, the target tree must contain migrations
+   20261118 and 20261119 and a review service that knows `archived_at`. A failed or
+   unreadable preflight refuses; break glass does not skip it.
+
+**Regression:** `test_review_item_archive_guard.py` (12: old-code ORM delete, SQL delete,
+children first, un-archive, truncate, many regenerations, attempt/document deletes
+allowed, old-code delete racing the archive, verifier missing/disabled trigger, guard
+downgrade refusal), `test_rollback_preflight.py` (2), `scripts/tests/test_deploy_pinning.sh`
+section R (6 cases) and 3 new mutations in `test_deploy_guard_mutations.sh`. Red first,
+except `test_rollback_preflight.py`, written together with the module it tests.

@@ -58,4 +58,8 @@ run_mutation break-glass-reason '[ -n "${MEMVID_BREAK_GLASS_REASON:-}" ]' 'true'
 run_mutation break-glass-attempt-record '  ledger_record "$LEDGER_FILE" "${DEPLOY_SHA:-unpinned}" break-glass-attempt' '  :'
 run_mutation break-glass-failure-record '    ledger_record "$LEDGER_FILE" "${APP_BUILD_SHA:-${DEPLOY_SHA:-unpinned}}" break-glass-failed || true' '    :'
 
+run_mutation rollback-archive-floor 'if [ "$ARCHIVED" -gt 0 ] && ! target_supports_archive "$SHA"; then' 'if false; then' rollback.sh
+run_mutation rollback-archive-preflight-unreadable '[ -n "$FACTS" ] || die' '[ -n "$FACTS" ] || true; : ' rollback.sh
+run_mutation rollback-archive-target-check '    && git -C "$REPO_ROOT" grep -q archived_at "$1" -- BE/app/domains/review/service.py 2>/dev/null' '    || true' rollback.sh
+
 printf 'All guard mutations were detected by the harness.\n'

@@ -38,7 +38,7 @@ def main(argv=None) -> int:
     from shared.env_loader import load_project_env
     load_project_env()
     from scripts.run_migrations import DichBiTuChoi, xac_dinh_dich
-    from shared.db_schema_checks import (ARCHIVE_RUNBOOK, RUNBOOK,
+    from shared.db_schema_checks import (ARCHIVE_RUNBOOK, RUNBOOK, archive_guard_problems,
                                          review_item_archive_problems,
                                          submit_key_index_problems)
     from shared.migration_guard import sanitize
@@ -60,7 +60,8 @@ def main(argv=None) -> int:
             # Each family keeps its own runbook: an archive failure must not send the
             # operator to the submit-key recovery SQL (Codex task46).
             families = [(RUNBOOK, submit_key_index_problems(conn)),
-                        (ARCHIVE_RUNBOOK, review_item_archive_problems(conn))]
+                        (ARCHIVE_RUNBOOK, review_item_archive_problems(conn)
+                         + archive_guard_problems(conn))]
             problems = [pr for _, found in families for pr in found]
     except Exception as exc:  # unreachable DB is a failed verification, never a pass
         print(f"DỪNG: cannot verify {sanitize(url)}: {type(exc).__name__}: {exc}",
@@ -82,6 +83,8 @@ def main(argv=None) -> int:
     print(f"[verify-db] {db}: review_plan_items.archived_at present; "
           "uq_review_plan_items_priority_active valid, unique, (review_plan_id, priority) "
           "WHERE archived_at IS NULL; old uq_review_plan_items_priority absent")
+    print(f"[verify-db] {db}: archive guard triggers present and enabled "
+          "(review_plans delete, review_plan_items delete/update, truncate)")
     return EXIT_OK
 
 

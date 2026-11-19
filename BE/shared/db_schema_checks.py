@@ -136,3 +136,40 @@ def review_item_archive_problems(conn) -> List[str]:
         problems.append(f"constraint {OLD_PRIORITY_CONSTRAINT} still exists: a regeneration "
                         "would fail on archived topics")
     return problems
+
+
+# Migration 20261119: the database refuses deletes that would cascade-delete archived
+# topics (code older than #194, a hand delete). Enabled = 'O' (origin) or 'A' (always).
+ARCHIVE_GUARD_TRIGGERS = [
+    ("trg_guard_review_plan_delete", "review_plans"),
+    ("trg_guard_archived_review_item", "review_plan_items"),
+    ("trg_guard_review_items_truncate", "review_plan_items"),
+    ("trg_guard_review_plans_truncate", "review_plans"),
+]
+ARCHIVE_GUARD_FUNCTIONS = ["studymap_guard_review_plan_delete",
+                           "studymap_guard_archived_review_item",
+                           "studymap_guard_review_truncate"]
+
+
+def archive_guard_problems(conn) -> List[str]:
+    """The archive guard triggers exist, are enabled and call the guard functions."""
+    problems = []
+    for name, table in ARCHIVE_GUARD_TRIGGERS:
+        row = conn.execute(sa.text(
+            "SELECT tg.tgenabled, p.proname FROM pg_trigger tg "
+            "JOIN pg_class t ON t.oid = tg.tgrelid JOIN pg_namespace n ON n.oid = t.relnamespace "
+            "JOIN pg_proc p ON p.oid = tg.tgfoid "
+            "WHERE tg.tgname = :n AND t.relname = :t AND n.nspname = current_schema() "
+            "AND NOT tg.tgisinternal"), {"n": name, "t": table}).first()
+        if row is None:
+            problems.append(f"guard trigger {name} on {table} is missing")
+        elif row[0] not in ("O", "A"):
+            problems.append(f"guard trigger {name} on {table} is disabled (tgenabled={row[0]})")
+        elif row[1] not in ARCHIVE_GUARD_FUNCTIONS:
+            problems.append(f"guard trigger {name} calls {row[1]}, not a guard function")
+    for fn in ARCHIVE_GUARD_FUNCTIONS:
+        if conn.execute(sa.text(
+                "SELECT 1 FROM pg_proc p JOIN pg_namespace n ON n.oid = p.pronamespace "
+                "WHERE p.proname = :f AND n.nspname = current_schema()"), {"f": fn}).first() is None:
+            problems.append(f"guard function {fn} is missing")
+    return problems
