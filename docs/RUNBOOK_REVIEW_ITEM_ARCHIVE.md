@@ -74,7 +74,9 @@ practice quiz, attempt, answer and mastery row made from them. Two layers stop t
      path inserts it. It locks in the regeneration's order (the plan's attempt, then the
      topic), so a worker racing a regeneration waits and is refused, never deadlocks;
    - `DELETE` of a practice quiz while its topic, plan, attempt, account and document
-     exist, or changing its `source_review_item_id` (detaching it); `TRUNCATE quizzes`.
+     exist; `DELETE` of any quiz (also the diagnostic one) whose attempts own a plan with
+     history while its user and document exist; changing a practice quiz's provenance
+     (`source_review_item_id`, `source_attempt_id`, `quiz_type`); `TRUNCATE quizzes`.
 
    Each guard function pins `search_path = <schema>, pg_temp`, so a session's
    temporary tables cannot shadow the tables it checks.

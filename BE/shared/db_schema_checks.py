@@ -220,11 +220,30 @@ BEGIN
       RAISE EXCEPTION 'refused: a practice quiz is review history'
         USING ERRCODE = 'restrict_violation', HINT = '{ARCHIVE_GUARD_HINT}';
     END IF;
+    -- Any quiz (the diagnostic one has no source topic): its attempts own review plans,
+    -- so its delete cascades through them (Codex task55). Refused while one of those
+    -- plans holds history and its user and document exist.
+    IF EXISTS (
+         SELECT 1 FROM quiz_attempts a JOIN review_plans p ON p.attempt_id = a.id
+          WHERE a.quiz_id = OLD.id
+            AND EXISTS (SELECT 1 FROM users WHERE id = p.user_id)
+            AND EXISTS (SELECT 1 FROM documents WHERE id = p.document_id)
+            AND (EXISTS (SELECT 1 FROM review_plan_items i
+                          WHERE i.review_plan_id = p.id AND i.archived_at IS NOT NULL)
+                 OR EXISTS (SELECT 1 FROM review_plan_items i
+                              JOIN quizzes q ON q.source_review_item_id = i.id
+                             WHERE i.review_plan_id = p.id))) THEN
+      RAISE EXCEPTION 'refused: this quiz owns review plans with practice history'
+        USING ERRCODE = 'restrict_violation', HINT = '{ARCHIVE_GUARD_HINT}';
+    END IF;
     RETURN OLD;
   END IF;
+  -- A practice quiz's provenance is read-only: its topic, its source attempt (the
+  -- before/after comparison) and its type (Codex task55).
   IF TG_OP = 'UPDATE' AND OLD.source_review_item_id IS NOT NULL
-     AND NEW.source_review_item_id IS DISTINCT FROM OLD.source_review_item_id THEN
-    RAISE EXCEPTION 'refused: a practice quiz cannot be detached from its topic'
+     AND (NEW.source_review_item_id, NEW.source_attempt_id, NEW.quiz_type)
+         IS DISTINCT FROM (OLD.source_review_item_id, OLD.source_attempt_id, OLD.quiz_type) THEN
+    RAISE EXCEPTION 'refused: a practice quiz''s provenance is read-only'
       USING ERRCODE = 'restrict_violation', HINT = '{ARCHIVE_GUARD_HINT}';
   END IF;
   IF NEW.source_review_item_id IS NOT NULL
@@ -275,7 +294,8 @@ ARCHIVE_GUARD_TRIGGERS = [
      2 | 32, "BEFORE TRUNCATE ON review_plan_items FOR EACH STATEMENT"),
     ("trg_guard_practice_source", "quizzes", "studymap_guard_practice_source",
      1 | 2 | 4 | 8 | 16,
-     "BEFORE INSERT OR DELETE OR UPDATE OF source_review_item_id ON quizzes FOR EACH ROW"),
+     "BEFORE INSERT OR DELETE OR UPDATE OF source_review_item_id, source_attempt_id, "
+     "quiz_type ON quizzes FOR EACH ROW"),
     ("trg_guard_quizzes_truncate", "quizzes", "studymap_guard_review_truncate",
      2 | 32, "BEFORE TRUNCATE ON quizzes FOR EACH STATEMENT"),
     ("trg_guard_review_plans_truncate", "review_plans", "studymap_guard_review_truncate",

@@ -8527,3 +8527,13 @@ except `test_rollback_preflight.py`, written together with the module it tests.
   answers and mastery while their parents existed, and changing `source_review_item_id`
   detached the quiz. Both are refused (and `TRUNCATE quizzes`); document, account and
   attempt deletes still cascade.
+
+**Review fixes (Codex task55: one P1, one P2), red first:**
+- *Diagnostic quiz as a delete root.* The quiz DELETE guard looked only at practice
+  quizzes; deleting the diagnostic quiz cascaded through its attempt, the plan, every
+  topic and every practice quiz while the user and document existed. Any quiz delete is
+  now refused while one of its attempts owns a plan with history and that plan's user
+  and document exist.
+- *Practice provenance.* Only `source_review_item_id` was frozen; `quiz_type` and
+  `source_attempt_id` could be rewritten (hiding the quiz, breaking the comparison). All
+  three are read-only for a practice quiz.

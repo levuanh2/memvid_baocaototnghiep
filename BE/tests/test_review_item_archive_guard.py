@@ -599,3 +599,33 @@ def test_practice_quiz_status_updates_still_work(client, planned):
         c.execute(sa.text("UPDATE quizzes SET title = title || '' WHERE id = :q"),
                   {"q": planned["pq"]})
         c.commit()
+
+
+# ── task55: the diagnostic quiz as an upstream delete root; practice provenance ──
+
+def test_deleting_the_diagnostic_quiz_behind_a_plan_with_history_is_refused(client, planned,
+                                                                            monkeypatch):
+    """Codex task55: the diagnostic quiz has no source topic, so the practice branch let
+    its DELETE through; the cascade then took the attempt, the plan, every topic and
+    every practice quiz made from them while the user and document still existed."""
+    _archived(client, planned, monkeypatch)
+    before = _counts(planned["pq"])
+    with _raw() as c:
+        diagnostic = c.execute(sa.text("SELECT quiz_id FROM quiz_attempts WHERE id = :a"),
+                               {"a": planned["attempt_id"]}).scalar()
+    with _raw() as c, pytest.raises(sa.exc.DBAPIError) as exc_info:
+        c.execute(sa.text("DELETE FROM quizzes WHERE id = :q"), {"q": diagnostic})
+    _refused(exc_info)
+    assert _counts(planned["pq"]) == before
+
+
+def test_practice_quiz_provenance_is_read_only(client, planned):
+    """Codex task55: only source_review_item_id was frozen; quiz_type and
+    source_attempt_id could be rewritten, hiding the quiz and its before/after link."""
+    for sql in ("UPDATE quizzes SET source_attempt_id = NULL, quiz_type = 'diagnostic' "
+                "WHERE id = :q",
+                "UPDATE quizzes SET quiz_type = 'diagnostic' WHERE id = :q",
+                "UPDATE quizzes SET source_attempt_id = NULL WHERE id = :q"):
+        with _raw() as c, pytest.raises(sa.exc.DBAPIError) as exc_info:
+            c.execute(sa.text(sql), {"q": planned["pq"]})
+        _refused(exc_info)
