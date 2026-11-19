@@ -69,7 +69,8 @@ be reconciled with #160. Everything else is independent in code.
    **#194 (migrations `20261118_review_item_archive` then `20261119_review_item_guard`)**: owner
    approval and its own deploy window. `deploy.sh` runs both (step 5) and `verify_db_schema`
    (step 5b) must then report the partial index, the dropped old constraint and the four
-   enabled guard triggers. After the first archived topic, never roll back below #194:
+   enabled guard triggers (five, incl. the practice-source trigger on `quizzes`). Once
+   any practice exists the deploy is **fix-forward only** (option B): never roll back below #194:
    `rollback.sh` refuses it (archive preflight) and the triggers refuse the destructive
    delete; recovery and rollback rules in `docs/RUNBOOK_REVIEW_ITEM_ARCHIVE.md`.
    **#183 -> #185** together, and only after the deploy order is planned: the migration

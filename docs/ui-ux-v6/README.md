@@ -73,7 +73,7 @@ Six different things are kept apart below. Do not read one as another.
 | #191 | `fix/e2e-memory-isolation` | `ac1a411` | pass (run 44263766276) | E2E isolation 6 tests | n/a (in trial 13) | from `main`; test harness only; conflicts with #187 in `run_e2e_server.py` (section 10) |
 | #192 | `fix/practice-provisional-regrade` | `fd0812f` | pass (run 44262980102) | practice regrade 16 + FE 9 tests, 3 E2E | n/a (in trial 13) | stacked on #190; merge after it |
 | #193 | `fix/practice-regrade-background` | `f69d911` | pass (run 44350467761) | 22 backend + 4 FE tests, E2E | n/a (trial 14 merge check) | stacked on #192; merge after it |
-| #194 | `fix/review-plan-archive` | `4c19d04` | pass (run 44354303047) | 9 + 6 migration + 4 FE tests | n/a (trial 14 merge check) | stacked on #190; **migration**: owner approval + window |
+| #194 | `fix/review-plan-archive` | `dc60af6` | pass (run 44354303047) | 9 + 6 migration + 4 FE tests | n/a (trial 14 merge check) | stacked on #190; **migration**: owner approval + window |
 | #195 | `test/mindmap-export-contract-slow` | `47dc4b1` | **success** (run 44363261244) | contract test budget, 40 measured runs | n/a | from `main`; test only |
 | #190 | `fix/provisional-grading-recovery` | `b74de27` | pass (run 44119547612) | provisional regrade 23 PostgreSQL tests, FE 11 + 4 E2E; Codex task34 + agy task35 | n/a (in trial 11) | stacked on #188; merge after it |
 | #189 | `fix/llm-timeouts` | `2d174d8` | pass (run 44035654037) | LLM deadline tests 15; Codex task28/30 + agy task29 | n/a (after the trials; in trial 10) | none (from `main`); merge before #188 |
