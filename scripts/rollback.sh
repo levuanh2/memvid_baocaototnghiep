@@ -61,10 +61,12 @@ if [ "$PREFLIGHT_OK" = 1 ] && [[ "$PREFLIGHT" =~ $FACTS_RE ]]; then
   if [ "$SCHEMA" = 1 ] && [ "$GUARD" != 1 ]; then
     die "rollback refused: the archive guard is missing or disabled (guard=0); restore it first (docs/RUNBOOK_REVIEW_ITEM_ARCHIVE.md, section 2); nothing was checked out"
   fi
-  # The floor exists only once the archive schema does (before #194 nothing is archived
-  # and old code is the deployed code).
-  if [ "$SCHEMA" = 1 ] && [ "$HISTORY" -gt 0 ] && ! target_supports_archive "$SHA"; then
-    die "rollback refused: $SHA predates the review-topic archive and $HISTORY review topic(s) hold practice history (archived, or with practice quizzes); its regeneration deletes such plans (the database guard would refuse it, breaking the feature). Roll back to a SHA carrying migrations 20261118/20261119 and BE/shared/archive_contract.py, or roll forward (docs/RUNBOOK_REVIEW_ITEM_ARCHIVE.md)"
+  # The floor exists once the archive schema does (before #194 nothing is archived and
+  # old code is the deployed code). It does not wait for history: history can appear
+  # while this rollback builds (Codex task54), and the schema itself only changes under
+  # the deploy lock this script holds.
+  if [ "$SCHEMA" = 1 ] && ! target_supports_archive "$SHA"; then
+    die "rollback refused: $SHA predates the review-topic archive, which this database already has ($HISTORY topic(s) hold practice history now; more can appear while a rollback builds). Older code regenerates by deleting plans, which the database guard refuses, breaking the feature. Roll back to a SHA carrying migrations 20261118/20261119 and BE/shared/archive_contract.py, or roll forward (docs/RUNBOOK_REVIEW_ITEM_ARCHIVE.md)"
   fi
   log "archive preflight: archive_schema=$SCHEMA history_topics=$HISTORY guard=$GUARD; target $SHA accepted"
 else

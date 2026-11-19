@@ -71,8 +71,10 @@ practice quiz, attempt, answer and mastery row made from them. Two layers stop t
    - `TRUNCATE` of `review_plans` or `review_plan_items` while any practice history exists.
 
    - `INSERT` of a practice quiz from an archived topic (or moving one onto it), whatever
-     path inserts it; the check locks the topic row, so a worker racing an archive waits
-     and is refused.
+     path inserts it. It locks in the regeneration's order (the plan's attempt, then the
+     topic), so a worker racing a regeneration waits and is refused, never deadlocks;
+   - `DELETE` of a practice quiz while its topic, plan, attempt, account and document
+     exist, or changing its `source_review_item_id` (detaching it); `TRUNCATE quizzes`.
 
    Each guard function pins `search_path = <schema>, pg_temp`, so a session's
    temporary tables cannot shadow the tables it checks.
@@ -90,9 +92,10 @@ practice quiz, attempt, answer and mastery row made from them. Two layers stop t
    `archive_schema=<0|1> history_topics=<n> guard=<0|1>` (read-only; history = a topic
    that is archived or has a practice quiz). Then:
    - archive schema present and `guard=0`: refused (restore the guard first, section 2);
-   - archive schema present, history topics, and a target that is not archive-aware:
-     refused (code before #194 regenerates by deleting such a plan; the guard refuses
-     that, so the old code would be broken, not merely unsafe). Archive-aware means
+   - archive schema present and a target that is not archive-aware: refused, with or
+     without history yet (history can appear while the rollback builds; the schema only
+     changes under the deploy lock this script holds). Code before #194 regenerates by
+     deleting the plan, which the guard refuses, so it would be broken. Archive-aware means
      the TARGET tree carries both migrations and `BE/shared/archive_contract.py` with
      `ARCHIVE_CONTRACT_VERSION = 1`, whose behaviour CI enforces (a keyword is not proof);
    - preflight failed, or its stdout is not exactly that one line: only an archive-aware

@@ -511,3 +511,91 @@ def test_a_worker_racing_the_archive_waits_and_is_refused(client, planned, owner
         release.set()
         event.remove(engine, "after_cursor_execute", _pause)
     assert outcome == {"archive": "ok", "practice": "23001"}, outcome
+
+
+# ── task54: lock order with a practice insert, quiz deletes and detaches ──
+
+def test_a_practice_insert_starting_before_the_archive_does_not_deadlock(client, planned,
+                                                                        owner, monkeypatch):
+    """Codex task54: regeneration locks attempt -> plan -> topic; the practice trigger
+    locked the topic first and the FK check then wanted the attempt: a cycle. The
+    regeneration is paused right after it locked the attempt, before archiving; a
+    practice insert then starts. It must wait (same lock order), never deadlock, and be
+    refused once the archive commits."""
+    from sqlalchemy import event
+
+    from app.application import review_plans as review_uc
+    from app.db import get_engine
+
+    locked, release = threading.Event(), threading.Event()
+
+    def _pause(conn, cursor, statement, *a):
+        st = " ".join(statement.split()).upper()
+        if (st.startswith("SELECT") and "FROM QUIZ_ATTEMPTS" in st and "FOR UPDATE" in st
+                and not locked.is_set()):
+            locked.set()
+            release.wait(30)
+
+    _fake_guide(monkeypatch, GUIDE_2)
+    engine = get_engine()
+    event.listen(engine, "after_cursor_execute", _pause)
+    outcome = {}
+
+    def _archiver():
+        try:
+            review_uc.generate(planned["attempt_id"], owner, force=True, bat_buoc_chu_so_huu=True)
+            outcome["archive"] = "ok"
+        except Exception as exc:
+            outcome["archive"] = repr(exc)[:200]
+
+    def _worker():
+        try:
+            _new_practice_quiz(planned["item"], owner)
+            outcome["practice"] = "inserted"
+        except sa.exc.DBAPIError as exc:
+            outcome["practice"] = getattr(exc.orig, "sqlstate", repr(exc.orig))
+
+    try:
+        arch = threading.Thread(target=_archiver)
+        arch.start()
+        assert locked.wait(30), "the regeneration did not lock the attempt"
+        work = threading.Thread(target=_worker)
+        work.start()
+        work.join(2)
+        assert work.is_alive(), "the insert must wait for the regeneration's attempt lock"
+        release.set()
+        arch.join(60)
+        work.join(60)
+    finally:
+        release.set()
+        event.remove(engine, "after_cursor_execute", _pause)
+    assert outcome == {"archive": "ok", "practice": "23001"}, outcome
+
+
+def test_deleting_or_detaching_a_practice_quiz_is_refused(client, planned):
+    """Codex task54: DELETE FROM quizzes cascaded the practice attempts, answers and
+    mastery while the topic and its plan existed; changing the source detached it."""
+    before = _counts(planned["pq"])
+    with _raw() as c, pytest.raises(sa.exc.DBAPIError) as exc_info:
+        c.execute(sa.text("DELETE FROM quizzes WHERE id = :q"), {"q": planned["pq"]})
+    _refused(exc_info)
+    with _raw() as c, pytest.raises(sa.exc.DBAPIError) as exc_info:
+        c.execute(sa.text("UPDATE quizzes SET quiz_type = 'diagnostic', "
+                          "source_review_item_id = NULL WHERE id = :q"), {"q": planned["pq"]})
+    _refused(exc_info)
+    with _raw() as c, pytest.raises(sa.exc.DBAPIError) as exc_info:
+        c.execute(sa.text("TRUNCATE quizzes CASCADE"))
+    _refused(exc_info)
+    assert _counts(planned["pq"]) == before
+
+
+def test_practice_quiz_status_updates_still_work(client, planned):
+    """The quiz row keeps changing during generation (status, counts): only the source
+    link is frozen."""
+    from app.domains.quiz import repository as quiz_repo
+
+    quiz_repo.finish(planned["pq"], "ready", question_count=1)
+    with _raw() as c:
+        c.execute(sa.text("UPDATE quizzes SET title = title || '' WHERE id = :q"),
+                  {"q": planned["pq"]})
+        c.commit()

@@ -8514,3 +8514,16 @@ except `test_rollback_preflight.py`, written together with the module it tests.
   WHERE clause: on the old snapshot the row was filtered out without waiting or
   re-reading. The row is now locked unconditionally (`FOR SHARE`) and its latest
   `archived_at` read.
+
+**Review fixes (Codex task54: one deadlock, one TOCTOU, one bypass), red first:**
+- *Practice insert vs regeneration deadlock.* The regeneration locks attempt, plan, then
+  topic; the practice trigger locked the topic, then the FK check wanted the attempt.
+  Reproduced: deadlock, the archive was the victim and the practice row was inserted.
+  The trigger now takes the plan's attempt `FOR KEY SHARE` first, then the topic.
+- *Rollback TOCTOU.* History counted at preflight could appear while the rollback built.
+  Once the archive schema exists every non archive-aware target is refused (the schema
+  only changes under the deploy lock rollback.sh holds).
+- *Practice quiz delete/detach.* `DELETE FROM quizzes` cascaded practice attempts,
+  answers and mastery while their parents existed, and changing `source_review_item_id`
+  detached the quiz. Both are refused (and `TRUNCATE quizzes`); document, account and
+  attempt deletes still cascade.

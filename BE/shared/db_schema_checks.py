@@ -206,10 +206,38 @@ END
     "studymap_guard_practice_source": f"""
 DECLARE
   topic_archived_at timestamptz;
+  plan_attempt uuid;
 BEGIN
+  IF TG_OP = 'DELETE' THEN
+    -- A practice quiz is history: it goes only when its topic, plan, attempt, account or
+    -- document goes (those cascades reach it after the parent row is gone).
+    IF OLD.source_review_item_id IS NOT NULL AND EXISTS (
+         SELECT 1 FROM review_plan_items i JOIN review_plans p ON p.id = i.review_plan_id
+          WHERE i.id = OLD.source_review_item_id
+            AND EXISTS (SELECT 1 FROM quiz_attempts WHERE id = p.attempt_id)
+            AND EXISTS (SELECT 1 FROM users WHERE id = p.user_id)
+            AND EXISTS (SELECT 1 FROM documents WHERE id = p.document_id)) THEN
+      RAISE EXCEPTION 'refused: a practice quiz is review history'
+        USING ERRCODE = 'restrict_violation', HINT = '{ARCHIVE_GUARD_HINT}';
+    END IF;
+    RETURN OLD;
+  END IF;
+  IF TG_OP = 'UPDATE' AND OLD.source_review_item_id IS NOT NULL
+     AND NEW.source_review_item_id IS DISTINCT FROM OLD.source_review_item_id THEN
+    RAISE EXCEPTION 'refused: a practice quiz cannot be detached from its topic'
+      USING ERRCODE = 'restrict_violation', HINT = '{ARCHIVE_GUARD_HINT}';
+  END IF;
   IF NEW.source_review_item_id IS NOT NULL
      AND (TG_OP = 'INSERT'
           OR NEW.source_review_item_id IS DISTINCT FROM OLD.source_review_item_id) THEN
+    -- Same lock order as a regeneration (attempt, then plan/topic; Codex task54): take
+    -- the plan's attempt first, so an insert that starts while a regeneration holds the
+    -- attempt waits for it instead of locking the topic and deadlocking on the FK check.
+    SELECT p.attempt_id INTO plan_attempt FROM review_plan_items i
+      JOIN review_plans p ON p.id = i.review_plan_id WHERE i.id = NEW.source_review_item_id;
+    IF plan_attempt IS NOT NULL THEN
+      PERFORM 1 FROM quiz_attempts WHERE id = plan_attempt FOR KEY SHARE;
+    END IF;
     -- Lock the topic row unconditionally: a predicate on archived_at would be judged on
     -- the old snapshot and skip the row without waiting or re-reading it.
     SELECT archived_at INTO topic_archived_at FROM review_plan_items
@@ -246,7 +274,10 @@ ARCHIVE_GUARD_TRIGGERS = [
     ("trg_guard_review_items_truncate", "review_plan_items", "studymap_guard_review_truncate",
      2 | 32, "BEFORE TRUNCATE ON review_plan_items FOR EACH STATEMENT"),
     ("trg_guard_practice_source", "quizzes", "studymap_guard_practice_source",
-     1 | 2 | 4 | 16, "BEFORE INSERT OR UPDATE OF source_review_item_id ON quizzes FOR EACH ROW"),
+     1 | 2 | 4 | 8 | 16,
+     "BEFORE INSERT OR DELETE OR UPDATE OF source_review_item_id ON quizzes FOR EACH ROW"),
+    ("trg_guard_quizzes_truncate", "quizzes", "studymap_guard_review_truncate",
+     2 | 32, "BEFORE TRUNCATE ON quizzes FOR EACH STATEMENT"),
     ("trg_guard_review_plans_truncate", "review_plans", "studymap_guard_review_truncate",
      2 | 32, "BEFORE TRUNCATE ON review_plans FOR EACH STATEMENT"),
 ]

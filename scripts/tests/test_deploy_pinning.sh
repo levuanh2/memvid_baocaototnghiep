@@ -479,7 +479,7 @@ run_rollback 1 "$A_SHA"
 refused_before_checkout
 reset_controls
 TEST_PREFLIGHT_OUTPUT=$'archive_schema=1 history_topics=3 guard=1
-archive_schema=1 history_topics=0 guard=1'  # stale or spoofed last line must not open the gate
+archive_schema=0 history_topics=0 guard=0'  # stale or spoofed last line must not open the gate
 run_rollback 1 "$A_SHA"
 refused_before_checkout
 reset_controls
@@ -530,10 +530,13 @@ TEST_PREFLIGHT_OUTPUT="STOP: cannot reach the database"
 expect_status 0 base_env env MEMVID_BREAK_GLASS=1 bash "$SERVER/scripts/rollback.sh" "$D_SHA"
 assert_head "$D_SHA"
 grep -q "archive facts unreadable; target is archive-aware" "$OUTPUT" || { cat "$OUTPUT" >&2; fail "no unreadable-but-safe warning"; }
+# Once the archive schema exists, a pre-archive target is refused even with no history
+# yet: history can appear while the rollback builds (Codex task54 TOCTOU).
+git -C "$SERVER" -c advice.detachedHead=false checkout --detach "$B_SHA" >/dev/null
 reset_controls
 TEST_PREFLIGHT_OUTPUT="archive_schema=1 history_topics=0 guard=1"
-run_rollback 0 "$A_SHA"
-assert_head "$A_SHA"
+run_rollback 1 "$A_SHA"
+refused_before_checkout
 # Before #194 was ever deployed (no archive schema) practice history is ordinary data:
 # rollbacks between pre-archive SHAs stay allowed.
 git -C "$SERVER" -c advice.detachedHead=false checkout --detach "$B_SHA" >/dev/null
@@ -541,6 +544,6 @@ reset_controls
 TEST_PREFLIGHT_OUTPUT="archive_schema=0 history_topics=5 guard=0"
 run_rollback 0 "$A_SHA"
 assert_head "$A_SHA"
-pass "R an archive-aware target (also with the database unreadable), or no archived topic yet, may be rolled back to"
+pass "R an archive-aware target (also with the database unreadable) may be rolled back to; a pre-archive one only before the archive schema exists"
 
 printf 'All deploy pinning scenarios passed.\n'
