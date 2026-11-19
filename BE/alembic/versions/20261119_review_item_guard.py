@@ -8,8 +8,10 @@ database refuses, fail closed (SQLSTATE 23001, restrict_violation; the hint name
 runbook; no row data in the message). The function bodies are the contract in
 `shared.db_schema_checks.ARCHIVE_GUARD_FUNCTIONS`, which `verify_db_schema` compares:
 
-1. BEFORE DELETE on review_plans, per row: refused when the plan holds archived topics
-   and its attempt, user and document all still exist (a regeneration by old code, or a
+1. BEFORE DELETE on review_plans, per row: refused when the plan holds practice history
+   (an archived topic, or a practice quiz made from one of its topics; Codex task52: an
+   old-code delete that won the plan lock before any archive existed) and its attempt,
+   user and document all still exist (a regeneration by old code, or a
    hand delete). A plan removed because its attempt, document or account was deleted
    still goes, exactly as before #194 (the parent row is already gone when the cascade
    reaches the plan).
@@ -18,7 +20,11 @@ runbook; no row data in the message). The function bodies are the contract in
    and is read-only: only its three nullable references may change, and only to NULL
    (FK ON DELETE SET NULL). The new code's archiving UPDATE (on rows not yet archived)
    is not affected.
-3. BEFORE TRUNCATE on both tables: refused while any archived topic exists.
+3. BEFORE TRUNCATE on both tables: refused while any archived topic or any practice
+   quiz made from a topic exists.
+
+Every guard function pins `search_path = <schema>, pg_temp`: a caller's temporary
+shadow tables cannot answer its EXISTS checks (Codex task52).
 
 Race: the new code locks the plan row (SELECT ... FOR UPDATE) before archiving its
 topics. An old-code DELETE of that plan waits for the lock; its row trigger then runs
@@ -46,8 +52,9 @@ depends_on = None
 
 
 def upgrade() -> None:
+    schema = op.get_bind().execute(sa.text("SELECT current_schema()")).scalar()
     for name in ARCHIVE_GUARD_FUNCTIONS:
-        op.execute(archive_guard_function_sql(name))
+        op.execute(archive_guard_function_sql(name, schema))
     for name, table, function, _tgtype, event in ARCHIVE_GUARD_TRIGGERS:
         op.execute(f"DROP TRIGGER IF EXISTS {name} ON {table}")
         op.execute(f"CREATE TRIGGER {name} {event} EXECUTE FUNCTION {function}()")

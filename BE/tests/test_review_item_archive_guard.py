@@ -288,7 +288,8 @@ def test_the_verifier_fails_closed_on_a_same_name_body_or_a_wrong_event():
         c.commit()
     r = _verify_and_restore()
     assert r.returncode != 0
-    assert "guard function studymap_guard_review_plan_delete body differs" in r.stderr
+    assert "guard function studymap_guard_review_plan_delete" in r.stderr
+    assert "body differs" in r.stderr
     with _raw() as c:
         c.execute(sa.text("DROP TRIGGER trg_guard_review_plan_delete ON review_plans"))
         c.execute(sa.text("CREATE TRIGGER trg_guard_review_plan_delete AFTER DELETE ON "
@@ -321,6 +322,7 @@ def _downgrade_statements(module_file):
 
     class _Ctx:
         def autocommit_block(self):
+            seen.append("AUTOCOMMIT (commits and releases locks)")
             return contextlib.nullcontext()
 
     class _Op:
@@ -354,3 +356,87 @@ def test_each_downgrade_locks_both_tables_before_it_counts_archived_topics():
         seen = _downgrade_statements(module_file)
         first_count = next(i for i, x in enumerate(seen) if "count(*)" in x)
         assert any(lock in x for x in seen[:first_count]), (module_file, seen[:first_count + 1])
+
+
+def test_downgrade_20261118_keeps_its_lock_until_the_column_is_dropped():
+    """Codex task52: an autocommit block for DROP INDEX CONCURRENTLY committed and
+    released the lock, and an archive could commit before the column was dropped."""
+    seen = _downgrade_statements("20261118_review_item_archive.py")
+    lock = next(i for i, x in enumerate(seen) if x.startswith("LOCK TABLE"))
+    drop = next(i for i, x in enumerate(seen) if "DROP COLUMN" in x)
+    assert lock < drop
+    assert not any(x.startswith("AUTOCOMMIT") for x in seen[lock:drop]), seen[lock:drop + 1]
+
+
+# ── task52: history before any archive, shadow tables, overloads ──────────
+
+def test_old_code_deleting_a_plan_with_practice_but_nothing_archived_is_refused(client,
+                                                                               planned):
+    """Codex task52 reverse interleaving: an old-code delete that takes the plan lock
+    before any archive exists found no archived topic and let the cascade erase the
+    current topic's practice. Practice history alone now protects the plan."""
+    from app.db import session_scope
+    from app.db.models import ReviewPlan
+
+    before = _counts(planned["pq"])
+    with pytest.raises(sa.exc.DBAPIError) as exc_info:
+        with session_scope() as s:
+            s.delete(s.get(ReviewPlan, planned["first"]["review_plan_id"]))
+            s.flush()
+    _refused(exc_info)
+    with _raw() as c, pytest.raises(sa.exc.DBAPIError):
+        c.execute(sa.text("DELETE FROM review_plan_items WHERE id = :i"),
+                  {"i": planned["item"]["review_item_id"]})
+    assert _counts(planned["pq"]) == before
+
+
+def test_temporary_shadow_tables_cannot_answer_for_the_guard(client, planned, monkeypatch):
+    """Codex task52: unqualified names let a caller's pg_temp tables (searched first)
+    make every EXISTS false while the real rows were deleted."""
+    forced = _archived(client, planned, monkeypatch)
+    with _raw() as c:
+        try:
+            for ddl in ("CREATE TEMP TABLE review_plan_items (review_plan_id uuid, "
+                        "archived_at timestamptz, id uuid)",
+                        "CREATE TEMP TABLE quizzes (source_review_item_id uuid)",
+                        "SET search_path = pg_temp, public"):
+                c.execute(sa.text(ddl))
+            with pytest.raises(sa.exc.DBAPIError) as exc_info:
+                c.execute(sa.text("DELETE FROM public.review_plans WHERE id = :p"),
+                          {"p": forced["review_plan_id"]})
+            _refused(exc_info)
+        finally:
+            c.rollback()
+    assert _counts(planned["pq"])["attempts"] == 1
+
+
+def test_the_verifier_reads_the_function_the_trigger_calls_not_a_same_name_overload():
+    """Codex task52: a lookup by name could read an overload with the contract body while
+    the zero-argument function the trigger calls was a no-op."""
+    from shared.db_schema_checks import ARCHIVE_GUARD_FUNCTIONS
+
+    body = ARCHIVE_GUARD_FUNCTIONS["studymap_guard_review_plan_delete"]
+    with _raw() as c:
+        # Trigger functions cannot take arguments: the overload is an ordinary function
+        # carrying the contract text (bodies are not validated with this setting).
+        c.execute(sa.text("SET check_function_bodies = off"))
+        c.execute(sa.text("CREATE FUNCTION studymap_guard_review_plan_delete(dummy integer) "
+                          "RETURNS integer LANGUAGE plpgsql AS $guard$" + body + "$guard$"))
+        c.execute(sa.text("CREATE OR REPLACE FUNCTION studymap_guard_review_plan_delete() "
+                          "RETURNS trigger LANGUAGE plpgsql AS $$ BEGIN RETURN OLD; END $$"))
+        c.commit()
+    try:
+        r = _verify_and_restore()
+    finally:
+        with _raw() as c:
+            c.execute(sa.text("DROP FUNCTION IF EXISTS studymap_guard_review_plan_delete(integer)"))
+            c.commit()
+    assert r.returncode != 0 and "body differs" in r.stderr, r.stderr
+
+
+def test_the_verifier_requires_the_pinned_search_path():
+    with _raw() as c:
+        c.execute(sa.text("ALTER FUNCTION studymap_guard_archived_review_item() RESET search_path"))
+        c.commit()
+    r = _verify_and_restore()
+    assert r.returncode != 0 and "search_path" in r.stderr, r.stderr

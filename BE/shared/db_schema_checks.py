@@ -138,37 +138,46 @@ def review_item_archive_problems(conn) -> List[str]:
     return problems
 
 
-# Migration 20261119: the database refuses deletes that would cascade-delete archived
-# topics (code older than #194, a hand delete) and rewrites of archived topics. The
+# Migration 20261119: the database refuses deletes that would cascade-delete review
+# history (code older than #194, a hand delete) and rewrites of archived topics. The
 # function bodies live HERE, used by the migration and by the verifier, so the verifier
-# compares the installed body with the exact contract (Codex task50: a same-name
-# `RETURN OLD` body or a trigger on the wrong event used to pass).
-ARCHIVE_GUARD_HINT = ("Archived review topics keep practice history (issue #18). Use code "
+# compares the installed body with the exact contract (Codex task50).
+#
+# History = an archived topic OR a practice quiz made from a topic (Codex task52: an
+# old-code delete taking the plan lock before any archive existed still erased the
+# current topics' practice). Every function pins `search_path = <schema>, pg_temp`, so a
+# caller's temporary shadow tables cannot answer the EXISTS checks (Codex task52).
+ARCHIVE_GUARD_HINT = ("Review plans with practice history are kept (issue #18). Use code "
                       "that archives instead of deleting; see "
                       "docs/RUNBOOK_REVIEW_ITEM_ARCHIVE.md.")
 
 ARCHIVE_GUARD_FUNCTIONS = {
     "studymap_guard_review_plan_delete": f"""
 BEGIN
-  IF EXISTS (SELECT 1 FROM review_plan_items
-              WHERE review_plan_id = OLD.id AND archived_at IS NOT NULL)
+  IF (EXISTS (SELECT 1 FROM review_plan_items i
+               WHERE i.review_plan_id = OLD.id AND i.archived_at IS NOT NULL)
+      OR EXISTS (SELECT 1 FROM review_plan_items i
+                   JOIN quizzes q ON q.source_review_item_id = i.id
+                  WHERE i.review_plan_id = OLD.id))
      AND EXISTS (SELECT 1 FROM quiz_attempts WHERE id = OLD.attempt_id)
      AND EXISTS (SELECT 1 FROM users WHERE id = OLD.user_id)
      AND EXISTS (SELECT 1 FROM documents WHERE id = OLD.document_id) THEN
-    RAISE EXCEPTION 'refused: this review plan holds archived topics'
+    RAISE EXCEPTION 'refused: this review plan holds practice history'
       USING ERRCODE = 'restrict_violation', HINT = '{ARCHIVE_GUARD_HINT}';
   END IF;
   RETURN OLD;
 END
 """,
     # An archived topic is read-only history: only the FK maintenance of its three
-    # nullable references (ON DELETE SET NULL) may change it, and only to NULL.
+    # nullable references (ON DELETE SET NULL) may change it, and only to NULL. A topic
+    # with practice, or an archived one, cannot be deleted while its plan exists.
     "studymap_guard_archived_review_item": f"""
 BEGIN
   IF TG_OP = 'DELETE' THEN
-    IF OLD.archived_at IS NOT NULL
+    IF (OLD.archived_at IS NOT NULL
+        OR EXISTS (SELECT 1 FROM quizzes WHERE source_review_item_id = OLD.id))
        AND EXISTS (SELECT 1 FROM review_plans WHERE id = OLD.review_plan_id) THEN
-      RAISE EXCEPTION 'refused: an archived review topic cannot be deleted'
+      RAISE EXCEPTION 'refused: a review topic with practice history cannot be deleted'
         USING ERRCODE = 'restrict_violation', HINT = '{ARCHIVE_GUARD_HINT}';
     END IF;
     RETURN OLD;
@@ -192,8 +201,9 @@ END
 """,
     "studymap_guard_review_truncate": f"""
 BEGIN
-  IF EXISTS (SELECT 1 FROM review_plan_items WHERE archived_at IS NOT NULL) THEN
-    RAISE EXCEPTION 'refused: review plans hold archived topics'
+  IF EXISTS (SELECT 1 FROM review_plan_items WHERE archived_at IS NOT NULL)
+     OR EXISTS (SELECT 1 FROM quizzes WHERE source_review_item_id IS NOT NULL) THEN
+    RAISE EXCEPTION 'refused: review plans hold practice history'
       USING ERRCODE = 'restrict_violation', HINT = '{ARCHIVE_GUARD_HINT}';
   END IF;
   RETURN NULL;
@@ -201,8 +211,8 @@ END
 """,
 }
 
-# (trigger, table, function, pg_trigger.tgtype). tgtype bits: ROW 1, BEFORE 2, INSERT 4,
-# DELETE 8, UPDATE 16, TRUNCATE 32.
+# (trigger, table, function, pg_trigger.tgtype, event). tgtype bits: ROW 1, BEFORE 2,
+# INSERT 4, DELETE 8, UPDATE 16, TRUNCATE 32.
 ARCHIVE_GUARD_TRIGGERS = [
     ("trg_guard_review_plan_delete", "review_plans", "studymap_guard_review_plan_delete",
      1 | 2 | 8, "BEFORE DELETE ON review_plans FOR EACH ROW"),
@@ -216,8 +226,17 @@ ARCHIVE_GUARD_TRIGGERS = [
 ]
 
 
-def archive_guard_function_sql(name: str) -> str:
+def _guard_search_path(schema: str) -> str:
+    return f"{schema}, pg_temp"
+
+
+def archive_guard_function_sql(name: str, schema: str) -> str:
+    """CREATE OR REPLACE for one guard function, search_path pinned to `schema` with
+    pg_temp LAST (an explicit pg_temp is searched where it is listed, not first)."""
+    if not schema.replace("_", "").isalnum():
+        raise ValueError(f"unexpected schema name {schema!r}")
     return (f"CREATE OR REPLACE FUNCTION {name}() RETURNS trigger LANGUAGE plpgsql "
+            f"SET search_path = {_guard_search_path(schema)} "
             f"AS $guard${ARCHIVE_GUARD_FUNCTIONS[name]}$guard$")
 
 
@@ -226,30 +245,39 @@ def _same_body(installed: str, expected: str) -> bool:
 
 
 def archive_guard_problems(conn) -> List[str]:
-    """Each guard trigger exists, is enabled, fires on the exact event/timing/level and
-    calls its own function; each function's body is exactly the contract above."""
+    """Each guard trigger exists, is enabled, fires on the exact event/timing/level, and
+    the EXACT function it calls (pg_trigger.tgfoid, never a lookup by name, so an
+    overload cannot answer for it) has the contract body, no arguments, returns
+    trigger, is plpgsql and pins search_path to the schema with pg_temp last."""
     problems = []
+    schema = conn.execute(sa.text("SELECT current_schema()")).scalar()
+    want_path = f"search_path={_guard_search_path(schema)}"
     for name, table, function, tgtype, _ in ARCHIVE_GUARD_TRIGGERS:
         row = conn.execute(sa.text(
-            "SELECT tg.tgenabled, p.proname, tg.tgtype FROM pg_trigger tg "
+            "SELECT tg.tgenabled, p.proname, tg.tgtype, p.prosrc, p.pronargs, "
+            "p.prorettype::regtype::text, l.lanname, p.proconfig "
+            "FROM pg_trigger tg "
             "JOIN pg_class t ON t.oid = tg.tgrelid JOIN pg_namespace n ON n.oid = t.relnamespace "
-            "JOIN pg_proc p ON p.oid = tg.tgfoid "
+            "JOIN pg_proc p ON p.oid = tg.tgfoid JOIN pg_language l ON l.oid = p.prolang "
             "WHERE tg.tgname = :n AND t.relname = :t AND n.nspname = current_schema() "
             "AND NOT tg.tgisinternal"), {"n": name, "t": table}).first()
         if row is None:
             problems.append(f"guard trigger {name} on {table} is missing")
-        elif row[0] not in ("O", "A"):
-            problems.append(f"guard trigger {name} on {table} is disabled (tgenabled={row[0]})")
-        elif row[1] != function:
-            problems.append(f"guard trigger {name} calls {row[1]}, expected {function}")
-        elif int(row[2]) != tgtype:
-            problems.append(f"guard trigger {name} fires on tgtype {row[2]}, expected {tgtype}")
-    for fn, body in ARCHIVE_GUARD_FUNCTIONS.items():
-        row = conn.execute(sa.text(
-            "SELECT p.prosrc FROM pg_proc p JOIN pg_namespace n ON n.oid = p.pronamespace "
-            "WHERE p.proname = :f AND n.nspname = current_schema()"), {"f": fn}).first()
-        if row is None:
-            problems.append(f"guard function {fn} is missing")
-        elif not _same_body(row[0], body):
-            problems.append(f"guard function {fn} body differs from the contract")
+            continue
+        enabled, proname, got_type, body, nargs, rettype, lang, config = row
+        if enabled not in ("O", "A"):
+            problems.append(f"guard trigger {name} on {table} is disabled (tgenabled={enabled})")
+        if proname != function:
+            problems.append(f"guard trigger {name} calls {proname}, expected {function}")
+        if int(got_type) != tgtype:
+            problems.append(f"guard trigger {name} fires on tgtype {got_type}, expected {tgtype}")
+        if not _same_body(body, ARCHIVE_GUARD_FUNCTIONS.get(function, "")):
+            problems.append(f"guard function {function} called by {name}: body differs "
+                            "from the contract")
+        if nargs != 0 or rettype != "trigger" or lang != "plpgsql":
+            problems.append(f"guard function {function} called by {name}: not a zero-argument "
+                            "plpgsql trigger function")
+        if list(config or []) != [want_path]:
+            problems.append(f"guard function {function} called by {name}: search_path is "
+                            f"{list(config or [])}, expected [{want_path!r}]")
     return problems

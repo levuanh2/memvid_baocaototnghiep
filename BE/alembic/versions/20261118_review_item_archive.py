@@ -82,6 +82,8 @@ def downgrade() -> None:
     if not old_priority_constraint_exists(conn):
         op.execute(f"ALTER TABLE review_plan_items ADD CONSTRAINT {OLD_PRIORITY_CONSTRAINT} "
                    "UNIQUE (review_plan_id, priority)")
-    with op.get_context().autocommit_block():
-        op.execute(f"DROP INDEX CONCURRENTLY IF EXISTS {ARCHIVE_INDEX}")
+    # One transaction from the lock to the dropped column (Codex task52: an autocommit
+    # block for DROP INDEX CONCURRENTLY committed and released the lock, and an archive
+    # could commit before the column went). A plain DROP INDEX on this small table is fine.
+    op.execute(f"DROP INDEX IF EXISTS {ARCHIVE_INDEX}")
     op.execute("ALTER TABLE review_plan_items DROP COLUMN IF EXISTS archived_at")

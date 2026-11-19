@@ -8485,3 +8485,18 @@ except `test_rollback_preflight.py`, written together with the module it tests.
   stale or spoofed extra line is refused.
 - *Database down (side note):* with unreadable facts only an archive-aware target may be
   rolled back to, so an outage does not block an emergency rollback to a safe SHA.
+
+**Review fixes (Codex task52, BLOCK: three P1, one P2), red first:**
+- *Reverse interleaving.* An old-code delete that took the plan lock before any archive
+  existed found no archived topic and the cascade erased the current topics' practice.
+  The plan guard now protects any practice history (an archived topic or a practice quiz
+  made from a topic); the item guard refuses deleting a topic with practice; TRUNCATE
+  checks both.
+- *Downgrade 20261118 released its lock.* `DROP INDEX CONCURRENTLY` needed an autocommit
+  block, which committed and released the table lock before `DROP COLUMN`. The index is
+  now dropped non-concurrently inside the locked transaction.
+- *search_path shadow tables.* Unqualified names let a session's `pg_temp` tables answer
+  the EXISTS checks. Every guard function pins `search_path = <schema>, pg_temp`; the
+  verifier requires it.
+- *Overload-ambiguous verifier.* Bodies were read by name; now from the exact
+  `pg_trigger.tgfoid` function, which must also be a zero-argument plpgsql trigger.

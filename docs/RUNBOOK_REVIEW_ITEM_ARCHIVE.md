@@ -61,12 +61,17 @@ practice quiz, attempt, answer and mastery row made from them. Two layers stop t
 
 1. **Database guard** (migration `20261119_review_item_guard`), fail closed with SQLSTATE
    23001 and a hint naming this runbook (no row data in the message):
-   - `DELETE` of a review plan holding archived topics while its attempt, user and
-     document all still exist (old-code regeneration, hand delete);
-   - `DELETE` of an archived topic while its plan exists (direct, or children first);
+   - `DELETE` of a review plan holding practice history (an archived topic, or a practice
+     quiz made from one of its topics) while its attempt, user and document all
+     still exist (old-code regeneration, also before any archive exists; hand delete);
+   - `DELETE` of an archived topic, or of a topic with practice quizzes, while its plan
+     exists (direct, or children first);
    - any `UPDATE` or upsert of an archived topic except its three nullable references
      being set to NULL (FK `ON DELETE SET NULL`): archived topics are read-only;
-   - `TRUNCATE` of `review_plans` or `review_plan_items` while archived topics exist.
+   - `TRUNCATE` of `review_plans` or `review_plan_items` while any practice history exists.
+
+   Each guard function pins `search_path = <schema>, pg_temp`, so a session's
+   temporary tables cannot shadow the tables it checks.
 
    Not refused: deleting a document (Library) or an account, or an attempt, still removes
    everything made from it, archived history included, exactly as before #194. The new
@@ -95,7 +100,8 @@ practice quiz, attempt, answer and mastery row made from them. Two layers stop t
 Rules:
 - **Schema:** `alembic downgrade` refuses below `20261119` and below `20261118` while
   archived topics exist; both lock `review_plans` and `review_plan_items` against writes
-  before counting, so no archive can commit in between. Do not force it.
+  before counting and keep the lock until the last DDL (no autocommit step), so no
+  archive can commit in between. Do not force it.
 - **Code:** roll back only to a SHA containing both migrations, or roll forward with a fix.
 - **No automatic bypass.** Disabling a guard trigger (`ALTER TABLE ... DISABLE TRIGGER`)
   or skipping the preflight is a manual, owner-approved incident step, recorded in the
