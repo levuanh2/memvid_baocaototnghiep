@@ -149,12 +149,13 @@ documented risks:
 
 | # | Not covered | Why it stays | Limited by |
 |---|---|---|---|
-| R1 | Hand-written `UPDATE`/`DELETE` on `quiz_questions`, `quiz_answers`, `review_item_chunks`, `concept_masteries` | valid product flows write them (regrade, gap analysis, document re-ingest); a trigger cannot tell those from a hand edit | role split below; hand SQL only through the read-only role |
+| R1 | Hand-written SQL on `quiz_questions`, `quiz_answers`, `review_item_chunks`, `concept_masteries`: `UPDATE`, `DELETE`, upserts that take their `UPDATE` branch, and **`TRUNCATE`** (with `CASCADE`, `TRUNCATE quiz_questions` also empties `quiz_answers` and the question citations). Each can erase or rewrite practice history while plan, quiz, account and document remain (Codex task57) | valid product flows write these tables (regrade, gap analysis, document re-ingest); a trigger cannot tell those from a hand edit; owner item 1 keeps the guard off them | **today: nothing** (the runtime role owns the tables, so it can also `TRUNCATE`). After the role split below: no `TRUNCATE` for the app role, hand SQL only through the read-only role |
 | R2 | Hand `UPDATE` of identity columns (`review_plans.attempt_id/user_id/document_id`, `quizzes.document_id/user_id`, `quiz_attempts.quiz_id/user_id`): moves history under another parent, a later cascade can then take it | out of the agreed scope (owner item 1) | role split; column-level `UPDATE` grants are a follow-up needing approval |
-| R3 | A hard delete of a document (sources sidebar), account or attempt removes its history | product decision (owner item 4); warned in a permanent-delete dialog, owner-only | `BE/tests/test_review_history_document_delete.py` |
+| R3a | A hard delete of a document from the sources sidebar removes its history | product decision (owner item 4) | permanent-delete dialog naming the loss; owner-only (404 for another learner); `BE/tests/test_review_history_document_delete.py` |
+| R3b | A hand/operator SQL delete of an account (`users`) or an attempt (`quiz_attempts`) cascades through its history | no product route deletes accounts or attempts today, so there is no dialog and no ownership check | nothing in the app; operator discipline and the role split below. A future account-delete route needs its own warning and ownership test |
 | R4 | Deadlock between an OLD-code plan delete and a regeneration | owner item 5: aborted safely, nothing lost; only during a mixed-version window | current-code flows lock attempt then plan (same test file) |
 | R5 | `pg_restore` of an old backup, a superuser, or the table OWNER disabling or dropping triggers | ownership can always change its own tables | role split: the runtime role must not own the tables |
-| R6 | Seconds between migration and new backend in the #194 deploy: old code's "Tạo lại kế hoạch" on a plan with practice fails with 23001 | refusing is the guard's job | deploy window 01:00-03:00 (Vietnam time), after the 7 NO-GO conditions |
+| R6 | Seconds between migration and new backend in the #194 deploy: old code's "Tạo lại kế hoạch" on a plan with practice fails with 23001, nothing is lost | refusing is the guard's job | a low-traffic window (owner: 01:00-03:00 Vietnam time). Scheduling is gated by the production GO/NO-GO checklist of PR #159 (`docs/ui-ux-v6/06-release-review.md` section 9 on branch `design/v6-foundation`), not by this runbook |
 
 ## 5. Least-privilege database roles (proposal, NOT applied)
 
@@ -172,7 +173,9 @@ access was used):
 
 Probe results for a non-owner DML role: `DISABLE TRIGGER`, `DROP TRIGGER`, `TRUNCATE`,
 replacing a guard function, `SET session_replication_role = replica` and `DISABLE ROW
-LEVEL SECURITY` are all refused (42501). Ordinary DML works. **Pitfall:** RLS is enabled
+LEVEL SECURITY` are all refused (42501). The probed `SELECT` (with `BYPASSRLS`) and
+`DELETE` worked; `INSERT`, `UPDATE` and sequence-backed app flows were NOT probed, so
+run the backend suite under the app role before claiming it works. **Pitfall:** RLS is enabled
 on 26 of 27 tables with no policies; a role without `BYPASSRLS` silently reads 0 rows
 (no error), so the app would look empty. Before applying: confirm Supabase allows
 granting `BYPASSRLS` (or write policies), add a separate migration URL to `alembic/env.py`
