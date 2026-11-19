@@ -64,23 +64,38 @@ practice quiz, attempt, answer and mastery row made from them. Two layers stop t
    - `DELETE` of a review plan holding archived topics while its attempt, user and
      document all still exist (old-code regeneration, hand delete);
    - `DELETE` of an archived topic while its plan exists (direct, or children first);
-     `UPDATE` that un-archives it or moves it to another plan;
+   - any `UPDATE` or upsert of an archived topic except its three nullable references
+     being set to NULL (FK `ON DELETE SET NULL`): archived topics are read-only;
    - `TRUNCATE` of `review_plans` or `review_plan_items` while archived topics exist.
 
    Not refused: deleting a document (Library) or an account, or an attempt, still removes
    everything made from it, archived history included, exactly as before #194. The new
    code's archiving and FK `SET NULL` updates are not affected.
-   `verify_db_schema` fails while any guard trigger or function is missing or disabled.
+   The new code locks the plan row before archiving, so an old-code delete waits and then
+   sees the committed archive (no deadlock that could sacrifice the archive).
+   `verify_db_schema` fails while any guard trigger is missing, disabled, on the wrong
+   event or calling the wrong function, or a guard function's body differs from the
+   contract in `BE/shared/db_schema_checks.py`.
 2. **Rollback floor** in `scripts/rollback.sh`, before any checkout or build:
-   `scripts.rollback_preflight` reads `archive_schema`, `archived_topics` and `guard`
-   read-only. With archived topics, a target SHA is accepted only if its tree contains
-   migrations `20261118_review_item_archive` and `20261119_review_item_guard` and its
-   `BE/app/domains/review/service.py` knows `archived_at`. A failed or unreadable
-   preflight refuses. `MEMVID_BREAK_GLASS` does not skip it.
+   `scripts.rollback_preflight` prints exactly one line
+   `archive_schema=<0|1> archived_topics=<n> guard=<0|1>` (read-only). Then:
+   - archive schema present and `guard=0`: refused (restore the guard first, section 2);
+   - archived topics and a target that is not archive-aware: refused. Archive-aware means
+     the TARGET tree carries both migrations and `BE/shared/archive_contract.py` with
+     `ARCHIVE_CONTRACT_VERSION = 1`, whose behaviour CI enforces (a keyword is not proof);
+   - preflight failed, or its stdout is not exactly that one line: only an archive-aware
+     target may go (safe whatever the facts), so a database outage does not block an
+     emergency rollback to a safe SHA; any other target is refused.
+   `MEMVID_BREAK_GLASS` does not skip any of this.
+
+   **Database down and a rollback is urgent:** roll back to the newest ledgered SHA that
+   is archive-aware (`git show <sha>:BE/shared/archive_contract.py`). A pre-archive SHA
+   cannot be rolled back to until the database answers.
 
 Rules:
 - **Schema:** `alembic downgrade` refuses below `20261119` and below `20261118` while
-  archived topics exist. Do not force it.
+  archived topics exist; both lock `review_plans` and `review_plan_items` against writes
+  before counting, so no archive can commit in between. Do not force it.
 - **Code:** roll back only to a SHA containing both migrations, or roll forward with a fix.
 - **No automatic bypass.** Disabling a guard trigger (`ALTER TABLE ... DISABLE TRIGGER`)
   or skipping the preflight is a manual, owner-approved incident step, recorded in the

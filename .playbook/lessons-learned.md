@@ -3809,3 +3809,11 @@ so the guard had to live in the database (triggers) and in the rollback tool, no
 new application. When a guard refuses a delete, first map every legitimate cascade into
 the table (document, account, attempt deletes) and distinguish them, or the guard breaks
 ordinary product actions.
+
+# A race test must drive the real code path, not a hand-written copy of it (2026-11-19)
+
+The first race test issued the SQL in the order the migration's comment assumed (plan
+first), while production locked the plan last; the test passed and the real race stayed
+open (Codex task50). Drive the real use case and pause it inside its transaction (an
+engine `after_cursor_execute` hook), and add a test that pins the SQL order the code
+actually sends. Same for gates: a keyword or a name is not proof of behaviour.

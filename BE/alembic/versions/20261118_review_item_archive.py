@@ -65,6 +65,10 @@ def upgrade() -> None:
 
 def downgrade() -> None:
     conn = op.get_bind()
+    # No archive may commit between the count and restoring the old constraint (Codex
+    # task50): block writes on both tables for the rest of this transaction.
+    conn.execute(sa.text(
+        "LOCK TABLE review_plans, review_plan_items IN SHARE ROW EXCLUSIVE MODE"))
     archived = (conn.execute(sa.text(
         "SELECT count(*) FROM review_plan_items WHERE archived_at IS NOT NULL")).scalar()
         if archived_at_column_exists(conn) else 0)

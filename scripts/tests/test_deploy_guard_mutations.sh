@@ -59,7 +59,9 @@ run_mutation break-glass-attempt-record '  ledger_record "$LEDGER_FILE" "${DEPLO
 run_mutation break-glass-failure-record '    ledger_record "$LEDGER_FILE" "${APP_BUILD_SHA:-${DEPLOY_SHA:-unpinned}}" break-glass-failed || true' '    :'
 
 run_mutation rollback-archive-floor 'if [ "$ARCHIVED" -gt 0 ] && ! target_supports_archive "$SHA"; then' 'if false; then' rollback.sh
-run_mutation rollback-archive-preflight-unreadable '[ -n "$FACTS" ] || die' '[ -n "$FACTS" ] || true; : ' rollback.sh
-run_mutation rollback-archive-target-check '    && git -C "$REPO_ROOT" grep -q archived_at "$1" -- BE/app/domains/review/service.py 2>/dev/null' '    || true' rollback.sh
+run_mutation rollback-archive-guard-required 'if [ "$SCHEMA" = 1 ] && [ "$GUARD" != 1 ]; then' 'if false; then' rollback.sh
+run_mutation rollback-archive-exact-line "FACTS_RE='^archive_schema=" "FACTS_RE='archive_schema=" rollback.sh
+run_mutation rollback-archive-unreadable '    || die "rollback refused: the archive preflight' '    || true; : "rollback refused: the archive preflight' rollback.sh
+run_mutation rollback-archive-contract "| grep -x 'ARCHIVE_CONTRACT_VERSION = 1' >/dev/null" "| cat >/dev/null" rollback.sh
 
 printf 'All guard mutations were detected by the harness.\n'

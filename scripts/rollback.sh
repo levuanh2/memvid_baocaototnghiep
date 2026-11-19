@@ -38,26 +38,42 @@ fi
 # Archive rollback floor (issue #18, migrations 20261118/20261119; owner 2026-11-19).
 # Code older than the review-topic archive deletes a regenerated plan, and the cascade
 # would take archived topics with their practice history (the database guard refuses
-# that too; this is the second layer). Read the facts BEFORE any checkout or build.
-# Fail closed: no break-glass path skips it; a failed or unreadable preflight refuses.
+# that too; this is the second layer). Decide BEFORE any checkout or build. Fail closed:
+# no break-glass path skips it. A target is archive-aware only if ITS tree carries both
+# migrations and the contract marker BE/shared/archive_contract.py (version 1), whose
+# behaviour CI enforces on every deployable SHA (Codex task50: a keyword was not proof).
 target_supports_archive() {
   git -C "$REPO_ROOT" cat-file -e "$1:BE/alembic/versions/20261118_review_item_archive.py" 2>/dev/null \
     && git -C "$REPO_ROOT" cat-file -e "$1:BE/alembic/versions/20261119_review_item_guard.py" 2>/dev/null \
-    && git -C "$REPO_ROOT" grep -q archived_at "$1" -- BE/app/domains/review/service.py 2>/dev/null
+    && git -C "$REPO_ROOT" show "$1:BE/shared/archive_contract.py" 2>/dev/null \
+         | grep -x 'ARCHIVE_CONTRACT_VERSION = 1' >/dev/null
 }
 log "archive preflight: reading archive facts from the database (read-only)"
-if ! PREFLIGHT="$(compose run --rm -T -e ALEMBIC_ALLOW_PRODUCTION=1 backend \
-    python -m scripts.rollback_preflight --moi-truong production 2>&1)"; then
-  printf '%s\n' "$PREFLIGHT" | tail -n 5 >&2
-  die "rollback refused: the archive preflight could not read the database; nothing was checked out (docs/RUNBOOK_REVIEW_ITEM_ARCHIVE.md)"
+PREFLIGHT_ERR="$(mktemp)"
+PREFLIGHT_OK=1
+PREFLIGHT="$(compose run --rm -T -e ALEMBIC_ALLOW_PRODUCTION=1 backend \
+  python -m scripts.rollback_preflight --moi-truong production 2>"$PREFLIGHT_ERR")" || PREFLIGHT_OK=0
+# Exactly one stdout line, exactly this shape (diagnostics go to stderr).
+FACTS_RE='^archive_schema=([01]) archived_topics=([0-9]+) guard=([01])$'
+if [ "$PREFLIGHT_OK" = 1 ] && [[ "$PREFLIGHT" =~ $FACTS_RE ]]; then
+  SCHEMA="${BASH_REMATCH[1]}" ARCHIVED="${BASH_REMATCH[2]}" GUARD="${BASH_REMATCH[3]}"
+  rm -f "$PREFLIGHT_ERR"
+  if [ "$SCHEMA" = 1 ] && [ "$GUARD" != 1 ]; then
+    die "rollback refused: the archive guard is missing or disabled (guard=0); restore it first (docs/RUNBOOK_REVIEW_ITEM_ARCHIVE.md, section 2); nothing was checked out"
+  fi
+  if [ "$ARCHIVED" -gt 0 ] && ! target_supports_archive "$SHA"; then
+    die "rollback refused: $SHA predates the review-topic archive and $ARCHIVED archived topic(s) exist; its regeneration would delete their practice history. Roll back to a SHA carrying migrations 20261118/20261119 and BE/shared/archive_contract.py, or roll forward (docs/RUNBOOK_REVIEW_ITEM_ARCHIVE.md)"
+  fi
+  log "archive preflight: archive_schema=$SCHEMA archived_topics=$ARCHIVED guard=$GUARD; target $SHA accepted"
+else
+  tail -n 5 "$PREFLIGHT_ERR" >&2 2>/dev/null || true
+  rm -f "$PREFLIGHT_ERR"
+  # Unknown facts: only a target that is safe whatever they are (archive-aware) may go,
+  # so a database outage does not block an emergency rollback to a safe SHA.
+  target_supports_archive "$SHA" \
+    || die "rollback refused: the archive preflight could not read the database (or its output was not exactly one facts line), and $SHA is not archive-aware; nothing was checked out (docs/RUNBOOK_REVIEW_ITEM_ARCHIVE.md)"
+  log "WARNING: archive facts unreadable; target is archive-aware ($SHA), rollback continues"
 fi
-FACTS="$(printf '%s\n' "$PREFLIGHT" | grep -E '^archive_schema=[01] archived_topics=[0-9]+ guard=[01]$' | tail -n 1 || true)"
-[ -n "$FACTS" ] || die "rollback refused: unreadable archive preflight output; nothing was checked out"
-ARCHIVED="$(printf '%s\n' "$FACTS" | sed -E 's/.*archived_topics=([0-9]+).*/\1/')"
-if [ "$ARCHIVED" -gt 0 ] && ! target_supports_archive "$SHA"; then
-  die "rollback refused: $SHA predates the review-topic archive and $ARCHIVED archived topic(s) exist; its regeneration would delete their practice history. Roll back to a SHA containing migrations 20261118 and 20261119, or roll forward (docs/RUNBOOK_REVIEW_ITEM_ARCHIVE.md)"
-fi
-log "archive preflight: $FACTS; target $SHA accepted"
 
 if [ -n "$(git -C "$REPO_ROOT" status --porcelain)" ]; then
   git -C "$REPO_ROOT" status --short >&2

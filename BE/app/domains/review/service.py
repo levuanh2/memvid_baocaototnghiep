@@ -233,8 +233,13 @@ def _persist(attempt_id: str, quiz_id: str, weak: List[Dict[str, Any]],
             return None
         document_id = quiz.document_id
 
+        # Lock the plan row BEFORE archiving its topics (Codex task50): an old-code DELETE
+        # of the plan then waits for this transaction and its guard trigger sees the
+        # committed archive. Archiving first and locking the plan at flush let the two
+        # deadlock, and the archive could be the victim.
         old = s.execute(
             select(ReviewPlan).where(ReviewPlan.attempt_id == str(attempt_id))
+            .with_for_update()
         ).scalar_one_or_none()
 
         if not summary:

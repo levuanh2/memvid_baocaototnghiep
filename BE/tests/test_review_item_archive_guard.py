@@ -147,18 +147,42 @@ def test_a_document_delete_removes_a_plan_with_archived_topics(client, planned, 
                          ).scalar() == 0
 
 
-def test_an_old_code_delete_racing_the_new_code_archive_is_refused(client, planned):
-    """New code archives under a lock on the plan row (it updates summary/created_at in
-    the same transaction). An old-code DELETE that started before the archive committed
-    waits for that lock, then its row trigger sees the committed archive and refuses."""
+def test_an_old_code_delete_racing_the_real_archive_is_refused(client, planned, owner,
+                                                               monkeypatch):
+    """The REAL regeneration path (Codex task50: the first test locked the plan in the
+    opposite order from production). It is paused right after its archiving UPDATE, with
+    its transaction open; an old-code DELETE of the plan then starts. It must wait for
+    the plan row lock the archive holds, then see the committed archive and refuse; the
+    archive must commit (no deadlock, no lost archive)."""
+    from sqlalchemy import event
+
+    from app.db import get_engine
+
     plan_id = planned["first"]["review_plan_id"]
-    archiving = _raw()
-    archiving.execute(sa.text("UPDATE review_plans SET summary = summary || ' ' WHERE id = :p"),
-                      {"p": plan_id})
-    archiving.execute(sa.text("UPDATE review_plan_items SET archived_at = now() "
-                              "WHERE review_plan_id = :p AND archived_at IS NULL"),
-                      {"p": plan_id})
+    archived, release = threading.Event(), threading.Event()
+
+    def _pause(conn, cursor, statement, *a):
+        # Only the first archiving UPDATE (the regeneration may run on a worker thread).
+        if (statement.lstrip().upper().startswith("UPDATE REVIEW_PLAN_ITEMS SET ARCHIVED_AT")
+                and not archived.is_set()):
+            archived.set()
+            release.wait(30)
+
+    engine = get_engine()
+    event.listen(engine, "after_cursor_execute", _pause)
     outcome = {}
+
+    from app.application import review_plans as review_uc
+
+    _fake_guide(monkeypatch, GUIDE_2)
+
+    def _archiver():   # the real use case and _persist, without the Flask test client
+        try:
+            review_uc.generate(planned["attempt_id"], owner, force=True,
+                               bat_buoc_chu_so_huu=True)
+            outcome["archive"] = 200
+        except Exception as exc:   # surfaced by the assertion below
+            outcome["archive"] = repr(exc)
 
     def _old_code_delete():
         with _raw() as c:
@@ -166,19 +190,51 @@ def test_an_old_code_delete_racing_the_new_code_archive_is_refused(client, plann
                 c.execute(sa.text("SET lock_timeout = '20s'"))
                 c.execute(sa.text("DELETE FROM review_plans WHERE id = :p"), {"p": plan_id})
                 c.commit()
-                outcome["result"] = "deleted"
+                outcome["delete"] = "deleted"
             except sa.exc.DBAPIError as exc:
-                outcome["result"] = getattr(exc.orig, "sqlstate", repr(exc.orig))
+                outcome["delete"] = getattr(exc.orig, "sqlstate", repr(exc.orig))
 
-    t = threading.Thread(target=_old_code_delete)
-    t.start()
-    t.join(2)
-    assert t.is_alive(), "the delete must wait for the archiving transaction"
-    archiving.commit()
-    archiving.close()
-    t.join(30)
-    assert outcome.get("result") == "23001", outcome
+    try:
+        arch = threading.Thread(target=_archiver, name="archiver")
+        arch.start()
+        if not archived.wait(30):
+            arch.join(30)
+            pytest.fail(f"the regeneration did not reach its archiving UPDATE: {outcome}")
+        dele = threading.Thread(target=_old_code_delete)
+        dele.start()
+        dele.join(2)
+        assert dele.is_alive(), "the delete must wait for the archiving transaction's plan lock"
+        release.set()
+        arch.join(60)
+        dele.join(60)
+    finally:
+        release.set()
+        event.remove(engine, "after_cursor_execute", _pause)
+    assert outcome.get("archive") in (200, 201), outcome
+    assert outcome.get("delete") == "23001", outcome
     assert _counts(planned["pq"])["attempts"] == 1
+
+
+def test_an_archived_topic_is_read_only_except_fk_set_null(client, planned, monkeypatch):
+    """Codex task50: changing only `archived_at`/`review_plan_id` was refused, but an
+    UPDATE or an upsert could rewrite the history's content."""
+    forced = _archived(client, planned, monkeypatch)
+    old = forced["archived_items"][0]["review_item_id"]
+    for sql in ("UPDATE review_plan_items SET topic = 'khac' WHERE id = :i",
+                "UPDATE review_plan_items SET reason = 'khac', priority = 9 WHERE id = :i",
+                "UPDATE review_plan_items SET review_tasks_json = '[]' WHERE id = :i",
+                "INSERT INTO review_plan_items (id, review_plan_id, topic, priority, reason, "
+                "status, mastery_score, review_tasks_json) SELECT id, review_plan_id, 'x', 7, "
+                "'x', status, 0.1, '[]' FROM review_plan_items WHERE id = :i "
+                "ON CONFLICT (id) DO UPDATE SET topic = EXCLUDED.topic"):
+        with _raw() as c, pytest.raises(sa.exc.DBAPIError) as exc_info:
+            c.execute(sa.text(sql), {"i": old})
+        _refused(exc_info)
+    with _raw() as c:   # FK maintenance (ON DELETE SET NULL) still works
+        c.execute(sa.text("UPDATE review_plan_items SET concept_mastery_id = NULL, "
+                          "section_id = NULL, knowledge_node_id = NULL WHERE id = :i"),
+                  {"i": old})
+        c.commit()
 
 
 # ── the verifier proves the guard from the catalogs ───────────────────────
@@ -222,3 +278,79 @@ def test_the_guard_downgrade_refuses_while_archived_topics_exist(client, planned
     assert r.returncode != 0 and "refusing downgrade" in (r.stdout + r.stderr)
     with _raw() as c:
         assert _version(c) == "20261119_review_item_guard"
+
+
+def test_the_verifier_fails_closed_on_a_same_name_body_or_a_wrong_event():
+    """Codex task50: names and enabled flags were not proof."""
+    with _raw() as c:
+        c.execute(sa.text("CREATE OR REPLACE FUNCTION studymap_guard_review_plan_delete() "
+                          "RETURNS trigger LANGUAGE plpgsql AS $$ BEGIN RETURN OLD; END $$"))
+        c.commit()
+    r = _verify_and_restore()
+    assert r.returncode != 0
+    assert "guard function studymap_guard_review_plan_delete body differs" in r.stderr
+    with _raw() as c:
+        c.execute(sa.text("DROP TRIGGER trg_guard_review_plan_delete ON review_plans"))
+        c.execute(sa.text("CREATE TRIGGER trg_guard_review_plan_delete AFTER DELETE ON "
+                          "review_plans FOR EACH ROW EXECUTE FUNCTION "
+                          "studymap_guard_review_plan_delete()"))
+        c.commit()
+    r = _verify_and_restore()
+    assert r.returncode != 0 and "fires on tgtype" in r.stderr, r.stderr
+
+
+def _downgrade_statements(module_file):
+    """Run a migration's downgrade() against a recording stand-in for the connection."""
+    import contextlib
+    import importlib.util
+    from pathlib import Path
+
+    seen = []
+
+    class _Result:
+        def scalar(self):
+            return 0
+
+        def first(self):
+            return None
+
+    class _Conn:
+        def execute(self, stmt, *a, **k):
+            seen.append(str(stmt))
+            return _Result()
+
+    class _Ctx:
+        def autocommit_block(self):
+            return contextlib.nullcontext()
+
+    class _Op:
+        def get_bind(self):
+            return _Conn()
+
+        def execute(self, sql):
+            seen.append(str(sql))
+
+        def get_context(self):
+            return _Ctx()
+
+    path = Path(__file__).resolve().parents[1] / "alembic" / "versions" / module_file
+    spec = importlib.util.spec_from_file_location("mig_under_test", path)
+    mod = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(mod)
+    mod.op = _Op()
+    if hasattr(mod, "archived_at_column_exists"):
+        mod.archived_at_column_exists = lambda conn: True
+    if hasattr(mod, "old_priority_constraint_exists"):
+        mod.old_priority_constraint_exists = lambda conn: False
+    mod.downgrade()
+    return seen
+
+
+def test_each_downgrade_locks_both_tables_before_it_counts_archived_topics():
+    """Codex task50: a count before a lock let an archive commit between the count and
+    the drop. The lock must come first and cover both tables."""
+    lock = "LOCK TABLE review_plans, review_plan_items IN SHARE ROW EXCLUSIVE MODE"
+    for module_file in ("20261119_review_item_guard.py", "20261118_review_item_archive.py"):
+        seen = _downgrade_statements(module_file)
+        first_count = next(i for i, x in enumerate(seen) if "count(*)" in x)
+        assert any(lock in x for x in seen[:first_count]), (module_file, seen[:first_count + 1])

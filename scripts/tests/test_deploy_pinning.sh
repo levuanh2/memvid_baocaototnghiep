@@ -448,53 +448,92 @@ expect_status 0 base_env env MEMVID_BREAK_GLASS=1 bash "$SERVER/scripts/deploy.s
 assert_ledger "$B_SHA" break-glass
 pass "break-glass pinned and unpinned paths warn, succeed, and are ledgered"
 
-# R: archive rollback floor (issue #18, owner decision 2026-11-19). Before any checkout
-# or build, rollback.sh reads the archive facts from the database (read-only) and refuses
-# a target SHA that predates the archive while archived topics exist. Unknown = refused.
+# R: archive rollback floor (issue #18, owner decision 2026-11-19; Codex task50). Before
+# any checkout or build, rollback.sh reads the archive facts (read-only) and refuses a
+# target that is not archive-aware while archived topics exist, refuses whenever the
+# archive guard is reported missing, and treats anything but one exact facts line as
+# unknown: then only an archive-aware target may go.
 git -C "$SERVER" -c advice.detachedHead=false checkout --detach "$B_SHA" >/dev/null
+refused_before_checkout() {
+  assert_head "$B_SHA"
+  assert_not_called 'compose .* build$'
+}
 reset_controls
 TEST_PREFLIGHT_OUTPUT="archive_schema=1 archived_topics=3 guard=1"
 run_rollback 1 "$A_SHA"
-assert_head "$B_SHA"
+refused_before_checkout
 assert_called 'compose .*run.*scripts.rollback_preflight'
-assert_not_called 'compose .* build$'
 grep -q "predates the review-topic archive" "$OUTPUT" || { cat "$OUTPUT" >&2; fail "no archive-floor reason"; }
 reset_controls
 TEST_PREFLIGHT_OUTPUT="archive_schema=1 archived_topics=3 guard=1"
 expect_status 1 base_env env MEMVID_BREAK_GLASS=1 bash "$SERVER/scripts/rollback.sh" "$A_SHA"
-assert_head "$B_SHA"
-assert_not_called 'compose .* build$'
+refused_before_checkout
 reset_controls
 TEST_PREFLIGHT_CODE=3
 TEST_PREFLIGHT_OUTPUT="STOP: cannot reach the database"
 run_rollback 1 "$A_SHA"
-assert_head "$B_SHA"
-assert_not_called 'compose .* build$'
+refused_before_checkout
 reset_controls
 TEST_PREFLIGHT_OUTPUT="something unexpected"
 run_rollback 1 "$A_SHA"
-assert_head "$B_SHA"
-assert_not_called 'compose .* build$'
-pass "R archived topics refuse a pre-archive rollback target before checkout; break glass, a failed or unreadable preflight refuse too"
+refused_before_checkout
+reset_controls
+TEST_PREFLIGHT_OUTPUT=$'archive_schema=1 archived_topics=3 guard=1
+archive_schema=1 archived_topics=0 guard=1'  # stale or spoofed last line must not open the gate
+run_rollback 1 "$A_SHA"
+refused_before_checkout
+reset_controls
+TEST_PREFLIGHT_OUTPUT="archive_schema=1 archived_topics=0 guard=0"
+run_rollback 1 "$A_SHA"
+refused_before_checkout
+grep -q "archive guard is missing or disabled" "$OUTPUT" || { cat "$OUTPUT" >&2; fail "no guard reason"; }
+pass "R pre-archive targets, a missing guard, a failed preflight and anything but one exact facts line are refused before checkout; break glass does not skip it"
 
-printf 'archive\n' >"$SOURCE/revision.txt"
-mkdir -p "$SOURCE/BE/alembic/versions" "$SOURCE/BE/app/domains/review"
+# E: carries the migrations and mentions archived_at, but has no valid contract marker
+# (a keyword is not proof; Codex task50 false positive).
+printf 'keyword-only\n' >"$SOURCE/revision.txt"
+mkdir -p "$SOURCE/BE/alembic/versions" "$SOURCE/BE/app/domains/review" "$SOURCE/BE/shared"
 printf 'revision = "20261118_review_item_archive"\n' >"$SOURCE/BE/alembic/versions/20261118_review_item_archive.py"
 printf 'revision = "20261119_review_item_guard"\n' >"$SOURCE/BE/alembic/versions/20261119_review_item_guard.py"
 printf 'archived_at = None  # readers filter archived topics\n' >"$SOURCE/BE/app/domains/review/service.py"
+printf '# ARCHIVE_CONTRACT_VERSION = 1 (comment only)\nARCHIVE_CONTRACT_VERSION = 0\n' >"$SOURCE/BE/shared/archive_contract.py"
+git -C "$SOURCE" add -A
+git -C "$SOURCE" commit -m "keyword only" >/dev/null
+E_SHA="$(git -C "$SOURCE" rev-parse HEAD)"
+printf 'ARCHIVE_CONTRACT_VERSION = 1\n' >"$SOURCE/BE/shared/archive_contract.py"
+printf 'archive\n' >"$SOURCE/revision.txt"
 git -C "$SOURCE" add -A
 git -C "$SOURCE" commit -m "archive-aware" >/dev/null
+D_SHA="$(git -C "$SOURCE" rev-parse HEAD)"
 git -C "$SOURCE" push origin HEAD:main >/dev/null
 git -C "$SERVER" fetch origin main >/dev/null
-D_SHA="$(git -C "$SOURCE" rev-parse HEAD)"
+reset_controls
+TEST_PREFLIGHT_OUTPUT="archive_schema=1 archived_topics=3 guard=1"
+expect_status 1 base_env env MEMVID_BREAK_GLASS=1 bash "$SERVER/scripts/rollback.sh" "$E_SHA"
+refused_before_checkout
+reset_controls
+TEST_PREFLIGHT_OUTPUT="archive_schema=1 archived_topics=3 guard=0"
+expect_status 1 base_env env MEMVID_BREAK_GLASS=1 bash "$SERVER/scripts/rollback.sh" "$D_SHA"
+refused_before_checkout
+pass "R a keyword-only target is not archive-aware; a missing guard refuses even an archive-aware target"
+
 reset_controls
 TEST_PREFLIGHT_OUTPUT="archive_schema=1 archived_topics=3 guard=1"
 expect_status 0 base_env env MEMVID_BREAK_GLASS=1 bash "$SERVER/scripts/rollback.sh" "$D_SHA"
 assert_head "$D_SHA"
+# Database down during an incident: an archive-aware target is safe whatever the facts,
+# so it may still be rolled back to; any other target may not (checked above).
+git -C "$SERVER" -c advice.detachedHead=false checkout --detach "$B_SHA" >/dev/null
+reset_controls
+TEST_PREFLIGHT_CODE=3
+TEST_PREFLIGHT_OUTPUT="STOP: cannot reach the database"
+expect_status 0 base_env env MEMVID_BREAK_GLASS=1 bash "$SERVER/scripts/rollback.sh" "$D_SHA"
+assert_head "$D_SHA"
+grep -q "archive facts unreadable; target is archive-aware" "$OUTPUT" || { cat "$OUTPUT" >&2; fail "no unreadable-but-safe warning"; }
 reset_controls
 TEST_PREFLIGHT_OUTPUT="archive_schema=1 archived_topics=0 guard=1"
 run_rollback 0 "$A_SHA"
 assert_head "$A_SHA"
-pass "R an archive-aware target, or no archived topic yet, may be rolled back to"
+pass "R an archive-aware target (also with the database unreadable), or no archived topic yet, may be rolled back to"
 
 printf 'All deploy pinning scenarios passed.\n'

@@ -8462,3 +8462,26 @@ allowed, old-code delete racing the archive, verifier missing/disabled trigger, 
 downgrade refusal), `test_rollback_preflight.py` (2), `scripts/tests/test_deploy_pinning.sh`
 section R (6 cases) and 3 new mutations in `test_deploy_guard_mutations.sh`. Red first,
 except `test_rollback_preflight.py`, written together with the module it tests.
+
+**Review fixes (Codex task50, BLOCK: four P1, two P2, one P3), all red first:**
+- *Lock order.* `_persist` archived the topic rows first and locked the plan row only at
+  flush; an old-code DELETE could take the plan lock in between, pass its trigger
+  (archive not committed), and deadlock with the archiver. Reproduced on the old service:
+  the archiver was the deadlock victim and the delete committed (history lost). The plan
+  row is now `SELECT ... FOR UPDATE` before archiving; the race test drives the real use
+  case and pauses inside its transaction; a contract test checks the SQL order.
+- *Rollback accepted `guard=0`.* Now refused whenever the archive schema exists.
+- *Keyword compatibility.* `archived_at` in a comment passed. A target is archive-aware
+  only if its tree carries both migrations and `BE/shared/archive_contract.py`
+  (`ARCHIVE_CONTRACT_VERSION = 1`), whose behaviour `tests/test_archive_contract.py`
+  and the archive tests enforce on every CI-green SHA.
+- *Downgrade race.* Both downgrades lock `review_plans` and `review_plan_items` (SHARE
+  ROW EXCLUSIVE) before counting archived topics.
+- *Verifier checked names only.* It now checks each trigger's `tgtype` and function and
+  compares each guard function body with the contract in `shared.db_schema_checks`.
+- *Archived rows were writable.* Any UPDATE/upsert of an archived topic is refused except
+  its three nullable references going to NULL (FK SET NULL).
+- *Preflight protocol.* stdout must be exactly one facts line (stderr kept apart); a
+  stale or spoofed extra line is refused.
+- *Database down (side note):* with unreadable facts only an archive-aware target may be
+  rolled back to, so an outage does not block an emergency rollback to a safe SHA.

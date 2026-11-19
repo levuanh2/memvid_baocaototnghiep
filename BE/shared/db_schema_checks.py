@@ -139,24 +139,99 @@ def review_item_archive_problems(conn) -> List[str]:
 
 
 # Migration 20261119: the database refuses deletes that would cascade-delete archived
-# topics (code older than #194, a hand delete). Enabled = 'O' (origin) or 'A' (always).
+# topics (code older than #194, a hand delete) and rewrites of archived topics. The
+# function bodies live HERE, used by the migration and by the verifier, so the verifier
+# compares the installed body with the exact contract (Codex task50: a same-name
+# `RETURN OLD` body or a trigger on the wrong event used to pass).
+ARCHIVE_GUARD_HINT = ("Archived review topics keep practice history (issue #18). Use code "
+                      "that archives instead of deleting; see "
+                      "docs/RUNBOOK_REVIEW_ITEM_ARCHIVE.md.")
+
+ARCHIVE_GUARD_FUNCTIONS = {
+    "studymap_guard_review_plan_delete": f"""
+BEGIN
+  IF EXISTS (SELECT 1 FROM review_plan_items
+              WHERE review_plan_id = OLD.id AND archived_at IS NOT NULL)
+     AND EXISTS (SELECT 1 FROM quiz_attempts WHERE id = OLD.attempt_id)
+     AND EXISTS (SELECT 1 FROM users WHERE id = OLD.user_id)
+     AND EXISTS (SELECT 1 FROM documents WHERE id = OLD.document_id) THEN
+    RAISE EXCEPTION 'refused: this review plan holds archived topics'
+      USING ERRCODE = 'restrict_violation', HINT = '{ARCHIVE_GUARD_HINT}';
+  END IF;
+  RETURN OLD;
+END
+""",
+    # An archived topic is read-only history: only the FK maintenance of its three
+    # nullable references (ON DELETE SET NULL) may change it, and only to NULL.
+    "studymap_guard_archived_review_item": f"""
+BEGIN
+  IF TG_OP = 'DELETE' THEN
+    IF OLD.archived_at IS NOT NULL
+       AND EXISTS (SELECT 1 FROM review_plans WHERE id = OLD.review_plan_id) THEN
+      RAISE EXCEPTION 'refused: an archived review topic cannot be deleted'
+        USING ERRCODE = 'restrict_violation', HINT = '{ARCHIVE_GUARD_HINT}';
+    END IF;
+    RETURN OLD;
+  END IF;
+  IF OLD.archived_at IS NOT NULL AND (
+       (NEW.id, NEW.review_plan_id, NEW.topic, NEW.priority, NEW.reason, NEW.status,
+        NEW.mastery_score, NEW.review_tasks_json, NEW.created_at, NEW.archived_at)
+         IS DISTINCT FROM
+       (OLD.id, OLD.review_plan_id, OLD.topic, OLD.priority, OLD.reason, OLD.status,
+        OLD.mastery_score, OLD.review_tasks_json, OLD.created_at, OLD.archived_at)
+       OR (NEW.concept_mastery_id IS DISTINCT FROM OLD.concept_mastery_id
+           AND NEW.concept_mastery_id IS NOT NULL)
+       OR (NEW.section_id IS DISTINCT FROM OLD.section_id AND NEW.section_id IS NOT NULL)
+       OR (NEW.knowledge_node_id IS DISTINCT FROM OLD.knowledge_node_id
+           AND NEW.knowledge_node_id IS NOT NULL)) THEN
+    RAISE EXCEPTION 'refused: an archived review topic is read-only'
+      USING ERRCODE = 'restrict_violation', HINT = '{ARCHIVE_GUARD_HINT}';
+  END IF;
+  RETURN NEW;
+END
+""",
+    "studymap_guard_review_truncate": f"""
+BEGIN
+  IF EXISTS (SELECT 1 FROM review_plan_items WHERE archived_at IS NOT NULL) THEN
+    RAISE EXCEPTION 'refused: review plans hold archived topics'
+      USING ERRCODE = 'restrict_violation', HINT = '{ARCHIVE_GUARD_HINT}';
+  END IF;
+  RETURN NULL;
+END
+""",
+}
+
+# (trigger, table, function, pg_trigger.tgtype). tgtype bits: ROW 1, BEFORE 2, INSERT 4,
+# DELETE 8, UPDATE 16, TRUNCATE 32.
 ARCHIVE_GUARD_TRIGGERS = [
-    ("trg_guard_review_plan_delete", "review_plans"),
-    ("trg_guard_archived_review_item", "review_plan_items"),
-    ("trg_guard_review_items_truncate", "review_plan_items"),
-    ("trg_guard_review_plans_truncate", "review_plans"),
+    ("trg_guard_review_plan_delete", "review_plans", "studymap_guard_review_plan_delete",
+     1 | 2 | 8, "BEFORE DELETE ON review_plans FOR EACH ROW"),
+    ("trg_guard_archived_review_item", "review_plan_items",
+     "studymap_guard_archived_review_item", 1 | 2 | 8 | 16,
+     "BEFORE DELETE OR UPDATE ON review_plan_items FOR EACH ROW"),
+    ("trg_guard_review_items_truncate", "review_plan_items", "studymap_guard_review_truncate",
+     2 | 32, "BEFORE TRUNCATE ON review_plan_items FOR EACH STATEMENT"),
+    ("trg_guard_review_plans_truncate", "review_plans", "studymap_guard_review_truncate",
+     2 | 32, "BEFORE TRUNCATE ON review_plans FOR EACH STATEMENT"),
 ]
-ARCHIVE_GUARD_FUNCTIONS = ["studymap_guard_review_plan_delete",
-                           "studymap_guard_archived_review_item",
-                           "studymap_guard_review_truncate"]
+
+
+def archive_guard_function_sql(name: str) -> str:
+    return (f"CREATE OR REPLACE FUNCTION {name}() RETURNS trigger LANGUAGE plpgsql "
+            f"AS $guard${ARCHIVE_GUARD_FUNCTIONS[name]}$guard$")
+
+
+def _same_body(installed: str, expected: str) -> bool:
+    return " ".join((installed or "").split()) == " ".join(expected.split())
 
 
 def archive_guard_problems(conn) -> List[str]:
-    """The archive guard triggers exist, are enabled and call the guard functions."""
+    """Each guard trigger exists, is enabled, fires on the exact event/timing/level and
+    calls its own function; each function's body is exactly the contract above."""
     problems = []
-    for name, table in ARCHIVE_GUARD_TRIGGERS:
+    for name, table, function, tgtype, _ in ARCHIVE_GUARD_TRIGGERS:
         row = conn.execute(sa.text(
-            "SELECT tg.tgenabled, p.proname FROM pg_trigger tg "
+            "SELECT tg.tgenabled, p.proname, tg.tgtype FROM pg_trigger tg "
             "JOIN pg_class t ON t.oid = tg.tgrelid JOIN pg_namespace n ON n.oid = t.relnamespace "
             "JOIN pg_proc p ON p.oid = tg.tgfoid "
             "WHERE tg.tgname = :n AND t.relname = :t AND n.nspname = current_schema() "
@@ -165,11 +240,16 @@ def archive_guard_problems(conn) -> List[str]:
             problems.append(f"guard trigger {name} on {table} is missing")
         elif row[0] not in ("O", "A"):
             problems.append(f"guard trigger {name} on {table} is disabled (tgenabled={row[0]})")
-        elif row[1] not in ARCHIVE_GUARD_FUNCTIONS:
-            problems.append(f"guard trigger {name} calls {row[1]}, not a guard function")
-    for fn in ARCHIVE_GUARD_FUNCTIONS:
-        if conn.execute(sa.text(
-                "SELECT 1 FROM pg_proc p JOIN pg_namespace n ON n.oid = p.pronamespace "
-                "WHERE p.proname = :f AND n.nspname = current_schema()"), {"f": fn}).first() is None:
+        elif row[1] != function:
+            problems.append(f"guard trigger {name} calls {row[1]}, expected {function}")
+        elif int(row[2]) != tgtype:
+            problems.append(f"guard trigger {name} fires on tgtype {row[2]}, expected {tgtype}")
+    for fn, body in ARCHIVE_GUARD_FUNCTIONS.items():
+        row = conn.execute(sa.text(
+            "SELECT p.prosrc FROM pg_proc p JOIN pg_namespace n ON n.oid = p.pronamespace "
+            "WHERE p.proname = :f AND n.nspname = current_schema()"), {"f": fn}).first()
+        if row is None:
             problems.append(f"guard function {fn} is missing")
+        elif not _same_body(row[0], body):
+            problems.append(f"guard function {fn} body differs from the contract")
     return problems
