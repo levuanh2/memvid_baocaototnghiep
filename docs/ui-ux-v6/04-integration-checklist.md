@@ -73,6 +73,9 @@ be reconciled with #160. Everything else is independent in code.
    any practice exists the deploy is **fix-forward only** (option B): never roll back below #194:
    `rollback.sh` refuses it (archive preflight) and the triggers refuse the destructive
    delete; recovery and rollback rules in `docs/RUNBOOK_REVIEW_ITEM_ARCHIVE.md`.
+   Migration **design** approved by the owner 2026-11-19; the production run is not. Window
+   01:00-03:00 Vietnam time, scheduled only after the 7 NO-GO conditions are GO. Before it,
+   read runbook §4 (accepted residual risks) and decide the role split of §5 (not applied).
    **#183 -> #185** together, and only after the deploy order is planned: the migration
    `20261115_attempt_submit_key` must run before the new backend starts (the model selects the
    new columns); `scripts/deploy.sh` runs migrations (step 5) before `compose up` (step 6). The

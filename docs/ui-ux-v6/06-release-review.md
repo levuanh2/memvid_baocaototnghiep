@@ -816,6 +816,22 @@ Reviews of #193/#194/#195 (2026-11-19):
 - **Review gate (lesson of this round):** agy approved #193 and #194 while Codex then found real defects in both. For merge decisions Codex's verdict is the blocking gate; agy's approval is a supplementary opinion, not independent confirmation.
 - **#195** `47dc4b1`: agy APPROVED (task47).
 
+## 8i. Owner decisions after Codex task57 (2026-11-19): #194 scope
+
+| # | Decision | Done on #194 `14a3631` |
+|---|---|---|
+| 1 | Keep the guard scope; no full immutability for hand SQL on child tables; keep the triggers | no trigger removed or widened |
+| 2 | Hand SQL outside scope = documented residual risks; propose least-privilege roles; no claim of absolute protection | runbook §4 (R1-R6), §5 role split, probed on disposable PG17 only (`review-plan-archive-guard/least-privilege-probe.log`): a non-owner DML role cannot disable/drop triggers, truncate, replace guard functions or set `replica`; **without `BYPASSRLS` or policies it silently reads 0 rows** (RLS on 26/27 tables). Not applied |
+| 3 | Rollback B: archive-aware SHA or roll forward | unchanged (`rollback.sh` floor) |
+| 4 | Hard delete keeps cascading history, with a clear warning and ownership tests | sidebar "Xóa" (`DELETE /sources/<id>`, hard) now asks in `DestructiveConfirmDialog` naming the lost history; the Library "Xoá" is a **soft** delete and keeps history (test); another learner gets 404 on both routes (test). No account-delete route exists today |
+| 5 | Deadlock accepted only against old code | found and fixed a current-code deadlock: `hard_delete` vs regeneration (40P01, red on old code, green 3/3); `hard_delete` now locks attempts, then plans |
+| 6 | Migration design 20261118/20261119 approved; production run not approved | docstring of 20261119 brought in line with the guard as built |
+| 7 | Window 01:00-03:00 Vietnam time, only after the 7 NO-GO conditions | section 9 unchanged; nothing scheduled |
+
+Tests: targeted backend 109 passed (guard, archive, migration, contract, preflight, every
+test touching `hard_delete` or `/sources`); full Vitest 234 files / 1971 tests passed.
+Codex task58 (`14a3631`) BLOCK on documentation only: R1 lacked child-table `TRUNCATE`/`CASCADE`, R3 over-claimed account/attempt coverage, R6 cited an undefined list, the probe claim was too broad; no code finding, and no remaining deadlock between current-code flows. Fixed in `3b3e784` (runbook only). Codex task59 **APPROVE** (`task59-codex-194-recheck.md`). Full backend on disposable PG17: 3139 passed, the 6 known baseline failures, 9 skipped; CI `14a3631` success (run 44529416367). Production run still not approved.
+
 ## 9. GO/NO-GO checklist for the owner
 
 Blocking: production stays **NO-GO** until every row is GO with the evidence named. None
