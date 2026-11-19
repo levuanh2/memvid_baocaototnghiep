@@ -82,15 +82,23 @@ practice quiz, attempt, answer and mastery row made from them. Two layers stop t
    Each guard function pins `search_path = <schema>, pg_temp`, so a session's
    temporary tables cannot shadow the tables it checks.
 
-   Not refused: deleting a document (Library) or an account, or an attempt, still removes
-   everything made from it, archived history included, exactly as before #194. The new
-   code's archiving and FK `SET NULL` updates are not affected.
+   Not refused (owner decision 2026-11-19, item 4): a HARD delete of a document (the
+   sources sidebar "Xóa": `DELETE /sources/<id>` and `/delete-source`), or of an account
+   or attempt row, still removes everything made from it, archived history included,
+   exactly as before #194. The sidebar says so in a permanent-delete dialog with an
+   explicit checkbox; only the owner can do it (404 otherwise). The Library's "Xoá"
+   (`DELETE /api/documents/<id>`) is a SOFT delete: it hides the document and keeps all
+   history. The app has no account-delete route today. `hard_delete` locks the
+   document's attempts, then its plans, before the cascade, in the regeneration's order,
+   so it never deadlocks with one. The new code's archiving and FK `SET NULL` updates are
+   not affected.
    Every guard decision first locks the attempt that owns the plan (a regeneration holds
    it `FOR UPDATE`, a practice insert `FOR KEY SHARE`, the delete guards take it `FOR
    UPDATE`), then judges history with a fresh snapshot: a delete racing a regeneration or
-   a practice insert waits and is refused. An old-code plan delete racing a regeneration
-   may deadlock instead; PostgreSQL then aborts one of them and no history is lost (the
-   surviving delete is judged under the lock).
+   a practice insert waits and is refused. Accepted (owner item 5): only an OLD-code plan
+   delete racing a regeneration may deadlock; PostgreSQL aborts one transaction and no
+   history is lost (the surviving delete is judged under the lock). A deadlock between
+   two current-code flows is a bug.
    `verify_db_schema` fails while any guard trigger is missing, disabled, on the wrong
    event or calling the wrong function, or a guard function's body differs from the
    contract in `BE/shared/db_schema_checks.py`.
@@ -132,3 +140,40 @@ Rules:
 - Not covered: `pg_restore` of an older backup over the database, or a superuser session
   with `session_replication_role = replica` (triggers off). Both are owner-only
   operations covered by the backup/restore runbook, not by this guard.
+
+## 4. Residual risks (owner decision 2026-11-19)
+
+The guard covers old code and mistaken deletes of plans, topics and practice quizzes. It
+does **not** make practice history immutable, and nobody should claim it does. Accepted,
+documented risks:
+
+| # | Not covered | Why it stays | Limited by |
+|---|---|---|---|
+| R1 | Hand-written `UPDATE`/`DELETE` on `quiz_questions`, `quiz_answers`, `review_item_chunks`, `concept_masteries` | valid product flows write them (regrade, gap analysis, document re-ingest); a trigger cannot tell those from a hand edit | role split below; hand SQL only through the read-only role |
+| R2 | Hand `UPDATE` of identity columns (`review_plans.attempt_id/user_id/document_id`, `quizzes.document_id/user_id`, `quiz_attempts.quiz_id/user_id`): moves history under another parent, a later cascade can then take it | out of the agreed scope (owner item 1) | role split; column-level `UPDATE` grants are a follow-up needing approval |
+| R3 | A hard delete of a document (sources sidebar), account or attempt removes its history | product decision (owner item 4); warned in a permanent-delete dialog, owner-only | `BE/tests/test_review_history_document_delete.py` |
+| R4 | Deadlock between an OLD-code plan delete and a regeneration | owner item 5: aborted safely, nothing lost; only during a mixed-version window | current-code flows lock attempt then plan (same test file) |
+| R5 | `pg_restore` of an old backup, a superuser, or the table OWNER disabling or dropping triggers | ownership can always change its own tables | role split: the runtime role must not own the tables |
+| R6 | Seconds between migration and new backend in the #194 deploy: old code's "Tạo lại kế hoạch" on a plan with practice fails with 23001 | refusing is the guard's job | deploy window 01:00-03:00 (Vietnam time), after the 7 NO-GO conditions |
+
+## 5. Least-privilege database roles (proposal, NOT applied)
+
+Today the backend and the migrations use the same `DATABASE_URL`, so the runtime role
+owns the tables and can `ALTER TABLE ... DISABLE TRIGGER`, `DROP TRIGGER`, `TRUNCATE`
+(R5). Proposed split, verified only on a disposable PostgreSQL 17 cluster
+(`least-privilege-probe.log` in the V6 QA evidence; Supabase not tested, no hosted
+access was used):
+
+| Role | Used by | Rights |
+|---|---|---|
+| `studymap_owner` | `scripts.run_migrations` only (deploy step) | owns schema, tables, guard functions; DDL |
+| `studymap_app` | backend runtime (`DATABASE_URL`) | `LOGIN NOSUPERUSER`; `SELECT, INSERT, UPDATE, DELETE` on tables, `USAGE, SELECT` on sequences; no `TRUNCATE`, `TRIGGER`, `REFERENCES`, no `CREATE` on the schema; **needs `BYPASSRLS` or RLS policies** |
+| `studymap_readonly` | `scripts.rollback_preflight`, `verify_db_schema`, support queries | `SELECT` only |
+
+Probe results for a non-owner DML role: `DISABLE TRIGGER`, `DROP TRIGGER`, `TRUNCATE`,
+replacing a guard function, `SET session_replication_role = replica` and `DISABLE ROW
+LEVEL SECURITY` are all refused (42501). Ordinary DML works. **Pitfall:** RLS is enabled
+on 26 of 27 tables with no policies; a role without `BYPASSRLS` silently reads 0 rows
+(no error), so the app would look empty. Before applying: confirm Supabase allows
+granting `BYPASSRLS` (or write policies), add a separate migration URL to `alembic/env.py`
+and the deploy scripts, and rehearse on a test database. Every step needs owner approval.

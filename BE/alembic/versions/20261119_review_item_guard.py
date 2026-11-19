@@ -8,36 +8,38 @@ database refuses, fail closed (SQLSTATE 23001, restrict_violation; the hint name
 runbook; no row data in the message). The function bodies are the contract in
 `shared.db_schema_checks.ARCHIVE_GUARD_FUNCTIONS`, which `verify_db_schema` compares:
 
-1. BEFORE DELETE on review_plans, per row: refused when the plan holds practice history
-   (an archived topic, or a practice quiz made from one of its topics; Codex task52: an
-   old-code delete that won the plan lock before any archive existed) and its attempt,
-   user and document all still exist (a regeneration by old code, or a
-   hand delete). A plan removed because its attempt, document or account was deleted
-   still goes, exactly as before #194 (the parent row is already gone when the cascade
-   reaches the plan).
-2. BEFORE DELETE OR UPDATE on review_plan_items, per row: an archived topic cannot be
-   deleted while its plan exists (a direct delete, or an ORM deleting children first),
-   and is read-only: only its three nullable references may change, and only to NULL
-   (FK ON DELETE SET NULL). The new code's archiving UPDATE (on rows not yet archived)
-   is not affected.
-3. BEFORE TRUNCATE on both tables: refused while any archived topic or any practice
-   quiz made from a topic exists.
-4. BEFORE INSERT OR UPDATE OF source_review_item_id on quizzes: no new practice from an
-   archived topic, whatever path inserts it (Codex task53: the request checked before
-   enqueueing, the worker inserted later). It takes FOR SHARE on the topic row, so it
-   waits for an archiving transaction and then reads the committed archive.
+History = a topic that is archived, or that has a practice quiz made from it.
+
+1. BEFORE DELETE on review_plans, per row: refused when the plan holds history and its
+   attempt, user and document all still exist (old-code regeneration, also before any
+   archive exists; a hand delete). A plan removed because its attempt, document or
+   account is being deleted still goes, exactly as before #194.
+2. BEFORE DELETE OR UPDATE on review_plan_items, per row: a topic with history cannot be
+   deleted while its plan exists (direct, or an ORM deleting children first) and is
+   read-only, except archiving an active topic and FK ON DELETE SET NULL on its three
+   nullable references.
+3. BEFORE INSERT OR DELETE OR UPDATE OF source_review_item_id, source_attempt_id,
+   quiz_type on quizzes: no new practice quiz from an archived topic, whatever path
+   inserts it (Codex task53: a late worker); a practice quiz with history, or any quiz
+   whose attempts own a plan with history, cannot be deleted while user and document
+   exist; a practice quiz's provenance is read-only.
+4. BEFORE TRUNCATE on review_plans, review_plan_items and quizzes while history exists.
+
+Lock order (Codex task50/54/56/57): every guard decision first locks the attempt that
+owns the plan (a regeneration holds it FOR UPDATE, a practice insert takes FOR KEY SHARE,
+the delete guards FOR UPDATE), then judges history with a fresh snapshot, so a delete or
+insert racing a regeneration waits and is refused instead of deadlocking or losing
+history. Only an old-code plan delete racing a regeneration can still deadlock;
+PostgreSQL aborts one transaction and nothing is lost (owner decision 2026-11-19, item 5).
 
 Every guard function pins `search_path = <schema>, pg_temp`: a caller's temporary
 shadow tables cannot answer its EXISTS checks (Codex task52).
 
-Race: the new code locks the plan row (SELECT ... FOR UPDATE) before archiving its
-topics. An old-code DELETE of that plan waits for the lock; its row trigger then runs
-with a fresh snapshot, sees the committed archive, and refuses (Codex task50).
-
 No automatic bypass. Disabling the triggers is a manual, owner-approved DDL step
 (docs/RUNBOOK_REVIEW_ITEM_ARCHIVE.md). Rerun-safe: CREATE OR REPLACE and drop/create of
-the named triggers. The downgrade locks both tables against writes, then refuses while
-archived topics exist, and keeps the lock until the triggers are gone.
+the named triggers. The downgrade locks review_plans, review_plan_items and quizzes
+against writes, refuses while any history exists, and keeps the lock until the triggers
+are gone.
 """
 from alembic import op
 import sqlalchemy as sa

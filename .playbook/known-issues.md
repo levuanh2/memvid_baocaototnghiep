@@ -8548,3 +8548,28 @@ except `test_rollback_preflight.py`, written together with the module it tests.
 - *Active topics with practice* were rewritable, also atomically rewritten and archived.
   They are now read-only like archived ones, except the archive transition itself and
   the FK SET NULL of their references.
+
+### Hard document delete deadlocked with "Tạo lại kế hoạch" (Codex task57, owner item 5, 2026-11-19)
+
+- **Symptom:** deleting a source from the sidebar (`DELETE /sources/<id>`, `hard_delete`)
+  while the same learner regenerated a review plan of that document: PostgreSQL aborted
+  the regeneration with 40P01 (deadlock detected).
+- **Root cause:** opposite lock order between two current-code flows. Regeneration locks
+  the attempt `FOR UPDATE`, then the plan. The document cascade reached `review_plans`
+  first (row lock, then the plan-delete guard), and the guard then waited for the attempt.
+- **Fix:** `documents.repository.hard_delete` locks the document's attempts, then its
+  plans (both ordered by id, `FOR UPDATE`) before `s.delete(document)`, in the
+  regeneration's order.
+- **Regression:** `BE/tests/test_review_history_document_delete.py::test_a_hard_document_delete_racing_a_regeneration_does_not_deadlock`
+  (red on the old `hard_delete`: `{'archive': '40P01'}`; green 3/3). Same file: another
+  learner gets 404 on both delete routes; the Library delete is soft and keeps history.
+- **Prevention:** any new path that deletes or cascades through `review_plans` locks the
+  owning attempt first. Only an OLD-code delete may still deadlock (accepted, runbook §3).
+
+### Sidebar "Xóa" is a hard delete and said nothing about history (owner item 4, 2026-11-19)
+
+- **Symptom:** `window.confirm('Xóa "<file>"?')` then the cascade removed every quiz, plan,
+  practice quiz and result of the document, archived topics included.
+- **Fix:** `SidebarLeft` uses the shared `DestructiveConfirmDialog` (checkbox required,
+  names the loss, "Không thể hoàn tác"). The Library's delete is soft and is not touched.
+- **Regression:** `FE/src/components/Layout/SidebarLeft.deleteSourceWarning.test.jsx`.

@@ -3824,3 +3824,18 @@ actually sends. Same for gates: a keyword or a name is not proof of behaviour.
 the statement snapshot. A row a concurrent transaction is archiving does not match, so it
 is neither locked nor re-read, and the check passes. Lock by key only
 (`WHERE id = $1 FOR SHARE`), then test the value PostgreSQL re-fetched after the wait.
+
+## 2026-11-19 — "Delete document" is two different operations here
+
+The Library's "Xoá" is a soft delete (status `deleted`, history kept); the sources
+sidebar's "Xóa" is a hard delete that cascades through review history. Earlier reports
+said "deleting a document removes the history" without naming the route, and an owner
+decision was taken on that wording. Name the exact route and whether it is soft or hard
+before writing a warning or asking for a decision.
+
+## 2026-11-19 — A non-owner role under RLS without policies reads 0 rows, silently
+
+Splitting the runtime role from the table owner is the right fix for "the app can
+disable its own triggers", but every table here has RLS enabled and no policies. The
+new role gets empty results, not errors. Grant `BYPASSRLS` or write policies, and
+rehearse on a test database first.
