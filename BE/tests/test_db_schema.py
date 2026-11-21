@@ -38,7 +38,8 @@ def user_id(engine):
             {"id": uid, "em": f"schema_{uid[:8]}@example.com"},
         )
     yield uid
-    with engine.begin() as c:
+    from tests._owner_db import owner_engine   # the app role may not delete users
+    with owner_engine().begin() as c:
         c.execute(text("DELETE FROM users WHERE id = :id"), {"id": uid})
 
 
@@ -66,12 +67,21 @@ def test_all_tables_exist_with_rls(engine):
     assert [t for t, rls in present.items() if not rls] == []
 
 
-def test_no_rls_policy_exists(engine):
-    """Deny-all: bật RLS mà tạo policy là vô tình mở cửa cho anon key."""
+def test_no_rls_policy_opens_a_table_to_anyone_else(engine):
+    """Deny-all for everyone else: a policy for anon/authenticated/PUBLIC would open the
+    table to the publishable key. The only policies allowed are the least-privilege
+    contract's two, each naming exactly its own role (shared.db_roles; present only
+    after `scripts.db_roles apply`)."""
     from sqlalchemy import text
+
+    from shared.db_roles import APP_POLICY, APP_ROLE, READONLY_POLICY, READONLY_ROLE
+
+    allowed = {APP_POLICY: [APP_ROLE], READONLY_POLICY: [READONLY_ROLE]}
     with engine.connect() as c:
-        n = c.execute(text("SELECT count(*) FROM pg_policies WHERE schemaname = 'public'")).scalar()
-    assert n == 0, "có policy RLS — FE không gọi thẳng Supabase nên không được có policy nào"
+        rows = c.execute(text("SELECT tablename, policyname, roles::text[] FROM pg_policies "
+                              "WHERE schemaname = 'public'")).all()
+    bad = [(t, n, list(r)) for t, n, r in rows if allowed.get(n) != list(r)]
+    assert bad == [], f"RLS policy outside the role contract: {bad}"
 
 
 def test_users_role_check_rejects_unknown_role(engine):
@@ -315,7 +325,8 @@ def test_delete_user_cascades_whole_tree(engine):
                  "VALUES (:id, :did, 0, 'noi dung')"),
             {"id": str(uuid.uuid4()), "did": did},
         )
-    with engine.begin() as c:
+    from tests._owner_db import owner_engine   # the app role may not delete users
+    with owner_engine().begin() as c:
         c.execute(text("DELETE FROM users WHERE id = :id"), {"id": uid})
     with engine.connect() as c:
         assert c.execute(

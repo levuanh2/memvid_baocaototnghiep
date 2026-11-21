@@ -5,6 +5,7 @@ import { Icon } from "../ui/Icon";
 import Badge from "../ui/Badge";
 import Spinner from "../ui/Spinner";
 import OperationUsage from "./OperationUsage";
+import DestructiveConfirmDialog from "../ui/DestructiveConfirmDialog";
 import { nguonConDangXuLy, nhoNguon, quenNguon } from "../../utils/nguonDangXuLy";
 import { taoBoTheoDoiNguon } from "../../utils/theoDoiNguon";
 import { mergeSources, reconcileSelectedSources } from "../../utils/sourceReconciliation";
@@ -78,6 +79,8 @@ export default function SidebarLeft({ selectedSources, setSelectedSources, onSou
   }, [menuOpen]);
   const [uploading, setUploading] = useState(false);
   const [deletingFile, setDeletingFile] = useState(null);
+  // The source to hard-delete, once the learner chose "Xóa" (owner decision 2026-11-19).
+  const [nguonCanXoa, setNguonCanXoa] = useState(null);
   const [loiTai, setLoiTai] = useState(null);
   const [loiUpload, setLoiUpload] = useState(null);
   const [query, setQuery] = useState("");
@@ -299,10 +302,16 @@ export default function SidebarLeft({ selectedSources, setSelectedSources, onSou
     }
   };
 
-  const handleDeleteSource = async (src) => {
-    const key = src.video_stem || src.video;
-    if (!window.confirm(`Xóa "${src.filename}"?`)) return;
+  // A HARD delete: the document and everything made from it (quizzes, review plans,
+  // practice quizzes and results, archived topics included). Ask in the shared
+  // permanent-delete dialog, in words (owner decision 2026-11-19, item 4).
+  const handleDeleteSource = (src) => {
     setMenuOpen(null);
+    setNguonCanXoa(src);
+  };
+
+  const xoaNguonVinhVien = async (src) => {
+    const key = src.video_stem || src.video;
     setDeletingFile(key);
     try {
       let res;
@@ -316,11 +325,11 @@ export default function SidebarLeft({ selectedSources, setSelectedSources, onSou
       setSelectedSources((prev) => prev.filter((p) => p !== key));
     } catch (err) {
       console.error("Delete source error:", err);
-      alert((isUnauthorizedError(err) || isNotFoundOrForbiddenError(err))
+      // The dialog shows this and stays open.
+      throw new Error((isUnauthorizedError(err) || isNotFoundOrForbiddenError(err))
         ? getUserFriendlyApiError(err)
         : "Không xóa được tài liệu. Thử lại sau ít phút.");
-    }
-    finally { setDeletingFile(null); }
+    } finally { setDeletingFile(null); }
   };
 
   const toggleSelect = (src) => {
@@ -667,6 +676,18 @@ export default function SidebarLeft({ selectedSources, setSelectedSources, onSou
       </div>
 
       <style>{`@media (min-width: 768px) { .md\\:hidden { display: none !important; } }`}</style>
+      <DestructiveConfirmDialog
+        open={Boolean(nguonCanXoa)}
+        title="Xoá tài liệu vĩnh viễn?"
+        targetName={nguonCanXoa?.filename || "Tài liệu"}
+        consequenceText="Tài liệu cùng mọi quiz, kế hoạch ôn tập, bài luyện tập và kết quả làm bài tạo từ nó sẽ bị xoá vĩnh viễn, kể cả các chủ đề đã lưu trữ. Không thể hoàn tác."
+        confirmLabel="Xoá vĩnh viễn"
+        onCancel={() => setNguonCanXoa(null)}
+        onConfirm={async () => {
+          await xoaNguonVinhVien(nguonCanXoa);
+          setNguonCanXoa(null);
+        }}
+      />
     </div>
   );
 }

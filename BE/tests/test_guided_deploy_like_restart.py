@@ -75,7 +75,8 @@ def test_web_and_worker_restart_recovery_is_single_map(tmp_path, monkeypatch):
     # claim_next_job is a global FIFO. This proof must not let a queued row
     # left by an earlier test masquerade as worker A/B's target job.
     from sqlalchemy import text
-    with guided_store._get_engine().begin() as conn:
+    from tests._owner_db import owner_engine
+    with owner_engine().begin() as conn:   # TRUNCATE is owner-only (least-privilege app role)
         conn.execute(text(
             "TRUNCATE guided_mindmap_jobs, guided_mindmap_worker_heartbeats"
         ))

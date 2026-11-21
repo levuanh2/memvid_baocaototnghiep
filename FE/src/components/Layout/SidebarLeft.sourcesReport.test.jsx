@@ -70,6 +70,10 @@ describe("SidebarLeft reports its source list to the layout", () => {
 
     await act(async () => { container.querySelector('[aria-label="Tuỳ chọn"]').click(); });
     await act(async () => { container.querySelector('[role="menuitem"]').click(); });
+    // The hard delete asks in the shared permanent-delete dialog (owner item 4).
+    const dialog = document.body.querySelector('[role="dialog"]');
+    await act(async () => { dialog.querySelector('input[type="checkbox"]').click(); });
+    await act(async () => { [...dialog.querySelectorAll("button")].find((b) => b.textContent.includes("Xoá vĩnh viễn")).click(); });
     await act(async () => { await new Promise((resolve) => setTimeout(resolve, 20)); });
     expect(onSourcesChange).toHaveBeenLastCalledWith([]);
   });
