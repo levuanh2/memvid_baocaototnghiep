@@ -460,3 +460,54 @@ def test_any_role_membership_fails_verification_even_without_inherit(app_conn, o
         with owner_conn.begin():
             owner_conn.execute(sa.text(f'REVOKE "{owner}" FROM {APP_ROLE}'))
     assert role_problems(owner_conn, _mode()) == []
+
+
+def test_supabase_api_roles_get_nothing_on_studymap_tables(app_conn, owner_conn):
+    """Side review 2026-11-21: on Supabase, `service_role` (the backend's
+    SUPABASE_SECRET_KEY, BYPASSRLS) and `anon`/`authenticated` have table grants in
+    `public` by default, so the Data API could rewrite history around this contract.
+    Modelled here with roles of the same names and Supabase-like grants."""
+    from shared.db_roles import API_ROLES, apply_statements
+
+    owner_conn.rollback()
+    created = []
+    try:
+        with owner_conn.begin():
+            for r in API_ROLES:
+                if not owner_conn.execute(sa.text("SELECT 1 FROM pg_roles WHERE rolname = :r"),
+                                          {"r": r}).first():
+                    extra = " BYPASSRLS" if r == "service_role" else ""
+                    owner_conn.execute(sa.text(f"CREATE ROLE {r} NOLOGIN{extra}"))
+                    created.append(r)
+            owner_conn.execute(sa.text(
+                f"GRANT ALL ON ALL TABLES IN SCHEMA public TO {', '.join(API_ROLES)}"))
+            owner_conn.execute(sa.text(f"GRANT USAGE ON SCHEMA public TO {', '.join(API_ROLES)}"))
+    except sa.exc.DBAPIError as exc:
+        if getattr(exc.orig, "sqlstate", "") == "42501":
+            pytest.skip("needs CREATEROLE to model Supabase's API roles (CI runs it as postgres)")
+        raise
+    try:
+        problems = role_problems(owner_conn, _mode())
+        owner_conn.rollback()
+        assert any("service_role has privileges on quiz_answers" in p for p in problems), problems
+        rls = {t for (t,) in owner_conn.execute(sa.text(
+            "SELECT relname FROM pg_class WHERE relnamespace = 'public'::regnamespace "
+            "AND relkind = 'r' AND relrowsecurity"))}
+        owner_conn.rollback()
+        with owner_conn.begin():
+            for stmt in apply_statements(rls, _mode(), list(API_ROLES)):
+                owner_conn.execute(sa.text(stmt))
+        assert role_problems(owner_conn, _mode()) == []
+        owner_conn.rollback()
+        with owner_conn.begin():
+            owner_conn.execute(sa.text("SET LOCAL ROLE service_role"))
+            with pytest.raises(sa.exc.ProgrammingError):
+                with owner_conn.begin_nested():
+                    owner_conn.execute(sa.text("UPDATE quiz_answers SET score = score WHERE false"))
+    finally:
+        owner_conn.rollback()
+        with owner_conn.begin():
+            owner_conn.execute(sa.text(f"REVOKE ALL ON ALL TABLES IN SCHEMA public FROM {', '.join(API_ROLES)}"))
+            owner_conn.execute(sa.text(f"REVOKE USAGE ON SCHEMA public FROM {', '.join(API_ROLES)}"))
+            for r in created:
+                owner_conn.execute(sa.text(f"DROP ROLE {r}"))

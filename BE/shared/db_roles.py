@@ -204,6 +204,13 @@ READ_ONLY_BY_DESIGN: Dict[str, Tuple[str, ...]] = {
 # Never granted to the app or the read-only role, on any table.
 FORBIDDEN_TABLE_PRIVILEGES = ("TRUNCATE", "TRIGGER", "REFERENCES")
 
+# Supabase's Data API roles. `service_role` (the SUPABASE_SECRET_KEY) has BYPASSRLS and,
+# by Supabase default, table grants in `public`: through the API it could rewrite any
+# table and skip this contract. The app reaches the tables only through DATABASE_URL and
+# uses the key for Storage only (another schema), so these roles get nothing here.
+# Revoked when they exist; absent on plain PostgreSQL.
+API_ROLES = ("anon", "authenticated", "service_role")
+
 APP_POLICY = "studymap_app_access"
 READONLY_POLICY = "studymap_readonly_access"
 
@@ -223,7 +230,7 @@ def _q(name: str) -> str:
     return '"' + name.replace('"', '""') + '"'
 
 
-def apply_statements(tables_with_rls, rls_mode: str = RLS_POLICIES):
+def apply_statements(tables_with_rls, rls_mode: str = RLS_POLICIES, api_roles=()):
     """SQL, in order, that makes the grants and policies match the contract.
 
     Run by the table owner (it alone may GRANT on its tables and CREATE POLICY).
@@ -236,6 +243,8 @@ def apply_statements(tables_with_rls, rls_mode: str = RLS_POLICIES):
     for table, privileges in sorted(APP_TABLE_PRIVILEGES.items()):
         t = f"public.{_q(table)}"
         out.append(f"REVOKE ALL ON {t} FROM {APP_ROLE}, {READONLY_ROLE}")
+        if api_roles:
+            out.append(f"REVOKE ALL ON {t} FROM {', '.join(api_roles)}")
         for p in privileges:
             name, cols = _split(p)
             target = f"{name} ({cols})" if cols else name
@@ -342,6 +351,17 @@ def role_problems(conn, rls_mode: str = RLS_POLICIES, roles=(APP_ROLE, READONLY_
         if conn.execute(sa.text("SELECT has_schema_privilege(:r, 'public', 'CREATE')"),
                         {"r": role}).scalar():
             problems.append(f"role {role} may CREATE in schema public")
+
+    present_api = [r for (r,) in conn.execute(sa.text(
+        "SELECT rolname FROM pg_roles WHERE rolname = ANY(:n)"), {"n": list(API_ROLES)})]
+    for api in present_api:
+        for table in sorted(set(tables) & set(APP_TABLE_PRIVILEGES)):
+            if conn.execute(sa.text(
+                    "SELECT has_table_privilege(:r, :t, 'SELECT') OR has_table_privilege(:r, :t, 'INSERT') "
+                    "OR has_table_privilege(:r, :t, 'UPDATE') OR has_table_privilege(:r, :t, 'DELETE') "
+                    "OR has_table_privilege(:r, :t, 'TRUNCATE') OR has_any_column_privilege(:r, :t, 'UPDATE')"),
+                    {"r": api, "t": f"public.{_q(table)}"}).scalar():
+                problems.append(f"Supabase API role {api} has privileges on {table}")
 
     for table, (rls, _owner) in sorted(tables.items()):
         if table not in APP_TABLE_PRIVILEGES:

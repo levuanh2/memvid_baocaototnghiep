@@ -3856,3 +3856,10 @@ rehearse on a test database first.
   delete into an error, and one failed clean-up leaves rows that break later tests
   (counts, downgrade refusals). Use `tests/_owner_db` for set-up/clean-up, and rerun on
   a fresh database before judging the next failure list.
+
+## 2026-11-21 — On Supabase, the database is reachable by more than one road
+
+Least-privilege on `DATABASE_URL` does not cover the Data API: `SUPABASE_SECRET_KEY`
+logs in as `service_role` (BYPASSRLS) and Supabase grants API roles on `public` tables by
+default. When the app never uses the Data API for its tables, revoke the API roles there
+in the same contract step that runs after every migration, and verify it.

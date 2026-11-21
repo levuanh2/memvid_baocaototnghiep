@@ -15,6 +15,14 @@ scripts.db_roles apply` makes a database match it; `verify` checks it read-only.
 | `studymap_app` | `DATABASE_URL`, the backend at runtime | the per-table, per-column DML of section 2; nothing else |
 | `studymap_readonly` | `verify_db_schema`, `rollback_preflight`, backups, support queries | `SELECT` on every table |
 
+**Supabase's Data API roles** (`anon`, `authenticated`, `service_role`) get nothing on
+StudyMap's tables: `apply` revokes their table grants and `verify` fails while any is
+left. `service_role` is what `SUPABASE_SECRET_KEY` (kept by the backend for Storage)
+logs in as; it has `BYPASSRLS` and, by Supabase default, grants in `public`, so through
+the Data API it could rewrite history around this contract. The frontend never calls the
+database directly and Storage uses its own schema, so nothing needs those grants
+(modelled on PostgreSQL with roles of the same names; to confirm on Supabase, step 1).
+
 Never granted to `studymap_app` or `studymap_readonly`: `TRUNCATE`, `TRIGGER`,
 `REFERENCES`, `CREATE` on the schema, ownership of any object, membership in the owner
 role, `SUPERUSER`, `CREATEROLE`, `CREATEDB`, `REPLICATION`. `verify` fails on any of them.
@@ -122,6 +130,12 @@ With `DB_ROLE_SEPARATION=1`, in addition:
    delete from the Library (soft) and from the sources sidebar (hard), usage limits.
    Afterwards search the backend log for `permission denied` / `InsufficientPrivilege`:
    any hit is a missing contract row; fix the contract, never by granting broadly.
+   Also on that project, read-only first: the grants of `anon`, `authenticated` and
+   `service_role` on `public` tables and their default privileges
+   (`\dp public.*`, `\ddp`); whether the Data API exposes `public` (Dashboard > API
+   settings > exposed schemas) and whether removing `public` there breaks nothing
+   (Storage, auth); that after `apply` an API call with the secret key to
+   `/rest/v1/quiz_answers` is refused; and that Storage upload/download still work.
 3. **Production**, in the 01:00-03:00 (Vietnam time) window, only after the GO/NO-GO
    checklist (PR #159, `docs/ui-ux-v6/06-release-review.md` section 9) is all GO:
    1. backup, and the restore rehearsal of that backup;
@@ -196,3 +210,7 @@ Evidence files: `studymap-qa-execution/v6/results/db-roles/`.
   (for example regrade a `quiz_answers` row, or delete and re-insert an attempt's
   `concept_masteries`). These are the product's own writes.
 - `pg_restore` of an old backup, and anyone holding the owner's credentials.
+- `SUPABASE_SECRET_KEY` itself: after `apply` it has no rights on StudyMap's tables, but
+  it still controls Storage (documents' files) and any table a later migration creates
+  before `apply` runs again (Supabase default privileges grant new tables to the API
+  roles). `run_migrations` applies the contract in the same step; keep it that way.

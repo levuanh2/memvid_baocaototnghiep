@@ -68,5 +68,8 @@ def reapply_role_contract() -> None:
         rls = {r[0] for r in conn.execute(sa.text(
             "SELECT c.relname FROM pg_class c JOIN pg_namespace n ON n.oid = c.relnamespace "
             "WHERE n.nspname = 'public' AND c.relkind IN ('r', 'p') AND c.relrowsecurity"))}
-        for stmt in apply_statements(rls, os.getenv("DB_RLS_MODE") or "policies"):
+        from shared.db_roles import API_ROLES
+        api = [r for (r,) in conn.execute(sa.text(
+            "SELECT rolname FROM pg_roles WHERE rolname = ANY(:n)"), {"n": list(API_ROLES)})]
+        for stmt in apply_statements(rls, os.getenv("DB_RLS_MODE") or "policies", api):
             conn.execute(sa.text(stmt))

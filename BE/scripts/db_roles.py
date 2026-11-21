@@ -21,7 +21,8 @@ sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 
 
 def main(argv=None) -> int:
-    from shared.db_roles import RLS_BYPASS, RLS_POLICIES, apply_statements, role_problems
+    from shared.db_roles import (API_ROLES, RLS_BYPASS, RLS_POLICIES, apply_statements,
+                                 role_problems)
 
     p = argparse.ArgumentParser(description=__doc__,
                                 formatter_class=argparse.RawDescriptionHelpFormatter)
@@ -49,7 +50,10 @@ def main(argv=None) -> int:
                     "SELECT c.relname FROM pg_class c JOIN pg_namespace n "
                     "ON n.oid = c.relnamespace WHERE n.nspname = 'public' "
                     "AND c.relkind IN ('r', 'p') AND c.relrowsecurity"))}
-                for stmt in apply_statements(rls, args.rls_mode):
+                api = [r for (r,) in conn.execute(sa.text(
+                    "SELECT rolname FROM pg_roles WHERE rolname = ANY(:n)"),
+                    {"n": list(API_ROLES)})]
+                for stmt in apply_statements(rls, args.rls_mode, api):
                     conn.execute(sa.text(stmt))
         with engine.connect() as conn:
             problems = role_problems(conn, args.rls_mode)
