@@ -16,15 +16,18 @@ scripts.db_roles apply` makes a database match it; `verify` checks it read-only.
 | `studymap_readonly` | `verify_db_schema`, `rollback_preflight`, backups, support queries | `SELECT` on every table |
 
 **Supabase's Data API roles** (`anon`, `authenticated`, `service_role`) get nothing on
-StudyMap's tables: `apply` revokes their table grants and `verify` fails while any is
-left. `service_role` is what `SUPABASE_SECRET_KEY` (kept by the backend for Storage)
+StudyMap's tables: `apply` revokes their table and sequence grants, their `EXECUTE` on
+`public` functions, `CREATE` on `public`, and the owner's default privileges that would
+grant them the next table, sequence or function; `verify` fails while any is left, and on
+any non-trigger function in `public` they may still `EXECUTE` through `PUBLIC` (revoke it
+from `PUBLIC` in that function's migration; Codex task62). `service_role` is what `SUPABASE_SECRET_KEY` (kept by the backend for Storage)
 logs in as; it has `BYPASSRLS` and, by Supabase default, grants in `public`, so through
 the Data API it could rewrite history around this contract. The frontend never calls the
 database directly and Storage uses its own schema, so nothing needs those grants
 (modelled on PostgreSQL with roles of the same names; to confirm on Supabase, step 1).
 
 Never granted to `studymap_app` or `studymap_readonly`: `TRUNCATE`, `TRIGGER`,
-`REFERENCES`, `CREATE` on the schema, ownership of any object, membership in the owner
+`REFERENCES`, `MAINTAIN` (PostgreSQL 17: `VACUUM`, `REINDEX`, `LOCK TABLE`), `CREATE` on the schema, ownership of any object, membership in the owner
 role, `SUPERUSER`, `CREATEROLE`, `CREATEDB`, `REPLICATION`. `verify` fails on any of them.
 
 ## 2. What the app may do, per table
@@ -94,10 +97,15 @@ Always: a production migration without `MIGRATION_DATABASE_URL` is refused
 (`shared.migration_guard`); there is no fallback to `DATABASE_URL`.
 
 With `DB_ROLE_SEPARATION=1`, in addition:
-- the migration URL must log in as another user than `DATABASE_URL`, on the same database;
+- the migration URL must log in as another user than `DATABASE_URL`, on the same database
+  and, on the shared pooler, the same project (the `.<project_ref>` user suffixes match);
 - `scripts.run_migrations` applies the role contract right after `upgrade head`, as the owner;
 - `scripts.verify_db_schema` (deploy step 5b) also fails when the contract does not match
   or `DATABASE_URL` does not log in as `studymap_app`: the new backend does not start.
+  Step 5b really logs in through `DATABASE_URL` (`/health` never touches the database):
+  it must authenticate, be `studymap_app`, reach the same server and database as the
+  owner's connection, and read a contract table. A wrong password, a role without
+  `LOGIN`, or the role of another project fails here, before the old backend is replaced.
 
 ## 5. Proposed rollout (each step needs owner approval; none is done)
 
@@ -145,8 +153,10 @@ With `DB_ROLE_SEPARATION=1`, in addition:
    4. deploy the same SHA. The deploy migrates and applies the contract as the owner
       (step 5), verifies schema, contract and runtime user (step 5b), and only then
       starts the backend as `studymap_app`. Any failure leaves the old backend running,
-      but with the env file already changed: **restore the three variables before any
-      restart**, or a restarted backend logs in as an app role that may have no grants yet;
+      but with the env file already changed: **before any restart, in
+      `/opt/memvid/env/.env` set `DATABASE_URL` back to the owner URL and remove
+      `DB_ROLE_SEPARATION`** (`migration.env` stays as it is), or a restarted backend logs
+      in as an app role that may have no grants yet;
    5. smoke tests (sign in, library, a quiz attempt, a review plan regeneration).
 4. **Back out** (no database change needed): set `DATABASE_URL` back to the owner URL and
    unset `DB_ROLE_SEPARATION`, restart. Grants and policies may stay; they open nothing to
@@ -159,6 +169,12 @@ With `DB_ROLE_SEPARATION=1`, in addition:
   role): exit 0, 27 `TABLE DATA` entries, restore exit 0, row counts identical on every
   table, all six guard triggers present. Without the flag it exits 1 ("query would be
   affected by row-level security policy"). In BYPASSRLS mode the flag is not needed.
+- Sequences: `pg_dump` reads each sequence's state, so `apply` grants `studymap_readonly`
+  `SELECT` on every sequence in the contract and `verify` requires it (Codex task62; none
+  exist today). Verified on the disposable PostgreSQL 17 with a serial table: without
+  `SELECT` on its sequence the read-only dump exits 1 ("permission denied for sequence");
+  with it, dump and restore exit 0 and the restored `nextval` continues from the dumped
+  value.
 - Row visibility: with a row seeded **as the app role** in every table (so every
   policy's `WITH CHECK` was exercised), owner, app and read-only counts are equal on all
   27 tables; a control role with `SELECT` but no policy saw 0 rows on every RLS table.
@@ -194,6 +210,7 @@ its database cases only in this mode.
 | Read-only `pg_dump --enable-row-security` / restore | exit 0 / exit 0, 27 tables identical, 6 guard triggers |
 | BYPASSRLS mode | role, guard, archive, preflight, schema tests 138 passed / 1 skipped; plain `pg_dump` works |
 | Deploy harness (WSL) | `test_deploy_pinning` 18 PASS, `test_deploy_guard_mutations` 29 PASS |
+| Codex task62 fixes (2026-11-22) | red at `f2fe344`: 8 failed (`task62-red-f2fe344.log`); green: `tests/test_db_roles.py` 98 passed, 1 skipped (`task62-green-pg17-roles.log`); read-only serial dump/restore (`task62-seq-dump-evidence.log`) |
 
 Evidence files: `studymap-qa-execution/v6/results/db-roles/`.
 
@@ -211,6 +228,11 @@ Evidence files: `studymap-qa-execution/v6/results/db-roles/`.
   `concept_masteries`). These are the product's own writes.
 - `pg_restore` of an old backup, and anyone holding the owner's credentials.
 - `SUPABASE_SECRET_KEY` itself: after `apply` it has no rights on StudyMap's tables, but
-  it still controls Storage (documents' files) and any table a later migration creates
-  before `apply` runs again (Supabase default privileges grant new tables to the API
-  roles). `run_migrations` applies the contract in the same step; keep it that way.
+  it still controls Storage (documents' files). `apply` closes the owner's default
+  privileges; Supabase's own `supabase_admin` defaults cannot be changed by `postgres` and
+  only cover objects that role creates. Whether the Data API should expose `public` at all
+  is an owner decision on the Supabase dashboard (section 5, step 2), not code.
+- Pooler routing itself: step 5b proves the runtime login reaches the same server and
+  database as the owner's connection (`pg_postmaster_start_time`, database oid), checked
+  locally; that this holds through Supavisor's session and transaction modes is to be
+  confirmed on the Supabase test project (section 5, step 2).

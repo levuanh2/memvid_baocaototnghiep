@@ -498,7 +498,13 @@ def test_supabase_api_roles_get_nothing_on_studymap_tables(app_conn, owner_conn)
             for stmt in apply_statements(rls, _mode(), list(API_ROLES)):
                 owner_conn.execute(sa.text(stmt))
         assert role_problems(owner_conn, _mode()) == []
+        assert not owner_conn.execute(sa.text(
+            "SELECT has_table_privilege('service_role', 'public.quiz_answers', 'UPDATE')")).scalar()
+        member = owner_conn.execute(sa.text(
+            "SELECT pg_has_role(current_user, 'service_role', 'MEMBER')")).scalar()
         owner_conn.rollback()
+        if not member:   # a non-superuser owner on a local database cannot SET ROLE to it
+            return
         with owner_conn.begin():
             owner_conn.execute(sa.text("SET LOCAL ROLE service_role"))
             with pytest.raises(sa.exc.ProgrammingError):
@@ -548,3 +554,171 @@ def test_a_sequence_without_a_contract_row_fails_verification(app_conn, owner_co
         with owner_conn.begin():
             owner_conn.execute(sa.text("DROP SEQUENCE public.studymap_probe_seq"))
     assert role_problems(owner_conn, _mode()) == []
+
+
+# ── Codex task62 (final review) ─────────────────────────────────────────────────
+
+def test_owner_and_runtime_urls_on_one_pooler_must_name_the_same_project():
+    """Codex task62 P1: on Supabase's shared pooler two projects share host and database
+    name `postgres`; only the user suffix (`<role>.<project_ref>`) tells them apart."""
+    from shared.migration_guard import MigrationTargetRejected, chon_dich
+
+    sep = {**_PROD, "DB_ROLE_SEPARATION": "1", "MIGRATION_DATABASE_URL": _OWNER}
+    for runtime_user in ("studymap_app.other", "studymap_app"):
+        env = {**sep, "DATABASE_URL": _PROD["DATABASE_URL"].replace("studymap_app.ref",
+                                                                    runtime_user)}
+        with pytest.raises(MigrationTargetRejected, match="project"):
+            chon_dich(env)
+    assert chon_dich(sep)[1] == "production"
+
+
+def _with_password(url, password):
+    from urllib.parse import urlsplit
+    p = urlsplit(url)
+    return p._replace(netloc=f"{p.username}:{password}@{p.hostname}:{p.port}").geturl()
+
+
+def test_the_runtime_url_must_log_in_as_the_app_role_on_the_owners_database(app_conn,
+                                                                            owner_conn):
+    """Codex task62 P1: step 5b checked the runtime user's NAME only and `/health` never
+    touches the database, so a wrong password or another project's role deployed green."""
+    from shared.db_roles import runtime_login_problems
+
+    url = os.environ["TEST_DATABASE_URL"]
+    assert runtime_login_problems(owner_conn, url) == []
+    wrong = runtime_login_problems(owner_conn, _with_password(url, "wrong-password-x"))
+    assert wrong and not any("wrong-password-x" in p for p in wrong), wrong
+    other_db = runtime_login_problems(owner_conn, url.rsplit("/", 1)[0] + "/postgres")
+    assert any("not the database" in p for p in other_db), other_db
+    as_owner = runtime_login_problems(owner_conn, _owner_url())
+    assert any(f"not {APP_ROLE}" in p for p in as_owner), as_owner
+
+
+def test_verify_db_schema_refuses_a_runtime_url_that_cannot_log_in(app_conn, owner_conn,
+                                                                   monkeypatch):
+    from scripts import verify_db_schema
+
+    # Test mode: the runtime URL is TEST_DATABASE_URL (DATABASE_URL is production's).
+    url = os.environ["TEST_DATABASE_URL"]
+    monkeypatch.setenv("DB_ROLE_SEPARATION", "1")
+    assert verify_db_schema.main(["--moi-truong", "test"]) == verify_db_schema.EXIT_OK
+    monkeypatch.setenv("TEST_DATABASE_URL", _with_password(url, "wrong-password-x"))
+    assert verify_db_schema.main(["--moi-truong", "test"]) == verify_db_schema.EXIT_SCHEMA_INVALID
+
+
+def _server_version(conn):
+    return int(conn.execute(sa.text("SHOW server_version_num")).scalar())
+
+
+def _api_roles_present(conn):
+    from shared.db_roles import API_ROLES
+    return [r for (r,) in conn.execute(sa.text(
+        "SELECT rolname FROM pg_roles WHERE rolname = ANY(:n)"), {"n": list(API_ROLES)})]
+
+
+@pytest.mark.parametrize("grantee", [APP_ROLE, READONLY_ROLE, "anon"])
+def test_a_maintain_grant_fails_verification(app_conn, owner_conn, grantee):
+    """Codex task62 P2: PostgreSQL 17's MAINTAIN (VACUUM, REINDEX, LOCK TABLE, ...) was not
+    in the privileges the verifier compares."""
+    if _server_version(owner_conn) < 170000:
+        pytest.skip("MAINTAIN exists from PostgreSQL 17")
+    if grantee == "anon" and "anon" not in _api_roles_present(owner_conn):
+        pytest.skip("needs Supabase-like API roles")
+    owner_conn.rollback()
+    with owner_conn.begin():
+        owner_conn.execute(sa.text(f"GRANT MAINTAIN ON quiz_answers TO {grantee}"))
+    try:
+        problems = role_problems(owner_conn, _mode())
+        assert any("quiz_answers" in p and grantee in p for p in problems), problems
+    finally:
+        owner_conn.rollback()
+        with owner_conn.begin():
+            owner_conn.execute(sa.text(f"REVOKE MAINTAIN ON quiz_answers FROM {grantee}"))
+    assert role_problems(owner_conn, _mode()) == []
+
+
+def _apply_contract(owner_conn):
+    owner_conn.rollback()
+    rls = {t for (t,) in owner_conn.execute(sa.text(
+        "SELECT relname FROM pg_class WHERE relnamespace = 'public'::regnamespace "
+        "AND relkind IN ('r', 'p') AND relrowsecurity"))}
+    api = _api_roles_present(owner_conn)
+    owner_conn.rollback()
+    with owner_conn.begin():
+        for stmt in apply_statements(rls, _mode(), api):
+            owner_conn.execute(sa.text(stmt))
+
+
+def test_supabase_api_default_privileges_sequences_and_functions_are_closed(
+        app_conn, owner_conn, monkeypatch):
+    """Codex task62 P2: Supabase grants new `public` tables, sequences and functions to
+    the API roles by default, and PUBLIC may EXECUTE every function. Only existing tables
+    were revoked and checked."""
+    import shared.db_roles as dr
+
+    if len(_api_roles_present(owner_conn)) != len(dr.API_ROLES):
+        pytest.skip("needs Supabase-like API roles (anon, authenticated, service_role)")
+    api = ", ".join(dr.API_ROLES)
+    monkeypatch.setitem(dr.APP_SEQUENCE_PRIVILEGES, "studymap_probe_seq", ("USAGE",))
+    owner_conn.rollback()
+    with owner_conn.begin():
+        for kind in ("TABLES", "SEQUENCES"):
+            owner_conn.execute(sa.text(
+                f"ALTER DEFAULT PRIVILEGES IN SCHEMA public GRANT ALL ON {kind} TO {api}"))
+        owner_conn.execute(sa.text(
+            f"ALTER DEFAULT PRIVILEGES IN SCHEMA public GRANT EXECUTE ON FUNCTIONS TO {api}"))
+        owner_conn.execute(sa.text(f"ALTER DEFAULT PRIVILEGES GRANT ALL ON TABLES TO {api}"))
+        owner_conn.execute(sa.text("CREATE SEQUENCE public.studymap_probe_seq"))
+        owner_conn.execute(sa.text(
+            "CREATE FUNCTION public.studymap_probe_fn() RETURNS int LANGUAGE sql AS 'SELECT 1'"))
+    try:
+        problems = role_problems(owner_conn, _mode())
+        owner_conn.rollback()
+        for needle in ("default privileges", "sequence studymap_probe_seq",
+                       "function studymap_probe_fn"):
+            assert any(needle in p and "anon" in p for p in problems), (needle, problems)
+        _apply_contract(owner_conn)
+        left = role_problems(owner_conn, _mode())
+        owner_conn.rollback()
+        # EXECUTE through PUBLIC stays until the function's own migration revokes it.
+        assert left and all("studymap_probe_fn" in p for p in left), left
+        with owner_conn.begin():
+            owner_conn.execute(sa.text(
+                "REVOKE EXECUTE ON FUNCTION public.studymap_probe_fn() FROM PUBLIC"))
+        assert role_problems(owner_conn, _mode()) == []
+    finally:
+        owner_conn.rollback()
+        with owner_conn.begin():
+            owner_conn.execute(sa.text("DROP FUNCTION IF EXISTS public.studymap_probe_fn()"))
+            owner_conn.execute(sa.text("DROP SEQUENCE IF EXISTS public.studymap_probe_seq"))
+            for kind in ("TABLES", "SEQUENCES", "FUNCTIONS"):
+                owner_conn.execute(sa.text(
+                    f"ALTER DEFAULT PRIVILEGES IN SCHEMA public REVOKE ALL ON {kind} FROM {api}"))
+            owner_conn.execute(sa.text(f"ALTER DEFAULT PRIVILEGES REVOKE ALL ON TABLES FROM {api}"))
+
+
+def test_the_readonly_role_reads_every_contract_sequence_for_backups(app_conn, owner_conn,
+                                                                     monkeypatch):
+    """Codex task62 P2: pg_dump as studymap_readonly reads each sequence's state; the
+    contract granted sequences to the app only, so a future serial column broke backups."""
+    import shared.db_roles as dr
+
+    monkeypatch.setitem(dr.APP_SEQUENCE_PRIVILEGES, "studymap_probe_seq", ("USAGE",))
+    owner_conn.rollback()
+    with owner_conn.begin():
+        owner_conn.execute(sa.text("CREATE SEQUENCE public.studymap_probe_seq"))
+    try:
+        _apply_contract(owner_conn)
+        assert role_problems(owner_conn, _mode()) == []
+        has = {(r, p): owner_conn.execute(sa.text(
+            "SELECT has_sequence_privilege(:r, 'public.studymap_probe_seq', :p)"),
+            {"r": r, "p": p}).scalar()
+            for r in (APP_ROLE, READONLY_ROLE) for p in ("USAGE", "SELECT", "UPDATE")}
+        owner_conn.rollback()
+        assert has == {(APP_ROLE, "USAGE"): True, (APP_ROLE, "SELECT"): False,
+                       (APP_ROLE, "UPDATE"): False, (READONLY_ROLE, "USAGE"): False,
+                       (READONLY_ROLE, "SELECT"): True, (READONLY_ROLE, "UPDATE"): False}
+    finally:
+        owner_conn.rollback()
+        with owner_conn.begin():
+            owner_conn.execute(sa.text("DROP SEQUENCE IF EXISTS public.studymap_probe_seq"))

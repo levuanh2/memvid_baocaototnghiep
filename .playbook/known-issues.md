@@ -8611,3 +8611,29 @@ except `test_rollback_preflight.py`, written together with the module it tests.
 - **Prevention:** a least-privilege design is only as good as where the privileged
   credential is reachable from; check every container's `env_file`, not only the code
   that uses the credential. For role checks, test membership itself, not inherited rights.
+
+### Role separation: unproven runtime login, MAINTAIN, API defaults, read-only sequences (Codex task62, 2026-11-22)
+
+- **Runtime login never proven before cut-over.** Step 5b checked only the user NAME in
+  `DATABASE_URL` and `/health` never touches the database; the guard compared host and
+  database only, and on Supabase's shared pooler every project is `<host>/postgres`. A
+  wrong password, a role without LOGIN, or `studymap_app.<other project>` deployed green.
+  **Fix:** `migration_guard` refuses different `.<project_ref>` user suffixes;
+  `verify_db_schema` logs in through the runtime URL (`db_roles.runtime_login_problems`:
+  must be `studymap_app`, same database oid/name and server start time as the owner's
+  connection, read a contract table; prints no URL or server message).
+- **MAINTAIN invisible.** PostgreSQL 17's `MAINTAIN` was not among the compared
+  privileges. **Fix:** compared on servers >= 17 for app, read-only and API roles; CI's
+  role-contract step now runs on a PostgreSQL 17 service and fails if any role test skips.
+- **API roles: defaults, sequences, functions.** Only existing tables were revoked.
+  **Fix:** `apply` also revokes API sequence/function grants, `CREATE` on `public` and the
+  owner's default privileges; `verify` checks them and fails on a non-trigger,
+  non-extension `public` function they may `EXECUTE` (also through `PUBLIC`).
+- **Read-only backups and sequences.** The contract gave sequences to the app only;
+  `pg_dump` as the read-only role failed with "permission denied for sequence". **Fix:**
+  read-only gets `SELECT` on every contract sequence, verified.
+- **Regression:** `tests/test_db_roles.py` task62 section (8 red at `f2fe344`, green
+  after; logs in `studymap-qa-execution/v6/results/db-roles/task62-*`).
+- **Prevention:** a deploy gate must exercise the credential it is about to activate, not
+  parse it. A privilege verifier must enumerate the server version's full privilege set
+  and every object kind the platform grants by default, not only what exists today.

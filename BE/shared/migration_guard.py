@@ -110,7 +110,18 @@ def _production_migration_url(env: Mapping[str, str]) -> str:
             raise MigrationTargetRejected(
                 "MIGRATION_DATABASE_URL và DATABASE_URL trỏ vào hai database khác nhau "
                 f"({sanitize(mig)} / {sanitize(runtime)}).")
+        # Supabase's shared pooler: every project has the same host and database
+        # `postgres`; the project is the user suffix `<role>.<project_ref>` (Codex task62).
+        if _project_ref(mig) != _project_ref(runtime):
+            raise MigrationTargetRejected(
+                "MIGRATION_DATABASE_URL và DATABASE_URL đăng nhập vào hai project khác nhau "
+                "(hậu tố `.<project_ref>` của user không khớp trên cùng pooler).")
     return mig
+
+
+def _project_ref(url: str) -> str:
+    """`studymap_app.abcd` -> `abcd`; a user without a suffix -> ``""``."""
+    return _user(url).partition(".")[2]
 
 
 def chon_dich(env: Optional[Mapping[str, str]] = None) -> Tuple[str, str]:

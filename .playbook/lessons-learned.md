@@ -3863,3 +3863,13 @@ Least-privilege on `DATABASE_URL` does not cover the Data API: `SUPABASE_SECRET_
 logs in as `service_role` (BYPASSRLS) and Supabase grants API roles on `public` tables by
 default. When the app never uses the Data API for its tables, revoke the API roles there
 in the same contract step that runs after every migration, and verify it.
+
+## 2026-11-22 — A name in a URL is not a login, and a pooler hides the project
+
+Parsing `DATABASE_URL` proves nothing about whether it authenticates or where it lands;
+`/health` that never queries the database proves nothing either. Before replacing a
+running backend, connect with the exact runtime credential and compare a server identity
+with the connection the migration verified. On Supabase's shared pooler the host and
+database are the same for every project; only the user's `.<project_ref>` differs.
+Version-gated privileges (`MAINTAIN` on PostgreSQL 17) must be tested on that version: a
+skip on an older CI server is a silent green.

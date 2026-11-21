@@ -206,7 +206,7 @@ READ_ONLY_BY_DESIGN: Dict[str, Tuple[str, ...]] = {
 APP_SEQUENCE_PRIVILEGES: Dict[str, Tuple[str, ...]] = {}
 
 # Never granted to the app or the read-only role, on any table.
-FORBIDDEN_TABLE_PRIVILEGES = ("TRUNCATE", "TRIGGER", "REFERENCES")
+FORBIDDEN_TABLE_PRIVILEGES = ("TRUNCATE", "TRIGGER", "REFERENCES", "MAINTAIN")
 
 # Supabase's Data API roles. `service_role` (the SUPABASE_SECRET_KEY) has BYPASSRLS and,
 # by Supabase default, table grants in `public`: through the API it could rewrite any
@@ -249,6 +249,8 @@ def apply_statements(tables_with_rls, rls_mode: str = RLS_POLICIES, api_roles=()
         out.append(f"REVOKE ALL ON SEQUENCE {q} FROM {APP_ROLE}, {READONLY_ROLE}")
         if privileges:
             out.append(f"GRANT {', '.join(privileges)} ON SEQUENCE {q} TO {APP_ROLE}")
+        # pg_dump as the read-only role reads every sequence's state (Codex task62).
+        out.append(f"GRANT SELECT ON SEQUENCE {q} TO {READONLY_ROLE}")
     for table, privileges in sorted(APP_TABLE_PRIVILEGES.items()):
         t = f"public.{_q(table)}"
         out.append(f"REVOKE ALL ON {t} FROM {APP_ROLE}, {READONLY_ROLE}")
@@ -266,6 +268,17 @@ def apply_statements(tables_with_rls, rls_mode: str = RLS_POLICIES, api_roles=()
                        f"TO {APP_ROLE} USING (true) WITH CHECK (true)")
             out.append(f"CREATE POLICY {READONLY_POLICY} ON {t} AS PERMISSIVE FOR SELECT "
                        f"TO {READONLY_ROLE} USING (true)")
+    if api_roles:
+        # Supabase grants new `public` objects to the API roles by default (Codex task62):
+        # close the defaults of the role running this (the owner) and what exists now.
+        # EXECUTE through PUBLIC is not revoked here; verify fails on it per function.
+        api = ", ".join(api_roles)
+        out += [f"REVOKE ALL ON ALL SEQUENCES IN SCHEMA public FROM {api}",
+                f"REVOKE ALL ON ALL FUNCTIONS IN SCHEMA public FROM {api}",
+                f"REVOKE CREATE ON SCHEMA public FROM {api}"]
+        for kind in ("TABLES", "SEQUENCES", "FUNCTIONS"):
+            out += [f"ALTER DEFAULT PRIVILEGES IN SCHEMA public REVOKE ALL ON {kind} FROM {api}",
+                    f"ALTER DEFAULT PRIVILEGES REVOKE ALL ON {kind} FROM {api}"]
     return out
 
 
@@ -301,8 +314,49 @@ def runtime_url_problems(env=None):
     return problems
 
 
+def runtime_login_problems(owner_conn, runtime_url: str):
+    """Log in through the runtime URL before the new backend starts (Codex task62).
+
+    The name in the URL proves nothing: a wrong password, a role without LOGIN, or the
+    same role name in another project on the shared pooler all passed. It must log in as
+    the app role, reach the very database `owner_conn` verifies (same server, same
+    database), and read a contract table. Reports no URL, user input or server message.
+    """
+    import sqlalchemy as sa
+
+    from shared.migration_guard import chuan_hoa_driver
+
+    if not runtime_url:
+        return []   # runtime_url_problems reports the empty URL
+    ident = sa.text("SELECT current_database(), (SELECT oid FROM pg_database "
+                    "WHERE datname = current_database()), pg_postmaster_start_time()")
+    want = tuple(owner_conn.execute(ident).first())
+    probe = next(t for t, privs in sorted(APP_TABLE_PRIVILEGES.items()) if "SELECT" in privs)
+    try:
+        engine = sa.create_engine(chuan_hoa_driver(runtime_url), poolclass=sa.pool.NullPool,
+                                  connect_args={"connect_timeout": 10})
+        try:
+            with engine.connect() as conn:
+                who = conn.execute(sa.text("SELECT current_user")).scalar()
+                got = tuple(conn.execute(ident).first())
+                if who != APP_ROLE:
+                    return [f"DATABASE_URL logs in as {who}, not {APP_ROLE}"]
+                if got != want:
+                    return [f"DATABASE_URL reaches database {got[0]}, not the database the "
+                            f"migration verified ({want[0]}, same server)"]
+                conn.execute(sa.text(f"SELECT 1 FROM public.{_q(probe)} LIMIT 0"))
+        finally:
+            engine.dispose()
+    except Exception as exc:   # never echo the URL or the server's message
+        orig = getattr(exc, "orig", None)
+        return [f"DATABASE_URL cannot log in or read {probe} as {APP_ROLE} "
+                f"({type(orig or exc).__name__}, sqlstate {getattr(orig, 'sqlstate', None)})"]
+    return []
+
+
 _COLUMN_PRIVS = ("SELECT", "INSERT", "UPDATE", "REFERENCES")
 _TABLE_PRIVS = ("SELECT", "INSERT", "UPDATE", "DELETE", "TRUNCATE", "TRIGGER", "REFERENCES")
+_DEFAULT_ACL_KINDS = {"r": "tables", "S": "sequences", "f": "functions"}
 
 
 def role_problems(conn, rls_mode: str = RLS_POLICIES, roles=(APP_ROLE, READONLY_ROLE)):
@@ -332,6 +386,10 @@ def role_problems(conn, rls_mode: str = RLS_POLICIES, roles=(APP_ROLE, READONLY_
     if problems and any("does not exist" in p for p in problems):
         return problems
 
+    # PostgreSQL 17 adds MAINTAIN (VACUUM, REINDEX, LOCK TABLE, ...; Codex task62).
+    table_privs = _TABLE_PRIVS + (
+        ("MAINTAIN",) if int(conn.execute(sa.text("SHOW server_version_num")).scalar()) >= 170000
+        else ())
     tables = {r[0]: (r[1], r[2]) for r in conn.execute(sa.text(
         "SELECT c.relname, c.relrowsecurity, pg_get_userbyid(c.relowner) FROM pg_class c "
         "JOIN pg_namespace n ON n.oid = c.relnamespace "
@@ -364,18 +422,56 @@ def role_problems(conn, rls_mode: str = RLS_POLICIES, roles=(APP_ROLE, READONLY_
 
     present_api = [r for (r,) in conn.execute(sa.text(
         "SELECT rolname FROM pg_roles WHERE rolname = ANY(:n)"), {"n": list(API_ROLES)})]
+    api_table_sql = sa.text("SELECT " + " OR ".join(
+        [f"has_any_column_privilege(:r, :t, '{p}')" for p in _COLUMN_PRIVS]
+        + [f"has_table_privilege(:r, :t, '{p}')" for p in table_privs
+           if p not in _COLUMN_PRIVS]))
     for api in present_api:
         for table in sorted(set(tables) & set(APP_TABLE_PRIVILEGES)):
-            if conn.execute(sa.text(
-                    "SELECT has_any_column_privilege(:r, :t, 'SELECT') "
-                    "OR has_any_column_privilege(:r, :t, 'INSERT') "
-                    "OR has_any_column_privilege(:r, :t, 'UPDATE') "
-                    "OR has_any_column_privilege(:r, :t, 'REFERENCES') "
-                    "OR has_table_privilege(:r, :t, 'DELETE') "
-                    "OR has_table_privilege(:r, :t, 'TRUNCATE') "
-                    "OR has_table_privilege(:r, :t, 'TRIGGER')"),
-                    {"r": api, "t": f"public.{_q(table)}"}).scalar():
+            if conn.execute(api_table_sql, {"r": api, "t": f"public.{_q(table)}"}).scalar():
                 problems.append(f"Supabase API role {api} has privileges on {table}")
+    if present_api:
+        # Codex task62: the next table, sequence or function the owner creates, and every
+        # function through PUBLIC, would reach the Data API without these checks.
+        owners = sorted({owner for (_rls, owner) in tables.values()})
+        for grantor, nsp, kind, grantee in conn.execute(sa.text(
+                "SELECT pg_get_userbyid(d.defaclrole), COALESCE(n.nspname, 'every schema'), "
+                "d.defaclobjtype::text, pg_get_userbyid(a.grantee) FROM pg_default_acl d "
+                "LEFT JOIN pg_namespace n ON n.oid = d.defaclnamespace "
+                "CROSS JOIN LATERAL aclexplode(d.defaclacl) a "
+                "WHERE (d.defaclnamespace = 0 OR n.nspname = 'public') "
+                "AND d.defaclobjtype IN ('r', 'S', 'f') "
+                "AND pg_get_userbyid(d.defaclrole) = ANY(:owners) "
+                "AND pg_get_userbyid(a.grantee) = ANY(:api) ORDER BY 1, 2, 3, 4"),
+                {"owners": owners, "api": present_api}).fetchall():
+            problems.append(f"default privileges of {grantor} in {nsp} grant new "
+                            f"{_DEFAULT_ACL_KINDS[kind]} to Supabase API role {grantee}")
+        seqs = [q for (q,) in conn.execute(sa.text(
+            "SELECT relname FROM pg_class WHERE relnamespace = 'public'::regnamespace "
+            "AND relkind = 'S' ORDER BY 1"))]
+        funcs = [f for (f,) in conn.execute(sa.text(
+            "SELECT p.oid::regprocedure::text FROM pg_proc p "
+            "WHERE p.pronamespace = 'public'::regnamespace "
+            "AND p.prorettype NOT IN ('trigger'::regtype, 'event_trigger'::regtype) "
+            "AND NOT EXISTS (SELECT 1 FROM pg_depend d WHERE d.classid = 'pg_proc'::regclass "
+            "AND d.objid = p.oid AND d.deptype = 'e') ORDER BY 1"))]
+        for api in present_api:
+            for seq in seqs:
+                if conn.execute(sa.text(
+                        "SELECT has_sequence_privilege(:r, :s, 'USAGE') "
+                        "OR has_sequence_privilege(:r, :s, 'SELECT') "
+                        "OR has_sequence_privilege(:r, :s, 'UPDATE')"),
+                        {"r": api, "s": f"public.{_q(seq)}"}).scalar():
+                    problems.append(f"Supabase API role {api} has privileges on sequence {seq}")
+            for fn in funcs:
+                if conn.execute(sa.text("SELECT has_function_privilege(:r, :f, 'EXECUTE')"),
+                                {"r": api, "f": fn}).scalar():
+                    problems.append(f"Supabase API role {api} may EXECUTE function {fn} "
+                                    "(revoke EXECUTE from PUBLIC and the API roles in its "
+                                    "migration)")
+            if conn.execute(sa.text("SELECT has_schema_privilege(:r, 'public', 'CREATE')"),
+                            {"r": api}).scalar():
+                problems.append(f"Supabase API role {api} may CREATE in schema public")
 
     for (seq,) in conn.execute(sa.text(
             "SELECT c.relname FROM pg_class c JOIN pg_namespace n ON n.oid = c.relnamespace "
@@ -383,7 +479,7 @@ def role_problems(conn, rls_mode: str = RLS_POLICIES, roles=(APP_ROLE, READONLY_
         want = set(APP_SEQUENCE_PRIVILEGES.get(seq, ()))
         if seq not in APP_SEQUENCE_PRIVILEGES:
             problems.append(f"sequence {seq} has no entry in APP_SEQUENCE_PRIVILEGES")
-        for role, allowed in ((app, want), (readonly, set())):
+        for role, allowed in ((app, want), (readonly, {"SELECT"})):
             for priv in ("USAGE", "SELECT", "UPDATE"):
                 if conn.execute(sa.text("SELECT has_sequence_privilege(:r, :s, :p)"),
                                 {"r": role, "s": f"public.{_q(seq)}", "p": priv}).scalar()                         != (priv in allowed):
@@ -397,7 +493,7 @@ def role_problems(conn, rls_mode: str = RLS_POLICIES, roles=(APP_ROLE, READONLY_
             name, cols = _split(p)
             want_app[name] = cols
         for role, want in ((app, want_app), (readonly, {"SELECT": ""})):
-            for priv in _TABLE_PRIVS:
+            for priv in table_privs:
                 has = conn.execute(sa.text("SELECT has_table_privilege(:r, :t, :p)"),
                                    {"r": role, "t": f"public.{_q(table)}", "p": priv}).scalar()
                 if priv in want and not want[priv] and not has:

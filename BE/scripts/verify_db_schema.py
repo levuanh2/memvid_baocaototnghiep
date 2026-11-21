@@ -62,12 +62,21 @@ def main(argv=None) -> int:
             families = [(RUNBOOK, submit_key_index_problems(conn)),
                         (ARCHIVE_RUNBOOK, review_item_archive_problems(conn)
                          + archive_guard_problems(conn))]
-            from shared.db_roles import (ROLES_RUNBOOK, role_problems, runtime_url_problems,
-                                         separation_enabled)
+            from shared.db_roles import (ROLES_RUNBOOK, role_problems, runtime_login_problems,
+                                         runtime_url_problems, separation_enabled)
             if separation_enabled():
                 import os
-                families.append((ROLES_RUNBOOK, runtime_url_problems()
-                                 + role_problems(conn, os.getenv("DB_RLS_MODE") or "policies")))
+                # The runtime URL the new backend will use: DATABASE_URL in production,
+                # TEST_DATABASE_URL in test mode (DATABASE_URL is production's there).
+                runtime = (os.getenv("DATABASE_URL" if args.moi_truong == "production"
+                                     else "TEST_DATABASE_URL") or "").strip()
+                env = {"DATABASE_URL": runtime, "MIGRATION_DATABASE_URL": url}
+                found = runtime_url_problems(env)
+                # Log in for real before activation (Codex task62): /health never
+                # touches the database.
+                found += [] if found else runtime_login_problems(conn, runtime)
+                families.append((ROLES_RUNBOOK, found + role_problems(
+                    conn, os.getenv("DB_RLS_MODE") or "policies")))
             problems = [pr for _, found in families for pr in found]
     except Exception as exc:  # unreachable DB is a failed verification, never a pass
         print(f"DỪNG: cannot verify {sanitize(url)}: {type(exc).__name__}: {exc}",
