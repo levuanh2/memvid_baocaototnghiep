@@ -167,6 +167,20 @@ Tests doing owner-only work (DDL, `TRUNCATE`, disabling a trigger, cleanup of ro
 app may not delete) use `tests/_owner_db.owner_engine()`. `tests/test_db_roles.py` runs
 its database cases only in this mode.
 
+## 7b. Evidence (disposable PostgreSQL 17.6, 2026-11-21)
+
+| Run | Result |
+|---|---|
+| Full backend suite **as `studymap_app`** (fresh database, contract applied) | 3222 passed, 9 skipped; 6 failed, all the known baseline (`test_index_khoa_that` x5, `test_fpt_rerank` x1) |
+| Same suite in ordinary owner mode (as CI runs it) | 3147 passed, 83 skipped (the app-role cases), same 6 baseline failures |
+| Playwright E2E, backend as `studymap_app` | open auth 47 passed / 1 skipped; protected auth 48 passed; 0 `permission denied` in the backend log |
+| A row seeded as the app role in all 27 tables | owner = app = read-only on every table; a no-policy control role saw 0 |
+| Read-only `pg_dump --enable-row-security` / restore | exit 0 / exit 0, 27 tables identical, 6 guard triggers |
+| BYPASSRLS mode | role, guard, archive, preflight, schema tests 138 passed / 1 skipped; plain `pg_dump` works |
+| Deploy harness (WSL) | `test_deploy_pinning` 18 PASS, `test_deploy_guard_mutations` 29 PASS |
+
+Evidence files: `studymap-qa-execution/v6/results/db-roles/`.
+
 ## 8. What the roles do not cover
 
 - The owner role can still disable triggers, truncate and rewrite anything: it is used
