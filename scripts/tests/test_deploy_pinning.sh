@@ -13,6 +13,7 @@ SHIM_DIR="$TMP/bin"
 DOCKER_LOG="$TMP/docker.log"
 OUTPUT="$TMP/output.log"
 ENV_FILE="$TMP/deploy.env"
+MIGRATION_ENV_FILE="$TMP/migration.env"
 DATA_DIR="$TMP/data"
 BACKUP_DIR="$TMP/backups"
 LOCK_FILE="$TMP/deploy.lock"
@@ -63,7 +64,7 @@ base_env() {
   env PATH="$SHIM_DIR:$PATH" DOCKER_LOG="$DOCKER_LOG" CURL_LOG="$CURL_LOG" \
     CI_SUCCESS_SHAS="${CI_SUCCESS_SHAS-${A_SHA:-} ${B_SHA:-} ${C_SHA:-}}" CI_MODE="${CI_MODE:-}" \
     MEMVID_BREAK_GLASS_REASON="${MEMVID_BREAK_GLASS_REASON-harness-incident}" \
-    MEMVID_ENV_FILE="$ENV_FILE" MEMVID_DATA_DIR="$DATA_DIR" MEMVID_BACKUP_DIR="$BACKUP_DIR" \
+    MEMVID_ENV_FILE="$ENV_FILE" MEMVID_MIGRATION_ENV_FILE="$MIGRATION_ENV_FILE" MEMVID_DATA_DIR="$DATA_DIR" MEMVID_BACKUP_DIR="$BACKUP_DIR" \
     MEMVID_LOCK_FILE="$LOCK_FILE" MEMVID_DEPLOY_LEDGER="$LEDGER_FILE" \
     MEMVID_HEALTH_TIMEOUT_SEC=1 MEMVID_HEALTH_POLL_SEC=1 \
     TEST_SOURCE="$SOURCE" TEST_SERVER="$SERVER" TEST_ORIGIN="$ORIGIN" \
@@ -165,7 +166,7 @@ chmod +x "$SHIM_DIR/curl"
 
 cat >"$SHIM_DIR/docker" <<'SHIM'
 #!/usr/bin/env bash
-printf 'sha=%s args=%s\n' "${APP_BUILD_SHA:-unset}" "$*" >>"$DOCKER_LOG"
+printf 'sha=%s mig=%s args=%s\n' "${APP_BUILD_SHA:-unset}" "${MIGRATION_DATABASE_URL:+set}" "$*" >>"$DOCKER_LOG"
 args="$*"
 phase=""
 [[ "$args" =~ compose.*build$ ]] && phase=build
@@ -216,8 +217,11 @@ GEMINI_API_KEY=dummy
 FPT_AI_API_KEY=dummy
 ALEMBIC_PRODUCTION_HOST=dummy
 ALEMBIC_PRODUCTION_DB=dummy
-MIGRATION_DATABASE_URL=dummy-owner
 ENV
+# The owner's URL: its own file, mode 600, never in the runtime env file (Codex task60).
+printf 'MIGRATION_DATABASE_URL=dummy-owner\n' >"$MIGRATION_ENV_FILE"
+chmod 600 "$MIGRATION_ENV_FILE"
+
 
 # A: current, CI-verified SHA deploys and is ledgered.
 B_SHA="$A_SHA"
@@ -226,13 +230,20 @@ reset_controls
 run_deploy 0 "$A_SHA"
 assert_head "$A_SHA"
 assert_called 'compose .* up -d$'
-assert_called "^sha=$A_SHA args=compose .* build$"
+assert_called "^sha=$A_SHA mig=[a-z]* args=compose .* build$"
 assert_ledger "$A_SHA" deploy
 # Order: migration, then read-only verification, then activation.
 order="$(grep -nE 'scripts.run_migrations|scripts.verify_db_schema|compose .* up -d$' "$DOCKER_LOG" | cut -d: -f1 | tr '
 ' ' ')"
 [ "$(grep -cE 'scripts.run_migrations|scripts.verify_db_schema|compose .* up -d$' "$DOCKER_LOG")" -eq 3 ]   && [ "$(printf '%s' "$order" | awk '{print ($1<$2 && $2<$3) ? "ok" : "bad"}')" = ok ]   || { cat "$DOCKER_LOG" >&2; fail "expected migration -> verify_db_schema -> up, got lines $order"; }
 pass "A current CI-verified commit deploys (migration, verification, activation in that order)"
+# Only the one-shot migration and verification containers get the owner's URL.
+grep -E 'scripts\.(run_migrations|verify_db_schema)' "$DOCKER_LOG" | grep -v 'mig=set .*-e MIGRATION_DATABASE_URL' \
+  && { cat "$DOCKER_LOG" >&2; fail "a migration/verification run did not get the owner URL"; }
+grep -E 'compose .* up -d$|compose .* build$' "$DOCKER_LOG" | grep 'mig=set' \
+  && { cat "$DOCKER_LOG" >&2; fail "the owner URL reached build or the long-running containers"; }
+grep -q 'dummy-owner' "$DOCKER_LOG" && { cat "$DOCKER_LOG" >&2; fail "the owner URL appeared on a command line"; }
+pass "the owner URL reaches only migration and verification, never a command line or the services"
 
 # A failed database verification stops the deploy before the new backend starts.
 reset_controls
@@ -247,15 +258,33 @@ pass "failed DB verification exits non-zero, never activates, never downgrades"
 
 # Without the owner's migration URL the deploy is refused before build or migration: a
 # migration never falls back to the runtime DATABASE_URL (docs/RUNBOOK_DB_ROLES.md).
-cp "$ENV_FILE" "$ENV_FILE.roles-bak"
-grep -v '^MIGRATION_DATABASE_URL=' "$ENV_FILE.roles-bak" >"$ENV_FILE"
+mv "$MIGRATION_ENV_FILE" "$MIGRATION_ENV_FILE.bak"
 reset_controls
 run_deploy 1 "$A_SHA"
-grep -q 'MIGRATION_DATABASE_URL' "$OUTPUT"   || { cat "$OUTPUT" >&2; fail "missing MIGRATION_DATABASE_URL was not reported"; }
+grep -q 'MIGRATION_DATABASE_URL (in ' "$OUTPUT" \
+  || { cat "$OUTPUT" >&2; fail "missing MIGRATION_DATABASE_URL was not reported"; }
 assert_not_called 'scripts.run_migrations'
 assert_not_called 'compose .* up -d$'
-cp "$ENV_FILE.roles-bak" "$ENV_FILE"
+mv "$MIGRATION_ENV_FILE.bak" "$MIGRATION_ENV_FILE"
 pass "a missing MIGRATION_DATABASE_URL is refused before any migration"
+
+# The owner's URL in the runtime env file (read by every service container): refused.
+cp "$ENV_FILE" "$ENV_FILE.roles-bak"
+printf 'MIGRATION_DATABASE_URL=dummy-owner\n' >>"$ENV_FILE"
+reset_controls
+run_deploy 1 "$A_SHA"
+grep -q 'must not be in' "$OUTPUT" || { cat "$OUTPUT" >&2; fail "owner URL in the runtime env file was not refused"; }
+assert_not_called 'compose .* build$'
+cp "$ENV_FILE.roles-bak" "$ENV_FILE"
+pass "the owner URL in the runtime env file is refused before build"
+
+# A group- or world-readable owner credential file: refused.
+chmod 644 "$MIGRATION_ENV_FILE"
+reset_controls
+run_deploy 1 "$A_SHA"
+grep -q 'must be mode 600' "$OUTPUT" || { cat "$OUTPUT" >&2; fail "readable migration env file was not refused"; }
+chmod 600 "$MIGRATION_ENV_FILE"
+pass "a readable owner credential file is refused"
 
 # Advance main to B.
 printf 'B\n' >"$SOURCE/revision.txt"

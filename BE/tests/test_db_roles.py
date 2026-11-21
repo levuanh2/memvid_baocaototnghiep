@@ -422,3 +422,41 @@ def test_every_table_with_a_row_seeded_as_the_app_role_is_seen_by_every_role(app
                 c.execute(sa.text(f"DELETE FROM {table} WHERE {col} = :tag"), params)
             c.execute(sa.text("DELETE FROM ai_validation_logs WHERE id = :aval"), params)
 
+
+
+def _table_owner(conn):
+    return conn.execute(sa.text(
+        "SELECT pg_get_userbyid(relowner) FROM pg_class WHERE oid = 'public.review_plans'::regclass"
+    )).scalar()
+
+
+def test_the_app_role_cannot_switch_to_the_owner(app_conn, owner_conn):
+    assert _sqlstate(app_conn, f'SET ROLE "{_table_owner(owner_conn)}"') == "42501"
+
+
+def test_any_role_membership_fails_verification_even_without_inherit(app_conn, owner_conn):
+    """Codex task60: `pg_has_role(.., 'USAGE')` misses a NOINHERIT membership, and the app
+    could then `SET ROLE` to the owner. Predefined roles (pg_write_all_data, ...) bypass
+    table grants the same way. The app and read-only roles must be members of nothing."""
+    owner = _table_owner(owner_conn)
+    owner_conn.rollback()
+    try:
+        with owner_conn.begin():
+            owner_conn.execute(sa.text(f'GRANT "{owner}" TO {APP_ROLE} WITH INHERIT FALSE'))
+    except sa.exc.DBAPIError as exc:
+        if getattr(exc.orig, "sqlstate", "") == "42501":
+            pytest.skip("this owner cannot grant membership in itself (CI runs it as postgres)")
+        raise
+    try:
+        problems = role_problems(owner_conn, _mode())
+        owner_conn.rollback()
+        assert any("member of" in p and APP_ROLE in p for p in problems), problems
+        # The escalation the check exists for: with the membership, SET ROLE works.
+        assert _sqlstate(app_conn, f'SET ROLE "{owner}"') == "ok"
+    finally:
+        app_conn.rollback()
+        app_conn.execute(sa.text("RESET ROLE"))
+        app_conn.commit()
+        with owner_conn.begin():
+            owner_conn.execute(sa.text(f'REVOKE "{owner}" FROM {APP_ROLE}'))
+    assert role_problems(owner_conn, _mode()) == []

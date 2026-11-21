@@ -77,7 +77,7 @@ The only cost is `--enable-row-security` on read-only backups.
 
 | Variable | Value |
 |---|---|
-| `MIGRATION_DATABASE_URL` | the owner's URL. **Always required** (`validate-env.sh` refuses the deploy without it): a migration, `verify_db_schema` and `rollback_preflight` never use `DATABASE_URL`. Before the roles exist it may name the same `postgres` user as `DATABASE_URL` |
+| `MIGRATION_DATABASE_URL` | the owner's URL. **Always required, and only in `/opt/memvid/env/migration.env` (mode 600)**, never in `/opt/memvid/env/.env`: both service containers (`backend`, `mindmap-worker`) read `.env` through `env_file`, so an owner URL there would hand the owner's rights to the running app (Codex task60). `validate-env.sh` refuses the deploy when it is missing from `migration.env`, present in `.env`, or `migration.env` is not mode 600. `scripts/_lib.sh` `compose_migration` passes it only to the one-shot migration, verification and rollback-preflight containers (`-e MIGRATION_DATABASE_URL`, never on a command line). Migrations, `verify_db_schema` and `rollback_preflight` never use `DATABASE_URL`. Before the roles exist it may name the same `postgres` user as `DATABASE_URL` |
 | `DB_ROLE_SEPARATION` | `1` once the roles exist and the contract is applied; until then unset |
 | `DATABASE_URL` | the app role: on the Supabase shared pooler the user is `studymap_app.<project_ref>` |
 | `DB_RLS_MODE` | `policies` (default) or `bypassrls` |
@@ -93,8 +93,10 @@ With `DB_ROLE_SEPARATION=1`, in addition:
 
 ## 5. Proposed rollout (each step needs owner approval; none is done)
 
-0. **Before the next deploy of this change** (any SHA containing it): add
-   `MIGRATION_DATABASE_URL` to `/opt/memvid/env/.env`, set to the current `postgres` URL.
+0. **Before the next deploy of this change** (any SHA containing it): create
+   `/opt/memvid/env/migration.env` (`umask 077`, then `chmod 600`) with one line
+   `MIGRATION_DATABASE_URL=<the current postgres URL>`, written with an editor, never on a
+   command line. Do not add it to `/opt/memvid/env/.env`.
    Without it the deploy stops at step 1 (validate environment), before build or
    migration, and the running backend is untouched.
 
@@ -124,8 +126,8 @@ With `DB_ROLE_SEPARATION=1`, in addition:
    checklist (PR #159, `docs/ui-ux-v6/06-release-review.md` section 9) is all GO:
    1. backup, and the restore rehearsal of that backup;
    2. create the two roles (step 1's SQL) and set their passwords;
-   3. in the server env file, all at once: `MIGRATION_DATABASE_URL` = the current
-      `postgres` URL, `DATABASE_URL` = the `studymap_app.<ref>` URL, `DB_ROLE_SEPARATION=1`;
+   3. all at once: in `/opt/memvid/env/.env`, `DATABASE_URL` = the `studymap_app.<ref>` URL
+      and `DB_ROLE_SEPARATION=1`; `migration.env` keeps the `postgres` URL (step 0);
    4. deploy the same SHA. The deploy migrates and applies the contract as the owner
       (step 5), verifies schema, contract and runtime user (step 5b), and only then
       starts the backend as `studymap_app`. Any failure leaves the old backend running,
@@ -184,7 +186,12 @@ Evidence files: `studymap-qa-execution/v6/results/db-roles/`.
 ## 8. What the roles do not cover
 
 - The owner role can still disable triggers, truncate and rewrite anything: it is used
-  only by the migration step, and its credentials stay out of the runtime environment.
+  only by the migration step, and its credential stays out of the runtime environment
+  (`migration.env`, enforced by `validate-env.sh` and the deploy harness). Anyone with
+  shell access to the EC2 host can still read `migration.env`.
+- The app and read-only roles must be members of no role at all: a `NOINHERIT`
+  membership still allows `SET ROLE`, and predefined roles such as `pg_write_all_data`
+  bypass table grants. `verify` fails on any membership (Codex task60).
 - The app role can still `UPDATE` non-identity columns and `INSERT` anywhere it inserts
   (for example regrade a `quiz_answers` row, or delete and re-insert an attempt's
   `concept_masteries`). These are the product's own writes.

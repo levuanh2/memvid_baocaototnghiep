@@ -329,12 +329,16 @@ def role_problems(conn, rls_mode: str = RLS_POLICIES, roles=(APP_ROLE, READONLY_
             {"r": role}).scalar()
         if owns:
             problems.append(f"role {role} owns {owns} object(s) in schema public")
-        member_of_owner = conn.execute(sa.text(
-            "SELECT count(*) FROM pg_class c JOIN pg_namespace n ON n.oid = c.relnamespace "
-            "WHERE n.nspname = 'public' AND c.relkind IN ('r', 'p') "
-            "AND pg_has_role(:r, c.relowner, 'USAGE')"), {"r": role}).scalar()
-        if member_of_owner:
-            problems.append(f"role {role} can act as the owner of {member_of_owner} table(s)")
+        # Members of nothing (Codex task60): `pg_has_role(.., 'USAGE')` misses a NOINHERIT
+        # membership, which still allows `SET ROLE` to the owner; predefined roles such as
+        # pg_write_all_data bypass table grants altogether. Any membership is a problem.
+        groups = [g for (g,) in conn.execute(sa.text(
+            "SELECT pg_get_userbyid(m.roleid) FROM pg_auth_members m "
+            "WHERE m.member = (SELECT oid FROM pg_roles WHERE rolname = :r) ORDER BY 1"),
+            {"r": role})]
+        if groups:
+            problems.append(f"role {role} is a member of {', '.join(groups)} "
+                            "(it could SET ROLE or inherit their rights)")
         if conn.execute(sa.text("SELECT has_schema_privilege(:r, 'public', 'CREATE')"),
                         {"r": role}).scalar():
             problems.append(f"role {role} may CREATE in schema public")

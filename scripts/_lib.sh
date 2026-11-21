@@ -6,6 +6,10 @@ SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 REPO_ROOT="$(cd "$SCRIPT_DIR/.." && pwd)"
 COMPOSE_FILE="$REPO_ROOT/docker-compose.prod.yml"
 ENV_FILE="${MEMVID_ENV_FILE:-/opt/memvid/env/.env}"
+# The table owner's credential (MIGRATION_DATABASE_URL) lives ONLY here, mode 600. Every
+# long-running container reads ENV_FILE (compose env_file), so the owner URL must never
+# be in it (Codex task60); it reaches the one-shot migration containers only.
+MIGRATION_ENV_FILE="${MEMVID_MIGRATION_ENV_FILE:-/opt/memvid/env/migration.env}"
 DATA_DIR="${MEMVID_DATA_DIR:-/opt/memvid/data}"
 BACKUP_DIR="${MEMVID_BACKUP_DIR:-/opt/memvid/backups}"
 
@@ -22,9 +26,6 @@ REQUIRED_ENV_VARS=(
   FPT_AI_API_KEY
   ALEMBIC_PRODUCTION_HOST
   ALEMBIC_PRODUCTION_DB
-  # The table owner's URL, used only by the migration step: a migration never runs
-  # through the runtime DATABASE_URL (docs/RUNBOOK_DB_ROLES.md).
-  MIGRATION_DATABASE_URL
 )
 
 # Every directory the compose stack bind-mounts.
@@ -72,6 +73,23 @@ env_value() {
   { grep -E "^${key}=" "$ENV_FILE" || true; } | tail -1 | cut -d'=' -f2-
 }
 
+migration_env_value() {
+  local key="$1"
+  [ -f "$MIGRATION_ENV_FILE" ] || { printf ''; return 0; }
+  { grep -E "^${key}=" "$MIGRATION_ENV_FILE" || true; } | tail -1 | cut -d'=' -f2-
+}
+
+# A one-shot `compose run` for migrations, schema verification and the rollback
+# preflight: the only containers that get the owner's URL. `-e NAME` without a value
+# passes it from this subshell's environment, never on a command line.
+compose_migration() {
+  local url
+  url="$(migration_env_value MIGRATION_DATABASE_URL)"
+  [ -n "$url" ] || { log "MIGRATION_DATABASE_URL is missing in $MIGRATION_ENV_FILE"; return 2; }
+  ( export MIGRATION_DATABASE_URL="$url"
+    compose run --rm -e ALEMBIC_ALLOW_PRODUCTION=1 -e MIGRATION_DATABASE_URL "$@" )
+}
+
 # Fail before build/deploy if any critical variable is missing or empty.
 validate_env() {
   require_env_file
@@ -80,6 +98,13 @@ validate_env() {
     val="$(env_value "$var")"
     [ -n "$val" ] || missing+=("$var")
   done
+  # The owner's URL: required, in MIGRATION_ENV_FILE only (docs/RUNBOOK_DB_ROLES.md).
+  [ -z "$(env_value MIGRATION_DATABASE_URL)" ]     || die "MIGRATION_DATABASE_URL must not be in $ENV_FILE: every runtime container reads that file. Move it to $MIGRATION_ENV_FILE (mode 600)"
+  if [ -n "$(migration_env_value MIGRATION_DATABASE_URL)" ]; then
+    [ "$(stat -c %a "$MIGRATION_ENV_FILE")" = 600 ]       || die "$MIGRATION_ENV_FILE must be mode 600 (it holds the database owner's credential)"
+  else
+    missing+=("MIGRATION_DATABASE_URL (in $MIGRATION_ENV_FILE)")
+  fi
   if [ "${#missing[@]}" -gt 0 ]; then
     log "missing/empty required variables in $ENV_FILE:"
     printf '  - %s\n' "${missing[@]}" >&2

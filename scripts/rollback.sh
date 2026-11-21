@@ -51,7 +51,7 @@ target_supports_archive() {
 log "archive preflight: reading archive facts from the database (read-only)"
 PREFLIGHT_ERR="$(mktemp)"
 PREFLIGHT_OK=1
-PREFLIGHT="$(compose run --rm -T -e ALEMBIC_ALLOW_PRODUCTION=1 backend \
+PREFLIGHT="$(compose_migration -T backend \
   python -m scripts.rollback_preflight --moi-truong production 2>"$PREFLIGHT_ERR")" || PREFLIGHT_OK=0
 # Exactly one stdout line, exactly this shape (diagnostics go to stderr).
 FACTS_RE='^archive_schema=([01]) history_topics=([0-9]+) guard=([01])$'

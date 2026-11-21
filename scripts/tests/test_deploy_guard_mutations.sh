@@ -49,7 +49,11 @@ run_mutation wrapper-lock 'flock -n 9 || {' 'true || {' deploy_remote.sh
 run_mutation wrapper-restore '  git -c advice.detachedHead=false checkout --detach "$prev"' '  : # guard removed' deploy_remote.sh
 run_mutation ci-query-head-sha 'head_sha=${DEPLOY_SHA}&' ''
 run_mutation ci-query-branch '&branch=main' ''
-run_mutation db-verify-removed 'if ! compose run --rm -e ALEMBIC_ALLOW_PRODUCTION=1 backend python -m scripts.verify_db_schema --moi-truong production; then' 'if false; then'
+run_mutation db-verify-removed 'if ! compose_migration backend python -m scripts.verify_db_schema --moi-truong production; then' 'if false; then'
+# Owner credential isolation (Codex task60).
+run_mutation owner-url-not-passed '    compose run --rm -e ALEMBIC_ALLOW_PRODUCTION=1 -e MIGRATION_DATABASE_URL "$@" )' '    compose run --rm -e ALEMBIC_ALLOW_PRODUCTION=1 "$@" )' _lib.sh
+run_mutation owner-url-in-runtime-env '[ -z "$(env_value MIGRATION_DATABASE_URL)" ]' 'true' _lib.sh
+run_mutation owner-file-mode '[ "$(stat -c %a "$MIGRATION_ENV_FILE")" = 600 ]' 'true' _lib.sh
 run_mutation db-verify-ignored '  die "database verification failed after migration' '  echo "database verification failed after migration'
 run_mutation ci-query-event '&event=push' ''
 run_mutation ci-query-status '&status=success' ''

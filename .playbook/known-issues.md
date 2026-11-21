@@ -8588,3 +8588,26 @@ except `test_rollback_preflight.py`, written together with the module it tests.
   message; green after: names `MIGRATION_DATABASE_URL (DB_ROLE_SEPARATION=1)`).
 - **Prevention:** a helper that reads optional input must not fail on absence under
   `pipefail`; test the "missing" branch of every validator, not only the happy path.
+
+### Role separation: owner credential in the runtime env; NOINHERIT membership (Codex task60, 2026-11-21)
+
+- **Owner URL in the runtime environment.** `MIGRATION_DATABASE_URL` was required in
+  `/opt/memvid/env/.env`, which `backend` and `mindmap-worker` load through compose
+  `env_file`: code execution in either service could connect as the table owner and
+  undo the whole role contract. **Fix:** the owner URL lives only in
+  `/opt/memvid/env/migration.env` (mode 600); `scripts/_lib.sh` `compose_migration` passes
+  it (`-e NAME`, no value on the command line) to the one-shot migration, verification
+  and rollback-preflight containers; `validate_env` refuses it in `.env`, refuses a
+  missing or non-600 `migration.env`. **Regression:** `test_deploy_pinning.sh` (owner URL
+  only in those runs, never in build/`up -d` or a command line; three refusal cases) and
+  three mutations in `test_deploy_guard_mutations.sh`, each caught.
+- **NOINHERIT membership passed verification.** `role_problems` used
+  `pg_has_role(.., 'USAGE')`, which is false for a `NOINHERIT` member that can still
+  `SET ROLE` to the owner. **Fix:** the app and read-only roles must be members of no
+  role (`pg_auth_members`); this also catches predefined roles such as
+  `pg_write_all_data`. **Regression:** `test_db_roles.py::test_any_role_membership_fails_verification_even_without_inherit`
+  (red: `role_problems` returned `[]` with the membership and `SET ROLE` worked; green
+  after) and `test_the_app_role_cannot_switch_to_the_owner`.
+- **Prevention:** a least-privilege design is only as good as where the privileged
+  credential is reachable from; check every container's `env_file`, not only the code
+  that uses the credential. For role checks, test membership itself, not inherited rights.
