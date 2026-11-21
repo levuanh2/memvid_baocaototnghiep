@@ -262,7 +262,10 @@ def _persist(attempt_id: str, quiz_id: str, weak: List[Dict[str, Any]],
                       .values(archived_at=now))
             plan_id = old.id
             old.summary = summary
-            old.document_id = document_id
+            # No `old.document_id = ...`: the plan's attempt, quiz and document never
+            # change (identity columns, read-only for the app role, shared.db_roles). It
+            # was a no-op that would have become a refused UPDATE (42501) if the value
+            # ever compared unequal (agy task61).
             old.created_at = now
         s.flush()
 
