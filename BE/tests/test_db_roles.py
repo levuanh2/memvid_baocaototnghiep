@@ -511,3 +511,40 @@ def test_supabase_api_roles_get_nothing_on_studymap_tables(app_conn, owner_conn)
             owner_conn.execute(sa.text(f"REVOKE USAGE ON SCHEMA public FROM {', '.join(API_ROLES)}"))
             for r in created:
                 owner_conn.execute(sa.text(f"DROP ROLE {r}"))
+
+
+@pytest.mark.parametrize("grant", [
+    f"GRANT REFERENCES (id) ON quizzes TO {APP_ROLE}",
+    f"GRANT INSERT (score) ON quiz_answers TO {READONLY_ROLE}",
+    f"GRANT SELECT (id), UPDATE (user_id) ON quiz_attempts TO {READONLY_ROLE}",
+    f"GRANT UPDATE (user_id) ON quiz_attempts TO {APP_ROLE}",
+])
+def test_a_column_level_grant_outside_the_contract_fails_verification(app_conn, owner_conn,
+                                                                      grant):
+    """Self-review 2026-11-22: only UPDATE was compared column by column, so a
+    column-level REFERENCES/INSERT/SELECT grant passed `verify`."""
+    owner_conn.rollback()
+    with owner_conn.begin():
+        owner_conn.execute(sa.text(grant))
+    try:
+        assert role_problems(owner_conn, _mode()) != [], grant
+    finally:
+        owner_conn.rollback()
+        from tests._owner_db import reapply_role_contract
+        reapply_role_contract()
+    assert role_problems(owner_conn, _mode()) == []
+
+
+def test_a_sequence_without_a_contract_row_fails_verification(app_conn, owner_conn):
+    """Owner brief: least privilege per table AND sequence. None exist today."""
+    owner_conn.rollback()
+    with owner_conn.begin():
+        owner_conn.execute(sa.text("CREATE SEQUENCE public.studymap_probe_seq"))
+    try:
+        assert any("sequence studymap_probe_seq has no entry" in p
+                   for p in role_problems(owner_conn, _mode()))
+    finally:
+        owner_conn.rollback()
+        with owner_conn.begin():
+            owner_conn.execute(sa.text("DROP SEQUENCE public.studymap_probe_seq"))
+    assert role_problems(owner_conn, _mode()) == []

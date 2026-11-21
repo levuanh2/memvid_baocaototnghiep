@@ -201,6 +201,10 @@ READ_ONLY_BY_DESIGN: Dict[str, Tuple[str, ...]] = {
     "usage_reservations": ("user_id", "idempotency_key", "request_id"),
 }
 
+# Sequences: none today (every id is a UUID). A sequence a migration adds (serial,
+# identity column) fails verification until it has a row here, e.g. {"x_id_seq": ("USAGE",)}.
+APP_SEQUENCE_PRIVILEGES: Dict[str, Tuple[str, ...]] = {}
+
 # Never granted to the app or the read-only role, on any table.
 FORBIDDEN_TABLE_PRIVILEGES = ("TRUNCATE", "TRIGGER", "REFERENCES")
 
@@ -240,6 +244,11 @@ def apply_statements(tables_with_rls, rls_mode: str = RLS_POLICIES, api_roles=()
         raise ValueError(f"unknown rls_mode {rls_mode!r}")
     out = [f"REVOKE CREATE ON SCHEMA public FROM {APP_ROLE}, {READONLY_ROLE}",
            f"GRANT USAGE ON SCHEMA public TO {APP_ROLE}, {READONLY_ROLE}"]
+    for seq, privileges in sorted(APP_SEQUENCE_PRIVILEGES.items()):
+        q = f"public.{_q(seq)}"
+        out.append(f"REVOKE ALL ON SEQUENCE {q} FROM {APP_ROLE}, {READONLY_ROLE}")
+        if privileges:
+            out.append(f"GRANT {', '.join(privileges)} ON SEQUENCE {q} TO {APP_ROLE}")
     for table, privileges in sorted(APP_TABLE_PRIVILEGES.items()):
         t = f"public.{_q(table)}"
         out.append(f"REVOKE ALL ON {t} FROM {APP_ROLE}, {READONLY_ROLE}")
@@ -292,6 +301,7 @@ def runtime_url_problems(env=None):
     return problems
 
 
+_COLUMN_PRIVS = ("SELECT", "INSERT", "UPDATE", "REFERENCES")
 _TABLE_PRIVS = ("SELECT", "INSERT", "UPDATE", "DELETE", "TRUNCATE", "TRIGGER", "REFERENCES")
 
 
@@ -357,11 +367,27 @@ def role_problems(conn, rls_mode: str = RLS_POLICIES, roles=(APP_ROLE, READONLY_
     for api in present_api:
         for table in sorted(set(tables) & set(APP_TABLE_PRIVILEGES)):
             if conn.execute(sa.text(
-                    "SELECT has_table_privilege(:r, :t, 'SELECT') OR has_table_privilege(:r, :t, 'INSERT') "
-                    "OR has_table_privilege(:r, :t, 'UPDATE') OR has_table_privilege(:r, :t, 'DELETE') "
-                    "OR has_table_privilege(:r, :t, 'TRUNCATE') OR has_any_column_privilege(:r, :t, 'UPDATE')"),
+                    "SELECT has_any_column_privilege(:r, :t, 'SELECT') "
+                    "OR has_any_column_privilege(:r, :t, 'INSERT') "
+                    "OR has_any_column_privilege(:r, :t, 'UPDATE') "
+                    "OR has_any_column_privilege(:r, :t, 'REFERENCES') "
+                    "OR has_table_privilege(:r, :t, 'DELETE') "
+                    "OR has_table_privilege(:r, :t, 'TRUNCATE') "
+                    "OR has_table_privilege(:r, :t, 'TRIGGER')"),
                     {"r": api, "t": f"public.{_q(table)}"}).scalar():
                 problems.append(f"Supabase API role {api} has privileges on {table}")
+
+    for (seq,) in conn.execute(sa.text(
+            "SELECT c.relname FROM pg_class c JOIN pg_namespace n ON n.oid = c.relnamespace "
+            "WHERE n.nspname = 'public' AND c.relkind = 'S' ORDER BY 1")):
+        want = set(APP_SEQUENCE_PRIVILEGES.get(seq, ()))
+        if seq not in APP_SEQUENCE_PRIVILEGES:
+            problems.append(f"sequence {seq} has no entry in APP_SEQUENCE_PRIVILEGES")
+        for role, allowed in ((app, want), (readonly, set())):
+            for priv in ("USAGE", "SELECT", "UPDATE"):
+                if conn.execute(sa.text("SELECT has_sequence_privilege(:r, :s, :p)"),
+                                {"r": role, "s": f"public.{_q(seq)}", "p": priv}).scalar()                         != (priv in allowed):
+                    problems.append(f"{role} {priv} on sequence {seq} differs from the contract")
 
     for table, (rls, _owner) in sorted(tables.items()):
         if table not in APP_TABLE_PRIVILEGES:
@@ -381,6 +407,13 @@ def role_problems(conn, rls_mode: str = RLS_POLICIES, roles=(APP_ROLE, READONLY_
                 elif priv in want and want[priv] and has:
                     problems.append(f"{role} has table-wide {priv} on {table}; "
                                     f"contract allows columns ({want[priv]}) only")
+                elif (priv not in want and priv in _COLUMN_PRIVS
+                      and conn.execute(sa.text("SELECT has_any_column_privilege(:r, :t, :p)"),
+                                       {"r": role, "t": f"public.{_q(table)}",
+                                        "p": priv}).scalar()):
+                    # A column-level grant is invisible to has_table_privilege.
+                    problems.append(f"{role} has column-level {priv} on {table} "
+                                    "(not in the contract)")
             for priv, cols in want.items():
                 if not cols:
                     continue
