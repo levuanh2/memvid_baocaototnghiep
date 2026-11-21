@@ -76,6 +76,11 @@ be reconciled with #160. Everything else is independent in code.
    Migration **design** approved by the owner 2026-11-19; the production run is not. Window
    01:00-03:00 Vietnam time, scheduled only after the 7 NO-GO conditions are GO. Before it,
    read runbook §4 (accepted residual risks) and decide the role split of §5 (not applied).
+   **#196 (role separation, after #194)**: before the first deploy of any SHA containing
+   it, create `/opt/memvid/env/migration.env` (mode 600) with `MIGRATION_DATABASE_URL`
+   (the current `postgres` URL), and never put it in `.env`; otherwise the deploy stops at
+   step 1. `DB_ROLE_SEPARATION=1` and the `studymap_app` `DATABASE_URL` only after the
+   Supabase test-project step of `docs/RUNBOOK_DB_ROLES.md`.
    **#183 -> #185** together, and only after the deploy order is planned: the migration
    `20261115_attempt_submit_key` must run before the new backend starts (the model selects the
    new columns); `scripts/deploy.sh` runs migrations (step 5) before `compose up` (step 6). The

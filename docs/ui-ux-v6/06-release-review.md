@@ -832,6 +832,32 @@ Tests: targeted backend 109 passed (guard, archive, migration, contract, preflig
 test touching `hard_delete` or `/sources`); full Vitest 234 files / 1971 tests passed.
 Codex task58 (`14a3631`) BLOCK on documentation only: R1 lacked child-table `TRUNCATE`/`CASCADE`, R3 over-claimed account/attempt coverage, R6 cited an undefined list, the probe claim was too broad; no code finding, and no remaining deadlock between current-code flows. Fixed in `3b3e784` (runbook only). Codex task59 **APPROVE** (`task59-codex-194-recheck.md`). Full backend on disposable PG17: 3139 passed, the 6 known baseline failures, 9 skipped; CI `14a3631` success (run 44529416367). Production run still not approved.
 
+## 8j. Owner decisions after task59 (2026-11-22): least-privilege roles, Draft #196
+
+#194 stays at Codex task59 APPROVE (scope unchanged; R1-R6 documented; the hard-delete
+vs regeneration deadlock regression test kept). New Draft **#196**
+`feat/db-role-separation` (stacked on #194, base `main` for CI): roles `studymap_owner`,
+`studymap_app`, `studymap_readonly`, built and tested on a disposable PostgreSQL 17 only.
+
+- Contract `BE/shared/db_roles.py`, per table and column, derived from a DML audit of the
+  full suite plus a code read (agy task61: no code path needs a withheld privilege). App:
+  `UPDATE` only on non-identity columns (R2 closed for the app), `DELETE` on 5 tables,
+  history tables insert-only or grading columns only, never `TRUNCATE`/`TRIGGER`/DDL/
+  ownership/membership; Supabase API roles get nothing on StudyMap tables.
+- RLS: per-role policies (recommended) and `BYPASSRLS` both exercised.
+- Migrations always use `MIGRATION_DATABASE_URL`, kept in `/opt/memvid/env/migration.env`
+  (mode 600) and passed only to the one-shot migration/verify/preflight containers.
+- Evidence: full suite as the app role 3222 passed (6 known baseline failures); E2E as the
+  app role 47+1 skipped / 48 passed, 0 `permission denied`; a row seeded as the app role
+  in all 27 tables seen equally by owner/app/read-only; read-only `pg_dump
+  --enable-row-security` + restore identical; deploy harness 21 + 32 PASS.
+- Reviews: Codex task60 BLOCK (owner URL in the runtime env; NOINHERIT membership), both
+  fixed with red tests; self-review found two verifier holes (column-level grants,
+  sequences), fixed with red tests; agy task63 APPROVE (supplementary). **Codex recheck
+  (task62) pending**: Codex hit its usage limit.
+- Not done, each needs owner approval: Supabase test-project verification (runbook
+  section 5 step 1), creating any hosted role, the production rollout.
+
 ## 9. GO/NO-GO checklist for the owner
 
 Blocking: production stays **NO-GO** until every row is GO with the evidence named. None
