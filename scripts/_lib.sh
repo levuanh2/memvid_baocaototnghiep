@@ -22,6 +22,9 @@ REQUIRED_ENV_VARS=(
   FPT_AI_API_KEY
   ALEMBIC_PRODUCTION_HOST
   ALEMBIC_PRODUCTION_DB
+  # The table owner's URL, used only by the migration step: a migration never runs
+  # through the runtime DATABASE_URL (docs/RUNBOOK_DB_ROLES.md).
+  MIGRATION_DATABASE_URL
 )
 
 # Every directory the compose stack bind-mounts.
@@ -63,7 +66,10 @@ compose() {
 env_value() {
   local key="$1"
   [ -f "$ENV_FILE" ] || { printf ''; return 0; }
-  grep -E "^${key}=" "$ENV_FILE" | tail -1 | cut -d'=' -f2-
+  # `|| true`: an absent key is an empty value, not a failure. Without it, grep's exit 1
+  # under `set -euo pipefail` killed validate_env silently, before it could name the
+  # missing variable (found 2026-11-21 by the role-separation deploy test).
+  { grep -E "^${key}=" "$ENV_FILE" || true; } | tail -1 | cut -d'=' -f2-
 }
 
 # Fail before build/deploy if any critical variable is missing or empty.

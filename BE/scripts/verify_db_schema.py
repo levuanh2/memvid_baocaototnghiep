@@ -62,6 +62,12 @@ def main(argv=None) -> int:
             families = [(RUNBOOK, submit_key_index_problems(conn)),
                         (ARCHIVE_RUNBOOK, review_item_archive_problems(conn)
                          + archive_guard_problems(conn))]
+            from shared.db_roles import (ROLES_RUNBOOK, role_problems, runtime_url_problems,
+                                         separation_enabled)
+            if separation_enabled():
+                import os
+                families.append((ROLES_RUNBOOK, runtime_url_problems()
+                                 + role_problems(conn, os.getenv("DB_RLS_MODE") or "policies")))
             problems = [pr for _, found in families for pr in found]
     except Exception as exc:  # unreachable DB is a failed verification, never a pass
         print(f"DỪNG: cannot verify {sanitize(url)}: {type(exc).__name__}: {exc}",

@@ -102,7 +102,7 @@ def test_duong_tinh_production_dung_hop_dong_thi_chay():
         "ALEMBIC_ALLOW_PRODUCTION": "1",
         "ALEMBIC_PRODUCTION_HOST": FAKE_PROD_HOST,
         "ALEMBIC_PRODUCTION_DB": FAKE_PROD_DB,
-        "DATABASE_URL": FAKE_PROD_URL,
+        "MIGRATION_DATABASE_URL": FAKE_PROD_URL,
     }, "--moi-truong", "production")
     assert r.returncode == 0, r.stderr
     assert "upgrade head: xong" in r.stdout
@@ -116,7 +116,7 @@ def test_duong_tinh_kiem_tra_khong_chay_gi():
         "ALEMBIC_ALLOW_PRODUCTION": "1",
         "ALEMBIC_PRODUCTION_HOST": FAKE_PROD_HOST,
         "ALEMBIC_PRODUCTION_DB": FAKE_PROD_DB,
-        "DATABASE_URL": FAKE_PROD_URL,
+        "MIGRATION_DATABASE_URL": FAKE_PROD_URL,
     }, "--moi-truong", "production", "--kiem-tra")
     assert r.returncode == 0, r.stderr
     assert "chỉ kiểm tra" in r.stdout
@@ -128,7 +128,7 @@ def test_1_khong_co_ALEMBIC_ALLOW_PRODUCTION_thi_tu_choi():
     r = chay({
         "ALEMBIC_PRODUCTION_HOST": FAKE_PROD_HOST,
         "ALEMBIC_PRODUCTION_DB": FAKE_PROD_DB,
-        "DATABASE_URL": FAKE_PROD_URL,
+        "MIGRATION_DATABASE_URL": FAKE_PROD_URL,
     }, "--moi-truong", "production")
     assert _bi_tu_choi(r)
     assert "ALEMBIC_ALLOW_PRODUCTION" in r.stderr
@@ -138,7 +138,7 @@ def test_2_thieu_production_host_thi_tu_choi():
     r = chay({
         "ALEMBIC_ALLOW_PRODUCTION": "1",
         "ALEMBIC_PRODUCTION_DB": FAKE_PROD_DB,
-        "DATABASE_URL": FAKE_PROD_URL,
+        "MIGRATION_DATABASE_URL": FAKE_PROD_URL,
     }, "--moi-truong", "production")
     assert _bi_tu_choi(r)
     assert "ALEMBIC_PRODUCTION_HOST" in r.stderr
@@ -148,7 +148,7 @@ def test_3_thieu_production_db_thi_tu_choi():
     r = chay({
         "ALEMBIC_ALLOW_PRODUCTION": "1",
         "ALEMBIC_PRODUCTION_HOST": FAKE_PROD_HOST,
-        "DATABASE_URL": FAKE_PROD_URL,
+        "MIGRATION_DATABASE_URL": FAKE_PROD_URL,
     }, "--moi-truong", "production")
     assert _bi_tu_choi(r)
 
@@ -158,7 +158,7 @@ def test_4_host_khai_bao_lech_thi_tu_choi():
         "ALEMBIC_ALLOW_PRODUCTION": "1",
         "ALEMBIC_PRODUCTION_HOST": "mot-host-hoan-toan-khac.example",
         "ALEMBIC_PRODUCTION_DB": FAKE_PROD_DB,
-        "DATABASE_URL": FAKE_PROD_URL,
+        "MIGRATION_DATABASE_URL": FAKE_PROD_URL,
     }, "--moi-truong", "production")
     assert _bi_tu_choi(r)
     assert "không khớp khai báo" in r.stderr
@@ -169,7 +169,7 @@ def test_5_db_khai_bao_lech_thi_tu_choi():
         "ALEMBIC_ALLOW_PRODUCTION": "1",
         "ALEMBIC_PRODUCTION_HOST": FAKE_PROD_HOST,
         "ALEMBIC_PRODUCTION_DB": "mot_db_khac",
-        "DATABASE_URL": FAKE_PROD_URL,
+        "MIGRATION_DATABASE_URL": FAKE_PROD_URL,
     }, "--moi-truong", "production")
     assert _bi_tu_choi(r)
 
@@ -186,7 +186,7 @@ def test_6_current_database_song_lech_thi_tu_choi():
         "ALEMBIC_ALLOW_PRODUCTION": "1",
         "ALEMBIC_PRODUCTION_HOST": FAKE_PROD_HOST,
         "ALEMBIC_PRODUCTION_DB": FAKE_PROD_DB,
-        "DATABASE_URL": lech,
+        "MIGRATION_DATABASE_URL": lech,
     }, "--moi-truong", "production")
     assert _bi_tu_choi(r) or "current_database" in (r.stderr + r.stdout)
 
@@ -197,7 +197,7 @@ def test_7_credential_hong_thi_tu_choi_an_toan():
         "ALEMBIC_ALLOW_PRODUCTION": "1",
         "ALEMBIC_PRODUCTION_HOST": FAKE_PROD_HOST,
         "ALEMBIC_PRODUCTION_DB": FAKE_PROD_DB,
-        "DATABASE_URL": "khong-phai-mot-url",
+        "MIGRATION_DATABASE_URL": "khong-phai-mot-url",
     }, "--moi-truong", "production")
     assert r.returncode != 0
     assert "MAT_KHAU" not in (r.stdout + r.stderr)
@@ -209,7 +209,7 @@ def test_8_db_test_khi_khai_la_production_thi_tu_choi():
         "ALEMBIC_ALLOW_PRODUCTION": "1",
         "ALEMBIC_PRODUCTION_HOST": "localhost",
         "ALEMBIC_PRODUCTION_DB": "studymap_test",
-        "DATABASE_URL": TEST_URL,
+        "MIGRATION_DATABASE_URL": TEST_URL,
     }, "--moi-truong", "production")
     assert _bi_tu_choi(r)
     assert "trông như database test" in r.stderr
@@ -220,7 +220,7 @@ def test_co_production_sot_lai_khi_chay_test_thi_tu_choi():
     r = chay({
         "ALEMBIC_ALLOW_PRODUCTION": "1",
         "TEST_DATABASE_URL": TEST_URL,
-        "DATABASE_URL": FAKE_PROD_URL,
+        "MIGRATION_DATABASE_URL": FAKE_PROD_URL,
     }, "--moi-truong", "test")
     assert _bi_tu_choi(r)
     assert "ALEMBIC_ALLOW_PRODUCTION" in r.stderr

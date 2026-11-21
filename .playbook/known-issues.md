@@ -8573,3 +8573,18 @@ except `test_rollback_preflight.py`, written together with the module it tests.
 - **Fix:** `SidebarLeft` uses the shared `DestructiveConfirmDialog` (checkbox required,
   names the loss, "Không thể hoàn tác"). The Library's delete is soft and is not touched.
 - **Regression:** `FE/src/components/Layout/SidebarLeft.deleteSourceWarning.test.jsx`.
+
+### `validate_env` died silently on a missing variable (found 2026-11-21, role separation)
+
+- **Symptom:** `deploy.sh` printed "step 1/7: validating environment" and exited non-zero
+  with no message when a checked variable was absent from the env file.
+- **Root cause:** `env_value` ran `grep -E "^KEY=" | tail | cut` under `set -euo pipefail`;
+  grep exits 1 on no match, the pipeline fails, and `val="$(env_value KEY)"` aborts the
+  script before `validate_env` can list what is missing. Latent since the list existed:
+  every required variable had always been present in the tests.
+- **Fix:** `scripts/_lib.sh` `env_value`: `{ grep ... || true; } | tail -1 | cut ...`.
+- **Regression:** `scripts/tests/test_deploy_pinning.sh` case "role separation on without
+  MIGRATION_DATABASE_URL is refused before any migration" (red before the fix: no
+  message; green after: names `MIGRATION_DATABASE_URL (DB_ROLE_SEPARATION=1)`).
+- **Prevention:** a helper that reads optional input must not fail on absence under
+  `pipefail`; test the "missing" branch of every validator, not only the happy path.

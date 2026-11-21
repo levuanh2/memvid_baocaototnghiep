@@ -27,7 +27,8 @@ def _db(client):
     from sqlalchemy import text
 
     from app.db import get_engine
-    with get_engine().begin() as c:
+    from tests._owner_db import owner_engine  # the app role may not delete users
+    with owner_engine().begin() as c:
         # identities đi theo user nhờ ON DELETE CASCADE.
         c.execute(text("DELETE FROM users WHERE email LIKE :pat"),
                   {"pat": "%" + TEST_EMAIL_SUFFIX})
@@ -137,7 +138,8 @@ def test_xoa_user_thi_identity_di_theo_cascade():
 
     pid = _pid()
     u = st.link_new_user(provider="nks", provider_user_id=pid, email=_email(), display_name="A")
-    with get_engine().begin() as c:
+    from tests._owner_db import owner_engine  # the app role may not delete users
+    with owner_engine().begin() as c:
         c.execute(text("DELETE FROM users WHERE id=:i"), {"i": u["user_id"]})
     assert st.find("nks", pid) is None
 

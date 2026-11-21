@@ -82,6 +82,37 @@ def _truthy(env: Mapping[str, str], name: str) -> bool:
     return _s(env, name).lower() in ("1", "true", "yes", "on")
 
 
+def _user(url: str) -> str:
+    return (urlsplit(url).username or "").lower()
+
+
+def _production_migration_url(env: Mapping[str, str]) -> str:
+    """The production migration URL (owner decision 2026-11-19, role separation).
+
+    Always `MIGRATION_DATABASE_URL`, the table owner's connection, used only by the
+    migration step. The runtime `DATABASE_URL` is never used for a migration: without the
+    migration URL the migration is refused. Until the least-privilege roles exist the two
+    may log in as the same user; with `DB_ROLE_SEPARATION=1` they must differ and name
+    the same database.
+    """
+    mig = _s(env, "MIGRATION_DATABASE_URL")
+    runtime = _s(env, "DATABASE_URL")
+    if not mig:
+        raise MigrationTargetRejected(
+            "ALEMBIC_ALLOW_PRODUCTION=1 nhưng MIGRATION_DATABASE_URL trống. Migration không "
+            "bao giờ chạy bằng DATABASE_URL (kết nối runtime của backend).")
+    if _truthy(env, "DB_ROLE_SEPARATION") and runtime:
+        if _user(mig) == _user(runtime):
+            raise MigrationTargetRejected(
+                "DB_ROLE_SEPARATION=1 nhưng MIGRATION_DATABASE_URL và DATABASE_URL đăng nhập "
+                "cùng một user. Migration phải dùng role owner, runtime dùng role app.")
+        if danh_tinh(mig) != danh_tinh(runtime):
+            raise MigrationTargetRejected(
+                "MIGRATION_DATABASE_URL và DATABASE_URL trỏ vào hai database khác nhau "
+                f"({sanitize(mig)} / {sanitize(runtime)}).")
+    return mig
+
+
 def chon_dich(env: Optional[Mapping[str, str]] = None) -> Tuple[str, str]:
     """Chọn URL đích + chế độ, TRƯỚC khi kết nối.
 
@@ -90,13 +121,16 @@ def chon_dich(env: Optional[Mapping[str, str]] = None) -> Tuple[str, str]:
     """
     env = os.environ if env is None else env
     if _truthy(env, "ALEMBIC_ALLOW_PRODUCTION"):
-        url = _s(env, "DATABASE_URL")
-        if not url:
-            raise MigrationTargetRejected(
-                "ALEMBIC_ALLOW_PRODUCTION=1 nhưng DATABASE_URL trống.")
-        return chuan_hoa_driver(url), CHE_DO_PRODUCTION
+        return chuan_hoa_driver(_production_migration_url(env)), CHE_DO_PRODUCTION
 
-    url = _s(env, "TEST_DATABASE_URL")
+    # Migrations run as the table owner; the tests' runtime connection may be the
+    # least-privilege app role (shared.db_roles), which cannot run DDL.
+    mig, runtime = _s(env, "TEST_MIGRATION_DATABASE_URL"), _s(env, "TEST_DATABASE_URL")
+    if mig and runtime and danh_tinh(mig) != danh_tinh(runtime):
+        raise MigrationTargetRejected(
+            "TEST_MIGRATION_DATABASE_URL và TEST_DATABASE_URL trỏ vào hai database khác nhau "
+            f"({sanitize(mig)} / {sanitize(runtime)}).")
+    url = mig or runtime
     if not url:
         raise MigrationTargetRejected(
             "TEST_DATABASE_URL chưa đặt. Migration mặc định CHỈ chạy trên database "

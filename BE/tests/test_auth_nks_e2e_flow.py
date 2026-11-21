@@ -27,7 +27,8 @@ def _db(client):
     from sqlalchemy import text
 
     from app.db import get_engine
-    with get_engine().begin() as c:
+    from tests._owner_db import owner_engine  # the app role may not delete users
+    with owner_engine().begin() as c:
         c.execute(text("DELETE FROM users WHERE email LIKE :p"), {"p": "%" + TEST_EMAIL_SUFFIX})
 
 

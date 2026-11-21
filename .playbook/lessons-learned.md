@@ -3839,3 +3839,20 @@ Splitting the runtime role from the table owner is the right fix for "the app ca
 disable its own triggers", but every table here has RLS enabled and no policies. The
 new role gets empty results, not errors. Grant `BYPASSRLS` or write policies, and
 rehearse on a test database first.
+
+## 2026-11-21 — Least-privilege roles: what the disposable-database run showed
+
+- A non-owner role under RLS with no policy reads 0 rows silently; with per-role
+  policies it sees everything, and **`pg_dump` as that role then stops** ("query would
+  be affected by row-level security policy") unless given `--enable-row-security`.
+- Foreign-key cascades run as the table owner: the app role needs no `DELETE` on child
+  tables to hard-delete a document. That is what lets history tables be insert-only.
+- A `GRANT` by a non-owner is not an error (PostgreSQL only warns "no privileges were
+  granted"). Test the effect (`has_table_privilege`), not the SQLSTATE.
+- Auditing DML by tagging statements with the calling frame misattributes ORM flushes:
+  a test's `s.delete(row)` executes inside `app.db.session_scope` at commit, so it looks
+  like app code. Confirm "the app deletes X" by reading the code, not by the tag alone.
+- Running the suite as the app role turns every test clean-up of rows the app may not
+  delete into an error, and one failed clean-up leaves rows that break later tests
+  (counts, downgrade refusals). Use `tests/_owner_db` for set-up/clean-up, and rerun on
+  a fresh database before judging the next failure list.

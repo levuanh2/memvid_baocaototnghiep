@@ -22,6 +22,7 @@ import threading
 import pytest
 import sqlalchemy as sa
 
+from tests._owner_db import owner_session_scope
 from tests.test_review_plan_archive import (  # noqa: F401  (fixtures)
     GUIDE_2, _counts, _fake_guide, _need_db, _plan, _protect, be, owner, planned)
 
@@ -38,9 +39,20 @@ def _archived(client, planned, monkeypatch):
 
 
 def _raw():
-    from app.db import get_engine
+    """Hand SQL and code older than #194, which these tests stand in for. As the table
+    owner: under the least-privilege app role the same statements are refused earlier,
+    by privilege (42501, tests/test_db_roles.py); the guard must refuse them anyway."""
+    from tests._owner_db import owner_engine
 
-    return get_engine().connect()
+    return owner_engine().connect()
+
+
+def _owner():
+    """Owner-only statements (TRUNCATE, DDL): refused to the app role by privilege
+    (tests/test_db_roles.py); here the GUARD must refuse them even for the owner."""
+    from tests._owner_db import owner_engine
+
+    return owner_engine().connect()
 
 
 def _refused(exc_info):
@@ -60,7 +72,9 @@ def test_old_code_regeneration_is_refused_and_history_stays(client, planned, mon
     forced = _archived(client, planned, monkeypatch)
     before = _counts(planned["pq"])
     with pytest.raises(sa.exc.DBAPIError) as exc_info:
-        with session_scope() as s:
+        # As the owner: under the least-privilege app role old code is refused earlier,
+        # by privilege (42501, tests/test_db_roles.py); the guard must refuse it anyway.
+        with owner_session_scope() as s:
             s.delete(s.get(ReviewPlan, forced["review_plan_id"]))
             s.flush()
     text = _refused(exc_info)
@@ -104,7 +118,7 @@ def test_unarchiving_or_moving_an_archived_topic_is_refused(client, planned, mon
 def test_truncate_is_refused_while_archived_topics_exist(client, planned, monkeypatch):
     _archived(client, planned, monkeypatch)
     for table in ("review_plan_items", "review_plans"):
-        with _raw() as c, pytest.raises(sa.exc.DBAPIError) as exc_info:
+        with _owner() as c, pytest.raises(sa.exc.DBAPIError) as exc_info:
             c.execute(sa.text(f"TRUNCATE {table} CASCADE"))
         _refused(exc_info)
 
@@ -251,7 +265,7 @@ def _verify_and_restore():
 
 
 def test_the_verifier_fails_closed_when_a_guard_trigger_is_missing():
-    with _raw() as c:
+    with _owner() as c:
         c.execute(sa.text("DROP TRIGGER trg_guard_review_plan_delete ON review_plans"))
         c.commit()
     r = _verify_and_restore()
@@ -261,7 +275,7 @@ def test_the_verifier_fails_closed_when_a_guard_trigger_is_missing():
 
 
 def test_the_verifier_fails_closed_when_a_guard_trigger_is_disabled():
-    with _raw() as c:
+    with _owner() as c:
         c.execute(sa.text("ALTER TABLE review_plan_items DISABLE TRIGGER "
                           "trg_guard_archived_review_item"))
         c.commit()
@@ -276,13 +290,13 @@ def test_the_guard_downgrade_refuses_while_archived_topics_exist(client, planned
     _archived(client, planned, monkeypatch)
     r = _run("alembic", "downgrade", "20261118_review_item_archive")
     assert r.returncode != 0 and "refusing downgrade" in (r.stdout + r.stderr)
-    with _raw() as c:
+    with _owner() as c:
         assert _version(c) == "20261119_review_item_guard"
 
 
 def test_the_verifier_fails_closed_on_a_same_name_body_or_a_wrong_event():
     """Codex task50: names and enabled flags were not proof."""
-    with _raw() as c:
+    with _owner() as c:
         c.execute(sa.text("CREATE OR REPLACE FUNCTION studymap_guard_review_plan_delete() "
                           "RETURNS trigger LANGUAGE plpgsql AS $$ BEGIN RETURN OLD; END $$"))
         c.commit()
@@ -290,7 +304,7 @@ def test_the_verifier_fails_closed_on_a_same_name_body_or_a_wrong_event():
     assert r.returncode != 0
     assert "guard function studymap_guard_review_plan_delete" in r.stderr
     assert "body differs" in r.stderr
-    with _raw() as c:
+    with _owner() as c:
         c.execute(sa.text("DROP TRIGGER trg_guard_review_plan_delete ON review_plans"))
         c.execute(sa.text("CREATE TRIGGER trg_guard_review_plan_delete AFTER DELETE ON "
                           "review_plans FOR EACH ROW EXECUTE FUNCTION "
@@ -382,7 +396,7 @@ def test_old_code_deleting_a_plan_with_practice_but_nothing_archived_is_refused(
 
     before = _counts(planned["pq"])
     with pytest.raises(sa.exc.DBAPIError) as exc_info:
-        with session_scope() as s:
+        with owner_session_scope() as s:
             s.delete(s.get(ReviewPlan, planned["first"]["review_plan_id"]))
             s.flush()
     _refused(exc_info)
@@ -418,7 +432,7 @@ def test_the_verifier_reads_the_function_the_trigger_calls_not_a_same_name_overl
     from shared.db_schema_checks import ARCHIVE_GUARD_FUNCTIONS
 
     body = ARCHIVE_GUARD_FUNCTIONS["studymap_guard_review_plan_delete"]
-    with _raw() as c:
+    with _owner() as c:
         # Trigger functions cannot take arguments: the overload is an ordinary function
         # carrying the contract text (bodies are not validated with this setting).
         c.execute(sa.text("SET check_function_bodies = off"))
@@ -430,14 +444,14 @@ def test_the_verifier_reads_the_function_the_trigger_calls_not_a_same_name_overl
     try:
         r = _verify_and_restore()
     finally:
-        with _raw() as c:
+        with _owner() as c:
             c.execute(sa.text("DROP FUNCTION IF EXISTS studymap_guard_review_plan_delete(integer)"))
             c.commit()
     assert r.returncode != 0 and "body differs" in r.stderr, r.stderr
 
 
 def test_the_verifier_requires_the_pinned_search_path():
-    with _raw() as c:
+    with _owner() as c:
         c.execute(sa.text("ALTER FUNCTION studymap_guard_archived_review_item() RESET search_path"))
         c.commit()
     r = _verify_and_restore()
@@ -583,7 +597,7 @@ def test_deleting_or_detaching_a_practice_quiz_is_refused(client, planned):
         c.execute(sa.text("UPDATE quizzes SET quiz_type = 'diagnostic', "
                           "source_review_item_id = NULL WHERE id = :q"), {"q": planned["pq"]})
     _refused(exc_info)
-    with _raw() as c, pytest.raises(sa.exc.DBAPIError) as exc_info:
+    with _owner() as c, pytest.raises(sa.exc.DBAPIError) as exc_info:
         c.execute(sa.text("TRUNCATE quizzes CASCADE"))
     _refused(exc_info)
     assert _counts(planned["pq"]) == before

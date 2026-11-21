@@ -32,9 +32,9 @@ OLD = "uq_review_plan_items_priority"
 
 @pytest.fixture()
 def db():
-    from app.db import get_engine
+    from tests._owner_db import owner_engine   # DDL is owner-only
 
-    with get_engine().connect().execution_options(isolation_level="AUTOCOMMIT") as conn:
+    with owner_engine().connect().execution_options(isolation_level="AUTOCOMMIT") as conn:
         yield conn
     # Whatever a test did (also one that failed half-way and left the index dropped),
     # rerun the revision: every step checks first, so this restores the full contract.
@@ -83,7 +83,10 @@ def _fresh_database(conn):
     """An empty `*_test` database next to the test one, migrated by the real scripts."""
     name = f"mig_{uuid.uuid4().hex[:10]}_test"
     conn.execute(sa.text(f'CREATE DATABASE "{name}"'))
-    parts = urlsplit(os.environ["TEST_DATABASE_URL"])
+    from tests._owner_db import owner_url
+
+    # The owner created it, so the owner migrates and reads it (no app grants there).
+    parts = urlsplit(owner_url())
     url = urlunsplit(parts._replace(path=f"/{name}"))
     try:
         yield url
@@ -95,6 +98,7 @@ def _run_on(url, *args):
     env = {k: v for k, v in os.environ.items() if k != "ALEMBIC_ALLOW_PRODUCTION"}
     env.update({"TEST_DATABASE_URL": url, "PYTHONUTF8": "1",
                 "PGOPTIONS": "-c lock_timeout=20s"})
+    env.pop("TEST_MIGRATION_DATABASE_URL", None)   # `url` is the only target
     return subprocess.run([sys.executable, "-m", *args], cwd=BE_ROOT, env=env,
                           capture_output=True, text=True, encoding="utf-8",
                           errors="replace", timeout=180)

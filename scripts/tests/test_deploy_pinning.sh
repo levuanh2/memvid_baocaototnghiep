@@ -216,6 +216,7 @@ GEMINI_API_KEY=dummy
 FPT_AI_API_KEY=dummy
 ALEMBIC_PRODUCTION_HOST=dummy
 ALEMBIC_PRODUCTION_DB=dummy
+MIGRATION_DATABASE_URL=dummy-owner
 ENV
 
 # A: current, CI-verified SHA deploys and is ledgered.
@@ -243,6 +244,18 @@ grep -q 'database verification failed after migration' "$OUTPUT"   || { cat "$OU
 grep -q 'RUNBOOK_SUBMIT_KEY_INDEX' "$OUTPUT" || fail "verification failure does not name the runbook"
 if grep -Eq 'go-lui|downgrade' "$DOCKER_LOG"; then cat "$DOCKER_LOG" >&2; fail "a failed verification must not downgrade"; fi
 pass "failed DB verification exits non-zero, never activates, never downgrades"
+
+# Without the owner's migration URL the deploy is refused before build or migration: a
+# migration never falls back to the runtime DATABASE_URL (docs/RUNBOOK_DB_ROLES.md).
+cp "$ENV_FILE" "$ENV_FILE.roles-bak"
+grep -v '^MIGRATION_DATABASE_URL=' "$ENV_FILE.roles-bak" >"$ENV_FILE"
+reset_controls
+run_deploy 1 "$A_SHA"
+grep -q 'MIGRATION_DATABASE_URL' "$OUTPUT"   || { cat "$OUTPUT" >&2; fail "missing MIGRATION_DATABASE_URL was not reported"; }
+assert_not_called 'scripts.run_migrations'
+assert_not_called 'compose .* up -d$'
+cp "$ENV_FILE.roles-bak" "$ENV_FILE"
+pass "a missing MIGRATION_DATABASE_URL is refused before any migration"
 
 # Advance main to B.
 printf 'B\n' >"$SOURCE/revision.txt"

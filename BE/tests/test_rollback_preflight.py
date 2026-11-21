@@ -25,6 +25,7 @@ def _preflight(url=None):
     env.update({"PYTHONUTF8": "1", "SKIP_DOTENV": "1"})
     if url:
         env["TEST_DATABASE_URL"] = url
+        env.pop("TEST_MIGRATION_DATABASE_URL", None)   # it would win over `url`
     return subprocess.run([sys.executable, "-m", "scripts.rollback_preflight",
                            "--moi-truong", "test"], cwd=BE_ROOT, env=env, capture_output=True,
                           text=True, encoding="utf-8", errors="replace", timeout=120)
