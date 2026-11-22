@@ -49,6 +49,17 @@ if has_gemini:
 if has_groq:
     PROVIDERS.append("groq")
 
+# Task63: offline fake model for E2E and the Supabase test project (never production).
+# E2E_FAKE_LLM=1 replaces EVERY provider, the gRPC gateway included, so the real graphs,
+# ingest and repositories run with no network and no cost. It refuses to start beside a
+# real provider key: an environment that can reach a paid model is not a test environment.
+E2E_FAKE_LLM = (os.getenv("E2E_FAKE_LLM") or "").strip() == "1"
+if E2E_FAKE_LLM:
+    if has_any_remote:
+        raise RuntimeError("E2E_FAKE_LLM=1 is set together with a real provider key; "
+                           "refusing to start (unset the key or the flag)")
+    PROVIDERS[:] = ["fake"]
+
 print("Active providers:", PROVIDERS)
 
 # Ollama num_predict / Groq max_tokens — thấp quá thì cắt giữa câu; mặc định 8192 cho trả lời dài.
@@ -708,6 +719,8 @@ def get_llm(
     cho mọi tác vụ sinh nội dung nặng; dựng thêm một vòng fallback thứ hai ở đây là
     hai luật cùng nói về một chuyện.
     """
+    if E2E_FAKE_LLM:
+        return FakeChatModel()
     loi: Exception | None = None
     if usage_context is not None and not usage_attempt_id:
         raise ValueError("usage_attempt_id is required with usage_context")
@@ -1177,6 +1190,8 @@ def ask_ai(
         pass
     if usage_context is not None and not usage_attempt_id:
         raise ValueError("usage_attempt_id is required with usage_context")
+    if E2E_FAKE_LLM:
+        return fake_reply(prompt, system_prompt or "")
     _addr = _gateway_addr()
     if _addr:
         # Định tuyến qua llm-gateway. Temperature resolve theo `feature` ở PHÍA SERVER
@@ -1307,3 +1322,31 @@ def summarize_results(
         usage_context=usage_context,
         usage_attempt_id=usage_attempt_id,
     )
+
+
+# ── E2E_FAKE_LLM (task63) ─────────────────────────────────────────────────────────────
+from langchain_core.language_models.chat_models import BaseChatModel as _BaseChatModel  # noqa: E402
+from langchain_core.messages import AIMessage as _AIMessage  # noqa: E402
+from langchain_core.outputs import ChatGeneration as _ChatGeneration, ChatResult as _ChatResult  # noqa: E402
+
+
+def fake_reply(prompt: str, system_prompt: str = "") -> str:
+    """Deterministic, offline. A prompt that asks for JSON gets an empty JSON object, so
+    parsers run; anything else gets one labelled sentence citing source [1].
+    ponytail: one generic shape; per-feature fixtures (mind map outline, summary
+    sections) are the upgrade path when G4 needs their success-path writes."""
+    if "json" in f"{system_prompt} {prompt}".lower():
+        return "{}"
+    return "Câu trả lời thử nghiệm (E2E_FAKE_LLM, không gọi mô hình thật) [1]."
+
+
+class FakeChatModel(_BaseChatModel):
+    @property
+    def _llm_type(self) -> str:
+        return "studymap-e2e-fake"
+
+    def _generate(self, messages, stop=None, run_manager=None, **kwargs):
+        system = " ".join(str(m.content) for m in messages if getattr(m, "type", "") == "system")
+        user = " ".join(str(m.content) for m in messages if getattr(m, "type", "") != "system")
+        text = fake_reply(user, system)
+        return _ChatResult(generations=[_ChatGeneration(message=_AIMessage(content=text))])

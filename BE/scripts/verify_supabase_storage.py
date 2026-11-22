@@ -20,6 +20,25 @@ tuỳ chọn. `--ci` đảo lại cho pipeline nào coi việc thiếu cấu hì
 from __future__ import annotations
 
 import argparse
+import os
+import re
+import sys
+
+_STRICT_VARS = ("SUPABASE_URL", "SUPABASE_SECRET_KEY", "SUPABASE_STORAGE_BUCKET")
+
+
+def _strict_env_problem(expect_ref: str):
+    """Checked BEFORE `.env` is loaded: a variable missing here would otherwise be filled
+    from `.env`, which may hold production keys (Codex task63). Names variables, never
+    prints a value."""
+    if not re.fullmatch(r"[a-z]{20}", expect_ref or ""):
+        return "--expect-ref must be the test project's 20-letter ref"
+    missing = [v for v in _STRICT_VARS if not (os.environ.get(v) or "").strip()]
+    if missing:
+        return f"set explicitly and non-empty: {', '.join(missing)}"
+    if os.environ["SUPABASE_URL"].strip().rstrip("/") != f"https://{expect_ref}.supabase.co":
+        return "SUPABASE_URL is not https://<expect-ref>.supabase.co"
+    return None
 
 
 def main() -> int:
@@ -29,7 +48,18 @@ def main() -> int:
                    help="tạo bucket nếu chưa có (thay đổi hạ tầng — phải nêu rõ)")
     p.add_argument("--ci", action="store_true",
                    help="thoát khác 0 khi chưa cấu hình hoặc kiểm tra hỏng")
+    p.add_argument("--strict-env", action="store_true",
+                   help="Supabase test project (task63): never fill a variable from .env; "
+                        "all three must be set explicitly and name --expect-ref")
+    p.add_argument("--expect-ref", default="",
+                   help="with --strict-env: the test project's ref")
     args = p.parse_args()
+
+    if args.strict_env:
+        problem = _strict_env_problem(args.expect_ref)
+        if problem:
+            print(f"DỪNG (strict-env): {problem}", file=sys.stderr)
+            return 2
 
     # `documents/storage.py` đọc thẳng `os.getenv` và KHÔNG tự nạp `.env` — nó vốn
     # chỉ chạy trong tiến trình app, nơi `llm_factory` đã nạp hộ. Chạy script này

@@ -58,6 +58,13 @@ os.environ.setdefault("OLLAMA_HOST", "http://127.0.0.1:11434")
 # separate Postgres-backed worker + heartbeat.
 os.environ.setdefault("GUIDED_MINDMAP_V3_ENABLED", "true")
 os.environ.setdefault("GUIDED_JOB_STORE_BACKEND", "sqlite")
+# Task63 (F1): E2E_REAL_GRAPHS=1 keeps the real query/mind-map graphs and the real ingest,
+# so their database writes run (as studymap_app on the test project). The only fake is
+# the model itself, at the llm_factory seam (E2E_FAKE_LLM), which refuses to start
+# beside a real provider key. No network model, no cost.
+E2E_REAL_GRAPHS = os.environ.get("E2E_REAL_GRAPHS", "").strip() == "1"
+if E2E_REAL_GRAPHS:
+    os.environ["E2E_FAKE_LLM"] = "1"
 # Same ephemeral Postgres the rest of CI already uses (backend-integration-and-smoke).
 os.environ.setdefault("DATABASE_URL", "postgresql://postgres:postgres@localhost:5432/studymap_test")
 os.environ.pop("GEMINI_API_KEY", None)
@@ -161,8 +168,9 @@ E2E_STUBS = {"e2e_server": True, "diagnostic_ai_stub": False,
 def main() -> None:
     import app.main as be_main  # noqa: E402  (env must be set first, see above)
 
-    be_main.QUERY_GRAPH = MockQueryGraph()
-    be_main.MINDMAP_GRAPH = MockMindmapGraph()
+    if not E2E_REAL_GRAPHS:
+        be_main.QUERY_GRAPH = MockQueryGraph()
+        be_main.MINDMAP_GRAPH = MockMindmapGraph()
 
     if os.environ.get("E2E_PRACTICE_AI_STUB", "").strip().lower() in {
         "1", "true", "yes", "on",
@@ -375,13 +383,15 @@ def main() -> None:
             capabilities={"chunk_query": True},
         )
 
-    be_main._trigger_background_ingest = (
-        lambda sid, fp, fn, usage_context_data=None: _fast_ingest(sid, fp, fn)
-    )
+    if not E2E_REAL_GRAPHS:
+        be_main._trigger_background_ingest = (
+            lambda sid, fp, fn, usage_context_data=None: _fast_ingest(sid, fp, fn)
+        )
     Path(be_main.INPUT_DIR).mkdir(parents=True, exist_ok=True)
 
     port = int(os.environ.get("PORT", "8080"))
-    print(f"[run_e2e_server] listening on 0.0.0.0:{port} (SKIP_MODEL_LOAD=1, mocked graphs)", flush=True)
+    mode = "real graphs, fake model" if E2E_REAL_GRAPHS else "mocked graphs"
+    print(f"[run_e2e_server] listening on 0.0.0.0:{port} (SKIP_MODEL_LOAD=1, {mode})", flush=True)
     be_main.app.run(host="0.0.0.0", port=port, threaded=True, use_reloader=False)
 
 

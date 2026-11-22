@@ -3873,3 +3873,27 @@ with the connection the migration verified. On Supabase's shared pooler the host
 database are the same for every project; only the user's `.<project_ref>` differs.
 Version-gated privileges (`MAINTAIN` on PostgreSQL 17) must be tested on that version: a
 skip on an older CI server is a silent green.
+
+## 2026-11-22 — A project guard by substring is not a guard; exit 2 from argparse is not a refusal
+
+Task63 (Codex BLOCK on the Supabase test-project plan):
+- The first probe accepted any URL that merely contained the test project ref. An empty ref
+  matched everything. `--local` checked nothing. Every failure still exited 0.
+- Root cause: each check tested text, not structure. Results were written to JSON and never
+  turned into an exit code.
+- Fix: `BE/scripts/supabase_test_probe.py` parses each URL. It requires a pooler host, a
+  port per mode, user exactly `<role>.<ref>`, database `postgres` and no query. It requires
+  20-letter refs and refuses the production ref anywhere. `--local` accepts loopback
+  `*_test` only. Every case has a verdict, and any failure exits 1.
+- Related fixes on the same branch:
+  - `verify_supabase_storage --strict-env` refuses before `.env` can refill a missing
+    variable.
+  - `E2E_FAKE_LLM=1` is a fake at the `llm_factory` seam that refuses to start beside a
+    real key.
+  - `run_e2e_server E2E_REAL_GRAPHS=1` keeps the real graphs and ingest.
+- Regression: the red runs of `tests/test_supabase_test_probe.py`,
+  `test_storage_strict_env.py` and `test_fake_llm.py`.
+- While writing the red tests, the strict-env cases first passed: argparse rejecting the
+  unknown `--strict-env` flag also exits 2. The test now requires the refusal text and
+  forbids "unrecognized arguments".
+- Prevention: a subprocess exit-code test must assert WHY it exited, not only the code.
