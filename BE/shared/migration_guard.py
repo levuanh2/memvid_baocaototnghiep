@@ -38,6 +38,75 @@ TEST_DB_SUFFIX = "_test"
 CHE_DO_TEST = "test"
 CHE_DO_PRODUCTION = "production"
 
+#: Query parameters a TEST url may carry. Allowlist: libpq/psycopg let `host`,
+#: `hostaddr`, `port`, `dbname`, `service`... in the query REPLACE the authority and path,
+#: so a check of `urlsplit(url).hostname` approved `127.0.0.1/x_test?host=<hosted>`
+#: while SQLAlchemy connected to the hosted server (Codex review of #187, 2026-11-16).
+ALLOWED_TEST_QUERY_KEYS = frozenset({"sslmode", "connect_timeout", "application_name"})
+
+#: libpq environment variables that can supply or move a connection target. psycopg reads
+#: the PROCESS environment: `PGHOSTADDR` (or a `PGSERVICE` entry) picks the socket even
+#: when the URL names `host` and `dbname` (Codex re-check of #187). A test run refuses to
+#: start while any of them is non-empty; the URL alone must say where it connects.
+LIBPQ_TARGET_VARS = ("PGHOSTADDR", "PGHOST", "PGPORT", "PGDATABASE", "PGSERVICE",
+                     "PGSERVICEFILE")
+
+def libpq_target_vars_set(files=None) -> list:
+    """Names in `LIBPQ_TARGET_VARS` that are, or WILL be, non-empty in this process.
+
+    A variable present in the process wins (even empty), else the value `load_dotenv`
+    will add from `BE/.env` then the root `.env` (the `shared.env_loader` order). The E2E
+    server checks before the app loads dotenv, and pytest may build an engine before it
+    does; checking only `os.environ` missed a `PGHOSTADDR` that arrives from `BE/.env`
+    later (Codex re-check 2 of #187). Names only, never values.
+    """
+    if (os.getenv("SKIP_DOTENV") or "").strip() in {"1", "true", "True", "yes", "on"}:
+        files = []
+    elif files is None:
+        from shared.paths import BE_ROOT
+
+        files = [BE_ROOT / ".env", BE_ROOT.parent / ".env"]
+    from_files: dict = {}
+    try:
+        from dotenv import dotenv_values
+
+        # Raw values, not interpolated: `load_dotenv` expands `${X}` file by file, so X
+        # may come from an earlier file only at load time (Codex re-check 3). A non-empty
+        # raw value counts as set, even if it would expand to "" (fail closed).
+        for path in reversed(list(files)):
+            if os.path.exists(path):
+                from_files.update(dotenv_values(path, interpolate=False))
+    except ImportError:  # no python-dotenv: nothing will be loaded either
+        pass
+    out = []
+    for name in LIBPQ_TARGET_VARS:
+        value = os.environ[name] if name in os.environ else (from_files.get(name) or "")
+        if value.strip():
+            out.append(name)
+    return out
+
+
+#: Hosts a test run may use for side services (Redis, Ollama): loopback plus the CI and
+#: compose service names.
+ALLOWED_LOCAL_SERVICE_HOSTS = ALLOWED_TEST_HOSTS | {"redis", "ollama"}
+
+
+def local_service_or_blank(name: str, env=None, *, fallback: str = "") -> None:
+    """Keep `env[name]` only when it points at a local service; otherwise set `fallback`.
+
+    Set, never deleted: `load_dotenv` fills every ABSENT variable from `BE/.env`, so a
+    deleted value comes back. `fallback` exists for `OLLAMA_HOST`, where "" is not "unset"
+    (`llm_factory` reads it with a default). Used by `tests/conftest.py` and
+    `scripts/run_e2e_server.py`.
+    """
+    env = os.environ if env is None else env
+    value = (env.get(name) or "").strip()
+    if value:
+        host = (urlsplit(value if "://" in value else "http://" + value).hostname or "").lower()
+        if host in ALLOWED_LOCAL_SERVICE_HOSTS:
+            return
+    env[name] = fallback
+
 
 class MigrationTargetRejected(RuntimeError):
     """Đích migration không đạt điều kiện. Thông điệp nói RÕ vì sao, không kèm credential."""
@@ -139,6 +208,23 @@ def kiem_tra_dich(url: str, che_do: str, *, live_db_name: Optional[str] = None,
         return
 
     # ── chế độ TEST ──────────────────────────────────────────────────────────
+    from urllib.parse import parse_qsl
+
+    la = sorted({k.lower() for k, _ in parse_qsl(urlsplit(url).query, keep_blank_values=True)}
+                - ALLOWED_TEST_QUERY_KEYS)
+    if la:
+        raise MigrationTargetRejected(
+            f"URL test có tham số query không cho phép {la}: host/dbname/service trong query "
+            f"thay được đích thật. Chỉ cho {sorted(ALLOWED_TEST_QUERY_KEYS)}. Đích: {sanitize(url)}")
+
+    # The process environment plus what dotenv will add, not `env`: the driver uses the
+    # process environment whatever a caller passed here (run_e2e_server passes env={}).
+    pg = libpq_target_vars_set()
+    if pg:
+        raise MigrationTargetRejected(
+            f"Biến môi trường libpq {pg} đang đặt: chúng có thể đổi đích kết nối dù URL trỏ "
+            "localhost. Gỡ chúng khi chạy test.")
+
     if host not in ALLOWED_TEST_HOSTS:
         raise MigrationTargetRejected(
             f"Host {host!r} không nằm trong danh sách host test cho phép "

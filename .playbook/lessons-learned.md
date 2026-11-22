@@ -3734,3 +3734,11 @@ A test that only detaches its container leaves every portal (dialogs, toasts, me
 `document.body`, and a later test's `document.body.querySelector` finds the leftover. It hides
 while tests run in file order and shows up only under `--sequence.shuffle`. Always unmount the
 React root in `afterEach`; to check a file for order dependence, run it with a few shuffle seeds.
+
+## 2026-11-16 — One isolation rule, applied at every door
+
+The migration guard had the strong rule (loopback or CI host, `_test` name, not the
+production target, live check); pytest, the guided job store and the E2E server each had
+a weaker one or none. Put the rule in one function and call it from every entry point
+that opens a connection in a test or dev run. And `os.environ.pop` does not keep a value
+out: `load_dotenv` fills every absent variable from `.env`; set it to `""` instead.
