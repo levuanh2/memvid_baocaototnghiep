@@ -36,9 +36,9 @@ export const THEME = {
     "--root-radius": "8px",
     "--main-radius": "6px",
     "--topic-padding": "4px",
-    // Root identity: blue action surface with white type. These values stay
-    // explicit because Mind Elixir has no fallback for missing cssVar entries.
-    "--root-color": "#FFFFFF",
+    // Root identity: the primary action fill with its paired foreground (V9.3: ink on
+    // light, gold on dark). Explicit because Mind Elixir has no fallback for missing vars.
+    "--root-color": "var(--on-primary)",
     "--root-bgcolor": "var(--accent-cta)",
     "--root-border-color": "var(--accent-cta)",
     // section = thẻ giấy nổi, viền đậm

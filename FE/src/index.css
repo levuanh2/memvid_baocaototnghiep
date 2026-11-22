@@ -10,6 +10,12 @@
    the only accent is son/chu sa seal red, used as a stamp.
 ═══════════════════════════════════════════════════ */
 @layer base {
+  /* V9.3 (docs/StudyMap-V9.3/02, PR #197): every VALUE below is the V9.3 design system.
+     Many comments in these two blocks are the history of earlier rounds (blue accent, seal
+     red, Spectral); where a comment and a value disagree, the value and this note win.
+     Roles: --accent = gold-brown text/link; --accent-cta + --on-primary = primary fill and
+     its paired foreground; --seal = citation/wordmark; --warn = warning only (never the
+     action colour); --forest/--ok = success; --err = danger; --focus = the focus ring. */
   :root {
     /* Surfaces — cool research paper (Visual Identity Reset, see
        docs/VISUAL_IDENTITY_WORKSPACE_REDESIGN.md). Was warm giấy-dó beige;
@@ -125,15 +131,15 @@
                                         falling back to rgba(34,150,94,0.12) — a DIFFERENT, brighter
                                         green than --ok itself. Declared for real, derived from --ok's
                                         own rgb so the badge background actually matches the badge text. */
-    --warn: #765300;   /* mock warning/technology orange */
+    --warn: #8A4512;   /* mock warning/technology orange */
     --err:  #9D392E;   /* error (also the seal) */
     /* Round 7.1: component-scoped semantic roles. The global status palette
        remains unchanged; these foregrounds are tuned against the actual
        translucent Quiz badges and the destructive button's solid fill. */
     --quiz-status-correct: #246348;
-    --quiz-status-partial: #765300;
+    --quiz-status-partial: #8A4512;
     --quiz-status-incorrect: #9D392E;
-    --quiz-status-processing: #765300;
+    --quiz-status-processing: #62665B;
     --quiz-question-complete-fg: #20211D;
     --danger-cta: #9D392E;
     --danger-cta-hover: #7F2D24;
@@ -207,12 +213,12 @@
 
     --ok:    #B6DFC4;
     --ok-bg: #1D3426;
-    --warn: #F4D178;
+    --warn: #F2B48A;
     --err:  #F0B7AD;
     --quiz-status-correct: #B6DFC4;
-    --quiz-status-partial: #F4D178;
+    --quiz-status-partial: #F2B48A;
     --quiz-status-incorrect: #F0B7AD;
-    --quiz-status-processing: #F4D178;
+    --quiz-status-processing: #B4B9A8;
     --quiz-question-complete-fg: #F2F4EA;
     --danger-cta: #9D392E;
     --danger-cta-hover: #7F2D24;
@@ -666,8 +672,8 @@
     user-select: none;
   }
   .cite-chip:hover, .cite-chip--active {
-    color: #F5F1E8;
-    background: var(--seal);
+    color: var(--on-primary);
+    background: var(--accent-cta);
     border-color: var(--seal);
   }
 
@@ -1033,7 +1039,7 @@
 /* Wave 4 — the opening-paragraph editorial flourish (redesign spec §07).
    Marks "a reading surface begins here" once; never repeated per section. */
 .prose-drop-cap > p:first-of-type::first-letter {
-  font-family: 'Spectral', Georgia, serif;
+  font-family: var(--font-display);
   font-size: 2.5em;
   float: left;
   line-height: 0.82;
@@ -1151,7 +1157,7 @@
    --accent-cta's own comment in this file). A small badge is still normal-
    size text under WCAG 1.4.3 (the "large text" 3:1 allowance needs ~24px/
    18.66px-bold, nowhere near this). --accent-cta: 5.17:1. */
-.source-rail__toggle span { position: absolute; top: -5px; right: -5px; display: grid; min-width: 17px; height: 17px; padding: 0 3px; place-items: center; border-radius: 9px; color: #fff; background: var(--accent-cta); font: 700 9px/1 var(--font-mono); }
+.source-rail__toggle span { position: absolute; top: -5px; right: -5px; display: grid; min-width: 17px; height: 17px; padding: 0 3px; place-items: center; border-radius: 9px; color: var(--on-primary); background: var(--accent-cta); font: 700 9px/1 var(--font-mono); }
 .source-rail__divider { width: 18px; height: 1px; flex: 0 0 1px; background: var(--border-strong); }
 .source-rail__files { display: flex; width: 100%; min-height: 0; flex: 1; flex-direction: column; align-items: center; gap: 9px; overflow-x: hidden; overflow-y: auto; padding: 1px 0 6px; scrollbar-width: none; }
 .source-rail__files::-webkit-scrollbar { display: none; }
@@ -1179,7 +1185,7 @@
   .mobile-context button:hover, .mobile-context button:focus-visible { color: var(--accent); background: var(--accent-subtle); outline: 3px solid var(--focus); outline-offset: 1px; }
   /* Round 3 QA closure: same --accent-cta fix as .source-rail__toggle span
      above (white text on --accent measured 2.77:1 in dark mode). */
-  .mobile-context b { position: absolute; top: 0; right: 0; display: grid; min-width: 15px; height: 15px; padding: 0 2px; place-items: center; border-radius: 8px; color: #fff; background: var(--accent-cta); font: 700 8px/1 var(--font-mono); }
+  .mobile-context b { position: absolute; top: 0; right: 0; display: grid; min-width: 15px; height: 15px; padding: 0 2px; place-items: center; border-radius: 8px; color: var(--on-primary); background: var(--accent-cta); font: 700 8px/1 var(--font-mono); }
 }
 
 @media (prefers-reduced-motion: reduce) {
