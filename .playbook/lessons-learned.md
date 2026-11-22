@@ -3750,3 +3750,10 @@ anyway. If a timeout matters, shut the executor down without waiting, give every
 library its own transport timeout (check the field really exists in the installed
 version: an unknown keyword may be silently ignored), share one deadline across retries
 and fallbacks, and never claim the provider stopped working: Python cannot cancel it.
+## 2026-11-12 — A param change is not a remount: tie every async load to the id it was started for
+
+Root cause of V6 bug hunt #4 and #14: a route component stays mounted when only `:id` changes,
+so a `load()` keyed by that id can have an older run still in flight. Prevention: in any page
+whose effect loads by a route param, capture the id at the start and compare it with a ref of
+the current id after every `await`, including in `catch` and `finally`; a "mounted" flag alone
+does not catch this. Test it by resolving the old request after the new one.

@@ -47,13 +47,25 @@ export default function QuizTaking() {
   // chưa hề nhận.
   const [choLuu, setChoLuu] = useState(0);
 
+  // The quiz this page shows NOW. /quiz/A -> /quiz/B while A's open is slow used to let A answer
+  // last: A's questions and attempt_id under B's URL, so autosave and submit went to A's attempt.
+  const quizIdRef = useRef(quizId);
+  quizIdRef.current = quizId;
+
   const load = useCallback(async () => {
+    const stale = () => !mountedRef.current || quizIdRef.current !== quizId;
+    // Drop what the previous quiz left behind: if this open fails, the old questions and
+    // attempt would otherwise stay on screen under the new URL and hide the error.
+    setQuiz(null);
+    setAttemptId(null);
+    setAnswers({});
     setLoading(true);
     setError(null);
     try {
       // Mở quiz TẠO attempt ngay (FR-07.10); mở lại thì BE trả đúng attempt đang
       // dở nên đáp án nháp cũ hiện lại nguyên vẹn.
       const body = await openAttempt(quizId);
+      if (stale()) return;
       setQuiz(body.quiz);
       setAttemptId(body.attempt_id);
       const restored = {};
@@ -65,9 +77,9 @@ export default function QuizTaking() {
         navigate(`/app/study/result/${body.attempt_id}`, { replace: true });
       }
     } catch (e) {
-      setError(moTaLoi(e, "Không mở được quiz."));
+      if (!stale()) setError(moTaLoi(e, "Không mở được quiz."));
     } finally {
-      setLoading(false);
+      if (!stale()) setLoading(false);
     }
   }, [quizId, navigate]);
 
