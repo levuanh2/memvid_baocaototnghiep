@@ -104,6 +104,28 @@ describe("V9.3 consumers", () => {
     expect(bad).toEqual([]);
   });
 
+  // Composite controls whose ring is drawn on a child or by a box-shadow (reviewed).
+  const RING_ON_CHILD = [".panel-divider:focus-visible", "me-export-check:focus-visible",
+    "me-export-check:focus,"];
+  it("no :focus-visible rule removes the outline without drawing a replacement", () => {
+    const bad = [];
+    for (const f of CSS_FILES) {
+      for (const block of stripComments(read(f)).split("}")) {
+        const [sel, body = ""] = block.split("{");
+        if (!/:focus-visible/.test(sel) || !/outline:\s*(none|0)\b/.test(body)) continue;
+        if (/box-shadow|outline-color|border-color/.test(body)) continue;
+        if (RING_ON_CHILD.some((s) => sel.includes(s))) continue;
+        bad.push(`${f}: ${sel.trim().slice(0, 80)}`);
+      }
+    }
+    expect(bad).toEqual([]);
+  });
+
+  it("no inline style names a retired typeface", () => {
+    const bad = JSX_FILES.filter((f) => /fontFamily:\s*["'][^"']*(Spectral|Aptos|\bInter\b)/.test(read(f)));
+    expect(bad).toEqual([]);
+  });
+
   it("a 44px button class is never squeezed into a smaller fixed height", () => {
     const bad = [];
     for (const f of JSX_FILES) {

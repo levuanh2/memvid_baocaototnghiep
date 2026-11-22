@@ -272,7 +272,7 @@ test("dark-mode keyboard and programmatic focus remain visibly tokenized", async
     const style = getComputedStyle(node);
     return [style.outlineStyle, style.outlineWidth];
   });
-  expect(taskFocus).toEqual(["solid", "2px"]);
+  expect(taskFocus).toEqual(["solid", "3px"]);  // V9.3: one 3px --focus ring
 
   const trigger = page.locator("[data-document-row]").first().locator("[data-tools-trigger]");
   await trigger.click();
@@ -283,6 +283,6 @@ test("dark-mode keyboard and programmatic focus remain visibly tokenized", async
     return [style.outlineStyle, style.outlineWidth, style.backgroundColor];
   });
   expect(menuFocus[0]).toBe("solid");
-  expect(menuFocus[1]).toBe("2px");
+  expect(menuFocus[1]).toBe("3px");
   expect(menuFocus[2]).not.toBe("rgba(0, 0, 0, 0)");
 });
