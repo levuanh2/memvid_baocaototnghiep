@@ -157,7 +157,8 @@ test("only the wordmark text changes colour: every other seal-coloured element k
     });
     for (const c of [...result.out, ...result.real]) expect(c).toBe(result.seal);
     expect(result.ins).toBe(result.brand);
-    expect(result.brand).not.toBe(result.seal);
+    // V9.3 (#197): --seal and --brand-text are both the V9.3 brand-text colour, so the old
+    // "wordmark differs from seal" split no longer exists; the scoping and contrast checks stay.
   }
 });
 

@@ -51,6 +51,7 @@ To see each resolution exactly: `git show --remerge-diff <merge>`.
 | `8d69ece` (P1a of #197) | `FE/src/index.css` tokens | #159 (`--brand-text` wordmark red; old seal) vs #197 (V9.3 values) | Took the V9.3 values. `--brand-text` is kept as the V9.3 brand-text role: `#765300` light, `#F4D178` dark. |
 | `8d69ece` | `FE/src/components/Layout/ChatArea.jsx` | #178 (worded "Huỷ" cancel button, `h-10`) vs #197 (44px icon cancel) | Kept #178's worded button at `h-11` (44px). |
 | `b719caf` (adaptation) | `FE/src/index.css`, `FE/src/pages/study/quizJourney.css`, `FE/src/pages/landing.wordmarkContrast.test.js` | V6 CSS vs the #197 contract test | V6's 2px accent rings become the 3px `--focus` ring. The V6 wordmark test pins the V9.3 seal instead of the old red, and keeps its 4.5:1 check. |
+| adaptation (CI Fixture Smoke) | `FE/e2e-fixture/landing-wordmark-contrast.spec.js` | #159/#167 spec (wordmark colour must differ from `--seal`) vs #197 (V9.3 uses one brand-text colour for both) | Dropped only the `brand != seal` assertion. The scoping check (wordmark uses `--brand-text`, every other `.text-seal` uses `--seal`) and the 4.5:1 contrast checks stay. Locally: 5 passed. |
 | every merge marked `playbook-union` | `.playbook/known-issues.md`, `.playbook/lessons-learned.md` | all | Union of both sides with `git merge-file --union`. These are append-only logs, so no entry is dropped. |
 
 ## Regression on this branch
