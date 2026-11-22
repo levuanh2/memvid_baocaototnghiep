@@ -563,7 +563,7 @@ export default function StudyMapView() {
               fontWeight: m.weight,
               fill: "var(--text-primary)",
               // Viền cùng màu nền vẽ TRƯỚC chữ = quầng che nét link cắt ngang.
-              fontFamily: 'Aptos, -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif',
+              fontFamily: "var(--font-display)",
               paintOrder: "stroke",
               stroke: "var(--bg-card)",
               strokeWidth: 3.5,

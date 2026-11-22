@@ -73,7 +73,9 @@ describe("shared four-tier map visual grammar", () => {
   it("uses shared tokens and scopes the lattice away from the export sandbox", () => {
     expect(studySource).toContain("var(--bg-base)");
     expect(studySource).toContain("var(--border-strong), transparent 68%");
-    expect(studySource).toContain('fontFamily: \'Aptos, -apple-system');
+    // V9.3: the study map and the mind map share the one app family through the token.
+    expect(studySource).toContain('fontFamily: "var(--font-display)"');
+    expect(mindMapCss).toContain("font-family: var(--font-display)");
     expect(mindMapCss).toContain("background: var(--accent-cta) !important");
 
     const latticeRule = mindMapCss.match(/\.mm-canvas-wrap\s*\{[^}]*radial-gradient[^}]*\}/s)?.[0] || "";
