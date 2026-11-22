@@ -8738,3 +8738,21 @@ closing surface, already existed).
 opening it focuses its first control.
 
 **Regression:** `e2e-fixture/workspace-drawer-focus.spec.js` (red before: focus not inside).
+
+### Study page titles shrank to "K…" on phones (2026-11-15)
+
+**Symptoms:** at 390px the quiz result header showed its title as one letter and an
+ellipsis next to "Kế hoạch ôn tập (2 chủ đề)"; at 320px the title was 0px wide.
+
+**Root cause:** `StudyShell`'s default header was one non-wrapping flex row with the title
+at `min-w-0` and the actions `shrink-0`: the actions kept their width and the title absorbed
+the whole shortage.
+
+**Fix:** the default header wraps (`flex-wrap`) and the title keeps
+`min-w-[min(100%,13rem)]`, so the actions move to a second row instead.
+
+**Regression:** `e2e-fixture/quiz-review-v6.spec.js` per-width test asserts a readable title
+width (red before: 0px at 320, "K…" at 390).
+
+**Prevention:** in a row with fixed-width actions give the text a minimum width and let the
+row wrap; `min-w-0` alone lets it collapse to nothing.
