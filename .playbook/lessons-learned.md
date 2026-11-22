@@ -3728,3 +3728,9 @@ Also check who fetches. If the only component that loads a list can be unmounted
 ## 2026-11-11 — `disabled={busy}` is not a lock
 
 A disabled attribute driven by state protects against the second click only after React has committed. Two activations in one tick (a double click, Enter held, a duplicated event) both run the handler. Any handler that starts a job, submits a graded attempt, writes, or downloads needs a synchronous lock: a ref checked and set before the first `await`, cleared in `finally`. Test it by firing two clicks inside one `act`.
+## 2026-11-13 — Removing the container does not clean up a portal
+
+A test that only detaches its container leaves every portal (dialogs, toasts, menus) mounted in
+`document.body`, and a later test's `document.body.querySelector` finds the leftover. It hides
+while tests run in file order and shows up only under `--sequence.shuffle`. Always unmount the
+React root in `afterEach`; to check a file for order dependence, run it with a few shuffle seeds.

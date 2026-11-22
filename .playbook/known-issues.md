@@ -8175,3 +8175,22 @@ asked for. Split the two: drop the UI effects, keep the durable ones.
 **Also fixed (review):** a practice job that finished without a `quiz_id` left `practiceFor` set, so every practice button stayed disabled until a reload. `onDone` now reports the error and unlocks (`ReviewGuide.practiceJobWithoutQuiz.test.jsx`).
 
 **Not changed:** the backend still accepts duplicate requests; these mutations are not idempotent server-side.
+### Guided Mind Map dialog test failed when its two tests ran in reverse order (2026-11-13)
+
+**Symptoms:** `SidebarRight.guidedDialogClose.test.jsx` "stays open while the create request is in
+flight (queued path)" failed with `expected <form role="dialog" …> to be falsy` under
+`--sequence.shuffle` (full suite seeds 61201 and 61202; the file alone with seed 61201). Unshuffled
+order and seeds 1 and 2 passed. CI does not shuffle, so CI never saw it.
+
+**Root cause:** the test created a React root per test but never unmounted it; `afterEach` only
+removed `container`. `GuidedMindmapDialog` portals onto `document.body`, so detaching `container`
+leaves the dialog mounted. When the failure test runs first, its dialog stays open (by design), and
+the queued test's `document.body.querySelector('[role="dialog"]')` then finds that stale dialog.
+
+**Fix:** keep the root in a module variable and `act(() => root.unmount())` in `afterEach`.
+
+**Regression:** the same file with `--sequence.shuffle --sequence.seed=61201` (red before, green
+after; seeds 61202, 1, 2 and unshuffled also green).
+
+**Prevention:** a test that mounts a component which portals to `document.body` must unmount its
+root; removing the container is not cleanup.
