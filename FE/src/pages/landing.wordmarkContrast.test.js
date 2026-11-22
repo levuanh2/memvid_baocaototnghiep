@@ -32,9 +32,9 @@ function contrast(a, b) {
 
 describe("landing wordmark brand text contrast", () => {
   it.each([
-    ["light", "#F1333A"],
-    ["dark", "#D86A53"],
-  ])("keeps the seal unchanged and gives %s brand text 4.5:1 against the header", (theme, seal) => {
+    ["light", "#765300"],
+    ["dark", "#F4D178"],
+  ])("keeps the V9.3 seal and gives %s brand text 4.5:1 against the header", (theme, seal) => {
     const block = themeBlock(theme);
     expect(token(block, "seal").toUpperCase()).toBe(seal);
     expect(contrast(token(block, "brand-text"), token(block, "bg-sidebar"))).toBeGreaterThanOrEqual(4.5);
