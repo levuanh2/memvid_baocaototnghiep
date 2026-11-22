@@ -32,12 +32,12 @@ describe("StudyMap brand mark", () => {
     expect(faviconSvg.replace(/\r\n/g, "\n")).toBe(markSvg.replace(/\r\n/g, "\n"));
   });
 
-  it("static icon and component share geometry, and the static tile is the light --seal", () => {
+  it("static icon and component share geometry, and the static tile is the --brand gold", () => {
     // Static SVG files cannot read CSS variables: their tile is pinned to the light theme value.
     // (`index.css?raw` is empty under Vitest's CSS handling, so read the file.)
-    const lightSeal = fs.readFileSync("src/index.css", "utf8").match(/--seal:\s*(#[0-9A-Fa-f]{6})/)[1];
+    const lightSeal = fs.readFileSync("src/index.css", "utf8").match(/--brand:\s*(#[0-9A-Fa-f]{6})/)[1];
     expect(markSvg).toContain(`<rect x="2" y="2" width="60" height="60" rx="15" fill="${lightSeal}" />`);
-    expect(markSource).toContain(`fill="var(--seal, ${lightSeal})"`);
+    expect(markSource).toContain(`fill="var(--brand, ${lightSeal})"`);
     const shapes = (s) => [...s.matchAll(/ (?:d|cx|cy|r|rx|viewBox)="[^"]+"/g)].map((m) => m[0]).join("");
     expect(shapes(markSource)).toBe(shapes(markSvg));
   });
