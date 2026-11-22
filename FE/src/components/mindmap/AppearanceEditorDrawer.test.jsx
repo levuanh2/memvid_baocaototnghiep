@@ -174,3 +174,16 @@ describe("AppearanceEditorDrawer — Apply persists and keeps the preview", () =
     expect(rootEl.style.cssText).toBe(baseline);
   });
 });
+
+// V6 (bug hunt #10): two clicks before `saving` commits sent two competing PATCH requests.
+describe("AppearanceEditorDrawer — Apply is locked synchronously", () => {
+  it("a double click in one tick sends one PATCH", async () => {
+    const patchSpy = vi.spyOn(api, "patchMindmapAppearance").mockResolvedValue({ appearance: { version: 2, preset: "study", overrides: {} }, updated_at: "now" });
+    const onClose = vi.fn();
+    const { dialog } = await renderDrawer({ onClose, mapId: "map-7" });
+    const applyBtn = [...dialog.querySelectorAll("button")].find((b) => b.textContent === "Áp dụng");
+    await act(async () => { applyBtn.click(); applyBtn.click(); });
+    expect(patchSpy).toHaveBeenCalledTimes(1);
+    expect(onClose).toHaveBeenCalledTimes(1);
+  });
+});

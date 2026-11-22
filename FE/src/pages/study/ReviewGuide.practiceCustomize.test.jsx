@@ -139,3 +139,15 @@ describe("ReviewGuide practice actions", () => {
     expect(container.textContent).toContain("Đang soạn câu luyện tập");
   });
 });
+
+// V6 (bug hunt #5): `practiceFor` is state, so two clicks in one tick both read the old value.
+describe("ReviewGuide practice start is locked synchronously", () => {
+  it("a double click on Luyện ngay starts one practice job", async () => {
+    generatePractice.mockResolvedValue({ job_id: "job-1" });
+    await renderReady();
+    const button = byText("Luyện ngay");
+    await act(async () => { button.click(); button.click(); });
+    await act(async () => { await Promise.resolve(); });
+    expect(generatePractice).toHaveBeenCalledTimes(1);
+  });
+});

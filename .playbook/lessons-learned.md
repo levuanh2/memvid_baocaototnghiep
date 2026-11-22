@@ -3725,3 +3725,6 @@ the branding test, so describe it without naming it.
 An empty array is what a list looks like before it loads, after it fails, and when it is truly empty. Any screen that draws an empty state from `list.length === 0` alone is making a claim about the user's data that it cannot back. Keep the load state next to the list ("loading" / "ready" / "error") and let only "ready and empty" say "you have nothing".
 
 Also check who fetches. If the only component that loads a list can be unmounted by a layout choice (a collapsed panel, a breakpoint), every consumer of that list silently sees "empty" in that layout. Test the collapsed and narrow layouts with a non-empty backend.
+## 2026-11-11 — `disabled={busy}` is not a lock
+
+A disabled attribute driven by state protects against the second click only after React has committed. Two activations in one tick (a double click, Enter held, a duplicated event) both run the handler. Any handler that starts a job, submits a graded attempt, writes, or downloads needs a synchronous lock: a ref checked and set before the first `await`, cleared in `finally`. Test it by firing two clicks inside one `act`.

@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useState, useRef } from "react";
 import { Link, useNavigate, useParams } from "react-router-dom";
 import StudyShell, { EmptyState } from "../../components/study/StudyShell";
 import SealMeter from "../../components/study/SealMeter";
@@ -37,7 +37,11 @@ export default function ReviewGuide() {
 
   const job = useStudyJob({
     onDone: (result) => {
-      if (result?.quiz_id) navigate(`/app/study/practice/${result.quiz_id}`);
+      if (result?.quiz_id) { navigate(`/app/study/practice/${result.quiz_id}`); return; }
+      // Finished without a quiz: there is nowhere to go. Say so and unlock, or `practiceFor`
+      // keeps every practice button disabled until a reload.
+      setError("Bài luyện tập đã tạo xong nhưng máy chủ không trả về mã bài. Thử lại.");
+      setPracticeFor(null);
     },
   });
 
@@ -76,11 +80,15 @@ export default function ReviewGuide() {
   // `config` defaults to the exact prior hardcoded body ("Luyện ngay"); the
   // Customize dialog calls this with a user-built config instead. Either way
   // it's the same job-start path, so job/error handling doesn't fork.
+  const practiceStartingRef = useRef(false);
   const practise = async (item, config = PRACTICE_QUICK_DEFAULTS) => {
     // Cờ đặt TRƯỚC await và nút đọc chính cờ này, không đọc `job.running`: `job.jobId`
     // chỉ có SAU khi 202 về, nên giữa lúc bấm và lúc đó nút vẫn bấm được và mỗi lần bấm
     // là một job luyện tập nữa tranh 1 slot LLM. Đúng lỗi Q1 vòng 7, chưa vá ở đây.
-    if (practiceFor) return;
+    // The ref is the lock: `practiceFor` is state, so two clicks in the same tick both read the
+    // old value and both start a job. Released only where `practiceFor` is reset below.
+    if (practiceFor || practiceStartingRef.current) return;
+    practiceStartingRef.current = true;
     setPracticeFor(item.review_item_id);
     setCustomizeItem(null);
     setError(null);
@@ -94,6 +102,9 @@ export default function ReviewGuide() {
     } catch (e) {
       setError(moTaLoi(e, "Không tạo được câu luyện tập."));
       setPracticeFor(null);
+    } finally {
+      // From here `practiceFor` (already committed) or the running job holds the lock.
+      practiceStartingRef.current = false;
     }
   };
 

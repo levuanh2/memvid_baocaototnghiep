@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useState, useRef } from "react";
 import { Link, useParams } from "react-router-dom";
 import StudyShell from "../../components/study/StudyShell";
 import SealMeter from "../../components/study/SealMeter";
@@ -55,7 +55,12 @@ export default function Practice() {
     [questions, answers],
   );
 
+  // `disabled={submitting}` is state: a double click in one tick passes it twice and grades the
+  // practice twice. The ref locks synchronously (same pattern as QuizTaking).
+  const submittingRef = useRef(false);
   const onSubmit = async () => {
+    if (submittingRef.current) return;
+    submittingRef.current = true;
     setSubmitting(true);
     setError(null);
     try {
@@ -72,6 +77,7 @@ export default function Practice() {
     } catch (e) {
       setError(moTaLoi(e, "Nộp bài luyện tập thất bại."));
     } finally {
+      submittingRef.current = false;
       setSubmitting(false);
     }
   };
