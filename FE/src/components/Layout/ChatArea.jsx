@@ -107,7 +107,7 @@ function AnswerProse({ content, mdComponents, dropCap = false }) {
 }
 
 export default function ChatArea({
-  selectedSources, sources = [], onEvidence, highlight, onHighlight, onOpenLeft, onOpenEvidence, evidenceCount = 0, askAboutDraft,
+  selectedSources, sources = [], sourcesState = "ready", onEvidence, highlight, onHighlight, onOpenLeft, onOpenEvidence, evidenceCount = 0, askAboutDraft,
   // Feature Pack B (Cross Navigation) — Chat -> Summary. `hasSummary` gates a
   // real link, never a dead one; `onOpenSummary` reuses MainLayout's existing
   // workspaceMode switch (same shape as the pre-existing `onSwitchToChat`).
@@ -915,7 +915,15 @@ export default function ChatArea({
             <h1 className="font-display text-[26px] sm:text-[30px] leading-[1.2] font-semibold text-text-primary mb-3">
               Hỏi tài liệu của bạn — <span className="text-seal">kèm dẫn chứng</span>.
             </h1>
-            {sources.length === 0 && !selectedSources?.length ? (
+            {sources.length === 0 && !selectedSources?.length && sourcesState !== "ready" ? (
+              // The list has not answered (or failed): the library is not known to be empty, so
+              // neither "upload your first document" nor "choose a document" is true yet.
+              <p className="font-display text-body-lg text-text-secondary mb-6" role="status">
+                {sourcesState === "error"
+                  ? "Chưa tải được danh sách tài liệu. Thử lại ở thư mục nguồn."
+                  : "Đang tải danh sách tài liệu…"}
+              </p>
+            ) : sources.length === 0 && !selectedSources?.length ? (
               // W1-4: nothing uploaded yet -- "chọn tài liệu" has nothing to
               // select, so the one primary action is to upload, reusing the
               // exact same handler/input SidebarLeft's own "Tải tài liệu lên"

@@ -8120,3 +8120,45 @@ off-screen button then matches the same role+name as the visible CTA.
 **Prevention:** hiding by transform, width, opacity or pointer-events is visual only; anything
 that stays mounted while hidden needs `inert`. Label tests should match the bare text, not one
 quoting style.
+
+### The app said "no documents" before it knew, and for as long as the source panel was collapsed (V6, 2026-11-11)
+
+**Seen on the live site:** an account with 4 documents opened `/app` and got "0 tài liệu", "Chưa có tài liệu nào" and the chat's "Tải tài liệu đầu tiên lên" call to action until `/list-indexed` answered (several seconds).
+
+**Root cause:** two states were drawn as one. `sources.length === 0` meant both "the list answered and is empty" and "the list has not answered". Separately, only `SidebarLeft` fetched `/list-indexed`, and a collapsed desktop panel renders `PanelSpine` instead of `SidebarLeft`, so with a collapsed panel nothing fetched at all: the spine had no count and the chat kept offering a first upload.
+
+**Fix:** `MainLayout` keeps `sourcesState` ("loading" / "ready" / "error"), set by `SidebarLeft` through `onSourcesSettled`. The panel shows "Đang tải danh sách tài liệu…" until the first answer; the chat shows the same line (or the load error) and offers the first-upload action only when the state is "ready" and the list is empty. While the panel is collapsed and the list is still unknown, `MainLayout` fetches `/list-indexed` once.
+
+**Regression:** `FE/e2e-fixture/source-loading-state.spec.js` (slow list, empty list, collapsed panel, failed list). Red before the fix: 3 of 4.
+
+**Not changed:** `SidebarLeft` still owns the list after it mounts; a failed load still keeps the previous rows.
+
+### Upload finishing after the source panel was gone started an orphan poller; Escape dropped focus (V6 bug hunt #2, #15, 2026-11-12)
+
+**Symptoms.** (a) Start an upload, then collapse the source panel or cross 768px / 1280px before
+`POST /upload` answers: the late answer created a status poller no cleanup owned and called
+setters on the dead panel; a finished source's 500 ms list refresh also fired after unmount.
+(b) Escape in the advanced-filter popover or in a source's menu removed the focused element
+and focus fell to `<body>`.
+
+**Root causes.** (a) The unmount cleanup in `SidebarLeft.jsx` stops pollers that exist at that
+moment; `handleAddFiles` created its poller after an await without asking whether the panel
+was still mounted, and the refresh `setTimeout` was never stored. (b) The Escape handlers
+only closed the surface; neither kept a ref to its trigger.
+
+**Fix.** (a) `conSongRef` (from the W1 fix) is checked after each await in the upload loop; the
+poller is never created for an unmounted panel; the refresh timer lives in a ref and is cleared
+on unmount. A file the server accepted after unmount is still remembered with `nhoNguon`, and
+the rest of a multi-file batch still uploads: the first version of this fix returned early and
+lost both. (b) Refs to the filter trigger and to each source's menu trigger; Escape closes and
+focuses the trigger. Written by Codex in a shared worktree; the remember/continue part was
+added in review.
+
+**Regression tests.** `SidebarLeft.orphanUploadPoller.test.jsx` (2) and
+`SidebarLeft.popoverFocus.test.jsx` (2); all four failed before the fix.
+
+**Not covered.** Outside-click and the explicit close button keep their old focus behaviour.
+The upload request is not aborted on unmount (on purpose: the file should still arrive).
+
+**Prevention.** "Stop when unmounted" is right for state and pollers, wrong for work the user
+asked for. Split the two: drop the UI effects, keep the durable ones.

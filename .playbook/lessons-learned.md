@@ -3719,3 +3719,9 @@ Rules: check icons and logos when a rename is reported incomplete; serve a chang
 new URL (browsers cache favicons per URL); a static SVG cannot read CSS variables, so pin its
 colour to the token value and test that they stay equal; comments quoting the retired name trip
 the branding test, so describe it without naming it.
+
+## 2026-11-11 — "Empty" is a result, not a default
+
+An empty array is what a list looks like before it loads, after it fails, and when it is truly empty. Any screen that draws an empty state from `list.length === 0` alone is making a claim about the user's data that it cannot back. Keep the load state next to the list ("loading" / "ready" / "error") and let only "ready and empty" say "you have nothing".
+
+Also check who fetches. If the only component that loads a list can be unmounted by a layout choice (a collapsed panel, a breakpoint), every consumer of that list silently sees "empty" in that layout. Test the collapsed and narrow layouts with a non-empty backend.
