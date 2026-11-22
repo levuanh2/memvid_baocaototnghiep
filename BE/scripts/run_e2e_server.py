@@ -66,6 +66,21 @@ os.environ.setdefault("DATABASE_URL", "postgresql://postgres:postgres@localhost:
 for _name in ("GEMINI_API_KEY", "GROQ_API_KEY", "FPT_AI_API_KEY", "COHERE_API_KEY",
               "SUPABASE_URL", "SUPABASE_SECRET_KEY"):
     os.environ[_name] = ""
+# Playwright hands the whole shell environment to this server, so a DATABASE_URL left in
+# the shell wins over the default above. E2E writes accounts, documents and attempts:
+# only a local database named *_test may receive them (Codex task39 191-1). No password
+# is printed.
+from urllib.parse import urlsplit
+_db = urlsplit(os.environ["DATABASE_URL"])
+_db_name = _db.path.lstrip("/")
+if _db.hostname not in {"localhost", "127.0.0.1", "::1"} or not _db_name.endswith("_test"):
+    sys.exit(f"[run_e2e_server] refusing DATABASE_URL (host={_db.hostname}, "
+             f"database={_db_name}): E2E needs a local database whose name ends in _test")
+# No .env (integration of #187 + #191: the provider and bucket keys above are emptied,
+# and .env is skipped as well): popping a variable makes it "missing", which is exactly when
+# load_project_env(override=False) in app.main fills it from BE/.env, bringing back a
+# developer's real store paths or provider keys (Codex task39 191-2). CI has no .env.
+os.environ["SKIP_DOTENV"] = "1"
 os.environ.setdefault("QUEUE_ENABLED", "")
 
 # Only a disposable database: the same test-target rule as migrations (loopback or CI
@@ -89,8 +104,19 @@ except MigrationTargetRejected as _exc:
     raise SystemExit(2)
 
 import tempfile
-data_dir = os.environ.get("DATA_DIR") or tempfile.mkdtemp(prefix="memvid_e2e_")
+# Every start gets new, empty stores (issue 19, 2026-11-17). A DATA_DIR from the caller
+# is only the PARENT of a fresh directory, never reused as is; every store path is set
+# inside it, overriding the shell and any .env, so a second local run cannot see the
+# first run's maps, and nothing can point this server at real data. Without MEMORY_DIR
+# the map and summary stores fell back to BE/memory/ in the checkout.
+data_dir = tempfile.mkdtemp(prefix="memvid_e2e_", dir=os.environ.get("DATA_DIR") or None)
 os.environ["DATA_DIR"] = data_dir
+for _name, _sub in (("MEMORY_DIR", "memory"), ("INDEX_DIR", "index"),
+                    ("MD_DIR", "cleaned_md"), ("INPUT_DOCS_DIR", "input_docs")):
+    os.environ[_name] = str(Path(data_dir) / _sub)
+for _name in ("MINDMAPS_DB_PATH", "SUMMARIES_DB_PATH", "CONVERSATIONS_DB_PATH",
+              "JOBS_DB_PATH", "LOG_DB_PATH", "USAGE_DB_PATH"):
+    os.environ.pop(_name, None)   # file overrides: each store then derives from the above
 
 FORCE_FAIL_MARKER = os.environ.get("E2E_FORCE_FAIL_MARKER", "__E2E_FORCE_FAIL__")
 # E2E_PRACTICE_AI_STUB defaults off. When enabled it replaces only the

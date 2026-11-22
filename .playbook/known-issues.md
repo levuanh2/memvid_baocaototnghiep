@@ -8315,3 +8315,44 @@ deadline is re-read after the client is built (building takes time too).
 
 **Regression:** `tests/test_llm_deadlines.py` (15; red on `main` `db005ab` or on the
 previous PR head for the follow-up).
+# Local E2E runs shared the checkout's map and summary stores (fixed 2026-11-18)
+
+**Symptom:** a second local Playwright run against `BE/scripts/run_e2e_server.py` failed
+`critical-flows` "A1 zero maps": the page showed a map from the previous run (open auth
+shares one anonymous owner). CI never saw it (fresh checkout per run). Found while
+validating integration trial 11 (#159 item 19).
+
+**Root cause:** the server made a temporary `DATA_DIR` but never set `MEMORY_DIR`; the
+mind map and summary SQLite stores (and the export output directory) fall back to
+`BE/memory/` in the checkout, which outlives the server. A `DATA_DIR` given by the caller
+was reused as is, and a `MEMORY_DIR` or `*_DB_PATH` left in the shell or `.env` could
+point the server at real data.
+
+**Fix:** every start creates a new directory (`mkdtemp`, inside the caller's `DATA_DIR`
+when given) and sets `MEMORY_DIR`, `INDEX_DIR`, `MD_DIR`, `INPUT_DOCS_DIR` inside it,
+overriding the environment; the `*_DB_PATH` file overrides are removed so every store
+derives from that directory. No production code changed.
+
+**Regression:** `BE/tests/test_e2e_server_isolation.py` (4 tests, red before the fix):
+stores inside the server's directory and never under `BE/memory`; two starts never share
+a directory; a given `DATA_DIR` is only a parent; shell paths cannot leak in. Two
+consecutive local `critical-flows` runs without any directory set: 20/20 passed both
+times, `BE/memory` never created.
+
+**Prevention:** a test harness that writes durable state must own every path that state
+can land on, and set them explicitly instead of relying on defaults that point into the
+checkout.
+
+**Review fixes (Codex task39, 2026-11-18):**
+- *A shell DATABASE_URL won.* `setdefault` kept whatever DATABASE_URL the shell had, and
+  Playwright passes the whole environment to the server, so a developer's real database
+  could receive E2E writes. The server now stops unless the URL is a local host
+  (localhost / 127.0.0.1 / ::1) and the database name ends in `_test`; the password is
+  never printed.
+- *.env brought popped values back.* Popping `*_DB_PATH` (and provider keys) made them
+  "missing", which is exactly when `load_project_env(override=False)` in `app.main` fills
+  them from `BE/.env`. The server now sets `SKIP_DOTENV=1`, as CI effectively runs.
+
+**Regression:** `BE/tests/test_e2e_server_isolation.py` +2 (a developer's .env cannot
+bring back real store paths or keys; a non-local or non-`_test` database is refused),
+both red first.
