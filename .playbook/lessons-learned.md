@@ -3742,3 +3742,11 @@ production target, live check); pytest, the guided job store and the E2E server 
 a weaker one or none. Put the rule in one function and call it from every entry point
 that opens a connection in a test or dev run. And `os.environ.pop` does not keep a value
 out: `load_dotenv` fills every absent variable from `.env`; set it to `""` instead.
+
+## 2026-11-17 — `fut.result(timeout)` inside `with ThreadPoolExecutor` is not a timeout
+
+The context manager's exit waits for the worker, so the caller blocks until the call ends
+anyway. If a timeout matters, shut the executor down without waiting, give every client
+library its own transport timeout (check the field really exists in the installed
+version: an unknown keyword may be silently ignored), share one deadline across retries
+and fallbacks, and never claim the provider stopped working: Python cannot cancel it.

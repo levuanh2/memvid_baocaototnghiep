@@ -8276,3 +8276,42 @@ right after the env files load, refuses to start when `PROCESS_ROLE` is not `web
 `STUDYMAP_ALLOW_REMOTE_TARGETS=1` after the fingerprint check. No new production variable:
 `docker-compose.prod.yml` already sets `PROCESS_ROLE` on both services. Skipped under pytest.
 **Regression:** `tests/test_dev_target_guard.py` (13).
+## LLM timeouts were not deadlines (fixed 2026-11-17, Draft PR "LLM deadlines")
+
+**Root cause (Codex task28 audit, reproduced with fake providers):**
+- `_invoke_chat` wrapped the call in `with ThreadPoolExecutor(...)`. After
+  `fut.result(timeout)` raised, `__exit__` waited for the worker, so the caller got control
+  back only when the provider finished. A 1 s deadline over four hanging fakes took 12 s.
+- Ollama had no HTTP timeout: `ask_ai` and `ProviderPool.ask` never passed one, and the
+  builder's `ChatOllama(timeout=...)` is not a field in langchain-ollama 0.3.x: silently
+  ignored, the httpx client kept `Timeout(None)`. The code comment claimed otherwise.
+- Gemini and Groq got no timeout; their SDK retries (6 attempts with 600 s GAPIC deadlines,
+  3 attempts with 60 s reads) ran inside the call.
+- Every provider in the fallback chain got a fresh full timeout.
+
+**Fix:** `timeout` keeps its meaning (per provider) but is now a real limit; the opt-in
+`total_timeout` is one deadline for the whole `ask_ai` / `ProviderPool.ask` operation
+(`_Deadline`): each provider gets min(timeout, what is left), none starts after it is
+spent. Only grading uses it (its claim lease must outlast one grading call); applying it
+to every caller would let a slow first provider (quiz: 900 s Ollama) leave no time for
+the fallback, a behaviour change for unrelated callers (owner's side-agent note).
+`_invoke_chat` returns at the deadline (`shutdown(wait=False, cancel_futures=True)`).
+Ollama gets `client_kwargs={"timeout": httpx.Timeout(budget, connect<=10)}`; Gemini
+`timeout` + `max_retries=1`; Groq `timeout` + `max_retries=0`; FPT `(connect<=10, read)`.
+No `timeout` = exactly the old behaviour (no executor, SDK defaults).
+
+**Limit, stated plainly:** a request already sent is not cancelled at the provider. The
+worker thread keeps running until the HTTP client's own timeout ends it, and the provider
+may still finish and bill the call. Only the gRPC gateway path has a real client deadline,
+and even there the server keeps working after the client gives up.
+
+**Follow-up (Codex task30 review):** a timed-out call keeps running in its thread, so
+releasing the in-process slot at the deadline let N timeouts become N concurrent model
+calls above `MAX_CONCURRENT_LLM_CALLS` (before the PR the executor's blocking exit had
+kept the slot held). Now the orphan owns its slot until the call really ends (`_Slot`,
+released in a done-callback); a fallback provider takes its own slot, waiting at most
+what is left. A late success is still usage-accounted (`late_after_timeout`). The total
+deadline is re-read after the client is built (building takes time too).
+
+**Regression:** `tests/test_llm_deadlines.py` (15; red on `main` `db005ab` or on the
+previous PR head for the follow-up).
