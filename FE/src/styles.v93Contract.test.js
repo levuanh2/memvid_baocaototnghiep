@@ -113,7 +113,8 @@ describe("V9.3 consumers", () => {
       for (const block of stripComments(read(f)).split("}")) {
         const [sel, body = ""] = block.split("{");
         if (!/:focus-visible/.test(sel) || !/outline:\s*(none|0)\b/.test(body)) continue;
-        if (/box-shadow|outline-color|border-color/.test(body)) continue;
+        // A 1px border-color change is not a focus indicator (agy recheck2): only a box-shadow ring counts.
+        if (/box-shadow/.test(body)) continue;
         if (RING_ON_CHILD.some((s) => sel.includes(s))) continue;
         bad.push(`${f}: ${sel.trim().slice(0, 80)}`);
       }

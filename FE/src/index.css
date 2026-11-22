@@ -17,7 +17,11 @@
      its paired foreground; --seal = citation/wordmark; --warn = warning only (never the
      action colour); --forest/--ok = success; --err = danger; --focus = the focus ring. */
   :root {
-    --bg-base:     #F6F7F2;    --bg-sidebar:  #FFFFFF;    --bg-card:     #FFFFFF;    --bg-elevated: #F0F2EB;    --bg-panel:    #FFFFFF;
+    --bg-base:     #F6F7F2;
+    --bg-sidebar:  #FFFFFF;
+    --bg-card:     #FFFFFF;
+    --bg-elevated: #F0F2EB;
+    --bg-panel:    #FFFFFF;
     --bg-hover:    #F0F2EB;
     --text-primary:   #20211D;
     --text-secondary: #62665B;
@@ -27,9 +31,13 @@
     --border-color:  #DEDFD6;
     --border-strong: #B8BCAE;
 
-    --accent:        #765300;    --accent-hover:  #5C4100;    --accent-subtle: #FFF3CF;    --accent-cta:       #20231B;
+    --accent:        #765300;
+    --accent-hover:  #5C4100;
+    --accent-subtle: #FFF3CF;
+    --accent-cta:       #20231B;
     --accent-cta-hover: #393E30;
-    --brand-rgb:     118 83 0;    --ink-rgb:       32 33 29;
+    --brand-rgb:     118 83 0;
+    --ink-rgb:       32 33 29;
     --slate:         #62665B;
 
     --font-display: 'Be Vietnam Pro', system-ui, sans-serif;
@@ -38,7 +46,9 @@
     --seal: #765300;
     --brand-text: #765300;
 
-    --forest-rgb: 36 99 72;    --bronze-rgb: 118 83 0;    --forest: #246348;
+    --forest-rgb: 36 99 72;
+    --bronze-rgb: 118 83 0;
+    --forest: #246348;
     --bronze: #765300;
 
     --surface-contrast:        #20211D;
@@ -50,7 +60,11 @@
     --contrast-input-bg:       #181915;
     --contrast-focus:          #F4C44E;
 
-    --ok:    #246348;    --ok-bg: #EDF6EF;    --warn: #8A4512;    --err:  #9D392E;    --quiz-status-correct: #246348;
+    --ok:    #246348;
+    --ok-bg: #EDF6EF;
+    --warn: #8A4512;
+    --err:  #9D392E;
+    --quiz-status-correct: #246348;
     --quiz-status-partial: #8A4512;
     --quiz-status-incorrect: #9D392E;
     --quiz-status-processing: #62665B;
@@ -95,7 +109,9 @@
     --seal: #F4D178;
     --brand-text: #F4D178;
 
-    --forest-rgb: 182 223 196;    --bronze-rgb: 244 209 120;    --forest: #B6DFC4;
+    --forest-rgb: 182 223 196;
+    --bronze-rgb: 244 209 120;
+    --forest: #B6DFC4;
     --bronze: #F4D178;
 
     --ok:    #B6DFC4;
@@ -979,7 +995,7 @@
   font-size: 12px; font-weight: 600;
 }
 .study-tools-trigger:hover, .study-tools-trigger:focus-visible {
-  color: var(--text-primary); border-color: var(--accent); outline: none;
+  color: var(--text-primary); border-color: var(--accent);
 }
 .mode-library-menu, .study-tools-menu {
   position: absolute; z-index: 70; top: calc(100% + 8px); right: 0;
