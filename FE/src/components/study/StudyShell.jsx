@@ -1,7 +1,9 @@
-import { Link } from "react-router-dom";
+import { useEffect, useRef } from "react";
+import { Link, useLocation } from "react-router-dom";
 import { Icon } from "../ui/Icon";
 import Spinner from "../ui/Spinner";
 import StudyBreadcrumb from "./StudyBreadcrumb";
+import AppNav from "./AppNav";
 
 /**
  * Khung chung cho các trang StudyMap.
@@ -40,8 +42,18 @@ export default function StudyShell({
     ? "flex w-full flex-col items-stretch gap-2 md:w-auto md:flex-row md:items-center"
     : "flex items-center gap-2";
 
+  // V9.3 (docs 03): after a route change, focus goes to main, unless the page already
+  // placed it (a quiz focuses its question): only when it fell to body.
+  const mainRef = useRef(null);
+  const { pathname } = useLocation();
+  useEffect(() => {
+    const active = document.activeElement;
+    if (!active || active === document.body) mainRef.current?.focus({ preventScroll: true });
+  }, [pathname]);
+
   return (
-    <div className="min-h-screen overflow-y-auto" style={{ background: "var(--bg-base)" }}>
+    <div className="study-shell min-h-screen overflow-y-auto" style={{ background: "var(--bg-base)" }}>
+      <a href="#main-content" className="skip-link">Bỏ qua đến nội dung chính</a>
       <header
         className="sticky top-0 z-20 border-b transition-theme"
         style={{ background: "var(--bg-sidebar)", borderColor: "var(--border-color)" }}
@@ -70,7 +82,8 @@ export default function StudyShell({
         <StudyBreadcrumb className={`${width} mx-auto px-5 pb-2.5`} documentLabel={breadcrumbDocumentLabel} />
       </header>
 
-      <main className={`${width} mx-auto px-5 py-7`}>
+      <main id="main-content" ref={mainRef} tabIndex={-1} aria-busy={loading || undefined}
+        className={`app-main ${width} mx-auto px-5 py-7`}>
         {subtitle && <p className="text-body text-text-secondary mb-6">{subtitle}</p>}
 
         {loading ? (
@@ -84,7 +97,7 @@ export default function StudyShell({
           )
         ) : error ? (
           <div className="surface-card flex flex-col items-start gap-3">
-            <div className="flex items-center gap-2 text-body" style={{ color: "var(--err)" }}>
+            <div role="alert" className="flex items-center gap-2 text-body" style={{ color: "var(--err)" }}>
               <Icon name="AlertCircle" size={15} /> {error}
             </div>
             {onRetry && (
@@ -97,6 +110,7 @@ export default function StudyShell({
           children
         )}
       </main>
+      <AppNav />
     </div>
   );
 }

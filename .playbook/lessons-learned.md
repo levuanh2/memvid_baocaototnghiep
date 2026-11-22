@@ -3952,3 +3952,12 @@ warning got its own value; blue and retired fonts replaced by tokens. Regression
 scans CSS and inline styles for light literals on token fills, legacy blue, retired fonts,
 2px accent rings and 44px buttons squeezed into `h-8/9/10`. Prevention: before remapping a
 token, grep every consumer of it and of literal foregrounds near it, and keep the scan test.
+
+## A mobile nav mounted in one shell vanishes on the page it links to (V9.3 P1b, 2026-11-22)
+
+The first P1b bottom nav lived only in `StudyShell`, so tapping "Học tập" opened the
+Workspace (`MainLayout`, its own shell) and the nav disappeared. Every destination a
+global nav links to must render that nav too: `MainLayout` now mounts `AppNavBar`
+in its flex column (`--inflow`, not fixed, so it never covers the chat composer),
+and `MainLayout.v93Shell.test.jsx` pins it with "Học tập" as `aria-current`.
+Screenshots measure the composer bottom against the nav top at 390/640px.
