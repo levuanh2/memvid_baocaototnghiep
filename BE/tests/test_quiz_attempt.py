@@ -9,6 +9,7 @@ import uuid
 import pytest
 
 from app.domains.attempts.grading import grade_objective, totals
+from tests._owner_db import owner_session_scope  # clean-up as the table owner
 
 
 # ── chấm khách quan: thuần, không DB ────────────────────────────────────────
@@ -65,7 +66,7 @@ def owner():
 
     u = users_store.create_user(f"att_{uuid.uuid4().hex[:8]}@example.com", "password123")
     yield u["user_id"]
-    with session_scope() as s:
+    with owner_session_scope() as s:
         row = s.get(User, u["user_id"])
         if row is not None:
             s.delete(row)

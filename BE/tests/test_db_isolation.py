@@ -183,6 +183,7 @@ def test_ngoai_pytest_thieu_DATABASE_URL_van_nem_nhu_cu(monkeypatch):
 def test_van_doi_driver_psycopg(monkeypatch):
     """`postgresql://` mặc định là psycopg2 (chưa cài) — luật cũ không được mất."""
     monkeypatch.setenv("TEST_DATABASE_URL", TEST_RIENG)
+    monkeypatch.delenv("TEST_MIGRATION_DATABASE_URL", raising=False)
     monkeypatch.delenv("DATABASE_URL", raising=False)
     assert appdb.database_url().startswith("postgresql+psycopg://")
 
@@ -192,6 +193,7 @@ def test_setup_test_db_tu_choi_khi_thieu_bien(monkeypatch):
     from scripts.setup_test_db import kiem_hang_rao
 
     monkeypatch.delenv("TEST_DATABASE_URL", raising=False)
+    monkeypatch.delenv("TEST_MIGRATION_DATABASE_URL", raising=False)
     ok, msg = kiem_hang_rao()
     assert ok is False and "TEST_DATABASE_URL" in msg
 
@@ -201,6 +203,7 @@ def test_setup_test_db_tu_choi_khi_cung_dich(monkeypatch):
 
     monkeypatch.setenv("DATABASE_URL", PROD)
     monkeypatch.setenv("TEST_DATABASE_URL", PROD_KHAC_CONG)
+    monkeypatch.delenv("TEST_MIGRATION_DATABASE_URL", raising=False)
     ok, msg = kiem_hang_rao()
     assert ok is False and "CÙNG database" in msg
 
@@ -211,6 +214,7 @@ def test_setup_test_db_khong_lo_mat_khau(monkeypatch):
     monkeypatch.delenv("DATABASE_URL", raising=False)
     monkeypatch.setenv("TEST_DATABASE_URL",
                        "postgresql://nguoi:MAT-KHAU-BI-MAT@localhost:55432/studymap_test")
+    monkeypatch.delenv("TEST_MIGRATION_DATABASE_URL", raising=False)
     ok, msg = kiem_hang_rao()
     assert ok is True
     assert "MAT-KHAU-BI-MAT" not in msg and "nguoi" not in msg

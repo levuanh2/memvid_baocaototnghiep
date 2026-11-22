@@ -109,7 +109,7 @@ def test_F_production_khong_duoc_cho_phep_ngam():
 
 def test_F2_chi_bat_co_thoi_van_chua_du():
     """Yêu cầu 3: một biến môi trường ĐƠN LẺ không được là toàn bộ hàng rào."""
-    env = {"ALEMBIC_ALLOW_PRODUCTION": "1", "DATABASE_URL": PROD_URL}
+    env = {"ALEMBIC_ALLOW_PRODUCTION": "1", "MIGRATION_DATABASE_URL": PROD_URL}
     url, che_do = chon_dich(env)
     assert che_do == CHE_DO_PRODUCTION
     with pytest.raises(MigrationTargetRejected) as ei:
@@ -118,7 +118,7 @@ def test_F2_chi_bat_co_thoi_van_chua_du():
 
 
 def test_F3_bat_co_nhung_khai_bao_sai_dich_van_bi_chan():
-    env = {"ALEMBIC_ALLOW_PRODUCTION": "1", "DATABASE_URL": PROD_URL,
+    env = {"ALEMBIC_ALLOW_PRODUCTION": "1", "MIGRATION_DATABASE_URL": PROD_URL,
            "ALEMBIC_PRODUCTION_HOST": "mot-host-khac.example.com",
            "ALEMBIC_PRODUCTION_DB": "postgres"}
     url, che_do = chon_dich(env)
@@ -128,7 +128,7 @@ def test_F3_bat_co_nhung_khai_bao_sai_dich_van_bi_chan():
 
 
 def test_F4_production_live_db_lech_khai_bao_bi_chan():
-    env = {"ALEMBIC_ALLOW_PRODUCTION": "1", "DATABASE_URL": PROD_URL,
+    env = {"ALEMBIC_ALLOW_PRODUCTION": "1", "MIGRATION_DATABASE_URL": PROD_URL,
            "ALEMBIC_PRODUCTION_HOST": "aws-0-ap-northeast-2.pooler.supabase.com",
            "ALEMBIC_PRODUCTION_DB": "postgres"}
     with pytest.raises(MigrationTargetRejected) as ei:
@@ -138,7 +138,7 @@ def test_F4_production_live_db_lech_khai_bao_bi_chan():
 
 # ── G. production có cho phép + khai báo đúng + live khớp ⇒ cho phép ─────────
 def test_G_production_du_dieu_kien_thi_cho_phep():
-    env = {"ALEMBIC_ALLOW_PRODUCTION": "1", "DATABASE_URL": PROD_URL,
+    env = {"ALEMBIC_ALLOW_PRODUCTION": "1", "MIGRATION_DATABASE_URL": PROD_URL,
            "ALEMBIC_PRODUCTION_HOST": "aws-0-ap-northeast-2.pooler.supabase.com",
            "ALEMBIC_PRODUCTION_DB": "postgres"}
     url, che_do = chon_dich(env)

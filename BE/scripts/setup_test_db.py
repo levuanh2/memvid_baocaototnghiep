@@ -51,12 +51,17 @@ def kiem_hang_rao() -> tuple[bool, str]:
     from shared.env_loader import load_project_env
     load_project_env()
 
-    test_url = (os.getenv("TEST_DATABASE_URL") or "").strip()
+    # Migrations run as the owner (TEST_MIGRATION_DATABASE_URL) when the tests run as the
+    # least-privilege app role; otherwise TEST_DATABASE_URL, as before.
+    test_url = ((os.getenv("TEST_MIGRATION_DATABASE_URL") or "").strip()
+                or (os.getenv("TEST_DATABASE_URL") or "").strip())
     if not test_url:
         return False, ("TEST_DATABASE_URL chưa được đặt. Đây là biến DUY NHẤT script "
                        "này đọc — nó không bao giờ lấy đích từ DATABASE_URL.")
     prod = (os.getenv("DATABASE_URL") or "").strip()
-    if prod and _danh_tinh_dich(test_url) == _danh_tinh_dich(prod):
+    runtime_url = (os.getenv("TEST_DATABASE_URL") or "").strip()
+    if prod and any(u and _danh_tinh_dich(u) == _danh_tinh_dich(prod)
+                    for u in (test_url, runtime_url)):
         return False, ("TEST_DATABASE_URL trỏ vào CÙNG database với DATABASE_URL. "
                        "Khác cổng KHÔNG phải khác database — Supabase mở cùng một "
                        "database ở cả 5432 lẫn 6543.")

@@ -38,7 +38,9 @@ def main(argv=None) -> int:
     from shared.env_loader import load_project_env
     load_project_env()
     from scripts.run_migrations import DichBiTuChoi, xac_dinh_dich
-    from shared.db_schema_checks import RUNBOOK, submit_key_index_problems
+    from shared.db_schema_checks import (ARCHIVE_RUNBOOK, RUNBOOK, archive_guard_problems,
+                                         review_item_archive_problems,
+                                         submit_key_index_problems)
     from shared.migration_guard import sanitize
 
     try:
@@ -55,7 +57,27 @@ def main(argv=None) -> int:
             # Read-only by construction: any write in this session is an error.
             conn.exec_driver_sql("SET TRANSACTION READ ONLY")
             db = conn.execute(sa.text("SELECT current_database()")).scalar()
-            problems = submit_key_index_problems(conn)
+            # Each family keeps its own runbook: an archive failure must not send the
+            # operator to the submit-key recovery SQL (Codex task46).
+            families = [(RUNBOOK, submit_key_index_problems(conn)),
+                        (ARCHIVE_RUNBOOK, review_item_archive_problems(conn)
+                         + archive_guard_problems(conn))]
+            from shared.db_roles import (ROLES_RUNBOOK, role_problems, runtime_login_problems,
+                                         runtime_url_problems, separation_enabled)
+            if separation_enabled():
+                import os
+                # The runtime URL the new backend will use: DATABASE_URL in production,
+                # TEST_DATABASE_URL in test mode (DATABASE_URL is production's there).
+                runtime = (os.getenv("DATABASE_URL" if args.moi_truong == "production"
+                                     else "TEST_DATABASE_URL") or "").strip()
+                env = {"DATABASE_URL": runtime, "MIGRATION_DATABASE_URL": url}
+                found = runtime_url_problems(env)
+                # Log in for real before activation (Codex task62): /health never
+                # touches the database.
+                found += [] if found else runtime_login_problems(conn, runtime)
+                families.append((ROLES_RUNBOOK, found + role_problems(
+                    conn, os.getenv("DB_RLS_MODE") or "policies")))
+            problems = [pr for _, found in families for pr in found]
     except Exception as exc:  # unreachable DB is a failed verification, never a pass
         print(f"DỪNG: cannot verify {sanitize(url)}: {type(exc).__name__}: {exc}",
               file=sys.stderr)
@@ -66,10 +88,18 @@ def main(argv=None) -> int:
               f"({len(problems)} problem(s)); the new backend must NOT start.", file=sys.stderr)
         for pr in problems:
             print(f"  - {pr}", file=sys.stderr)
-        print(f"  Nothing was changed. Recovery (manual, approved): {RUNBOOK}", file=sys.stderr)
+        for runbook, found in families:
+            if found:
+                print(f"  Nothing was changed. Recovery (manual, approved): {runbook}",
+                      file=sys.stderr)
         return EXIT_SCHEMA_INVALID
     print(f"[verify-db] {db}: uq_quiz_attempts_user_submit_key valid, ready, unique, "
           "(user_id, submit_key) WHERE submit_key IS NOT NULL")
+    print(f"[verify-db] {db}: review_plan_items.archived_at present; "
+          "uq_review_plan_items_priority_active valid, unique, (review_plan_id, priority) "
+          "WHERE archived_at IS NULL; old uq_review_plan_items_priority absent")
+    print(f"[verify-db] {db}: archive guard triggers present and enabled "
+          "(review_plans delete, review_plan_items delete/update, truncate)")
     return EXIT_OK
 
 

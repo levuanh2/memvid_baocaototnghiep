@@ -3866,3 +3866,75 @@ and production but breaks under StrictMode, which runs setup, cleanup, setup: th
 never set back. Set it in the setup body. And a component reused across route params
 needs an identity check (the param it started for) after every await, not only "still
 mounted".
+# New code cannot patch old code: guard the data where old code also writes (2026-11-19)
+
+An expand-only migration is "safe to roll back" only if the old code is harmless on the
+new data. Here the old code's regeneration became destructive once rows were archived,
+so the guard had to live in the database (triggers) and in the rollback tool, not in the
+new application. When a guard refuses a delete, first map every legitimate cascade into
+the table (document, account, attempt deletes) and distinguish them, or the guard breaks
+ordinary product actions.
+
+# A race test must drive the real code path, not a hand-written copy of it (2026-11-19)
+
+The first race test issued the SQL in the order the migration's comment assumed (plan
+first), while production locked the plan last; the test passed and the real race stayed
+open (Codex task50). Drive the real use case and pause it inside its transaction (an
+engine `after_cursor_execute` hook), and add a test that pins the SQL order the code
+actually sends. Same for gates: a keyword or a name is not proof of behaviour.
+
+# Row-lock reads: put the condition after the lock, not in the WHERE (2026-11-19)
+
+`SELECT ... WHERE id = $1 AND archived_at IS NOT NULL FOR SHARE` judges `archived_at` on
+the statement snapshot. A row a concurrent transaction is archiving does not match, so it
+is neither locked nor re-read, and the check passes. Lock by key only
+(`WHERE id = $1 FOR SHARE`), then test the value PostgreSQL re-fetched after the wait.
+
+## 2026-11-19 — "Delete document" is two different operations here
+
+The Library's "Xoá" is a soft delete (status `deleted`, history kept); the sources
+sidebar's "Xóa" is a hard delete that cascades through review history. Earlier reports
+said "deleting a document removes the history" without naming the route, and an owner
+decision was taken on that wording. Name the exact route and whether it is soft or hard
+before writing a warning or asking for a decision.
+
+## 2026-11-19 — A non-owner role under RLS without policies reads 0 rows, silently
+
+Splitting the runtime role from the table owner is the right fix for "the app can
+disable its own triggers", but every table here has RLS enabled and no policies. The
+new role gets empty results, not errors. Grant `BYPASSRLS` or write policies, and
+rehearse on a test database first.
+
+## 2026-11-21 — Least-privilege roles: what the disposable-database run showed
+
+- A non-owner role under RLS with no policy reads 0 rows silently; with per-role
+  policies it sees everything, and **`pg_dump` as that role then stops** ("query would
+  be affected by row-level security policy") unless given `--enable-row-security`.
+- Foreign-key cascades run as the table owner: the app role needs no `DELETE` on child
+  tables to hard-delete a document. That is what lets history tables be insert-only.
+- A `GRANT` by a non-owner is not an error (PostgreSQL only warns "no privileges were
+  granted"). Test the effect (`has_table_privilege`), not the SQLSTATE.
+- Auditing DML by tagging statements with the calling frame misattributes ORM flushes:
+  a test's `s.delete(row)` executes inside `app.db.session_scope` at commit, so it looks
+  like app code. Confirm "the app deletes X" by reading the code, not by the tag alone.
+- Running the suite as the app role turns every test clean-up of rows the app may not
+  delete into an error, and one failed clean-up leaves rows that break later tests
+  (counts, downgrade refusals). Use `tests/_owner_db` for set-up/clean-up, and rerun on
+  a fresh database before judging the next failure list.
+
+## 2026-11-21 — On Supabase, the database is reachable by more than one road
+
+Least-privilege on `DATABASE_URL` does not cover the Data API: `SUPABASE_SECRET_KEY`
+logs in as `service_role` (BYPASSRLS) and Supabase grants API roles on `public` tables by
+default. When the app never uses the Data API for its tables, revoke the API roles there
+in the same contract step that runs after every migration, and verify it.
+
+## 2026-11-22 — A name in a URL is not a login, and a pooler hides the project
+
+Parsing `DATABASE_URL` proves nothing about whether it authenticates or where it lands;
+`/health` that never queries the database proves nothing either. Before replacing a
+running backend, connect with the exact runtime credential and compare a server identity
+with the connection the migration verified. On Supabase's shared pooler the host and
+database are the same for every project; only the user's `.<project_ref>` differs.
+Version-gated privileges (`MAINTAIN` on PostgreSQL 17) must be tested on that version: a
+skip on an older CI server is a silent green.

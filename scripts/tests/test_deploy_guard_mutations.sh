@@ -49,7 +49,11 @@ run_mutation wrapper-lock 'flock -n 9 || {' 'true || {' deploy_remote.sh
 run_mutation wrapper-restore '  git -c advice.detachedHead=false checkout --detach "$prev"' '  : # guard removed' deploy_remote.sh
 run_mutation ci-query-head-sha 'head_sha=${DEPLOY_SHA}&' ''
 run_mutation ci-query-branch '&branch=main' ''
-run_mutation db-verify-removed 'if ! compose run --rm -e ALEMBIC_ALLOW_PRODUCTION=1 backend python -m scripts.verify_db_schema --moi-truong production; then' 'if false; then'
+run_mutation db-verify-removed 'if ! compose_migration backend python -m scripts.verify_db_schema --moi-truong production; then' 'if false; then'
+# Owner credential isolation (Codex task60).
+run_mutation owner-url-not-passed '    compose run --rm -e ALEMBIC_ALLOW_PRODUCTION=1 -e MIGRATION_DATABASE_URL "$@" )' '    compose run --rm -e ALEMBIC_ALLOW_PRODUCTION=1 "$@" )' _lib.sh
+run_mutation owner-url-in-runtime-env '[ -z "$(env_value MIGRATION_DATABASE_URL)" ]' 'true' _lib.sh
+run_mutation owner-file-mode '[ "$(stat -c %a "$MIGRATION_ENV_FILE")" = 600 ]' 'true' _lib.sh
 run_mutation db-verify-ignored '  die "database verification failed after migration' '  echo "database verification failed after migration'
 run_mutation ci-query-event '&event=push' ''
 run_mutation ci-query-status '&status=success' ''
@@ -57,5 +61,11 @@ run_mutation ci-query-workflow 'workflows/ci.yml/runs' 'runs'
 run_mutation break-glass-reason '[ -n "${MEMVID_BREAK_GLASS_REASON:-}" ]' 'true' _lib.sh
 run_mutation break-glass-attempt-record '  ledger_record "$LEDGER_FILE" "${DEPLOY_SHA:-unpinned}" break-glass-attempt' '  :'
 run_mutation break-glass-failure-record '    ledger_record "$LEDGER_FILE" "${APP_BUILD_SHA:-${DEPLOY_SHA:-unpinned}}" break-glass-failed || true' '    :'
+
+run_mutation rollback-archive-floor 'if [ "$SCHEMA" = 1 ] && ! target_supports_archive "$SHA"; then' 'if false; then' rollback.sh
+run_mutation rollback-archive-guard-required 'if [ "$SCHEMA" = 1 ] && [ "$GUARD" != 1 ]; then' 'if false; then' rollback.sh
+run_mutation rollback-archive-exact-line "FACTS_RE='^archive_schema=" "FACTS_RE='archive_schema=" rollback.sh
+run_mutation rollback-archive-unreadable '    || die "rollback refused: the archive preflight' '    || true; : "rollback refused: the archive preflight' rollback.sh
+run_mutation rollback-archive-contract "| grep -x 'ARCHIVE_CONTRACT_VERSION = 1' >/dev/null" "| cat >/dev/null" rollback.sh
 
 printf 'All guard mutations were detected by the harness.\n'

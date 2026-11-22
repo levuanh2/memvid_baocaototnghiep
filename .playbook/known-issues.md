@@ -9132,3 +9132,254 @@ B's banner (and A's lock blocked B's button), and A's own late `load()` could re
 quiz, comparison or result. Every continuation of the regrade (success, failure,
 `finally`) and of `load()` now checks the quiz id it started for; loading a quiz also
 frees the regrade lock. Regression: 2 Vitest tests, red first.
+## "Tạo lại kế hoạch" archived instead of deleting practice history (issue #18, option B, 2026-11-19)
+
+**Problem:** `review.service._persist` deleted the old plan; the database cascade
+(`review_plan_items` -> `quizzes.source_review_item_id` -> attempts -> answers,
+`concept_masteries`) deleted every practice quiz made from its topics with its results.
+#190 only added a warning dialog.
+
+**Fix (owner option B, migration `20261118_review_item_archive`, disposable PostgreSQL
+only; not applied to any hosted database):**
+- `review_plan_items.archived_at` (nullable). The whole-table `UNIQUE (review_plan_id,
+  priority)` became the partial unique index `uq_review_plan_items_priority_active ...
+  WHERE archived_at IS NULL`: archived and current topics of one plan share priorities.
+  The index is built CONCURRENTLY and verified before the old constraint is dropped; the
+  upgrade is rerun-safe; `verify_db_schema` checks all three facts.
+- Regeneration keeps the plan row (same id), archives its current topics, adds the new
+  ones, and moves `created_at` (the generation time; otherwise #190 marks the new plan
+  outdated). No foreign key changes, nothing deleted.
+- Readers: `items` are current topics only; `archived_items` (additive) lists the old ones
+  with their practice quizzes; the Library lists current topics; `get_item` still
+  resolves archived topics (history, practice pages, comparison).
+- `POST /api/practice/generate` refuses an archived topic (409 "Chủ đề này thuộc kế hoạch
+  cũ..."); a practice quiz already made from it can still be opened, submitted and
+  regraded.
+- The page asks with an honest archive confirmation (plain `Modal`, no "xoá vĩnh viễn"
+  dialog) and shows "Kế hoạch trước" read-only.
+- Downgrade refuses while archived topics exist (owner: roll back code only, keep the
+  column). Old code on the new schema behaves as before while nothing is archived.
+
+**Regression:** `test_review_plan_archive.py` (9), `test_review_item_archive_migration.py`
+(6: verified head, rerun-safe, partial index, downgrade refusal, downgrade/upgrade on a
+fresh database, verifier fails closed), `test_gap_and_review.py` regenerate test updated,
+`ReviewGuide.practiceCustomize.test.jsx` (4 new). Red first on the old application code.
+
+**Review fixes (Codex task46):**
+- *Code-only rollback is not safe (P1).* The first text said "roll back code only, keep
+  the column". Code older than this migration deletes the plan on regeneration, and the
+  cascade deletes archived topics with their practice history; `scripts/rollback.sh`
+  accepts any ledgered SHA. The migration docstring, its downgrade message and the new
+  `docs/RUNBOOK_REVIEW_ITEM_ARCHIVE.md` now state the rollback floor: once a topic is
+  archived, roll back only to code containing this revision, or roll forward. A hard
+  guard (a trigger refusing to delete a plan with archived topics, or a schema floor in
+  `rollback.sh`) is proposed for owner approval, not implemented.
+- *Wrong runbook (P3).* `verify_db_schema` printed the submit-key runbook for every
+  failure; each check family now prints its own.
+- The migration test fixture reruns the revision after every test (stamp previous +
+  migrate), so a test that fails half-way cannot leave the index dropped for the next.
+
+## Two guards for archived review history (owner decision 2026-11-19, Codex task46/48 P1)
+
+**Problem:** after #194 archives a topic, code older than #194 (a rollback, a hand delete)
+deletes the plan on regeneration and the FK cascade deletes the archived topics with
+their practice quizzes, attempts, answers and mastery. Documentation alone did not stop
+`scripts/rollback.sh`, which accepts any ledgered SHA.
+
+**Fix:**
+1. Migration `20261119_review_item_guard` (PostgreSQL triggers, fail closed, SQLSTATE
+   23001, hint names `docs/RUNBOOK_REVIEW_ITEM_ARCHIVE.md`, no row data): refuse DELETE
+   of a plan holding archived topics while its attempt, user and document all exist;
+   DELETE of an archived topic while its plan exists; UPDATE that un-archives or moves
+   one; TRUNCATE of either table while archived topics exist. Deleting a document, an
+   account or an attempt still removes everything made from it, as before. Race: the new
+   code updates the plan row in its archiving transaction, so an old-code DELETE waits
+   for that lock and its row trigger then sees the committed archive. `verify_db_schema`
+   fails while a guard trigger or function is missing or disabled. Downgrade refuses
+   while archived topics exist. The revision id must fit `alembic_version` (32 chars).
+2. `scripts/rollback.sh` runs `scripts.rollback_preflight` (read-only) before any
+   checkout or build: with archived topics, the target tree must contain migrations
+   20261118 and 20261119 and a review service that knows `archived_at`. A failed or
+   unreadable preflight refuses; break glass does not skip it.
+
+**Regression:** `test_review_item_archive_guard.py` (12: old-code ORM delete, SQL delete,
+children first, un-archive, truncate, many regenerations, attempt/document deletes
+allowed, old-code delete racing the archive, verifier missing/disabled trigger, guard
+downgrade refusal), `test_rollback_preflight.py` (2), `scripts/tests/test_deploy_pinning.sh`
+section R (6 cases) and 3 new mutations in `test_deploy_guard_mutations.sh`. Red first,
+except `test_rollback_preflight.py`, written together with the module it tests.
+
+**Review fixes (Codex task50, BLOCK: four P1, two P2, one P3), all red first:**
+- *Lock order.* `_persist` archived the topic rows first and locked the plan row only at
+  flush; an old-code DELETE could take the plan lock in between, pass its trigger
+  (archive not committed), and deadlock with the archiver. Reproduced on the old service:
+  the archiver was the deadlock victim and the delete committed (history lost). The plan
+  row is now `SELECT ... FOR UPDATE` before archiving; the race test drives the real use
+  case and pauses inside its transaction; a contract test checks the SQL order.
+- *Rollback accepted `guard=0`.* Now refused whenever the archive schema exists.
+- *Keyword compatibility.* `archived_at` in a comment passed. A target is archive-aware
+  only if its tree carries both migrations and `BE/shared/archive_contract.py`
+  (`ARCHIVE_CONTRACT_VERSION = 1`), whose behaviour `tests/test_archive_contract.py`
+  and the archive tests enforce on every CI-green SHA.
+- *Downgrade race.* Both downgrades lock `review_plans` and `review_plan_items` (SHARE
+  ROW EXCLUSIVE) before counting archived topics.
+- *Verifier checked names only.* It now checks each trigger's `tgtype` and function and
+  compares each guard function body with the contract in `shared.db_schema_checks`.
+- *Archived rows were writable.* Any UPDATE/upsert of an archived topic is refused except
+  its three nullable references going to NULL (FK SET NULL).
+- *Preflight protocol.* stdout must be exactly one facts line (stderr kept apart); a
+  stale or spoofed extra line is refused.
+- *Database down (side note):* with unreadable facts only an archive-aware target may be
+  rolled back to, so an outage does not block an emergency rollback to a safe SHA.
+
+**Review fixes (Codex task52, BLOCK: three P1, one P2), red first:**
+- *Reverse interleaving.* An old-code delete that took the plan lock before any archive
+  existed found no archived topic and the cascade erased the current topics' practice.
+  The plan guard now protects any practice history (an archived topic or a practice quiz
+  made from a topic); the item guard refuses deleting a topic with practice; TRUNCATE
+  checks both.
+- *Downgrade 20261118 released its lock.* `DROP INDEX CONCURRENTLY` needed an autocommit
+  block, which committed and released the table lock before `DROP COLUMN`. The index is
+  now dropped non-concurrently inside the locked transaction.
+- *search_path shadow tables.* Unqualified names let a session's `pg_temp` tables answer
+  the EXISTS checks. Every guard function pins `search_path = <schema>, pg_temp`; the
+  verifier requires it.
+- *Overload-ambiguous verifier.* Bodies were read by name; now from the exact
+  `pg_trigger.tgfoid` function, which must also be a zero-argument plpgsql trigger.
+
+**Review fixes (Codex task53, BLOCK: two P1, one P2), red first:**
+- *History, not archive only.* With the wider plan guard, code before #194 cannot
+  regenerate a plan whose topic has practice. The rollback preflight now reports
+  `history_topics` (archived or with practice) and `rollback.sh` refuses a non
+  archive-aware target while it is > 0, once the archive schema exists (before #194 was
+  ever deployed, rollbacks between older SHAs stay allowed). Both downgrades count the
+  same history and lock `quizzes` too.
+- *Practice from an archived topic, late.* The request checked before enqueueing and
+  the worker inserted later. A `BEFORE INSERT OR UPDATE OF source_review_item_id` trigger
+  on `quizzes` refuses it in the database. First version judged `archived_at` in the
+  WHERE clause: on the old snapshot the row was filtered out without waiting or
+  re-reading. The row is now locked unconditionally (`FOR SHARE`) and its latest
+  `archived_at` read.
+
+**Review fixes (Codex task54: one deadlock, one TOCTOU, one bypass), red first:**
+- *Practice insert vs regeneration deadlock.* The regeneration locks attempt, plan, then
+  topic; the practice trigger locked the topic, then the FK check wanted the attempt.
+  Reproduced: deadlock, the archive was the victim and the practice row was inserted.
+  The trigger now takes the plan's attempt `FOR KEY SHARE` first, then the topic.
+- *Rollback TOCTOU.* History counted at preflight could appear while the rollback built.
+  Once the archive schema exists every non archive-aware target is refused (the schema
+  only changes under the deploy lock rollback.sh holds).
+- *Practice quiz delete/detach.* `DELETE FROM quizzes` cascaded practice attempts,
+  answers and mastery while their parents existed, and changing `source_review_item_id`
+  detached the quiz. Both are refused (and `TRUNCATE quizzes`); document, account and
+  attempt deletes still cascade.
+
+**Review fixes (Codex task55: one P1, one P2), red first:**
+- *Diagnostic quiz as a delete root.* The quiz DELETE guard looked only at practice
+  quizzes; deleting the diagnostic quiz cascaded through its attempt, the plan, every
+  topic and every practice quiz while the user and document existed. Any quiz delete is
+  now refused while one of its attempts owns a plan with history and that plan's user
+  and document exist.
+- *Practice provenance.* Only `source_review_item_id` was frozen; `quiz_type` and
+  `source_attempt_id` could be rewritten (hiding the quiz, breaking the comparison). All
+  three are read-only for a practice quiz.
+
+**Review fixes (Codex task56: two P1 races, one P2), red first:**
+- *One serialisation point.* The delete guards judged history on their snapshot, before
+  a racing regeneration or practice insert committed; their cascade then waited and took
+  the new history. Reproduced both (diagnostic quiz delete vs the first archive, plan
+  delete vs a practice insert). Every guard now locks the owning attempt first (`FOR
+  UPDATE` in the plan and quiz delete guards; regeneration already holds it `FOR UPDATE`,
+  a practice insert `FOR KEY SHARE`), then judges with a fresh snapshot.
+- *Active topics with practice* were rewritable, also atomically rewritten and archived.
+  They are now read-only like archived ones, except the archive transition itself and
+  the FK SET NULL of their references.
+
+### Hard document delete deadlocked with "Tạo lại kế hoạch" (Codex task57, owner item 5, 2026-11-19)
+
+- **Symptom:** deleting a source from the sidebar (`DELETE /sources/<id>`, `hard_delete`)
+  while the same learner regenerated a review plan of that document: PostgreSQL aborted
+  the regeneration with 40P01 (deadlock detected).
+- **Root cause:** opposite lock order between two current-code flows. Regeneration locks
+  the attempt `FOR UPDATE`, then the plan. The document cascade reached `review_plans`
+  first (row lock, then the plan-delete guard), and the guard then waited for the attempt.
+- **Fix:** `documents.repository.hard_delete` locks the document's attempts, then its
+  plans (both ordered by id, `FOR UPDATE`) before `s.delete(document)`, in the
+  regeneration's order.
+- **Regression:** `BE/tests/test_review_history_document_delete.py::test_a_hard_document_delete_racing_a_regeneration_does_not_deadlock`
+  (red on the old `hard_delete`: `{'archive': '40P01'}`; green 3/3). Same file: another
+  learner gets 404 on both delete routes; the Library delete is soft and keeps history.
+- **Prevention:** any new path that deletes or cascades through `review_plans` locks the
+  owning attempt first. Only an OLD-code delete may still deadlock (accepted, runbook §3).
+
+### Sidebar "Xóa" is a hard delete and said nothing about history (owner item 4, 2026-11-19)
+
+- **Symptom:** `window.confirm('Xóa "<file>"?')` then the cascade removed every quiz, plan,
+  practice quiz and result of the document, archived topics included.
+- **Fix:** `SidebarLeft` uses the shared `DestructiveConfirmDialog` (checkbox required,
+  names the loss, "Không thể hoàn tác"). The Library's delete is soft and is not touched.
+- **Regression:** `FE/src/components/Layout/SidebarLeft.deleteSourceWarning.test.jsx`.
+
+### `validate_env` died silently on a missing variable (found 2026-11-21, role separation)
+
+- **Symptom:** `deploy.sh` printed "step 1/7: validating environment" and exited non-zero
+  with no message when a checked variable was absent from the env file.
+- **Root cause:** `env_value` ran `grep -E "^KEY=" | tail | cut` under `set -euo pipefail`;
+  grep exits 1 on no match, the pipeline fails, and `val="$(env_value KEY)"` aborts the
+  script before `validate_env` can list what is missing. Latent since the list existed:
+  every required variable had always been present in the tests.
+- **Fix:** `scripts/_lib.sh` `env_value`: `{ grep ... || true; } | tail -1 | cut ...`.
+- **Regression:** `scripts/tests/test_deploy_pinning.sh` case "role separation on without
+  MIGRATION_DATABASE_URL is refused before any migration" (red before the fix: no
+  message; green after: names `MIGRATION_DATABASE_URL (DB_ROLE_SEPARATION=1)`).
+- **Prevention:** a helper that reads optional input must not fail on absence under
+  `pipefail`; test the "missing" branch of every validator, not only the happy path.
+
+### Role separation: owner credential in the runtime env; NOINHERIT membership (Codex task60, 2026-11-21)
+
+- **Owner URL in the runtime environment.** `MIGRATION_DATABASE_URL` was required in
+  `/opt/memvid/env/.env`, which `backend` and `mindmap-worker` load through compose
+  `env_file`: code execution in either service could connect as the table owner and
+  undo the whole role contract. **Fix:** the owner URL lives only in
+  `/opt/memvid/env/migration.env` (mode 600); `scripts/_lib.sh` `compose_migration` passes
+  it (`-e NAME`, no value on the command line) to the one-shot migration, verification
+  and rollback-preflight containers; `validate_env` refuses it in `.env`, refuses a
+  missing or non-600 `migration.env`. **Regression:** `test_deploy_pinning.sh` (owner URL
+  only in those runs, never in build/`up -d` or a command line; three refusal cases) and
+  three mutations in `test_deploy_guard_mutations.sh`, each caught.
+- **NOINHERIT membership passed verification.** `role_problems` used
+  `pg_has_role(.., 'USAGE')`, which is false for a `NOINHERIT` member that can still
+  `SET ROLE` to the owner. **Fix:** the app and read-only roles must be members of no
+  role (`pg_auth_members`); this also catches predefined roles such as
+  `pg_write_all_data`. **Regression:** `test_db_roles.py::test_any_role_membership_fails_verification_even_without_inherit`
+  (red: `role_problems` returned `[]` with the membership and `SET ROLE` worked; green
+  after) and `test_the_app_role_cannot_switch_to_the_owner`.
+- **Prevention:** a least-privilege design is only as good as where the privileged
+  credential is reachable from; check every container's `env_file`, not only the code
+  that uses the credential. For role checks, test membership itself, not inherited rights.
+
+### Role separation: unproven runtime login, MAINTAIN, API defaults, read-only sequences (Codex task62, 2026-11-22)
+
+- **Runtime login never proven before cut-over.** Step 5b checked only the user NAME in
+  `DATABASE_URL` and `/health` never touches the database; the guard compared host and
+  database only, and on Supabase's shared pooler every project is `<host>/postgres`. A
+  wrong password, a role without LOGIN, or `studymap_app.<other project>` deployed green.
+  **Fix:** `migration_guard` refuses different `.<project_ref>` user suffixes;
+  `verify_db_schema` logs in through the runtime URL (`db_roles.runtime_login_problems`:
+  must be `studymap_app`, same database oid/name and server start time as the owner's
+  connection, read a contract table; prints no URL or server message).
+- **MAINTAIN invisible.** PostgreSQL 17's `MAINTAIN` was not among the compared
+  privileges. **Fix:** compared on servers >= 17 for app, read-only and API roles; CI's
+  role-contract step now runs on a PostgreSQL 17 service and fails if any role test skips.
+- **API roles: defaults, sequences, functions.** Only existing tables were revoked.
+  **Fix:** `apply` also revokes API sequence/function grants, `CREATE` on `public` and the
+  owner's default privileges; `verify` checks them and fails on a non-trigger,
+  non-extension `public` function they may `EXECUTE` (also through `PUBLIC`).
+- **Read-only backups and sequences.** The contract gave sequences to the app only;
+  `pg_dump` as the read-only role failed with "permission denied for sequence". **Fix:**
+  read-only gets `SELECT` on every contract sequence, verified.
+- **Regression:** `tests/test_db_roles.py` task62 section (8 red at `f2fe344`, green
+  after; logs in `studymap-qa-execution/v6/results/db-roles/task62-*`).
+- **Prevention:** a deploy gate must exercise the credential it is about to activate, not
+  parse it. A privilege verifier must enumerate the server version's full privilege set
+  and every object kind the platform grants by default, not only what exists today.

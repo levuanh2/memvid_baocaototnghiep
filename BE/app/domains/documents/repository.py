@@ -599,7 +599,9 @@ def tri_thuc_tho(user_id: Optional[str]) -> Dict[str, Dict[str, Any]]:
         # 3) Chu de can on tap + moc tao ke hoach.
         q = (select(ReviewPlan.document_id, ReviewPlanItem.topic, ReviewPlan.created_at)
              .select_from(ReviewPlan)
-             .join(ReviewPlanItem, ReviewPlanItem.review_plan_id == ReviewPlan.id))
+             .join(ReviewPlanItem, ReviewPlanItem.review_plan_id == ReviewPlan.id)
+             # Current topics only: archived ones belong to an older plan (issue #18).
+             .where(ReviewPlanItem.archived_at.is_(None)))
         if user_id is not None:
             q = q.where(ReviewPlan.user_id == user_id)
         for doc_id, topic, tao_luc in s.execute(q).all():
@@ -711,11 +713,24 @@ def ai_counts(user_id: Optional[str]) -> Dict[str, Dict[str, Any]]:
 
 
 def hard_delete(document_id: str) -> bool:
-    """Xoá cứng — cascade xuống sections/chunks/quizzes/... theo cây 6.2."""
+    """Xoá cứng — cascade xuống sections/chunks/quizzes/... theo cây 6.2.
+
+    The cascade also removes the document's review history (owner decision 2026-11-19).
+    Lock its attempts, then its review plans, BEFORE the delete: a regeneration locks
+    attempt then plan, and the cascade otherwise took the plan first and then waited for
+    the attempt, a deadlock between two current-code flows (Codex task57; owner item 5).
+    """
+    from app.db.models import Quiz, QuizAttempt, ReviewPlan
+
     with session_scope() as s:
         d = s.get(Document, str(document_id))
         if d is None:
             return False
+        s.execute(select(QuizAttempt.id).join(Quiz, Quiz.id == QuizAttempt.quiz_id)
+                  .where(Quiz.document_id == d.id).order_by(QuizAttempt.id)
+                  .with_for_update(of=QuizAttempt)).all()
+        s.execute(select(ReviewPlan.id).where(ReviewPlan.document_id == d.id)
+                  .order_by(ReviewPlan.id).with_for_update()).all()
         s.delete(d)
     invalidate_cache()
     return True

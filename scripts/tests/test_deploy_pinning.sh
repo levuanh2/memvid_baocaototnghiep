@@ -13,6 +13,7 @@ SHIM_DIR="$TMP/bin"
 DOCKER_LOG="$TMP/docker.log"
 OUTPUT="$TMP/output.log"
 ENV_FILE="$TMP/deploy.env"
+MIGRATION_ENV_FILE="$TMP/migration.env"
 DATA_DIR="$TMP/data"
 BACKUP_DIR="$TMP/backups"
 LOCK_FILE="$TMP/deploy.lock"
@@ -63,20 +64,23 @@ base_env() {
   env PATH="$SHIM_DIR:$PATH" DOCKER_LOG="$DOCKER_LOG" CURL_LOG="$CURL_LOG" \
     CI_SUCCESS_SHAS="${CI_SUCCESS_SHAS-${A_SHA:-} ${B_SHA:-} ${C_SHA:-}}" CI_MODE="${CI_MODE:-}" \
     MEMVID_BREAK_GLASS_REASON="${MEMVID_BREAK_GLASS_REASON-harness-incident}" \
-    MEMVID_ENV_FILE="$ENV_FILE" MEMVID_DATA_DIR="$DATA_DIR" MEMVID_BACKUP_DIR="$BACKUP_DIR" \
+    MEMVID_ENV_FILE="$ENV_FILE" MEMVID_MIGRATION_ENV_FILE="$MIGRATION_ENV_FILE" MEMVID_DATA_DIR="$DATA_DIR" MEMVID_BACKUP_DIR="$BACKUP_DIR" \
     MEMVID_LOCK_FILE="$LOCK_FILE" MEMVID_DEPLOY_LEDGER="$LEDGER_FILE" \
     MEMVID_HEALTH_TIMEOUT_SEC=1 MEMVID_HEALTH_POLL_SEC=1 \
     TEST_SOURCE="$SOURCE" TEST_SERVER="$SERVER" TEST_ORIGIN="$ORIGIN" \
     TEST_HOOK_PHASE="${TEST_HOOK_PHASE:-}" TEST_HOOK_ACTION="${TEST_HOOK_ACTION:-}" \
     TEST_HOOK_MARKER="$HOOK_MARKER" TEST_MOVE_SHA="${TEST_MOVE_SHA:-}" \
-    TEST_FAIL_PHASE="${TEST_FAIL_PHASE:-}" TEST_FAIL_CODE="${TEST_FAIL_CODE:-75}" "$@"
+    TEST_FAIL_PHASE="${TEST_FAIL_PHASE:-}" TEST_FAIL_CODE="${TEST_FAIL_CODE:-75}" \
+    TEST_PREFLIGHT_OUTPUT="${TEST_PREFLIGHT_OUTPUT-archive_schema=0 history_topics=0 guard=0}" \
+    TEST_PREFLIGHT_CODE="${TEST_PREFLIGHT_CODE:-0}" "$@"
 }
 
 reset_controls() {
   : >"$DOCKER_LOG"
   rm -f "$HOOK_MARKER"
   : >"$CURL_LOG"
-  unset CI_SUCCESS_SHAS CI_MODE TEST_HOOK_PHASE TEST_HOOK_ACTION TEST_MOVE_SHA TEST_FAIL_PHASE TEST_FAIL_CODE
+  unset CI_SUCCESS_SHAS CI_MODE TEST_HOOK_PHASE TEST_HOOK_ACTION TEST_MOVE_SHA TEST_FAIL_PHASE TEST_FAIL_CODE \
+    TEST_PREFLIGHT_OUTPUT TEST_PREFLIGHT_CODE
 }
 
 run_deploy() {
@@ -162,7 +166,7 @@ chmod +x "$SHIM_DIR/curl"
 
 cat >"$SHIM_DIR/docker" <<'SHIM'
 #!/usr/bin/env bash
-printf 'sha=%s args=%s\n' "${APP_BUILD_SHA:-unset}" "$*" >>"$DOCKER_LOG"
+printf 'sha=%s mig=%s args=%s\n' "${APP_BUILD_SHA:-unset}" "${MIGRATION_DATABASE_URL:+set}" "$*" >>"$DOCKER_LOG"
 args="$*"
 phase=""
 [[ "$args" =~ compose.*build$ ]] && phase=build
@@ -191,6 +195,11 @@ fi
 if [ -n "$phase" ] && [ "$phase" = "${TEST_FAIL_PHASE:-}" ]; then
   exit "${TEST_FAIL_CODE:-75}"
 fi
+# The archive preflight of rollback.sh (read-only DB facts), modelled by the harness.
+if [[ "$args" =~ compose.*run.*scripts.rollback_preflight ]]; then
+  printf '%s\n' "${TEST_PREFLIGHT_OUTPUT:-}"
+  exit "${TEST_PREFLIGHT_CODE:-0}"
+fi
 if [ "${1:-}" = inspect ]; then
   printf 'running\t0\thealthy\n'
 fi
@@ -209,6 +218,10 @@ FPT_AI_API_KEY=dummy
 ALEMBIC_PRODUCTION_HOST=dummy
 ALEMBIC_PRODUCTION_DB=dummy
 ENV
+# The owner's URL: its own file, mode 600, never in the runtime env file (Codex task60).
+printf 'MIGRATION_DATABASE_URL=dummy-owner\n' >"$MIGRATION_ENV_FILE"
+chmod 600 "$MIGRATION_ENV_FILE"
+
 
 # A: current, CI-verified SHA deploys and is ledgered.
 B_SHA="$A_SHA"
@@ -217,13 +230,20 @@ reset_controls
 run_deploy 0 "$A_SHA"
 assert_head "$A_SHA"
 assert_called 'compose .* up -d$'
-assert_called "^sha=$A_SHA args=compose .* build$"
+assert_called "^sha=$A_SHA mig=[a-z]* args=compose .* build$"
 assert_ledger "$A_SHA" deploy
 # Order: migration, then read-only verification, then activation.
 order="$(grep -nE 'scripts.run_migrations|scripts.verify_db_schema|compose .* up -d$' "$DOCKER_LOG" | cut -d: -f1 | tr '
 ' ' ')"
 [ "$(grep -cE 'scripts.run_migrations|scripts.verify_db_schema|compose .* up -d$' "$DOCKER_LOG")" -eq 3 ]   && [ "$(printf '%s' "$order" | awk '{print ($1<$2 && $2<$3) ? "ok" : "bad"}')" = ok ]   || { cat "$DOCKER_LOG" >&2; fail "expected migration -> verify_db_schema -> up, got lines $order"; }
 pass "A current CI-verified commit deploys (migration, verification, activation in that order)"
+# Only the one-shot migration and verification containers get the owner's URL.
+grep -E 'scripts\.(run_migrations|verify_db_schema)' "$DOCKER_LOG" | grep -v 'mig=set .*-e MIGRATION_DATABASE_URL' \
+  && { cat "$DOCKER_LOG" >&2; fail "a migration/verification run did not get the owner URL"; }
+grep -E 'compose .* up -d$|compose .* build$' "$DOCKER_LOG" | grep 'mig=set' \
+  && { cat "$DOCKER_LOG" >&2; fail "the owner URL reached build or the long-running containers"; }
+grep -q 'dummy-owner' "$DOCKER_LOG" && { cat "$DOCKER_LOG" >&2; fail "the owner URL appeared on a command line"; }
+pass "the owner URL reaches only migration and verification, never a command line or the services"
 
 # A failed database verification stops the deploy before the new backend starts.
 reset_controls
@@ -235,6 +255,36 @@ grep -q 'database verification failed after migration' "$OUTPUT"   || { cat "$OU
 grep -q 'RUNBOOK_SUBMIT_KEY_INDEX' "$OUTPUT" || fail "verification failure does not name the runbook"
 if grep -Eq 'go-lui|downgrade' "$DOCKER_LOG"; then cat "$DOCKER_LOG" >&2; fail "a failed verification must not downgrade"; fi
 pass "failed DB verification exits non-zero, never activates, never downgrades"
+
+# Without the owner's migration URL the deploy is refused before build or migration: a
+# migration never falls back to the runtime DATABASE_URL (docs/RUNBOOK_DB_ROLES.md).
+mv "$MIGRATION_ENV_FILE" "$MIGRATION_ENV_FILE.bak"
+reset_controls
+run_deploy 1 "$A_SHA"
+grep -q 'MIGRATION_DATABASE_URL (in ' "$OUTPUT" \
+  || { cat "$OUTPUT" >&2; fail "missing MIGRATION_DATABASE_URL was not reported"; }
+assert_not_called 'scripts.run_migrations'
+assert_not_called 'compose .* up -d$'
+mv "$MIGRATION_ENV_FILE.bak" "$MIGRATION_ENV_FILE"
+pass "a missing MIGRATION_DATABASE_URL is refused before any migration"
+
+# The owner's URL in the runtime env file (read by every service container): refused.
+cp "$ENV_FILE" "$ENV_FILE.roles-bak"
+printf 'MIGRATION_DATABASE_URL=dummy-owner\n' >>"$ENV_FILE"
+reset_controls
+run_deploy 1 "$A_SHA"
+grep -q 'must not be in' "$OUTPUT" || { cat "$OUTPUT" >&2; fail "owner URL in the runtime env file was not refused"; }
+assert_not_called 'compose .* build$'
+cp "$ENV_FILE.roles-bak" "$ENV_FILE"
+pass "the owner URL in the runtime env file is refused before build"
+
+# A group- or world-readable owner credential file: refused.
+chmod 644 "$MIGRATION_ENV_FILE"
+reset_controls
+run_deploy 1 "$A_SHA"
+grep -q 'must be mode 600' "$OUTPUT" || { cat "$OUTPUT" >&2; fail "readable migration env file was not refused"; }
+chmod 600 "$MIGRATION_ENV_FILE"
+pass "a readable owner credential file is refused"
 
 # Advance main to B.
 printf 'B\n' >"$SOURCE/revision.txt"
@@ -439,5 +489,103 @@ reset_controls
 expect_status 0 base_env env MEMVID_BREAK_GLASS=1 bash "$SERVER/scripts/deploy.sh"
 assert_ledger "$B_SHA" break-glass
 pass "break-glass pinned and unpinned paths warn, succeed, and are ledgered"
+
+# R: archive rollback floor (issue #18, owner decision 2026-11-19; Codex task50). Before
+# any checkout or build, rollback.sh reads the archive facts (read-only) and refuses a
+# target that is not archive-aware while archived topics exist, refuses whenever the
+# archive guard is reported missing, and treats anything but one exact facts line as
+# unknown: then only an archive-aware target may go.
+git -C "$SERVER" -c advice.detachedHead=false checkout --detach "$B_SHA" >/dev/null
+refused_before_checkout() {
+  assert_head "$B_SHA"
+  assert_not_called 'compose .* build$'
+}
+reset_controls
+TEST_PREFLIGHT_OUTPUT="archive_schema=1 history_topics=3 guard=1"
+run_rollback 1 "$A_SHA"
+refused_before_checkout
+assert_called 'compose .*run.*scripts.rollback_preflight'
+grep -q "predates the review-topic archive" "$OUTPUT" || { cat "$OUTPUT" >&2; fail "no archive-floor reason"; }
+reset_controls
+TEST_PREFLIGHT_OUTPUT="archive_schema=1 history_topics=3 guard=1"
+expect_status 1 base_env env MEMVID_BREAK_GLASS=1 bash "$SERVER/scripts/rollback.sh" "$A_SHA"
+refused_before_checkout
+reset_controls
+TEST_PREFLIGHT_CODE=3
+TEST_PREFLIGHT_OUTPUT="STOP: cannot reach the database"
+run_rollback 1 "$A_SHA"
+refused_before_checkout
+reset_controls
+TEST_PREFLIGHT_OUTPUT="something unexpected"
+run_rollback 1 "$A_SHA"
+refused_before_checkout
+reset_controls
+TEST_PREFLIGHT_OUTPUT=$'archive_schema=1 history_topics=3 guard=1
+archive_schema=0 history_topics=0 guard=0'  # stale or spoofed last line must not open the gate
+run_rollback 1 "$A_SHA"
+refused_before_checkout
+reset_controls
+TEST_PREFLIGHT_OUTPUT="archive_schema=1 history_topics=0 guard=0"
+run_rollback 1 "$A_SHA"
+refused_before_checkout
+grep -q "archive guard is missing or disabled" "$OUTPUT" || { cat "$OUTPUT" >&2; fail "no guard reason"; }
+pass "R pre-archive targets, a missing guard, a failed preflight and anything but one exact facts line are refused before checkout; break glass does not skip it"
+
+# E: carries the migrations and mentions archived_at, but has no valid contract marker
+# (a keyword is not proof; Codex task50 false positive).
+printf 'keyword-only\n' >"$SOURCE/revision.txt"
+mkdir -p "$SOURCE/BE/alembic/versions" "$SOURCE/BE/app/domains/review" "$SOURCE/BE/shared"
+printf 'revision = "20261118_review_item_archive"\n' >"$SOURCE/BE/alembic/versions/20261118_review_item_archive.py"
+printf 'revision = "20261119_review_item_guard"\n' >"$SOURCE/BE/alembic/versions/20261119_review_item_guard.py"
+printf 'archived_at = None  # readers filter archived topics\n' >"$SOURCE/BE/app/domains/review/service.py"
+printf '# ARCHIVE_CONTRACT_VERSION = 1 (comment only)\nARCHIVE_CONTRACT_VERSION = 0\n' >"$SOURCE/BE/shared/archive_contract.py"
+git -C "$SOURCE" add -A
+git -C "$SOURCE" commit -m "keyword only" >/dev/null
+E_SHA="$(git -C "$SOURCE" rev-parse HEAD)"
+printf 'ARCHIVE_CONTRACT_VERSION = 1\n' >"$SOURCE/BE/shared/archive_contract.py"
+printf 'archive\n' >"$SOURCE/revision.txt"
+git -C "$SOURCE" add -A
+git -C "$SOURCE" commit -m "archive-aware" >/dev/null
+D_SHA="$(git -C "$SOURCE" rev-parse HEAD)"
+git -C "$SOURCE" push origin HEAD:main >/dev/null
+git -C "$SERVER" fetch origin main >/dev/null
+reset_controls
+TEST_PREFLIGHT_OUTPUT="archive_schema=1 history_topics=3 guard=1"
+expect_status 1 base_env env MEMVID_BREAK_GLASS=1 bash "$SERVER/scripts/rollback.sh" "$E_SHA"
+refused_before_checkout
+reset_controls
+TEST_PREFLIGHT_OUTPUT="archive_schema=1 history_topics=3 guard=0"
+expect_status 1 base_env env MEMVID_BREAK_GLASS=1 bash "$SERVER/scripts/rollback.sh" "$D_SHA"
+refused_before_checkout
+pass "R a keyword-only target is not archive-aware; a missing guard refuses even an archive-aware target"
+
+reset_controls
+TEST_PREFLIGHT_OUTPUT="archive_schema=1 history_topics=3 guard=1"
+expect_status 0 base_env env MEMVID_BREAK_GLASS=1 bash "$SERVER/scripts/rollback.sh" "$D_SHA"
+assert_head "$D_SHA"
+# Database down during an incident: an archive-aware target is safe whatever the facts,
+# so it may still be rolled back to; any other target may not (checked above).
+git -C "$SERVER" -c advice.detachedHead=false checkout --detach "$B_SHA" >/dev/null
+reset_controls
+TEST_PREFLIGHT_CODE=3
+TEST_PREFLIGHT_OUTPUT="STOP: cannot reach the database"
+expect_status 0 base_env env MEMVID_BREAK_GLASS=1 bash "$SERVER/scripts/rollback.sh" "$D_SHA"
+assert_head "$D_SHA"
+grep -q "archive facts unreadable; target is archive-aware" "$OUTPUT" || { cat "$OUTPUT" >&2; fail "no unreadable-but-safe warning"; }
+# Once the archive schema exists, a pre-archive target is refused even with no history
+# yet: history can appear while the rollback builds (Codex task54 TOCTOU).
+git -C "$SERVER" -c advice.detachedHead=false checkout --detach "$B_SHA" >/dev/null
+reset_controls
+TEST_PREFLIGHT_OUTPUT="archive_schema=1 history_topics=0 guard=1"
+run_rollback 1 "$A_SHA"
+refused_before_checkout
+# Before #194 was ever deployed (no archive schema) practice history is ordinary data:
+# rollbacks between pre-archive SHAs stay allowed.
+git -C "$SERVER" -c advice.detachedHead=false checkout --detach "$B_SHA" >/dev/null
+reset_controls
+TEST_PREFLIGHT_OUTPUT="archive_schema=0 history_topics=5 guard=0"
+run_rollback 0 "$A_SHA"
+assert_head "$A_SHA"
+pass "R an archive-aware target (also with the database unreadable) may be rolled back to; a pre-archive one only before the archive schema exists"
 
 printf 'All deploy pinning scenarios passed.\n'

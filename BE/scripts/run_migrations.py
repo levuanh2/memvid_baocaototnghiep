@@ -151,6 +151,15 @@ def main() -> int:
     else:
         command.upgrade(cfg, "head")
         print("[migration] upgrade head: xong")
+        # Role separation on: grants and RLS policies follow the schema, as the same
+        # owner, in the same step (a new table must not stay unreachable or open).
+        if (os.getenv("DB_ROLE_SEPARATION") or "").strip().lower() in ("1", "true", "yes", "on"):
+            from scripts.db_roles import main as db_roles_main
+            rc = db_roles_main(["apply", "--moi-truong", args.moi_truong])
+            if rc != 0:
+                print("[migration] DỪNG: role contract not applied (scripts.db_roles); "
+                      "see docs/RUNBOOK_DB_ROLES.md", file=sys.stderr)
+                return rc
     return 0
 
 

@@ -28,7 +28,8 @@ from tests.test_practice_idempotency import _submit, practice  # noqa: F401  (fi
 
 BE_ROOT = Path(__file__).resolve().parents[1]
 INDEX = "uq_quiz_attempts_user_submit_key"
-HEAD = "20261115_attempt_submit_key"
+# The chain head: later revisions (20261118 review topic archive) rerun safely on top.
+HEAD = "20261119_review_item_guard"
 PREVIOUS = "20261001_job_usage_ctx"
 CREATE = (f"CREATE UNIQUE INDEX CONCURRENTLY {INDEX} "
           "ON quiz_attempts (user_id, submit_key) WHERE submit_key IS NOT NULL")
@@ -64,10 +65,12 @@ def _stamp(rev):
 
 @pytest.fixture()
 def db():
-    """An autocommit connection; afterwards the index is valid again and Alembic at head."""
-    from app.db import get_engine
+    """An autocommit connection; afterwards the index is valid again and Alembic at head.
 
-    with get_engine().connect().execution_options(isolation_level="AUTOCOMMIT") as conn:
+    The table owner's: the tests build and drop the index (DDL, owner-only)."""
+    from tests._owner_db import owner_engine
+
+    with owner_engine().connect().execution_options(isolation_level="AUTOCOMMIT") as conn:
         yield conn
         # Runs after a failed test too. A test that stops half-way can leave duplicate keys
         # (the runbook test makes them on purpose); the rebuild below would then fail and
@@ -77,6 +80,8 @@ def db():
         conn.execute(sa.text(f"DROP INDEX CONCURRENTLY IF EXISTS {INDEX}"))
         conn.execute(sa.text(CREATE))
     _stamp(HEAD)
+    from tests._owner_db import reapply_role_contract
+    reapply_role_contract()   # a downgrade re-created columns; their grants went with them
 
 
 def _state(conn):
