@@ -725,8 +725,8 @@ export default function MainLayout({
                 title={t.label} aria-label={t.label}
                 className="flex items-center justify-center gap-1.5 w-10 h-10 lg:w-auto lg:h-auto px-0 lg:px-3 py-0 lg:py-1.5 text-small rounded-full transition-colors shrink-0"
                 style={{
-                  background: active ? "var(--accent)" : "transparent",
-                  color: active ? "#FFFFFF" : "var(--text-secondary)",
+                  background: active ? "var(--accent-cta)" : "transparent",
+                  color: active ? "var(--on-primary)" : "var(--text-secondary)",
                   fontWeight: active ? 600 : 500,
                 }}>
                 <Icon name={t.icon} size={14} />
