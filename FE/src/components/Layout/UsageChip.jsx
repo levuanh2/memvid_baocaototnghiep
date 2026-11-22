@@ -1,31 +1,12 @@
-import { useCallback, useEffect, useRef, useState } from "react";
-import { apiFetch } from "../../utils/api";
+import { useEffect, useRef, useState } from "react";
 import { Icon } from "../ui/Icon";
-
-const formatTokens = (value) => new Intl.NumberFormat("vi-VN").format(Number(value || 0));
+import { formatTokens, usageByActivity, useAiUsage } from "../../hooks/useAiUsage";
 
 export default function UsageChip() {
-  const [usage, setUsage] = useState(null);
+  // Loader shared with the account page (V6), so both read the same thing the same way.
+  const { usage, loading, error, load } = useAiUsage();
   const [open, setOpen] = useState(false);
-  const [loading, setLoading] = useState(true);
-  const [error, setError] = useState(false);
   const rootRef = useRef(null);
-  const mountedRef = useRef(false);
-
-  const load = useCallback(() => {
-    setLoading(true); setError(false);
-    apiFetch("/usage/me").then((response) => {
-      if (!response.ok) throw new Error("usage request failed");
-      return response.json();
-    }).then((data) => { if (mountedRef.current && data?.limit) setUsage(data); })
-      .catch(() => { if (mountedRef.current) setError(true); })
-      .finally(() => { if (mountedRef.current) setLoading(false); });
-  }, []);
-  useEffect(() => {
-    mountedRef.current = true;
-    load();
-    return () => { mountedRef.current = false; };
-  }, [load]);
   useEffect(() => {
     if (!open) return undefined;
     const close = (event) => { if (!rootRef.current?.contains(event.target)) setOpen(false); };
@@ -66,7 +47,7 @@ export default function UsageChip() {
         <p className="mt-2 text-caption text-text-secondary">{formatTokens(usage.used)} dùng · {formatTokens(usage.reserved)} giữ · {formatTokens(usage.limit)} token tháng</p>
         <p className={exhausted ? "mt-1 text-caption text-[var(--err)]" : "mt-1 text-caption text-text-secondary"}>Còn lại: {formatTokens(usage.remaining)}</p>
         <p className="mt-1 text-caption text-text-muted">Đặt lại: {new Date(usage.reset_at).toLocaleDateString("vi-VN")}</p>
-        <div className="mt-3 border-t border-border pt-2 text-caption text-text-muted">{Object.entries(usage.breakdown || {}).map(([feature, total]) => <div key={feature} className="flex justify-between"><span>{feature}</span><span>{formatTokens(total)}</span></div>)}</div>
+        <div className="mt-3 border-t border-border pt-2 text-caption text-text-muted">{usageByActivity(usage.breakdown).map(([nhan, total]) => <div key={nhan} className="flex justify-between"><span>{nhan}</span><span>{formatTokens(total)}</span></div>)}</div>
       </div>}
     </div>
   );

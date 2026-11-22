@@ -613,6 +613,29 @@
   .profile-form-action,
   .profile-avatar-action { min-height: 44px; }
 
+  /* V6 account page: one record sheet. Each section is a ruled row; from `md` its name sits
+     in a left column, like the field names of a form, and the content keeps one left edge. */
+  .profile-sections { margin-top: 28px; }
+  .profile-section {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr);
+    gap: 12px;
+    padding-block: 22px;
+    border-top: 1px solid var(--border-color);
+  }
+  .profile-section:last-child { padding-bottom: 0; }
+  .profile-section__title {
+    font-family: var(--font-display, inherit);
+    font-size: 17px;
+    font-weight: 600;
+    line-height: 1.35;
+    color: var(--text-primary);
+  }
+  @media (min-width: 768px) {
+    .profile-section { grid-template-columns: 168px minmax(0, 1fr); gap: 28px; }
+  }
+  .profile-sections .pill-action { min-height: 44px; }
+
   /* Wave 8 cleanup: `.sidebar-tab`/`.sidebar-tab-active` removed — grep-
      confirmed zero JSX consumers (superseded by WorkspaceTabs.jsx). */
 
