@@ -55,9 +55,17 @@ if has_groq:
 # real provider key: an environment that can reach a paid model is not a test environment.
 E2E_FAKE_LLM = (os.getenv("E2E_FAKE_LLM") or "").strip() == "1"
 if E2E_FAKE_LLM:
-    if has_any_remote:
-        raise RuntimeError("E2E_FAKE_LLM=1 is set together with a real provider key; "
+    # Codex task63 recheck: refuse every remote inference path (direct keys, Cohere, a
+    # remote reranker), and only inside the E2E harness, which sets E2E_PROCESS itself.
+    # A leaked flag in a production env therefore stops the service instead of quietly
+    # serving fake answers.
+    _remote = has_any_remote or bool((os.getenv("COHERE_API_KEY") or "").strip())
+    _rerank = (os.getenv("RERANK_BACKEND") or "").strip().lower()
+    if _remote or _rerank not in ("", "identity"):
+        raise RuntimeError("E2E_FAKE_LLM=1 next to a real provider key or a remote reranker; "
                            "refusing to start (unset the key or the flag)")
+    if (os.getenv("E2E_PROCESS") or "").strip() != "run_e2e_server":
+        raise RuntimeError("E2E_FAKE_LLM=1 outside scripts/run_e2e_server.py; refusing to start")
     PROVIDERS[:] = ["fake"]
 
 print("Active providers:", PROVIDERS)

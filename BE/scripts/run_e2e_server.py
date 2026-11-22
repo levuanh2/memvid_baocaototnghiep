@@ -63,10 +63,22 @@ os.environ.setdefault("GUIDED_JOB_STORE_BACKEND", "sqlite")
 # the model itself, at the llm_factory seam (E2E_FAKE_LLM), which refuses to start
 # beside a real provider key. No network model, no cost.
 E2E_REAL_GRAPHS = os.environ.get("E2E_REAL_GRAPHS", "").strip() == "1"
-if E2E_REAL_GRAPHS:
-    os.environ["E2E_FAKE_LLM"] = "1"
 # Same ephemeral Postgres the rest of CI already uses (backend-integration-and-smoke).
 os.environ.setdefault("DATABASE_URL", "postgresql://postgres:postgres@localhost:5432/studymap_test")
+if E2E_REAL_GRAPHS:
+    # Codex task63 recheck P0: real graphs and ingest write through the real repositories,
+    # so the database is checked before the app is imported. Loopback *_test, or the
+    # hosted TEST project as studymap_app with E2E_HOSTED_TEST=1 + expected/denied refs.
+    from scripts.supabase_test_probe import e2e_database_problems  # noqa: E402
+
+    _problems = e2e_database_problems(os.environ)
+    if _problems:
+        for _p in _problems:
+            print(f"DỪNG: run_e2e_server (E2E_REAL_GRAPHS): {_p}", file=sys.stderr)
+        raise SystemExit(2)
+    os.environ["E2E_FAKE_LLM"] = "1"
+    os.environ["E2E_PROCESS"] = "run_e2e_server"
+    os.environ.setdefault("RERANK_BACKEND", "identity")
 os.environ.pop("GEMINI_API_KEY", None)
 os.environ.pop("GROQ_API_KEY", None)
 os.environ.pop("FPT_AI_API_KEY", None)

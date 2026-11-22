@@ -27,17 +27,26 @@ import sys
 _STRICT_VARS = ("SUPABASE_URL", "SUPABASE_SECRET_KEY", "SUPABASE_STORAGE_BUCKET")
 
 
-def _strict_env_problem(expect_ref: str):
+_TEST_BUCKET = re.compile(r"studymap-t63-[a-z0-9][a-z0-9-]*")
+
+
+def _strict_env_problem(expect_ref: str, deny_ref: str = ""):
     """Checked BEFORE `.env` is loaded: a variable missing here would otherwise be filled
     from `.env`, which may hold production keys (Codex task63). Names variables, never
     prints a value."""
     if not re.fullmatch(r"[a-z]{20}", expect_ref or ""):
         return "--expect-ref must be the test project's 20-letter ref"
+    if not re.fullmatch(r"[a-z]{20}", deny_ref or "") or deny_ref == expect_ref:
+        return "--deny-ref (the production ref) is required and must differ from --expect-ref"
     missing = [v for v in _STRICT_VARS if not (os.environ.get(v) or "").strip()]
     if missing:
         return f"set explicitly and non-empty: {', '.join(missing)}"
+    if any(deny_ref in os.environ[v] for v in _STRICT_VARS):
+        return "a Storage variable names the production project"
     if os.environ["SUPABASE_URL"].strip().rstrip("/") != f"https://{expect_ref}.supabase.co":
         return "SUPABASE_URL is not https://<expect-ref>.supabase.co"
+    if not _TEST_BUCKET.fullmatch(os.environ["SUPABASE_STORAGE_BUCKET"].strip()):
+        return "SUPABASE_STORAGE_BUCKET must be a test-only bucket named studymap-t63-*"
     return None
 
 
@@ -53,10 +62,12 @@ def main() -> int:
                         "all three must be set explicitly and name --expect-ref")
     p.add_argument("--expect-ref", default="",
                    help="with --strict-env: the test project's ref")
+    p.add_argument("--deny-ref", default="",
+                   help="with --strict-env: the production project's ref, refused everywhere")
     args = p.parse_args()
 
     if args.strict_env:
-        problem = _strict_env_problem(args.expect_ref)
+        problem = _strict_env_problem(args.expect_ref, args.deny_ref)
         if problem:
             print(f"DỪNG (strict-env): {problem}", file=sys.stderr)
             return 2

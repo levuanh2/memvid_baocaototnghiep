@@ -12,13 +12,14 @@ from pathlib import Path
 
 BE = Path(__file__).resolve().parents[1]
 KEYS = ("GEMINI_API_KEY", "GROQ_API_KEY", "FPT_AI_API_KEY", "COHERE_API_KEY",
-        "OLLAMA_HOST", "LLM_GATEWAY_ADDR")
+        "OLLAMA_HOST", "LLM_GATEWAY_ADDR", "RERANK_BACKEND", "E2E_PROCESS")
 
 
 def _child(code, **env_over):
     env = {k: v for k, v in os.environ.items() if k not in KEYS}
     env.update({"SKIP_DOTENV": "1", "SKIP_MODEL_LOAD": "1", "PYTHONIOENCODING": "utf-8",
-                "E2E_FAKE_LLM": "1"}, **env_over)
+                "E2E_FAKE_LLM": "1", "E2E_PROCESS": "run_e2e_server",
+                "RERANK_BACKEND": "identity"}, **env_over)
     for k in KEYS:
         env.setdefault(k, "")
     prelude = textwrap.dedent("""
@@ -88,3 +89,19 @@ def test_without_the_flag_nothing_changes():
         print("ok")
     """, E2E_FAKE_LLM="")
     assert r.returncode == 0 and "ok" in r.stdout, r.stdout + r.stderr
+
+
+# Codex task63 recheck P1: every remote path is refused, and only the E2E harness may enable it.
+def test_the_fake_refuses_beside_a_cohere_key():
+    r = _child("from app.clients import llm_factory", COHERE_API_KEY="real-looking-key")
+    assert r.returncode != 0 and "E2E_FAKE_LLM" in r.stderr and "real-looking-key" not in r.stderr
+
+
+def test_the_fake_refuses_a_remote_reranker():
+    r = _child("from app.clients import llm_factory", RERANK_BACKEND="cohere")
+    assert r.returncode != 0 and "E2E_FAKE_LLM" in r.stderr
+
+
+def test_the_fake_refuses_outside_the_e2e_harness():
+    r = _child("from app.clients import llm_factory", E2E_PROCESS="")
+    assert r.returncode != 0 and "E2E_FAKE_LLM" in r.stderr

@@ -68,8 +68,10 @@ def env_problems(env: dict, expect_ref: str, deny_ref: str) -> list[str]:
         if deny_ref in value:
             problems.append(f"{key} contains the production ref")
     for key in URL_KEYS:
-        if env.get(key):
+        if key in env:
             problems += [f"{key}: {p}" for p in _pooler_url_problems(key, env[key], expect_ref)]
+    if "SUPABASE_URL" in env and not env["SUPABASE_URL"]:
+        problems.append("SUPABASE_URL is empty")
     if env.get("SUPABASE_URL") and env["SUPABASE_URL"].rstrip("/") != f"https://{expect_ref}.supabase.co":
         problems.append("SUPABASE_URL is not exactly https://<expect-ref>.supabase.co")
     return problems
@@ -77,6 +79,8 @@ def env_problems(env: dict, expect_ref: str, deny_ref: str) -> list[str]:
 
 def _pooler_url_problems(key: str, url: str, ref: str) -> list[str]:
     who, mode = key.split("_URL_")
+    if not url:
+        return ["empty value"]
     try:
         u = urlsplit(url)
         port = u.port
@@ -117,6 +121,75 @@ def local_env_problems(env: dict) -> list[str]:
             if u.hostname not in LOOPBACK or not u.path.lstrip("/").endswith("_test") or u.query:
                 problems.append(f"{key}: --local needs a loopback *_test database")
     return problems
+
+
+# Inputs each phase needs: a missing one stops the run before any connection (Codex
+# task63 recheck: `identity` used to pass with OWNER_URL_SESSION alone).
+PHASE_INPUTS = {
+    "preflight": ("OWNER_URL_SESSION",),
+    "inspect": ("OWNER_URL_SESSION",),
+    "verify": ("OWNER_URL_SESSION",),
+    "identity": URL_KEYS,
+    "rls": ("OWNER_URL_SESSION", "APP_URL_SESSION", "READONLY_URL_SESSION"),
+    "deny": ("APP_URL_SESSION",),
+    "restapi": ("SUPABASE_URL", "SUPABASE_SECRET_KEY", "SUPABASE_PUBLISHABLE_KEY"),
+}
+
+
+def phase_input_problems(phases, env: dict) -> list[str]:
+    return [f"{ph} needs {key}" for ph in phases for key in PHASE_INPUTS[ph] if not env.get(key)]
+
+
+def default_acl_problems(rows, revoker: str, owners) -> list[str]:
+    """rows: (defacl_role, schema, objtype, grantee, privilege). A default ACL of the
+    revoker is closed by `apply` at G3. One of another role only matters if that role owns
+    StudyMap objects in `public` (then the next object it creates is born open, and the
+    revoker cannot change its defaults). `supabase_admin` owning nothing there is the
+    accepted, documented exception."""
+    return [f"default ACL of {role} in {schema} gives {grantee} {priv} on new {kind} objects, "
+            f"and {role} owns objects in public; {revoker} cannot revoke it"
+            for role, schema, kind, grantee, priv in rows
+            if grantee in (*API_ROLES, "PUBLIC") and role != revoker and role in owners]
+
+
+def e2e_database_problems(env) -> list[str]:
+    """Guard for `run_e2e_server E2E_REAL_GRAPHS=1`, which runs the real repositories and
+    ingest: a loopback `*_test` database, or the hosted TEST project as `studymap_app`
+    with explicit opt-in and distinct expected/denied refs. Names keys, never values."""
+    url = env.get("DATABASE_URL") or ""
+    if not url:
+        return ["DATABASE_URL is required"]
+    if env.get("E2E_HOSTED_TEST") == "1":
+        expect, deny = env.get("E2E_EXPECT_REF") or "", env.get("E2E_DENY_REF") or ""
+        if not (REF.fullmatch(expect) and REF.fullmatch(deny)) or expect == deny:
+            return ["E2E_HOSTED_TEST=1 needs distinct 20-letter E2E_EXPECT_REF and E2E_DENY_REF"]
+        if deny in url:
+            return ["DATABASE_URL contains the production ref"]
+        try:
+            mode = "TRANSACTION" if urlsplit(url).port == 6543 else "SESSION"
+        except ValueError:
+            return ["DATABASE_URL is not a parseable URL"]
+        return [f"DATABASE_URL: {p}" for p in _pooler_url_problems(f"APP_URL_{mode}", url, expect)]
+    try:
+        u = urlsplit(url)
+        u.port
+    except ValueError:
+        return ["DATABASE_URL is not a parseable URL"]
+    if u.hostname not in LOOPBACK or not u.path.lstrip("/").endswith("_test") or u.query:
+        return ["DATABASE_URL must be a loopback *_test database "
+                "(or set E2E_HOSTED_TEST=1 with E2E_EXPECT_REF and E2E_DENY_REF)"]
+    return []
+
+
+def write_private(path: str, data) -> None:
+    """Mode 600 even when the file already exists (O_CREAT's mode applies to new files only)."""
+    fd = os.open(path, os.O_WRONLY | os.O_CREAT | os.O_TRUNC, 0o600)
+    try:
+        os.chmod(path, 0o600)
+    except OSError:
+        pass
+    with os.fdopen(fd, "w", encoding="utf-8") as fh:
+        json.dump(data, fh, indent=1, default=str)
 
 
 def unrevokable_api_grants(rows, revoker: str) -> list[str]:
@@ -168,13 +241,18 @@ def failures(out: dict) -> list[str]:
 
 
 def load_env(path: str) -> dict:
+    """A duplicate key is an error: last-one-wins would hide an earlier production value
+    from the production-ref scan (Codex task63 recheck)."""
     env = {}
     with open(path, encoding="utf-8") as fh:
         for line in fh:
             line = line.strip()
             if line and not line.startswith("#") and "=" in line:
                 k, _, v = line.partition("=")
-                env[k.strip()] = v.strip()
+                k = k.strip()
+                if k in env:
+                    raise ValueError(f"{k} appears twice in the env file")
+                env[k] = v.strip()
     return env
 
 
@@ -251,8 +329,13 @@ def preflight(env, out):
         revoker = c.execute(_sa().text("SELECT current_user")).scalar()
         acl = _rows(c, ACL_SQL)
         api = [r for r in acl if r[2] in (*API_ROLES, "PUBLIC")]
-        return {"revoker": revoker, "acl": acl, "default_acl": _rows(c, DEFAULT_ACL_SQL),
-                "problems": unrevokable_api_grants([tuple(r) for r in api], revoker)}
+        defaults = _rows(c, DEFAULT_ACL_SQL)
+        owners = {r[0] for r in _rows(c, "SELECT DISTINCT pg_get_userbyid(c.relowner) FROM pg_class c "
+                                         "JOIN pg_namespace n ON n.oid = c.relnamespace "
+                                         "WHERE n.nspname = 'public'")}
+        return {"revoker": revoker, "acl": acl, "default_acl": defaults, "owners": sorted(owners),
+                "problems": unrevokable_api_grants([tuple(r) for r in api], revoker)
+                + default_acl_problems([tuple(r) for r in defaults], revoker, owners)}
     out["preflight"] = _ro(env["OWNER_URL_SESSION"], f)
 
 
@@ -433,8 +516,13 @@ def main(argv=None) -> int:
                    help="disposable local PostgreSQL rehearsal: loopback *_test only")
     p.add_argument("--out", required=True)
     a = p.parse_args(argv)
-    env = load_env(a.env_file)
+    try:
+        env = load_env(a.env_file)
+    except ValueError as exc:
+        print(f"DỪNG: {exc}", file=sys.stderr)
+        return 2
     refused = local_env_problems(env) if a.local else env_problems(env, a.expect_ref, a.deny_ref)
+    refused += phase_input_problems(a.phases, env)
     if a.local and "restapi" in a.phases:
         refused.append("restapi is not available with --local")
     if refused:
@@ -449,9 +537,7 @@ def main(argv=None) -> int:
             out[ph] = f"phase raised {_err(exc)}"
     bad = failures(out)
     out["verdict"] = {"pass": not bad, "failures": bad}
-    fd = os.open(a.out, os.O_WRONLY | os.O_CREAT | os.O_TRUNC, 0o600)
-    with os.fdopen(fd, "w", encoding="utf-8") as fh:
-        json.dump(out, fh, indent=1, default=str)
+    write_private(a.out, out)
     print(f"{os.path.basename(a.out)}: {'PASS' if not bad else f'FAIL ({len(bad)})'}")
     for b in bad:
         print(f"  {b}", file=sys.stderr)
