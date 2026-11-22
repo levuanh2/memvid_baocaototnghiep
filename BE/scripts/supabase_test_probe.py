@@ -36,7 +36,6 @@ from __future__ import annotations
 import argparse
 import json
 import os
-import re
 import sys
 import urllib.error
 import urllib.request
@@ -44,12 +43,11 @@ from urllib.parse import urlsplit
 
 URL_KEYS = ("OWNER_URL_SESSION", "OWNER_URL_TRANSACTION", "APP_URL_SESSION",
             "APP_URL_TRANSACTION", "READONLY_URL_SESSION", "READONLY_URL_TRANSACTION")
-ROLE_FOR = {"OWNER": "postgres", "APP": "studymap_app", "READONLY": "studymap_readonly"}
-PORT_FOR = {"SESSION": 5432, "TRANSACTION": 6543}
-POOLER_HOST = re.compile(r"aws-\d+-[a-z]{2}-[a-z]+-\d+\.pooler\.supabase\.com")
-REF = re.compile(r"[a-z]{20}")
 API_ROLES = ("anon", "authenticated", "service_role")
-LOOPBACK = {"localhost", "127.0.0.1", "::1"}
+
+# One structural rule set for the probe, the E2E server and the fake model.
+from shared.e2e_guard import (LOOPBACK, REF, e2e_database_problems,  # noqa: E402,F401
+                              pooler_url_problems as _pooler_url_problems)
 
 
 # ── pure checks (unit-tested, no network) ───────────────────────────────────────────
@@ -75,31 +73,6 @@ def env_problems(env: dict, expect_ref: str, deny_ref: str) -> list[str]:
     if env.get("SUPABASE_URL") and env["SUPABASE_URL"].rstrip("/") != f"https://{expect_ref}.supabase.co":
         problems.append("SUPABASE_URL is not exactly https://<expect-ref>.supabase.co")
     return problems
-
-
-def _pooler_url_problems(key: str, url: str, ref: str) -> list[str]:
-    who, mode = key.split("_URL_")
-    if not url:
-        return ["empty value"]
-    try:
-        u = urlsplit(url)
-        port = u.port
-    except ValueError:
-        return ["not a parseable URL"]
-    out = []
-    if u.scheme not in ("postgresql", "postgres", "postgresql+psycopg2"):
-        out.append("scheme is not postgresql")
-    if not POOLER_HOST.fullmatch((u.hostname or "").rstrip(".")):
-        out.append("host is not a Supabase pooler (aws-N-<region>.pooler.supabase.com)")
-    if port != PORT_FOR[mode]:
-        out.append(f"{mode.lower()} mode needs port {PORT_FOR[mode]}")
-    if u.path != "/postgres":
-        out.append("database is not postgres")
-    if u.query or u.fragment:
-        out.append("query or fragment present")
-    if (u.username or "") != f"{ROLE_FOR[who]}.{ref}":
-        out.append(f"user is not {ROLE_FOR[who]}.<expect-ref>")
-    return out
 
 
 def local_env_problems(env: dict) -> list[str]:
@@ -150,35 +123,6 @@ def default_acl_problems(rows, revoker: str, owners) -> list[str]:
             f"and {role} owns objects in public; {revoker} cannot revoke it"
             for role, schema, kind, grantee, priv in rows
             if grantee in (*API_ROLES, "PUBLIC") and role != revoker and role in owners]
-
-
-def e2e_database_problems(env) -> list[str]:
-    """Guard for `run_e2e_server E2E_REAL_GRAPHS=1`, which runs the real repositories and
-    ingest: a loopback `*_test` database, or the hosted TEST project as `studymap_app`
-    with explicit opt-in and distinct expected/denied refs. Names keys, never values."""
-    url = env.get("DATABASE_URL") or ""
-    if not url:
-        return ["DATABASE_URL is required"]
-    if env.get("E2E_HOSTED_TEST") == "1":
-        expect, deny = env.get("E2E_EXPECT_REF") or "", env.get("E2E_DENY_REF") or ""
-        if not (REF.fullmatch(expect) and REF.fullmatch(deny)) or expect == deny:
-            return ["E2E_HOSTED_TEST=1 needs distinct 20-letter E2E_EXPECT_REF and E2E_DENY_REF"]
-        if deny in url:
-            return ["DATABASE_URL contains the production ref"]
-        try:
-            mode = "TRANSACTION" if urlsplit(url).port == 6543 else "SESSION"
-        except ValueError:
-            return ["DATABASE_URL is not a parseable URL"]
-        return [f"DATABASE_URL: {p}" for p in _pooler_url_problems(f"APP_URL_{mode}", url, expect)]
-    try:
-        u = urlsplit(url)
-        u.port
-    except ValueError:
-        return ["DATABASE_URL is not a parseable URL"]
-    if u.hostname not in LOOPBACK or not u.path.lstrip("/").endswith("_test") or u.query:
-        return ["DATABASE_URL must be a loopback *_test database "
-                "(or set E2E_HOSTED_TEST=1 with E2E_EXPECT_REF and E2E_DENY_REF)"]
-    return []
 
 
 def write_private(path: str, data) -> None:
@@ -330,9 +274,11 @@ def preflight(env, out):
         acl = _rows(c, ACL_SQL)
         api = [r for r in acl if r[2] in (*API_ROLES, "PUBLIC")]
         defaults = _rows(c, DEFAULT_ACL_SQL)
-        owners = {r[0] for r in _rows(c, "SELECT DISTINCT pg_get_userbyid(c.relowner) FROM pg_class c "
-                                         "JOIN pg_namespace n ON n.oid = c.relnamespace "
-                                         "WHERE n.nspname = 'public'")}
+        owners = {r[0] for r in _rows(
+            c, "SELECT pg_get_userbyid(c.relowner) FROM pg_class c JOIN pg_namespace n "
+               "ON n.oid = c.relnamespace WHERE n.nspname = 'public' "
+               "UNION SELECT pg_get_userbyid(p.proowner) FROM pg_proc p JOIN pg_namespace n "
+               "ON n.oid = p.pronamespace WHERE n.nspname = 'public'")}
         return {"revoker": revoker, "acl": acl, "default_acl": defaults, "owners": sorted(owners),
                 "problems": unrevokable_api_grants([tuple(r) for r in api], revoker)
                 + default_acl_problems([tuple(r) for r in defaults], revoker, owners)}

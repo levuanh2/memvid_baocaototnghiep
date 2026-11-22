@@ -278,6 +278,19 @@ assert_not_called 'compose .* build$'
 cp "$ENV_FILE.roles-bak" "$ENV_FILE"
 pass "the owner URL in the runtime env file is refused before build"
 
+# Task63 (Codex recheck): the offline-model and E2E harness flags never reach a deploy host.
+for e2e_var in E2E_FAKE_LLM E2E_REAL_GRAPHS E2E_PROCESS E2E_HOSTED_TEST; do
+  cp "$ENV_FILE" "$ENV_FILE.e2e-bak"
+  printf '%s=1\n' "$e2e_var" >>"$ENV_FILE"
+  reset_controls
+  run_deploy 1 "$A_SHA"
+  grep -q "$e2e_var must not be set on a deploy host" "$OUTPUT" \
+    || { cat "$OUTPUT" >&2; fail "$e2e_var in the runtime env file was not refused"; }
+  assert_not_called 'compose .* build$'
+  cp "$ENV_FILE.e2e-bak" "$ENV_FILE"
+done
+pass "E2E harness flags in the runtime env file are refused before build"
+
 # A group- or world-readable owner credential file: refused.
 chmod 644 "$MIGRATION_ENV_FILE"
 reset_controls

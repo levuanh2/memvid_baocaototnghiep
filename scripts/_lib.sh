@@ -100,6 +100,11 @@ validate_env() {
   done
   # The owner's URL: required, in MIGRATION_ENV_FILE only (docs/RUNBOOK_DB_ROLES.md).
   [ -z "$(env_value MIGRATION_DATABASE_URL)" ]     || die "MIGRATION_DATABASE_URL must not be in $ENV_FILE: every runtime container reads that file. Move it to $MIGRATION_ENV_FILE (mode 600)"
+  # Task63: the offline fake model and the E2E harness are never part of a deployment.
+  local e2e_var
+  for e2e_var in E2E_FAKE_LLM E2E_REAL_GRAPHS E2E_PROCESS E2E_HOSTED_TEST; do
+    [ -z "$(env_value "$e2e_var")" ] || die "$e2e_var must not be set on a deploy host: it belongs to scripts/run_e2e_server.py only"
+  done
   if [ -n "$(migration_env_value MIGRATION_DATABASE_URL)" ]; then
     [ "$(stat -c %a "$MIGRATION_ENV_FILE")" = 600 ]       || die "$MIGRATION_ENV_FILE must be mode 600 (it holds the database owner's credential)"
   else

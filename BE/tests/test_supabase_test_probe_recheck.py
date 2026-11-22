@@ -148,3 +148,16 @@ def test_run_e2e_server_with_real_graphs_refuses_production_before_importing_the
     assert r.returncode == 2, r.stdout[-500:] + r.stderr[-500:]
     assert "DỪNG" in r.stderr and "pw@" not in r.stderr and PROD not in r.stderr
     assert "Active providers" not in r.stdout          # the app was never imported
+
+
+def test_preflight_counts_function_owners_for_default_acl_relevance():
+    # Codex recheck2: a foreign role owning only a function in public must make its
+    # function default ACLs count (the owners set is built from pg_class AND pg_proc).
+    src = (BE / "scripts" / "supabase_test_probe.py").read_text(encoding="utf-8")
+    pre = src[src.index("def preflight("):src.index("def inspect(")]
+    assert "pg_proc" in pre and "proowner" in pre
+
+
+def test_the_e2e_guard_is_one_shared_rule():
+    from shared import e2e_guard
+    assert probe.e2e_database_problems is e2e_guard.e2e_database_problems

@@ -61,11 +61,16 @@ if E2E_FAKE_LLM:
     # serving fake answers.
     _remote = has_any_remote or bool((os.getenv("COHERE_API_KEY") or "").strip())
     _rerank = (os.getenv("RERANK_BACKEND") or "").strip().lower()
-    if _remote or _rerank not in ("", "identity"):
+    if _remote or _rerank in ("fpt", "cohere"):   # rerank.py's _REMOTE_BACKENDS
         raise RuntimeError("E2E_FAKE_LLM=1 next to a real provider key or a remote reranker; "
                            "refusing to start (unset the key or the flag)")
     if (os.getenv("E2E_PROCESS") or "").strip() != "run_e2e_server":
         raise RuntimeError("E2E_FAKE_LLM=1 outside scripts/run_e2e_server.py; refusing to start")
+    # The marker is only text: also require the verified test database (Codex recheck2).
+    from shared.e2e_guard import e2e_database_problems as _e2e_db_problems
+    if _e2e_db_problems(os.environ):
+        raise RuntimeError("E2E_FAKE_LLM=1 without a verified test database "
+                           "(loopback *_test, or the hosted test project with its refs); refusing to start")
     PROVIDERS[:] = ["fake"]
 
 print("Active providers:", PROVIDERS)

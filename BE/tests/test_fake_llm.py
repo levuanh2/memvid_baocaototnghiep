@@ -12,14 +12,16 @@ from pathlib import Path
 
 BE = Path(__file__).resolve().parents[1]
 KEYS = ("GEMINI_API_KEY", "GROQ_API_KEY", "FPT_AI_API_KEY", "COHERE_API_KEY",
-        "OLLAMA_HOST", "LLM_GATEWAY_ADDR", "RERANK_BACKEND", "E2E_PROCESS")
+        "OLLAMA_HOST", "LLM_GATEWAY_ADDR", "RERANK_BACKEND", "E2E_PROCESS", "DATABASE_URL",
+        "E2E_HOSTED_TEST", "E2E_EXPECT_REF", "E2E_DENY_REF")
 
 
 def _child(code, **env_over):
     env = {k: v for k, v in os.environ.items() if k not in KEYS}
     env.update({"SKIP_DOTENV": "1", "SKIP_MODEL_LOAD": "1", "PYTHONIOENCODING": "utf-8",
                 "E2E_FAKE_LLM": "1", "E2E_PROCESS": "run_e2e_server",
-                "RERANK_BACKEND": "identity"}, **env_over)
+                "RERANK_BACKEND": "identity",
+                "DATABASE_URL": "postgresql://u:p@127.0.0.1:5432/fake_llm_test"}, **env_over)
     for k in KEYS:
         env.setdefault(k, "")
     prelude = textwrap.dedent("""
@@ -104,4 +106,28 @@ def test_the_fake_refuses_a_remote_reranker():
 
 def test_the_fake_refuses_outside_the_e2e_harness():
     r = _child("from app.clients import llm_factory", E2E_PROCESS="")
+    assert r.returncode != 0 and "E2E_FAKE_LLM" in r.stderr
+
+
+# Codex task63 recheck round 2: the marker is only text, so the database decides too.
+PROD_POOLER = ("postgresql://studymap_app.zyxwvutsrqponmlkjihg:pw@"
+               "aws-0-ap-southeast-1.pooler.supabase.com:5432/postgres")
+
+
+def test_the_fake_refuses_a_production_shaped_database_even_with_the_marker():
+    r = _child("from app.clients import llm_factory", DATABASE_URL=PROD_POOLER)
+    assert r.returncode != 0 and "E2E_FAKE_LLM" in r.stderr and "zyxwvutsrqponmlkjihg" not in r.stderr
+
+
+def test_a_local_reranker_is_not_treated_as_remote():
+    r = _child("""
+        from app.clients import llm_factory as lf
+        assert lf.PROVIDERS == ["fake"]
+        print("ok")
+    """, RERANK_BACKEND="cross_encoder")
+    assert r.returncode == 0 and "ok" in r.stdout, r.stdout + r.stderr
+
+
+def test_the_fpt_reranker_is_refused():
+    r = _child("from app.clients import llm_factory", RERANK_BACKEND="fpt")
     assert r.returncode != 0 and "E2E_FAKE_LLM" in r.stderr
