@@ -189,7 +189,10 @@ jobs:
   # Blocking smoke subset of the Vite fixture harness (FE/playwright.fixture.config.js:
   # mocked API, no backend). The full suite (448 tests, ~17 min) runs in
   # fixture-audit.yml instead, on a schedule and on demand, so it never gates a
-  # deploy. These specs cover the regressions Round 8 actually shipped fixes for;
+  # deploy. The list of specs lives in FE/scripts/fixture-smoke-specs.mjs (one place, with a
+  # reason per spec, covered by a unit test): the Round 8 set plus the V6 regressions.
+  # A required spec that is missing fails the job; specs of still-open V6 pull requests join
+  # the gate when their file reaches this branch.
   # --fail-on-flaky-tests turns a pass-on-retry into a failure rather than noise.
   fixture-smoke:
     name: Fixture Smoke (Playwright)
@@ -220,19 +223,16 @@ jobs:
       - name: Install Playwright browsers
         run: npx playwright install --with-deps chromium
 
+      # `set -euo pipefail`: a failing list script (missing required spec) must stop the step
+      # before Playwright runs, instead of running Playwright with an empty list (= every spec).
       - name: Run fixture smoke specs
-        run: >-
-          npx playwright test -c playwright.fixture.config.js --workers=1 --fail-on-flaky-tests
-          e2e-fixture/mobile-header.spec.js
-          e2e-fixture/round6-library-action-matrix.spec.js
-          e2e-fixture/export-studio.spec.js
-          e2e-fixture/exact-node-export-v3.spec.js
-          e2e-fixture/exact-branch-artifact-gates.spec.js
-          e2e-fixture/post-pr77-exact-selection.spec.js
-          e2e-fixture/multi-branch-export-connectors.spec.js
-          e2e-fixture/multi-branch-export-raster-connectors.spec.js
-          e2e-fixture/mindmap-depth-presets.spec.js
-          e2e-fixture/mobile-touch-selection.spec.js
+        shell: bash
+        run: |
+          set -euo pipefail
+          node scripts/fixture-smoke-specs.mjs > "$RUNNER_TEMP/fixture-smoke-specs.txt"
+          mapfile -t specs < "$RUNNER_TEMP/fixture-smoke-specs.txt"
+          test "${#specs[@]}" -gt 0
+          npx playwright test -c playwright.fixture.config.js --workers=1 --fail-on-flaky-tests "${specs[@]}"
 
       - name: Upload fixture report & traces on failure
         if: failure()
