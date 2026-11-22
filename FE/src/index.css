@@ -960,7 +960,7 @@
   font-size: 12px; font-weight: 600;
 }
 .study-tools-trigger:hover, .study-tools-trigger:focus-visible {
-  color: var(--text-primary); border-color: var(--accent); outline: none;
+  color: var(--text-primary); border-color: var(--accent);
 }
 .mode-library-menu, .study-tools-menu {
   position: absolute; z-index: 70; top: calc(100% + 8px); right: 0;
