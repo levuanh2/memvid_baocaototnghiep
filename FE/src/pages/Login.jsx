@@ -63,14 +63,19 @@ export default function Login() {
           <form onSubmit={onSubmit} className="flex flex-col gap-3.5">
             {/* Chọn nguồn tài khoản. Mặc định là tài khoản StudyMap — người dùng cũ
                 mở trang này thấy đúng thứ họ vẫn thấy. */}
-            <div className="flex gap-1.5" role="radiogroup" aria-label="Nguồn tài khoản">
-              {[["local", "Tài khoản StudyMap"], ["nks", "Tài khoản NKS"]].map(([gt, nhan]) => (
-                <button key={gt} type="button" role="radio" aria-checked={provider === gt}
-                  onClick={() => doiProvider(gt)}
-                  className={`pill-tab flex-1 justify-center !py-1.5 ${provider === gt ? "pill-tab-active" : ""}`}>
-                  {nhan}
-                </button>
-              ))}
+            {/* V9.3: "Tài khoản" is said once, in the group label, so each choice stays one
+                line at every width (the full words wrapped at 1280px with Be Vietnam Pro). */}
+            <div className="flex flex-col gap-1.5">
+              <span id="login-provider-label" className="text-small font-medium text-text-secondary">Đăng nhập bằng tài khoản</span>
+              <div className="flex gap-1.5" role="radiogroup" aria-labelledby="login-provider-label">
+                {[["local", "StudyMap"], ["nks", "NKS"]].map(([gt, nhan]) => (
+                  <button key={gt} type="button" role="radio" aria-checked={provider === gt}
+                    onClick={() => doiProvider(gt)}
+                    className={`pill-tab flex-1 justify-center min-h-[44px] whitespace-nowrap ${provider === gt ? "pill-tab-active" : ""}`}>
+                    {nhan}
+                  </button>
+                ))}
+              </div>
             </div>
 
             {laNks ? (

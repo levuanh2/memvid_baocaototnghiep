@@ -3719,3 +3719,18 @@ Rules: check icons and logos when a rename is reported incomplete; serve a chang
 new URL (browsers cache favicons per URL); a static SVG cannot read CSS variables, so pin its
 colour to the token value and test that they stay equal; comments quoting the retired name trip
 the branding test, so describe it without naming it.
+
+## 2026-11-22 — Remapping token values breaks consumers that bypassed the paired token
+
+PR #197 (V9.3 P1a) changed `--accent`/`--accent-cta`/`--seal` from blue/red to gold-brown and
+gold. The token values were accessible in isolation, but six consumers had hard-coded a light
+foreground (`#fff`, `#FFFFFF`, `#F5F1E8`) on a token fill: in dark mode they became white on
+gold at 1.31–1.63:1 (Codex and agy review, both BLOCK). The same remap made `--warn` equal to
+`--accent`, so warning and action read the same, and left V5 blue hard-coded in the mind map
+and Export Studio. Root cause: a token remap changes the background under every consumer, but
+a literal foreground does not follow. Fix: every solid token fill takes `var(--on-primary)`;
+warning got its own value; blue and retired fonts replaced by tokens. Regression:
+`FE/src/styles.v93Contract.test.js` checks WCAG pairs in both themes, role distinctness, and
+scans CSS and inline styles for light literals on token fills, legacy blue, retired fonts,
+2px accent rings and 44px buttons squeezed into `h-8/9/10`. Prevention: before remapping a
+token, grep every consumer of it and of literal foregrounds near it, and keep the scan test.

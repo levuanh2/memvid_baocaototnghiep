@@ -1180,7 +1180,7 @@ export default function ChatArea({
           {loading && !pendingReview ? (
             <button
               onClick={handleCancel}
-              className="btn-danger w-10 h-10 !p-0 rounded-[9px] inline-flex items-center justify-center flex-shrink-0"
+              className="btn-danger w-11 h-11 !p-0 rounded-[9px] inline-flex items-center justify-center flex-shrink-0"
               aria-label="Huỷ truy vấn" title="Huỷ"
             >
               <Icon name="Square" size={15} />
@@ -1189,7 +1189,7 @@ export default function ChatArea({
             <button
               onClick={handleSend}
               disabled={(!input.trim() && !attachedImage) || Boolean(pendingReview) || transcribing}
-              className="btn-primary w-10 h-10 !p-0 rounded-[9px] inline-flex items-center justify-center flex-shrink-0"
+              className="btn-primary w-11 h-11 !p-0 rounded-[9px] inline-flex items-center justify-center flex-shrink-0"
               aria-label="Gửi câu hỏi"
             >
               <Icon name="Send" size={16} strokeWidth={2} />

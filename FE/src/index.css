@@ -1,4 +1,4 @@
-@import url('https://fonts.googleapis.com/css2?family=Spectral:ital,wght@0,400;0,500;0,600;0,700;1,400;1,500&family=Inter:wght@400;500;600;700&family=IBM+Plex+Mono:wght@400;500;600&display=swap');
+@import url('https://fonts.googleapis.com/css2?family=Be+Vietnam+Pro:wght@400;500;600;700;800&family=IBM+Plex+Mono:wght@400;500;600&display=swap');
 
 @tailwind base;
 @tailwind components;
@@ -10,221 +10,133 @@
    the only accent is son/chu sa seal red, used as a stamp.
 ═══════════════════════════════════════════════════ */
 @layer base {
+  /* V9.3 (docs/StudyMap-V9.3/02, PR #197): every VALUE below is the V9.3 design system.
+     Many comments in these two blocks are the history of earlier rounds (blue accent, seal
+     red, Spectral); where a comment and a value disagree, the value and this note win.
+     Roles: --accent = gold-brown text/link; --accent-cta + --on-primary = primary fill and
+     its paired foreground; --seal = citation/wordmark; --warn = warning only (never the
+     action colour); --forest/--ok = success; --err = danger; --focus = the focus ring. */
   :root {
-    /* Surfaces — cool research paper (Visual Identity Reset, see
-       docs/VISUAL_IDENTITY_WORKSPACE_REDESIGN.md). Was warm giấy-dó beige;
-       moved to a cool off-white/slate family so the app reads as a research
-       instrument, not a paper simulation. Ink text tokens below were
-       already navy-charcoal and are unchanged. */
-    --bg-base:     #F4F8FC;   /* mock canvas/background: sampled flat #F4F8FC */
-    --bg-sidebar:  #FEFEFE;   /* mock header/sidebar: sampled flat #FEFEFE */
-    --bg-card:     #FFFFFF;   /* cards — clean white surface */
-    --bg-elevated: #F1F6FB;   /* mock input/well surface */
+    --bg-base:     #F6F7F2;
+    --bg-sidebar:  #FFFFFF;
+    --bg-card:     #FFFFFF;
+    --bg-elevated: #F0F2EB;
     --bg-panel:    #FFFFFF;
-    --bg-hover:    #EAF3FF;   /* blue-soft hover/selection wash */
+    --bg-hover:    #F0F2EB;
+    --text-primary:   #20211D;
+    --text-secondary: #62665B;
+    --text-muted:     #62665B;
+    --text-inverse:   #F6F7F2;
 
-    /* Text — ink (unchanged; already navy-charcoal, matches the reset) */
-    --text-primary:   #102A5D;
-    --text-secondary: #5B7096;
-    /* Phase C Round 2 (UX-VIS-002, docs/ui-ux-audit-v4/03-visual-design-audit.md):
-       was #8294B1 — measured 2.89:1 on --bg-base / 3.08:1 on --bg-card, both
-       below the 4.5:1 normal-text floor. Canonical value from doc 06 §1 /
-       visual-grammar-spec.md §1, re-verified here against THIS app's actual
-       surfaces (WCAG relative-luminance formula): 4.73:1 on --bg-base, 5.05:1
-       on --bg-card. Only this token changes — --text-secondary already passes
-       (4.69:1) and is left untouched per the measured-defect-only scope. */
-    --text-muted:     #587095;
-    --text-inverse:   #F4F8FC;
+    --border-color:  #DEDFD6;
+    --border-strong: #B8BCAE;
 
-    /* Rules — hairline ink */
-    --border-color:  rgba(29, 67, 117, 0.14);
-    --border-strong: rgba(29, 67, 117, 0.24);
+    --accent:        #765300;
+    --accent-hover:  #5C4100;
+    --accent-subtle: #FFF3CF;
+    --accent-cta:       #20231B;
+    --accent-cta-hover: #393E30;
+    --brand-rgb:     118 83 0;
+    --ink-rgb:       32 33 29;
+    --slate:         #62665B;
 
-    /* Accent — action/selection/focus role (Signature Contract §1). User
-       decision (supersedes the forest-vs-blue open item from the first
-       redesign pass): primary interactive is the Learning Canvas Option 2
-       blue, not forest. Forest is kept (see --forest below, value
-       UNCHANGED) but its role narrows to success/ready-status/progress
-       only — never a button, tab, link, checkbox, or focus ring.
-       `--seal`/`--brand-rgb` below are UNCHANGED and stay red — provenance/
-       citation + the StudyMap wordmark accent and brand mark only (Signature Contract §7;
-       verified no citation/provenance consumer reads `--accent`). */
-    --accent:        #126CF2;   /* approved primary accent */
-    --accent-hover:  #0059D6;   /* primary hover/pressed */
-    --accent-subtle: #EAF3FF;   /* primary soft surface (selection wash, badges) */
-    /* Phase C Round 2 (UX-VIS-001): dedicated solid-fill role for white-text
-       buttons (.btn-primary/.btn-seal), separate from --accent itself.
-       --accent also serves as a TEXT/icon color elsewhere (links, pill-tabs,
-       focus rings) where a lighter value reads better against dark
-       surfaces — the two needs pull in opposite directions, which is exactly
-       why a single shared variable can't satisfy both (see the dark-mode
-       value below). Light mode has no such conflict (white text already
-       passes against --accent at 4.72:1), so this simply aliases it. */
-    --accent-cta:       var(--accent);
-    --accent-cta-hover: var(--accent-hover);
-    --brand-rgb:     241 51 58;   /* mock seal/citation red */
-    --ink-rgb:       27 42 65;
-    --slate:         #5C6B7A;
-
-    /* Phase C Round 2 (doc 06 §2): were referenced (FE/src/index.css's own
-       .artifact-toolbar__identity rules, mindmap.css's hidden-count badge)
-       but never declared — `font: ... var(--font-display)` silently dropped
-       the whole shorthand, `font-family: var(--font-mono, monospace)`
-       degraded to a generic monospace. Same, theme-independent in both light
-       and dark — typography doesn't flip with the color scheme. Values
-       match tailwind.config.js's existing `display`/`mono` fontFamily
-       entries exactly, so every `className="font-display"`/`"font-mono"`
-       Tailwind-utility consumer (governed by tailwind.config.js, not this
-       file) is visually unchanged — this only fixes the two real var()
-       consumers above. No new font package: both families are already
-       loaded by this file's own @import. */
-    --font-display: 'Spectral', Georgia, serif;
+    --font-display: 'Be Vietnam Pro', system-ui, sans-serif;
     --font-mono:    'IBM Plex Mono', ui-monospace, monospace;
 
-    /* Seal — provenance ONLY (wordmark stamp, citations, evidence, the
-       seal-meter mastery visualization). Same value as `--accent` today by
-       construction (they haven't diverged yet); kept as its OWN named var so
-       provenance consumers stay correct once `--accent` flips to forest. */
-    --seal: #F1333A;
+    --seal: #765300;
 
-    /* Wave 1 (additive) — forest/bronze from the Signature Contract. */
-    --forest-rgb: 31 64 51;     /* #1F4033 */
-    --bronze-rgb: 160 106 59;   /* #A06A3B */
-    --forest: #1F4033;
-    --bronze: #A06A3B;
+    --forest-rgb: 36 99 72;
+    --bronze-rgb: 118 83 0;
+    --forest: #246348;
+    --bronze: #765300;
 
-    /* Sprint F — the graphite register (Knowledge Inspector / Evidence
-       Drawer, both MindMap-scoped; the persistent /app workspace's
-       SidebarRight left this register in the structural refactor pass, see
-       mindmap.css's own comment there). Declared ONCE, here, with NO
-       redefinition in the `html.dark` block below — that's what makes it a permanent register rather than a
-       dark-mode variant: these values are the SAME regardless of which
-       reading theme is active, verified by the fact that nothing below
-       redeclares them. Warm graphite, not black — distinct from BOTH the
-       light paper surface and the navy-tinted dark-mode surface, so
-       "graphite" reads as its own material, not just "dark mode turned on." */
-    --surface-contrast:        #26241F;
-    --on-contrast:             #EDE8DA;
-    --on-contrast-muted:       #A79E8C;
+    --surface-contrast:        #20211D;
+    --on-contrast:             #F2F4EA;
+    --on-contrast-muted:       #B4B9A8;
     --contrast-border:         rgba(237, 232, 218, 0.14);
     --contrast-border-strong:  rgba(237, 232, 218, 0.24);
     --contrast-hover:          rgba(237, 232, 218, 0.07);
-    --contrast-input-bg:       #201E19;
-    /* Contrast measured (WCAG relative-luminance formula, not eyeballed):
-       surface-contrast (#26241F) vs forest (#1F4033) = 1.36:1 — fails,
-       forest reads almost invisibly dark on graphite. vs the base --bronze
-       (#A06A3B) = 3.41:1 — passes for UI-component boundaries (3:1) but not
-       body text (4.5:1). This dedicated, lighter bronze (#C99A6C, same hue
-       family, tuned for this ONE dark surface) = 6.14:1 — clears normal-text
-       AA, not just the component-boundary minimum. */
-    --contrast-focus:          #C99A6C;
+    --contrast-input-bg:       #181915;
+    --contrast-focus:          #F4C44E;
 
-    /* Semantic status */
-    --ok:    #16B36A;   /* mock ready/success green */
-    --ok-bg: rgba(22,179,106,0.12);   /* Wave 0: was an undeclared var(--ok-bg) everywhere, silently
-                                        falling back to rgba(34,150,94,0.12) — a DIFFERENT, brighter
-                                        green than --ok itself. Declared for real, derived from --ok's
-                                        own rgb so the badge background actually matches the badge text. */
-    --warn: #F39A1B;   /* mock warning/technology orange */
-    --err:  #F1333A;   /* error (also the seal) */
-    /* Round 7.1: component-scoped semantic roles. The global status palette
-       remains unchanged; these foregrounds are tuned against the actual
-       translucent Quiz badges and the destructive button's solid fill. */
-    --quiz-status-correct: #06663A;
-    --quiz-status-partial: #854700;
-    --quiz-status-incorrect: #B4232A;
-    --quiz-status-processing: #854700;
-    --quiz-question-complete-fg: #064EAF;
-    --danger-cta: #B4232A;
-    --danger-cta-hover: #941D24;
+    --ok:    #246348;
+    --ok-bg: #EDF6EF;
+    --warn: #8A4512;
+    --err:  #9D392E;
+    --quiz-status-correct: #246348;
+    --quiz-status-partial: #8A4512;
+    --quiz-status-incorrect: #9D392E;
+    --quiz-status-processing: #62665B;
+    --quiz-question-complete-fg: #20211D;
+    --danger-cta: #9D392E;
+    --danger-cta-hover: #7F2D24;
 
-    /* Shadows — soft, paper-on-paper */
-    --shadow-card:       0 1px 2px rgba(29,67,117,0.06), 0 1px 1px rgba(29,67,117,0.04);
-    --shadow-card-hover: 0 6px 18px rgba(29,67,117,0.10), 0 2px 6px rgba(29,67,117,0.06);
+    --shadow-card:       0 1px 2px rgb(27 31 20 / .05);
+    --shadow-card-hover: 0 12px 32px rgb(27 31 20 / .07);
 
-    /* Scrollbar — follows the accent (now blue) */
-    --scrollbar-thumb: rgba(18,108,242,0.28);
-    --scrollbar-hover: rgba(18,108,242,0.50);
+    --scrollbar-thumb: rgb(32 33 29 / .22);
+    --scrollbar-hover: rgb(32 33 29 / .40);
+    /* V9.3 roles (docs/StudyMap-V9.3/02-Design-System.md). */
+    --brand: #F4C44E; --brand-soft: #FFF3CF; --on-primary: #FFFFFF;
+    --focus: #886100; --success-line: #9FC4AC; --danger-bg: #FFF0ED; --danger-line: #DBA69F;
   }
 
-  /* ═══════════════════════════════════════════════════
-     DARK (ink) — first-class, not an afterthought
-  ═══════════════════════════════════════════════════ */
   html.dark {
-    --bg-base:     #15233B;
-    --bg-sidebar:  #1B2A41;
-    --bg-card:     #1B2A41;
-    --bg-elevated: #101B2E;
-    --bg-panel:    #1B2A41;
-    --bg-hover:    #223251;
+    --bg-base:     #151810;
+    --bg-sidebar:  #21261A;
+    --bg-card:     #21261A;
+    --bg-elevated: #2A3021;
+    --bg-panel:    #21261A;
+    --bg-hover:    #2A3021;
 
-    --text-primary:   #ECE7DB;
-    --text-secondary: #A9B4C2;
-    /* Phase C Round 2 (UX-VIS-002): was #6B7689 — measured 3.43:1 on
-       --bg-base / 3.15:1 on --bg-card. New value re-verified against this
-       app's actual dark surfaces: 8.61:1 on --bg-base, 7.91:1 on --bg-card. */
-    --text-muted:     #AFC1DD;
-    --text-inverse:   #15233B;
+    --text-primary:   #F2F4EA;
+    --text-secondary: #B4B9A8;
+    --text-muted:     #B4B9A8;
+    --text-inverse:   #151810;
 
-    --border-color:  rgba(236, 231, 219, 0.10);
-    --border-strong: rgba(236, 231, 219, 0.20);
+    --border-color:  #3A4031;
+    --border-strong: #69725C;
 
-    /* Same accent/seal split as :root above — general action/selection/focus
-       is blue (dark-mode-tuned: brightened off the light-mode #126CF2/
-       #0C55CC/#EAF3FF for readability on navy, same pattern already used
-       for dark-mode forest below), seal/brand stay red (provenance +
-       wordmark only). Forest (below) is UNCHANGED and still the one
-       MindMap's selection ring and ::selection read from directly. */
-    --accent:        #5B9DF5;
-    --accent-hover:  #82B8F8;
-    --accent-subtle: #1B2F4D;
-    /* Phase C Round 2 (UX-VIS-001, docs/ui-ux-audit-v4/03-visual-design-audit.md):
-       --accent itself (#5B9DF5) stays — it's deliberately light so accent-as-
-       TEXT-color (links, pill-tabs, icon-btn hover) still reads at 5.22:1
-       against --bg-card. That SAME lightness is exactly why white text on an
-       --accent-filled button measured 2.77:1 and failed. A dedicated,
-       darker, button-only fill breaks the conflict without touching every
-       other --accent consumer. Verified (WCAG relative-luminance formula,
-       white #FFFFFF foreground): #2563EB → 5.17:1 against --bg-base
-       (#15233B); hover #1D4ED8 → 6.70:1. The default fill also clears the
-       3:1 non-text floor against --bg-base on its own (3.04:1) — the focus
-       outline itself is unaffected by this change, it still reads from the
-       unchanged --accent (5.68:1 against --bg-base). */
-    --accent-cta:       #2563EB;
-    --accent-cta-hover: #1D4ED8;
-    --brand-rgb:     216 106 83;
-    --ink-rgb:       236 231 219;
-    --slate:         #8FA0B3;
-    --seal: #D86A53;
+    --accent:        #F4D178;
+    --accent-hover:  #FFDB80;
+    --accent-subtle: #3D341B;
+    --accent-cta:       #F4C44E;
+    --accent-cta-hover: #FFDB80;
+    --brand-rgb:     244 209 120;
+    --ink-rgb:       242 244 234;
+    --slate:         #B4B9A8;
+    --seal: #F4D178;
 
-    --forest-rgb: 111 169 138;   /* #6FA98A — brightened, not an inversion */
-    --bronze-rgb: 201 154 108;   /* #C99A6C */
-    --forest: #6FA98A;
-    --bronze: #C99A6C;
+    --forest-rgb: 182 223 196;
+    --bronze-rgb: 244 209 120;
+    --forest: #B6DFC4;
+    --bronze: #F4D178;
 
-    --ok:    #5BA888;
-    --ok-bg: rgba(91,168,136,0.14);
-    --warn: #D6A547;
-    --err:  #D86A53;
-    --quiz-status-correct: #70C49E;
-    --quiz-status-partial: #F1C56A;
-    --quiz-status-incorrect: #FF9A86;
-    --quiz-status-processing: #F1C56A;
-    --quiz-question-complete-fg: #B7D5FF;
-    --danger-cta: #A63B2E;
-    --danger-cta-hover: #873027;
+    --ok:    #B6DFC4;
+    --ok-bg: #1D3426;
+    --warn: #F2B48A;
+    --err:  #F0B7AD;
+    --quiz-status-correct: #B6DFC4;
+    --quiz-status-partial: #F2B48A;
+    --quiz-status-incorrect: #F0B7AD;
+    --quiz-status-processing: #B4B9A8;
+    --quiz-question-complete-fg: #F2F4EA;
+    --danger-cta: #9D392E;
+    --danger-cta-hover: #7F2D24;
 
-    --shadow-card:       0 1px 3px rgba(0,0,0,0.35), 0 1px 2px rgba(0,0,0,0.25);
-    --shadow-card-hover: 0 6px 20px rgba(0,0,0,0.45), 0 2px 8px rgba(0,0,0,0.30);
+    --shadow-card:       0 1px 3px rgb(0 0 0 / .30);
+    --shadow-card-hover: 0 12px 32px rgb(0 0 0 / .40);
 
-    --scrollbar-thumb: rgba(91,157,245,0.32);
-    --scrollbar-hover: rgba(91,157,245,0.55);
+    --scrollbar-thumb: rgb(242 244 234 / .24);
+    --scrollbar-hover: rgb(242 244 234 / .42);
+    --brand: #F4C44E; --brand-soft: #3D341B; --on-primary: #252212;
+    --focus: #F4C44E; --success-line: #527E5F; --danger-bg: #3D2720; --danger-line: #A76B5E;
   }
 
   html, body, #root { height: 100%; }
 
   body {
-    font-family: Inter, system-ui, sans-serif;
+    font-family: 'Be Vietnam Pro', system-ui, sans-serif;
     background: var(--bg-base);
     color: var(--text-primary);
     overflow: hidden;
@@ -239,8 +151,11 @@
      reason — see MindElixirView.jsx's THEME.cssVar). Text selection now
      matches: one selection color across every surface, an ink-wash instead
      of the OS-default blue block. */
+  /* V9.3 (03-Components-Accessibility): one visible 3px focus ring everywhere. */
+  :focus-visible { outline: 3px solid var(--focus); outline-offset: 2px; }
+
   ::selection {
-    background: color-mix(in srgb, var(--forest) 22%, transparent);
+    background: var(--brand-soft);
     color: var(--text-primary);
   }
 }
@@ -253,10 +168,6 @@
 
 /* ─── Utilities ─────────────────────────────── */
 @layer utilities {
-  /* Wave 1: `.font-reading` was a duplicate alias of `.font-display` (same
-     Spectral/Georgia/serif voice, slightly different fallback chain) —
-     collapsed to one role per the Signature Contract; every call site now
-     uses `font-display` directly. */
   /* No more gradient brand — degrade any leftover usage to seal ink */
   /* Wave 8 cleanup: `.text-gradient` removed — grep-confirmed zero JSX
      consumers (its own comment said it was a leftover compatibility shim
@@ -326,7 +237,7 @@
        --accent directly — see that token's own comment for why the two
        diverge in dark mode. */
     background: var(--accent-cta);
-    color: #FFFFFF;
+    color: var(--on-primary);
     border: 1px solid var(--accent-cta);
   }
   .btn-primary:hover { background: var(--accent-cta-hover); border-color: var(--accent-cta-hover); box-shadow: var(--shadow-card-hover); transform: translateY(-1px); }
@@ -349,7 +260,7 @@
        components), so unifying the text color removes the defect with no
        visual-identity loss. */
     background: var(--accent-cta);
-    color: #FFFFFF;
+    color: var(--on-primary);
     border: 1px solid var(--accent-cta);
   }
   .btn-seal:hover { background: var(--accent-cta-hover); border-color: var(--accent-cta-hover); box-shadow: var(--shadow-card-hover); transform: translateY(-1px); }
@@ -443,7 +354,7 @@
     color: var(--text-primary);
   }
   .pill-tab--sub:focus-visible {
-    outline: 2px solid var(--accent);
+    outline: 3px solid var(--focus);
     outline-offset: 2px;
     transition: none;
   }
@@ -484,7 +395,7 @@
   }
   .inspector-tab.pill-tab-active::after { background: var(--accent); }
   .inspector-tab:focus-visible {
-    outline: 2px solid var(--accent);
+    outline: 3px solid var(--focus);
     outline-offset: 2px;
     transition: none;
   }
@@ -555,10 +466,15 @@
      ring of their own — Tab landed on the browser's mismatched default
      outline. One shared rule instead of six ad-hoc inline `--tw-ring-color`
      copies (the pattern AvatarPicker/StudyCard already use per-instance). */
+  /* V9.3: primary controls are at least 44px tall. */
+  .btn-primary, .btn-seal, .btn-secondary, .btn-danger {
+    min-height: 44px;
+    display: inline-flex; align-items: center; justify-content: center; gap: 0.5rem;
+  }
   .btn-primary:focus-visible, .btn-seal:focus-visible, .btn-secondary:focus-visible,
   .btn-danger:focus-visible, .pill-tab:focus-visible, .pill-action:focus-visible,
   .icon-btn:focus-visible {
-    outline: 2px solid var(--accent);
+    outline: 3px solid var(--focus);
     outline-offset: 2px;
     /* Sprint J (Hallmark major finding): these six primitives all carry
        `transition-all`, which was animating outline-color in on focus too —
@@ -653,8 +569,8 @@
     user-select: none;
   }
   .cite-chip:hover, .cite-chip--active {
-    color: #F5F1E8;
-    background: var(--seal);
+    color: var(--on-primary);
+    background: var(--accent-cta);
     border-color: var(--seal);
   }
 
@@ -864,7 +780,7 @@
 .panel-spine--right { border-left: 1px solid var(--border-color); }
 .panel-spine:hover  { background: var(--bg-hover); color: var(--text-secondary); }
 .panel-spine:focus-visible {
-  outline: 2px solid var(--accent);
+  outline: 3px solid var(--focus);
   outline-offset: -2px;
 }
 
@@ -922,7 +838,7 @@
   transition: color 0.15s ease, border-color 0.15s ease;
 }
 .panel-collapse-btn:hover { border-color: var(--accent); color: var(--accent); }
-.panel-collapse-btn:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+.panel-collapse-btn:focus-visible { outline: 3px solid var(--focus); outline-offset: 2px; }
 .panel-collapse-btn--left  { right: 6px; }
 .panel-collapse-btn--right { left: 6px; }
 
@@ -974,7 +890,7 @@
 }
 .disclosure__toggle:hover { background: var(--bg-hover); color: var(--text-primary); }
 .disclosure__toggle:focus-visible {
-  outline: 2px solid var(--accent);
+  outline: 3px solid var(--focus);
   outline-offset: -2px;
 }
 
@@ -1020,7 +936,7 @@
 /* Wave 4 — the opening-paragraph editorial flourish (redesign spec §07).
    Marks "a reading surface begins here" once; never repeated per section. */
 .prose-drop-cap > p:first-of-type::first-letter {
-  font-family: 'Spectral', Georgia, serif;
+  font-family: var(--font-display);
   font-size: 2.5em;
   float: left;
   line-height: 0.82;
@@ -1044,7 +960,7 @@
   font-size: 12px; font-weight: 600;
 }
 .study-tools-trigger:hover, .study-tools-trigger:focus-visible {
-  color: var(--text-primary); border-color: var(--accent); outline: none;
+  color: var(--text-primary); border-color: var(--accent);
 }
 .mode-library-menu, .study-tools-menu {
   position: absolute; z-index: 70; top: calc(100% + 8px); right: 0;
@@ -1077,7 +993,7 @@
 .mode-library-menu__item:hover, .mode-library-menu__item:focus-visible,
 .mode-library-menu__create:hover, .mode-library-menu__create:focus-visible,
 .study-tools-menu__item:hover, .study-tools-menu__item:focus-visible {
-  color: var(--text-primary); background: var(--bg-hover); outline: none;
+  color: var(--text-primary); background: var(--bg-hover);
 }
 .mode-library-menu__item.is-selected { color: var(--text-primary); background: color-mix(in srgb, var(--accent) 10%, transparent); }
 .mode-library-menu__item-icon, .study-tools-menu__item-icon { width: 32px; height: 32px; display: grid; place-items: center; flex: 0 0 32px; color: var(--accent); border-radius: 7px; background: var(--bg-elevated); }
@@ -1097,7 +1013,7 @@
 .source-search-row { position: relative; display: flex; align-items: center; gap: 7px; min-width: 0; min-height: 38px; padding: 0 7px 0 10px; border: 1px solid var(--border-color); border-radius: 8px; background: var(--bg-card); }
 .source-search-row:focus-within { border-color: var(--accent); box-shadow: 0 0 0 2px color-mix(in srgb, var(--accent) 15%, transparent); }
 .source-filter-trigger { position: relative; display: inline-grid; place-items: center; flex: 0 0 32px; width: 32px; height: 32px; border: 0; border-radius: 6px; color: var(--text-muted); background: transparent; cursor: pointer; }
-.source-filter-trigger:hover, .source-filter-trigger:focus-visible, .source-filter-trigger.is-active { color: var(--accent); background: var(--bg-hover); outline: none; }
+.source-filter-trigger:hover, .source-filter-trigger:focus-visible, .source-filter-trigger.is-active { color: var(--accent); background: var(--bg-hover); }
 .source-filter-trigger span { position: absolute; top: -3px; right: -3px; min-width: 15px; height: 15px; padding: 0 3px; border-radius: 99px; color: var(--bg-card); background: var(--accent); font: 9px/15px "IBM Plex Mono", ui-monospace, monospace; text-align: center; }
 .source-filter-popover { position: absolute; z-index: 35; top: 118px; left: 12px; right: 12px; padding: 12px; border: 1px solid var(--border-color); border-radius: 10px; background: var(--bg-card); box-shadow: var(--shadow-card-hover); }
 .source-filter-popover__head, .source-filter-popover__foot { display: flex; align-items: center; justify-content: space-between; gap: 8px; }
@@ -1129,7 +1045,7 @@
 .source-rail__toggle:focus-visible, .source-rail__file:focus-visible, .source-rail__add:focus-visible {
   border-color: var(--accent);
   color: var(--accent);
-  outline: 2px solid var(--accent);
+  outline: 3px solid var(--focus);
   outline-offset: 2px;
 }
 /* Round 3 QA closure (same UX-VIS-001 class of defect as Round 2's CTA fix):
@@ -1138,7 +1054,7 @@
    --accent-cta's own comment in this file). A small badge is still normal-
    size text under WCAG 1.4.3 (the "large text" 3:1 allowance needs ~24px/
    18.66px-bold, nowhere near this). --accent-cta: 5.17:1. */
-.source-rail__toggle span { position: absolute; top: -5px; right: -5px; display: grid; min-width: 17px; height: 17px; padding: 0 3px; place-items: center; border-radius: 9px; color: #fff; background: var(--accent-cta); font: 700 9px/1 var(--font-mono); }
+.source-rail__toggle span { position: absolute; top: -5px; right: -5px; display: grid; min-width: 17px; height: 17px; padding: 0 3px; place-items: center; border-radius: 9px; color: var(--on-primary); background: var(--accent-cta); font: 700 9px/1 var(--font-mono); }
 .source-rail__divider { width: 18px; height: 1px; flex: 0 0 1px; background: var(--border-strong); }
 .source-rail__files { display: flex; width: 100%; min-height: 0; flex: 1; flex-direction: column; align-items: center; gap: 9px; overflow-x: hidden; overflow-y: auto; padding: 1px 0 6px; scrollbar-width: none; }
 .source-rail__files::-webkit-scrollbar { display: none; }
@@ -1163,10 +1079,10 @@
   /* Phase C Round 3 (Codex2 review): was 36x36px, below the 44x44px mobile
      touch-target floor named in the brief's accessibility gates. */
   .mobile-context button { position: relative; display: grid; width: 44px; height: 44px; place-items: center; border: 0; border-radius: 8px; color: var(--text-muted); background: transparent; }
-  .mobile-context button:hover, .mobile-context button:focus-visible { color: var(--accent); background: var(--accent-subtle); outline: 2px solid var(--accent); outline-offset: 1px; }
+  .mobile-context button:hover, .mobile-context button:focus-visible { color: var(--accent); background: var(--accent-subtle); outline: 3px solid var(--focus); outline-offset: 1px; }
   /* Round 3 QA closure: same --accent-cta fix as .source-rail__toggle span
      above (white text on --accent measured 2.77:1 in dark mode). */
-  .mobile-context b { position: absolute; top: 0; right: 0; display: grid; min-width: 15px; height: 15px; padding: 0 2px; place-items: center; border-radius: 8px; color: #fff; background: var(--accent-cta); font: 700 8px/1 var(--font-mono); }
+  .mobile-context b { position: absolute; top: 0; right: 0; display: grid; min-width: 15px; height: 15px; padding: 0 2px; place-items: center; border-radius: 8px; color: var(--on-primary); background: var(--accent-cta); font: 700 8px/1 var(--font-mono); }
 }
 
 @media (prefers-reduced-motion: reduce) {

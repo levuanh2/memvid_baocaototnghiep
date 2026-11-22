@@ -3,7 +3,7 @@
 .library-task-view[aria-pressed="true"] { border-color:var(--accent); color:var(--accent); box-shadow:inset 3px 0 0 var(--accent); }
 .library-task-view:focus-visible,
 .study-document-row__quick button:focus-visible,
-.study-document-row__tools>button:focus-visible { outline:2px solid var(--accent); outline-offset:2px; }
+.study-document-row__tools>button:focus-visible { outline:3px solid var(--focus); outline-offset:2px; }
 .library-task-view strong { font-family:var(--font-mono); font-variant-numeric:tabular-nums; }
 .study-document-matrix { display:flex; flex-direction:column; gap:8px; }
 /* Primary action column: at least 220px, growing with its label ("Tiếp tục · Hướng dẫn ôn tập" needs ~240-260px depending on the font); a fixed 220px clipped the arrow and both ends of that label at every width >= 768px. The cap is max-width:300px on the button itself (CI on Linux measured the label at ~257px in the DejaVu Sans Bold fallback, i.e. a 283px button; 280px still clipped it by 1.6px a side) (an item's max-content contribution is clamped by its max-width), so a future longer label cannot squeeze the title column; the Library spec fails if a label exceeds it. NOTE fit-content() cannot sit inside minmax(): the browser drops the whole grid-template-columns and every row stacks. Rows are separate grids, so only long-label rows get the wider column. */
@@ -31,7 +31,7 @@
 .document-tools__group button { min-height:44px; padding:8px 10px; display:flex; align-items:center; gap:8px; border-radius:var(--radius-control); color:var(--text-primary); text-align:left; }
 .document-tools__group button:disabled { opacity:.48; cursor:not-allowed; }
 .document-tools__readiness-note { margin:4px 6px 2px; color:var(--text-muted); font-size:11px; line-height:1.35; }
-.document-tools__group button:hover,.document-tools__group button:focus { background:var(--bg-hover); outline:2px solid var(--accent); outline-offset:-2px; }
+.document-tools__group button:hover,.document-tools__group button:focus { background:var(--bg-hover); outline:3px solid var(--focus); outline-offset:-2px; }
 .document-tools--sheet { padding:12px; }
 .document-tools--sheet .document-tools__group button { min-height:44px; }
 .document-tools-sheet .icon-btn { width:44px; height:44px; }
