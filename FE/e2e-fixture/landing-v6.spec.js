@@ -117,9 +117,11 @@ test("landing copy uses the product's own names, not internal ones", async ({ pa
   for (const name of ["Tải tài liệu lên", "Sơ đồ tư duy", "bản đồ kiến thức", "Thư viện học tập", "Gia sư AI", "câu chưa đúng"]) {
     expect(text).toContain(name);
   }
-  // No absolute promises the app does not enforce (review of #159).
-  expect(text).not.toContain("Mỗi câu trả lời");
-  expect(text).not.toContain("Câu trả lời chỉ dựa trên những tài liệu bạn đang chọn");
+  // No absolute promises the app does not enforce (review of #159; Codex #201): reject the
+  // shapes, not two historical sentences. Grounding is stated with a condition ("khi …").
+  expect(text).not.toMatch(/(mỗi|mọi|từng) (câu trả lời|ý)[^.]*trích dẫn/i);
+  expect(text).not.toMatch(/chỉ dựa (trên|vào)/i);
+  expect(text).not.toMatch(/(^|[.!?]\s+)câu trả lời (đánh số|có|kèm) trích dẫn/im);
 });
 
 test("specimens are readable by assistive technology and labelled as samples", async ({ page }) => {

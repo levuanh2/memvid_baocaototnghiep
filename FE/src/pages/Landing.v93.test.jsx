@@ -88,6 +88,20 @@ describe("Landing V9.3", () => {
     expect(text).not.toMatch(/ghi chú/i);
   });
 
+  // Codex P1/P2 (#201): grounding is conditional. Reject the absolute shapes, not two old
+  // sentences: "mỗi/mọi ý … trích dẫn", "chỉ dựa trên", "câu trả lời đánh số/có trích dẫn"
+  // stated without a condition ("khi …").
+  it.each([
+    [/(mỗi|mọi|từng) ý[^.]*trích dẫn/i],
+    [/(mỗi|mọi|từng) ý[^.]*(dẫn về|có nguồn)/i],
+    [/chỉ dựa (trên|vào)/i],
+    [/(^|[.!?]\s+)câu trả lời (đánh số|có|kèm) trích dẫn/i],
+  ])("makes no absolute grounding promise: %s", async (re) => {
+    const c = await render();
+    const text = [...c.querySelectorAll("main p, main li, main dd, main figcaption")].map((e) => e.textContent).join(" ");
+    expect(text).not.toMatch(re);
+  });
+
   it("links the onboarding preview and says it is a preview", async () => {
     const c = await render();
     const link = c.querySelector("a[href='/onboarding']");

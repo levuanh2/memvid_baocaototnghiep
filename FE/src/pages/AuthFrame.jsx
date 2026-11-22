@@ -17,7 +17,7 @@ export default function AuthFrame({ title, lede, children, footer }) {
           </Link>
           <p className="auth-claim"><span>Đọc có nguồn.</span> <span>Hiểu đến gốc.</span></p>
           <ul className="auth-points">
-            <li><Icon name="Quote" size={16} aria-hidden="true" />Hỏi về tài liệu của bạn, câu trả lời có trích dẫn tới đoạn nguồn.</li>
+            <li><Icon name="Quote" size={16} aria-hidden="true" />Hỏi về tài liệu của bạn; khi tìm được đoạn liên quan, câu trả lời kèm trích dẫn.</li>
             <li><Icon name="Network" size={16} aria-hidden="true" />Sơ đồ tư duy và tóm tắt đi theo cấu trúc tài liệu.</li>
             <li><Icon name="Target" size={16} aria-hidden="true" />Quiz chỉ ra câu chưa đúng và phần cần ôn.</li>
           </ul>

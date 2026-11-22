@@ -17,7 +17,7 @@ import "./landing.css";
 // A real sequence: each step needs the one before it, so it is drawn as a route with stops.
 const ROUTE = [
   { title: "Tải tài liệu lên", desc: "PDF, Word, PowerPoint (.pptx), ảnh chụp bài giảng và nhiều định dạng khác." },
-  { title: "Hỏi và đối chiếu nguồn", desc: "Câu trả lời đánh số trích dẫn. Bấm vào số để đọc đúng đoạn trong tài liệu." },
+  { title: "Hỏi và đối chiếu nguồn", desc: "Khi tìm được đoạn liên quan, câu trả lời gắn số trích dẫn. Bấm vào số để đọc đúng đoạn trong tài liệu." },
   { title: "Xem sơ đồ", desc: "Sơ đồ tư duy và bản đồ kiến thức cho thấy các ý nối với nhau thế nào." },
   { title: "Luyện tập", desc: "Làm quiz, xem lại câu chưa đúng và luyện thêm đúng phần còn yếu." },
 ];
@@ -147,8 +147,8 @@ export default function Landing() {
           <div>
             <h1 className="lp-h1">Đọc có nguồn. Hiểu đến gốc.</h1>
             <p className="lp-lede mt-6">
-              Tải bài giảng, giáo trình hay đề cương lên rồi hỏi về chính tài liệu đó. Câu trả lời
-              đánh số trích dẫn, bấm vào là thấy đúng đoạn nguồn để tự đối chiếu.
+              Tải bài giảng, giáo trình hay đề cương lên rồi hỏi về chính tài liệu đó. Khi tìm được
+              đoạn liên quan, câu trả lời gắn số trích dẫn; bấm vào là thấy đúng đoạn nguồn để tự đối chiếu.
             </p>
             <div className="flex flex-wrap gap-3 mt-8">
               <Link to={start.to} className="btn-seal lp-cta inline-flex items-center gap-2">{start.label}</Link>
@@ -181,14 +181,14 @@ export default function Landing() {
       {/* ── WHY AN ANSWER CAN BE CHECKED ── */}
       <section id="doichieu" className="lp-wrap py-14 sm:py-20 grid lg:grid-cols-2 gap-10 lg:gap-16 items-start">
         <div>
-          <h2 className="lp-h2 mb-4">Câu trả lời đi kèm đoạn nguồn</h2>
+          <h2 className="lp-h2 mb-4">Đối chiếu câu trả lời với đoạn nguồn</h2>
           <p className="lp-lede">
-            Mỗi ý trong câu trả lời có số trích dẫn. Bấm số để mở đúng đoạn trong tài liệu, đọc
-            ngữ cảnh xung quanh, rồi tự quyết định có tin hay không. Câu sau không cần nhắc lại tên
+            Khi tìm được đoạn liên quan trong tài liệu, câu trả lời gắn số trích dẫn tới đoạn đó.
+            Bấm số để mở đúng đoạn, đọc ngữ cảnh xung quanh, rồi tự quyết định có tin hay không. Câu sau không cần nhắc lại tên
             tài liệu: StudyMap hiểu “nó” là gì nhờ mạch trò chuyện trước đó.
           </p>
           <ul className="lp-facts">
-            <li><Icon name="Check" size={15} strokeWidth={2.5} />Khi bạn chọn tài liệu, câu trả lời chỉ dựa trên các tài liệu đó.</li>
+            <li><Icon name="Check" size={15} strokeWidth={2.5} />StudyMap tìm đoạn liên quan trong chính những tài liệu bạn chọn làm nguồn.</li>
             <li><Icon name="Check" size={15} strokeWidth={2.5} />Xoá ngữ cảnh bất cứ lúc nào để bắt đầu chủ đề mới.</li>
             <li><Icon name="Check" size={15} strokeWidth={2.5} />Tóm tắt và sơ đồ được tạo ở nền, bạn vẫn hỏi tiếp được.</li>
           </ul>
@@ -215,8 +215,8 @@ export default function Landing() {
             <div className="lp-copy">
               <h3>Bài này nói những ý chính nào?</h3>
               <p>
-                Tóm tắt đi theo các mục của tài liệu gốc và giữ trích dẫn, nên mỗi ý tóm lại vẫn
-                dẫn về được đoạn đã nói ra nó.
+                Tóm tắt đi theo các mục của tài liệu gốc và giữ trích dẫn đã có, để bạn quay
+                lại đoạn gốc khi cần.
               </p>
             </div>
             <figure className="lp-panel">
