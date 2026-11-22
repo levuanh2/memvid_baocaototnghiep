@@ -1,6 +1,5 @@
 import { Icon } from "../ui/Icon";
 import SealMeter from "./SealMeter";
-import { MASTERY_LABEL } from "../../utils/studyApi";
 import { tenHienThi } from "../../utils/thuVienTaiLieu";
 import {
   baoPhuArtifact, hoanThanhTongThe, chuDeChuaDanhGia, taiLieuItMo, taiLieuChuaXong,
@@ -16,7 +15,7 @@ import { hanhTrinhHoc } from "../../study/learningJourney";
  * `/api/progress/*` trang đó ĐÃ tải). KHÔNG fetch gì thêm, KHÔNG tính lại
  * `chiaMuc`/`overview`/`weak`/`attempts` — chỉ đọc và trình bày.
  */
-export default function LearningDashboard({ documents, overview, weak, attempts, mucHienThi, onMo }) {
+export default function LearningDashboard({ documents, overview, mucHienThi, onMo }) {
   const coverage = baoPhuArtifact(documents);
   const hoanThanh = hoanThanhTongThe(documents);
   const chuaDanhGia = chuDeChuaDanhGia(documents, { gioiHan: 4 });
@@ -127,30 +126,9 @@ export default function LearningDashboard({ documents, overview, weak, attempts,
             </ul>
           </div>
 
-          {/* ── Câu hỏi/quiz gần đây (Step 5 — cùng dữ liệu với mục "Bài đã làm gần đây" bên dưới, chỉ rút gọn 3 dòng) ── */}
-          {(weak?.length > 0 || attempts?.length > 0) && (
-            <div>
-              <TieuDeNho>Gần đây</TieuDeNho>
-              <div className="grid gap-2.5 sm:grid-cols-2">
-                {weak?.length > 0 && (
-                  <MiniDanhSach icon="TrendingDown" tieuDe="Đang yếu ở">
-                    {weak.slice(0, 3).map((c) => (
-                      <span key={c.concept_name} className="mini-item mini-item--static">
-                        {c.concept_name} · {MASTERY_LABEL[c.status] || c.status}
-                      </span>
-                    ))}
-                  </MiniDanhSach>
-                )}
-                {attempts?.length > 0 && (
-                  <MiniDanhSach icon="ScrollText" tieuDe="Bài quiz gần đây">
-                    {attempts.slice(0, 3).map((a) => (
-                      <span key={a.attempt_id} className="mini-item mini-item--static">{a.quiz_title}</span>
-                    ))}
-                  </MiniDanhSach>
-                )}
-              </div>
-            </div>
-          )}
+          {/* V6: the "Gần đây" block that used to close this panel is gone. It showed the first
+              three weak concepts and quiz attempts, the same data as the "Đang yếu ở" and
+              "Bài đã làm gần đây" sections directly below the panel on the page. */}
         </div>
 
       <style>{`

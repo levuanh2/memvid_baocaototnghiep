@@ -28,6 +28,7 @@ const QuizTaking = lazy(() => import("./pages/study/QuizTaking"));
 const QuizResult = lazy(() => import("./pages/study/QuizResult"));
 const ReviewGuide = lazy(() => import("./pages/study/ReviewGuide"));
 const Practice = lazy(() => import("./pages/study/Practice"));
+const LearningProgress = lazy(() => import("./pages/study/LearningProgress"));
 const ProfilePage = lazy(() => import("./pages/ProfilePage"));
 
 /** Cùng một khung tải cho mọi lần đổi route lazy — một dòng, không layout
@@ -77,6 +78,7 @@ export default function App() {
         <Route path="/app/study/result/:attemptId" element={<ProtectedRoute><QuizResult /></ProtectedRoute>} />
         <Route path="/app/study/review/:attemptId" element={<ProtectedRoute><ReviewGuide /></ProtectedRoute>} />
         <Route path="/app/study/practice/:quizId" element={<ProtectedRoute><Practice /></ProtectedRoute>} />
+        <Route path="/app/study/progress" element={<ProtectedRoute><LearningProgress /></ProtectedRoute>} />
         <Route path="/app/profile" element={<ProtectedRoute><ProfilePage /></ProtectedRoute>} />
         <Route path="*" element={<Navigate to="/" replace />} />
       </Routes>
