@@ -74,8 +74,11 @@ from urllib.parse import urlsplit
 _db = urlsplit(os.environ["DATABASE_URL"])
 _db_name = _db.path.lstrip("/")
 if _db.hostname not in {"localhost", "127.0.0.1", "::1"} or not _db_name.endswith("_test"):
-    sys.exit(f"[run_e2e_server] refusing DATABASE_URL (host={_db.hostname}, "
-             f"database={_db_name}): E2E needs a local database whose name ends in _test")
+    # Integration of #187 + #191: one refusal contract (exit 2, "DỪNG", no password).
+    print(f"DỪNG: run_e2e_server refusing DATABASE_URL (host={_db.hostname}, "
+          f"database={_db_name}): E2E needs a local database whose name ends in _test",
+          file=sys.stderr)
+    raise SystemExit(2)
 # No .env (integration of #187 + #191: the provider and bucket keys above are emptied,
 # and .env is skipped as well): popping a variable makes it "missing", which is exactly when
 # load_project_env(override=False) in app.main fills it from BE/.env, bringing back a
