@@ -21,6 +21,7 @@ import ShortcutsOverlay from "../shortcuts/ShortcutsOverlay";
 import StudyToolsMenu from "./StudyToolsMenu";
 import { fetchMindmapNodeContext } from "../../utils/mindmapNodeContext";
 import UsageChip from "./UsageChip";
+import { AppNavBar } from "../study/AppNav";
 import BrandMark from "../ui/BrandMark";
 import { apiFetch, _appError } from "../../utils/api";
 import { mergeSources, formatFileName } from "../../utils/sourceReconciliation";
@@ -672,6 +673,8 @@ export default function MainLayout({
   return (
     <div className="app-shell-height flex flex-col overflow-hidden font-body transition-theme" style={{ background: "var(--bg-base)", color: "var(--text-primary)" }}>
 
+      <a href="#main-content" className="skip-link">Bỏ qua đến nội dung chính</a>
+
       {/* ── TOP HEADER ── */}
       <header
         className="workspace-global-header flex items-center gap-1.5 lg:gap-4 px-2 lg:px-5 h-[56px] border-b border-border flex-shrink-0 transition-theme"
@@ -939,7 +942,7 @@ export default function MainLayout({
         )}
 
         {/* ── TRANG GIỮA — Workspace: Chat ⇄ MindMap ⇄ Summary ── */}
-        <main className="flex flex-1 flex-col min-w-0 min-h-0">
+        <main id="main-content" tabIndex={-1} className="flex flex-1 flex-col min-w-0 min-h-0">
           <WorkspaceContainer
             mode={workspaceMode}
             onMindmapAction={onMindmapAction}
@@ -1098,6 +1101,9 @@ export default function MainLayout({
           </>
         )}
       </div>
+
+      {/* V9.3 P1b: same bottom nav as the study pages at <=700px; MainLayout only renders at /app. */}
+      <AppNavBar pathname="/app" inflow />
 
       {/* ── TOAST STACK ── */}
       <Toaster />

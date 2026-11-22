@@ -1257,3 +1257,36 @@
 @media (min-width: 640px) { .chat-suggestions { padding: 12px 24px 2px; } }
 @media (max-width: 767px) { .chat-suggestions__item { min-height: 44px; } .chat-stop { min-width: 44px; } }
 @media (prefers-reduced-motion: reduce) { .chat-suggestions__item { transition: none; } }
+
+/* V9.3 P1b shell (docs/StudyMap-V9.3/01, 03, 14). Skip link, focusable main, and the
+   bottom nav at <=700px. The active link is marked by weight, ink colour and a 3px
+   accent-cta bar (non-text contrast >= 3:1 in both themes), not by colour alone. */
+.skip-link {
+  position: absolute; left: 8px; top: -100px; z-index: 100; padding: 10px 16px; min-height: 44px;
+  background: var(--accent-cta); color: var(--on-primary); border-radius: 8px; font-weight: 600;
+}
+.skip-link:focus { top: 8px; }
+.skip-link:focus-visible { outline: 3px solid var(--focus); outline-offset: 2px; }
+.app-bottom-nav { display: none; }
+.toast-stack { bottom: 16px; }
+@media (max-width: 700px) {
+  .study-shell { padding-bottom: calc(64px + env(safe-area-inset-bottom)); }
+  /* Toasts sit above the bottom nav, never over it (Codex P2, PR #200). */
+  .toast-stack { bottom: calc(64px + 16px + env(safe-area-inset-bottom)); }
+  .app-bottom-nav {
+    position: fixed; left: 0; right: 0; bottom: 0; z-index: 30; display: grid;
+    grid-template-columns: repeat(4, minmax(0, 1fr));
+    padding-bottom: env(safe-area-inset-bottom);
+    background: var(--bg-card); border-top: 1px solid var(--border-color);
+  }
+  .app-bottom-nav--inflow { position: static; flex-shrink: 0; }
+  .app-bottom-nav__link {
+    display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 2px;
+    min-height: 64px; padding: 6px 4px; font-size: 12px; line-height: 1.2; text-align: center;
+    color: var(--text-secondary);
+  }
+  .app-bottom-nav__link[aria-current="page"] {
+    color: var(--text-primary); font-weight: 600; box-shadow: inset 0 3px 0 var(--accent-cta);
+  }
+  .app-bottom-nav__link:focus-visible { outline: 3px solid var(--focus); outline-offset: -3px; }
+}
