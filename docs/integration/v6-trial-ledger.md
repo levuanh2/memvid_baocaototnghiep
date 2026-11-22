@@ -48,13 +48,16 @@ To see each resolution exactly: `git show --remerge-diff <merge>`.
 | `c45389f` | `FE/src/pages/study/QuizResult.jsx` | #175/#182 (compact correct rows; one filled action) vs #193 (review link hidden while a regrade is pending; ungraded tone) | #193's `reviewPlanTo &&` guard and its ungraded `--text-muted` tone. #175's compact block after it. The "Mở kế hoạch ôn tập" link stays `btn-secondary`, following #182's "one filled action". #193 had made it `btn-primary`. |
 | `b7168a8` | `FE/src/pages/study/ReviewGuide.jsx` | #182 vs #194 (import order only) | Took #194's sorted `useCallback, useEffect, useRef, useState`. |
 | follow-up commit | `BE/scripts/run_e2e_server.py` | #187 test (`exit 2` and `DỪNG`) vs #191's `sys.exit(message)` (exit 1) | Found by the BE regression (2 failures in `test_devtest_isolation`). #191's refusal now prints `DỪNG: ...` to stderr and exits 2, with no password. #191's own test (non-zero, no password) still passes. Red first: 2 failed; green: 54 passed. |
+| `8d69ece` (P1a of #197) | `FE/src/index.css` tokens | #159 (`--brand-text` wordmark red; old seal) vs #197 (V9.3 values) | Took the V9.3 values. `--brand-text` is kept as the V9.3 brand-text role: `#765300` light, `#F4D178` dark. |
+| `8d69ece` | `FE/src/components/Layout/ChatArea.jsx` | #178 (worded "Huỷ" cancel button, `h-10`) vs #197 (44px icon cancel) | Kept #178's worded button at `h-11` (44px). |
+| `b719caf` (adaptation) | `FE/src/index.css`, `FE/src/pages/study/quizJourney.css`, `FE/src/pages/landing.wordmarkContrast.test.js` | V6 CSS vs the #197 contract test | V6's 2px accent rings become the 3px `--focus` ring. The V6 wordmark test pins the V9.3 seal instead of the old red, and keeps its 4.5:1 check. |
 | every merge marked `playbook-union` | `.playbook/known-issues.md`, `.playbook/lessons-learned.md` | all | Union of both sides with `git merge-file --union`. These are append-only logs, so no entry is dropped. |
 
 ## Regression on this branch
 
 | Check | Result |
 |---|---|
-| FE vitest | 262 files, 2142/2142 pass |
+| FE vitest | before P1a: 262 files, 2142/2142. With P1a (`b719caf`): 263 files, 2152/2152 |
 | FE `vite build` | pass |
 | FE lint ratchet | 63 (baseline 67) |
 | BE pytest (disposable PostgreSQL 17, owner mode) | 3250 passed, 99 skipped, 8 failed before the follow-up: 6 known baseline (`test_index_khoa_that` ×5, `test_fpt_rerank` ×1) and 2 caused by the merge, fixed in the follow-up (54/54 in both isolation suites). Redis was not running locally. |
