@@ -1268,8 +1268,11 @@
 .skip-link:focus { top: 8px; }
 .skip-link:focus-visible { outline: 3px solid var(--focus); outline-offset: 2px; }
 .app-bottom-nav { display: none; }
+.toast-stack { bottom: 16px; }
 @media (max-width: 700px) {
   .study-shell { padding-bottom: calc(64px + env(safe-area-inset-bottom)); }
+  /* Toasts sit above the bottom nav, never over it (Codex P2, PR #200). */
+  .toast-stack { bottom: calc(64px + 16px + env(safe-area-inset-bottom)); }
   .app-bottom-nav {
     position: fixed; left: 0; right: 0; bottom: 0; z-index: 30; display: grid;
     grid-template-columns: repeat(4, minmax(0, 1fr));

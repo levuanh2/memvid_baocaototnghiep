@@ -61,6 +61,16 @@ describe("AppNav", () => {
     expect(current.map((a) => a.textContent.trim())).toEqual([label]);
   });
 
+  // Codex P2: React Router serves /app/, /app/study/ and /app/study/progress/ too.
+  it.each([
+    ["/app/", "Học tập"], ["/app/study/", "Thư viện"], ["/app/study/progress/", "Tiến độ"],
+    ["/app/study/quiz/new/", "Luyện tập"],
+  ])("tolerates the trailing slash on %s", async (path, label) => {
+    await render(<AppNav />, path);
+    const current = [...container.querySelectorAll("a[aria-current='page']")];
+    expect(current.map((a) => a.textContent.trim())).toEqual([label]);
+  });
+
   it("marks nothing current on the profile page", async () => {
     await render(<AppNav />, "/app/profile");
     expect(container.querySelectorAll("a[aria-current]").length).toBe(0);

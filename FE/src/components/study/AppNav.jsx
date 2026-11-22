@@ -19,11 +19,13 @@ export const APP_NAV_ITEMS = [
 /** Pure bar. `inflow`: part of a flex-column shell (the workspace) instead of fixed over
  * the page, so it never covers the chat composer. */
 export function AppNavBar({ pathname, inflow = false }) {
+  // React Router also serves /app/, /app/study/ … (Codex P2): match without the slash.
+  const path = pathname.length > 1 ? pathname.replace(/\/+$/, "") : pathname;
   return (
     <nav className={inflow ? "app-bottom-nav app-bottom-nav--inflow" : "app-bottom-nav"}
       aria-label="Điều hướng chính">
       {APP_NAV_ITEMS.map((item) => {
-        const current = item.match(pathname);
+        const current = item.match(path);
         return (
           <Link key={item.to} to={item.to} className="app-bottom-nav__link"
             aria-current={current ? "page" : undefined}>

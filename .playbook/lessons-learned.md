@@ -3961,3 +3961,13 @@ global nav links to must render that nav too: `MainLayout` now mounts `AppNavBar
 in its flex column (`--inflow`, not fixed, so it never covers the chat composer),
 and `MainLayout.v93Shell.test.jsx` pins it with "Học tập" as `aria-current`.
 Screenshots measure the composer bottom against the nav top at 390/640px.
+
+## A new fixed bar must re-check every other fixed layer at that edge (PR #200, Codex P2, 2026-11-22)
+
+The P1b bottom nav was in-flow and covered nothing, but the existing toast stack is
+fixed at `bottom: 1rem` with a far higher z-index, so at <=700px a toast sat on top
+of the nav for five seconds. Root cause: the nav was checked against the composer
+only, not against other fixed layers anchored to the same edge. Fix: `.toast-stack`
+offsets by `64px + 16px + safe-area` at <=700px; the screenshot metrics now include
+`toastOverNav`. Same review: `useLocation().pathname` keeps a trailing slash that
+React Router still matches, so nav matchers normalise it before comparing.
