@@ -60,6 +60,56 @@ async function renderReady() {
 
 const byText = (txt) => [...document.body.querySelectorAll("button")].find((b) => b.textContent.includes(txt));
 
+describe("ReviewGuide provisional plan", () => {
+  it("says the plan covers only the graded answers when some could not be graded", async () => {
+    getReviewPlan.mockResolvedValue({ ...PLAN, ungraded_count: 2 });
+    await renderReady();
+    expect(container.textContent).toContain(
+      "Kế hoạch này chỉ dựa trên các câu đã chấm. 2 câu tự luận chưa chấm được nên không nằm trong kế hoạch.");
+  });
+
+  // It must not steer the learner to "Tạo lại kế hoạch": regenerating deletes the old
+  // plan and, through it, the practice quizzes made from its items.
+  it("says the plan is older than the latest grading, without pushing a regenerate", async () => {
+    getReviewPlan.mockResolvedValue({ ...PLAN, ungraded_count: 0, outdated: true });
+    await renderReady();
+    expect(container.textContent).toContain(
+      "Bài làm đã được chấm lại sau khi tạo kế hoạch này, nên các chủ đề bên dưới có thể chưa khớp với kết quả mới.");
+    expect(container.querySelector('[role="status"]')?.textContent).not.toContain("Tạo lại");
+  });
+
+  it("adds no note to a plan from a complete result", async () => {
+    getReviewPlan.mockResolvedValue({ ...PLAN, ungraded_count: 0, outdated: false });
+    await renderReady();
+    expect(container.textContent).not.toContain("chỉ dựa trên các câu đã chấm");
+    expect(container.textContent).not.toContain("đã được chấm lại");
+  });
+});
+
+describe("Tạo lại kế hoạch", () => {
+  // Regenerating deletes the old plan and, through its items, the practice quizzes made
+  // from it: ask first, and say so (owner decision 2026-11-17, PR #190).
+  it("asks for confirmation, says practice quizzes are deleted, and sends nothing before it", async () => {
+    await renderReady();
+    await act(async () => byText("Tạo lại kế hoạch").click());
+    expect(generateReviewPlan).not.toHaveBeenCalled();
+    const dialog = document.body.querySelector('[role="dialog"]');
+    expect(dialog?.textContent).toContain("bài luyện tập đã tạo từ kế hoạch này");
+  });
+
+  it("regenerates with force only after the learner confirms", async () => {
+    generateReviewPlan.mockResolvedValue({ ...PLAN, summary: "Kế hoạch mới" });
+    await renderReady();
+    await act(async () => byText("Tạo lại kế hoạch").click());
+    const dialog = document.body.querySelector('[role="dialog"]');
+    await act(async () => dialog.querySelector('input[type="checkbox"]').click());
+    const confirm = [...dialog.querySelectorAll("button")].find((b) => b.textContent.includes("Xoá và tạo lại"));
+    await act(async () => { confirm.click(); await Promise.resolve(); });
+    expect(generateReviewPlan).toHaveBeenCalledWith("attempt-1", { force: true });
+    expect(container.textContent).toContain("Kế hoạch mới");
+  });
+});
+
 describe("ReviewGuide practice actions", () => {
   it("Luyện ngay sends the exact prior smart-default body (count 5, difficulty easy, no question_types)", async () => {
     generatePractice.mockResolvedValue({ job_id: "job-1" });

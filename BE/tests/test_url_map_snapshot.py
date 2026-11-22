@@ -110,9 +110,15 @@ def test_tong_so_route_khop(client, cu):
     +1 ngày 2026-10-08 (Appearance V2, PR C2): `PATCH /mindmaps/<mindmap_id>/appearance`
       (merges ONLY record.appearance — node/connector/canvas LIVE_SAFE subset — never
       nodes/relations/title; see services/mindmap/appearance.py).
+    +1 ngày 2026-11-17 (provisional grading recovery, stacked on #188): `POST
+      /api/attempts/<attempt_id>/regrade` — chấm lại các câu tự luận bộ chấm AI chưa
+      chấm được trên bài `graded` có `ungraded_count > 0`; cùng claim và trần lượt.
+    +1 ngày 2026-11-18 (provisional practice regrade, #159 mục 17): `POST
+      /api/practice/<practice_quiz_id>/regrade` — như trên cho bài luyện tập, chấm ngay
+      trong request (luyện tập không có job nền).
     Con số ở đây CỐ Ý viết cứng — sửa nó là một dòng diff mà người review phải nhìn
     thấy, đúng mục đích của cả file này."""
-    assert len(_hien_tai()) == len(cu) == 111
+    assert len(_hien_tai()) == len(cu) == 113
 
 
 def test_khong_co_cap_duong_dan_method_trung(client):

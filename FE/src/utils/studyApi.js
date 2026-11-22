@@ -139,6 +139,10 @@ export const saveAnswers = (attemptId, answers) =>
 export const submitAttempt = (attemptId) =>
   _send(`/api/attempts/${encodeURIComponent(attemptId)}/submit`, "POST");
 
+// A provisional result (the AI grader failed on some short answers): grade only those.
+export const regradeAttempt = (attemptId) =>
+  _send(`/api/attempts/${encodeURIComponent(attemptId)}/regrade`, "POST");
+
 export const getResult = (attemptId) =>
   _get(`/api/quizzes/results/${encodeURIComponent(attemptId)}`);
 
@@ -159,8 +163,18 @@ export const generatePractice = (payload) => _send("/api/practice/generate", "PO
 export const getPractice = (practiceQuizId) =>
   _get(`/api/practice/${encodeURIComponent(practiceQuizId)}`);
 
-export const submitPractice = (practiceQuizId, answers) =>
-  _send(`/api/practice/${encodeURIComponent(practiceQuizId)}/submit`, "POST", { answers });
+// `idempotencyKey` goes in the BODY, not the `Idempotency-Key` header: a new header on a
+// cross-origin call needs the backend's CORS allowlist first, and the web and the backend
+// deploy separately. An older backend ignores the unknown field.
+export const submitPractice = (practiceQuizId, answers, { idempotencyKey } = {}) =>
+  _send(`/api/practice/${encodeURIComponent(practiceQuizId)}/submit`, "POST",
+    idempotencyKey ? { answers, idempotency_key: idempotencyKey } : { answers });
+
+// A provisional practice result (the AI grader failed on some short answers): grade only
+// those, inside the request. Returns the stored attempt.
+export const regradePractice = (practiceQuizId, attemptId) =>
+  _send(`/api/practice/${encodeURIComponent(practiceQuizId)}/regrade`, "POST",
+    { attempt_id: attemptId });
 
 export const getPracticeComparison = (practiceQuizId) =>
   _get(`/api/practice/${encodeURIComponent(practiceQuizId)}/comparison`);

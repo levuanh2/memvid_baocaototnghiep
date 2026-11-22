@@ -476,6 +476,13 @@ class QuizAttempt(Base):
     submitted_at = Column(DateTime(timezone=True))
     graded_at = Column(DateTime(timezone=True))
     metadata_json = Column(JSONB)
+    # Practice submit idempotency (2026-11-15). The attempt row IS the idempotency
+    # record: the key lives exactly as long as the graded attempt, so no expiry can make
+    # a retry grade a second time. `submit_fingerprint` = sha256 of quiz + answers.
+    submit_key = Column(Text)
+    submit_fingerprint = Column(Text)
+    # Set by whoever is grading this attempt; a retry reclaims it only after the lease.
+    grading_claimed_at = Column(DateTime(timezone=True))
 
     __table_args__ = (
         CheckConstraint(
@@ -495,6 +502,8 @@ class QuizAttempt(Base):
         Index("ix_quiz_attempts_quiz_id", "quiz_id"),
         Index("ix_quiz_attempts_user_id", "user_id"),
         Index("ix_quiz_attempts_status", "status"),
+        Index("uq_quiz_attempts_user_submit_key", "user_id", "submit_key", unique=True,
+              postgresql_where=text("submit_key IS NOT NULL")),
     )
 
 

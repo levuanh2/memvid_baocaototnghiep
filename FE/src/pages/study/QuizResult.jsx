@@ -13,6 +13,8 @@ import {
   getResult,
   optionLabel,
   moTaLoi,
+  regradeAttempt,
+  submitAttempt,
 } from "../../utils/studyApi";
 import { MAX_CONSECUTIVE_FETCH_FAILURES } from "../../utils/jobPoller";
 import "./quizJourney.css";
@@ -47,6 +49,11 @@ export default function QuizResult() {
   const truotRef = useRef(0);
   const batDauChoRef = useRef(null);
   const timerRef = useRef(null);
+  // "Thử chấm lại" (diagnostic recovery): one request at a time, even on a double click.
+  const chamLaiRef = useRef(false);
+  // The provisional banner's status text: focus lands here when its button goes away.
+  const banTamRef = useRef(null);
+  const [chamLai, setChamLai] = useState({ dangGui: false, loi: null, daThu: false });
 
   const load = useCallback(async ({ quiet = false } = {}) => {
     if (!quiet) { setLoading(true); setError(null); }
@@ -78,7 +85,16 @@ export default function QuizResult() {
   // `nhip` phải nằm trong dependency: lần hỏi nền hỏng thì `result` KHÔNG đổi, effect
   // không chạy lại, và vòng hỏi chết lặng — trang đứng mãi ở "đang chấm".
   useEffect(() => {
-    if (result?.status !== "submitted") { batDauChoRef.current = null; return undefined; }
+    // Also while a provisional result's missing answers are being regraded.
+    const waiting = result?.status === "submitted"
+      || (result?.status === "graded" && result?.regrade_state === "running");
+    if (!waiting) { batDauChoRef.current = null; return undefined; }
+    // Nobody is grading (stalled) or retries are used up (failed): asking again changes
+    // nothing until the learner retries, so stop polling instead of spinning.
+    if (result?.grading_state === "stalled" || result?.grading_state === "failed") {
+      batDauChoRef.current = null;
+      return undefined;
+    }
     if (truotRef.current >= MAX_CONSECUTIVE_FETCH_FAILURES) return undefined;
     if (batDauChoRef.current === null) batDauChoRef.current = Date.now();
     if (Date.now() - batDauChoRef.current > REGRADE_STALL_MS) {
@@ -93,6 +109,37 @@ export default function QuizResult() {
   }, [result, nhip, load]);
 
   const graded = result?.status === "graded";
+  // Only the server knows whether a grader still holds the claim; an older backend
+  // sends no `grading_state`, and then no retry is offered (today's behaviour).
+  const stalled = result?.status === "submitted" && result?.grading_state === "stalled";
+  const gradingFailed = result?.status === "submitted" && result?.grading_state === "failed";
+
+  // `gui`: submit (a stuck attempt) or regrade (a provisional result's missing answers).
+  const thuChamLai = async (gui = submitAttempt, { focusBanner = false } = {}) => {
+    if (chamLaiRef.current) return;
+    chamLaiRef.current = true;
+    setChamLai((s) => ({ ...s, dangGui: true, loi: null }));
+    let loi = null;
+    try {
+      await gui(attemptId);
+      // 200 (graded now) or 202 (grading in the background): the bounded poll above
+      // starts a fresh 5-minute window if it is still grading.
+      batDauChoRef.current = null;
+      truotRef.current = 0;
+      setKetChamBai(false);
+    } catch (e) {
+      loi = moTaLoi(e, "Chưa thử chấm lại được.");
+    }
+    // Reload either way: after a 409 (retries used up) the server says "failed" and the
+    // button must go (agy task27 F1). The button stays busy until the new state is in (F2).
+    await load({ quiet: true });
+    setChamLai({ dangGui: false, loi, daThu: loi === null });
+    setNhip((n) => n + 1);
+    chamLaiRef.current = false;
+    // A regrade that was accepted (or refused for good) removes its button: keep the
+    // keyboard on the banner instead of dropping it to the page (agy task35).
+    if (focusBanner) banTamRef.current?.focus();
+  };
   // Fail closed for any current or future non-final status: completed-result
   // presentation is authorized only by the explicit graded state.
   const grading = Boolean(result) && !graded;
@@ -100,6 +147,9 @@ export default function QuizResult() {
   const provisional = graded && (
     result?.grading_complete === false || ungradedCount > 0
   );
+  // Only while a regrade runs (it is about to change the result); otherwise a plan from
+  // the graded answers is offered, without spending a regrade first (owner, 2026-11-17).
+  const planWaitsForRegrade = provisional && result?.regrade_state === "running";
   // `.filter()` alone loses the question's position in the original ten-question
   // quiz — the wrong-answer review must label question 4 and 9 as "Câu 4"/"Câu 9",
   // not "Câu 1"/"Câu 2" (their position inside the filtered subset). Stamp the
@@ -153,7 +203,7 @@ export default function QuizResult() {
       width={reviewingWrong ? "max-w-[1120px]" : "max-w-[1050px]"}
       actions={
         graded && (
-          wrongQuestions.length > 0 ? (
+          wrongQuestions.length > 0 && !planWaitsForRegrade ? (
             <Link to={`/app/study/review/${attemptId}`} className="btn-primary text-small inline-flex items-center gap-2">
               <Icon name="BookOpen" size={14} />
               {weakTopicCount > 0 ? `Kế hoạch ôn tập (${weakTopicCount} chủ đề)` : "Kế hoạch ôn tập"}
@@ -168,7 +218,29 @@ export default function QuizResult() {
     >
       {!result ? null : (
         <>
-          {ketChamBai && (
+          {(stalled || gradingFailed) && (
+            <div className="surface-card !p-3.5 flex items-start gap-2.5 mb-4" role="status"
+              style={{ borderColor: "var(--err)" }}>
+              <Icon name="AlertCircle" size={15} className="mt-0.5 shrink-0" />
+              <div className="flex-1 text-body text-text-secondary">
+                {gradingFailed
+                  ? "Bài này chưa chấm được sau nhiều lần thử. Hãy quay lại sau; câu trả lời của bạn vẫn được lưu."
+                  : chamLai.daThu
+                    ? "Lần chấm lại vừa rồi chưa thành công. Bạn có thể thử thêm."
+                    : "Việc chấm bài đã dừng giữa chừng. Câu trả lời của bạn vẫn được lưu."}
+                {chamLai.loi && (
+                  <div className="text-small mt-1" style={{ color: "var(--err)" }}>{chamLai.loi}</div>
+                )}
+              </div>
+              {stalled && (
+                <button type="button" className="btn-secondary text-small shrink-0"
+                  onClick={() => thuChamLai()} disabled={chamLai.dangGui} aria-busy={chamLai.dangGui}>
+                  {chamLai.dangGui ? "Đang gửi…" : "Thử chấm lại"}
+                </button>
+              )}
+            </div>
+          )}
+          {ketChamBai && !stalled && !gradingFailed && (
             <div className="text-small flex items-center gap-1.5 mb-3" style={{ color: "var(--err)" }}>
               <Icon name="AlertCircle" size={14} />
               Bài chưa được chấm xong sau 5 phút — có thể việc chấm đã dừng giữa chừng.
@@ -189,7 +261,8 @@ export default function QuizResult() {
           )}
           {reviewingWrong ? (
             <WrongAnswerReview questions={wrongQuestions} index={reviewIndex} onIndex={setReviewIndex}
-              onClose={() => setReviewingWrong(false)} reviewPlanTo={`/app/study/review/${attemptId}`} />
+              onClose={() => setReviewingWrong(false)}
+              reviewPlanTo={planWaitsForRegrade ? null : `/app/study/review/${attemptId}`} />
           ) : <>
           <ScoreBoard result={result} grading={grading} provisional={provisional} onJump={jumpToQuestion}
             ungradedCount={ungradedCount} wrongCount={wrongQuestions.length}
@@ -205,15 +278,45 @@ export default function QuizResult() {
           )}
 
           {provisional && (
+            // One live region (the text); the button sits below it, never beside it: at
+            // 320px a side button left the text a ~20px column (agy task35).
             <div className="surface-card !p-3.5 flex items-start gap-2.5 mb-6"
-              role="status" style={{ borderColor: "var(--warn)" }}>
+              style={{ borderColor: "var(--warn)" }}>
               <Icon name="AlertCircle" size={16} className="shrink-0 mt-0.5" />
-              <span className="text-body text-text-secondary">
+              <div className="min-w-0 flex-1">
+              <p ref={banTamRef} tabIndex={-1} role="status" className="text-body text-text-secondary">
                 <strong className="text-text-primary">Kết quả tạm thời.</strong>{" "}
                 {ungradedCount} câu chưa chấm được do bộ chấm AI không khả dụng.
                 Các câu này không bị tính là sai và không nằm trong điểm, mức nắm
                 hay phân tích lỗ hổng hiện tại.
-              </span>
+                {result?.regrade_state === "running" && (
+                  <span className="flex items-center gap-1.5 mt-1.5">
+                    <span aria-hidden="true"><Spinner size={12} /></span>
+                    Đang chấm lại {ungradedCount} câu còn thiếu…
+                  </span>
+                )}
+                {result?.regrade_state === "available" && chamLai.daThu && (
+                  <span className="block mt-1.5">
+                    Lần chấm lại vừa rồi chưa chấm được các câu này. Bạn có thể thử thêm.
+                  </span>
+                )}
+                {result?.regrade_state === "exhausted" && (
+                  <span className="block mt-1.5">
+                    Đã hết lượt chấm lại cho bài này. Kết quả tạm thời được giữ nguyên.
+                  </span>
+                )}
+                {chamLai.loi && result?.regrade_state !== "exhausted" && (
+                  <span className="block text-small mt-1" style={{ color: "var(--err)" }}>{chamLai.loi}</span>
+                )}
+              </p>
+              {result?.regrade_state === "available" && (
+                <button type="button" className="btn-secondary text-small mt-2.5"
+                  onClick={() => thuChamLai(regradeAttempt, { focusBanner: true })} disabled={chamLai.dangGui}
+                  aria-busy={chamLai.dangGui}>
+                  {chamLai.dangGui ? "Đang gửi…" : "Chấm lại câu còn thiếu"}
+                </button>
+              )}
+              </div>
             </div>
           )}
 
@@ -419,9 +522,9 @@ function WrongAnswerReview({ questions, index, onIndex, onClose, reviewPlanTo })
       <section className="quiz-wrong-review__content">
         <div className="quiz-wrong-review__nav"><button type="button" className="btn-secondary" onClick={onClose}><Icon name="ArrowLeft" size={14} /> Kết quả</button><span>Câu cần ôn {index + 1} / {questions.length}</span><div><button type="button" aria-label="Câu cần ôn trước" disabled={index === 0} onClick={() => onIndex(index - 1)}>←</button><button type="button" aria-label="Câu cần ôn tiếp theo" disabled={index === questions.length - 1} onClick={() => onIndex(index + 1)}>→</button></div></div>
         <ReviewedQuestion question={current} order={current._originalOrder} />
-        <Link className="btn-secondary quiz-wrong-review__compact-review-link" to={reviewPlanTo}>Mở kế hoạch ôn tập</Link>
+        {reviewPlanTo && <Link className="btn-secondary quiz-wrong-review__compact-review-link" to={reviewPlanTo}>Mở kế hoạch ôn tập</Link>}
       </section>
-      <aside className="quiz-wrong-review__next"><Icon name="Target" size={20} /><h2>Tiếp tục học</h2><p>Đây là phần xem lại câu trả lời. Kế hoạch ôn tập riêng vẫn được tạo và quản lý ở bước tiếp theo.</p><Link className="btn-secondary" to={reviewPlanTo}>Mở kế hoạch ôn tập</Link></aside>
+      {reviewPlanTo && <aside className="quiz-wrong-review__next"><Icon name="Target" size={20} /><h2>Tiếp tục học</h2><p>Đây là phần xem lại câu trả lời. Kế hoạch ôn tập riêng vẫn được tạo và quản lý ở bước tiếp theo.</p><Link className="btn-secondary" to={reviewPlanTo}>Mở kế hoạch ôn tập</Link></aside>}
     </div>
   );
 }
@@ -444,7 +547,11 @@ function Stat({ label, value, swatch }) {
 function ReviewedQuestion({ question, order, gonKhiDung = false }) {
   const { verdict } = question;
   const tone =
-    verdict === "correct" ? "var(--quiz-status-correct)" : verdict === "partial" ? "var(--quiz-status-partial)" : "var(--quiz-status-incorrect)";
+    verdict === "correct" ? "var(--quiz-status-correct)"
+      : verdict === "partial" ? "var(--quiz-status-partial)"
+        : verdict === "incorrect" ? "var(--quiz-status-incorrect)"
+          // Not graded (AI grader outage): not wrong, so not the incorrect colour.
+          : "var(--text-muted)";
   if (gonKhiDung && verdict === "correct") {
     const giaiThich = question.feedback || question.explanation;
     return (
