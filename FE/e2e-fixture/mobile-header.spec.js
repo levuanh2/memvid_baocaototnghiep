@@ -191,12 +191,27 @@ test.describe("full desktop header above the compact danger zone", () => {
       expect(h.docScroll).toBeLessThanOrEqual(h.docClient);
       await expect(page.getByRole("tab", { name: "Sơ đồ tư duy" })).toBeVisible();
       await expect(page.locator('nav[role="tablist"] [role="tab"][title="Sơ đồ tư duy"] span').first()).toBeVisible();
-      await expect(page.locator('header button[aria-label="Xem phím tắt"]')).toBeVisible();
+      // V6 header: shortcut help lives in the account menu, not in its own header button.
+      await expect(page.locator('header button[aria-label="Xem phím tắt"]')).toHaveCount(0);
       const home = await hitOwnership(page, 'header a[aria-label^="StudyMap"]');
       expect(home.h, "home link height at full header").toBeGreaterThanOrEqual(MIN);
       expect(home.ok, `home centre hit at ${home.at}`).toBe(true);
-      await expect(page.getByRole("group", { name: "Chế độ sáng/tối" })).toBeVisible();
+      // V6 header: one theme control instead of the two-button group.
+      await expect(page.locator("header .workspace-theme-toggle")).toBeVisible();
+      await expect(page.getByRole("group", { name: "Chế độ sáng/tối" })).toHaveCount(0);
       await expect(page.locator('header button[aria-label^="Mức sử dụng AI"] span').last()).toBeVisible();
+
+      // The shortcut help is still one menu away, and the theme button names its next action.
+      // (Reachability at 768 / 1024 / 1100 is checked in its own test below.)
+      await page.locator('header button[aria-haspopup="menu"][aria-label^="Tài khoản"]').click();
+      await page.getByRole("menuitem", { name: /Phím tắt/ }).click();
+      await expect(page.getByRole("dialog", { name: "Phím tắt" })).toBeVisible();
+      await page.keyboard.press("Escape");
+      await expect(page.getByRole("dialog", { name: "Phím tắt" })).toHaveCount(0);
+      const theme = page.locator("header .workspace-theme-toggle");
+      const before = await theme.getAttribute("aria-label");
+      await theme.click();
+      await expect(theme).not.toHaveAttribute("aria-label", before);
     });
   }
 });
@@ -411,4 +426,24 @@ test.describe("mode-switch lifecycle invariants", () => {
     await expect(listbox).toBeVisible();
     await expect(listbox.getByRole("button", { name: /Tạo sơ đồ mới/ })).toBeVisible();
   });
+});
+
+// V6 header: with the header's own keyboard button gone, the account menu item is the only
+// visible way to the shortcut help. It must exist wherever a keyboard is likely.
+for (const vp of [{ width: 768, height: 1024 }, { width: 1024, height: 768 }, { width: 1100, height: 800 }]) {
+  test(`${vp.width}px: shortcut help is reachable from the account menu`, async ({ page }) => {
+    await openApp(page, vp);
+    await page.locator('header button[aria-haspopup="menu"][aria-label^="Tài khoản"]').click();
+    const item = page.getByRole("menuitem", { name: /Phím tắt/ });
+    await expect(item).toBeVisible();
+    await item.click();
+    await expect(page.getByRole("dialog", { name: "Phím tắt" })).toBeVisible();
+  });
+}
+
+test("390px: the account menu has no shortcut-help item (no keyboard to use it with)", async ({ page }) => {
+  await openApp(page, { width: 390, height: 844 });
+  await page.locator('header button[aria-haspopup="menu"][aria-label^="Tài khoản"]').click();
+  await expect(page.getByRole("menuitem", { name: /Hồ sơ tài khoản/ })).toBeVisible();
+  await expect(page.getByRole("menuitem", { name: /Phím tắt/ })).toBeHidden();
 });
