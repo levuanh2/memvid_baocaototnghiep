@@ -12,6 +12,7 @@ import pytest
 from app.domains.ai_validation.rules import RULE_REVIEW_SCOPE, validate_review_items
 from app.domains.gap_analysis.service import compute_masteries, status_for
 from app.domains.review.service import fallback_text, rank_weak_concepts
+from tests._owner_db import owner_session_scope  # clean-up as the table owner
 
 
 # ── tính toán thuần: không DB, không LLM ────────────────────────────────────
@@ -125,7 +126,7 @@ def owner():
 
     u = users_store.create_user(f"gap_{uuid.uuid4().hex[:8]}@example.com", "password123")
     yield u["user_id"]
-    with session_scope() as s:
+    with owner_session_scope() as s:
         row = s.get(User, u["user_id"])
         if row is not None:
             s.delete(row)
@@ -303,7 +304,7 @@ def test_invented_topics_are_dropped_and_logged(be, client, monkeypatch, owner):
 
     from app.db import session_scope
     from app.db.models import AIValidationLog
-    with session_scope() as s:
+    with owner_session_scope() as s:
         rows = s.query(AIValidationLog).filter(
             AIValidationLog.target_ref == "tich phan bia dat").all()
         assert rows and rows[0].rule_code == RULE_REVIEW_SCOPE
@@ -329,7 +330,10 @@ def test_plan_is_cached_until_force_and_regeneration_replaces_it(be, client, mon
     forced = client.post("/api/review-plans/generate",
                          json={"attempt_id": attempt_id, "force": True}).get_json()
     assert forced["summary"] == "lan 2"
-    assert forced["review_plan_id"] != first["review_plan_id"]
+    # Issue #18 (owner option B): the plan is kept and its old topics archived, so the
+    # practice made from them survives; the id stays.
+    assert forced["review_plan_id"] == first["review_plan_id"]
+    assert [a["topic"] for a in forced["archived_items"]] == ["quy tac ham hop"]
     # UNIQUE(attempt_id): đúng MỘT plan cho mỗi attempt
     assert client.get(f"/api/review-plans/{attempt_id}").get_json()[
         "review_plan_id"] == forced["review_plan_id"]

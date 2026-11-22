@@ -6,6 +6,10 @@ SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 REPO_ROOT="$(cd "$SCRIPT_DIR/.." && pwd)"
 COMPOSE_FILE="$REPO_ROOT/docker-compose.prod.yml"
 ENV_FILE="${MEMVID_ENV_FILE:-/opt/memvid/env/.env}"
+# The table owner's credential (MIGRATION_DATABASE_URL) lives ONLY here, mode 600. Every
+# long-running container reads ENV_FILE (compose env_file), so the owner URL must never
+# be in it (Codex task60); it reaches the one-shot migration containers only.
+MIGRATION_ENV_FILE="${MEMVID_MIGRATION_ENV_FILE:-/opt/memvid/env/migration.env}"
 DATA_DIR="${MEMVID_DATA_DIR:-/opt/memvid/data}"
 BACKUP_DIR="${MEMVID_BACKUP_DIR:-/opt/memvid/backups}"
 
@@ -63,7 +67,27 @@ compose() {
 env_value() {
   local key="$1"
   [ -f "$ENV_FILE" ] || { printf ''; return 0; }
-  grep -E "^${key}=" "$ENV_FILE" | tail -1 | cut -d'=' -f2-
+  # `|| true`: an absent key is an empty value, not a failure. Without it, grep's exit 1
+  # under `set -euo pipefail` killed validate_env silently, before it could name the
+  # missing variable (found 2026-11-21 by the role-separation deploy test).
+  { grep -E "^${key}=" "$ENV_FILE" || true; } | tail -1 | cut -d'=' -f2-
+}
+
+migration_env_value() {
+  local key="$1"
+  [ -f "$MIGRATION_ENV_FILE" ] || { printf ''; return 0; }
+  { grep -E "^${key}=" "$MIGRATION_ENV_FILE" || true; } | tail -1 | cut -d'=' -f2-
+}
+
+# A one-shot `compose run` for migrations, schema verification and the rollback
+# preflight: the only containers that get the owner's URL. `-e NAME` without a value
+# passes it from this subshell's environment, never on a command line.
+compose_migration() {
+  local url
+  url="$(migration_env_value MIGRATION_DATABASE_URL)"
+  [ -n "$url" ] || { log "MIGRATION_DATABASE_URL is missing in $MIGRATION_ENV_FILE"; return 2; }
+  ( export MIGRATION_DATABASE_URL="$url"
+    compose run --rm -e ALEMBIC_ALLOW_PRODUCTION=1 -e MIGRATION_DATABASE_URL "$@" )
 }
 
 # Fail before build/deploy if any critical variable is missing or empty.
@@ -74,6 +98,18 @@ validate_env() {
     val="$(env_value "$var")"
     [ -n "$val" ] || missing+=("$var")
   done
+  # The owner's URL: required, in MIGRATION_ENV_FILE only (docs/RUNBOOK_DB_ROLES.md).
+  [ -z "$(env_value MIGRATION_DATABASE_URL)" ]     || die "MIGRATION_DATABASE_URL must not be in $ENV_FILE: every runtime container reads that file. Move it to $MIGRATION_ENV_FILE (mode 600)"
+  # Task63: the offline fake model and the E2E harness are never part of a deployment.
+  local e2e_var
+  for e2e_var in E2E_FAKE_LLM E2E_REAL_GRAPHS E2E_PROCESS E2E_HOSTED_TEST; do
+    [ -z "$(env_value "$e2e_var")" ] || die "$e2e_var must not be set on a deploy host: it belongs to scripts/run_e2e_server.py only"
+  done
+  if [ -n "$(migration_env_value MIGRATION_DATABASE_URL)" ]; then
+    [ "$(stat -c %a "$MIGRATION_ENV_FILE")" = 600 ]       || die "$MIGRATION_ENV_FILE must be mode 600 (it holds the database owner's credential)"
+  else
+    missing+=("MIGRATION_DATABASE_URL (in $MIGRATION_ENV_FILE)")
+  fi
   if [ "${#missing[@]}" -gt 0 ]; then
     log "missing/empty required variables in $ENV_FILE:"
     printf '  - %s\n' "${missing[@]}" >&2

@@ -112,7 +112,8 @@ def _postgres_tables(monkeypatch):
     from app import db
 
     db.reset_engine()
-    with db.session_scope() as session:
+    from tests._owner_db import owner_engine
+    with owner_engine().begin() as session:   # TRUNCATE is owner-only (app role)
         session.execute(text(
             "TRUNCATE usage_events, usage_reservations, usage_entitlements, "
             "guided_mindmap_jobs, guided_mindmap_worker_heartbeats CASCADE"
