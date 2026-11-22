@@ -25,6 +25,7 @@ import BrandMark from "../ui/BrandMark";
 import { apiFetch, _appError } from "../../utils/api";
 import { mergeSources, formatFileName } from "../../utils/sourceReconciliation";
 import { nguonConDangXuLy } from "../../utils/nguonDangXuLy";
+import { useAppHeight } from "../../hooks/useAppHeight";
 
 // Round 11 (mockup parity, explicit user decision) — the Chat/Mind Map/
 // Summary mode switch, moved here from the now-deleted LessonHeader.jsx
@@ -51,11 +52,14 @@ export default function MainLayout({
   // Nonce from Command Palette "Mở Gia sư AI" (router state), V4.1 W3-1.
   tutorRequest,
 }) {
+  useAppHeight();
   const [sources, setSources] = useState([]);
   // "loading" until `/list-indexed` has answered once, then "ready" or "error". An empty
   // `sources` means "no documents" only when this is "ready".
   const [sourcesState, setSourcesState] = useState("loading");
   const onSourcesSettled = useCallback((ok) => setSourcesState(ok ? "ready" : "error"), []);
+  // Chat start screen: add one document to the selection (same list the source panel edits).
+  const pickSource = useCallback((key) => setSelectedSources((prev) => (prev.includes(key) ? prev : [...prev, key])), [setSelectedSources]);
   // W1-4: the centre empty states (Chat/Mind Map/Summary) have no file input
   // or upload POST logic of their own, by design -- reuse SidebarLeft's,
   // reached here via the registration callback it calls back with (see its
@@ -573,16 +577,18 @@ export default function MainLayout({
   // panel.collapsed.left — see that declaration's own comment for why).
   useEffect(() => {
     const onKey = (e) => {
-      if (e.key !== "Escape" || !((panelDrawer && rightOpen) || tabletShelfOpen)) return;
+      if (e.key !== "Escape" || !((panelDrawer && (rightOpen || leftOpen)) || tabletShelfOpen)) return;
       // Defer to real modal dialogs only. `.me-container` is the Mind Map canvas
       // itself, present for the whole MindMap mode, so it must not block Escape.
       if (document.querySelector('[aria-modal="true"]')) return;
       if (tabletShelfOpen) setTabletShelfOpen(false);
+      // V6: the phone source drawer had no keyboard way out (only its X and the backdrop).
+      else if (panelDrawer && leftOpen) setLeftOpen(false);
       else closeRightPanel();
     };
     window.addEventListener("keydown", onKey);
     return () => window.removeEventListener("keydown", onKey);
-  }, [panelDrawer, rightOpen, closeRightPanel, tabletShelfOpen]);
+  }, [panelDrawer, rightOpen, leftOpen, closeRightPanel, tabletShelfOpen]);
 
   const rightSurfaceVisible = true;
   // 2026-09-21: Mind Map's node-detail surface must be a closed-by-default
@@ -605,6 +611,14 @@ export default function MainLayout({
   // control that reopens the surface: the header tools trigger (mobile) or the column's spine.
   const leftAsideRef = useRef(null);
   const rightAsideRef = useRef(null);
+  // The reverse hand-off: opening the phone drawer from the header puts focus inside it, so
+  // a keyboard or screen-reader user lands where the drawer's content is, not behind it.
+  useEffect(() => {
+    if (!panel.drawer || !leftOpen) return;
+    leftAsideRef.current
+      ?.querySelector('button:not([disabled]), [href], input:not([disabled]), [tabindex]:not([tabindex="-1"])')
+      ?.focus();
+  }, [panel.drawer, leftOpen]);
   useLayoutEffect(() => {
     for (const [hidden, ref, spine] of [[leftSurfaceHidden, leftAsideRef, ".panel-spine--left"], [rightSurfaceHidden, rightAsideRef, ".panel-spine--right"]]) {
       if (!hidden || !ref.current?.contains(document.activeElement)) continue;
@@ -656,7 +670,7 @@ export default function MainLayout({
   }, [workspaceMode, mmClearSelectedNode]);
 
   return (
-    <div className="flex flex-col h-screen overflow-hidden font-body transition-theme" style={{ background: "var(--bg-base)", color: "var(--text-primary)" }}>
+    <div className="app-shell-height flex flex-col overflow-hidden font-body transition-theme" style={{ background: "var(--bg-base)", color: "var(--text-primary)" }}>
 
       {/* ── TOP HEADER ── */}
       <header
@@ -828,7 +842,7 @@ export default function MainLayout({
                 // this aside's right edge (same negative-margin technique
                 // PanelDivider already uses on desktop) and would otherwise
                 // be clipped.
-                : `workspace-source-rail-overlay fixed top-[56px] left-0 h-[calc(100vh-56px)] z-40
+                : `workspace-source-rail-overlay fixed top-[56px] left-0 h-[calc(var(--app-height,100dvh)-56px)] z-40
                    bg-surface-sidebar border-r border-border shadow-card-hover`
             }
             style={{ width: !tabletShelfOpen ? 56 : panel.width.left }}
@@ -886,7 +900,7 @@ export default function MainLayout({
               inert={leftSurfaceHidden ? true : undefined}
               className={
                 panel.drawer
-                  ? `fixed top-[56px] left-0 h-[calc(100vh-56px)] z-40 w-[252px] shrink-0
+                  ? `fixed top-[56px] left-0 h-[calc(var(--app-height,100dvh)-56px)] z-40 w-[252px] shrink-0
                      bg-surface-sidebar border-r border-border
                      transition-transform duration-200 ease-in-out
                      ${leftOpen ? "translate-x-0" : "-translate-x-full"}`
@@ -943,6 +957,7 @@ export default function MainLayout({
               askAboutDraft,
               hasSummary: Boolean(summaryData), onOpenSummary: onSwitchToSummary,
               onUploadDocument: triggerUpload,
+              onPickSource: pickSource,
             }}
             // `sources` (MainLayout's own state, populated only once SidebarLeft
             // reports its fetch via `onSourcesChange`) can briefly/artificially lag
@@ -1052,6 +1067,7 @@ export default function MainLayout({
               <div className="h-full">
                 <ContextInspector
                   mode={workspaceMode}
+                  sources={sources}
                   selectedSources={selectedSources}
                   evidence={evidence}
                   highlight={highlight}
