@@ -8486,3 +8486,21 @@ that never reports; the stubs now report once, as the real panel does.
 
 **Prevention.** State that a child reports from an effect needs an initial value that means
 "not known yet", never the value that means "known to be empty".
+
+### Wordmark "Map" under 4.5:1 in the landing footer and app header (2026-11-15)
+
+**Symptoms:** after `--brand-text` reached the landing header, the same "Map" text in the
+landing footer and the workspace header still used `--seal`: 3.95:1 (light) and 4.20:1 (dark).
+The first `--brand-text` values also sat at 4.50-4.54:1 there, no margin.
+
+**Root cause:** the rule lived in `landing.css` scoped to `.lp-wordmark` only; each wordmark
+is separate markup.
+
+**Fix:** one unlayered rule in `index.css` for `.lp-wordmark`, `.lp-footer-wordmark`,
+`.workspace-wordmark` (unlayered because `.text-seal` is a utility and would win over a
+layered rule); `--brand-text` #E00E16 light, #DC7762 dark: 4.88-4.91 / 4.72-4.75:1 measured.
+`--seal` and the StudyMap mark unchanged.
+
+**Regression:** `e2e-fixture/landing-wordmark-contrast.spec.js` asserts all three places
+>= 4.5:1 in both themes (red before for footer and app header) and that every other
+`.text-seal` element still computes to `--seal`.

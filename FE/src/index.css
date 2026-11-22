@@ -86,6 +86,7 @@
        construction (they haven't diverged yet); kept as its OWN named var so
        provenance consumers stay correct once `--accent` flips to forest. */
     --seal: #F1333A;
+    --brand-text: #E00E16;
 
     /* Wave 1 (additive) — forest/bronze from the Signature Contract. */
     --forest-rgb: 31 64 51;     /* #1F4033 */
@@ -196,6 +197,7 @@
     --ink-rgb:       236 231 219;
     --slate:         #8FA0B3;
     --seal: #D86A53;
+    --brand-text: #DC7762;
 
     --forest-rgb: 111 169 138;   /* #6FA98A — brightened, not an inversion */
     --bronze-rgb: 201 154 108;   /* #C99A6C */
@@ -252,6 +254,13 @@
 *::-webkit-scrollbar-thumb:hover { background: var(--scrollbar-hover); }
 
 /* ─── Utilities ─────────────────────────────── */
+/* Brand wordmark text ("Map" in StudyMap): `--brand-text`, AA 4.5:1 on its real
+   background in both themes. The StudyMap mark and every other `.text-seal` keep `--seal`.
+   Unlayered on purpose: `.text-seal` is a utility, and a layered rule would lose to it. */
+.lp-wordmark .text-seal,
+.lp-footer-wordmark .text-seal,
+.workspace-wordmark .text-seal { color: var(--brand-text); }
+
 @layer utilities {
   /* Wave 1: `.font-reading` was a duplicate alias of `.font-display` (same
      Spectral/Georgia/serif voice, slightly different fallback chain) —
