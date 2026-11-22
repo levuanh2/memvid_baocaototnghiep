@@ -1,5 +1,6 @@
-/* Landing (V6). Everything here reads role tokens from index.css, so light and dark stay one
-   design. Classes are prefixed `lp-` and used only by pages/Landing.jsx. */
+/* Landing (V6, V9.3 P2a). Everything here reads role tokens from index.css, so light and dark stay
+   one design; `.lp-ink` (index.css) scopes the dark set onto the header, hero and final band in
+   both themes. Classes are prefixed `lp-` and used by pages/Landing.jsx (and `.lp-ink` by auth). */
 
 .lp-wrap { max-width: 1120px; margin: 0 auto; padding: 0 20px; }
 @media (min-width: 640px) { .lp-wrap { padding: 0 32px; } }
@@ -36,11 +37,17 @@
 .lp-lede { font-size: 1.0625rem; line-height: 1.65; color: var(--text-secondary); max-width: 34rem; }
 .lp-note { font-size: 0.75rem; line-height: 1.4; color: var(--text-muted); }
 
-/* ── Hero ───────────────────────────────────────────────────────────── */
-.lp-hero { display: grid; gap: 40px; padding-top: 48px; padding-bottom: 56px; align-items: center; }
+/* ── Header and hero (ink) ─────────────────────────────────────────── */
+.lp-header { background: color-mix(in srgb, var(--bg-sidebar) 92%, transparent); backdrop-filter: blur(8px); }
+.lp-brand { min-height: 44px; min-width: 44px; }
+.lp-navlink { min-height: 44px; align-items: center; font-size: 0.9375rem; color: var(--text-secondary); padding: 0 4px; }
+@media (min-width: 768px) { .lp-navlink { display: inline-flex; } }
+.lp-navlink:hover { color: var(--text-primary); }
+.lp-hero__grid { display: grid; gap: 40px; padding-top: 48px; padding-bottom: 56px; align-items: center; }
 @media (min-width: 1024px) {
-  .lp-hero { grid-template-columns: minmax(0, 5fr) minmax(0, 6fr); gap: 56px; padding-top: 72px; padding-bottom: 80px; }
+  .lp-hero__grid { grid-template-columns: minmax(0, 5fr) minmax(0, 6fr); gap: 56px; padding-top: 72px; padding-bottom: 80px; }
 }
+@media (max-width: 450px) { .lp-hero .lp-h1 { font-size: 38px; } }
 
 /* The specimen: one answered question and the passage it cites. The slip overlaps the sheet so
    the pair reads as "answer, with its source attached", which is the product's whole claim. */
@@ -121,7 +128,7 @@
 /* Mind map specimen: root pill, then branches hanging off one trunk line. */
 .lp-map { display: flex; align-items: center; gap: 0; }
 .lp-map__root {
-  flex: none; background: var(--accent-cta); color: #fff; font-weight: 600; font-size: 0.875rem;
+  flex: none; background: var(--accent-cta); color: var(--on-primary); font-weight: 600; font-size: 0.875rem;
   padding: 8px 12px; border-radius: 8px; max-width: 7.5rem; text-align: center;
 }
 .lp-map__stem { flex: none; width: 18px; height: 2px; background: var(--border-strong); }
@@ -154,3 +161,30 @@
 .lp-facts { list-style: none; margin: 28px 0 0; padding: 0; display: grid; gap: 10px; font-size: 0.9375rem; line-height: 1.55; color: var(--text-secondary); }
 .lp-facts li { display: flex; gap: 10px; }
 .lp-facts svg { flex: none; margin-top: 3px; color: var(--forest); }
+
+/* ── V9.3 additions ─────────────────────────────────────────────────── */
+.lp-h3 { font-family: var(--font-display); font-weight: 600; font-size: 1.375rem; line-height: 1.25; color: var(--text-primary); }
+.lp-preview-link { margin-top: 32px; font-size: 0.9375rem; }
+.lp-preview-link a { color: var(--text-primary); font-weight: 600; text-decoration: underline; text-underline-offset: 3px; }
+
+/* Summary specimen: numbered because the sections of a document are an order. */
+.lp-summary { list-style: none; margin: 0; padding: 0; display: grid; gap: 12px; }
+.lp-summary li { font-size: 0.9375rem; line-height: 1.6; color: var(--text-secondary); }
+.lp-summary strong { color: var(--text-primary); font-weight: 600; }
+
+/* FAQ: native details/summary; each opens on its own. */
+.lp-faq { border-top: 1px solid var(--border-color); }
+.lp-faq details { border-bottom: 1px solid var(--border-color); }
+.lp-faq summary {
+  display: flex; align-items: center; justify-content: space-between; gap: 16px;
+  min-height: 56px; padding: 12px 0; cursor: pointer; list-style: none;
+  font-weight: 600; font-size: 1rem; line-height: 1.45; color: var(--text-primary);
+}
+.lp-faq summary::-webkit-details-marker { display: none; }
+.lp-faq summary::after { content: "+"; flex: none; font-size: 1.25rem; line-height: 1; color: var(--text-secondary); }
+.lp-faq details[open] summary::after { content: "–"; }
+.lp-faq summary:focus-visible { outline: 3px solid var(--focus); outline-offset: 2px; }
+.lp-faq p { padding: 0 0 18px; max-width: 42rem; font-size: 0.9375rem; line-height: 1.65; color: var(--text-secondary); }
+
+.lp-final { border-top: 1px solid var(--border-color); }
+@media (max-width: 767px) { .lp-final .btn-seal, .lp-final .btn-secondary { min-height: 44px; display: inline-flex; align-items: center; } }

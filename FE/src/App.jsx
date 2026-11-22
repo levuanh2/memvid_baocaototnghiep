@@ -20,6 +20,8 @@ import Landing from "./pages/Landing";
 const CommandPalette = lazy(() => import("./components/palette/CommandPalette"));
 const Login = lazy(() => import("./pages/Login"));
 const Register = lazy(() => import("./pages/Register"));
+// V9.3 P2c: labelled preview, public, never part of sign-in (owner D3).
+const Onboarding = lazy(() => import("./pages/Onboarding"));
 const Workspace = lazy(() => import("./pages/Workspace"));
 const DocumentList = lazy(() => import("./pages/study/DocumentList"));
 const StudyMapView = lazy(() => import("./pages/study/StudyMapView"));
@@ -61,6 +63,7 @@ export default function App() {
         <Route path="/" element={<Landing />} />
         <Route path="/login" element={<Login />} />
         <Route path="/register" element={<Register />} />
+        <Route path="/onboarding" element={<Onboarding />} />
         <Route
           path="/app"
           element={

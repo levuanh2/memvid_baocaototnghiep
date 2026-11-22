@@ -3971,3 +3971,19 @@ only, not against other fixed layers anchored to the same edge. Fix: `.toast-sta
 offsets by `64px + 16px + safe-area` at <=700px; the screenshot metrics now include
 `toastOverNav`. Same review: `useLocation().pathname` keeps a trailing slash that
 React Router still matches, so nav matchers normalise it before comparing.
+
+## A helper inside a <label> renames the field (V9.3 P2b, 2026-11-23)
+
+The first P2 register form put "Ít nhất 8 ký tự." inside the password `<label>`. The
+field's accessible name became "Mật khẩu Ít nhất 8 ký tự.", so `getByLabel("Mật khẩu",
+{ exact: true })` in `e2e/fixtures.js` (every critical flow registers through it) would
+no longer find the field. Helpers and errors go next to the label, linked with
+`aria-describedby`; `Auth.v93.test.jsx` pins `input.labels[0].textContent === "Mật khẩu"`.
+
+## Ink surfaces re-declare the dark tokens instead of hard-coding colours (V9.3 P2, 2026-11-23)
+
+The landing hero/header/final band and the auth intro must stay dark in both themes. A
+`.lp-ink` scope re-declares the dark token set, so buttons, cite chips, cards and the focus
+ring inside use their contract-tested dark pairs with no per-component overrides. Any
+probe that reads colours from `:root` must read them from the element's own scope instead
+(`landing-wordmark-contrast.spec.js` now reads the header's custom properties).

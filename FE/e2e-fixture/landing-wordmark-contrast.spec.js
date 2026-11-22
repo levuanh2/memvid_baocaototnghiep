@@ -66,9 +66,12 @@ async function measuredColors(page) {
     const study = document.querySelector(".lp-wordmark");
     const map = study.querySelector(".text-seal");
     const rootStyle = getComputedStyle(document.documentElement);
-    const [headerRed, headerGreen, headerBlue] = parse(rootStyle.getPropertyValue("--bg-sidebar"));
+    // V9.3: the landing header is an ink surface (`.lp-ink` re-declares the dark tokens), so
+    // its backdrop is read from the header's own scope, not from the page root.
+    const headerStyle = getComputedStyle(header);
+    const [headerRed, headerGreen, headerBlue] = parse(headerStyle.getPropertyValue("--bg-sidebar"));
     const headerLayer = [headerRed, headerGreen, headerBlue, 0.92];
-    const pageBackground = parse(rootStyle.getPropertyValue("--bg-base"));
+    const pageBackground = parse(headerStyle.getPropertyValue("--bg-base"));
     return {
       studyCss: getComputedStyle(study).color,
       mapCss: getComputedStyle(map).color,

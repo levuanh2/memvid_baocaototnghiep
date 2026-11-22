@@ -27,7 +27,7 @@ async function open(page, { width, dark = false, blockFonts = false, signedIn = 
   if (blockFonts) await page.route(/fonts\.(googleapis|gstatic)\.com/, (r) => r.abort());
   await page.goto("/");
   await expect(page.getByRole("heading", { level: 1 })).toBeVisible();
-  if (signedIn) await expect(page.locator("header").getByRole("link", { name: "Vào workspace" })).toBeVisible();
+  if (signedIn) await expect(page.locator("header").getByRole("link", { name: "Vào không gian học" })).toBeVisible();
 }
 
 // Two kinds of horizontal overflow: a box that leaves the viewport, and content wider than a
@@ -69,9 +69,9 @@ for (const width of WIDTHS) {
       await open(page, { width, dark });
       expect(await overflowing(page)).toEqual([]);
 
-      // One primary action in the hero.
+      // One primary action in the hero (V9.3: ink hero, "Bắt đầu học").
       const hero = page.locator("main section").first();
-      await expect(hero.getByRole("link", { name: "Bắt đầu miễn phí" })).toBeVisible();
+      await expect(hero.getByRole("link", { name: "Bắt đầu học" })).toBeVisible();
       await expect(hero.locator(".btn-seal")).toHaveCount(1);
 
       // The specimen (answer + cited passage) is visible.
@@ -125,9 +125,9 @@ test("landing copy uses the product's own names, not internal ones", async ({ pa
 test("specimens are readable by assistive technology and labelled as samples", async ({ page }) => {
   await open(page, { width: 1280 });
   const figures = page.locator("main figure");
-  await expect(figures).toHaveCount(3);
+  await expect(figures).toHaveCount(5);
   for (const figure of await figures.all()) {
-    await expect(figure.locator("figcaption")).toContainText("Ví dụ minh hoạ");
+    await expect(figure.locator("figcaption")).toContainText("Ví dụ minh họa");
     expect(await figure.evaluate((el) => el.closest("[aria-hidden='true']") !== null)).toBe(false);
   }
   // The specimen classes keep their own type (a broader `.lp-row p` rule once overrode them).
@@ -138,7 +138,7 @@ test("specimens are readable by assistive technology and labelled as samples", a
 
 test("section links are anchors that scroll to their sections", async ({ page }) => {
   await open(page, { width: 1280 });
-  for (const [name, id] of [["Cách hoạt động", "quytrinh"], ["Công cụ", "tinhnang"], ["Ví dụ", "demo"]]) {
+  for (const [name, id] of [["Cách học", "quytrinh"], ["Công cụ", "tinhnang"], ["Hỏi đáp", "hoidap"]]) {
     const link = page.locator("header").getByRole("link", { name, exact: true });
     await expect(link).toHaveAttribute("href", `#${id}`);
     await link.click();
@@ -148,18 +148,19 @@ test("section links are anchors that scroll to their sections", async ({ page })
 
 test("with reduced motion, a section link jumps without animating", async ({ page }) => {
   await open(page, { width: 1280, reducedMotion: true });
-  await page.locator("header").getByRole("link", { name: "Ví dụ", exact: true }).click();
+  await page.locator("header").getByRole("link", { name: "Hỏi đáp", exact: true }).click();
   // No smooth scroll: the target is already in view on the next frame.
-  const top = await page.evaluate(() => new Promise((resolve) => requestAnimationFrame(() => resolve(document.getElementById("demo").getBoundingClientRect().top))));
+  const top = await page.evaluate(() => new Promise((resolve) => requestAnimationFrame(() => resolve(document.getElementById("hoidap").getBoundingClientRect().top))));
   expect(top).toBeLessThan(120);
 });
 
 test("keyboard order is header, then the hero actions", async ({ page }) => {
   await open(page, { width: 1280 });
   const seen = [];
-  for (let i = 0; i < 8; i += 1) {
+  for (let i = 0; i < 9; i += 1) {
     await page.keyboard.press("Tab");
     seen.push(await page.evaluate(() => document.activeElement?.textContent?.trim() || document.activeElement?.getAttribute("aria-label")));
   }
-  expect(seen).toEqual(["Cách hoạt động", "Công cụ", "Ví dụ", "Đổi giao diện sáng/tối", "Đăng nhập", "Bắt đầu", "Bắt đầu miễn phí", "Xem cách hoạt động"]);
+  // V9.3: the brand mark is now a link home, first in the header.
+  expect(seen).toEqual(["StudyMap", "Cách học", "Công cụ", "Hỏi đáp", "Đổi giao diện sáng/tối", "Đăng nhập", "Bắt đầu", "Bắt đầu học", "Xem cách học"]);
 });
