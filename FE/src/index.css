@@ -1275,15 +1275,15 @@
   .toast-stack { bottom: calc(64px + 16px + env(safe-area-inset-bottom)); }
   .app-bottom-nav {
     position: fixed; left: 0; right: 0; bottom: 0; z-index: 30; display: grid;
-    grid-template-columns: repeat(4, minmax(0, 1fr));
+    grid-template-columns: repeat(5, minmax(0, 1fr));
     padding-bottom: env(safe-area-inset-bottom);
     background: var(--bg-card); border-top: 1px solid var(--border-color);
   }
   .app-bottom-nav--inflow { position: static; flex-shrink: 0; }
   .app-bottom-nav__link {
     display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 2px;
-    min-height: 64px; padding: 6px 4px; font-size: 12px; line-height: 1.2; text-align: center;
-    color: var(--text-secondary);
+    min-height: 64px; padding: 6px 2px; font-size: 12px; line-height: 1.2; text-align: center;
+    color: var(--text-secondary); min-width: 0; overflow-wrap: anywhere;
   }
   .app-bottom-nav__link[aria-current="page"] {
     color: var(--text-primary); font-weight: 600; box-shadow: inset 0 3px 0 var(--accent-cta);

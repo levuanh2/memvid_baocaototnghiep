@@ -1,12 +1,14 @@
 import { Link, useLocation } from "react-router-dom";
 import { Icon } from "../ui/Icon";
 
-// V9.3 P1b bottom nav (docs/StudyMap-V9.3/01 "Điều hướng"), shown at <=700px only.
-// Only routes the app really has: the spec's "Tổng quan" and "Ôn tập" have no route
-// of their own yet (review lives under a quiz attempt), so they are not invented here.
-// ponytail: four items; add "Tổng quan"/"Ôn tập" when P3/P6 give them real routes.
+// V9.3 bottom nav (docs/StudyMap-V9.3/01 "Điều hướng"), shown at <=700px only.
+// Owner-approved five items after P3b gave "Tổng quan" a real route (/app/study/dashboard).
+// "Luyện tập" stays; the spec's "Ôn tập" has no route of its own yet (review lives under a
+// quiz attempt), so it is not invented. Each `match` claims disjoint paths: one current item.
 // eslint-disable-next-line react-refresh/only-export-components
 export const APP_NAV_ITEMS = [
+  { label: "Tổng quan", to: "/app/study/dashboard", icon: "LayoutDashboard",
+    match: (p) => p === "/app/study/dashboard" },
   { label: "Thư viện", to: "/app/study", icon: "Library",
     match: (p) => p === "/app/study" || p.startsWith("/app/study/map/") },
   { label: "Học tập", to: "/app", icon: "MessagesSquare", match: (p) => p === "/app" },

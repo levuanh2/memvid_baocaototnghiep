@@ -10,7 +10,7 @@ import {
   MessageCircleQuestion, MessageSquare, MessageSquareText, MessagesSquare, Moon,
   MoreVertical, MousePointerClick, Network, PanelRight, Pencil, Plus, Quote, RotateCcw, Rows3, Scale, Scan, ScrollText,
   Search, Send, Sliders, Spline, Square, Sun, Target, Trash2, TrendingDown, TriangleAlert, Unlink, Upload, UserRound, X, Save,
-  Sparkles, Star, Tag, Pin, Zap, ZoomIn, ZoomOut,
+  Sparkles, Star, Tag, Pin, Zap, ZoomIn, ZoomOut, LayoutDashboard,
 } from "lucide-react";
 
 const ICONS = {
@@ -20,7 +20,7 @@ const ICONS = {
   MessageCircleQuestion, MessageSquare, MessageSquareText, MessagesSquare, Moon,
   MoreVertical, MousePointerClick, Network, PanelRight, Pencil, Plus, Quote, RotateCcw, Rows3, Scale, Scan, ScrollText,
   Search, Send, Sliders, Spline, Square, Sun, Target, Trash2, TrendingDown, TriangleAlert, Unlink, Upload, UserRound, X, Save,
-  Sparkles, Star, Tag, Pin, Zap, ZoomIn, ZoomOut,
+  Sparkles, Star, Tag, Pin, Zap, ZoomIn, ZoomOut, LayoutDashboard,
 };
 
 /**
