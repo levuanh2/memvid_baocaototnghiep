@@ -1,6 +1,7 @@
 import { useState } from "react";
 import { Link, Navigate, useNavigate, useSearchParams } from "react-router-dom";
 import { Icon } from "../components/ui/Icon";
+import AuthFrame, { AuthError } from "./AuthFrame";
 import Spinner from "../components/ui/Spinner";
 import { kiemTra, PROVIDER_MAC_DINH, thongBaoSauDangXuat } from "../auth/loginForm";
 import { safeNext } from "../auth/authRedirect";
@@ -46,85 +47,71 @@ export default function Login() {
     }
   };
 
+  // One error line for the form: every field points at it while it is shown.
+  const invalid = error ? { "aria-invalid": "true", "aria-describedby": "auth-error" } : {};
+  const nextQuery = params.get("next") ? `?next=${encodeURIComponent(params.get("next"))}` : "";
+
   return (
-    <div className="h-screen overflow-y-auto flex items-center justify-center px-5 py-10" style={{ background: "var(--bg-base)" }}>
-      <div className="w-full max-w-[400px]">
-        <Link to="/" className="inline-flex items-center gap-1.5 text-small text-text-muted hover:text-accent mb-6 transition-theme">
-          <Icon name="ArrowLeft" size={14} /> Về trang chủ
-        </Link>
-
-        <div className="surface-card !p-7">
-          <div className="mb-6">
-            <div className="font-mono text-metadata uppercase text-text-muted mb-2">Phòng đọc</div>
-            <h1 className="font-display text-h2 font-semibold text-text-primary">Đăng nhập</h1>
-            <p className="text-body text-text-secondary mt-1">Tiếp tục làm việc với tài liệu của bạn.</p>
+    <AuthFrame
+      title="Đăng nhập"
+      lede="Tiếp tục làm việc với tài liệu của bạn."
+      footer={(
+        <p className="auth-switch">
+          Chưa có tài khoản? <Link to={`/register${nextQuery}`}>Tạo tài khoản</Link>
+        </p>
+      )}
+    >
+      <form onSubmit={onSubmit} className="flex flex-col gap-4" noValidate>
+        {/* Chọn nguồn tài khoản. Mặc định là tài khoản StudyMap — người dùng cũ
+            mở trang này thấy đúng thứ họ vẫn thấy. "Tài khoản" nói một lần ở nhãn nhóm
+            để mỗi lựa chọn giữ một dòng ở mọi bề rộng (V9.3 P1a). */}
+        <div className="auth-field">
+          <span id="login-provider-label" className="auth-label">Đăng nhập bằng tài khoản</span>
+          <div className="flex gap-1.5" role="radiogroup" aria-labelledby="login-provider-label">
+            {[["local", "StudyMap"], ["nks", "NKS"]].map(([gt, nhan]) => (
+              <button key={gt} type="button" role="radio" aria-checked={provider === gt}
+                onClick={() => doiProvider(gt)}
+                className={`pill-tab flex-1 justify-center min-h-[44px] whitespace-nowrap ${provider === gt ? "pill-tab-active" : ""}`}>
+                {nhan}
+              </button>
+            ))}
           </div>
-
-          <form onSubmit={onSubmit} className="flex flex-col gap-3.5">
-            {/* Chọn nguồn tài khoản. Mặc định là tài khoản StudyMap — người dùng cũ
-                mở trang này thấy đúng thứ họ vẫn thấy. */}
-            {/* V9.3: "Tài khoản" is said once, in the group label, so each choice stays one
-                line at every width (the full words wrapped at 1280px with Be Vietnam Pro). */}
-            <div className="flex flex-col gap-1.5">
-              <span id="login-provider-label" className="text-small font-medium text-text-secondary">Đăng nhập bằng tài khoản</span>
-              <div className="flex gap-1.5" role="radiogroup" aria-labelledby="login-provider-label">
-                {[["local", "StudyMap"], ["nks", "NKS"]].map(([gt, nhan]) => (
-                  <button key={gt} type="button" role="radio" aria-checked={provider === gt}
-                    onClick={() => doiProvider(gt)}
-                    className={`pill-tab flex-1 justify-center min-h-[44px] whitespace-nowrap ${provider === gt ? "pill-tab-active" : ""}`}>
-                    {nhan}
-                  </button>
-                ))}
-              </div>
-            </div>
-
-            {laNks ? (
-              <label className="flex flex-col gap-1.5">
-                <span className="text-small font-medium text-text-secondary">Tên đăng nhập NKS</span>
-                <input type="text" autoComplete="username" value={username}
-                  onChange={(e) => setUsername(e.target.value)}
-                  placeholder="tên đăng nhập" className="input-surface text-body" />
-              </label>
-            ) : (
-              <label className="flex flex-col gap-1.5">
-                <span className="text-small font-medium text-text-secondary">Email</span>
-                <input type="email" autoComplete="email" value={email}
-                  onChange={(e) => setEmail(e.target.value)}
-                  placeholder="ban@vidu.com" className="input-surface text-body" />
-              </label>
-            )}
-            <label className="flex flex-col gap-1.5">
-              <span className="text-small font-medium text-text-secondary">Mật khẩu</span>
-              <input type="password" autoComplete="current-password" value={password}
-                onChange={(e) => setPassword(e.target.value)}
-                placeholder="••••••••" className="input-surface text-body" />
-            </label>
-
-            {thongBao && !error && (
-              <p role="status" className="flex items-center gap-1.5 text-small mb-3"
-                style={{ color: "var(--ok)" }}>
-                <Icon name="BadgeCheck" size={13} /> {thongBao}
-              </p>
-            )}
-            {error && (
-              <div className="text-small flex items-center gap-1.5" style={{ color: "var(--err)" }}>
-                <Icon name="AlertCircle" size={13} /> {error}
-              </div>
-            )}
-
-            <button type="submit" disabled={submitting}
-              className="btn-seal w-full mt-1 inline-flex items-center justify-center gap-2 disabled:opacity-60">
-              {submitting ? <><Spinner size={14} /> Đang đăng nhập…</> : "Đăng nhập"}
-            </button>
-          </form>
-
-          <p className="text-small text-text-secondary text-center mt-5">
-            Chưa có tài khoản?{" "}
-            <Link to={`/register${params.get("next") ? `?next=${encodeURIComponent(params.get("next"))}` : ""}`}
-              className="text-accent font-medium hover:underline">Tạo tài khoản</Link>
-          </p>
         </div>
-      </div>
-    </div>
+
+        {laNks ? (
+          <label className="auth-field">
+            <span className="auth-label">Tên đăng nhập NKS</span>
+            <input type="text" autoComplete="username" value={username} {...invalid}
+              onChange={(e) => setUsername(e.target.value)}
+              className="input-surface" />
+          </label>
+        ) : (
+          <label className="auth-field">
+            <span className="auth-label">Email</span>
+            <input type="email" autoComplete="email" value={email} {...invalid}
+              onChange={(e) => setEmail(e.target.value)}
+              placeholder="ban@vidu.com" className="input-surface" />
+          </label>
+        )}
+        <label className="auth-field">
+          <span className="auth-label">Mật khẩu</span>
+          <input type="password" autoComplete="current-password" value={password} {...invalid}
+            onChange={(e) => setPassword(e.target.value)}
+            className="input-surface" />
+        </label>
+
+        {thongBao && !error && (
+          <p role="status" className="auth-status">
+            <Icon name="BadgeCheck" size={15} aria-hidden="true" /> {thongBao}
+          </p>
+        )}
+        <AuthError error={error} />
+
+        <button type="submit" disabled={submitting}
+          className="btn-seal auth-submit inline-flex items-center justify-center gap-2 disabled:opacity-60">
+          {submitting ? <><Spinner size={14} /> Đang đăng nhập…</> : "Đăng nhập"}
+        </button>
+      </form>
+    </AuthFrame>
   );
 }

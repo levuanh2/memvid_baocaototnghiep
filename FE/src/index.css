@@ -1290,3 +1290,24 @@
   }
   .app-bottom-nav__link:focus-visible { outline: 3px solid var(--focus); outline-offset: -3px; }
 }
+
+/* V9.3 P2: ink surfaces (landing header/hero/final band, auth intro) stay dark in BOTH themes
+   (docs/StudyMap-V9.3/02). The dark token set is re-declared on the scope, so every component
+   inside (buttons, cite chips, cards, focus ring) uses its contract-tested dark pairs. */
+.lp-ink {
+  color-scheme: dark;
+  --bg-base: #151810; --bg-sidebar: #21261A; --bg-card: #21261A; --bg-elevated: #2A3021;
+  --bg-panel: #21261A; --bg-hover: #2A3021;
+  --text-primary: #F2F4EA; --text-secondary: #B4B9A8; --text-muted: #B4B9A8; --text-inverse: #151810;
+  --border-color: #3A4031; --border-strong: #69725C;
+  --accent: #F4D178; --accent-hover: #FFDB80; --accent-subtle: #3D341B;
+  --accent-cta: #F4C44E; --accent-cta-hover: #FFDB80;
+  --brand-rgb: 244 209 120; --ink-rgb: 242 244 234; --slate: #B4B9A8;
+  --seal: #F4D178; --brand-text: #F4D178; --forest: #B6DFC4; --bronze: #F4D178;
+  --ok: #B6DFC4; --ok-bg: #1D3426; --warn: #F2B48A; --err: #F0B7AD;
+  --quiz-status-correct: #B6DFC4;
+  --shadow-card: 0 1px 3px rgb(0 0 0 / .30); --shadow-card-hover: 0 12px 32px rgb(0 0 0 / .40);
+  --brand: #F4C44E; --brand-soft: #3D341B; --on-primary: #252212; --focus: #F4C44E;
+  background: var(--bg-base);
+  color: var(--text-primary);
+}
