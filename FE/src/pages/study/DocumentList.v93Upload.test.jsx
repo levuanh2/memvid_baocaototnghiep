@@ -27,7 +27,7 @@ vi.mock("../../components/study/StudyShell", () => ({
 vi.mock("../../components/study/CollectionSidebar", () => ({ default: () => <aside /> }));
 vi.mock("../../components/study/BulkBar", () => ({ default: () => null }));
 vi.mock("../../components/study/StudyCard", () => ({ default: ({ doc }) => <div data-card={doc.document_id} /> }));
-vi.mock("../../components/study/AiInsightCard", () => ({ default: () => null }));
+vi.mock("../../components/study/AiInsightCard", () => ({ default: ({ doc, dangTai, tenTep }) => <div data-insight>{dangTai ? `tai:${tenTep}` : `doc:${doc?.document_id}`}</div> }));
 vi.mock("../../components/study/LearningDashboard", () => ({ default: () => null }));
 vi.mock("../../components/study/LearningHome", () => ({ default: () => null }));
 vi.mock("../../components/ui/Disclosure", () => ({ default: ({ children }) => <div>{children}</div> }));
@@ -128,5 +128,50 @@ describe("Library upload V9.3", () => {
     await pick([file("setup.exe")]);
     expect(uploadDocument).not.toHaveBeenCalled();
     expect([...item("setup.exe").querySelectorAll("button")].some((b) => b.textContent.includes("Thử lại"))).toBe(false);
+  });
+
+  // Codex P1 (#202): a new pick used to replace the queue, dropping a failed file and its retry.
+  it("keeps a failed file and its retry when another file is picked", async () => {
+    uploadDocument.mockRejectedValueOnce(new Error("Máy chủ bận")).mockResolvedValue({ document_id: "doc-1" });
+    await pick([file("a.pdf")]);
+    await pick([file("b.pdf")]);
+    expect(item("b.pdf").textContent).toMatch(/Đã tải lên/);
+    const retry = [...item("a.pdf").querySelectorAll("button")].find((b) => b.textContent.includes("Thử lại"));
+    expect(retry).toBeTruthy();
+    await act(async () => { retry.click(); });
+    await flush();
+    expect(uploadDocument.mock.calls.map((c) => c[0].name)).toEqual(["a.pdf", "b.pdf", "a.pdf"]);
+  });
+
+  // Codex P1 (#202): the insight card named the previous upload while a later one was running,
+  // and kept it after a later batch failed entirely.
+  it("does not show the previous upload's document during or after a later batch", async () => {
+    uploadDocument.mockResolvedValueOnce({ document_id: "doc-1" });
+    await pick([file("a.pdf")]);
+    expect(host.querySelector("[data-insight]").textContent).toBe("doc:doc-1");
+    let fail;
+    uploadDocument.mockImplementationOnce(() => new Promise((_, reject) => { fail = reject; }));
+    await pick([file("b.pdf")]);
+    expect(host.querySelector("[data-insight]").textContent).toBe("tai:b.pdf");
+    await act(async () => { fail(new Error("Máy chủ bận")); });
+    await flush();
+    expect(host.querySelector("[data-insight]")).toBeNull();
+  });
+
+  // Codex P2 (#202): retry and close removed the focused control and left focus on <body>.
+  it("keeps focus on the queue after retry and returns it to the upload button after closing", async () => {
+    uploadDocument.mockRejectedValueOnce(new Error("Máy chủ bận")).mockResolvedValue({ document_id: "doc-1" });
+    await pick([file("a.pdf")]);
+    const retry = [...item("a.pdf").querySelectorAll("button")].find((b) => b.textContent.includes("Thử lại"));
+    retry.focus();
+    await act(async () => { retry.click(); });
+    await flush();
+    const queue = host.querySelector(".upload-queue");
+    expect(document.activeElement).toBe(queue);
+    expect(queue.getAttribute("aria-label")).toBe("Danh sách tải lên");
+    const close = [...queue.querySelectorAll("button")].find((b) => b.textContent.includes("Ẩn danh sách"));
+    close.focus();
+    await act(async () => { close.click(); });
+    expect(document.activeElement.textContent).toMatch(/Tải tài liệu lên/);
   });
 });

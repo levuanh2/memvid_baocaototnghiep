@@ -1,3 +1,4 @@
+import { useRef } from "react";
 import { Icon } from "../ui/Icon";
 import Spinner from "../ui/Spinner";
 
@@ -11,9 +12,12 @@ const NHAN = {
 };
 
 export default function UploadQueue({ hang, dangChay, onThuLai, onDong }) {
+  const khungRef = useRef(null);
   if (!hang.length) return null;
   return (
-    <section className="upload-queue surface-card mb-4" aria-label="Tệp đang tải lên">
+    // Codex P2/P3 (#202): "Thử lại" disappears once its row starts again, so focus moves to the
+    // queue itself (tabIndex -1); the label stays true whether files are sending or done.
+    <section ref={khungRef} tabIndex={-1} className="upload-queue surface-card mb-4" aria-label="Danh sách tải lên">
       <ul className="upload-queue__list" aria-live="polite">
         {hang.map((m) => (
           <li key={m.khoa} data-upload-item className="upload-queue__item" data-state={m.trangThai}>
@@ -29,7 +33,7 @@ export default function UploadQueue({ hang, dangChay, onThuLai, onDong }) {
             )}
             {m.trangThai === "loi" && (
               <button type="button" className="pill-action upload-queue__retry" disabled={dangChay}
-                      onClick={() => onThuLai(m.khoa)}>
+                      onClick={() => { khungRef.current?.focus(); onThuLai(m.khoa); }}>
                 Thử lại <span className="sr-only">{m.ten}</span>
               </button>
             )}

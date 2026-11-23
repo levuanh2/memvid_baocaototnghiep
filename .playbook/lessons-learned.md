@@ -3999,3 +3999,11 @@ A size check on the client mirrors a request-wide server cap only approximately:
 server's 413 visible on the file's own row.
 
 Also: a comment that quotes a retired label trips `toolsUploadLabels.test.js` like live copy does.
+
+Regression (Codex review of #202, fixed red-first): a per-file queue that is rebuilt on every
+pick silently drops failed rows and their File objects, so "retry" has nothing to send; carry
+failed rows across picks. A status card keyed on "the last upload" must be cleared when a new
+batch starts, or it names the wrong document. And a refresh that flips the page's `loading`
+flag unmounts the list, the queue and the focused button with it: refresh quietly after an
+action the user is still looking at. Tests: DocumentList.v93Upload.test.jsx (fail A, pick B,
+retry A; two batches with an all-failed second; focus after retry and close).

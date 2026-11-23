@@ -194,8 +194,10 @@ export default function DocumentList() {
   const [boSuuTapCanXoa, setBoSuuTapCanXoa] = useState(null);
   const [chiTietDoc, setChiTietDoc] = useState(null);
 
-  const load = useCallback(async () => {
-    setLoading(true);
+  // `yen` (quiet): refresh after an upload without the skeleton. The skeleton unmounted the
+  // whole list, the upload queue with it, and dropped keyboard focus (Codex P2, #202).
+  const load = useCallback(async ({ yen = false } = {}) => {
+    if (!yen) setLoading(true);
     setError(null);
     try {
       // Thư viện là thứ trang này TỒN TẠI để hiện; ba khối tiến độ là phần thêm.
@@ -228,11 +230,15 @@ export default function DocumentList() {
   // no longer replaces the whole library with a page error: the other files and the list stay.
   const [hangTai, setHangTai] = useState([]);
   const tepTaiRef = useRef(new Map());
+  const nutTaiRef = useRef(null);
   const capNhatTep = (khoa, thayDoi) =>
     setHangTai((prev) => prev.map((m) => (m.khoa === khoa ? { ...m, ...thayDoi } : m)));
 
   const chayHangTai = async (khoas) => {
     setUploading(true);
+    // Codex P1 (#202): the insight card is about THIS batch. Left set, it named the previous
+    // upload while a later file was sending, and stayed after a later batch failed entirely.
+    setIdVuaTai(null);
     let idMoi = null;
     for (const khoa of khoas) {
       const tep = tepTaiRef.current.get(khoa);
@@ -248,7 +254,7 @@ export default function DocumentList() {
     }
     if (idMoi) {
       setIdVuaTai(idMoi);
-      await load();
+      await load({ yen: true });
     }
     setUploading(false);
   };
@@ -258,15 +264,19 @@ export default function DocumentList() {
     const accept = e.target.accept;
     e.target.value = "";
     if (!tepChon.length || uploading) return;
-    tepTaiRef.current = new Map();
-    const hang = tepChon.map((tep, i) => {
+    // Codex P1 (#202): a file the server refused keeps its row and its File across a new pick,
+    // so its "Thử lại" still works. Finished and refused-before-sending rows are replaced.
+    const conLoi = hangTai.filter((m) => m.trangThai === "loi");
+    const tepCu = tepTaiRef.current;
+    tepTaiRef.current = new Map(conLoi.map((m) => [m.khoa, tepCu.get(m.khoa)]));
+    const moi = tepChon.map((tep, i) => {
       const khoa = `${Date.now()}-${i}`;
       tepTaiRef.current.set(khoa, tep);
       const loi = kiemTraTep(tep, accept);
       return { khoa, ten: tep.name, trangThai: loi ? "tu_choi" : "cho", loi };
     });
-    setHangTai(hang);
-    const guiDuoc = hang.filter((m) => m.trangThai === "cho").map((m) => m.khoa);
+    setHangTai([...conLoi, ...moi]);
+    const guiDuoc = moi.filter((m) => m.trangThai === "cho").map((m) => m.khoa);
     if (guiDuoc.length) chayHangTai(guiDuoc);
   };
 
@@ -585,7 +595,7 @@ export default function DocumentList() {
             accept=".bmp,.csv,.doc,.docx,.epub,.fb2,.gif,.htm,.html,.jpeg,.jpg,.json,.md,.mobi,.odp,.odt,.pdf,.png,.pptx,.rtf,.txt,.xlsx,.xps" />
           {/* V6: one filled button above the list. When the learning home offers "Tiếp tục",
               that is the page's main action and uploading is secondary; otherwise uploading is. */}
-          <button type="button"
+          <button type="button" ref={nutTaiRef}
             className={`${coTiepTuc ? "btn-secondary" : "btn-seal"} text-small inline-flex items-center gap-2`}
             data-emphasis={coTiepTuc ? "secondary" : "primary"}
             disabled={uploading} onClick={() => fileRef.current?.click()}>
@@ -636,7 +646,8 @@ export default function DocumentList() {
 
       <UploadQueue hang={hangTai} dangChay={uploading}
         onThuLai={(khoa) => { if (!uploading) chayHangTai([khoa]); }}
-        onDong={() => setHangTai([])} />
+        // Codex P2 (#202): closing removes the focused button; hand focus back to the upload button.
+        onDong={() => { setHangTai([]); nutTaiRef.current?.focus(); }} />
 
       {loiThaoTac && (
         <div role="alert" className="mb-4 text-small flex items-start gap-1.5"
