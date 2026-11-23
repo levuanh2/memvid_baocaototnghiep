@@ -4079,3 +4079,13 @@ re-run every opener of that surface from the new default state; tests at 1440 fi
 the phone panel controls lived only in that menu, it mattered. Fix: focus the first item on
 open; ArrowDown/ArrowUp wrap, Home/End jump; Escape returns focus to the trigger. Declaring an
 ARIA pattern means implementing its keyboard contract.
+
+## P4b CI: a header that fit on Windows overflowed on Linux; a second e2e folder missed (2026-11-24)
+
+1. mobile-header.spec 1280px passed locally and overflowed by 24px in CI (Linux fonts are wider).
+A header row with less than ~30px slack locally is not safe. Fix: the Tập trung label also waits
+for 1440px. Prevention: when adding to the header, measure slack at the tightest desktop width
+and keep a margin for font metrics.
+2. The <=700px select hid the tab row; e2e-fixture/ specs were updated but e2e/ (real-backend
+Critical Flows) still waited for the tab row at 390px. Prevention: grep every Playwright folder
+(e2e/ and e2e-fixture/) for a selector before changing what it points at.
