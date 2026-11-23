@@ -293,7 +293,10 @@ test.describe("compact usage control states", () => {
     expect(box.x + box.width).toBeLessThanOrEqual(321);
     await pop.getByText(/Gói/).click();
     await expect(pop).toBeVisible();
-    await page.mouse.click(160, 690);
+    // Outside click on a blank spot of the page. A fixed (160, 690) landed on the bottom nav
+    // (added in V9.3 P1b), so the "outside click" navigated away and the test raced the route.
+    const main = await page.locator("main#main-content").boundingBox();
+    await page.mouse.click(main.x + 6, main.y + main.height / 2);
     await expect(pop).toHaveCount(0);
     await btn.click();
     await expect(pop).toBeVisible();

@@ -4036,3 +4036,9 @@ Focus Mode from the "Công cụ học" menu; the exit toggle shows only once foc
 header actions are hidden then, so it fits). Also: a full fixture run in parallel with another
 Playwright run produced load-only failures; re-run suspects alone and compare with the baseline
 before calling anything a regression.
+
+Regression (CI Fixture Smoke on #205/#206): mobile-header.spec.js "popover ... closes on outside
+click" clicked a fixed (160, 690) at 320x720. Since V9.3 P1b that point is the bottom nav, so the
+"outside click" followed a link and the next step raced the lazy route (2 of 3 local runs failed;
+#204 passed only because its 5-item nav puts "Học tập" = the current /app there). An "outside
+click" must target a measured blank spot, never a viewport coordinate that new chrome can occupy.
