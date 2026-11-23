@@ -4017,3 +4017,11 @@ twice; only a screenshot caught it. And `count ?? 0` turned a field the API did 
 blocks, list every number each block renders; render "missing" as absent or as a sentence,
 never as 0. Tests: Dashboard.test.jsx ("shows the quiz average once", "leaves out the concept
 line when the API does not report concepts").
+
+Regression (Codex review of #203, fixed red-first): a new page that lists attempts must reuse
+the existing routing/label contract (`baiLam` in utils/tienDoHoc.js), not a second table:
+practice and submitted attempts went to the wrong flow. A failed source (`null`) and an empty
+one (`[]`) need different output. Per-account page state must be keyed by the account: an
+effect that resets state runs AFTER the new account's first commit, which shows the previous
+account's data; a `useLayoutEffect` probe sees that frame where `act()` hides it. A retry that
+swaps the button for a loading line must move focus to a persistent node first.

@@ -3,7 +3,7 @@
 // from real data only. Library + /api/progress/{overview,concepts,attempts}; no reading time,
 // no mastery percentage, no weekly chart; zero, missing and loading are different states;
 // every link goes to a real route.
-import { act } from "react";
+import { act, useLayoutEffect } from "react";
 import { createRoot } from "react-dom/client";
 import { MemoryRouter } from "react-router-dom";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
@@ -34,7 +34,7 @@ const OVERVIEW = { document_count: 2, quiz_count: 2, attempt_count: 3, average_p
   mastered_concept_count: 2, weak_concept_count: 1, completion_rate: 0.67 };
 const WEAK = [{ concept_name: "Độ co giãn của cầu", status: "review_needed", mastery_score: 0.41, attempt_count: 2 }];
 const ATTEMPTS = [
-  { attempt_id: "a1", quiz_id: "q1", quiz_title: "Quiz chương 3", status: "graded", score: 3, max_score: 4, submitted_at: hoursAgo(5), quiz_type: "practice" },
+  { attempt_id: "a1", quiz_id: "q1", quiz_title: "Quiz chương 3", status: "graded", score: 3, max_score: 4, percentage: 75, submitted_at: hoursAgo(5), quiz_type: "diagnostic" },
   { attempt_id: "a2", quiz_id: "q2", quiz_title: "Quiz đang làm", status: "in_progress", submitted_at: null, quiz_type: "diagnostic" },
 ];
 
@@ -163,7 +163,7 @@ describe("Dashboard V9.3", () => {
 
   it("links only to real routes", async () => {
     await render();
-    const real = [/^\/app$/, /^\/app\/study$/, /^\/app\/study\/progress$/, /^\/app\/study\/quiz\/new$/,
+    const real = [/^\/app$/, /^\/app\/study$/, /^\/app\/study\/progress$/, /^\/app\/study\/quiz\/new$/, /^\/app\/study\/practice\/[\w-]+$/,
       /^\/app\/study\/quiz\/[\w-]+$/, /^\/app\/study\/result\/[\w-]+$/];
     for (const a of host.querySelectorAll("a[href]:not([href^='#'])")) {
       expect(real.some((r) => r.test(a.getAttribute("href"))), a.getAttribute("href")).toBe(true);
@@ -182,5 +182,67 @@ describe("Dashboard V9.3", () => {
     getProgressOverview.mockResolvedValue(withoutConcepts);
     await render();
     expect(section("Kết quả luyện tập").textContent).not.toMatch(/đã nắm/);
+  });
+
+  // Codex P1 (#203): attempt rows reimplemented routing; practice and submitted attempts went
+  // to the wrong workflow and a cancelled one got a made-up link. Rows follow V6 baiLam().
+  it("routes each attempt the way the progress page does", async () => {
+    getProgressAttempts.mockResolvedValue([
+      { attempt_id: "p1", quiz_id: "qp1", quiz_title: "Luyện tập đã chấm", status: "graded", quiz_type: "practice", score: 1, max_score: 2, percentage: 50 },
+      { attempt_id: "p2", quiz_id: "qp2", quiz_title: "Luyện tập dở", status: "in_progress", quiz_type: "practice" },
+      { attempt_id: "s1", quiz_id: "qs1", quiz_title: "Chẩn đoán đã nộp", status: "submitted", quiz_type: "diagnostic" },
+      { attempt_id: "i1", quiz_id: "qi1", quiz_title: "Chẩn đoán dở", status: "in_progress", quiz_type: "diagnostic" },
+      { attempt_id: "c1", quiz_id: "qc1", quiz_title: "Bài đã huỷ", status: "cancelled", quiz_type: "diagnostic" },
+    ]);
+    await render();
+    const s = section("Bài làm gần nhất");
+    const row = (title) => [...s.querySelectorAll("li")].find((li) => li.textContent.includes(title));
+    const href = (title) => row(title).querySelector("a")?.getAttribute("href") ?? null;
+    expect(href("Luyện tập đã chấm")).toBe("/app/study/practice/qp1");
+    expect(href("Luyện tập dở")).toBe("/app/study/practice/qp2");
+    expect(href("Chẩn đoán đã nộp")).toBe("/app/study/result/s1");
+    expect(row("Chẩn đoán đã nộp").textContent).toContain("Đang chấm");
+    expect(href("Chẩn đoán dở")).toBe("/app/study/quiz/qi1");
+    expect(row("Chẩn đoán dở").textContent).toContain("Đang làm dở");
+    expect(href("Bài đã huỷ")).toBeNull();
+  });
+
+  // Codex P1 (#203): a failed attempts request looked exactly like "no attempts".
+  it("says when only the attempts list failed, and offers a retry", async () => {
+    getProgressAttempts.mockRejectedValueOnce(new Error("500"));
+    await render();
+    const s = section("Bài làm gần nhất");
+    expect(s.textContent).toMatch(/Chưa tải được danh sách bài làm/);
+    await act(async () => { [...s.querySelectorAll("button")].find((b) => b.textContent === "Thử lại").click(); });
+    await flush();
+    expect(section("Bài làm gần nhất").querySelectorAll("a")).toHaveLength(2);
+  });
+
+  // Codex P1 (#203): on an account switch the new account's first render showed the previous
+  // account's documents and numbers until the effect ran.
+  it("never renders the previous account's data for the new account", async () => {
+    await render();
+    expect(text()).toContain("Kinh tế vi mô");
+    currentUser = { id: "u2", display_name: "Minh" };
+    getLibrary.mockImplementationOnce(() => new Promise(() => {}));
+    getProgressOverview.mockImplementationOnce(() => new Promise(() => {}));
+    // A layout effect reads the DOM as committed, before any passive effect can hide it.
+    const committed = [];
+    function Probe() { useLayoutEffect(() => { committed.push(host.textContent); }); return null; }
+    act(() => root.render(<MemoryRouter><StudyContextProvider><Dashboard /><Probe /></StudyContextProvider></MemoryRouter>));
+    expect(committed[0]).toContain("Minh");
+    expect(committed[0]).not.toContain("Kinh tế vi mô");
+    expect(committed[0]).not.toContain("72.5%");
+  });
+
+  // Codex P2 (#203): retry removed the focused button and dropped focus to <body>.
+  it("keeps focus in the practice section after retry", async () => {
+    getProgressOverview.mockRejectedValueOnce(new Error("500"));
+    await render();
+    const s = section("Kết quả luyện tập");
+    const retry = [...s.querySelectorAll("button")].find((b) => b.textContent === "Thử lại");
+    retry.focus();
+    await act(async () => { retry.click(); });
+    expect(document.activeElement).toBe(section("Kết quả luyện tập"));
   });
 });

@@ -5,10 +5,10 @@ import LearningHome from "../../components/study/LearningHome";
 import { useAuth } from "../../auth/useAuth";
 import { useOpenSurface } from "../../study/useOpenSurface";
 import {
-  MASTERY_LABEL, attemptScoreLabel, getLibrary, getProgressAttempts, getProgressConcepts,
-  getProgressOverview, moTaLoi,
+  MASTERY_LABEL, getLibrary, getProgressAttempts, getProgressConcepts, getProgressOverview, moTaLoi,
 } from "../../utils/studyApi";
 import { chiaMuc, coTheTiepTuc, loc, sapXep } from "../../utils/thuVienTaiLieu";
+import { baiLam } from "../../utils/tienDoHoc";
 import "./dashboard.css";
 
 // V9.3 P3b — Tổng quan: what to do next, from real data only (owner brief; docs/StudyMap-V9.3
@@ -19,8 +19,15 @@ import "./dashboard.css";
 
 const SO_BAI_GAN_NHAT = 5;
 
+// Codex P1 (#203): keyed by account. State kept across an account switch rendered the previous
+// account's documents and numbers for the new one until an effect ran; a fresh instance starts
+// in loading on its very first render, and the old one's late responses land nowhere.
 export default function Dashboard() {
   const { user } = useAuth();
+  return <TongQuan key={user?.id ?? "khach"} user={user} />;
+}
+
+function TongQuan({ user }) {
   const moBeMat = useOpenSurface();
   const [thuVien, setThuVien] = useState({ dangTai: true, loi: null, documents: [] });
   const [tienDo, setTienDo] = useState({ dangTai: true });
@@ -58,7 +65,7 @@ export default function Dashboard() {
   useEffect(() => {
     taiThuVien();
     taiTienDo();
-  }, [user?.id, taiThuVien, taiTienDo]);
+  }, [taiThuVien, taiTienDo]);
 
   const documents = thuVien.documents;
   const mucHienThi = useMemo(() => chiaMuc(sapXep(loc(documents), "newest")), [documents]);
@@ -95,23 +102,38 @@ export default function Dashboard() {
       )}
 
       <KetQuaLuyenTap tienDo={tienDo} onThuLai={taiTienDo} />
-      {!tienDo.dangTai && <CanCungCo tienDo={tienDo} />}
-      {!tienDo.dangTai && tienDo.attempts?.length > 0 && <BaiGanNhat attempts={tienDo.attempts} />}
+      {!tienDo.dangTai && <CanCungCo tienDo={tienDo} onThuLai={taiTienDo} />}
+      {/* `null` = the request failed (say so); `[]` = loaded, nothing yet (the practice section
+          already says "Chưa làm bài nào"). Codex P1 (#203). */}
+      {!tienDo.dangTai && (tienDo.attempts === null || tienDo.attempts?.length > 0) && (
+        <BaiGanNhat attempts={tienDo.attempts} onThuLai={taiTienDo} />
+      )}
     </StudyShell>
+  );
+}
+
+// Retry removes the focused button (the section switches to loading), so focus moves to the
+// section itself first (Codex P2, #203).
+function NutThuLai({ khungRef, onThuLai }) {
+  return (
+    <button type="button" className="btn-secondary text-small"
+            onClick={() => { khungRef.current?.focus(); onThuLai(); }}>Thử lại</button>
   );
 }
 
 function KetQuaLuyenTap({ tienDo, onThuLai }) {
   const ov = tienDo.overview;
+  const khungRef = useRef(null);
   return (
-    <section className="dash-section" aria-labelledby="dash-practice" aria-busy={tienDo.dangTai || undefined}>
+    <section ref={khungRef} tabIndex={-1} className="dash-section" aria-labelledby="dash-practice"
+             aria-busy={tienDo.dangTai || undefined}>
       <h2 id="dash-practice" className="dash-h2">Kết quả luyện tập</h2>
       {tienDo.dangTai ? (
         <p className="dash-note">Đang tải số liệu luyện tập…</p>
       ) : !ov ? (
         <div className="dash-note dash-note--error" role="alert">
           <span>Chưa tải được số liệu luyện tập. Phần tài liệu ở trên vẫn dùng được.</span>
-          <button type="button" className="btn-secondary text-small" onClick={onThuLai}>Thử lại</button>
+          <NutThuLai khungRef={khungRef} onThuLai={onThuLai} />
         </div>
       ) : !ov.attempt_count ? (
         <p className="dash-note">
@@ -148,13 +170,17 @@ function KetQuaLuyenTap({ tienDo, onThuLai }) {
   );
 }
 
-function CanCungCo({ tienDo }) {
+function CanCungCo({ tienDo, onThuLai }) {
+  const khungRef = useRef(null);
   if (tienDo.concepts === null) {
     // The overview may have loaded; only this list failed. Say which part is missing.
     return tienDo.overview ? (
-      <section className="dash-section" aria-labelledby="dash-weak">
+      <section ref={khungRef} tabIndex={-1} className="dash-section" aria-labelledby="dash-weak">
         <h2 id="dash-weak" className="dash-h2">Cần củng cố</h2>
-        <p className="dash-note">Chưa tải được danh sách khái niệm cần củng cố.</p>
+        <div className="dash-note dash-note--error" role="alert">
+          <span>Chưa tải được danh sách khái niệm cần củng cố.</span>
+          <NutThuLai khungRef={khungRef} onThuLai={onThuLai} />
+        </div>
       </section>
     ) : null;
   }
@@ -181,25 +207,45 @@ function CanCungCo({ tienDo }) {
   );
 }
 
-function BaiGanNhat({ attempts }) {
+// Each row goes where the progress page sends it (V6 `baiLam`): practice to the practice flow,
+// a submitted diagnostic to its result while it is graded, an unfinished one back to the quiz,
+// anything else nowhere (Codex P1, #203: this page used to keep its own, wrong table).
+function BaiGanNhat({ attempts, onThuLai }) {
+  const khungRef = useRef(null);
   return (
-    <section className="dash-section" aria-labelledby="dash-attempts">
+    <section ref={khungRef} tabIndex={-1} className="dash-section" aria-labelledby="dash-attempts">
       <h2 id="dash-attempts" className="dash-h2">Bài làm gần nhất</h2>
-      <p className="dash-def">Tối đa {SO_BAI_GAN_NHAT} bài mới nhất, không phải toàn bộ lịch sử.</p>
-      <ul className="dash-list">
-        {attempts.map((a) => (
-          <li key={a.attempt_id}>
-            <Link className="dash-list__row"
-              to={a.status === "graded" ? `/app/study/result/${a.attempt_id}` : `/app/study/quiz/${a.quiz_id}`}>
-              <span className="dash-list__name">{a.quiz_title}</span>
-              <span className="dash-list__meta">
-                {a.status === "graded" ? attemptScoreLabel(a) : "Chưa nộp"}
-                {a.submitted_at ? `, ${new Date(a.submitted_at).toLocaleDateString("vi-VN")}` : ""}
-              </span>
-            </Link>
-          </li>
-        ))}
-      </ul>
+      {attempts === null ? (
+        <div className="dash-note dash-note--error" role="alert">
+          <span>Chưa tải được danh sách bài làm.</span>
+          <NutThuLai khungRef={khungRef} onThuLai={onThuLai} />
+        </div>
+      ) : (
+        <>
+          <p className="dash-def">Tối đa {SO_BAI_GAN_NHAT} bài mới nhất, không phải toàn bộ lịch sử.</p>
+          <ul className="dash-list">
+            {attempts.map((a) => {
+              const b = baiLam(a);
+              const noiDung = (
+                <>
+                  <span className="dash-list__name">{a.quiz_title}</span>
+                  <span className="dash-list__meta">
+                    {b.loai}, {b.ketQua}
+                    {a.submitted_at ? `, ${new Date(a.submitted_at).toLocaleDateString("vi-VN")}` : ""}
+                  </span>
+                </>
+              );
+              return (
+                <li key={a.attempt_id}>
+                  {b.den
+                    ? <Link className="dash-list__row" to={b.den}>{noiDung}</Link>
+                    : <div className="dash-list__row">{noiDung}</div>}
+                </li>
+              );
+            })}
+          </ul>
+        </>
+      )}
     </section>
   );
 }
