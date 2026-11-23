@@ -188,6 +188,47 @@ describe("Phone tools menu (no room for the header buttons at <=480px)", () => {
   });
 });
 
+// Codex P1 (#208): "Công cụ học" tools changed the right view but only set the transient
+// rightOpen, so a collapsed desktop column (now the first-run default) stayed closed.
+describe("Tools menu opens a collapsed desktop column", () => {
+  const openMenu = async () => { await click(container.querySelector("button[aria-label='Mở công cụ học']")); };
+  const tool = (name) => [...container.querySelectorAll("[role='menuitem']")].find((el) => el.textContent.includes(name));
+
+  for (const [width, stored] of [[1440, null], [1024, { left: true, right: true }]]) {
+    it(`${width}px ${stored ? "saved collapsed" : "no saved layout"}: Gia sư AI shows the column`, async () => {
+      await renderLayout(width, stored);
+      expect(rightAside().getAttribute("aria-hidden")).toBe("true");
+      await openMenu();
+      await click(tool("Gia sư AI"));
+      expect(rightAside().getAttribute("aria-hidden")).toBeNull();
+      expect(evidenceButton().getAttribute("aria-expanded")).toBe("true");
+    });
+  }
+});
+
+// Codex P2 (#208): role="menu" without the menu keyboard pattern.
+describe("Tools menu keyboard", () => {
+  const key = async (k) => { await act(async () => { document.activeElement.dispatchEvent(new KeyboardEvent("keydown", { key: k, bubbles: true })); }); };
+  const items = () => [...container.querySelectorAll("[role='menu'] [role^='menuitem']")];
+
+  it("focuses the first item on open and moves with ArrowDown/ArrowUp/Home/End", async () => {
+    await renderLayout(390);
+    await click(container.querySelector("button[aria-label='Mở công cụ học']"));
+    const all = items();
+    expect(document.activeElement).toBe(all[0]);
+    await key("ArrowDown");
+    expect(document.activeElement).toBe(all[1]);
+    await key("End");
+    expect(document.activeElement).toBe(all[all.length - 1]);
+    await key("ArrowDown");
+    expect(document.activeElement).toBe(all[0]);
+    await key("ArrowUp");
+    expect(document.activeElement).toBe(all[all.length - 1]);
+    await key("Home");
+    expect(document.activeElement).toBe(all[0]);
+  });
+});
+
 describe("Chế độ học select", () => {
   it("is a labelled select with every mode, in step with the tabs", async () => {
     await renderLayout(390);

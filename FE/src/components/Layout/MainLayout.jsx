@@ -442,8 +442,11 @@ export default function MainLayout({
   const openStudyTool = useCallback((view) => {
     setRightView(view);
     setHeaderSurface(null);
-    openRight();
-  }, [openRight]);
+    // Codex P1 (#208): a desktop column is shown by rightCollapsed, not rightOpen. Overlays
+    // (phone drawer, Mind Map) use rightOpen; the column goes through the focus-aware setter.
+    if (panelDrawer || workspaceMode === "mindmap") openRight();
+    else setRightCollapsed(false);
+  }, [openRight, panelDrawer, workspaceMode, setRightCollapsed]);
   // Structural refactor (Learning Canvas lesson header + next-action strip) —
   // ONE real action per artifact type, shared by the header's mode-switch
   // tabs and ChatArea's next-action strip: switch to the pane if it

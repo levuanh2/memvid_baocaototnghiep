@@ -33,8 +33,18 @@ export default function StudyToolsMenu({ open, onClose, onSelect, extraActions =
       if (!event.target.closest?.(FOCUSABLE_SELECTOR)) triggerRef?.current?.focus();
       onClose?.();
     };
+    // Menu keyboard pattern (Codex P2, #208): arrows, Home and End move between items, wrapping.
     const onKeyDown = (event) => {
-      if (event.key === "Escape") close();
+      if (event.key === "Escape") { close(); return; }
+      const items = [...(ref.current?.querySelectorAll('[role^="menuitem"]') ?? [])];
+      if (!items.length || !["ArrowDown", "ArrowUp", "Home", "End"].includes(event.key)) return;
+      event.preventDefault();
+      const at = items.indexOf(document.activeElement);
+      const next = event.key === "Home" ? 0
+        : event.key === "End" ? items.length - 1
+        : event.key === "ArrowDown" ? (at + 1) % items.length
+        : (at <= 0 ? items.length : at) - 1;
+      items[next].focus();
     };
     document.addEventListener("mousedown", onPointerDown);
     document.addEventListener("keydown", onKeyDown);
@@ -43,6 +53,10 @@ export default function StudyToolsMenu({ open, onClose, onSelect, extraActions =
       document.removeEventListener("keydown", onKeyDown);
     };
   }, [open, onClose, close, triggerRef]);
+  // Opening the menu puts focus on its first item, as the menu pattern expects.
+  useEffect(() => {
+    if (open) ref.current?.querySelector('[role^="menuitem"]')?.focus();
+  }, [open]);
   if (!open) return null;
   return (
     <div ref={ref} className="study-tools-menu" role="menu" aria-label="Công cụ học">

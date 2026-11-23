@@ -229,3 +229,38 @@ test("390px Focus Mode: Dẫn chứng is back in the emptied header and the row 
   expect(o.header).toBeLessThanOrEqual(0);
   await shot(page, "focus-evidence-390");
 });
+
+// Codex P1 (#208): tools from "Công cụ học" must open a collapsed desktop column.
+for (const [width, stored] of [[1440, null], [1024, { width: { left: 252, right: 360 }, collapsed: { left: true, right: true } }]]) {
+  test(`${width}px ${stored ? "saved collapsed" : "first run"}: Gia sư AI from the tools menu opens the column`, async ({ page }) => {
+    await openWorkspace(page, { width, stored });
+    await expect(page.locator("#workspace-evidence")).toHaveAttribute("aria-hidden", "true");
+    await page.getByRole("button", { name: "Mở công cụ học" }).click();
+    await page.getByRole("menuitem", { name: /Gia sư AI/ }).click();
+    await expect(page.locator("#workspace-evidence")).not.toHaveAttribute("aria-hidden", "true");
+    const width0 = await page.locator("#workspace-evidence").evaluate((el) => el.getBoundingClientRect().width);
+    expect(width0).toBeGreaterThan(300);
+  });
+}
+
+// Codex P2 (#208): the tools menu follows the menu keyboard pattern.
+test("390px: tools menu takes focus and moves with the arrow keys, Home and End", async ({ page }) => {
+  await openWorkspace(page, { width: 390 });
+  await page.getByRole("button", { name: "Mở công cụ học" }).focus();
+  await page.keyboard.press("Enter");
+  const items = page.getByRole("menu", { name: "Công cụ học" }).locator('[role^="menuitem"]');
+  const count = await items.count();
+  await expect(items.first()).toBeFocused();
+  await page.keyboard.press("ArrowDown");
+  await expect(items.nth(1)).toBeFocused();
+  await page.keyboard.press("End");
+  await expect(items.nth(count - 1)).toBeFocused();
+  await page.keyboard.press("ArrowDown");
+  await expect(items.first()).toBeFocused();
+  await page.keyboard.press("ArrowUp");
+  await expect(items.nth(count - 1)).toBeFocused();
+  await page.keyboard.press("Home");
+  await expect(items.first()).toBeFocused();
+  await page.keyboard.press("Escape");
+  await expect(page.getByRole("button", { name: "Mở công cụ học" })).toBeFocused();
+});

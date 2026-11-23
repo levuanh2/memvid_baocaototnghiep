@@ -4064,3 +4064,18 @@ checks passed. Fix: `appearance: none` + drawn chevron in the right padding; reg
 e2e measures the longest option against the select's text box.
 3. Two Playwright runs in the same worktree wipe each other's `test-results` (trace ENOENT on
 close). Run one suite per worktree at a time, or give each run its own --output.
+
+## Codex #208: a tool opener used the overlay flag on a desktop column; a menu without its keys (2026-11-24)
+
+1. P1: "Công cụ học" tools (Gia sư AI, Dòng thời gian, Kiến thức) called only openRight(), which
+sets the transient overlay flag. A desktop column is shown by rightCollapsed, so a collapsed
+column stayed closed. It was hidden while the wide default had the column open; P4b's
+"evidence closed by default" exposed it on every first run. Root cause: two flags for one
+surface and an opener that only knew one. Fix: overlays (drawer, Mind Map) use openRight, a
+column goes through setRightCollapsed(false) (focus-aware). Prevention: when a default changes,
+re-run every opener of that surface from the new default state; tests at 1440 first-run and
+1024 saved-collapsed assert the column is visible.
+2. P2: StudyToolsMenu said role="menu" but had no arrow/Home/End keys or initial focus. Once
+the phone panel controls lived only in that menu, it mattered. Fix: focus the first item on
+open; ArrowDown/ArrowUp wrap, Home/End jump; Escape returns focus to the trigger. Declaring an
+ARIA pattern means implementing its keyboard contract.
