@@ -245,4 +245,18 @@ describe("Dashboard V9.3", () => {
     await act(async () => { retry.click(); });
     expect(document.activeElement).toBe(section("Kết quả luyện tập"));
   });
+
+  // Codex recheck P2 (#203): the concepts and attempts error sections unmount while progress
+  // reloads, so their retry lost focus. Focus goes to the practice section, which stays.
+  it.each([
+    ["Cần củng cố", () => getProgressConcepts.mockRejectedValueOnce(new Error("500"))],
+    ["Bài làm gần nhất", () => getProgressAttempts.mockRejectedValueOnce(new Error("500"))],
+  ])("keeps focus on the page after retrying %s", async (name, fail) => {
+    fail();
+    await render();
+    const retry = [...section(name).querySelectorAll("button")].find((b) => b.textContent === "Thử lại");
+    retry.focus();
+    await act(async () => { retry.click(); });
+    expect(document.activeElement).toBe(section("Kết quả luyện tập"));
+  });
 });

@@ -35,6 +35,9 @@ function TongQuan({ user }) {
   // source (a retry, or another account) is dropped instead of overwriting the newer one.
   const luotThuVien = useRef(0);
   const luotTienDo = useRef(0);
+  // The practice section is always mounted; every progress retry hands focus to it, because
+  // the concepts/attempts error sections unmount while progress reloads (Codex P2, #203).
+  const khungTienDoRef = useRef(null);
 
   const taiThuVien = useCallback(async () => {
     const luot = ++luotThuVien.current;
@@ -101,19 +104,19 @@ function TongQuan({ user }) {
           overview={null} onMo={(doc, beMat) => moBeMat(doc, beMat)} />
       )}
 
-      <KetQuaLuyenTap tienDo={tienDo} onThuLai={taiTienDo} />
-      {!tienDo.dangTai && <CanCungCo tienDo={tienDo} onThuLai={taiTienDo} />}
+      <KetQuaLuyenTap khungRef={khungTienDoRef} tienDo={tienDo} onThuLai={taiTienDo} />
+      {!tienDo.dangTai && <CanCungCo khungRef={khungTienDoRef} tienDo={tienDo} onThuLai={taiTienDo} />}
       {/* `null` = the request failed (say so); `[]` = loaded, nothing yet (the practice section
           already says "Chưa làm bài nào"). Codex P1 (#203). */}
       {!tienDo.dangTai && (tienDo.attempts === null || tienDo.attempts?.length > 0) && (
-        <BaiGanNhat attempts={tienDo.attempts} onThuLai={taiTienDo} />
+        <BaiGanNhat khungRef={khungTienDoRef} attempts={tienDo.attempts} onThuLai={taiTienDo} />
       )}
     </StudyShell>
   );
 }
 
-// Retry removes the focused button (the section switches to loading), so focus moves to the
-// section itself first (Codex P2, #203).
+// Retry removes the focused button (progress switches to loading), so focus moves first to the
+// always-mounted practice section (Codex P2, #203).
 function NutThuLai({ khungRef, onThuLai }) {
   return (
     <button type="button" className="btn-secondary text-small"
@@ -121,9 +124,8 @@ function NutThuLai({ khungRef, onThuLai }) {
   );
 }
 
-function KetQuaLuyenTap({ tienDo, onThuLai }) {
+function KetQuaLuyenTap({ khungRef, tienDo, onThuLai }) {
   const ov = tienDo.overview;
-  const khungRef = useRef(null);
   return (
     <section ref={khungRef} tabIndex={-1} className="dash-section" aria-labelledby="dash-practice"
              aria-busy={tienDo.dangTai || undefined}>
@@ -170,12 +172,11 @@ function KetQuaLuyenTap({ tienDo, onThuLai }) {
   );
 }
 
-function CanCungCo({ tienDo, onThuLai }) {
-  const khungRef = useRef(null);
+function CanCungCo({ khungRef, tienDo, onThuLai }) {
   if (tienDo.concepts === null) {
     // The overview may have loaded; only this list failed. Say which part is missing.
     return tienDo.overview ? (
-      <section ref={khungRef} tabIndex={-1} className="dash-section" aria-labelledby="dash-weak">
+      <section className="dash-section" aria-labelledby="dash-weak">
         <h2 id="dash-weak" className="dash-h2">Cần củng cố</h2>
         <div className="dash-note dash-note--error" role="alert">
           <span>Chưa tải được danh sách khái niệm cần củng cố.</span>
@@ -210,10 +211,9 @@ function CanCungCo({ tienDo, onThuLai }) {
 // Each row goes where the progress page sends it (V6 `baiLam`): practice to the practice flow,
 // a submitted diagnostic to its result while it is graded, an unfinished one back to the quiz,
 // anything else nowhere (Codex P1, #203: this page used to keep its own, wrong table).
-function BaiGanNhat({ attempts, onThuLai }) {
-  const khungRef = useRef(null);
+function BaiGanNhat({ khungRef, attempts, onThuLai }) {
   return (
-    <section ref={khungRef} tabIndex={-1} className="dash-section" aria-labelledby="dash-attempts">
+    <section className="dash-section" aria-labelledby="dash-attempts">
       <h2 id="dash-attempts" className="dash-h2">Bài làm gần nhất</h2>
       {attempts === null ? (
         <div className="dash-note dash-note--error" role="alert">
