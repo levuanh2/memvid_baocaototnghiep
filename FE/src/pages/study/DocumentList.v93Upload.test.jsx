@@ -174,4 +174,17 @@ describe("Library upload V9.3", () => {
     await act(async () => { close.click(); });
     expect(document.activeElement.textContent).toMatch(/Tải tài liệu lên/);
   });
+
+  // Codex recheck P1 (#202): the quiet refresh still set the PAGE error when it failed, so a
+  // successful upload hid the library and its own success row.
+  it("keeps the library and the success row when the refresh after an upload fails", async () => {
+    uploadDocument.mockResolvedValue({ document_id: "doc-1" });
+    getLibrary.mockRejectedValueOnce(new Error("Mạng chập chờn"));
+    await pick([file("a.pdf")]);
+    expect(host.querySelector("[data-page-error]")).toBeNull();
+    expect(host.querySelector("[data-card='doc-1']")).not.toBeNull();
+    expect(item("a.pdf").textContent).toMatch(/Đã tải lên/);
+    expect([...host.querySelectorAll("[role='alert']")].map((a) => a.textContent).join(" "))
+      .toMatch(/chưa làm mới được danh sách/);
+  });
 });

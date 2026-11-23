@@ -194,11 +194,11 @@ export default function DocumentList() {
   const [boSuuTapCanXoa, setBoSuuTapCanXoa] = useState(null);
   const [chiTietDoc, setChiTietDoc] = useState(null);
 
-  // `yen` (quiet): refresh after an upload without the skeleton. The skeleton unmounted the
-  // whole list, the upload queue with it, and dropped keyboard focus (Codex P2, #202).
+  // `yen` (quiet): refresh after an upload without the skeleton, and if it fails say so inline
+  // instead of the page error. Both used to unmount the list, the upload queue with it, and
+  // drop keyboard focus, and the page error made a successful upload look failed (Codex, #202).
   const load = useCallback(async ({ yen = false } = {}) => {
-    if (!yen) setLoading(true);
-    setError(null);
+    if (!yen) { setLoading(true); setError(null); }
     try {
       // Thư viện là thứ trang này TỒN TẠI để hiện; ba khối tiến độ là phần thêm.
       // `allSettled` để một cú 500 của /api/progress/* không xoá sạch trang.
@@ -216,7 +216,8 @@ export default function DocumentList() {
       setAttempts(history.status === "fulfilled" ? history.value : []);
       setJobs(docJobDangChay());
     } catch (e) {
-      setError(moTaLoi(e, "Không tải được thư viện tài liệu."));
+      if (yen) setLoiThaoTac(`Đã tải lên xong, nhưng chưa làm mới được danh sách. ${moTaLoi(e, "Hãy tải lại trang.")}`);
+      else setError(moTaLoi(e, "Không tải được thư viện tài liệu."));
     } finally {
       setLoading(false);
     }
@@ -584,7 +585,7 @@ export default function DocumentList() {
       backLabel="Phòng đọc"
       loading={loading}
       error={error}
-      onRetry={load}
+      onRetry={() => load()}
       skeleton={<DocumentSkeleton />}
       stackActionsOnMobile
       actions={
