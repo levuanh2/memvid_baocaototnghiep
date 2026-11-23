@@ -60,7 +60,6 @@ async function openLibrary(page, { width = 1440, dark = false, library = () => j
   await page.goto("/app/study");
   await expect(page.getByRole("heading", { name: "Thư viện học tập" })).toBeVisible();
 }
-const home = (page) => page.locator("section.learning-home");
 
 
 const titleOf = (d) => d.display_name || d.title;
@@ -116,7 +115,7 @@ test("one filled action above the list: 'Tiếp tục' when there is one, otherw
   const upload = page.locator("header button", { hasText: "Tải tài liệu lên" }).first();
   await expect(upload).toHaveAttribute("data-emphasis", "secondary");
   await expect(page.locator(".btn-seal:visible")).toHaveCount(1);
-  await expect(home(page).locator(".btn-seal")).toHaveCount(1);
+  await expect(page.locator(".library-resume .btn-seal")).toHaveCount(1);
 });
 
 test("with nothing to continue, upload is the filled action and nothing pretends to resume", async ({ page }) => {

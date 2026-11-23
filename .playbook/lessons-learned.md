@@ -4007,3 +4007,13 @@ batch starts, or it names the wrong document. And a refresh that flips the page'
 flag unmounts the list, the queue and the focused button with it: refresh quietly after an
 action the user is still looking at. Tests: DocumentList.v93Upload.test.jsx (fail A, pick B,
 retry A; two batches with an all-failed second; focus after retry and close).
+
+## 2026-11-23 — Moving a block to a new page: check the numbers it already shows
+
+V9.3 P3b moved the learning home from the Library to a new dashboard that also has its own
+"Kết quả luyện tập". The reused block already printed the quiz average, so the page showed it
+twice; only a screenshot caught it. And `count ?? 0` turned a field the API did not send into
+"0 đã nắm", presenting missing data as a measured zero. When composing a page from existing
+blocks, list every number each block renders; render "missing" as absent or as a sentence,
+never as 0. Tests: Dashboard.test.jsx ("shows the quiz average once", "leaves out the concept
+line when the API does not report concepts").

@@ -105,12 +105,8 @@ afterEach(() => {
 });
 
 describe("DocumentList Round 6 mounted integration", () => {
-  it("PR #137: the Library overview names the quiz average as '% điểm' (score / max_score, partial = 0.5)", async () => {
-    getProgressOverview.mockResolvedValue({ document_count: 3, quiz_count: 2, attempt_count: 3, average_percentage: 75 });
-    await renderDocumentList({ flag: false });
-    expect(host.textContent).toContain("75% điểm");
-    expect(host.textContent).not.toContain("câu đúng");
-  });
+  // PR #137 ("% điểm" for the quiz average) moved with the practice numbers to the dashboard
+  // in V9.3 P3b; Dashboard.test.jsx now asserts it there.
 
   // V6: an empty library in the matrix renderer used to say "Không có tài liệu phù hợp" and
   // ask the learner to change filters they had never set.

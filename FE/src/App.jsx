@@ -24,6 +24,7 @@ const Register = lazy(() => import("./pages/Register"));
 const Onboarding = lazy(() => import("./pages/Onboarding"));
 const Workspace = lazy(() => import("./pages/Workspace"));
 const DocumentList = lazy(() => import("./pages/study/DocumentList"));
+const Dashboard = lazy(() => import("./pages/study/Dashboard"));
 const StudyMapView = lazy(() => import("./pages/study/StudyMapView"));
 const QuizSetup = lazy(() => import("./pages/study/QuizSetup"));
 const QuizTaking = lazy(() => import("./pages/study/QuizTaking"));
@@ -75,6 +76,7 @@ export default function App() {
         <Route path="/app/chat" element={<Navigate to="/app" replace />} />
         {/* StudyMap — dữ liệu học tập là dữ liệu cá nhân, mọi trang đều sau ProtectedRoute. */}
         <Route path="/app/study" element={<ProtectedRoute><DocumentList /></ProtectedRoute>} />
+        <Route path="/app/study/dashboard" element={<ProtectedRoute><Dashboard /></ProtectedRoute>} />
         <Route path="/app/study/map/:documentId" element={<ProtectedRoute><StudyMapView /></ProtectedRoute>} />
         <Route path="/app/study/quiz/new" element={<ProtectedRoute><QuizSetup /></ProtectedRoute>} />
         <Route path="/app/study/quiz/:quizId" element={<ProtectedRoute><QuizTaking /></ProtectedRoute>} />
