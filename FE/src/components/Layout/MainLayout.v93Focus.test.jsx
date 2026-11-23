@@ -157,4 +157,34 @@ describe("Phone side panels", () => {
     await act(async () => { focusButton().click(); });
     expect(leftAside().getAttribute("aria-hidden")).toBeNull();
   });
+
+  // Codex P1 (#206): entering focus wrote "right panel collapsed" into the saved layout, so a
+  // reload or leaving the page while focused lost the learner's open evidence column for good.
+  it("never writes the temporary collapse into the saved layout, even if the page goes away while focused", async () => {
+    await renderLayout(1440, { left: false, right: false });
+    await act(async () => { focusButton().click(); });
+    expect(JSON.parse(window.localStorage.getItem("memvidx.panels.v1")).collapsed.right).toBe(false);
+    act(() => { root.unmount(); });
+    root = null;
+    container.remove();
+    container = document.createElement("div");
+    document.body.appendChild(container);
+    root = createRoot(container);
+    await act(async () => {
+      root.render(<StudyContextProvider><MainLayout selectedSources={["a"]} setSelectedSources={() => {}} /></StudyContextProvider>);
+    });
+    expect(rightAside().getAttribute("aria-hidden")).toBeNull();
+  });
+
+  it("shows evidence opened while focused without saving it, and hides it again on exit", async () => {
+    await renderLayout(1440, { left: false, right: true });
+    const stored = window.localStorage.getItem("memvidx.panels.v1");
+    await act(async () => { focusButton().click(); });
+    await act(async () => { spies.chatProps.onOpenEvidence(); });
+    expect(rightAside().getAttribute("aria-hidden")).toBeNull();
+    expect(window.localStorage.getItem("memvidx.panels.v1")).toBe(stored);
+    await act(async () => { focusButton().click(); });
+    expect(rightAside().getAttribute("aria-hidden")).toBe("true");
+    expect(window.localStorage.getItem("memvidx.panels.v1")).toBe(stored);
+  });
 });

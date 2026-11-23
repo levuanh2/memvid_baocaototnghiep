@@ -4042,3 +4042,10 @@ click" clicked a fixed (160, 690) at 320x720. Since V9.3 P1b that point is the b
 "outside click" followed a link and the next step raced the lazy route (2 of 3 local runs failed;
 #204 passed only because its 5-item nav puts "Học tập" = the current /app there). An "outside
 click" must target a measured blank spot, never a viewport coordinate that new chrome can occupy.
+
+Regression (Codex review of #206, fixed red-first): Focus Mode collapsed the evidence column
+through usePanelLayout's setter, which persists every change; reloading or leaving while focused
+overwrote the learner's saved layout. A temporary view state must never go through a persisting
+setter: derive the visible state (`rightCollapsed = focusMode ? !focusRightShown : saved`) and
+route every write through one helper that knows which one to change. Test: remount while
+focused and assert the saved layout and the visible panel.

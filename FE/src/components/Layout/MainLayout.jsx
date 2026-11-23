@@ -100,6 +100,19 @@ export default function MainLayout({
     setRightOpen(true);
     if (panelDrawer) setLeftOpen(false);
   }, [panelDrawer]);
+  // V9.3 P4 Focus Mode state (behaviour further below). The right column's collapse while
+  // focused is PRESENTATION ONLY (Codex P1, #206): it never goes through usePanelLayout, which
+  // persists every change, so leaving or reloading while focused cannot overwrite the learner's
+  // saved layout. Every right-column open/close below goes through setRightCollapsed.
+  const [focusMode, setFocusMode] = useState(false);
+  const [focusRightShown, setFocusRightShown] = useState(false);
+  const focusModeRef = useRef(false);
+  focusModeRef.current = focusMode;
+  const rightCollapsed = focusMode ? !focusRightShown : panel.collapsed.right;
+  const setRightCollapsed = useCallback((value) => {
+    if (focusModeRef.current) setFocusRightShown(!value);
+    else setPanelCollapsed("right", value);
+  }, [setPanelCollapsed]);
 
   // SidebarLeft owns the `/list-indexed` fetch, but a collapsed desktop panel renders only its
   // spine, so nothing fetched: the spine showed no count and the chat offered "upload your first
@@ -223,8 +236,8 @@ export default function MainLayout({
   const onSwitchToSummary = useCallback(() => setWorkspaceMode("summary"), []);
   const openTimeline = useCallback(() => {
     setRightView("timeline");
-    if (panel.drawer) openRight(); else panel.setCollapsedFor("right", false);
-  }, [panel, openRight]);
+    if (panel.drawer) openRight(); else setRightCollapsed(false);
+  }, [panel, openRight, setRightCollapsed]);
 
   // ONE controller, ONE Inspector, shared by MindElixirView (via WorkspaceContainer)
   // and the KnowledgeInspector rendered directly below — selection state
@@ -267,8 +280,8 @@ export default function MainLayout({
       setRightOpen(false);
       return;
     }
-    panel.setCollapsedFor("right", true);
-  }, [workspaceMode, mmClearSelectedNode, panel]);
+    setRightCollapsed(true);
+  }, [workspaceMode, mmClearSelectedNode, panel, setRightCollapsed]);
 
   // Node/citation triggers open the same inspector used by Chat and Summary.
   // The controller remains mounted, so opening this surface never touches the
@@ -276,8 +289,8 @@ export default function MainLayout({
   useEffect(() => {
     if (!mmSelected?.id) return;
     if (panelDrawer) openRight();
-    else setPanelCollapsed("right", false);
-  }, [mmSelected?.id, panelDrawer, setPanelCollapsed, openRight]);
+    else setRightCollapsed(false);
+  }, [mmSelected?.id, panelDrawer, setRightCollapsed, openRight]);
 
   // Feature Pack A (Research Timeline) — "Jump" to a mindmap-node entry must
   // switch the pane INTO view before scrolling it: MindElixirView stays
@@ -400,8 +413,8 @@ export default function MainLayout({
   const [artifactRequest, setArtifactRequest] = useState(null);
   const openTutor = useCallback(() => {
     setRightView("tutor");
-    if (panel.drawer) openRight(); else panel.setCollapsedFor("right", false);
-  }, [panel, openRight]);
+    if (panel.drawer) openRight(); else setRightCollapsed(false);
+  }, [panel, openRight, setRightCollapsed]);
   const handledTutorRequestRef = useRef(null);
   useEffect(() => {
     if (!tutorRequest || handledTutorRequestRef.current === tutorRequest) return;
@@ -417,13 +430,13 @@ export default function MainLayout({
   // create route as the toolbar's "Tạo sơ đồ mới".
   const openArtifact = useCallback((tab, { create = false } = {}) => {
     if (!panelBeforeArtifactRef.current) {
-      panelBeforeArtifactRef.current = { rightOpen, rightView, collapsed: panel.collapsed.right };
+      panelBeforeArtifactRef.current = { rightOpen, rightView, collapsed: rightCollapsed };
     }
     setRightView("evidence");
     setArtifactRequest({ tab, nonce: Date.now(), create });
     openRight();
-    if (!panel.drawer) panel.setCollapsedFor("right", false);
-  }, [panel, rightOpen, rightView, openRight]);
+    if (!panel.drawer) setRightCollapsed(false);
+  }, [panel, rightOpen, rightView, openRight, rightCollapsed, setRightCollapsed]);
 
   const closeHeaderSurface = useCallback(() => setHeaderSurface(null), []);
   const openStudyTool = useCallback((view) => {
@@ -607,29 +620,27 @@ export default function MainLayout({
   // (collapsing it on desktop unmounts SidebarLeft); the evidence column is collapsed but its
   // aside always stays mounted, so a citation opened while focused still shows. The layout
   // before (panel columns, phone drawers, tablet shelf) is snapshotted and put back on exit.
-  const [focusMode, setFocusMode] = useState(false);
   const focusSnapshotRef = useRef(null);
   const enterFocus = useCallback(() => {
-    focusSnapshotRef.current = {
-      leftOpen, rightOpen, tabletShelfOpen, collapsedRight: panel.collapsed.right,
-    };
+    // Only transient, unsaved state is snapshotted; the saved column layout is never written.
+    focusSnapshotRef.current = { leftOpen, rightOpen, tabletShelfOpen };
     setLeftOpen(false);
     setRightOpen(false);
     setTabletShelfOpen(false);
     setHeaderSurface(null);
-    if (!panel.drawer && !panel.collapsed.right) setPanelCollapsed("right", true);
+    setFocusRightShown(false);
     setFocusMode(true);
-  }, [leftOpen, rightOpen, tabletShelfOpen, panel.collapsed.right, panel.drawer, setPanelCollapsed]);
+  }, [leftOpen, rightOpen, tabletShelfOpen]);
   const exitFocus = useCallback(() => {
     const saved = focusSnapshotRef.current;
     focusSnapshotRef.current = null;
     setFocusMode(false);
+    setFocusRightShown(false);
     if (!saved) return;
     setLeftOpen(saved.leftOpen);
     setRightOpen(saved.rightOpen);
     setTabletShelfOpen(saved.tabletShelfOpen);
-    if (panel.collapsed.right !== saved.collapsedRight) setPanelCollapsed("right", saved.collapsedRight);
-  }, [panel.collapsed.right, setPanelCollapsed]);
+  }, []);
   useEffect(() => {
     if (!focusMode) return undefined;
     const onKey = (e) => {
@@ -659,7 +670,7 @@ export default function MainLayout({
   // through its own JSX but left it hardcoded `false` -- turning it on here
   // is what this branch's whole redesign is built around.)
   const mindmapToolOverlay = workspaceMode === "mindmap" && !panel.drawer;
-  const rightSurfaceHidden = (mindmapToolOverlay || panel.drawer) ? !rightOpen : panel.collapsed.right;
+  const rightSurfaceHidden = (mindmapToolOverlay || panel.drawer) ? !rightOpen : rightCollapsed;
   const leftSurfaceHidden = panel.drawer && !leftOpen;
   // A surface that turns inert while it holds focus would drop focus to <body>. Hand it to the
   // control that reopens the surface: the header tools trigger (mobile) or the column's spine.
@@ -704,11 +715,11 @@ export default function MainLayout({
     if (mindmapToolOverlay) {
       setRightOpen(saved.rightOpen || Boolean(mindmapSelectedNodeId));
     } else if (!panel.drawer) {
-      panel.setCollapsedFor("right", saved.collapsed);
+      setRightCollapsed(saved.collapsed);
     } else {
       setRightOpen(saved.rightOpen);
     }
-  }, [mindmapToolOverlay, mindmapSelectedNodeId, panel]);
+  }, [mindmapToolOverlay, mindmapSelectedNodeId, panel, setRightCollapsed]);
 
   // Leaving MindMap (to Chat or Summary) ends the contextual node: clear the
   // selection and close the overlay. MindElixirView stays mounted while hidden,
@@ -1020,7 +1031,7 @@ export default function MainLayout({
               onOpenEvidence: () => {
                 setRightView("evidence");
                 if (panel.drawer) openRight();
-                else panel.setCollapsedFor("right", false);
+                else setRightCollapsed(false);
               },
               evidenceCount: evidence?.sources?.length || 0,
               isLeftVisible: tabletSourceRail || (!panel.drawer && !panel.collapsed.left),
@@ -1084,15 +1095,15 @@ export default function MainLayout({
             vary per state, never JSX presence. */}
         {!rightSurfaceVisible ? null : (
           <>
-            {!mindmapToolOverlay && !panel.drawer && panel.collapsed.right && (
+            {!mindmapToolOverlay && !panel.drawer && rightCollapsed && (
               <div className="workspace-region focus-hide"><PanelSpine
                 side="right"
                 label={PANELS.right.label}
                 count={evidence?.sources?.length || 0}
-                onExpand={() => panel.setCollapsedFor("right", false)}
+                onExpand={() => setRightCollapsed(false)}
               /></div>
             )}
-            {!panel.drawer && !panel.collapsed.right && !mindmapToolOverlay && (
+            {!panel.drawer && !rightCollapsed && !mindmapToolOverlay && (
               <div className="workspace-region focus-hide"><PanelDivider
                 side="right"
                 label={PANELS.right.label}
@@ -1128,7 +1139,7 @@ export default function MainLayout({
                 mindmapToolOverlay
                   ? (rightOpen ? undefined : { opacity: 0, pointerEvents: "none", visibility: "hidden" })
                   : !panel.drawer
-                  ? (panel.collapsed.right
+                  ? (rightCollapsed
                       ? { width: 0, minWidth: 0, padding: 0, border: "none", pointerEvents: "none" }
                       : { width: panel.width.right, minWidth: PANELS.right.min })
                   : undefined
