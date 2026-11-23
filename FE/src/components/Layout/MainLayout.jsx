@@ -90,6 +90,29 @@ export default function MainLayout({
     return () => window.removeEventListener("resize", onResize);
   }, []);
   const tabletSourceRail = !panelDrawer && viewportWidth < 1280;
+  // V9.3 P4: on phones only one side panel is open at a time (docs/StudyMap-V9.3/06).
+  // Every opener goes through these two, so neither can leave the other open.
+  const openLeft = useCallback(() => {
+    setLeftOpen(true);
+    if (panelDrawer) setRightOpen(false);
+  }, [panelDrawer]);
+  const openRight = useCallback(() => {
+    setRightOpen(true);
+    if (panelDrawer) setLeftOpen(false);
+  }, [panelDrawer]);
+  // V9.3 P4 Focus Mode state (behaviour further below). The right column's collapse while
+  // focused is PRESENTATION ONLY (Codex P1, #206): it never goes through usePanelLayout, which
+  // persists every change, so leaving or reloading while focused cannot overwrite the learner's
+  // saved layout. Every right-column open/close below goes through setRightCollapsed.
+  const [focusMode, setFocusMode] = useState(false);
+  const [focusRightShown, setFocusRightShown] = useState(false);
+  const focusModeRef = useRef(false);
+  focusModeRef.current = focusMode;
+  const rightCollapsed = focusMode ? !focusRightShown : panel.collapsed.right;
+  const setRightCollapsed = useCallback((value) => {
+    if (focusModeRef.current) setFocusRightShown(!value);
+    else setPanelCollapsed("right", value);
+  }, [setPanelCollapsed]);
 
   // SidebarLeft owns the `/list-indexed` fetch, but a collapsed desktop panel renders only its
   // spine, so nothing fetched: the spine showed no count and the chat offered "upload your first
@@ -166,10 +189,10 @@ export default function MainLayout({
       return;
     }
     pendingUploadIntentRef.current = true;
-    if (panelDrawer) setLeftOpen(true);
+    if (panelDrawer) openLeft();
     else if (tabletSourceRail) setTabletShelfOpen(true);
     else setPanelCollapsed("left", false);
-  }, [panelDrawer, setPanelCollapsed, tabletSourceRail]);
+  }, [panelDrawer, setPanelCollapsed, tabletSourceRail, openLeft]);
   const [mindmapData, setMindmapData] = useState(null);   // { data, onRegenerate, regenerating } | null
   const [summaryData, setSummaryData] = useState(null);   // summary record | null
   const [summaryContext, setSummaryContext] = useState(null);
@@ -213,8 +236,8 @@ export default function MainLayout({
   const onSwitchToSummary = useCallback(() => setWorkspaceMode("summary"), []);
   const openTimeline = useCallback(() => {
     setRightView("timeline");
-    if (panel.drawer) setRightOpen(true); else panel.setCollapsedFor("right", false);
-  }, [panel]);
+    if (panel.drawer) openRight(); else setRightCollapsed(false);
+  }, [panel, openRight, setRightCollapsed]);
 
   // ONE controller, ONE Inspector, shared by MindElixirView (via WorkspaceContainer)
   // and the KnowledgeInspector rendered directly below — selection state
@@ -257,17 +280,17 @@ export default function MainLayout({
       setRightOpen(false);
       return;
     }
-    panel.setCollapsedFor("right", true);
-  }, [workspaceMode, mmClearSelectedNode, panel]);
+    setRightCollapsed(true);
+  }, [workspaceMode, mmClearSelectedNode, panel, setRightCollapsed]);
 
   // Node/citation triggers open the same inspector used by Chat and Summary.
   // The controller remains mounted, so opening this surface never touches the
   // Mind Elixir instance or its viewport transform.
   useEffect(() => {
     if (!mmSelected?.id) return;
-    if (panelDrawer) setRightOpen(true);
-    else setPanelCollapsed("right", false);
-  }, [mmSelected?.id, panelDrawer, setPanelCollapsed]);
+    if (panelDrawer) openRight();
+    else setRightCollapsed(false);
+  }, [mmSelected?.id, panelDrawer, setRightCollapsed, openRight]);
 
   // Feature Pack A (Research Timeline) — "Jump" to a mindmap-node entry must
   // switch the pane INTO view before scrolling it: MindElixirView stays
@@ -390,8 +413,8 @@ export default function MainLayout({
   const [artifactRequest, setArtifactRequest] = useState(null);
   const openTutor = useCallback(() => {
     setRightView("tutor");
-    if (panel.drawer) setRightOpen(true); else panel.setCollapsedFor("right", false);
-  }, [panel]);
+    if (panel.drawer) openRight(); else setRightCollapsed(false);
+  }, [panel, openRight, setRightCollapsed]);
   const handledTutorRequestRef = useRef(null);
   useEffect(() => {
     if (!tutorRequest || handledTutorRequestRef.current === tutorRequest) return;
@@ -407,20 +430,20 @@ export default function MainLayout({
   // create route as the toolbar's "Tạo sơ đồ mới".
   const openArtifact = useCallback((tab, { create = false } = {}) => {
     if (!panelBeforeArtifactRef.current) {
-      panelBeforeArtifactRef.current = { rightOpen, rightView, collapsed: panel.collapsed.right };
+      panelBeforeArtifactRef.current = { rightOpen, rightView, collapsed: rightCollapsed };
     }
     setRightView("evidence");
     setArtifactRequest({ tab, nonce: Date.now(), create });
-    setRightOpen(true);
-    if (!panel.drawer) panel.setCollapsedFor("right", false);
-  }, [panel, rightOpen, rightView]);
+    openRight();
+    if (!panel.drawer) setRightCollapsed(false);
+  }, [panel, rightOpen, rightView, openRight, rightCollapsed, setRightCollapsed]);
 
   const closeHeaderSurface = useCallback(() => setHeaderSurface(null), []);
   const openStudyTool = useCallback((view) => {
     setRightView(view);
     setHeaderSurface(null);
-    setRightOpen(true);
-  }, []);
+    openRight();
+  }, [openRight]);
   // Structural refactor (Learning Canvas lesson header + next-action strip) —
   // ONE real action per artifact type, shared by the header's mode-switch
   // tabs and ChatArea's next-action strip: switch to the pane if it
@@ -591,6 +614,47 @@ export default function MainLayout({
     return () => window.removeEventListener("keydown", onKey);
   }, [panelDrawer, rightOpen, leftOpen, closeRightPanel, tabletShelfOpen]);
 
+  // ── V9.3 P4 Focus Mode (docs/StudyMap-V9.3/06) ──
+  // Hides the secondary UI (CSS on `data-focus`) and keeps the mode switch and its own exit
+  // button. Nothing that holds state is unmounted: the source panel is hidden, not collapsed
+  // (collapsing it on desktop unmounts SidebarLeft); the evidence column is collapsed but its
+  // aside always stays mounted, so a citation opened while focused still shows. The layout
+  // before (panel columns, phone drawers, tablet shelf) is snapshotted and put back on exit.
+  const focusSnapshotRef = useRef(null);
+  const enterFocus = useCallback(() => {
+    // Only transient, unsaved state is snapshotted; the saved column layout is never written.
+    focusSnapshotRef.current = { leftOpen, rightOpen, tabletShelfOpen };
+    setLeftOpen(false);
+    setRightOpen(false);
+    setTabletShelfOpen(false);
+    setHeaderSurface(null);
+    setFocusRightShown(false);
+    setFocusMode(true);
+  }, [leftOpen, rightOpen, tabletShelfOpen]);
+  const exitFocus = useCallback(() => {
+    const saved = focusSnapshotRef.current;
+    focusSnapshotRef.current = null;
+    setFocusMode(false);
+    setFocusRightShown(false);
+    if (!saved) return;
+    setLeftOpen(saved.leftOpen);
+    setRightOpen(saved.rightOpen);
+    setTabletShelfOpen(saved.tabletShelfOpen);
+  }, []);
+  useEffect(() => {
+    if (!focusMode) return undefined;
+    const onKey = (e) => {
+      if (e.key !== "Escape") return;
+      // A dialog keeps Escape (docs/StudyMap-V9.3/03); an open phone drawer is closed first by
+      // the handler above, so one press never does both.
+      if (document.querySelector('[aria-modal="true"]')) return;
+      if ((panelDrawer && (rightOpen || leftOpen)) || tabletShelfOpen) return;
+      exitFocus();
+    };
+    window.addEventListener("keydown", onKey);
+    return () => window.removeEventListener("keydown", onKey);
+  }, [focusMode, exitFocus, panelDrawer, rightOpen, leftOpen, tabletShelfOpen]);
+
   const rightSurfaceVisible = true;
   // 2026-09-21: Mind Map's node-detail surface must be a closed-by-default
   // overlay that does not consume grid width (spec section 8) -- distinct
@@ -606,7 +670,7 @@ export default function MainLayout({
   // through its own JSX but left it hardcoded `false` -- turning it on here
   // is what this branch's whole redesign is built around.)
   const mindmapToolOverlay = workspaceMode === "mindmap" && !panel.drawer;
-  const rightSurfaceHidden = (mindmapToolOverlay || panel.drawer) ? !rightOpen : panel.collapsed.right;
+  const rightSurfaceHidden = (mindmapToolOverlay || panel.drawer) ? !rightOpen : rightCollapsed;
   const leftSurfaceHidden = panel.drawer && !leftOpen;
   // A surface that turns inert while it holds focus would drop focus to <body>. Hand it to the
   // control that reopens the surface: the header tools trigger (mobile) or the column's spine.
@@ -651,11 +715,11 @@ export default function MainLayout({
     if (mindmapToolOverlay) {
       setRightOpen(saved.rightOpen || Boolean(mindmapSelectedNodeId));
     } else if (!panel.drawer) {
-      panel.setCollapsedFor("right", saved.collapsed);
+      setRightCollapsed(saved.collapsed);
     } else {
       setRightOpen(saved.rightOpen);
     }
-  }, [mindmapToolOverlay, mindmapSelectedNodeId, panel]);
+  }, [mindmapToolOverlay, mindmapSelectedNodeId, panel, setRightCollapsed]);
 
   // Leaving MindMap (to Chat or Summary) ends the contextual node: clear the
   // selection and close the overlay. MindElixirView stays mounted while hidden,
@@ -671,7 +735,7 @@ export default function MainLayout({
   }, [workspaceMode, mmClearSelectedNode]);
 
   return (
-    <div className="app-shell-height flex flex-col overflow-hidden font-body transition-theme" style={{ background: "var(--bg-base)", color: "var(--text-primary)" }}>
+    <div className="app-shell-height workspace-shell flex flex-col overflow-hidden font-body transition-theme" data-focus={focusMode ? "true" : "false"} style={{ background: "var(--bg-base)", color: "var(--text-primary)" }}>
 
       <a href="#main-content" className="skip-link">Bỏ qua đến nội dung chính</a>
 
@@ -689,7 +753,7 @@ export default function MainLayout({
             The Study library destination is a separate sibling link below;
             StudyToolsMenu remains the owner of contextual learning tools. */}
         <Link to="/app" aria-label="StudyMap — trang chủ"
-          className="workspace-home-link flex items-center justify-center lg:justify-start gap-2.5 w-10 h-10 lg:w-auto lg:h-10 flex-shrink-0 select-none">
+          className="workspace-home-link focus-hide flex items-center justify-center lg:justify-start gap-2.5 w-10 h-10 lg:w-auto lg:h-10 flex-shrink-0 select-none">
           {/* V5-A: StudyMap mark (replaces the retired "M" seal). Below lg the
               wordmark is hidden, so this mark alone must read as StudyMap. */}
           <BrandMark size={30} />
@@ -699,7 +763,7 @@ export default function MainLayout({
         </Link>
 
         <Link to="/app/study" aria-label="Thư viện học tập" title="Thư viện học tập"
-          className="study-library-link flex items-center justify-center gap-1.5 w-10 h-10 lg:w-auto lg:px-3 rounded-[8px] border border-border text-small font-medium text-text-secondary hover:text-text-primary hover:bg-surface-elevated flex-shrink-0 transition-colors">
+          className="study-library-link focus-hide flex items-center justify-center gap-1.5 w-10 h-10 lg:w-auto lg:px-3 rounded-[8px] border border-border text-small font-medium text-text-secondary hover:text-text-primary hover:bg-surface-elevated flex-shrink-0 transition-colors">
           <Icon name="BookOpen" size={16} />
           <span className="study-library-link__label hidden lg:inline">Thư viện học tập</span>
         </Link>
@@ -739,8 +803,17 @@ export default function MainLayout({
           })}
         </nav>
 
+        {/* V9.3 P4: the one control that stays with the mode switch in Focus Mode. */}
+        <button type="button" data-focus-toggle onClick={focusMode ? exitFocus : enterFocus}
+          aria-pressed={focusMode} aria-label={focusMode ? "Thoát tập trung" : "Tập trung"}
+          title={focusMode ? "Thoát tập trung (Esc)" : "Tập trung"}
+          className="workspace-focus-toggle flex-shrink-0 inline-flex items-center justify-center gap-1.5 w-10 h-10 lg:w-auto lg:px-3 rounded-[8px] border border-border text-small font-medium text-text-secondary hover:text-text-primary hover:bg-surface-elevated transition-colors">
+          <Icon name={focusMode ? "X" : "Maximize"} size={16} aria-hidden="true" />
+          <span className="hidden lg:inline">{focusMode ? "Thoát tập trung" : "Tập trung"}</span>
+        </button>
+
         {/* Right actions */}
-        <div className="workspace-header-actions flex items-center gap-1 lg:gap-2 flex-shrink-0">
+        <div className="workspace-header-actions focus-hide flex items-center gap-1 lg:gap-2 flex-shrink-0">
           {/* Mobile: one workspace-tools owner. Its menu also carries the actions
               that used to be separate phone buttons (source library, inspector). */}
           <div className="relative">
@@ -753,8 +826,11 @@ export default function MainLayout({
               triggerRef={studyToolsTriggerRef}
               extraActions={[
                 ...(viewportWidth <= 340 ? [{ key: "library", label: "Thư viện học tập", icon: "BookOpen", onSelect: () => navigate("/app/study") }] : []),
-                { key: "sources", label: "Mở thư mục nguồn", icon: "Menu", onSelect: () => setLeftOpen(true) },
-                { key: "inspector", label: "Mở công cụ", icon: "PanelRight", onSelect: () => setRightOpen(true) },
+                { key: "sources", label: "Mở thư mục nguồn", icon: "Menu", onSelect: openLeft },
+                { key: "inspector", label: "Mở công cụ", icon: "PanelRight", onSelect: openRight },
+                // V9.3 P4: phones enter Focus Mode here (the header has no room for a 40px
+                // toggle at 375-390px); the visible exit button appears once it is on.
+                { key: "focus", label: "Tập trung", icon: "Maximize", onSelect: enterFocus },
                 {
                   key: "theme",
                   label: isDark ? "Chuyển sang nền sáng" : "Chuyển sang nền tối",
@@ -835,7 +911,8 @@ export default function MainLayout({
           />
         )}
 
-        {/* ── KỆ TRÁI — Thư mục nguồn ── */}
+        {/* ── KỆ TRÁI — Thư mục nguồn ── (V9.3 P4: hidden, not unmounted, in Focus Mode) */}
+        <div className="workspace-region focus-hide">
         {tabletSourceRail ? (
           <aside
             className={
@@ -940,6 +1017,7 @@ export default function MainLayout({
             )}
           </>
         )}
+        </div>
 
         {/* ── TRANG GIỮA — Workspace: Chat ⇄ MindMap ⇄ Summary ── */}
         <main id="main-content" tabIndex={-1} className="flex flex-1 flex-col min-w-0 min-h-0">
@@ -949,11 +1027,11 @@ export default function MainLayout({
             onSummaryAction={onSummaryAction}
             chatProps={{
               selectedSources, sources, sourcesState, onEvidence: setEvidence, highlight, onHighlight,
-              onOpenLeft: () => (panel.drawer ? setLeftOpen(true) : panel.setCollapsedFor("left", false)),
+              onOpenLeft: () => (panel.drawer ? openLeft() : panel.setCollapsedFor("left", false)),
               onOpenEvidence: () => {
                 setRightView("evidence");
-                if (panel.drawer) setRightOpen(true);
-                else panel.setCollapsedFor("right", false);
+                if (panel.drawer) openRight();
+                else setRightCollapsed(false);
               },
               evidenceCount: evidence?.sources?.length || 0,
               isLeftVisible: tabletSourceRail || (!panel.drawer && !panel.collapsed.left),
@@ -1017,16 +1095,16 @@ export default function MainLayout({
             vary per state, never JSX presence. */}
         {!rightSurfaceVisible ? null : (
           <>
-            {!mindmapToolOverlay && !panel.drawer && panel.collapsed.right && (
-              <PanelSpine
+            {!mindmapToolOverlay && !panel.drawer && rightCollapsed && (
+              <div className="workspace-region focus-hide"><PanelSpine
                 side="right"
                 label={PANELS.right.label}
                 count={evidence?.sources?.length || 0}
-                onExpand={() => panel.setCollapsedFor("right", false)}
-              />
+                onExpand={() => setRightCollapsed(false)}
+              /></div>
             )}
-            {!panel.drawer && !panel.collapsed.right && !mindmapToolOverlay && (
-              <PanelDivider
+            {!panel.drawer && !rightCollapsed && !mindmapToolOverlay && (
+              <div className="workspace-region focus-hide"><PanelDivider
                 side="right"
                 label={PANELS.right.label}
                 width={panel.width.right}
@@ -1036,7 +1114,7 @@ export default function MainLayout({
                 onDrag={(e) => panel.startDrag("right", e)}
                 onNudge={(d) => panel.nudgeWidth("right", d)}
                 onReset={() => panel.resetWidth("right")}
-              />
+              /></div>
             )}
             <aside
               // Hidden states (closed overlay, closed mobile sheet, collapsed desktop column) keep
@@ -1061,7 +1139,7 @@ export default function MainLayout({
                 mindmapToolOverlay
                   ? (rightOpen ? undefined : { opacity: 0, pointerEvents: "none", visibility: "hidden" })
                   : !panel.drawer
-                  ? (panel.collapsed.right
+                  ? (rightCollapsed
                       ? { width: 0, minWidth: 0, padding: 0, border: "none", pointerEvents: "none" }
                       : { width: panel.width.right, minWidth: PANELS.right.min })
                   : undefined
@@ -1103,7 +1181,7 @@ export default function MainLayout({
       </div>
 
       {/* V9.3 P1b: same bottom nav as the study pages at <=700px; MainLayout only renders at /app. */}
-      <AppNavBar pathname="/app" inflow />
+      <div className="workspace-region focus-hide"><AppNavBar pathname="/app" inflow /></div>
 
       {/* ── TOAST STACK ── */}
       <Toaster />

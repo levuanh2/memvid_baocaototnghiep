@@ -4025,3 +4025,27 @@ one (`[]`) need different output. Per-account page state must be keyed by the ac
 effect that resets state runs AFTER the new account's first commit, which shows the previous
 account's data; a `useLayoutEffect` probe sees that frame where `act()` hides it. A retry that
 swaps the button for a loading line must move focus to a persistent node first.
+
+## 2026-11-23 — A new header control on the workspace: run mobile-header.spec.js, not just your own spec
+
+V9.3 P4 added a 40px "Tập trung" toggle next to the mode switch. Its own specs passed; the
+compact-header contract (mobile-header.spec.js: one 56px row, no overflow, every control >= 40px
+hitting its own centre) failed at 375/390px: the header overflowed by 16px. The 320px case had
+already moved items into the tools menu, so 320 passed and hid the problem. Fix: phones enter
+Focus Mode from the "Công cụ học" menu; the exit toggle shows only once focus is on (the other
+header actions are hidden then, so it fits). Also: a full fixture run in parallel with another
+Playwright run produced load-only failures; re-run suspects alone and compare with the baseline
+before calling anything a regression.
+
+Regression (CI Fixture Smoke on #205/#206): mobile-header.spec.js "popover ... closes on outside
+click" clicked a fixed (160, 690) at 320x720. Since V9.3 P1b that point is the bottom nav, so the
+"outside click" followed a link and the next step raced the lazy route (2 of 3 local runs failed;
+#204 passed only because its 5-item nav puts "Học tập" = the current /app there). An "outside
+click" must target a measured blank spot, never a viewport coordinate that new chrome can occupy.
+
+Regression (Codex review of #206, fixed red-first): Focus Mode collapsed the evidence column
+through usePanelLayout's setter, which persists every change; reloading or leaving while focused
+overwrote the learner's saved layout. A temporary view state must never go through a persisting
+setter: derive the visible state (`rightCollapsed = focusMode ? !focusRightShown : saved`) and
+route every write through one helper that knows which one to change. Test: remount while
+focused and assert the saved layout and the visible panel.
