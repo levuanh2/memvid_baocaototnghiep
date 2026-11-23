@@ -1268,6 +1268,15 @@
 .skip-link:focus { top: 8px; }
 .skip-link:focus-visible { outline: 3px solid var(--focus); outline-offset: 2px; }
 .app-bottom-nav { display: none; }
+/* V9.3 P4 Focus Mode: wrappers that hold workspace regions take no box of their own, and
+   everything marked focus-hide leaves the layout (stays mounted) while the shell is focused. */
+.workspace-region { display: contents; }
+.workspace-shell[data-focus="true"] .focus-hide { display: none !important; }
+.workspace-focus-toggle[aria-pressed="true"] { color: var(--text-primary); border-color: var(--border-strong, var(--border-color)); }
+.workspace-focus-toggle:focus-visible { outline: 3px solid var(--focus); outline-offset: 2px; }
+/* Phones: no room in the 56px header for the enter toggle (mobile-header.spec.js, 375/390px);
+   entering is in the "Công cụ học" menu, and the exit toggle shows once focus is on. */
+@media (max-width: 480px) { .workspace-focus-toggle[aria-pressed="false"] { display: none; } }
 .toast-stack { bottom: 16px; }
 @media (max-width: 700px) {
   .study-shell { padding-bottom: calc(64px + env(safe-area-inset-bottom)); }
