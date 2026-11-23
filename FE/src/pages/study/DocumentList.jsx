@@ -3,9 +3,6 @@ import { Link } from "react-router-dom";
 import StudyShell, { EmptyState } from "../../components/study/StudyShell";
 import StudyCard from "../../components/study/StudyCard";
 import AiInsightCard from "../../components/study/AiInsightCard";
-import LearningDashboard from "../../components/study/LearningDashboard";
-import LearningHome from "../../components/study/LearningHome";
-import Disclosure from "../../components/ui/Disclosure";
 import CollectionSidebar from "../../components/study/CollectionSidebar";
 import BulkBar from "../../components/study/BulkBar";
 import UploadQueue from "../../components/study/UploadQueue";
@@ -14,15 +11,14 @@ import LibraryTaskViews from "../../components/study/LibraryTaskViews";
 import StudyDocumentActionRow from "../../components/study/StudyDocumentActionRow";
 import DocumentKnowledgeDetails from "../../components/study/DocumentKnowledgeDetails";
 import DestructiveConfirmDialog from "../../components/ui/DestructiveConfirmDialog";
-import SealMeter from "../../components/study/SealMeter";
 import { Icon } from "../../components/ui/Icon";
 import Spinner from "../../components/ui/Spinner";
 import {
-  MASTERY_LABEL, attemptScoreLabel, bulkDocuments, createCollection, deleteCollection,
-  getLibrary, getProgressAttempts, getProgressConcepts, getProgressOverview,
+  bulkDocuments, createCollection, deleteCollection, getLibrary,
   patchCollection, patchDocument, uploadDocument, moTaLoi,
 } from "../../utils/studyApi";
-import { tim, loc, sapXep, chiaMuc, NHOM_THU_VIEN, laNhomThuVien, taiLieuTheoNhom, demTheoNhom } from "../../utils/thuVienTaiLieu";
+import { tim, loc, sapXep, chiaMuc, NHOM_THU_VIEN, laNhomThuVien, taiLieuTheoNhom, demTheoNhom, tenHienThi } from "../../utils/thuVienTaiLieu";
+import { tiepTucHoc } from "../../utils/tiepTucHoc";
 import { docJobDangChay } from "../../utils/trangThaiAi";
 import { chonTaiLieuDemo, beMatDemoDauTien } from "../../utils/demoMode";
 import { useOpenSurface } from "../../study/useOpenSurface";
@@ -74,7 +70,6 @@ const NHAN_LOC = new Map(NHOM_LOC.flatMap(([, mucLoc]) => mucLoc));
 
 // Same localStorage discipline as `memvidx.panels.v1` (hooks/panelLayout.js) and
 // `memvidx.inspector.collapsed.v1` (knowledgeParts.jsx) — try/catch, fails silent.
-const KHOA_TQHT_MO = "memvidx.library.dashboardOpen.v1";
 const KHOA_MAT_DO = "memvidx.library.density.v1";
 // Card renderer (V6): the chosen view, the search text and the scroll position survive leaving
 // the Library (opening a document) and coming back, for this tab only.
@@ -124,14 +119,6 @@ function DocumentSkeleton() {
   );
 }
 
-function SectionTitle({ children, dem }) {
-  return (
-    <h2 className="font-mono text-metadata uppercase text-text-muted mb-3">
-      {children}{dem != null ? ` (${dem})` : ""}
-    </h2>
-  );
-}
-
 export default function DocumentList() {
   const { user } = useAuth();
   const moTheoDoi = useOpenSurface();
@@ -144,9 +131,6 @@ export default function DocumentList() {
   const matrixScrollRestoredRef = useRef(false);
 
   const [documents, setDocuments] = useState([]);
-  const [overview, setOverview] = useState(null);
-  const [weak, setWeak] = useState([]);
-  const [attempts, setAttempts] = useState([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
   const [uploading, setUploading] = useState(false);
@@ -205,20 +189,11 @@ export default function DocumentList() {
     setLoiLamMoi(null);
     if (!yen) { setLoading(true); setError(null); }
     try {
-      // Thư viện là thứ trang này TỒN TẠI để hiện; ba khối tiến độ là phần thêm.
-      // `allSettled` để một cú 500 của /api/progress/* không xoá sạch trang.
-      const [thuVien, ov, concepts, history] = await Promise.allSettled([
-        getLibrary({ kemBoSuuTap: true }),
-        getProgressOverview(),
-        getProgressConcepts({ weakOnly: true }),
-        getProgressAttempts({ limit: 5 }),
-      ]);
-      if (thuVien.status === "rejected") throw thuVien.reason;
-      setDocuments(thuVien.value.documents);
-      setCollections(thuVien.value.collections);
-      setOverview(ov.status === "fulfilled" ? ov.value : null);
-      setWeak(concepts.status === "fulfilled" ? concepts.value.slice(0, 4) : []);
-      setAttempts(history.status === "fulfilled" ? history.value : []);
+      // V9.3 P3b: the practice numbers, weak concepts and recent attempts live on the
+      // dashboard now (/app/study/dashboard); the Library loads the library only.
+      const thuVien = await getLibrary({ kemBoSuuTap: true });
+      setDocuments(thuVien.documents);
+      setCollections(thuVien.collections);
       setJobs(docJobDangChay());
     } catch (e) {
       if (yen) setLoiLamMoi(`Đã tải lên xong, nhưng chưa làm mới được danh sách. ${moTaLoi(e, "Hãy tải lại trang.")}`);
@@ -607,6 +582,10 @@ export default function DocumentList() {
             disabled={uploading} onClick={() => fileRef.current?.click()}>
             {uploading ? <><Spinner size={13} /> Đang tải lên…</> : <><Icon name="Upload" size={14} /> Tải tài liệu lên</>}
           </button>
+          {/* V9.3 P3b: the dashboard's entry while the bottom navigation keeps four items. */}
+          <Link to="/app/study/dashboard" className="pill-action text-small inline-flex items-center gap-1.5">
+            <Icon name="Activity" size={13} aria-hidden="true" /> Tổng quan
+          </Link>
           {/* Demo Mode — chỉ hiện khi có tài liệu THẬT đủ sẵn sàng; không có thì
               không vẽ nút, không hứa một bản xem thử không tồn tại. */}
           {taiLieuDemo && (
@@ -670,8 +649,6 @@ export default function DocumentList() {
           <span>{loiThaoTac}</span>
         </div>
       )}
-
-      {overview && <Overview overview={overview} />}
 
       <BulkBar
         so={daChonHieuLuc.size}
@@ -813,41 +790,10 @@ export default function DocumentList() {
         </div>
       )}
 
-      {/* Product Experience / Signature System pass — Analytics used to render full-
-          weight ABOVE the document grid on every visit (the single highest-leverage
-          "feels like a dashboard" finding in docs/MEMVIDX_SIGNATURE_SYSTEM.md §10).
-          Library's job is Find→Open, which happens every visit; Analytics is a
-          reflect-occasionally surface — collapsed by default re-tiers it without
-          removing it. Reuses the existing Disclosure primitive, no new component.
-          Frontend V2 wave: default-collapsed is now a REMEMBERED preference, not
-          just a fixed behavior — closes the exact gap flagged in
-          docs/FINAL_VISUAL_REVIEW.md's "acceptance criterion not met" note. */}
-      {/* V6 learning home: where to pick up, recent documents, library progress. It replaces
-          the separate "Tiếp tục học" section (one full card for the same document) below. */}
-      {documents.length > 0 && (
-        <LearningHome documents={documents} mucHienThi={mucHienThi} overview={overview} onMo={moBeMat} />
-      )}
-
-      {documents.length > 0 && (
-        <section className="surface-card !p-0 mb-7">
-          <Disclosure title="Tổng quan học tập" dense
-                      defaultOpen={docBool(KHOA_TQHT_MO, false)}
-                      onToggle={(open) => ghiBool(KHOA_TQHT_MO, open)}>
-            <LearningDashboard
-              documents={documents}
-              overview={overview}
-              mucHienThi={mucHienThi}
-              onMo={moBeMat}
-            />
-          </Disclosure>
-          {/* Learning Home says what to do next; this page says what is known and weak. */}
-          <div className="px-4 pb-3">
-            <Link to="/app/study/progress" className="text-small font-semibold text-text-primary underline underline-offset-4">
-              Xem mức nắm từng khái niệm và các bài đã làm
-            </Link>
-          </div>
-        </section>
-      )}
+      {/* V9.3 P3b: the full learning home (recent, coverage, review) moved to the dashboard.
+          Until the five-item navigation reaches it, the Library keeps one compact way back
+          into the document in progress, so continuing costs no extra step. */}
+      {coTiepTuc && <ResumeLine doc={mucHienThi.tiepTucHoc} onMo={moBeMat} />}
 
       {LIBRARY_ACTION_MATRIX && (
         <section ref={matrixListRef} className="mb-7" aria-label="Ma trận hành động học tập">
@@ -910,28 +856,6 @@ export default function DocumentList() {
               ))}
             </div>
           )}
-        </section>
-      )}
-
-      {weak.length > 0 && (
-        <section className="mb-7">
-          <SectionTitle>Đang yếu ở</SectionTitle>
-          <div className="grid gap-2.5 sm:grid-cols-2">
-            {weak.map((c) => (
-              <div key={c.concept_name} className="surface-card !p-3.5 flex items-center gap-3">
-                <SealMeter score={c.mastery_score} status={c.status} size={40} />
-                <div className="min-w-0">
-                  <div className="font-display text-body font-semibold text-text-primary truncate">
-                    {c.concept_name}
-                  </div>
-                  <div className="text-small text-text-secondary">
-                    {MASTERY_LABEL[c.status] || c.status}
-                    {c.attempt_count > 1 && ` · ${c.attempt_count} lần làm`}
-                  </div>
-                </div>
-              </div>
-            ))}
-          </div>
         </section>
       )}
 
@@ -1005,33 +929,6 @@ export default function DocumentList() {
         )}
       </section>}
 
-      {attempts.length > 0 && (
-        <section>
-          <SectionTitle>Bài đã làm gần đây</SectionTitle>
-          <div className="flex flex-col gap-2">
-            {attempts.map((a) => (
-              <Link
-                key={a.attempt_id}
-                to={a.status === "graded" ? `/app/study/result/${a.attempt_id}` : `/app/study/quiz/${a.quiz_id}`}
-                className="surface-card !p-3.5 flex items-center gap-3 hover:no-underline"
-              >
-                <div className="min-w-0 flex-1">
-                  <div className="text-body font-semibold text-text-primary truncate">
-                    {a.quiz_title}
-                  </div>
-                  <div className="font-mono text-caption text-text-muted mt-0.5">
-                    {a.quiz_type === "practice" ? "luyện tập" : "chẩn đoán"}
-                    {a.submitted_at ? ` · ${new Date(a.submitted_at).toLocaleDateString("vi-VN")}` : ""}
-                  </div>
-                </div>
-                <span className="font-mono text-small text-text-secondary shrink-0">
-                  {attemptScoreLabel(a)}
-                </span>
-              </Link>
-            ))}
-          </div>
-        </section>
-      )}
       <DestructiveConfirmDialog
         open={Boolean(boSuuTapCanXoa)}
         title="Xoá bộ sưu tập"
@@ -1047,35 +944,20 @@ export default function DocumentList() {
   );
 }
 
-/* Sprint J (Hallmark critical finding C1): four equal `.surface-card` tiles,
-   each a mono-uppercase label over a big number, is the single most
-   recognizable "admin dashboard stat row" shape — independent of any
-   color/font choice layered on top. Replaced with a status line: document
-   count gets real visual priority (it's the number that orients the page),
-   the other three read as a natural inline sentence, not a second row of
-   boxes. Numbers stay mono/tabular per the Signature Contract's "numbers
-   are the one cross-screen constant" rule — bronze, not the accent color,
-   since these are data, not an action. */
-function Overview({ overview }) {
-  const items = [
-    ["Quiz đã tạo", overview.quiz_count ?? 0],
-    ["Bài đã làm", overview.attempt_count ?? 0],
-    // PR #137: a score-derived percentage says "điểm" everywhere (see QuizResult).
-    ["Điểm trung bình", overview.average_percentage == null ? "—" : `${overview.average_percentage}% điểm`],
-  ];
+// V9.3 P3b: the one compact "continue" the Library keeps (the full learning home is on the
+// dashboard). It is the page's filled action when present; upload is then secondary.
+function ResumeLine({ doc, onMo }) {
+  const tt = tiepTucHoc(doc);
   return (
-    <section className="mb-7 pb-5 border-b border-border flex flex-wrap items-baseline gap-x-2.5 gap-y-1.5">
-      <span className="font-mono text-h1 font-semibold tabular-nums" style={{ color: "var(--bronze)" }}>
-        {overview.document_count ?? 0}
-      </span>
-      <span className="text-body-lg text-text-secondary mr-2">tài liệu</span>
-      {items.map(([label, value], i) => (
-        <span key={label} className="text-small text-text-muted">
-          {i > 0 && <span className="mx-2.5" aria-hidden="true">·</span>}
-          {label}{" "}
-          <span className="font-mono tabular-nums" style={{ color: "var(--bronze)" }}>{value}</span>
-        </span>
-      ))}
+    <section className="library-resume surface-card" aria-labelledby="library-resume-title">
+      <div className="library-resume__text">
+        <h2 id="library-resume-title" className="library-resume__label">Học tiếp</h2>
+        <p className="library-resume__name">{tenHienThi(doc)}</p>
+      </div>
+      <button type="button" className="btn-seal library-resume__cta"
+              onClick={() => onMo(doc, tt?.beMat || "studymap")}>
+        Tiếp tục{tt?.nhanBeMat ? ` · ${tt.nhanBeMat}` : ""}
+      </button>
     </section>
   );
 }

@@ -1,4 +1,5 @@
-// V6 Library: the learning home (#172) and the document card (#171) on one page.
+// V6 learning home (#172) and document card (#171). V9.3 P3b moved the learning home to the
+// dashboard (/app/study/dashboard); the Library keeps the cards and one compact "Học tiếp".
 // Real app on the Vite dev server, API mocked at the network layer. Covers the page's states
 // (loading, empty, error, processing, failed, nothing to continue), the action hierarchy (one
 // filled "Tiếp tục" on the page), and containment at 320 / 390 / 768 / 1024 / 1440 in both themes.
@@ -41,7 +42,7 @@ const NEVER_OPENED = { ...RECENT, document_id: "d5", source_stem: "moi", title: 
 const ALL = [RESUME, RECENT, PROCESSING, FAILED];
 const COLLECTIONS = [{ collection_id: "c1", name: "Học kỳ 1", color: "accent" }, { collection_id: "c2", name: "Ôn thi cuối kỳ", color: "slate" }];
 
-async function openLibrary(page, { width = 1440, dark = false, library = () => json({ documents: ALL, collections: COLLECTIONS }) } = {}) {
+async function openLibrary(page, { width = 1440, dark = false, path: route = "/app/study", library = () => json({ documents: ALL, collections: COLLECTIONS }) } = {}) {
   await page.setViewportSize({ width, height: 900 });
   await page.addInitScript((isDark) => {
     localStorage.setItem("memvid-token", "fixture-token");
@@ -57,57 +58,65 @@ async function openLibrary(page, { width = 1440, dark = false, library = () => j
     if (p === "/list-indexed") return route.fulfill(json({ sources: [] }));
     return route.fulfill(json({}));
   });
-  await page.goto("/app/study");
-  await expect(page.getByRole("heading", { name: "Thư viện học tập" })).toBeVisible();
+  await page.goto(route);
+  await expect(page.getByRole("heading", { level: 1 })).toHaveText(route === "/app/study" ? "Thư viện học tập" : "Tổng quan");
 }
+const openDashboard = (page, opts = {}) => openLibrary(page, { ...opts, path: "/app/study/dashboard" });
 const home = (page) => page.locator("section.learning-home");
 const cardOf = (page, title) => page.locator(".study-card", { has: page.getByRole("heading", { name: title, exact: true }) }).first();
 
-test("the learning home names the document to pick up and holds the page's only filled 'Tiếp tục'", async ({ page }) => {
-  await openLibrary(page);
+test("the dashboard's learning home names the document to pick up and holds the page's only filled 'Tiếp tục'", async ({ page }) => {
+  await openDashboard(page);
   await expect(home(page).getByRole("heading", { name: "Học tiếp" })).toBeVisible();
   await expect(home(page).locator(".learning-home__title")).toHaveText(RESUME.display_name);
   await expect(home(page).getByText(/Mở lần cuối 2 giờ trước, ở Quiz\./)).toBeVisible();
   // One filled continue on the page: in the home. Every card's "Tiếp tục" is outlined.
+  await expect(page.locator(".btn-seal:visible")).toHaveCount(1);
   await expect(home(page).locator(".btn-seal")).toHaveCount(1);
-  await expect(page.locator(".study-card .btn-seal")).toHaveCount(0);
-  const cardResume = cardOf(page, RESUME.display_name).locator(".study-card__resume");
-  await expect(cardResume).toHaveAttribute("data-emphasis", "secondary");
   // The other recently opened document is offered once, in "Mở gần đây", not as a second resume.
   await expect(home(page).locator(".learning-home__recent button")).toHaveCount(1);
   await expect(home(page).locator(".learning-home__recent-name")).toHaveText(RECENT.title);
 });
 
-test("continuing from the home works from the keyboard and leaves the Library", async ({ page }) => {
+test("the Library keeps one compact 'Học tiếp' as its only filled action; cards stay outlined", async ({ page }) => {
   await openLibrary(page);
+  await expect(home(page)).toHaveCount(0);
+  const resume = page.locator(".library-resume");
+  await expect(resume.locator(".library-resume__name")).toHaveText(RESUME.display_name);
+  await expect(page.locator(".btn-seal:visible")).toHaveCount(1);
+  await expect(resume.locator(".btn-seal")).toHaveCount(1);
+  await expect(cardOf(page, RESUME.display_name).locator(".study-card__resume")).toHaveAttribute("data-emphasis", "secondary");
+  await expect(page.getByRole("link", { name: /Tổng quan/ })).toHaveAttribute("href", "/app/study/dashboard");
+});
+
+test("continuing from the dashboard works from the keyboard and leaves the page", async ({ page }) => {
+  await openDashboard(page);
   const cta = home(page).locator(".btn-seal");
   await cta.focus();
   await expect(cta).toBeFocused();
   await page.keyboard.press("Enter");
-  await expect(page).not.toHaveURL(/\/app\/study$/);
+  await expect(page).not.toHaveURL(/\/app\/study\/dashboard$/);
 });
 
 test("while the library is loading there is no learning home and no empty-library message", async ({ page }) => {
   let release;
   const gate = new Promise((r) => { release = r; });
-  await openLibrary(page, { library: async () => { await gate; return json({ documents: ALL, collections: COLLECTIONS }); } });
+  await openDashboard(page, { library: async () => { await gate; return json({ documents: ALL, collections: COLLECTIONS }); } });
   await expect(home(page)).toHaveCount(0);
   await expect(page.getByText("Chưa có tài liệu nào đang học dở")).toHaveCount(0);
-  await expect(page.locator(".study-card")).toHaveCount(0);
   release();
   await expect(home(page)).toBeVisible();
 });
 
-test("an empty library has no learning home", async ({ page }) => {
-  await openLibrary(page, { library: () => json({ documents: [], collections: [] }) });
-  await expect(page.locator(".study-card")).toHaveCount(0);
+test("an empty library has no learning home; the dashboard sends the learner to upload", async ({ page }) => {
+  await openDashboard(page, { library: () => json({ documents: [], collections: [] }) });
   await expect(home(page)).toHaveCount(0);
-  await expect(page.getByRole("button", { name: /Tải tài liệu lên/ }).first()).toBeVisible();
+  await expect(page.getByRole("link", { name: "Tải tài liệu lên ở Thư viện" })).toHaveAttribute("href", "/app/study");
 });
 
 test("a failed library load shows the error and a retry, not a learning home", async ({ page }) => {
   let fail = true;
-  await openLibrary(page, { library: () => (fail ? json({ error: "boom" }, 500) : json({ documents: ALL, collections: COLLECTIONS })) });
+  await openDashboard(page, { library: () => (fail ? json({ error: "boom" }, 500) : json({ documents: ALL, collections: COLLECTIONS })) });
   await expect(home(page)).toHaveCount(0);
   const retry = page.getByRole("button", { name: "Thử lại" });
   await expect(retry).toBeVisible();
@@ -117,7 +126,7 @@ test("a failed library load shows the error and a retry, not a learning home", a
 });
 
 test("with nothing to continue the home says so and has no filled button", async ({ page }) => {
-  await openLibrary(page, { library: () => json({ documents: [NEVER_OPENED, PROCESSING], collections: [] }) });
+  await openDashboard(page, { library: () => json({ documents: [NEVER_OPENED, PROCESSING], collections: [] }) });
   await expect(home(page).getByText("Chưa có tài liệu nào đang học dở")).toBeVisible();
   await expect(home(page).locator(".btn-seal")).toHaveCount(0);
   await expect(home(page).locator(".learning-home__recent")).toHaveCount(0);
@@ -142,12 +151,12 @@ test("a processing document and a failed one say so in words and offer no study 
 
 for (const width of [320, 390, 768, 1024, 1440]) {
   for (const dark of [false, true]) {
-    test(`${width}px ${dark ? "dark" : "light"}: home and cards stay inside the viewport, targets are large enough`, async ({ page }) => {
+    test(`${width}px ${dark ? "dark" : "light"}: Library resume line and cards stay inside the viewport, targets are large enough`, async ({ page }) => {
       await openLibrary(page, { width, dark });
-      await expect(home(page)).toBeVisible();
+      await expect(page.locator(".library-resume")).toBeVisible();
       const overflow = await page.evaluate(() => {
         const root = document.documentElement;
-        const wide = [...document.querySelectorAll(".learning-home, .learning-home *, .study-card, .study-card *")]
+        const wide = [...document.querySelectorAll(".library-resume, .library-resume *, .study-card, .study-card *")]
           .filter((el) => { const r = el.getBoundingClientRect(); return r.width > 0 && (r.right > root.clientWidth + 0.5 || r.left < -0.5); })
           .map((el) => el.className || el.tagName);
         return { doc: root.scrollWidth - root.clientWidth, wide: [...new Set(wide)].slice(0, 5) };
@@ -158,7 +167,7 @@ for (const width of [320, 390, 768, 1024, 1440]) {
       if (width < 768) {
         // Phones: the controls a thumb uses on the home and on a card are at least 44px tall.
         const px = (value) => Math.round(value * 100) / 100;
-        const targets = page.locator(".learning-home__cta, .learning-home__recent button, .study-card__resume, .study-card__tool, .study-card__details, .study-card__menu-trigger");
+        const targets = page.locator(".library-resume__cta, .study-card__resume, .study-card__tool, .study-card__details, .study-card__menu-trigger");
         const count = await targets.count();
         expect(count).toBeGreaterThan(6);
         for (let i = 0; i < count; i += 1) {
@@ -168,6 +177,31 @@ for (const width of [320, 390, 768, 1024, 1440]) {
         }
       }
       if (OUT) await page.screenshot({ path: path.join(OUT, `library-${width}-${dark ? "dark" : "light"}-${TAG}.png`), fullPage: true });
+    });
+
+    test(`${width}px ${dark ? "dark" : "light"}: the dashboard stays inside the viewport, targets are large enough`, async ({ page }) => {
+      await openDashboard(page, { width, dark });
+      await expect(home(page)).toBeVisible();
+      await expect(page.getByRole("heading", { name: "Kết quả luyện tập" })).toBeVisible();
+      const overflow = await page.evaluate(() => {
+        const root = document.documentElement;
+        const wide = [...document.querySelectorAll("main *")]
+          .filter((el) => { const r = el.getBoundingClientRect(); return r.width > 0 && (r.right > root.clientWidth + 0.5 || r.left < -0.5); })
+          .map((el) => el.className || el.tagName);
+        return { doc: root.scrollWidth - root.clientWidth, wide: [...new Set(wide)].slice(0, 5) };
+      });
+      expect(overflow.doc, "horizontal page overflow").toBeLessThanOrEqual(0);
+      expect(overflow.wide, "elements past the viewport edge").toEqual([]);
+      if (width < 768) {
+        const targets = page.locator(".learning-home__cta, .learning-home__recent button, .dash-link");
+        const count = await targets.count();
+        expect(count).toBeGreaterThan(1);
+        for (let i = 0; i < count; i += 1) {
+          const box = await targets.nth(i).boundingBox();
+          if (box) expect(Math.round(box.height * 100) / 100, `target ${i} height`).toBeGreaterThanOrEqual(44);
+        }
+      }
+      if (OUT) await page.screenshot({ path: path.join(OUT, `dashboard-${width}-${dark ? "dark" : "light"}-${TAG}.png`), fullPage: true });
     });
   }
 }

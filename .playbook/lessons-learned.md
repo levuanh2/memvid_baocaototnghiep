@@ -4007,3 +4007,21 @@ batch starts, or it names the wrong document. And a refresh that flips the page'
 flag unmounts the list, the queue and the focused button with it: refresh quietly after an
 action the user is still looking at. Tests: DocumentList.v93Upload.test.jsx (fail A, pick B,
 retry A; two batches with an all-failed second; focus after retry and close).
+
+## 2026-11-23 — Moving a block to a new page: check the numbers it already shows
+
+V9.3 P3b moved the learning home from the Library to a new dashboard that also has its own
+"Kết quả luyện tập". The reused block already printed the quiz average, so the page showed it
+twice; only a screenshot caught it. And `count ?? 0` turned a field the API did not send into
+"0 đã nắm", presenting missing data as a measured zero. When composing a page from existing
+blocks, list every number each block renders; render "missing" as absent or as a sentence,
+never as 0. Tests: Dashboard.test.jsx ("shows the quiz average once", "leaves out the concept
+line when the API does not report concepts").
+
+Regression (Codex review of #203, fixed red-first): a new page that lists attempts must reuse
+the existing routing/label contract (`baiLam` in utils/tienDoHoc.js), not a second table:
+practice and submitted attempts went to the wrong flow. A failed source (`null`) and an empty
+one (`[]`) need different output. Per-account page state must be keyed by the account: an
+effect that resets state runs AFTER the new account's first commit, which shows the previous
+account's data; a `useLayoutEffect` probe sees that frame where `act()` hides it. A retry that
+swaps the button for a loading line must move focus to a persistent node first.

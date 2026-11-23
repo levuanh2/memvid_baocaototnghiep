@@ -127,3 +127,11 @@
   .library-views__item { flex: none; min-height: 44px; }
 }
 @media (prefers-reduced-motion: reduce) { .library-views__item { transition: none; } }
+
+/* V9.3 P3b — the Library's one compact "continue" (the full learning home is on the dashboard). */
+.library-resume { display: flex; flex-wrap: wrap; align-items: center; gap: 8px 16px; margin-bottom: 20px; padding: 12px 16px; }
+.library-resume__text { flex: 1 1 14rem; min-width: 0; }
+.library-resume__label { color: var(--text-secondary); font-size: 13px; font-weight: 500; }
+.library-resume__name { color: var(--text-primary); font-size: 16px; font-weight: 600; line-height: 1.4; overflow-wrap: anywhere; }
+.library-resume__cta { min-height: 44px; }
+@media (max-width: 450px) { .library-resume__cta { width: 100%; justify-content: center; } }
