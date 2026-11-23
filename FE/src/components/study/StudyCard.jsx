@@ -24,6 +24,13 @@ import "./studyCard.css";
  * mang bảy thông tin; thêm một khối nữa là biến nó thành bảng biểu.
  */
 
+// V9.3 P3a: loại tệp từ `file_type`, không có thì từ đuôi tên tệp gốc; không đoán được thì
+// không vẽ nhãn (một nhãn "FILE" chung chung không nói được gì).
+function loaiTep(doc) {
+  const loai = doc.file_type || /\.([a-z0-9]{2,5})$/i.exec(doc.title || "")?.[1];
+  return loai ? loai.toUpperCase() : null;
+}
+
 export default function StudyCard({
   doc, documents, chiMucBst, jobs, boSuuTap, dangDoiTen, dangLuu, onDoiTen, onLuuTen,
   onHuyDoiTen, onBatTat, onMo, daChon, onChon, tabIndex, onKeyDown, refThe,
@@ -178,6 +185,7 @@ export default function StudyCard({
                                     saving={dangLuu} onSave={onLuuTen} onCancel={onHuyDoiTen} />
         ) : (
           <div className="min-w-0">
+            {loaiTep(doc) && <span className="study-card__type"><span className="sr-only">Tệp </span>{loaiTep(doc)}</span>}
             <h3 className="study-card__title" title={ten}>{ten}</h3>
             {(boSuuTap || doc.pinned || doc.favorite || doc.archived_at) && (
               <div className="study-card__badges">

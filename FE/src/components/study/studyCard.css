@@ -14,9 +14,28 @@
 .study-card__title {
   font-family: var(--font-display, inherit); font-size: 17px; font-weight: 600; line-height: 1.35;
   color: var(--text-primary); overflow-wrap: anywhere; text-wrap: balance;
-  display: -webkit-box; -webkit-box-orient: vertical; -webkit-line-clamp: 2; overflow: hidden;
 }
-.study-card[data-density="compact"] .study-card__title { -webkit-line-clamp: 1; font-size: 15px; }
+/* V9.3 P3a: the full name wraps (spec 05); only the compact density, which the learner picks,
+   clamps it, and the `title` attribute still carries the whole name there. */
+.study-card[data-density="compact"] .study-card__title {
+  font-size: 15px; display: -webkit-box; -webkit-box-orient: vertical; -webkit-line-clamp: 1; overflow: hidden;
+}
+.study-card__type {
+  display: inline-block; margin-bottom: 4px; padding: 1px 6px; border-radius: 4px;
+  background: var(--bg-elevated); color: var(--text-secondary);
+  font-size: 11px; font-weight: 600; letter-spacing: 0.04em; line-height: 1.6;
+}
+/* Upload queue (V9.3 P3a): one line per picked file, its state or its error, retry for that file. */
+.upload-queue { padding: 12px 14px; }
+.upload-queue__list { display: grid; gap: 8px; }
+.upload-queue__item { display: flex; flex-wrap: wrap; align-items: center; gap: 4px 12px; font-size: 14px; }
+.upload-queue__name { min-width: 0; flex: 1 1 12rem; color: var(--text-primary); font-weight: 500; overflow-wrap: anywhere; }
+.upload-queue__status { display: inline-flex; align-items: center; gap: 6px; color: var(--text-secondary); }
+.upload-queue__item[data-state="xong"] .upload-queue__status { color: var(--ok); }
+.upload-queue__error { display: inline-flex; align-items: flex-start; gap: 6px; color: var(--err); }
+.upload-queue__error svg { flex: none; margin-top: 3px; }
+.upload-queue__retry, .upload-queue__close { min-height: 44px; }
+.upload-queue__close { margin-top: 4px; color: var(--text-secondary); text-decoration: underline; text-underline-offset: 3px; }
 .study-card[data-archived="true"] .study-card__title { color: var(--text-secondary); }
 .study-card__badges { display: flex; flex-wrap: wrap; align-items: center; gap: 6px; margin-top: 6px; }
 .study-card__badge {

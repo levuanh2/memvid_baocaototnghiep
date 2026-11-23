@@ -8,6 +8,8 @@ import LearningHome from "../../components/study/LearningHome";
 import Disclosure from "../../components/ui/Disclosure";
 import CollectionSidebar from "../../components/study/CollectionSidebar";
 import BulkBar from "../../components/study/BulkBar";
+import UploadQueue from "../../components/study/UploadQueue";
+import { kiemTraTep } from "../../utils/taiLenTep";
 import LibraryTaskViews from "../../components/study/LibraryTaskViews";
 import StudyDocumentActionRow from "../../components/study/StudyDocumentActionRow";
 import DocumentKnowledgeDetails from "../../components/study/DocumentKnowledgeDetails";
@@ -221,31 +223,51 @@ export default function DocumentList() {
   useEffect(() => { load(); }, [load]);
 
   // ── Upload ────────────────────────────────────────────────────────────────
-  const onPick = async (e) => {
-    const file = e.target.files?.[0];
-    e.target.value = "";
-    if (!file) return;
+  // V9.3 P3a: several files per pick, each checked before sending (kiemTraTep), sent ONE AT
+  // A TIME, each with its own status/error, and a failed one retried alone. A failed upload
+  // no longer replaces the whole library with a page error: the other files and the list stay.
+  const [hangTai, setHangTai] = useState([]);
+  const tepTaiRef = useRef(new Map());
+  const capNhatTep = (khoa, thayDoi) =>
+    setHangTai((prev) => prev.map((m) => (m.khoa === khoa ? { ...m, ...thayDoi } : m)));
+
+  const chayHangTai = async (khoas) => {
     setUploading(true);
-    setTenDangTai(file.name);
-    setError(null);
-    let taiLen;
-    try {
-      taiLen = await uploadDocument(file);
-    } catch (err) {
-      setError(moTaLoi(err, "Tải tài liệu lên thất bại."));
-      setUploading(false);
-      return;
+    let idMoi = null;
+    for (const khoa of khoas) {
+      const tep = tepTaiRef.current.get(khoa);
+      setTenDangTai(tep.name);
+      capNhatTep(khoa, { trangThai: "dang_tai", loi: null });
+      try {
+        const taiLen = await uploadDocument(tep);
+        idMoi = taiLen?.document_id || idMoi;
+        capNhatTep(khoa, { trangThai: "xong" });
+      } catch (err) {
+        capNhatTep(khoa, { trangThai: "loi", loi: moTaLoi(err, "Tải lên thất bại.") });
+      }
     }
-    // Lên xong rồi. `load()` hỏng SAU đó là lỗi tải lại, không phải lỗi tải lên —
-    // gộp hai cái vào một `catch` thì file đã lên mà màn hình ghi "tải lên thất bại".
-    setIdVuaTai(taiLen?.document_id || null);
-    try {
+    if (idMoi) {
+      setIdVuaTai(idMoi);
       await load();
-    } catch (err) {
-      setError(moTaLoi(err, "Đã tải lên xong, nhưng chưa làm mới được danh sách."));
-    } finally {
-      setUploading(false);
     }
+    setUploading(false);
+  };
+
+  const onPick = (e) => {
+    const tepChon = [...(e.target.files || [])];
+    const accept = e.target.accept;
+    e.target.value = "";
+    if (!tepChon.length || uploading) return;
+    tepTaiRef.current = new Map();
+    const hang = tepChon.map((tep, i) => {
+      const khoa = `${Date.now()}-${i}`;
+      tepTaiRef.current.set(khoa, tep);
+      const loi = kiemTraTep(tep, accept);
+      return { khoa, ten: tep.name, trangThai: loi ? "tu_choi" : "cho", loi };
+    });
+    setHangTai(hang);
+    const guiDuoc = hang.filter((m) => m.trangThai === "cho").map((m) => m.khoa);
+    if (guiDuoc.length) chayHangTai(guiDuoc);
   };
 
   // ── Mở một bề mặt ─────────────────────────────────────────────────────────
@@ -559,7 +581,7 @@ export default function DocumentList() {
         <>
           {/* Danh sách này phải khớp formats.accept_attribute() của backend —
               BE/tests/test_upload_formats.py khoá lại để hai bên không lệch. */}
-          <input ref={fileRef} type="file" className="hidden" onChange={onPick}
+          <input ref={fileRef} type="file" className="hidden" onChange={onPick} multiple
             accept=".bmp,.csv,.doc,.docx,.epub,.fb2,.gif,.htm,.html,.jpeg,.jpg,.json,.md,.mobi,.odp,.odt,.pdf,.png,.pptx,.rtf,.txt,.xlsx,.xps" />
           {/* V6: one filled button above the list. When the learning home offers "Tiếp tục",
               that is the page's main action and uploading is secondary; otherwise uploading is. */}
@@ -611,6 +633,10 @@ export default function DocumentList() {
           onDong={() => { if (idVuaTai) dongInsight(idVuaTai); setIdVuaTai(null); }}
         />
       )}
+
+      <UploadQueue hang={hangTai} dangChay={uploading}
+        onThuLai={(khoa) => { if (!uploading) chayHangTai([khoa]); }}
+        onDong={() => setHangTai([])} />
 
       {loiThaoTac && (
         <div role="alert" className="mb-4 text-small flex items-start gap-1.5"
