@@ -4,6 +4,7 @@
 // leaves it and the layout before comes back; on phones only one side panel is open.
 // Screenshots only when P4_SHOT_OUT is set.
 import { test, expect } from "@playwright/test";
+import { MODE_SELECT } from "./workspaceMode.js";
 import { mkdirSync } from "node:fs";
 import path from "node:path";
 
@@ -62,7 +63,8 @@ for (const width of [390, 1024, 1440]) {
       await enterFocus(page);
       await expect(toggle(page)).toHaveAttribute("aria-pressed", "true");
       await expect(toggle(page)).toBeVisible();
-      await expect(page.locator(".workspace-mode-switch")).toBeVisible();
+      // The mode control stays: the tab row, or the "Chế độ học" select at <=700px (P4b).
+      await expect(page.locator(`.workspace-mode-switch:visible, ${MODE_SELECT}:visible`)).toHaveCount(1);
       await expect(page.locator(".workspace-home-link")).toBeHidden();
       await expect(page.locator(".study-library-link")).toBeHidden();
       await expect(page.locator("nav.app-bottom-nav")).toBeHidden();
@@ -99,12 +101,12 @@ test("1024px: the focus toggle is reachable by keyboard and named for what it do
 test("390px: opening the evidence sheet closes the source drawer", async ({ page }) => {
   await openWorkspace(page, { width: 390 });
   await page.getByRole("button", { name: "Mở công cụ học" }).click();
-  await page.getByRole("menuitem", { name: "Mở thư mục nguồn" }).click();
+  await page.getByRole("menuitemcheckbox", { name: "Nguồn" }).click();
   const left = page.locator("aside").first();
   await expect(left).not.toHaveAttribute("aria-hidden", "true");
   await page.keyboard.press("Escape");
   await page.getByRole("button", { name: "Mở công cụ học" }).click();
-  await page.getByRole("menuitem", { name: "Mở công cụ" }).click();
+  await page.getByRole("menuitemcheckbox", { name: "Dẫn chứng" }).click();
   await expect(page.locator("aside.context-inspector-shell")).not.toHaveAttribute("aria-hidden", "true");
   await expect(left).toHaveAttribute("aria-hidden", "true");
 });

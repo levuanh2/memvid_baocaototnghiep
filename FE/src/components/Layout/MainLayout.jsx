@@ -656,6 +656,25 @@ export default function MainLayout({
   }, [focusMode, exitFocus, panelDrawer, rightOpen, leftOpen, tabletShelfOpen]);
 
   const rightSurfaceVisible = true;
+
+  // V9.3 P4b (docs/StudyMap-V9.3/06): the header's "Nguồn" / "Dẫn chứng" buttons drive the same
+  // state as the spines, drawers and tablet shelf, so they never disagree with what is shown.
+  // Phones (drawers) keep one side panel open at a time through openLeft/openRight. The evidence
+  // column goes through setRightCollapsed, so Focus Mode shows it without saving it.
+  const evidenceIsOverlay = panelDrawer || workspaceMode === "mindmap";
+  const sourcesOpen = panelDrawer ? leftOpen : tabletSourceRail ? tabletShelfOpen : !panel.collapsed.left;
+  const evidenceOpen = evidenceIsOverlay ? rightOpen : !rightCollapsed;
+  const toggleSources = useCallback(() => {
+    if (panelDrawer) { if (leftOpen) setLeftOpen(false); else openLeft(); }
+    else if (tabletSourceRail) setTabletShelfOpen((open) => !open);
+    else setPanelCollapsed("left", !panel.collapsed.left);
+  }, [panelDrawer, leftOpen, openLeft, tabletSourceRail, setPanelCollapsed, panel.collapsed.left]);
+  const toggleEvidence = useCallback(() => {
+    if (evidenceOpen) { closeRightPanel(); return; }
+    setRightView("evidence");
+    if (evidenceIsOverlay) openRight();
+    else setRightCollapsed(false);
+  }, [evidenceOpen, closeRightPanel, evidenceIsOverlay, openRight, setRightCollapsed]);
   // 2026-09-21: Mind Map's node-detail surface must be a closed-by-default
   // overlay that does not consume grid width (spec section 8) -- distinct
   // from Chat/Summary's persistent evidence rail, which stays as-is.
@@ -739,9 +758,11 @@ export default function MainLayout({
 
       <a href="#main-content" className="skip-link">Bỏ qua đến nội dung chính</a>
 
-      {/* ── TOP HEADER ── */}
+      {/* ── TOP HEADER ── V9.3 P4b: z-[45] keeps the header above drawer backdrops (z-30) and
+          drawers (z-40) so "Nguồn"/"Dẫn chứng" stay usable while a panel is open; modals (z-50)
+          still cover it. */}
       <header
-        className="workspace-global-header flex items-center gap-1.5 lg:gap-4 px-2 lg:px-5 h-[56px] border-b border-border flex-shrink-0 transition-theme"
+        className="workspace-global-header relative z-[45] flex items-center gap-1.5 lg:gap-4 px-2 lg:px-5 h-[56px] border-b border-border flex-shrink-0 transition-theme"
         style={{ background: "var(--bg-sidebar)" }}
       >
 
@@ -802,6 +823,33 @@ export default function MainLayout({
             );
           })}
         </nav>
+        {/* V9.3 P4b: at <=700px the tab row becomes this labelled select (CSS shows one of the
+            two). Same state as the tabs: changing it never sends anything. */}
+        <span className="workspace-mode-select flex-shrink-0">
+          <label htmlFor="workspace-mode-select" className="sr-only">Chế độ học</label>
+          <select id="workspace-mode-select" data-mode-select value={workspaceMode}
+            onChange={(e) => { setWorkspaceMode(e.target.value); closeHeaderSurface(); }}>
+            {MODE_TABS.map((t) => <option key={t.key} value={t.key}>{t.label}</option>)}
+          </select>
+          <Icon name="ChevronDown" size={14} aria-hidden="true" className="workspace-mode-select__chevron" />
+        </span>
+
+        {/* V9.3 P4b: the two side panels, named and with their state (docs/StudyMap-V9.3/06).
+            "Nguồn" hides with the source panel in Focus Mode; "Dẫn chứng" stays, like a citation. */}
+        <button type="button" data-panel-toggle="sources" onClick={toggleSources}
+          aria-expanded={sourcesOpen} aria-controls={leftPanelUnmounted ? undefined : "workspace-sources"}
+          aria-label="Nguồn" title="Nguồn"
+          className="workspace-panel-toggle focus-hide flex-shrink-0 inline-flex items-center justify-center gap-1.5 w-10 h-10 min-[1440px]:w-auto min-[1440px]:px-3 rounded-[8px] border border-border text-small font-medium text-text-secondary hover:text-text-primary hover:bg-surface-elevated transition-colors">
+          <Icon name="FolderOpen" size={16} aria-hidden="true" />
+          <span className="hidden min-[1440px]:inline">Nguồn</span>
+        </button>
+        <button type="button" data-panel-toggle="evidence" onClick={toggleEvidence}
+          aria-expanded={evidenceOpen} aria-controls="workspace-evidence"
+          aria-label="Dẫn chứng" title="Dẫn chứng"
+          className="workspace-panel-toggle flex-shrink-0 inline-flex items-center justify-center gap-1.5 w-10 h-10 min-[1440px]:w-auto min-[1440px]:px-3 rounded-[8px] border border-border text-small font-medium text-text-secondary hover:text-text-primary hover:bg-surface-elevated transition-colors">
+          <Icon name="Quote" size={16} aria-hidden="true" />
+          <span className="hidden min-[1440px]:inline">Dẫn chứng</span>
+        </button>
 
         {/* V9.3 P4: the one control that stays with the mode switch in Focus Mode. */}
         <button type="button" data-focus-toggle onClick={focusMode ? exitFocus : enterFocus}
@@ -826,8 +874,10 @@ export default function MainLayout({
               triggerRef={studyToolsTriggerRef}
               extraActions={[
                 ...(viewportWidth <= 340 ? [{ key: "library", label: "Thư viện học tập", icon: "BookOpen", onSelect: () => navigate("/app/study") }] : []),
-                { key: "sources", label: "Mở thư mục nguồn", icon: "Menu", onSelect: openLeft },
-                { key: "inspector", label: "Mở công cụ", icon: "PanelRight", onSelect: openRight },
+                // V9.3 P4b: the same two controls as the header buttons (which have no room at
+                // <=480px), named alike and reporting whether their panel is open.
+                { key: "sources", label: "Nguồn", icon: "FolderOpen", onSelect: toggleSources, checked: sourcesOpen },
+                { key: "evidence", label: "Dẫn chứng", icon: "Quote", onSelect: toggleEvidence, checked: evidenceOpen },
                 // V9.3 P4: phones enter Focus Mode here (the header has no room for a 40px
                 // toggle at 375-390px); the visible exit button appears once it is on.
                 { key: "focus", label: "Tập trung", icon: "Maximize", onSelect: enterFocus },
@@ -915,6 +965,7 @@ export default function MainLayout({
         <div className="workspace-region focus-hide">
         {tabletSourceRail ? (
           <aside
+            id="workspace-sources"
             className={
               !tabletShelfOpen
                 ? "workspace-source-rail-shell shrink-0 bg-surface-sidebar overflow-hidden"
@@ -976,6 +1027,7 @@ export default function MainLayout({
               // A closed mobile drawer is only translated off-screen: without `inert` its
               // controls stay in the Tab order and in the accessibility tree while invisible.
               ref={leftAsideRef}
+              id="workspace-sources"
               aria-hidden={leftSurfaceHidden ? true : undefined}
               inert={leftSurfaceHidden ? true : undefined}
               className={
@@ -1120,6 +1172,7 @@ export default function MainLayout({
               // Hidden states (closed overlay, closed mobile sheet, collapsed desktop column) keep
               // this subtree mounted. `pointer-events` and `aria-hidden` do not stop Tab; `inert` does.
               ref={rightAsideRef}
+              id="workspace-evidence"
               aria-hidden={rightSurfaceHidden ? true : undefined}
               inert={rightSurfaceHidden ? true : undefined}
               className={

@@ -4,6 +4,7 @@
 // with no error banner, valid connectors, and the same mind-elixir instance.
 // Same mocked-API harness as mobile-header-visual.spec.js. No backend, no provider.
 import { test, expect } from "@playwright/test";
+import { chooseMode, waitForModeControl } from "./workspaceMode.js";
 
 const API = /localhost:8080\//;
 const json = (body) => ({ status: 200, contentType: "application/json", body: JSON.stringify(body) });
@@ -32,9 +33,9 @@ async function openChatHeld(page, { width, height, dark }) {
     return route.fulfill(json({}));
   });
   await page.goto("/app");
-  await page.getByRole("tablist", { name: "Chế độ Workspace" }).waitFor({ state: "visible", timeout: 30000 });
+  await waitForModeControl(page);
   if (dark) await page.evaluate(() => document.documentElement.classList.add("dark"));
-  await page.getByRole("tab", { name: "Trò chuyện" }).click();
+  await chooseMode(page, "Trò chuyện");
 }
 
 const VIEWPORTS = [
@@ -48,7 +49,7 @@ for (const vp of VIEWPORTS) {
   test(`${tag}: held Chat for 11 s, then Mind Map is ready with valid connectors and no banner`, async ({ page }) => {
     await openChatHeld(page, vp);
     await page.waitForTimeout(11_000);
-    await page.getByRole("tab", { name: "Sơ đồ tư duy" }).click();
+    await chooseMode(page, "Sơ đồ tư duy");
 
     const wrap = page.locator("[data-mindmap-render-state]");
     await expect(wrap).toHaveAttribute("data-mindmap-render-state", "ready", { timeout: 3000 });

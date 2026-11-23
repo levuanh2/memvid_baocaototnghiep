@@ -62,10 +62,15 @@ export default function StudyToolsMenu({ open, onClose, onSelect, extraActions =
       {extraActions.length > 0 && (
         <div className="study-tools-menu__extra border-t border-border mt-1 pt-1">
           {extraActions.map((action) => (
-            <button key={action.key} type="button" role="menuitem" className="study-tools-menu__item"
+            // An action with `checked` toggles something that stays open (a side panel), so it is a
+            // menuitemcheckbox that reports its state (V9.3 P4b).
+            <button key={action.key} type="button" className="study-tools-menu__item"
+              role={action.checked === undefined ? "menuitem" : "menuitemcheckbox"}
+              aria-checked={action.checked === undefined ? undefined : Boolean(action.checked)}
               onClick={() => { action.onSelect?.(); close(); }}>
               <span className="study-tools-menu__item-icon"><Icon name={action.icon} size={16} /></span>
               <span className="study-tools-menu__item-copy"><strong className="study-tools-menu__item-title">{action.label}</strong></span>
+              {action.checked && <Icon name="Check" size={16} className="study-tools-menu__item-check" />}
             </button>
           ))}
         </div>

@@ -4049,3 +4049,18 @@ overwrote the learner's saved layout. A temporary view state must never go throu
 setter: derive the visible state (`rightCollapsed = focusMode ? !focusRightShown : saved`) and
 route every write through one helper that knows which one to change. Test: remount while
 focused and assert the saved layout and the visible panel.
+
+## Header controls under a drawer backdrop; a select clipped by its native arrow (V9.3 P4b, 2026-11-24)
+
+1. The new "Nguồn"/"Dẫn chứng" header buttons could not be clicked while a drawer or the tablet
+shelf was open: the backdrop is `fixed inset-0 z-30` and the header had no z-index, so the
+backdrop covered it (workspace-panel-controls.spec.js, 700/768/1024px). Root cause: a control
+that toggles a panel must sit above that panel's backdrop. Fix: header `relative z-[45]`, above
+backdrops (30) and drawers (40), below modals (50). Prevention: e2e toggles a panel open and
+closed from the same control, and switches panels while one is open.
+2. The <=700px "Chế độ học" select clipped "Trò chuyện" at 375px: a fixed width with the
+native arrow drawn inside the content box. Found only in the screenshot; size and overflow
+checks passed. Fix: `appearance: none` + drawn chevron in the right padding; regression: the
+e2e measures the longest option against the select's text box.
+3. Two Playwright runs in the same worktree wipe each other's `test-results` (trace ENOENT on
+close). Run one suite per worktree at a time, or give each run its own --output.
