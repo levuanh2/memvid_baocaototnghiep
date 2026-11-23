@@ -187,4 +187,15 @@ describe("Library upload V9.3", () => {
     expect([...host.querySelectorAll("[role='alert']")].map((a) => a.textContent).join(" "))
       .toMatch(/chưa làm mới được danh sách/);
   });
+
+  // Codex recheck 2 P2 (#202): the refresh alert stayed after a later refresh succeeded.
+  it("clears the refresh alert once a later refresh succeeds", async () => {
+    uploadDocument.mockResolvedValue({ document_id: "doc-1" });
+    getLibrary.mockRejectedValueOnce(new Error("Mạng chập chờn"));
+    await pick([file("a.pdf")]);
+    const alerts = () => [...host.querySelectorAll("[role='alert']")].map((a) => a.textContent).join(" ");
+    expect(alerts()).toMatch(/chưa làm mới được danh sách/);
+    await pick([file("b.pdf")]);
+    expect(alerts()).not.toMatch(/chưa làm mới được danh sách/);
+  });
 });

@@ -178,6 +178,10 @@ export default function DocumentList() {
   const [dangDoiTen, setDangDoiTen] = useState(null);
   const [dangLuu, setDangLuu] = useState(false);
   const [loiThaoTac, setLoiThaoTac] = useState(null);
+  // Its own state (Codex, #202): only a quiet refresh sets it and the next one clears it, so a
+  // later successful refresh cannot leave a false "not refreshed" alert, and an unrelated
+  // action error is never cleared by a refresh.
+  const [loiLamMoi, setLoiLamMoi] = useState(null);
 
   // Job đang chạy ở MÁY NÀY — đọc một lần cho cả danh sách, không đọc theo từng thẻ.
   const [jobs, setJobs] = useState(() => docJobDangChay());
@@ -198,6 +202,7 @@ export default function DocumentList() {
   // instead of the page error. Both used to unmount the list, the upload queue with it, and
   // drop keyboard focus, and the page error made a successful upload look failed (Codex, #202).
   const load = useCallback(async ({ yen = false } = {}) => {
+    setLoiLamMoi(null);
     if (!yen) { setLoading(true); setError(null); }
     try {
       // Thư viện là thứ trang này TỒN TẠI để hiện; ba khối tiến độ là phần thêm.
@@ -216,7 +221,7 @@ export default function DocumentList() {
       setAttempts(history.status === "fulfilled" ? history.value : []);
       setJobs(docJobDangChay());
     } catch (e) {
-      if (yen) setLoiThaoTac(`Đã tải lên xong, nhưng chưa làm mới được danh sách. ${moTaLoi(e, "Hãy tải lại trang.")}`);
+      if (yen) setLoiLamMoi(`Đã tải lên xong, nhưng chưa làm mới được danh sách. ${moTaLoi(e, "Hãy tải lại trang.")}`);
       else setError(moTaLoi(e, "Không tải được thư viện tài liệu."));
     } finally {
       setLoading(false);
@@ -649,6 +654,14 @@ export default function DocumentList() {
         onThuLai={(khoa) => { if (!uploading) chayHangTai([khoa]); }}
         // Codex P2 (#202): closing removes the focused button; hand focus back to the upload button.
         onDong={() => { setHangTai([]); nutTaiRef.current?.focus(); }} />
+
+      {loiLamMoi && (
+        <div role="alert" className="mb-4 text-small flex items-start gap-1.5"
+             style={{ color: "var(--err)" }}>
+          <Icon name="AlertCircle" size={13} className="mt-0.5 shrink-0" />
+          <span>{loiLamMoi}</span>
+        </div>
+      )}
 
       {loiThaoTac && (
         <div role="alert" className="mb-4 text-small flex items-start gap-1.5"
