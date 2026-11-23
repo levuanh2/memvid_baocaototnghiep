@@ -6,6 +6,7 @@
 // on the real control.
 import { test, expect } from "@playwright/test";
 import { registerAndEnterApp } from "./fixtures.js";
+import { chooseMode } from "../e2e-fixture/workspaceMode.js";
 
 const STORAGE_KEY = "memvid-theme";
 const LIGHT_LABEL = "Chuyển sang nền tối";
@@ -171,13 +172,13 @@ test.describe("mobile: real Light<->Dark via the real control", () => {
     await page.setViewportSize({ width: 390, height: 844 });
     await registerAndEnterApp(page);
 
-    await page.getByRole("tab", { name: "Sơ đồ tư duy" }).click();
-    await expect(page.getByRole("tab", { name: "Sơ đồ tư duy" })).toHaveAttribute("aria-selected", "true");
+    await chooseMode(page, "Sơ đồ tư duy");
 
     await openOverflow(page);
     await themeMenuItem(page).click();
 
-    await expect(page.getByRole("tab", { name: "Sơ đồ tư duy" })).toHaveAttribute("aria-selected", "true");
+    // The tab row is hidden at 390px (the select shows); its tabs still carry the state.
+    await expect(page.locator('nav[role="tablist"] [role="tab"][title="Sơ đồ tư duy"]')).toHaveAttribute("aria-selected", "true");
   });
 });
 

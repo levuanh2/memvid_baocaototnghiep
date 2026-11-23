@@ -858,9 +858,9 @@ export default function MainLayout({
         <button type="button" data-focus-toggle onClick={focusMode ? exitFocus : enterFocus}
           aria-pressed={focusMode} aria-label={focusMode ? "Thoát tập trung" : "Tập trung"}
           title={focusMode ? "Thoát tập trung (Esc)" : "Tập trung"}
-          className="workspace-focus-toggle flex-shrink-0 inline-flex items-center justify-center gap-1.5 w-10 h-10 lg:w-auto lg:px-3 rounded-[8px] border border-border text-small font-medium text-text-secondary hover:text-text-primary hover:bg-surface-elevated transition-colors">
+          className="workspace-focus-toggle flex-shrink-0 inline-flex items-center justify-center gap-1.5 w-10 h-10 min-[1440px]:w-auto min-[1440px]:px-3 rounded-[8px] border border-border text-small font-medium text-text-secondary hover:text-text-primary hover:bg-surface-elevated transition-colors">
           <Icon name={focusMode ? "X" : "Maximize"} size={16} aria-hidden="true" />
-          <span className="hidden lg:inline">{focusMode ? "Thoát tập trung" : "Tập trung"}</span>
+          <span className="hidden min-[1440px]:inline">{focusMode ? "Thoát tập trung" : "Tập trung"}</span>
         </button>
 
         {/* Right actions */}

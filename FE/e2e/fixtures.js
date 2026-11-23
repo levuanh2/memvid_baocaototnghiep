@@ -2,6 +2,7 @@
 // credentials anywhere here — every user is registered fresh, per test run,
 // against the ephemeral E2E backend (BE/scripts/run_e2e_server.py) and its
 // throwaway Postgres database.
+import { waitForModeControl } from "../e2e-fixture/workspaceMode.js";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 
@@ -30,7 +31,8 @@ export async function registerAndEnterApp(page, user = freshTestUser()) {
   await page.getByLabel("Mật khẩu", { exact: true }).fill(user.password);
   await page.getByLabel("Nhập lại mật khẩu").fill(user.password);
   await page.getByRole("button", { name: "Tạo tài khoản" }).click();
-  await page.getByRole("tablist", { name: "Chế độ Workspace" }).waitFor({ state: "visible" });
+  // V9.3 P4b: <=700px shows the "Chế độ học" select instead of the tab row.
+  await waitForModeControl(page);
   return user;
 }
 
