@@ -584,7 +584,7 @@ export default function DocumentList() {
           </button>
           {/* V9.3 P3b: the dashboard's entry while the bottom navigation keeps four items. */}
           <Link to="/app/study/dashboard" className="pill-action text-small inline-flex items-center gap-1.5">
-            <Icon name="Activity" size={13} aria-hidden="true" /> Tổng quan
+            <Icon name="LayoutDashboard" size={13} aria-hidden="true" /> Tổng quan
           </Link>
           {/* Demo Mode — chỉ hiện khi có tài liệu THẬT đủ sẵn sàng; không có thì
               không vẽ nút, không hứa một bản xem thử không tồn tại. */}

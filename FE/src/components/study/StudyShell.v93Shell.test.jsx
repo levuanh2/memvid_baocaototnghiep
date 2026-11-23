@@ -3,6 +3,8 @@
 // focusable main, a bottom nav at <=700px with real routes only and aria-current, an
 // error banner announced as an alert, and focus that lands on main after a route
 // change when nothing else claimed it.
+import fs from "node:fs";
+import path from "node:path";
 import { act } from "react";
 import { createRoot } from "react-dom/client";
 import { MemoryRouter, useNavigate } from "react-router-dom";
@@ -34,8 +36,11 @@ async function render(ui, path = "/app/study") {
 }
 
 describe("AppNav", () => {
-  it("lists only routes the app really has", () => {
+  // Owner (V9.3 P3b approval): five items, "Tổng quan" first; "Luyện tập" stays and no
+  // "Ôn tập" is invented until a real review-queue route exists.
+  it("lists only routes the app really has, Tổng quan first", () => {
     expect(APP_NAV_ITEMS.map((i) => [i.label, i.to])).toEqual([
+      ["Tổng quan", "/app/study/dashboard"],
       ["Thư viện", "/app/study"],
       ["Học tập", "/app"],
       ["Luyện tập", "/app/study/quiz/new"],
@@ -44,6 +49,7 @@ describe("AppNav", () => {
   });
 
   it.each([
+    ["/app/study/dashboard", "Tổng quan"],
     ["/app/study", "Thư viện"],
     ["/app/study/map/abc", "Thư viện"],
     ["/app", "Học tập"],
@@ -64,11 +70,17 @@ describe("AppNav", () => {
   // Codex P2: React Router serves /app/, /app/study/ and /app/study/progress/ too.
   it.each([
     ["/app/", "Học tập"], ["/app/study/", "Thư viện"], ["/app/study/progress/", "Tiến độ"],
-    ["/app/study/quiz/new/", "Luyện tập"],
+    ["/app/study/quiz/new/", "Luyện tập"], ["/app/study/dashboard/", "Tổng quan"],
   ])("tolerates the trailing slash on %s", async (path, label) => {
     await render(<AppNav />, path);
     const current = [...container.querySelectorAll("a[aria-current='page']")];
     expect(current.map((a) => a.textContent.trim())).toEqual([label]);
+  });
+
+  it("lays the bar out as five equal columns", () => {
+    const css = fs.readFileSync(path.resolve("src/index.css"), "utf8");
+    const rule = css.match(/\.app-bottom-nav \{[^}]*position: fixed[^}]*\}/)[0];
+    expect(rule).toContain("repeat(5, minmax(0, 1fr))");
   });
 
   it("marks nothing current on the profile page", async () => {

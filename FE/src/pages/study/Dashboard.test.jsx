@@ -163,7 +163,7 @@ describe("Dashboard V9.3", () => {
 
   it("links only to real routes", async () => {
     await render();
-    const real = [/^\/app$/, /^\/app\/study$/, /^\/app\/study\/progress$/, /^\/app\/study\/quiz\/new$/, /^\/app\/study\/practice\/[\w-]+$/,
+    const real = [/^\/app$/, /^\/app\/study$/, /^\/app\/study\/dashboard$/, /^\/app\/study\/progress$/, /^\/app\/study\/quiz\/new$/, /^\/app\/study\/practice\/[\w-]+$/,
       /^\/app\/study\/quiz\/[\w-]+$/, /^\/app\/study\/result\/[\w-]+$/];
     for (const a of host.querySelectorAll("a[href]:not([href^='#'])")) {
       expect(real.some((r) => r.test(a.getAttribute("href"))), a.getAttribute("href")).toBe(true);
