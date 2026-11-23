@@ -8,6 +8,8 @@ import LearningHome from "../../components/study/LearningHome";
 import Disclosure from "../../components/ui/Disclosure";
 import CollectionSidebar from "../../components/study/CollectionSidebar";
 import BulkBar from "../../components/study/BulkBar";
+import UploadQueue from "../../components/study/UploadQueue";
+import { kiemTraTep } from "../../utils/taiLenTep";
 import LibraryTaskViews from "../../components/study/LibraryTaskViews";
 import StudyDocumentActionRow from "../../components/study/StudyDocumentActionRow";
 import DocumentKnowledgeDetails from "../../components/study/DocumentKnowledgeDetails";
@@ -176,6 +178,10 @@ export default function DocumentList() {
   const [dangDoiTen, setDangDoiTen] = useState(null);
   const [dangLuu, setDangLuu] = useState(false);
   const [loiThaoTac, setLoiThaoTac] = useState(null);
+  // Its own state (Codex, #202): only a quiet refresh sets it and the next one clears it, so a
+  // later successful refresh cannot leave a false "not refreshed" alert, and an unrelated
+  // action error is never cleared by a refresh.
+  const [loiLamMoi, setLoiLamMoi] = useState(null);
 
   // Job đang chạy ở MÁY NÀY — đọc một lần cho cả danh sách, không đọc theo từng thẻ.
   const [jobs, setJobs] = useState(() => docJobDangChay());
@@ -192,9 +198,12 @@ export default function DocumentList() {
   const [boSuuTapCanXoa, setBoSuuTapCanXoa] = useState(null);
   const [chiTietDoc, setChiTietDoc] = useState(null);
 
-  const load = useCallback(async () => {
-    setLoading(true);
-    setError(null);
+  // `yen` (quiet): refresh after an upload without the skeleton, and if it fails say so inline
+  // instead of the page error. Both used to unmount the list, the upload queue with it, and
+  // drop keyboard focus, and the page error made a successful upload look failed (Codex, #202).
+  const load = useCallback(async ({ yen = false } = {}) => {
+    setLoiLamMoi(null);
+    if (!yen) { setLoading(true); setError(null); }
     try {
       // Thư viện là thứ trang này TỒN TẠI để hiện; ba khối tiến độ là phần thêm.
       // `allSettled` để một cú 500 của /api/progress/* không xoá sạch trang.
@@ -212,7 +221,8 @@ export default function DocumentList() {
       setAttempts(history.status === "fulfilled" ? history.value : []);
       setJobs(docJobDangChay());
     } catch (e) {
-      setError(moTaLoi(e, "Không tải được thư viện tài liệu."));
+      if (yen) setLoiLamMoi(`Đã tải lên xong, nhưng chưa làm mới được danh sách. ${moTaLoi(e, "Hãy tải lại trang.")}`);
+      else setError(moTaLoi(e, "Không tải được thư viện tài liệu."));
     } finally {
       setLoading(false);
     }
@@ -221,31 +231,59 @@ export default function DocumentList() {
   useEffect(() => { load(); }, [load]);
 
   // ── Upload ────────────────────────────────────────────────────────────────
-  const onPick = async (e) => {
-    const file = e.target.files?.[0];
-    e.target.value = "";
-    if (!file) return;
+  // V9.3 P3a: several files per pick, each checked before sending (kiemTraTep), sent ONE AT
+  // A TIME, each with its own status/error, and a failed one retried alone. A failed upload
+  // no longer replaces the whole library with a page error: the other files and the list stay.
+  const [hangTai, setHangTai] = useState([]);
+  const tepTaiRef = useRef(new Map());
+  const nutTaiRef = useRef(null);
+  const capNhatTep = (khoa, thayDoi) =>
+    setHangTai((prev) => prev.map((m) => (m.khoa === khoa ? { ...m, ...thayDoi } : m)));
+
+  const chayHangTai = async (khoas) => {
     setUploading(true);
-    setTenDangTai(file.name);
-    setError(null);
-    let taiLen;
-    try {
-      taiLen = await uploadDocument(file);
-    } catch (err) {
-      setError(moTaLoi(err, "Tải tài liệu lên thất bại."));
-      setUploading(false);
-      return;
+    // Codex P1 (#202): the insight card is about THIS batch. Left set, it named the previous
+    // upload while a later file was sending, and stayed after a later batch failed entirely.
+    setIdVuaTai(null);
+    let idMoi = null;
+    for (const khoa of khoas) {
+      const tep = tepTaiRef.current.get(khoa);
+      setTenDangTai(tep.name);
+      capNhatTep(khoa, { trangThai: "dang_tai", loi: null });
+      try {
+        const taiLen = await uploadDocument(tep);
+        idMoi = taiLen?.document_id || idMoi;
+        capNhatTep(khoa, { trangThai: "xong" });
+      } catch (err) {
+        capNhatTep(khoa, { trangThai: "loi", loi: moTaLoi(err, "Tải lên thất bại.") });
+      }
     }
-    // Lên xong rồi. `load()` hỏng SAU đó là lỗi tải lại, không phải lỗi tải lên —
-    // gộp hai cái vào một `catch` thì file đã lên mà màn hình ghi "tải lên thất bại".
-    setIdVuaTai(taiLen?.document_id || null);
-    try {
-      await load();
-    } catch (err) {
-      setError(moTaLoi(err, "Đã tải lên xong, nhưng chưa làm mới được danh sách."));
-    } finally {
-      setUploading(false);
+    if (idMoi) {
+      setIdVuaTai(idMoi);
+      await load({ yen: true });
     }
+    setUploading(false);
+  };
+
+  const onPick = (e) => {
+    const tepChon = [...(e.target.files || [])];
+    const accept = e.target.accept;
+    e.target.value = "";
+    if (!tepChon.length || uploading) return;
+    // Codex P1 (#202): a file the server refused keeps its row and its File across a new pick,
+    // so its "Thử lại" still works. Finished and refused-before-sending rows are replaced.
+    const conLoi = hangTai.filter((m) => m.trangThai === "loi");
+    const tepCu = tepTaiRef.current;
+    tepTaiRef.current = new Map(conLoi.map((m) => [m.khoa, tepCu.get(m.khoa)]));
+    const moi = tepChon.map((tep, i) => {
+      const khoa = `${Date.now()}-${i}`;
+      tepTaiRef.current.set(khoa, tep);
+      const loi = kiemTraTep(tep, accept);
+      return { khoa, ten: tep.name, trangThai: loi ? "tu_choi" : "cho", loi };
+    });
+    setHangTai([...conLoi, ...moi]);
+    const guiDuoc = moi.filter((m) => m.trangThai === "cho").map((m) => m.khoa);
+    if (guiDuoc.length) chayHangTai(guiDuoc);
   };
 
   // ── Mở một bề mặt ─────────────────────────────────────────────────────────
@@ -552,18 +590,18 @@ export default function DocumentList() {
       backLabel="Phòng đọc"
       loading={loading}
       error={error}
-      onRetry={load}
+      onRetry={() => load()}
       skeleton={<DocumentSkeleton />}
       stackActionsOnMobile
       actions={
         <>
           {/* Danh sách này phải khớp formats.accept_attribute() của backend —
               BE/tests/test_upload_formats.py khoá lại để hai bên không lệch. */}
-          <input ref={fileRef} type="file" className="hidden" onChange={onPick}
+          <input ref={fileRef} type="file" className="hidden" onChange={onPick} multiple
             accept=".bmp,.csv,.doc,.docx,.epub,.fb2,.gif,.htm,.html,.jpeg,.jpg,.json,.md,.mobi,.odp,.odt,.pdf,.png,.pptx,.rtf,.txt,.xlsx,.xps" />
           {/* V6: one filled button above the list. When the learning home offers "Tiếp tục",
               that is the page's main action and uploading is secondary; otherwise uploading is. */}
-          <button type="button"
+          <button type="button" ref={nutTaiRef}
             className={`${coTiepTuc ? "btn-secondary" : "btn-seal"} text-small inline-flex items-center gap-2`}
             data-emphasis={coTiepTuc ? "secondary" : "primary"}
             disabled={uploading} onClick={() => fileRef.current?.click()}>
@@ -610,6 +648,19 @@ export default function DocumentList() {
           onTaiLai={() => fileRef.current?.click()}
           onDong={() => { if (idVuaTai) dongInsight(idVuaTai); setIdVuaTai(null); }}
         />
+      )}
+
+      <UploadQueue hang={hangTai} dangChay={uploading}
+        onThuLai={(khoa) => { if (!uploading) chayHangTai([khoa]); }}
+        // Codex P2 (#202): closing removes the focused button; hand focus back to the upload button.
+        onDong={() => { setHangTai([]); nutTaiRef.current?.focus(); }} />
+
+      {loiLamMoi && (
+        <div role="alert" className="mb-4 text-small flex items-start gap-1.5"
+             style={{ color: "var(--err)" }}>
+          <Icon name="AlertCircle" size={13} className="mt-0.5 shrink-0" />
+          <span>{loiLamMoi}</span>
+        </div>
       )}
 
       {loiThaoTac && (

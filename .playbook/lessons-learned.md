@@ -3987,3 +3987,23 @@ The landing hero/header/final band and the auth intro must stay dark in both the
 ring inside use their contract-tested dark pairs with no per-component overrides. Any
 probe that reads colours from `:root` must read them from the element's own scope instead
 (`landing-wordmark-contrast.spec.js` now reads the header's custom properties).
+
+## 2026-11-23 — A design spec written against a prototype is not the product's contract
+
+V9.3 spec 05 caps uploads at 25 MiB, PDF/DOCX/TXT only, collection names at 50 characters. Those
+are the prototype's numbers. The backend accepts 23 formats, a request-wide 100 MiB
+(`MAX_UPLOAD_MB`), and 100-character collection names. Copying the spec would have refused files
+learners upload today. Before turning a spec limit into a check, grep the backend for the real
+one and keep a single source (here the `accept` string that BE/tests/test_upload_formats.py pins).
+A size check on the client mirrors a request-wide server cap only approximately: keep the
+server's 413 visible on the file's own row.
+
+Also: a comment that quotes a retired label trips `toolsUploadLabels.test.js` like live copy does.
+
+Regression (Codex review of #202, fixed red-first): a per-file queue that is rebuilt on every
+pick silently drops failed rows and their File objects, so "retry" has nothing to send; carry
+failed rows across picks. A status card keyed on "the last upload" must be cleared when a new
+batch starts, or it names the wrong document. And a refresh that flips the page's `loading`
+flag unmounts the list, the queue and the focused button with it: refresh quietly after an
+action the user is still looking at. Tests: DocumentList.v93Upload.test.jsx (fail A, pick B,
+retry A; two batches with an all-failed second; focus after retry and close).
