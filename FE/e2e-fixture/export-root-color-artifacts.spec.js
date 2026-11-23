@@ -6,7 +6,7 @@ import { fileURLToPath } from "node:url";
 const HERE = path.dirname(fileURLToPath(import.meta.url));
 const OUT = path.join(HERE, "..", "qa-artifacts", "export-root-color-fidelity");
 
-async function openSavedAppearance(page) {
+async function openThemeDefaultRoot(page) {
   await page.goto("/fixture-harness.html?map=post-pr77");
   await expect.poll(() => page.evaluate(() => Boolean(window.__STUDYMAP_FIXTURE__?.mind))).toBe(true);
 }
@@ -116,7 +116,7 @@ test.beforeEach(() => fs.mkdirSync(OUT, { recursive: true }));
 
 test("source root color survives real PNG, JPEG and WebP downloads", async ({ page }) => {
   const results = {};
-  await openSavedAppearance(page);
+  await openThemeDefaultRoot(page);
   await toFormat(page, "svg");
   const svgPath = await downloadImage(page, "svg");
   const { region: rootRegion, overflows } = await rootRegionFromSvg(page, fs.readFileSync(svgPath, "utf8"));
@@ -125,7 +125,7 @@ test("source root color survives real PNG, JPEG and WebP downloads", async ({ pa
     expect(Math.max(...Object.values(overflow)), `${id} text remains inside its visible node box`).toBeLessThanOrEqual(1);
   }
   for (const [format, mime] of [["png", "image/png"], ["jpeg", "image/jpeg"], ["webp", "image/webp"]]) {
-    await openSavedAppearance(page);
+    await openThemeDefaultRoot(page);
     const source = await sourceRootColor(page);
     expect(source).toBe(V93_ROOT);
     await toFormat(page, format);
@@ -151,7 +151,7 @@ async function capturePdfRequest(page, { mode, pageSize, name }) {
     body: JSON.stringify({ job_id: jobId, status: "done", progress: 100, result: { node_count: 6 } }),
   }));
 
-  await openSavedAppearance(page);
+  await openThemeDefaultRoot(page);
   const source = await sourceRootColor(page);
   expect(source).toBe(V93_ROOT);
   await toFormat(page, "pdf");
