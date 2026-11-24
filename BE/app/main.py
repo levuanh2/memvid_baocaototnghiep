@@ -1709,30 +1709,37 @@ def billing_capability():
     return jsonify({"plan": summary["plan"], "monthly_token_limit": summary["limit"], "per_request_token_limit": summary["per_request_token_limit"], "enforcement_enabled": summary["enforcement_enabled"], "reset_at": summary["reset_at"], "period_start": summary.get("period_start"), "period_end": summary.get("period_end")}), 200
 
 
-def _all_document_stem_owners() -> Optional[Dict[str, set]]:
+def _all_document_stem_owners(stems=None) -> Optional[Dict[str, set]]:
     """Owners of every document row per canonical stem, soft-deleted included (their
     chunks stay in the shared index). None when the view cannot be read: callers in
-    protected mode then refuse rather than authorize on a partial picture."""
+    protected mode then refuse rather than authorize on a partial picture.
+    V9.3 security (#209 review P1): always read fresh (the cache is per process and only the
+    writing process invalidates it). With `stems`, one SQL-filtered query for just those
+    stems; without, the whole view (upload naming only)."""
     try:
         from app.domains.documents import repository as _docs
-        return _docs.stem_owners()
+        if stems is not None:
+            return _docs.owners_for_stems(stems)
+        return _docs.stem_owners(use_cache=False)
     except Exception as exc:
         print(f"⚠️ Không đọc được chủ sở hữu theo stem: {exc}")
         return None
 
 
-def _stem_owner_map(registry: Optional[Dict[str, Dict]] = None) -> Optional[Dict[str, set]]:
-    """V9.3 security: {canonical stem: owners} from every document row plus the registry."""
-    every = _all_document_stem_owners()
+def _stem_owner_map(registry: Optional[Dict[str, Dict]] = None, stems=None) -> Optional[Dict[str, set]]:
+    """V9.3 security: {canonical stem: owners} from every document row (fresh) plus the
+    registry. `stems` limits the owner view to the stems being decided (one filtered query)."""
+    wanted = None if stems is None else {_normalize_video_stem(s) for s in stems if s}
+    every = _all_document_stem_owners(sorted(wanted)) if wanted is not None else _all_document_stem_owners()
     if every is None:
         return None
-    out = {k: set(v) for k, v in every.items()}
+    out = {k: set(v) for k, v in every.items() if wanted is None or k in wanted}
     rows = registry if registry is not None else _load_source_registry()
     for row in (rows or {}).values():
         if not isinstance(row, dict):
             continue
         stem = _normalize_video_stem(row.get("source_stem") or row.get("filename") or "")
-        if stem:
+        if stem and (wanted is None or stem in wanted):
             out.setdefault(stem, set()).add(row.get("user_id"))
     return out
 
@@ -1760,7 +1767,11 @@ def owned_stems(user_id: Optional[str]) -> set:
     except Exception:
         return set()
     protect = _auth_protect_enabled()
-    owners_map = _stem_owner_map(registry) if protect else None
+    owners_map = None
+    if protect and user_id is not None:
+        mine = [row.get("source_stem") for row in registry.values()
+                if isinstance(row, dict) and row.get("user_id") == user_id and row.get("source_stem")]
+        owners_map = _stem_owner_map(registry, stems=mine) if mine else {}
     out: set = set()
     for row in registry.values():
         if not isinstance(row, dict):
@@ -1793,17 +1804,41 @@ def _source_owner_ok(stem_or_id: str, user_id: Optional[str]) -> bool:
     except Exception:
         return False
     norm = _normalize_video_stem(stem_or_id)
-    owners_map = _stem_owner_map(registry)
     for sid, row in registry.items():
         if not isinstance(row, dict):
             continue
         row_stem = _normalize_video_stem(row.get("source_stem") or row.get("filename") or "")
         if sid == stem_or_id or (norm and row_stem == norm):
+            owners_map = _stem_owner_map(registry, stems=[row_stem])
             # V9.3 security: the caller acts on the stem next (reads or deletes its chunks
             # in the shared index), so the owner of this one row is not enough: every
             # document on the stem must be theirs. Matched by id or by stem alike.
             return row.get("user_id") == user_id and _stem_exclusive_to(row_stem, user_id, owners_map)
     return False
+
+
+def _hold_stem_lock_for_request(stem: str) -> bool:
+    """Take the stem's advisory lock until this request ends (released in teardown).
+    False when it cannot be taken: the caller refuses instead of acting unlocked."""
+    from flask import g
+    from app.domains.documents import repository as _docs
+    try:
+        release = _docs.acquire_stem_lock(stem)
+    except Exception as exc:
+        print(f"⚠️ Không giữ được khoá stem {stem}: {exc}")
+        return False
+    g.setdefault("_stem_lock_releases", []).append(release)
+    return True
+
+
+@app.teardown_request
+def _release_stem_locks(_exc=None):
+    from flask import g
+    for release in reversed(g.pop("_stem_lock_releases", []) or []):
+        try:
+            release()
+        except Exception as exc:  # pragma: no cover - release already discards on failure
+            print(f"⚠️ Nhả khoá stem lỗi: {exc}")
 
 
 def _chunk_db_owner(chunk_id) -> tuple:
@@ -2655,6 +2690,17 @@ def _safe_save_path(filename: str) -> str:
             n += 1
 
 
+class StemOwnershipUnavailable(RuntimeError):
+    """Who owns a stem cannot be established (owner view unreadable or stem lock not taken)."""
+
+
+def _ownership_unavailable_response(exc):
+    return jsonify({
+        "error": "ownership_unavailable",
+        "message": "Chưa kiểm tra được quyền sở hữu tên tài liệu. Thử lại sau ít phút.",
+    }), 503
+
+
 def _unique_display_filename(filename: str, registry: dict) -> str:
     """Chống trùng tên: nếu canonical stem đã có trong registry → thêm hậu tố
     " (n)" trước đuôi để hai tài liệu cùng tên KHÔNG trộn chunk (mỗi cái 1 stem)."""
@@ -2664,7 +2710,12 @@ def _unique_display_filename(filename: str, registry: dict) -> str:
     # row and its index chunks under its stem. Reusing that stem would make it shared, and
     # the shared-stem rule would then lock the new uploader out without a word. Skip every
     # stem any document row still carries (an unreadable view adds nothing, as before).
-    existing |= set((_all_document_stem_owners() or {}).keys())
+    view = _all_document_stem_owners()
+    if view is None:
+        # Fail closed (#209 review P2): naming blind could hand out a stem a soft-deleted or
+        # foreign document still carries, locking the new upload out without a word.
+        raise StemOwnershipUnavailable("document owner view unavailable")
+    existing |= set(view.keys())
     if _normalize_video_stem(fn) not in existing:
         return fn
     base, ext = os.path.splitext(fn)
@@ -2743,6 +2794,38 @@ def _ingest_uploaded_file(file) -> dict:
         raise
 
 
+def _choose_and_lock_display_filename(original: str, releases: list) -> str:
+    """V9.3 security (#209 review P2): pick the de-duplicated display name while holding the
+    advisory lock of its stem family (and of the chosen candidate), so two uploads, from any
+    worker or owner, cannot both take one stem. The caller releases `releases` after the
+    document row exists."""
+    from app.domains.documents import repository as _docs
+    original = original or "file"
+    base = _normalize_video_stem(original)
+    held = set()
+
+    def lock(stem):
+        if stem in held:
+            return
+        try:
+            releases.append(_docs.acquire_stem_lock(stem))
+        except _docs.StemLockTimeout as exc:
+            raise StemOwnershipUnavailable(str(exc)) from exc
+        held.add(stem)
+
+    lock(base)
+    for _ in range(25):
+        filename = _unique_display_filename(original, _docs.all_rows(use_cache=False))
+        stem = _normalize_video_stem(filename)
+        if stem in held:
+            return filename
+        lock(stem)
+        # Re-check under the candidate's own lock: another family may have taken it meanwhile.
+        if _unique_display_filename(original, _docs.all_rows(use_cache=False)) == filename:
+            return filename
+    raise StemOwnershipUnavailable("no free display name")
+
+
 def _ingest_uploaded_file_reserved(
     file,
     *,
@@ -2751,10 +2834,19 @@ def _ingest_uploaded_file_reserved(
     usage_context,
 ) -> dict:
     """Persist and enqueue one validated upload under an explicit reservation."""
-    registry = _load_source_registry()
-    # Tên hiển thị (chống trùng) — canonical stem suy từ tên này nên FE chọn theo
-    # tên hiển thị sẽ khớp chunk; lưu vật lý theo path an toàn riêng.
-    filename = _unique_display_filename(file.filename or "file", registry)
+    releases: list = []
+    try:
+        filename = _choose_and_lock_display_filename(file.filename or "file", releases)
+        return _ingest_uploaded_file_named(file, filename=filename, source_id=source_id, uid=uid,
+                                           usage_context=usage_context)
+    finally:
+        for release in reversed(releases):
+            release()
+
+
+def _ingest_uploaded_file_named(file, *, filename: str, source_id: str, uid: Optional[str],
+                                usage_context) -> dict:
+    """Persist and enqueue one upload whose display name (and stem) is already reserved."""
     # `_safe_save_path` tạo thư mục và giành tên (atomic) — `save` chỉ ghi đè nội dung.
     save_path = _safe_save_path(filename)
     file.save(save_path)
@@ -2866,6 +2958,8 @@ def upload_file():
             return _unsupported_response(exc)
         if isinstance(exc, DurableStorageRequired):
             return _storage_required_response(exc)
+        if isinstance(exc, StemOwnershipUnavailable):
+            return _ownership_unavailable_response(exc)
         if isinstance(exc, IngestQueueRequired):
             return _queue_required_response(exc)
         raise
@@ -2959,6 +3053,8 @@ def upload_multiple():
             results.append({'file': file.filename, 'error': f'Không đọc được định dạng {exc}'})
         except DurableStorageRequired as exc:
             results.append({'file': file.filename, 'error': f'Kho lưu trữ bền chưa sẵn sàng: {exc}'})
+        except StemOwnershipUnavailable:
+            results.append({'file': file.filename, 'error': 'Chưa kiểm tra được quyền sở hữu tên tài liệu. Thử lại sau ít phút.'})
         except IngestQueueRequired as exc:
             results.append({'file': file.filename, 'error': f'Hàng đợi xử lý chưa sẵn sàng: {exc}'})
         except Exception as exc:
@@ -3136,6 +3232,8 @@ def api_documents_upload():
             return _unsupported_response(exc)
         if isinstance(exc, DurableStorageRequired):
             return _storage_required_response(exc)
+        if isinstance(exc, StemOwnershipUnavailable):
+            return _ownership_unavailable_response(exc)
         if isinstance(exc, IngestQueueRequired):
             return _queue_required_response(exc)
         raise
@@ -5503,6 +5601,10 @@ def delete_source():
         return jsonify({'error': 'Missing video name'}), 400
 
     target_stem = _normalize_video_stem(video_name)
+    # V9.3 security (#209 review P1): hold the stem lock for the rest of the request, so no new
+    # owner can appear between this check and the purge below.
+    if _auth_protect_enabled() and not _hold_stem_lock_for_request(target_stem):
+        return _ownership_unavailable_response(None)
     # Owner scope: cannot delete another user's source (404, no oracle).
     if _auth_protect_enabled() and not _source_owner_ok(target_stem, uid):
         return jsonify({'error': 'Source not found'}), 404
@@ -6716,7 +6818,9 @@ def delete_source_v2(source_id: str):
     # When another owner, an ownerless row or a soft-deleted foreign document shares the
     # stem, purging destroys their data, and skipping it would leave this owner's chunks
     # readable by the other one once the stem is theirs alone. Refuse, explicitly.
-    if _auth_protect_enabled() and not _stem_exclusive_to(source_stem, uid, _stem_owner_map()):
+    if _auth_protect_enabled() and not _hold_stem_lock_for_request(source_stem):
+        return _ownership_unavailable_response(None)
+    if _auth_protect_enabled() and not _stem_exclusive_to(source_stem, uid, _stem_owner_map(stems=[source_stem])):
         return jsonify({
             "error": "shared_source_stem",
             "message": "Tài liệu này trùng tên nguồn với một tài liệu khác nên chưa xoá an toàn được. Hãy báo quản trị viên.",

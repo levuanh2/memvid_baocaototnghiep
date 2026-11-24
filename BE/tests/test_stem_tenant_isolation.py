@@ -38,7 +38,7 @@ def _registry(be, monkeypatch, rows):
 def _all_docs(be, monkeypatch, owners_by_stem):
     """Owners of every document row per stem, soft-deleted included (DB view)."""
     monkeypatch.setattr(be, "_all_document_stem_owners",
-                        lambda: {k: set(v) for k, v in owners_by_stem.items()}, raising=False)
+                        lambda *a, **k: {s: set(v) for s, v in owners_by_stem.items()}, raising=False)
 
 
 def _index(be, entries):

@@ -4128,3 +4128,18 @@ Follow-up (side review, same PR): upload de-duplication (`_unique_display_filena
 live rows, so a new upload could take the stem of someone else's soft-deleted document and be
 locked out by the new rule without a message. It now skips every stem any document row carries.
 When a rule widens what counts as "taken", every place that hands out the same key must widen too.
+
+Independent review of #209 (GPT-6, BLOCK) found two more, fixed red-first (sec2-red.log):
+- P1 stale per-process caches: `all_rows()`/`stem_owners()` cache per process and
+  `invalidate_cache()` only clears the writer, so another worker could authorize a stem that had
+  just become shared. Ownership now reads a fresh, SQL-filtered owner view for only the stems being
+  decided (`repository.owners_for_stems`). A first attempt bypassed the cache by re-reading the
+  whole documents table on every protected check (135 ms at 3,000 rows); the filtered query is
+  2.7 ms (sec2-bench.log). Stem-wide deletes take a PostgreSQL advisory lock for the stem for the
+  rest of the request and re-check under it.
+- P2 racing/blind upload naming: two owners uploading one name at once both got the same stem
+  (reproduced). Naming and the row create now run under the stem-family advisory lock
+  (`acquire_stem_lock`, pg_try_advisory_lock with a timeout), and an unreadable owner view or a
+  lock timeout answers 503 ownership_unavailable instead of naming blind.
+Prevention: a per-process cache is never an authorization source when more than one process can
+write; cost a security fix with real row counts before calling it cheap.

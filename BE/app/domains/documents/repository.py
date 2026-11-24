@@ -261,6 +261,80 @@ def stem_owners(*, use_cache: bool = True) -> Dict[str, set]:
     return out
 
 
+class StemLockTimeout(RuntimeError):
+    """The advisory lock for a stem could not be taken in time: refuse, never proceed unlocked."""
+
+
+def acquire_stem_lock(stem: str, *, timeout_s: float = 15.0):
+    """V9.3 security (#209 review P1/P2): hold a PostgreSQL advisory lock for one canonical stem
+    across processes and workers. Returns a release function (call it exactly once).
+
+    Upload naming holds it from choosing the name to creating the row, and stem-wide deletes
+    hold it while they re-check ownership and purge, so no new owner can appear in between.
+    Session-level lock on a dedicated connection; if unlocking fails the connection is
+    discarded, which also drops the lock. Non-PostgreSQL engines (no shared workers) no-op.
+    ponytail: hashtext() keys can collide; a collision only serializes two unrelated stems.
+    """
+    from sqlalchemy import text as _text
+    from app.db import get_engine
+    engine = get_engine()
+    if engine.dialect.name != "postgresql":
+        return lambda: None
+    key = "studymap.stem:" + (canonical_source_stem(stem) or str(stem))
+    conn = engine.connect()
+    try:
+        deadline = time.monotonic() + max(0.0, timeout_s)
+        while True:
+            got = conn.execute(_text("SELECT pg_try_advisory_lock(hashtext(:k))"), {"k": key}).scalar()
+            if got:
+                break
+            if time.monotonic() >= deadline:
+                raise StemLockTimeout(key)
+            time.sleep(0.05)
+    except BaseException:
+        conn.invalidate()
+        conn.close()
+        raise
+
+    def release() -> None:
+        try:
+            conn.execute(_text("SELECT pg_advisory_unlock(hashtext(:k))"), {"k": key})
+        except Exception:
+            conn.invalidate()
+        finally:
+            conn.close()
+
+    return release
+
+
+def owners_for_stems(stems: Iterable[str]) -> Dict[str, set]:
+    """V9.3 security (#209 review P1): owners of the given canonical stems over EVERY document row
+    (soft-deleted included), read fresh, never from the per-process cache. Filtered in SQL so a
+    check costs one query returning only the rows on those stems, not the whole table. Rows
+    without a stored stem (legacy) are canonicalized from the title in Python.
+    ponytail: no expression index on metadata_json->>'source_stem' (would need a migration);
+    PostgreSQL scans documents inside the database, which is fine at this table size.
+    """
+    wanted = {canonical_source_stem(s) for s in (stems or []) if s}
+    wanted.discard("")
+    if not wanted:
+        return {}
+    stored = Document.metadata_json["source_stem"].astext
+    anon = anonymous_user_id()
+    with session_scope() as s:
+        rows = s.execute(
+            select(Document.user_id, Document.title, Document.metadata_json)
+            .where((stored.in_(sorted(wanted))) | (stored.is_(None)) | (stored == ""))
+        ).all()
+    out: Dict[str, set] = {}
+    for uid, title, meta in rows:
+        stem = canonical_source_stem((meta or {}).get("source_stem") or title or "")
+        if stem not in wanted:
+            continue
+        out.setdefault(stem, set()).add(None if (not uid or uid == anon) else str(uid))
+    return out
+
+
 def chunk_owner_by_embedding(embedding_id: Any) -> tuple:
     """V9.3 security: (found, owner) for the chunk a global FAISS id points at, from the
     chunk's own row (`document_chunks.embedding_id` -> `documents.user_id`).
