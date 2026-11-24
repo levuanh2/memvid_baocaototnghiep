@@ -4098,3 +4098,48 @@ and keep a margin for font metrics.
 2. The <=700px select hid the tab row; e2e-fixture/ specs were updated but e2e/ (real-backend
 Critical Flows) still waited for the tab row at 390px. Prevention: grep every Playwright folder
 (e2e/ and e2e-fixture/) for a selector before changing what it points at.
+
+## A stem is a name, not an identity: cross-tenant reads/deletes on a shared stem (V9.3 security, 2026-11-24)
+
+Found by the P5a Reader audit (agy) and verified by Codex. Every stem-scoped path authorized
+through `owned_stems` / `_source_owner_ok`: query/RAG source resolution, `/list-indexed`,
+summary/mind-map gates, `/chunk-text`, `/delete-source`, memory tree. With two owners on one
+canonical stem (legacy/imported rows, concurrent same-name uploads, per-process registry caches;
+a soft-deleted document keeps its chunks in the index under its stem):
+- `/list-indexed` grouped the whole index by stem and returned both owners' chunk text;
+- `_source_owner_ok` returned on the FIRST registry row with the stem, so registry order decided;
+- `/delete-source` and `DELETE /sources/<id>` purged index chunks, memory tree and mind maps BY
+  STEM after checking one row's owner, destroying the other owner's data.
+Root cause: authorization keyed on a display-derived name. Normal sequential uploads de-duplicate
+stems globally, which hid it; nothing in the schema guarantees it.
+Fix (no API/migration): in protected mode a stem is usable by U only when EVERY document row
+carrying it, soft-deleted included (`repository.stem_owners`), is U's; ownerless rows count as
+another owner; an unreadable owner view refuses. `/chunk-text` trusts the chunk's own row
+(`document_chunks.embedding_id` -> `documents.user_id`, deleted or mixed -> refuse) and falls back
+to the stem rule only for legacy entries. Purge-by-stem deletes on a shared stem answer 409
+`shared_source_stem` instead of purging or orphaning chunks.
+Trade-off: both owners of a shared stem lose stem-scoped access (chat/list/summary/mind map) to
+it until it is resolved; document-id routes still work. A per-document identity in the index
+(or a unique stem constraint) is the schema follow-up, owner approval needed.
+Regression: `BE/tests/test_stem_tenant_isolation.py` (11 tests, red log sec-red.log).
+Prevention: never authorize by a value derived from a filename; when two rows can share a key,
+test the two-owner case and assert nothing is chosen by order.
+Follow-up (side review, same PR): upload de-duplication (`_unique_display_filename`) only saw
+live rows, so a new upload could take the stem of someone else's soft-deleted document and be
+locked out by the new rule without a message. It now skips every stem any document row carries.
+When a rule widens what counts as "taken", every place that hands out the same key must widen too.
+
+Independent review of #209 (GPT-6, BLOCK) found two more, fixed red-first (sec2-red.log):
+- P1 stale per-process caches: `all_rows()`/`stem_owners()` cache per process and
+  `invalidate_cache()` only clears the writer, so another worker could authorize a stem that had
+  just become shared. Ownership now reads a fresh, SQL-filtered owner view for only the stems being
+  decided (`repository.owners_for_stems`). A first attempt bypassed the cache by re-reading the
+  whole documents table on every protected check (135 ms at 3,000 rows); the filtered query is
+  2.7 ms (sec2-bench.log). Stem-wide deletes take a PostgreSQL advisory lock for the stem for the
+  rest of the request and re-check under it.
+- P2 racing/blind upload naming: two owners uploading one name at once both got the same stem
+  (reproduced). Naming and the row create now run under the stem-family advisory lock
+  (`acquire_stem_lock`, pg_try_advisory_lock with a timeout), and an unreadable owner view or a
+  lock timeout answers 503 ownership_unavailable instead of naming blind.
+Prevention: a per-process cache is never an authorization source when more than one process can
+write; cost a security fix with real row counts before calling it cheap.
