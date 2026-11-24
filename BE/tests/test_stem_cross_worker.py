@@ -159,3 +159,52 @@ def test_delete_routes_purge_only_while_holding_the_stem_lock(be, client, monkey
     _protect(be, monkeypatch, "A")
     client.post("/delete-source", json={"video": "rieng_a"})
     assert "rieng_a" in held
+
+
+# ---- the lock covers naming and the row, never the slow storage upload -------
+
+def test_storage_upload_runs_after_the_stem_lock_is_released(be, can_db_test, monkeypatch):
+    """Side review of #209: holding the stem lock through the object-storage upload made a
+    second same-name upload wait (and time out with 503) behind a large file."""
+    from werkzeug.datastructures import FileStorage
+    from app.domains.documents import repository as repo
+    from app.domains.documents import storage
+    held = {"n": 0}
+    seen_during_upload = []
+
+    def fake_lock(stem, **kw):
+        held["n"] += 1
+        def release():
+            held["n"] -= 1
+        return release
+
+    monkeypatch.setattr(repo, "acquire_stem_lock", fake_lock)
+    monkeypatch.setattr(storage, "is_configured", lambda: True)
+    monkeypatch.setattr(storage, "ensure_bucket", lambda: None)
+    monkeypatch.setattr(storage, "upload", lambda obj, data: seen_during_upload.append(held["n"]))
+    monkeypatch.setattr(be, "_trigger_background_ingest", lambda *a, **k: None)
+    sid = str(uuid.uuid4())
+    f = FileStorage(stream=io.BytesIO(b"noi dung"), filename=f"lon_{uuid.uuid4().hex[:6]}.txt")
+    info = be._ingest_uploaded_file_reserved(f, source_id=sid, uid=None, usage_context=None)
+    try:
+        assert seen_during_upload == [0], "storage upload ran while a stem lock was held"
+        assert repo.get(sid)["file_path"] == storage.object_path("anonymous", sid, info["filename"])
+    finally:
+        repo.hard_delete(sid)
+
+
+def test_durable_storage_failure_leaves_no_document_row(be, can_db_test, monkeypatch):
+    from werkzeug.datastructures import FileStorage
+    from app.domains.documents import repository as repo
+    from app.domains.documents import storage, provenance
+    monkeypatch.setattr(storage, "is_configured", lambda: True)
+    monkeypatch.setattr(storage, "ensure_bucket", lambda: None)
+    def boom(obj, data):
+        raise RuntimeError("storage down")
+    monkeypatch.setattr(storage, "upload", boom)
+    monkeypatch.setattr(provenance, "la_production", lambda *_: True)
+    sid = str(uuid.uuid4())
+    f = FileStorage(stream=io.BytesIO(b"noi dung"), filename=f"ben_{uuid.uuid4().hex[:6]}.txt")
+    with pytest.raises(be.DurableStorageRequired):
+        be._ingest_uploaded_file_reserved(f, source_id=sid, uid=None, usage_context=None)
+    assert repo.get(sid) is None

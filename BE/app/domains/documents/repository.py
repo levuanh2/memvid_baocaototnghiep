@@ -844,6 +844,17 @@ def ai_counts(user_id: Optional[str]) -> Dict[str, Dict[str, Any]]:
     return {"quizzes": quizzes, "reviews": reviews, "studymaps": studymaps}
 
 
+def update_file_path(document_id: str, file_path: str) -> bool:
+    """Point a document at its durable copy once the upload to object storage finished."""
+    with session_scope() as s:
+        d = s.get(Document, str(document_id))
+        if d is None:
+            return False
+        d.file_path = file_path
+    invalidate_cache()
+    return True
+
+
 def hard_delete(document_id: str) -> bool:
     """Xoá cứng — cascade xuống sections/chunks/quizzes/... theo cây 6.2.
 
