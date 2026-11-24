@@ -4118,3 +4118,15 @@ change to the mode tabs or header, run: `grep -rn 'getByRole("tab")\|Chế độ
 5. The hidden Notes pane rendered "Đang tải danh sách tài liệu…" in <main> before it was opened,
 doubling the sidebar/chat loading text that source-loading-state.spec counts. A pane mounted
 hidden must render nothing until first opened, and must not reuse another surface's status text.
+6. Independent review of #210 (BLOCK), fixed red-first (p5b-review-red.log):
+- P1: the mounted pane kept one document list for every account and keyed edits by props while
+  the shown text still belonged to the previous identity. The list now reloads per account
+  (late responses dropped), the textarea renders only when the loaded {user, document} equals
+  the props, and edits/deletes are keyed by the loaded identity.
+- P2: forced session ends (401, bfcache user mismatch, logout after a password change) dropped
+  pending drafts silently. Every session end now writes pending drafts first; a refused write
+  is never reported as saved and the login screen says once that a draft was lost.
+- P3: the delete confirmation took focus nowhere. Focus goes to "Huỷ", Escape cancels, focus
+  returns to the trigger.
+Prevention: a component that outlives an identity change binds its state to that identity, not
+to whatever props it last saw; every exit path of a session goes through one cleanup.

@@ -6,6 +6,7 @@ import Spinner from "../components/ui/Spinner";
 import { kiemTra, PROVIDER_MAC_DINH, thongBaoSauDangXuat } from "../auth/loginForm";
 import { safeNext } from "../auth/authRedirect";
 import { useAuth } from "../auth/useAuth";
+import { takeNotesLostNotice } from "../utils/notesPreview";
 
 export default function Login() {
   const navigate = useNavigate();
@@ -13,6 +14,8 @@ export default function Login() {
   const next = safeNext(params.get("next"));
   // Thông báo tra từ BẢNG TRẮNG theo mã — không lấy câu chữ từ URL.
   const thongBao = thongBaoSauDangXuat(params.get("tb"));
+  // V9.3 P5b: a session that ended with an unsavable browser-notes draft says so once.
+  const [ghiChuMat] = useState(() => takeNotesLostNotice());
   const { user, loading, login, error, setError } = useAuth();
   const [provider, setProvider] = useState(PROVIDER_MAC_DINH);
   const [email, setEmail] = useState("");
@@ -100,6 +103,11 @@ export default function Login() {
             className="input-surface" />
         </label>
 
+        {ghiChuMat && (
+          <p role="alert" className="auth-status">
+            <Icon name="Info" size={15} aria-hidden="true" /> Phiên trước kết thúc khi một bản nháp ghi chú chưa lưu được vào trình duyệt này, nên bản nháp đó đã mất.
+          </p>
+        )}
         {thongBao && !error && (
           <p role="status" className="auth-status">
             <Icon name="BadgeCheck" size={15} aria-hidden="true" /> {thongBao}

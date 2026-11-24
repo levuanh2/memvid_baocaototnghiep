@@ -22,18 +22,34 @@ export default function NotesPane({ active, userId, selectedSources = [], loadDo
   const [confirming, setConfirming] = useState(false);
   const timer = useRef(null);
   const current = useRef({ userId: null, docId: null, text: "", dirty: false });
+  // The identity the shown text was loaded for. The textarea only renders when it equals the
+  // current props, and edits are keyed by it, never by props (#210 review P1).
+  const [loaded, setLoaded] = useState({ userId: null, docId: null });
+  const docsRequest = useRef(0);
+  const deleteRef = useRef(null);
+  const cancelRef = useRef(null);
+  const returnFocus = useRef(false);
   // Nothing renders or loads until the mode is first opened (the pane is mounted hidden).
   const [opened, setOpened] = useState(false);
 
   const load = useCallback(() => {
+    // One list per account; a response for an earlier request (another account) is dropped.
+    const request = ++docsRequest.current;
     setLoadError(false);
-    loadDocuments().then((list) => setDocs(list || [])).catch(() => setLoadError(true));
+    setDocs(null);
+    loadDocuments()
+      .then((list) => { if (request === docsRequest.current) setDocs(list || []); })
+      .catch(() => { if (request === docsRequest.current) setLoadError(true); });
   }, [loadDocuments]);
   useEffect(() => {
-    if (!active || opened) return;
-    setOpened(true);
+    if (active && !opened) setOpened(true);
+  }, [active, opened]);
+  useEffect(() => {
+    if (!opened) return undefined;
+    setPickedId("");
     load();
-  }, [active, opened, load]);
+    return () => { docsRequest.current += 1; };
+  }, [opened, userId, load]);
 
   const resolved = docs ? resolveWorkspaceDocument(selectedSources, docs) : null;
   const docId = pickedId || resolved?.document?.document_id || "";
@@ -66,27 +82,35 @@ export default function NotesPane({ active, userId, selectedSources = [], loadDo
     setConfirming(false);
     setStatus(r.error ? { kind: "error", error: "blocked" } : r.savedAt ? { kind: "saved", at: r.savedAt } : { kind: "idle" });
     current.current = { userId, docId, text: r.text, dirty: false };
+    setLoaded({ userId, docId });
     return () => flushNow();
   }, [userId, docId, flushNow]);
 
   const onChange = (e) => {
     const value = e.target.value;
     setText(value);
-    current.current = { ...current.current, text: value, dirty: true };
-    setPendingNote(userId, docId, value);
+    current.current = { userId: loaded.userId, docId: loaded.docId, text: value, dirty: true };
+    setPendingNote(loaded.userId, loaded.docId, value);
     clearTimeout(timer.current);
     timer.current = setTimeout(flushNow, SAVE_DELAY_MS);
   };
 
   const remove = () => {
     clearTimeout(timer.current);
-    const r = deleteNote(userId, docId);
+    const r = deleteNote(loaded.userId, loaded.docId);
     setConfirming(false);
+    returnFocus.current = true;
     if (!r.ok) { setStatus({ kind: "error", error: r.error }); return; }
     setText("");
-    current.current = { userId, docId, text: "", dirty: false };
+    current.current = { userId: loaded.userId, docId: loaded.docId, text: "", dirty: false };
     setStatus({ kind: "idle" });
   };
+  const cancelDelete = () => { setConfirming(false); returnFocus.current = true; };
+  // #210 review P3: focus goes into the confirmation (the safe choice) and back to the trigger.
+  useEffect(() => {
+    if (confirming) cancelRef.current?.focus();
+    else if (returnFocus.current) { returnFocus.current = false; deleteRef.current?.focus(); }
+  }, [confirming]);
 
   if (!opened) return null;
 
@@ -130,7 +154,7 @@ export default function NotesPane({ active, userId, selectedSources = [], loadDo
               )}
             </div>
 
-            {doc && (
+            {doc && loaded.userId === userId && loaded.docId === docId && (
               <div className="flex flex-col gap-2">
                 <textarea
                   className="notes-pane__text"
@@ -162,12 +186,13 @@ export default function NotesPane({ active, userId, selectedSources = [], loadDo
                 )}
                 <div className="flex flex-wrap items-center gap-2">
                   {!confirming ? (
-                    <button type="button" className="notes-pane__btn" onClick={() => setConfirming(true)}>Xoá ghi chú trên trình duyệt này</button>
+                    <button type="button" ref={deleteRef} className="notes-pane__btn" onClick={() => setConfirming(true)}>Xoá ghi chú trên trình duyệt này</button>
                   ) : (
-                    <div role="group" aria-label="Xác nhận xoá ghi chú" className="flex flex-wrap items-center gap-2 text-small">
+                    <div role="group" aria-label="Xác nhận xoá ghi chú" className="flex flex-wrap items-center gap-2 text-small"
+                      onKeyDown={(e) => { if (e.key === "Escape") { e.stopPropagation(); cancelDelete(); } }}>
                       <span>Xoá hẳn ghi chú của tài liệu này trên trình duyệt này? Không khôi phục được.</span>
                       <button type="button" className="notes-pane__btn notes-pane__btn--danger" onClick={remove}>Xoá</button>
-                      <button type="button" className="notes-pane__btn" onClick={() => setConfirming(false)}>Huỷ</button>
+                      <button type="button" ref={cancelRef} className="notes-pane__btn" onClick={cancelDelete}>Huỷ</button>
                     </div>
                   )}
                 </div>

@@ -83,6 +83,31 @@ export function forgetPendingNotes() {
   pending.clear();
 }
 
+// A one-time notice for the next screen (login) when a session ended with a draft the browser
+// refused to save (#210 review P2). sessionStorage: this tab only, gone with it.
+const LOSS_FLAG = "studymap.notes.unsavedLost";
+
+export function takeNotesLostNotice() {
+  try {
+    const flagged = window.sessionStorage.getItem(LOSS_FLAG) === "1";
+    if (flagged) window.sessionStorage.removeItem(LOSS_FLAG);
+    return flagged;
+  } catch {
+    return false;
+  }
+}
+
+/** Session end (any path): write pending drafts, then drop them from memory. A draft the
+ * browser refuses is not reported as saved; the next screen says it was lost. */
+export function flushThenForgetPendingNotes() {
+  const result = flushPendingNotes();
+  if (!result.ok) {
+    try { window.sessionStorage.setItem(LOSS_FLAG, "1"); } catch { /* nothing left to tell */ }
+  }
+  forgetPendingNotes();
+  return result;
+}
+
 /**
  * The document the workspace is on: the caller's document whose `source_stem` matches the
  * first selected source. Exactly one match or nothing: two documents on one stem are never

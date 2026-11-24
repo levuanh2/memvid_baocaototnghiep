@@ -17,7 +17,7 @@ import { clearActiveMindmapJob } from "../utils/activeMindmapJob";
 import { clearActiveSummaryJob } from "../utils/activeSummaryJob";
 import { quenHetNguon } from "../utils/nguonDangXuLy";
 import { quenGrant } from "./grantNks";
-import { forgetPendingNotes } from "../utils/notesPreview";
+import { flushThenForgetPendingNotes } from "../utils/notesPreview";
 
 /**
  * Xoá mọi thứ thuộc về phiên của MỘT người dùng.
@@ -45,7 +45,9 @@ export function xoaDuLieuPhienNguoiDung() {
   clearActiveMindmapJob();
   clearActiveSummaryJob();
   quenGrant();
-  // V9.3 P5b (owner option A): drafts still in memory belong to the user who is leaving;
-  // notes already saved in this browser are KEPT (studymap.notes.v1:<user>:<document>).
-  forgetPendingNotes();
+  // V9.3 P5b (owner option A): every session end (logout, 401, bfcache user mismatch, logout
+  // after a password change) first writes drafts still pending under their own user/document
+  // key, then drops them from memory. Saved notes are KEPT. A refused write is not claimed as
+  // saved: the login screen says a draft was lost (#210 review P2).
+  flushThenForgetPendingNotes();
 }

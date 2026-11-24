@@ -4,7 +4,7 @@
 import { describe, it, expect, beforeEach, afterEach, vi } from "vitest";
 import {
   NOTE_MAX, noteKey, readNote, writeNote, deleteNote,
-  setPendingNote, flushPendingNotes, forgetPendingNotes, hasPendingNotes,
+  setPendingNote, flushPendingNotes, forgetPendingNotes, hasPendingNotes, takeNotesLostNotice,
   resolveWorkspaceDocument,
 } from "./notesPreview";
 import { xoaDuLieuPhienNguoiDung } from "../auth/phienNguoiDung";
@@ -82,13 +82,32 @@ describe("pending drafts and logout", () => {
     expect(hasPendingNotes()).toBe(true);
   });
 
-  it("session cleanup drops in-memory drafts but keeps saved notes (owner option A)", () => {
+  // Independent review of #210 (P2): forced session ends (401, bfcache user mismatch, logout
+  // after a password change) called this cleanup, which dropped a pending draft unsaved and
+  // silently. It now writes pending drafts first, then clears memory; saved notes stay (A).
+  it("session cleanup writes pending drafts, then clears memory, and keeps saved notes (owner option A)", () => {
     writeNote("u1", "d1", "đã lưu");
     setPendingNote("u1", "d2", "nháp trong bộ nhớ");
     xoaDuLieuPhienNguoiDung();
     expect(hasPendingNotes()).toBe(false);
     expect(readNote("u1", "d1").text).toBe("đã lưu");
+    expect(readNote("u1", "d2").text).toBe("nháp trong bộ nhớ");
+    expect(takeNotesLostNotice()).toBe(false);
+  });
+
+  it("a forced session end that cannot save says so and never claims the draft was saved", () => {
+    setPendingNote("u1", "d2", "nháp trong bộ nhớ");
+    const realSetItem = Storage.prototype.setItem;
+    vi.spyOn(Storage.prototype, "setItem").mockImplementation(function (k, v) {
+      if (String(k).startsWith("studymap.notes.v1")) throw new DOMException("blocked", "SecurityError");
+      return realSetItem.call(this, k, v);
+    });
+    xoaDuLieuPhienNguoiDung();
+    vi.restoreAllMocks();
+    expect(hasPendingNotes()).toBe(false);
     expect(readNote("u1", "d2").text).toBe("");
+    expect(takeNotesLostNotice()).toBe(true);
+    expect(takeNotesLostNotice()).toBe(false); // shown once
   });
 });
 

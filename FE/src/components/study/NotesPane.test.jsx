@@ -167,3 +167,56 @@ describe("NotesPane", () => {
     expect(container.textContent).toMatch(/Đăng nhập để ghi chú/);
   });
 });
+
+// Independent review of #210 (P1): the pane stays mounted across an account switch. The
+// document list was loaded once and never per account, and a late response from the previous
+// account could fill the next account's picker.
+describe("NotesPane identity", () => {
+  it("reloads documents per account and ignores a late response from the previous account", async () => {
+    let finishU1;
+    const u1Docs = [{ document_id: "x1", source_stem: "rieng_u1", title: "Riêng của u1.pdf" }];
+    const u2Docs = [{ document_id: "y1", source_stem: "rieng_u2", title: "Riêng của u2.pdf" }];
+    const loader = vi.fn()
+      .mockImplementationOnce(() => new Promise((resolve) => { finishU1 = () => resolve(u1Docs); }))
+      .mockImplementationOnce(() => Promise.resolve(u2Docs));
+    await render({ userId: "u1", selectedSources: [], loadDocuments: loader });
+    await render({ userId: "u2", selectedSources: [], loadDocuments: loader });
+    await act(async () => { finishU1(); await Promise.resolve(); });
+    const titles = [...container.querySelectorAll("option")].map((o) => o.textContent);
+    expect(loader).toHaveBeenCalledTimes(2);
+    expect(titles).toContain("Riêng của u2.pdf");
+    expect(titles).not.toContain("Riêng của u1.pdf");
+  });
+
+  it("writes a pending draft under the account that typed it, never the next one", async () => {
+    await render({ userId: "u1" });
+    await type("nháp của u1");
+    await render({ userId: "u2" }); // before the debounce fired
+    expect(readNote("u1", "d1").text).toBe("nháp của u1");
+    expect(readNote("u2", "d1").text).toBe("");
+    if (area()) {
+      expect(area().value).toBe("");
+      await type("của u2");
+      await tick();
+      expect(readNote("u2", "d1").text).toBe("của u2");
+      expect(readNote("u1", "d1").text).toBe("nháp của u1");
+    }
+  });
+});
+
+// Independent review of #210 (P3): opening the delete confirmation dropped keyboard focus.
+describe("NotesPane delete confirmation focus", () => {
+  it("moves focus into the confirmation, Escape cancels, and focus returns to the trigger", async () => {
+    writeNote("u1", "d1", "sẽ xoá");
+    await render();
+    await act(async () => { button("Xoá ghi chú trên trình duyệt này").focus(); button("Xoá ghi chú trên trình duyệt này").click(); });
+    expect(document.activeElement).toBe(button("Huỷ"));
+    await act(async () => { document.activeElement.dispatchEvent(new KeyboardEvent("keydown", { key: "Escape", bubbles: true })); });
+    expect(container.querySelector("[role='group']")).toBeNull();
+    expect(document.activeElement).toBe(button("Xoá ghi chú trên trình duyệt này"));
+    expect(readNote("u1", "d1").text).toBe("sẽ xoá");
+    await act(async () => { button("Xoá ghi chú trên trình duyệt này").click(); });
+    await act(async () => { button("Huỷ").click(); });
+    expect(document.activeElement).toBe(button("Xoá ghi chú trên trình duyệt này"));
+  });
+});
