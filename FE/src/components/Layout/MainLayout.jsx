@@ -834,10 +834,9 @@ export default function MainLayout({
             round (LessonHeader only ever received it as a prop) — no new
             state, no prop drilling added, just rendered one level up.
             Pill styling (filled accent when active) matches the reference
-            image; icon-only below `sm` so it still fits the mobile header
-            alongside the hamburger/account/search icons (mode-switching
-            must stay reachable on mobile — see round 10's own checklist
-            item on this). */}
+            image. V9.3: the row shows from 1600px only, five labelled tabs;
+            below that the labelled "Chế độ học" select next to it takes over
+            (CSS swaps them; one state). */}
         <nav role="tablist" aria-label="Chế độ Workspace"
           className="workspace-mode-switch relative flex items-center gap-1 p-1 rounded-full flex-shrink-0 mx-auto"
           style={{ background: "var(--bg-card)", border: "1px solid var(--border-color)" }}>
