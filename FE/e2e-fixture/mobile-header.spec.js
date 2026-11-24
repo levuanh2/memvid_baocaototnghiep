@@ -78,7 +78,8 @@ const hitOwnership = (page, selector) => page.evaluate((sel) => {
 }, selector);
 
 // V9.3 P4b/P5a: at <=700px the workspace tabs become one labelled "Chế độ học" select.
-const SELECT_MAX = 700;
+// V9.3 laptop header: the labelled select below 1440px, five labelled tabs from 1440px.
+const SELECT_MAX = 1439;
 const controlsFor = (width) => [
   'header a[aria-label^="StudyMap"]',
   ...(width <= SELECT_MAX ? [`header ${MODE_SELECT}`] : [
@@ -140,7 +141,7 @@ for (const vp of COMPACT) {
         }
       });
 
-      test("mode control shows no clipped label (icon-only tabs, or the labelled select at <=700px)", async ({ page }) => {
+      test("mode control shows no clipped label (the labelled select below 1440px)", async ({ page }) => {
         await openApp(page, { ...vp, dark });
         if (vp.width <= SELECT_MAX) {
           // Spec 06: no long tabs squeezed into the row and no unlabelled icons.
@@ -230,12 +231,15 @@ test.describe("full desktop header above the compact danger zone", () => {
       expect(h.modeTabs).toBe(5);
       expect(h.currentSlack).toBeGreaterThanOrEqual(40);
       expect(h.fiveModeSlack).toBeGreaterThanOrEqual(40);
-      await expect(page.getByRole("tab", { name: "Sơ đồ tư duy" })).toBeVisible();
       const modeLabel = page.locator('nav[role="tablist"] [role="tab"][title="Sơ đồ tư duy"] span').first();
-      // Mode labels stay from 1440px (Claude review): the panel/focus labels and the library label
-      // give way first (1800px / 1600px).
-      if (vp.width >= 1440) await expect(modeLabel).toBeVisible();
-      else await expect(modeLabel).toBeHidden();
+      // V9.3 laptop header: five labelled tabs from 1440px; below that the labelled select.
+      if (vp.width >= 1440) {
+        await expect(page.getByRole("tab", { name: "Sơ đồ tư duy" })).toBeVisible();
+        await expect(modeLabel).toBeVisible();
+      } else {
+        await expect(page.locator(MODE_SELECT)).toBeVisible();
+        await expect(page.getByRole("tablist", { name: "Chế độ Workspace" })).toBeHidden();
+      }
       // V6 header: shortcut help lives in the account menu, not in its own header button.
       await expect(page.locator('header button[aria-label="Xem phím tắt"]')).toHaveCount(0);
       const home = await hitOwnership(page, 'header a[aria-label^="StudyMap"]');

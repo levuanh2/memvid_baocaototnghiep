@@ -65,8 +65,8 @@ for (const width of [320, 375, 390, 640, 700, 768, 1024, 1440]) {
       expect(o.header, "header overflow").toBeLessThanOrEqual(0);
       expect(o.doc, "page overflow").toBeLessThanOrEqual(0);
 
-      // Mode control: the labelled select at <=700px, the tab row above.
-      if (width <= 700) {
+      // Mode control: the labelled select below 1440px, the tab row from 1440px.
+      if (width < 1440) {
         await expect(page.getByLabel("Chế độ học")).toBeVisible();
         await expect(page.getByRole("tablist", { name: "Chế độ Workspace" })).toBeHidden();
         // The first version clipped "Trò chuyện" to "Trò chuyệ" at 375px (native arrow inside a

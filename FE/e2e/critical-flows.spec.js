@@ -4,6 +4,7 @@
 // re-POST" and "A/B map switching preserves identity" meaningful checks
 // instead of isolated unit assertions.
 import { test, expect } from "@playwright/test";
+import { chooseMode, waitForModeControl } from "../e2e-fixture/workspaceMode.js";
 import {
   registerAndEnterApp, uploadSampleDocument, selectAllSources,
   openGuidedDialogFromHeader, openMapLibrary,
@@ -108,7 +109,7 @@ async function seedMap(request, api, stem) {
 
 async function reloadApp(page) {
   await page.reload();
-  await page.getByRole("tablist", { name: "Chế độ Workspace" }).waitFor({ state: "visible" });
+  await waitForModeControl(page);
 }
 
 async function selectedMapTitle(page) {
@@ -156,7 +157,7 @@ test.describe.serial("guided panel restoration (browser)", () => {
   });
 
   test("A1 zero maps: X close restores the aside to its pre-open state", async () => {
-    await page.getByRole("tab", { name: "Sơ đồ tư duy" }).click();
+    await chooseMode(page, "Sơ đồ tư duy");
     const before = await settled(() => rightAsideOpen(page));
     expect(before, "zero maps, nothing selected: aside starts closed").toBe(false);
 
@@ -189,7 +190,7 @@ test.describe.serial("guided panel restoration (browser)", () => {
   });
 
   test("B1 existing map: Guided close leaves transform, instance, topics and aside unchanged", async () => {
-    await page.getByRole("tab", { name: "Sơ đồ tư duy" }).click();
+    await chooseMode(page, "Sơ đồ tư duy");
     await page.locator("me-root").first().waitFor({ state: "visible" });
     const beforeCanvas = await settled(() => canvasState(page));
     const beforeAside = await settled(() => rightAsideOpen(page));
@@ -223,13 +224,13 @@ test.describe.serial("guided panel restoration (browser)", () => {
 
   test("D1 node detail default-closed on fresh load and after reload", async () => {
     await page.goto("/app");
-    await page.getByRole("tablist", { name: "Chế độ Workspace" }).waitFor({ state: "visible" });
-    await page.getByRole("tab", { name: "Sơ đồ tư duy" }).click();
+    await waitForModeControl(page);
+    await chooseMode(page, "Sơ đồ tư duy");
     await page.locator("me-root").first().waitFor({ state: "visible" });
     expect(await settled(() => rightAsideOpen(page)), "fresh load: no node detail").toBe(false);
 
     await reloadApp(page);
-    await page.getByRole("tab", { name: "Sơ đồ tư duy" }).click();
+    await chooseMode(page, "Sơ đồ tư duy");
     await page.locator("me-root").first().waitFor({ state: "visible" });
     expect(await settled(() => rightAsideOpen(page)), "after reload: no node detail").toBe(false);
   });
@@ -238,7 +239,7 @@ test.describe.serial("guided panel restoration (browser)", () => {
     await uploadSecondDocument(request, api);
     seededMapIds.push(await seedMap(request, api, await sourceStem(request, api, "second-doc")));
     await reloadApp(page);
-    await page.getByRole("tab", { name: "Sơ đồ tư duy" }).click();
+    await chooseMode(page, "Sơ đồ tư duy");
 
     const [titleNewest, titleOlder] = await mapTitles(page);
     expect(titleNewest).not.toBe(titleOlder);
@@ -249,8 +250,8 @@ test.describe.serial("guided panel restoration (browser)", () => {
   });
 
   test("D3 node detail stays closed after Chat -> Mind Map", async () => {
-    await page.getByRole("tab", { name: "Trò chuyện" }).click();
-    await page.getByRole("tab", { name: "Sơ đồ tư duy" }).click();
+    await chooseMode(page, "Trò chuyện");
+    await chooseMode(page, "Sơ đồ tư duy");
     await page.locator("me-root").first().waitFor({ state: "visible" });
     expect(await settled(() => rightAsideOpen(page))).toBe(false);
   });
@@ -349,7 +350,7 @@ test.describe.serial("critical flows", () => {
   test("reloading an existing/generated map does not trigger a new POST /generate-mindmap", async () => {
     const postsBefore = generateMindmapPosts.length;
     await page.reload();
-    await page.getByRole("tablist", { name: "Chế độ Workspace" }).waitFor({ state: "visible" });
+    await waitForModeControl(page);
     // Give any accidental auto-regen a moment to fire before asserting it didn't.
     await page.waitForTimeout(1500);
     expect(generateMindmapPosts.length).toBe(postsBefore);
@@ -412,7 +413,7 @@ test.describe.serial("critical flows", () => {
 
   test("Mind Map -> Chat -> Summary -> Mind Map switching causes no accidental regeneration", async () => {
     const postsBefore = generateMindmapPosts.length;
-    await page.getByRole("tab", { name: "Trò chuyện" }).click();
+    await chooseMode(page, "Trò chuyện");
     await openMapLibrary(page);
     // Selecting an existing map from the library (not "create") must not POST.
     const existingItem = page.getByRole("option").first();
@@ -445,7 +446,7 @@ test.describe.serial("critical flows", () => {
       if (res.request().method() === "POST" && res.url().includes("/generate-summary")) posts.push(res.status());
     };
     page.on("response", onResponse);
-    await page.getByRole("tab", { name: "Tóm tắt" }).click();
+    await chooseMode(page, "Tóm tắt");
     await page.getByRole("button", { name: /^Tạo tóm tắt/ }).first().dblclick();
     await expect.poll(() => posts.length, { timeout: 15_000 }).toBe(1);
     await page.waitForTimeout(1500);
@@ -459,7 +460,7 @@ test.describe.serial("critical flows", () => {
     // opens again without a new POST.
     const title = await page.locator(".artifact-toolbar__identity strong").first().innerText();
     await page.reload();
-    await page.getByRole("tab", { name: "Tóm tắt" }).click();
+    await chooseMode(page, "Tóm tắt");
     await page.getByRole("combobox", { name: "Chọn tóm tắt" }).first().selectOption({ label: title });
     await expect(page.locator(".artifact-toolbar__identity strong").first()).toHaveText(title);
     expect(posts).toHaveLength(1);

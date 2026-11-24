@@ -4244,3 +4244,29 @@ Fix: wait for `document.fonts.ready` and a stable scrollHeight before setting an
 position; poll the restored value for stability across frames, then require exact equality.
 Regression: 10/10 isolated, 20/20 with --repeat-each=20 --workers=4, review group 164/164.
 Prevention: any e2e that asserts an exact scroll offset must first wait for a stable scrollHeight.
+
+## Laptop header (V9.3, owner option 2): select below 1440px, labels from measured budget (2026-11-25)
+
+Problem: at 1366px (and 701-1439px) the five mode tabs were icon-only and Nguồn/Dẫn chứng/Tập
+trung/Thư viện were icon-only too: nothing in the header named the current mode in text.
+Root cause of the old breakpoints: five labelled tabs need ~565px (Segoe UI) / ~582px (Verdana);
+with them visible nothing else could carry a label below ~1800px.
+Also found: Be Vietnam Pro (the design font) is never loaded (no font files, no link), so users see
+system-ui: Segoe UI on Windows, DejaVu Sans on Linux CI. That is why "fits locally, overflows on CI".
+Decision on loading the font is separate (owner); if it is ever loaded, re-measure the header.
+Fix: one labelled "Chế độ học" select below 1440px (CSS swaps it with the tablist; same state, no
+requests). Labels where the measured slack allows it with a wide font (Verdana, >= DejaVu width):
+panel labels 1280-1439px and from 1800px; library label 1366-1439px and from 1600px; five
+labelled tabs from 1440px (40px tall). Select text box 8px/24px padding so "Sơ đồ tư duy" (92px in
+Verdana) fits the 128px select without widening the 375px phone header. Theme, usage and account
+triggers were 36px on desktop: now 40px.
+Regression: e2e-fixture/laptop-header.spec.js (64 tests: 13 widths x light/dark x normal/wide font,
+labels per width, resize keeps mode/Focus/chat draft/Notes draft and sends nothing, Reader loads
+nothing, keyboard select/tabs, zoom 200% as 683/768px). Red on 27fec57: 55/64 failed.
+Prevention: before changing header breakpoints, run the measurement in laptop-header.spec.js with
+the wide font; slack < 16px with Verdana or < 40px with the default font is not safe. Specs must
+choose modes with chooseMode()/waitForModeControl() (e2e-fixture/workspaceMode.js), never by
+clicking or waiting for a visible tab: the default Playwright viewport (1280) now shows the select,
+and getByRole("tab") skips hidden tabs, so assert aria-selected through a CSS locator.
+Pre-existing flake seen (not this change): exact-node-export-v3.spec.js:240 node width 74.9 vs 76.1
+(2/3 failed on integ 27fec57 too).

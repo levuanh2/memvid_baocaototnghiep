@@ -34,6 +34,15 @@ import { useAppHeight } from "../../hooks/useAppHeight";
 // Summary mode switch, moved here from the now-deleted LessonHeader.jsx
 // (was its own `TABS` constant there). Same three entries, same order,
 // same icons — this is a render-location move, not a redesign.
+// V9.3 laptop header (owner option 2). Below 1440px the mode tabs are the "Chế độ học" select,
+// and the width it saves carries text labels; from 1440px five labelled tabs need that room
+// back. Bands come from measured widths with a wide (Linux-like) font, see
+// .playbook/lessons-learned.md "Laptop header" and the QA header-measure-*.json evidence.
+const PANEL_BTN = "w-10 min-[1280px]:max-[1439px]:w-auto min-[1280px]:max-[1439px]:px-3 min-[1800px]:w-auto min-[1800px]:px-3";
+const PANEL_LABEL = "hidden min-[1280px]:max-[1439px]:inline min-[1800px]:inline";
+const LIBRARY_BTN = "w-10 min-[1366px]:max-[1439px]:w-auto min-[1366px]:max-[1439px]:px-3 min-[1600px]:w-auto min-[1600px]:px-3";
+const LIBRARY_LABEL = "hidden min-[1366px]:max-[1439px]:inline min-[1600px]:inline";
+
 const MODE_TABS = [
   { key: "chat", label: "Trò chuyện", icon: "MessageSquareText" },
   { key: "reader", label: "Đọc nguồn", icon: "BookOpen" },
@@ -810,9 +819,9 @@ export default function MainLayout({
         </Link>
 
         <Link to="/app/study" aria-label="Thư viện học tập" title="Thư viện học tập"
-          className="study-library-link focus-hide flex items-center justify-center gap-1.5 w-10 h-10 min-[1600px]:w-auto min-[1600px]:px-3 rounded-[8px] border border-border text-small font-medium text-text-secondary hover:text-text-primary hover:bg-surface-elevated flex-shrink-0 transition-colors">
+          className={`study-library-link focus-hide flex items-center justify-center gap-1.5 h-10 ${LIBRARY_BTN} rounded-[8px] border border-border text-small font-medium text-text-secondary hover:text-text-primary hover:bg-surface-elevated flex-shrink-0 transition-colors`}>
           <Icon name="BookOpen" size={16} />
-          <span className="study-library-link__label hidden min-[1600px]:inline">Thư viện học tập</span>
+          <span className={`study-library-link__label ${LIBRARY_LABEL}`}>Thư viện học tập</span>
         </Link>
 
         {/* Mode switch — Round 11 (mockup parity, explicit user decision):
@@ -829,7 +838,7 @@ export default function MainLayout({
             must stay reachable on mobile — see round 10's own checklist
             item on this). */}
         <nav role="tablist" aria-label="Chế độ Workspace"
-          className="workspace-mode-switch relative flex items-center gap-0 lg:gap-1 p-0 lg:p-1 rounded-full flex-shrink-0 mx-auto"
+          className="workspace-mode-switch relative flex items-center gap-1 p-1 rounded-full flex-shrink-0 mx-auto"
           style={{ background: "var(--bg-card)", border: "1px solid var(--border-color)" }}>
           {MODE_TABS.map((t) => {
             const active = workspaceMode === t.key;
@@ -837,19 +846,19 @@ export default function MainLayout({
               <button key={t.key} type="button" role="tab" aria-selected={active}
                 onClick={() => { setWorkspaceMode(t.key); closeHeaderSurface(); }}
                 title={t.label} aria-label={t.label}
-                className="flex items-center justify-center gap-1.5 w-10 h-10 min-[1440px]:w-auto min-[1440px]:h-auto px-0 min-[1440px]:px-3 py-0 min-[1440px]:py-1.5 text-small rounded-full transition-colors shrink-0"
+                className="flex items-center justify-center gap-1.5 h-10 px-3 text-small rounded-full transition-colors shrink-0"
                 style={{
                   background: active ? "var(--accent-cta)" : "transparent",
                   color: active ? "var(--on-primary)" : "var(--text-secondary)",
                   fontWeight: active ? 600 : 500,
                 }}>
                 <Icon name={t.icon} size={14} />
-                <span className="workspace-mode-label hidden min-[1440px]:inline">{t.label}</span>
+                <span className="workspace-mode-label">{t.label}</span>
               </button>
             );
           })}
         </nav>
-        {/* V9.3 P4b: at <=700px the tab row becomes this labelled select (CSS shows one of the
+        {/* V9.3: below 1440px the tab row becomes this labelled select (CSS shows one of the
             two). Same state as the tabs: changing it never sends anything. */}
         <span className="workspace-mode-select flex-shrink-0">
           <label htmlFor="workspace-mode-select" className="sr-only">Chế độ học</label>
@@ -865,25 +874,25 @@ export default function MainLayout({
         <button type="button" data-panel-toggle="sources" onClick={toggleSources}
           aria-expanded={sourcesOpen} aria-controls={leftPanelUnmounted ? undefined : "workspace-sources"}
           aria-label="Nguồn" title="Nguồn"
-          className="workspace-panel-toggle focus-hide flex-shrink-0 inline-flex items-center justify-center gap-1.5 w-10 h-10 min-[1800px]:w-auto min-[1800px]:px-3 rounded-[8px] border border-border text-small font-medium text-text-secondary hover:text-text-primary hover:bg-surface-elevated transition-colors">
+          className={`workspace-panel-toggle focus-hide flex-shrink-0 inline-flex items-center justify-center gap-1.5 h-10 ${PANEL_BTN} rounded-[8px] border border-border text-small font-medium text-text-secondary hover:text-text-primary hover:bg-surface-elevated transition-colors`}>
           <Icon name="FolderOpen" size={16} aria-hidden="true" />
-          <span className="hidden min-[1800px]:inline">Nguồn</span>
+          <span className={PANEL_LABEL}>Nguồn</span>
         </button>
         <button type="button" data-panel-toggle="evidence" onClick={toggleEvidence}
           aria-expanded={evidenceOpen} aria-controls="workspace-evidence"
           aria-label="Dẫn chứng" title="Dẫn chứng"
-          className="workspace-panel-toggle flex-shrink-0 inline-flex items-center justify-center gap-1.5 w-10 h-10 min-[1800px]:w-auto min-[1800px]:px-3 rounded-[8px] border border-border text-small font-medium text-text-secondary hover:text-text-primary hover:bg-surface-elevated transition-colors">
+          className={`workspace-panel-toggle flex-shrink-0 inline-flex items-center justify-center gap-1.5 h-10 ${PANEL_BTN} rounded-[8px] border border-border text-small font-medium text-text-secondary hover:text-text-primary hover:bg-surface-elevated transition-colors`}>
           <Icon name="Quote" size={16} aria-hidden="true" />
-          <span className="hidden min-[1800px]:inline">Dẫn chứng</span>
+          <span className={PANEL_LABEL}>Dẫn chứng</span>
         </button>
 
         {/* V9.3 P4: the one control that stays with the mode switch in Focus Mode. */}
         <button type="button" data-focus-toggle onClick={focusMode ? exitFocus : enterFocus}
           aria-pressed={focusMode} aria-label={focusMode ? "Thoát tập trung" : "Tập trung"}
           title={focusMode ? "Thoát tập trung (Esc)" : "Tập trung"}
-          className="workspace-focus-toggle flex-shrink-0 inline-flex items-center justify-center gap-1.5 w-10 h-10 min-[1800px]:w-auto min-[1800px]:px-3 rounded-[8px] border border-border text-small font-medium text-text-secondary hover:text-text-primary hover:bg-surface-elevated transition-colors">
+          className={`workspace-focus-toggle flex-shrink-0 inline-flex items-center justify-center gap-1.5 h-10 ${PANEL_BTN} rounded-[8px] border border-border text-small font-medium text-text-secondary hover:text-text-primary hover:bg-surface-elevated transition-colors`}>
           <Icon name={focusMode ? "X" : "Maximize"} size={16} aria-hidden="true" />
-          <span className="hidden min-[1800px]:inline">{focusMode ? "Thoát tập trung" : "Tập trung"}</span>
+          <span className={PANEL_LABEL}>{focusMode ? "Thoát tập trung" : "Tập trung"}</span>
         </button>
 
         {/* Right actions */}
@@ -938,7 +947,7 @@ export default function MainLayout({
               two places read as one control. The keyboard-shortcut help moved into the
               account menu; the `?` key still opens it. */}
           <button type="button" onClick={toggleTheme}
-                  className="workspace-theme-toggle hidden lg:inline-flex icon-btn w-9 h-9"
+                  className="workspace-theme-toggle hidden lg:inline-flex icon-btn w-10 h-10"
                   title={isDark ? "Chuyển sang nền sáng" : "Chuyển sang nền tối"}
                   aria-label={isDark ? "Chuyển sang nền sáng" : "Chuyển sang nền tối"}>
             <Icon name={isDark ? "Sun" : "Moon"} size={16} />
