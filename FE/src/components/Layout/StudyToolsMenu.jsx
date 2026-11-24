@@ -33,8 +33,18 @@ export default function StudyToolsMenu({ open, onClose, onSelect, extraActions =
       if (!event.target.closest?.(FOCUSABLE_SELECTOR)) triggerRef?.current?.focus();
       onClose?.();
     };
+    // Menu keyboard pattern (Codex P2, #208): arrows, Home and End move between items, wrapping.
     const onKeyDown = (event) => {
-      if (event.key === "Escape") close();
+      if (event.key === "Escape") { close(); return; }
+      const items = [...(ref.current?.querySelectorAll('[role^="menuitem"]') ?? [])];
+      if (!items.length || !["ArrowDown", "ArrowUp", "Home", "End"].includes(event.key)) return;
+      event.preventDefault();
+      const at = items.indexOf(document.activeElement);
+      const next = event.key === "Home" ? 0
+        : event.key === "End" ? items.length - 1
+        : event.key === "ArrowDown" ? (at + 1) % items.length
+        : (at <= 0 ? items.length : at) - 1;
+      items[next].focus();
     };
     document.addEventListener("mousedown", onPointerDown);
     document.addEventListener("keydown", onKeyDown);
@@ -43,6 +53,10 @@ export default function StudyToolsMenu({ open, onClose, onSelect, extraActions =
       document.removeEventListener("keydown", onKeyDown);
     };
   }, [open, onClose, close, triggerRef]);
+  // Opening the menu puts focus on its first item, as the menu pattern expects.
+  useEffect(() => {
+    if (open) ref.current?.querySelector('[role^="menuitem"]')?.focus();
+  }, [open]);
   if (!open) return null;
   return (
     <div ref={ref} className="study-tools-menu" role="menu" aria-label="Công cụ học">
@@ -62,10 +76,15 @@ export default function StudyToolsMenu({ open, onClose, onSelect, extraActions =
       {extraActions.length > 0 && (
         <div className="study-tools-menu__extra border-t border-border mt-1 pt-1">
           {extraActions.map((action) => (
-            <button key={action.key} type="button" role="menuitem" className="study-tools-menu__item"
+            // An action with `checked` toggles something that stays open (a side panel), so it is a
+            // menuitemcheckbox that reports its state (V9.3 P4b).
+            <button key={action.key} type="button" className="study-tools-menu__item"
+              role={action.checked === undefined ? "menuitem" : "menuitemcheckbox"}
+              aria-checked={action.checked === undefined ? undefined : Boolean(action.checked)}
               onClick={() => { action.onSelect?.(); close(); }}>
               <span className="study-tools-menu__item-icon"><Icon name={action.icon} size={16} /></span>
               <span className="study-tools-menu__item-copy"><strong className="study-tools-menu__item-title">{action.label}</strong></span>
+              {action.checked && <Icon name="Check" size={16} className="study-tools-menu__item-check" />}
             </button>
           ))}
         </div>

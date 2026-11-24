@@ -4059,3 +4059,42 @@ after V9.3 P1a moved --brand, --focus and --accent-cta. They are outside CI Fixt
 instead of reading the token or the source element. Prevention: resolve the token in the page
 (probe element with `color: var(--token)`) or compare an export with the source node's computed
 colour, and pin the literal only once, next to the comment naming the contract it comes from.
+## Header controls under a drawer backdrop; a select clipped by its native arrow (V9.3 P4b, 2026-11-24)
+
+1. The new "Nguồn"/"Dẫn chứng" header buttons could not be clicked while a drawer or the tablet
+shelf was open: the backdrop is `fixed inset-0 z-30` and the header had no z-index, so the
+backdrop covered it (workspace-panel-controls.spec.js, 700/768/1024px). Root cause: a control
+that toggles a panel must sit above that panel's backdrop. Fix: header `relative z-[45]`, above
+backdrops (30) and drawers (40), below modals (50). Prevention: e2e toggles a panel open and
+closed from the same control, and switches panels while one is open.
+2. The <=700px "Chế độ học" select clipped "Trò chuyện" at 375px: a fixed width with the
+native arrow drawn inside the content box. Found only in the screenshot; size and overflow
+checks passed. Fix: `appearance: none` + drawn chevron in the right padding; regression: the
+e2e measures the longest option against the select's text box.
+3. Two Playwright runs in the same worktree wipe each other's `test-results` (trace ENOENT on
+close). Run one suite per worktree at a time, or give each run its own --output.
+
+## Codex #208: a tool opener used the overlay flag on a desktop column; a menu without its keys (2026-11-24)
+
+1. P1: "Công cụ học" tools (Gia sư AI, Dòng thời gian, Kiến thức) called only openRight(), which
+sets the transient overlay flag. A desktop column is shown by rightCollapsed, so a collapsed
+column stayed closed. It was hidden while the wide default had the column open; P4b's
+"evidence closed by default" exposed it on every first run. Root cause: two flags for one
+surface and an opener that only knew one. Fix: overlays (drawer, Mind Map) use openRight, a
+column goes through setRightCollapsed(false) (focus-aware). Prevention: when a default changes,
+re-run every opener of that surface from the new default state; tests at 1440 first-run and
+1024 saved-collapsed assert the column is visible.
+2. P2: StudyToolsMenu said role="menu" but had no arrow/Home/End keys or initial focus. Once
+the phone panel controls lived only in that menu, it mattered. Fix: focus the first item on
+open; ArrowDown/ArrowUp wrap, Home/End jump; Escape returns focus to the trigger. Declaring an
+ARIA pattern means implementing its keyboard contract.
+
+## P4b CI: a header that fit on Windows overflowed on Linux; a second e2e folder missed (2026-11-24)
+
+1. mobile-header.spec 1280px passed locally and overflowed by 24px in CI (Linux fonts are wider).
+A header row with less than ~30px slack locally is not safe. Fix: the Tập trung label also waits
+for 1440px. Prevention: when adding to the header, measure slack at the tightest desktop width
+and keep a margin for font metrics.
+2. The <=700px select hid the tab row; e2e-fixture/ specs were updated but e2e/ (real-backend
+Critical Flows) still waited for the tab row at 390px. Prevention: grep every Playwright folder
+(e2e/ and e2e-fixture/) for a selector before changing what it points at.

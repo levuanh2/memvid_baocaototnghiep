@@ -2,6 +2,7 @@
 // Runs the REAL workspace (MainLayout) on the Vite dev server with the API mocked at the
 // network layer, so it needs no backend, no provider, and no production data.
 import { test, expect } from "@playwright/test";
+import { MODE_SELECT, chooseMode, waitForModeControl } from "./workspaceMode.js";
 
 const API = /localhost:8080\//;
 const MIN = 40;
@@ -55,7 +56,7 @@ async function openApp(page, { width, height, dark = false, usage = "ok", provid
     return route.fulfill(json({}));
   });
   await page.goto("/app");
-  await page.getByRole("tablist", { name: "Chế độ Workspace" }).waitFor({ state: "visible", timeout: 30000 });
+  await waitForModeControl(page);
   if (dark) await page.evaluate(() => document.documentElement.classList.add("dark"));
   return { release: () => release() };
 }
@@ -76,11 +77,15 @@ const hitOwnership = (page, selector) => page.evaluate((sel) => {
   };
 }, selector);
 
-const CONTROLS = [
+// V9.3 P4b: at <=700px the three icon-only tabs become one labelled "Chế độ học" select.
+const SELECT_MAX = 700;
+const controlsFor = (width) => [
   'header a[aria-label^="StudyMap"]',
-  'nav[role="tablist"] [role="tab"][title="Trò chuyện"]',
-  'nav[role="tablist"] [role="tab"][title="Sơ đồ tư duy"]',
-  'nav[role="tablist"] [role="tab"][title="Tóm tắt"]',
+  ...(width <= SELECT_MAX ? [`header ${MODE_SELECT}`] : [
+    'nav[role="tablist"] [role="tab"][title="Trò chuyện"]',
+    'nav[role="tablist"] [role="tab"][title="Sơ đồ tư duy"]',
+    'nav[role="tablist"] [role="tab"][title="Tóm tắt"]',
+  ]),
   'header button[aria-label="Mở công cụ học"]',
   'header button[aria-label^="Mức sử dụng AI"]',
   'header button[aria-haspopup="menu"][aria-label^="Tài khoản"]',
@@ -122,9 +127,9 @@ for (const vp of COMPACT) {
         expect(h.navOverflowX).not.toBe("auto");
       });
 
-      test("home, three mode tabs, tools, usage and account are each at least 40x40 and hit their own centre", async ({ page }) => {
+      test("home, mode control, tools, usage and account are each at least 40x40 and hit their own centre", async ({ page }) => {
         await openApp(page, { ...vp, dark });
-        for (const sel of CONTROLS) {
+        for (const sel of controlsFor(vp.width)) {
           const r = await hitOwnership(page, sel);
           expect(r.found, `${sel} present`).toBe(true);
           expect(r.w, `${sel} width`).toBeGreaterThanOrEqual(MIN);
@@ -133,8 +138,19 @@ for (const vp of COMPACT) {
         }
       });
 
-      test("mode tabs are icon-only and show no clipped label", async ({ page }) => {
+      test("mode control shows no clipped label (icon-only tabs, or the labelled select at <=700px)", async ({ page }) => {
         await openApp(page, { ...vp, dark });
+        if (vp.width <= SELECT_MAX) {
+          // Spec 06: no long tabs squeezed into the row and no unlabelled icons.
+          await expect(page.getByRole("tablist", { name: "Chế độ Workspace" })).toBeHidden();
+          const select = page.getByLabel("Chế độ học");
+          await expect(select).toBeVisible();
+          await expect(select.locator("option")).toHaveText(["Trò chuyện", "Sơ đồ tư duy", "Tóm tắt"]);
+          const box = await select.boundingBox();
+          expect(box.x).toBeGreaterThanOrEqual(0);
+          expect(box.x + box.width).toBeLessThanOrEqual(vp.width);
+          return;
+        }
         for (const name of ["Trò chuyện", "Sơ đồ tư duy", "Tóm tắt"]) {
           const label = await page.locator(`nav[role="tablist"] [role="tab"][title="${name}"] span`).first();
           await expect(label).toBeHidden();
@@ -144,15 +160,16 @@ for (const vp of COMPACT) {
       test("the mode switch is the same width in every global mode and one tap changes aria-selected once", async ({ page }) => {
         await openApp(page, { ...vp, dark });
         const widths = [];
+        const control = vp.width <= SELECT_MAX ? MODE_SELECT : 'nav[role="tablist"]';
+        const tab = (name) => page.locator(`nav[role="tablist"] [role="tab"][title="${name}"]`);
         for (const mode of ["Trò chuyện", "Sơ đồ tư duy", "Tóm tắt"]) {
-          await page.getByRole("tab", { name: mode }).click();
-          await expect(page.getByRole("tab", { name: mode })).toHaveAttribute("aria-selected", "true");
-          widths.push(await page.evaluate(() => Math.round(document.querySelector('nav[role="tablist"]').getBoundingClientRect().width)));
+          await chooseMode(page, mode);
+          widths.push(await page.evaluate((sel) => Math.round(document.querySelector(sel).getBoundingClientRect().width), control));
         }
         expect(new Set(widths).size).toBe(1);
-        await page.getByRole("tab", { name: "Sơ đồ tư duy" }).click();
-        await expect(page.getByRole("tab", { name: "Sơ đồ tư duy" })).toHaveAttribute("aria-selected", "true");
-        await expect(page.getByRole("tab", { name: "Trò chuyện" })).toHaveAttribute("aria-selected", "false");
+        await chooseMode(page, "Sơ đồ tư duy");
+        await expect(tab("Sơ đồ tư duy")).toHaveAttribute("aria-selected", "true");
+        await expect(tab("Trò chuyện")).toHaveAttribute("aria-selected", "false");
       });
 
       test("exactly one workspace-tools owner; source library and inspector live inside its menu", async ({ page }) => {
@@ -167,8 +184,9 @@ for (const vp of COMPACT) {
         expect(box.x).toBeGreaterThanOrEqual(0);
         expect(box.x + box.width).toBeLessThanOrEqual(vp.width + 1);
         await expect(menu.getByRole("menuitem", { name: /Gia sư AI/ })).toBeVisible();
-        await expect(menu.getByRole("menuitem", { name: /Mở thư mục nguồn/ })).toBeVisible();
-        await expect(menu.getByRole("menuitem", { name: /Mở công cụ/ })).toBeVisible();
+        // V9.3 P4b: the two side panels, named like the header buttons, with their state.
+        await expect(menu.getByRole("menuitemcheckbox", { name: "Nguồn" })).toHaveAttribute("aria-checked", /true|false/);
+        await expect(menu.getByRole("menuitemcheckbox", { name: "Dẫn chứng" })).toHaveAttribute("aria-checked", /true|false/);
       });
     });
   }
@@ -220,18 +238,18 @@ test.describe("contextual Mind Map row does not overlap the global header", () =
   for (const vp of [{ width: 390, height: 844 }, { width: 768, height: 1024 }, { width: 1024, height: 768 }]) {
     test(`${vp.width}x${vp.height}: header bottom <= contextual row top, and tab centres hit only the tab`, async ({ page }) => {
       await openApp(page, { ...vp, withMap: true });
-      await page.getByRole("tab", { name: "Sơ đồ tư duy" }).click();
+      await chooseMode(page, "Sơ đồ tư duy");
       const library = page.locator('button[aria-label="Mở thư viện sơ đồ"]');
       await expect(library).toBeVisible();
       const rows = await page.evaluate(() => {
         const header = document.querySelector("header").getBoundingClientRect();
         const lib = document.querySelector('button[aria-label="Mở thư viện sơ đồ"]').getBoundingClientRect();
-        const tabs = [...document.querySelectorAll('nav[role="tablist"] [role="tab"]')].map((t) => t.getBoundingClientRect().bottom);
+        const tabs = [...document.querySelectorAll('nav[role="tablist"] [role="tab"], #workspace-mode-select')].map((t) => t.getBoundingClientRect().bottom);
         return { headerBottom: header.bottom, contextualTop: lib.top, tabBottom: Math.max(...tabs) };
       });
       expect(rows.headerBottom).toBeLessThanOrEqual(rows.contextualTop);
       expect(rows.tabBottom).toBeLessThanOrEqual(rows.contextualTop);
-      for (const sel of CONTROLS) {
+      for (const sel of controlsFor(vp.width)) {
         const r = await hitOwnership(page, sel);
         expect(r.ok, `${sel} centre hit in Mind Map at ${r.at}`).toBe(true);
       }
@@ -349,7 +367,7 @@ test.describe("menu dismissal", () => {
     await openApp(page, { width: 390, height: 844 });
     const menu = page.getByRole("menu", { name: "Công cụ học" });
     await page.locator('header button[aria-label="Mở công cụ học"]').click();
-    await menu.getByRole("menuitem", { name: /Mở thư mục nguồn/ }).click();
+    await menu.getByRole("menuitemcheckbox", { name: "Nguồn" }).click();
     await expect(menu).toHaveCount(0);
   });
 
@@ -379,18 +397,18 @@ test.describe("menu dismissal", () => {
 test.describe("mode-switch lifecycle invariants", () => {
   test("chat pane is not remounted and the Mind Map canvas keeps its node and transform through round trips", async ({ page }) => {
     await openApp(page, { width: 390, height: 844, withMap: true });
-    await page.getByRole("tab", { name: "Trò chuyện" }).click();
+    await chooseMode(page, "Trò chuyện");
     await page.evaluate(() => { window.__chat = document.querySelector("textarea"); });
-    await page.getByRole("tab", { name: "Sơ đồ tư duy" }).click();
+    await chooseMode(page, "Sơ đồ tư duy");
     await expect(page.locator("me-root").first()).toBeAttached();
     const before = await page.evaluate(() => ({
       root: document.querySelector("me-root")?.outerHTML.length ?? 0,
       transform: document.querySelector(".map-canvas, .mm-canvas-wrap > div")?.style.transform || "",
       tpc: document.querySelectorAll("me-tpc").length,
     }));
-    await page.getByRole("tab", { name: "Tóm tắt" }).click();
-    await page.getByRole("tab", { name: "Sơ đồ tư duy" }).click();
-    await page.getByRole("tab", { name: "Trò chuyện" }).click();
+    await chooseMode(page, "Tóm tắt");
+    await chooseMode(page, "Sơ đồ tư duy");
+    await chooseMode(page, "Trò chuyện");
     const after = await page.evaluate(() => ({
       sameTextarea: document.querySelector("textarea") === window.__chat,
       transform: document.querySelector(".map-canvas, .mm-canvas-wrap > div")?.style.transform || "",
@@ -403,18 +421,18 @@ test.describe("mode-switch lifecycle invariants", () => {
 
   test("Mind Elixir instance (me-root element) survives Mind Map → Summary → Mind Map", async ({ page }) => {
     await openApp(page, { width: 390, height: 844, withMap: true });
-    await page.getByRole("tab", { name: "Sơ đồ tư duy" }).click();
+    await chooseMode(page, "Sơ đồ tư duy");
     await expect(page.locator("me-root").first()).toBeAttached();
     await page.evaluate(() => { window.__root = document.querySelector("me-root"); });
-    await page.getByRole("tab", { name: "Tóm tắt" }).click();
-    await page.getByRole("tab", { name: "Sơ đồ tư duy" }).click();
+    await chooseMode(page, "Tóm tắt");
+    await chooseMode(page, "Sơ đồ tư duy");
     const same = await page.evaluate(() => document.querySelector("me-root") === window.__root);
     expect(same, "same Mind Elixir root element after the round trip").toBe(true);
   });
 
   test("Export Studio opens from the Mind Map header", async ({ page }) => {
     await openApp(page, { width: 390, height: 844, withMap: true });
-    await page.getByRole("tab", { name: "Sơ đồ tư duy" }).click();
+    await chooseMode(page, "Sơ đồ tư duy");
     await page.getByRole("button", { name: "Xuất sơ đồ" }).click();
     await expect(page.getByRole("dialog").filter({ hasText: "Xuất sơ đồ" }).first()).toBeVisible();
   });
@@ -423,7 +441,7 @@ test.describe("mode-switch lifecycle invariants", () => {
     // Guided itself is verified on production (aria-modal, Escape, no generation POST).
     // This fixture cannot open it: the create action needs a selected source.
     await openApp(page, { width: 390, height: 844, withMap: true });
-    await page.getByRole("tab", { name: "Sơ đồ tư duy" }).click();
+    await chooseMode(page, "Sơ đồ tư duy");
     await page.locator('button[aria-label="Mở thư viện sơ đồ"]').click();
     const listbox = page.getByRole("listbox", { name: "Chọn sơ đồ" });
     await expect(listbox).toBeVisible();
