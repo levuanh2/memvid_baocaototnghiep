@@ -4230,3 +4230,17 @@ hidden must render nothing until first opened, and must not reuse another surfac
   returns to the trigger.
 Prevention: a component that outlives an identity change binds its state to that identity, not
 to whatever props it last saw; every exit path of a session goes through one cleanup.
+
+## Reader scroll round-trip flake: measured before the layout settled (2026-11-24, #211 merge review)
+
+Symptom: `reader.spec.js` "keyboard reaches the Reader tab..." failed intermittently after the
+#211/integ merge (420 vs 425, 424 vs 420; 2/5 then 6/10 isolated runs). Root cause (instrumented
+with ResizeObserver + scroll log): `.reader-scroll` scrollHeight was still changing when the test
+set `scrollTop = 420` (1589 or 1544, settling at 1571: web fonts / late layout), so scroll anchoring
+moved the position a few px AFTER `before` was read. ReaderPane's restore was correct (it saved the
+anchored value from the scroll event). A first attempt that captured scrollTop at hide time did not
+help and was reverted: never fix a flake before logging what actually moves.
+Fix: wait for `document.fonts.ready` and a stable scrollHeight before setting and reading the
+position; poll the restored value for stability across frames, then require exact equality.
+Regression: 10/10 isolated, 20/20 with --repeat-each=20 --workers=4, review group 164/164.
+Prevention: any e2e that asserts an exact scroll offset must first wait for a stable scrollHeight.

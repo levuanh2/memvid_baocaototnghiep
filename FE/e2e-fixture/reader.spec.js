@@ -74,6 +74,15 @@ test("keyboard reaches the Reader tab and TOC, and mode switches keep reading po
   // content and shifted scrollTop by a few pixels when specs ran together (flaky 424 vs 420).
   await expect(page.getByText(/Đang tải \d+/)).toHaveCount(0);
   await expect(page.getByRole("heading", { name: "Bộ nhớ" })).toBeAttached();
+  // #211 merge review P2: the content height was still changing here (web fonts / late layout:
+  // scrollHeight 1589 or 1544 before settling at 1571), and scroll anchoring then moved the
+  // position by a few px after `before` was read. Wait for fonts and a stable height first.
+  await page.evaluate(() => document.fonts.ready.then(() => undefined));
+  await expect.poll(async () => {
+    const first = await scroll.evaluate((node) => node.scrollHeight);
+    await page.waitForTimeout(150);
+    return first === await scroll.evaluate((node) => node.scrollHeight);
+  }, { timeout: 5000 }).toBe(true);
   await scroll.evaluate((node) => { node.scrollTop = 420; });
   // The contract is "the same position after the round trip". Read the position the Reader
   // actually holds once the scroll settled (scroll anchoring can move it a few pixels).
@@ -85,7 +94,13 @@ test("keyboard reaches the Reader tab and TOC, and mode switches keep reading po
   await readerTab.focus();
   await page.keyboard.press("Enter");
   await expect(readerTab).toHaveAttribute("aria-selected", "true");
-  expect(await scroll.evaluate((node) => node.scrollTop)).toBe(before);
+  // Wait until the restored position is stable across frames, then require it exactly.
+  await expect.poll(async () => {
+    const first = await scroll.evaluate((node) => node.scrollTop);
+    await page.evaluate(() => new Promise((r) => requestAnimationFrame(() => requestAnimationFrame(r))));
+    const second = await scroll.evaluate((node) => node.scrollTop);
+    return first === second ? second : null;
+  }, { timeout: 5000 }).toBe(before);
   const toc = page.getByRole("navigation", { name: "Mục lục tài liệu" }).getByRole("button", { name: "Bộ nhớ" });
   await toc.focus();
   await expect(toc).toBeFocused();
