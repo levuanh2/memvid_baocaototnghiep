@@ -282,3 +282,23 @@ describe("ReaderPane before it is first opened", () => {
     expect(api.listSections).toHaveBeenCalledTimes(1);
   });
 });
+
+// Claude review of P5a: the reading position relied on the browser keeping scrollTop through
+// display:none, which drifted by a few pixels (and resets in some engines). The pane now saves
+// the position while visible and restores it exactly when shown again.
+describe("ReaderPane reading position", () => {
+  it("restores the exact scroll position after being hidden", async () => {
+    api.listDocuments.mockResolvedValue([documentRow("d1", "alpha")]);
+    api.listSections.mockResolvedValue([]);
+    api.listChunkPage.mockResolvedValue({ total: 1, chunks: [{ chunk_id: "c1", chunk_index: 0, text: "Đoạn 1" }] });
+    await render();
+    const node = host.querySelector(".reader-scroll");
+    expect(node).not.toBeNull();
+    node.scrollTop = 420;
+    await act(async () => { node.dispatchEvent(new Event("scroll")); });
+    await act(async () => { root.render(<ReaderPane active={false} selectedSources={["alpha"]} />); });
+    node.scrollTop = 0; // what a hidden scroller may come back with
+    await act(async () => { root.render(<ReaderPane active selectedSources={["alpha"]} />); });
+    expect(host.querySelector(".reader-scroll").scrollTop).toBe(420);
+  });
+});

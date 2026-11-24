@@ -1,4 +1,4 @@
-import { Fragment, useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { Fragment, useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
 import { Icon } from "../ui/Icon";
 import { MdProse } from "../ui/Markdown";
 import Spinner from "../ui/Spinner";
@@ -50,6 +50,15 @@ export default function ReaderPane({ active = false, selectedSources = [], citat
   const documentsRequestRef = useRef(0);
   const contentRequestRef = useRef(0);
   const scrollRef = useRef(null);
+  // Reading position, saved while visible and restored exactly when shown again: a scroller
+  // under display:none can come back shifted or reset (flaky 416/424 vs 420 in reader.spec).
+  const savedScrollTop = useRef(null);
+  const onReaderScroll = useCallback((e) => { if (active) savedScrollTop.current = e.currentTarget.scrollTop; }, [active]);
+  useLayoutEffect(() => {
+    // The scroller may mount after this effect first ran (content loads later): read the ref now.
+    const node = scrollRef.current;
+    if (active && node && savedScrollTop.current != null) node.scrollTop = savedScrollTop.current;
+  }, [active]);
   const chunkRefs = useRef(new Map());
   const lastCitationNonceRef = useRef(citation?.nonce ?? null);
   // Claude review (CI #211): the pane is mounted hidden in every workspace; it must not load
@@ -263,7 +272,7 @@ export default function ReaderPane({ active = false, selectedSources = [], citat
             )) : <p className="text-caption text-text-muted">Tài liệu không có mục lục.</p>}
           </nav>
 
-          <div ref={scrollRef} className="reader-scroll flex-1 min-w-0 overflow-y-auto scroll-pt-4" tabIndex={0} aria-label="Nội dung tài liệu">
+          <div ref={scrollRef} onScroll={onReaderScroll} className="reader-scroll flex-1 min-w-0 overflow-y-auto scroll-pt-4" tabIndex={0} aria-label="Nội dung tài liệu">
             {citationMessage && (
               <div role="status" className="sticky top-0 z-10 mx-auto mt-3 max-w-[820px] rounded-[8px] border px-3 py-2.5 text-small"
                 style={{ borderColor: "var(--warn)", background: "var(--bg-card)", color: "var(--text-secondary)" }}>

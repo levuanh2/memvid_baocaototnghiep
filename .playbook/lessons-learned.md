@@ -4144,3 +4144,12 @@ permanently overriding automatic resolution, even for discrete citation navigati
 `manualDocumentId` so the citation's own unique mapping resolves document A. Workspace source changes
 (`selectedSources` changes without a new citation) leave `manualDocumentId` intact.
 Regression: `ReaderPane.test.jsx` 'switches from a manually picked document to a citation document when a citation arrives with a new nonce'.
+
+## P5a: reading position kept exactly; a test that compared with the value it set (2026-11-24)
+
+reader.spec 'mode switches keep reading position' failed intermittently on the a8d3d3a baseline too
+(416/424 vs 420): the Reader relied on the browser keeping scrollTop through display:none, and the
+test compared with the 420 it had just set although scroll anchoring had already moved the real
+position. The pane now saves scrollTop on scroll while visible and restores it on activation
+(unit: 'restores the exact scroll position after being hidden'); the e2e compares the settled
+position before the round trip with the one after (exact), and checks it is near 420.

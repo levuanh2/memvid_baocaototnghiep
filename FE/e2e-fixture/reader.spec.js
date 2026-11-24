@@ -70,13 +70,22 @@ for (const width of [390, 768, 1440]) {
 test("keyboard reaches the Reader tab and TOC, and mode switches keep reading position", async ({ page }) => {
   await openReader(page, { width: 768 });
   const scroll = page.locator(".reader-scroll");
+  // Set the position only after every chunk page has loaded: a page arriving later grew the
+  // content and shifted scrollTop by a few pixels when specs ran together (flaky 424 vs 420).
+  await expect(page.getByText(/Đang tải \d+/)).toHaveCount(0);
+  await expect(page.getByRole("heading", { name: "Bộ nhớ" })).toBeAttached();
   await scroll.evaluate((node) => { node.scrollTop = 420; });
+  // The contract is "the same position after the round trip". Read the position the Reader
+  // actually holds once the scroll settled (scroll anchoring can move it a few pixels).
+  await page.evaluate(() => new Promise((r) => requestAnimationFrame(() => requestAnimationFrame(r))));
+  const before = await scroll.evaluate((node) => node.scrollTop);
+  expect(Math.abs(before - 420)).toBeLessThan(16);
   await chooseMode(page, "Trò chuyện");
   const readerTab = page.getByRole("tab", { name: "Đọc nguồn" });
   await readerTab.focus();
   await page.keyboard.press("Enter");
   await expect(readerTab).toHaveAttribute("aria-selected", "true");
-  expect(await scroll.evaluate((node) => node.scrollTop)).toBe(420);
+  expect(await scroll.evaluate((node) => node.scrollTop)).toBe(before);
   const toc = page.getByRole("navigation", { name: "Mục lục tài liệu" }).getByRole("button", { name: "Bộ nhớ" });
   await toc.focus();
   await expect(toc).toBeFocused();
