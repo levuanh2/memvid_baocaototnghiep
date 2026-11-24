@@ -66,14 +66,14 @@ async function renderMainLayout() {
 }
 
 describe("MainLayout mode-switch ownership", () => {
-  it("renders exactly one tablist with exactly three mode tabs, no duplicate nav row", async () => {
+  it("renders exactly one tablist with exactly four mode tabs, no duplicate nav row", async () => {
     await renderMainLayout();
     const tablists = container.querySelectorAll('[role="tablist"]');
     expect(tablists.length).toBe(1);
     const tabs = container.querySelectorAll('[role="tab"]');
-    expect(tabs.length).toBe(3);
+    expect(tabs.length).toBe(4);
     const labels = Array.from(tabs).map((t) => t.getAttribute("title"));
-    expect(labels).toEqual(["Trò chuyện", "Sơ đồ tư duy", "Tóm tắt"]);
+    expect(labels).toEqual(["Trò chuyện", "Đọc nguồn", "Sơ đồ tư duy", "Tóm tắt"]);
   });
 
   it("clicking a mode tab switches the workspace pane (single real owner, not decorative)", async () => {

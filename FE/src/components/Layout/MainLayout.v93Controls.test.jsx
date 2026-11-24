@@ -235,7 +235,7 @@ describe("Chế độ học select", () => {
     const select = container.querySelector("select[data-mode-select]");
     expect(select).not.toBeNull();
     expect(select.labels[0].textContent).toBe("Chế độ học");
-    expect([...select.options].map((o) => o.textContent)).toEqual(["Trò chuyện", "Sơ đồ tư duy", "Tóm tắt"]);
+    expect([...select.options].map((o) => o.textContent)).toEqual(["Trò chuyện", "Đọc nguồn", "Sơ đồ tư duy", "Tóm tắt"]);
     expect(select.value).toBe("chat");
     const calls = spies.apiFetch.mock.calls.length;
     await act(async () => {

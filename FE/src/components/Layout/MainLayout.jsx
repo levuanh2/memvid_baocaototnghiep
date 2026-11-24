@@ -34,6 +34,7 @@ import { useAppHeight } from "../../hooks/useAppHeight";
 // same icons — this is a render-location move, not a redesign.
 const MODE_TABS = [
   { key: "chat", label: "Trò chuyện", icon: "MessageSquareText" },
+  { key: "reader", label: "Đọc nguồn", icon: "BookOpen" },
   { key: "mindmap", label: "Sơ đồ tư duy", icon: "Network" },
   { key: "summary", label: "Tóm tắt", icon: "ScrollText" },
 ];
@@ -196,6 +197,7 @@ export default function MainLayout({
   const [mindmapData, setMindmapData] = useState(null);   // { data, onRegenerate, regenerating } | null
   const [summaryData, setSummaryData] = useState(null);   // summary record | null
   const [summaryContext, setSummaryContext] = useState(null);
+  const [readerCitation, setReaderCitation] = useState(null);
   // Keep the active client-side pane in this history entry so a round trip to
   // the Study library returns to the same pane. This does not route between
   // Chat/Mind Map/Summary: WorkspaceContainer still owns all three panes and
@@ -234,6 +236,10 @@ export default function MainLayout({
   // Feature Pack B — the other direction of the same switch, for Chat's own
   // "Xem tóm tắt" button.
   const onSwitchToSummary = useCallback(() => setWorkspaceMode("summary"), []);
+  const onOpenReaderCitation = useCallback((citation) => {
+    setReaderCitation({ ...citation, nonce: Date.now() });
+    setWorkspaceMode("reader");
+  }, []);
   const openTimeline = useCallback(() => {
     setRightView("timeline");
     if (panel.drawer) openRight(); else setRightCollapsed(false);
@@ -306,11 +312,15 @@ export default function MainLayout({
   // Task 3 "Open source" (Knowledge Inspector) — reuses the EXISTING Study
   // Context selector, same call SummaryPane already makes; "closing" now
   // means switching the Workspace back to Chat, not dismissing a modal.
-  const onInspectorOpenSource = useCallback((stem) => {
+  const onInspectorOpenSource = useCallback((stem, citation = null) => {
     if (!stem) return;
     selectDocument(stem, { source: "mindmap" });
+    if (citation) {
+      onOpenReaderCitation({ ...citation, stem });
+      return;
+    }
     setWorkspaceMode("chat");
-  }, [selectDocument]);
+  }, [onOpenReaderCitation, selectDocument]);
   const onInspectorAskAI = useCallback((request) => {
     const text = typeof request === "string" ? request : request?.text;
     if (!text) return;
@@ -814,14 +824,14 @@ export default function MainLayout({
               <button key={t.key} type="button" role="tab" aria-selected={active}
                 onClick={() => { setWorkspaceMode(t.key); closeHeaderSurface(); }}
                 title={t.label} aria-label={t.label}
-                className="flex items-center justify-center gap-1.5 w-10 h-10 lg:w-auto lg:h-auto px-0 lg:px-3 py-0 lg:py-1.5 text-small rounded-full transition-colors shrink-0"
+                className="flex items-center justify-center gap-1.5 w-10 h-10 min-[1800px]:w-auto min-[1800px]:h-auto px-0 min-[1800px]:px-3 py-0 min-[1800px]:py-1.5 text-small rounded-full transition-colors shrink-0"
                 style={{
                   background: active ? "var(--accent-cta)" : "transparent",
                   color: active ? "var(--on-primary)" : "var(--text-secondary)",
                   fontWeight: active ? 600 : 500,
                 }}>
                 <Icon name={t.icon} size={14} />
-                <span className="workspace-mode-label hidden lg:inline">{t.label}</span>
+                <span className="workspace-mode-label hidden min-[1800px]:inline">{t.label}</span>
               </button>
             );
           })}
@@ -1091,6 +1101,7 @@ export default function MainLayout({
               evidenceCount: evidence?.sources?.length || 0,
               isLeftVisible: tabletSourceRail || (!panel.drawer && !panel.collapsed.left),
               askAboutDraft,
+              onOpenReaderCitation,
               hasSummary: Boolean(summaryData), onOpenSummary: onSwitchToSummary,
               onUploadDocument: triggerUpload,
               onPickSource: pickSource,
@@ -1115,6 +1126,7 @@ export default function MainLayout({
             summaryLibrary={summaryLibrary}
             summaryListLoading={libraries.summaryInitialLoading}
             onSummaryContextChange={setSummaryContext}
+            readerCitation={readerCitation}
             controller={mindMapController}
           />
         </main>

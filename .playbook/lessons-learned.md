@@ -4098,3 +4098,16 @@ and keep a margin for font metrics.
 2. The <=700px select hid the tab row; e2e-fixture/ specs were updated but e2e/ (real-backend
 Critical Flows) still waited for the tab row at 390px. Prevention: grep every Playwright folder
 (e2e/ and e2e-fixture/) for a selector before changing what it points at.
+
+## Independent request counters for independent Reader resources (V9.3 P5a, 2026-11-24)
+
+The first Reader draft shared one stale-response counter between the caller-owned document-list
+request and the selected document's sections/chunks request. On the initial commit, the content
+effect correctly observed that no document had resolved yet, but incremented the shared counter;
+that made the still-valid `/api/documents` response look stale and left the Reader loading forever.
+Root cause: the counter represented a component render sequence instead of one request lifecycle.
+Fix: the owned-list request and document-content request have separate counters, and only a new
+request or cleanup in the same resource family invalidates its response. Regression:
+`ReaderPane.test.jsx` loads the owned list, paginates 501 chunks, changes documents while an old
+sections response is pending, and retries a failed sections request. Prevention: a stale-response
+token must be scoped to the resource/effect it guards; never reuse it across independent fetches.
