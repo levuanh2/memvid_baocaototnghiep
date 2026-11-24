@@ -50,12 +50,16 @@ ANONYMOUS_EMAIL = "anonymous@studymap.local"
 _CACHE_TTL = float(os.getenv("DOCUMENTS_CACHE_TTL_SEC", "2") or 2)
 _cache_lock = threading.Lock()
 _cache: dict = {"t": 0.0, "rows": None}
+# V9.3 security: owners per canonical stem over EVERY document row (soft-deleted too).
+_stem_cache: dict = {"t": 0.0, "map": None}
 
 
 def invalidate_cache() -> None:
     with _cache_lock:
         _cache["rows"] = None
         _cache["t"] = 0.0
+        _stem_cache["map"] = None
+        _stem_cache["t"] = 0.0
 
 
 def _now_iso() -> str:
@@ -223,6 +227,60 @@ def all_rows(*, use_cache: bool = True) -> Dict[str, Dict[str, Any]]:
         _cache["rows"] = rows
         _cache["t"] = time.time()
     return rows
+
+
+def stem_owners(*, use_cache: bool = True) -> Dict[str, set]:
+    """V9.3 security: {canonical source_stem: {owner user_id or None}} over EVERY document
+    row, soft-deleted included.
+
+    A stem is NOT an identity: two owners (or an owner and an ownerless/anonymous row) can
+    carry the same canonical stem through legacy/imported rows, concurrent uploads or
+    multi-process registry caches, and a soft-deleted document keeps its chunks in the
+    shared index under that stem. Authorization by stem must therefore see every row that
+    still has chunks, not only the live ones `all_rows()` returns. Anonymous owner -> None,
+    like `_row`.
+    """
+    if use_cache and _CACHE_TTL > 0:
+        with _cache_lock:
+            cached = _stem_cache["map"]
+            if cached is not None and (time.time() - _stem_cache["t"]) < _CACHE_TTL:
+                return cached
+    anon = anonymous_user_id()
+    with session_scope() as s:
+        rows = s.execute(select(Document.user_id, Document.title, Document.metadata_json)).all()
+    out: Dict[str, set] = {}
+    for uid, title, meta in rows:
+        stem = canonical_source_stem((meta or {}).get("source_stem") or title or "")
+        if not stem:
+            continue
+        owner = None if (not uid or uid == anon) else str(uid)
+        out.setdefault(stem, set()).add(owner)
+    with _cache_lock:
+        _stem_cache["map"] = out
+        _stem_cache["t"] = time.time()
+    return out
+
+
+def chunk_owner_by_embedding(embedding_id: Any) -> tuple:
+    """V9.3 security: (found, owner) for the chunk a global FAISS id points at, from the
+    chunk's own row (`document_chunks.embedding_id` -> `documents.user_id`).
+
+    found=False: no chunk row carries this id (legacy index entry) -> caller falls back to
+    the stem rule. owner=None when the document is soft-deleted, anonymous, or when rows
+    of different owners carry the id (never pick one): the caller must refuse.
+    """
+    key = str(embedding_id)
+    anon = anonymous_user_id()
+    with session_scope() as s:
+        rows = s.execute(
+            select(Document.user_id, Document.status)
+            .join(DocumentChunk, DocumentChunk.document_id == Document.id)
+            .where(DocumentChunk.embedding_id == key)
+        ).all()
+    if not rows:
+        return False, None
+    owners = {None if (st == "deleted" or not uid or uid == anon) else str(uid) for uid, st in rows}
+    return True, (owners.pop() if len(owners) == 1 else None)
 
 
 def update_status(document_id: str, status: str, progress: Optional[float] = None,

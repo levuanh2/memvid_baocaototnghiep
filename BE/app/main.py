@@ -1709,17 +1709,58 @@ def billing_capability():
     return jsonify({"plan": summary["plan"], "monthly_token_limit": summary["limit"], "per_request_token_limit": summary["per_request_token_limit"], "enforcement_enabled": summary["enforcement_enabled"], "reset_at": summary["reset_at"], "period_start": summary.get("period_start"), "period_end": summary.get("period_end")}), 200
 
 
+def _all_document_stem_owners() -> Optional[Dict[str, set]]:
+    """Owners of every document row per canonical stem, soft-deleted included (their
+    chunks stay in the shared index). None when the view cannot be read: callers in
+    protected mode then refuse rather than authorize on a partial picture."""
+    try:
+        from app.domains.documents import repository as _docs
+        return _docs.stem_owners()
+    except Exception as exc:
+        print(f"⚠️ Không đọc được chủ sở hữu theo stem: {exc}")
+        return None
+
+
+def _stem_owner_map(registry: Optional[Dict[str, Dict]] = None) -> Optional[Dict[str, set]]:
+    """V9.3 security: {canonical stem: owners} from every document row plus the registry."""
+    every = _all_document_stem_owners()
+    if every is None:
+        return None
+    out = {k: set(v) for k, v in every.items()}
+    rows = registry if registry is not None else _load_source_registry()
+    for row in (rows or {}).values():
+        if not isinstance(row, dict):
+            continue
+        stem = _normalize_video_stem(row.get("source_stem") or row.get("filename") or "")
+        if stem:
+            out.setdefault(stem, set()).add(row.get("user_id"))
+    return out
+
+
+def _stem_exclusive_to(stem: str, user_id: Optional[str], owners_map: Optional[Dict[str, set]]) -> bool:
+    """A stem is usable by `user_id` only when EVERY document carrying it is theirs. Two
+    owners, an ownerless/anonymous row, or an unreadable owner view -> False (never the
+    first match: a stem is a display-derived name, not an identity)."""
+    if user_id is None or owners_map is None:
+        return False
+    return owners_map.get(_normalize_video_stem(stem or "")) == {user_id}
+
+
 def owned_stems(user_id: Optional[str]) -> set:
     """Canonical source stems owned by `user_id`, from the registry.
 
     When AUTH_PROTECT_APP_APIS is OFF, legacy/None-owner rows are included (today's
     open behavior). When ON, only rows whose user_id matches are returned (and, for
-    a None user_id, nothing) — the fail-closed base the later phases enforce."""
+    a None user_id, nothing) — the fail-closed base the later phases enforce.
+    V9.3 security: when ON, a stem any other owner (or an ownerless row, or a
+    soft-deleted foreign document) also carries is left out, so no stem-scoped path
+    (query/RAG, list-indexed, summary, mind map) can reach the other owner's chunks."""
     try:
         registry = _load_source_registry()
     except Exception:
         return set()
     protect = _auth_protect_enabled()
+    owners_map = _stem_owner_map(registry) if protect else None
     out: set = set()
     for row in registry.values():
         if not isinstance(row, dict):
@@ -1729,7 +1770,7 @@ def owned_stems(user_id: Optional[str]) -> set:
             continue
         owner = row.get("user_id")
         if protect:
-            if user_id is not None and owner == user_id:
+            if user_id is not None and owner == user_id and _stem_exclusive_to(stem, user_id, owners_map):
                 out.add(stem)
         else:
             # open mode: everything visible (owner filter is a no-op)
@@ -1752,13 +1793,27 @@ def _source_owner_ok(stem_or_id: str, user_id: Optional[str]) -> bool:
     except Exception:
         return False
     norm = _normalize_video_stem(stem_or_id)
+    owners_map = _stem_owner_map(registry)
     for sid, row in registry.items():
         if not isinstance(row, dict):
             continue
         row_stem = _normalize_video_stem(row.get("source_stem") or row.get("filename") or "")
         if sid == stem_or_id or (norm and row_stem == norm):
-            return row.get("user_id") == user_id
+            # V9.3 security: the caller acts on the stem next (reads or deletes its chunks
+            # in the shared index), so the owner of this one row is not enough: every
+            # document on the stem must be theirs. Matched by id or by stem alike.
+            return row.get("user_id") == user_id and _stem_exclusive_to(row_stem, user_id, owners_map)
     return False
+
+
+def _chunk_db_owner(chunk_id) -> tuple:
+    """(found, owner) for a global chunk id from its own `document_chunks` row."""
+    try:
+        from app.domains.documents import repository as _docs
+        return _docs.chunk_owner_by_embedding(chunk_id)
+    except Exception as exc:
+        print(f"⚠️ Không đọc được chủ của chunk {chunk_id}: {exc}")
+        return True, None  # cannot verify -> refuse
 
 
 def _resolve_owned_query_sources(raw_sources, user_id: Optional[str]):
@@ -5900,8 +5955,15 @@ def get_chunk_text(chunk_id: int):
         return jsonify({"error": "Chunk not found"}), 404
     # Owner scope: resolve the chunk's source and deny raw-text exfiltration by global
     # chunk id. A foreign chunk is indistinguishable from a missing one (404).
-    if _auth_protect_enabled() and not _source_owner_ok(_chunk_owner_stem(chunk_id), uid):
-        return jsonify({"error": "Chunk not found"}), 404
+    # V9.3 security: the chunk's own row (embedding_id -> document -> owner) decides when it
+    # exists; only a legacy entry without one falls back to the stem, which must then be
+    # exclusive to the caller.
+    if _auth_protect_enabled():
+        found, owner = _chunk_db_owner(chunk_id)
+        allowed = (owner is not None and owner == uid) if found else \
+            _source_owner_ok(_chunk_owner_stem(chunk_id), uid)
+        if not allowed:
+            return jsonify({"error": "Chunk not found"}), 404
     return jsonify({"chunk_id": chunk_id, "text": text}), 200
 
 
@@ -6644,6 +6706,16 @@ def delete_source_v2(source_id: str):
         _real_stem = _normalize_video_stem(source_info.get("source_stem") or source_info.get("filename") or "")
         if _real_stem:
             source_stem = _real_stem
+
+    # V9.3 security: every purge below is BY STEM (index chunks, memory tree, mind maps).
+    # When another owner, an ownerless row or a soft-deleted foreign document shares the
+    # stem, purging destroys their data, and skipping it would leave this owner's chunks
+    # readable by the other one once the stem is theirs alone. Refuse, explicitly.
+    if _auth_protect_enabled() and not _stem_exclusive_to(source_stem, uid, _stem_owner_map()):
+        return jsonify({
+            "error": "shared_source_stem",
+            "message": "Tài liệu này trùng tên nguồn với một tài liệu khác nên chưa xoá an toàn được. Hãy báo quản trị viên.",
+        }), 409
 
     # Kiểm tra nếu source đang processing (cho phép xóa nhưng log warning)
     if source_info and source_info.get("status") == "processing":
