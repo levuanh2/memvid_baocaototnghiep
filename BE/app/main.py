@@ -2660,6 +2660,11 @@ def _unique_display_filename(filename: str, registry: dict) -> str:
     " (n)" trước đuôi để hai tài liệu cùng tên KHÔNG trộn chunk (mỗi cái 1 stem)."""
     fn = filename or "file"
     existing = {(info.get("source_stem") or "") for info in registry.values()}
+    # V9.3 security: `registry` holds live rows only, but a soft-deleted document keeps its
+    # row and its index chunks under its stem. Reusing that stem would make it shared, and
+    # the shared-stem rule would then lock the new uploader out without a word. Skip every
+    # stem any document row still carries (an unreadable view adds nothing, as before).
+    existing |= set((_all_document_stem_owners() or {}).keys())
     if _normalize_video_stem(fn) not in existing:
         return fn
     base, ext = os.path.splitext(fn)

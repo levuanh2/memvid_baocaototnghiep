@@ -259,3 +259,17 @@ def test_delete_by_id_refuses_to_purge_a_shared_stem(be, client, monkeypatch):
     assert r.status_code == 409
     assert r.get_json()["error"] == "shared_source_stem"
     assert be.INDEX_META_JSON_PATH.read_text(encoding="utf-8") == before
+
+
+def test_upload_name_avoids_the_stem_of_a_soft_deleted_document(be, monkeypatch):
+    """B uploaded then soft-deleted slide.pdf; its chunks and row still carry the stem. The
+    de-duplication only looked at live rows, so A's new slide.pdf got that stem and the rule
+    above would lock A out of a fresh document without a word. New uploads must skip every
+    stem any document row still carries."""
+    registry = {"idA2": {"source_stem": "ghi_chu", "user_id": "A"}}  # live rows only
+    _all_docs(be, monkeypatch, {"slide_pdf": {"B"}, "ghi_chu": {"A"}})
+    name = be._unique_display_filename("slide.pdf", registry)
+    assert name == "slide (2).pdf"
+    assert be._normalize_video_stem(name) != "slide_pdf"
+    # Unaffected when nothing carries the stem.
+    assert be._unique_display_filename("moi.pdf", registry) == "moi.pdf"

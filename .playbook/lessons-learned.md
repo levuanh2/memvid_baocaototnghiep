@@ -4124,3 +4124,7 @@ it until it is resolved; document-id routes still work. A per-document identity 
 Regression: `BE/tests/test_stem_tenant_isolation.py` (11 tests, red log sec-red.log).
 Prevention: never authorize by a value derived from a filename; when two rows can share a key,
 test the two-owner case and assert nothing is chosen by order.
+Follow-up (side review, same PR): upload de-duplication (`_unique_display_filename`) only saw
+live rows, so a new upload could take the stem of someone else's soft-deleted document and be
+locked out by the new rule without a message. It now skips every stem any document row carries.
+When a rule widens what counts as "taken", every place that hands out the same key must widen too.
