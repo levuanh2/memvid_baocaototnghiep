@@ -10,6 +10,8 @@ import { usePanelLayout } from "../../hooks/usePanelLayout";
 import { PANELS } from "../../hooks/panelLayout";
 import { useTheme } from "../../hooks/useTheme";
 import { useAuth } from "../../auth/useAuth";
+import { flushPendingNotes } from "../../utils/notesPreview";
+import { toast } from "../ui/Toaster";
 import { Icon } from "../ui/Icon";
 import Toaster from "../ui/Toaster";
 import AccountMenu from "./AccountMenu";
@@ -37,6 +39,8 @@ const MODE_TABS = [
   { key: "reader", label: "Đọc nguồn", icon: "BookOpen" },
   { key: "mindmap", label: "Sơ đồ tư duy", icon: "Network" },
   { key: "summary", label: "Tóm tắt", icon: "ScrollText" },
+  // V9.3 P5b: browser-only Notes Preview (works with no AI source selected).
+  { key: "notes", label: "Ghi chú", icon: "Pencil" },
 ];
 
 export default function MainLayout({
@@ -349,7 +353,16 @@ export default function MainLayout({
   // Chỉ ca đăng xuất-vì-vừa-đổi-mật-khẩu mới đi tới `/login` kèm một MÃ thông báo —
   // người dùng cần thấy xác nhận rằng mật khẩu đã đổi, và cần đăng nhập lại ngay ở
   // đúng chỗ để làm việc đó.
+  // V9.3 P5b: write pending browser notes before leaving. If the browser refuses, warn once
+  // and stay; a second click leaves (session cleanup then drops the in-memory draft).
+  const notesWarnedRef = useRef(false);
   const handleLogout = async (tuyChon) => {
+    const flushed = flushPendingNotes();
+    if (!flushed.ok && !tuyChon?.lyDo && !notesWarnedRef.current) {
+      notesWarnedRef.current = true;
+      toast("Chưa lưu được ghi chú trên trình duyệt này. Sao chép ghi chú trước khi đăng xuất, hoặc bấm Đăng xuất lần nữa để rời đi và bỏ bản nháp.", { type: "error", duration: 12000 });
+      return;
+    }
     await logout();
     const ma = tuyChon?.lyDo;
     if (ma) navigate(`/login?tb=${encodeURIComponent(ma)}`, { replace: true });
@@ -1127,6 +1140,7 @@ export default function MainLayout({
             summaryListLoading={libraries.summaryInitialLoading}
             onSummaryContextChange={setSummaryContext}
             readerCitation={readerCitation}
+            notesProps={{ active: workspaceMode === "notes", userId: user?.id ?? null, selectedSources }}
             controller={mindMapController}
           />
         </main>

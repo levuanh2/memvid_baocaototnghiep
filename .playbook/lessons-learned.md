@@ -4153,3 +4153,80 @@ test compared with the 420 it had just set although scroll anchoring had already
 position. The pane now saves scrollTop on scroll while visible and restores it on activation
 (unit: 'restores the exact scroll position after being hidden'); the e2e compares the settled
 position before the round trip with the one after (exact), and checks it is near 420.
+
+## A stem is a name, not an identity: cross-tenant reads/deletes on a shared stem (V9.3 security, 2026-11-24)
+
+Found by the P5a Reader audit (agy) and verified by Codex. Every stem-scoped path authorized
+through `owned_stems` / `_source_owner_ok`: query/RAG source resolution, `/list-indexed`,
+summary/mind-map gates, `/chunk-text`, `/delete-source`, memory tree. With two owners on one
+canonical stem (legacy/imported rows, concurrent same-name uploads, per-process registry caches;
+a soft-deleted document keeps its chunks in the index under its stem):
+- `/list-indexed` grouped the whole index by stem and returned both owners' chunk text;
+- `_source_owner_ok` returned on the FIRST registry row with the stem, so registry order decided;
+- `/delete-source` and `DELETE /sources/<id>` purged index chunks, memory tree and mind maps BY
+  STEM after checking one row's owner, destroying the other owner's data.
+Root cause: authorization keyed on a display-derived name. Normal sequential uploads de-duplicate
+stems globally, which hid it; nothing in the schema guarantees it.
+Fix (no API/migration): in protected mode a stem is usable by U only when EVERY document row
+carrying it, soft-deleted included (`repository.stem_owners`), is U's; ownerless rows count as
+another owner; an unreadable owner view refuses. `/chunk-text` trusts the chunk's own row
+(`document_chunks.embedding_id` -> `documents.user_id`, deleted or mixed -> refuse) and falls back
+to the stem rule only for legacy entries. Purge-by-stem deletes on a shared stem answer 409
+`shared_source_stem` instead of purging or orphaning chunks.
+Trade-off: both owners of a shared stem lose stem-scoped access (chat/list/summary/mind map) to
+it until it is resolved; document-id routes still work. A per-document identity in the index
+(or a unique stem constraint) is the schema follow-up, owner approval needed.
+Regression: `BE/tests/test_stem_tenant_isolation.py` (11 tests, red log sec-red.log).
+Prevention: never authorize by a value derived from a filename; when two rows can share a key,
+test the two-owner case and assert nothing is chosen by order.
+Follow-up (side review, same PR): upload de-duplication (`_unique_display_filename`) only saw
+live rows, so a new upload could take the stem of someone else's soft-deleted document and be
+locked out by the new rule without a message. It now skips every stem any document row carries.
+When a rule widens what counts as "taken", every place that hands out the same key must widen too.
+
+Independent review of #209 (GPT-6, BLOCK) found two more, fixed red-first (sec2-red.log):
+- P1 stale per-process caches: `all_rows()`/`stem_owners()` cache per process and
+  `invalidate_cache()` only clears the writer, so another worker could authorize a stem that had
+  just become shared. Ownership now reads a fresh, SQL-filtered owner view for only the stems being
+  decided (`repository.owners_for_stems`). A first attempt bypassed the cache by re-reading the
+  whole documents table on every protected check (135 ms at 3,000 rows); the filtered query is
+  2.7 ms (sec2-bench.log). Stem-wide deletes take a PostgreSQL advisory lock for the stem for the
+  rest of the request and re-check under it.
+- P2 racing/blind upload naming: two owners uploading one name at once both got the same stem
+  (reproduced). Naming and the row create now run under the stem-family advisory lock
+  (`acquire_stem_lock`, pg_try_advisory_lock with a timeout), and an unreadable owner view or a
+  lock timeout answers 503 ownership_unavailable instead of naming blind.
+Prevention: a per-process cache is never an authorization source when more than one process can
+write; cost a security fix with real row counts before calling it cheap.
+
+## P5b Notes: native controls on white in dark mode; a mode helper that raced a reload (2026-11-24)
+
+1. The Notes select and textarea had class names but no CSS, so they kept the browser's white
+default while their text took the light dark-theme token: unreadable. Unit tests and every e2e
+assertion passed; only the dark screenshot showed it. Fix: token surface for native controls.
+Regression: notes-preview.spec.js compares the controls' background with the resolved --bg-card.
+Prevention: every new native control gets a dark-mode surface check, not only a screenshot.
+2. e2e helper chooseMode() called isVisible() right after a reload, before the <=700px select
+rendered, and fell through to clicking a hidden tab. isVisible() does not wait: wait for the
+visible control first (waitForModeControl).
+3. A 4th mode tab overflowed the 1280/1440 desktop header (38px / 21px). Text labels of
+Nguồn/Dẫn chứng/Tập trung now start at 1600px and the library label at 1440px. Measured slack
+(natural header width): +102px at 1440, +65px at 1600 with labels. A 5th tab needs its own budget.
+4. CI #210 again caught e2e/study-library-navigation (real backend) still expecting 3 tabs: the
+same miss as P4b, despite the lesson above. A written lesson is not a check. Before pushing a
+change to the mode tabs or header, run: `grep -rn 'getByRole("tab")\|Chế độ Workspace' FE/e2e FE/e2e-fixture`.
+5. The hidden Notes pane rendered "Đang tải danh sách tài liệu…" in <main> before it was opened,
+doubling the sidebar/chat loading text that source-loading-state.spec counts. A pane mounted
+hidden must render nothing until first opened, and must not reuse another surface's status text.
+6. Independent review of #210 (BLOCK), fixed red-first (p5b-review-red.log):
+- P1: the mounted pane kept one document list for every account and keyed edits by props while
+  the shown text still belonged to the previous identity. The list now reloads per account
+  (late responses dropped), the textarea renders only when the loaded {user, document} equals
+  the props, and edits/deletes are keyed by the loaded identity.
+- P2: forced session ends (401, bfcache user mismatch, logout after a password change) dropped
+  pending drafts silently. Every session end now writes pending drafts first; a refused write
+  is never reported as saved and the login screen says once that a draft was lost.
+- P3: the delete confirmation took focus nowhere. Focus goes to "Huỷ", Escape cancels, focus
+  returns to the trigger.
+Prevention: a component that outlives an identity change binds its state to that identity, not
+to whatever props it last saw; every exit path of a session goes through one cleanup.

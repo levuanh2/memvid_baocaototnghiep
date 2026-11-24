@@ -86,6 +86,7 @@ const controlsFor = (width) => [
     'nav[role="tablist"] [role="tab"][title="Đọc nguồn"]',
     'nav[role="tablist"] [role="tab"][title="Sơ đồ tư duy"]',
     'nav[role="tablist"] [role="tab"][title="Tóm tắt"]',
+    'nav[role="tablist"] [role="tab"][title="Ghi chú"]',
   ]),
   'header button[aria-label="Mở công cụ học"]',
   'header button[aria-label^="Mức sử dụng AI"]',
@@ -146,13 +147,13 @@ for (const vp of COMPACT) {
           await expect(page.getByRole("tablist", { name: "Chế độ Workspace" })).toBeHidden();
           const select = page.getByLabel("Chế độ học");
           await expect(select).toBeVisible();
-          await expect(select.locator("option")).toHaveText(["Trò chuyện", "Đọc nguồn", "Sơ đồ tư duy", "Tóm tắt"]);
+          await expect(select.locator("option")).toHaveText(["Trò chuyện", "Đọc nguồn", "Sơ đồ tư duy", "Tóm tắt", "Ghi chú"]);
           const box = await select.boundingBox();
           expect(box.x).toBeGreaterThanOrEqual(0);
           expect(box.x + box.width).toBeLessThanOrEqual(vp.width);
           return;
         }
-        for (const name of ["Trò chuyện", "Đọc nguồn", "Sơ đồ tư duy", "Tóm tắt"]) {
+        for (const name of ["Trò chuyện", "Đọc nguồn", "Sơ đồ tư duy", "Tóm tắt", "Ghi chú"]) {
           const label = await page.locator(`nav[role="tablist"] [role="tab"][title="${name}"] span`).first();
           await expect(label).toBeHidden();
         }
@@ -163,7 +164,7 @@ for (const vp of COMPACT) {
         const widths = [];
         const control = vp.width <= SELECT_MAX ? MODE_SELECT : 'nav[role="tablist"]';
         const tab = (name) => page.locator(`nav[role="tablist"] [role="tab"][title="${name}"]`);
-        for (const mode of ["Trò chuyện", "Đọc nguồn", "Sơ đồ tư duy", "Tóm tắt"]) {
+        for (const mode of ["Trò chuyện", "Đọc nguồn", "Sơ đồ tư duy", "Tóm tắt", "Ghi chú"]) {
           await chooseMode(page, mode);
           widths.push(await page.evaluate((sel) => Math.round(document.querySelector(sel).getBoundingClientRect().width), control));
         }
@@ -213,26 +214,20 @@ test.describe("full desktop header above the compact danger zone", () => {
             - widths - gap * Math.max(0, visible.length - 1);
         };
         const currentSlack = naturalSlack();
-        // P5b will add Ghi chú. Clone a real tab to keep this branch honest about the merged
-        // five-mode footprint instead of measuring P5a's four tabs only.
-        const nav = header.querySelector('nav[role="tablist"]');
-        const future = nav.querySelector('[role="tab"]').cloneNode(true);
-        future.setAttribute("title", "Ghi chú");
-        future.setAttribute("aria-label", "Ghi chú");
-        future.querySelector("span").textContent = "Ghi chú";
-        nav.append(future);
-        const fiveModeSlack = naturalSlack();
-        future.remove();
+        // P5a + P5b merged: the five real mode tabs are on the page now (no clone needed).
+        const modeTabs = header.querySelectorAll('nav[role="tablist"] [role="tab"]').length;
+        const fiveModeSlack = currentSlack;
         return {
           height: Math.round(header.getBoundingClientRect().height),
           headerScroll: header.scrollWidth, headerClient: header.clientWidth,
           docScroll: document.documentElement.scrollWidth, docClient: document.documentElement.clientWidth,
-          currentSlack, fiveModeSlack,
+          currentSlack, fiveModeSlack, modeTabs,
         };
       });
       expect(h.height).toBe(56);
       expect(h.headerScroll).toBeLessThanOrEqual(h.headerClient);
       expect(h.docScroll).toBeLessThanOrEqual(h.docClient);
+      expect(h.modeTabs).toBe(5);
       expect(h.currentSlack).toBeGreaterThanOrEqual(40);
       expect(h.fiveModeSlack).toBeGreaterThanOrEqual(40);
       await expect(page.getByRole("tab", { name: "Sơ đồ tư duy" })).toBeVisible();

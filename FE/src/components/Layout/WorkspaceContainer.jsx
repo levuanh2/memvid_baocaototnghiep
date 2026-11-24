@@ -16,6 +16,7 @@ import SummaryPane from "./SummaryPane";
 import SummaryPicker from "./SummaryPicker";
 import WorkspaceEmptyState from "./WorkspaceEmptyState";
 import ReaderPane from "./ReaderPane";
+import NotesPane from "../study/NotesPane";
 
 const paneClass = (active) => (active ? "flex-1 min-h-0" : "hidden");
 
@@ -46,6 +47,8 @@ export default function WorkspaceContainer({
   // is selected) and the upload trigger, both computed/owned by MainLayout
   // — see its own comment on `uploadTriggerRef` and `hasAnyDocuments`.
   hasAnyDocuments = true, onUploadDocument,
+  // V9.3 P5b: { active, userId, selectedSources } for the browser-only notes pane.
+  notesProps = null,
 }) {
   const hasMindmap = Boolean(mindmapData?.data);
   const hasSummary = Boolean(summaryData);
@@ -113,6 +116,12 @@ export default function WorkspaceContainer({
           </WorkspaceEmptyState>
         )}
       </div>
+
+      {notesProps && (
+        <div className={paneClass(mode === "notes")}>
+          <NotesPane {...notesProps} />
+        </div>
+      )}
     </div>
   );
 }
