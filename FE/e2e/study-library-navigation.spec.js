@@ -31,7 +31,7 @@ test.describe("workspace study-library navigation", () => {
     await page.goBack();
     await expect(page.getByRole("tablist", { name: "Chế độ Workspace" })).toBeVisible();
     await expect(page.getByRole("tab", { name: "Sơ đồ tư duy" })).toHaveAttribute("aria-selected", "true");
-    await expect(page.getByRole("tab")).toHaveCount(3);
+    await expect(page.getByRole("tab")).toHaveCount(4); // V9.3 P5b adds "Ghi chú"
 
     // Narrow screens retain a separate, hit-testable library entry point.
     await page.setViewportSize({ width: 390, height: 844 });

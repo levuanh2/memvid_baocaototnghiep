@@ -4143,3 +4143,35 @@ Independent review of #209 (GPT-6, BLOCK) found two more, fixed red-first (sec2-
   lock timeout answers 503 ownership_unavailable instead of naming blind.
 Prevention: a per-process cache is never an authorization source when more than one process can
 write; cost a security fix with real row counts before calling it cheap.
+
+## P5b Notes: native controls on white in dark mode; a mode helper that raced a reload (2026-11-24)
+
+1. The Notes select and textarea had class names but no CSS, so they kept the browser's white
+default while their text took the light dark-theme token: unreadable. Unit tests and every e2e
+assertion passed; only the dark screenshot showed it. Fix: token surface for native controls.
+Regression: notes-preview.spec.js compares the controls' background with the resolved --bg-card.
+Prevention: every new native control gets a dark-mode surface check, not only a screenshot.
+2. e2e helper chooseMode() called isVisible() right after a reload, before the <=700px select
+rendered, and fell through to clicking a hidden tab. isVisible() does not wait: wait for the
+visible control first (waitForModeControl).
+3. A 4th mode tab overflowed the 1280/1440 desktop header (38px / 21px). Text labels of
+Nguồn/Dẫn chứng/Tập trung now start at 1600px and the library label at 1440px. Measured slack
+(natural header width): +102px at 1440, +65px at 1600 with labels. A 5th tab needs its own budget.
+4. CI #210 again caught e2e/study-library-navigation (real backend) still expecting 3 tabs: the
+same miss as P4b, despite the lesson above. A written lesson is not a check. Before pushing a
+change to the mode tabs or header, run: `grep -rn 'getByRole("tab")\|Chế độ Workspace' FE/e2e FE/e2e-fixture`.
+5. The hidden Notes pane rendered "Đang tải danh sách tài liệu…" in <main> before it was opened,
+doubling the sidebar/chat loading text that source-loading-state.spec counts. A pane mounted
+hidden must render nothing until first opened, and must not reuse another surface's status text.
+6. Independent review of #210 (BLOCK), fixed red-first (p5b-review-red.log):
+- P1: the mounted pane kept one document list for every account and keyed edits by props while
+  the shown text still belonged to the previous identity. The list now reloads per account
+  (late responses dropped), the textarea renders only when the loaded {user, document} equals
+  the props, and edits/deletes are keyed by the loaded identity.
+- P2: forced session ends (401, bfcache user mismatch, logout after a password change) dropped
+  pending drafts silently. Every session end now writes pending drafts first; a refused write
+  is never reported as saved and the login screen says once that a draft was lost.
+- P3: the delete confirmation took focus nowhere. Focus goes to "Huỷ", Escape cancels, focus
+  returns to the trigger.
+Prevention: a component that outlives an identity change binds its state to that identity, not
+to whatever props it last saw; every exit path of a session goes through one cleanup.

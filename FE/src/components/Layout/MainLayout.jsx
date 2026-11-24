@@ -10,6 +10,8 @@ import { usePanelLayout } from "../../hooks/usePanelLayout";
 import { PANELS } from "../../hooks/panelLayout";
 import { useTheme } from "../../hooks/useTheme";
 import { useAuth } from "../../auth/useAuth";
+import { flushPendingNotes } from "../../utils/notesPreview";
+import { toast } from "../ui/Toaster";
 import { Icon } from "../ui/Icon";
 import Toaster from "../ui/Toaster";
 import AccountMenu from "./AccountMenu";
@@ -36,6 +38,8 @@ const MODE_TABS = [
   { key: "chat", label: "Trò chuyện", icon: "MessageSquareText" },
   { key: "mindmap", label: "Sơ đồ tư duy", icon: "Network" },
   { key: "summary", label: "Tóm tắt", icon: "ScrollText" },
+  // V9.3 P5b: browser-only Notes Preview (works with no AI source selected).
+  { key: "notes", label: "Ghi chú", icon: "Pencil" },
 ];
 
 export default function MainLayout({
@@ -339,7 +343,16 @@ export default function MainLayout({
   // Chỉ ca đăng xuất-vì-vừa-đổi-mật-khẩu mới đi tới `/login` kèm một MÃ thông báo —
   // người dùng cần thấy xác nhận rằng mật khẩu đã đổi, và cần đăng nhập lại ngay ở
   // đúng chỗ để làm việc đó.
+  // V9.3 P5b: write pending browser notes before leaving. If the browser refuses, warn once
+  // and stay; a second click leaves (session cleanup then drops the in-memory draft).
+  const notesWarnedRef = useRef(false);
   const handleLogout = async (tuyChon) => {
+    const flushed = flushPendingNotes();
+    if (!flushed.ok && !tuyChon?.lyDo && !notesWarnedRef.current) {
+      notesWarnedRef.current = true;
+      toast("Chưa lưu được ghi chú trên trình duyệt này. Sao chép ghi chú trước khi đăng xuất, hoặc bấm Đăng xuất lần nữa để rời đi và bỏ bản nháp.", { type: "error", duration: 12000 });
+      return;
+    }
     await logout();
     const ma = tuyChon?.lyDo;
     if (ma) navigate(`/login?tb=${encodeURIComponent(ma)}`, { replace: true });
@@ -787,9 +800,9 @@ export default function MainLayout({
         </Link>
 
         <Link to="/app/study" aria-label="Thư viện học tập" title="Thư viện học tập"
-          className="study-library-link focus-hide flex items-center justify-center gap-1.5 w-10 h-10 lg:w-auto lg:px-3 rounded-[8px] border border-border text-small font-medium text-text-secondary hover:text-text-primary hover:bg-surface-elevated flex-shrink-0 transition-colors">
+          className="study-library-link focus-hide flex items-center justify-center gap-1.5 w-10 h-10 min-[1440px]:w-auto min-[1440px]:px-3 rounded-[8px] border border-border text-small font-medium text-text-secondary hover:text-text-primary hover:bg-surface-elevated flex-shrink-0 transition-colors">
           <Icon name="BookOpen" size={16} />
-          <span className="study-library-link__label hidden lg:inline">Thư viện học tập</span>
+          <span className="study-library-link__label hidden min-[1440px]:inline">Thư viện học tập</span>
         </Link>
 
         {/* Mode switch — Round 11 (mockup parity, explicit user decision):
@@ -842,25 +855,25 @@ export default function MainLayout({
         <button type="button" data-panel-toggle="sources" onClick={toggleSources}
           aria-expanded={sourcesOpen} aria-controls={leftPanelUnmounted ? undefined : "workspace-sources"}
           aria-label="Nguồn" title="Nguồn"
-          className="workspace-panel-toggle focus-hide flex-shrink-0 inline-flex items-center justify-center gap-1.5 w-10 h-10 min-[1440px]:w-auto min-[1440px]:px-3 rounded-[8px] border border-border text-small font-medium text-text-secondary hover:text-text-primary hover:bg-surface-elevated transition-colors">
+          className="workspace-panel-toggle focus-hide flex-shrink-0 inline-flex items-center justify-center gap-1.5 w-10 h-10 min-[1600px]:w-auto min-[1600px]:px-3 rounded-[8px] border border-border text-small font-medium text-text-secondary hover:text-text-primary hover:bg-surface-elevated transition-colors">
           <Icon name="FolderOpen" size={16} aria-hidden="true" />
-          <span className="hidden min-[1440px]:inline">Nguồn</span>
+          <span className="hidden min-[1600px]:inline">Nguồn</span>
         </button>
         <button type="button" data-panel-toggle="evidence" onClick={toggleEvidence}
           aria-expanded={evidenceOpen} aria-controls="workspace-evidence"
           aria-label="Dẫn chứng" title="Dẫn chứng"
-          className="workspace-panel-toggle flex-shrink-0 inline-flex items-center justify-center gap-1.5 w-10 h-10 min-[1440px]:w-auto min-[1440px]:px-3 rounded-[8px] border border-border text-small font-medium text-text-secondary hover:text-text-primary hover:bg-surface-elevated transition-colors">
+          className="workspace-panel-toggle flex-shrink-0 inline-flex items-center justify-center gap-1.5 w-10 h-10 min-[1600px]:w-auto min-[1600px]:px-3 rounded-[8px] border border-border text-small font-medium text-text-secondary hover:text-text-primary hover:bg-surface-elevated transition-colors">
           <Icon name="Quote" size={16} aria-hidden="true" />
-          <span className="hidden min-[1440px]:inline">Dẫn chứng</span>
+          <span className="hidden min-[1600px]:inline">Dẫn chứng</span>
         </button>
 
         {/* V9.3 P4: the one control that stays with the mode switch in Focus Mode. */}
         <button type="button" data-focus-toggle onClick={focusMode ? exitFocus : enterFocus}
           aria-pressed={focusMode} aria-label={focusMode ? "Thoát tập trung" : "Tập trung"}
           title={focusMode ? "Thoát tập trung (Esc)" : "Tập trung"}
-          className="workspace-focus-toggle flex-shrink-0 inline-flex items-center justify-center gap-1.5 w-10 h-10 min-[1440px]:w-auto min-[1440px]:px-3 rounded-[8px] border border-border text-small font-medium text-text-secondary hover:text-text-primary hover:bg-surface-elevated transition-colors">
+          className="workspace-focus-toggle flex-shrink-0 inline-flex items-center justify-center gap-1.5 w-10 h-10 min-[1600px]:w-auto min-[1600px]:px-3 rounded-[8px] border border-border text-small font-medium text-text-secondary hover:text-text-primary hover:bg-surface-elevated transition-colors">
           <Icon name={focusMode ? "X" : "Maximize"} size={16} aria-hidden="true" />
-          <span className="hidden min-[1440px]:inline">{focusMode ? "Thoát tập trung" : "Tập trung"}</span>
+          <span className="hidden min-[1600px]:inline">{focusMode ? "Thoát tập trung" : "Tập trung"}</span>
         </button>
 
         {/* Right actions */}
@@ -1115,6 +1128,7 @@ export default function MainLayout({
             summaryLibrary={summaryLibrary}
             summaryListLoading={libraries.summaryInitialLoading}
             onSummaryContextChange={setSummaryContext}
+            notesProps={{ active: workspaceMode === "notes", userId: user?.id ?? null, selectedSources }}
             controller={mindMapController}
           />
         </main>
