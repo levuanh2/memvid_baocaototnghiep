@@ -4049,3 +4049,13 @@ overwrote the learner's saved layout. A temporary view state must never go throu
 setter: derive the visible state (`rightCollapsed = focusMode ? !focusRightShown : saved`) and
 route every write through one helper that knows which one to change. Test: remount while
 focused and assert the saved layout and the visible panel.
+
+## Fixture specs pinned retired theme colours as literals (V9.3, 2026-11-24)
+
+brand-mark, marker-keyboard and export-root-color-artifacts asserted #F1333A/#D86A53/#126CF2
+after V9.3 P1a moved --brand, --focus and --accent-cta. They are outside CI Fixture Smoke, so
+15 failures sat unnoticed for several PRs. The export spec called the theme default root a
+"saved" colour although the fixture saves no appearance. Root cause: tests copied token values
+instead of reading the token or the source element. Prevention: resolve the token in the page
+(probe element with `color: var(--token)`) or compare an export with the source node's computed
+colour, and pin the literal only once, next to the comment naming the contract it comes from.
