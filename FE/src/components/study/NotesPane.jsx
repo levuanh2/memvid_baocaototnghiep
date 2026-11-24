@@ -22,17 +22,18 @@ export default function NotesPane({ active, userId, selectedSources = [], loadDo
   const [confirming, setConfirming] = useState(false);
   const timer = useRef(null);
   const current = useRef({ userId: null, docId: null, text: "", dirty: false });
-  const started = useRef(false);
+  // Nothing renders or loads until the mode is first opened (the pane is mounted hidden).
+  const [opened, setOpened] = useState(false);
 
   const load = useCallback(() => {
     setLoadError(false);
     loadDocuments().then((list) => setDocs(list || [])).catch(() => setLoadError(true));
   }, [loadDocuments]);
   useEffect(() => {
-    if (!active || started.current) return;
-    started.current = true;
+    if (!active || opened) return;
+    setOpened(true);
     load();
-  }, [active, load]);
+  }, [active, opened, load]);
 
   const resolved = docs ? resolveWorkspaceDocument(selectedSources, docs) : null;
   const docId = pickedId || resolved?.document?.document_id || "";
@@ -87,6 +88,8 @@ export default function NotesPane({ active, userId, selectedSources = [], loadDo
     setStatus({ kind: "idle" });
   };
 
+  if (!opened) return null;
+
   return (
     <section className="notes-pane flex-1 min-h-0 overflow-y-auto" aria-labelledby="notes-pane-title">
       <div className="mx-auto w-full max-w-[940px] px-4 py-5 flex flex-col gap-4">
@@ -110,7 +113,7 @@ export default function NotesPane({ active, userId, selectedSources = [], loadDo
             <button type="button" className="notes-pane__btn" onClick={load}>Thử lại</button>
           </div>
         ) : docs === null ? (
-          <p className="text-small text-text-secondary">Đang tải danh sách tài liệu…</p>
+          <p className="text-small text-text-secondary">Đang tải tài liệu để ghi chú…</p>
         ) : docs.length === 0 ? (
           <p className="text-small text-text-primary">Chưa có tài liệu nào để ghi chú. Tải tài liệu lên trong Thư viện.</p>
         ) : (

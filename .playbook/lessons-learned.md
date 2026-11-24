@@ -4112,3 +4112,9 @@ visible control first (waitForModeControl).
 3. A 4th mode tab overflowed the 1280/1440 desktop header (38px / 21px). Text labels of
 Nguồn/Dẫn chứng/Tập trung now start at 1600px and the library label at 1440px. Measured slack
 (natural header width): +102px at 1440, +65px at 1600 with labels. A 5th tab needs its own budget.
+4. CI #210 again caught e2e/study-library-navigation (real backend) still expecting 3 tabs: the
+same miss as P4b, despite the lesson above. A written lesson is not a check. Before pushing a
+change to the mode tabs or header, run: `grep -rn 'getByRole("tab")\|Chế độ Workspace' FE/e2e FE/e2e-fixture`.
+5. The hidden Notes pane rendered "Đang tải danh sách tài liệu…" in <main> before it was opened,
+doubling the sidebar/chat loading text that source-loading-state.spec counts. A pane mounted
+hidden must render nothing until first opened, and must not reuse another surface's status text.

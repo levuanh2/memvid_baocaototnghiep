@@ -149,6 +149,18 @@ describe("NotesPane", () => {
     expect(area().value).toBe("");
   });
 
+  // CI #210: the hidden pane rendered "Đang tải danh sách tài liệu…" inside <main> before it was
+  // ever opened, which doubled the sidebar/chat loading text other specs count.
+  it("renders and fetches nothing until the Notes mode is first opened", async () => {
+    load.mockClear();
+    await render({ active: false });
+    expect(load).not.toHaveBeenCalled();
+    expect(container.textContent).toBe("");
+    await render({ active: true });
+    expect(load).toHaveBeenCalledTimes(1);
+    expect(container.textContent).toContain("Ghi chú");
+  });
+
   it("does not offer editing without a signed-in user", async () => {
     await render({ userId: null });
     expect(area()).toBeNull();
