@@ -166,3 +166,21 @@ describe("ReaderPane data contract", () => {
     expect(api.listChunkPage).toHaveBeenCalledTimes(1);
   });
 });
+
+// Claude review of P5a (CI #211): the hidden Reader loaded the document list, the sections and
+// EVERY chunk page of the active source on each workspace load, before anyone opened it.
+describe("ReaderPane before it is first opened", () => {
+  it("requests nothing while hidden, and loads once opened", async () => {
+    api.listDocuments.mockResolvedValue([documentRow("d1", "alpha")]);
+    api.listSections.mockResolvedValue([]);
+    api.listChunkPage.mockResolvedValue({ total: 0, chunks: [] });
+    await render({ active: false });
+    expect(api.listDocuments).not.toHaveBeenCalled();
+    expect(api.listSections).not.toHaveBeenCalled();
+    expect(api.listChunkPage).not.toHaveBeenCalled();
+    await act(async () => { root.render(<ReaderPane active selectedSources={["alpha"]} />); });
+    await act(async () => { await Promise.resolve(); await Promise.resolve(); });
+    expect(api.listDocuments).toHaveBeenCalledTimes(1);
+    expect(api.listSections).toHaveBeenCalledTimes(1);
+  });
+});

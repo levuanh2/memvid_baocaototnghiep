@@ -51,6 +51,10 @@ export default function ReaderPane({ active = false, selectedSources = [], citat
   const contentRequestRef = useRef(0);
   const scrollRef = useRef(null);
   const chunkRefs = useRef(new Map());
+  // Claude review (CI #211): the pane is mounted hidden in every workspace; it must not load
+  // the document list, sections or chunk pages until the Reader is first opened.
+  const [opened, setOpened] = useState(active);
+  useEffect(() => { if (active) setOpened(true); }, [active]);
 
   const loadOwnedDocuments = useCallback(async () => {
     const request = ++documentsRequestRef.current;
@@ -69,9 +73,10 @@ export default function ReaderPane({ active = false, selectedSources = [], citat
   }, []);
 
   useEffect(() => {
+    if (!opened) return undefined;
     loadOwnedDocuments();
     return () => { documentsRequestRef.current += 1; };
-  }, [loadOwnedDocuments]);
+  }, [opened, loadOwnedDocuments]);
 
   const mappedDocument = useMemo(
     () => resolveWorkspaceDocument(citation?.stem ? [citation.stem] : selectedSources, documents),
@@ -92,6 +97,7 @@ export default function ReaderPane({ active = false, selectedSources = [], citat
   }, [documents, manualDocumentId]);
 
   useEffect(() => {
+    if (!opened) return undefined;
     const request = ++contentRequestRef.current;
     setSections([]);
     setChunks([]);
@@ -143,7 +149,7 @@ export default function ReaderPane({ active = false, selectedSources = [], citat
     };
     load();
     return () => { contentRequestRef.current += 1; };
-  }, [documentId, currentDocument, loadNonce]);
+  }, [opened, documentId, currentDocument, loadNonce]);
 
   useEffect(() => {
     if (!citation || contentState !== "ready") return;
@@ -177,6 +183,7 @@ export default function ReaderPane({ active = false, selectedSources = [], citat
     });
   }, [chunks, orderedSections]);
 
+  if (!opened) return null;
   if (documentsState === "loading") {
     return <ReaderNotice icon="BookOpen" title="Đang mở thư viện"><Spinner /> <span className="ml-2">Đang tải tài liệu của bạn…</span></ReaderNotice>;
   }

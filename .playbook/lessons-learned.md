@@ -4131,3 +4131,7 @@ KnowledgeInspector.readerCitation.test.jsx.
 1280/1440 "labels visible" assertion. Labels that name the main navigation give way last: tab
 labels from 1440px, library label from 1600px, Nguồn/Dẫn chứng/Tập trung labels from 1800px;
 the five-mode slack test (>=40px at 1280/1440/1600/1920) stays.
+3. CI #211 (protected-auth Critical Flows): the Reader pane, mounted hidden in every workspace,
+fetched the document list, the sections and EVERY chunk page of the active source on each load.
+Same class as the P5b Notes miss: a hidden pane must not load or render until first opened.
+Regression: ReaderPane.test.jsx 'requests nothing while hidden'.
