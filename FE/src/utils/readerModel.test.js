@@ -51,3 +51,21 @@ describe("citationMatchesChunk", () => {
     expect(CITATION_STALE_MESSAGE).toContain("không còn trong bản hiện tại");
   });
 });
+
+// Claude review of P5a: the server cuts a chat evidence snippet at 600 characters and appends
+// "…" (_attach_evidence). The verified chunk text never contains that ellipsis, so every long
+// chunk was reported as "no longer in the current version".
+describe("citation snippets cut by the server", () => {
+  it("matches a chunk whose snippet was truncated with an ellipsis", () => {
+    const text = "Đoạn dài ".repeat(120).trim();
+    const chunk = { embedding_id: "7", text };
+    const citation = { kind: "chat", id: "7", text: `${text.slice(0, 600).trimEnd()}…` };
+    expect(citationMatchesChunk(chunk, citation)).toBe(true);
+  });
+
+  it("still refuses a truncated snippet that is not in the chunk", () => {
+    const chunk = { embedding_id: "7", text: "Nội dung khác hẳn ".repeat(60) };
+    const citation = { kind: "chat", id: "7", text: `${"Đoạn dài ".repeat(80).slice(0, 600)}…` };
+    expect(citationMatchesChunk(chunk, citation)).toBe(false);
+  });
+});

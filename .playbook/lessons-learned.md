@@ -4111,3 +4111,9 @@ request or cleanup in the same resource family invalidates its response. Regress
 `ReaderPane.test.jsx` loads the owned list, paginates 501 chunks, changes documents while an old
 sections response is pending, and retries a failed sections request. Prevention: a stale-response
 token must be scoped to the resource/effect it guards; never reuse it across independent fetches.
+
+The same review found that chat evidence snippets longer than 600 characters end with a server-added
+ellipsis. Comparing that punctuation literally makes a valid `embedding_id` look stale because the
+stored chunk never contains the added ellipsis. The verifier now removes only a trailing truncation
+marker before its normalized contains check; a mismatched truncated snippet still fails. Regression:
+`readerModel.test.js` covers both the valid truncated prefix and a foreign truncated prefix.

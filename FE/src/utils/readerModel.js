@@ -29,7 +29,9 @@ export function citationIdMatchesChunk(chunk, citation) {
 export function citationMatchesChunk(chunk, citation) {
   if (!citationIdMatchesChunk(chunk, citation)) return false;
   const text = normalizeReaderText(chunk.text);
-  const snippet = normalizeReaderText(citation.text);
+  // The server cuts long evidence snippets at 600 characters and appends "…" (_attach_evidence);
+  // compare only the part that came from the chunk.
+  const snippet = normalizeReaderText(String(citation.text || "").replace(/\s*(…|\.\.\.)\s*$/u, ""));
   return Boolean(text && snippet && text.includes(snippet));
 }
 
