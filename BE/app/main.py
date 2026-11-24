@@ -2835,61 +2835,73 @@ def _ingest_uploaded_file_reserved(
 ) -> dict:
     """Persist and enqueue one validated upload under an explicit reservation.
 
-    V9.3 security (#209 review P2): the stem lock is held only while the display name is chosen,
-    the temporary local copy is written and the documents row is created (milliseconds). The
-    upload to object storage, which can be slow for large files, happens after the row exists and
-    the lock is released, so a second same-name upload never waits behind it."""
+    V9.3 security (#209 review P2 + side review): the stem lock covers only choosing the display
+    name and creating the documents row (milliseconds). The temporary copy and the upload to
+    object storage happen BEFORE the lock (the object key is unique by `source_id`), so a
+    second same-name upload never waits behind a large file, and a failed durable upload still
+    creates no row."""
     from app.domains.documents import repository as _docs
     from app.domains.documents import storage as _storage
     from app.domains.documents import provenance as _prov
 
+    original = file.filename or "file"
     # Production thì kho bền là BẮT BUỘC; dev/test thì bản local chính là kho lưu.
     # Cùng một hàm quyết định nhãn nguồn gốc, nên không có cờ thứ hai để lệch nhau.
     bat_buoc_ben = _prov.la_production(_prov.nguon_ingest())
     if bat_buoc_ben and not _storage.is_configured():
-        # Ném TRƯỚC khi đặt tên / tạo hàng documents nên không để lại hàng ma.
+        # Ném TRƯỚC khi ghi bất cứ gì nên không để lại hàng documents ma.
         raise DurableStorageRequired(
             "kho object chưa cấu hình (thiếu SUPABASE_URL / SUPABASE_SECRET_KEY)")
 
-    releases: list = []
-    try:
-        filename = _choose_and_lock_display_filename(file.filename or "file", releases)
-        # `_safe_save_path` tạo thư mục và giành tên (atomic) — `save` chỉ ghi đè nội dung.
-        save_path = _safe_save_path(filename)
-        file.save(save_path)
-        _docs.create(
-            document_id=source_id,
-            filename=filename,
-            file_type=os.path.splitext(filename)[1].lstrip(".").lower(),
-            file_path=save_path,
-            user_id=uid,
-            input_path=save_path,   # để xóa file gốc khi delete
-            file_size=(os.path.getsize(save_path) if os.path.exists(save_path) else None),
-        )
-    finally:
-        for release in reversed(releases):
-            release()
+    # `_safe_save_path` tạo thư mục và giành tên (atomic) — `save` chỉ ghi đè nội dung.
+    # Đây chỉ là bản tạm cho pipeline ingest; tên hiển thị được chọn sau, dưới khoá.
+    save_path = _safe_save_path(original)
+    file.save(save_path)
 
     # Bản gốc lên Supabase Storage (bucket private) và đó là kho lưu DUY NHẤT.
     # File local chỉ là chỗ đặt TẠM để pipeline ingest có đường dẫn mà đọc —
     # `_don_file_tam` xoá nó trong `finally` của job ingest.
     # Chưa cấu hình Storage (test/CI) → file_path trỏ đường dẫn local, và lúc đó
     # bản local CHÍNH LÀ kho lưu nên không bị xoá. Xem `_don_file_tam`.
+    stored_path = save_path
     if _storage.is_configured():
         try:
             _storage.ensure_bucket()
-            obj = _storage.object_path(uid or "anonymous", source_id, filename)
+            obj = _storage.object_path(uid or "anonymous", source_id, original)
             with open(save_path, "rb") as fh:
                 _storage.upload(obj, fh.read())
-            _docs.update_file_path(source_id, obj)
+            stored_path = obj
         except Exception as exc:
             if bat_buoc_ben:
-                # The row was created to reserve the name; remove it so nothing is left behind.
                 _go_file_tam(save_path)
-                _docs.hard_delete(source_id)
                 raise DurableStorageRequired(
                     f"đẩy bản gốc lên kho object thất bại: {type(exc).__name__}") from exc
             print(f"⚠️ [Storage] Không đẩy được file lên bucket, dùng bản local: {exc}")
+
+    releases: list = []
+    try:
+        filename = _choose_and_lock_display_filename(original, releases)
+        _docs.create(
+            document_id=source_id,
+            filename=filename,
+            file_type=os.path.splitext(filename)[1].lstrip(".").lower(),
+            file_path=stored_path,
+            user_id=uid,
+            input_path=save_path,   # để xóa file gốc khi delete
+            file_size=(os.path.getsize(save_path) if os.path.exists(save_path) else None),
+        )
+    except Exception:
+        # Naming refused (503) or the row failed: nothing of this upload may stay behind.
+        _go_file_tam(save_path)
+        if stored_path != save_path:
+            try:
+                _storage.delete(stored_path)
+            except Exception as exc:  # pragma: no cover - best effort clean-up
+                print(f"⚠️ [Storage] Không xoá được object của lượt upload hỏng: {exc}")
+        raise
+    finally:
+        for release in reversed(releases):
+            release()
 
     _trigger_background_ingest(
         source_id,

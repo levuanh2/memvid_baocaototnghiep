@@ -188,7 +188,7 @@ def test_storage_upload_runs_after_the_stem_lock_is_released(be, can_db_test, mo
     info = be._ingest_uploaded_file_reserved(f, source_id=sid, uid=None, usage_context=None)
     try:
         assert seen_during_upload == [0], "storage upload ran while a stem lock was held"
-        assert repo.get(sid)["file_path"] == storage.object_path("anonymous", sid, info["filename"])
+        assert repo.get(sid)["file_path"] == storage.object_path("anonymous", sid, f.filename)
     finally:
         repo.hard_delete(sid)
 
