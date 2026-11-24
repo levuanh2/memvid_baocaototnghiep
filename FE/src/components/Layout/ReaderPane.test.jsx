@@ -165,6 +165,104 @@ describe("ReaderPane data contract", () => {
     expect(scroll.scrollTop).toBe(372);
     expect(api.listChunkPage).toHaveBeenCalledTimes(1);
   });
+
+  it("switches from a manually picked document to a citation document when a citation arrives with a new nonce", async () => {
+    api.listDocuments.mockResolvedValue([
+      documentRow("d1", "alpha"),
+      documentRow("d2", "beta"),
+    ]);
+    api.listSections.mockResolvedValue([]);
+    api.listChunkPage.mockImplementation((id) => Promise.resolve({
+      total: 1,
+      chunks: id === "d1"
+        ? [{ chunk_id: "uuid-1", embedding_id: "91", chunk_index: 0, text: "Đoạn văn alpha được trích dẫn" }]
+        : [{ chunk_id: "uuid-2", embedding_id: "92", chunk_index: 0, text: "Đoạn văn beta" }],
+    }));
+
+    await render({ selectedSources: ["alpha"] });
+    expect(host.textContent).toContain("Đoạn văn alpha");
+
+    const select = host.querySelector("#reader-toolbar-picker");
+    expect(select).not.toBeNull();
+    await act(async () => {
+      select.value = "d2";
+      select.dispatchEvent(new Event("change", { bubbles: true }));
+      await Promise.resolve();
+      await Promise.resolve();
+    });
+    expect(host.textContent).toContain("Đoạn văn beta");
+
+    await act(async () => {
+      root.render(
+        <ReaderPane
+          active
+          selectedSources={["alpha"]}
+          citation={{
+            kind: "chat",
+            stem: "alpha",
+            id: 91,
+            text: "alpha được trích dẫn",
+            nonce: 42,
+          }}
+        />
+      );
+      await Promise.resolve();
+      await Promise.resolve();
+    });
+
+    expect(host.textContent).toContain("Đoạn văn alpha được trích dẫn");
+    expect(host.querySelector("[data-reader-chunk='uuid-1']").classList.contains("reader-chunk--highlighted")).toBe(true);
+    expect(host.textContent).not.toContain("không còn trong bản hiện tại");
+  });
+
+  it("keeps manual document selection when selectedSources changes with no new citation", async () => {
+    api.listDocuments.mockResolvedValue([
+      documentRow("d1", "alpha"),
+      documentRow("d2", "beta"),
+      documentRow("d3", "gamma"),
+    ]);
+    api.listSections.mockResolvedValue([]);
+    api.listChunkPage.mockImplementation((id) => Promise.resolve({
+      total: 1,
+      chunks: [{ chunk_id: `chunk-${id}`, chunk_index: 0, text: `Nội dung của ${id}` }],
+    }));
+
+    await render({ selectedSources: ["alpha"] });
+    expect(host.textContent).toContain("Nội dung của d1");
+
+    const select = host.querySelector("#reader-toolbar-picker");
+    await act(async () => {
+      select.value = "d2";
+      select.dispatchEvent(new Event("change", { bubbles: true }));
+      await Promise.resolve();
+      await Promise.resolve();
+    });
+    expect(host.textContent).toContain("Nội dung của d2");
+
+    await act(async () => {
+      root.render(<ReaderPane active selectedSources={["gamma"]} />);
+      await Promise.resolve();
+      await Promise.resolve();
+    });
+
+    expect(host.textContent).toContain("Nội dung của d2");
+    expect(host.textContent).not.toContain("Nội dung của d3");
+  });
+
+  it("shows the picker and does not guess when a citation is ambiguous or unauthorized", async () => {
+    api.listDocuments.mockResolvedValue([
+      documentRow("d1", "shared"),
+      documentRow("d2", "shared"),
+    ]);
+    api.listSections.mockResolvedValue([]);
+    api.listChunkPage.mockResolvedValue({ total: 0, chunks: [] });
+
+    await render({
+      selectedSources: [],
+      citation: { kind: "chat", stem: "shared", id: "c1", text: "text", nonce: 99 },
+    });
+    expect(host.querySelector("select[aria-label='Chọn tài liệu để đọc']")).not.toBeNull();
+  });
 });
 
 // Claude review of P5a (CI #211): the hidden Reader loaded the document list, the sections and

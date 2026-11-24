@@ -4135,3 +4135,12 @@ the five-mode slack test (>=40px at 1280/1440/1600/1920) stays.
 fetched the document list, the sections and EVERY chunk page of the active source on each load.
 Same class as the P5b Notes miss: a hidden pane must not load or render until first opened.
 Regression: ReaderPane.test.jsx 'requests nothing while hidden'.
+4. P2 review finding: a manually picked document in ReaderPane must not block new citation navigation.
+When the learner manually selected document B, `manualDocumentId` remained sticky across all subsequent
+prop changes, causing any newly clicked chat or mind-map citation for document A to fail verification
+on document B and falsely emit `CITATION_STALE_MESSAGE`. Root cause: manual selection was treated as
+permanently overriding automatic resolution, even for discrete citation navigation events. Fix: track the citation's
+`nonce` (attached by `onOpenReaderCitation`); when a citation arrives with a new `nonce`, clear
+`manualDocumentId` so the citation's own unique mapping resolves document A. Workspace source changes
+(`selectedSources` changes without a new citation) leave `manualDocumentId` intact.
+Regression: `ReaderPane.test.jsx` 'switches from a manually picked document to a citation document when a citation arrives with a new nonce'.

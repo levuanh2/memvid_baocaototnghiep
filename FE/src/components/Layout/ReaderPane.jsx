@@ -51,6 +51,7 @@ export default function ReaderPane({ active = false, selectedSources = [], citat
   const contentRequestRef = useRef(0);
   const scrollRef = useRef(null);
   const chunkRefs = useRef(new Map());
+  const lastCitationNonceRef = useRef(citation?.nonce ?? null);
   // Claude review (CI #211): the pane is mounted hidden in every workspace; it must not load
   // the document list, sections or chunk pages until the Reader is first opened.
   const [opened, setOpened] = useState(active);
@@ -95,6 +96,15 @@ export default function ReaderPane({ active = false, selectedSources = [], citat
       setManualDocumentId(null);
     }
   }, [documents, manualDocumentId]);
+
+  // When a citation arrives with a new nonce, clear the manual document choice so the citation's
+  // own unique mapping decides. Ordinary workspace source changes leave the manual pick intact.
+  useEffect(() => {
+    if (citation?.nonce != null && citation.nonce !== lastCitationNonceRef.current) {
+      lastCitationNonceRef.current = citation.nonce;
+      setManualDocumentId(null);
+    }
+  }, [citation?.nonce]);
 
   useEffect(() => {
     if (!opened) return undefined;
