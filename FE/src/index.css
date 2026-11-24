@@ -1347,3 +1347,26 @@
   background: var(--bg-base);
   color: var(--text-primary);
 }
+
+/* V9.3 P5b — Notes Preview pane. Native controls take the theme surface (the browser default
+   white under light token text was unreadable in dark mode). */
+.notes-pane__select, .notes-pane__text {
+  background-color: var(--bg-card); color: var(--text-primary);
+  border: 1px solid var(--border-color); border-radius: 8px; font: inherit;
+}
+.notes-pane__select { height: 40px; padding: 0 10px; max-width: 28rem; }
+.notes-pane__text { width: 100%; min-height: 14rem; padding: 12px 14px; line-height: 1.6; resize: vertical; }
+.notes-pane__text::placeholder { color: var(--text-muted, var(--text-secondary)); }
+.notes-pane__select:focus-visible, .notes-pane__text:focus-visible, .notes-pane__btn:focus-visible {
+  outline: 3px solid var(--focus); outline-offset: 2px;
+}
+.notes-pane__btn {
+  min-height: 40px; padding: 0 14px; border-radius: 8px; border: 1px solid var(--border-color);
+  background: transparent; color: var(--text-primary); font-size: 0.875rem; font-weight: 600;
+}
+.notes-pane__btn:hover { background: var(--bg-card); }
+.notes-pane__btn--danger { background: var(--danger-bg); border-color: var(--danger-line); }
+.notes-pane__alert {
+  background: var(--danger-bg); border: 1px solid var(--danger-line); border-radius: 8px;
+  padding: 10px 12px; color: var(--text-primary);
+}

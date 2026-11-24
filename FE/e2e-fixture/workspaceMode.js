@@ -10,6 +10,9 @@ export async function waitForModeControl(page, timeout = 30000) {
 }
 
 export async function chooseMode(page, label) {
+  // Wait for whichever control this width shows: right after a load or reload neither may be
+  // rendered yet, and isVisible() does not wait (it then clicked a hidden tab at <=700px).
+  await waitForModeControl(page);
   const select = page.locator(MODE_SELECT);
   if (await select.isVisible()) await select.selectOption({ label });
   else await page.getByRole("tab", { name: label }).click();

@@ -17,6 +17,7 @@ import { clearActiveMindmapJob } from "../utils/activeMindmapJob";
 import { clearActiveSummaryJob } from "../utils/activeSummaryJob";
 import { quenHetNguon } from "../utils/nguonDangXuLy";
 import { quenGrant } from "./grantNks";
+import { forgetPendingNotes } from "../utils/notesPreview";
 
 /**
  * Xoá mọi thứ thuộc về phiên của MỘT người dùng.
@@ -44,4 +45,7 @@ export function xoaDuLieuPhienNguoiDung() {
   clearActiveMindmapJob();
   clearActiveSummaryJob();
   quenGrant();
+  // V9.3 P5b (owner option A): drafts still in memory belong to the user who is leaving;
+  // notes already saved in this browser are KEPT (studymap.notes.v1:<user>:<document>).
+  forgetPendingNotes();
 }

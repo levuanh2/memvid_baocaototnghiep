@@ -85,6 +85,7 @@ const controlsFor = (width) => [
     'nav[role="tablist"] [role="tab"][title="Trò chuyện"]',
     'nav[role="tablist"] [role="tab"][title="Sơ đồ tư duy"]',
     'nav[role="tablist"] [role="tab"][title="Tóm tắt"]',
+    'nav[role="tablist"] [role="tab"][title="Ghi chú"]',
   ]),
   'header button[aria-label="Mở công cụ học"]',
   'header button[aria-label^="Mức sử dụng AI"]',
@@ -145,13 +146,13 @@ for (const vp of COMPACT) {
           await expect(page.getByRole("tablist", { name: "Chế độ Workspace" })).toBeHidden();
           const select = page.getByLabel("Chế độ học");
           await expect(select).toBeVisible();
-          await expect(select.locator("option")).toHaveText(["Trò chuyện", "Sơ đồ tư duy", "Tóm tắt"]);
+          await expect(select.locator("option")).toHaveText(["Trò chuyện", "Sơ đồ tư duy", "Tóm tắt", "Ghi chú"]);
           const box = await select.boundingBox();
           expect(box.x).toBeGreaterThanOrEqual(0);
           expect(box.x + box.width).toBeLessThanOrEqual(vp.width);
           return;
         }
-        for (const name of ["Trò chuyện", "Sơ đồ tư duy", "Tóm tắt"]) {
+        for (const name of ["Trò chuyện", "Sơ đồ tư duy", "Tóm tắt", "Ghi chú"]) {
           const label = await page.locator(`nav[role="tablist"] [role="tab"][title="${name}"] span`).first();
           await expect(label).toBeHidden();
         }
@@ -162,7 +163,7 @@ for (const vp of COMPACT) {
         const widths = [];
         const control = vp.width <= SELECT_MAX ? MODE_SELECT : 'nav[role="tablist"]';
         const tab = (name) => page.locator(`nav[role="tablist"] [role="tab"][title="${name}"]`);
-        for (const mode of ["Trò chuyện", "Sơ đồ tư duy", "Tóm tắt"]) {
+        for (const mode of ["Trò chuyện", "Sơ đồ tư duy", "Tóm tắt", "Ghi chú"]) {
           await chooseMode(page, mode);
           widths.push(await page.evaluate((sel) => Math.round(document.querySelector(sel).getBoundingClientRect().width), control));
         }

@@ -4098,3 +4098,17 @@ and keep a margin for font metrics.
 2. The <=700px select hid the tab row; e2e-fixture/ specs were updated but e2e/ (real-backend
 Critical Flows) still waited for the tab row at 390px. Prevention: grep every Playwright folder
 (e2e/ and e2e-fixture/) for a selector before changing what it points at.
+
+## P5b Notes: native controls on white in dark mode; a mode helper that raced a reload (2026-11-24)
+
+1. The Notes select and textarea had class names but no CSS, so they kept the browser's white
+default while their text took the light dark-theme token: unreadable. Unit tests and every e2e
+assertion passed; only the dark screenshot showed it. Fix: token surface for native controls.
+Regression: notes-preview.spec.js compares the controls' background with the resolved --bg-card.
+Prevention: every new native control gets a dark-mode surface check, not only a screenshot.
+2. e2e helper chooseMode() called isVisible() right after a reload, before the <=700px select
+rendered, and fell through to clicking a hidden tab. isVisible() does not wait: wait for the
+visible control first (waitForModeControl).
+3. A 4th mode tab overflowed the 1280/1440 desktop header (38px / 21px). Text labels of
+Nguồn/Dẫn chứng/Tập trung now start at 1600px and the library label at 1440px. Measured slack
+(natural header width): +102px at 1440, +65px at 1600 with labels. A 5th tab needs its own budget.

@@ -7,7 +7,7 @@
 // unknown or malicious value must degrade to the exact same default as no
 // value at all, never leave the app in a state that never existed before.
 
-const VALID_TABS = new Set(["chat", "mindmap", "summary"]);
+const VALID_TABS = new Set(["chat", "mindmap", "summary", "notes"]);
 const DEFAULT_TAB = "chat";
 
 const VALID_RIGHT_VIEWS = new Set(["evidence", "tutor", "timeline", "insights"]);
