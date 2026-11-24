@@ -1,5 +1,6 @@
-// V9.3 laptop header (owner option 2): below 1440px the five mode tabs become the labelled
-// "Chế độ học" select; from 1440px five labelled tabs. The width the select saves gives the
+// V9.3 laptop header (owner option 2, tab threshold moved to 1600px by the owner on 2026-11-25):
+// below 1600px the five mode tabs are the labelled "Chế độ học" select; from 1600px five labelled
+// tabs. The width the select saves gives the
 // laptop header its text labels (Nguồn, Dẫn chứng, Tập trung, Thư viện học tập).
 // Fixture only: the API is mocked at the network layer; no backend, no provider.
 import { test, expect } from "@playwright/test";
@@ -81,8 +82,8 @@ const selectFits = (page) => page.evaluate((sel) => {
   return { longest: Math.ceil(longest), room };
 }, MODE_SELECT);
 
-const SELECT_WIDTHS = [320, 375, 390, 700, 701, 1024, 1280, 1366];
-const TAB_WIDTHS = [1440, 1536, 1600, 1800, 1920];
+const SELECT_WIDTHS = [320, 375, 390, 700, 701, 1024, 1280, 1366, 1440, 1536, 1599];
+const TAB_WIDTHS = [1600, 1800, 1920];
 
 for (const wideFont of [false, true]) {
   for (const dark of [false, true]) {
@@ -100,7 +101,7 @@ for (const wideFont of [false, true]) {
         expect(fit.small, "controls under 40px").toEqual([]);
         expect(fit.unnamed).toBe(0);
         const select = page.locator(MODE_SELECT);
-        if (width < 1440) {
+        if (width < 1600) {
           await expect(select).toBeVisible();
           await expect(page.getByRole("tablist", { name: "Chế độ Workspace" })).toBeHidden();
           await expect(select.locator("option:checked")).toHaveText("Trò chuyện");
@@ -112,7 +113,7 @@ for (const wideFont of [false, true]) {
             await expect(page.locator(`nav[role="tablist"] [role="tab"][title="${name}"] .workspace-mode-label`)).toBeVisible();
           }
         }
-        if (OUT && [1280, 1366, 1440, 1536].includes(width) && !wideFont) {
+        if (OUT && [1280, 1366, 1440, 1536, 1600].includes(width) && !wideFont) {
           fs.mkdirSync(OUT, { recursive: true });
           await page.locator("header").screenshot({ path: path.join(OUT, `header-${width}-${dark ? "dark" : "light"}.png`) });
         }
@@ -122,14 +123,16 @@ for (const wideFont of [false, true]) {
 }
 
 // Labels by width, from the measured budget (header-measure-*.json in the QA evidence):
-// select band: panel labels from 1280px, library label from 1366px; tab band: library label
-// from 1600px, panel labels from 1800px (five labelled tabs need the room below that).
+// select band (< 1600px): panel labels from 1280px, library label from 1366px, so the whole
+// 1366-1599px laptop range has every label; tab band: library label, panel labels from 1800px
+// (five labelled tabs need the room below that).
 const EXPECT_LABELS = {
   1024: { library: "", sources: "", evidence: "", focus: "" },
   1280: { library: "", sources: "Nguồn", evidence: "Dẫn chứng", focus: "Tập trung" },
   1366: { library: "Thư viện học tập", sources: "Nguồn", evidence: "Dẫn chứng", focus: "Tập trung" },
-  1440: { library: "", sources: "", evidence: "", focus: "" },
-  1536: { library: "", sources: "", evidence: "", focus: "" },
+  1440: { library: "Thư viện học tập", sources: "Nguồn", evidence: "Dẫn chứng", focus: "Tập trung" },
+  1536: { library: "Thư viện học tập", sources: "Nguồn", evidence: "Dẫn chứng", focus: "Tập trung" },
+  1599: { library: "Thư viện học tập", sources: "Nguồn", evidence: "Dẫn chứng", focus: "Tập trung" },
   1600: { library: "Thư viện học tập", sources: "", evidence: "", focus: "" },
   1800: { library: "Thư viện học tập", sources: "Nguồn", evidence: "Dẫn chứng", focus: "Tập trung" },
 };
@@ -143,7 +146,7 @@ for (const [width, want] of Object.entries(EXPECT_LABELS)) {
 }
 
 test("resizing between the select and the tabs keeps the mode, Focus Mode, drafts, and sends nothing", async ({ page }) => {
-  const { requests } = await openApp(page, { width: 1440, source: "alpha" });
+  const { requests } = await openApp(page, { width: 1600, source: "alpha" });
   const chat = page.locator('textarea[aria-label="Câu hỏi cho tài liệu đã chọn"]');
   await chat.fill("Nháp câu hỏi chưa gửi");
   await chooseMode(page, "Ghi chú");
@@ -152,16 +155,16 @@ test("resizing between the select and the tabs keeps the mode, Focus Mode, draft
   await chooseMode(page, "Tóm tắt");
   await page.waitForLoadState("networkidle");
   const before = requests.length;
-  for (const width of [1366, 1440, 1024, 1536, 1280, 1440]) {
+  for (const width of [1366, 1600, 1024, 1536, 1280, 1920, 1600]) {
     await page.setViewportSize({ width, height: 900 });
     await expect(page.locator(`nav[role="tablist"] [role="tab"][title="Tóm tắt"]`)).toHaveAttribute("aria-selected", "true");
-    if (width < 1440) await expect(page.locator(MODE_SELECT)).toHaveValue("summary");
+    if (width < 1600) await expect(page.locator(MODE_SELECT)).toHaveValue("summary");
   }
   await page.getByRole("button", { name: "Tập trung" }).click();
   await page.setViewportSize({ width: 1366, height: 900 });
   await expect(page.locator("[data-focus-toggle]")).toHaveAttribute("aria-pressed", "true");
   await expect(page.locator(MODE_SELECT)).toHaveValue("summary");
-  await page.setViewportSize({ width: 1440, height: 900 });
+  await page.setViewportSize({ width: 1600, height: 900 });
   await expect(page.locator("[data-focus-toggle]")).toHaveAttribute("aria-pressed", "true");
   await page.keyboard.press("Escape");
   await expect(page.locator("[data-focus-toggle]")).toHaveAttribute("aria-pressed", "false");
@@ -186,8 +189,8 @@ test("1366px keyboard: Tab reaches the mode select and the arrow keys change the
   await expect(page.locator(`nav[role="tablist"] [role="tab"][title="Đọc nguồn"]`)).toHaveAttribute("aria-selected", "true");
 });
 
-test("1440px keyboard: every mode tab is reachable and selectable", async ({ page }) => {
-  await openApp(page, { width: 1440 });
+test("1600px keyboard: every mode tab is reachable and selectable", async ({ page }) => {
+  await openApp(page, { width: 1600 });
   for (const name of MODES) {
     const tab = page.getByRole("tab", { name });
     await tab.focus();

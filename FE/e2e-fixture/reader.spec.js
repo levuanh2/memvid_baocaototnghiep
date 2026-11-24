@@ -60,7 +60,7 @@ for (const width of [390, 768, 1440]) {
       await expect(fileNote).toContainText("không phải bản xem trước file gốc");
       await expect(fileNote).toBeVisible();
       await expect(page.getByText(/trang \d+/i)).toHaveCount(0);
-      if (width < 1440) await expect(page.getByLabel("Chế độ học")).toHaveValue("reader");
+      if (width < 1600) await expect(page.getByLabel("Chế độ học")).toHaveValue("reader");
       else await expect(page.getByRole("tab", { name: "Đọc nguồn" })).toHaveAttribute("aria-selected", "true");
       if (OUT) await page.screenshot({ path: path.join(OUT, `reader-${width}-${dark ? "dark" : "light"}.png`), fullPage: true });
     });
@@ -90,7 +90,7 @@ test("keyboard reaches the Reader mode and TOC, and mode switches keep reading p
   const before = await scroll.evaluate((node) => node.scrollTop);
   expect(Math.abs(before - 420)).toBeLessThan(16);
   await chooseMode(page, "Trò chuyện");
-  // Below 1440px the mode control is the labelled select: reach "Đọc nguồn" by keyboard.
+  // Below 1600px the mode control is the labelled select: reach "Đọc nguồn" by keyboard.
   const modeSelect = page.locator(MODE_SELECT);
   await modeSelect.focus();
   await page.keyboard.press("ArrowDown");

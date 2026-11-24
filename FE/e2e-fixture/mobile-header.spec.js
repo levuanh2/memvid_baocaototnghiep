@@ -78,8 +78,8 @@ const hitOwnership = (page, selector) => page.evaluate((sel) => {
 }, selector);
 
 // V9.3 P4b/P5a: at <=700px the workspace tabs become one labelled "Chế độ học" select.
-// V9.3 laptop header: the labelled select below 1440px, five labelled tabs from 1440px.
-const SELECT_MAX = 1439;
+// V9.3 laptop header: the labelled select below 1600px, five labelled tabs from 1600px.
+const SELECT_MAX = 1599;
 const controlsFor = (width) => [
   'header a[aria-label^="StudyMap"]',
   ...(width <= SELECT_MAX ? [`header ${MODE_SELECT}`] : [
@@ -141,7 +141,7 @@ for (const vp of COMPACT) {
         }
       });
 
-      test("mode control shows no clipped label (the labelled select below 1440px)", async ({ page }) => {
+      test("mode control shows no clipped label (the labelled select below 1600px)", async ({ page }) => {
         await openApp(page, { ...vp, dark });
         if (vp.width <= SELECT_MAX) {
           // Spec 06: no long tabs squeezed into the row and no unlabelled icons.
@@ -232,8 +232,8 @@ test.describe("full desktop header above the compact danger zone", () => {
       expect(h.currentSlack).toBeGreaterThanOrEqual(40);
       expect(h.fiveModeSlack).toBeGreaterThanOrEqual(40);
       const modeLabel = page.locator('nav[role="tablist"] [role="tab"][title="Sơ đồ tư duy"] span').first();
-      // V9.3 laptop header: five labelled tabs from 1440px; below that the labelled select.
-      if (vp.width >= 1440) {
+      // V9.3 laptop header: five labelled tabs from 1600px; below that the labelled select.
+      if (vp.width >= 1600) {
         await expect(page.getByRole("tab", { name: "Sơ đồ tư duy" })).toBeVisible();
         await expect(modeLabel).toBeVisible();
       } else {

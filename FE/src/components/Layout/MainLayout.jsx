@@ -34,14 +34,15 @@ import { useAppHeight } from "../../hooks/useAppHeight";
 // Summary mode switch, moved here from the now-deleted LessonHeader.jsx
 // (was its own `TABS` constant there). Same three entries, same order,
 // same icons — this is a render-location move, not a redesign.
-// V9.3 laptop header (owner option 2). Below 1440px the mode tabs are the "Chế độ học" select,
-// and the width it saves carries text labels; from 1440px five labelled tabs need that room
-// back. Bands come from measured widths with a wide (Linux-like) font, see
+// V9.3 laptop header (owner option 2; tabs from 1600px by owner decision 2026-11-25). Below
+// 1600px the mode tabs are the "Chế độ học" select, and the width it saves carries every text
+// label on 1366-1599px laptops; from 1600px five labelled tabs need that room back until 1800px.
+// Bands come from measured widths with a wide (Linux-like) font, see
 // .playbook/lessons-learned.md "Laptop header" and the QA header-measure-*.json evidence.
-const PANEL_BTN = "w-10 min-[1280px]:max-[1439px]:w-auto min-[1280px]:max-[1439px]:px-3 min-[1800px]:w-auto min-[1800px]:px-3";
-const PANEL_LABEL = "hidden min-[1280px]:max-[1439px]:inline min-[1800px]:inline";
-const LIBRARY_BTN = "w-10 min-[1366px]:max-[1439px]:w-auto min-[1366px]:max-[1439px]:px-3 min-[1600px]:w-auto min-[1600px]:px-3";
-const LIBRARY_LABEL = "hidden min-[1366px]:max-[1439px]:inline min-[1600px]:inline";
+const PANEL_BTN = "w-10 min-[1280px]:max-[1599px]:w-auto min-[1280px]:max-[1599px]:px-3 min-[1800px]:w-auto min-[1800px]:px-3";
+const PANEL_LABEL = "hidden min-[1280px]:max-[1599px]:inline min-[1800px]:inline";
+const LIBRARY_BTN = "w-10 min-[1366px]:w-auto min-[1366px]:px-3";
+const LIBRARY_LABEL = "hidden min-[1366px]:inline";
 
 const MODE_TABS = [
   { key: "chat", label: "Trò chuyện", icon: "MessageSquareText" },
@@ -858,7 +859,7 @@ export default function MainLayout({
             );
           })}
         </nav>
-        {/* V9.3: below 1440px the tab row becomes this labelled select (CSS shows one of the
+        {/* V9.3: below 1600px the tab row becomes this labelled select (CSS shows one of the
             two). Same state as the tabs: changing it never sends anything. */}
         <span className="workspace-mode-select flex-shrink-0">
           <label htmlFor="workspace-mode-select" className="sr-only">Chế độ học</label>

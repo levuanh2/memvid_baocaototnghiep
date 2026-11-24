@@ -1284,8 +1284,8 @@
   .workspace-shell[data-focus="true"] .workspace-panel-toggle[data-panel-toggle="evidence"] { display: inline-flex; }
 }
 .study-tools-menu__item-check { margin-left: auto; flex-shrink: 0; color: var(--text-primary); }
-/* V9.3: below 1440px a labelled "Chế độ học" select replaces the tab row (owner option 2: five
-   labelled tabs need ~580px; an icon-only row did not name the mode on laptops). */
+/* V9.3: below 1600px a labelled "Chế độ học" select replaces the tab row (owner option 2, tabs
+   from 1600px: five labelled tabs need ~580px; an icon-only row did not name the mode). */
 .workspace-mode-select { display: none; }
 .workspace-mode-select select {
   /* Fixed width: the header must not shift when the mode changes. The native arrow is replaced
@@ -1298,7 +1298,7 @@
 .workspace-mode-select { position: relative; align-items: center; }
 .workspace-mode-select__chevron { position: absolute; right: 9px; pointer-events: none; color: var(--text-secondary); }
 .workspace-mode-select select:focus-visible { outline: 3px solid var(--focus); outline-offset: 2px; }
-@media (max-width: 1439px) {
+@media (max-width: 1599px) {
   .workspace-global-header .workspace-mode-switch { display: none; }
   .workspace-mode-select { display: flex; margin-inline: auto; }
 }

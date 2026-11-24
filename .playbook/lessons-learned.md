@@ -4245,7 +4245,7 @@ position; poll the restored value for stability across frames, then require exac
 Regression: 10/10 isolated, 20/20 with --repeat-each=20 --workers=4, review group 164/164.
 Prevention: any e2e that asserts an exact scroll offset must first wait for a stable scrollHeight.
 
-## Laptop header (V9.3, owner option 2): select below 1440px, labels from measured budget (2026-11-25)
+## Laptop header (V9.3, owner option 2): select below 1600px, labels from measured budget (2026-11-25)
 
 Problem: at 1366px (and 701-1439px) the five mode tabs were icon-only and Nguồn/Dẫn chứng/Tập
 trung/Thư viện were icon-only too: nothing in the header named the current mode in text.
@@ -4254,10 +4254,12 @@ with them visible nothing else could carry a label below ~1800px.
 Also found: Be Vietnam Pro (the design font) is never loaded (no font files, no link), so users see
 system-ui: Segoe UI on Windows, DejaVu Sans on Linux CI. That is why "fits locally, overflows on CI".
 Decision on loading the font is separate (owner); if it is ever loaded, re-measure the header.
-Fix: one labelled "Chế độ học" select below 1440px (CSS swaps it with the tablist; same state, no
+Fix: one labelled "Chế độ học" select below 1600px (CSS swaps it with the tablist; same state, no
 requests). Labels where the measured slack allows it with a wide font (Verdana, >= DejaVu width):
-panel labels 1280-1439px and from 1800px; library label 1366-1439px and from 1600px; five
-labelled tabs from 1440px (40px tall). Select text box 8px/24px padding so "Sơ đồ tư duy" (92px in
+panel labels 1280-1599px and from 1800px; library label from 1366px; five labelled tabs from
+1600px (40px tall). The first version put the tabs at 1440px (the brief's starting point); that
+left 1440-1599px laptops with icon-only Nguồn/Dẫn chứng/Tập trung while 1366px had labels, so the
+owner moved the tabs to 1600px (slack with every label, Verdana: +194 at 1440, +290 at 1536). Select text box 8px/24px padding so "Sơ đồ tư duy" (92px in
 Verdana) fits the 128px select without widening the 375px phone header. Theme, usage and account
 triggers were 36px on desktop: now 40px.
 Regression: e2e-fixture/laptop-header.spec.js (64 tests: 13 widths x light/dark x normal/wide font,
