@@ -1348,6 +1348,26 @@
   color: var(--text-primary);
 }
 
+/* V9.3 P5a — structured source reader. Highlight only the verified chunk; never
+   imply that the extracted text is an original-file page. */
+.reader-paper { line-height: 1.72; }
+.reader-chunk--highlighted {
+  background: color-mix(in srgb, var(--accent-cta) 14%, transparent);
+  box-shadow: inset 3px 0 0 var(--accent-cta);
+}
+.reader-scroll:focus-visible {
+  outline: 2px solid var(--focus);
+  outline-offset: -2px;
+}
+@media (max-width: 700px) {
+  .reader-document-select { max-width: 132px; }
+  .reader-paper {
+    margin: 0;
+    border-width: 0;
+    border-radius: 0;
+    box-shadow: none;
+  }
+}
 /* V9.3 P5b — Notes Preview pane. Native controls take the theme surface (the browser default
    white under light token text was unreadable in dark mode). */
 .notes-pane__select, .notes-pane__text {

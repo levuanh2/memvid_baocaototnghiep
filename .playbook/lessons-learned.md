@@ -4099,6 +4099,61 @@ and keep a margin for font metrics.
 Critical Flows) still waited for the tab row at 390px. Prevention: grep every Playwright folder
 (e2e/ and e2e-fixture/) for a selector before changing what it points at.
 
+## Independent request counters for independent Reader resources (V9.3 P5a, 2026-11-24)
+
+The first Reader draft shared one stale-response counter between the caller-owned document-list
+request and the selected document's sections/chunks request. On the initial commit, the content
+effect correctly observed that no document had resolved yet, but incremented the shared counter;
+that made the still-valid `/api/documents` response look stale and left the Reader loading forever.
+Root cause: the counter represented a component render sequence instead of one request lifecycle.
+Fix: the owned-list request and document-content request have separate counters, and only a new
+request or cleanup in the same resource family invalidates its response. Regression:
+`ReaderPane.test.jsx` loads the owned list, paginates 501 chunks, changes documents while an old
+sections response is pending, and retries a failed sections request. Prevention: a stale-response
+token must be scoped to the resource/effect it guards; never reuse it across independent fetches.
+
+The same review found that chat evidence snippets longer than 600 characters end with a server-added
+ellipsis. Comparing that punctuation literally makes a valid `embedding_id` look stale because the
+stored chunk never contains the added ellipsis. The verifier now removes only a trailing truncation
+marker before its normalized contains check; a mismatched truncated snippet still fails. Regression:
+`readerModel.test.js` covers both the valid truncated prefix and a foreign truncated prefix.
+
+## P5a review: mind-map citations are FAISS ids; five tabs must not cost the desktop labels (2026-11-24)
+
+1. KnowledgeInspector sent mind-map citations to the Reader as kind "studymap" (matched on the
+DocumentChunk UUID), but BE mindmap/context.py resolves node chunk_refs through index.json: their
+chunk_id is the global FAISS id (= embedding_id). Every "Đọc đoạn này trong nguồn" would have
+shown the stale message. Root cause: three citation sources, two id spaces, one assumed. Fix:
+kind "index" matches embedding_id like chat. Prevention: name the id space at the producer
+(trace the BE builder) before choosing the match field. Regression: readerModel.test.js,
+KnowledgeInspector.readerCitation.test.jsx.
+2. Fitting five mode tabs, the first P5a version hid the tab labels below 1800px and flipped the
+1280/1440 "labels visible" assertion. Labels that name the main navigation give way last: tab
+labels from 1440px, library label from 1600px, Nguồn/Dẫn chứng/Tập trung labels from 1800px;
+the five-mode slack test (>=40px at 1280/1440/1600/1920) stays.
+3. CI #211 (protected-auth Critical Flows): the Reader pane, mounted hidden in every workspace,
+fetched the document list, the sections and EVERY chunk page of the active source on each load.
+Same class as the P5b Notes miss: a hidden pane must not load or render until first opened.
+Regression: ReaderPane.test.jsx 'requests nothing while hidden'.
+4. P2 review finding: a manually picked document in ReaderPane must not block new citation navigation.
+When the learner manually selected document B, `manualDocumentId` remained sticky across all subsequent
+prop changes, causing any newly clicked chat or mind-map citation for document A to fail verification
+on document B and falsely emit `CITATION_STALE_MESSAGE`. Root cause: manual selection was treated as
+permanently overriding automatic resolution, even for discrete citation navigation events. Fix: track the citation's
+`nonce` (attached by `onOpenReaderCitation`); when a citation arrives with a new `nonce`, clear
+`manualDocumentId` so the citation's own unique mapping resolves document A. Workspace source changes
+(`selectedSources` changes without a new citation) leave `manualDocumentId` intact.
+Regression: `ReaderPane.test.jsx` 'switches from a manually picked document to a citation document when a citation arrives with a new nonce'.
+
+## P5a: reading position kept exactly; a test that compared with the value it set (2026-11-24)
+
+reader.spec 'mode switches keep reading position' failed intermittently on the a8d3d3a baseline too
+(416/424 vs 420): the Reader relied on the browser keeping scrollTop through display:none, and the
+test compared with the 420 it had just set although scroll anchoring had already moved the real
+position. The pane now saves scrollTop on scroll while visible and restores it on activation
+(unit: 'restores the exact scroll position after being hidden'); the e2e compares the settled
+position before the round trip with the one after (exact), and checks it is near 420.
+
 ## A stem is a name, not an identity: cross-tenant reads/deletes on a shared stem (V9.3 security, 2026-11-24)
 
 Found by the P5a Reader audit (agy) and verified by Codex. Every stem-scoped path authorized
@@ -4175,3 +4230,17 @@ hidden must render nothing until first opened, and must not reuse another surfac
   returns to the trigger.
 Prevention: a component that outlives an identity change binds its state to that identity, not
 to whatever props it last saw; every exit path of a session goes through one cleanup.
+
+## Reader scroll round-trip flake: measured before the layout settled (2026-11-24, #211 merge review)
+
+Symptom: `reader.spec.js` "keyboard reaches the Reader tab..." failed intermittently after the
+#211/integ merge (420 vs 425, 424 vs 420; 2/5 then 6/10 isolated runs). Root cause (instrumented
+with ResizeObserver + scroll log): `.reader-scroll` scrollHeight was still changing when the test
+set `scrollTop = 420` (1589 or 1544, settling at 1571: web fonts / late layout), so scroll anchoring
+moved the position a few px AFTER `before` was read. ReaderPane's restore was correct (it saved the
+anchored value from the scroll event). A first attempt that captured scrollTop at hide time did not
+help and was reverted: never fix a flake before logging what actually moves.
+Fix: wait for `document.fonts.ready` and a stable scrollHeight before setting and reading the
+position; poll the restored value for stability across frames, then require exact equality.
+Regression: 10/10 isolated, 20/20 with --repeat-each=20 --workers=4, review group 164/164.
+Prevention: any e2e that asserts an exact scroll offset must first wait for a stable scrollHeight.

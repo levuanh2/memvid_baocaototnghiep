@@ -15,6 +15,7 @@ import MindElixirView from "../mindmap/MindElixirView";
 import SummaryPane from "./SummaryPane";
 import SummaryPicker from "./SummaryPicker";
 import WorkspaceEmptyState from "./WorkspaceEmptyState";
+import ReaderPane from "./ReaderPane";
 import NotesPane from "../study/NotesPane";
 
 const paneClass = (active) => (active ? "flex-1 min-h-0" : "hidden");
@@ -41,6 +42,7 @@ export default function WorkspaceContainer({
   // P2 fix: generation-in-progress/failed status for the no-map-yet case —
   // WorkspaceEmptyState has no other way to know a job is running.
   mindmapCreating, mindmapJobLabel, mindmapJobProgress, mindmapJobError, onRetryMindmap,
+  readerCitation = null,
   // W1-4: whether the library has ANY document at all (not just whether one
   // is selected) and the upload trigger, both computed/owned by MainLayout
   // — see its own comment on `uploadTriggerRef` and `hasAnyDocuments`.
@@ -56,6 +58,12 @@ export default function WorkspaceContainer({
     <div className="flex flex-1 flex-col min-w-0 min-h-0">
       <div className={paneClass(mode === "chat")}>
         <ChatArea {...chatProps} />
+      </div>
+
+      {/* Keep the reader mounted so its scroll position, selected document and loaded pages
+          survive mode switches and Focus Mode. */}
+      <div className={paneClass(mode === "reader")}>
+        <ReaderPane active={mode === "reader"} selectedSources={selectedSources} citation={readerCitation} />
       </div>
 
       <div className={paneClass(mode === "mindmap")}>

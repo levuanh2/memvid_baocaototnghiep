@@ -112,6 +112,7 @@ function AnswerProse({ content, mdComponents, dropCap = false }) {
 
 export default function ChatArea({
   selectedSources, sources = [], sourcesState = "ready", onPickSource, onEvidence, highlight, onHighlight, onOpenLeft, onOpenEvidence, evidenceCount = 0, askAboutDraft,
+  onOpenReaderCitation,
   // Feature Pack B (Cross Navigation) — Chat -> Summary. `hasSummary` gates a
   // real link, never a dead one; `onOpenSummary` reuses MainLayout's existing
   // workspaceMode switch (same shape as the pre-existing `onSwitchToChat`).
@@ -191,7 +192,17 @@ export default function ChatArea({
     selectEvidence(citeKey(cite.stem, cite.chunkId), {
       source: "chat", label: `${cite.stem} · đoạn ${cite.chunkId}`,
     });
-  }, [selectEvidence]);
+    const matching = [...messages].reverse()
+      .flatMap((message) => message?.evidence?.chunks || [])
+      .find((chunk) => normStem(chunk?.stem) === normStem(cite.stem)
+        && String(chunk?.chunk_id) === String(cite.chunkId));
+    onOpenReaderCitation?.({
+      kind: "chat",
+      stem: cite.stem,
+      id: cite.chunkId,
+      text: matching?.snippet || matching?.text || "",
+    });
+  }, [messages, onOpenReaderCitation, selectEvidence]);
   const mdComponents = useMemo(
     () => makeMdComponents({ highlight, onHighlight, onEvidenceOpen: handleEvidenceOpen }),
     [highlight, onHighlight, handleEvidenceOpen],

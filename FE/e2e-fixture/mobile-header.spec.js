@@ -77,12 +77,13 @@ const hitOwnership = (page, selector) => page.evaluate((sel) => {
   };
 }, selector);
 
-// V9.3 P4b: at <=700px the three icon-only tabs become one labelled "Chế độ học" select.
+// V9.3 P4b/P5a: at <=700px the workspace tabs become one labelled "Chế độ học" select.
 const SELECT_MAX = 700;
 const controlsFor = (width) => [
   'header a[aria-label^="StudyMap"]',
   ...(width <= SELECT_MAX ? [`header ${MODE_SELECT}`] : [
     'nav[role="tablist"] [role="tab"][title="Trò chuyện"]',
+    'nav[role="tablist"] [role="tab"][title="Đọc nguồn"]',
     'nav[role="tablist"] [role="tab"][title="Sơ đồ tư duy"]',
     'nav[role="tablist"] [role="tab"][title="Tóm tắt"]',
     'nav[role="tablist"] [role="tab"][title="Ghi chú"]',
@@ -146,13 +147,13 @@ for (const vp of COMPACT) {
           await expect(page.getByRole("tablist", { name: "Chế độ Workspace" })).toBeHidden();
           const select = page.getByLabel("Chế độ học");
           await expect(select).toBeVisible();
-          await expect(select.locator("option")).toHaveText(["Trò chuyện", "Sơ đồ tư duy", "Tóm tắt", "Ghi chú"]);
+          await expect(select.locator("option")).toHaveText(["Trò chuyện", "Đọc nguồn", "Sơ đồ tư duy", "Tóm tắt", "Ghi chú"]);
           const box = await select.boundingBox();
           expect(box.x).toBeGreaterThanOrEqual(0);
           expect(box.x + box.width).toBeLessThanOrEqual(vp.width);
           return;
         }
-        for (const name of ["Trò chuyện", "Sơ đồ tư duy", "Tóm tắt", "Ghi chú"]) {
+        for (const name of ["Trò chuyện", "Đọc nguồn", "Sơ đồ tư duy", "Tóm tắt", "Ghi chú"]) {
           const label = await page.locator(`nav[role="tablist"] [role="tab"][title="${name}"] span`).first();
           await expect(label).toBeHidden();
         }
@@ -163,7 +164,7 @@ for (const vp of COMPACT) {
         const widths = [];
         const control = vp.width <= SELECT_MAX ? MODE_SELECT : 'nav[role="tablist"]';
         const tab = (name) => page.locator(`nav[role="tablist"] [role="tab"][title="${name}"]`);
-        for (const mode of ["Trò chuyện", "Sơ đồ tư duy", "Tóm tắt", "Ghi chú"]) {
+        for (const mode of ["Trò chuyện", "Đọc nguồn", "Sơ đồ tư duy", "Tóm tắt", "Ghi chú"]) {
           await chooseMode(page, mode);
           widths.push(await page.evaluate((sel) => Math.round(document.querySelector(sel).getBoundingClientRect().width), control));
         }
@@ -194,22 +195,47 @@ for (const vp of COMPACT) {
 }
 
 test.describe("full desktop header above the compact danger zone", () => {
-  for (const vp of [{ width: 1280, height: 800 }, { width: 1440, height: 1024 }]) {
-    test(`${vp.width}x${vp.height}: one 56px row, labels visible, shortcut and theme toggle present, no overflow`, async ({ page }) => {
+  for (const vp of [
+    { width: 1280, height: 800 }, { width: 1440, height: 1024 },
+    { width: 1600, height: 1000 }, { width: 1920, height: 1080 },
+  ]) {
+    test(`${vp.width}x${vp.height}: one 56px row, >=40px five-mode budget, no overflow`, async ({ page }) => {
       await openApp(page, vp);
       const h = await page.evaluate(() => {
         const header = document.querySelector("header");
+        const naturalSlack = () => {
+          const style = getComputedStyle(header);
+          const visible = [...header.children].filter((node) => getComputedStyle(node).display !== "none");
+          const widths = visible.reduce((sum, node) => sum + node.getBoundingClientRect().width, 0);
+          const gap = Number.parseFloat(style.columnGap || style.gap) || 0;
+          return header.clientWidth
+            - (Number.parseFloat(style.paddingLeft) || 0)
+            - (Number.parseFloat(style.paddingRight) || 0)
+            - widths - gap * Math.max(0, visible.length - 1);
+        };
+        const currentSlack = naturalSlack();
+        // P5a + P5b merged: the five real mode tabs are on the page now (no clone needed).
+        const modeTabs = header.querySelectorAll('nav[role="tablist"] [role="tab"]').length;
+        const fiveModeSlack = currentSlack;
         return {
           height: Math.round(header.getBoundingClientRect().height),
           headerScroll: header.scrollWidth, headerClient: header.clientWidth,
           docScroll: document.documentElement.scrollWidth, docClient: document.documentElement.clientWidth,
+          currentSlack, fiveModeSlack, modeTabs,
         };
       });
       expect(h.height).toBe(56);
       expect(h.headerScroll).toBeLessThanOrEqual(h.headerClient);
       expect(h.docScroll).toBeLessThanOrEqual(h.docClient);
+      expect(h.modeTabs).toBe(5);
+      expect(h.currentSlack).toBeGreaterThanOrEqual(40);
+      expect(h.fiveModeSlack).toBeGreaterThanOrEqual(40);
       await expect(page.getByRole("tab", { name: "Sơ đồ tư duy" })).toBeVisible();
-      await expect(page.locator('nav[role="tablist"] [role="tab"][title="Sơ đồ tư duy"] span').first()).toBeVisible();
+      const modeLabel = page.locator('nav[role="tablist"] [role="tab"][title="Sơ đồ tư duy"] span').first();
+      // Mode labels stay from 1440px (Claude review): the panel/focus labels and the library label
+      // give way first (1800px / 1600px).
+      if (vp.width >= 1440) await expect(modeLabel).toBeVisible();
+      else await expect(modeLabel).toBeHidden();
       // V6 header: shortcut help lives in the account menu, not in its own header button.
       await expect(page.locator('header button[aria-label="Xem phím tắt"]')).toHaveCount(0);
       const home = await hitOwnership(page, 'header a[aria-label^="StudyMap"]');

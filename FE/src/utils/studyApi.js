@@ -116,8 +116,15 @@ export const listStudyMaps = (documentId) =>
 
 // Đoạn văn nguồn để hiện khi bấm một node. Lấy MỘT lần rồi tra theo chunk_id —
 // node trỏ tới chunk bằng id, không kèm text.
-export const listChunks = (documentId, { limit = 500 } = {}) =>
-  _get(`/api/documents/${encodeURIComponent(documentId)}/chunks?limit=${limit}`).then((b) => b.chunks || []);
+export const listChunkPage = (documentId, { limit = 500, offset = 0 } = {}) => {
+  const capped = Math.min(500, Math.max(1, Number(limit) || 500));
+  const start = Math.max(0, Number(offset) || 0);
+  return _get(`/api/documents/${encodeURIComponent(documentId)}/chunks?limit=${capped}&offset=${start}`)
+    .then((b) => ({ ...b, total: Number(b.total) || 0, chunks: b.chunks || [] }));
+};
+
+export const listChunks = (documentId, { limit = 500, offset = 0 } = {}) =>
+  listChunkPage(documentId, { limit, offset }).then((b) => b.chunks);
 
 // ── Quiz ────────────────────────────────────────────────────────────────────
 export const generateQuiz = (payload) => _send("/api/quizzes/generate", "POST", payload);

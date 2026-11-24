@@ -6,6 +6,7 @@ import {
   formatScore,
   generateQuiz,
   getResult,
+  listChunkPage,
   listDocuments,
   masteryPercent,
   optionLabel,
@@ -47,6 +48,13 @@ describe("studyApi requests", () => {
   it("returns [] when the server sends no list", async () => {
     globalThis.fetch = vi.fn(async () => ok({}));
     await expect(listDocuments()).resolves.toEqual([]);
+  });
+
+  it("caps Reader chunk pages at 500 and sends the stored-order offset", async () => {
+    globalThis.fetch = vi.fn(async () => ok({ total: 700, chunks: [{ chunk_id: "c501" }] }));
+    await expect(listChunkPage("doc/1", { limit: 900, offset: 500 })).resolves.toMatchObject({ total: 700, chunks: [{ chunk_id: "c501" }] });
+    const [url] = globalThis.fetch.mock.calls[0];
+    expect(String(url)).toContain("/api/documents/doc%2F1/chunks?limit=500&offset=500");
   });
 
   it("sends JSON bodies with the right method", async () => {

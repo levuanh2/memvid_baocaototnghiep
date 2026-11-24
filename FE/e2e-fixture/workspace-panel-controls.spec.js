@@ -125,7 +125,7 @@ for (const width of [320, 375, 390, 640, 700, 768, 1024, 1440]) {
         }
       }
 
-      for (const mode of ["Tóm tắt", "Sơ đồ tư duy", "Trò chuyện"]) await chooseMode(page, mode);
+      for (const mode of ["Tóm tắt", "Sơ đồ tư duy", "Đọc nguồn", "Trò chuyện"]) await chooseMode(page, mode);
       await expect(composer(page)).toHaveValue(draft);
       const after = await overflow(page);
       expect(after.header).toBeLessThanOrEqual(0);
@@ -184,7 +184,7 @@ test("390px keyboard: the mode select changes mode with the arrow keys", async (
   const select = page.getByLabel("Chế độ học");
   await select.focus();
   await page.keyboard.press("ArrowDown");
-  await expect(page.locator('nav[role="tablist"] [role="tab"][title="Sơ đồ tư duy"]')).toHaveAttribute("aria-selected", "true");
+  await expect(page.locator('nav[role="tablist"] [role="tab"][title="Đọc nguồn"]')).toHaveAttribute("aria-selected", "true");
   await expect(select).toBeFocused();
 });
 
