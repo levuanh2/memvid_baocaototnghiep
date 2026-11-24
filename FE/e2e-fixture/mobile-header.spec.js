@@ -237,7 +237,9 @@ test.describe("full desktop header above the compact danger zone", () => {
       expect(h.fiveModeSlack).toBeGreaterThanOrEqual(40);
       await expect(page.getByRole("tab", { name: "Sơ đồ tư duy" })).toBeVisible();
       const modeLabel = page.locator('nav[role="tablist"] [role="tab"][title="Sơ đồ tư duy"] span').first();
-      if (vp.width >= 1800) await expect(modeLabel).toBeVisible();
+      // Mode labels stay from 1440px (Claude review): the panel/focus labels and the library label
+      // give way first (1800px / 1600px).
+      if (vp.width >= 1440) await expect(modeLabel).toBeVisible();
       else await expect(modeLabel).toBeHidden();
       // V6 header: shortcut help lives in the account menu, not in its own header button.
       await expect(page.locator('header button[aria-label="Xem phím tắt"]')).toHaveCount(0);

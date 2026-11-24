@@ -4117,3 +4117,17 @@ ellipsis. Comparing that punctuation literally makes a valid `embedding_id` look
 stored chunk never contains the added ellipsis. The verifier now removes only a trailing truncation
 marker before its normalized contains check; a mismatched truncated snippet still fails. Regression:
 `readerModel.test.js` covers both the valid truncated prefix and a foreign truncated prefix.
+
+## P5a review: mind-map citations are FAISS ids; five tabs must not cost the desktop labels (2026-11-24)
+
+1. KnowledgeInspector sent mind-map citations to the Reader as kind "studymap" (matched on the
+DocumentChunk UUID), but BE mindmap/context.py resolves node chunk_refs through index.json: their
+chunk_id is the global FAISS id (= embedding_id). Every "Đọc đoạn này trong nguồn" would have
+shown the stale message. Root cause: three citation sources, two id spaces, one assumed. Fix:
+kind "index" matches embedding_id like chat. Prevention: name the id space at the producer
+(trace the BE builder) before choosing the match field. Regression: readerModel.test.js,
+KnowledgeInspector.readerCitation.test.jsx.
+2. Fitting five mode tabs, the first P5a version hid the tab labels below 1800px and flipped the
+1280/1440 "labels visible" assertion. Labels that name the main navigation give way last: tab
+labels from 1440px, library label from 1600px, Nguồn/Dẫn chứng/Tập trung labels from 1800px;
+the five-mode slack test (>=40px at 1280/1440/1600/1920) stays.

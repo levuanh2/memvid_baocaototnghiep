@@ -69,3 +69,13 @@ describe("citation snippets cut by the server", () => {
     expect(citationMatchesChunk(chunk, citation)).toBe(false);
   });
 });
+
+// Claude review of P5a: mind-map node citations carry GLOBAL FAISS ids (chunk_refs resolved
+// through index.json in BE mindmap/context.py), i.e. embedding_id, not the chunk UUID.
+describe("index (mind map) citations", () => {
+  it("match on embedding_id, never on the chunk UUID", () => {
+    const chunk = { chunk_id: "uuid-1", embedding_id: "42", text: "Cung và cầu quyết định giá." };
+    expect(citationMatchesChunk(chunk, { kind: "index", id: "42", text: "Cung và cầu" })).toBe(true);
+    expect(citationMatchesChunk(chunk, { kind: "index", id: "uuid-1", text: "Cung và cầu" })).toBe(false);
+  });
+});

@@ -22,7 +22,10 @@ export function normalizeReaderText(value) {
 
 export function citationIdMatchesChunk(chunk, citation) {
   if (!chunk || !citation) return false;
-  const actual = citation.kind === "chat" ? chunk.embedding_id : chunk.chunk_id;
+  // "chat" and "index" (mind map) citations carry the global FAISS id = embedding_id;
+  // "studymap" citations carry the DocumentChunk UUID.
+  const byEmbedding = citation.kind === "chat" || citation.kind === "index";
+  const actual = byEmbedding ? chunk.embedding_id : chunk.chunk_id;
   return actual != null && String(actual) === String(citation.id);
 }
 

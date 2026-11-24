@@ -375,7 +375,7 @@ export default function KnowledgeInspector({
                     />
                     {readerStem && entry.text && !entry.loading && !entry.error && (
                       <button type="button"
-                        onClick={() => onOpenSource(readerStem, { kind: "studymap", id: entry.chunkId, text: entry.text })}
+                        onClick={() => onOpenSource(readerStem, { kind: "index", id: entry.chunkId, text: entry.text })}
                         className="mt-1.5 text-caption font-medium text-accent hover:underline">
                         Đọc đoạn này trong nguồn
                       </button>

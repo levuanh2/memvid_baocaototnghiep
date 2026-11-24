@@ -797,9 +797,9 @@ export default function MainLayout({
         </Link>
 
         <Link to="/app/study" aria-label="Thư viện học tập" title="Thư viện học tập"
-          className="study-library-link focus-hide flex items-center justify-center gap-1.5 w-10 h-10 lg:w-auto lg:px-3 rounded-[8px] border border-border text-small font-medium text-text-secondary hover:text-text-primary hover:bg-surface-elevated flex-shrink-0 transition-colors">
+          className="study-library-link focus-hide flex items-center justify-center gap-1.5 w-10 h-10 min-[1600px]:w-auto min-[1600px]:px-3 rounded-[8px] border border-border text-small font-medium text-text-secondary hover:text-text-primary hover:bg-surface-elevated flex-shrink-0 transition-colors">
           <Icon name="BookOpen" size={16} />
-          <span className="study-library-link__label hidden lg:inline">Thư viện học tập</span>
+          <span className="study-library-link__label hidden min-[1600px]:inline">Thư viện học tập</span>
         </Link>
 
         {/* Mode switch — Round 11 (mockup parity, explicit user decision):
@@ -824,14 +824,14 @@ export default function MainLayout({
               <button key={t.key} type="button" role="tab" aria-selected={active}
                 onClick={() => { setWorkspaceMode(t.key); closeHeaderSurface(); }}
                 title={t.label} aria-label={t.label}
-                className="flex items-center justify-center gap-1.5 w-10 h-10 min-[1800px]:w-auto min-[1800px]:h-auto px-0 min-[1800px]:px-3 py-0 min-[1800px]:py-1.5 text-small rounded-full transition-colors shrink-0"
+                className="flex items-center justify-center gap-1.5 w-10 h-10 min-[1440px]:w-auto min-[1440px]:h-auto px-0 min-[1440px]:px-3 py-0 min-[1440px]:py-1.5 text-small rounded-full transition-colors shrink-0"
                 style={{
                   background: active ? "var(--accent-cta)" : "transparent",
                   color: active ? "var(--on-primary)" : "var(--text-secondary)",
                   fontWeight: active ? 600 : 500,
                 }}>
                 <Icon name={t.icon} size={14} />
-                <span className="workspace-mode-label hidden min-[1800px]:inline">{t.label}</span>
+                <span className="workspace-mode-label hidden min-[1440px]:inline">{t.label}</span>
               </button>
             );
           })}
@@ -852,25 +852,25 @@ export default function MainLayout({
         <button type="button" data-panel-toggle="sources" onClick={toggleSources}
           aria-expanded={sourcesOpen} aria-controls={leftPanelUnmounted ? undefined : "workspace-sources"}
           aria-label="Nguồn" title="Nguồn"
-          className="workspace-panel-toggle focus-hide flex-shrink-0 inline-flex items-center justify-center gap-1.5 w-10 h-10 min-[1440px]:w-auto min-[1440px]:px-3 rounded-[8px] border border-border text-small font-medium text-text-secondary hover:text-text-primary hover:bg-surface-elevated transition-colors">
+          className="workspace-panel-toggle focus-hide flex-shrink-0 inline-flex items-center justify-center gap-1.5 w-10 h-10 min-[1800px]:w-auto min-[1800px]:px-3 rounded-[8px] border border-border text-small font-medium text-text-secondary hover:text-text-primary hover:bg-surface-elevated transition-colors">
           <Icon name="FolderOpen" size={16} aria-hidden="true" />
-          <span className="hidden min-[1440px]:inline">Nguồn</span>
+          <span className="hidden min-[1800px]:inline">Nguồn</span>
         </button>
         <button type="button" data-panel-toggle="evidence" onClick={toggleEvidence}
           aria-expanded={evidenceOpen} aria-controls="workspace-evidence"
           aria-label="Dẫn chứng" title="Dẫn chứng"
-          className="workspace-panel-toggle flex-shrink-0 inline-flex items-center justify-center gap-1.5 w-10 h-10 min-[1440px]:w-auto min-[1440px]:px-3 rounded-[8px] border border-border text-small font-medium text-text-secondary hover:text-text-primary hover:bg-surface-elevated transition-colors">
+          className="workspace-panel-toggle flex-shrink-0 inline-flex items-center justify-center gap-1.5 w-10 h-10 min-[1800px]:w-auto min-[1800px]:px-3 rounded-[8px] border border-border text-small font-medium text-text-secondary hover:text-text-primary hover:bg-surface-elevated transition-colors">
           <Icon name="Quote" size={16} aria-hidden="true" />
-          <span className="hidden min-[1440px]:inline">Dẫn chứng</span>
+          <span className="hidden min-[1800px]:inline">Dẫn chứng</span>
         </button>
 
         {/* V9.3 P4: the one control that stays with the mode switch in Focus Mode. */}
         <button type="button" data-focus-toggle onClick={focusMode ? exitFocus : enterFocus}
           aria-pressed={focusMode} aria-label={focusMode ? "Thoát tập trung" : "Tập trung"}
           title={focusMode ? "Thoát tập trung (Esc)" : "Tập trung"}
-          className="workspace-focus-toggle flex-shrink-0 inline-flex items-center justify-center gap-1.5 w-10 h-10 min-[1440px]:w-auto min-[1440px]:px-3 rounded-[8px] border border-border text-small font-medium text-text-secondary hover:text-text-primary hover:bg-surface-elevated transition-colors">
+          className="workspace-focus-toggle flex-shrink-0 inline-flex items-center justify-center gap-1.5 w-10 h-10 min-[1800px]:w-auto min-[1800px]:px-3 rounded-[8px] border border-border text-small font-medium text-text-secondary hover:text-text-primary hover:bg-surface-elevated transition-colors">
           <Icon name={focusMode ? "X" : "Maximize"} size={16} aria-hidden="true" />
-          <span className="hidden min-[1440px]:inline">{focusMode ? "Thoát tập trung" : "Tập trung"}</span>
+          <span className="hidden min-[1800px]:inline">{focusMode ? "Thoát tập trung" : "Tập trung"}</span>
         </button>
 
         {/* Right actions */}
