@@ -4091,7 +4091,8 @@ ARIA pattern means implementing its keyboard contract.
 
 ## P4b CI: a header that fit on Windows overflowed on Linux; a second e2e folder missed (2026-11-24)
 
-1. mobile-header.spec 1280px passed locally and overflowed by 24px in CI (Linux fonts are wider).
+1. mobile-header.spec 1280px passed locally and overflowed by 24px in CI (Linux rendering differs;
+the exact cause, font metrics vs. a font not loaded in CI, was never established).
 A header row with less than ~30px slack locally is not safe. Fix: the Tập trung label also waits
 for 1440px. Prevention: when adding to the header, measure slack at the tightest desktop width
 and keep a margin for font metrics.
@@ -4249,11 +4250,16 @@ Prevention: any e2e that asserts an exact scroll offset must first wait for a st
 
 Problem: at 1366px (and 701-1439px) the five mode tabs were icon-only and Nguồn/Dẫn chứng/Tập
 trung/Thư viện were icon-only too: nothing in the header named the current mode in text.
-Root cause of the old breakpoints: five labelled tabs need ~565px (Segoe UI) / ~582px (Verdana);
+Root cause of the old breakpoints: five labelled tabs need ~565px (default font, which was Be Vietnam
+Pro loaded from Google Fonts) / ~582px (Verdana);
 with them visible nothing else could carry a label below ~1800px.
-Also found: Be Vietnam Pro (the design font) is never loaded (no font files, no link), so users see
-system-ui: Segoe UI on Windows, DejaVu Sans on Linux CI. That is why "fits locally, overflows on CI".
-Decision on loading the font is separate (owner); if it is ever loaded, re-measure the header.
+CORRECTED 2026-11-25: an earlier version of this entry said "Be Vietnam Pro is never loaded" and
+blamed that for "fits locally, overflows on CI". Both were wrong / unverified: index.css line 1
+imported it from Google Fonts (the search missed the URL spelling "Be+Vietnam"; font-loading.spec.js
+showed the WOFF2 coming from fonts.gstatic.com). Why the P4b header overflowed by 24px only on Linux
+CI is NOT established (font hinting/metrics on Linux, or Google Fonts unreachable in CI, are both
+possible); the Verdana budget stays as a conservative margin. The fonts are now bundled with
+@fontsource (see "Fonts bundled with @fontsource" below) and the header was re-measured.
 Fix: one labelled "Chế độ học" select below 1600px (CSS swaps it with the tablist; same state, no
 requests). Labels where the measured slack allows it with a wide font (Verdana, >= DejaVu width):
 panel labels 1280-1599px and from 1800px; library label from 1366px; five labelled tabs from
