@@ -444,13 +444,10 @@ async function warmUpExportFonts(snapdom) {
   if (document.fonts?.load) {
     try {
       await Promise.allSettled([
-        document.fonts.load('600 20px "Spectral"', sample),
-        document.fonts.load('600 14px "Spectral"', sample),
-        document.fonts.load('400 13px "Spectral"', sample),
-        document.fonts.load('700 14px "Spectral"', sample),
-        document.fonts.load('600 20px Inter', sample),
-        document.fonts.load('600 14px Inter', sample),
-        document.fonts.load('400 13px Inter', sample),
+        document.fonts.load('600 20px "Be Vietnam Pro"', sample),
+        document.fonts.load('600 14px "Be Vietnam Pro"', sample),
+        document.fonts.load('400 13px "Be Vietnam Pro"', sample),
+        document.fonts.load('700 14px "Be Vietnam Pro"', sample),
       ]);
       await document.fonts.ready;
     } catch { /* best effort */ }
@@ -462,7 +459,7 @@ async function warmUpExportFonts(snapdom) {
   ) {
     try {
       const dummy = document.createElement("div");
-      dummy.style.cssText = "position:fixed;left:-99999px;top:0;font-family:'Spectral', Georgia, serif;font-weight:600;font-size:14px;pointer-events:none;";
+      dummy.style.cssText = "position:fixed;left:-99999px;top:0;font-family:'Be Vietnam Pro', system-ui, sans-serif;font-weight:600;font-size:14px;pointer-events:none;";
       dummy.textContent = sample;
       document.body.appendChild(dummy);
       try {

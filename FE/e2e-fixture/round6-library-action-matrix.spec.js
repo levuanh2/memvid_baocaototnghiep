@@ -101,9 +101,11 @@ for (const [width, height] of viewports) {
   }
 }
 
-// The primary label is measured with the webfont (Inter, after document.fonts.ready) AND
-// with Google Fonts blocked (the system fallback a user sees while Inter loads or when it
-// cannot load). Post-merge #149 Fixture Smoke failed at 768px on doc-2 because the check
+// The primary label is measured with the webfont (Be Vietnam Pro, after document.fonts.ready)
+// AND with the font files blocked (the system fallback a user sees while it loads or when it
+// cannot load). V9.3 PR #214: the fonts are bundled with the app now, so the webfont run no longer
+// depends on a third party and is required, not skipped (it checked the retired Inter and skipped
+// at every width). Post-merge #149 Fixture Smoke failed at 768px on doc-2 because the check
 // ran before the font swap and only looked at scrollWidth.
 for (const [width, height] of responsiveMatrixViewports) for (const fonts of ["webfont", "fallback font"]) {
   test(`${width}px action rows contain every control and keep the primary action on one line (${fonts})`, async ({ page }) => {
@@ -130,28 +132,25 @@ for (const [width, height] of responsiveMatrixViewports) for (const fonts of ["w
     // With every Google request aborted nothing can be pending, so this must settle.
     if (fonts === "fallback font") expect(fontsSettled, "fonts did not settle with Google Fonts blocked").toBe(true);
     if (fonts === "webfont") {
-      test.skip(!fontsSettled, "Google Fonts did not settle within 8s; the fallback-font run covers this width");
-      // fonts.ready also resolves when a font FAILS to load; prove Inter 600 is really in use,
+      expect(fontsSettled, "bundled fonts did not settle within 8s").toBe(true);
+      // fonts.ready also resolves when a font FAILS to load; prove Be Vietnam Pro 600 is in use,
       // otherwise this "webfont" run would silently measure the fallback (Codex review).
       // fonts.check() is true for a family with no registered face (stylesheet blocked) and
-      // fonts.load() rejects when the font files fail, so require a loaded Inter FontFace,
+      // fonts.load() rejects when the font files fail, so require a loaded FontFace,
       // catch the rejection and bound the wait (Codex review 3).
-      const interLoaded = await page.evaluate(async () => {
+      const webfontLoaded = await page.evaluate(async () => {
         try {
           const faces = await Promise.race([
-            document.fonts.load("600 16px Inter", "Tiếp tục · Hướng dẫn ôn tập"),
+            document.fonts.load('600 16px "Be Vietnam Pro"', "Tiếp tục · Hướng dẫn ôn tập"),
             new Promise((resolve) => setTimeout(() => resolve(null), 5000)),
           ]);
           return Array.isArray(faces)
-            && faces.some((face) => face.family.replace(/["']/g, "") === "Inter" && face.status === "loaded");
+            && faces.some((face) => face.family.replace(/["']/g, "") === "Be Vietnam Pro" && face.status === "loaded");
         } catch {
           return false;
         }
       });
-      // Inter comes from Google Fonts. If it cannot load, say so and skip instead of failing the
-      // required gate on a third-party outage (Codex review 2); the fallback-font run of this
-      // width always runs and needs no network.
-      test.skip(!interLoaded, "Inter 600 could not load from Google Fonts; the fallback-font run covers this width");
+      expect(webfontLoaded, "bundled Be Vietnam Pro 600 is not in use").toBe(true);
     }
     // The intended grid must actually apply: an invalid grid-template-columns is dropped by the
     // browser and every row silently stacks into one column (Codex review 2, P1).

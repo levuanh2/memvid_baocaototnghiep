@@ -4353,3 +4353,15 @@ re-anchors the root centre with `mind.move(dx, dy)` even when the offset is a fl
 the @fontsource build of Be Vietnam Pro gives the root topic slightly different fractional metrics,
 which produced dx/dy of ~0.0001px. Fix: move only when |dx| or |dy| >= 0.01px (real drift is still
 corrected). The test was not changed. Verified: root-collapse + depth-preset specs x4 = 132/132.
+Review follow-ups on #214 (2026-11-25):
+- Independent review P2 / owner decision: Export Studio offered "Sans (Inter)" and "Serif
+  (Spectral)" and the "Tài liệu học tập" preset defaulted to Spectral, but neither font was ever
+  loaded (the Google import only had Be Vietnam Pro + IBM Plex Mono), so image exports fell back to
+  the machine's fonts. Owner chose Be Vietnam Pro only: FONT_STACKS sans (and the legacy "serif" key
+  older saved appearances may hold) -> bundled Be Vietnam Pro; study preset -> sans; font warm-up and
+  the legend overlay use it; the image font choice is "Giống canvas" / "Be Vietnam Pro". Documents
+  (PDF/DOCX) are built by the backend with its own fonts (DejaVu, Calibri/Times), so they keep a
+  generic "Sans" / "Serif" choice (labels no longer claim Inter/Spectral). Red-first unit tests.
+- agy P2: round6-library-action-matrix's "webfont" half checked the retired Inter and skipped at all
+  7 widths. It now requires a loaded Be Vietnam Pro 600 (bundled, no third-party outage to excuse a
+  skip): 59/59 run, 0 skipped.
