@@ -4309,3 +4309,8 @@ Gotcha 3 (agy review of #213, P2): centring the note on the select cut it 22px o
 overflow-hidden clipped it silently, no page scroll). The note is now `position: fixed`, centred on
 the viewport. The spec covers 320/375px too (red -22 before). `aria-describedby` points at the text
 `<p>` only, so "Đã hiểu" is not read as part of the select's description.
+Owner decision (2026-11-25, after a side-agent note that a visit-only step-aside could show the note
+on every visit to a learner who never presses "Đã hiểu"): the note shows on at most 3 visits where it
+is actually on screen (`studymap.hint.modes.v1.visits`, counted once per page load and only below
+1600px via matchMedia), then stops by itself; "Đã hiểu" or a mode change through the select end it at
+once. Regression: mode-hint.spec "three visits at most" (red before) and "from 1600px do not count".

@@ -48,7 +48,15 @@ const LIBRARY_LABEL = "hidden min-[1366px]:inline";
 // select, so a one-time note under it names them. Browser-only; storage errors only mean the note
 // may come back next visit.
 const MODE_HINT_KEY = "studymap.hint.modes.v1";
-const modeHintSeen = () => { try { return localStorage.getItem(MODE_HINT_KEY) === "1"; } catch { return false; } };
+// Owner decision (2026-11-25): it shows on at most 3 visits where it is on screen, then stops.
+const MODE_HINT_VISITS_KEY = "studymap.hint.modes.v1.visits";
+const MODE_HINT_MAX_VISITS = 3;
+const modeHintSeen = () => {
+  try {
+    return localStorage.getItem(MODE_HINT_KEY) === "1"
+      || Number(localStorage.getItem(MODE_HINT_VISITS_KEY) || 0) >= MODE_HINT_MAX_VISITS;
+  } catch { return false; }
+};
 
 const MODE_TABS = [
   { key: "chat", label: "Trò chuyện", icon: "MessageSquareText" },
@@ -815,6 +823,17 @@ export default function MainLayout({
   // shelf) and in Focus Mode; from 1600px CSS hides it with the select.
   const showModeHint = modeHintOpen && !modeHintAway && !focusMode && !headerSurface && !tabletShelfOpen
     && !(panelDrawer && (leftOpen || rightOpen));
+  // Count a visit once per page load, and only when the note is really on screen (below 1600px).
+  const modeHintCounted = useRef(false);
+  useEffect(() => {
+    if (!showModeHint || modeHintCounted.current) return;
+    if (!window.matchMedia?.("(max-width: 1599px)").matches) return;
+    modeHintCounted.current = true;
+    try {
+      const visits = Number(localStorage.getItem(MODE_HINT_VISITS_KEY) || 0) + 1;
+      localStorage.setItem(MODE_HINT_VISITS_KEY, String(visits));
+    } catch { /* blocked storage: the note may come back next visit */ }
+  }, [showModeHint, viewportWidth]);
 
   return (
     <div className="app-shell-height workspace-shell flex flex-col overflow-hidden font-body transition-theme" data-focus={focusMode ? "true" : "false"} style={{ background: "var(--bg-base)", color: "var(--text-primary)" }}>

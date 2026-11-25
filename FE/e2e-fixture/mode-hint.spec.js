@@ -178,3 +178,25 @@ test("opening the tools menu or a side drawer hides the note while it is open", 
   await expect(page.getByRole("menu", { name: "Công cụ học" })).toBeHidden();
   await expect(hint(page)).toBeVisible();
 });
+
+// Owner decision (2026-11-25): the note shows on at most 3 visits where it is actually on screen,
+// then stops by itself. "Đã hiểu" or a mode change through the select still end it at once.
+test("the note shows on three visits at most, then stops by itself", async ({ page }) => {
+  await openApp(page, { width: 1366 });
+  for (let visit = 1; visit <= 3; visit += 1) {
+    if (visit > 1) { await page.reload(); await waitForModeControl(page); }
+    await expect(hint(page), `visit ${visit}`).toBeVisible();
+  }
+  await page.reload();
+  await waitForModeControl(page);
+  await expect(hint(page)).toHaveCount(0);
+});
+
+test("visits where the note is not on screen (from 1600px) do not count", async ({ page }) => {
+  await openApp(page, { width: 1600 });
+  for (let visit = 1; visit <= 3; visit += 1) { await page.reload(); await waitForModeControl(page); }
+  await page.setViewportSize({ width: 1366, height: 900 });
+  await page.reload();
+  await waitForModeControl(page);
+  await expect(hint(page)).toBeVisible();
+});
