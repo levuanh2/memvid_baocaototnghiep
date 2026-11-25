@@ -12,6 +12,10 @@ async function openSelection(page, { map = "exact-v3", zoom = 0.69, initialAppea
   await expect.poll(() => page.evaluate(() => Boolean(window.__STUDYMAP_FIXTURE__?.mind))).toBe(true);
   await page.evaluate((value) => window.__STUDYMAP_FIXTURE__.mind.scale(value), zoom);
   await expect.poll(() => page.evaluate(() => window.__STUDYMAP_FIXTURE__.mind.scaleVal)).toBeCloseTo(zoom, 5);
+  // V9.3 Task 6C: canvas geometry is only comparable once the web fonts have swapped in. A font
+  // arriving between two reads re-flowed node A (74.9 -> 76.1px) and failed the "canvas not mutated"
+  // check on a cold cache, though the export override changed nothing.
+  await page.evaluate(() => document.fonts.ready);
   await page.getByRole("button", { name: "Xuất sơ đồ" }).click();
   await page.locator('input[name="mm-export-scope"][value="selected_branches"]').check();
   await page.locator(".export-inline-action").click();

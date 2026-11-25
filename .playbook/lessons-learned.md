@@ -4325,6 +4325,34 @@ Gotcha 4 (independent review of #213, P3): a first visit opened straight into Mi
 note is not shown in Mind Map mode, and such a visit is not counted. Regression: mode-hint.spec
 "opening straight into Mind Map" (red before).
 
+## Three "flaky" fixture tests, investigated to root cause (V9.3 Task 6C, 2026-11-25)
+
+1. mindmap-branch-marker.spec.js "20px circle ... outer side" (right markers 6-8px off, full suite
+   and CI only; passed in isolation). ROOT CAUSE, product bug: selection markers are placed from
+   the topic widths (offsetLeft/offsetWidth) when selection opens; a web font that finishes later
+   re-flows every topic without a DOM mutation, so the MutationObserver never re-placed them. On a
+   cold cache / slow network the markers sit off their topics. Deterministic repro: hold the font
+   files until selection is open -> off by exactly 8px (the CI number). Ruled out: CPU load (6x
+   throttle), fonts arriving before selection. Fix: attachBranchSelectionMode re-scans on
+   `document.fonts` "loadingdone" and removes the listener on detach. Regression: new e2e
+   "right-side markers follow their topics when web fonts arrive after selection opens" (red before)
+   and a unit test (red on the old code).
+2. exact-node-export-v3.spec.js:240 "saved appearance and an export-only leaf override ..." (node A
+   74.9 vs 76.1px). ROOT CAUSE, test timing: the "canvas not mutated" baseline was read before the
+   web fonts swapped in; the font, not the export override, re-flowed node A. Deterministic repro:
+   release held fonts right after the baseline read -> exactly 74.897 vs 76.051 (the CI numbers).
+   Fix: openSelection waits for `document.fonts.ready` AFTER setting the zoom (waiting before it let
+   the map's own initial fit reset the zoom to 1). Assertion unchanged. Verified with fonts delayed
+   1500ms (3/3) and the spec x2 (18/18).
+3. library-one-list.spec.js:155 "scroll position survives" (CI: scrollY 0 after Back, run
+   45416413978). NOT root-caused yet. Ruled out locally: late fonts (2.5s), the save race (state is
+   saved as 900 before a same-frame full navigation), bfcache (navigation type back_forward,
+   persisted false), slow /auth/me on the way back (1.2s), Chromium's own scroll restoration
+   (switched to manual). Not changed: no skip, no loosened assertion. Next: capture a CI trace with
+   the stored sessionStorage value, `loading`, and document height at the restore frame.
+Prevention: before calling a test "flaky", log what moved and try to make it deterministic (hold a
+resource, throttle, reorder); a fixed wait (400ms) or a single pre-read is never a settled state.
+
 ## Notes: a direct account switch rendered the previous account's document titles for one commit (V9.3 Task 6A, 2026-11-25)
 
 Root cause: NotesPane kept `docs`, `pickedId` and `loadError` without the account they belonged to.
