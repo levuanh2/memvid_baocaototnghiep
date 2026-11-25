@@ -820,9 +820,10 @@ export default function MainLayout({
   }, [workspaceMode, mmClearSelectedNode]);
 
   // Out of the way while anything else is open over the workspace (menus, drawers, the tablet
-  // shelf) and in Focus Mode; from 1600px CSS hides it with the select.
+  // shelf), in Focus Mode, and in Mind Map mode (its contextual toolbar row sits right under the
+  // header; independent review of #213); from 1600px CSS hides it with the select.
   const showModeHint = modeHintOpen && !modeHintAway && !focusMode && !headerSurface && !tabletShelfOpen
-    && !(panelDrawer && (leftOpen || rightOpen));
+    && !(panelDrawer && (leftOpen || rightOpen)) && workspaceMode !== "mindmap";
   // Count a visit once per page load, and only when the note is really on screen (below 1600px).
   const modeHintCounted = useRef(false);
   useEffect(() => {

@@ -8,7 +8,7 @@ const API = /localhost:8080\//;
 const KEY = "studymap.hint.modes.v1";
 const json = (body) => ({ status: 200, contentType: "application/json", body: JSON.stringify(body) });
 
-async function openApp(page, { width, dark = false, blockStorage = false, seen = false } = {}) {
+async function openApp(page, { width, dark = false, blockStorage = false, seen = false, path = "/app" } = {}) {
   await page.setViewportSize({ width, height: 900 });
   await page.addInitScript(({ block, key, wasSeen }) => {
     localStorage.setItem("memvid-token", "fixture-token");
@@ -29,7 +29,7 @@ async function openApp(page, { width, dark = false, blockStorage = false, seen =
     if (pathname === "/mindmaps") return route.fulfill(json({ mindmaps: [] }));
     return route.fulfill(json({}));
   });
-  await page.goto("/app");
+  await page.goto(path);
   await waitForModeControl(page);
   if (dark) await page.evaluate(() => document.documentElement.classList.add("dark"));
   await page.waitForLoadState("networkidle");
@@ -199,4 +199,13 @@ test("visits where the note is not on screen (from 1600px) do not count", async 
   await page.reload();
   await waitForModeControl(page);
   await expect(hint(page)).toBeVisible();
+});
+
+// Independent review of #213 (P3): a first visit that opens straight into Mind Map put the note over
+// the map's contextual toolbar row. No note in Mind Map mode; it does not count as a visit there.
+test("opening straight into Mind Map shows no note over its toolbar row, and that visit does not count", async ({ page }) => {
+  await openApp(page, { width: 1366, path: "/app?tab=mindmap" });
+  await expect(page.locator('nav[role="tablist"] [role="tab"][title="Sơ đồ tư duy"]')).toHaveAttribute("aria-selected", "true");
+  await expect(hint(page)).toHaveCount(0);
+  expect(await page.evaluate((k) => localStorage.getItem(`${k}.visits`), KEY)).toBeNull();
 });

@@ -4314,3 +4314,7 @@ on every visit to a learner who never presses "Đã hiểu"): the note shows on 
 is actually on screen (`studymap.hint.modes.v1.visits`, counted once per page load and only below
 1600px via matchMedia), then stops by itself; "Đã hiểu" or a mode change through the select end it at
 once. Regression: mode-hint.spec "three visits at most" (red before) and "from 1600px do not count".
+Gotcha 4 (independent review of #213, P3): a first visit opened straight into Mind Map
+(`/app?tab=mindmap`) painted the note over the map's contextual toolbar row under the header. The
+note is not shown in Mind Map mode, and such a visit is not counted. Regression: mode-hint.spec
+"opening straight into Mind Map" (red before).
