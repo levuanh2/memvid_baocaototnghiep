@@ -14,6 +14,39 @@ function buildParent({ id, topic }) {
 }
 
 describe("attachBranchSelectionMode", () => {
+  // V9.3 Task 6C: a web font that finishes after the markers were placed re-flows the topics
+  // without a DOM mutation; the markers must be re-placed on FontFaceSet "loadingdone".
+  it("re-places markers when web fonts finish loading, and stops listening on detach", async () => {
+    const fonts = new EventTarget();
+    const had = Object.getOwnPropertyDescriptor(document, "fonts");
+    Object.defineProperty(document, "fonts", { configurable: true, value: fonts });
+    try {
+      const container = document.createElement("div");
+      document.body.appendChild(container);
+      const main = document.createElement("me-main");
+      main.className = "rhs";
+      const parent = buildParent({ id: "a", topic: "Alpha" });
+      main.appendChild(parent);
+      container.appendChild(main);
+      const tpc = parent.querySelector("me-tpc");
+      let width = 100;
+      Object.defineProperty(tpc, "offsetLeft", { configurable: true, get: () => 0 });
+      Object.defineProperty(tpc, "offsetWidth", { configurable: true, get: () => width });
+      handle = attachBranchSelectionMode(container, { isActiveRef: { current: true }, isSelectedFn: () => false, onToggle: vi.fn() });
+      const check = () => container.querySelector("me-export-check");
+      expect(check().style.left).toContain("100px");
+      width = 124; // the web font arrived: the topic is wider now
+      fonts.dispatchEvent(new Event("loadingdone"));
+      expect(check().style.left).toContain("124px");
+      handle.detach(); handle = null;
+      width = 150;
+      fonts.dispatchEvent(new Event("loadingdone")); // no listener left: nothing throws or re-adds
+      expect(container.querySelector("me-export-check")).toBeNull();
+    } finally {
+      if (had) Object.defineProperty(document, "fonts", had); else delete document.fonts;
+    }
+  });
+
   it("injects no checkbox while inactive", async () => {
     const container = document.createElement("div");
     document.body.appendChild(container);
