@@ -4346,3 +4346,10 @@ same-origin WOFF2 200, no Google request, rendered-width proof, body/header/sele
 Notes, blocked-font fallback at 390/1366/1600). Header re-measured at 14 widths x bundled/blocked/
 Verdana: no overflow, 56px, min target 40 (QA evidence fonts/header-measurement-report.md).
 Reader mode icon BookOpen -> FileText (library keeps BookOpen, summary ScrollText).
+Follow-up on #214 (full fixture run): mindmap-toolbar-root-collapse "root-only collapse ... without
+moving the viewport" failed 3/48 with the bundled fonts (0/48 on d51cbe0 with Google Fonts): the
+canvas transform went -19.5px -> -19.5001px. Root cause: after a depth preset, MindElixirView
+re-anchors the root centre with `mind.move(dx, dy)` even when the offset is a floating-point residue;
+the @fontsource build of Be Vietnam Pro gives the root topic slightly different fractional metrics,
+which produced dx/dy of ~0.0001px. Fix: move only when |dx| or |dy| >= 0.01px (real drift is still
+corrected). The test was not changed. Verified: root-collapse + depth-preset specs x4 = 132/132.
