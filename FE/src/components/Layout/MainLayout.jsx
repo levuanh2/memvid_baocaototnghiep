@@ -890,7 +890,7 @@ export default function MainLayout({
         <span className="workspace-mode-select flex-shrink-0">
           <label htmlFor="workspace-mode-select" className="sr-only">Chế độ học</label>
           <select id="workspace-mode-select" data-mode-select value={workspaceMode} ref={modeSelectRef}
-            aria-describedby={showModeHint ? "workspace-mode-hint" : undefined}
+            aria-describedby={showModeHint ? "workspace-mode-hint-text" : undefined}
             onChange={(e) => { setWorkspaceMode(e.target.value); closeHeaderSurface(); if (modeHintOpen) dismissModeHint(); }}>
             {MODE_TABS.map((t) => <option key={t.key} value={t.key}>{t.label}</option>)}
           </select>
@@ -899,7 +899,7 @@ export default function MainLayout({
               name containing "Chế độ học" collided with the select's label (getByLabel). */}
           {showModeHint && (
             <div id="workspace-mode-hint" role="note" className="workspace-mode-hint">
-              <p>Đổi chế độ học ở ô này: Trò chuyện, Đọc nguồn, Sơ đồ tư duy, Tóm tắt, Ghi chú.</p>
+              <p id="workspace-mode-hint-text">Đổi chế độ học ở ô này: Trò chuyện, Đọc nguồn, Sơ đồ tư duy, Tóm tắt, Ghi chú.</p>
               <button type="button" className="workspace-mode-hint__ok" onClick={() => dismissModeHint(true)}>Đã hiểu</button>
             </div>
           )}

@@ -4304,3 +4304,8 @@ Gotcha 2: its accessible name "Các chế độ học" contained the select's la
 "chế độ học" names. The note has no name of its own; the select announces it via aria-describedby.
 Prevention: never fix a first-run overlay by seeding it away in test config; prove it with the
 suite running first-visit. Give helper text no accessible name that repeats a control's label.
+Gotcha 3 (agy review of #213, P2): centring the note on the select cut it 22px off the left edge at
+320px (the <=340px header hides the library link, so the select sits left of centre; the shell's
+overflow-hidden clipped it silently, no page scroll). The note is now `position: fixed`, centred on
+the viewport. The spec covers 320/375px too (red -22 before). `aria-describedby` points at the text
+`<p>` only, so "Đã hiểu" is not read as part of the select's description.

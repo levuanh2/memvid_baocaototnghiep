@@ -38,7 +38,7 @@ async function openApp(page, { width, dark = false, blockStorage = false, seen =
 
 const hint = (page) => page.locator('#workspace-mode-hint[role="note"]');
 
-for (const width of [390, 1024, 1366, 1536]) {
+for (const width of [320, 375, 390, 1024, 1366, 1536]) {
   for (const dark of [false, true]) {
     test(`${width}px ${dark ? "dark" : "light"}: first visit names the modes in the select, fits, takes no focus`, async ({ page }) => {
       await openApp(page, { width, dark });
@@ -51,7 +51,8 @@ for (const width of [390, 1024, 1366, 1536]) {
       await expect(page.getByLabel("Chế độ học")).toHaveCount(1);
       const describedBy = await page.locator(MODE_SELECT).getAttribute("aria-describedby");
       expect(describedBy).toBeTruthy();
-      expect(await note.getAttribute("id")).toBe(describedBy);
+      // It points at the text only, so "Đã hiểu" is not read as part of the description.
+      expect(await note.locator("p").getAttribute("id")).toBe(describedBy);
       // Never steals focus, never grows the header, never overflows the page.
       expect(await page.evaluate(() => document.activeElement?.closest?.('[role="note"]') ?? null)).toBeNull();
       const box = await note.boundingBox();

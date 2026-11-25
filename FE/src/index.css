@@ -1298,9 +1298,11 @@
 .workspace-mode-select { position: relative; align-items: center; }
 .workspace-mode-select__chevron { position: absolute; right: 9px; pointer-events: none; color: var(--text-secondary); }
 /* One-time note under the select (see MODE_HINT_KEY). It hangs below the 56px header instead of
-   growing it, and hides with the select from 1600px. */
+   growing it, and hides with the select from 1600px. Fixed and centred on the viewport (not on the
+   select): at 320px the select sits left of centre and a select-centred note was cut 22px off the
+   left edge (agy review of #213). */
 .workspace-mode-hint {
-  position: absolute; top: calc(100% + 10px); left: 50%; transform: translateX(-50%); z-index: 1;
+  position: fixed; top: 66px; left: 50%; transform: translateX(-50%); z-index: 1;
   width: 17.5rem; max-width: calc(100vw - 16px); padding: 10px 12px; border-radius: 10px;
   display: flex; flex-direction: column; align-items: flex-start; gap: 8px;
   background: var(--bg-card); color: var(--text-primary); border: 1px solid var(--border-strong);
