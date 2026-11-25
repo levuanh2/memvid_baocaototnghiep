@@ -3,6 +3,7 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
 import { createRoot } from "react-dom/client";
 import { act } from "react-dom/test-utils";
+import { useLayoutEffect } from "react";
 import NotesPane from "./NotesPane";
 import { forgetPendingNotes, readNote, writeNote, NOTE_MAX } from "../../utils/notesPreview";
 
@@ -186,6 +187,42 @@ describe("NotesPane identity", () => {
     expect(loader).toHaveBeenCalledTimes(2);
     expect(titles).toContain("Riêng của u2.pdf");
     expect(titles).not.toContain("Riêng của u1.pdf");
+  });
+
+  // Owner brief (V9.3 Task 6A): a direct account switch must not show the previous account's
+  // document titles or note text in ANY commit, including the first one after the switch
+  // (#210 independent review P3). A layout-effect probe reads the DOM of every commit before
+  // passive effects (where the pane reloads) can run.
+  it("never shows the previous account's titles or note, even in the first commit after a switch", async () => {
+    const snapshots = [];
+    function Probe(props) {
+      useLayoutEffect(() => { snapshots.push(container.innerHTML); });
+      return <NotesPane active selectedSources={[]} {...props} />;
+    }
+    const u1Docs = [{ document_id: "x1", source_stem: "rieng_u1", title: "Bí mật của u1.pdf" }];
+    const u2Docs = [{ document_id: "y1", source_stem: "rieng_u2", title: "Tài liệu của u2.pdf" }];
+    writeNote("u1", "x1", "nội dung riêng của u1");
+    const loader = vi.fn().mockResolvedValueOnce(u1Docs).mockResolvedValueOnce(u2Docs);
+    await act(async () => { root.render(<Probe userId="u1" loadDocuments={loader} />); });
+    await act(async () => { await Promise.resolve(); });
+    // u1 picks the document so its note is on screen before the switch.
+    await act(async () => {
+      const select = container.querySelector("#notes-pane-document");
+      const setter = Object.getOwnPropertyDescriptor(HTMLSelectElement.prototype, "value").set;
+      setter.call(select, "x1");
+      select.dispatchEvent(new Event("change", { bubbles: true }));
+    });
+    expect(container.innerHTML).toContain("Bí mật của u1.pdf");
+    expect(area().value).toBe("nội dung riêng của u1");
+    snapshots.length = 0;
+    await act(async () => { root.render(<Probe userId="u2" loadDocuments={loader} />); });
+    await act(async () => { await Promise.resolve(); });
+    expect(snapshots.length).toBeGreaterThan(0);
+    snapshots.forEach((html, i) => {
+      expect(html, `commit ${i} after the switch`).not.toContain("Bí mật của u1.pdf");
+      expect(html, `commit ${i} after the switch`).not.toContain("nội dung riêng của u1");
+    });
+    expect(container.innerHTML).toContain("Tài liệu của u2.pdf");
   });
 
   it("writes a pending draft under the account that typed it, never the next one", async () => {

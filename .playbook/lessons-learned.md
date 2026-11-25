@@ -4318,3 +4318,18 @@ Gotcha 4 (independent review of #213, P3): a first visit opened straight into Mi
 (`/app?tab=mindmap`) painted the note over the map's contextual toolbar row under the header. The
 note is not shown in Mind Map mode, and such a visit is not counted. Regression: mode-hint.spec
 "opening straight into Mind Map" (red before).
+
+## Notes: a direct account switch rendered the previous account's document titles for one commit (V9.3 Task 6A, 2026-11-25)
+
+Root cause: NotesPane kept `docs`, `pickedId` and `loadError` without the account they belonged to.
+When a mounted pane received a different `userId`, the first commit still built the document picker
+from the previous account's list; the reload effect (passive) cleared it only afterwards. The note
+text was already gated by the loaded identity (#210), the titles were not (#210 review P3).
+Fix: every per-account value is stored with its owner (`{ userId, list }`, `{ userId, id }`,
+`errorFor`) and used only while that owner is the signed-in account; otherwise the pane shows its
+loading state until the new account's list arrives.
+Regression: NotesPane.test.jsx "never shows the previous account's titles or note, even in the first
+commit after a switch": a useLayoutEffect probe snapshots the DOM of every commit; red before
+(commit 0 contained "Bí mật của u1.pdf").
+Prevention: per-account UI state carries its owner; a test of "after the switch" must look at the
+first commit, not at the settled DOM.
