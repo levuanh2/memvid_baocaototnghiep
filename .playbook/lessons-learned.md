@@ -4280,3 +4280,21 @@ test hung. All option queries are now scoped to the listbox "Chọn sơ đồ". 
 `study-library-navigation` clicked a visible tab at 1440px (select band). Prevention: when the
 mode control changes, also grep `getByRole("option"` and `getByRole("tab"` in BOTH `FE/e2e` and
 `FE/e2e-fixture`, and remember `FE/e2e` only runs in CI (Critical Flows).
+
+## One-time "Chế độ học" note below 1600px (V9.3 follow-up to #212, 2026-11-25)
+
+Why: after #212 the five modes sit inside the "Chế độ học" select below 1600px (1280/1366/1440/1536
+laptops), so the new Đọc nguồn and Ghi chú modes are only visible after opening the list (side-agent
+finding; owner chose a one-time note in its own PR, no analytics/API).
+What: a `role="note"` under the select (absolute, so the 56px header does not grow), named by the
+select's `aria-describedby`; "Đã hiểu" (40px) closes it and moves focus to the select; the first mode
+change through the select also counts as seen. Stored in localStorage `studymap.hint.modes.v1`
+(try/catch: blocked storage only means it may come back next visit). Hidden in Focus Mode and from
+1600px (it lives inside `.workspace-mode-select`, which is hidden there). No request, no focus steal.
+Regression: e2e-fixture/mode-hint.spec.js 15 tests (390/1024/1366/1536 light+dark fit + no focus +
+describedby; dismiss by keyboard persists and sends nothing; select change counts; 1600px none;
+resize; Focus Mode; returning learner; blocked storage). Red 13/15 before the change.
+Gotcha: a floating first-run note intercepts clicks in every other spec (51 failures in the first
+full run). Both Playwright configs now pre-seed the key through `use.storageState`; only
+mode-hint.spec.js opts out with `test.use({ storageState: { cookies: [], origins: [] } })`.
+Prevention: any new first-run UI that overlays the workspace needs the same seed in BOTH configs.

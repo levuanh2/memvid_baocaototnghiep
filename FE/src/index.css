@@ -1297,6 +1297,22 @@
 }
 .workspace-mode-select { position: relative; align-items: center; }
 .workspace-mode-select__chevron { position: absolute; right: 9px; pointer-events: none; color: var(--text-secondary); }
+/* One-time note under the select (see MODE_HINT_KEY). It hangs below the 56px header instead of
+   growing it, and hides with the select from 1600px. */
+.workspace-mode-hint {
+  position: absolute; top: calc(100% + 10px); left: 50%; transform: translateX(-50%); z-index: 1;
+  width: 17.5rem; max-width: calc(100vw - 16px); padding: 10px 12px; border-radius: 10px;
+  display: flex; flex-direction: column; align-items: flex-start; gap: 8px;
+  background: var(--bg-card); color: var(--text-primary); border: 1px solid var(--border-strong);
+  box-shadow: var(--shadow-card-hover); font-size: 0.8125rem; line-height: 1.45; white-space: normal;
+  text-wrap: pretty;
+}
+.workspace-mode-hint__ok {
+  min-height: 40px; padding: 0 14px; border-radius: 8px; border: 1px solid var(--border-color);
+  background: transparent; color: var(--text-primary); font: inherit; font-weight: 600;
+}
+.workspace-mode-hint__ok:hover { background: var(--bg-sidebar); }
+.workspace-mode-hint__ok:focus-visible { outline: 3px solid var(--focus); outline-offset: 2px; }
 .workspace-mode-select select:focus-visible { outline: 3px solid var(--focus); outline-offset: 2px; }
 @media (max-width: 1599px) {
   .workspace-global-header .workspace-mode-switch { display: none; }

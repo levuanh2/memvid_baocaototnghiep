@@ -44,6 +44,12 @@ const PANEL_LABEL = "hidden min-[1280px]:max-[1599px]:inline min-[1800px]:inline
 const LIBRARY_BTN = "w-10 min-[1366px]:w-auto min-[1366px]:px-3";
 const LIBRARY_LABEL = "hidden min-[1366px]:inline";
 
+// V9.3 (owner decision after #212): below 1600px the five modes sit inside the "Chế độ học"
+// select, so a one-time note under it names them. Browser-only; storage errors only mean the note
+// may come back next visit.
+const MODE_HINT_KEY = "studymap.hint.modes.v1";
+const modeHintSeen = () => { try { return localStorage.getItem(MODE_HINT_KEY) === "1"; } catch { return false; } };
+
 const MODE_TABS = [
   { key: "chat", label: "Trò chuyện", icon: "MessageSquareText" },
   { key: "reader", label: "Đọc nguồn", icon: "BookOpen" },
@@ -120,6 +126,13 @@ export default function MainLayout({
   // persists every change, so leaving or reloading while focused cannot overwrite the learner's
   // saved layout. Every right-column open/close below goes through setRightCollapsed.
   const [focusMode, setFocusMode] = useState(false);
+  const [modeHintOpen, setModeHintOpen] = useState(() => !modeHintSeen());
+  const modeSelectRef = useRef(null);
+  const dismissModeHint = useCallback((focusSelect = false) => {
+    setModeHintOpen(false);
+    try { localStorage.setItem(MODE_HINT_KEY, "1"); } catch { /* the note may return next visit */ }
+    if (focusSelect) modeSelectRef.current?.focus();
+  }, []);
   const [focusRightShown, setFocusRightShown] = useState(false);
   const focusModeRef = useRef(false);
   focusModeRef.current = focusMode;
@@ -862,11 +875,18 @@ export default function MainLayout({
             two). Same state as the tabs: changing it never sends anything. */}
         <span className="workspace-mode-select flex-shrink-0">
           <label htmlFor="workspace-mode-select" className="sr-only">Chế độ học</label>
-          <select id="workspace-mode-select" data-mode-select value={workspaceMode}
-            onChange={(e) => { setWorkspaceMode(e.target.value); closeHeaderSurface(); }}>
+          <select id="workspace-mode-select" data-mode-select value={workspaceMode} ref={modeSelectRef}
+            aria-describedby={modeHintOpen && !focusMode ? "workspace-mode-hint" : undefined}
+            onChange={(e) => { setWorkspaceMode(e.target.value); closeHeaderSurface(); if (modeHintOpen) dismissModeHint(); }}>
             {MODE_TABS.map((t) => <option key={t.key} value={t.key}>{t.label}</option>)}
           </select>
           <Icon name="ChevronDown" size={14} aria-hidden="true" className="workspace-mode-select__chevron" />
+          {modeHintOpen && !focusMode && (
+            <div id="workspace-mode-hint" role="note" aria-label="Các chế độ học" className="workspace-mode-hint">
+              <p>Đổi chế độ học ở ô này: Trò chuyện, Đọc nguồn, Sơ đồ tư duy, Tóm tắt, Ghi chú.</p>
+              <button type="button" className="workspace-mode-hint__ok" onClick={() => dismissModeHint(true)}>Đã hiểu</button>
+            </div>
+          )}
         </span>
 
         {/* V9.3 P4b: the two side panels, named and with their state (docs/StudyMap-V9.3/06).

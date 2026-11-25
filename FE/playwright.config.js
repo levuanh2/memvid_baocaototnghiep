@@ -31,6 +31,9 @@ export default defineConfig({
     : "list",
   use: {
     baseURL: `http://127.0.0.1:${FE_PORT}`,
+    // The one-time "Chế độ học" note (MainLayout MODE_HINT_KEY) floats over the workspace below
+    // 1600px; every spec starts with it already seen except e2e-fixture/mode-hint.spec.js.
+    storageState: { cookies: [], origins: [{ origin: `http://127.0.0.1:${FE_PORT}`, localStorage: [{ name: "studymap.hint.modes.v1", value: "1" }] }] },
     trace: "retain-on-failure",
     screenshot: "only-on-failure",
     video: "off",
