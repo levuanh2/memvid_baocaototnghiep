@@ -22,7 +22,7 @@ async function openWorkspace(page, summariesHandler) {
     return route.fulfill(json({}));
   });
   await page.goto("/app?source=tai-lieu-1&tab=summary");
-  await expect(page.locator('[role="tab"][title="Tóm tắt"][aria-selected="true"]')).toBeVisible();
+  await expect(page.locator('[role="tab"][title="Tóm tắt"]')).toHaveAttribute("aria-selected", "true");
 }
 
 const summaryPane = (page) => page.locator("main");
@@ -109,7 +109,7 @@ test("the Mind map screen never shows 'Chưa có sơ đồ tư duy' while its li
     return route.fulfill(json({ summaries: [] }));
   });
   await page.goto("/app?source=tai-lieu-1&tab=mindmap");
-  await expect(page.locator('[role="tab"][title="Sơ đồ tư duy"][aria-selected="true"]')).toBeVisible();
+  await expect(page.locator('[role="tab"][title="Sơ đồ tư duy"]')).toHaveAttribute("aria-selected", "true");
   await expect(loadingLine(page)).toBeVisible();
   expect(await page.evaluate(() => window.__everSeen)).toEqual([]);
   release();

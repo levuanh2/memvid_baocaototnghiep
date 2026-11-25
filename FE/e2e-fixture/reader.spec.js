@@ -2,7 +2,7 @@
 import { test, expect } from "@playwright/test";
 import { mkdirSync } from "node:fs";
 import path from "node:path";
-import { chooseMode } from "./workspaceMode.js";
+import { MODE_SELECT, chooseMode } from "./workspaceMode.js";
 
 const OUT = process.env.P5A_SHOT_OUT;
 if (OUT) mkdirSync(OUT, { recursive: true });
@@ -60,14 +60,14 @@ for (const width of [390, 768, 1440]) {
       await expect(fileNote).toContainText("không phải bản xem trước file gốc");
       await expect(fileNote).toBeVisible();
       await expect(page.getByText(/trang \d+/i)).toHaveCount(0);
-      if (width <= 700) await expect(page.getByLabel("Chế độ học")).toHaveValue("reader");
+      if (width < 1600) await expect(page.getByLabel("Chế độ học")).toHaveValue("reader");
       else await expect(page.getByRole("tab", { name: "Đọc nguồn" })).toHaveAttribute("aria-selected", "true");
       if (OUT) await page.screenshot({ path: path.join(OUT, `reader-${width}-${dark ? "dark" : "light"}.png`), fullPage: true });
     });
   }
 }
 
-test("keyboard reaches the Reader tab and TOC, and mode switches keep reading position", async ({ page }) => {
+test("keyboard reaches the Reader mode and TOC, and mode switches keep reading position", async ({ page }) => {
   await openReader(page, { width: 768 });
   const scroll = page.locator(".reader-scroll");
   // Set the position only after every chunk page has loaded: a page arriving later grew the
@@ -90,10 +90,11 @@ test("keyboard reaches the Reader tab and TOC, and mode switches keep reading po
   const before = await scroll.evaluate((node) => node.scrollTop);
   expect(Math.abs(before - 420)).toBeLessThan(16);
   await chooseMode(page, "Trò chuyện");
-  const readerTab = page.getByRole("tab", { name: "Đọc nguồn" });
-  await readerTab.focus();
-  await page.keyboard.press("Enter");
-  await expect(readerTab).toHaveAttribute("aria-selected", "true");
+  // Below 1600px the mode control is the labelled select: reach "Đọc nguồn" by keyboard.
+  const modeSelect = page.locator(MODE_SELECT);
+  await modeSelect.focus();
+  await page.keyboard.press("ArrowDown");
+  await expect(modeSelect).toHaveValue("reader");
   // Wait until the restored position is stable across frames, then require it exactly.
   await expect.poll(async () => {
     const first = await scroll.evaluate((node) => node.scrollTop);

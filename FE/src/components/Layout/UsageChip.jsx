@@ -32,7 +32,7 @@ export default function UsageChip() {
     <div ref={rootRef} className={`relative ${open ? "z-[60]" : ""}`}>
       {/* Phones: a 40x40 icon with a status dot (ok / warning / exhausted); the numbers
           stay in the popover. Desktop keeps the "AI n%" text. Name carries the percentage. */}
-      <button type="button" className="usage-chip__trigger icon-btn relative w-10 h-10 lg:w-auto lg:h-9 lg:px-2.5 gap-1.5 inline-flex items-center justify-center"
+      <button type="button" className="usage-chip__trigger icon-btn relative w-10 h-10 lg:w-auto lg:h-10 lg:px-2.5 gap-1.5 inline-flex items-center justify-center"
         aria-expanded={open} aria-haspopup="dialog" aria-label={`Mức sử dụng AI ${Math.round(usage.percentage)}%`} title="Mức sử dụng AI"
         onClick={() => setOpen((value) => !value)}>
         <Icon name="Activity" size={15} />

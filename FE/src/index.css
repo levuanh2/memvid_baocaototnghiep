@@ -1135,7 +1135,6 @@
   .workspace-home-link { width: 40px !important; height: 40px !important; justify-content: center !important; }
   .workspace-wordmark,
   .study-library-link__label,
-  .workspace-mode-label,
   .workspace-theme-toggle,
   .usage-chip__label,
   .account-menu__label,
@@ -1148,8 +1147,6 @@
   .account-menu__trigger { width: 44px !important; min-width: 44px; height: 44px !important; padding: 0 !important; justify-content: center !important; }
   .usage-chip__status { display: block !important; }
   .workspace-header-actions { gap: 4px !important; }
-  .workspace-mode-switch { flex: 0 0 auto; overflow: visible; }
-  .workspace-mode-switch > button { width: 40px !important; height: 40px !important; flex: 0 0 auto; padding: 0 !important; }
   .study-tools-trigger { width: 40px; padding: 0; justify-content: center; }
   .study-tools-trigger span { display: none; }
   .study-tools-menu__extra { display: block; }
@@ -1287,20 +1284,21 @@
   .workspace-shell[data-focus="true"] .workspace-panel-toggle[data-panel-toggle="evidence"] { display: inline-flex; }
 }
 .study-tools-menu__item-check { margin-left: auto; flex-shrink: 0; color: var(--text-primary); }
-/* V9.3 P4b: <=700px swaps the icon-only tab row for a labelled "Chế độ học" select. */
+/* V9.3: below 1600px a labelled "Chế độ học" select replaces the tab row (owner option 2, tabs
+   from 1600px: five labelled tabs need ~580px; an icon-only row did not name the mode). */
 .workspace-mode-select { display: none; }
 .workspace-mode-select select {
   /* Fixed width: the header must not shift when the mode changes. The native arrow is replaced
      by a drawn chevron so the longest label ("Sơ đồ tư duy") is not clipped at 375px. */
   appearance: none; -webkit-appearance: none;
-  height: 40px; width: 8rem; padding: 0 26px 0 10px; border-radius: 8px;
+  height: 40px; width: 8rem; padding: 0 24px 0 8px; border-radius: 8px;
   border: 1px solid var(--border-color); background-color: var(--bg-card); color: var(--text-primary);
   font: inherit; font-size: 0.8125rem; font-weight: 600; text-overflow: ellipsis;
 }
 .workspace-mode-select { position: relative; align-items: center; }
 .workspace-mode-select__chevron { position: absolute; right: 9px; pointer-events: none; color: var(--text-secondary); }
 .workspace-mode-select select:focus-visible { outline: 3px solid var(--focus); outline-offset: 2px; }
-@media (max-width: 700px) {
+@media (max-width: 1599px) {
   .workspace-global-header .workspace-mode-switch { display: none; }
   .workspace-mode-select { display: flex; margin-inline: auto; }
 }
