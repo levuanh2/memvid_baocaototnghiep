@@ -76,6 +76,15 @@ describe("MainLayout mode-switch ownership", () => {
     expect(labels).toEqual(["Trò chuyện", "Đọc nguồn", "Sơ đồ tư duy", "Tóm tắt", "Ghi chú"]);
   });
 
+  it("each destination has its own icon: Reader FileText, Library BookOpen, Summary ScrollText (owner 2026-11-25)", async () => {
+    await renderMainLayout();
+    const iconOf = (el) => Array.from(el.querySelector("svg").classList).find((c) => c.startsWith("lucide-"));
+    const tab = (title) => container.querySelector(`[role="tab"][title="${title}"]`);
+    expect(iconOf(tab("Đọc nguồn"))).toBe("lucide-file-text");
+    expect(iconOf(tab("Tóm tắt"))).toBe("lucide-scroll-text");
+    expect(iconOf(container.querySelector(".study-library-link"))).toBe("lucide-book-open");
+  });
+
   it("clicking a mode tab switches the workspace pane (single real owner, not decorative)", async () => {
     await renderMainLayout();
     const mindmapTab = Array.from(container.querySelectorAll('[role="tab"]'))

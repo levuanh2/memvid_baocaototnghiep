@@ -24,7 +24,7 @@ async function open(page, { width, dark = false, blockFonts = false, signedIn = 
     if (signedIn) return r.fulfill(json({}));
     return r.fulfill({ status: 401, contentType: "application/json", body: "{}" });
   });
-  if (blockFonts) await page.route(/fonts\.(googleapis|gstatic)\.com/, (r) => r.abort());
+  if (blockFonts) await page.route(/\.woff2?(\?|$)|fonts\.(googleapis|gstatic)\.com/, (r) => r.abort());
   await page.goto("/");
   await expect(page.getByRole("heading", { level: 1 })).toBeVisible();
   if (signedIn) await expect(page.locator("header").getByRole("link", { name: "Vào không gian học" })).toBeVisible();
