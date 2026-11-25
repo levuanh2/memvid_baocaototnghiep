@@ -230,11 +230,12 @@ const visitsUntilGone = async (page) => {
 };
 
 for (const bad of ["abc", "-2", "NaN", "1.5", " ", "Infinity"]) {
-  test(`a corrupted visit count (${JSON.stringify(bad)}) still ends after at most three visits`, async ({ page }) => {
+  // A corrupted count is read as 0 (independent review of #216, P3: "at most three" also passed a
+  // note that never showed): the note shows on exactly three visits and the counter ends at "3".
+  test(`a corrupted visit count (${JSON.stringify(bad)}) counts as zero: three visits, then it ends`, async ({ page }) => {
     await openApp(page, { width: 1366, preset: { [VISITS]: bad } });
-    expect(await visitsUntilGone(page)).toBeLessThanOrEqual(3);
-    const stored = await page.evaluate((k) => localStorage.getItem(k), VISITS);
-    expect(stored === null || /^[0-3]$/.test(stored), `stored ${stored}`).toBe(true);
+    expect(await visitsUntilGone(page)).toBe(3);
+    expect(await page.evaluate((k) => localStorage.getItem(k), VISITS)).toBe("3");
   });
 }
 
