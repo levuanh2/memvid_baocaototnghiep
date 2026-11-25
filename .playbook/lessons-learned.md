@@ -4318,3 +4318,17 @@ Gotcha 4 (independent review of #213, P3): a first visit opened straight into Mi
 (`/app?tab=mindmap`) painted the note over the map's contextual toolbar row under the header. The
 note is not shown in Mind Map mode, and such a visit is not counted. Regression: mode-hint.spec
 "opening straight into Mind Map" (red before).
+
+## Mode note storage hardening (V9.3 Task 6B, agy review of #213 P3, 2026-11-25)
+
+Root cause: the visit counter was read with `Number(raw || 0)`. A corrupted value kept the note
+forever or wrote junk back: "abc"/"NaN"/"1.5" -> NaN (never >= 3, NaN + 1 stored as "NaN"), "-2" ->
+five visits, "Infinity" -> hidden but left stored. Both keys were read in one try, so a blocked
+counter key could hide a valid "seen" flag.
+Fix: the counter is trusted only as /^\d+$/, capped at 3 (anything else counts as 0 and is rewritten
+as a valid number on the next shown visit); no write once it reaches 3; the seen flag and the counter
+are read in separate try blocks.
+Regression: mode-hint.spec.js (red 5/35 before): corrupted counts "abc", "-2", "NaN", "1.5", " ",
+"Infinity" end within 3 visits and leave 0-3 stored; the counter never passes 3 and stops being
+written; "Đã hiểu" stops further writes; a blocked counter key alone keeps the note dismissible.
+Prevention: parse stored numbers strictly and clamp; read independent keys independently.
