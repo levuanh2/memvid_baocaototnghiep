@@ -60,7 +60,8 @@ const modeHintSeen = () => {
 
 const MODE_TABS = [
   { key: "chat", label: "Trò chuyện", icon: "MessageSquareText" },
-  { key: "reader", label: "Đọc nguồn", icon: "BookOpen" },
+  // Owner 2026-11-25: FileText, so it is not mistaken for the BookOpen library link next to it.
+  { key: "reader", label: "Đọc nguồn", icon: "FileText" },
   { key: "mindmap", label: "Sơ đồ tư duy", icon: "Network" },
   { key: "summary", label: "Tóm tắt", icon: "ScrollText" },
   // V9.3 P5b: browser-only Notes Preview (works with no AI source selected).
