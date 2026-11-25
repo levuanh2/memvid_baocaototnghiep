@@ -4272,3 +4272,11 @@ clicking or waiting for a visible tab: the default Playwright viewport (1280) no
 and getByRole("tab") skips hidden tabs, so assert aria-selected through a CSS locator.
 Pre-existing flake seen (not this change): exact-node-export-v3.spec.js:240 node width 74.9 vs 76.1
 (2/3 failed on integ 27fec57 too).
+CI follow-up (E2E Critical Flows on 3678955, red): two `e2e/` specs (real backend, not runnable in
+the local fixture run) still assumed the tab row. (1) `critical-flows` read
+`page.getByRole("option", { selected: true }).first()` for the map library: with the select now
+visible at 1280px, its native `<option>` "Sơ đồ tư duy" matched first and had no inner span, so the
+test hung. All option queries are now scoped to the listbox "Chọn sơ đồ". (2)
+`study-library-navigation` clicked a visible tab at 1440px (select band). Prevention: when the
+mode control changes, also grep `getByRole("option"` and `getByRole("tab"` in BOTH `FE/e2e` and
+`FE/e2e-fixture`, and remember `FE/e2e` only runs in CI (Critical Flows).
