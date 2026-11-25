@@ -4091,7 +4091,8 @@ ARIA pattern means implementing its keyboard contract.
 
 ## P4b CI: a header that fit on Windows overflowed on Linux; a second e2e folder missed (2026-11-24)
 
-1. mobile-header.spec 1280px passed locally and overflowed by 24px in CI (Linux fonts are wider).
+1. mobile-header.spec 1280px passed locally and overflowed by 24px in CI (Linux rendering differs;
+the exact cause, font metrics vs. a font not loaded in CI, was never established).
 A header row with less than ~30px slack locally is not safe. Fix: the Tập trung label also waits
 for 1440px. Prevention: when adding to the header, measure slack at the tightest desktop width
 and keep a margin for font metrics.
@@ -4249,11 +4250,16 @@ Prevention: any e2e that asserts an exact scroll offset must first wait for a st
 
 Problem: at 1366px (and 701-1439px) the five mode tabs were icon-only and Nguồn/Dẫn chứng/Tập
 trung/Thư viện were icon-only too: nothing in the header named the current mode in text.
-Root cause of the old breakpoints: five labelled tabs need ~565px (Segoe UI) / ~582px (Verdana);
+Root cause of the old breakpoints: five labelled tabs need ~565px (default font, which was Be Vietnam
+Pro loaded from Google Fonts) / ~582px (Verdana);
 with them visible nothing else could carry a label below ~1800px.
-Also found: Be Vietnam Pro (the design font) is never loaded (no font files, no link), so users see
-system-ui: Segoe UI on Windows, DejaVu Sans on Linux CI. That is why "fits locally, overflows on CI".
-Decision on loading the font is separate (owner); if it is ever loaded, re-measure the header.
+CORRECTED 2026-11-25: an earlier version of this entry said "Be Vietnam Pro is never loaded" and
+blamed that for "fits locally, overflows on CI". Both were wrong / unverified: index.css line 1
+imported it from Google Fonts (the search missed the URL spelling "Be+Vietnam"; font-loading.spec.js
+showed the WOFF2 coming from fonts.gstatic.com). Why the P4b header overflowed by 24px only on Linux
+CI is NOT established (font hinting/metrics on Linux, or Google Fonts unreachable in CI, are both
+possible); the Verdana budget stays as a conservative margin. The fonts are now bundled with
+@fontsource (see "Fonts bundled with @fontsource" below) and the header was re-measured.
 Fix: one labelled "Chế độ học" select below 1600px (CSS swaps it with the tablist; same state, no
 requests). Labels where the measured slack allows it with a wide font (Verdana, >= DejaVu width):
 panel labels 1280-1599px and from 1800px; library label from 1366px; five labelled tabs from
@@ -4318,3 +4324,44 @@ Gotcha 4 (independent review of #213, P3): a first visit opened straight into Mi
 (`/app?tab=mindmap`) painted the note over the map's contextual toolbar row under the header. The
 note is not shown in Mind Map mode, and such a visit is not counted. Regression: mode-hint.spec
 "opening straight into Mind Map" (red before).
+
+## Fonts bundled with @fontsource instead of Google Fonts; a wrong "never loaded" claim (V9.3, 2026-11-25)
+
+Owner decision: Be Vietnam Pro (400/500/600/700/800) and IBM Plex Mono (400/500/600), both OFL-1.1,
+installed with npm (`@fontsource/*@5.3.0`) and `@import`ed at the top of `src/index.css`, so every
+entry that loads index.css (app, fixture harness, QA pages) gets them; Vite emits hashed WOFF2 assets
+(30 files: latin / latin-ext / vietnamese faces split by unicode-range, font-display: swap). The
+runtime `@import url('https://fonts.googleapis.com/...')` is gone (third-party request on every load,
+offline/CI-dependent).
+Correction: during #212 I reported "Be Vietnam Pro is never loaded". Wrong: index.css line 1 imported
+it from Google Fonts; my grep searched "Be Vietnam" and missed the URL spelling "Be+Vietnam". The
+red run of font-loading.spec.js on d51cbe0 showed the WOFF2 coming from fonts.gstatic.com.
+Prevention: search for the URL form too (`Be+Vietnam`, `googleapis`) and prove font claims with
+FontFaceSet / network, never with getComputedStyle().fontFamily (it echoes the stack).
+Also: three specs simulated "fallback font" by blocking only fonts.(googleapis|gstatic).com; with
+bundled fonts that blocked nothing, so they now also block `.woff2` (chat-start, landing-v6,
+round6-library-action-matrix).
+Regression: e2e-fixture/font-loading.spec.js (FontFaceSet loaded incl. the Vietnamese subset,
+same-origin WOFF2 200, no Google request, rendered-width proof, body/header/select/textarea/Reader/
+Notes, blocked-font fallback at 390/1366/1600). Header re-measured at 14 widths x bundled/blocked/
+Verdana: no overflow, 56px, min target 40 (QA evidence fonts/header-measurement-report.md).
+Reader mode icon BookOpen -> FileText (library keeps BookOpen, summary ScrollText).
+Follow-up on #214 (full fixture run): mindmap-toolbar-root-collapse "root-only collapse ... without
+moving the viewport" failed 3/48 with the bundled fonts (0/48 on d51cbe0 with Google Fonts): the
+canvas transform went -19.5px -> -19.5001px. Root cause: after a depth preset, MindElixirView
+re-anchors the root centre with `mind.move(dx, dy)` even when the offset is a floating-point residue;
+the @fontsource build of Be Vietnam Pro gives the root topic slightly different fractional metrics,
+which produced dx/dy of ~0.0001px. Fix: move only when |dx| or |dy| >= 0.01px (real drift is still
+corrected). The test was not changed. Verified: root-collapse + depth-preset specs x4 = 132/132.
+Review follow-ups on #214 (2026-11-25):
+- Independent review P2 / owner decision: Export Studio offered "Sans (Inter)" and "Serif
+  (Spectral)" and the "Tài liệu học tập" preset defaulted to Spectral, but neither font was ever
+  loaded (the Google import only had Be Vietnam Pro + IBM Plex Mono), so image exports fell back to
+  the machine's fonts. Owner chose Be Vietnam Pro only: FONT_STACKS sans (and the legacy "serif" key
+  older saved appearances may hold) -> bundled Be Vietnam Pro; study preset -> sans; font warm-up and
+  the legend overlay use it; the image font choice is "Giống canvas" / "Be Vietnam Pro". Documents
+  (PDF/DOCX) are built by the backend with its own fonts (DejaVu, Calibri/Times), so they keep a
+  generic "Sans" / "Serif" choice (labels no longer claim Inter/Spectral). Red-first unit tests.
+- agy P2: round6-library-action-matrix's "webfont" half checked the retired Inter and skipped at all
+  7 widths. It now requires a loaded Be Vietnam Pro 600 (bundled, no third-party outage to excuse a
+  skip): 59/59 run, 0 skipped.

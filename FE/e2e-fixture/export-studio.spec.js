@@ -315,13 +315,13 @@ test.describe("Export Studio — fixture harness, real files", () => {
     expect(svgText).toContain("Kiến trúc hệ thống");
   });
 
-  test("appearance: font change (serif) and spacing change (compact) do not corrupt the exported SVG geometry", async ({ page }) => {
+  test("appearance: font change (Be Vietnam Pro) and spacing change (compact) do not corrupt the exported SVG geometry", async ({ page }) => {
     await openExportStudio(page);
     await chooseScope(page, "full");
     await clickNext(page);
     await chooseFormat(page, "svg");
     await clickNext(page); // -> appearance step
-    await page.getByRole("button", { name: "Serif (Spectral)" }).click();
+    await page.getByRole("button", { name: "Be Vietnam Pro", exact: true }).click();
     await page.getByRole("button", { name: "Bố cục" }).click();
     await page.getByRole("button", { name: "Gọn" }).click(); // spacing: compact
     await clickNext(page);
