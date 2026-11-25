@@ -4318,3 +4318,25 @@ Gotcha 4 (independent review of #213, P3): a first visit opened straight into Mi
 (`/app?tab=mindmap`) painted the note over the map's contextual toolbar row under the header. The
 note is not shown in Mind Map mode, and such a visit is not counted. Regression: mode-hint.spec
 "opening straight into Mind Map" (red before).
+
+## Fonts bundled with @fontsource instead of Google Fonts; a wrong "never loaded" claim (V9.3, 2026-11-25)
+
+Owner decision: Be Vietnam Pro (400/500/600/700/800) and IBM Plex Mono (400/500/600), both OFL-1.1,
+installed with npm (`@fontsource/*@5.3.0`) and `@import`ed at the top of `src/index.css`, so every
+entry that loads index.css (app, fixture harness, QA pages) gets them; Vite emits hashed WOFF2 assets
+(30 files: latin / latin-ext / vietnamese faces split by unicode-range, font-display: swap). The
+runtime `@import url('https://fonts.googleapis.com/...')` is gone (third-party request on every load,
+offline/CI-dependent).
+Correction: during #212 I reported "Be Vietnam Pro is never loaded". Wrong: index.css line 1 imported
+it from Google Fonts; my grep searched "Be Vietnam" and missed the URL spelling "Be+Vietnam". The
+red run of font-loading.spec.js on d51cbe0 showed the WOFF2 coming from fonts.gstatic.com.
+Prevention: search for the URL form too (`Be+Vietnam`, `googleapis`) and prove font claims with
+FontFaceSet / network, never with getComputedStyle().fontFamily (it echoes the stack).
+Also: three specs simulated "fallback font" by blocking only fonts.(googleapis|gstatic).com; with
+bundled fonts that blocked nothing, so they now also block `.woff2` (chat-start, landing-v6,
+round6-library-action-matrix).
+Regression: e2e-fixture/font-loading.spec.js (FontFaceSet loaded incl. the Vietnamese subset,
+same-origin WOFF2 200, no Google request, rendered-width proof, body/header/select/textarea/Reader/
+Notes, blocked-font fallback at 390/1366/1600). Header re-measured at 14 widths x bundled/blocked/
+Verdana: no overflow, 56px, min target 40 (QA evidence fonts/header-measurement-report.md).
+Reader mode icon BookOpen -> FileText (library keeps BookOpen, summary ScrollText).

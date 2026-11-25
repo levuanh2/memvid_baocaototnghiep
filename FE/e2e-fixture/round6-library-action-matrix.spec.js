@@ -107,7 +107,7 @@ for (const [width, height] of viewports) {
 // ran before the font swap and only looked at scrollWidth.
 for (const [width, height] of responsiveMatrixViewports) for (const fonts of ["webfont", "fallback font"]) {
   test(`${width}px action rows contain every control and keep the primary action on one line (${fonts})`, async ({ page }) => {
-    if (fonts === "fallback font") await page.route(/fonts\.(googleapis|gstatic)\.com/, (route) => route.abort());
+    if (fonts === "fallback font") await page.route(/\.woff2?(\?|$)|fonts\.(googleapis|gstatic)\.com/, (route) => route.abort());
     await page.setViewportSize({ width, height });
     // domcontentloaded: a stalled Google Fonts request must not hold the "load" event and time
     // the test out before the webfont run can skip (Codex review 4).
