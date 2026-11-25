@@ -8,9 +8,6 @@ const API = /localhost:8080\//;
 const KEY = "studymap.hint.modes.v1";
 const json = (body) => ({ status: 200, contentType: "application/json", body: JSON.stringify(body) });
 
-// The configs pre-seed the note as seen for every other spec; this one starts fresh.
-test.use({ storageState: { cookies: [], origins: [] } });
-
 async function openApp(page, { width, dark = false, blockStorage = false, seen = false } = {}) {
   await page.setViewportSize({ width, height: 900 });
   await page.addInitScript(({ block, key, wasSeen }) => {
@@ -39,7 +36,7 @@ async function openApp(page, { width, dark = false, blockStorage = false, seen =
   return { requests };
 }
 
-const hint = (page) => page.getByRole("note", { name: "Các chế độ học" });
+const hint = (page) => page.locator('#workspace-mode-hint[role="note"]');
 
 for (const width of [390, 1024, 1366, 1536]) {
   for (const dark of [false, true]) {
@@ -49,7 +46,9 @@ for (const width of [390, 1024, 1366, 1536]) {
       await expect(note).toBeVisible();
       await expect(note).toContainText("Đọc nguồn");
       await expect(note).toContainText("Ghi chú");
-      // The select points at the note, so a screen reader hears it with the control.
+      // The select points at the note, so a screen reader hears it with the control, and the
+      // note's text does not collide with the select's own label.
+      await expect(page.getByLabel("Chế độ học")).toHaveCount(1);
       const describedBy = await page.locator(MODE_SELECT).getAttribute("aria-describedby");
       expect(describedBy).toBeTruthy();
       expect(await note.getAttribute("id")).toBe(describedBy);
@@ -114,7 +113,10 @@ test("resizing to the tab band hides the note; back below 1600px shows it again 
 
 test("Focus Mode hides the note; leaving it brings the note back", async ({ page }) => {
   await openApp(page, { width: 1366 });
-  await page.locator("[data-focus-toggle]").click();
+  // Keyboard: a pointer press anywhere already sets the note aside for this visit.
+  await page.locator("[data-focus-toggle]").focus();
+  await page.keyboard.press("Enter");
+  await expect(page.locator("[data-focus-toggle]")).toHaveAttribute("aria-pressed", "true");
   await expect(hint(page)).toBeHidden();
   await page.keyboard.press("Escape");
   await expect(page.locator("[data-focus-toggle]")).toHaveAttribute("aria-pressed", "false");
@@ -134,4 +136,44 @@ test("blocked storage: the note still shows and 'Đã hiểu' still closes it", 
   await page.getByRole("button", { name: "Đã hiểu" }).click();
   await expect(hint(page)).toHaveCount(0);
   expect(errors).toEqual([]);
+});
+
+// Side-agent finding: the first full run had 51 specs blocked by the floating note. It must never
+// block: its body lets clicks through to what is under it, and the first press anywhere outside
+// "Đã hiểu" hides it for this visit (not saved, so it comes back on the next visit until seen).
+for (const width of [390, 1024, 1366]) {
+  test(`${width}px first visit: a click under the note reaches the page, and the note steps aside`, async ({ page }) => {
+    await openApp(page, { width });
+    const note = hint(page);
+    await expect(note).toBeVisible();
+    const target = await note.evaluate((el) => {
+      const b = el.getBoundingClientRect();
+      const x = b.left + 12, y = b.top + 12; // on the text, away from the button
+      el.style.visibility = "hidden";
+      const under = document.elementFromPoint(x, y);
+      el.style.visibility = "";
+      under.setAttribute("data-under-note", "1");
+      under.addEventListener("click", () => { window.__underClicked = true; }, { once: true });
+      return { x, y };
+    });
+    await page.mouse.click(target.x, target.y);
+    expect(await page.evaluate(() => window.__underClicked === true)).toBe(true);
+    await expect(note).toHaveCount(0);
+    expect(await page.evaluate((k) => localStorage.getItem(k), KEY)).toBeNull();
+    await page.reload();
+    await waitForModeControl(page);
+    await expect(hint(page)).toBeVisible();
+  });
+}
+
+test("opening the tools menu or a side drawer hides the note while it is open", async ({ page }) => {
+  await openApp(page, { width: 1024 });
+  await expect(hint(page)).toBeVisible();
+  await page.locator('header button[aria-label="Mở công cụ học"]').focus();
+  await page.keyboard.press("Enter");
+  await expect(page.getByRole("menu", { name: "Công cụ học" })).toBeVisible();
+  await expect(hint(page)).toBeHidden();
+  await page.keyboard.press("Escape");
+  await expect(page.getByRole("menu", { name: "Công cụ học" })).toBeHidden();
+  await expect(hint(page)).toBeVisible();
 });

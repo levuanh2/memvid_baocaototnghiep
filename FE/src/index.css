@@ -1306,8 +1306,11 @@
   background: var(--bg-card); color: var(--text-primary); border: 1px solid var(--border-strong);
   box-shadow: var(--shadow-card-hover); font-size: 0.8125rem; line-height: 1.45; white-space: normal;
   text-wrap: pretty;
+  /* Never blocks the page under it: only "Đã hiểu" takes the pointer. */
+  pointer-events: none;
 }
 .workspace-mode-hint__ok {
+  pointer-events: auto;
   min-height: 40px; padding: 0 14px; border-radius: 8px; border: 1px solid var(--border-color);
   background: transparent; color: var(--text-primary); font: inherit; font-weight: 600;
 }

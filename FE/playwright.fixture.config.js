@@ -27,9 +27,6 @@ export default defineConfig({
     // LISTENING` and a plain IPv4 curl failing to connect while a
     // "localhost" curl (which resolves to ::1 first) succeeds.
     baseURL: `http://localhost:${FE_PORT}`,
-    // The one-time "Chế độ học" note (MainLayout MODE_HINT_KEY) floats over the workspace below
-    // 1600px; every spec starts with it already seen except e2e-fixture/mode-hint.spec.js.
-    storageState: { cookies: [], origins: [{ origin: `http://localhost:${FE_PORT}`, localStorage: [{ name: "studymap.hint.modes.v1", value: "1" }] }] },
     trace: "retain-on-failure",
     screenshot: "only-on-failure",
     video: "off",

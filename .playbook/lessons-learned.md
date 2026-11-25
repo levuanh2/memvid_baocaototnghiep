@@ -4294,7 +4294,13 @@ change through the select also counts as seen. Stored in localStorage `studymap.
 Regression: e2e-fixture/mode-hint.spec.js 15 tests (390/1024/1366/1536 light+dark fit + no focus +
 describedby; dismiss by keyboard persists and sends nothing; select change counts; 1600px none;
 resize; Focus Mode; returning learner; blocked storage). Red 13/15 before the change.
-Gotcha: a floating first-run note intercepts clicks in every other spec (51 failures in the first
-full run). Both Playwright configs now pre-seed the key through `use.storageState`; only
-mode-hint.spec.js opts out with `test.use({ storageState: { cookies: [], origins: [] } })`.
-Prevention: any new first-run UI that overlays the workspace needs the same seed in BOTH configs.
+Gotcha 1: the first version blocked clicks under it (51 specs failed in the first full run). Pre-seeding
+"seen" in the Playwright configs made the suite green but HID the real first-visit problem (side-agent
+finding). Fix: the note body is `pointer-events: none` (only "Đã hiểu" takes the pointer), the first
+press anywhere else sets it aside for this visit only (not saved), and it hides while the tools menu,
+a drawer or the tablet shelf is open. No pre-seed: the whole fixture suite runs as a first visit.
+Gotcha 2: its accessible name "Các chế độ học" contained the select's label, so
+`getByLabel("Chế độ học")` matched two elements (41 strict-mode failures) and a screen reader got two
+"chế độ học" names. The note has no name of its own; the select announces it via aria-describedby.
+Prevention: never fix a first-run overlay by seeding it away in test config; prove it with the
+suite running first-visit. Give helper text no accessible name that repeats a control's label.

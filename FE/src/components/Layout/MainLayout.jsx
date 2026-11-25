@@ -127,6 +127,15 @@ export default function MainLayout({
   // saved layout. Every right-column open/close below goes through setRightCollapsed.
   const [focusMode, setFocusMode] = useState(false);
   const [modeHintOpen, setModeHintOpen] = useState(() => !modeHintSeen());
+  // The note must never block the page: the first press anywhere but its own button sets it aside
+  // for this visit only (not saved), and its body lets clicks through (CSS pointer-events).
+  const [modeHintAway, setModeHintAway] = useState(false);
+  useEffect(() => {
+    if (!modeHintOpen || modeHintAway) return undefined;
+    const away = (e) => { if (!e.target.closest?.(".workspace-mode-hint__ok")) setModeHintAway(true); };
+    document.addEventListener("pointerdown", away, true);
+    return () => document.removeEventListener("pointerdown", away, true);
+  }, [modeHintOpen, modeHintAway]);
   const modeSelectRef = useRef(null);
   const dismissModeHint = useCallback((focusSelect = false) => {
     setModeHintOpen(false);
@@ -802,6 +811,11 @@ export default function MainLayout({
     setRightOpen(false);
   }, [workspaceMode, mmClearSelectedNode]);
 
+  // Out of the way while anything else is open over the workspace (menus, drawers, the tablet
+  // shelf) and in Focus Mode; from 1600px CSS hides it with the select.
+  const showModeHint = modeHintOpen && !modeHintAway && !focusMode && !headerSurface && !tabletShelfOpen
+    && !(panelDrawer && (leftOpen || rightOpen));
+
   return (
     <div className="app-shell-height workspace-shell flex flex-col overflow-hidden font-body transition-theme" data-focus={focusMode ? "true" : "false"} style={{ background: "var(--bg-base)", color: "var(--text-primary)" }}>
 
@@ -876,13 +890,15 @@ export default function MainLayout({
         <span className="workspace-mode-select flex-shrink-0">
           <label htmlFor="workspace-mode-select" className="sr-only">Chế độ học</label>
           <select id="workspace-mode-select" data-mode-select value={workspaceMode} ref={modeSelectRef}
-            aria-describedby={modeHintOpen && !focusMode ? "workspace-mode-hint" : undefined}
+            aria-describedby={showModeHint ? "workspace-mode-hint" : undefined}
             onChange={(e) => { setWorkspaceMode(e.target.value); closeHeaderSurface(); if (modeHintOpen) dismissModeHint(); }}>
             {MODE_TABS.map((t) => <option key={t.key} value={t.key}>{t.label}</option>)}
           </select>
           <Icon name="ChevronDown" size={14} aria-hidden="true" className="workspace-mode-select__chevron" />
-          {modeHintOpen && !focusMode && (
-            <div id="workspace-mode-hint" role="note" aria-label="Các chế độ học" className="workspace-mode-hint">
+          {/* No accessible name of its own: the select announces it through aria-describedby, and a
+              name containing "Chế độ học" collided with the select's label (getByLabel). */}
+          {showModeHint && (
+            <div id="workspace-mode-hint" role="note" className="workspace-mode-hint">
               <p>Đổi chế độ học ở ô này: Trò chuyện, Đọc nguồn, Sơ đồ tư duy, Tóm tắt, Ghi chú.</p>
               <button type="button" className="workspace-mode-hint__ok" onClick={() => dismissModeHint(true)}>Đã hiểu</button>
             </div>
