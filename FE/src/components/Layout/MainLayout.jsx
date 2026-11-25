@@ -44,6 +44,20 @@ const PANEL_LABEL = "hidden min-[1280px]:max-[1599px]:inline min-[1800px]:inline
 const LIBRARY_BTN = "w-10 min-[1366px]:w-auto min-[1366px]:px-3";
 const LIBRARY_LABEL = "hidden min-[1366px]:inline";
 
+// V9.3 (owner decision after #212): below 1600px the five modes sit inside the "Chế độ học"
+// select, so a one-time note under it names them. Browser-only; storage errors only mean the note
+// may come back next visit.
+const MODE_HINT_KEY = "studymap.hint.modes.v1";
+// Owner decision (2026-11-25): it shows on at most 3 visits where it is on screen, then stops.
+const MODE_HINT_VISITS_KEY = "studymap.hint.modes.v1.visits";
+const MODE_HINT_MAX_VISITS = 3;
+const modeHintSeen = () => {
+  try {
+    return localStorage.getItem(MODE_HINT_KEY) === "1"
+      || Number(localStorage.getItem(MODE_HINT_VISITS_KEY) || 0) >= MODE_HINT_MAX_VISITS;
+  } catch { return false; }
+};
+
 const MODE_TABS = [
   { key: "chat", label: "Trò chuyện", icon: "MessageSquareText" },
   { key: "reader", label: "Đọc nguồn", icon: "BookOpen" },
@@ -120,6 +134,22 @@ export default function MainLayout({
   // persists every change, so leaving or reloading while focused cannot overwrite the learner's
   // saved layout. Every right-column open/close below goes through setRightCollapsed.
   const [focusMode, setFocusMode] = useState(false);
+  const [modeHintOpen, setModeHintOpen] = useState(() => !modeHintSeen());
+  // The note must never block the page: the first press anywhere but its own button sets it aside
+  // for this visit only (not saved), and its body lets clicks through (CSS pointer-events).
+  const [modeHintAway, setModeHintAway] = useState(false);
+  useEffect(() => {
+    if (!modeHintOpen || modeHintAway) return undefined;
+    const away = (e) => { if (!e.target.closest?.(".workspace-mode-hint__ok")) setModeHintAway(true); };
+    document.addEventListener("pointerdown", away, true);
+    return () => document.removeEventListener("pointerdown", away, true);
+  }, [modeHintOpen, modeHintAway]);
+  const modeSelectRef = useRef(null);
+  const dismissModeHint = useCallback((focusSelect = false) => {
+    setModeHintOpen(false);
+    try { localStorage.setItem(MODE_HINT_KEY, "1"); } catch { /* the note may return next visit */ }
+    if (focusSelect) modeSelectRef.current?.focus();
+  }, []);
   const [focusRightShown, setFocusRightShown] = useState(false);
   const focusModeRef = useRef(false);
   focusModeRef.current = focusMode;
@@ -789,6 +819,23 @@ export default function MainLayout({
     setRightOpen(false);
   }, [workspaceMode, mmClearSelectedNode]);
 
+  // Out of the way while anything else is open over the workspace (menus, drawers, the tablet
+  // shelf), in Focus Mode, and in Mind Map mode (its contextual toolbar row sits right under the
+  // header; independent review of #213); from 1600px CSS hides it with the select.
+  const showModeHint = modeHintOpen && !modeHintAway && !focusMode && !headerSurface && !tabletShelfOpen
+    && !(panelDrawer && (leftOpen || rightOpen)) && workspaceMode !== "mindmap";
+  // Count a visit once per page load, and only when the note is really on screen (below 1600px).
+  const modeHintCounted = useRef(false);
+  useEffect(() => {
+    if (!showModeHint || modeHintCounted.current) return;
+    if (!window.matchMedia?.("(max-width: 1599px)").matches) return;
+    modeHintCounted.current = true;
+    try {
+      const visits = Number(localStorage.getItem(MODE_HINT_VISITS_KEY) || 0) + 1;
+      localStorage.setItem(MODE_HINT_VISITS_KEY, String(visits));
+    } catch { /* blocked storage: the note may come back next visit */ }
+  }, [showModeHint, viewportWidth]);
+
   return (
     <div className="app-shell-height workspace-shell flex flex-col overflow-hidden font-body transition-theme" data-focus={focusMode ? "true" : "false"} style={{ background: "var(--bg-base)", color: "var(--text-primary)" }}>
 
@@ -862,11 +909,20 @@ export default function MainLayout({
             two). Same state as the tabs: changing it never sends anything. */}
         <span className="workspace-mode-select flex-shrink-0">
           <label htmlFor="workspace-mode-select" className="sr-only">Chế độ học</label>
-          <select id="workspace-mode-select" data-mode-select value={workspaceMode}
-            onChange={(e) => { setWorkspaceMode(e.target.value); closeHeaderSurface(); }}>
+          <select id="workspace-mode-select" data-mode-select value={workspaceMode} ref={modeSelectRef}
+            aria-describedby={showModeHint ? "workspace-mode-hint-text" : undefined}
+            onChange={(e) => { setWorkspaceMode(e.target.value); closeHeaderSurface(); if (modeHintOpen) dismissModeHint(); }}>
             {MODE_TABS.map((t) => <option key={t.key} value={t.key}>{t.label}</option>)}
           </select>
           <Icon name="ChevronDown" size={14} aria-hidden="true" className="workspace-mode-select__chevron" />
+          {/* No accessible name of its own: the select announces it through aria-describedby, and a
+              name containing "Chế độ học" collided with the select's label (getByLabel). */}
+          {showModeHint && (
+            <div id="workspace-mode-hint" role="note" className="workspace-mode-hint">
+              <p id="workspace-mode-hint-text">Đổi chế độ học ở ô này: Trò chuyện, Đọc nguồn, Sơ đồ tư duy, Tóm tắt, Ghi chú.</p>
+              <button type="button" className="workspace-mode-hint__ok" onClick={() => dismissModeHint(true)}>Đã hiểu</button>
+            </div>
+          )}
         </span>
 
         {/* V9.3 P4b: the two side panels, named and with their state (docs/StudyMap-V9.3/06).

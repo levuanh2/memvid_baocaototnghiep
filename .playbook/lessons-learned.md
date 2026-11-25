@@ -4280,3 +4280,41 @@ test hung. All option queries are now scoped to the listbox "Chọn sơ đồ". 
 `study-library-navigation` clicked a visible tab at 1440px (select band). Prevention: when the
 mode control changes, also grep `getByRole("option"` and `getByRole("tab"` in BOTH `FE/e2e` and
 `FE/e2e-fixture`, and remember `FE/e2e` only runs in CI (Critical Flows).
+
+## One-time "Chế độ học" note below 1600px (V9.3 follow-up to #212, 2026-11-25)
+
+Why: after #212 the five modes sit inside the "Chế độ học" select below 1600px (1280/1366/1440/1536
+laptops), so the new Đọc nguồn and Ghi chú modes are only visible after opening the list (side-agent
+finding; owner chose a one-time note in its own PR, no analytics/API).
+What: a `role="note"` under the select (absolute, so the 56px header does not grow), named by the
+select's `aria-describedby`; "Đã hiểu" (40px) closes it and moves focus to the select; the first mode
+change through the select also counts as seen. Stored in localStorage `studymap.hint.modes.v1`
+(try/catch: blocked storage only means it may come back next visit). Hidden in Focus Mode and from
+1600px (it lives inside `.workspace-mode-select`, which is hidden there). No request, no focus steal.
+Regression: e2e-fixture/mode-hint.spec.js 15 tests (390/1024/1366/1536 light+dark fit + no focus +
+describedby; dismiss by keyboard persists and sends nothing; select change counts; 1600px none;
+resize; Focus Mode; returning learner; blocked storage). Red 13/15 before the change.
+Gotcha 1: the first version blocked clicks under it (51 specs failed in the first full run). Pre-seeding
+"seen" in the Playwright configs made the suite green but HID the real first-visit problem (side-agent
+finding). Fix: the note body is `pointer-events: none` (only "Đã hiểu" takes the pointer), the first
+press anywhere else sets it aside for this visit only (not saved), and it hides while the tools menu,
+a drawer or the tablet shelf is open. No pre-seed: the whole fixture suite runs as a first visit.
+Gotcha 2: its accessible name "Các chế độ học" contained the select's label, so
+`getByLabel("Chế độ học")` matched two elements (41 strict-mode failures) and a screen reader got two
+"chế độ học" names. The note has no name of its own; the select announces it via aria-describedby.
+Prevention: never fix a first-run overlay by seeding it away in test config; prove it with the
+suite running first-visit. Give helper text no accessible name that repeats a control's label.
+Gotcha 3 (agy review of #213, P2): centring the note on the select cut it 22px off the left edge at
+320px (the <=340px header hides the library link, so the select sits left of centre; the shell's
+overflow-hidden clipped it silently, no page scroll). The note is now `position: fixed`, centred on
+the viewport. The spec covers 320/375px too (red -22 before). `aria-describedby` points at the text
+`<p>` only, so "Đã hiểu" is not read as part of the select's description.
+Owner decision (2026-11-25, after a side-agent note that a visit-only step-aside could show the note
+on every visit to a learner who never presses "Đã hiểu"): the note shows on at most 3 visits where it
+is actually on screen (`studymap.hint.modes.v1.visits`, counted once per page load and only below
+1600px via matchMedia), then stops by itself; "Đã hiểu" or a mode change through the select end it at
+once. Regression: mode-hint.spec "three visits at most" (red before) and "from 1600px do not count".
+Gotcha 4 (independent review of #213, P3): a first visit opened straight into Mind Map
+(`/app?tab=mindmap`) painted the note over the map's contextual toolbar row under the header. The
+note is not shown in Mind Map mode, and such a visit is not counted. Regression: mode-hint.spec
+"opening straight into Mind Map" (red before).
