@@ -15,7 +15,7 @@ async function openChat(page, { width, height = 900, dark = false, blockFonts = 
     localStorage.setItem("memvid-token", "fixture-token");
     localStorage.setItem("memvid-theme", d ? "dark" : "light");
   }, dark);
-  if (blockFonts) await page.route(/fonts\.(googleapis|gstatic)\.com/, (r) => r.abort());
+  if (blockFonts) await page.route(/\.woff2?(\?|$)|fonts\.(googleapis|gstatic)\.com/, (r) => r.abort());
   await page.route(/localhost:8080\//, (route) => {
     const p = new URL(route.request().url()).pathname;
     if (p === "/auth/me") return route.fulfill(json({ user: { id: "u1", email: "qa@example.test", display_name: "QA", provider: "local" } }));

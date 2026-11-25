@@ -216,7 +216,7 @@ export default function ReaderPane({ active = false, selectedSources = [], citat
   const needsPicker = !currentDocument;
   if (needsPicker) {
     return (
-      <ReaderNotice icon="BookOpen" title="Chọn tài liệu để đọc">
+      <ReaderNotice icon="FileText" title="Chọn tài liệu để đọc">
         <p className="mb-3">Nguồn đang mở không ánh xạ duy nhất tới một tài liệu của bạn. Hãy chọn rõ ràng; StudyMap sẽ không tự đoán.</p>
         <label className="sr-only" htmlFor="reader-document-picker">Chọn tài liệu để đọc</label>
         <select id="reader-document-picker" aria-label="Chọn tài liệu để đọc" defaultValue=""
@@ -240,7 +240,7 @@ export default function ReaderPane({ active = false, selectedSources = [], citat
   return (
     <div className="reader-pane flex h-full min-h-0 flex-col" data-reader-active={active ? "true" : "false"}>
       <div className="artifact-toolbar flex-shrink-0">
-        <Icon name="BookOpen" size={16} className="artifact-toolbar__icon" aria-hidden="true" />
+        <Icon name="FileText" size={16} className="artifact-toolbar__icon" aria-hidden="true" />
         <div className="artifact-toolbar__identity min-w-0">
           <strong className="truncate">{readerDocumentLabel(currentDocument)}</strong>
           <small>Văn bản đã trích xuất · không phải bản xem trước file gốc</small>

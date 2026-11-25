@@ -76,6 +76,28 @@ test.describe("Branch selection marker: geometry and interaction", () => {
     await page.screenshot({ path: path.join(SHOT_DIR, "1440x1024-light-selection-0.png") });
   });
 
+  // V9.3 Task 6C root cause of the "flaky" right-marker offset (6-8px, full suite and CI only): the
+  // markers are positioned from the topic widths when selection opens; web fonts that arrive later
+  // re-flow the topics, and nothing re-positioned the markers. Deterministic here by holding the font
+  // files until after selection opens.
+  test("right-side markers follow their topics when web fonts arrive after selection opens", async ({ page }) => {
+    await page.unrouteAll({ behavior: "ignoreErrors" });
+    let release;
+    const gate = new Promise((r) => { release = r; });
+    await page.route(/fonts\.gstatic\.com|\.woff2(\?|$)/, async (route) => { await gate; await route.continue(); });
+    // The load event waits for the held fonts, so do not wait for it.
+    await page.goto("/fixture-harness.html", { waitUntil: "domcontentloaded" });
+    await expect(page.locator(nodeSelector(`${MAP_A_ID}-root`))).toBeVisible();
+    await openSelection(page);
+    release();
+    await page.waitForFunction(() => [...document.fonts].some((f) => f.family.includes("Be Vietnam") && f.status === "loaded"));
+    await page.evaluate(() => document.fonts.ready);
+    await expect.poll(async () => {
+      const right = (await measureMarkers(page)).filter((m) => m.side === "right");
+      return right.length > 0 && right.every((m) => Math.abs(m.fromTopicRight - -10) <= 2);
+    }, { timeout: 5000 }).toBe(true);
+  });
+
   test("a real click on a marker toggles selection and leaves the canvas transform untouched", async ({ page }) => {
     await openSelection(page);
     const before = await page.locator(".map-canvas").evaluate((el) => el.style.transform || "");

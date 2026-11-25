@@ -1044,10 +1044,11 @@ export default function MindElixirView({ data, onRegenerate, regenerating, contr
     // differences do not accumulate into visible viewport drift.
     const rootAfter = findTopicSafely(mind, mind.nodeData.id)?.getBoundingClientRect?.();
     if (rootCenterBefore && rootAfter) {
-      mind.move?.(
-        rootCenterBefore.x - (rootAfter.left + rootAfter.width / 2),
-        rootCenterBefore.y - (rootAfter.top + rootAfter.height / 2),
-      );
+      const dx = rootCenterBefore.x - (rootAfter.left + rootAfter.width / 2);
+      const dy = rootCenterBefore.y - (rootAfter.top + rootAfter.height / 2);
+      // Only a real offset is corrected. A floating-point residue (0.0001px with the bundled
+      // fonts, PR #214) rewrote the canvas transform although nothing visibly moved.
+      if (Math.abs(dx) >= 0.01 || Math.abs(dy) >= 0.01) mind.move?.(dx, dy);
     }
     // setRootOnly/expandNodeAll each call mind.refresh() internally, which
     // rewrites every topic's DOM wholesale and wipes any inline style

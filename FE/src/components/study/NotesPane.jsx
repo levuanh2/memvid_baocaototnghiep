@@ -14,9 +14,15 @@ const soVN = (n) => n.toLocaleString("vi-VN");
 const gio = (iso) => new Date(iso).toLocaleTimeString("vi-VN", { hour: "2-digit", minute: "2-digit", hour12: false });
 
 export default function NotesPane({ active, userId, selectedSources = [], loadDocuments = listDocuments }) {
-  const [docs, setDocs] = useState(null);
-  const [loadError, setLoadError] = useState(false);
-  const [pickedId, setPickedId] = useState("");
+  // Every piece of per-account state carries the account it belongs to, and is only used while
+  // that is still the signed-in account: a direct account switch renders nothing of the previous
+  // account, not even for the first commit before the reload effect runs (V9.3 Task 6A).
+  const [docsFor, setDocsFor] = useState({ userId: null, list: null });
+  const [errorFor, setErrorFor] = useState(null);
+  const [pickedFor, setPickedFor] = useState({ userId: null, id: "" });
+  const docs = docsFor.userId === userId ? docsFor.list : null;
+  const loadError = errorFor !== null && errorFor === userId;
+  const pickedId = pickedFor.userId === userId ? pickedFor.id : "";
   const [text, setText] = useState("");
   const [status, setStatus] = useState({ kind: "idle" });
   const [confirming, setConfirming] = useState(false);
@@ -35,18 +41,19 @@ export default function NotesPane({ active, userId, selectedSources = [], loadDo
   const load = useCallback(() => {
     // One list per account; a response for an earlier request (another account) is dropped.
     const request = ++docsRequest.current;
-    setLoadError(false);
-    setDocs(null);
+    const owner = userId;
+    setErrorFor(null);
+    setDocsFor({ userId: owner, list: null });
     loadDocuments()
-      .then((list) => { if (request === docsRequest.current) setDocs(list || []); })
-      .catch(() => { if (request === docsRequest.current) setLoadError(true); });
-  }, [loadDocuments]);
+      .then((list) => { if (request === docsRequest.current) setDocsFor({ userId: owner, list: list || [] }); })
+      .catch(() => { if (request === docsRequest.current) setErrorFor(owner); });
+  }, [loadDocuments, userId]);
   useEffect(() => {
     if (active && !opened) setOpened(true);
   }, [active, opened]);
   useEffect(() => {
     if (!opened) return undefined;
-    setPickedId("");
+    setPickedFor({ userId, id: "" });
     load();
     return () => { docsRequest.current += 1; };
   }, [opened, userId, load]);
@@ -145,7 +152,7 @@ export default function NotesPane({ active, userId, selectedSources = [], loadDo
             <div className="flex flex-col gap-1.5">
               <label htmlFor="notes-pane-document" className="text-small font-medium text-text-primary">Tài liệu</label>
               <select id="notes-pane-document" className="notes-pane__select" value={docId}
-                onChange={(e) => setPickedId(e.target.value)}>
+                onChange={(e) => setPickedFor({ userId, id: e.target.value })}>
                 <option value="">Chọn tài liệu…</option>
                 {docs.map((d) => <option key={d.document_id} value={d.document_id}>{d.title || d.filename || d.document_id}</option>)}
               </select>
