@@ -53,14 +53,23 @@ describe("applyContainerAppearance", () => {
     expect(mind.container.getAttribute("style")).toBe(before);
   });
 
-  it("sets and restores font-family on mind.container", () => {
-    mind = makeMind();
-    const restore = applyContainerAppearance({ mind, appearance: { ...DEFAULT_APPEARANCE, font: "serif" } });
-    // jsdom normalizes the quote style of the CSS string it stores (single
-    // quotes -> double), so compare content, not exact string identity.
-    expect(mind.container.style.fontFamily).toContain("Spectral");
-    restore();
-    expect(mind.container.style.fontFamily).toBe("");
+  // Owner decision (V9.3 typography, 2026-11-25): image exports use only the bundled Be Vietnam Pro.
+  // Inter and Spectral were never loaded, so exports silently fell back to the machine's fonts.
+  it("sets and restores font-family on mind.container, with the bundled Be Vietnam Pro only", () => {
+    for (const font of ["sans", "serif"]) { // "serif" is a value older saved appearances may hold
+      mind = makeMind();
+      const restore = applyContainerAppearance({ mind, appearance: { ...DEFAULT_APPEARANCE, font } });
+      // jsdom normalizes the quote style of the CSS string it stores (single
+      // quotes -> double), so compare content, not exact string identity.
+      expect(mind.container.style.fontFamily).toContain("Be Vietnam Pro");
+      expect(mind.container.style.fontFamily).not.toMatch(/Inter|Spectral/);
+      restore();
+      expect(mind.container.style.fontFamily).toBe("");
+    }
+  });
+
+  it("no preset asks for a font the app does not ship", () => {
+    for (const preset of Object.values(PRESETS)) expect(["canvas", "sans"]).toContain(preset.font);
   });
 
   it("sets and restores spacing cssVars on mind.container", () => {
