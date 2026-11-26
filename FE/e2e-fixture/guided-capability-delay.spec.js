@@ -3,6 +3,7 @@
 // provider: every generation POST is counted and answered with 500, and the
 // suite asserts zero POSTs. Writes screenshots to qa-artifacts/guided-capability-delay.
 import { test, expect } from "@playwright/test";
+import { chooseMode, waitForModeControl } from "./workspaceMode.js";
 import fs from "node:fs";
 import path from "node:path";
 
@@ -55,8 +56,8 @@ async function openHeldCapability(page, { w, h }) {
     return route.fulfill(json({}));
   });
   await page.goto("/app");
-  await page.getByRole("tablist", { name: "Chế độ Workspace" }).waitFor({ state: "visible", timeout: 30000 });
-  await page.getByRole("tab", { name: "Sơ đồ tư duy" }).click();
+  await waitForModeControl(page);
+  await chooseMode(page, "Sơ đồ tư duy");
   await page.getByRole("button", { name: "Mở thư viện sơ đồ" }).click();
   const createButton = page.locator(".mm-map-selector__new");
   await expect(createButton).toBeVisible();

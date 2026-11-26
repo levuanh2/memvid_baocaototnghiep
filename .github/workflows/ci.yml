@@ -189,7 +189,10 @@ jobs:
   # Blocking smoke subset of the Vite fixture harness (FE/playwright.fixture.config.js:
   # mocked API, no backend). The full suite (448 tests, ~17 min) runs in
   # fixture-audit.yml instead, on a schedule and on demand, so it never gates a
-  # deploy. These specs cover the regressions Round 8 actually shipped fixes for;
+  # deploy. The list of specs lives in FE/scripts/fixture-smoke-specs.mjs (one place, with a
+  # reason per spec, covered by a unit test): the Round 8 set plus the V6 regressions.
+  # A required spec that is missing fails the job; specs of still-open V6 pull requests join
+  # the gate when their file reaches this branch.
   # --fail-on-flaky-tests turns a pass-on-retry into a failure rather than noise.
   fixture-smoke:
     name: Fixture Smoke (Playwright)
@@ -220,19 +223,16 @@ jobs:
       - name: Install Playwright browsers
         run: npx playwright install --with-deps chromium
 
+      # `set -euo pipefail`: a failing list script (missing required spec) must stop the step
+      # before Playwright runs, instead of running Playwright with an empty list (= every spec).
       - name: Run fixture smoke specs
-        run: >-
-          npx playwright test -c playwright.fixture.config.js --workers=1 --fail-on-flaky-tests
-          e2e-fixture/mobile-header.spec.js
-          e2e-fixture/round6-library-action-matrix.spec.js
-          e2e-fixture/export-studio.spec.js
-          e2e-fixture/exact-node-export-v3.spec.js
-          e2e-fixture/exact-branch-artifact-gates.spec.js
-          e2e-fixture/post-pr77-exact-selection.spec.js
-          e2e-fixture/multi-branch-export-connectors.spec.js
-          e2e-fixture/multi-branch-export-raster-connectors.spec.js
-          e2e-fixture/mindmap-depth-presets.spec.js
-          e2e-fixture/mobile-touch-selection.spec.js
+        shell: bash
+        run: |
+          set -euo pipefail
+          node scripts/fixture-smoke-specs.mjs > "$RUNNER_TEMP/fixture-smoke-specs.txt"
+          mapfile -t specs < "$RUNNER_TEMP/fixture-smoke-specs.txt"
+          test "${#specs[@]}" -gt 0
+          npx playwright test -c playwright.fixture.config.js --workers=1 --fail-on-flaky-tests "${specs[@]}"
 
       - name: Upload fixture report & traces on failure
         if: failure()
@@ -332,6 +332,22 @@ jobs:
           --health-timeout 5s
           --health-retries 5
 
+      # The role-contract step runs on PostgreSQL 17 (Codex task62): MAINTAIN exists
+      # only from 17, and that is the version the role evidence was produced on.
+      postgres17:
+        image: postgres:17-alpine
+        env:
+          POSTGRES_USER: postgres
+          POSTGRES_PASSWORD: postgres
+          POSTGRES_DB: postgres
+        ports:
+          - 5433:5432
+        options: >-
+          --health-cmd pg_isready
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
+
       redis:
         image: redis:7-alpine
         ports:
@@ -382,6 +398,42 @@ jobs:
         # headroom over every real test's actual runtime (the full suite
         # normally clears in a few minutes; see .playbook/known-issues.md).
         run: python -m pytest -q --timeout=60 --timeout-method=thread --junitxml=reports/backend-junit.xml
+
+      # Least-privilege roles (docs/RUNBOOK_DB_ROLES.md): a separate database, migrated by
+      # the owner, the role contract applied, then the role, guard and archive tests run
+      # as the app role. Throwaway passwords for this service container only.
+      - name: Role contract tests as the app role
+        working-directory: BE
+        env:
+          TEST_MIGRATION_DATABASE_URL: postgresql://postgres:postgres@localhost:5433/roles_test
+        run: |
+          python - <<'PY'
+          import sqlalchemy as sa
+          e = sa.create_engine("postgresql+psycopg://postgres:postgres@localhost:5433/postgres",
+                               isolation_level="AUTOCOMMIT")
+          with e.connect() as c:
+              v = int(c.execute(sa.text("SHOW server_version_num")).scalar())
+              assert v >= 170000, f"role contract tests need PostgreSQL 17, got {v}"
+              c.execute(sa.text("CREATE DATABASE roles_test"))
+              for r in ("studymap_app", "studymap_readonly"):
+                  c.execute(sa.text(f"CREATE ROLE {r} LOGIN NOSUPERUSER NOCREATEDB NOCREATEROLE "
+                                    f"NOINHERIT NOBYPASSRLS PASSWORD 'ci-{r}'"))
+              # Supabase's Data API roles, so their tests run instead of skipping.
+              for r in ("anon", "authenticated", "service_role"):
+                  extra = " BYPASSRLS" if r == "service_role" else ""
+                  c.execute(sa.text(f"CREATE ROLE {r} NOLOGIN{extra}"))
+          PY
+          TEST_DATABASE_URL="$TEST_MIGRATION_DATABASE_URL" python -m scripts.setup_test_db
+          TEST_DATABASE_URL="$TEST_MIGRATION_DATABASE_URL" python -m scripts.db_roles apply
+          TEST_DATABASE_URL=postgresql://studymap_app:ci-studymap_app@localhost:5433/roles_test \
+          TEST_READONLY_DATABASE_URL=postgresql://studymap_readonly:ci-studymap_readonly@localhost:5433/roles_test \
+            python -m pytest -q -rs --timeout=120 --timeout-method=thread tests/test_db_roles.py \
+              tests/test_review_item_archive_guard.py tests/test_review_history_document_delete.py \
+              tests/test_review_plan_archive.py tests/test_rollback_preflight.py | tee roles.out
+          # A skipped role test proves nothing: none of tests/test_db_roles.py may skip here.
+          if grep -E '^SKIPPED .*test_db_roles' roles.out; then
+            echo "role contract tests skipped on CI" >&2; exit 1
+          fi
 
       - name: Upload test report artifact
         if: always()

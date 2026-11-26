@@ -10,6 +10,7 @@ import uuid
 import pytest
 
 from app.domains.progress.service import compare_masteries
+from tests._owner_db import owner_session_scope  # clean-up as the table owner
 
 
 # ── so sánh trước/sau: thuần, không DB ──────────────────────────────────────
@@ -72,7 +73,7 @@ def owner():
 
     u = users_store.create_user(f"prac_{uuid.uuid4().hex[:8]}@example.com", "password123")
     yield u["user_id"]
-    with session_scope() as s:
+    with owner_session_scope() as s:
         row = s.get(User, u["user_id"])
         if row is not None:
             s.delete(row)
@@ -441,7 +442,7 @@ def don_tai_lieu_an_danh():
     yield ids
     from app.db import session_scope
     from app.db.models import Document
-    with session_scope() as s:
+    with owner_session_scope() as s:
         for doc_id in ids:
             row = s.get(Document, doc_id)
             if row is not None:

@@ -9,6 +9,7 @@ import uuid
 import pytest
 
 from app.domains.attempts.grading import grade_objective, totals
+from tests._owner_db import owner_session_scope  # clean-up as the table owner
 
 
 # ── chấm khách quan: thuần, không DB ────────────────────────────────────────
@@ -65,7 +66,7 @@ def owner():
 
     u = users_store.create_user(f"att_{uuid.uuid4().hex[:8]}@example.com", "password123")
     yield u["user_id"]
-    with session_scope() as s:
+    with owner_session_scope() as s:
         row = s.get(User, u["user_id"])
         if row is not None:
             s.delete(row)
@@ -216,7 +217,11 @@ def test_patch_and_resubmit_after_submit_are_refused(be, client, monkeypatch, ow
     late = client.patch(f"/api/attempts/{attempt_id}/answers",
                         json={"answers": {qids[0]: "x"}})
     assert late.status_code == 409, "sửa đáp án sau khi nộp thì điểm vô nghĩa"
-    assert client.post(f"/api/attempts/{attempt_id}/submit").status_code == 409
+    # Owner decision 2026-11-17 (diagnostic recovery): resubmitting a graded attempt is a
+    # replay of a lost response, not an error. 200 with the STORED result; nothing is
+    # regraded and the late PATCH above changed nothing.
+    again = client.post(f"/api/attempts/{attempt_id}/submit")
+    assert again.status_code == 200 and again.get_json()["grading"] == "done"
 
     # đáp án cũ không bị đổi
     answers = client.get(f"/api/attempts/{attempt_id}").get_json()["answers"]

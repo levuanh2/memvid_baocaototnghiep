@@ -2,6 +2,7 @@
 // harness as mobile-header.spec.js. Writes captures and measurements.json to
 // MOBILE_HEADER_QA_DIR (default ./qa-artifacts/mobile-header). No generation, no provider.
 import { test, expect } from "@playwright/test";
+import { MODE_SELECT, chooseMode, waitForModeControl } from "./workspaceMode.js";
 import fs from "node:fs";
 import path from "node:path";
 
@@ -36,7 +37,7 @@ async function openApp(page, { width, height, dark }) {
     return route.fulfill(json({}));
   });
   await page.goto("/app");
-  await page.getByRole("tablist", { name: "Chế độ Workspace" }).waitFor({ state: "visible", timeout: 30000 });
+  await waitForModeControl(page);
   if (dark) await page.evaluate(() => document.documentElement.classList.add("dark"));
 }
 
@@ -91,18 +92,19 @@ for (const vp of MATRIX) {
     const clip = { x: 0, y: 0, width: vp.w, height: 56 };
     RESULTS[tag] = { viewport: [vp.w, vp.h], modes: {} };
     for (const mode of ["Trò chuyện", "Sơ đồ tư duy", "Tóm tắt"]) {
-      await page.getByRole("tab", { name: mode }).click();
+      await chooseMode(page, mode);
       await page.waitForTimeout(250);
       const key = mode.replace(/\s/g, "");
       RESULTS[tag].modes[key] = await measure(page);
       await page.screenshot({ path: path.join(OUT, `${tag}-${key}-header.png`), clip });
     }
     // Focus-visible on the first mode tab (keyboard modality).
-    await page.getByRole("tab", { name: "Trò chuyện" }).focus();
+    // V9.3 P4b: <=700px the mode control is the "Chế độ học" select.
+    await page.locator(`nav[role="tablist"]:visible [role="tab"][title="Trò chuyện"], ${MODE_SELECT}:visible`).first().focus();
     await page.keyboard.press("Shift");
     await page.screenshot({ path: path.join(OUT, `${tag}-focus-tab-header.png`), clip });
 
-    await page.getByRole("tab", { name: "Sơ đồ tư duy" }).click();
+    await chooseMode(page, "Sơ đồ tư duy");
     await page.locator('header button[aria-label="Mở công cụ học"]').click();
     const tools = page.getByRole("menu", { name: "Công cụ học" });
     await expect(tools).toBeVisible();

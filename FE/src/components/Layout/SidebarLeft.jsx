@@ -5,9 +5,10 @@ import { Icon } from "../ui/Icon";
 import Badge from "../ui/Badge";
 import Spinner from "../ui/Spinner";
 import OperationUsage from "./OperationUsage";
+import DestructiveConfirmDialog from "../ui/DestructiveConfirmDialog";
 import { nguonConDangXuLy, nhoNguon, quenNguon } from "../../utils/nguonDangXuLy";
 import { taoBoTheoDoiNguon } from "../../utils/theoDoiNguon";
-import { mergeSources, reconcileSelectedSources } from "../../utils/sourceReconciliation";
+import { mergeSources, reconcileSelectedSources, formatFileName } from "../../utils/sourceReconciliation";
 
 /** Phase sau FAISS: memory tree. memory_tree_ready = đã xong — không hiện « đang tối ưu ». */
 const SUBSTATUS_OPTIMIZING = new Set(["faiss_ready", "building_memory_tree"]);
@@ -38,9 +39,8 @@ const getStatusConfig = (status, substatus, canQuery) => {
   }
 };
 
-const formatFileName = (name = "") => name.replace(/\.(mp4|avi|mov|mkv|webm|mp3|wav|pdf|txt|docx)$/i, "");
 
-export default function SidebarLeft({ selectedSources, setSelectedSources, onSourcesChange, onClose, collapsible = false, onTransientSurfaceOpen, railMode = false, onUploadReady, initialSources }) {
+export default function SidebarLeft({ selectedSources, setSelectedSources, onSourcesChange, onClose, collapsible = false, onTransientSurfaceOpen, railMode = false, onUploadReady, initialSources, onSourcesSettled }) {
   // This component remounts on every 768px / 1280px crossing. `initialSources` is the layout's
   // last known list, read ONCE at mount: it keeps the rows on screen until `/list-indexed`
   // answers, and gives selection reconciliation the old filename it needs to follow a rename
@@ -59,6 +59,7 @@ export default function SidebarLeft({ selectedSources, setSelectedSources, onSou
   const sourcesRef = useRef(sources);
   useEffect(() => { sourcesRef.current = sources; }, [sources]);
   const [menuOpen, setMenuOpen] = useState(null);
+  const menuTriggerRefs = useRef({});
   // Sprint H: "..." menu had no dismiss path except its own Xóa button or
   // re-clicking the toggle — click elsewhere / Escape left it floating open
   // indefinitely. Same outside-click shape as `DoiTenTaiCho` below.
@@ -68,7 +69,12 @@ export default function SidebarLeft({ selectedSources, setSelectedSources, onSou
     // check containment mới tránh được vòng lặp đóng-rồi-mở lại ngay do
     // mousedown chạy trước click và React re-render xen giữa hai sự kiện đó.
     const ngoai = (e) => { if (!e.target.closest(".sidebar-source-menu")) setMenuOpen(null); };
-    const phimEsc = (e) => { if (e.key === "Escape") setMenuOpen(null); };
+    const phimEsc = (e) => {
+      if (e.key !== "Escape") return;
+      const trigger = menuTriggerRefs.current[menuOpen];
+      setMenuOpen(null);
+      trigger?.focus();
+    };
     document.addEventListener("mousedown", ngoai);
     document.addEventListener("keydown", phimEsc);
     return () => {
@@ -78,19 +84,25 @@ export default function SidebarLeft({ selectedSources, setSelectedSources, onSou
   }, [menuOpen]);
   const [uploading, setUploading] = useState(false);
   const [deletingFile, setDeletingFile] = useState(null);
+  // The source to hard-delete, once the learner chose "Xóa" (owner decision 2026-11-19).
+  const [nguonCanXoa, setNguonCanXoa] = useState(null);
   const [loiTai, setLoiTai] = useState(null);
+  // First load of this mount with nothing to show yet: neither rows nor an error.
+  const dangTaiLanDau = !daTaiDanhSach && !loiTai && sources.length === 0;
   const [loiUpload, setLoiUpload] = useState(null);
   const [query, setQuery] = useState("");
   const [filterOpen, setFilterOpen] = useState(false);
   const [draftFilters, setDraftFilters] = useState({ type: "", status: "", date: "" });
   const [appliedFilters, setAppliedFilters] = useState({ type: "", status: "", date: "" });
   const fileInputRef = useRef(null);
+  const filterTriggerRef = useRef(null);
   // Rail "+" and desktop panel upload button unmount when the layout crosses 768px / 1280px;
   // a focused one hands focus to the upload control of the new layout (not <body>).
   const railUploadFocusRef = useMemo(uploadFocusHandoffRef, []);
   const panelUploadFocusRef = useMemo(uploadFocusHandoffRef, []);
   const fileChooserOpenRef = useRef(false);
   const pollersRef = useRef({});
+  const completionRefreshTimerRef = useRef(null);
   const settleFileChooser = useCallback(() => {
     fileChooserOpenRef.current = false;
   }, []);
@@ -124,7 +136,7 @@ export default function SidebarLeft({ selectedSources, setSelectedSources, onSou
   };
 
   const pollSourceStatus = (sourceId) => {
-    if (pollersRef.current[sourceId]) return;   // đang theo dõi rồi, đừng dựng bộ thứ hai
+    if (!conSongRef.current || pollersRef.current[sourceId]) return;   // đang theo dõi rồi, đừng dựng bộ thứ hai
     const bo = taoBoTheoDoiNguon({
       layTrangThai,
       onTrangThai: (data) => {
@@ -133,7 +145,13 @@ export default function SidebarLeft({ selectedSources, setSelectedSources, onSou
       onKetThuc: (data) => {
         stopPolling(sourceId);
         quenNguon(sourceId);
-        if (data.status === "ready") setTimeout(() => fetchSourcesFromBackend(), 500);
+        if (data.status === "ready") {
+          clearTimeout(completionRefreshTimerRef.current);
+          completionRefreshTimerRef.current = setTimeout(() => {
+            completionRefreshTimerRef.current = null;
+            if (conSongRef.current) fetchSourcesFromBackend();
+          }, 500);
+        }
       },
       // Vẫn đang thử lại — thẻ giữ nguyên trạng thái xử lý, chỉ thêm một dòng nhỏ.
       onTrucTrac: () => {
@@ -164,7 +182,17 @@ export default function SidebarLeft({ selectedSources, setSelectedSources, onSou
     if (bo) { bo.stop(); delete pollersRef.current[sourceId]; }
   };
 
+  // Only the latest request of a mounted panel may publish. Without this, a response that lands
+  // after the panel unmounted (collapsed, or a breakpoint crossing) still told the layout "the list
+  // has loaded" and reconciled the selection against rows that were never committed; and an older
+  // request (mount) finishing after a newer one ("Thử lại") overwrote its result.
+  const conSongRef = useRef(false);
+  const luotTaiRef = useRef(0);
+  useEffect(() => { conSongRef.current = true; return () => { conSongRef.current = false; }; }, []);
+
   const fetchSourcesFromBackend = () => {
+    const luot = ++luotTaiRef.current;
+    const conHieuLuc = () => conSongRef.current && luot === luotTaiRef.current;
     apiFetch(`/list-indexed`)
       .then(async (res) => {
         // `.json()` trên một 500/401 vẫn "thành công" (body lỗi cũng là JSON), rồi
@@ -195,15 +223,19 @@ export default function SidebarLeft({ selectedSources, setSelectedSources, onSou
         // CAN race — e.g. the mount effect and a manual "Thử lại" retry — and
         // the functional form is what keeps a second merge from clobbering
         // the first instead of building on it).
+        if (!conHieuLuc()) return;
         const prevSnapshot = sourcesRef.current;
         setSources((prev) => mergeSources(prev, backendSources, formatFileName));
         setSelectedSources((prevSel) => reconcileSelectedSources(prevSnapshot, backendSources, prevSel));
         setDaTaiDanhSach(true);
         setLoiTai(null);
+        onSourcesSettled?.(true);
       })
       .catch((err) => {
+        if (!conHieuLuc()) return;
         console.error("Error fetching sources:", err);
         setLoiTai(getUserFriendlyApiError(err));
+        onSourcesSettled?.(false);
       });
   };
 
@@ -230,6 +262,8 @@ export default function SidebarLeft({ selectedSources, setSelectedSources, onSou
   useEffect(() => () => {
     Object.values(pollersRef.current).forEach((bo) => bo.stop());
     pollersRef.current = {};
+    clearTimeout(completionRefreshTimerRef.current);
+    completionRefreshTimerRef.current = null;
   }, []);
   // This component remounts whenever the layout crosses 768px / 1280px (rail, shelf, drawer and
   // panel are different mounts). A fresh mount starts with `sources = []`; reporting that before
@@ -247,7 +281,9 @@ export default function SidebarLeft({ selectedSources, setSelectedSources, onSou
   useEffect(() => {
     if (!filterOpen) return undefined;
     const onKeyDown = (event) => {
-      if (event.key === "Escape") setFilterOpen(false);
+      if (event.key !== "Escape") return;
+      setFilterOpen(false);
+      filterTriggerRef.current?.focus();
     };
     const onPointerDown = (event) => {
       if (!event.target.closest?.(".source-filter-popover, .source-filter-trigger")) setFilterOpen(false);
@@ -273,7 +309,11 @@ export default function SidebarLeft({ selectedSources, setSelectedSources, onSou
         fd.append("file", file);
         const res = await apiFetch("/upload", { method: "POST", body: fd });
         if (!res.ok) {
+          // Panel gone (collapsed, breakpoint crossed): nothing to show the error on. Keep
+          // going, so the rest of a multi-file batch is still uploaded.
+          if (!conSongRef.current) continue;
           const err = await _appError(res);
+          if (!conSongRef.current) continue;
           console.error("Upload failed:", err.code);
           // Trước đây chỉ 401/403/404 mới báo; 413 (file quá lớn), 415 (định dạng
           // không đọc được) và 500 thì `continue` trong im lặng — nút hết quay, danh
@@ -283,6 +323,13 @@ export default function SidebarLeft({ selectedSources, setSelectedSources, onSou
           continue;
         }
         const data = await res.json();
+        if (!conSongRef.current) {
+          // The server accepted the file after this panel was gone. REMEMBER it, so the
+          // next mount shows and follows it (`/list-indexed` only lists finished documents);
+          // start no poller and touch no state from here.
+          if (data.source_id) nhoNguon({ sourceId: data.source_id, filename: formatFileName(file.name) });
+          continue;
+        }
         const newSource = { source_id: data.source_id, filename: formatFileName(file.name), video_stem: data.video_stem, status: data.status || "processing", progress: 0, can_query: false };
         setSources((prev) => [newSource, ...prev]);
         if (data.source_id) {
@@ -294,15 +341,23 @@ export default function SidebarLeft({ selectedSources, setSelectedSources, onSou
         }
       }
     } finally {
-      setUploading(false);
-      if (fileInputRef.current) fileInputRef.current.value = "";
+      if (conSongRef.current) {
+        setUploading(false);
+        if (fileInputRef.current) fileInputRef.current.value = "";
+      }
     }
   };
 
-  const handleDeleteSource = async (src) => {
-    const key = src.video_stem || src.video;
-    if (!window.confirm(`Xóa "${src.filename}"?`)) return;
+  // A HARD delete: the document and everything made from it (quizzes, review plans,
+  // practice quizzes and results, archived topics included). Ask in the shared
+  // permanent-delete dialog, in words (owner decision 2026-11-19, item 4).
+  const handleDeleteSource = (src) => {
     setMenuOpen(null);
+    setNguonCanXoa(src);
+  };
+
+  const xoaNguonVinhVien = async (src) => {
+    const key = src.video_stem || src.video;
     setDeletingFile(key);
     try {
       let res;
@@ -316,11 +371,11 @@ export default function SidebarLeft({ selectedSources, setSelectedSources, onSou
       setSelectedSources((prev) => prev.filter((p) => p !== key));
     } catch (err) {
       console.error("Delete source error:", err);
-      alert((isUnauthorizedError(err) || isNotFoundOrForbiddenError(err))
+      // The dialog shows this and stays open.
+      throw new Error((isUnauthorizedError(err) || isNotFoundOrForbiddenError(err))
         ? getUserFriendlyApiError(err)
         : "Không xóa được tài liệu. Thử lại sau ít phút.");
-    }
-    finally { setDeletingFile(null); }
+    } finally { setDeletingFile(null); }
   };
 
   const toggleSelect = (src) => {
@@ -416,7 +471,7 @@ export default function SidebarLeft({ selectedSources, setSelectedSources, onSou
             <Icon name="Library" size={14} className="text-accent" /> Thư mục nguồn
           </div>
           <div className="text-caption text-text-muted mt-1 font-mono">
-            {sources.length} tài liệu · <span className="text-accent">{selectedSources.length} đang chọn</span>
+            {dangTaiLanDau ? "Đang tải…" : <>{sources.length} tài liệu · <span className="text-accent">{selectedSources.length} đang chọn</span></>}
           </div>
         </div>
         {/* Khổ hẹp: đóng ngăn kéo. Khổ rộng: thu cột về gáy sách. */}
@@ -457,7 +512,7 @@ export default function SidebarLeft({ selectedSources, setSelectedSources, onSou
               <Icon name="X" size={13} />
             </button>
           )}
-          <button type="button" className={"source-filter-trigger" + (activeFilterCount ? " is-active" : "")}
+          <button type="button" ref={filterTriggerRef} className={"source-filter-trigger" + (activeFilterCount ? " is-active" : "")}
             onClick={() => { onTransientSurfaceOpen?.(); setFilterOpen((value) => !value); }}
             aria-expanded={filterOpen} aria-haspopup="dialog"
             aria-label={activeFilterCount ? "Bộ lọc, " + activeFilterCount + " đang áp dụng" : "Mở bộ lọc nâng cao"}
@@ -525,9 +580,18 @@ export default function SidebarLeft({ selectedSources, setSelectedSources, onSou
             <Icon name="AlertCircle" size={30} className="mx-auto mb-3" style={{ color: "var(--err)" }} />
             <p className="text-small font-semibold text-text-secondary">{loiTai}</p>
             <button type="button" className="text-small underline text-text-muted mt-2"
-              onClick={fetchSourcesFromBackend}>
+              // Clearing the error puts the panel back in its loading state, so the retry is
+              // visibly pending and cannot be pressed twice.
+              onClick={() => { setLoiTai(null); fetchSourcesFromBackend(); }}>
               Thử lại
             </button>
+          </div>
+        ) : dangTaiLanDau ? (
+          // Not "empty": the list has not answered yet. Saying "Chưa có tài liệu nào" here told
+          // people with a full library that it was empty for as long as the request took.
+          <div className="py-10 px-4 flex flex-col items-center" role="status">
+            <Spinner size={16} />
+            <p className="text-small text-text-muted mt-3">Đang tải danh sách tài liệu…</p>
           </div>
         ) : sources.length === 0 && (
           <div className="text-center py-12 px-4">
@@ -647,7 +711,7 @@ export default function SidebarLeft({ selectedSources, setSelectedSources, onSou
                     <Spinner size={16} className="text-text-muted" />
                   ) : (
                     <>
-                      <button onClick={() => setMenuOpen(menuOpen === idx ? null : idx)} className="w-7 h-7 rounded-control inline-flex items-center justify-center text-text-muted hover:text-text-primary hover:bg-surface-elevated transition-colors" aria-label="Tuỳ chọn" aria-haspopup="true" aria-expanded={menuOpen === idx}>
+                      <button ref={(node) => { menuTriggerRefs.current[idx] = node; }} onClick={() => setMenuOpen(menuOpen === idx ? null : idx)} className="w-7 h-7 rounded-control inline-flex items-center justify-center text-text-muted hover:text-text-primary hover:bg-surface-elevated transition-colors" aria-label="Tuỳ chọn" aria-haspopup="true" aria-expanded={menuOpen === idx}>
                         <Icon name="MoreVertical" size={14} />
                       </button>
                       {menuOpen === idx && (
@@ -667,6 +731,18 @@ export default function SidebarLeft({ selectedSources, setSelectedSources, onSou
       </div>
 
       <style>{`@media (min-width: 768px) { .md\\:hidden { display: none !important; } }`}</style>
+      <DestructiveConfirmDialog
+        open={Boolean(nguonCanXoa)}
+        title="Xoá tài liệu vĩnh viễn?"
+        targetName={nguonCanXoa?.filename || "Tài liệu"}
+        consequenceText="Tài liệu cùng mọi quiz, kế hoạch ôn tập, bài luyện tập và kết quả làm bài tạo từ nó sẽ bị xoá vĩnh viễn, kể cả các chủ đề đã lưu trữ. Không thể hoàn tác."
+        confirmLabel="Xoá vĩnh viễn"
+        onCancel={() => setNguonCanXoa(null)}
+        onConfirm={async () => {
+          await xoaNguonVinhVien(nguonCanXoa);
+          setNguonCanXoa(null);
+        }}
+      />
     </div>
   );
 }

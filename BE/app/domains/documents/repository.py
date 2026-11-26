@@ -50,12 +50,16 @@ ANONYMOUS_EMAIL = "anonymous@studymap.local"
 _CACHE_TTL = float(os.getenv("DOCUMENTS_CACHE_TTL_SEC", "2") or 2)
 _cache_lock = threading.Lock()
 _cache: dict = {"t": 0.0, "rows": None}
+# V9.3 security: owners per canonical stem over EVERY document row (soft-deleted too).
+_stem_cache: dict = {"t": 0.0, "map": None}
 
 
 def invalidate_cache() -> None:
     with _cache_lock:
         _cache["rows"] = None
         _cache["t"] = 0.0
+        _stem_cache["map"] = None
+        _stem_cache["t"] = 0.0
 
 
 def _now_iso() -> str:
@@ -223,6 +227,134 @@ def all_rows(*, use_cache: bool = True) -> Dict[str, Dict[str, Any]]:
         _cache["rows"] = rows
         _cache["t"] = time.time()
     return rows
+
+
+def stem_owners(*, use_cache: bool = True) -> Dict[str, set]:
+    """V9.3 security: {canonical source_stem: {owner user_id or None}} over EVERY document
+    row, soft-deleted included.
+
+    A stem is NOT an identity: two owners (or an owner and an ownerless/anonymous row) can
+    carry the same canonical stem through legacy/imported rows, concurrent uploads or
+    multi-process registry caches, and a soft-deleted document keeps its chunks in the
+    shared index under that stem. Authorization by stem must therefore see every row that
+    still has chunks, not only the live ones `all_rows()` returns. Anonymous owner -> None,
+    like `_row`.
+    """
+    if use_cache and _CACHE_TTL > 0:
+        with _cache_lock:
+            cached = _stem_cache["map"]
+            if cached is not None and (time.time() - _stem_cache["t"]) < _CACHE_TTL:
+                return cached
+    anon = anonymous_user_id()
+    with session_scope() as s:
+        rows = s.execute(select(Document.user_id, Document.title, Document.metadata_json)).all()
+    out: Dict[str, set] = {}
+    for uid, title, meta in rows:
+        stem = canonical_source_stem((meta or {}).get("source_stem") or title or "")
+        if not stem:
+            continue
+        owner = None if (not uid or uid == anon) else str(uid)
+        out.setdefault(stem, set()).add(owner)
+    with _cache_lock:
+        _stem_cache["map"] = out
+        _stem_cache["t"] = time.time()
+    return out
+
+
+class StemLockTimeout(RuntimeError):
+    """The advisory lock for a stem could not be taken in time: refuse, never proceed unlocked."""
+
+
+def acquire_stem_lock(stem: str, *, timeout_s: float = 15.0):
+    """V9.3 security (#209 review P1/P2): hold a PostgreSQL advisory lock for one canonical stem
+    across processes and workers. Returns a release function (call it exactly once).
+
+    Upload naming holds it from choosing the name to creating the row, and stem-wide deletes
+    hold it while they re-check ownership and purge, so no new owner can appear in between.
+    Session-level lock on a dedicated connection; if unlocking fails the connection is
+    discarded, which also drops the lock. Non-PostgreSQL engines (no shared workers) no-op.
+    ponytail: hashtext() keys can collide; a collision only serializes two unrelated stems.
+    """
+    from sqlalchemy import text as _text
+    from app.db import get_engine
+    engine = get_engine()
+    if engine.dialect.name != "postgresql":
+        return lambda: None
+    key = "studymap.stem:" + (canonical_source_stem(stem) or str(stem))
+    conn = engine.connect()
+    try:
+        deadline = time.monotonic() + max(0.0, timeout_s)
+        while True:
+            got = conn.execute(_text("SELECT pg_try_advisory_lock(hashtext(:k))"), {"k": key}).scalar()
+            if got:
+                break
+            if time.monotonic() >= deadline:
+                raise StemLockTimeout(key)
+            time.sleep(0.05)
+    except BaseException:
+        conn.invalidate()
+        conn.close()
+        raise
+
+    def release() -> None:
+        try:
+            conn.execute(_text("SELECT pg_advisory_unlock(hashtext(:k))"), {"k": key})
+        except Exception:
+            conn.invalidate()
+        finally:
+            conn.close()
+
+    return release
+
+
+def owners_for_stems(stems: Iterable[str]) -> Dict[str, set]:
+    """V9.3 security (#209 review P1): owners of the given canonical stems over EVERY document row
+    (soft-deleted included), read fresh, never from the per-process cache. Filtered in SQL so a
+    check costs one query returning only the rows on those stems, not the whole table. Rows
+    without a stored stem (legacy) are canonicalized from the title in Python.
+    ponytail: no expression index on metadata_json->>'source_stem' (would need a migration);
+    PostgreSQL scans documents inside the database, which is fine at this table size.
+    """
+    wanted = {canonical_source_stem(s) for s in (stems or []) if s}
+    wanted.discard("")
+    if not wanted:
+        return {}
+    stored = Document.metadata_json["source_stem"].astext
+    anon = anonymous_user_id()
+    with session_scope() as s:
+        rows = s.execute(
+            select(Document.user_id, Document.title, Document.metadata_json)
+            .where((stored.in_(sorted(wanted))) | (stored.is_(None)) | (stored == ""))
+        ).all()
+    out: Dict[str, set] = {}
+    for uid, title, meta in rows:
+        stem = canonical_source_stem((meta or {}).get("source_stem") or title or "")
+        if stem not in wanted:
+            continue
+        out.setdefault(stem, set()).add(None if (not uid or uid == anon) else str(uid))
+    return out
+
+
+def chunk_owner_by_embedding(embedding_id: Any) -> tuple:
+    """V9.3 security: (found, owner) for the chunk a global FAISS id points at, from the
+    chunk's own row (`document_chunks.embedding_id` -> `documents.user_id`).
+
+    found=False: no chunk row carries this id (legacy index entry) -> caller falls back to
+    the stem rule. owner=None when the document is soft-deleted, anonymous, or when rows
+    of different owners carry the id (never pick one): the caller must refuse.
+    """
+    key = str(embedding_id)
+    anon = anonymous_user_id()
+    with session_scope() as s:
+        rows = s.execute(
+            select(Document.user_id, Document.status)
+            .join(DocumentChunk, DocumentChunk.document_id == Document.id)
+            .where(DocumentChunk.embedding_id == key)
+        ).all()
+    if not rows:
+        return False, None
+    owners = {None if (st == "deleted" or not uid or uid == anon) else str(uid) for uid, st in rows}
+    return True, (owners.pop() if len(owners) == 1 else None)
 
 
 def update_status(document_id: str, status: str, progress: Optional[float] = None,
@@ -599,7 +731,9 @@ def tri_thuc_tho(user_id: Optional[str]) -> Dict[str, Dict[str, Any]]:
         # 3) Chu de can on tap + moc tao ke hoach.
         q = (select(ReviewPlan.document_id, ReviewPlanItem.topic, ReviewPlan.created_at)
              .select_from(ReviewPlan)
-             .join(ReviewPlanItem, ReviewPlanItem.review_plan_id == ReviewPlan.id))
+             .join(ReviewPlanItem, ReviewPlanItem.review_plan_id == ReviewPlan.id)
+             # Current topics only: archived ones belong to an older plan (issue #18).
+             .where(ReviewPlanItem.archived_at.is_(None)))
         if user_id is not None:
             q = q.where(ReviewPlan.user_id == user_id)
         for doc_id, topic, tao_luc in s.execute(q).all():
@@ -711,11 +845,24 @@ def ai_counts(user_id: Optional[str]) -> Dict[str, Dict[str, Any]]:
 
 
 def hard_delete(document_id: str) -> bool:
-    """Xoá cứng — cascade xuống sections/chunks/quizzes/... theo cây 6.2."""
+    """Xoá cứng — cascade xuống sections/chunks/quizzes/... theo cây 6.2.
+
+    The cascade also removes the document's review history (owner decision 2026-11-19).
+    Lock its attempts, then its review plans, BEFORE the delete: a regeneration locks
+    attempt then plan, and the cascade otherwise took the plan first and then waited for
+    the attempt, a deadlock between two current-code flows (Codex task57; owner item 5).
+    """
+    from app.db.models import Quiz, QuizAttempt, ReviewPlan
+
     with session_scope() as s:
         d = s.get(Document, str(document_id))
         if d is None:
             return False
+        s.execute(select(QuizAttempt.id).join(Quiz, Quiz.id == QuizAttempt.quiz_id)
+                  .where(Quiz.document_id == d.id).order_by(QuizAttempt.id)
+                  .with_for_update(of=QuizAttempt)).all()
+        s.execute(select(ReviewPlan.id).where(ReviewPlan.document_id == d.id)
+                  .order_by(ReviewPlan.id).with_for_update()).all()
         s.delete(d)
     invalidate_cache()
     return True

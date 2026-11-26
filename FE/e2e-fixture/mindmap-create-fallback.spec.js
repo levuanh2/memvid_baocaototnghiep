@@ -41,7 +41,7 @@ async function openMindmapMode(page, { capability = "disabled", capabilityDelayM
     return route.fulfill(json({}));
   });
   await page.goto("/app?source=tai-lieu-1&tab=mindmap");
-  await expect(page.locator('[role="tab"][title="Sơ đồ tư duy"][aria-selected="true"]')).toBeVisible();
+  await expect(page.locator('[role="tab"][title="Sơ đồ tư duy"]')).toHaveAttribute("aria-selected", "true");
   return posts;
 }
 

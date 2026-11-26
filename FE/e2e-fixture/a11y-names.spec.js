@@ -1,6 +1,7 @@
 // V4.1 W5-4: programmatic names for the Workspace source checkboxes and the
 // chat box, and the closed usage chip never sits above a modal.
 import { test, expect } from "@playwright/test";
+import { waitForModeControl } from "./workspaceMode.js";
 
 const json = (body) => ({ status: 200, contentType: "application/json", body: JSON.stringify(body) });
 const src = (stem, filename) => ({ video: stem, video_stem: stem, filename, status: "index_ready" });
@@ -18,7 +19,7 @@ async function openWorkspace(page, width) {
     return route.fulfill(json({}));
   });
   await page.goto("/app");
-  await expect(page.locator('nav[aria-label="Chế độ Workspace"]')).toBeVisible();
+  await waitForModeControl(page);
 }
 
 test("source checkboxes and the chat box have names", async ({ page }) => {

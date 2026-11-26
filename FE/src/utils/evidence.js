@@ -91,7 +91,9 @@ export function normalizeSourceStems(raw) {
 // The query graph annotates context chunks as "[Nguồn: <stem>, đoạn <id>]".
 // If the answer reproduces those markers, turn each into a numbered chip
 // that links to its source frame; the registry is reused by the margin.
-const CITE_RE = /\[\s*Nguồn\s*:\s*([^,\]]+?)\s*,\s*đoạn\s*([0-9]+)\s*\]/gi;
+// Leading spaces/tabs are part of the match and dropped: the model writes "… không đổi [Nguồn: …]."
+// and the chip then stood alone between two spaces, with the full stop detached after it.
+const CITE_RE = /[ \t]*\[\s*Nguồn\s*:\s*([^,\]]+?)\s*,\s*đoạn\s*([0-9]+)\s*\]/gi;
 
 export function processCitations(answer) {
   const citations = [];

@@ -188,6 +188,11 @@ export function attachBranchSelectionMode(containerEl, {
   scan();
   const observer = new MutationObserver(scan);
   observer.observe(containerEl, { childList: true, subtree: true });
+  // Marker positions are computed from topic widths. A web font that finishes loading after the
+  // markers were placed re-flows every topic without any DOM mutation, so re-place them then
+  // (V9.3 Task 6C: right-side markers were 6-8px off on a cold cache / slow network).
+  const fonts = typeof document !== "undefined" ? document.fonts : null;
+  fonts?.addEventListener?.("loadingdone", scan);
 
   // Keep markers a stable on-screen size: the canvas zoom is in its inline
   // transform, so mirror 1/zoom onto the container as a CSS variable. Attribute
@@ -217,6 +222,7 @@ export function attachBranchSelectionMode(containerEl, {
     detach: () => {
       observer.disconnect();
       zoomObserver.disconnect();
+      fonts?.removeEventListener?.("loadingdone", scan);
       containerEl.removeEventListener("pointerdown", suppress, true);
       containerEl.removeEventListener("click", suppress, true);
       containerEl.querySelectorAll("me-export-check").forEach((el) => el.remove());

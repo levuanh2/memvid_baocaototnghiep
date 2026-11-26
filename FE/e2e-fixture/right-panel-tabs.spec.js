@@ -121,7 +121,13 @@ async function checkFullTabRowBehavior(page, { widthForClipCheck } = {}) {
 test("1440px: full tab-row checklist + before/after screenshots", async ({ page }) => {
   await page.setViewportSize({ width: 1440, height: 900 });
   await openChatWithSource(page);
-  await expect(panelTitle(page)).toHaveText("Bằng chứng câu trả lời"); // initial view, before any interaction
+  // V9.3 P4b: with no saved layout the evidence column starts closed; the header's
+  // "Dẫn chứng" control opens it, on the evidence view.
+  const evidence = page.getByRole("button", { name: "Dẫn chứng" });
+  await expect(evidence).toHaveAttribute("aria-expanded", "false");
+  await evidence.click();
+  await expect(evidence).toHaveAttribute("aria-expanded", "true");
+  await expect(panelTitle(page)).toHaveText("Bằng chứng câu trả lời"); // first view, before any tab interaction
   await page.screenshot({ path: `${EVIDENCE_DIR}/after-1440-before-interaction.png` });
 
   await checkFullTabRowBehavior(page);

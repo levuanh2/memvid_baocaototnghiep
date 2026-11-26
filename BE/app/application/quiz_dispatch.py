@@ -82,6 +82,12 @@ class ReviewItemKhongCoChunk(attempts_uc.AttemptError):
     loi = "Review item không có chunk nguồn để ra đề"
 
 
+class ReviewItemDaLuuTru(attempts_uc.AttemptError):
+    """The topic belongs to an older plan (issue #18): its history stays readable and
+    its practice quizzes can still be finished, but no new practice is generated."""
+    loi = "Chủ đề này thuộc kế hoạch cũ. Hãy luyện tập từ kế hoạch hiện tại."
+
+
 # ── Cấu hình dùng chung cho cả hai đường ───────────────────────────────────
 def cau_hinh_quiz(data: dict) -> Dict[str, Any]:
     """Ép mọi giá trị về tập DB chấp nhận TRƯỚC khi chạy job.
@@ -200,6 +206,8 @@ def sinh_practice(review_item_id: str, data: dict, user_id: Optional[str], *,
     item = _review.get_item(review_item_id)
     if not item or (bat_buoc_chu_so_huu and item.get("user_id") != user_id):
         raise ReviewItemKhongTonTai()
+    if item.get("archived_at"):
+        raise ReviewItemDaLuuTru()
     if not item.get("chunk_ids"):
         raise ReviewItemKhongCoChunk()
 

@@ -13,7 +13,7 @@
    viewport instead of collapsing to content height. */
 .me-container { width: 100%; height: 100%; min-height: 0; }
 .me-container { outline: none; }
-.me-container :focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+.me-container :focus-visible { outline: 3px solid var(--focus); outline-offset: 2px; }
 
 /* Render lifecycle: keep the canvas sized while Mind Elixir settles, but block
    accidental node/toolbar interaction until connector geometry is validated. */
@@ -94,20 +94,20 @@ html.dark .me-container { --mm-relation: #7e90c4; }
    `--selected`) draws independently of this box's fill/border and is
    unaffected either way. */
 .me-container me-root me-tpc:not([data-export-source-role="section"]):not([data-export-source-role="concept"]):not([data-export-source-role="detail"]) {
-  font-family: Aptos, -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
+  font-family: var(--font-display);
   font-weight: 600;
   font-size: 16px;
   line-height: 1.25;
   letter-spacing: normal;
   background: var(--accent-cta) !important;
-  color: #fff !important;
+  color: var(--on-primary) !important;
   border: 0 !important;
   border-radius: 8px !important;
   padding: 8px 16px !important;
   max-width: 260px;
 }
 .me-container me-main > me-wrapper > me-parent > me-tpc {
-  font-family: Aptos, -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
+  font-family: var(--font-display);
   font-weight: 600;
   font-size: 14px;
   line-height: 1.3;
@@ -116,7 +116,7 @@ html.dark .me-container { --mm-relation: #7e90c4; }
   border-radius: 6px !important;
 }
 .me-container me-main me-wrapper me-wrapper > me-parent > me-tpc {
-  font-family: Aptos, -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
+  font-family: var(--font-display);
   font-size: 13px;
   font-weight: 500;
   line-height: 1.3;
@@ -174,7 +174,7 @@ html.dark .me-container { --mm-relation: #7e90c4; }
    not only jsdom. `color` is set alongside it for the same at-root-position
    safety net, matching `--main-color` (section's actual live text color). */
 .mm-export-offscreen me-tpc[data-export-source-role="section"] {
-  font-family: Aptos, -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
+  font-family: var(--font-display);
   font-weight: 600;
   font-size: 14px;
   line-height: 1.3;
@@ -187,7 +187,7 @@ html.dark .me-container { --mm-relation: #7e90c4; }
 }
 
 .mm-export-offscreen me-tpc[data-export-source-role="concept"] {
-  font-family: Aptos, -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
+  font-family: var(--font-display);
   font-weight: 500;
   font-size: 13px;
   line-height: 1.3;
@@ -200,7 +200,7 @@ html.dark .me-container { --mm-relation: #7e90c4; }
 }
 
 .mm-export-offscreen me-tpc[data-export-source-role="detail"] {
-  font-family: Aptos, -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
+  font-family: var(--font-display);
   font-weight: 400;
   font-size: 12px;
   line-height: 1.35;
@@ -781,7 +781,7 @@ html.dark .me-container { --mm-relation: #7e90c4; }
   /* Phase C Round 2: keyboard focus is interactive, not a status signal —
      accent only (was forest, with a dead accent fallback since --forest is
      always declared). */
-  outline: 2px solid var(--accent);
+  outline: 3px solid var(--focus);
   outline-offset: 2px;
   border-radius: 4px;
 }
@@ -865,18 +865,18 @@ html.dark .me-container { --mm-relation: #7e90c4; }
   pointer-events: auto;
 }
 .map-container me-export-check:hover .mm-export-check__dot {
-  box-shadow: 0 0 0 3px rgba(18, 108, 242, 0.18);
+  box-shadow: 0 0 0 3px color-mix(in srgb, var(--focus) 22%, transparent);
 }
 .map-container me-export-check.is-checked .mm-export-check__dot {
-  background: #126CF2;
-  border-color: #126CF2;
+  background: var(--accent-cta);
+  border-color: var(--accent-cta);
 }
 .map-container me-export-check.is-checked .mm-export-check__dot::after {
   content: "";
   position: absolute;
   left: calc(6px * var(--mm-marker-inv, 1)); top: calc(3px * var(--mm-marker-inv, 1));
   width: calc(4px * var(--mm-marker-inv, 1)); height: calc(8px * var(--mm-marker-inv, 1));
-  border: solid #fff; border-width: 0 calc(2px * var(--mm-marker-inv, 1)) calc(2px * var(--mm-marker-inv, 1)) 0;
+  border: solid var(--on-primary); border-width: 0 calc(2px * var(--mm-marker-inv, 1)) calc(2px * var(--mm-marker-inv, 1)) 0;
   transform: rotate(45deg);
 }
 /* Auto-context: an ancestor pulled in to keep the explicit picks connected
@@ -886,16 +886,16 @@ html.dark .me-container { --mm-relation: #7e90c4; }
    chosen". Clicking it suppresses (handled in mindmapBranchSelectionMode.js,
    not here), which drops it to the plain/.is-auto-suppressed look below. */
 .map-container me-export-check.is-auto-context .mm-export-check__dot {
-  background: rgba(18, 108, 242, 0.14);
+  background: var(--brand-soft);
   border-style: dashed;
-  border-color: #126CF2;
+  border-color: var(--accent-cta);
 }
 .map-container me-export-check.is-auto-context .mm-export-check__dot::after {
   content: "";
   position: absolute;
   left: calc(5.5px * var(--mm-marker-inv, 1)); top: calc(8.5px * var(--mm-marker-inv, 1));
   width: calc(9px * var(--mm-marker-inv, 1)); height: calc(2px * var(--mm-marker-inv, 1));
-  background: #126CF2;
+  background: var(--accent-cta);
   border-radius: 1px;
 }
 /* Suppressed auto-context: user clicked it off. Plain dot (same as an
@@ -911,7 +911,7 @@ html.dark .me-container { --mm-relation: #7e90c4; }
 }
 .map-container me-export-check:focus-visible .mm-export-check__dot {
   box-shadow: 0 0 0 calc(2px * var(--mm-marker-inv, 1)) var(--bg-card, #fff),
-              0 0 0 calc(4px * var(--mm-marker-inv, 1)) #126CF2;
+              0 0 0 calc(4px * var(--mm-marker-inv, 1)) var(--focus);
 }
 
 /* Selection bar — "Đã chọn N nhánh · Xóa chọn · Tiếp tục · Hủy", overlaid
@@ -943,10 +943,10 @@ html.dark .me-container { --mm-relation: #7e90c4; }
 .mm-selection-bar { bottom: 64px; max-width: calc(100% - 32px); }
 .mm-selection-bar__hint { color: var(--text-secondary); }
 .mm-selection-bar__badge {
-  padding: 2px 10px; border-radius: 999px; background: #126CF2; color: #fff; font-weight: 600;
+  padding: 2px 10px; border-radius: 999px; background: var(--accent-cta); color: var(--on-primary); font-weight: 600;
 }
 .mm-selection-bar__primary {
-  background: #126CF2 !important; color: #fff !important; font-weight: 600;
+  background: var(--accent-cta) !important; color: var(--on-primary) !important; font-weight: 600;
 }
 .mm-selection-bar__primary:disabled { opacity: .4; }
 /* Narrow screens: full-width bottom bar with the device safe area; legend hides

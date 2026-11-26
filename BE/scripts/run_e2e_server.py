@@ -60,14 +60,66 @@ os.environ.setdefault("GUIDED_MINDMAP_V3_ENABLED", "true")
 os.environ.setdefault("GUIDED_JOB_STORE_BACKEND", "sqlite")
 # Same ephemeral Postgres the rest of CI already uses (backend-integration-and-smoke).
 os.environ.setdefault("DATABASE_URL", "postgresql://postgres:postgres@localhost:5432/studymap_test")
-os.environ.pop("GEMINI_API_KEY", None)
-os.environ.pop("GROQ_API_KEY", None)
-os.environ.pop("FPT_AI_API_KEY", None)
+# Empty, not popped: `load_dotenv` (run when the app is imported) fills every variable
+# that is ABSENT, so a pop let `BE/.env` put the real provider and bucket keys back on a
+# developer's machine. An empty string is present and stays empty (see tests/conftest.py).
+for _name in ("GEMINI_API_KEY", "GROQ_API_KEY", "FPT_AI_API_KEY", "COHERE_API_KEY",
+              "SUPABASE_URL", "SUPABASE_SECRET_KEY"):
+    os.environ[_name] = ""
+# Playwright hands the whole shell environment to this server, so a DATABASE_URL left in
+# the shell wins over the default above. E2E writes accounts, documents and attempts:
+# only a local database named *_test may receive them (Codex task39 191-1). No password
+# is printed.
+from urllib.parse import urlsplit
+_db = urlsplit(os.environ["DATABASE_URL"])
+_db_name = _db.path.lstrip("/")
+if _db.hostname not in {"localhost", "127.0.0.1", "::1"} or not _db_name.endswith("_test"):
+    # Integration of #187 + #191: one refusal contract (exit 2, "DỪNG", no password).
+    print(f"DỪNG: run_e2e_server refusing DATABASE_URL (host={_db.hostname}, "
+          f"database={_db_name}): E2E needs a local database whose name ends in _test",
+          file=sys.stderr)
+    raise SystemExit(2)
+# No .env (integration of #187 + #191: the provider and bucket keys above are emptied,
+# and .env is skipped as well): popping a variable makes it "missing", which is exactly when
+# load_project_env(override=False) in app.main fills it from BE/.env, bringing back a
+# developer's real store paths or provider keys (Codex task39 191-2). CI has no .env.
+os.environ["SKIP_DOTENV"] = "1"
 os.environ.setdefault("QUEUE_ENABLED", "")
 
+# Only a disposable database: the same test-target rule as migrations (loopback or CI
+# host, name ending in `_test`, no query parameter that moves the target). Checked before
+# the app is imported, so a hosted DATABASE_URL left in the shell never gets a connection.
+# Redis and Ollama: kept only when local (the setdefault above cannot replace a remote
+# OLLAMA_HOST already in the shell).
+from shared.migration_guard import (  # noqa: E402
+    CHE_DO_TEST, MigrationTargetRejected, kiem_tra_dich, local_service_or_blank)
+
+local_service_or_blank("REDIS_URL")
+local_service_or_blank("OLLAMA_HOST", fallback="http://127.0.0.1:11434")
+local_service_or_blank("LLM_GATEWAY_ADDR")
+local_service_or_blank("MINDMAP_SERVICE_ADDR")
+
+try:
+    kiem_tra_dich(os.environ["DATABASE_URL"], CHE_DO_TEST, env={})
+except MigrationTargetRejected as _exc:
+    print(f"DỪNG: run_e2e_server only runs against a disposable database: {_exc}",
+          file=sys.stderr)
+    raise SystemExit(2)
+
 import tempfile
-data_dir = os.environ.get("DATA_DIR") or tempfile.mkdtemp(prefix="memvid_e2e_")
+# Every start gets new, empty stores (issue 19, 2026-11-17). A DATA_DIR from the caller
+# is only the PARENT of a fresh directory, never reused as is; every store path is set
+# inside it, overriding the shell and any .env, so a second local run cannot see the
+# first run's maps, and nothing can point this server at real data. Without MEMORY_DIR
+# the map and summary stores fell back to BE/memory/ in the checkout.
+data_dir = tempfile.mkdtemp(prefix="memvid_e2e_", dir=os.environ.get("DATA_DIR") or None)
 os.environ["DATA_DIR"] = data_dir
+for _name, _sub in (("MEMORY_DIR", "memory"), ("INDEX_DIR", "index"),
+                    ("MD_DIR", "cleaned_md"), ("INPUT_DOCS_DIR", "input_docs")):
+    os.environ[_name] = str(Path(data_dir) / _sub)
+for _name in ("MINDMAPS_DB_PATH", "SUMMARIES_DB_PATH", "CONVERSATIONS_DB_PATH",
+              "JOBS_DB_PATH", "LOG_DB_PATH", "USAGE_DB_PATH"):
+    os.environ.pop(_name, None)   # file overrides: each store then derives from the above
 
 FORCE_FAIL_MARKER = os.environ.get("E2E_FORCE_FAIL_MARKER", "__E2E_FORCE_FAIL__")
 # E2E_PRACTICE_AI_STUB defaults off. When enabled it replaces only the
@@ -151,6 +203,13 @@ class MockMindmapGraph:
         return {"result": record, "status_code": 200}
 
 
+# What this process stubbed, and how often the grading stub ran (read by
+# GET /__e2e__/stubs). One process, threads only: a dict is enough.
+E2E_STUBS = {"e2e_server": True, "diagnostic_ai_stub": False,
+             "short_answer_grading_stub": False, "grade_calls": 0,
+             "grading_dispatches": 0, "graded_questions": []}
+
+
 def main() -> None:
     import app.main as be_main  # noqa: E402  (env must be set first, see above)
 
@@ -196,6 +255,82 @@ def main() -> None:
         quiz_generator.generate_questions = _deterministic_practice_questions
         print("[run_e2e_server] deterministic practice AI stub enabled", flush=True)
 
+    # Test-only identity: a spec that needs the stubs checks this first, so Playwright
+    # reusing some other server on the port (a dev backend with real provider keys)
+    # fails the spec instead of calling a real model.
+    @be_main.app.get("/__e2e__/stubs")
+    def _e2e_stubs():
+        from flask import jsonify
+        return jsonify(E2E_STUBS)
+
+    if os.environ.get("E2E_DIAGNOSTIC_AI_STUB", "").strip().lower() in {
+        "1", "true", "yes", "on",
+    }:
+        # Diagnostic quizzes with one multiple-choice and one short-answer question, no
+        # model: the grading-recovery spec (quiz-grading-recovery.spec.js) needs a quiz
+        # whose grading runs in a background job, deterministically.
+        from app.domains.quiz import generator as quiz_generator
+
+        inner_generate_questions = quiz_generator.generate_questions
+
+        def _deterministic_diagnostic_questions(context, config, **kwargs):
+            base = {"explanation": "E2E diagnostic explanation.",
+                    "difficulty": config.get("difficulty") or "easy",
+                    "concept_tags": ["e2e-diagnostic"], "chunk_refs": ["c0"]}
+            if config.get("quiz_type") == "practice":
+                # Practice on the weak topic: one choice + one short answer, so the
+                # practice-regrade spec grades a short answer inside the submit request.
+                return [
+                    {**base, "question_text": "E2E practice choice?",
+                     "question_type": "multiple_choice", "correct_answer": "Correct",
+                     "options": ["Correct", "Wrong", "Distractor", "Alternative"]},
+                    {**base, "question_text": "E2E practice short answer?",
+                     "question_type": "short_answer",
+                     "correct_answer": "A practice model answer."},
+                ], None, 1
+            questions = [
+                {**base, "question_text": "E2E diagnostic choice?",
+                 "question_type": "multiple_choice", "correct_answer": "Correct",
+                 "options": ["Correct", "Wrong", "Distractor", "Alternative"]},
+                {**base, "question_text": "E2E diagnostic short answer?",
+                 "question_type": "short_answer",
+                 "correct_answer": "A deterministic model answer."},
+            ]
+            if int(config.get("question_count") or 2) >= 3:
+                # A second short answer: the provisional-regrade spec proves that only
+                # the answer the model failed on is sent to it again.
+                questions.append({**base, "question_text": "E2E diagnostic short answer 2?",
+                                  "question_type": "short_answer",
+                                  "correct_answer": "A second model answer."})
+            return questions, None, 1
+
+        quiz_generator.generate_questions = _deterministic_diagnostic_questions
+
+        # `_fast_ingest` below writes only the FAISS index, not the `document_chunks`
+        # rows a quiz is built from; seed one real row (FKs point at it) on first use.
+        from app.domains.quiz import repository as quiz_repository
+        inner_chunks_for_scope = quiz_repository.chunks_for_scope
+
+        def _chunks_with_seed(document_id, section_ids=None, *, limit=200):
+            chunks = inner_chunks_for_scope(document_id, section_ids, limit=limit)
+            if chunks or section_ids:
+                return chunks
+            from app.db.models import DocumentChunk
+            from app.db import session_scope
+            from sqlalchemy.dialects.postgresql import insert
+            # Idempotent under concurrent jobs: the loser of the race inserts nothing
+            # (unique (document_id, chunk_index)); an unknown document still fails (FK).
+            with session_scope() as s:
+                s.execute(insert(DocumentChunk).values(
+                    document_id=str(document_id), chunk_index=0,
+                    text="E2E diagnostic source text.", heading="E2E",
+                ).on_conflict_do_nothing(index_elements=["document_id", "chunk_index"]))
+            return inner_chunks_for_scope(document_id, section_ids, limit=limit)
+
+        quiz_repository.chunks_for_scope = _chunks_with_seed
+        E2E_STUBS["diagnostic_ai_stub"] = True
+        print("[run_e2e_server] deterministic diagnostic AI stub enabled", flush=True)
+
     if os.environ.get("E2E_SHORT_ANSWER_GRADING_STUB", "").strip().lower() in {
         "1", "true", "yes", "on",
     }:
@@ -205,24 +340,54 @@ def main() -> None:
 
         real_grade_short_answer = attempt_grading.grade_short_answer
         delay = float(os.environ.get("E2E_SHORT_ANSWER_GRADING_DELAY_SEC", "5"))
+        crash_marker = os.environ.get(
+            "E2E_GRADING_CRASH_MARKER", "__E2E_GRADE_CRASH__")
         fail_marker = os.environ.get(
             "E2E_SHORT_ANSWER_FAIL_MARKER", "__E2E_GRADE_FAIL__")
+        # Fails the model call the first time an answer is graded, succeeds after: a
+        # provider outage that ends. Keyed by the answer text, process-local.
+        fail_once_marker = "__E2E_GRADE_FAIL_ONCE__"
+        failed_once = set()
 
         def _deterministic_short_answer_grade(**kwargs):
+            E2E_STUBS["grade_calls"] += 1
+            E2E_STUBS["graded_questions"].append(str(kwargs.get("question") or ""))
+            answer = str(kwargs.get("user_answer") or "")
+
             def _ask(_prompt, **_ask_kwargs):
                 time.sleep(delay)
-                if fail_marker in str(kwargs.get("user_answer") or ""):
+                if fail_marker in answer:
                     raise RuntimeError("E2E deterministic short-answer grading failure")
+                if fail_once_marker in answer and answer not in failed_once:
+                    failed_once.add(answer)
+                    raise RuntimeError("E2E short-answer grading failure (first time only)")
                 return json.dumps({
                     "verdict": "correct",
                     "feedback": "E2E deterministic short-answer feedback.",
                     "missing_points": [],
                 })
 
+            # The fail marker only fails the model call, which grading survives (the
+            # answer stays ungraded). The crash marker fails the grading job itself, as a
+            # dead worker would: the attempt is left submitted and ungraded ("stalled").
+            if crash_marker in str(kwargs.get("user_answer") or ""):
+                time.sleep(delay)
+                raise RuntimeError("E2E deterministic grading job crash")
             call_kwargs = {**kwargs, "ask": _ask}
             return real_grade_short_answer(**call_kwargs)
 
         attempt_grading.grade_short_answer = _deterministic_short_answer_grade
+
+        # Counted where the submit route hands a job over (synchronous, before its
+        # response), so "nothing regraded" cannot pass while a job is still queued.
+        inner_dispatch_grading = be_main._dispatch_grading
+
+        def _counted_dispatch_grading(*args, **kwargs):
+            E2E_STUBS["grading_dispatches"] += 1
+            return inner_dispatch_grading(*args, **kwargs)
+
+        be_main._dispatch_grading = _counted_dispatch_grading
+        E2E_STUBS["short_answer_grading_stub"] = True
         print("[run_e2e_server] deterministic short-answer grading stub enabled", flush=True)
 
     def _fast_ingest(source_id: str, file_path: str, filename: str):

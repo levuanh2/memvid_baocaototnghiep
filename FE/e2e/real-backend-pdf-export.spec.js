@@ -1,4 +1,5 @@
 import { expect, test } from "@playwright/test";
+import { waitForModeControl } from "../e2e-fixture/workspaceMode.js";
 import { execFileSync } from "node:child_process";
 import fs from "node:fs";
 import path from "node:path";
@@ -105,7 +106,7 @@ async function createRichMap(request, api) {
 
 async function openSeededMap(page, title) {
   await page.goto("/app");
-  await page.getByRole("tablist", { name: "Chế độ Workspace" }).waitFor({ state: "visible" });
+  await waitForModeControl(page);
   const listbox = await openMapLibrary(page);
   await listbox.getByRole("option").filter({ hasText: title }).click();
   await page.locator('[data-nodeid="meROOT"]').waitFor({ state: "visible" });

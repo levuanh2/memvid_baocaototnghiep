@@ -122,7 +122,7 @@ test("mobile: chooser works with the drawer closed and open", async ({ page }) =
   await (await expectOneChooser(page, () => upload.click())).setFiles([]);
   // PR #126 (W1-2) renamed the header trigger "Mở công cụ StudyMap" -> "Mở công cụ học".
   await page.getByRole("button", { name: "Mở công cụ học", exact: true }).click();
-  await page.getByRole("menuitem", { name: /Mở thư mục nguồn/ }).click();
+  await page.getByRole("menuitemcheckbox", { name: "Nguồn" }).click();
   await expect(page.locator(PANEL_UPLOAD)).toBeInViewport();
   await (await expectOneChooser(page, () => page.locator(PANEL_UPLOAD).click())).setFiles([]);
   await page.getByRole("button", { name: "Đóng" }).first().click();
@@ -270,7 +270,7 @@ test("mobile: the closed source drawer is out of the Tab order; closing it retur
   }
   const trigger = page.getByRole("button", { name: "Mở công cụ học", exact: true });
   await trigger.click();
-  await page.getByRole("menuitem", { name: /Mở thư mục nguồn/ }).click();
+  await page.getByRole("menuitemcheckbox", { name: "Nguồn" }).click();
   await expect(drawer).not.toHaveAttribute("inert", "");
   await expect(page.locator(PANEL_UPLOAD)).toBeInViewport();
   const close = drawer.getByRole("button", { name: "Đóng" }).first();

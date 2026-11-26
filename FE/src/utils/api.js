@@ -89,6 +89,8 @@ export async function _appError(res) {
   const err = new Error(body?.error || `HTTP ${res.status}`);
   err.status = res.status;
   err.code = body?.error || `http_${res.status}`;
+  // The whole body, for machine fields next to the message (e.g. `ma`).
+  err.body = body;
   return err;
 }
 

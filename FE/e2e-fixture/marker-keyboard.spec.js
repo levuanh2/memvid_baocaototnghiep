@@ -75,9 +75,16 @@ for (const [w, h] of [[1440, 1024], [1024, 768], [390, 844]]) {
     const ring = await page.evaluate(() => {
       const host = document.activeElement;
       const dot = host.querySelector(".mm-export-check__dot");
-      return { hostOutline: getComputedStyle(host).outlineStyle, dotShadow: getComputedStyle(dot).boxShadow };
+      const probe = document.createElement("span");
+      probe.style.color = "var(--focus)";
+      dot.appendChild(probe);
+      const focus = getComputedStyle(probe).color;
+      probe.remove();
+      return { hostOutline: getComputedStyle(host).outlineStyle, dotShadow: getComputedStyle(dot).boxShadow, focus };
     });
     expect(ring.hostOutline).toBe("none");
-    expect(ring.dotShadow).toContain("rgb(18, 108, 242)");
+    // The outer ring is the V9.3 --focus token (#886100 on the light harness), not the retired blue.
+    expect(ring.focus).toBe("rgb(136, 97, 0)");
+    expect(ring.dotShadow).toContain(ring.focus);
   });
 }

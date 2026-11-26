@@ -53,10 +53,12 @@ export function isDrawerMode(viewportWidth) {
 /**
  * Trạng thái mặc định khi chưa có gì lưu. Màn hẹp thì thu cả hai về gáy: mở sẵn
  * ba cột trên 1024px để lại chưa tới 450px cho khung đọc, tệ hơn là không mở.
+ * Màn rộng: nguồn mở, dẫn chứng đóng (V9.3 P4b, docs/StudyMap-V9.3/06). Bố cục đã
+ * lưu luôn thắng mặc định này.
  */
 export function defaultCollapsed(viewportWidth) {
   const w = Number(viewportWidth) || 0;
-  if (w >= COMFORT_MIN) return { left: false, right: false };
+  if (w >= COMFORT_MIN) return { left: false, right: true };
   return { left: true, right: true };
 }
 
