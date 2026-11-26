@@ -22,7 +22,10 @@ from services.mindmap.export.image_guard import validate_map_image
 
 MAX_HEADING_LEVEL = 9
 
-FONT_NAMES = {"sans": "Calibri", "serif": "Times New Roman"}  # both Vietnamese-diacritic-safe, both ship with Office/LibreOffice defaults — no embedding needed, DOCX stores real UTF-8 text regardless of the nominal font name
+# V9.3 (owner decision 2026-11-26): "sans" names Be Vietnam Pro, the app's UI font. The font is not
+# embedded in the file: Word/Excel/LibreOffice use it when installed and otherwise substitute their
+# default sans; the text stays real UTF-8 either way. "serif" stays Times New Roman.
+FONT_NAMES = {"sans": "Be Vietnam Pro", "serif": "Times New Roman"}  # both Vietnamese-diacritic-safe, both ship with Office/LibreOffice defaults — no embedding needed, DOCX stores real UTF-8 text regardless of the nominal font name
 MARGINS_INCHES = {"narrow": 0.5, "normal": 1.0, "wide": 1.5}
 MONOCHROME_RGB = RGBColor(0x2B, 0x26, 0x20)  # matches FE's mindmapExportAppearance.js MONOCHROME_COLOR
 CUSTOM_PALETTE_RGB = [

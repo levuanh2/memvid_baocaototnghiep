@@ -4422,3 +4422,16 @@ Review follow-ups on #214 (2026-11-25):
 - agy P2: round6-library-action-matrix's "webfont" half checked the retired Inter and skipped at all
   7 widths. It now requires a loaded Be Vietnam Pro 600 (bundled, no third-party outage to excuse a
   skip): 59/59 run, 0 skipped.
+
+## Backend export typography: Be Vietnam Pro for "sans" (V9.3 Task 4, 2026-11-26)
+
+Owner decision: document exports follow the app font. PDF "sans" now embeds the official OFL TTF
+(google/fonts ofl/bevietnampro, BeVietnamPro-Regular v1.002, sha256 cd1ef6e9...; fsType 0, every
+Vietnamese diacritic present; licence in assets/fonts/OFL_BEVIETNAMPRO.txt). DOCX/XLSX "sans" name
+"Be Vietnam Pro" (not embedded: Office/LibreOffice substitute their default sans when it is not
+installed; the text is real UTF-8 either way). "serif" is unchanged (DejaVu Serif / Times New Roman).
+DejaVuSans.ttf stays: two benchmark scripts still load it.
+Measured (200-node outline): PDF sans 446 KiB / 1030 ms -> 107 KiB / 726 ms, same 5 pages, Vietnamese
+text extractable; DOCX unchanged (37 KiB). Regression: tests/test_mindmap_export_fonts_v93.py (red
+3/4 before: font file, PDF embedding + extraction, DOCX/XLSX name); export test set 353/353.
+Gotcha: PyMuPDF reports the embedded basefont with spaces ("DejaVu Serif Book"), compare without them.

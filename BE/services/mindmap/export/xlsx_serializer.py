@@ -20,7 +20,10 @@ from openpyxl.utils import get_column_letter
 
 from .tree import flatten_export_tree
 
-FONT_NAMES = {"sans": "Calibri", "serif": "Times New Roman"}
+# V9.3 (owner decision 2026-11-26): "sans" names Be Vietnam Pro, the app's UI font. The font is not
+# embedded in the file: Word/Excel/LibreOffice use it when installed and otherwise substitute their
+# default sans; the text stays real UTF-8 either way. "serif" stays Times New Roman.
+FONT_NAMES = {"sans": "Be Vietnam Pro", "serif": "Times New Roman"}
 MONOCHROME_HEX = "2B2620"  # matches FE's mindmapExportAppearance.js MONOCHROME_COLOR (no leading #, openpyxl's own convention)
 CUSTOM_PALETTE_HEX = ["126CF2", "8C4DFF", "16A085", "F2353A"]  # matches FE's CUSTOM_PALETTE
 

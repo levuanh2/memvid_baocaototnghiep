@@ -58,11 +58,15 @@ CONTEXT_TEXT_RGB = (0.55, 0.55, 0.55)
 # assets/fonts/LICENSE_DEJAVU), so they're bundled as real repo assets and
 # embedded into the PDF, rather than assuming any font is installed in the
 # production container.
+# V9.3 typography (owner decision 2026-11-26): "sans" is Be Vietnam Pro, the app's UI font, from the
+# official OFL release (google/fonts ofl/bevietnampro, v1.002, sha256 cd1ef6e9...; licence in
+# assets/fonts/OFL_BEVIETNAMPRO.txt). fsType 0 allows embedding, and it covers every Vietnamese
+# diacritic. "serif" stays DejaVu Serif. DejaVuSans.ttf is no longer referenced by the PDF path.
 FONT_FILES = {
-    "sans": BE_ROOT / "assets" / "fonts" / "DejaVuSans.ttf",
+    "sans": BE_ROOT / "assets" / "fonts" / "BeVietnamPro-Regular.ttf",
     "serif": BE_ROOT / "assets" / "fonts" / "DejaVuSerif.ttf",
 }
-FONT_ALIASES = {"sans": "dejavu-sans", "serif": "dejavu-serif"}
+FONT_ALIASES = {"sans": "bevietnampro", "serif": "dejavu-serif"}
 
 # PR H2 -- when a geometry manifest is present and the overview alone can't
 # hit this readability target, overview+detail tiling kicks in. Region-code
