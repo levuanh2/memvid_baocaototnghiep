@@ -163,6 +163,30 @@ test("the scroll position survives leaving the Library and coming back", async (
   await expect.poll(() => page.evaluate(() => window.scrollY)).toBeGreaterThan(800);
 });
 
+// V9.3 Task 5 root cause of the CI flake above (run 45416413978 trace: goto("/app") 10ms after
+// scrollTo, scrollY 0 after Back for 10s). The position was saved only from "scroll" events, which
+// fire on the next rendering frame, and on React unmount, which a full-page navigation never runs.
+// Leaving before that frame kept the stale 0. Deterministic here: "scroll" listeners are delayed
+// past the navigation (the CI timing), and the browser's own scroll restoration is off, so only the
+// app's guarantee is under test.
+test("the Library keeps its position when the page is left before the scroll event fires", async ({ page }) => {
+  await page.addInitScript(() => {
+    history.scrollRestoration = "manual";
+    const add = window.addEventListener.bind(window);
+    window.addEventListener = (type, fn, opts) => (type === "scroll"
+      ? add(type, (e) => setTimeout(() => fn(e), 500), opts)
+      : add(type, fn, opts));
+  });
+  await openLibrary(page, { width: 1024 });
+  await page.setViewportSize({ width: 1024, height: 500 });
+  await page.evaluate(() => window.scrollTo({ top: 900 }));
+  await expect.poll(() => page.evaluate(() => window.scrollY)).toBeGreaterThan(800);
+  await page.goto("/app");
+  await page.goBack();
+  await expect(page.locator(".study-card").first()).toBeVisible();
+  await expect.poll(() => page.evaluate(() => window.scrollY)).toBeGreaterThan(800);
+});
+
 for (const width of [320, 390, 768, 1024, 1440]) {
   for (const dark of [false, true]) {
     test(`${width}px ${dark ? "dark" : "light"}: views and cards stay inside the viewport`, async ({ page }) => {

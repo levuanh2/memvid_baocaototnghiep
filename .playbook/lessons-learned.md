@@ -4422,3 +4422,21 @@ Review follow-ups on #214 (2026-11-25):
 - agy P2: round6-library-action-matrix's "webfont" half checked the retired Inter and skipped at all
   7 widths. It now requires a loaded Be Vietnam Pro 600 (bundled, no third-party outage to excuse a
   skip): 59/59 run, 0 skipped.
+
+## Library scroll restoration flake: root cause found in a CI trace (V9.3 Task 5, 2026-11-26)
+
+Symptom: library-one-list.spec.js "scroll position survives" failed only in CI (run 45416413978:
+scrollY 0 after Back for 10 s). Five local hypotheses had been ruled out (see "Three flaky fixture
+tests" above), and 60 runs under load passed locally.
+Evidence: the CI trace (artifact playwright-fixture-report) shows goto("/app") 10 ms after
+scrollTo(900). Root cause, product bug: DocumentList saved the position only from "scroll" events,
+which fire on the next rendering frame, and in the effect cleanup, which a full-page navigation never
+runs. Leaving before that frame (a fast click/keyboard navigation, a loaded CI runner) kept the stale
+0, and Chromium's own restoration did not cover it either. Locally the old page always rendered one
+more frame before the navigation committed, so the scroll event fired in time.
+Fix: both Library save effects also save on `pagehide`, which always runs before the page is left.
+Regression: "the Library keeps its position when the page is left before the scroll event fires"
+(scroll listeners delayed past the navigation, native restoration off): red (scrollY 0, the CI
+number) before, green after; library-one-list x3 = 57/57.
+Prevention: state that must survive leaving a page is saved on pagehide too, never only from
+frame-driven events or React cleanup. When a flake only reproduces in CI, read its trace first.

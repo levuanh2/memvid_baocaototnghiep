@@ -351,8 +351,11 @@ export default function DocumentList() {
       }));
     } catch { /* storage unavailable */ } };
     save();
+    // "scroll" fires a frame after the scroll and React never unmounts on a full-page navigation:
+    // also save on pagehide, which always runs before the page is left (V9.3 Task 5).
     window.addEventListener("scroll", save, { passive: true });
-    return () => { save(); window.removeEventListener("scroll", save); };
+    window.addEventListener("pagehide", save);
+    return () => { save(); window.removeEventListener("scroll", save); window.removeEventListener("pagehide", save); };
   }, [matrixStorageKey, taskView, truyVan, cheDoSap, chonBoSuuTap, chonThe, boLoc, hienLuuTru]);
 
   useEffect(() => {
@@ -371,8 +374,11 @@ export default function DocumentList() {
       catch { /* storage unavailable */ }
     };
     save();
+    // V9.3 Task 5 (CI flake root cause): a full-page navigation within the frame after a scroll left
+    // a stale scrollY, because "scroll" had not fired yet and no unmount runs. pagehide always does.
     window.addEventListener("scroll", save, { passive: true });
-    return () => { save(); window.removeEventListener("scroll", save); };
+    window.addEventListener("pagehide", save);
+    return () => { save(); window.removeEventListener("scroll", save); window.removeEventListener("pagehide", save); };
   }, [user?.id, nhom, truyVan]);
 
   useEffect(() => {
