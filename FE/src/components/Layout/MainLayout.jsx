@@ -51,11 +51,20 @@ const MODE_HINT_KEY = "studymap.hint.modes.v1";
 // Owner decision (2026-11-25): it shows on at most 3 visits where it is on screen, then stops.
 const MODE_HINT_VISITS_KEY = "studymap.hint.modes.v1.visits";
 const MODE_HINT_MAX_VISITS = 3;
-const modeHintSeen = () => {
+// The stored count is trusted only as a plain non-negative integer, capped at the maximum: a
+// corrupted value ("abc", "-2", "1.5", "Infinity") counts as 0 and is rewritten on the next visit
+// instead of keeping the note forever (V9.3 Task 6B). Each key is read on its own, so one blocked
+// key does not hide the other.
+const readModeHintVisits = () => {
   try {
-    return localStorage.getItem(MODE_HINT_KEY) === "1"
-      || Number(localStorage.getItem(MODE_HINT_VISITS_KEY) || 0) >= MODE_HINT_MAX_VISITS;
-  } catch { return false; }
+    const raw = localStorage.getItem(MODE_HINT_VISITS_KEY);
+    return /^\d+$/.test(raw ?? "") ? Math.min(Number(raw), MODE_HINT_MAX_VISITS) : 0;
+  } catch { return 0; }
+};
+const modeHintSeen = () => {
+  let dismissed = false;
+  try { dismissed = localStorage.getItem(MODE_HINT_KEY) === "1"; } catch { /* treat as not seen */ }
+  return dismissed || readModeHintVisits() >= MODE_HINT_MAX_VISITS;
 };
 
 const MODE_TABS = [
@@ -831,10 +840,9 @@ export default function MainLayout({
     if (!showModeHint || modeHintCounted.current) return;
     if (!window.matchMedia?.("(max-width: 1599px)").matches) return;
     modeHintCounted.current = true;
-    try {
-      const visits = Number(localStorage.getItem(MODE_HINT_VISITS_KEY) || 0) + 1;
-      localStorage.setItem(MODE_HINT_VISITS_KEY, String(visits));
-    } catch { /* blocked storage: the note may come back next visit */ }
+    const visits = readModeHintVisits();
+    if (visits >= MODE_HINT_MAX_VISITS) return;
+    try { localStorage.setItem(MODE_HINT_VISITS_KEY, String(visits + 1)); } catch { /* blocked: may come back next visit */ }
   }, [showModeHint, viewportWidth]);
 
   return (

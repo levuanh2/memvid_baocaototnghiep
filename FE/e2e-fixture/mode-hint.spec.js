@@ -8,18 +8,23 @@ const API = /localhost:8080\//;
 const KEY = "studymap.hint.modes.v1";
 const json = (body) => ({ status: 200, contentType: "application/json", body: JSON.stringify(body) });
 
-async function openApp(page, { width, dark = false, blockStorage = false, seen = false, path = "/app" } = {}) {
+async function openApp(page, { width, dark = false, blockStorage = false, blockKeys = null, seen = false, preset = {}, path = "/app" } = {}) {
   await page.setViewportSize({ width, height: 900 });
-  await page.addInitScript(({ block, key, wasSeen }) => {
+  // `preset` is written once (first document load only), so reloads keep what the app stored.
+  await page.addInitScript(({ blocked, key, wasSeen, values }) => {
     localStorage.setItem("memvid-token", "fixture-token");
-    if (wasSeen) localStorage.setItem(key, "1");
-    if (block) {
+    if (!sessionStorage.getItem("__preset")) {
+      sessionStorage.setItem("__preset", "1");
+      if (wasSeen) localStorage.setItem(key, "1");
+      for (const [k, v] of Object.entries(values)) localStorage.setItem(k, v);
+    }
+    if (blocked.length) {
       const realGet = Storage.prototype.getItem;
       const realSet = Storage.prototype.setItem;
-      Storage.prototype.getItem = function (k) { if (k === key) throw new DOMException("blocked", "SecurityError"); return realGet.call(this, k); };
-      Storage.prototype.setItem = function (k, v) { if (k === key) throw new DOMException("blocked", "SecurityError"); return realSet.call(this, k, v); };
+      Storage.prototype.getItem = function (k) { if (blocked.includes(k)) throw new DOMException("blocked", "SecurityError"); return realGet.call(this, k); };
+      Storage.prototype.setItem = function (k, v) { if (blocked.includes(k)) throw new DOMException("blocked", "SecurityError"); return realSet.call(this, k, v); };
     }
-  }, { block: blockStorage, key: KEY, wasSeen: seen });
+  }, { blocked: blockKeys || (blockStorage ? [KEY] : []), key: KEY, wasSeen: seen, values: preset });
   const requests = [];
   page.on("request", (r) => { if (API.test(r.url())) requests.push(`${r.method()} ${new URL(r.url()).pathname}`); });
   await page.route(API, (route) => {
@@ -208,4 +213,57 @@ test("opening straight into Mind Map shows no note over its toolbar row, and tha
   await expect(page.locator('nav[role="tablist"] [role="tab"][title="Sơ đồ tư duy"]')).toHaveAttribute("aria-selected", "true");
   await expect(hint(page)).toHaveCount(0);
   expect(await page.evaluate((k) => localStorage.getItem(`${k}.visits`), KEY)).toBeNull();
+});
+
+// V9.3 Task 6B (agy review of #213, P3): stored state must be robust. A corrupted or out-of-range
+// visit count must not keep the note forever, a learner who has seen it must not keep writing the
+// counter, and either key may be blocked on its own.
+const VISITS = `${KEY}.visits`;
+const visitsUntilGone = async (page) => {
+  let shown = 0;
+  for (let visit = 1; visit <= 6; visit += 1) {
+    if (visit > 1) { await page.reload(); await waitForModeControl(page); }
+    await page.waitForTimeout(150);
+    if (await hint(page).count()) shown += 1; else break;
+  }
+  return shown;
+};
+
+for (const bad of ["abc", "-2", "NaN", "1.5", " ", "Infinity"]) {
+  // A corrupted count is read as 0 (independent review of #216, P3: "at most three" also passed a
+  // note that never showed): the note shows on exactly three visits and the counter ends at "3".
+  test(`a corrupted visit count (${JSON.stringify(bad)}) counts as zero: three visits, then it ends`, async ({ page }) => {
+    await openApp(page, { width: 1366, preset: { [VISITS]: bad } });
+    expect(await visitsUntilGone(page)).toBe(3);
+    expect(await page.evaluate((k) => localStorage.getItem(k), VISITS)).toBe("3");
+  });
+}
+
+test("the visit count never goes past three, and stops being written once the note is done", async ({ page }) => {
+  await openApp(page, { width: 1366 });
+  expect(await visitsUntilGone(page)).toBe(3);
+  for (let i = 0; i < 3; i += 1) { await page.reload(); await waitForModeControl(page); }
+  expect(await page.evaluate((k) => localStorage.getItem(k), VISITS)).toBe("3");
+});
+
+test("'Đã hiểu' ends it with no further visit writes", async ({ page }) => {
+  await openApp(page, { width: 1366 });
+  await page.getByRole("button", { name: "Đã hiểu" }).click();
+  const before = await page.evaluate((k) => localStorage.getItem(k), VISITS);
+  for (let i = 0; i < 2; i += 1) { await page.reload(); await waitForModeControl(page); }
+  await expect(hint(page)).toHaveCount(0);
+  expect(await page.evaluate((k) => localStorage.getItem(k), VISITS)).toBe(before);
+});
+
+test("a blocked visit counter alone: the note still shows and 'Đã hiểu' still ends it", async ({ page }) => {
+  const errors = [];
+  page.on("pageerror", (e) => errors.push(e.message));
+  await openApp(page, { width: 1366, blockKeys: [VISITS] });
+  await expect(hint(page)).toBeVisible();
+  await page.getByRole("button", { name: "Đã hiểu" }).click();
+  await expect(hint(page)).toHaveCount(0);
+  await page.reload();
+  await waitForModeControl(page);
+  await expect(hint(page)).toHaveCount(0);
+  expect(errors).toEqual([]);
 });
