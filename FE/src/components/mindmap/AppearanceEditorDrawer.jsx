@@ -69,7 +69,11 @@ export default function AppearanceEditorDrawer({ open, onClose, mind, mapId, sav
   };
   const handleReset = () => pushDraft(defaultAppearanceV2());
   const handlePreset = (preset) => pushDraft({ ...draft, preset });
+  // Synchronous lock: two clicks before `saving` commits would send two competing PATCHes.
+  const savingRef = useRef(false);
   const handleApply = async () => {
+    if (savingRef.current) return;
+    savingRef.current = true;
     setSaving(true);
     setError(null);
     try {
@@ -83,6 +87,7 @@ export default function AppearanceEditorDrawer({ open, onClose, mind, mapId, sav
       setDraft(savedAppearance || defaultAppearanceV2());
       setError(e?.message || "Không lưu được giao diện.");
     } finally {
+      savingRef.current = false;
       setSaving(false);
     }
   };

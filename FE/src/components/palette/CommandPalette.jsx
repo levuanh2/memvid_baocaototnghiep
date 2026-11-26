@@ -8,7 +8,7 @@ import { useOpenSurface } from "../../study/useOpenSurface";
 import AdvancedSearchPanel from "./AdvancedSearchPanel";
 import { getLibrary } from "../../utils/studyApi";
 import { OPEN_EVENT } from "../../utils/commandPaletteBus";
-import { tenHienThi, sapXep } from "../../utils/thuVienTaiLieu";
+import { tenHienThi, ganNhatCoTheTiepTuc } from "../../utils/thuVienTaiLieu";
 import { tiepTucHoc } from "../../utils/tiepTucHoc";
 import { timKiemToanCuc } from "../../utils/paletteSearch";
 import { phimBang } from "../../utils/paletteKeyboard";
@@ -36,7 +36,7 @@ const DANH_SACH_LENH = [
   { id: "tao-bo-suu-tap", nhan: "Tạo bộ sưu tập", icon: "FolderOpen", moTa: "Mở Thư viện học tập để tạo" },
   { id: "tiep-tuc-hoc", nhan: "Tiếp tục học", icon: "ArrowRight", moTa: "Về đúng chỗ tài liệu gần nhất đang dở" },
   { id: "mo-gia-su", nhan: "Mở Gia sư AI", icon: "Sparkles", moTa: "Mở Workspace với Gia sư AI (Ctrl+/)" },
-  { id: "mo-phan-tich", nhan: "Xem phân tích học tập", icon: "TrendingDown", moTa: "Mở Thư viện học tập — mục Tổng quan học tập" },
+  { id: "mo-phan-tich", nhan: "Xem phân tích học tập", icon: "TrendingDown", moTa: "Mở trang Tổng quan: học tiếp, kết quả luyện tập, khái niệm cần củng cố" },
   // Feature Pack C (Keyboard-first Research Workspace) — mục 7 (Discoverability):
   // "?" mở overlay này từ trong Workspace; đây là đường vào THỨ HAI từ palette,
   // đúng yêu cầu "mở từ ? hoặc Command Palette" — cùng MỘT overlay, không có
@@ -283,9 +283,11 @@ export default function CommandPalette() {
   const chayLenh = useCallback((lenh) => {
     luuLichSu(themLenh(lichSu, lenh.id, lenh.nhan));
     switch (lenh.id) {
+      case "mo-phan-tich":
+        navigate("/app/study/dashboard");
+        break;
       case "tai-len":
       case "tao-bo-suu-tap":
-      case "mo-phan-tich":
         navigate("/app/study");
         break;
       case "mo-gia-su":
@@ -293,7 +295,7 @@ export default function CommandPalette() {
         navigate("/app", { state: { openTutor: Date.now() } });
         break;
       case "tiep-tuc-hoc": {
-        const gioiHan = sapXep(documents.filter((d) => d.last_opened_at), "recently_opened")[0];
+        const gioiHan = ganNhatCoTheTiepTuc(documents);
         if (!gioiHan) { navigate("/app/study"); break; }
         const resume = tiepTucHoc(gioiHan);
         moTheoDoi(gioiHan, resume?.beMat || gioiHan.last_workspace || "studymap");

@@ -1,5 +1,6 @@
 import { test, expect } from "@playwright/test";
 import { registerAndEnterApp } from "./fixtures.js";
+import { MODE_SELECT, chooseMode, waitForModeControl } from "../e2e-fixture/workspaceMode.js";
 
 test.describe("workspace study-library navigation", () => {
   test("keeps the learning library reachable across desktop, keyboard, history, and mobile", async ({ page }) => {
@@ -20,8 +21,9 @@ test.describe("workspace study-library navigation", () => {
     await expect(library).toBeFocused();
 
     // A real navigation round trip returns to the same workspace mode.
-    const mindmapTab = page.getByRole("tab", { name: "Sơ đồ tư duy" });
-    await mindmapTab.click();
+    // 1440px is in the select band (tabs from 1600px).
+    const mindmapTab = page.locator('nav[role="tablist"] [role="tab"][title="Sơ đồ tư duy"]');
+    await chooseMode(page, "Sơ đồ tư duy");
     await expect(mindmapTab).toHaveAttribute("aria-selected", "true");
 
     await library.click();
@@ -29,9 +31,10 @@ test.describe("workspace study-library navigation", () => {
     await expect(page.getByRole("heading", { name: "Thư viện học tập" })).toBeVisible();
 
     await page.goBack();
-    await expect(page.getByRole("tablist", { name: "Chế độ Workspace" })).toBeVisible();
-    await expect(page.getByRole("tab", { name: "Sơ đồ tư duy" })).toHaveAttribute("aria-selected", "true");
-    await expect(page.getByRole("tab")).toHaveCount(3);
+    await waitForModeControl(page);
+    await expect(page.locator(MODE_SELECT)).toHaveValue("mindmap");
+    await expect(mindmapTab).toHaveAttribute("aria-selected", "true");
+    await expect(page.locator('nav[role="tablist"] [role="tab"]')).toHaveCount(5); // V9.3 P5a "Đọc nguồn" + P5b "Ghi chú"
 
     // Narrow screens retain a separate, hit-testable library entry point.
     await page.setViewportSize({ width: 390, height: 844 });

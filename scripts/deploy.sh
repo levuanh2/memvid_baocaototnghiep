@@ -152,7 +152,15 @@ if [ -n "$DEPLOY_SHA" ]; then
   require_current_main "before migration"
 fi
 log "step 5/7: running database migration (scripts.run_migrations — the sanctioned production entry point)"
-compose run --rm -e ALEMBIC_ALLOW_PRODUCTION=1 backend python -m scripts.run_migrations --moi-truong production
+compose_migration backend python -m scripts.run_migrations --moi-truong production
+
+# `alembic upgrade head` exiting 0 only proves the revision was stamped. Prove the schema
+# from the catalogs before the new backend starts; read-only, never repairs anything. On
+# failure the old containers keep serving (nothing below runs) and the deploy fails.
+log "step 5b/7: verifying the database schema (scripts.verify_db_schema, read-only)"
+if ! compose_migration backend python -m scripts.verify_db_schema --moi-truong production; then
+  die "database verification failed after migration — new backend NOT started; the running one was left as is. Do not downgrade; follow docs/RUNBOOK_SUBMIT_KEY_INDEX.md"
+fi
 
 log "step 6/7: starting backend"
 if [ -n "$DEPLOY_SHA" ]; then

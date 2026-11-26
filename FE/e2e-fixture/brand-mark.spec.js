@@ -51,9 +51,18 @@ for (const width of [320, 390, 768, 1024, 1440]) {
       const link = await home.boundingBox();
       expect(link.height).toBeGreaterThanOrEqual(40);
       expect(link.width).toBeGreaterThanOrEqual(40);
-      // The tile follows the theme: #F1333A (light) / #D86A53 (dark).
-      const fill = await home.locator("[data-brand-mark] rect").evaluate((el) => getComputedStyle(el).fill);
-      expect(fill).toBe(dark ? "rgb(216, 106, 83)" : "rgb(241, 51, 58)");
+      // The tile follows the theme's --brand token. V9.3 (P1a, index.css) sets --brand to
+      // #F4C44E in both themes; the retired #F1333A / #D86A53 seal colours must not come back.
+      const { fill, brand } = await home.locator("[data-brand-mark] rect").evaluate((el) => {
+        const probe = document.createElement("span");
+        probe.style.color = "var(--brand)";
+        el.closest("a").appendChild(probe);
+        const brand = getComputedStyle(probe).color;
+        probe.remove();
+        return { fill: getComputedStyle(el).fill, brand };
+      });
+      expect(fill).toBe(brand);
+      expect(fill).toBe("rgb(244, 196, 78)");
       await page.screenshot({ path: path.join(OUT, `app-${tag}.png`), clip: { x: 0, y: 0, width, height: 56 } });
     });
   }

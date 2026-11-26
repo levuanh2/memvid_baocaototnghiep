@@ -20,14 +20,18 @@ import Landing from "./pages/Landing";
 const CommandPalette = lazy(() => import("./components/palette/CommandPalette"));
 const Login = lazy(() => import("./pages/Login"));
 const Register = lazy(() => import("./pages/Register"));
+// V9.3 P2c: labelled preview, public, never part of sign-in (owner D3).
+const Onboarding = lazy(() => import("./pages/Onboarding"));
 const Workspace = lazy(() => import("./pages/Workspace"));
 const DocumentList = lazy(() => import("./pages/study/DocumentList"));
+const Dashboard = lazy(() => import("./pages/study/Dashboard"));
 const StudyMapView = lazy(() => import("./pages/study/StudyMapView"));
 const QuizSetup = lazy(() => import("./pages/study/QuizSetup"));
 const QuizTaking = lazy(() => import("./pages/study/QuizTaking"));
 const QuizResult = lazy(() => import("./pages/study/QuizResult"));
 const ReviewGuide = lazy(() => import("./pages/study/ReviewGuide"));
 const Practice = lazy(() => import("./pages/study/Practice"));
+const LearningProgress = lazy(() => import("./pages/study/LearningProgress"));
 const ProfilePage = lazy(() => import("./pages/ProfilePage"));
 
 /** Cùng một khung tải cho mọi lần đổi route lazy — một dòng, không layout
@@ -60,6 +64,7 @@ export default function App() {
         <Route path="/" element={<Landing />} />
         <Route path="/login" element={<Login />} />
         <Route path="/register" element={<Register />} />
+        <Route path="/onboarding" element={<Onboarding />} />
         <Route
           path="/app"
           element={
@@ -71,12 +76,14 @@ export default function App() {
         <Route path="/app/chat" element={<Navigate to="/app" replace />} />
         {/* StudyMap — dữ liệu học tập là dữ liệu cá nhân, mọi trang đều sau ProtectedRoute. */}
         <Route path="/app/study" element={<ProtectedRoute><DocumentList /></ProtectedRoute>} />
+        <Route path="/app/study/dashboard" element={<ProtectedRoute><Dashboard /></ProtectedRoute>} />
         <Route path="/app/study/map/:documentId" element={<ProtectedRoute><StudyMapView /></ProtectedRoute>} />
         <Route path="/app/study/quiz/new" element={<ProtectedRoute><QuizSetup /></ProtectedRoute>} />
         <Route path="/app/study/quiz/:quizId" element={<ProtectedRoute><QuizTaking /></ProtectedRoute>} />
         <Route path="/app/study/result/:attemptId" element={<ProtectedRoute><QuizResult /></ProtectedRoute>} />
         <Route path="/app/study/review/:attemptId" element={<ProtectedRoute><ReviewGuide /></ProtectedRoute>} />
         <Route path="/app/study/practice/:quizId" element={<ProtectedRoute><Practice /></ProtectedRoute>} />
+        <Route path="/app/study/progress" element={<ProtectedRoute><LearningProgress /></ProtectedRoute>} />
         <Route path="/app/profile" element={<ProtectedRoute><ProfilePage /></ProtectedRoute>} />
         <Route path="*" element={<Navigate to="/" replace />} />
       </Routes>

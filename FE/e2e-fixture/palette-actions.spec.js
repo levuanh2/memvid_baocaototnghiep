@@ -1,6 +1,7 @@
 // V4.1 W3-1: Command Palette actions do what their label says, also when the
 // Workspace is already open. Real app on the Vite dev server, API mocked.
 import { test, expect } from "@playwright/test";
+import { waitForModeControl } from "./workspaceMode.js";
 
 const json = (body) => ({ status: 200, contentType: "application/json", body: JSON.stringify(body) });
 const DOC = {
@@ -23,7 +24,7 @@ async function openWorkspace(page) {
     return route.fulfill(json({}));
   });
   await page.goto("/app");
-  await expect(page.locator('nav[aria-label="Chế độ Workspace"]')).toBeVisible();
+  await waitForModeControl(page);
 }
 
 const palette = (page) => page.getByRole("combobox", { name: "Tìm kiếm toàn cục" }).or(page.getByLabel("Tìm kiếm toàn cục")).first();

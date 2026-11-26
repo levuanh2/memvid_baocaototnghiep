@@ -89,7 +89,7 @@ describe("Export Studio UX v2", () => {
     expect(pngPreset.getAttribute("aria-pressed")).toBe("true");
     expect(dialog.textContent).not.toContain("Đã xuất:");
 
-    await click([...dialog.querySelectorAll("button")].find((button) => button.textContent === "Sans (Inter)"));
+    await click([...dialog.querySelectorAll("button")].find((button) => button.textContent === "Be Vietnam Pro"));
     expect(dialog.textContent).toContain("Tùy chỉnh");
   });
 

@@ -8120,3 +8120,1266 @@ off-screen button then matches the same role+name as the visible CTA.
 **Prevention:** hiding by transform, width, opacity or pointer-events is visual only; anything
 that stays mounted while hidden needs `inert`. Label tests should match the bare text, not one
 quoting style.
+
+### The app said "no documents" before it knew, and for as long as the source panel was collapsed (V6, 2026-11-11)
+
+**Seen on the live site:** an account with 4 documents opened `/app` and got "0 tài liệu", "Chưa có tài liệu nào" and the chat's "Tải tài liệu đầu tiên lên" call to action until `/list-indexed` answered (several seconds).
+
+**Root cause:** two states were drawn as one. `sources.length === 0` meant both "the list answered and is empty" and "the list has not answered". Separately, only `SidebarLeft` fetched `/list-indexed`, and a collapsed desktop panel renders `PanelSpine` instead of `SidebarLeft`, so with a collapsed panel nothing fetched at all: the spine had no count and the chat kept offering a first upload.
+
+**Fix:** `MainLayout` keeps `sourcesState` ("loading" / "ready" / "error"), set by `SidebarLeft` through `onSourcesSettled`. The panel shows "Đang tải danh sách tài liệu…" until the first answer; the chat shows the same line (or the load error) and offers the first-upload action only when the state is "ready" and the list is empty. While the panel is collapsed and the list is still unknown, `MainLayout` fetches `/list-indexed` once.
+
+**Regression:** `FE/e2e-fixture/source-loading-state.spec.js` (slow list, empty list, collapsed panel, failed list). Red before the fix: 3 of 4.
+
+**Not changed:** `SidebarLeft` still owns the list after it mounts; a failed load still keeps the previous rows.
+
+### Upload finishing after the source panel was gone started an orphan poller; Escape dropped focus (V6 bug hunt #2, #15, 2026-11-12)
+
+**Symptoms.** (a) Start an upload, then collapse the source panel or cross 768px / 1280px before
+`POST /upload` answers: the late answer created a status poller no cleanup owned and called
+setters on the dead panel; a finished source's 500 ms list refresh also fired after unmount.
+(b) Escape in the advanced-filter popover or in a source's menu removed the focused element
+and focus fell to `<body>`.
+
+**Root causes.** (a) The unmount cleanup in `SidebarLeft.jsx` stops pollers that exist at that
+moment; `handleAddFiles` created its poller after an await without asking whether the panel
+was still mounted, and the refresh `setTimeout` was never stored. (b) The Escape handlers
+only closed the surface; neither kept a ref to its trigger.
+
+**Fix.** (a) `conSongRef` (from the W1 fix) is checked after each await in the upload loop; the
+poller is never created for an unmounted panel; the refresh timer lives in a ref and is cleared
+on unmount. A file the server accepted after unmount is still remembered with `nhoNguon`, and
+the rest of a multi-file batch still uploads: the first version of this fix returned early and
+lost both. (b) Refs to the filter trigger and to each source's menu trigger; Escape closes and
+focuses the trigger. Written by Codex in a shared worktree; the remember/continue part was
+added in review.
+
+**Regression tests.** `SidebarLeft.orphanUploadPoller.test.jsx` (2) and
+`SidebarLeft.popoverFocus.test.jsx` (2); all four failed before the fix.
+
+**Not covered.** Outside-click and the explicit close button keep their old focus behaviour.
+The upload request is not aborted on unmount (on purpose: the file should still arrive).
+
+**Prevention.** "Stop when unmounted" is right for state and pollers, wrong for work the user
+asked for. Split the two: drop the UI effects, keep the durable ones.
+### Five actions could run twice from one double click (V6 bug hunt #5, #6, #8, #9, #10; fixed 2026-11-11)
+
+**Where:** "Luyện ngay" (`ReviewGuide.jsx`), "Nộp bài luyện tập" (`Practice.jsx`), "Dựng sơ đồ kiến thức" and image export (`StudyMapView.jsx`), "Áp dụng" (`AppearanceEditorDrawer.jsx`).
+
+**Root cause:** each handler was guarded only by React state (`disabled={submitting}`, `if (practiceFor) return`). State commits after the event, so two activations in the same tick both saw the old value and both called the API: two practice jobs for one LLM slot, a practice graded twice, two generation jobs, two downloads, two competing PATCH requests.
+
+**Fix:** a ref set before the first `await` and cleared in `finally`, the pattern `QuizTaking` and `QuizSetup` already use.
+
+**Regression:** double-click tests in `Practice.percentUnits.test.jsx`, `ReviewGuide.practiceCustomize.test.jsx`, `AppearanceEditorDrawer.test.jsx` (each fails without its guard). The two `StudyMapView` guards have no test of their own.
+
+**Also fixed (review):** a practice job that finished without a `quiz_id` left `practiceFor` set, so every practice button stayed disabled until a reload. `onDone` now reports the error and unlocks (`ReviewGuide.practiceJobWithoutQuiz.test.jsx`).
+
+**Not changed:** the backend still accepts duplicate requests; these mutations are not idempotent server-side.
+### Guided Mind Map dialog test failed when its two tests ran in reverse order (2026-11-13)
+
+**Symptoms:** `SidebarRight.guidedDialogClose.test.jsx` "stays open while the create request is in
+flight (queued path)" failed with `expected <form role="dialog" …> to be falsy` under
+`--sequence.shuffle` (full suite seeds 61201 and 61202; the file alone with seed 61201). Unshuffled
+order and seeds 1 and 2 passed. CI does not shuffle, so CI never saw it.
+
+**Root cause:** the test created a React root per test but never unmounted it; `afterEach` only
+removed `container`. `GuidedMindmapDialog` portals onto `document.body`, so detaching `container`
+leaves the dialog mounted. When the failure test runs first, its dialog stays open (by design), and
+the queued test's `document.body.querySelector('[role="dialog"]')` then finds that stale dialog.
+
+**Fix:** keep the root in a module variable and `act(() => root.unmount())` in `afterEach`.
+
+**Regression:** the same file with `--sequence.shuffle --sequence.seed=61201` (red before, green
+after; seeds 61202, 1, 2 and unshuffled also green).
+
+**Prevention:** a test that mounts a component which portals to `document.body` must unmount its
+root; removing the container is not cleanup.
+## Dev and test runs could still reach a hosted database or bucket (fixed 2026-11-16)
+
+**Symptom:** none observed; found by a read-only audit after the owner learned that the
+local `BE/.env` and root `.env` point the database and Storage at one Supabase project
+(whether EC2 production uses the same project is not yet checked).
+
+**Root cause:** four paths kept a way out after the 2026-09-04/05 fixes:
+- pytest compared `TEST_DATABASE_URL` with `DATABASE_URL` only by (host, db), so a hosted
+  database under another host name (direct `db.<ref>` host vs pooler) or with
+  `DATABASE_URL` absent passed. Migrations already required a loopback/CI host and a
+  `_test` name; pytest did not.
+- `guided_store.dsn()` fell back to `DATABASE_URL` with no pytest check. It is used when
+  `AUTH_PROTECT_APP_APIS=true` (set in the root `.env` on the developer machine) or
+  `GUIDED_JOB_STORE_BACKEND=postgres`.
+- `SUPABASE_URL`/`SUPABASE_SECRET_KEY` from `BE/.env` reached the test process, so an
+  upload through the `client` fixture wrote to the real bucket.
+- `scripts/run_e2e_server.py` (local Playwright) popped provider keys, which
+  `load_dotenv` refills from `BE/.env`, kept the bucket keys, and accepted any
+  `DATABASE_URL` from the shell.
+
+**Fix:** `app.db.kiem_dich_test()` applies `migration_guard.kiem_tra_dich` (test mode) to
+`TEST_DATABASE_URL` and, under pytest, to `JOBS_DATABASE_URL`; `guided_store.dsn()` never
+uses `DATABASE_URL` under pytest. `conftest.py` blanks the bucket keys at session start
+(the FPT/QUEUE pattern). `run_e2e_server.py` blanks provider and bucket keys and refuses a
+non-disposable `DATABASE_URL` (exit 2) before importing the app.
+`scripts/db_target_fingerprint.py` lets the owner compare EC2 with a dev machine by
+fingerprint only.
+
+**Regression:** `tests/test_devtest_isolation.py` (10 red on `main` `db005ab` with a fake
+dev `.env` using `.invalid` hosts); `test_db_isolation.py` hosted `_test` case now refused.
+
+**Follow-up the same day (Codex review of #187):** the raw-URL check could be bypassed:
+libpq/psycopg let query parameters (`host`, `hostaddr`, `dbname`, `service`, ...) replace the
+authority and path, so `127.0.0.1/x_test?host=<hosted>&dbname=postgres` passed the guard
+and SQLAlchemy connected to the hosted server (reproduced offline with
+`PGDialect_psycopg.create_connect_args`, no socket). The fingerprint helper hashed the same
+misleading authority. Also left open: `REDIS_URL` (hosted Redis from `BE/.env`), Gemini /
+Groq / Cohere keys (`conftest` popped Gemini/Groq, which dotenv refills) and a remote
+`OLLAMA_HOST`. **Fix:** test mode allows only `sslmode`, `connect_timeout`,
+`application_name` in the query (`ALLOWED_TEST_QUERY_KEYS`); the fingerprint uses the
+effective host/db/user; `local_service_or_blank` keeps Redis/Ollama only on loopback or a
+CI/compose service name (CI's `redis://localhost` stays); provider keys are set to `""`.
+**Regression:** 15 more tests in `test_devtest_isolation.py`, red on `17d5d45`.
+Still open by design: a backend started by hand with `BE/.env` (needs a production marker;
+owner approval).
+
+**Second follow-up (Codex re-check of 3c7f0e5):** libpq also takes the target from the
+process environment: `PGHOSTADDR` (or a `PGSERVICE` entry) picks the socket even when the
+URL names `host` and `dbname`, and `run_e2e_server` passed `env={}` to the guard while
+psycopg still read the real environment. `LLM_GATEWAY_ADDR` / `MINDMAP_SERVICE_ADDR` (gRPC,
+preferred by `llm_factory`) were not filtered. The fingerprint missed failover hosts and
+percent-encoded pooler users. **Fix:** test mode refuses while any of `PGHOSTADDR`,
+`PGHOST`, `PGPORT`, `PGDATABASE`, `PGSERVICE`, `PGSERVICEFILE` is non-empty (read from
+`os.environ`, names only); both harnesses keep the gRPC addresses only when local; the
+fingerprint covers every host, decodes the user, and prints UNRELIABLE (exit 3) when a
+libpq variable is set. **Regression:** 9 more tests, red on `3c7f0e5`.
+
+**Third follow-up (Codex re-check 2 of 08c4ff1):** the libpq check read only the process
+environment, but `BE/.env` is loaded later (the E2E server checks before importing the
+app; pytest may build an engine before dotenv runs), so a `PGHOSTADDR` that only lived in
+`BE/.env` still moved the target (reproduced: the E2E server started). **Fix:**
+`libpq_target_vars_set()` returns what WILL be in effect: process value if present, else
+`BE/.env`, then root `.env` (dotenv order); `SKIP_DOTENV` respected. The fingerprint strips
+ports from every candidate host and prints UNRELIABLE for a URL with `?service=`.
+**Regression:** 4 tests, red on `08c4ff1`; manual E2E run with a fake `BE/.env`: exit 124
+(server started) before, exit 2 after.
+
+**Fourth follow-up (Codex re-check 3 of ae9e091):** reading each env file alone with
+`dotenv_values` expanded `${X}` against the current process, but `load_dotenv` loads file by
+file, so `PGHOSTADDR=${X}` in root `.env` with X set in `BE/.env` expanded to "" in the
+guard and to an address at load time. **Fix:** read raw values (`interpolate=False`); a
+non-empty raw value counts as set (fail closed). The fingerprint no longer strips a "port"
+from a bare IPv6 literal. **Regression:** 2 tests, red on `ae9e091`.
+
+**Hand-started backend (2026-11-17):** `shared/dev_target_guard.py`, called by `app.main`
+right after the env files load, refuses to start when `PROCESS_ROLE` is not `web` /
+`mindmap-worker`, a `BE/.env` or root `.env` exists on disk (a source checkout;
+`BE/.dockerignore` keeps `.env` out of the image) and `DATABASE_URL` / `JOBS_DATABASE_URL`
+/ `SUPABASE_URL` points off this machine. Opt out on purpose with
+`STUDYMAP_ALLOW_REMOTE_TARGETS=1` after the fingerprint check. No new production variable:
+`docker-compose.prod.yml` already sets `PROCESS_ROLE` on both services. Skipped under pytest.
+**Regression:** `tests/test_dev_target_guard.py` (13).
+## LLM timeouts were not deadlines (fixed 2026-11-17, Draft PR "LLM deadlines")
+
+**Root cause (Codex task28 audit, reproduced with fake providers):**
+- `_invoke_chat` wrapped the call in `with ThreadPoolExecutor(...)`. After
+  `fut.result(timeout)` raised, `__exit__` waited for the worker, so the caller got control
+  back only when the provider finished. A 1 s deadline over four hanging fakes took 12 s.
+- Ollama had no HTTP timeout: `ask_ai` and `ProviderPool.ask` never passed one, and the
+  builder's `ChatOllama(timeout=...)` is not a field in langchain-ollama 0.3.x: silently
+  ignored, the httpx client kept `Timeout(None)`. The code comment claimed otherwise.
+- Gemini and Groq got no timeout; their SDK retries (6 attempts with 600 s GAPIC deadlines,
+  3 attempts with 60 s reads) ran inside the call.
+- Every provider in the fallback chain got a fresh full timeout.
+
+**Fix:** `timeout` keeps its meaning (per provider) but is now a real limit; the opt-in
+`total_timeout` is one deadline for the whole `ask_ai` / `ProviderPool.ask` operation
+(`_Deadline`): each provider gets min(timeout, what is left), none starts after it is
+spent. Only grading uses it (its claim lease must outlast one grading call); applying it
+to every caller would let a slow first provider (quiz: 900 s Ollama) leave no time for
+the fallback, a behaviour change for unrelated callers (owner's side-agent note).
+`_invoke_chat` returns at the deadline (`shutdown(wait=False, cancel_futures=True)`).
+Ollama gets `client_kwargs={"timeout": httpx.Timeout(budget, connect<=10)}`; Gemini
+`timeout` + `max_retries=1`; Groq `timeout` + `max_retries=0`; FPT `(connect<=10, read)`.
+No `timeout` = exactly the old behaviour (no executor, SDK defaults).
+
+**Limit, stated plainly:** a request already sent is not cancelled at the provider. The
+worker thread keeps running until the HTTP client's own timeout ends it, and the provider
+may still finish and bill the call. Only the gRPC gateway path has a real client deadline,
+and even there the server keeps working after the client gives up.
+
+**Follow-up (Codex task30 review):** a timed-out call keeps running in its thread, so
+releasing the in-process slot at the deadline let N timeouts become N concurrent model
+calls above `MAX_CONCURRENT_LLM_CALLS` (before the PR the executor's blocking exit had
+kept the slot held). Now the orphan owns its slot until the call really ends (`_Slot`,
+released in a done-callback); a fallback provider takes its own slot, waiting at most
+what is left. A late success is still usage-accounted (`late_after_timeout`). The total
+deadline is re-read after the client is built (building takes time too).
+
+**Regression:** `tests/test_llm_deadlines.py` (15; red on `main` `db005ab` or on the
+previous PR head for the follow-up).
+# Local E2E runs shared the checkout's map and summary stores (fixed 2026-11-18)
+
+**Symptom:** a second local Playwright run against `BE/scripts/run_e2e_server.py` failed
+`critical-flows` "A1 zero maps": the page showed a map from the previous run (open auth
+shares one anonymous owner). CI never saw it (fresh checkout per run). Found while
+validating integration trial 11 (#159 item 19).
+
+**Root cause:** the server made a temporary `DATA_DIR` but never set `MEMORY_DIR`; the
+mind map and summary SQLite stores (and the export output directory) fall back to
+`BE/memory/` in the checkout, which outlives the server. A `DATA_DIR` given by the caller
+was reused as is, and a `MEMORY_DIR` or `*_DB_PATH` left in the shell or `.env` could
+point the server at real data.
+
+**Fix:** every start creates a new directory (`mkdtemp`, inside the caller's `DATA_DIR`
+when given) and sets `MEMORY_DIR`, `INDEX_DIR`, `MD_DIR`, `INPUT_DOCS_DIR` inside it,
+overriding the environment; the `*_DB_PATH` file overrides are removed so every store
+derives from that directory. No production code changed.
+
+**Regression:** `BE/tests/test_e2e_server_isolation.py` (4 tests, red before the fix):
+stores inside the server's directory and never under `BE/memory`; two starts never share
+a directory; a given `DATA_DIR` is only a parent; shell paths cannot leak in. Two
+consecutive local `critical-flows` runs without any directory set: 20/20 passed both
+times, `BE/memory` never created.
+
+**Prevention:** a test harness that writes durable state must own every path that state
+can land on, and set them explicitly instead of relying on defaults that point into the
+checkout.
+
+**Review fixes (Codex task39, 2026-11-18):**
+- *A shell DATABASE_URL won.* `setdefault` kept whatever DATABASE_URL the shell had, and
+  Playwright passes the whole environment to the server, so a developer's real database
+  could receive E2E writes. The server now stops unless the URL is a local host
+  (localhost / 127.0.0.1 / ::1) and the database name ends in `_test`; the password is
+  never printed.
+- *.env brought popped values back.* Popping `*_DB_PATH` (and provider keys) made them
+  "missing", which is exactly when `load_project_env(override=False)` in `app.main` fills
+  them from `BE/.env`. The server now sets `SKIP_DOTENV=1`, as CI effectively runs.
+
+**Regression:** `BE/tests/test_e2e_server_isolation.py` +2 (a developer's .env cannot
+bring back real store paths or keys; a non-local or non-`_test` database is refused),
+both red first.
+### Summary screen said "Chưa có tóm tắt" while the list was loading or had failed (V6, 2026-11-12)
+
+**Symptom.** `/app?tab=summary` for an account with saved summaries: until `/summaries` answered,
+and for good if it failed, the centre screen showed "Chưa có tóm tắt" and the "Tạo tóm tắt"
+button. A learner could pay for a summary they already had.
+
+**Root cause.** `SidebarRight` holds `dangTaiSummary` / `loiTaiSummary` and used them only in its
+own list. `onSummaryLibraryChange` published neither, so `WorkspaceContainer` gave the summary
+`WorkspaceEmptyState` no `loading` / `error`. The mind-map side got both signals earlier (the
+"intermittent no map" fix); the summary side was left out.
+
+**Fix.** The two signals and a `retryLoad` go up through `updateSummaryLibrary` ->
+`summaryLibrary` -> `WorkspaceEmptyState` (`loading`, `error`, new `onRetryLoad`: "Tải lại danh
+sách"). The error is shown only when there are no summaries to offer.
+
+**Regression test.** `e2e-fixture/summary-loading-state.spec.js` (3 cases; the loading and the
+failed-load case fail on the old code). Not in Fixture Smoke.
+
+**Not covered.** The mind-map load error still has no reload button. Before `SidebarRight`
+publishes for the first time the empty screen can show for one frame.
+
+**Prevention.** Found by a read-only audit comparing the props the two `WorkspaceEmptyState`
+call sites pass: when a state is fixed for one of two sibling screens, check the other.
+
+### A slow load for the previous route id landed on the new one: quiz and study map (V6 bug hunt #4, #14, 2026-11-12)
+
+**Symptom.** `/app/study/quiz/A` -> `/quiz/B` (or study map of document A -> B) without a full
+reload, while A's request is slow. If A answers after B, the page shows A's questions/map under
+B's URL. For the quiz this is worse than cosmetic: `attempt_id` becomes A's, so autosave and
+submit write to A's attempt. A finished A also redirected B to A's result page.
+
+**Root cause.** `load()` in `QuizTaking.jsx` and `load()`/`openMap()` in `StudyMapView.jsx` are
+`useCallback`s keyed by the route id, re-run by an effect. React Router keeps the component
+mounted when only the param changes, so two loads are in flight and neither checked which id the
+page shows when its `await` returned. `finally { setLoading(false) }` also ended B's loading.
+
+**Fix.** A ref holding the id the page shows now (`quizIdRef`, `docIdRef`); each load captures
+its own id and stops after every `await`, in `catch` and in `finally` when the two differ.
+`docIdRef` is also set inside its effect because StrictMode runs the cleanup without a render.
+
+**Regression tests.** `QuizTaking.staleOpen.test.jsx` (3 cases) and
+`StudyMapView.staleDocument.test.jsx`; four of the five cases fail on the old code.
+
+**Not covered.** The requests are not aborted, only ignored. `SidebarLeft` upload poller (#2)
+waits for #160, which touches the same lines.
+
+### Knowledge-map nodes could only be used with a pointer (V6 bug hunt #7, 2026-11-12)
+
+**Symptom.** On `/app/study/map/:id` Tab skipped every node; a keyboard user could not select a
+node, read its detail or open a branch.
+
+**Root cause.** `renderNode` in `StudyMapView.jsx` returns an SVG `<g onClick>` with no
+`tabIndex`, role, name or key handler.
+
+**Fix.** The `<g>` is `role="button"`, `tabIndex=0`, named by the node title, with
+`aria-pressed` (selected) and `aria-expanded` (branch), Enter/Space run the click action, and a
+`:focus-visible` style on the node's circle and label.
+
+**Regression test.** `e2e-fixture/knowledge-map-keyboard.spec.js` (real react-d3-tree: Enter
+selects and opens the branch and focus stays on the node; Tab reaches the root).
+
+**Not covered.** No arrow-key movement between nodes; Tab order is DOM order. Not tried with a
+screen reader.
+
+**Prevention.** A custom SVG/canvas element with `onClick` needs the same three things a button
+has: focus, a name, and Enter/Space.
+
+### Mind-map/summary start answered after the panel was gone and started an orphan poller (V6 bug hunt #3, 2026-11-12)
+
+**Symptom.** Start a mind map or summary, leave `/app` (or let the right panel unmount) before
+`POST` answers. The late 202 started a poller nothing owned: requests and state callbacks on a
+dead panel until the job ended. A late cache hit ran the completion handler (list refresh, toast).
+
+**Root cause.** The unmount cleanup in `SidebarRight.jsx` stops pollers that exist at that
+moment; `handleGenerateMindMap` / `handleGenerateSummary` created theirs after the await without
+asking whether the panel was still mounted.
+
+**Fix.** The existing `mountedRef` is checked after each await in both start handlers, in the
+list fetches and in the completion handlers. A job the server queued is still saved with
+`saveActive*Job`, so the next visit resumes it; only the poller and state updates are skipped.
+
+**Regression tests.** `SidebarRight.orphanPoller.test.jsx`, four cases (queued and cache hit,
+mind map and summary); all four fail without the guards.
+
+**Not covered.** The start request is not aborted. Out-of-order list refreshes (#13) are a
+separate problem and are not fixed here.
+
+**Prevention.** Cleanup can only stop what exists when it runs; anything created after an await
+needs its own "am I still the owner?" check.
+
+### Two fixes to the same list fetch had to be combined, not chosen between (#164 + #165, 2026-11-12)
+
+**Symptom.** #164 and #165 each passed CI and were each MERGEABLE, but both rewrote
+`fetchSummaries` in `SidebarRight.jsx`: #164 so an unmounted panel publishes nothing, #165 so
+only the newest request publishes. A trial merge conflicted; taking either side dropped the
+other rule.
+
+**Fix.** One predicate, `cu = () => !mountedRef.current || luot !== luotTai...Ref.current`,
+checked after every await, in `catch` and in `finally`. The same rule now covers `fetchMindMaps`
+(bug hunt #13: a slow mount-time list answered after a refresh and hid the new map).
+#165's branch contains #164's branch from here on (merge commit, no force-push).
+
+**Regression tests.** `SidebarRight.summaryListOwnership.test.jsx`, six cases. Removing the
+mounted half fails case 2; removing the newest-request half fails cases 1, 3, 4 and the
+mind-map case.
+
+**Prevention.** MERGEABLE is per PR against `main`; it says nothing about two open PRs against
+each other. Trial-merge open branches pairwise (`git merge-tree --write-tree A B`) before
+reporting them as independent.
+
+### Summary and mind-map screens drew "empty" for one commit before "loading" (V6, 2026-11-12)
+
+**Symptom.** Opening `/app?tab=summary` or `?tab=mindmap`: "Chưa có tóm tắt" / "Chưa có sơ đồ
+tư duy" with its create button for the first commit, then "Đang tải…".
+
+**Root cause.** `MainLayout`'s `libraries` state started with no loading flags. The right panel
+owns both fetches and reports them from an effect, which runs after the first commit, so the
+first commit read "not loading" and rendered the empty screen.
+
+**Fix.** The state starts as loading for both lists (the right panel is always mounted, so a
+report always follows); the Summary screen reads that flag until `summaryLibrary` exists. No
+delay, no CSS hiding.
+
+**Regression tests.** Two cases in `e2e-fixture/summary-loading-state.spec.js` that record every
+text the page ever rendered (a settled-DOM assertion cannot see a one-commit flash); both
+failed before the fix. Two `MainLayout` unit tests stubbed the right panel with a component
+that never reports; the stubs now report once, as the real panel does.
+
+**Prevention.** State that a child reports from an effect needs an initial value that means
+"not known yet", never the value that means "known to be empty".
+
+### Wordmark "Map" under 4.5:1 in the landing footer and app header (2026-11-15)
+
+**Symptoms:** after `--brand-text` reached the landing header, the same "Map" text in the
+landing footer and the workspace header still used `--seal`: 3.95:1 (light) and 4.20:1 (dark).
+The first `--brand-text` values also sat at 4.50-4.54:1 there, no margin.
+
+**Root cause:** the rule lived in `landing.css` scoped to `.lp-wordmark` only; each wordmark
+is separate markup.
+
+**Fix:** one unlayered rule in `index.css` for `.lp-wordmark`, `.lp-footer-wordmark`,
+`.workspace-wordmark` (unlayered because `.text-seal` is a utility and would win over a
+layered rule); `--brand-text` #E00E16 light, #DC7762 dark: 4.88-4.91 / 4.72-4.75:1 measured.
+`--seal` and the StudyMap mark unchanged.
+
+**Regression:** `e2e-fixture/landing-wordmark-contrast.spec.js` asserts all three places
+>= 4.5:1 in both themes (red before for footer and app header) and that every other
+`.text-seal` element still computes to `--seal`.
+### One timed-out test made eleven more fail in `DocumentList.round6.behavior.test.jsx` (2026-11-12)
+
+**Symptom.** One full `npx vitest run` had 12 failures, all in this file: the first test
+"timed out in 15000ms", then `Cannot read properties of null (reading 'click')`,
+`expected [] to deeply equal ['doc-2']` and React's "overlapping act() calls". A rerun was green.
+
+**Root cause (confirmed).** Every test called `vi.resetModules()` and `await import("./DocumentList")`
+inside its own body, so a cold import of the whole Library graph ran on the test's 15 s clock.
+When that plus the render exceeded 15 s, Vitest failed the test but could not cancel its open
+async `act`; `afterEach` then unmounted and nulled the module-level `root` / `host`, the next
+test opened another `act`, and every later test queried an empty document. Reproduced exactly
+(same 12 failures, same order) by running the file with `--testTimeout=500`.
+
+**Not confirmed.** Why the first test was that slow in that run. CPU contention is the likely
+cause (the run reported transform 91 s, import 170 s, environment 823 s) but four loaded full
+runs did not reproduce it.
+
+**Fix.** The two flag-specific imports happen once in `beforeAll` with a 60 s budget; tests
+render the cached components. First test: about 1.4 s -> 55 ms. With `--testTimeout=500` the
+file now passes 13/13 where it used to fail 12/12.
+
+**Not done.** `root` / `host` are still module-level; a different timeout inside a test body
+would cascade the same way. A shuffled concurrent run also showed
+`SidebarRight.guidedDialogClose.test.jsx` failing; not investigated.
+
+**Prevention.** Do not conclude "flaky" from a green rerun: find what the first failure was
+waiting for. Keep cold imports and other one-off setup out of the test body's timeout.
+
+### Library card: keys on inner controls reached the list handler; arrows did not move focus; ids repeated (2026-11-13)
+
+Found by a read-only review of the V6 Library on a local merge of all V6 branches.
+
+**Symptoms.**
+1. In the "Tất cả" list, Enter on a tool button ("Tóm tắt") also ran the card's own Enter
+   (open the last workspace), and Space on a tool or on the checkbox selected the card.
+2. Arrow / Home / End changed which card had `tabindex=0` but left focus on the old card,
+   which had just become untabbable. After a filter shortened the list, the remembered index
+   could be out of range: no card had `tabindex=0` and Tab skipped the list.
+3. The same document is drawn in several sections, so `id="tri-thuc-<document_id>"` (and the
+   new tool descriptions) repeated in one page; `aria-controls` / `aria-describedby` no longer
+   pointed at one element.
+
+**Root causes.** (1) The card root's `onKeyDown` received every bubbling keydown; only the menu
+and the knowledge panel stopped propagation. (2) `xuLyPhim` only called `setChiSoFocus`; no ref
+was passed to the cards and the index was never clamped. (3) Ids were built from
+`document_id`, which is unique per document, not per rendered card.
+
+**Fix.** The card forwards a keydown to the list only when the card itself is the target.
+`DocumentList` keeps refs to the "Tất cả" cards, focuses the target card on arrow keys, and
+clamps the index when the list shrinks. Ids use `useId()`.
+
+**Regression tests.** `StudyCard.v6.test.jsx`: keys on inner controls do not reach the list
+handler; two cards for one document share no id and every reference resolves inside its card.
+
+**Not covered.** The focus move and the clamp have no test (the page test mocks the card).
+The matrix renderer has its own roving code and was not changed.
+
+**Prevention.** A roving-tabindex container must act only on its own keydowns, must move focus
+when it moves the tab stop, and must not build ids from a key that can render twice.
+
+### Library sections: `ds.map(veThe)` turned every section card into a roving-list item (2026-11-13)
+
+**Symptom.** With one resume document and five documents, eight cards had `tabindex="0"`
+instead of one. Arrow keys on a section card changed the focus index of the "Tất cả" list.
+
+**Root cause.** `veThe(doc, chiSo = null)` treats its second argument as the card's index in
+the roving "Tất cả" list. The sections rendered with `ds.map(veThe)`, and `Array.prototype.map`
+passes `(item, index)`, so each section card received its index within its own section.
+
+**Fix.** `ds.map((d) => veThe(d))` for the sections and the archived list. Found while adding
+the focus-movement test: the first version of that fix stored refs by index and the section
+cards overwrote them.
+
+**Regression test.** `e2e-fixture/library-learning-home.spec.js` (on the Library integration
+branch): exactly one card is the tab stop, and ArrowDown moves focus to another card.
+
+**Prevention.** Never pass a function with optional positional parameters straight to `map`.
+
+
+### "Tiếp tục" was offered for an indexed document whose processing later failed (2026-11-14)
+
+**Symptoms:** the Library card and the learning home offered "Tiếp tục" for a document with
+`ingest_status: "error"` (or `status: "failed"`) whose index was already `ready`; the Command
+Palette's "Tiếp tục học" opened the most recently opened document even when it had failed.
+
+**Root cause:** each place tested only `ai.index === "ready"`. Indexed-then-failed is a real
+state (a later pipeline step can fail after the index is written), and the owner decision is
+that "Tiếp tục" is never offered for a failed, unindexed or not-ready document.
+
+**Fix:** one predicate, `coTheTiepTuc(d) = daLapChiMuc(d) && !xuLyLoi(d)` in
+`utils/thuVienTaiLieu.js`, used by `StudyCard`, `LearningHome`, and (through
+`ganNhatCoTheTiepTuc`) the palette, which skips a failed document because it has no place to
+say why.
+
+**Regression:** `StudyCard.v6.test.jsx` and `LearningHome.test.jsx` "indexed document whose
+processing then failed" (red before), `thuVienTaiLieu.test.js` `ganNhatCoTheTiepTuc`.
+
+**Prevention:** a rule the owner states about one action ("never offer X for Y") gets one
+named predicate, and every entry point to that action calls it.
+### A cancelled chat question could publish into the next one (V6 bug hunt #1; fixed 2026-11-12)
+
+**Repro:** send question A, press "Huỷ", send question B at once. When A's request, stream or poll finished afterwards, A could append an error bubble or its answer to the conversation and set `loading = false` while B was still running. A's cancel tail also replaced "the last message" (`prev.slice(0, -1)`), which by then was B's question.
+
+**Root cause:** one shared `cancelledRef`. Cancelling A set it to `true`; starting B set it back to `false`; every later check in A then read "not cancelled".
+
+**Fix:** `attemptRef` in `ChatArea.jsx`. Each send takes a number; cancel, unmount and every new send bump it. Every publication after an `await` in `handleSend` (result, error, `finally`, status updates, the stream tick, the fallback poll) checks that its own number is still current. The cancel tail replaces the "Đang dừng truy vấn…" placeholder by identity. If the POST returns a job id after the cancel, that job is cancelled instead of left running.
+
+**Regression:** `ChatArea.attemptIdentity.test.jsx` (both cases fail on the old code).
+
+**Not changed:** the review-resume polling path (bug hunt #11) still has no cancellation.
+
+### Answer-review polling could not be cancelled and outlived the chat (V6 bug hunt #11, 2026-11-12)
+
+**Symptom.** After "Duyệt" / "Sửa" on a held answer, `ChatArea` polled the job with
+`isCancelled: () => false`. Leaving the page left the poll running against a dead component; a
+second review action started a second poll, and the older one could publish its progress,
+result, error notice and `loading = false` after the newer one owned the screen.
+
+**Root cause.** `handleReview` was the one async path in `ChatArea` that did not take part in
+the attempt identity introduced for send/cancel (`attemptRef`, `stale()`).
+
+**Fix.** Each review continuation takes a fresh attempt id; `stale` is the poll's
+`isCancelled`, and guards the continuation after `resumeQuery`, the progress callback, the
+final result, the error notice and `finally`. New chat, clear context and delete history bump
+the same id. Written by Codex in a shared worktree, reviewed before commit.
+
+**Regression test.** `ChatArea.reviewResumeCancel.test.jsx`: unmount cancels the poll; a
+continuation replaced in the same tick never starts polling. Both failed before the fix.
+
+**Not covered.** Two review clicks in the same tick still send `resumeQuery` twice (only one
+continuation proceeds). The poll is stopped by predicate; the in-flight request is not aborted.
+
+**Prevention.** When a component gets an "attempt identity", list every async path in it, not
+only the one that was reported.
+
+### Review and send actions accepted two synchronous submissions (V6 task 14, 2026-11-13)
+
+**Symptom.** Two clicks in one React turn called `resumeQuery` twice for approve, edit, or
+reject. The same race submitted `/query` twice from the composer. A second review click after
+the resume request resolved was also accepted while result polling continued.
+
+**Root cause.** Both handlers treated React state (`reviewSubmitting` / `loading`) as a
+synchronous mutex. Event handlers in the same turn retain the previous render's values, so
+both calls passed their guards. The backend does not re-run the continuation: the first
+request changes `interrupted` to `running` under `query_jobs_lock`, and the second gets 409.
+
+**Fix and regression.** `ChatArea` now acquires ref-backed locks before either handler's first
+asynchronous boundary. The review lock covers resume plus polling, releases in `finally`, and
+is reset when a new review interrupt is surfaced. The send lock participates in cancellation
+and only releases from the current attempt. `ChatArea.reviewResumeCancel.test.jsx` covers all
+three decisions and polling; `ChatArea.attemptIdentity.test.jsx` covers same-turn send clicks.
+
+### Chat follow-up suggestions were cut at the composer's right edge (V6, 2026-11-13)
+
+**Symptom.** After an answer, the third suggestion ("Khái niệm nào trong <tên tệp>.pdf khó hiểu
+nhất?") ended mid-word at the composer's edge at every width, including 1440px.
+
+**Root cause.** The row was `flex overflow-x-auto scrollbar-none` with `flex-shrink-0` chips: one
+line that scrolled sideways with its scrollbar hidden. Nothing showed there was more, and a mouse
+user could not scroll it. Every chip also carried the full file name with its extension.
+
+**Fix.** The suggestions are a labelled group that wraps; a chip may take two lines; file
+extensions are dropped from the document name. The stop control has the word "Huỷ" next to its
+icon so it does not read as the send button.
+
+**Regression test.** `e2e-fixture/chat-composer.spec.js`: every suggestion and the input inside
+the composer at 320/390/768/1440, light and dark; 44px chips on phones; keyboard; the stop control.
+
+**Prevention.** Hiding a scrollbar hides the only sign that content continues. Wrap, or show the
+overflow.
+
+
+### The on-screen keyboard covered the chat composer on phones (2026-11-14)
+
+**Symptoms:** on a phone, focusing the chat input left the composer and its send button
+behind the keyboard; the workspace shell kept its full height. (Reproduced with a simulated
+iOS keyboard in Chromium; no real device was used.)
+
+**Root cause:** the workspace shell was `h-screen` (`100vh`), and the left drawers
+`calc(100vh - 56px)`. `100vh` is the largest viewport: it ignores browser toolbars, and iOS
+Safari also keeps it when the keyboard opens, shrinking only `window.visualViewport`. The shell
+never scrolls itself, so its bottom (the composer) stayed below the visible area. The viewport
+meta did not ask Android Chrome to resize content for the keyboard either.
+
+**Fix:** `useAppHeight` (in `MainLayout`) keeps `--app-height` equal to
+`visualViewport.height`; the shell uses `.app-shell-height` (`100vh`, then `100dvh`, then
+`var(--app-height, 100dvh)`), the drawers `calc(var(--app-height,100dvh) - 56px)`; the
+viewport meta adds `interactive-widget=resizes-content`.
+
+**Regression:** `e2e-fixture/mobile-viewport.spec.js` (simulated `visualViewport` at
+390x844, 320x640, 768x1024; red before: composer bottom 820 with 508 visible) and
+`src/hooks/useAppHeight.test.jsx`.
+
+**Prevention:** a full-screen container that does not scroll itself sizes to the visible
+viewport, never `100vh`. Headless tests cannot open a keyboard: drive `visualViewport`
+directly and say that it is a simulation.
+
+
+### iOS pans the visual viewport: header hidden, half the screen blank (2026-11-15, follow-up)
+
+**Symptoms (simulated):** with the keyboard open, Safari pans the visual viewport to the
+focused input (`visualViewport.offsetTop` 336 at 390x844). The #184 shell, sized to
+`visualViewport.height` but still at the top of the layout, then showed only its lower part:
+the header above the visible area, and blank space below the composer.
+
+**Root cause:** `useAppHeight` read `height` only and listened to `resize` only; a pan is a
+`scroll` event on `visualViewport` and changes `offsetTop`, not `height`. Pinch zoom also
+shrinks `height` (by `scale`) and would have reflowed the shell.
+
+**Fix:** `--app-offset-top` + `html.vv-panned .app-shell-height { transform: translateY(...) }`
+(the class only while panned, because a transform makes the shell the containing block of
+its fixed drawers), `scroll` and `orientationchange` listeners, `height * scale`, and no
+style write when nothing changed.
+
+**Regression:** `useAppHeight.test.jsx` (5 red on the old hook) and
+`e2e-fixture/mobile-viewport.spec.js` pan + open-drawer cases (2 red on the old hook).
+
+**Prevention:** on iOS the visible area is `offsetTop .. offsetTop + height`, both of which
+change; test both. Still simulation: no iPhone, Safari or WebKit run.
+
+
+### Phone source drawer: no Escape, focus left behind it (2026-11-15)
+
+**Symptoms:** at phone width, opening "Mở thư mục nguồn" left keyboard focus on the header
+behind the drawer, and Escape did nothing (only the X and the backdrop closed it).
+
+**Root cause:** the Escape effect covered the right drawer and the tablet shelf only, and
+nothing moved focus into the left drawer when it opened (the reverse hand-off, focus out of a
+closing surface, already existed).
+
+**Fix:** Escape also closes the left drawer (still deferring to an open `aria-modal` dialog);
+opening it focuses its first control.
+
+**Regression:** `e2e-fixture/workspace-drawer-focus.spec.js` (red before: focus not inside).
+
+### Study page titles shrank to "K…" on phones (2026-11-15)
+
+**Symptoms:** at 390px the quiz result header showed its title as one letter and an
+ellipsis next to "Kế hoạch ôn tập (2 chủ đề)"; at 320px the title was 0px wide.
+
+**Root cause:** `StudyShell`'s default header was one non-wrapping flex row with the title
+at `min-w-0` and the actions `shrink-0`: the actions kept their width and the title absorbed
+the whole shortage.
+
+**Fix:** the default header wraps (`flex-wrap`) and the title keeps
+`min-w-[min(100%,13rem)]`, so the actions move to a second row instead.
+
+**Regression:** `e2e-fixture/quiz-review-v6.spec.js` per-width test asserts a readable title
+width (red before: 0px at 320, "K…" at 390).
+
+**Prevention:** in a row with fixed-width actions give the text a minimum width and let the
+row wrap; `min-w-0` alone lets it collapse to nothing.
+
+### Two submits of one quiz at the same moment were both graded (2026-11-14)
+
+**Symptoms:** two requests that submit the same attempt (diagnostic) or the same practice
+quiz at almost the same time both returned 200 and both were graded: two grading runs, two
+mastery snapshots, and for practice two graded attempts. Two opens of one quiz created two
+`in_progress` attempts. Sending the same practice answers again right after the first
+response also created and graded a second attempt.
+
+**Root cause:** every step was read-then-write with no lock. `repository.submit` read
+`status == "in_progress"` with a plain `s.get` and then wrote `submitted`; `open_attempt`
+looked for an `in_progress` attempt and inserted one if none was found (no unique
+constraint); `practice.submit` always opened a fresh attempt, so even a sequential duplicate
+was a new attempt. The frontend ref locks (#162) only cover one tab and one click burst.
+
+**Fix:** `repository.submit` reads the attempt `FOR UPDATE`; `open_attempt` locks the quiz
+row before its lookup; `practice.submit` calls `repository.submit_practice`, which opens,
+fills and submits in one transaction under the quiz row lock and returns None (409, the
+existing "no longer in progress" error) when the same answers were submitted for that quiz
+by that learner in the last `PRACTICE_REPLAY_WINDOW_S` (30) seconds. No route, payload or
+status code changed.
+
+**Regression:** `BE/tests/test_attempt_submit_concurrency.py` (PostgreSQL only). The tests
+make two threads meet inside `repository._now()` (after the status read, before the
+write), so the race is forced, not hoped for. Red on `main`: all four fail (two 200s, two
+attempts, a second graded practice attempt). Green after, five repeated runs.
+
+**Prevention:** a status transition is a conditional write or a locked read, never a plain
+read followed by a write. A test for it must force the interleaving (a barrier between the
+read and the write); two threads started together usually run one after the other and pass.
+
+
+### Practice submit: a 30 s guess instead of idempotency, and attempts stuck `submitted` (2026-11-15)
+
+**Symptoms:** (1) #183 recognised a retried practice submit only by "same answers within
+30 s": a deliberate retake with identical answers got 409, and a retry after 30 s graded a
+second attempt. (2) When grading raised after the submit transaction had committed (LLM
+outage, bug, killed process) the attempt stayed `submitted` forever: the retry was a 409
+replay and no route graded it again (reproduced on `1d787f8`).
+
+**Root cause:** the server had no identity for "one logical submit", so it guessed from
+content and time; and grading ran outside the submit transaction with nothing recording
+who was grading or letting anyone take over.
+
+**Fix:** optional `idempotency_key` (body) / `Idempotency-Key` (header) on
+`POST /api/practice/<id>/submit`. The attempt row stores `submit_key` +
+`submit_fingerprint` (sha256 of quiz + answers) under a partial unique index
+`(user_id, submit_key)`, so the record lives exactly as long as the attempt and cannot
+expire into a regrade. Same key + same payload: the stored result (200, same body), never a
+second grading; same key + other payload: 422; still grading: 409 "Bài nộp này đang được
+chấm..." and the FE asks again with the same key. `grading_claimed_at` is the grading claim:
+released on an exception, taken over after `GRADING_LEASE_S`; `save_grades(once=True)` keeps
+a second grader from writing or re-running gap analysis. Keyless requests keep the #183
+window, but a replay of a stuck `submitted` attempt now grades it.
+
+**Regression:** `BE/tests/test_practice_idempotency.py` (PostgreSQL, barriers/events, no
+sleeps), `FE/src/pages/study/Practice.idempotency.test.jsx` (5 red on the old page).
+
+**Prevention:** an operation that may be retried needs a client-chosen identity stored
+with its result; time windows only guess. Any work done after the commit that marks a
+state needs a claim that a retry can see and, after a lease, take over.
+
+
+### Draft answers could change a graded attempt (2026-11-15)
+
+**Symptoms:** a draft save (`PATCH /api/attempts/<id>/answers`) arriving while the same
+attempt was being submitted could overwrite answers after submit and grading had committed;
+the score no longer matched the stored answers.
+
+**Root cause:** `attempts.save_answers` checked `status == "in_progress"` in one transaction
+and `save_draft_answers` wrote in another, without a lock or re-check.
+
+**Fix:** `save_draft_answers` takes the attempt row lock (`FOR UPDATE`, the one `submit`
+takes) and writes only while `in_progress`; otherwise the use case raises `AttemptDaNop`
+(409, as for a draft on a submitted attempt).
+
+**Regression:** `test_attempt_submit_concurrency.py::test_a_draft_save_that_loses_the_race_to_submit_changes_nothing`
+(red before: the late write landed).
+
+**Prevention:** a status check and the write it guards belong in one transaction under the
+row lock (same lesson as 2026-11-14).
+
+
+### #185 review: keyless dead grader, lost mastery, foreign release, stale FE keys (2026-11-15)
+
+Independent review (`task20-codex-185-review.md`) of the first #185 head. Fixed:
+- **Keyless dead grader never recovered:** the keyless retry looked only 30 s back, the claim
+  lasts 300 s. Now a `submitted` attempt with the same answers and an expired (or no) claim is
+  reclaimed at any age.
+- **Mastery lost between the score commit and gap analysis:** a same-key retry said `done`
+  forever with no mastery rows. A `done` retry and the practice comparison now repair it
+  (fail-open, as the generic concept-mastery route does).
+- **An old grader released a newer claim:** release now clears only the claim timestamp this
+  request set (`submit_practice` returns it).
+- **FE kept a spent key:** a 422 and a graded attempt found on reload now forget the key.
+- **Index build blocked writes:** `CREATE UNIQUE INDEX CONCURRENTLY` in an autocommit block.
+
+**Regression:** three PostgreSQL tests in `test_practice_idempotency.py`, two FE tests in
+`Practice.idempotency.test.jsx` (red on the previous head).
+
+Not fixed here (reported): diagnostic grading has no claim; anonymous keys are bearer
+tokens; generic attempt routes accept a practice quiz.
+
+### #185 migration: an interrupted CONCURRENTLY build passed as done (2026-11-16)
+
+**Root cause:** a `CREATE UNIQUE INDEX CONCURRENTLY` that fails half-way (lost connection,
+lock or statement timeout, a duplicate key) leaves the index in the catalog marked INVALID.
+It enforces nothing. The migration used `IF NOT EXISTS`, which checks only the name, so a
+rerun skipped it and Alembic stamped the revision: "one key per owner" silently not
+enforced. The same name check also accepts a hand-made index with the wrong definition, and
+nothing looked again once `alembic_version` was at head. A first fix (`2bb0c48`) dropped and
+rebuilt an invalid index automatically; that is not allowed on production.
+
+**Fix:** the migration builds the index only when absent, then proves it from `pg_index`
+(`shared/db_schema_checks.py`: schema, table, valid, ready, unique, btree, columns
+`(user_id, submit_key)`, predicate `submit_key IS NOT NULL`) and raises otherwise, so the
+revision is not stamped. It never drops or rebuilds an existing index. `deploy.sh` step 5b
+runs the read-only `python -m scripts.verify_db_schema --moi-truong production` after the
+migration and before `compose up`; on failure the deploy dies and the old backend keeps
+serving. Recovery is manual: `docs/RUNBOOK_SUBMIT_KEY_INDEX.md`.
+
+**Regression:** `tests/test_attempt_submit_key_migration.py` (real faults: lock_timeout
+interruption, duplicate key, four wrong definitions, index dropped at head; red on
+`2bb0c48`), `scripts/tests/test_deploy_pinning.sh` (order migration, verify, up; a failed
+verify never activates or downgrades), two mutations in `test_deploy_guard_mutations.sh`.
+
+**Prevention:** check `indisvalid`/definition from the catalogs after any concurrent index
+build, in the migration and again at deploy time.
+
+### #185 test harness: submit-key migration tests broke on a Windows console (2026-11-16)
+
+**Root cause:** `_run` in `BE/tests/test_attempt_submit_key_migration.py` called
+`subprocess.run(text=True)` with no encoding. On Windows the parent decodes the child's
+output as cp1252; the scripts print Vietnamese, the reader thread dies with
+`UnicodeDecodeError` (byte 0x9d), `stdout` is `None` and `result.stdout + result.stderr`
+raises `TypeError`. Six tests failed that way. The runbook test then stopped before its
+repair steps with duplicate keys still in the table, the `db` fixture teardown could not
+rebuild the unique index (`UniqueViolation`), and the INVALID index it left made two tests in
+other files fail. Product code was never involved; CI (Linux, UTF-8) passed.
+
+**Fix:** `_run` passes `encoding="utf-8", errors="replace"` (the pattern of
+`test_production_migration_contract.py`) and `PYTHONUTF8=1` to the child. The fixture
+teardown resets `lock_timeout` and clears duplicate keys (keeps the first per owner, test
+database only) before rebuilding the index.
+
+**Regression:** on a cp1252 console, no `PYTHONUTF8`: before 6 failed + 1 error in the file,
+after 155 passed across the ten migration/idempotency/concurrency files and
+`test_guided_postgres_store.py`. A copy of the runbook test made to fail right after the
+duplicate keys: old fixture -> teardown ERROR and the practice idempotency test fails; new
+fixture -> no teardown error, the next tests pass, verifier says valid. Logs:
+`studymap-qa-execution/v6/results/185-harness/`.
+
+### Diagnostic attempts stuck in `submitted`; two graders on one attempt (2026-11-17)
+
+**Root cause:** `submit_attempt` committed `submitted` before grading. A crash or a grading
+error in between left the attempt there for good: a second submit answered 409, nothing
+swept attempts, and the result page only said "stuck" after 5 minutes. Both diagnostic
+graders used `grade_attempt(once=False)`, so a duplicated or retried job wrote scores
+twice (last wins) and ran gap analysis twice. Mastery rows were NOT doubled
+(`analyze_attempt` rewrites the per-attempt snapshot). A process dying between the score
+commit and gap analysis left a graded attempt with no mastery.
+
+**Fix (owner-approved scope):** the claim of #185 (`grading_claimed_at`, lease) is taken at
+submit and returned; a retry reclaims a free/expired claim (`reclaim_for_retry`), answers
+202 while a grader holds it or its job is queued, 200 with the STORED result for a graded
+attempt (mastery rebuilt if missing, no LLM). Jobs are fenced (`start_grading_job`): only
+the registered job grades; a stale or duplicated job ends as a no-op BEFORE any model
+call. A failed enqueue forgets the job, releases the claim and refunds the retry. Learner
+retries are capped per attempt (`GRADING_MANUAL_RETRY_MAX`, 3) on the diagnostic AND the
+practice route. The generic route refuses practice quizzes. A recovery sweep exists but
+is OFF (`GRADING_RECOVERY_ENABLED`), dry-run by default, batch/attempts/inflight capped,
+one budget across processes (advisory lock), enqueue-only. `grading_state` in results
+drives the FE "Thử chấm lại".
+
+**Regression:** `tests/test_diagnostic_grading_recovery.py` (29; 5 red on `5e18271`, 8
+more red on the first implementation after Codex's review), FE
+`QuizResult.retryGrading.test.jsx` (9; 6 red on the old page).
+
+# A provisional result (AI grader outage) could never be regraded (fixed 2026-11-17)
+
+**Symptom:** when the model failed on a short answer, grading still finished: the
+attempt became `graded` with `ungraded_count > 0`, `grading_complete = false`, and the
+page said "Kết quả tạm thời". Nothing could ever grade those answers again: a submit of
+a graded attempt answers 200 with the stored result, and #188's "Thử chấm lại" exists
+only for a `submitted` attempt whose grading job died. The attempt stayed out of
+progress and completion for good. #189 makes a slow provider hit its real deadline, so
+this state can become more frequent.
+
+**Root cause:** recovery was designed around one failure (a dead grading job) and the
+claim/fencing code gated everything on `status == "submitted"`. A second, more common
+failure (the model fails, the job succeeds) ends in a different state that no path
+handled. Also, `save_grades` left `grading_claimed_at` and `grading_job_running` set
+after writing the result, which made any later claim look live for the lease.
+
+**Fix:** `POST /api/attempts/<id>/regrade` (`regrade_provisional`). Under the row lock
+`reclaim_for_regrade` takes the claim, counts one `manual_retries` (same cap as #188) and
+registers `regrade_job_id` in the same transaction, so a concurrent request answers 202
+with that job. Only that job may regrade (`start_grading_job` returns "regrade"; the
+job that produced the provisional result, redelivered, returns "done"). The job grades
+only answers with `verdict IS NULL` and `save_regrade` writes them, the totals and
+`ungraded_count` in one transaction, never touching an answer that has a verdict or any
+`user_answer`; gap analysis reruns (snapshot overwrite). The attempt stays `graded`
+throughout: the provisional result is visible until a better one replaces it. 200 when
+nothing is left, 409 `HetLuotChamLai` when retries are used up (result kept), 404 for
+another learner, 409 `KhongCoCauChoChamLai` when the attempt is not graded. `save_grades`
+now ends the claim. The result page shows "Chấm lại câu còn thiếu" on
+`regrade_state == "available"` and polls while it is "running".
+
+**Review fixes (Codex task34):** (1) a regrade job that ended (model failed again, or
+it crashed) kept `regrade_job_id`, so the queue delivering the same job again ran a
+second, uncounted regrade: `release_job_claim` now retires the registration with the
+job. (2) Scores were published before the gap analysis ran: the job now holds the claim
+until its analysis is written and releases it last (`save_grades` / `save_regrade` no
+longer end it), `regrade_state` stays "running" through the analysis, and a regrade
+cannot start while the first grading still analyses. (3) A review plan built from a
+provisional result was cached and outlived the regrade: `review_plans.generate` refuses
+a provisional attempt while a regrade can still change it (409), and the result page
+offers no plan link then. Owner decision 2026-11-17, revised the same day: the
+first rule (a plan only once the retries were used up) made a learner spend up to three
+paid regrades, even during an outage, to get a plan, and the page did not say why. Now a
+plan is built from the graded answers whenever no regrade is running (409 only while one
+is queued or running); plan responses carry `ungraded_count`, the review page says the
+plan covers only the graded answers, and a later regrade that changes the result marks it
+`outdated`. A plan is written only under the attempt's row lock (the lock a regrade takes to
+write its result), and only if `graded_at` is still the one the plan was built from and no
+grader holds the claim; otherwise 409 (Codex task34 re-check 3: a regrade starting during
+the up-to-120 s model call could otherwise leave a stale plan labelled current). Existing plans are left as they are (deleting
+one cascades to practice quizzes).
+Practice attempts are out of scope: their route refuses a regrade (open item, #159).
+
+**Re-check fixes (Codex task34 re-check):** a plan built before a regrade changed the
+result is returned with `outdated: true` (plan `created_at` < attempt `graded_at`) and
+the review page says its topics may not match the new result; synchronous grading
+(objective-only, inline) ends its claim in `save_grades` again (only a grading job keeps
+it until its analysis). "Tạo lại kế hoạch" already deleted the old plan and, through the
+FK cascade, its practice quizzes and their attempts, without asking: it now asks first
+(`DestructiveConfirmDialog`, owner decision 2026-11-17), and the outdated note does not
+point the learner at it.
+
+**UX fixes (agy task35):** the banner's button sat beside the text with `shrink-0`: at
+320px the explanation was a 41px column (measured in Chromium). It now sits below the
+text; E2E checks the text is wider than 200px at 320px and nothing scrolls sideways (the
+check fails on the old layout). One live region (the text paragraph; the spinner is
+`aria-hidden`), the button outside it, focus moves to the text when the button goes
+away, the 409 message is not stacked on the used-up message, and an ungraded answer's
+badge uses the muted colour instead of the incorrect red. Kept: the name "Chấm lại câu
+còn thiếu" (it regrades missing answers; "Thử chấm lại" retries a stuck grading). Not a
+deadlock (F8): after the 5-minute stall note, "Chờ thêm" asks the server again, which
+reports "available" once the lease of a dead regrade has expired.
+
+**Regression:** `BE/tests/test_provisional_grading_recovery.py` (23, PostgreSQL),
+`FE/src/pages/study/QuizResult.provisionalRegrade.test.jsx` (11),
+`FE/e2e/quiz-provisional-regrade.spec.js` (4, real backend, fake grader that fails once
+then succeeds; both auth modes).
+
+**Prevention:** when a recovery path is added, list every terminal state a failure can
+end in, not only the one that was reported. A result write must also end the claim that
+fenced it.
+
+**Test isolation note:** the recovery-sweep tests in `test_diagnostic_grading_recovery.py`
+take the oldest stuck attempts of the whole database. On a database reused across runs,
+stuck attempts left by earlier runs (aged 30 days) fill the batch and three sweep tests
+fail (also on #188 alone). They pass on a fresh database (CI). Scope the sweep tests'
+candidates if this database reuse becomes common.
+
+# A provisional practice result could never be regraded (fixed 2026-11-18, #159 item 17)
+
+**Symptom:** practice grades inside the submit request. When the model failed on a short
+answer the attempt became `graded` with `ungraded_count > 0` ("N câu chưa chấm được"),
+the same Idempotency-Key returned that stored provisional result, and #190's regrade
+route refuses practice attempts: the answer stayed ungraded for good.
+
+**Root cause:** #190 fixed the diagnostic route only; practice has its own route,
+synchronous grading and key rules.
+
+**Fix:** `POST /api/practice/<id>/regrade` (`practice.regrade`), synchronous like the
+submit. It reuses #190's primitives with a per-request token: `reclaim_for_regrade`
+(claim + `manual_retries` cap + token registration in one transaction),
+`start_grading_job` (role "regrade"), `regrade_ungraded` (only `verdict IS NULL`, never
+`user_answer` or a graded answer) and `release_job_claim` after the gap analysis. 200
+with the stored attempt (also when nothing is left), 409 `NopBaiDangCham` while another
+request regrades, 409 `HetLuotChamLai` when retries are used up (no model call), 404 for
+another learner or an attempt of another quiz. The submit's Idempotency-Key contract is
+unchanged (no attempt opened, no answer written). Practice page: "Chấm lại câu còn
+thiếu" under a provisional score. No schema change.
+
+**UX review fixes (agy task38):** the used-up 409 now carries a stable machine field
+`ma: "het_luot_cham_lai"` (additive; the message is unchanged, also on the diagnostic
+route) and `_appError` keeps the response body, so the page no longer matches wording;
+the banner matches #190 (warn border, icon, "Kết quả tạm thời.", the exact count) on its
+own row of the flex-wrap score card; a regrade that grades nothing says so; focus moves
+to the banner text or the score card when the button goes away.
+
+**Regression:** `BE/tests/test_practice_provisional_regrade.py` (12, red first),
+`FE/src/pages/study/Practice.provisionalRegrade.test.jsx` (6, red first).
+
+**Review fixes (task39: owner checks of timeout, lease, aborted request, concurrent
+retries, reload after used-up retries, duplicate model calls):**
+- *No heartbeat inside the request.* `practice.regrade` called `regrade_ungraded`
+  without `progress_cb`, so its claim was never renewed between answers. A regrade
+  longer than `grading_lease_s()` (several answers at `GRADE_LLM_TIMEOUT_SEC` + queue
+  wait) let a second request reclaim and pay for the same answers again, while the
+  first kept calling the model (its write was already fenced off). Now it renews before
+  each model call, as the grading job does, and answers 409 `NopBaiDangCham` once its
+  claim was taken over, before the next call.
+- *Takeover during the last model call* (agy task40): no heartbeat follows it, so the
+  takeover shows only when `save_regrade` refuses the write. The request then answered
+  200 with the unchanged provisional result and "thử thêm" while the other request was
+  still grading. It now answers 409 `NopBaiDangCham` too.
+- *Reload lost the provisional result.* The comparison counts complete results only
+  (409 while provisional), so a reload showed the empty quiz: no "Kết quả tạm thời", no
+  regrade offer, no word that retries were used up. `GET /api/practice/<id>` now adds
+  `latest_attempt_id` (latest graded attempt, provisional too; additive) and the page
+  reloads that result, its offer, or "Đã hết lượt chấm lại".
+- *Result page dead end.* A provisional practice attempt opened from "Bài đã làm gần
+  đây" lands on the generic result page, which offered "Chấm lại câu còn thiếu" and
+  posted to `/api/attempts/<id>/regrade`; that route refused practice with a developer
+  message, every time. It now hands practice attempts to `practice.regrade` (inside the
+  request, 200).
+- *Not changed, owner risk:* production runs one sync gunicorn worker with
+  `GUNICORN_TIMEOUT=120` while one grading call may take `GRADE_LLM_TIMEOUT_SEC` (120) +
+  queue wait. An inline grading (practice submit, and now practice regrade) can hold
+  the only worker and be aborted; the claim then expires after the lease and the used
+  retry is not refunded. Pre-existing for practice submit.
+
+**Regression:** `test_practice_provisional_regrade.py` +3 (lost claim stops before the
+next model call; result-page route regrades practice; the page finds a provisional
+result again), `Practice.provisionalRegrade.test.jsx` +3 (reload), new E2E
+`FE/e2e/practice-provisional-regrade.spec.js` (3, real Flask + PostgreSQL + browser,
+fake grader; `run_e2e_server.py` now stubs practice question generation too). All red
+first except the E2E, written after the unit reds.
+
+## Practice regrade moved to the background job (task A, 2026-11-18, stacked on #192)
+
+**Problem (Codex task39 192-2/192-3, owner decision):** #192 graded inside the HTTP
+request. Production runs one sync gunicorn worker with `GUNICORN_TIMEOUT=120` (compose
+`environment:` overrides `.env`), and one model call may take 120 s plus queue wait: one
+regrade could hold the only worker and be aborted, and a dead worker kept a counted retry.
+
+**Fix:** `POST /api/practice/<id>/regrade` checks ownership and hands the attempt to
+#190's `regrade_provisional`: 202 + `job_id` (the same job while one is queued or
+running), 200 with the stored result when nothing is left, 409 when retries are used up.
+`/api/attempts/<id>/regrade` takes practice attempts the same way (the inline delegation
+of task39 is gone). The page polls the stored result every 3 s for at most 5 min, then
+says the regrade is taking long; a reload during the job keeps waiting.
+
+**Retry accounting (shared, so the diagnostic route follows it too):** `start_grading_job`
+marks `regrade_started_job` when a regrade job reaches its model work. A later
+`reclaim_for_regrade` gives back the previous retry once only when that job never
+started: no marker AND its job row still `pending` (lost by the queue, worker died
+before taking it). A job that started and died keeps its retry counted, so dead workers
+cannot refund paid model calls without end. Both signs are required so a job registered
+before the marker existed, which did run, is not refunded at deploy time. No schema
+change (`metadata_json`).
+
+**Regression:** `test_practice_provisional_regrade.py` rewritten for the job (22 tests,
+including lost job refunded once, started-and-died counted, legacy job not refunded,
+failed enqueue refunded, duplicate delivery grades once, diagnostic route refund),
+`Practice.provisionalRegrade.test.jsx` +4 (wait, exhausted after the job, 5-minute bound,
+reload during the job), E2E `practice-provisional-regrade.spec.js` now expects 202 and
+exactly one job.
+
+**Review fixes (Codex task44):** the practice poller was stopped for ever under the app's
+`React.StrictMode` (setup, cleanup, setup left `mountedRef` false, so the button stayed
+"Đang chấm lại…" after a 202); the flag is now set on every setup. The route reuses the
+component when only the quiz id changes, so a wait for quiz A could write A's result into
+quiz B; every wait now checks the current quiz id after each await, and loading a quiz
+starts from a clean result/comparison/regrade state. Regression: 2 Vitest tests (StrictMode,
+quiz change), red first.
+
+**Review fixes (Codex task46):** the quiz-id fence covered only the successful poll. A
+regrade request of quiz A that failed after the page moved to quiz B wrote A's error into
+B's banner (and A's lock blocked B's button), and A's own late `load()` could replace B's
+quiz, comparison or result. Every continuation of the regrade (success, failure,
+`finally`) and of `load()` now checks the quiz id it started for; loading a quiz also
+frees the regrade lock. Regression: 2 Vitest tests, red first.
+## "Tạo lại kế hoạch" archived instead of deleting practice history (issue #18, option B, 2026-11-19)
+
+**Problem:** `review.service._persist` deleted the old plan; the database cascade
+(`review_plan_items` -> `quizzes.source_review_item_id` -> attempts -> answers,
+`concept_masteries`) deleted every practice quiz made from its topics with its results.
+#190 only added a warning dialog.
+
+**Fix (owner option B, migration `20261118_review_item_archive`, disposable PostgreSQL
+only; not applied to any hosted database):**
+- `review_plan_items.archived_at` (nullable). The whole-table `UNIQUE (review_plan_id,
+  priority)` became the partial unique index `uq_review_plan_items_priority_active ...
+  WHERE archived_at IS NULL`: archived and current topics of one plan share priorities.
+  The index is built CONCURRENTLY and verified before the old constraint is dropped; the
+  upgrade is rerun-safe; `verify_db_schema` checks all three facts.
+- Regeneration keeps the plan row (same id), archives its current topics, adds the new
+  ones, and moves `created_at` (the generation time; otherwise #190 marks the new plan
+  outdated). No foreign key changes, nothing deleted.
+- Readers: `items` are current topics only; `archived_items` (additive) lists the old ones
+  with their practice quizzes; the Library lists current topics; `get_item` still
+  resolves archived topics (history, practice pages, comparison).
+- `POST /api/practice/generate` refuses an archived topic (409 "Chủ đề này thuộc kế hoạch
+  cũ..."); a practice quiz already made from it can still be opened, submitted and
+  regraded.
+- The page asks with an honest archive confirmation (plain `Modal`, no "xoá vĩnh viễn"
+  dialog) and shows "Kế hoạch trước" read-only.
+- Downgrade refuses while archived topics exist (owner: roll back code only, keep the
+  column). Old code on the new schema behaves as before while nothing is archived.
+
+**Regression:** `test_review_plan_archive.py` (9), `test_review_item_archive_migration.py`
+(6: verified head, rerun-safe, partial index, downgrade refusal, downgrade/upgrade on a
+fresh database, verifier fails closed), `test_gap_and_review.py` regenerate test updated,
+`ReviewGuide.practiceCustomize.test.jsx` (4 new). Red first on the old application code.
+
+**Review fixes (Codex task46):**
+- *Code-only rollback is not safe (P1).* The first text said "roll back code only, keep
+  the column". Code older than this migration deletes the plan on regeneration, and the
+  cascade deletes archived topics with their practice history; `scripts/rollback.sh`
+  accepts any ledgered SHA. The migration docstring, its downgrade message and the new
+  `docs/RUNBOOK_REVIEW_ITEM_ARCHIVE.md` now state the rollback floor: once a topic is
+  archived, roll back only to code containing this revision, or roll forward. A hard
+  guard (a trigger refusing to delete a plan with archived topics, or a schema floor in
+  `rollback.sh`) is proposed for owner approval, not implemented.
+- *Wrong runbook (P3).* `verify_db_schema` printed the submit-key runbook for every
+  failure; each check family now prints its own.
+- The migration test fixture reruns the revision after every test (stamp previous +
+  migrate), so a test that fails half-way cannot leave the index dropped for the next.
+
+## Two guards for archived review history (owner decision 2026-11-19, Codex task46/48 P1)
+
+**Problem:** after #194 archives a topic, code older than #194 (a rollback, a hand delete)
+deletes the plan on regeneration and the FK cascade deletes the archived topics with
+their practice quizzes, attempts, answers and mastery. Documentation alone did not stop
+`scripts/rollback.sh`, which accepts any ledgered SHA.
+
+**Fix:**
+1. Migration `20261119_review_item_guard` (PostgreSQL triggers, fail closed, SQLSTATE
+   23001, hint names `docs/RUNBOOK_REVIEW_ITEM_ARCHIVE.md`, no row data): refuse DELETE
+   of a plan holding archived topics while its attempt, user and document all exist;
+   DELETE of an archived topic while its plan exists; UPDATE that un-archives or moves
+   one; TRUNCATE of either table while archived topics exist. Deleting a document, an
+   account or an attempt still removes everything made from it, as before. Race: the new
+   code updates the plan row in its archiving transaction, so an old-code DELETE waits
+   for that lock and its row trigger then sees the committed archive. `verify_db_schema`
+   fails while a guard trigger or function is missing or disabled. Downgrade refuses
+   while archived topics exist. The revision id must fit `alembic_version` (32 chars).
+2. `scripts/rollback.sh` runs `scripts.rollback_preflight` (read-only) before any
+   checkout or build: with archived topics, the target tree must contain migrations
+   20261118 and 20261119 and a review service that knows `archived_at`. A failed or
+   unreadable preflight refuses; break glass does not skip it.
+
+**Regression:** `test_review_item_archive_guard.py` (12: old-code ORM delete, SQL delete,
+children first, un-archive, truncate, many regenerations, attempt/document deletes
+allowed, old-code delete racing the archive, verifier missing/disabled trigger, guard
+downgrade refusal), `test_rollback_preflight.py` (2), `scripts/tests/test_deploy_pinning.sh`
+section R (6 cases) and 3 new mutations in `test_deploy_guard_mutations.sh`. Red first,
+except `test_rollback_preflight.py`, written together with the module it tests.
+
+**Review fixes (Codex task50, BLOCK: four P1, two P2, one P3), all red first:**
+- *Lock order.* `_persist` archived the topic rows first and locked the plan row only at
+  flush; an old-code DELETE could take the plan lock in between, pass its trigger
+  (archive not committed), and deadlock with the archiver. Reproduced on the old service:
+  the archiver was the deadlock victim and the delete committed (history lost). The plan
+  row is now `SELECT ... FOR UPDATE` before archiving; the race test drives the real use
+  case and pauses inside its transaction; a contract test checks the SQL order.
+- *Rollback accepted `guard=0`.* Now refused whenever the archive schema exists.
+- *Keyword compatibility.* `archived_at` in a comment passed. A target is archive-aware
+  only if its tree carries both migrations and `BE/shared/archive_contract.py`
+  (`ARCHIVE_CONTRACT_VERSION = 1`), whose behaviour `tests/test_archive_contract.py`
+  and the archive tests enforce on every CI-green SHA.
+- *Downgrade race.* Both downgrades lock `review_plans` and `review_plan_items` (SHARE
+  ROW EXCLUSIVE) before counting archived topics.
+- *Verifier checked names only.* It now checks each trigger's `tgtype` and function and
+  compares each guard function body with the contract in `shared.db_schema_checks`.
+- *Archived rows were writable.* Any UPDATE/upsert of an archived topic is refused except
+  its three nullable references going to NULL (FK SET NULL).
+- *Preflight protocol.* stdout must be exactly one facts line (stderr kept apart); a
+  stale or spoofed extra line is refused.
+- *Database down (side note):* with unreadable facts only an archive-aware target may be
+  rolled back to, so an outage does not block an emergency rollback to a safe SHA.
+
+**Review fixes (Codex task52, BLOCK: three P1, one P2), red first:**
+- *Reverse interleaving.* An old-code delete that took the plan lock before any archive
+  existed found no archived topic and the cascade erased the current topics' practice.
+  The plan guard now protects any practice history (an archived topic or a practice quiz
+  made from a topic); the item guard refuses deleting a topic with practice; TRUNCATE
+  checks both.
+- *Downgrade 20261118 released its lock.* `DROP INDEX CONCURRENTLY` needed an autocommit
+  block, which committed and released the table lock before `DROP COLUMN`. The index is
+  now dropped non-concurrently inside the locked transaction.
+- *search_path shadow tables.* Unqualified names let a session's `pg_temp` tables answer
+  the EXISTS checks. Every guard function pins `search_path = <schema>, pg_temp`; the
+  verifier requires it.
+- *Overload-ambiguous verifier.* Bodies were read by name; now from the exact
+  `pg_trigger.tgfoid` function, which must also be a zero-argument plpgsql trigger.
+
+**Review fixes (Codex task53, BLOCK: two P1, one P2), red first:**
+- *History, not archive only.* With the wider plan guard, code before #194 cannot
+  regenerate a plan whose topic has practice. The rollback preflight now reports
+  `history_topics` (archived or with practice) and `rollback.sh` refuses a non
+  archive-aware target while it is > 0, once the archive schema exists (before #194 was
+  ever deployed, rollbacks between older SHAs stay allowed). Both downgrades count the
+  same history and lock `quizzes` too.
+- *Practice from an archived topic, late.* The request checked before enqueueing and
+  the worker inserted later. A `BEFORE INSERT OR UPDATE OF source_review_item_id` trigger
+  on `quizzes` refuses it in the database. First version judged `archived_at` in the
+  WHERE clause: on the old snapshot the row was filtered out without waiting or
+  re-reading. The row is now locked unconditionally (`FOR SHARE`) and its latest
+  `archived_at` read.
+
+**Review fixes (Codex task54: one deadlock, one TOCTOU, one bypass), red first:**
+- *Practice insert vs regeneration deadlock.* The regeneration locks attempt, plan, then
+  topic; the practice trigger locked the topic, then the FK check wanted the attempt.
+  Reproduced: deadlock, the archive was the victim and the practice row was inserted.
+  The trigger now takes the plan's attempt `FOR KEY SHARE` first, then the topic.
+- *Rollback TOCTOU.* History counted at preflight could appear while the rollback built.
+  Once the archive schema exists every non archive-aware target is refused (the schema
+  only changes under the deploy lock rollback.sh holds).
+- *Practice quiz delete/detach.* `DELETE FROM quizzes` cascaded practice attempts,
+  answers and mastery while their parents existed, and changing `source_review_item_id`
+  detached the quiz. Both are refused (and `TRUNCATE quizzes`); document, account and
+  attempt deletes still cascade.
+
+**Review fixes (Codex task55: one P1, one P2), red first:**
+- *Diagnostic quiz as a delete root.* The quiz DELETE guard looked only at practice
+  quizzes; deleting the diagnostic quiz cascaded through its attempt, the plan, every
+  topic and every practice quiz while the user and document existed. Any quiz delete is
+  now refused while one of its attempts owns a plan with history and that plan's user
+  and document exist.
+- *Practice provenance.* Only `source_review_item_id` was frozen; `quiz_type` and
+  `source_attempt_id` could be rewritten (hiding the quiz, breaking the comparison). All
+  three are read-only for a practice quiz.
+
+**Review fixes (Codex task56: two P1 races, one P2), red first:**
+- *One serialisation point.* The delete guards judged history on their snapshot, before
+  a racing regeneration or practice insert committed; their cascade then waited and took
+  the new history. Reproduced both (diagnostic quiz delete vs the first archive, plan
+  delete vs a practice insert). Every guard now locks the owning attempt first (`FOR
+  UPDATE` in the plan and quiz delete guards; regeneration already holds it `FOR UPDATE`,
+  a practice insert `FOR KEY SHARE`), then judges with a fresh snapshot.
+- *Active topics with practice* were rewritable, also atomically rewritten and archived.
+  They are now read-only like archived ones, except the archive transition itself and
+  the FK SET NULL of their references.
+
+### Hard document delete deadlocked with "Tạo lại kế hoạch" (Codex task57, owner item 5, 2026-11-19)
+
+- **Symptom:** deleting a source from the sidebar (`DELETE /sources/<id>`, `hard_delete`)
+  while the same learner regenerated a review plan of that document: PostgreSQL aborted
+  the regeneration with 40P01 (deadlock detected).
+- **Root cause:** opposite lock order between two current-code flows. Regeneration locks
+  the attempt `FOR UPDATE`, then the plan. The document cascade reached `review_plans`
+  first (row lock, then the plan-delete guard), and the guard then waited for the attempt.
+- **Fix:** `documents.repository.hard_delete` locks the document's attempts, then its
+  plans (both ordered by id, `FOR UPDATE`) before `s.delete(document)`, in the
+  regeneration's order.
+- **Regression:** `BE/tests/test_review_history_document_delete.py::test_a_hard_document_delete_racing_a_regeneration_does_not_deadlock`
+  (red on the old `hard_delete`: `{'archive': '40P01'}`; green 3/3). Same file: another
+  learner gets 404 on both delete routes; the Library delete is soft and keeps history.
+- **Prevention:** any new path that deletes or cascades through `review_plans` locks the
+  owning attempt first. Only an OLD-code delete may still deadlock (accepted, runbook §3).
+
+### Sidebar "Xóa" is a hard delete and said nothing about history (owner item 4, 2026-11-19)
+
+- **Symptom:** `window.confirm('Xóa "<file>"?')` then the cascade removed every quiz, plan,
+  practice quiz and result of the document, archived topics included.
+- **Fix:** `SidebarLeft` uses the shared `DestructiveConfirmDialog` (checkbox required,
+  names the loss, "Không thể hoàn tác"). The Library's delete is soft and is not touched.
+- **Regression:** `FE/src/components/Layout/SidebarLeft.deleteSourceWarning.test.jsx`.
+
+### `validate_env` died silently on a missing variable (found 2026-11-21, role separation)
+
+- **Symptom:** `deploy.sh` printed "step 1/7: validating environment" and exited non-zero
+  with no message when a checked variable was absent from the env file.
+- **Root cause:** `env_value` ran `grep -E "^KEY=" | tail | cut` under `set -euo pipefail`;
+  grep exits 1 on no match, the pipeline fails, and `val="$(env_value KEY)"` aborts the
+  script before `validate_env` can list what is missing. Latent since the list existed:
+  every required variable had always been present in the tests.
+- **Fix:** `scripts/_lib.sh` `env_value`: `{ grep ... || true; } | tail -1 | cut ...`.
+- **Regression:** `scripts/tests/test_deploy_pinning.sh` case "role separation on without
+  MIGRATION_DATABASE_URL is refused before any migration" (red before the fix: no
+  message; green after: names `MIGRATION_DATABASE_URL (DB_ROLE_SEPARATION=1)`).
+- **Prevention:** a helper that reads optional input must not fail on absence under
+  `pipefail`; test the "missing" branch of every validator, not only the happy path.
+
+### Role separation: owner credential in the runtime env; NOINHERIT membership (Codex task60, 2026-11-21)
+
+- **Owner URL in the runtime environment.** `MIGRATION_DATABASE_URL` was required in
+  `/opt/memvid/env/.env`, which `backend` and `mindmap-worker` load through compose
+  `env_file`: code execution in either service could connect as the table owner and
+  undo the whole role contract. **Fix:** the owner URL lives only in
+  `/opt/memvid/env/migration.env` (mode 600); `scripts/_lib.sh` `compose_migration` passes
+  it (`-e NAME`, no value on the command line) to the one-shot migration, verification
+  and rollback-preflight containers; `validate_env` refuses it in `.env`, refuses a
+  missing or non-600 `migration.env`. **Regression:** `test_deploy_pinning.sh` (owner URL
+  only in those runs, never in build/`up -d` or a command line; three refusal cases) and
+  three mutations in `test_deploy_guard_mutations.sh`, each caught.
+- **NOINHERIT membership passed verification.** `role_problems` used
+  `pg_has_role(.., 'USAGE')`, which is false for a `NOINHERIT` member that can still
+  `SET ROLE` to the owner. **Fix:** the app and read-only roles must be members of no
+  role (`pg_auth_members`); this also catches predefined roles such as
+  `pg_write_all_data`. **Regression:** `test_db_roles.py::test_any_role_membership_fails_verification_even_without_inherit`
+  (red: `role_problems` returned `[]` with the membership and `SET ROLE` worked; green
+  after) and `test_the_app_role_cannot_switch_to_the_owner`.
+- **Prevention:** a least-privilege design is only as good as where the privileged
+  credential is reachable from; check every container's `env_file`, not only the code
+  that uses the credential. For role checks, test membership itself, not inherited rights.
+
+### Role separation: unproven runtime login, MAINTAIN, API defaults, read-only sequences (Codex task62, 2026-11-22)
+
+- **Runtime login never proven before cut-over.** Step 5b checked only the user NAME in
+  `DATABASE_URL` and `/health` never touches the database; the guard compared host and
+  database only, and on Supabase's shared pooler every project is `<host>/postgres`. A
+  wrong password, a role without LOGIN, or `studymap_app.<other project>` deployed green.
+  **Fix:** `migration_guard` refuses different `.<project_ref>` user suffixes;
+  `verify_db_schema` logs in through the runtime URL (`db_roles.runtime_login_problems`:
+  must be `studymap_app`, same database oid/name and server start time as the owner's
+  connection, read a contract table; prints no URL or server message).
+- **MAINTAIN invisible.** PostgreSQL 17's `MAINTAIN` was not among the compared
+  privileges. **Fix:** compared on servers >= 17 for app, read-only and API roles; CI's
+  role-contract step now runs on a PostgreSQL 17 service and fails if any role test skips.
+- **API roles: defaults, sequences, functions.** Only existing tables were revoked.
+  **Fix:** `apply` also revokes API sequence/function grants, `CREATE` on `public` and the
+  owner's default privileges; `verify` checks them and fails on a non-trigger,
+  non-extension `public` function they may `EXECUTE` (also through `PUBLIC`).
+- **Read-only backups and sequences.** The contract gave sequences to the app only;
+  `pg_dump` as the read-only role failed with "permission denied for sequence". **Fix:**
+  read-only gets `SELECT` on every contract sequence, verified.
+- **Regression:** `tests/test_db_roles.py` task62 section (8 red at `f2fe344`, green
+  after; logs in `studymap-qa-execution/v6/results/db-roles/task62-*`).
+- **Prevention:** a deploy gate must exercise the credential it is about to activate, not
+  parse it. A privilege verifier must enumerate the server version's full privilege set
+  and every object kind the platform grants by default, not only what exists today.

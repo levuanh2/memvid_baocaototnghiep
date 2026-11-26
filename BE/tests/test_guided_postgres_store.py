@@ -36,7 +36,8 @@ def _postgres_backend(monkeypatch):
     # over from a previous test run is older than anything this test creates and
     # would get claimed instead, making claim assertions flaky/wrong rather than
     # a real concurrency bug. Each test gets a clean table.
-    with guided_store._get_engine().begin() as conn:
+    from tests._owner_db import owner_engine
+    with owner_engine().begin() as conn:   # TRUNCATE is owner-only (least-privilege app role)
         conn.execute(text("TRUNCATE guided_mindmap_jobs, guided_mindmap_worker_heartbeats"))
     yield
     guided_store.reset_engine()
