@@ -87,10 +87,10 @@ export { PROSE };
 /** `dropCap` — the opening-paragraph editorial flourish from the redesign
  * spec (§07): use on ONE reading surface's first block, never repeated per
  * section (see index.css's `.prose-drop-cap` for exactly what it draws). */
-export function MdProse({ text, className = "", dropCap = false }) {
+export function MdProse({ text, className = "", dropCap = false, components = null }) {
   return (
     <div className={dropCap ? `prose-drop-cap ${className}` : className}>
-      <ReactMarkdown remarkPlugins={[remarkGfm, remarkBreaks]} components={PROSE}>
+      <ReactMarkdown remarkPlugins={[remarkGfm, remarkBreaks]} components={components ? { ...PROSE, ...components } : PROSE}>
         {unescapeMd(text)}
       </ReactMarkdown>
     </div>

@@ -25,13 +25,24 @@ vi.mock("../../auth/useAuth", () => ({
 }));
 vi.mock("./SidebarLeft", () => ({ default: () => <div data-testid="sidebar-left-stub" /> }));
 // Stands in for the Guided dialog's own close: calls the callback MainLayout wires.
-vi.mock("./SidebarRight", () => ({
-  default: (props) => (
-    <div data-testid="sidebar-right-stub">
-      <button type="button" onClick={() => props.onGuidedClose?.()}>close-guided</button>
-    </div>
-  ),
-}));
+// The real panel always reports its two lists once mounted; until it does, MainLayout treats
+// them as still loading. A stub that never reports would leave the centre on "Đang tải…".
+vi.mock("./SidebarRight", async () => {
+  const { useEffect } = await import("react");
+  function SidebarRightStub(props) {
+      const { onMindmapLibraryChange, onSummaryLibraryChange } = props;
+      useEffect(() => {
+        onMindmapLibraryChange?.({ mindMaps: [], initialLoading: false });
+        onSummaryLibraryChange?.({ summaries: [], initialLoading: false });
+      }, [onMindmapLibraryChange, onSummaryLibraryChange]);
+      return (
+        <div data-testid="sidebar-right-stub">
+          <button type="button" onClick={() => props.onGuidedClose?.()}>close-guided</button>
+        </div>
+      );
+  }
+  return { default: SidebarRightStub };
+});
 vi.mock("../mindmap/KnowledgeInspector", () => ({ default: () => <div data-testid="inspector-stub" /> }));
 vi.mock("../study/ResearchTimeline", () => ({ default: () => <div data-testid="timeline-stub" /> }));
 vi.mock("./AccountMenu", () => ({ default: () => <div data-testid="account-menu-stub" /> }));

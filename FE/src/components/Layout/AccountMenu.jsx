@@ -17,7 +17,7 @@ import { dungHoSo } from "../../auth/hoSoNguoiDung";
  * `updateUserFields`, nên khối này không cần giữ một bản sao `hoSoMoi` cục bộ như
  * bản ngăn kéo cũ nữa — `user` truyền vào đây tự cập nhật theo.
  */
-export default function AccountMenu({ user, onLogout }) {
+export default function AccountMenu({ user, onLogout, onShowShortcuts }) {
   const navigate = useNavigate();
   const [moDoiMatKhau, setMoDoiMatKhau] = useState(false);
   const [moMenu, setMoMenu] = useState(false);
@@ -49,7 +49,7 @@ export default function AccountMenu({ user, onLogout }) {
         aria-expanded={moMenu}
         title={hoSo.email}
         aria-label={`Tài khoản: ${hoSo.ten}`}
-        className="account-menu__trigger flex items-center justify-center lg:justify-start gap-2 w-10 h-10 lg:w-auto lg:h-auto pl-0 lg:pl-1 pr-0 lg:pr-1.5 py-0 lg:py-1 rounded-full border border-[var(--border-color)] transition-theme hover:border-[var(--accent)]"
+        className="account-menu__trigger flex items-center justify-center lg:justify-start gap-2 w-10 h-10 lg:w-auto lg:h-10 pl-0 lg:pl-1 pr-0 lg:pr-1.5 py-0 lg:py-1 rounded-full border border-[var(--border-color)] transition-theme hover:border-[var(--accent)]"
       >
         <Avatar src={hoSo.avatar} chuCai={hoSo.chuCai} size={28} />
         <span className="account-menu__label hidden lg:inline text-small text-text-secondary max-w-[140px] truncate">{hoSo.ten}</span>
@@ -85,6 +85,20 @@ export default function AccountMenu({ user, onLogout }) {
               onClick={() => { setMoMenu(false); setMoDoiMatKhau(true); }}
             >
               <Icon name="KeyRound" size={15} /> Đổi mật khẩu
+            </button>
+          )}
+
+          {/* Keyboard-shortcut help (V6: moved here from its own header button). Only at the
+              widths where the old button showed: a phone has no keyboard to use them with. */}
+          {typeof onShowShortcuts === "function" && (
+            <button
+              role="menuitem"
+              className={`${muc} account-menu__shortcuts text-text-secondary hover:text-accent`}
+              onClick={() => { setMoMenu(false); onShowShortcuts(); }}
+            >
+              <Icon name="Keyboard" size={15} /> Phím tắt
+              <kbd aria-hidden className="ml-auto text-caption font-mono text-text-muted border rounded-[4px] px-1.5"
+                   style={{ borderColor: "var(--border-color)" }}>?</kbd>
             </button>
           )}
 

@@ -116,8 +116,15 @@ export const listStudyMaps = (documentId) =>
 
 // Đoạn văn nguồn để hiện khi bấm một node. Lấy MỘT lần rồi tra theo chunk_id —
 // node trỏ tới chunk bằng id, không kèm text.
-export const listChunks = (documentId, { limit = 500 } = {}) =>
-  _get(`/api/documents/${encodeURIComponent(documentId)}/chunks?limit=${limit}`).then((b) => b.chunks || []);
+export const listChunkPage = (documentId, { limit = 500, offset = 0 } = {}) => {
+  const capped = Math.min(500, Math.max(1, Number(limit) || 500));
+  const start = Math.max(0, Number(offset) || 0);
+  return _get(`/api/documents/${encodeURIComponent(documentId)}/chunks?limit=${capped}&offset=${start}`)
+    .then((b) => ({ ...b, total: Number(b.total) || 0, chunks: b.chunks || [] }));
+};
+
+export const listChunks = (documentId, { limit = 500, offset = 0 } = {}) =>
+  listChunkPage(documentId, { limit, offset }).then((b) => b.chunks);
 
 // ── Quiz ────────────────────────────────────────────────────────────────────
 export const generateQuiz = (payload) => _send("/api/quizzes/generate", "POST", payload);
@@ -139,6 +146,10 @@ export const saveAnswers = (attemptId, answers) =>
 export const submitAttempt = (attemptId) =>
   _send(`/api/attempts/${encodeURIComponent(attemptId)}/submit`, "POST");
 
+// A provisional result (the AI grader failed on some short answers): grade only those.
+export const regradeAttempt = (attemptId) =>
+  _send(`/api/attempts/${encodeURIComponent(attemptId)}/regrade`, "POST");
+
 export const getResult = (attemptId) =>
   _get(`/api/quizzes/results/${encodeURIComponent(attemptId)}`);
 
@@ -159,8 +170,18 @@ export const generatePractice = (payload) => _send("/api/practice/generate", "PO
 export const getPractice = (practiceQuizId) =>
   _get(`/api/practice/${encodeURIComponent(practiceQuizId)}`);
 
-export const submitPractice = (practiceQuizId, answers) =>
-  _send(`/api/practice/${encodeURIComponent(practiceQuizId)}/submit`, "POST", { answers });
+// `idempotencyKey` goes in the BODY, not the `Idempotency-Key` header: a new header on a
+// cross-origin call needs the backend's CORS allowlist first, and the web and the backend
+// deploy separately. An older backend ignores the unknown field.
+export const submitPractice = (practiceQuizId, answers, { idempotencyKey } = {}) =>
+  _send(`/api/practice/${encodeURIComponent(practiceQuizId)}/submit`, "POST",
+    idempotencyKey ? { answers, idempotency_key: idempotencyKey } : { answers });
+
+// A provisional practice result (the AI grader failed on some short answers): grade only
+// those, inside the request. Returns the stored attempt.
+export const regradePractice = (practiceQuizId, attemptId) =>
+  _send(`/api/practice/${encodeURIComponent(practiceQuizId)}/regrade`, "POST",
+    { attempt_id: attemptId });
 
 export const getPracticeComparison = (practiceQuizId) =>
   _get(`/api/practice/${encodeURIComponent(practiceQuizId)}/comparison`);

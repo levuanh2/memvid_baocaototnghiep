@@ -13,6 +13,7 @@ import uuid
 import pytest
 
 from app.domains.studymap.generator import build_graph
+from tests._owner_db import owner_session_scope  # clean-up as the table owner
 
 
 # ── mapping thuần: không DB, không LLM ──────────────────────────────────────
@@ -96,7 +97,7 @@ def owner():
 
     u = users_store.create_user(f"smap_{uuid.uuid4().hex[:8]}@example.com", "password123")
     yield u["user_id"]
-    with session_scope() as s:
+    with owner_session_scope() as s:
         row = s.get(User, u["user_id"])
         if row is not None:
             s.delete(row)
@@ -304,7 +305,7 @@ def don_map_theo_tai_lieu():
     yield ids
     from app.db import session_scope
     from app.db.models import Document
-    with session_scope() as s:
+    with owner_session_scope() as s:
         for doc_id in ids:
             row = s.get(Document, doc_id)
             if row is not None:

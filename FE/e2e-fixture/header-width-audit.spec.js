@@ -1,6 +1,7 @@
 // Breakpoint audit for the global header (diagnostic, not a gate). Measures the full
 // desktop header's natural width, then checks overflow and child boxes across widths.
 import { test } from "@playwright/test";
+import { waitForModeControl } from "./workspaceMode.js";
 import fs from "node:fs";
 import path from "node:path";
 
@@ -23,7 +24,7 @@ async function openApp(page, width, height) {
     return route.fulfill(json({}));
   });
   await page.goto("/app");
-  await page.getByRole("tablist", { name: "Chế độ Workspace" }).waitFor({ state: "visible", timeout: 30000 });
+  await waitForModeControl(page);
 }
 
 const MEASURE = () => {

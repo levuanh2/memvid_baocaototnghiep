@@ -3719,3 +3719,716 @@ Rules: check icons and logos when a rename is reported incomplete; serve a chang
 new URL (browsers cache favicons per URL); a static SVG cannot read CSS variables, so pin its
 colour to the token value and test that they stay equal; comments quoting the retired name trip
 the branding test, so describe it without naming it.
+
+## 2026-11-11 — "Empty" is a result, not a default
+
+An empty array is what a list looks like before it loads, after it fails, and when it is truly empty. Any screen that draws an empty state from `list.length === 0` alone is making a claim about the user's data that it cannot back. Keep the load state next to the list ("loading" / "ready" / "error") and let only "ready and empty" say "you have nothing".
+
+Also check who fetches. If the only component that loads a list can be unmounted by a layout choice (a collapsed panel, a breakpoint), every consumer of that list silently sees "empty" in that layout. Test the collapsed and narrow layouts with a non-empty backend.
+## 2026-11-11 — `disabled={busy}` is not a lock
+
+A disabled attribute driven by state protects against the second click only after React has committed. Two activations in one tick (a double click, Enter held, a duplicated event) both run the handler. Any handler that starts a job, submits a graded attempt, writes, or downloads needs a synchronous lock: a ref checked and set before the first `await`, cleared in `finally`. Test it by firing two clicks inside one `act`.
+## 2026-11-13 — Removing the container does not clean up a portal
+
+A test that only detaches its container leaves every portal (dialogs, toasts, menus) mounted in
+`document.body`, and a later test's `document.body.querySelector` finds the leftover. It hides
+while tests run in file order and shows up only under `--sequence.shuffle`. Always unmount the
+React root in `afterEach`; to check a file for order dependence, run it with a few shuffle seeds.
+
+## 2026-11-16 — One isolation rule, applied at every door
+
+The migration guard had the strong rule (loopback or CI host, `_test` name, not the
+production target, live check); pytest, the guided job store and the E2E server each had
+a weaker one or none. Put the rule in one function and call it from every entry point
+that opens a connection in a test or dev run. And `os.environ.pop` does not keep a value
+out: `load_dotenv` fills every absent variable from `.env`; set it to `""` instead.
+
+## 2026-11-17 — `fut.result(timeout)` inside `with ThreadPoolExecutor` is not a timeout
+
+The context manager's exit waits for the worker, so the caller blocks until the call ends
+anyway. If a timeout matters, shut the executor down without waiting, give every client
+library its own transport timeout (check the field really exists in the installed
+version: an unknown keyword may be silently ignored), share one deadline across retries
+and fallbacks, and never claim the provider stopped working: Python cannot cancel it.
+## 2026-11-12 — A param change is not a remount: tie every async load to the id it was started for
+
+Root cause of V6 bug hunt #4 and #14: a route component stays mounted when only `:id` changes,
+so a `load()` keyed by that id can have an older run still in flight. Prevention: in any page
+whose effect loads by a route param, capture the id at the start and compare it with a ref of
+the current id after every `await`, including in `catch` and `finally`; a "mounted" flag alone
+does not catch this. Test it by resolving the old request after the new one.
+
+## 2026-11-12 — A cancel flag that the next attempt resets is not a cancel
+
+One boolean cannot represent "attempt A is cancelled" once attempt B exists: B must clear the flag to run, and that un-cancels A. Give each attempt its own identity (a counter captured in the closure) and compare identities after every `await`. The same applies to "replace the last message": after an `await`, "last" may belong to someone else, so address the item you created.
+
+## 2026-11-13 — React state is not a same-turn submission lock
+
+Disabling a button from state protects later renders, not two event calls that run before the
+render commits. For an async action that must be single-flight, acquire a ref synchronously
+before the first `await`, hold it for the whole operation (including polling), and release it
+in `finally`. If cancellation can permit a replacement attempt while the old promise settles,
+combine the lock with attempt identity so the old `finally` cannot unlock the replacement.
+Regression tests must invoke the handler twice synchronously in one `act()`.
+
+## 2026-11-14 — A frontend double-submit lock is not idempotency
+
+A ref lock stops one tab from sending twice. It does nothing for a second tab, a retried
+request or a proxy replay, and the server then graded twice because its status check was a
+plain read followed by a write. Guard the transition where the data lives (row lock or
+conditional update), and prove it with a test that parks both threads between the read and
+the write; without that barrier the race test passes on the broken code.
+
+
+## 2026-11-15 — Store the idempotency key on the row it created
+
+A separate idempotency table needs its own expiry, and an expired record turns the next
+retry into a fresh operation. Putting the key on the attempt itself ties its lifetime to the
+result and lets one partial unique index do the deduplication. Send it in the body when web
+and API are on different origins: a new header needs the CORS allowlist deployed first.
+
+
+## 2026-11-16 — `IF NOT EXISTS` is not "exists and works" for a CONCURRENTLY index
+
+A concurrent index build that fails leaves an INVALID index behind under the right name.
+Any idempotent guard that checks the name only (`IF NOT EXISTS`, `to_regclass`) then treats
+a useless index as done. Check the definition in `pg_index` (valid, ready, unique, columns,
+predicate), fail the migration if it is wrong, and check again at deploy time: once
+`alembic_version` is at head the revision never runs again. Repairing an index on production
+(DROP/REINDEX) is a manual, approved step, not something a migration does on its own.
+
+
+## 2026-11-16 — A test teardown must undo what a failed test can leave behind
+
+Teardown code runs after a failed test, but only works if it does not depend on the test
+having reached its end. A fixture that rebuilds a unique index must first remove the
+duplicates a half-finished test may have left, or one failure turns into errors in other
+files. And any `subprocess.run(text=True)` that reads Vietnamese output needs
+`encoding="utf-8"`: the Windows default is cp1252.
+
+
+## 2026-11-17 — A claim that only fences the final write still pays twice
+
+`save_grades(once=True)` stopped a second grader from writing, but only after it had
+called the model for every answer. Fence the expensive part: decide who the grader is
+before the work starts (register the job under the claim, refuse a stale or duplicated
+job at start), and give back what a failure did not use (claim, retry count) so a retry
+is neither blocked by a ghost job nor charged for work that never ran.
+
+## 2026-11-17 — An E2E that needs a stub must prove the stub is there
+
+Writing `FE/e2e/quiz-grading-recovery.spec.js` (QuizResult 202/200/409 against the real
+backend) hit three wrong assumptions, and Codex task33 found five weaknesses:
+
+- **A failing model call does not stall an attempt.** `grade_short_answer` turns a
+  provider error into "ungraded", and the attempt is graded. Only a grading *job* that
+  dies leaves it `submitted` with no live claim ("stalled"). The E2E stub got a separate
+  crash marker that raises outside the model call.
+- **The fake ingest writes FAISS only.** Quizzes read `document_chunks` (PostgreSQL), and
+  the public `status` stays `processing` (`ingest_status` is the pipeline state). The
+  diagnostic stub seeds one chunk with `ON CONFLICT DO NOTHING`; a check-then-insert lost
+  a race on `uq_document_chunks_doc_index` under concurrent jobs.
+- **`reuseExistingServer` ignores `webServer.env`.** Locally, Playwright reuses any healthy
+  process on the port, so a dev backend with provider keys would get the spec's quiz and
+  grading calls. The spec now requires `GET /__e2e__/stubs` (only `run_e2e_server.py`
+  serves it) in `beforeAll`; stub env is set after `...process.env` so the shell cannot
+  turn it off.
+- "200 = nothing regraded" needs a counter, not equal fields (the stub is
+  deterministic); a cumulative response listener can credit a duplicate request to the
+  next click — wait per click and count at the end; a 1 s transient UI state is a race.
+
+Regression: the spec itself (2 tests, both auth modes); the guard was checked with an
+unrelated healthy server on :8080 (spec refused before any quiz call).
+
+## 2026-11-17 — Vitest "all tests passed" is not a pass: read the exit code
+
+PR #190 CI failed with `Test Files 233 passed` and six `##[error] No "regradeAttempt"
+export is defined on the "../../utils/studyApi" mock`. `QuizResult.thuChamLai` compared
+`gui === regradeAttempt`, which reads the export even on the old "Thử chấm lại" path;
+the older QuizResult test files mock `studyApi` without it. Vitest reports such an access
+as an unhandled error after the tests and exits 1. The local check grepped only the
+"Tests" line, so it looked green. Fix: an explicit `{ focusBanner }` option instead of
+comparing functions. Prevention: judge a run by its exit code (`echo $?`), not by
+grepping the summary line; and do not read a module export on a path that does not use it.
+
+# A claim needs its heartbeat wherever the grader runs (2026-11-18, task39)
+
+The job path renewed its claim before each model call; the in-request path that reused
+the same primitives did not, so the lease silently became the limit of a regrade.
+Reusing a fenced primitive means reusing its heartbeat too. And a page that rebuilds
+its state after a reload must read the same states it shows live (here: provisional),
+not a summary endpoint that filters them out.
+
+# A mounted flag must be set on every effect setup (2026-11-19, Codex task44)
+
+`useEffect(() => () => { ref.current = false }, [])` with `useRef(true)` works in tests
+and production but breaks under StrictMode, which runs setup, cleanup, setup: the flag is
+never set back. Set it in the setup body. And a component reused across route params
+needs an identity check (the param it started for) after every await, not only "still
+mounted".
+# New code cannot patch old code: guard the data where old code also writes (2026-11-19)
+
+An expand-only migration is "safe to roll back" only if the old code is harmless on the
+new data. Here the old code's regeneration became destructive once rows were archived,
+so the guard had to live in the database (triggers) and in the rollback tool, not in the
+new application. When a guard refuses a delete, first map every legitimate cascade into
+the table (document, account, attempt deletes) and distinguish them, or the guard breaks
+ordinary product actions.
+
+# A race test must drive the real code path, not a hand-written copy of it (2026-11-19)
+
+The first race test issued the SQL in the order the migration's comment assumed (plan
+first), while production locked the plan last; the test passed and the real race stayed
+open (Codex task50). Drive the real use case and pause it inside its transaction (an
+engine `after_cursor_execute` hook), and add a test that pins the SQL order the code
+actually sends. Same for gates: a keyword or a name is not proof of behaviour.
+
+# Row-lock reads: put the condition after the lock, not in the WHERE (2026-11-19)
+
+`SELECT ... WHERE id = $1 AND archived_at IS NOT NULL FOR SHARE` judges `archived_at` on
+the statement snapshot. A row a concurrent transaction is archiving does not match, so it
+is neither locked nor re-read, and the check passes. Lock by key only
+(`WHERE id = $1 FOR SHARE`), then test the value PostgreSQL re-fetched after the wait.
+
+## 2026-11-19 — "Delete document" is two different operations here
+
+The Library's "Xoá" is a soft delete (status `deleted`, history kept); the sources
+sidebar's "Xóa" is a hard delete that cascades through review history. Earlier reports
+said "deleting a document removes the history" without naming the route, and an owner
+decision was taken on that wording. Name the exact route and whether it is soft or hard
+before writing a warning or asking for a decision.
+
+## 2026-11-19 — A non-owner role under RLS without policies reads 0 rows, silently
+
+Splitting the runtime role from the table owner is the right fix for "the app can
+disable its own triggers", but every table here has RLS enabled and no policies. The
+new role gets empty results, not errors. Grant `BYPASSRLS` or write policies, and
+rehearse on a test database first.
+
+## 2026-11-21 — Least-privilege roles: what the disposable-database run showed
+
+- A non-owner role under RLS with no policy reads 0 rows silently; with per-role
+  policies it sees everything, and **`pg_dump` as that role then stops** ("query would
+  be affected by row-level security policy") unless given `--enable-row-security`.
+- Foreign-key cascades run as the table owner: the app role needs no `DELETE` on child
+  tables to hard-delete a document. That is what lets history tables be insert-only.
+- A `GRANT` by a non-owner is not an error (PostgreSQL only warns "no privileges were
+  granted"). Test the effect (`has_table_privilege`), not the SQLSTATE.
+- Auditing DML by tagging statements with the calling frame misattributes ORM flushes:
+  a test's `s.delete(row)` executes inside `app.db.session_scope` at commit, so it looks
+  like app code. Confirm "the app deletes X" by reading the code, not by the tag alone.
+- Running the suite as the app role turns every test clean-up of rows the app may not
+  delete into an error, and one failed clean-up leaves rows that break later tests
+  (counts, downgrade refusals). Use `tests/_owner_db` for set-up/clean-up, and rerun on
+  a fresh database before judging the next failure list.
+
+## 2026-11-21 — On Supabase, the database is reachable by more than one road
+
+Least-privilege on `DATABASE_URL` does not cover the Data API: `SUPABASE_SECRET_KEY`
+logs in as `service_role` (BYPASSRLS) and Supabase grants API roles on `public` tables by
+default. When the app never uses the Data API for its tables, revoke the API roles there
+in the same contract step that runs after every migration, and verify it.
+
+## 2026-11-22 — A name in a URL is not a login, and a pooler hides the project
+
+Parsing `DATABASE_URL` proves nothing about whether it authenticates or where it lands;
+`/health` that never queries the database proves nothing either. Before replacing a
+running backend, connect with the exact runtime credential and compare a server identity
+with the connection the migration verified. On Supabase's shared pooler the host and
+database are the same for every project; only the user's `.<project_ref>` differs.
+Version-gated privileges (`MAINTAIN` on PostgreSQL 17) must be tested on that version: a
+skip on an older CI server is a silent green.
+## 2026-11-22 — Remapping token values breaks consumers that bypassed the paired token
+
+PR #197 (V9.3 P1a) changed `--accent`/`--accent-cta`/`--seal` from blue/red to gold-brown and
+gold. The token values were accessible in isolation, but six consumers had hard-coded a light
+foreground (`#fff`, `#FFFFFF`, `#F5F1E8`) on a token fill: in dark mode they became white on
+gold at 1.31–1.63:1 (Codex and agy review, both BLOCK). The same remap made `--warn` equal to
+`--accent`, so warning and action read the same, and left V5 blue hard-coded in the mind map
+and Export Studio. Root cause: a token remap changes the background under every consumer, but
+a literal foreground does not follow. Fix: every solid token fill takes `var(--on-primary)`;
+warning got its own value; blue and retired fonts replaced by tokens. Regression:
+`FE/src/styles.v93Contract.test.js` checks WCAG pairs in both themes, role distinctness, and
+scans CSS and inline styles for light literals on token fills, legacy blue, retired fonts,
+2px accent rings and 44px buttons squeezed into `h-8/9/10`. Prevention: before remapping a
+token, grep every consumer of it and of literal foregrounds near it, and keep the scan test.
+
+## A mobile nav mounted in one shell vanishes on the page it links to (V9.3 P1b, 2026-11-22)
+
+The first P1b bottom nav lived only in `StudyShell`, so tapping "Học tập" opened the
+Workspace (`MainLayout`, its own shell) and the nav disappeared. Every destination a
+global nav links to must render that nav too: `MainLayout` now mounts `AppNavBar`
+in its flex column (`--inflow`, not fixed, so it never covers the chat composer),
+and `MainLayout.v93Shell.test.jsx` pins it with "Học tập" as `aria-current`.
+Screenshots measure the composer bottom against the nav top at 390/640px.
+
+## A new fixed bar must re-check every other fixed layer at that edge (PR #200, Codex P2, 2026-11-22)
+
+The P1b bottom nav was in-flow and covered nothing, but the existing toast stack is
+fixed at `bottom: 1rem` with a far higher z-index, so at <=700px a toast sat on top
+of the nav for five seconds. Root cause: the nav was checked against the composer
+only, not against other fixed layers anchored to the same edge. Fix: `.toast-stack`
+offsets by `64px + 16px + safe-area` at <=700px; the screenshot metrics now include
+`toastOverNav`. Same review: `useLocation().pathname` keeps a trailing slash that
+React Router still matches, so nav matchers normalise it before comparing.
+
+## A helper inside a <label> renames the field (V9.3 P2b, 2026-11-23)
+
+The first P2 register form put "Ít nhất 8 ký tự." inside the password `<label>`. The
+field's accessible name became "Mật khẩu Ít nhất 8 ký tự.", so `getByLabel("Mật khẩu",
+{ exact: true })` in `e2e/fixtures.js` (every critical flow registers through it) would
+no longer find the field. Helpers and errors go next to the label, linked with
+`aria-describedby`; `Auth.v93.test.jsx` pins `input.labels[0].textContent === "Mật khẩu"`.
+
+## Ink surfaces re-declare the dark tokens instead of hard-coding colours (V9.3 P2, 2026-11-23)
+
+The landing hero/header/final band and the auth intro must stay dark in both themes. A
+`.lp-ink` scope re-declares the dark token set, so buttons, cite chips, cards and the focus
+ring inside use their contract-tested dark pairs with no per-component overrides. Any
+probe that reads colours from `:root` must read them from the element's own scope instead
+(`landing-wordmark-contrast.spec.js` now reads the header's custom properties).
+
+## 2026-11-23 — A design spec written against a prototype is not the product's contract
+
+V9.3 spec 05 caps uploads at 25 MiB, PDF/DOCX/TXT only, collection names at 50 characters. Those
+are the prototype's numbers. The backend accepts 23 formats, a request-wide 100 MiB
+(`MAX_UPLOAD_MB`), and 100-character collection names. Copying the spec would have refused files
+learners upload today. Before turning a spec limit into a check, grep the backend for the real
+one and keep a single source (here the `accept` string that BE/tests/test_upload_formats.py pins).
+A size check on the client mirrors a request-wide server cap only approximately: keep the
+server's 413 visible on the file's own row.
+
+Also: a comment that quotes a retired label trips `toolsUploadLabels.test.js` like live copy does.
+
+Regression (Codex review of #202, fixed red-first): a per-file queue that is rebuilt on every
+pick silently drops failed rows and their File objects, so "retry" has nothing to send; carry
+failed rows across picks. A status card keyed on "the last upload" must be cleared when a new
+batch starts, or it names the wrong document. And a refresh that flips the page's `loading`
+flag unmounts the list, the queue and the focused button with it: refresh quietly after an
+action the user is still looking at. Tests: DocumentList.v93Upload.test.jsx (fail A, pick B,
+retry A; two batches with an all-failed second; focus after retry and close).
+
+## 2026-11-23 — Moving a block to a new page: check the numbers it already shows
+
+V9.3 P3b moved the learning home from the Library to a new dashboard that also has its own
+"Kết quả luyện tập". The reused block already printed the quiz average, so the page showed it
+twice; only a screenshot caught it. And `count ?? 0` turned a field the API did not send into
+"0 đã nắm", presenting missing data as a measured zero. When composing a page from existing
+blocks, list every number each block renders; render "missing" as absent or as a sentence,
+never as 0. Tests: Dashboard.test.jsx ("shows the quiz average once", "leaves out the concept
+line when the API does not report concepts").
+
+Regression (Codex review of #203, fixed red-first): a new page that lists attempts must reuse
+the existing routing/label contract (`baiLam` in utils/tienDoHoc.js), not a second table:
+practice and submitted attempts went to the wrong flow. A failed source (`null`) and an empty
+one (`[]`) need different output. Per-account page state must be keyed by the account: an
+effect that resets state runs AFTER the new account's first commit, which shows the previous
+account's data; a `useLayoutEffect` probe sees that frame where `act()` hides it. A retry that
+swaps the button for a loading line must move focus to a persistent node first.
+
+## 2026-11-23 — A new header control on the workspace: run mobile-header.spec.js, not just your own spec
+
+V9.3 P4 added a 40px "Tập trung" toggle next to the mode switch. Its own specs passed; the
+compact-header contract (mobile-header.spec.js: one 56px row, no overflow, every control >= 40px
+hitting its own centre) failed at 375/390px: the header overflowed by 16px. The 320px case had
+already moved items into the tools menu, so 320 passed and hid the problem. Fix: phones enter
+Focus Mode from the "Công cụ học" menu; the exit toggle shows only once focus is on (the other
+header actions are hidden then, so it fits). Also: a full fixture run in parallel with another
+Playwright run produced load-only failures; re-run suspects alone and compare with the baseline
+before calling anything a regression.
+
+Regression (CI Fixture Smoke on #205/#206): mobile-header.spec.js "popover ... closes on outside
+click" clicked a fixed (160, 690) at 320x720. Since V9.3 P1b that point is the bottom nav, so the
+"outside click" followed a link and the next step raced the lazy route (2 of 3 local runs failed;
+#204 passed only because its 5-item nav puts "Học tập" = the current /app there). An "outside
+click" must target a measured blank spot, never a viewport coordinate that new chrome can occupy.
+
+Regression (Codex review of #206, fixed red-first): Focus Mode collapsed the evidence column
+through usePanelLayout's setter, which persists every change; reloading or leaving while focused
+overwrote the learner's saved layout. A temporary view state must never go through a persisting
+setter: derive the visible state (`rightCollapsed = focusMode ? !focusRightShown : saved`) and
+route every write through one helper that knows which one to change. Test: remount while
+focused and assert the saved layout and the visible panel.
+
+## Fixture specs pinned retired theme colours as literals (V9.3, 2026-11-24)
+
+brand-mark, marker-keyboard and export-root-color-artifacts asserted #F1333A/#D86A53/#126CF2
+after V9.3 P1a moved --brand, --focus and --accent-cta. They are outside CI Fixture Smoke, so
+15 failures sat unnoticed for several PRs. The export spec called the theme default root a
+"saved" colour although the fixture saves no appearance. Root cause: tests copied token values
+instead of reading the token or the source element. Prevention: resolve the token in the page
+(probe element with `color: var(--token)`) or compare an export with the source node's computed
+colour, and pin the literal only once, next to the comment naming the contract it comes from.
+## Header controls under a drawer backdrop; a select clipped by its native arrow (V9.3 P4b, 2026-11-24)
+
+1. The new "Nguồn"/"Dẫn chứng" header buttons could not be clicked while a drawer or the tablet
+shelf was open: the backdrop is `fixed inset-0 z-30` and the header had no z-index, so the
+backdrop covered it (workspace-panel-controls.spec.js, 700/768/1024px). Root cause: a control
+that toggles a panel must sit above that panel's backdrop. Fix: header `relative z-[45]`, above
+backdrops (30) and drawers (40), below modals (50). Prevention: e2e toggles a panel open and
+closed from the same control, and switches panels while one is open.
+2. The <=700px "Chế độ học" select clipped "Trò chuyện" at 375px: a fixed width with the
+native arrow drawn inside the content box. Found only in the screenshot; size and overflow
+checks passed. Fix: `appearance: none` + drawn chevron in the right padding; regression: the
+e2e measures the longest option against the select's text box.
+3. Two Playwright runs in the same worktree wipe each other's `test-results` (trace ENOENT on
+close). Run one suite per worktree at a time, or give each run its own --output.
+
+## Codex #208: a tool opener used the overlay flag on a desktop column; a menu without its keys (2026-11-24)
+
+1. P1: "Công cụ học" tools (Gia sư AI, Dòng thời gian, Kiến thức) called only openRight(), which
+sets the transient overlay flag. A desktop column is shown by rightCollapsed, so a collapsed
+column stayed closed. It was hidden while the wide default had the column open; P4b's
+"evidence closed by default" exposed it on every first run. Root cause: two flags for one
+surface and an opener that only knew one. Fix: overlays (drawer, Mind Map) use openRight, a
+column goes through setRightCollapsed(false) (focus-aware). Prevention: when a default changes,
+re-run every opener of that surface from the new default state; tests at 1440 first-run and
+1024 saved-collapsed assert the column is visible.
+2. P2: StudyToolsMenu said role="menu" but had no arrow/Home/End keys or initial focus. Once
+the phone panel controls lived only in that menu, it mattered. Fix: focus the first item on
+open; ArrowDown/ArrowUp wrap, Home/End jump; Escape returns focus to the trigger. Declaring an
+ARIA pattern means implementing its keyboard contract.
+
+## P4b CI: a header that fit on Windows overflowed on Linux; a second e2e folder missed (2026-11-24)
+
+1. mobile-header.spec 1280px passed locally and overflowed by 24px in CI (Linux rendering differs;
+the exact cause, font metrics vs. a font not loaded in CI, was never established).
+A header row with less than ~30px slack locally is not safe. Fix: the Tập trung label also waits
+for 1440px. Prevention: when adding to the header, measure slack at the tightest desktop width
+and keep a margin for font metrics.
+2. The <=700px select hid the tab row; e2e-fixture/ specs were updated but e2e/ (real-backend
+Critical Flows) still waited for the tab row at 390px. Prevention: grep every Playwright folder
+(e2e/ and e2e-fixture/) for a selector before changing what it points at.
+
+## Independent request counters for independent Reader resources (V9.3 P5a, 2026-11-24)
+
+The first Reader draft shared one stale-response counter between the caller-owned document-list
+request and the selected document's sections/chunks request. On the initial commit, the content
+effect correctly observed that no document had resolved yet, but incremented the shared counter;
+that made the still-valid `/api/documents` response look stale and left the Reader loading forever.
+Root cause: the counter represented a component render sequence instead of one request lifecycle.
+Fix: the owned-list request and document-content request have separate counters, and only a new
+request or cleanup in the same resource family invalidates its response. Regression:
+`ReaderPane.test.jsx` loads the owned list, paginates 501 chunks, changes documents while an old
+sections response is pending, and retries a failed sections request. Prevention: a stale-response
+token must be scoped to the resource/effect it guards; never reuse it across independent fetches.
+
+The same review found that chat evidence snippets longer than 600 characters end with a server-added
+ellipsis. Comparing that punctuation literally makes a valid `embedding_id` look stale because the
+stored chunk never contains the added ellipsis. The verifier now removes only a trailing truncation
+marker before its normalized contains check; a mismatched truncated snippet still fails. Regression:
+`readerModel.test.js` covers both the valid truncated prefix and a foreign truncated prefix.
+
+## P5a review: mind-map citations are FAISS ids; five tabs must not cost the desktop labels (2026-11-24)
+
+1. KnowledgeInspector sent mind-map citations to the Reader as kind "studymap" (matched on the
+DocumentChunk UUID), but BE mindmap/context.py resolves node chunk_refs through index.json: their
+chunk_id is the global FAISS id (= embedding_id). Every "Đọc đoạn này trong nguồn" would have
+shown the stale message. Root cause: three citation sources, two id spaces, one assumed. Fix:
+kind "index" matches embedding_id like chat. Prevention: name the id space at the producer
+(trace the BE builder) before choosing the match field. Regression: readerModel.test.js,
+KnowledgeInspector.readerCitation.test.jsx.
+2. Fitting five mode tabs, the first P5a version hid the tab labels below 1800px and flipped the
+1280/1440 "labels visible" assertion. Labels that name the main navigation give way last: tab
+labels from 1440px, library label from 1600px, Nguồn/Dẫn chứng/Tập trung labels from 1800px;
+the five-mode slack test (>=40px at 1280/1440/1600/1920) stays.
+3. CI #211 (protected-auth Critical Flows): the Reader pane, mounted hidden in every workspace,
+fetched the document list, the sections and EVERY chunk page of the active source on each load.
+Same class as the P5b Notes miss: a hidden pane must not load or render until first opened.
+Regression: ReaderPane.test.jsx 'requests nothing while hidden'.
+4. P2 review finding: a manually picked document in ReaderPane must not block new citation navigation.
+When the learner manually selected document B, `manualDocumentId` remained sticky across all subsequent
+prop changes, causing any newly clicked chat or mind-map citation for document A to fail verification
+on document B and falsely emit `CITATION_STALE_MESSAGE`. Root cause: manual selection was treated as
+permanently overriding automatic resolution, even for discrete citation navigation events. Fix: track the citation's
+`nonce` (attached by `onOpenReaderCitation`); when a citation arrives with a new `nonce`, clear
+`manualDocumentId` so the citation's own unique mapping resolves document A. Workspace source changes
+(`selectedSources` changes without a new citation) leave `manualDocumentId` intact.
+Regression: `ReaderPane.test.jsx` 'switches from a manually picked document to a citation document when a citation arrives with a new nonce'.
+
+## P5a: reading position kept exactly; a test that compared with the value it set (2026-11-24)
+
+reader.spec 'mode switches keep reading position' failed intermittently on the a8d3d3a baseline too
+(416/424 vs 420): the Reader relied on the browser keeping scrollTop through display:none, and the
+test compared with the 420 it had just set although scroll anchoring had already moved the real
+position. The pane now saves scrollTop on scroll while visible and restores it on activation
+(unit: 'restores the exact scroll position after being hidden'); the e2e compares the settled
+position before the round trip with the one after (exact), and checks it is near 420.
+
+## A stem is a name, not an identity: cross-tenant reads/deletes on a shared stem (V9.3 security, 2026-11-24)
+
+Found by the P5a Reader audit (agy) and verified by Codex. Every stem-scoped path authorized
+through `owned_stems` / `_source_owner_ok`: query/RAG source resolution, `/list-indexed`,
+summary/mind-map gates, `/chunk-text`, `/delete-source`, memory tree. With two owners on one
+canonical stem (legacy/imported rows, concurrent same-name uploads, per-process registry caches;
+a soft-deleted document keeps its chunks in the index under its stem):
+- `/list-indexed` grouped the whole index by stem and returned both owners' chunk text;
+- `_source_owner_ok` returned on the FIRST registry row with the stem, so registry order decided;
+- `/delete-source` and `DELETE /sources/<id>` purged index chunks, memory tree and mind maps BY
+  STEM after checking one row's owner, destroying the other owner's data.
+Root cause: authorization keyed on a display-derived name. Normal sequential uploads de-duplicate
+stems globally, which hid it; nothing in the schema guarantees it.
+Fix (no API/migration): in protected mode a stem is usable by U only when EVERY document row
+carrying it, soft-deleted included (`repository.stem_owners`), is U's; ownerless rows count as
+another owner; an unreadable owner view refuses. `/chunk-text` trusts the chunk's own row
+(`document_chunks.embedding_id` -> `documents.user_id`, deleted or mixed -> refuse) and falls back
+to the stem rule only for legacy entries. Purge-by-stem deletes on a shared stem answer 409
+`shared_source_stem` instead of purging or orphaning chunks.
+Trade-off: both owners of a shared stem lose stem-scoped access (chat/list/summary/mind map) to
+it until it is resolved; document-id routes still work. A per-document identity in the index
+(or a unique stem constraint) is the schema follow-up, owner approval needed.
+Regression: `BE/tests/test_stem_tenant_isolation.py` (11 tests, red log sec-red.log).
+Prevention: never authorize by a value derived from a filename; when two rows can share a key,
+test the two-owner case and assert nothing is chosen by order.
+Follow-up (side review, same PR): upload de-duplication (`_unique_display_filename`) only saw
+live rows, so a new upload could take the stem of someone else's soft-deleted document and be
+locked out by the new rule without a message. It now skips every stem any document row carries.
+When a rule widens what counts as "taken", every place that hands out the same key must widen too.
+
+Independent review of #209 (GPT-6, BLOCK) found two more, fixed red-first (sec2-red.log):
+- P1 stale per-process caches: `all_rows()`/`stem_owners()` cache per process and
+  `invalidate_cache()` only clears the writer, so another worker could authorize a stem that had
+  just become shared. Ownership now reads a fresh, SQL-filtered owner view for only the stems being
+  decided (`repository.owners_for_stems`). A first attempt bypassed the cache by re-reading the
+  whole documents table on every protected check (135 ms at 3,000 rows); the filtered query is
+  2.7 ms (sec2-bench.log). Stem-wide deletes take a PostgreSQL advisory lock for the stem for the
+  rest of the request and re-check under it.
+- P2 racing/blind upload naming: two owners uploading one name at once both got the same stem
+  (reproduced). Naming and the row create now run under the stem-family advisory lock
+  (`acquire_stem_lock`, pg_try_advisory_lock with a timeout), and an unreadable owner view or a
+  lock timeout answers 503 ownership_unavailable instead of naming blind.
+Prevention: a per-process cache is never an authorization source when more than one process can
+write; cost a security fix with real row counts before calling it cheap.
+
+## P5b Notes: native controls on white in dark mode; a mode helper that raced a reload (2026-11-24)
+
+1. The Notes select and textarea had class names but no CSS, so they kept the browser's white
+default while their text took the light dark-theme token: unreadable. Unit tests and every e2e
+assertion passed; only the dark screenshot showed it. Fix: token surface for native controls.
+Regression: notes-preview.spec.js compares the controls' background with the resolved --bg-card.
+Prevention: every new native control gets a dark-mode surface check, not only a screenshot.
+2. e2e helper chooseMode() called isVisible() right after a reload, before the <=700px select
+rendered, and fell through to clicking a hidden tab. isVisible() does not wait: wait for the
+visible control first (waitForModeControl).
+3. A 4th mode tab overflowed the 1280/1440 desktop header (38px / 21px). Text labels of
+Nguồn/Dẫn chứng/Tập trung now start at 1600px and the library label at 1440px. Measured slack
+(natural header width): +102px at 1440, +65px at 1600 with labels. A 5th tab needs its own budget.
+4. CI #210 again caught e2e/study-library-navigation (real backend) still expecting 3 tabs: the
+same miss as P4b, despite the lesson above. A written lesson is not a check. Before pushing a
+change to the mode tabs or header, run: `grep -rn 'getByRole("tab")\|Chế độ Workspace' FE/e2e FE/e2e-fixture`.
+5. The hidden Notes pane rendered "Đang tải danh sách tài liệu…" in <main> before it was opened,
+doubling the sidebar/chat loading text that source-loading-state.spec counts. A pane mounted
+hidden must render nothing until first opened, and must not reuse another surface's status text.
+6. Independent review of #210 (BLOCK), fixed red-first (p5b-review-red.log):
+- P1: the mounted pane kept one document list for every account and keyed edits by props while
+  the shown text still belonged to the previous identity. The list now reloads per account
+  (late responses dropped), the textarea renders only when the loaded {user, document} equals
+  the props, and edits/deletes are keyed by the loaded identity.
+- P2: forced session ends (401, bfcache user mismatch, logout after a password change) dropped
+  pending drafts silently. Every session end now writes pending drafts first; a refused write
+  is never reported as saved and the login screen says once that a draft was lost.
+- P3: the delete confirmation took focus nowhere. Focus goes to "Huỷ", Escape cancels, focus
+  returns to the trigger.
+Prevention: a component that outlives an identity change binds its state to that identity, not
+to whatever props it last saw; every exit path of a session goes through one cleanup.
+
+## Reader scroll round-trip flake: measured before the layout settled (2026-11-24, #211 merge review)
+
+Symptom: `reader.spec.js` "keyboard reaches the Reader tab..." failed intermittently after the
+#211/integ merge (420 vs 425, 424 vs 420; 2/5 then 6/10 isolated runs). Root cause (instrumented
+with ResizeObserver + scroll log): `.reader-scroll` scrollHeight was still changing when the test
+set `scrollTop = 420` (1589 or 1544, settling at 1571: web fonts / late layout), so scroll anchoring
+moved the position a few px AFTER `before` was read. ReaderPane's restore was correct (it saved the
+anchored value from the scroll event). A first attempt that captured scrollTop at hide time did not
+help and was reverted: never fix a flake before logging what actually moves.
+Fix: wait for `document.fonts.ready` and a stable scrollHeight before setting and reading the
+position; poll the restored value for stability across frames, then require exact equality.
+Regression: 10/10 isolated, 20/20 with --repeat-each=20 --workers=4, review group 164/164.
+Prevention: any e2e that asserts an exact scroll offset must first wait for a stable scrollHeight.
+
+## Laptop header (V9.3, owner option 2): select below 1600px, labels from measured budget (2026-11-25)
+
+Problem: at 1366px (and 701-1439px) the five mode tabs were icon-only and Nguồn/Dẫn chứng/Tập
+trung/Thư viện were icon-only too: nothing in the header named the current mode in text.
+Root cause of the old breakpoints: five labelled tabs need ~565px (default font, which was Be Vietnam
+Pro loaded from Google Fonts) / ~582px (Verdana);
+with them visible nothing else could carry a label below ~1800px.
+CORRECTED 2026-11-25: an earlier version of this entry said "Be Vietnam Pro is never loaded" and
+blamed that for "fits locally, overflows on CI". Both were wrong / unverified: index.css line 1
+imported it from Google Fonts (the search missed the URL spelling "Be+Vietnam"; font-loading.spec.js
+showed the WOFF2 coming from fonts.gstatic.com). Why the P4b header overflowed by 24px only on Linux
+CI is NOT established (font hinting/metrics on Linux, or Google Fonts unreachable in CI, are both
+possible); the Verdana budget stays as a conservative margin. The fonts are now bundled with
+@fontsource (see "Fonts bundled with @fontsource" below) and the header was re-measured.
+Fix: one labelled "Chế độ học" select below 1600px (CSS swaps it with the tablist; same state, no
+requests). Labels where the measured slack allows it with a wide font (Verdana, >= DejaVu width):
+panel labels 1280-1599px and from 1800px; library label from 1366px; five labelled tabs from
+1600px (40px tall). The first version put the tabs at 1440px (the brief's starting point); that
+left 1440-1599px laptops with icon-only Nguồn/Dẫn chứng/Tập trung while 1366px had labels, so the
+owner moved the tabs to 1600px (slack with every label, Verdana: +194 at 1440, +290 at 1536). Select text box 8px/24px padding so "Sơ đồ tư duy" (92px in
+Verdana) fits the 128px select without widening the 375px phone header. Theme, usage and account
+triggers were 36px on desktop: now 40px.
+Regression: e2e-fixture/laptop-header.spec.js (64 tests: 13 widths x light/dark x normal/wide font,
+labels per width, resize keeps mode/Focus/chat draft/Notes draft and sends nothing, Reader loads
+nothing, keyboard select/tabs, zoom 200% as 683/768px). Red on 27fec57: 55/64 failed.
+Prevention: before changing header breakpoints, run the measurement in laptop-header.spec.js with
+the wide font; slack < 16px with Verdana or < 40px with the default font is not safe. Specs must
+choose modes with chooseMode()/waitForModeControl() (e2e-fixture/workspaceMode.js), never by
+clicking or waiting for a visible tab: the default Playwright viewport (1280) now shows the select,
+and getByRole("tab") skips hidden tabs, so assert aria-selected through a CSS locator.
+Pre-existing flake seen (not this change): exact-node-export-v3.spec.js:240 node width 74.9 vs 76.1
+(2/3 failed on integ 27fec57 too).
+CI follow-up (E2E Critical Flows on 3678955, red): two `e2e/` specs (real backend, not runnable in
+the local fixture run) still assumed the tab row. (1) `critical-flows` read
+`page.getByRole("option", { selected: true }).first()` for the map library: with the select now
+visible at 1280px, its native `<option>` "Sơ đồ tư duy" matched first and had no inner span, so the
+test hung. All option queries are now scoped to the listbox "Chọn sơ đồ". (2)
+`study-library-navigation` clicked a visible tab at 1440px (select band). Prevention: when the
+mode control changes, also grep `getByRole("option"` and `getByRole("tab"` in BOTH `FE/e2e` and
+`FE/e2e-fixture`, and remember `FE/e2e` only runs in CI (Critical Flows).
+
+## One-time "Chế độ học" note below 1600px (V9.3 follow-up to #212, 2026-11-25)
+
+Why: after #212 the five modes sit inside the "Chế độ học" select below 1600px (1280/1366/1440/1536
+laptops), so the new Đọc nguồn and Ghi chú modes are only visible after opening the list (side-agent
+finding; owner chose a one-time note in its own PR, no analytics/API).
+What: a `role="note"` under the select (absolute, so the 56px header does not grow), named by the
+select's `aria-describedby`; "Đã hiểu" (40px) closes it and moves focus to the select; the first mode
+change through the select also counts as seen. Stored in localStorage `studymap.hint.modes.v1`
+(try/catch: blocked storage only means it may come back next visit). Hidden in Focus Mode and from
+1600px (it lives inside `.workspace-mode-select`, which is hidden there). No request, no focus steal.
+Regression: e2e-fixture/mode-hint.spec.js 15 tests (390/1024/1366/1536 light+dark fit + no focus +
+describedby; dismiss by keyboard persists and sends nothing; select change counts; 1600px none;
+resize; Focus Mode; returning learner; blocked storage). Red 13/15 before the change.
+Gotcha 1: the first version blocked clicks under it (51 specs failed in the first full run). Pre-seeding
+"seen" in the Playwright configs made the suite green but HID the real first-visit problem (side-agent
+finding). Fix: the note body is `pointer-events: none` (only "Đã hiểu" takes the pointer), the first
+press anywhere else sets it aside for this visit only (not saved), and it hides while the tools menu,
+a drawer or the tablet shelf is open. No pre-seed: the whole fixture suite runs as a first visit.
+Gotcha 2: its accessible name "Các chế độ học" contained the select's label, so
+`getByLabel("Chế độ học")` matched two elements (41 strict-mode failures) and a screen reader got two
+"chế độ học" names. The note has no name of its own; the select announces it via aria-describedby.
+Prevention: never fix a first-run overlay by seeding it away in test config; prove it with the
+suite running first-visit. Give helper text no accessible name that repeats a control's label.
+Gotcha 3 (agy review of #213, P2): centring the note on the select cut it 22px off the left edge at
+320px (the <=340px header hides the library link, so the select sits left of centre; the shell's
+overflow-hidden clipped it silently, no page scroll). The note is now `position: fixed`, centred on
+the viewport. The spec covers 320/375px too (red -22 before). `aria-describedby` points at the text
+`<p>` only, so "Đã hiểu" is not read as part of the select's description.
+Owner decision (2026-11-25, after a side-agent note that a visit-only step-aside could show the note
+on every visit to a learner who never presses "Đã hiểu"): the note shows on at most 3 visits where it
+is actually on screen (`studymap.hint.modes.v1.visits`, counted once per page load and only below
+1600px via matchMedia), then stops by itself; "Đã hiểu" or a mode change through the select end it at
+once. Regression: mode-hint.spec "three visits at most" (red before) and "from 1600px do not count".
+Gotcha 4 (independent review of #213, P3): a first visit opened straight into Mind Map
+(`/app?tab=mindmap`) painted the note over the map's contextual toolbar row under the header. The
+note is not shown in Mind Map mode, and such a visit is not counted. Regression: mode-hint.spec
+"opening straight into Mind Map" (red before).
+
+## Mode note storage hardening (V9.3 Task 6B, agy review of #213 P3, 2026-11-25)
+
+Root cause: the visit counter was read with `Number(raw || 0)`. A corrupted value kept the note
+forever or wrote junk back: "abc"/"NaN"/"1.5" -> NaN (never >= 3, NaN + 1 stored as "NaN"), "-2" ->
+five visits, "Infinity" -> hidden but left stored. Both keys were read in one try, so a blocked
+counter key could hide a valid "seen" flag.
+Fix: the counter is trusted only as /^\d+$/, capped at 3 (anything else counts as 0 and is rewritten
+as a valid number on the next shown visit); no write once it reaches 3; the seen flag and the counter
+are read in separate try blocks.
+Regression: mode-hint.spec.js (red 5/35 before): corrupted counts "abc", "-2", "NaN", "1.5", " ",
+"Infinity" end within 3 visits and leave 0-3 stored; the counter never passes 3 and stops being
+written; "Đã hiểu" stops further writes; a blocked counter key alone keeps the note dismissible.
+Prevention: parse stored numbers strictly and clamp; read independent keys independently.
+
+## Three "flaky" fixture tests, investigated to root cause (V9.3 Task 6C, 2026-11-25)
+
+1. mindmap-branch-marker.spec.js "20px circle ... outer side" (right markers 6-8px off, full suite
+   and CI only; passed in isolation). ROOT CAUSE, product bug: selection markers are placed from
+   the topic widths (offsetLeft/offsetWidth) when selection opens; a web font that finishes later
+   re-flows every topic without a DOM mutation, so the MutationObserver never re-placed them. On a
+   cold cache / slow network the markers sit off their topics. Deterministic repro: hold the font
+   files until selection is open -> off by exactly 8px (the CI number). Ruled out: CPU load (6x
+   throttle), fonts arriving before selection. Fix: attachBranchSelectionMode re-scans on
+   `document.fonts` "loadingdone" and removes the listener on detach. Regression: new e2e
+   "right-side markers follow their topics when web fonts arrive after selection opens" (red before)
+   and a unit test (red on the old code).
+2. exact-node-export-v3.spec.js:240 "saved appearance and an export-only leaf override ..." (node A
+   74.9 vs 76.1px). ROOT CAUSE, test timing: the "canvas not mutated" baseline was read before the
+   web fonts swapped in; the font, not the export override, re-flowed node A. Deterministic repro:
+   release held fonts right after the baseline read -> exactly 74.897 vs 76.051 (the CI numbers).
+   Fix: openSelection waits for `document.fonts.ready` AFTER setting the zoom (waiting before it let
+   the map's own initial fit reset the zoom to 1). Assertion unchanged. Verified with fonts delayed
+   1500ms (3/3) and the spec x2 (18/18).
+3. library-one-list.spec.js:155 "scroll position survives" (CI: scrollY 0 after Back, run
+   45416413978). NOT root-caused yet. Ruled out locally: late fonts (2.5s), the save race (state is
+   saved as 900 before a same-frame full navigation), bfcache (navigation type back_forward,
+   persisted false), slow /auth/me on the way back (1.2s), Chromium's own scroll restoration
+   (switched to manual). Not changed: no skip, no loosened assertion. Next: capture a CI trace with
+   the stored sessionStorage value, `loading`, and document height at the restore frame.
+Prevention: before calling a test "flaky", log what moved and try to make it deterministic (hold a
+resource, throttle, reorder); a fixed wait (400ms) or a single pre-read is never a settled state.
+
+## Notes: a direct account switch rendered the previous account's document titles for one commit (V9.3 Task 6A, 2026-11-25)
+
+Root cause: NotesPane kept `docs`, `pickedId` and `loadError` without the account they belonged to.
+When a mounted pane received a different `userId`, the first commit still built the document picker
+from the previous account's list; the reload effect (passive) cleared it only afterwards. The note
+text was already gated by the loaded identity (#210), the titles were not (#210 review P3).
+Fix: every per-account value is stored with its owner (`{ userId, list }`, `{ userId, id }`,
+`errorFor`) and used only while that owner is the signed-in account; otherwise the pane shows its
+loading state until the new account's list arrives.
+Regression: NotesPane.test.jsx "never shows the previous account's titles or note, even in the first
+commit after a switch": a useLayoutEffect probe snapshots the DOM of every commit; red before
+(commit 0 contained "Bí mật của u1.pdf").
+Prevention: per-account UI state carries its owner; a test of "after the switch" must look at the
+first commit, not at the settled DOM.
+
+## Fonts bundled with @fontsource instead of Google Fonts; a wrong "never loaded" claim (V9.3, 2026-11-25)
+
+Owner decision: Be Vietnam Pro (400/500/600/700/800) and IBM Plex Mono (400/500/600), both OFL-1.1,
+installed with npm (`@fontsource/*@5.3.0`) and `@import`ed at the top of `src/index.css`, so every
+entry that loads index.css (app, fixture harness, QA pages) gets them; Vite emits hashed WOFF2 assets
+(30 files: latin / latin-ext / vietnamese faces split by unicode-range, font-display: swap). The
+runtime `@import url('https://fonts.googleapis.com/...')` is gone (third-party request on every load,
+offline/CI-dependent).
+Correction: during #212 I reported "Be Vietnam Pro is never loaded". Wrong: index.css line 1 imported
+it from Google Fonts; my grep searched "Be Vietnam" and missed the URL spelling "Be+Vietnam". The
+red run of font-loading.spec.js on d51cbe0 showed the WOFF2 coming from fonts.gstatic.com.
+Prevention: search for the URL form too (`Be+Vietnam`, `googleapis`) and prove font claims with
+FontFaceSet / network, never with getComputedStyle().fontFamily (it echoes the stack).
+Also: three specs simulated "fallback font" by blocking only fonts.(googleapis|gstatic).com; with
+bundled fonts that blocked nothing, so they now also block `.woff2` (chat-start, landing-v6,
+round6-library-action-matrix).
+Regression: e2e-fixture/font-loading.spec.js (FontFaceSet loaded incl. the Vietnamese subset,
+same-origin WOFF2 200, no Google request, rendered-width proof, body/header/select/textarea/Reader/
+Notes, blocked-font fallback at 390/1366/1600). Header re-measured at 14 widths x bundled/blocked/
+Verdana: no overflow, 56px, min target 40 (QA evidence fonts/header-measurement-report.md).
+Reader mode icon BookOpen -> FileText (library keeps BookOpen, summary ScrollText).
+Follow-up on #214 (full fixture run): mindmap-toolbar-root-collapse "root-only collapse ... without
+moving the viewport" failed 3/48 with the bundled fonts (0/48 on d51cbe0 with Google Fonts): the
+canvas transform went -19.5px -> -19.5001px. Root cause: after a depth preset, MindElixirView
+re-anchors the root centre with `mind.move(dx, dy)` even when the offset is a floating-point residue;
+the @fontsource build of Be Vietnam Pro gives the root topic slightly different fractional metrics,
+which produced dx/dy of ~0.0001px. Fix: move only when |dx| or |dy| >= 0.01px (real drift is still
+corrected). The test was not changed. Verified: root-collapse + depth-preset specs x4 = 132/132.
+Review follow-ups on #214 (2026-11-25):
+- Independent review P2 / owner decision: Export Studio offered "Sans (Inter)" and "Serif
+  (Spectral)" and the "Tài liệu học tập" preset defaulted to Spectral, but neither font was ever
+  loaded (the Google import only had Be Vietnam Pro + IBM Plex Mono), so image exports fell back to
+  the machine's fonts. Owner chose Be Vietnam Pro only: FONT_STACKS sans (and the legacy "serif" key
+  older saved appearances may hold) -> bundled Be Vietnam Pro; study preset -> sans; font warm-up and
+  the legend overlay use it; the image font choice is "Giống canvas" / "Be Vietnam Pro". Documents
+  (PDF/DOCX) are built by the backend with its own fonts (DejaVu, Calibri/Times), so they keep a
+  generic "Sans" / "Serif" choice (labels no longer claim Inter/Spectral). Red-first unit tests.
+- agy P2: round6-library-action-matrix's "webfont" half checked the retired Inter and skipped at all
+  7 widths. It now requires a loaded Be Vietnam Pro 600 (bundled, no third-party outage to excuse a
+  skip): 59/59 run, 0 skipped.
+
+## Dependency security: react-router-dom 7.7.1 -> 7.18.5, postcss 8.5.6 -> 8.5.32 (V9.3 Task 6, 2026-11-26)
+
+`npm audit --omit=dev` at 365130f: 15 (7 moderate, 8 high). The browser-runtime ones were
+react-router <7.18.0 (open redirect via backslash in <Link>/useNavigate GHSA-wrjc-x8rr-h8h6, plus
+SSR/framework-mode advisories that do not apply to this SPA) and postcss (build-time CSS stringify /
+source-map advisories). Upgraded to versions published more than two weeks earlier; audit now 10
+(7 moderate, 3 high), all transitive build tooling (picomatch, minimatch, brace-expansion, glob,
+nanoid, source-map-js, yaml, uuid via react-d3-tree): tracked in v93-open-issues.md, not runtime.
+Checks: Vitest 2325/2325, build, lint 63 (baseline); CI Fixture Smoke and Critical Flows.

@@ -134,7 +134,8 @@ def test_rejections_are_persisted_with_rule_code_and_payload():
             assert all(r.target_type == "quiz_question" for r in rows)
             assert all(r.payload_json and "item" in r.payload_json for r in rows)
     finally:
-        with session_scope() as s:
+        from tests._owner_db import owner_session_scope   # the log is append-only for the app
+        with owner_session_scope() as s:
             s.query(AIValidationLog).filter(AIValidationLog.target_ref == ref).delete()
 
 

@@ -97,8 +97,11 @@ def grade_short_answer(
         f"Câu trả lời của người học: {user_answer}"
     )
     try:
+        # `total_timeout`: one deadline for the whole provider fallback chain, so a
+        # grading call never outlives the claim lease of #188 (grading_lease_s).
         raw = ask(prompt, system_prompt=_SYSTEM, feature="grade",
-                  options={"temperature": 0}, timeout=timeout_sec)
+                  options={"temperature": 0}, timeout=timeout_sec,
+                  total_timeout=timeout_sec)
         data = json.loads(repair_json_text(str(raw or "")))
     except Exception as exc:
         print(f"[grading] chấm tự luận thất bại: {exc}", flush=True)

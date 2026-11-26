@@ -100,3 +100,16 @@ describe("Practice — percentages name their unit (W2-2)", () => {
     expect(container.querySelector('[role="img"]').getAttribute("aria-hidden")).not.toBe("true");
   });
 });
+
+// V6 (bug hunt #6): two activations in the same tick both passed `disabled={submitting}`.
+describe("Practice submit is locked synchronously", () => {
+  it("a double click in one tick grades the practice once", async () => {
+    await renderReady();
+    submitPractice.mockResolvedValue({ score: 1, max_score: 1, percentage: 100, results: [] });
+    getPracticeComparison.mockResolvedValue({ concepts: [] });
+    const submitButton = [...container.querySelectorAll("button")].find((b) => b.textContent.includes("Nộp bài luyện tập"));
+    await act(async () => { submitButton.click(); submitButton.click(); });
+    await act(async () => { await Promise.resolve(); await Promise.resolve(); });
+    expect(submitPractice).toHaveBeenCalledTimes(1);
+  });
+});

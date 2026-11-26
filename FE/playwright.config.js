@@ -45,7 +45,19 @@ export default defineConfig({
       url: `http://127.0.0.1:${BE_PORT}/health`,
       timeout: 60_000,
       reuseExistingServer: !CI,
-      env: { ...process.env, PORT: String(BE_PORT) },
+      // Deterministic quiz generation and short-answer grading (no model) for
+      // quiz-grading-recovery.spec.js; no other spec generates or grades quizzes.
+      // Set after `...process.env` so the shell cannot switch them off; the spec
+      // also checks GET /__e2e__/stubs, since a reused server ignores this env.
+      env: {
+        ...process.env,
+        E2E_DIAGNOSTIC_AI_STUB: "1",
+        E2E_SHORT_ANSWER_GRADING_STUB: "1",
+        E2E_SHORT_ANSWER_GRADING_DELAY_SEC: "1",
+        GRADING_MANUAL_RETRY_MAX: "3",
+        E2E_GRADING_CRASH_MARKER: "__E2E_GRADE_CRASH__",
+        PORT: String(BE_PORT),
+      },
     },
     {
       // Real production build (FE/dist, built by the CI step right before

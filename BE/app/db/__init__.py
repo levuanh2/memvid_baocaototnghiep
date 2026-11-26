@@ -57,6 +57,22 @@ def _danh_tinh_dich(url: str) -> tuple:
     return ((p.hostname or "").lower(), (p.path or "").rstrip("/").lower())
 
 
+def kiem_dich_test(url: str, ten_bien: str) -> None:
+    """A test run may only use a disposable database: the rule migrations already use.
+
+    Loopback or CI service host, a name ending in `_test`, not the `DATABASE_URL` target
+    (`shared.migration_guard.kiem_tra_dich`, test mode). Comparing with `DATABASE_URL`
+    alone let a hosted database through under another host name (direct host vs pooler)
+    or whenever `DATABASE_URL` was absent. The message carries host:port/db only.
+    """
+    from shared.migration_guard import CHE_DO_TEST, MigrationTargetRejected, kiem_tra_dich
+
+    try:
+        kiem_tra_dich(url, CHE_DO_TEST)
+    except MigrationTargetRejected as exc:
+        raise DatabaseNotConfigured(f"{ten_bien} bị từ chối trong test: {exc}") from None
+
+
 def database_url() -> str:
     if dang_chay_pytest():
         url = (os.getenv("TEST_DATABASE_URL") or "").strip()
@@ -77,6 +93,7 @@ def database_url() -> str:
                 "Khác cổng KHÔNG phải khác database — Supabase mở cùng một database "
                 "ở cả 5432 lẫn 6543. Dùng một database riêng cho test."
             )
+        kiem_dich_test(url, "TEST_DATABASE_URL")
     else:
         url = (os.getenv("DATABASE_URL") or "").strip()
         if not url:

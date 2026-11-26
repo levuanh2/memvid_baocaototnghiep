@@ -23,6 +23,9 @@ import { Icon } from "../ui/Icon";
 export default function ProfileView({
   hoSo, onClose, laNks, dangSua, dangTai, onSua, rongHon, khoiAnh, children,
   variant = "modal",
+  // V6: sections under the personal details on the PAGE (usage, appearance, security).
+  // An element built by the caller, so this function stays hook-free.
+  phanThem = null,
 }) {
   if (!hoSo) return null;
 
@@ -64,7 +67,7 @@ export default function ProfileView({
           một email dài (vd "sprinti-qa-1789286238622@example.com") vỡ ba dòng dù đã
           `break-words`. Một cột duy nhất tránh vỡ dòng cho MỌI độ dài giá trị, không
           cần biết trước trường nào sẽ dài. */}
-      <dl className="mt-6 grid grid-cols-1 gap-x-5 gap-y-4">
+      <dl className={`mt-6 grid grid-cols-1 gap-x-8 gap-y-4${variant === "page" ? " sm:grid-cols-2" : ""}`}>
         {hoSo.dong.map((d) => (
           <div key={d.khoa} className="min-w-0">
             <dt className="font-mono text-metadata uppercase text-text-muted">{d.nhan}</dt>
@@ -78,10 +81,19 @@ export default function ProfileView({
       {hoSo.nhaCungCap === "NKS" && !dangSua && (
         <p className="mt-6 pt-4 border-t text-small text-text-muted"
           style={{ borderColor: "var(--border-color)" }}>
-          Hồ sơ này do NKS quản lý. Thay đổi ở đây được ghi thẳng sang NKS; tên hiển thị
-          và ảnh đại diện phải sửa tại tài khoản NKS.
+          {/* The avatar CAN be changed here (the picker above writes to NKS); only the
+              display name cannot. The old sentence said both had to be changed at NKS. */}
+          Hồ sơ này do NKS quản lý. Thông tin và ảnh đại diện sửa ở đây được ghi thẳng sang
+          NKS; riêng tên hiển thị phải sửa tại tài khoản NKS.
         </p>
       )}
+      {hoSo.nhaCungCap !== "NKS" && variant === "page" && (
+        <p className="mt-6 pt-4 border-t text-small text-text-muted"
+          style={{ borderColor: "var(--border-color)" }}>
+          Thông tin của tài khoản đăng nhập bằng email chưa sửa được trong StudyMap.
+        </p>
+      )}
+      {variant === "page" && phanThem}
     </>
   );
 

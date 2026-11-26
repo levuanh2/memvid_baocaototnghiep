@@ -28,6 +28,13 @@
     "rule": "/api/attempts/<attempt_id>/concept-masteries"
   },
   {
+    "endpoint": "api_attempt_regrade",
+    "methods": [
+      "POST"
+    ],
+    "rule": "/api/attempts/<attempt_id>/regrade"
+  },
+  {
     "endpoint": "api_attempt_submit",
     "methods": [
       "POST"
@@ -208,6 +215,13 @@
       "GET"
     ],
     "rule": "/api/practice/<practice_quiz_id>/comparison"
+  },
+  {
+    "endpoint": "api_practice_regrade",
+    "methods": [
+      "POST"
+    ],
+    "rule": "/api/practice/<practice_quiz_id>/regrade"
   },
   {
     "endpoint": "api_practice_submit",
