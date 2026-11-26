@@ -4422,3 +4422,13 @@ Review follow-ups on #214 (2026-11-25):
 - agy P2: round6-library-action-matrix's "webfont" half checked the retired Inter and skipped at all
   7 widths. It now requires a loaded Be Vietnam Pro 600 (bundled, no third-party outage to excuse a
   skip): 59/59 run, 0 skipped.
+
+## Dependency security: react-router-dom 7.7.1 -> 7.18.5, postcss 8.5.6 -> 8.5.32 (V9.3 Task 6, 2026-11-26)
+
+`npm audit --omit=dev` at 365130f: 15 (7 moderate, 8 high). The browser-runtime ones were
+react-router <7.18.0 (open redirect via backslash in <Link>/useNavigate GHSA-wrjc-x8rr-h8h6, plus
+SSR/framework-mode advisories that do not apply to this SPA) and postcss (build-time CSS stringify /
+source-map advisories). Upgraded to versions published more than two weeks earlier; audit now 10
+(7 moderate, 3 high), all transitive build tooling (picomatch, minimatch, brace-expansion, glob,
+nanoid, source-map-js, yaml, uuid via react-d3-tree): tracked in v93-open-issues.md, not runtime.
+Checks: Vitest 2325/2325, build, lint 63 (baseline); CI Fixture Smoke and Critical Flows.
