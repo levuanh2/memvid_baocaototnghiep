@@ -5,6 +5,7 @@
 // server, API mocked at the network layer (pattern copied from
 // FE/e2e-fixture/library-mode-navigation.spec.js).
 import { test, expect } from "@playwright/test";
+import { chooseMode } from "./workspaceMode.js";
 
 const json = (body) => ({ status: 200, contentType: "application/json", body: JSON.stringify(body) });
 
@@ -42,7 +43,7 @@ test("Chat: shows the upload CTA and clicking it opens the real file picker", as
 
 test("Mind Map empty state (no documents): shows the upload CTA, not the disabled create button", async ({ page }) => {
   await openEmptyLibraryApp(page);
-  await page.locator('nav[aria-label="Chế độ Workspace"] [role="tab"][title="Sơ đồ tư duy"]').click();
+  await chooseMode(page, "Sơ đồ tư duy");
 
   const upload = page.getByRole("button", { name: "Tải tài liệu lên" }).first();
   await expect(upload).toBeVisible();

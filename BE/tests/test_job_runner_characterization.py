@@ -27,6 +27,7 @@ import os
 import uuid
 
 import pytest
+from tests._owner_db import owner_session_scope  # clean-up as the table owner
 
 
 # `be` / `owner` là fixture CỤC BỘ của `test_quiz_generation.py`, không nằm trong
@@ -57,7 +58,7 @@ def owner():
 
     u = users_store.create_user(f"jobchar_{uuid.uuid4().hex[:8]}@example.com", "password123")
     yield u["user_id"]
-    with session_scope() as s:
+    with owner_session_scope() as s:
         row = s.get(User, u["user_id"])
         if row is not None:
             s.delete(row)

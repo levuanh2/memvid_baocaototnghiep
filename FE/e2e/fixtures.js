@@ -2,6 +2,7 @@
 // credentials anywhere here — every user is registered fresh, per test run,
 // against the ephemeral E2E backend (BE/scripts/run_e2e_server.py) and its
 // throwaway Postgres database.
+import { chooseMode, waitForModeControl } from "../e2e-fixture/workspaceMode.js";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 
@@ -30,7 +31,8 @@ export async function registerAndEnterApp(page, user = freshTestUser()) {
   await page.getByLabel("Mật khẩu", { exact: true }).fill(user.password);
   await page.getByLabel("Nhập lại mật khẩu").fill(user.password);
   await page.getByRole("button", { name: "Tạo tài khoản" }).click();
-  await page.getByRole("tablist", { name: "Chế độ Workspace" }).waitFor({ state: "visible" });
+  // V9.3 P4b: <=700px shows the "Chế độ học" select instead of the tab row.
+  await waitForModeControl(page);
   return user;
 }
 
@@ -81,7 +83,7 @@ export async function selectAllSources(page) {
  * dialog locator so callers can assert visibility explicitly and decide how
  * hard to fail if a concurrent fix for that regression hasn't landed yet. */
 export async function openGuidedDialogFromHeader(page) {
-  await page.getByRole("tab", { name: "Sơ đồ tư duy" }).click();
+  await chooseMode(page, "Sơ đồ tư duy");
   const hasMaps = await page.getByRole("button", { name: "Mở thư viện sơ đồ" })
     .waitFor({ state: "visible", timeout: 5_000 }).then(() => true, () => false);
   if (hasMaps) {
@@ -100,7 +102,7 @@ export async function openGuidedDialogFromHeader(page) {
 // global "Sơ đồ tư duy" tab switches mode, and "Mở thư viện sơ đồ" opens the
 // listbox "Chọn sơ đồ" (its "Tạo sơ đồ mới" sits in the same popover).
 export async function openMapLibrary(page) {
-  await page.getByRole("tab", { name: "Sơ đồ tư duy" }).click();
+  await chooseMode(page, "Sơ đồ tư duy");
   const trigger = page.getByRole("button", { name: "Mở thư viện sơ đồ" });
   if ((await trigger.getAttribute("aria-expanded")) !== "true") await trigger.click();
   return page.getByRole("listbox", { name: "Chọn sơ đồ" });

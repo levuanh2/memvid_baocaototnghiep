@@ -61,8 +61,9 @@ module.exports = {
         // Wave 1: `reading` was a duplicate alias of `display` (same Spectral
         // stack) — collapsed to one role per the Signature Contract; Spectral
         // stays (not swapped to Fraunces — see docs/UI_IMPLEMENTATION_PLAN.md).
-        display: ["Spectral", "Georgia", "serif"],
-        body: ["Inter", "system-ui", "sans-serif"],
+        // V9.3: one family (Be Vietnam Pro) for headings and body; the comment above is history.
+        display: ["Be Vietnam Pro", "system-ui", "sans-serif"],
+        body: ["Be Vietnam Pro", "system-ui", "sans-serif"],
         mono: ["IBM Plex Mono", "ui-monospace", "monospace"],
       },
       fontSize: {

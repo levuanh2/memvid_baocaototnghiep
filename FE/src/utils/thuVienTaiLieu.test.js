@@ -549,3 +549,21 @@ describe("mục theo lịch trong chiaMuc", () => {
     expect(m.tuanNay).toEqual([]);
   });
 });
+
+
+describe("ganNhatCoTheTiepTuc (Command Palette 'Tiếp tục học')", () => {
+  const ago = (h) => new Date(Date.now() - h * 3600e3).toISOString();
+  const ready = { ai: { index: "ready" } };
+  it("skips a failed or unindexed document even when it was opened last", async () => {
+    const { ganNhatCoTheTiepTuc } = await import("./thuVienTaiLieu");
+    const docs = [
+      { document_id: "failed", last_opened_at: ago(1), ingest_status: "error", status: "failed", ...ready },
+      { document_id: "waiting", last_opened_at: ago(2), ai: { index: "not_generated" } },
+      { document_id: "ok", last_opened_at: ago(3), ...ready },
+      { document_id: "never", ...ready },
+    ];
+    expect(ganNhatCoTheTiepTuc(docs)?.document_id).toBe("ok");
+    expect(ganNhatCoTheTiepTuc(docs.slice(0, 2))).toBeNull();
+    expect(ganNhatCoTheTiepTuc(undefined)).toBeNull();
+  });
+});

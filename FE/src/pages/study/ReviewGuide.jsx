@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import { Link, useNavigate, useParams } from "react-router-dom";
 import StudyShell, { EmptyState } from "../../components/study/StudyShell";
 import SealMeter from "../../components/study/SealMeter";
@@ -34,10 +34,18 @@ export default function ReviewGuide() {
   const [busy, setBusy] = useState(false);
   const [practiceFor, setPracticeFor] = useState(null);
   const [customizeItem, setCustomizeItem] = useState(null);
+  // "Tạo lại kế hoạch" archives the current topics (issue #18, owner option B): nothing
+  // is deleted, practice quizzes and their results stay. It still asks first, saying
+  // exactly that (owner decision 2026-11-17, PR #190; wording changed with the archive).
+  const [xacNhanTaoLai, setXacNhanTaoLai] = useState(false);
 
   const job = useStudyJob({
     onDone: (result) => {
-      if (result?.quiz_id) navigate(`/app/study/practice/${result.quiz_id}`);
+      if (result?.quiz_id) { navigate(`/app/study/practice/${result.quiz_id}`); return; }
+      // Finished without a quiz: there is nowhere to go. Say so and unlock, or `practiceFor`
+      // keeps every practice button disabled until a reload.
+      setError("Bài luyện tập đã tạo xong nhưng máy chủ không trả về mã bài. Thử lại.");
+      setPracticeFor(null);
     },
   });
 
@@ -76,11 +84,15 @@ export default function ReviewGuide() {
   // `config` defaults to the exact prior hardcoded body ("Luyện ngay"); the
   // Customize dialog calls this with a user-built config instead. Either way
   // it's the same job-start path, so job/error handling doesn't fork.
+  const practiceStartingRef = useRef(false);
   const practise = async (item, config = PRACTICE_QUICK_DEFAULTS) => {
     // Cờ đặt TRƯỚC await và nút đọc chính cờ này, không đọc `job.running`: `job.jobId`
     // chỉ có SAU khi 202 về, nên giữa lúc bấm và lúc đó nút vẫn bấm được và mỗi lần bấm
     // là một job luyện tập nữa tranh 1 slot LLM. Đúng lỗi Q1 vòng 7, chưa vá ở đây.
-    if (practiceFor) return;
+    // The ref is the lock: `practiceFor` is state, so two clicks in the same tick both read the
+    // old value and both start a job. Released only where `practiceFor` is reset below.
+    if (practiceFor || practiceStartingRef.current) return;
+    practiceStartingRef.current = true;
     setPracticeFor(item.review_item_id);
     setCustomizeItem(null);
     setError(null);
@@ -94,6 +106,9 @@ export default function ReviewGuide() {
     } catch (e) {
       setError(moTaLoi(e, "Không tạo được câu luyện tập."));
       setPracticeFor(null);
+    } finally {
+      // From here `practiceFor` (already committed) or the running job holds the lock.
+      practiceStartingRef.current = false;
     }
   };
 
@@ -110,7 +125,7 @@ export default function ReviewGuide() {
       actions={
         plan && (
           <button type="button" className="btn-secondary text-small inline-flex items-center gap-1.5"
-            disabled={busy} onClick={() => build({ force: true })}>
+            disabled={busy} onClick={() => setXacNhanTaoLai(true)}>
             {busy ? <Spinner size={13} /> : <Icon name="RotateCcw" size={14} />} Tạo lại kế hoạch
           </button>
         )
@@ -133,6 +148,28 @@ export default function ReviewGuide() {
           <p className="font-display text-title text-text-primary mb-6 quiz-review-summary">
             {plan.summary}
           </p>
+          {plan.outdated && (
+            <p className="text-body text-text-secondary -mt-4 mb-6" role="status">
+              Bài làm đã được chấm lại sau khi tạo kế hoạch này, nên các chủ đề bên dưới có
+              thể chưa khớp với kết quả mới.
+            </p>
+          )}
+          {Number(plan.ungraded_count || 0) > 0 && (
+            <p className="text-body text-text-secondary -mt-4 mb-6">
+              Kế hoạch này chỉ dựa trên các câu đã chấm. {plan.ungraded_count} câu tự luận
+              chưa chấm được nên không nằm trong kế hoạch.
+            </p>
+          )}
+
+          {plan.items.length > 0 && (() => {
+            const chunkCount = new Set(plan.items.flatMap((item) => item.chunk_ids || [])).size;
+            return (
+              <p className="quiz-review-overview">
+                {plan.items.length} chủ đề cần ôn, chủ đề nắm yếu nhất đứng đầu.
+                {chunkCount > 0 ? ` ${chunkCount} đoạn tài liệu cần đọc lại.` : ""}
+              </p>
+            );
+          })()}
 
           {job.jobId && (
             <div className="surface-card !p-3.5 mb-5 flex items-center gap-2.5">
@@ -158,10 +195,11 @@ export default function ReviewGuide() {
             />
           ) : (
             <ol className="quiz-review-plan-list">
-              {plan.items.map((item) => (
+              {plan.items.map((item, index) => (
                 <ReviewItem
                   key={item.review_item_id}
                   item={item}
+                  primary={index === 0}
                   busy={practiceFor === item.review_item_id}
                   disabled={Boolean(practiceFor) || job.running}
                   onPractise={() => practise(item)}
@@ -170,9 +208,19 @@ export default function ReviewGuide() {
               ))}
             </ol>
           )}
+          <ArchivedTopics items={plan.archived_items} />
         </>
       )}
 
+      <RegenerateConfirm
+        open={xacNhanTaoLai}
+        onCancel={() => setXacNhanTaoLai(false)}
+        onConfirm={async () => {
+          // Errors stay in the dialog (it shows them and keeps itself open).
+          setPlan(await generateReviewPlan(attemptId, { force: true }));
+          setXacNhanTaoLai(false);
+        }}
+      />
       {customizeItem && (
         <PracticeCustomizeDialog
           item={customizeItem}
@@ -185,7 +233,7 @@ export default function ReviewGuide() {
   );
 }
 
-function ReviewItem({ item, busy, disabled, onPractise, onCustomize }) {
+function ReviewItem({ item, primary, busy, disabled, onPractise, onCustomize }) {
   return (
     <li className="surface-card quiz-review-plan-item">
       <div className="flex items-start gap-4">
@@ -224,7 +272,8 @@ function ReviewItem({ item, busy, disabled, onPractise, onCustomize }) {
                 {item.chunk_ids.length} đoạn cần đọc lại
               </span>
             )}
-            <button type="button" className="btn-seal text-small inline-flex items-center gap-1.5"
+            <button type="button" className={`${primary ? "btn-seal" : "btn-secondary"} text-small inline-flex items-center gap-1.5`}
+              data-emphasis={primary ? "primary" : "secondary"}
               disabled={disabled} onClick={onPractise}>
               {busy ? <><Spinner size={12} /> Đang soạn…</> : <><Icon name="Zap" size={13} /> Luyện ngay (5 câu)</>}
             </button>
@@ -296,5 +345,84 @@ function PracticeCustomizeDialog({ item, submitting, onClose, onSubmit }) {
         <QuestionBuilderSummary count={count} difficulty={difficulty} types={types} scopeLabel={`Chủ đề: ${item.topic}`} />
       </div>
     </Modal>
+  );
+}
+
+
+/** "Tạo lại kế hoạch" archives, never deletes (issue #18): say what really happens. */
+function RegenerateConfirm({ open, onConfirm, onCancel }) {
+  const [dangGui, setDangGui] = useState(false);
+  const [loi, setLoi] = useState("");
+  const guiRef = useRef(false);
+  if (!open) return null;
+  const xacNhan = async () => {
+    if (guiRef.current) return;
+    guiRef.current = true;
+    setDangGui(true);
+    setLoi("");
+    try {
+      await onConfirm();
+    } catch (e) {
+      setLoi(moTaLoi(e, "Chưa tạo lại được kế hoạch. Thử lại sau ít phút."));
+    } finally {
+      guiRef.current = false;
+      setDangGui(false);
+    }
+  };
+  return (
+    <Modal open title="Tạo lại kế hoạch ôn tập?" onClose={dangGui ? undefined : onCancel}
+      footer={
+        <>
+          <button type="button" className="btn-secondary" onClick={onCancel} disabled={dangGui}>Huỷ</button>
+          <button type="button" className="btn-seal inline-flex items-center gap-2" onClick={xacNhan}
+            disabled={dangGui} aria-busy={dangGui}>
+            {dangGui ? <><Spinner size={13} /> Đang tạo lại…</> : "Tạo lại kế hoạch"}
+          </button>
+        </>
+      }>
+      <p className="text-body text-text-secondary">
+        Các chủ đề hiện tại được chuyển sang mục “Kế hoạch trước”. Bài luyện tập đã tạo và
+        kết quả làm bài của chúng vẫn được giữ nguyên. Chủ đề cũ không tạo được bài luyện
+        tập mới.
+      </p>
+      {loi && (
+        <p className="text-small mt-3" role="alert" style={{ color: "var(--err)" }}>{loi}</p>
+      )}
+    </Modal>
+  );
+}
+
+/** Topics replaced by a regeneration: read-only history with their practice quizzes. */
+function ArchivedTopics({ items }) {
+  if (!items?.length) return null;
+  return (
+    <section className="mt-8" aria-labelledby="ke-hoach-truoc">
+      <h2 id="ke-hoach-truoc" className="font-display text-body-lg text-text-primary mb-1">
+        Kế hoạch trước
+      </h2>
+      <p className="text-small text-text-secondary mb-3">
+        Các chủ đề này thuộc kế hoạch cũ. Bạn vẫn xem và làm tiếp được bài luyện tập đã tạo,
+        nhưng không tạo bài mới từ chúng.
+      </p>
+      <ul className="flex flex-col gap-2">
+        {items.map((item) => (
+          <li key={item.review_item_id} className="surface-card !p-3.5">
+            <div className="text-body text-text-primary">{item.topic}</div>
+            <div className="text-small text-text-secondary">
+              Lưu trữ lúc {new Date(item.archived_at).toLocaleString("vi-VN")}
+            </div>
+            {item.practice_quiz_ids?.length > 0 && (
+              <div className="flex flex-wrap gap-2 mt-2">
+                {item.practice_quiz_ids.map((quizId, i) => (
+                  <Link key={quizId} to={`/app/study/practice/${quizId}`} className="btn-secondary text-small">
+                    Bài luyện tập {i + 1}
+                  </Link>
+                ))}
+              </div>
+            )}
+          </li>
+        ))}
+      </ul>
+    </section>
   );
 }

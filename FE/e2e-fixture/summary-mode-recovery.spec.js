@@ -28,7 +28,7 @@ async function openWorkspace(page, { summaries = [], generate = () => json({ sta
     return route.fulfill(json({}));
   });
   await page.goto("/app?source=tai-lieu-1&tab=summary");
-  await expect(page.locator('[role="tab"][title="Tóm tắt"][aria-selected="true"]')).toBeVisible();
+  await expect(page.locator('[role="tab"][title="Tóm tắt"]')).toHaveAttribute("aria-selected", "true");
   return posts;
 }
 

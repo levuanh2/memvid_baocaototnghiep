@@ -88,9 +88,9 @@ describe("isDrawerMode", () => {
 });
 
 describe("defaultCollapsed", () => {
-  it("màn rộng mở sẵn cả hai cột", () => {
-    expect(defaultCollapsed(COMFORT_MIN)).toEqual({ left: false, right: false });
-    expect(defaultCollapsed(1920)).toEqual({ left: false, right: false });
+  it("màn rộng mở sẵn nguồn, dẫn chứng đóng (V9.3 P4b)", () => {
+    expect(defaultCollapsed(COMFORT_MIN)).toEqual({ left: false, right: true });
+    expect(defaultCollapsed(1920)).toEqual({ left: false, right: true });
   });
 
   it("màn hẹp thu cả hai về gáy — mở sẵn thì khung đọc không còn chỗ", () => {

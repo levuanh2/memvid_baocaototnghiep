@@ -137,6 +137,8 @@ function createActionFor(capability) {
 }
 
 export default function SidebarRight({
+  // `sources`: the document list (stem -> file name), only to name a citation's document.
+  sources = [],
   selectedSources, evidence, highlight, onHighlight, onClose, onGuidedClose, onAskAbout, onOpenSource, collapsible = true,
   mode = "chat", mindMapContext, summaryData,
   // Phase 4C — Gia sư AI sống trong CÙNG cột này, không phải một cột thứ ba
@@ -295,35 +297,60 @@ export default function SidebarRight({
   // Hỏng KHÁC rỗng: `setMindMaps([])` trong `catch` làm màn hình ghi "Chưa có sơ đồ
   // nào được lưu" cho một người có đủ sơ đồ, và họ sẽ dựng lại từ đầu. Giữ nguyên danh
   // sách đang có, nói ra là chưa tải được.
+  // Same publishing rule as fetchSummaries below (still mounted AND newest request): a slow
+  // mount-time list used to answer after a delete or a finished job had refreshed it, and put
+  // the deleted map back or hid the new one (V6 bug hunt #13).
+  const luotTaiMindmapRef = useRef(0);
   const fetchMindMaps = useCallback(async () => {
+    const luot = ++luotTaiMindmapRef.current;
+    const cu = () => !mountedRef.current || luot !== luotTaiMindmapRef.current;
     try {
       const res = await apiFetch(`/mindmaps`);
+      if (cu()) return;
       if (!res.ok) throw new Error(`HTTP ${res.status}`);
       const data = await res.json();
+      if (cu()) return;
       setMindMaps(Array.isArray(data?.mindmaps) ? data.mindmaps : []);
       setLoiTaiMindmap(null);
     } catch (err) {
+      if (cu()) return;
       console.error("Mind map fetch error:", err);
       setLoiTaiMindmap("Chưa tải được danh sách sơ đồ.");
     }
-    finally { setInitialLoading(false); }
+    finally { if (!cu()) setInitialLoading(false); }
   }, []);
 
+  // A /summaries answer may publish only if BOTH hold: the panel is still mounted (#164) and
+  // no newer request has started since (#165). One predicate, checked after every await, so
+  // neither rule can be dropped by editing the other.
+  const luotTaiSummaryRef = useRef(0);
   const fetchSummaries = useCallback(async () => {
+    const luot = ++luotTaiSummaryRef.current;
+    const cu = () => !mountedRef.current || luot !== luotTaiSummaryRef.current;
     try {
       const res = await apiFetch(`/summaries`);
+      if (cu()) return;
       if (!res.ok) throw new Error(`HTTP ${res.status}`);
       const data = await res.json();
+      if (cu()) return;
       setSummaries(Array.isArray(data?.summaries) ? data.summaries : []);
       setLoiTaiSummary(null);
     } catch (err) {
+      if (cu()) return;
       console.error("Summary fetch error:", err);
       setLoiTaiSummary("Chưa tải được danh sách tóm tắt.");
     }
     // Tab Tóm tắt trước đây KHÔNG có cờ tải nào, nên nó hiện "Chưa có tóm tắt nào"
     // ngay trong lúc đang tải lần đầu.
-    finally { setDangTaiSummary(false); }
+    finally { if (!cu()) setDangTaiSummary(false); }
   }, []);
+  // "Tải lại danh sách": show the loading state again instead of leaving the old error and an
+  // enabled button on screen while the request runs.
+  const taiLaiSummaries = useCallback(() => {
+    setLoiTaiSummary(null);
+    setDangTaiSummary(true);
+    return fetchSummaries();
+  }, [fetchSummaries]);
 
   useEffect(() => { fetchMindMaps(); fetchSummaries(); }, [fetchMindMaps, fetchSummaries]);
 
@@ -341,6 +368,7 @@ export default function SidebarRight({
   // the one case where `mindmapGenerating` was turned on (viewer overlay
   // stays open showing the old map with a banner), so it's the one case that
   // needs it turned back off on completion.
+  const lanXongMindmapRef = useRef(0);
   const handleMindmapDone = useCallback(async (data, sourceList, { resumed = false, isRegenerate = false } = {}) => {
     clearActiveMindmapJob();
     if (isRegenerate) setMindmapGenerating(false);
@@ -366,7 +394,11 @@ export default function SidebarRight({
       initialLayoutType: "napkin",
     };
     setMindMaps((prev) => [record, ...prev.filter((item) => item.id !== record.id)]);
+    // The list refresh is awaited, so two finished jobs can overlap here. Only the newest
+    // completion may open its map: an older one resuming late used to replace it.
+    const lan = ++lanXongMindmapRef.current;
     await fetchMindMaps();
+    if (!mountedRef.current || lan !== lanXongMindmapRef.current) return;
     if (resumed) {
       // The tab that started this job is gone — don't yank the user into a
       // full-screen overlay for a job they may not even remember starting.
@@ -511,6 +543,15 @@ export default function SidebarRight({
     if (force) setMindmapGenerating(true); // keep the open viewer's banner up during "Tạo lại"
     try {
       const startData = await generateMindmap(sourceList, { force, ...guidedOptions });
+      if (!mountedRef.current) {
+        // Left before the answer came. The server did queue the job, so keep it for the next
+        // visit to resume; start no poller and touch no state from this dead panel.
+        // Never over a job a newer panel has stored since: its record is the one being tracked.
+        if (startData?.job_id && startData.status !== "done" && !loadActiveMindmapJob()?.jobId) {
+          saveActiveMindmapJob({ jobId: startData.job_id, sources: sourceList, startedAt: Date.now() });
+        }
+        return;
+      }
       if (startData.error) throw new Error(startData.error);
 
       if (startData.status === "done" && startData.result) {
@@ -542,6 +583,7 @@ export default function SidebarRight({
       if (Object.keys(guidedOptions).length) setGuidedOpen(false);
       startMindmapPoller(startData.job_id, sourceList, { resumed: false, isRegenerate: force });
     } catch (err) {
+      if (!mountedRef.current) return;
       console.error("Mind Map Error:", err);
       toast(_errText(err, "Không tạo được sơ đồ", "Không tạo được sơ đồ, kiểm tra console!"), { type: "error" });
       if (Object.keys(guidedOptions).length) {
@@ -556,7 +598,7 @@ export default function SidebarRight({
     }
     finally {
       mindmapStartingRef.current = false;
-      setLoading(false);
+      if (mountedRef.current) setLoading(false);
     }
   };
 
@@ -675,9 +717,12 @@ export default function SidebarRight({
   };
 
   // ── Summary v2 job flow (mirror mindmap: poller + resume + cancel thật) ──
+  const lanXongSummaryRef = useRef(0);
   const handleSummaryDone = useCallback(async (record, { resumed = false } = {}) => {
     clearActiveSummaryJob();
+    const lan = ++lanXongSummaryRef.current;   // same rule as handleMindmapDone
     await fetchSummaries(); // BE đã tự persist record — chỉ cần refresh danh sách
+    if (!mountedRef.current || lan !== lanXongSummaryRef.current) return;
     if (resumed) {
       toast("Tóm tắt đã xong trong lúc bạn vắng mặt — mở từ danh sách", { type: "info" });
     } else {
@@ -755,6 +800,13 @@ export default function SidebarRight({
     setSummaryCancelNotice(false);
     try {
       const startData = await generateSummary(sourceList, { lengthMode, mode });
+      if (!mountedRef.current) {
+        // Same as the mind map: keep the queued job for the next visit, start nothing here.
+        if (startData?.job_id && startData.status !== "done" && !loadActiveSummaryJob()?.jobId) {
+          saveActiveSummaryJob({ jobId: startData.job_id, sources: sourceList, startedAt: Date.now(), extra: { lengthMode, mode } });
+        }
+        return;
+      }
       if (startData.error) throw new Error(startData.error);
 
       if (startData.status === "done" && startData.result) {
@@ -770,10 +822,11 @@ export default function SidebarRight({
       saveActiveSummaryJob({ jobId: startData.job_id, sources: sourceList, startedAt: Date.now(), extra: { lengthMode, mode } });
       startSummaryPoller(startData.job_id, { resumed: false });
     } catch (err) {
+      if (!mountedRef.current) return;
       handleSummaryError(err);
     } finally {
       summaryStartingRef.current = false;
-      setSummaryLoading(false);
+      if (mountedRef.current) setSummaryLoading(false);
     }
   };
 
@@ -820,6 +873,13 @@ export default function SidebarRight({
 
   // ── Derived ───────────────────────────────────────
   const chunks = Array.isArray(evidence?.chunks) ? evidence.chunks : [];
+  // A citation used to be labelled with its internal stem ("kinh_te_vi_mo_20261101_120000 ·
+  // đoạn 12"). Learners know the document by its name; the stem stays in the tooltip.
+  const tenTaiLieu = (stem) => {
+    const s = normStem(stem);
+    const found = (sources || []).find((x) => normStem(x.video_stem || x.video) === s);
+    return found?.filename ? String(found.filename).replace(/\.[a-z0-9]{2,5}$/i, "") : (stem || "Tài liệu");
+  };
   const sourceStems = Array.isArray(evidence?.sources) ? evidence.sources : [];
   // `mindmapJobUi.running` is included so the button stays disabled for the
   // whole background run, not just the initial POST round-trip — otherwise a
@@ -935,14 +995,19 @@ export default function SidebarRight({
   useEffect(() => {
     onSummaryLibraryChange?.({
       summaries,
+      // Same two signals the mind map publishes: without them the Summary screen cannot tell
+      // "still loading" or "failed to load" from "this account has no summaries".
+      initialLoading: dangTaiSummary,
+      loadError: loiTaiSummary,
       actions: {
+        retryLoad: taiLaiSummaries,
         select: setShowSummaryModal,
         create: createSummaryFromLibrary,
         creating: summaryLoading || summaryJobUi.running,
         jobLabel: summaryJobUi.label,
       },
     });
-  }, [summaries, summaryLoading, summaryJobUi.running, summaryJobUi.label, createSummaryFromLibrary, onSummaryLibraryChange]);
+  }, [summaries, summaryLoading, summaryJobUi.running, summaryJobUi.label, createSummaryFromLibrary, onSummaryLibraryChange, dangTaiSummary, loiTaiSummary, taiLaiSummaries]);
 
   // W3-4: roving-tabindex arrow keys for the right-panel tab row (standard
   // ARIA tabs pattern) -- automatic activation, same as clicking.
@@ -1106,8 +1171,9 @@ export default function SidebarRight({
                         style={{ color: "var(--seal)", border: "1px solid color-mix(in srgb, var(--seal) 35%, transparent)" }}>
                         {i + 1}
                       </span>
-                      <span className="coord truncate flex-1" title={stem}>
-                        {stem || "nguồn"}{chunkId !== "" ? ` · đoạn ${chunkId}` : ""}
+                      <span className="min-w-0 flex-1 text-small text-text-primary truncate" title={stem}>
+                        {tenTaiLieu(stem)}
+                        {chunkId !== "" && <span className="text-text-muted">{`, đoạn ${chunkId}`}</span>}
                       </span>
                       {mindMapNodeId && (
                         <button
@@ -1139,7 +1205,7 @@ export default function SidebarRight({
               {sourceStems.map((s, i) => (
                 <div key={`${s}-${i}`} className="evidence-frame p-2.5 flex items-center gap-2">
                   <Icon name="FileText" size={13} className="text-slate flex-shrink-0" />
-                  <span className="coord truncate" title={s}>{s}</span>
+                  <span className="text-small text-text-primary truncate" title={s}>{tenTaiLieu(s)}</span>
                 </div>
               ))}
             </div>

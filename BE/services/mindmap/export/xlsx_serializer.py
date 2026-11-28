@@ -20,6 +20,8 @@ from openpyxl.utils import get_column_letter
 
 from .tree import flatten_export_tree
 
+# V9.3 (owner decision 2026-11-28): Excel cannot embed fonts, so XLSX keeps fonts every Office install
+# has. PDF and DOCX use (and embed) Be Vietnam Pro.
 FONT_NAMES = {"sans": "Calibri", "serif": "Times New Roman"}
 MONOCHROME_HEX = "2B2620"  # matches FE's mindmapExportAppearance.js MONOCHROME_COLOR (no leading #, openpyxl's own convention)
 CUSTOM_PALETTE_HEX = ["126CF2", "8C4DFF", "16A085", "F2353A"]  # matches FE's CUSTOM_PALETTE

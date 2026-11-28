@@ -127,7 +127,9 @@ def test_request_dung_url_header_model_va_stream_false(monkeypatch):
     assert ghi["payload"]["messages"] == [{"role": "user", "content": "xin chao"}]
     assert isinstance(ghi["payload"]["max_tokens"], int)
     assert isinstance(ghi["payload"]["temperature"], float)
-    assert ghi["timeout"] and ghi["timeout"] > 0, "phải có timeout, không treo vô hạn"
+    # (connect, read) since the LLM timeout PR (2026-11-17): a dead host fails fast.
+    connect, read = ghi["timeout"]
+    assert 0 < connect <= read and read > 0, "phải có timeout, không treo vô hạn"
 
 
 def test_base_url_va_model_doc_tu_env(monkeypatch):
@@ -267,14 +269,19 @@ def test_thieu_key_thi_builder_bao_ro(monkeypatch):
 
 # ── 7: hồi quy provider cũ ─────────────────────────────────────────────────
 def test_builder_cu_khong_doi_chu_ky(monkeypatch):
-    """Không đụng Gemini/Groq/Ollama ngoài việc thêm FPT vào danh sách."""
+    """Không đụng Gemini/Groq/Ollama ngoài việc thêm FPT vào danh sách.
+
+    2026-11-17 (LLM timeout PR, owner-approved): Gemini and Groq gained ONE keyword-only
+    `timeout`, used only when the caller gives a deadline; without it nothing changes."""
     import inspect
 
     lf = _nap_lai(monkeypatch, GEMINI_API_KEY="g", GROQ_API_KEY="q")
-    assert list(inspect.signature(lf._gemini_chat_llm).parameters) == ["feature", "options"]
-    assert list(inspect.signature(lf._groq_chat_llm).parameters) == ["feature", "options"]
+    assert list(inspect.signature(lf._gemini_chat_llm).parameters) == [
+        "feature", "options", "timeout"]
+    assert list(inspect.signature(lf._groq_chat_llm).parameters) == [
+        "feature", "options", "timeout"]
     assert list(inspect.signature(lf._ollama_chat_llm).parameters) == [
         "model", "feature", "options", "timeout"]
     assert list(inspect.signature(lf.ask_ai).parameters) == [
         "prompt", "system_prompt", "model", "options", "feature", "timeout",
-        "usage_context", "usage_attempt_id"]
+        "usage_context", "usage_attempt_id", "total_timeout"]

@@ -9,6 +9,12 @@ try:
 except Exception:
     pass
 
+# A backend started by hand from a checkout with `.env` must not reach a hosted database
+# or bucket (dev/test isolation; production containers set PROCESS_ROLE and have no .env
+# file). Outside the try: a refusal must stop the process, not be swallowed.
+from shared import dev_target_guard as _dev_target_guard  # noqa: E402
+_dev_target_guard.enforce()
+
 
 def _jobs_update_dispatch(job_id: str, **kwargs: Any) -> None:
     """Keep Guided progress in Postgres; legacy jobs stay on SQLite."""
@@ -161,7 +167,9 @@ CORS(
     # mindmap đã sửa (PUT /mindmaps/<id>).
     methods=["GET", "POST", "PUT", "PATCH", "DELETE", "OPTIONS"],
     # "Authorization" for Bearer-token auth (no cookie credentials in this phase).
-    allow_headers=["Content-Type", "Authorization"],
+    # "Idempotency-Key": optional on POST /api/practice/<id>/submit. Missing here, a
+    # cross-origin client sending it would fail the preflight (see PATCH above).
+    allow_headers=["Content-Type", "Authorization", "Idempotency-Key"],
 )
 
 
@@ -265,6 +273,18 @@ def _run_jobs_maintenance(force: bool = False) -> None:
             print(f"jobs_maintenance swept={swept} pruned={pruned} logs={logs} export_files_pruned={exported_files_pruned}", flush=True)
     except Exception:
         pass
+    # Diagnostic grading recovery: OFF unless GRADING_RECOVERY_ENABLED=1 (then a dry run
+    # unless GRADING_RECOVERY_DRY_RUN=0). Regrades go to background jobs, never this
+    # request thread; it has its own try so it can never break the sweep above.
+    try:
+        # Both names are defined further down this module; the startup call runs before
+        # them, so look them up at call time and skip until they exist.
+        from app.application import attempts as _attempts_uc
+        _dispatch = globals().get("_dispatch_grading")
+        if _dispatch is not None:
+            _attempts_uc.recover_grading(dispatch_grading=_dispatch)
+    except Exception as exc:
+        print(f"grading_recovery_failed err={type(exc).__name__}", flush=True)
 
 
 def _handle_sigterm(*_args):
@@ -1689,17 +1709,69 @@ def billing_capability():
     return jsonify({"plan": summary["plan"], "monthly_token_limit": summary["limit"], "per_request_token_limit": summary["per_request_token_limit"], "enforcement_enabled": summary["enforcement_enabled"], "reset_at": summary["reset_at"], "period_start": summary.get("period_start"), "period_end": summary.get("period_end")}), 200
 
 
+def _all_document_stem_owners(stems=None) -> Optional[Dict[str, set]]:
+    """Owners of every document row per canonical stem, soft-deleted included (their
+    chunks stay in the shared index). None when the view cannot be read: callers in
+    protected mode then refuse rather than authorize on a partial picture.
+    V9.3 security (#209 review P1): always read fresh (the cache is per process and only the
+    writing process invalidates it). With `stems`, one SQL-filtered query for just those
+    stems; without, the whole view (upload naming only)."""
+    try:
+        from app.domains.documents import repository as _docs
+        if stems is not None:
+            return _docs.owners_for_stems(stems)
+        return _docs.stem_owners(use_cache=False)
+    except Exception as exc:
+        print(f"⚠️ Không đọc được chủ sở hữu theo stem: {exc}")
+        return None
+
+
+def _stem_owner_map(registry: Optional[Dict[str, Dict]] = None, stems=None) -> Optional[Dict[str, set]]:
+    """V9.3 security: {canonical stem: owners} from every document row (fresh) plus the
+    registry. `stems` limits the owner view to the stems being decided (one filtered query)."""
+    wanted = None if stems is None else {_normalize_video_stem(s) for s in stems if s}
+    every = _all_document_stem_owners(sorted(wanted)) if wanted is not None else _all_document_stem_owners()
+    if every is None:
+        return None
+    out = {k: set(v) for k, v in every.items() if wanted is None or k in wanted}
+    rows = registry if registry is not None else _load_source_registry()
+    for row in (rows or {}).values():
+        if not isinstance(row, dict):
+            continue
+        stem = _normalize_video_stem(row.get("source_stem") or row.get("filename") or "")
+        if stem and (wanted is None or stem in wanted):
+            out.setdefault(stem, set()).add(row.get("user_id"))
+    return out
+
+
+def _stem_exclusive_to(stem: str, user_id: Optional[str], owners_map: Optional[Dict[str, set]]) -> bool:
+    """A stem is usable by `user_id` only when EVERY document carrying it is theirs. Two
+    owners, an ownerless/anonymous row, or an unreadable owner view -> False (never the
+    first match: a stem is a display-derived name, not an identity)."""
+    if user_id is None or owners_map is None:
+        return False
+    return owners_map.get(_normalize_video_stem(stem or "")) == {user_id}
+
+
 def owned_stems(user_id: Optional[str]) -> set:
     """Canonical source stems owned by `user_id`, from the registry.
 
     When AUTH_PROTECT_APP_APIS is OFF, legacy/None-owner rows are included (today's
     open behavior). When ON, only rows whose user_id matches are returned (and, for
-    a None user_id, nothing) — the fail-closed base the later phases enforce."""
+    a None user_id, nothing) — the fail-closed base the later phases enforce.
+    V9.3 security: when ON, a stem any other owner (or an ownerless row, or a
+    soft-deleted foreign document) also carries is left out, so no stem-scoped path
+    (query/RAG, list-indexed, summary, mind map) can reach the other owner's chunks."""
     try:
         registry = _load_source_registry()
     except Exception:
         return set()
     protect = _auth_protect_enabled()
+    owners_map = None
+    if protect and user_id is not None:
+        mine = [row.get("source_stem") for row in registry.values()
+                if isinstance(row, dict) and row.get("user_id") == user_id and row.get("source_stem")]
+        owners_map = _stem_owner_map(registry, stems=mine) if mine else {}
     out: set = set()
     for row in registry.values():
         if not isinstance(row, dict):
@@ -1709,7 +1781,7 @@ def owned_stems(user_id: Optional[str]) -> set:
             continue
         owner = row.get("user_id")
         if protect:
-            if user_id is not None and owner == user_id:
+            if user_id is not None and owner == user_id and _stem_exclusive_to(stem, user_id, owners_map):
                 out.add(stem)
         else:
             # open mode: everything visible (owner filter is a no-op)
@@ -1737,8 +1809,46 @@ def _source_owner_ok(stem_or_id: str, user_id: Optional[str]) -> bool:
             continue
         row_stem = _normalize_video_stem(row.get("source_stem") or row.get("filename") or "")
         if sid == stem_or_id or (norm and row_stem == norm):
-            return row.get("user_id") == user_id
+            owners_map = _stem_owner_map(registry, stems=[row_stem])
+            # V9.3 security: the caller acts on the stem next (reads or deletes its chunks
+            # in the shared index), so the owner of this one row is not enough: every
+            # document on the stem must be theirs. Matched by id or by stem alike.
+            return row.get("user_id") == user_id and _stem_exclusive_to(row_stem, user_id, owners_map)
     return False
+
+
+def _hold_stem_lock_for_request(stem: str) -> bool:
+    """Take the stem's advisory lock until this request ends (released in teardown).
+    False when it cannot be taken: the caller refuses instead of acting unlocked."""
+    from flask import g
+    from app.domains.documents import repository as _docs
+    try:
+        release = _docs.acquire_stem_lock(stem)
+    except Exception as exc:
+        print(f"⚠️ Không giữ được khoá stem {stem}: {exc}")
+        return False
+    g.setdefault("_stem_lock_releases", []).append(release)
+    return True
+
+
+@app.teardown_request
+def _release_stem_locks(_exc=None):
+    from flask import g
+    for release in reversed(g.pop("_stem_lock_releases", []) or []):
+        try:
+            release()
+        except Exception as exc:  # pragma: no cover - release already discards on failure
+            print(f"⚠️ Nhả khoá stem lỗi: {exc}")
+
+
+def _chunk_db_owner(chunk_id) -> tuple:
+    """(found, owner) for a global chunk id from its own `document_chunks` row."""
+    try:
+        from app.domains.documents import repository as _docs
+        return _docs.chunk_owner_by_embedding(chunk_id)
+    except Exception as exc:
+        print(f"⚠️ Không đọc được chủ của chunk {chunk_id}: {exc}")
+        return True, None  # cannot verify -> refuse
 
 
 def _resolve_owned_query_sources(raw_sources, user_id: Optional[str]):
@@ -2580,11 +2690,32 @@ def _safe_save_path(filename: str) -> str:
             n += 1
 
 
+class StemOwnershipUnavailable(RuntimeError):
+    """Who owns a stem cannot be established (owner view unreadable or stem lock not taken)."""
+
+
+def _ownership_unavailable_response(exc):
+    return jsonify({
+        "error": "ownership_unavailable",
+        "message": "Chưa kiểm tra được quyền sở hữu tên tài liệu. Thử lại sau ít phút.",
+    }), 503
+
+
 def _unique_display_filename(filename: str, registry: dict) -> str:
     """Chống trùng tên: nếu canonical stem đã có trong registry → thêm hậu tố
     " (n)" trước đuôi để hai tài liệu cùng tên KHÔNG trộn chunk (mỗi cái 1 stem)."""
     fn = filename or "file"
     existing = {(info.get("source_stem") or "") for info in registry.values()}
+    # V9.3 security: `registry` holds live rows only, but a soft-deleted document keeps its
+    # row and its index chunks under its stem. Reusing that stem would make it shared, and
+    # the shared-stem rule would then lock the new uploader out without a word. Skip every
+    # stem any document row still carries (an unreadable view adds nothing, as before).
+    view = _all_document_stem_owners()
+    if view is None:
+        # Fail closed (#209 review P2): naming blind could hand out a stem a soft-deleted or
+        # foreign document still carries, locking the new upload out without a word.
+        raise StemOwnershipUnavailable("document owner view unavailable")
+    existing |= set(view.keys())
     if _normalize_video_stem(fn) not in existing:
         return fn
     base, ext = os.path.splitext(fn)
@@ -2663,6 +2794,38 @@ def _ingest_uploaded_file(file) -> dict:
         raise
 
 
+def _choose_and_lock_display_filename(original: str, releases: list) -> str:
+    """V9.3 security (#209 review P2): pick the de-duplicated display name while holding the
+    advisory lock of its stem family (and of the chosen candidate), so two uploads, from any
+    worker or owner, cannot both take one stem. The caller releases `releases` after the
+    document row exists."""
+    from app.domains.documents import repository as _docs
+    original = original or "file"
+    base = _normalize_video_stem(original)
+    held = set()
+
+    def lock(stem):
+        if stem in held:
+            return
+        try:
+            releases.append(_docs.acquire_stem_lock(stem))
+        except _docs.StemLockTimeout as exc:
+            raise StemOwnershipUnavailable(str(exc)) from exc
+        held.add(stem)
+
+    lock(base)
+    for _ in range(25):
+        filename = _unique_display_filename(original, _docs.all_rows(use_cache=False))
+        stem = _normalize_video_stem(filename)
+        if stem in held:
+            return filename
+        lock(stem)
+        # Re-check under the candidate's own lock: another family may have taken it meanwhile.
+        if _unique_display_filename(original, _docs.all_rows(use_cache=False)) == filename:
+            return filename
+    raise StemOwnershipUnavailable("no free display name")
+
+
 def _ingest_uploaded_file_reserved(
     file,
     *,
@@ -2670,33 +2833,41 @@ def _ingest_uploaded_file_reserved(
     uid: Optional[str],
     usage_context,
 ) -> dict:
-    """Persist and enqueue one validated upload under an explicit reservation."""
-    registry = _load_source_registry()
-    # Tên hiển thị (chống trùng) — canonical stem suy từ tên này nên FE chọn theo
-    # tên hiển thị sẽ khớp chunk; lưu vật lý theo path an toàn riêng.
-    filename = _unique_display_filename(file.filename or "file", registry)
+    """Persist and enqueue one validated upload under an explicit reservation.
+
+    V9.3 security (#209 review P2 + side review): the stem lock covers only choosing the display
+    name and creating the documents row (milliseconds). The temporary copy and the upload to
+    object storage happen BEFORE the lock (the object key is unique by `source_id`), so a
+    second same-name upload never waits behind a large file, and a failed durable upload still
+    creates no row."""
+    from app.domains.documents import repository as _docs
+    from app.domains.documents import storage as _storage
+    from app.domains.documents import provenance as _prov
+
+    original = file.filename or "file"
+    # Production thì kho bền là BẮT BUỘC; dev/test thì bản local chính là kho lưu.
+    # Cùng một hàm quyết định nhãn nguồn gốc, nên không có cờ thứ hai để lệch nhau.
+    bat_buoc_ben = _prov.la_production(_prov.nguon_ingest())
+    if bat_buoc_ben and not _storage.is_configured():
+        # Ném TRƯỚC khi ghi bất cứ gì nên không để lại hàng documents ma.
+        raise DurableStorageRequired(
+            "kho object chưa cấu hình (thiếu SUPABASE_URL / SUPABASE_SECRET_KEY)")
+
     # `_safe_save_path` tạo thư mục và giành tên (atomic) — `save` chỉ ghi đè nội dung.
-    save_path = _safe_save_path(filename)
+    # Đây chỉ là bản tạm cho pipeline ingest; tên hiển thị được chọn sau, dưới khoá.
+    save_path = _safe_save_path(original)
     file.save(save_path)
 
-    source_stem = _normalize_video_stem(filename)
     # Bản gốc lên Supabase Storage (bucket private) và đó là kho lưu DUY NHẤT.
     # File local chỉ là chỗ đặt TẠM để pipeline ingest có đường dẫn mà đọc —
     # `_don_file_tam` xoá nó trong `finally` của job ingest.
     # Chưa cấu hình Storage (test/CI) → file_path trỏ đường dẫn local, và lúc đó
     # bản local CHÍNH LÀ kho lưu nên không bị xoá. Xem `_don_file_tam`.
-    from app.domains.documents import repository as _docs
-    from app.domains.documents import storage as _storage
-    from app.domains.documents import provenance as _prov
-
-    # Production thì kho bền là BẮT BUỘC; dev/test thì bản local chính là kho lưu.
-    # Cùng một hàm quyết định nhãn nguồn gốc, nên không có cờ thứ hai để lệch nhau.
-    bat_buoc_ben = _prov.la_production(_prov.nguon_ingest())
     stored_path = save_path
     if _storage.is_configured():
         try:
             _storage.ensure_bucket()
-            obj = _storage.object_path(uid or "anonymous", source_id, filename)
+            obj = _storage.object_path(uid or "anonymous", source_id, original)
             with open(save_path, "rb") as fh:
                 _storage.upload(obj, fh.read())
             stored_path = obj
@@ -2706,22 +2877,32 @@ def _ingest_uploaded_file_reserved(
                 raise DurableStorageRequired(
                     f"đẩy bản gốc lên kho object thất bại: {type(exc).__name__}") from exc
             print(f"⚠️ [Storage] Không đẩy được file lên bucket, dùng bản local: {exc}")
-    elif bat_buoc_ben:
-        # Ném TRƯỚC `_docs.create` nên không để lại hàng documents ma. Bản cũ đi
-        # thẳng qua đây không một lời cảnh báo — đó là cách sự cố này im lặng suốt.
-        _go_file_tam(save_path)
-        raise DurableStorageRequired(
-            "kho object chưa cấu hình (thiếu SUPABASE_URL / SUPABASE_SECRET_KEY)")
 
-    _docs.create(
-        document_id=source_id,
-        filename=filename,
-        file_type=os.path.splitext(filename)[1].lstrip(".").lower(),
-        file_path=stored_path,
-        user_id=uid,
-        input_path=save_path,   # để xóa file gốc khi delete
-        file_size=(os.path.getsize(save_path) if os.path.exists(save_path) else None),
-    )
+    releases: list = []
+    try:
+        filename = _choose_and_lock_display_filename(original, releases)
+        _docs.create(
+            document_id=source_id,
+            filename=filename,
+            file_type=os.path.splitext(filename)[1].lstrip(".").lower(),
+            file_path=stored_path,
+            user_id=uid,
+            input_path=save_path,   # để xóa file gốc khi delete
+            file_size=(os.path.getsize(save_path) if os.path.exists(save_path) else None),
+        )
+    except Exception:
+        # Naming refused (503) or the row failed: nothing of this upload may stay behind.
+        _go_file_tam(save_path)
+        if stored_path != save_path:
+            try:
+                _storage.delete(stored_path)
+            except Exception as exc:  # pragma: no cover - best effort clean-up
+                print(f"⚠️ [Storage] Không xoá được object của lượt upload hỏng: {exc}")
+        raise
+    finally:
+        for release in reversed(releases):
+            release()
+
     _trigger_background_ingest(
         source_id,
         save_path,
@@ -2731,7 +2912,7 @@ def _ingest_uploaded_file_reserved(
     return {
         'source_id': source_id,
         'filename': filename,
-        'video_stem': source_stem,
+        'video_stem': _normalize_video_stem(filename),
         'status': 'processing',
         'progress': 0.0,
         'can_query': False,
@@ -2786,6 +2967,8 @@ def upload_file():
             return _unsupported_response(exc)
         if isinstance(exc, DurableStorageRequired):
             return _storage_required_response(exc)
+        if isinstance(exc, StemOwnershipUnavailable):
+            return _ownership_unavailable_response(exc)
         if isinstance(exc, IngestQueueRequired):
             return _queue_required_response(exc)
         raise
@@ -2879,6 +3062,8 @@ def upload_multiple():
             results.append({'file': file.filename, 'error': f'Không đọc được định dạng {exc}'})
         except DurableStorageRequired as exc:
             results.append({'file': file.filename, 'error': f'Kho lưu trữ bền chưa sẵn sàng: {exc}'})
+        except StemOwnershipUnavailable:
+            results.append({'file': file.filename, 'error': 'Chưa kiểm tra được quyền sở hữu tên tài liệu. Thử lại sau ít phút.'})
         except IngestQueueRequired as exc:
             results.append({'file': file.filename, 'error': f'Hàng đợi xử lý chưa sẵn sàng: {exc}'})
         except Exception as exc:
@@ -3056,6 +3241,8 @@ def api_documents_upload():
             return _unsupported_response(exc)
         if isinstance(exc, DurableStorageRequired):
             return _storage_required_response(exc)
+        if isinstance(exc, StemOwnershipUnavailable):
+            return _ownership_unavailable_response(exc)
         if isinstance(exc, IngestQueueRequired):
             return _queue_required_response(exc)
         raise
@@ -4061,6 +4248,9 @@ _ATTEMPT_ERR_HTTP = {
     attempts_uc.AttemptDaNop: 409,
     attempts_uc.AttemptKhongConDangLam: 409,
     attempts_uc.AttemptChuaNop: 409,
+    attempts_uc.BaiLuyenTapSaiRoute: 409,
+    attempts_uc.HetLuotChamLai: 409,
+    attempts_uc.KhongCoCauChoChamLai: 409,
     attempts_uc.ThieuDapAn: 400,
     attempts_uc.CauHoiLac: 400,
     # Phase 2C
@@ -4073,6 +4263,9 @@ _ATTEMPT_ERR_HTTP = {
     practice_uc.PracticeKhongTonTai: 404,
     practice_uc.PracticeChuaSanSang: 409,
     practice_uc.ChuaCoLanChamNao: 409,
+    practice_uc.KhoaNopBaiKhongHopLe: 400,
+    practice_uc.KhoaNopBaiDaDung: 422,
+    practice_uc.NopBaiDangCham: 409,
     # Phase 2D
     jobs_uc.JobKhongTonTai: 404,
     jobs_uc.JobKhongHoTroHuy: 409,
@@ -4087,6 +4280,7 @@ _ATTEMPT_ERR_HTTP = {
     quiz_uc.TaiLieuChuaIndex: 409,
     quiz_uc.ReviewItemKhongTonTai: 404,
     quiz_uc.ReviewItemKhongCoChunk: 409,
+    quiz_uc.ReviewItemDaLuuTru: 409,
 }
 
 
@@ -4178,6 +4372,22 @@ def api_attempt_submit(attempt_id: str):
         return err
     try:
         data, cham_nen = attempts_uc.submit_attempt(
+            attempt_id, uid, bat_buoc_chu_so_huu=_auth_protect_enabled(),
+            dispatch_grading=_dispatch_grading)
+    except attempts_uc.AttemptError as exc:
+        return _attempt_err(exc)
+    return (jsonify(data), 202) if cham_nen else jsonify(data)
+
+
+@app.post('/api/attempts/<attempt_id>/regrade')
+def api_attempt_regrade(attempt_id: str):
+    """Chấm lại các câu tự luận mà bộ chấm AI chưa chấm được (kết quả tạm thời).
+    202 khi có job chấm lại, 200 khi không còn câu nào chờ, 409 khi hết lượt."""
+    uid, err = _require_app_user()
+    if err:
+        return err
+    try:
+        data, cham_nen = attempts_uc.regrade_provisional(
             attempt_id, uid, bat_buoc_chu_so_huu=_auth_protect_enabled(),
             dispatch_grading=_dispatch_grading)
     except attempts_uc.AttemptError as exc:
@@ -4327,20 +4537,40 @@ def api_practice_get(practice_quiz_id: str):
         return _attempt_err(exc)
 
 
+@app.post('/api/practice/<practice_quiz_id>/regrade')
+def api_practice_regrade(practice_quiz_id: str):
+    """Chấm lại các câu tự luận bộ chấm AI chưa chấm được của một bài luyện tập (kết quả
+    tạm thời). Chấm trong job nền như #190, không trong request: 202 + job_id khi đã
+    nhận hoặc đang chấm, 200 khi không còn gì để chấm, 409 khi hết lượt."""
+    uid, err = _require_app_user()
+    if err:
+        return err
+    attempt_id = ((request.json or {}).get("attempt_id") or "").strip()
+    if not attempt_id:
+        return jsonify({"error": "Thiếu attempt_id"}), 400
+    try:
+        data, accepted = practice_uc.regrade(
+            practice_quiz_id, uid, attempt_id, bat_buoc_chu_so_huu=_auth_protect_enabled(),
+            dispatch_grading=_dispatch_grading)
+        return jsonify(data), 202 if accepted else 200
+    except attempts_uc.AttemptError as exc:
+        return _attempt_err(exc)
+
+
 @app.post('/api/practice/<practice_quiz_id>/submit')
 def api_practice_submit(practice_quiz_id: str):
-    """Nộp bài luyện tập trong MỘT lần gọi (FR-11.6, FR-11.7).
-
-    Luồng chẩn đoán tách mở/nháp/nộp vì người học làm dài và cần lưu nháp; bài luyện tập
-    ngắn nên gộp lại — vẫn đi qua đúng repository attempt để lịch sử thống nhất.
-    """
+    """Nộp bài luyện tập trong MỘT lần gọi (FR-11.6, FR-11.7). Chẩn đoán tách mở/nháp/nộp vì
+    bài dài cần lưu nháp; luyện tập ngắn nên gộp, vẫn qua đúng repository attempt."""
     uid, err = _require_app_user()
     if err:
         return err
     try:
+        body = request.json or {}
+        # Idempotency key, optional, header or body field (FE uses the body: no preflight).
         return jsonify(practice_uc.submit(
-            practice_quiz_id, uid, (request.json or {}).get("answers"),
-            bat_buoc_chu_so_huu=_auth_protect_enabled()))
+            practice_quiz_id, uid, body.get("answers"),
+            bat_buoc_chu_so_huu=_auth_protect_enabled(),
+            submit_key=request.headers.get("Idempotency-Key") or body.get("idempotency_key")))
     except attempts_uc.AttemptError as exc:
         return _attempt_err(exc)
 
@@ -5380,6 +5610,10 @@ def delete_source():
         return jsonify({'error': 'Missing video name'}), 400
 
     target_stem = _normalize_video_stem(video_name)
+    # V9.3 security (#209 review P1): hold the stem lock for the rest of the request, so no new
+    # owner can appear between this check and the purge below.
+    if _auth_protect_enabled() and not _hold_stem_lock_for_request(target_stem):
+        return _ownership_unavailable_response(None)
     # Owner scope: cannot delete another user's source (404, no oracle).
     if _auth_protect_enabled() and not _source_owner_ok(target_stem, uid):
         return jsonify({'error': 'Source not found'}), 404
@@ -5837,8 +6071,15 @@ def get_chunk_text(chunk_id: int):
         return jsonify({"error": "Chunk not found"}), 404
     # Owner scope: resolve the chunk's source and deny raw-text exfiltration by global
     # chunk id. A foreign chunk is indistinguishable from a missing one (404).
-    if _auth_protect_enabled() and not _source_owner_ok(_chunk_owner_stem(chunk_id), uid):
-        return jsonify({"error": "Chunk not found"}), 404
+    # V9.3 security: the chunk's own row (embedding_id -> document -> owner) decides when it
+    # exists; only a legacy entry without one falls back to the stem, which must then be
+    # exclusive to the caller.
+    if _auth_protect_enabled():
+        found, owner = _chunk_db_owner(chunk_id)
+        allowed = (owner is not None and owner == uid) if found else \
+            _source_owner_ok(_chunk_owner_stem(chunk_id), uid)
+        if not allowed:
+            return jsonify({"error": "Chunk not found"}), 404
     return jsonify({"chunk_id": chunk_id, "text": text}), 200
 
 
@@ -6581,6 +6822,18 @@ def delete_source_v2(source_id: str):
         _real_stem = _normalize_video_stem(source_info.get("source_stem") or source_info.get("filename") or "")
         if _real_stem:
             source_stem = _real_stem
+
+    # V9.3 security: every purge below is BY STEM (index chunks, memory tree, mind maps).
+    # When another owner, an ownerless row or a soft-deleted foreign document shares the
+    # stem, purging destroys their data, and skipping it would leave this owner's chunks
+    # readable by the other one once the stem is theirs alone. Refuse, explicitly.
+    if _auth_protect_enabled() and not _hold_stem_lock_for_request(source_stem):
+        return _ownership_unavailable_response(None)
+    if _auth_protect_enabled() and not _stem_exclusive_to(source_stem, uid, _stem_owner_map(stems=[source_stem])):
+        return jsonify({
+            "error": "shared_source_stem",
+            "message": "Tài liệu này trùng tên nguồn với một tài liệu khác nên chưa xoá an toàn được. Hãy báo quản trị viên.",
+        }), 409
 
     # Kiểm tra nếu source đang processing (cho phép xóa nhưng log warning)
     if source_info and source_info.get("status") == "processing":

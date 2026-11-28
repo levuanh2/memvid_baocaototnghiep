@@ -112,7 +112,7 @@ def _real_1x1_png() -> bytes:
 def test_docx_font_selection_sans_vs_serif():
     sans_doc = docx.Document(io.BytesIO(serialize_docx(_tree(), font="sans")))
     serif_doc = docx.Document(io.BytesIO(serialize_docx(_tree(), font="serif")))
-    assert sans_doc.styles["Normal"].font.name == "Calibri"
+    assert sans_doc.styles["Normal"].font.name == "Be Vietnam Pro"
     assert serif_doc.styles["Normal"].font.name == "Times New Roman"
 
 

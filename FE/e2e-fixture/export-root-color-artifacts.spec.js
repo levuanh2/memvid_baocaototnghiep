@@ -6,7 +6,7 @@ import { fileURLToPath } from "node:url";
 const HERE = path.dirname(fileURLToPath(import.meta.url));
 const OUT = path.join(HERE, "..", "qa-artifacts", "export-root-color-fidelity");
 
-async function openSavedAppearance(page) {
+async function openThemeDefaultRoot(page) {
   await page.goto("/fixture-harness.html?map=post-pr77");
   await expect.poll(() => page.evaluate(() => Boolean(window.__STUDYMAP_FIXTURE__?.mind))).toBe(true);
 }
@@ -14,6 +14,12 @@ async function openSavedAppearance(page) {
 async function sourceRootColor(page) {
   return page.locator('[data-nodeid="meROOT"]').evaluate((element) => getComputedStyle(element).backgroundColor);
 }
+
+// The post-pr77 fixture carries no saved appearance, so its root is filled by the theme
+// (--root-bgcolor: var(--accent-cta)). That was #126CF2 before V9.3 and is #20231B since P1a.
+// Every export is compared with the colour the source root actually renders, never a constant.
+const V93_ROOT = "rgb(32, 35, 27)";
+const rgbOf = (css) => css.match(/\d+/g).slice(0, 3).map(Number);
 
 async function toFormat(page, format) {
   await page.getByRole("button", { name: "Xuất sơ đồ" }).click();
@@ -110,7 +116,7 @@ test.beforeEach(() => fs.mkdirSync(OUT, { recursive: true }));
 
 test("source root color survives real PNG, JPEG and WebP downloads", async ({ page }) => {
   const results = {};
-  await openSavedAppearance(page);
+  await openThemeDefaultRoot(page);
   await toFormat(page, "svg");
   const svgPath = await downloadImage(page, "svg");
   const { region: rootRegion, overflows } = await rootRegionFromSvg(page, fs.readFileSync(svgPath, "utf8"));
@@ -119,14 +125,15 @@ test("source root color survives real PNG, JPEG and WebP downloads", async ({ pa
     expect(Math.max(...Object.values(overflow)), `${id} text remains inside its visible node box`).toBeLessThanOrEqual(1);
   }
   for (const [format, mime] of [["png", "image/png"], ["jpeg", "image/jpeg"], ["webp", "image/webp"]]) {
-    await openSavedAppearance(page);
-    expect(await sourceRootColor(page)).toBe("rgb(18, 108, 242)");
+    await openThemeDefaultRoot(page);
+    const source = await sourceRootColor(page);
+    expect(source).toBe(V93_ROOT);
     await toFormat(page, format);
     const output = await downloadImage(page, format);
-    const metrics = await rasterColorMetrics(page, fs.readFileSync(output), mime, [18, 108, 242], rootRegion);
+    const metrics = await rasterColorMetrics(page, fs.readFileSync(output), mime, rgbOf(source), rootRegion);
     results[format] = { output: path.basename(output), bytes: fs.statSync(output).size, ...metrics };
-    expect(metrics.nearest, `${format} contains the saved root blue`).toBeLessThanOrEqual(24);
-    expect(metrics.closePixels / metrics.sampledPixels, `${format} root interior retains the saved blue fill`).toBeGreaterThan(0.45);
+    expect(metrics.nearest, `${format} contains the source root colour`).toBeLessThanOrEqual(24);
+    expect(metrics.closePixels / metrics.sampledPixels, `${format} root interior retains the source root fill`).toBeGreaterThan(0.45);
   }
   fs.writeFileSync(path.join(OUT, "raster-color-metrics.json"), JSON.stringify(results, null, 2));
 });
@@ -144,7 +151,9 @@ async function capturePdfRequest(page, { mode, pageSize, name }) {
     body: JSON.stringify({ job_id: jobId, status: "done", progress: 100, result: { node_count: 6 } }),
   }));
 
-  await openSavedAppearance(page);
+  await openThemeDefaultRoot(page);
+  const source = await sourceRootColor(page);
+  expect(source).toBe(V93_ROOT);
   await toFormat(page, "pdf");
   await page.getByRole("button", { name: mode === "map" ? "Chỉ sơ đồ" : "Sơ đồ + dàn ý" }).click();
   if (pageSize === "content_fit") await page.getByRole("button", { name: "Vừa nội dung — Xem trên màn hình" }).click();
@@ -157,7 +166,7 @@ async function capturePdfRequest(page, { mode, pageSize, name }) {
   fs.writeFileSync(path.join(OUT, `${name}-request.json`), JSON.stringify(body, null, 2));
   fs.writeFileSync(path.join(OUT, `${name}-source.png`), Buffer.from(body.map_image_base64, "base64"));
   await page.unrouteAll({ behavior: "wait" });
-  return body;
+  return { body, source };
 }
 
 test("Chromium PDF capture preserves source root color for A4, content-fit and map+outline", async ({ page }) => {
@@ -166,14 +175,14 @@ test("Chromium PDF capture preserves source root color for A4, content-fit and m
     { mode: "map", pageSize: "content_fit", name: "pdf-content-fit-map" },
     { mode: "map_and_outline", pageSize: "content_fit", name: "pdf-content-fit-map-and-outline" },
   ]) {
-    const request = await capturePdfRequest(page, scenario);
+    const { body: request, source } = await capturePdfRequest(page, scenario);
     const png = fs.readFileSync(path.join(OUT, `${scenario.name}-source.png`));
     const root = request.map_geometry_manifest.nodes.find((node) => node.id === "ROOT");
-    const metrics = await rasterColorMetrics(page, png, "image/png", [18, 108, 242], {
+    const metrics = await rasterColorMetrics(page, png, "image/png", rgbOf(source), {
       ...root,
       sceneWidth: request.map_geometry_manifest.image_width_px,
       sceneHeight: request.map_geometry_manifest.image_height_px,
     });
-    expect(metrics.closePixels / metrics.sampledPixels, `${scenario.name} capture retains the saved blue root fill`).toBeGreaterThan(0.45);
+    expect(metrics.closePixels / metrics.sampledPixels, `${scenario.name} capture retains the source root fill`).toBeGreaterThan(0.45);
   }
 });

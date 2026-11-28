@@ -97,7 +97,8 @@ def _clean_usage_tables(monkeypatch):
     from app import db
 
     db.reset_engine()
-    with db.session_scope() as session:
+    from tests._owner_db import owner_engine
+    with owner_engine().begin() as session:   # TRUNCATE is owner-only (app role)
         session.execute(text(
             "TRUNCATE usage_events, usage_reservations, usage_entitlements CASCADE"
         ))
@@ -246,7 +247,10 @@ def test_monthly_rollover_keeps_history_but_excludes_it_from_current_quota():
         reservation["id"], input_tokens=10, output_tokens=5,
         provider="integration", model="mock", usage_source="provider",
     )
-    with metering._pg() as session:
+    # Moving rows into an old period is test set-up, not an app write (usage_events is
+    # append-only for the app role): as the table owner.
+    from tests._owner_db import owner_session_scope
+    with owner_session_scope() as session:
         old_start = datetime(2023, 12, 1, tzinfo=timezone.utc)
         old_end = datetime(2024, 1, 1, tzinfo=timezone.utc)
         for table in ("usage_events", "usage_reservations"):

@@ -44,7 +44,7 @@ CUSTOM_PALETTE_RGB = [  # matches FE's CUSTOM_PALETTE hex values exactly
     (0xF2 / 255, 0x35 / 255, 0x3A / 255),  # #F2353A
 ]
 DEFAULT_TEXT_RGB = (0.0, 0.0, 0.0)
-# No italic variant of the bundled DejaVu fonts exists (assets/fonts has only
+# No italic variant of the bundled PDF fonts exists (assets/fonts has only
 # the regular weight) — a context-only ancestor is distinguished by muted
 # gray text instead, overriding branch color for that one line.
 CONTEXT_TEXT_RGB = (0.55, 0.55, 0.55)
@@ -53,16 +53,19 @@ CONTEXT_TEXT_RGB = (0.55, 0.55, 0.55)
 # Vietnamese diacritic (ế, ồ, ư, ệ... silently become "?"/mojibake) — this
 # was caught by this module's own round-trip tests asserting the real
 # Vietnamese substring appears in the extracted text, not by eyeballing
-# output. DejaVu Sans/Serif have full Vietnamese Unicode coverage and a
-# redistribution-permissive license (Bitstream Vera-derived; see
-# assets/fonts/LICENSE_DEJAVU), so they're bundled as real repo assets and
-# embedded into the PDF, rather than assuming any font is installed in the
-# production container.
+# output. So the PDF always embeds a bundled TTF with full Vietnamese coverage
+# instead of assuming any font is installed in the production container:
+# Be Vietnam Pro for "sans" (OFL) and DejaVu Serif for "serif" (Bitstream
+# Vera-derived, redistribution-permissive; see assets/fonts/LICENSE_DEJAVU).
+# V9.3 typography (owner decision 2026-11-26): "sans" is Be Vietnam Pro, the app's UI font, from the
+# official OFL release (google/fonts ofl/bevietnampro, v1.002, sha256 cd1ef6e9...; licence in
+# assets/fonts/OFL_BEVIETNAMPRO.txt). fsType 0 allows embedding, and it covers every Vietnamese
+# diacritic. "serif" stays DejaVu Serif. DejaVuSans.ttf is no longer referenced by the PDF path.
 FONT_FILES = {
-    "sans": BE_ROOT / "assets" / "fonts" / "DejaVuSans.ttf",
+    "sans": BE_ROOT / "assets" / "fonts" / "BeVietnamPro-Regular.ttf",
     "serif": BE_ROOT / "assets" / "fonts" / "DejaVuSerif.ttf",
 }
-FONT_ALIASES = {"sans": "dejavu-sans", "serif": "dejavu-serif"}
+FONT_ALIASES = {"sans": "bevietnampro", "serif": "dejavu-serif"}
 
 # PR H2 -- when a geometry manifest is present and the overview alone can't
 # hit this readability target, overview+detail tiling kicks in. Region-code

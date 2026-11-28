@@ -1,6 +1,7 @@
 // P0-3 (V4.1 audit D04): Library card actions must open the Workspace mode they
 // name. Real app on the Vite dev server, API mocked at the network layer.
 import { test, expect } from "@playwright/test";
+import { chooseMode } from "./workspaceMode.js";
 
 const json = (body) => ({ status: 200, contentType: "application/json", body: JSON.stringify(body) });
 const DOC = {
@@ -85,7 +86,7 @@ test("Command Palette 'Tóm tắt' while already on /app switches to Summary mod
   await expect(page).toHaveURL(/tab=summary/);
   await expect(activeMode(page)).toHaveAttribute("title", "Tóm tắt");
   // Clicking another mode still works and is reflected in the URL.
-  await page.locator('nav[aria-label="Chế độ Workspace"] [role="tab"][title="Trò chuyện"]').click();
+  await chooseMode(page, "Trò chuyện");
   await expect(activeMode(page)).toHaveAttribute("title", "Trò chuyện");
   await expect(page).not.toHaveURL(/tab=/);
 });

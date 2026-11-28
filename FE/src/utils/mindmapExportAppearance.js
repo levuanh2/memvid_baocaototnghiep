@@ -36,11 +36,13 @@ export const SPACING_VARS = {
   spacious: { "--main-gap-x": "110px", "--main-gap-y": "56px", "--node-gap-x": "48px", "--node-gap-y": "14px", "--map-padding": "90px 140px" },
 };
 
-// Already loaded globally via index.css's Google Fonts import — reusing
-// the app's own bundled faces rather than adding a new font dependency.
+// Owner decision (V9.3 typography, 2026-11-25): exports use only the app's bundled Be Vietnam Pro
+// (@fontsource, imported in index.css). Inter and Spectral were offered here but never loaded, so
+// exports fell back to whatever the machine had. "serif" stays as a key only so appearances saved
+// before this change still resolve, to the same bundled family.
 export const FONT_STACKS = {
-  sans: "Inter, system-ui, sans-serif",
-  serif: "'Spectral', Georgia, serif",
+  sans: "'Be Vietnam Pro', system-ui, sans-serif",
+  serif: "'Be Vietnam Pro', system-ui, sans-serif",
 };
 
 export const MONOCHROME_COLOR = "#2B2620"; // archival-ink, matches this app's --text-primary family
@@ -49,7 +51,7 @@ export const CUSTOM_PALETTE = ["#126CF2", "#8C4DFF", "#16A085", "#F2353A"]; // c
 export const STROKE_WIDTH = { thin: "1.5", normal: "2", thick: "3.5" };
 
 export const DEFAULT_APPEARANCE = {
-  font: "canvas", // "canvas" | "sans" | "serif"
+  font: "canvas", // "canvas" | "sans" ("serif" only in older saved appearances)
   branchColorMode: "keep", // "keep" | "monochrome" | "customPalette"
   spacing: "normal", // "compact" | "normal" | "spacious"
   connectorThickness: "normal", // "thin" | "normal" | "thick"
@@ -58,7 +60,7 @@ export const DEFAULT_APPEARANCE = {
 
 export const PRESETS = {
   canvas: { ...DEFAULT_APPEARANCE, content: { relations: true, citations: true, legend: false, branding: false } },
-  study: { font: "serif", branchColorMode: "keep", spacing: "normal", connectorThickness: "normal", content: { relations: true, citations: true, legend: true, branding: false } },
+  study: { font: "sans", branchColorMode: "keep", spacing: "normal", connectorThickness: "normal", content: { relations: true, citations: true, legend: true, branding: false } },
   minimal: { font: "sans", branchColorMode: "monochrome", spacing: "compact", connectorThickness: "thin", content: { relations: false, citations: false, legend: false, branding: false } },
   presentation: { font: "sans", branchColorMode: "customPalette", spacing: "spacious", connectorThickness: "thick", content: { relations: true, citations: false, legend: true, branding: true } },
 };
@@ -161,7 +163,7 @@ export function applyTargetAppearance({ mind, target, appearance }) {
   if (appearance.content.legend || appearance.content.branding) {
     overlay = document.createElement("div");
     overlay.className = "mm-export-overlay";
-    overlay.style.cssText = "position:absolute; left:12px; bottom:12px; display:flex; flex-direction:column; gap:4px; font-family:Inter,system-ui,sans-serif; font-size:12px; color:#2B2620; pointer-events:none;";
+    overlay.style.cssText = "position:absolute; left:12px; bottom:12px; display:flex; flex-direction:column; gap:4px; font-family:'Be Vietnam Pro',system-ui,sans-serif; font-size:12px; color:#2B2620; pointer-events:none;";
     if (appearance.content.legend) {
       const children = mind.nodeData?.children || [];
       const legend = document.createElement("div");

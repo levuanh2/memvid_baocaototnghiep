@@ -3,23 +3,22 @@ import { Link } from "react-router-dom";
 import StudyShell, { EmptyState } from "../../components/study/StudyShell";
 import StudyCard from "../../components/study/StudyCard";
 import AiInsightCard from "../../components/study/AiInsightCard";
-import LearningDashboard from "../../components/study/LearningDashboard";
-import Disclosure from "../../components/ui/Disclosure";
 import CollectionSidebar from "../../components/study/CollectionSidebar";
 import BulkBar from "../../components/study/BulkBar";
+import UploadQueue from "../../components/study/UploadQueue";
+import { kiemTraTep } from "../../utils/taiLenTep";
 import LibraryTaskViews from "../../components/study/LibraryTaskViews";
 import StudyDocumentActionRow from "../../components/study/StudyDocumentActionRow";
 import DocumentKnowledgeDetails from "../../components/study/DocumentKnowledgeDetails";
 import DestructiveConfirmDialog from "../../components/ui/DestructiveConfirmDialog";
-import SealMeter from "../../components/study/SealMeter";
 import { Icon } from "../../components/ui/Icon";
 import Spinner from "../../components/ui/Spinner";
 import {
-  MASTERY_LABEL, attemptScoreLabel, bulkDocuments, createCollection, deleteCollection,
-  getLibrary, getProgressAttempts, getProgressConcepts, getProgressOverview,
+  bulkDocuments, createCollection, deleteCollection, getLibrary,
   patchCollection, patchDocument, uploadDocument, moTaLoi,
 } from "../../utils/studyApi";
-import { tim, loc, sapXep, chiaMuc } from "../../utils/thuVienTaiLieu";
+import { tim, loc, sapXep, chiaMuc, NHOM_THU_VIEN, laNhomThuVien, taiLieuTheoNhom, demTheoNhom, tenHienThi } from "../../utils/thuVienTaiLieu";
+import { tiepTucHoc } from "../../utils/tiepTucHoc";
 import { docJobDangChay } from "../../utils/trangThaiAi";
 import { chonTaiLieuDemo, beMatDemoDauTien } from "../../utils/demoMode";
 import { useOpenSurface } from "../../study/useOpenSurface";
@@ -71,8 +70,22 @@ const NHAN_LOC = new Map(NHOM_LOC.flatMap(([, mucLoc]) => mucLoc));
 
 // Same localStorage discipline as `memvidx.panels.v1` (hooks/panelLayout.js) and
 // `memvidx.inspector.collapsed.v1` (knowledgeParts.jsx) — try/catch, fails silent.
-const KHOA_TQHT_MO = "memvidx.library.dashboardOpen.v1";
 const KHOA_MAT_DO = "memvidx.library.density.v1";
+// Card renderer (V6): the chosen view, the search text and the scroll position survive leaving
+// the Library (opening a document) and coming back, for this tab only.
+const TIEN_TO_TRANG_THAI_THE = "memvidx.library.cards.v1";
+function docTrangThaiThe(userId) {
+  const macDinh = { nhom: "tat_ca", truyVan: "", scrollY: 0 };
+  if (!userId) return macDinh;
+  try {
+    const raw = JSON.parse(sessionStorage.getItem(`${TIEN_TO_TRANG_THAI_THE}:${encodeURIComponent(userId)}`) || "{}");
+    return {
+      nhom: laNhomThuVien(raw.nhom) ? raw.nhom : "tat_ca",
+      truyVan: typeof raw.truyVan === "string" ? raw.truyVan : "",
+      scrollY: Number.isFinite(raw.scrollY) && raw.scrollY > 0 ? raw.scrollY : 0,
+    };
+  } catch { return macDinh; }
+}
 const LIBRARY_ACTION_MATRIX = isLibraryActionMatrixEnabled();
 
 function docMatrixState(storageKey) {
@@ -106,14 +119,6 @@ function DocumentSkeleton() {
   );
 }
 
-function SectionTitle({ children, dem }) {
-  return (
-    <h2 className="font-mono text-metadata uppercase text-text-muted mb-3">
-      {children}{dem != null ? ` (${dem})` : ""}
-    </h2>
-  );
-}
-
 export default function DocumentList() {
   const { user } = useAuth();
   const moTheoDoi = useOpenSurface();
@@ -126,16 +131,16 @@ export default function DocumentList() {
   const matrixScrollRestoredRef = useRef(false);
 
   const [documents, setDocuments] = useState([]);
-  const [overview, setOverview] = useState(null);
-  const [weak, setWeak] = useState([]);
-  const [attempts, setAttempts] = useState([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
   const [uploading, setUploading] = useState(false);
   const [tenDangTai, setTenDangTai] = useState("");
   const [idVuaTai, setIdVuaTai] = useState(null);
 
-  const [truyVan, setTruyVan] = useState(matrixInitial.query);
+  const theInitial = useRef(LIBRARY_ACTION_MATRIX ? null : docTrangThaiThe(user?.id)).current;
+  const theScrollRestoredRef = useRef(false);
+  const [nhom, setNhom] = useState(theInitial?.nhom || "tat_ca");
+  const [truyVan, setTruyVan] = useState(theInitial ? theInitial.truyVan : matrixInitial.query);
   const [cheDoSap, setCheDoSap] = useState(matrixInitial.sort);
   const [boLoc, setBoLoc] = useState(matrixInitial.filterKeys);
   const [hienLuuTru, setHienLuuTru] = useState(matrixInitial.includeArchived);
@@ -157,6 +162,10 @@ export default function DocumentList() {
   const [dangDoiTen, setDangDoiTen] = useState(null);
   const [dangLuu, setDangLuu] = useState(false);
   const [loiThaoTac, setLoiThaoTac] = useState(null);
+  // Its own state (Codex, #202): only a quiet refresh sets it and the next one clears it, so a
+  // later successful refresh cannot leave a false "not refreshed" alert, and an unrelated
+  // action error is never cleared by a refresh.
+  const [loiLamMoi, setLoiLamMoi] = useState(null);
 
   // Job đang chạy ở MÁY NÀY — đọc một lần cho cả danh sách, không đọc theo từng thẻ.
   const [jobs, setJobs] = useState(() => docJobDangChay());
@@ -173,27 +182,22 @@ export default function DocumentList() {
   const [boSuuTapCanXoa, setBoSuuTapCanXoa] = useState(null);
   const [chiTietDoc, setChiTietDoc] = useState(null);
 
-  const load = useCallback(async () => {
-    setLoading(true);
-    setError(null);
+  // `yen` (quiet): refresh after an upload without the skeleton, and if it fails say so inline
+  // instead of the page error. Both used to unmount the list, the upload queue with it, and
+  // drop keyboard focus, and the page error made a successful upload look failed (Codex, #202).
+  const load = useCallback(async ({ yen = false } = {}) => {
+    setLoiLamMoi(null);
+    if (!yen) { setLoading(true); setError(null); }
     try {
-      // Thư viện là thứ trang này TỒN TẠI để hiện; ba khối tiến độ là phần thêm.
-      // `allSettled` để một cú 500 của /api/progress/* không xoá sạch trang.
-      const [thuVien, ov, concepts, history] = await Promise.allSettled([
-        getLibrary({ kemBoSuuTap: true }),
-        getProgressOverview(),
-        getProgressConcepts({ weakOnly: true }),
-        getProgressAttempts({ limit: 5 }),
-      ]);
-      if (thuVien.status === "rejected") throw thuVien.reason;
-      setDocuments(thuVien.value.documents);
-      setCollections(thuVien.value.collections);
-      setOverview(ov.status === "fulfilled" ? ov.value : null);
-      setWeak(concepts.status === "fulfilled" ? concepts.value.slice(0, 4) : []);
-      setAttempts(history.status === "fulfilled" ? history.value : []);
+      // V9.3 P3b: the practice numbers, weak concepts and recent attempts live on the
+      // dashboard now (/app/study/dashboard); the Library loads the library only.
+      const thuVien = await getLibrary({ kemBoSuuTap: true });
+      setDocuments(thuVien.documents);
+      setCollections(thuVien.collections);
       setJobs(docJobDangChay());
     } catch (e) {
-      setError(moTaLoi(e, "Không tải được thư viện tài liệu."));
+      if (yen) setLoiLamMoi(`Đã tải lên xong, nhưng chưa làm mới được danh sách. ${moTaLoi(e, "Hãy tải lại trang.")}`);
+      else setError(moTaLoi(e, "Không tải được thư viện tài liệu."));
     } finally {
       setLoading(false);
     }
@@ -202,31 +206,59 @@ export default function DocumentList() {
   useEffect(() => { load(); }, [load]);
 
   // ── Upload ────────────────────────────────────────────────────────────────
-  const onPick = async (e) => {
-    const file = e.target.files?.[0];
-    e.target.value = "";
-    if (!file) return;
+  // V9.3 P3a: several files per pick, each checked before sending (kiemTraTep), sent ONE AT
+  // A TIME, each with its own status/error, and a failed one retried alone. A failed upload
+  // no longer replaces the whole library with a page error: the other files and the list stay.
+  const [hangTai, setHangTai] = useState([]);
+  const tepTaiRef = useRef(new Map());
+  const nutTaiRef = useRef(null);
+  const capNhatTep = (khoa, thayDoi) =>
+    setHangTai((prev) => prev.map((m) => (m.khoa === khoa ? { ...m, ...thayDoi } : m)));
+
+  const chayHangTai = async (khoas) => {
     setUploading(true);
-    setTenDangTai(file.name);
-    setError(null);
-    let taiLen;
-    try {
-      taiLen = await uploadDocument(file);
-    } catch (err) {
-      setError(moTaLoi(err, "Tải tài liệu lên thất bại."));
-      setUploading(false);
-      return;
+    // Codex P1 (#202): the insight card is about THIS batch. Left set, it named the previous
+    // upload while a later file was sending, and stayed after a later batch failed entirely.
+    setIdVuaTai(null);
+    let idMoi = null;
+    for (const khoa of khoas) {
+      const tep = tepTaiRef.current.get(khoa);
+      setTenDangTai(tep.name);
+      capNhatTep(khoa, { trangThai: "dang_tai", loi: null });
+      try {
+        const taiLen = await uploadDocument(tep);
+        idMoi = taiLen?.document_id || idMoi;
+        capNhatTep(khoa, { trangThai: "xong" });
+      } catch (err) {
+        capNhatTep(khoa, { trangThai: "loi", loi: moTaLoi(err, "Tải lên thất bại.") });
+      }
     }
-    // Lên xong rồi. `load()` hỏng SAU đó là lỗi tải lại, không phải lỗi tải lên —
-    // gộp hai cái vào một `catch` thì file đã lên mà màn hình ghi "tải lên thất bại".
-    setIdVuaTai(taiLen?.document_id || null);
-    try {
-      await load();
-    } catch (err) {
-      setError(moTaLoi(err, "Đã tải lên xong, nhưng chưa làm mới được danh sách."));
-    } finally {
-      setUploading(false);
+    if (idMoi) {
+      setIdVuaTai(idMoi);
+      await load({ yen: true });
     }
+    setUploading(false);
+  };
+
+  const onPick = (e) => {
+    const tepChon = [...(e.target.files || [])];
+    const accept = e.target.accept;
+    e.target.value = "";
+    if (!tepChon.length || uploading) return;
+    // Codex P1 (#202): a file the server refused keeps its row and its File across a new pick,
+    // so its "Thử lại" still works. Finished and refused-before-sending rows are replaced.
+    const conLoi = hangTai.filter((m) => m.trangThai === "loi");
+    const tepCu = tepTaiRef.current;
+    tepTaiRef.current = new Map(conLoi.map((m) => [m.khoa, tepCu.get(m.khoa)]));
+    const moi = tepChon.map((tep, i) => {
+      const khoa = `${Date.now()}-${i}`;
+      tepTaiRef.current.set(khoa, tep);
+      const loi = kiemTraTep(tep, accept);
+      return { khoa, ten: tep.name, trangThai: loi ? "tu_choi" : "cho", loi };
+    });
+    setHangTai([...conLoi, ...moi]);
+    const guiDuoc = moi.filter((m) => m.trangThai === "cho").map((m) => m.khoa);
+    if (guiDuoc.length) chayHangTai(guiDuoc);
   };
 
   // ── Mở một bề mặt ─────────────────────────────────────────────────────────
@@ -278,6 +310,11 @@ export default function DocumentList() {
                       { hienLuuTru, collectionId: chonBoSuuTap, tags: chonThe });
     return chiaMuc(sapXep(daLoc, cheDoSap), { hienLuuTru });
   }, [documents, truyVan, chiMucBst, boLoc, hienLuuTru, chonBoSuuTap, chonThe, cheDoSap]);
+  // V6: the one list of the card renderer is the chosen view of `tatCa`.
+  const danhSachHien = useMemo(() => taiLieuTheoNhom(mucHienThi.tatCa, nhom), [mucHienThi.tatCa, nhom]);
+  const demNhom = useMemo(() => demTheoNhom(mucHienThi.tatCa), [mucHienThi.tatCa]);
+  // Same condition the learning home uses for its filled "Tiếp tục".
+  const coTiepTuc = Boolean(mucHienThi.tiepTucHoc && mucHienThi.tiepTucHoc.ai?.index === "ready");
   const matrixProjection = useMemo(() => projectLibrary(documents, {
     query: truyVan,
     collectionIndex: chiMucBst,
@@ -325,6 +362,25 @@ export default function DocumentList() {
     const frame = requestAnimationFrame(() => window.scrollTo({ top: matrixInitial.scrollY }));
     return () => cancelAnimationFrame(frame);
   }, [loading, matrixInitial.scrollY, matrixProjection.rows.length]);
+
+  useEffect(() => {
+    if (LIBRARY_ACTION_MATRIX || !user?.id) return undefined;
+    const khoa = `${TIEN_TO_TRANG_THAI_THE}:${encodeURIComponent(user.id)}`;
+    const save = () => {
+      try { sessionStorage.setItem(khoa, JSON.stringify({ nhom, truyVan, scrollY: window.scrollY })); }
+      catch { /* storage unavailable */ }
+    };
+    save();
+    window.addEventListener("scroll", save, { passive: true });
+    return () => { save(); window.removeEventListener("scroll", save); };
+  }, [user?.id, nhom, truyVan]);
+
+  useEffect(() => {
+    if (LIBRARY_ACTION_MATRIX || loading || theScrollRestoredRef.current || !theInitial?.scrollY) return undefined;
+    theScrollRestoredRef.current = true;
+    const frame = requestAnimationFrame(() => window.scrollTo({ top: theInitial.scrollY }));
+    return () => cancelAnimationFrame(frame);
+  }, [loading, theInitial]);
 
   // ── Bộ sưu tập ────────────────────────────────────────────────────────────
   const taiLaiBoSuuTap = useCallback(async (ham, thongBaoLoi) => {
@@ -433,10 +489,15 @@ export default function DocumentList() {
   // Roving tabindex: đúng MỘT thẻ nhận Tab, mũi tên đi giữa các thẻ. Cho mọi thẻ
   // `tabIndex=0` thì người dùng bàn phím phải Tab 300 lần để đi qua thư viện.
   const xuLyPhim = (e, doc, chiSo) => {
-    const kq = phimDanhSach(e, { chiSo, tong: mucHienThi.tatCa.length });
+    const kq = phimDanhSach(e, { chiSo, tong: danhSachHien.length });
     if (!kq) return;
     e.preventDefault();
-    if (kq.loai === "focus") setChiSoFocus(kq.chiSo);
+    if (kq.loai === "focus") {
+      setChiSoFocus(kq.chiSo);
+      // Move the real focus too. Only the tabindex used to change, so the arrow keys left
+      // focus on the card that had just become untabbable.
+      theRefs.current.get(kq.chiSo)?.focus();
+    }
     else if (kq.loai === "chon") setDaChon((prev) => batTatChon(prev, doc.document_id));
     else if (kq.loai === "mo") moBeMat(doc, doc.last_workspace || "studymap");
     else if (kq.loai === "xoa_chon") setDaChon(xoaChon());
@@ -456,9 +517,21 @@ export default function DocumentList() {
     setMatrixFocusId((current) => resolveRovingDocumentId(matrixProjection.rows, current));
   }, [matrixProjection.rows]);
 
+  // Cards of the list by index, for the arrow keys above.
+  const theRefs = useRef(new Map());
+  // A filter or a view can shorten the list under the remembered index; without this no card
+  // had tabindex 0 and Tab skipped the whole list.
+  const soThe = danhSachHien.length;
+  useEffect(() => {
+    setChiSoFocus((hienTai) => (hienTai >= soThe ? Math.max(-1, soThe - 1) : hienTai));
+  }, [soThe]);
+
   const veThe = (doc, chiSo = null) => (
     <StudyCard
       key={doc.document_id}
+      refThe={chiSo == null ? undefined : (node) => {
+        if (node) theRefs.current.set(chiSo, node); else theRefs.current.delete(chiSo);
+      }}
       doc={doc}
       documents={documents}
       chiMucBst={chiMucBst}
@@ -476,24 +549,12 @@ export default function DocumentList() {
       tabIndex={chiSo == null ? undefined : (chiSo === Math.max(0, chiSoFocus) ? 0 : -1)}
       onKeyDown={chiSo == null ? undefined : (e) => xuLyPhim(e, doc, chiSo)}
       matDo={matDo}
+      // The learning home above the list holds the page's filled "Tiếp tục".
+      nutTiepTuc="secondary"
     />
   );
 
   // Mục rỗng KHÔNG được dựng — một mục "Cần tóm tắt" trống chỉ thêm nhiễu.
-  const muc = [
-    ["Đã ghim", mucHienThi.daGhim],
-    ["Yêu thích", mucHienThi.yeuThich],
-    ["Hôm nay", mucHienThi.homNay],
-    ["Hôm qua", mucHienThi.homQua],
-    ["Tuần này", mucHienThi.tuanNay],
-    ["Học gần đây", mucHienThi.hocGanDay],
-    ["Tải lên gần đây", mucHienThi.taiLenGanDay],
-    ["Chưa mở bao giờ", mucHienThi.chuaMoBaoGio],
-    ["Cần tóm tắt", mucHienThi.canTomTat],
-    ["Cần sơ đồ", mucHienThi.canSoDo],
-    ["Cần quiz", mucHienThi.canQuiz],
-    ["Cần hướng dẫn ôn tập", mucHienThi.canOnTap],
-  ].filter(([, ds]) => ds.length > 0);
 
   return (
     <StudyShell
@@ -504,19 +565,27 @@ export default function DocumentList() {
       backLabel="Phòng đọc"
       loading={loading}
       error={error}
-      onRetry={load}
+      onRetry={() => load()}
       skeleton={<DocumentSkeleton />}
       stackActionsOnMobile
       actions={
         <>
           {/* Danh sách này phải khớp formats.accept_attribute() của backend —
               BE/tests/test_upload_formats.py khoá lại để hai bên không lệch. */}
-          <input ref={fileRef} type="file" className="hidden" onChange={onPick}
+          <input ref={fileRef} type="file" className="hidden" onChange={onPick} multiple
             accept=".bmp,.csv,.doc,.docx,.epub,.fb2,.gif,.htm,.html,.jpeg,.jpg,.json,.md,.mobi,.odp,.odt,.pdf,.png,.pptx,.rtf,.txt,.xlsx,.xps" />
-          <button type="button" className="btn-seal text-small inline-flex items-center gap-2"
+          {/* V6: one filled button above the list. When the learning home offers "Tiếp tục",
+              that is the page's main action and uploading is secondary; otherwise uploading is. */}
+          <button type="button" ref={nutTaiRef}
+            className={`${coTiepTuc ? "btn-secondary" : "btn-seal"} text-small inline-flex items-center gap-2`}
+            data-emphasis={coTiepTuc ? "secondary" : "primary"}
             disabled={uploading} onClick={() => fileRef.current?.click()}>
             {uploading ? <><Spinner size={13} /> Đang tải lên…</> : <><Icon name="Upload" size={14} /> Tải tài liệu lên</>}
           </button>
+          {/* V9.3 P3b: the dashboard's entry while the bottom navigation keeps four items. */}
+          <Link to="/app/study/dashboard" className="pill-action text-small inline-flex items-center gap-1.5">
+            <Icon name="LayoutDashboard" size={13} aria-hidden="true" /> Tổng quan
+          </Link>
           {/* Demo Mode — chỉ hiện khi có tài liệu THẬT đủ sẵn sàng; không có thì
               không vẽ nút, không hứa một bản xem thử không tồn tại. */}
           {taiLieuDemo && (
@@ -535,17 +604,17 @@ export default function DocumentList() {
         boSuuTap={thanhBen.boSuuTap}
         chuaPhanLoai={thanhBen.chuaPhanLoai}
         the={theThanhBen}
-        chon={{ collectionId: chonBoSuuTap, tags: chonThe, khoa: boLoc }}
+        chon={{ collectionId: chonBoSuuTap, tags: chonThe }}
         onChon={(v) => {
+          // Collection and tags only. The sidebar used to carry the state filters too and
+          // echoed them back on every click, so picking a collection cleared an active
+          // "Yêu thích" / "Đã ghim" filter.
           setChonBoSuuTap(v.collectionId ?? null);
           setChonThe(v.tags || []);
-          if (v.khoa) setBoLoc((prev) => (prev.join() === v.khoa.join() ? [] : v.khoa));
         }}
         onTao={taoBoSuuTap}
         onSua={suaBoSuuTap}
         onXoa={setBoSuuTapCanXoa}
-        hienLuuTru={hienLuuTru}
-        onHienLuuTru={setHienLuuTru}
       />
 
       <div className="min-w-0 flex-1">
@@ -560,6 +629,19 @@ export default function DocumentList() {
         />
       )}
 
+      <UploadQueue hang={hangTai} dangChay={uploading}
+        onThuLai={(khoa) => { if (!uploading) chayHangTai([khoa]); }}
+        // Codex P2 (#202): closing removes the focused button; hand focus back to the upload button.
+        onDong={() => { setHangTai([]); nutTaiRef.current?.focus(); }} />
+
+      {loiLamMoi && (
+        <div role="alert" className="mb-4 text-small flex items-start gap-1.5"
+             style={{ color: "var(--err)" }}>
+          <Icon name="AlertCircle" size={13} className="mt-0.5 shrink-0" />
+          <span>{loiLamMoi}</span>
+        </div>
+      )}
+
       {loiThaoTac && (
         <div role="alert" className="mb-4 text-small flex items-start gap-1.5"
              style={{ color: "var(--err)" }}>
@@ -567,8 +649,6 @@ export default function DocumentList() {
           <span>{loiThaoTac}</span>
         </div>
       )}
-
-      {overview && <Overview overview={overview} />}
 
       <BulkBar
         so={daChonHieuLuc.size}
@@ -710,31 +790,10 @@ export default function DocumentList() {
         </div>
       )}
 
-      {/* Product Experience / Signature System pass — Analytics used to render full-
-          weight ABOVE the document grid on every visit (the single highest-leverage
-          "feels like a dashboard" finding in docs/MEMVIDX_SIGNATURE_SYSTEM.md §10).
-          Library's job is Find→Open, which happens every visit; Analytics is a
-          reflect-occasionally surface — collapsed by default re-tiers it without
-          removing it. Reuses the existing Disclosure primitive, no new component.
-          Frontend V2 wave: default-collapsed is now a REMEMBERED preference, not
-          just a fixed behavior — closes the exact gap flagged in
-          docs/FINAL_VISUAL_REVIEW.md's "acceptance criterion not met" note. */}
-      {documents.length > 0 && (
-        <section className="surface-card !p-0 mb-7">
-          <Disclosure title="Tổng quan học tập" dense
-                      defaultOpen={docBool(KHOA_TQHT_MO, false)}
-                      onToggle={(open) => ghiBool(KHOA_TQHT_MO, open)}>
-            <LearningDashboard
-              documents={documents}
-              overview={overview}
-              weak={weak}
-              attempts={attempts}
-              mucHienThi={mucHienThi}
-              onMo={moBeMat}
-            />
-          </Disclosure>
-        </section>
-      )}
+      {/* V9.3 P3b: the full learning home (recent, coverage, review) moved to the dashboard.
+          Until the five-item navigation reaches it, the Library keeps one compact way back
+          into the document in progress, so continuing costs no extra step. */}
+      {coTiepTuc && <ResumeLine doc={mucHienThi.tiepTucHoc} onMo={moBeMat} />}
 
       {LIBRARY_ACTION_MATRIX && (
         <section ref={matrixListRef} className="mb-7" aria-label="Ma trận hành động học tập">
@@ -744,7 +803,17 @@ export default function DocumentList() {
           <p className="text-small text-text-muted mb-3" aria-live="polite">
             {matrixProjection.rows.length} tài liệu phù hợp
           </p>
-          {matrixProjection.rows.length === 0 ? (
+          {matrixProjection.rows.length === 0 && documents.length === 0 ? (
+            // A library with no documents at all is not "nothing matches your filters":
+            // that message sent people to change filters they had never set.
+            <EmptyState
+              icon="Upload"
+              title="Chưa có tài liệu nào"
+              hint="Tải một tài liệu lên để bắt đầu: tóm tắt, sơ đồ và quiz đều dựng từ nó."
+              action={<button type="button" className="pill-action mt-1" disabled={uploading}
+                              onClick={() => fileRef.current?.click()}>Tải tài liệu lên</button>}
+            />
+          ) : matrixProjection.rows.length === 0 ? (
             <EmptyState
               icon="Search"
               title="Không có tài liệu phù hợp"
@@ -790,49 +859,22 @@ export default function DocumentList() {
         </section>
       )}
 
-      {/* Tiếp tục học */}
-      {!LIBRARY_ACTION_MATRIX && mucHienThi.tiepTucHoc && (
-        <section className="mb-7">
-          <SectionTitle>Tiếp tục học</SectionTitle>
-          {veThe(mucHienThi.tiepTucHoc)}
-        </section>
-      )}
-
-      {weak.length > 0 && (
-        <section className="mb-7">
-          <SectionTitle>Đang yếu ở</SectionTitle>
-          <div className="grid gap-2.5 sm:grid-cols-2">
-            {weak.map((c) => (
-              <div key={c.concept_name} className="surface-card !p-3.5 flex items-center gap-3">
-                <SealMeter score={c.mastery_score} status={c.status} size={40} />
-                <div className="min-w-0">
-                  <div className="font-display text-body font-semibold text-text-primary truncate">
-                    {c.concept_name}
-                  </div>
-                  <div className="text-small text-text-secondary">
-                    {MASTERY_LABEL[c.status] || c.status}
-                    {c.attempt_count > 1 && ` · ${c.attempt_count} lần làm`}
-                  </div>
-                </div>
-              </div>
+      {!LIBRARY_ACTION_MATRIX && <section className="mb-7" aria-labelledby="library-list-title">
+        <h2 id="library-list-title" className="sr-only">Danh sách tài liệu</h2>
+        {/* V6: one list. A view picks which documents it holds; a document is never drawn twice.
+            These used to be up to twelve sections plus "Tất cả", the same card repeated. */}
+        {documents.length > 0 && (
+          <div className="library-views" role="group" aria-label="Xem tài liệu">
+            {NHOM_THU_VIEN.map(([khoa, nhan]) => (
+              <button key={khoa} type="button" className="library-views__item"
+                      aria-pressed={nhom === khoa}
+                      onClick={() => { setNhom(khoa); setChiSoFocus(-1); }}>
+                {nhan} <span className="library-views__count">{demNhom[khoa]}</span>
+              </button>
             ))}
           </div>
-        </section>
-      )}
-
-      {!LIBRARY_ACTION_MATRIX && muc.map(([ten, ds]) => (
-        <section key={ten} className="mb-7">
-          <SectionTitle dem={ds.length}>{ten}</SectionTitle>
-          <div className="flex flex-col gap-2.5">{ds.map(veThe)}</div>
-        </section>
-      ))}
-
-      {!LIBRARY_ACTION_MATRIX && <section className="mb-7">
-        <SectionTitle dem={mucHienThi.tatCa.length}>Tất cả tài liệu</SectionTitle>
+        )}
         {mucHienThi.tatCa.length === 0 ? (
-          // "Chưa có gì", "không khớp bộ lọc" và "mục này trống" là BA màn hình khác
-          // nhau. Gộp chúng làm người có đủ tài liệu đọc thành "thư viện trống" rồi
-          // đi tải lên lại từ đầu.
           (() => {
             const rong = trangThaiRong(
               documents.length === 0
@@ -872,48 +914,21 @@ export default function DocumentList() {
               />
             );
           })()
+        ) : danhSachHien.length === 0 ? (
+          <EmptyState
+            icon="FileText"
+            title={`Không có tài liệu nào ở mục “${(NHOM_THU_VIEN.find(([khoa]) => khoa === nhom) || [])[1]}”`}
+            hint="Các tài liệu khác vẫn ở mục Tất cả."
+            action={<button type="button" className="pill-action mt-1" onClick={() => setNhom("tat_ca")}>Xem tất cả</button>}
+          />
         ) : (
           <div className="flex flex-col gap-2.5" role="listbox"
                aria-label="Danh sách tài liệu" aria-multiselectable="true">
-            {mucHienThi.tatCa.map((d, i) => veThe(d, i))}
+            {danhSachHien.map((d, i) => veThe(d, i))}
           </div>
         )}
       </section>}
 
-      {!LIBRARY_ACTION_MATRIX && mucHienThi.daLuuTru.length > 0 && hienLuuTru && (
-        <section className="mb-7">
-          <SectionTitle dem={mucHienThi.daLuuTru.length}>Đã lưu trữ</SectionTitle>
-          <div className="flex flex-col gap-2.5">{mucHienThi.daLuuTru.map(veThe)}</div>
-        </section>
-      )}
-
-      {attempts.length > 0 && (
-        <section>
-          <SectionTitle>Bài đã làm gần đây</SectionTitle>
-          <div className="flex flex-col gap-2">
-            {attempts.map((a) => (
-              <Link
-                key={a.attempt_id}
-                to={a.status === "graded" ? `/app/study/result/${a.attempt_id}` : `/app/study/quiz/${a.quiz_id}`}
-                className="surface-card !p-3.5 flex items-center gap-3 hover:no-underline"
-              >
-                <div className="min-w-0 flex-1">
-                  <div className="text-body font-semibold text-text-primary truncate">
-                    {a.quiz_title}
-                  </div>
-                  <div className="font-mono text-caption text-text-muted mt-0.5">
-                    {a.quiz_type === "practice" ? "luyện tập" : "chẩn đoán"}
-                    {a.submitted_at ? ` · ${new Date(a.submitted_at).toLocaleDateString("vi-VN")}` : ""}
-                  </div>
-                </div>
-                <span className="font-mono text-small text-text-secondary shrink-0">
-                  {attemptScoreLabel(a)}
-                </span>
-              </Link>
-            ))}
-          </div>
-        </section>
-      )}
       <DestructiveConfirmDialog
         open={Boolean(boSuuTapCanXoa)}
         title="Xoá bộ sưu tập"
@@ -929,35 +944,20 @@ export default function DocumentList() {
   );
 }
 
-/* Sprint J (Hallmark critical finding C1): four equal `.surface-card` tiles,
-   each a mono-uppercase label over a big number, is the single most
-   recognizable "admin dashboard stat row" shape — independent of any
-   color/font choice layered on top. Replaced with a status line: document
-   count gets real visual priority (it's the number that orients the page),
-   the other three read as a natural inline sentence, not a second row of
-   boxes. Numbers stay mono/tabular per the Signature Contract's "numbers
-   are the one cross-screen constant" rule — bronze, not the accent color,
-   since these are data, not an action. */
-function Overview({ overview }) {
-  const items = [
-    ["Quiz đã tạo", overview.quiz_count ?? 0],
-    ["Bài đã làm", overview.attempt_count ?? 0],
-    // PR #137: a score-derived percentage says "điểm" everywhere (see QuizResult).
-    ["Điểm trung bình", overview.average_percentage == null ? "—" : `${overview.average_percentage}% điểm`],
-  ];
+// V9.3 P3b: the one compact "continue" the Library keeps (the full learning home is on the
+// dashboard). It is the page's filled action when present; upload is then secondary.
+function ResumeLine({ doc, onMo }) {
+  const tt = tiepTucHoc(doc);
   return (
-    <section className="mb-7 pb-5 border-b border-border flex flex-wrap items-baseline gap-x-2.5 gap-y-1.5">
-      <span className="font-mono text-h1 font-semibold tabular-nums" style={{ color: "var(--bronze)" }}>
-        {overview.document_count ?? 0}
-      </span>
-      <span className="text-body-lg text-text-secondary mr-2">tài liệu</span>
-      {items.map(([label, value], i) => (
-        <span key={label} className="text-small text-text-muted">
-          {i > 0 && <span className="mx-2.5" aria-hidden="true">·</span>}
-          {label}{" "}
-          <span className="font-mono tabular-nums" style={{ color: "var(--bronze)" }}>{value}</span>
-        </span>
-      ))}
+    <section className="library-resume surface-card" aria-labelledby="library-resume-title">
+      <div className="library-resume__text">
+        <h2 id="library-resume-title" className="library-resume__label">Học tiếp</h2>
+        <p className="library-resume__name">{tenHienThi(doc)}</p>
+      </div>
+      <button type="button" className="btn-seal library-resume__cta"
+              onClick={() => onMo(doc, tt?.beMat || "studymap")}>
+        Tiếp tục{tt?.nhanBeMat ? ` · ${tt.nhanBeMat}` : ""}
+      </button>
     </section>
   );
 }

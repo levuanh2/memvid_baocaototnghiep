@@ -361,16 +361,28 @@ export default function KnowledgeInspector({
               trung bình của cả nhánh, chưa tách theo từng trích đoạn.
             </p>
             <div className="flex flex-col gap-2">
-              {evidence.map((entry, i) => (
-                <CitationCard
-                  key={`${entry.chunkId}-${i}`}
-                  chunkId={entry.chunkId} text={entry.text} loading={entry.loading} error={entry.error}
-                  index={i} sourceLabel={sourceLabel} heading={node.title}
-                  claim={node.title} confidencePct={avgConfidencePct}
-                  highlighted={highlightedIds.has(entry.chunkId)}
-                  onToggleHighlight={() => toggleHighlight(entry.chunkId)}
-                />
-              ))}
+              {evidence.map((entry, i) => {
+                const readerStems = node.sourceStems?.length > 0 ? node.sourceStems : (sources?.length === 1 ? sources : []);
+                const readerStem = readerStems.length === 1 ? readerStems[0] : null;
+                return (
+                  <div key={`${entry.chunkId}-${i}`}>
+                    <CitationCard
+                      chunkId={entry.chunkId} text={entry.text} loading={entry.loading} error={entry.error}
+                      index={i} sourceLabel={sourceLabel} heading={node.title}
+                      claim={node.title} confidencePct={avgConfidencePct}
+                      highlighted={highlightedIds.has(entry.chunkId)}
+                      onToggleHighlight={() => toggleHighlight(entry.chunkId)}
+                    />
+                    {readerStem && entry.text && !entry.loading && !entry.error && (
+                      <button type="button"
+                        onClick={() => onOpenSource(readerStem, { kind: "index", id: entry.chunkId, text: entry.text })}
+                        className="mt-1.5 text-caption font-medium text-accent hover:underline">
+                        Đọc đoạn này trong nguồn
+                      </button>
+                    )}
+                  </div>
+                );
+              })}
             </div>
           </>
         )}
