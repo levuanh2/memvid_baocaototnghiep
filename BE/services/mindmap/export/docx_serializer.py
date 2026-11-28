@@ -14,18 +14,50 @@ from __future__ import annotations
 import io
 from typing import Any, Optional
 
+import uuid
+
 import docx
 from docx.enum.section import WD_ORIENT
+from docx.opc.constants import RELATIONSHIP_TYPE as RT
+from docx.opc.packuri import PackURI
+from docx.opc.part import Part
 from docx.shared import Inches, Pt, RGBColor
 
 from services.mindmap.export.image_guard import validate_map_image
+from shared.paths import BE_ROOT
 
 MAX_HEADING_LEVEL = 9
 
-# V9.3 (owner decision 2026-11-26): "sans" names Be Vietnam Pro, the app's UI font. The font is not
-# embedded in the file: Word/Excel/LibreOffice use it when installed and otherwise substitute their
-# default sans; the text stays real UTF-8 either way. "serif" stays Times New Roman.
-FONT_NAMES = {"sans": "Be Vietnam Pro", "serif": "Times New Roman"}  # both Vietnamese-diacritic-safe, both ship with Office/LibreOffice defaults — no embedding needed, DOCX stores real UTF-8 text regardless of the nominal font name
+# V9.3 typography (owner decisions 2026-11-26 and 2026-11-28): "sans" is Be Vietnam Pro, the app's
+# UI font, and the DOCX EMBEDS it (ECMA-376 obfuscated TrueType, ~130 KiB) so Word shows it on machines
+# that do not have it installed. "serif" stays Times New Roman (ships with Office). The TTF is the
+# same official OFL file the PDF embeds (assets/fonts/BeVietnamPro-Regular.ttf, fsType 0).
+FONT_NAMES = {"sans": "Be Vietnam Pro", "serif": "Times New Roman"}
+EMBEDDED_FONT_FILES = {"sans": BE_ROOT / "assets" / "fonts" / "BeVietnamPro-Regular.ttf"}
+_FONT_REL = "http://schemas.openxmlformats.org/officeDocument/2006/relationships/font"
+_OBFUSCATED_FONT_CT = "application/vnd.openxmlformats-officedocument.obfuscatedFont"
+# A fixed key keeps the output reproducible; the obfuscation is a format requirement, not a secret.
+_FONT_KEY = "{" + str(uuid.uuid5(uuid.NAMESPACE_URL, "studymap/export/bevietnampro-regular")).upper() + "}"
+_W = "http://schemas.openxmlformats.org/wordprocessingml/2006/main"
+
+
+def _embed_regular_font(doc: "docx.document.Document", name: str, ttf: bytes) -> None:
+    """Embed `ttf` as the regular face of `name` (fontTable entry + obfuscated part + settings flag)."""
+    key = bytes.fromhex(_FONT_KEY.strip("{}").replace("-", ""))[::-1]
+    data = bytes(b ^ key[i % 16] for i, b in enumerate(ttf[:32])) + ttf[32:]
+    font_table = doc.part.part_related_by(RT.FONT_TABLE)
+    font_part = Part(PackURI("/word/fonts/font1.odttf"), _OBFUSCATED_FONT_CT, data, doc.part.package)
+    rid = font_table.relate_to(font_part, _FONT_REL)
+    entry = (f'<w:font w:name="{name}"><w:charset w:val="00"/><w:family w:val="swiss"/>'
+             f'<w:pitch w:val="variable"/><w:embedRegular r:id="{rid}" w:fontKey="{_FONT_KEY}"/></w:font>')
+    xml = font_table.blob.decode("utf-8")
+    font_table._blob = xml.replace("</w:fonts>", entry + "</w:fonts>").encode("utf-8")
+    settings = doc.settings.element
+    if settings.find(f"{{{_W}}}embedTrueTypeFonts") is None:
+        flag = settings.makeelement(f"{{{_W}}}embedTrueTypeFonts", {})
+        zoom = settings.find(f"{{{_W}}}zoom")
+        # CT_Settings order: ... zoom, removePersonalInformation, ..., embedTrueTypeFonts, ... proofState
+        (zoom.addnext(flag) if zoom is not None else settings.insert(0, flag))
 MARGINS_INCHES = {"narrow": 0.5, "normal": 1.0, "wide": 1.5}
 MONOCHROME_RGB = RGBColor(0x2B, 0x26, 0x20)  # matches FE's mindmapExportAppearance.js MONOCHROME_COLOR
 CUSTOM_PALETTE_RGB = [
@@ -98,6 +130,8 @@ def serialize_docx(
 
     doc = docx.Document()
     font_name = FONT_NAMES.get(font, FONT_NAMES["sans"])
+    if font in EMBEDDED_FONT_FILES or font not in FONT_NAMES:
+        _embed_regular_font(doc, font_name, EMBEDDED_FONT_FILES["sans"].read_bytes())
     for style_name in ("Normal", "Heading 1", "Title"):
         try:
             doc.styles[style_name].font.name = font_name

@@ -4435,3 +4435,10 @@ Measured (200-node outline): PDF sans 446 KiB / 1030 ms -> 107 KiB / 726 ms, sam
 text extractable; DOCX unchanged (37 KiB). Regression: tests/test_mindmap_export_fonts_v93.py (red
 3/4 before: font file, PDF embedding + extraction, DOCX/XLSX name); export test set 353/353.
 Gotcha: PyMuPDF reports the embedded basefont with spaces ("DejaVu Serif Book"), compare without them.
+Follow-up (owner decision 2026-11-28, after a side-agent note that a named-only font is substituted on
+most recipients' machines): DOCX now EMBEDS Be Vietnam Pro (ECMA-376 obfuscated TrueType:
+word/fonts/font1.odttf, fontTable <w:embedRegular r:id w:fontKey>, settings <w:embedTrueTypeFonts/>
+after <w:zoom>; fixed uuid5 key for reproducible output). XLSX goes back to Calibri: Excel cannot embed
+fonts. DOCX sans 36 -> 87 KiB. Tests: the embedded part de-obfuscates to the exact bundled TTF; serif
+embeds nothing; XLSX sans is Calibri (red before). Export set 354/354. Opening in Word/LibreOffice is
+NOT RUN (not installed here).

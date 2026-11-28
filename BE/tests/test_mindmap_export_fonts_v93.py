@@ -1,8 +1,9 @@
 """V9.3 typography (owner decision 2026-11-26): backend document exports use Be Vietnam Pro.
 
 PDF embeds the official OFL TTF (assets/fonts/BeVietnamPro-Regular.ttf) for the "sans" choice and
-must keep every Vietnamese diacritic extractable; DOCX/XLSX name Be Vietnam Pro as the "sans" font
-(not embedded: see the PR notes on substitution). "serif" keeps DejaVu Serif / Times New Roman.
+must keep every Vietnamese diacritic extractable; DOCX names and EMBEDS Be Vietnam Pro for "sans"
+(owner decision 2026-11-28); XLSX keeps Calibri because Excel cannot embed fonts. "serif" keeps
+DejaVu Serif / Times New Roman.
 """
 import io
 
@@ -61,9 +62,43 @@ def test_pdf_serif_still_embeds_dejavu_serif():
     assert not any("BeVietnamPro" in name for name in names)
 
 
-def test_docx_and_xlsx_sans_name_be_vietnam_pro():
-    document = docx.Document(io.BytesIO(serialize_docx(_tree(), font="sans")))
-    assert document.styles["Normal"].font.name == "Be Vietnam Pro"
+def _deobfuscate(data: bytes, font_key: str) -> bytes:
+    # ECMA-376 Part 2 / [MS-OFFCRYPTO] obfuscated font: XOR the first 32 bytes with the GUID key read
+    # in reverse byte order.
+    key = bytes.fromhex(font_key.strip("{}").replace("-", ""))[::-1]
+    head = bytes(b ^ key[i % 16] for i, b in enumerate(data[:32]))
+    return head + data[32:]
+
+
+def test_docx_sans_names_and_embeds_be_vietnam_pro():
+    """Owner decision (2026-11-28): DOCX embeds the font so Word shows it on machines without it."""
+    import re
+    import zipfile
+
+    raw = serialize_docx(_tree(), font="sans")
+    assert docx.Document(io.BytesIO(raw)).styles["Normal"].font.name == "Be Vietnam Pro"
+    z = zipfile.ZipFile(io.BytesIO(raw))
+    names = z.namelist()
+    odttf = [n for n in names if n.startswith("word/fonts/") and n.endswith(".odttf")]
+    assert len(odttf) == 1
+    ctypes = z.read("[Content_Types].xml").decode("utf-8")
+    assert "application/vnd.openxmlformats-officedocument.obfuscatedFont" in ctypes
+    font_table = z.read("word/fontTable.xml").decode("utf-8")
+    m = re.search(r'<w:font w:name="Be Vietnam Pro">.*?<w:embedRegular r:id="(rId\d+)" w:fontKey="(\{[0-9A-F-]{36}\})"', font_table, re.S)
+    assert m, "fontTable declares an embedded regular face with a font key"
+    rels = z.read("word/_rels/fontTable.xml.rels").decode("utf-8")
+    assert f'Id="{m.group(1)}"' in rels and odttf[0].split("/", 1)[1] in rels
+    assert "<w:embedTrueTypeFonts/>" in z.read("word/settings.xml").decode("utf-8")
+    original = FONT_FILES["sans"].read_bytes()
+    assert _deobfuscate(z.read(odttf[0]), m.group(2)) == original
+
+
+def test_docx_serif_embeds_nothing_and_xlsx_keeps_calibri():
+    import zipfile
+
+    z = zipfile.ZipFile(io.BytesIO(serialize_docx(_tree(), font="serif")))
+    assert not [n for n in z.namelist() if n.endswith(".odttf")]
+    # Excel cannot embed fonts, so XLSX keeps a font every Office install has (owner decision).
     ws = load_workbook(io.BytesIO(serialize_xlsx(_tree(), font="sans")))["Nodes"]
-    assert ws["A1"].font.name == "Be Vietnam Pro"
-    assert ws["A2"].font.name == "Be Vietnam Pro"
+    assert ws["A1"].font.name == "Calibri"
+    assert ws["A2"].font.name == "Calibri"
