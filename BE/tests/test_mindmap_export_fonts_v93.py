@@ -102,3 +102,18 @@ def test_docx_serif_embeds_nothing_and_xlsx_keeps_calibri():
     ws = load_workbook(io.BytesIO(serialize_xlsx(_tree(), font="sans")))["Nodes"]
     assert ws["A1"].font.name == "Calibri"
     assert ws["A2"].font.name == "Calibri"
+
+
+def test_docx_every_heading_and_title_style_resolves_to_the_chosen_font():
+    """agy review of #218 (P2): only Normal/Heading 1/Title were set, and the template's
+    w:asciiTheme/w:hAnsiTheme (majorHAnsi) override w:ascii, so headings stayed on the theme font."""
+    from docx.oxml.ns import qn
+
+    for font, name in (("sans", "Be Vietnam Pro"), ("serif", "Times New Roman")):
+        document = docx.Document(io.BytesIO(serialize_docx(_tree(), font=font)))
+        for style_name in ["Normal", "Title"] + [f"Heading {i}" for i in range(1, 10)]:
+            r_fonts = document.styles[style_name].element.find(qn("w:rPr")).find(qn("w:rFonts"))
+            assert r_fonts is not None, style_name
+            assert r_fonts.get(qn("w:ascii")) == name and r_fonts.get(qn("w:hAnsi")) == name, style_name
+            themed = [a for a in r_fonts.attrib if a.endswith("Theme") or a.endswith("theme")]
+            assert themed == [], f"{style_name} still defers to the theme: {themed}"

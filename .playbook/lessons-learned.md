@@ -4442,3 +4442,9 @@ after <w:zoom>; fixed uuid5 key for reproducible output). XLSX goes back to Cali
 fonts. DOCX sans 36 -> 87 KiB. Tests: the embedded part de-obfuscates to the exact bundled TTF; serif
 embeds nothing; XLSX sans is Calibri (red before). Export set 354/354. Opening in Word/LibreOffice is
 NOT RUN (not installed here).
+agy review of #218 (P2): DOCX headings never used the chosen font. Only Normal/Heading 1/Title were set,
+and python-docx's Font.name sets w:ascii/w:hAnsi but leaves the template's w:asciiTheme/w:hAnsiTheme
+(majorHAnsi), which take precedence; Heading 2-9 were untouched. (Pre-existing: with Calibri the
+headings were Calibri Light from the theme.) Fix: set Normal, Title and Heading 1-9 and drop the *Theme
+attributes. Regression: test_docx_every_heading_and_title_style_resolves_to_the_chosen_font (red
+before, sans and serif). Prevention: assert the resolved style XML, not just style.font.name.

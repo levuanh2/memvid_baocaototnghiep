@@ -21,6 +21,7 @@ from docx.enum.section import WD_ORIENT
 from docx.opc.constants import RELATIONSHIP_TYPE as RT
 from docx.opc.packuri import PackURI
 from docx.opc.part import Part
+from docx.oxml.ns import qn
 from docx.shared import Inches, Pt, RGBColor
 
 from services.mindmap.export.image_guard import validate_map_image
@@ -132,11 +133,18 @@ def serialize_docx(
     font_name = FONT_NAMES.get(font, FONT_NAMES["sans"])
     if font in EMBEDDED_FONT_FILES or font not in FONT_NAMES:
         _embed_regular_font(doc, font_name, EMBEDDED_FONT_FILES["sans"].read_bytes())
-    for style_name in ("Normal", "Heading 1", "Title"):
+    # Every heading level the outline can use, plus Title. The template's theme attributes
+    # (w:asciiTheme="majorHAnsi" ...) take precedence over w:ascii, so they are removed; before this,
+    # headings kept the theme font whatever was chosen (agy review of #218, P2).
+    for style_name in ("Normal", "Title", *(f"Heading {i}" for i in range(1, MAX_HEADING_LEVEL + 1))):
         try:
-            doc.styles[style_name].font.name = font_name
+            style = doc.styles[style_name]
         except KeyError:
-            pass
+            continue
+        style.font.name = font_name
+        r_fonts = style.element.rPr.rFonts
+        for attr in ("w:asciiTheme", "w:hAnsiTheme", "w:eastAsiaTheme", "w:cstheme"):
+            r_fonts.attrib.pop(qn(attr), None)
 
     section = doc.sections[0]
     if orientation == "landscape" and section.orientation != WD_ORIENT.LANDSCAPE:
